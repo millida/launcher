@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Millida Launcher</title>
+<script src="/boot.js"></script>
+<meta name="color-scheme" content="dark light">
+<link rel="preload" href="/fonts/Geist-Variable.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+#boot{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;background:#161718;transition:opacity .34s ease}
+html[data-theme="light"] #boot{background:#f2f3f1}
+#boot.gone{opacity:0;pointer-events:none}
+#boot img{width:52px;height:52px;animation:bootPulse 1.8s ease-in-out infinite}
+@keyframes bootPulse{0%,100%{opacity:.95;transform:scale(1)}50%{opacity:.55;transform:scale(.95)}}
+@media (prefers-reduced-motion: reduce){#boot img{animation:none}}
+</style>
+</head>
+<body>
+<div id="boot"><img src="/millida-logo.svg" alt=""></div>
+<div id="root"></div>
+<script type="module" src="/src/main.tsx"></script>
+</body>
+</html>

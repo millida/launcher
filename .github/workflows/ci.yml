@@ -1,0 +1,184 @@
+# Public CI: GitHub-hosted runners only, no configurable secrets.
+# Must be green in any fork right after cloning.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-public-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    # Skipped only in the private development repository, which runs its own CI
+    # on a self-hosted runner; GitHub-hosted minutes are billed for private repos.
+    # Forks do not match this condition, so the workflow runs there as usual.
+    if: github.repository != 'millida/millida-launcher'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Tests
+        run: bun test
+
+      # Built without MILLIDA_MS_CLIENT_ID, which also proves the fallback path works.
+      - name: Build web
+        run: bun run build:web
+
+  rust:
+    name: Rust (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    # Skipped only in the private development repository, which runs its own CI
+    # on a self-hosted runner; GitHub-hosted minutes are billed for private repos.
+    # Forks do not match this condition, so the workflow runs there as usual.
+    if: github.repository != 'millida/millida-launcher'
+    strategy:
+      fail-fast: false
+      # Windows stays in the matrix: src-tauri has cfg(windows) branches that a
+      # Linux clippy never compiles. Jobs run in parallel, so the wall clock is
+      # the slowest job rather than the sum.
+      matrix:
+        include:
+          - label: linux
+            os: ubuntu-latest
+          - label: windows
+            os: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libxdo-dev \
+            libssl-dev \
+            build-essential \
+            file \
+            wget
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install --frozen-lockfile
+
+      # tauri::generate_context! needs a built dist, otherwise even clippy fails.
+      - name: Build web assets
+        run: bun run build:web
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          key: ${{ matrix.os }}
+
+      - name: Clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Tests
+        working-directory: src-tauri
+        run: cargo test
+
+  gates:
+    name: Quality gates
+    runs-on: ubuntu-latest
+    # Skipped only in the private development repository, which runs its own CI
+    # on a self-hosted runner; GitHub-hosted minutes are billed for private repos.
+    # Forks do not match this condition, so the workflow runs there as usual.
+    if: github.repository != 'millida/millida-launcher'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ripgrep
+        run: command -v rg >/dev/null || sudo apt-get install -y ripgrep
+
+      # Comments must be in English. Only comment lines (//, ///, /*, *) and trailing
+      # // comments are matched: non-English string literals in format!/Err/JSX are
+      # legitimate and stay out of the pattern ("https://" is excluded).
+      - name: Comment language gate
+        run: |
+          set +e
+          out=$(rg --line-number --no-heading \
+            -e '^[[:space:]]*(//|/\*|\*)[^\n]*\p{Cyrillic}' \
+            -e '(^|[^:"])//[^\n]*\p{Cyrillic}' \
+            src src-tauri/src)
+          code=$?
+          set -e
+          if [ "$code" -eq 0 ]; then
+            echo "$out"
+            echo "::error::Comments must be written in English - see the matches above"
+            exit 1
+          fi
+          if [ "$code" -ne 1 ]; then
+            echo "::error::ripgrep failed with exit code $code"
+            exit 1
+          fi
+          echo "OK: no non-English comments in src/ and src-tauri/src/"
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+
+      - name: License check
+        run: cargo deny --manifest-path src-tauri/Cargo.toml --config deny.toml check licenses
+
+  audit:
+    name: Audit
+    runs-on: ubuntu-latest
+    # Skipped only in the private development repository, which runs its own CI
+    # on a self-hosted runner; GitHub-hosted minutes are billed for private repos.
+    # Forks do not match this condition, so the workflow runs there as usual.
+    if: github.repository != 'millida/millida-launcher'
+    # Never blocks a merge: advisories in transitive dependencies arrive on their own.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install --frozen-lockfile
+
+      - name: Bun audit
+        run: bun audit
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+
+      - name: Cargo audit
+        working-directory: src-tauri
+        run: cargo audit

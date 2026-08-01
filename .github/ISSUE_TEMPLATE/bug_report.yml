@@ -1,0 +1,103 @@
+name: Ошибка
+description: Что-то работает не так, как ожидалось
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо за отчёт. Чем точнее шаги, тем быстрее найдётся причина.
+
+        Нашли уязвимость — не создавайте issue: порядок описан в
+        [SECURITY.md](https://github.com/millida/launcher/blob/main/SECURITY.md).
+
+  - type: input
+    id: version
+    attributes:
+      label: Версия лаунчера
+      description: Видна в настройках лаунчера. Проверьте, что проблема есть на последней версии.
+      placeholder: 1.0.123
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Операционная система
+      options:
+        - Windows 11
+        - Windows 10
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Linux
+    validations:
+      required: true
+
+  - type: input
+    id: os_details
+    attributes:
+      label: Подробности об ОС
+      description: Версия и, для Linux, дистрибутив и способ установки (deb, rpm, AppImage).
+      placeholder: Ubuntu 24.04, AppImage
+    validations:
+      required: false
+
+  - type: input
+    id: minecraft
+    attributes:
+      label: Версия Minecraft и загрузчик
+      description: Версия игры и загрузчик модов, если он используется.
+      placeholder: 1.21.4, Fabric 0.16.9
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Что вы делали
+      description: Пошагово, с самого начала — так, чтобы повторить на чистой установке.
+      placeholder: |
+        1. Открыл вкладку «Мои сборки»
+        2. Нажал «Играть» на сборке с Fabric
+        3. Дождался окончания загрузки
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Что вы ожидали
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Что произошло
+      description: Текст ошибки — целиком, если он есть.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Лог
+      description: |
+        Лог запуска или консоль лаунчера. Достаточно фрагмента вокруг ошибки — вставлять файл целиком не нужно.
+
+        Перед отправкой пробегитесь глазами по тексту: в логах и на скриншотах попадаются
+        токены сессии, ссылки с ключами доступа и адреса электронной почты — замените их
+        на `***`. Не выкладывайте содержимое папки данных лаунчера целиком: там лежат
+        `secrets.bin` и `vault.key`, а также сохранённые сессии.
+      render: text
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Перед отправкой
+      options:
+        - label: Проверил на последней версии лаунчера
+          required: true
+        - label: Убрал из логов и скриншотов токены, ссылки с ключами и личные данные
+          required: true

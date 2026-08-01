@@ -1,0 +1,507 @@
+use futures::StreamExt;
+use serde_json::Value;
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
+use std::time::Duration;
+
+const UA: &str = "MillidaLauncher/1.0 (+https://millida.net)";
+const JSON_TIMEOUT: Duration = Duration::from_secs(30);
+const TRIES: u32 = 3;
+
+static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+
+/// When off, a matching file size is accepted as intact; full rehashing is only
+/// enabled during an explicit repair pass.
+static DEEP_VERIFY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub(crate) fn set_deep_verify(on: bool) {
+    DEEP_VERIFY.store(on, std::sync::atomic::Ordering::SeqCst);
+}
+
+pub(crate) fn deep_verify() -> bool {
+    DEEP_VERIFY.load(std::sync::atomic::Ordering::SeqCst)
+}
+
+/// The bundled webpki roots alone are not enough: HTTPS-inspecting antivirus and
+/// corporate proxies re-sign traffic with a CA that only exists in the OS store.
+fn build_client(native_roots: bool) -> Result<reqwest::Client, reqwest::Error> {
+    reqwest::Client::builder()
+        .user_agent(UA)
+        .connect_timeout(Duration::from_secs(15))
+        .read_timeout(Duration::from_secs(60))
+        .pool_idle_timeout(Duration::from_secs(90))
+        .tls_built_in_webpki_certs(true)
+        .tls_built_in_native_certs(native_roots)
+        .build()
+}
+
+pub(crate) fn client() -> reqwest::Client {
+    CLIENT
+        .get_or_init(|| {
+            build_client(true)
+                .or_else(|_| build_client(false))
+                .unwrap_or_else(|_| reqwest::Client::new())
+        })
+        .clone()
+}
+
+#[cfg(test)]
+mod tls_roots_tests {
+    #[test]
+    fn client_builds_with_system_roots() {
+        assert!(super::build_client(true).is_ok());
+    }
+
+    #[test]
+    #[ignore]
+    fn millida_api_reachable() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let status = rt.block_on(async {
+            super::client()
+                .get("https://api.millida.net/v2/rating/servers?limit=1&offset=0&sort=rating")
+                .send()
+                .await
+                .map(|r| r.status().as_u16())
+                .map_err(|e| super::net_err(&e))
+        });
+        assert_eq!(status, Ok(200));
+    }
+}
+
+/// reqwest's Display only yields "error sending request for url"; the actual
+/// cause is the deepest source() in the chain.
+pub(crate) fn net_err(e: &reqwest::Error) -> String {
+    let mut cause: &(dyn std::error::Error + 'static) = e;
+    while let Some(next) = cause.source() {
+        cause = next;
+    }
+    let detail = cause.to_string();
+    let low = detail.to_lowercase();
+    let hint = if low.contains("certificate") || low.contains("tls") || low.contains("handshake") {
+        " — соединение подменяет антивирус или прокси: отключи проверку HTTPS/SSL или добавь лаунчер в исключения"
+    } else if low.contains("dns") || low.contains("failed to lookup") || low.contains("resolve") {
+        " — адрес сервера не определился: проверь DNS, VPN и антивирус"
+    } else if e.is_timeout() || low.contains("timed out") {
+        " — сервер не ответил вовремя: проверь интернет и VPN"
+    } else if e.is_connect() {
+        " — соединение не установилось: проверь брандмауэр, VPN и антивирус"
+    } else {
+        ""
+    };
+    format!("нет связи ({}{})", detail, hint)
+}
+
+/// Digest kind announced by the source: Modrinth publishes sha1/sha512, Mojang
+/// and Adoptium sha1/sha256.
+#[derive(Clone, Copy)]
+pub(crate) enum Sum<'a> {
+    Sha1(&'a str),
+    Sha256(&'a str),
+    Sha512(&'a str),
+}
+
+enum Hasher {
+    Sha1(sha1::Sha1),
+    Sha256(sha2::Sha256),
+    Sha512(sha2::Sha512),
+}
+
+impl Hasher {
+    fn for_sum(sum: &Sum<'_>) -> Self {
+        use sha1::Digest as _;
+        match sum {
+            Sum::Sha1(_) => Hasher::Sha1(sha1::Sha1::new()),
+            Sum::Sha256(_) => Hasher::Sha256(sha2::Sha256::new()),
+            Sum::Sha512(_) => Hasher::Sha512(sha2::Sha512::new()),
+        }
+    }
+
+    fn update(&mut self, bytes: &[u8]) {
+        use sha1::Digest as _;
+        match self {
+            Hasher::Sha1(h) => h.update(bytes),
+            Hasher::Sha256(h) => h.update(bytes),
+            Hasher::Sha512(h) => h.update(bytes),
+        }
+    }
+
+    fn hex(self) -> String {
+        use sha1::Digest as _;
+        let bytes: Vec<u8> = match self {
+            Hasher::Sha1(h) => h.finalize().to_vec(),
+            Hasher::Sha256(h) => h.finalize().to_vec(),
+            Hasher::Sha512(h) => h.finalize().to_vec(),
+        };
+        bytes.iter().map(|b| format!("{:02x}", b)).collect()
+    }
+}
+
+impl Sum<'_> {
+    fn expected(&self) -> &str {
+        match self {
+            Sum::Sha1(v) | Sum::Sha256(v) | Sum::Sha512(v) => v,
+        }
+    }
+
+    fn matches(&self, got: &str) -> bool {
+        got.eq_ignore_ascii_case(self.expected())
+    }
+
+    fn is_usable(&self) -> bool {
+        !self.expected().trim().is_empty()
+    }
+}
+
+fn retryable(status: reqwest::StatusCode) -> bool {
+    status.is_server_error() || status == reqwest::StatusCode::TOO_MANY_REQUESTS
+}
+
+async fn send(url: &str, timeout: Option<Duration>) -> Result<reqwest::Response, String> {
+    let mut last = String::new();
+    for attempt in 1..=TRIES {
+        let mut req = client().get(url);
+        if let Some(t) = timeout {
+            req = req.timeout(t);
+        }
+        match req.send().await {
+            Ok(r) if r.status().is_success() => return Ok(r),
+            Ok(r) => {
+                let status = r.status();
+                last = format!("{} → {}", url, status);
+                if !retryable(status) {
+                    return Err(last);
+                }
+            }
+            Err(e) => last = format!("{}: {}", url, e),
+        }
+        if attempt < TRIES {
+            tokio::time::sleep(Duration::from_millis(400 * attempt as u64)).await;
+        }
+    }
+    Err(last)
+}
+
+pub(crate) async fn get_json(url: &str) -> Result<Value, String> {
+    send(url, Some(JSON_TIMEOUT))
+        .await?
+        .json()
+        .await
+        .map_err(|e| format!("{}: неожиданный ответ ({})", url, e))
+}
+
+pub(crate) async fn get_json_cached(url: &str, cache: &Path) -> Result<Value, String> {
+    match get_json(url).await {
+        Ok(v) => {
+            super::paths::write_json_quiet(cache, &v);
+            Ok(v)
+        }
+        Err(e) => {
+            if let Ok(v) = read_json_file(cache) {
+                return Ok(v);
+            }
+            Err(format!("{} (и нет офлайн-кэша)", e))
+        }
+    }
+}
+
+fn read_json_file(cache: &Path) -> Result<Value, ()> {
+    let b = std::fs::read(cache).map_err(|_| ())?;
+    serde_json::from_slice(&b).map_err(|_| ())
+}
+
+/// Mojang version descriptors and asset indexes are content-addressed, so a
+/// cached copy can never go stale.
+pub(crate) async fn get_json_immutable(url: &str, cache: &Path) -> Result<Value, String> {
+    if let Ok(v) = read_json_file(cache) {
+        return Ok(v);
+    }
+    get_json_cached(url, cache).await
+}
+
+pub(crate) async fn get_json_fresh(url: &str, cache: &Path, ttl: Duration) -> Result<Value, String> {
+    let fresh = std::fs::metadata(cache)
+        .and_then(|m| m.modified())
+        .map(|t| t.elapsed().map(|age| age < ttl).unwrap_or(false))
+        .unwrap_or(false);
+    if fresh {
+        if let Ok(v) = read_json_file(cache) {
+            return Ok(v);
+        }
+    }
+    get_json_cached(url, cache).await
+}
+
+/// Modrinth bulk endpoints only accept a JSON body over POST.
+pub(crate) async fn post_json(url: &str, body: &Value) -> Result<Value, String> {
+    let mut last = String::new();
+    for attempt in 1..=TRIES {
+        match client().post(url).json(body).timeout(JSON_TIMEOUT).send().await {
+            Ok(r) if r.status().is_success() => {
+                return r.json().await.map_err(|e| format!("{}: неожиданный ответ ({})", url, e))
+            }
+            Ok(r) => {
+                let status = r.status();
+                last = format!("{} → {}", url, status);
+                if !retryable(status) {
+                    return Err(last);
+                }
+            }
+            Err(e) => last = format!("{}: {}", url, e),
+        }
+        if attempt < TRIES {
+            tokio::time::sleep(Duration::from_millis(400 * attempt as u64)).await;
+        }
+    }
+    Err(last)
+}
+
+fn part_path(dest: &Path) -> PathBuf {
+    let mut name = dest.file_name().map(|n| n.to_os_string()).unwrap_or_default();
+    name.push(".part");
+    dest.with_file_name(name)
+}
+
+fn file_matches(path: &Path, sum: Option<Sum<'_>>, size: Option<u64>) -> bool {
+    let Ok(meta) = std::fs::metadata(path) else { return false };
+    if let Some(want) = size {
+        if meta.len() != want {
+            return false;
+        }
+        if !deep_verify() {
+            return true;
+        }
+    }
+    let Some(sum) = sum else { return true };
+    if !sum.is_usable() {
+        return true;
+    }
+    let Ok(mut file) = std::fs::File::open(path) else { return false };
+    let mut h = Hasher::for_sum(&sum);
+    let mut buf = vec![0u8; 128 * 1024];
+    loop {
+        match std::io::Read::read(&mut file, &mut buf) {
+            Ok(0) => break,
+            Ok(n) => h.update(&buf[..n]),
+            Err(_) => return false,
+        }
+    }
+    sum.matches(&h.hex())
+}
+
+fn is_stale_cdn_miss(err: &str) -> bool {
+    err.contains("404 Not Found") || err.contains("403 Forbidden")
+}
+
+fn bypass_cdn_cache(url: &str) -> String {
+    let salt = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let sep = if url.contains('?') { '&' } else { '?' };
+    format!("{}{}nocache={}", url, sep, salt)
+}
+
+/// Streams into `<file>.part` and renames on success so an aborted download can
+/// never be mistaken for a complete file.
+async fn fetch(url: &str, dest: &Path, sum: Option<Sum<'_>>, size: Option<u64>) -> Result<(), String> {
+    if url.trim().is_empty() {
+        return Err("пустая ссылка на файл".into());
+    }
+    if let Some(p) = dest.parent() {
+        std::fs::create_dir_all(p).map_err(|e| e.to_string())?;
+    }
+    let part = part_path(dest);
+    let mut last = String::new();
+    for attempt in 1..=TRIES {
+        let target = if attempt > 1 && is_stale_cdn_miss(&last) {
+            bypass_cdn_cache(url)
+        } else {
+            url.to_string()
+        };
+        match fetch_once(&target, &part, sum, size).await {
+            Ok(()) => {
+                std::fs::rename(&part, dest).map_err(|e| e.to_string())?;
+                return Ok(());
+            }
+            Err(e) => {
+                let _ = std::fs::remove_file(&part);
+                last = e;
+            }
+        }
+        if attempt < TRIES {
+            tokio::time::sleep(Duration::from_millis(400 * attempt as u64)).await;
+        }
+    }
+    Err(last)
+}
+
+async fn fetch_once(url: &str, part: &Path, sum: Option<Sum<'_>>, size: Option<u64>) -> Result<(), String> {
+    let resp = client().get(url).send().await.map_err(|e| format!("{}: {}", url, net_err(&e)))?;
+    if !resp.status().is_success() {
+        return Err(format!("{} → {}", url, resp.status()));
+    }
+    let mut file = std::fs::File::create(part).map_err(|e| e.to_string())?;
+    let mut hasher = sum.filter(|s| s.is_usable()).map(|s| Hasher::for_sum(&s));
+    let mut written: u64 = 0;
+    let mut stream = resp.bytes_stream();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| format!("{}: обрыв загрузки ({})", url, e))?;
+        if let Some(h) = hasher.as_mut() {
+            h.update(&chunk);
+        }
+        written += chunk.len() as u64;
+        file.write_all(&chunk).map_err(|e| e.to_string())?;
+    }
+    file.flush().map_err(|e| e.to_string())?;
+    drop(file);
+    if let Some(want) = size {
+        if written != want {
+            return Err(format!("{}: размер {} вместо {}", url, written, want));
+        }
+    }
+    if let (Some(h), Some(s)) = (hasher, sum) {
+        let got = h.hex();
+        if !s.matches(&got) {
+            return Err(format!("{}: контрольная сумма не сошлась", url));
+        }
+    }
+    Ok(())
+}
+
+/// For content whose file name is its own hash (Mojang assets): an existing file
+/// needs no re-verification.
+pub(crate) async fn download_new(
+    url: &str,
+    dest: &Path,
+    sum: Option<Sum<'_>>,
+    size: Option<u64>,
+) -> Result<(), String> {
+    if dest.exists() {
+        return Ok(());
+    }
+    fetch(url, dest, sum, size).await
+}
+
+/// For sources without a reference hash whose content changes between versions
+/// (installers, modpack archives).
+pub(crate) async fn download_fresh(url: &str, dest: &Path) -> Result<(), String> {
+    fetch(url, dest, None, None).await
+}
+
+/// Verification reads and hashes the file, so it runs off the async runtime to
+/// avoid blocking the worker thread that other downloads share.
+pub(crate) async fn download_checked(
+    url: &str,
+    dest: &Path,
+    sum: Option<Sum<'_>>,
+    size: Option<u64>,
+) -> Result<(), String> {
+    if dest.exists() {
+        let owned: Option<(u8, String)> = sum.map(|s| match s {
+            Sum::Sha1(v) => (1u8, v.to_string()),
+            Sum::Sha256(v) => (2, v.to_string()),
+            Sum::Sha512(v) => (3, v.to_string()),
+        });
+        let path = dest.to_path_buf();
+        let ok = tokio::task::spawn_blocking(move || {
+            let sum = owned.as_ref().map(|(k, v)| match k {
+                1 => Sum::Sha1(v.as_str()),
+                2 => Sum::Sha256(v.as_str()),
+                _ => Sum::Sha512(v.as_str()),
+            });
+            file_matches(&path, sum, size)
+        })
+        .await
+        .unwrap_or(false);
+        if ok {
+            return Ok(());
+        }
+        let _ = std::fs::remove_file(dest);
+    }
+    fetch(url, dest, sum, size).await
+}
+
+pub(crate) async fn download_verify(
+    url: &str,
+    dest: &Path,
+    sha1: Option<&str>,
+    size: Option<u64>,
+) -> Result<(), String> {
+    download_checked(url, dest, sha1.map(Sum::Sha1), size).await
+}
+
+pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    let mut h = Sha256::new();
+    h.update(bytes);
+    h.finalize().iter().map(|b| format!("{:02x}", b)).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Port 1 refuses immediately, so any network attempt fails fast.
+    const DEAD: &str = "http://127.0.0.1:1/nope.json";
+
+    fn tmp(name: &str) -> PathBuf {
+        let p = std::env::temp_dir().join("millida-http-tests").join(name);
+        let _ = std::fs::remove_dir_all(&p);
+        std::fs::create_dir_all(&p).unwrap();
+        p
+    }
+
+    #[test]
+    fn cdn_bypass_appends_unique_parameter() {
+        let plain = bypass_cdn_cache("https://maven.neoforged.net/releases/a.jar");
+        assert!(plain.starts_with("https://maven.neoforged.net/releases/a.jar?nocache="));
+        let with_query = bypass_cdn_cache("https://host/a.jar?x=1");
+        assert!(with_query.starts_with("https://host/a.jar?x=1&nocache="));
+        assert!(is_stale_cdn_miss("https://host/a.jar → 404 Not Found"));
+        assert!(!is_stale_cdn_miss("https://host/a.jar: обрыв загрузки"));
+    }
+
+    #[tokio::test]
+    async fn immutable_json_reads_disk_without_network() {
+        let cache = tmp("immutable").join("meta.json");
+        std::fs::write(&cache, br#"{"id":"26.2"}"#).unwrap();
+        let v = get_json_immutable(DEAD, &cache).await.expect("кэш должен подхватиться");
+        assert_eq!(v["id"], "26.2");
+    }
+
+    #[tokio::test]
+    async fn fresh_json_uses_cache_until_ttl_expires() {
+        let cache = tmp("fresh").join("manifest.json");
+        std::fs::write(&cache, br#"{"latest":{"release":"26.2"}}"#).unwrap();
+        let v = get_json_fresh(DEAD, &cache, Duration::from_secs(3600)).await.unwrap();
+        assert_eq!(v["latest"]["release"], "26.2");
+        let v2 = get_json_fresh(DEAD, &cache, Duration::from_millis(0)).await.unwrap();
+        assert_eq!(v2["latest"]["release"], "26.2");
+    }
+
+    // Both modes live in one test: DEEP_VERIFY is process-global and parallel
+    // tests would toggle it under each other.
+    #[tokio::test]
+    async fn size_fast_path_and_deep_verify() {
+        let dir = tmp("size-path");
+        let f = dir.join("lib.jar");
+        std::fs::write(&f, b"0123456789").unwrap();
+        let wrong = "0000000000000000000000000000000000000000";
+        set_deep_verify(false);
+        download_checked(DEAD, &f, Some(Sum::Sha1(wrong)), Some(10))
+            .await
+            .expect("совпал размер — перекачивать нечего");
+        assert!(f.exists());
+
+        set_deep_verify(true);
+        let r = download_checked(DEAD, &f, Some(Sum::Sha1(wrong)), Some(10)).await;
+        set_deep_verify(false);
+        assert!(r.is_err(), "глубокая проверка обязана поймать несовпадение хеша");
+
+        let g = dir.join("short.jar");
+        std::fs::write(&g, b"012").unwrap();
+        let r2 = download_checked(DEAD, &g, None, Some(10)).await;
+        assert!(r2.is_err(), "размер не сошёлся — файл должен качаться заново");
+    }
+}

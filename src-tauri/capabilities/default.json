@@ -1,0 +1,25 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Основное окно: управление окном + IPC ядра",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-internal-toggle-maximize",
+    "core:window:allow-close",
+    "core:window:allow-destroy",
+    "core:window:allow-start-dragging",
+    "updater:allow-check",
+    "updater:allow-download",
+    "updater:allow-install",
+    "deep-link:allow-get-current",
+    "clipboard-manager:allow-write-text",
+    "process:allow-restart",
+    "process:allow-exit"
+  ]
+}

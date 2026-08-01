@@ -1,0 +1,57 @@
+# cargo-deny: checks that Rust dependency licenses stay compatible with GPL-3.0-only.
+# Run: cargo deny --manifest-path src-tauri/Cargo.toml --config deny.toml check licenses
+# The allow list mirrors the audit written down in THIRD-PARTY.md (610 packages).
+
+[graph]
+targets = [
+  "x86_64-unknown-linux-gnu",
+  "x86_64-pc-windows-msvc",
+  "aarch64-apple-darwin",
+  "x86_64-apple-darwin",
+]
+
+[licenses]
+confidence-threshold = 0.9
+
+# Anything missing from this list fails the check: a new dependency under AGPL,
+# SSPL, BUSL, CC-BY-NC or with no license at all never reaches a release.
+allow = [
+  # permissive, compatible with GPL-3.0
+  "MIT",
+  "MIT-0",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "0BSD",
+  "Zlib",
+  "Unlicense",
+  "BSL-1.0",
+  "CC0-1.0",
+  # Unicode-3.0 covers the ICU4X family and the FSF recognises it as GPL compatible
+  "Unicode-3.0",
+  # MPL-2.0 section 3.3 explicitly names GPL-3.0 a compatible secondary license
+  "MPL-2.0",
+  # CDLA-Permissive-2.0 is a data license (webpki-roots ships root certificates)
+  "CDLA-Permissive-2.0",
+  # the launcher itself and any GPL-3.0 dependency
+  "GPL-3.0-only",
+]
+
+# Workspace crates marked publish = false are not audited.
+[licenses.private]
+ignore = true
+
+# Duplicate versions of one crate bloat the binary and complicate auditing, but
+# they are unavoidable in the Tauri dependency tree, so this only warns.
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+# Dependencies come from crates.io only: a git URL or a private registry in an
+# open project swaps the source out from under the audit.
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

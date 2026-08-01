@@ -1,0 +1,1610 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Icon } from '../components/Icon'
+import { Cover } from '../components/Cover'
+import { IconGrid } from '../components/IconGrid'
+import { uiConfirm } from '../state/confirm'
+import { copyText } from '../lib/clipboard'
+import { hasTauri } from '../ipc/tauri'
+import { listenDragDrop, listenGameLog, listenGameLogStart } from '../ipc/events'
+import {
+  addLocalFile,
+  addServer,
+  backupWorld,
+  checkUpdates,
+  clearProfileCover,
+  countScreenshots,
+  deleteContent,
+  deleteProfile,
+  deleteWorld,
+  detectJava,
+  duplicateProfile,
+  exportMrpack,
+  getPlayStats,
+  getProfileGroups,
+  listContent,
+  listLogs,
+  listServers,
+  listVersions,
+  listWorlds,
+  loadProfileSettings,
+  modpackInfo,
+  openProfileFolder,
+  openUrl,
+  pickJavaPath,
+  pickProfileCover,
+  pingServer,
+  readLog,
+  removeServer,
+  renameProfile,
+  repairProfile,
+  saveProfileSettings,
+  scanContent,
+  scanContentLocal,
+  setProfileGroup,
+  setProfileIcon,
+  setProfileLoader,
+  shareLog,
+  testJava,
+  toggleContent,
+  updateAll,
+  updateContent,
+} from '../ipc/commands'
+import type { JavaInfo, ModFile, PingResult, ServerEntry, WorldEntry } from '../ipc/commands'
+import { Select } from '../components/Select'
+import { Slider } from '../components/Slider'
+import { isBlockIcon } from '../lib/blockColor'
+import { LOADER_NAME, agoText, fmtPlaytime, fmtSize, loaderId, whenText } from '../lib/format'
+import { useProfiles } from '../state/profiles'
+import { useInstance } from '../state/instance'
+import { closeModal, setScreen, showToast, useUi } from '../state/ui'
+import { joinWithAuth, realLaunch, showLaunchError, startPrelaunch } from '../lib/launch'
+import { useMods } from '../state/mods'
+import { useScreens } from '../state/screens'
+import { useModpackVersions } from '../state/modpack'
+import { openProject } from '../state/project'
+import { stopRunningGame, useGame } from '../state/game'
+
+const ramKey = (p: string) => 'm-ram-' + p
+
+const KIND_ICON: Record<string, string> = {
+  mod: 'i-blocks',
+  resourcepack: 'i-image',
+  datapack: 'i-book',
+  shader: 'i-eye',
+}
+
+const KINDS: [string, string][] = [
+  ['mod', 'Моды'],
+  ['resourcepack', 'Ресурспаки'],
+  ['datapack', 'Дата-паки'],
+  ['shader', 'Шейдеры'],
+]
+
+const CORE_OPTS: [string, string][] = [
+  ['vanilla', 'Ванилла'],
+  ['fabric', 'Fabric'],
+  ['quilt', 'Quilt'],
+  ['forge', 'Forge'],
+  ['neoforge', 'NeoForge'],
+]
+
+export function InstancePage() {
+  const modal = useUi((s) => s.modals.bsModal)
+  const profile = useInstance((s) => s.profile)
+  const profiles = useProfiles((s) => s.profiles)
+  const pr = profiles.find((x) => x.name === profile) || null
+  const customCover = pr && pr.icon && !isBlockIcon(pr.icon) ? pr.icon : null
+
+  const [tab, setTab] = useState('content')
+  const [kind, setKind] = useState('mod')
+  const [items, setItems] = useState<ModFile[]>([])
+  const [contentQuery, setContentQuery] = useState('')
+  const [sel, setSel] = useState<Set<string>>(new Set())
+  const [upd, setUpd] = useState<Record<string, string>>({})
+  const [itemLabels, setItemLabels] = useState<Record<string, string>>({})
+  const [emptyList, setEmptyList] = useState(false)
+  const [openInfo, setOpenInfo] = useState('')
+  const [scanLabel, setScanLabel] = useState('Сканировать')
+  const [noticeList, setNoticeList] = useState('')
+  const [playtime, setPlaytime] = useState('')
+  const [ram, setRam] = useState(4)
+  const [jvm, setJvm] = useState('')
+  const [w, setW] = useState('')
+  const [h, setH] = useState('')
+  const [java, setJava] = useState('')
+  const [javaList, setJavaList] = useState<JavaInfo[]>([])
+  const [detectLabel, setDetectLabel] = useState('Найти')
+  const [shotCount, setShotCount] = useState('—')
+  const [mpSlug, setMpSlug] = useState('')
+  const [mpVersion, setMpVersion] = useState('')
+  const [group, setGroup] = useState('')
+  const [worlds, setWorlds] = useState<WorldEntry[]>([])
+  const [servers, setServers] = useState<ServerEntry[]>([])
+  const [pings, setPings] = useState<Record<string, PingResult | null>>({})
+  const [repairBusy, setRepairBusy] = useState(false)
+  const [wFilter, setWFilter] = useState('all')
+  const [wsName, setWsName] = useState('')
+  const [wsIp, setWsIp] = useState('')
+  const [worldsNotice, setWorldsNotice] = useState('')
+  const [logFiles, setLogFiles] = useState<string[]>([])
+  const [logFile, setLogFile] = useState('')
+  const [logBody, setLogBody] = useState('')
+  const [logView, setLogView] = useState<'live' | 'files'>('live')
+  const [liveLines, setLiveLines] = useState<string[]>([])
+  const gameRunning = useGame((s) => s.running)
+  const gameStopping = useGame((s) => s.stopping)
+  const liveRef = useRef<HTMLPreElement>(null)
+  const [shareLabel, setShareLabel] = useState('Поделиться (mclo.gs)')
+  const [updateAllLabel, setUpdateAllLabel] = useState('Обновить всё')
+  const [bulkUpdLabel, setBulkUpdLabel] = useState('Обновить')
+  const [renameVal, setRenameVal] = useState('')
+  const [renameBusy, setRenameBusy] = useState(false)
+  const [newLoader, setNewLoader] = useState('vanilla')
+  const [newVersion, setNewVersion] = useState('')
+  const [verList, setVerList] = useState<string[]>([])
+  const [coreBusy, setCoreBusy] = useState(false)
+  const [note, setNote] = useState('')
+  const logBodyRef = useRef<HTMLPreElement>(null)
+  const kindRef = useRef(kind)
+  kindRef.current = kind
+
+  const loadMods = useCallback(
+    (k?: string) => {
+      const kk = k || kindRef.current
+      setSel(new Set())
+      setUpd({})
+      setItemLabels({})
+      if (!profile) return
+      if (!hasTauri()) {
+        setItems([])
+        setNoticeList('Список появится в приложении')
+        setEmptyList(false)
+        return
+      }
+      setNoticeList('')
+      setOpenInfo('')
+      listContent(profile, kk)
+        .then((list) => {
+          setItems(list)
+          setEmptyList(!list.length)
+          if (list.some((i) => !i.scanned)) {
+            scanContentLocal(profile, kk)
+              .then((full) => {
+                if (kindRef.current === kk) setItems(full)
+              })
+              .catch(() => {})
+          }
+          checkUpdates(profile, kk)
+            .then((ups) => {
+              const m: Record<string, string> = {}
+              ;(ups || []).forEach((u) => (m[u.file_name] = u.new_version_number))
+              setUpd(m)
+            })
+            .catch(() => {})
+        })
+        .catch(() => {
+          setItems([])
+          setEmptyList(false)
+          setNoticeList('—')
+        })
+    },
+    [profile],
+  )
+
+  const loadWorlds = useCallback(() => {
+    if (!profile) return
+    if (!hasTauri()) {
+      setWorlds([])
+      setServers([])
+      setWorldsNotice('Доступно в приложении')
+      return
+    }
+    setWorldsNotice('')
+    Promise.all([listWorlds(profile), listServers(profile)])
+      .then(([ws, srv]) => {
+        setWorlds(ws)
+        setServers(srv)
+      })
+      .catch(() => {})
+  }, [profile])
+
+  const loadLogs = useCallback(() => {
+    if (!profile || !hasTauri()) return
+    listLogs(profile)
+      .then((files) => {
+        setLogFiles(files)
+        if (!files.length) {
+          setLogFile('')
+          setLogBody('Логи появятся после первого запуска игры')
+          return
+        }
+        setLogFile(files[0])
+      })
+      .catch(() => {})
+  }, [profile])
+
+  useEffect(() => {
+    if (!profile || !logFile || !hasTauri()) return
+    readLog(profile, logFile).then((t) => setLogBody(t || '(пусто)'))
+  }, [profile, logFile])
+
+  useEffect(() => {
+    const b = logBodyRef.current
+    if (b) b.scrollTop = b.scrollHeight
+  }, [logBody])
+
+  // Rust streams the game stdout/stderr as "game-log"; "game-log-start" clears the buffer.
+  useEffect(() => {
+    let uns: Array<(() => void) | null> = []
+    listenGameLogStart(() => setLiveLines([])).then((u) => uns.push(u))
+    listenGameLog((lines) => setLiveLines((l) => [...l, ...lines].slice(-800))).then((u) => uns.push(u))
+    return () => uns.forEach((u) => u && u())
+  }, [])
+
+  useEffect(() => {
+    const b = liveRef.current
+    if (b) b.scrollTop = b.scrollHeight
+  }, [liveLines])
+
+  useEffect(() => {
+    if (!hasTauri() || !servers.length) return
+    let alive = true
+    servers.forEach((sv) => {
+      if (!sv.ip) return
+      pingServer(sv.ip)
+        .then((r) => alive && setPings((p) => ({ ...p, [sv.ip]: r })))
+        .catch(() => alive && setPings((p) => ({ ...p, [sv.ip]: null })))
+    })
+    return () => {
+      alive = false
+    }
+  }, [servers])
+
+  useEffect(() => {
+    if (!modal.open || !profile) return
+    setTab('content')
+    setKind('mod')
+    setPlaytime('')
+    setRam(parseInt(localStorage.getItem(ramKey(profile)) || '4'))
+    setJavaList([])
+    setDetectLabel('Найти')
+    setShotCount('—')
+    setMpSlug('')
+    setMpVersion('')
+    setWFilter('all')
+    setWsName('')
+    setWsIp('')
+    setShareLabel('Поделиться (mclo.gs)')
+    setUpdateAllLabel('Обновить всё')
+    setBulkUpdLabel('Обновить')
+    setRenameVal(profile)
+    try {
+      setNote(localStorage.getItem('m-note-' + profile) || '')
+    } catch {
+      setNote('')
+    }
+    if (hasTauri()) {
+      ;(listVersions() as Promise<string[]>)
+        .then((vs) => setVerList(vs))
+        .catch(() => setVerList([]))
+      getPlayStats()
+        .then((s) => {
+          const b = s.builds.find((x) => x.key === profile)
+          if (!b || !b.seconds) return
+          setPlaytime(' · играно ' + fmtPlaytime(b.seconds) + (b.last ? ' · заходил ' + whenText(b.last) : ''))
+        })
+        .catch(() => {})
+      loadProfileSettings(profile)
+        .then((cfg) => {
+          setJvm(cfg.jvmArgs || '')
+          setW(cfg.width ? String(cfg.width) : '')
+          setH(cfg.height ? String(cfg.height) : '')
+          setJava(cfg.javaPath || '')
+        })
+        .catch(() => {})
+      detectJava()
+        .then((list) => setJavaList(list))
+        .catch(() => {})
+      countScreenshots(profile)
+        .then((n) => setShotCount(n ? n + ' шт.' : 'пока нет'))
+        .catch(() => {})
+      modpackInfo(profile)
+        .then((mp) => {
+          if (mp && mp.slug) {
+            setMpSlug(mp.slug)
+            setMpVersion(mp.versionId || '')
+          }
+        })
+        .catch(() => {})
+      getProfileGroups()
+        .then((g) => setGroup((g && g[profile]) || ''))
+        .catch(() => {})
+    }
+    loadMods('mod')
+  }, [modal.open, profile, loadMods])
+
+  useEffect(() => {
+    if (!pr) return
+    setNewLoader(loaderId(pr))
+    setNewVersion(pr.version)
+  }, [modal.open, profile, pr?.version, pr?.loader, pr?.fabric])
+
+  const doRename = () => {
+    const nn = renameVal.trim()
+    if (!profile || !nn || nn === profile) return
+    if (!hasTauri()) {
+      showToast('Переименование доступно в приложении', 'error')
+      return
+    }
+    setRenameBusy(true)
+    renameProfile(profile, nn)
+      .then(() => {
+        for (const pfx of ['m-last-', 'm-ram-']) {
+          const v = localStorage.getItem(pfx + profile)
+          if (v !== null) {
+            localStorage.setItem(pfx + nn, v)
+            localStorage.removeItem(pfx + profile)
+          }
+        }
+        useInstance.getState().setProfile(nn)
+        useProfiles.getState().setSelected(nn)
+        void useProfiles.getState().refresh()
+        showToast('Сборка переименована в «' + nn + '»')
+      })
+      .catch((e) => showToast('Не удалось переименовать: ' + e, 'error'))
+      .finally(() => setRenameBusy(false))
+  }
+
+  const applyCore = async () => {
+    if (!profile || !pr) return
+    if (!hasTauri()) {
+      showToast('Смена версии/ядра доступна в приложении', 'error')
+      return
+    }
+    const ver = (newVersion || pr.version).trim()
+    if (ver === pr.version && newLoader === loaderId(pr)) {
+      showToast('Версия и ядро не менялись')
+      return
+    }
+    const label = CORE_OPTS.find((c) => c[0] === newLoader)?.[1] || newLoader
+    if (
+      !(await uiConfirm('Сменить сборку на ' + label + ' ' + ver + '? Установленные моды могут стать несовместимы — проверь их после смены.', {
+        confirmLabel: 'Сменить',
+      }))
+    )
+      return
+    setCoreBusy(true)
+    let modCount = 0
+    try {
+      if (hasTauri()) modCount = (await listContent(profile, 'mod')).length
+    } catch {}
+    setProfileLoader(profile, ver, newLoader)
+      .then(() => {
+        void useProfiles.getState().refresh()
+        if (modCount > 0 && newLoader !== loaderId(pr)) {
+          showToast(
+            'Ядро сменили на ' + label + '. Проверь моды (' + modCount + ' шт.) — часть может не подойти под новое ядро.',
+          )
+        } else {
+          showToast('Готово: ' + label + ' · ' + ver + '. Ядро доустановим при запуске.')
+        }
+      })
+      .catch((e) => showToast('Не удалось сменить: ' + e, 'error'))
+      .finally(() => setCoreBusy(false))
+  }
+
+  useEffect(() => {
+    if (!modal.open) return
+    let unlisten: (() => void) | null = null
+    listenDragDrop((paths) => {
+      if (!useUi.getState().modals.bsModal.open) return
+      const p = useInstance.getState().profile
+      if (!p) return
+      const files = (paths || []).filter((x) => /\.(jar|zip|litemod)$/i.test(x))
+      if (!files.length) return
+      showToast('Добавляем ' + files.length + ' файл(ов)…')
+      Promise.all(files.map((x) => addLocalFile(p, kindRef.current, x).catch(() => {}))).then(() => {
+        loadMods()
+        showToast('Добавлено в сборку')
+      })
+    }).then((u) => {
+      unlisten = u
+    })
+    return () => {
+      if (unlisten) unlisten()
+    }
+  }, [modal.open, loadMods])
+
+  if (!modal.open) return null
+
+  const saveOpts = () => {
+    if (!hasTauri() || !profile) return
+    saveProfileSettings(profile, jvm || '', +w || 0, +h || 0, java || '').catch((e) => showToast('' + e, 'error'))
+  }
+
+  const close = () => closeModal('bsModal')
+
+  const bulk = (names: string[], fn: (n: string) => Promise<unknown>, after?: () => void) =>
+    Promise.all(names.map(fn)).then(() => {
+      setSel(new Set())
+      loadMods()
+      if (after) after()
+    })
+
+  const filteredWorlds = wFilter !== 'server' ? worlds : []
+  const filteredServers = wFilter !== 'single' ? servers : []
+  const worldsEmpty = !worldsNotice && !filteredWorlds.length && !filteredServers.length
+
+  const cq = contentQuery.trim().toLowerCase()
+  const shownItems = cq ? items.filter((i) => (i.title || i.name).toLowerCase().includes(cq)) : items
+
+  return (
+    <div
+      className={'modal-bg instance-page' + (modal.open ? ' open' : '') + (modal.vis ? ' vis' : '')}
+      id="bsModal"
+      onClick={(e) => {
+        if ((e.target as HTMLElement).id === 'bsModal') close()
+      }}
+    >
+      <div className="instance-shell">
+        <div className="inst-head">
+          <button className="inst-back" id="bsClose" data-sound="close" onClick={close}>
+            <Icon id="i-chev-l" /> К сборкам
+          </button>
+          <div className="inst-hero">
+            <div className="inst-icon" id="bsIconBig">
+              <Cover url={pr ? pr.icon : null} />
+            </div>
+            <div className="inst-titles">
+              <h1 id="bsTitle">{profile}</h1>
+              <div className="inst-sub" id="bsSub">
+                {(pr ? LOADER_NAME(pr) + ' · ' + pr.version : '—') + playtime}
+              </div>
+            </div>
+            <div className="inst-actions">
+              <button
+                className="btn lg primary"
+                id="bsPlay"
+                onClick={() => {
+                  close()
+                  if (hasTauri()) realLaunch(profile!)
+                  else startPrelaunch(profile!)
+                }}
+              >
+                <Icon id="i-play" /> Играть
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="inst-body">
+          <nav className="inst-tabs">
+            {[
+              ['content', 'i-blocks', 'Контент'],
+              ['worlds', 'i-server', 'Миры и серверы'],
+              ['logs', 'i-list', 'Логи'],
+              ['opts', 'i-settings', 'Параметры'],
+            ].map(([id, ic, label]) => (
+              <button
+                key={id}
+                className={'inst-tab' + (tab === id ? ' on' : '')}
+                data-bstab={id}
+                onClick={() => {
+                  setTab(id)
+                  if (id === 'worlds') loadWorlds()
+                  if (id === 'logs') loadLogs()
+                }}
+              >
+                <Icon id={ic} /> {label}
+              </button>
+            ))}
+            <div className="inst-tab-sep"></div>
+            <button
+              className="inst-tab danger-tab"
+              id="bsDelete"
+              onClick={async () => {
+                if (!(await uiConfirm('Удалить сборку «' + profile + '» со всеми модами?', { confirmLabel: 'Удалить' }))) return
+                if (hasTauri()) {
+                  deleteProfile(profile!).then(() => {
+                    close()
+                    useProfiles.getState().setSelected(null)
+                    void useProfiles.getState().refresh()
+                    showToast('Сборка удалена', 'ok', 'delete')
+                  })
+                } else {
+                  close()
+                  showToast('Удалено (демо)')
+                }
+              }}
+            >
+              <Icon id="i-trash" /> Удалить сборку
+            </button>
+          </nav>
+          <div className="inst-content">
+            <div id="bsTabContent" style={{ display: tab === 'content' ? '' : 'none' }}>
+              <div className="segs" style={{ marginBottom: '12px' }}>
+                {KINDS.map(([k, label]) => (
+                  <button
+                    key={k}
+                    className={'seg' + (kind === k ? ' on' : '')}
+                    data-bskind={k}
+                    style={{ height: '32px', fontSize: '12.5px' }}
+                    onClick={() => {
+                      setKind(k)
+                      loadMods(k)
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+                <span style={{ flex: 1 }}></span>
+                {items.length > 4 ? (
+                  <div className="input sm" style={{ width: '150px', height: '32px' }}>
+                    <Icon id="i-search" />
+                    <input placeholder="Поиск…" value={contentQuery} onChange={(e) => setContentQuery(e.target.value)} />
+                  </div>
+                ) : null}
+                <button
+                  className="btn sm secondary"
+                  id="bsScan"
+                  style={{ height: '32px', fontSize: '12.5px' }}
+                  title="Прочитать метаданные файлов и опознать их на Modrinth"
+                  disabled={scanLabel !== 'Сканировать' || !items.length}
+                  onClick={() => {
+                    if (!hasTauri()) {
+                      showToast('Доступно в приложении')
+                      return
+                    }
+                    setScanLabel('Сканируем…')
+                    scanContent(profile!, kind)
+                      .then((r) => {
+                        setScanLabel('Сканировать')
+                        if (kindRef.current === kind) setItems(r.items)
+                        showToast(
+                          r.identified
+                            ? 'Опознано на Modrinth: ' + r.identified + ' из ' + r.scanned
+                            : 'Разобрано файлов: ' + r.scanned,
+                        )
+                      })
+                      .catch((e) => {
+                        setScanLabel('Сканировать')
+                        showToast('Не удалось просканировать: ' + e, 'error')
+                      })
+                  }}
+                >
+                  <Icon id="i-search" /> {scanLabel}
+                </button>
+                <span className="set-val" id="bsModCount">
+                  {noticeList ? '' : shownItems.length ? shownItems.length + ' шт.' : ''}
+                </span>
+              </div>
+              <div
+                id="bsBulkBar"
+                style={{
+                  display: sel.size ? 'flex' : 'none',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginBottom: '10px',
+                  padding: '7px 10px',
+                  background: 'var(--m-accent-soft)',
+                  borderRadius: '10px',
+                }}
+              >
+                <span
+                  className={
+                    'chk' + (sel.size > 0 && sel.size === shownItems.length ? ' on' : sel.size ? ' part' : '')
+                  }
+                  id="bsSelAll"
+                  title="Выбрать всё"
+                  style={{ flex: 'none' }}
+                  onClick={() => {
+                    if (sel.size === shownItems.length) setSel(new Set())
+                    else setSel(new Set(shownItems.map((i) => i.name)))
+                  }}
+                ></span>
+                <span className="set-val" id="bsSelCount" style={{ color: 'var(--m-accent)' }}>
+                  {sel.size + ' выбрано'}
+                </span>
+                <span style={{ flex: 1 }}></span>
+                <button
+                  className="btn sm secondary"
+                  data-bulk="enable"
+                  onClick={() => void bulk([...sel], (n) => toggleContent(profile!, kind, n, true))}
+                >
+                  Вкл
+                </button>
+                <button
+                  className="btn sm secondary"
+                  data-bulk="disable"
+                  onClick={() => void bulk([...sel], (n) => toggleContent(profile!, kind, n, false))}
+                >
+                  Выкл
+                </button>
+                <button
+                  className="btn sm secondary"
+                  data-bulk="update"
+                  onClick={() => {
+                    setBulkUpdLabel('…')
+                    void bulk(
+                      [...sel],
+                      (n) => updateContent(profile!, kind, n).catch(() => {}),
+                      () => showToast('Обновлено'),
+                    )
+                  }}
+                >
+                  {bulkUpdLabel}
+                </button>
+                <button
+                  className="btn sm danger"
+                  data-bulk="delete"
+                  onClick={async () => {
+                    const names = [...sel]
+                    if (await uiConfirm('Удалить выбранное (' + names.length + ')?', { confirmLabel: 'Удалить' }))
+                      void bulk(names, (n) => deleteContent(profile!, kind, n))
+                  }}
+                >
+                  Удалить
+                </button>
+              </div>
+              <div id="bsMods" style={{ maxHeight: '340px', overflowY: 'auto' }}>
+                {noticeList ? (
+                  <p className="faint-note">{noticeList}</p>
+                ) : emptyList ? (
+                  <p className="faint-note">Пусто. Добавь из каталога или перетащи .jar сюда.</p>
+                ) : !shownItems.length ? (
+                  <p className="faint-note">Ничего не найдено по «{contentQuery.trim()}».</p>
+                ) : (
+                  shownItems.map((md) => {
+                    const up = upd[md.name]
+                    const title = md.title || md.name.replace(/\.(jar|zip)$/, '')
+                    const info = openInfo === md.name
+                    const modrinth = md.project_id && !md.project_id.startsWith('cf:') ? md.project_id : ''
+                    const curse = md.project_id && md.project_id.startsWith('cf:') ? md.project_id.slice(3) : ''
+                    const facts = [
+                      md.version_number ? 'версия ' + md.version_number : '',
+                      md.mc ? 'MC ' + md.mc : '',
+                      md.author ? 'автор: ' + md.author : '',
+                      fmtSize(md.size),
+                    ].filter(Boolean)
+                    return (
+                      <div className={'mod-card' + (md.enabled ? '' : ' off') + (info ? ' open' : '')} key={md.name}>
+                        <div className="mod-card-row">
+                          <span
+                            className={'chk mod-sel' + (sel.has(md.name) ? ' on' : '')}
+                            data-sel={md.name}
+                            title={sel.has(md.name) ? 'Убрать из выбора' : 'Выбрать'}
+                            onClick={() => {
+                              const next = new Set(sel)
+                              if (next.has(md.name)) next.delete(md.name)
+                              else next.add(md.name)
+                              setSel(next)
+                            }}
+                          ></span>
+                          <span className="mod-art">
+                            {md.icon_url ? <img src={md.icon_url} alt="" loading="lazy" /> : <Icon id={KIND_ICON[kind]} />}
+                          </span>
+                          <span className="mod-card-body" title={md.name}>
+                            <span className="mod-card-title">
+                              {title}
+                              {md.version_number ? <span className="mod-ver">{md.version_number}</span> : null}
+                              {up ? (
+                                <span className="mod-upd" title={'Новая версия: ' + up}>
+                                  обновление
+                                </span>
+                              ) : null}
+                              {md.loader ? <span className="mod-tag">{md.loader}</span> : null}
+                            </span>
+                            <span className="mod-card-sub">{md.description || md.name}</span>
+                          </span>
+                          {up ? (
+                            <button
+                              className="btn sm secondary"
+                              data-upd={md.name}
+                              style={{ height: '26px' }}
+                              onClick={() => {
+                                setItemLabels((l) => ({ ...l, [md.name]: '…' }))
+                                updateContent(profile!, kind, md.name)
+                                  .then(() => {
+                                    loadMods()
+                                    showToast('Обновлено')
+                                  })
+                                  .catch((er) => {
+                                    loadMods()
+                                    showToast('' + er)
+                                  })
+                              }}
+                            >
+                              {itemLabels[md.name] || 'Обновить'}
+                            </button>
+                          ) : null}
+                          <button
+                            className={'icon-btn mod-info' + (info ? ' on' : '')}
+                            title="Подробнее"
+                            onClick={() => setOpenInfo(info ? '' : md.name)}
+                          >
+                            <Icon id="i-info" />
+                          </button>
+                          <span
+                            className={'tgl' + (md.enabled ? ' on' : '')}
+                            data-tg={md.name}
+                            title={md.enabled ? 'Выключить в игре' : 'Включить в игре'}
+                            onClick={() => {
+                              toggleContent(profile!, kind, md.name, !md.enabled).then(() => loadMods())
+                            }}
+                          ></span>
+                          <button
+                            className="icon-btn del"
+                            data-del={md.name}
+                            title="Удалить файл"
+                            onClick={async () => {
+                              if (await uiConfirm('Удалить ' + md.name + '?', { confirmLabel: 'Удалить' }))
+                                deleteContent(profile!, kind, md.name).then(() => loadMods())
+                            }}
+                          >
+                            <Icon id="i-trash" />
+                          </button>
+                        </div>
+                        {info ? (
+                          <div className="mod-card-info">
+                            <p className="mod-card-desc">{md.description || 'Автор не оставил описания в файле.'}</p>
+                            {facts.length ? (
+                              <div className="mod-card-facts">
+                                {facts.map((f) => (
+                                  <span className="pill" key={f}>
+                                    {f}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : null}
+                            <div className="mod-card-file">{md.name}</div>
+                            <div className="mod-card-acts">
+                              {modrinth ? (
+                                <button className="btn sm secondary" onClick={() => openProject(modrinth, kind)}>
+                                  Карточка на Modrinth
+                                </button>
+                              ) : null}
+                              {curse ? (
+                                <button
+                                  className="btn sm secondary"
+                                  onClick={() => openUrl('https://www.curseforge.com/projects/' + curse)}
+                                >
+                                  Открыть на CurseForge
+                                </button>
+                              ) : null}
+                              {!md.project_id ? (
+                                <span className="faint-note" style={{ margin: 0 }}>
+                                  Файла нет в каталогах — нажми «Сканировать», поищем его на Modrinth.
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+              <div
+                id="bsDrop"
+                style={{
+                  marginTop: '10px',
+                  padding: '10px',
+                  border: '1px dashed var(--m-border-strong)',
+                  borderRadius: '10px',
+                  textAlign: 'center',
+                  fontSize: '12px',
+                  color: 'var(--m-fg-faint)',
+                }}
+              >
+                Перетащи сюда .jar / .zip — опознаем на Modrinth
+              </div>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                <button
+                  className="btn sm secondary"
+                  id="bsAddContent"
+                  style={{ flex: 1 }}
+                  onClick={() => {
+                    useProfiles.getState().setSelected(profile)
+                    close()
+                    setScreen('mods')
+                    useMods.getState().scopeTo(profile)
+                    useMods.getState().set({ modTab: 'mod' })
+                    void useMods.getState().load()
+                  }}
+                >
+                  Добавить из каталога
+                </button>
+                <button
+                  className="btn sm secondary"
+                  id="bsUpdateAll"
+                  onClick={() => {
+                    if (!hasTauri()) return
+                    setUpdateAllLabel('Обновляем…')
+                    updateAll(profile!, kind)
+                      .then((n) => {
+                        setUpdateAllLabel('Обновить всё')
+                        loadMods()
+                        showToast(n ? 'Обновлено: ' + n : 'Всё актуально')
+                      })
+                      .catch((e) => {
+                        setUpdateAllLabel('Обновить всё')
+                        showToast('' + e)
+                      })
+                  }}
+                >
+                  {updateAllLabel}
+                </button>
+                <button
+                  className="btn sm ghost"
+                  id="bsExport"
+                  title="Экспорт сборки в .mrpack"
+                  onClick={() => {
+                    if (!hasTauri()) {
+                      showToast('Доступно в приложении')
+                      return
+                    }
+                    showToast('Собираем .mrpack…')
+                    exportMrpack(profile!, profile!, '1.0.0', pr ? LOADER_NAME(pr) + ' ' + pr.version : '')
+                      .then((p) => showToast('Экспортировано: ' + ('' + p).split('/').pop()))
+                      .catch((e) => showToast('' + e))
+                  }}
+                >
+                  <Icon id="i-download" />
+                </button>
+              </div>
+            </div>
+
+            <div id="bsTabWorlds" style={{ display: tab === 'worlds' ? '' : 'none' }}>
+              <div className="segs" style={{ marginBottom: '12px' }}>
+                {[
+                  ['all', 'Все'],
+                  ['single', 'Одиночные'],
+                  ['server', 'Серверы'],
+                ].map(([k, label]) => (
+                  <button
+                    key={k}
+                    className={'seg' + (wFilter === k ? ' on' : '')}
+                    data-wfilter={k}
+                    style={{ height: '32px', fontSize: '12.5px' }}
+                    onClick={() => {
+                      setWFilter(k)
+                      loadWorlds()
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div id="bsWorlds" style={{ maxHeight: '250px', overflowY: 'auto' }}>
+                {worldsNotice ? (
+                  <p className="faint-note">{worldsNotice}</p>
+                ) : worldsEmpty ? (
+                  <p className="faint-note">
+                    Миров пока нет — они появятся после игры. Сервер можно добавить ниже.
+                  </p>
+                ) : (
+                  <>
+                    {filteredWorlds.map((wd) => (
+                      <div className="mod-line" key={'w' + wd.folder}>
+                        <span className="mod-mini">
+                          <Icon id="i-box2" />
+                        </span>
+                        <b>{wd.name}</b>
+                        <span className="set-val">{agoText(wd.last_played)}</span>
+                        <button
+                          className="btn sm secondary w-play"
+                          data-w={wd.name}
+                          style={{ marginLeft: '8px' }}
+                          onClick={() => {
+                            close()
+                            showToast('Заходим в мир «' + wd.name + '»…')
+                            joinWithAuth(profile!, wd.name, null).catch((e) => showLaunchError(e))
+                          }}
+                        >
+                          Играть
+                        </button>
+                        <button
+                          className="icon-btn w-bak"
+                          data-wb={wd.folder}
+                          title="Бэкап мира"
+                          onClick={(ev) => {
+                            const b = ev.currentTarget
+                            b.style.opacity = '0.4'
+                            showToast('Делаем бэкап мира…')
+                            backupWorld(profile!, wd.folder)
+                              .then((p) => {
+                                b.style.opacity = '1'
+                                showToast('Бэкап готов: ' + ('' + p).split('/').pop())
+                              })
+                              .catch((e) => {
+                                b.style.opacity = '1'
+                                showToast('' + e)
+                              })
+                          }}
+                        >
+                          <Icon id="i-download" />
+                        </button>
+                        <button
+                          className="icon-btn del w-wdel"
+                          data-wd={wd.folder}
+                          title="Удалить мир"
+                          onClick={() => {
+                            void uiConfirm(
+                              'Удалить мир «' + wd.name + '» вместе со всем прогрессом? Отменить будет нельзя.',
+                              { title: 'Удаление мира', confirmLabel: 'Удалить' },
+                            ).then((ok) => {
+                              if (!ok) return
+                              deleteWorld(profile!, wd.folder)
+                                .then(() => {
+                                  loadWorlds()
+                                  showToast('Мир «' + wd.name + '» удалён')
+                                })
+                                .catch((e) => showToast('' + e))
+                            })
+                          }}
+                        >
+                          <Icon id="i-trash" />
+                        </button>
+                      </div>
+                    ))}
+                    {filteredServers.map((s2) => {
+                      const pg = pings[s2.ip]
+                      const online = pg && pg.online >= 0 && (pg.max > 0 || pg.online > 0 || pg.version)
+                      return (
+                      <div className="mod-line srv-line" key={'s' + s2.ip}>
+                        <span className="mod-mini">
+                          <Icon id="i-server" />
+                        </span>
+                        <span className="srv-line-body">
+                          <b>
+                            {s2.name}
+                            {pg === undefined ? (
+                              <span className="srv-ping-dot loading"></span>
+                            ) : online ? (
+                              <span className="srv-ping-dot on"></span>
+                            ) : (
+                              <span className="srv-ping-dot off"></span>
+                            )}
+                          </b>
+                          <span className="srv-line-meta">
+                            {online ? (
+                              <>
+                                {pg!.online}/{pg!.max} онлайн{pg!.version ? ' · ' + pg!.version : ''}
+                                {pg!.motd ? ' · ' + pg!.motd.slice(0, 40) : ''}
+                              </>
+                            ) : pg === undefined ? (
+                              'проверяем…'
+                            ) : (
+                              s2.ip + ' · офлайн'
+                            )}
+                          </span>
+                        </span>
+                        <button
+                          className="btn sm secondary w-join"
+                          data-ip={s2.ip}
+                          style={{ marginLeft: '8px' }}
+                          onClick={() => {
+                            close()
+                            showToast('Подключаемся к ' + s2.ip + '…')
+                            joinWithAuth(profile!, null, s2.ip, s2.name).catch((e) => showLaunchError(e))
+                          }}
+                        >
+                          Зайти
+                        </button>
+                        <button
+                          className="icon-btn del w-del"
+                          data-ip={s2.ip}
+                          onClick={() => removeServer(profile!, s2.ip).then(() => loadWorlds())}
+                        >
+                          <Icon id="i-trash" />
+                        </button>
+                      </div>
+                      )
+                    })}
+                  </>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                <div className="input sm" style={{ flex: 1 }}>
+                  <input
+                    id="wsName"
+                    placeholder="Название сервера"
+                    value={wsName}
+                    onChange={(e) => setWsName(e.target.value)}
+                  />
+                </div>
+                <div className="input sm" style={{ flex: 1 }}>
+                  <input id="wsIp" placeholder="mc.example.net" value={wsIp} onChange={(e) => setWsIp(e.target.value)} />
+                </div>
+                <button
+                  className="btn sm secondary"
+                  id="wsAdd"
+                  onClick={() => {
+                    const n = wsName.trim() || wsIp.trim()
+                    const ip = wsIp.trim()
+                    if (!ip) return
+                    addServer(profile!, n, ip).then(() => {
+                      setWsName('')
+                      setWsIp('')
+                      loadWorlds()
+                      showToast('Сервер добавлен')
+                    })
+                  }}
+                >
+                  Добавить
+                </button>
+              </div>
+              <button
+                className="btn sm secondary"
+                id="bsAddWorld"
+                style={{ width: '100%', marginTop: '8px' }}
+                onClick={() => {
+                  useProfiles.getState().setSelected(profile)
+                  close()
+                  setScreen('mods')
+                  useMods.getState().scopeTo(profile)
+                  useMods.getState().set({ modTab: 'world', fCats: [], fCat: 'все', fWorldCat: 0 })
+                  void useMods.getState().load()
+                }}
+              >
+                <Icon id="i-map" /> Скачать карту из каталога
+              </button>
+            </div>
+
+            <div id="bsTabLogs" style={{ display: tab === 'logs' ? '' : 'none' }}>
+              <div className="segs" style={{ marginBottom: '10px', width: 'auto' }}>
+                <button
+                  className={'seg' + (logView === 'live' ? ' on' : '')}
+                  style={{ height: '32px', fontSize: '12.5px' }}
+                  onClick={() => setLogView('live')}
+                >
+                  <Icon id="i-list" /> Прямой эфир
+                  {liveLines.length ? <span className="log-live-dot"></span> : null}
+                </button>
+                <button
+                  className={'seg' + (logView === 'files' ? ' on' : '')}
+                  style={{ height: '32px', fontSize: '12.5px' }}
+                  onClick={() => setLogView('files')}
+                >
+                  <Icon id="i-book" /> Файлы
+                </button>
+              </div>
+
+              {logView === 'live' ? (
+                <>
+                  <pre ref={liveRef} className="host-console" style={{ height: '300px', margin: 0 }}>
+                    {liveLines.length ? (
+                      liveLines.map((l, i) => <div key={i}>{l}</div>)
+                    ) : (
+                      <div className="faint-note">Запусти игру — здесь будет живой вывод консоли в реальном времени.</div>
+                    )}
+                  </pre>
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                    {gameRunning ? (
+                      <button
+                        className="btn sm danger"
+                        style={{ flex: 1 }}
+                        disabled={gameStopping}
+                        onClick={() => stopRunningGame()}
+                      >
+                        <Icon id="i-power" /> {gameStopping ? 'Останавливаем…' : 'Остановить игру'}
+                      </button>
+                    ) : null}
+                    <button className="btn sm secondary" style={{ flex: 1 }} onClick={() => setLiveLines([])}>
+                      <Icon id="i-trash" /> Очистить
+                    </button>
+                    <button
+                      className="btn sm secondary"
+                      style={{ flex: 1 }}
+                      onClick={() => {
+                        void copyText(liveLines.join('\n')).then((ok) =>
+                          showToast(ok ? 'Консоль скопирована' : 'Не удалось скопировать консоль'),
+                        )
+                      }}
+                    >
+                      <Icon id="i-copy" /> Скопировать
+                    </button>
+                  </div>
+                </>
+              ) : null}
+
+              <div style={{ display: logView === 'files' ? '' : 'none' }}>
+                {logFiles.length ? (
+                  <div className="log-files">
+                    {logFiles.map((f) => (
+                      <button
+                        key={f}
+                        className={'log-file-chip' + (f === logFile ? ' on' : '')}
+                        onClick={() => setLogFile(f)}
+                      >
+                        {f}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                <pre
+                  id="bsLogBody"
+                  ref={logBodyRef}
+                  style={{
+                    maxHeight: '280px',
+                    overflow: 'auto',
+                    background: 'var(--m-inset)',
+                    borderRadius: '12px',
+                    padding: '12px',
+                    fontFamily: 'var(--m-mono)',
+                    fontSize: '11.5px',
+                    lineHeight: 1.5,
+                    whiteSpace: 'pre-wrap',
+                    color: 'var(--m-fg-muted)',
+                  }}
+                >
+                  {logBody}
+                </pre>
+                <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                <button
+                  className="btn sm secondary"
+                  id="bsLogCopy"
+                  style={{ flex: 1 }}
+                  onClick={() => {
+                    void copyText(logBody)
+                    showToast('Лог скопирован')
+                  }}
+                >
+                  Скопировать
+                </button>
+                <button
+                  className="btn sm secondary"
+                  id="bsLogShare"
+                  style={{ flex: 1 }}
+                  onClick={() => {
+                    if (!hasTauri()) {
+                      showToast('Доступно в приложении')
+                      return
+                    }
+                    const name = logFiles.length ? logFile : 'нет логов'
+                    if (!name || name === 'нет логов') {
+                      showToast('Нет лога для отправки')
+                      return
+                    }
+                    setShareLabel('Загружаем…')
+                    shareLog(profile!, name)
+                      .then((url) => {
+                        setShareLabel('Поделиться (mclo.gs)')
+                        void copyText(url)
+                        showToast('Ссылка на лог скопирована: ' + url)
+                        openUrl(url)
+                      })
+                      .catch((e) => {
+                        setShareLabel('Поделиться (mclo.gs)')
+                        showToast('' + e)
+                      })
+                  }}
+                >
+                  {shareLabel}
+                </button>
+              </div>
+              </div>
+            </div>
+
+            <div id="bsTabOpts" style={{ display: tab === 'opts' ? '' : 'none' }}>
+              <div className="set-row">
+                <span className="lab">
+                  Название сборки<small>Переименуем и перенесём все файлы</small>
+                </span>
+                <div className="input sm" style={{ width: '220px' }}>
+                  <input
+                    id="bsRename"
+                    value={renameVal}
+                    placeholder="Название сборки"
+                    onChange={(e) => setRenameVal(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') doRename()
+                    }}
+                  />
+                </div>
+                <button
+                  className="btn sm secondary"
+                  disabled={renameBusy || !renameVal.trim() || renameVal.trim() === profile}
+                  onClick={doRename}
+                >
+                  {renameBusy ? 'Переименовываем…' : 'Переименовать'}
+                </button>
+              </div>
+              <div className="set-row" style={{ alignItems: 'flex-start' }}>
+                <span className="lab">
+                  Версия и ядро<small>Загрузчик и версия Minecraft — доустановим при запуске</small>
+                </span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '300px' }}>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <Select
+                      width={148}
+                      value={newLoader}
+                      options={CORE_OPTS.map(([v, label]) => ({ value: v, label }))}
+                      onChange={setNewLoader}
+                    />
+                    <Select
+                      width={144}
+                      value={newVersion}
+                      options={[newVersion, ...verList.filter((v) => v !== newVersion)]
+                        .filter(Boolean)
+                        .map((v) => ({ value: v, label: v }))}
+                      onChange={setNewVersion}
+                    />
+                  </div>
+                  <button
+                    className="btn sm primary"
+                    style={{ alignSelf: 'flex-start' }}
+                    disabled={coreBusy || (newVersion === (pr ? pr.version : '') && newLoader === (pr ? loaderId(pr) : ''))}
+                    onClick={() => void applyCore()}
+                  >
+                    {coreBusy ? 'Меняем…' : 'Применить версию и ядро'}
+                  </button>
+                </div>
+              </div>
+              <div className="set-row" style={{ alignItems: 'flex-start' }}>
+                <span className="lab">
+                  Заметка<small>Личная пометка к сборке — видишь только ты</small>
+                </span>
+                <div className="input sm" style={{ width: '300px' }}>
+                  <input
+                    id="bsNote"
+                    placeholder="Например: сборка для игры с друзьями"
+                    value={note}
+                    maxLength={200}
+                    onChange={(e) => setNote(e.target.value)}
+                    onBlur={() => {
+                      try {
+                        if (profile) {
+                          if (note.trim()) localStorage.setItem('m-note-' + profile, note.trim())
+                          else localStorage.removeItem('m-note-' + profile)
+                        }
+                      } catch {}
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="set-row">
+                <span className="lab">
+                  Оперативная память<small>Для этой сборки</small>
+                </span>
+                <span className="set-val" id="bsRamVal">
+                  {ram + ' ГБ'}
+                </span>
+                <Slider
+                  width={200}
+                  min={1}
+                  max={16}
+                  value={ram}
+                  onChange={(v) => {
+                    setRam(v)
+                    if (profile) localStorage.setItem(ramKey(profile), String(v))
+                  }}
+                />
+              </div>
+              <div className="set-row">
+                <span className="lab">
+                  Аргументы JVM<small>Для опытных — тюнинг сборщика мусора</small>
+                </span>
+                <div className="input sm" style={{ width: '220px' }}>
+                  <input
+                    id="bsJvm"
+                    placeholder="-XX:+UseG1GC"
+                    value={jvm}
+                    onChange={(e) => setJvm(e.target.value)}
+                    onBlur={saveOpts}
+                  />
+                </div>
+              </div>
+              <div className="set-row" style={{ alignItems: 'flex-start' }}>
+                <span className="lab">
+                  Java<small>Пусто = скачиваем сами</small>
+                </span>
+                <div style={{ width: '300px' }}>
+                  <div className="input sm" style={{ marginBottom: '6px' }}>
+                    <input
+                      id="bsJava"
+                      placeholder="Авто (нужную версию ставим сами)"
+                      value={java}
+                      onChange={(e) => setJava(e.target.value)}
+                      onBlur={saveOpts}
+                    />
+                  </div>
+                  <Select
+                    width="100%"
+                    value={java && javaList.some((j) => j.path === java) ? java : ''}
+                    disabled={!javaList.length}
+                    placeholder={
+                      javaList.length ? '— выбрать найденную (' + javaList.length + ') —' : 'Ищем Java в системе…'
+                    }
+                    options={javaList.map((j) => ({ value: j.path, label: j.version, sub: j.path }))}
+                    onChange={(v) => {
+                      setJava(v)
+                      if (hasTauri() && profile)
+                        saveProfileSettings(profile, jvm || '', +w || 0, +h || 0, v).catch((e) => showToast('' + e, 'error'))
+                      showToast('Java выбрана')
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                    <button
+                      className="btn sm secondary"
+                      id="bsJavaBrowse"
+                      style={{ flex: 1 }}
+                      onClick={() => {
+                        if (!hasTauri()) {
+                          showToast('Доступно в приложении')
+                          return
+                        }
+                        pickJavaPath()
+                          .then((j) => {
+                            if (!j) return
+                            setJava(j.path)
+                            setJavaList((l) => (l.some((x) => x.path === j.path) ? l : [j, ...l]))
+                            if (profile)
+                              saveProfileSettings(profile, jvm || '', +w || 0, +h || 0, j.path).catch((e) => showToast('' + e, 'error'))
+                            showToast('Java выбрана: ' + j.version)
+                          })
+                          .catch((e) => showToast('' + e, 'error'))
+                      }}
+                    >
+                      Обзор…
+                    </button>
+                    <button
+                      className="btn sm secondary"
+                      id="bsJavaDetect"
+                      style={{ flex: 1 }}
+                      onClick={() => {
+                        if (!hasTauri()) {
+                          showToast('Доступно в приложении')
+                          return
+                        }
+                        setDetectLabel('Ищем…')
+                        detectJava()
+                          .then((list) => {
+                            setDetectLabel('Найти')
+                            setJavaList(list)
+                            showToast(
+                              list.length
+                                ? 'Найдено Java: ' + list.length
+                                : 'Java в системе не найдена — жми «Обзор…» или оставь пусто, скачаем сами',
+                            )
+                          })
+                          .catch((e) => {
+                            setDetectLabel('Найти')
+                            showToast('' + e)
+                          })
+                      }}
+                    >
+                      {detectLabel}
+                    </button>
+                    <button
+                      className="btn sm secondary"
+                      id="bsJavaTest"
+                      style={{ flex: 1 }}
+                      onClick={() => {
+                        if (!hasTauri()) {
+                          showToast('Доступно в приложении')
+                          return
+                        }
+                        const p = java.trim()
+                        if (!p) {
+                          showToast('Пусто = скачаем нужную Java сами')
+                          return
+                        }
+                        testJava(p)
+                          .then((v) => showToast('✓ ' + v))
+                          .catch((e) => showToast('✗ ' + e))
+                      }}
+                    >
+                      Тест
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="set-row">
+                <span className="lab">
+                  Разрешение окна<small>0 = как в игре</small>
+                </span>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <div className="input sm" style={{ width: '80px' }}>
+                    <input
+                      id="bsW"
+                      type="number"
+                      placeholder="Ширина"
+                      value={w}
+                      onChange={(e) => setW(e.target.value)}
+                      onBlur={saveOpts}
+                    />
+                  </div>
+                  <div className="input sm" style={{ width: '80px' }}>
+                    <input
+                      id="bsH"
+                      type="number"
+                      placeholder="Высота"
+                      value={h}
+                      onChange={(e) => setH(e.target.value)}
+                      onBlur={saveOpts}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="set-row" style={{ alignItems: 'flex-start' }}>
+                <span className="lab">
+                  Иконка сборки<small>Блок Millida или своя картинка</small>
+                </span>
+                <div style={{ width: '340px' }}>
+                  <IconGrid
+                    id="bsIcons"
+                    current={pr ? pr.icon : null}
+                    style={{ width: '100%', gridTemplateColumns: 'repeat(7,1fr)', maxHeight: '140px' }}
+                    onPick={(v) => {
+                      if (hasTauri() && profile)
+                        setProfileIcon(profile, v).then(() => {
+                          void useProfiles.getState().refresh()
+                          showToast('Иконка обновлена')
+                        })
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: '6px', marginTop: '8px', alignItems: 'center' }}>
+                    {customCover ? (
+                      <img
+                        src={customCover}
+                        alt=""
+                        width={32}
+                        height={32}
+                        style={{ borderRadius: '8px', objectFit: 'cover', flex: '0 0 auto' }}
+                      />
+                    ) : null}
+                    <button
+                      className="btn sm secondary"
+                      id="bsCoverPick"
+                      style={{ flex: 1 }}
+                      onClick={() => {
+                        if (!hasTauri()) {
+                          showToast('Доступно в приложении')
+                          return
+                        }
+                        if (!profile) return
+                        pickProfileCover(profile)
+                          .then((all) => {
+                            if (!all) return
+                            void useProfiles.getState().refresh()
+                            showToast('Обложка обновлена')
+                          })
+                          .catch((e) => showToast('' + e, 'error'))
+                      }}
+                    >
+                      Своя картинка…
+                    </button>
+                    {customCover ? (
+                      <button
+                        className="btn sm secondary"
+                        id="bsCoverClear"
+                        onClick={() => {
+                          if (!hasTauri() || !profile) return
+                          clearProfileCover(profile).then(() => {
+                            void useProfiles.getState().refresh()
+                            showToast('Вернули блок Millida')
+                          })
+                        }}
+                      >
+                        Убрать
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+              <div className="set-row" id="bsModpackRow" style={{ display: mpSlug ? '' : 'none' }}>
+                <span className="lab">
+                  Модпак<small>Обновить версию или откатиться</small>
+                </span>
+                <button
+                  className="btn sm secondary"
+                  id="bsModpackUpd"
+                  onClick={() => useModpackVersions.getState().open(profile!, mpSlug, mpVersion)}
+                >
+                  Версии…
+                </button>
+              </div>
+              <div className="set-row">
+                <span className="lab">
+                  Группа<small>Для порядка в списке сборок</small>
+                </span>
+                <div className="input sm" style={{ width: '180px' }}>
+                  <input
+                    id="bsGroup"
+                    placeholder="Напр. Технические"
+                    value={group}
+                    onChange={(e) => setGroup(e.target.value)}
+                    onBlur={() => {
+                      if (!hasTauri() || !profile) return
+                      const g = group.trim()
+                      setProfileGroup(profile, g).then(() => {
+                        void useProfiles.getState().refresh()
+                        showToast(g ? 'Группа: ' + g : 'Убрано из группы')
+                      })
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="set-row">
+                <span className="lab">
+                  Скриншоты<small id="bsShotCount">{shotCount}</small>
+                </span>
+                <button
+                  className="btn sm secondary"
+                  id="bsShots"
+                  onClick={() => {
+                    if (hasTauri()) void useScreens.getState().open(profile!)
+                    else showToast('Доступно в приложении')
+                  }}
+                >
+                  Открыть папку
+                </button>
+              </div>
+              <div className="set-row">
+                <span className="lab">Папка сборки</span>
+                <button
+                  className="btn sm secondary"
+                  id="bsFolder"
+                  onClick={() => {
+                    if (hasTauri()) openProfileFolder(profile!)
+                    else showToast('Папка (демо)')
+                  }}
+                >
+                  Открыть
+                </button>
+              </div>
+              <div className="set-row">
+                <span className="lab">
+                  Дублировать сборку<small>Копия со всем контентом</small>
+                </span>
+                <button
+                  className="btn sm secondary"
+                  id="bsDup"
+                  onClick={() => {
+                    if (!hasTauri()) {
+                      showToast('Доступно в приложении')
+                      return
+                    }
+                    duplicateProfile(profile!)
+                      .then(() => {
+                        close()
+                        void useProfiles.getState().refresh()
+                        showToast('Сборка продублирована')
+                      })
+                      .catch((e) => showToast('Не удалось продублировать: ' + e, 'error'))
+                  }}
+                >
+                  Дублировать
+                </button>
+              </div>
+              <div className="set-row">
+                <span className="lab">
+                  Починить сборку<small>Дозагрузить недостающие и битые файлы</small>
+                </span>
+                <button
+                  className="btn sm secondary"
+                  id="bsRepair"
+                  disabled={repairBusy}
+                  onClick={() => {
+                    if (!hasTauri()) {
+                      showToast('Доступно в приложении')
+                      return
+                    }
+                    setRepairBusy(true)
+                    showToast('Чиним сборку — проверяем файлы…')
+                    repairProfile(profile!)
+                      .then(() => showToast('Сборка починена — файлы на месте'))
+                      .catch((e) => showToast('Не удалось починить: ' + e, 'error'))
+                      .finally(() => setRepairBusy(false))
+                  }}
+                >
+                  <Icon id="i-restart" /> {repairBusy ? 'Чиним…' : 'Починить'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

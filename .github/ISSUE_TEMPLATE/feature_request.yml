@@ -1,0 +1,44 @@
+name: Предложение
+description: Идея, которая сделает лаунчер удобнее
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Опишите задачу, а не готовое решение. Понимая, что именно неудобно,
+        мы часто находим вариант проще и лучше исходного.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Какую проблему это решает
+      description: Что не получается или отнимает время. По возможности — на конкретном примере из вашей практики.
+      placeholder: |
+        Держу пять сборок под разные сервера и каждый раз ищу нужную глазами —
+        названия похожие, а порядок меняется после запуска.
+    validations:
+      required: true
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Как вы обходитесь сейчас
+      description: Что делаете вместо этого — в лаунчере, вручную или в других программах. Или «никак».
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: Как это могло бы работать
+      description: Необязательно. Если есть идея решения или пример из другого лаунчера — расскажите.
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Что ещё важно знать
+      description: Платформа, сценарий использования, скриншоты или наброски.
+    validations:
+      required: false

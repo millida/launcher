@@ -1,0 +1,18 @@
+{
+  "app": {
+    "windows": [
+      {
+        "title": "Millida Launcher",
+        "width": 1200,
+        "height": 760,
+        "minWidth": 980,
+        "minHeight": 640,
+        "decorations": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": { "x": 16, "y": 15 },
+        "center": true
+      }
+    ]
+  }
+}

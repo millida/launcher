@@ -1,0 +1,24 @@
+Millida Launcher
+Copyright (C) 2024-2026 Millida
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License, version 3, as published by the
+Free Software Foundation.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+The full text of the license is in the LICENSE file (SPDX: GPL-3.0-only).
+A copy is also available at <https://www.gnu.org/licenses/gpl-3.0.txt>.
+
+The name "Millida", the Millida logotype and the other brand assets listed in
+TRADEMARK.md are NOT covered by the GNU GPL. See TRADEMARK.md for the terms
+that apply to forks and redistributions.
+
+Third-party components bundled with or linked into this program keep their own
+licenses; they are listed in THIRD-PARTY.md. Bundled fonts are licensed under
+the SIL Open Font License 1.1 — see public/fonts/OFL.txt.
+
+Minecraft is a trademark of Mojang Synergies AB / Microsoft. This project is
+not affiliated with, endorsed by or sponsored by Mojang or Microsoft.

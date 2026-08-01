@@ -1,0 +1,846 @@
+import { useEffect, useState } from 'react'
+import { showToast } from '../state/ui'
+import { hasTauri } from '../ipc/tauri'
+import {
+  appVersion,
+  cacheSize,
+  clearCache,
+  convertFileSrc,
+  discordClear,
+  listJavaRuntimes,
+  openGameFolder,
+  pickGameDir,
+  pickWallpaper,
+  removeJavaRuntime,
+  setGameDir,
+} from '../ipc/commands'
+import { refreshProfiles } from '../state/profiles'
+import type { JavaRuntime } from '../ipc/commands'
+import { Icon } from '../components/Icon'
+import { uiConfirm } from '../state/confirm'
+import { ColorPicker } from '../components/ColorPicker'
+import { checkForUpdate, pendingUpdate } from '../lib/updater'
+import { useUpdate } from '../state/update'
+import { discordPresence } from '../lib/launch'
+import { fetchSounds, playSound, setSoundMode, soundMode, soundVolume } from '../lib/sound'
+import type { SoundMode } from '../lib/sound'
+import { Slider } from '../components/Slider'
+import { useWallpaper } from '../state/wallpaper'
+import { setTelemetryEnabled, telemetryEnabled, track } from '../lib/telemetry'
+import { VIDEOS } from '../lib/wallpaper'
+import { getAccount, getMillidaAccount, useAccounts } from '../state/accounts'
+import { accKindLabel } from '../lib/format'
+import { WALLET_URL, openExt } from '../lib/api'
+import { setSkinSource, skinSource } from '../lib/gameProfile'
+import { setStatsShared, statsShared } from '../state/playStats'
+import {
+  hasTray,
+  launchWindowMode,
+  restoreOnGameExit,
+  setLaunchWindowMode,
+  setRestoreOnGameExit,
+  setTrayClose,
+  trayCloseEnabled,
+} from '../lib/window'
+import type { LaunchWindowMode } from '../lib/window'
+import type { SkinSource } from '../lib/gameProfile'
+
+interface Accent {
+  id: string
+  c: string
+  h: string
+  s: string
+  fg?: string
+  grad?: string
+  textC?: string
+}
+
+function hexToRgb(hex: string) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim())
+  const n = m ? parseInt(m[1], 16) : 0x5ec64d
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 }
+}
+function toHex(r: number, g: number, b: number) {
+  const h = (v: number) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')
+  return '#' + h(r) + h(g) + h(b)
+}
+function shade(hex: string, amt: number) {
+  const { r, g, b } = hexToRgb(hex)
+  const t = amt < 0 ? 0 : 255
+  const p = Math.abs(amt)
+  return toHex(r + (t - r) * p, g + (t - g) * p, b + (t - b) * p)
+}
+function luminance(hex: string) {
+  const { r, g, b } = hexToRgb(hex)
+  const lin = (v: number) => {
+    const x = v / 255
+    return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4)
+  }
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+}
+function computeAccent(a: Accent): Accent {
+  const lum = luminance(a.c)
+  return {
+    ...a,
+    fg: lum > 0.5 ? '#141414' : '#ffffff',
+    textC: lum > 0.6 ? shade(a.c, -0.42) : a.c,
+    grad: 'linear-gradient(45deg,' + shade(a.c, -0.16) + ' 0%,' + a.c + ' 100%)',
+  }
+}
+
+const ACCENTS: Accent[] = [
+  { id: 'green', c: '#5EC64D', h: '#70D55F', s: 'rgba(94,198,77,.13)' },
+  { id: 'lime', c: '#9BD628', h: '#ACE23F', s: 'rgba(155,214,40,.14)' },
+  { id: 'teal', c: '#22C7A9', h: '#3ADBBD', s: 'rgba(34,199,169,.14)' },
+  { id: 'cyan', c: '#2CB6E8', h: '#48C6F2', s: 'rgba(44,182,232,.14)' },
+  { id: 'blue', c: '#4C8DFF', h: '#639BFF', s: 'rgba(76,141,255,.14)' },
+  { id: 'indigo', c: '#6C6BFF', h: '#8180FF', s: 'rgba(108,107,255,.14)' },
+  { id: 'purple', c: '#9B6BFF', h: '#AC80FF', s: 'rgba(155,107,255,.14)' },
+  { id: 'pink', c: '#FF6BAA', h: '#FF80B8', s: 'rgba(255,107,170,.14)' },
+  { id: 'red', c: '#FF6B5E', h: '#FF8073', s: 'rgba(255,107,94,.14)' },
+  { id: 'orange', c: '#F5923B', h: '#FFA24F', s: 'rgba(245,146,59,.14)' },
+  { id: 'yellow', c: '#F5C93B', h: '#FFD65A', s: 'rgba(245,201,59,.14)' },
+]
+
+function applyAccent(raw: Accent) {
+  const a = computeAccent(raw)
+  const r = document.documentElement.style
+  r.setProperty('--m-accent', a.textC || a.c)
+  r.setProperty('--m-accent-hover', a.h)
+  r.setProperty('--m-accent-soft', a.s)
+  r.setProperty('--m-accent-fg', a.fg || '#fff')
+  if (a.grad) r.setProperty('--m-grad', a.grad)
+  try {
+    localStorage.setItem('m-accent', JSON.stringify(a))
+  } catch {}
+}
+
+function accentFromHex(hex: string): Accent {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim())
+  const int = m ? parseInt(m[1], 16) : 0x5ec64d
+  const r = (int >> 16) & 255,
+    g = (int >> 8) & 255,
+    b = int & 255
+  const lift = (v: number) => Math.round(v + (255 - v) * 0.18)
+  const hx = (v: number) => v.toString(16).padStart(2, '0')
+  return {
+    id: 'custom',
+    c: '#' + hx(r) + hx(g) + hx(b),
+    h: '#' + hx(lift(r)) + hx(lift(g)) + hx(lift(b)),
+    s: `rgba(${r},${g},${b},.14)`,
+  }
+}
+
+function initialCustomHex(): string {
+  try {
+    const s = JSON.parse(localStorage.getItem('m-accent') || 'null')
+    if (s && s.id === 'custom') return s.c
+  } catch {}
+  return '#5EC64D'
+}
+
+function initialAccent(): string {
+  try {
+    const s = JSON.parse(localStorage.getItem('m-accent') || 'null')
+    if (s) return s.id
+  } catch {}
+  return 'green'
+}
+
+export function Settings({ on }: { on: boolean }) {
+  const wp = useWallpaper()
+  const [theme, setTheme] = useState(() => {
+    try {
+      return localStorage.getItem('m-theme') || 'dark'
+    } catch {
+      return 'dark'
+    }
+  })
+  const [accent, setAccent] = useState(initialAccent)
+  const [customHex, setCustomHex] = useState(initialCustomHex)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [cacheMb, setCacheMb] = useState<number | null>(null)
+  const [clearing, setClearing] = useState(false)
+  const [moving, setMoving] = useState(false)
+  const [winMode, setWinMode] = useState<LaunchWindowMode>(launchWindowMode)
+  const [trayClose, setTrayCloseOn] = useState(trayCloseEnabled)
+  const [telemetryOn, setTelemetryOn] = useState(telemetryEnabled)
+  const [backAfterGame, setBackAfterGame] = useState(restoreOnGameExit)
+  const [tray, setTray] = useState(hasTray)
+  const [discord, setDiscord] = useState(() => localStorage.getItem('m-discord') !== '0')
+  const [musicAuto, setMusicAuto] = useState(() => localStorage.getItem('m-mus-auto') !== '0')
+  const [soundMd, setSoundMd] = useState<SoundMode>(soundMode)
+  const [soundVol, setSoundVol] = useState(soundVolume)
+  const [soundBusy, setSoundBusy] = useState(false)
+  const [shareStats, setShareStats] = useState(statsShared)
+  const [ver, setVer] = useState('')
+  const [javas, setJavas] = useState<JavaRuntime[]>([])
+  const [upd, setUpd] = useState(pendingUpdate)
+  const [updBusy, setUpdBusy] = useState(false)
+  const updStaged = useUpdate((s) => s.staged)
+  const [skins, setSkins] = useState<SkinSource>(skinSource)
+  useAccounts()
+  const acc = getAccount()
+  const millidaAcc = getMillidaAccount()
+
+  useEffect(() => {
+    if (!on || !hasTauri()) return
+    setTray(hasTray())
+    setTrayCloseOn(trayCloseEnabled())
+    if (!ver) void appVersion().then(setVer).catch(() => {})
+    if (cacheMb === null)
+      void cacheSize()
+        .then((b) => setCacheMb(Math.round(b / 1024 / 1024)))
+        .catch(() => setCacheMb(0))
+    void listJavaRuntimes().then(setJavas).catch(() => {})
+  }, [on])
+
+  const changeDir = async () => {
+    if (!hasTauri()) {
+      showToast('Смена папки доступна в приложении лаунчера', 'error')
+      return
+    }
+    try {
+      const p = await pickGameDir()
+      if (!p) return
+      const move = await uiConfirm('Перенести в новую папку уже скачанные сборки, версии, миры и ассеты?', {
+        confirmLabel: 'Перенести',
+        cancelLabel: 'Оставить на месте',
+        danger: false,
+      })
+      setMoving(true)
+      showToast(move ? 'Переносим файлы игры…' : 'Меняем папку…')
+      await setGameDir(p, move)
+      await refreshProfiles()
+      showToast(move ? 'Папка игры сменилась, файлы перенесены' : 'Папка игры сменилась')
+    } catch (e) {
+      showToast('Не удалось сменить папку: ' + e, 'error')
+    } finally {
+      setMoving(false)
+    }
+  }
+
+  return (
+    <section className={'screen' + (on ? ' on' : '')} id="s-settings">
+      <div className="page-head">
+        <h1>Настройки</h1>
+        <div className="right">
+          <span className="faint-note" style={{ margin: 0 }}>
+            {acc ? acc.nick + ' · ' + accKindLabel(acc.kind) : 'Аккаунт не выбран'}
+          </span>
+        </div>
+      </div>
+
+      <div className="set-screen">
+        {millidaAcc ? (
+          <div className="set-group">
+            <div className="cap">Аккаунт Millida</div>
+            <div className="set-row">
+              <span className="lab">
+                Баланс<small>Средства на аккаунте Millida — оплата хостинга и сервисов</small>
+              </span>
+              <span className="set-val" style={{ fontSize: '16px', fontWeight: 700, color: 'var(--m-accent)' }}>
+                {(((millidaAcc.balance || 0) / 100) | 0).toLocaleString('ru-RU')} ₽
+              </span>
+              <button
+                className="btn sm primary"
+                onClick={() => {
+                  track('store_open', { where: 'wallet_topup' })
+                  openExt(WALLET_URL)
+                }}
+              >
+                <Icon id="i-wallet" /> Пополнить
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="set-group">
+          <div className="cap">Оформление</div>
+          <div className="set-row">
+            <span className="lab">Тема</span>
+            <div className="segs">
+              {[
+                ['', 'Тёмная'],
+                ['light', 'Светлая'],
+                ['auto', 'Авто'],
+              ].map(([v, label]) => (
+                <button
+                  key={label}
+                  className={'seg' + (theme === v ? ' on' : '')}
+                  style={{ height: '32px', fontSize: '12.5px' }}
+                  data-t={v}
+                  onClick={() => {
+                    setTheme(v)
+                    document.documentElement.dataset.theme =
+                      v === 'auto' ? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : '') : v
+                    try {
+                      localStorage.setItem('m-theme', v || 'dark')
+                    } catch {}
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="set-row">
+            <span className="lab">
+              Акцент<small>Цвет кнопок и выделения</small>
+            </span>
+            <div id="accentSwatches" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 26px)', gap: '9px', justifyContent: 'flex-end' }}>
+              {ACCENTS.map((a) => (
+                <button
+                  key={a.id}
+                  data-acc={a.id}
+                  title={a.id}
+                  style={{
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '50%',
+                    border: '2px solid ' + (a.id === accent ? 'var(--m-fg)' : 'transparent'),
+                    background: a.c,
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => {
+                    applyAccent(a)
+                    setAccent(a.id)
+                  }}
+                ></button>
+              ))}
+              <div style={{ position: 'relative', display: 'inline-block' }}>
+                <button
+                  title="Свой цвет"
+                  onClick={() => setPickerOpen((o) => !o)}
+                  style={{
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '50%',
+                    border: '2px solid ' + (accent === 'custom' ? 'var(--m-fg)' : 'transparent'),
+                    background:
+                      accent === 'custom'
+                        ? customHex
+                        : 'conic-gradient(from 0deg,#ff6b5e,#f5c93b,#5ec64d,#2cb6e8,#9b6bff,#ff6baa,#ff6b5e)',
+                    cursor: 'pointer',
+                    display: 'inline-block',
+                  }}
+                ></button>
+                {pickerOpen ? (
+                  <ColorPicker
+                    value={customHex}
+                    onClose={() => setPickerOpen(false)}
+                    onChange={(hex) => {
+                      setCustomHex(hex)
+                      const a = accentFromHex(hex)
+                      applyAccent(a)
+                      setAccent('custom')
+                    }}
+                  />
+                ) : null}
+              </div>
+            </div>
+          </div>
+          <div className="set-row">
+            <span className="lab">
+              Живые обои<small>Анимированный фон на главном экране</small>
+            </span>
+            <span
+              className={'tgl' + (wp.wpAnimOn ? ' on' : '')}
+              id="setAnim"
+              onClick={(e) => {
+                e.stopPropagation()
+                wp.toggleAnim()
+              }}
+            ></span>
+          </div>
+          <div className="set-row">
+            <span className="lab">
+              Фон при запуске<small>Случайный — при каждом запуске одно из видео</small>
+            </span>
+            <div className="segs">
+              {[
+                ['random', 'Случайный'],
+                ['fixed', 'Выбранный'],
+              ].map(([v, label]) => (
+                <button
+                  key={v}
+                  className={'seg' + (wp.wpMode === v ? ' on' : '')}
+                  data-wpmode={v}
+                  style={{ height: '32px', fontSize: '12.5px' }}
+                  onClick={() => wp.setMode(v)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="set-row" style={{ alignItems: 'flex-start' }}>
+            <span className="lab">
+              Выбрать фон<small>Одно из видео — станет фоном главного экрана</small>
+            </span>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '8px', width: '300px' }}>
+              {VIDEOS.map((v) => (
+                <button
+                  key={v.id}
+                  title={v.name}
+                  onClick={() => wp.pick(v.id, v.name)}
+                  style={{
+                    aspectRatio: '16/10',
+                    borderRadius: '9px',
+                    overflow: 'hidden',
+                    border:
+                      '2px solid ' +
+                      (wp.wpMode === 'fixed' && wp.wpCur === v.id ? 'var(--m-accent)' : 'transparent'),
+                    padding: 0,
+                    cursor: 'pointer',
+                    background: 'var(--m-inset)',
+                  }}
+                >
+                  <img
+                    src={v.poster}
+                    alt={v.name}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                  />
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="set-row" style={{ alignItems: 'flex-start' }}>
+            <span className="lab">
+              Свои фоны<small>Картинка, гифка или видео — храним последние 4</small>
+            </span>
+            <div className="wp-gallery">
+              {wp.gallery.map((c) => (
+                <div
+                  key={c.path}
+                  className={'wp-tile' + (wp.wpCur === 'custom' && wp.custom && wp.custom.path === c.path ? ' on' : '')}
+                  title={c.name || 'Свой фон'}
+                  onClick={() => wp.setCustom(c)}
+                >
+                  {c.kind === 'video' ? (
+                    <span className="wp-tile-ph">
+                      <Icon id="i-play" />
+                    </span>
+                  ) : (
+                    <img src={convertFileSrc(c.path)} alt="" />
+                  )}
+                  <span className="wp-tile-name">{c.name || 'Свой фон'}</span>
+                  <button
+                    className="wp-tile-del"
+                    title="Удалить"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      wp.removeCustom(c.path)
+                    }}
+                  >
+                    <Icon id="i-trash" />
+                  </button>
+                </div>
+              ))}
+              <button
+                className="wp-tile add"
+                onClick={() => {
+                  if (!hasTauri()) {
+                    showToast('Загрузка своего фона доступна в приложении', 'error')
+                    return
+                  }
+                  void pickWallpaper()
+                    .then((w) => {
+                      if (w) wp.addCustom({ kind: w.kind, path: w.path, name: w.name })
+                    })
+                    .catch((e) => showToast('Не удалось загрузить фон: ' + e, 'error'))
+                }}
+              >
+                <Icon id="i-upload" />
+                <span className="wp-tile-name">Загрузить</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="set-group">
+          <div className="cap">Игра</div>
+          <div className="set-row">
+            <span className="lab">
+              Скины и плащи
+              <small>
+                {skins === 'millida'
+                  ? 'Через Millida: тебя и других игроков лаунчера видно даже без лицензии'
+                  : 'Через Mojang: как в обычном лаунчере, скин берётся из аккаунта Microsoft'}
+              </small>
+            </span>
+            <div className="segs">
+              {[
+                ['millida', 'Millida'],
+                ['mojang', 'Лицензия'],
+              ].map(([v, label]) => (
+                <button
+                  key={v}
+                  className={'seg' + (skins === v ? ' on' : '')}
+                  data-skinsrc={v}
+                  style={{ height: '32px', fontSize: '12.5px' }}
+                  onClick={() => {
+                    setSkins(v as SkinSource)
+                    setSkinSource(v as SkinSource)
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="set-row">
+            <span className="lab">
+              Java<small>Идёт в комплекте, менять не нужно</small>
+            </span>
+            <span className="set-val">Авто · 21.0.5</span>
+          </div>
+          <div className="set-row">
+            <span className="lab">
+              Папка игры<small>{moving ? 'Переносим файлы, не закрывай лаунчер…' : 'Сборки, миры и ассеты игры'}</small>
+            </span>
+            <button className="btn sm secondary" onClick={() => openGameFolder()} disabled={moving}>
+              Открыть
+            </button>
+            <button className="btn sm secondary" onClick={() => void changeDir()} disabled={moving}>
+              {moving ? 'Переносим…' : 'Сменить'}
+            </button>
+          </div>
+          <div className="set-row">
+            <span className="lab">
+              Кэш и временные файлы<small>{cacheMb === null ? 'Считаем размер…' : cacheMb + ' МБ можно освободить'}</small>
+            </span>
+            <button
+              className="btn sm secondary"
+              disabled={clearing || !cacheMb}
+              onClick={async () => {
+                if (!hasTauri()) {
+                  showToast('Доступно в приложении', 'error')
+                  return
+                }
+                if (!(await uiConfirm('Очистить кэш и временные файлы? Сборки, миры и версии не тронем.', { confirmLabel: 'Очистить', danger: false })))
+                  return
+                setClearing(true)
+                clearCache()
+                  .then((freed) => {
+                    showToast('Освобождено ' + Math.round(freed / 1024 / 1024) + ' МБ')
+                    setCacheMb(0)
+                  })
+                  .catch((e) => showToast('Не удалось очистить: ' + e, 'error'))
+                  .finally(() => setClearing(false))
+              }}
+            >
+              <Icon id="i-trash" /> {clearing ? 'Чистим…' : 'Очистить'}
+            </button>
+          </div>
+          {javas.map((j) => (
+            <div className="set-row" key={j.major}>
+              <span className="lab">
+                Java {j.major}
+                <small>
+                  {Math.round(j.size / 1024 / 1024) + ' МБ · '}
+                  {j.in_use ? 'нужна сборкам' : 'сборками не используется'}
+                </small>
+              </span>
+              <button
+                className="btn sm secondary"
+                disabled={j.in_use}
+                title={j.in_use ? 'Эту Java просит одна из сборок' : 'Удалить, освободится место'}
+                onClick={async () => {
+                  if (
+                    !(await uiConfirm('Удалить Java ' + j.major + '? Если она снова понадобится, лаунчер скачает её сам.', {
+                      confirmLabel: 'Удалить',
+                      danger: true,
+                    }))
+                  )
+                    return
+                  removeJavaRuntime(j.major)
+                    .then((freed) => {
+                      showToast('Освобождено ' + Math.round(freed / 1024 / 1024) + ' МБ')
+                      void listJavaRuntimes().then(setJavas).catch(() => {})
+                    })
+                    .catch((e) => showToast('Не удалось удалить: ' + e, 'error'))
+                }}
+              >
+                <Icon id="i-trash" /> Удалить
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <div className="set-group">
+          <div className="cap">Лаунчер</div>
+          <div className="set-row">
+            <span className="lab">
+              Музыка при запуске<small>Фоновый плеер включается сам, когда открываешь лаунчер</small>
+            </span>
+            <span
+              className={'tgl' + (musicAuto ? ' on' : '')}
+              onClick={() => {
+                const next = !musicAuto
+                setMusicAuto(next)
+                localStorage.setItem('m-mus-auto', next ? '1' : '0')
+                showToast(next ? 'Музыка будет играть при запуске' : 'Музыка при запуске выключена')
+              }}
+            ></span>
+          </div>
+          <div className="set-row">
+            <span className="lab">
+              Звуки Minecraft<small>Настоящие звуки игры: свой на кнопку, вкладку, сундук, ачивку</small>
+            </span>
+            <div className="segs">
+              {(
+                [
+                  ['off', 'Выкл'],
+                  ['notify', 'Уведомления'],
+                  ['all', 'Все звуки'],
+                ] as [SoundMode, string][]
+              ).map(([v, label]) => (
+                <button
+                  key={v}
+                  data-nosound
+                  className={'seg' + (soundMd === v ? ' on' : '')}
+                  style={{ height: '32px', fontSize: '12.5px' }}
+                  onClick={() => {
+                    setSoundMd(v)
+                    setSoundMode(v)
+                    if (v === 'notify') playSound('notify')
+                    if (v === 'all') playSound('click')
+                    showToast(
+                      v === 'off'
+                        ? 'Звуки выключены'
+                        : v === 'notify'
+                          ? 'Звучат только уведомления'
+                          : 'Озвучен весь интерфейс',
+                      'ok',
+                      false,
+                    )
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {soundMd !== 'off' ? (
+            <>
+              <div className="set-row">
+                <span className="lab">
+                  Громкость звуков<small>Уведомления, клики и сигналы установки</small>
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: '0 0 240px' }}>
+                  <Slider
+                    value={soundVol}
+                    min={0}
+                    max={100}
+                    onChange={(v) => {
+                      setSoundVol(v)
+                      localStorage.setItem('m-sound-vol', String(v))
+                      playSound(soundMd === 'all' ? 'click' : 'notify')
+                    }}
+                  />
+                  <span className="set-val" style={{ width: '38px', textAlign: 'right' }}>
+                    {soundVol + '%'}
+                  </span>
+                </div>
+              </div>
+              <div className="set-row">
+                <span className="lab">
+                  Набор звуков<small>Один звук на действие, всё из ассетов игры — свои файлы Mojang не раздаём</small>
+                </span>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button className="btn sm" data-nosound onClick={() => playSound('achievement')}>
+                    <Icon id="i-volume" /> Проверить
+                  </button>
+                  <button
+                    className="btn sm"
+                    disabled={soundBusy}
+                    onClick={() => {
+                      setSoundBusy(true)
+                      fetchSounds()
+                        .then((n) =>
+                          showToast(n ? 'Звуков из игры: ' + n : 'Не удалось скачать звуки', n ? 'ok' : 'error', false),
+                        )
+                        .catch((e) => showToast('' + e, 'error', false))
+                        .finally(() => setSoundBusy(false))
+                    }}
+                  >
+                    {soundBusy ? <span className="spin"></span> : <Icon id="i-download" />} Обновить
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : null}
+          <div className="set-row">
+            <span className="lab">
+              Статистика для друзей<small>Часы в сборках и последний сервер видны друзьям в профиле</small>
+            </span>
+            <span
+              className={'tgl' + (shareStats ? ' on' : '')}
+              onClick={() => {
+                const next = !shareStats
+                setShareStats(next)
+                setStatsShared(next)
+                showToast(next ? 'Друзья видят твою статистику' : 'Статистика скрыта от друзей')
+              }}
+            ></span>
+          </div>
+          <div className="set-row">
+            <span className="lab">
+              Активность в Discord<small>Показывать друзьям, во что играешь</small>
+            </span>
+            <span
+              className={'tgl' + (discord ? ' on' : '')}
+              onClick={() => {
+                const next = !discord
+                setDiscord(next)
+                localStorage.setItem('m-discord', next ? '1' : '0')
+                if (next) discordPresence('lobby')
+                else discordClear().catch(() => {})
+                showToast(next ? 'Активность в Discord включена' : 'Активность в Discord выключена')
+              }}
+            ></span>
+          </div>
+          <div className="set-row">
+            <span className="lab">
+              При запуске игры
+              <small>
+                {winMode === 'tray'
+                  ? 'Лаунчер уходит в трей — иконка рядом с часами, клик по ней вернёт окно'
+                  : winMode === 'minimize'
+                    ? 'Лаунчер сворачивается в панель задач'
+                    : 'Лаунчер остаётся на экране'}
+              </small>
+            </span>
+            <div className="segs">
+              {[
+                ['none', 'Оставить'],
+                ['minimize', 'Свернуть'],
+                ['tray', 'В трей'],
+              ].map(([v, label]) => (
+                <button
+                  key={v}
+                  className={'seg' + (winMode === v ? ' on' : '')}
+                  data-winmode={v}
+                  disabled={v === 'tray' && !tray}
+                  title={v === 'tray' && !tray ? 'Трей недоступен в этой системе' : ''}
+                  style={{ height: '32px', fontSize: '12.5px', opacity: v === 'tray' && !tray ? 0.45 : 1 }}
+                  onClick={() => {
+                    const mode = v as LaunchWindowMode
+                    setWinMode(mode)
+                    setLaunchWindowMode(mode)
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="set-row">
+            <span className="lab">
+              Возвращать после игры<small>Игра закрылась — лаунчер снова открывается сам</small>
+            </span>
+            <span
+              className={'tgl' + (backAfterGame ? ' on' : '')}
+              onClick={() => {
+                const next = !backAfterGame
+                setBackAfterGame(next)
+                setRestoreOnGameExit(next)
+              }}
+            ></span>
+          </div>
+          <div className="set-row">
+            <span className="lab">
+              Закрывать в трей
+              <small>
+                {tray
+                  ? 'Крестик прячет лаунчер к часам, полный выход — из меню иконки в трее'
+                  : 'Трей недоступен в этой системе'}
+              </small>
+            </span>
+            <span
+              className={'tgl' + (trayClose ? ' on' : '')}
+              style={{ opacity: tray ? 1 : 0.45 }}
+              onClick={() => {
+                if (!tray) {
+                  showToast('Трей недоступен в этой системе', 'error')
+                  return
+                }
+                const next = !trayClose
+                setTrayCloseOn(next)
+                setTrayClose(next)
+                showToast(next ? 'Крестик убирает лаунчер в трей' : 'Крестик закрывает лаунчер')
+              }}
+            ></span>
+          </div>
+          <div className="set-row">
+            <span className="lab">
+              Анонимная статистика
+              <small>
+                Помогает чинить лаги и падения: система, железо, версия лаунчера и что не запустилось.
+                Ни ников, ни файлов, ни адреса — только цифры.
+              </small>
+            </span>
+            <span
+              className={'tgl' + (telemetryOn ? ' on' : '')}
+              id="setTelemetry"
+              onClick={(e) => {
+                e.stopPropagation()
+                const next = !telemetryOn
+                setTelemetryOn(next)
+                setTelemetryEnabled(next)
+                showToast(next ? 'Статистика включена — спасибо' : 'Статистика выключена')
+              }}
+            ></span>
+          </div>
+          <div className="set-row">
+            <span className="lab">
+              Версия лаунчера
+              <small>
+                {upd
+                  ? updStaged
+                    ? 'Обновление ' + upd.version + ' встанет при выходе'
+                    : 'Доступна ' + upd.version + ' — качаем'
+                  : ver
+                    ? 'Установлена ' + ver
+                    : 'Millida Launcher'}
+              </small>
+            </span>
+            {upd ? (
+              <button
+                className="btn sm primary"
+                disabled={updBusy}
+                onClick={() => {
+                  setUpdBusy(true)
+                  upd.install().catch((e) => {
+                    setUpdBusy(false)
+                    showToast('Не удалось обновиться: ' + e, 'error')
+                  })
+                }}
+              >
+                {updBusy ? 'Обновляем…' : 'Обновить и перезапустить'}
+              </button>
+            ) : (
+              <button
+                className="btn sm secondary"
+                disabled={updBusy}
+                onClick={() => {
+                  setUpdBusy(true)
+                  void checkForUpdate(true)
+                    .then((u) => setUpd(u))
+                    .finally(() => setUpdBusy(false))
+                }}
+              >
+                {updBusy ? 'Проверяем…' : 'Проверить обновления'}
+              </button>
+            )}
+          </div>
+        </div>
+
+        <p className="faint-note" style={{ marginTop: '18px' }}>
+          Настройки применяются сразу — сохранять не нужно.
+        </p>
+      </div>
+    </section>
+  )
+}

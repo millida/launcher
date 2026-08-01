@@ -1,0 +1,81 @@
+[package]
+name = "millida-launcher"
+version = "1.0.0"
+description = "Millida Launcher — безопасный лаунчер Minecraft"
+authors = ["Millida"]
+edition = "2021"
+license = "GPL-3.0-only"
+
+[lib]
+name = "millida_launcher_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset", "tray-icon"] }
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+tauri-plugin-deep-link = "2"
+# opens links and folders without a shell, so URL metacharacters cannot be
+# executed as commands
+tauri-plugin-opener = "2"
+# the webview is not a secure context, so navigator.clipboard is unavailable
+tauri-plugin-clipboard-manager = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+# rustls rather than native-tls: on macOS native-tls goes through the Keychain,
+# which re-prompts for a password after every auto-update changes the binary hash
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls-webpki-roots", "rustls-tls-native-roots", "charset", "http2"] }
+futures = "0.3"
+dirs = "6"
+md-5 = "0.10"
+rfd = "0.15"
+sha1 = "0.10"
+sha2 = "0.10"
+sysinfo = { version = "0.33", default-features = false, features = ["system"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+discord-rich-presence = "0.2"
+# secrets live in the local vault (secrets.rs): AES-256-GCM with an HKDF key
+aes-gcm = "0.10"
+hkdf = "0.12"
+# the fallback updater verifies artifacts with the same key and algorithm as the
+# updater plugin
+minisign-verify = "0.2"
+semver = "1"
+base64 = "0.22"
+url = "2"
+# game assets ship as ogg/vorbis, which WKWebView on macOS cannot play
+lewton = "0.10"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+
+[target.'cfg(windows)'.dependencies]
+# DPAPI for vault.key: the file is useless outside the Windows account
+windows-sys = { version = "0.61", features = ["Win32_Security_Cryptography", "Win32_Foundation"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2"
+
+[profile.release]
+strip = true
+lto = "thin"
+codegen-units = 1
+
+# Local iteration profile. A separate named profile keeps its own target dir and
+# cache, so alternating with release builds does not rebuild the dependency tree.
+# The only difference from release is LTO, which dominates link time.
+[profile.fast]
+inherits = "release"
+lto = false
+codegen-units = 16
+incremental = true
+strip = "debuginfo"
+
+# dependencies come from cache anyway, so keep them fully optimized
+[profile.fast.package."*"]
+opt-level = 3
+codegen-units = 1
+incremental = false
