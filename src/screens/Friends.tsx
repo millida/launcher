@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { Head } from '../components/Head'
-import { api } from '../lib/api'
+import { PROFILE_URL, api, openExt } from '../lib/api'
+import { copyText } from '../lib/clipboard'
 import { logoutToLogin } from '../lib/session'
 import { showToast } from '../state/ui'
 import { useHasMillida } from '../state/auth'
+import { refreshGameNick, useGameNick } from '../state/gameNick'
 import { loadFriends, openChat, openFriendProfile, useFriends } from '../state/friends'
 import { rememberServerName } from '../state/playStats'
 import { uiConfirm } from '../state/confirm'
@@ -55,6 +57,7 @@ export function Friends({ on }: { on: boolean }) {
     if (!on || !millida) return
     void loadFriends()
     void loadBlocked()
+    void refreshGameNick()
   }, [on, millida])
 
   const unblock = (b: Blocked) => {
@@ -144,6 +147,12 @@ export function Friends({ on }: { on: boolean }) {
   }
 
   const gated = !millida
+  const accountNick = useGameNick((s) => s.accountNick)
+  const myNick = accountNick && !isTechnicalNick(accountNick) ? accountNick : ''
+  const copyNick = async () => {
+    const ok = await copyText(myNick)
+    showToast(ok ? 'Ник скопирован: ' + myNick : 'Не удалось скопировать ник', ok ? 'ok' : 'error')
+  }
   const needle = filter.trim().toLowerCase()
   const visible = needle
     ? friends.filter((f) => (f.nickname || '').toLowerCase().includes(needle))
@@ -456,10 +465,32 @@ export function Friends({ on }: { on: boolean }) {
         ) : null}
       </div>
 
-      <p className="faint-note">
-        Друзья привязаны к аккаунту Millida. Играешь с лицензией — привяжи ник Millida в настройках, и друзья увидят
-        тебя в сети. Сообщения прямо в игре — в одном из ближайших обновлений.
-      </p>
+      {!gated ? (
+        <div className="fr-nick-note">
+          {myNick ? (
+            <p className="faint-note">
+              Тебя находят по нику Millida — <b>{myNick}</b>. Игровой аккаунт не важен: с лицензией или без, пока
+              лаунчер открыт, друзья видят тебя в сети, а в игре — на каком ты сервере.
+            </p>
+          ) : (
+            <p className="faint-note">
+              Чтобы друзья нашли тебя, задай ник Millida в профиле на сайте — сейчас у тебя служебный. Игровой аккаунт
+              не важен: с лицензией или без, пока лаунчер открыт, друзья видят тебя в сети.
+            </p>
+          )}
+          {myNick ? (
+            <button className="btn sm ghost" onClick={() => void copyNick()}>
+              <Icon id="i-copy" />
+              Скопировать ник
+            </button>
+          ) : (
+            <button className="btn sm ghost" onClick={() => openExt(PROFILE_URL)}>
+              <Icon id="i-user" />
+              Задать ник в профиле
+            </button>
+          )}
+        </div>
+      ) : null}
     </section>
   )
 }

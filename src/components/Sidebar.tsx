@@ -3,7 +3,8 @@ import { Icon } from './Icon'
 import { AccountMenu } from './AccountMenu'
 import { Head } from './Head'
 import { accKindLabel } from '../lib/format'
-import { getAccount, useAccounts } from '../state/accounts'
+import { getAccount, isMillidaKind, useAccounts } from '../state/accounts'
+import { useGameNick } from '../state/gameNick'
 import { unreadTotal, useFriends } from '../state/friends'
 import { useUi } from '../state/ui'
 import type { ScreenId } from '../state/ui'
@@ -30,6 +31,10 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
   const millida = useHasMillida()
   useAccounts()
   const acc = getAccount()
+  const gameName = useGameNick((s) => s.name)
+  // The Millida game profile has its own name, and that is what the server sees.
+  const inGameNick = acc && isMillidaKind(acc.kind) && gameName ? gameName : acc ? acc.nick : ''
+  const otherAccountNick = acc && inGameNick !== acc.nick ? acc.nick : ''
   const chipRef = useRef<HTMLDivElement>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(() => {
@@ -58,7 +63,7 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
     return () => document.removeEventListener('click', onDoc)
   }, [menuOpen])
 
-  const frCount = millida ? String(friends.filter((f) => f.online).length) : '0'
+  const frOnline = millida ? friends.filter((f) => f.online).length : 0
   const frAlerts = millida ? unreadTotal(friends) + reqIn.length : 0
 
   return (
@@ -90,9 +95,11 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
             <span className="nav-label">{n.label}</span>
             {n.id === 'friends' ? (
               <>
-                <span className="nav-count" id="frOnline">
-                  {frCount}
-                </span>
+                {frOnline ? (
+                  <span className="nav-count" id="frOnline" title="Друзья в сети">
+                    {frOnline}
+                  </span>
+                ) : null}
                 {frAlerts ? (
                   <span className="nav-badge" title="Новые сообщения и заявки">
                     {frAlerts > 99 ? '99+' : frAlerts}
@@ -141,13 +148,13 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
       <div
         className="account"
         title="Аккаунты"
-        data-tip={(acc && acc.nick) || 'Гость'}
+        data-tip={inGameNick || 'Гость'}
         ref={chipRef}
         onClick={() => setMenuOpen((v) => !v)}
       >
         <span className="ava">
           <Head
-            nick={(acc && acc.nick) || 'MHF_Steve'}
+            nick={inGameNick || 'MHF_Steve'}
             kind={acc ? acc.kind : undefined}
             src={acc && acc.avatar}
             size={32}
@@ -155,8 +162,10 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
           />
         </span>
         <span className="acc-meta">
-          <span className="acc-nick">{(acc && acc.nick) || 'Гость'}</span>{' '}
-          <span className="acc-kind">{acc ? accKindLabel(acc.kind) : 'Нажми, чтобы войти'}</span>
+          <span className="acc-nick">{inGameNick || 'Гость'}</span>{' '}
+          <span className="acc-kind">
+            {acc ? (otherAccountNick ? 'Ник в игре · аккаунт ' + otherAccountNick : accKindLabel(acc.kind)) : 'Нажми, чтобы войти'}
+          </span>
         </span>
         <span className="acc-chevron">
           <Icon id="i-chev-r" />

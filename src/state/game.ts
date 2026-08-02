@@ -4,32 +4,47 @@ import { runningGames, stopGame } from '../ipc/commands'
 import { showToast } from './ui'
 
 interface GameState {
-  running: string | null
+  list: string[]
   stopping: boolean
-  setRunning: (p: string | null) => void
+  setList: (l: string[]) => void
+  addRunning: (p: string) => void
+  removeRunning: (p: string) => void
   setStopping: (v: boolean) => void
 }
 
 export const useGame = create<GameState>((set) => ({
-  running: null,
+  list: [],
   stopping: false,
-  setRunning: (running) => set({ running, stopping: false }),
+  setList: (list) => set({ list, stopping: false }),
+  addRunning: (p) => set((s) => ({ list: s.list.concat(p), stopping: false })),
+  removeRunning: (p) =>
+    set((s) => {
+      const i = s.list.indexOf(p)
+      if (i < 0) return s
+      const list = s.list.slice()
+      list.splice(i, 1)
+      return { list, stopping: list.length ? s.stopping : false }
+    }),
   setStopping: (stopping) => set({ stopping }),
 }))
+
+export const anyGameRunning = () => useGame.getState().list.length > 0
+
+export const isGameRunning = (profile: string) => useGame.getState().list.includes(profile)
 
 // The game outlives a launcher window reload, so button state comes from the core.
 export function syncRunningGame() {
   if (!hasTauri()) return
   void runningGames()
-    .then((list) => useGame.getState().setRunning(list[0] || null))
+    .then((list) => useGame.getState().setList(list || []))
     .catch(() => {})
 }
 
-export function stopRunningGame() {
-  const { running, stopping } = useGame.getState()
-  if (!running || stopping) return
+export function stopRunningGame(profile?: string | null) {
+  const { list, stopping } = useGame.getState()
+  if (!list.length || stopping) return
   useGame.getState().setStopping(true)
-  void stopGame(running)
+  void stopGame(profile || null)
     .then(() => showToast('Останавливаем игру…'))
     .catch((e) => {
       useGame.getState().setStopping(false)

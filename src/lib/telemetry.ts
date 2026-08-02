@@ -1,6 +1,7 @@
 import { hasTauri } from '../ipc/tauri'
 import { appVersion, deviceSpecs, millidaApi } from '../ipc/commands'
 import { LAUNCHER_API, apiHeaders } from './api'
+import { detectGpu } from './gpu'
 
 export type TelemetryEventType =
   | 'app_start'
@@ -44,7 +45,9 @@ interface Device {
   timezone?: string
   cpu?: string
   cpuCores?: number
+  cpuThreads?: number
   ramMb?: number
+  gpu?: string
   screen?: string
   buildsCount?: number
   modsCount?: number
@@ -130,6 +133,7 @@ async function initDevice(): Promise<Device> {
     locale: navigator.language?.slice(0, 16),
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone?.slice(0, 64),
     screen: `${window.screen?.width || 0}x${window.screen?.height || 0}`,
+    gpu: detectGpu(),
   }
   if (hasTauri()) {
     try {
@@ -142,6 +146,7 @@ async function initDevice(): Promise<Device> {
       base.arch = s.arch || undefined
       base.cpu = s.cpu || undefined
       base.cpuCores = s.cpu_cores || undefined
+      base.cpuThreads = s.cpu_threads || undefined
       base.ramMb = s.ram_mb || undefined
     } catch {}
   }

@@ -101,8 +101,18 @@ export function getMillidaAccount(): Account | null {
   return list.find((a) => a.kind === 'millida' || a.kind === 'tg') || null
 }
 
+/// The Millida game profile carries its own name, and the game uses that one — the site
+/// login is not the in-game nick. Read from cache so callers stay synchronous.
+export const GAME_NICK_KEY = 'm-game-nick'
+
+export const isMillidaKind = (kind: string) => kind === 'millida' || kind === 'tg'
+
 export function effectiveNick(): string {
   const a = getAccount()
+  if (a && isMillidaKind(a.kind)) {
+    const game = localStorage.getItem(GAME_NICK_KEY) || ''
+    if (game) return game
+  }
   return (a && a.nick) || 'Player' + Math.floor(Math.random() * 9999)
 }
 

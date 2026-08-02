@@ -6,6 +6,8 @@ export const LAUNCHER_API = localStorage.getItem('m-api') || 'https://api.millid
 
 export const WALLET_URL = 'https://millida.net/profile?tab=wallet'
 
+export const PROFILE_URL = 'https://millida.net/profile'
+
 // No Authorization here: authenticated calls go through the core, which holds
 // the token. The plain fetch path is the unauthenticated browser fallback.
 export function apiHeaders(): Record<string, string> {

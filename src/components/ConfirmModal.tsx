@@ -1,18 +1,23 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useConfirm } from '../state/confirm'
 
 export function ConfirmModal() {
-  const { open, title, message, confirmLabel, cancelLabel, danger, close } = useConfirm()
+  const { open, title, message, confirmLabel, cancelLabel, danger, rememberKey, rememberLabel, close } = useConfirm()
+  const [remember, setRemember] = useState(false)
+
+  useEffect(() => {
+    if (open) setRemember(false)
+  }, [open])
 
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') close(false)
-      if (e.key === 'Enter') close(true)
+      if (e.key === 'Enter') close(true, remember)
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [open, close])
+  }, [open, close, remember])
 
   if (!open) return null
   // Above other modals (z-index 400) so a confirm opened from a modal is not hidden behind it.
@@ -29,6 +34,26 @@ export function ConfirmModal() {
         <div className="sub" style={{ marginTop: '6px' }}>
           {message}
         </div>
+        {rememberKey ? (
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '9px',
+              marginTop: '18px',
+              cursor: 'pointer',
+              fontSize: '13px',
+              color: 'var(--m-fg-muted)',
+            }}
+            onClick={(e) => {
+              e.preventDefault()
+              setRemember(!remember)
+            }}
+          >
+            <span className={'chk' + (remember ? ' on' : '')}></span>
+            {rememberLabel}
+          </label>
+        ) : null}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '22px' }}>
           <button className="btn md secondary" onClick={() => close(false)}>
             {cancelLabel}
@@ -36,7 +61,7 @@ export function ConfirmModal() {
           <button
             className={'btn md ' + (danger ? 'danger' : 'primary')}
             data-nosound
-            onClick={() => close(true)}
+            onClick={() => close(true, remember)}
             autoFocus
           >
             {confirmLabel}

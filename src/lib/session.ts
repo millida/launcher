@@ -4,6 +4,7 @@ import { syncAuth } from '../state/auth'
 import { loadFriends } from '../state/friends'
 import { refreshPlayStats } from '../state/playStats'
 import { refreshProfiles } from '../state/profiles'
+import { refreshGameNick } from '../state/gameNick'
 import { useUi } from '../state/ui'
 import { hasTauri } from '../ipc/tauri'
 import { millidaLogout } from '../ipc/commands'
@@ -48,6 +49,7 @@ export function enterApp() {
   void loadMillidaProfile()
   void loadFriends()
   void refreshPlayStats()
+  void refreshGameNick()
 }
 
 function dropMillidaSession() {
@@ -72,4 +74,5 @@ export function logoutToLogin() {
     .forEach((a) => acc.remove(a.id))
   useUi.getState().setLogged(false)
   syncAuth()
+  void refreshGameNick()
 }

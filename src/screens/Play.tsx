@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Icon } from '../components/Icon'
 import { Cover } from '../components/Cover'
+import { BuildCard } from '../components/BuildCard'
 import { ServerRow } from '../components/ServerRow'
 import { MusicControls } from '../components/MusicPop'
 import { useMusic } from '../state/music'
 import { useHeroWallpaper } from '../components/HeroWallpaper'
-import { LOADER_NAME, RU_LOADER, fmt, fmtPlaytime } from '../lib/format'
+import { LOADER_NAME, RU_LOADER, fmt } from '../lib/format'
 import { VIDEOS } from '../lib/wallpaper'
 import { hasTauri } from '../ipc/tauri'
 import { useProfiles } from '../state/profiles'
@@ -71,8 +72,6 @@ function ReadyCard({ h }: { h: ReadyHit }) {
 export function Play({ on }: { on: boolean }) {
   const profiles = useProfiles((s) => s.profiles)
   const selected = useProfiles((s) => s.selected)
-  const setSelected = useProfiles((s) => s.setSelected)
-  const refresh = useProfiles((s) => s.refresh)
   const servers = useServers((s) => s.list)
   const wp = useWallpaper()
   const hero = useHeroWallpaper(on)
@@ -81,7 +80,7 @@ export function Play({ on }: { on: boolean }) {
   const [ready, setReady] = useState<ReadyHit[] | null>(null)
   const [readyErr, setReadyErr] = useState('')
   const playStats = usePlayStats((s) => s.stats)
-  const gameRunning = useGame((s) => s.running)
+  const running = useGame((s) => s.list)
   const gameStopping = useGame((s) => s.stopping)
   const hoursOf = (name: string) => playStats.builds.find((b) => b.key === name) || null
 
@@ -133,6 +132,7 @@ export function Play({ on }: { on: boolean }) {
   }, [wp.popOpen])
 
   const sel = profiles.find((p) => p.name === selected) || profiles[0]
+  const selRunning = !!sel && running.includes(sel.name)
 
   let heroName: string
   let heroMeta: ReactNode
@@ -162,40 +162,7 @@ export function Play({ on }: { on: boolean }) {
     .sort((a, b) => b.t - a.t)
     .map((x) => x.p)
 
-  const buildCard = (p: (typeof profiles)[number]) => (
-    <button
-      key={p.name}
-      className={'card hoverable build-card' + (p.name === selected ? ' selected' : '')}
-      data-prof={p.name}
-      data-sound="open"
-      onClick={(e) => {
-        setSelected(p.name)
-        if ((e.target as HTMLElement).closest('.mini-play')) {
-          void refresh()
-          realLaunch(p.name)
-          return
-        }
-        openBuildSettings(p.name)
-      }}
-    >
-      <span className="build-cover">
-        <Cover url={p.icon} />
-        <span className="mini-play" data-nosound>
-          <Icon id="i-play" />
-        </span>
-      </span>
-      <span className="build-body">
-        <b>{p.name}</b>
-        <span className="meta">{LOADER_NAME(p) + ' · ' + p.version}</span>
-        {hoursOf(p.name) ? (
-          <span className="meta build-hours">
-            <Icon id="i-clock" />
-            {fmtPlaytime(hoursOf(p.name)!.seconds)}
-          </span>
-        ) : null}
-      </span>
-    </button>
-  )
+  const buildCard = (p: (typeof profiles)[number]) => <BuildCard key={p.name} p={p} hours={hoursOf(p.name)} />
 
   const newBuildBtn = (
     <button className="build-new" id="newBuild2" data-sound="open" onClick={() => openModal('nbModal')}>
@@ -294,14 +261,10 @@ export function Play({ on }: { on: boolean }) {
               <Icon id="i-settings" />
             </button>
             <button
-              className={'btn lg ' + (gameRunning ? 'danger' : 'primary')}
+              className={'btn lg ' + (selRunning ? 'running' : 'primary')}
               id="playBtn"
-              disabled={gameStopping}
+              title={selRunning ? 'Игра идёт — нажми, чтобы запустить ещё одну копию' : undefined}
               onClick={() => {
-                if (gameRunning) {
-                  stopRunningGame()
-                  return
-                }
                 if (!sel) {
                   openModal('nbModal')
                   return
@@ -312,18 +275,24 @@ export function Play({ on }: { on: boolean }) {
             >
               <span className="fill"></span>
               <span className="lbl">
-                <Icon id={gameRunning ? 'i-power' : sel ? 'i-play' : 'i-plus'} />
-                <span id="playLbl">
-                  {gameRunning
-                    ? gameStopping
-                      ? 'Останавливаем…'
-                      : 'Остановить игру'
-                    : sel
-                      ? 'Играть'
-                      : 'Создать сборку'}
-                </span>
+                {selRunning ? <span className="run-dot"></span> : <Icon id={sel ? 'i-play' : 'i-plus'} />}
+                <span id="playLbl">{selRunning ? 'Запущено' : sel ? 'Играть' : 'Создать сборку'}</span>
               </span>
             </button>
+            {running.length ? (
+              <button
+                className="btn lg danger"
+                id="stopBtn"
+                disabled={gameStopping}
+                title="Остановить игру"
+                onClick={() => stopRunningGame()}
+              >
+                <span className="lbl">
+                  <Icon id="i-power" />
+                  {gameStopping ? 'Останавливаем…' : 'Остановить'}
+                </span>
+              </button>
+            ) : null}
           </div>
         </div>
       </div>

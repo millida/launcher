@@ -1,18 +1,16 @@
 import { Fragment, useEffect } from 'react'
 import { Icon } from '../components/Icon'
-import { Cover } from '../components/Cover'
-import { LOADER_NAME, fmtPlaytime, plural, whenText } from '../lib/format'
+import { BuildCard } from '../components/BuildCard'
+import { fmtPlaytime, plural, whenText } from '../lib/format'
 import { useProfiles } from '../state/profiles'
 import { useModUpdates } from '../state/modUpdates'
 import { refreshPlayStats, usePlayStats } from '../state/playStats'
 import { rememberServerName } from '../state/playStats'
 import { openModal, setScreen } from '../state/ui'
-import { openBuildSettings } from '../state/instance'
 import { quickJoin } from '../lib/joinServer'
-import { realLaunch } from '../lib/launch'
 
 export function Builds({ on }: { on: boolean }) {
-  const { profiles, selected, groups, setSelected, refresh } = useProfiles()
+  const { profiles, groups } = useProfiles()
   const updates = useModUpdates()
   const stats = usePlayStats((s) => s.stats)
 
@@ -33,39 +31,7 @@ export function Builds({ on }: { on: boolean }) {
   const ungrouped = profiles.filter((p) => !(groups[p.name] || ''))
 
   const buildCard = (p: (typeof profiles)[number]) => (
-    <button
-      key={p.name}
-      className={'card hoverable build-card' + (p.name === selected ? ' selected' : '')}
-      data-prof={p.name}
-      data-sound="open"
-      onClick={(e) => {
-        setSelected(p.name)
-        if ((e.target as HTMLElement).closest('.mini-play')) {
-          void refresh()
-          realLaunch(p.name)
-          return
-        }
-        openBuildSettings(p.name)
-      }}
-    >
-      <span className="build-cover">
-        <Cover url={p.icon} />
-        <span className="mini-play" data-nosound>
-          <Icon id="i-play" />
-        </span>
-      </span>
-      <span className="build-body">
-        <b>{p.name}</b>
-        <span className="meta">{LOADER_NAME(p) + ' · ' + p.version}</span>
-        {hoursOf(p.name) ? (
-          <span className="meta build-hours">
-            <Icon id="i-clock" />
-            {fmtPlaytime(hoursOf(p.name)!.seconds) +
-              (hoursOf(p.name)!.last ? ' · ' + whenText(hoursOf(p.name)!.last) : '')}
-          </span>
-        ) : null}
-      </span>
-    </button>
+    <BuildCard key={p.name} p={p} hours={hoursOf(p.name)} withLast />
   )
 
   const newBuildBtn = (

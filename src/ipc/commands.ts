@@ -545,6 +545,7 @@ export interface DeviceSpecs {
   arch: string
   cpu: string
   cpu_cores: number
+  cpu_threads: number
   ram_mb: number
 }
 
