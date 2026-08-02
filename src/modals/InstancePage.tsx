@@ -131,8 +131,9 @@ export function InstancePage() {
   const [logBody, setLogBody] = useState('')
   const [logView, setLogView] = useState<'live' | 'files'>('live')
   const [liveLines, setLiveLines] = useState<string[]>([])
-  const gameRunning = useGame((s) => s.running)
+  const running = useGame((s) => s.list)
   const gameStopping = useGame((s) => s.stopping)
+  const thisRunning = !!profile && running.includes(profile)
   const liveRef = useRef<HTMLPreElement>(null)
   const [shareLabel, setShareLabel] = useState('Поделиться (mclo.gs)')
   const [updateAllLabel, setUpdateAllLabel] = useState('Обновить всё')
@@ -463,16 +464,35 @@ export function InstancePage() {
             </div>
             <div className="inst-actions">
               <button
-                className="btn lg primary"
+                className={'btn lg ' + (thisRunning ? 'running' : 'primary')}
                 id="bsPlay"
+                title={thisRunning ? 'Игра идёт — нажми, чтобы запустить ещё одну копию' : undefined}
                 onClick={() => {
                   close()
                   if (hasTauri()) realLaunch(profile!)
                   else startPrelaunch(profile!)
                 }}
               >
-                <Icon id="i-play" /> Играть
+                {thisRunning ? (
+                  <>
+                    <span className="run-dot"></span> Запущено
+                  </>
+                ) : (
+                  <>
+                    <Icon id="i-play" /> Играть
+                  </>
+                )}
               </button>
+              {thisRunning ? (
+                <button
+                  className="btn lg danger"
+                  disabled={gameStopping}
+                  title="Остановить игру"
+                  onClick={() => stopRunningGame(profile!)}
+                >
+                  <Icon id="i-power" /> {gameStopping ? 'Останавливаем…' : 'Остановить'}
+                </button>
+              ) : null}
             </div>
           </div>
         </div>
@@ -1079,12 +1099,12 @@ export function InstancePage() {
                     )}
                   </pre>
                   <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
-                    {gameRunning ? (
+                    {thisRunning ? (
                       <button
                         className="btn sm danger"
                         style={{ flex: 1 }}
                         disabled={gameStopping}
-                        onClick={() => stopRunningGame()}
+                        onClick={() => stopRunningGame(profile!)}
                       >
                         <Icon id="i-power" /> {gameStopping ? 'Останавливаем…' : 'Остановить игру'}
                       </button>

@@ -71,7 +71,9 @@ pub struct DeviceSpecs {
     pub os_version: String,
     pub arch: String,
     pub cpu: String,
+    /// Physical cores; 0 when the platform will not report them.
     pub cpu_cores: u32,
+    pub cpu_threads: u32,
     pub ram_mb: u32,
 }
 
@@ -97,7 +99,8 @@ pub fn device_specs() -> DeviceSpecs {
         os_version: sysinfo::System::os_version().unwrap_or_default(),
         arch: std::env::consts::ARCH.to_string(),
         cpu,
-        cpu_cores: sys.cpus().len() as u32,
+        cpu_cores: sys.physical_core_count().unwrap_or(0) as u32,
+        cpu_threads: sys.cpus().len() as u32,
         ram_mb: (sys.total_memory() / 1024 / 1024) as u32,
     }
 }

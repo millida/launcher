@@ -413,6 +413,23 @@
   color: var(--m-danger);
 }
 
+.fr-nick-note {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+.fr-nick-note p {
+  flex: 1;
+  min-width: 240px;
+  margin: 0;
+  line-height: 1.55;
+}
+.fr-nick-note .btn {
+  flex: none;
+}
+
 /* ---- Add friend popup ---- */
 .fr-add-wrap {
   position: relative;

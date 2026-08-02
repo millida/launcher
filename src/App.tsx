@@ -24,6 +24,7 @@ import { ServerDetail } from './components/ServerDetail'
 import { pushChatNotify } from './state/chatNotify'
 import { parseInvite } from './lib/invite'
 import { getAccount, useAccounts } from './state/accounts'
+import { refreshGameNick } from './state/gameNick'
 import { warmHeads } from './lib/heads'
 import { useUi, closeModal, setScreen as gotoScreen, showToast } from './state/ui'
 import { useWallpaper } from './state/wallpaper'
@@ -136,6 +137,7 @@ export function App() {
       loadLiveRating()
       warmHeads(useAccounts.getState().list.filter((x) => !x.avatar).map((x) => x.nick))
       void loadFriends()
+      void refreshGameNick()
       void refreshMsAccounts()
       void flushNativeCrashes()
       hideBoot()
@@ -235,11 +237,17 @@ export function App() {
     }
     window.addEventListener('millida-game-started', onGameStarted)
 
-    void listenGameExit(() => {
+    void listenGameExit((profile) => {
       track('game_exit', {}, { durationMs: gameStartedAt ? Date.now() - gameStartedAt : undefined })
+      useGame.getState().removeRunning(profile)
+      // A second copy may still be alive — only the last exit puts the launcher back into lobby.
+      if (useGame.getState().list.length) {
+        void refreshPlayStats()
+        showToast('Игра «' + profile + '» закрыта')
+        return
+      }
       gameStartedAt = 0
       setGameSession(null)
-      useGame.getState().setRunning(null)
       heartbeat('lobby')
       void refreshPlayStats()
       if (restoreOnGameExit()) restoreLauncher()

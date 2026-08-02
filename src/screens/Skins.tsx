@@ -23,7 +23,6 @@ import { loadSkinview } from '../lib/skinview'
 import {
   addToWardrobe,
   applyWardrobeItem,
-  gameProfile,
   loadWardrobe,
   removeWardrobeItem,
   setSkinSource,
@@ -31,6 +30,7 @@ import {
   uploadTexture,
 } from '../lib/gameProfile'
 import type { WardrobeItem } from '../lib/gameProfile'
+import { refreshGameNick, useGameNick } from '../state/gameNick'
 import { hasMillidaAccount, openExt } from '../lib/api'
 import { track } from '../lib/telemetry'
 import { loadMillidaProfile } from '../lib/session'
@@ -567,18 +567,9 @@ export function Skins({ on }: { on: boolean }) {
     void refreshWardrobe()
   }, [])
 
-  const [gameNick, setGameNick] = useState<{ name: string; account: string; conflict: boolean } | null>(null)
+  const gameNick = useGameNick()
   useEffect(() => {
-    if (!hasMillidaAccount()) return
-    let alive = true
-    gameProfile()
-      .then((p) => {
-        if (alive) setGameNick({ name: p.name, account: p.accountNick || p.name, conflict: !!p.nameConflict })
-      })
-      .catch(() => {})
-    return () => {
-      alive = false
-    }
+    void refreshGameNick()
   }, [])
 
   const syncedRef = useRef(false)
@@ -750,7 +741,8 @@ export function Skins({ on }: { on: boolean }) {
         }))
       const design: CapeOption[] = [{ id: 'millida', name: 'Millida', url: MILLIDA_CAPE, sub: 'Плащ лаунчера' }]
       const mine: CapeOption[] = myCapes.map((c, i) => ({ id: 'my:' + i, name: c.name, url: c.data, sub: 'Свой дизайн' }))
-      return licensed.concat(stored).concat(acc).concat(design).concat(mine).concat(official)
+      // Millida capes first, Microsoft and Mojang designs after them.
+      return design.concat(stored).concat(mine).concat(licensed).concat(acc).concat(official)
     },
     [accounts, textures, myCapes, msCapes, wardrobe],
   )
@@ -968,19 +960,6 @@ export function Skins({ on }: { on: boolean }) {
   }, [svReady, fallback])
 
   // Native dialog: HTML <input type=file> aborts WKWebView on macOS (runOpenPanel).
-  const savePicked = (
-    kind: TextureKind,
-    apply: (next: MySkin[]) => void,
-    label: string,
-    picked: { name: string; data: string },
-  ) =>
-    saveTexture(kind, picked.name.replace(/\.png$/i, ''), picked.data, false)
-      .then((next) => {
-        apply(next)
-        showToast(label + ' загружен: ' + picked.name)
-      })
-      .catch((e) => showToast('Не удалось сохранить: ' + e, 'error'))
-
   const pickSkin = () => {
     if (!hasTauri()) {
       showToast('Загрузка скина доступна в приложении', 'error')
@@ -989,38 +968,6 @@ export function Skins({ on }: { on: boolean }) {
     void pickTexture()
       .then(async (p) => {
         if (p) await acceptSkin(p.name, p.data)
-      })
-      .catch((e) => showToast('Не удалось загрузить: ' + e, 'error'))
-  }
-
-  const pickCape = () => {
-    if (!hasTauri()) {
-      showToast('Загрузка плаща доступна в приложении', 'error')
-      return
-    }
-    void pickTexture()
-      .then(async (p) => {
-        if (!p) return
-        await savePicked(
-          'capes',
-          (next) => {
-            setMyCapes(next)
-            chooseCape('my:0')
-          },
-          'Плащ',
-          p,
-        )
-        if (!hasMillidaAccount()) return
-        try {
-          await addToWardrobe({
-            kind: 'cape',
-            name: p.name.replace(/\.png$/i, ''),
-            pngBase64: await toPngBase64(p.data),
-          })
-          await refreshWardrobe()
-        } catch (e) {
-          showToast('Плащ не сохранился в каталог аккаунта: ' + e, 'error')
-        }
       })
       .catch((e) => showToast('Не удалось загрузить: ' + e, 'error'))
   }
@@ -1348,7 +1295,7 @@ export function Skins({ on }: { on: boolean }) {
         </div>
 
         <div>
-          {gameNick && gameNick.conflict ? (
+          {gameNick.conflict ? (
             <div
               className="card"
               style={{
@@ -1359,7 +1306,8 @@ export function Skins({ on }: { on: boolean }) {
                 lineHeight: 1.5,
               }}
             >
-              В игру ты заходишь как <b>{gameNick.name}</b>, а не <b>{gameNick.account}</b>: игровой ник занят другим
+              В игру ты заходишь как <b>{gameNick.name}</b>, а не <b>{gameNick.accountNick || gameNick.name}</b>:
+              игровой ник занят другим
               аккаунтом Millida. Поэтому в игре видно чужой скин — напиши в поддержку, чтобы освободить ник.
             </div>
           ) : null}
@@ -1649,13 +1597,6 @@ export function Skins({ on }: { on: boolean }) {
               >
                 <span className="cape-render empty">нет</span>
                 <b>Без плаща</b>
-              </button>
-              <button className="cape-card add" onClick={pickCape}>
-                <span className="cape-render empty">
-                  <Icon id="i-upload" />
-                </span>
-                <b>Загрузить</b>
-                <span className="cape-sub">64×32 PNG</span>
               </button>
               {capes.map((c) => {
                 const my = c.id.startsWith('my:')

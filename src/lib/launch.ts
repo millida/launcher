@@ -110,13 +110,45 @@ export function showLaunchError(e: unknown) {
 
 let launching = false
 
+const RELAUNCH_SAME_KEY = 'relaunch-same-build'
+const RELAUNCH_OTHER_KEY = 'relaunch-other-build'
+
+/// A second copy is allowed, but the user must see what they are getting into:
+/// the same build shares its saves between both processes.
+function confirmSecondCopy(profile: string): Promise<boolean> {
+  const list = useGame.getState().list
+  if (!list.length) return Promise.resolve(true)
+  const same = list.includes(profile)
+  return uiConfirm(
+    same
+      ? 'Сборка «' +
+          profile +
+          '» уже запущена. Вторая копия будет писать в те же миры — одиночный мир может испортиться. Запустить ещё раз?'
+      : 'Уже запущена сборка «' + list[0] + '». Запустить ещё и «' + profile + '»? Игры поделят память компьютера.',
+    {
+      title: 'Игра уже запущена',
+      confirmLabel: 'Запустить ещё раз',
+      cancelLabel: 'Не запускать',
+      danger: same,
+      rememberKey: same ? RELAUNCH_SAME_KEY : RELAUNCH_OTHER_KEY,
+      rememberLabel: 'Больше не спрашивать',
+    },
+  )
+}
+
 export function joinWithAuth(profile: string, world: string | null, server: string | null, serverName?: string | null) {
   if (launching) {
     showToast('Игра уже запускается')
     return Promise.resolve('busy')
   }
-  if (useGame.getState().running) {
-    showToast('Игра уже запущена — сначала останови её')
+  if (useGame.getState().list.length)
+    return confirmSecondCopy(profile).then((ok) => (ok ? doJoin(profile, world, server, serverName) : 'busy'))
+  return doJoin(profile, world, server, serverName)
+}
+
+function doJoin(profile: string, world: string | null, server: string | null, serverName?: string | null) {
+  if (launching) {
+    showToast('Игра уже запускается')
     return Promise.resolve('busy')
   }
   launching = true
@@ -126,13 +158,12 @@ export function joinWithAuth(profile: string, world: string | null, server: stri
   return resolveAuth()
     .then((a) => quickPlay(profile, a.nick, ramMbFor(profile), world, server, a.auth))
     .then((res) => {
-      useGame.getState().setRunning(profile)
+      useGame.getState().addRunning(profile)
       applyLaunchWindowMode()
       return res
     })
     .catch((e) => {
       setGameSession(null)
-      useGame.getState().setRunning(null)
       heartbeat('lobby')
       throw e
     })
@@ -156,8 +187,19 @@ export function realLaunch(name: string) {
     showToast('Игра уже запускается')
     return
   }
-  if (useGame.getState().running) {
-    showToast('Игра уже запущена — сначала останови её')
+  if (useGame.getState().list.length) {
+    const prof = name || useProfiles.getState().selected || 'default'
+    void confirmSecondCopy(prof).then((ok) => {
+      if (ok) doLaunch(name)
+    })
+    return
+  }
+  doLaunch(name)
+}
+
+function doLaunch(name: string) {
+  if (launching) {
+    showToast('Игра уже запускается')
     return
   }
   launching = true
@@ -208,7 +250,7 @@ export function realLaunch(name: string) {
   inv
     .then(() => {
       trackTimed('game_launch', launchStartedAt, launchInfo)
-      useGame.getState().setRunning(prof || 'default')
+      useGame.getState().addRunning(prof || 'default')
       window.dispatchEvent(new Event('millida-game-started'))
       setTimeout(() => {
         setPrelaunch({ open: false })
@@ -221,7 +263,6 @@ export function realLaunch(name: string) {
       stopProgress()
       setPrelaunch({ open: false })
       setGameSession(null)
-      useGame.getState().setRunning(null)
       if (String(err).includes('отмен')) return
       trackTimed('game_launch', launchStartedAt, { ...launchInfo, code: String(err).slice(0, 120) }, false)
       track('error', { code: String(err).slice(0, 120), where: 'launch' }, { ok: false })
