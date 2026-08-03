@@ -3,8 +3,8 @@ import { Icon } from '../components/Icon'
 import { closeModal, showToast, useUi } from '../state/ui'
 import { openExt } from '../lib/api'
 import { useAccounts } from '../state/accounts'
-import { cancelWebLogin, copyUserCode, startWebLogin, useLogin } from '../state/login'
-import { cancelMsLogin, copyMsCode, openMsVerifyPage, startMsLogin, useMsLogin } from '../state/msLogin'
+import { cancelWebLogin, copyUserCode, copyVerifyLink, startWebLogin, useLogin } from '../state/login'
+import { cancelMsLogin, copyMsCode, copyMsVerifyLink, openMsVerifyPage, startMsLogin, useMsLogin } from '../state/msLogin'
 
 type Kind = 'millida' | 'microsoft' | 'offline'
 
@@ -122,6 +122,13 @@ function KindPanel({ kind, onBack, onDone }: { kind: Kind; onBack: () => void; o
                   onClick={() => (kind === 'millida' ? void startWebLogin(true) : openMsVerifyPage())}
                 >
                   Открыть страницу
+                </button>
+                <button
+                  className="btn sm ghost"
+                  title="Скопировать ссылку"
+                  onClick={() => (kind === 'millida' ? copyVerifyLink() : copyMsVerifyLink())}
+                >
+                  Ссылка
                 </button>
                 <button
                   className="btn sm ghost"

@@ -24,6 +24,14 @@ pub fn save_profile_settings(profile: String, jvm_args: String, width: u32, heig
 }
 
 #[tauri::command]
+pub fn fps_boost_state(profile: String) -> engine::FpsBoostState { engine::fps_boost_state(&profile) }
+
+#[tauri::command]
+pub async fn set_fps_boost(app: tauri::AppHandle, profile: String, on: bool) -> Result<engine::FpsBoostState, String> {
+    engine::set_fps_boost(app, profile, on).await
+}
+
+#[tauri::command]
 pub fn load_profile_settings(profile: String) -> serde_json::Value {
     std::fs::read_to_string(engine::profile_dir(&profile).join("millida-settings.json"))
         .ok().and_then(|t| serde_json::from_str(&t).ok())
@@ -47,8 +55,19 @@ pub async fn update_modpack(app: tauri::AppHandle, profile: String, version_id: 
 #[tauri::command]
 pub fn modpack_info(profile: String) -> serde_json::Value { engine::modpack_info(&profile) }
 
+/// Screenshots are the only game-root files the webview shows, and the grant is
+/// per file: opening `profiles/<p>/` to `asset://` would also expose mods and
+/// worlds that a compromised webview copied there.
 #[tauri::command]
-pub fn list_screenshots(profile: String) -> Vec<String> { engine::list_screenshots(&profile) }
+pub fn list_screenshots(app: tauri::AppHandle, profile: String) -> Vec<String> {
+    use tauri::Manager;
+    let shots = engine::list_screenshots(&profile);
+    let scope = app.asset_protocol_scope();
+    for shot in &shots {
+        let _ = scope.allow_file(shot);
+    }
+    shots
+}
 
 #[tauri::command]
 pub fn set_profile_group(name: String, group: String) { engine::set_profile_group(&name, &group); }
@@ -118,14 +137,22 @@ pub fn list_profiles() -> Vec<engine::Profile> {
 }
 
 #[tauri::command]
-pub fn create_profile(name: String, version: String, fabric: bool, loader: Option<String>, icon: Option<String>) -> Result<Vec<engine::Profile>, String> {
+pub fn create_profile(name: String, version: String, fabric: bool, loader: Option<String>, icon: Option<String>) -> Result<engine::Profile, String> {
     let mut all = engine::load_profiles();
-    all.retain(|p| p.name != name);
     let lid = loader.unwrap_or_else(|| if fabric { "fabric".into() } else { "vanilla".into() });
     let fab = lid == "fabric";
-    all.insert(0, engine::Profile { name, version, fabric: fab, loader: Some(lid), loader_version: None, icon });
+    // a repeated name must not overwrite the existing build or share its folder
+    let prof = engine::Profile {
+        name: engine::unique_profile_name(&name),
+        version,
+        fabric: fab,
+        loader: Some(lid),
+        loader_version: None,
+        icon,
+    };
+    all.insert(0, prof.clone());
     engine::save_profiles(&all)?;
-    Ok(all)
+    Ok(prof)
 }
 
 #[tauri::command]
@@ -160,7 +187,9 @@ pub async fn cf_install_modpack(app: tauri::AppHandle, mod_id: u32, file_id: Opt
 }
 
 #[tauri::command]
-pub fn scan_imports() -> Vec<engine::FoundInstance> { engine::scan_imports() }
+pub async fn scan_imports() -> Result<Vec<engine::FoundInstance>, String> {
+    super::blocking(engine::scan_imports).await
+}
 
 #[tauri::command]
 pub fn import_instance(path: String, name: String, version: String, loader: String) -> Result<engine::Profile, String> {

@@ -6,11 +6,22 @@ mod secrets;
 mod commands;
 pub mod tray;
 
-/// Narrows the `asset:` protocol scope to launcher data and the game root, so a
-/// webview XSS cannot read the whole home directory.
+/// Directories the webview may read through `asset://`: the media files it
+/// plays and shows, nothing else. The token vault (`secrets.bin`, `vault.key`)
+/// sits directly under `data_dir()` and imported files land in
+/// `game_root()/profiles/...`, so neither root may ever be granted — an XSS
+/// would read the vault and any copied file straight out of the scope. Skins,
+/// capes and head avatars need no grant at all: they reach the UI as data URLs.
+/// Screenshots are granted per file when the webview asks for the list (see
+/// `commands::profiles::list_screenshots`).
+pub fn asset_dirs() -> Vec<std::path::PathBuf> {
+    let data = engine::data_dir();
+    vec![data.join("wallpaper"), data.join("music"), data.join("sounds")]
+}
+
 pub fn allow_assets(app: &tauri::AppHandle) {
     let scope = app.asset_protocol_scope();
-    for dir in [engine::data_dir(), engine::game_root()] {
+    for dir in asset_dirs() {
         std::fs::create_dir_all(&dir).ok();
         let _ = scope.allow_directory(&dir, true);
     }
@@ -117,6 +128,8 @@ pub fn run() {
             commands::profiles::duplicate_profile,
             commands::profiles::save_profile_settings,
             commands::profiles::load_profile_settings,
+            commands::profiles::fps_boost_state,
+            commands::profiles::set_fps_boost,
             commands::profiles::scan_imports,
             commands::profiles::import_instance,
             commands::profiles::import_pack_file,
@@ -130,6 +143,7 @@ pub fn run() {
             commands::accounts::ms_profile,
             commands::accounts::ms_set_cape,
             commands::accounts::ms_upload_skin,
+            commands::accounts::ms_reset_skin,
             commands::launch::list_worlds,
             commands::launch::list_servers,
             commands::launch::add_server,
@@ -201,7 +215,9 @@ pub fn run() {
             commands::system::tray_available,
             commands::system::hide_to_tray,
             commands::system::show_from_tray,
-            commands::system::set_restore_on_exit
+            commands::system::set_restore_on_exit,
+            commands::system::ui_prefs,
+            commands::system::set_ui_pref
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -428,9 +444,33 @@ mod tests {
         assert_eq!(
             scope,
             serde_json::json!([]),
-            "the static asset scope must stay empty. Access is granted at runtime for data_dir() \
-             and game_root() only (see allow_assets); a wildcard such as $HOME/** would let an \
-             XSS read the whole home directory.",
+            "the static asset scope must stay empty. Runtime grants (see allow_assets) cover \
+             media directories only; a wildcard such as $HOME/** would let an XSS read the whole \
+             home directory.",
         );
+    }
+
+    /// directory -> verdict. The vault lives directly under data_dir() and
+    /// imports land under game_root(), so granting either root to `asset://`
+    /// hands the webview the tokens and every copied file.
+    #[test]
+    fn asset_dirs_never_include_a_vault_or_game_root() {
+        let data = crate::engine::data_dir();
+        let forbidden = [data.clone(), crate::engine::game_root(), data.join("..")];
+        for dir in crate::asset_dirs() {
+            for bad in &forbidden {
+                assert_ne!(
+                    &dir, bad,
+                    "{} is served over asset://; secrets.bin, vault.key and imported files sit \
+                     under it and would become readable from the webview.",
+                    dir.display(),
+                );
+            }
+            assert!(
+                dir.starts_with(&data),
+                "{} is outside data_dir(); the asset scope must not reach arbitrary paths.",
+                dir.display(),
+            );
+        }
     }
 }

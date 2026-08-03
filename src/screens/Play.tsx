@@ -13,7 +13,7 @@ import { hasTauri } from '../ipc/tauri'
 import { useProfiles } from '../state/profiles'
 import { useServers } from '../state/servers'
 import { useWallpaper } from '../state/wallpaper'
-import { convertFileSrc, pickWallpaper } from '../ipc/commands'
+import { convertFileSrc, fpsBoostState, pickWallpaper, setFpsBoost } from '../ipc/commands'
 import { useMods } from '../state/mods'
 import { useModpackVersions } from '../state/modpack'
 import { openModal, setScreen, showToast } from '../state/ui'
@@ -77,6 +77,8 @@ export function Play({ on }: { on: boolean }) {
   const hero = useHeroWallpaper(on)
   const setMusicOpen = useMusic((s) => s.setOpen)
   const updates = useModUpdates()
+  const [boostOn, setBoostOn] = useState(false)
+  const [boostBusy, setBoostBusy] = useState(false)
   const [ready, setReady] = useState<ReadyHit[] | null>(null)
   const [readyErr, setReadyErr] = useState('')
   const playStats = usePlayStats((s) => s.stats)
@@ -88,6 +90,42 @@ export function Play({ on }: { on: boolean }) {
     if (on && profiles.length && profiles.length !== updates.scannedCount && !updates.scanning)
       void updates.scan()
   }, [on, profiles.length])
+
+  useEffect(() => {
+    if (!hasTauri() || !selected) {
+      setBoostOn(false)
+      return
+    }
+    let alive = true
+    fpsBoostState(selected)
+      .then((st) => {
+        if (alive) setBoostOn(st.enabled)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [selected, on])
+
+  const toggleBoost = async (name: string) => {
+    setBoostBusy(true)
+    try {
+      const next = await setFpsBoost(name, !boostOn)
+      setBoostOn(next.enabled)
+      void useMods.getState().load()
+      showToast(
+        next.enabled
+          ? next.vanilla
+            ? 'Буст FPS включён: профиль JVM и лёгкая графика'
+            : 'Буст FPS включён: ' + next.mods.length + ' мод(ов), профиль JVM и лёгкая графика'
+          : 'Буст FPS выключен — вернули как было',
+      )
+    } catch (e) {
+      showToast('Не удалось переключить буст FPS: ' + e, 'error')
+    } finally {
+      setBoostBusy(false)
+    }
+  }
 
   useEffect(() => {
     if (readyCache && Date.now() - readyCache.at < READY_TTL) {
@@ -259,6 +297,23 @@ export function Play({ on }: { on: boolean }) {
               onClick={() => sel && openBuildSettings(sel.name)}
             >
               <Icon id="i-settings" />
+            </button>
+            <button
+              className={'btn lg' + (boostOn ? ' primary' : '')}
+              id="fpsBoostBtn"
+              title={
+                boostOn
+                  ? 'Буст FPS включён — нажми, чтобы вернуть обычные настройки'
+                  : 'Больше FPS: моды-ускорители, профиль JVM и лёгкая графика'
+              }
+              style={sel && hasTauri() ? undefined : { display: 'none' }}
+              disabled={boostBusy}
+              onClick={() => sel && void toggleBoost(sel.name)}
+            >
+              <span className="lbl">
+                <Icon id="i-zap" />
+                {boostBusy ? 'Меняем…' : boostOn ? 'Буст FPS: вкл' : 'Буст FPS'}
+              </span>
             </button>
             <button
               className={'btn lg ' + (selRunning ? 'running' : 'primary')}

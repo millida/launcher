@@ -6,6 +6,7 @@ mod ping;
 mod worlds;
 mod serversdat;
 mod playtime;
+mod fpsboost;
 
 pub(crate) use mcmeta::*;
 pub use java::*;
@@ -15,3 +16,4 @@ pub use ping::*;
 pub use worlds::*;
 pub use serversdat::*;
 pub use playtime::*;
+pub use fpsboost::*;

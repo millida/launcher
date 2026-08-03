@@ -231,33 +231,9 @@ pub async fn millida_login_poll(device_code: String) -> Result<Value, String> {
     Ok(serde_json::json!({ "status": "ok", "user": r["user"].clone() }))
 }
 
-/// Accepts only http(s) URLs with a real host. Kept free of side effects so the
-/// verdict can be tested without opening anything.
-pub fn validate_external_url(url: &str) -> Result<url::Url, String> {
-    let raw = url.trim();
-    if raw.contains(['\r', '\n', '\0']) {
-        return Err("Некорректная ссылка".into());
-    }
-    let parsed = url::Url::parse(raw).map_err(|_| "Некорректная ссылка".to_string())?;
-    if !matches!(parsed.scheme(), "http" | "https") {
-        return Err("Ссылку такого вида лаунчер не открывает".into());
-    }
-    if parsed.host().is_none() {
-        return Err("Некорректная ссылка".into());
-    }
-    Ok(parsed)
-}
-
-/// Opens http(s) links through the platform API only. Shelling out would let
-/// shell metacharacters in the URL be executed.
-pub fn open_external(url: &str) -> Result<(), String> {
-    let parsed = validate_external_url(url)?;
-    tauri_plugin_opener::open_url(parsed.as_str(), None::<&str>).map_err(|e| e.to_string())
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{api_url, validate_external_url, MILLIDA_API};
+    use super::{api_url, MILLIDA_API};
 
     #[test]
     fn api_path_verdicts() {
@@ -308,60 +284,4 @@ mod tests {
         );
     }
 
-    #[test]
-    fn external_url_verdicts() {
-        // (input, should be accepted, why this case exists)
-        let cases: &[(&str, bool, &str)] = &[
-            ("https://millida.net/news", true, "plain https must keep working"),
-            ("http://millida.net/news", true, "plain http must keep working"),
-            ("HTTPS://MILLIDA.NET/news", true, "scheme comparison must be case-insensitive"),
-            ("https://millida.net/p?a=1&b=2", true, "query strings must survive intact"),
-            ("http:foo", true, "scheme-relative http is normalised to a real host by the URL parser"),
-            ("  https://millida.net/  ", true, "surrounding whitespace must be trimmed, not rejected"),
-            ("javascript:alert(1)", false, "javascript: would execute code in the opening context"),
-            ("file:///C:/Windows", false, "file: would expose the local filesystem"),
-            ("data:text/html,<script>alert(1)</script>", false, "data: can carry inline HTML/JS"),
-            ("http:///", false, "http with an empty host is not a real destination"),
-            ("millida://deeplink", false, "our own deep-link scheme must not be re-entered from a link"),
-            ("https://millida.net/\r\nHeader: x", false, "CR/LF enable injection into whatever consumes the URL"),
-            ("https://millida.net/\0evil", false, "NUL truncates the URL in C-string based platform APIs"),
-            ("", false, "empty input is not a URL"),
-            ("   ", false, "whitespace-only input is not a URL"),
-        ];
-
-        for (input, expected_ok, why) in cases {
-            let verdict = validate_external_url(input);
-            assert_eq!(
-                verdict.is_ok(),
-                *expected_ok,
-                "validate_external_url({input:?}) returned {verdict:?}, expected {}. \
-                 Reason this case is pinned: {why}",
-                if *expected_ok { "Ok" } else { "Err" },
-            );
-        }
-    }
-
-    #[test]
-    fn query_is_not_truncated_at_first_ampersand() {
-        let parsed = validate_external_url("https://millida.net/p?a=1&b=2")
-            .expect("a normal https URL with two query parameters must be accepted");
-        assert_eq!(
-            parsed.query(),
-            Some("a=1&b=2"),
-            "the whole query string must reach the browser; an earlier revision cut the URL \
-             at the first '&', silently dropping parameters",
-        );
-    }
-
-    #[test]
-    fn accepted_url_keeps_its_host_and_scheme() {
-        let parsed = validate_external_url("HTTPS://MILLIDA.NET/news")
-            .expect("upper-case scheme and host must be accepted");
-        assert_eq!(parsed.scheme(), "https", "scheme must normalise to lower case");
-        assert_eq!(
-            parsed.host_str(),
-            Some("millida.net"),
-            "host must be preserved so the user lands on the site they clicked",
-        );
-    }
 }

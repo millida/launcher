@@ -5,7 +5,8 @@
   --m-fg:#EDEFEE; --m-fg-muted:rgba(237,239,238,.80); --m-fg-subtle:rgba(237,239,238,.66); --m-fg-faint:rgba(237,239,238,.52);
   --m-accent:#5EC64D; --m-accent-hover:#70D55F; --m-accent-fg:#FFFFFF;
   --m-grad:linear-gradient(45deg,#11998E 0%,#5EC64D 100%);
-  --m-accent-soft:rgba(94,198,77,.13); --m-accent-glow:0 6px 16px rgba(94,198,77,.20);
+  --m-accent-rgb:94,198,77;
+  --m-accent-soft:rgba(var(--m-accent-rgb),.13); --m-accent-glow:0 6px 16px rgba(var(--m-accent-rgb),.20);
   --m-danger:#FF6B5E; --m-danger-soft:rgba(255,107,94,.13);
   --m-warning:#F5AA38; --m-warning-soft:rgba(245,170,56,.14);
   --m-info:#6AA9E9; --m-info-soft:rgba(106,169,233,.14);
@@ -23,7 +24,8 @@
   --m-bg:#F2F3F1; --m-surface:#FFFFFF; --m-surface-2:#F5F6F4; --m-raised:#FFFFFF; --m-inset:#E9EBE8;
   --m-border:rgba(18,26,20,.09); --m-border-strong:rgba(18,26,20,.17);
   --m-fg:#181D1A; --m-fg-muted:rgba(24,29,26,.80); --m-fg-subtle:rgba(24,29,26,.66); --m-fg-faint:rgba(24,29,26,.54);
-  --m-accent:#3B9A34; --m-accent-hover:#328A2C; --m-accent-soft:rgba(59,154,52,.11); --m-accent-glow:0 5px 14px rgba(59,154,52,.18);
+  --m-accent:#3B9A34; --m-accent-hover:#328A2C; --m-accent-rgb:59,154,52;
+  --m-accent-soft:rgba(var(--m-accent-rgb),.11); --m-accent-glow:0 5px 14px rgba(var(--m-accent-rgb),.18);
   --m-danger:#DD4A3E; --m-danger-soft:rgba(221,74,62,.14);
   --m-warning:#B97511; --m-warning-soft:rgba(185,117,17,.16);
   --m-info:#3572B8; --m-info-soft:rgba(53,114,184,.15);
@@ -303,7 +305,7 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 .btn.md{height:48px;padding:0 22px;font-size:14px}
 .btn.lg{height:56px;padding:0 30px;font-size:15px}
 .btn.primary{background:var(--m-grad);color:var(--m-accent-fg,#fff)}
-.btn.primary:hover{filter:brightness(1.1);transform:translateY(-1px);box-shadow:0 10px 28px rgba(94,198,77,.35)}
+.btn.primary:hover{filter:brightness(1.1);transform:translateY(-1px);box-shadow:0 10px 28px rgba(var(--m-accent-rgb),.35)}
 .btn.primary:active{transform:translateY(1px);filter:brightness(.95)}
 .btn.secondary{background:var(--m-surface-2);color:var(--m-fg)}
 .btn.secondary:hover{background:var(--m-raised)}
@@ -398,10 +400,10 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 .linklike:hover{text-decoration:underline}
 .trust svg{width:15px;height:15px;color:var(--m-accent);margin-top:1px}
 .login-art{position:relative;height:100%;display:flex;align-items:flex-end;justify-content:center;overflow:hidden}
-.login-art img{height:88%;object-fit:contain;filter:drop-shadow(0 0 34px rgba(94,198,77,.28)) drop-shadow(0 30px 50px rgba(0,0,0,.5));user-select:none;-webkit-user-drag:none}
+.login-art img{height:88%;object-fit:contain;filter:drop-shadow(0 0 34px rgba(var(--m-accent-rgb),.28)) drop-shadow(0 30px 50px rgba(0,0,0,.5));user-select:none;-webkit-user-drag:none}
 
 /* ============ Play screen hero ============ */
-.hero-live-wrap{position:relative;z-index:5}
+.hero-live-wrap{position:relative;z-index:5;margin-bottom:26px}
 .hero-live-wrap>.hero-tools{z-index:60}
 /* No contain:paint or will-change here: they trap the video inside the card layer,
    and WebKit then repaints every frame on the CPU. */
@@ -425,6 +427,13 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 .hero-cta{display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-end;gap:10px;flex-shrink:0}
 .hero-cta .ghost{color:rgba(242,244,243,.75)}
 .hero-cta .ghost:hover{color:#fff;background:rgba(255,255,255,.10)}
+/* Soft tints read as invisible over a photographic wallpaper: opaque glass instead. */
+.hero-cta .btn.running{background:rgba(12,14,13,.78);color:#9BEC8B;box-shadow:inset 0 0 0 1.5px rgba(155,236,139,.9),0 8px 24px rgba(0,0,0,.38);backdrop-filter:blur(10px)}
+.hero-cta .btn.running:hover{background:var(--m-accent);color:#fff;box-shadow:inset 0 0 0 1.5px var(--m-accent),0 10px 28px rgba(0,0,0,.42)}
+.hero-cta .btn.running .run-dot{background:#9BEC8B;box-shadow:0 0 10px rgba(155,236,139,.75)}
+.hero-cta .btn.running:hover .run-dot{background:#fff;box-shadow:none}
+.hero-cta .btn.danger{background:rgba(12,14,13,.78);color:#FF9C92;box-shadow:inset 0 0 0 1.5px rgba(255,156,146,.75),0 8px 24px rgba(0,0,0,.38);backdrop-filter:blur(10px)}
+.hero-cta .btn.danger:hover{background:var(--m-danger);color:#fff;box-shadow:inset 0 0 0 1.5px var(--m-danger),0 10px 28px rgba(0,0,0,.42)}
 /* Wallpaper switch button */
 .hero-tools{position:absolute;top:14px;right:14px;z-index:3;display:flex;gap:8px;align-items:center}
 .wp-btn{position:relative;z-index:3;height:32px;padding:0 12px;border-radius:var(--m-r-pill);background:rgba(12,14,13,.72);color:rgba(242,244,243,.85);font-size:12.5px;font-weight:600;display:inline-flex;align-items:center;gap:7px;transition:all var(--m-t-fast)}
@@ -574,7 +583,6 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 .build-cover .mini-play{position:absolute;right:8px;bottom:8px;width:30px;height:30px;border-radius:9px;background:var(--m-grad);color:#fff;display:grid;place-items:center;opacity:0;transform:translateY(4px);transition:all var(--m-t-fast)}
 .build-card:hover .mini-play{opacity:1;transform:none}
 .build-run{position:absolute;left:6px;top:6px;display:inline-flex;align-items:center;gap:5px;padding:3px 8px 3px 6px;border-radius:99px;background:rgba(12,14,13,.78);color:#fff;font-size:10.5px;font-weight:650;letter-spacing:.01em}
-.build-card.running{box-shadow:inset 0 0 0 1.5px var(--m-accent)}
 .build-card.running .build-body b{color:var(--m-accent)}
 .build-body{padding:9px 11px 11px;display:flex;flex-direction:column;gap:1px;flex:1 1 auto}
 .build-body b{font-size:13px;font-weight:650;display:block;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -686,6 +694,7 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 .skin-card.on{border-color:var(--m-accent)}
 .skin-thumb{height:158px;display:grid;place-items:center;background:radial-gradient(120% 90% at 50% 22%,color-mix(in srgb,var(--m-accent) 14%,var(--m-surface-2)) 0%,var(--m-inset) 78%)}
 .skin-body3d{height:132px;width:auto;object-fit:contain;image-rendering:auto;filter:drop-shadow(0 6px 11px rgba(0,0,0,.4))}
+.skin-body3d-slot{display:grid;place-items:center}
 .skin-thumb canvas{image-rendering:pixelated;filter:drop-shadow(0 6px 10px rgba(0,0,0,.35))}
 .skin-thumb>svg{width:30px;height:30px;color:var(--m-fg-faint)}
 .skin-card.skin-add{border:1.5px dashed var(--m-border-strong);cursor:pointer}

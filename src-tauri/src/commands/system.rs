@@ -55,8 +55,8 @@ pub fn ui_sounds() -> Vec<engine::UiSound> { engine::ui_sounds() }
 pub async fn download_ui_sounds() -> Result<Vec<engine::UiSound>, String> { engine::download_ui_sounds().await }
 
 #[tauri::command]
-pub fn open_url(url: String) -> Result<(), String> {
-    engine::open_external(&url)
+pub fn open_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    engine::open_external_anyhow(&app, &url)
 }
 
 #[tauri::command]
@@ -119,6 +119,14 @@ pub fn show_from_tray(app: tauri::AppHandle) { crate::tray::show_main(&app); }
 #[tauri::command]
 pub fn set_restore_on_exit(on: bool) { crate::tray::set_restore_on_exit(on); }
 
+/// Web storage is committed lazily and a tray quit tears the process down
+/// before it lands, so settings the user must not lose are mirrored to disk.
+#[tauri::command]
+pub fn ui_prefs() -> engine::UiPrefs { engine::ui_prefs() }
+
+#[tauri::command]
+pub fn set_ui_pref(key: String, value: String) -> Result<(), String> { engine::set_ui_pref(key, value) }
+
 /// Flatpak builds are updated by flatpak itself, so the in-app update channel
 /// must be hidden there.
 #[tauri::command]
@@ -160,11 +168,11 @@ pub fn clear_crashes() {
 }
 
 #[tauri::command]
-pub fn cache_size() -> u64 {
-    engine::cache_size()
+pub async fn cache_size() -> Result<u64, String> {
+    super::blocking(engine::cache_size).await
 }
 
 #[tauri::command]
-pub fn clear_cache() -> u64 {
-    engine::clear_cache()
+pub async fn clear_cache() -> Result<u64, String> {
+    super::blocking(engine::clear_cache).await
 }

@@ -122,9 +122,14 @@ export function ProjectModal() {
       return
     }
     if (!isCf) {
-      void installContentFlow(pj.slug, pj.kind, pj.title)
+      void installContentFlow({ source: 'modrinth', slug: pj.slug }, pj.kind, pj.title)
       return
     }
+    if (fileId === undefined) {
+      void installContentFlow({ source: 'curseforge', cfid: pj.cfid }, pj.kind, pj.title)
+      return
+    }
+    // a file picked by hand in the versions tab installs as picked
     void resolveTargetBuild(pj.kind).then((prof) => {
       if (!prof) return
       const pr = useProfiles.getState().profiles.find((x) => x.name === prof)
@@ -133,7 +138,7 @@ export function ProjectModal() {
         title: pj.title,
         running: 'Скачивание…',
         run: () => cfInstall(pj.cfid, (pr && pr.version) || '', prof, pj.kind, fileId),
-        onDone: (f) => showToast('CurseForge → «' + prof + '»: ' + f, 'ok', 'install'),
+        onDone: (r) => showToast('CurseForge → «' + prof + '»: ' + r.file, 'ok', 'install'),
       })
     })
   }
@@ -158,7 +163,7 @@ export function ProjectModal() {
       title: pj.title || pj.slug,
       running: 'Скачивание…',
       run: () => installVersion(pj.slug, v.id, prof, pj.kind),
-      onDone: (f) => showToast('В «' + prof + '»: ' + f, 'ok', 'install'),
+      onDone: (r) => showToast('В «' + prof + '»: ' + r.file + (r.warning ? ' · ' + r.warning : ''), 'ok', 'install'),
     })
   }
 

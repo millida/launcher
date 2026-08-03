@@ -98,11 +98,13 @@ export function NewBuildModal() {
             onClick={() => {
               const nm = name.trim() || 'Моя сборка'
               if (hasTauri()) {
-                createProfile(nm, ver, loader === 'fabric', loader, icon).then(() => {
-                  track('build_create', { mc: ver, loader })
-                  void useProfiles.getState().refresh()
-                  showToast('Сборка «' + nm + '» создана', 'ok', 'achievement')
-                })
+                createProfile(nm, ver, loader === 'fabric', loader, icon)
+                  .then((p) => {
+                    track('build_create', { mc: ver, loader })
+                    void useProfiles.getState().refresh()
+                    showToast('Сборка «' + p.name + '» создана', 'ok', 'achievement')
+                  })
+                  .catch((e) => showToast('Не удалось создать сборку: ' + e, 'error'))
               } else {
                 showToast('Сборка «' + nm + '» создана (демо)')
               }

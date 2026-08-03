@@ -11,6 +11,7 @@ import {
   listTextures,
   mcTextures,
   msProfile,
+  msResetSkin,
   msSetCape,
   msUploadSkin,
   pickTexture,
@@ -20,16 +21,20 @@ import {
 } from '../ipc/commands'
 import type { MsCape, TextureEntry, TextureKind } from '../ipc/commands'
 import { loadSkinview } from '../lib/skinview'
+import { textureSource } from '../lib/textureSource'
+import { SkinBody } from '../components/SkinBody'
 import {
   addToWardrobe,
   applyWardrobeItem,
+  claimReward,
+  loadRewards,
   loadWardrobe,
   removeWardrobeItem,
   setSkinSource,
   skinSource,
   uploadTexture,
 } from '../lib/gameProfile'
-import type { WardrobeItem } from '../lib/gameProfile'
+import type { RewardItem, WardrobeItem } from '../lib/gameProfile'
 import { refreshGameNick, useGameNick } from '../state/gameNick'
 import { hasMillidaAccount, openExt } from '../lib/api'
 import { track } from '../lib/telemetry'
@@ -130,6 +135,11 @@ const CATALOG: { group: string; items: CatalogSkin[] }[] = [
 
 const NICK_RE = /^[A-Za-z0-9_]{3,16}$/
 
+const rewardProgress = (r: { unit: string; progress: number; goal: number }) =>
+  r.unit === 'seconds'
+    ? Math.floor(r.progress / 3600) + ' из ' + Math.floor(r.goal / 3600) + ' ч'
+    : r.progress + ' из ' + r.goal
+
 const MILLIDA_SKINS_URL = 'https://millida.net/skins'
 
 const MILLIDA_CAPE = '/capes/millida.png'
@@ -196,13 +206,16 @@ async function migrateStored(kind: TextureKind, key: string): Promise<MySkin[] |
 const skinUrl = (n: string) => 'https://mc-heads.net/skin/' + encodeURIComponent(n)
 
 function loadImg(url: string): Promise<HTMLImageElement> {
-  return new Promise((res, rej) => {
-    const i = new Image()
-    i.crossOrigin = 'anonymous'
-    i.onload = () => res(i)
-    i.onerror = () => rej(new Error('img'))
-    i.src = url
-  })
+  return textureSource(url).then(
+    (src) =>
+      new Promise<HTMLImageElement>((res, rej) => {
+        const i = new Image()
+        i.crossOrigin = 'anonymous'
+        i.onload = () => res(i)
+        i.onerror = () => rej(new Error('текстура недоступна: ' + url))
+        i.src = src
+      }),
+  )
 }
 
 type SkinArea = [number, number, number, number]
@@ -339,18 +352,18 @@ function SkinThumb({ url, size = 132, slim }: { url: string; size?: number; slim
   )
 }
 
-function CatalogThumb({ nick, url }: { nick?: string; url?: string }) {
-  const [failed, setFailed] = useState(false)
-  const texture = url || skinUrl(nick || 'MHF_Steve')
-  if (url || failed) return <SkinThumb url={texture} />
+function SkinCardThumb({ url, slim }: { url: string; slim?: boolean }) {
   return (
-    <img
-      className="skin-body3d"
-      src={'https://mc-heads.net/body/' + encodeURIComponent(nick || 'MHF_Steve') + '/128'}
-      alt=""
-      onError={() => setFailed(true)}
+    <SkinBody
+      url={url}
+      model={slim === undefined ? 'auto-detect' : slim ? 'slim' : 'default'}
+      fallback={<SkinThumb url={url} slim={slim} />}
     />
   )
+}
+
+function CatalogThumb({ nick, url }: { nick?: string; url?: string }) {
+  return <SkinCardThumb url={url || skinUrl(nick || 'MHF_Steve')} />
 }
 
 interface AccTexture {
@@ -362,19 +375,25 @@ interface AccTexture {
 const texCache = new Map<string, { at: number; tex: AccTexture }>()
 const TEX_TTL = 300000
 
-async function loadAccountTexture(a: Account): Promise<AccTexture> {
-  const key = a.uuid || a.nick
-  const hit = texCache.get(key)
-  if (hit && Date.now() - hit.at < TEX_TTL) return hit.tex
-  if (hasTauri()) {
+const DEFAULT_SKIN = OFFICIAL_SKINS[0].url as string
+
+/// Текстуры Mojang запрашиваем только для лицензии. Офлайн- и Millida-аккаунт
+/// ищутся по нику, а ник в Mojang принадлежит другому человеку: раньше игрок
+/// видел и применял чужой скин, считая его своим.
+async function loadAccountTexture(a: Account, millida: AccTexture | null): Promise<AccTexture> {
+  if (a.kind === 'microsoft' && hasTauri()) {
+    const key = a.uuid || a.nick
+    const hit = texCache.get(key)
+    if (hit && Date.now() - hit.at < TEX_TTL) return hit.tex
     try {
       const t = await mcTextures(key)
-      const tex = { skin: t.skin || skinUrl(a.nick), cape: t.cape, slim: !!t.slim }
+      const tex = { skin: t.skin || DEFAULT_SKIN, cape: t.cape, slim: !!t.slim }
       texCache.set(key, { at: Date.now(), tex })
       return tex
     } catch {}
   }
-  return { skin: skinUrl(a.nick), cape: null, slim: false }
+  if (a.kind === 'millida' && millida) return millida
+  return { skin: DEFAULT_SKIN, cape: null, slim: false }
 }
 
 /// Offline and Microsoft accounts keep the skin locally; mc-heads only knows Mojang uploads.
@@ -408,25 +427,51 @@ async function toPngBase64(url: string): Promise<string> {
 // Cape back face: UV (1,1) sized 10x16 on the standard 64x32 cape texture.
 function CapePreview({ url, h = 64 }: { url: string; h?: number }) {
   const ref = useRef<HTMLCanvasElement>(null)
+  const [failed, setFailed] = useState(false)
   useEffect(() => {
-    const cv = ref.current
-    if (!cv) return
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    img.onload = () => {
-      const g = cv.getContext('2d')
-      if (!g) return
-      const s = img.width / 64
-      cv.width = 10
-      cv.height = 16
-      g.imageSmoothingEnabled = false
-      try {
+    let alive = true
+    setFailed(false)
+    loadImg(url)
+      .then((img) => {
+        const cv = ref.current
+        if (!alive || !cv) return
+        const g = cv.getContext('2d')
+        if (!g) return
+        const s = img.width / 64
+        cv.width = 10
+        cv.height = 16
+        g.imageSmoothingEnabled = false
         g.clearRect(0, 0, 10, 16)
         g.drawImage(img, 1 * s, 1 * s, 10 * s, 16 * s, 0, 0, 10, 16)
-      } catch {}
+      })
+      .catch(() => {
+        if (alive) setFailed(true)
+      })
+    return () => {
+      alive = false
     }
-    img.src = url
   }, [url])
+  if (failed)
+    return (
+      <span
+        style={{
+          width: (h * 10) / 16 + 'px',
+          height: h + 'px',
+          borderRadius: '4px',
+          display: 'grid',
+          placeItems: 'center',
+          background: 'var(--m-inset)',
+          color: 'var(--m-fg-faint)',
+          fontSize: '10px',
+          textAlign: 'center',
+          lineHeight: 1.2,
+        }}
+      >
+        нет
+        <br />
+        картинки
+      </span>
+    )
   return (
     <canvas
       ref={ref}
@@ -485,6 +530,20 @@ function applyPose(skin: any, t: number, cur: Cur) {
   } catch {}
 }
 
+const VIEWER_FOV = 40
+const VIEWER_MAX_ZOOM = 0.9
+const VIEWER_FIT_UNITS = 16.5
+const VIEWER_NEAR_OFFSET = 4.5
+const MODEL_HALF_HEIGHT = 18
+const POSE_HALF_SPAN = 16
+
+function fitZoom(width: number, height: number) {
+  const aspect = width > 0 && height > 0 ? width / height : 0.7
+  const offset = VIEWER_NEAR_OFFSET * Math.tan(((VIEWER_FOV / 180) * Math.PI) / 2)
+  const zoomFor = (half: number) => VIEWER_FIT_UNITS / Math.max(half - offset, 0.001)
+  return Math.min(VIEWER_MAX_ZOOM, zoomFor(MODEL_HALF_HEIGHT), zoomFor(POSE_HALF_SPAN / aspect))
+}
+
 function newCur(): Cur {
   return { hx: 0, hy: 0, hz: 0, rx: 0, rz: 0, lx: 0, lz: 0, by: 0 }
 }
@@ -498,6 +557,7 @@ function resetBones(viewer: any) {
 
 export function Skins({ on }: { on: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<any>(null)
   const accounts = useAccounts((s) => s.list)
   const activeId = useAccounts((s) => s.active)
@@ -513,6 +573,9 @@ export function Skins({ on }: { on: boolean }) {
   const [myCapes, setMyCapes] = useState<MySkin[]>([])
   const [textures, setTextures] = useState<Record<string, AccTexture>>({})
   const [wardrobe, setWardrobe] = useState<WardrobeItem[]>([])
+  const [millidaTex, setMillidaTex] = useState<AccTexture | null>(null)
+  const [rewards, setRewards] = useState<RewardItem[]>([])
+  const [claiming, setClaiming] = useState('')
   const [activeWardrobe, setActiveWardrobe] = useState<string | null>(null)
   const [msCapes, setMsCapes] = useState<Record<string, MsCape[]>>({})
   const [activeMy, setActiveMy] = useState<number | null>(null)
@@ -547,6 +610,11 @@ export function Skins({ on }: { on: boolean }) {
     try {
       const w = await loadWardrobe()
       setWardrobe(w.items)
+      setMillidaTex(
+        w.active.skinUrl
+          ? { skin: w.active.skinUrl, cape: w.active.capeUrl, slim: w.active.model === 'slim' }
+          : null,
+      )
       const cur = w.items.find((i) => i.kind === 'skin' && i.url === w.active.skinUrl)
       setActiveWardrobe(cur ? cur.id : null)
       if (!wardrobeVariantRef.current) {
@@ -563,9 +631,35 @@ export function Skins({ on }: { on: boolean }) {
     }
   }
 
+  const refreshRewards = async () => {
+    if (!hasMillidaAccount()) return
+    try {
+      const r = await loadRewards()
+      setRewards(r.items)
+    } catch (e) {
+      showToast('Награды не загрузились: ' + e, 'error')
+    }
+  }
+
   useEffect(() => {
     void refreshWardrobe()
+    void refreshRewards()
   }, [])
+
+  const takeReward = async (r: RewardItem) => {
+    setClaiming(r.code)
+    try {
+      await claimReward(r.code)
+      await refreshRewards()
+      await refreshWardrobe()
+      setTab('capes')
+      showToast('Плащ «' + r.title + '» твой — он уже в каталоге аккаунта')
+    } catch (e) {
+      showToast('Не удалось забрать награду: ' + e, 'error')
+    } finally {
+      setClaiming('')
+    }
+  }
 
   const gameNick = useGameNick()
   useEffect(() => {
@@ -749,13 +843,13 @@ export function Skins({ on }: { on: boolean }) {
 
   useEffect(() => {
     let alive = true
-    Promise.all(accounts.map((a) => loadAccountTexture(a).then((t) => [a.id, t] as const))).then((pairs) => {
+    Promise.all(accounts.map((a) => loadAccountTexture(a, millidaTex).then((t) => [a.id, t] as const))).then((pairs) => {
       if (alive) setTextures(Object.fromEntries(pairs))
     })
     return () => {
       alive = false
     }
-  }, [accounts])
+  }, [accounts, millidaTex])
 
   useEffect(() => {
     if (!hasTauri()) return
@@ -836,14 +930,29 @@ export function Skins({ on }: { on: boolean }) {
       .catch((e) => showToast('Плащ лицензии не переключился: ' + e, 'error'))
   }
 
+  const fitViewer = () => {
+    const viewer = viewerRef.current
+    const stage = stageRef.current
+    if (!viewer || !stage) return
+    const w = stage.clientWidth || 250
+    const h = stage.clientHeight || 360
+    try {
+      viewer.setSize(w, h)
+      viewer.zoom = fitZoom(w, h)
+    } catch {}
+  }
+
   const ensureViewer = () => {
     const SV = window.skinview3d
     const canvas = canvasRef.current
+    const stage = stageRef.current
     if (viewerRef.current || !SV || !canvas) return viewerRef.current
+    const w = (stage && stage.clientWidth) || 250
+    const h = (stage && stage.clientHeight) || 360
     try {
-      viewerRef.current = new SV.SkinViewer({ canvas, width: 260, height: 380 })
-      viewerRef.current.zoom = 0.9
-      viewerRef.current.fov = 40
+      viewerRef.current = new SV.SkinViewer({ canvas, width: w, height: h })
+      viewerRef.current.fov = VIEWER_FOV
+      viewerRef.current.zoom = fitZoom(w, h)
       try {
         viewerRef.current.background = null
       } catch {}
@@ -881,16 +990,35 @@ export function Skins({ on }: { on: boolean }) {
     }
     setFallback(false)
     const viewer = viewerRef.current
-    viewer.loadSkin(skinSrc || skinUrl(nick), { model: variant === 'slim' ? 'slim' : 'default' }).catch(() => {})
+    let alive = true
+    void textureSource(skinSrc || skinUrl(nick)).then((src) => {
+      if (alive) viewer.loadSkin(src, { model: variant === 'slim' ? 'slim' : 'default' }).catch(() => {})
+    })
     const c = capes.find((x) => x.id === cape)
     if (!c) {
       try {
         viewer.loadCape(null)
       } catch {}
     } else {
-      viewer.loadCape(c.url).catch(() => {})
+      void textureSource(c.url).then((src) => {
+        if (alive) viewer.loadCape(src).catch(() => {})
+      })
+    }
+    return () => {
+      alive = false
     }
   }, [nick, skinSrc, variant, cape, capes, svReady])
+
+  useEffect(() => {
+    if (!svReady || fallback) return
+    const stage = stageRef.current
+    if (!stage) return
+    fitViewer()
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => fitViewer())
+    ro.observe(stage)
+    return () => ro.disconnect()
+  }, [svReady, fallback, on])
 
   // skinview3d runs its own RAF loop and does not know the window is hidden, which kept the GPU busy.
   useEffect(() => {
@@ -1057,7 +1185,11 @@ export function Skins({ on }: { on: boolean }) {
       const acc = getAccount()
       if (acc && acc.kind === 'microsoft' && hasTauri()) {
         const ms = await ensureMsAuth(acc)
-        if (ms) await msSetCape(ms.id, '').catch(() => {})
+        if (ms) {
+          await msSetCape(ms.id, '').catch(() => {})
+          await msResetSkin(ms.id).catch((e) => showToast('Скин на лицензии остался прежним: ' + e, 'error'))
+          texCache.delete(acc.uuid || acc.nick)
+        }
       }
       setSkinSrc(null)
       setActiveMy(null)
@@ -1115,12 +1247,16 @@ export function Skins({ on }: { on: boolean }) {
   const selectCatalog = (it: CatalogSkin) => {
     const texture = it.url || skinUrl(it.nick || 'MHF_Steve')
     if (it.nick) setNick(it.nick)
-    setSkinSrc(it.url ? it.url : null)
+    // Текстура запоминается целиком: «применить» обязано отправить именно тот
+    // скин, который человек видит в превью, а не подставлять его по нику.
+    setSkinSrc(texture)
     setActiveMy(null)
     setActiveWardrobe(null)
     autoVariant(texture, it.url ? 's:' + it.url : 'n:' + (it.nick || 'MHF_Steve'))
     showToast('Скин «' + it.label + '» применён')
   }
+
+  const readyRewards = rewards.filter((r) => r.done && !r.claimed).length
 
   const use3d = svReady && !fallback
   const currentCape = capes.find((c) => c.id === cape)
@@ -1162,12 +1298,25 @@ export function Skins({ on }: { on: boolean }) {
   }
 
   const applyToMillida = async () => {
+    const texture = skinSrc
+    if (!texture) {
+      showToast('Сначала выбери скин — свой, из каталога или из аккаунта', 'error')
+      return
+    }
     setApplying(true)
-    const texture = skinSrc || skinUrl(nick)
     try {
-      const skin = await toPngBase64(texture)
-      const capePng = currentCape ? await toPngBase64(currentCape.url) : null
-      await setLocalSkin(skin, capePng, variant === 'slim').catch(() => {})
+      const skin = await toPngBase64(texture).catch(() => {
+        throw new Error('картинка скина не читается — выбери его заново')
+      })
+      const capePng = currentCape
+        ? await toPngBase64(currentCape.url).catch(() => {
+            throw new Error('плащ «' + currentCape.name + '» не скачался — выбери другой')
+          })
+        : null
+      if (hasTauri())
+        await setLocalSkin(skin, capePng, variant === 'slim').catch((e) => {
+          throw new Error('скин не сохранился на этом компьютере: ' + e)
+        })
       const acc = getAccount()
       let licensed = false
       try {
@@ -1175,24 +1324,37 @@ export function Skins({ on }: { on: boolean }) {
       } catch (e) {
         showToast('Плащ лицензии не переключился: ' + e, 'error')
       }
-      if (hasMillidaAccount()) {
-        if (skinSource() !== 'millida') setSkinSource('millida')
-        const applied = await uploadTexture('skin', skin, variant === 'slim', skinTitle())
-        await uploadTexture('cape', capePng, false, currentCape ? currentCape.name : undefined)
-        if (acc && acc.kind === 'microsoft' && applied?.skinUrl && hasTauri()) {
-          const ms = await ensureMsAuth(acc)
-          if (ms) {
-            try {
-              await msUploadSkin(ms.id, applied.skinUrl, variant === 'slim')
-              licensed = true
-            } catch (e) {
-              showToast('На лицензию скин не уехал: ' + e, 'error')
-            }
+      // Скин на лицензию уходит независимо от аккаунта Millida: раньше он был
+      // привязан к загрузке в каталог, и без входа в Millida на аккаунте
+      // менялся только плащ — скин оставался прежним.
+      if (acc && acc.kind === 'microsoft' && hasTauri()) {
+        const ms = await ensureMsAuth(acc)
+        if (ms) {
+          try {
+            await msUploadSkin(ms.id, skin, variant === 'slim')
+            texCache.delete(acc.uuid || acc.nick)
+            licensed = true
+          } catch (e) {
+            showToast('На лицензию скин не уехал: ' + e, 'error')
           }
         }
+      }
+      if (hasMillidaAccount()) {
+        if (skinSource() !== 'millida') setSkinSource('millida')
+        const applied = await uploadTexture('skin', skin, variant === 'slim', skinTitle()).catch((e) => {
+          throw new Error(
+            'скин не сохранился в аккаунте Millida (' +
+              String(e).replace(/^Error:\s*/, '') +
+              ')' +
+              (licensed ? ' — на лицензии он уже применён' : ''),
+          )
+        })
+        if (!applied || !applied.skinUrl) throw new Error('сервер не сохранил скин')
+        await uploadTexture('cape', capePng, false, currentCape ? currentCape.name : undefined)
         await loadMillidaProfile().catch(() => {})
         await refreshHead(texture)
         await refreshWardrobe()
+        await refreshRewards()
         showToast(
           licensed
             ? 'Скин применён — сохранён в каталоге Millida и на лицензии'
@@ -1200,7 +1362,11 @@ export function Skins({ on }: { on: boolean }) {
         )
       } else {
         await refreshHead(texture)
-        showToast('Скин применён — увидишь его в игре на модовых сборках после запуска')
+        showToast(
+          licensed
+            ? 'Скин применён на лицензии Microsoft'
+            : 'Скин применён — увидишь его в игре на модовых сборках после запуска',
+        )
       }
       track('skin_apply', {
         cape: currentCape ? currentCape.name : 'нет',
@@ -1209,7 +1375,7 @@ export function Skins({ on }: { on: boolean }) {
         licensed,
       })
     } catch (e) {
-      showToast('Не удалось применить скин: ' + e, 'error')
+      showToast('Не удалось применить скин: ' + String(e).replace(/^Error:\s*/, ''), 'error')
     } finally {
       setApplying(false)
     }
@@ -1223,12 +1389,12 @@ export function Skins({ on }: { on: boolean }) {
 
       <div className="skins-grid">
         <div className="card skin-preview">
-          <div className="skin-stage" id="skinStage">
+          <div className="skin-stage" id="skinStage" ref={stageRef}>
             <div className="skin-aura" aria-hidden="true"></div>
             <canvas
               id="skinCanvas"
               ref={canvasRef}
-              style={{ imageRendering: 'auto', width: '100%', height: '100%', display: use3d ? undefined : 'none' }}
+              style={{ imageRendering: 'auto', display: use3d ? undefined : 'none' }}
             ></canvas>
             {use3d ? null : fallback ? (
               <div style={{ display: 'grid', placeItems: 'center', height: '100%' }}>
@@ -1323,6 +1489,18 @@ export function Skins({ on }: { on: boolean }) {
             <button className={'seg' + (tab === 'capes' ? ' on' : '')} data-sktab="capes" onClick={() => setTab('capes')}>
               <Icon id="i-flag" />
               Плащи <span style={{ opacity: 0.6, fontSize: '11px' }}>{capes.length}</span>
+            </button>
+            <button
+              className={'seg' + (tab === 'rewards' ? ' on' : '')}
+              data-sktab="rewards"
+              onClick={() => {
+                setTab('rewards')
+                void refreshRewards()
+              }}
+            >
+              <Icon id="i-trophy" />
+              Награды
+              {readyRewards ? <span style={{ opacity: 0.85, fontSize: '11px' }}>{readyRewards}</span> : null}
             </button>
           </div>
 
@@ -1476,7 +1654,7 @@ export function Skins({ on }: { on: boolean }) {
                     }}
                   >
                     <span className="skin-thumb">
-                      <SkinThumb url={sk.data} slim={sk.slim} />
+                      <SkinCardThumb url={sk.data} slim={sk.slim} />
                     </span>
                     <span className="skin-body">
                       <b>{sk.name}</b>
@@ -1508,7 +1686,7 @@ export function Skins({ on }: { on: boolean }) {
                         >
                           <button className="sk-card-hit" onClick={() => void useWardrobeSkin(item)}>
                             <span className="skin-thumb">
-                              <SkinThumb url={item.url} slim={item.model === 'slim'} />
+                              <SkinCardThumb url={item.url} slim={item.model === 'slim'} />
                             </span>
                             <span className="skin-body">
                               <b>{item.name}</b>
@@ -1565,7 +1743,7 @@ export function Skins({ on }: { on: boolean }) {
                       }}
                     >
                       <span className="skin-thumb">
-                        <SkinThumb
+                        <SkinCardThumb
                           url={textures[a.id] ? textures[a.id].skin : skinUrl(a.nick)}
                           slim={textures[a.id] ? textures[a.id].slim : undefined}
                         />
@@ -1625,6 +1803,58 @@ export function Skins({ on }: { on: boolean }) {
               })}
             </div>
           </div>
+
+          {tab === 'rewards' ? (
+            <div id="skTabRewards">
+              <div className="side-cap" style={{ padding: '0 2px 10px' }}>
+                Плащи за задания
+              </div>
+              {hasMillidaAccount() ? (
+                <>
+                  <p className="faint-note" style={{ marginBottom: '12px' }}>
+                    Выполняй задания в лаунчере — забирай плащи. Каждый попадает в каталог аккаунта и надевается на
+                    вкладке «Плащи».
+                  </p>
+                  <div className="cape-cards">
+                    {rewards.map((r) => (
+                      <div key={r.code} className={'cape-card' + (r.claimed ? ' on' : '')}>
+                        {r.capeUrl ? (
+                          <span className="cape-render">
+                            <CapePreview url={r.capeUrl} h={92} />
+                          </span>
+                        ) : (
+                          <span className="cape-render empty">
+                            <Icon id="i-trophy" />
+                          </span>
+                        )}
+                        <b>{r.title}</b>
+                        <span className="cape-sub">{r.task}</span>
+                        <span className="cape-sub" style={{ opacity: 0.75 }}>
+                          {r.claimed ? 'Получен' : rewardProgress(r)}
+                        </span>
+                        {r.claimed ? null : (
+                          <button
+                            className={'btn sm' + (r.done ? ' primary' : '')}
+                            style={{ width: '100%', marginTop: '6px' }}
+                            disabled={!r.done || claiming === r.code}
+                            title={r.done ? 'Забрать плащ' : r.hint}
+                            onClick={() => void takeReward(r)}
+                          >
+                            {claiming === r.code ? 'Выдаём…' : r.done ? 'Забрать' : 'Не выполнено'}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {rewards.length ? null : <p className="faint-note">Список наград загружается…</p>}
+                </>
+              ) : (
+                <p className="faint-note">
+                  Войди в Millida — награды за задания выдаются на аккаунт, чтобы плащ был на любом компьютере.
+                </p>
+              )}
+            </div>
+          ) : null}
 
         </div>
       </div>

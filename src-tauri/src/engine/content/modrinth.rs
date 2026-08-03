@@ -71,12 +71,6 @@ pub(crate) fn modrinth_loaders(loader_id: &str, kind: &str) -> Vec<String> {
     }
 }
 
-pub(crate) fn loaders_facet(loaders: &[String]) -> String {
-    if loaders.is_empty() { return String::new(); }
-    let list: Vec<String> = loaders.iter().map(|l| format!("\"{}\"", l)).collect();
-    format!("&loaders=[{}]", list.join(","))
-}
-
 type MetaTriple = (String, String, String, String);
 static META_CACHE: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, MetaTriple>>> =
     std::sync::OnceLock::new();
@@ -190,25 +184,46 @@ pub(crate) async fn bulk_latest_by_hash(
     out
 }
 
+pub(crate) async fn project_versions(project: &str) -> Result<Vec<Value>, String> {
+    let versions = get_json(&format!("https://api.modrinth.com/v2/project/{}/version", project)).await?;
+    Ok(versions.as_array().cloned().unwrap_or_default())
+}
+
+fn has_str(v: &Value, key: &str, wanted: &str) -> bool {
+    v[key].as_array().is_some_and(|a| a.iter().any(|x| x.as_str() == Some(wanted)))
+}
+
+pub(crate) fn version_fits(v: &Value, game_version: &str, loaders: &[String]) -> bool {
+    let gv_ok = game_version.is_empty() || has_str(v, "game_versions", game_version);
+    let ld_ok = loaders.is_empty() || loaders.iter().any(|l| has_str(v, "loaders", l));
+    gv_ok && ld_ok
+}
+
+/// Human-readable list of the game versions a project actually ships, used to
+/// explain a mismatch instead of silently installing something else.
+pub(crate) fn known_game_versions(versions: &[Value]) -> String {
+    let mut seen: Vec<String> = vec![];
+    for v in versions {
+        for g in v["game_versions"].as_array().into_iter().flatten() {
+            let Some(g) = g.as_str() else { continue };
+            if !seen.iter().any(|x| x == g) { seen.push(g.to_string()); }
+        }
+        if seen.len() >= 6 { break }
+    }
+    seen.join(", ")
+}
+
+/// Strict: a version that does not match the profile is never returned. Callers
+/// that want it anyway ask for it explicitly via `latest_version`.
 pub(crate) async fn best_version(project: &str, game_version: &str, loaders: &[String]) -> Result<Value, String> {
-    let mut url = format!(
-        "https://api.modrinth.com/v2/project/{}/version?game_versions=[\"{}\"]",
-        project, game_version
-    );
-    url.push_str(&loaders_facet(loaders));
-    let versions = get_json(&url).await?;
-    let versions = if versions.as_array().map(|a| a.is_empty()).unwrap_or(true) {
-        // fall back to the loader filter alone, then to no filters at all
-        let facet = loaders_facet(loaders);
-        let u2 = format!(
-            "https://api.modrinth.com/v2/project/{}/version?{}",
-            project, facet.trim_start_matches('&')
-        );
-        let v2 = get_json(&u2).await.unwrap_or(Value::Null);
-        if v2.as_array().map(|a| !a.is_empty()).unwrap_or(false) { v2 }
-        else { get_json(&format!("https://api.modrinth.com/v2/project/{}/version", project)).await? }
-    } else { versions };
-    versions.as_array().and_then(|a| a.first()).cloned().ok_or_else(|| "Нет совместимой версии".to_string())
+    let versions = project_versions(project).await?;
+    versions.iter().find(|v| version_fits(v, game_version, loaders)).cloned()
+        .ok_or_else(|| format!(
+            "нет версии под {}{} (есть под {})",
+            if game_version.is_empty() { "эту сборку" } else { game_version },
+            if loaders.is_empty() { String::new() } else { format!(" · {}", loaders.join("/")) },
+            if known_game_versions(&versions).is_empty() { "другие версии".into() } else { known_game_versions(&versions) },
+        ))
 }
 
 pub(crate) async fn install_project_version(
@@ -247,9 +262,12 @@ pub(crate) async fn install_project_version(
 
 /// Installs required dependencies transitively, honouring a pinned `version_id`
 /// when the dependency declares one and skipping projects already installed.
-pub(crate) async fn resolve_deps(profile: &str, game_version: &str, loaders: &[String], initial: &Value) {
+/// Returns the dependencies that had nothing compatible, so the caller can say
+/// so instead of leaving a build that will not start.
+pub(crate) async fn resolve_deps(profile: &str, game_version: &str, loaders: &[String], initial: &Value) -> Vec<String> {
     use std::collections::HashSet;
     let mut visited: HashSet<String> = HashSet::new();
+    let mut missed: Vec<String> = vec![];
     for e in load_content_manifest(profile) {
         if !e.project_id.is_empty() { visited.insert(e.project_id); }
     }
@@ -264,16 +282,36 @@ pub(crate) async fn resolve_deps(profile: &str, game_version: &str, loaders: &[S
         visited.insert(pid.clone());
         let dv = if let Some(vid) = d["version_id"].as_str().filter(|s| !s.is_empty()) {
             get_json(&format!("https://api.modrinth.com/v2/version/{}", vid)).await.ok()
+                .filter(|v| version_fits(v, game_version, loaders))
         } else {
             best_version(&pid, game_version, loaders).await.ok()
         };
-        if let Some(dv) = dv {
-            let _ = install_project_version(profile, "mod", &pid, &dv).await;
-            if let Some(more) = dv["dependencies"].as_array() {
-                for m in more { queue.push(m.clone()); }
+        match dv {
+            Some(dv) => {
+                if install_project_version(profile, "mod", &pid, &dv).await.is_err() {
+                    missed.push(fetch_project_meta(&pid).await.1);
+                }
+                if let Some(more) = dv["dependencies"].as_array() {
+                    for m in more { queue.push(m.clone()); }
+                }
+            }
+            None => {
+                let title = fetch_project_meta(&pid).await.1;
+                missed.push(if title.is_empty() { pid } else { title });
             }
         }
     }
+    missed
+}
+
+/// An empty `file` with a non-empty `mismatch` means nothing fits the profile:
+/// the caller confirms and retries with `allow_mismatch`. `warning` carries
+/// dependencies that could not be installed for this game version.
+#[derive(serde::Serialize, Default)]
+pub struct ContentInstall {
+    pub file: String,
+    pub mismatch: String,
+    pub warning: String,
 }
 
 pub async fn install_content(
@@ -282,9 +320,10 @@ pub async fn install_content(
     game_version: String,
     profile: String,
     kind: String,
-) -> Result<String, String> {
+    allow_mismatch: bool,
+) -> Result<ContentInstall, String> {
     let job = Job::start(job_key_content("mr", &profile, &kind, &project), project.clone())?;
-    let res = install_content_job(&app, &job, project, game_version, profile, kind).await;
+    let res = install_content_job(&app, &job, project, game_version, profile, kind, allow_mismatch).await;
     job.finish(&app, res)
 }
 
@@ -295,30 +334,47 @@ async fn install_content_job(
     game_version: String,
     profile: String,
     kind: String,
-) -> Result<String, String> {
+    allow_mismatch: bool,
+) -> Result<ContentInstall, String> {
     job.emit(app, 10.0, &format!("Подбираем версию {}…", project));
     let loader_id = load_profiles().into_iter().find(|p| p.name == profile)
         .map(|p| p.loader_id()).unwrap_or_else(|| "vanilla".into());
     let loaders = modrinth_loaders(&loader_id, &kind);
-    let ver = best_version(&project, &game_version, &loaders).await?;
+    let versions = project_versions(&project).await?;
+    let ver = match versions.iter().find(|v| version_fits(v, &game_version, &loaders)) {
+        Some(v) => v.clone(),
+        None if allow_mismatch => versions.first().cloned().ok_or("У проекта нет ни одного файла")?,
+        None => {
+            let have = known_game_versions(&versions);
+            return Ok(ContentInstall {
+                file: String::new(),
+                mismatch: if have.is_empty() { "другие версии".into() } else { have },
+                warning: String::new(),
+            });
+        }
+    };
     job.check()?;
     job.emit(app, 40.0, "Скачиваем…");
-    let fname = install_project_version(&profile, &kind, &project, &ver).await?;
+    let file = install_project_version(&profile, &kind, &project, &ver).await?;
+    let mut warning = String::new();
     if kind == "mod" {
         job.emit(app, 70.0, "Зависимости…");
-        resolve_deps(&profile, &game_version, &loaders, &ver["dependencies"]).await;
+        let missed = resolve_deps(&profile, &game_version, &loaders, &ver["dependencies"]).await;
+        if !missed.is_empty() {
+            warning = format!("не нашлось зависимостей под эту версию: {}", missed.join(", "));
+        }
     }
     job.emit(app, 100.0, "Установлено");
-    Ok(fname)
+    Ok(ContentInstall { file, mismatch: String::new(), warning })
 }
 
-pub async fn install_mod(app: AppHandle, project: String, game_version: String, profile: String) -> Result<String, String> {
-    install_content(app, project, game_version, profile, "mod".into()).await
+pub async fn install_mod(app: AppHandle, project: String, game_version: String, profile: String) -> Result<ContentInstall, String> {
+    install_content(app, project, game_version, profile, "mod".into(), false).await
 }
 
 pub async fn install_version(
     app: AppHandle, project: String, version_id: String, profile: String, kind: String,
-) -> Result<String, String> {
+) -> Result<ContentInstall, String> {
     let job = Job::start(job_key_content("mr", &profile, &kind, &project), project.clone())?;
     let res = install_version_job(&app, &job, project, version_id, profile, kind).await;
     job.finish(&app, res)
@@ -326,17 +382,60 @@ pub async fn install_version(
 
 async fn install_version_job(
     app: &AppHandle, job: &Job, project: String, version_id: String, profile: String, kind: String,
-) -> Result<String, String> {
+) -> Result<ContentInstall, String> {
     job.emit(app, 20.0, "Скачиваем версию…");
     let ver = get_json(&format!("https://api.modrinth.com/v2/version/{}", version_id)).await?;
-    let fname = install_project_version(&profile, &kind, &project, &ver).await?;
+    let file = install_project_version(&profile, &kind, &project, &ver).await?;
+    let mut warning = String::new();
     if kind == "mod" {
         let loader_id = load_profiles().into_iter().find(|p| p.name == profile)
             .map(|p| p.loader_id()).unwrap_or_else(|| "vanilla".into());
         let gv = ver["game_versions"].as_array().and_then(|a| a.first()).and_then(|v| v.as_str()).unwrap_or("").to_string();
         let loaders = modrinth_loaders(&loader_id, &kind);
-        resolve_deps(&profile, &gv, &loaders, &ver["dependencies"]).await;
+        let missed = resolve_deps(&profile, &gv, &loaders, &ver["dependencies"]).await;
+        if !missed.is_empty() {
+            warning = format!("не нашлось зависимостей под эту версию: {}", missed.join(", "));
+        }
     }
     job.emit(app, 100.0, "Установлено");
-    Ok(fname)
+    Ok(ContentInstall { file, mismatch: String::new(), warning })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn ver(games: &[&str], loaders: &[&str]) -> Value {
+        json!({ "game_versions": games, "loaders": loaders })
+    }
+
+    /// input -> verdict. A file that targets another game version installs fine
+    /// and then keeps the game from starting, so "close enough" must never pass.
+    #[test]
+    fn only_exact_game_version_and_loader_fit() {
+        let fabric = vec!["fabric".to_string()];
+        let quilt = vec!["quilt".to_string(), "fabric".to_string()];
+
+        // exact match on both axes
+        assert!(version_fits(&ver(&["26.1.2"], &["fabric"]), "26.1.2", &fabric));
+        // the reported bug: 1.21.11 content offered for a 26.1.2 build
+        assert!(!version_fits(&ver(&["1.21.11"], &["fabric"]), "26.1.2", &fabric),
+            "content for another game version must not be treated as compatible");
+        // right version, wrong loader
+        assert!(!version_fits(&ver(&["26.1.2"], &["forge"]), "26.1.2", &fabric),
+            "a Forge file must not land in a Fabric build");
+        // Quilt also loads Fabric mods
+        assert!(version_fits(&ver(&["26.1.2"], &["fabric"]), "26.1.2", &quilt));
+        // resource packs carry no loader: an empty filter matches anything
+        assert!(version_fits(&ver(&["26.1.2"], &[] as &[&str]), "26.1.2", &[]));
+    }
+
+    #[test]
+    fn mismatch_text_lists_versions_the_project_ships() {
+        let versions = vec![ver(&["1.21.11", "1.21.10"], &["fabric"]), ver(&["1.21.9"], &["fabric"])];
+        let text = known_game_versions(&versions);
+        assert!(text.contains("1.21.11") && text.contains("1.21.9"),
+            "the user must see what the project is actually built for, got: {}", text);
+    }
 }

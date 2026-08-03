@@ -158,13 +158,18 @@ const TEXTURE_HOSTS: &[&str] = &[
     "api.millida.net",
     "cdn.millida.net",
     "millida.net",
+    "cdn.millida.trade",
+    "millida.trade",
     "cdn.modrinth.com",
 ];
+
+/// Our own domains; wardrobe textures live on `cdn.millida.trade`.
+const TEXTURE_HOST_SUFFIXES: &[&str] = &[".millida.net", ".millida.trade"];
 
 /// Names and literals that resolve inside the machine or the user's LAN. The
 /// fetch runs in the core, outside the webview CSP, so without this check a URL
 /// coming from the webview could read back local and intranet responses.
-fn host_is_local(host: &str) -> bool {
+pub(crate) fn host_is_local(host: &str) -> bool {
     use std::net::IpAddr;
     if let Ok(ip) = host.trim_matches(['[', ']']).parse::<IpAddr>() {
         return match ip {
@@ -206,7 +211,9 @@ fn validate_texture_url(url: &str) -> Result<url::Url, String> {
     if host.is_empty() || host_is_local(&host) {
         return Err("Скины из локальной сети лаунчер не забирает".into());
     }
-    if !TEXTURE_HOSTS.contains(&host.as_str()) && !host.ends_with(".millida.net") {
+    let allowed = TEXTURE_HOSTS.contains(&host.as_str())
+        || TEXTURE_HOST_SUFFIXES.iter().any(|s| host.ends_with(s));
+    if !allowed {
         return Err(format!("Скины берём только с проверенных сайтов: {}", TEXTURE_HOSTS.join(", ")));
     }
     Ok(parsed)
@@ -317,6 +324,7 @@ mod tests {
             ("https://mc-heads.net/skin/Notch", true, "import by nickname goes through mc-heads"),
             ("https://api.millida.net/v2/skins/1.png", true, "wardrobe textures come from our own API"),
             ("https://cdn.millida.net/skins/1.png", true, "our CDN is covered by the .millida.net suffix"),
+            ("https://cdn.millida.trade/launcher/capes/1.png", true, "wardrobe skins and capes are stored on this CDN"),
             ("https://cdn.modrinth.com/data/x/icon.png", true, "modpack assets are served by the Modrinth CDN"),
             ("  https://mc-heads.net/skin/Notch  ", true, "pasted links carry surrounding whitespace"),
             ("HTTPS://MC-HEADS.NET/skin/Notch", true, "scheme and host comparison must be case-insensitive"),
@@ -325,6 +333,7 @@ mod tests {
             ("https://evil.example.com/x.png", false, "an arbitrary host is the SSRF the allowlist exists for"),
             ("https://mc-heads.net.evil.com/x.png", false, "suffix trick: the real host is evil.com"),
             ("https://millida.net.evil.com/x.png", false, "the .millida.net suffix must not match as a prefix"),
+            ("https://cdn.millida.trade.evil.com/x.png", false, "the .millida.trade suffix must not match as a prefix"),
             ("https://127.0.0.1/x.png", false, "loopback reaches services bound to the user's machine"),
             ("https://localhost:8080/x.png", false, "localhost is loopback by name"),
             ("https://192.168.1.1/x.png", false, "private LAN addresses expose the user's router"),

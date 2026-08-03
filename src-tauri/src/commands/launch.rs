@@ -21,10 +21,14 @@ pub fn list_logs(profile: String) -> Vec<String> { engine::list_logs(&profile) }
 pub fn read_log(profile: String, name: String) -> String { engine::read_log(&profile, &name) }
 
 #[tauri::command]
-pub fn detect_java() -> Vec<engine::JavaInfo> { engine::detect_java() }
+pub async fn detect_java() -> Result<Vec<engine::JavaInfo>, String> {
+    super::blocking(engine::detect_java).await
+}
 
 #[tauri::command]
-pub fn test_java(path: String) -> Result<String, String> { engine::test_java(path) }
+pub async fn test_java(path: String) -> Result<String, String> {
+    super::blocking(move || engine::test_java(path)).await?
+}
 
 #[tauri::command]
 pub async fn pick_java_path() -> Result<Option<engine::JavaInfo>, String> {

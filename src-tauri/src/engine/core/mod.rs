@@ -1,4 +1,5 @@
 mod paths;
+mod prefs;
 mod http;
 mod archive;
 mod crash;
@@ -7,8 +8,10 @@ mod jobs;
 mod proc;
 mod selfupdate;
 mod selfheal;
+mod external;
 
 pub use paths::*;
+pub use prefs::*;
 pub(crate) use http::*;
 pub(crate) use archive::*;
 pub use crash::*;
@@ -17,3 +20,4 @@ pub use jobs::*;
 pub(crate) use proc::*;
 pub use selfupdate::*;
 pub use selfheal::*;
+pub use external::*;

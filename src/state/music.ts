@@ -2,6 +2,16 @@ import { create } from 'zustand'
 import { hasTauri } from '../ipc/tauri'
 import { convertFileSrc, downloadMcMusic, musicTracks } from '../ipc/commands'
 import { showToast, useUi } from './ui'
+import { hydratePrefs, readPref, writePref } from '../lib/prefs'
+
+const DEFAULT_LEVEL = 5
+
+function storedLevel(): number {
+  const v = parseInt(readPref('m-mus-vol', String(DEFAULT_LEVEL)), 10)
+  return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : DEFAULT_LEVEL
+}
+
+const storedMuted = () => readPref('m-mus-muted', '0') === '1'
 
 export interface Track {
   src: string
@@ -73,22 +83,23 @@ function apply() {
 }
 
 export const useMusic = create<MusicState>((set, get) => ({
-  level: parseInt(localStorage.getItem('m-mus-vol') || '5', 10),
-  muted: localStorage.getItem('m-mus-muted') === '1',
+  level: storedLevel(),
+  muted: storedMuted(),
   tracks: [],
   index: 0,
   playing: false,
   open: false,
   setOpen: (v) => set({ open: v }),
   setVolume: (v) => {
-    localStorage.setItem('m-mus-vol', String(v))
-    localStorage.setItem('m-mus-muted', '0')
-    set({ level: v, muted: false })
+    const level = Math.max(0, Math.min(100, Math.round(v)))
+    writePref('m-mus-vol', String(level))
+    writePref('m-mus-muted', '0')
+    set({ level, muted: false })
     apply()
   },
   toggleMute: () => {
     const v = !get().muted
-    localStorage.setItem('m-mus-muted', v ? '1' : '0')
+    writePref('m-mus-muted', v ? '1' : '0')
     set({ muted: v })
     apply()
     showToast(v ? 'Музыка выключена' : 'Музыка включена')
@@ -137,20 +148,12 @@ export function initMusic() {
   if (inited) return
   inited = true
 
-  void loadPlaylist().then(async (list) => {
-    useMusic.setState({ tracks: list })
-    pickStart(list)
-    autostart()
-    if (!hasTauri() || list.length >= 5) return
-    try {
-      await downloadMcMusic()
-    } catch {}
-    const full = await loadPlaylist()
-    if (full.length !== list.length) {
-      useMusic.setState({ tracks: full })
-      pickStart(full)
-      apply()
-    }
+  // The store was built from web storage, which can be a start behind the disk
+  // copy; the volume the user actually set is applied before anything plays.
+  void hydratePrefs().then(() => {
+    useMusic.setState({ level: storedLevel(), muted: storedMuted() })
+    apply()
+    return boot()
   })
 
   let wasPlaying = false
@@ -166,6 +169,24 @@ export function initMusic() {
     wasPlaying = false
     useMusic.setState({ playing: true })
     apply()
+  })
+}
+
+function boot() {
+  return loadPlaylist().then(async (list) => {
+    useMusic.setState({ tracks: list })
+    pickStart(list)
+    autostart()
+    if (!hasTauri() || list.length >= 5) return
+    try {
+      await downloadMcMusic()
+    } catch {}
+    const full = await loadPlaylist()
+    if (full.length !== list.length) {
+      useMusic.setState({ tracks: full })
+      pickStart(full)
+      apply()
+    }
   })
 }
 

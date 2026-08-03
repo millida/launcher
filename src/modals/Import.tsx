@@ -6,6 +6,7 @@ import type { FoundInstance } from '../ipc/commands'
 import { useProfiles } from '../state/profiles'
 import { closeModal, showToast, useUi } from '../state/ui'
 import { track } from '../lib/telemetry'
+import { foundKey } from '../lib/imports'
 
 type RowState = 'idle' | 'busy' | 'done'
 
@@ -75,7 +76,7 @@ export function ImportModal() {
               const state = rows[i] || 'idle'
               const already = state === 'done' || existing.has(it.name)
               return (
-                <div className="mod-line" key={it.path}>
+                <div className="mod-line" key={foundKey(it)}>
                   <span className="mod-mini">
                     <Icon id="i-box2" />
                   </span>

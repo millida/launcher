@@ -1,12 +1,15 @@
 import { hasTauri } from '../ipc/tauri'
-import { installContent } from '../ipc/commands'
+import { cfInstall, installContent } from '../ipc/commands'
+import type { ContentInstall } from '../ipc/commands'
 import { useProfiles } from '../state/profiles'
 import { useMods } from '../state/mods'
 import { pickBuild } from '../state/buildPicker'
+import { uiConfirm } from '../state/confirm'
 import { showToast } from '../state/ui'
 import { track, trackTimed } from './telemetry'
 import { runInstall } from '../state/installs'
 import { keyContent } from './installKeys'
+import { LOADER_NAME } from './format'
 
 const RU: Record<string, string> = {
   mod: 'мод',
@@ -24,27 +27,85 @@ export async function resolveTargetBuild(kind: string): Promise<string | null> {
   return pickBuild(RU[kind] || 'контент')
 }
 
-export async function installContentFlow(slug: string, kind: string, title?: string): Promise<boolean> {
-  if (!hasTauri()) return false
+interface Source {
+  source: 'modrinth' | 'curseforge'
+  slug?: string
+  cfid?: number
+}
+
+function buildOf(name: string) {
+  return useProfiles.getState().profiles.find((x) => x.name === name)
+}
+
+/// Content built for another game version starts, then crashes the game, so an
+/// install that does not fit is confirmed by the user rather than assumed.
+async function confirmMismatch(title: string, prof: string, mismatch: string): Promise<boolean> {
+  const pr = buildOf(prof)
+  return uiConfirm(
+    '«' +
+      title +
+      '» нет под ' +
+      (pr ? pr.version + ' · ' + LOADER_NAME(pr) : 'эту сборку') +
+      ' — есть только под ' +
+      mismatch +
+      '. Такой файл обычно не даёт игре запуститься. Поставить всё равно?',
+    { title: 'Версия не совпадает', confirmLabel: 'Поставить', danger: true },
+  )
+}
+
+export async function installContentFlow(src: Source, kind: string, title?: string): Promise<boolean> {
+  if (!hasTauri()) {
+    showToast('Установка доступна в приложении')
+    return false
+  }
   const prof = await resolveTargetBuild(kind)
   if (!prof) return false
-  const pr = useProfiles.getState().profiles.find((x) => x.name === prof)
-  const gv = (pr && pr.version) || (useProfiles.getState().profiles[0] && useProfiles.getState().profiles[0].version) || '1.21.4'
+  const pr = buildOf(prof)
+  const gv = (pr && pr.version) || ''
   const loader = (pr && (pr.loader || (pr.fabric ? 'fabric' : 'vanilla'))) || 'vanilla'
-  const startedAt = performance.now()
-  return runInstall({
-    key: keyContent('mr', prof, kind, slug),
-    title: title || slug,
-    running: 'Скачивание…',
-    run: () => installContent(slug, gv, prof, kind),
-    onDone: (f) => {
-      trackTimed('content_install', startedAt, { name: slug, kind, mc: gv, loader })
-      showToast((RU[kind] || 'Контент') + ' → «' + prof + '»: ' + f, 'ok', 'install')
-    },
-    onError: (err) => {
-      trackTimed('content_install', startedAt, { name: slug, kind, mc: gv, loader, code: String(err).slice(0, 120) }, false)
-      track('error', { code: String(err).slice(0, 120), where: 'content_install' }, { ok: false })
-      showToast('' + err, 'error')
-    },
-  })
+  const label = title || src.slug || String(src.cfid)
+  const key =
+    src.source === 'curseforge'
+      ? keyContent('cf', prof, kind, src.cfid!)
+      : keyContent('mr', prof, kind, src.slug!)
+
+  const start = (allowMismatch: boolean): boolean => {
+    const startedAt = performance.now()
+    return runInstall<ContentInstall>({
+      key,
+      title: label,
+      running: allowMismatch ? 'Ставим всё равно…' : 'Скачивание…',
+      run: () =>
+        src.source === 'curseforge'
+          ? cfInstall(src.cfid!, gv, prof, kind, undefined, allowMismatch)
+          : installContent(src.slug!, gv, prof, kind, allowMismatch),
+      keepOpen: (r) => !r.file,
+      onDone: (r) => {
+        if (!r.file) {
+          void confirmMismatch(label, prof, r.mismatch).then((ok) => {
+            if (ok) start(true)
+          })
+          return
+        }
+        trackTimed('content_install', startedAt, { name: label, kind, mc: gv, loader, source: src.source })
+        showToast(
+          (RU[kind] || 'Контент') + ' → «' + prof + '»: ' + r.file + (r.warning ? ' · ' + r.warning : ''),
+          'ok',
+          'install',
+        )
+      },
+      onError: (err) => {
+        trackTimed(
+          'content_install',
+          startedAt,
+          { name: label, kind, mc: gv, loader, source: src.source, code: String(err).slice(0, 120) },
+          false,
+        )
+        track('error', { code: String(err).slice(0, 120), where: 'content_install' }, { ok: false })
+        showToast('' + err, 'error')
+      },
+    })
+  }
+
+  return start(false)
 }

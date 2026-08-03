@@ -3,6 +3,8 @@ use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
+use crate::engine::host_is_local;
+
 #[derive(serde::Serialize)]
 pub struct PingResult {
     pub online: i64,
@@ -79,6 +81,12 @@ pub fn ping(addr: &str) -> Result<PingResult, String> {
         .map_err(|e| e.to_string())?
         .next()
         .ok_or("не удалось разрешить адрес")?;
+    // The webview picks the address, so without this the command is a probe for
+    // the local machine, the LAN and cloud metadata. Both the literal host and
+    // the address it resolved to are checked, so DNS rebinding gains nothing.
+    if host_is_local(&host) || host_is_local(&sock.ip().to_string()) {
+        return Err("локальные и домашние адреса лаунчер не проверяет".into());
+    }
     let start = std::time::Instant::now();
     let mut s = TcpStream::connect_timeout(&sock, Duration::from_secs(4)).map_err(|e| e.to_string())?;
     s.set_read_timeout(Some(Duration::from_secs(4))).ok();
@@ -124,4 +132,32 @@ pub fn ping(addr: &str) -> Result<PingResult, String> {
         favicon: v["favicon"].as_str().map(|s| s.to_string()),
         ms,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// address -> verdict. The webview reaches this command directly, so a ping
+    /// must never turn into a port scan of the user's machine or LAN.
+    #[test]
+    fn local_targets_are_refused_before_any_connect() {
+        let cases = [
+            ("127.0.0.1:22", "loopback exposes services bound to the user's machine"),
+            ("localhost:8080", "loopback by name is the same target"),
+            ("192.168.1.1:80", "private ranges expose the user's router"),
+            ("169.254.169.254:80", "link-local is where cloud metadata lives"),
+            ("[::1]:25565", "IPv6 loopback must be refused too"),
+        ];
+        for (addr, why) in cases {
+            let err = match ping(addr) {
+                Ok(_) => panic!("{addr} was pinged instead of refused: {why}"),
+                Err(e) => e,
+            };
+            assert!(
+                err.contains("локальные"),
+                "{addr} failed with «{err}» instead of the local-address refusal: {why}",
+            );
+        }
+    }
 }

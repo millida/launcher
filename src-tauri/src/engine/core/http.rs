@@ -157,23 +157,24 @@ fn retryable(status: reqwest::StatusCode) -> bool {
     status.is_server_error() || status == reqwest::StatusCode::TOO_MANY_REQUESTS
 }
 
-async fn send(url: &str, timeout: Option<Duration>) -> Result<reqwest::Response, String> {
+/// A failed attempt either deserves another try (connection reset, truncated
+/// body, 5xx) or is the final answer (404, malformed request).
+enum Attempt {
+    Retry(String),
+    Fatal(String),
+}
+
+async fn retrying<F, Fut>(mut once: F) -> Result<Value, String>
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Result<Value, Attempt>>,
+{
     let mut last = String::new();
     for attempt in 1..=TRIES {
-        let mut req = client().get(url);
-        if let Some(t) = timeout {
-            req = req.timeout(t);
-        }
-        match req.send().await {
-            Ok(r) if r.status().is_success() => return Ok(r),
-            Ok(r) => {
-                let status = r.status();
-                last = format!("{} → {}", url, status);
-                if !retryable(status) {
-                    return Err(last);
-                }
-            }
-            Err(e) => last = format!("{}: {}", url, e),
+        match once().await {
+            Ok(v) => return Ok(v),
+            Err(Attempt::Fatal(e)) => return Err(e),
+            Err(Attempt::Retry(e)) => last = e,
         }
         if attempt < TRIES {
             tokio::time::sleep(Duration::from_millis(400 * attempt as u64)).await;
@@ -182,12 +183,31 @@ async fn send(url: &str, timeout: Option<Duration>) -> Result<reqwest::Response,
     Err(last)
 }
 
-pub(crate) async fn get_json(url: &str) -> Result<Value, String> {
-    send(url, Some(JSON_TIMEOUT))
-        .await?
-        .json()
+/// The body is read inside the attempt, not after it: a connection cut halfway
+/// through a chunked response is the common failure on filtered networks, and
+/// reqwest reports it as an opaque decode error long after the status said 200.
+async fn read_json(url: &str, resp: reqwest::Response) -> Result<Value, Attempt> {
+    let status = resp.status();
+    if !status.is_success() {
+        let msg = format!("{} → {}", url, status);
+        return Err(if retryable(status) { Attempt::Retry(msg) } else { Attempt::Fatal(msg) });
+    }
+    let body = resp
+        .bytes()
         .await
-        .map_err(|e| format!("{}: неожиданный ответ ({})", url, e))
+        .map_err(|e| Attempt::Retry(format!("{}: ответ оборвался ({})", url, net_err(&e))))?;
+    serde_json::from_slice(&body)
+        .map_err(|e| Attempt::Retry(format!("{}: неожиданный ответ ({})", url, e)))
+}
+
+pub(crate) async fn get_json(url: &str) -> Result<Value, String> {
+    retrying(|| async move {
+        match client().get(url).timeout(JSON_TIMEOUT).send().await {
+            Ok(r) => read_json(url, r).await,
+            Err(e) => Err(Attempt::Retry(format!("{}: {}", url, net_err(&e)))),
+        }
+    })
+    .await
 }
 
 pub(crate) async fn get_json_cached(url: &str, cache: &Path) -> Result<Value, String> {
@@ -234,26 +254,13 @@ pub(crate) async fn get_json_fresh(url: &str, cache: &Path, ttl: Duration) -> Re
 
 /// Modrinth bulk endpoints only accept a JSON body over POST.
 pub(crate) async fn post_json(url: &str, body: &Value) -> Result<Value, String> {
-    let mut last = String::new();
-    for attempt in 1..=TRIES {
+    retrying(|| async move {
         match client().post(url).json(body).timeout(JSON_TIMEOUT).send().await {
-            Ok(r) if r.status().is_success() => {
-                return r.json().await.map_err(|e| format!("{}: неожиданный ответ ({})", url, e))
-            }
-            Ok(r) => {
-                let status = r.status();
-                last = format!("{} → {}", url, status);
-                if !retryable(status) {
-                    return Err(last);
-                }
-            }
-            Err(e) => last = format!("{}: {}", url, e),
+            Ok(r) => read_json(url, r).await,
+            Err(e) => Err(Attempt::Retry(format!("{}: {}", url, net_err(&e)))),
         }
-        if attempt < TRIES {
-            tokio::time::sleep(Duration::from_millis(400 * attempt as u64)).await;
-        }
-    }
-    Err(last)
+    })
+    .await
 }
 
 fn part_path(dest: &Path) -> PathBuf {
@@ -460,6 +467,32 @@ mod tests {
         assert!(with_query.starts_with("https://host/a.jar?x=1&nocache="));
         assert!(is_stale_cdn_miss("https://host/a.jar → 404 Not Found"));
         assert!(!is_stale_cdn_miss("https://host/a.jar: обрыв загрузки"));
+    }
+
+    /// A body cut mid-flight is what a filtered or unstable connection produces:
+    /// the status is already 200, so retrying only helps if the read happens
+    /// inside the attempt.
+    #[tokio::test]
+    async fn truncated_body_is_retried() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/assets.json", listener.local_addr().unwrap());
+        tokio::spawn(async move {
+            for served in 0..2u32 {
+                let (mut sock, _) = listener.accept().await.unwrap();
+                let mut buf = [0u8; 1024];
+                let _ = sock.read(&mut buf).await;
+                let body = if served == 0 { "[{\"binar" } else { "[{\"ok\":true}]" };
+                let head = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 13\r\nConnection: close\r\n\r\n{}",
+                    body
+                );
+                let _ = sock.write_all(head.as_bytes()).await;
+                let _ = sock.shutdown().await;
+            }
+        });
+        let v = get_json(&url).await.expect("вторая попытка должна вернуть тело целиком");
+        assert_eq!(v[0]["ok"], true, "оборванный ответ не должен доходить до вызывающего кода");
     }
 
     #[tokio::test]

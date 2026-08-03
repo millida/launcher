@@ -7,6 +7,7 @@ import { showToast } from './ui'
 import { enterApp } from '../lib/session'
 import { refreshSessionState } from '../lib/secure'
 import { copyText } from '../lib/clipboard'
+import { copyLink } from '../lib/links'
 
 interface MsLoginState {
   busy: boolean
@@ -42,6 +43,10 @@ export function openMsVerifyPage() {
   const url = useMsLogin.getState().verifyUrl || MS_VERIFY_URL
   if (hasTauri()) openUrl(url)
   else window.open(url, '_blank')
+}
+
+export function copyMsVerifyLink() {
+  void copyLink(useMsLogin.getState().verifyUrl || MS_VERIFY_URL)
 }
 
 export async function copyMsCode() {

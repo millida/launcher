@@ -1,9 +1,48 @@
 use crate::engine::*;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
-#[derive(serde::Serialize)]
+#[derive(Clone, serde::Serialize)]
 pub struct FoundInstance { pub name: String, pub version: String, pub loader: String, pub path: String, pub source: String }
+
+/// A spinning HDD with a full drive can walk for minutes; the user is waiting on
+/// a modal, so the sweep stops with whatever it found by then.
+const VOLUME_BUDGET: Duration = Duration::from_secs(12);
+const CACHE_TTL: Duration = Duration::from_secs(300);
+
+static CACHE: Mutex<Option<(Instant, Vec<FoundInstance>)>> = Mutex::new(None);
+
+/// Paths the core itself surfaced — a `scan_imports` result or a native dialog
+/// pick. `import_instance` accepts nothing else: an arbitrary path from the
+/// webview would pull any directory on disk into the game root.
+static VOUCHED: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
+
+pub(crate) fn vouch(path: &Path) {
+    let mut list = VOUCHED.lock().unwrap_or_else(|e| e.into_inner());
+    if !list.iter().any(|p| p == path) {
+        list.push(path.to_path_buf());
+    }
+}
+
+fn vouch_all(found: &[FoundInstance]) {
+    let mut list = VOUCHED.lock().unwrap_or_else(|e| e.into_inner());
+    for item in found {
+        let p = PathBuf::from(&item.path);
+        if !list.iter().any(|k| k == &p) {
+            list.push(p);
+        }
+    }
+}
+
+fn is_vouched(path: &Path) -> bool {
+    VOUCHED.lock().unwrap_or_else(|e| e.into_inner()).iter().any(|p| p == path)
+}
+
+fn fresh(stamp: Instant, now: Instant) -> bool {
+    now.duration_since(stamp) < CACHE_TTL
+}
 
 pub(crate) fn home() -> PathBuf { dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")) }
 
@@ -86,8 +125,8 @@ fn root_kind(name: &str) -> Option<(&'static str, bool)> {
 }
 
 /// Shallow volume walk, 3 levels deep. Returns (source, root, is_shared_dot_minecraft).
-fn scan_volume(root: &Path, depth: usize, out: &mut Vec<(String, PathBuf, bool)>) {
-    if depth > 3 || out.len() > 64 { return }
+fn scan_volume(root: &Path, depth: usize, deadline: Instant, out: &mut Vec<(String, PathBuf, bool)>) {
+    if depth > 3 || out.len() > 64 || Instant::now() >= deadline { return }
     let Ok(rd) = std::fs::read_dir(root) else { return };
     for e in rd.flatten() {
         let p = e.path();
@@ -104,7 +143,7 @@ fn scan_volume(root: &Path, depth: usize, out: &mut Vec<(String, PathBuf, bool)>
                 if name.eq_ignore_ascii_case("instances") { out.push((src.to_string(), p.clone(), false)) }
                 if p.join("versions").is_dir() { out.push((src.to_string(), p.clone(), true)) }
             }
-            None => scan_volume(&p, depth + 1, out),
+            None => scan_volume(&p, depth + 1, deadline, out),
         }
     }
 }
@@ -113,7 +152,8 @@ type SourceRoots = Vec<(String, PathBuf)>;
 
 fn extra_roots() -> (SourceRoots, SourceRoots) {
     let mut found = vec![];
-    for vol in volume_roots() { scan_volume(&vol, 1, &mut found) }
+    let deadline = Instant::now() + VOLUME_BUDGET;
+    for vol in volume_roots() { scan_volume(&vol, 1, deadline, &mut found) }
     let mut dots = vec![];
     let mut insts = vec![];
     for (src, path, is_dot) in found {
@@ -243,6 +283,23 @@ pub(crate) fn base_version(id: &str, inherits: &str) -> String {
 }
 
 pub fn scan_imports() -> Vec<FoundInstance> {
+    {
+        let hit = CACHE.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some((stamp, list)) = hit.as_ref() {
+            if fresh(*stamp, Instant::now()) {
+                let list = list.clone();
+                vouch_all(&list);
+                return list;
+            }
+        }
+    }
+    let out = walk_imports();
+    *CACHE.lock().unwrap_or_else(|e| e.into_inner()) = Some((Instant::now(), out.clone()));
+    vouch_all(&out);
+    out
+}
+
+fn walk_imports() -> Vec<FoundInstance> {
     let mut out: Vec<FoundInstance> = vec![];
     let (extra_dots, extra_insts) = extra_roots();
     let dots: Vec<(String, PathBuf)> = dot_minecraft_roots().into_iter()
@@ -389,6 +446,9 @@ fn copy_game_files(game: &Path, dst: &Path) -> Result<usize, String> {
 
 pub fn import_instance(path: String, name: String, version: String, loader: String) -> Result<Profile, String> {
     let src = PathBuf::from(&path);
+    if !is_vouched(&src) {
+        return Err("Импортировать можно только сборку из списка найденных или выбранную в проводнике".into());
+    }
     // Prism/MultiMC keep game files under .minecraft/ or minecraft/
     let game = ["minecraft", ".minecraft"].iter().map(|d| src.join(d)).find(|p| p.exists()).unwrap_or(src.clone());
     let mut all = load_profiles();
@@ -416,6 +476,39 @@ pub fn import_instance(path: String, name: String, version: String, loader: Stri
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// age -> verdict. The disk sweep is expensive enough that reopening the
+    /// import dialog must reuse it, but a drive plugged in meanwhile has to show
+    /// up without restarting the launcher.
+    #[test]
+    fn scan_cache_expires_after_its_ttl() {
+        let now = Instant::now();
+        let cases: [(Duration, bool); 4] = [
+            (Duration::from_secs(0), true),
+            (Duration::from_secs(60), true),
+            (CACHE_TTL - Duration::from_secs(1), true),
+            (CACHE_TTL + Duration::from_secs(1), false),
+        ];
+        for (age, want) in cases {
+            let stamp = now - age;
+            assert_eq!(
+                fresh(stamp, now),
+                want,
+                "a scan {age:?} old must be {}: the dialog reuses whatever this says is fresh",
+                if want { "reused" } else { "redone" },
+            );
+        }
+    }
+
+    /// A volume walk that ignores the deadline is what froze the window: the
+    /// budget has to be small enough that a user waits seconds, not minutes.
+    #[test]
+    fn volume_budget_stays_within_what_a_user_will_wait() {
+        assert!(
+            VOLUME_BUDGET <= Duration::from_secs(20),
+            "a {VOLUME_BUDGET:?} sweep is longer than anyone waits on a modal",
+        );
+    }
 
     fn tmp(name: &str) -> PathBuf {
         let p = std::env::temp_dir().join("millida-imports-test").join(name);

@@ -39,16 +39,32 @@ export interface AppliedTexture {
   model: string
 }
 
-export function uploadTexture(
+const TEXTURE_ATTEMPTS = 3
+
+/// A rejected upload is the user's skin lost, so anything that is not a verdict
+/// on the request itself (auth, validation) is worth another try.
+const worthRetry = (e: unknown) => !/unauthorized|http 4\d\d/i.test(String(e))
+
+export async function uploadTexture(
   type: 'skin' | 'cape',
   pngBase64: string | null,
   slim = false,
   name?: string,
 ): Promise<AppliedTexture> {
-  return api<AppliedTexture>('/launcher/game-texture', {
-    method: 'POST',
-    body: JSON.stringify({ type, pngBase64, slim, name }),
-  })
+  let last: unknown
+  for (let attempt = 1; attempt <= TEXTURE_ATTEMPTS; attempt++) {
+    try {
+      return await api<AppliedTexture>('/launcher/game-texture', {
+        method: 'POST',
+        body: JSON.stringify({ type, pngBase64, slim, name }),
+      })
+    } catch (e) {
+      last = e
+      if (!worthRetry(e) || attempt === TEXTURE_ATTEMPTS) break
+      await new Promise((r) => setTimeout(r, 800 * attempt))
+    }
+  }
+  throw last
 }
 
 export interface WardrobeItem {
@@ -86,4 +102,25 @@ export function applyWardrobeItem(id: string): Promise<AppliedTexture> {
 
 export function removeWardrobeItem(id: string): Promise<unknown> {
   return api('/launcher/wardrobe/' + encodeURIComponent(id), { method: 'DELETE' })
+}
+
+export interface RewardItem {
+  code: string
+  title: string
+  task: string
+  hint: string
+  unit: 'count' | 'seconds'
+  goal: number
+  progress: number
+  done: boolean
+  claimed: boolean
+  capeUrl: string | null
+}
+
+export function loadRewards(): Promise<{ items: RewardItem[] }> {
+  return api<{ items: RewardItem[] }>('/launcher/rewards')
+}
+
+export function claimReward(code: string): Promise<RewardItem> {
+  return api<RewardItem>('/launcher/rewards/' + encodeURIComponent(code) + '/claim', { method: 'POST' })
 }

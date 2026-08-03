@@ -1,7 +1,7 @@
 import { Icon } from './Icon'
 import { fmt, RU_LOADER } from '../lib/format'
 import { hasTauri } from '../ipc/tauri'
-import { cfInstall, cfInstallModpack, cfInstallWorld, installModpack } from '../ipc/commands'
+import { cfInstallModpack, cfInstallWorld, installModpack } from '../ipc/commands'
 import { installContentFlow, resolveTargetBuild } from '../lib/install'
 import { keyCfModpack, keyContent, keyMrModpack } from '../lib/installKeys'
 import { runInstall, useInstalls } from '../state/installs'
@@ -106,24 +106,13 @@ export function ModRow({ h }: { h: ModHit }) {
       })
       return
     }
-    void resolveTargetBuild(modTab).then((prof) => {
-      if (!prof) return
-      const pr = useProfiles.getState().profiles.find((x) => x.name === prof)
-      const gv = (pr && pr.version) || ''
-      runInstall({
-        key: keyContent('cf', prof, modTab, h.cfid!),
-        title: h.title || String(h.cfid),
-        running: 'Скачивание…',
-        run: () => cfInstall(h.cfid!, gv, prof, modTab),
-        onDone: (f) => showToast('CurseForge → «' + prof + '»: ' + f, 'ok', 'install'),
-      })
-    })
+    void installContentFlow({ source: 'curseforge', cfid: h.cfid }, modTab, h.title)
   }
 
   const onInst = () => {
     if (done) return
     if (h.slug && hasTauri() && ['mod', 'resourcepack', 'datapack', 'shader'].includes(modTab)) {
-      void installContentFlow(h.slug, modTab, h.title)
+      void installContentFlow({ source: 'modrinth', slug: h.slug }, modTab, h.title)
       return
     }
     if (h.slug && hasTauri() && modTab === 'modpack') {

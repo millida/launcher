@@ -106,6 +106,14 @@ Services → профиль. Client_id берётся из `option_env!("MILLIDA
 `csl.rs` — CustomSkinLoader для модовых сборок.
 `heads.rs` — рендер и кеш голов-аватарок.
 
+### Буст FPS — [src-tauri/src/engine/game/fpsboost.rs](src-tauri/src/engine/game/fpsboost.rs)
+
+Режим на сборку: ставит моды-ускорители под её загрузчик (Sodium/Embeddium и
+компанию), включает профиль GC для JVM и снижает тяжёлые настройки графики в
+`options.txt`. Всё, что он изменил, записано в `millida-settings.json`
+(`fpsBoostMods`, `fpsBoostVideo`), поэтому выключение снимает ровно свои моды и
+возвращает ровно прежние значения настроек.
+
 ### media — [src-tauri/src/engine/media](src-tauri/src/engine/media)
 
 Музыка, звуки интерфейса и обои: скачивание, перекодирование ogg (WKWebView на
@@ -201,7 +209,9 @@ macOS его не играет), выбор файла пользователе�
 4. **Аргументы.** `build_args` подставляет подстановки Mojang (пути, ассеты,
    нативы, сессия). Сверху добавляются `-Xmx`, мера против Log4Shell
    (`-Dlog4j2.formatMsgNoLookups=true`, а для 1.7–1.11.2 — заменяющий конфиг
-   логгера), пользовательские аргументы JVM, размер окна, Quick Play.
+   логгера), пользовательские аргументы JVM, профиль GC режима «Буст FPS»
+   (`fpsboost.rs`, левее пользовательских — свой флаг игрока сильнее), размер
+   окна, Quick Play.
 5. **Сессия.** Для лицензии подставляются токен, uuid и xuid; для скинов
    Millida добавляется `-javaagent` authlib-injector, а на модовых сборках при
    необходимости ставится CustomSkinLoader. Если агент поставить не удалось,
