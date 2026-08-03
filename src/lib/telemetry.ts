@@ -104,7 +104,7 @@ export function setTelemetryEnabled(on: boolean) {
   if (!on) queue = []
 }
 
-function installId(): string {
+export function installId(): string {
   try {
     const cur = localStorage.getItem(ID_KEY)
     if (cur) return cur

@@ -104,6 +104,16 @@ async function refreshInstalledIds(kind: string): Promise<Set<string>> {
   return ids
 }
 
+function scopeFilters(build: string | null): { fVer: string; fLoader: string } {
+  const pr = build ? useProfiles.getState().profiles.find((p) => p.name === build) : null
+  if (!pr) return { fVer: 'любая', fLoader: 'любой' }
+  const loader = pr.loader || (pr.fabric ? 'fabric' : 'vanilla')
+  return {
+    fVer: pr.version || 'любая',
+    fLoader: F_LOADERS.includes(loader) ? loader : 'любой',
+  }
+}
+
 let cfBuffer: ModHit[] = []
 
 // Cross-source duplicates collapse to the Modrinth entry: only it carries a
@@ -151,12 +161,13 @@ export const useMods = create<ModsState>((set, get) => ({
       fWorldCat: 0,
       fOpenSource: false,
       mq: '',
-      fVer: 'любая',
-      fLoader: 'любой',
+      ...scopeFilters(get().targetBuild),
     })
     void get().load()
   },
-  scopeTo: (build) => set({ targetBuild: build }),
+  // Entering the catalog from a build pre-filters it: content for another game
+  // version installs fine and then keeps the game from starting.
+  scopeTo: (build) => set({ targetBuild: build, ...scopeFilters(build) }),
   load: async (append) => {
     const s = get()
     if (!append) {

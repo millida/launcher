@@ -6,8 +6,10 @@ import { showToast } from './ui'
 import { enterApp } from '../lib/session'
 import { refreshSessionState } from '../lib/secure'
 import { copyText } from '../lib/clipboard'
+import { copyLink } from '../lib/links'
 import { api } from '../lib/api'
 import { flushTelemetry, track } from '../lib/telemetry'
+import { markMillidaEver, millidaEver } from './onboarding'
 
 interface LauncherInit {
   deviceCode: string
@@ -70,6 +72,10 @@ function nickFromUser(user: LauncherUser): string {
 
 export function cancelWebLogin() {
   resetLogin()
+}
+
+export function copyVerifyLink() {
+  void copyLink(useLogin.getState().verifyUrl)
 }
 
 export async function copyUserCode() {
@@ -135,6 +141,7 @@ export async function startWebLogin(reopen = false) {
     if (r.status === 'ok') {
       const nick = nickFromUser(r.user)
       await refreshSessionState()
+      markMillidaEver()
       useAccounts.getState().add({ nick, kind: 'millida' })
       resetLogin()
       enterApp()
@@ -159,6 +166,12 @@ export async function startWebLogin(reopen = false) {
 }
 
 export function quickStart() {
+  // Guest mode is a shortcut for a returning user, not a way around the account:
+  // friends, skins, hosting and the game profile all need a Millida login.
+  if (!millidaEver()) {
+    showToast('Сначала войди в аккаунт Millida — это нужно один раз', 'error')
+    return
+  }
   const nick = 'Player' + Math.floor(1000 + Math.random() * 8999)
   useAccounts.getState().add({ nick, kind: 'guest' })
   enterApp()

@@ -529,6 +529,19 @@ pub async fn install_and_launch_in(
         }
         for (i, a) in sanitize_jvm_args(jvm).into_iter().enumerate() { args.insert(1 + i, a); }
     }
+    // Профиль GC режима «Буст FPS» встаёт левее пользовательских аргументов:
+    // у JVM выигрывает последний одноимённый флаг, поэтому свой -XX игрока
+    // остаётся сильнее нашего.
+    if settings["fpsBoost"].as_bool().unwrap_or(false) {
+        let own = settings["jvmArgs"].as_str().unwrap_or("");
+        let taken: Vec<&str> = own.split_whitespace().collect();
+        let flags: Vec<String> = BOOST_FLAGS
+            .iter()
+            .filter(|f| !taken.iter().any(|a| a.eq_ignore_ascii_case(f)))
+            .map(|f| f.to_string())
+            .collect();
+        for (i, a) in flags.into_iter().enumerate() { args.insert(1 + i, a); }
+    }
     // Zero means "let the game decide": passing --width/--height 0 makes
     // Minecraft open a minimum-size window.
     if let (Some(w), Some(h)) = (settings["width"].as_u64(), settings["height"].as_u64()) {

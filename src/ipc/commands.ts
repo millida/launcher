@@ -160,8 +160,30 @@ export const addServer = (profile: string, name: string, ip: string) =>
 export const backupWorld = (profile: string, folder: string) =>
   invoke<string>('backup_world', { profile, folder })
 
-export const cfInstall = (modId: number, gameVersion: string, profile: string, kind: string, fileId?: number) =>
-  invoke<string>('cf_install', { modId, gameVersion, profile, kind, fileId: fileId ?? null })
+/// Empty `file` with a non-empty `mismatch` means nothing fits the build: the
+/// mismatch text lists the versions the project does ship.
+export interface ContentInstall {
+  file: string
+  mismatch: string
+  warning: string
+}
+
+export const cfInstall = (
+  modId: number,
+  gameVersion: string,
+  profile: string,
+  kind: string,
+  fileId?: number,
+  allowMismatch = false,
+) =>
+  invoke<ContentInstall>('cf_install', {
+    modId,
+    gameVersion,
+    profile,
+    kind,
+    fileId: fileId ?? null,
+    allowMismatch,
+  })
 
 export const cfInstallModpack = (modId: number, fileId?: number) =>
   invoke<Profile>('cf_install_modpack', { modId, fileId: fileId ?? null })
@@ -222,7 +244,7 @@ export const checkUpdates = (profile: string, kind: string) =>
 export const countScreenshots = (profile: string) => invoke<number>('count_screenshots', { profile })
 
 export const createProfile = (name: string, version: string, fabric: boolean, loader: string, icon: string | null) =>
-  invoke<Profile[]>('create_profile', { name, version, fabric, loader, icon })
+  invoke<Profile>('create_profile', { name, version, fabric, loader, icon })
 
 export const deleteContent = (profile: string, kind: string, name: string) =>
   invoke<void>('delete_content', { profile, kind, name })
@@ -308,11 +330,16 @@ export const importInstance = (path: string, name: string, version: string, load
 
 export const importPackFile = (path?: string) => invoke<Profile>('import_pack_file', { path: path || null })
 
-export const installContent = (project: string, gameVersion: string, profile: string, kind: string) =>
-  invoke<string>('install_content', { project, gameVersion, profile, kind })
+export const installContent = (
+  project: string,
+  gameVersion: string,
+  profile: string,
+  kind: string,
+  allowMismatch = false,
+) => invoke<ContentInstall>('install_content', { project, gameVersion, profile, kind, allowMismatch })
 
 export const installMod = (project: string, gameVersion: string, profile: string) =>
-  invoke<string>('install_mod', { project, gameVersion, profile })
+  invoke<ContentInstall>('install_mod', { project, gameVersion, profile })
 
 export const installModpack = (slug: string) => invoke<Profile>('install_modpack', { slug })
 
@@ -320,7 +347,7 @@ export const installModpackVersion = (slug: string, versionId: string) =>
   invoke<Profile>('install_modpack_version', { slug, versionId })
 
 export const installVersion = (project: string, versionId: string, profile: string, kind: string) =>
-  invoke<string>('install_version', { project, versionId, profile, kind })
+  invoke<ContentInstall>('install_version', { project, versionId, profile, kind })
 
 // Names the account to play as; the core resolves the credentials itself.
 export interface LaunchAuth {
@@ -361,6 +388,19 @@ export const listWorlds = (profile: string) => invoke<WorldEntry[]>('list_worlds
 
 export const loadProfileSettings = (profile: string) =>
   invoke<ProfileSettings>('load_profile_settings', { profile })
+
+export interface FpsBoostState {
+  enabled: boolean
+  mods: string[]
+  skipped: string[]
+  flags: string[]
+  video: boolean
+  vanilla: boolean
+}
+
+export const fpsBoostState = (profile: string) => invoke<FpsBoostState>('fps_boost_state', { profile })
+
+export const setFpsBoost = (profile: string, on: boolean) => invoke<FpsBoostState>('set_fps_boost', { profile, on })
 
 export const millidaApi = <T = unknown>(path: string, method: string, body?: unknown) =>
   invoke<T>('millida_api', { path, method, body: body === undefined ? null : body })
@@ -419,10 +459,12 @@ export interface MsProfile {
 
 export const msProfile = (accountId: string) => invoke<MsProfile>('ms_profile', { accountId })
 
+export const msResetSkin = (accountId: string) => invoke<unknown>('ms_reset_skin', { accountId })
+
 export const msSetCape = (accountId: string, capeId: string) => invoke<unknown>('ms_set_cape', { accountId, capeId })
 
-export const msUploadSkin = (accountId: string, skinUrl: string, slim: boolean) =>
-  invoke<unknown>('ms_upload_skin', { accountId, skinUrl, slim })
+export const msUploadSkin = (accountId: string, pngBase64: string, slim: boolean) =>
+  invoke<{ skin: string | null }>('ms_upload_skin', { accountId, pngBase64, slim })
 
 export const openProfileFolder = (name: string) => invoke<void>('open_profile_folder', { name })
 
@@ -578,6 +620,10 @@ export const updateFallbackStage = () => invoke<FallbackInstall | null>('update_
 
 export const updateFallbackRun = (path: string) => invoke<FallbackInstall>('update_fallback_run', { path })
 
+
+export const uiPrefs = () => invoke<Record<string, string>>('ui_prefs')
+
+export const setUiPref = (key: string, value: string) => invoke<void>('set_ui_pref', { key, value })
 
 // Liveness signal: without it the core treats the window as blank and reinstalls
 // the launcher. Must be called once the UI actually mounted, not from main.

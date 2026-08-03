@@ -23,7 +23,11 @@ import { initInstalls } from './state/installs'
 import { ServerDetail } from './components/ServerDetail'
 import { pushChatNotify } from './state/chatNotify'
 import { parseInvite } from './lib/invite'
-import { getAccount, useAccounts } from './state/accounts'
+import { getAccount, getMillidaAccount, isMillidaKind, useAccounts } from './state/accounts'
+import { markMillidaEver, millidaEver } from './state/onboarding'
+import { OnboardingModal } from './modals/Onboarding'
+import { Tour } from './components/Tour'
+import { initTheme } from './lib/theme'
 import { refreshGameNick } from './state/gameNick'
 import { warmHeads } from './lib/heads'
 import { useUi, closeModal, setScreen as gotoScreen, showToast } from './state/ui'
@@ -48,6 +52,7 @@ import { CrashModal } from './components/CrashModal'
 import { hideBoot } from './lib/boot'
 import { frontendReady } from './ipc/commands'
 import { initTelemetry, track } from './lib/telemetry'
+import { flushPrefs, hydratePrefs } from './lib/prefs'
 
 let gameStartedAt = 0
 import { flushNativeCrashes, installErrorHandlers } from './lib/crash'
@@ -99,6 +104,7 @@ export function App() {
     // reinstalls the launcher.
     void frontendReady()
     installErrorHandlers()
+    initTheme()
     initTray()
     initMusic()
     initSounds()
@@ -117,20 +123,31 @@ export function App() {
       void refreshMsAccounts()
     }, 1_800_000)
     const onVisible = () => {
-      if (document.hidden) return
+      if (document.hidden) {
+        void flushPrefs()
+        return
+      }
       void loadFriends()
       heartbeat()
     }
     document.addEventListener('visibilitychange', onVisible)
+    const onLeave = () => void flushPrefs()
+    window.addEventListener('pagehide', onLeave)
     const safety = setTimeout(hideBoot, 4000)
-    void initSecrets().then(() => {
+    // The "logged in at least once" flag lives in the durable prefs file, so the
+    // disk copy has to land before boot decides whether this account may skip login.
+    void Promise.all([initSecrets(), hydratePrefs()]).then(() => {
       clearTimeout(safety)
       const acc = getAccount()
+      if (getMillidaAccount()) markMillidaEver()
       // Account present but its token did not survive a secret-storage migration:
       // clear the session once instead of showing a half-logged-in state everywhere.
-      if (acc && (acc.kind === 'millida' || acc.kind === 'tg') && !hasMillidaAccount()) {
+      if (acc && isMillidaKind(acc.kind) && !hasMillidaAccount()) {
         logoutToLogin()
         showToast('После обновления войдите в Millida заново — один раз', 'error')
+      } else if (acc && !millidaEver()) {
+        logoutToLogin()
+        showToast('Войди в аккаунт Millida — это нужно один раз', 'error')
       } else if (acc) enterApp()
       else logoutToLogin()
       void refreshProfiles()
@@ -147,6 +164,7 @@ export function App() {
       clearInterval(updPoll)
       clearInterval(msPoll)
       document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('pagehide', onLeave)
     }
   }, [])
 
@@ -182,6 +200,7 @@ export function App() {
   useEffect(() => {
     let unlisten: UnlistenFn | null = null
     void listenTrayExit(() => {
+      void flushPrefs()
       if (updateReady()) void installUpdateOnExit()
     }).then((u) => {
       unlisten = u
@@ -414,6 +433,8 @@ export function App() {
         {/* Mounted last: it asks on top of any other modal, and DOM order breaks
             ties between equal z-index values. */}
         <ConfirmModal />
+        <OnboardingModal />
+        <Tour />
         <Installs />
         <Toast />
       </div>

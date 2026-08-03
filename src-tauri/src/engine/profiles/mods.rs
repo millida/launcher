@@ -83,12 +83,31 @@ pub fn delete_content(profile: &str, kind: &str, name: &str) -> Result<(), Strin
 }
 pub fn delete_mod(profile: &str, name: &str) -> Result<(), String> { delete_content(profile, "mod", name) }
 
+/// Files first, list second: a build that vanished from the list while its
+/// folder survived came back — worlds, mods and playtime included — as soon as
+/// the name was reused.
 pub fn delete_profile(name: &str) -> Result<Vec<Profile>, String> {
+    if running_games().iter().any(|p| p == name) {
+        return Err("Сборка сейчас запущена — закрой игру и удали ещё раз".into());
+    }
+    let dir = profile_dir(name);
+    if dir.exists() {
+        std::fs::remove_dir_all(&dir).map_err(|e| format!(
+            "Не удалось удалить файлы сборки: {}. Закрой игру и папку сборки в проводнике, затем повтори", e
+        ))?;
+    }
     let mut all = load_profiles();
     all.retain(|p| p.name != name);
     save_profiles(&all)?;
-    let _ = std::fs::remove_dir_all(profile_dir(name));
+    forget_profile_side_data(name);
     Ok(all)
+}
+
+/// Playtime and groups live outside the profile folder and are keyed by name, so
+/// a rebuilt profile with the same name inherited them.
+fn forget_profile_side_data(name: &str) {
+    set_profile_group(name, "");
+    forget_playtime(name);
 }
 
 pub fn open_profile_folder(name: &str) {

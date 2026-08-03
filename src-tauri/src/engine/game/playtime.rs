@@ -105,6 +105,21 @@ pub fn label_server(addr: &str, name: &str) {
     write_doc(&doc);
 }
 
+/// Called when a build is deleted: otherwise a new build with the same name
+/// inherits the hours played by the old one.
+pub(crate) fn forget_playtime(profile: &str) {
+    let mut doc = read_doc();
+    if let Some(builds) = doc["builds"].as_object_mut() {
+        if builds.remove(profile).is_none() { return }
+    } else {
+        return;
+    }
+    if doc["lastBuild"].as_str() == Some(profile) {
+        doc["lastBuild"] = json!("");
+    }
+    write_doc(&doc);
+}
+
 pub fn get_playtime(profile: &str) -> u64 {
     read_doc()["builds"][profile]["seconds"].as_u64().unwrap_or(0)
 }

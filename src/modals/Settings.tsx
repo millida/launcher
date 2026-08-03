@@ -25,6 +25,7 @@ import { discordPresence } from '../lib/launch'
 import { fetchSounds, playSound, setSoundMode, soundMode, soundVolume } from '../lib/sound'
 import type { SoundMode } from '../lib/sound'
 import { Slider } from '../components/Slider'
+import { writePref } from '../lib/prefs'
 import { useWallpaper } from '../state/wallpaper'
 import { setTelemetryEnabled, telemetryEnabled, track } from '../lib/telemetry'
 import { VIDEOS } from '../lib/wallpaper'
@@ -32,6 +33,11 @@ import { getAccount, getMillidaAccount, useAccounts } from '../state/accounts'
 import { accKindLabel } from '../lib/format'
 import { WALLET_URL, openExt } from '../lib/api'
 import { setSkinSource, skinSource } from '../lib/gameProfile'
+import { applyTheme, storedTheme } from '../lib/theme'
+import type { ThemeId } from '../lib/theme'
+import { startTour } from '../state/tour'
+import { buildDiagnostics } from '../lib/diag'
+import { copyText } from '../lib/clipboard'
 import { setStatsShared, statsShared } from '../state/playStats'
 import {
   hasTray,
@@ -53,6 +59,7 @@ interface Accent {
   fg?: string
   grad?: string
   textC?: string
+  rgb?: string
 }
 
 function hexToRgb(hex: string) {
@@ -80,11 +87,13 @@ function luminance(hex: string) {
 }
 function computeAccent(a: Accent): Accent {
   const lum = luminance(a.c)
+  const { r, g, b } = hexToRgb(a.c)
   return {
     ...a,
     fg: lum > 0.5 ? '#141414' : '#ffffff',
     textC: lum > 0.6 ? shade(a.c, -0.42) : a.c,
     grad: 'linear-gradient(45deg,' + shade(a.c, -0.16) + ' 0%,' + a.c + ' 100%)',
+    rgb: r + ',' + g + ',' + b,
   }
 }
 
@@ -109,6 +118,7 @@ function applyAccent(raw: Accent) {
   r.setProperty('--m-accent-hover', a.h)
   r.setProperty('--m-accent-soft', a.s)
   r.setProperty('--m-accent-fg', a.fg || '#fff')
+  if (a.rgb) r.setProperty('--m-accent-rgb', a.rgb)
   if (a.grad) r.setProperty('--m-grad', a.grad)
   try {
     localStorage.setItem('m-accent', JSON.stringify(a))
@@ -149,13 +159,7 @@ function initialAccent(): string {
 
 export function Settings({ on }: { on: boolean }) {
   const wp = useWallpaper()
-  const [theme, setTheme] = useState(() => {
-    try {
-      return localStorage.getItem('m-theme') || 'dark'
-    } catch {
-      return 'dark'
-    }
-  })
+  const [theme, setTheme] = useState<ThemeId>(storedTheme)
   const [accent, setAccent] = useState(initialAccent)
   const [customHex, setCustomHex] = useState(initialCustomHex)
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -174,6 +178,9 @@ export function Settings({ on }: { on: boolean }) {
   const [soundBusy, setSoundBusy] = useState(false)
   const [shareStats, setShareStats] = useState(statsShared)
   const [ver, setVer] = useState('')
+  const [diagBusy, setDiagBusy] = useState(false)
+  const [diagText, setDiagText] = useState('')
+  const [diagOpen, setDiagOpen] = useState(false)
   const [javas, setJavas] = useState<JavaRuntime[]>([])
   const [upd, setUpd] = useState(pendingUpdate)
   const [updBusy, setUpdBusy] = useState(false)
@@ -260,11 +267,11 @@ export function Settings({ on }: { on: boolean }) {
           <div className="set-row">
             <span className="lab">Тема</span>
             <div className="segs">
-              {[
+              {([
                 ['', 'Тёмная'],
                 ['light', 'Светлая'],
                 ['auto', 'Авто'],
-              ].map(([v, label]) => (
+              ] as [ThemeId, string][]).map(([v, label]) => (
                 <button
                   key={label}
                   className={'seg' + (theme === v ? ' on' : '')}
@@ -272,11 +279,7 @@ export function Settings({ on }: { on: boolean }) {
                   data-t={v}
                   onClick={() => {
                     setTheme(v)
-                    document.documentElement.dataset.theme =
-                      v === 'auto' ? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : '') : v
-                    try {
-                      localStorage.setItem('m-theme', v || 'dark')
-                    } catch {}
+                    applyTheme(v)
                   }}
                 >
                   {label}
@@ -572,6 +575,14 @@ export function Settings({ on }: { on: boolean }) {
           <div className="cap">Лаунчер</div>
           <div className="set-row">
             <span className="lab">
+              Гайд по лаунчеру<small>Короткие подсказки по разделам — те же, что при первом запуске</small>
+            </span>
+            <button className="btn sm secondary" onClick={startTour}>
+              <Icon id="i-play" /> Показать гайд
+            </button>
+          </div>
+          <div className="set-row">
+            <span className="lab">
               Музыка при запуске<small>Фоновый плеер включается сам, когда открываешь лаунчер</small>
             </span>
             <span
@@ -579,7 +590,7 @@ export function Settings({ on }: { on: boolean }) {
               onClick={() => {
                 const next = !musicAuto
                 setMusicAuto(next)
-                localStorage.setItem('m-mus-auto', next ? '1' : '0')
+                writePref('m-mus-auto', next ? '1' : '0')
                 showToast(next ? 'Музыка будет играть при запуске' : 'Музыка при запуске выключена')
               }}
             ></span>
@@ -635,7 +646,7 @@ export function Settings({ on }: { on: boolean }) {
                     max={100}
                     onChange={(v) => {
                       setSoundVol(v)
-                      localStorage.setItem('m-sound-vol', String(v))
+                      writePref('m-sound-vol', String(v))
                       playSound(soundMd === 'all' ? 'click' : 'notify')
                     }}
                   />
@@ -793,6 +804,64 @@ export function Settings({ on }: { on: boolean }) {
               }}
             ></span>
           </div>
+          <div className="set-row">
+            <span className="lab">
+              Данные для поддержки
+              <small>
+                {diagText
+                  ? 'Скопировано — просто вставь в чат поддержки'
+                  : 'Система, железо, версия, сборки и последние ошибки — одним текстом'}
+              </small>
+            </span>
+            <button
+              className="btn sm secondary"
+              disabled={diagBusy}
+              onClick={() => {
+                setDiagBusy(true)
+                buildDiagnostics()
+                  .then(async (text) => {
+                    setDiagText(text)
+                    const ok = await copyText(text)
+                    showToast(
+                      ok ? 'Данные скопированы — отправь их в поддержку' : 'Не удалось скопировать, текст ниже — выдели и скопируй',
+                      ok ? 'ok' : 'error',
+                    )
+                    if (!ok) setDiagOpen(true)
+                  })
+                  .catch((e) => showToast('Не удалось собрать данные: ' + e, 'error'))
+                  .finally(() => setDiagBusy(false))
+              }}
+            >
+              <Icon id="i-copy" /> {diagBusy ? 'Собираем…' : 'Скопировать'}
+            </button>
+            {diagText ? (
+              <button className="btn sm secondary" onClick={() => setDiagOpen((o) => !o)}>
+                {diagOpen ? 'Скрыть' : 'Показать'}
+              </button>
+            ) : null}
+          </div>
+          {diagText && diagOpen ? (
+            <div className="set-row" style={{ alignItems: 'flex-start' }}>
+              <textarea
+                readOnly
+                value={diagText}
+                onFocus={(e) => e.currentTarget.select()}
+                style={{
+                  width: '100%',
+                  minHeight: '220px',
+                  resize: 'vertical',
+                  fontFamily: 'var(--m-mono)',
+                  fontSize: '11.5px',
+                  lineHeight: 1.5,
+                  color: 'var(--m-fg)',
+                  background: 'var(--m-inset)',
+                  border: '1px solid var(--m-border)',
+                  borderRadius: 'var(--m-r-md)',
+                  padding: '10px 12px',
+                }}
+              />
+            </div>
+          ) : null}
           <div className="set-row">
             <span className="lab">
               Версия лаунчера

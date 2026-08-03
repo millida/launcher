@@ -119,24 +119,65 @@ pub async fn cf_search(
     Ok(out)
 }
 
-pub async fn cf_install(app: AppHandle, mod_id: u32, game_version: String, profile: String, kind: String, file_id: Option<u64>) -> Result<String, String> {
-    let job = Job::start(job_key_content("cf", &profile, &kind, &mod_id.to_string()), format!("Файл #{}", mod_id))?;
-    let res = cf_install_job(&app, &job, mod_id, game_version, profile, kind, file_id).await;
+pub struct CfInstallReq {
+    pub mod_id: u32,
+    pub game_version: String,
+    pub profile: String,
+    pub kind: String,
+    pub file_id: Option<u64>,
+    /// Set only after the user confirmed content built for other versions.
+    pub allow_mismatch: bool,
+}
+
+pub async fn cf_install(app: AppHandle, req: CfInstallReq) -> Result<ContentInstall, String> {
+    let job = Job::start(
+        job_key_content("cf", &req.profile, &req.kind, &req.mod_id.to_string()),
+        format!("Файл #{}", req.mod_id),
+    )?;
+    let res = cf_install_job(&app, &job, req).await;
     job.finish(&app, res)
 }
 
-async fn cf_install_job(app: &AppHandle, job: &Job, mod_id: u32, game_version: String, profile: String, kind: String, file_id: Option<u64>) -> Result<String, String> {
+async fn cf_files_for(mod_id: u32, game_version: &str, loader_type: u32) -> Result<Vec<Value>, String> {
+    let mut q: Vec<(String, String)> = vec![("pageSize".into(), "30".into())];
+    if !game_version.is_empty() { q.push(("gameVersion".into(), game_version.to_string())); }
+    if loader_type > 0 { q.push(("modLoaderType".into(), loader_type.to_string())); }
+    let files: Value = cf_get(&format!("v1/mods/{}/files", mod_id), &q).await?;
+    Ok(files["data"].as_array().cloned().unwrap_or_default())
+}
+
+fn short_mc_versions(files: &[Value]) -> String {
+    let mut seen: Vec<String> = vec![];
+    for v in files.iter().flat_map(cf_file_mc_versions) {
+        if seen.len() >= 6 { break }
+        if !seen.contains(&v) { seen.push(v); }
+    }
+    seen.join(", ")
+}
+
+async fn cf_install_job(app: &AppHandle, job: &Job, req: CfInstallReq) -> Result<ContentInstall, String> {
+    let CfInstallReq { mod_id, game_version, profile, kind, file_id, allow_mismatch } = req;
     job.emit(app, 10.0, "CurseForge: подбираем файл…");
     let file = match file_id {
         Some(fid) => cf_get(&format!("v1/mods/{}/files/{}", mod_id, fid), &[]).await?["data"].clone(),
         None => {
             let loader_id = load_profiles().into_iter().find(|p| p.name == profile).map(|p| p.loader_id()).unwrap_or_else(|| "vanilla".into());
-            let lt = cf_loader_type(&loader_id);
-            let mut q: Vec<(String, String)> = vec![("pageSize".into(), "30".into())];
-            if !game_version.is_empty() { q.push(("gameVersion".into(), game_version.clone())); }
-            if lt > 0 && kind == "mod" { q.push(("modLoaderType".into(), lt.to_string())); }
-            let files: Value = cf_get(&format!("v1/mods/{}/files", mod_id), &q).await?;
-            files["data"].as_array().and_then(|a| a.first()).cloned().ok_or("Нет совместимого файла на CurseForge")?
+            let lt = if kind == "mod" { cf_loader_type(&loader_id) } else { 0 };
+            match cf_files_for(mod_id, &game_version, lt).await?.into_iter().next() {
+                Some(f) => f,
+                None => {
+                    let any = cf_files_for(mod_id, "", 0).await.unwrap_or_default();
+                    if !allow_mismatch {
+                        let have = short_mc_versions(&any);
+                        return Ok(ContentInstall {
+                            file: String::new(),
+                            mismatch: if have.is_empty() { "другие версии".into() } else { have },
+                            warning: String::new(),
+                        });
+                    }
+                    any.into_iter().next().ok_or("У проекта нет ни одного файла на CurseForge")?
+                }
+            }
         }
     };
     let file = &file;
@@ -167,7 +208,7 @@ async fn cf_install_job(app: &AppHandle, job: &Job, mod_id: u32, game_version: S
         file_size: file["fileLength"].as_u64().unwrap_or(0),
     });
     job.emit(app, 100.0, "Установлено");
-    Ok(fname)
+    Ok(ContentInstall { file: fname, mismatch: String::new(), warning: String::new() })
 }
 
 // Maps install as a world folder in saves/, tracked in the manifest as kind = world.

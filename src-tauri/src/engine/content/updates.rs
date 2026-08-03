@@ -118,7 +118,8 @@ pub async fn update_content(profile: String, kind: String, file_name: String) ->
     let gv = prof.as_ref().map(|p| p.version.clone()).unwrap_or_default();
     let loader_id = prof.map(|p| p.loader_id()).unwrap_or_else(|| "vanilla".into());
     let loaders = modrinth_loaders(&loader_id, &kind);
-    let ver = best_version(&entry.project_id, &gv, &loaders).await?;
+    let ver = best_version(&entry.project_id, &gv, &loaders).await
+        .map_err(|e| format!("{}: {}", if entry.title.is_empty() { file_name.clone() } else { entry.title.clone() }, e))?;
     apply_update(&profile, &kind, &file_name, &ver).await
 }
 

@@ -27,6 +27,7 @@ import {
   listVersions,
   listWorlds,
   loadProfileSettings,
+  fpsBoostState,
   modpackInfo,
   openProfileFolder,
   openUrl,
@@ -39,6 +40,7 @@ import {
   repairProfile,
   saveProfileSettings,
   scanContent,
+  setFpsBoost,
   scanContentLocal,
   setProfileGroup,
   setProfileIcon,
@@ -49,11 +51,12 @@ import {
   updateAll,
   updateContent,
 } from '../ipc/commands'
-import type { JavaInfo, ModFile, PingResult, ServerEntry, WorldEntry } from '../ipc/commands'
+import type { FpsBoostState, JavaInfo, ModFile, PingResult, ServerEntry, WorldEntry } from '../ipc/commands'
 import { Select } from '../components/Select'
 import { Slider } from '../components/Slider'
 import { isBlockIcon } from '../lib/blockColor'
 import { LOADER_NAME, agoText, fmtPlaytime, fmtSize, loaderId, whenText } from '../lib/format'
+import { incompatibleWith } from '../lib/compat'
 import { useProfiles } from '../state/profiles'
 import { useInstance } from '../state/instance'
 import { closeModal, setScreen, showToast, useUi } from '../state/ui'
@@ -108,6 +111,8 @@ export function InstancePage() {
   const [noticeList, setNoticeList] = useState('')
   const [playtime, setPlaytime] = useState('')
   const [ram, setRam] = useState(4)
+  const [boost, setBoost] = useState<FpsBoostState | null>(null)
+  const [boostBusy, setBoostBusy] = useState(false)
   const [jvm, setJvm] = useState('')
   const [w, setW] = useState('')
   const [h, setH] = useState('')
@@ -295,6 +300,9 @@ export function InstancePage() {
           setPlaytime(' · играно ' + fmtPlaytime(b.seconds) + (b.last ? ' · заходил ' + whenText(b.last) : ''))
         })
         .catch(() => {})
+      fpsBoostState(profile)
+        .then(setBoost)
+        .catch(() => setBoost(null))
       loadProfileSettings(profile)
         .then((cfg) => {
           setJvm(cfg.jvmArgs || '')
@@ -329,6 +337,37 @@ export function InstancePage() {
     setNewLoader(loaderId(pr))
     setNewVersion(pr.version)
   }, [modal.open, profile, pr?.version, pr?.loader, pr?.fabric])
+
+  const toggleBoost = async () => {
+    if (!profile) return
+    if (!hasTauri()) {
+      showToast('Буст FPS доступен в приложении', 'error')
+      return
+    }
+    const on = !(boost && boost.enabled)
+    setBoostBusy(true)
+    try {
+      const next = await setFpsBoost(profile, on)
+      setBoost(next)
+      loadMods()
+      if (!on) {
+        showToast('Буст FPS выключен — моды сняты, настройки графики вернули как было')
+      } else if (next.vanilla) {
+        showToast('Буст FPS включён: профиль JVM и лёгкая графика. Моды-ускорители работают только на Fabric/Forge.')
+      } else {
+        showToast(
+          'Буст FPS включён: ' +
+            next.mods.length +
+            ' мод(ов), профиль JVM и лёгкая графика' +
+            (next.skipped.length ? '. Без сборки под эту версию: ' + next.skipped.join(', ') : ''),
+        )
+      }
+    } catch (e) {
+      showToast('Не удалось переключить буст FPS: ' + e, 'error')
+    } finally {
+      setBoostBusy(false)
+    }
+  }
 
   const doRename = () => {
     const nn = renameVal.trim()
@@ -522,14 +561,25 @@ export function InstancePage() {
               className="inst-tab danger-tab"
               id="bsDelete"
               onClick={async () => {
-                if (!(await uiConfirm('Удалить сборку «' + profile + '» со всеми модами?', { confirmLabel: 'Удалить' }))) return
+                if (
+                  !(await uiConfirm(
+                    'Удалить сборку «' + profile + '» со всеми модами, мирами и часами игры? Отменить будет нельзя.',
+                    { confirmLabel: 'Удалить' },
+                  ))
+                )
+                  return
                 if (hasTauri()) {
-                  deleteProfile(profile!).then(() => {
-                    close()
-                    useProfiles.getState().setSelected(null)
-                    void useProfiles.getState().refresh()
-                    showToast('Сборка удалена', 'ok', 'delete')
-                  })
+                  deleteProfile(profile!)
+                    .then(() => {
+                      close()
+                      useProfiles.getState().setSelected(null)
+                      void useProfiles.getState().refresh()
+                      showToast('Сборка удалена', 'ok', 'delete')
+                    })
+                    .catch((e) => {
+                      void useProfiles.getState().refresh()
+                      showToast('' + e, 'error')
+                    })
                 } else {
                   close()
                   showToast('Удалено (демо)')
@@ -712,6 +762,15 @@ export function InstancePage() {
                                 </span>
                               ) : null}
                               {md.loader ? <span className="mod-tag">{md.loader}</span> : null}
+                              {incompatibleWith(md.mc, pr ? pr.version : '') ? (
+                                <span
+                                  className="mod-upd"
+                                  style={{ background: 'var(--m-danger-soft)', color: 'var(--m-danger)' }}
+                                  title={'Файл собран под MC ' + md.mc + ', а сборка на ' + (pr ? pr.version : '—') + ' — вероятная причина вылета'}
+                                >
+                                  не для {pr ? pr.version : 'этой версии'}
+                                </span>
+                              ) : null}
                             </span>
                             <span className="mod-card-sub">{md.description || md.name}</span>
                           </span>
@@ -1299,6 +1358,39 @@ export function InstancePage() {
                     if (profile) localStorage.setItem(ramKey(profile), String(v))
                   }}
                 />
+              </div>
+              <div className="set-row" style={{ alignItems: 'flex-start' }}>
+                <span className="lab">
+                  Буст FPS
+                  <small>
+                    {boost && boost.enabled
+                      ? 'Включён: моды-ускорители, профиль JVM и лёгкая графика' +
+                        (boost.skipped.length ? '. Нет под эту версию: ' + boost.skipped.join(', ') : '')
+                      : boost && boost.vanilla
+                        ? 'Ускорит JVM и настройки графики; моды доступны на Fabric/Forge'
+                        : 'Ставит Sodium/Embeddium и компанию, чинит GC и убирает тяжёлую графику'}
+                  </small>
+                </span>
+                <div className="segs">
+                  {[
+                    ['on', 'Включить'],
+                    ['off', 'Выключить'],
+                  ].map(([v, label]) => {
+                    const active = (v === 'on') === !!(boost && boost.enabled)
+                    return (
+                      <button
+                        key={v}
+                        className={'seg' + (active ? ' on' : '')}
+                        data-fpsboost={v}
+                        style={{ height: '32px', fontSize: '12.5px' }}
+                        disabled={boostBusy || active}
+                        onClick={() => void toggleBoost()}
+                      >
+                        {boostBusy ? 'Меняем…' : label}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
               <div className="set-row">
                 <span className="lab">

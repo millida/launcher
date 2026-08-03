@@ -67,8 +67,6 @@ function FriendStats({ p }: { p: FriendProfile }) {
       'Последний сервер',
       lastServer + (s?.lastPlayedAt ? ' · ' + whenText(Math.round(s.lastPlayedAt / 1000)) : ''),
     ])
-  const builds = (s?.builds || []).filter((b) => b.seconds > 0).slice(0, 3)
-
   if (!rows.length && !joinable) {
     return <p className="faint-note fr-stat-empty">Статистика появится, когда друг поиграет через лаунчер.</p>
   }
@@ -93,17 +91,6 @@ function FriendStats({ p }: { p: FriendProfile }) {
           <b>{v}</b>
         </div>
       ))}
-      {builds.length ? (
-        <>
-          <div className="fr-stat-cap">Больше всего играет</div>
-          {builds.map((b) => (
-            <div className="fr-stat-row" key={b.name}>
-              <span>{b.name}</span>
-              <b>{fmtPlaytime(b.seconds)}</b>
-            </div>
-          ))}
-        </>
-      ) : null}
     </div>
   )
 }

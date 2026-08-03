@@ -16,13 +16,15 @@ export interface Account {
 
 type AccountInput = Partial<Account> & { nick: string; kind: string }
 
+const isHeadAvatar = (v?: string): boolean => !!v && v.startsWith('data:image/')
+
 function readAccounts(): Account[] {
   try {
     const list = JSON.parse(localStorage.getItem('m-accounts') || 'null') || []
     return Array.isArray(list)
       ? list.map((a: Account & { token?: string }) => {
-          const { token: _drop, ...rest } = a
-          return rest as Account
+          const { token: _drop, avatar, ...rest } = a
+          return (isHeadAvatar(avatar) ? { ...rest, avatar } : rest) as Account
         })
       : []
   } catch {
@@ -31,7 +33,8 @@ function readAccounts(): Account[] {
 }
 
 function persist(list: Account[]) {
-  localStorage.setItem('m-accounts', JSON.stringify(list))
+  const clean = list.map((a) => (isHeadAvatar(a.avatar) ? a : { ...a, avatar: undefined }))
+  localStorage.setItem('m-accounts', JSON.stringify(clean))
 }
 
 function readActive(): string {

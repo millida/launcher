@@ -10,6 +10,7 @@ import { hasTauri } from '../ipc/tauri'
 import { millidaLogout } from '../ipc/commands'
 import { refreshSessionState } from './secure'
 import { playSound } from './sound'
+import { maybeStartOnboarding } from '../state/onboarding'
 
 export interface MillidaProfile {
   nickname?: string
@@ -31,7 +32,6 @@ export async function loadMillidaProfile(): Promise<MillidaProfile | null> {
     const a = l.find((x) => x.kind === 'millida' || x.kind === 'tg')
     if (a) {
       if (me.nickname) a.nick = me.nickname
-      if (me.avatarUrl) a.avatar = me.avatarUrl
       if (wallet && wallet.availableKopecks != null) a.balance = wallet.availableKopecks
       save(l)
     }
@@ -50,6 +50,7 @@ export function enterApp() {
   void loadFriends()
   void refreshPlayStats()
   void refreshGameNick()
+  void maybeStartOnboarding()
 }
 
 function dropMillidaSession() {

@@ -1,10 +1,12 @@
 import { useRef } from 'react'
 import { Icon } from '../components/Icon'
-import { cancelWebLogin, copyUserCode, quickStart, startWebLogin, useLogin } from '../state/login'
+import { cancelWebLogin, copyUserCode, copyVerifyLink, quickStart, startWebLogin, useLogin } from '../state/login'
+import { millidaEver } from '../state/onboarding'
 
 export function Login({ on }: { on: boolean }) {
   const login = useLogin()
   const artRef = useRef<HTMLImageElement>(null)
+  const guestAllowed = millidaEver()
 
   const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return
@@ -48,6 +50,9 @@ export function Login({ on }: { on: boolean }) {
                 <button className="btn sm secondary" onClick={() => void startWebLogin(true)}>
                   Открыть страницу
                 </button>
+                <button className="btn sm ghost" title="Скопировать ссылку" onClick={copyVerifyLink}>
+                  Скопировать ссылку
+                </button>
                 <button className="btn sm ghost" onClick={cancelWebLogin}>
                   Отмена
                 </button>
@@ -63,10 +68,19 @@ export function Login({ on }: { on: boolean }) {
           </div>
           <div className="login-reg">Нет аккаунта Millida? Он создастся автоматически при входе.</div>
 
-          <div className="or">или без сервисов</div>
-          <button className="btn sm ghost" style={{ width: '100%' }} id="quickStart" onClick={quickStart}>
-            Играть гостем (без друзей и профиля)
-          </button>
+          {guestAllowed ? (
+            <>
+              <div className="or">или без сервисов</div>
+              <button className="btn sm ghost" style={{ width: '100%' }} id="quickStart" onClick={quickStart}>
+                Играть гостем (без друзей и профиля)
+              </button>
+            </>
+          ) : (
+            <div className="login-reg">
+              Аккаунт нужен один раз: он даёт ник в игре, скины, друзей и свой сервер. После входа появится и режим
+              гостя.
+            </div>
+          )}
           <div className="trust">
             <Icon id="i-shield" />
             <span>

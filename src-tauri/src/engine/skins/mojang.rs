@@ -107,22 +107,43 @@ pub async fn ms_set_cape(token: String, cape_id: String) -> Result<Value, String
     .await
 }
 
-/// Mojang can fetch the skin PNG by URL, so the existing hosted URL is passed
-/// through instead of re-uploading the bytes.
-pub async fn ms_upload_skin(token: String, skin_url: String, slim: bool) -> Result<Value, String> {
-    if !skin_url.starts_with("https://") {
-        return Err("Mojang принимает только https-ссылку на скин".into());
+/// Скин уходит на лицензию файлом, а не ссылкой: загрузка по URL работает
+/// только для адресов, которые Mojang способен скачать сам, и молча оставляла
+/// на аккаунте прежний скин, когда текстура лежала не там. Байты есть всегда.
+pub async fn ms_upload_skin_png(token: String, png_base64: String, slim: bool) -> Result<Value, String> {
+    let raw = png_base64.rsplit(',').next().unwrap_or(&png_base64);
+    let bytes = b64_decode(raw).ok_or("битый PNG")?;
+    if !bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
+        return Err("это не PNG".into());
     }
-    ms_json(
-        client()
-            .post(format!("{}/skins", MS_PROFILE))
-            .bearer_auth(&token)
-            .json(&serde_json::json!({
-                "variant": if slim { "slim" } else { "classic" },
-                "url": skin_url,
-            })),
-    )
-    .await
+    if bytes.len() > 2_000_000 {
+        return Err("PNG больше 2 МБ".into());
+    }
+    let part = reqwest::multipart::Part::bytes(bytes)
+        .file_name("skin.png")
+        .mime_str("image/png")
+        .map_err(|e| e.to_string())?;
+    let form = reqwest::multipart::Form::new()
+        .text("variant", if slim { "slim" } else { "classic" })
+        .part("file", part);
+    let res = ms_json(client().post(format!("{}/skins", MS_PROFILE)).bearer_auth(&token).multipart(form)).await?;
+    // Ответ Mojang — это профиль целиком: сверяем, что активный скин появился,
+    // иначе «применили» превращается в тихую ложь.
+    let active = res["skins"]
+        .as_array()
+        .and_then(|a| a.iter().find(|s| s["state"] == "ACTIVE").or_else(|| a.first()))
+        .and_then(|s| s["url"].as_str())
+        .unwrap_or_default();
+    if active.is_empty() {
+        return Err("Mojang принял запрос, но скин на аккаунте не сменился — попробуй ещё раз".into());
+    }
+    Ok(serde_json::json!({ "skin": to_https(Some(active)) }))
+}
+
+/// Возврат к стандартному скину на лицензии: без этого «сбросить скин»
+/// чистил только локальные текстуры, а на аккаунте Mojang оставался прежний.
+pub async fn ms_reset_skin(token: String) -> Result<Value, String> {
+    ms_json(client().delete(format!("{}/skins/active", MS_PROFILE)).bearer_auth(&token)).await
 }
 
 pub async fn mc_textures(query: String) -> Result<Value, String> {

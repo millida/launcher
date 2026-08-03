@@ -26,9 +26,7 @@ pub fn read_log(profile: &str, name: &str) -> String {
 pub fn duplicate_profile(name: &str) -> Result<Vec<Profile>, String> {
     let mut all = load_profiles();
     let Some(src) = all.iter().find(|p| p.name == name).cloned() else { return Ok(all) };
-    let mut newname = format!("{} (копия)", name);
-    let mut i = 2;
-    while all.iter().any(|p| p.name == newname) { newname = format!("{} (копия {})", name, i); i += 1; }
+    let newname = unique_profile_name(&format!("{} (копия)", name));
     let from = profile_dir(name);
     let to = profile_dir(&newname);
     if from.exists() {

@@ -1,5 +1,6 @@
 import { convertFileSrc, downloadUiSounds, uiSounds } from '../ipc/commands'
 import { hasTauri } from '../ipc/tauri'
+import { writePref } from './prefs'
 
 export type SoundEvent =
   | 'click'
@@ -54,8 +55,8 @@ export function soundMode(): SoundMode {
 }
 
 export function setSoundMode(mode: SoundMode) {
+  writePref(MODE_KEY, mode)
   try {
-    localStorage.setItem(MODE_KEY, mode)
     localStorage.removeItem('m-sound')
     localStorage.removeItem('m-sound-ui')
   } catch {}
@@ -80,7 +81,7 @@ export function soundVolume(): number {
 
 // Decoded into memory once: <audio> refetches through the asset protocol and drops rapid clicks.
 const buffers = new Map<SoundEvent, AudioBuffer>()
-const files = new Map<SoundEvent, HTMLAudioElement>()
+const urls = new Map<SoundEvent, string>()
 let ctx: AudioContext | null = null
 
 function audioCtx(): AudioContext | null {
@@ -88,11 +89,18 @@ function audioCtx(): AudioContext | null {
     const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
     if (!AC) return null
     ctx = ctx || new AC()
-    if (ctx.state === 'suspended') void ctx.resume()
     return ctx
   } catch {
     return null
   }
+}
+
+// Autoplay policy only lets resume() through while a real gesture is being handled;
+// without this the context stays suspended and background notifications are silent.
+function unlockAudio() {
+  const ac = audioCtx()
+  if (!ac || ac.state === 'running') return
+  void ac.resume().catch(() => {})
 }
 
 async function collect(list: { event: string; path: string }[]) {
@@ -102,16 +110,12 @@ async function collect(list: { event: string; path: string }[]) {
       const ev = f.event as SoundEvent
       if (!(ev in GAIN) || buffers.has(ev)) return
       const src = convertFileSrc(f.path)
-      if (ac) {
-        try {
-          const raw = await (await fetch(src)).arrayBuffer()
-          buffers.set(ev, await ac.decodeAudioData(raw))
-          return
-        } catch {}
-      }
-      const el = new Audio(src)
-      el.preload = 'auto'
-      files.set(ev, el)
+      urls.set(ev, src)
+      if (!ac) return
+      try {
+        const raw = await (await fetch(src)).arrayBuffer()
+        buffers.set(ev, await ac.decodeAudioData(raw))
+      } catch {}
     }),
   )
 }
@@ -124,11 +128,81 @@ let gestureUntil = 0
 
 const gestureBusy = () => performance.now() < gestureUntil
 
+export function soundAllowed(ev: SoundEvent, mode: SoundMode, gestureActive: boolean): boolean {
+  if (mode === 'off') return false
+  if (!UI_EVENTS.includes(ev)) return true
+  return mode === 'all' && !gestureActive
+}
+
 export function playSound(ev: SoundEvent) {
-  if (!soundEnabled()) return
-  if (UI_EVENTS.includes(ev) && !uiClicksEnabled()) return
-  if (gestureBusy()) return
+  if (!soundAllowed(ev, soundMode(), gestureBusy())) return
   emit(ev)
+}
+
+function playBuffer(ac: AudioContext, ev: SoundEvent, level: number): boolean {
+  const buf = buffers.get(ev)
+  if (!buf) return false
+  try {
+    const node = ac.createBufferSource()
+    const gain = ac.createGain()
+    node.buffer = buf
+    gain.gain.value = level
+    node.connect(gain)
+    gain.connect(ac.destination)
+    node.start()
+    return true
+  } catch {
+    return false
+  }
+}
+
+function playFile(ev: SoundEvent, level: number, onFail: () => void): boolean {
+  const url = urls.get(ev)
+  if (!url) return false
+  try {
+    // A fresh element per play so overlapping sounds do not cut each other off.
+    const a = new Audio(url)
+    a.volume = level
+    void a.play().catch(onFail)
+    return true
+  } catch {
+    return false
+  }
+}
+
+const TONE: Partial<Record<SoundEvent, number[]>> = {
+  notify: [880, 1318],
+  success: [660, 990],
+  error: [330, 220],
+  crash: [220, 165],
+  achievement: [784, 1046],
+  install: [587, 880],
+  login: [523, 784],
+  launch: [440, 660],
+  delete: [392, 294],
+}
+
+// Last resort when the game assets never downloaded: a notification must never be mute.
+function playTone(ac: AudioContext, ev: SoundEvent, level: number) {
+  const notes = TONE[ev]
+  if (!notes) return
+  try {
+    const start = ac.currentTime
+    notes.forEach((hz, i) => {
+      const at = start + i * 0.11
+      const osc = ac.createOscillator()
+      const gain = ac.createGain()
+      osc.type = 'sine'
+      osc.frequency.value = hz
+      gain.gain.setValueAtTime(0.0001, at)
+      gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, level * 0.5), at + 0.012)
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.3)
+      osc.connect(gain)
+      gain.connect(ac.destination)
+      osc.start(at)
+      osc.stop(at + 0.32)
+    })
+  } catch {}
 }
 
 function emit(ev: SoundEvent) {
@@ -140,30 +214,26 @@ function emit(ev: SoundEvent) {
   lastAt[ev] = now
 
   const level = Math.max(0, Math.min(1, (vol / 100) * GAIN[ev]))
-  const buf = buffers.get(ev)
-  if (buf) {
-    const ac = audioCtx()
-    if (ac) {
-      try {
-        const node = ac.createBufferSource()
-        const gain = ac.createGain()
-        node.buffer = buf
-        gain.gain.value = level
-        node.connect(gain)
-        gain.connect(ac.destination)
-        node.start()
-        return
-      } catch {}
-    }
+  const ac = audioCtx()
+
+  if (ac && ac.state === 'running') {
+    if (playBuffer(ac, ev, level)) return
+    if (playFile(ev, level, () => playTone(ac, ev, level))) return
+    playTone(ac, ev, level)
+    return
   }
-  const src = files.get(ev)
-  if (!src) return
-  try {
-    // Cloned so overlapping plays do not cut each other off.
-    const a = src.cloneNode(true) as HTMLAudioElement
-    a.volume = level
-    void a.play().catch(() => {})
-  } catch {}
+
+  const resumeAndPlay = () => {
+    if (!ac) return
+    void ac
+      .resume()
+      .then(() => {
+        if (ac.state !== 'running') return
+        if (!playBuffer(ac, ev, level)) playTone(ac, ev, level)
+      })
+      .catch(() => {})
+  }
+  if (!playFile(ev, level, resumeAndPlay)) resumeAndPlay()
 }
 
 export const playNotifySound = () => playSound('notify')
@@ -178,7 +248,7 @@ async function load(force: boolean): Promise<number> {
   return ready()
 }
 
-const ready = () => buffers.size + files.size
+const ready = () => urls.size
 
 export const fetchSounds = () => load(true)
 
@@ -196,6 +266,7 @@ function onGameStart() {
 
 function onDown(e: PointerEvent) {
   gestureUntil = 0
+  unlockAudio()
   const t = e.target as HTMLElement | null
   if (!t || typeof t.closest !== 'function') return
   const el = t.closest('button, a[href], .tgl, .nav-item, [role="button"], [data-sound]') as HTMLElement | null
@@ -225,10 +296,14 @@ export function initSounds() {
 
   // Delegated on the document, pointerdown only: playing on release would double every action.
   document.addEventListener('pointerdown', onDown, true)
+  document.addEventListener('keydown', unlockAudio, true)
+  window.addEventListener('focus', unlockAudio)
 
   if (import.meta.hot) {
     import.meta.hot.dispose(() => {
       document.removeEventListener('pointerdown', onDown, true)
+      document.removeEventListener('keydown', unlockAudio, true)
+      window.removeEventListener('focus', unlockAudio)
       window.removeEventListener('mc-started', onGameStart)
       w[INIT_FLAG] = false
     })

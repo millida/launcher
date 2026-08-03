@@ -198,6 +198,24 @@ pub(crate) async fn ensure_java(app: &AppHandle, major: u64) -> Result<PathBuf, 
     if java_usable(&jdir) { Ok(bin) } else { Err("Java не найдена после распаковки".into()) }
 }
 
+struct AdoptiumPackage {
+    url: String,
+    sha256: String,
+    size: Option<u64>,
+}
+
+/// The archive is executed right after unpacking, so an entry without an https
+/// link and a full sha256 is dropped rather than installed unverified.
+fn adoptium_package(assets: &serde_json::Value) -> Option<AdoptiumPackage> {
+    let pkg = &assets.as_array()?.first()?["binary"]["package"];
+    let url = pkg["link"].as_str().filter(|u| u.starts_with("https://"))?.to_string();
+    let sha256 = pkg["checksum"].as_str()?.to_lowercase();
+    if sha256.len() != 64 || !sha256.chars().all(|c| c.is_ascii_hexdigit()) {
+        return None;
+    }
+    Some(AdoptiumPackage { url, sha256, size: pkg["size"].as_u64() })
+}
+
 async fn install_java(app: &AppHandle, major: u64, jdir: &Path) -> Result<(), String> {
     emit(app, "java", 0.0, &format!("Скачиваем Java {}…", major));
     let (os, ext) = if cfg!(target_os = "macos") {
@@ -214,24 +232,22 @@ async fn install_java(app: &AppHandle, major: u64, jdir: &Path) -> Result<(), St
         "https://api.adoptium.net/v3/assets/latest/{}/hotspot?architecture={}&image_type=jre&os={}&vendor=eclipse",
         major, arch, os
     );
-    let pkg = get_json(&assets_url)
-        .await?
-        .as_array()
-        .and_then(|a| a.first())
-        .map(|e| e["binary"]["package"].clone())
-        .ok_or_else(|| format!("Adoptium не предлагает Java {} для этой системы", major))?;
-    let url = pkg["link"]
-        .as_str()
-        .filter(|u| u.starts_with("https://"))
-        .ok_or("Adoptium не дал ссылку на архив Java")?
-        .to_string();
-    let sha256 = pkg["checksum"].as_str().unwrap_or("").to_lowercase();
-    if sha256.len() != 64 || !sha256.chars().all(|c| c.is_ascii_hexdigit()) {
-        return Err("Adoptium не дал контрольную сумму Java — такой архив не ставим".into());
-    }
-    let size = pkg["size"].as_u64();
+    // The archive is checksum-verified, so a remembered answer is as safe as a
+    // fresh one and keeps a flaky connection from blocking a launch entirely.
+    let meta_cache = data_dir().join("java").join(format!("adoptium-{}-{}-{}.json", major, os, arch));
+    let assets = get_json_cached(&assets_url, &meta_cache)
+        .await
+        .map_err(|e| format!("Не удалось узнать, где скачать Java {}: {}", major, e))?;
+    let pkg = adoptium_package(&assets).ok_or_else(|| {
+        let _ = std::fs::remove_file(&meta_cache);
+        format!("Adoptium не дал пригодной ссылки на Java {} для этой системы", major)
+    })?;
+    let size = pkg.size;
     let archive = data_dir().join(format!("java-{}.{}", major, ext));
-    download_checked(&url, &archive, Some(Sum::Sha256(&sha256)), size).await?;
+    download_checked(&pkg.url, &archive, Some(Sum::Sha256(&pkg.sha256)), size).await.map_err(|e| {
+        let _ = std::fs::remove_file(&meta_cache);
+        e
+    })?;
     emit(app, "java", 60.0, "Распаковываем Java…");
     std::fs::create_dir_all(jdir).map_err(|e| e.to_string())?;
     let unpacked = if ext == "zip" {
@@ -549,6 +565,35 @@ mod tests {
         let mut left = trusted_java_paths();
         left.retain(|p| !same_file(Path::new(p), &picked));
         let _ = write_json_atomic(&trusted_java_index(), &left);
+    }
+
+    fn assets(link: &str, checksum: &str) -> serde_json::Value {
+        serde_json::json!([{
+            "binary": { "package": { "link": link, "checksum": checksum, "size": 42u64 } }
+        }])
+    }
+
+    #[test]
+    fn adoptium_entry_verdicts() {
+        let good = "7fe2324cc5901a89aaa0e8dc232075c59f2aca5270c533bdb1b861a5274af834";
+        // (link, checksum, accepted, why this case is pinned)
+        let cases: &[(&str, &str, bool, &str)] = &[
+            ("https://github.com/a/OpenJDK17U-jre.zip", good, true, "a normal Adoptium answer"),
+            ("http://github.com/a/OpenJDK17U-jre.zip", good, false, "plain HTTP could be swapped in transit"),
+            ("https://github.com/a/OpenJDK17U-jre.zip", "", false, "no checksum means the archive cannot be verified"),
+            ("https://github.com/a/OpenJDK17U-jre.zip", "7fe232", false, "a truncated digest is not a sha256"),
+            ("https://github.com/a/OpenJDK17U-jre.zip", &good.replace('7', "z"), false, "a non-hex digest never matches"),
+        ];
+        for (link, checksum, expected, why) in cases {
+            let got = adoptium_package(&assets(link, checksum)).is_some();
+            assert_eq!(got, *expected, "link {link:?} checksum {checksum:?} accepted={got}, expected {expected}. Pinned because: {why}");
+        }
+        assert!(adoptium_package(&serde_json::json!([])).is_none(), "an empty answer offers no JRE");
+        assert_eq!(
+            adoptium_package(&assets("https://h/x.zip", good)).map(|p| p.sha256),
+            Some(good.to_string()),
+            "the digest must reach download_checked unchanged"
+        );
     }
 
     #[test]

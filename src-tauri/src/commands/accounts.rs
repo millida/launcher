@@ -73,8 +73,13 @@ pub async fn ms_set_cape(account_id: String, cape_id: String) -> Result<serde_js
 }
 
 #[tauri::command]
-pub async fn ms_upload_skin(account_id: String, skin_url: String, slim: bool) -> Result<serde_json::Value, String> {
-    engine::ms_upload_skin(licensed_token(&account_id)?, skin_url, slim).await
+pub async fn ms_upload_skin(account_id: String, png_base64: String, slim: bool) -> Result<serde_json::Value, String> {
+    engine::ms_upload_skin_png(licensed_token(&account_id)?, png_base64, slim).await
+}
+
+#[tauri::command]
+pub async fn ms_reset_skin(account_id: String) -> Result<serde_json::Value, String> {
+    engine::ms_reset_skin(licensed_token(&account_id)?).await
 }
 
 #[derive(serde::Serialize)]

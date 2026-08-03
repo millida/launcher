@@ -11,10 +11,12 @@ pub async fn install_mod(
     project: String,
     game_version: String,
     profile: String,
-) -> Result<String, String> {
+) -> Result<engine::ContentInstall, String> {
     engine::install_mod(app, project, game_version, profile).await
 }
 
+/// `allow_mismatch` is set only after the user confirmed installing content that
+/// targets other game versions.
 #[tauri::command]
 pub async fn install_content(
     app: tauri::AppHandle,
@@ -22,8 +24,9 @@ pub async fn install_content(
     game_version: String,
     profile: String,
     kind: String,
-) -> Result<String, String> {
-    engine::install_content(app, project, game_version, profile, kind).await
+    allow_mismatch: Option<bool>,
+) -> Result<engine::ContentInstall, String> {
+    engine::install_content(app, project, game_version, profile, kind, allow_mismatch.unwrap_or(false)).await
 }
 
 #[tauri::command]
@@ -76,8 +79,15 @@ pub async fn cf_search(
 }
 
 #[tauri::command]
-pub async fn cf_install(app: tauri::AppHandle, mod_id: u32, game_version: String, profile: String, kind: String, file_id: Option<u64>) -> Result<String, String> {
-    engine::cf_install(app, mod_id, game_version, profile, kind, file_id).await
+pub async fn cf_install(app: tauri::AppHandle, mod_id: u32, game_version: String, profile: String, kind: String, file_id: Option<u64>, allow_mismatch: Option<bool>) -> Result<engine::ContentInstall, String> {
+    engine::cf_install(app, engine::CfInstallReq {
+        mod_id,
+        game_version,
+        profile,
+        kind,
+        file_id,
+        allow_mismatch: allow_mismatch.unwrap_or(false),
+    }).await
 }
 
 #[tauri::command]
@@ -132,16 +142,17 @@ pub async fn add_local_file(profile: String, kind: String, path: String) -> Resu
 }
 
 #[tauri::command]
-pub async fn install_version(app: tauri::AppHandle, project: String, version_id: String, profile: String, kind: String) -> Result<String, String> {
+pub async fn install_version(app: tauri::AppHandle, project: String, version_id: String, profile: String, kind: String) -> Result<engine::ContentInstall, String> {
     engine::install_version(app, project, version_id, profile, kind).await
 }
 
 #[tauri::command]
-pub fn export_mrpack(profile: String, name: String, version: String, description: String) -> Result<String, String> {
+pub async fn export_mrpack(profile: String, name: String, version: String, description: String) -> Result<String, String> {
     let safe: String = name.chars().filter(|c| c.is_alphanumeric() || *c==' ' || *c=='-' || *c=='_').collect();
     let base = if safe.trim().is_empty() { profile.clone() } else { safe.trim().to_string() };
     let out = engine::data_dir().join("exports").join(format!("{}.mrpack", base));
-    let res = engine::export_mrpack(profile, out.to_string_lossy().to_string(), name, version, description)?;
+    let dst = out.to_string_lossy().to_string();
+    let res = super::blocking(move || engine::export_mrpack(profile, dst, name, version, description)).await??;
     if let Some(p) = out.parent() {
         engine::open_path(&p.to_string_lossy());
     }

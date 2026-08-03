@@ -4,8 +4,9 @@ import { FilterPill } from '../components/FilterPill'
 import { ModRow } from '../components/ModRow'
 import { hasTauri } from '../ipc/tauri'
 import { listVersions } from '../ipc/commands'
-import { RU_LOADER } from '../lib/format'
+import { LOADER_NAME, RU_LOADER, loaderId } from '../lib/format'
 import { F_LOADERS, F_SIDES, F_SORTS, F_VERS, MOD_TABS, WORLD_CATS, useMods } from '../state/mods'
+import { useProfiles } from '../state/profiles'
 
 const TAB_META: [string, string][] = [
   ['Модпаки', 'i-box2'],
@@ -47,7 +48,12 @@ export function Mods({ on }: { on: boolean }) {
   }, [mods.modTab])
 
   const reload = () => void useMods.getState().load()
-  const verOptions = ['любая'].concat(mods.vers)
+  const scoped = useProfiles((s) => s.profiles).find((p) => p.name === mods.targetBuild)
+  // the build may run a version the manifest does not list yet (snapshot, fresh release)
+  const verOptions = ['любая']
+    .concat(mods.vers)
+    .concat(scoped && scoped.version && !mods.vers.includes(scoped.version) ? [scoped.version] : [])
+  const scopeOn = !!scoped && (mods.fVer === scoped.version || mods.fLoader === loaderId(scoped))
   const isWorld = mods.modTab === 'world'
   const isMr = mods.modSource === 'modrinth' && !isWorld
   const catList = mods.cats.filter((c) => c !== 'все')
@@ -85,6 +91,38 @@ export function Mods({ on }: { on: boolean }) {
           </div>
         </div>
       </div>
+
+      {scoped ? (
+        <div className="mk-chips" style={{ marginBottom: '10px' }}>
+          <span className="mk-chips-cap">Сборка:</span>
+          <span className="mk-chip">
+            {scoped.name} · {scoped.version} · {LOADER_NAME(scoped)}
+          </span>
+          <span className="faint-note" style={{ margin: 0 }}>
+            {scopeOn
+              ? 'показываем только то, что подходит этой сборке'
+              : 'фильтр по сборке снят — несовместимое спросим перед установкой'}
+          </span>
+          {scopeOn ? (
+            <button
+              className="facet-reset"
+              onClick={() => (mods.set({ fVer: 'любая', fLoader: 'любой' }), reload())}
+            >
+              Показать всё
+            </button>
+          ) : (
+            <button
+              className="facet-reset"
+              onClick={() => {
+                useMods.getState().scopeTo(scoped.name)
+                reload()
+              }}
+            >
+              Только для сборки
+            </button>
+          )}
+        </div>
+      ) : null}
 
       <div className="segs" style={{ marginBottom: '14px' }}>
         {TAB_META.map(([t, ic], i) => (

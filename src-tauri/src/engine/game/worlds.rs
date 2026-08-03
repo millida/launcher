@@ -64,9 +64,21 @@ pub fn remove_server(profile: &str, ip: &str) -> Vec<ServerEntry> {
 pub fn pin_server_dat(profile: &str, name: &str, ip: &str) -> Result<(), String> {
     if ip.trim().is_empty() { return Ok(()); }
     let path = profile_dir(profile).join("servers.dat");
-    let mut list = std::fs::read(&path).ok().map(|b| read_servers(&b)).unwrap_or_default();
-    list.retain(|(_, i)| i != ip);
-    list.insert(0, (name.to_string(), ip.to_string()));
+    let raw = std::fs::read(&path).unwrap_or_default();
+    let mut list = read_servers(&raw);
+    // A non-empty file that yields no servers is a format we failed to read,
+    // not an empty list. Writing our single entry over it would erase every
+    // server the player added by hand; not getting pinned is the lesser harm.
+    if list.is_empty() && !raw.is_empty() {
+        return Ok(());
+    }
+    let pinned = list
+        .iter()
+        .position(|s| s.ip == ip)
+        .map(|idx| list.remove(idx))
+        .map(|prev| ServerRecord { name: name.to_string(), ip: ip.to_string(), ..prev })
+        .unwrap_or_else(|| ServerRecord::new(name, ip));
+    list.insert(0, pinned);
     if let Some(par) = path.parent() { std::fs::create_dir_all(par).ok(); }
     write_bytes_atomic(&path, &write_servers(&list))
 }
