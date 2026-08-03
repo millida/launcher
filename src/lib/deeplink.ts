@@ -1,6 +1,7 @@
 import { getCurrent, onOpenUrl } from '@tauri-apps/plugin-deep-link'
 import { hasTauri } from '../ipc/tauri'
 import { setScreen, showToast } from '../state/ui'
+import { uiConfirm } from '../state/confirm'
 import { useServerDetail } from '../state/serverDetail'
 import { useServers } from '../state/servers'
 import { useMods } from '../state/mods'
@@ -32,7 +33,12 @@ function handle(raw: string) {
     if (!addr) return
     const name = q.get('name') || addr
     rememberServerName(addr, name)
-    void quickJoin(addr, name, q.get('licensed') === '1').catch(() => {})
+    // Any page or app can fire a millida:// URL, so launching the game and
+    // joining a server requires an explicit confirmation first.
+    void uiConfirm(`Запустить игру и зайти на сервер «${name}»?`, { title: 'Millida', confirmLabel: 'Запустить' })
+      .then((ok) => {
+        if (ok) void quickJoin(addr, name, q.get('licensed') === '1').catch(() => {})
+      })
     return
   }
   if (action === 'server') {
@@ -54,7 +60,10 @@ function handle(raw: string) {
       setScreen('builds')
       return
     }
-    realLaunch(profile)
+    // Drive-by launch protection: the scheme is triggerable by any web page.
+    void uiConfirm(`Запустить сборку «${profile}»?`, { title: 'Millida', confirmLabel: 'Запустить' }).then((ok) => {
+      if (ok) realLaunch(profile)
+    })
     return
   }
   if (action === 'build') {

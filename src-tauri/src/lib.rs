@@ -6,11 +6,14 @@ mod secrets;
 mod commands;
 pub mod tray;
 
-/// Narrows the `asset:` protocol scope to launcher data and the game root, so a
-/// webview XSS cannot read the whole home directory.
+/// Narrows the `asset:` protocol scope to directories whose contents are only
+/// user-chosen images. The vault (secrets.bin, vault.key) lives under
+/// `data_dir()` and files copied into the game root land in `profiles/...` —
+/// neither may ever be readable through `asset://`, or a webview XSS could read
+/// the token vault and arbitrary copied files straight out of the scope.
 pub fn allow_assets(app: &tauri::AppHandle) {
     let scope = app.asset_protocol_scope();
-    for dir in [engine::data_dir(), engine::game_root()] {
+    for dir in [engine::data_dir().join("textures"), engine::data_dir().join("cache").join("heads")] {
         std::fs::create_dir_all(&dir).ok();
         let _ = scope.allow_directory(&dir, true);
     }
@@ -428,9 +431,10 @@ mod tests {
         assert_eq!(
             scope,
             serde_json::json!([]),
-            "the static asset scope must stay empty. Access is granted at runtime for data_dir() \
-             and game_root() only (see allow_assets); a wildcard such as $HOME/** would let an \
-             XSS read the whole home directory.",
+            "the static asset scope must stay empty. Runtime grants (see allow_assets) cover only \
+             safe image directories under data_dir; a wildcard such as $HOME/** would let an XSS \
+             read the whole home directory, and data_dir/game_root roots would expose the vault \
+             and copied game files.",
         );
     }
 }

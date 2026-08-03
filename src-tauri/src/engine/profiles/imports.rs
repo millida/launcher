@@ -1,6 +1,21 @@
 use crate::engine::*;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+
+/// Paths the core itself surfaced to the webview via `scan_imports` (or a
+/// native file dialog). `import_instance` only accepts paths from this set:
+/// without a vouch the webview could point it at arbitrary directories and pull
+/// their contents into the asset-served game root.
+static VOUCHED: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
+
+pub(crate) fn vouch(path: &Path) {
+    VOUCHED.lock().unwrap().push(path.to_path_buf());
+}
+
+fn is_vouched(path: &Path) -> bool {
+    VOUCHED.lock().unwrap().contains(&path.to_path_buf())
+}
 
 #[derive(serde::Serialize)]
 pub struct FoundInstance { pub name: String, pub version: String, pub loader: String, pub path: String, pub source: String }
@@ -367,6 +382,7 @@ pub fn scan_imports() -> Vec<FoundInstance> {
             out.push(FoundInstance { name, version, loader, path, source: src.clone() });
         }
     }
+    *VOUCHED.lock().unwrap() = out.iter().map(|i| PathBuf::from(&i.path)).collect();
     out
 }
 
@@ -389,6 +405,12 @@ fn copy_game_files(game: &Path, dst: &Path) -> Result<usize, String> {
 
 pub fn import_instance(path: String, name: String, version: String, loader: String) -> Result<Profile, String> {
     let src = PathBuf::from(&path);
+    // Only paths the core itself surfaced (scan_imports result or a native
+    // dialog) may be imported; anything else would let the webview pull
+    // arbitrary directories into the game root.
+    if !is_vouched(&src) {
+        return Err("Импортировать можно только сборку из списка найденных".into());
+    }
     // Prism/MultiMC keep game files under .minecraft/ or minecraft/
     let game = ["minecraft", ".minecraft"].iter().map(|d| src.join(d)).find(|p| p.exists()).unwrap_or(src.clone());
     let mut all = load_profiles();

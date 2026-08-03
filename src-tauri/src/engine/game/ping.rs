@@ -3,6 +3,8 @@ use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
+use crate::engine::host_is_local;
+
 #[derive(serde::Serialize)]
 pub struct PingResult {
     pub online: i64,
@@ -79,6 +81,13 @@ pub fn ping(addr: &str) -> Result<PingResult, String> {
         .map_err(|e| e.to_string())?
         .next()
         .ok_or("не удалось разрешить адрес")?;
+    // The webview may ask the core to connect anywhere, so block loopback,
+    // private, link-local and mDNS targets — including hostnames that resolve
+    // to them (DNS rebinding) — to keep ping_server from probing the local
+    // machine, the LAN or cloud metadata.
+    if host_is_local(&host) || host_is_local(&sock.ip().to_string()) {
+        return Err("локальные и домашние адреса проверять нельзя".into());
+    }
     let start = std::time::Instant::now();
     let mut s = TcpStream::connect_timeout(&sock, Duration::from_secs(4)).map_err(|e| e.to_string())?;
     s.set_read_timeout(Some(Duration::from_secs(4))).ok();

@@ -164,7 +164,7 @@ const TEXTURE_HOSTS: &[&str] = &[
 /// Names and literals that resolve inside the machine or the user's LAN. The
 /// fetch runs in the core, outside the webview CSP, so without this check a URL
 /// coming from the webview could read back local and intranet responses.
-fn host_is_local(host: &str) -> bool {
+pub(crate) fn host_is_local(host: &str) -> bool {
     use std::net::IpAddr;
     if let Ok(ip) = host.trim_matches(['[', ']']).parse::<IpAddr>() {
         return match ip {

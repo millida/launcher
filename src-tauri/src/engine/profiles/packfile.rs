@@ -1,6 +1,6 @@
 use crate::engine::*;
 use serde_json::Value;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use tauri::AppHandle;
 
 fn unique_name(base: &str) -> String {
@@ -118,6 +118,7 @@ fn from_plain_dir(dir: &Path, name_hint: &str) -> Result<Profile, String> {
         return Err("Не удалось определить версию Minecraft — импортируй .mrpack или zip с manifest.json".into());
     }
     let pname = unique_name(name_hint);
+    vouch(&game);
     import_instance(game.to_string_lossy().to_string(), pname, version, loader)
 }
 
@@ -126,19 +127,20 @@ fn base_name(p: &Path) -> String {
 }
 
 pub async fn import_pack_file(app: AppHandle, path: Option<String>) -> Result<Profile, String> {
-    let picked = match path {
-        Some(p) if !p.trim().is_empty() => PathBuf::from(p),
-        _ => {
-            let f = tauri::async_runtime::spawn_blocking(|| {
-                rfd::FileDialog::new()
-                    .add_filter("Сборка Minecraft", &["mrpack", "zip"])
-                    .set_title("Файл сборки (.mrpack или .zip)")
-                    .pick_file()
-            })
-            .await
-            .map_err(|e| e.to_string())?;
-            f.ok_or("Отменено")?
-        }
+    // The webview-supplied path is ignored: only a native dialog pick may
+    // import, so a compromised webview cannot point the import at arbitrary
+    // files or folders.
+    let _ = path;
+    let picked = {
+        let f = tauri::async_runtime::spawn_blocking(|| {
+            rfd::FileDialog::new()
+                .add_filter("Сборка Minecraft", &["mrpack", "zip"])
+                .set_title("Файл сборки (.mrpack или .zip)")
+                .pick_file()
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+        f.ok_or("Отменено")?
     };
     if picked.is_dir() { return from_plain_dir(&picked, &base_name(&picked)); }
     if !picked.exists() { return Err("Файл не найден".into()) }
