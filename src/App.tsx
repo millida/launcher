@@ -20,6 +20,7 @@ import { BuildPicker } from './components/BuildPicker'
 import { ChatNotify } from './components/ChatNotify'
 import { Installs } from './components/Installs'
 import { initInstalls } from './state/installs'
+import { overlayNotify } from './ipc/commands'
 import { ServerDetail } from './components/ServerDetail'
 import { pushChatNotify } from './state/chatNotify'
 import { parseInvite } from './lib/invite'
@@ -34,7 +35,28 @@ import { useUi, closeModal, setScreen as gotoScreen, showToast } from './state/u
 import { useWallpaper } from './state/wallpaper'
 import { loadLiveRating } from './state/servers'
 import { appendChatMessage, loadFriends, useFriends } from './state/friends'
-import type { Friend, FriendRequest } from './state/friends'
+import type { ChatAttachment, Friend, FriendRequest } from './state/friends'
+
+interface PolledMessage {
+  id?: string
+  from: string
+  fromNick?: string
+  text?: string
+  ts?: number
+  attachment?: ChatAttachment | null
+}
+
+interface PolledRead {
+  userId: string
+  readAt: number
+}
+
+function previewOf(m: PolledMessage): string {
+  const text = String(m.text || '')
+  if (m.attachment?.kind === 'voice') return 'Голосовое сообщение'
+  if (m.attachment?.kind === 'image') return 'Картинка'
+  return parseInvite(text) ? 'Приглашение на сервер' : text
+}
 import { refreshPlayStats, rememberServerName } from './state/playStats'
 import { quickJoin } from './lib/joinServer'
 import { refreshProfiles } from './state/profiles'
@@ -292,7 +314,11 @@ export function App() {
 
   useEffect(() => {
     let stopped = false
-    let since = Date.now()
+    // The cursor survives a restart, so messages that arrived while the
+    // launcher was closed still show up as unread instead of silently landing
+    // in history.
+    const CURSOR = 'm-poll-since'
+    let since = Number(localStorage.getItem(CURSOR)) || Date.now()
     let firstPass = true
     let timer: ReturnType<typeof setTimeout>
     const loop = async () => {
@@ -301,6 +327,7 @@ export function App() {
         try {
           const r = await api('/friends/poll?since=' + since)
           since = r.now || Date.now()
+          localStorage.setItem(CURSOR, String(since))
           if (r.presence) {
             const before = useFriends.getState().friends
             useFriends.getState().set({ friends: r.presence })
@@ -324,18 +351,32 @@ export function App() {
                   }),
                 )
           }
-          ;(r.messages || []).forEach((m: { from: string; text: string; fromNick?: string }) => {
+          ;(r.messages || []).forEach((m: PolledMessage) => {
             const f = useFriends.getState()
             if (f.chatOpen && f.chatWith === m.from) {
-              appendChatMessage({ text: String(m.text) })
+              appendChatMessage({
+                id: m.id,
+                text: String(m.text || ''),
+                ts: m.ts,
+                attachment: m.attachment || null,
+              })
               playSound('notify')
-            }
-            else {
-              const preview = parseInvite(String(m.text)) ? 'Приглашение на сервер' : String(m.text)
+              void api('/friends/chat/' + encodeURIComponent(m.from) + '/read', { method: 'POST' }).catch(() => {})
+            } else {
               const nick = m.fromNick || f.friends.find((x) => x.userId === m.from)?.nickname || ''
-              pushChatNotify({ uid: m.from, nick, text: preview })
+              pushChatNotify({ uid: m.from, nick, text: previewOf(m) })
+              // While the game holds the screen, the launcher's own toast is
+              // invisible — the card has to go over the game instead.
+              if (useGame.getState().list.length)
+                void overlayNotify({ uid: m.from, nick, text: previewOf(m), ts: m.ts || Date.now() }).catch(() => {})
             }
           })
+          const chat = useFriends.getState()
+          if (chat.chatWith) {
+            const mine = (r.reads || []).find((x: PolledRead) => x.userId === chat.chatWith)
+            if (mine) chat.set({ chatPeerReadAt: mine.readAt })
+            chat.set({ chatTyping: (r.typing || []).includes(chat.chatWith) })
+          }
           firstPass = false
         } catch {}
       }

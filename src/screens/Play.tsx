@@ -299,7 +299,7 @@ export function Play({ on }: { on: boolean }) {
               <Icon id="i-settings" />
             </button>
             <button
-              className={'btn lg' + (boostOn ? ' primary' : '')}
+              className={'btn lg ' + (boostOn ? 'primary' : 'glass')}
               id="fpsBoostBtn"
               title={
                 boostOn

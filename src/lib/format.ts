@@ -93,6 +93,10 @@ const RU_MAP: Record<string, string> = {
 
 export const RU_LOADER = (c: string): string => RU_MAP[c] || c
 
+/// Catalogue values arrive lower-cased from the APIs ("fabric", "любая"); only
+/// the first letter is touched so "NeoForge" and "1.21.4" stay as they are.
+export const cap = (s: string): string => (s ? s[0].toUpperCase() + s.slice(1) : s)
+
 export const accKindLabel = (k?: string): string =>
   k === 'microsoft'
     ? 'Лицензия Microsoft'

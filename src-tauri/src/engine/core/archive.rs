@@ -1,6 +1,18 @@
 use serde_json::Value;
 use std::path::Path;
 
+/// A jar cut short by a dropped connection still opens and still has a
+/// plausible size, so only reading its directory tells a broken mod from a
+/// working one. Entry data is not inflated: that would cost minutes on a pack.
+pub(crate) fn zip_readable(path: &Path) -> bool {
+    let Ok(f) = std::fs::File::open(path) else { return false };
+    let Ok(mut zip) = zip::ZipArchive::new(std::io::BufReader::new(f)) else { return false };
+    if zip.is_empty() {
+        return false;
+    }
+    (0..zip.len()).all(|i| zip.by_index(i).is_ok())
+}
+
 pub(crate) fn unzip_to(archive: &Path, dest: &Path) -> Result<(), String> {
     let f = std::fs::File::open(archive).map_err(|e| e.to_string())?;
     let mut zip = zip::ZipArchive::new(f).map_err(|e| e.to_string())?;

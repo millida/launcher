@@ -51,12 +51,18 @@ url = "2"
 # game assets ship as ogg/vorbis, which WKWebView on macOS cannot play
 lewton = "0.10"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+tauri-plugin-global-shortcut = "2.3.2"
 
 [target.'cfg(windows)'.dependencies]
 # DPAPI for vault.key: the file is useless outside the Windows account.
 # Shell/Registry: opening links without the shell's own error dialog, and
 # finding a browser when the https association is broken
 windows-sys = { version = "0.61", features = ["Win32_Security_Cryptography", "Win32_Foundation", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_System_Registry"] }
+# The microphone prompt is WebView2's own dialog. The launcher already asked the
+# user in its settings, so the request is answered for our window instead of
+# being bounced back at them on every recording.
+webview2-com = "0.38"
+windows = { version = "0.61", features = ["Win32_Foundation"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 libc = "0.2"

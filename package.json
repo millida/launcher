@@ -18,7 +18,11 @@
     "build:timings": "bun scripts/build.mjs fast --timings",
     "build:why": "bun scripts/build.mjs fast --why"
   },
+  "overrides": {
+    "postcss": "^8.5.25"
+  },
   "dependencies": {
+    "@breezystack/lamejs": "^1.2.7",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-clipboard-manager": "^2.3.2",
     "@tauri-apps/plugin-deep-link": "^2.4.9",

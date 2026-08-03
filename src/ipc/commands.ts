@@ -270,6 +270,14 @@ export interface JavaRuntime {
 
 export const listJavaRuntimes = () => invoke<JavaRuntime[]>('list_java_runtimes')
 
+export const defaultJava = () => invoke<JavaInfo | null>('default_java')
+
+export const setDefaultJava = (path: string | null) => invoke<void>('set_default_java', { path })
+
+export const javaMajors = () => invoke<number[]>('java_majors')
+
+export const downloadJavaRuntime = (major: number) => invoke<string>('download_java_runtime', { major })
+
 export const removeJavaRuntime = (major: number) => invoke<number>('remove_java_runtime', { major })
 
 export interface DiscordStatus {
@@ -285,7 +293,8 @@ export const discordPresence = (
   playing: boolean,
   largeImage?: string,
   largeText?: string,
-) => invoke<void>('discord_presence', { details, state, playing, largeImage, largeText })
+  joinUrl?: string,
+) => invoke<void>('discord_presence', { details, state, playing, largeImage, largeText, joinUrl })
 
 export const discordStatus = () => invoke<DiscordStatus>('discord_status')
 
@@ -643,7 +652,8 @@ export const hostUpload = (id: string, dir: string) => invoke<string | null>('ho
 
 export interface PingResult { online: number; max: number; motd: string; version: string; favicon: string | null; ms: number }
 export const pingServer = (addr: string) => invoke<PingResult>('ping_server', { addr })
-export const repairProfile = (profile: string) => invoke<void>('repair_profile', { profile })
+export interface RepairReport { checked: number; restored: number; broken: string[] }
+export const repairProfile = (profile: string) => invoke<RepairReport>('repair_profile', { profile })
 
 export const setLocalSkin = (skin: string | null, cape: string | null, slim: boolean) =>
   invoke<void>('set_local_skin', { skin, cape, slim })
@@ -683,3 +693,11 @@ export const trayAvailable = () => invoke<boolean>('tray_available')
 export const hideToTray = () => invoke<void>('hide_to_tray')
 export const showFromTray = () => invoke<void>('show_from_tray')
 export const setRestoreOnExitNative = (on: boolean) => invoke<void>('set_restore_on_exit', { on })
+
+export interface OverlayState { enabled: boolean; hotkey: string }
+export const overlayState = () => invoke<OverlayState>('overlay_state')
+export const overlaySetEnabled = (on: boolean) => invoke<void>('overlay_set_enabled', { on })
+export const overlaySetHotkey = (hotkey: string) => invoke<void>('overlay_set_hotkey', { hotkey })
+export const overlayNotify = (payload: { uid: string; nick: string; text: string; ts: number }) =>
+  invoke<void>('overlay_notify', { payload })
+export const overlayHide = () => invoke<void>('overlay_hide')

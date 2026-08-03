@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Icon } from './Icon'
 import { hasTauri } from '../ipc/tauri'
-import { openProfileFolder, repairProfile } from '../ipc/commands'
-import { showToast } from '../state/ui'
+import { openProfileFolder } from '../ipc/commands'
+import { runRepair } from '../lib/repair'
 import { useCrash } from '../state/crash'
 
 export function CrashModal() {
@@ -58,13 +58,12 @@ export function CrashModal() {
             onClick={() => {
               if (!hasTauri()) return
               setRepairing(true)
-              showToast('Чиним сборку — проверяем файлы…')
-              repairProfile(info.profile)
-                .then(() => {
-                  showToast('Готово — попробуй запустить снова')
-                  close()
+              // The dialog closes only on a repair that actually finished: on a
+              // failure the log and the folder button stay one click away.
+              runRepair(info.profile)
+                .then((r) => {
+                  if (r) close()
                 })
-                .catch((e) => showToast('Не удалось починить: ' + e, 'error'))
                 .finally(() => setRepairing(false))
             }}
           >

@@ -4,6 +4,7 @@ import { listenLaunchProgress } from '../ipc/events'
 import type { UnlistenFn } from '../ipc/tauri'
 import type { LaunchAuth } from '../ipc/commands'
 import { api, hasMillidaAccount } from './api'
+import { joinPageUrl } from './invite'
 import { effectiveNick, getAccount } from '../state/accounts'
 import { ensureMsAuth, startMsLogin } from '../state/msLogin'
 import { uiConfirm } from '../state/confirm'
@@ -15,7 +16,9 @@ import { liveBeat, track, trackTimed } from './telemetry'
 
 export const PL_STAGES = ['Проверка файлов', 'Java 21 (в комплекте)', 'Ассеты и библиотеки', 'Запуск игры']
 
-const STAGE_IDX: Record<string, number> = { files: 0, assets: 2, java: 1, launch: 3, mod: 0 }
+export const REPAIR_STAGES = ['Файлы игры', 'Java', 'Ассеты и библиотеки', 'Моды и контент']
+
+const STAGE_IDX: Record<string, number> = { files: 0, assets: 2, java: 1, launch: 3, mod: 0, content: 3 }
 
 let session: { profile: string; server: string | null; serverName: string | null } | null = null
 
@@ -37,9 +40,11 @@ export function discordPresence(status?: string, server?: string | null) {
   // Discord only proxies https images; data: and local paths are silently ignored.
   const icon = pack && pack.icon && pack.icon.startsWith('https://') ? pack.icon : ''
   const details = playing ? (build ? 'Играет · ' + build : 'В игре') : 'В лаунчере'
-  const place = session && session.server ? session.server : server || ''
+  const addr = (session && session.server) || ''
+  const place = (session && (session.serverName || session.server)) || server || ''
   const state = playing && place ? 'Сервер: ' + place : nick ? 'Ник: ' + nick : 'Millida Launcher'
-  ipcDiscordPresence(details, state, playing, icon, build).catch(() => {})
+  const joinUrl = playing && addr ? joinPageUrl(addr, (session && session.serverName) || null) : ''
+  ipcDiscordPresence(details, state, playing, icon, build, joinUrl).catch(() => {})
 }
 
 export function heartbeat(status?: string, server?: string | null) {
@@ -206,7 +211,7 @@ function doLaunch(name: string) {
   const setPrelaunch = useUi.getState().setPrelaunch
   const pack = useProfiles.getState().profiles.find((p) => p.name === name)
   const ver = pack ? (pack.version === 'latest' ? 'Minecraft последней версии' : 'Minecraft ' + pack.version) : 'Minecraft последней версии'
-  setPrelaunch({ open: true, sub: name + ' · ' + ver, stage: 0, pct: 2, msg: 'Готовимся…' })
+  setPrelaunch({ open: true, sub: name + ' · ' + ver, stage: 0, pct: 2, msg: 'Готовимся…', mode: 'launch' })
   try {
     localStorage.setItem('m-last-' + name, String(Date.now()))
   } catch {}
@@ -279,7 +284,7 @@ export function startPrelaunch(name: string) {
   const setPrelaunch = useUi.getState().setPrelaunch
   let stage = 0
   let prog = 0
-  setPrelaunch({ open: true, sub: name, stage, pct: prog, msg: null })
+  setPrelaunch({ open: true, sub: name, stage, pct: prog, msg: null, mode: 'launch' })
   if (plTimer) clearInterval(plTimer)
   plTimer = setInterval(() => {
     prog += Math.random() * 7 + 3
@@ -301,8 +306,16 @@ export function startPrelaunch(name: string) {
 
 export function cancelPrelaunch() {
   if (plTimer) clearInterval(plTimer)
-  useUi.getState().setPrelaunch({ open: false })
+  const ui = useUi.getState()
+  // A repair reports its own outcome once the core unwinds; announcing anything
+  // here would race it with a second toast.
+  const repair = ui.prelaunch.mode === 'repair'
   if (hasTauri()) cancelLaunch().catch(() => {})
+  if (repair) {
+    ui.setPrelaunch({ msg: 'Отменяем…' })
+    return
+  }
+  ui.setPrelaunch({ open: false })
   launching = false
   showToast('Запуск отменён')
 }

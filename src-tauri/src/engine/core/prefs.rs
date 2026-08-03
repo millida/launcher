@@ -37,6 +37,11 @@ pub fn ui_prefs() -> UiPrefs {
     read()
 }
 
+pub fn ui_pref(key: &str) -> Option<String> {
+    let _g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    read().get(key).cloned()
+}
+
 pub fn set_ui_pref(key: String, value: String) -> Result<(), String> {
     if !valid(&key, &value) {
         return Err("недопустимое имя или значение настройки".into());

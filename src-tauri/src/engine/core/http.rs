@@ -13,14 +13,27 @@ static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 
 /// When off, a matching file size is accepted as intact; full rehashing is only
 /// enabled during an explicit repair pass.
-static DEEP_VERIFY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static DEEP_VERIFY: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
-pub(crate) fn set_deep_verify(on: bool) {
-    DEEP_VERIFY.store(on, std::sync::atomic::Ordering::SeqCst);
+/// A counter, not a flag: a launch running next to a repair used to clear the
+/// flag under it and the repair silently degraded to size-only checks.
+pub(crate) struct DeepVerify;
+
+impl DeepVerify {
+    pub(crate) fn hold() -> DeepVerify {
+        DEEP_VERIFY.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        DeepVerify
+    }
+}
+
+impl Drop for DeepVerify {
+    fn drop(&mut self) {
+        DEEP_VERIFY.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+    }
 }
 
 pub(crate) fn deep_verify() -> bool {
-    DEEP_VERIFY.load(std::sync::atomic::Ordering::SeqCst)
+    DEEP_VERIFY.load(std::sync::atomic::Ordering::SeqCst) > 0
 }
 
 /// The bundled webpki roots alone are not enough: HTTPS-inspecting antivirus and
@@ -521,15 +534,21 @@ mod tests {
         let f = dir.join("lib.jar");
         std::fs::write(&f, b"0123456789").unwrap();
         let wrong = "0000000000000000000000000000000000000000";
-        set_deep_verify(false);
+        assert!(!deep_verify(), "проверка стартует с выключенной глубокой сверкой");
         download_checked(DEAD, &f, Some(Sum::Sha1(wrong)), Some(10))
             .await
             .expect("совпал размер — перекачивать нечего");
         assert!(f.exists());
 
-        set_deep_verify(true);
-        let r = download_checked(DEAD, &f, Some(Sum::Sha1(wrong)), Some(10)).await;
-        set_deep_verify(false);
+        let outer = DeepVerify::hold();
+        let r = {
+            let inner = DeepVerify::hold();
+            drop(inner);
+            assert!(deep_verify(), "вложенный держатель не должен снимать флаг у внешнего");
+            download_checked(DEAD, &f, Some(Sum::Sha1(wrong)), Some(10)).await
+        };
+        drop(outer);
+        assert!(!deep_verify(), "после освобождения всех держателей флаг снят");
         assert!(r.is_err(), "глубокая проверка обязана поймать несовпадение хеша");
 
         let g = dir.join("short.jar");

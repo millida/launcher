@@ -166,18 +166,18 @@ fn system_java(major: u64) -> Option<PathBuf> {
         .map(|(p, _)| p.clone())
 }
 
-pub(crate) async fn ensure_java(app: &AppHandle, major: u64) -> Result<PathBuf, String> {
-    let major = if major == 16 { 17 } else { major };
-    if let Some(bin) = bundled_java(major) {
-        return Ok(bin);
-    }
+/// Majors the launcher is willing to fetch. The value reaches a URL and a
+/// directory name, so it never comes from the webview unchecked.
+pub const JAVA_MAJORS: &[u64] = &[8, 11, 17, 21, 25];
+
+/// Downloads a managed runtime into the data directory, skipping whatever the
+/// system already offers. Shared by the automatic path and the explicit
+/// "download this major" action so both install exactly the same way.
+pub(crate) async fn install_managed_java(app: &AppHandle, major: u64) -> Result<PathBuf, String> {
     let jdir = data_dir().join("java").join(major.to_string());
     let bin = java_bin(&jdir);
     if java_usable(&jdir) {
         return Ok(bin);
-    }
-    if let Some(sys) = system_java(major) {
-        return Ok(sys);
     }
     let _ = std::fs::remove_dir_all(&jdir);
     // Unpack into staging and move with a single rename so the target directory
@@ -196,6 +196,31 @@ pub(crate) async fn ensure_java(app: &AppHandle, major: u64) -> Result<PathBuf, 
         format!("Не удалось установить Java: {}", e)
     })?;
     if java_usable(&jdir) { Ok(bin) } else { Err("Java не найдена после распаковки".into()) }
+}
+
+pub(crate) async fn ensure_java(app: &AppHandle, major: u64) -> Result<PathBuf, String> {
+    let major = if major == 16 { 17 } else { major };
+    if let Some(bin) = bundled_java(major) {
+        return Ok(bin);
+    }
+    let jdir = data_dir().join("java").join(major.to_string());
+    if java_usable(&jdir) {
+        return Ok(java_bin(&jdir));
+    }
+    if let Some(sys) = system_java(major) {
+        return Ok(sys);
+    }
+    install_managed_java(app, major).await
+}
+
+/// Fetches a major on demand. The webview may only name a version from the
+/// published list: the number ends up in the Adoptium URL and in a path.
+pub async fn download_java_runtime(app: &AppHandle, major: u64) -> Result<String, String> {
+    if !JAVA_MAJORS.contains(&major) {
+        return Err("Такую версию Java лаунчер не скачивает".into());
+    }
+    let bin = install_managed_java(app, major).await?;
+    java_version_of(&bin).ok_or_else(|| "Java скачалась, но не запускается".to_string())
 }
 
 struct AdoptiumPackage {
@@ -244,9 +269,8 @@ async fn install_java(app: &AppHandle, major: u64, jdir: &Path) -> Result<(), St
     })?;
     let size = pkg.size;
     let archive = data_dir().join(format!("java-{}.{}", major, ext));
-    download_checked(&pkg.url, &archive, Some(Sum::Sha256(&pkg.sha256)), size).await.map_err(|e| {
+    download_checked(&pkg.url, &archive, Some(Sum::Sha256(&pkg.sha256)), size).await.inspect_err(|_| {
         let _ = std::fs::remove_file(&meta_cache);
-        e
     })?;
     emit(app, "java", 60.0, "Распаковываем Java…");
     std::fs::create_dir_all(jdir).map_err(|e| e.to_string())?;
@@ -432,6 +456,39 @@ pub fn java_path_allowed(path: &Path) -> bool {
         || trusted_java_paths().iter().any(|c| same_file(Path::new(c), path))
 }
 
+/// Java the user picked for every build that has none of its own. Stored next to
+/// the trusted index and re-validated on read: the file may have been written by
+/// an older build, and the binary can disappear between launches.
+fn default_java_index() -> PathBuf {
+    data_dir().join("java").join("default.json")
+}
+
+pub fn default_java() -> Option<PathBuf> {
+    let raw: String = std::fs::read(default_java_index())
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())?;
+    let p = PathBuf::from(raw.trim());
+    java_path_allowed(&p).then_some(p)
+}
+
+pub fn default_java_info() -> Option<JavaInfo> {
+    let p = default_java()?;
+    let version = java_version_of(&p)?;
+    Some(JavaInfo { path: p.to_string_lossy().to_string(), version })
+}
+
+pub fn set_default_java(path: Option<String>) -> Result<(), String> {
+    let path = path.map(|p| p.trim().to_string()).filter(|p| !p.is_empty());
+    let Some(path) = path else {
+        let _ = std::fs::remove_file(default_java_index());
+        return Ok(());
+    };
+    if !java_path_allowed(Path::new(&path)) {
+        return Err("Путь к Java не распознан — выбери её кнопкой «Выбрать Java»".into());
+    }
+    write_json_atomic(&default_java_index(), &path).map_err(|e| format!("Не удалось сохранить выбор: {}", e))
+}
+
 pub fn detect_java() -> Vec<JavaInfo> {
     let mut seen = std::collections::HashSet::new();
     let mut out = vec![];
@@ -550,6 +607,29 @@ mod tests {
 
         let missing = std::env::temp_dir().join("millida-java-guard").join("nope").join(bin_name);
         assert!(!java_path_allowed(&missing), "a path that does not exist cannot be a JRE");
+    }
+
+    /// The Java chosen in settings is started for every build that has none of
+    /// its own, so it goes through the same gate as a per-build path.
+    #[test]
+    fn default_java_refuses_unvouched_paths() {
+        let bin_name = if cfg!(target_os = "windows") { "java.exe" } else { "java" };
+        let planted = temp_file(bin_name);
+        assert!(
+            set_default_java(Some(planted.to_string_lossy().to_string())).is_err(),
+            "a file named like the JRE launcher but outside every known JRE location must not become the default Java"
+        );
+        assert!(
+            set_default_java(Some(temp_file("evil.exe").to_string_lossy().to_string())).is_err(),
+            "an arbitrary executable must never be stored as the default Java"
+        );
+    }
+
+    #[test]
+    fn downloadable_majors_are_a_closed_list() {
+        // The number reaches the Adoptium URL and a directory name.
+        assert!(JAVA_MAJORS.contains(&21), "the current default runtime must stay fetchable");
+        assert!(!JAVA_MAJORS.contains(&0), "a major the launcher cannot map to a release must not be requestable");
     }
 
     /// Writes the trusted-paths index into the launcher data directory, so it is

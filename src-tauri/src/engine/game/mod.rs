@@ -7,6 +7,7 @@ mod worlds;
 mod serversdat;
 mod playtime;
 mod fpsboost;
+mod repair;
 
 pub(crate) use mcmeta::*;
 pub use java::*;
@@ -17,3 +18,4 @@ pub use worlds::*;
 pub use serversdat::*;
 pub use playtime::*;
 pub use fpsboost::*;
+pub use repair::*;

@@ -262,18 +262,22 @@ fn spawn_log_reader(reader: Box<dyn std::io::Read + Send>, file: Arc<Mutex<std::
     });
 }
 
-/// User-selected Java for a profile; a missing or no longer allowed path falls
-/// back to the bundled JRE. The setting is re-checked here because the file on
-/// disk may have been written by an older build that did not validate it.
+/// User-selected Java for a profile, then the Java chosen in settings for every
+/// build; a missing or no longer allowed path falls back to the bundled JRE. The
+/// setting is re-checked here because the file on disk may have been written by
+/// an older build that did not validate it.
 pub fn profile_java(profile: &str) -> Option<PathBuf> {
-    let s: Value = std::fs::read(profile_dir(profile).join("millida-settings.json"))
+    let own = std::fs::read(profile_dir(profile).join("millida-settings.json"))
         .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())?;
-    s["javaPath"]
-        .as_str()
-        .map(str::trim)
-        .filter(|p| !p.is_empty() && java_path_allowed(Path::new(p)))
-        .map(PathBuf::from)
+        .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
+        .and_then(|s| {
+            s["javaPath"]
+                .as_str()
+                .map(str::trim)
+                .filter(|p| !p.is_empty() && java_path_allowed(Path::new(p)))
+                .map(PathBuf::from)
+        });
+    own.or_else(default_java)
 }
 
 /// JVM flags that hand the JVM something to execute: native/Java agents, hooks

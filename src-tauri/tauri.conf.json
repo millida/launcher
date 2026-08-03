@@ -52,7 +52,9 @@
           "data:",
           "blob:",
           "asset:",
-          "http://asset.localhost"
+          "http://asset.localhost",
+          "https://cdn.millida.net",
+          "https://api.millida.net"
         ],
         "connect-src": [
           "'self'",
@@ -125,7 +127,9 @@
           "blob:",
           "asset:",
           "http://asset.localhost",
-          "http://127.0.0.1:5173"
+          "http://127.0.0.1:5173",
+          "https://cdn.millida.net",
+          "https://api.millida.net"
         ],
         "connect-src": [
           "'self'",

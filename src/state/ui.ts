@@ -25,6 +25,7 @@ export interface PrelaunchState {
   stage: number
   msg: string | null
   pct: number
+  mode: 'launch' | 'repair'
 }
 
 export type ToastKind = 'ok' | 'error'
@@ -81,7 +82,7 @@ export const useUi = create<UiState>((set, get) => ({
     shotOverlay: emptyModal(),
     mpOverlay: emptyModal(),
   },
-  prelaunch: { open: false, sub: 'Fabulously Optimized · Fabric', stage: 0, msg: null, pct: 0 },
+  prelaunch: { open: false, sub: 'Fabulously Optimized · Fabric', stage: 0, msg: null, pct: 0, mode: 'launch' },
   setLogged: (v) => set({ logged: v }),
   // Transition keeps the current screen mounted while the next chunk loads,
   // instead of flashing the empty Suspense fallback.

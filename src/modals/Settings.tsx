@@ -6,16 +6,23 @@ import {
   cacheSize,
   clearCache,
   convertFileSrc,
+  defaultJava,
   discordClear,
+  downloadJavaRuntime,
+  javaMajors,
   listJavaRuntimes,
   openGameFolder,
+  overlaySetEnabled,
+  overlayState,
   pickGameDir,
+  pickJavaPath,
   pickWallpaper,
   removeJavaRuntime,
+  setDefaultJava,
   setGameDir,
 } from '../ipc/commands'
 import { refreshProfiles } from '../state/profiles'
-import type { JavaRuntime } from '../ipc/commands'
+import type { JavaInfo, JavaRuntime, OverlayState } from '../ipc/commands'
 import { Icon } from '../components/Icon'
 import { uiConfirm } from '../state/confirm'
 import { ColorPicker } from '../components/ColorPicker'
@@ -25,6 +32,7 @@ import { discordPresence } from '../lib/launch'
 import { fetchSounds, playSound, setSoundMode, soundMode, soundVolume } from '../lib/sound'
 import type { SoundMode } from '../lib/sound'
 import { Slider } from '../components/Slider'
+import { Select } from '../components/Select'
 import { writePref } from '../lib/prefs'
 import { useWallpaper } from '../state/wallpaper'
 import { setTelemetryEnabled, telemetryEnabled, track } from '../lib/telemetry'
@@ -33,7 +41,7 @@ import { getAccount, getMillidaAccount, useAccounts } from '../state/accounts'
 import { accKindLabel } from '../lib/format'
 import { WALLET_URL, openExt } from '../lib/api'
 import { setSkinSource, skinSource } from '../lib/gameProfile'
-import { applyTheme, storedTheme } from '../lib/theme'
+import { applyTheme, storedTheme, withColorFade } from '../lib/theme'
 import type { ThemeId } from '../lib/theme'
 import { startTour } from '../state/tour'
 import { buildDiagnostics } from '../lib/diag'
@@ -163,6 +171,7 @@ export function Settings({ on }: { on: boolean }) {
   const [accent, setAccent] = useState(initialAccent)
   const [customHex, setCustomHex] = useState(initialCustomHex)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [overlay, setOverlay] = useState<OverlayState>({ enabled: false, hotkey: 'Alt+M' })
   const [cacheMb, setCacheMb] = useState<number | null>(null)
   const [clearing, setClearing] = useState(false)
   const [moving, setMoving] = useState(false)
@@ -182,6 +191,10 @@ export function Settings({ on }: { on: boolean }) {
   const [diagText, setDiagText] = useState('')
   const [diagOpen, setDiagOpen] = useState(false)
   const [javas, setJavas] = useState<JavaRuntime[]>([])
+  const [javaDef, setJavaDef] = useState<JavaInfo | null>(null)
+  const [majors, setMajors] = useState<number[]>([8, 11, 17, 21])
+  const [javaWant, setJavaWant] = useState(21)
+  const [javaBusy, setJavaBusy] = useState(0)
   const [upd, setUpd] = useState(pendingUpdate)
   const [updBusy, setUpdBusy] = useState(false)
   const updStaged = useUpdate((s) => s.staged)
@@ -199,7 +212,12 @@ export function Settings({ on }: { on: boolean }) {
       void cacheSize()
         .then((b) => setCacheMb(Math.round(b / 1024 / 1024)))
         .catch(() => setCacheMb(0))
+    void overlayState().then(setOverlay).catch(() => {})
     void listJavaRuntimes().then(setJavas).catch(() => {})
+    void defaultJava().then(setJavaDef).catch(() => {})
+    void javaMajors()
+      .then((m) => m.length && setMajors(m))
+      .catch(() => {})
   }, [on])
 
   const changeDir = async () => {
@@ -306,7 +324,7 @@ export function Settings({ on }: { on: boolean }) {
                     cursor: 'pointer',
                   }}
                   onClick={() => {
-                    applyAccent(a)
+                    withColorFade(() => applyAccent(a))
                     setAccent(a.id)
                   }}
                 ></button>
@@ -342,6 +360,25 @@ export function Settings({ on }: { on: boolean }) {
                 ) : null}
               </div>
             </div>
+          </div>
+          <div className="set-row">
+            <span className="lab">
+              Оверлей поверх игры
+              <small>Сообщения друзей прямо в Minecraft. Вызов — {overlay.hotkey}. Нужен оконный или безрамочный режим</small>
+            </span>
+            <span
+              className={'tgl' + (overlay.enabled ? ' on' : '')}
+              id="setOverlay"
+              onClick={(e) => {
+                e.stopPropagation()
+                const next = !overlay.enabled
+                setOverlay({ ...overlay, enabled: next })
+                overlaySetEnabled(next).catch((err) => {
+                  setOverlay({ ...overlay, enabled: !next })
+                  showToast('Оверлей не включился: ' + err, 'error')
+                })
+              }}
+            ></span>
           </div>
           <div className="set-row">
             <span className="lab">
@@ -494,9 +531,85 @@ export function Settings({ on }: { on: boolean }) {
           </div>
           <div className="set-row">
             <span className="lab">
-              Java<small>Идёт в комплекте, менять не нужно</small>
+              Java
+              <small>
+                {javaDef
+                  ? javaDef.version + ' · ' + javaDef.path
+                  : 'Авто — лаунчер сам скачает ту версию, которую просит сборка'}
+              </small>
             </span>
-            <span className="set-val">Авто · 21.0.5</span>
+            <button
+              className="btn sm secondary"
+              onClick={() => {
+                if (!hasTauri()) {
+                  showToast('Выбор Java доступен в приложении', 'error')
+                  return
+                }
+                pickJavaPath()
+                  .then((j) => {
+                    if (!j) return
+                    return setDefaultJava(j.path).then(() => {
+                      setJavaDef(j)
+                      showToast('Java для всех сборок: ' + j.version)
+                    })
+                  })
+                  .catch((e) => showToast('' + e, 'error'))
+              }}
+            >
+              <Icon id="i-list" /> Указать путь
+            </button>
+            <button
+              className="btn sm secondary"
+              disabled={!javaDef}
+              title={javaDef ? 'Вернуться к автоматическому выбору' : 'Java и так выбирается автоматически'}
+              onClick={() => {
+                setDefaultJava(null)
+                  .then(() => {
+                    setJavaDef(null)
+                    showToast('Java снова выбирается автоматически')
+                  })
+                  .catch((e) => showToast('' + e, 'error'))
+              }}
+            >
+              Авто
+            </button>
+          </div>
+          <div className="set-row">
+            <span className="lab">
+              Скачать Java
+              <small>
+                {javaBusy
+                  ? 'Качаем Java ' + javaBusy + ', это займёт минуту…'
+                  : 'Возьмём сборку Eclipse Temurin с проверкой контрольной суммы'}
+              </small>
+            </span>
+            <Select
+              value={String(javaWant)}
+              options={majors.map((m) => ({ value: String(m), label: 'Java ' + m }))}
+              onChange={(v) => setJavaWant(Number(v))}
+              width={130}
+            />
+            <button
+              className="btn sm secondary"
+              disabled={!!javaBusy}
+              onClick={() => {
+                if (!hasTauri()) {
+                  showToast('Скачивание Java доступно в приложении', 'error')
+                  return
+                }
+                setJavaBusy(javaWant)
+                downloadJavaRuntime(javaWant)
+                  .then((v) => {
+                    showToast('Java готова: ' + v)
+                    void listJavaRuntimes().then(setJavas).catch(() => {})
+                  })
+                  .catch((e) => showToast('' + e, 'error'))
+                  .finally(() => setJavaBusy(0))
+              }}
+            >
+              {javaBusy ? <span className="spin"></span> : <Icon id="i-download" />}
+              {javaBusy ? 'Качаем…' : 'Скачать'}
+            </button>
           </div>
           <div className="set-row">
             <span className="lab">
