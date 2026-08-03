@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
 import { Icon } from './Icon'
+import { cap } from '../lib/format'
+import { usePopover } from '../lib/popover'
 
 export interface PillOption {
   value: string
@@ -31,43 +32,34 @@ export function FilterPill({
   align?: 'left' | 'right'
   width?: number
 }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
-    document.addEventListener('mousedown', onDoc)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDoc)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [open])
+  const pop = usePopover<HTMLDivElement>()
 
   const cur = options.find((o) => o.value === value)
   const nSel = values ? values.length : 0
   const active = multi ? nSel > 0 : defaultValue !== undefined && value !== defaultValue
-  const trigger = multi ? label + (nSel ? ' · ' + nSel : '') : cur ? cur.label : label
+  // Untouched filters name the facet ("Загрузчик"), not their catch-all value
+  // ("любой"), which said nothing about what the pill even filters.
+  const showsValue = !!cur && (defaultValue === undefined || active)
+  const trigger = multi ? label + (nSel ? ' · ' + nSel : '') : showsValue ? cap(cur!.label) : label
 
   return (
-    <div className="mk-pill-wrap" ref={ref}>
+    <div className="mk-pill-wrap" ref={pop.ref}>
       <button
         type="button"
-        className={'mk-pill' + (active ? ' is-active' : '') + (open ? ' open' : '')}
-        aria-expanded={open}
+        className={'mk-pill' + (active ? ' is-active' : '') + (pop.open ? ' open' : '')}
+        aria-expanded={pop.open}
         title={label}
-        onClick={() => setOpen((v) => !v)}
+        onClick={pop.toggle}
       >
         {icon ? <Icon id={icon} /> : null}
         <span>{trigger}</span>
         <Icon id="i-chev-d" className="mk-chev-inline" />
       </button>
-      {open ? (
-        <div className={'mk-menu' + (align === 'right' ? ' end' : '')} style={{ minWidth: width + 'px' }}>
+      {pop.mounted ? (
+        <div
+          className={'mk-menu' + (align === 'right' ? ' end' : '') + (pop.closing ? ' closing' : '')}
+          style={{ minWidth: width + 'px' }}
+        >
           {options.map((o) => {
             const on = multi ? (values || []).includes(o.value) : o.value === value
             return (
@@ -79,12 +71,12 @@ export function FilterPill({
                   if (multi) onToggle && onToggle(o.value)
                   else {
                     onPick && onPick(o.value)
-                    setOpen(false)
+                    pop.close()
                   }
                 }}
               >
                 {multi ? <span className={'mk-check' + (on ? ' on' : '')}>{on ? <Icon id="i-check" /> : null}</span> : null}
-                <span className="mk-menu-lab">{o.label}</span>
+                <span className="mk-menu-lab">{cap(o.label)}</span>
                 {!multi && on ? <Icon id="i-check" /> : null}
               </button>
             )

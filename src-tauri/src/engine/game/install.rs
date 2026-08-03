@@ -58,12 +58,31 @@ async fn fetch_libs(jobs: &[LibJob], app: &AppHandle, from: f32, to: f32, title:
 /// Fabric/Quilt manifests and Forge profiles carry no hashes, but their maven
 /// repos publish a sibling `.sha1`, which is verified when present.
 /// Returns the first error when `strict`, otherwise skips unavailable files.
+/// Loader libraries come without hashes from their meta APIs, so outside a
+/// repair the only affordable check is existence.
+fn loader_lib_intact(path: &Path) -> bool {
+    if !path.exists() {
+        return false;
+    }
+    if !deep_verify() {
+        return true;
+    }
+    !path.extension().is_some_and(|e| e.eq_ignore_ascii_case("jar")) || zip_readable(path)
+}
+
 async fn fetch_missing(jobs: &[LibJob], strict: bool) -> Result<(), String> {
     let items: Vec<(String, PathBuf)> = jobs
         .iter()
-        .filter(|j| !j.path.exists() && !j.url.is_empty())
+        .filter(|j| !j.url.is_empty() && !loader_lib_intact(&j.path))
         .map(|j| (j.url.clone(), j.path.clone()))
         .collect();
+    // Maven does not always publish a .sha1, and without one an existing file is
+    // accepted as is — a jar already judged broken has to go before the refetch.
+    for (_, path) in &items {
+        if path.exists() {
+            let _ = std::fs::remove_file(path);
+        }
+    }
     let results: Vec<Result<(), String>> = futures::stream::iter(items.into_iter().map(|(url, path)| async move {
         let sha1 = maven_sha1(&url).await;
         download_checked(&url, &path, sha1.as_deref().map(Sum::Sha1), None).await
@@ -269,6 +288,7 @@ pub async fn install_loader_with_java(
         }
     }
     emit(app, "files", 15.0, "Библиотеки…");
+    check_cancel()?;
     fetch_libs(&jobs, app, 15.0, 45.0, "Библиотеки…").await?;
     for j in &jobs {
         cp_put(&mut cp, &j.rel, j.path.clone());
@@ -541,6 +561,7 @@ pub async fn install_loader_with_java(
     classpath.push(client_jar);
 
     emit(app, "assets", 55.0, "Ассеты игры…");
+    check_cancel()?;
     let (Some(aidx_url), Some(aidx_id)) = (vjson["assetIndex"]["url"].as_str(), vjson["assetIndex"]["id"].as_str())
     else {
         return Err(format!("В описании версии {} нет индекса ассетов", vid));
@@ -591,6 +612,9 @@ pub async fn install_loader_with_java(
             let done = done.clone();
             let app = app.clone();
             async move {
+                if cancelled() {
+                    return true;
+                }
                 let dest = root.join("assets/objects").join(&pre).join(&hash);
                 // An asset object's name is its sha1.
                 let bad = download_checked(&format!("{}/{}/{}", RESOURCES, pre, hash), &dest, Some(Sum::Sha1(&hash)), None)
@@ -610,6 +634,7 @@ pub async fn install_loader_with_java(
         if !failed.iter().any(|b| *b) {
             let _ = std::fs::write(&done_marker, b"ok");
         }
+        check_cancel()?;
     }
 
     if needs_log4j_config(vjson["id"].as_str().unwrap_or_default()) {

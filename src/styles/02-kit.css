@@ -33,6 +33,16 @@
   --m-shadow-md:0 8px 20px -8px rgba(15,26,18,.08); --m-shadow-lg:0 20px 44px -16px rgba(15,26,18,.13);
   color-scheme:light;
 }
+/* Theme and accent live in CSS variables, and a variable swap repaints with no
+   transition of its own. The class is switched on only while the palette
+   changes, so the blanket rule never costs anything during normal use. */
+:root.color-fade,
+:root.color-fade *,
+:root.color-fade *::before,
+:root.color-fade *::after{
+  transition:background-color 300ms ease,border-color 300ms ease,color 300ms ease,
+    fill 300ms ease,stroke 300ms ease,box-shadow 300ms ease,outline-color 300ms ease !important;
+}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{
   font-family:var(--m-font);font-size:14px;line-height:1.5;font-weight:500;
@@ -105,14 +115,15 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 
 /* ============ Sidebar ============ */
 .sidebar{width:236px;flex-shrink:0;background:var(--m-surface);border-radius:var(--m-r-card);padding:10px;display:flex;flex-direction:column;gap:2px;transition:width .24s var(--m-ease-move,ease)}
-.nav-item{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:10px;font-size:14px;font-weight:600;color:var(--m-fg-muted);width:100%;text-align:left;transition:all var(--m-t-fast)}
+/* The active tint fades in: switching sections should read as a move, not a
+   flash. Colour is quicker than the background so the label leads. */
+.nav-item{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:10px;font-size:14px;font-weight:600;color:var(--m-fg-subtle);width:100%;text-align:left;
+  transition:background-color 280ms var(--m-ease-move),color 180ms ease,padding 300ms var(--m-ease-move)}
 .nav-item:hover{background:rgba(255,255,255,.04);color:var(--m-fg)}
 :root[data-theme="light"] .nav-item:hover{background:rgba(18,26,20,.04)}
 .nav-item.active{background:var(--m-accent-soft);color:var(--m-accent)}
 .nav-group{display:flex;flex-direction:column;gap:2px;width:100%}
 .sidebar.collapsed .nav-group{align-items:center}
-/* Expanded rail: hovering one item dims the rest */
-.sidebar:not(.collapsed) .nav-group:has(.nav-item:hover) .nav-item:not(:hover){opacity:.5}
 /* The label is always present and only faded: animating in from display:none
    is impossible, so it would snap instead of fade. */
 .sidebar.collapsed .nav-item::after{
@@ -146,10 +157,17 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 .sidebar.collapsed .quick-play,
 .sidebar.collapsed .acc-chevron,
 .sidebar.collapsed .dl-card{display:none}
+/* Icons stay left-aligned and only their padding changes: centring them inside a
+   box that is still 216px wide teleported the avatar to the middle of the rail
+   before it had shrunk, which read as the picture blinking out. The end padding
+   is what centres each icon once the rail reaches 46px. */
 .sidebar.collapsed .nav-item,
 .sidebar.collapsed .side-collapse,
 .sidebar.collapsed .account,
-.sidebar.collapsed .quick-open{justify-content:center;gap:0;width:46px;padding-left:0;padding-right:0}
+.sidebar.collapsed .quick-open{gap:0;width:100%;padding-right:0}
+.sidebar.collapsed .nav-item{padding-left:14px}
+.sidebar.collapsed .account{padding-left:5px}
+.sidebar.collapsed .quick-open{padding-left:8px}
 .sidebar.collapsed .nav-item{position:relative}
 .sidebar.collapsed .quick-row{justify-content:center;padding:3px}
 .sidebar.collapsed .quick-open{flex:none}
@@ -194,9 +212,48 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 .chat-head img{width:32px;height:32px;border-radius:8px;image-rendering:pixelated}
 .chat-head b{flex:1;font-size:14px}
 .chat-body{flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:8px}
-.msg{max-width:82%;padding:9px 12px;border-radius:12px;font-size:13.5px;line-height:1.45;background:var(--m-surface-2);align-self:flex-start}
+.msg-row{display:flex;flex-direction:column;align-items:flex-start;gap:3px}
+.msg-row.me{align-items:flex-end}
+.msg{max-width:82%;padding:9px 12px;border-radius:12px;font-size:13.5px;line-height:1.45;background:var(--m-surface-2);align-self:flex-start;display:flex;flex-direction:column;gap:5px}
 .msg.me{background:var(--m-accent-soft);color:var(--m-fg);align-self:flex-end}
 .msg time{display:block;font-size:10.5px;color:var(--m-fg-faint);margin-top:3px}
+.msg-text{white-space:pre-wrap;word-break:break-word}
+.msg.grouped{border-top-left-radius:5px}
+.msg.me.grouped{border-top-left-radius:12px;border-top-right-radius:5px}
+.msg.sending{opacity:.62}
+.msg.failed{background:var(--m-danger-soft,rgba(220,70,70,.16))}
+.msg.bare{padding:5px}
+.msg-meta{display:flex;align-items:center;gap:4px;align-self:flex-end;font-size:10.5px;color:var(--m-fg-faint);line-height:1}
+.msg-tick{width:13px;height:7px;border-left:1.6px solid currentColor;border-bottom:1.6px solid currentColor;transform:rotate(-45deg) translate(1px,-2px);opacity:.55}
+.msg-tick.read{box-shadow:4px 4px 0 -1.6px currentColor;opacity:.95;color:var(--m-accent)}
+.msg-tick.pending{width:8px;height:8px;border:1.6px solid currentColor;border-radius:50%;border-bottom-color:transparent;transform:none;animation:spin .9s linear infinite}
+.msg-img{max-width:100%;border-radius:9px;display:block;cursor:zoom-in}
+.msg-fail{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--m-fg-muted)}
+.msg-fail button{background:none;border:0;padding:0;color:var(--m-accent);font-size:11.5px;font-weight:650;cursor:pointer}
+.chat-day{align-self:center;font-size:11px;font-weight:650;color:var(--m-fg-faint);padding:6px 10px;border-radius:999px;background:var(--m-surface-2)}
+.chat-typing{align-self:flex-start;font-size:12px;color:var(--m-fg-subtle);font-style:italic}
+.chat-down{position:absolute;right:16px;bottom:74px;width:34px;height:34px;display:grid;place-items:center;border-radius:50%;background:var(--m-surface-2);border:1px solid var(--m-border);box-shadow:var(--m-shadow-lg);color:var(--m-fg-muted);cursor:pointer;z-index:5}
+.chat-down:hover{color:var(--m-accent)}
+.chat-down svg{width:16px;height:16px}
+/* Voice message */
+.voice{display:flex;align-items:center;gap:9px;min-width:190px}
+.voice-play{width:32px;height:32px;flex:none;display:grid;place-items:center;border-radius:50%;background:var(--m-accent);color:var(--m-accent-fg,#fff);cursor:pointer;border:0}
+.voice-play svg{width:14px;height:14px}
+.voice-wave{flex:1;display:flex;align-items:center;gap:2px;height:26px;cursor:pointer}
+.voice-wave i{flex:1;min-width:2px;border-radius:2px;background:var(--m-fg-faint);opacity:.5}
+.voice-wave i.on{background:var(--m-accent);opacity:1}
+.voice-time{font-size:11px;color:var(--m-fg-subtle);font-variant-numeric:tabular-nums;flex:none}
+/* Recording bar replaces the composer while the mic is live */
+.chat-rec{gap:10px}
+.chat-rec-x{width:36px;height:36px;flex:none;display:grid;place-items:center;border-radius:11px;background:var(--m-surface-2);border:1px solid var(--m-border);color:var(--m-fg-muted);cursor:pointer}
+.chat-rec-x svg{width:15px;height:15px}
+.chat-rec-dot{width:9px;height:9px;border-radius:50%;background:#e5484d;flex:none;animation:recPulse 1.1s ease-in-out infinite}
+@keyframes recPulse{0%,100%{opacity:1}50%{opacity:.35}}
+.chat-rec-wave{flex:1;min-width:0;display:flex;align-items:center;justify-content:flex-end;gap:2px;height:24px;overflow:hidden}
+.chat-rec-wave i{width:3px;flex:none;border-radius:2px;background:var(--m-accent);opacity:.85;transition:height .07s linear}
+.chat-rec-left{font-size:11px;color:#e5a04d;flex:none;font-variant-numeric:tabular-nums}
+.chat-rec-time{font-size:12.5px;font-weight:650;font-variant-numeric:tabular-nums}
+
 /* In-chat server invite widget */
 .msg-invite{max-width:88%;align-self:flex-start;display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:14px;background:var(--m-surface-2);border:1px solid var(--m-border)}
 .msg-invite.me{align-self:flex-end;background:var(--m-accent-soft);border-color:transparent}
@@ -208,15 +265,18 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 .msg-invite-name{font-size:14px;font-weight:650}
 .msg-invite-addr{font-size:12px;color:var(--m-fg-subtle);font-variant-numeric:tabular-nums}
 .msg-invite .btn{width:100%}
-.chat-input{position:relative;display:flex;align-items:center;gap:8px;padding:12px;border-top:1px solid var(--m-border)}
-.chat-emoji-btn{width:38px;height:38px;flex:none;display:grid;place-items:center;border-radius:11px;background:var(--m-surface-2);color:var(--m-fg-subtle);border:1px solid var(--m-border);cursor:pointer;transition:color var(--m-t-fast),background var(--m-t-fast)}
+.chat-input{position:relative;display:flex;align-items:center;gap:6px;padding:10px 12px;border-top:1px solid var(--m-border)}
+/* The row gained an attach button, and a flex item defaults to min-width:auto:
+   without this the field refuses to shrink and pushes send off the panel. */
+.chat-input>.input{flex:1 1 0;min-width:0;height:36px;padding:0 12px}
+.chat-emoji-btn{width:36px;height:36px;flex:none;display:grid;place-items:center;border-radius:11px;background:var(--m-surface-2);color:var(--m-fg-subtle);border:1px solid var(--m-border);cursor:pointer;transition:color var(--m-t-fast),background var(--m-t-fast)}
 .chat-emoji-btn:hover{color:var(--m-accent);background:var(--m-surface)}
 .chat-emoji-btn svg{width:18px;height:18px}
 .chat-emoji-pop{position:absolute;left:12px;bottom:calc(100% + 6px);width:280px;display:grid;grid-template-columns:repeat(8,1fr);gap:2px;padding:10px;border-radius:14px;background:var(--m-surface-2);border:1px solid var(--m-border);box-shadow:var(--m-shadow-lg);z-index:20}
 .chat-emoji{display:grid;place-items:center;height:30px;border:0;background:none;border-radius:8px;font-size:17px;cursor:pointer;transition:background var(--m-t-fast)}
 .chat-emoji:hover{background:var(--m-surface)}
 /* Send button: square icon button */
-.chat-send{width:38px;height:38px;flex:none;display:grid;place-items:center;border-radius:11px;background:var(--m-grad);color:var(--m-accent-fg,#fff);transition:transform var(--m-t-fast),opacity var(--m-t-fast)}
+.chat-send{width:36px;height:36px;flex:none;display:grid;place-items:center;border-radius:11px;background:var(--m-grad);color:var(--m-accent-fg,#fff);transition:transform var(--m-t-fast),opacity var(--m-t-fast)}
 .chat-send:hover{transform:translateY(-1px)}
 .chat-send:disabled{opacity:.4;pointer-events:none}
 .chat-send svg{width:17px;height:17px}
@@ -259,7 +319,7 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 .dl-fill{height:100%;border-radius:99px;background:var(--m-grad);width:63%;transition:width .4s var(--m-ease-move)}
 
 /* Account block at the sidebar bottom */
-.account{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--m-r-ctl);cursor:pointer;transition:background var(--m-t-fast)}
+.account{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--m-r-ctl);cursor:pointer;transition:background var(--m-t-fast),padding 300ms var(--m-ease-move)}
 .account:hover{background:var(--m-surface-2)}
 .ava{width:36px;height:36px;border-radius:8px;background:var(--m-inset);display:grid;place-items:center;overflow:hidden;flex-shrink:0}
 .ava canvas{width:32px;height:32px;image-rendering:pixelated}
@@ -305,7 +365,9 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 .btn.md{height:48px;padding:0 22px;font-size:14px}
 .btn.lg{height:56px;padding:0 30px;font-size:15px}
 .btn.primary{background:var(--m-grad);color:var(--m-accent-fg,#fff)}
-.btn.primary:hover{filter:brightness(1.1);transform:translateY(-1px);box-shadow:0 10px 28px rgba(var(--m-accent-rgb),.35)}
+/* No accent glow: a blurred drop shadow spreads downwards only and read as a
+   lighting bug rather than as depth. */
+.btn.primary:hover{filter:brightness(1.1);transform:translateY(-1px)}
 .btn.primary:active{transform:translateY(1px);filter:brightness(.95)}
 .btn.secondary{background:var(--m-surface-2);color:var(--m-fg)}
 .btn.secondary:hover{background:var(--m-raised)}
@@ -360,7 +422,8 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 .pill svg{width:13px;height:13px}
 .dot{width:7px;height:7px;border-radius:50%;background:var(--m-success);display:inline-block;flex:none}
 .segs{display:flex;gap:8px;flex-wrap:wrap}
-.seg{height:36px;padding:0 15px;border-radius:49px;font-size:13px;font-weight:600;color:var(--m-fg-muted);background:var(--m-surface);display:inline-flex;align-items:center;gap:7px;transition:all 350ms var(--m-ease-move)}
+.seg{height:36px;padding:0 15px;border-radius:49px;font-size:13px;font-weight:600;color:var(--m-fg-muted);background:var(--m-surface);display:inline-flex;align-items:center;gap:7px;
+  transition:background-color 300ms var(--m-ease-move),color 180ms ease}
 .seg:hover{color:var(--m-fg);background:var(--m-surface-2)}
 .seg.on{background:var(--m-accent-soft);color:var(--m-accent)}
 .seg svg{width:14px;height:14px}
@@ -434,6 +497,9 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 .hero-cta .btn.running:hover .run-dot{background:#fff;box-shadow:none}
 .hero-cta .btn.danger{background:rgba(12,14,13,.78);color:#FF9C92;box-shadow:inset 0 0 0 1.5px rgba(255,156,146,.75),0 8px 24px rgba(0,0,0,.38);backdrop-filter:blur(10px)}
 .hero-cta .btn.danger:hover{background:var(--m-danger);color:#fff;box-shadow:inset 0 0 0 1.5px var(--m-danger),0 10px 28px rgba(0,0,0,.42)}
+.hero-cta .btn.glass{background:rgba(12,14,13,.72);color:rgba(242,244,243,.92);box-shadow:0 8px 24px rgba(0,0,0,.38);backdrop-filter:blur(10px)}
+.hero-cta .btn.glass:hover{background:rgba(12,14,13,.88);color:#fff;transform:translateY(-1px)}
+.hero-cta .btn.glass svg{color:var(--m-accent)}
 /* Wallpaper switch button */
 .hero-tools{position:absolute;top:14px;right:14px;z-index:3;display:flex;gap:8px;align-items:center}
 .wp-btn{position:relative;z-index:3;height:32px;padding:0 12px;border-radius:var(--m-r-pill);background:rgba(12,14,13,.72);color:rgba(242,244,243,.85);font-size:12.5px;font-weight:600;display:inline-flex;align-items:center;gap:7px;transition:all var(--m-t-fast)}
@@ -496,13 +562,17 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 .modal .sub{font-size:13px;color:var(--m-fg-muted);margin-bottom:18px}
 /* Filters: pill triggers plus an .mk-menu panel */
 .mk-pill-wrap{position:relative;display:inline-block}
-.mk-pill{cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 13px;border-radius:var(--m-r-pill);background:color-mix(in srgb,var(--m-fg) 6%,transparent);font-size:13px;font-weight:600;color:var(--m-fg-muted);border:0;transition:all var(--m-t-fast) ease;white-space:nowrap}
+.mk-pill{cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 13px;border-radius:var(--m-r-pill);background:color-mix(in srgb,var(--m-fg) 6%,transparent);font-size:13px;font-weight:600;color:var(--m-fg-muted);border:0;
+  transition:background-color 280ms var(--m-ease-move),color 180ms ease;white-space:nowrap}
 .mk-pill:hover{color:var(--m-fg);background:var(--m-raised)}
 .mk-pill.is-active{background:var(--m-accent-soft);color:var(--m-accent)}
 .mk-pill>svg{width:14px;height:14px;flex:none}
 .mk-pill .mk-chev-inline{width:14px;height:14px;transition:transform var(--m-t-fast)}
 .mk-pill.open .mk-chev-inline{transform:rotate(180deg)}
-.mk-menu{position:absolute;top:calc(100% + 6px);left:0;z-index:80;max-height:min(60vh,340px);overflow-y:auto;padding:6px;border-radius:var(--m-r-card);background:var(--m-raised);border:1px solid var(--m-border);box-shadow:var(--m-shadow-lg);animation:frMenuIn .12s ease}
+.mk-menu{position:absolute;top:calc(100% + 6px);left:0;z-index:80;max-height:min(60vh,340px);overflow-y:auto;padding:6px;border-radius:var(--m-r-card);background:var(--m-raised);border:1px solid var(--m-border);box-shadow:var(--m-shadow-lg);animation:frMenuIn .14s ease}
+.mk-menu.closing{animation:frMenuOut .13s ease forwards;pointer-events:none}
+@keyframes frMenuOut{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-4px)}}
+@media(prefers-reduced-motion:reduce){.mk-menu,.mk-menu.closing{animation:none}}
 .mk-menu.end{left:auto;right:0}
 .mk-menu-opt{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:8px 11px;border:0;background:none;border-radius:8px;color:var(--m-fg-muted);font-size:13px;font-weight:550;cursor:pointer;white-space:nowrap;transition:background var(--m-t-fast),color var(--m-t-fast)}
 .mk-menu-opt:hover{background:var(--m-surface-2);color:var(--m-fg)}
@@ -533,6 +603,7 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 .m-select-btn svg{width:15px;height:15px;flex:none;color:var(--m-fg-faint);transition:transform var(--m-t-fast)}
 .m-select-btn.open svg{transform:rotate(180deg)}
 .m-select-pop{position:absolute;top:calc(100% + 6px);left:0;z-index:80;min-width:100%;max-height:320px;overflow-y:auto;padding:6px;border-radius:12px;background:var(--m-surface-2);border:1px solid var(--m-border);box-shadow:var(--m-shadow-lg);animation:frMenuIn .12s ease}
+.m-select-pop.closing{animation:frMenuOut .13s ease forwards;pointer-events:none}
 .m-select-pop.right{left:auto;right:0}
 .m-select-opt{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:8px 10px;border:0;background:none;border-radius:8px;color:var(--m-fg);font-size:12.5px;cursor:pointer;white-space:nowrap;transition:background var(--m-t-fast)}
 .m-select-opt:hover{background:var(--m-surface)}
@@ -580,8 +651,16 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 .build-cover{aspect-ratio:1;height:auto;background:var(--m-inset);position:relative;overflow:hidden}
 .cover-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
 .cover-img.block{object-fit:contain;padding:13%;image-rendering:auto;background:var(--m-inset)}
-.build-cover .mini-play{position:absolute;right:8px;bottom:8px;width:30px;height:30px;border-radius:9px;background:var(--m-grad);color:#fff;display:grid;place-items:center;opacity:0;transform:translateY(4px);transition:all var(--m-t-fast)}
+.build-cover .mini-play{position:absolute;right:8px;bottom:8px;width:30px;height:30px;border-radius:9px;background:var(--m-grad);color:#fff;display:grid;place-items:center;opacity:0;transform:translateY(6px) scale(.9);
+  transition:opacity 160ms ease,transform 260ms var(--m-ease-out)}
 .build-card:hover .mini-play{opacity:1;transform:none}
+.build-cover .mini-play:hover{transform:scale(1.14)}
+.build-cover .mini-play:active{transform:scale(.92)}
+/* The arrow keeps nudging down while the card is hovered: the button installs
+   something, and the pull reads as that before the tooltip does. */
+.build-card:hover .ready-go svg{animation:dl-nudge 1.5s var(--m-ease-move) infinite}
+@keyframes dl-nudge{0%,62%,100%{transform:translateY(0)}30%{transform:translateY(3px)}}
+@media(prefers-reduced-motion:reduce){.build-card:hover .ready-go svg{animation:none}}
 .build-run{position:absolute;left:6px;top:6px;display:inline-flex;align-items:center;gap:5px;padding:3px 8px 3px 6px;border-radius:99px;background:rgba(12,14,13,.78);color:#fff;font-size:10.5px;font-weight:650;letter-spacing:.01em}
 .build-card.running .build-body b{color:var(--m-accent)}
 .build-body{padding:9px 11px 11px;display:flex;flex-direction:column;gap:1px;flex:1 1 auto}

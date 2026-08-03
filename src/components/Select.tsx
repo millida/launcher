@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
 import { Icon } from './Icon'
+import { usePopover } from '../lib/popover'
 
 export interface SelectOption {
   value: string
@@ -25,39 +25,22 @@ export function Select({
   placeholder?: string
   align?: 'left' | 'right'
 }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
+  const pop = usePopover<HTMLDivElement>()
   const cur = options.find((o) => o.value === value)
 
-  useEffect(() => {
-    if (!open) return
-    const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('mousedown', onDoc)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDoc)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [open])
-
   return (
-    <div className="m-select" ref={ref} style={{ width }}>
+    <div className="m-select" ref={pop.ref} style={{ width }}>
       <button
         type="button"
-        className={'m-select-btn' + (open ? ' open' : '')}
+        className={'m-select-btn' + (pop.open ? ' open' : '')}
         disabled={disabled}
-        onClick={() => setOpen((v) => !v)}
+        onClick={pop.toggle}
       >
         <span className="m-select-val">{cur ? cur.label : placeholder || '—'}</span>
         <Icon id="i-chev-d" />
       </button>
-      {open ? (
-        <div className={'m-select-pop' + (align === 'right' ? ' right' : '')}>
+      {pop.mounted ? (
+        <div className={'m-select-pop' + (align === 'right' ? ' right' : '') + (pop.closing ? ' closing' : '')}>
           {options.map((o) => (
             <button
               key={o.value}
@@ -65,7 +48,7 @@ export function Select({
               className={'m-select-opt' + (o.value === value ? ' on' : '')}
               onClick={() => {
                 onChange(o.value)
-                setOpen(false)
+                pop.close()
               }}
             >
               <span className="m-select-opt-body">

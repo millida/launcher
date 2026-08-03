@@ -51,6 +51,24 @@ pub async fn pick_java_path() -> Result<Option<engine::JavaInfo>, String> {
 }
 
 #[tauri::command]
+pub async fn default_java() -> Option<engine::JavaInfo> {
+    super::blocking(engine::default_java_info).await.ok().flatten()
+}
+
+#[tauri::command]
+pub async fn set_default_java(path: Option<String>) -> Result<(), String> {
+    super::blocking(move || engine::set_default_java(path)).await?
+}
+
+#[tauri::command]
+pub fn java_majors() -> Vec<u64> { engine::JAVA_MAJORS.to_vec() }
+
+#[tauri::command]
+pub async fn download_java_runtime(app: tauri::AppHandle, major: u64) -> Result<String, String> {
+    engine::download_java_runtime(&app, major).await
+}
+
+#[tauri::command]
 pub fn list_java_runtimes() -> Vec<engine::JavaRuntime> { engine::list_java_runtimes() }
 
 #[tauri::command]
@@ -125,19 +143,7 @@ pub async fn ping_server(addr: String) -> Result<engine::PingResult, String> {
         .map_err(|e| e.to_string())?
 }
 
-/// Re-runs the install with full checksum verification. Normal launches only
-/// compare file sizes, since rehashing everything on each launch is too slow.
 #[tauri::command]
-pub async fn repair_profile(app: tauri::AppHandle, profile: String) -> Result<(), String> {
-    let p = engine::load_profiles()
-        .into_iter()
-        .find(|p| p.name == profile)
-        .ok_or("сборка не найдена")?;
-    engine::set_deep_verify(true);
-    let java = engine::profile_java(&profile);
-    let r =
-        engine::install_loader_with_java(&app, &p.version, &p.loader_id(), p.loader_version.as_deref(), java).await;
-    engine::set_deep_verify(false);
-    r?;
-    Ok(())
+pub async fn repair_profile(app: tauri::AppHandle, profile: String) -> Result<engine::RepairReport, String> {
+    engine::repair_profile_files(app, profile).await
 }

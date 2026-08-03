@@ -7,6 +7,7 @@ pub fn discord_presence(
     playing: bool,
     large_image: Option<String>,
     large_text: Option<String>,
+    join_url: Option<String>,
 ) {
     discord::set_activity(
         &details,
@@ -14,6 +15,7 @@ pub fn discord_presence(
         playing,
         &large_image.unwrap_or_default(),
         &large_text.unwrap_or_default(),
+        &join_url.unwrap_or_default(),
     );
 }
 

@@ -4,7 +4,7 @@ import { FilterPill } from '../components/FilterPill'
 import { ModRow } from '../components/ModRow'
 import { hasTauri } from '../ipc/tauri'
 import { listVersions } from '../ipc/commands'
-import { LOADER_NAME, RU_LOADER, loaderId } from '../lib/format'
+import { LOADER_NAME, RU_LOADER, cap, loaderId } from '../lib/format'
 import { F_LOADERS, F_SIDES, F_SORTS, F_VERS, MOD_TABS, WORLD_CATS, useMods } from '../state/mods'
 import { useProfiles } from '../state/profiles'
 
@@ -60,14 +60,14 @@ export function Mods({ on }: { on: boolean }) {
 
   const chips: { key: string; label: string; clear: () => void }[] = []
   if (mods.fLoader !== 'любой')
-    chips.push({ key: 'l', label: mods.fLoader, clear: () => (mods.set({ fLoader: 'любой' }), reload()) })
+    chips.push({ key: 'l', label: cap(RU_LOADER(mods.fLoader)), clear: () => (mods.set({ fLoader: 'любой' }), reload()) })
   if (mods.fVer !== 'любая')
     chips.push({ key: 'v', label: mods.fVer, clear: () => (mods.set({ fVer: 'любая' }), reload()) })
   if (isMr && mods.fSide !== 'any') {
     const sl = F_SIDES.find((s) => s[0] === mods.fSide)
     chips.push({ key: 's', label: sl ? sl[1] : mods.fSide, clear: () => (mods.set({ fSide: 'any' }), reload()) })
   }
-  mods.fCats.forEach((c) => chips.push({ key: 'c:' + c, label: RU_LOADER(c), clear: () => mods.toggleCat(c) }))
+  mods.fCats.forEach((c) => chips.push({ key: 'c:' + c, label: cap(RU_LOADER(c)), clear: () => mods.toggleCat(c) }))
   if (isWorld && mods.fWorldCat) {
     const wc = WORLD_CATS.find((c) => c[0] === mods.fWorldCat)
     if (wc) chips.push({ key: 'w', label: wc[1], clear: () => (mods.set({ fWorldCat: 0 }), reload()) })
@@ -170,7 +170,7 @@ export function Mods({ on }: { on: boolean }) {
               label="Загрузчик"
               defaultValue="любой"
               value={mods.fLoader}
-              options={F_LOADERS.map((v) => ({ value: v, label: v }))}
+              options={F_LOADERS.map((v) => ({ value: v, label: RU_LOADER(v) }))}
               onPick={(v) => (mods.set({ fLoader: v }), reload())}
             />
           </>

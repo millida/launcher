@@ -5,6 +5,8 @@ mod discord;
 mod secrets;
 mod commands;
 pub mod tray;
+mod overlay;
+mod mic;
 
 /// Directories the webview may read through `asset://`: the media files it
 /// plays and shows, nothing else. The token vault (`secrets.bin`, `vault.key`)
@@ -37,6 +39,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
             // Portable builds never run an installer, so the deep link scheme is
             // registered at startup as well.
@@ -49,6 +52,10 @@ pub fn run() {
             allow_assets(app.handle());
             tray::init(app.handle());
             engine::arm_selfheal(app.handle());
+            if let Some(w) = app.get_webview_window("main") {
+                mic::allow_microphone(&w);
+            }
+            overlay::rebind_hotkey(app.handle());
             if let Ok(mode) = std::env::var("MILLIDA_AUTOTEST") {
                 let h = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
@@ -171,6 +178,10 @@ pub fn run() {
             commands::launch::detect_java,
             commands::launch::test_java,
             commands::launch::pick_java_path,
+            commands::launch::default_java,
+            commands::launch::set_default_java,
+            commands::launch::java_majors,
+            commands::launch::download_java_runtime,
             commands::launch::list_java_runtimes,
             commands::launch::remove_java_runtime,
             commands::launch::get_playtime,
@@ -217,7 +228,12 @@ pub fn run() {
             commands::system::show_from_tray,
             commands::system::set_restore_on_exit,
             commands::system::ui_prefs,
-            commands::system::set_ui_pref
+            commands::system::set_ui_pref,
+            commands::overlay::overlay_state,
+            commands::overlay::overlay_set_enabled,
+            commands::overlay::overlay_set_hotkey,
+            commands::overlay::overlay_notify,
+            commands::overlay::overlay_hide
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -259,6 +275,38 @@ mod tests {
     fn capabilities_json() -> serde_json::Value {
         let raw = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/capabilities/default.json"));
         serde_json::from_str(raw).expect("capabilities/default.json must be valid JSON")
+    }
+
+    /// The overlay is a second window over a running game. It holds no window
+    /// controls and no plugin access on purpose: everything it can do goes
+    /// through the app's own commands, which the core validates itself.
+    const OVERLAY_PERMISSIONS: &[&str] = &["core:event:allow-listen", "core:event:allow-unlisten"];
+
+    fn overlay_capabilities_json() -> serde_json::Value {
+        let raw = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/capabilities/overlay.json"));
+        serde_json::from_str(raw).expect("capabilities/overlay.json must be valid JSON")
+    }
+
+    #[test]
+    fn overlay_capabilities_are_pinned() {
+        let caps = overlay_capabilities_json();
+        let actual: Vec<String> = caps["permissions"]
+            .as_array()
+            .expect("capabilities/overlay.json must contain a \"permissions\" array")
+            .iter()
+            .map(|p| p.as_str().expect("permissions must be plain strings").to_string())
+            .collect();
+        assert_eq!(
+            actual, OVERLAY_PERMISSIONS,
+            "the overlay window's permission set changed. It sits on top of the game and is the              easiest window to reach, so anything granted here should be argued for first."
+        );
+        let windows: Vec<String> = caps["windows"]
+            .as_array()
+            .expect("capabilities/overlay.json must name its windows")
+            .iter()
+            .map(|w| w.as_str().unwrap_or_default().to_string())
+            .collect();
+        assert_eq!(windows, vec!["overlay".to_string()], "this capability must not reach the main window");
     }
 
     fn registered_commands() -> Vec<String> {

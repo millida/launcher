@@ -37,7 +37,6 @@ import {
   readLog,
   removeServer,
   renameProfile,
-  repairProfile,
   saveProfileSettings,
   scanContent,
   setFpsBoost,
@@ -60,6 +59,7 @@ import { incompatibleWith } from '../lib/compat'
 import { useProfiles } from '../state/profiles'
 import { useInstance } from '../state/instance'
 import { closeModal, setScreen, showToast, useUi } from '../state/ui'
+import { runRepair } from '../lib/repair'
 import { joinWithAuth, realLaunch, showLaunchError, startPrelaunch } from '../lib/launch'
 import { useMods } from '../state/mods'
 import { useScreens } from '../state/screens'
@@ -1691,23 +1691,15 @@ export function InstancePage() {
               </div>
               <div className="set-row">
                 <span className="lab">
-                  Починить сборку<small>Дозагрузить недостающие и битые файлы</small>
+                  Починить сборку<small>Сверить файлы игры и моды по хешам, перекачать битые</small>
                 </span>
                 <button
                   className="btn sm secondary"
                   id="bsRepair"
                   disabled={repairBusy}
                   onClick={() => {
-                    if (!hasTauri()) {
-                      showToast('Доступно в приложении')
-                      return
-                    }
                     setRepairBusy(true)
-                    showToast('Чиним сборку — проверяем файлы…')
-                    repairProfile(profile!)
-                      .then(() => showToast('Сборка починена — файлы на месте'))
-                      .catch((e) => showToast('Не удалось починить: ' + e, 'error'))
-                      .finally(() => setRepairBusy(false))
+                    runRepair(profile!).finally(() => setRepairBusy(false))
                   }}
                 >
                   <Icon id="i-restart" /> {repairBusy ? 'Чиним…' : 'Починить'}

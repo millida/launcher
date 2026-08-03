@@ -540,8 +540,18 @@
 .fr-msg{position:relative}
 .fr-unread{min-width:17px;height:17px;margin-left:6px;padding:0 5px;border-radius:var(--m-r-pill);background:var(--m-danger);color:#fff;font-size:10.5px;font-weight:700;display:inline-grid;place-items:center}
 .fr-row.unread .fr-nick{color:var(--m-fg)}
+.fr-now{display:flex;flex-direction:column;gap:9px;padding:12px;margin:6px 0 2px;border-radius:12px;background:var(--m-inset);border:1px solid var(--m-accent-soft)}
+.fr-now-head{display:flex;align-items:flex-start;gap:10px;min-width:0}
+.fr-now-ic{flex:none;width:30px;height:30px;display:grid;place-items:center;border-radius:9px;background:var(--m-surface);color:var(--m-accent)}
+.fr-now-ic svg{width:15px;height:15px}
+.fr-now-body{display:flex;flex-direction:column;gap:2px;min-width:0}
+.fr-now-body b{font-size:11px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--m-fg-faint)}
+.fr-now-name{font-size:13.5px;font-weight:650;color:var(--m-fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fr-now-addr{font-size:12px;color:var(--m-fg-subtle);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fr-now-build{font-size:12px;color:var(--m-fg-subtle)}
+.fr-now-join{width:100%}
+.fr-now-hint{margin:0}
 .fr-stat{display:flex;flex-direction:column;gap:6px;padding:12px;margin:4px 0 2px;border-radius:12px;background:var(--m-inset)}
-.fr-stat-join{width:100%;margin-bottom:4px}
 .fr-stat-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px;font-size:12.5px;color:var(--m-fg-subtle)}
 .fr-stat-row b{font-weight:650;color:var(--m-fg);text-align:right}
 .fr-stat-empty{padding:8px 2px 0}
@@ -621,3 +631,37 @@
 @keyframes bootUpdSlide{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}
 @media (prefers-reduced-motion: reduce){.boot-upd-fill.pulse{animation:none;width:100%}}
 .boot-upd-note{font-size:11.5px;color:var(--m-fg-faint)}
+
+/* In-game overlay: its own window, so the page itself must stay transparent
+   and must not scroll — anything opaque here paints over Minecraft. */
+html.overlay-root,html.overlay-root body,html.overlay-root #root{background:transparent;overflow:hidden;height:100%}
+.ov{position:fixed;inset:0;font-family:inherit}
+.ov-passive{pointer-events:none}
+.ov-cards{position:absolute;top:22px;right:22px;display:flex;flex-direction:column;gap:8px;width:320px}
+.ov-card{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:rgba(18,18,22,.86);border:1px solid rgba(255,255,255,.12);box-shadow:0 10px 30px rgba(0,0,0,.45);color:#f2f2f5;animation:ovIn .18s ease}
+.ov-card img{width:30px;height:30px;border-radius:8px;image-rendering:pixelated;flex:none}
+.ov-card-body{min-width:0;display:flex;flex-direction:column;gap:1px}
+.ov-card-body b{font-size:12.5px;font-weight:650}
+.ov-card-body span{font-size:12px;color:rgba(242,242,245,.72);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@keyframes ovIn{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}
+.ov-active{background:rgba(0,0,0,.32);display:grid;place-items:center}
+.ov-panel{width:440px;max-height:70vh;display:flex;flex-direction:column;border-radius:16px;background:rgba(20,20,25,.96);border:1px solid rgba(255,255,255,.14);box-shadow:0 24px 60px rgba(0,0,0,.55);color:#f2f2f5;overflow:hidden}
+.ov-head{display:flex;align-items:center;gap:9px;padding:13px 15px;border-bottom:1px solid rgba(255,255,255,.1)}
+.ov-head svg{width:16px;height:16px}
+.ov-head b{flex:1;font-size:13.5px}
+.ov-hint{font-size:11px;color:rgba(242,242,245,.5)}
+.ov-x{width:26px;height:26px;display:grid;place-items:center;border:0;background:none;color:rgba(242,242,245,.6);border-radius:7px;cursor:pointer}
+.ov-x:hover{background:rgba(255,255,255,.1);color:#fff}
+.ov-x svg{width:13px;height:13px}
+.ov-list{flex:1;overflow-y:auto;padding:12px 15px;display:flex;flex-direction:column;gap:9px}
+.ov-msg{display:flex;flex-direction:column;gap:2px;max-width:88%;padding:8px 11px;border-radius:11px;background:rgba(255,255,255,.08);font-size:13px;align-self:flex-start}
+.ov-msg.me{align-self:flex-end;background:rgba(120,170,255,.22)}
+.ov-msg b{font-size:11px;color:rgba(242,242,245,.6);font-weight:650}
+.ov-empty{font-size:12.5px;color:rgba(242,242,245,.55);text-align:center;padding:18px 0}
+.ov-error{padding:0 15px 8px;font-size:11.5px;color:#ff9b9b}
+.ov-input{display:flex;gap:8px;padding:12px 15px;border-top:1px solid rgba(255,255,255,.1)}
+.ov-input input{flex:1;height:36px;padding:0 12px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#f2f2f5;font-size:13px;outline:none}
+.ov-input input:focus{border-color:rgba(140,180,255,.6)}
+.ov-input button{width:36px;height:36px;flex:none;display:grid;place-items:center;border:0;border-radius:10px;background:var(--m-accent,#5b8cff);color:#fff;cursor:pointer}
+.ov-input button:disabled{opacity:.4;pointer-events:none}
+.ov-input button svg{width:15px;height:15px}

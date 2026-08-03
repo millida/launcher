@@ -49,7 +49,7 @@ pub fn reconnect() -> DiscordStatus {
     if let Ok(mut t) = LAST_TRY.lock() {
         *t = None;
     }
-    set_activity("В лаунчере", "Millida Launcher", false, "", "");
+    set_activity("В лаунчере", "Millida Launcher", false, "", "", "");
     status()
 }
 
@@ -89,8 +89,19 @@ fn ensure_connected(guard: &mut Option<DiscordIpcClient>) -> bool {
     }
 }
 
+const JOIN_PREFIX: &str = "https://millida.net/join?";
+
 /// `large_image` may be an https URL: Discord proxies external images itself.
-pub fn set_activity(details: &str, state: &str, playing: bool, large_image: &str, large_text: &str) {
+/// `join_url` replaces the download button while the player is on a server; it is
+/// restricted to our own join page because the value comes from the webview.
+pub fn set_activity(
+    details: &str,
+    state: &str,
+    playing: bool,
+    large_image: &str,
+    large_text: &str,
+    join_url: &str,
+) {
     let mut guard = match CLIENT.lock() {
         Ok(g) => g,
         Err(p) => p.into_inner(),
@@ -114,6 +125,18 @@ pub fn set_activity(details: &str, state: &str, playing: bool, large_image: &str
 
     let big = if large_image.starts_with("https://") { large_image } else { "logo" };
     let big_text = if large_text.is_empty() { "Millida Launcher" } else { large_text };
+    let join_ok = playing && join_url.starts_with(JOIN_PREFIX) && join_url.len() <= 512;
+    let buttons = if join_ok {
+        vec![
+            activity::Button::new("Зайти на сервер", join_url),
+            activity::Button::new("Скачать лаунчер", SITE_URL),
+        ]
+    } else {
+        vec![
+            activity::Button::new("Скачать лаунчер", SITE_URL),
+            activity::Button::new("Discord Millida", DISCORD_URL),
+        ]
+    };
     let mut act = activity::Activity::new()
         .activity_type(ActivityType::Playing)
         .details(details)
@@ -125,10 +148,7 @@ pub fn set_activity(details: &str, state: &str, playing: bool, large_image: &str
                 .small_image("logo")
                 .small_text(if playing { "В игре" } else { "В лаунчере" }),
         )
-        .buttons(vec![
-            activity::Button::new("Скачать лаунчер", SITE_URL),
-            activity::Button::new("Discord Millida", DISCORD_URL),
-        ]);
+        .buttons(buttons);
     if let Some(ts) = *since {
         act = act.timestamps(activity::Timestamps::new().start(ts));
     }
