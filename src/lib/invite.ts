@@ -3,10 +3,15 @@ export const INVITE_PREFIX = '⟪mc-invite⟫'
 const JOIN_PAGE = 'https://millida.net/join'
 const ADDR_RE = /^[a-zA-Z0-9]([a-zA-Z0-9._-]{1,118})?(:\d{1,5})?$/
 
+/** An invite may point at any Minecraft server, so the address is the only gate. */
+export function isServerAddr(addr: string): boolean {
+  return ADDR_RE.test((addr || '').trim())
+}
+
 /** Public page that hands the address back to the launcher over `millida://join`. */
 export function joinPageUrl(addr: string, name?: string | null): string {
   const host = (addr || '').trim()
-  if (!ADDR_RE.test(host)) return ''
+  if (!isServerAddr(host)) return ''
   const qs = new URLSearchParams({ addr: host })
   const label = (name || '').trim()
   if (label && label !== host) qs.set('name', label.slice(0, 48))

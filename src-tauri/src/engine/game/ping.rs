@@ -71,21 +71,39 @@ fn motd_text(v: &serde_json::Value) -> String {
         .join("")
 }
 
+const LOCAL_REFUSED: &str = "локальные и домашние адреса лаунчер не проверяет";
+
+/// A bracketed IPv6 literal has to be split before the last colon is taken for
+/// a port, otherwise `[::1]:25565` and `::1` both end up as garbage hosts.
+fn split_host_port(addr: &str) -> (String, u16) {
+    if let Some((host, tail)) = addr.strip_prefix('[').and_then(|rest| rest.split_once(']')) {
+        let port = tail.strip_prefix(':').and_then(|p| p.parse().ok()).unwrap_or(25565);
+        return (host.to_string(), port);
+    }
+    match addr.rsplit_once(':') {
+        Some((h, p)) if !h.contains(':') => (h.to_string(), p.parse().unwrap_or(25565)),
+        _ => (addr.to_string(), 25565),
+    }
+}
+
 pub fn ping(addr: &str) -> Result<PingResult, String> {
-    let (host, port) = match addr.rsplit_once(':') {
-        Some((h, p)) => (h.to_string(), p.parse::<u16>().unwrap_or(25565)),
-        None => (addr.to_string(), 25565),
-    };
+    let (host, port) = split_host_port(addr);
+    // The webview picks the address, so without this the command is a probe for
+    // the local machine, the LAN and cloud metadata. The literal host is judged
+    // before any resolution, so a machine without IPv6 still refuses `::1`
+    // instead of failing with a lookup error.
+    if host_is_local(&host) {
+        return Err(LOCAL_REFUSED.into());
+    }
     let sock = (host.as_str(), port)
         .to_socket_addrs()
         .map_err(|e| e.to_string())?
         .next()
         .ok_or("не удалось разрешить адрес")?;
-    // The webview picks the address, so without this the command is a probe for
-    // the local machine, the LAN and cloud metadata. Both the literal host and
-    // the address it resolved to are checked, so DNS rebinding gains nothing.
-    if host_is_local(&host) || host_is_local(&sock.ip().to_string()) {
-        return Err("локальные и домашние адреса лаунчер не проверяет".into());
+    // The address a name resolved to is judged too, so DNS rebinding gains
+    // nothing.
+    if host_is_local(&sock.ip().to_string()) {
+        return Err(LOCAL_REFUSED.into());
     }
     let start = std::time::Instant::now();
     let mut s = TcpStream::connect_timeout(&sock, Duration::from_secs(4)).map_err(|e| e.to_string())?;
@@ -148,6 +166,8 @@ mod tests {
             ("192.168.1.1:80", "private ranges expose the user's router"),
             ("169.254.169.254:80", "link-local is where cloud metadata lives"),
             ("[::1]:25565", "IPv6 loopback must be refused too"),
+            ("::1", "a bare IPv6 literal must not be mangled into a port"),
+            ("[fd00::1]:25565", "unique local IPv6 is the user's own network"),
         ];
         for (addr, why) in cases {
             let err = match ping(addr) {

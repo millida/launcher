@@ -26,6 +26,7 @@ import type { JavaInfo, JavaRuntime, OverlayState } from '../ipc/commands'
 import { Icon } from '../components/Icon'
 import { uiConfirm } from '../state/confirm'
 import { ColorPicker } from '../components/ColorPicker'
+import { AudioSettings } from '../components/AudioSettings'
 import { checkForUpdate, pendingUpdate } from '../lib/updater'
 import { useUpdate } from '../state/update'
 import { discordPresence } from '../lib/launch'
@@ -361,6 +362,7 @@ export function Settings({ on }: { on: boolean }) {
               </div>
             </div>
           </div>
+          <AudioSettings />
           <div className="set-row">
             <span className="lab">
               Оверлей поверх игры

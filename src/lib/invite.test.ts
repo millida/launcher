@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { joinPageUrl } from './invite'
+import { encodeInvite, isServerAddr, joinPageUrl, parseInvite } from './invite'
 
 // Значение уходит в кнопку Discord-активности, которую видят посторонние:
 // любой адрес, который смог бы утащить клик на другой хост, обязан отсеяться.
@@ -40,5 +40,36 @@ describe('joinPageUrl', () => {
     expect(joinPageUrl('play.millida.net', 'play.millida.net')).toBe(
       'https://millida.net/join?addr=play.millida.net',
     )
+  })
+})
+
+// Приглашение из чата шлётся на любой сервер, не только на millida-хостинг:
+// адрес — единственная проверка, и она обязана быть той же, что у ссылки.
+describe('isServerAddr', () => {
+  const ADDRS: Array<[string, boolean, string]> = [
+    ['hypixel.net', true, 'чужой сервер'],
+    ['mc.example.co.uk:25565', true, 'чужой сервер с портом'],
+    ['play.millida.net', true, 'свой сервер'],
+    [' play.millida.net ', true, 'пробелы по краям обрезаются'],
+    ['', false, 'пустой адрес'],
+    ['-bad.example.net', false, 'дефис в начале'],
+    ['https://evil.com', false, 'схема в адресе'],
+    ['evil.com/join', false, 'путь в адресе'],
+  ]
+  for (const [addr, ok, why] of ADDRS) {
+    test(`${why}: ${addr || '<пусто>'}`, () => {
+      expect(isServerAddr(addr)).toBe(ok)
+    })
+  }
+})
+
+describe('encodeInvite', () => {
+  test('приглашение переживает кодирование и разбор', () => {
+    const back = parseInvite(encodeInvite('mc.example.net:25566', 'Сервер друга'))
+    expect(back).toEqual({ addr: 'mc.example.net:25566', name: 'Сервер друга' })
+  })
+
+  test('обычный текст приглашением не считается', () => {
+    expect(parseInvite('заходи на mc.example.net')).toBe(null)
   })
 })

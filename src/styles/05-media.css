@@ -665,3 +665,23 @@ html.overlay-root,html.overlay-root body,html.overlay-root #root{background:tran
 .ov-input button{width:36px;height:36px;flex:none;display:grid;place-items:center;border:0;border-radius:10px;background:var(--m-accent,#5b8cff);color:#fff;cursor:pointer}
 .ov-input button:disabled{opacity:.4;pointer-events:none}
 .ov-input button svg{width:15px;height:15px}
+
+/* Audio device settings */
+.aud-meter-row{display:flex;align-items:center;gap:10px}
+.aud-meter{flex:1;min-width:0;height:6px;border-radius:3px;background:var(--m-inset);overflow:hidden}
+.aud-meter i{display:block;height:100%;border-radius:3px;background:var(--m-accent);transition:width .06s linear}
+
+/* ---- Image lightbox ---- */
+.lightbox{position:fixed;inset:0;z-index:900;display:grid;place-items:center;background:rgba(0,0,0,.88);overscroll-behavior:contain}
+.lightbox-img{max-width:92%;max-height:92%;border-radius:10px;user-select:none;transform-origin:center;transition:transform .12s ease-out;cursor:zoom-in}
+.lightbox-img.zoomed{cursor:grab;transition:none}
+.lightbox-img.zoomed:active{cursor:grabbing}
+.lightbox-top{position:absolute;top:16px;right:16px;display:flex;align-items:center;gap:8px}
+.lightbox-bar{display:flex;align-items:center;gap:6px;padding:6px;border-radius:12px;background:var(--m-surface-2);border:1px solid var(--m-border);box-shadow:var(--m-shadow-lg)}
+.lightbox-close{display:flex;align-items:center;gap:7px;height:42px;padding:0 14px;border:1px solid var(--m-border);border-radius:12px;background:var(--m-surface-2);color:var(--m-fg);font-size:13px;font-weight:650;cursor:pointer;box-shadow:var(--m-shadow-lg);transition:background var(--m-t-fast),color var(--m-t-fast)}
+.lightbox-close:hover{background:var(--m-danger);border-color:var(--m-danger);color:#fff}
+.lightbox-close svg{width:15px;height:15px}
+.lightbox-btn{width:30px;height:30px;display:grid;place-items:center;border:0;padding:0;border-radius:8px;background:transparent;color:var(--m-fg-muted);cursor:pointer}
+.lightbox-btn:hover{background:var(--m-inset);color:var(--m-fg)}
+.lightbox-btn svg{width:15px;height:15px}
+.lightbox-zoom{min-width:44px;text-align:center;font-size:12px;font-weight:600;color:var(--m-fg-muted);font-variant-numeric:tabular-nums}

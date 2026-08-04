@@ -14,6 +14,7 @@
   --m-r-mini:8px; --m-r-ctl:12px; --m-r-md:16px; --m-r-card:14px; --m-r-pill:999px;
   --m-shadow-md:0 8px 24px -8px rgba(0,0,0,.28); --m-shadow-lg:0 20px 48px -16px rgba(0,0,0,.45);
   --m-t-fast:120ms; --m-t-base:200ms; --m-t-slow:300ms;
+  --m-side-t:320ms;
   --m-ease-out:cubic-bezier(.16,1,.3,1); --m-ease-move:cubic-bezier(.32,.72,0,1);
   --m-font:'Geist','Manrope',system-ui,-apple-system,sans-serif;
   --m-font-brand:'Unbounded','Geist',sans-serif;
@@ -114,19 +115,22 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 .app{flex:1;display:flex;min-height:0;padding:0 12px 12px;gap:12px}
 
 /* ============ Sidebar ============ */
-.sidebar{width:236px;flex-shrink:0;background:var(--m-surface);border-radius:var(--m-r-card);padding:10px;display:flex;flex-direction:column;gap:2px;transition:width .24s var(--m-ease-move,ease)}
+/* Every part of the rail moves on one duration and one curve: when the width,
+   the paddings and the labels each had their own timing, the items appeared to
+   stutter against the edge that was still travelling. */
+.sidebar{width:236px;flex-shrink:0;background:var(--m-surface);border-radius:var(--m-r-card);padding:10px;display:flex;flex-direction:column;gap:2px;will-change:width;transition:width var(--m-side-t) var(--m-ease-move)}
 /* The active tint fades in: switching sections should read as a move, not a
    flash. Colour is quicker than the background so the label leads. */
-.nav-item{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:10px;font-size:14px;font-weight:600;color:var(--m-fg-subtle);width:100%;text-align:left;
-  transition:background-color 280ms var(--m-ease-move),color 180ms ease,padding 300ms var(--m-ease-move)}
+.nav-item{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:10px;font-size:14px;font-weight:600;color:var(--m-fg-subtle);width:100%;text-align:left;position:relative;
+  transition:background-color 280ms var(--m-ease-move),color 180ms ease,padding var(--m-side-t) var(--m-ease-move),gap var(--m-side-t) var(--m-ease-move)}
 .nav-item:hover{background:rgba(255,255,255,.04);color:var(--m-fg)}
 :root[data-theme="light"] .nav-item:hover{background:rgba(18,26,20,.04)}
 .nav-item.active{background:var(--m-accent-soft);color:var(--m-accent)}
 .nav-group{display:flex;flex-direction:column;gap:2px;width:100%}
-.sidebar.collapsed .nav-group{align-items:center}
-/* The label is always present and only faded: animating in from display:none
-   is impossible, so it would snap instead of fade. */
-.sidebar.collapsed .nav-item::after{
+/* One tooltip for every `data-tip` on the collapsed rail — nav items, the
+   collapse button, the account chip. It is always present and only faded:
+   animating in from display:none is impossible, so it would snap. */
+.sidebar.collapsed [data-tip]::after{
   content:attr(data-tip);position:absolute;left:calc(100% + 12px);top:50%;
   transform:translate(-8px,-50%) scale(.96);transform-origin:left center;
   background:var(--m-surface-2);color:var(--m-fg);border:1px solid var(--m-border);
@@ -135,28 +139,35 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
   z-index:80;pointer-events:none;
   opacity:0;visibility:hidden;
   transition:opacity .17s var(--m-ease-move,ease),transform .22s var(--m-ease-move,ease),visibility 0s linear .22s}
-.sidebar.collapsed .nav-item:hover::after{
+.sidebar.collapsed [data-tip]:hover::after{
   opacity:1;visibility:visible;transform:translate(0,-50%) scale(1);
   transition:opacity .17s var(--m-ease-move,ease),transform .22s var(--m-ease-move,ease),visibility 0s}
-.nav-item svg{width:17px;height:17px}
+.nav-item svg{width:17px;height:17px;flex:none}
 /* Sidebar collapse button */
 .side-collapse{display:flex;align-items:center;gap:9px;padding:5px 8px 5px 6px;margin-bottom:6px;border-radius:10px;color:var(--m-fg-faint);font-size:12px;font-weight:600;width:100%;text-align:left;transition:all var(--m-t-fast)}
 .side-collapse:hover{color:var(--m-fg)}
-.side-collapse-ic{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;background:var(--m-inset);color:var(--m-fg-subtle);flex:none;transition:all var(--m-t-fast)}
+.side-collapse-ic{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;background:var(--m-inset);color:var(--m-fg-subtle);flex:none;transition:width var(--m-side-t) var(--m-ease-move),height var(--m-side-t) var(--m-ease-move),background var(--m-t-fast),color var(--m-t-fast)}
 .side-collapse:hover .side-collapse-ic{background:var(--m-accent-soft);color:var(--m-accent)}
 .side-collapse svg{width:15px;height:15px;flex:none}
 .sidebar.collapsed .side-collapse{margin-bottom:6px;padding:0}
 .sidebar.collapsed .side-collapse .side-collapse-ic{width:46px;height:34px}
-/* Collapsing is slightly slower than expanding so labels finish fading out. */
-.sidebar.collapsed{width:66px;align-items:center;transition:width .34s cubic-bezier(.32,.72,0,1)}
-.nav-label,.acc-meta,.quick-meta{transition:opacity .16s var(--m-ease-move,ease)}
+.sidebar.collapsed{width:66px}
+/* The label shrinks its own box in step with the rail instead of switching
+   width between 0 and auto: a width that jumps makes the text pop out past the
+   panel edge before the panel has grown to hold it. */
+.nav-label,.acc-meta,.quick-meta{max-width:170px;overflow:hidden;transition:opacity .18s var(--m-ease-move) 60ms,max-width var(--m-side-t) var(--m-ease-move)}
+/* Wrapping is what made the icons dip: at the narrow end of the animation a
+   two-word label broke onto a second line and grew the row for a few frames. */
+.nav-label{white-space:nowrap}
 .sidebar.collapsed .nav-label,
 .sidebar.collapsed .acc-meta,
-.sidebar.collapsed .quick-meta{opacity:0;width:0;min-width:0;flex:0 0 0;padding:0;overflow:hidden;white-space:nowrap;pointer-events:none;transition:opacity .11s var(--m-ease-move,ease)}
+.sidebar.collapsed .quick-meta{opacity:0;max-width:0;min-width:0;flex:0 0 0;padding:0;white-space:nowrap;pointer-events:none;transition:opacity .12s var(--m-ease-move),max-width var(--m-side-t) var(--m-ease-move)}
 .sidebar.collapsed .side-cap,
-.sidebar.collapsed .quick-play,
-.sidebar.collapsed .acc-chevron,
 .sidebar.collapsed .dl-card{display:none}
+/* Trailing controls fade and give up their width on the same curve as the rail;
+   dropping them with display:none re-flowed the row a frame before the move. */
+.sidebar.collapsed .quick-play,
+.sidebar.collapsed .acc-chevron{opacity:0;max-width:0;min-width:0;padding:0;overflow:hidden;pointer-events:none}
 /* Icons stay left-aligned and only their padding changes: centring them inside a
    box that is still 216px wide teleported the avatar to the middle of the rail
    before it had shrunk, which read as the picture blinking out. The end padding
@@ -165,32 +176,31 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 .sidebar.collapsed .side-collapse,
 .sidebar.collapsed .account,
 .sidebar.collapsed .quick-open{gap:0;width:100%;padding-right:0}
+.side-collapse{transition:gap var(--m-side-t) var(--m-ease-move),padding var(--m-side-t) var(--m-ease-move),color var(--m-t-fast)}
 .sidebar.collapsed .nav-item{padding-left:14px}
 .sidebar.collapsed .account{padding-left:5px}
 .sidebar.collapsed .quick-open{padding-left:8px}
-.sidebar.collapsed .nav-item{position:relative}
 .sidebar.collapsed .quick-row{justify-content:center;padding:3px}
 .sidebar.collapsed .quick-open{flex:none}
 .sidebar.collapsed .account{margin:0 auto}
 .sidebar.collapsed .nav-count{position:absolute;top:1px;right:1px;margin:0;min-width:16px;height:16px;padding:0 4px;font-size:10px}
 .sidebar.collapsed [data-tip]{position:relative}
-.sidebar.collapsed [data-tip]:not(.nav-item):hover::after{content:attr(data-tip);position:absolute;left:calc(100% + 12px);top:50%;transform:translateY(-50%);background:var(--m-surface-2);color:var(--m-fg);border:1px solid var(--m-border);padding:6px 10px;border-radius:8px;font-size:12.5px;font-weight:600;white-space:nowrap;box-shadow:var(--m-shadow-lg);z-index:80;pointer-events:none}
 .side-sep{height:1px;background:var(--m-border);margin:8px 4px;flex-shrink:0}
 .side-spacer{flex:1}
 .side-cap{font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--m-fg-faint);padding:2px 12px 6px}
 .nav-count{margin-left:auto;min-width:20px;height:20px;padding:0 6px;border-radius:var(--m-r-pill);background:var(--m-accent-soft);color:var(--m-accent);font-size:11.5px;font-weight:700;display:grid;place-items:center}
 .nav-badge{min-width:20px;height:20px;margin-left:6px;padding:0 6px;border-radius:var(--m-r-pill);background:var(--m-danger);color:#fff;font-size:11px;font-weight:700;display:grid;place-items:center}
 .sidebar.collapsed .nav-badge{position:absolute;top:1px;left:1px;margin:0;min-width:16px;height:16px;padding:0 4px;font-size:10px}
-.quick-row{display:flex;align-items:center;gap:4px;width:100%;padding:3px 8px 3px 12px;border-radius:10px;color:var(--m-fg-muted);transition:all var(--m-t-fast)}
+.quick-row{display:flex;align-items:center;gap:4px;width:100%;padding:3px 8px 3px 12px;border-radius:10px;color:var(--m-fg-muted);transition:padding var(--m-side-t) var(--m-ease-move),background var(--m-t-fast),color var(--m-t-fast)}
 .quick-row:hover{background:rgba(255,255,255,.04);color:var(--m-fg)}
 :root[data-theme="light"] .quick-row:hover{background:rgba(18,26,20,.04)}
-.quick-open{display:flex;align-items:center;gap:10px;flex:1;min-width:0;padding:5px 0;color:inherit;text-align:left}
+.quick-open{display:flex;align-items:center;gap:10px;flex:1;min-width:0;padding:5px 0;color:inherit;text-align:left;transition:padding var(--m-side-t) var(--m-ease-move),gap var(--m-side-t) var(--m-ease-move)}
 .quick-open img{width:30px;height:30px;border-radius:8px;object-fit:cover;flex-shrink:0}
 .quick-open>svg{width:20px;height:20px;flex-shrink:0;color:var(--m-fg-faint)}
-.quick-meta{min-width:0;display:flex;flex-direction:column;gap:1px}
+.quick-meta{min-width:0;max-width:170px;overflow:hidden;display:flex;flex-direction:column;gap:1px;transition:opacity .18s var(--m-ease-move) 60ms,max-width var(--m-side-t) var(--m-ease-move)}
 .quick-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .quick-ver{font-size:11px;color:var(--m-fg-subtle);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.quick-play{width:28px;height:28px;flex:none;display:grid;place-items:center;border-radius:8px;color:var(--m-fg-faint);transition:all var(--m-t-fast)}
+.quick-play{width:28px;height:28px;max-width:28px;flex:none;display:grid;place-items:center;border-radius:8px;color:var(--m-fg-faint);transition:background var(--m-t-fast),color var(--m-t-fast),opacity .14s var(--m-ease-move),max-width var(--m-side-t) var(--m-ease-move)}
 .quick-play svg{width:14px;height:14px}
 .quick-row:hover .quick-play{color:var(--m-accent);background:var(--m-accent-soft)}
 /* Friends */
@@ -208,6 +218,10 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 /* Chat panel */
 .chat{position:absolute;top:44px;right:0;bottom:0;width:330px;background:var(--m-raised);box-shadow:var(--m-shadow-lg);z-index:300;display:flex;flex-direction:column;transform:translateX(105%);transition:transform var(--m-t-slow) var(--m-ease-move);border-radius:14px 0 0 0}
 .chat.open{transform:none}
+.chat-grip{position:absolute;left:-3px;top:0;bottom:0;width:8px;cursor:ew-resize;z-index:10;touch-action:none}
+/* The highlight is an inset shadow on the panel, not a bar on the grip: only a
+   shadow is clipped by the panel's own corner radius and hugs the rounded top. */
+.chat:has(.chat-grip:hover),.chat:has(.chat-grip:active){box-shadow:var(--m-shadow-lg),inset 2px 0 0 var(--m-accent)}
 .chat-head{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--m-border)}
 .chat-head img{width:32px;height:32px;border-radius:8px;image-rendering:pixelated}
 .chat-head b{flex:1;font-size:14px}
@@ -222,11 +236,14 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 .msg.me.grouped{border-top-left-radius:12px;border-top-right-radius:5px}
 .msg.sending{opacity:.62}
 .msg.failed{background:var(--m-danger-soft,rgba(220,70,70,.16))}
-.msg.bare{padding:5px}
-.msg-meta{display:flex;align-items:center;gap:4px;align-self:flex-end;font-size:10.5px;color:var(--m-fg-faint);line-height:1}
-.msg-tick{width:13px;height:7px;border-left:1.6px solid currentColor;border-bottom:1.6px solid currentColor;transform:rotate(-45deg) translate(1px,-2px);opacity:.55}
-.msg-tick.read{box-shadow:4px 4px 0 -1.6px currentColor;opacity:.95;color:var(--m-accent)}
-.msg-tick.pending{width:8px;height:8px;border:1.6px solid currentColor;border-radius:50%;border-bottom-color:transparent;transform:none;animation:spin .9s linear infinite}
+/* Attachment-only bubble: the player needs room the text bubble does not. */
+.msg.bare{padding:6px 8px;max-width:92%;min-width:210px}
+.msg-meta{display:flex;align-items:center;gap:4px;align-self:flex-end;font-size:10.5px;line-height:1;color:var(--m-fg-faint)}
+/* A rotated CSS box does not agree with its own bounding box, so the tick sat
+   off the baseline next to the time. A glyph from the sprite lines up on its own. */
+.msg-tick{width:14px;height:14px;flex:none;opacity:.6}
+.msg-tick.read{opacity:1;color:var(--m-accent)}
+.msg-dot{width:8px;height:8px;flex:none;border:1.6px solid currentColor;border-radius:50%;border-bottom-color:transparent;animation:spin .9s linear infinite}
 .msg-img{max-width:100%;border-radius:9px;display:block;cursor:zoom-in}
 .msg-fail{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--m-fg-muted)}
 .msg-fail button{background:none;border:0;padding:0;color:var(--m-accent);font-size:11.5px;font-weight:650;cursor:pointer}
@@ -236,13 +253,19 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 .chat-down:hover{color:var(--m-accent)}
 .chat-down svg{width:16px;height:16px}
 /* Voice message */
-.voice{display:flex;align-items:center;gap:9px;min-width:190px}
-.voice-play{width:32px;height:32px;flex:none;display:grid;place-items:center;border-radius:50%;background:var(--m-accent);color:var(--m-accent-fg,#fff);cursor:pointer;border:0}
-.voice-play svg{width:14px;height:14px}
-.voice-wave{flex:1;display:flex;align-items:center;gap:2px;height:26px;cursor:pointer}
-.voice-wave i{flex:1;min-width:2px;border-radius:2px;background:var(--m-fg-faint);opacity:.5}
+/* The bubble is at most 82% of a 330px panel, so every part of the player has
+   to be able to shrink — a rigid strip pushed the duration outside it. */
+.voice{display:flex;align-items:center;gap:8px;min-width:0;width:100%}
+.voice-play{width:32px;height:32px;flex:none;display:grid;place-items:center;border-radius:50%;background:var(--m-accent);color:var(--m-accent-fg,#fff);cursor:pointer;border:0;padding:0;line-height:0}
+/* A triangle is heavier on its left, so a geometrically centred one reads as
+   shifted; the nudge puts its visual mass in the middle. */
+.voice-play svg{width:13px;height:13px}
+.voice-play.is-play svg{margin-left:2px}
+.voice-wave{flex:1 1 0;min-width:0;display:flex;align-items:center;gap:2px;height:26px;cursor:pointer;overflow:hidden}
+.voice-wave i{flex:1 1 0;min-width:1px;border-radius:2px;background:var(--m-fg-faint);opacity:.5}
 .voice-wave i.on{background:var(--m-accent);opacity:1}
-.voice-time{font-size:11px;color:var(--m-fg-subtle);font-variant-numeric:tabular-nums;flex:none}
+.voice-time.bad{color:#e5848a}
+.voice-time{font-size:11px;white-space:nowrap;color:var(--m-fg-subtle);font-variant-numeric:tabular-nums;flex:none}
 /* Recording bar replaces the composer while the mic is live */
 .chat-rec{gap:10px}
 .chat-rec-x{width:36px;height:36px;flex:none;display:grid;place-items:center;border-radius:11px;background:var(--m-surface-2);border:1px solid var(--m-border);color:var(--m-fg-muted);cursor:pointer}
@@ -319,11 +342,11 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 .dl-fill{height:100%;border-radius:99px;background:var(--m-grad);width:63%;transition:width .4s var(--m-ease-move)}
 
 /* Account block at the sidebar bottom */
-.account{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--m-r-ctl);cursor:pointer;transition:background var(--m-t-fast),padding 300ms var(--m-ease-move)}
+.account{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--m-r-ctl);cursor:pointer;transition:background var(--m-t-fast),padding var(--m-side-t) var(--m-ease-move),gap var(--m-side-t) var(--m-ease-move)}
 .account:hover{background:var(--m-surface-2)}
 .ava{width:36px;height:36px;border-radius:8px;background:var(--m-inset);display:grid;place-items:center;overflow:hidden;flex-shrink:0}
 .ava canvas{width:32px;height:32px;image-rendering:pixelated}
-.acc-meta{min-width:0;flex:1;display:flex;flex-direction:column;gap:1px}
+.acc-meta{min-width:0;flex:1;max-width:170px;overflow:hidden;display:flex;flex-direction:column;gap:1px;transition:opacity .18s var(--m-ease-move) 60ms,max-width var(--m-side-t) var(--m-ease-move)}
 .acc-nick{display:block;font-size:13.5px;font-weight:650;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .acc-kind{display:block;font-size:11.5px;color:var(--m-fg-subtle);line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* Account menu. Kept in the bundle because WKWebView ignores <style> tags
@@ -336,7 +359,7 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 .acc-add-btn:hover{background:var(--m-surface-2);border-color:var(--m-accent)}
 .acc-add-btn svg{width:16px;height:16px;flex:none;color:var(--m-accent)}
 
-.acc-chevron{width:24px;height:24px;flex-shrink:0;display:grid;place-items:center;color:var(--m-fg-faint);transition:transform var(--m-t-fast),color var(--m-t-fast)}
+.acc-chevron{width:24px;height:24px;max-width:24px;flex-shrink:0;display:grid;place-items:center;color:var(--m-fg-faint);transition:transform var(--m-t-fast),color var(--m-t-fast),opacity .14s var(--m-ease-move),max-width var(--m-side-t) var(--m-ease-move)}
 .acc-chevron svg{width:16px;height:16px;display:block}
 .account:hover .acc-chevron{color:var(--m-fg-subtle);transform:translateX(2px)}
 
@@ -835,3 +858,16 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 .mod-card-facts .pill{height:22px;font-size:11px}
 .mod-card-file{font-family:var(--m-mono);font-size:11px;color:var(--m-fg-faint);word-break:break-all}
 .mod-card-acts{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.chat-srv-pop{position:absolute;left:12px;right:12px;bottom:calc(100% + 6px);display:flex;flex-direction:column;gap:4px;padding:10px;border-radius:14px;background:var(--m-surface-2);border:1px solid var(--m-border);box-shadow:var(--m-shadow-lg);z-index:20}
+.chat-srv-row{display:flex;align-items:center;gap:8px;width:100%;padding:7px 9px;border:0;border-radius:10px;background:none;color:var(--m-fg);font-size:13px;text-align:left;cursor:pointer;transition:background var(--m-t-fast)}
+.chat-srv-row:hover{background:var(--m-surface)}
+.chat-srv-row svg{width:15px;height:15px;flex:none;color:var(--m-fg-faint)}
+.chat-srv-name{flex:none;max-width:45%;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-srv-addr{flex:1;min-width:0;font-size:11.5px;color:var(--m-fg-faint);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-srv-manual{display:flex;align-items:center;gap:6px;margin-top:4px;padding-top:8px;border-top:1px solid var(--m-border)}
+.chat-srv-manual .input{flex:1;min-width:0}
+
+/* The rail is the largest motion in the app; honour the system setting. */
+@media(prefers-reduced-motion:reduce){
+  .sidebar,.nav-item,.nav-label,.acc-meta,.quick-meta,.side-collapse,.side-collapse-ic,.account,.quick-open,.quick-row,.quick-play,.acc-chevron{transition:none}
+}
