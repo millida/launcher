@@ -6,16 +6,12 @@ import { openModal, showToast } from './ui'
 interface ScreensState {
   profile: string
   paths: string[]
-  big: string
-  setBig: (s: string) => void
   open: (profile: string) => Promise<void>
 }
 
 export const useScreens = create<ScreensState>((set) => ({
   profile: '',
   paths: [],
-  big: '',
-  setBig: (s) => set({ big: s }),
   open: async (profile) => {
     if (!hasTauri()) {
       showToast('Доступно в приложении')
@@ -27,7 +23,7 @@ export const useScreens = create<ScreensState>((set) => ({
         showToast('Скриншотов пока нет — сделай F2 в игре')
         return
       }
-      set({ profile, paths, big: '' })
+      set({ profile, paths })
       openModal('shotOverlay')
     } catch (e) {
       showToast('' + e)

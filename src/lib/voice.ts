@@ -1,3 +1,5 @@
+import { micConstraint } from './audioDevices'
+
 export const VOICE_MAX_MS = 120_000
 export const VOICE_PEAKS = 48
 
@@ -18,22 +20,43 @@ export interface VoiceRecorder {
 export const canRecordVoice = (): boolean =>
   typeof navigator !== 'undefined' && !!navigator.mediaDevices && !!navigator.mediaDevices.getUserMedia
 
-/// lamejs accepts only a fixed set of rates, so halving 48k/44.1k keeps us on a
-/// legal one while cutting the file in two. Speech has nothing above 12 kHz.
-function targetRate(ctxRate: number): { rate: number; decimate: number } {
-  if (ctxRate >= 32000) return { rate: Math.round(ctxRate / 2), decimate: 2 }
-  return { rate: Math.round(ctxRate), decimate: 1 }
+/**
+ * The encoder always runs at 22050 Hz no matter what the constructor is told
+ * (verified against its output headers), so material at any other rate decodes
+ * to near-silence: a 48 kHz take measured -44 dB against -12 dB for a correct
+ * one. Everything is resampled to that rate before it reaches the encoder.
+ */
+export const ENCODER_RATE = 22050
+
+export interface Resampler {
+  push: (input: Float32Array) => Int16Array
 }
 
-function toInt16(input: Float32Array, decimate: number): Int16Array {
-  const out = new Int16Array(Math.floor(input.length / decimate))
-  for (let i = 0; i < out.length; i++) {
-    let sum = 0
-    for (let k = 0; k < decimate; k++) sum += input[i * decimate + k] || 0
-    const v = Math.max(-1, Math.min(1, sum / decimate))
-    out[i] = v < 0 ? v * 0x8000 : v * 0x7fff
+/// Linear interpolation with the read position and the boundary sample carried
+/// between blocks: resetting either would put a click at every block edge.
+export function createResampler(fromRate: number, toRate = ENCODER_RATE): Resampler {
+  const step = fromRate / toRate
+  let pos = 0
+  let prev = 0
+  return {
+    push(input: Float32Array): Int16Array {
+      if (!input.length) return new Int16Array(0)
+      const merged = new Float32Array(input.length + 1)
+      merged[0] = prev
+      merged.set(input, 1)
+      const out: number[] = []
+      let p = pos
+      for (; p + 1 < merged.length; p += step) {
+        const i = Math.floor(p)
+        const f = p - i
+        const v = Math.max(-1, Math.min(1, merged[i] * (1 - f) + merged[i + 1] * f))
+        out.push(v < 0 ? v * 0x8000 : v * 0x7fff)
+      }
+      pos = p - input.length
+      prev = input[input.length - 1]
+      return Int16Array.from(out)
+    },
   }
-  return out
 }
 
 function envelope(levels: number[]): number[] {
@@ -64,14 +87,12 @@ export async function recordVoice(
   // The encoder is 170 KB of the bundle and matters only to someone who
   // actually presses record, so it loads on demand.
   const { Mp3Encoder } = await import('@breezystack/lamejs')
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-  })
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: micConstraint() })
   const AudioCtor: typeof AudioContext =
     window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
   const ctx = new AudioCtor()
-  const { rate, decimate } = targetRate(ctx.sampleRate)
-  const encoder = new Mp3Encoder(1, rate, KBPS)
+  const encoder = new Mp3Encoder(1, ENCODER_RATE, KBPS)
+  const resampler = createResampler(ctx.sampleRate)
   const chunks: Uint8Array[] = []
   const levels: number[] = []
   const source = ctx.createMediaStreamSource(stream)
@@ -86,11 +107,11 @@ export async function recordVoice(
     let peak = 0
     for (let i = 0; i < input.length; i++) peak = Math.max(peak, Math.abs(input[i]))
     levels.push(peak)
-    const pcm = toInt16(input, decimate)
+    const pcm = resampler.push(input)
     const buf = encoder.encodeBuffer(pcm)
     if (buf.length) chunks.push(new Uint8Array(buf))
     frames += pcm.length
-    const ms = (frames / rate) * 1000
+    const ms = (frames / ENCODER_RATE) * 1000
     if (onLevel) onLevel(peak, ms)
     if (ms >= VOICE_MAX_MS && !limitHit) {
       limitHit = true
@@ -132,7 +153,7 @@ export async function recordVoice(
       mp3.set(c, at)
       at += c.length
     })
-    return { mp3, durationMs: Math.round((frames / rate) * 1000), peaks: envelope(levels) }
+    return { mp3, durationMs: Math.round((frames / ENCODER_RATE) * 1000), peaks: envelope(levels) }
   }
 
   return { stop: () => Promise.resolve(finish()), cancel: teardown }

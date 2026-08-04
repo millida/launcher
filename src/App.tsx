@@ -14,6 +14,7 @@ import { ProjectModal } from './modals/Project'
 import { NewBuildModal } from './modals/NewBuild'
 import { AccountAddModal } from './modals/AccountAdd'
 import { ModpackVersionsOverlay, ScreenshotsOverlay } from './modals/Overlays'
+import { ImageLightbox } from './components/ImageLightbox'
 import { UpdateBanner } from './components/UpdateBanner'
 import { ConfirmModal } from './components/ConfirmModal'
 import { BuildPicker } from './components/BuildPicker'
@@ -474,6 +475,7 @@ export function App() {
         {/* Mounted last: it asks on top of any other modal, and DOM order breaks
             ties between equal z-index values. */}
         <ConfirmModal />
+        <ImageLightbox />
         <OnboardingModal />
         <Tour />
         <Installs />

@@ -6,14 +6,14 @@ import { uiConfirm } from '../state/confirm'
 import { useScreens } from '../state/screens'
 import { useModpackVersions } from '../state/modpack'
 import { useProfiles } from '../state/profiles'
+import { openImage } from '../components/ImageLightbox'
 
 export function ScreenshotsOverlay() {
   const modal = useUi((s) => s.modals.shotOverlay)
-  const { profile, paths, big, setBig } = useScreens()
+  const { profile, paths } = useScreens()
   if (!modal.open) return null
   const close = () => closeModal('shotOverlay')
   return (
-    <>
       <div
         id="shotOverlay"
         className={'modal-bg' + (modal.open ? ' open' : '') + (modal.vis ? ' vis' : '')}
@@ -38,7 +38,6 @@ export function ScreenshotsOverlay() {
                 key={p}
                 loading="lazy"
                 src={convertFileSrc(p)}
-                data-big={convertFileSrc(p)}
                 style={{
                   width: '100%',
                   aspectRatio: '16/9',
@@ -47,7 +46,7 @@ export function ScreenshotsOverlay() {
                   cursor: 'zoom-in',
                   background: 'var(--m-inset)',
                 }}
-                onClick={() => setBig(convertFileSrc(p))}
+                onClick={() => openImage(convertFileSrc(p))}
               />
             ))}
           </div>
@@ -61,23 +60,6 @@ export function ScreenshotsOverlay() {
           </div>
         </div>
       </div>
-      {big ? (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 200,
-            background: 'rgba(0,0,0,.86)',
-            display: 'grid',
-            placeItems: 'center',
-            cursor: 'zoom-out',
-          }}
-          onClick={() => setBig('')}
-        >
-          <img src={big} style={{ maxWidth: '92%', maxHeight: '92%', borderRadius: '10px' }} />
-        </div>
-      ) : null}
-    </>
   )
 }
 

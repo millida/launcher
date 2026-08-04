@@ -5,14 +5,15 @@ import { addServer } from '../ipc/commands'
 import { useProfiles } from '../state/profiles'
 import { joinWithAuth, showLaunchError } from '../lib/launch'
 import { setScreen, showToast } from '../state/ui'
-import { parseInvite } from '../lib/invite'
+import { encodeInvite, isServerAddr, parseInvite } from '../lib/invite'
 import { Head } from './Head'
 import { fmtPlaytime, onAvatarError, whenText } from '../lib/format'
-import { rememberServerName } from '../state/playStats'
+import { refreshPlayStats, rememberServerName, usePlayStats } from '../state/playStats'
 import { quickJoin } from '../lib/joinServer'
 import { dropFailedChat, loadOlderChat, pingTyping, retryChat, sendChat, useFriends } from '../state/friends'
 import type { ChatAttachment, ChatMessage, FriendProfile } from '../state/friends'
 import { VoiceMessage } from './VoiceMessage'
+import { openImage } from './ImageLightbox'
 import { MAX_CHAT_IMAGE_BYTES, uploadChatImage, uploadVoice } from '../lib/chatMedia'
 import { VOICE_MAX_MS, canRecordVoice, fmtVoiceTime, recordVoice } from '../lib/voice'
 import type { VoiceRecorder } from '../lib/voice'
@@ -133,15 +134,23 @@ function MessageBody({ m }: { m: ChatMessage }) {
   return (
     <>
       {att && att.kind === 'voice' ? <VoiceMessage att={att} me={m.me} /> : null}
-      {att && att.kind === 'image' ? <img className="msg-img" src={att.url} alt="" loading="lazy" /> : null}
+      {att && att.kind === 'image' ? (
+        <img className="msg-img" src={att.url} alt="" loading="lazy" onClick={() => openImage(att.url)} />
+      ) : null}
       {m.text ? <span className="msg-text">{m.text}</span> : null}
     </>
   )
 }
 
+const INVITE_SERVERS = 6
+
 function Composer({ uid }: { uid: string }) {
   const [text, setText] = useState('')
   const [emojiOpen, setEmojiOpen] = useState(false)
+  const [srvOpen, setSrvOpen] = useState(false)
+  const [srvAddr, setSrvAddr] = useState('')
+  const playServers = usePlayStats((s) => s.stats.servers)
+  const recentServers = [...playServers].sort((a, b) => b.last - a.last).slice(0, INVITE_SERVERS)
   const [busy, setBusy] = useState(false)
   const [rec, setRec] = useState<VoiceRecorder | null>(null)
   const [recMs, setRecMs] = useState(0)
@@ -183,6 +192,18 @@ function Composer({ uid }: { uid: string }) {
     } catch {
       showToast('Сообщение не ушло — нажми «Повторить» под ним', 'error')
     }
+  }
+
+  const sendInvite = (addr: string, name: string) => {
+    if (!isServerAddr(addr)) {
+      showToast('Не похоже на адрес сервера', 'error')
+      return
+    }
+    setSrvOpen(false)
+    setSrvAddr('')
+    sendChat(uid, encodeInvite(addr.trim(), (name || addr).trim().slice(0, 48))).catch(() =>
+      showToast('Приглашение не ушло — нажми «Повторить» под ним', 'error'),
+    )
   }
 
   const attachImage = async (file: File) => {
@@ -278,6 +299,41 @@ function Composer({ uid }: { uid: string }) {
 
   return (
     <div className="chat-input">
+      {srvOpen ? (
+        <div className="chat-srv-pop" onClick={(e) => e.stopPropagation()}>
+          <div className="side-cap">Пригласить на сервер</div>
+          {recentServers.length ? (
+            recentServers.map((s) => (
+              <button key={s.key} className="chat-srv-row" onClick={() => sendInvite(s.key, s.label || s.key)}>
+                <Icon id="i-server" />
+                <span className="chat-srv-name">{s.label || s.key}</span>
+                <span className="chat-srv-addr">{s.key}</span>
+              </button>
+            ))
+          ) : (
+            <p className="faint-note">Ты ещё никуда не заходил — впиши адрес вручную</p>
+          )}
+          <div className="chat-srv-manual">
+            <div className="input sm">
+              <input
+                placeholder="play.example.net"
+                value={srvAddr}
+                onChange={(e) => setSrvAddr(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') sendInvite(srvAddr.trim(), srvAddr.trim())
+                }}
+              />
+            </div>
+            <button
+              className="btn sm"
+              disabled={!isServerAddr(srvAddr)}
+              onClick={() => sendInvite(srvAddr.trim(), srvAddr.trim())}
+            >
+              Отправить
+            </button>
+          </div>
+        </div>
+      ) : null}
       {emojiOpen ? (
         <div className="chat-emoji-pop" onClick={(e) => e.stopPropagation()}>
           {[...recent, ...EMOJIS.filter((e) => !recent.includes(e))].map((em) => (
@@ -312,12 +368,27 @@ function Composer({ uid }: { uid: string }) {
         onClick={(e) => {
           e.stopPropagation()
           setEmojiOpen((v) => !v)
+          setSrvOpen(false)
         }}
       >
         <Icon id="i-smile" />
       </button>
       <button className="chat-emoji-btn" title="Картинка" disabled={busy} onClick={() => fileRef.current?.click()}>
         <Icon id="i-image" />
+      </button>
+      <button
+        className="chat-emoji-btn"
+        title="Пригласить на сервер"
+        onClick={(e) => {
+          e.stopPropagation()
+          setSrvOpen((v) => {
+            if (!v) void refreshPlayStats()
+            return !v
+          })
+          setEmojiOpen(false)
+        }}
+      >
+        <Icon id="i-server" />
       </button>
       <div className="input sm">
         <input
@@ -346,6 +417,23 @@ function Composer({ uid }: { uid: string }) {
   )
 }
 
+const CHAT_WIDTH_KEY = 'm-chat-width'
+const CHAT_WIDTH_DEFAULT = 330
+const CHAT_WIDTH_MIN = 300
+
+/// The panel is docked to the right edge of the window, so the ceiling has to
+/// come from the live window and not a constant: on a small screen a stored
+/// width from a big one would swallow the whole app.
+function clampChatWidth(w: number): number {
+  const max = Math.max(CHAT_WIDTH_MIN, Math.min(900, window.innerWidth - 220))
+  return Math.round(Math.min(max, Math.max(CHAT_WIDTH_MIN, w)))
+}
+
+function storedChatWidth(): number {
+  const raw = Number(localStorage.getItem(CHAT_WIDTH_KEY))
+  return clampChatWidth(raw > 0 ? raw : CHAT_WIDTH_DEFAULT)
+}
+
 export function Chat() {
   const {
     chatOpen,
@@ -362,6 +450,8 @@ export function Chat() {
     set,
   } = useFriends()
   const bodyRef = useRef<HTMLDivElement>(null)
+  const [width, setWidth] = useState(storedChatWidth)
+  const grip = useRef<{ x: number; w: number } | null>(null)
   const [atBottom, setAtBottom] = useState(true)
   const atBottomRef = useRef(true)
   atBottomRef.current = atBottom
@@ -383,6 +473,12 @@ export function Chat() {
   }, [chatOpen, chatWith, scrollDown])
 
   useEffect(() => {
+    const onResize = () => setWidth((w) => clampChatWidth(w))
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  useEffect(() => {
     if (!chatOpen) return
     const onDoc = (e: MouseEvent) => {
       // composedPath is captured when the event is dispatched. `closest` on the
@@ -394,7 +490,10 @@ export function Chat() {
         .some(
           (n) =>
             n instanceof HTMLElement &&
-            (n.id === 'chat' || n.classList.contains('fr-msg') || n.classList.contains('fr-row')),
+            (n.id === 'chat' ||
+              n.classList.contains('fr-msg') ||
+              n.classList.contains('fr-row') ||
+              n.classList.contains('lightbox')),
         )
       if (inside) return
       set({ chatOpen: false })
@@ -420,7 +519,29 @@ export function Chat() {
   }
 
   return (
-    <div className={'chat' + (chatOpen ? ' open' : '')} id="chat">
+    <div className={'chat' + (chatOpen ? ' open' : '')} id="chat" style={{ width: width + 'px' }}>
+      <div
+        className="chat-grip"
+        title="Потяни, чтобы изменить ширину"
+        onPointerDown={(e) => {
+          grip.current = { x: e.clientX, w: width }
+          e.currentTarget.setPointerCapture(e.pointerId)
+        }}
+        onPointerMove={(e) => {
+          const g = grip.current
+          if (!g) return
+          setWidth(clampChatWidth(g.w + (g.x - e.clientX)))
+        }}
+        onPointerUp={(e) => {
+          if (grip.current) localStorage.setItem(CHAT_WIDTH_KEY, String(width))
+          grip.current = null
+          e.currentTarget.releasePointerCapture(e.pointerId)
+        }}
+        onDoubleClick={() => {
+          setWidth(CHAT_WIDTH_DEFAULT)
+          localStorage.setItem(CHAT_WIDTH_KEY, String(CHAT_WIDTH_DEFAULT))
+        }}
+      />
       <div className="chat-head">
         <Head id="chatAva" nick={chatNick || 'MHF_Steve'} size={32} />
         <b id="chatNick">{chatNick || '—'}</b>
@@ -477,8 +598,10 @@ export function Chat() {
                 <MessageBody m={m} />
                 <span className="msg-meta">
                   <span>{timeHM(m.ts)}</span>
-                  {m.me && !m.state ? <span className={'msg-tick' + (read ? ' read' : '')} /> : null}
-                  {m.state === 'sending' ? <span className="msg-tick pending" /> : null}
+                  {m.me && !m.state ? (
+                    <Icon id={read ? 'i-check-2' : 'i-check'} className={'msg-tick' + (read ? ' read' : '')} />
+                  ) : null}
+                  {m.state === 'sending' ? <span className="msg-dot" /> : null}
                 </span>
               </div>
               {m.state === 'failed' ? (
