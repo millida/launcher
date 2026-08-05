@@ -87,7 +87,7 @@ export function ServerRow({ sv, promo, hidden }: { sv: SnapshotServer; promo?: b
       {promo ? (
         <span className="srv-rank promo">Промо</span>
       ) : (
-        <span className={'srv-rank' + (sv.rank <= 3 ? ' medal m' + sv.rank : '')}>{sv.rank}</span>
+        <span className={'srv-rank' + (sv.rank <= 3 ? ' medal' : '')}>{sv.rank}</span>
       )}
       <Logo sv={sv} />
       <Banner sv={sv} />

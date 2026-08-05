@@ -157,7 +157,8 @@ pub async fn repair_profile_files(app: AppHandle, profile: String) -> Result<Rep
     CANCEL.store(false, Ordering::SeqCst);
     let _deep = DeepVerify::hold();
     emit(&app, "files", 2.0, "Сверяем файлы игры…");
-    install_loader_with_java(&app, &version, &loader, loader_version.as_deref(), profile_java(&profile)).await?;
+    let java_pick = resolve_profile_java(&app, &profile).await?;
+    install_loader_with_java(&app, &version, &loader, loader_version.as_deref(), java_pick).await?;
 
     let mut report = RepairReport::default();
     if known.is_some() {

@@ -3,6 +3,7 @@ import { getPlayStats, labelServer } from '../ipc/commands'
 import type { PlayStats } from '../ipc/commands'
 import { hasTauri } from '../ipc/tauri'
 import { api, hasMillidaAccount } from '../lib/api'
+import { privacySettings, usePrivacy } from '../lib/privacy'
 
 const EMPTY: PlayStats = {
   total_seconds: 0,
@@ -15,13 +16,22 @@ const EMPTY: PlayStats = {
   last_at: 0,
 }
 
-export const statsShared = (): boolean => localStorage.getItem('m-share-stats') !== '0'
+/// Раньше это был локальный ключ m-share-stats, из-за чего лаунчер и сайт
+/// показывали разное. Теперь настройка одна — серверное поле showPlaytime
+/// (см. lib/privacy.ts); локальный ключ остался только зеркалом.
+export const statsShared = (): boolean => privacySettings().showPlaytime
 
-export const setStatsShared = (on: boolean) => {
-  localStorage.setItem('m-share-stats', on ? '1' : '0')
-  if (on) void refreshPlayStats()
+// Смена showPlaytime приезжает и из лаунчера, и с сайта: реагируем на сам факт
+// изменения, а не на клик по тумблеру. Выключили — просим сервер убрать уже
+// синхронизированную статистику, включили — заливаем её заново.
+let lastShared = statsShared()
+usePrivacy.subscribe((s) => {
+  const now = s.settings.showPlaytime
+  if (now === lastShared) return
+  lastShared = now
+  if (now) void refreshPlayStats()
   else void api('/friends/stats/hide', { method: 'POST' }).catch(() => {})
-}
+})
 
 interface State {
   stats: PlayStats

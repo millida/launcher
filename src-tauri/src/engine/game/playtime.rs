@@ -65,25 +65,28 @@ fn write_doc(doc: &Value) {
     write_json_quiet(&playtime_path(), doc);
 }
 
-fn bump(section: &mut Value, key: &str, secs: u64, ts: u64) {
+fn bump(section: &mut Value, key: &str, secs: u64, ts: u64, new_session: bool) {
     let cur = section[key].clone();
     section[key] = json!({
         "seconds": cur["seconds"].as_u64().unwrap_or(0) + secs,
-        "sessions": cur["sessions"].as_u64().unwrap_or(0) + 1,
+        "sessions": cur["sessions"].as_u64().unwrap_or(0) + u64::from(new_session),
         "last": ts,
         "name": cur["name"].as_str().unwrap_or(""),
     });
 }
 
-pub(crate) fn record_playtime(profile: &str, secs: u64, server: Option<&str>) {
-    if secs == 0 { return }
+/// A session is written in slices while the game runs, so killing the launcher
+/// (tray exit, crash, reboot) loses at most one flush interval instead of the
+/// whole session. Only the first slice counts towards the session counter.
+pub(crate) fn record_playtime(profile: &str, secs: u64, server: Option<&str>, new_session: bool) {
+    if secs == 0 && !new_session { return }
     let ts = now_secs();
     let mut doc = read_doc();
-    bump(&mut doc["builds"], profile, secs, ts);
+    bump(&mut doc["builds"], profile, secs, ts, new_session);
     doc["lastBuild"] = json!(profile);
     doc["lastAt"] = json!(ts);
     if let Some(addr) = server.map(str::trim).filter(|s| !s.is_empty()) {
-        bump(&mut doc["servers"], addr, secs, ts);
+        bump(&mut doc["servers"], addr, secs, ts, new_session);
         doc["lastServer"] = json!(addr);
     }
     write_doc(&doc);
@@ -161,5 +164,44 @@ pub fn get_play_stats() -> PlayStats {
         last_server_name,
         builds,
         servers,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Slices of one session must add up in seconds but count as a single
+    /// session: the periodic flush in `launch.rs` calls `bump` many times.
+    #[test]
+    fn flush_slices_accumulate_seconds_but_not_sessions() {
+        let mut section = json!({});
+        bump(&mut section, "build", 60, 100, true);
+        bump(&mut section, "build", 60, 160, false);
+        bump(&mut section, "build", 25, 185, false);
+        assert_eq!(
+            section["build"]["seconds"].as_u64(),
+            Some(145),
+            "flushed slices must sum into total seconds"
+        );
+        assert_eq!(
+            section["build"]["sessions"].as_u64(),
+            Some(1),
+            "one launch must stay one session no matter how many flushes it took"
+        );
+        assert_eq!(section["build"]["last"].as_u64(), Some(185), "last must track the newest flush");
+    }
+
+    #[test]
+    fn separate_launches_count_separately() {
+        let mut section = json!({ "build": { "seconds": 10, "sessions": 1, "name": "Survival" } });
+        bump(&mut section, "build", 5, 200, true);
+        assert_eq!(section["build"]["sessions"].as_u64(), Some(2));
+        assert_eq!(section["build"]["seconds"].as_u64(), Some(15));
+        assert_eq!(
+            section["build"]["name"].as_str(),
+            Some("Survival"),
+            "the UI-supplied label must survive a bump"
+        );
     }
 }

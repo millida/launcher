@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { showToast } from '../state/ui'
+import { showToast, useUi } from '../state/ui'
+import type { SettingsTab } from '../state/ui'
 import { hasTauri } from '../ipc/tauri'
 import {
   appVersion,
@@ -41,13 +42,18 @@ import { VIDEOS } from '../lib/wallpaper'
 import { getAccount, getMillidaAccount, useAccounts } from '../state/accounts'
 import { accKindLabel } from '../lib/format'
 import { WALLET_URL, openExt } from '../lib/api'
+// Наличие аккаунта берём из стора, а не вызовом hasMillidaAccount(): вызов не
+// реактивен, и вкладка «Приватность», открытая до готовности хранилища сессий
+// (или до входа в аккаунт), навсегда застревала на «Нужен аккаунт Millida».
+import { useHasMillida } from '../state/auth'
 import { setSkinSource, skinSource } from '../lib/gameProfile'
 import { applyTheme, storedTheme, withColorFade } from '../lib/theme'
 import type { ThemeId } from '../lib/theme'
 import { startTour } from '../state/tour'
 import { buildDiagnostics } from '../lib/diag'
 import { copyText } from '../lib/clipboard'
-import { setStatsShared, statsShared } from '../state/playStats'
+import { loadPrivacy, usePrivacy } from '../lib/privacy'
+import type { PrivacySettings } from '../lib/privacy'
 import {
   hasTray,
   launchWindowMode,
@@ -166,8 +172,71 @@ function initialAccent(): string {
   return 'green'
 }
 
+type TabId = SettingsTab
+
+const TABS: { id: TabId; label: string; icon: string }[] = [
+  { id: 'look', label: 'Оформление', icon: 'i-brush' },
+  { id: 'sound', label: 'Звук', icon: 'i-volume' },
+  { id: 'game', label: 'Игра', icon: 'i-blocks' },
+  { id: 'window', label: 'Окно', icon: 'i-monitor' },
+  { id: 'privacy', label: 'Приватность', icon: 'i-shield' },
+  { id: 'about', label: 'О лаунчере', icon: 'i-info' },
+]
+
+function initialTab(): TabId {
+  try {
+    const v = localStorage.getItem('m-set-tab')
+    if (TABS.some((t) => t.id === v)) return v as TabId
+  } catch {}
+  return 'look'
+}
+
+/// Тумблеры приватности профиля. Те же поля правятся на millida.net —
+/// подписи держим близкими к сайту, чтобы человек узнавал настройку.
+const PRIVACY_ROWS: { key: keyof PrivacySettings; title: string; on: string; off: string }[] = [
+  {
+    key: 'showActivity',
+    title: 'Игровая активность',
+    on: 'В профиле видно, когда ты последний раз заходил в игру',
+    off: 'Вместо активности посторонние видят «Игрок скрыл активность»',
+  },
+  {
+    key: 'showServers',
+    title: 'Серверы',
+    on: 'Видно, на каких серверах ты играешь',
+    off: 'Список серверов скрыт от посторонних',
+  },
+  {
+    key: 'showPlaytime',
+    title: 'Часы в игре',
+    on: 'Наигранное время в сборках видно друзьям и в профиле',
+    off: 'Часы и статистика по сборкам скрыты',
+  },
+  {
+    key: 'showFriends',
+    title: 'Список друзей',
+    on: 'Друзья видны в профиле',
+    off: 'Список друзей скрыт',
+  },
+  {
+    key: 'showAchievements',
+    title: 'Достижения',
+    on: 'Полученные достижения видно в профиле',
+    off: 'Достижения скрыты',
+  },
+  {
+    key: 'showMarket',
+    title: 'Активность на Маркете',
+    on: 'Покупки и объявления видно в профиле',
+    off: 'Активность на Маркете скрыта',
+  },
+]
+
 export function Settings({ on }: { on: boolean }) {
   const wp = useWallpaper()
+  const [tab, setTabState] = useState<TabId>(initialTab)
+  const wantTab = useUi((s) => s.settingsTab)
+  const takeSettingsTab = useUi((s) => s.takeSettingsTab)
   const [theme, setTheme] = useState<ThemeId>(storedTheme)
   const [accent, setAccent] = useState(initialAccent)
   const [customHex, setCustomHex] = useState(initialCustomHex)
@@ -186,7 +255,6 @@ export function Settings({ on }: { on: boolean }) {
   const [soundMd, setSoundMd] = useState<SoundMode>(soundMode)
   const [soundVol, setSoundVol] = useState(soundVolume)
   const [soundBusy, setSoundBusy] = useState(false)
-  const [shareStats, setShareStats] = useState(statsShared)
   const [ver, setVer] = useState('')
   const [diagBusy, setDiagBusy] = useState(false)
   const [diagText, setDiagText] = useState('')
@@ -221,6 +289,44 @@ export function Settings({ on }: { on: boolean }) {
       .catch(() => {})
   }, [on])
 
+  useEffect(() => {
+    if (!wantTab) return
+    setTabState(wantTab)
+    try {
+      localStorage.setItem('m-set-tab', wantTab)
+    } catch {}
+    takeSettingsTab()
+  }, [wantTab])
+
+  const setTab = (id: TabId) => {
+    setTabState(id)
+    try {
+      localStorage.setItem('m-set-tab', id)
+    } catch {}
+    const c = document.querySelector('.content')
+    if (c) c.scrollTop = 0
+  }
+
+  // Приватность серверная и общая с сайтом: при открытии раздела перечитываем
+  // её, чтобы увидеть значение, выставленное на millida.net с другого места.
+  const privacy = usePrivacy()
+  const hasMillida = useHasMillida()
+  useEffect(() => {
+    if (!on || !hasMillida) return
+    void loadPrivacy(true)
+  }, [on, hasMillida])
+
+  const togglePrivacy = (key: keyof PrivacySettings) => {
+    const next = !privacy.settings[key]
+    const row = PRIVACY_ROWS.find((r) => r.key === key)
+    privacy
+      .patch({ [key]: next } as Partial<PrivacySettings>)
+      .then(() => showToast((row ? row.title : 'Настройка') + (next ? ' — видно всем' : ' — скрыто')))
+      .catch(() => showToast('Не удалось сохранить настройку приватности', 'error'))
+  }
+
+  // Смена папки без переноса файлов означала «сделай все сборки заново»:
+  // спрашиваем и по умолчанию переносим уже скачанное.
   const changeDir = async () => {
     if (!hasTauri()) {
       showToast('Смена папки доступна в приложении лаунчера', 'error')
@@ -258,7 +364,22 @@ export function Settings({ on }: { on: boolean }) {
       </div>
 
       <div className="set-screen">
-        {millidaAcc ? (
+        <div className="set-tabs" role="tablist">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              role="tab"
+              aria-selected={tab === t.id}
+              className={'set-tab' + (tab === t.id ? ' on' : '')}
+              onClick={() => setTab(t.id)}
+            >
+              <Icon id={t.icon} />
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'about' && millidaAcc ? (
           <div className="set-group">
             <div className="cap">Аккаунт Millida</div>
             <div className="set-row">
@@ -281,8 +402,10 @@ export function Settings({ on }: { on: boolean }) {
           </div>
         ) : null}
 
+        {tab === 'look' ? (
+        <>
         <div className="set-group">
-          <div className="cap">Оформление</div>
+          <div className="cap">Тема и цвет</div>
           <div className="set-row">
             <span className="lab">Тема</span>
             <div className="segs">
@@ -362,26 +485,10 @@ export function Settings({ on }: { on: boolean }) {
               </div>
             </div>
           </div>
-          <AudioSettings />
-          <div className="set-row">
-            <span className="lab">
-              Оверлей поверх игры
-              <small>Сообщения друзей прямо в Minecraft. Вызов — {overlay.hotkey}. Нужен оконный или безрамочный режим</small>
-            </span>
-            <span
-              className={'tgl' + (overlay.enabled ? ' on' : '')}
-              id="setOverlay"
-              onClick={(e) => {
-                e.stopPropagation()
-                const next = !overlay.enabled
-                setOverlay({ ...overlay, enabled: next })
-                overlaySetEnabled(next).catch((err) => {
-                  setOverlay({ ...overlay, enabled: !next })
-                  showToast('Оверлей не включился: ' + err, 'error')
-                })
-              }}
-            ></span>
-          </div>
+        </div>
+
+        <div className="set-group">
+          <div className="cap">Фон</div>
           <div className="set-row">
             <span className="lab">
               Живые обои<small>Анимированный фон на главном экране</small>
@@ -500,8 +607,13 @@ export function Settings({ on }: { on: boolean }) {
           </div>
         </div>
 
+        </>
+        ) : null}
+
+        {tab === 'game' ? (
+        <>
         <div className="set-group">
-          <div className="cap">Игра</div>
+          <div className="cap">В игре</div>
           <div className="set-row">
             <span className="lab">
               Скины и плащи
@@ -531,6 +643,29 @@ export function Settings({ on }: { on: boolean }) {
               ))}
             </div>
           </div>
+          <div className="set-row">
+            <span className="lab">
+              Оверлей поверх игры
+              <small>Сообщения друзей прямо в Minecraft. Вызов — {overlay.hotkey}. Нужен оконный или безрамочный режим</small>
+            </span>
+            <span
+              className={'tgl' + (overlay.enabled ? ' on' : '')}
+              id="setOverlay"
+              onClick={(e) => {
+                e.stopPropagation()
+                const next = !overlay.enabled
+                setOverlay({ ...overlay, enabled: next })
+                overlaySetEnabled(next).catch((err) => {
+                  setOverlay({ ...overlay, enabled: !next })
+                  showToast('Оверлей не включился: ' + err, 'error')
+                })
+              }}
+            ></span>
+          </div>
+        </div>
+
+        <div className="set-group">
+          <div className="cap">Java</div>
           <div className="set-row">
             <span className="lab">
               Java
@@ -613,6 +748,43 @@ export function Settings({ on }: { on: boolean }) {
               {javaBusy ? 'Качаем…' : 'Скачать'}
             </button>
           </div>
+          {javas.map((j) => (
+            <div className="set-row" key={j.major}>
+              <span className="lab">
+                Java {j.major}
+                <small>
+                  {Math.round(j.size / 1024 / 1024) + ' МБ · '}
+                  {j.in_use ? 'нужна сборкам' : 'сборками не используется'}
+                </small>
+              </span>
+              <button
+                className="btn sm secondary"
+                disabled={j.in_use}
+                title={j.in_use ? 'Эту Java просит одна из сборок' : 'Удалить, освободится место'}
+                onClick={async () => {
+                  if (
+                    !(await uiConfirm('Удалить Java ' + j.major + '? Если она снова понадобится, лаунчер скачает её сам.', {
+                      confirmLabel: 'Удалить',
+                      danger: true,
+                    }))
+                  )
+                    return
+                  removeJavaRuntime(j.major)
+                    .then((freed) => {
+                      showToast('Освобождено ' + Math.round(freed / 1024 / 1024) + ' МБ')
+                      void listJavaRuntimes().then(setJavas).catch(() => {})
+                    })
+                    .catch((e) => showToast('Не удалось удалить: ' + e, 'error'))
+                }}
+              >
+                <Icon id="i-trash" /> Удалить
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <div className="set-group">
+          <div className="cap">Файлы</div>
           <div className="set-row">
             <span className="lab">
               Папка игры<small>{moving ? 'Переносим файлы, не закрывай лаунчер…' : 'Сборки, миры и ассеты игры'}</small>
@@ -651,51 +823,14 @@ export function Settings({ on }: { on: boolean }) {
               <Icon id="i-trash" /> {clearing ? 'Чистим…' : 'Очистить'}
             </button>
           </div>
-          {javas.map((j) => (
-            <div className="set-row" key={j.major}>
-              <span className="lab">
-                Java {j.major}
-                <small>
-                  {Math.round(j.size / 1024 / 1024) + ' МБ · '}
-                  {j.in_use ? 'нужна сборкам' : 'сборками не используется'}
-                </small>
-              </span>
-              <button
-                className="btn sm secondary"
-                disabled={j.in_use}
-                title={j.in_use ? 'Эту Java просит одна из сборок' : 'Удалить, освободится место'}
-                onClick={async () => {
-                  if (
-                    !(await uiConfirm('Удалить Java ' + j.major + '? Если она снова понадобится, лаунчер скачает её сам.', {
-                      confirmLabel: 'Удалить',
-                      danger: true,
-                    }))
-                  )
-                    return
-                  removeJavaRuntime(j.major)
-                    .then((freed) => {
-                      showToast('Освобождено ' + Math.round(freed / 1024 / 1024) + ' МБ')
-                      void listJavaRuntimes().then(setJavas).catch(() => {})
-                    })
-                    .catch((e) => showToast('Не удалось удалить: ' + e, 'error'))
-                }}
-              >
-                <Icon id="i-trash" /> Удалить
-              </button>
-            </div>
-          ))}
         </div>
+        </>
+        ) : null}
 
+        {tab === 'sound' ? (
+        <>
         <div className="set-group">
-          <div className="cap">Лаунчер</div>
-          <div className="set-row">
-            <span className="lab">
-              Гайд по лаунчеру<small>Короткие подсказки по разделам — те же, что при первом запуске</small>
-            </span>
-            <button className="btn sm secondary" onClick={startTour}>
-              <Icon id="i-play" /> Показать гайд
-            </button>
-          </div>
+          <div className="cap">Звуки лаунчера</div>
           <div className="set-row">
             <span className="lab">
               Музыка при запуске<small>Фоновый плеер включается сам, когда открываешь лаунчер</small>
@@ -797,20 +932,64 @@ export function Settings({ on }: { on: boolean }) {
               </div>
             </>
           ) : null}
-          <div className="set-row">
-            <span className="lab">
-              Статистика для друзей<small>Часы в сборках и последний сервер видны друзьям в профиле</small>
-            </span>
-            <span
-              className={'tgl' + (shareStats ? ' on' : '')}
-              onClick={() => {
-                const next = !shareStats
-                setShareStats(next)
-                setStatsShared(next)
-                showToast(next ? 'Друзья видят твою статистику' : 'Статистика скрыта от друзей')
-              }}
-            ></span>
-          </div>
+        </div>
+
+        <div className="set-group">
+          <div className="cap">Устройства</div>
+          <AudioSettings />
+        </div>
+        </>
+        ) : null}
+
+        {tab === 'privacy' ? (
+        <>
+        <div className="set-group">
+          <div className="cap">Профиль на millida.net</div>
+          {!hasMillida ? (
+            <div className="set-row">
+              <span className="lab">
+                Что видно в профиле<small>Нужен аккаунт Millida — настройки хранятся на нём</small>
+              </span>
+            </div>
+          ) : (
+            PRIVACY_ROWS.map((r) => {
+              const val = privacy.settings[r.key]
+              return (
+                <div className="set-row" key={r.key}>
+                  <span className="lab">
+                    {r.title}
+                    <small>{val ? r.on : r.off}</small>
+                  </span>
+                  {!privacy.loaded && privacy.loading ? (
+                    <span className="skel" style={{ width: '38px', height: '22px', borderRadius: '99px' }}></span>
+                  ) : (
+                    <span
+                      className={'tgl' + (val ? ' on' : '') + (privacy.saving === r.key ? ' busy' : '')}
+                      onClick={() => togglePrivacy(r.key)}
+                    ></span>
+                  )}
+                </div>
+              )
+            })
+          )}
+          {privacy.error ? (
+            <div className="set-row">
+              <span className="lab" style={{ color: 'var(--m-danger)' }}>
+                {privacy.error}
+              </span>
+              <button className="btn sm" onClick={() => void loadPrivacy(true)}>
+                Повторить
+              </button>
+            </div>
+          ) : null}
+          <p className="faint-note" style={{ margin: '10px 0 0' }}>
+            Настройки общие с сайтом millida.net — меняются в обоих местах сразу и остаются на аккаунте после
+            переустановки лаунчера.
+          </p>
+        </div>
+
+        <div className="set-group">
+          <div className="cap">Видно другим</div>
           <div className="set-row">
             <span className="lab">
               Активность в Discord<small>Показывать друзьям, во что играешь</small>
@@ -827,6 +1006,37 @@ export function Settings({ on }: { on: boolean }) {
               }}
             ></span>
           </div>
+        </div>
+
+        <div className="set-group">
+          <div className="cap">Данные о работе</div>
+          <div className="set-row">
+            <span className="lab">
+              Анонимная статистика
+              <small>
+                Помогает чинить лаги и падения: система, железо, версия лаунчера и что не запустилось.
+                Ни ников, ни файлов, ни адреса — только цифры.
+              </small>
+            </span>
+            <span
+              className={'tgl' + (telemetryOn ? ' on' : '')}
+              id="setTelemetry"
+              onClick={(e) => {
+                e.stopPropagation()
+                const next = !telemetryOn
+                setTelemetryOn(next)
+                setTelemetryEnabled(next)
+                showToast(next ? 'Статистика включена — спасибо' : 'Статистика выключена')
+              }}
+            ></span>
+          </div>
+        </div>
+        </>
+        ) : null}
+
+        {tab === 'window' ? (
+        <div className="set-group">
+          <div className="cap">Окно и трей</div>
           <div className="set-row">
             <span className="lab">
               При запуске игры
@@ -899,25 +1109,19 @@ export function Settings({ on }: { on: boolean }) {
               }}
             ></span>
           </div>
+        </div>
+        ) : null}
+
+        {tab === 'about' ? (
+        <div className="set-group">
+          <div className="cap">Лаунчер</div>
           <div className="set-row">
             <span className="lab">
-              Анонимная статистика
-              <small>
-                Помогает чинить лаги и падения: система, железо, версия лаунчера и что не запустилось.
-                Ни ников, ни файлов, ни адреса — только цифры.
-              </small>
+              Гайд по лаунчеру<small>Короткие подсказки по разделам — те же, что при первом запуске</small>
             </span>
-            <span
-              className={'tgl' + (telemetryOn ? ' on' : '')}
-              id="setTelemetry"
-              onClick={(e) => {
-                e.stopPropagation()
-                const next = !telemetryOn
-                setTelemetryOn(next)
-                setTelemetryEnabled(next)
-                showToast(next ? 'Статистика включена — спасибо' : 'Статистика выключена')
-              }}
-            ></span>
+            <button className="btn sm secondary" onClick={startTour}>
+              <Icon id="i-play" /> Показать гайд
+            </button>
           </div>
           <div className="set-row">
             <span className="lab">
@@ -1020,6 +1224,7 @@ export function Settings({ on }: { on: boolean }) {
             )}
           </div>
         </div>
+        ) : null}
 
         <p className="faint-note" style={{ marginTop: '18px' }}>
           Настройки применяются сразу — сохранять не нужно.

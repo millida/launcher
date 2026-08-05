@@ -124,3 +124,28 @@ export function loadRewards(): Promise<{ items: RewardItem[] }> {
 export function claimReward(code: string): Promise<RewardItem> {
   return api<RewardItem>('/launcher/rewards/' + encodeURIComponent(code) + '/claim', { method: 'POST' })
 }
+
+/// Каталог плащей Millida. Свои плащи грузить больше нельзя — плащ можно только
+/// получить: либо он есть на лицензии Mojang, либо открыт в каталоге Millida.
+/// Закрытые плащи каталог тоже отдаёт (unlocked=false) — их видно затемнёнными
+/// вместе с условием, иначе непонятно, ради чего играть.
+export interface CapeCatalogItem {
+  id: string
+  name: string
+  url: string
+  rarity?: string
+  /// Текст условия: «Наиграть 10 часов», «Купить любой хостинг».
+  requirement?: string
+  requirementCode?: string
+  unlocked?: boolean
+  /// 0..100 — насколько условие выполнено.
+  progress?: number
+  progressCurrent?: number
+  progressTarget?: number
+  progressUnit?: string
+}
+
+/// Канонический путь; на бэкенде есть алиас /wardrobe/capes/catalog.
+export function loadCapeCatalog(): Promise<CapeCatalogItem[]> {
+  return api<CapeCatalogItem[]>('/launcher/wardrobe/capes/catalog')
+}

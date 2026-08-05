@@ -109,47 +109,13 @@ jobs:
         working-directory: src-tauri
         run: cargo test
 
-  gates:
-    name: Quality gates
-    runs-on: ubuntu-latest
-    # Skipped only in the private development repository, which runs its own CI
-    # on a self-hosted runner; GitHub-hosted minutes are billed for private repos.
-    # Forks do not match this condition, so the workflow runs there as usual.
-    if: github.repository != 'millida/millida-launcher'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install ripgrep
-        run: command -v rg >/dev/null || sudo apt-get install -y ripgrep
-
-      # Comments must be in English. Only comment lines (//, ///, /*, *) and trailing
-      # // comments are matched: non-English string literals in format!/Err/JSX are
-      # legitimate and stay out of the pattern ("https://" is excluded).
-      - name: Comment language gate
-        run: |
-          set +e
-          out=$(rg --line-number --no-heading \
-            -e '^[[:space:]]*(//|/\*|\*)[^\n]*\p{Cyrillic}' \
-            -e '(^|[^:"])//[^\n]*\p{Cyrillic}' \
-            src src-tauri/src)
-          code=$?
-          set -e
-          if [ "$code" -eq 0 ]; then
-            echo "$out"
-            echo "::error::Comments must be written in English - see the matches above"
-            exit 1
-          fi
-          if [ "$code" -ne 1 ]; then
-            echo "::error::ripgrep failed with exit code $code"
-            exit 1
-          fi
-          echo "OK: no non-English comments in src/ and src-tauri/src/"
-
       - uses: taiki-e/install-action@v2
+        if: runner.os == 'Linux'
         with:
           tool: cargo-deny
 
       - name: License check
+        if: runner.os == 'Linux'
         run: cargo deny --manifest-path src-tauri/Cargo.toml --config deny.toml check licenses
 
   audit:

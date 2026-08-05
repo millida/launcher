@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { hasTauri } from '../ipc/tauri'
 import { convertFileSrc, downloadMcMusic, musicTracks } from '../ipc/commands'
+import { listenWindowVisibility } from '../ipc/events'
 import { showToast, useUi } from './ui'
 import { hydratePrefs, readPref, writePref } from '../lib/prefs'
 
@@ -57,6 +58,10 @@ interface MusicState {
 let audio: HTMLAudioElement | null = null
 let started = false
 
+const FADE_MS = 900
+const FADE_QUICK_MS = 180
+const FADE_STEP_MS = 40
+
 const getAudio = () => {
   if (!audio) {
     audio = new Audio()
@@ -65,21 +70,77 @@ const getAudio = () => {
   return audio
 }
 
-function apply() {
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v))
+
+let fadeTimer: ReturnType<typeof setInterval> | null = null
+
+function clearFade() {
+  if (fadeTimer === null) return
+  clearInterval(fadeTimer)
+  fadeTimer = null
+}
+
+function fadeTo(to: number, ms: number, after?: () => void) {
+  clearFade()
+  const a = getAudio()
+  const from = a.volume
+  if (ms <= 0 || Math.abs(to - from) < 0.01) {
+    a.volume = to
+    if (after) after()
+    return
+  }
+  const start = Date.now()
+  fadeTimer = setInterval(() => {
+    const p = Math.min(1, (Date.now() - start) / ms)
+    a.volume = clamp01(from + (to - from) * p)
+    if (p < 1) return
+    clearFade()
+    if (after) after()
+  }, FADE_STEP_MS)
+}
+
+function apply(fadeMs = 0) {
   const s = useMusic.getState()
   const a = getAudio()
   const cur = s.tracks[s.index]
+  const vol = s.muted ? 0 : clamp01(s.level / 100)
   if (!cur) {
+    clearFade()
     a.pause()
     return
   }
-  if (a.src !== new URL(cur.src, location.href).href) {
+  const changed = a.src !== new URL(cur.src, location.href).href
+  if (changed) {
+    clearFade()
     a.src = cur.src
     a.currentTime = 0
   }
-  a.volume = s.muted ? 0 : Math.max(0, Math.min(1, s.level / 100))
-  if (s.playing && !s.muted && s.level > 0) a.play().catch(() => useMusic.setState({ playing: false }))
-  else a.pause()
+  const want = s.playing && !s.muted && s.level > 0
+  if (!want) {
+    if (a.paused) {
+      clearFade()
+      a.volume = vol
+    } else if (fadeMs > 0) {
+      fadeTo(0, fadeMs, () => a.pause())
+    } else {
+      clearFade()
+      a.pause()
+      a.volume = vol
+    }
+    return
+  }
+  if (!a.paused && !changed) {
+    fadeTo(vol, fadeMs)
+    return
+  }
+  clearFade()
+  a.volume = fadeMs > 0 ? 0 : vol
+  a.play()
+    .then(() => fadeTo(vol, fadeMs))
+    .catch(() => {
+      a.volume = vol
+      useMusic.setState({ playing: false })
+    })
 }
 
 export const useMusic = create<MusicState>((set, get) => ({
@@ -101,7 +162,7 @@ export const useMusic = create<MusicState>((set, get) => ({
     const v = !get().muted
     writePref('m-mus-muted', v ? '1' : '0')
     set({ muted: v })
-    apply()
+    apply(FADE_MS)
     showToast(v ? 'Музыка выключена' : 'Музыка включена')
   },
   togglePlay: () => {
@@ -110,21 +171,21 @@ export const useMusic = create<MusicState>((set, get) => ({
       return
     }
     set({ muted: false, playing: !get().playing })
-    apply()
+    apply(FADE_MS)
   },
   next: () => {
     const { tracks, index } = get()
     set({ index: tracks.length ? (index + 1) % tracks.length : 0 })
-    apply()
+    apply(FADE_MS)
   },
   prev: () => {
     const { tracks, index } = get()
     set({ index: tracks.length ? (index - 1 + tracks.length) % tracks.length : 0 })
-    apply()
+    apply(FADE_MS)
   },
   play: (i) => {
     set({ index: i, muted: false, playing: true })
-    apply()
+    apply(FADE_MS)
   },
   refresh: async () => {
     const list = await loadPlaylist()
@@ -162,14 +223,42 @@ export function initMusic() {
     wasPlaying = s.playing
     if (!s.playing) return
     useMusic.setState({ playing: false })
-    apply()
+    apply(FADE_MS)
   })
   window.addEventListener('mc-stopped', () => {
     if (!wasPlaying) return
     wasPlaying = false
     useMusic.setState({ playing: true })
-    apply()
+    apply(FADE_MS)
   })
+
+  // Hidden in the tray the webview keeps running, so audio has to be stopped
+  // explicitly — otherwise the launcher looks closed but still plays.
+  void listenWindowVisibility((visible) => (visible ? resumeMusic() : suspendMusic()))
+}
+
+let suspended = false
+
+export function suspendMusic() {
+  if (!useMusic.getState().playing) return
+  suspended = true
+  useMusic.setState({ playing: false })
+  apply(FADE_QUICK_MS)
+}
+
+export function resumeMusic() {
+  if (!suspended) return
+  suspended = false
+  useMusic.setState({ playing: true })
+  apply(FADE_MS)
+}
+
+export function stopMusicNow() {
+  suspended = false
+  clearFade()
+  if (!audio) return
+  audio.pause()
+  audio.volume = 0
 }
 
 function boot() {
@@ -196,12 +285,12 @@ function autostart() {
   if (!s.tracks.length || s.muted || s.level === 0) return
   if (localStorage.getItem('m-mus-auto') === '0') return
   useMusic.setState({ playing: true })
-  apply()
+  apply(FADE_MS)
   // Webviews block playback until a user gesture, so retry on the first click.
   const once = () => {
     const a = getAudio()
     const cur = useMusic.getState()
-    if (a.paused && cur.playing && !cur.muted && cur.level > 0) a.play().catch(() => {})
+    if (a.paused && cur.playing && !cur.muted && cur.level > 0) apply(FADE_MS)
   }
   document.addEventListener('click', once, { once: true })
 }

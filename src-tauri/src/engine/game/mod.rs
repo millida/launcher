@@ -8,6 +8,7 @@ mod serversdat;
 mod playtime;
 mod fpsboost;
 mod repair;
+mod gpu;
 
 pub(crate) use mcmeta::*;
 pub use java::*;
@@ -19,3 +20,4 @@ pub use serversdat::*;
 pub use playtime::*;
 pub use fpsboost::*;
 pub use repair::*;
+pub use gpu::*;

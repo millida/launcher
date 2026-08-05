@@ -47,6 +47,12 @@ export function listenTrayExit(handler: () => void): Promise<UnlistenFn | null> 
   return T.event.listen('tray-exit', () => handler()).catch(() => null)
 }
 
+export function listenWindowVisibility(handler: (visible: boolean) => void): Promise<UnlistenFn | null> {
+  const T = tauri()
+  if (!T) return Promise.resolve(null)
+  return T.event.listen<boolean>('window-visibility', (e) => handler(e.payload)).catch(() => null)
+}
+
 export function listenDragDrop(handler: (paths: string[]) => void): Promise<UnlistenFn | null> {
   const T = tauri()
   if (!T || !T.event) return Promise.resolve(null)

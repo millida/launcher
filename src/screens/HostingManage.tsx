@@ -24,6 +24,10 @@ import { TabNetwork } from './hosting/TabNetwork'
 import { TabAccess } from './hosting/TabAccess'
 import { TabPlan } from './hosting/TabPlan'
 
+// Console error prefix: a word, not a "⚠" dingbat (rule 5.1 — Lucide icons only).
+// The .err class is applied by matching this same prefix.
+const LOG_ERR = 'Ошибка: '
+
 interface Rules {
   gamemode?: string
   difficulty?: string
@@ -517,7 +521,7 @@ export function HostingManage({
         setTimeout(() => logRef.current?.scrollTo(0, 1e9), 30)
       })
       .catch((e) => {
-        setLog((l) => [...l.slice(-200), '⚠ не отправить: ' + errText(e)])
+        setLog((l) => [...l.slice(-200), LOG_ERR + 'команда не ушла — ' + errText(e)])
         showToast('Не удалось отправить команду', 'error')
       })
   }
@@ -1125,7 +1129,7 @@ export function HostingManage({
             <div className="host-console" ref={logRef}>
               {log.length ? (
                 log.map((l, i) => (
-                  <div key={i} className={l.startsWith('>') ? 'cmd' : l.startsWith('⚠') ? 'err' : logLevelClass(l)}>
+                  <div key={i} className={l.startsWith('>') ? 'cmd' : l.startsWith(LOG_ERR) ? 'err' : logLevelClass(l)}>
                     {consoleParts(l).map((p, k) =>
                       p.link ? (
                         <a

@@ -8,6 +8,9 @@ use tauri::{AppHandle, Emitter};
 /// Running games: profile name -> JVM process pid.
 pub static RUNNING: Mutex<Vec<(String, u32)>> = Mutex::new(Vec::new());
 
+const EXIT_POLL: std::time::Duration = std::time::Duration::from_secs(2);
+const PLAYTIME_FLUSH: std::time::Duration = std::time::Duration::from_secs(60);
+
 /// Pids killed on user request: a non-zero exit code for them is not a crash.
 static STOPPED: Mutex<Vec<u32>> = Mutex::new(Vec::new());
 
@@ -266,6 +269,18 @@ fn spawn_log_reader(reader: Box<dyn std::io::Read + Send>, file: Arc<Mutex<std::
 /// build; a missing or no longer allowed path falls back to the bundled JRE. The
 /// setting is re-checked here because the file on disk may have been written by
 /// an older build that did not validate it.
+/// Java version the user pinned for this build by number. The runtime is fetched
+/// at launch rather than resolved to a path once, so removing it in settings
+/// reinstalls it instead of silently dropping the build back to the automatic
+/// major.
+pub fn profile_java_major(profile: &str) -> Option<u64> {
+    std::fs::read(profile_dir(profile).join("millida-settings.json"))
+        .ok()
+        .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
+        .and_then(|s| s["javaMajor"].as_u64())
+        .filter(|m| JAVA_MAJORS.contains(m))
+}
+
 pub fn profile_java(profile: &str) -> Option<PathBuf> {
     let own = std::fs::read(profile_dir(profile).join("millida-settings.json"))
         .ok()
@@ -278,6 +293,17 @@ pub fn profile_java(profile: &str) -> Option<PathBuf> {
                 .map(PathBuf::from)
         });
     own.or_else(default_java)
+}
+
+/// The single answer to "which Java does this build run on": a pinned version
+/// number first — fetched here, so a runtime removed in settings comes back
+/// instead of silently downgrading the build — then a chosen path, then the
+/// automatic major from the version metadata.
+pub(crate) async fn resolve_profile_java(app: &AppHandle, profile: &str) -> Result<Option<PathBuf>, String> {
+    match profile_java_major(profile) {
+        Some(m) => Ok(Some(ensure_java(app, m).await?)),
+        None => Ok(profile_java(profile)),
+    }
 }
 
 /// JVM flags that hand the JVM something to execute: native/Java agents, hooks
@@ -475,7 +501,7 @@ pub async fn install_and_launch_in(
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or(Value::Null);
-    let java_pick = profile_java(&profile);
+    let java_pick = resolve_profile_java(&app, &profile).await?;
     let (v, main_class, classpath, java) =
         install_loader_with_java(&app, &version_id, &loader_id, loader_ver.as_deref(), java_pick).await?;
     check_cancel()?;
@@ -570,9 +596,11 @@ pub async fn install_and_launch_in(
         }
     }
     check_cancel()?;
-    let mut cmd = Command::new(branded_java(&java));
+    let exe = branded_java(&java);
+    let mut cmd = Command::new(&exe);
     // CREATE_NO_WINDOW on Windows, otherwise every launch pops a console window.
     quiet(&mut cmd);
+    apply_gpu_pref(&mut cmd, &exe, GpuPref::parse(settings["gpu"].as_str().unwrap_or("auto")));
     cmd.args(&args)
         .current_dir(&game_dir)
         .stdout(std::process::Stdio::piped())
@@ -609,9 +637,27 @@ pub async fn install_and_launch_in(
         v.push((profile.clone(), pid));
     }
     std::thread::spawn(move || {
-        let status = child.wait();
+        let mut written = 0u64;
+        let mut new_session = true;
+        let status = loop {
+            match child.try_wait() {
+                Ok(Some(s)) => break Ok(s),
+                Err(e) => break Err(e),
+                Ok(None) => {}
+            }
+            std::thread::sleep(EXIT_POLL);
+            let elapsed = start.elapsed().as_secs();
+            if elapsed - written >= PLAYTIME_FLUSH.as_secs() {
+                record_playtime(&pname, elapsed - written, quick_server.as_deref(), new_session);
+                written = elapsed;
+                new_session = false;
+            }
+        };
         forget_running(pid);
-        record_playtime(&pname, start.elapsed().as_secs(), quick_server.as_deref());
+        let elapsed = start.elapsed().as_secs();
+        if elapsed > written || new_session {
+            record_playtime(&pname, elapsed - written, quick_server.as_deref(), new_session);
+        }
         let _ = app2.emit("game-exit", pname.clone());
         let waker = app2.clone();
         std::thread::spawn(move || {

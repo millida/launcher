@@ -15,6 +15,7 @@ pub fn show_main(app: &AppHandle) {
         let _ = w.show();
         let _ = w.unminimize();
         let _ = w.set_focus();
+        let _ = app.emit("window-visibility", true);
     }
 }
 
@@ -39,6 +40,7 @@ pub fn restore_after_game(app: &AppHandle) {
 pub fn hide_main(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         if available() { let _ = w.hide(); } else { let _ = w.minimize(); }
+        let _ = app.emit("window-visibility", false);
     }
 }
 

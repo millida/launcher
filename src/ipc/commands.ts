@@ -80,7 +80,11 @@ export interface ProfileSettings {
   width?: number
   height?: number
   javaPath?: string
+  javaMajor?: number
+  gpu?: GpuPref
 }
+
+export type GpuPref = 'auto' | 'discrete' | 'integrated'
 
 export interface ModpackInfo {
   slug: string
@@ -551,6 +555,14 @@ export const saveProfileSettings = (
   height: number,
   javaPath: string,
 ) => invoke<void>('save_profile_settings', { profile, jvmArgs, width, height, javaPath })
+
+export const setProfileGpu = (profile: string, pref: GpuPref) =>
+  invoke<GpuPref>('set_profile_gpu', { profile, pref })
+
+export const gpuSwitchSupported = () => invoke<boolean>('gpu_switch_supported')
+
+export const setProfileJavaMajor = (profile: string, major: number | null) =>
+  invoke<string>('set_profile_java_major', { profile, major })
 
 export const scanImports = () => invoke<FoundInstance[]>('scan_imports')
 

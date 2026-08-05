@@ -62,7 +62,8 @@ fn probe_major(path: &Path) -> Option<u32> {
     if !text.contains("64-Bit") {
         return None;
     }
-    parse_major(text.lines().next()?)
+    // JAVA_TOOL_OPTIONS makes the JVM print a notice above the version line.
+    text.lines().find_map(parse_major)
 }
 
 fn push_children(out: &mut Vec<PathBuf>, base: &Path) {
@@ -221,6 +222,17 @@ pub async fn download_java_runtime(app: &AppHandle, major: u64) -> Result<String
     }
     let bin = install_managed_java(app, major).await?;
     java_version_of(&bin).ok_or_else(|| "Java скачалась, но не запускается".to_string())
+}
+
+/// Installs, or reuses, the runtime for a major the webview named. Same closed
+/// list as the manual download, but it goes through `ensure_java`, so inside
+/// Flatpak the bundled SDK extension is used instead of a fresh Adoptium fetch.
+pub async fn ensure_java_major(app: &AppHandle, major: u64) -> Result<String, String> {
+    if !JAVA_MAJORS.contains(&major) {
+        return Err("Такую версию Java лаунчер не ставит".into());
+    }
+    let bin = ensure_java(app, major).await?;
+    java_version_of(&bin).ok_or_else(|| "Java установилась, но не запускается".to_string())
 }
 
 struct AdoptiumPackage {
@@ -383,11 +395,17 @@ pub fn remove_java_runtime(major: u32) -> Result<u64, String> {
     Ok(freed)
 }
 
+/// `java -version` writes to stderr: `openjdk version "21.0.2"`. A binary that
+/// cannot start writes its loader error to the very same stream, so taking the
+/// first line would report `libjli.so: cannot open shared object file` as the
+/// installed Java version and let a dead binary through every check below.
+fn version_line(stderr: &str) -> Option<String> {
+    stderr.lines().map(str::trim).find(|l| parse_major(l).is_some()).map(str::to_string)
+}
+
 pub(crate) fn java_version_of(path: &Path) -> Option<String> {
     let out = quiet(&mut Command::new(path)).arg("-version").output().ok()?;
-    // `java -version` writes to stderr: `openjdk version "21.0.2"`.
-    let s = String::from_utf8_lossy(&out.stderr);
-    s.lines().next().map(|l| l.trim().to_string()).filter(|l| !l.is_empty())
+    version_line(&String::from_utf8_lossy(&out.stderr))
 }
 
 /// Java binaries the launcher discovered on its own: managed runtimes under the
@@ -444,12 +462,47 @@ fn java_file_name_ok(path: &Path) -> bool {
     if cfg!(target_os = "windows") { name.eq_ignore_ascii_case("java.exe") } else { name == "java" }
 }
 
+/// The JRE launcher only works inside its own runtime: it finds libjli and
+/// jvm.cfg relative to itself. A sandboxed file dialog answers with a single-file
+/// copy under /run/user/<uid>/doc, which is named `java`, is executable, and dies
+/// on the first library it needs — so the surrounding tree is what decides.
+/// Resolved first: /usr/bin/java is a symlink chain into the real JRE, and the
+/// tree only exists at the far end of it.
+fn java_tree_ok(bin: &Path) -> bool {
+    let real = std::fs::canonicalize(bin).unwrap_or_else(|_| bin.to_path_buf());
+    real.parent().and_then(|b| b.parent()).is_some_and(has_jvm_cfg)
+}
+
+/// Why a path the user typed or picked cannot be started. The generic "choose it
+/// with the button" answer sends Flatpak users into the file dialog, which hands
+/// back a broken single-file path, so each case says what actually helps.
+pub fn java_reject_reason(path: &Path) -> String {
+    if !java_file_name_ok(path) {
+        let want = if cfg!(target_os = "windows") { "java.exe" } else { "java" };
+        return format!("Нужен сам файл {} из папки bin выбранной Java", want);
+    }
+    if !path.is_file() {
+        if is_flatpak() {
+            return "Flatpak не видит папки системы, поэтому такую Java запустить нельзя — впиши номер версии (например 25), лаунчер скачает её сам".into();
+        }
+        return "По этому пути файла java нет".into();
+    }
+    if !java_tree_ok(path) {
+        let base = "Это одиночный файл java без своей папки lib — Java запускается только целиком";
+        if is_flatpak() {
+            return format!("{}. Во Flatpak выбор системной Java не работает — впиши номер версии (например 25), скачаем сами", base);
+        }
+        return format!("{}. Выбери bin/java внутри папки установленной Java", base);
+    }
+    "Эту Java лаунчер ещё не проверял — выбери её кнопкой «Обзор…» или впиши номер версии, скачаем сами".into()
+}
+
 /// The webview may name a Java binary, and the launcher then executes it, so the
 /// path has to be one the core produced itself: a discovered JRE or a file the
 /// user picked in the native dialog. Anything else would turn a scripting hole
 /// in the UI into "run this arbitrary executable".
 pub fn java_path_allowed(path: &Path) -> bool {
-    if !java_file_name_ok(path) || !path.is_file() {
+    if !java_file_name_ok(path) || !path.is_file() || !java_tree_ok(path) {
         return false;
     }
     java_candidates().iter().any(|c| same_file(c, path))
@@ -484,7 +537,7 @@ pub fn set_default_java(path: Option<String>) -> Result<(), String> {
         return Ok(());
     };
     if !java_path_allowed(Path::new(&path)) {
-        return Err("Путь к Java не распознан — выбери её кнопкой «Выбрать Java»".into());
+        return Err(java_reject_reason(Path::new(&path)));
     }
     write_json_atomic(&default_java_index(), &path).map_err(|e| format!("Не удалось сохранить выбор: {}", e))
 }
@@ -503,7 +556,7 @@ pub fn detect_java() -> Vec<JavaInfo> {
 pub fn test_java(path: String) -> Result<String, String> {
     let p = PathBuf::from(&path);
     if !java_path_allowed(&p) {
-        return Err("Такой файл Java лаунчер не запускает — выбери его кнопкой «Выбрать Java»".into());
+        return Err(java_reject_reason(&p));
     }
     java_version_of(&p).ok_or_else(|| "Не удалось запустить Java по этому пути".to_string())
 }
@@ -512,9 +565,8 @@ pub fn test_java(path: String) -> Result<String, String> {
 /// JRE, remembers it as an allowed Java for later launches.
 pub fn accept_picked_java(path: String) -> Result<String, String> {
     let p = PathBuf::from(&path);
-    if !java_file_name_ok(&p) || !p.is_file() {
-        let want = if cfg!(target_os = "windows") { "java.exe" } else { "java" };
-        return Err(format!("Нужен сам файл {} из папки bin выбранной Java", want));
+    if !java_file_name_ok(&p) || !p.is_file() || !java_tree_ok(&p) {
+        return Err(java_reject_reason(&p));
     }
     let version = java_version_of(&p).ok_or_else(|| "Не удалось запустить Java по этому пути".to_string())?;
     trust_java_path(&p);
@@ -623,6 +675,61 @@ mod tests {
             set_default_java(Some(temp_file("evil.exe").to_string_lossy().to_string())).is_err(),
             "an arbitrary executable must never be stored as the default Java"
         );
+    }
+
+    /// A sandboxed file dialog answers with a single-file copy of the binary. It
+    /// is named `java`, it is executable, and it dies on `libjli.so`, so the tree
+    /// around it is what separates a real JRE from a useless proxy.
+    #[test]
+    fn lone_java_binary_is_not_a_runtime() {
+        let d = make("lone");
+        let bin = java_bin(&d);
+        assert!(!java_tree_ok(&bin), "java without its own lib/jvm.cfg cannot start a JVM");
+        assert!(
+            accept_picked_java(bin.to_string_lossy().to_string()).is_err(),
+            "picking a single-file java must be refused instead of stored as a working runtime"
+        );
+
+        let lib = java_home(&d).join("lib");
+        std::fs::create_dir_all(&lib).unwrap();
+        std::fs::write(lib.join("jvm.cfg"), b"-server KNOWN").unwrap();
+        assert!(java_tree_ok(&bin), "the same binary inside a complete JRE is fine");
+    }
+
+    /// `java -version` and a failing loader both write to stderr, so a version has
+    /// to be recognised as one — otherwise `libjli.so: cannot open shared object
+    /// file` is stored and shown to the user as the installed Java version.
+    #[test]
+    fn only_a_real_version_line_counts() {
+        // (stderr of `java -version`, version reported, why this case is pinned)
+        let cases: &[(&str, Option<&str>, &str)] = &[
+            (
+                "openjdk version \"25.0.1\" 2025-10-21\nOpenJDK Runtime Environment\n",
+                Some("openjdk version \"25.0.1\" 2025-10-21"),
+                "a normal answer",
+            ),
+            ("java version \"1.8.0_402\"\n", Some("java version \"1.8.0_402\""), "the Java 8 spelling"),
+            (
+                "Picked up JAVA_TOOL_OPTIONS: -Dfoo\nopenjdk version \"21.0.2\" 2024-01-16\n",
+                Some("openjdk version \"21.0.2\" 2024-01-16"),
+                "the JVM prints an options notice above the version line",
+            ),
+            (
+                "/run/user/1000/doc/S6NX/java: error while loading shared libraries: libjli.so: cannot open shared object file: No such file or directory\n",
+                None,
+                "the sandbox single-file copy fails exactly like this and used to be stored as a working Java",
+            ),
+            ("Error occurred during initialization of VM\n", None, "a JVM that dies before printing a version"),
+            ("", None, "no output at all"),
+        ];
+        for (stderr, expected, why) in cases {
+            let got = version_line(stderr);
+            assert_eq!(
+                got.as_deref(),
+                *expected,
+                "stderr {stderr:?} reported {got:?}, expected {expected:?}. Pinned because: {why}",
+            );
+        }
     }
 
     #[test]
