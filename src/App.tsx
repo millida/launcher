@@ -61,7 +61,7 @@ function previewOf(m: PolledMessage): string {
 import { refreshPlayStats, rememberServerName } from './state/playStats'
 import { quickJoin } from './lib/joinServer'
 import { refreshProfiles } from './state/profiles'
-import { initMusic, startMusicAfterLogin } from './state/music'
+import { initMusic, startMusicAfterLogin, stopMusicNow } from './state/music'
 import { initSounds, playSound } from './lib/sound'
 import { initDeepLinks } from './lib/deeplink'
 import { useMods } from './state/mods'
@@ -223,6 +223,7 @@ export function App() {
   useEffect(() => {
     let unlisten: UnlistenFn | null = null
     void listenTrayExit(() => {
+      stopMusicNow()
       void flushPrefs()
       if (updateReady()) void installUpdateOnExit()
     }).then((u) => {

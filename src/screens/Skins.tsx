@@ -27,6 +27,7 @@ import {
   addToWardrobe,
   applyWardrobeItem,
   claimReward,
+  loadCapeCatalog,
   loadRewards,
   loadWardrobe,
   removeWardrobeItem,
@@ -34,7 +35,7 @@ import {
   skinSource,
   uploadTexture,
 } from '../lib/gameProfile'
-import type { RewardItem, WardrobeItem } from '../lib/gameProfile'
+import type { CapeCatalogItem, RewardItem, WardrobeItem } from '../lib/gameProfile'
 import { refreshGameNick, useGameNick } from '../state/gameNick'
 import { hasMillidaAccount, openExt } from '../lib/api'
 import { track } from '../lib/telemetry'
@@ -179,6 +180,16 @@ interface CapeOption {
   msId?: string
   accId?: string
   wardrobeId?: string
+  /// Плащ из каталога Millida, условие которого ещё не выполнено: карточка
+  /// затемнена, надеть нельзя, но видно, что и сколько осталось сделать.
+  locked?: boolean
+  /// Текст условия получения («Наиграть 10 часов»).
+  requirement?: string
+  /// 0..100 — прогресс по условию.
+  progress?: number
+  /// «7 / 10 часов» — человеческий счётчик под полоской.
+  progressLabel?: string
+  rarity?: string
 }
 
 async function migrateStored(kind: TextureKind, key: string): Promise<MySkin[] | null> {
@@ -577,6 +588,11 @@ export function Skins({ on }: { on: boolean }) {
   const [rewards, setRewards] = useState<RewardItem[]>([])
   const [claiming, setClaiming] = useState('')
   const [activeWardrobe, setActiveWardrobe] = useState<string | null>(null)
+  // Каталог плащей Millida: и открытые, и закрытые — закрытые показываем
+  // затемнёнными с условием, ради них и играют.
+  const [capeCatalog, setCapeCatalog] = useState<CapeCatalogItem[]>([])
+  // Все плащи лицензии по аккаунтам: сессионный профиль отдаёт только надетый,
+  // из-за чего «на аккаунте» помечался ровно один плащ.
   const [msCapes, setMsCapes] = useState<Record<string, MsCape[]>>({})
   const [activeMy, setActiveMy] = useState<number | null>(null)
   const activeMyRef = useRef<number | null>(null)
@@ -661,15 +677,34 @@ export function Skins({ on }: { on: boolean }) {
     }
   }
 
+  // Каталог плащей: без аккаунта Millida его некому персонализировать
+  // (прогресс и «открыт/закрыт» считает сервер по текущему пользователю).
+  useEffect(() => {
+    if (!hasMillidaAccount()) return
+    let alive = true
+    loadCapeCatalog()
+      .then((list) => {
+        if (alive && Array.isArray(list)) setCapeCatalog(list)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [])
+
   const gameNick = useGameNick()
   useEffect(() => {
     void refreshGameNick()
   }, [])
 
+  // Разовый переезд локальной библиотеки в аккаунт: сервер сам схлопывает
+  // повторы по содержимому PNG, поэтому дублей каталог не наберёт.
+  // Только скины: плащи в каталог аккаунта больше не загружаются — они выдаются
+  // каталогом Millida и лицензией Mojang.
   const syncedRef = useRef(false)
   useEffect(() => {
     if (syncedRef.current || !hasMillidaAccount()) return
-    if (!mySkins.length && !myCapes.length) return
+    if (!mySkins.length) return
     syncedRef.current = true
     void (async () => {
       const KEY = 'm-wardrobe-synced'
@@ -678,10 +713,9 @@ export function Skins({ on }: { on: boolean }) {
         const raw = JSON.parse(localStorage.getItem(KEY) || '[]')
         done = Array.isArray(raw) ? raw : []
       } catch {}
-      const pending = [
-        ...mySkins.map((s) => ({ kind: 'skin' as const, item: s, tag: 's:' + s.file })),
-        ...myCapes.map((c) => ({ kind: 'cape' as const, item: c, tag: 'c:' + c.file })),
-      ].filter((p) => !done.includes(p.tag))
+      const pending = mySkins
+        .map((s) => ({ kind: 'skin' as const, item: s, tag: 's:' + s.file }))
+        .filter((p) => !done.includes(p.tag))
       if (!pending.length) return
       for (const p of pending) {
         try {
@@ -697,7 +731,7 @@ export function Skins({ on }: { on: boolean }) {
       localStorage.setItem(KEY, JSON.stringify(done.slice(-200)))
       await refreshWardrobe()
     })()
-  }, [mySkins, myCapes])
+  }, [mySkins])
 
   const setMySlim = (i: number, slim: boolean) => {
     const target = mySkins[i]
@@ -834,11 +868,40 @@ export function Skins({ on }: { on: boolean }) {
           onAccount: true,
         }))
       const design: CapeOption[] = [{ id: 'millida', name: 'Millida', url: MILLIDA_CAPE, sub: 'Плащ лаунчера' }]
-      const mine: CapeOption[] = myCapes.map((c, i) => ({ id: 'my:' + i, name: c.name, url: c.data, sub: 'Свой дизайн' }))
-      // Millida capes first, Microsoft and Mojang designs after them.
-      return design.concat(stored).concat(mine).concat(licensed).concat(acc).concat(official)
+      // Плащи каталога Millida. Уже лежащие в гардеробе аккаунта не дублируем.
+      const storedHashes = new Set(stored.map((s) => hashOf(s.url)).filter(Boolean))
+      const storedUrls = new Set(stored.map((s) => s.url))
+      const catalog: CapeOption[] = capeCatalog
+        .filter((c) => c.url && !storedUrls.has(c.url) && !(hashOf(c.url) && storedHashes.has(hashOf(c.url))))
+        .map((c) => {
+          const locked = c.unlocked === false
+          const target = c.progressTarget || 0
+          const cur = c.progressCurrent || 0
+          return {
+            id: 'cat:' + c.id,
+            name: c.name,
+            url: c.url,
+            sub: locked ? c.requirement || 'Пока закрыт' : c.rarity ? 'Каталог Millida · ' + c.rarity : 'Каталог Millida',
+            locked,
+            requirement: c.requirement,
+            rarity: c.rarity,
+            progress: locked ? Math.max(0, Math.min(100, Math.round(c.progress || 0))) : undefined,
+            progressLabel:
+              locked && target ? cur + ' / ' + target + (c.progressUnit ? ' ' + c.progressUnit : '') : undefined,
+          }
+        })
+      // Ранее загруженные свои плащи. Новые загрузить нельзя, но старые надеть — да.
+      const mine: CapeOption[] = myCapes.map((c, i) => ({
+        id: 'my:' + i,
+        name: c.name,
+        url: c.data,
+        sub: 'Загружено ранее',
+      }))
+      const open = catalog.filter((c) => !c.locked)
+      const shut = catalog.filter((c) => c.locked)
+      return licensed.concat(stored).concat(open).concat(acc).concat(design).concat(mine).concat(official).concat(shut)
     },
-    [accounts, textures, myCapes, msCapes, wardrobe],
+    [accounts, textures, myCapes, msCapes, wardrobe, capeCatalog],
   )
 
   useEffect(() => {
@@ -919,6 +982,11 @@ export function Skins({ on }: { on: boolean }) {
   }
 
   const pickCapeOption = (c: CapeOption) => {
+    // Закрытый плащ каталога надеть нельзя — вместо этого напоминаем условие.
+    if (c.locked) {
+      showToast(c.requirement ? c.name + ' · ' + c.requirement : 'Плащ «' + c.name + '» ещё не открыт')
+      return
+    }
     chooseCape(c.id)
     const target = capeTarget(c)
     if (!target) {
@@ -1100,6 +1168,12 @@ export function Skins({ on }: { on: boolean }) {
       .catch((e) => showToast('Не удалось загрузить: ' + e, 'error'))
   }
 
+  // Загрузки своих плащей больше нет: плащ можно только получить — с лицензии
+  // Mojang или в каталоге Millida. Ранее загруженные плащи остаются в списке
+  // (группа «Загружено ранее»), но новых добавить нельзя.
+
+  /// Общий приём импортированной текстуры: кладём в локальную библиотеку, в
+  /// каталог аккаунта и сразу показываем в превью.
   const acceptSkin = async (name: string, data: string) => {
     let slim = false
     try {
@@ -1779,7 +1853,15 @@ export function Skins({ on }: { on: boolean }) {
               {capes.map((c) => {
                 const my = c.id.startsWith('my:')
                 return (
-                  <div key={c.id} className={'cape-card' + (c.id === cape ? ' on' : '') + (my ? ' sk-removable' : '')}>
+                  <div
+                    key={c.id}
+                    className={
+                      'cape-card' +
+                      (c.id === cape ? ' on' : '') +
+                      (my ? ' sk-removable' : '') +
+                      (c.locked ? ' locked' : '')
+                    }
+                  >
                     <button
                       className={my ? 'sk-card-hit' : 'cape-hit'}
                       title={c.name + ' · ' + c.sub}
@@ -1787,11 +1869,29 @@ export function Skins({ on }: { on: boolean }) {
                     >
                       <span className="cape-render">
                         <CapePreview url={c.url} h={92} />
+                        {c.locked ? (
+                          <span className="cape-lock">
+                            <Icon id="i-lock" />
+                          </span>
+                        ) : null}
                       </span>
                       <b>{c.name}</b>
                       <span className="cape-sub">
-                        {c.onAccount ? <span className="cape-ok">✓ на аккаунте</span> : c.sub}
+                        {c.onAccount ? (
+                          <span className="cape-ok">
+                            <Icon id="i-check" />
+                            на аккаунте
+                          </span>
+                        ) : (
+                          c.sub
+                        )}
                       </span>
+                      {c.locked && c.progress !== undefined ? (
+                        <span className="cape-prog" title={c.progressLabel || ''}>
+                          <span className="cape-prog-bar" style={{ width: c.progress + '%' }}></span>
+                        </span>
+                      ) : null}
+                      {c.locked && c.progressLabel ? <span className="cape-prog-txt">{c.progressLabel}</span> : null}
                     </button>
                     {my ? (
                       <button className="sk-del" title="Удалить" onClick={() => removeMyCape(Number(c.id.slice(3)))}>
@@ -1802,6 +1902,10 @@ export function Skins({ on }: { on: boolean }) {
                 )
               })}
             </div>
+            <p className="faint-note">
+              Свои плащи загрузить нельзя: плащ выдаётся вместе с лицензией Mojang или открывается в каталоге Millida.
+              Загруженные раньше плащи остались в списке и работают как прежде.
+            </p>
           </div>
 
           {tab === 'rewards' ? (

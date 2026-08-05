@@ -12,16 +12,54 @@ pub fn save_profile_settings(profile: String, jvm_args: String, width: u32, heig
     }
     let java_path = java_path.map(|p| p.trim().to_string()).unwrap_or_default();
     if !java_path.is_empty() && !engine::java_path_allowed(std::path::Path::new(&java_path)) {
-        return Err("Путь к Java не распознан — выбери её кнопкой «Выбрать Java»".into());
+        return Err(engine::java_reject_reason(std::path::Path::new(&java_path)));
     }
     let mut patch = serde_json::Map::new();
     patch.insert("jvmArgs".into(), serde_json::json!(jvm_args));
     patch.insert("width".into(), serde_json::json!(width));
     patch.insert("height".into(), serde_json::json!(height));
     patch.insert("javaPath".into(), serde_json::json!(java_path));
+    // An explicit path replaces a pinned version; the empty path means "auto" and
+    // must not silently unpin a version the user chose in the same panel.
+    if !java_path.is_empty() {
+        patch.insert("javaMajor".into(), serde_json::Value::Null);
+    }
     engine::merge_settings(&profile, patch);
     Ok(())
 }
+
+/// Pins a Java version for one build and installs it. `major` is the only thing
+/// the webview may name here, and it is checked against the published list
+/// before it reaches an Adoptium URL and a directory name.
+#[tauri::command]
+pub async fn set_profile_java_major(app: tauri::AppHandle, profile: String, major: Option<u64>) -> Result<String, String> {
+    let Some(major) = major else {
+        let mut patch = serde_json::Map::new();
+        patch.insert("javaMajor".into(), serde_json::Value::Null);
+        engine::merge_settings(&profile, patch);
+        return Ok(String::new());
+    };
+    let version = engine::ensure_java_major(&app, major).await?;
+    let mut patch = serde_json::Map::new();
+    patch.insert("javaMajor".into(), serde_json::json!(major));
+    patch.insert("javaPath".into(), serde_json::json!(""));
+    engine::merge_settings(&profile, patch);
+    Ok(version)
+}
+
+/// The webview names a card, never a command line: the core owns the switches
+/// that a name turns into.
+#[tauri::command]
+pub fn set_profile_gpu(profile: String, pref: String) -> String {
+    let pref = engine::GpuPref::parse(&pref);
+    let mut patch = serde_json::Map::new();
+    patch.insert("gpu".into(), serde_json::json!(pref.as_str()));
+    engine::merge_settings(&profile, patch);
+    pref.as_str().to_string()
+}
+
+#[tauri::command]
+pub fn gpu_switch_supported() -> bool { engine::gpu_switch_supported() }
 
 #[tauri::command]
 pub fn fps_boost_state(profile: String) -> engine::FpsBoostState { engine::fps_boost_state(&profile) }

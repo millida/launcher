@@ -1,5 +1,6 @@
 import { hasTauri, tauri } from '../ipc/tauri'
 import { hideToTray, setRestoreOnExitNative, showFromTray, trayAvailable } from '../ipc/commands'
+import { suspendMusic } from '../state/music'
 import { showToast } from '../state/ui'
 
 export type LaunchWindowMode = 'none' | 'minimize' | 'tray'
@@ -66,7 +67,11 @@ function hideWindow() {
 
 export function hideLauncherToTray() {
   if (!hasTauri()) return
-  if (trayReady) hideWindow()
+  if (trayReady) {
+    // The hint toast delays the hide, but the user already asked to leave.
+    suspendMusic()
+    hideWindow()
+  }
   else minimizeWindow()
 }
 

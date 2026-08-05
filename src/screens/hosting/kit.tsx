@@ -168,8 +168,20 @@ export function Empty({ icon, text }: { icon?: string; text: string }) {
   )
 }
 
-export function Loading({ text }: { text?: string }) {
-  return <p className="faint-note">{text || 'Загружаем…'}</p>
+// Канон 3.9: загрузка — скелетон формы контента, а не «Загружаем…» текстом.
+// `text` оставлен в типе для совместимости вызовов, но не рендерится.
+export function Loading({ rows = 3 }: { text?: string; rows?: number }) {
+  return (
+    <div className="skel-rows" aria-busy="true">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div className="skel-row" key={i}>
+          <span className="skel" style={{ width: '28px', height: '28px', borderRadius: '8px' }} />
+          <span className="skel skel-line" style={{ width: i % 2 ? '38%' : '52%' }} />
+          <span className="skel skel-line" style={{ width: '72px', marginLeft: 'auto' }} />
+        </div>
+      ))}
+    </div>
+  )
 }
 
 export const gbLabel = (mb: number) => (mb / 1024).toFixed(mb % 1024 === 0 ? 0 : 1).replace('.', ',')

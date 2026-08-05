@@ -4,7 +4,7 @@ import { hasTauri } from '../ipc/tauri'
 import { addServer } from '../ipc/commands'
 import { useProfiles } from '../state/profiles'
 import { joinWithAuth, showLaunchError } from '../lib/launch'
-import { setScreen, showToast } from '../state/ui'
+import { openSettings, setScreen, showToast } from '../state/ui'
 import { encodeInvite, isServerAddr, parseInvite } from '../lib/invite'
 import { Head } from './Head'
 import { fmtPlaytime, onAvatarError, whenText } from '../lib/format'
@@ -248,7 +248,10 @@ function Composer({ uid }: { uid: string }) {
 
   const startRecording = async () => {
     if (!canRecordVoice()) {
-      showToast('Микрофон недоступен', 'error')
+      showToast('Микрофон недоступен — открой настройки звука и проверь его', 'error', undefined, {
+        label: 'Настроить',
+        run: () => openSettings('sound', 'mic'),
+      })
       return
     }
     setRecMs(0)
@@ -266,7 +269,10 @@ function Composer({ uid }: { uid: string }) {
         ),
       )
     } catch {
-      showToast('Нет доступа к микрофону — разреши его в системе', 'error')
+      showToast('Нет доступа к микрофону — разреши его в системе', 'error', undefined, {
+        label: 'Как исправить',
+        run: () => openSettings('sound', 'mic'),
+      })
     }
   }
 

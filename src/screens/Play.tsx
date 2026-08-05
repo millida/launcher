@@ -506,9 +506,19 @@ export function Play({ on }: { on: boolean }) {
       </div>
       <div className="ready-grid" id="readyGrid">
         {ready === null ? (
-          <p className="faint-note" style={{ gridColumn: '1/-1' }}>
-            Загружаем популярные сборки…
-          </p>
+          /* Канон 3.9: скелетон формы карточки сборки вместо текста «Загружаем…» */
+          <>
+            {[0, 1, 2, 3].map((i) => (
+              <div className="card skel-card" key={i} style={{ display: 'flex', gap: '15px', padding: '12px', marginBottom: 0 }} aria-busy="true">
+                <span className="skel" style={{ width: '120px', height: '120px', borderRadius: '12px', flex: 'none' }} />
+                <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '8px' }}>
+                  <span className="skel skel-line" style={{ width: '62%' }} />
+                  <span className="skel skel-line" style={{ width: '100%' }} />
+                  <span className="skel skel-line" style={{ width: '48%' }} />
+                </span>
+              </div>
+            ))}
+          </>
         ) : ready.length ? (
           ready.map((h) => <ReadyCard key={h.slug} h={h} />)
         ) : (

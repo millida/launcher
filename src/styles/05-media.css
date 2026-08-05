@@ -180,6 +180,15 @@
 .cape-ok {
   color: var(--m-accent);
   font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+/* Дингбат «✓» заменён иконкой Lucide (канон 3.14) */
+.cape-ok svg {
+  width: 13px;
+  height: 13px;
+  flex: none;
 }
 
 /* ---- Custom wallpaper gallery ---- */
@@ -282,7 +291,7 @@
   left: 0;
   right: 0;
   text-align: center;
-  font-family: var(--m-font-brand, inherit);
+  /* Канон 2.1: Unbounded — только wordmark, имя скина — Geist */
   font-weight: 700;
   font-size: 15px;
   color: var(--m-fg);
@@ -337,6 +346,7 @@
   color: var(--m-fg-subtle);
 }
 .cape-render {
+  position: relative;
   width: 58px;
   height: 92px;
   display: grid;
@@ -353,8 +363,53 @@
   width: 18px;
   height: 18px;
 }
-.cape-card.add {
-  border: 1px dashed var(--m-border-strong);
+/* Закрытый плащ каталога: видно, но надеть нельзя. Прячем — теряем мотивацию,
+   поэтому показываем затемнённым, с замком и прогрессом по условию. */
+.cape-card.locked,
+.cape-card.locked .cape-hit {
+  cursor: default;
+}
+.cape-card.locked:hover {
+  background: var(--m-surface);
+}
+.cape-card.locked .cape-render canvas {
+  filter: grayscale(1) brightness(0.55);
+}
+.cape-card.locked b,
+.cape-card.locked .cape-sub {
+  color: var(--m-fg-subtle);
+}
+.cape-lock {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--m-inset) 55%, transparent);
+}
+.cape-lock svg {
+  width: 16px;
+  height: 16px;
+  color: var(--m-fg-muted);
+}
+.cape-prog {
+  display: block;
+  width: 100%;
+  height: 4px;
+  margin-top: 2px;
+  border-radius: 99px;
+  background: var(--m-inset);
+  overflow: hidden;
+}
+.cape-prog-bar {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--m-accent);
+  transition: width var(--m-t-base);
+}
+.cape-prog-txt {
+  font-size: 10px;
+  color: var(--m-fg-faint);
 }
 
 /* ---- Friend row menu ---- */
@@ -497,17 +552,21 @@
   height: 15px;
 }
 
-/* ---- Add account modal ---- */
-.acc-opt{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--m-inset);border:1px solid transparent;color:inherit;padding:12px;border-radius:12px;cursor:pointer;transition:border-color var(--m-t-fast),background var(--m-t-fast)}
-.acc-opt:hover{background:var(--m-raised);border-color:var(--m-border)}
+/* ---- Add account modal (lived in a <style> tag, which WKWebView ignores) ---- */
+/* Kit rule 3.4/5.4: hover shifts the surface, it does not reveal an outline. */
+.acc-opt{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--m-inset);border:0;color:inherit;padding:12px;border-radius:12px;cursor:pointer;transition:background var(--m-t-fast)}
+.acc-opt:hover{background:var(--m-surface-2)}
 .acc-opt-ic{width:38px;height:38px;border-radius:10px;background:var(--m-surface-2);display:grid;place-items:center;flex:none}
 .acc-opt-ic svg{width:18px;height:18px;color:var(--m-accent)}
 .acc-code{display:flex;align-items:center;gap:10px;justify-content:center;width:100%;font-size:22px;font-weight:700;letter-spacing:.14em;padding:14px;border-radius:12px;background:var(--m-inset);border:1px dashed var(--m-border);color:var(--m-fg);cursor:pointer}
-.acc-buy{display:flex;align-items:center;gap:12px;width:100%;text-decoration:none;padding:12px;margin-top:2px;border-radius:12px;color:#fff;background:linear-gradient(100deg,#5a9c3a 0%,#3f8f5b 45%,#2f7fae 100%);position:relative;overflow:hidden;transition:filter var(--m-t-fast),transform var(--m-t-fast)}
+/* "Buy a licence" promo banner: not an account, so it reads as an ad.
+   Kit rule 5.2: the only permitted gradient is the brand 45deg (--m-grad). */
+.acc-buy{display:flex;align-items:center;gap:12px;width:100%;text-decoration:none;padding:12px;margin-top:2px;border-radius:12px;color:var(--m-accent-fg);background:var(--m-grad);position:relative;overflow:hidden;transition:filter var(--m-t-fast),transform var(--m-t-fast)}
 .acc-buy:hover{filter:brightness(1.08);transform:translateY(-1px)}
 .acc-buy>svg{width:16px;height:16px;opacity:.9;flex:none}
-.acc-buy-ic{width:38px;height:38px;border-radius:10px;flex:none;display:grid;place-items:center;background:conic-gradient(from 210deg,#ff6b5e,#f5c93b,#5ec64d,#2cb6e8,#9b6bff,#ff6baa,#ff6b5e);box-shadow:0 2px 8px rgba(0,0,0,.28)}
-.acc-buy-ic svg{width:18px;height:18px;color:#fff;filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))}
+/* Плитка иконки — плоская подложка на фирменном фоне, без радужного конуса и тени (5.2 / 1.5) */
+.acc-buy-ic{width:38px;height:38px;border-radius:10px;flex:none;display:grid;place-items:center;background:rgba(255,255,255,.18)}
+.acc-buy-ic svg{width:18px;height:18px;color:var(--m-accent-fg)}
 
 /* ---- Incoming message popup ---- */
 .chat-notify-stack{position:absolute;top:52px;right:16px;z-index:400;display:flex;flex-direction:column;gap:8px;width:300px}
@@ -538,7 +597,7 @@
 .fr-build{padding:1px 7px;border-radius:var(--m-r-pill);background:var(--m-inset);color:var(--m-fg-subtle);font-size:11px;font-weight:600}
 .fr-filter{width:190px}
 .fr-msg{position:relative}
-.fr-unread{min-width:17px;height:17px;margin-left:6px;padding:0 5px;border-radius:var(--m-r-pill);background:var(--m-danger);color:#fff;font-size:10.5px;font-weight:700;display:inline-grid;place-items:center}
+.fr-unread{min-width:17px;height:17px;margin-left:6px;padding:0 5px;border-radius:var(--m-r-pill);background:var(--m-danger);color:var(--m-accent-fg);font-size:10.5px;font-weight:700;display:inline-grid;place-items:center}
 .fr-row.unread .fr-nick{color:var(--m-fg)}
 .fr-now{display:flex;flex-direction:column;gap:9px;padding:12px;margin:6px 0 2px;border-radius:12px;background:var(--m-inset);border:1px solid var(--m-accent-soft)}
 .fr-now-head{display:flex;align-items:flex-start;gap:10px;min-width:0}
@@ -581,9 +640,9 @@
 /* ---- Custom color picker replacing input[type=color] ---- */
 .cpk{position:absolute;top:calc(100% + 8px);right:0;z-index:120;width:216px;padding:12px;border-radius:14px;background:var(--m-surface-2);border:1px solid var(--m-border);box-shadow:var(--m-shadow-lg);animation:frMenuIn .14s ease}
 .cpk-sv{position:relative;width:100%;height:130px;border-radius:10px;cursor:crosshair;touch-action:none;overflow:hidden}
-.cpk-sv-thumb{position:absolute;width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.4);transform:translate(-50%,-50%);pointer-events:none}
+.cpk-sv-thumb{position:absolute;width:14px;height:14px;border-radius:50%;border:2px solid var(--m-accent-fg);box-shadow:0 0 0 1px rgba(0,0,0,.4);transform:translate(-50%,-50%);pointer-events:none}
 .cpk-hue{position:relative;width:100%;height:14px;margin-top:12px;border-radius:99px;cursor:pointer;touch-action:none;background:linear-gradient(to right,#f00 0%,#ff0 17%,#0f0 33%,#0ff 50%,#00f 67%,#f0f 83%,#f00 100%)}
-.cpk-hue-thumb{position:absolute;top:50%;width:16px;height:16px;border-radius:50%;background:#fff;border:2px solid var(--m-surface-2);box-shadow:0 1px 4px rgba(0,0,0,.5);transform:translate(-50%,-50%);pointer-events:none}
+.cpk-hue-thumb{position:absolute;top:50%;width:16px;height:16px;border-radius:50%;background:var(--m-accent-fg);border:2px solid var(--m-surface-2);box-shadow:0 1px 4px rgba(0,0,0,.5);transform:translate(-50%,-50%);pointer-events:none}
 .cpk-foot{display:flex;align-items:center;gap:8px;margin-top:12px}
 .cpk-preview{width:32px;height:32px;flex:none;border-radius:8px;border:1px solid var(--m-border)}
 .cpk-foot .input{text-transform:uppercase}
@@ -606,7 +665,7 @@
 .srv-ping-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-left:7px;vertical-align:middle}
 .srv-ping-dot.on{background:var(--m-accent)}
 .srv-ping-dot.off{background:var(--m-fg-faint)}
-.srv-ping-dot.loading{position:relative;background:#e0a34a}
+.srv-ping-dot.loading{position:relative;background:var(--m-warning)}
 .srv-ping-dot.loading::after{content:"";position:absolute;inset:0;border-radius:50%;background:rgba(224,163,74,.6);animation:logLive 1.2s ease-out infinite}
 @media (prefers-reduced-motion: reduce){.srv-ping-dot.loading::after{animation:none;opacity:0}}
 

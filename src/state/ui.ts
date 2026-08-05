@@ -29,6 +29,13 @@ export interface PrelaunchState {
 }
 
 export type ToastKind = 'ok' | 'error'
+export type SettingsTab = 'look' | 'sound' | 'game' | 'window' | 'privacy' | 'about'
+export type SettingsFocus = 'mic' | null
+
+export interface ToastAction {
+  label: string
+  run: () => void
+}
 
 interface UiState {
   logged: boolean
@@ -36,12 +43,18 @@ interface UiState {
   toastMsg: string
   toastKind: ToastKind
   toastShow: boolean
+  toastAction: ToastAction | null
+  settingsTab: SettingsTab | null
+  settingsFocus: SettingsFocus
   modals: Record<ModalId, ModalState>
   prelaunch: PrelaunchState
   setLogged: (v: boolean) => void
   setScreen: (s: ScreenId) => void
-  showToast: (msg: string, kind?: ToastKind, sound?: SoundEvent | false) => void
+  showToast: (msg: string, kind?: ToastKind, sound?: SoundEvent | false, action?: ToastAction) => void
   hideToast: () => void
+  openSettings: (tab: SettingsTab, focus?: SettingsFocus) => void
+  takeSettingsTab: () => void
+  clearSettingsFocus: () => void
   openModal: (id: ModalId) => void
   closeModal: (id: ModalId) => void
   setPrelaunch: (p: Partial<PrelaunchState>) => void
@@ -63,6 +76,9 @@ function hasStoredAccount(): boolean {
 const ERROR_RE =
   /(ошибк|не удалось|не удаётся|отклон|устарел|истек|истёк|время вышло|недоступ|не настроен|не найден|нет лицензии|отказал|failed|error|AADSTS)/i
 
+const TOAST_MS = 2600
+const TOAST_ACTION_MS = 7000
+
 let toastTimer: ReturnType<typeof setTimeout> | undefined
 const closeTimers: Partial<Record<ModalId, ReturnType<typeof setTimeout>>> = {}
 
@@ -72,6 +88,9 @@ export const useUi = create<UiState>((set, get) => ({
   toastMsg: 'Скопировано',
   toastKind: 'ok',
   toastShow: false,
+  toastAction: null,
+  settingsTab: null,
+  settingsFocus: null,
   modals: {
     nbModal: emptyModal(),
     bsModal: emptyModal(),
@@ -87,14 +106,20 @@ export const useUi = create<UiState>((set, get) => ({
   // Transition keeps the current screen mounted while the next chunk loads,
   // instead of flashing the empty Suspense fallback.
   setScreen: (s) => startTransition(() => set({ screen: s })),
-  showToast: (msg, kind, sound) => {
+  showToast: (msg, kind, sound, action) => {
     const k = kind || (ERROR_RE.test(msg) ? 'error' : 'ok')
-    set({ toastMsg: msg, toastKind: k, toastShow: true })
+    set({ toastMsg: msg, toastKind: k, toastShow: true, toastAction: action || null })
     if (sound !== false) playSound(sound || (k === 'error' ? 'error' : 'success'))
     clearTimeout(toastTimer)
-    toastTimer = setTimeout(() => get().hideToast(), 2600)
+    toastTimer = setTimeout(() => get().hideToast(), action ? TOAST_ACTION_MS : TOAST_MS)
   },
-  hideToast: () => set({ toastShow: false }),
+  hideToast: () => set({ toastShow: false, toastAction: null }),
+  openSettings: (tab, focus) => {
+    set({ settingsTab: tab, settingsFocus: focus || null })
+    get().setScreen('settings')
+  },
+  takeSettingsTab: () => set({ settingsTab: null }),
+  clearSettingsFocus: () => set({ settingsFocus: null }),
   openModal: (id) => {
     clearTimeout(closeTimers[id])
     closeTimers[id] = undefined
@@ -119,8 +144,10 @@ export const useUi = create<UiState>((set, get) => ({
   setPrelaunch: (p) => set({ prelaunch: { ...get().prelaunch, ...p } }),
 }))
 
-export const showToast = (msg: string, kind?: ToastKind, sound?: SoundEvent | false) =>
-  useUi.getState().showToast(msg, kind, sound)
+export const showToast = (msg: string, kind?: ToastKind, sound?: SoundEvent | false, action?: ToastAction) =>
+  useUi.getState().showToast(msg, kind, sound, action)
+export const openSettings = (tab: SettingsTab, focus?: SettingsFocus) =>
+  useUi.getState().openSettings(tab, focus)
 export const openModal = (id: ModalId) => useUi.getState().openModal(id)
 export const closeModal = (id: ModalId) => useUi.getState().closeModal(id)
 export const setScreen = (s: ScreenId) => useUi.getState().setScreen(s)

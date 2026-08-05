@@ -28,6 +28,8 @@ import {
   listWorlds,
   loadProfileSettings,
   fpsBoostState,
+  gpuSwitchSupported,
+  setProfileGpu,
   modpackInfo,
   openProfileFolder,
   openUrl,
@@ -43,14 +45,16 @@ import {
   scanContentLocal,
   setProfileGroup,
   setProfileIcon,
+  setProfileJavaMajor,
   setProfileLoader,
+  javaMajors,
   shareLog,
   testJava,
   toggleContent,
   updateAll,
   updateContent,
 } from '../ipc/commands'
-import type { FpsBoostState, JavaInfo, ModFile, PingResult, ServerEntry, WorldEntry } from '../ipc/commands'
+import type { FpsBoostState, GpuPref, JavaInfo, ModFile, PingResult, ServerEntry, WorldEntry } from '../ipc/commands'
 import { Select } from '../components/Select'
 import { Slider } from '../components/Slider'
 import { isBlockIcon } from '../lib/blockColor'
@@ -118,6 +122,11 @@ export function InstancePage() {
   const [h, setH] = useState('')
   const [java, setJava] = useState('')
   const [javaList, setJavaList] = useState<JavaInfo[]>([])
+  const [javaMajor, setJavaMajor] = useState(0)
+  const [gpu, setGpu] = useState<GpuPref>('auto')
+  const [gpuOk, setGpuOk] = useState(true)
+  const [javaAll, setJavaAll] = useState<number[]>([])
+  const [javaBusy, setJavaBusy] = useState(0)
   const [detectLabel, setDetectLabel] = useState('Найти')
   const [shotCount, setShotCount] = useState('—')
   const [mpSlug, setMpSlug] = useState('')
@@ -300,6 +309,9 @@ export function InstancePage() {
           setPlaytime(' · играно ' + fmtPlaytime(b.seconds) + (b.last ? ' · заходил ' + whenText(b.last) : ''))
         })
         .catch(() => {})
+      gpuSwitchSupported()
+        .then(setGpuOk)
+        .catch(() => setGpuOk(false))
       fpsBoostState(profile)
         .then(setBoost)
         .catch(() => setBoost(null))
@@ -309,10 +321,15 @@ export function InstancePage() {
           setW(cfg.width ? String(cfg.width) : '')
           setH(cfg.height ? String(cfg.height) : '')
           setJava(cfg.javaPath || '')
+          setJavaMajor(Number(cfg.javaMajor) || 0)
+          setGpu(cfg.gpu || 'auto')
         })
         .catch(() => {})
       detectJava()
         .then((list) => setJavaList(list))
+        .catch(() => {})
+      javaMajors()
+        .then(setJavaAll)
         .catch(() => {})
       countScreenshots(profile)
         .then((n) => setShotCount(n ? n + ' шт.' : 'пока нет'))
@@ -459,7 +476,46 @@ export function InstancePage() {
 
   const saveOpts = () => {
     if (!hasTauri() || !profile) return
-    saveProfileSettings(profile, jvm || '', +w || 0, +h || 0, java || '').catch((e) => showToast('' + e, 'error'))
+    saveProfileSettings(profile, jvm || '', +w || 0, +h || 0, java || '')
+      .then(() => {
+        if (java.trim()) setJavaMajor(0)
+      })
+      .catch((e) => showToast('' + e, 'error'))
+  }
+
+  const pinJavaMajor = (major: number) => {
+    if (!hasTauri() || !profile) return
+    if (!major) {
+      setJavaMajor(0)
+      setProfileJavaMajor(profile, null)
+        .then(() => showToast('Java для сборки снова выбирается автоматически'))
+        .catch((e) => showToast('' + e, 'error'))
+      return
+    }
+    if (!javaAll.includes(major)) {
+      showToast('Лаунчер ставит только Java ' + javaAll.join(', '), 'error')
+      return
+    }
+    setJavaBusy(major)
+    setProfileJavaMajor(profile, major)
+      .then((v) => {
+        setJavaMajor(major)
+        setJava('')
+        showToast('Сборка запускается на Java ' + major + ' · ' + v)
+      })
+      .catch((e) => showToast('' + e, 'error'))
+      .finally(() => setJavaBusy(0))
+  }
+
+  // The path field doubles as a version field: a bare number is what people type
+  // when the system Java cannot be reached at all, which is every Flatpak build.
+  const saveJavaField = () => {
+    const v = java.trim()
+    if (/^\d{1,3}$/.test(v)) {
+      pinJavaMajor(Number(v))
+      return
+    }
+    saveOpts()
   }
 
   const close = () => closeModal('bsModal')
@@ -1359,6 +1415,50 @@ export function InstancePage() {
                   }}
                 />
               </div>
+              <div className="set-row">
+                <span className="lab">
+                  Видеокарта
+                  <small>
+                    {!gpuOk
+                      ? 'В этой системе карту выбирает сама ОС — настройка недоступна'
+                      : gpu === 'discrete'
+                        ? 'Игра пойдёт на дискретной карте — так и нужно на ноутбуках со встройкой'
+                        : gpu === 'integrated'
+                          ? 'Встроенная карта: меньше нагрев и расход батареи, меньше FPS'
+                          : 'Как решит система — обычно это встроенная карта на ноутбуке'}
+                  </small>
+                </span>
+                <Select
+                  width={230}
+                  value={gpu}
+                  disabled={!gpuOk}
+                  options={[
+                    { value: 'auto', label: 'Авто', sub: 'Как решит система' },
+                    { value: 'discrete', label: 'Дискретная', sub: 'NVIDIA или AMD — больше FPS' },
+                    { value: 'integrated', label: 'Встроенная', sub: 'Тише и дольше от батареи' },
+                  ]}
+                  onChange={(v) => {
+                    if (!profile) return
+                    const prev = gpu
+                    setGpu(v as GpuPref)
+                    setProfileGpu(profile, v as GpuPref)
+                      .then((saved) => {
+                        setGpu(saved)
+                        showToast(
+                          saved === 'discrete'
+                            ? 'Запускаем на дискретной карте'
+                            : saved === 'integrated'
+                              ? 'Запускаем на встроенной карте'
+                              : 'Карту выбирает система',
+                        )
+                      })
+                      .catch((e) => {
+                        setGpu(prev)
+                        showToast('Не удалось сохранить выбор карты: ' + e, 'error')
+                      })
+                  }}
+                />
+              </div>
               <div className="set-row" style={{ alignItems: 'flex-start' }}>
                 <span className="lab">
                   Буст FPS
@@ -1408,16 +1508,33 @@ export function InstancePage() {
               </div>
               <div className="set-row" style={{ alignItems: 'flex-start' }}>
                 <span className="lab">
-                  Java<small>Пусто = скачиваем сами</small>
+                  Java
+                  <small>
+                    {javaBusy
+                      ? 'Качаем Java ' + javaBusy + ', это займёт минуту…'
+                      : javaMajor
+                        ? 'Сборка запускается на Java ' + javaMajor + ' — её скачал лаунчер'
+                        : 'Пусто = ставим ту, которую просит версия. Можно вписать номер — например 25'}
+                  </small>
                 </span>
                 <div style={{ width: '300px' }}>
-                  <div className="input sm" style={{ marginBottom: '6px' }}>
+                  <Select
+                    width="100%"
+                    value={String(javaMajor)}
+                    disabled={!!javaBusy}
+                    options={[
+                      { value: '0', label: 'Версия Java: авто', sub: 'Ту, которую просит сборка' },
+                      ...javaAll.map((m) => ({ value: String(m), label: 'Java ' + m, sub: 'Скачаем и закрепим за сборкой' })),
+                    ]}
+                    onChange={(v) => pinJavaMajor(Number(v))}
+                  />
+                  <div className="input sm" style={{ margin: '6px 0' }}>
                     <input
                       id="bsJava"
-                      placeholder="Авто (нужную версию ставим сами)"
+                      placeholder="Номер версии (25) или путь к java"
                       value={java}
                       onChange={(e) => setJava(e.target.value)}
-                      onBlur={saveOpts}
+                      onBlur={saveJavaField}
                     />
                   </div>
                   <Select
@@ -1431,8 +1548,12 @@ export function InstancePage() {
                     onChange={(v) => {
                       setJava(v)
                       if (hasTauri() && profile)
-                        saveProfileSettings(profile, jvm || '', +w || 0, +h || 0, v).catch((e) => showToast('' + e, 'error'))
-                      showToast('Java выбрана')
+                        saveProfileSettings(profile, jvm || '', +w || 0, +h || 0, v)
+                          .then(() => {
+                            setJavaMajor(0)
+                            showToast('Java выбрана')
+                          })
+                          .catch((e) => showToast('' + e, 'error'))
                     }}
                   />
                   <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
@@ -1451,7 +1572,9 @@ export function InstancePage() {
                             setJava(j.path)
                             setJavaList((l) => (l.some((x) => x.path === j.path) ? l : [j, ...l]))
                             if (profile)
-                              saveProfileSettings(profile, jvm || '', +w || 0, +h || 0, j.path).catch((e) => showToast('' + e, 'error'))
+                              saveProfileSettings(profile, jvm || '', +w || 0, +h || 0, j.path)
+                                .then(() => setJavaMajor(0))
+                                .catch((e) => showToast('' + e, 'error'))
                             showToast('Java выбрана: ' + j.version)
                           })
                           .catch((e) => showToast('' + e, 'error'))
@@ -1502,8 +1625,9 @@ export function InstancePage() {
                           return
                         }
                         testJava(p)
-                          .then((v) => showToast('✓ ' + v))
-                          .catch((e) => showToast('✗ ' + e))
+                          // Статус несёт иконка тоста (i-check / i-alert), дингбаты в тексте не нужны
+                          .then((v) => showToast(String(v)))
+                          .catch((e) => showToast(String(e), 'error'))
                       }}
                     >
                       Тест

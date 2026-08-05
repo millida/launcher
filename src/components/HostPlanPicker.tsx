@@ -323,7 +323,17 @@ export function HostPlanPicker({
 
         <div className="plan-list">
           {plans.length === 0 ? (
-            <p className="faint-note" style={{ padding: '10px 0' }}>Загружаем тарифы…</p>
+            /* Канон 3.9: скелетон формы тарифных карточек вместо текста «Загружаем…» */
+            <>
+              {[0, 1, 2, 3].map((i) => (
+                <div className="plan-card" key={i} aria-busy="true">
+                  <div className="skel skel-line" style={{ width: '64%' }} />
+                  <div className="skel skel-line" style={{ width: '44%', height: '22px', marginTop: '12px' }} />
+                  <div className="skel skel-line" style={{ width: '100%', marginTop: '14px' }} />
+                  <div className="skel skel-line" style={{ width: '80%', marginTop: '8px' }} />
+                </div>
+              ))}
+            </>
           ) : (
             plans.map((p) => {
               const free = !p.priceKopecks

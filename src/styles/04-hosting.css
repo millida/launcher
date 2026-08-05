@@ -11,7 +11,8 @@
     .inst-icon img{width:100%;height:100%;object-fit:cover}
     .inst-icon svg{width:32px;height:32px;color:var(--m-fg-faint)}
     .inst-titles{flex:1;min-width:0}
-    .inst-titles h1{font-size:25px;font-weight:750;line-height:1.1;font-family:var(--m-font-brand,inherit)}
+    /* Канон 2.1: Unbounded — только wordmark логотипа, заголовки — Geist ≤700 */
+    .inst-titles h1{font-size:25px;font-weight:700;line-height:1.1}
     .inst-sub{font-size:13.5px;color:var(--m-fg-muted);margin-top:7px}
     .inst-actions{display:flex;gap:10px;align-items:center}
     .inst-body{flex:1;display:grid;grid-template-columns:220px minmax(0,1fr);min-height:0}
@@ -36,14 +37,15 @@
     .gate-title{font-size:17px;font-weight:700;margin-bottom:8px}
     .gate-text{line-height:1.55;margin-bottom:20px;max-width:360px}
     .gate-btn{min-width:200px}
-    /* Loading skeletons */
-    .skel{position:relative;overflow:hidden;background:var(--m-inset);border-radius:8px}
-    .skel::after{content:"";position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,rgba(255,255,255,.06),transparent);animation:skel-sweep 1.25s infinite}
-    @keyframes skel-sweep{100%{transform:translateX(100%)}}
+    /* Loading skeletons. Mirrors the kit's .mk-sk: surface-2, r-mini, 1.6s sweep. */
+    .skel{position:relative;overflow:hidden;background:var(--m-surface-2);border-radius:var(--m-r-mini)}
+    .skel::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--m-fg) 5%,transparent),transparent);animation:skel-sweep 1.6s infinite}
+    @keyframes skel-sweep{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
     @media (prefers-reduced-motion: reduce){.skel::after{animation:none}}
     .skel-card{padding:22px;margin-bottom:14px}
     .skel-line{height:12px}
     .skel-row{display:flex;align-items:center;gap:12px}
+    .skel-rows{display:flex;flex-direction:column;gap:16px;padding:8px 0}
 
 /* ---- Server card ---- */
 .host-ico{width:34px;height:34px;border-radius:8px;background:var(--m-inset);display:grid;place-items:center;color:var(--m-fg-faint);flex:none}
@@ -61,8 +63,11 @@
 .plan-wallet>span{display:flex;align-items:center;gap:8px}
 .plan-wallet b{color:var(--m-fg)}
 .plan-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:12px;margin-top:6px}
-.plan-card{background:var(--m-surface);border:1px solid var(--m-border);border-radius:var(--m-r-card);padding:14px}
-.plan-card.cur{border-color:var(--m-accent);background:var(--m-accent-soft)}
+/* Kit rule 3.4/5.4: cards are separated by surface (a shift against the modal's
+   --m-raised), never by an outline. The selected plan is an accent-soft fill. */
+.plan-card{background:var(--m-surface);border-radius:var(--m-r-card);padding:14px}
+.plan-card.cur{background:var(--m-accent-soft)}
+.plan-card.cur .plan-name{color:var(--m-accent)}
 /* Title shrinks and wraps; the price drops below it when space runs out. */
 .plan-head{display:flex;align-items:baseline;justify-content:space-between;gap:4px 8px;flex-wrap:wrap}
 .plan-name{font-weight:700;font-size:14.5px;min-width:0;overflow-wrap:anywhere}
@@ -132,12 +137,12 @@
 .host-invite-friend img{width:30px;height:30px;border-radius:8px;image-rendering:pixelated}
 .host-invite-nick{flex:1;min-width:0;font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .host-invite-dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--m-fg-faint)}
-.host-invite-dot.on{background:var(--m-ok,#5EC64D)}
+.host-invite-dot.on{background:var(--m-success)}
 
 /* ---- Full server management: catalog, files, schedule, access ---- */
 .host-manage-body>.card+.card{margin-top:14px}
 .bar i.st-danger{background:var(--m-danger)}
-.bar i.st-warn{background:#f0c674}
+.bar i.st-warn{background:var(--m-warning)}
 
 .host-manage-body .fr-row{flex-wrap:wrap}
 .host-empty{display:flex;align-items:center;gap:10px;padding:18px 4px;color:var(--m-fg-subtle);font-size:13px;line-height:1.5}
