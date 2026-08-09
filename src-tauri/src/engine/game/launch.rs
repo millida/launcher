@@ -535,8 +535,9 @@ pub async fn install_and_launch_in(
         let root = if agent.is_some() && !auth.yggdrasil.is_empty() {
             Some(format!("{}/csl/", auth.yggdrasil.trim_end_matches('/')))
         } else { None };
+        let licensed = !auth.token.is_empty() && auth.yggdrasil.is_empty();
         if want_in_game_skins(root.as_deref()) {
-            if let Err(e) = ensure_custom_skin_loader(&profile, &loader_id, root.as_deref(), &nick).await {
+            if let Err(e) = ensure_custom_skin_loader(&profile, &loader_id, root.as_deref(), &nick, licensed).await {
                 warn(&app, &format!("Мод скинов не поставлен: {}", e));
             }
         }

@@ -1,0 +1,223 @@
+/* Millida theme: Mario
+   Eight-bit platformer dressing. Every surface is drawn with gradients rather
+   than bitmaps, so the pack stays inside the bundle and needs no asset scope. */
+
+:root[data-theme-pack="mario"]{
+  --mario-brick:var(--o-brick);
+  --mario-gold:#FCD800;
+  --mario-sky:#5C94FC;
+  --mario-pipe:#00A800;
+  --mario-pipe-dark:#006A00;
+  --mario-ink:#000000;
+
+  --m-bg:var(--mario-sky);
+  --m-surface:#F8F0D8;
+  --m-surface-2:#EFE2BC;
+  --m-raised:#FFFAE8;
+  --m-inset:#E2D2A4;
+  --m-border:rgba(0,0,0,.55);
+  --m-border-strong:#000000;
+  --m-fg:#1A1008;
+  --m-fg-muted:rgba(26,16,8,.82);
+  --m-fg-subtle:rgba(26,16,8,.66);
+  --m-fg-faint:rgba(26,16,8,.5);
+  --m-accent:var(--mario-brick);
+  --m-accent-hover:#E2661B;
+  --m-accent-fg:#FFFFFF;
+  --m-accent-rgb:200,76,12;
+  --m-accent-soft:rgba(200,76,12,.16);
+  --m-grad:var(--mario-brick);
+  --m-danger:#D82800;
+  --m-warning:#E39B00;
+  --m-info:#2038EC;
+  --m-success:#00A800;
+  --m-r-mini:0;--m-r-ctl:0;--m-r-md:0;--m-r-card:0;--m-r-pill:0;
+  --m-shadow-md:4px 4px 0 rgba(0,0,0,.55);
+  --m-shadow-lg:6px 6px 0 rgba(0,0,0,.6);
+  --m-accent-glow:none;
+  color-scheme:light;
+}
+
+:root[data-theme-pack="mario"][data-o-coin="on"]{
+  --m-accent:#B07800;
+  --m-accent-hover:#D89A00;
+  --m-accent-rgb:252,216,0;
+  --m-accent-soft:rgba(252,216,0,.28);
+  --m-grad:var(--mario-gold);
+  --m-accent-fg:#1A1008;
+}
+
+:root[data-theme-pack="mario"][data-o-sky="underground"]{
+  --mario-sky:#000000;
+  --m-surface:#2038EC;
+  --m-surface-2:#1A2CC0;
+  --m-raised:#2A44FF;
+  --m-inset:#101C7A;
+  --m-fg:#F8F0D8;
+  --m-fg-muted:rgba(248,240,216,.84);
+  --m-fg-subtle:rgba(248,240,216,.66);
+  --m-fg-faint:rgba(248,240,216,.48);
+  --m-border:rgba(255,255,255,.28);
+  --m-border-strong:#FFFFFF;
+  color-scheme:dark;
+}
+
+:root[data-theme-pack="mario"][data-o-sky="castle"]{
+  --mario-sky:#1A0A06;
+  --m-surface:#8C8C8C;
+  --m-surface-2:#787878;
+  --m-raised:#9C9C9C;
+  --m-inset:#4A4A4A;
+  --m-fg:#0B0603;
+  --m-fg-muted:rgba(11,6,3,.8);
+  --m-fg-subtle:rgba(11,6,3,.64);
+  --m-fg-faint:rgba(11,6,3,.46);
+  --m-border-strong:#000000;
+  color-scheme:dark;
+}
+
+/* Sky with clouds and hills; underground and castle paint a brick wall
+   instead, so the empty space behind the panels is never flat. */
+:root[data-theme-pack="mario"] .window{
+  background-color:var(--mario-sky);
+  background-image:
+    radial-gradient(closest-side, rgba(255,255,255,.62) 96%, transparent 97%),
+    radial-gradient(closest-side, rgba(255,255,255,.5) 96%, transparent 97%),
+    radial-gradient(closest-side, rgba(255,255,255,.44) 96%, transparent 97%);
+  background-size:104px 46px, 66px 30px, 132px 52px;
+  background-position:6% 8%, 46% 4%, 88% 12%;
+  background-repeat:no-repeat;
+}
+:root[data-theme-pack="mario"][data-o-sky="underground"] .window,
+:root[data-theme-pack="mario"][data-o-sky="castle"] .window{
+  background-image:
+    repeating-linear-gradient(0deg, rgba(255,255,255,.06) 0 30px, transparent 30px 32px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.06) 0 60px, transparent 60px 62px);
+  background-size:auto;
+  background-position:0 0;
+  background-repeat:repeat;
+}
+
+:root[data-theme-pack="mario"] .card,
+:root[data-theme-pack="mario"] .srv-row,
+:root[data-theme-pack="mario"] .mod-row,
+:root[data-theme-pack="mario"] .fr-row,
+:root[data-theme-pack="mario"] .build-card,
+:root[data-theme-pack="mario"] .modal,
+:root[data-theme-pack="mario"] .toast,
+:root[data-theme-pack="mario"] .kpi,
+:root[data-theme-pack="mario"] .chat{
+  border:3px solid var(--m-border-strong);
+  box-shadow:4px 4px 0 rgba(0,0,0,.45);
+}
+
+/* The rail is a warp pipe: two darker bands and a lip at the top. */
+:root[data-theme-pack="mario"] .sidebar{
+  border:3px solid var(--m-border-strong);
+  background:
+    linear-gradient(90deg,
+      var(--mario-pipe-dark) 0 8px,
+      var(--mario-pipe) 8px 26px,
+      #4CD44C 26px 40px,
+      var(--mario-pipe) 40px calc(100% - 10px),
+      var(--mario-pipe-dark) calc(100% - 10px) 100%);
+  box-shadow:4px 4px 0 rgba(0,0,0,.45);
+}
+:root[data-theme-pack="mario"] .nav-item,
+:root[data-theme-pack="mario"] .side-cap,
+:root[data-theme-pack="mario"] .acc-nick,
+:root[data-theme-pack="mario"] .acc-kind,
+:root[data-theme-pack="mario"] .quick-name,
+:root[data-theme-pack="mario"] .quick-ver{color:#F8F0D8}
+:root[data-theme-pack="mario"] .nav-item:hover{background:rgba(0,0,0,.28);color:#FFFFFF}
+:root[data-theme-pack="mario"] .nav-item.active{
+  background:var(--mario-gold);color:#1A1008;box-shadow:inset 0 0 0 3px #1A1008;
+}
+:root[data-theme-pack="mario"] .side-sep{background:rgba(0,0,0,.4)}
+:root[data-theme-pack="mario"] .side-collapse{color:rgba(248,240,216,.8)}
+:root[data-theme-pack="mario"] .side-collapse:hover{color:#FFFFFF}
+:root[data-theme-pack="mario"] .side-collapse-ic{background:rgba(0,0,0,.3);color:#F8F0D8}
+/* Section headings sit straight on the sky, where the gold accent goes flat. */
+:root[data-theme-pack="mario"] .sec-link{color:var(--m-fg)}
+:root[data-theme-pack="mario"] .sec-link:hover{background:rgba(0,0,0,.14)}
+:root[data-theme-pack="mario"] .account:hover,
+:root[data-theme-pack="mario"] .quick-row:hover{background:rgba(0,0,0,.28)}
+
+/* The question block: a gold button with a hard shadow that presses in. */
+:root[data-theme-pack="mario"] .btn{
+  border:3px solid var(--m-border-strong);
+  box-shadow:3px 3px 0 rgba(0,0,0,.5);
+  text-transform:uppercase;
+  letter-spacing:.04em;
+}
+:root[data-theme-pack="mario"] .btn:active{transform:translate(3px,3px);box-shadow:none}
+:root[data-theme-pack="mario"] .btn.primary:hover{transform:none;filter:brightness(1.08)}
+:root[data-theme-pack="mario"] .btn.primary:active{transform:translate(3px,3px)}
+:root[data-theme-pack="mario"] .btn.ghost{border-color:transparent;box-shadow:none}
+:root[data-theme-pack="mario"] .icon-btn,
+:root[data-theme-pack="mario"] .tb-btn{border-radius:0}
+
+:root[data-theme-pack="mario"] .input,
+:root[data-theme-pack="mario"] .m-select-btn,
+:root[data-theme-pack="mario"] .seg{border:3px solid var(--m-border-strong)}
+:root[data-theme-pack="mario"] .seg.on{background:var(--mario-gold);color:#1A1008;box-shadow:none}
+:root[data-theme-pack="mario"] .pill{border:2px solid var(--m-border-strong)}
+:root[data-theme-pack="mario"] .tgl{border:2px solid var(--m-border-strong);border-radius:0}
+:root[data-theme-pack="mario"] .tgl::after{border-radius:0}
+:root[data-theme-pack="mario"] .chk{border-radius:0;border:2px solid var(--m-border-strong)}
+
+/* Brick pattern on the section headings and the hero scrim. */
+:root[data-theme-pack="mario"] .page-head h1,
+:root[data-theme-pack="mario"] .sec-title{
+  color:var(--m-fg);
+  text-shadow:2px 2px 0 rgba(0,0,0,.35);
+}
+:root[data-theme-pack="mario"] .hero-live{border:3px solid var(--m-border-strong)}
+:root[data-theme-pack="mario"] .hero-scrim{
+  background:linear-gradient(180deg, transparent 0%, rgba(0,0,0,.15) 45%, rgba(0,0,0,.72) 100%);
+}
+:root[data-theme-pack="mario"] .build-cover{
+  background-color:var(--mario-brick);
+  background-image:
+    repeating-linear-gradient(0deg, rgba(0,0,0,.45) 0 2px, transparent 2px 16px),
+    repeating-linear-gradient(90deg, rgba(0,0,0,.45) 0 2px, transparent 2px 32px);
+}
+:root[data-theme-pack="mario"] .pl-bar,
+:root[data-theme-pack="mario"] .dl-track,
+:root[data-theme-pack="mario"] .bar{border:2px solid var(--m-border-strong);border-radius:0}
+:root[data-theme-pack="mario"] .pl-bar i,
+:root[data-theme-pack="mario"] .dl-fill,
+:root[data-theme-pack="mario"] .bar i{border-radius:0;background:var(--mario-gold)}
+
+:root[data-theme-pack="mario"][data-o-pixel="on"]{
+  --m-font:var(--m-mono);
+  --m-font-brand:var(--m-mono);
+}
+:root[data-theme-pack="mario"][data-o-pixel="on"] body{
+  letter-spacing:.02em;
+  -webkit-font-smoothing:none;
+}
+:root[data-theme-pack="mario"][data-o-pixel="on"] .page-head h1,
+:root[data-theme-pack="mario"][data-o-pixel="on"] .tb-name,
+:root[data-theme-pack="mario"][data-o-pixel="on"] .hero-body h2{
+  text-transform:uppercase;
+  letter-spacing:.06em;
+}
+/* A hard offset shadow on small type reads as doubled text, so only the large
+   headings carry it. */
+:root[data-theme-pack="mario"][data-o-pixel="on"] .page-head h1,
+:root[data-theme-pack="mario"][data-o-pixel="on"] .hero-body h2{
+  text-shadow:2px 2px 0 rgba(0,0,0,.4);
+}
+:root[data-theme-pack="mario"] .tb-name,
+:root[data-theme-pack="mario"] .tb-name span{text-shadow:none}
+:root[data-theme-pack="mario"] img,
+:root[data-theme-pack="mario"] canvas{image-rendering:pixelated}
+
+/* CRT scanlines: an inert overlay above every screen, below the modals. */
+:root[data-theme-pack="mario"] .window::after{
+  content:"";
+  position:absolute;inset:0;z-index:390;pointer-events:none;
+  opacity:var(--o-scan);
+  background:repeating-linear-gradient(0deg, rgba(0,0,0,.55) 0 1px, transparent 1px 3px);
+}

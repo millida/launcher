@@ -1,7 +1,7 @@
 #onbModal{z-index:460}
 .onb-modal{width:620px}
 .onb-bar{display:flex;gap:6px;margin-bottom:18px}
-.onb-bar-seg{flex:1;height:4px;border-radius:99px;background:var(--m-inset);transition:background var(--m-t-base)}
+.onb-bar-seg{flex:1;height:4px;border-radius:var(--m-r-pill);background:var(--m-inset);transition:background var(--m-t-base)}
 .onb-bar-seg.on{background:var(--m-accent)}
 .onb-hero{display:flex;align-items:center;gap:14px;margin-bottom:16px}
 .onb-hero img{width:52px;height:52px;border-radius:14px}

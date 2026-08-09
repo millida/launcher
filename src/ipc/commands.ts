@@ -6,7 +6,14 @@ export interface Profile {
   version: string
   fabric: boolean
   loader?: string | null
+  loader_version?: string | null
   icon?: string | null
+}
+
+export interface LoaderBuild {
+  version: string
+  stable: boolean
+  recommended: boolean
 }
 
 export interface ModFile {
@@ -247,8 +254,14 @@ export const checkUpdates = (profile: string, kind: string) =>
 
 export const countScreenshots = (profile: string) => invoke<number>('count_screenshots', { profile })
 
-export const createProfile = (name: string, version: string, fabric: boolean, loader: string, icon: string | null) =>
-  invoke<Profile>('create_profile', { name, version, fabric, loader, icon })
+export const createProfile = (
+  name: string,
+  version: string,
+  fabric: boolean,
+  loader: string,
+  icon: string | null,
+  loaderVersion: string | null = null,
+) => invoke<Profile>('create_profile', { name, version, fabric, loader, loaderVersion, icon })
 
 export const deleteContent = (profile: string, kind: string, name: string) =>
   invoke<void>('delete_content', { profile, kind, name })
@@ -260,8 +273,8 @@ export const deleteWorld = (profile: string, folder: string) => invoke<void>('de
 export const renameProfile = (name: string, newName: string) =>
   invoke<Profile[]>('rename_profile', { name, newName })
 
-export const setProfileLoader = (name: string, version: string, loader: string) =>
-  invoke<Profile[]>('set_profile_loader', { name, version, loader })
+export const setProfileLoader = (name: string, version: string, loader: string, loaderVersion: string | null = null) =>
+  invoke<Profile[]>('set_profile_loader', { name, version, loader, loaderVersion })
 
 export const detectJava = () => invoke<JavaInfo[]>('detect_java')
 
@@ -394,6 +407,9 @@ export const listScreenshots = (profile: string) => invoke<string[]>('list_scree
 export const listServers = (profile: string) => invoke<ServerEntry[]>('list_servers', { profile })
 
 export const listVersions = () => invoke<string[]>('list_versions')
+
+export const listLoaderVersions = (loader: string, mcVersion: string) =>
+  invoke<LoaderBuild[]>('list_loader_versions', { loader, mcVersion })
 
 export const listWorldInstalls = (profile: string) => invoke<string[]>('list_world_installs', { profile })
 
@@ -561,6 +577,17 @@ export const setProfileGpu = (profile: string, pref: GpuPref) =>
 
 export const gpuSwitchSupported = () => invoke<boolean>('gpu_switch_supported')
 
+export interface SkinModState {
+  on: boolean
+  present: boolean
+  conflict: string | null
+}
+
+export const skinModState = (profile: string) => invoke<SkinModState>('skin_mod_state', { profile })
+
+export const setSkinMod = (profile: string, on: boolean) =>
+  invoke<SkinModState>('set_skin_mod', { profile, on })
+
 export const setProfileJavaMajor = (profile: string, major: number | null) =>
   invoke<string>('set_profile_java_major', { profile, major })
 
@@ -641,6 +668,46 @@ export const updateFallbackStage = () => invoke<FallbackInstall | null>('update_
 
 export const updateFallbackRun = (path: string) => invoke<FallbackInstall>('update_fallback_run', { path })
 
+
+export interface ThemeOptionFile {
+  key: string
+  kind: 'toggle' | 'color' | 'select' | 'slider'
+  label: string
+  hint?: string
+  default: string
+  items?: { value: string; label: string }[]
+  min?: number
+  max?: number
+  step?: number
+  unit?: string
+}
+
+export interface InstalledThemeFile {
+  id: string
+  name: string
+  author?: string
+  version?: string
+  description?: string
+  base: 'dark' | 'light' | 'any'
+  preview?: string[]
+  options?: ThemeOptionFile[]
+  dir: string
+}
+
+export interface ThemeSourceFile {
+  css: string
+  dir: string
+}
+
+export const listThemes = () => invoke<InstalledThemeFile[]>('list_themes')
+
+export const readTheme = (id: string) => invoke<ThemeSourceFile>('read_theme', { id })
+
+export const importTheme = () => invoke<InstalledThemeFile | null>('import_theme')
+
+export const deleteTheme = (id: string) => invoke<void>('delete_theme', { id })
+
+export const openThemesFolder = () => invoke<void>('open_themes_folder')
 
 export const uiPrefs = () => invoke<Record<string, string>>('ui_prefs')
 

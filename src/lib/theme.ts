@@ -27,7 +27,25 @@ export function withColorFade(change: () => void) {
   paintTimer = setTimeout(() => root.classList.remove('color-fade'), PAINT_MS)
 }
 
+/// A theme pack drawn against one palette pins it: the kit still carries
+/// light-only rules, and letting the dark/light switch fight the pack would
+/// leave half the screen in the wrong set of colours.
+let pinnedBase: '' | 'light' | 'dark' = ''
+
+export function pinThemeBase(v: '' | 'light' | 'dark') {
+  pinnedBase = v
+  paint(storedTheme())
+}
+
+export function themeBasePinned(): '' | 'light' | 'dark' {
+  return pinnedBase
+}
+
 function paint(v: ThemeId) {
+  if (pinnedBase) {
+    document.documentElement.dataset.theme = pinnedBase === 'light' ? 'light' : ''
+    return
+  }
   document.documentElement.dataset.theme =
     v === 'auto' ? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : '') : v
 }

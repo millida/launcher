@@ -46,6 +46,7 @@ pub mod content;
 pub mod accounts;
 pub mod skins;
 pub mod media;
+pub mod themes;
 
 pub use core::*;
 pub use game::*;
@@ -54,3 +55,4 @@ pub use content::*;
 pub use accounts::*;
 pub use skins::*;
 pub use media::*;
+pub use themes::*;

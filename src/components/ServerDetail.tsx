@@ -7,6 +7,7 @@ import { quickJoin } from '../lib/joinServer'
 import { openModal, showToast } from '../state/ui'
 import { useServerDetail } from '../state/serverDetail'
 import { copyText } from '../lib/clipboard'
+import { backdropClose } from '../lib/dismiss'
 
 export function ServerDetail() {
   const { sv, close } = useServerDetail()
@@ -56,9 +57,7 @@ export function ServerDetail() {
     <div
       className="modal-bg open vis"
       style={{ zIndex: 190 }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) close()
-      }}
+      {...backdropClose(close)}
     >
       <div className="modal srv-detail" style={{ width: '560px', maxWidth: '92vw', padding: 0, overflow: 'hidden' }}>
         <div className="srv-detail-banner">

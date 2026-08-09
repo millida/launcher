@@ -1,0 +1,68 @@
+/* Millida theme: Minimal
+   Flat surfaces, hairline borders, one accent. Works on both palettes, so it
+   only touches what makes the default kit feel heavy: gradients, shadows and
+   the lift on hover. */
+
+:root[data-theme-pack="minimal"]{
+  --m-r-mini:calc(var(--o-radius) * .5);
+  --m-r-ctl:var(--o-radius);
+  --m-r-md:var(--o-radius);
+  --m-r-card:var(--o-radius);
+  --m-grad:var(--m-accent);
+  --m-shadow-md:0 0 0 1px var(--m-border);
+  --m-shadow-lg:0 0 0 1px var(--m-border-strong);
+  --m-accent-glow:none;
+  --m-surface-2:var(--m-surface);
+  --m-raised:var(--m-surface);
+}
+
+:root[data-theme-pack="minimal"] .card,
+:root[data-theme-pack="minimal"] .srv-row,
+:root[data-theme-pack="minimal"] .mod-row,
+:root[data-theme-pack="minimal"] .fr-row,
+:root[data-theme-pack="minimal"] .build-card,
+:root[data-theme-pack="minimal"] .sidebar,
+:root[data-theme-pack="minimal"] .modal,
+:root[data-theme-pack="minimal"] .chat{
+  border:1px solid var(--m-border);
+  box-shadow:none;
+}
+
+:root[data-theme-pack="minimal"] .card.hoverable::after,
+:root[data-theme-pack="minimal"] .srv-row::after{content:none}
+:root[data-theme-pack="minimal"] .card.hoverable:hover,
+:root[data-theme-pack="minimal"] .srv-row:hover,
+:root[data-theme-pack="minimal"] .skin-card:hover,
+:root[data-theme-pack="minimal"] .btn.primary:hover,
+:root[data-theme-pack="minimal"] .chat-send:hover{transform:none}
+:root[data-theme-pack="minimal"] .card.hoverable:hover,
+:root[data-theme-pack="minimal"] .srv-row:hover{border-color:var(--m-border-strong)}
+
+:root[data-theme-pack="minimal"] .btn.primary{background:var(--m-accent)}
+:root[data-theme-pack="minimal"] .btn.secondary{background:transparent;border:1px solid var(--m-border-strong)}
+:root[data-theme-pack="minimal"] .btn.secondary:hover{background:var(--m-surface);border-color:var(--m-accent)}
+:root[data-theme-pack="minimal"] .nav-item.active{background:transparent;color:var(--m-accent);box-shadow:inset 2px 0 0 var(--m-accent)}
+:root[data-theme-pack="minimal"] .tb-mark,
+:root[data-theme-pack="minimal"] .login-mark{background:var(--m-accent)}
+:root[data-theme-pack="minimal"] .pl-bar i,
+:root[data-theme-pack="minimal"] .dl-fill,
+:root[data-theme-pack="minimal"] .bar i,
+:root[data-theme-pack="minimal"] .m-slider-fill{background:var(--m-accent)}
+:root[data-theme-pack="minimal"] .toast{border:1px solid var(--m-border)}
+
+/* Flat buttons: the accent survives as text and outline only. */
+:root[data-theme-pack="minimal"][data-o-flat="on"] .btn.primary{
+  background:transparent;color:var(--m-accent);box-shadow:inset 0 0 0 1px var(--m-accent);
+}
+:root[data-theme-pack="minimal"][data-o-flat="on"] .btn.primary:hover{
+  background:var(--m-accent-soft);filter:none;
+}
+:root[data-theme-pack="minimal"][data-o-flat="on"] .chat-send,
+:root[data-theme-pack="minimal"][data-o-flat="on"] .build-cover .mini-play{
+  background:var(--m-accent-soft);color:var(--m-accent);
+}
+
+:root[data-theme-pack="minimal"][data-o-lines="off"] .set-row,
+:root[data-theme-pack="minimal"][data-o-lines="off"] .mod-line,
+:root[data-theme-pack="minimal"][data-o-lines="off"] .mod-card+.mod-card{border-bottom:0;border-top:0}
+:root[data-theme-pack="minimal"][data-o-lines="off"] .set-tabs{border-bottom:0}

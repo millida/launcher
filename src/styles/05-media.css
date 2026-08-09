@@ -641,7 +641,7 @@
 .cpk{position:absolute;top:calc(100% + 8px);right:0;z-index:120;width:216px;padding:12px;border-radius:14px;background:var(--m-surface-2);border:1px solid var(--m-border);box-shadow:var(--m-shadow-lg);animation:frMenuIn .14s ease}
 .cpk-sv{position:relative;width:100%;height:130px;border-radius:10px;cursor:crosshair;touch-action:none;overflow:hidden}
 .cpk-sv-thumb{position:absolute;width:14px;height:14px;border-radius:50%;border:2px solid var(--m-accent-fg);box-shadow:0 0 0 1px rgba(0,0,0,.4);transform:translate(-50%,-50%);pointer-events:none}
-.cpk-hue{position:relative;width:100%;height:14px;margin-top:12px;border-radius:99px;cursor:pointer;touch-action:none;background:linear-gradient(to right,#f00 0%,#ff0 17%,#0f0 33%,#0ff 50%,#00f 67%,#f0f 83%,#f00 100%)}
+.cpk-hue{position:relative;width:100%;height:14px;margin-top:12px;border-radius:var(--m-r-pill);cursor:pointer;touch-action:none;background:linear-gradient(to right,#f00 0%,#ff0 17%,#0f0 33%,#0ff 50%,#00f 67%,#f0f 83%,#f00 100%)}
 .cpk-hue-thumb{position:absolute;top:50%;width:16px;height:16px;border-radius:50%;background:var(--m-accent-fg);border:2px solid var(--m-surface-2);box-shadow:0 1px 4px rgba(0,0,0,.5);transform:translate(-50%,-50%);pointer-events:none}
 .cpk-foot{display:flex;align-items:center;gap:8px;margin-top:12px}
 .cpk-preview{width:32px;height:32px;flex:none;border-radius:8px;border:1px solid var(--m-border)}
@@ -684,8 +684,8 @@
 .boot-upd-card{display:flex;flex-direction:column;align-items:center;gap:10px;width:280px;text-align:center}
 .boot-upd-title{font-size:15px;font-weight:700;color:var(--m-fg);margin-top:6px}
 .boot-upd-sub{font-size:12.5px;color:var(--m-fg-muted)}
-.boot-upd-bar{width:100%;height:6px;border-radius:99px;background:var(--m-inset);overflow:hidden;margin-top:6px}
-.boot-upd-fill{display:block;height:100%;width:0;border-radius:99px;background:var(--m-accent);transition:width .2s ease}
+.boot-upd-bar{width:100%;height:6px;border-radius:var(--m-r-pill);background:var(--m-inset);overflow:hidden;margin-top:6px}
+.boot-upd-fill{display:block;height:100%;width:0;border-radius:var(--m-r-pill);background:var(--m-accent);transition:width .2s ease}
 .boot-upd-fill.pulse{width:40%;animation:bootUpdSlide 1.1s ease-in-out infinite}
 @keyframes bootUpdSlide{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}
 @media (prefers-reduced-motion: reduce){.boot-upd-fill.pulse{animation:none;width:100%}}

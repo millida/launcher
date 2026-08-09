@@ -5,6 +5,7 @@ import { openExt } from '../lib/api'
 import { useAccounts } from '../state/accounts'
 import { cancelWebLogin, copyUserCode, copyVerifyLink, startWebLogin, useLogin } from '../state/login'
 import { cancelMsLogin, copyMsCode, copyMsVerifyLink, openMsVerifyPage, startMsLogin, useMsLogin } from '../state/msLogin'
+import { backdropClose } from '../lib/dismiss'
 
 type Kind = 'millida' | 'microsoft' | 'offline'
 
@@ -185,9 +186,7 @@ export function AccountAddModal() {
     <div
       className={'modal-bg' + (modal.open ? ' open' : '') + (modal.vis ? ' vis' : '')}
       id="accModal"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) close()
-      }}
+      {...backdropClose(close)}
     >
       <div className="modal" style={{ width: '460px', display: 'flex', flexDirection: 'column' }}>
         <h3>Добавить аккаунт</h3>

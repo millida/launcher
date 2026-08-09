@@ -66,7 +66,11 @@ pub fn toggle_content(profile: &str, kind: &str, name: &str, enable: bool) -> Re
     let on = safe_child(&dir, &file)?;
     let off = safe_child(&dir, &format!("{}.disabled", file))?;
     let (from, to) = if enable { (off, on) } else { (on, off) };
-    if from.exists() { std::fs::rename(&from, &to).map_err(|e| e.to_string()) } else { Ok(()) }
+    if from.exists() { std::fs::rename(&from, &to).map_err(|e| e.to_string())?; }
+    if kind == "mod" && is_injected_skin_mod(&file) {
+        set_skin_mod(profile, enable)?;
+    }
+    Ok(())
 }
 pub fn toggle_mod(profile: &str, name: &str, enable: bool) -> Result<(), String> { toggle_content(profile, "mod", name, enable) }
 
@@ -79,6 +83,9 @@ pub fn delete_content(profile: &str, kind: &str, name: &str) -> Result<(), Strin
         }
     }
     manifest_remove(profile, kind, &file);
+    if kind == "mod" && is_injected_skin_mod(&file) {
+        note_skin_mod_removed(profile);
+    }
     Ok(())
 }
 pub fn delete_mod(profile: &str, name: &str) -> Result<(), String> { delete_content(profile, "mod", name) }

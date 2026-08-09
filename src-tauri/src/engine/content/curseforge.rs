@@ -494,6 +494,7 @@ async fn cf_install_modpack_job(app: &AppHandle, job: &Job, mod_id: u32, file_id
     let pdir = profile_dir(&pname);
     // the pack owns mods/: leftovers from a previous install would duplicate mods
     let _ = std::fs::remove_dir_all(pdir.join("mods"));
+    forget_skin_mod_install(&pname);
     std::fs::create_dir_all(pdir.join("mods")).map_err(|e| e.to_string())?;
     let list = man["files"].as_array().cloned().unwrap_or_default();
     let total = list.len().max(1);

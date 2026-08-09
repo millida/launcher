@@ -208,6 +208,7 @@ async fn install_modpack_job(app: &AppHandle, job: &Job, slug: String, version_i
     let pdir = profile_dir(&pname);
     // the pack owns mods/: leftovers would duplicate classes and crash the game
     let _ = std::fs::remove_dir_all(pdir.join("mods"));
+    forget_skin_mod_install(&pname);
     std::fs::create_dir_all(pdir.join("mods")).map_err(|e| e.to_string())?;
     let files = idx["files"].as_array().cloned().unwrap_or_default();
     let total = files.len().max(1);

@@ -47,7 +47,8 @@ import { WALLET_URL, openExt } from '../lib/api'
 // (или до входа в аккаунт), навсегда застревала на «Нужен аккаунт Millida».
 import { useHasMillida } from '../state/auth'
 import { setSkinSource, skinSource } from '../lib/gameProfile'
-import { applyTheme, storedTheme, withColorFade } from '../lib/theme'
+import { applyTheme, storedTheme, themeBasePinned, withColorFade } from '../lib/theme'
+import { ThemeGallery } from '../components/ThemeGallery'
 import type { ThemeId } from '../lib/theme'
 import { startTour } from '../state/tour'
 import { buildDiagnostics } from '../lib/diag'
@@ -404,10 +405,15 @@ export function Settings({ on }: { on: boolean }) {
 
         {tab === 'look' ? (
         <>
+        <ThemeGallery />
+
         <div className="set-group">
           <div className="cap">Тема и цвет</div>
           <div className="set-row">
-            <span className="lab">Тема</span>
+            <span className="lab">
+              Тема
+              {themeBasePinned() ? <small>Задана выбранным оформлением</small> : null}
+            </span>
             <div className="segs">
               {([
                 ['', 'Тёмная'],
@@ -417,7 +423,7 @@ export function Settings({ on }: { on: boolean }) {
                 <button
                   key={label}
                   className={'seg' + (theme === v ? ' on' : '')}
-                  style={{ height: '32px', fontSize: '12.5px' }}
+                  style={{ height: '32px', fontSize: '12.5px', opacity: themeBasePinned() ? 0.5 : 1 }}
                   data-t={v}
                   onClick={() => {
                     setTheme(v)

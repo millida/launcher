@@ -4,6 +4,7 @@ import { hasTauri } from '../ipc/tauri'
 import { openProfileFolder } from '../ipc/commands'
 import { runRepair } from '../lib/repair'
 import { useCrash } from '../state/crash'
+import { backdropClose } from '../lib/dismiss'
 
 export function CrashModal() {
   const { info, close } = useCrash()
@@ -23,9 +24,7 @@ export function CrashModal() {
     <div
       className="modal-bg open vis"
       style={{ zIndex: 210 }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) close()
-      }}
+      {...backdropClose(close)}
     >
       <div className="modal" style={{ width: '460px' }}>
         <div className="crash-head">

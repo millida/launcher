@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useConfirm } from '../state/confirm'
+import { backdropClose } from '../lib/dismiss'
 
 export function ConfirmModal() {
   const { open, title, message, confirmLabel, cancelLabel, danger, rememberKey, rememberLabel, close } = useConfirm()
@@ -25,9 +26,7 @@ export function ConfirmModal() {
     <div
       className="modal-bg open vis"
       style={{ zIndex: 700 }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) close(false)
-      }}
+      {...backdropClose(() => close(false))}
     >
       <div className="modal" style={{ width: '400px' }}>
         <h3>{title}</h3>

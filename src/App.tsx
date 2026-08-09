@@ -30,6 +30,7 @@ import { markMillidaEver, millidaEver } from './state/onboarding'
 import { OnboardingModal } from './modals/Onboarding'
 import { Tour } from './components/Tour'
 import { initTheme } from './lib/theme'
+import { initThemePacks } from './lib/themes'
 import { refreshGameNick } from './state/gameNick'
 import { warmHeads } from './lib/heads'
 import { useUi, closeModal, setScreen as gotoScreen, showToast } from './state/ui'
@@ -128,6 +129,7 @@ export function App() {
     void frontendReady()
     installErrorHandlers()
     initTheme()
+    void initThemePacks()
     initTray()
     initMusic()
     initSounds()

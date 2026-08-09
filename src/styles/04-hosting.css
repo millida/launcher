@@ -203,7 +203,7 @@
 
 /* Permissions and notification channels */
 .host-perms{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.host-perm{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 11px;border-radius:999px;border:1px solid var(--m-border);background:var(--m-surface);color:var(--m-fg-muted);font-size:12px;font-weight:600;cursor:pointer;transition:all var(--m-t-fast)}
+.host-perm{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 11px;border-radius:var(--m-r-pill);border:1px solid var(--m-border);background:var(--m-surface);color:var(--m-fg-muted);font-size:12px;font-weight:600;cursor:pointer;transition:all var(--m-t-fast)}
 .host-perm:hover{border-color:var(--m-border-strong);color:var(--m-fg)}
 .host-perm.on{background:var(--m-accent-soft);border-color:var(--m-accent);color:var(--m-accent)}
 .host-perm svg{width:13px;height:13px}

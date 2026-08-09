@@ -1,0 +1,382 @@
+/* Millida theme: Windows 98
+   Grey plastic, bevelled edges, a blue title bar. Only system font families are
+   named, so nothing is fetched and the pack still renders where they are
+   missing. */
+
+:root[data-theme-pack="win98"]{
+  --w-face:#C0C0C0;
+  --w-light:#FFFFFF;
+  --w-shade:#808080;
+  --w-dark:#000000;
+  --w-title:var(--o-title);
+  --w-desk:#008080;
+
+  --m-bg:var(--w-desk);
+  --m-surface:var(--w-face);
+  --m-surface-2:#D4D0C8;
+  --m-raised:var(--w-face);
+  --m-inset:#FFFFFF;
+  --m-border:var(--w-shade);
+  --m-border-strong:var(--w-dark);
+  --m-fg:#000000;
+  --m-fg-muted:#000000;
+  --m-fg-subtle:#404040;
+  --m-fg-faint:#808080;
+  --m-accent:var(--w-title);
+  --m-accent-hover:var(--w-title);
+  --m-accent-fg:#FFFFFF;
+  --m-accent-rgb:0,0,128;
+  --m-accent-soft:#B4C8E8;
+  --m-grad:var(--w-title);
+  --m-accent-glow:none;
+  --m-danger:#A80000;
+  --m-warning:#8A6D00;
+  --m-info:#000080;
+  --m-success:#006400;
+  --m-r-mini:0;--m-r-ctl:0;--m-r-md:0;--m-r-card:0;--m-r-pill:0;
+  --m-shadow-md:none;
+  --m-shadow-lg:2px 2px 0 rgba(0,0,0,.35);
+  --m-font:Tahoma,'MS Sans Serif','Segoe UI',sans-serif;
+  --m-font-brand:Tahoma,'MS Sans Serif','Segoe UI',sans-serif;
+  --m-mono:'Lucida Console','Courier New',monospace;
+  color-scheme:light;
+}
+
+:root[data-theme-pack="win98"][data-o-wall="plum"]{--w-desk:#5B3758}
+:root[data-theme-pack="win98"][data-o-wall="grey"]{--w-desk:#3A6EA5}
+
+:root[data-theme-pack="win98"] body{font-size:12px;line-height:1.4}
+
+/* Raised plastic: light on the top-left, shadow on the bottom-right. */
+:root[data-theme-pack="win98"][data-o-bevel="on"] .card,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .sidebar,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .srv-row,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .mod-row,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .fr-row,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .build-card,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .modal,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .toast,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .kpi,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .chat,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .btn,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .seg,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .m-select-btn,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .tb-btn,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .icon-btn,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .wp-btn,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .hero-gear,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .build-cover .mini-play,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .chat-send,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .toast-act{
+  background-color:var(--w-face);
+  border:0;
+  box-shadow:
+    inset 1px 1px 0 var(--w-light),
+    inset -1px -1px 0 var(--w-dark),
+    inset 2px 2px 0 #DFDFDF,
+    inset -2px -2px 0 var(--w-shade);
+}
+:root[data-theme-pack="win98"][data-o-bevel="on"] .btn:active,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .tb-btn:active,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .icon-btn:active,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .wp-btn:active,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .hero-gear:active,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .build-cover .mini-play:active,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .chat-send:active,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .seg.on{
+  box-shadow:
+    inset 1px 1px 0 var(--w-dark),
+    inset -1px -1px 0 var(--w-light),
+    inset 2px 2px 0 var(--w-shade),
+    inset -2px -2px 0 #DFDFDF;
+}
+/* Sunken well: the mirror image of the raised edge. */
+:root[data-theme-pack="win98"][data-o-bevel="on"] .input,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .pl-bar,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .dl-track,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .bar,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .icon-grid,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .skin-stage{
+  background-color:#FFFFFF;
+  box-shadow:
+    inset 1px 1px 0 var(--w-shade),
+    inset -1px -1px 0 var(--w-light),
+    inset 2px 2px 0 var(--w-dark),
+    inset -2px -2px 0 #DFDFDF;
+}
+
+:root[data-theme-pack="win98"] .btn{
+  height:auto;min-height:23px;padding:3px 14px;font-size:12px;font-weight:400;
+  color:#000000;background:var(--w-face);text-transform:none;letter-spacing:0;
+}
+:root[data-theme-pack="win98"] .btn.sm{height:auto;min-height:22px;padding:2px 12px;font-size:11.5px}
+:root[data-theme-pack="win98"] .btn.md{height:auto;min-height:26px;padding:5px 18px}
+:root[data-theme-pack="win98"] .btn.lg{height:auto;min-height:32px;padding:7px 24px;font-size:13px}
+:root[data-theme-pack="win98"] .btn.primary{background:var(--w-face);color:#000000;font-weight:700}
+:root[data-theme-pack="win98"] .btn.primary:hover{filter:none;transform:none}
+:root[data-theme-pack="win98"] .btn:active{transform:none}
+:root[data-theme-pack="win98"] .btn.danger{color:#A80000}
+:root[data-theme-pack="win98"] .btn svg{color:#000080}
+
+/* Title bar of the launcher window, drawn like the caption of a 98 window. */
+:root[data-theme-pack="win98"] .titlebar{
+  background:linear-gradient(90deg, var(--w-title) 0%, #1084D0 100%);
+  height:22px;
+  margin:2px 2px 0;
+  padding:0 2px 0 6px;
+}
+:root[data-theme-pack="win98"] .tb-name,
+:root[data-theme-pack="win98"] .tb-name span{color:#FFFFFF;font-weight:700;font-size:11.5px}
+:root[data-theme-pack="win98"] .tb-mark{background:#FFFFFF;color:var(--w-title);border-radius:0;width:16px;height:16px}
+:root[data-theme-pack="win98"] .tb-center{left:auto;right:auto;transform:none;position:static;pointer-events:none;gap:5px}
+/* The window icon carries its size and radius inline from the component, which
+   no ordinary rule can outweigh — a 98 caption icon is 16 square and sharp. */
+:root[data-theme-pack="win98"] .tb-center img{
+  width:16px !important;height:16px !important;border-radius:0 !important;
+}
+/* Caption buttons: 16x14 plastic squares packed together, close set slightly
+   apart. Only the glyph is drawn inside, at the size the era used. */
+:root[data-theme-pack="win98"] .tb-btns{gap:2px}
+:root[data-theme-pack="win98"] .tb-btn{
+  width:17px;height:15px;border-radius:0;color:#000000;background:var(--w-face);
+}
+:root[data-theme-pack="win98"] .tb-btn svg,
+:root[data-theme-pack="win98"] .tb-btn svg.icon{width:9px;height:9px;stroke-width:2.4}
+:root[data-theme-pack="win98"] .tb-btn.close{margin-left:2px}
+:root[data-theme-pack="win98"] .tb-btn:hover,
+:root[data-theme-pack="win98"] .tb-btn.close:hover{background:var(--w-face);color:#000000}
+
+:root[data-theme-pack="win98"] .window{
+  background:var(--w-face);
+  box-shadow:inset 1px 1px 0 var(--w-light), inset -1px -1px 0 var(--w-dark);
+}
+/* The desktop shows around the panels; the panels themselves are grey plastic,
+   because teal behind body text is unreadable. */
+:root[data-theme-pack="win98"] .content{
+  background:var(--w-face);
+  padding:10px;
+  box-shadow:
+    inset 1px 1px 0 var(--w-shade),
+    inset -1px -1px 0 var(--w-light),
+    inset 2px 2px 0 var(--w-dark),
+    inset -2px -2px 0 #DFDFDF;
+}
+:root[data-theme-pack="win98"] .app{background:var(--w-desk);padding:4px;gap:4px}
+
+:root[data-theme-pack="win98"] .nav-item{border-radius:0;font-size:12px;padding:5px 8px}
+:root[data-theme-pack="win98"] .nav-item.active{background:var(--w-title);color:#FFFFFF}
+:root[data-theme-pack="win98"] .nav-item:hover{background:#D4D0C8;color:#000000}
+:root[data-theme-pack="win98"] .nav-item.active:hover{background:var(--w-title);color:#FFFFFF}
+:root[data-theme-pack="win98"] .side-cap{color:#404040}
+/* Collapsed rail: the kit centres its icons with a left padding tuned to its own
+   radii, which no longer lands in the middle once the rows are square. */
+:root[data-theme-pack="win98"] .sidebar.collapsed .nav-item,
+:root[data-theme-pack="win98"] .sidebar.collapsed .side-collapse,
+:root[data-theme-pack="win98"] .sidebar.collapsed .account,
+:root[data-theme-pack="win98"] .sidebar.collapsed .quick-open{
+  justify-content:center;padding-left:0;padding-right:0;
+}
+:root[data-theme-pack="win98"] .side-collapse-ic{
+  width:22px;height:22px;border-radius:0;background:var(--w-face);color:#000000;
+}
+:root[data-theme-pack="win98"] .sidebar.collapsed .side-collapse .side-collapse-ic{
+  width:26px;height:22px;
+}
+:root[data-theme-pack="win98"][data-o-bevel="on"] .side-collapse-ic{
+  box-shadow:
+    inset 1px 1px 0 var(--w-light),
+    inset -1px -1px 0 var(--w-dark),
+    inset 2px 2px 0 #DFDFDF,
+    inset -2px -2px 0 var(--w-shade);
+}
+:root[data-theme-pack="win98"] .side-collapse:hover .side-collapse-ic{
+  background:var(--w-face);color:#000000;
+}
+/* Tooltip: the yellow note with a hairline border, not a floating dark card. */
+:root[data-theme-pack="win98"] .sidebar.collapsed [data-tip]::after{
+  background:#FFFFE1;color:#000000;border:1px solid #000000;
+  border-radius:0;box-shadow:none;
+  font-size:11px;font-weight:400;padding:2px 6px;
+}
+:root[data-theme-pack="win98"] .side-sep{background:var(--w-shade);box-shadow:0 1px 0 var(--w-light)}
+
+:root[data-theme-pack="win98"] .page-head h1{font-size:16px;font-weight:700}
+:root[data-theme-pack="win98"] .sec-title{font-size:13px;font-weight:700}
+:root[data-theme-pack="win98"] .modal h3{font-size:14px}
+:root[data-theme-pack="win98"] .set-tab.on{background:var(--w-title);color:#FFFFFF;border-color:var(--w-dark)}
+/* The sticky tab strip paints the page background behind itself, which is the
+   desktop colour here and not the panel it sits on. */
+:root[data-theme-pack="win98"] .set-tabs{background:var(--w-face);border-bottom-color:var(--w-shade)}
+:root[data-theme-pack="win98"] .pill{border:1px solid var(--w-shade);background:var(--w-face);color:#000000}
+:root[data-theme-pack="win98"] .tgl{border-radius:0;background:#FFFFFF;box-shadow:inset 1px 1px 0 var(--w-shade)}
+:root[data-theme-pack="win98"] .tgl::after{border-radius:0;background:var(--w-face);box-shadow:inset 1px 1px 0 var(--w-light), inset -1px -1px 0 var(--w-dark)}
+:root[data-theme-pack="win98"] .tgl.on{background:var(--w-title)}
+:root[data-theme-pack="win98"] .chk{border-radius:0;background:#FFFFFF;border:1px solid var(--w-shade)}
+:root[data-theme-pack="win98"] .pl-bar i,
+:root[data-theme-pack="win98"] .dl-fill,
+:root[data-theme-pack="win98"] .bar i{
+  border-radius:0;
+  background:repeating-linear-gradient(90deg, var(--w-title) 0 10px, transparent 10px 12px);
+}
+:root[data-theme-pack="win98"] .hero-live,
+:root[data-theme-pack="win98"] .build-cover,
+:root[data-theme-pack="win98"] .srv-banner{border-radius:0}
+
+/* Controls floating over artwork: the kit gives them dark translucent glass,
+   which reads as a different operating system next to grey plastic. */
+:root[data-theme-pack="win98"] .wp-btn,
+:root[data-theme-pack="win98"] .hero-gear,
+:root[data-theme-pack="win98"] .hero-cta .btn.glass,
+:root[data-theme-pack="win98"] .hero-cta .btn.running,
+:root[data-theme-pack="win98"] .hero-cta .btn.danger{
+  border-radius:0;
+  background:var(--w-face);
+  color:#000000;
+  backdrop-filter:none;
+  text-shadow:none;
+}
+:root[data-theme-pack="win98"] .wp-btn:hover,
+:root[data-theme-pack="win98"] .hero-gear:hover,
+:root[data-theme-pack="win98"] .hero-cta .btn.glass:hover,
+:root[data-theme-pack="win98"] .hero-cta .btn.running:hover,
+:root[data-theme-pack="win98"] .hero-cta .btn.danger:hover{
+  background:var(--w-face);color:#000000;transform:none;
+}
+:root[data-theme-pack="win98"] .hero-cta .btn.danger{color:#A80000}
+:root[data-theme-pack="win98"] .hero-gear{width:34px;height:34px}
+:root[data-theme-pack="win98"] .hero-gear svg{width:16px;height:16px}
+:root[data-theme-pack="win98"] .wp-btn{height:23px}
+:root[data-theme-pack="win98"] .hero-cta .btn svg,
+:root[data-theme-pack="win98"] .wp-btn svg,
+:root[data-theme-pack="win98"] .hero-gear svg{color:#000080}
+:root[data-theme-pack="win98"] .hero-meta .pill{background:var(--w-face);color:#000000;border:1px solid var(--w-shade)}
+
+/* The play/install badge on a build cover: a small plastic button, not a blue
+   bubble. */
+:root[data-theme-pack="win98"] .build-cover .mini-play,
+:root[data-theme-pack="win98"] .chat-send{
+  border-radius:0;background:var(--w-face);color:#000000;
+}
+:root[data-theme-pack="win98"] .build-cover .mini-play svg,
+:root[data-theme-pack="win98"] .build-cover .mini-play svg.icon,
+:root[data-theme-pack="win98"] .chat-send svg{color:#000080}
+:root[data-theme-pack="win98"] .build-card:hover .mini-play,
+:root[data-theme-pack="win98"] .build-cover .mini-play:hover{transform:none}
+:root[data-theme-pack="win98"] .chat-send:hover{transform:none;background:var(--w-face)}
+:root[data-theme-pack="win98"] .toast-act{border-radius:0;background:var(--w-face);color:#000000;border:0}
+:root[data-theme-pack="win98"] .nav-count,
+:root[data-theme-pack="win98"] .nav-badge,
+:root[data-theme-pack="win98"] .mod-ver,
+:root[data-theme-pack="win98"] .mod-upd,
+:root[data-theme-pack="win98"] .mod-tag{border-radius:0}
+:root[data-theme-pack="win98"] ::-webkit-scrollbar{width:16px;height:16px}
+:root[data-theme-pack="win98"] ::-webkit-scrollbar-track{
+  background:repeating-conic-gradient(#FFFFFF 0 25%, #C0C0C0 0 50%) 0 0/2px 2px;
+}
+:root[data-theme-pack="win98"] ::-webkit-scrollbar-thumb{
+  border:0;border-radius:0;background:var(--w-face);background-clip:border-box;
+  box-shadow:inset 1px 1px 0 var(--w-light), inset -1px -1px 0 var(--w-dark),
+    inset 2px 2px 0 #DFDFDF, inset -2px -2px 0 var(--w-shade);
+}
+
+/* Nothing in this era is rounded. Chasing every radius selector by selector left
+   whole screens (capes, hosting, chat) half-modern, so the rule is stated once
+   and loudly enough to also beat the sizes components set inline. Spinners keep
+   their circle: a square one reads as a broken element, not as a style. */
+:root[data-theme-pack="win98"] *{border-radius:0 !important}
+:root[data-theme-pack="win98"] .spin,
+:root[data-theme-pack="win98"] .skin-loader,
+:root[data-theme-pack="win98"] .msg-dot,
+:root[data-theme-pack="win98"] .cpk-dot{border-radius:50% !important}
+
+/* Cape picker: selection is the classic blue fill with white text, and the
+   preview well is sunken like any picture box of the period. */
+:root[data-theme-pack="win98"] .cape-card{
+  background:var(--w-face);border:1px solid transparent;padding:8px 6px;
+}
+:root[data-theme-pack="win98"] .cape-card:hover{background:#D4D0C8}
+:root[data-theme-pack="win98"] .cape-card.on,
+:root[data-theme-pack="win98"] .cape-card.on:hover{
+  background:var(--w-title);border-color:var(--w-dark);
+}
+:root[data-theme-pack="win98"] .cape-card.on b,
+:root[data-theme-pack="win98"] .cape-card.on .cape-sub,
+:root[data-theme-pack="win98"] .cape-card.on .cape-ok{color:#FFFFFF}
+:root[data-theme-pack="win98"] .cape-render{
+  background:#FFFFFF;
+  box-shadow:
+    inset 1px 1px 0 var(--w-shade),
+    inset -1px -1px 0 var(--w-light),
+    inset 2px 2px 0 var(--w-dark),
+    inset -2px -2px 0 #DFDFDF;
+}
+:root[data-theme-pack="win98"] .cape-prog{background:#FFFFFF;box-shadow:inset 1px 1px 0 var(--w-shade)}
+:root[data-theme-pack="win98"] .cape-prog-bar{
+  background:repeating-linear-gradient(90deg, var(--w-title) 0 6px, transparent 6px 8px);
+}
+:root[data-theme-pack="win98"] .cape-ok{color:#006400}
+:root[data-theme-pack="win98"] .sk-del{background:var(--w-face);color:#A80000}
+
+/* Chat: round accent buttons become plastic squares like every other control. */
+:root[data-theme-pack="win98"] .voice-play,
+:root[data-theme-pack="win98"] .chat-emoji-btn,
+:root[data-theme-pack="win98"] .chat-rec-x,
+:root[data-theme-pack="win98"] .chat-down{
+  background:var(--w-face);color:#000000;border:0;
+}
+:root[data-theme-pack="win98"][data-o-bevel="on"] .voice-play,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .chat-emoji-btn,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .chat-rec-x,
+:root[data-theme-pack="win98"][data-o-bevel="on"] .chat-down{
+  box-shadow:
+    inset 1px 1px 0 var(--w-light),
+    inset -1px -1px 0 var(--w-dark),
+    inset 2px 2px 0 #DFDFDF,
+    inset -2px -2px 0 var(--w-shade);
+}
+:root[data-theme-pack="win98"] .voice-play svg,
+:root[data-theme-pack="win98"] .chat-emoji-btn svg,
+:root[data-theme-pack="win98"] .chat-down svg{color:#000080}
+:root[data-theme-pack="win98"] .msg{background:var(--w-face);border:1px solid var(--w-shade)}
+:root[data-theme-pack="win98"] .msg.me{background:#D4D0C8;border-color:var(--w-shade)}
+:root[data-theme-pack="win98"] .chat-day{background:var(--w-face);border:1px solid var(--w-shade)}
+:root[data-theme-pack="win98"] .voice-wave i.on{background:var(--w-title)}
+:root[data-theme-pack="win98"] .chat{border-left:1px solid var(--w-dark)}
+
+/* Hosting: text areas and readouts are sunken wells, buttons are plastic. */
+:root[data-theme-pack="win98"] .host-file-edit,
+:root[data-theme-pack="win98"] .host-console{
+  background:#FFFFFF;color:#000000;border:0;
+  box-shadow:
+    inset 1px 1px 0 var(--w-shade),
+    inset -1px -1px 0 var(--w-light),
+    inset 2px 2px 0 var(--w-dark),
+    inset -2px -2px 0 #DFDFDF;
+}
+:root[data-theme-pack="win98"] .host-console .lvl-err{color:#A80000}
+:root[data-theme-pack="win98"] .host-console .lvl-warn{color:#8A6D00}
+:root[data-theme-pack="win98"] .host-console .lvl-ok{color:#006400}
+:root[data-theme-pack="win98"] .host-console code{background:#D4D0C8}
+:root[data-theme-pack="win98"] .host-day,
+:root[data-theme-pack="win98"] .host-perm,
+:root[data-theme-pack="win98"] .inst-back{
+  background:var(--w-face);color:#000000;border:1px solid var(--w-shade);
+}
+:root[data-theme-pack="win98"] .host-day.on,
+:root[data-theme-pack="win98"] .host-perm.on{background:var(--w-title);color:#FFFFFF;border-color:var(--w-dark)}
+:root[data-theme-pack="win98"] .inst-tab.on{background:var(--w-title);color:#FFFFFF}
+:root[data-theme-pack="win98"] .host-graph,
+:root[data-theme-pack="win98"] .host-sched,
+:root[data-theme-pack="win98"] .host-share,
+:root[data-theme-pack="win98"] .host-cat-card,
+:root[data-theme-pack="win98"] .host-cred-row,
+:root[data-theme-pack="win98"] .plan-wallet{background:#FFFFFF;border:1px solid var(--w-shade)}
+:root[data-theme-pack="win98"] .plan-card{background:var(--w-face);border:1px solid var(--w-shade)}
+:root[data-theme-pack="win98"] .host-crash{background:var(--w-face);border:1px solid #A80000}
+:root[data-theme-pack="win98"] .skel::after{animation:none}
+
+:root[data-theme-pack="win98"][data-o-crisp="on"] body{-webkit-font-smoothing:none}
+:root[data-theme-pack="win98"][data-o-crisp="on"] *{transition-duration:0s !important}
+:root[data-theme-pack="win98"][data-o-crisp="on"] .card.hoverable:hover,
+:root[data-theme-pack="win98"][data-o-crisp="on"] .srv-row:hover,
+:root[data-theme-pack="win98"][data-o-crisp="on"] .skin-card:hover{transform:none}
