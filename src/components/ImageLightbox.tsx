@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { create } from 'zustand'
 import { Icon } from './Icon'
+import { backdropClose } from '../lib/dismiss'
 
 interface LightboxState {
   src: string
@@ -58,9 +59,7 @@ export function ImageLightbox() {
   return (
     <div
       className="lightbox"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) close()
-      }}
+      {...backdropClose(close)}
       onWheel={(e) => zoomTo(scale * (e.deltaY < 0 ? STEP : 1 / STEP))}
     >
       <div className="lightbox-top" onClick={(e) => e.stopPropagation()}>

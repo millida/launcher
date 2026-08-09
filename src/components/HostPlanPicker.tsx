@@ -4,6 +4,7 @@ import { WALLET_URL, api, openExt } from '../lib/api'
 import { track } from '../lib/telemetry'
 import { getMillidaAccount } from '../state/accounts'
 import { showToast } from '../state/ui'
+import { backdropClose } from '../lib/dismiss'
 
 export interface HostPlan {
   code: string
@@ -194,9 +195,7 @@ export function HostPlanPicker({
   return (
     <div
       className={'modal-bg open' + (vis ? ' vis' : '')}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose()
-      }}
+      {...backdropClose(onClose)}
     >
       <div className="modal" style={{ width: '620px' }}>
         <h2>{mode === 'create' ? 'Новый сервер' : 'Улучшить тариф'}</h2>

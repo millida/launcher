@@ -1,0 +1,96 @@
+/* Millida theme: Terminal
+   Monospace everything on near-black, with a phosphor glow that scales from the
+   theme options. */
+
+:root[data-theme-pack="terminal"]{
+  --term-fg:#39FF88;
+  --term-dim:#1F7A45;
+
+  --m-bg:#050807;
+  --m-surface:#0B120E;
+  --m-surface-2:#101A14;
+  --m-raised:#0E1712;
+  --m-inset:#05100A;
+  --m-border:color-mix(in srgb, var(--term-fg) 22%, transparent);
+  --m-border-strong:color-mix(in srgb, var(--term-fg) 45%, transparent);
+  --m-fg:var(--term-fg);
+  --m-fg-muted:color-mix(in srgb, var(--term-fg) 80%, transparent);
+  --m-fg-subtle:color-mix(in srgb, var(--term-fg) 62%, transparent);
+  --m-fg-faint:color-mix(in srgb, var(--term-fg) 42%, transparent);
+  --m-accent:var(--term-fg);
+  --m-accent-hover:#7BFFB4;
+  --m-accent-fg:#03170C;
+  --m-accent-soft:color-mix(in srgb, var(--term-fg) 16%, transparent);
+  --m-grad:var(--term-fg);
+  --m-accent-glow:none;
+  --m-danger:#FF5C5C;
+  --m-warning:#FFC24D;
+  --m-info:#5CC8FF;
+  --m-success:var(--term-fg);
+  --m-r-mini:2px;--m-r-ctl:2px;--m-r-md:2px;--m-r-card:2px;--m-r-pill:2px;
+  --m-shadow-md:none;
+  --m-shadow-lg:0 0 0 1px var(--m-border-strong);
+  --m-font:var(--m-mono);
+  --m-font-brand:var(--m-mono);
+  color-scheme:dark;
+}
+
+:root[data-theme-pack="terminal"][data-o-phosphor="amber"]{--term-fg:#FFB300;--term-dim:#7A5400}
+:root[data-theme-pack="terminal"][data-o-phosphor="ice"]{--term-fg:#7FD9FF;--term-dim:#2C6B85}
+
+:root[data-theme-pack="terminal"] body{
+  letter-spacing:.01em;
+  text-shadow:0 0 6px color-mix(in srgb, var(--term-fg) var(--o-glow), transparent);
+}
+
+:root[data-theme-pack="terminal"] .card,
+:root[data-theme-pack="terminal"] .sidebar,
+:root[data-theme-pack="terminal"] .srv-row,
+:root[data-theme-pack="terminal"] .mod-row,
+:root[data-theme-pack="terminal"] .fr-row,
+:root[data-theme-pack="terminal"] .build-card,
+:root[data-theme-pack="terminal"] .modal,
+:root[data-theme-pack="terminal"] .toast,
+:root[data-theme-pack="terminal"] .kpi,
+:root[data-theme-pack="terminal"] .chat{
+  border:1px solid var(--m-border);
+  box-shadow:none;
+}
+:root[data-theme-pack="terminal"] .card.hoverable::after,
+:root[data-theme-pack="terminal"] .srv-row::after{content:none}
+:root[data-theme-pack="terminal"] .card.hoverable:hover,
+:root[data-theme-pack="terminal"] .srv-row:hover{transform:none;border-color:var(--m-border-strong)}
+
+:root[data-theme-pack="terminal"] .page-head h1::before,
+:root[data-theme-pack="terminal"] .sec-title::before{content:"> ";color:var(--term-dim)}
+:root[data-theme-pack="terminal"] .page-head h1,
+:root[data-theme-pack="terminal"] .sec-title,
+:root[data-theme-pack="terminal"] .eyebrow,
+:root[data-theme-pack="terminal"] .btn{text-transform:uppercase;letter-spacing:.06em}
+
+:root[data-theme-pack="terminal"] .btn{border:1px solid var(--m-border-strong);font-weight:400}
+:root[data-theme-pack="terminal"] .btn.primary{background:var(--term-fg);color:var(--m-accent-fg)}
+:root[data-theme-pack="terminal"] .btn.primary:hover{transform:none;filter:brightness(1.15)}
+:root[data-theme-pack="terminal"] .btn.secondary{background:transparent}
+:root[data-theme-pack="terminal"] .btn.secondary:hover{background:var(--m-accent-soft)}
+:root[data-theme-pack="terminal"] .nav-item{border-radius:2px}
+:root[data-theme-pack="terminal"] .nav-item.active{background:var(--m-accent-soft);box-shadow:inset 2px 0 0 var(--term-fg)}
+:root[data-theme-pack="terminal"] .nav-item.active .nav-label::before{content:"* ";color:var(--term-fg)}
+:root[data-theme-pack="terminal"] .input{border:1px solid var(--m-border)}
+:root[data-theme-pack="terminal"] .tb-mark,
+:root[data-theme-pack="terminal"] .login-mark{background:var(--term-fg);color:var(--m-accent-fg)}
+:root[data-theme-pack="terminal"] .pl-bar i,
+:root[data-theme-pack="terminal"] .dl-fill,
+:root[data-theme-pack="terminal"] .bar i,
+:root[data-theme-pack="terminal"] .m-slider-fill{background:var(--term-fg)}
+:root[data-theme-pack="terminal"] .pl-bar,
+:root[data-theme-pack="terminal"] .dl-track,
+:root[data-theme-pack="terminal"] .bar{border:1px solid var(--m-border)}
+:root[data-theme-pack="terminal"] .tgl{border:1px solid var(--m-border-strong)}
+:root[data-theme-pack="terminal"] ::-webkit-scrollbar-thumb{background:var(--term-dim);border-radius:0}
+
+:root[data-theme-pack="terminal"][data-o-scan="on"] .window::after{
+  content:"";
+  position:absolute;inset:0;z-index:390;pointer-events:none;
+  background:repeating-linear-gradient(0deg, rgba(0,0,0,.32) 0 1px, transparent 1px 3px);
+}

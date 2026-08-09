@@ -30,6 +30,8 @@ import {
   fpsBoostState,
   gpuSwitchSupported,
   setProfileGpu,
+  setSkinMod,
+  skinModState,
   modpackInfo,
   openProfileFolder,
   openUrl,
@@ -54,11 +56,21 @@ import {
   updateAll,
   updateContent,
 } from '../ipc/commands'
-import type { FpsBoostState, GpuPref, JavaInfo, ModFile, PingResult, ServerEntry, WorldEntry } from '../ipc/commands'
+import type {
+  FpsBoostState,
+  GpuPref,
+  JavaInfo,
+  ModFile,
+  PingResult,
+  ServerEntry,
+  SkinModState,
+  WorldEntry,
+} from '../ipc/commands'
 import { Select } from '../components/Select'
 import { Slider } from '../components/Slider'
 import { isBlockIcon } from '../lib/blockColor'
 import { LOADER_NAME, agoText, fmtPlaytime, fmtSize, loaderId, whenText } from '../lib/format'
+import { AUTO_LOADER_VERSION, hasLoaderVersions, useLoaderBuilds } from '../lib/loaderBuilds'
 import { incompatibleWith } from '../lib/compat'
 import { useProfiles } from '../state/profiles'
 import { useInstance } from '../state/instance'
@@ -117,6 +129,8 @@ export function InstancePage() {
   const [ram, setRam] = useState(4)
   const [boost, setBoost] = useState<FpsBoostState | null>(null)
   const [boostBusy, setBoostBusy] = useState(false)
+  const [skinMod, setSkinModState] = useState<SkinModState | null>(null)
+  const [skinModBusy, setSkinModBusy] = useState(false)
   const [jvm, setJvm] = useState('')
   const [w, setW] = useState('')
   const [h, setH] = useState('')
@@ -155,9 +169,11 @@ export function InstancePage() {
   const [renameVal, setRenameVal] = useState('')
   const [renameBusy, setRenameBusy] = useState(false)
   const [newLoader, setNewLoader] = useState('vanilla')
+  const [newLoaderVer, setNewLoaderVer] = useState(AUTO_LOADER_VERSION)
   const [newVersion, setNewVersion] = useState('')
   const [verList, setVerList] = useState<string[]>([])
   const [coreBusy, setCoreBusy] = useState(false)
+  const lb = useLoaderBuilds(newLoader, newVersion, modal.open)
   const [note, setNote] = useState('')
   const logBodyRef = useRef<HTMLPreElement>(null)
   const kindRef = useRef(kind)
@@ -315,6 +331,9 @@ export function InstancePage() {
       fpsBoostState(profile)
         .then(setBoost)
         .catch(() => setBoost(null))
+      skinModState(profile)
+        .then(setSkinModState)
+        .catch(() => setSkinModState(null))
       loadProfileSettings(profile)
         .then((cfg) => {
           setJvm(cfg.jvmArgs || '')
@@ -352,8 +371,9 @@ export function InstancePage() {
   useEffect(() => {
     if (!pr) return
     setNewLoader(loaderId(pr))
+    setNewLoaderVer(pr.loader_version || AUTO_LOADER_VERSION)
     setNewVersion(pr.version)
-  }, [modal.open, profile, pr?.version, pr?.loader, pr?.fabric])
+  }, [modal.open, profile, pr?.version, pr?.loader, pr?.fabric, pr?.loader_version])
 
   const toggleBoost = async () => {
     if (!profile) return
@@ -383,6 +403,25 @@ export function InstancePage() {
       showToast('Не удалось переключить буст FPS: ' + e, 'error')
     } finally {
       setBoostBusy(false)
+    }
+  }
+
+  const toggleSkinMod = async () => {
+    if (!profile) return
+    const on = !skinMod?.on
+    setSkinModBusy(true)
+    try {
+      setSkinModState(await setSkinMod(profile, on))
+      loadMods()
+      showToast(
+        on
+          ? 'Мод скинов вернётся в сборку при следующем запуске'
+          : 'Мод скинов убран — лаунчер больше не будет добавлять его в эту сборку',
+      )
+    } catch (e) {
+      showToast('Не удалось переключить мод скинов: ' + e, 'error')
+    } finally {
+      setSkinModBusy(false)
     }
   }
 
@@ -419,11 +458,12 @@ export function InstancePage() {
       return
     }
     const ver = (newVersion || pr.version).trim()
-    if (ver === pr.version && newLoader === loaderId(pr)) {
+    const lver = hasLoaderVersions(newLoader) ? newLoaderVer : AUTO_LOADER_VERSION
+    if (ver === pr.version && newLoader === loaderId(pr) && lver === (pr.loader_version || AUTO_LOADER_VERSION)) {
       showToast('Версия и ядро не менялись')
       return
     }
-    const label = CORE_OPTS.find((c) => c[0] === newLoader)?.[1] || newLoader
+    const label = (CORE_OPTS.find((c) => c[0] === newLoader)?.[1] || newLoader) + (lver ? ' ' + lver : '')
     if (
       !(await uiConfirm('Сменить сборку на ' + label + ' ' + ver + '? Установленные моды могут стать несовместимы — проверь их после смены.', {
         confirmLabel: 'Сменить',
@@ -435,7 +475,7 @@ export function InstancePage() {
     try {
       if (hasTauri()) modCount = (await listContent(profile, 'mod')).length
     } catch {}
-    setProfileLoader(profile, ver, newLoader)
+    setProfileLoader(profile, ver, newLoader, lver || null)
       .then(() => {
         void useProfiles.getState().refresh()
         if (modCount > 0 && newLoader !== loaderId(pr)) {
@@ -1354,7 +1394,10 @@ export function InstancePage() {
                       width={148}
                       value={newLoader}
                       options={CORE_OPTS.map(([v, label]) => ({ value: v, label }))}
-                      onChange={setNewLoader}
+                      onChange={(v) => {
+                        setNewLoader(v)
+                        setNewLoaderVer(AUTO_LOADER_VERSION)
+                      }}
                     />
                     <Select
                       width={144}
@@ -1362,13 +1405,31 @@ export function InstancePage() {
                       options={[newVersion, ...verList.filter((v) => v !== newVersion)]
                         .filter(Boolean)
                         .map((v) => ({ value: v, label: v }))}
-                      onChange={setNewVersion}
+                      onChange={(v) => {
+                        setNewVersion(v)
+                        setNewLoaderVer(AUTO_LOADER_VERSION)
+                      }}
                     />
                   </div>
+                  {hasLoaderVersions(newLoader) ? (
+                    <Select
+                      width={300}
+                      value={newLoaderVer}
+                      options={lb.withPinned(newLoaderVer)}
+                      disabled={lb.loading}
+                      placeholder={lb.loading ? 'Загружаем версии загрузчика…' : 'Рекомендуемая'}
+                      onChange={setNewLoaderVer}
+                    />
+                  ) : null}
                   <button
                     className="btn sm primary"
                     style={{ alignSelf: 'flex-start' }}
-                    disabled={coreBusy || (newVersion === (pr ? pr.version : '') && newLoader === (pr ? loaderId(pr) : ''))}
+                    disabled={
+                      coreBusy ||
+                      (newVersion === (pr ? pr.version : '') &&
+                        newLoader === (pr ? loaderId(pr) : '') &&
+                        newLoaderVer === (pr ? pr.loader_version || AUTO_LOADER_VERSION : ''))
+                    }
                     onClick={() => void applyCore()}
                   >
                     {coreBusy ? 'Меняем…' : 'Применить версию и ядро'}
@@ -1492,6 +1553,40 @@ export function InstancePage() {
                   })}
                 </div>
               </div>
+              {pr && loaderId(pr) !== 'vanilla' ? (
+                <div className="set-row" style={{ alignItems: 'flex-start' }}>
+                  <span className="lab">
+                    Скин Millida в игре
+                    <small>
+                      {skinMod?.conflict
+                        ? 'В сборке уже есть свой мод скинов (' + skinMod.conflict + ') — свой лаунчер не добавляет'
+                        : skinMod?.on
+                          ? 'Лаунчер добавляет в сборку CustomSkinLoader, чтобы твой скин было видно на серверах'
+                          : 'Выключено: мод в эту сборку не добавляется. Включай, если скин не виден в игре'}
+                    </small>
+                  </span>
+                  <div className="segs">
+                    {[
+                      ['on', 'Включить'],
+                      ['off', 'Выключить'],
+                    ].map(([v, label]) => {
+                      const active = (v === 'on') === !!skinMod?.on
+                      return (
+                        <button
+                          key={v}
+                          className={'seg' + (active ? ' on' : '')}
+                          data-skinmod={v}
+                          style={{ height: '32px', fontSize: '12.5px' }}
+                          disabled={skinModBusy || active || !skinMod}
+                          onClick={() => void toggleSkinMod()}
+                        >
+                          {skinModBusy ? 'Меняем…' : label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : null}
               <div className="set-row">
                 <span className="lab">
                   Аргументы JVM<small>Для опытных — тюнинг сборщика мусора</small>

@@ -1,6 +1,7 @@
 mod mcmeta;
 mod java;
 mod install;
+mod loaders;
 mod launch;
 mod ping;
 mod worlds;
@@ -13,6 +14,7 @@ mod gpu;
 pub(crate) use mcmeta::*;
 pub use java::*;
 pub use install::*;
+pub use loaders::*;
 pub use launch::*;
 pub use ping::*;
 pub use worlds::*;

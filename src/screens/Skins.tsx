@@ -1249,7 +1249,7 @@ export function Skins({ on }: { on: boolean }) {
   const resetSkin = async () => {
     setApplying(true)
     try {
-      await setLocalSkin('', null, false).catch(() => {})
+      await setLocalSkin('', '', false).catch(() => {})
       if (hasMillidaAccount()) {
         await uploadTexture('skin', null)
         await uploadTexture('cape', null)
@@ -1287,6 +1287,16 @@ export function Skins({ on }: { on: boolean }) {
       showToast('Скин «' + item.name + '» надет')
     } catch (e) {
       showToast('Не удалось надеть скин: ' + e, 'error')
+      return
+    }
+    // Локальную копию обновляем тем же скином: сборки с модом скинов читают её,
+    // и без этой записи в игре оставался скин с прошлого «Применить».
+    if (hasTauri()) {
+      try {
+        await setLocalSkin(await toPngBase64(item.url), null, item.model === 'slim')
+      } catch (e) {
+        showToast('На этом компьютере скин не обновился — в сборках останется прежний: ' + e, 'error')
+      }
     }
   }
 
@@ -1388,7 +1398,7 @@ export function Skins({ on }: { on: boolean }) {
           })
         : null
       if (hasTauri())
-        await setLocalSkin(skin, capePng, variant === 'slim').catch((e) => {
+        await setLocalSkin(skin, capePng ?? '', variant === 'slim').catch((e) => {
           throw new Error('скин не сохранился на этом компьютере: ' + e)
         })
       const acc = getAccount()

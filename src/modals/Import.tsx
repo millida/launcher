@@ -7,6 +7,7 @@ import { useProfiles } from '../state/profiles'
 import { closeModal, showToast, useUi } from '../state/ui'
 import { track } from '../lib/telemetry'
 import { foundKey } from '../lib/imports'
+import { backdropClose } from '../lib/dismiss'
 
 type RowState = 'idle' | 'busy' | 'done'
 
@@ -59,9 +60,7 @@ export function ImportModal() {
     <div
       className={'modal-bg' + (modal.open ? ' open' : '') + (modal.vis ? ' vis' : '')}
       id="impModal"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) close()
-      }}
+      {...backdropClose(close)}
     >
       <div className="modal" style={{ width: '560px' }}>
         <h3>Импорт сборок</h3>

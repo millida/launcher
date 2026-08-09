@@ -12,6 +12,8 @@ const DURABLE = [
   'm-sound-vol',
   'm-sound-mode',
   'm-theme',
+  'm-theme-pack',
+  'm-density',
   'm-onb-done',
   'm-tour-done',
   'm-mil-ever',

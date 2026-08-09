@@ -7,6 +7,7 @@ import { useScreens } from '../state/screens'
 import { useModpackVersions } from '../state/modpack'
 import { useProfiles } from '../state/profiles'
 import { openImage } from '../components/ImageLightbox'
+import { backdropClose } from '../lib/dismiss'
 
 export function ScreenshotsOverlay() {
   const modal = useUi((s) => s.modals.shotOverlay)
@@ -17,9 +18,7 @@ export function ScreenshotsOverlay() {
       <div
         id="shotOverlay"
         className={'modal-bg' + (modal.open ? ' open' : '') + (modal.vis ? ' vis' : '')}
-        onClick={(e) => {
-          if (e.target === e.currentTarget) close()
-        }}
+        {...backdropClose(close)}
       >
         <div className="modal" style={{ width: '780px', maxHeight: '88%' }}>
           <h3>{'Скриншоты · ' + paths.length}</h3>
@@ -73,9 +72,7 @@ export function ModpackVersionsOverlay() {
     <div
       id="mpOverlay"
       className={'modal-bg' + (modal.open ? ' open' : '') + (modal.vis ? ' vis' : '')}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) close()
-      }}
+      {...backdropClose(close)}
     >
       <div className="modal" style={{ width: '640px', maxHeight: '88%' }}>
         <h3>{install ? 'Установить «' + title + '»' : 'Версии модпака'}</h3>

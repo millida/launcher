@@ -9,16 +9,16 @@ mod overlay;
 mod mic;
 
 /// Directories the webview may read through `asset://`: the media files it
-/// plays and shows, nothing else. The token vault (`secrets.bin`, `vault.key`)
-/// sits directly under `data_dir()` and imported files land in
-/// `game_root()/profiles/...`, so neither root may ever be granted — an XSS
-/// would read the vault and any copied file straight out of the scope. Skins,
-/// capes and head avatars need no grant at all: they reach the UI as data URLs.
-/// Screenshots are granted per file when the webview asks for the list (see
-/// `commands::profiles::list_screenshots`).
+/// plays and shows plus the images a theme pack ships, nothing else. The token
+/// vault (`secrets.bin`, `vault.key`) sits directly under `data_dir()` and
+/// imported files land in `game_root()/profiles/...`, so neither root may ever
+/// be granted — an XSS would read the vault and any copied file straight out of
+/// the scope. Skins, capes and head avatars need no grant at all: they reach
+/// the UI as data URLs. Screenshots are granted per file when the webview asks
+/// for the list (see `commands::profiles::list_screenshots`).
 pub fn asset_dirs() -> Vec<std::path::PathBuf> {
     let data = engine::data_dir();
-    vec![data.join("wallpaper"), data.join("music"), data.join("sounds")]
+    vec![data.join("wallpaper"), data.join("music"), data.join("sounds"), data.join("themes")]
 }
 
 pub fn allow_assets(app: &tauri::AppHandle) {
@@ -92,6 +92,7 @@ pub fn run() {
             commands::launch::launch_game,
             commands::content::install_mod,
             commands::content::list_versions,
+            commands::content::list_loader_versions,
             commands::profiles::list_profiles,
             commands::profiles::create_profile,
             commands::profiles::launch_profile,
@@ -138,6 +139,8 @@ pub fn run() {
             commands::profiles::load_profile_settings,
             commands::profiles::set_profile_gpu,
             commands::profiles::gpu_switch_supported,
+            commands::profiles::skin_mod_state,
+            commands::profiles::set_skin_mod,
             commands::profiles::fps_boost_state,
             commands::profiles::set_fps_boost,
             commands::profiles::scan_imports,
@@ -236,7 +239,12 @@ pub fn run() {
             commands::overlay::overlay_set_enabled,
             commands::overlay::overlay_set_hotkey,
             commands::overlay::overlay_notify,
-            commands::overlay::overlay_hide
+            commands::overlay::overlay_hide,
+            commands::themes::list_themes,
+            commands::themes::read_theme,
+            commands::themes::import_theme,
+            commands::themes::delete_theme,
+            commands::themes::open_themes_folder
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

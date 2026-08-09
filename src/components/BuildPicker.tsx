@@ -5,6 +5,7 @@ import { Cover } from './Cover'
 import { useBuildPicker } from '../state/buildPicker'
 import { useProfiles } from '../state/profiles'
 import { openModal } from '../state/ui'
+import { backdropClose } from '../lib/dismiss'
 
 export function BuildPicker() {
   const { open, kindLabel, choose } = useBuildPicker()
@@ -23,9 +24,7 @@ export function BuildPicker() {
     <div
       className="modal-bg open vis"
       style={{ zIndex: 205 }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) choose(null)
-      }}
+      {...backdropClose(() => choose(null))}
     >
       <div className="modal" style={{ width: '440px' }}>
         <h3>Куда добавить {kindLabel}?</h3>

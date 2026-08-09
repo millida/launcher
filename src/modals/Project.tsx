@@ -11,6 +11,7 @@ import { useProfiles } from '../state/profiles'
 import { useProject } from '../state/project'
 import type { ProjectVersion } from '../state/project'
 import { closeModal, showToast, useUi } from '../state/ui'
+import { backdropClose } from '../lib/dismiss'
 
 const PANE_STYLE = { maxHeight: '340px', overflowY: 'auto' as const }
 
@@ -171,9 +172,7 @@ export function ProjectModal() {
     <div
       className={'modal-bg' + (modal.open ? ' open' : '') + (modal.vis ? ' vis' : '')}
       id="pjModal"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) close()
-      }}
+      {...backdropClose(close)}
     >
       <div className="modal" style={{ width: '760px', maxHeight: '88%' }}>
         <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start', marginBottom: '14px' }}>

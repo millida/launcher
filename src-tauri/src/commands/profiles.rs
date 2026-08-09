@@ -62,6 +62,17 @@ pub fn set_profile_gpu(profile: String, pref: String) -> String {
 pub fn gpu_switch_supported() -> bool { engine::gpu_switch_supported() }
 
 #[tauri::command]
+pub fn skin_mod_state(profile: String) -> serde_json::Value { engine::skin_mod_state(&profile) }
+
+/// Off takes the jar out of the build now and keeps it out: the launcher used to
+/// put its skin mod back on the next launch, so a build it does not fit could
+/// not be fixed by removing it.
+#[tauri::command]
+pub fn set_skin_mod(profile: String, on: bool) -> Result<serde_json::Value, String> {
+    engine::set_skin_mod(&profile, on)
+}
+
+#[tauri::command]
 pub fn fps_boost_state(profile: String) -> engine::FpsBoostState { engine::fps_boost_state(&profile) }
 
 #[tauri::command]
@@ -154,14 +165,19 @@ pub fn rename_profile(name: String, new_name: String) -> Result<Vec<engine::Prof
 
 /// The loader itself is installed on the next launch.
 #[tauri::command]
-pub fn set_profile_loader(name: String, version: String, loader: String) -> Result<Vec<engine::Profile>, String> {
+pub fn set_profile_loader(
+    name: String,
+    version: String,
+    loader: String,
+    loader_version: Option<String>,
+) -> Result<Vec<engine::Profile>, String> {
     let mut all = engine::load_profiles();
     let p = all.iter_mut().find(|p| p.name == name).ok_or("Сборка не найдена")?;
     p.version = version;
     p.fabric = loader == "fabric";
     p.loader = Some(loader);
-    // a manual loader change drops the loader build pinned by a modpack
-    p.loader_version = None;
+    // empty means "recommended build": a manual change drops whatever a modpack pinned
+    p.loader_version = loader_version.filter(|v| !v.trim().is_empty());
     engine::save_profiles(&all)?;
     Ok(all)
 }
@@ -175,17 +191,27 @@ pub fn list_profiles() -> Vec<engine::Profile> {
 }
 
 #[tauri::command]
-pub fn create_profile(name: String, version: String, fabric: bool, loader: Option<String>, icon: Option<String>) -> Result<engine::Profile, String> {
+pub fn create_profile(
+    name: String,
+    version: String,
+    fabric: bool,
+    loader: Option<String>,
+    loader_version: Option<String>,
+    icon: Option<String>,
+) -> Result<engine::Profile, String> {
     let mut all = engine::load_profiles();
     let lid = loader.unwrap_or_else(|| if fabric { "fabric".into() } else { "vanilla".into() });
     let fab = lid == "fabric";
+    let pinned = loader_version
+        .filter(|v| !v.trim().is_empty())
+        .filter(|_| lid != "vanilla");
     // a repeated name must not overwrite the existing build or share its folder
     let prof = engine::Profile {
         name: engine::unique_profile_name(&name),
         version,
         fabric: fab,
         loader: Some(lid),
-        loader_version: None,
+        loader_version: pinned,
         icon,
     };
     all.insert(0, prof.clone());

@@ -122,6 +122,11 @@ pub async fn list_versions() -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
+pub async fn list_loader_versions(loader: String, mc_version: String) -> Result<Vec<engine::LoaderBuild>, String> {
+    engine::list_loader_versions(&loader, &mc_version).await
+}
+
+#[tauri::command]
 pub async fn check_updates(profile: String, kind: String) -> Result<Vec<engine::UpdateInfo>, String> {
     engine::check_updates(profile, kind).await
 }

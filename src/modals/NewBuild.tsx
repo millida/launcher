@@ -8,6 +8,8 @@ import { BLOCK_ICONS } from '../lib/icons'
 import { useProfiles } from '../state/profiles'
 import { takeNewBuildPreset } from '../state/newBuild'
 import { closeModal, showToast, useUi } from '../state/ui'
+import { backdropClose } from '../lib/dismiss'
+import { AUTO_LOADER_VERSION, hasLoaderVersions, useLoaderBuilds } from '../lib/loaderBuilds'
 
 const LOADERS: [string, string][] = [
   ['vanilla', 'Ванилла'],
@@ -23,13 +25,16 @@ export function NewBuildModal() {
   const [vers, setVers] = useState<string[]>([])
   const [ver, setVer] = useState('')
   const [loader, setLoader] = useState('vanilla')
+  const [loaderVer, setLoaderVer] = useState(AUTO_LOADER_VERSION)
   const [icon, setIcon] = useState<string | null>(BLOCK_ICONS[0] || null)
+  const lb = useLoaderBuilds(loader, ver, modal.open)
 
   useEffect(() => {
     if (!modal.open) return
     const pre = takeNewBuildPreset()
     if (pre?.name) setName(pre.name)
     if (pre?.loader) setLoader(pre.loader)
+    setLoaderVer(AUTO_LOADER_VERSION)
     ;(hasTauri() ? listVersions() : Promise.resolve(['1.21.4', '1.21.1', '1.20.1'])).then((v) => {
       setVers(v)
       const wanted = pre?.version && v.includes(pre.version) ? pre.version : ''
@@ -44,9 +49,7 @@ export function NewBuildModal() {
     <div
       className={'modal-bg' + (modal.open ? ' open' : '') + (modal.vis ? ' vis' : '')}
       id="nbModal"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) close()
-      }}
+      {...backdropClose(close)}
     >
       <div className="modal" style={{ width: '460px' }}>
         <h3>Новая сборка</h3>
@@ -67,7 +70,10 @@ export function NewBuildModal() {
             width="100%"
             value={ver}
             options={vers.map((v) => ({ value: v, label: v }))}
-            onChange={(v) => setVer(v)}
+            onChange={(v) => {
+              setVer(v)
+              setLoaderVer(AUTO_LOADER_VERSION)
+            }}
           />
         </div>
         <div className="field">
@@ -78,7 +84,10 @@ export function NewBuildModal() {
                 key={k}
                 className={'seg' + (loader === k ? ' on' : '')}
                 data-nbl={k}
-                onClick={() => setLoader(k)}
+                onClick={() => {
+                  setLoader(k)
+                  setLoaderVer(AUTO_LOADER_VERSION)
+                }}
               >
                 {label}
               </button>
@@ -88,6 +97,24 @@ export function NewBuildModal() {
             Загрузчик нужен для модов. Forge и NeoForge ставятся дольше — их официальный инсталлер патчит клиент.
           </p>
         </div>
+        {hasLoaderVersions(loader) ? (
+          <div className="field" style={{ marginTop: '14px' }}>
+            <label>Версия загрузчика</label>
+            <Select
+              width="100%"
+              value={loaderVer}
+              options={lb.options}
+              disabled={lb.loading}
+              placeholder={lb.loading ? 'Загружаем список…' : 'Рекомендуемая'}
+              onChange={setLoaderVer}
+            />
+            <p className="faint-note" style={{ marginTop: '8px' }}>
+              {lb.error
+                ? 'Список версий загрузчика недоступен — поставим рекомендуемую.'
+                : 'Оставь «Рекомендуемую», если моды не просят конкретную сборку.'}
+            </p>
+          </div>
+        ) : null}
         <div style={{ display: 'flex', gap: '10px', marginTop: '22px', justifyContent: 'flex-end' }}>
           <button className="btn md secondary" id="nbCancel" data-sound="close" onClick={close}>
             Отмена
@@ -98,9 +125,9 @@ export function NewBuildModal() {
             onClick={() => {
               const nm = name.trim() || 'Моя сборка'
               if (hasTauri()) {
-                createProfile(nm, ver, loader === 'fabric', loader, icon)
+                createProfile(nm, ver, loader === 'fabric', loader, icon, loaderVer || null)
                   .then((p) => {
-                    track('build_create', { mc: ver, loader })
+                    track('build_create', { mc: ver, loader, loaderVersion: loaderVer || 'auto' })
                     void useProfiles.getState().refresh()
                     showToast('Сборка «' + p.name + '» создана', 'ok', 'achievement')
                   })
