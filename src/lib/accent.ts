@@ -1,4 +1,5 @@
 import { hydratePrefs, readPref, writePref } from './prefs'
+import { createStyleNode } from './style-node'
 
 const STYLE_ID = 'm-accent-css'
 const PACK_STYLE_ID = 'm-theme-pack-css'
@@ -87,7 +88,7 @@ let styleEl: HTMLStyleElement | null = null
 function node(): HTMLStyleElement {
   if (styleEl && styleEl.isConnected) return styleEl
   const found = document.getElementById(STYLE_ID)
-  styleEl = found instanceof HTMLStyleElement ? found : document.createElement('style')
+  styleEl = found instanceof HTMLStyleElement ? found : createStyleNode(STYLE_ID)
   styleEl.id = STYLE_ID
   // `:root:root` and a pack's `:root[data-theme-pack=…]` weigh the same, so the
   // pack only wins while it is written later. It also has to stay ahead of the
