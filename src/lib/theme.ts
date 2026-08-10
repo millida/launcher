@@ -22,6 +22,13 @@ export function withColorFade(change: () => void) {
     return
   }
   root.classList.add('color-fade')
+  // A transition only starts when the declaration that carries it was already in
+  // effect on the previous computed style. Adding the class and moving the
+  // palette in one go gave the engine a single recalculation, so the colours sat
+  // on the old values for the whole fade and only crawled over once the class
+  // came back off — a theme looked like it had not applied at all. The flush
+  // gives the transition a "before" to start from.
+  void root.offsetWidth
   change()
   clearTimeout(paintTimer)
   paintTimer = setTimeout(() => root.classList.remove('color-fade'), PAINT_MS)

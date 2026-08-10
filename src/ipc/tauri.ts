@@ -27,12 +27,6 @@ export interface TauriGlobal {
   }
 }
 
-declare global {
-  interface Window {
-    skinview3d?: any
-  }
-}
-
 // Imported from the packages rather than window.__TAURI__: exposing the global
 // would hand any XSS in the webview full IPC access, secrets included.
 const api = {

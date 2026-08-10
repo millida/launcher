@@ -11,7 +11,7 @@ import { applyTheme, storedTheme } from '../lib/theme'
 import { foundKey } from '../lib/imports'
 import type { ThemeId } from '../lib/theme'
 import { setSoundMode, soundMode } from '../lib/sound'
-import { writePref } from '../lib/prefs'
+import { setMusicAutostart } from '../state/music'
 import { track } from '../lib/telemetry'
 
 const THEMES: [ThemeId, string][] = [
@@ -207,7 +207,7 @@ function LookStep() {
           onClick={() => {
             const next = !music
             setMusic(next)
-            writePref('m-mus-auto', next ? '1' : '0')
+            setMusicAutostart(next)
           }}
         ></span>
       </div>

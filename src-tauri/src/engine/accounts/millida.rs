@@ -167,6 +167,73 @@ pub async fn millida_api_auth(path: String, method: String, body: Option<Value>)
     }
 }
 
+/// Multipart upload to the same API, with the same path validation: the payload
+/// is built in the core and the webview never names a URL or a file on disk.
+pub async fn millida_upload(
+    path: String,
+    filename: String,
+    bytes: Vec<u8>,
+    fields: Vec<(String, String)>,
+    token: Option<String>,
+) -> Result<Value, String> {
+    let resolved = api_url(&path)?;
+    let mut form = reqwest::multipart::Form::new();
+    for (key, value) in fields {
+        form = form.text(key, value);
+    }
+    let part = reqwest::multipart::Part::bytes(bytes)
+        .file_name(filename)
+        .mime_str("application/zip")
+        .map_err(|e| e.to_string())?;
+    form = form.part("file", part);
+
+    let mut req = client().post(resolved.as_str()).multipart(form);
+    if let Some(t) = token.as_ref().filter(|t| !t.is_empty()) {
+        req = req.header("Authorization", format!("Bearer {}", t));
+    }
+    // No retry: a multipart body is consumed by the send, and a repeated upload
+    // would publish the same version twice.
+    let res = req.send().await.map_err(|e| net_err(&e))?;
+    let status = res.status();
+    let text = res.text().await.unwrap_or_default();
+    if !status.is_success() {
+        if status.as_u16() == 401 {
+            return Err("http 401".into());
+        }
+        return Err(api_error_message(&text).unwrap_or_else(|| format!("http {}", status.as_u16())));
+    }
+    if text.trim().is_empty() {
+        return Ok(Value::Null);
+    }
+    serde_json::from_str(&text).map_err(|e| e.to_string())
+}
+
+pub async fn millida_upload_auth(
+    path: String,
+    filename: String,
+    bytes: Vec<u8>,
+    fields: Vec<(String, String)>,
+) -> Result<Value, String> {
+    let token = millida_token();
+    let first = millida_upload(
+        path.clone(),
+        filename.clone(),
+        bytes.clone(),
+        fields.clone(),
+        token.clone(),
+    )
+    .await;
+    let Err(e) = first else { return first };
+    if e != "http 401" {
+        return Err(e);
+    }
+    match refresh_session(token).await {
+        Refreshed::Token(fresh) => millida_upload(path, filename, bytes, fields, Some(fresh)).await,
+        Refreshed::Dead => Err(UNAUTHORIZED.into()),
+        Refreshed::Unavailable => Err(e),
+    }
+}
+
 pub fn millida_forget_session() -> Result<(), String> {
     for key in [SEC_MILLIDA, SEC_MILLIDA_REFRESH, SEC_MILLIDA_LEGACY] {
         crate::secrets::delete(key)?;

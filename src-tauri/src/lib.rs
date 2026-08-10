@@ -212,6 +212,7 @@ pub fn run() {
             commands::accounts::list_textures,
             commands::accounts::save_texture,
             commands::accounts::fetch_texture,
+            commands::accounts::export_png,
             commands::accounts::delete_texture,
             commands::accounts::set_texture_slim,
             commands::accounts::rename_texture,
@@ -244,7 +245,16 @@ pub fn run() {
             commands::themes::read_theme,
             commands::themes::import_theme,
             commands::themes::delete_theme,
-            commands::themes::open_themes_folder
+            commands::themes::open_themes_folder,
+            commands::themes::export_theme,
+            commands::themes::save_theme,
+            commands::themes::add_theme_asset,
+            commands::themes::catalog_themes,
+            commands::themes::catalog_my_themes,
+            commands::themes::catalog_install_theme,
+            commands::themes::catalog_publish_theme,
+            commands::themes::catalog_unpublish_theme,
+            commands::themes::catalog_like_theme
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -36,6 +36,7 @@ import type { SoundMode } from '../lib/sound'
 import { Slider } from '../components/Slider'
 import { Select } from '../components/Select'
 import { writePref } from '../lib/prefs'
+import { setMusicAutostart } from '../state/music'
 import { useWallpaper } from '../state/wallpaper'
 import { setTelemetryEnabled, telemetryEnabled, track } from '../lib/telemetry'
 import { VIDEOS } from '../lib/wallpaper'
@@ -66,52 +67,8 @@ import {
 } from '../lib/window'
 import type { LaunchWindowMode } from '../lib/window'
 import type { SkinSource } from '../lib/gameProfile'
-
-interface Accent {
-  id: string
-  c: string
-  h: string
-  s: string
-  fg?: string
-  grad?: string
-  textC?: string
-  rgb?: string
-}
-
-function hexToRgb(hex: string) {
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim())
-  const n = m ? parseInt(m[1], 16) : 0x5ec64d
-  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 }
-}
-function toHex(r: number, g: number, b: number) {
-  const h = (v: number) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')
-  return '#' + h(r) + h(g) + h(b)
-}
-function shade(hex: string, amt: number) {
-  const { r, g, b } = hexToRgb(hex)
-  const t = amt < 0 ? 0 : 255
-  const p = Math.abs(amt)
-  return toHex(r + (t - r) * p, g + (t - g) * p, b + (t - b) * p)
-}
-function luminance(hex: string) {
-  const { r, g, b } = hexToRgb(hex)
-  const lin = (v: number) => {
-    const x = v / 255
-    return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4)
-  }
-  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
-}
-function computeAccent(a: Accent): Accent {
-  const lum = luminance(a.c)
-  const { r, g, b } = hexToRgb(a.c)
-  return {
-    ...a,
-    fg: lum > 0.5 ? '#141414' : '#ffffff',
-    textC: lum > 0.6 ? shade(a.c, -0.42) : a.c,
-    grad: 'linear-gradient(45deg,' + shade(a.c, -0.16) + ' 0%,' + a.c + ' 100%)',
-    rgb: r + ',' + g + ',' + b,
-  }
-}
+import { accentFromHex, computeAccent, paintAccent, saveAccent } from '../lib/accent'
+import type { Accent } from '../lib/accent'
 
 const ACCENTS: Accent[] = [
   { id: 'green', c: '#5EC64D', h: '#70D55F', s: 'rgba(94,198,77,.13)' },
@@ -129,32 +86,8 @@ const ACCENTS: Accent[] = [
 
 function applyAccent(raw: Accent) {
   const a = computeAccent(raw)
-  const r = document.documentElement.style
-  r.setProperty('--m-accent', a.textC || a.c)
-  r.setProperty('--m-accent-hover', a.h)
-  r.setProperty('--m-accent-soft', a.s)
-  r.setProperty('--m-accent-fg', a.fg || '#fff')
-  if (a.rgb) r.setProperty('--m-accent-rgb', a.rgb)
-  if (a.grad) r.setProperty('--m-grad', a.grad)
-  try {
-    localStorage.setItem('m-accent', JSON.stringify(a))
-  } catch {}
-}
-
-function accentFromHex(hex: string): Accent {
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim())
-  const int = m ? parseInt(m[1], 16) : 0x5ec64d
-  const r = (int >> 16) & 255,
-    g = (int >> 8) & 255,
-    b = int & 255
-  const lift = (v: number) => Math.round(v + (255 - v) * 0.18)
-  const hx = (v: number) => v.toString(16).padStart(2, '0')
-  return {
-    id: 'custom',
-    c: '#' + hx(r) + hx(g) + hx(b),
-    h: '#' + hx(lift(r)) + hx(lift(g)) + hx(lift(b)),
-    s: `rgba(${r},${g},${b},.14)`,
-  }
+  paintAccent(a)
+  saveAccent(a)
 }
 
 function initialCustomHex(): string {
@@ -846,7 +779,7 @@ export function Settings({ on }: { on: boolean }) {
               onClick={() => {
                 const next = !musicAuto
                 setMusicAuto(next)
-                writePref('m-mus-auto', next ? '1' : '0')
+                setMusicAutostart(next)
                 showToast(next ? 'Музыка будет играть при запуске' : 'Музыка при запуске выключена')
               }}
             ></span>

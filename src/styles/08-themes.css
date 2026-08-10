@@ -16,14 +16,59 @@
 }
 .th-swatches{display:flex;width:100%;height:34px;border-radius:var(--m-r-mini);overflow:hidden;margin-bottom:5px}
 .th-swatches i{flex:1}
-.th-del{
-  position:absolute;top:6px;right:6px;width:24px;height:24px;
-  display:none;place-items:center;border-radius:var(--m-r-mini);
+.th-card-acts{position:absolute;top:6px;right:6px;display:none;gap:4px}
+.th-card:hover .th-card-acts{display:flex}
+.th-act{
+  width:24px;height:24px;display:grid;place-items:center;border-radius:var(--m-r-mini);
   background:var(--m-inset);color:var(--m-fg-faint);
 }
-.th-card:hover .th-del{display:grid}
+.th-act:hover{background:var(--m-raised);color:var(--m-fg)}
 .th-del:hover{background:var(--m-danger-soft);color:var(--m-danger)}
-.th-del svg{width:13px;height:13px}
+.th-act svg{width:13px;height:13px}
+
+/* ============ Theme editor ============ */
+
+.th-editor{width:720px;max-height:88%;display:flex;flex-direction:column}
+.th-ed-head{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.th-ed-tabs{margin:6px 0 12px}
+.th-ed-body{flex:1;overflow-y:auto;min-height:220px;padding-right:4px}
+.th-ed-body .set-group{margin-bottom:14px}
+.th-ed-css{
+  width:100%;min-height:280px;resize:vertical;
+  padding:12px;border:1.5px solid var(--m-border);border-radius:var(--m-r-md);
+  background:var(--m-inset);color:var(--m-fg);
+  font-family:var(--m-mono);font-size:12.5px;line-height:1.55;tab-size:2;
+}
+.th-ed-css:focus{outline:none;border-color:var(--m-accent)}
+.th-ed-problem{color:var(--m-warning)}
+.th-ed-foot{display:flex;align-items:center;gap:10px;margin-top:16px}
+.th-ed-count{flex:1;font-size:11.5px;color:var(--m-fg-faint)}
+.th-clear{
+  width:24px;height:24px;display:grid;place-items:center;flex:none;
+  background:none;border:0;border-radius:var(--m-r-mini);cursor:pointer;color:var(--m-fg-faint);
+}
+.th-clear:hover:not(:disabled){background:var(--m-inset);color:var(--m-fg)}
+.th-clear:disabled{opacity:.25;cursor:default}
+.th-clear svg{width:11px;height:11px}
+
+/* ============ Theme catalogue ============ */
+
+.th-cat-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.th-cat-search{flex:1;min-width:160px}
+.th-cat{cursor:default;gap:6px}
+.th-cat .btn{width:100%;justify-content:center;margin-top:2px}
+.th-cat-meta{
+  display:flex;align-items:center;gap:10px;width:100%;
+  font-size:11px;color:var(--m-fg-faint);
+}
+.th-cat-meta svg{width:11px;height:11px;vertical-align:-1px}
+.th-cat-size{margin-left:auto}
+.th-like{
+  display:inline-flex;align-items:center;gap:3px;
+  background:none;border:0;padding:0;cursor:pointer;font-size:11px;color:inherit;
+}
+.th-like:hover,.th-like.on{color:var(--m-accent)}
+.th-publish{flex-wrap:wrap;gap:8px}
 .th-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .th-color{
   width:34px;height:26px;border-radius:var(--m-r-mini);

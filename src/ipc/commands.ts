@@ -709,6 +709,69 @@ export const deleteTheme = (id: string) => invoke<void>('delete_theme', { id })
 
 export const openThemesFolder = () => invoke<void>('open_themes_folder')
 
+export interface ThemeDraftFile {
+  manifest: Omit<InstalledThemeFile, 'dir'>
+  css: string
+}
+
+export const saveTheme = (draft: ThemeDraftFile) =>
+  invoke<InstalledThemeFile>('save_theme', { draft })
+
+/// Возвращает имя скопированного в папку темы файла или null, если диалог закрыли.
+export const addThemeAsset = (id: string) => invoke<string | null>('add_theme_asset', { id })
+
+export interface CatalogTheme {
+  slug: string
+  name: string
+  description: string
+  author: string
+  base: 'dark' | 'light' | 'any'
+  preview: string[]
+  version: string
+  sizeBytes: number
+  sha256: string
+  downloads: number
+  likes: number
+  liked: boolean
+  mine: boolean
+  updatedAt: string
+}
+
+export interface OwnCatalogTheme extends CatalogTheme {
+  status: 'PENDING' | 'ACTIVE' | 'REJECTED'
+  moderationNote: string | null
+  /// Версия, которая ждёт модерации; игроки пока получают предыдущую.
+  pendingVersion: string | null
+}
+
+export interface CatalogQuery {
+  q?: string
+  sort?: 'popular' | 'new' | 'liked'
+  base?: 'dark' | 'light' | 'any'
+  limit?: number
+  offset?: number
+}
+
+/// Возвращает путь сохранённого файла или null, если диалог закрыли.
+export const exportTheme = (id: string) => invoke<string | null>('export_theme', { id })
+
+export const catalogThemes = (query: CatalogQuery) =>
+  invoke<{ items: CatalogTheme[]; total: number }>('catalog_themes', { query })
+
+export const catalogMyThemes = () => invoke<OwnCatalogTheme[]>('catalog_my_themes')
+
+export const catalogInstallTheme = (slug: string) =>
+  invoke<InstalledThemeFile>('catalog_install_theme', { slug })
+
+export const catalogPublishTheme = (id: string, changelog?: string) =>
+  invoke<OwnCatalogTheme>('catalog_publish_theme', { id, changelog })
+
+export const catalogUnpublishTheme = (slug: string) =>
+  invoke<{ ok: boolean }>('catalog_unpublish_theme', { slug })
+
+export const catalogLikeTheme = (slug: string) =>
+  invoke<{ liked: boolean; likes: number }>('catalog_like_theme', { slug })
+
 export const uiPrefs = () => invoke<Record<string, string>>('ui_prefs')
 
 export const setUiPref = (key: string, value: string) => invoke<void>('set_ui_pref', { key, value })
@@ -755,6 +818,9 @@ export const saveTexture = (kind: TextureKind, name: string, data: string, slim:
 
 // Downloaded by the core: the webview CSP blocks third-party hosts.
 export const fetchTexture = (url: string) => invoke<string>('fetch_texture', { url })
+
+// Returns the chosen path, or null when the save dialog was dismissed.
+export const exportPng = (name: string, data: string) => invoke<string | null>('export_png', { name, data })
 
 export const deleteTexture = (kind: TextureKind, file: string) =>
   invoke<TextureEntry[]>('delete_texture', { kind, file })

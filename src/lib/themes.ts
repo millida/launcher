@@ -1,7 +1,7 @@
 import { convertFileSrc, listThemes, readTheme } from '../ipc/commands'
 import { hasTauri } from '../ipc/tauri'
-import { readPref, writePref } from './prefs'
-import { pinThemeBase, withColorFade } from './theme'
+import { hydratePrefs, readPref, writePref } from './prefs'
+import { pinThemeBase } from './theme'
 import marioCss from '../themes/mario.css?raw'
 import win98Css from '../themes/win98.css?raw'
 import minimalCss from '../themes/minimal.css?raw'
@@ -48,6 +48,8 @@ export interface ThemePack extends ThemeManifest {
 const PACK_KEY = 'm-theme-pack'
 const DENSITY_KEY = 'm-density'
 const OPTS_KEY = 'm-theme-opts'
+const VALS_KEY = 'm-theme-vals'
+const VALS_MAX = 256
 const STYLE_ID = 'm-theme-pack-css'
 
 export type Density = '' | 'compact' | 'roomy'
@@ -265,8 +267,25 @@ function allOptionValues(): Record<string, Record<string, string>> {
   }
 }
 
+/// Web storage keeps every pack's settings, but only the active pack's are
+/// mirrored into the durable file: the core caps one setting at 256 bytes, and
+/// the values that have to survive a restart are the ones currently on screen.
+function durableValues(): { id: string; v: Record<string, string> } | null {
+  try {
+    const raw = JSON.parse(readPref(VALS_KEY, '') || 'null')
+    if (!raw || typeof raw !== 'object') return null
+    const id = typeof raw.id === 'string' ? raw.id : ''
+    const v = raw.v && typeof raw.v === 'object' ? (raw.v as Record<string, string>) : null
+    return id && v ? { id, v } : null
+  } catch {
+    return null
+  }
+}
+
 export function optionValues(pack: ThemePack): Record<string, string> {
-  const stored = allOptionValues()[pack.id] || {}
+  const mirrored = durableValues()
+  const stored =
+    allOptionValues()[pack.id] || (mirrored && mirrored.id === pack.id ? mirrored.v : {})
   const out: Record<string, string> = {}
   for (const o of pack.options || []) {
     const v = stored[o.key]
@@ -281,6 +300,8 @@ export function saveOptionValues(pack: ThemePack, values: Record<string, string>
   try {
     localStorage.setItem(OPTS_KEY, JSON.stringify(all))
   } catch {}
+  const mirror = JSON.stringify({ id: pack.id, v: values })
+  if (mirror.length <= VALS_MAX) writePref(VALS_KEY, mirror)
 }
 
 function optionCssValue(o: ThemeOption, raw: string): string {
@@ -344,25 +365,76 @@ export function activeThemePack(): ThemePack | null {
   return activePack
 }
 
+/// Empty stylesheet text is never a valid pack. Applying it anyway still pinned
+/// the palette and marked the card active, so the launcher claimed a theme it
+/// had not drawn and the only visible effect was the light palette showing
+/// through — the failure has to reach the user instead.
 async function packCss(pack: ThemePack): Promise<string> {
+  if (pack.builtin) {
+    const css = BUILTIN_CSS[pack.id]
+    if (!css || !css.trim()) {
+      throw new Error('Оформление «' + pack.name + '» не попало в сборку лаунчера')
+    }
+    return css
+  }
+  const src = await readTheme(pack.id)
+  const css = resolveAssets(src.css, src.dir)
+  if (!css.trim()) throw new Error('Файл оформления «' + pack.name + '» пуст')
+  return css
+}
+
+/// Исходный CSS темы — тот, что лежит в файле: без подстановки asset-адресов,
+/// которую делает применение. Редактор правит именно текст файла.
+export async function rawPackCss(pack: ThemePack): Promise<string> {
   if (pack.builtin) return BUILTIN_CSS[pack.id] || ''
   const src = await readTheme(pack.id)
-  return resolveAssets(src.css, src.dir)
+  return src.css
 }
 
 /// Installed packs are read from disk, so the list is only complete once the
-/// core answers; builtins are always available.
+/// core answers; builtins are always available and win a clash of ids, because
+/// a pack dropped into the folder must not shadow one that ships with the app.
 export async function availableThemes(): Promise<ThemePack[]> {
   if (!hasTauri()) return BUILTIN_THEMES
   try {
     const installed = await listThemes()
+    const taken = new Set(BUILTIN_THEMES.map((t) => t.id))
     return [
       ...BUILTIN_THEMES,
-      ...installed.map((t) => ({ ...t, builtin: false }) as ThemePack),
+      ...installed.filter((t) => !taken.has(t.id)).map((t) => ({ ...t, builtin: false }) as ThemePack),
     ]
   } catch {
     return BUILTIN_THEMES
   }
+}
+
+/// A pack changes fonts, radii and borders alongside the palette, and only the
+/// colours can be tweened. Fading them left the screen visibly mid-swap for a
+/// third of a second — long enough to read as "the theme did not apply" — so a
+/// pack lands at once and the fade stays for accent and light/dark, where every
+/// property involved can actually travel.
+function swap(change: () => void) {
+  change()
+}
+
+let previewing = false
+
+/// Живой просмотр черновика: стили встают в тот же узел, что и настоящий пакет,
+/// но выбор темы никуда не пишется. Иначе закрытый без сохранения редактор
+/// оставлял бы лаунчер в теме, которой на диске нет.
+export function previewDraftCss(id: string, base: ThemeBase, css: string, dir?: string) {
+  previewing = true
+  styleNode().textContent = resolveAssets(css, dir)
+  document.documentElement.dataset.themePack = id
+  pinThemeBase(base === 'any' ? '' : base)
+}
+
+export async function stopDraftPreview(): Promise<void> {
+  if (!previewing) return
+  previewing = false
+  const pack = activePack
+  activePack = null
+  await applyThemePack(pack)
 }
 
 export function clearThemePack() {
@@ -376,12 +448,12 @@ export function clearThemePack() {
 
 export async function applyThemePack(pack: ThemePack | null): Promise<void> {
   if (!pack) {
-    withColorFade(() => clearThemePack())
+    swap(() => clearThemePack())
     return
   }
   const css = await packCss(pack)
   const values = optionValues(pack)
-  withColorFade(() => {
+  swap(() => {
     if (activePack && activePack.id !== pack.id) clearOptions(activePack)
     activePack = pack
     // textContent, never innerHTML: the pack is author-supplied text and a
@@ -392,21 +464,53 @@ export async function applyThemePack(pack: ThemePack | null): Promise<void> {
     applyOptions(pack, values)
   })
   writePref(PACK_KEY, pack.id)
+  const mirror = JSON.stringify({ id: pack.id, v: values })
+  if (mirror.length <= VALS_MAX) writePref(VALS_KEY, mirror)
 }
 
-/// Applies the stored pack and density on boot. A pack that was uninstalled
-/// outside the launcher simply falls back to the plain theme.
-export async function initThemePacks(): Promise<void> {
+/// Reached from boot, where the toast layer is not mounted yet, so the reason
+/// goes to the log the crash report collects and to the next gallery attempt.
+function reportThemeFailure(e: unknown) {
+  console.error('theme pack not applied:', e)
+}
+
+async function restoreStoredPack(): Promise<void> {
   const density = storedDensity()
-  if (density) document.documentElement.dataset.density = density
+  const root = document.documentElement
+  if (density) root.dataset.density = density
+  else delete root.dataset.density
   const id = storedPackId()
-  if (!id) return
+  if (!id || (activePack && activePack.id === id)) return
   const builtin = BUILTIN_THEMES.find((t) => t.id === id)
   if (builtin) {
     await applyThemePack(builtin)
     return
   }
-  const found = (await availableThemes()).find((t) => t.id === id)
-  if (found) await applyThemePack(found)
+  if (!hasTauri()) return
+  // A pack that was uninstalled outside the launcher falls back to the plain
+  // theme, but a core that failed to answer must not: dropping the choice on a
+  // transient error would lose it for good.
+  let installed: ThemeManifest[]
+  try {
+    installed = await listThemes()
+  } catch {
+    return
+  }
+  const found = installed.find((t) => t.id === id)
+  if (found) await applyThemePack({ ...found, builtin: false })
   else clearThemePack()
+}
+
+/// Applies the stored pack and density on boot. Web storage can start empty
+/// while the durable copy on disk still holds the choice — the webview commits
+/// it lazily and a session that ended through the tray never got to — so the
+/// restore runs a second time once that copy has landed.
+export async function initThemePacks(): Promise<void> {
+  // A pack that cannot be drawn must not take the boot down with it: the plain
+  // theme is a working launcher, and the gallery reports the reason on the next
+  // attempt.
+  const restore = () => restoreStoredPack().catch((e) => void reportThemeFailure(e))
+  await restore()
+  await hydratePrefs()
+  await restore()
 }

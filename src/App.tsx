@@ -29,6 +29,7 @@ import { getAccount, getMillidaAccount, isMillidaKind, useAccounts } from './sta
 import { markMillidaEver, millidaEver } from './state/onboarding'
 import { OnboardingModal } from './modals/Onboarding'
 import { Tour } from './components/Tour'
+import { initAccent } from './lib/accent'
 import { initTheme } from './lib/theme'
 import { initThemePacks } from './lib/themes'
 import { refreshGameNick } from './state/gameNick'
@@ -129,6 +130,7 @@ export function App() {
     void frontendReady()
     installErrorHandlers()
     initTheme()
+    void initAccent()
     void initThemePacks()
     initTray()
     initMusic()
