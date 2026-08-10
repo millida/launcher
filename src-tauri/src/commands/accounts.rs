@@ -133,6 +133,24 @@ pub async fn fetch_texture(url: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+pub async fn export_png(name: String, data: String) -> Result<Option<String>, String> {
+    let bytes = engine::png_bytes(&data)?;
+    let suggested = engine::file_stem(&name) + ".png";
+    let dest = tauri::async_runtime::spawn_blocking(move || {
+        rfd::FileDialog::new()
+            .set_file_name(&suggested)
+            .set_title("Куда сохранить")
+            .save_file()
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    let Some(dest) = dest else { return Ok(None) };
+
+    std::fs::write(&dest, &bytes).map_err(|e| e.to_string())?;
+    Ok(Some(dest.to_string_lossy().to_string()))
+}
+
+#[tauri::command]
 pub fn delete_texture(kind: String, file: String) -> Result<Vec<engine::TextureEntry>, String> {
     engine::delete_texture(&kind, &file)
 }

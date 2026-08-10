@@ -60,7 +60,11 @@ export function SkinBody({
   if (failed && fallback) return <>{fallback}</>
 
   return (
-    <span ref={holder} className="skin-body3d-slot" style={{ width: width + 'px', height: height + 'px' }}>
+    <span
+      ref={holder}
+      className={'skin-body3d-slot' + (src ? '' : ' is-loading')}
+      style={{ width: width + 'px', height: height + 'px' }}
+    >
       {src ? <img className="skin-body3d" src={src} alt="" style={{ height: height + 'px' }} /> : null}
     </span>
   )

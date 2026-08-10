@@ -6,7 +6,12 @@ import { ColorPicker } from './ColorPicker'
 import { showToast } from '../state/ui'
 import { uiConfirm } from '../state/confirm'
 import { hasTauri } from '../ipc/tauri'
-import { deleteTheme, importTheme, openThemesFolder } from '../ipc/commands'
+import { deleteTheme, exportTheme, importTheme, openThemesFolder } from '../ipc/commands'
+import type { InstalledThemeFile } from '../ipc/commands'
+import { ThemeCatalog } from './ThemeCatalog'
+import { ThemeEditor } from './ThemeEditor'
+import { emptyDraft, parseDraft } from '../lib/theme-draft'
+import type { ThemeDraft } from '../lib/theme-draft'
 import {
   BUILTIN_THEMES,
   DENSITIES,
@@ -15,6 +20,7 @@ import {
   applyThemePack,
   availableThemes,
   optionValues,
+  rawPackCss,
   saveOptionValues,
   storedDensity,
   storedPackId,
@@ -112,6 +118,8 @@ export function ThemeGallery() {
   const [values, setValues] = useState<Record<string, string>>({})
   const [density, setDensity] = useState<Density>(storedDensity)
   const [busy, setBusy] = useState(false)
+  const [draft, setDraft] = useState<ThemeDraft | null>(null)
+  const [savedId, setSavedId] = useState('')
 
   const active = packs.find((p) => p.id === activeId) || null
 
@@ -180,6 +188,64 @@ export function ThemeGallery() {
     }
   }
 
+  /// Редактор открывается либо на своей теме, либо копией чужой: встроенные
+  /// паки трогать нельзя, а начинать с нуля хочется не всегда.
+  async function openEditor(pack: ThemePack | null, copy: boolean) {
+    try {
+      if (!pack) {
+        setDraft(emptyDraft())
+        return
+      }
+      const next = parseDraft(pack, await rawPackCss(pack))
+      if (copy) {
+        next.basedOn = pack.id
+        next.id = ''
+        next.name = pack.name + ' — копия'
+        next.version = '1.0.0'
+        next.options = []
+      }
+      setDraft(next)
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : String(e), 'error')
+    }
+  }
+
+  /// Закрытие редактора возвращает лаунчер к настоящей теме: если что-то
+  /// сохранили — к ней, иначе к той, что стояла до превью.
+  async function closeEditor() {
+    setDraft(null)
+    if (!savedId) return
+    const list = await availableThemes()
+    setPacks(list)
+    const pack = list.find((p) => p.id === savedId)
+    setSavedId('')
+    if (!pack) return
+    await applyThemePack(pack)
+    setActiveId(pack.id)
+    setValues(optionValues(pack))
+  }
+
+  /// Файл темы — это и есть способ ей поделиться: тот же архив ставится
+  /// кнопкой «Установить из файла» у любого другого игрока.
+  async function onExport(pack: ThemePack) {
+    try {
+      const path = await exportTheme(pack.id)
+      if (path) showToast('Тема сохранена: ' + path)
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : String(e), 'error')
+    }
+  }
+
+  async function onCatalogInstall(file: InstalledThemeFile) {
+    const list = await availableThemes()
+    setPacks(list)
+    const pack = list.find((p) => p.id === file.id)
+    if (!pack) return
+    await applyThemePack(pack)
+    setActiveId(pack.id)
+    setValues(optionValues(pack))
+  }
+
   async function onDelete(pack: ThemePack) {
     const ok = await uiConfirm('Файлы темы «' + pack.name + '» будут удалены с диска.', {
       title: 'Удалить тему?',
@@ -220,18 +286,56 @@ export function ThemeGallery() {
               <Swatches colors={p.preview} />
               <b>{p.name}</b>
               <span>{p.description || p.author || ''}</span>
-              {p.builtin ? null : (
+              <span className="th-card-acts">
                 <span
-                  className="th-del"
+                  className="th-act"
                   role="button"
+                  title="Создать свою на основе этой"
                   onClick={(e) => {
                     e.stopPropagation()
-                    void onDelete(p)
+                    void openEditor(p, true)
                   }}
                 >
-                  <Icon id="i-trash" />
+                  <Icon id="i-copy" />
                 </span>
-              )}
+                {p.builtin ? null : (
+                  <>
+                    <span
+                      className="th-act"
+                      role="button"
+                      title="Изменить тему"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        void openEditor(p, false)
+                      }}
+                    >
+                      <Icon id="i-brush" />
+                    </span>
+                    <span
+                      className="th-act"
+                      role="button"
+                      title="Сохранить файл темы"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        void onExport(p)
+                      }}
+                    >
+                      <Icon id="i-upload" />
+                    </span>
+                    <span
+                      className="th-act th-del"
+                      role="button"
+                      title="Удалить тему"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        void onDelete(p)
+                      }}
+                    >
+                      <Icon id="i-trash" />
+                    </span>
+                  </>
+                )}
+              </span>
             </button>
           ))}
         </div>
@@ -240,6 +344,9 @@ export function ThemeGallery() {
         ) : null}
         {hasTauri() ? (
           <div className="th-actions">
+            <button className="btn sm" onClick={() => void openEditor(null, false)}>
+              <Icon id="i-plus" /> Создать тему
+            </button>
             <button className="btn sm secondary" disabled={busy} onClick={() => void onImport()}>
               <Icon id="i-download" /> Установить из файла
             </button>
@@ -249,6 +356,19 @@ export function ThemeGallery() {
           </div>
         ) : null}
       </div>
+
+      {hasTauri() ? (
+        <ThemeCatalog installed={packs} onInstalled={(file) => void onCatalogInstall(file)} />
+      ) : null}
+
+      {draft ? (
+        <ThemeEditor
+          initial={draft}
+          packs={packs}
+          onClose={() => void closeEditor()}
+          onSaved={(theme) => setSavedId(theme.id)}
+        />
+      ) : null}
 
       {active && (active.options || []).length ? (
         <div className="set-group">

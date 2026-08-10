@@ -14,6 +14,8 @@ function storedLevel(): number {
 
 const storedMuted = () => readPref('m-mus-muted', '0') === '1'
 
+const storedPlaying = () => readPref('m-mus-play', '1') !== '0'
+
 export interface Track {
   src: string
   title: string
@@ -143,6 +145,32 @@ function apply(fadeMs = 0) {
     })
 }
 
+// Game start and the tray both stop the music on their own. They share one flag,
+// so playback comes back only when it was us who stopped it: a pause the user
+// asked for is never undone by a later automatic resume.
+let autoPaused = false
+
+function setPlaying(playing: boolean, fadeMs: number) {
+  autoPaused = false
+  writePref('m-mus-play', playing ? '1' : '0')
+  useMusic.setState({ playing })
+  apply(fadeMs)
+}
+
+function autoPause(fadeMs: number) {
+  if (!useMusic.getState().playing) return
+  autoPaused = true
+  useMusic.setState({ playing: false })
+  apply(fadeMs)
+}
+
+function autoResume(fadeMs: number) {
+  if (!autoPaused) return
+  autoPaused = false
+  useMusic.setState({ playing: true })
+  apply(fadeMs)
+}
+
 export const useMusic = create<MusicState>((set, get) => ({
   level: storedLevel(),
   muted: storedMuted(),
@@ -170,8 +198,9 @@ export const useMusic = create<MusicState>((set, get) => ({
       showToast('Треков нет — добавь mp3 в папку с музыкой', 'error')
       return
     }
-    set({ muted: false, playing: !get().playing })
-    apply(FADE_MS)
+    writePref('m-mus-muted', '0')
+    set({ muted: false })
+    setPlaying(!get().playing, FADE_MS)
   },
   next: () => {
     const { tracks, index } = get()
@@ -184,8 +213,9 @@ export const useMusic = create<MusicState>((set, get) => ({
     apply(FADE_MS)
   },
   play: (i) => {
-    set({ index: i, muted: false, playing: true })
-    apply(FADE_MS)
+    writePref('m-mus-muted', '0')
+    set({ index: i, muted: false })
+    setPlaying(true, FADE_MS)
   },
   refresh: async () => {
     const list = await loadPlaylist()
@@ -217,44 +247,31 @@ export function initMusic() {
     return boot()
   })
 
-  let wasPlaying = false
-  window.addEventListener('mc-started', () => {
-    const s = useMusic.getState()
-    wasPlaying = s.playing
-    if (!s.playing) return
-    useMusic.setState({ playing: false })
-    apply(FADE_MS)
-  })
-  window.addEventListener('mc-stopped', () => {
-    if (!wasPlaying) return
-    wasPlaying = false
-    useMusic.setState({ playing: true })
-    apply(FADE_MS)
-  })
+  window.addEventListener('mc-started', () => autoPause(FADE_MS))
+  window.addEventListener('mc-stopped', () => autoResume(FADE_MS))
 
   // Hidden in the tray the webview keeps running, so audio has to be stopped
   // explicitly — otherwise the launcher looks closed but still plays.
   void listenWindowVisibility((visible) => (visible ? resumeMusic() : suspendMusic()))
 }
 
-let suspended = false
-
 export function suspendMusic() {
-  if (!useMusic.getState().playing) return
-  suspended = true
-  useMusic.setState({ playing: false })
-  apply(FADE_QUICK_MS)
+  autoPause(FADE_QUICK_MS)
 }
 
 export function resumeMusic() {
-  if (!suspended) return
-  suspended = false
-  useMusic.setState({ playing: true })
-  apply(FADE_MS)
+  autoResume(FADE_MS)
+}
+
+// Turning autostart on is an explicit "play on launch", so an old manual pause
+// must not keep the player silent forever.
+export function setMusicAutostart(on: boolean) {
+  writePref('m-mus-auto', on ? '1' : '0')
+  if (on) writePref('m-mus-play', '1')
 }
 
 export function stopMusicNow() {
-  suspended = false
+  autoPaused = false
   clearFade()
   if (!audio) return
   audio.pause()
@@ -284,6 +301,9 @@ function autostart() {
   const s = useMusic.getState()
   if (!s.tracks.length || s.muted || s.level === 0) return
   if (localStorage.getItem('m-mus-auto') === '0') return
+  // A pause the user asked for outlives the restart, so autostart stays quiet.
+  if (!storedPlaying()) return
+  autoPaused = false
   useMusic.setState({ playing: true })
   apply(FADE_MS)
   // Webviews block playback until a user gesture, so retry on the first click.

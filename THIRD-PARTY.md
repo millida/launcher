@@ -39,11 +39,28 @@ Millida Launcher распространяется под [GPL-3.0-only](LICENSE)
 
 ## Vendored-код в репозитории
 
-- `public/skinview3d.bundle.js` — собранный бандл
-  [skinview3d](https://github.com/bs-community/skinview3d) со встроенным
-  [three.js](https://github.com/mrdoob/three.js). Обе библиотеки под **MIT**.
-  Файл лежит в репозитории готовой сборкой (не тянется из npm); копирайт-шапка
-  с текстом MIT добавлена в начало самого файла.
+- `src/vendor/mine3d` — исходники движка 3D-превью скинов
+  [mine3d-embedded](https://github.com/studioberry-hub/mine3d-embedded) (Undefined
+  Studio), лицензия **MIT**, текст лежит рядом в `src/vendor/mine3d/LICENSE`.
+  Код взят версии `0.2.0` и собирается вместе с фронтендом. Отличия от upstream:
+
+  - удалён модуль загрузки скина по нику через сторонние CDN — текстуры берёт ядро;
+  - добавлены опция `preserveDrawingBuffer` и метод `setContactShadowVisible`;
+  - воксели outer-слоя строятся без граней, упирающихся в соседний воксель, и с
+    отступом UV от края текселя — иначе по второму слою идёт тёмная сетка;
+  - tone mapping ACES заменён на Neutral: ACES уводил цвета пиксель-арта;
+  - взгляд за курсором считается от направления на камеру, а не в локальных
+    координатах модели — иначе при развороте спиной голова смотрит не туда;
+  - взгляд догоняет цель с ограничением скорости и с плавным весом: ровно за
+    спиной цель перескакивает с плеча на плечо, а вход и выход из «толчка»
+    иначе рвут позу головы;
+  - повторный клик во время «толчка» не перезапускает его с нуля;
+  - shadow map 2048 вместо 4096, потолок devicePixelRatio 2 вместо 2.5 и
+    автоматическое снижение качества при просадке FPS.
+
+  Движок опирается на npm-пакеты [three.js](https://github.com/mrdoob/three.js),
+  [skin3d](https://github.com/cosmic-fi/skin3d) и
+  [skinview-utils](https://github.com/bs-community/skinview-utils) — все под **MIT**.
 
 ## Шрифты
 

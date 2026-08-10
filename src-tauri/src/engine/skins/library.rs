@@ -104,7 +104,7 @@ pub fn list_textures(kind: &str) -> Result<Vec<TextureEntry>, String> {
     store(kind, &metas)
 }
 
-fn file_stem(name: &str) -> String {
+pub fn file_stem(name: &str) -> String {
     let base = name.trim().trim_end_matches(".png").trim_end_matches(".PNG");
     let safe: String = base
         .chars()
@@ -114,7 +114,7 @@ fn file_stem(name: &str) -> String {
     if safe.is_empty() { "texture".into() } else { safe.chars().take(40).collect() }
 }
 
-pub fn save_texture(kind: &str, name: &str, data: &str, slim: bool) -> Result<Vec<TextureEntry>, String> {
+pub fn png_bytes(data: &str) -> Result<Vec<u8>, String> {
     let raw = data.rsplit(',').next().unwrap_or(data);
     let bytes = b64_decode(raw).ok_or("битый PNG")?;
     if !bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
@@ -123,6 +123,11 @@ pub fn save_texture(kind: &str, name: &str, data: &str, slim: bool) -> Result<Ve
     if bytes.len() > MAX_BYTES {
         return Err("PNG больше 2 МБ".into());
     }
+    Ok(bytes)
+}
+
+pub fn save_texture(kind: &str, name: &str, data: &str, slim: bool) -> Result<Vec<TextureEntry>, String> {
+    let bytes = png_bytes(data)?;
     let dir = kind_dir(kind)?;
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     // content-hashed file name: no duplicates, and no collisions between

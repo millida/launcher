@@ -1,4 +1,4 @@
-import { loadSkinview } from './skinview'
+import { loadMine3d } from './mine3d'
 import { textureSource } from './textureSource'
 
 export const BODY_W = 300
@@ -8,35 +8,77 @@ export type BodyModel = 'default' | 'slim' | 'auto-detect'
 
 const cache = new Map<string, string>()
 const inflight = new Map<string, Promise<string>>()
-let viewer: any = null
-let viewerFailed = false
+let engine: any = null
+let engineFailed = false
 let queue: Promise<unknown> = Promise.resolve()
 
-async function ensureViewer(): Promise<any> {
-  if (viewer) return viewer
-  if (viewerFailed) throw new Error('3D-превью недоступно')
+async function ensureEngine(): Promise<any> {
+  if (engine) return engine
+  if (engineFailed) throw new Error('3D-превью недоступно')
   try {
-    const SV = await loadSkinview()
+    const m3d = await loadMine3d()
     const canvas = document.createElement('canvas')
-    viewer = new SV.SkinViewer({
-      canvas,
-      width: BODY_W,
-      height: BODY_H,
-      renderPaused: true,
+    engine = new m3d.SkinViewEngine(canvas, {
+      idleAnimation: new m3d.CoolPoseAnimation(),
+      enableControls: false,
+      enableEffects: false,
+      autoResize: false,
+      transparent: true,
       preserveDrawingBuffer: true,
     })
-    viewer.zoom = 0.82
-    viewer.fov = 36
-    try {
-      viewer.background = null
-    } catch {}
-    viewer.playerObject.rotation.y = Math.PI / 9
+    engine.setSize(BODY_W, BODY_H)
+    engine.setContactShadowVisible(true)
   } catch (e) {
-    viewer = null
-    viewerFailed = true
+    engine = null
+    engineFailed = true
     throw e
   }
-  return viewer
+  return engine
+}
+
+export const AVATAR_SIZE = 512
+
+const AVATAR_LOOK_Y = 12.2
+const AVATAR_DISTANCE = 40
+const AVATAR_YAW = -0.4
+
+export function renderAvatar(url: string, model: BodyModel): Promise<string> {
+  const task = queue.then(async () => {
+    const e = await ensureEngine()
+    const m3d = await loadMine3d()
+    const img = await loadTexture(url)
+    await e.setSkin(img)
+    if (model !== 'auto-detect') {
+      e.setModelType(model === 'slim' ? m3d.SkinModelType.Slim : m3d.SkinModelType.Classic)
+    }
+    e.clearCape()
+    try {
+      e.setSize(AVATAR_SIZE, AVATAR_SIZE)
+      e.setContactShadowVisible(false)
+      e.setAnimation(null)
+      e.setBodyPartsVisible(false)
+      e.setPlayerYaw(AVATAR_YAW)
+      e.setLookTargetY(AVATAR_LOOK_Y)
+      e.setCameraDistance(AVATAR_DISTANCE)
+      e.renderFrame()
+      return e.canvas.toDataURL('image/png')
+    } finally {
+      e.clearShotPreset()
+      e.setPlayerYaw(0)
+      e.setBodyPartsVisible(true)
+      e.setPresentationMode('full')
+      e.setAnimation(new m3d.CoolPoseAnimation())
+      e.clearCape()
+      e.setContactShadowVisible(true)
+      e.resetCamera()
+      e.setSize(BODY_W, BODY_H)
+    }
+  })
+  queue = task.then(
+    () => undefined,
+    () => undefined,
+  )
+  return task
 }
 
 const TEXTURE_TIMEOUT = 12000
@@ -73,10 +115,16 @@ export function renderSkinBody(url: string, model: BodyModel = 'auto-detect'): P
   if (running) return running
   const task = loadTexture(url).then((img) => {
     const gpu = queue.then(async () => {
-      const v = await ensureViewer()
-      await v.loadSkin(img, { model })
-      v.render()
-      const data = v.canvas.toDataURL('image/png')
+      const e = await ensureEngine()
+      const m3d = await loadMine3d()
+      await e.setSkin(img)
+      if (model !== 'auto-detect') {
+        e.setModelType(model === 'slim' ? m3d.SkinModelType.Slim : m3d.SkinModelType.Classic)
+      }
+      e.clearCape()
+      e.fitPlayerToFrame({ fillY: 0.86, offsetY: 0 })
+      e.renderFrame()
+      const data = e.canvas.toDataURL('image/png')
       cache.set(key, data)
       return data
     })

@@ -14,15 +14,20 @@ import {
   msResetSkin,
   msSetCape,
   msUploadSkin,
+  exportPng,
   pickTexture,
   saveTexture,
   setLocalSkin,
   setTextureSlim,
 } from '../ipc/commands'
 import type { MsCape, TextureEntry, TextureKind } from '../ipc/commands'
-import { loadSkinview } from '../lib/skinview'
+import { loadMine3d } from '../lib/mine3d'
+import type { Mine3dModule } from '../lib/mine3d'
+import type { ShotPresetId, SkinAnimId, SkinViewEngine } from '../vendor/mine3d'
 import { textureSource } from '../lib/textureSource'
+import { Select } from '../components/Select'
 import { SkinBody } from '../components/SkinBody'
+import { renderAvatar } from '../lib/skinBody'
 import {
   addToWardrobe,
   applyWardrobeItem,
@@ -491,85 +496,41 @@ function CapePreview({ url, h = 64 }: { url: string; h?: number }) {
   )
 }
 
-const EMOTE_SEQ = ['look', 'wave', 'flex', 'shy', 'time']
-type Cur = { hx: number; hy: number; hz: number; rx: number; rz: number; lx: number; lz: number; by: number }
+const SHOT_PRESETS: { id: ShotPresetId; label: string; fillY: number; offsetY: number }[] = [
+  { id: 'hero', label: 'Герой', fillY: 0.74, offsetY: 0 },
+  { id: 'bust', label: 'Бюст', fillY: 0.8, offsetY: -0.02 },
+  { id: 'back', label: 'Спина', fillY: 0.74, offsetY: 0 },
+]
 
-function applyPose(skin: any, t: number, cur: Cur) {
-  const name = EMOTE_SEQ[Math.floor(t / 3.6) % EMOTE_SEQ.length]
-  const tgt: Cur = { hx: 0, hy: 0, hz: 0, rx: 0, rz: 0, lx: 0, lz: 0, by: 0 }
-  // Past ~100 degrees the arm leaves the shoulder socket and looks detached.
-  if (name === 'look') {
-    tgt.hy = 0.5 * Math.sin(t * 0.7)
-    tgt.hx = 0.13 * Math.sin(t * 0.45)
-  } else if (name === 'wave') {
-    tgt.rz = -2.5
-    tgt.rx = 0.22 * Math.sin(t * 7)
-    tgt.hz = -0.06
-  } else if (name === 'flex') {
-    tgt.rz = -2.5
-    tgt.lz = 2.5
-    tgt.rx = -0.12
-    tgt.lx = -0.12
-    tgt.hx = -0.1
-  } else if (name === 'shy') {
-    tgt.hx = 0.42
-    tgt.hy = 0.28
-    tgt.rx = -0.45
-    tgt.lx = -0.45
-    tgt.by = 0.16
-  } else if (name === 'time') {
-    tgt.rx = -1.6
-    tgt.rz = 0.22
-    tgt.hx = 0.32
-    tgt.hy = -0.16
-  }
-  const k = 0.09
-  cur.hx += (tgt.hx - cur.hx) * k
-  cur.hy += (tgt.hy - cur.hy) * k
-  cur.hz += (tgt.hz - cur.hz) * k
-  cur.rx += (tgt.rx - cur.rx) * k
-  cur.rz += (tgt.rz - cur.rz) * k
-  cur.lx += (tgt.lx - cur.lx) * k
-  cur.lz += (tgt.lz - cur.lz) * k
-  cur.by += (tgt.by - cur.by) * k
-  const sway = 0.05 * Math.sin(t * 1.4)
-  try {
-    skin.head.rotation.set(cur.hx, cur.hy, cur.hz)
-    skin.rightArm.rotation.set(cur.rx + sway, 0, cur.rz)
-    skin.leftArm.rotation.set(cur.lx - sway, 0, cur.lz)
-    skin.body.rotation.set(0, cur.by, 0)
-  } catch {}
+const MILLIDA_LIGHT = {
+  keyAzimuthDeg: 52,
+  keyElevationDeg: 38,
+  keyIntensity: 2.05,
+  ambientIntensity: 0.32,
+  fillIntensity: 0.46,
+  shadowRadius: 4.8,
+  shadowIntensity: 0.66,
 }
 
-const VIEWER_FOV = 40
-const VIEWER_MAX_ZOOM = 0.9
-const VIEWER_FIT_UNITS = 16.5
-const VIEWER_NEAR_OFFSET = 4.5
-const MODEL_HALF_HEIGHT = 18
-const POSE_HALF_SPAN = 16
+const ANIMATIONS: { value: SkinAnimId; label: string }[] = [
+  { value: 'idle', label: 'Спокойствие' },
+  { value: 'run', label: 'Бег' },
+  { value: 'wave', label: 'Приветствие' },
+  { value: 'dance', label: 'Танец' },
+  { value: 'cool', label: 'Поза' },
+  { value: 'victory', label: 'Победа' },
+  { value: 'sneak', label: 'Крадётся' },
+  { value: 'look', label: 'Осматривается' },
+  { value: 'glide', label: 'Полёт' },
+  { value: 'sad', label: 'Грусть' },
+]
 
-function fitZoom(width: number, height: number) {
-  const aspect = width > 0 && height > 0 ? width / height : 0.7
-  const offset = VIEWER_NEAR_OFFSET * Math.tan(((VIEWER_FOV / 180) * Math.PI) / 2)
-  const zoomFor = (half: number) => VIEWER_FIT_UNITS / Math.max(half - offset, 0.001)
-  return Math.min(VIEWER_MAX_ZOOM, zoomFor(MODEL_HALF_HEIGHT), zoomFor(POSE_HALF_SPAN / aspect))
-}
-
-function newCur(): Cur {
-  return { hx: 0, hy: 0, hz: 0, rx: 0, rz: 0, lx: 0, lz: 0, by: 0 }
-}
-
-function resetBones(viewer: any) {
-  try {
-    const s = viewer.playerObject.skin
-    ;['head', 'rightArm', 'leftArm', 'body', 'rightLeg', 'leftLeg'].forEach((b) => s[b].rotation.set(0, 0, 0))
-  } catch {}
-}
+const FULL_FILL_Y = 0.74
 
 export function Skins({ on }: { on: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
-  const viewerRef = useRef<any>(null)
+  const viewerRef = useRef<SkinViewEngine | null>(null)
   const accounts = useAccounts((s) => s.list)
   const activeId = useAccounts((s) => s.active)
   const [nick, setNick] = useState(() => (getAccount() || { nick: '' }).nick || 'MHF_Steve')
@@ -580,6 +541,11 @@ export function Skins({ on }: { on: boolean }) {
   const [catQuery, setCatQuery] = useState('')
   const [fallback, setFallback] = useState(false)
   const [svReady, setSvReady] = useState(false)
+  const [m3d, setM3d] = useState<Mine3dModule | null>(null)
+  const [engineReady, setEngineReady] = useState(false)
+  const [modelShown, setModelShown] = useState(false)
+  const [shot, setShot] = useState<ShotPresetId | null>(null)
+  const [anim, setAnim] = useState<SkinAnimId>('idle')
   const [mySkins, setMySkins] = useState<MySkin[]>([])
   const [myCapes, setMyCapes] = useState<MySkin[]>([])
   const [textures, setTextures] = useState<Record<string, AccTexture>>({})
@@ -998,48 +964,33 @@ export function Skins({ on }: { on: boolean }) {
       .catch((e) => showToast('Плащ лицензии не переключился: ' + e, 'error'))
   }
 
+  const shotRef = useRef<ShotPresetId | null>(null)
+  shotRef.current = shot
+  const animRef = useRef<SkinAnimId>(anim)
+  animRef.current = anim
+
   const fitViewer = () => {
-    const viewer = viewerRef.current
+    const engine = viewerRef.current
     const stage = stageRef.current
-    if (!viewer || !stage) return
-    const w = stage.clientWidth || 250
-    const h = stage.clientHeight || 360
+    if (!engine || !stage) return
+    const preset = SHOT_PRESETS.find((p) => p.id === shotRef.current)
     try {
-      viewer.setSize(w, h)
-      viewer.zoom = fitZoom(w, h)
+      engine.setSize(stage.clientWidth || 250, stage.clientHeight || 360)
+      engine.fitPlayerToFrame({
+        fillY: preset ? preset.fillY : FULL_FILL_Y,
+        offsetY: preset ? preset.offsetY : 0,
+      })
     } catch {}
   }
 
-  const ensureViewer = () => {
-    const SV = window.skinview3d
-    const canvas = canvasRef.current
-    const stage = stageRef.current
-    if (viewerRef.current || !SV || !canvas) return viewerRef.current
-    const w = (stage && stage.clientWidth) || 250
-    const h = (stage && stage.clientHeight) || 360
-    try {
-      viewerRef.current = new SV.SkinViewer({ canvas, width: w, height: h })
-      viewerRef.current.fov = VIEWER_FOV
-      viewerRef.current.zoom = fitZoom(w, h)
-      try {
-        viewerRef.current.background = null
-      } catch {}
-      if (viewerRef.current.controls) {
-        viewerRef.current.controls.enableZoom = false
-        viewerRef.current.controls.enablePan = false
-      }
-    } catch {
-      viewerRef.current = null
-    }
-    return viewerRef.current
-  }
-
   useEffect(() => {
-    if (!on || svReady) return
+    if (!on || m3d) return
     let alive = true
-    loadSkinview()
-      .then(() => {
-        if (alive) setSvReady(true)
+    loadMine3d()
+      .then((mod) => {
+        if (!alive) return
+        setM3d(mod)
+        setSvReady(true)
       })
       .catch(() => {
         if (alive) setFallback(true)
@@ -1047,38 +998,98 @@ export function Skins({ on }: { on: boolean }) {
     return () => {
       alive = false
     }
-  }, [on, svReady])
+  }, [on, m3d])
 
   useEffect(() => {
-    if (!svReady) return
-    const SV = window.skinview3d
-    if (!SV || !ensureViewer()) {
+    const canvas = canvasRef.current
+    if (!m3d || !canvas) return
+    let engine: SkinViewEngine
+    try {
+      engine = new m3d.SkinViewEngine(canvas, {
+        autoResize: false,
+        autoDetectModel: false,
+        transparent: true,
+        enableControls: true,
+      })
+    } catch {
       setFallback(true)
       return
     }
+    engine.applyLightSettings(MILLIDA_LIGHT)
+    engine.setContactShadowVisible(true)
+    engine.setCursorFollow(true)
+    viewerRef.current = engine
+    setEngineReady(true)
     setFallback(false)
-    const viewer = viewerRef.current
+    fitViewer()
+    engine.start()
+    return () => {
+      viewerRef.current = null
+      setEngineReady(false)
+      engine.dispose()
+    }
+  }, [m3d])
+
+  useEffect(() => {
+    const engine = viewerRef.current
+    if (!engine) return
     let alive = true
     void textureSource(skinSrc || skinUrl(nick)).then((src) => {
-      if (alive) viewer.loadSkin(src, { model: variant === 'slim' ? 'slim' : 'default' }).catch(() => {})
+      if (!alive) return
+      engine
+        .setSkin(src)
+        .then(() => {
+          if (!alive) return
+          if (shotRef.current) engine.applyShotPreset(shotRef.current)
+          fitViewer()
+          requestAnimationFrame(() => requestAnimationFrame(() => setModelShown(true)))
+        })
+        .catch(() => {})
     })
-    const c = capes.find((x) => x.id === cape)
-    if (!c) {
-      try {
-        viewer.loadCape(null)
-      } catch {}
-    } else {
-      void textureSource(c.url).then((src) => {
-        if (alive) viewer.loadCape(src).catch(() => {})
-      })
-    }
     return () => {
       alive = false
     }
-  }, [nick, skinSrc, variant, cape, capes, svReady])
+  }, [nick, skinSrc, engineReady])
 
   useEffect(() => {
-    if (!svReady || fallback) return
+    const engine = viewerRef.current
+    if (!engine || !m3d) return
+    engine.setModelType(variant === 'slim' ? m3d.SkinModelType.Slim : m3d.SkinModelType.Classic)
+  }, [variant, m3d, engineReady])
+
+  useEffect(() => {
+    const engine = viewerRef.current
+    if (!engine) return
+    const c = capes.find((x) => x.id === cape)
+    if (!c) {
+      engine.clearCape()
+      return
+    }
+    let alive = true
+    void textureSource(c.url).then((src) => {
+      if (alive) engine.setCape(src).catch(() => {})
+    })
+    return () => {
+      alive = false
+    }
+  }, [cape, capes, engineReady])
+
+  useEffect(() => {
+    const engine = viewerRef.current
+    if (!engine || !m3d) return
+    if (shot) {
+      engine.applyShotPreset(shot)
+    } else {
+      engine.clearShotPreset()
+      engine.setPresentationMode('full')
+      engine.setAnimation(m3d.createSkinAnimation(anim))
+      engine.setCursorFollow(anim === 'idle')
+    }
+    fitViewer()
+  }, [shot, anim, m3d, engineReady])
+
+  useEffect(() => {
+    if (!engineReady) return
     const stage = stageRef.current
     if (!stage) return
     fitViewer()
@@ -1086,18 +1097,15 @@ export function Skins({ on }: { on: boolean }) {
     const ro = new ResizeObserver(() => fitViewer())
     ro.observe(stage)
     return () => ro.disconnect()
-  }, [svReady, fallback, on])
+  }, [engineReady, on])
 
-  // skinview3d runs its own RAF loop and does not know the window is hidden, which kept the GPU busy.
   useEffect(() => {
-    if (!svReady || fallback) return
+    if (!engineReady) return
     const setPaused = (v: boolean) => {
-      const viewer = viewerRef.current
-      if (viewer) {
-        try {
-          viewer.renderPaused = v
-        } catch {}
-      }
+      const engine = viewerRef.current
+      if (!engine) return
+      if (v) engine.stop()
+      else engine.start()
     }
     const onVis = () => setPaused(document.hidden)
     const onBlur = () => setPaused(true)
@@ -1105,55 +1113,22 @@ export function Skins({ on }: { on: boolean }) {
     document.addEventListener('visibilitychange', onVis)
     window.addEventListener('blur', onBlur)
     window.addEventListener('focus', onFocus)
-    setPaused(document.hidden || !document.hasFocus())
+    setPaused(document.hidden || !document.hasFocus() || !on)
     return () => {
       document.removeEventListener('visibilitychange', onVis)
       window.removeEventListener('blur', onBlur)
       window.removeEventListener('focus', onFocus)
-      setPaused(false)
     }
-  }, [svReady, fallback])
+  }, [engineReady, on])
 
-  // Prefer the bundled PlayerAnimation; fall back to a manual RAF loop when it is missing.
-  useEffect(() => {
-    if (!svReady || fallback) return
-    const viewer = viewerRef.current
-    const SV = window.skinview3d
-    if (!viewer) return
-    if (SV && SV.PlayerAnimation) {
-      try {
-        const inst: any = new SV.PlayerAnimation()
-        inst._cur = newCur()
-        inst.animate = function (player: any) {
-          applyPose(player.skin, this.progress, this._cur)
-        }
-        viewer.animation = inst
-      } catch {}
-      return () => {
-        try {
-          viewer.animation = null
-          resetBones(viewer)
-        } catch {}
-      }
-    }
-    let raf = 0
-    let alive = true
-    const cur = newCur()
-    const loop = (ts: number) => {
-      if (!alive) return
-      raf = requestAnimationFrame(loop)
-      if (document.hidden || !document.hasFocus()) return
-      try {
-        applyPose(viewer.playerObject.skin, ts / 1000, cur)
-      } catch {}
-    }
-    raf = requestAnimationFrame(loop)
-    return () => {
-      alive = false
-      cancelAnimationFrame(raf)
-      resetBones(viewer)
-    }
-  }, [svReady, fallback])
+  const aimAtCursor = (e: { clientX: number; clientY: number }) => {
+    const engine = viewerRef.current
+    const stage = stageRef.current
+    if (!engine || !stage || !engine.cursorFollow) return
+    const r = stage.getBoundingClientRect()
+    if (!r.width || !r.height) return
+    engine.setCursorAim(((e.clientX - r.left) / r.width) * 2 - 1, -(((e.clientY - r.top) / r.height) * 2 - 1))
+  }
 
   // Native dialog: HTML <input type=file> aborts WKWebView on macOS (runOpenPanel).
   const pickSkin = () => {
@@ -1194,6 +1169,25 @@ export function Skins({ on }: { on: boolean }) {
       }
     }
     showToast('Скин «' + name + '» загружен · ' + (slim ? 'тонкие руки' : 'классические руки'))
+  }
+
+  const [savingAvatar, setSavingAvatar] = useState(false)
+
+  const saveAvatar = async () => {
+    if (!hasTauri()) {
+      showToast('Сохранение аватара доступно в приложении', 'error')
+      return
+    }
+    setSavingAvatar(true)
+    try {
+      const png = await renderAvatar(skinSrc || skinUrl(nick), variant === 'slim' ? 'slim' : 'default')
+      const path = await exportPng('avatar-' + nick, png)
+      if (path) showToast('Аватар сохранён: ' + path)
+    } catch (e) {
+      showToast('Аватар не сохранился: ' + String(e).replace(/^Error:\s*/, ''), 'error')
+    } finally {
+      setSavingAvatar(false)
+    }
   }
 
   const [importOpen, setImportOpen] = useState(false)
@@ -1473,14 +1467,29 @@ export function Skins({ on }: { on: boolean }) {
 
       <div className="skins-grid">
         <div className="card skin-preview">
-          <div className="skin-stage" id="skinStage" ref={stageRef}>
+          <div
+            className="skin-stage"
+            id="skinStage"
+            ref={stageRef}
+            onPointerMove={aimAtCursor}
+            onPointerLeave={() => viewerRef.current?.setCursorAim(0, 0)}
+            onDoubleClick={() => viewerRef.current?.nudge()}
+          >
             <div className="skin-aura" aria-hidden="true"></div>
             <canvas
               id="skinCanvas"
               ref={canvasRef}
-              style={{ imageRendering: 'auto', display: use3d ? undefined : 'none' }}
+              style={{
+                imageRendering: 'auto',
+                display: use3d ? undefined : 'none',
+                opacity: modelShown ? 1 : 0,
+                transition: 'opacity var(--m-t-base)',
+              }}
             ></canvas>
-            {use3d ? null : fallback ? (
+            {use3d && !modelShown ? <span className="skin-loader" aria-label="Загружаем модель"></span> : null}
+            {use3d ? (
+              modelShown ? <span className="skin-rot">Потяни мышью, чтобы повернуть</span> : null
+            ) : fallback ? (
               <div style={{ display: 'grid', placeItems: 'center', height: '100%' }}>
                 <SkinThumb url={skinSrc || skinUrl(nick)} size={240} slim={variant === 'slim'} />
               </div>
@@ -1488,6 +1497,43 @@ export function Skins({ on }: { on: boolean }) {
               <span className="skin-loader" aria-label="Загружаем модель"></span>
             )}
           </div>
+          {use3d ? (
+            <>
+              <div className="skin-shots">
+                {SHOT_PRESETS.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    className={'skin-shot' + (shot === p.id ? ' on' : '')}
+                    onClick={() => setShot(shot === p.id ? null : p.id)}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              <div className="skin-anim">
+                <Select
+                  value={shot ? '' : anim}
+                  options={ANIMATIONS}
+                  placeholder="Кадр по пресету"
+                  width="100%"
+                  onChange={(v) => {
+                    setShot(null)
+                    setAnim(v as SkinAnimId)
+                  }}
+                />
+              </div>
+              <button
+                type="button"
+                className="skin-shot wide"
+                disabled={savingAvatar}
+                onClick={() => void saveAvatar()}
+              >
+                <Icon id="i-user" />
+                {savingAvatar ? 'Готовим аватар…' : 'Сохранить аватар'}
+              </button>
+            </>
+          ) : null}
           <div className="segs" style={{ marginTop: '14px' }}>
             {[
               ['classic', 'Классик'],

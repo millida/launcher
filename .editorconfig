@@ -21,10 +21,6 @@ indent_size = 2
 [*.svg]
 insert_final_newline = false
 
-[public/skinview3d.bundle.js]
-insert_final_newline = false
-trim_trailing_whitespace = false
-
 [LICENSE]
 trim_trailing_whitespace = false
 

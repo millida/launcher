@@ -125,6 +125,10 @@
   margin:2px 2px 0;
   padding:0 2px 0 6px;
 }
+/* macOS draws its own window controls in the caption, and the kit keeps a strip
+   free for them. A 22px bar with a 6px inset would put the launcher name under
+   the buttons, so the platform inset stays and the bar keeps room for it. */
+:root[data-theme-pack="win98"] .titlebar.mac{height:28px;padding:0 6px 0 78px}
 :root[data-theme-pack="win98"] .tb-name,
 :root[data-theme-pack="win98"] .tb-name span{color:#FFFFFF;font-weight:700;font-size:11.5px}
 :root[data-theme-pack="win98"] .tb-mark{background:#FFFFFF;color:var(--w-title);border-radius:0;width:16px;height:16px}

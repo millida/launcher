@@ -96,11 +96,16 @@ fn place_local_skin(build_dir: &std::path::Path, nick: &str) {
 /// The local copy is a `Legacy` source over `CustomSkinLoader/LocalSkin`: the
 /// mod has no `Local` type, and an unknown type is skipped with a line in the
 /// log, so the copy the launcher writes never reached the game.
+/// `GameProfile` is the only source that reads the texture the server itself
+/// attached to a profile, and the mod routes decorative player heads through the
+/// same list: without it a case head is looked up by the nickname stored in it
+/// and comes back wearing some player's skin instead of its own texture.
 fn csl_loadlist(csl_root: Option<&str>, licensed: bool, slim: bool) -> Vec<Value> {
     let mut list = Vec::new();
     if let Some(root) = csl_root {
         list.push(serde_json::json!({ "name": "Millida", "type": "CustomSkinAPI", "root": root }));
     }
+    list.push(serde_json::json!({ "name": "GameProfile", "type": "GameProfile" }));
     list.push(serde_json::json!({
         "name": "LocalSkin",
         "type": "Legacy",
@@ -340,34 +345,67 @@ mod tests {
         list.iter().map(|s| s["name"].as_str().unwrap_or("").to_string()).collect()
     }
 
+    fn source(list: &[Value], name: &str) -> Value {
+        list.iter().find(|s| s["name"] == name).cloned().unwrap_or(Value::Null)
+    }
+
     /// account   | licensed | expected order
-    /// Millida   | no       | Millida, Local — Mojang would answer by nickname
-    /// offline   | no       | Local only — nothing else knows this player
-    /// Mojang    | yes      | Local, Mojang — the licence is the player's own
+    /// Millida   | no       | Millida, GameProfile, Local — Mojang answers by nickname
+    /// offline   | no       | GameProfile, Local — nothing else knows this player
+    /// Mojang    | yes      | GameProfile, Local, Mojang — the licence is the player's own
     #[test]
     fn loadlist_order_puts_account_first_and_mojang_only_for_a_licence() {
         assert_eq!(
             names(&csl_loadlist(Some("https://api/yggdrasil/csl/"), false, false)),
-            ["Millida", "LocalSkin"],
+            ["Millida", "GameProfile", "LocalSkin"],
             "аккаунт Millida обязан опрашиваться раньше локальной копии, иначе в игре остаётся скин с прошлого «Применить»"
         );
         assert_eq!(
             names(&csl_loadlist(None, false, false)),
-            ["LocalSkin"],
+            ["GameProfile", "LocalSkin"],
             "без лицензии Mojang спрашивать нельзя: этот ник там принадлежит постороннему игроку"
         );
         assert_eq!(
             names(&csl_loadlist(None, true, false)),
-            ["LocalSkin", "Mojang"],
+            ["GameProfile", "LocalSkin", "Mojang"],
             "на лицензии Mojang — законный источник скина"
         );
+    }
+
+    /// Decorative heads (cases, crates, decorations) carry their texture in the
+    /// profile the server sends. The mod resolves them through this same list, so
+    /// without `GameProfile` the head is looked up by the nickname stored in it
+    /// and shows a stranger's skin — the licence made it worse, not better,
+    /// because Mojang answers for far more nicknames than our own API does.
+    #[test]
+    fn server_supplied_textures_have_a_source_and_it_outranks_every_nickname_lookup() {
+        for licensed in [false, true] {
+            let list = csl_loadlist(Some("https://api/yggdrasil/csl/"), licensed, false);
+            let n = names(&list);
+            let gp = n.iter().position(|x| x == "GameProfile").expect(
+                "без источника GameProfile головы-кейсы теряют свою текстуру и ищутся по нику",
+            );
+            assert_eq!(
+                source(&list, "GameProfile")["type"], "GameProfile",
+                "тип обязан быть из реализованных модом, иначе источник молча выкидывается"
+            );
+            for by_nick in ["LocalSkin", "Mojang"] {
+                if let Some(i) = n.iter().position(|x| x == by_nick) {
+                    assert!(
+                        gp < i,
+                        "{} ищет по нику и обязан спрашиваться после текстуры, которую прислал сервер",
+                        by_nick
+                    );
+                }
+            }
+        }
     }
 
     /// The mod knows no `Local` type: it logged "Type 'Local' is not defined."
     /// and dropped the source, so the catalog skin never showed up in game.
     #[test]
     fn local_source_uses_a_type_the_mod_implements_and_the_paths_it_is_given() {
-        let local = csl_loadlist(None, false, false).remove(0);
+        let local = source(&csl_loadlist(None, false, false), "LocalSkin");
         assert_eq!(local["type"], "Legacy", "тип обязан быть из реализованных модом, иначе источник молча выкидывается");
         assert_eq!(
             local["skin"], "LocalSkin/skins/{USERNAME}.png",
@@ -427,9 +465,9 @@ mod tests {
 
     #[test]
     fn loadlist_passes_the_arm_model_to_the_local_source() {
-        let slim = csl_loadlist(None, false, true);
-        assert_eq!(slim[0]["model"], "slim", "тонкие руки должны доехать до мода, иначе руки в игре толстые");
-        let classic = csl_loadlist(None, false, false);
-        assert_eq!(classic[0]["model"], "default");
+        let slim = source(&csl_loadlist(None, false, true), "LocalSkin");
+        assert_eq!(slim["model"], "slim", "тонкие руки должны доехать до мода, иначе руки в игре толстые");
+        let classic = source(&csl_loadlist(None, false, false), "LocalSkin");
+        assert_eq!(classic["model"], "default");
     }
 }

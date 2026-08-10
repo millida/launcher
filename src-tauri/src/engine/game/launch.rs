@@ -70,41 +70,140 @@ pub fn stop_game(profile: Option<&str>) -> Result<(), String> {
     Ok(())
 }
 
-fn newest_crash_report(game_dir: &Path) -> Option<PathBuf> {
+/// Evidence older than the launch belongs to an earlier run. Reading it as the
+/// reason THIS run died is how a week-old crash report kept taking a mod out of
+/// a build that had nothing to do with the crash.
+const EVIDENCE_SLACK: std::time::Duration = std::time::Duration::from_secs(30);
+
+fn is_fresh(path: &Path, since: std::time::SystemTime) -> bool {
+    let cutoff = since.checked_sub(EVIDENCE_SLACK).unwrap_or(since);
+    std::fs::metadata(path)
+        .and_then(|md| md.modified())
+        .map(|mt| mt >= cutoff)
+        .unwrap_or(false)
+}
+
+fn read_fresh(path: &Path, since: std::time::SystemTime) -> Option<String> {
+    is_fresh(path, since).then(|| std::fs::read_to_string(path).ok())?
+}
+
+fn newest_fresh_in(dir: &Path, since: std::time::SystemTime, name_starts: &str) -> Option<PathBuf> {
     let mut newest: Option<(PathBuf, std::time::SystemTime)> = None;
-    if let Ok(rd) = std::fs::read_dir(game_dir.join("crash-reports")) {
-        for e in rd.flatten() {
-            if let Ok(md) = e.metadata() {
-                let mt = md.modified().unwrap_or(std::time::UNIX_EPOCH);
-                if newest.as_ref().map(|(_, t)| mt > *t).unwrap_or(true) {
-                    newest = Some((e.path(), mt));
-                }
-            }
+    for e in std::fs::read_dir(dir).ok()?.flatten() {
+        if !e.file_name().to_string_lossy().starts_with(name_starts) {
+            continue;
+        }
+        let p = e.path();
+        if !is_fresh(&p, since) {
+            continue;
+        }
+        let mt = e.metadata().and_then(|md| md.modified()).unwrap_or(std::time::UNIX_EPOCH);
+        if newest.as_ref().map(|(_, t)| mt > *t).unwrap_or(true) {
+            newest = Some((p, mt));
         }
     }
     newest.map(|(p, _)| p)
 }
 
-/// Captured stdout plus the game's own latest.log and newest crash report:
-/// Fabric reports mod resolution and mixin failures only in latest.log.
-fn crash_text(game_dir: &Path) -> String {
-    let mut text = std::fs::read_to_string(game_dir.join("logs/launcher-latest.log")).unwrap_or_default();
-    if let Ok(l) = std::fs::read_to_string(game_dir.join("logs/latest.log")) {
+fn newest_crash_report(game_dir: &Path, since: std::time::SystemTime) -> Option<PathBuf> {
+    newest_fresh_in(&game_dir.join("crash-reports"), since, "")
+}
+
+/// A JVM that dies inside a native library (video driver, LWJGL) writes no crash
+/// report and no last log line — the only trace is hs_err_pid<pid>.log next to
+/// the game. Without it such a launch looks like "no evidence at all" and any
+/// unrelated keyword in an old log becomes the verdict.
+fn native_crash_log(game_dir: &Path, since: std::time::SystemTime) -> Option<String> {
+    let p = newest_fresh_in(game_dir, since, "hs_err_pid")?;
+    std::fs::read_to_string(&p).ok()
+}
+
+/// Captured stdout plus the game's own latest.log, the newest crash report and a
+/// JVM fatal-error log — all of them only if written by THIS launch. Fabric and
+/// Quilt report mod resolution and mixin failures only in latest.log.
+fn crash_text(game_dir: &Path, since: std::time::SystemTime) -> String {
+    let mut text = read_fresh(&game_dir.join("logs/launcher-latest.log"), since).unwrap_or_default();
+    for extra in [
+        read_fresh(&game_dir.join("logs/latest.log"), since),
+        newest_crash_report(game_dir, since).and_then(|p| std::fs::read_to_string(p).ok()),
+        native_crash_log(game_dir, since),
+    ]
+    .into_iter()
+    .flatten()
+    {
         text.push('\n');
-        text.push_str(&l);
-    }
-    if let Some(cr) = newest_crash_report(game_dir) {
-        if let Ok(c) = std::fs::read_to_string(&cr) {
-            text.push('\n');
-            text.push_str(&c);
-        }
+        text.push_str(&extra);
     }
     text
 }
 
-fn analyze_crash(game_dir: &Path) -> (String, String) {
-    let text = crash_text(game_dir);
+/// Frame the JVM died in, e.g. "C  [nvoglv64.dll+0x9a1b30]" — the one line of a
+/// hs_err log that says whose fault it was.
+fn problematic_frame(text: &str) -> Option<String> {
+    let i = text.find("# Problematic frame:")?;
+    text[i..]
+        .lines()
+        .nth(1)
+        .map(|l| l.trim_start_matches('#').trim().to_string())
+        .filter(|l| !l.is_empty())
+}
+
+/// Video driver libraries the JVM can die inside, by vendor. Matched against the
+/// problematic frame only, so a substring cannot collide with a file path
+/// elsewhere in the log. Naming the vendor turns "обнови драйвер" into an
+/// instruction the player can actually follow.
+///
+/// The empty vendor covers the API layers themselves: the frame proves the crash
+/// is in graphics, but not whose driver is behind it.
+const GPU_DRIVER_FRAMES: [(&str, &[&str]); 4] = [
+    ("AMD", &["atio", "amdvlk", "amdxc", "aticfx", "amdxx"]),
+    ("NVIDIA", &["nvoglv", "nvwgf2um", "nvd3dum", "nvcuda"]),
+    ("Intel", &["igdumdim", "igxelpicd", "ig9icd", "igvk", "igdusc"]),
+    ("", &["opengl32", "vulkan-1", "libgl", "lwjgl_opengl"]),
+];
+
+/// Vendor of the video driver the JVM died in, `Some("")` when only the graphics
+/// API layer is named. `None` — the crash is not in a video driver.
+fn gpu_driver_vendor(frame: &str) -> Option<&'static str> {
+    let low = frame.to_lowercase();
+    GPU_DRIVER_FRAMES
+        .iter()
+        .find(|(_, libs)| libs.iter().any(|l| low.contains(l)))
+        .map(|(vendor, _)| *vendor)
+}
+
+/// Lines that carry a failure. A mod is named on plenty of healthy lines — the
+/// loader prints a table of every jar it loaded, and a crash report repeats that
+/// list — so the name alone proves nothing.
+const FAILURE_MARKERS: [&str; 8] =
+    ["/error]", "/fatal]", "exception", "caused by", "\tat ", "error:", "failed", "could not"];
+
+/// True only when the injected skin mod appears in a line that is itself a
+/// failure: a stack frame, a mixin apply error, a loader complaint.
+///
+/// Matching the bare name anywhere in the log blamed the mod for every crash in
+/// a build that merely had it installed — the loader's "Loading N mods" table
+/// names it on every single launch. The build then lost its skins and kept
+/// crashing for the original, still undiagnosed reason.
+fn skin_mod_implicated(text: &str) -> bool {
+    text.lines().any(|l| {
+        let low = l.to_lowercase();
+        low.contains("customskinloader") && FAILURE_MARKERS.iter().any(|m| low.contains(m))
+    })
+}
+
+fn analyze_crash(game_dir: &Path, since: std::time::SystemTime) -> (String, String) {
+    let text = crash_text(game_dir, since);
     let low = text.to_lowercase();
+    // "Problematic frame" is written by nothing but a JVM fatal-error log, so it
+    // stands on its own: a truncated hs_err (the header cut off by a rotating
+    // tail, a report the player pasted from the middle) must still be diagnosed.
+    let fatal_jvm = low.contains("a fatal error has been detected by the java runtime")
+        || low.contains("# problematic frame:");
+    let gpu_vendor = fatal_jvm
+        .then(|| problematic_frame(&text))
+        .flatten()
+        .and_then(|f| gpu_driver_vendor(&f));
     let reason = if low.contains("outofmemoryerror") || low.contains("could not reserve enough space") || low.contains("out of memory") {
         "Не хватило оперативной памяти. Добавь ОЗУ в настройках сборки."
     } else if low.contains("unsupportedclassversionerror") || low.contains("class file version") || low.contains("compiled by a more recent version of the java") {
@@ -116,21 +215,41 @@ fn analyze_crash(game_dir: &Path) -> (String, String) {
         "Конфликт модов — есть дубли или несовместимые моды."
     } else if low.contains("mixin apply failed") || low.contains("mixinapplyerror") || low.contains("mixintransformererror") {
         "Один из модов не подошёл к этой версии игры (ошибка миксина)."
+    } else if let Some(vendor) = gpu_vendor {
+        return (driver_crash_reason(vendor), crash_tail(&text));
     } else if low.contains("glfw") || low.contains("pixel format") || low.contains("failed to create window") || low.contains("no opengl") {
-        "Проблема с графикой или драйверами видеокарты."
+        "Игра не смогла открыть окно — дело в видеокарте или её драйвере. Обнови драйвер видеокарты."
+    } else if fatal_jvm {
+        "Java аварийно завершилась. Отчёт hs_err_pid лежит в папке сборки — пришли его в поддержку."
+    } else if text.trim().is_empty() {
+        "Игра закрылась без единой строчки в логе — чаще всего её закрыл антивирус. Добавь папку игры в исключения."
     } else {
         "Игра вылетела. Загляни в лог — там причина."
     };
-    let tail: String = text
-        .lines()
-        .rev()
-        .take(18)
-        .collect::<Vec<_>>()
-        .into_iter()
-        .rev()
-        .collect::<Vec<_>>()
-        .join("\n");
-    (reason.to_string(), tail)
+    (reason.to_string(), crash_tail(&text))
+}
+
+const TAIL_LINES: usize = 18;
+
+fn crash_tail(text: &str) -> String {
+    let lines: Vec<&str> = text.lines().collect();
+    lines[lines.len().saturating_sub(TAIL_LINES)..].join("\n")
+}
+
+/// The one crash the player can fix themselves, and the only one where naming the
+/// vendor changes what they do: an access violation inside the video driver is
+/// almost always an outdated driver, and on a laptop the other card often works
+/// straight away.
+fn driver_crash_reason(vendor: &str) -> String {
+    let whose = match vendor {
+        "" => "видеокарты".to_string(),
+        v => format!("видеокарты {}", v),
+    };
+    format!(
+        "Игра упала внутри драйвера {} — сама игра тут ни при чём. Обнови драйвер видеокарты до последней версии, \
+         а если это ноутбук — в настройках сборки переключи видеокарту.",
+        whose
+    )
 }
 
 /// Game output is emitted to the webview in batches: mod loaders dump thousands
@@ -607,6 +726,9 @@ pub async fn install_and_launch_in(
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
     let start = std::time::Instant::now();
+    // Wall clock too: crash evidence is filtered by file mtime, and Instant has
+    // no common ground with a file timestamp.
+    let start_wall = std::time::SystemTime::now();
     let mut child = cmd.spawn().map_err(|e| format!("Запуск Java: {}", e))?;
     if cancelled() {
         let _ = child.kill();
@@ -669,10 +791,11 @@ pub async fn install_and_launch_in(
             return;
         }
         if matches!(&status, Ok(s) if !s.success()) {
-            let (mut reason, tail) = analyze_crash(&gdir);
-            // The injected skin mod must never break a profile permanently:
-            // if it appears in the crash, remove it and say so.
-            if crash_text(&gdir).to_lowercase().contains("customskinloader") && drop_custom_skin_loader(&pname) {
+            let (mut reason, tail) = analyze_crash(&gdir, start_wall);
+            // The injected skin mod must never break a profile permanently: if
+            // the crash actually implicates it, remove it and say so. Anything
+            // weaker than "implicates" costs the player their skins for nothing.
+            if skin_mod_implicated(&crash_text(&gdir, start_wall)) && drop_custom_skin_loader(&pname) {
                 reason = "Мод скинов Millida не ужился со сборкой — мы его убрали. Запусти игру ещё раз.".into();
             }
             let _ = app2.emit(
@@ -775,5 +898,163 @@ mod tests {
     fn plain_lines_pass_through() {
         let mut f = Log4jFilter::default();
         assert_eq!(f.feed("[12:00:00] [main/INFO]: Loading\n"), vec!["[12:00:00] [main/INFO]: Loading"]);
+    }
+
+    /// The line the mod is named on decides whether it is the culprit.
+    /// Every loader prints its jar list on a healthy launch, so the name by
+    /// itself is not evidence — that is what cost players their skins after an
+    /// unrelated crash.
+    #[test]
+    fn only_a_failing_line_blames_the_skin_mod() {
+        let cases: &[(&str, bool, &str)] = &[
+            (
+                "|     4 | CustomSkinLoader | customskinloader | 15.0.1 | Quilt | <game>\\mods\\CustomSkinLoader.jar |",
+                false,
+                "the loader prints this table on EVERY launch — it is not a crash",
+            ),
+            (
+                "[main/INFO]: Loading 4 mods:\ncustomskinloader: CustomSkinLoader 15.0.1",
+                false,
+                "the mod list inside a crash report repeats the same names",
+            ),
+            (
+                "\tat customskinloader.fabric.CustomSkinLoader.init(CustomSkinLoader.java:42)",
+                true,
+                "a stack frame in the mod is what an actual fault looks like",
+            ),
+            (
+                "[main/ERROR]: Mixin apply failed customskinloader.mixins.json:MixinSkinManager",
+                true,
+                "a mixin that fails to apply is the classic version mismatch",
+            ),
+            (
+                "[main/ERROR]: Could not execute entrypoint stage 'client' due to errors, provided by 'customskinloader'!",
+                true,
+                "a loader complaint naming the mod is a direct accusation",
+            ),
+            (
+                "[Render thread/ERROR]: java.lang.NullPointerException\n\tat net.minecraft.client.Foo.bar(Foo.java:1)",
+                false,
+                "a crash that never mentions the mod must leave the skins alone",
+            ),
+        ];
+        for (text, expected, why) in cases {
+            assert_eq!(
+                skin_mod_implicated(text),
+                *expected,
+                "skin_mod_implicated({text:?}) must be {expected}. Reason this case is pinned: {why}",
+            );
+        }
+    }
+
+    #[test]
+    fn problematic_frame_names_the_native_library() {
+        let hs = "#\n# A fatal error has been detected by the Java Runtime Environment:\n#\n#  EXCEPTION_ACCESS_VIOLATION (0xc0000005)\n#\n# Problematic frame:\n# C  [nvoglv64.dll+0x9a1b30]\n#\n";
+        assert_eq!(
+            problematic_frame(hs).as_deref(),
+            Some("C  [nvoglv64.dll+0x9a1b30]"),
+            "без кадра падения вылет в драйвере неотличим от любого другого"
+        );
+        assert_eq!(problematic_frame("just a log"), None);
+    }
+
+    /// A crash report left by an earlier run is not evidence about this launch.
+    /// Reading it is exactly how a stale CustomSkinLoader crash kept removing the
+    /// mod from a build whose current crash had another cause.
+    #[test]
+    fn stale_evidence_is_not_read() {
+        let dir = std::env::temp_dir().join("millida-crash-freshness-test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("crash-reports")).unwrap();
+        std::fs::create_dir_all(dir.join("logs")).unwrap();
+        let stale = dir.join("crash-reports/crash-old.txt");
+        std::fs::write(&stale, "\tat customskinloader.CustomSkinLoader.init(X.java:1)").unwrap();
+        std::fs::write(dir.join("logs/latest.log"), "[main/INFO]: Loading 3 mods").unwrap();
+
+        // Дата файлов = «сейчас», а запуск считаем случившимся сильно позже.
+        let much_later = std::time::SystemTime::now() + std::time::Duration::from_secs(3600);
+        let text = crash_text(&dir, much_later);
+        assert!(
+            text.trim().is_empty(),
+            "логи и отчёты старше запуска обязаны игнорироваться, иначе прошлый вылет объявляется причиной нового; получили: {text:?}"
+        );
+        assert!(
+            !skin_mod_implicated(&text),
+            "мод скинов нельзя обвинять по чужому отчёту — именно так сборка теряла скины и продолжала падать"
+        );
+
+        let text_now = crash_text(&dir, std::time::SystemTime::now());
+        assert!(
+            skin_mod_implicated(&text_now),
+            "свежий отчёт с кадром в моде обязан читаться, иначе мы перестанем чинить реальный конфликт"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// (кадр падения → вендор, зачем случай закреплён)
+    #[test]
+    fn driver_frames_are_recognised_by_vendor() {
+        let cases: &[(&str, Option<&str>, &str)] = &[
+            (
+                "C  [atio6axx.dll+0x196200]",
+                Some("AMD"),
+                "реальный отчёт игрока 09.08.2026: OpenGL-драйвер AMD, MC 1.21.11",
+            ),
+            ("C  [nvoglv64.dll+0x9a1b30]", Some("NVIDIA"), "тот же вылет на карте NVIDIA"),
+            ("C  [igdumdim64.dll+0x1234]", Some("Intel"), "встроенная графика Intel"),
+            ("C  [opengl32.dll+0x10]", Some(""), "слой API назван, вендор — нет"),
+            ("V  [jvm.dll+0x5f0a2b]", None, "падение в самой JVM драйвером не является"),
+            (
+                "j  net.minecraft.client.Minecraft.run()V+12",
+                None,
+                "кадр в коде игры не должен отправлять игрока обновлять драйвер",
+            ),
+        ];
+        for (frame, expected, why) in cases {
+            assert_eq!(
+                gpu_driver_vendor(frame),
+                *expected,
+                "gpu_driver_vendor({frame:?}) должен вернуть {expected:?}. Зачем случай закреплён: {why}",
+            );
+        }
+    }
+
+    #[test]
+    fn native_driver_crash_gets_its_own_reason() {
+        let dir = std::env::temp_dir().join("millida-crash-hserr-test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("logs")).unwrap();
+        // Дословно из отчёта игрока (09.08.2026, сборка «vvvv», MC 1.21.11).
+        std::fs::write(
+            dir.join("hs_err_pid16520.log"),
+            "#\n# A fatal error has been detected by the Java Runtime Environment:\n#\n\
+             #  EXCEPTION_ACCESS_VIOLATION (0xc0000005) at pc=0x00007ff93c726200, pid=16520, tid=17728\n#\n\
+             # JRE version: OpenJDK Runtime Environment Temurin-25.0.4+7\n# Problematic frame:\n\
+             # C  [atio6axx.dll+0x196200]\n#\n",
+        )
+        .unwrap();
+
+        let (reason, _) = analyze_crash(&dir, std::time::SystemTime::now());
+        assert!(
+            reason.contains("драйвер") && reason.contains("AMD"),
+            "вылет в atio6axx.dll обязан читаться как драйвер AMD, иначе игрок опять услышит «виноват мод скинов»; получили: {reason}"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Тот же отчёт не должен по пути превратиться в обвинение мода скинов:
+    /// именно так игрок и потерял скины, ни разу не узнав про драйвер.
+    #[test]
+    fn a_driver_crash_never_costs_the_player_their_skins() {
+        let log = "[main/INFO]: Loading 4 mods:\n\
+                   |     4 | CustomSkinLoader | customskinloader | 15.0.1 | Quilt | mods\\CustomSkinLoader.jar |\n\
+                   [Render thread/INFO]: Backend library: LWJGL version 3.4.1+2\n\
+                   # Problematic frame:\n# C  [atio6axx.dll+0x196200]";
+        assert!(
+            !skin_mod_implicated(log),
+            "мод назван только в таблице загрузки — трогать его нельзя, вылет в драйвере видеокарты"
+        );
     }
 }

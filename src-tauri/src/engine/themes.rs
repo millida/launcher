@@ -295,6 +295,163 @@ pub fn open_themes_folder() {
     open_path(&dir.to_string_lossy());
 }
 
+/// What the editor sends back: the manifest it built and the stylesheet it
+/// generated. Nothing else about the folder is touched, so images and fonts
+/// added by hand survive a save.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThemeDraft {
+    pub manifest: ThemeManifest,
+    pub css: String,
+}
+
+fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    let tmp = path.with_extension("part");
+    std::fs::write(&tmp, bytes).map_err(|e| format!("не удалось записать файл: {e}"))?;
+    std::fs::rename(&tmp, path).map_err(|e| {
+        std::fs::remove_file(&tmp).ok();
+        format!("не удалось записать файл: {e}")
+    })
+}
+
+/// Saves a theme written in the launcher itself. The pack is validated by the
+/// same rules as an imported one — a theme made here has to be a theme anywhere
+/// else — and both files land atomically, so an interrupted save cannot leave a
+/// manifest describing a stylesheet that was never written.
+pub fn save_theme(draft: ThemeDraft) -> Result<InstalledTheme, String> {
+    validate_manifest(&draft.manifest)?;
+    if draft.css.len() as u64 > MAX_CSS_BYTES {
+        return Err("theme.css больше 512 КБ".into());
+    }
+    if draft.css.trim().is_empty() {
+        return Err("в теме нет ни одного правила".into());
+    }
+    check_css(&draft.css)?;
+
+    let manifest = serde_json::to_vec_pretty(&draft.manifest).map_err(|e| e.to_string())?;
+    if manifest.len() as u64 > MAX_MANIFEST_BYTES {
+        return Err("theme.json слишком большой".into());
+    }
+
+    let dir = safe_child(&themes_dir(), &draft.manifest.id)?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    write_atomic(&dir.join("theme.css"), draft.css.as_bytes())?;
+    write_atomic(&dir.join("theme.json"), &manifest)?;
+    Ok(InstalledTheme { manifest: draft.manifest, dir: dir.to_string_lossy().to_string() })
+}
+
+/// Copies a picked image or font into the theme folder so its CSS can reach it
+/// by a relative `url()`. The name is rebuilt from the extension rather than
+/// taken from the file, and the pack's own two files are never overwritten.
+pub fn add_theme_asset(id: &str, source: &Path) -> Result<String, String> {
+    let dir = safe_child(&themes_dir(), id)?;
+    if !dir.join("theme.json").is_file() {
+        return Err("сначала сохраните тему".into());
+    }
+    let name = source
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .ok_or_else(|| "у файла нет имени".to_string())?;
+    let ext = ext_of(&name);
+    if !ALLOWED_EXT.contains(&ext.as_str()) || ext == "css" || ext == "json" {
+        return Err(format!("файлы «{ext}» в теме не поддерживаются"));
+    }
+    let stem: String = Path::new(&name)
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect();
+    let stem = stem.trim_matches('-').to_string();
+    let safe = format!("{}.{ext}", if stem.is_empty() { "asset".into() } else { stem });
+
+    let size = std::fs::metadata(source).map(|m| m.len()).unwrap_or(u64::MAX);
+    if size > MAX_TOTAL_BYTES {
+        return Err("файл больше 16 МБ".into());
+    }
+    let dest = safe_child(&dir, &safe)?;
+    std::fs::copy(source, &dest).map_err(|e| format!("не удалось скопировать файл: {e}"))?;
+    Ok(safe)
+}
+
+/// Every file of an installed pack, relative to its folder, in a stable order.
+/// The same allow-list as installation: a pack that leaves the launcher must be
+/// a pack the launcher would take back.
+fn pack_files(dir: &Path) -> Result<Vec<(String, PathBuf)>, String> {
+    let mut out: Vec<(String, PathBuf)> = Vec::new();
+    let mut total: u64 = 0;
+    let mut queue = vec![(String::new(), dir.to_path_buf())];
+    while let Some((prefix, current)) = queue.pop() {
+        let entries = std::fs::read_dir(&current).map_err(|e| e.to_string())?;
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            let rel = if prefix.is_empty() { name.clone() } else { format!("{prefix}/{name}") };
+            let path = entry.path();
+            if path.is_dir() {
+                queue.push((rel, path));
+                continue;
+            }
+            if !ALLOWED_EXT.contains(&ext_of(&rel).as_str()) {
+                continue;
+            }
+            total += entry.metadata().map(|m| m.len()).unwrap_or(0);
+            if out.len() >= MAX_FILES || total > MAX_TOTAL_BYTES {
+                return Err("тема слишком большая, чтобы ей поделиться".into());
+            }
+            out.push((rel, path));
+        }
+    }
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    Ok(out)
+}
+
+/// Packs an installed theme back into the archive format installation accepts,
+/// so the same bytes work as a file to share and as an upload to the catalogue.
+/// The pack is validated on the way out: a theme that would be rejected on
+/// install must not travel to anyone else.
+pub fn pack_theme(id: &str) -> Result<(ThemeManifest, Vec<u8>), String> {
+    let dir = safe_child(&themes_dir(), id)?;
+    let manifest = read_manifest(&dir)?;
+    if manifest.id != id {
+        return Err(format!("в theme.json указан другой идентификатор: «{}»", manifest.id));
+    }
+    let css_file = dir.join("theme.css");
+    let css_len = std::fs::metadata(&css_file).map(|m| m.len()).unwrap_or(0);
+    if css_len == 0 {
+        return Err("в теме нет файла theme.css".into());
+    }
+    if css_len > MAX_CSS_BYTES {
+        return Err("theme.css больше 512 КБ".into());
+    }
+    check_css(&std::fs::read_to_string(&css_file).map_err(|e| e.to_string())?)?;
+
+    let files = pack_files(&dir)?;
+    let options = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
+    let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    for (rel, path) in files {
+        zip.start_file(&rel, options).map_err(|e| e.to_string())?;
+        let mut src = std::fs::File::open(&path).map_err(|e| e.to_string())?;
+        std::io::copy(&mut src, &mut zip).map_err(|e| e.to_string())?;
+    }
+    let bytes = zip.finish().map_err(|e| e.to_string())?.into_inner();
+    Ok((manifest, bytes))
+}
+
+/// Writes the pack next to its final name and moves it into place, so an
+/// interrupted export never leaves a half-written file where a theme is
+/// expected.
+pub fn export_theme(id: &str, dest: &Path) -> Result<(), String> {
+    let (_, bytes) = pack_theme(id)?;
+    let tmp = dest.with_extension("part");
+    std::fs::write(&tmp, &bytes).map_err(|e| format!("не удалось сохранить файл: {e}"))?;
+    std::fs::rename(&tmp, dest).map_err(|e| {
+        std::fs::remove_file(&tmp).ok();
+        format!("не удалось сохранить файл: {e}")
+    })
+}
+
 /// Removes the staging directory unless it was handed over, so a pack that
 /// fails validation halfway leaves nothing behind.
 struct Staging(Option<PathBuf>);
@@ -538,6 +695,34 @@ mod tests {
         assert!(
             validate_manifest(&manifest("ok", "neon")).is_err(),
             "an unknown base leaves the frontend without a palette to start the theme from",
+        );
+    }
+
+    /// A shared theme is installed by someone else, so the archive may hold
+    /// only what installation would take back — an svg or a stray text file
+    /// would be dropped there anyway, and shipping them just makes the file
+    /// bigger and the pack look different on the two machines.
+    #[test]
+    fn packing_takes_only_what_installation_accepts() {
+        let dir = std::env::temp_dir().join(format!("millida-theme-pack-{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::create_dir_all(dir.join("art")).expect("temp theme folder");
+        std::fs::write(dir.join("theme.json"), "{}").expect("manifest");
+        std::fs::write(dir.join("theme.css"), ":root{}").expect("stylesheet");
+        std::fs::write(dir.join("art").join("bg.png"), [0u8; 4]).expect("image");
+        std::fs::write(dir.join("notes.txt"), "x").expect("note");
+        std::fs::write(dir.join("art").join("icon.svg"), "<svg/>").expect("svg");
+
+        let packed: Vec<String> =
+            pack_files(&dir).expect("pack").into_iter().map(|(rel, _)| rel).collect();
+        std::fs::remove_dir_all(&dir).ok();
+
+        assert_eq!(
+            packed,
+            vec!["art/bg.png", "theme.css", "theme.json"],
+            "the archive carries the pack's own files with their folders intact and nothing the \
+             installer would refuse: svg is scriptable when opened directly and never reaches the \
+             themes folder",
         );
     }
 
