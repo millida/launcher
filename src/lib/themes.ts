@@ -2,6 +2,7 @@ import { convertFileSrc, listThemes, readTheme } from '../ipc/commands'
 import { hasTauri } from '../ipc/tauri'
 import { hydratePrefs, readPref, writePref } from './prefs'
 import { pinThemeBase } from './theme'
+import { createStyleNode, styleBlocked } from './style-node'
 import marioCss from '../themes/mario.css?raw'
 import win98Css from '../themes/win98.css?raw'
 import minimalCss from '../themes/minimal.css?raw'
@@ -352,11 +353,22 @@ let styleEl: HTMLStyleElement | null = null
 function styleNode(): HTMLStyleElement {
   if (styleEl && styleEl.isConnected) return styleEl
   const found = document.getElementById(STYLE_ID)
-  styleEl = found instanceof HTMLStyleElement ? found : document.createElement('style')
+  styleEl = found instanceof HTMLStyleElement ? found : createStyleNode(STYLE_ID)
   styleEl.id = STYLE_ID
   // Appended last so a pack overrides the bundled kit at equal specificity.
   if (!styleEl.isConnected) document.head.appendChild(styleEl)
   return styleEl
+}
+
+/// The node has to be able to hold rules before anything else moves: a pack that
+/// pins the palette and lights up its card while the stylesheet is refused is
+/// exactly the failure that reads as "themes do not work in the release build".
+function paintableNode(): HTMLStyleElement {
+  const el = styleNode()
+  if (styleBlocked(el)) {
+    throw new Error('Стили оформления заблокированы политикой безопасности сборки (CSP)')
+  }
+  return el
 }
 
 let activePack: ThemePack | null = null
@@ -423,8 +435,9 @@ let previewing = false
 /// но выбор темы никуда не пишется. Иначе закрытый без сохранения редактор
 /// оставлял бы лаунчер в теме, которой на диске нет.
 export function previewDraftCss(id: string, base: ThemeBase, css: string, dir?: string) {
+  const node = paintableNode()
   previewing = true
-  styleNode().textContent = resolveAssets(css, dir)
+  node.textContent = resolveAssets(css, dir)
   document.documentElement.dataset.themePack = id
   pinThemeBase(base === 'any' ? '' : base)
 }
@@ -452,13 +465,14 @@ export async function applyThemePack(pack: ThemePack | null): Promise<void> {
     return
   }
   const css = await packCss(pack)
+  const node = paintableNode()
   const values = optionValues(pack)
   swap(() => {
     if (activePack && activePack.id !== pack.id) clearOptions(activePack)
     activePack = pack
     // textContent, never innerHTML: the pack is author-supplied text and a
     // style element parses it as CSS, so a stray tag stays inert.
-    styleNode().textContent = css
+    node.textContent = css
     document.documentElement.dataset.themePack = pack.id
     pinThemeBase(pack.base === 'any' ? '' : pack.base)
     applyOptions(pack, values)

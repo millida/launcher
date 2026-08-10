@@ -32,7 +32,10 @@ let installed: { id: string; name: string; base: string }[] = []
 let listFails = false
 let pinned = ''
 
-const style = { id: '', isConnected: false, textContent: '' }
+// `sheet` is what a policy takes away: a refused `<style>` keeps its text and
+// loses its stylesheet, which is the only readable sign the rules never landed.
+const style = { id: '', isConnected: false, textContent: '', nonce: '', sheet: {} as object | null }
+const bootStyle = { nonce: '' }
 const root = {
   dataset: {} as Record<string, string | undefined>,
   style: {
@@ -61,6 +64,7 @@ define('document', {
   head: { appendChild: () => void (style.isConnected = true) },
   getElementById: () => null,
   createElement: () => style,
+  querySelectorAll: () => [bootStyle],
 })
 
 const { applyThemePack, BUILTIN_THEMES, initThemePacks, optionValues, saveOptionValues } =
@@ -76,6 +80,9 @@ beforeEach(() => {
   listFails = false
   pinned = ''
   style.textContent = ''
+  style.nonce = ''
+  style.sheet = {}
+  bootStyle.nonce = ''
   for (const k of Object.keys(root.dataset)) delete root.dataset[k]
   root.style.values.clear()
 })
@@ -151,6 +158,18 @@ test('a built-in pack with no stylesheet is refused instead of half applied', as
 /// A key written through `writePref` that is missing from the durable list is
 /// saved to disk and never read back, so the setting survives everywhere except
 /// the one case the file exists for — a wiped web storage.
+/// A packaged build serves its own CSP, and a policy carrying a nonce refuses a
+/// `<style>` built at runtime: the node keeps the text and loses the stylesheet.
+/// Applying anyway pinned the palette and marked the card active while drawing
+/// none of the pack — the release build that started this.
+test('a pack refused by the page policy is reported instead of half applied', async () => {
+  style.sheet = null
+  await expect(applyThemePack(pack('win98'))).rejects.toThrow(/политикой безопасности/)
+  expect(root.dataset.themePack).toBeUndefined()
+  expect(pinned).toBe('')
+  expect(prefs.get('m-theme-pack')).toBeUndefined()
+})
+
 test('every pref key used in the app is registered as durable', async () => {
   const { readFileSync, readdirSync, statSync } = await import('node:fs')
   const { join } = await import('node:path')
