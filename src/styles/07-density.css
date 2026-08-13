@@ -1,7 +1,12 @@
 /* ============ Interface density ============ */
 /* One axis, independent of the palette: the same theme can be drawn tight or
    airy. Only spacing, control heights and type scale move — colours, radii and
-   motion stay where the theme put them, so a pack never has to opt in. */
+   motion stay where the theme put them, so a pack never has to opt in.
+
+   A rule here outranks the kit by two classes, so whenever the kit refines an
+   element with an extra class the refinement has to be repeated at this level
+   or it stops existing at that density. Both densities carry the same set of
+   selectors — density.test.ts fails on either gap. */
 
 :root[data-density="compact"] body{font-size:13px;line-height:1.45}
 :root[data-density="compact"] .titlebar{height:38px}
@@ -13,9 +18,14 @@
 :root[data-density="compact"] .sidebar.collapsed{width:58px}
 :root[data-density="compact"] .nav-item{padding:7px 10px;font-size:13px;gap:9px;border-radius:8px}
 :root[data-density="compact"] .nav-item svg{width:16px;height:16px}
+:root[data-density="compact"] .sidebar.collapsed .nav-item{padding-left:14px;padding-right:0;gap:0}
+:root[data-density="compact"] .sidebar.collapsed .account{padding-left:4px;padding-right:0;gap:0}
+:root[data-density="compact"] .sidebar.collapsed .quick-open{padding-left:7px}
+:root[data-density="compact"] .sidebar.collapsed .side-collapse .side-collapse-ic{width:44px;height:32px}
 :root[data-density="compact"] .side-cap{padding:2px 10px 4px}
 :root[data-density="compact"] .side-sep{margin:5px 4px}
 :root[data-density="compact"] .side-collapse{margin-bottom:3px}
+:root[data-density="compact"] .sidebar.collapsed .side-collapse{margin-bottom:3px}
 :root[data-density="compact"] .account{padding:6px 8px;gap:8px}
 :root[data-density="compact"] .ava{width:30px;height:30px}
 :root[data-density="compact"] .ava canvas{width:26px;height:26px}
@@ -26,6 +36,11 @@
 :root[data-density="compact"] .page-head h1{font-size:19px}
 :root[data-density="compact"] .sec-title{margin:18px 0 9px;font-size:15px}
 :root[data-density="compact"] .card{padding:14px}
+:root[data-density="compact"] .card.build-card,
+:root[data-density="compact"] .card.skin-card{padding:0}
+:root[data-density="compact"] .card.gate-card{padding:24px 20px}
+:root[data-density="compact"] .card.play-stat{padding:12px 14px}
+:root[data-density="compact"] .card.skel-card{padding:16px}
 :root[data-density="compact"] .stack{gap:7px}
 :root[data-density="compact"] .faint-note{margin-top:7px}
 
@@ -34,7 +49,9 @@
 :root[data-density="compact"] .btn.lg{height:46px;padding:0 24px;font-size:14px}
 :root[data-density="compact"] .input{height:40px;padding:0 13px}
 :root[data-density="compact"] .input.sm{height:34px}
+:root[data-density="compact"] .chat-input>.input{height:32px;padding:0 10px}
 :root[data-density="compact"] .seg{height:32px;padding:0 13px;font-size:12.5px}
+:root[data-density="compact"] .facet-seg .seg{height:30px;padding:0 7px;font-size:12px}
 :root[data-density="compact"] .icon-btn{width:28px;height:28px}
 
 :root[data-density="compact"] .hero-live{height:216px}
@@ -44,8 +61,10 @@
 :root[data-density="compact"] .hero-gear{width:46px;height:46px}
 
 :root[data-density="compact"] .build-grid{grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
-:root[data-density="compact"] .build-grid.one-line{grid-auto-columns:minmax(0,116px);gap:7px}
+:root[data-density="compact"] .build-grid.one-line{grid-template-columns:none;grid-auto-columns:minmax(0,116px);gap:7px}
 :root[data-density="compact"] .build-body{padding:7px 9px 9px}
+:root[data-density="compact"] .build-grid.one-line .build-body{padding:7px 9px 9px}
+:root[data-density="compact"] .build-card.ready-card .build-body{padding:9px 12px}
 :root[data-density="compact"] .ready-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
 :root[data-density="compact"] .build-card.ready-card .build-cover{width:92px;height:92px;margin:9px 0 9px 9px}
 :root[data-density="compact"] .skin-cards{grid-template-columns:repeat(5,1fr);gap:9px}
@@ -55,42 +74,128 @@
 :root[data-density="compact"] .srv-row,
 :root[data-density="compact"] .mod-row{padding:9px 12px;gap:12px}
 :root[data-density="compact"] .fr-row{padding:9px 12px;gap:11px}
+:root[data-density="compact"] .fr-row.compact{padding:5px 7px;gap:9px}
+:root[data-density="compact"] .fr-row.host-file-row{gap:8px}
 :root[data-density="compact"] .mod-icon{width:42px;height:42px}
 :root[data-density="compact"] .srv-banner{width:240px;height:60px}
 :root[data-density="compact"] .srv-feature{min-height:150px}
 :root[data-density="compact"] .srv-feature-inner{padding:16px;gap:16px}
 :root[data-density="compact"] .mod-card-row{padding:6px}
 :root[data-density="compact"] .mod-line{padding:7px 2px}
+:root[data-density="compact"] .instance-page .mod-line{padding:7px 10px}
 
 :root[data-density="compact"] .set-screen{max-width:820px}
 :root[data-density="compact"] .set-group{margin-top:13px}
 :root[data-density="compact"] .set-row{padding:8px 0;gap:10px}
 :root[data-density="compact"] .set-row .lab{font-size:13px}
+:root[data-density="compact"] .host-manage-body .set-row{padding:8px 0}
+:root[data-density="compact"] .set-row.th-publish{gap:6px}
 :root[data-density="compact"] .modal{width:500px;padding:18px}
+:root[data-density="compact"] .modal.onb-modal{width:560px}
+:root[data-density="compact"] .modal.th-editor{width:640px}
 :root[data-density="compact"] .kpi{padding:10px 12px}
 :root[data-density="compact"] .kpi .val{font-size:20px}
 :root[data-density="compact"] .kpi-row{gap:9px;margin-top:12px}
 :root[data-density="compact"] .chat{width:300px}
 
-:root[data-density="roomy"] body{font-size:15px}
+:root[data-density="compact"] .th-grid{grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:8px}
+:root[data-density="compact"] .th-card{padding:8px}
+:root[data-density="compact"] .th-card b{font-size:12.5px}
+:root[data-density="compact"] .th-card>span{font-size:11px}
+:root[data-density="compact"] .th-swatches{height:28px;margin-bottom:4px}
+
+:root[data-density="roomy"] body{font-size:15px;line-height:1.6}
+:root[data-density="roomy"] .titlebar{height:48px}
 :root[data-density="roomy"] .app{padding:0 16px 16px;gap:16px}
 :root[data-density="roomy"] .content{padding:18px 10px 10px 6px}
+:root[data-density="roomy"] ::-webkit-scrollbar{width:12px;height:12px}
+
 :root[data-density="roomy"] .sidebar{width:258px;padding:12px;gap:3px}
-:root[data-density="roomy"] .nav-item{padding:12px 14px;font-size:14.5px}
-:root[data-density="roomy"] .page-head{margin-bottom:24px}
+:root[data-density="roomy"] .sidebar.collapsed{width:74px}
+:root[data-density="roomy"] .nav-item{padding:12px 14px;font-size:14.5px;gap:12px;border-radius:11px}
+:root[data-density="roomy"] .nav-item svg{width:19px;height:19px}
+:root[data-density="roomy"] .sidebar.collapsed .nav-item{padding-left:16px;padding-right:0;gap:0}
+:root[data-density="roomy"] .sidebar.collapsed .account{padding-left:7px;padding-right:0;gap:0}
+:root[data-density="roomy"] .sidebar.collapsed .quick-open{padding-left:8px}
+:root[data-density="roomy"] .sidebar.collapsed .side-collapse .side-collapse-ic{width:50px;height:38px}
+:root[data-density="roomy"] .side-cap{padding:3px 14px 7px}
+:root[data-density="roomy"] .side-sep{margin:10px 4px}
+:root[data-density="roomy"] .side-collapse{margin-bottom:8px}
+:root[data-density="roomy"] .sidebar.collapsed .side-collapse{margin-bottom:8px}
+:root[data-density="roomy"] .account{padding:10px 12px;gap:12px}
+:root[data-density="roomy"] .ava{width:40px;height:40px}
+:root[data-density="roomy"] .ava canvas{width:36px;height:36px}
+:root[data-density="roomy"] .quick-open img{width:34px;height:34px}
+:root[data-density="roomy"] .dl-card{padding:12px 14px;margin-bottom:10px}
+
+:root[data-density="roomy"] .page-head{margin-bottom:24px;gap:16px}
 :root[data-density="roomy"] .page-head h1{font-size:25px}
 :root[data-density="roomy"] .sec-title{margin:32px 0 15px;font-size:17px}
 :root[data-density="roomy"] .card{padding:24px}
+:root[data-density="roomy"] .card.build-card,
+:root[data-density="roomy"] .card.skin-card{padding:0}
+:root[data-density="roomy"] .card.gate-card{padding:38px 32px}
+:root[data-density="roomy"] .card.play-stat{padding:20px 22px}
+:root[data-density="roomy"] .card.skel-card{padding:26px}
 :root[data-density="roomy"] .stack{gap:13px}
-:root[data-density="roomy"] .btn.sm{height:44px;padding:0 18px}
-:root[data-density="roomy"] .btn.md{height:52px}
-:root[data-density="roomy"] .btn.lg{height:60px}
-:root[data-density="roomy"] .input{height:52px}
+:root[data-density="roomy"] .faint-note{margin-top:13px}
+
+:root[data-density="roomy"] .btn.sm{height:44px;padding:0 18px;font-size:13.5px}
+:root[data-density="roomy"] .btn.md{height:52px;padding:0 24px;font-size:14.5px}
+:root[data-density="roomy"] .btn.lg{height:60px;padding:0 34px;font-size:15.5px}
+:root[data-density="roomy"] .input{height:52px;padding:0 18px}
+:root[data-density="roomy"] .input.sm{height:44px}
+:root[data-density="roomy"] .chat-input>.input{height:40px;padding:0 14px}
+:root[data-density="roomy"] .seg{height:40px;padding:0 18px;font-size:13.5px}
+:root[data-density="roomy"] .facet-seg .seg{height:36px;padding:0 10px;font-size:13px}
+:root[data-density="roomy"] .icon-btn{width:34px;height:34px}
+
 :root[data-density="roomy"] .hero-live{height:340px}
-:root[data-density="roomy"] .hero-overlay{padding:28px}
+:root[data-density="roomy"] .hero-live-wrap{margin-bottom:30px}
+:root[data-density="roomy"] .hero-overlay{padding:28px;gap:26px}
+:root[data-density="roomy"] .hero-body h2{font-size:29px}
+:root[data-density="roomy"] .hero-gear{width:62px;height:62px}
+
 :root[data-density="roomy"] .build-grid{grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:13px}
+:root[data-density="roomy"] .build-grid.one-line{grid-template-columns:none;grid-auto-columns:minmax(0,152px);gap:12px}
+:root[data-density="roomy"] .build-body{padding:11px 13px 13px}
+:root[data-density="roomy"] .build-grid.one-line .build-body{padding:9px 11px 11px}
+:root[data-density="roomy"] .build-card.ready-card .build-body{padding:14px 18px}
+:root[data-density="roomy"] .ready-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+:root[data-density="roomy"] .build-card.ready-card .build-cover{width:140px;height:140px;margin:14px 0 14px 14px}
+:root[data-density="roomy"] .skin-cards{grid-template-columns:repeat(3,1fr);gap:14px}
+:root[data-density="roomy"] .skin-thumb{height:184px}
+:root[data-density="roomy"] .skin-preview{padding:30px 24px 26px}
+
 :root[data-density="roomy"] .srv-row,
-:root[data-density="roomy"] .mod-row{padding:18px 20px}
-:root[data-density="roomy"] .fr-row{padding:16px 18px}
-:root[data-density="roomy"] .set-row{padding:14px 0}
-:root[data-density="roomy"] .skin-cards{grid-template-columns:repeat(3,1fr)}
+:root[data-density="roomy"] .mod-row{padding:18px 20px;gap:18px}
+:root[data-density="roomy"] .fr-row{padding:16px 18px;gap:16px}
+:root[data-density="roomy"] .fr-row.compact{padding:8px 11px;gap:12px}
+:root[data-density="roomy"] .fr-row.host-file-row{gap:12px}
+:root[data-density="roomy"] .mod-icon{width:58px;height:58px}
+:root[data-density="roomy"] .srv-banner{width:330px;height:80px}
+:root[data-density="roomy"] .srv-feature{min-height:210px}
+:root[data-density="roomy"] .srv-feature-inner{padding:26px;gap:24px}
+:root[data-density="roomy"] .mod-card-row{padding:11px}
+:root[data-density="roomy"] .mod-line{padding:11px 2px}
+:root[data-density="roomy"] .instance-page .mod-line{padding:11px 14px}
+
+:root[data-density="roomy"] .set-screen{max-width:900px}
+:root[data-density="roomy"] .set-group{margin-top:24px}
+:root[data-density="roomy"] .set-row{padding:14px 0;gap:14px}
+:root[data-density="roomy"] .set-row .lab{font-size:15px}
+:root[data-density="roomy"] .host-manage-body .set-row{padding:14px 0}
+:root[data-density="roomy"] .set-row.th-publish{gap:10px}
+:root[data-density="roomy"] .modal{width:600px;padding:28px}
+:root[data-density="roomy"] .modal.onb-modal{width:680px}
+:root[data-density="roomy"] .modal.th-editor{width:780px}
+:root[data-density="roomy"] .kpi{padding:18px 20px}
+:root[data-density="roomy"] .kpi .val{font-size:28px}
+:root[data-density="roomy"] .kpi-row{gap:14px;margin-top:20px}
+:root[data-density="roomy"] .chat{width:370px}
+
+:root[data-density="roomy"] .th-grid{grid-template-columns:repeat(auto-fill,minmax(172px,1fr));gap:13px}
+:root[data-density="roomy"] .th-card{padding:13px}
+:root[data-density="roomy"] .th-card b{font-size:14px}
+:root[data-density="roomy"] .th-card>span{font-size:12.5px}
+:root[data-density="roomy"] .th-swatches{height:40px;margin-bottom:7px}

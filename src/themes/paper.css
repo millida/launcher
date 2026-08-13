@@ -1,0 +1,148 @@
+/* Millida theme: Paper
+   A daylight theme that behaves like print: warm stock, ink instead of white
+   text, hairline rules and no glow anywhere. Built for the launcher standing
+   open next to work, not for a dark room. */
+
+:root[data-theme-pack="paper"]{
+  --pap-stock:#F1ECE0;
+  --pap-sheet:#FBF8F1;
+  --pap-sheet-2:#F3EFE4;
+  --pap-raised:#FFFDF8;
+  --pap-well:#E9E3D4;
+  --pap-ink:#2A2521;
+  --pap-rule:rgba(58,48,36,.16);
+  --pap-rule-strong:rgba(58,48,36,.30);
+  --pap-accent:#356B4F;
+  --pap-accent-hover:#2B5A42;
+  --pap-accent-rgb:53,107,79;
+
+  --m-bg:var(--pap-stock);
+  --m-surface:var(--pap-sheet);
+  --m-surface-2:var(--pap-sheet-2);
+  --m-raised:var(--pap-raised);
+  --m-inset:var(--pap-well);
+  --m-border:var(--pap-rule);
+  --m-border-strong:var(--pap-rule-strong);
+  --m-fg:var(--pap-ink);
+  --m-fg-muted:color-mix(in srgb, var(--pap-ink) 82%, transparent);
+  --m-fg-subtle:color-mix(in srgb, var(--pap-ink) 64%, transparent);
+  --m-fg-faint:color-mix(in srgb, var(--pap-ink) 46%, transparent);
+  --m-accent:var(--pap-accent);
+  --m-accent-hover:var(--pap-accent-hover);
+  --m-accent-fg:#FFFFFF;
+  --m-accent-rgb:var(--pap-accent-rgb);
+  --m-accent-soft:rgba(var(--pap-accent-rgb),.12);
+  --m-grad:var(--pap-accent);
+  --m-accent-glow:none;
+  --m-danger:#B0402F;
+  --m-danger-soft:rgba(176,64,47,.12);
+  --m-warning:#9A6A15;
+  --m-warning-soft:rgba(154,106,21,.14);
+  --m-info:#2F6285;
+  --m-info-soft:rgba(47,98,133,.13);
+  --m-success:var(--pap-accent);
+  --m-success-soft:rgba(var(--pap-accent-rgb),.13);
+  --m-r-mini:5px;--m-r-ctl:7px;--m-r-md:9px;--m-r-card:8px;
+  --m-shadow-md:0 1px 2px rgba(58,48,36,.08);
+  --m-shadow-lg:0 8px 22px -12px rgba(58,48,36,.28);
+  color-scheme:light;
+}
+
+/* Холодная бумага: та же вёрстка на белом листе, без желтизны. */
+:root[data-theme-pack="paper"][data-o-tint="cool"]{
+  --pap-stock:#F1F3F4;
+  --pap-sheet:#FFFFFF;
+  --pap-sheet-2:#F5F7F8;
+  --pap-raised:#FFFFFF;
+  --pap-well:#E9ECEE;
+  --pap-ink:#1F2427;
+  --pap-rule:rgba(20,32,38,.14);
+  --pap-rule-strong:rgba(20,32,38,.28);
+  --pap-accent:#2F6285;
+  --pap-accent-hover:#27536F;
+  --pap-accent-rgb:47,98,133;
+}
+
+/* Сепия: старая книга, самый низкий контраст — для вечера. */
+:root[data-theme-pack="paper"][data-o-tint="sepia"]{
+  --pap-stock:#E8DCC2;
+  --pap-sheet:#F3E9D2;
+  --pap-sheet-2:#EBE0C6;
+  --pap-raised:#F8F0DE;
+  --pap-well:#DCCEAE;
+  --pap-ink:#3B2F1E;
+  --pap-rule:rgba(78,60,32,.20);
+  --pap-rule-strong:rgba(78,60,32,.34);
+  --pap-accent:#8A5A22;
+  --pap-accent-hover:#764B1A;
+  --pap-accent-rgb:138,90,34;
+}
+
+:root[data-theme-pack="paper"] .window{background:var(--m-bg);box-shadow:none}
+:root[data-theme-pack="paper"] .titlebar{background:transparent}
+
+:root[data-theme-pack="paper"] .card,
+:root[data-theme-pack="paper"] .srv-row,
+:root[data-theme-pack="paper"] .mod-row,
+:root[data-theme-pack="paper"] .fr-row,
+:root[data-theme-pack="paper"] .build-card,
+:root[data-theme-pack="paper"] .sidebar,
+:root[data-theme-pack="paper"] .modal,
+:root[data-theme-pack="paper"] .toast,
+:root[data-theme-pack="paper"] .kpi,
+:root[data-theme-pack="paper"] .chat{
+  border:1px solid var(--m-border);
+  box-shadow:var(--m-shadow-md);
+}
+:root[data-theme-pack="paper"] .card.hoverable::after,
+:root[data-theme-pack="paper"] .srv-row::after{content:none}
+:root[data-theme-pack="paper"] .card.hoverable:hover,
+:root[data-theme-pack="paper"] .srv-row:hover,
+:root[data-theme-pack="paper"] .skin-card:hover{transform:none;border-color:var(--m-border-strong)}
+
+:root[data-theme-pack="paper"] .btn{font-weight:600}
+:root[data-theme-pack="paper"] .btn.primary{background:var(--m-accent)}
+:root[data-theme-pack="paper"] .btn.primary:hover{transform:none;filter:brightness(1.08)}
+:root[data-theme-pack="paper"] .btn.secondary{background:var(--m-raised);border:1px solid var(--m-border-strong)}
+:root[data-theme-pack="paper"] .btn.secondary:hover{background:var(--m-surface-2)}
+:root[data-theme-pack="paper"] .input,
+:root[data-theme-pack="paper"] .m-select-btn{background:var(--m-raised);border:1px solid var(--m-border-strong)}
+:root[data-theme-pack="paper"] .nav-item.active{
+  background:var(--m-accent-soft);color:var(--m-accent);box-shadow:inset 2px 0 0 var(--m-accent);
+}
+:root[data-theme-pack="paper"] .sidebar{background:var(--m-surface)}
+:root[data-theme-pack="paper"] .pl-bar,
+:root[data-theme-pack="paper"] .dl-track,
+:root[data-theme-pack="paper"] .bar{background:var(--m-inset)}
+:root[data-theme-pack="paper"] .pl-bar i,
+:root[data-theme-pack="paper"] .dl-fill,
+:root[data-theme-pack="paper"] .bar i,
+:root[data-theme-pack="paper"] .m-slider-fill{background:var(--m-accent)}
+:root[data-theme-pack="paper"] .hero-scrim{
+  background:linear-gradient(180deg, transparent 0%, rgba(30,24,16,.10) 45%, rgba(30,24,16,.62) 100%);
+}
+:root[data-theme-pack="paper"] ::-webkit-scrollbar-thumb{background:var(--m-border-strong)}
+
+/* Заголовки с засечками: единственное место, где тема говорит «печать», а не
+   просто «светлая». Шрифты только системные — пак не ходит в сеть. */
+:root[data-theme-pack="paper"][data-o-serif="on"]{
+  --m-font-brand:Georgia,'Iowan Old Style','Times New Roman',serif;
+}
+:root[data-theme-pack="paper"][data-o-serif="on"] .page-head h1,
+:root[data-theme-pack="paper"][data-o-serif="on"] .sec-title,
+:root[data-theme-pack="paper"][data-o-serif="on"] .modal h3,
+:root[data-theme-pack="paper"][data-o-serif="on"] .login-form h1,
+:root[data-theme-pack="paper"][data-o-serif="on"] .hero-body h2{
+  font-family:Georgia,'Iowan Old Style','Times New Roman',serif;
+  font-weight:700;
+  letter-spacing:0;
+}
+
+/* Линейки между строками списков — как в бумажной таблице. Выключаются для
+   тех, кому спокойнее без сетки. */
+:root[data-theme-pack="paper"][data-o-rule="off"] .set-row,
+:root[data-theme-pack="paper"][data-o-rule="off"] .mod-line,
+:root[data-theme-pack="paper"][data-o-rule="off"] .mod-card+.mod-card{border-bottom:0;border-top:0}
+:root[data-theme-pack="paper"][data-o-rule="off"] .set-tabs{border-bottom:0}
+:root[data-theme-pack="paper"][data-o-rule="on"] .set-row{border-bottom:1px solid var(--m-border)}
+:root[data-theme-pack="paper"][data-o-rule="on"] .set-row:last-child{border-bottom:0}

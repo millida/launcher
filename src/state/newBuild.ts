@@ -1,7 +1,15 @@
+export interface JoinIntent {
+  ip: string
+  name: string
+  licensed?: boolean
+  versions?: string[]
+}
+
 interface NewBuildPreset {
   version?: string
   name?: string
   loader?: string
+  join?: JoinIntent
 }
 
 let preset: NewBuildPreset | null = null

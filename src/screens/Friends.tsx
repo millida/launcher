@@ -143,7 +143,7 @@ export function Friends({ on }: { on: boolean }) {
     if (!addr) return
     const name = f.serverName || 'Сервер ' + (f.nickname || 'друга')
     rememberServerName(addr, name)
-    void quickJoin(addr, name)
+    void quickJoin(addr, name).catch(() => {})
   }
 
   const gated = !millida

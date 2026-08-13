@@ -5,7 +5,7 @@ import { IconGrid } from '../components/IconGrid'
 import { uiConfirm } from '../state/confirm'
 import { copyText } from '../lib/clipboard'
 import { hasTauri } from '../ipc/tauri'
-import { listenDragDrop, listenGameLog, listenGameLogStart } from '../ipc/events'
+import { listenDragDrop, listenDragState, listenGameLog, listenGameLogStart } from '../ipc/events'
 import {
   addLocalFile,
   addServer,
@@ -35,6 +35,7 @@ import {
   modpackInfo,
   openProfileFolder,
   openUrl,
+  pickContentFiles,
   pickJavaPath,
   pickProfileCover,
   pingServer,
@@ -98,6 +99,20 @@ const KINDS: [string, string][] = [
   ['datapack', 'Дата-паки'],
   ['shader', 'Шейдеры'],
 ]
+
+const CONTENT_EXTS: Record<string, string[]> = {
+  mod: ['jar', 'zip', 'litemod'],
+  resourcepack: ['zip'],
+  datapack: ['zip'],
+  shader: ['zip'],
+}
+
+const extsOf = (kind: string) => CONTENT_EXTS[kind] || ['zip']
+const baseName = (p: string) => p.split(/[\\/]/).pop() || p
+const acceptsFile = (kind: string, p: string) => {
+  const parts = baseName(p).split('.')
+  return parts.length > 1 && extsOf(kind).includes(parts[parts.length - 1].toLowerCase())
+}
 
 const CORE_OPTS: [string, string][] = [
   ['vanilla', 'Ванилла'],
@@ -178,6 +193,10 @@ export function InstancePage() {
   const logBodyRef = useRef<HTMLPreElement>(null)
   const kindRef = useRef(kind)
   kindRef.current = kind
+  const tabRef = useRef(tab)
+  tabRef.current = tab
+  const [dropActive, setDropActive] = useState(false)
+  const [dropBusy, setDropBusy] = useState(false)
 
   const loadMods = useCallback(
     (k?: string) => {
@@ -490,27 +509,64 @@ export function InstancePage() {
       .finally(() => setCoreBusy(false))
   }
 
-  useEffect(() => {
-    if (!modal.open) return
-    let unlisten: (() => void) | null = null
-    listenDragDrop((paths) => {
-      if (!useUi.getState().modals.bsModal.open) return
+  const addFiles = useCallback(
+    async (paths: string[]) => {
       const p = useInstance.getState().profile
       if (!p) return
-      const files = (paths || []).filter((x) => /\.(jar|zip|litemod)$/i.test(x))
-      if (!files.length) return
-      showToast('Добавляем ' + files.length + ' файл(ов)…')
-      Promise.all(files.map((x) => addLocalFile(p, kindRef.current, x).catch(() => {}))).then(() => {
-        loadMods()
-        showToast('Добавлено в сборку')
-      })
+      const k = kindRef.current
+      const accepted = (paths || []).filter((x) => acceptsFile(k, x))
+      const skipped = (paths || []).length - accepted.length
+      if (!accepted.length) {
+        showToast('Нужен файл ' + extsOf(k).map((e) => '.' + e).join(' / '), 'error')
+        return
+      }
+      setDropBusy(true)
+      showToast('Добавляем ' + accepted.length + ' файл(ов)…')
+      const errors = await Promise.all(
+        accepted.map((x) =>
+          addLocalFile(p, k, x).then(
+            () => '',
+            (e) => baseName(x) + ': ' + e,
+          ),
+        ),
+      ).finally(() => setDropBusy(false))
+      loadMods()
+      const failed = errors.filter(Boolean)
+      if (failed.length === accepted.length) {
+        showToast('Не удалось добавить: ' + failed[0], 'error')
+        return
+      }
+      if (failed.length) {
+        showToast('Добавлено ' + (accepted.length - failed.length) + ', с ошибкой ' + failed.length + ': ' + failed[0], 'error')
+        return
+      }
+      showToast('Добавлено в сборку: ' + accepted.length + (skipped ? ' · пропущено не по формату: ' + skipped : ''))
+    },
+    [loadMods],
+  )
+
+  useEffect(() => {
+    if (!modal.open) return
+    let unlistenDrop: (() => void) | null = null
+    let unlistenState: (() => void) | null = null
+    listenDragDrop((paths) => {
+      setDropActive(false)
+      if (!useUi.getState().modals.bsModal.open || tabRef.current !== 'content') return
+      void addFiles(paths || [])
     }).then((u) => {
-      unlisten = u
+      unlistenDrop = u
+    })
+    listenDragState((active) => {
+      setDropActive(active && useUi.getState().modals.bsModal.open && tabRef.current === 'content')
+    }).then((u) => {
+      unlistenState = u
     })
     return () => {
-      if (unlisten) unlisten()
+      if (unlistenDrop) unlistenDrop()
+      if (unlistenState) unlistenState()
+      setDropActive(false)
     }
-  }, [modal.open, loadMods])
+  }, [modal.open, addFiles])
 
   if (!modal.open) return null
 
@@ -958,20 +1014,42 @@ export function InstancePage() {
                   })
                 )}
               </div>
-              <div
+              <button
                 id="bsDrop"
+                type="button"
+                disabled={dropBusy}
+                onClick={() => {
+                  if (!hasTauri()) {
+                    showToast('Доступно в приложении', 'error')
+                    return
+                  }
+                  pickContentFiles(kindRef.current)
+                    .then((paths) => {
+                      if (paths && paths.length) void addFiles(paths)
+                    })
+                    .catch((e) => showToast('Не удалось открыть выбор файлов: ' + e, 'error'))
+                }}
                 style={{
+                  display: 'block',
+                  width: '100%',
                   marginTop: '10px',
-                  padding: '10px',
-                  border: '1px dashed var(--m-border-strong)',
+                  padding: '14px 10px',
+                  border: '1px dashed ' + (dropActive ? 'var(--m-accent)' : 'var(--m-border-strong)'),
+                  background: dropActive ? 'var(--m-accent-soft)' : 'transparent',
                   borderRadius: '10px',
                   textAlign: 'center',
                   fontSize: '12px',
-                  color: 'var(--m-fg-faint)',
+                  cursor: dropBusy ? 'default' : 'pointer',
+                  transition: 'border-color .15s, background .15s',
+                  color: dropActive ? 'var(--m-accent)' : 'var(--m-fg-faint)',
                 }}
               >
-                Перетащи сюда .jar / .zip — опознаем на Modrinth
-              </div>
+                {dropBusy
+                  ? 'Добавляем файлы…'
+                  : dropActive
+                    ? 'Отпусти — добавим в сборку'
+                    : 'Перетащи сюда ' + extsOf(kind).map((e) => '.' + e).join(' / ') + ' или нажми, чтобы выбрать — опознаем на Modrinth'}
+              </button>
               <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
                 <button
                   className="btn sm secondary"

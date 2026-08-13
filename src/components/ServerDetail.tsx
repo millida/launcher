@@ -7,6 +7,7 @@ import { quickJoin } from '../lib/joinServer'
 import { openModal, showToast } from '../state/ui'
 import { useServerDetail } from '../state/serverDetail'
 import { copyText } from '../lib/clipboard'
+import { serverVersions, versionFits } from '../lib/mcVersion'
 import { backdropClose } from '../lib/dismiss'
 
 export function ServerDetail() {
@@ -33,7 +34,7 @@ export function ServerDetail() {
     if (busy.current) return
     busy.current = true
     setLabel('Подготовка…')
-    quickJoin(sv.ip || '', sv.name || 'Сервер', sv.lic !== 'CRACKED')
+    quickJoin(sv.ip || '', sv.name || 'Сервер', sv.lic !== 'CRACKED', sv.versions)
       .then(() => close())
       .catch(() => {})
       .finally(() => {
@@ -42,10 +43,9 @@ export function ServerDetail() {
       })
   }
 
-  const serverVersion = (sv.versions || [])[0] || ''
-  const hasBuildForServer = useProfiles
-    .getState()
-    .profiles.some((p) => !serverVersion || p.version === serverVersion)
+  const wanted = serverVersions(sv.versions)
+  const serverVersion = wanted[0] || ''
+  const hasBuildForServer = useProfiles.getState().profiles.some((p) => versionFits(p.version, wanted))
 
   const makeBuild = () => {
     setNewBuildPreset({ version: serverVersion, name: (sv.name || 'Сервер').slice(0, 24) })
@@ -120,6 +120,12 @@ export function ServerDetail() {
               </button>
             ) : null}
           </div>
+
+          {wanted.length && !hasBuildForServer ? (
+            <p className="faint-note" style={{ marginTop: '14px' }}>
+              Сборки под {wanted.join(', ')} нет — сервер не пустит. Нажми «Сборка под сервер», версию подставим сами.
+            </p>
+          ) : null}
 
           <div style={{ display: 'flex', gap: '10px', marginTop: '18px', flexWrap: 'wrap' }}>
             {sv.ip ? (

@@ -7,8 +7,11 @@ import { track } from '../lib/telemetry'
 import { BLOCK_ICONS } from '../lib/icons'
 import { useProfiles } from '../state/profiles'
 import { takeNewBuildPreset } from '../state/newBuild'
+import type { JoinIntent } from '../state/newBuild'
+import { quickJoin } from '../lib/joinServer'
 import { closeModal, showToast, useUi } from '../state/ui'
 import { backdropClose } from '../lib/dismiss'
+import { pickVersionForServer } from '../lib/mcVersion'
 import { AUTO_LOADER_VERSION, hasLoaderVersions, useLoaderBuilds } from '../lib/loaderBuilds'
 
 const LOADERS: [string, string][] = [
@@ -27,6 +30,7 @@ export function NewBuildModal() {
   const [loader, setLoader] = useState('vanilla')
   const [loaderVer, setLoaderVer] = useState(AUTO_LOADER_VERSION)
   const [icon, setIcon] = useState<string | null>(BLOCK_ICONS[0] || null)
+  const [join, setJoin] = useState<JoinIntent | null>(null)
   const lb = useLoaderBuilds(loader, ver, modal.open)
 
   useEffect(() => {
@@ -34,10 +38,11 @@ export function NewBuildModal() {
     const pre = takeNewBuildPreset()
     if (pre?.name) setName(pre.name)
     if (pre?.loader) setLoader(pre.loader)
+    setJoin(pre?.join || null)
     setLoaderVer(AUTO_LOADER_VERSION)
     ;(hasTauri() ? listVersions() : Promise.resolve(['1.21.4', '1.21.1', '1.20.1'])).then((v) => {
       setVers(v)
-      const wanted = pre?.version && v.includes(pre.version) ? pre.version : ''
+      const wanted = pre?.version ? pickVersionForServer(v, [pre.version]) : ''
       setVer((cur) => wanted || cur || v[0] || '')
     })
   }, [modal.open])
@@ -126,10 +131,13 @@ export function NewBuildModal() {
               const nm = name.trim() || 'Моя сборка'
               if (hasTauri()) {
                 createProfile(nm, ver, loader === 'fabric', loader, icon, loaderVer || null)
-                  .then((p) => {
+                  .then(async (p) => {
                     track('build_create', { mc: ver, loader, loaderVersion: loaderVer || 'auto' })
-                    void useProfiles.getState().refresh()
+                    await useProfiles.getState().refresh()
                     showToast('Сборка «' + p.name + '» создана', 'ok', 'achievement')
+                    if (!join) return
+                    useProfiles.getState().setSelected(p.name)
+                    void quickJoin(join.ip, join.name, join.licensed, [ver]).catch(() => {})
                   })
                   .catch((e) => showToast('Не удалось создать сборку: ' + e, 'error'))
               } else {

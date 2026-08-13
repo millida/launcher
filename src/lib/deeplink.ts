@@ -40,7 +40,7 @@ function handle(raw: string) {
       confirmLabel: 'Запустить',
       danger: false,
     }).then((ok) => {
-      if (ok) void quickJoin(addr, name, q.get('licensed') === '1').catch(() => {})
+      if (ok) void quickJoin(addr, name, q.get('licensed') === '1', q.getAll('version')).catch(() => {})
     })
     return
   }

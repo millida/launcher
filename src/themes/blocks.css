@@ -1,0 +1,246 @@
+/* Millida theme: Blocks
+   The launcher dressed as the game it starts: stone panels with a two-pixel
+   bevel, an inventory grid behind the content and a grass rail down the side.
+   Everything is drawn with gradients — no bitmaps, so the pack stays inside the
+   bundle and needs no asset scope. */
+
+:root[data-theme-pack="blocks"]{
+  --blk-lip:rgba(255,255,255,.17);
+  --blk-shade:rgba(0,0,0,.45);
+  --blk-line:rgba(0,0,0,.62);
+  /* Сетка рисуется отдельным цветом, а не тенью грани: на светлом мире тень
+     достаточно плотная, чтобы ячейки читались как миллиметровка. */
+  --blk-grid:rgba(0,0,0,.26);
+  --blk-deep:#0D0F11;
+  --blk-face:#32353A;
+  --blk-face-2:#2B2E32;
+  --blk-raised:#3B3F44;
+  --blk-inset:#1B1D20;
+  --blk-rail:#6B4A2E;
+  --blk-cap:#6BBB4B;
+  --blk-ink:#E9EDE7;
+  --blk-accent:#6BBB4B;
+  --blk-accent-hover:#7CD25A;
+  --blk-accent-rgb:107,187,75;
+  --blk-accent-fg:#0E1F09;
+
+  --m-bg:var(--blk-deep);
+  --m-surface:var(--blk-face);
+  --m-surface-2:var(--blk-face-2);
+  --m-raised:var(--blk-raised);
+  --m-inset:var(--blk-inset);
+  --m-border:var(--blk-line);
+  --m-border-strong:#000000;
+  --m-fg:var(--blk-ink);
+  --m-fg-muted:color-mix(in srgb, var(--blk-ink) 82%, transparent);
+  --m-fg-subtle:color-mix(in srgb, var(--blk-ink) 64%, transparent);
+  --m-fg-faint:color-mix(in srgb, var(--blk-ink) 46%, transparent);
+  --m-accent:var(--blk-accent);
+  --m-accent-hover:var(--blk-accent-hover);
+  --m-accent-fg:var(--blk-accent-fg);
+  --m-accent-rgb:var(--blk-accent-rgb);
+  --m-accent-soft:rgba(var(--blk-accent-rgb),.18);
+  --m-grad:var(--blk-accent);
+  --m-accent-glow:none;
+  --m-danger:#D4483B;
+  --m-warning:#E8B14A;
+  --m-info:#4AA3E8;
+  --m-success:var(--blk-accent);
+  --m-r-mini:0;--m-r-ctl:0;--m-r-md:0;--m-r-card:0;--m-r-pill:0;
+  --m-shadow-md:0 4px 0 rgba(0,0,0,.45);
+  --m-shadow-lg:0 6px 0 rgba(0,0,0,.5);
+  color-scheme:dark;
+}
+
+/* Нижний мир: багрянец и адский камень. */
+:root[data-theme-pack="blocks"][data-o-world="nether"]{
+  --blk-deep:#170807;
+  --blk-face:#43201D;
+  --blk-face-2:#3A1B18;
+  --blk-raised:#4E2723;
+  --blk-inset:#2A100E;
+  --blk-rail:#6E2B24;
+  --blk-cap:#FF8A3D;
+  --blk-ink:#F6E4DC;
+  --blk-accent:#FF8A3D;
+  --blk-accent-hover:#FFA163;
+  --blk-accent-rgb:255,138,61;
+  --blk-accent-fg:#2A0F05;
+  --m-info:#C24DFF;
+}
+
+/* Край: эндер-камень и хорус. */
+:root[data-theme-pack="blocks"][data-o-world="end"]{
+  --blk-deep:#0A0912;
+  --blk-face:#26243A;
+  --blk-face-2:#211F33;
+  --blk-raised:#2F2C46;
+  --blk-inset:#151327;
+  --blk-rail:#3F3A5E;
+  --blk-cap:#B79CFF;
+  --blk-ink:#E9E6F7;
+  --blk-accent:#B79CFF;
+  --blk-accent-hover:#CBB6FF;
+  --blk-accent-rgb:183,156,255;
+  --blk-accent-fg:#160F2B;
+  --m-success:#5ED4A8;
+}
+
+/* Снежные равнины: единственный светлый мир пака. */
+:root[data-theme-pack="blocks"][data-o-world="snow"]{
+  --blk-lip:rgba(255,255,255,.85);
+  --blk-shade:rgba(20,40,55,.28);
+  --blk-line:rgba(20,40,55,.42);
+  --blk-grid:rgba(20,40,55,.10);
+  --blk-deep:#BFD5E4;
+  --blk-face:#EEF5FA;
+  --blk-face-2:#E3EDF4;
+  --blk-raised:#FFFFFF;
+  --blk-inset:#D8E5EE;
+  --blk-rail:#A8C7DC;
+  --blk-cap:#5FA8CF;
+  --blk-ink:#17262F;
+  --blk-accent:#2C82B4;
+  --blk-accent-hover:#3796CD;
+  --blk-accent-rgb:44,130,180;
+  --blk-accent-fg:#FFFFFF;
+  --m-warning:#B97511;
+  --m-danger:#C43F32;
+  color-scheme:light;
+}
+
+/* Фон окна — кладка блоков: крупная сетка, которую панели почти целиком
+   закрывают, поэтому она читается только по краям. */
+:root[data-theme-pack="blocks"] .window{
+  background-color:var(--blk-deep);
+  background-image:
+    repeating-linear-gradient(0deg, var(--blk-grid) 0 1px, transparent 1px 32px),
+    repeating-linear-gradient(90deg, var(--blk-grid) 0 1px, transparent 1px 32px);
+}
+:root[data-theme-pack="blocks"] .app{gap:6px;padding:6px}
+:root[data-theme-pack="blocks"] .titlebar{background:rgba(0,0,0,.32)}
+:root[data-theme-pack="blocks"] .tb-name,
+:root[data-theme-pack="blocks"] .tb-name span{letter-spacing:.04em}
+
+/* Выпуклый блок: светлая грань сверху-слева, тень снизу-справа. Ровно те же
+   две линии, что рисует игра у каждой кнопки инвентаря. */
+:root[data-theme-pack="blocks"] .card,
+:root[data-theme-pack="blocks"] .srv-row,
+:root[data-theme-pack="blocks"] .mod-row,
+:root[data-theme-pack="blocks"] .fr-row,
+:root[data-theme-pack="blocks"] .build-card,
+:root[data-theme-pack="blocks"] .modal,
+:root[data-theme-pack="blocks"] .toast,
+:root[data-theme-pack="blocks"] .kpi,
+:root[data-theme-pack="blocks"] .chat,
+:root[data-theme-pack="blocks"] .btn,
+:root[data-theme-pack="blocks"] .seg,
+:root[data-theme-pack="blocks"] .m-select-btn,
+:root[data-theme-pack="blocks"] .tb-btn,
+:root[data-theme-pack="blocks"] .icon-btn,
+:root[data-theme-pack="blocks"] .chat-send,
+:root[data-theme-pack="blocks"] .toast-act{
+  border:2px solid var(--blk-line);
+  box-shadow:inset 2px 2px 0 var(--blk-lip), inset -2px -2px 0 var(--blk-shade);
+}
+:root[data-theme-pack="blocks"] .card.hoverable::after,
+:root[data-theme-pack="blocks"] .srv-row::after{content:none}
+:root[data-theme-pack="blocks"] .card.hoverable:hover,
+:root[data-theme-pack="blocks"] .srv-row:hover,
+:root[data-theme-pack="blocks"] .skin-card:hover{transform:none;border-color:var(--m-accent)}
+
+/* Вдавленный блок: та же пара граней наоборот — поля ввода и полосы прогресса
+   должны читаться как углубление, а не как ещё одна кнопка. */
+:root[data-theme-pack="blocks"] .input,
+:root[data-theme-pack="blocks"] .pl-bar,
+:root[data-theme-pack="blocks"] .dl-track,
+:root[data-theme-pack="blocks"] .bar,
+:root[data-theme-pack="blocks"] .m-select-pop,
+:root[data-theme-pack="blocks"] .host-console{
+  border:2px solid var(--blk-line);
+  box-shadow:inset 2px 2px 0 var(--blk-shade), inset -2px -2px 0 var(--blk-lip);
+}
+:root[data-theme-pack="blocks"] .m-select-pop{background:var(--m-surface-2);padding:2px}
+:root[data-theme-pack="blocks"] .m-select-opt.on{background:var(--m-accent-soft)}
+
+:root[data-theme-pack="blocks"] .btn{
+  text-transform:uppercase;letter-spacing:.05em;font-weight:700;
+}
+:root[data-theme-pack="blocks"] .btn:hover{filter:brightness(1.12);transform:none}
+:root[data-theme-pack="blocks"] .btn:active,
+:root[data-theme-pack="blocks"] .seg.on{
+  box-shadow:inset 2px 2px 0 var(--blk-shade), inset -2px -2px 0 var(--blk-lip);
+  transform:none;
+}
+:root[data-theme-pack="blocks"] .btn.ghost{border-color:transparent;box-shadow:none}
+:root[data-theme-pack="blocks"] .btn.ghost:hover{border-color:var(--blk-line)}
+
+/* Боковая панель — блок земли с травой сверху. */
+:root[data-theme-pack="blocks"] .sidebar{
+  background:linear-gradient(180deg, var(--blk-cap) 0 6px, var(--blk-rail) 6px 100%);
+  border:2px solid var(--blk-line);
+  box-shadow:inset 2px 2px 0 var(--blk-lip), inset -2px -2px 0 var(--blk-shade);
+}
+:root[data-theme-pack="blocks"] .nav-item{color:color-mix(in srgb, var(--blk-ink) 88%, transparent)}
+:root[data-theme-pack="blocks"] .nav-item:hover{background:rgba(0,0,0,.24);color:var(--blk-ink)}
+:root[data-theme-pack="blocks"] .nav-item.active{
+  background:var(--m-accent);color:var(--m-accent-fg);
+  box-shadow:inset 2px 2px 0 rgba(255,255,255,.28), inset -2px -2px 0 rgba(0,0,0,.35);
+}
+:root[data-theme-pack="blocks"] .side-cap{color:color-mix(in srgb, var(--blk-ink) 58%, transparent)}
+:root[data-theme-pack="blocks"] .side-sep{background:rgba(0,0,0,.38)}
+:root[data-theme-pack="blocks"] .side-collapse-ic{background:rgba(0,0,0,.26)}
+:root[data-theme-pack="blocks"] .account:hover,
+:root[data-theme-pack="blocks"] .quick-row:hover{background:rgba(0,0,0,.24)}
+
+/* Полоса загрузки — как шкала опыта: сплошная заливка с бликом сверху. */
+:root[data-theme-pack="blocks"] .pl-bar i,
+:root[data-theme-pack="blocks"] .dl-fill,
+:root[data-theme-pack="blocks"] .bar i,
+:root[data-theme-pack="blocks"] .m-slider-fill{
+  border-radius:0;
+  background:linear-gradient(180deg,
+    color-mix(in srgb, var(--m-accent) 72%, #FFFFFF) 0 2px,
+    var(--m-accent) 2px 100%);
+}
+:root[data-theme-pack="blocks"] .tgl{border:2px solid var(--blk-line)}
+:root[data-theme-pack="blocks"] .tgl::after{box-shadow:inset 1px 1px 0 var(--blk-lip)}
+:root[data-theme-pack="blocks"] .chk{border:2px solid var(--blk-line)}
+:root[data-theme-pack="blocks"] .pill{border:2px solid var(--blk-line)}
+:root[data-theme-pack="blocks"] .build-cover{
+  background-color:var(--blk-rail);
+  background-image:
+    repeating-linear-gradient(0deg, rgba(0,0,0,.35) 0 2px, transparent 2px 18px),
+    repeating-linear-gradient(90deg, rgba(0,0,0,.35) 0 2px, transparent 2px 18px);
+}
+:root[data-theme-pack="blocks"] ::-webkit-scrollbar-thumb{
+  border-radius:0;background:var(--blk-raised);background-clip:border-box;border:0;
+  box-shadow:inset 2px 2px 0 var(--blk-lip), inset -2px -2px 0 var(--blk-shade);
+}
+
+/* Сетка инвентаря за содержимым: тонкие ячейки 18px, заметные ровно настолько,
+   чтобы пустое место не выглядело залитым цветом. */
+:root[data-theme-pack="blocks"][data-o-slots="on"] .content,
+:root[data-theme-pack="blocks"][data-o-slots="on"] .card,
+:root[data-theme-pack="blocks"][data-o-slots="on"] .modal{
+  background-image:
+    repeating-linear-gradient(0deg, var(--blk-grid) 0 1px, transparent 1px 18px),
+    repeating-linear-gradient(90deg, var(--blk-grid) 0 1px, transparent 1px 18px);
+}
+:root[data-theme-pack="blocks"][data-o-slots="on"] .content{
+  box-shadow:inset 2px 2px 0 var(--blk-shade), inset -2px -2px 0 var(--blk-lip);
+}
+
+:root[data-theme-pack="blocks"][data-o-pixel="on"]{
+  --m-font:var(--m-mono);
+  --m-font-brand:var(--m-mono);
+}
+:root[data-theme-pack="blocks"][data-o-pixel="on"] body{
+  letter-spacing:.02em;-webkit-font-smoothing:none;
+}
+:root[data-theme-pack="blocks"][data-o-pixel="on"] .page-head h1,
+:root[data-theme-pack="blocks"][data-o-pixel="on"] .hero-body h2{
+  text-transform:uppercase;letter-spacing:.06em;text-shadow:2px 2px 0 rgba(0,0,0,.45);
+}
+:root[data-theme-pack="blocks"][data-o-pixel="on"] img,
+:root[data-theme-pack="blocks"][data-o-pixel="on"] canvas{image-rendering:pixelated}

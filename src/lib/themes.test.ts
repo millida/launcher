@@ -24,7 +24,7 @@ mock.module('./theme', () => ({
   pinThemeBase: (v: string) => void (pinned = v),
   withColorFade: (fn: () => void) => fn(),
 }))
-for (const id of ['mario', 'win98', 'minimal', 'terminal']) {
+for (const id of ['mario', 'win98', 'minimal', 'terminal', 'blocks', 'night', 'paper']) {
   mock.module('../themes/' + id + '.css?raw', () => ({ default: ':root{--pack:' + id + '}' }))
 }
 

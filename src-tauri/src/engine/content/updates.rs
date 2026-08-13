@@ -153,6 +153,34 @@ pub async fn update_all(profile: String, kind: String) -> Result<u32, String> {
     Ok(n)
 }
 
+pub fn content_exts(kind: &str) -> &'static [&'static str] {
+    match kind {
+        "mod" => &["jar", "zip", "litemod"],
+        _ => &["zip"],
+    }
+}
+
+pub async fn pick_content_files(kind: String) -> Result<Vec<String>, String> {
+    let exts = content_exts(&kind);
+    let (filter, title) = match kind.as_str() {
+        "mod" => ("Моды", "Выбери моды"),
+        "resourcepack" => ("Ресурспаки", "Выбери ресурспаки"),
+        "datapack" => ("Дата-паки", "Выбери дата-паки"),
+        "shader" => ("Шейдеры", "Выбери шейдеры"),
+        _ => ("Файлы", "Выбери файлы"),
+    };
+    let picked = tauri::async_runtime::spawn_blocking(move || {
+        rfd::FileDialog::new().add_filter(filter, exts).set_title(title).pick_files()
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(picked
+        .unwrap_or_default()
+        .iter()
+        .map(|p| p.to_string_lossy().to_string())
+        .collect())
+}
+
 pub async fn add_local_file(profile: String, kind: String, src: String) -> Result<String, String> {
     let srcp = PathBuf::from(&src);
     let fname = safe_file_name(&srcp.file_name().ok_or("нет имени файла")?.to_string_lossy())?;

@@ -8,11 +8,13 @@ import {
   catalogLikeTheme,
   catalogMyThemes,
   catalogPublishTheme,
+  catalogThemeInstalled,
   catalogThemes,
   catalogUnpublishTheme,
 } from '../ipc/commands'
 import type { CatalogTheme, InstalledThemeFile, OwnCatalogTheme } from '../ipc/commands'
 import { hasMillidaAccount } from '../lib/api'
+import { installId } from '../lib/telemetry'
 import type { ThemePack } from '../lib/themes'
 
 const PAGE = 24
@@ -135,9 +137,14 @@ export function ThemeCatalog({
       const file = await catalogInstallTheme(theme.slug)
       onInstalled(file)
       showToast('Тема «' + file.name + '» установлена')
-      setItems((prev) =>
-        prev.map((t) => (t.slug === theme.slug ? { ...t, downloads: t.downloads + 1 } : t)),
-      )
+      // Счётчик считает лаунчеры, а не нажатия: повторная установка после
+      // удаления вернёт прежнее число, поэтому оно берётся из ответа каталога.
+      const counted = await catalogThemeInstalled(theme.slug, installId()).catch(() => null)
+      if (counted) {
+        setItems((prev) =>
+          prev.map((t) => (t.slug === theme.slug ? { ...t, downloads: counted.downloads } : t)),
+        )
+      }
     } catch (e) {
       showToast(errText(e), 'error')
     } finally {

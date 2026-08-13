@@ -64,6 +64,19 @@ export function listenDragDrop(handler: (paths: string[]) => void): Promise<Unli
     .catch(() => null)
 }
 
+// Highlight state for the drop zone: enter/leave fire around the actual drop.
+export function listenDragState(handler: (active: boolean) => void): Promise<UnlistenFn | null> {
+  const T = tauri()
+  if (!T || !T.event) return Promise.resolve(null)
+  return Promise.all([
+    T.event.listen('tauri://drag-enter', () => handler(true)),
+    T.event.listen('tauri://drag-leave', () => handler(false)),
+    T.event.listen('tauri://drag-drop', () => handler(false)),
+  ])
+    .then((subs) => () => subs.forEach((u) => u()))
+    .catch(() => null)
+}
+
 export function listenHostConsole(handler: (line: string) => void): Promise<UnlistenFn | null> {
   const T = tauri()
   if (!T) return Promise.resolve(null)

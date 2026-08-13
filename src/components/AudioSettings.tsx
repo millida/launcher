@@ -6,6 +6,7 @@ import {
   canPickOutput,
   listAudioDevices,
   micConstraint,
+  micErrorText,
   playTestTone,
   setStoredMic,
   setStoredOutput,
@@ -63,10 +64,10 @@ function MicMeter({ deviceId, onFail }: { deviceId: string; onFail: () => void }
         stream.getTracks().forEach((t) => t.stop())
         void ctx.close().catch(() => {})
       }
-    } catch {
+    } catch (error) {
       setBusy(false)
       onFail()
-      showToast('Микрофон недоступен — проверь, не занят ли он другой программой', 'error')
+      showToast(micErrorText(error), 'error')
     }
   }
 

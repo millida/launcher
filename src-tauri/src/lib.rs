@@ -170,6 +170,7 @@ pub fn run() {
             commands::content::update_content,
             commands::content::update_all,
             commands::content::add_local_file,
+            commands::content::pick_content_files,
             commands::content::export_mrpack,
             commands::content::install_version,
             commands::content::cf_search,
@@ -252,6 +253,7 @@ pub fn run() {
             commands::themes::catalog_themes,
             commands::themes::catalog_my_themes,
             commands::themes::catalog_install_theme,
+            commands::themes::catalog_theme_installed,
             commands::themes::catalog_publish_theme,
             commands::themes::catalog_unpublish_theme,
             commands::themes::catalog_like_theme

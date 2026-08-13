@@ -110,7 +110,7 @@ function notifyStartedPlaying(before: Friend[], now: Friend[]) {
           }
           const name = f.serverName || 'Сервер ' + (f.nickname || 'друга')
           rememberServerName(addr, name)
-          void quickJoin(addr, name)
+          void quickJoin(addr, name).catch(() => {})
         },
       })
     })
