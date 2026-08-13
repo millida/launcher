@@ -66,10 +66,12 @@ export function ServerRow({ sv, promo, hidden }: { sv: SnapshotServer; promo?: b
     if (busy.current) return
     busy.current = true
     setLabel('Подготовка…')
-    quickJoin(sv.ip || '', sv.name || 'Сервер', sv.lic !== 'CRACKED').finally(() => {
-      setLabel('Играть')
-      busy.current = false
-    })
+    quickJoin(sv.ip || '', sv.name || 'Сервер', sv.lic !== 'CRACKED', sv.versions)
+      .catch(() => {})
+      .finally(() => {
+        setLabel('Играть')
+        busy.current = false
+      })
   }
 
   return (

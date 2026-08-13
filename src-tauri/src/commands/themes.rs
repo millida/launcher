@@ -93,6 +93,14 @@ pub async fn catalog_install_theme(
 }
 
 #[tauri::command]
+pub async fn catalog_theme_installed(
+    slug: String,
+    install_id: String,
+) -> Result<serde_json::Value, String> {
+    engine::catalog_report_install(&slug, &install_id).await
+}
+
+#[tauri::command]
 pub async fn catalog_publish_theme(
     id: String,
     changelog: Option<String>,

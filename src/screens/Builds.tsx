@@ -100,7 +100,7 @@ export function Builds({ on }: { on: boolean }) {
                   onClick={() => {
                     const name = stats.last_server_name || stats.last_server
                     rememberServerName(stats.last_server, name)
-                    void quickJoin(stats.last_server, name)
+                    void quickJoin(stats.last_server, name).catch(() => {})
                   }}
                 >
                   <Icon id="i-login" />

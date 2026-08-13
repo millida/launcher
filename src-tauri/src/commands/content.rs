@@ -147,6 +147,11 @@ pub async fn add_local_file(profile: String, kind: String, path: String) -> Resu
 }
 
 #[tauri::command]
+pub async fn pick_content_files(kind: String) -> Result<Vec<String>, String> {
+    engine::pick_content_files(kind).await
+}
+
+#[tauri::command]
 pub async fn install_version(app: tauri::AppHandle, project: String, version_id: String, profile: String, kind: String) -> Result<engine::ContentInstall, String> {
     engine::install_version(app, project, version_id, profile, kind).await
 }

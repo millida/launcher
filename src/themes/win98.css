@@ -216,6 +216,26 @@
 :root[data-theme-pack="win98"] .tgl::after{border-radius:0;background:var(--w-face);box-shadow:inset 1px 1px 0 var(--w-light), inset -1px -1px 0 var(--w-dark)}
 :root[data-theme-pack="win98"] .tgl.on{background:var(--w-title)}
 :root[data-theme-pack="win98"] .chk{border-radius:0;background:#FFFFFF;border:1px solid var(--w-shade)}
+
+/* Dropdown: the era's list box is a white well hanging straight off the field,
+   with a hairline border and no gap, and the current row is a solid blue bar
+   rather than tinted text. The kit's card-like popup was the one control that
+   still looked modern next to the plastic. */
+:root[data-theme-pack="win98"] .m-select-btn{font-weight:400;font-size:12px;height:22px}
+:root[data-theme-pack="win98"] .m-select-btn svg{color:#000000}
+:root[data-theme-pack="win98"] .m-select-pop{
+  top:100%;padding:0;background:#FFFFFF;
+  border:1px solid var(--w-dark);box-shadow:none;animation:none;
+}
+:root[data-theme-pack="win98"] .m-select-opt{
+  padding:3px 6px;font-size:12px;color:#000000;
+}
+:root[data-theme-pack="win98"] .m-select-opt-lab{font-weight:400}
+:root[data-theme-pack="win98"] .m-select-opt:hover,
+:root[data-theme-pack="win98"] .m-select-opt.on{background:var(--w-title);color:#FFFFFF}
+:root[data-theme-pack="win98"] .m-select-opt:hover .m-select-opt-sub,
+:root[data-theme-pack="win98"] .m-select-opt.on .m-select-opt-sub{color:#D4D0C8}
+:root[data-theme-pack="win98"] .m-select-opt svg{color:currentColor}
 :root[data-theme-pack="win98"] .pl-bar i,
 :root[data-theme-pack="win98"] .dl-fill,
 :root[data-theme-pack="win98"] .bar i{

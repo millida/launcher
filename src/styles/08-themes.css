@@ -10,7 +10,9 @@
 .th-card:hover{border-color:var(--m-border-strong)}
 .th-card.on{border-color:var(--m-accent);background:var(--m-accent-soft)}
 .th-card b{font-size:13px;font-weight:650}
-.th-card>span{
+/* The action strip is a span too, so the clamped description must not claim it:
+   -webkit-box would win over its own display and stack the icons vertically. */
+.th-card>span:not(.th-card-acts){
   font-size:11.5px;line-height:1.4;color:var(--m-fg-subtle);
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
 }

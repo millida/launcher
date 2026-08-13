@@ -165,6 +165,8 @@ export const cancelInstall = (key: string) => invoke<boolean>('cancel_install', 
 export const addLocalFile = (profile: string, kind: string, path: string) =>
   invoke<string>('add_local_file', { profile, kind, path })
 
+export const pickContentFiles = (kind: string) => invoke<string[]>('pick_content_files', { kind })
+
 export const addServer = (profile: string, name: string, ip: string) =>
   invoke<ServerEntry[]>('add_server', { profile, name, ip })
 
@@ -762,6 +764,9 @@ export const catalogMyThemes = () => invoke<OwnCatalogTheme[]>('catalog_my_theme
 
 export const catalogInstallTheme = (slug: string) =>
   invoke<InstalledThemeFile>('catalog_install_theme', { slug })
+
+export const catalogThemeInstalled = (slug: string, installId: string) =>
+  invoke<{ downloads: number }>('catalog_theme_installed', { slug, installId })
 
 export const catalogPublishTheme = (id: string, changelog?: string) =>
   invoke<OwnCatalogTheme>('catalog_publish_theme', { id, changelog })

@@ -231,6 +231,27 @@ export function parseDraft(manifest: ThemeManifest, css: string): ThemeDraft {
   return draft
 }
 
+/// Слепок содержимого черновика: по нему редактор отличает «ничего не трогал»
+/// от «есть что терять». Пустые токены и пробелы по краям в файл темы не
+/// попадают, поэтому и на слепок влиять не должны.
+export function draftFingerprint(draft: ThemeDraft): string {
+  const tokens = Object.entries(draft.tokens)
+    .map(([key, value]) => [key, value.trim()] as const)
+    .filter(([, value]) => value)
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+  return JSON.stringify([
+    draft.id,
+    draft.name.trim(),
+    draft.author.trim(),
+    draft.version.trim(),
+    draft.description.trim(),
+    draft.base,
+    tokens,
+    draft.css.trim(),
+    draft.options,
+  ])
+}
+
 const SLUG = /^[a-z0-9-]{1,32}$/
 
 /// Причина, по которой тему нельзя сохранить, или null. Проверки те же, что в

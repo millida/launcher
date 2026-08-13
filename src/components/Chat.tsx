@@ -18,6 +18,7 @@ import { MAX_CHAT_IMAGE_BYTES, uploadChatImage, uploadVoice } from '../lib/chatM
 import { VOICE_MAX_MS, canRecordVoice, fmtVoiceTime, recordVoice } from '../lib/voice'
 import type { VoiceRecorder } from '../lib/voice'
 import { dayKey, dayLabel, isGrouped, isRead } from '../lib/chatGroup'
+import { micErrorText } from '../lib/audioDevices'
 
 function InviteCard({ addr, name, me }: { addr: string; name: string; me?: boolean }) {
   const [busy, setBusy] = useState(false)
@@ -83,7 +84,7 @@ function FriendStats({ p }: { p: FriendProfile }) {
           onClick={() => {
             const name = p.serverName || 'Сервер ' + p.nick
             rememberServerName(p.serverIp!, name)
-            void quickJoin(p.serverIp!, name)
+            void quickJoin(p.serverIp!, name).catch(() => {})
           }}
         >
           <Icon id="i-login" />
@@ -268,8 +269,8 @@ function Composer({ uid }: { uid: string }) {
           () => void stopRecording(true),
         ),
       )
-    } catch {
-      showToast('Нет доступа к микрофону — разреши его в системе', 'error', undefined, {
+    } catch (error) {
+      showToast(micErrorText(error), 'error', undefined, {
         label: 'Как исправить',
         run: () => openSettings('sound', 'mic'),
       })

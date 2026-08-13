@@ -484,11 +484,26 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 :root[data-theme="light"] .btn.ms:hover{background:#2A2B2D}
 .ms-logo{width:16px;height:16px;fill:currentColor;opacity:.9}
 .login-reg{text-align:center;font-size:13px;color:var(--m-fg-subtle);margin-top:12px}
+.login-hint{margin-top:10px;line-height:1.55;max-width:34em}
 .linklike{color:var(--m-accent);font-weight:600;font-size:13px}
 .linklike:hover{text-decoration:underline}
 .trust svg{width:15px;height:15px;color:var(--m-accent);margin-top:1px}
-.login-art{position:relative;height:100%;display:flex;align-items:flex-end;justify-content:center;overflow:hidden}
-.login-art img{height:88%;object-fit:contain;filter:drop-shadow(0 0 34px rgba(var(--m-accent-rgb),.28)) drop-shadow(0 30px 50px rgba(0,0,0,.5));user-select:none;-webkit-user-drag:none}
+.login-art{position:relative;height:100%;display:flex;align-items:flex-end;justify-content:center;overflow:hidden;padding:24px 20px 14px}
+/* Свечение отдельным слоем, а не drop-shadow: тень считается от краёв
+   картинки и на узком окне упиралась в границу колонки, обрываясь ровной
+   линией. Градиент гаснет раньше, поэтому обрезать нечего. */
+.login-art::before{
+  content:"";position:absolute;left:50%;bottom:6%;transform:translateX(-50%);
+  width:min(88%,560px);aspect-ratio:1;pointer-events:none;
+  background:radial-gradient(closest-side,rgba(var(--m-accent-rgb),.22),rgba(var(--m-accent-rgb),0) 72%);
+}
+/* Ограничение по обеим сторонам: одна только высота на узком окне давала
+   картинку шире колонки, и герою срезало плечо. */
+.login-art img{
+  position:relative;width:auto;height:auto;max-width:100%;max-height:min(88%,620px);
+  object-fit:contain;filter:drop-shadow(0 22px 38px rgba(0,0,0,.45));
+  user-select:none;-webkit-user-drag:none;
+}
 
 /* ============ Play screen hero ============ */
 .hero-live-wrap{position:relative;z-index:5;margin-bottom:26px}

@@ -14,6 +14,7 @@ import {
   ALL_TOKENS,
   TOKEN_GROUPS,
   draftCss,
+  draftFingerprint,
   draftManifest,
   draftProblem,
   emptyDraft,
@@ -138,7 +139,9 @@ export function ThemeEditor({
   const [tab, setTab] = useState<'tokens' | 'css'>('tokens')
   const [busy, setBusy] = useState(false)
   const [saved, setSaved] = useState<string>(initial.id)
+  const [savedMark, setSavedMark] = useState(() => draftFingerprint(initial))
   const dirRef = useRef<string | undefined>(packs.find((p) => p.id === initial.id)?.dir)
+  const dirty = draftFingerprint(draft) !== savedMark
 
   const taken = useMemo(
     () => packs.filter((p) => p.id !== initial.id).map((p) => p.id),
@@ -183,6 +186,7 @@ export function ThemeEditor({
       const theme = await saveTheme({ manifest: draftManifest(draft), css })
       dirRef.current = theme.dir
       setSaved(theme.id)
+      setSavedMark(draftFingerprint(draft))
       onSaved(theme)
       return theme
     } catch (e) {
@@ -194,6 +198,10 @@ export function ThemeEditor({
   }
 
   async function onSaveAndClose() {
+    if (!dirty) {
+      await close()
+      return
+    }
     const theme = await save()
     if (!theme) return
     showToast('Тема «' + theme.name + '» сохранена')
@@ -215,7 +223,13 @@ export function ThemeEditor({
     }
   }
 
+  /// Терять нечего — незачем и спрашивать: окно закрывается сразу, если с
+  /// момента открытия (или последнего сохранения) в черновике ничего не менялось.
   async function onCancel() {
+    if (!dirty) {
+      void close()
+      return
+    }
     if (
       !(await uiConfirm('Несохранённые изменения темы пропадут.', {
         title: 'Закрыть редактор?',
@@ -351,7 +365,11 @@ export function ThemeEditor({
           <button className="btn sm ghost" onClick={() => void onCancel()}>
             Отмена
           </button>
-          <button className="btn sm secondary" disabled={busy || !!problem} onClick={() => void save()}>
+          <button
+            className="btn sm secondary"
+            disabled={busy || !!problem || !dirty}
+            onClick={() => void save()}
+          >
             Сохранить
           </button>
           <button className="btn sm" disabled={busy || !!problem} onClick={() => void onSaveAndClose()}>

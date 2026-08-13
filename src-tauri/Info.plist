@@ -2,9 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <!-- Without this key macOS kills the process on the first getUserMedia call
-       instead of showing a permission prompt. -->
+  <!-- Without this key macOS denies capture outright instead of showing a
+       permission prompt: neither the launcher nor the game it spawns (TCC
+       attributes a child process to the launcher bundle) can reach the mic. -->
   <key>NSMicrophoneUsageDescription</key>
-  <string>Микрофон нужен только для записи голосовых сообщений друзьям в чате лаунчера.</string>
+  <string>Микрофон нужен для голосовых сообщений в чате лаунчера и для голосового чата в игре.</string>
 </dict>
 </plist>

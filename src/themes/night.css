@@ -1,0 +1,126 @@
+/* Millida theme: Night
+   True black for OLED panels: unlit pixels instead of dark grey, one accent and
+   nothing that glows. Panels are told apart by a hairline, not by a lighter
+   fill, because on black every fill is a lit rectangle. */
+
+:root[data-theme-pack="night"]{
+  --nite-accent:#5EC64D;
+  --nite-accent-hover:#74DA63;
+  --nite-accent-rgb:94,198,77;
+  --nite-accent-fg:#07130A;
+
+  --m-bg:#000000;
+  --m-surface:#000000;
+  --m-surface-2:#0A0A0B;
+  --m-raised:#131315;
+  --m-inset:#000000;
+  --m-border:rgba(255,255,255,.10);
+  --m-border-strong:rgba(255,255,255,.22);
+  /* Чистый белый на чистом чёрном светится по краям букв, поэтому текст
+     чуть притушен — читаемость выше, а глаза ночью не режет. */
+  --m-fg:#DEDEDF;
+  --m-fg-muted:rgba(222,222,223,.76);
+  --m-fg-subtle:rgba(222,222,223,.58);
+  --m-fg-faint:rgba(222,222,223,.40);
+  --m-accent:var(--nite-accent);
+  --m-accent-hover:var(--nite-accent-hover);
+  --m-accent-fg:var(--nite-accent-fg);
+  --m-accent-rgb:var(--nite-accent-rgb);
+  --m-accent-soft:rgba(var(--nite-accent-rgb),.14);
+  --m-grad:var(--nite-accent);
+  --m-accent-glow:none;
+  --m-shadow-md:none;
+  --m-shadow-lg:0 0 0 1px var(--m-border-strong);
+  color-scheme:dark;
+}
+
+:root[data-theme-pack="night"][data-o-accent="ice"]{
+  --nite-accent:#5AB4FF;--nite-accent-hover:#7FC7FF;--nite-accent-rgb:90,180,255;--nite-accent-fg:#04121F;
+}
+:root[data-theme-pack="night"][data-o-accent="amber"]{
+  --nite-accent:#FFB23D;--nite-accent-hover:#FFC468;--nite-accent-rgb:255,178,61;--nite-accent-fg:#1E1103;
+}
+:root[data-theme-pack="night"][data-o-accent="violet"]{
+  --nite-accent:#A98BFF;--nite-accent-hover:#BEA6FF;--nite-accent-rgb:169,139,255;--nite-accent-fg:#120B26;
+}
+:root[data-theme-pack="night"][data-o-accent="plain"]{
+  --nite-accent:#D7D7D9;--nite-accent-hover:#EFEFF1;--nite-accent-rgb:215,215,217;--nite-accent-fg:#0A0A0B;
+}
+
+:root[data-theme-pack="night"] .window,
+:root[data-theme-pack="night"] .app,
+:root[data-theme-pack="night"] .content,
+:root[data-theme-pack="night"] .titlebar{background:#000000}
+:root[data-theme-pack="night"] .window{box-shadow:none}
+
+:root[data-theme-pack="night"] .card,
+:root[data-theme-pack="night"] .srv-row,
+:root[data-theme-pack="night"] .mod-row,
+:root[data-theme-pack="night"] .fr-row,
+:root[data-theme-pack="night"] .build-card,
+:root[data-theme-pack="night"] .sidebar,
+:root[data-theme-pack="night"] .modal,
+:root[data-theme-pack="night"] .toast,
+:root[data-theme-pack="night"] .kpi,
+:root[data-theme-pack="night"] .chat{
+  background:#000000;
+  border:1px solid var(--m-border);
+  box-shadow:none;
+}
+:root[data-theme-pack="night"] .modal,
+:root[data-theme-pack="night"] .m-select-pop,
+:root[data-theme-pack="night"] .fr-menu{background:#050506}
+:root[data-theme-pack="night"] .card.hoverable::after,
+:root[data-theme-pack="night"] .srv-row::after{content:none}
+:root[data-theme-pack="night"] .card.hoverable:hover,
+:root[data-theme-pack="night"] .srv-row:hover,
+:root[data-theme-pack="night"] .skin-card:hover{transform:none;border-color:var(--m-border-strong)}
+
+:root[data-theme-pack="night"] .btn.primary{background:var(--m-accent)}
+:root[data-theme-pack="night"] .btn.primary:hover{transform:none;filter:brightness(1.1)}
+:root[data-theme-pack="night"] .btn.secondary{background:#0A0A0B;border:1px solid var(--m-border-strong)}
+:root[data-theme-pack="night"] .btn.secondary:hover{background:#151517}
+:root[data-theme-pack="night"] .input,
+:root[data-theme-pack="night"] .m-select-btn,
+:root[data-theme-pack="night"] .seg{background:#000000;border:1px solid var(--m-border)}
+:root[data-theme-pack="night"] .seg.on{background:var(--m-accent-soft);color:var(--m-accent)}
+:root[data-theme-pack="night"] .nav-item.active{
+  background:transparent;color:var(--m-accent);box-shadow:inset 2px 0 0 var(--m-accent);
+}
+:root[data-theme-pack="night"] .nav-item:hover{background:#101012}
+:root[data-theme-pack="night"] .tb-mark,
+:root[data-theme-pack="night"] .login-mark{background:var(--m-accent)}
+:root[data-theme-pack="night"] .pl-bar,
+:root[data-theme-pack="night"] .dl-track,
+:root[data-theme-pack="night"] .bar{background:#141416}
+:root[data-theme-pack="night"] .pl-bar i,
+:root[data-theme-pack="night"] .dl-fill,
+:root[data-theme-pack="night"] .bar i,
+:root[data-theme-pack="night"] .m-slider-fill{background:var(--m-accent)}
+:root[data-theme-pack="night"] ::-webkit-scrollbar-thumb{background:#1C1C1F}
+
+/* Картинки — единственное, что ночью светит в полную силу: обложки сборок,
+   баннеры серверов и видео в шапке. Ползунок гасит их, не трогая интерфейс. */
+:root[data-theme-pack="night"] .build-cover img,
+:root[data-theme-pack="night"] .build-cover video,
+:root[data-theme-pack="night"] .hero-live img,
+:root[data-theme-pack="night"] .hero-live video,
+:root[data-theme-pack="night"] .srv-banner img,
+:root[data-theme-pack="night"] .skin-card img{
+  filter:brightness(calc(100% - var(--o-dim, 0%)));
+}
+
+/* Без границ панели держатся только на расстоянии — самый тихий вариант,
+   в котором на экране не остаётся ни одной лишней линии. */
+:root[data-theme-pack="night"][data-o-lines="off"] .card,
+:root[data-theme-pack="night"][data-o-lines="off"] .srv-row,
+:root[data-theme-pack="night"][data-o-lines="off"] .mod-row,
+:root[data-theme-pack="night"][data-o-lines="off"] .fr-row,
+:root[data-theme-pack="night"][data-o-lines="off"] .build-card,
+:root[data-theme-pack="night"][data-o-lines="off"] .sidebar,
+:root[data-theme-pack="night"][data-o-lines="off"] .kpi,
+:root[data-theme-pack="night"][data-o-lines="off"] .chat{border-color:transparent}
+:root[data-theme-pack="night"][data-o-lines="off"] .set-row,
+:root[data-theme-pack="night"][data-o-lines="off"] .set-tabs{border-bottom-color:transparent}
+:root[data-theme-pack="night"][data-o-lines="off"] .card.hoverable:hover,
+:root[data-theme-pack="night"][data-o-lines="off"] .srv-row:hover{background:#0B0B0C}

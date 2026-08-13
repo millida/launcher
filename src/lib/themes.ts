@@ -7,6 +7,9 @@ import marioCss from '../themes/mario.css?raw'
 import win98Css from '../themes/win98.css?raw'
 import minimalCss from '../themes/minimal.css?raw'
 import terminalCss from '../themes/terminal.css?raw'
+import blocksCss from '../themes/blocks.css?raw'
+import nightCss from '../themes/night.css?raw'
+import paperCss from '../themes/paper.css?raw'
 
 export type ThemeBase = 'dark' | 'light' | 'any'
 export type ThemeOptionKind = 'toggle' | 'color' | 'select' | 'slider'
@@ -66,6 +69,9 @@ const BUILTIN_CSS: Record<string, string> = {
   win98: win98Css,
   minimal: minimalCss,
   terminal: terminalCss,
+  blocks: blocksCss,
+  night: nightCss,
+  paper: paperCss,
 }
 
 export const BUILTIN_THEMES: ThemePack[] = [
@@ -102,6 +108,124 @@ export const BUILTIN_THEMES: ThemePack[] = [
         label: 'Плоские кнопки',
         hint: 'Акцент только цветом текста, без заливки',
         default: '0',
+      },
+    ],
+  },
+  {
+    id: 'blocks',
+    name: 'Блоки',
+    author: 'Millida',
+    version: '1.0.0',
+    description: 'Каменные панели, объёмные грани и сетка инвентаря — лаунчер в духе самой игры.',
+    base: 'dark',
+    preview: ['#2C2E31', '#4A3524', '#6BBB4B'],
+    builtin: true,
+    options: [
+      {
+        key: 'world',
+        kind: 'select',
+        label: 'Мир',
+        hint: 'Палитра блоков, из которых собран интерфейс',
+        default: 'overworld',
+        items: [
+          { value: 'overworld', label: 'Обычный (камень и трава)' },
+          { value: 'nether', label: 'Нижний мир' },
+          { value: 'end', label: 'Край' },
+          { value: 'snow', label: 'Снежные равнины (светлый)' },
+        ],
+      },
+      {
+        key: 'slots',
+        kind: 'toggle',
+        label: 'Сетка инвентаря',
+        hint: 'Ячейки за содержимым панелей',
+        default: '1',
+      },
+      {
+        key: 'pixel',
+        kind: 'toggle',
+        label: 'Пиксельная типографика',
+        hint: 'Моноширинный шрифт без сглаживания и чёткие картинки',
+        default: '0',
+      },
+    ],
+  },
+  {
+    id: 'night',
+    name: 'Ночь',
+    author: 'Millida',
+    version: '1.0.0',
+    description: 'Настоящий чёрный для OLED: панели держатся на линиях, ничего не светится.',
+    base: 'dark',
+    preview: ['#000000', '#0A0A0B', '#5EC64D'],
+    builtin: true,
+    options: [
+      {
+        key: 'accent',
+        kind: 'select',
+        label: 'Акцент',
+        default: 'green',
+        items: [
+          { value: 'green', label: 'Millida (зелёный)' },
+          { value: 'ice', label: 'Ледяной' },
+          { value: 'amber', label: 'Янтарный' },
+          { value: 'violet', label: 'Фиолетовый' },
+          { value: 'plain', label: 'Без цвета' },
+        ],
+      },
+      {
+        key: 'lines',
+        kind: 'toggle',
+        label: 'Границы панелей',
+        hint: 'Выключить — панели разделяет только расстояние',
+        default: '1',
+      },
+      {
+        key: 'dim',
+        kind: 'slider',
+        label: 'Приглушить картинки',
+        hint: 'Обложки, баннеры и видео — единственное, что светит ночью в полную силу',
+        default: '0',
+        min: 0,
+        max: 60,
+        step: 10,
+        unit: '%',
+      },
+    ],
+  },
+  {
+    id: 'paper',
+    name: 'Бумага',
+    author: 'Millida',
+    version: '1.0.0',
+    description: 'Светлая тема для дневного света: тёплый лист, чернила и тонкие линейки.',
+    base: 'light',
+    preview: ['#F1ECE0', '#FBF8F1', '#356B4F'],
+    builtin: true,
+    options: [
+      {
+        key: 'tint',
+        kind: 'select',
+        label: 'Оттенок листа',
+        default: 'warm',
+        items: [
+          { value: 'warm', label: 'Тёплый (крем)' },
+          { value: 'cool', label: 'Холодный (белый)' },
+          { value: 'sepia', label: 'Сепия' },
+        ],
+      },
+      {
+        key: 'serif',
+        kind: 'toggle',
+        label: 'Заголовки с засечками',
+        default: '1',
+      },
+      {
+        key: 'rule',
+        kind: 'toggle',
+        label: 'Линейки в списках',
+        hint: 'Тонкая черта между строками настроек и списков',
+        default: '1',
       },
     ],
   },

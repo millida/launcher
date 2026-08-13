@@ -59,14 +59,13 @@ export function Login({ on }: { on: boolean }) {
               </div>
             </div>
           ) : (
-            <p className="faint-note" style={{ marginTop: '10px', lineHeight: 1.55 }}>
-              Откроется страница Millida — войди почтой, Discord или Telegram и подтверди код. Лаунчер войдёт сам.
+            <p className="faint-note login-hint">
+              Откроется страница Millida — подтверди код, и лаунчер войдёт сам. Нет аккаунта? Он создастся при входе.
             </p>
           )}
           <div className="login-reg" id="tgHint" style={{ display: login.hintShown ? 'block' : 'none' }}>
             {login.hintText}
           </div>
-          <div className="login-reg">Нет аккаунта Millida? Он создастся автоматически при входе.</div>
 
           {guestAllowed ? (
             <>
@@ -75,17 +74,10 @@ export function Login({ on }: { on: boolean }) {
                 Играть гостем (без друзей и профиля)
               </button>
             </>
-          ) : (
-            <div className="login-reg">
-              Аккаунт нужен один раз: он даёт ник в игре, скины, друзей и свой сервер. После входа появится и режим
-              гостя.
-            </div>
-          )}
+          ) : null}
           <div className="trust">
             <Icon id="i-shield" />
-            <span>
-              Вход подтверждается на официальной странице Millida — лаунчер не видит твой пароль.
-            </span>
+            <span>Пароль вводится только на сайте Millida — лаунчер его не видит.</span>
           </div>
         </div>
         <div className="login-art">
