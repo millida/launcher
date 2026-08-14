@@ -79,7 +79,7 @@ export function ImportModal() {
                   <span className="mod-mini">
                     <Icon id="i-box2" />
                   </span>
-                  <b>{it.name}</b>
+                  <b title={it.name + '\n' + it.path}>{it.name}</b>
                   <span className="pill" style={{ marginRight: '6px' }}>
                     {it.source}
                   </span>

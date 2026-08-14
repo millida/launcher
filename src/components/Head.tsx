@@ -32,8 +32,9 @@ export function Head({
       className={className}
       width={size}
       height={size}
-      // Nearest-neighbour scaling only at integer ratios; fractional ratios make skin pixels uneven.
-      style={{ imageRendering: size % 8 === 0 ? 'pixelated' : 'auto', ...style }}
+      // The render is requested at exactly twice the box (see headPx), so the
+      // ratio is whole on every display and nearest-neighbour keeps it sharp.
+      style={{ imageRendering: 'pixelated', ...style }}
     />
   )
 }

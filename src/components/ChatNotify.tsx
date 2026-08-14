@@ -5,7 +5,7 @@ import { openChat } from '../state/friends'
 import { useChatNotify } from '../state/chatNotify'
 import type { ChatNotify as Notify } from '../state/chatNotify'
 
-const ICON: Record<string, string> = { play: 'i-play', request: 'i-user' }
+const ICON: Record<string, string> = { play: 'i-play', request: 'i-user', room: 'i-users' }
 
 function NotifyCard({ id, uid, nick, text, kind, actionLabel, action }: Notify) {
   const dismiss = useChatNotify((s) => s.dismiss)
@@ -22,7 +22,15 @@ function NotifyCard({ id, uid, nick, text, kind, actionLabel, action }: Notify) 
         else void openChat(uid, nick)
       }}
     >
-      <Head nick={nick} size={40} />
+      {/* У группы вместо головы игрока свой значок: ник в карточке — это её
+          название, и рендерить по нему скин было бы враньём. */}
+      {kind === 'room' ? (
+        <span className="room-ava sm">
+          <Icon id="i-users" />
+        </span>
+      ) : (
+        <Head nick={nick} size={40} />
+      )}
       <div className="chat-notify-body">
         <b>{nick || 'Игрок'}</b>
         <span>{text}</span>

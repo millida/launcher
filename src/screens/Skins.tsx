@@ -340,7 +340,14 @@ function drawFront(g: CanvasRenderingContext2D, img: HTMLImageElement, slim: boo
   }
 }
 
-function SkinThumb({ url, size = 132, slim }: { url: string; size?: number; slim?: boolean }) {
+// The figure is 32 skin pixels tall, so only a multiple of 32 keeps every pixel
+// the same height on screen; 132 px gave rows of 4 and 5 pixels side by side.
+const FIGURE_CELLS = 32
+const CAPE_CELLS = 16
+const snapPx = (px: number, cells: number) => Math.max(1, Math.round(px / cells)) * cells
+
+function SkinThumb({ url, size: askedSize = 128, slim }: { url: string; size?: number; slim?: boolean }) {
+  const size = snapPx(askedSize, FIGURE_CELLS)
   const ref = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
     let alive = true
@@ -441,7 +448,8 @@ async function toPngBase64(url: string): Promise<string> {
 }
 
 // Cape back face: UV (1,1) sized 10x16 on the standard 64x32 cape texture.
-function CapePreview({ url, h = 64 }: { url: string; h?: number }) {
+function CapePreview({ url, h: askedH = 64 }: { url: string; h?: number }) {
+  const h = snapPx(askedH, CAPE_CELLS)
   const ref = useRef<HTMLCanvasElement>(null)
   const [failed, setFailed] = useState(false)
   useEffect(() => {

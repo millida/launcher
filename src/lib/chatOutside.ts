@@ -6,7 +6,19 @@
  * уже ПОСЛЕ того, как панель открылась, и закрывал её обратно: нажатие на
  * уведомление выглядело как «ничего не произошло».
  */
-const OWNS_CLICK = ['chat-notify', 'fr-msg', 'fr-row', 'lightbox', 'call-dock', 'call-ring', 'msg-menu']
+const OWNS_CLICK = [
+  'chat-notify',
+  'fr-msg',
+  'fr-row',
+  'lightbox',
+  'call-dock',
+  'call-ring',
+  'msg-menu',
+  // Окно группы открывается из шапки переписки и живёт в корне приложения:
+  // без этого клик по нему закрывал бы переписку у себя за спиной.
+  'room-modal-back',
+  'room-modal',
+]
 
 export function keepsChatOpen(path: readonly (EventTarget | undefined)[]): boolean {
   return path.some(

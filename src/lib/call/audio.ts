@@ -111,11 +111,83 @@ export interface RemoteAudio {
   close: () => void
 }
 
+/** Порог речи и удержание индикатора: без гистерезиса полоска мигала бы на паузах между словами. */
+const SPEAK_ON = 0.045
+const SPEAK_OFF = 0.02
+const SPEAK_HOLD_MS = 260
+
+/**
+ * Замер громкости чужой дорожки для индикатора. Работает в обход громкости и
+ * глушения: показывать надо, что собеседник говорит, а не как громко его слышно.
+ */
+/// Контекст замеров один на все чужие дорожки: в групповом разговоре их до
+/// пяти, а движок держит всего несколько аудиоконтекстов на страницу — по
+/// контексту на собеседника упёрлось бы в этот потолок.
+let meterCtx: AudioContext | null = null
+
+function sharedMeterContext(): AudioContext | null {
+  if (meterCtx && meterCtx.state !== 'closed') return meterCtx
+  try {
+    meterCtx = new (audioCtor())()
+  } catch {
+    meterCtx = null
+  }
+  return meterCtx
+}
+
+function meterStream(stream: MediaStream, cb: (l: MicLevel) => void): () => void {
+  const ctx = sharedMeterContext()
+  if (!ctx) return () => {}
+  const source = ctx.createMediaStreamSource(stream)
+  const analyser = ctx.createAnalyser()
+  analyser.fftSize = 1024
+  analyser.smoothingTimeConstant = 0.5
+  source.connect(analyser)
+  const buf = new Float32Array(analyser.fftSize)
+  let raf = 0
+  let alive = true
+  let open = false
+  let openUntil = 0
+  let sent = -1
+  let sentOpen = false
+  const tick = () => {
+    if (!alive) return
+    raf = requestAnimationFrame(tick)
+    analyser.getFloatTimeDomainData(buf)
+    let sum = 0
+    for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i]
+    const level = Math.sqrt(sum / buf.length)
+    const now = performance.now()
+    if (level > SPEAK_ON) {
+      open = true
+      openUntil = now + SPEAK_HOLD_MS
+    } else if (open && level < SPEAK_OFF && now > openUntil) {
+      open = false
+    }
+    const step = Math.round(Math.min(1, level * 6) * 20)
+    if (step === sent && open === sentOpen) return
+    sent = step
+    sentOpen = open
+    cb({ level, open })
+  }
+  raf = requestAnimationFrame(tick)
+  return () => {
+    alive = false
+    cancelAnimationFrame(raf)
+    try {
+      source.disconnect()
+      analyser.disconnect()
+    } catch {
+      // Контекст мог закрыться раньше — освобождать уже нечего.
+    }
+  }
+}
+
 /**
  * Голос собеседника. Элемент живёт вне разметки: React перерисовывает панель
  * звонка, а пересозданный элемент оборвал бы звук на середине фразы.
  */
-export function playRemote(stream: MediaStream, volumePct: number): RemoteAudio {
+export function playRemote(stream: MediaStream, volumePct: number, onLevel?: (l: MicLevel) => void): RemoteAudio {
   const el = document.createElement('audio')
   el.autoplay = true
   el.srcObject = stream
@@ -125,6 +197,7 @@ export function playRemote(stream: MediaStream, volumePct: number): RemoteAudio 
     // Политика автозапуска: звук пойдёт после первого же действия человека,
     // а он его и совершил, приняв звонок.
   })
+  const stopMeter = onLevel ? meterStream(stream, onLevel) : null
   return {
     setVolume: (pct) => {
       el.volume = Math.max(0, Math.min(100, pct)) / 100
@@ -133,6 +206,7 @@ export function playRemote(stream: MediaStream, volumePct: number): RemoteAudio 
       el.muted = v
     },
     close: () => {
+      if (stopMeter) stopMeter()
       el.pause()
       el.srcObject = null
     },

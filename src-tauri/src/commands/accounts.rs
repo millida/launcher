@@ -168,6 +168,6 @@ pub fn rename_texture(kind: String, file: String, name: String) -> Result<Vec<en
 }
 
 #[tauri::command]
-pub async fn head_avatar(nick: String) -> Result<String, String> {
-    engine::head_avatar(nick).await
+pub async fn head_avatar(nick: String, size: Option<u32>) -> Result<String, String> {
+    engine::head_avatar(nick, size).await
 }

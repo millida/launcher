@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { api, hasMillidaAccount } from '../lib/api'
 import { warmHeads } from '../lib/heads'
+import { clearRoomUnread } from './rooms'
 
 export interface Friend {
   userId: string
@@ -53,6 +54,8 @@ export interface ChatReaction {
 export interface ChatReplyPreview {
   id: string
   me?: boolean
+  /// Автор цитаты: в группе подпись «Собеседник» ничего не сказала бы.
+  from?: string
   text: string
   deleted?: boolean
   kind?: string | null
@@ -63,6 +66,10 @@ export interface ChatMessage {
   me?: boolean
   ts?: number
   id?: string
+  /// Автор. В личке он и так известен по `me`, в группе — нет: там в ленте
+  /// стоят несколько человек, и каждому пузырю нужна подпись.
+  from?: string
+  fromNick?: string
   attachment?: ChatAttachment | null
   /// Only set on our own messages while they are in flight or after a failure —
   /// a sent message that never reached the server must not look delivered.
@@ -116,6 +123,9 @@ interface FriendsState {
   found: FoundUser[] | null
   chatOpen: boolean
   chatWith: string
+  /// Открытая группа. Пусто — открыта личка: панель, лента и поле ввода одни на
+  /// оба случая, различается только адресат.
+  chatRoom: string
   chatNick: string
   chatHeader: FriendProfile | null
   chatMsgs: ChatMessage[]
@@ -125,6 +135,8 @@ interface FriendsState {
   chatOlderBusy: boolean
   chatPeerReadAt: number
   chatTyping: boolean
+  /// Кто печатает в открытой группе: в личке собеседник один и хватает флага.
+  chatTypers: string[]
   /// Сообщение, на которое отвечаем, и сообщение, которое правим — оба живут в
   /// сторе: их выставляет меню сообщения, а читает поле ввода.
   chatReplyTo: ChatMessage | null
@@ -140,6 +152,7 @@ export const useFriends = create<FriendsState>((set) => ({
   found: null,
   chatOpen: false,
   chatWith: '',
+  chatRoom: '',
   chatNick: '',
   chatHeader: null,
   chatMsgs: [],
@@ -149,6 +162,7 @@ export const useFriends = create<FriendsState>((set) => ({
   chatOlderBusy: false,
   chatPeerReadAt: 0,
   chatTyping: false,
+  chatTypers: [],
   chatReplyTo: null,
   chatEditing: null,
   set: (patch) => set(patch as FriendsState),
@@ -183,15 +197,48 @@ export async function openChat(uid: string, nick: string, profileMode?: boolean)
   const resolved = nick || s.friends.find((f) => f.userId === uid)?.nickname || ''
   s.set({
     chatWith: uid,
+    chatRoom: '',
     chatNick: resolved,
     chatOpen: true,
     chatHeader: profileMode ? s.chatHeader : null,
     chatReplyTo: null,
     chatEditing: null,
+    chatTyping: false,
   })
   clearUnread(uid)
   void api('/friends/chat/' + encodeURIComponent(uid) + '/read', { method: 'POST' }).catch(() => {})
   if (!profileMode) await renderChat()
+}
+
+/**
+ * Открытая переписка одной строкой. Личка адресована человеку, группа —
+ * комнате; всё остальное (лента, вложения, правка, реакции) у них общее,
+ * поэтому и точки API отличаются только этим корнем.
+ */
+function chatBase(state: { chatWith: string; chatRoom: string }): string {
+  return state.chatRoom
+    ? '/friends/rooms/' + encodeURIComponent(state.chatRoom) + '/chat'
+    : '/friends/chat/' + encodeURIComponent(state.chatWith)
+}
+
+/** Ключ открытой переписки: по нему видно, что ответ пришёл уже не туда. */
+const scopeKey = (s: { chatWith: string; chatRoom: string }) => s.chatRoom + '>' + s.chatWith
+
+export async function openRoomChat(roomId: string, title: string) {
+  const s = useFriends.getState()
+  s.set({
+    chatWith: '',
+    chatRoom: roomId,
+    chatNick: title,
+    chatOpen: true,
+    chatHeader: null,
+    chatReplyTo: null,
+    chatEditing: null,
+    chatTyping: false,
+  })
+  clearRoomUnread(roomId)
+  void api('/friends/rooms/' + encodeURIComponent(roomId) + '/read', { method: 'POST' }).catch(() => {})
+  await renderChat()
 }
 
 interface ChatPage {
@@ -201,17 +248,17 @@ interface ChatPage {
 }
 
 export async function renderChat(append?: boolean) {
-  const uid = useFriends.getState().chatWith
+  const scope = scopeKey(useFriends.getState())
   let page: ChatPage = {}
   try {
-    page = await api('/friends/chat/' + encodeURIComponent(uid))
+    page = await api(chatBase(useFriends.getState()))
   } catch {
     page = {}
   }
   const cur = useFriends.getState()
   // A reply that outlived its request would otherwise drop someone else's
   // conversation into the open one.
-  if (cur.chatWith !== uid) return
+  if (scopeKey(cur) !== scope) return
   const msgs = page.messages || []
   cur.set({
     chatMsgs: append ? cur.chatMsgs.concat(msgs) : msgs,
@@ -228,14 +275,12 @@ export async function loadOlderChat(): Promise<number> {
   const s = useFriends.getState()
   const oldest = s.chatMsgs.find((m) => m.ts)
   if (!s.chatHasMore || s.chatOlderBusy || !oldest?.ts) return 0
-  const uid = s.chatWith
+  const scope = scopeKey(s)
   s.set({ chatOlderBusy: true })
   try {
-    const page: ChatPage = await api(
-      '/friends/chat/' + encodeURIComponent(uid) + '?before=' + oldest.ts,
-    )
+    const page: ChatPage = await api(chatBase(s) + '?before=' + oldest.ts)
     const cur = useFriends.getState()
-    if (cur.chatWith !== uid) return 0
+    if (scopeKey(cur) !== scope) return 0
     const older = page.messages || []
     cur.set({ chatMsgs: older.concat(cur.chatMsgs), chatHasMore: !!page.hasMore })
     return older.length
@@ -267,13 +312,13 @@ export function replyPreviewOf(m: ChatMessage): ChatReplyPreview | null {
 }
 
 export async function sendChat(
-  uid: string,
   text: string,
   attachment?: ChatAttachment | null,
   replyTo?: ChatReplyPreview | null,
 ) {
   const body = text.trim()
   if (!body && !attachment) return
+  const base = chatBase(useFriends.getState())
   const localId = 'l' + ++localSeq
   appendChatMessage({
     text: body,
@@ -285,7 +330,7 @@ export async function sendChat(
     localId,
   })
   try {
-    const r = await api('/friends/chat/' + encodeURIComponent(uid), {
+    const r = await api(base, {
       method: 'POST',
       body: JSON.stringify({
         text: body || undefined,
@@ -305,7 +350,7 @@ export async function retryChat(localId: string) {
   const msg = s.chatMsgs.find((m) => m.localId === localId)
   if (!msg || msg.state !== 'failed') return
   s.set({ chatMsgs: s.chatMsgs.filter((m) => m.localId !== localId) })
-  await sendChat(s.chatWith, msg.text, msg.attachment, msg.replyTo)
+  await sendChat(msg.text, msg.attachment, msg.replyTo)
 }
 
 /// Ответ сервера — целое сообщение: правка, удаление и реакция возвращают его
@@ -373,11 +418,15 @@ export function dropFailedChat(localId: string) {
 let typingSentAt = 0
 
 /// One ping per few seconds is enough: the server keeps the flag alive for six.
-export function pingTyping(uid: string) {
+export function pingTyping() {
   const now = Date.now()
   if (now - typingSentAt < 3000) return
   typingSentAt = now
-  void api('/friends/chat/' + encodeURIComponent(uid) + '/typing', { method: 'POST' }).catch(() => {})
+  const s = useFriends.getState()
+  const url = s.chatRoom
+    ? '/friends/rooms/' + encodeURIComponent(s.chatRoom) + '/typing'
+    : '/friends/chat/' + encodeURIComponent(s.chatWith) + '/typing'
+  void api(url, { method: 'POST' }).catch(() => {})
 }
 
 export async function openFriendProfile(uid: string, nick: string) {

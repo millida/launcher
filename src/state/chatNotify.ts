@@ -6,7 +6,7 @@ export interface ChatNotify {
   uid: string
   nick: string
   text: string
-  kind?: 'msg' | 'play' | 'request'
+  kind?: 'msg' | 'play' | 'request' | 'room'
   actionLabel?: string
   action?: () => void
 }
