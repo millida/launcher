@@ -11,6 +11,7 @@ export interface GameProfile {
   skinUrl: string | null
   capeUrl: string | null
   accountNick?: string | null
+  publicSlug?: string | null
   nameConflict?: boolean
 }
 

@@ -28,7 +28,7 @@ export function ConfirmModal() {
       style={{ zIndex: 700 }}
       {...backdropClose(() => close(false))}
     >
-      <div className="modal" style={{ width: '400px' }}>
+      <div className="modal mw-xs">
         <h3>{title}</h3>
         <div className="sub" style={{ marginTop: '6px' }}>
           {message}

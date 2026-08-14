@@ -11,6 +11,19 @@ const DEFAULT_APP_ID: &str = "1530764069965922354";
 const RETRY_AFTER: Duration = Duration::from_secs(30);
 const SITE_URL: &str = "https://millida.net/launcher";
 const DISCORD_URL: &str = "https://discord.gg/mcru";
+const PROFILE_BASE: &str = "https://millida.net/u/";
+
+fn profile_url(slug: &str) -> Option<String> {
+    let ok = (1..=48).contains(&slug.len())
+        && slug
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+    if ok {
+        Some(format!("{}{}", PROFILE_BASE, slug.to_ascii_lowercase()))
+    } else {
+        None
+    }
+}
 
 fn app_id() -> String {
     std::env::var("MILLIDA_DISCORD_APP_ID").unwrap_or_else(|_| DEFAULT_APP_ID.to_string())
@@ -21,6 +34,7 @@ static SINCE: Mutex<Option<i64>> = Mutex::new(None);
 static LAST_TRY: Mutex<Option<Instant>> = Mutex::new(None);
 static LAST_ERROR: Mutex<String> = Mutex::new(String::new());
 static LAST_OK: Mutex<String> = Mutex::new(String::new());
+static LAST_SLUG: Mutex<String> = Mutex::new(String::new());
 
 fn note_err(msg: String) {
     if let Ok(mut e) = LAST_ERROR.lock() {
@@ -49,7 +63,8 @@ pub fn reconnect() -> DiscordStatus {
     if let Ok(mut t) = LAST_TRY.lock() {
         *t = None;
     }
-    set_activity("В лаунчере", "Millida Launcher", false, "", "", "");
+    let slug = LAST_SLUG.lock().map(|s| s.clone()).unwrap_or_default();
+    set_activity("В лаунчере", "Millida Launcher", false, "", "", "", &slug);
     status()
 }
 
@@ -94,6 +109,8 @@ const JOIN_PREFIX: &str = "https://millida.net/join?";
 /// `large_image` may be an https URL: Discord proxies external images itself.
 /// `join_url` replaces the download button while the player is on a server; it is
 /// restricted to our own join page because the value comes from the webview.
+/// `profile_slug` is a slug, not a URL: the address is built here so the webview
+/// cannot point the button anywhere else. Empty slug keeps the Discord button.
 pub fn set_activity(
     details: &str,
     state: &str,
@@ -101,6 +118,7 @@ pub fn set_activity(
     large_image: &str,
     large_text: &str,
     join_url: &str,
+    profile_slug: &str,
 ) {
     let mut guard = match CLIENT.lock() {
         Ok(g) => g,
@@ -126,6 +144,10 @@ pub fn set_activity(
     let big = if large_image.starts_with("https://") { large_image } else { "logo" };
     let big_text = if large_text.is_empty() { "Millida Launcher" } else { large_text };
     let join_ok = playing && join_url.starts_with(JOIN_PREFIX) && join_url.len() <= 512;
+    let profile = profile_url(profile_slug);
+    if let Ok(mut s) = LAST_SLUG.lock() {
+        *s = profile_slug.to_string();
+    }
     let buttons = if join_ok {
         vec![
             activity::Button::new("Зайти на сервер", join_url),
@@ -134,7 +156,10 @@ pub fn set_activity(
     } else {
         vec![
             activity::Button::new("Скачать лаунчер", SITE_URL),
-            activity::Button::new("Discord Millida", DISCORD_URL),
+            match profile.as_deref() {
+                Some(url) => activity::Button::new("Профиль Millida", url),
+                None => activity::Button::new("Discord Millida", DISCORD_URL),
+            },
         ]
     };
     let mut act = activity::Activity::new()
@@ -188,5 +213,32 @@ pub fn clear() {
     }
     if let Ok(mut s) = SINCE.lock() {
         *s = None;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::profile_url;
+
+    #[test]
+    fn profile_button_points_only_at_our_profile_page() {
+        let cases: [(&str, Option<&str>); 7] = [
+            ("danielgrash", Some("https://millida.net/u/danielgrash")),
+            ("DanielGrash", Some("https://millida.net/u/danielgrash")),
+            ("some_nick-2", Some("https://millida.net/u/some_nick-2")),
+            ("", None),
+            ("../admin", None),
+            ("a b", None),
+            ("evil.com/x", None),
+        ];
+        for (slug, want) in cases {
+            assert_eq!(
+                profile_url(slug).as_deref(),
+                want,
+                "slug «{}» must not escape {}: the value comes from the webview",
+                slug,
+                super::PROFILE_BASE
+            );
+        }
     }
 }

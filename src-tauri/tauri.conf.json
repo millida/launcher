@@ -66,8 +66,7 @@
           "http://asset.localhost",
           "https://api.millida.net",
           "https://api.modrinth.com",
-          "https://cdn.modrinth.com",
-          "https://mc-heads.net"
+          "https://cdn.modrinth.com"
         ],
         "worker-src": [
           "'self'",
@@ -144,8 +143,7 @@
           "http://localhost:5173",
           "https://api.millida.net",
           "https://api.modrinth.com",
-          "https://cdn.modrinth.com",
-          "https://mc-heads.net"
+          "https://cdn.modrinth.com"
         ],
         "worker-src": [
           "'self'",

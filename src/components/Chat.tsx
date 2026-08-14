@@ -5,20 +5,36 @@ import { addServer } from '../ipc/commands'
 import { useProfiles } from '../state/profiles'
 import { joinWithAuth, showLaunchError } from '../lib/launch'
 import { openSettings, setScreen, showToast } from '../state/ui'
+import { uiConfirm } from '../state/confirm'
 import { encodeInvite, isServerAddr, parseInvite } from '../lib/invite'
 import { Head } from './Head'
 import { fmtPlaytime, onAvatarError, whenText } from '../lib/format'
 import { refreshPlayStats, rememberServerName, usePlayStats } from '../state/playStats'
 import { quickJoin } from '../lib/joinServer'
-import { dropFailedChat, loadOlderChat, pingTyping, retryChat, sendChat, useFriends } from '../state/friends'
+import {
+  deleteChatMessage,
+  dropFailedChat,
+  editChatMessage,
+  loadOlderChat,
+  pingTyping,
+  replyPreviewOf,
+  retryChat,
+  sendChat,
+  toggleChatReaction,
+  useFriends,
+} from '../state/friends'
 import type { ChatAttachment, ChatMessage, FriendProfile } from '../state/friends'
+import { copyText } from '../lib/clipboard'
 import { VoiceMessage } from './VoiceMessage'
 import { openImage } from './ImageLightbox'
 import { MAX_CHAT_IMAGE_BYTES, uploadChatImage, uploadVoice } from '../lib/chatMedia'
 import { VOICE_MAX_MS, canRecordVoice, fmtVoiceTime, recordVoice } from '../lib/voice'
 import type { VoiceRecorder } from '../lib/voice'
 import { dayKey, dayLabel, isGrouped, isRead } from '../lib/chatGroup'
+import { keepsChatOpen } from '../lib/chatOutside'
 import { micErrorText } from '../lib/audioDevices'
+import { callLogTitle, parseCallLog, type CallLog } from '../lib/call/callLog'
+import { callFriend, callSupported, fmtCallTime, useCall } from '../state/call'
 
 function InviteCard({ addr, name, me }: { addr: string; name: string; me?: boolean }) {
   const [busy, setBusy] = useState(false)
@@ -57,6 +73,27 @@ function InviteCard({ addr, name, me }: { addr: string; name: string; me?: boole
         {busy ? 'Заходим…' : 'Присоединиться'}
       </button>
     </div>
+  )
+}
+
+/// Итог звонка в ленте: нажатие перезванивает — это самое частое следующее
+/// действие после пропущенного.
+function CallLogCard({ log, me, uid, nick }: { log: CallLog; me?: boolean; uid: string; nick: string }) {
+  const busy = useCall((s) => s.status) !== 'idle'
+  const missed = log.outcome !== 'done'
+  return (
+    <button
+      className={'msg-call' + (me ? ' me' : '') + (missed ? ' missed' : '')}
+      disabled={busy || !callSupported()}
+      title={busy ? 'Идёт другой звонок' : 'Позвонить'}
+      onClick={() => void callFriend(uid, nick)}
+    >
+      <Icon id={missed ? 'i-phone-off' : 'i-phone'} />
+      <span className="msg-call-body">
+        <b>{callLogTitle(log, !!me)}</b>
+        <span>{log.outcome === 'done' ? fmtCallTime(log.seconds * 1000) : 'Нажми, чтобы перезвонить'}</span>
+      </span>
+    </button>
   )
 }
 
@@ -130,10 +167,23 @@ function rememberEmoji(em: string) {
 const timeHM = (ts?: number) =>
   ts ? new Date(ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : ''
 
-function MessageBody({ m }: { m: ChatMessage }) {
+function MessageBody({ m, onJump }: { m: ChatMessage; onJump: (id: string) => void }) {
   const att = m.attachment
+  if (m.deleted) return <span className="msg-gone">Сообщение удалено</span>
   return (
     <>
+      {m.replyTo ? (
+        <button
+          className="msg-reply"
+          onClick={(e) => {
+            e.stopPropagation()
+            onJump(m.replyTo!.id)
+          }}
+        >
+          <b>{m.replyTo.me ? 'Ты' : 'Собеседник'}</b>
+          <span>{replyLabel(m.replyTo)}</span>
+        </button>
+      ) : null}
       {att && att.kind === 'voice' ? <VoiceMessage att={att} me={m.me} /> : null}
       {att && att.kind === 'image' ? (
         <img className="msg-img" src={att.url} alt="" loading="lazy" onClick={() => openImage(att.url)} />
@@ -143,10 +193,146 @@ function MessageBody({ m }: { m: ChatMessage }) {
   )
 }
 
+/**
+ * Галочки статуса рисуются здесь, а не берутся из общего спрайта: там размер
+ * задаёт `svg.icon`, и селектор с типом бьёт по специфичности любой класс —
+ * галки молча вписывались в квадрат 16×16 с полями. Свои размеры и viewBox
+ * стоят атрибутами, поэтому фигура не зависит ни от каскада, ни от темы.
+ */
+function Ticks({ state, read }: { state?: 'sending' | 'failed'; read: boolean }) {
+  const sending = state === 'sending'
+  return (
+    <svg
+      className={'msg-tick' + (sending ? ' pending' : read ? ' read' : '')}
+      width={sending ? 13 : 17}
+      height={14}
+      viewBox={sending ? '0 0 20 22' : '0 0 26 22'}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2.2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <title>{sending ? 'Отправляется' : read ? 'Прочитано' : 'Доставлено'}</title>
+      <path d={sending ? 'M3 12 8 17 18 6' : 'M2 12 7 17 17 6'} />
+      {sending ? null : <path d="M11.8 17 21.8 6" />}
+    </svg>
+  )
+}
+
+interface MenuAt {
+  m: ChatMessage
+  x: number
+  y: number
+}
+
+const MENU_W = 210
+const MENU_H = 250
+
+function MessageMenu({ at, close }: { at: MenuAt; close: () => void }) {
+  const m = at.m
+  const run = (fn: () => void) => () => {
+    close()
+    fn()
+  }
+  const react = (emoji: string) => {
+    close()
+    toggleChatReaction(m.id || '', emoji).catch(() => showToast('Реакция не поставилась', 'error'))
+  }
+  return (
+    <div
+      className="msg-menu"
+      style={{
+        left: Math.max(8, Math.min(at.x, window.innerWidth - MENU_W - 8)) + 'px',
+        top: Math.max(8, Math.min(at.y, window.innerHeight - MENU_H)) + 'px',
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="msg-menu-react">
+        {REACTIONS.map((em) => (
+          <button
+            key={em}
+            className={'msg-menu-emoji' + (m.reactions?.some((r) => r.emoji === em && r.mine) ? ' on' : '')}
+            onClick={() => react(em)}
+          >
+            {em}
+          </button>
+        ))}
+      </div>
+      <button className="msg-menu-item" onClick={run(() => useFriends.getState().set({ chatReplyTo: m, chatEditing: null }))}>
+        <Icon id="i-reply" /> Ответить
+      </button>
+      {m.text ? (
+        <button
+          className="msg-menu-item"
+          onClick={run(() => {
+            void copyText(m.text).then((ok) =>
+              ok ? showToast('Скопировано') : showToast('Не удалось скопировать', 'error'),
+            )
+          })}
+        >
+          <Icon id="i-copy" /> Копировать текст
+        </button>
+      ) : null}
+      {m.me && m.text ? (
+        <button
+          className="msg-menu-item"
+          onClick={run(() => useFriends.getState().set({ chatEditing: m, chatReplyTo: null }))}
+        >
+          <Icon id="i-edit" /> Изменить
+        </button>
+      ) : null}
+      {m.me ? (
+        <button
+          className="msg-menu-item danger"
+          onClick={run(() => {
+            void uiConfirm('Сообщение исчезнет и у собеседника.', {
+              title: 'Удалить сообщение?',
+              confirmLabel: 'Удалить',
+              danger: true,
+            }).then((ok) => {
+              if (ok) deleteChatMessage(m.id || '').catch(() => showToast('Не удалось удалить', 'error'))
+            })
+          })}
+        >
+          <Icon id="i-trash" /> Удалить
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
 const INVITE_SERVERS = 6
+
+/// Набор реакций закреплён и на сервере: там он же проверяет пришедший эмодзи.
+const REACTIONS = ['👍', '👎', '❤️', '🔥', '😂', '😮', '😢', '🎉']
+
+function replyLabel(m: { text: string; deleted?: boolean; kind?: string | null }): string {
+  if (m.deleted) return 'Сообщение удалено'
+  if (m.text) return m.text
+  if (m.kind === 'voice') return 'Голосовое сообщение'
+  if (m.kind === 'image') return 'Картинка'
+  return 'Вложение'
+}
 
 function Composer({ uid }: { uid: string }) {
   const [text, setText] = useState('')
+  const replyTo = useFriends((s) => s.chatReplyTo)
+  const editing = useFriends((s) => s.chatEditing)
+  const setChat = useFriends((s) => s.set)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // Правка начинается из меню сообщения, а не из поля: текст переносится сюда,
+  // чтобы человек видел его там же, где обычно печатает.
+  useEffect(() => {
+    if (!editing) return
+    setText(editing.text)
+    inputRef.current?.focus()
+  }, [editing])
+
+  useEffect(() => {
+    if (replyTo) inputRef.current?.focus()
+  }, [replyTo])
   const [emojiOpen, setEmojiOpen] = useState(false)
   const [srvOpen, setSrvOpen] = useState(false)
   const [srvAddr, setSrvAddr] = useState('')
@@ -187,9 +373,23 @@ function Composer({ uid }: { uid: string }) {
   const send = async (attachment?: ChatAttachment) => {
     const body = text.trim()
     if (!body && !attachment) return
+    // Вложение всегда уходит новым сообщением: правка меняет только текст.
+    if (editing && !attachment) {
+      const id = editing.id || ''
+      setText('')
+      setChat({ chatEditing: null })
+      try {
+        await editChatMessage(id, body)
+      } catch {
+        showToast('Не удалось изменить сообщение', 'error')
+      }
+      return
+    }
     setText('')
+    const quoted = replyTo
+    setChat({ chatReplyTo: null })
     try {
-      await sendChat(uid, body, attachment)
+      await sendChat(uid, body, attachment, quoted ? replyPreviewOf(quoted) : null)
     } catch {
       showToast('Сообщение не ушло — нажми «Повторить» под ним', 'error')
     }
@@ -304,7 +504,30 @@ function Composer({ uid }: { uid: string }) {
 
   const recent = recentEmojis()
 
+  const quoted = editing || replyTo
+  const bar = quoted ? (
+    <div className="chat-quote">
+      <Icon id={editing ? 'i-edit' : 'i-reply'} />
+      <span className="chat-quote-body">
+        <b>{editing ? 'Изменение сообщения' : 'Ответ ' + (replyTo?.me ? 'на своё сообщение' : '')}</b>
+        <span>{replyLabel({ text: quoted.text, deleted: quoted.deleted, kind: quoted.attachment?.kind })}</span>
+      </span>
+      <button
+        className="chat-quote-x"
+        title="Отменить"
+        onClick={() => {
+          setChat({ chatReplyTo: null, chatEditing: null })
+          if (editing) setText('')
+        }}
+      >
+        <Icon id="i-x" />
+      </button>
+    </div>
+  ) : null
+
   return (
+    <>
+    {bar}
     <div className="chat-input">
       {srvOpen ? (
         <div className="chat-srv-pop" onClick={(e) => e.stopPropagation()}>
@@ -400,20 +623,30 @@ function Composer({ uid }: { uid: string }) {
       <div className="input sm">
         <input
           id="chatMsg"
-          placeholder={busy ? 'Загружаем…' : 'Сообщение…'}
+          ref={inputRef}
+          placeholder={busy ? 'Загружаем…' : editing ? 'Новый текст…' : 'Сообщение…'}
           value={text}
           onChange={(e) => {
             setText(e.target.value)
-            if (e.target.value) pingTyping(uid)
+            if (e.target.value && !editing) pingTyping(uid)
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) void send()
+            if (e.key === 'Escape' && quoted) {
+              setChat({ chatReplyTo: null, chatEditing: null })
+              if (editing) setText('')
+            }
           }}
         />
       </div>
-      {text.trim() ? (
-        <button className="chat-send" title="Отправить" disabled={busy} onClick={() => void send()}>
-          <Icon id="i-send" />
+      {text.trim() || editing ? (
+        <button
+          className="chat-send"
+          title={editing ? 'Сохранить' : 'Отправить'}
+          disabled={busy || (!!editing && !text.trim())}
+          onClick={() => void send()}
+        >
+          <Icon id={editing ? 'i-check' : 'i-send'} />
         </button>
       ) : (
         <button className="chat-send" title="Записать голосовое" disabled={busy} onClick={() => void startRecording()}>
@@ -421,8 +654,28 @@ function Composer({ uid }: { uid: string }) {
         </button>
       )}
     </div>
+    </>
   )
 }
+
+function CallButton({ uid, nick }: { uid: string; nick: string }) {
+  const status = useCall((s) => s.status)
+  if (!uid || !callSupported()) return null
+  return (
+    <button
+      className="tb-btn call-start"
+      title={status === 'idle' ? 'Позвонить' : 'Уже идёт звонок'}
+      disabled={status !== 'idle'}
+      onClick={() => void callFriend(uid, nick)}
+    >
+      <Icon id="i-phone" />
+    </button>
+  )
+}
+
+const FLASH_MS = 1400
+const JUMP_PAGES = 20
+const JUMP_FRAMES = 12
 
 const CHAT_WIDTH_KEY = 'm-chat-width'
 const CHAT_WIDTH_DEFAULT = 330
@@ -462,6 +715,79 @@ export function Chat() {
   const [atBottom, setAtBottom] = useState(true)
   const atBottomRef = useRef(true)
   atBottomRef.current = atBottom
+  const [menu, setMenu] = useState<MenuAt | null>(null)
+  const [flashId, setFlashId] = useState('')
+  const flashTimer = useRef(0)
+
+  useEffect(() => () => window.clearTimeout(flashTimer.current), [])
+
+  /// Цитата ведёт к оригиналу, но тот может лежать выше загруженной страницы —
+  /// подтягиваем историю, пока он не появится, иначе переход молча не сработал бы
+  /// именно на старой переписке, где он и нужен.
+  const jumpToMessage = useCallback((id: string) => {
+    const focus = () => {
+      const body = bodyRef.current
+      const el = body && body.querySelector('[data-mid="' + CSS.escape(id) + '"]')
+      if (!el) return false
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      window.clearTimeout(flashTimer.current)
+      // Повторный переход к тому же сообщению обязан мигнуть снова: класс уже
+      // висит, и без кадра без него анимация не перезапускается — выглядело так,
+      // будто вторым нажатием ничего не происходит.
+      setFlashId('')
+      requestAnimationFrame(() => {
+        setFlashId(id)
+        flashTimer.current = window.setTimeout(() => setFlashId(''), FLASH_MS)
+      })
+      return true
+    }
+    if (focus()) return
+    // Пока идёт догрузка, лента не должна прыгать вниз за новыми сообщениями —
+    // человек уже уходит вверх, к оригиналу.
+    setAtBottom(false)
+    void (async () => {
+      for (let i = 0; i < JUMP_PAGES; i++) {
+        const s = useFriends.getState()
+        if (s.chatMsgs.some((m) => m.id === id) || !s.chatHasMore) break
+        if (!(await loadOlderChat())) break
+      }
+      // Рендер прилетевшей страницы идёт своим кадром: ищем узел, пока он не
+      // появится, а не один раз сразу после ответа сервера.
+      for (let i = 0; i < JUMP_FRAMES; i++) {
+        await new Promise((r) => requestAnimationFrame(r))
+        if (focus()) return
+      }
+      showToast('Не нашли это сообщение — возможно, оно удалено', 'error')
+    })()
+  }, [])
+
+  // Меню приколочено к точке экрана: прокрутка переписки увела бы его от своего
+  // сообщения, поэтому закрывается вместе с любым движением ленты.
+  useEffect(() => {
+    if (!menu) return
+    const close = () => setMenu(null)
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close()
+    }
+    const onDown = (e: MouseEvent) => {
+      // Пункт меню исчезает вместе с меню, поэтому проверяем попадание на
+      // нажатии — иначе закрытие съедало бы собственный клик.
+      if (e.target instanceof Element && e.target.closest('.msg-menu')) return
+      close()
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    window.addEventListener('resize', close)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+      window.removeEventListener('resize', close)
+    }
+  }, [menu])
+
+  useEffect(() => {
+    if (!chatOpen) setMenu(null)
+  }, [chatOpen, chatWith])
 
   const scrollDown = useCallback(() => {
     const b = bodyRef.current
@@ -492,17 +818,7 @@ export function Chat() {
       // target is not: a button whose handler re-renders it away (stop the
       // recording, drop a failed message) is already detached by the time this
       // listener runs, reads as "outside" and closed the whole panel.
-      const inside = e
-        .composedPath()
-        .some(
-          (n) =>
-            n instanceof HTMLElement &&
-            (n.id === 'chat' ||
-              n.classList.contains('fr-msg') ||
-              n.classList.contains('fr-row') ||
-              n.classList.contains('lightbox')),
-        )
-      if (inside) return
+      if (keepsChatOpen(e.composedPath())) return
       set({ chatOpen: false })
     }
     document.addEventListener('click', onDoc)
@@ -512,6 +828,7 @@ export function Chat() {
   const onScroll = () => {
     const b = bodyRef.current
     if (!b) return
+    if (menu) setMenu(null)
     setAtBottom(b.scrollHeight - b.scrollTop - b.clientHeight < 40)
     if (b.scrollTop >= 60 || !chatHasMore || chatOlderBusy) return
     const before = b.scrollHeight
@@ -552,6 +869,7 @@ export function Chat() {
       <div className="chat-head">
         <Head id="chatAva" nick={chatNick || 'MHF_Steve'} size={32} />
         <b id="chatNick">{chatNick || '—'}</b>
+        <CallButton uid={chatWith} nick={chatNick} />
         <button className="tb-btn" id="chatClose" onClick={() => set({ chatOpen: false })}>
           <Icon id="i-x" />
         </button>
@@ -562,7 +880,7 @@ export function Chat() {
           <>
             <div style={{ textAlign: 'center', padding: '10px 0 4px' }}>
               <img
-                src={'https://mc-heads.net/body/' + encodeURIComponent(chatHeader.nick || 'MHF_Steve') + '/120'}
+                src={'https://api.millida.net/v2/heads/body/' + encodeURIComponent(chatHeader.nick || 'Steve') + '?size=120'}
                 style={{ height: '130px', imageRendering: 'pixelated' }}
                 onError={(e) => onAvatarError(e, 120, chatHeader.nick)}
               />
@@ -577,6 +895,7 @@ export function Chat() {
         ) : null}
         {chatMsgs.map((m, i) => {
           const inv = m.text ? parseInvite(m.text) : null
+          const callLog = m.text ? parseCallLog(m.text) : null
           const key = m.id || m.localId || 'i' + i
           const newDay = dayKey(m.ts) !== dayKey(chatMsgs[i - 1]?.ts)
           const day = newDay && m.ts ? <div className="chat-day">{dayLabel(m.ts)}</div> : null
@@ -587,11 +906,39 @@ export function Chat() {
                 <InviteCard addr={inv.addr} name={inv.name} me={m.me} />
               </Fragment>
             )
+          if (callLog)
+            return (
+              <Fragment key={key}>
+                {day}
+                <CallLogCard log={callLog} me={m.me} uid={chatWith} nick={chatNick} />
+              </Fragment>
+            )
           const read = isRead(m, chatPeerReadAt)
+          const actionable = !!m.id && !m.state && !m.deleted
+          const openMenu = (e: { clientX: number; clientY: number; preventDefault: () => void }) => {
+            if (!actionable) return
+            e.preventDefault()
+            setMenu({ m, x: e.clientX, y: e.clientY })
+          }
+          // Двойное нажатие по пузырю отвечает на него. Свои элементы внутри
+          // (цитата, картинка, кнопки) имеют собственное действие и остаются за
+          // пределами жеста.
+          const replyOnDouble = (e: { target: EventTarget | null }) => {
+            if (!actionable) return
+            if (e.target instanceof Element && e.target.closest('button, a, .msg-img, .voice-wave')) return
+            window.getSelection()?.removeAllRanges()
+            useFriends.getState().set({ chatReplyTo: m, chatEditing: null })
+          }
           return (
             <Fragment key={key}>
               {day}
-              <div className={'msg-row' + (m.me ? ' me' : '')}>
+              <div
+                className={'msg-row' + (m.me ? ' me' : '')}
+                data-mid={m.id || undefined}
+                onContextMenu={openMenu}
+                onDoubleClick={replyOnDouble}
+              >
+              <div className="msg-line">
               <div
                 className={
                   'msg' +
@@ -599,18 +946,51 @@ export function Chat() {
                   (!newDay && isGrouped(chatMsgs, i) ? ' grouped' : '') +
                   (m.state === 'sending' ? ' sending' : '') +
                   (m.state === 'failed' ? ' failed' : '') +
-                  (m.attachment && !m.text ? ' bare' : '')
+                  (m.deleted ? ' gone' : '') +
+                  (m.attachment && !m.text ? ' bare' : '') +
+                  (m.id && m.id === flashId ? ' flash' : '')
                 }
               >
-                <MessageBody m={m} />
+                <MessageBody m={m} onJump={jumpToMessage} />
                 <span className="msg-meta">
+                  {m.editedAt ? <span title="Отредактировано">изм.</span> : null}
                   <span>{timeHM(m.ts)}</span>
-                  {m.me && !m.state ? (
-                    <Icon id={read ? 'i-check-2' : 'i-check'} className={'msg-tick' + (read ? ' read' : '')} />
-                  ) : null}
-                  {m.state === 'sending' ? <span className="msg-dot" /> : null}
+                  {/* Одна серая — ещё летит, две серые — сервер принял, две
+                      синие — собеседник прочитал. */}
+                  {m.me && m.state !== 'failed' ? <Ticks state={m.state} read={read} /> : null}
                 </span>
               </div>
+              {actionable ? (
+                <button
+                  className="msg-act"
+                  title="Действия с сообщением"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    const r = e.currentTarget.getBoundingClientRect()
+                    setMenu({ m, x: r.left - MENU_W, y: r.top })
+                  }}
+                >
+                  <Icon id="i-dots" />
+                </button>
+              ) : null}
+              </div>
+              {m.reactions?.length ? (
+                <div className="msg-reactions">
+                  {m.reactions.map((r) => (
+                    <button
+                      key={r.emoji}
+                      className={'msg-reaction' + (r.mine ? ' on' : '')}
+                      onClick={() =>
+                        toggleChatReaction(m.id || '', r.emoji).catch(() =>
+                          showToast('Реакция не поставилась', 'error'),
+                        )
+                      }
+                    >
+                      {r.emoji} {r.count}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               {m.state === 'failed' ? (
                 <div className="msg-fail">
                   <span>Не отправлено</span>
@@ -630,6 +1010,7 @@ export function Chat() {
           <Icon id="i-arrow-dn" />
         </button>
       ) : null}
+      {menu ? <MessageMenu at={menu} close={() => setMenu(null)} /> : null}
       <Composer uid={chatWith} />
     </div>
   )

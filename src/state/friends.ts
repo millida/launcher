@@ -8,6 +8,10 @@ export interface Friend {
   avatarUrl?: string | null
   online?: boolean
   text?: string
+  /// Где именно человек: в игре, в лаунчере или просто на сайте. Присутствие на
+  /// сайте меряется отметкой любого запроса с токеном и лаунчера не означает.
+  place?: 'game' | 'launcher' | 'web' | null
+  lastMessageAt?: number | null
   playing?: boolean
   serverIp?: string
   serverName?: string
@@ -40,6 +44,20 @@ export interface ChatAttachment {
   peaks?: number[]
 }
 
+export interface ChatReaction {
+  emoji: string
+  count: number
+  mine?: boolean
+}
+
+export interface ChatReplyPreview {
+  id: string
+  me?: boolean
+  text: string
+  deleted?: boolean
+  kind?: string | null
+}
+
 export interface ChatMessage {
   text: string
   me?: boolean
@@ -50,6 +68,10 @@ export interface ChatMessage {
   /// a sent message that never reached the server must not look delivered.
   state?: 'sending' | 'failed'
   localId?: string
+  editedAt?: number | null
+  deleted?: boolean
+  replyTo?: ChatReplyPreview | null
+  reactions?: ChatReaction[]
 }
 
 export interface PlayStatBuild {
@@ -103,6 +125,10 @@ interface FriendsState {
   chatOlderBusy: boolean
   chatPeerReadAt: number
   chatTyping: boolean
+  /// Сообщение, на которое отвечаем, и сообщение, которое правим — оба живут в
+  /// сторе: их выставляет меню сообщения, а читает поле ввода.
+  chatReplyTo: ChatMessage | null
+  chatEditing: ChatMessage | null
   set: (patch: Partial<FriendsState>) => void
   load: () => Promise<void>
 }
@@ -123,6 +149,8 @@ export const useFriends = create<FriendsState>((set) => ({
   chatOlderBusy: false,
   chatPeerReadAt: 0,
   chatTyping: false,
+  chatReplyTo: null,
+  chatEditing: null,
   set: (patch) => set(patch as FriendsState),
   load: async () => {
     if (!hasMillidaAccount()) {
@@ -153,7 +181,14 @@ function clearUnread(uid: string) {
 export async function openChat(uid: string, nick: string, profileMode?: boolean) {
   const s = useFriends.getState()
   const resolved = nick || s.friends.find((f) => f.userId === uid)?.nickname || ''
-  s.set({ chatWith: uid, chatNick: resolved, chatOpen: true, chatHeader: profileMode ? s.chatHeader : null })
+  s.set({
+    chatWith: uid,
+    chatNick: resolved,
+    chatOpen: true,
+    chatHeader: profileMode ? s.chatHeader : null,
+    chatReplyTo: null,
+    chatEditing: null,
+  })
   clearUnread(uid)
   void api('/friends/chat/' + encodeURIComponent(uid) + '/read', { method: 'POST' }).catch(() => {})
   if (!profileMode) await renderChat()
@@ -226,7 +261,17 @@ function patchMessage(localId: string, patch: Partial<ChatMessage>) {
  * sat in the thread looking delivered. Now it carries its state and can be sent
  * again.
  */
-export async function sendChat(uid: string, text: string, attachment?: ChatAttachment | null) {
+export function replyPreviewOf(m: ChatMessage): ChatReplyPreview | null {
+  if (!m.id) return null
+  return { id: m.id, me: m.me, text: m.text.slice(0, 120), kind: m.attachment?.kind || null }
+}
+
+export async function sendChat(
+  uid: string,
+  text: string,
+  attachment?: ChatAttachment | null,
+  replyTo?: ChatReplyPreview | null,
+) {
   const body = text.trim()
   if (!body && !attachment) return
   const localId = 'l' + ++localSeq
@@ -235,13 +280,18 @@ export async function sendChat(uid: string, text: string, attachment?: ChatAttac
     me: true,
     ts: Date.now(),
     attachment: attachment || null,
+    replyTo: replyTo || null,
     state: 'sending',
     localId,
   })
   try {
     const r = await api('/friends/chat/' + encodeURIComponent(uid), {
       method: 'POST',
-      body: JSON.stringify({ text: body || undefined, attachment: attachment || undefined }),
+      body: JSON.stringify({
+        text: body || undefined,
+        attachment: attachment || undefined,
+        replyToId: replyTo?.id,
+      }),
     })
     patchMessage(localId, { state: undefined, id: r?.id, ts: r?.ts || Date.now() })
   } catch (e) {
@@ -255,7 +305,64 @@ export async function retryChat(localId: string) {
   const msg = s.chatMsgs.find((m) => m.localId === localId)
   if (!msg || msg.state !== 'failed') return
   s.set({ chatMsgs: s.chatMsgs.filter((m) => m.localId !== localId) })
-  await sendChat(s.chatWith, msg.text, msg.attachment)
+  await sendChat(s.chatWith, msg.text, msg.attachment, msg.replyTo)
+}
+
+/// Ответ сервера — целое сообщение: правка, удаление и реакция возвращают его
+/// же, поэтому применяется одинаково, откуда бы ни пришло (действие или опрос).
+export function applyChatMessage(view: ChatMessage) {
+  const s = useFriends.getState()
+  if (!view.id || !s.chatMsgs.some((m) => m.id === view.id)) return
+  s.set({
+    chatMsgs: s.chatMsgs.map((m) => (m.id === view.id ? { ...m, ...view } : m)),
+    chatSeq: s.chatSeq + 1,
+  })
+}
+
+export async function editChatMessage(id: string, text: string) {
+  const body = text.trim()
+  if (!body) return
+  applyChatMessage(await api('/friends/chat/message/' + encodeURIComponent(id) + '/edit', {
+    method: 'POST',
+    body: JSON.stringify({ text: body }),
+  }))
+}
+
+export async function deleteChatMessage(id: string) {
+  applyChatMessage(
+    await api('/friends/chat/message/' + encodeURIComponent(id) + '/delete', { method: 'POST' }),
+  )
+  const s = useFriends.getState()
+  if (s.chatReplyTo?.id === id) s.set({ chatReplyTo: null })
+  if (s.chatEditing?.id === id) s.set({ chatEditing: null })
+}
+
+/// Реакция рисуется сразу: ответ сервера приходит следом и правит счётчик, если
+/// собеседник нажал ту же в тот же момент.
+export async function toggleChatReaction(id: string, emoji: string) {
+  const s = useFriends.getState()
+  const msg = s.chatMsgs.find((m) => m.id === id)
+  if (!msg) return
+  const cur = msg.reactions || []
+  const mine = cur.find((r) => r.emoji === emoji)?.mine
+  const optimistic = cur
+    .map((r) =>
+      r.emoji === emoji ? { ...r, count: r.count + (mine ? -1 : 1), mine: !mine } : r,
+    )
+    .filter((r) => r.count > 0)
+  if (!mine && !cur.some((r) => r.emoji === emoji)) optimistic.push({ emoji, count: 1, mine: true })
+  applyChatMessage({ ...msg, reactions: optimistic })
+  try {
+    applyChatMessage(
+      await api('/friends/chat/message/' + encodeURIComponent(id) + '/react', {
+        method: 'POST',
+        body: JSON.stringify({ emoji }),
+      }),
+    )
+  } catch (e) {
+    applyChatMessage({ ...msg, reactions: cur })
+    throw e
+  }
 }
 
 export function dropFailedChat(localId: string) {

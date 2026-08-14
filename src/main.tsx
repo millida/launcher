@@ -7,6 +7,8 @@ import './styles/05-media.css'
 import './styles/06-onboarding.css'
 import './styles/07-density.css'
 import './styles/08-themes.css'
+import './styles/09-wide.css'
+import './styles/10-call.css'
 import { App } from './App'
 import { Overlay } from './screens/Overlay'
 

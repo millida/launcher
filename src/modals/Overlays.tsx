@@ -20,7 +20,7 @@ export function ScreenshotsOverlay() {
         className={'modal-bg' + (modal.open ? ' open' : '') + (modal.vis ? ' vis' : '')}
         {...backdropClose(close)}
       >
-        <div className="modal" style={{ width: '780px', maxHeight: '88%' }}>
+        <div className="modal mw-xl" style={{ maxHeight: '88%' }}>
           <h3>{'Скриншоты · ' + paths.length}</h3>
           <div
             style={{
@@ -74,7 +74,7 @@ export function ModpackVersionsOverlay() {
       className={'modal-bg' + (modal.open ? ' open' : '') + (modal.vis ? ' vis' : '')}
       {...backdropClose(close)}
     >
-      <div className="modal" style={{ width: '640px', maxHeight: '88%' }}>
+      <div className="modal mw-lg" style={{ maxHeight: '88%' }}>
         <h3>{install ? 'Установить «' + title + '»' : 'Версии модпака'}</h3>
         <div className="sub">
           {install

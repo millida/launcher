@@ -19,12 +19,15 @@ import { UpdateBanner } from './components/UpdateBanner'
 import { ConfirmModal } from './components/ConfirmModal'
 import { BuildPicker } from './components/BuildPicker'
 import { ChatNotify } from './components/ChatNotify'
+import { CallPanel } from './components/CallPanel'
 import { Installs } from './components/Installs'
 import { initInstalls } from './state/installs'
+import { initCalls } from './state/call'
 import { overlayNotify } from './ipc/commands'
 import { ServerDetail } from './components/ServerDetail'
 import { pushChatNotify } from './state/chatNotify'
 import { parseInvite } from './lib/invite'
+import { parseCallLog } from './lib/call/callLog'
 import { getAccount, getMillidaAccount, isMillidaKind, useAccounts } from './state/accounts'
 import { markMillidaEver, millidaEver } from './state/onboarding'
 import { OnboardingModal } from './modals/Onboarding'
@@ -37,8 +40,15 @@ import { warmHeads } from './lib/heads'
 import { useUi, closeModal, setScreen as gotoScreen, showToast } from './state/ui'
 import { useWallpaper } from './state/wallpaper'
 import { loadLiveRating } from './state/servers'
-import { appendChatMessage, loadFriends, useFriends } from './state/friends'
-import type { ChatAttachment, Friend, FriendRequest } from './state/friends'
+import { appendChatMessage, applyChatMessage, loadFriends, useFriends } from './state/friends'
+import type {
+  ChatAttachment,
+  ChatMessage,
+  ChatReaction,
+  ChatReplyPreview,
+  Friend,
+  FriendRequest,
+} from './state/friends'
 
 interface PolledMessage {
   id?: string
@@ -47,7 +57,13 @@ interface PolledMessage {
   text?: string
   ts?: number
   attachment?: ChatAttachment | null
+  replyTo?: ChatReplyPreview | null
+  reactions?: ChatReaction[]
 }
+
+/// Правка, удаление и реакция приходят целым сообщением с пометкой, чья это
+/// переписка: применяем только к открытой, остальное подтянет её загрузка.
+type PolledUpdate = ChatMessage & { peer: string }
 
 interface PolledRead {
   userId: string
@@ -58,6 +74,8 @@ function previewOf(m: PolledMessage): string {
   const text = String(m.text || '')
   if (m.attachment?.kind === 'voice') return 'Голосовое сообщение'
   if (m.attachment?.kind === 'image') return 'Картинка'
+  const call = parseCallLog(text)
+  if (call) return call.outcome === 'done' ? 'Звонок завершён' : 'Пропущенный звонок'
   return parseInvite(text) ? 'Приглашение на сервер' : text
 }
 import { refreshPlayStats, rememberServerName } from './state/playStats'
@@ -137,6 +155,7 @@ export function App() {
     initSounds()
     initDeepLinks()
     initInstalls()
+    initCalls()
     void bootUpdate().then((leaving) => {
       if (leaving) return
       preloadScreens()
@@ -365,6 +384,8 @@ export function App() {
                 text: String(m.text || ''),
                 ts: m.ts,
                 attachment: m.attachment || null,
+                replyTo: m.replyTo || null,
+                reactions: m.reactions || [],
               })
               playSound('notify')
               void api('/friends/chat/' + encodeURIComponent(m.from) + '/read', { method: 'POST' }).catch(() => {})
@@ -376,6 +397,9 @@ export function App() {
               if (useGame.getState().list.length)
                 void overlayNotify({ uid: m.from, nick, text: previewOf(m), ts: m.ts || Date.now() }).catch(() => {})
             }
+          })
+          ;(r.updates || []).forEach((u: PolledUpdate) => {
+            if (useFriends.getState().chatWith === u.peer) applyChatMessage(u)
           })
           const chat = useFriends.getState()
           if (chat.chatWith) {
@@ -477,6 +501,7 @@ export function App() {
         <CrashModal />
         <ServerDetail />
         <ChatNotify />
+        <CallPanel />
         {/* Mounted last: it asks on top of any other modal, and DOM order breaks
             ties between equal z-index values. */}
         <ConfirmModal />

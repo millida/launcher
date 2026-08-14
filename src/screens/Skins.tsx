@@ -219,7 +219,7 @@ async function migrateStored(kind: TextureKind, key: string): Promise<MySkin[] |
   return list
 }
 
-const skinUrl = (n: string) => 'https://mc-heads.net/skin/' + encodeURIComponent(n)
+const skinUrl = (n: string) => 'https://api.millida.net/v2/heads/skin/' + encodeURIComponent(n)
 
 function loadImg(url: string): Promise<HTMLImageElement> {
   return textureSource(url).then(
@@ -412,7 +412,7 @@ async function loadAccountTexture(a: Account, millida: AccTexture | null): Promi
   return { skin: DEFAULT_SKIN, cape: null, slim: false }
 }
 
-/// Offline and Microsoft accounts keep the skin locally; mc-heads only knows Mojang uploads.
+/// Offline and Microsoft accounts keep the skin locally.
 async function headDataUrl(url: string, size = 64): Promise<string> {
   const img = await loadImg(url)
   const s = img.width / 64
@@ -427,7 +427,7 @@ async function headDataUrl(url: string, size = 64): Promise<string> {
   return c.toDataURL('image/png')
 }
 
-/// mc-heads and textures.minecraft.net are CORS-restricted, so re-encode through canvas.
+/// Remote textures are CORS-restricted, so re-encode through canvas.
 async function toPngBase64(url: string): Promise<string> {
   if (url.startsWith('data:')) return url.replace(/^data:image\/png;base64,/, '')
   const img = await loadImg(url)

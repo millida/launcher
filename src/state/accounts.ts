@@ -108,7 +108,17 @@ export function getMillidaAccount(): Account | null {
 /// login is not the in-game nick. Read from cache so callers stay synchronous.
 export const GAME_NICK_KEY = 'm-game-nick'
 
+/// The public profile lives at /u/<publicSlug>, and that slug is not the nick:
+/// it can be taken, renamed or missing entirely when the profile is hidden.
+export const PROFILE_SLUG_KEY = 'm-profile-slug'
+
 export const isMillidaKind = (kind: string) => kind === 'millida' || kind === 'tg'
+
+export function profileSlug(): string {
+  const a = getAccount()
+  if (!a || !isMillidaKind(a.kind)) return ''
+  return localStorage.getItem(PROFILE_SLUG_KEY) || ''
+}
 
 export function effectiveNick(): string {
   const a = getAccount()
@@ -117,6 +127,16 @@ export function effectiveNick(): string {
     if (game) return game
   }
   return (a && a.nick) || 'Player' + Math.floor(Math.random() * 9999)
+}
+
+export type LaunchAuthKind = 'offline' | 'microsoft' | 'millida'
+
+/// An offline account is an explicit choice of nick: issuing a Millida session for it would
+/// replace that nick with the one bound to the site login, so only a Millida account gets one.
+export function launchAuthKind(acc: Account | null, millidaSession: boolean): LaunchAuthKind {
+  if (acc && acc.kind === 'microsoft') return 'microsoft'
+  if (acc && !isMillidaKind(acc.kind)) return 'offline'
+  return millidaSession ? 'millida' : 'offline'
 }
 
 export function hasLicenseSession(a: Account): boolean {

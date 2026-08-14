@@ -154,12 +154,11 @@ pub fn save_texture(kind: &str, name: &str, data: &str, slim: bool) -> Result<Ve
     store(kind, &metas)
 }
 
-/// Hosts the launcher itself links textures from: Mojang's texture CDN, the
-/// head/skin proxy used across the UI, our own API and CDN, and the Modrinth CDN
-/// that serves modpack assets.
+/// Hosts the launcher itself links textures from: Mojang's texture CDN, our own
+/// API and CDN (head and skin rendering included), and the Modrinth CDN that
+/// serves modpack assets.
 const TEXTURE_HOSTS: &[&str] = &[
     "textures.minecraft.net",
-    "mc-heads.net",
     "api.millida.net",
     "cdn.millida.net",
     "millida.net",
@@ -326,17 +325,17 @@ mod tests {
         // (input, should be accepted, why this case exists)
         let cases: &[(&str, bool, &str)] = &[
             ("https://textures.minecraft.net/texture/abc", true, "Mojang texture CDN is where player skins live"),
-            ("https://mc-heads.net/skin/Notch", true, "import by nickname goes through mc-heads"),
+            ("https://api.millida.net/v2/heads/skin/Notch", true, "import by nickname goes through our own renderer"),
             ("https://api.millida.net/v2/skins/1.png", true, "wardrobe textures come from our own API"),
             ("https://cdn.millida.net/skins/1.png", true, "our CDN is covered by the .millida.net suffix"),
             ("https://cdn.millida.trade/launcher/capes/1.png", true, "wardrobe skins and capes are stored on this CDN"),
             ("https://cdn.modrinth.com/data/x/icon.png", true, "modpack assets are served by the Modrinth CDN"),
-            ("  https://mc-heads.net/skin/Notch  ", true, "pasted links carry surrounding whitespace"),
-            ("HTTPS://MC-HEADS.NET/skin/Notch", true, "scheme and host comparison must be case-insensitive"),
-            ("https://mc-heads.net./skin/Notch", true, "a trailing root dot is the same host"),
-            ("http://mc-heads.net/skin/Notch", false, "plain http would let a proxy swap the texture"),
+            ("  https://api.millida.net/v2/heads/skin/Notch  ", true, "pasted links carry surrounding whitespace"),
+            ("HTTPS://API.MILLIDA.NET/v2/heads/skin/Notch", true, "scheme and host comparison must be case-insensitive"),
+            ("https://api.millida.net./v2/heads/skin/Notch", true, "a trailing root dot is the same host"),
+            ("http://api.millida.net/v2/heads/skin/Notch", false, "plain http would let a proxy swap the texture"),
             ("https://evil.example.com/x.png", false, "an arbitrary host is the SSRF the allowlist exists for"),
-            ("https://mc-heads.net.evil.com/x.png", false, "suffix trick: the real host is evil.com"),
+            ("https://api.millida.net.evil.com/x.png", false, "suffix trick: the real host is evil.com"),
             ("https://millida.net.evil.com/x.png", false, "the .millida.net suffix must not match as a prefix"),
             ("https://cdn.millida.trade.evil.com/x.png", false, "the .millida.trade suffix must not match as a prefix"),
             ("https://127.0.0.1/x.png", false, "loopback reaches services bound to the user's machine"),
@@ -349,8 +348,8 @@ mod tests {
             ("https://router.local/x.png", false, "mDNS names resolve inside the LAN"),
             ("file:///C:/Windows/win.ini", false, "file: would read the local filesystem"),
             ("data:image/png;base64,AAAA", false, "data: is not a fetchable host"),
-            ("https://mc-heads.net/\r\nHeader: x", false, "CR/LF enable request splitting"),
-            ("https://mc-heads.net/\0evil", false, "NUL truncates the URL in C-string based APIs"),
+            ("https://api.millida.net/\r\nHeader: x", false, "CR/LF enable request splitting"),
+            ("https://api.millida.net/\0evil", false, "NUL truncates the URL in C-string based APIs"),
             ("", false, "empty input is not a URL"),
         ];
 

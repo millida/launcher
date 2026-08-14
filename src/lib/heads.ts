@@ -30,7 +30,7 @@ export function loadHead(nick?: string, kind?: string): Promise<string | null> {
   const task = (
     hasTauri()
       ? headAvatar(real)
-      : Promise.resolve('https://mc-heads.net/avatar/' + encodeURIComponent(real) + '/64')
+      : Promise.resolve('https://api.millida.net/v2/heads/avatar/' + encodeURIComponent(real) + '?size=64')
   )
     .then((url) => {
       mem.set(key, url)

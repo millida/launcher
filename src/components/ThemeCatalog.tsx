@@ -17,7 +17,9 @@ import { hasMillidaAccount } from '../lib/api'
 import { installId } from '../lib/telemetry'
 import type { ThemePack } from '../lib/themes'
 
-const PAGE = 24
+// Каталог живёт внутри страницы настроек: страница в две строки карточек не
+// отодвигает остальные разделы за экран, дальше — по кнопке «Показать ещё».
+const PAGE = 8
 
 const SORTS: { id: 'popular' | 'new' | 'liked'; label: string }[] = [
   { id: 'popular', label: 'Популярные' },

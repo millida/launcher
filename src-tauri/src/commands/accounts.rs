@@ -8,6 +8,7 @@ pub fn discord_presence(
     large_image: Option<String>,
     large_text: Option<String>,
     join_url: Option<String>,
+    profile_slug: Option<String>,
 ) {
     discord::set_activity(
         &details,
@@ -16,6 +17,7 @@ pub fn discord_presence(
         &large_image.unwrap_or_default(),
         &large_text.unwrap_or_default(),
         &join_url.unwrap_or_default(),
+        &profile_slug.unwrap_or_default(),
     );
 }
 

@@ -26,7 +26,7 @@ export function BuildPicker() {
       style={{ zIndex: 205 }}
       {...backdropClose(() => choose(null))}
     >
-      <div className="modal" style={{ width: '440px' }}>
+      <div className="modal mw-xs">
         <h3>Куда добавить {kindLabel}?</h3>
         <div className="sub">Выбери сборку — установим {kindLabel} именно в неё.</div>
 
