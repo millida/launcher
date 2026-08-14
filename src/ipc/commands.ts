@@ -835,7 +835,7 @@ export const setTextureSlim = (kind: TextureKind, file: string, slim: boolean, m
   invoke<TextureEntry[]>('set_texture_slim', { kind, file, slim, manual })
 
 // Served from the core cache, which survives restarts and rate-limits upstream.
-export const headAvatar = (nick: string) => invoke<string>('head_avatar', { nick })
+export const headAvatar = (nick: string, size?: number) => invoke<string>('head_avatar', { nick, size })
 
 export const cacheSize = () => invoke<number>('cache_size')
 export const clearCache = () => invoke<number>('clear_cache')

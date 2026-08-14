@@ -13,9 +13,21 @@
 .call-ring-acts{display:flex;gap:8px}
 
 
-.call-dock{position:fixed;left:14px;bottom:14px;z-index:640;width:300px;display:flex;flex-direction:column;gap:10px;padding:12px;background:var(--m-raised);border:1px solid var(--m-border);border-radius:var(--m-r-card);box-shadow:var(--m-shadow-lg);animation:call-in .18s var(--m-ease-out)}
-.call-dock.talking{border-color:var(--m-success)}
-.call-dock-who{display:flex;align-items:center;gap:10px;background:none;border:0;padding:0;cursor:pointer;text-align:left;color:inherit;min-width:0}
+.call-dock{position:fixed;left:14px;bottom:14px;z-index:640;width:300px;display:flex;flex-direction:column;gap:10px;padding:12px;background:var(--m-raised);border:1px solid var(--m-border);border-radius:var(--m-r-card);box-shadow:var(--m-shadow-lg);animation:call-in .18s var(--m-ease-out);cursor:grab;user-select:none}
+.call-dock.talking{border-color:var(--m-accent)}
+.call-dock.peer-talking{border-color:var(--m-info)}
+/* Поверх развёрнутого экрана: микрофон и трубка должны оставаться под рукой. */
+.call-dock.above{z-index:890}
+.call-dock.dragging{cursor:grabbing;animation:none;box-shadow:var(--m-shadow-lg),0 0 0 1px var(--m-accent)}
+.call-dock-top{display:flex;align-items:center;gap:6px;min-width:0}
+.call-dock img,.call-dock canvas,.call-dock video{-webkit-user-drag:none;user-select:none}
+.call-dock-grip{display:flex;align-items:center;justify-content:center;width:14px;flex:none;color:var(--m-fg-subtle);opacity:.5;cursor:grab}
+.call-dock-grip svg{width:14px;height:14px}
+.call-dock:hover .call-dock-grip{opacity:.9}
+.call-dock-resize{position:absolute;right:2px;bottom:2px;width:16px;height:16px;cursor:nwse-resize;opacity:.45}
+.call-dock-resize::after{content:'';position:absolute;right:4px;bottom:4px;width:7px;height:7px;border-right:2px solid var(--m-fg-subtle);border-bottom:2px solid var(--m-fg-subtle);border-bottom-right-radius:2px}
+.call-dock:hover .call-dock-resize{opacity:.9}
+.call-dock-who{display:flex;align-items:center;gap:10px;background:none;border:0;padding:0;cursor:pointer;text-align:left;color:inherit;min-width:0;flex:1}
 .call-dock-who img{width:34px;height:34px;border-radius:9px;image-rendering:pixelated}
 .call-dock-name{display:flex;flex-direction:column;gap:2px;min-width:0}
 .call-dock-name b{font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -24,9 +36,16 @@
 .call-dock-state.mid{color:var(--m-info)}
 .call-dock-state.bad{color:var(--m-danger)}
 
-.call-level{height:18px;display:flex;align-items:flex-end;padding:0 2px}
-.call-level i{display:block;width:100%;background:var(--m-accent);border-radius:2px;transition:height 90ms linear;opacity:.55}
-.call-dock.talking .call-level i{opacity:1}
+/* График речи: своя волна вверх акцентом, волна собеседника вниз синим. Сторона
+   и цвет отвечают на вопрос «кто говорит» быстрее любой подписи. */
+/* На широкой панели график уходит в строку с ником: место справа от имени всё
+   равно пустует, а вертикаль экономится для показа экрана. */
+.call-head{display:flex;flex-direction:column;gap:10px}
+.call-head.wide{flex-direction:row;align-items:center;gap:12px}
+.call-head.wide .call-dock-top{width:196px;flex:none}
+.call-head.wide .call-graph{flex:1;min-width:0}
+.call-graph{width:100%;border-radius:var(--m-r-md);background:var(--m-inset);overflow:hidden}
+.call-graph canvas{display:block;width:100%}
 
 /* Кнопки — обычные из набора (tb-btn / btn), здесь только состояния звонка:
    включённый показ экрана и выключенные микрофон или звук. */
@@ -41,11 +60,15 @@
 .call-vol svg{width:14px;height:14px}
 .call-vol .m-slider{flex:1}
 
-.call-screen-mini{position:relative;border-radius:var(--m-r-md);overflow:hidden;background:#000;cursor:zoom-in;aspect-ratio:16/9}
+.call-screen-mini{position:relative;border-radius:var(--m-r-md);overflow:hidden;background:#000;aspect-ratio:16/9}
 .call-screen-mini video{width:100%;height:100%;object-fit:contain;display:block}
 .call-screen-hint{position:absolute;left:8px;bottom:6px;font-size:11px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.8)}
-.call-screen-full{position:fixed;inset:0;z-index:880;background:rgba(0,0,0,.94);display:flex;align-items:center;justify-content:center;cursor:zoom-out}
-.call-screen-full video{max-width:100%;max-height:100%;display:block}
+.call-screen-max{position:absolute;top:6px;right:6px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:var(--m-r-ctl);border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.55);color:#fff;cursor:pointer;opacity:0;transition:opacity .12s linear}
+.call-screen-max svg{width:14px;height:14px}
+.call-screen-mini:hover .call-screen-max{opacity:1}
+.call-screen-full{position:fixed;inset:0;z-index:880;background:rgba(0,0,0,.94);display:flex;align-items:center;justify-content:center;padding:20px}
+.call-screen-stage{max-width:100%;max-height:100%;display:flex;border-radius:var(--m-r-md);overflow:hidden;box-shadow:0 24px 60px -20px rgba(0,0,0,.7)}
+.call-screen-full video{max-width:calc(100vw - 40px);max-height:calc(100vh - 40px);display:block}
 .call-screen-x{position:absolute;top:14px;right:14px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:var(--m-r-ctl);border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.5);color:#fff;cursor:pointer}
 .call-screen-x svg{width:16px;height:16px}
 

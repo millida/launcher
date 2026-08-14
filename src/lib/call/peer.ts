@@ -1,5 +1,11 @@
 import type { IceConfig } from './ice'
 
+/** Потолок показа экрана одному зрителю; на группу он делится между ними. */
+export const SCREEN_MAX_BITRATE = 2_500_000
+
+/** Ниже этого картинка перестаёт быть читаемой — лучше не показывать вовсе. */
+export const SCREEN_MIN_BITRATE = 600_000
+
 export interface PeerFlags {
   muted?: boolean
   deafened?: boolean
@@ -24,7 +30,7 @@ export interface PeerCallbacks {
 
 export interface Peer {
   setMicTrack: (track: MediaStreamTrack) => Promise<void>
-  setScreenTrack: (track: MediaStreamTrack | null) => Promise<void>
+  setScreenTrack: (track: MediaStreamTrack | null, maxBitrate?: number) => Promise<void>
   setScreenAudioTrack: (track: MediaStreamTrack | null) => Promise<void>
   /** Возвращает, ушло ли состояние: закрытый канал — повод отправить его сигналингом. */
   sendFlags: (flags: PeerFlags) => boolean
@@ -119,7 +125,7 @@ export function createPeer(
       if (micSender) await micSender.replaceTrack(track)
       else micSender = pc.addTrack(track)
     },
-    async setScreenTrack(track) {
+    async setScreenTrack(track, maxBitrate = SCREEN_MAX_BITRATE) {
       if (!track) {
         if (screenSender) {
           pc.removeTrack(screenSender)
@@ -134,8 +140,10 @@ export function createPeer(
       screenSender = pc.addTrack(track)
       const params = screenSender.getParameters()
       // Показ экрана не должен вытеснять голос: потолок битрейта задаётся сразу,
-      // иначе движок отдаст видео весь доступный канал.
-      params.encodings = [{ maxBitrate: 2_500_000, maxFramerate: 30 }]
+      // иначе движок отдаст видео весь доступный канал. В группе картинка уходит
+      // каждому отдельным потоком, поэтому потолок там делится на зрителей —
+      // иначе показ впятером требовал бы аплоада, которого почти ни у кого нет.
+      params.encodings = [{ maxBitrate, maxFramerate: 30 }]
       await screenSender.setParameters(params).catch(() => {})
     },
     async setScreenAudioTrack(track) {

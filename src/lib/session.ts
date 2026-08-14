@@ -2,6 +2,7 @@ import { api, hasMillidaAccount } from './api'
 import { useAccounts } from '../state/accounts'
 import { syncAuth } from '../state/auth'
 import { loadFriends } from '../state/friends'
+import { loadRooms } from '../state/rooms'
 import { refreshPlayStats } from '../state/playStats'
 import { refreshProfiles } from '../state/profiles'
 import { refreshGameNick } from '../state/gameNick'
@@ -49,6 +50,7 @@ export function enterApp() {
   void refreshProfiles()
   void loadMillidaProfile()
   void loadFriends()
+  void loadRooms()
   void refreshPlayStats()
   void refreshGameNick()
   void maybeStartOnboarding()

@@ -11,6 +11,9 @@ export type CallSignalKind =
   | 'answer'
   | 'ice'
   | 'state'
+  /// Заводит сервер: состав голосовой комнаты и приглашение в неё.
+  | 'roster'
+  | 'ring'
 
 export interface CallEvent {
   seq: number
@@ -23,6 +26,8 @@ export interface CallEvent {
 
 export interface CallSignalOptions {
   seconds?: number
+  /** Разговор в группе: право на конверт даёт общий голос комнаты, а не дружба. */
+  roomId?: string
 }
 
 export async function sendSignal(
@@ -34,7 +39,14 @@ export async function sendSignal(
 ): Promise<void> {
   await api('/friends/call/signal', {
     method: 'POST',
-    body: JSON.stringify({ callId, peerId, kind, data: data || {}, seconds: opts?.seconds }),
+    body: JSON.stringify({
+      callId,
+      peerId,
+      kind,
+      data: data || {},
+      seconds: opts?.seconds,
+      roomId: opts?.roomId,
+    }),
   })
 }
 

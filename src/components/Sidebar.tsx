@@ -6,6 +6,7 @@ import { accKindLabel } from '../lib/format'
 import { getAccount, isMillidaKind, useAccounts } from '../state/accounts'
 import { useGameNick } from '../state/gameNick'
 import { unreadTotal, useFriends } from '../state/friends'
+import { roomsUnreadTotal, useRooms } from '../state/rooms'
 import { useUi } from '../state/ui'
 import type { ScreenId } from '../state/ui'
 import { useHasMillida } from '../state/auth'
@@ -28,6 +29,7 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
   const prelaunch = useUi((s) => s.prelaunch)
   const friends = useFriends((s) => s.friends)
   const reqIn = useFriends((s) => s.reqIn)
+  const rooms = useRooms((s) => s.rooms)
   const millida = useHasMillida()
   useAccounts()
   const acc = getAccount()
@@ -64,7 +66,9 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
   }, [menuOpen])
 
   const frOnline = millida ? friends.filter((f) => f.online).length : 0
-  const frAlerts = millida ? unreadTotal(friends) + reqIn.length : 0
+  // Непрочитанное в группах считается тем же счётчиком: для человека это одно
+  // и то же «мне написали», а не два разных места.
+  const frAlerts = millida ? unreadTotal(friends) + roomsUnreadTotal(rooms) + reqIn.length : 0
 
   return (
     <aside className={'sidebar' + (collapsed ? ' collapsed' : '')}>

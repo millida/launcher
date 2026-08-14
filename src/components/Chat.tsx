@@ -34,7 +34,8 @@ import { dayKey, dayLabel, isGrouped, isRead } from '../lib/chatGroup'
 import { keepsChatOpen } from '../lib/chatOutside'
 import { micErrorText } from '../lib/audioDevices'
 import { callLogTitle, parseCallLog, type CallLog } from '../lib/call/callLog'
-import { callFriend, callSupported, fmtCallTime, useCall } from '../state/call'
+import { callFriend, callSupported, fmtCallTime, joinRoomVoice, useCall } from '../state/call'
+import { nickInRooms, openRoomManage, useRooms, type Room } from '../state/rooms'
 
 function InviteCard({ addr, name, me }: { addr: string; name: string; me?: boolean }) {
   const [busy, setBusy] = useState(false)
@@ -170,6 +171,9 @@ const timeHM = (ts?: number) =>
 function MessageBody({ m, onJump }: { m: ChatMessage; onJump: (id: string) => void }) {
   const att = m.attachment
   if (m.deleted) return <span className="msg-gone">Сообщение удалено</span>
+  const quotedFrom = m.replyTo?.me
+    ? 'Ты'
+    : nickInRooms(m.replyTo?.from || '') || 'Собеседник'
   return (
     <>
       {m.replyTo ? (
@@ -180,7 +184,7 @@ function MessageBody({ m, onJump }: { m: ChatMessage; onJump: (id: string) => vo
             onJump(m.replyTo!.id)
           }}
         >
-          <b>{m.replyTo.me ? 'Ты' : 'Собеседник'}</b>
+          <b>{quotedFrom}</b>
           <span>{replyLabel(m.replyTo)}</span>
         </button>
       ) : null}
@@ -315,7 +319,7 @@ function replyLabel(m: { text: string; deleted?: boolean; kind?: string | null }
   return 'Вложение'
 }
 
-function Composer({ uid }: { uid: string }) {
+function Composer() {
   const [text, setText] = useState('')
   const replyTo = useFriends((s) => s.chatReplyTo)
   const editing = useFriends((s) => s.chatEditing)
@@ -389,7 +393,7 @@ function Composer({ uid }: { uid: string }) {
     const quoted = replyTo
     setChat({ chatReplyTo: null })
     try {
-      await sendChat(uid, body, attachment, quoted ? replyPreviewOf(quoted) : null)
+      await sendChat(body, attachment, quoted ? replyPreviewOf(quoted) : null)
     } catch {
       showToast('Сообщение не ушло — нажми «Повторить» под ним', 'error')
     }
@@ -402,7 +406,7 @@ function Composer({ uid }: { uid: string }) {
     }
     setSrvOpen(false)
     setSrvAddr('')
-    sendChat(uid, encodeInvite(addr.trim(), (name || addr).trim().slice(0, 48))).catch(() =>
+    sendChat(encodeInvite(addr.trim(), (name || addr).trim().slice(0, 48))).catch(() =>
       showToast('Приглашение не ушло — нажми «Повторить» под ним', 'error'),
     )
   }
@@ -628,7 +632,7 @@ function Composer({ uid }: { uid: string }) {
           value={text}
           onChange={(e) => {
             setText(e.target.value)
-            if (e.target.value && !editing) pingTyping(uid)
+            if (e.target.value && !editing) pingTyping()
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) void send()
@@ -673,6 +677,46 @@ function CallButton({ uid, nick }: { uid: string; nick: string }) {
   )
 }
 
+/**
+ * Шапка группы. Голос здесь не «позвонить», а «зайти»: разговор в комнате идёт
+ * сам по себе, и кнопка показывает, сколько человек уже внутри.
+ */
+function RoomHead({ room }: { room: Room }) {
+  const mode = useCall((s) => s.mode)
+  const roomId = useCall((s) => s.roomId)
+  const status = useCall((s) => s.status)
+  const inside = room.voice || []
+  const here = mode === 'room' && roomId === room.id && status !== 'idle'
+  return (
+    <>
+      <span className="room-ava">
+        <Icon id="i-users" />
+      </span>
+      <span className="chat-head-body">
+        <b>{room.title}</b>
+        <span className="chat-head-sub">
+          {room.members.length} чел.
+          {inside.length ? ' · в разговоре ' + inside.length : ''}
+        </span>
+      </span>
+      {callSupported() ? (
+        <button
+          className={'btn sm ' + (here ? 'secondary' : 'primary') + ' room-join'}
+          title={here ? 'Ты в разговоре' : 'Зайти в разговор группы'}
+          disabled={here || (status !== 'idle' && !here)}
+          onClick={() => void joinRoomVoice(room.id, room.title)}
+        >
+          <Icon id={inside.length ? 'i-headset' : 'i-phone'} />
+          {here ? 'В разговоре' : inside.length ? 'Зайти · ' + inside.length : 'Разговор'}
+        </button>
+      ) : null}
+      <button className="tb-btn" title="Участники группы" onClick={() => openRoomManage(room.id)}>
+        <Icon id="i-dots" />
+      </button>
+    </>
+  )
+}
+
 const FLASH_MS = 1400
 const JUMP_PAGES = 20
 const JUMP_FRAMES = 12
@@ -699,6 +743,7 @@ export function Chat() {
     chatOpen,
     chatNick,
     chatWith,
+    chatRoom,
     chatHeader,
     chatMsgs,
     chatEmpty,
@@ -707,8 +752,10 @@ export function Chat() {
     chatOlderBusy,
     chatPeerReadAt,
     chatTyping,
+    chatTypers,
     set,
   } = useFriends()
+  const room = useRooms((s) => s.rooms.find((r) => r.id === chatRoom))
   const bodyRef = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(storedChatWidth)
   const grip = useRef<{ x: number; w: number } | null>(null)
@@ -787,7 +834,7 @@ export function Chat() {
 
   useEffect(() => {
     if (!chatOpen) setMenu(null)
-  }, [chatOpen, chatWith])
+  }, [chatOpen, chatWith, chatRoom])
 
   const scrollDown = useCallback(() => {
     const b = bodyRef.current
@@ -803,7 +850,7 @@ export function Chat() {
     if (!chatOpen) return
     setAtBottom(true)
     scrollDown()
-  }, [chatOpen, chatWith, scrollDown])
+  }, [chatOpen, chatWith, chatRoom, scrollDown])
 
   useEffect(() => {
     const onResize = () => setWidth((w) => clampChatWidth(w))
@@ -866,10 +913,16 @@ export function Chat() {
           localStorage.setItem(CHAT_WIDTH_KEY, String(CHAT_WIDTH_DEFAULT))
         }}
       />
-      <div className="chat-head">
-        <Head id="chatAva" nick={chatNick || 'MHF_Steve'} size={32} />
-        <b id="chatNick">{chatNick || '—'}</b>
-        <CallButton uid={chatWith} nick={chatNick} />
+      <div className={'chat-head' + (room ? ' room' : '')}>
+        {room ? (
+          <RoomHead room={room} />
+        ) : (
+          <>
+            <Head id="chatAva" nick={chatNick || 'MHF_Steve'} size={32} />
+            <b id="chatNick">{chatNick || '—'}</b>
+            <CallButton uid={chatWith} nick={chatNick} />
+          </>
+        )}
         <button className="tb-btn" id="chatClose" onClick={() => set({ chatOpen: false })}>
           <Icon id="i-x" />
         </button>
@@ -880,9 +933,9 @@ export function Chat() {
           <>
             <div style={{ textAlign: 'center', padding: '10px 0 4px' }}>
               <img
-                src={'https://api.millida.net/v2/heads/body/' + encodeURIComponent(chatHeader.nick || 'Steve') + '?size=120'}
-                style={{ height: '130px', imageRendering: 'pixelated' }}
-                onError={(e) => onAvatarError(e, 120, chatHeader.nick)}
+                src={'https://api.millida.net/v2/heads/body/' + encodeURIComponent(chatHeader.nick || 'Steve') + '?size=128'}
+                style={{ height: '128px', imageRendering: 'pixelated' }}
+                onError={(e) => onAvatarError(e, 128, chatHeader.nick)}
               />
               <div style={{ fontWeight: 700, fontSize: '16px', marginTop: '8px' }}>{chatHeader.nick}</div>
               <div style={{ fontSize: '12.5px', color: 'var(--m-fg-subtle)' }}>{chatHeader.text}</div>
@@ -906,7 +959,7 @@ export function Chat() {
                 <InviteCard addr={inv.addr} name={inv.name} me={m.me} />
               </Fragment>
             )
-          if (callLog)
+          if (callLog && !chatRoom)
             return (
               <Fragment key={key}>
                 {day}
@@ -929,6 +982,15 @@ export function Chat() {
             window.getSelection()?.removeAllRanges()
             useFriends.getState().set({ chatReplyTo: m, chatEditing: null })
           }
+          // Подпись автора в группе ставится только у первого сообщения подряд:
+          // повторять ник над каждым пузырём одного человека — шум.
+          const author =
+            chatRoom && !m.me && (!isGrouped(chatMsgs, i) || newDay) ? (
+              <span className="msg-author">
+                <Head nick={m.fromNick} size={18} />
+                {m.fromNick || 'Игрок'}
+              </span>
+            ) : null
           return (
             <Fragment key={key}>
               {day}
@@ -938,6 +1000,7 @@ export function Chat() {
                 onContextMenu={openMenu}
                 onDoubleClick={replyOnDouble}
               >
+              {author}
               <div className="msg-line">
               <div
                 className={
@@ -1002,8 +1065,20 @@ export function Chat() {
             </Fragment>
           )
         })}
-        {chatTyping ? <div className="chat-typing">{chatNick} печатает…</div> : null}
-        {!chatHeader && chatEmpty && !chatMsgs.length ? <p className="faint-note">Напиши первым</p> : null}
+        {chatRoom ? (
+          chatTypers.length ? (
+            <div className="chat-typing">
+              {chatTypers.slice(0, 2).join(', ')}
+              {chatTypers.length > 2 ? ' и ещё ' + (chatTypers.length - 2) : ''} печата
+              {chatTypers.length > 1 ? 'ют' : 'ет'}…
+            </div>
+          ) : null
+        ) : chatTyping ? (
+          <div className="chat-typing">{chatNick} печатает…</div>
+        ) : null}
+        {!chatHeader && chatEmpty && !chatMsgs.length ? (
+          <p className="faint-note">{chatRoom ? 'Пока тихо — начни разговор' : 'Напиши первым'}</p>
+        ) : null}
       </div>
       {!atBottom ? (
         <button className="chat-down" title="К последним" onClick={scrollDown}>
@@ -1011,7 +1086,7 @@ export function Chat() {
         </button>
       ) : null}
       {menu ? <MessageMenu at={menu} close={() => setMenu(null)} /> : null}
-      <Composer uid={chatWith} />
+      <Composer />
     </div>
   )
 }

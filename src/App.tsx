@@ -20,6 +20,7 @@ import { ConfirmModal } from './components/ConfirmModal'
 import { BuildPicker } from './components/BuildPicker'
 import { ChatNotify } from './components/ChatNotify'
 import { CallPanel } from './components/CallPanel'
+import { RoomModals } from './components/RoomManage'
 import { Installs } from './components/Installs'
 import { initInstalls } from './state/installs'
 import { initCalls } from './state/call'
@@ -40,7 +41,8 @@ import { warmHeads } from './lib/heads'
 import { useUi, closeModal, setScreen as gotoScreen, showToast } from './state/ui'
 import { useWallpaper } from './state/wallpaper'
 import { loadLiveRating } from './state/servers'
-import { appendChatMessage, applyChatMessage, loadFriends, useFriends } from './state/friends'
+import { appendChatMessage, applyChatMessage, loadFriends, openRoomChat, useFriends } from './state/friends'
+import { bumpRoom, loadRooms, nickInRooms, roomById, useRooms, type VoiceMember } from './state/rooms'
 import type {
   ChatAttachment,
   ChatMessage,
@@ -68,6 +70,71 @@ type PolledUpdate = ChatMessage & { peer: string }
 interface PolledRead {
   userId: string
   readAt: number
+}
+
+type PolledRoomMessage = PolledMessage & { roomId: string; id?: string; deleted?: boolean }
+
+interface RoomPoll {
+  roomMessages?: PolledRoomMessage[]
+  roomUpdates?: PolledRoomMessage[]
+  roomTyping?: { roomId: string; users: string[] }[]
+  roomVoice?: { roomId: string; members: VoiceMember[] }[]
+}
+
+/**
+ * Дельта групп из общего опроса. Открытая группа получает сообщение в ленту,
+ * закрытая — счётчик и карточку уведомления: то же поведение, что у лички,
+ * потому что человеку всё равно, откуда пришло сообщение.
+ */
+function applyRoomPoll(r: RoomPoll) {
+  const rooms = useRooms.getState()
+  ;(r.roomMessages || []).forEach((m) => {
+    const f = useFriends.getState()
+    const open = f.chatOpen && f.chatRoom === m.roomId
+    if (open) {
+      appendChatMessage({
+        id: m.id,
+        text: String(m.text || ''),
+        ts: m.ts,
+        from: m.from,
+        fromNick: m.fromNick,
+        attachment: m.attachment || null,
+        replyTo: m.replyTo || null,
+        reactions: m.reactions || [],
+      })
+      playSound('notify')
+      void api('/friends/rooms/' + encodeURIComponent(m.roomId) + '/read', { method: 'POST' }).catch(() => {})
+      bumpRoom(m.roomId, m.ts || Date.now(), false)
+      return
+    }
+    bumpRoom(m.roomId, m.ts || Date.now(), true)
+    const title = roomById(m.roomId)?.title || 'Группа'
+    const nick = m.fromNick || ''
+    pushChatNotify({
+      uid: m.roomId,
+      nick: title,
+      text: (nick ? nick + ': ' : '') + previewOf(m),
+      kind: 'room',
+      actionLabel: 'Открыть группу',
+      action: () => void openRoomChat(m.roomId, title),
+    })
+    if (useGame.getState().list.length)
+      void overlayNotify({
+        uid: m.roomId,
+        nick: title,
+        text: (nick ? nick + ': ' : '') + previewOf(m),
+        ts: m.ts || Date.now(),
+      }).catch(() => {})
+  })
+  ;(r.roomUpdates || []).forEach((u) => {
+    if (useFriends.getState().chatRoom === u.roomId) applyChatMessage(u as ChatMessage)
+  })
+  ;(r.roomVoice || []).forEach((v) => rooms.setVoice(v.roomId, v.members))
+  const f = useFriends.getState()
+  if (f.chatRoom) {
+    const mine = (r.roomTyping || []).find((t) => t.roomId === f.chatRoom)
+    f.set({ chatTypers: (mine?.users || []).map((id) => nickInRooms(id) || 'Кто-то') })
+  }
 }
 
 function previewOf(m: PolledMessage): string {
@@ -280,7 +347,10 @@ export function App() {
   useEffect(() => {
     const t = setInterval(() => {
       if (document.hidden) return
-      if (useUi.getState().screen === 'friends') void loadFriends()
+      if (useUi.getState().screen === 'friends') {
+        void loadFriends()
+        void loadRooms()
+      }
     }, 30000)
     return () => clearInterval(t)
   }, [])
@@ -401,6 +471,7 @@ export function App() {
           ;(r.updates || []).forEach((u: PolledUpdate) => {
             if (useFriends.getState().chatWith === u.peer) applyChatMessage(u)
           })
+          applyRoomPoll(r)
           const chat = useFriends.getState()
           if (chat.chatWith) {
             const mine = (r.reads || []).find((x: PolledRead) => x.userId === chat.chatWith)
@@ -502,6 +573,7 @@ export function App() {
         <ServerDetail />
         <ChatNotify />
         <CallPanel />
+        <RoomModals />
         {/* Mounted last: it asks on top of any other modal, and DOM order breaks
             ties between equal z-index values. */}
         <ConfirmModal />

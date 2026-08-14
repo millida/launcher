@@ -7,8 +7,9 @@ import { logoutToLogin } from '../lib/session'
 import { showToast } from '../state/ui'
 import { useHasMillida } from '../state/auth'
 import { refreshGameNick, useGameNick } from '../state/gameNick'
-import { loadFriends, openChat, openFriendProfile, useFriends } from '../state/friends'
-import { callFriend, callSupported, useCall } from '../state/call'
+import { loadFriends, openChat, openFriendProfile, openRoomChat, useFriends } from '../state/friends'
+import { callFriend, callSupported, joinRoomVoice, useCall } from '../state/call'
+import { loadRooms, nickInRooms, openRoomCreate, openRoomManage, useRooms } from '../state/rooms'
 import { rememberServerName } from '../state/playStats'
 import { uiConfirm } from '../state/confirm'
 import { quickJoin } from '../lib/joinServer'
@@ -36,6 +37,75 @@ interface Blocked {
   user?: { id: string; nickname?: string; displayName?: string; avatarUrl?: string | null } | null
 }
 
+/**
+ * Группы. Карточка отвечает на два вопроса сразу: есть ли непрочитанное и идёт
+ * ли там сейчас разговор — второе видно по головам участников в голосе, поэтому
+ * зайти к своим можно одним нажатием, не открывая переписку.
+ */
+function RoomsSection() {
+  const rooms = useRooms((s) => s.rooms)
+  const callStatus = useCall((s) => s.status)
+  const callRoom = useCall((s) => s.roomId)
+  return (
+    <div className="stack rooms-stack">
+      <div className="side-cap rooms-cap">{rooms.length ? 'Группы — ' + rooms.length : 'Группы'}</div>
+      {rooms.length ? (
+        rooms.map((r) => {
+          const inside = r.voice || []
+          const here = callRoom === r.id && callStatus !== 'idle'
+          return (
+            <div
+              className={'fr-row room-row' + (r.unread ? ' unread' : '')}
+              key={r.id}
+              onClick={(e) => {
+                if ((e.target as HTMLElement).closest('button')) return
+                void openRoomChat(r.id, r.title)
+              }}
+            >
+              <span className="room-ava">
+                <Icon id="i-users" />
+              </span>
+              <span className="fr-body">
+                <span className="fr-nick">{r.title}</span>
+                <span className={'fr-status' + (inside.length ? ' on' : '')}>
+                  {inside.length ? <span className="dot"></span> : null}
+                  {inside.length
+                    ? 'В разговоре: ' + inside.map((v) => nickInRooms(v.userId) || '…').join(', ')
+                    : r.members.map((m) => m.nickname).join(', ')}
+                </span>
+              </span>
+              {callSupported() ? (
+                <button
+                  className={'btn sm ' + (inside.length && !here ? 'primary' : 'secondary')}
+                  title={here ? 'Ты в разговоре' : 'Зайти в разговор группы'}
+                  disabled={here || (callStatus !== 'idle' && !here)}
+                  onClick={() => void joinRoomVoice(r.id, r.title)}
+                >
+                  <Icon id={inside.length ? 'i-headset' : 'i-phone'} />
+                  {here ? 'В разговоре' : inside.length ? 'Зайти · ' + inside.length : 'Разговор'}
+                </button>
+              ) : null}
+              <button className="btn sm secondary fr-msg" onClick={() => void openRoomChat(r.id, r.title)}>
+                <Icon id="i-msg" />
+                Открыть
+                {r.unread ? <span className="fr-unread">{r.unread > 9 ? '9+' : r.unread}</span> : null}
+              </button>
+              <button className="tb-btn" title="Участники" onClick={() => openRoomManage(r.id)}>
+                <Icon id="i-dots" />
+              </button>
+            </div>
+          )
+        })
+      ) : (
+        <p className="faint-note">
+          Группа — общий чат и общий разговор для своих. Позови в неё друзей: голос держится сам, заходить можно
+          в любой момент.
+        </p>
+      )}
+    </div>
+  )
+}
+
 export function Friends({ on }: { on: boolean }) {
   const { friends, reqIn, reqOut, found, set } = useFriends()
   const millida = useHasMillida()
@@ -57,6 +127,7 @@ export function Friends({ on }: { on: boolean }) {
   useEffect(() => {
     if (!on || !millida) return
     void loadFriends()
+    void loadRooms()
     void loadBlocked()
     void refreshGameNick()
   }, [on, millida])
@@ -276,6 +347,12 @@ export function Friends({ on }: { on: boolean }) {
               <input placeholder="Найти в списке…" value={filter} onChange={(e) => setFilter(e.target.value)} />
             </div>
           ) : null}
+          {!gated ? (
+            <button className="btn sm secondary" onClick={openRoomCreate}>
+              <Icon id="i-users" />
+              Создать группу
+            </button>
+          ) : null}
           <button
             className="btn sm primary"
             id="frAddBtn"
@@ -422,6 +499,7 @@ export function Friends({ on }: { on: boolean }) {
           </>
         ) : null}
       </div>
+      {!gated ? <RoomsSection /> : null}
       <div className="stack" id="frList" style={{ marginTop: '10px' }}>
         {gated ? (
           <div className="card gate-card">
