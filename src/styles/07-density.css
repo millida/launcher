@@ -91,6 +91,11 @@
 :root[data-density="compact"] .host-manage-body .set-row{padding:8px 0}
 :root[data-density="compact"] .set-row.th-publish{gap:6px}
 :root[data-density="compact"] .modal{width:500px;padding:18px}
+:root[data-density="compact"] .modal.mw-xs{width:390px}
+:root[data-density="compact"] .modal.mw-sm{width:440px}
+:root[data-density="compact"] .modal.mw-md{width:520px}
+:root[data-density="compact"] .modal.mw-lg{width:590px}
+:root[data-density="compact"] .modal.mw-xl{width:700px}
 :root[data-density="compact"] .modal.onb-modal{width:560px}
 :root[data-density="compact"] .modal.th-editor{width:640px}
 :root[data-density="compact"] .kpi{padding:10px 12px}
@@ -187,6 +192,11 @@
 :root[data-density="roomy"] .host-manage-body .set-row{padding:14px 0}
 :root[data-density="roomy"] .set-row.th-publish{gap:10px}
 :root[data-density="roomy"] .modal{width:600px;padding:28px}
+:root[data-density="roomy"] .modal.mw-xs{width:470px}
+:root[data-density="roomy"] .modal.mw-sm{width:540px}
+:root[data-density="roomy"] .modal.mw-md{width:630px}
+:root[data-density="roomy"] .modal.mw-lg{width:720px}
+:root[data-density="roomy"] .modal.mw-xl{width:860px}
 :root[data-density="roomy"] .modal.onb-modal{width:680px}
 :root[data-density="roomy"] .modal.th-editor{width:780px}
 :root[data-density="roomy"] .kpi{padding:18px 20px}

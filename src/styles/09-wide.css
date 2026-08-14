@@ -1,0 +1,50 @@
+/* ============ Wide windows ============ */
+/* The kit is drawn for a ~1280-1600 window. Past that every list row keeps
+   stretching, so on an ultrawide the banner sits at the far left, its actions
+   at the far right and the eye has to cross a metre of empty surface. The
+   reading column is capped and centred instead, and the few pieces whose
+   proportions were picked for a narrow window are restated for the room.
+
+   Scale is not touched here: that axis belongs to the density layer, which
+   picks `roomy` by itself once the window is this large (themes.ts).
+
+   `:root:root` is not decoration — it matches the specificity of
+   `:root[data-density="…"] .x`, and this file loads after 07-density.css, so a
+   tie resolves here. A plain class would lose at every density but the default. */
+
+@media (min-width: 1500px) {
+  :root:root .screen,
+  :root:root .login-wrap {
+    max-width: 1400px;
+    margin-inline: auto;
+  }
+}
+
+@media (min-width: 2000px) {
+  :root:root .screen,
+  :root:root .login-wrap {
+    max-width: 1560px;
+  }
+  /* Three cards across a 1560px column give 500px tiles — the roomy count is
+     meant for a window half this wide. */
+  :root:root .skin-cards {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  :root:root .srv-feature-motd,
+  :root:root .srv-feature-desc {
+    max-width: 860px;
+  }
+  :root:root .chat {
+    width: 400px;
+  }
+}
+
+@media (min-width: 2560px) {
+  :root:root .screen,
+  :root:root .login-wrap {
+    max-width: 1720px;
+  }
+  :root:root .skin-cards {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}

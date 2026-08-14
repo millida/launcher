@@ -62,7 +62,7 @@ export function ImportModal() {
       id="impModal"
       {...backdropClose(close)}
     >
-      <div className="modal" style={{ width: '560px' }}>
+      <div className="modal mw-md">
         <h3>Импорт сборок</h3>
         <div className="sub">Сборки других лаунчеров на всех дисках — или свой файл сборки</div>
         <div id="impList" style={{ maxHeight: '320px', overflowY: 'auto' }}>

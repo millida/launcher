@@ -5,7 +5,7 @@ import type { UnlistenFn } from '../ipc/tauri'
 import type { LaunchAuth } from '../ipc/commands'
 import { api, hasMillidaAccount } from './api'
 import { joinPageUrl } from './invite'
-import { effectiveNick, getAccount } from '../state/accounts'
+import { effectiveNick, getAccount, launchAuthKind, profileSlug } from '../state/accounts'
 import { ensureMsAuth, startMsLogin } from '../state/msLogin'
 import { uiConfirm } from '../state/confirm'
 import { useProfiles } from '../state/profiles'
@@ -44,7 +44,7 @@ export function discordPresence(status?: string, server?: string | null) {
   const place = (session && (session.serverName || session.server)) || server || ''
   const state = playing && place ? 'Сервер: ' + place : nick ? 'Ник: ' + nick : 'Millida Launcher'
   const joinUrl = playing && addr ? joinPageUrl(addr, (session && session.serverName) || null) : ''
-  ipcDiscordPresence(details, state, playing, icon, build, joinUrl).catch(() => {})
+  ipcDiscordPresence(details, state, playing, icon, build, joinUrl, profileSlug()).catch(() => {})
 }
 
 export function heartbeat(status?: string, server?: string | null) {
@@ -84,8 +84,9 @@ export function ramMbFor(profile: string): number {
 async function resolveAuth(): Promise<{ nick: string; auth: LaunchAuth }> {
   const acc = getAccount()
   const offline: { nick: string; auth: LaunchAuth } = { nick: effectiveNick(), auth: { kind: 'offline' } }
+  const kind = launchAuthKind(acc, hasMillidaAccount())
   // A live token is required, not just a stored one: Minecraft session tokens expire after a day.
-  if (acc && acc.kind === 'microsoft') {
+  if (acc && kind === 'microsoft') {
     const ms = await ensureMsAuth(acc)
     if (ms) return { nick: acc.nick, auth: { kind: 'microsoft', accountId: ms.id, uuid: ms.uuid, xuid: ms.xuid } }
     const relogin = await uiConfirm(
@@ -104,7 +105,7 @@ async function resolveAuth(): Promise<{ nick: string; auth: LaunchAuth }> {
     showToast('Играем офлайн: онлайн-серверы ответят «Вы не вошли в свой аккаунт Minecraft»')
     return offline
   }
-  if (!hasMillidaAccount()) return offline
+  if (kind !== 'millida') return offline
   return { nick: offline.nick, auth: { kind: 'millida' } }
 }
 

@@ -310,7 +310,6 @@
 :root[data-theme-pack="win98"] *{border-radius:0 !important}
 :root[data-theme-pack="win98"] .spin,
 :root[data-theme-pack="win98"] .skin-loader,
-:root[data-theme-pack="win98"] .msg-dot,
 :root[data-theme-pack="win98"] .cpk-dot{border-radius:50% !important}
 
 /* Cape picker: selection is the classic blue fill with white text, and the

@@ -59,14 +59,31 @@ pub fn list_content(profile: &str, kind: &str) -> Vec<ModFile> {
 }
 pub fn list_mods(profile: &str) -> Vec<ModFile> { list_content(profile, "mod") }
 
+/// A running JVM keeps every loaded jar open, and Windows refuses to rename or
+/// delete an open file. Refusing up front says what to do; the raw OS text did
+/// not — and it arrived as an unhandled rejection, so nothing said it at all.
+fn assert_not_running(profile: &str, then: &str) -> Result<(), String> {
+    if running_games().iter().any(|p| p == profile) {
+        return Err(format!("Сборка сейчас запущена — закрой игру и {}", then));
+    }
+    Ok(())
+}
+
+/// One wording for every file conflict here. While there were two, one path
+/// explained the cause and the other handed the player Windows' own sentence.
+fn file_busy(e: std::io::Error) -> String {
+    format!("Файл занят другой программой — закрой игру и папку сборки, затем повтори: {}", e)
+}
+
 pub fn toggle_content(profile: &str, kind: &str, name: &str, enable: bool) -> Result<(), String> {
     // name arrives over IPC: reject anything but a plain file name
     let file = safe_file_name(name)?;
+    assert_not_running(profile, "переключи мод ещё раз")?;
     let dir = profile_dir(profile).join(content_dir(kind));
     let on = safe_child(&dir, &file)?;
     let off = safe_child(&dir, &format!("{}.disabled", file))?;
     let (from, to) = if enable { (off, on) } else { (on, off) };
-    if from.exists() { std::fs::rename(&from, &to).map_err(|e| e.to_string())?; }
+    if from.exists() { std::fs::rename(&from, &to).map_err(file_busy)?; }
     if kind == "mod" && is_injected_skin_mod(&file) {
         set_skin_mod(profile, enable)?;
     }
@@ -76,10 +93,11 @@ pub fn toggle_mod(profile: &str, name: &str, enable: bool) -> Result<(), String>
 
 pub fn delete_content(profile: &str, kind: &str, name: &str) -> Result<(), String> {
     let file = safe_file_name(name)?;
+    assert_not_running(profile, "удали файл ещё раз")?;
     let dir = profile_dir(profile).join(content_dir(kind));
     for cand in [safe_child(&dir, &file)?, safe_child(&dir, &format!("{}.disabled", file))?] {
         if cand.exists() {
-            std::fs::remove_file(&cand).map_err(|e| format!("Файл занят другой программой: {}", e))?;
+            std::fs::remove_file(&cand).map_err(file_busy)?;
         }
     }
     manifest_remove(profile, kind, &file);
@@ -94,9 +112,7 @@ pub fn delete_mod(profile: &str, name: &str) -> Result<(), String> { delete_cont
 /// folder survived came back — worlds, mods and playtime included — as soon as
 /// the name was reused.
 pub fn delete_profile(name: &str) -> Result<Vec<Profile>, String> {
-    if running_games().iter().any(|p| p == name) {
-        return Err("Сборка сейчас запущена — закрой игру и удали ещё раз".into());
-    }
+    assert_not_running(name, "удали ещё раз")?;
     let dir = profile_dir(name);
     if dir.exists() {
         std::fs::remove_dir_all(&dir).map_err(|e| format!(

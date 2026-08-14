@@ -313,7 +313,8 @@ export const discordPresence = (
   largeImage?: string,
   largeText?: string,
   joinUrl?: string,
-) => invoke<void>('discord_presence', { details, state, playing, largeImage, largeText, joinUrl })
+  profileSlug?: string,
+) => invoke<void>('discord_presence', { details, state, playing, largeImage, largeText, joinUrl, profileSlug })
 
 export const discordStatus = () => invoke<DiscordStatus>('discord_status')
 

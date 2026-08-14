@@ -8,6 +8,7 @@ import { showToast } from '../state/ui'
 import { useHasMillida } from '../state/auth'
 import { refreshGameNick, useGameNick } from '../state/gameNick'
 import { loadFriends, openChat, openFriendProfile, useFriends } from '../state/friends'
+import { callFriend, callSupported, useCall } from '../state/call'
 import { rememberServerName } from '../state/playStats'
 import { uiConfirm } from '../state/confirm'
 import { quickJoin } from '../lib/joinServer'
@@ -153,6 +154,7 @@ export function Friends({ on }: { on: boolean }) {
     const ok = await copyText(myNick)
     showToast(ok ? 'Ник скопирован: ' + myNick : 'Не удалось скопировать ник', ok ? 'ok' : 'error')
   }
+  const callBusy = useCall((s) => s.status) !== 'idle'
   const needle = filter.trim().toLowerCase()
   const visible = needle
     ? friends.filter((f) => (f.nickname || '').toLowerCase().includes(needle))
@@ -175,7 +177,7 @@ export function Friends({ on }: { on: boolean }) {
       <Head nick={f.nickname} size={40} />
       <span className="fr-body">
         <span className="fr-nick">{f.nickname || ''}</span>
-        <span className={'fr-status' + (f.online ? ' on' : '')}>
+        <span className={'fr-status' + (f.online ? ' on' : '') + (f.place === 'web' ? ' web' : '')}>
           {f.online ? <span className="dot"></span> : null}
           {f.text || ''}
           {f.playing && f.build ? <span className="fr-build">{f.build}</span> : null}
@@ -192,6 +194,16 @@ export function Friends({ on }: { on: boolean }) {
             <span className="dot"></span>В игре
           </span>
         )
+      ) : null}
+      {callSupported() ? (
+        <button
+          className="btn sm secondary call-start"
+          title={callBusy ? 'Уже идёт звонок' : 'Позвонить'}
+          disabled={callBusy}
+          onClick={() => void callFriend(f.userId, f.nickname || '')}
+        >
+          <Icon id="i-phone" />
+        </button>
       ) : null}
       <button
         className="btn sm secondary fr-msg"

@@ -617,11 +617,13 @@ export function InstancePage() {
   const close = () => closeModal('bsModal')
 
   const bulk = (names: string[], fn: (n: string) => Promise<unknown>, after?: () => void) =>
-    Promise.all(names.map(fn)).then(() => {
-      setSel(new Set())
-      loadMods()
-      if (after) after()
-    })
+    Promise.all(names.map(fn))
+      .then(() => {
+        setSel(new Set())
+        loadMods()
+        if (after) after()
+      })
+      .catch((e) => showToast(String(e), 'error'))
 
   const filteredWorlds = wFilter !== 'server' ? worlds : []
   const filteredServers = wFilter !== 'single' ? servers : []
@@ -959,7 +961,13 @@ export function InstancePage() {
                             data-tg={md.name}
                             title={md.enabled ? 'Выключить в игре' : 'Включить в игре'}
                             onClick={() => {
-                              toggleContent(profile!, kind, md.name, !md.enabled).then(() => loadMods())
+                              // Отказ ядра обязан доехать до игрока: пока `.then`
+                              // стоял без пары, переключение мода при запущенной
+                              // игре молча роняло промис, тумблер оставался как
+                              // был, а причину видели только мы в журнале ошибок.
+                              toggleContent(profile!, kind, md.name, !md.enabled)
+                                .then(() => loadMods())
+                                .catch((e) => showToast(String(e), 'error'))
                             }}
                           ></span>
                           <button
@@ -968,7 +976,9 @@ export function InstancePage() {
                             title="Удалить файл"
                             onClick={async () => {
                               if (await uiConfirm('Удалить ' + md.name + '?', { confirmLabel: 'Удалить' }))
-                                deleteContent(profile!, kind, md.name).then(() => loadMods())
+                                deleteContent(profile!, kind, md.name)
+                                  .then(() => loadMods())
+                                  .catch((e) => showToast(String(e), 'error'))
                             }}
                           >
                             <Icon id="i-trash" />

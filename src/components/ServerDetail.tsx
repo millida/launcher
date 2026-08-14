@@ -59,7 +59,7 @@ export function ServerDetail() {
       style={{ zIndex: 190 }}
       {...backdropClose(close)}
     >
-      <div className="modal srv-detail" style={{ width: '560px', maxWidth: '92vw', padding: 0, overflow: 'hidden' }}>
+      <div className="modal mw-md srv-detail" style={{ padding: 0, overflow: 'hidden' }}>
         <div className="srv-detail-banner">
           {sv.banner ? (
             <img src={sv.banner} alt="" onError={(e) => e.currentTarget.remove()} />

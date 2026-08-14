@@ -56,7 +56,7 @@ export function NewBuildModal() {
       id="nbModal"
       {...backdropClose(close)}
     >
-      <div className="modal" style={{ width: '460px' }}>
+      <div className="modal mw-sm">
         <h3>Новая сборка</h3>
         <div className="sub">Версия и загрузчик — остальное сделаем сами</div>
         <div className="field" style={{ marginBottom: '14px' }}>

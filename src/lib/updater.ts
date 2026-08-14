@@ -149,6 +149,16 @@ function stageFallback(): Promise<string | null> {
 
 const BOOT_CHECK_TIMEOUT = 5000
 
+/// Gatekeeper runs a .app opened straight from the DMG out of a throwaway copy, so no update can
+/// ever stick until the user moves it to Applications: retrying only burns the download again.
+const TRANSLOCATED_RE = /запущен из образа/i
+
+function noticeIfTranslocated(e: unknown): boolean {
+  if (!TRANSLOCATED_RE.test(String(e))) return false
+  showToast('Лаунчер запущен из образа. Перенеси Millida в «Программы» — иначе обновления не установятся', 'error')
+  return true
+}
+
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
   return Promise.race([p, new Promise<null>((res) => setTimeout(() => res(null), ms))])
 }
@@ -201,9 +211,10 @@ export async function bootUpdate(): Promise<boolean> {
   } catch (e) {
     installing = false
     downloading = null
+    useUpdate.getState().set({ bootPhase: 'idle' })
+    if (noticeIfTranslocated(e)) return false
     void reportError('updater-boot', e)
     if (current) markPluginFailed(current.version)
-    useUpdate.getState().set({ bootPhase: 'idle' })
     void autoUpdate()
     return false
   }
@@ -281,6 +292,7 @@ export async function applyFallback(): Promise<void> {
     showToast('Обновление скачано — замени приложение файлом из открытой папки')
   } catch (e) {
     st.set({ busy: false, failed: true })
+    if (noticeIfTranslocated(e)) return
     void reportError('updater-fallback', e)
     showToast('Обновиться не вышло: ' + e, 'error')
   }

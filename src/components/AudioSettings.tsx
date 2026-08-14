@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Icon } from './Icon'
 import { Select } from './Select'
+import { Slider } from './Slider'
 import { showToast, useUi } from '../state/ui'
 import {
   canPickOutput,
@@ -14,6 +15,10 @@ import {
   storedOutput,
 } from '../lib/audioDevices'
 import type { AudioDevice } from '../lib/audioDevices'
+import { setStoredMicGain, setStoredNoiseMode, storedMicGain, storedNoiseMode, type NoiseMode } from '../lib/call/mic-worklet'
+import { setStoredCallVolume, storedCallVolume } from '../lib/call/audio'
+import { SCREEN_PRESETS, canShareScreen, setStoredScreenQuality, storedScreenQuality, type ScreenQuality } from '../lib/call/screen'
+import { setCallMicGain, setCallNoise, setCallVolume } from '../state/call'
 
 const SYSTEM = { value: '', label: 'Системное по умолчанию' }
 
@@ -84,6 +89,111 @@ function MicMeter({ deviceId, onFail }: { deviceId: string; onFail: () => void }
   )
 }
 
+const NOISE_OPTIONS: { value: NoiseMode; label: string }[] = [
+  { value: 'off', label: 'Выключен' },
+  { value: 'standard', label: 'Обычный' },
+  { value: 'strong', label: 'Сильный' },
+]
+
+const NOISE_HINT: Record<NoiseMode, string> = {
+  off: 'Остаётся только шумоподавление системы',
+  standard: 'Тишина между фразами, речь не режется',
+  strong: 'Для шумной комнаты: механическая клавиатура, вентилятор',
+}
+
+const SCREEN_OPTIONS: { value: ScreenQuality; label: string }[] = [
+  { value: 'smooth', label: 'Плавно — 720p, 60 кадров' },
+  { value: 'balanced', label: 'Поровну — 900p, 30 кадров' },
+  { value: 'sharp', label: 'Чётко — 1080p, 15 кадров' },
+]
+
+/// Настройки звонка меняются и во время разговора: значение уходит и в
+/// хранилище, и в живой звонок, иначе его пришлось бы перезванивать.
+function CallSettings() {
+  const [noise, setNoise] = useState<NoiseMode>(storedNoiseMode())
+  const [gain, setGain] = useState(storedMicGain())
+  const [volume, setVolume] = useState(storedCallVolume())
+  const [screen, setScreen] = useState<ScreenQuality>(storedScreenQuality())
+  return (
+    <>
+      <div className="set-row">
+        <span className="lab">
+          Шумоподавление в звонках<small>{NOISE_HINT[noise]}</small>
+        </span>
+        <Select
+          value={noise}
+          width={230}
+          options={NOISE_OPTIONS}
+          onChange={(v) => {
+            const mode = v as NoiseMode
+            setNoise(mode)
+            setStoredNoiseMode(mode)
+            setCallNoise(mode)
+          }}
+        />
+      </div>
+      <div className="set-row">
+        <span className="lab">
+          Усиление микрофона<small>{gain}% — подними, если тебя плохо слышно</small>
+        </span>
+        <div style={{ width: 230 }}>
+          <Slider
+            value={gain}
+            min={50}
+            max={250}
+            step={5}
+            onChange={(v) => {
+              setGain(v)
+              setStoredMicGain(v)
+              setCallMicGain(v)
+            }}
+          />
+        </div>
+      </div>
+      <div className="set-row">
+        <span className="lab">
+          Громкость собеседника<small>{volume}%</small>
+        </span>
+        <div style={{ width: 230 }}>
+          <Slider
+            value={volume}
+            onChange={(v) => {
+              setVolume(v)
+              setStoredCallVolume(v)
+              setCallVolume(v)
+            }}
+          />
+        </div>
+      </div>
+      {canShareScreen() ? (
+        <div className="set-row">
+          <span className="lab">
+            Показ экрана<small>
+              До {SCREEN_PRESETS[screen].height}p, {SCREEN_PRESETS[screen].fps} кадров в секунду
+            </small>
+          </span>
+          <Select
+            value={screen}
+            width={230}
+            options={SCREEN_OPTIONS}
+            onChange={(v) => {
+              const q = v as ScreenQuality
+              setScreen(q)
+              setStoredScreenQuality(q)
+            }}
+          />
+        </div>
+      ) : (
+        <div className="set-row">
+          <span className="lab">
+            Показ экрана<small>Недоступен в этой сборке системы — движок не отдаёт экран</small>
+          </span>
+        </div>
+      )}
+    </>
+  )
+}
+
 export function AudioSettings() {
   const [inputs, setInputs] = useState<AudioDevice[]>([])
   const [outputs, setOutputs] = useState<AudioDevice[]>([])
@@ -128,7 +238,7 @@ export function AudioSettings() {
     <>
       <div className={'set-row' + (focus === 'mic' ? ' focus-flash' : '')} ref={micRow}>
         <span className="lab">
-          Микрофон<small>С него записываются голосовые сообщения в чате</small>
+          Микрофон<small>С него идут голосовые сообщения и голос в звонках</small>
         </span>
         <Select
           value={mic}
@@ -170,7 +280,7 @@ export function AudioSettings() {
         <>
           <div className="set-row">
             <span className="lab">
-              Наушники<small>Куда проигрывать голосовые сообщения</small>
+              Наушники<small>Куда проигрывать звонки, голосовые и сигналы</small>
             </span>
             <Select
               value={out}
@@ -202,6 +312,10 @@ export function AudioSettings() {
           </div>
         </>
       ) : null}
+      <div className="side-cap" style={{ padding: '10px 2px 2px' }}>
+        Звонки
+      </div>
+      <CallSettings />
     </>
   )
 }

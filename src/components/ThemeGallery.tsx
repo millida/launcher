@@ -25,7 +25,7 @@ import {
   storedDensity,
   storedPackId,
 } from '../lib/themes'
-import type { Density, ThemeOption, ThemePack } from '../lib/themes'
+import type { DensityPref, ThemeOption, ThemePack } from '../lib/themes'
 
 /// The card for the stock look must keep showing the stock colours even while a
 /// pack is active, so it cannot read the live tokens.
@@ -116,7 +116,7 @@ export function ThemeGallery() {
   const [packs, setPacks] = useState<ThemePack[]>(BUILTIN_THEMES)
   const [activeId, setActiveId] = useState(storedPackId)
   const [values, setValues] = useState<Record<string, string>>({})
-  const [density, setDensity] = useState<Density>(storedDensity)
+  const [density, setDensity] = useState<DensityPref>(storedDensity)
   const [busy, setBusy] = useState(false)
   const [draft, setDraft] = useState<ThemeDraft | null>(null)
   const [savedId, setSavedId] = useState('')

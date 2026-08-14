@@ -1,0 +1,76 @@
+/* Звонки: карточка входящего, док активного разговора и экран собеседника. */
+
+.call-ring{position:fixed;inset:0;z-index:900;display:flex;align-items:flex-start;justify-content:center;padding-top:70px;pointer-events:none}
+.call-ring-card{pointer-events:auto;display:flex;align-items:center;gap:14px;padding:14px 16px;background:var(--m-raised);border:1px solid var(--m-border-strong);border-radius:var(--m-r-card);box-shadow:var(--m-shadow-lg);min-width:380px;animation:call-in .22s var(--m-ease-out)}
+.call-ring-card img{width:56px;height:56px;border-radius:12px;image-rendering:pixelated}
+.call-ring-body{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.call-ring-body b{font-size:15px}
+.call-ring-body span{font-size:12.5px;color:var(--m-fg-subtle)}
+/* Пульсация — единственная анимация карточки: она должна ловить взгляд, но не
+   мешать читать имя. */
+.call-ring-card::before{content:'';position:absolute;inset:0;border-radius:var(--m-r-card);box-shadow:0 0 0 0 var(--m-accent-glow);animation:call-pulse 1.8s ease-out infinite;pointer-events:none}
+.call-ring-card{position:relative;overflow:hidden}
+.call-ring-acts{display:flex;gap:8px}
+
+
+.call-dock{position:fixed;left:14px;bottom:14px;z-index:640;width:300px;display:flex;flex-direction:column;gap:10px;padding:12px;background:var(--m-raised);border:1px solid var(--m-border);border-radius:var(--m-r-card);box-shadow:var(--m-shadow-lg);animation:call-in .18s var(--m-ease-out)}
+.call-dock.talking{border-color:var(--m-success)}
+.call-dock-who{display:flex;align-items:center;gap:10px;background:none;border:0;padding:0;cursor:pointer;text-align:left;color:inherit;min-width:0}
+.call-dock-who img{width:34px;height:34px;border-radius:9px;image-rendering:pixelated}
+.call-dock-name{display:flex;flex-direction:column;gap:2px;min-width:0}
+.call-dock-name b{font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.call-dock-state{font-size:11.5px;color:var(--m-fg-subtle);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.call-dock-state.ok{color:var(--m-success)}
+.call-dock-state.mid{color:var(--m-info)}
+.call-dock-state.bad{color:var(--m-danger)}
+
+.call-level{height:18px;display:flex;align-items:flex-end;padding:0 2px}
+.call-level i{display:block;width:100%;background:var(--m-accent);border-radius:2px;transition:height 90ms linear;opacity:.55}
+.call-dock.talking .call-level i{opacity:1}
+
+/* Кнопки — обычные из набора (tb-btn / btn), здесь только состояния звонка:
+   включённый показ экрана и выключенные микрофон или звук. */
+.call-dock-acts{display:flex;align-items:center;gap:2px}
+.call-dock-acts .tb-btn{flex:1}
+.call-dock-acts .tb-btn.on{background:var(--m-accent-soft);color:var(--m-accent)}
+.call-dock-acts .tb-btn.off{background:var(--m-danger-soft);color:var(--m-danger)}
+.call-dock-acts .tb-btn[disabled]{opacity:.45;pointer-events:none}
+.call-dock-acts .btn.sm{height:32px;padding:0 12px;margin-left:6px}
+
+.call-vol{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--m-fg-subtle)}
+.call-vol svg{width:14px;height:14px}
+.call-vol .m-slider{flex:1}
+
+.call-screen-mini{position:relative;border-radius:var(--m-r-md);overflow:hidden;background:#000;cursor:zoom-in;aspect-ratio:16/9}
+.call-screen-mini video{width:100%;height:100%;object-fit:contain;display:block}
+.call-screen-hint{position:absolute;left:8px;bottom:6px;font-size:11px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.8)}
+.call-screen-full{position:fixed;inset:0;z-index:880;background:rgba(0,0,0,.94);display:flex;align-items:center;justify-content:center;cursor:zoom-out}
+.call-screen-full video{max-width:100%;max-height:100%;display:block}
+.call-screen-x{position:absolute;top:14px;right:14px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:var(--m-r-ctl);border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.5);color:#fff;cursor:pointer}
+.call-screen-x svg{width:16px;height:16px}
+
+/* Кнопка звонка берёт класс соседей по ряду: в строке друга это такая же
+   кнопка, как «Написать», только без подписи, в шапке переписки — как крестик. */
+.btn.call-start{width:40px;padding:0;flex:none}
+.btn.call-start:hover{background:var(--m-accent-soft);color:var(--m-accent)}
+.tb-btn.call-start:hover{background:var(--m-accent-soft);color:var(--m-accent)}
+.call-start[disabled]{opacity:.45;pointer-events:none}
+
+/* Карточка звонка в переписке. */
+.msg-call{border:0;cursor:pointer;text-align:left;display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:12px;background:var(--m-surface-2);font-size:13px;align-self:flex-start;max-width:82%}
+.msg-call.me{align-self:flex-end}
+.msg-call:hover{background:var(--m-raised)}
+.msg-call[disabled]{cursor:default;opacity:.75}
+.msg-call svg{width:16px;height:16px;color:var(--m-fg-subtle);flex:none}
+.msg-call.missed svg{color:var(--m-danger)}
+.msg-call-body{display:flex;flex-direction:column;gap:1px;min-width:0}
+.msg-call-body b{font-size:13px}
+.msg-call-body span{font-size:11.5px;color:var(--m-fg-subtle)}
+
+@keyframes call-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes call-pulse{0%{box-shadow:0 0 0 0 var(--m-accent-glow)}70%{box-shadow:0 0 0 14px transparent}100%{box-shadow:0 0 0 0 transparent}}
+
+@media (prefers-reduced-motion:reduce){
+  .call-ring-card::before{animation:none}
+  .call-dock,.call-ring-card{animation:none}
+}

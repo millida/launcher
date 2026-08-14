@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { gameProfile } from '../lib/gameProfile'
 import { hasMillidaAccount } from '../lib/api'
-import { GAME_NICK_KEY } from './accounts'
+import { GAME_NICK_KEY, PROFILE_SLUG_KEY } from './accounts'
 
 interface GameNickState {
   name: string
@@ -17,6 +17,7 @@ export const useGameNick = create<GameNickState>((set) => ({
   load: async () => {
     if (!hasMillidaAccount()) {
       localStorage.removeItem(GAME_NICK_KEY)
+      localStorage.removeItem(PROFILE_SLUG_KEY)
       set({ name: '', accountNick: '', conflict: false })
       return
     }
@@ -25,6 +26,9 @@ export const useGameNick = create<GameNickState>((set) => ({
       const name = p.name || ''
       set({ name, accountNick: p.accountNick || '', conflict: !!p.nameConflict })
       if (name) localStorage.setItem(GAME_NICK_KEY, name)
+      const slug = p.publicSlug || ''
+      if (slug) localStorage.setItem(PROFILE_SLUG_KEY, slug)
+      else localStorage.removeItem(PROFILE_SLUG_KEY)
     } catch {}
   },
 }))

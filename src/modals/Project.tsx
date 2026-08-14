@@ -13,7 +13,6 @@ import type { ProjectVersion } from '../state/project'
 import { closeModal, showToast, useUi } from '../state/ui'
 import { backdropClose } from '../lib/dismiss'
 
-const PANE_STYLE = { maxHeight: '340px', overflowY: 'auto' as const }
 
 export function ProjectModal() {
   const modal = useUi((s) => s.modals.pjModal)
@@ -174,7 +173,7 @@ export function ProjectModal() {
       id="pjModal"
       {...backdropClose(close)}
     >
-      <div className="modal" style={{ width: '760px', maxHeight: '88%' }}>
+      <div className="modal mw-xl" style={{ maxHeight: '88%' }}>
         <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start', marginBottom: '14px' }}>
           <img
             id="pjIcon"
@@ -215,7 +214,7 @@ export function ProjectModal() {
             </button>
           ))}
         </div>
-        <div id="pjDesc" className="pj-body" style={{ ...PANE_STYLE, display: pj.tab === 'desc' ? '' : 'none' }}>
+        <div id="pjDesc" className="pj-body pj-pane" style={{ display: pj.tab === 'desc' ? '' : 'none' }}>
           {pj.loading ? (
             <p className="faint-note">Загружаем описание…</p>
           ) : pj.body ? (
@@ -224,7 +223,7 @@ export function ProjectModal() {
             <p className="faint-note">Без описания</p>
           )}
         </div>
-        <div id="pjGallery" style={{ ...PANE_STYLE, display: pj.tab === 'gallery' ? '' : 'none' }}>
+        <div id="pjGallery" className="pj-pane" style={{ display: pj.tab === 'gallery' ? '' : 'none' }}>
           {pj.gallery.length ? (
             pj.gallery.map((x, i) => (
               <figure style={{ marginBottom: '12px' }} key={i}>
@@ -238,7 +237,7 @@ export function ProjectModal() {
             <p className="faint-note">Галереи нет</p>
           )}
         </div>
-        <div id="pjVersions" style={{ ...PANE_STYLE, display: pj.tab === 'versions' ? '' : 'none' }}>
+        <div id="pjVersions" className="pj-pane" style={{ display: pj.tab === 'versions' ? '' : 'none' }}>
           {pj.versions.length ? (
             pj.versions.map((v) => (
               <div className="mod-line" key={v.id}>

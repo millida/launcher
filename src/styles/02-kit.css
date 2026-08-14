@@ -10,6 +10,7 @@
   --m-danger:#FF6B5E; --m-danger-soft:rgba(255,107,94,.13);
   --m-warning:#F5AA38; --m-warning-soft:rgba(245,170,56,.14);
   --m-info:#6AA9E9; --m-info-soft:rgba(106,169,233,.14);
+  --m-tick-read:#4C9FFE;
   --m-success:#5EC64D; --m-success-soft:rgba(94,198,77,.13);
   --m-r-mini:8px; --m-r-ctl:12px; --m-r-md:16px; --m-r-card:14px; --m-r-pill:999px;
   --m-shadow-md:0 8px 24px -8px rgba(0,0,0,.28); --m-shadow-lg:0 20px 48px -16px rgba(0,0,0,.45);
@@ -30,6 +31,7 @@
   --m-danger:#DD4A3E; --m-danger-soft:rgba(221,74,62,.14);
   --m-warning:#B97511; --m-warning-soft:rgba(185,117,17,.16);
   --m-info:#3572B8; --m-info-soft:rgba(53,114,184,.15);
+  --m-tick-read:#2F7FD8;
   --m-success:#3B9A34; --m-success-soft:rgba(59,154,52,.15);
   --m-shadow-md:0 8px 20px -8px rgba(15,26,18,.08); --m-shadow-lg:0 20px 44px -16px rgba(15,26,18,.13);
   color-scheme:light;
@@ -211,6 +213,9 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 .fr-row>.btn,.fr-row .fr-more-wrap{flex:none}
 .fr-status{font-size:12.5px;color:var(--m-fg-subtle);margin-top:2px;display:flex;align-items:center;gap:7px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .fr-status.on{color:var(--m-fg-muted)}
+/* На сайте — это не лаунчер: точка приглушена, чтобы «в сети» не читалось как
+   «сидит в лаунчере и сейчас ответит». */
+.fr-status.on.web .dot{background:var(--m-fg-faint)}
 /* Dim the row contents only: opacity on the row would also fade its popup menu. */
 .fr-row.off>img{opacity:.55}
 .fr-row.off .fr-nick{color:var(--m-fg-muted)}
@@ -226,7 +231,7 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 .chat-head img{width:32px;height:32px;border-radius:8px;image-rendering:pixelated}
 .chat-head b{flex:1;font-size:14px}
 .chat-body{flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:8px}
-.msg-row{display:flex;flex-direction:column;align-items:flex-start;gap:3px}
+.msg-row{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:3px}
 .msg-row.me{align-items:flex-end}
 .msg{max-width:82%;padding:9px 12px;border-radius:12px;font-size:13.5px;line-height:1.45;background:var(--m-surface-2);align-self:flex-start;display:flex;flex-direction:column;gap:5px}
 .msg.me{background:var(--m-accent-soft);color:var(--m-fg);align-self:flex-end}
@@ -241,9 +246,66 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 .msg-meta{display:flex;align-items:center;gap:4px;align-self:flex-end;font-size:10.5px;line-height:1;color:var(--m-fg-faint)}
 /* A rotated CSS box does not agree with its own bounding box, so the tick sat
    off the baseline next to the time. A glyph from the sprite lines up on its own. */
-.msg-tick{width:14px;height:14px;flex:none;opacity:.6}
-.msg-tick.read{opacity:1;color:var(--m-accent)}
-.msg-dot{width:8px;height:8px;flex:none;border:1.6px solid currentColor;border-radius:50%;border-bottom-color:transparent;animation:spin .9s linear infinite}
+/* Как в мессенджерах: доставлено — одна серая галка, прочитано — две синие.
+   Полупрозрачность съедала тонкий штрих на 14 пикселях, поэтому оттенок задан
+   цветом, а не opacity. */
+/* Двойная шире одиночной ровно на своё второе плечо — иначе бокс сжал бы её.
+   Цвет доставленной галки берётся от строки со временем, а не из отдельного
+   токена: тема из каталога может переопределить любой токен, и галка уезжала в
+   чёрное на тёмном пузыре. Время в этой же строке видно всегда — значит видно и
+   галку. У прочитанной синий свой, с запасным значением на случай темы, которая
+   про него не знает. */
+/* Селектор с типом: `svg.icon` задаёт общий размер иконок и по специфичности
+   бьёт голый класс — размеры галок молча игнорировались, и они рисовались
+   вписанными в квадрат 16×16 с полями. */
+svg.msg-tick{width:17px;height:14px;flex:none;color:inherit;opacity:1}
+svg.msg-tick.pending{width:13px;opacity:.5}
+svg.msg-tick.read{color:var(--m-tick-read,#4C9FFE);opacity:1}
+/* Message actions: reply, edit, delete, reactions */
+.msg.gone{opacity:.7}
+.msg-gone{font-style:italic;color:var(--m-fg-faint)}
+.msg-reply{display:flex;flex-direction:column;align-items:flex-start;gap:1px;width:100%;padding:4px 8px;border:0;border-left:2px solid var(--m-accent);border-radius:0 7px 7px 0;background:rgba(127,127,127,.12);font-family:inherit;font-size:12px;line-height:1.35;text-align:left;color:inherit;cursor:pointer;transition:background var(--m-t-fast)}
+.msg-reply:hover{background:rgba(127,127,127,.24)}
+.msg-reply b{font-size:11px;font-weight:700;color:var(--m-accent)}
+.msg-reply span{color:var(--m-fg-subtle);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+/* Подсветка цели перехода: обводка гаснет сама, поэтому состояние снимается по
+   таймеру и не остаётся висеть, если человек тут же ушёл дальше. */
+.msg.flash{animation:msg-flash 1.4s var(--m-ease-move)}
+@keyframes msg-flash{0%,55%{box-shadow:0 0 0 2px var(--m-accent)}100%{box-shadow:0 0 0 2px transparent}}
+/* Кнопка действий стоит вплотную к пузырю, а не у края панели: строка тянется
+   на всю ширину, и прижатая к её краю кнопка оказывалась на другой стороне
+   чата, за метры от своего сообщения. */
+.msg-line{display:flex;width:100%;align-items:center;gap:5px;min-width:0}
+/* В строке align-self правит уже вертикаль, а сторону задаёт направление. */
+.msg-line>.msg{align-self:auto}
+.msg-row.me .msg-line{flex-direction:row-reverse}
+.msg-act{width:22px;height:22px;flex:none;display:grid;place-items:center;padding:0;border:0;border-radius:7px;background:none;color:var(--m-fg-faint);cursor:pointer;opacity:0;transition:opacity var(--m-t-fast),color var(--m-t-fast)}
+.msg-row:hover .msg-act{opacity:1}
+.msg-act:hover{color:var(--m-accent)}
+.msg-act svg{width:14px;height:14px}
+.msg-reactions{display:flex;flex-wrap:wrap;gap:4px;max-width:82%}
+.msg-reaction{display:flex;align-items:center;gap:3px;padding:2px 7px;border-radius:var(--m-r-pill);border:1px solid var(--m-border);background:var(--m-surface-2);color:var(--m-fg-subtle);font-size:11.5px;line-height:1.5;cursor:pointer;font-variant-numeric:tabular-nums}
+.msg-reaction:hover{border-color:var(--m-border-strong)}
+.msg-reaction.on{border-color:var(--m-accent);background:var(--m-accent-soft);color:var(--m-fg)}
+.msg-menu{position:fixed;z-index:400;width:210px;display:flex;flex-direction:column;gap:1px;padding:6px;border-radius:13px;background:var(--m-surface-2);border:1px solid var(--m-border);box-shadow:var(--m-shadow-lg)}
+.msg-menu-react{display:grid;grid-template-columns:repeat(8,1fr);gap:1px;padding-bottom:5px;margin-bottom:4px;border-bottom:1px solid var(--m-border)}
+.msg-menu-emoji{display:grid;place-items:center;height:26px;border:0;background:none;border-radius:7px;font-size:15px;cursor:pointer;transition:background var(--m-t-fast)}
+.msg-menu-emoji:hover{background:var(--m-surface)}
+.msg-menu-emoji.on{background:var(--m-accent-soft)}
+.msg-menu-item{display:flex;align-items:center;gap:9px;padding:7px 9px;border:0;background:none;border-radius:9px;color:var(--m-fg);font-size:13px;text-align:left;cursor:pointer;transition:background var(--m-t-fast)}
+.msg-menu-item:hover{background:var(--m-surface)}
+.msg-menu-item.danger{color:#e5848a}
+.msg-menu-item svg{width:15px;height:15px;flex:none}
+/* Reply/edit bar above the composer */
+.chat-quote{display:flex;align-items:center;gap:9px;padding:8px 12px;border-top:1px solid var(--m-border);color:var(--m-fg-subtle)}
+.chat-quote>svg{width:16px;height:16px;flex:none;color:var(--m-accent)}
+.chat-quote-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.chat-quote-body b{font-size:11.5px;font-weight:700;color:var(--m-accent)}
+.chat-quote-body span{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chat-quote-x{width:26px;height:26px;flex:none;display:grid;place-items:center;border:0;border-radius:8px;background:none;color:var(--m-fg-faint);cursor:pointer}
+.chat-quote-x:hover{color:var(--m-fg)}
+.chat-quote-x svg{width:14px;height:14px}
+.chat-quote+.chat-input{border-top:0}
 .msg-img{max-width:100%;border-radius:9px;display:block;cursor:zoom-in}
 .msg-fail{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--m-fg-muted)}
 .msg-fail button{background:none;border:0;padding:0;color:var(--m-accent);font-size:11.5px;font-weight:650;cursor:pointer}
@@ -597,10 +659,20 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 .modal-bg{position:absolute;inset:0;background:rgba(0,0,0,.7);z-index:400;display:none;align-items:center;justify-content:center;opacity:0;transition:opacity 240ms ease}
 .modal-bg.open{display:flex}
 .modal-bg.vis{opacity:1}
-.modal{width:540px;max-height:86%;overflow-y:auto;background:var(--m-raised);border-radius:var(--m-r-card);box-shadow:var(--m-shadow-lg);padding:24px;transform:scale(.96) translateY(10px);transition:transform 320ms var(--m-ease-out)}
+.modal{width:540px;max-width:calc(100vw - 48px);max-height:86%;overflow-y:auto;background:var(--m-raised);border-radius:var(--m-r-card);box-shadow:var(--m-shadow-lg);padding:24px;transform:scale(.96) translateY(10px);transition:transform 320ms var(--m-ease-out)}
+/* One width scale for every dialog. Widths written inline on the element used
+   to win over both the density layer and the wide-screen layer, so a dialog
+   stayed at its 2019 size no matter how large the window or how the user set
+   the density. */
+.modal.mw-xs{width:420px}
+.modal.mw-sm{width:480px}
+.modal.mw-md{width:560px}
+.modal.mw-lg{width:640px}
+.modal.mw-xl{width:760px}
 .modal-bg.vis .modal{transform:none}
 .modal h3{font-size:19px;font-weight:700;margin-bottom:4px}
 .modal .sub{font-size:13px;color:var(--m-fg-muted);margin-bottom:18px}
+.pj-pane{max-height:min(56vh,620px);overflow-y:auto}
 /* Build picker: .bp-cover must stay positioned — .cover-img/.cover-ph are absolute and would otherwise fill the whole modal */
 .bp-list{display:flex;flex-direction:column;gap:6px;max-height:min(46vh,320px);overflow-y:auto}
 .bp-item{display:flex;align-items:center;gap:12px;width:100%;padding:9px 11px;border:0;border-radius:var(--m-r-ctl);background:color-mix(in srgb,var(--m-fg) 5%,transparent);color:inherit;text-align:left;cursor:pointer;transition:background-color var(--m-t-fast) ease}

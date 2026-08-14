@@ -197,7 +197,7 @@ export function HostPlanPicker({
       className={'modal-bg open' + (vis ? ' vis' : '')}
       {...backdropClose(onClose)}
     >
-      <div className="modal" style={{ width: '620px' }}>
+      <div className="modal mw-lg">
         <h2>{mode === 'create' ? 'Новый сервер' : 'Улучшить тариф'}</h2>
         <div className="sub">
           {mode === 'create'

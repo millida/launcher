@@ -57,12 +57,21 @@ const VALS_MAX = 256
 const STYLE_ID = 'm-theme-pack-css'
 
 export type Density = '' | 'compact' | 'roomy'
+export type DensityPref = Density | 'auto'
 
-export const DENSITIES: { id: Density; label: string; hint: string }[] = [
+export const DENSITIES: { id: DensityPref; label: string; hint: string }[] = [
+  { id: 'auto', label: 'Авто', hint: 'Плотность по размеру окна: на широком экране — свободная' },
   { id: 'compact', label: 'Плотно', hint: 'Мелкие отступы — на экран помещается заметно больше' },
   { id: '', label: 'Обычно', hint: 'Стандартные размеры лаунчера' },
   { id: 'roomy', label: 'Свободно', hint: 'Крупнее и просторнее, удобно на большом экране' },
 ]
+
+/// Kept in step with the second tier of 09-wide.css: past this the column is
+/// capped, and the freed room is what the roomy scale needs to look right.
+const ROOMY_QUERY = '(min-width: 2000px)'
+
+const wideQuery = (): MediaQueryList | null =>
+  typeof matchMedia === 'function' ? matchMedia(ROOMY_QUERY) : null
 
 const BUILTIN_CSS: Record<string, string> = {
   mario: marioCss,
@@ -371,16 +380,43 @@ export function storedPackId(): string {
   return readPref(PACK_KEY, '')
 }
 
-export function storedDensity(): Density {
-  const v = readPref(DENSITY_KEY, '')
-  return v === 'compact' || v === 'roomy' ? v : ''
+/// An empty string is a choice ('Обычно') and a missing key is not, so the
+/// default only reaches installs that never opened the density control.
+export function storedDensity(): DensityPref {
+  const v = readPref(DENSITY_KEY, 'auto')
+  return v === 'compact' || v === 'roomy' || v === '' ? v : 'auto'
 }
 
-export function applyDensity(v: Density) {
+export function resolveDensity(v: DensityPref): Density {
+  if (v !== 'auto') return v
+  return wideQuery()?.matches ? 'roomy' : ''
+}
+
+function writeDensityAttr(v: Density) {
   const root = document.documentElement
   if (v) root.dataset.density = v
   else delete root.dataset.density
+}
+
+export function applyDensity(v: DensityPref) {
+  writeDensityAttr(resolveDensity(v))
   writePref(DENSITY_KEY, v)
+}
+
+let autoDensityWatched = false
+
+/// Resizing the window, moving it to another monitor or leaving fullscreen all
+/// change which side of the breakpoint the launcher is on, and the attribute
+/// has to follow — it is written once at boot and would otherwise stay stale
+/// for the rest of the session.
+export function watchAutoDensity() {
+  if (autoDensityWatched) return
+  const mq = wideQuery()
+  if (!mq) return
+  autoDensityWatched = true
+  mq.addEventListener('change', () => {
+    if (storedDensity() === 'auto') writeDensityAttr(resolveDensity('auto'))
+  })
 }
 
 function allOptionValues(): Record<string, Record<string, string>> {
@@ -613,10 +649,8 @@ function reportThemeFailure(e: unknown) {
 }
 
 async function restoreStoredPack(): Promise<void> {
-  const density = storedDensity()
-  const root = document.documentElement
-  if (density) root.dataset.density = density
-  else delete root.dataset.density
+  writeDensityAttr(resolveDensity(storedDensity()))
+  watchAutoDensity()
   const id = storedPackId()
   if (!id || (activePack && activePack.id === id)) return
   const builtin = BUILTIN_THEMES.find((t) => t.id === id)

@@ -26,7 +26,7 @@ export function CrashModal() {
       style={{ zIndex: 210 }}
       {...backdropClose(close)}
     >
-      <div className="modal" style={{ width: '460px' }}>
+      <div className="modal mw-sm">
         <div className="crash-head">
           <span className="crash-ic">
             <Icon id="i-alert" />

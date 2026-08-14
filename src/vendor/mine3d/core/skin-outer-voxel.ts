@@ -14,6 +14,11 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 const TEX = 64;
 /** Как isPresent в моде: любой ненулевой alpha после sanitize */
 const ALPHA_PRESENT = 1;
+/**
+ * Полупрозрачные тексели overlay (стёкла очков, крылья, вуаль) идут отдельным
+ * мешем: общий с inner материал непрозрачен, и через него ничего не видно.
+ */
+const ALPHA_OPAQUE = 250;
 
 /**
  * Имена граней как в SolidPixelWrapper (Minecraft Direction),
@@ -53,6 +58,8 @@ export class OuterVoxelLayers {
   private readonly _replacedOuters: Mesh[] = [];
   /** Общий материал с inner — не dispose (владеет skin3d) */
   private _material: MeshStandardMaterial | null = null;
+  /** Клон inner для полупрозрачных текселей — наш, dispose обязателен */
+  private _glassMaterial: MeshStandardMaterial | null = null;
 
   get hasLayers(): boolean {
     return this._groups.length > 0;
@@ -85,19 +92,18 @@ export class OuterVoxelLayers {
 
     for (const spec of partSpecs(slim)) {
       if (!partHasSolidOverlay(img.data, width, height, scale, spec)) continue;
-      const geos = buildPartVoxels(img.data, width, height, scale, spec);
-      if (geos.length === 0) continue;
+      const { solid, glass } = buildPartVoxels(img.data, width, height, scale, spec);
+      if (solid.length === 0 && glass.length === 0) continue;
 
-      const merged = mergeGeometries(geos, false);
-      for (const g of geos) g.dispose();
-      if (!merged) continue;
-
-      this._geometries.push(merged);
-      const mesh = new Mesh(merged, this._material);
-      mesh.name = "outer3d";
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      mesh.renderOrder = 3;
+      const solidMesh = this._mergeMesh(solid, "outer3d", this._material, 3, true);
+      const glassMesh = this._mergeMesh(
+        glass,
+        "outer3dGlass",
+        this._glassMaterial ?? (this._glassMaterial = createGlassMaterial(this._material)),
+        4,
+        false,
+      );
+      if (!solidMesh && !glassMesh) continue;
 
       const outer = spec.getOuter(skin);
       const parent = outer.parent;
@@ -107,13 +113,36 @@ export class OuterVoxelLayers {
       group.name = "outer3dGroup";
       group.position.copy(outer.position);
       applyShellScale(group, outer, spec.w, spec.h, spec.d);
-      group.add(mesh);
+      if (solidMesh) group.add(solidMesh);
+      if (glassMesh) group.add(glassMesh);
       parent.add(group);
       this._groups.push(group);
 
       outer.visible = false;
       this._replacedOuters.push(outer);
     }
+  }
+
+  private _mergeMesh(
+    geos: BufferGeometry[],
+    name: string,
+    material: MeshStandardMaterial,
+    renderOrder: number,
+    castShadow: boolean,
+  ): Mesh | null {
+    if (geos.length === 0) return null;
+
+    const merged = mergeGeometries(geos, false);
+    for (const g of geos) g.dispose();
+    if (!merged) return null;
+
+    this._geometries.push(merged);
+    const mesh = new Mesh(merged, material);
+    mesh.name = name;
+    mesh.castShadow = castShadow;
+    mesh.receiveShadow = true;
+    mesh.renderOrder = renderOrder;
+    return mesh;
   }
 
   /**
@@ -144,8 +173,10 @@ export class OuterVoxelLayers {
     for (const g of this._geometries) g.dispose();
     this._geometries.length = 0;
 
-    // Материал общий с skin3d — не dispose
+    // Материал общий с skin3d — не dispose; стеклянный клон наш
     this._material = null;
+    this._glassMaterial?.dispose();
+    this._glassMaterial = null;
 
     if (!skin) return;
     for (const spec of partSpecs(false)) {
@@ -245,9 +276,10 @@ function buildPartVoxels(
   imgH: number,
   scale: number,
   spec: PartSpec,
-): BufferGeometry[] {
+): { solid: BufferGeometry[]; glass: BufferGeometry[] } {
   const { u, v, w, h, d } = spec;
-  const geos: BufferGeometry[] = [];
+  const solid: BufferGeometry[] = [];
+  const glass: BufferGeometry[] = [];
   const dims = { w, h, d };
 
   const cellIndex = (mx: number, my: number, mz: number): number => mx + w * (my + h * mz);
@@ -293,12 +325,28 @@ function buildPartVoxels(
         geo.translate(x, y, z);
         paintBoxUvToTexel(geo, texelU[cell], texelV[cell]);
         keepBoxFaces(geo, visible);
-        geos.push(geo);
+        const alpha = alphaAt(data, imgW, imgH, scale, texelU[cell], texelV[cell]);
+        (alpha >= ALPHA_OPAQUE ? solid : glass).push(geo);
       }
     }
   }
 
-  return geos;
+  return { solid, glass };
+}
+
+/**
+ * Стекло второго слоя: клон inner-материала с blend'ом вместо cutout.
+ * depthWrite оставляем — так стеклянные грани не просвечивают друг друга,
+ * а inner под ними уже нарисован (renderOrder меньше).
+ */
+function createGlassMaterial(inner: MeshStandardMaterial): MeshStandardMaterial {
+  const glass = inner.clone();
+  glass.transparent = true;
+  glass.alphaTest = 1e-5;
+  glass.depthWrite = true;
+  glass.alphaToCoverage = false;
+  glass.needsUpdate = true;
+  return glass;
 }
 
 function keepBoxFaces(geo: BoxGeometry, visible: boolean[]): void {
@@ -390,6 +438,20 @@ function modToThreeCenter(
   ];
 }
 
+function alphaAt(
+  data: Uint8ClampedArray,
+  imgW: number,
+  imgH: number,
+  scale: number,
+  tu: number,
+  tv: number,
+): number {
+  const x = Math.min(imgW - 1, Math.floor(tu * scale));
+  const y = Math.min(imgH - 1, Math.floor(tv * scale));
+  if (x < 0 || y < 0 || tu < 0 || tv < 0) return 0;
+  return data[(y * imgW + x) * 4 + 3]!;
+}
+
 function isPresent(
   data: Uint8ClampedArray,
   imgW: number,
@@ -398,10 +460,7 @@ function isPresent(
   tu: number,
   tv: number,
 ): boolean {
-  const x = Math.min(imgW - 1, Math.floor(tu * scale));
-  const y = Math.min(imgH - 1, Math.floor(tv * scale));
-  if (x < 0 || y < 0 || tu < 0 || tv < 0) return false;
-  return data[(y * imgW + x) * 4 + 3]! >= ALPHA_PRESENT;
+  return alphaAt(data, imgW, imgH, scale, tu, tv) >= ALPHA_PRESENT;
 }
 
 const TEXEL_INSET = 0.25;

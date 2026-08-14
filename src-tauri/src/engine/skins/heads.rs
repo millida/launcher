@@ -5,7 +5,7 @@ use std::time::{Duration, SystemTime};
 
 // Player head avatars, cached on disk so repeat views are instant and offline.
 
-const HEAD_URL: &str = "https://mc-heads.net/avatar/";
+const HEAD_URL: &str = "https://api.millida.net/v2/heads/avatar/";
 const HEAD_PX: u32 = 64;
 const TTL: Duration = Duration::from_secs(14 * 24 * 3600);
 const MAX_BYTES: usize = 200_000;
@@ -60,8 +60,8 @@ fn prune(dir: &std::path::Path) {
 }
 
 /// The nick is already sanitized, so it cannot inject a path into the URL.
-async fn download_mcheads(nick: &str) -> Result<Vec<u8>, String> {
-    let url = format!("{}{}/{}", HEAD_URL, nick, HEAD_PX);
+async fn download_head_service(nick: &str) -> Result<Vec<u8>, String> {
+    let url = format!("{}{}?size={}", HEAD_URL, nick, HEAD_PX);
     let res = client().get(url).send().await.map_err(|e| e.to_string())?;
     if !res.status().is_success() {
         return Err(format!("сервис голов ответил {}", res.status().as_u16()));
@@ -74,8 +74,7 @@ async fn download_mcheads(nick: &str) -> Result<Vec<u8>, String> {
 }
 
 /// Head rendered from the CustomSkinAPI skin, i.e. the same source
-/// CustomSkinLoader reads in game. Public head services only know licensed
-/// Mojang accounts.
+/// CustomSkinLoader reads in game.
 async fn download_millida(nick: &str) -> Result<Vec<u8>, String> {
     let meta = get_json(&format!("{}/yggdrasil/csl/{}", MILLIDA_API, nick)).await?;
     let hash = meta["skins"]["default"]
@@ -125,12 +124,12 @@ fn head_from_skin(skin: &[u8]) -> Result<Vec<u8>, String> {
     Ok(png)
 }
 
-/// CustomSkinAPI first, then the public head service for licensed accounts that
-/// have no profile here.
+/// CustomSkinAPI first, then the platform head renderer for accounts that have
+/// no profile here.
 async fn download(nick: &str) -> Result<Vec<u8>, String> {
     match download_millida(nick).await {
         Ok(bytes) => Ok(bytes),
-        Err(_) => download_mcheads(nick).await,
+        Err(_) => download_head_service(nick).await,
     }
 }
 

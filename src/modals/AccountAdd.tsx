@@ -188,7 +188,7 @@ export function AccountAddModal() {
       id="accModal"
       {...backdropClose(close)}
     >
-      <div className="modal" style={{ width: '460px', display: 'flex', flexDirection: 'column' }}>
+      <div className="modal mw-sm" style={{ display: 'flex', flexDirection: 'column' }}>
         <h3>Добавить аккаунт</h3>
         <div className="sub">Аккаунты можно переключать в любой момент — прогресс и сборки общие.</div>
 
