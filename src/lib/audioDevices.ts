@@ -1,5 +1,9 @@
+import { storedNoiseMode, type NoiseMode } from './call/mic-worklet'
+
 export const MIC_KEY = 'm-audio-in'
 export const OUT_KEY = 'm-audio-out'
+export const AGC_KEY = 'm-audio-agc'
+export const AEC_KEY = 'm-audio-aec'
 
 export interface AudioDevice {
   id: string
@@ -74,16 +78,59 @@ export function micErrorText(error: unknown): string {
   return 'Микрофон недоступен — проверь, не занят ли он другой программой'
 }
 
-export function micConstraint(): MediaTrackConstraints {
-  const id = storedMic()
+export interface MicProcessing {
+  /** Системный автоуровень: ведёт громкость микрофона сам, без спроса. */
+  agc: boolean
+  /** Подавление эха из колонок в микрофон. */
+  echo: boolean
+}
+
+const storedFlag = (key: string, fallback: boolean): boolean => {
+  const v = localStorage.getItem(key)
+  return v === '1' ? true : v === '0' ? false : fallback
+}
+
+/**
+ * Автоуровень выключен по умолчанию: во время долгой речи он заметно убавляет
+ * микрофон, а усиление в лаунчере задаётся ползунком — вместе они тянут уровень
+ * в разные стороны, и человек слышит, что его «прикручивают». Эхоподавление
+ * остаётся включённым: без него звук из колонок уходит обратно собеседнику.
+ */
+export function storedMicProcessing(): MicProcessing {
+  return { agc: storedFlag(AGC_KEY, false), echo: storedFlag(AEC_KEY, true) }
+}
+
+export function setStoredMicProcessing(p: MicProcessing): void {
+  localStorage.setItem(AGC_KEY, p.agc ? '1' : '0')
+  localStorage.setItem(AEC_KEY, p.echo ? '1' : '0')
+}
+
+/// Только обработка, без выбора устройства: смена устройства требует нового
+/// захвата, а эти три поля движок меняет на живой дорожке.
+///
+/// Шумоподавление движка подчиняется тому же выбору, что и наше: оно тоже
+/// приглушает микрофон на речи, и пока оно стояло жёстко, «Выключен» в
+/// настройках ничего не выключал — человек слышал, что его всё равно ведут.
+export const micProcessingConstraint = (p: MicProcessing, noise: NoiseMode): MediaTrackConstraints => ({
+  echoCancellation: p.echo,
+  autoGainControl: p.agc,
+  noiseSuppression: noise !== 'off',
+})
+
+export function micConstraintFor(
+  deviceId: string,
+  p: MicProcessing,
+  noise: NoiseMode,
+): MediaTrackConstraints {
   const base: MediaTrackConstraints = {
     channelCount: 1,
-    echoCancellation: true,
-    noiseSuppression: true,
-    autoGainControl: true,
+    ...micProcessingConstraint(p, noise),
   }
-  return id ? { ...base, deviceId: { exact: id } } : base
+  return deviceId ? { ...base, deviceId: { exact: deviceId } } : base
 }
+
+export const micConstraint = (): MediaTrackConstraints =>
+  micConstraintFor(storedMic(), storedMicProcessing(), storedNoiseMode())
 
 /// Two seconds of a quiet sine through the chosen output: if this is silent,
 /// the problem is the device, not the voice message.

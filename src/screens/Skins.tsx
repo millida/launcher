@@ -25,6 +25,7 @@ import { loadMine3d } from '../lib/mine3d'
 import type { Mine3dModule } from '../lib/mine3d'
 import type { ShotPresetId, SkinAnimId, SkinViewEngine } from '../vendor/mine3d'
 import { textureSource } from '../lib/textureSource'
+import { capeTitle, dedupeByTitle, dedupeCapes, textureHash } from '../lib/capes'
 import { Select } from '../components/Select'
 import { SkinBody } from '../components/SkinBody'
 import { renderAvatar } from '../lib/skinBody'
@@ -166,10 +167,6 @@ const OFFICIAL_CAPES: { id: string; name: string; hash: string }[] = [
   { id: 'off:minecon2016', name: 'MineCon 2016', hash: 'e7dfea16dc83c97df01a12fabbd1216359c0cd0ea42f9999b6e97c584963e980' },
 ]
 const capeTexUrl = (h: string) => 'https://textures.minecraft.net/texture/' + h
-const hashOf = (url: string | null | undefined) => {
-  const m = /texture\/([0-9a-f]{40,})/i.exec(url || '')
-  return m ? m[1] : ''
-}
 const OFFICIAL_HASHES = new Set(OFFICIAL_CAPES.map((c) => c.hash))
 
 // Kept as files on disk: localStorage hit the webview quota and lost entries silently.
@@ -196,6 +193,7 @@ interface CapeOption {
   progressLabel?: string
   rarity?: string
 }
+
 
 async function migrateStored(kind: TextureKind, key: string): Promise<MySkin[] | null> {
   let stored: { name?: string; data?: string; slim?: boolean }[] = []
@@ -435,8 +433,15 @@ async function headDataUrl(url: string, size = 64): Promise<string> {
 }
 
 /// Remote textures are CORS-restricted, so re-encode through canvas.
+const PNG_DATA_PREFIX = 'data:image/png;base64,'
+
 async function toPngBase64(url: string): Promise<string> {
   if (url.startsWith('data:')) return url.replace(/^data:image\/png;base64,/, '')
+  // Байты уходят на сервер как есть: пережатие через canvas меняет их, а каталог
+  // аккаунта схлопывает повторы по хешу PNG — с новым хешем та же текстура
+  // ложится в него ещё одной записью.
+  const src = await textureSource(url)
+  if (src.startsWith(PNG_DATA_PREFIX)) return src.slice(PNG_DATA_PREFIX.length)
   const img = await loadImg(url)
   const canvas = document.createElement('canvas')
   canvas.width = img.naturalWidth
@@ -805,10 +810,10 @@ export function Skins({ on }: { on: boolean }) {
       for (const a of accounts) {
         for (const c of msCapes[a.id] || []) {
           if (!c.url) continue
-          licensedHashes.add(hashOf(c.url))
+          licensedHashes.add(textureHash(c.url))
           licensed.push({
             id: 'ms:' + a.id + ':' + c.id,
-            name: c.alias || OFFICIAL_CAPES.find((o) => o.hash === hashOf(c.url))?.name || 'Плащ',
+            name: c.alias || OFFICIAL_CAPES.find((o) => o.hash === textureHash(c.url))?.name || 'Плащ',
             url: c.url,
             sub: c.active ? 'Надет на ' + a.nick : 'На аккаунте ' + a.nick,
             onAccount: true,
@@ -820,11 +825,15 @@ export function Skins({ on }: { on: boolean }) {
       }
       const accCapes = accounts
         .filter((a) => textures[a.id] && textures[a.id].cape && !msCapes[a.id])
-        .map((a) => ({ nick: a.nick, kind: a.kind, id: a.id, url: textures[a.id].cape as string, hash: hashOf(textures[a.id].cape) }))
+        .map((a) => ({ nick: a.nick, kind: a.kind, id: a.id, url: textures[a.id].cape as string, hash: textureHash(textures[a.id].cape) }))
       const accHashes = new Set(accCapes.map((c) => c.hash).filter(Boolean))
-      const stored: CapeOption[] = wardrobe
-        .filter((i) => i.kind === 'cape')
-        .map((i) => ({ id: 'w:' + i.id, name: i.name, url: i.url, sub: 'В каталоге Millida', wardrobeId: i.id }))
+      // Копии одного плаща, накопленные прошлыми версиями (каждое «Применить»
+      // заливало его заново), различаются адресом, но не именем.
+      const stored: CapeOption[] = dedupeByTitle(
+        wardrobe
+          .filter((i) => i.kind === 'cape')
+          .map((i) => ({ id: 'w:' + i.id, name: i.name, url: i.url, sub: 'В каталоге Millida', wardrobeId: i.id })),
+      )
       const official: CapeOption[] = OFFICIAL_CAPES.filter((c) => !licensedHashes.has(c.hash)).map((c) => ({
         id: c.id,
         name: c.name,
@@ -843,10 +852,19 @@ export function Skins({ on }: { on: boolean }) {
         }))
       const design: CapeOption[] = [{ id: 'millida', name: 'Millida', url: MILLIDA_CAPE, sub: 'Плащ лаунчера' }]
       // Плащи каталога Millida. Уже лежащие в гардеробе аккаунта не дублируем.
-      const storedHashes = new Set(stored.map((s) => hashOf(s.url)).filter(Boolean))
+      const storedHashes = new Set(stored.map((s) => textureHash(s.url)).filter(Boolean))
       const storedUrls = new Set(stored.map((s) => s.url))
+      // Надетый плащ каталога лежит в аккаунте уже своей копией: адрес у неё
+      // другой, а имя — то же, по нему повтор и опознаётся.
+      const storedNames = new Set(stored.map((s) => capeTitle(s.name)))
       const catalog: CapeOption[] = capeCatalog
-        .filter((c) => c.url && !storedUrls.has(c.url) && !(hashOf(c.url) && storedHashes.has(hashOf(c.url))))
+        .filter(
+          (c) =>
+            c.url &&
+            !storedUrls.has(c.url) &&
+            !storedNames.has(capeTitle(c.name)) &&
+            !(textureHash(c.url) && storedHashes.has(textureHash(c.url))),
+        )
         .map((c) => {
           const locked = c.unlocked === false
           const target = c.progressTarget || 0
@@ -873,7 +891,9 @@ export function Skins({ on }: { on: boolean }) {
       }))
       const open = catalog.filter((c) => !c.locked)
       const shut = catalog.filter((c) => c.locked)
-      return licensed.concat(stored).concat(open).concat(acc).concat(design).concat(mine).concat(official).concat(shut)
+      return dedupeCapes(
+        licensed.concat(stored).concat(open).concat(acc).concat(design).concat(mine).concat(official).concat(shut),
+      )
     },
     [accounts, textures, myCapes, msCapes, wardrobe, capeCatalog],
   )
@@ -919,9 +939,9 @@ export function Skins({ on }: { on: boolean }) {
       return
     }
     const t = textures[a.id]
-    const h = hashOf(t ? t.cape : null)
+    const h = textureHash(t ? t.cape : null)
     if (!h) return
-    const same = capes.find((c) => hashOf(c.url) === h)
+    const same = capes.find((c) => textureHash(c.url) === h)
     if (same) setCape(same.id)
   }, [capes, textures, activeId])
 
@@ -933,10 +953,10 @@ export function Skins({ on }: { on: boolean }) {
   // Capes are matched by texture hash, but Mojang only accepts the cape id from the profile.
   const capeTarget = (c: CapeOption): { accId: string; msId: string } | null => {
     if (c.accId && c.msId) return { accId: c.accId, msId: c.msId }
-    const h = hashOf(c.url)
+    const h = textureHash(c.url)
     if (!h) return null
     for (const a of accounts) {
-      const hit = (msCapes[a.id] || []).find((x) => hashOf(x.url) === h)
+      const hit = (msCapes[a.id] || []).find((x) => textureHash(x.url) === h)
       if (hit) return { accId: a.id, msId: hit.id }
     }
     return null
@@ -1436,7 +1456,10 @@ export function Skins({ on }: { on: boolean }) {
           )
         })
         if (!applied || !applied.skinUrl) throw new Error('сервер не сохранил скин')
-        await uploadTexture('cape', capePng, false, currentCape ? currentCape.name : undefined)
+        // Плащ из каталога аккаунта надевается по id: повторная заливка того же
+        // PNG заводит в каталоге вторую карточку той же текстуры.
+        if (currentCape && currentCape.wardrobeId) await applyWardrobeItem(currentCape.wardrobeId)
+        else await uploadTexture('cape', capePng, false, currentCape ? currentCape.name : undefined)
         await loadMillidaProfile().catch(() => {})
         await refreshHead(texture)
         await refreshWardrobe()
@@ -1874,7 +1897,7 @@ export function Skins({ on }: { on: boolean }) {
                         else if (t) chooseVariant('n:' + a.nick, t.slim ? 'slim' : 'classic', false)
                         else autoVariant(skinUrl(a.nick), 'n:' + a.nick)
                         if (t && t.cape) {
-                          const worn = capes.find((c) => hashOf(c.url) === hashOf(t.cape))
+                          const worn = capes.find((c) => textureHash(c.url) === textureHash(t.cape))
                           chooseCape(worn ? worn.id : 'acc:' + a.id)
                         }
                         showToast('Скин аккаунта ' + a.nick + ' применён')

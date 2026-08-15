@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { hasTauri } from '../ipc/tauri'
 import { cfSearch, listContent, listWorldInstalls } from '../ipc/commands'
 import { fmt } from '../lib/format'
+import { mergeSources } from '../lib/modMerge'
 import { useProfiles } from './profiles'
 
 export interface ModHit {
@@ -72,6 +73,7 @@ interface ModsState {
   notice: string
   count: string
   offset: number
+  cfOffset: number
   showMore: boolean
   installedIds: Set<string>
   targetBuild: string | null
@@ -116,13 +118,11 @@ function scopeFilters(build: string | null): { fVer: string; fLoader: string } {
 
 let cfBuffer: ModHit[] = []
 
-// Cross-source duplicates collapse to the Modrinth entry: only it carries a
-// project_id, which install/dependency/update tracking relies on.
-function mergeSources(mr: ModHit[], cf: ModHit[]): ModHit[] {
-  const key = (h: ModHit) => h.title.toLowerCase().replace(/[^a-zа-я0-9]/gi, '')
-  const seen = new Set(mr.map(key))
-  return mr.concat(cf.filter((h) => !seen.has(key(h)))).sort((a, b) => (b.dl || 0) - (a.dl || 0))
-}
+// CurseForge pages hold 50 entries, Modrinth 20. One shared counter meant the
+// second CurseForge page started 20 entries in and repeated thirty rows that
+// were already on screen.
+const CF_PAGE = 50
+const MR_PAGE = 20
 
 export const useMods = create<ModsState>((set, get) => ({
   modTab: 'modpack',
@@ -142,6 +142,7 @@ export const useMods = create<ModsState>((set, get) => ({
   notice: '',
   count: '',
   offset: 0,
+  cfOffset: 0,
   showMore: false,
   installedIds: new Set<string>(),
   targetBuild: null,
@@ -171,7 +172,7 @@ export const useMods = create<ModsState>((set, get) => ({
   load: async (append) => {
     const s = get()
     if (!append) {
-      set({ offset: 0, installedIds: await refreshInstalledIds(s.modTab) })
+      set({ offset: 0, cfOffset: 0, installedIds: await refreshInstalledIds(s.modTab) })
     }
     const st = get()
     if (st.modTab === 'world') {
@@ -179,7 +180,7 @@ export const useMods = create<ModsState>((set, get) => ({
         set({ hits: [], count: '', showMore: false, notice: 'Каталог карт доступен в приложении' })
         return
       }
-      const idx = append ? s.offset : 0
+      const idx = append ? s.cfOffset : 0
       try {
         const raw = await cfSearch(
           st.mq,
@@ -207,9 +208,9 @@ export const useMods = create<ModsState>((set, get) => ({
           count: all.length ? all.length + ' карт' : '',
           hits: all,
           notice: all.length ? '' : 'Ничего не нашли — попробуй другой запрос или версию',
-          offset: idx + hits.length,
+          cfOffset: idx + hits.length,
           // CurseForge answers 400 past 10 000 results.
-          showMore: hits.length >= 50 && idx + hits.length < 9950,
+          showMore: hits.length >= CF_PAGE && idx + hits.length < 9950,
         })
       } catch (e) {
         set({ hits: [], count: '', showMore: false, notice: 'CurseForge: ' + e })
@@ -221,7 +222,7 @@ export const useMods = create<ModsState>((set, get) => ({
         set({ hits: [], showMore: false, notice: 'CurseForge доступен в приложении' })
         return
       }
-      const cfOffset = append ? s.offset : 0
+      const cfOffset = append ? s.cfOffset : 0
       if (hasTauri()) {
         try {
           const loader = st.fLoader === 'любой' ? '' : st.fLoader
@@ -244,11 +245,12 @@ export const useMods = create<ModsState>((set, get) => ({
               count: all.length ? all.length + ' результатов' : '',
               hits: all,
               notice: '',
-              offset: cfOffset + hits.length,
-              showMore: hits.length >= 50,
+              cfOffset: cfOffset + hits.length,
+              showMore: hits.length >= CF_PAGE,
             })
             return
           }
+          set({ cfOffset: cfOffset + hits.length })
           cfBuffer = hits
         } catch (e) {
           if (st.modSource === 'curseforge') {
@@ -294,30 +296,36 @@ export const useMods = create<ModsState>((set, get) => ({
         slug: h.slug,
         pid: h.project_id,
       }))
-      const page = st.modSource === 'all' ? mergeSources(hits, cfBuffer) : hits
+      const shown = append ? get().hits : []
+      const cfPage = cfBuffer
+      const page = st.modSource === 'all' ? mergeSources(hits, cfPage, shown) : hits
       cfBuffer = []
       set({
         count:
           st.modSource === 'all'
-            ? (append ? get().hits.length + page.length : page.length) + ' результатов'
+            ? (shown.length + page.length) + ' результатов'
             : typeof d.total_hits === 'number'
               ? fmt(d.total_hits) + ' результатов'
               : get().count,
-        hits: append ? get().hits.concat(page) : page,
+        hits: append ? shown.concat(page) : page,
         notice: '',
         offset: offset + hits.length,
-        showMore: page.length >= 20,
+        // Judged by what the sources returned, not by the merged page: a page
+        // of pure duplicates would collapse to zero and cut the catalogue off
+        // in the middle.
+        showMore: hits.length >= MR_PAGE || cfPage.length >= CF_PAGE,
       })
     } catch {
       if (st.modSource === 'all' && cfBuffer.length) {
-        const page = cfBuffer
+        const shown = append ? get().hits : []
+        const cfPage = cfBuffer
         cfBuffer = []
+        const page = mergeSources([], cfPage, shown)
         set({
-          count: (append ? get().hits.length + page.length : page.length) + ' результатов',
-          hits: append ? get().hits.concat(page) : page,
+          count: shown.length + page.length + ' результатов',
+          hits: append ? shown.concat(page) : page,
           notice: '',
-          offset: offset + page.length,
-          showMore: page.length >= 20,
+          showMore: cfPage.length >= CF_PAGE,
         })
       }
     }

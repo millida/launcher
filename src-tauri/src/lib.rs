@@ -7,6 +7,7 @@ mod commands;
 pub mod tray;
 mod overlay;
 mod mic;
+mod display;
 
 /// Directories the webview may read through `asset://`: the media files it
 /// plays and shows plus the images a theme pack ships, nothing else. The token
@@ -52,9 +53,11 @@ pub fn run() {
             allow_assets(app.handle());
             tray::init(app.handle());
             engine::arm_selfheal(app.handle());
+            engine::arm_dialogs(app.handle());
             if let Some(w) = app.get_webview_window("main") {
                 mic::allow_microphone(&w);
             }
+            display::watch(app.handle());
             overlay::rebind_hotkey(app.handle());
             if let Ok(mode) = std::env::var("MILLIDA_AUTOTEST") {
                 let h = app.handle().clone();

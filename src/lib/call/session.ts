@@ -1,9 +1,9 @@
 import { playRemote, type RemoteAudio } from './audio'
 import { iceConfig } from './ice'
 import { createPeer, type Peer, type PeerFlags } from './peer'
-import { peerFlagsPatch, screenBitrateFor, type PeerState } from './mesh-rules'
+import { peerFlagsPatch, screenEncodingFor, type PeerState } from './mesh-rules'
 
-export { peerFlagsPatch, politeToward, screenBitrateFor } from './mesh-rules'
+export { peerFlagsPatch, politeToward, screenBitrateFor, screenEncodingFor } from './mesh-rules'
 export type { PeerState } from './mesh-rules'
 
 export type SignalKind = 'offer' | 'answer' | 'ice'
@@ -36,6 +36,7 @@ export class CallSession {
   private mic: MediaStreamTrack | null = null
   private screenVideo: MediaStreamTrack | null = null
   private screenAudio: MediaStreamTrack | null = null
+  private screenFps = 30
   private volume = 100
   private deafened = false
 
@@ -86,7 +87,7 @@ export class CallSession {
     })
     this.slots.set(peerId, slot)
     if (this.mic) await slot.peer.setMicTrack(this.mic)
-    if (this.screenVideo) await slot.peer.setScreenTrack(this.screenVideo, this.screenBitrate())
+    if (this.screenVideo) await slot.peer.setScreenTrack(this.screenVideo, this.screenEncoding())
     if (this.screenAudio) await slot.peer.setScreenAudioTrack(this.screenAudio)
   }
 
@@ -117,18 +118,19 @@ export class CallSession {
     await Promise.all([...this.slots.values()].map((s) => s.peer.setMicTrack(track)))
   }
 
-  async setScreen(video: MediaStreamTrack | null, audio: MediaStreamTrack | null): Promise<void> {
+  async setScreen(video: MediaStreamTrack | null, audio: MediaStreamTrack | null, fps = this.screenFps): Promise<void> {
     this.screenVideo = video
     this.screenAudio = audio
-    const cap = this.screenBitrate()
+    this.screenFps = fps
+    const encoding = this.screenEncoding()
     for (const slot of this.slots.values()) {
-      await slot.peer.setScreenTrack(video, cap)
+      await slot.peer.setScreenTrack(video, encoding)
       await slot.peer.setScreenAudioTrack(audio)
     }
   }
 
-  private screenBitrate(): number {
-    return screenBitrateFor(this.slots.size)
+  private screenEncoding(): RTCRtpEncodingParameters {
+    return screenEncodingFor(this.slots.size, this.screenFps)
   }
 
 

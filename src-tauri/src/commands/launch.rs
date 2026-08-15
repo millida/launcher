@@ -32,16 +32,11 @@ pub async fn test_java(path: String) -> Result<String, String> {
 
 #[tauri::command]
 pub async fn pick_java_path() -> Result<Option<engine::JavaInfo>, String> {
-    let picked = tauri::async_runtime::spawn_blocking(|| {
-        let mut d = rfd::FileDialog::new().set_title("Файл java (java.exe / bin/java)");
-        if cfg!(target_os = "windows") {
-            d = d.add_filter("Java", &["exe"]);
-        }
-        d.pick_file()
-    })
-    .await
-    .map_err(|e| e.to_string())?;
-    let Some(path) = picked else { return Ok(None) };
+    let mut d = engine::dialog().set_title("Файл java (java.exe / bin/java)");
+    if cfg!(target_os = "windows") {
+        d = d.add_filter("Java", &["exe"]);
+    }
+    let Some(path) = engine::pick_file(d).await else { return Ok(None) };
     let path = path.to_string_lossy().to_string();
     // Any file can be picked, so verify it actually runs and reports a version.
     // A path that passes is remembered as allowed: `test_java` and the launcher

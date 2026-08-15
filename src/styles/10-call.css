@@ -18,7 +18,7 @@
 .call-dock.peer-talking{border-color:var(--m-info)}
 /* Поверх развёрнутого экрана: микрофон и трубка должны оставаться под рукой. */
 .call-dock.above{z-index:890}
-.call-dock.dragging{cursor:grabbing;animation:none;box-shadow:var(--m-shadow-lg),0 0 0 1px var(--m-accent)}
+.call-dock.dragging{cursor:grabbing;box-shadow:var(--m-shadow-lg),0 0 0 1px var(--m-accent)}
 .call-dock-top{display:flex;align-items:center;gap:6px;min-width:0}
 .call-dock img,.call-dock canvas,.call-dock video{-webkit-user-drag:none;user-select:none}
 .call-dock-grip{display:flex;align-items:center;justify-content:center;width:14px;flex:none;color:var(--m-fg-subtle);opacity:.5;cursor:grab}
@@ -60,15 +60,17 @@
 .call-vol svg{width:14px;height:14px}
 .call-vol .m-slider{flex:1}
 
-.call-screen-mini{position:relative;border-radius:var(--m-r-md);overflow:hidden;background:#000;aspect-ratio:16/9}
+.call-screen-mini{position:relative;border-radius:var(--m-r-md);overflow:hidden;background:#000;aspect-ratio:16/9;cursor:zoom-in}
 .call-screen-mini video{width:100%;height:100%;object-fit:contain;display:block}
 .call-screen-hint{position:absolute;left:8px;bottom:6px;font-size:11px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.8)}
-.call-screen-max{position:absolute;top:6px;right:6px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:var(--m-r-ctl);border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.55);color:#fff;cursor:pointer;opacity:0;transition:opacity .12s linear}
+.call-screen-max{position:absolute;top:6px;right:6px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:var(--m-r-ctl);border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.55);color:#fff;cursor:pointer;opacity:.72;transition:opacity .12s linear}
 .call-screen-max svg{width:14px;height:14px}
 .call-screen-mini:hover .call-screen-max{opacity:1}
 .call-screen-full{position:fixed;inset:0;z-index:880;background:rgba(0,0,0,.94);display:flex;align-items:center;justify-content:center;padding:20px}
-.call-screen-stage{max-width:100%;max-height:100%;display:flex;border-radius:var(--m-r-md);overflow:hidden;box-shadow:0 24px 60px -20px rgba(0,0,0,.7)}
-.call-screen-full video{max-width:calc(100vw - 40px);max-height:calc(100vh - 40px);display:block}
+/* Картинка растягивается на весь экран: сама дорожка приходит в том разрешении,
+   которое выбрал кодек, и по своему размеру она заняла бы угол чёрного поля. */
+.call-screen-stage{flex:1;min-width:0;width:100%;height:100%;display:flex;border-radius:var(--m-r-md);overflow:hidden}
+.call-screen-full video{width:100%;height:100%;object-fit:contain;display:block}
 .call-screen-x{position:absolute;top:14px;right:14px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:var(--m-r-ctl);border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.5);color:#fff;cursor:pointer}
 .call-screen-x svg{width:16px;height:16px}
 

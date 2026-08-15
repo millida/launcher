@@ -169,11 +169,7 @@ pub async fn pick_content_files(kind: String) -> Result<Vec<String>, String> {
         "shader" => ("Шейдеры", "Выбери шейдеры"),
         _ => ("Файлы", "Выбери файлы"),
     };
-    let picked = tauri::async_runtime::spawn_blocking(move || {
-        rfd::FileDialog::new().add_filter(filter, exts).set_title(title).pick_files()
-    })
-    .await
-    .map_err(|e| e.to_string())?;
+    let picked = pick_files(dialog().add_filter(filter, exts).set_title(title)).await;
     Ok(picked
         .unwrap_or_default()
         .iter()

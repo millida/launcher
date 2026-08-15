@@ -31,6 +31,20 @@ export function screenBitrateFor(viewers: number): number {
  */
 export const SCREEN_MAX_VIEWERS = 4
 
+/**
+ * Как отдавать картинку показа. Разрешение не уменьшается ни при каком канале:
+ * зритель смотрит на текст и интерфейс, а уменьшенная вдвое картинка у него
+ * растягивается обратно и читаться перестаёт. Частота кадров берётся из выбранного
+ * качества — жёсткие 30 обрезали бы «плавный» режим ровно вдвое.
+ */
+export function screenEncodingFor(viewers: number, fps: number): RTCRtpEncodingParameters {
+  return {
+    maxBitrate: screenBitrateFor(viewers),
+    maxFramerate: Math.max(1, Math.round(fps)),
+    scaleResolutionDownBy: 1,
+  }
+}
+
 export const canShareScreenTo = (viewers: number): boolean => viewers <= SCREEN_MAX_VIEWERS
 
 /**

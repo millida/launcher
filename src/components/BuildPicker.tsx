@@ -23,7 +23,7 @@ export function BuildPicker() {
   return (
     <div
       className="modal-bg open vis"
-      style={{ zIndex: 205 }}
+      style={{ zIndex: 470 }}
       {...backdropClose(() => choose(null))}
     >
       <div className="modal mw-xs">

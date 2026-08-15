@@ -208,6 +208,9 @@ const DOCK_MAX_W = 980
 /// С этой ширины график переезжает в строку с ником: рядом с именем остаётся
 /// пустое место, а вертикаль нужнее показу экрана.
 const DOCK_WIDE_W = 460
+/// Ширина панели под чужой экран: 16:9 от неё даёт превью, на котором видно,
+/// что показывают, — с ходу и без разворота на весь экран.
+const DOCK_SCREEN_W = 560
 /// Дрожь руки на клике — не перетаскивание.
 const DRAG_SLOP = 4
 
@@ -344,7 +347,22 @@ function useDockBox(ref: React.RefObject<HTMLDivElement | null>) {
     saveDock(next)
   }, [commit])
 
-  return { box, dragging, drag, reset }
+  /// Панель раздаётся под пришедшую картинку показа: превью занимает всю её
+  /// ширину, и в доке шириной с телефонный столбик чужой экран читался как марка.
+  /// Размер не сохраняем: это не выбор человека, а место под конкретный показ.
+  const widenTo = useCallback(
+    (min: number) => {
+      const cur = boxRef.current
+      const w = clampWidth(Math.max(cur.w, min))
+      if (w === cur.w) return
+      const el = ref.current
+      if (el && cur.x !== null && cur.y !== null) commit({ ...clampPos(cur.x, cur.y, el), w })
+      else commit({ ...cur, w })
+    },
+    [ref, commit],
+  )
+
+  return { box, dragging, drag, reset, widenTo }
 }
 
 /**
@@ -454,7 +472,12 @@ export function CallPanel() {
   const remoteScreen = (shown.find((p) => p.userId === screenOf) || shown[0])?.screen || null
   const [volOpen, setVolOpen] = useState(false)
   const dockRef = useRef<HTMLDivElement>(null)
-  const { box, dragging, drag, reset } = useDockBox(dockRef)
+  const { box, dragging, drag, reset, widenTo } = useDockBox(dockRef)
+  const hasScreen = !!remoteScreen
+
+  useEffect(() => {
+    if (hasScreen) widenTo(DOCK_SCREEN_W)
+  }, [hasScreen, widenTo])
 
   if (status === 'idle') return null
   if (status === 'incoming') return <IncomingCard />
@@ -529,12 +552,16 @@ export function CallPanel() {
         {mode === 'room' ? <RoomParticipants parts={parts} screenOf={screenOf} /> : null}
 
         {remoteScreen && !screenFull ? (
-          <div className="call-screen-mini" onDoubleClick={() => set({ screenFull: true })}>
+          <div
+            className="call-screen-mini"
+            title="Развернуть на весь экран"
+            onClick={() => set({ screenFull: true })}
+          >
             <ScreenVideo stream={remoteScreen} />
             <span className="call-screen-hint">
-              {mode === 'room'
+              {(mode === 'room'
                 ? 'Экран · ' + (shown.find((p) => p.screen === remoteScreen)?.nick || 'участник')
-                : 'Экран собеседника'}
+                : 'Экран собеседника') + ' · нажми, чтобы развернуть'}
             </span>
             <button
               className="call-screen-max"

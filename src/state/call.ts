@@ -7,7 +7,7 @@ import type { PeerFlags, PeerQuality } from '../lib/call/peer'
 import { newCallId, sendSignal, startSignalPump, type CallEvent } from '../lib/call/signal'
 import { startRing, stopRing } from '../lib/call/ringtone'
 import { canShareScreen, screenErrorText, shareScreen, storedScreenQuality, type ScreenShare } from '../lib/call/screen'
-import { micErrorText } from '../lib/audioDevices'
+import { micErrorText, storedMicProcessing, type MicProcessing } from '../lib/audioDevices'
 import { storedMicGain, storedNoiseMode, type NoiseMode } from '../lib/call/mic-worklet'
 import { openSettings, showToast } from './ui'
 import { useGame } from './game'
@@ -411,7 +411,7 @@ export async function toggleScreen() {
   try {
     const share = await shareScreen(storedScreenQuality())
     screen = share
-    await session.setScreen(share.video, share.audio ?? null)
+    await session.setScreen(share.video, share.audio ?? null, share.fps)
     shareFlags({ screen: true })
     st().set({ sharing: true })
     // Показ прекращают и системной кнопкой «остановить», не только нашей.
@@ -429,14 +429,27 @@ export function setCallVolume(pct: number) {
   if (session) session.setVolume(pct)
 }
 
+/// Режим шумоподавления правит оба слоя сразу: наши ворота в обработке и
+/// шумоподавление движка на самом захвате. Иначе «Выключен» глушил бы только
+/// наш слой, а микрофон продолжал бы приседать на речи.
 export function setCallNoise(mode: NoiseMode) {
   st().set({ noise: mode })
-  if (mic) mic.setMode(mode)
+  if (!mic) return
+  mic.setMode(mode)
+  void mic.setProcessing(storedMicProcessing(), mode)
 }
 
 export function setCallMicGain(pct: number) {
   st().set({ micGain: pct })
   if (mic) mic.setGain(pct)
+}
+
+/// Обработку меняют посреди разговора — если движок не принял её на живой
+/// дорожке, человек должен узнать об этом, а не гадать, почему ничего не изменилось.
+export async function setCallProcessing(p: MicProcessing) {
+  if (!mic) return
+  const applied = await mic.setProcessing(p, st().noise)
+  if (!applied) showToast('Настройка микрофона встанет со следующего звонка — эта уже идёт', 'ok')
 }
 
 interface VoiceReply {

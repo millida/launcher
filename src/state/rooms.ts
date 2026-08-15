@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { api, hasMillidaAccount } from '../lib/api'
 import { warmHeads } from '../lib/heads'
+import { coalesce } from '../lib/coalesce'
 
 export interface RoomMember {
   userId: string
@@ -49,20 +50,7 @@ export const useRooms = create<RoomsState>((set, get) => ({
   manageId: '',
   createOpen: false,
   set: (patch) => set(patch as RoomsState),
-  load: async () => {
-    if (!hasMillidaAccount()) {
-      set({ rooms: [], loaded: true })
-      return
-    }
-    try {
-      const r = await api<{ me?: string; rooms?: Room[] }>('/friends/rooms')
-      const rooms = r.rooms || []
-      set({ me: r.me || get().me, rooms, loaded: true })
-      warmHeads(rooms.flatMap((room) => room.members.map((m) => m.nickname)))
-    } catch {
-      set({ loaded: true })
-    }
-  },
+  load: () => loadRooms(),
   setVoice: (roomId, members) => {
     const rooms = get().rooms
     if (!rooms.some((r) => r.id === roomId)) return
@@ -70,7 +58,23 @@ export const useRooms = create<RoomsState>((set, get) => ({
   },
 }))
 
-export const loadRooms = () => useRooms.getState().load()
+const fetchRooms = coalesce(async () => {
+  const set = useRooms.setState
+  if (!hasMillidaAccount()) {
+    set({ rooms: [], loaded: true })
+    return
+  }
+  try {
+    const r = await api<{ me?: string; rooms?: Room[] }>('/friends/rooms')
+    const rooms = r.rooms || []
+    set({ me: r.me || useRooms.getState().me, rooms, loaded: true })
+    warmHeads(rooms.flatMap((room) => room.members.map((m) => m.nickname)))
+  } catch {
+    set({ loaded: true })
+  }
+})
+
+export const loadRooms = () => fetchRooms()
 
 export const roomById = (id: string): Room | undefined =>
   useRooms.getState().rooms.find((r) => r.id === id)

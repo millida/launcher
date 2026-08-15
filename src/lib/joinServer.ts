@@ -7,7 +7,7 @@ import { useServers } from '../state/servers'
 import { setNewBuildPreset } from '../state/newBuild'
 import type { JoinIntent } from '../state/newBuild'
 import { rememberServerName } from '../state/playStats'
-import { uiConfirm } from '../state/confirm'
+import { uiChoice, uiConfirm } from '../state/confirm'
 import { joinWithAuth, showLaunchError } from './launch'
 import { openModal, setScreen, showToast } from '../state/ui'
 import { pickBuildForServer, serverVersions, versionFits } from './mcVersion'
@@ -74,7 +74,7 @@ async function buildForServer(join: JoinIntent, wanted: string[]): Promise<strin
     return fit.name
   }
 
-  const make = await uiConfirm(
+  const make = await uiChoice(
     'Сервер работает на ' +
       wanted.join(', ') +
       ', а сборки под эту версию у тебя нет' +
@@ -89,7 +89,10 @@ async function buildForServer(join: JoinIntent, wanted: string[]): Promise<strin
       danger: false,
     },
   )
-  if (!make) return (current || profiles[0]).name
+  // Walking away from the question is not "зайти всё равно": the game must not
+  // start from a window the user only closed.
+  if (make === 'dismiss') return null
+  if (make === 'no') return (current || profiles[0]).name
   offerBuild(wanted[0] || '', join)
   return null
 }

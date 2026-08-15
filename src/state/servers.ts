@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import type { SnapshotServer } from '../lib/snapshot'
 import { api } from '../lib/api'
+import { serverVersions } from '../lib/mcVersion'
+import { ensureMcVersions } from './mcVersions'
 
 const CAT: Record<string, string> = {
   SURVIVAL: 'Выживание',
@@ -90,7 +92,7 @@ const toCard = (sv: RatingServer, rank: number): SnapshotServer => ({
   online: sv.online ?? sv.avgOnline ?? 0,
   banner: sv.bannerUrl,
   logo: sv.logoUrl,
-  versions: sv.versionMajors || [],
+  versions: serverVersions(sv.versionMajors),
   cat: CAT[(sv.categories || ['OTHER'])[0]] || 'Разное',
   motd: (sv.motd || '').slice(0, 120),
   lic: sv.license || '',
@@ -111,6 +113,7 @@ export async function loadLiveRating(category?: string) {
   const cat = category ?? s.category
   s.set({ status: 'loading', error: '', category: cat })
   try {
+    await ensureMcVersions()
     const d = await api<RatingPage>(pageUrl(0, cat))
     useServers.getState().set({
       list: (d.servers || []).map((sv, i) => toCard(sv, i + 1)),
@@ -132,6 +135,7 @@ export async function loadMoreServers() {
   if (s.loadingMore || s.status !== 'ok' || s.list.length >= s.total) return
   s.set({ loadingMore: true })
   try {
+    await ensureMcVersions()
     const d = await api<RatingPage>(pageUrl(s.list.length, s.category))
     const cur = useServers.getState()
     const seen = new Set(cur.list.map((x) => x.slug))

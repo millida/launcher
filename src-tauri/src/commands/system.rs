@@ -18,11 +18,8 @@ pub async fn set_game_dir(app: tauri::AppHandle, path: String, move_data: bool) 
 #[tauri::command]
 pub async fn pick_game_dir() -> Result<Option<String>, String> {
     let start = engine::game_root();
-    let picked = tauri::async_runtime::spawn_blocking(move || {
-        rfd::FileDialog::new().set_directory(&start).set_title("Папка игры Millida").pick_folder()
-    })
-    .await
-    .map_err(|e| e.to_string())?;
+    let picked =
+        engine::pick_folder(engine::dialog().set_directory(&start).set_title("Папка игры Millida")).await;
     Ok(picked.map(|d| d.to_string_lossy().to_string()))
 }
 
