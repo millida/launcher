@@ -34,8 +34,9 @@ import { dayKey, dayLabel, isGrouped, isRead } from '../lib/chatGroup'
 import { keepsChatOpen } from '../lib/chatOutside'
 import { micErrorText } from '../lib/audioDevices'
 import { callLogTitle, parseCallLog, type CallLog } from '../lib/call/callLog'
-import { callFriend, callSupported, fmtCallTime, joinRoomVoice, useCall } from '../state/call'
+import { callFriend, callSupported, fmtCallTime, useCall } from '../state/call'
 import { nickInRooms, openRoomManage, useRooms, type Room } from '../state/rooms'
+import { RoomCallButton } from './RoomCall'
 
 function InviteCard({ addr, name, me }: { addr: string; name: string; me?: boolean }) {
   const [busy, setBusy] = useState(false)
@@ -699,17 +700,7 @@ function RoomHead({ room }: { room: Room }) {
           {inside.length ? ' · в разговоре ' + inside.length : ''}
         </span>
       </span>
-      {callSupported() ? (
-        <button
-          className={'btn sm ' + (here ? 'secondary' : 'primary') + ' room-join'}
-          title={here ? 'Ты в разговоре' : 'Зайти в разговор группы'}
-          disabled={here || (status !== 'idle' && !here)}
-          onClick={() => void joinRoomVoice(room.id, room.title)}
-        >
-          <Icon id={inside.length ? 'i-headset' : 'i-phone'} />
-          {here ? 'В разговоре' : inside.length ? 'Зайти · ' + inside.length : 'Разговор'}
-        </button>
-      ) : null}
+      {callSupported() ? <RoomCallButton room={room} here={here} busy={status !== 'idle'} /> : null}
       <button className="tb-btn" title="Участники группы" onClick={() => openRoomManage(room.id)}>
         <Icon id="i-dots" />
       </button>

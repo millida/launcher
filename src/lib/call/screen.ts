@@ -32,6 +32,8 @@ export const canShareScreen = (): boolean =>
 
 export interface ScreenShare {
   video: MediaStreamTrack
+  /** Частота кадров выбранного качества — с ней же картинка уходит собеседнику. */
+  fps: number
   /** Звук показываемого окна или экрана — есть не везде, на macOS его не будет. */
   audio: MediaStreamTrack | null
   stop: () => void
@@ -63,6 +65,7 @@ export async function shareScreen(quality: ScreenQuality): Promise<ScreenShare> 
   hinted.contentHint = p.hint
   return {
     video,
+    fps: p.fps,
     audio: stream.getAudioTracks()[0] || null,
     stop: () => stream.getTracks().forEach((t) => t.stop()),
   }

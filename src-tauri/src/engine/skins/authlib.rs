@@ -3,6 +3,13 @@ use serde_json::Value;
 use std::path::PathBuf;
 
 pub(crate) const AUTHLIB_LATEST: &str = "https://authlib-injector.yushi.moe/artifact/latest.json";
+/// Build used when the feed is unreachable. Without the agent the launch falls
+/// back to offline: no multiplayer and, on a vanilla profile, no skin at all —
+/// a single unreachable host must not cost that. The mirror is the upstream
+/// GitHub release, and the digest is the one the feed publishes for build 56.
+const AUTHLIB_PINNED_URL: &str =
+    "https://github.com/yushijinhun/authlib-injector/releases/download/v1.2.8/authlib-injector-1.2.8.jar";
+const AUTHLIB_PINNED_SHA256: &str = "9c7f4343e6c82034958ffb48c14a2cb0c85928be7283103ce17da00c6d5a7b10";
 
 pub async fn ensure_authlib_injector() -> Result<PathBuf, String> {
     let dir = data_dir().join("agents");
@@ -17,16 +24,22 @@ pub async fn ensure_authlib_injector() -> Result<PathBuf, String> {
         return Ok(jar);
     }
 
-    let url = meta["download_url"]
+    // loaded into the JVM as -javaagent, so an unverified jar is never used:
+    // a feed without a usable address or digest falls back to the pinned build,
+    // never to an unchecked download.
+    let signed = meta["download_url"]
         .as_str()
         .filter(|u| u.starts_with("https://"))
-        .ok_or("не удалось узнать адрес authlib-injector")?;
-    // loaded into the JVM as -javaagent, so an unverified jar is never used
-    let expected = meta["checksums"]["sha256"].as_str().unwrap_or("").to_lowercase();
-    if expected.len() != 64 || !expected.chars().all(|c| c.is_ascii_hexdigit()) {
-        return Err("нет контрольной суммы authlib-injector".into());
-    }
-    download_checked(url, &jar, Some(Sum::Sha256(&expected)), None).await?;
-    let _ = std::fs::write(&stamp, &build);
+        .and_then(|u| {
+            let sum = meta["checksums"]["sha256"].as_str().unwrap_or("").to_lowercase();
+            let hex = sum.len() == 64 && sum.chars().all(|c| c.is_ascii_hexdigit());
+            hex.then(|| (u.to_string(), sum))
+        });
+    let (url, expected, stamped) = match signed {
+        Some((u, s)) => (u, s, build),
+        None => (AUTHLIB_PINNED_URL.to_string(), AUTHLIB_PINNED_SHA256.to_string(), String::new()),
+    };
+    download_checked(&url, &jar, Some(Sum::Sha256(&expected)), None).await?;
+    let _ = std::fs::write(&stamp, &stamped);
     Ok(jar)
 }

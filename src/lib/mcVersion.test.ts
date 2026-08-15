@@ -1,5 +1,13 @@
 import { expect, test } from 'bun:test'
-import { pickBuildForServer, pickVersionForServer, serverVersions, versionFits, versionMajor } from './mcVersion'
+import {
+  isKnownVersion,
+  pickBuildForServer,
+  pickVersionForServer,
+  serverVersions,
+  setKnownVersions,
+  versionFits,
+  versionMajor,
+} from './mcVersion'
 
 // input -> verdict. A wrong "fits" sends the player into a server that will
 // refuse the handshake, a wrong "does not fit" nags about a build that works.
@@ -22,6 +30,24 @@ test('a build fits only when it shares a major with some server version', () => 
 test('only plain numeric versions are judged', () => {
   expect(serverVersions(['1.21', ' 1.20.1 ', '1.21', '1.16-1.21', 'Bedrock', ''])).toEqual(['1.21', '1.20.1'])
   expect(versionFits('26.2', serverVersions(['1.16-1.21'])), 'a range says nothing, so no nagging').toBe(true)
+})
+
+// The reported case: a rating entry claiming 1.22..1.29 put releases that never
+// existed into the version filter of the server list.
+test('a version Mojang never released is dropped once the release list is known', () => {
+  setKnownVersions(['26.2', '1.21.4', '1.21', '1.20.1'])
+  expect(serverVersions(['1.21', '1.22', '1.29', '1.20.1'])).toEqual(['1.21', '1.20.1'])
+  expect(isKnownVersion('1.21.4'), 'a full release from the manifest').toBe(true)
+  expect(isKnownVersion('1.21'), 'the major of a full release the rating reports instead').toBe(true)
+  expect(isKnownVersion('26.2'), 'calendar releases are versions too').toBe(true)
+  expect(isKnownVersion('1.22')).toBe(false)
+  setKnownVersions([])
+})
+
+test('an unknown release list judges nothing, so real versions are never hidden', () => {
+  setKnownVersions([])
+  expect(serverVersions(['1.21', '1.22'])).toEqual(['1.21', '1.22'])
+  expect(isKnownVersion('1.22')).toBe(true)
 })
 
 test('major keeps calendar versions apart', () => {

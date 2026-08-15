@@ -337,6 +337,27 @@ pub fn want_in_game_skins(csl_root: Option<&str>) -> bool {
     have_local_skin() || csl_root.is_some()
 }
 
+/// Why the skin the player just applied will not show up on this launch.
+///
+/// A vanilla profile has nowhere to load a skin mod from, so its only source is
+/// the session: with no account the game asks nobody and draws Steve. The
+/// wardrobe screen answers "applied" either way, and the player finds an empty
+/// skin in their own single-player world with nothing telling them why
+/// (UltraMatrix, 15.08.2026). Modded builds are not warned about: the mod
+/// carries the local copy even offline.
+pub fn in_game_skin_blocker(loader: &str, online: bool, want_skin: bool) -> Option<&'static str> {
+    if !want_skin || online {
+        return None;
+    }
+    if matches!(loader, "fabric" | "quilt" | "forge" | "neoforge") {
+        return None;
+    }
+    Some(
+        "Скин в этой игре виден не будет: ванильная сборка берёт его только из аккаунта. \
+         Войди аккаунтом Millida или лицензией — либо играй на сборке с модами.",
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -434,6 +455,22 @@ mod tests {
         );
         assert_eq!(absent_action(false, false, false), Absent::Skip);
         assert_eq!(absent_action(false, true, true), Absent::Skip);
+    }
+
+    /// loader  | online | скин выбран | вердикт
+    /// vanilla | нет    | да          | предупредить — грузить скин неоткуда
+    /// vanilla | да     | да          | молчим: скин придёт из аккаунта (Yggdrasil/лицензия)
+    /// fabric  | нет    | да          | молчим: мод берёт локальную копию и в офлайне
+    /// vanilla | нет    | нет         | молчим: скина никто и не ставил
+    #[test]
+    fn a_vanilla_offline_launch_says_the_skin_will_not_show() {
+        assert!(
+            in_game_skin_blocker("vanilla", false, true).is_some(),
+            "ваниль без аккаунта не может показать скин, и молчать об этом значит обещать несделанное",
+        );
+        assert_eq!(in_game_skin_blocker("vanilla", true, true), None);
+        assert_eq!(in_game_skin_blocker("fabric", false, true), None);
+        assert_eq!(in_game_skin_blocker("vanilla", false, false), None);
     }
 
     #[test]

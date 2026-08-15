@@ -8,14 +8,10 @@ const COVER_PX: u32 = 128;
 const MAX_SOURCE_BYTES: u64 = 12 * 1024 * 1024;
 
 pub async fn pick_profile_cover(profile: String) -> Result<Option<Vec<Profile>>, String> {
-    let picked = tauri::async_runtime::spawn_blocking(|| {
-        rfd::FileDialog::new()
-            .add_filter("Картинка", &["png", "jpg", "jpeg", "webp"])
-            .set_title("Обложка сборки")
-            .pick_file()
-    })
-    .await
-    .map_err(|e| e.to_string())?;
+    let picked = pick_file(
+        dialog().add_filter("Картинка", &["png", "jpg", "jpeg", "webp"]).set_title("Обложка сборки"),
+    )
+    .await;
     let Some(src) = picked else { return Ok(None) };
     if std::fs::metadata(&src).map(|m| m.len()).unwrap_or(0) > MAX_SOURCE_BYTES {
         return Err("Картинка больше 12 МБ — возьми поменьше".into());

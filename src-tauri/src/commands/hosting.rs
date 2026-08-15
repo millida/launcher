@@ -121,11 +121,7 @@ pub async fn host_download(id: String, path: Option<String>) -> Result<Option<St
         None => format!("{}/hosting/servers/{}/world/download", engine::MILLIDA_API, id),
     };
     let title = name.clone();
-    let dest = tauri::async_runtime::spawn_blocking(move || {
-        rfd::FileDialog::new().set_file_name(&title).set_title("Куда сохранить").save_file()
-    })
-    .await
-    .map_err(|e| e.to_string())?;
+    let dest = engine::save_file(engine::dialog().set_file_name(&title).set_title("Куда сохранить")).await;
     let Some(dest) = dest else { return Ok(None) };
 
     let mut res = engine::client()
@@ -163,11 +159,7 @@ fn urlencoding_encode(s: &str) -> String {
 pub async fn host_upload(id: String, dir: String) -> Result<Option<String>, String> {
     check_id(&id)?;
     let token = token()?;
-    let picked = tauri::async_runtime::spawn_blocking(|| {
-        rfd::FileDialog::new().set_title("Файл для сервера").pick_file()
-    })
-    .await
-    .map_err(|e| e.to_string())?;
+    let picked = engine::pick_file(engine::dialog().set_title("Файл для сервера")).await;
     let Some(src) = picked else { return Ok(None) };
     let name = src
         .file_name()

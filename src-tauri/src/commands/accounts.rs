@@ -138,14 +138,7 @@ pub async fn fetch_texture(url: String) -> Result<String, String> {
 pub async fn export_png(name: String, data: String) -> Result<Option<String>, String> {
     let bytes = engine::png_bytes(&data)?;
     let suggested = engine::file_stem(&name) + ".png";
-    let dest = tauri::async_runtime::spawn_blocking(move || {
-        rfd::FileDialog::new()
-            .set_file_name(&suggested)
-            .set_title("Куда сохранить")
-            .save_file()
-    })
-    .await
-    .map_err(|e| e.to_string())?;
+    let dest = engine::save_file(engine::dialog().set_file_name(&suggested).set_title("Куда сохранить")).await;
     let Some(dest) = dest else { return Ok(None) };
 
     std::fs::write(&dest, &bytes).map_err(|e| e.to_string())?;

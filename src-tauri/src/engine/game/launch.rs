@@ -192,6 +192,85 @@ fn skin_mod_implicated(text: &str) -> bool {
     })
 }
 
+/// A mod the loader refused to load. `wrong_version` — the unmet requirement is
+/// the game itself (or the loader), i.e. the jar is built for another version.
+#[derive(PartialEq, Debug)]
+struct ModFault {
+    name: String,
+    wrong_version: bool,
+}
+
+/// First `'...'` after the marker. Loaders quote mod names, so the quotes are
+/// what separates the name from the sentence around it.
+fn quoted_after(line: &str, marker: &str) -> Option<String> {
+    let rest = line.split_once(marker)?.1;
+    let start = rest.find('\'')? + 1;
+    let end = rest[start..].find('\'')? + start;
+    let name = rest[start..end].trim();
+    (!name.is_empty() && name.len() <= 60).then(|| name.to_string())
+}
+
+/// The requirement a mod is missing is what the requirement is ABOUT: the game,
+/// the loader, or another mod.
+const GAME_REQUIREMENTS: [&str; 6] =
+    [" of minecraft", "'minecraft'", "'neoforge'", "'forge'", "'fabricloader'", "'fabric loader'"];
+
+/// Mods named in loader resolution failures. Fabric, Quilt and NeoForge all
+/// print one line per unmet requirement, and that line is the only place the
+/// player learns WHICH jar to update — without it the verdict stays "конфликт
+/// модов", and a fifty-mod pack is unfixable by hand.
+fn mod_faults(text: &str) -> Vec<ModFault> {
+    let mut out: Vec<ModFault> = vec![];
+    for line in text.lines() {
+        let low = line.to_lowercase();
+        // NeoForge: "Mod ID: 'minecraft', Requested by: 'sodium', Expected range: ..."
+        let fault = if low.contains("requested by:") {
+            quoted_after(line, "Requested by:").map(|name| ModFault {
+                name,
+                wrong_version: GAME_REQUIREMENTS.iter().any(|r| low.split("requested by:").next().unwrap_or("").contains(r)),
+            })
+        } else if low.contains("requires") && low.contains("mod '") {
+            // Fabric/Quilt: "- Mod 'Sodium' (sodium) 0.5.8 requires version 1.20.1
+            //  of minecraft, but only the wrong version is present: 1.21.1!"
+            quoted_after(line, "Mod ").map(|name| ModFault {
+                name,
+                wrong_version: GAME_REQUIREMENTS.iter().any(|r| low.contains(r)),
+            })
+        } else {
+            None
+        };
+        let Some(fault) = fault else { continue };
+        if !out.iter().any(|f| f.name == fault.name) {
+            out.push(fault);
+        }
+    }
+    out
+}
+
+const FAULT_NAMES_SHOWN: usize = 3;
+
+fn fault_list(faults: &[ModFault]) -> String {
+    let names: Vec<&str> = faults.iter().take(FAULT_NAMES_SHOWN).map(|f| f.name.as_str()).collect();
+    let mut list = names.join(", ");
+    if faults.len() > names.len() {
+        list.push_str(&format!(" и ещё {}", faults.len() - names.len()));
+    }
+    list
+}
+
+/// Verdict for a resolution failure: name the jars, then say what to do with them.
+fn mod_fault_reason(faults: &[ModFault]) -> String {
+    let list = fault_list(faults);
+    if faults.iter().any(|f| f.wrong_version) {
+        format!(
+            "Моды собраны под другую версию игры: {}. Обнови их до версии сборки или убери из папки mods.",
+            list
+        )
+    } else {
+        format!("Модам не хватает зависимостей: {}. Установи то, что они требуют, или убери их.", list)
+    }
+}
+
 fn analyze_crash(game_dir: &Path, since: std::time::SystemTime) -> (String, String) {
     let text = crash_text(game_dir, since);
     let low = text.to_lowercase();
@@ -204,10 +283,13 @@ fn analyze_crash(game_dir: &Path, since: std::time::SystemTime) -> (String, Stri
         .then(|| problematic_frame(&text))
         .flatten()
         .and_then(|f| gpu_driver_vendor(&f));
+    let faults = mod_faults(&text);
     let reason = if low.contains("outofmemoryerror") || low.contains("could not reserve enough space") || low.contains("out of memory") {
         "Не хватило оперативной памяти. Добавь ОЗУ в настройках сборки."
     } else if low.contains("unsupportedclassversionerror") || low.contains("class file version") || low.contains("compiled by a more recent version of the java") {
         "Нужна другая версия Java для этой сборки."
+    } else if !faults.is_empty() {
+        return (mod_fault_reason(&faults), crash_tail(&text));
     } else if low.contains("mandatory dependencies") || low.contains("missing mods") || (low.contains("requires") && low.contains("mod")) {
         "Не хватает зависимости одного из модов."
     } else if low.contains("duplicate mods") || low.contains("incompatible mod") || low.contains("found a duplicate mod")
@@ -215,6 +297,15 @@ fn analyze_crash(game_dir: &Path, since: std::time::SystemTime) -> (String, Stri
         "Конфликт модов — есть дубли или несовместимые моды."
     } else if low.contains("mixin apply failed") || low.contains("mixinapplyerror") || low.contains("mixintransformererror") {
         "Один из модов не подошёл к этой версии игры (ошибка миксина)."
+    } else if low.contains("nosuchmethoderror")
+        || low.contains("noclassdeffounderror")
+        || low.contains("nosuchfielderror")
+        || low.contains("incompatibleclasschangeerror")
+    {
+        // Загрузчик пропустил мод, а код внутри него зовёт то, чего в этой версии
+        // игры уже нет. Так падает сборка, перенесённая на другую версию, — часто
+        // не на запуске, а при входе на сервер, когда мод впервые доходит до дела.
+        "Один из модов собран под другую версию игры: он зовёт код, которого в ней нет. Обнови моды сборки под её версию."
     } else if let Some(vendor) = gpu_vendor {
         return (driver_crash_reason(vendor), crash_tail(&text));
     } else if low.contains("glfw") || low.contains("pixel format") || low.contains("failed to create window") || low.contains("no opengl") {
@@ -650,16 +741,19 @@ pub async fn install_and_launch_in(
     }
     // CustomSkinLoader is a client mod, so it can only be installed on modded
     // profiles; vanilla has no way to load custom skins without Yggdrasil.
+    let root = if agent.is_some() && !auth.yggdrasil.is_empty() {
+        Some(format!("{}/csl/", auth.yggdrasil.trim_end_matches('/')))
+    } else { None };
+    let want_skin = want_in_game_skins(root.as_deref());
     if matches!(loader_id.as_str(), "fabric" | "quilt" | "forge" | "neoforge") {
-        let root = if agent.is_some() && !auth.yggdrasil.is_empty() {
-            Some(format!("{}/csl/", auth.yggdrasil.trim_end_matches('/')))
-        } else { None };
         let licensed = !auth.token.is_empty() && auth.yggdrasil.is_empty();
-        if want_in_game_skins(root.as_deref()) {
+        if want_skin {
             if let Err(e) = ensure_custom_skin_loader(&profile, &loader_id, root.as_deref(), &nick, licensed).await {
                 warn(&app, &format!("Мод скинов не поставлен: {}", e));
             }
         }
+    } else if let Some(why) = in_game_skin_blocker(&loader_id, !auth.token.is_empty(), want_skin) {
+        warn(&app, why);
     }
     let mut args = build_args(&v, &main_class, &classpath, &nick, &game_dir, &assets_root, &natives_dir, &libraries_dir, &auth);
     args.insert(0, format!("-Xmx{}M", resolve_ram_mb(ram_mb)));
@@ -945,6 +1039,60 @@ mod tests {
                 "skin_mod_implicated({text:?}) must be {expected}. Reason this case is pinned: {why}",
             );
         }
+    }
+
+    /// Жалоба 14.08.2026: сборку с Modrinth перенесли на другую версию, игра
+    /// вылетала при входе на сервер, а лаунчер отвечал «конфликт модов» — по
+    /// такому вердикту пятидесяти модов вручную не разобрать.
+    #[test]
+    fn resolution_failure_names_the_mods() {
+        let cases: &[(&str, &str, bool, &str)] = &[
+            (
+                "\t - Mod 'Sodium' (sodium) 0.5.8 requires version 1.20.1 of minecraft, but only the wrong version is present: 1.21.1!",
+                "Sodium",
+                true,
+                "Fabric: требование к самой игре = мод собран под другую версию",
+            ),
+            (
+                "\t - Mod 'Iris Shaders' (iris) 1.6.9 requires any version of fabric-api, which is missing!",
+                "Iris Shaders",
+                false,
+                "то же место, но не хватает соседнего мода — это другая починка",
+            ),
+            (
+                "\tMod ID: 'minecraft', Requested by: 'jei', Expected range: '[1.21,1.21.1]', Actual version: '1.21.4'",
+                "jei",
+                true,
+                "NeoForge пишет виновника в Requested by, а требование — в Mod ID",
+            ),
+            (
+                "\tMod ID: 'curios', Requested by: 'artifacts', Expected range: '[5.0,)', Actual version: '[MISSING]'",
+                "artifacts",
+                false,
+                "тот же формат, но не хватает мода-зависимости, а не версии игры",
+            ),
+        ];
+        for (line, name, wrong_version, why) in cases {
+            let faults = mod_faults(line);
+            assert_eq!(
+                faults,
+                vec![ModFault { name: name.to_string(), wrong_version: *wrong_version }],
+                "строка {line:?} обязана назвать мод. Зачем случай закреплён: {why}",
+            );
+        }
+
+        assert!(
+            mod_faults("[main/INFO]: Loading 4 mods:\n| 1 | Sodium | sodium | 0.5.8 | Fabric |").is_empty(),
+            "таблица загруженных модов печатается на каждом здоровом запуске — обвинять по ней нельзя"
+        );
+
+        let both = "\t - Mod 'Sodium' (sodium) 0.5.8 requires version 1.20.1 of minecraft, but only the wrong version is present: 1.21.1!\n\
+                    \t - Mod 'Iris Shaders' (iris) 1.6.9 requires version 1.20.1 of minecraft, but only the wrong version is present: 1.21.1!";
+        let reason = mod_fault_reason(&mod_faults(both));
+        assert!(
+            reason.contains("Sodium") && reason.contains("Iris Shaders") && reason.contains("другую версию"),
+            "вердикт обязан перечислить моды и сказать, что с ними делать; получили: {reason}"
+        );
     }
 
     #[test]

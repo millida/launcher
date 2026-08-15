@@ -32,14 +32,7 @@ fn base64_encode(bytes: &[u8]) -> String {
 /// Native file dialog: an HTML <input type=file> aborts WKWebView on macOS, so
 /// the file is picked here and returned as a data URL.
 pub async fn pick_texture() -> Result<Option<PickedTexture>, String> {
-    let picked = tauri::async_runtime::spawn_blocking(|| {
-        rfd::FileDialog::new()
-            .add_filter("PNG", &["png"])
-            .set_title("Скин или плащ (PNG)")
-            .pick_file()
-    })
-    .await
-    .map_err(|e| e.to_string())?;
+    let picked = pick_file(dialog().add_filter("PNG", &["png"]).set_title("Скин или плащ (PNG)")).await;
     let Some(p) = picked else { return Ok(None) };
     let bytes = std::fs::read(&p).map_err(|e| e.to_string())?;
     if bytes.len() > 2_000_000 {
@@ -55,14 +48,12 @@ pub async fn pick_texture() -> Result<Option<PickedTexture>, String> {
 /// Copied under a unique name, because WKWebView serves a cached image when the
 /// path repeats. Only the 8 most recent files are kept.
 pub async fn pick_wallpaper() -> Result<Option<CustomWallpaper>, String> {
-    let picked = tauri::async_runtime::spawn_blocking(|| {
-        rfd::FileDialog::new()
+    let picked = pick_file(
+        dialog()
             .add_filter("Фон", &["png", "jpg", "jpeg", "webp", "gif", "mp4", "webm", "mov", "m4v"])
-            .set_title("Свой фон лаунчера")
-            .pick_file()
-    })
-    .await
-    .map_err(|e| e.to_string())?;
+            .set_title("Свой фон лаунчера"),
+    )
+    .await;
     let Some(src) = picked else { return Ok(None) };
     let ext = src.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
     let kind = if matches!(ext.as_str(), "mp4" | "webm" | "mov" | "m4v") { "video" } else { "image" };

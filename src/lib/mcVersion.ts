@@ -8,12 +8,32 @@ export function versionMajor(v: string): string {
   return parts.length > 2 ? parts.slice(0, 2).join('.') : t
 }
 
+// The rating takes the version from the server owner, so releases that were
+// never published ("1.22".."1.29") reach the launcher and end up in its filters
+// and in the offer to build for them. Only Mojang's own list tells a typo from a
+// release; while that list is unknown every numeric version is kept, so a real
+// version is never hidden because the manifest failed to load.
+let known: Set<string> | null = null
+
+export function setKnownVersions(list: string[]) {
+  const s = new Set<string>()
+  for (const raw of list) {
+    const v = (raw || '').trim()
+    if (!NUMERIC.test(v)) continue
+    s.add(v)
+    s.add(versionMajor(v))
+  }
+  known = s.size ? s : null
+}
+
+export const isKnownVersion = (v: string) => !known || known.has(v)
+
 export function serverVersions(list?: string[] | null): string[] {
   const seen = new Set<string>()
   const out: string[] = []
   for (const raw of list || []) {
     const v = (raw || '').trim()
-    if (!NUMERIC.test(v) || seen.has(v)) continue
+    if (!NUMERIC.test(v) || seen.has(v) || !isKnownVersion(v)) continue
     seen.add(v)
     out.push(v)
   }

@@ -130,17 +130,13 @@ pub async fn import_pack_file(app: AppHandle, path: Option<String>) -> Result<Pr
     // The path from the webview is ignored: only a native pick may name a file,
     // so a compromised webview cannot aim the import at arbitrary files.
     let _ = path;
-    let picked = {
-        let f = tauri::async_runtime::spawn_blocking(|| {
-            rfd::FileDialog::new()
-                .add_filter("Сборка Minecraft", &["mrpack", "zip"])
-                .set_title("Файл сборки (.mrpack или .zip)")
-                .pick_file()
-        })
-        .await
-        .map_err(|e| e.to_string())?;
-        f.ok_or("Отменено")?
-    };
+    let picked = pick_file(
+        dialog()
+            .add_filter("Сборка Minecraft", &["mrpack", "zip"])
+            .set_title("Файл сборки (.mrpack или .zip)"),
+    )
+    .await
+    .ok_or("Отменено")?;
     if picked.is_dir() { return from_plain_dir(&picked, &base_name(&picked)); }
     if !picked.exists() { return Err("Файл не найден".into()) }
     emit(&app, "mod", 10.0, "Распаковываем сборку…");

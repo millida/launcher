@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { api, hasMillidaAccount } from '../lib/api'
+import { coalesce } from '../lib/coalesce'
 import { warmHeads } from '../lib/heads'
 import { clearRoomUnread } from './rooms'
 
@@ -166,25 +167,42 @@ export const useFriends = create<FriendsState>((set) => ({
   chatReplyTo: null,
   chatEditing: null,
   set: (patch) => set(patch as FriendsState),
-  load: async () => {
-    if (!hasMillidaAccount()) {
-      set({ friends: [], reqIn: [], reqOut: [] })
-      return
-    }
-    try {
-      const [f, req] = await Promise.all([api('/friends'), api('/friends/requests')])
-      set({ friends: f.friends || [], reqIn: req.incoming || [], reqOut: req.outgoing || [] })
-      warmHeads((f.friends || []).filter((x: Friend) => !x.avatarUrl).map((x: Friend) => x.nickname))
-    } catch {
-      set({ friends: [], reqIn: [], reqOut: [] })
-    }
-  },
+  load: () => loadFriends(),
 }))
 
-export const loadFriends = () => useFriends.getState().load()
+const fetchFriends = coalesce(async () => {
+  const set = useFriends.setState
+  if (!hasMillidaAccount()) {
+    set({ friends: [], reqIn: [], reqOut: [] })
+    return
+  }
+  try {
+    const [f, req] = await Promise.all([api('/friends'), api('/friends/requests')])
+    set({ friends: f.friends || [], reqIn: req.incoming || [], reqOut: req.outgoing || [] })
+    warmHeads((f.friends || []).filter((x: Friend) => !x.avatarUrl).map((x: Friend) => x.nickname))
+  } catch {
+    set({ friends: [], reqIn: [], reqOut: [] })
+  }
+})
+
+export const loadFriends = () => fetchFriends()
 
 export const unreadTotal = (friends: Friend[]): number =>
   friends.reduce((n, f) => n + (f.unread || 0), 0)
+
+/**
+ * Чистое поле новой переписки. Лента и её спутники обнуляются в тот же приём,
+ * что и адресат: пока они переживали переключение, до ответа сервера в открытом
+ * чате висели чужие сообщения — тем дольше, чем хуже связь.
+ */
+const emptyThread = () => ({
+  chatMsgs: [] as ChatMessage[],
+  chatEmpty: false,
+  chatHasMore: false,
+  chatPeerReadAt: 0,
+  chatTypers: [] as string[],
+  chatSeq: useFriends.getState().chatSeq + 1,
+})
 
 function clearUnread(uid: string) {
   const s = useFriends.getState()
@@ -204,6 +222,7 @@ export async function openChat(uid: string, nick: string, profileMode?: boolean)
     chatReplyTo: null,
     chatEditing: null,
     chatTyping: false,
+    ...emptyThread(),
   })
   clearUnread(uid)
   void api('/friends/chat/' + encodeURIComponent(uid) + '/read', { method: 'POST' }).catch(() => {})
@@ -235,6 +254,7 @@ export async function openRoomChat(roomId: string, title: string) {
     chatReplyTo: null,
     chatEditing: null,
     chatTyping: false,
+    ...emptyThread(),
   })
   clearRoomUnread(roomId)
   void api('/friends/rooms/' + encodeURIComponent(roomId) + '/read', { method: 'POST' }).catch(() => {})

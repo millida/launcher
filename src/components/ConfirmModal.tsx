@@ -13,20 +13,22 @@ export function ConfirmModal() {
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close(false)
-      if (e.key === 'Enter') close(true, remember)
+      if (e.key === 'Escape') close('dismiss')
+      if (e.key === 'Enter') close('yes', remember)
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [open, close, remember])
 
   if (!open) return null
-  // Above other modals (z-index 400) so a confirm opened from a modal is not hidden behind it.
+  // Above every window a confirm can be opened from: ordinary modals sit at 400,
+  // the room member list at 960 — under it the question about leaving the group
+  // or kicking someone was invisible while the launcher waited for an answer.
   return (
     <div
       className="modal-bg open vis"
-      style={{ zIndex: 700 }}
-      {...backdropClose(() => close(false))}
+      style={{ zIndex: 980 }}
+      {...backdropClose(() => close('dismiss'))}
     >
       <div className="modal mw-xs">
         <h3>{title}</h3>
@@ -54,13 +56,13 @@ export function ConfirmModal() {
           </label>
         ) : null}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '22px' }}>
-          <button className="btn md secondary" onClick={() => close(false)}>
+          <button className="btn md secondary" onClick={() => close('no')}>
             {cancelLabel}
           </button>
           <button
             className={'btn md ' + (danger ? 'danger' : 'primary')}
             data-nosound
-            onClick={() => close(true, remember)}
+            onClick={() => close('yes', remember)}
             autoFocus
           >
             {confirmLabel}

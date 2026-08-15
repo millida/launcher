@@ -1,4 +1,4 @@
-import { applyOutput, micConstraint } from '../audioDevices'
+import { applyOutput, micConstraint, micProcessingConstraint, type MicProcessing } from '../audioDevices'
 import {
   MIC_PROCESSOR,
   MIC_TUNING,
@@ -18,6 +18,9 @@ export interface MicChain {
   setMuted: (v: boolean) => void
   setMode: (mode: NoiseMode) => void
   setGain: (pct: number) => void
+  /** Ложь — движок не принял обработку на живой дорожке, она встанет со следующего звонка. */
+  setProcessing: (p: MicProcessing, noise: NoiseMode) => Promise<boolean>
+
   /** Уровень и факт речи для индикатора; шумоподавление может быть выключено, тогда `open` всегда истинно. */
   onLevel: (cb: (l: MicLevel) => void) => void
   close: () => void
@@ -86,6 +89,16 @@ export async function openMic(): Promise<MicChain> {
     },
     setMode: (mode) => post({ tune: MIC_TUNING[mode] }),
     setGain: (pct) => post({ gain: Math.max(0, Math.min(300, pct)) / 100 }),
+    setProcessing: async (p, noise) => {
+      const source = nodes.stream.getAudioTracks()[0]
+      if (!source) return false
+      try {
+        await source.applyConstraints(micProcessingConstraint(p, noise))
+        return true
+      } catch {
+        return false
+      }
+    },
     onLevel: (cb) => {
       listener = cb
     },

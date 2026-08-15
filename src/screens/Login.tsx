@@ -60,7 +60,8 @@ export function Login({ on }: { on: boolean }) {
             </div>
           ) : (
             <p className="faint-note login-hint">
-              Откроется страница Millida — подтверди код, и лаунчер войдёт сам. Нет аккаунта? Он создастся при входе.
+              Откроется страница Millida — подтверди код, и лаунчер войдёт сам. Не открылась — введи код на
+              millida.net/auth/launcher. Нет аккаунта? Он создастся при входе.
             </p>
           )}
           <div className="login-reg" id="tgHint" style={{ display: login.hintShown ? 'block' : 'none' }}>

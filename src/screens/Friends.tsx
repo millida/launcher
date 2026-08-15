@@ -8,8 +8,9 @@ import { showToast } from '../state/ui'
 import { useHasMillida } from '../state/auth'
 import { refreshGameNick, useGameNick } from '../state/gameNick'
 import { loadFriends, openChat, openFriendProfile, openRoomChat, useFriends } from '../state/friends'
-import { callFriend, callSupported, joinRoomVoice, useCall } from '../state/call'
+import { callFriend, callSupported, useCall } from '../state/call'
 import { loadRooms, nickInRooms, openRoomCreate, openRoomManage, useRooms } from '../state/rooms'
+import { RoomCallButton } from '../components/RoomCall'
 import { rememberServerName } from '../state/playStats'
 import { uiConfirm } from '../state/confirm'
 import { quickJoin } from '../lib/joinServer'
@@ -75,15 +76,7 @@ function RoomsSection() {
                 </span>
               </span>
               {callSupported() ? (
-                <button
-                  className={'btn sm ' + (inside.length && !here ? 'primary' : 'secondary')}
-                  title={here ? 'Ты в разговоре' : 'Зайти в разговор группы'}
-                  disabled={here || (callStatus !== 'idle' && !here)}
-                  onClick={() => void joinRoomVoice(r.id, r.title)}
-                >
-                  <Icon id={inside.length ? 'i-headset' : 'i-phone'} />
-                  {here ? 'В разговоре' : inside.length ? 'Зайти · ' + inside.length : 'Разговор'}
-                </button>
+                <RoomCallButton room={r} here={here} busy={callStatus !== 'idle'} row />
               ) : null}
               <button className="btn sm secondary fr-msg" onClick={() => void openRoomChat(r.id, r.title)}>
                 <Icon id="i-msg" />

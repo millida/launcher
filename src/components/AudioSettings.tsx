@@ -10,15 +10,17 @@ import {
   micErrorText,
   playTestTone,
   setStoredMic,
+  setStoredMicProcessing,
   setStoredOutput,
   storedMic,
+  storedMicProcessing,
   storedOutput,
 } from '../lib/audioDevices'
-import type { AudioDevice } from '../lib/audioDevices'
+import type { AudioDevice, MicProcessing } from '../lib/audioDevices'
 import { setStoredMicGain, setStoredNoiseMode, storedMicGain, storedNoiseMode, type NoiseMode } from '../lib/call/mic-worklet'
 import { setStoredCallVolume, storedCallVolume } from '../lib/call/audio'
 import { SCREEN_PRESETS, canShareScreen, setStoredScreenQuality, storedScreenQuality, type ScreenQuality } from '../lib/call/screen'
-import { setCallMicGain, setCallNoise, setCallVolume } from '../state/call'
+import { setCallMicGain, setCallNoise, setCallProcessing, setCallVolume } from '../state/call'
 
 const SYSTEM = { value: '', label: 'Системное по умолчанию' }
 
@@ -96,7 +98,7 @@ const NOISE_OPTIONS: { value: NoiseMode; label: string }[] = [
 ]
 
 const NOISE_HINT: Record<NoiseMode, string> = {
-  off: 'Остаётся только шумоподавление системы',
+  off: 'Микрофон уходит как есть: ни лаунчер, ни движок его не приглушают',
   standard: 'Тишина между фразами, речь не режется',
   strong: 'Для шумной комнаты: механическая клавиатура, вентилятор',
 }
@@ -107,6 +109,11 @@ const SCREEN_OPTIONS: { value: ScreenQuality; label: string }[] = [
   { value: 'sharp', label: 'Чётко — 1080p, 15 кадров' },
 ]
 
+const ON_OFF = [
+  { value: 'on', label: 'Включено' },
+  { value: 'off', label: 'Выключено' },
+]
+
 /// Настройки звонка меняются и во время разговора: значение уходит и в
 /// хранилище, и в живой звонок, иначе его пришлось бы перезванивать.
 function CallSettings() {
@@ -114,6 +121,14 @@ function CallSettings() {
   const [gain, setGain] = useState(storedMicGain())
   const [volume, setVolume] = useState(storedCallVolume())
   const [screen, setScreen] = useState<ScreenQuality>(storedScreenQuality())
+  const [processing, setProcessing] = useState<MicProcessing>(storedMicProcessing())
+
+  const applyProcessing = (next: MicProcessing) => {
+    setProcessing(next)
+    setStoredMicProcessing(next)
+    void setCallProcessing(next)
+  }
+
   return (
     <>
       <div className="set-row">
@@ -130,6 +145,38 @@ function CallSettings() {
             setStoredNoiseMode(mode)
             setCallNoise(mode)
           }}
+        />
+      </div>
+      <div className="set-row">
+        <span className="lab">
+          Автоуровень микрофона
+          <small>
+            {processing.agc
+              ? 'Система сама ведёт громкость — во время долгой речи она её убавляет'
+              : 'Громкость держится ровно такой, какой её задал ползунок ниже'}
+          </small>
+        </span>
+        <Select
+          value={processing.agc ? 'on' : 'off'}
+          width={230}
+          options={ON_OFF}
+          onChange={(v) => applyProcessing({ ...processing, agc: v === 'on' })}
+        />
+      </div>
+      <div className="set-row">
+        <span className="lab">
+          Подавление эха
+          <small>
+            {processing.echo
+              ? 'Нужно, если слушаешь через колонки: иначе собеседник слышит себя'
+              : 'Выключено — в наушниках эха нет, а микрофон не приглушается на чужой речи'}
+          </small>
+        </span>
+        <Select
+          value={processing.echo ? 'on' : 'off'}
+          width={230}
+          options={ON_OFF}
+          onChange={(v) => applyProcessing({ ...processing, echo: v === 'on' })}
         />
       </div>
       <div className="set-row">

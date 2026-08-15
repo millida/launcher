@@ -6,6 +6,12 @@ export const SCREEN_MAX_BITRATE = 2_500_000
 /** Ниже этого картинка перестаёт быть читаемой — лучше не показывать вовсе. */
 export const SCREEN_MIN_BITRATE = 600_000
 
+/// Показ экрана без явного разрешения: движок сам решает, чем жертвовать при
+/// нехватке канала, и для дорожки с подсказкой «движение» жертвует именно
+/// разрешением — картинка у зрителя схлопывается до нечитаемой и обратно уже не
+/// растёт. Кадры терять можно, буквы — нет.
+const SCREEN_DEGRADATION: RTCDegradationPreference = 'maintain-resolution'
+
 export interface PeerFlags {
   muted?: boolean
   deafened?: boolean
@@ -30,7 +36,7 @@ export interface PeerCallbacks {
 
 export interface Peer {
   setMicTrack: (track: MediaStreamTrack) => Promise<void>
-  setScreenTrack: (track: MediaStreamTrack | null, maxBitrate?: number) => Promise<void>
+  setScreenTrack: (track: MediaStreamTrack | null, encoding?: RTCRtpEncodingParameters) => Promise<void>
   setScreenAudioTrack: (track: MediaStreamTrack | null) => Promise<void>
   /** Возвращает, ушло ли состояние: закрытый канал — повод отправить его сигналингом. */
   sendFlags: (flags: PeerFlags) => boolean
@@ -125,7 +131,7 @@ export function createPeer(
       if (micSender) await micSender.replaceTrack(track)
       else micSender = pc.addTrack(track)
     },
-    async setScreenTrack(track, maxBitrate = SCREEN_MAX_BITRATE) {
+    async setScreenTrack(track, encoding = { maxBitrate: SCREEN_MAX_BITRATE, maxFramerate: 30 }) {
       if (!track) {
         if (screenSender) {
           pc.removeTrack(screenSender)
@@ -133,17 +139,15 @@ export function createPeer(
         }
         return
       }
-      if (screenSender) {
-        await screenSender.replaceTrack(track)
-        return
-      }
-      screenSender = pc.addTrack(track)
+      if (!screenSender) screenSender = pc.addTrack(track)
+      else await screenSender.replaceTrack(track)
       const params = screenSender.getParameters()
       // Показ экрана не должен вытеснять голос: потолок битрейта задаётся сразу,
       // иначе движок отдаст видео весь доступный канал. В группе картинка уходит
       // каждому отдельным потоком, поэтому потолок там делится на зрителей —
       // иначе показ впятером требовал бы аплоада, которого почти ни у кого нет.
-      params.encodings = [{ maxBitrate, maxFramerate: 30 }]
+      params.degradationPreference = SCREEN_DEGRADATION
+      params.encodings = [encoding]
       await screenSender.setParameters(params).catch(() => {})
     },
     async setScreenAudioTrack(track) {

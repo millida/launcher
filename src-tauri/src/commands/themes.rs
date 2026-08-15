@@ -27,14 +27,13 @@ pub fn open_themes_folder() {
 #[tauri::command]
 pub async fn export_theme(id: String) -> Result<Option<String>, String> {
     let name = id.clone();
-    let picked = blocking(move || {
-        rfd::FileDialog::new()
+    let picked = engine::save_file(
+        engine::dialog()
             .add_filter("Тема лаунчера", &["mtheme", "zip"])
             .set_file_name(format!("{name}.mtheme"))
-            .set_title("Сохранить тему")
-            .save_file()
-    })
-    .await?;
+            .set_title("Сохранить тему"),
+    )
+    .await;
     let Some(path) = picked else { return Ok(None) };
     let target = path.clone();
     blocking(move || engine::export_theme(&id, &target)).await??;
@@ -57,13 +56,12 @@ pub async fn save_theme(
 /// theme id instead of a path from the webview.
 #[tauri::command]
 pub async fn add_theme_asset(app: tauri::AppHandle, id: String) -> Result<Option<String>, String> {
-    let picked = blocking(|| {
-        rfd::FileDialog::new()
+    let picked = engine::pick_file(
+        engine::dialog()
             .add_filter("Картинка или шрифт", &["png", "jpg", "jpeg", "webp", "gif", "woff2", "woff", "ttf", "otf"])
-            .set_title("Файл для темы")
-            .pick_file()
-    })
-    .await?;
+            .set_title("Файл для темы"),
+    )
+    .await;
     let Some(path) = picked else { return Ok(None) };
     let name = blocking(move || engine::add_theme_asset(&id, &path)).await??;
     crate::allow_assets(&app);
@@ -122,13 +120,10 @@ pub async fn catalog_like_theme(slug: String) -> Result<serde_json::Value, Strin
 /// letting the webview hand over a path would make the command take one.
 #[tauri::command]
 pub async fn import_theme(app: tauri::AppHandle) -> Result<Option<engine::InstalledTheme>, String> {
-    let picked = blocking(|| {
-        rfd::FileDialog::new()
-            .add_filter("Тема лаунчера", &["zip", "mtheme"])
-            .set_title("Тема оформления")
-            .pick_file()
-    })
-    .await?;
+    let picked = engine::pick_file(
+        engine::dialog().add_filter("Тема лаунчера", &["zip", "mtheme"]).set_title("Тема оформления"),
+    )
+    .await;
     let Some(path) = picked else { return Ok(None) };
     let installed = blocking(move || engine::install_theme_from(&path)).await??;
     // A freshly created themes directory is outside the asset scope granted at

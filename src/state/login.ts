@@ -33,6 +33,11 @@ interface LoginState {
 
 const IDLE_LABEL = 'Войти через аккаунт Millida'
 
+// The browser does not always come up (no default browser, a portable build, a
+// second machine). Saying where the code goes turns a dead end into a two-step
+// login: millida.net/auth/launcher has a field for exactly this code.
+const MANUAL_HINT = 'Подтверди код на странице Millida. Не открылась — зайди на millida.net/auth/launcher и введи код там.'
+
 export const useLogin = create<LoginState>((set) => ({
   webLabel: IDLE_LABEL,
   webBusy: false,
@@ -115,12 +120,12 @@ export async function startWebLogin(reopen = false) {
     userCode: init.userCode,
     verifyUrl: init.verifyUrl,
     hintShown: true,
-    hintText: 'Подтверди код на открывшейся странице Millida.',
+    hintText: MANUAL_HINT,
   })
   openUrlAnywhere(init.verifyUrl)
   void copyText(init.userCode).then((copied) => {
     if (!copied || useLogin.getState().userCode !== init.userCode) return
-    useLogin.getState().set({ hintText: 'Код скопирован — подтверди его на открывшейся странице Millida.' })
+    useLogin.getState().set({ hintText: 'Код скопирован. ' + MANUAL_HINT })
   })
 
   const deadline = Date.now() + Math.max(60, init.expiresInSec) * 1000

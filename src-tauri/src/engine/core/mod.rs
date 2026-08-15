@@ -9,6 +9,7 @@ mod proc;
 mod selfupdate;
 mod selfheal;
 mod external;
+mod dialogs;
 
 pub use paths::*;
 pub use prefs::*;
@@ -21,3 +22,4 @@ pub(crate) use proc::*;
 pub use selfupdate::*;
 pub use selfheal::*;
 pub use external::*;
+pub use dialogs::*;

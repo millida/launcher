@@ -9,6 +9,8 @@ import { openProject } from '../state/project'
 import { setNewBuildPreset } from '../state/newBuild'
 import { openModal } from '../state/ui'
 import { useProfiles } from '../state/profiles'
+import { useFriends, openChat } from '../state/friends'
+import { callFriend } from '../state/call'
 import { rememberServerName } from '../state/playStats'
 import { quickJoin } from './joinServer'
 import { realLaunch } from './launch'
@@ -96,6 +98,30 @@ function handle(raw: string) {
   }
   if (action === 'friends') {
     setScreen('friends')
+    return
+  }
+  // The website hands off to the launcher for anything the browser cannot do:
+  // opening a specific conversation and placing a call. Without a target id
+  // these fall back to the friends screen rather than doing nothing.
+  if (action === 'chat') {
+    const uid = rest || q.get('user') || ''
+    setScreen('friends')
+    if (uid) void openChat(uid, q.get('nick') || '').catch(() => {})
+    return
+  }
+  if (action === 'call') {
+    const uid = rest || q.get('user') || ''
+    setScreen('friends')
+    if (!uid) return
+    const nick = q.get('nick') || useFriends.getState().friends.find((f) => f.userId === uid)?.nickname || ''
+    // Any web page can fire a millida:// link, so calling someone asks first.
+    void uiConfirm(`Позвонить ${nick || 'этому игроку'}?`, {
+      title: 'Millida',
+      confirmLabel: 'Позвонить',
+      danger: false,
+    }).then((ok) => {
+      if (ok) void callFriend(uid, nick).catch(() => {})
+    })
   }
 }
 

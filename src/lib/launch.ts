@@ -7,7 +7,7 @@ import { api, hasMillidaAccount } from './api'
 import { joinPageUrl } from './invite'
 import { effectiveNick, getAccount, launchAuthKind, profileSlug } from '../state/accounts'
 import { ensureMsAuth, startMsLogin } from '../state/msLogin'
-import { uiConfirm } from '../state/confirm'
+import { uiChoice, uiConfirm } from '../state/confirm'
 import { useProfiles } from '../state/profiles'
 import { showToast, useUi } from '../state/ui'
 import { useGame } from '../state/game'
@@ -89,7 +89,7 @@ async function resolveAuth(): Promise<{ nick: string; auth: LaunchAuth }> {
   if (acc && kind === 'microsoft') {
     const ms = await ensureMsAuth(acc)
     if (ms) return { nick: acc.nick, auth: { kind: 'microsoft', accountId: ms.id, uuid: ms.uuid, xuid: ms.xuid } }
-    const relogin = await uiConfirm(
+    const relogin = await uiChoice(
       'Вход по лицензии Microsoft истёк — сессия Minecraft больше не действует. Онлайн-серверы такой запуск не примут: игра скажет «Вы не вошли в свой аккаунт Minecraft». Войти заново?',
       {
         title: 'Лицензия не подтверждена',
@@ -98,10 +98,11 @@ async function resolveAuth(): Promise<{ nick: string; auth: LaunchAuth }> {
         danger: false,
       },
     )
-    if (relogin) {
+    if (relogin === 'yes') {
       void startMsLogin()
       throw new Error('Вход по лицензии Microsoft истёк — подтверди аккаунт и запусти игру снова')
     }
+    if (relogin === 'dismiss') throw new Error('Запуск отменён')
     showToast('Играем офлайн: онлайн-серверы ответят «Вы не вошли в свой аккаунт Minecraft»')
     return offline
   }
@@ -111,6 +112,8 @@ async function resolveAuth(): Promise<{ nick: string; auth: LaunchAuth }> {
 
 export function showLaunchError(e: unknown) {
   const msg = String(e && (e as Error).message ? (e as Error).message : e).replace(/^Error:\s*/, '')
+  // A launch the user called off is not a failure and must not raise a red toast.
+  if (/^Запуск отменён/.test(msg)) return
   showToast(/лиценз/i.test(msg) ? msg : 'Ошибка запуска: ' + msg, 'error')
 }
 
