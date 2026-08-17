@@ -8,11 +8,14 @@ import { refreshPlayStats, usePlayStats } from '../state/playStats'
 import { rememberServerName } from '../state/playStats'
 import { openModal, setScreen } from '../state/ui'
 import { quickJoin } from '../lib/joinServer'
+import { usePackCode } from '../state/packCode'
+import { InstallByCodeModal } from '../components/InstallByCodeModal'
 
 export function Builds({ on }: { on: boolean }) {
   const { profiles, groups } = useProfiles()
   const updates = useModUpdates()
   const stats = usePlayStats((s) => s.stats)
+  const packCode = usePackCode()
 
   useEffect(() => {
     if (on) void refreshPlayStats()
@@ -62,6 +65,10 @@ export function Builds({ on }: { on: boolean }) {
               </span>
             </button>
           ) : null}
+          <button className="btn sm secondary" data-sound="open" onClick={() => usePackCode.getState().show()}>
+            <Icon id="i-link" />
+            По коду
+          </button>
           <button className="btn sm secondary" data-sound="open" onClick={() => openModal('impModal')}>
             <Icon id="i-download" />
             Импорт
@@ -168,6 +175,9 @@ export function Builds({ on }: { on: boolean }) {
           </div>
         )}
       </div>
+      {packCode.open ? (
+        <InstallByCodeModal initialCode={packCode.code} onClose={() => packCode.close()} />
+      ) : null}
     </section>
   )
 }

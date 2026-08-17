@@ -71,10 +71,18 @@ pub(crate) async fn cf_download(file: &Value, fname: &str, dest: &Path) -> Resul
     let sha1 = cf_sha1(file);
     let sum = if sha1.is_empty() { None } else { Some(Sum::Sha1(sha1.as_str())) };
     let size = file["fileLength"].as_u64();
+    // Linked from the shared store when another build already has this file:
+    // the digest is CurseForge's own, so the bytes are the ones it would serve.
+    if !sha1.is_empty() && !dest.exists() && link_from_store(&sha1, dest, size) {
+        return Ok(cf_file_urls(file, fname).into_iter().next().unwrap_or_default());
+    }
     let mut last = String::new();
     for u in cf_file_urls(file, fname) {
         match download_checked(&u, dest, sum, size).await {
-            Ok(_) => return Ok(u),
+            Ok(_) => {
+                if !sha1.is_empty() { adopt_to_store(dest, &sha1); }
+                return Ok(u);
+            }
             Err(e) => last = e,
         }
     }

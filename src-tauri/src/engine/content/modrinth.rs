@@ -240,7 +240,14 @@ pub(crate) async fn install_project_version(
     let sum = if !sha512.is_empty() { Sum::Sha512(sha512) }
         else if !sha1.is_empty() { Sum::Sha1(sha1) }
         else { return Err(format!("{}: Modrinth не дал контрольную сумму файла", fname)) };
-    download_checked(file["url"].as_str().unwrap_or(""), &dest, Some(sum), file["size"].as_u64()).await?;
+    // A build that already has this exact file gets it linked, not downloaded:
+    // the store is addressed by the same sha1 the catalogue published.
+    let shared = !dest.exists() && !sha1.is_empty()
+        && link_from_store(sha1, &dest, file["size"].as_u64());
+    if !shared {
+        download_checked(file["url"].as_str().unwrap_or(""), &dest, Some(sum), file["size"].as_u64()).await?;
+        if !sha1.is_empty() { adopt_to_store(&dest, sha1); }
+    }
     let (pid, title, icon, summary) = fetch_project_meta(project).await;
     manifest_upsert(profile, ContentEntry {
         kind: kind.to_string(),

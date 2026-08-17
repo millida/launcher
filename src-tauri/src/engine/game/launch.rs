@@ -121,7 +121,7 @@ fn native_crash_log(game_dir: &Path, since: std::time::SystemTime) -> Option<Str
 /// Captured stdout plus the game's own latest.log, the newest crash report and a
 /// JVM fatal-error log — all of them only if written by THIS launch. Fabric and
 /// Quilt report mod resolution and mixin failures only in latest.log.
-fn crash_text(game_dir: &Path, since: std::time::SystemTime) -> String {
+pub(crate) fn crash_text(game_dir: &Path, since: std::time::SystemTime) -> String {
     let mut text = read_fresh(&game_dir.join("logs/launcher-latest.log"), since).unwrap_or_default();
     for extra in [
         read_fresh(&game_dir.join("logs/latest.log"), since),
@@ -195,9 +195,9 @@ fn skin_mod_implicated(text: &str) -> bool {
 /// A mod the loader refused to load. `wrong_version` — the unmet requirement is
 /// the game itself (or the loader), i.e. the jar is built for another version.
 #[derive(PartialEq, Debug)]
-struct ModFault {
-    name: String,
-    wrong_version: bool,
+pub(crate) struct ModFault {
+    pub(crate) name: String,
+    pub(crate) wrong_version: bool,
 }
 
 /// First `'...'` after the marker. Loaders quote mod names, so the quotes are
@@ -219,7 +219,7 @@ const GAME_REQUIREMENTS: [&str; 6] =
 /// print one line per unmet requirement, and that line is the only place the
 /// player learns WHICH jar to update — without it the verdict stays "конфликт
 /// модов", and a fifty-mod pack is unfixable by hand.
-fn mod_faults(text: &str) -> Vec<ModFault> {
+pub(crate) fn mod_faults(text: &str) -> Vec<ModFault> {
     let mut out: Vec<ModFault> = vec![];
     for line in text.lines() {
         let low = line.to_lowercase();
@@ -271,7 +271,7 @@ fn mod_fault_reason(faults: &[ModFault]) -> String {
     }
 }
 
-fn analyze_crash(game_dir: &Path, since: std::time::SystemTime) -> (String, String) {
+pub(crate) fn analyze_crash(game_dir: &Path, since: std::time::SystemTime) -> (String, String) {
     let text = crash_text(game_dir, since);
     let low = text.to_lowercase();
     // "Problematic frame" is written by nothing but a JVM fatal-error log, so it
@@ -665,20 +665,6 @@ pub(crate) fn build_args(
     args
 }
 
-/// Auto memory: half of physical RAM, clamped to 2-8 GB.
-pub(crate) fn resolve_ram_mb(requested: u32) -> u32 {
-    if requested > 0 {
-        return requested.clamp(512, 65536);
-    }
-    let mut sys = sysinfo::System::new();
-    sys.refresh_memory();
-    let total_mb = sys.total_memory() / 1024 / 1024;
-    if total_mb == 0 {
-        return 4096;
-    }
-    (total_mb / 2).clamp(2048, 8192) as u32
-}
-
 /// `ram_mb` of 0 means auto.
 pub async fn install_and_launch(
     app: AppHandle,
@@ -756,7 +742,7 @@ pub async fn install_and_launch_in(
         warn(&app, why);
     }
     let mut args = build_args(&v, &main_class, &classpath, &nick, &game_dir, &assets_root, &natives_dir, &libraries_dir, &auth);
-    args.insert(0, format!("-Xmx{}M", resolve_ram_mb(ram_mb)));
+    args.insert(0, format!("-Xmx{}M", tuned_ram_mb(&profile, ram_mb)));
     if let Some(a) = agent { args.insert(1, a); }
     // Log4Shell mitigation for 1.7-1.18; harmless on newer versions.
     args.insert(1, "-Dlog4j2.formatMsgNoLookups=true".into());
@@ -776,15 +762,24 @@ pub async fn install_and_launch_in(
     // Профиль GC режима «Буст FPS» встаёт левее пользовательских аргументов:
     // у JVM выигрывает последний одноимённый флаг, поэтому свой -XX игрока
     // остаётся сильнее нашего.
-    if settings["fpsBoost"].as_bool().unwrap_or(false) {
+    let boost_on = settings["fpsBoost"].as_bool().unwrap_or(false);
+    if boost_on {
         let own = settings["jvmArgs"].as_str().unwrap_or("");
         let taken: Vec<&str> = own.split_whitespace().collect();
-        let flags: Vec<String> = BOOST_FLAGS
-            .iter()
+        let flags: Vec<String> = boost_flags()
+            .into_iter()
             .filter(|f| !taken.iter().any(|a| a.eq_ignore_ascii_case(f)))
             .map(|f| f.to_string())
             .collect();
         for (i, a) in flags.into_iter().enumerate() { args.insert(1 + i, a); }
+    }
+    // Тот же порядок и по той же причине: авто-тюнинг встаёт левее аргументов
+    // игрока и молчит, когда буст уже поставил свой профиль GC.
+    for (i, a) in tuned_flags(&profile, settings["jvmArgs"].as_str().unwrap_or(""), boost_on)
+        .into_iter()
+        .enumerate()
+    {
+        args.insert(1 + i, a);
     }
     // Zero means "let the game decide": passing --width/--height 0 makes
     // Minecraft open a minimum-size window.
@@ -889,13 +884,11 @@ pub async fn install_and_launch_in(
             // The injected skin mod must never break a profile permanently: if
             // the crash actually implicates it, remove it and say so. Anything
             // weaker than "implicates" costs the player their skins for nothing.
-            if skin_mod_implicated(&crash_text(&gdir, start_wall)) && drop_custom_skin_loader(&pname) {
+            let log_text = crash_text(&gdir, start_wall);
+            if skin_mod_implicated(&log_text) && drop_custom_skin_loader(&pname) {
                 reason = "Мод скинов Millida не ужился со сборкой — мы его убрали. Запусти игру ещё раз.".into();
             }
-            let _ = app2.emit(
-                "game-crash",
-                serde_json::json!({ "profile": pname, "reason": reason, "tail": tail }),
-            );
+            let _ = app2.emit("game-crash", diagnose(&pname, &reason, &tail, &log_text));
         }
     });
     emit(&app, "launch", 100.0, "Игра запущена");

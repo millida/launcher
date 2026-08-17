@@ -291,22 +291,6 @@ pub fn modpack_info(profile: &str) -> Value {
     })
 }
 
-pub fn list_screenshots(profile: &str) -> Vec<String> {
-    let dir = profile_dir(profile).join("screenshots");
-    let mut items: Vec<(std::time::SystemTime, String)> = vec![];
-    if let Ok(rd) = std::fs::read_dir(&dir) {
-        for e in rd.flatten() {
-            let n = e.file_name().to_string_lossy().to_string();
-            if n.to_lowercase().ends_with(".png") {
-                let t = e.metadata().ok().and_then(|m| m.modified().ok()).unwrap_or(std::time::UNIX_EPOCH);
-                items.push((t, e.path().to_string_lossy().to_string()));
-            }
-        }
-    }
-    items.sort_by_key(|i| std::cmp::Reverse(i.0));
-    items.into_iter().map(|(_, p)| p).collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

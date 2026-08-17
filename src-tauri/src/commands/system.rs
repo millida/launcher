@@ -173,3 +173,22 @@ pub async fn cache_size() -> Result<u64, String> {
 pub async fn clear_cache() -> Result<u64, String> {
     super::blocking(engine::clear_cache).await
 }
+
+/// Shared-store numbers for the settings screen. Scanning hashes every mod in
+/// every build, so it runs off the event loop.
+#[tauri::command]
+pub async fn dedupe_scan() -> Result<engine::DedupReport, String> {
+    super::blocking(engine::dedupe_scan).await
+}
+
+#[tauri::command]
+pub async fn dedupe_run() -> Result<engine::DedupReport, String> {
+    super::blocking(engine::dedupe_run).await
+}
+
+/// Drops stored objects no build points at any more — what removing a mod
+/// leaves behind.
+#[tauri::command]
+pub async fn dedupe_gc() -> Result<u64, String> {
+    super::blocking(engine::store_gc).await
+}

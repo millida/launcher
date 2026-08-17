@@ -47,6 +47,7 @@ pub mod accounts;
 pub mod skins;
 pub mod media;
 pub mod themes;
+pub mod cloud;
 pub mod theme_catalog;
 
 pub use core::*;
@@ -57,4 +58,5 @@ pub use accounts::*;
 pub use skins::*;
 pub use media::*;
 pub use themes::*;
+pub use cloud::*;
 pub use theme_catalog::*;

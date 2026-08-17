@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { Cover } from '../components/Cover'
+import { WorldManager } from '../components/WorldManager'
+import { ScreenshotGallery } from '../components/ScreenshotGallery'
+import { SafetyModal } from '../components/SafetyModal'
+import { SharePackModal } from '../components/SharePackModal'
+import { TunePanel } from '../components/TunePanel'
 import { IconGrid } from '../components/IconGrid'
 import { uiConfirm } from '../state/confirm'
 import { copyText } from '../lib/clipboard'
@@ -10,13 +15,11 @@ import {
   addLocalFile,
   addServer,
   auditDeps,
-  backupWorld,
   checkUpdates,
   clearProfileCover,
   countScreenshots,
   deleteContent,
   deleteProfile,
-  deleteWorld,
   detectJava,
   duplicateProfile,
   exportMrpack,
@@ -26,7 +29,6 @@ import {
   listLogs,
   listServers,
   listVersions,
-  listWorlds,
   loadProfileSettings,
   fpsBoostState,
   gpuSwitchSupported,
@@ -68,12 +70,11 @@ import type {
   PingResult,
   ServerEntry,
   SkinModState,
-  WorldEntry,
 } from '../ipc/commands'
 import { Select } from '../components/Select'
 import { Slider } from '../components/Slider'
 import { isBlockIcon } from '../lib/blockColor'
-import { LOADER_NAME, agoText, fmtPlaytime, fmtSize, loaderId, whenText } from '../lib/format'
+import { LOADER_NAME, fmtPlaytime, fmtSize, loaderId, whenText } from '../lib/format'
 import { AUTO_LOADER_VERSION, hasLoaderVersions, useLoaderBuilds } from '../lib/loaderBuilds'
 import { incompatibleWith } from '../lib/compat'
 import { planItem } from '../lib/deps'
@@ -175,7 +176,6 @@ export function InstancePage() {
   const [mpSlug, setMpSlug] = useState('')
   const [mpVersion, setMpVersion] = useState('')
   const [group, setGroup] = useState('')
-  const [worlds, setWorlds] = useState<WorldEntry[]>([])
   const [servers, setServers] = useState<ServerEntry[]>([])
   const [pings, setPings] = useState<Record<string, PingResult | null>>({})
   const [repairBusy, setRepairBusy] = useState(false)
@@ -209,6 +209,8 @@ export function InstancePage() {
   kindRef.current = kind
   const tabRef = useRef(tab)
   tabRef.current = tab
+  const [safetyOpen, setSafetyOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
   const [dropActive, setDropActive] = useState(false)
   const [dropBusy, setDropBusy] = useState(false)
 
@@ -258,17 +260,13 @@ export function InstancePage() {
   const loadWorlds = useCallback(() => {
     if (!profile) return
     if (!hasTauri()) {
-      setWorlds([])
       setServers([])
       setWorldsNotice('Доступно в приложении')
       return
     }
     setWorldsNotice('')
-    Promise.all([listWorlds(profile), listServers(profile)])
-      .then(([ws, srv]) => {
-        setWorlds(ws)
-        setServers(srv)
-      })
+    listServers(profile)
+      .then(setServers)
       .catch(() => {})
   }, [profile])
 
@@ -639,9 +637,8 @@ export function InstancePage() {
       })
       .catch((e) => showToast(String(e), 'error'))
 
-  const filteredWorlds = wFilter !== 'server' ? worlds : []
   const filteredServers = wFilter !== 'single' ? servers : []
-  const worldsEmpty = !worldsNotice && !filteredWorlds.length && !filteredServers.length
+  const serversEmpty = !worldsNotice && !filteredServers.length
 
   const cq = contentQuery.trim().toLowerCase()
   const shownItems = cq ? items.filter((i) => (i.title || i.name).toLowerCase().includes(cq)) : items
@@ -708,6 +705,7 @@ export function InstancePage() {
             {[
               ['content', 'i-blocks', 'Контент'],
               ['worlds', 'i-server', 'Миры и серверы'],
+              ['shots', 'i-image', 'Скриншоты'],
               ['logs', 'i-list', 'Логи'],
               ['opts', 'i-settings', 'Параметры'],
             ].map(([id, ic, label]) => (
@@ -811,6 +809,14 @@ export function InstancePage() {
                   }}
                 >
                   <Icon id="i-search" /> {scanLabel}
+                </button>
+                <button
+                  className="btn sm secondary"
+                  disabled={kind !== 'mod' || !items.length}
+                  title="Сверить моды с каталогами и заглянуть внутрь jar"
+                  onClick={() => setSafetyOpen(true)}
+                >
+                  <Icon id="i-shield" /> Проверить моды
                 </button>
                 <span className="set-val" id="bsModCount">
                   {noticeList ? '' : shownItems.length ? shownItems.length + ' шт.' : ''}
@@ -1128,6 +1134,19 @@ export function InstancePage() {
                 >
                   <Icon id="i-download" />
                 </button>
+                <button
+                  className="btn sm ghost"
+                  title="Поделиться сборкой по коду"
+                  onClick={() => {
+                    if (!hasTauri()) {
+                      showToast('Доступно в приложении')
+                      return
+                    }
+                    setShareOpen(true)
+                  }}
+                >
+                  <Icon id="i-link" />
+                </button>
               </div>
               {kind === 'mod' ? (
                 <div style={{ marginTop: '14px', borderTop: '1px solid var(--m-border)', paddingTop: '12px' }}>
@@ -1254,78 +1273,23 @@ export function InstancePage() {
                   </button>
                 ))}
               </div>
+              {wFilter !== 'server' ? (
+                <WorldManager
+                  profile={profile!}
+                  onPlay={(folder, name) => {
+                    close()
+                    showToast('Заходим в мир «' + name + '»…')
+                    joinWithAuth(profile!, folder, null).catch((e) => showLaunchError(e))
+                  }}
+                />
+              ) : null}
               <div id="bsWorlds" style={{ maxHeight: '250px', overflowY: 'auto' }}>
                 {worldsNotice ? (
                   <p className="faint-note">{worldsNotice}</p>
-                ) : worldsEmpty ? (
-                  <p className="faint-note">
-                    Миров пока нет — они появятся после игры. Сервер можно добавить ниже.
-                  </p>
+                ) : serversEmpty ? (
+                  <p className="faint-note">Серверов пока нет — добавь адрес ниже.</p>
                 ) : (
                   <>
-                    {filteredWorlds.map((wd) => (
-                      <div className="mod-line" key={'w' + wd.folder}>
-                        <span className="mod-mini">
-                          <Icon id="i-box2" />
-                        </span>
-                        <b>{wd.name}</b>
-                        <span className="set-val">{agoText(wd.last_played)}</span>
-                        <button
-                          className="btn sm secondary w-play"
-                          data-w={wd.name}
-                          style={{ marginLeft: '8px' }}
-                          onClick={() => {
-                            close()
-                            showToast('Заходим в мир «' + wd.name + '»…')
-                            joinWithAuth(profile!, wd.name, null).catch((e) => showLaunchError(e))
-                          }}
-                        >
-                          Играть
-                        </button>
-                        <button
-                          className="icon-btn w-bak"
-                          data-wb={wd.folder}
-                          title="Бэкап мира"
-                          onClick={(ev) => {
-                            const b = ev.currentTarget
-                            b.style.opacity = '0.4'
-                            showToast('Делаем бэкап мира…')
-                            backupWorld(profile!, wd.folder)
-                              .then((p) => {
-                                b.style.opacity = '1'
-                                showToast('Бэкап готов: ' + ('' + p).split('/').pop())
-                              })
-                              .catch((e) => {
-                                b.style.opacity = '1'
-                                showToast('' + e)
-                              })
-                          }}
-                        >
-                          <Icon id="i-download" />
-                        </button>
-                        <button
-                          className="icon-btn del w-wdel"
-                          data-wd={wd.folder}
-                          title="Удалить мир"
-                          onClick={() => {
-                            void uiConfirm(
-                              'Удалить мир «' + wd.name + '» вместе со всем прогрессом? Отменить будет нельзя.',
-                              { title: 'Удаление мира', confirmLabel: 'Удалить' },
-                            ).then((ok) => {
-                              if (!ok) return
-                              deleteWorld(profile!, wd.folder)
-                                .then(() => {
-                                  loadWorlds()
-                                  showToast('Мир «' + wd.name + '» удалён')
-                                })
-                                .catch((e) => showToast('' + e))
-                            })
-                          }}
-                        >
-                          <Icon id="i-trash" />
-                        </button>
-                      </div>
-                    ))}
                     {filteredServers.map((s2) => {
                       const pg = pings[s2.ip]
                       const online = pg && pg.online >= 0 && (pg.max > 0 || pg.online > 0 || pg.version)
@@ -1429,6 +1393,12 @@ export function InstancePage() {
                 <Icon id="i-map" /> Скачать карту из каталога
               </button>
             </div>
+
+            {tab === 'shots' ? (
+              <div id="bsTabShots">
+                <ScreenshotGallery profile={profile!} />
+              </div>
+            ) : null}
 
             <div id="bsTabLogs" style={{ display: tab === 'logs' ? '' : 'none' }}>
               <div className="segs" style={{ marginBottom: '10px', width: 'auto' }}>
@@ -1681,6 +1651,7 @@ export function InstancePage() {
                   }}
                 />
               </div>
+              <TunePanel profile={profile!} manualGb={ram} />
               <div className="set-row">
                 <span className="lab">
                   Видеокарта
@@ -2133,6 +2104,10 @@ export function InstancePage() {
           </div>
         </div>
       </div>
+      {safetyOpen ? (
+        <SafetyModal profile={profile!} onClose={() => setSafetyOpen(false)} onChanged={() => loadMods()} />
+      ) : null}
+      {shareOpen ? <SharePackModal profile={profile!} onClose={() => setShareOpen(false)} /> : null}
     </div>
   )
 }

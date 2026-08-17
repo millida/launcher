@@ -172,6 +172,7 @@ pub async fn millida_api_auth(path: String, method: String, body: Option<Value>)
 pub async fn millida_upload(
     path: String,
     filename: String,
+    mime: &str,
     bytes: Vec<u8>,
     fields: Vec<(String, String)>,
     token: Option<String>,
@@ -183,7 +184,7 @@ pub async fn millida_upload(
     }
     let part = reqwest::multipart::Part::bytes(bytes)
         .file_name(filename)
-        .mime_str("application/zip")
+        .mime_str(mime)
         .map_err(|e| e.to_string())?;
     form = form.part("file", part);
 
@@ -211,6 +212,7 @@ pub async fn millida_upload(
 pub async fn millida_upload_auth(
     path: String,
     filename: String,
+    mime: &str,
     bytes: Vec<u8>,
     fields: Vec<(String, String)>,
 ) -> Result<Value, String> {
@@ -218,6 +220,7 @@ pub async fn millida_upload_auth(
     let first = millida_upload(
         path.clone(),
         filename.clone(),
+        mime,
         bytes.clone(),
         fields.clone(),
         token.clone(),
@@ -228,7 +231,7 @@ pub async fn millida_upload_auth(
         return Err(e);
     }
     match refresh_session(token).await {
-        Refreshed::Token(fresh) => millida_upload(path, filename, bytes, fields, Some(fresh)).await,
+        Refreshed::Token(fresh) => millida_upload(path, filename, mime, bytes, fields, Some(fresh)).await,
         Refreshed::Dead => Err(UNAUTHORIZED.into()),
         Refreshed::Unavailable => Err(e),
     }
