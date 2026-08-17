@@ -18,7 +18,7 @@ fn file_sha1(path: &std::path::Path) -> Option<String> {
     Some(h.finalize().iter().map(|b| format!("{:02x}", b)).collect())
 }
 
-async fn versions_by_hash(hashes: &[String]) -> HashMap<String, Value> {
+pub(crate) async fn versions_by_hash(hashes: &[String]) -> HashMap<String, Value> {
     let mut out = HashMap::new();
     for chunk in hashes.chunks(100) {
         let body = serde_json::json!({ "hashes": chunk, "algorithm": "sha1" });

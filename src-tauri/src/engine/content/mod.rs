@@ -4,8 +4,10 @@ mod updates;
 mod localmeta;
 mod scan;
 mod deps;
+mod safety;
 
 pub use deps::*;
+pub use safety::*;
 pub use modrinth::*;
 pub use curseforge::*;
 pub use updates::*;

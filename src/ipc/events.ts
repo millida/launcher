@@ -98,7 +98,20 @@ export function listenGameLogStart(handler: (profile: string) => void): Promise<
   return T.event.listen<string>('game-log-start', (e) => handler(e.payload)).catch(() => null)
 }
 
-export interface CrashInfo { profile: string; reason: string; tail: string }
+export interface CrashAction {
+  kind: string
+  label: string
+  arg?: string
+  hint?: string
+}
+
+export interface CrashInfo {
+  profile: string
+  reason: string
+  tail: string
+  culprits?: string[]
+  actions?: CrashAction[]
+}
 export function listenGameCrash(handler: (info: CrashInfo) => void): Promise<UnlistenFn | null> {
   const T = tauri()
   if (!T) return Promise.resolve(null)

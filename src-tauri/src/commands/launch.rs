@@ -142,3 +142,60 @@ pub async fn ping_server(addr: String) -> Result<engine::PingResult, String> {
 pub async fn repair_profile(app: tauri::AppHandle, profile: String) -> Result<engine::RepairReport, String> {
     engine::repair_profile_files(app, profile).await
 }
+
+#[tauri::command]
+pub async fn world_details(profile: String) -> Result<Vec<engine::WorldInfo>, String> {
+    super::blocking(move || engine::world_details(&profile)).await
+}
+
+#[tauri::command]
+pub async fn rename_world(profile: String, folder: String, name: String) -> Result<engine::WorldInfo, String> {
+    super::blocking(move || engine::rename_world(&profile, &folder, &name)).await?
+}
+
+#[tauri::command]
+pub async fn duplicate_world(profile: String, folder: String) -> Result<engine::WorldInfo, String> {
+    super::blocking(move || engine::duplicate_world(&profile, &folder)).await?
+}
+
+/// Returns `None` when the save dialog was dismissed.
+#[tauri::command]
+pub async fn export_world(profile: String, folder: String) -> Result<Option<String>, String> {
+    engine::export_world(profile, folder).await
+}
+
+#[tauri::command]
+pub async fn import_world(profile: String) -> Result<engine::WorldInfo, String> {
+    engine::import_world(profile).await
+}
+
+#[tauri::command]
+pub async fn restore_world_backup(profile: String, file: String) -> Result<engine::WorldInfo, String> {
+    super::blocking(move || engine::restore_backup(&profile, &file)).await?
+}
+
+#[tauri::command]
+pub fn delete_world_backup(profile: String, file: String) -> Result<(), String> {
+    engine::delete_backup(&profile, &file)
+}
+
+#[tauri::command]
+pub fn open_world_folder(profile: String, folder: String) -> Result<(), String> {
+    engine::open_world_folder(&profile, &folder)
+}
+
+/// Performs one of the actions offered under a crash report.
+#[tauri::command]
+pub async fn apply_crash_fix(app: tauri::AppHandle, profile: String, kind: String, arg: String) -> Result<String, String> {
+    engine::apply_crash_fix(app, profile, kind, arg).await
+}
+
+/// Memory and JVM flags the launcher would pick for this build, with the
+/// reasons — shown in the build settings next to the manual slider.
+#[tauri::command]
+pub async fn tune_profile(profile: String) -> Result<engine::Tuning, String> {
+    super::blocking(move || engine::tune_profile(&profile)).await
+}
+
+#[tauri::command]
+pub fn set_auto_tune(profile: String, on: bool) { engine::set_auto_tune(&profile, on); }

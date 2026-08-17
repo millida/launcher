@@ -3,27 +3,12 @@ use serde_json::Value;
 use tauri::AppHandle;
 
 /// GC-профиль под Minecraft: короткие паузы вместо максимальной пропускной
-/// способности. Все флаги проходят `jvm_arg_allowed` — ничего исполняемого.
-pub const BOOST_FLAGS: &[&str] = &[
-    "-XX:+UseG1GC",
-    "-XX:+ParallelRefProcEnabled",
-    "-XX:MaxGCPauseMillis=50",
-    "-XX:+UnlockExperimentalVMOptions",
-    "-XX:+DisableExplicitGC",
-    "-XX:+AlwaysPreTouch",
-    "-XX:G1NewSizePercent=30",
-    "-XX:G1MaxNewSizePercent=40",
-    "-XX:G1HeapRegionSize=8M",
-    "-XX:G1ReservePercent=20",
-    "-XX:G1HeapWastePercent=5",
-    "-XX:G1MixedGCCountTarget=4",
-    "-XX:InitiatingHeapOccupancyPercent=15",
-    "-XX:G1MixedGCLiveThresholdPercent=90",
-    "-XX:G1RSetUpdatingPauseTimePercent=5",
-    "-XX:SurvivorRatio=32",
-    "-XX:+PerfDisableSharedMem",
-    "-XX:MaxTenuringThreshold=1",
-];
+/// способности. Тот же набор, что у авто-тюнинга (`GC_FLAGS`), плюс
+/// предварительный захват кучи — режим включают осознанно и ради кадров.
+/// Все флаги проходят `jvm_arg_allowed` — ничего исполняемого.
+pub fn boost_flags() -> Vec<&'static str> {
+    GC_FLAGS.iter().copied().chain(std::iter::once(PRETOUCH_FLAG)).collect()
+}
 
 /// Моды-ускорители по загрузчику. Slug'и Modrinth; ставится то, у чего есть
 /// сборка под версию профиля, остальное пропускается — режим не должен
@@ -120,7 +105,7 @@ pub fn fps_boost_state(profile: &str) -> FpsBoostState {
         enabled: s["fpsBoost"].as_bool().unwrap_or(false),
         mods: str_list(&s["fpsBoostMods"]),
         skipped: str_list(&s["fpsBoostSkipped"]),
-        flags: BOOST_FLAGS.iter().map(|f| f.to_string()).collect(),
+        flags: boost_flags().iter().map(|f| f.to_string()).collect(),
         video: s["fpsBoostVideo"].is_object(),
         vanilla: boost_mods(&loader).is_empty(),
     }
@@ -295,7 +280,7 @@ mod tests {
     /// профиля молча отсеялась бы на запуске.
     #[test]
     fn boost_flags_survive_the_jvm_filter() {
-        for f in BOOST_FLAGS {
+        for f in boost_flags() {
             assert!(
                 jvm_arg_allowed(f),
                 "флаг {f} режима «Буст FPS» отсеивается фильтром аргументов JVM — он не дойдёт до игры",

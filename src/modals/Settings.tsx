@@ -25,6 +25,8 @@ import {
 import { refreshProfiles } from '../state/profiles'
 import type { JavaInfo, JavaRuntime, OverlayState } from '../ipc/commands'
 import { Icon } from '../components/Icon'
+import { CloudSync } from '../components/CloudSync'
+import { SharedStore } from '../components/SharedStore'
 import { uiConfirm } from '../state/confirm'
 import { ColorPicker } from '../components/ColorPicker'
 import { AudioSettings } from '../components/AudioSettings'
@@ -762,6 +764,12 @@ export function Settings({ on }: { on: boolean }) {
               <Icon id="i-trash" /> {clearing ? 'Чистим…' : 'Очистить'}
             </button>
           </div>
+          <SharedStore />
+        </div>
+
+        <div className="set-group">
+          <div className="cap">Облако</div>
+          <CloudSync />
         </div>
         </>
         ) : null}

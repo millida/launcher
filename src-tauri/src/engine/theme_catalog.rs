@@ -191,7 +191,7 @@ pub async fn catalog_publish(id: String, changelog: Option<String>) -> Result<Va
     } else {
         vec![("changelog".to_string(), note.trim().to_string())]
     };
-    millida_upload_auth(CATALOG.to_string(), format!("{}.mtheme", manifest.id), bytes, fields).await
+    millida_upload_auth(CATALOG.to_string(), format!("{}.mtheme", manifest.id), "application/zip", bytes, fields).await
 }
 
 #[cfg(test)]

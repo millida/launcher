@@ -37,9 +37,3 @@ pub fn open_screenshots(profile: &str) {
     std::fs::create_dir_all(&p).ok();
     open_path(&p.to_string_lossy());
 }
-
-pub fn count_screenshots(profile: &str) -> usize {
-    std::fs::read_dir(profile_dir(profile).join("screenshots")).map(|rd|
-        rd.flatten().filter(|e| e.file_name().to_string_lossy().ends_with(".png")).count()
-    ).unwrap_or(0)
-}

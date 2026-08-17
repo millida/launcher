@@ -196,3 +196,17 @@ pub async fn export_mrpack(profile: String, name: String, version: String, descr
     }
     Ok(res)
 }
+
+/// Reads every jar in the build and says which files a catalogue vouches for,
+/// which are unknown and which do things a mod has no business doing.
+#[tauri::command]
+pub async fn scan_mod_safety(profile: String) -> Result<engine::SafetyReport, String> {
+    engine::scan_safety(profile).await
+}
+
+/// Turns off the files named by the report. The webview passes back file names
+/// it received from the same report; the core re-checks each one.
+#[tauri::command]
+pub async fn quarantine_mods(profile: String, files: Vec<String>) -> Result<u32, String> {
+    super::blocking(move || engine::quarantine(&profile, files)).await?
+}

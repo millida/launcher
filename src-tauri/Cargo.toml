@@ -41,6 +41,8 @@ sha1 = "0.10"
 sha2 = "0.10"
 sysinfo = { version = "0.33", default-features = false, features = ["system"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
+# level.dat is gzip-compressed NBT, and the world manager rewrites it on rename
+flate2 = "1"
 discord-rich-presence = "0.2"
 # secrets live in the local vault (secrets.rs): AES-256-GCM with an HKDF key
 aes-gcm = "0.10"

@@ -91,7 +91,7 @@ pub fn load_profile_settings(profile: String) -> serde_json::Value {
 pub fn open_screenshots(profile: String) { engine::open_screenshots(&profile); }
 
 #[tauri::command]
-pub fn count_screenshots(profile: String) -> usize { engine::count_screenshots(&profile) }
+pub fn count_screenshots(profile: String) -> usize { engine::screenshot_count(&profile) }
 
 #[tauri::command]
 pub async fn modpack_versions(slug: String) -> Result<serde_json::Value, String> { engine::modpack_versions(slug).await }
@@ -109,13 +109,35 @@ pub fn modpack_info(profile: String) -> serde_json::Value { engine::modpack_info
 /// worlds that a compromised webview copied there.
 #[tauri::command]
 pub fn list_screenshots(app: tauri::AppHandle, profile: String) -> Vec<String> {
+    screenshot_gallery(app, profile).into_iter().map(|s| s.path).collect()
+}
+
+/// Same per-file grant as the plain list, plus the sizes and dates the gallery
+/// shows. An empty profile name means every build.
+#[tauri::command]
+pub fn screenshot_gallery(app: tauri::AppHandle, profile: String) -> Vec<engine::Screenshot> {
     use tauri::Manager;
-    let shots = engine::list_screenshots(&profile);
+    let shots = engine::gallery(&profile);
     let scope = app.asset_protocol_scope();
     for shot in &shots {
-        let _ = scope.allow_file(shot);
+        let _ = scope.allow_file(&shot.path);
     }
     shots
+}
+
+#[tauri::command]
+pub fn delete_screenshot(profile: String, name: String) -> Result<(), String> {
+    engine::delete_screenshot(&profile, &name)
+}
+
+#[tauri::command]
+pub async fn save_screenshot_as(profile: String, name: String) -> Result<Option<String>, String> {
+    engine::save_screenshot_as(profile, name).await
+}
+
+#[tauri::command]
+pub async fn share_screenshot(profile: String, name: String) -> Result<String, String> {
+    engine::share_screenshot(profile, name).await
 }
 
 #[tauri::command]
@@ -263,4 +285,51 @@ pub fn import_instance(path: String, name: String, version: String, loader: Stri
 #[tauri::command]
 pub async fn import_pack_file(app: tauri::AppHandle, path: Option<String>) -> Result<engine::Profile, String> {
     engine::import_pack_file(app, path).await
+}
+
+#[tauri::command]
+pub async fn share_profile(profile: String, summary: Option<String>) -> Result<engine::SharedPack, String> {
+    engine::share_profile(profile, summary).await
+}
+
+#[tauri::command]
+pub async fn unshare_profile(code: String) -> Result<(), String> {
+    engine::unshare_profile(code).await
+}
+
+/// What a code points at, before anything is downloaded.
+#[tauri::command]
+pub async fn pack_preview(code: String) -> Result<serde_json::Value, String> {
+    engine::pack_preview(code).await
+}
+
+#[tauri::command]
+pub async fn install_shared_pack(app: tauri::AppHandle, code: String) -> Result<engine::Profile, String> {
+    engine::install_shared_pack(app, code).await
+}
+
+#[tauri::command]
+pub async fn cloud_status() -> Result<engine::CloudStatus, String> {
+    engine::cloud_status().await
+}
+
+#[tauri::command]
+pub async fn cloud_push() -> Result<engine::CloudStatus, String> {
+    engine::cloud_push().await
+}
+
+/// `only` restores exactly the named builds, overwriting what is here;
+/// without it only builds missing on this machine are installed.
+#[tauri::command]
+pub async fn cloud_pull(
+    app: tauri::AppHandle,
+    only: Option<Vec<String>>,
+    apply_prefs: bool,
+) -> Result<engine::PullReport, String> {
+    engine::cloud_pull(app, only, apply_prefs).await
+}
+
+#[tauri::command]
+pub async fn cloud_forget() -> Result<(), String> {
+    engine::cloud_forget().await
 }

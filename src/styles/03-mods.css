@@ -65,3 +65,75 @@
         .pj-body h3,.pj-body h4{color:var(--m-fg)}
         .pj-body a{color:var(--m-accent)}
         .pj-body table{display:block;overflow-x:auto;max-width:100%}
+
+/* ============ Менеджер миров ============ */
+
+.wm-list{display:flex;flex-direction:column;gap:8px;max-height:320px;overflow-y:auto}
+.wm-card{border:1.5px solid var(--m-border);border-radius:var(--m-r-card);background:var(--m-surface);overflow:hidden}
+.wm-card.on{border-color:var(--m-border-strong)}
+.wm-head{display:flex;align-items:center;gap:10px;padding:9px 11px}
+.wm-icon{width:34px;height:34px;flex:none;border-radius:var(--m-r-mini);overflow:hidden;display:grid;place-items:center;background:var(--m-inset);color:var(--m-fg-faint)}
+.wm-icon img{width:100%;height:100%;object-fit:cover;image-rendering:pixelated}
+.wm-icon svg{width:16px;height:16px}
+.wm-title{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.wm-title b{font-size:13px;font-weight:650;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.wm-meta{font-size:11.5px;color:var(--m-fg-faint);overflow-wrap:anywhere}
+.wm-tag{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;padding:2px 6px;border-radius:var(--m-r-mini);background:var(--m-inset);color:var(--m-fg-muted)}
+.wm-tag.danger{background:var(--m-danger-soft);color:var(--m-danger)}
+.wm-body{padding:0 11px 11px;display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--m-border)}
+.wm-row{display:flex;align-items:center;gap:8px;margin-top:8px}
+.wm-actions{display:flex;gap:8px;flex-wrap:wrap}
+.wm-backups{display:flex;flex-direction:column;gap:2px;padding-top:6px;border-top:1px solid var(--m-border)}
+
+/* ============ Галерея скриншотов ============ */
+
+.shot-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
+.shot-card{position:relative;margin:0;border:1.5px solid var(--m-border);border-radius:var(--m-r-card);background:var(--m-surface);overflow:hidden}
+.shot-thumb{display:block;width:100%;aspect-ratio:16/9;background:var(--m-inset);padding:0;border:0;cursor:zoom-in}
+.shot-thumb img{width:100%;height:100%;object-fit:cover}
+.shot-card figcaption{display:flex;flex-direction:column;gap:2px;padding:8px 10px 10px}
+.shot-card figcaption b{font-size:12.5px;font-weight:650;overflow-wrap:anywhere}
+.shot-card figcaption span{font-size:11px;color:var(--m-fg-faint)}
+/* Действия появляются на наведении: сетка скриншотов должна читаться как
+   картинки, а не как панель кнопок. */
+.shot-acts{position:absolute;top:6px;right:6px;display:none;gap:4px}
+.shot-card:hover .shot-acts{display:flex}
+.shot-acts .icon-btn{background:var(--m-surface);border-radius:var(--m-r-mini)}
+.shot-zoom{display:grid;place-items:center;padding:40px;cursor:zoom-out}
+.shot-zoom img{max-width:100%;max-height:100%;border-radius:var(--m-r-card);box-shadow:0 24px 60px rgba(0,0,0,.5)}
+
+/* ============ Проверка модов ============ */
+
+/* Ширину даёт mw-md: собственная width здесь проигрывала бы правилам плотности. */
+.safety-modal{max-height:86vh;display:flex;flex-direction:column}
+.safety-sum{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.safety-pill{font-size:11.5px;font-weight:650;padding:3px 9px;border-radius:999px;background:var(--m-inset);color:var(--m-fg-muted)}
+.safety-pill.ok{background:var(--m-accent-soft);color:var(--m-accent)}
+.safety-pill.warn{background:var(--m-warn-soft,var(--m-inset));color:var(--m-warn,var(--m-fg))}
+.safety-pill.danger{background:var(--m-danger-soft);color:var(--m-danger)}
+.safety-list{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.safety-row{display:flex;gap:10px;padding:9px 10px;border:1.5px solid var(--m-border);border-radius:var(--m-r-card);background:var(--m-surface)}
+.safety-row.danger{border-color:var(--m-danger)}
+.safety-row.warn{border-color:var(--m-warn,var(--m-border-strong))}
+.safety-mark{flex:none;width:104px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--m-fg-faint)}
+.safety-row.ok .safety-mark{color:var(--m-accent)}
+.safety-row.warn .safety-mark{color:var(--m-warn,var(--m-fg))}
+.safety-row.danger .safety-mark{color:var(--m-danger)}
+.safety-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.safety-body b{font-size:12.5px;font-weight:650;display:flex;align-items:center;gap:6px;flex-wrap:wrap;overflow-wrap:anywhere}
+.safety-meta{font-size:11px;color:var(--m-fg-faint);overflow-wrap:anywhere}
+.safety-why{font-size:11.5px;color:var(--m-fg-subtle);overflow-wrap:anywhere}
+
+/* ============ Шаринг сборки ============ */
+
+.share-code{
+  margin:14px 0 6px;text-align:center;font-size:30px;font-weight:750;letter-spacing:4px;
+  font-variant-numeric:tabular-nums;color:var(--m-accent);
+}
+.pack-preview{margin-top:12px;padding:10px 12px;border:1.5px solid var(--m-border);border-radius:var(--m-r-card);background:var(--m-surface);display:flex;flex-direction:column;gap:3px}
+.pack-preview b{font-size:13.5px;font-weight:650}
+
+/* ============ Разбор краша и авто-тюнинг ============ */
+
+.crash-fixes{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.tune-why{margin:0;padding-left:16px;display:flex;flex-direction:column;gap:2px;font-size:11.5px;color:var(--m-fg-subtle)}

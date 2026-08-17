@@ -173,6 +173,8 @@ export const addServer = (profile: string, name: string, ip: string) =>
 export const backupWorld = (profile: string, folder: string) =>
   invoke<string>('backup_world', { profile, folder })
 
+export const listBackups = (profile: string) => invoke<string[]>('list_backups', { profile })
+
 /// Empty `file` with a non-empty `mismatch` means nothing fits the build: the
 /// mismatch text lists the versions the project does ship.
 export interface ContentInstall {
@@ -951,3 +953,183 @@ export const overlaySetHotkey = (hotkey: string) => invoke<void>('overlay_set_ho
 export const overlayNotify = (payload: { uid: string; nick: string; text: string; ts: number }) =>
   invoke<void>('overlay_notify', { payload })
 export const overlayHide = () => invoke<void>('overlay_hide')
+
+
+// ---- Общее хранилище файлов между сборками ----
+
+export interface DedupReport {
+  files: number
+  unique: number
+  linked: number
+  totalBytes: number
+  savedBytes: number
+  storeBytes: number
+  note?: string
+}
+
+export const dedupeScan = () => invoke<DedupReport>('dedupe_scan')
+export const dedupeRun = () => invoke<DedupReport>('dedupe_run')
+export const dedupeGc = () => invoke<number>('dedupe_gc')
+
+// ---- Авто-тюнинг памяти и JVM ----
+
+export interface Tuning {
+  ramMb: number
+  flags: string[]
+  reasons: string[]
+  totalRamMb: number
+  mods: number
+  shaders: boolean
+  manualRamMb: number
+}
+
+export const tuneProfile = (profile: string) => invoke<Tuning>('tune_profile', { profile })
+export const setAutoTune = (profile: string, on: boolean) => invoke<void>('set_auto_tune', { profile, on })
+
+// ---- Менеджер миров ----
+
+export interface WorldInfo {
+  folder: string
+  name: string
+  lastPlayed: number
+  sizeBytes: number
+  icon: string
+  mode: string
+  hardcore: boolean
+  cheats: boolean
+  difficulty: string
+  version: string
+  seed: string
+  backups: number
+  unreadable: boolean
+}
+
+export const worldDetails = (profile: string) => invoke<WorldInfo[]>('world_details', { profile })
+export const renameWorld = (profile: string, folder: string, name: string) =>
+  invoke<WorldInfo>('rename_world', { profile, folder, name })
+export const duplicateWorld = (profile: string, folder: string) =>
+  invoke<WorldInfo>('duplicate_world', { profile, folder })
+// null — диалог сохранения закрыли
+export const exportWorld = (profile: string, folder: string) =>
+  invoke<string | null>('export_world', { profile, folder })
+export const importWorld = (profile: string) => invoke<WorldInfo>('import_world', { profile })
+export const restoreWorldBackup = (profile: string, file: string) =>
+  invoke<WorldInfo>('restore_world_backup', { profile, file })
+export const deleteWorldBackup = (profile: string, file: string) =>
+  invoke<void>('delete_world_backup', { profile, file })
+export const openWorldFolder = (profile: string, folder: string) =>
+  invoke<void>('open_world_folder', { profile, folder })
+
+// ---- Галерея скриншотов ----
+
+export interface Screenshot {
+  profile: string
+  name: string
+  path: string
+  sizeBytes: number
+  takenAt: number
+  width: number
+  height: number
+}
+
+// Пустое имя сборки — скриншоты всех сборок.
+export const screenshotGallery = (profile: string) => invoke<Screenshot[]>('screenshot_gallery', { profile })
+export const deleteScreenshot = (profile: string, name: string) =>
+  invoke<void>('delete_screenshot', { profile, name })
+export const saveScreenshotAs = (profile: string, name: string) =>
+  invoke<string | null>('save_screenshot_as', { profile, name })
+export const shareScreenshot = (profile: string, name: string) =>
+  invoke<string>('share_screenshot', { profile, name })
+
+// ---- Проверка модов ----
+
+export interface ModVerdict {
+  file: string
+  title: string
+  verdict: 'ok' | 'unknown' | 'suspicious' | 'blocked'
+  reasons: string[]
+  sha1: string
+  source: string
+  enabled: boolean
+  size: number
+}
+
+export interface SafetyReport {
+  profile: string
+  checked: number
+  ok: number
+  unknown: number
+  suspicious: number
+  blocked: number
+  items: ModVerdict[]
+  checkedAt: number
+  note?: string
+}
+
+export const scanModSafety = (profile: string) => invoke<SafetyReport>('scan_mod_safety', { profile })
+export const quarantineMods = (profile: string, files: string[]) =>
+  invoke<number>('quarantine_mods', { profile, files })
+
+// ---- Разбор краша ----
+
+export const applyCrashFix = (profile: string, kind: string, arg: string) =>
+  invoke<string>('apply_crash_fix', { profile, kind, arg })
+
+// ---- Шаринг сборки ----
+
+export interface SharedPack {
+  code: string
+  url: string
+  files: number
+  skipped: string[]
+  sizeBytes: number
+}
+
+export interface PackPreview {
+  code: string
+  name: string
+  summary: string
+  game: string
+  loader: string
+  files: number
+  author: string
+  installs: number
+  updatedAt: string
+  sizeBytes: number
+}
+
+export const shareProfile = (profile: string, summary?: string) =>
+  invoke<SharedPack>('share_profile', { profile, summary })
+export const unshareProfile = (code: string) => invoke<void>('unshare_profile', { code })
+export const packPreview = (code: string) => invoke<PackPreview>('pack_preview', { code })
+export const installSharedPack = (code: string) => invoke<Profile>('install_shared_pack', { code })
+
+// ---- Облачная синхронизация ----
+
+export interface CloudStatus {
+  signedIn: boolean
+  hasRemote: boolean
+  updatedAt: string
+  device: string
+  remoteProfiles: number
+  localProfiles: number
+  sizeBytes: number
+  missingHere: string[]
+  missingThere: string[]
+}
+
+export interface PullReport {
+  installed: string[]
+  updated: string[]
+  failed: string[]
+  prefsApplied: number
+  themesMissing: string[]
+}
+
+export const cloudStatus = () => invoke<CloudStatus>('cloud_status')
+export const cloudPush = () => invoke<CloudStatus>('cloud_push')
+// only — переустановить именно эти сборки поверх локальных; без него ставятся
+// только те, которых на этой машине нет.
+export const cloudPull = (only: string[] | null, applyPrefs: boolean) =>
+  invoke<PullReport>('cloud_pull', { only, applyPrefs })
+export const cloudForget = () => invoke<void>('cloud_forget')

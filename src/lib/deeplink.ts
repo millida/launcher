@@ -9,6 +9,7 @@ import { openProject } from '../state/project'
 import { setNewBuildPreset } from '../state/newBuild'
 import { openModal } from '../state/ui'
 import { useProfiles } from '../state/profiles'
+import { usePackCode } from '../state/packCode'
 import { useFriends, openChat } from '../state/friends'
 import { callFriend } from '../state/call'
 import { rememberServerName } from '../state/playStats'
@@ -90,6 +91,13 @@ function handle(raw: string) {
     setScreen('mods')
     useMods.getState().scopeTo(null)
     void openProject(slug, q.get('type') === 'modpack' ? 'modpack' : 'mod')
+    return
+  }
+  if (action === 'pack') {
+    const code = rest || q.get('code') || ''
+    if (!code) return
+    setScreen('builds')
+    usePackCode.getState().show(code)
     return
   }
   if (action === 'skins') {

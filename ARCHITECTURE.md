@@ -47,6 +47,7 @@ src-tauri/src/secrets.rs   хранилище токенов (в вебвью н
 | [archive.rs](src-tauri/src/engine/core/archive.rs) | распаковка zip через проверенные пути |
 | [safepath.rs](src-tauri/src/engine/core/safepath.rs) | `safe_join`, `safe_child`, `safe_file_name` — единственная точка валидации недоверенных путей |
 | [crash.rs](src-tauri/src/engine/core/crash.rs) | панический хук и журнал падений самого лаунчера |
+| [dedup.rs](src-tauri/src/engine/core/dedup.rs) | общее хранилище файлов между сборками: `objects/<xx>/<sha1>`, жёсткие ссылки вместо копий, установка без скачивания уже известного файла, сборка мусора |
 | [proc.rs](src-tauri/src/engine/core/proc.rs) | запуск дочерних процессов без всплывающей консоли на Windows |
 | [selfupdate.rs](src-tauri/src/engine/core/selfupdate.rs) | запасной канал обновления: свой разбор манифеста и проверка minisign-подписи тем же ключом, что и у плагина |
 | [selfheal.rs](src-tauri/src/engine/core/selfheal.rs) | если вебвью не сообщил о готовности, установка считается битой |
@@ -62,6 +63,14 @@ SDK-расширения внутри Flatpak.
 `launch.rs` — сборка аргументов, запуск JVM, чтение логов, учёт запущенных игр,
 остановка, распознавание падений.
 `worlds.rs`, `serversdat.rs` — миры и список серверов игры, Quick Play.
+`nbt.rs` — NBT с полным round-trip; на нём читается и переписывается `level.dat`.
+`worldmgr.rs` — менеджер миров: карточка мира из `level.dat` (режим, сложность,
+версия, сид, иконка, размер), переименование, копия, экспорт и импорт zip,
+восстановление бэкапа отдельным миром.
+`tuning.rs` — авто-подбор памяти и профиля GC под машину и число модов
+(`GC_FLAGS` — общий источник для авто-режима и «Буста FPS»).
+`crashfix.rs` — разбор падения в действия: отключить названный загрузчиком мод,
+поднять память, поставить нужную Java; `apply_crash_fix` выполняет ровно одно.
 `ping.rs` — пинг сервера по протоколу Minecraft.
 `playtime.rs` — статистика наигранного времени.
 
@@ -89,7 +98,13 @@ SDK-расширения внутри Flatpak.
 GDLauncher, CurseForge, Modrinth App, общие `.minecraft`) и импорт сборки.
 `packfile.rs` — импорт файла сборки (`.mrpack`, архивы CurseForge).
 `export.rs` — выгрузка сборки в `.mrpack`.
-`backups.rs` — бэкап мира в zip и скриншоты.
+`backups.rs` — бэкап мира в zip.
+`screenshots.rs` — галерея скриншотов: список с размерами и датами, удаление,
+сохранение через диалог, выгрузка ссылкой через `/launcher/screenshots`.
+`share.rs` — описание сборки (`PackManifest`: только файлы Modrinth/CurseForge с
+хешами), публикация по короткому коду, предпросмотр и установка чужой сборки.
+Адреса файлов принимаются только с хостов каталогов, а `install_manifest` —
+единственный путь установки как для кода, так и для облака.
 `logs.rs`, `sharelog.rs` — чтение и выгрузка логов.
 
 ### accounts — [src-tauri/src/engine/accounts](src-tauri/src/engine/accounts)
@@ -121,6 +136,13 @@ Services → профиль. Client_id берётся из `option_env!("MILLIDA
 `options.txt`. Всё, что он изменил, записано в `millida-settings.json`
 (`fpsBoostMods`, `fpsBoostVideo`), поэтому выключение снимает ровно свои моды и
 возвращает ровно прежние значения настроек.
+
+### cloud — [src-tauri/src/engine/cloud.rs](src-tauri/src/engine/cloud.rs)
+
+Облачный профиль на аккаунте Millida: слепок из описаний сборок (тех же
+манифестов, что у шаринга), настроек интерфейса, групп и списка тем. В облако
+уезжают ссылки и хеши, а не файлы, поэтому сотня сборок весит сотни килобайт.
+`cloud_pull` ставит только отсутствующие сборки, если не назвать их явно.
 
 ### media — [src-tauri/src/engine/media](src-tauri/src/engine/media)
 

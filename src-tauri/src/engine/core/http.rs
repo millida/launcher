@@ -442,13 +442,24 @@ pub(crate) async fn download_checked(
     fetch(url, dest, sum, size).await
 }
 
+/// Same contract as `download_checked`, plus the shared store: a file another
+/// build already downloaded is linked instead of fetched again, and a file that
+/// had to be fetched joins the store for the next build that wants it.
 pub(crate) async fn download_verify(
     url: &str,
     dest: &Path,
     sha1: Option<&str>,
     size: Option<u64>,
 ) -> Result<(), String> {
-    download_checked(url, dest, sha1.map(Sum::Sha1), size).await
+    if let Some(sha1) = sha1.filter(|s| !s.is_empty()) {
+        if !dest.exists() && super::dedup::link_from_store(sha1, dest, size) {
+            return Ok(());
+        }
+        download_checked(url, dest, Some(Sum::Sha1(sha1)), size).await?;
+        super::dedup::adopt_to_store(dest, sha1);
+        return Ok(());
+    }
+    download_checked(url, dest, None, size).await
 }
 
 pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
