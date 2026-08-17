@@ -1,6 +1,8 @@
 import { hasTauri } from '../ipc/tauri'
-import { cfInstall, installContent } from '../ipc/commands'
-import type { ContentInstall } from '../ipc/commands'
+import { cfInstall, depPlan, installContent, installDepItems } from '../ipc/commands'
+import type { ContentInstall, DepReport, PlanItem } from '../ipc/commands'
+import { askDepPlan } from '../state/depPlan'
+import { planNeedsPrompt } from './deps'
 import { useProfiles } from '../state/profiles'
 import { useMods } from '../state/mods'
 import { pickBuild } from '../state/buildPicker'
@@ -53,6 +55,42 @@ async function confirmMismatch(title: string, prof: string, mismatch: string): P
   )
 }
 
+/// The optional dependencies the user ticked. Hard ones are pulled in by the
+/// core during the install itself, so a failure here never leaves the mod
+/// without what it cannot run without.
+export function installExtras(prof: string, kind: string, extras: PlanItem[], after?: () => void) {
+  if (!extras.length) return
+  runInstall<DepReport>({
+    key: keyContent('mr', prof, kind, 'millida:deps'),
+    title: 'Дополнения',
+    running: 'Ставим дополнительные моды…',
+    run: () => installDepItems(prof, kind, extras),
+    onDone: (r) => {
+      if (r.failed.length) showToast('Не встало: ' + r.failed.join('; '), 'error')
+      else showToast('Дополнительно поставлено: ' + r.installed.length, 'ok', 'install')
+      if (after) after()
+    },
+    onError: (e) => showToast('' + e, 'error'),
+  })
+}
+
+/// Same question for a hand-picked version: the file is fixed, but what it drags
+/// in is not. Returns the optional extras to install alongside, or null when the
+/// user backed out.
+export async function askPlanForVersion(
+  prof: string,
+  kind: string,
+  source: 'modrinth' | 'curseforge',
+  project: string,
+  versionId: string,
+): Promise<PlanItem[] | null> {
+  if (kind !== 'mod') return []
+  const plan = await depPlan(prof, kind, source, project, versionId).catch(() => null)
+  if (!planNeedsPrompt(plan)) return []
+  const decision = await askDepPlan(plan!)
+  return decision.go ? decision.extras : null
+}
+
 export async function installContentFlow(src: Source, kind: string, title?: string): Promise<boolean> {
   if (!hasTauri()) {
     showToast('Установка доступна в приложении')
@@ -60,6 +98,22 @@ export async function installContentFlow(src: Source, kind: string, title?: stri
   }
   const prof = await resolveTargetBuild(kind)
   if (!prof) return false
+  // A build that only needs the mod itself must stay one click, so the window
+  // opens only when the plan actually has something to decide or to warn about.
+  let extras: PlanItem[] = []
+  if (kind === 'mod') {
+    const plan = await depPlan(
+      prof,
+      kind,
+      src.source,
+      src.source === 'curseforge' ? String(src.cfid) : src.slug!,
+    ).catch(() => null)
+    if (planNeedsPrompt(plan)) {
+      const decision = await askDepPlan(plan!)
+      if (!decision.go) return false
+      extras = decision.extras
+    }
+  }
   const pr = buildOf(prof)
   const gv = (pr && pr.version) || ''
   const loader = (pr && (pr.loader || (pr.fabric ? 'fabric' : 'vanilla'))) || 'vanilla'
@@ -88,6 +142,7 @@ export async function installContentFlow(src: Source, kind: string, title?: stri
           return
         }
         trackTimed('content_install', startedAt, { name: label, kind, mc: gv, loader, source: src.source })
+        installExtras(prof, kind, extras)
         showToast(
           (RU[kind] || 'Контент') + ' → «' + prof + '»: ' + r.file + (r.warning ? ' · ' + r.warning : ''),
           'ok',

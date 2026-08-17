@@ -18,6 +18,7 @@ import { ImageLightbox } from './components/ImageLightbox'
 import { UpdateBanner } from './components/UpdateBanner'
 import { ConfirmModal } from './components/ConfirmModal'
 import { BuildPicker } from './components/BuildPicker'
+import { DepPlanModal } from './components/DepPlanModal'
 import { ChatNotify } from './components/ChatNotify'
 import { CallPanel } from './components/CallPanel'
 import { RoomModals } from './components/RoomManage'
@@ -569,6 +570,7 @@ export function App() {
         <ScreenshotsOverlay />
         <ModpackVersionsOverlay />
         <BuildPicker />
+        <DepPlanModal />
         <CrashModal />
         <ServerDetail />
         <ChatNotify />

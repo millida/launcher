@@ -9,6 +9,7 @@ import { listenDragDrop, listenDragState, listenGameLog, listenGameLogStart } fr
 import {
   addLocalFile,
   addServer,
+  auditDeps,
   backupWorld,
   checkUpdates,
   clearProfileCover,
@@ -58,6 +59,8 @@ import {
   updateContent,
 } from '../ipc/commands'
 import type {
+  AuditIssue,
+  DepAudit,
   FpsBoostState,
   GpuPref,
   JavaInfo,
@@ -73,6 +76,8 @@ import { isBlockIcon } from '../lib/blockColor'
 import { LOADER_NAME, agoText, fmtPlaytime, fmtSize, loaderId, whenText } from '../lib/format'
 import { AUTO_LOADER_VERSION, hasLoaderVersions, useLoaderBuilds } from '../lib/loaderBuilds'
 import { incompatibleWith } from '../lib/compat'
+import { planItem } from '../lib/deps'
+import { installExtras } from '../lib/install'
 import { useProfiles } from '../state/profiles'
 import { useInstance } from '../state/instance'
 import { closeModal, setScreen, showToast, useUi } from '../state/ui'
@@ -99,6 +104,13 @@ const KINDS: [string, string][] = [
   ['datapack', 'Дата-паки'],
   ['shader', 'Шейдеры'],
 ]
+
+const AUDIT_LABEL: Record<string, string> = {
+  missing: 'не хватает мода',
+  conflict: 'конфликт',
+  version: 'не для этой версии',
+  loader: 'другой загрузчик',
+}
 
 const CONTENT_EXTS: Record<string, string[]> = {
   mod: ['jar', 'zip', 'litemod'],
@@ -139,6 +151,8 @@ export function InstancePage() {
   const [emptyList, setEmptyList] = useState(false)
   const [openInfo, setOpenInfo] = useState('')
   const [scanLabel, setScanLabel] = useState('Сканировать')
+  const [audit, setAudit] = useState<DepAudit | null>(null)
+  const [auditBusy, setAuditBusy] = useState(false)
   const [noticeList, setNoticeList] = useState('')
   const [playtime, setPlaytime] = useState('')
   const [ram, setRam] = useState(4)
@@ -754,6 +768,7 @@ export function InstancePage() {
                     style={{ height: '32px', fontSize: '12.5px' }}
                     onClick={() => {
                       setKind(k)
+                      setAudit(null)
                       loadMods(k)
                     }}
                   >
@@ -1114,6 +1129,108 @@ export function InstancePage() {
                   <Icon id="i-download" />
                 </button>
               </div>
+              {kind === 'mod' ? (
+                <div style={{ marginTop: '14px', borderTop: '1px solid var(--m-border)', paddingTop: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span className="set-val">Зависимости и совместимость</span>
+                    <span style={{ flex: 1 }}></span>
+                    {audit && audit.issues.some((i) => i.fix) ? (
+                      <button
+                        className="btn sm secondary"
+                        onClick={() => {
+                          const items = audit.issues
+                            .map((i) => i.fix)
+                            .filter((f): f is NonNullable<typeof f> => !!f)
+                            .map(planItem)
+                          const uniq = items.filter(
+                            (it, i) => items.findIndex((x) => x.project_id === it.project_id) === i,
+                          )
+                          installExtras(profile!, 'mod', uniq, () => {
+                            loadMods()
+                            setAudit(null)
+                          })
+                        }}
+                      >
+                        Доустановить ({audit.issues.filter((i) => i.fix).length})
+                      </button>
+                    ) : null}
+                    <button
+                      className="btn sm secondary"
+                      disabled={auditBusy}
+                      title="Проверить, всё ли нужное стоит и не конфликтуют ли моды между собой"
+                      onClick={() => {
+                        if (!hasTauri()) {
+                          showToast('Доступно в приложении')
+                          return
+                        }
+                        setAuditBusy(true)
+                        auditDeps(profile!)
+                          .then((r) => {
+                            setAuditBusy(false)
+                            setAudit(r)
+                          })
+                          .catch((e) => {
+                            setAuditBusy(false)
+                            showToast('Не удалось проверить: ' + e, 'error')
+                          })
+                      }}
+                    >
+                      <Icon id="i-check" /> {auditBusy ? 'Проверяем…' : 'Проверить'}
+                    </button>
+                  </div>
+                  {!audit ? (
+                    <p className="faint-note">
+                      Найдём моды, которым не хватает библиотек, конфликтующие пары и файлы не под эту версию игры.
+                    </p>
+                  ) : !audit.issues.length ? (
+                    <p className="faint-note">
+                      Проверено файлов: {audit.checked} — недостающих зависимостей и конфликтов не нашли.
+                    </p>
+                  ) : (
+                    <div style={{ marginTop: '8px', maxHeight: '260px', overflowY: 'auto' }}>
+                      {audit.issues.map((it: AuditIssue, i) => (
+                        <div className="mod-card" key={it.kind + it.title + it.detail + i} style={{ marginBottom: '6px' }}>
+                          <div className="mod-card-row">
+                            <span className="mod-art">
+                              <Icon id={it.kind === 'missing' ? 'i-download' : 'i-alert'} />
+                            </span>
+                            <span className="mod-card-body">
+                              <span className="mod-card-title">
+                                {it.title}
+                                <span
+                                  className="mod-upd"
+                                  style={
+                                    it.kind === 'missing'
+                                      ? undefined
+                                      : { background: 'var(--m-danger-soft)', color: 'var(--m-danger)' }
+                                  }
+                                >
+                                  {AUDIT_LABEL[it.kind]}
+                                </span>
+                              </span>
+                              <span className="mod-card-sub">{it.detail}</span>
+                            </span>
+                            {it.fix ? (
+                              <button
+                                className="btn sm secondary"
+                                style={{ height: '26px' }}
+                                onClick={() =>
+                                  installExtras(profile!, 'mod', [planItem(it.fix!)], () => {
+                                    loadMods()
+                                    setAudit(null)
+                                  })
+                                }
+                              >
+                                Поставить
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : null}
             </div>
 
             <div id="bsTabWorlds" style={{ display: tab === 'worlds' ? '' : 'none' }}>

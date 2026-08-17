@@ -119,6 +119,13 @@ pub fn set_local_skin(skin: Option<String>, cape: Option<String>, slim: bool) ->
     engine::set_local_skin(skin, cape, slim)
 }
 
+/// Why the applied skin is not in the game. The webview names the account it
+/// shows, never a URL: the address of our own API is the core's to know.
+#[tauri::command]
+pub async fn skin_diagnose(nick: String, online: bool) -> serde_json::Value {
+    engine::skin_diagnose(&nick, online).await
+}
+
 #[tauri::command]
 pub fn list_textures(kind: String) -> Result<Vec<engine::TextureEntry>, String> {
     engine::list_textures(&kind)

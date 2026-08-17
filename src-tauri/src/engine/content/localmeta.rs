@@ -8,6 +8,11 @@ use std::path::{Path, PathBuf};
 const DESC_LIMIT: usize = 600;
 const ICON_LIMIT: usize = 320_000;
 
+/// Bumped whenever the parser starts extracting a new field: cache entries are
+/// keyed by (size, mtime), so without it an old cache would keep answering with
+/// fields the previous version never filled in.
+const META_REV: u32 = 2;
+
 /// Metadata read from the content file itself (fabric.mod.json, mods.toml,
 /// mcmod.info, pack.mcmeta): works offline and for files unknown to Modrinth.
 #[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
@@ -23,6 +28,33 @@ pub struct LocalMeta {
     #[serde(default)] pub icon: String,
     #[serde(default)] pub mc: String,
     #[serde(default)] pub loader: String,
+    /// Loader-level identity and relations, used by the dependency resolver for
+    /// files that no catalog knows.
+    #[serde(default)] pub mod_id: String,
+    #[serde(default)] pub provides: Vec<String>,
+    #[serde(default)] pub requires: Vec<String>,
+    #[serde(default)] pub breaks: Vec<String>,
+    #[serde(default)] pub meta_rev: u32,
+}
+
+/// Ids the loader itself answers for: asking the user to install "minecraft" or
+/// "fabricloader" as a missing dependency would be noise, not a finding.
+const ENV_IDS: &[&str] = &[
+    "minecraft", "java", "mcp", "forge", "neoforge", "fml", "javafml", "lowcodefml",
+    "fabricloader", "fabric-loader", "quilt_loader", "quilt_base", "quilt_loader_api",
+];
+
+pub fn is_env_mod_id(id: &str) -> bool {
+    let low = id.to_ascii_lowercase();
+    ENV_IDS.contains(&low.as_str())
+}
+
+fn push_id(out: &mut Vec<String>, id: &str) {
+    let id = id.trim();
+    if id.is_empty() || is_env_mod_id(id) || out.iter().any(|x| x == id) {
+        return;
+    }
+    out.push(id.to_string());
 }
 
 type Jar = zip::ZipArchive<std::fs::File>;
@@ -126,6 +158,31 @@ fn versions_of(v: &Value) -> String {
         .unwrap_or_default()
 }
 
+/// Loader manifests spell relations three ways — {"id": "range"}, ["id"] and
+/// [{"id": …, "optional": true}] — and all three mean the same list of ids.
+fn id_list(v: &Value, drop_optional: bool) -> Vec<String> {
+    let mut out: Vec<String> = vec![];
+    if let Some(o) = v.as_object() {
+        for k in o.keys() {
+            push_id(&mut out, k);
+        }
+        return out;
+    }
+    for x in v.as_array().into_iter().flatten() {
+        if let Some(s) = x.as_str() {
+            push_id(&mut out, s);
+            continue;
+        }
+        if drop_optional && x["optional"].as_bool() == Some(true) {
+            continue;
+        }
+        if let Some(s) = x["id"].as_str() {
+            push_id(&mut out, s);
+        }
+    }
+    out
+}
+
 fn read_icon(jar: &mut Jar, candidates: &[String]) -> String {
     for name in candidates {
         let name = name.trim_start_matches('/');
@@ -201,6 +258,63 @@ fn toml_values(text: &str) -> HashMap<String, String> {
     out
 }
 
+/// `toml_values` flattens the whole file, which is enough for display fields but
+/// loses which `[[dependencies.x]]` block a `modId` belongs to. Splitting on
+/// header lines first keeps every block separate while reusing one value parser.
+fn toml_sections(text: &str) -> Vec<(String, HashMap<String, String>)> {
+    let mut chunks: Vec<(String, Vec<&str>)> = vec![(String::new(), vec![])];
+    for line in text.lines() {
+        let t = line.trim();
+        if t.starts_with('[') && t.ends_with(']') {
+            chunks.push((t.trim_matches(|c| c == '[' || c == ']').to_string(), vec![]));
+        } else if let Some(last) = chunks.last_mut() {
+            last.1.push(line);
+        }
+    }
+    chunks.into_iter().map(|(h, body)| (h, toml_values(&body.join("\n")))).collect()
+}
+
+/// Returns (own mod id, hard dependencies, incompatible mods). Forge marks a
+/// dependency with `mandatory`, NeoForge switched to `type`, and files in the
+/// wild carry either — a missing marker means required in both.
+fn forge_relations(text: &str) -> (String, Vec<String>, Vec<String>) {
+    let mut own = String::new();
+    let (mut requires, mut breaks) = (vec![], vec![]);
+    for (header, kv) in toml_sections(text) {
+        if header == "mods" {
+            if own.is_empty() {
+                own = kv.get("modId").cloned().unwrap_or_default();
+            }
+            continue;
+        }
+        if !header.starts_with("dependencies.") {
+            continue;
+        }
+        let Some(id) = kv.get("modId") else { continue };
+        let ty = kv.get("type").map(|s| s.to_ascii_lowercase()).unwrap_or_default();
+        let mandatory = match kv.get("mandatory") {
+            Some(v) => v.trim() == "true",
+            None => ty.is_empty() || ty == "required",
+        };
+        if ty == "incompatible" {
+            push_id(&mut breaks, id);
+        } else if mandatory {
+            push_id(&mut requires, id);
+        }
+    }
+    (own, requires, breaks)
+}
+
+/// Old Forge lists dependencies as "jei@[1.0,)"; only the id part is an id.
+fn mcmod_ids(v: &Value) -> Vec<String> {
+    let mut out = vec![];
+    for x in v.as_array().into_iter().flatten() {
+        let Some(s) = x.as_str() else { continue };
+        push_id(&mut out, s.split(['@', '[', '(', ':']).next().unwrap_or(s));
+    }
+    out
+}
+
 fn pack_description(v: &Value) -> String {
     if let Some(s) = v.as_str() {
         return s.to_string();
@@ -243,6 +357,15 @@ fn from_fabric(jar: &mut Jar, meta: &mut LocalMeta, quilt: bool) -> bool {
         &versions_of(if quilt { &v["quilt_loader"]["depends"] } else { &v["depends"]["minecraft"] }),
         60,
     );
+    meta.mod_id = id.clone();
+    let (depends, breaks, provides) = if quilt {
+        (&v["quilt_loader"]["depends"], &v["quilt_loader"]["breaks"], &v["quilt_loader"]["provides"])
+    } else {
+        (&v["depends"], &v["breaks"], &v["provides"])
+    };
+    meta.requires = id_list(depends, true);
+    meta.breaks = id_list(breaks, false);
+    meta.provides = id_list(provides, false);
     let mut icons = vec![icon_of(&root["icon"])];
     if !id.is_empty() {
         icons.push(format!("assets/{}/icon.png", id));
@@ -261,6 +384,10 @@ fn from_forge(jar: &mut Jar, meta: &mut LocalMeta) -> bool {
     meta.description = clean_text(kv.get("description").map(String::as_str).unwrap_or(""), DESC_LIMIT);
     meta.version = clean_text(kv.get("version").map(String::as_str).unwrap_or(""), 40);
     meta.authors = clean_text(kv.get("authors").map(String::as_str).unwrap_or(""), 120);
+    let (own, requires, breaks) = forge_relations(&text);
+    meta.mod_id = own;
+    meta.requires = requires;
+    meta.breaks = breaks;
     let mut icons: Vec<String> = vec![];
     if let Some(logo) = kv.get("logoFile") {
         icons.push(logo.clone());
@@ -282,6 +409,11 @@ fn from_mcmod_info(jar: &mut Jar, meta: &mut LocalMeta) -> bool {
     meta.version = clean_text(first["version"].as_str().unwrap_or(""), 40);
     meta.authors = clean_text(&names_of(&first["authorList"]), 120);
     meta.mc = clean_text(first["mcversion"].as_str().unwrap_or(""), 60);
+    meta.mod_id = first["modid"].as_str().unwrap_or("").to_string();
+    meta.requires = mcmod_ids(&first["requiredMods"]);
+    if meta.requires.is_empty() {
+        meta.requires = mcmod_ids(&first["dependencies"]);
+    }
     let mut icons: Vec<String> = vec![];
     if let Some(logo) = first["logoFile"].as_str() {
         icons.push(logo.to_string());
@@ -335,7 +467,12 @@ fn title_from_file(name: &str) -> String {
 }
 
 pub fn read_file_meta(path: &Path, kind: &str, file_name: &str) -> LocalMeta {
-    let mut meta = LocalMeta { kind: kind.to_string(), file_name: file_name.to_string(), ..Default::default() };
+    let mut meta = LocalMeta {
+        kind: kind.to_string(),
+        file_name: file_name.to_string(),
+        meta_rev: META_REV,
+        ..Default::default()
+    };
     if let Ok(md) = std::fs::metadata(path) {
         meta.size = md.len();
         meta.mtime = md
@@ -411,9 +548,9 @@ pub fn scan_local_meta(profile: &str, kind: &str, force: bool) -> Vec<LocalMeta>
             .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
             .map(|d| d.as_secs())
             .unwrap_or(0);
-        let hit = cached
-            .iter()
-            .find(|c| c.kind == kind && &c.file_name == name && c.size == size && c.mtime == mtime);
+        let hit = cached.iter().find(|c| {
+            c.kind == kind && &c.file_name == name && c.size == size && c.mtime == mtime && c.meta_rev == META_REV
+        });
         match hit {
             Some(c) if !force => fresh.push(c.clone()),
             _ => fresh.push(read_file_meta(path, kind, name)),
@@ -524,6 +661,99 @@ viewing mod.
         assert_eq!(m.description, "Faithful 32x");
         assert_eq!(m.title, "Faithful32x");
         assert!(m.icon.starts_with("data:image/png;base64,"));
+    }
+
+    /// The resolver only ever sees what this parser extracts: a dependency it
+    /// misses is a build that starts and crashes with no warning shown.
+    #[test]
+    fn fabric_relations_are_read_and_environment_ids_dropped() {
+        let jar = tmp("fabric-deps.jar");
+        make_jar(
+            &jar,
+            &[(
+                "fabric.mod.json",
+                br#"{"id":"rei","version":"14.0","name":"REI","provides":["roughlyenoughitems"],
+                     "depends":{"minecraft":"1.21","java":">=17","cloth-config":"*","architectury":"*"},
+                     "breaks":{"jei":"*"}}"#,
+            )],
+        );
+        let m = read_file_meta(&jar, "mod", "rei.jar");
+        assert_eq!(m.mod_id, "rei");
+        assert_eq!(m.provides, vec!["roughlyenoughitems".to_string()]);
+        let mut requires = m.requires.clone();
+        requires.sort();
+        assert_eq!(requires, vec!["architectury".to_string(), "cloth-config".to_string()],
+            "minecraft and java are answered by the loader, not by a mod the user must install");
+        assert_eq!(m.breaks, vec!["jei".to_string()]);
+    }
+
+    #[test]
+    fn quilt_relations_come_from_the_loader_block() {
+        let jar = tmp("quilt-deps.jar");
+        make_jar(
+            &jar,
+            &[(
+                "quilt.mod.json",
+                br#"{"quilt_loader":{"id":"modmenu","version":"9.0","metadata":{"name":"Mod Menu"},
+                     "depends":[{"id":"quilt_base","versions":"*"},{"id":"cloth-config","versions":"*"},
+                                {"id":"sodium","versions":"*","optional":true}],
+                     "breaks":[{"id":"oldmenu"}]}}"#,
+            )],
+        );
+        let m = read_file_meta(&jar, "mod", "modmenu.jar");
+        assert_eq!(m.mod_id, "modmenu");
+        assert_eq!(m.requires, vec!["cloth-config".to_string()],
+            "an optional dependency must never be reported as missing");
+        assert_eq!(m.breaks, vec!["oldmenu".to_string()]);
+    }
+
+    /// Forge marks a dependency with `mandatory`, NeoForge with `type`, and both
+    /// spellings live side by side in the wild.
+    #[test]
+    fn forge_dependency_blocks_keep_their_own_mod_ids() {
+        let jar = tmp("forge-deps.jar");
+        make_jar(
+            &jar,
+            &[(
+                "META-INF/mods.toml",
+                br#"modLoader="javafml"
+[[mods]]
+modId="jei"
+displayName="Just Enough Items"
+[[dependencies.jei]]
+modId="forge"
+mandatory=true
+[[dependencies.jei]]
+modId="architectury"
+mandatory=true
+[[dependencies.jei]]
+modId="sodium"
+mandatory=false
+[[dependencies.jei]]
+modId="rei"
+type="incompatible"
+"#,
+            )],
+        );
+        let m = read_file_meta(&jar, "mod", "jei.jar");
+        assert_eq!(m.mod_id, "jei", "the id must come from [[mods]], not from a dependency block");
+        assert_eq!(m.requires, vec!["architectury".to_string()]);
+        assert_eq!(m.breaks, vec!["rei".to_string()]);
+    }
+
+    #[test]
+    fn mcmod_info_dependencies_lose_their_version_ranges() {
+        let jar = tmp("legacy-deps.jar");
+        make_jar(
+            &jar,
+            &[(
+                "mcmod.info",
+                br#"[{"modid":"oldmod","name":"Old Mod","requiredMods":["forge@[14.0,)","cofhcore@[1.0,)"]}]"#,
+            )],
+        );
+        let m = read_file_meta(&jar, "mod", "old.jar");
+        assert_eq!(m.mod_id, "oldmod");
+        assert_eq!(m.requires, vec!["cofhcore".to_string()]);
     }
 
     #[test]

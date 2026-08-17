@@ -138,7 +138,7 @@ pub async fn cf_install(app: AppHandle, req: CfInstallReq) -> Result<ContentInst
     job.finish(&app, res)
 }
 
-async fn cf_files_for(mod_id: u32, game_version: &str, loader_type: u32) -> Result<Vec<Value>, String> {
+pub(crate) async fn cf_files_for(mod_id: u32, game_version: &str, loader_type: u32) -> Result<Vec<Value>, String> {
     let mut q: Vec<(String, String)> = vec![("pageSize".into(), "30".into())];
     if !game_version.is_empty() { q.push(("gameVersion".into(), game_version.to_string())); }
     if loader_type > 0 { q.push(("modLoaderType".into(), loader_type.to_string())); }
@@ -146,7 +146,7 @@ async fn cf_files_for(mod_id: u32, game_version: &str, loader_type: u32) -> Resu
     Ok(files["data"].as_array().cloned().unwrap_or_default())
 }
 
-fn short_mc_versions(files: &[Value]) -> String {
+pub(crate) fn cf_short_mc_versions(files: &[Value]) -> String {
     let mut seen: Vec<String> = vec![];
     for v in files.iter().flat_map(cf_file_mc_versions) {
         if seen.len() >= 6 { break }
@@ -168,7 +168,7 @@ async fn cf_install_job(app: &AppHandle, job: &Job, req: CfInstallReq) -> Result
                 None => {
                     let any = cf_files_for(mod_id, "", 0).await.unwrap_or_default();
                     if !allow_mismatch {
-                        let have = short_mc_versions(&any);
+                        let have = cf_short_mc_versions(&any);
                         return Ok(ContentInstall {
                             file: String::new(),
                             mismatch: if have.is_empty() { "другие версии".into() } else { have },
@@ -181,12 +181,30 @@ async fn cf_install_job(app: &AppHandle, job: &Job, req: CfInstallReq) -> Result
         }
     };
     let file = &file;
-    // remote-supplied file name: validate before it reaches a path
     let fname = safe_file_name(file["fileName"].as_str().ok_or("нет имени файла")?)?;
-    let dest = safe_child(&profile_dir(&profile).join(content_dir(&kind)), &fname)?;
-    let fid = file["id"].as_u64().unwrap_or(0);
     job.rename(&fname);
     job.emit(app, 40.0, &format!("Скачиваем {}…", fname));
+    let fname = cf_install_file(&profile, &kind, mod_id, file).await?;
+    let mut warning = String::new();
+    if kind == "mod" {
+        job.emit(app, 75.0, "Зависимости…");
+        let ctx = ctx_of(&profile, &kind);
+        let missed = install_required(&ctx, cf_deps(file)).await;
+        if !missed.is_empty() {
+            warning = format!("не нашлось зависимостей под эту версию: {}", missed.join(", "));
+        }
+    }
+    job.emit(app, 100.0, "Установлено");
+    Ok(ContentInstall { file: fname, mismatch: String::new(), warning })
+}
+
+/// Downloads one CurseForge file into the profile and records it in the
+/// manifest. Split out of the install job so the dependency resolver installs
+/// CurseForge content through exactly the same path.
+pub(crate) async fn cf_install_file(profile: &str, kind: &str, mod_id: u32, file: &Value) -> Result<String, String> {
+    // remote-supplied file name: validate before it reaches a path
+    let fname = safe_file_name(file["fileName"].as_str().ok_or("нет имени файла")?)?;
+    let dest = safe_child(&profile_dir(profile).join(content_dir(kind)), &fname)?;
     let sha1 = cf_sha1(file);
     let dl = cf_download(file, &fname, &dest).await
         .map_err(|e| format!("Не скачался файл с CurseForge: {}", e))?;
@@ -198,17 +216,16 @@ async fn cf_install_job(app: &AppHandle, job: &Job, req: CfInstallReq) -> Result
         ),
         Err(_) => (String::new(), String::new(), String::new()),
     };
-    manifest_upsert(&profile, ContentEntry {
-        kind: kind.clone(), file_name: fname.clone(),
+    manifest_upsert(profile, ContentEntry {
+        kind: kind.to_string(), file_name: fname.clone(),
         project_id: format!("cf:{}", mod_id),
-        version_id: fid.to_string(),
+        version_id: file["id"].as_u64().unwrap_or(0).to_string(),
         version_number: file["displayName"].as_str().unwrap_or("").to_string(),
         title, icon_url: icon, description: summary, author: String::new(),
         download_url: dl, sha1, sha512: String::new(),
         file_size: file["fileLength"].as_u64().unwrap_or(0),
     });
-    job.emit(app, 100.0, "Установлено");
-    Ok(ContentInstall { file: fname, mismatch: String::new(), warning: String::new() })
+    Ok(fname)
 }
 
 // Maps install as a world folder in saves/, tracked in the manifest as kind = world.

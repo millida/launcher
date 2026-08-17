@@ -71,7 +71,7 @@ pub(crate) fn modrinth_loaders(loader_id: &str, kind: &str) -> Vec<String> {
     }
 }
 
-type MetaTriple = (String, String, String, String);
+pub(crate) type MetaTriple = (String, String, String, String);
 static META_CACHE: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, MetaTriple>>> =
     std::sync::OnceLock::new();
 
@@ -260,48 +260,21 @@ pub(crate) async fn install_project_version(
     Ok(fname)
 }
 
-/// Installs required dependencies transitively, honouring a pinned `version_id`
-/// when the dependency declares one and skipping projects already installed.
-/// Returns the dependencies that had nothing compatible, so the caller can say
-/// so instead of leaving a build that will not start.
+/// Installs required dependencies transitively through the shared resolver, so
+/// an install and the plan shown beforehand can never disagree. Returns the
+/// dependencies that had nothing compatible, so the caller can say so instead of
+/// leaving a build that will not start.
 pub(crate) async fn resolve_deps(profile: &str, game_version: &str, loaders: &[String], initial: &Value) -> Vec<String> {
-    use std::collections::HashSet;
-    let mut visited: HashSet<String> = HashSet::new();
-    let mut missed: Vec<String> = vec![];
-    for e in load_content_manifest(profile) {
-        if !e.project_id.is_empty() { visited.insert(e.project_id); }
-    }
-    let mut queue: Vec<Value> = initial.as_array().cloned().unwrap_or_default();
-    let mut guard = 0;
-    while let Some(d) = queue.pop() {
-        guard += 1;
-        if guard > 200 { break } // cycle guard
-        if d["dependency_type"].as_str() != Some("required") { continue }
-        let Some(pid) = d["project_id"].as_str().map(|s| s.to_string()) else { continue };
-        if pid.is_empty() || visited.contains(&pid) { continue }
-        visited.insert(pid.clone());
-        let dv = if let Some(vid) = d["version_id"].as_str().filter(|s| !s.is_empty()) {
-            get_json(&format!("https://api.modrinth.com/v2/version/{}", vid)).await.ok()
-                .filter(|v| version_fits(v, game_version, loaders))
-        } else {
-            best_version(&pid, game_version, loaders).await.ok()
-        };
-        match dv {
-            Some(dv) => {
-                if install_project_version(profile, "mod", &pid, &dv).await.is_err() {
-                    missed.push(fetch_project_meta(&pid).await.1);
-                }
-                if let Some(more) = dv["dependencies"].as_array() {
-                    for m in more { queue.push(m.clone()); }
-                }
-            }
-            None => {
-                let title = fetch_project_meta(&pid).await.1;
-                missed.push(if title.is_empty() { pid } else { title });
-            }
-        }
-    }
-    missed
+    let ctx = Ctx {
+        profile: profile.to_string(),
+        kind: "mod".into(),
+        game_version: game_version.to_string(),
+        loader_id: load_profiles().into_iter().find(|p| p.name == profile)
+            .map(|p| p.loader_id()).unwrap_or_else(|| "vanilla".into()),
+        loaders: loaders.to_vec(),
+    };
+    let deps = mr_deps(&serde_json::json!({ "dependencies": initial }));
+    install_required(&ctx, deps).await
 }
 
 /// An empty `file` with a non-empty `mismatch` means nothing fits the profile:

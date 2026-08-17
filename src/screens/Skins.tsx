@@ -28,6 +28,7 @@ import { textureSource } from '../lib/textureSource'
 import { capeTitle, dedupeByTitle, dedupeCapes, textureHash } from '../lib/capes'
 import { Select } from '../components/Select'
 import { SkinBody } from '../components/SkinBody'
+import { SkinDiag } from '../components/SkinDiag'
 import { renderAvatar } from '../lib/skinBody'
 import {
   addToWardrobe,
@@ -547,6 +548,7 @@ export function Skins({ on }: { on: boolean }) {
   const accounts = useAccounts((s) => s.list)
   const activeId = useAccounts((s) => s.active)
   const [nick, setNick] = useState(() => (getAccount() || { nick: '' }).nick || 'MHF_Steve')
+  const [diagOpen, setDiagOpen] = useState(false)
   const [skinSrc, setSkinSrc] = useState<string | null>(null)
   const [variant, setVariant] = useState('classic')
   const [cape, setCape] = useState('none')
@@ -1619,6 +1621,12 @@ export function Skins({ on }: { on: boolean }) {
             <Icon id="i-trash" />
             Сбросить скин
           </button>
+          {hasTauri() ? (
+            <button className="btn sm" style={{ width: '100%', marginTop: '8px' }} onClick={() => setDiagOpen(true)}>
+              <Icon id="i-info" />
+              Скина нет в игре?
+            </button>
+          ) : null}
         </div>
 
         <div>
@@ -2049,6 +2057,9 @@ export function Skins({ on }: { on: boolean }) {
 
         </div>
       </div>
+      {diagOpen ? (
+        <SkinDiag nick={gameNick.name || nick} online={hasMillidaAccount()} onClose={() => setDiagOpen(false)} />
+      ) : null}
     </section>
   )
 }

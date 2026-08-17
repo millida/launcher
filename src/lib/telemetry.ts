@@ -18,6 +18,7 @@ export type TelemetryEventType =
   | 'screen_view'
   | 'server_join'
   | 'skin_apply'
+  | 'skin_diag'
   | 'account_link'
   | 'hosting_open'
   | 'hosting_action'

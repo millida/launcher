@@ -2,7 +2,7 @@ import { hasTauri } from '../ipc/tauri'
 import { cfInstall, cfInstallModpack, cfInstallWorld, installModpack, installVersion, openUrl } from '../ipc/commands'
 import { RU_LOADER, fmtSize } from '../lib/format'
 import { renderMarkdown } from '../lib/markdown'
-import { installContentFlow, resolveTargetBuild } from '../lib/install'
+import { askPlanForVersion, installContentFlow, installExtras, resolveTargetBuild } from '../lib/install'
 import { keyCfModpack, keyContent, keyMrModpack } from '../lib/installKeys'
 import { runInstall, useInstalls } from '../state/installs'
 import { trackTimed } from '../lib/telemetry'
@@ -130,15 +130,20 @@ export function ProjectModal() {
       return
     }
     // a file picked by hand in the versions tab installs as picked
-    void resolveTargetBuild(pj.kind).then((prof) => {
+    void resolveTargetBuild(pj.kind).then(async (prof) => {
       if (!prof) return
+      const extras = await askPlanForVersion(prof, pj.kind, 'curseforge', String(pj.cfid), String(fileId))
+      if (!extras) return
       const pr = useProfiles.getState().profiles.find((x) => x.name === prof)
       runInstall({
         key: keyContent('cf', prof, pj.kind, pj.cfid),
         title: pj.title,
         running: 'Скачивание…',
         run: () => cfInstall(pj.cfid, (pr && pr.version) || '', prof, pj.kind, fileId),
-        onDone: (r) => showToast('CurseForge → «' + prof + '»: ' + r.file, 'ok', 'install'),
+        onDone: (r) => {
+          installExtras(prof, pj.kind, extras)
+          showToast('CurseForge → «' + prof + '»: ' + r.file, 'ok', 'install')
+        },
       })
     })
   }
@@ -158,12 +163,18 @@ export function ProjectModal() {
     }
     const { selected, profiles } = useProfiles.getState()
     const prof = selected || (profiles[0] || { name: '' }).name || 'default'
-    runInstall({
-      key: keyContent('mr', prof, pj.kind, pj.slug),
-      title: pj.title || pj.slug,
-      running: 'Скачивание…',
-      run: () => installVersion(pj.slug, v.id, prof, pj.kind),
-      onDone: (r) => showToast('В «' + prof + '»: ' + r.file + (r.warning ? ' · ' + r.warning : ''), 'ok', 'install'),
+    void askPlanForVersion(prof, pj.kind, 'modrinth', pj.slug, v.id).then((extras) => {
+      if (!extras) return
+      runInstall({
+        key: keyContent('mr', prof, pj.kind, pj.slug),
+        title: pj.title || pj.slug,
+        running: 'Скачивание…',
+        run: () => installVersion(pj.slug, v.id, prof, pj.kind),
+        onDone: (r) => {
+          installExtras(prof, pj.kind, extras)
+          showToast('В «' + prof + '»: ' + r.file + (r.warning ? ' · ' + r.warning : ''), 'ok', 'install')
+        },
+      })
     })
   }
 
