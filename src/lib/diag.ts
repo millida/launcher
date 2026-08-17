@@ -7,8 +7,9 @@ import {
   listJavaRuntimes,
   listProfiles,
   readCrashes,
+  skinDiagnose,
 } from '../ipc/commands'
-import type { CrashEntry, DeviceSpecs, JavaRuntime, Profile } from '../ipc/commands'
+import type { CrashEntry, DeviceSpecs, JavaRuntime, Profile, SkinDiag } from '../ipc/commands'
 import { hasTauri } from '../ipc/tauri'
 import { detectGpu } from './gpu'
 import { recentIssues } from './crash'
@@ -98,6 +99,15 @@ function issuesBlock(pending: CrashEntry[] | null): string[] {
   return out
 }
 
+function skinBlock(d: SkinDiag | null): string[] {
+  if (!d) return ['Скин в игре: проверка недоступна']
+  const out = ['Скин в игре: ' + d.verdict + ' — ' + d.text]
+  d.builds
+    .filter((b) => b.state !== 'ok' && b.state !== 'never_launched')
+    .forEach((b) => out.push('  - ' + b.build + ' (' + b.mc + ' · ' + b.loader + '): ' + b.text))
+  return out
+}
+
 export async function buildDiagnostics(): Promise<string> {
   const tauri = hasTauri()
   const [ver, specs, javas, dir, cache, profiles, crashes, flatpak] = await Promise.all([
@@ -115,6 +125,7 @@ export async function buildDiagnostics(): Promise<string> {
   const accounts = useAccounts.getState().list
   const acc = getAccount()
   const millida = getMillidaAccount()
+  const skin = tauri && acc ? await safe(() => skinDiagnose(acc.nick, !!millida)) : null
 
   const lines: (string | null)[] = [
     '=== Millida Launcher · диагностика ===',
@@ -146,6 +157,7 @@ export async function buildDiagnostics(): Promise<string> {
     'Активный: ' + (acc ? acc.nick + ' · ' + accKindLabel(acc.kind) : 'не выбран'),
     'Millida: ' + (millida ? 'вход выполнен' : 'не выполнен вход'),
     'Скины: ' + (skinSource() === 'millida' ? 'Millida' : 'Mojang'),
+    ...skinBlock(skin),
     '',
     '--- Настройки ---',
     'Тема: ' + themeLabel() + ' · акцент: ' + accentId(),

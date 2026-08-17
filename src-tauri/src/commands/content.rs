@@ -29,6 +29,34 @@ pub async fn install_content(
     engine::install_content(app, project, game_version, profile, kind, allow_mismatch.unwrap_or(false)).await
 }
 
+/// Read-only preview of what an install would pull in. Nothing is downloaded,
+/// so the frontend may call it before every install.
+#[tauri::command]
+pub async fn dep_plan(
+    profile: String,
+    kind: String,
+    source: String,
+    project: String,
+    version_id: Option<String>,
+) -> Result<engine::DepPlan, String> {
+    engine::dep_plan(profile, kind, source, project, version_id).await
+}
+
+#[tauri::command]
+pub async fn install_dep_items(
+    app: tauri::AppHandle,
+    profile: String,
+    kind: String,
+    items: Vec<engine::PlanItem>,
+) -> Result<engine::DepReport, String> {
+    engine::install_dep_items(app, profile, kind, items).await
+}
+
+#[tauri::command]
+pub async fn audit_deps(profile: String) -> Result<engine::DepAudit, String> {
+    engine::audit_deps(profile).await
+}
+
 #[tauri::command]
 pub fn list_content(profile: String, kind: String) -> Vec<engine::ModFile> { engine::list_content(&profile, &kind) }
 

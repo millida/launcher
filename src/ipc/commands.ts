@@ -181,6 +181,77 @@ export interface ContentInstall {
   warning: string
 }
 
+/// One project the resolver decided about. `problem` is filled only for
+/// dependencies nothing compatible was found for.
+export interface DepNode {
+  source: 'modrinth' | 'curseforge'
+  project_id: string
+  version_id: string
+  title: string
+  icon: string
+  version_number: string
+  file_name: string
+  size: number
+  relation: string
+  required_by: string
+  problem: string
+}
+
+export interface DepConflict {
+  title: string
+  file_name: string
+  with: string
+  reason: string
+}
+
+export interface DepPlan {
+  title: string
+  version_number: string
+  mismatch: string
+  required: DepNode[]
+  optional: DepNode[]
+  missing: DepNode[]
+  conflicts: DepConflict[]
+  truncated: boolean
+}
+
+export interface PlanItem {
+  source: string
+  project_id: string
+  version_id?: string
+}
+
+export interface DepReport {
+  installed: string[]
+  failed: string[]
+}
+
+export interface AuditIssue {
+  kind: 'missing' | 'conflict' | 'version' | 'loader'
+  title: string
+  detail: string
+  file_name: string
+  fix: DepNode | null
+}
+
+export interface DepAudit {
+  checked: number
+  issues: AuditIssue[]
+}
+
+export const depPlan = (
+  profile: string,
+  kind: string,
+  source: string,
+  project: string,
+  versionId?: string,
+) => invoke<DepPlan>('dep_plan', { profile, kind, source, project, versionId: versionId || null })
+
+export const installDepItems = (profile: string, kind: string, items: PlanItem[]) =>
+  invoke<DepReport>('install_dep_items', { profile, kind, items })
+
+export const auditDeps = (profile: string) => invoke<DepAudit>('audit_deps', { profile })
+
 export const cfInstall = (
   modId: number,
   gameVersion: string,
@@ -805,6 +876,34 @@ export const repairProfile = (profile: string) => invoke<RepairReport>('repair_p
 
 export const setLocalSkin = (skin: string | null, cape: string | null, slim: boolean) =>
   invoke<void>('set_local_skin', { skin, cape, slim })
+
+export interface SkinDiagBuild {
+  build: string
+  mc: string
+  loader: string
+  state: string
+  text: string
+  conflict: string | null
+  root: string | null
+  rootStale: boolean
+  problems: string[]
+}
+export interface SkinDiagServer {
+  ok: boolean
+  reason?: string
+  skin?: boolean
+  cape?: boolean
+  skinReadable?: boolean
+  capeReadable?: boolean
+}
+export interface SkinDiag {
+  nick: string
+  verdict: string
+  text: string
+  server: SkinDiagServer | null
+  builds: SkinDiagBuild[]
+}
+export const skinDiagnose = (nick: string, online: boolean) => invoke<SkinDiag>('skin_diagnose', { nick, online })
 
 // Textures live on disk: localStorage hit the webview quota and lost them silently.
 export interface TextureEntry {

@@ -162,6 +162,17 @@ fn resolve_loader_dir(vdir: &Path, loader: &str, ver_dir_name: &str, vid: &str) 
     cands.pop().map(|(_, p)| p)
 }
 
+/// Carries the loader's launch arguments into the merged json. MC 1.13+ loaders
+/// ship an `arguments` object, while 1.12.2 and older ship a `minecraftArguments`
+/// string that replaces the vanilla one — dropping it loses `--tweakClass`, and
+/// LaunchWrapper then falls back to VanillaTweaker and cannot find Minecraft.
+fn apply_loader_args(merged: &mut Value, loader_json: &Value) {
+    merged["fabricArguments"] = loader_json["arguments"].clone();
+    if let Some(legacy) = loader_json["minecraftArguments"].as_str() {
+        merged["minecraftArguments"] = Value::String(legacy.to_string());
+    }
+}
+
 /// Returns (merged version json, main_class, classpath, java_bin).
 pub async fn install(
     app: &AppHandle,
@@ -398,7 +409,7 @@ pub async fn install_loader_with_java(
         for j in &ljobs {
             cp_put(&mut cp, &j.rel, j.path.clone());
         }
-        merged["fabricArguments"] = profile["arguments"].clone();
+        apply_loader_args(&mut merged, &profile);
     }
     // Forge/NeoForge ship a headless installer that lays out libraries and runs
     // its own patch processors; its version json is read afterwards.
@@ -554,7 +565,7 @@ pub async fn install_loader_with_java(
         for j in &ljobs {
             if j.path.exists() { cp_put(&mut cp, &j.rel, j.path.clone()); }
         }
-        merged["fabricArguments"] = lj["arguments"].clone();
+        apply_loader_args(&mut merged, &lj);
     }
 
     let mut classpath: Vec<PathBuf> = cp.into_iter().map(|(_, p)| p).collect();
@@ -691,6 +702,41 @@ mod tests {
         assert!(!needs_log4j_config("1.12.2"));
         assert!(!needs_log4j_config("1.21.4"));
         assert!(needs_log4j_config("13w39a"));
+    }
+
+    /// Forge for 1.12.2 and older carries `--tweakClass` only in the legacy
+    /// string; losing it left LaunchWrapper on VanillaTweaker, which dies with
+    /// ClassNotFoundException: net.minecraft.client.Minecraft.
+    #[test]
+    fn legacy_loader_arguments_replace_the_vanilla_string() {
+        let mut merged = serde_json::json!({
+            "id": "1.12.2",
+            "minecraftArguments": "--username ${auth_player_name} --version ${version_name}"
+        });
+        let forge = serde_json::json!({
+            "mainClass": "net.minecraft.launchwrapper.Launch",
+            "minecraftArguments": "--username ${auth_player_name} --version ${version_name} --tweakClass net.minecraftforge.fml.common.launcher.FMLTweaker --versionType Forge"
+        });
+
+        apply_loader_args(&mut merged, &forge);
+
+        assert!(
+            merged["minecraftArguments"].as_str().unwrap_or_default().contains("FMLTweaker"),
+            "аргументы Forge для 1.12.2 обязаны заменить ванильные, иначе сборка стартует без модов и падает"
+        );
+    }
+
+    /// A 1.13+ loader has no legacy string, and inventing one would feed the
+    /// game arguments twice.
+    #[test]
+    fn modern_loader_arguments_leave_the_legacy_string_alone() {
+        let mut merged = serde_json::json!({ "id": "1.20.1", "arguments": { "game": [] } });
+        let fabric = serde_json::json!({ "arguments": { "game": ["--fabric"], "jvm": [] } });
+
+        apply_loader_args(&mut merged, &fabric);
+
+        assert!(merged["minecraftArguments"].is_null(), "у современных версий легаси-строки нет");
+        assert_eq!(merged["fabricArguments"]["game"][0], "--fabric", "аргументы лоадера обязаны доехать");
     }
 
     #[test]
