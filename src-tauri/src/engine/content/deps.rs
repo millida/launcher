@@ -1,7 +1,73 @@
 use crate::engine::*;
 use serde_json::Value;
+use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use tauri::AppHandle;
+
+/// Dotted-numeric precedence, ignoring `+build.metadata` — enough to tell
+/// `0.155.2+26.1.2` is newer than `0.144.3+26.1` the way Fabric mod authors mean
+/// it, without pulling in a full semver crate for four comparison operators.
+fn cmp_version(a: &str, b: &str) -> Ordering {
+    let parts = |s: &str| -> Vec<i64> {
+        s.split('+')
+            .next()
+            .unwrap_or(s)
+            .split(['.', '-'])
+            .map(|p| p.chars().take_while(|c| c.is_ascii_digit()).collect::<String>())
+            .map(|p| p.parse::<i64>().unwrap_or(0))
+            .collect()
+    };
+    let (pa, pb) = (parts(a), parts(b));
+    for i in 0..pa.len().max(pb.len()) {
+        match pa.get(i).copied().unwrap_or(0).cmp(&pb.get(i).copied().unwrap_or(0)) {
+            Ordering::Equal => continue,
+            o => return o,
+        }
+    }
+    Ordering::Equal
+}
+
+/// A minimal reading of Fabric's version predicate syntax: `>=`, `<=`, `>`, `<`,
+/// `=` (or a bare version, which means `=`), ANDed by whitespace, and `*` for
+/// "any version". `breaks: {"fabric-api": "<0.144.3+26.1"}` is how a mod says
+/// "needs a newer Fabric API", not "never install with Fabric API" — treating
+/// every breaks entry as unconditional flags that pairing as a hard conflict
+/// even when the version about to land clears the guard.
+/// Anything this cannot parse (carets, tildes, OR-groups) is left unresolved and
+/// counted as a match, so an incompatibility the launcher cannot verify still
+/// gets flagged instead of silently disappearing.
+fn version_satisfies(version: &str, range: &str) -> bool {
+    let range = range.trim();
+    if range.is_empty() || range == "*" {
+        return true;
+    }
+    range.split_whitespace().all(|clause| clause_satisfies(version, clause))
+}
+
+fn clause_satisfies(version: &str, clause: &str) -> bool {
+    let (op, rhs) = if let Some(r) = clause.strip_prefix(">=") {
+        (">=", r)
+    } else if let Some(r) = clause.strip_prefix("<=") {
+        ("<=", r)
+    } else if let Some(r) = clause.strip_prefix('>') {
+        (">", r)
+    } else if let Some(r) = clause.strip_prefix('<') {
+        ("<", r)
+    } else if let Some(r) = clause.strip_prefix('=') {
+        ("=", r)
+    } else if clause.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+        ("=", clause)
+    } else {
+        return true;
+    };
+    match op {
+        ">=" => cmp_version(version, rhs) != Ordering::Less,
+        "<=" => cmp_version(version, rhs) != Ordering::Greater,
+        ">" => cmp_version(version, rhs) == Ordering::Greater,
+        "<" => cmp_version(version, rhs) == Ordering::Less,
+        _ => cmp_version(version, rhs) == Ordering::Equal,
+    }
+}
 
 /// A pack of 300 mods would otherwise walk the whole catalog graph on every
 /// install; the resolver stops early and says so instead of hanging.
@@ -441,7 +507,11 @@ fn local_conflicts(profile: &str, incoming: &DepNode) -> Vec<DepConflict> {
     let wanted = [norm_title(&incoming.title), norm_title(&incoming.project_id)];
     local_meta_map(profile, "mod")
         .into_values()
-        .filter(|m| m.breaks.iter().any(|b| wanted.contains(&norm_title(b))))
+        .filter(|m| {
+            m.breaks
+                .iter()
+                .any(|b| wanted.contains(&norm_title(&b.id)) && version_satisfies(&incoming.version_number, &b.range))
+        })
         .map(|m| DepConflict {
             title: m.title.clone(),
             file_name: m.file_name.clone(),
@@ -598,6 +668,19 @@ pub async fn audit_deps(profile: String) -> Result<DepAudit, String> {
     let installed = installed_index(&profile);
     let mut audit = DepAudit { checked: locals.len() as u32, issues: vec![] };
     let mut wanted: HashMap<String, String> = HashMap::new();
+    // The installed version of whatever a `breaks` rule points at — needed to
+    // tell a real conflict from a minimum-version guard the build already clears.
+    let version_of: HashMap<&str, &str> = locals
+        .iter()
+        .flat_map(|m| {
+            let mut ids: Vec<&str> = vec![];
+            if !m.mod_id.is_empty() {
+                ids.push(&m.mod_id);
+            }
+            ids.extend(m.provides.iter().map(String::as_str));
+            ids.into_iter().map(move |id| (id, m.version.as_str()))
+        })
+        .collect();
 
     for m in &locals {
         if declared_mismatch(&m.mc, &ctx.game_version) {
@@ -619,12 +702,16 @@ pub async fn audit_deps(profile: String) -> Result<DepAudit, String> {
             });
         }
         for b in &m.breaks {
-            if installed.mod_ids.contains(b) {
+            if installed.mod_ids.contains(&b.id) {
+                let other_version = version_of.get(b.id.as_str()).copied().unwrap_or("");
+                if !version_satisfies(other_version, &b.range) {
+                    continue;
+                }
                 let other = locals
                     .iter()
-                    .find(|o| &o.mod_id == b || o.provides.contains(b))
+                    .find(|o| o.mod_id == b.id || o.provides.contains(&b.id))
                     .map(|o| o.title.clone())
-                    .unwrap_or_else(|| b.clone());
+                    .unwrap_or_else(|| b.id.clone());
                 audit.issues.push(AuditIssue {
                     kind: "conflict".into(),
                     title: m.title.clone(),
@@ -712,6 +799,32 @@ fn push_missing(audit: &mut DepAudit, needed_by: String, missing: String, fix: O
 mod tests {
     use super::*;
     use serde_json::json;
+
+    /// Real `breaks` entries pulled from Simple Voice Chat and More Culling: both
+    /// only guard against an OLD Fabric API, so installing the current one (well
+    /// above either floor) must not be reported as a conflict.
+    #[test]
+    fn breaks_range_only_flags_the_version_it_actually_covers() {
+        assert!(
+            !version_satisfies("0.155.2+26.1.2", "<0.144.3+26.1"),
+            "Simple Voice Chat's guard: a newer Fabric API clears it, no conflict"
+        );
+        assert!(
+            !version_satisfies("0.155.2+26.1.2", "<=0.145.2"),
+            "More Culling's guard: same story"
+        );
+        assert!(
+            version_satisfies("0.140.0+26.1", "<0.144.3+26.1"),
+            "an actually old Fabric API still trips the same guard"
+        );
+        assert!(version_satisfies("1.0.0", "*"), "no range means always incompatible");
+        assert!(version_satisfies("1.0.0", ""), "an empty range reads the same as *");
+        assert!(version_satisfies("2.0.0", ">=1.5.0"));
+        assert!(!version_satisfies("1.0.0", ">=1.5.0"));
+        assert!(version_satisfies("1.5.0", ">=1.0.0 <2.0.0"), "space-separated clauses AND together");
+        assert!(!version_satisfies("2.0.0", ">=1.0.0 <2.0.0"));
+        assert!(version_satisfies("1.2.3", "^1.0.0"), "an unparsed operator is treated as still matching");
+    }
 
     /// input -> verdict. Embedded libraries and tools are already inside the jar:
     /// installing them separately duplicates classes and breaks the game.

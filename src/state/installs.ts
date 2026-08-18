@@ -17,11 +17,16 @@ export interface InstallTask {
   msg: string
   pct: number
   state: InstallState
+  versionId?: string
 }
 
 interface InstallsState {
   tasks: Record<string, InstallTask>
   done: Record<string, true>
+  // Which version id a key's last completed install actually put in place —
+  // a key covers every version of a project, so the plain `done` flag alone
+  // cannot tell one version's row from another's.
+  doneVersion: Record<string, string>
   patch: (key: string, t: Partial<InstallTask> & { title?: string }) => void
   drop: (key: string) => void
 }
@@ -29,6 +34,7 @@ interface InstallsState {
 export const useInstalls = create<InstallsState>((set, get) => ({
   tasks: {},
   done: {},
+  doneVersion: {},
   patch: (key, t) => {
     const prev = get().tasks[key]
     const next: InstallTask = {
@@ -38,6 +44,7 @@ export const useInstalls = create<InstallsState>((set, get) => ({
       msg: t.msg !== undefined ? t.msg : (prev && prev.msg) || '',
       pct: t.pct !== undefined ? t.pct : (prev && prev.pct) || 0,
       state: t.state || (prev && prev.state) || 'run',
+      versionId: t.versionId !== undefined ? t.versionId : prev && prev.versionId,
     }
     set({ tasks: { ...get().tasks, [key]: next } })
   },
@@ -52,7 +59,11 @@ export const installTask = (key: string): InstallTask | undefined => useInstalls
 
 export const isInstalled = (key: string): boolean => !!useInstalls.getState().done[key]
 
-const markDone = (key: string) => useInstalls.setState((s) => ({ done: { ...s.done, [key]: true } }))
+const markDone = (key: string, versionId?: string) =>
+  useInstalls.setState((s) => ({
+    done: { ...s.done, [key]: true },
+    doneVersion: versionId ? { ...s.doneVersion, [key]: versionId } : s.doneVersion,
+  }))
 
 const HIDE_MS = 2600
 const hideTimers: Record<string, ReturnType<typeof setTimeout>> = {}
@@ -70,6 +81,9 @@ interface RunOptions<T> {
   onDone?: (r: T) => void
   onError?: (e: unknown) => void
   keepOpen?: (r: T) => boolean
+  // Which version this call targets, when the key covers a whole project —
+  // lets the UI show progress only on that version's row instead of every one.
+  versionId?: string
 }
 
 export function runInstall<T>(o: RunOptions<T>): boolean {
@@ -85,13 +99,14 @@ export function runInstall<T>(o: RunOptions<T>): boolean {
     msg: '',
     pct: 0,
     state: 'run',
+    versionId: o.versionId,
   })
   o.run()
     .then((r) => {
       if (o.keepOpen && o.keepOpen(r)) {
         useInstalls.getState().drop(o.key)
       } else {
-        markDone(o.key)
+        markDone(o.key, o.versionId)
         useInstalls.getState().patch(o.key, { label: 'Установлено', pct: 100, msg: '', state: 'done' })
         fade(o.key)
       }

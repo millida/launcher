@@ -14,7 +14,7 @@ import { useGame } from '../state/game'
 import { applyLaunchWindowMode } from './window'
 import { liveBeat, track, trackTimed } from './telemetry'
 
-export const PL_STAGES = ['Проверка файлов', 'Java 21 (в комплекте)', 'Ассеты и библиотеки', 'Запуск игры']
+export const PL_STAGES = ['Проверка файлов', 'Java', 'Ассеты и библиотеки', 'Запуск игры']
 
 export const REPAIR_STAGES = ['Файлы игры', 'Java', 'Ассеты и библиотеки', 'Моды и контент']
 

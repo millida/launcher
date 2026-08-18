@@ -18,6 +18,8 @@ type AccountInput = Partial<Account> & { nick: string; kind: string }
 
 const isHeadAvatar = (v?: string): boolean => !!v && v.startsWith('data:image/')
 
+export const isMillidaKind = (kind: string) => kind === 'millida' || kind === 'tg'
+
 function readAccounts(): Account[] {
   try {
     const list = JSON.parse(localStorage.getItem('m-accounts') || 'null') || []
@@ -41,6 +43,28 @@ function readActive(): string {
   return localStorage.getItem('m-active') || ''
 }
 
+/// The Millida session lives in one vault slot for the whole launcher, so a second
+/// sign-in replaces the first one instead of adding to it. Rows written before that
+/// was enforced still sit in storage: they all point at the current session and show
+/// its nick, so the list reads as the same account twice.
+function collapseMillida(list: Account[], active: string): { list: Account[]; active: string } {
+  const millida = list.filter((a) => isMillidaKind(a.kind))
+  if (millida.length < 2) return { list, active }
+  const keep = millida.find((a) => a.id === active) || millida[millida.length - 1]
+  const next = list.filter((a) => !isMillidaKind(a.kind) || a.id === keep.id)
+  return { list: next, active: list.some((a) => a.id === active) && !next.some((a) => a.id === active) ? keep.id : active }
+}
+
+export function loadState(): { list: Account[]; active: string } {
+  const stored = readAccounts()
+  const state = collapseMillida(stored, readActive())
+  if (state.list.length !== stored.length) {
+    persist(state.list)
+    localStorage.setItem('m-active', state.active)
+  }
+  return state
+}
+
 interface AccountsState {
   list: Account[]
   active: string
@@ -50,9 +74,11 @@ interface AccountsState {
   save: (list: Account[]) => void
 }
 
+const initial = loadState()
+
 export const useAccounts = create<AccountsState>((set, get) => ({
-  list: readAccounts(),
-  active: readActive(),
+  list: initial.list,
+  active: initial.active,
   setActive: (id) => {
     localStorage.setItem('m-active', id)
     set({ active: id })
@@ -61,9 +87,13 @@ export const useAccounts = create<AccountsState>((set, get) => ({
     const l = get().list.slice()
     const acc: Account = { ...(input as Account) }
     acc.id = acc.id || 'acc' + Date.now() + Math.floor(Math.random() * 1000)
-    const i = l.findIndex((x) => x.nick === acc.nick && x.kind === acc.kind)
+    const i = isMillidaKind(acc.kind)
+      ? l.findIndex((x) => isMillidaKind(x.kind))
+      : l.findIndex((x) => x.nick === acc.nick && x.kind === acc.kind)
     if (i >= 0) {
-      l[i] = Object.assign(l[i], acc)
+      // A Millida row is replaced, not merged: keeping the previous balance, avatar
+      // or uuid would show one user's facts under another user's login.
+      l[i] = isMillidaKind(acc.kind) ? { ...acc, id: l[i].id } : Object.assign(l[i], acc)
       acc.id = l[i].id
     } else {
       l.push(acc)
@@ -101,7 +131,7 @@ export function getAccount(): Account | null {
 
 export function getMillidaAccount(): Account | null {
   const { list } = useAccounts.getState()
-  return list.find((a) => a.kind === 'millida' || a.kind === 'tg') || null
+  return list.find((a) => isMillidaKind(a.kind)) || null
 }
 
 /// The Millida game profile carries its own name, and the game uses that one — the site
@@ -112,7 +142,9 @@ export const GAME_NICK_KEY = 'm-game-nick'
 /// it can be taken, renamed or missing entirely when the profile is hidden.
 export const PROFILE_SLUG_KEY = 'm-profile-slug'
 
-export const isMillidaKind = (kind: string) => kind === 'millida' || kind === 'tg'
+/// Which user the cached game nick and profile slug belong to, so a sign-in with a
+/// different Millida account is told apart from a renamed one.
+export const MILLIDA_USER_KEY = 'm-millida-uid'
 
 export function profileSlug(): string {
   const a = getAccount()

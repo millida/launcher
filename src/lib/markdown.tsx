@@ -95,8 +95,12 @@ function htmlNodes(node: Node, ctx: Ctx): ReactNode[] {
   const out: ReactNode[] = []
   node.childNodes.forEach((child) => {
     if (child.nodeType === 3) {
-      const text = (child.textContent || '').replace(/\s+/g, ' ')
-      if (text.trim() || text === ' ') out.push(text)
+      const raw = child.textContent || ''
+      // A description can mix raw HTML (banners, badges) with plain Markdown
+      // syntax around it — the text nodes here still need **bold**, [links](),
+      // and #headers interpreted, not dumped as literal characters.
+      if (raw.trim()) out.push(...mdBlock(raw, ctx))
+      else if (raw.replace(/\s+/g, ' ') === ' ') out.push(' ')
       return
     }
     if (child.nodeType !== 1) return
@@ -174,9 +178,10 @@ function renderHtml(body: string): ReactNode[] {
   }
 }
 
-export function renderMarkdown(body: string): ReactNode[] {
-  if (HTML_RE.test(body)) return renderHtml(body)
-  const ctx: Ctx = { nodes: [], key: 0 }
+/// Turns a block of plain Markdown text (headers, **bold**, [links](), ![images]())
+/// into React nodes. Shared by the pure-Markdown path and by HTML text nodes so a
+/// description mixing both formats renders consistently either way.
+function mdBlock(body: string, ctx: Ctx): ReactNode[] {
   const out: ReactNode[] = []
   const re = /^(#{1,3}) (.*)$/gm
   let last = 0
@@ -202,4 +207,9 @@ export function renderMarkdown(body: string): ReactNode[] {
   }
   if (last < body.length) out.push(...assemble(transform(body.slice(last), ctx), ctx))
   return out
+}
+
+export function renderMarkdown(body: string): ReactNode[] {
+  if (HTML_RE.test(body)) return renderHtml(body)
+  return mdBlock(body, { nodes: [], key: 0 })
 }

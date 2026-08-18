@@ -1,5 +1,5 @@
 import { api, hasMillidaAccount } from './api'
-import { useAccounts } from '../state/accounts'
+import { MILLIDA_USER_KEY, useAccounts } from '../state/accounts'
 import { syncAuth } from '../state/auth'
 import { loadFriends } from '../state/friends'
 import { loadRooms } from '../state/rooms'
@@ -61,6 +61,7 @@ export function enterApp() {
 
 function dropMillidaSession() {
   MILLIDA_PROFILE = null
+  localStorage.removeItem(MILLIDA_USER_KEY)
   // Приватность привязана к аккаунту: следующий вход не должен видеть чужие
   // тумблеры до ответа сервера.
   usePrivacy.setState({ loaded: false, error: '', saving: null })

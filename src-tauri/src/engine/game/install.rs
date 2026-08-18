@@ -29,8 +29,10 @@ async fn fetch_libs(jobs: &[LibJob], app: &AppHandle, from: f32, to: f32, title:
     let step = (total / 12).max(1);
     // Each task owns its data: borrowing from the slice would make the future
     // non-'static, which a Tauri command cannot hold.
+    let mut seen: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
     let items: Vec<(String, PathBuf, Option<String>, Option<u64>)> = jobs
         .iter()
+        .filter(|j| seen.insert(j.path.clone()))
         .map(|j| (j.url.clone(), j.path.clone(), j.sha1.clone(), j.size))
         .collect();
     let results: Vec<Result<(), String>> = futures::stream::iter(items.into_iter().map(|(url, path, sha1, size)| {
@@ -71,9 +73,11 @@ fn loader_lib_intact(path: &Path) -> bool {
 }
 
 async fn fetch_missing(jobs: &[LibJob], strict: bool) -> Result<(), String> {
+    let mut seen: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
     let items: Vec<(String, PathBuf)> = jobs
         .iter()
         .filter(|j| !j.url.is_empty() && !loader_lib_intact(&j.path))
+        .filter(|j| seen.insert(j.path.clone()))
         .map(|j| (j.url.clone(), j.path.clone()))
         .collect();
     // Maven does not always publish a .sha1, and without one an existing file is
@@ -135,6 +139,20 @@ async fn maven_sha1(url: &str) -> Option<String> {
 fn loader_profile_json(dir: &Path) -> Option<Value> {
     let name = dir.file_name()?.to_string_lossy().to_string();
     serde_json::from_slice(&std::fs::read(dir.join(format!("{}.json", name))).ok()?).ok()
+}
+
+/// Forge published its installer under two names: `forge-<mc>-<build>` and, up
+/// to MC 1.9.4, `forge-<mc>-<build>-<mc>`. Only one of them exists per build, so
+/// both are offered and the missing one is skipped on its 404.
+fn forge_installers(vid: &str, build: &str) -> Vec<(String, String)> {
+    const MAVEN: &str = "https://maven.minecraftforge.net/net/minecraftforge/forge";
+    let f = format!("{}-{}", vid, build);
+    // The Forge installer creates "<mc>-forge-<build>", not "forge-<mc>-<build>".
+    let dir_name = format!("{}-forge-{}", vid, build);
+    vec![
+        (format!("{MAVEN}/{f}/forge-{f}-installer.jar"), dir_name.clone()),
+        (format!("{MAVEN}/{f}-{vid}/forge-{f}-{vid}-installer.jar"), dir_name),
+    ]
 }
 
 /// Locates an installed Forge/NeoForge dir for this MC version: exact name
@@ -463,35 +481,33 @@ pub async fn install_loader_with_java(
                     }
                 }
                 if builds.is_empty() { return Err("Forge для этой версии не найден".into()) }
-                // The Forge installer creates "<mc>-forge-<build>", not "forge-<mc>-<build>".
-                builds.into_iter().map(|fv| (
-                    format!("https://maven.minecraftforge.net/net/minecraftforge/forge/{f}/forge-{f}-installer.jar", f = format!("{}-{}", vid, fv)),
-                    format!("{}-forge-{}", vid, fv),
-                )).collect()
+                builds.iter().flat_map(|fv| forge_installers(&vid, fv)).collect()
             };
             // The modpack's pinned build is tried first.
             if let Some(pin) = loader_version {
-                let (url, name) = if loader == "neoforge" {
-                    (
+                let pinned = if loader == "neoforge" {
+                    vec![(
                         format!("https://maven.neoforged.net/releases/net/neoforged/neoforge/{v}/neoforge-{v}-installer.jar", v = pin),
                         format!("neoforge-{}", pin),
-                    )
+                    )]
                 } else {
-                    (
-                        format!("https://maven.minecraftforge.net/net/minecraftforge/forge/{f}/forge-{f}-installer.jar", f = format!("{}-{}", vid, pin)),
-                        format!("{}-forge-{}", vid, pin),
-                    )
+                    forge_installers(&vid, pin)
                 };
-                installers.retain(|(_, n)| n != &name);
-                installers.insert(0, (url, name));
+                installers.retain(|(u, _)| !pinned.iter().any(|(pu, _)| pu == u));
+                for (i, entry) in pinned.into_iter().enumerate() {
+                    installers.insert(i, entry);
+                }
             }
             // Skip the installer when the profile is already laid out: it takes
             // up to a minute and needs network.
             let ver_dir_name = installers[0].1.clone();
-            found = if loader_version.is_some() {
-                Some(vdir.join(&ver_dir_name)).filter(|d| d.join(format!("{}.json", ver_dir_name)).exists())
-            } else {
-                resolve_loader_dir(&vdir, loader, &ver_dir_name, &vid)
+            found = match loader_version {
+                // A pinned build must not resolve to a neighbouring one, but the
+                // legacy Forge installer names its dir "<mc>-Forge<build>-<mc>",
+                // so the exact name is a hint rather than the only answer.
+                Some(pin) => resolve_loader_dir(&vdir, loader, &ver_dir_name, &vid)
+                    .filter(|d| d.file_name().is_some_and(|n| n.to_string_lossy().contains(pin))),
+                None => resolve_loader_dir(&vdir, loader, &ver_dir_name, &vid),
             };
             if found.is_none() {
                 let java_pre = match java_override.clone() {
@@ -530,7 +546,7 @@ pub async fn install_loader_with_java(
                     }
                     found = resolve_loader_dir(&vdir, loader, name, &vid);
                     if found.is_some() { break }
-                    last_err = "Не нашли профиль загрузчика".into();
+                    last_err = format!("Инсталлер отработал, но профиль {} не появился", name);
                 }
                 if found.is_none() { return Err(last_err) }
             }
@@ -599,9 +615,13 @@ pub async fn install_loader_with_java(
         // async task is spawned; deep verify also rejects truncated objects.
         let obj_root = root.join("assets/objects");
         let deep = deep_verify();
+        // Several index entries can point at one object: downloading the same
+        // destination twice in parallel is a race, not extra work.
         let missing: Vec<(String, String)> = tokio::task::spawn_blocking(move || {
+            let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
             objects
                 .into_iter()
+                .filter(|(_, hash, _)| seen.insert(hash.clone()))
                 .filter(|(pre, hash, size)| {
                     let Ok(md) = std::fs::metadata(obj_root.join(pre).join(hash)) else { return true };
                     deep && size.is_some_and(|want| md.len() != want)
@@ -694,6 +714,29 @@ async fn ensure_log4j_config(vjson: &Value, root: &Path) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Forge up to 1.9.4 lives under `<mc>-<build>-<mc>`, later builds under
+    /// `<mc>-<build>`: offering only one name left every legacy modpack stuck on
+    /// "maven не дал контрольную сумму инсталлера".
+    #[test]
+    fn legacy_forge_gets_both_installer_names() {
+        let legacy = forge_installers("1.7.10", "10.13.4.1614");
+        assert_eq!(legacy.len(), 2, "оба варианта имени обязаны попасть в список");
+        assert!(
+            legacy[0].0.ends_with("/1.7.10-10.13.4.1614/forge-1.7.10-10.13.4.1614-installer.jar"),
+            "современное имя пробуется первым: {}",
+            legacy[0].0
+        );
+        assert!(
+            legacy[1].0.ends_with("/1.7.10-10.13.4.1614-1.7.10/forge-1.7.10-10.13.4.1614-1.7.10-installer.jar"),
+            "легаси-имя с повтором версии игры обязано быть запасным: {}",
+            legacy[1].0
+        );
+        assert!(
+            legacy.iter().all(|(_, name)| name == "1.7.10-forge-10.13.4.1614"),
+            "имя папки версии от варианта ссылки не зависит"
+        );
+    }
 
     #[test]
     fn log4j_config_only_for_pre_1_12() {
