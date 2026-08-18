@@ -324,7 +324,22 @@ export function InstancePage() {
 
   useEffect(() => {
     if (!modal.open || !profile) return
-    setTab('content')
+    const { tab: wantTab, focusRename, share: wantShare } = useInstance.getState()
+    setTab(wantTab)
+    if (wantTab === 'worlds') loadWorlds()
+    if (wantTab === 'logs') loadLogs()
+    // The rename input lives on the Settings tab, so focus is set after that
+    // tab has been rendered.
+    if (focusRename) {
+      requestAnimationFrame(() => {
+        const input = document.getElementById('bsRename') as HTMLInputElement | null
+        input?.focus()
+        input?.select()
+      })
+      useInstance.getState().set({ focusRename: false })
+    }
+    setShareOpen(wantShare)
+    if (wantShare) useInstance.getState().set({ share: false })
     setKind('mod')
     setPlaytime('')
     setRam(parseInt(localStorage.getItem(ramKey(profile)) || '4'))
@@ -668,6 +683,19 @@ export function InstancePage() {
             </div>
             <div className="inst-actions">
               <button
+                className="btn lg secondary"
+                title="Получить код сборки, чтобы её поставил друг"
+                onClick={() => {
+                  if (!hasTauri()) {
+                    showToast('Доступно в приложении')
+                    return
+                  }
+                  setShareOpen(true)
+                }}
+              >
+                <Icon id="i-link" /> Поделиться
+              </button>
+              <button
                 className={'btn lg ' + (thisRunning ? 'running' : 'primary')}
                 id="bsPlay"
                 title={thisRunning ? 'Игра идёт — нажми, чтобы запустить ещё одну копию' : undefined}
@@ -780,60 +808,8 @@ export function InstancePage() {
                     <input placeholder="Поиск…" value={contentQuery} onChange={(e) => setContentQuery(e.target.value)} />
                   </div>
                 ) : null}
-                <button
-                  className="btn sm secondary"
-                  id="bsScan"
-                  style={{ height: '32px', fontSize: '12.5px' }}
-                  title="Прочитать метаданные файлов и опознать их на Modrinth"
-                  disabled={scanLabel !== 'Сканировать' || !items.length}
-                  onClick={() => {
-                    if (!hasTauri()) {
-                      showToast('Доступно в приложении')
-                      return
-                    }
-                    setScanLabel('Сканируем…')
-                    scanContent(profile!, kind)
-                      .then((r) => {
-                        setScanLabel('Сканировать')
-                        if (kindRef.current === kind) setItems(r.items)
-                        showToast(
-                          r.identified
-                            ? 'Опознано на Modrinth: ' + r.identified + ' из ' + r.scanned
-                            : 'Разобрано файлов: ' + r.scanned,
-                        )
-                      })
-                      .catch((e) => {
-                        setScanLabel('Сканировать')
-                        showToast('Не удалось просканировать: ' + e, 'error')
-                      })
-                  }}
-                >
-                  <Icon id="i-search" /> {scanLabel}
-                </button>
-                <button
-                  className="btn sm secondary"
-                  disabled={kind !== 'mod' || !items.length}
-                  title="Сверить моды с каталогами и заглянуть внутрь jar"
-                  onClick={() => setSafetyOpen(true)}
-                >
-                  <Icon id="i-shield" /> Проверить моды
-                </button>
-                <span className="set-val" id="bsModCount">
-                  {noticeList ? '' : shownItems.length ? shownItems.length + ' шт.' : ''}
-                </span>
               </div>
-              <div
-                id="bsBulkBar"
-                style={{
-                  display: sel.size ? 'flex' : 'none',
-                  alignItems: 'center',
-                  gap: '8px',
-                  marginBottom: '10px',
-                  padding: '7px 10px',
-                  background: 'var(--m-accent-soft)',
-                  borderRadius: '10px',
-                }}
-              >
+              <div id="bsBulkBar" className="bulk-float" style={{ display: sel.size ? 'flex' : 'none' }}>
                 <span
                   className={
                     'chk' + (sel.size > 0 && sel.size === shownItems.length ? ' on' : sel.size ? ' part' : '')
@@ -890,6 +866,249 @@ export function InstancePage() {
                   Удалить
                 </button>
               </div>
+              <div style={{ display: 'flex', gap: '8px', margin: '12px 0 14px' }}>
+                <button
+                  className="btn sm secondary act-row-btn"
+                  id="bsDrop"
+                  disabled={dropBusy}
+                  title={'Выбрать ' + extsOf(kind).map((e) => '.' + e).join(' / ') + ' на диске'}
+                  onClick={() => {
+                    if (!hasTauri()) {
+                      showToast('Доступно в приложении', 'error')
+                      return
+                    }
+                    pickContentFiles(kindRef.current)
+                      .then((paths) => {
+                        if (paths && paths.length) void addFiles(paths)
+                      })
+                      .catch((e) => showToast('Не удалось открыть выбор файлов: ' + e, 'error'))
+                  }}
+                >
+                  <Icon id="i-upload" /> {dropBusy ? 'Добавляем…' : 'Файл'}
+                </button>
+                <button
+                  className="btn sm secondary act-row-btn"
+                  id="bsAddContent"
+                  style={{ flex: 1 }}
+                  onClick={() => {
+                    useProfiles.getState().setSelected(profile)
+                    close()
+                    setScreen('mods')
+                    useMods.getState().scopeTo(profile)
+                    useMods.getState().set({ modTab: 'mod' })
+                    void useMods.getState().load()
+                  }}
+                >
+                  <Icon id="i-plus" /> Добавить из каталога
+                </button>
+                <button
+                  className="btn sm secondary act-row-btn"
+                  id="bsUpdateAll"
+                  onClick={() => {
+                    if (!hasTauri()) return
+                    setUpdateAllLabel('Обновляем…')
+                    updateAll(profile!, kind)
+                      .then((n) => {
+                        setUpdateAllLabel('Обновить всё')
+                        loadMods()
+                        showToast(n ? 'Обновлено: ' + n : 'Всё актуально')
+                      })
+                      .catch((e) => {
+                        setUpdateAllLabel('Обновить всё')
+                        showToast('' + e)
+                      })
+                  }}
+                >
+                  <Icon id="i-restart" /> {updateAllLabel}
+                </button>
+                <button
+                  className="btn sm secondary act-row-btn"
+                  id="bsScan"
+                  title="Прочитать метаданные файлов и опознать их на Modrinth и CurseForge"
+                  disabled={scanLabel !== 'Сканировать' || !items.length}
+                  onClick={() => {
+                    if (!hasTauri()) {
+                      showToast('Доступно в приложении')
+                      return
+                    }
+                    setScanLabel('Сканируем…')
+                    scanContent(profile!, kind)
+                      .then((r) => {
+                        setScanLabel('Сканировать')
+                        if (kindRef.current === kind) setItems(r.items)
+                        showToast(
+                          r.identified
+                            ? 'Опознано ' +
+                              r.identified +
+                              ' из ' +
+                              r.scanned +
+                              ' (' +
+                              [
+                                r.modrinth ? 'Modrinth: ' + r.modrinth : '',
+                                r.curseforge ? 'CurseForge: ' + r.curseforge : '',
+                              ]
+                                .filter(Boolean)
+                                .join(', ') +
+                              ')'
+                            : 'Разобрано файлов: ' + r.scanned,
+                        )
+                      })
+                      .catch((e) => {
+                        setScanLabel('Сканировать')
+                        showToast('Не удалось просканировать: ' + e, 'error')
+                      })
+                  }}
+                >
+                  <Icon id="i-search" /> {scanLabel}
+                </button>
+                <button
+                  className="btn sm secondary act-row-btn"
+                  disabled={kind !== 'mod' || !items.length}
+                  title="Сверить моды с каталогами и заглянуть внутрь jar"
+                  onClick={() => setSafetyOpen(true)}
+                >
+                  <Icon id="i-shield" /> Проверить моды
+                </button>
+                <button
+                  className="btn sm secondary act-row-btn"
+                  id="bsExport"
+                  title="Экспорт сборки в файл .mrpack"
+                  onClick={() => {
+                    if (!hasTauri()) {
+                      showToast('Доступно в приложении')
+                      return
+                    }
+                    showToast('Собираем .mrpack…')
+                    exportMrpack(profile!, profile!, '1.0.0', pr ? LOADER_NAME(pr) + ' ' + pr.version : '')
+                      .then((p) => showToast('Экспортировано: ' + ('' + p).split('/').pop()))
+                      .catch((e) => showToast('' + e))
+                  }}
+                >
+                  <Icon id="i-download" /> Экспорт
+                </button>
+              </div>
+              {kind === 'mod' ? (
+                <div
+                  style={{
+                    margin: '0 0 14px',
+                    borderTop: '1px solid var(--m-border)',
+                    borderBottom: '1px solid var(--m-border)',
+                    padding: '12px 0 14px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span className="set-val">Зависимости и совместимость</span>
+                    <span style={{ flex: 1 }}></span>
+                    {audit && audit.issues.some((i) => i.fix) ? (
+                      <button
+                        className="btn sm secondary"
+                        onClick={() => {
+                          const items = audit.issues
+                            .map((i) => i.fix)
+                            .filter((f): f is NonNullable<typeof f> => !!f)
+                            .map(planItem)
+                          const uniq = items.filter(
+                            (it, i) => items.findIndex((x) => x.project_id === it.project_id) === i,
+                          )
+                          installExtras(profile!, 'mod', uniq, () => {
+                            loadMods()
+                            setAudit(null)
+                          })
+                        }}
+                      >
+                        Доустановить ({audit.issues.filter((i) => i.fix).length})
+                      </button>
+                    ) : null}
+                    <button
+                      className="btn sm secondary"
+                      disabled={auditBusy}
+                      title="Проверить, всё ли нужное стоит и не конфликтуют ли моды между собой"
+                      onClick={() => {
+                        if (!hasTauri()) {
+                          showToast('Доступно в приложении')
+                          return
+                        }
+                        setAuditBusy(true)
+                        auditDeps(profile!)
+                          .then((r) => {
+                            setAuditBusy(false)
+                            setAudit(r)
+                          })
+                          .catch((e) => {
+                            setAuditBusy(false)
+                            showToast('Не удалось проверить: ' + e, 'error')
+                          })
+                      }}
+                    >
+                      <Icon id="i-check" /> {auditBusy ? 'Проверяем…' : 'Проверить'}
+                    </button>
+                  </div>
+                  {!audit ? (
+                    <p className="faint-note">
+                      Найдём моды, которым не хватает библиотек, конфликтующие пары и файлы не под эту версию игры.
+                    </p>
+                  ) : !audit.issues.length ? (
+                    <p className="faint-note">
+                      Проверено файлов: {audit.checked} — недостающих зависимостей и конфликтов не нашли.
+                    </p>
+                  ) : (
+                    <div style={{ marginTop: '8px', maxHeight: '260px', overflowY: 'auto' }}>
+                      {audit.issues.map((it: AuditIssue, i) => (
+                        <div className="mod-card" key={it.kind + it.title + it.detail + i} style={{ marginBottom: '6px' }}>
+                          <div className="mod-card-row">
+                            <span className="mod-art">
+                              <Icon id={it.kind === 'missing' ? 'i-download' : 'i-alert'} />
+                            </span>
+                            <span className="mod-card-body">
+                              <span className="mod-card-title">
+                                {it.title}
+                                <span
+                                  className="mod-upd"
+                                  style={
+                                    it.kind === 'missing'
+                                      ? undefined
+                                      : { background: 'var(--m-danger-soft)', color: 'var(--m-danger)' }
+                                  }
+                                >
+                                  {AUDIT_LABEL[it.kind]}
+                                </span>
+                              </span>
+                              <span className="mod-card-sub">{it.detail}</span>
+                            </span>
+                            {it.fix ? (
+                              <button
+                                className="btn sm secondary"
+                                style={{ height: '26px' }}
+                                onClick={() =>
+                                  installExtras(profile!, 'mod', [planItem(it.fix!)], () => {
+                                    loadMods()
+                                    setAudit(null)
+                                  })
+                                }
+                              >
+                                Поставить
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+              <div className="mod-list-head">
+                <span className="set-val" id="bsModCount">
+                  {noticeList ? '' : shownItems.length ? shownItems.length + ' шт.' : ''}
+                </span>
+              </div>
+              <div className="mod-list-wrap">
+                {dropActive ? (
+                  <div className="mod-drop">
+                    <Icon id="i-upload" />
+                    <b>Отпусти — добавим в сборку</b>
+                    <span>{extsOf(kind).map((e) => '.' + e).join(' / ')}</span>
+                  </div>
+                ) : null}
               <div id="bsMods" style={{ maxHeight: '340px', overflowY: 'auto' }}>
                 {noticeList ? (
                   <p className="faint-note">{noticeList}</p>
@@ -1045,211 +1264,7 @@ export function InstancePage() {
                   })
                 )}
               </div>
-              <button
-                id="bsDrop"
-                type="button"
-                disabled={dropBusy}
-                onClick={() => {
-                  if (!hasTauri()) {
-                    showToast('Доступно в приложении', 'error')
-                    return
-                  }
-                  pickContentFiles(kindRef.current)
-                    .then((paths) => {
-                      if (paths && paths.length) void addFiles(paths)
-                    })
-                    .catch((e) => showToast('Не удалось открыть выбор файлов: ' + e, 'error'))
-                }}
-                style={{
-                  display: 'block',
-                  width: '100%',
-                  marginTop: '10px',
-                  padding: '14px 10px',
-                  border: '1px dashed ' + (dropActive ? 'var(--m-accent)' : 'var(--m-border-strong)'),
-                  background: dropActive ? 'var(--m-accent-soft)' : 'transparent',
-                  borderRadius: '10px',
-                  textAlign: 'center',
-                  fontSize: '12px',
-                  cursor: dropBusy ? 'default' : 'pointer',
-                  transition: 'border-color .15s, background .15s',
-                  color: dropActive ? 'var(--m-accent)' : 'var(--m-fg-faint)',
-                }}
-              >
-                {dropBusy
-                  ? 'Добавляем файлы…'
-                  : dropActive
-                    ? 'Отпусти — добавим в сборку'
-                    : 'Перетащи сюда ' + extsOf(kind).map((e) => '.' + e).join(' / ') + ' или нажми, чтобы выбрать — опознаем на Modrinth'}
-              </button>
-              <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-                <button
-                  className="btn sm secondary"
-                  id="bsAddContent"
-                  style={{ flex: 1 }}
-                  onClick={() => {
-                    useProfiles.getState().setSelected(profile)
-                    close()
-                    setScreen('mods')
-                    useMods.getState().scopeTo(profile)
-                    useMods.getState().set({ modTab: 'mod' })
-                    void useMods.getState().load()
-                  }}
-                >
-                  Добавить из каталога
-                </button>
-                <button
-                  className="btn sm secondary"
-                  id="bsUpdateAll"
-                  onClick={() => {
-                    if (!hasTauri()) return
-                    setUpdateAllLabel('Обновляем…')
-                    updateAll(profile!, kind)
-                      .then((n) => {
-                        setUpdateAllLabel('Обновить всё')
-                        loadMods()
-                        showToast(n ? 'Обновлено: ' + n : 'Всё актуально')
-                      })
-                      .catch((e) => {
-                        setUpdateAllLabel('Обновить всё')
-                        showToast('' + e)
-                      })
-                  }}
-                >
-                  {updateAllLabel}
-                </button>
-                <button
-                  className="btn sm ghost"
-                  id="bsExport"
-                  title="Экспорт сборки в .mrpack"
-                  onClick={() => {
-                    if (!hasTauri()) {
-                      showToast('Доступно в приложении')
-                      return
-                    }
-                    showToast('Собираем .mrpack…')
-                    exportMrpack(profile!, profile!, '1.0.0', pr ? LOADER_NAME(pr) + ' ' + pr.version : '')
-                      .then((p) => showToast('Экспортировано: ' + ('' + p).split('/').pop()))
-                      .catch((e) => showToast('' + e))
-                  }}
-                >
-                  <Icon id="i-download" />
-                </button>
-                <button
-                  className="btn sm ghost"
-                  title="Поделиться сборкой по коду"
-                  onClick={() => {
-                    if (!hasTauri()) {
-                      showToast('Доступно в приложении')
-                      return
-                    }
-                    setShareOpen(true)
-                  }}
-                >
-                  <Icon id="i-link" />
-                </button>
               </div>
-              {kind === 'mod' ? (
-                <div style={{ marginTop: '14px', borderTop: '1px solid var(--m-border)', paddingTop: '12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span className="set-val">Зависимости и совместимость</span>
-                    <span style={{ flex: 1 }}></span>
-                    {audit && audit.issues.some((i) => i.fix) ? (
-                      <button
-                        className="btn sm secondary"
-                        onClick={() => {
-                          const items = audit.issues
-                            .map((i) => i.fix)
-                            .filter((f): f is NonNullable<typeof f> => !!f)
-                            .map(planItem)
-                          const uniq = items.filter(
-                            (it, i) => items.findIndex((x) => x.project_id === it.project_id) === i,
-                          )
-                          installExtras(profile!, 'mod', uniq, () => {
-                            loadMods()
-                            setAudit(null)
-                          })
-                        }}
-                      >
-                        Доустановить ({audit.issues.filter((i) => i.fix).length})
-                      </button>
-                    ) : null}
-                    <button
-                      className="btn sm secondary"
-                      disabled={auditBusy}
-                      title="Проверить, всё ли нужное стоит и не конфликтуют ли моды между собой"
-                      onClick={() => {
-                        if (!hasTauri()) {
-                          showToast('Доступно в приложении')
-                          return
-                        }
-                        setAuditBusy(true)
-                        auditDeps(profile!)
-                          .then((r) => {
-                            setAuditBusy(false)
-                            setAudit(r)
-                          })
-                          .catch((e) => {
-                            setAuditBusy(false)
-                            showToast('Не удалось проверить: ' + e, 'error')
-                          })
-                      }}
-                    >
-                      <Icon id="i-check" /> {auditBusy ? 'Проверяем…' : 'Проверить'}
-                    </button>
-                  </div>
-                  {!audit ? (
-                    <p className="faint-note">
-                      Найдём моды, которым не хватает библиотек, конфликтующие пары и файлы не под эту версию игры.
-                    </p>
-                  ) : !audit.issues.length ? (
-                    <p className="faint-note">
-                      Проверено файлов: {audit.checked} — недостающих зависимостей и конфликтов не нашли.
-                    </p>
-                  ) : (
-                    <div style={{ marginTop: '8px', maxHeight: '260px', overflowY: 'auto' }}>
-                      {audit.issues.map((it: AuditIssue, i) => (
-                        <div className="mod-card" key={it.kind + it.title + it.detail + i} style={{ marginBottom: '6px' }}>
-                          <div className="mod-card-row">
-                            <span className="mod-art">
-                              <Icon id={it.kind === 'missing' ? 'i-download' : 'i-alert'} />
-                            </span>
-                            <span className="mod-card-body">
-                              <span className="mod-card-title">
-                                {it.title}
-                                <span
-                                  className="mod-upd"
-                                  style={
-                                    it.kind === 'missing'
-                                      ? undefined
-                                      : { background: 'var(--m-danger-soft)', color: 'var(--m-danger)' }
-                                  }
-                                >
-                                  {AUDIT_LABEL[it.kind]}
-                                </span>
-                              </span>
-                              <span className="mod-card-sub">{it.detail}</span>
-                            </span>
-                            {it.fix ? (
-                              <button
-                                className="btn sm secondary"
-                                style={{ height: '26px' }}
-                                onClick={() =>
-                                  installExtras(profile!, 'mod', [planItem(it.fix!)], () => {
-                                    loadMods()
-                                    setAudit(null)
-                                  })
-                                }
-                              >
-                                Поставить
-                              </button>
-                            ) : null}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : null}
             </div>
 
             <div id="bsTabWorlds" style={{ display: tab === 'worlds' ? '' : 'none' }}>

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { IconGrid } from '../components/IconGrid'
 import { Select } from '../components/Select'
 import { hasTauri } from '../ipc/tauri'
-import { createProfile, listVersions } from '../ipc/commands'
+import { createProfile, listVersions, pickCoverImage } from '../ipc/commands'
 import { track } from '../lib/telemetry'
 import { BLOCK_ICONS } from '../lib/icons'
 import { useProfiles } from '../state/profiles'
@@ -30,6 +30,9 @@ export function NewBuildModal() {
   const [loader, setLoader] = useState('vanilla')
   const [loaderVer, setLoaderVer] = useState(AUTO_LOADER_VERSION)
   const [icon, setIcon] = useState<string | null>(BLOCK_ICONS[0] || null)
+  // A custom image arrives as a ready data URL: anything outside the block set
+  // is that image, so it needs no state of its own.
+  const custom = icon && icon.startsWith('data:') ? icon : null
   const [join, setJoin] = useState<JoinIntent | null>(null)
   const lb = useLoaderBuilds(loader, ver, modal.open)
 
@@ -68,6 +71,40 @@ export function NewBuildModal() {
         <div className="field" style={{ marginBottom: '14px' }}>
           <label>Иконка сборки</label>
           <IconGrid id="nbIcons" current={icon} onPick={(v) => setIcon(v)} />
+          <div style={{ display: 'flex', gap: '8px', marginTop: '8px', alignItems: 'center' }}>
+            {custom ? (
+              <img
+                src={custom}
+                alt=""
+                width={32}
+                height={32}
+                style={{ borderRadius: '8px', objectFit: 'cover', flex: '0 0 auto' }}
+              />
+            ) : null}
+            <button
+              className="btn sm secondary"
+              style={{ flex: 1 }}
+              onClick={() => {
+                if (!hasTauri()) {
+                  showToast('Доступно в приложении')
+                  return
+                }
+                pickCoverImage()
+                  .then((data) => {
+                    if (!data) return
+                    setIcon(data)
+                  })
+                  .catch((e) => showToast('' + e, 'error'))
+              }}
+            >
+              Своя картинка…
+            </button>
+            {custom ? (
+              <button className="btn sm secondary" onClick={() => setIcon(BLOCK_ICONS[0] || null)}>
+                Сбросить
+              </button>
+            ) : null}
+          </div>
         </div>
         <div className="field" style={{ marginBottom: '14px' }}>
           <label>Версия Minecraft</label>

@@ -157,6 +157,13 @@ pub async fn pick_profile_cover(profile: String) -> Result<Option<Vec<engine::Pr
     engine::pick_profile_cover(profile).await
 }
 
+/// Cover for a build that does not exist yet: the New build dialog needs the
+/// image before there is a profile to store it on. `None` — picker dismissed.
+#[tauri::command]
+pub async fn pick_cover_image() -> Result<Option<String>, String> {
+    engine::pick_cover_image().await
+}
+
 #[tauri::command]
 pub fn clear_profile_cover(profile: String) -> Vec<engine::Profile> {
     engine::set_profile_cover(&profile, None)
@@ -290,6 +297,11 @@ pub async fn import_pack_file(app: tauri::AppHandle, path: Option<String>) -> Re
 #[tauri::command]
 pub async fn share_profile(profile: String, summary: Option<String>) -> Result<engine::SharedPack, String> {
     engine::share_profile(profile, summary).await
+}
+
+#[tauri::command]
+pub async fn my_packs() -> Result<serde_json::Value, String> {
+    engine::my_packs().await
 }
 
 #[tauri::command]

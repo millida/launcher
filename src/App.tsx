@@ -169,7 +169,7 @@ let gameStartedAt = 0
 import { flushNativeCrashes, installErrorHandlers } from './lib/crash'
 import { autoUpdate, bootUpdate, installUpdateOnExit, updateReady } from './lib/updater'
 import { BootUpdate } from './components/BootUpdate'
-import { gameSession, heartbeat, setGameSession } from './lib/launch'
+import { gameSession, heartbeat, reconcileGameSession, setGameSession } from './lib/launch'
 import { hideLauncherToTray, initTray, restoreLauncher, restoreOnGameExit, trayCloseEnabled } from './lib/window'
 import { SESSION_EXPIRED_EVENT, api, hasMillidaAccount } from './lib/api'
 import { hasTauri, tauri } from './ipc/tauri'
@@ -364,7 +364,7 @@ export function App() {
       const quiet = document.hidden && !gameSession()
       if (Date.now() - lastBeat < (quiet ? 55000 : 45000)) return
       lastBeat = Date.now()
-      heartbeat('lobby')
+      void reconcileGameSession().then(() => heartbeat('lobby'))
     }, 15000)
     const t0 = setTimeout(() => heartbeat('lobby'), 1500)
     syncRunningGame()

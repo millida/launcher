@@ -2,10 +2,10 @@ use crate::engine::*;
 use serde_json::Value;
 use tauri::AppHandle;
 
-/// GC-профиль под Minecraft: короткие паузы вместо максимальной пропускной
-/// способности. Тот же набор, что у авто-тюнинга (`GC_FLAGS`), плюс
-/// предварительный захват кучи — режим включают осознанно и ради кадров.
-/// Все флаги проходят `jvm_arg_allowed` — ничего исполняемого.
+/// GC profile for Minecraft: short pauses instead of peak throughput. The same
+/// set auto-tuning uses (`GC_FLAGS`) plus pre-touching the heap — this mode is
+/// switched on deliberately, for frames. Every flag passes `jvm_arg_allowed`:
+/// nothing executable belongs here.
 pub fn boost_flags() -> Vec<&'static str> {
     GC_FLAGS.iter().copied().chain(std::iter::once(PRETOUCH_FLAG)).collect()
 }

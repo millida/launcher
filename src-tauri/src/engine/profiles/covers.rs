@@ -7,7 +7,10 @@ const COVER_PX: u32 = 128;
 /// Guard against decoding huge camera photos into memory.
 const MAX_SOURCE_BYTES: u64 = 12 * 1024 * 1024;
 
-pub async fn pick_profile_cover(profile: String) -> Result<Option<Vec<Profile>>, String> {
+/// Picks an image and turns it into the small square PNG a cover is. Used both
+/// when a build already exists and while one is being created — the second case
+/// has no profile to attach it to yet, so the data URL is simply returned.
+pub async fn pick_cover_image() -> Result<Option<String>, String> {
     let picked = pick_file(
         dialog().add_filter("Картинка", &["png", "jpg", "jpeg", "webp"]).set_title("Обложка сборки"),
     )
@@ -20,6 +23,11 @@ pub async fn pick_profile_cover(profile: String) -> Result<Option<Vec<Profile>>,
     let data = tauri::async_runtime::spawn_blocking(move || cover_data_url(&src))
         .await
         .map_err(|e| e.to_string())??;
+    Ok(Some(data))
+}
+
+pub async fn pick_profile_cover(profile: String) -> Result<Option<Vec<Profile>>, String> {
+    let Some(data) = pick_cover_image().await? else { return Ok(None) };
     Ok(Some(set_profile_cover(&profile, Some(data))))
 }
 

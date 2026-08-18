@@ -88,7 +88,7 @@ fn url_allowed(raw: &str) -> bool {
     if url.scheme() != "https" {
         return false;
     }
-    url.host_str().map(|h| FILE_HOSTS.iter().any(|allowed| h == *allowed)).unwrap_or(false)
+    url.host_str().map(|h| FILE_HOSTS.contains(&h)).unwrap_or(false)
 }
 
 fn settings_of(profile: &str) -> Value {
@@ -218,6 +218,12 @@ pub async fn share_profile(profile: String, summary: Option<String>) -> Result<S
         skipped,
         size_bytes,
     })
+}
+
+/// Codes this player has already handed out, so the share window can show the
+/// existing one instead of issuing a fresh code on every click.
+pub async fn my_packs() -> Result<Value, String> {
+    millida_api_auth(format!("{}/mine", PACKS_PATH), "GET".into(), None).await
 }
 
 pub async fn unshare_profile(code: String) -> Result<(), String> {

@@ -271,7 +271,7 @@ pub async fn export_world(profile: String, folder: String) -> Result<Option<Stri
     let picked = save_file(
         dialog()
             .add_filter("Архив мира", &["zip"])
-            .set_file_name(&format!("{}.zip", folder))
+            .set_file_name(format!("{}.zip", folder))
             .set_title("Куда сохранить мир"),
     )
     .await;

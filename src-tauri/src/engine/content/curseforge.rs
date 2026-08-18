@@ -589,6 +589,48 @@ async fn cf_install_modpack_job(app: &AppHandle, job: &Job, mod_id: u32, file_id
     Ok(prof)
 }
 
+/// Identifies local files by their CurseForge fingerprint. The endpoint is a
+/// POST, so it goes through the backend proxy (the API key stays server-side)
+/// with the public mirror as the fallback, exactly like the GET path.
+pub(crate) async fn cf_by_fingerprint(prints: &[u32]) -> Vec<Value> {
+    if prints.is_empty() {
+        return vec![];
+    }
+    let body = serde_json::json!({ "fingerprints": prints });
+    let mut out = vec![];
+    for url in [format!("{}/fingerprints", cf_base()), format!("{}/v1/fingerprints", CF_MIRROR)] {
+        let Ok(res) = client().post(&url).json(&body).send().await else { continue };
+        if !res.status().is_success() {
+            continue;
+        }
+        let Ok(j) = res.json::<Value>().await else { continue };
+        let matches = j["data"]["exactMatches"].as_array().cloned().unwrap_or_default();
+        if !matches.is_empty() {
+            out = matches;
+            break;
+        }
+        // An answer with no matches is still an answer: the files are simply
+        // not CurseForge's, and asking the mirror the same question changes
+        // nothing.
+        if j.get("data").is_some() {
+            break;
+        }
+    }
+    out
+}
+
+/// Name, icon and summary of several projects at once — the scan needs them for
+/// every file it just recognised.
+pub(crate) async fn cf_projects(ids: &[u32]) -> std::collections::HashMap<u32, Value> {
+    let mut out = std::collections::HashMap::new();
+    for id in ids.iter().take(60) {
+        if let Ok(j) = cf_get(&format!("v1/mods/{}", id), &[]).await {
+            out.insert(*id, j["data"].clone());
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

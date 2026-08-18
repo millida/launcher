@@ -11,7 +11,7 @@ interface Props {
 }
 
 /// Auto memory and JVM flags, with the reasoning visible. The numbers matter
-/// less than the explanation: "2 ГБ на 180 модов" is the single most common
+/// less than the explanation: two gigabytes for 180 mods is the most common
 /// cause of a build that crashes on the loading screen, and a player only
 /// stops setting it by hand once they see why.
 export function TunePanel({ profile, manualGb }: Props) {

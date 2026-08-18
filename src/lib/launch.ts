@@ -1,5 +1,5 @@
 import { hasTauri } from '../ipc/tauri'
-import { cancelLaunch, launchGame, launchProfile, quickPlay, pinServerDat, discordPresence as ipcDiscordPresence } from '../ipc/commands'
+import { cancelLaunch, launchGame, launchProfile, quickPlay, pinServerDat, runningGames, discordPresence as ipcDiscordPresence } from '../ipc/commands'
 import { listenLaunchProgress } from '../ipc/events'
 import type { UnlistenFn } from '../ipc/tauri'
 import type { LaunchAuth } from '../ipc/commands'
@@ -21,12 +21,35 @@ export const REPAIR_STAGES = ['Файлы игры', 'Java', 'Ассеты и б
 const STAGE_IDX: Record<string, number> = { files: 0, assets: 2, java: 1, launch: 3, mod: 0, content: 3 }
 
 let session: { profile: string; server: string | null; serverName: string | null } | null = null
+let sessionAt = 0
 
 export const gameSession = () => session
 
 export function setGameSession(profile: string | null, server?: string | null, serverName?: string | null) {
   session = profile ? { profile, server: server || null, serverName: serverName || null } : null
+  sessionAt = profile ? Date.now() : 0
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(profile ? 'mc-started' : 'mc-stopped'))
+}
+
+/** Процесс успевает появиться в списке ядра не мгновенно — до этого верим сессии. */
+const SESSION_GRACE_MS = 3 * 60 * 1000
+
+/**
+ * Сверка «в игре» с ядром: список процессов ведёт Rust, а не флаг во вьюхе.
+ * Потерянное событие выхода раньше оставляло сессию навсегда — лаунчер в трее
+ * продолжал бить «playing» и копить часы без запущенной игры.
+ */
+export async function reconcileGameSession(): Promise<void> {
+  if (!hasTauri() || !session || launching) return
+  if (Date.now() - sessionAt < SESSION_GRACE_MS) return
+  try {
+    const list = (await runningGames()) || []
+    useGame.getState().setList(list)
+    if (!list.length) {
+      setGameSession(null)
+      heartbeat('lobby')
+    }
+  } catch {}
 }
 
 export const discordEnabled = () => localStorage.getItem('m-discord') !== '0'
