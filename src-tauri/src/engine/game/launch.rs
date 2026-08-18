@@ -773,8 +773,9 @@ pub async fn install_and_launch_in(
             .collect();
         for (i, a) in flags.into_iter().enumerate() { args.insert(1 + i, a); }
     }
-    // Тот же порядок и по той же причине: авто-тюнинг встаёт левее аргументов
-    // игрока и молчит, когда буст уже поставил свой профиль GC.
+    // Same order and for the same reason: auto-tuning goes to the left of the
+    // player's own arguments and stays quiet once the boost mode has already
+    // placed its GC profile.
     for (i, a) in tuned_flags(&profile, settings["jvmArgs"].as_str().unwrap_or(""), boost_on)
         .into_iter()
         .enumerate()

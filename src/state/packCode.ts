@@ -7,8 +7,8 @@ interface State {
   close: () => void
 }
 
-/// Установка сборки по коду. Код приходит либо из поля ввода, либо из ссылки
-/// millida://pack/<код> — тогда окно открывается уже с ним.
+/// Installing a build by code. The code comes either from the input or from a
+/// millida://pack/<code> link, in which case the window opens with it filled in.
 export const usePackCode = create<State>((set) => ({
   open: false,
   code: '',

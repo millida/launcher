@@ -287,6 +287,10 @@ svg.msg-tick.read{color:var(--m-tick-read,#4C9FFE);opacity:1}
 .msg-reaction{display:flex;align-items:center;gap:3px;padding:2px 7px;border-radius:var(--m-r-pill);border:1px solid var(--m-border);background:var(--m-surface-2);color:var(--m-fg-subtle);font-size:11.5px;line-height:1.5;cursor:pointer;font-variant-numeric:tabular-nums}
 .msg-reaction:hover{border-color:var(--m-border-strong)}
 .msg-reaction.on{border-color:var(--m-accent);background:var(--m-accent-soft);color:var(--m-fg)}
+/* Контекстное меню карточки сборки — та же панель, что у меню сообщения:
+   один вид и одни отступы у всего, что открывается по правой кнопке. */
+.ctx-menu{position:fixed;z-index:400;width:224px;display:flex;flex-direction:column;gap:1px;padding:6px;border-radius:13px;background:var(--m-surface-2);border:1px solid var(--m-border);box-shadow:var(--m-shadow-lg)}
+.ctx-menu .msg-menu-item.ctx-sep{margin-top:5px;padding-top:9px;border-top:1px solid var(--m-border);border-radius:9px}
 .msg-menu{position:fixed;z-index:400;width:210px;display:flex;flex-direction:column;gap:1px;padding:6px;border-radius:13px;background:var(--m-surface-2);border:1px solid var(--m-border);box-shadow:var(--m-shadow-lg)}
 .msg-menu-react{display:grid;grid-template-columns:repeat(8,1fr);gap:1px;padding-bottom:5px;margin-bottom:4px;border-bottom:1px solid var(--m-border)}
 .msg-menu-emoji{display:grid;place-items:center;height:26px;border:0;background:none;border-radius:7px;font-size:15px;cursor:pointer;transition:background var(--m-t-fast)}

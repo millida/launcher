@@ -7,7 +7,7 @@ import { showToast } from '../state/ui'
 import { useProfiles } from '../state/profiles'
 import { cloudForget, cloudPull, cloudPush, cloudStatus, type CloudStatus } from '../ipc/commands'
 
-// ISO-дата приходит от сервера, а whenText считает в секундах эпохи
+// The server sends an ISO date, while whenText counts in epoch seconds.
 const syncedAgo = (iso: string): string => {
   const ms = Date.parse(iso)
   return Number.isNaN(ms) ? '' : whenText(Math.round(ms / 1000))

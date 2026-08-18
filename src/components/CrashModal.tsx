@@ -85,7 +85,7 @@ export function CrashModal() {
                       return
                     }
                     if (a.kind === 'share-log') {
-                      // Свежий лог — первый в списке: именно он описывает это падение.
+                      // The newest log is first in the list: that is the one describing this crash.
                       listLogs(info.profile)
                         .then((files) => {
                           const file = files.find((f) => f.startsWith('logs/')) ?? files[0]

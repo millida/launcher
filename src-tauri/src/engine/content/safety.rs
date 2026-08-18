@@ -57,6 +57,10 @@ pub struct SafetyReport {
     pub note: String,
 }
 
+/// Findings from reading one jar: the reasons to show, and how many of them
+/// were strong enough to matter on their own.
+type Inspection = (Vec<String>, u32);
+
 /// Byte patterns inside class files. Each one is normal on its own — the
 /// verdict needs two independent ones, because a mod that downloads its own
 /// assets or spawns a helper process is ordinary.
@@ -101,7 +105,7 @@ fn has_metadata(names: &[String]) -> bool {
 
 /// Reads the jar and returns the reasons to look closer, plus how many of them
 /// were strong.
-fn inspect_jar(path: &Path) -> (Vec<String>, u32) {
+fn inspect_jar(path: &Path) -> Inspection {
     let mut reasons: Vec<String> = vec![];
     let mut strong = 0u32;
     let Ok(meta) = std::fs::metadata(path) else { return (reasons, strong) };
@@ -210,7 +214,7 @@ fn verdict_for(
     blocked: Option<&String>,
     catalog: Option<&str>,
     title: String,
-    inspected: (Vec<String>, u32),
+    inspected: Inspection,
 ) -> ModVerdict {
     let (reasons, strong) = inspected;
     if let Some(why) = blocked {
@@ -261,7 +265,7 @@ pub async fn scan_safety(profile: String) -> Result<SafetyReport, String> {
     let metas = local_meta_map(&profile, "mod");
 
     let paths: Vec<std::path::PathBuf> = jars.iter().map(|j| j.path.clone()).collect();
-    let scanned: Vec<(Option<String>, (Vec<String>, u32))> =
+    let scanned: Vec<(Option<String>, Inspection)> =
         tauri::async_runtime::spawn_blocking(move || {
             paths.iter().map(|p| (file_sha1(p), inspect_jar(p))).collect()
         })
@@ -343,40 +347,69 @@ mod tests {
     /// on it, which only works while "opasno" is rare and means something.
     #[test]
     fn verdicts_separate_a_finding_from_an_unknown_file() {
-        let cases: [(&str, Option<&str>, Vec<String>, u32, &str, &str); 5] = [
-            ("sodium.jar", Some("modrinth"), vec![], 0, "ok", "файл из каталога без находок"),
-            ("custom.jar", None, vec![], 0, "unknown", "самосбор — не обвинение, просто неизвестен"),
-            (
-                "loader.jar",
-                None,
-                vec!["грузит классы в обход загрузчика модов".into(), "тянет код с pastebin".into()],
-                2,
-                "suspicious",
-                "два сильных признака — это уже находка",
-            ),
-            (
-                "helper.jar",
-                Some("modrinth"),
-                vec!["запускает сторонние процессы".into()],
-                0,
-                "ok",
-                "один слабый признак у файла из каталога — обычный мод",
-            ),
-            (
-                "weird.jar",
-                None,
-                vec!["В архиве лежит класс под видом ресурса".into(), "Внутри лежит ещё один jar".into()],
-                1,
-                "suspicious",
-                "сильный признак у файла вне каталогов",
-            ),
+        struct Case {
+            file: &'static str,
+            catalog: Option<&'static str>,
+            reasons: Vec<String>,
+            strong: u32,
+            want: &'static str,
+            why: &'static str,
+        }
+        let cases: [Case; 5] = [
+            Case {
+                file: "sodium.jar",
+                catalog: Some("modrinth"),
+                reasons: vec![],
+                strong: 0,
+                want: "ok",
+                why: "файл из каталога без находок",
+            },
+            Case {
+                file: "custom.jar",
+                catalog: None,
+                reasons: vec![],
+                strong: 0,
+                want: "unknown",
+                why: "самосбор — не обвинение, просто неизвестен",
+            },
+            Case {
+                file: "loader.jar",
+                catalog: None,
+                reasons: vec!["грузит классы в обход загрузчика модов".into(), "тянет код с pastebin".into()],
+                strong: 2,
+                want: "suspicious",
+                why: "два сильных признака — это уже находка",
+            },
+            Case {
+                file: "helper.jar",
+                catalog: Some("modrinth"),
+                reasons: vec!["запускает сторонние процессы".into()],
+                strong: 0,
+                want: "ok",
+                why: "один слабый признак у файла из каталога — обычный мод",
+            },
+            Case {
+                file: "weird.jar",
+                catalog: None,
+                reasons: vec!["В архиве лежит класс под видом ресурса".into(), "Внутри лежит ещё один jar".into()],
+                strong: 1,
+                want: "suspicious",
+                why: "сильный признак у файла вне каталогов",
+            },
         ];
-        for (file, catalog, reasons, strong, want, why) in cases {
-            let v = verdict_for(&jar(file), "a".repeat(40), None, catalog, file.into(), (reasons, strong));
+        for case in cases {
+            let v = verdict_for(
+                &jar(case.file),
+                "a".repeat(40),
+                None,
+                case.catalog,
+                case.file.into(),
+                (case.reasons, case.strong),
+            );
             assert_eq!(
-                v.verdict, want,
-                "{file} должен получить «{want}», получил «{}». Зачем случай закреплён: {why}",
-                v.verdict,
+                v.verdict, case.want,
+                "{} должен получить «{}», получил «{}». Зачем случай закреплён: {}",
+                case.file, case.want, v.verdict, case.why,
             );
         }
     }

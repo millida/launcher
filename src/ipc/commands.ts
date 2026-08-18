@@ -34,6 +34,9 @@ export interface ModFile {
 export interface ScanResult {
   scanned: number
   identified: number
+  // Recognised by hash on Modrinth and by fingerprint on CurseForge
+  modrinth: number
+  curseforge: number
   items: ModFile[]
 }
 
@@ -677,6 +680,10 @@ export const setProfileIcon = (name: string, icon: string) =>
 
 export const pickProfileCover = (profile: string) =>
   invoke<Profile[] | null>('pick_profile_cover', { profile })
+// Cover for a build that does not exist yet: the New build dialog gets the
+// image before there is a profile. null — the picker was dismissed.
+export const pickCoverImage = () => invoke<string | null>('pick_cover_image')
+
 
 export const clearProfileCover = (profile: string) => invoke<Profile[]>('clear_profile_cover', { profile })
 
@@ -955,7 +962,7 @@ export const overlayNotify = (payload: { uid: string; nick: string; text: string
 export const overlayHide = () => invoke<void>('overlay_hide')
 
 
-// ---- Общее хранилище файлов между сборками ----
+// ---- Shared file store across builds ----
 
 export interface DedupReport {
   files: number
@@ -971,7 +978,7 @@ export const dedupeScan = () => invoke<DedupReport>('dedupe_scan')
 export const dedupeRun = () => invoke<DedupReport>('dedupe_run')
 export const dedupeGc = () => invoke<number>('dedupe_gc')
 
-// ---- Авто-тюнинг памяти и JVM ----
+// ---- Auto-tuned memory and JVM flags ----
 
 export interface Tuning {
   ramMb: number
@@ -986,7 +993,7 @@ export interface Tuning {
 export const tuneProfile = (profile: string) => invoke<Tuning>('tune_profile', { profile })
 export const setAutoTune = (profile: string, on: boolean) => invoke<void>('set_auto_tune', { profile, on })
 
-// ---- Менеджер миров ----
+// ---- World manager ----
 
 export interface WorldInfo {
   folder: string
@@ -1009,7 +1016,7 @@ export const renameWorld = (profile: string, folder: string, name: string) =>
   invoke<WorldInfo>('rename_world', { profile, folder, name })
 export const duplicateWorld = (profile: string, folder: string) =>
   invoke<WorldInfo>('duplicate_world', { profile, folder })
-// null — диалог сохранения закрыли
+// null — the save dialog was dismissed
 export const exportWorld = (profile: string, folder: string) =>
   invoke<string | null>('export_world', { profile, folder })
 export const importWorld = (profile: string) => invoke<WorldInfo>('import_world', { profile })
@@ -1020,7 +1027,7 @@ export const deleteWorldBackup = (profile: string, file: string) =>
 export const openWorldFolder = (profile: string, folder: string) =>
   invoke<void>('open_world_folder', { profile, folder })
 
-// ---- Галерея скриншотов ----
+// ---- Screenshot gallery ----
 
 export interface Screenshot {
   profile: string
@@ -1032,7 +1039,7 @@ export interface Screenshot {
   height: number
 }
 
-// Пустое имя сборки — скриншоты всех сборок.
+// An empty build name means screenshots of every build.
 export const screenshotGallery = (profile: string) => invoke<Screenshot[]>('screenshot_gallery', { profile })
 export const deleteScreenshot = (profile: string, name: string) =>
   invoke<void>('delete_screenshot', { profile, name })
@@ -1041,7 +1048,7 @@ export const saveScreenshotAs = (profile: string, name: string) =>
 export const shareScreenshot = (profile: string, name: string) =>
   invoke<string>('share_screenshot', { profile, name })
 
-// ---- Проверка модов ----
+// ---- Mod safety check ----
 
 export interface ModVerdict {
   file: string
@@ -1070,12 +1077,12 @@ export const scanModSafety = (profile: string) => invoke<SafetyReport>('scan_mod
 export const quarantineMods = (profile: string, files: string[]) =>
   invoke<number>('quarantine_mods', { profile, files })
 
-// ---- Разбор краша ----
+// ---- Crash diagnosis ----
 
 export const applyCrashFix = (profile: string, kind: string, arg: string) =>
   invoke<string>('apply_crash_fix', { profile, kind, arg })
 
-// ---- Шаринг сборки ----
+// ---- Sharing a build ----
 
 export interface SharedPack {
   code: string
@@ -1100,11 +1107,23 @@ export interface PackPreview {
 
 export const shareProfile = (profile: string, summary?: string) =>
   invoke<SharedPack>('share_profile', { profile, summary })
+export interface MyPack {
+  code: string
+  name: string
+  files: number
+  installs: number
+  updatedAt: string
+}
+
+// Codes already issued: the share window shows the existing one instead of
+// printing a new one on every open.
+export const myPacks = () => invoke<MyPack[]>('my_packs')
+
 export const unshareProfile = (code: string) => invoke<void>('unshare_profile', { code })
 export const packPreview = (code: string) => invoke<PackPreview>('pack_preview', { code })
 export const installSharedPack = (code: string) => invoke<Profile>('install_shared_pack', { code })
 
-// ---- Облачная синхронизация ----
+// ---- Cloud sync ----
 
 export interface CloudStatus {
   signedIn: boolean
@@ -1128,8 +1147,8 @@ export interface PullReport {
 
 export const cloudStatus = () => invoke<CloudStatus>('cloud_status')
 export const cloudPush = () => invoke<CloudStatus>('cloud_push')
-// only — переустановить именно эти сборки поверх локальных; без него ставятся
-// только те, которых на этой машине нет.
+// only — reinstall exactly these builds over the local ones; without it only
+// builds missing on this machine are installed.
 export const cloudPull = (only: string[] | null, applyPrefs: boolean) =>
   invoke<PullReport>('cloud_pull', { only, applyPrefs })
 export const cloudForget = () => invoke<void>('cloud_forget')
