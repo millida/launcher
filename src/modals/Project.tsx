@@ -1,5 +1,13 @@
 import { hasTauri } from '../ipc/tauri'
-import { cfInstall, cfInstallModpack, cfInstallWorld, installModpack, installVersion, openUrl } from '../ipc/commands'
+import {
+  cfInstall,
+  cfInstallModpack,
+  cfInstallWorld,
+  installModpack,
+  installModpackVersion,
+  installVersion,
+  openUrl,
+} from '../ipc/commands'
 import { RU_LOADER, fmtSize } from '../lib/format'
 import { renderMarkdown } from '../lib/markdown'
 import { askPlanForVersion, installContentFlow, installExtras, resolveTargetBuild } from '../lib/install'
@@ -19,6 +27,7 @@ export function ProjectModal() {
   const pj = useProject()
   const tasks = useInstalls((s) => s.tasks)
   const doneKeys = useInstalls((s) => s.done)
+  const doneVersion = useInstalls((s) => s.doneVersion)
   const selectedBuild = useProfiles((s) => s.selected)
   const isCf = pj.source === 'curseforge'
   const src = isCf ? 'cf' : 'mr'
@@ -33,6 +42,18 @@ export function ProjectModal() {
     const t = tasks[key]
     if (t && t.state === 'run') return t.pct > 0 ? t.label + ' ' + Math.round(t.pct) + '%' : t.label
     return doneKeys[key] ? 'Установлено' : idle
+  }
+  // The install task key covers the whole project (backend refuses two
+  // concurrent jobs writing into the same profile slot), so a single running
+  // or finished task must not paint every version row as if it were the one
+  // in progress — only the row for the version that task actually targets.
+  const versionLabel = (key: string, versionId: string, idle: string): string => {
+    const t = tasks[key]
+    if (t && t.state === 'run') {
+      if (t.versionId !== versionId) return idle
+      return t.pct > 0 ? t.label + ' ' + Math.round(t.pct) + '%' : t.label
+    }
+    return doneVersion[key] === versionId ? 'Установлено' : idle
   }
 
   if (!modal.open) return null
@@ -69,13 +90,19 @@ export function ProjectModal() {
     })
   }
 
-  const installPack = (fileId?: number) => {
+  const installPack = (fileId?: number, mrVersionId?: string) => {
     const startedAt = performance.now()
     runInstall({
       key: packKey,
       title: pj.title || pj.slug,
       running: 'Скачивание…',
-      run: () => (isCf ? cfInstallModpack(pj.cfid, fileId) : installModpack(pj.slug)),
+      versionId: isCf ? (fileId !== undefined ? 'cf' + fileId : undefined) : mrVersionId,
+      run: () =>
+        isCf
+          ? cfInstallModpack(pj.cfid, fileId)
+          : mrVersionId
+            ? installModpackVersion(pj.slug, mrVersionId)
+            : installModpack(pj.slug),
       onDone: (p) => {
         trackTimed('modpack_install', startedAt, {
           name: pj.title || pj.slug,
@@ -139,6 +166,7 @@ export function ProjectModal() {
         key: keyContent('cf', prof, pj.kind, pj.cfid),
         title: pj.title,
         running: 'Скачивание…',
+        versionId: 'cf' + fileId,
         run: () => cfInstall(pj.cfid, (pr && pr.version) || '', prof, pj.kind, fileId),
         onDone: (r) => {
           installExtras(prof, pj.kind, extras)
@@ -158,7 +186,7 @@ export function ProjectModal() {
       return
     }
     if (pj.kind === 'modpack') {
-      installPack()
+      installPack(undefined, v.id)
       return
     }
     const { selected, profiles } = useProfiles.getState()
@@ -169,6 +197,7 @@ export function ProjectModal() {
         key: keyContent('mr', prof, pj.kind, pj.slug),
         title: pj.title || pj.slug,
         running: 'Скачивание…',
+        versionId: v.id,
         run: () => installVersion(pj.slug, v.id, prof, pj.kind),
         onDone: (r) => {
           installExtras(prof, pj.kind, extras)
@@ -266,7 +295,7 @@ export function ProjectModal() {
                   style={{ marginLeft: '8px' }}
                   onClick={() => installVer(v)}
                 >
-                  {label(packKey, 'Установить')}
+                  {versionLabel(packKey, v.id, 'Установить')}
                 </button>
               </div>
             ))

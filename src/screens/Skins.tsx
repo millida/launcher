@@ -32,6 +32,7 @@ import { SkinDiag } from '../components/SkinDiag'
 import { renderAvatar } from '../lib/skinBody'
 import {
   addToWardrobe,
+  applyCatalogCape,
   applyWardrobeItem,
   claimReward,
   loadCapeCatalog,
@@ -183,6 +184,9 @@ interface CapeOption {
   msId?: string
   accId?: string
   wardrobeId?: string
+  /// Карточка каталога: плащ надевается по этому идентификатору, PNG на сервер
+  /// не уходит — плащ выдаёт сервер, а не файл на диске.
+  catalogId?: string
   /// Плащ из каталога Millida, условие которого ещё не выполнено: карточка
   /// затемнена, надеть нельзя, но видно, что и сколько осталось сделать.
   locked?: boolean
@@ -836,8 +840,11 @@ export function Skins({ on }: { on: boolean }) {
           .filter((i) => i.kind === 'cape')
           .map((i) => ({ id: 'w:' + i.id, name: i.name, url: i.url, sub: 'В каталоге Millida', wardrobeId: i.id })),
       )
+      // Плащ на аккаунт Millida ставит сервер по идентификатору карточки
+      // (catalogId), файл туда не уходит: список открытых плащей — серверный.
       const official: CapeOption[] = OFFICIAL_CAPES.filter((c) => !licensedHashes.has(c.hash)).map((c) => ({
         id: c.id,
+        catalogId: c.id,
         name: c.name,
         url: capeTexUrl(c.hash),
         sub: 'Дизайн Mojang',
@@ -852,7 +859,9 @@ export function Skins({ on }: { on: boolean }) {
           sub: 'На аккаунте ' + accKindLabel(c.kind),
           onAccount: true,
         }))
-      const design: CapeOption[] = [{ id: 'millida', name: 'Millida', url: MILLIDA_CAPE, sub: 'Плащ лаунчера' }]
+      const design: CapeOption[] = [
+        { id: 'millida', catalogId: 'design:millida', name: 'Millida', url: MILLIDA_CAPE, sub: 'Плащ лаунчера' },
+      ]
       // Плащи каталога Millida. Уже лежащие в гардеробе аккаунта не дублируем.
       const storedHashes = new Set(stored.map((s) => textureHash(s.url)).filter(Boolean))
       const storedUrls = new Set(stored.map((s) => s.url))
@@ -873,6 +882,7 @@ export function Skins({ on }: { on: boolean }) {
           const cur = c.progressCurrent || 0
           return {
             id: 'cat:' + c.id,
+            catalogId: c.id,
             name: c.name,
             url: c.url,
             sub: locked ? c.requirement || 'Пока закрыт' : c.rarity ? 'Каталог Millida · ' + c.rarity : 'Каталог Millida',
@@ -1427,6 +1437,7 @@ export function Skins({ on }: { on: boolean }) {
         })
       const acc = getAccount()
       let licensed = false
+      let capeLocalOnly = ''
       try {
         licensed = await applyLicensedCape()
       } catch (e) {
@@ -1460,12 +1471,21 @@ export function Skins({ on }: { on: boolean }) {
         if (!applied || !applied.skinUrl) throw new Error('сервер не сохранил скин')
         // Плащ из каталога аккаунта надевается по id: повторная заливка того же
         // PNG заводит в каталоге вторую карточку той же текстуры.
-        if (currentCape && currentCape.wardrobeId) await applyWardrobeItem(currentCape.wardrobeId)
-        else await uploadTexture('cape', capePng, false, currentCape ? currentCape.name : undefined)
+        // Плащ на аккаунт ставится только по идентификатору: из каталога
+        // аккаунта или из каталога Millida. Заливка PNG плащом больше не
+        // считается — иначе плащ выдавал себе кто угодно запросом мимо лаунчера.
+        if (!currentCape) await uploadTexture('cape', null)
+        else if (currentCape.wardrobeId) await applyWardrobeItem(currentCape.wardrobeId)
+        else if (currentCape.catalogId) await applyCatalogCape(currentCape.catalogId)
+        else capeLocalOnly = currentCape.name
         await loadMillidaProfile().catch(() => {})
         await refreshHead(texture)
         await refreshWardrobe()
         await refreshRewards()
+        if (capeLocalOnly)
+          showToast(
+            'Плащ «' + capeLocalOnly + '» виден только на этом компьютере: на аккаунт ставятся плащи из каталога',
+          )
         showToast(
           licensed
             ? 'Скин применён — сохранён в каталоге Millida и на лицензии'
@@ -1779,7 +1799,7 @@ export function Skins({ on }: { on: boolean }) {
                 </span>
                 <span className="skin-body">
                   <b>Загрузить</b>
-                  <span style={{ fontSize: '11px', color: 'var(--m-fg-faint)' }}>PNG 64×64</span>
+                  <span style={{ fontSize: '11px', color: 'var(--m-fg-faint)' }}>PNG 64×64 или HD</span>
                 </span>
               </button>
               <button className="card skin-card skin-add" onClick={() => setImportOpen(true)}>

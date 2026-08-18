@@ -34,3 +34,11 @@ export const useGameNick = create<GameNickState>((set) => ({
 }))
 
 export const refreshGameNick = () => useGameNick.getState().load()
+
+/// A cached nick and slug belong to the account that was signed in; showing them
+/// under the next one would name the wrong player until the server answers.
+export function resetGameNick() {
+  localStorage.removeItem(GAME_NICK_KEY)
+  localStorage.removeItem(PROFILE_SLUG_KEY)
+  useGameNick.setState({ name: '', accountNick: '', conflict: false })
+}

@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { api, hasMillidaAccount } from '../lib/api'
 import { coalesce } from '../lib/coalesce'
+import { offPlatformReason } from '../lib/offPlatform'
 import { warmHeads } from '../lib/heads'
 import { clearRoomUnread } from './rooms'
 
@@ -360,6 +361,11 @@ export async function sendChat(
     })
     patchMessage(localId, { state: undefined, id: r?.id, ts: r?.ts || Date.now() })
   } catch (e) {
+    if (offPlatformReason(e)) {
+      const cur = useFriends.getState()
+      cur.set({ chatMsgs: cur.chatMsgs.filter((m) => m.localId !== localId), chatSeq: cur.chatSeq + 1 })
+      throw e
+    }
     patchMessage(localId, { state: 'failed' })
     throw e
   }

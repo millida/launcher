@@ -146,7 +146,12 @@ export interface CapeCatalogItem {
   progressUnit?: string
 }
 
-/// Канонический путь; на бэкенде есть алиас /wardrobe/capes/catalog.
 export function loadCapeCatalog(): Promise<CapeCatalogItem[]> {
   return api<CapeCatalogItem[]>('/launcher/wardrobe/capes/catalog')
+}
+
+/// Плащ каталога надевается по идентификатору карточки: PNG подставляет сервер,
+/// клиент его не отправляет вовсе — плащ выдаёт сервер, а не файл на диске.
+export function applyCatalogCape(id: string): Promise<AppliedTexture> {
+  return api<AppliedTexture>('/launcher/wardrobe/capes/' + encodeURIComponent(id) + '/apply', { method: 'POST' })
 }

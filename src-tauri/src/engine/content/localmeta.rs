@@ -11,7 +11,18 @@ const ICON_LIMIT: usize = 320_000;
 /// Bumped whenever the parser starts extracting a new field: cache entries are
 /// keyed by (size, mtime), so without it an old cache would keep answering with
 /// fields the previous version never filled in.
-const META_REV: u32 = 2;
+const META_REV: u32 = 3;
+
+/// A `breaks` entry as the mod author wrote it: which mod, and under what
+/// version range. `"breaks": {"fabric-api": "<0.144.3+26.1"}` means "needs a
+/// newer Fabric API than that", not "never install with Fabric API" — collapsing
+/// it to a bare id would report every such minimum-version guard as a hard
+/// conflict, even once the newer version is the one being installed.
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct BreakRule {
+    pub id: String,
+    pub range: String,
+}
 
 /// Metadata read from the content file itself (fabric.mod.json, mods.toml,
 /// mcmod.info, pack.mcmeta): works offline and for files unknown to Modrinth.
@@ -33,7 +44,7 @@ pub struct LocalMeta {
     #[serde(default)] pub mod_id: String,
     #[serde(default)] pub provides: Vec<String>,
     #[serde(default)] pub requires: Vec<String>,
-    #[serde(default)] pub breaks: Vec<String>,
+    #[serde(default)] pub breaks: Vec<BreakRule>,
     #[serde(default)] pub meta_rev: u32,
 }
 
@@ -178,6 +189,36 @@ fn id_list(v: &Value, drop_optional: bool) -> Vec<String> {
         }
         if let Some(s) = x["id"].as_str() {
             push_id(&mut out, s);
+        }
+    }
+    out
+}
+
+fn push_break(out: &mut Vec<BreakRule>, id: &str, range: &str) {
+    let id = id.trim();
+    if id.is_empty() || is_env_mod_id(id) || out.iter().any(|b| b.id == id) {
+        return;
+    }
+    out.push(BreakRule { id: id.to_string(), range: range.trim().to_string() });
+}
+
+/// Same three shapes as `id_list`, but keeps the version range each id applies
+/// to instead of discarding it.
+fn break_list(v: &Value) -> Vec<BreakRule> {
+    let mut out: Vec<BreakRule> = vec![];
+    if let Some(o) = v.as_object() {
+        for (k, val) in o {
+            push_break(&mut out, k, val.as_str().unwrap_or("*"));
+        }
+        return out;
+    }
+    for x in v.as_array().into_iter().flatten() {
+        if let Some(s) = x.as_str() {
+            push_break(&mut out, s, "*");
+            continue;
+        }
+        if let Some(s) = x["id"].as_str() {
+            push_break(&mut out, s, x["versions"].as_str().unwrap_or("*"));
         }
     }
     out
@@ -364,7 +405,7 @@ fn from_fabric(jar: &mut Jar, meta: &mut LocalMeta, quilt: bool) -> bool {
         (&v["depends"], &v["breaks"], &v["provides"])
     };
     meta.requires = id_list(depends, true);
-    meta.breaks = id_list(breaks, false);
+    meta.breaks = break_list(breaks);
     meta.provides = id_list(provides, false);
     let mut icons = vec![icon_of(&root["icon"])];
     if !id.is_empty() {
@@ -387,7 +428,9 @@ fn from_forge(jar: &mut Jar, meta: &mut LocalMeta) -> bool {
     let (own, requires, breaks) = forge_relations(&text);
     meta.mod_id = own;
     meta.requires = requires;
-    meta.breaks = breaks;
+    // Forge's versionRange uses Maven interval syntax, which the launcher does
+    // not parse — kept as an unconditional break rather than guessed at.
+    meta.breaks = breaks.into_iter().map(|id| BreakRule { id, range: "*".into() }).collect();
     let mut icons: Vec<String> = vec![];
     if let Some(logo) = kv.get("logoFile") {
         icons.push(logo.clone());
@@ -674,7 +717,7 @@ viewing mod.
                 "fabric.mod.json",
                 br#"{"id":"rei","version":"14.0","name":"REI","provides":["roughlyenoughitems"],
                      "depends":{"minecraft":"1.21","java":">=17","cloth-config":"*","architectury":"*"},
-                     "breaks":{"jei":"*"}}"#,
+                     "breaks":{"jei":"<5.0"}}"#,
             )],
         );
         let m = read_file_meta(&jar, "mod", "rei.jar");
@@ -684,7 +727,9 @@ viewing mod.
         requires.sort();
         assert_eq!(requires, vec!["architectury".to_string(), "cloth-config".to_string()],
             "minecraft and java are answered by the loader, not by a mod the user must install");
-        assert_eq!(m.breaks, vec!["jei".to_string()]);
+        assert_eq!(m.breaks.len(), 1);
+        assert_eq!(m.breaks[0].id, "jei");
+        assert_eq!(m.breaks[0].range, "<5.0", "the version range must survive, not just the id");
     }
 
     #[test]
@@ -704,7 +749,9 @@ viewing mod.
         assert_eq!(m.mod_id, "modmenu");
         assert_eq!(m.requires, vec!["cloth-config".to_string()],
             "an optional dependency must never be reported as missing");
-        assert_eq!(m.breaks, vec!["oldmenu".to_string()]);
+        assert_eq!(m.breaks.len(), 1);
+        assert_eq!(m.breaks[0].id, "oldmenu");
+        assert_eq!(m.breaks[0].range, "*", "a bare id with no versions field means any version");
     }
 
     /// Forge marks a dependency with `mandatory`, NeoForge with `type`, and both
@@ -738,7 +785,9 @@ type="incompatible"
         let m = read_file_meta(&jar, "mod", "jei.jar");
         assert_eq!(m.mod_id, "jei", "the id must come from [[mods]], not from a dependency block");
         assert_eq!(m.requires, vec!["architectury".to_string()]);
-        assert_eq!(m.breaks, vec!["rei".to_string()]);
+        assert_eq!(m.breaks.len(), 1);
+        assert_eq!(m.breaks[0].id, "rei");
+        assert_eq!(m.breaks[0].range, "*", "Forge's Maven version ranges are not parsed, so the rule stays unconditional");
     }
 
     #[test]

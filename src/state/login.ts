@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import { hasTauri } from '../ipc/tauri'
 import { millidaLoginPoll, openUrl } from '../ipc/commands'
-import { useAccounts } from './accounts'
+import { MILLIDA_USER_KEY, useAccounts } from './accounts'
+import { resetGameNick } from './gameNick'
 import { showToast } from './ui'
 import { enterApp } from '../lib/session'
 import { refreshSessionState } from '../lib/secure'
@@ -75,6 +76,16 @@ function nickFromUser(user: LauncherUser): string {
   return local || 'Millida'
 }
 
+/// The launcher holds one Millida session, so a second sign-in takes the place of the
+/// first. Everything cached for the previous user has to go with it.
+function adoptUser(user: LauncherUser) {
+  const id = (user && user.id) || ''
+  const prev = localStorage.getItem(MILLIDA_USER_KEY) || ''
+  if (prev && prev !== id) resetGameNick()
+  if (id) localStorage.setItem(MILLIDA_USER_KEY, id)
+  else localStorage.removeItem(MILLIDA_USER_KEY)
+}
+
 export function cancelWebLogin() {
   resetLogin()
 }
@@ -145,6 +156,7 @@ export async function startWebLogin(reopen = false) {
     }
     if (r.status === 'ok') {
       const nick = nickFromUser(r.user)
+      adoptUser(r.user)
       await refreshSessionState()
       markMillidaEver()
       useAccounts.getState().add({ nick, kind: 'millida' })

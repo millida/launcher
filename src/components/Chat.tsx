@@ -24,6 +24,7 @@ import {
   useFriends,
 } from '../state/friends'
 import type { ChatAttachment, ChatMessage, FriendProfile } from '../state/friends'
+import { offPlatformReason } from '../lib/offPlatform'
 import { copyText } from '../lib/clipboard'
 import { VoiceMessage } from './VoiceMessage'
 import { openImage } from './ImageLightbox'
@@ -385,8 +386,8 @@ function Composer() {
       setChat({ chatEditing: null })
       try {
         await editChatMessage(id, body)
-      } catch {
-        showToast('Не удалось изменить сообщение', 'error')
+      } catch (e) {
+        showToast(offPlatformReason(e) || 'Не удалось изменить сообщение', 'error')
       }
       return
     }
@@ -395,8 +396,9 @@ function Composer() {
     setChat({ chatReplyTo: null })
     try {
       await sendChat(body, attachment, quoted ? replyPreviewOf(quoted) : null)
-    } catch {
-      showToast('Сообщение не ушло — нажми «Повторить» под ним', 'error')
+    } catch (e) {
+      const held = offPlatformReason(e)
+      showToast(held || 'Сообщение не ушло — нажми «Повторить» под ним', 'error')
     }
   }
 
@@ -407,8 +409,8 @@ function Composer() {
     }
     setSrvOpen(false)
     setSrvAddr('')
-    sendChat(encodeInvite(addr.trim(), (name || addr).trim().slice(0, 48))).catch(() =>
-      showToast('Приглашение не ушло — нажми «Повторить» под ним', 'error'),
+    sendChat(encodeInvite(addr.trim(), (name || addr).trim().slice(0, 48))).catch((e) =>
+      showToast(offPlatformReason(e) || 'Приглашение не ушло — нажми «Повторить» под ним', 'error'),
     )
   }
 

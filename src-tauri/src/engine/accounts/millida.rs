@@ -101,12 +101,28 @@ pub async fn millida_api(
         if status.as_u16() == 401 {
             return Err("http 401".into());
         }
+        // A message held by the marketplace guard must not offer a retry, so
+        // the verdict travels with the text and the webview explains why.
+        if let Some(reason) = off_platform_reason(&text) {
+            return Err(format!("{}{}", OFF_PLATFORM_PREFIX, reason));
+        }
         return Err(api_error_message(&text).unwrap_or_else(|| format!("http {}", status.as_u16())));
     }
     if text.trim().is_empty() {
         return Ok(Value::Null);
     }
     serde_json::from_str(&text).map_err(|e| e.to_string())
+}
+
+/// Marker the webview matches on to show the reason instead of «send failed».
+pub const OFF_PLATFORM_PREFIX: &str = "off-platform: ";
+
+fn off_platform_reason(text: &str) -> Option<String> {
+    let v: Value = serde_json::from_str(text).ok()?;
+    if v.get("code")?.as_str()? != "OFF_PLATFORM_BLOCKED" {
+        return None;
+    }
+    api_error_message(text)
 }
 
 pub const SEC_MILLIDA: &str = "millida";

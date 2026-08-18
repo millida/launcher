@@ -276,9 +276,16 @@ pub(crate) async fn post_json(url: &str, body: &Value) -> Result<Value, String> 
     .await
 }
 
+/// Unique per call: two downloads of the same destination — a duplicated library
+/// in one version json, two builds sharing the library store, a second launch
+/// started next to the first — used to share one `.part`. One of them renamed or
+/// removed it under the other, which surfaced as "file not found", "access
+/// denied" or a jar with no end-of-central-directory.
 fn part_path(dest: &Path) -> PathBuf {
+    static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let mut name = dest.file_name().map(|n| n.to_os_string()).unwrap_or_default();
-    name.push(".part");
+    name.push(format!(".{}-{}.part", std::process::id(), n));
     dest.with_file_name(name)
 }
 
@@ -322,16 +329,38 @@ fn bypass_cdn_cache(url: &str) -> String {
     format!("{}{}nocache={}", url, sep, salt)
 }
 
-/// Streams into `<file>.part` and renames on success so an aborted download can
-/// never be mistaken for a complete file.
+/// Removes the temporary file on every exit path, including cancellation.
+struct PartGuard(PathBuf);
+
+impl Drop for PartGuard {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+/// Moves the finished download into place. A rename can still lose to a parallel
+/// download of the same file or to the game holding the jar open, so a
+/// destination that already carries the wanted content counts as success instead
+/// of failing the whole install.
+fn publish(part: &Path, dest: &Path, sum: Option<Sum<'_>>, size: Option<u64>) -> Result<(), String> {
+    match std::fs::rename(part, dest) {
+        Ok(()) => Ok(()),
+        Err(_) if file_matches(dest, sum, size) => Ok(()),
+        Err(e) => Err(format!("{}: {}", dest.display(), e)),
+    }
+}
+
+/// Streams into a private `.part` file and renames on success so an aborted
+/// download can never be mistaken for a complete file.
 async fn fetch(url: &str, dest: &Path, sum: Option<Sum<'_>>, size: Option<u64>) -> Result<(), String> {
     if url.trim().is_empty() {
         return Err("пустая ссылка на файл".into());
     }
     if let Some(p) = dest.parent() {
-        std::fs::create_dir_all(p).map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(p).map_err(|e| format!("{}: {}", p.display(), e))?;
     }
     let part = part_path(dest);
+    let _cleanup = PartGuard(part.clone());
     let mut last = String::new();
     for attempt in 1..=TRIES {
         let target = if attempt > 1 && is_stale_cdn_miss(&last) {
@@ -340,10 +369,7 @@ async fn fetch(url: &str, dest: &Path, sum: Option<Sum<'_>>, size: Option<u64>) 
             url.to_string()
         };
         match fetch_once(&target, &part, sum, size).await {
-            Ok(()) => {
-                std::fs::rename(&part, dest).map_err(|e| e.to_string())?;
-                return Ok(());
-            }
+            Ok(()) => return publish(&part, dest, sum, size),
             Err(e) => {
                 let _ = std::fs::remove_file(&part);
                 last = e;
@@ -361,7 +387,7 @@ async fn fetch_once(url: &str, part: &Path, sum: Option<Sum<'_>>, size: Option<u
     if !resp.status().is_success() {
         return Err(format!("{} → {}", url, resp.status()));
     }
-    let mut file = std::fs::File::create(part).map_err(|e| e.to_string())?;
+    let mut file = std::fs::File::create(part).map_err(|e| format!("{}: {}", part.display(), e))?;
     let mut hasher = sum.filter(|s| s.is_usable()).map(|s| Hasher::for_sum(&s));
     let mut written: u64 = 0;
     let mut stream = resp.bytes_stream();
@@ -481,6 +507,51 @@ mod tests {
         let _ = std::fs::remove_dir_all(&p);
         std::fs::create_dir_all(&p).unwrap();
         p
+    }
+
+    /// Two downloads of one file used to share `<name>.part`: whoever finished
+    /// second found it renamed away and failed the whole install with
+    /// "не удается найти указанный файл".
+    #[test]
+    fn concurrent_downloads_do_not_share_one_temp_file() {
+        let dest = tmp("part").join("lwjgl.jar");
+        let a = part_path(&dest);
+        let b = part_path(&dest);
+        assert_ne!(a, b, "каждая загрузка обязана писать в свой временный файл");
+        assert_eq!(a.parent(), dest.parent(), "временный файл лежит рядом с целевым");
+        assert!(
+            a.file_name().unwrap().to_string_lossy().starts_with("lwjgl.jar."),
+            "имя временного файла привязано к целевому: {:?}",
+            a
+        );
+    }
+
+    /// The loser of that race — and a jar the running game holds open — must not
+    /// fail the install when the destination already holds the wanted bytes.
+    #[test]
+    fn publish_accepts_destination_written_by_the_other_download() {
+        let dir = tmp("publish");
+        let dest = dir.join("asset.bin");
+        std::fs::write(&dest, b"ok").unwrap();
+        let missing_part = dir.join("asset.bin.gone.part");
+        assert!(
+            publish(&missing_part, &dest, None, Some(2)).is_ok(),
+            "готовый файл нужного размера — это успех, а не ошибка установки"
+        );
+        assert!(
+            publish(&missing_part, &dest, None, Some(999)).is_err(),
+            "чужой файл другого размера принимать нельзя"
+        );
+    }
+
+    #[test]
+    fn part_file_is_removed_when_download_gives_up() {
+        let part = tmp("guard").join("x.jar.part");
+        std::fs::write(&part, b"half").unwrap();
+        {
+            let _g = PartGuard(part.clone());
+        }
+        assert!(!part.exists(), "оборванная загрузка не должна оставлять мусор");
     }
 
     #[test]
