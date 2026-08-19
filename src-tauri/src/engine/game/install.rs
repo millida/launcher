@@ -6,7 +6,7 @@ use std::process::Command;
 use std::time::Duration;
 use tauri::AppHandle;
 
-const MANIFEST_TTL: Duration = Duration::from_secs(6 * 3600);
+pub(crate) const MANIFEST_TTL: Duration = Duration::from_secs(6 * 3600);
 const LOADER_TTL: Duration = Duration::from_secs(24 * 3600);
 /// Assets are thousands of tiny files where request concurrency, not bandwidth,
 /// is the limit; libraries are few and large.
@@ -21,6 +21,32 @@ struct LibJob {
     sha1: Option<String>,
     size: Option<u64>,
     path: PathBuf,
+}
+
+/// Turns an installer run into something a player can act on: its exit code
+/// says nothing, while the last lines it printed name the blocked host or the
+/// directory it could not write.
+fn installer_failure(out: &std::process::Output) -> String {
+    let mut said = String::from_utf8_lossy(&out.stderr).into_owned();
+    if said.trim().is_empty() {
+        said = String::from_utf8_lossy(&out.stdout).into_owned();
+    }
+    let tail = said
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .rev()
+        .take(3)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect::<Vec<_>>()
+        .join(" / ");
+    if tail.is_empty() {
+        return "Инсталлер загрузчика завершился с ошибкой и ничего не сообщил — чаще всего это антивирус или нет доступа к папке игры".into();
+    }
+    let tail: String = tail.chars().take(400).collect();
+    format!("Инсталлер загрузчика завершился с ошибкой: {}", tail)
 }
 
 async fn fetch_libs(jobs: &[LibJob], app: &AppHandle, from: f32, to: f32, title: &str) -> Result<(), String> {
@@ -102,6 +128,13 @@ async fn fetch_missing(jobs: &[LibJob], strict: bool) -> Result<(), String> {
     Ok(())
 }
 
+/// Java the version needs. Mojang only started publishing `javaVersion` around
+/// 1.17, so every older release relies on the fallback — and answering 21 there
+/// hands Minecraft 1.6.4 a runtime it cannot start on at all.
+pub(crate) fn java_major_of(vjson: &Value, vid: &str) -> u64 {
+    vjson["javaVersion"]["majorVersion"].as_u64().unwrap_or_else(|| java_major_for(vid))
+}
+
 /// Fingerprint of the version's native set; unchanged means no need to unpack
 /// the classifier jars again.
 fn natives_stamp_path(natives_dir: &Path) -> PathBuf {
@@ -115,6 +148,50 @@ fn natives_up_to_date(natives_dir: &Path, stamp: &str, deep: bool) -> bool {
     std::fs::read_to_string(natives_stamp_path(natives_dir))
         .map(|s| s == stamp)
         .unwrap_or(false)
+}
+
+/// Asset indexes up to `legacy` (1.7.2 and older) address objects by their file
+/// name, not by hash: those versions look for real files under `--assetsDir` and
+/// find an empty world without them. `pre-1.6` says the same thing under its own
+/// key.
+pub(crate) fn assets_are_virtual(index: &Value) -> bool {
+    index["virtual"] == true || index["map_to_resources"] == true
+}
+
+/// Lays the object store out under real names for a virtual index. Returns the
+/// directory the game must be pointed at.
+fn build_virtual_assets(index: &Value, root: &Path, index_id: &str) -> Result<PathBuf, String> {
+    let dir = root.join("assets").join("virtual").join(safe_file_name(index_id)?);
+    let objects = root.join("assets").join("objects");
+    let mut laid = 0usize;
+    let mut missing: Vec<String> = vec![];
+    for (name, meta) in index["objects"].as_object().cloned().unwrap_or_default() {
+        let Some(hash) = meta["hash"].as_str() else { continue };
+        let Some(pre) = hash.get(0..2) else { continue };
+        let src = objects.join(pre).join(hash);
+        let dest = safe_join(&dir, &name)?;
+        let want = meta["size"].as_u64();
+        if std::fs::metadata(&dest).is_ok_and(|m| want.is_none_or(|w| m.len() == w)) {
+            continue;
+        }
+        if !src.exists() {
+            missing.push(name.clone());
+            continue;
+        }
+        if let Some(p) = dest.parent() {
+            std::fs::create_dir_all(p).map_err(|e| format!("Не удалось создать {}: {}", p.display(), e))?;
+        }
+        std::fs::copy(&src, &dest)
+            .map_err(|e| format!("Не удалось разложить ассет {}: {}", name, e))?;
+        laid += 1;
+    }
+    if !missing.is_empty() && laid == 0 && !dir.exists() {
+        return Err(format!(
+            "Ассеты старой версии не скачались ({} файлов). Проверь интернет и нажми «Починить сборку».",
+            missing.len()
+        ));
+    }
+    Ok(dir)
 }
 
 /// Reads the maven sibling `.sha1`; the body is bare hex, sometimes followed by
@@ -153,6 +230,64 @@ fn forge_installers(vid: &str, build: &str) -> Vec<(String, String)> {
         (format!("{MAVEN}/{f}/forge-{f}-installer.jar"), dir_name.clone()),
         (format!("{MAVEN}/{f}-{vid}/forge-{f}-{vid}-installer.jar"), dir_name),
     ]
+}
+
+/// Forge installers written before the 1.13 spec carry no client CLI at all:
+/// they reject `--installClient` as an unknown option and exit, which is why
+/// every build for MC 1.12.1 and older died on "installer failed". Such a
+/// profile is declarative — its version json is `versionInfo`, and the only file
+/// to lay out is the core jar packed inside the installer — so the launcher
+/// installs it itself. `None` means a modern profile, which its own installer
+/// still has to apply because of the patch processors.
+fn install_legacy_forge(installer: &Path, vdir: &Path, libs: &Path) -> Result<Option<PathBuf>, String> {
+    let f = std::fs::File::open(installer).map_err(|e| e.to_string())?;
+    let mut zip = zip::ZipArchive::new(std::io::BufReader::new(f)).map_err(|e| e.to_string())?;
+    let profile: Value = {
+        let entry = zip
+            .by_name("install_profile.json")
+            .map_err(|_| "в инсталлере нет install_profile.json".to_string())?;
+        serde_json::from_reader(entry).map_err(|e| e.to_string())?
+    };
+    let Some(vinfo) = profile.get("versionInfo").filter(|v| v.is_object()).cloned() else {
+        return Ok(None);
+    };
+    // The id names the version directory and the maven coordinates name the jar
+    // path, and both come out of a downloaded archive, so both go through the
+    // path guards.
+    let id = safe_file_name(vinfo["id"].as_str().ok_or("в профиле загрузчика нет id")?)?;
+    let coord = profile["install"]["path"].as_str().ok_or("в профиле загрузчика нет координат ядра")?;
+    let packed = profile["install"]["filePath"].as_str().ok_or("в профиле загрузчика нет ядра")?;
+    let jar = safe_join(libs, &maven_path(coord))?;
+    if let Some(p) = jar.parent() {
+        std::fs::create_dir_all(p).map_err(|e| e.to_string())?;
+    }
+    let tmp = jar.with_extension(format!("{}.part", std::process::id()));
+    {
+        let mut src = zip.by_name(packed).map_err(|_| format!("в инсталлере нет {}", packed))?;
+        let mut out = std::fs::File::create(&tmp).map_err(|e| format!("{}: {}", tmp.display(), e))?;
+        std::io::copy(&mut src, &mut out).map_err(|e| format!("{}: {}", tmp.display(), e))?;
+    }
+    std::fs::rename(&tmp, &jar).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        format!("{}: {}", jar.display(), e)
+    })?;
+    // The version json is what marks the loader as installed, so it is written
+    // only after the core jar is in place.
+    let dir = vdir.join(&id);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    write_json_atomic(&dir.join(format!("{}.json", id)), &vinfo)?;
+    Ok(Some(dir))
+}
+
+/// Old Forge profiles name `files.minecraftforge.net/maven`, which stopped
+/// serving artifacts; the layout on the maven host is the same.
+fn maven_base(url: &str) -> String {
+    for dead in ["http://files.minecraftforge.net/maven/", "https://files.minecraftforge.net/maven/"] {
+        if let Some(rest) = url.strip_prefix(dead) {
+            return format!("https://maven.minecraftforge.net/{}", rest);
+        }
+    }
+    url.to_string()
 }
 
 /// Locates an installed Forge/NeoForge dir for this MC version: exact name
@@ -512,7 +647,7 @@ pub async fn install_loader_with_java(
             if found.is_none() {
                 let java_pre = match java_override.clone() {
                     Some(j) => j,
-                    None => ensure_java(app, vjson["javaVersion"]["majorVersion"].as_u64().unwrap_or(21)).await?,
+                    None => ensure_java(app, java_major_of(&vjson, &vid)).await?,
                 };
                 // The installer refuses to run without launcher_profiles.json.
                 let lp = root.join("launcher_profiles.json");
@@ -534,14 +669,36 @@ pub async fn install_loader_with_java(
                         continue;
                     }
                     emit(app, "files", 60.0, "Ставим загрузчик (может занять минуту)…");
+                    // A pre-1.13 profile is laid out here: its installer would
+                    // only answer that it does not know `--installClient`.
+                    let (ip, vd, lb) = (inst.clone(), vdir.clone(), root.join("libraries"));
+                    match tokio::task::spawn_blocking(move || install_legacy_forge(&ip, &vd, &lb))
+                        .await
+                        .map_err(|e| e.to_string())?
+                    {
+                        Ok(Some(dir)) => {
+                            let _ = std::fs::remove_file(&inst);
+                            found = Some(dir);
+                            break;
+                        }
+                        Ok(None) => {}
+                        Err(e) => {
+                            let _ = std::fs::remove_file(&inst);
+                            last_err = format!("{}: {}", name, e);
+                            continue;
+                        }
+                    }
                     let (jp, ip, rp) = (java_pre.clone(), inst.clone(), root.clone());
-                    let st = tokio::task::spawn_blocking(move || {
+                    // The installer's own output is the only account of why it
+                    // gave up - it exits 1 for a blocked maven, a read-only
+                    // directory and a corrupt profile alike.
+                    let out = tokio::task::spawn_blocking(move || {
                         quiet(&mut Command::new(&jp)).arg("-jar").arg(&ip).arg("--installClient").arg(&rp)
-                            .current_dir(&rp).status()
+                            .current_dir(&rp).output()
                     }).await.map_err(|e| e.to_string())?.map_err(|e| e.to_string())?;
                     let _ = std::fs::remove_file(&inst);
-                    if !st.success() {
-                        last_err = "Инсталлер загрузчика завершился с ошибкой".into();
+                    if !out.status.success() {
+                        last_err = installer_failure(&out);
                         continue;
                     }
                     found = resolve_loader_dir(&vdir, loader, name, &vid);
@@ -573,7 +730,7 @@ pub async fn install_loader_with_java(
             } else if let Some(name) = lib["name"].as_str() {
                 let rel = maven_path(name);
                 let p = root.join("libraries").join(&rel);
-                let base = lib["url"].as_str().unwrap_or("https://libraries.minecraft.net/");
+                let base = maven_base(lib["url"].as_str().unwrap_or("https://libraries.minecraft.net/"));
                 ljobs.push(LibJob { url: format!("{}{}", base, rel), path: p, rel, sha1: None, size: None });
             }
         }
@@ -668,6 +825,15 @@ pub async fn install_loader_with_java(
         check_cancel()?;
     }
 
+    if assets_are_virtual(&aidx) {
+        emit(app, "assets", 86.0, "Раскладываем ассеты старой версии…");
+        let (idx, r, id) = (aidx.clone(), root.clone(), aidx_id.to_string());
+        let dir = tokio::task::spawn_blocking(move || build_virtual_assets(&idx, &r, &id))
+            .await
+            .map_err(|e| e.to_string())??;
+        merged["millidaGameAssets"] = Value::String(dir.to_string_lossy().to_string());
+    }
+
     if needs_log4j_config(vjson["id"].as_str().unwrap_or_default()) {
         if let Some(arg) = ensure_log4j_config(&vjson, &root).await {
             merged["millidaLog4jArg"] = Value::String(arg);
@@ -676,7 +842,7 @@ pub async fn install_loader_with_java(
 
     let java = match java_override {
         Some(j) => j,
-        None => ensure_java(app, vjson["javaVersion"]["majorVersion"].as_u64().unwrap_or(21)).await?,
+        None => ensure_java(app, java_major_of(&vjson, &vid)).await?,
     };
 
     Ok((merged, main_class, classpath, java))
@@ -715,6 +881,36 @@ async fn ensure_log4j_config(vjson: &Value, root: &Path) -> Option<String> {
 mod tests {
     use super::*;
 
+    fn output(code: i32, stdout: &str, stderr: &str) -> std::process::Output {
+        #[cfg(unix)]
+        let status = std::os::unix::process::ExitStatusExt::from_raw(code);
+        #[cfg(windows)]
+        let status = std::os::windows::process::ExitStatusExt::from_raw(code as u32);
+        std::process::Output { status, stdout: stdout.as_bytes().to_vec(), stderr: stderr.as_bytes().to_vec() }
+    }
+
+    #[test]
+    fn installer_failure_reports_what_the_installer_said() {
+        let net = "Exception: java.net.UnknownHostException: maven.minecraftforge.net";
+        let said = installer_failure(&output(1, "", net));
+        assert!(said.contains("maven.minecraftforge.net"), "the blocked host is the whole diagnosis, got {said:?}");
+
+        let only_stdout = installer_failure(&output(1, "Failed to download library", ""));
+        assert!(only_stdout.contains("Failed to download library"), "installers print to stdout too, got {only_stdout:?}");
+
+        let mute = installer_failure(&output(1, "  
+", ""));
+        assert!(!mute.contains(':'), "with nothing said the message must not end in a dangling colon, got {mute:?}");
+
+        let noisy = "a
+b
+c
+d
+e";
+        let tail = installer_failure(&output(1, "", noisy));
+        assert!(tail.contains("c / d / e") && !tail.contains('a'), "only the last lines carry the cause, got {tail:?}");
+    }
+
     /// Forge up to 1.9.4 lives under `<mc>-<build>-<mc>`, later builds under
     /// `<mc>-<build>`: offering only one name left every legacy modpack stuck on
     /// "maven не дал контрольную сумму инсталлера".
@@ -738,6 +934,50 @@ mod tests {
         );
     }
 
+    /// Mojang only publishes `javaVersion` from 1.17 on. Answering 21 for the
+    /// versions that lack it handed 1.6.4 a runtime it cannot start on, and the
+    /// build died before the Forge installer even ran.
+    #[test]
+    fn missing_java_version_falls_back_to_what_the_game_needs() {
+        let modern = serde_json::json!({ "javaVersion": { "majorVersion": 21 } });
+        assert_eq!(java_major_of(&modern, "1.21.4"), 21, "объявленное значение всегда сильнее догадки");
+        let legacy = serde_json::json!({ "id": "1.6.4" });
+        assert_eq!(java_major_of(&legacy, "1.6.4"), 8, "без поля решает версия игры, а не «поставим самую новую»");
+        assert_eq!(java_major_of(&serde_json::json!({}), "1.18.2"), 17);
+        assert_eq!(java_major_of(&serde_json::json!({}), "1.20.6"), 21);
+    }
+
+    /// Indexes up to `legacy` address objects by file name: those versions need
+    /// the store laid out, and the modern ones must never pay for it.
+    #[test]
+    fn only_old_indexes_are_virtual() {
+        assert!(assets_are_virtual(&serde_json::json!({ "virtual": true })), "1.6.4 и 1.7.2");
+        assert!(assets_are_virtual(&serde_json::json!({ "map_to_resources": true })), "pre-1.6");
+        assert!(!assets_are_virtual(&serde_json::json!({ "objects": {} })), "1.7.10 и новее читают object store");
+    }
+
+    #[test]
+    fn virtual_assets_are_laid_out_under_their_real_names() {
+        let root = std::env::temp_dir().join("millida-virtual-assets-test");
+        let _ = std::fs::remove_dir_all(&root);
+        let obj = root.join("assets/objects/0d");
+        std::fs::create_dir_all(&obj).unwrap();
+        let hash = "0d000710b71ca9aafabd8f587768431d0b560b32";
+        std::fs::write(obj.join(hash), b"hello").unwrap();
+        let index = serde_json::json!({
+            "virtual": true,
+            "objects": { "lang/en_US.lang": { "hash": hash, "size": 5 } },
+        });
+
+        let dir = build_virtual_assets(&index, &root, "legacy").unwrap();
+        assert_eq!(
+            std::fs::read(dir.join("lang/en_US.lang")).unwrap(),
+            b"hello",
+            "объект обязан лечь под своим настоящим именем, иначе старая версия не найдёт ни языка, ни звуков"
+        );
+        assert!(build_virtual_assets(&index, &root, "legacy").is_ok(), "повторный запуск не должен ломаться");
+    }
+
     #[test]
     fn log4j_config_only_for_pre_1_12() {
         assert!(needs_log4j_config("1.7.10"));
@@ -745,6 +985,100 @@ mod tests {
         assert!(!needs_log4j_config("1.12.2"));
         assert!(!needs_log4j_config("1.21.4"));
         assert!(needs_log4j_config("13w39a"));
+    }
+
+    fn legacy_installer(dir: &std::path::Path, packed: &str, id: &str, coord: &str) -> PathBuf {
+        use std::io::Write;
+        let jar = dir.join(format!("installer-{}.jar", id.replace(['/', '\\', '.', ':'], "_")));
+        let f = std::fs::File::create(&jar).unwrap();
+        let mut z = zip::ZipWriter::new(f);
+        let opts: zip::write::SimpleFileOptions = Default::default();
+        let profile = serde_json::json!({
+            "install": { "path": coord, "filePath": packed },
+            "versionInfo": { "id": id, "inheritsFrom": "1.7.10", "mainClass": "net.minecraft.launchwrapper.Launch" }
+        });
+        z.start_file("install_profile.json", opts).unwrap();
+        z.write_all(serde_json::to_string(&profile).unwrap().as_bytes()).unwrap();
+        z.start_file(packed, opts).unwrap();
+        z.write_all(b"core").unwrap();
+        z.finish().unwrap();
+        jar
+    }
+
+    /// Every Forge build for MC 1.12.1 and older ships an installer that does not
+    /// know `--installClient`, so the launcher has to lay the profile out itself:
+    /// the version json under its own name and the core jar at its maven path.
+    #[test]
+    fn legacy_forge_is_installed_without_its_installer() {
+        let base = std::env::temp_dir().join(format!("millida-legacy-forge-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let (vdir, libs) = (base.join("versions"), base.join("libraries"));
+        std::fs::create_dir_all(&vdir).unwrap();
+        let id = "1.7.10-Forge10.13.4.1614-1.7.10";
+        let jar = legacy_installer(&base, "forge-universal.jar", id, "net.minecraftforge:forge:1.7.10-10.13.4.1614-1.7.10");
+
+        let dir = install_legacy_forge(&jar, &vdir, &libs).unwrap().expect("легаси-профиль обязан ставиться сам");
+
+        assert_eq!(dir, vdir.join(id), "профиль кладётся в папку со своим id");
+        let written: Value = serde_json::from_slice(&std::fs::read(dir.join(format!("{}.json", id))).unwrap()).unwrap();
+        assert_eq!(written["inheritsFrom"], "1.7.10", "versionInfo и есть version json сборки");
+        let core = libs.join("net/minecraftforge/forge/1.7.10-10.13.4.1614-1.7.10/forge-1.7.10-10.13.4.1614-1.7.10.jar");
+        assert_eq!(std::fs::read(&core).unwrap(), b"core", "ядро Forge есть только внутри инсталлера: maven его не отдаёт");
+        assert!(!vdir.join(id).join(format!("{}.{}.part", id, std::process::id())).exists(), "временных файлов после установки не остаётся");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// A profile with processors (MC 1.13+ and late 1.12.2 builds) is patched by
+    /// the installer itself — copying its files would produce a build that never
+    /// gets the patched Minecraft jar.
+    #[test]
+    fn modern_forge_profile_is_left_to_its_installer() {
+        let base = std::env::temp_dir().join(format!("millida-modern-forge-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        let jar = base.join("installer.jar");
+        {
+            use std::io::Write;
+            let mut z = zip::ZipWriter::new(std::fs::File::create(&jar).unwrap());
+            let opts: zip::write::SimpleFileOptions = Default::default();
+            z.start_file("install_profile.json", opts).unwrap();
+            z.write_all(br#"{"spec":1,"processors":[],"libraries":[]}"#).unwrap();
+            z.finish().unwrap();
+        }
+        assert!(
+            install_legacy_forge(&jar, &base.join("versions"), &base.join("libraries")).unwrap().is_none(),
+            "современный профиль ставит только его собственный инсталлер"
+        );
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// The profile is read out of a downloaded archive: its id names the version
+    /// directory, its maven coordinates name the jar path. A profile that walks
+    /// out of `versions/` or `libraries/` has to be refused.
+    #[test]
+    fn legacy_profile_may_not_walk_out_of_the_game_folder() {
+        let base = std::env::temp_dir().join(format!("millida-legacy-escape-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        let (vdir, libs) = (base.join("versions"), base.join("libraries"));
+
+        let by_id = legacy_installer(&base, "core.jar", "../../evil", "net.minecraftforge:forge:1.7.10");
+        assert!(install_legacy_forge(&by_id, &vdir, &libs).is_err(), "id решает, где окажется профиль");
+        let by_coord = legacy_installer(&base, "core.jar", "1.7.10-forge", "..:..:..");
+        assert!(install_legacy_forge(&by_coord, &vdir, &libs).is_err(), "координаты решают, где окажется ядро");
+        assert!(!base.join("evil").exists() && !base.join("evil.jar").exists(), "за пределы папки игры не записано ничего");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// Old profiles point at the file host, which no longer serves artifacts.
+    #[test]
+    fn dead_forge_maven_is_rewritten() {
+        assert_eq!(
+            maven_base("http://files.minecraftforge.net/maven/"),
+            "https://maven.minecraftforge.net/",
+            "иначе все библиотеки Forge старых сборок идут в никуда"
+        );
+        assert_eq!(maven_base("https://libraries.minecraft.net/"), "https://libraries.minecraft.net/", "чужие хосты не трогаем");
     }
 
     /// Forge for 1.12.2 and older carries `--tweakClass` only in the legacy

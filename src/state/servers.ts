@@ -3,6 +3,7 @@ import type { SnapshotServer } from '../lib/snapshot'
 import { api } from '../lib/api'
 import { serverVersions } from '../lib/mcVersion'
 import { ensureMcVersions } from './mcVersions'
+import { apiErrorText } from '../lib/apiError'
 
 const CAT: Record<string, string> = {
   SURVIVAL: 'Выживание',
@@ -125,7 +126,7 @@ export async function loadLiveRating(category?: string) {
   } catch (e) {
     useServers.getState().set({
       status: 'error',
-      error: e instanceof Error ? e.message : String(e),
+      error: apiErrorText(e, 'Список серверов не загрузился'),
     })
   }
 }

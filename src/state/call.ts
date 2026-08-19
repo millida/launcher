@@ -16,6 +16,7 @@ import { restoreLauncher } from '../lib/window'
 import { useFriends } from './friends'
 import { api } from '../lib/api'
 import { nickInRooms, useRooms, type VoiceMember } from './rooms'
+import { apiErrorText } from '../lib/apiError'
 
 export type CallStatus = 'idle' | 'outgoing' | 'incoming' | 'connecting' | 'active'
 
@@ -320,7 +321,7 @@ export async function callFriend(peerId: string, nick: string) {
     await sendSignal(callId, peerId, 'invite', {})
   } catch (e) {
     reset()
-    showToast(String((e as Error).message || e), 'error')
+    showToast(apiErrorText(e, 'Не удалось начать звонок'), 'error')
     return
   }
   startRing('outgoing')
@@ -487,7 +488,7 @@ export async function joinRoomVoice(roomId: string, title: string) {
     })
   } catch (e) {
     reset()
-    showToast(String((e as Error).message || e) || 'Не удалось войти в разговор', 'error')
+    showToast(apiErrorText(e, 'Не удалось войти в разговор'), 'error')
     return
   }
   if (st().roomId !== roomId) return

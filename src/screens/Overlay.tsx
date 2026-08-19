@@ -5,6 +5,7 @@ import { tauri } from '../ipc/tauri'
 import { overlayHide } from '../ipc/commands'
 import { api } from '../lib/api'
 import { Head } from '../components/Head'
+import { apiErrorText } from '../lib/apiError'
 
 interface OverlayMessage {
   uid: string
@@ -95,7 +96,7 @@ export function Overlay() {
       setMsgs((prev) => prev.concat([{ uid: to.uid, nick: 'Ты', text: body, ts: Date.now() }]).slice(-HISTORY))
       setReply('')
     } catch (e) {
-      setError('Не отправлено: ' + String((e as Error).message || e))
+      setError(apiErrorText(e, 'Сообщение не отправлено'))
     } finally {
       setSending(false)
     }

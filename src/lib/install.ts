@@ -142,6 +142,7 @@ export async function installContentFlow(src: Source, kind: string, title?: stri
           return
         }
         trackTimed('content_install', startedAt, { name: label, kind, mc: gv, loader, source: src.source })
+        void useMods.getState().refreshInstalled()
         installExtras(prof, kind, extras)
         showToast(
           (RU[kind] || 'Контент') + ' → «' + prof + '»: ' + r.file + (r.warning ? ' · ' + r.warning : ''),

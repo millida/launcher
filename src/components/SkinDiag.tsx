@@ -6,6 +6,7 @@ import { copyText } from '../lib/clipboard'
 import { showToast } from '../state/ui'
 import { track } from '../lib/telemetry'
 import { Icon } from './Icon'
+import { apiErrorText } from '../lib/apiError'
 
 const HEALTHY = new Set(['ok', 'never_launched', 'vanilla'])
 
@@ -31,7 +32,7 @@ export function SkinDiag({ nick, online, onClose }: { nick: string; online: bool
         setReport(r)
         track('skin_diag', { verdict: r.verdict, builds: r.builds.length })
       })
-      .catch((e) => alive && setFailed(String(e).replace(/^Error:\s*/, '')))
+      .catch((e) => alive && setFailed(apiErrorText(e, 'Проверка скина не прошла')))
     return () => {
       alive = false
     }

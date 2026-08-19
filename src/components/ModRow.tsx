@@ -3,7 +3,7 @@ import { fmt, RU_LOADER } from '../lib/format'
 import { hasTauri } from '../ipc/tauri'
 import { cfInstallModpack, cfInstallWorld, installModpack } from '../ipc/commands'
 import { installContentFlow, resolveTargetBuild } from '../lib/install'
-import { keyCfModpack, keyContent, keyMrModpack } from '../lib/installKeys'
+import { keyCfModpack, keyContent, keyMrModpack, pickTargetName } from '../lib/installKeys'
 import { runInstall, useInstalls } from '../state/installs'
 import { trackTimed } from '../lib/telemetry'
 import { useProfiles } from '../state/profiles'
@@ -19,7 +19,12 @@ export function ModRow({ h }: { h: ModHit }) {
   const modTab = useMods((s) => s.modTab)
   const installedIds = useMods((s) => s.installedIds)
   const installed = !!(h.pid && installedIds.has(h.pid))
-  const target = useMods((s) => s.targetBuild)
+  // The same build the install itself will use, so a finished install shows on
+  // this very row instead of under a key nobody reads.
+  const scoped = useMods((s) => s.targetBuild)
+  const profiles = useProfiles((s) => s.profiles)
+  const selected = useProfiles((s) => s.selected)
+  const target = pickTargetName(scoped, profiles.map((p) => p.name), selected || '')
   const key =
     h.cfid !== undefined
       ? modTab === 'modpack'
@@ -72,8 +77,22 @@ export function ModRow({ h }: { h: ModHit }) {
     })
   }
 
+  /// Нажатие на «Установлено» раньше молча качало файл заново: состояние не
+  /// менялось, и выглядело это как сломанная кнопка. Теперь оно объясняет себя.
+  const sayInstalled = (): boolean => {
+    if (!done) return false
+    showToast(
+      modTab === 'modpack'
+        ? 'Модпак уже установлен — открой карточку, чтобы выбрать другую версию'
+        : 'Уже в сборке' + (target ? ' «' + target + '»' : '') + ' — версию можно сменить в карточке',
+      'ok',
+      false,
+    )
+    return true
+  }
+
   const onCf = () => {
-    if (done) return
+    if (sayInstalled()) return
     if (!hasTauri()) {
       showToast('CurseForge доступен в приложении')
       return
@@ -110,7 +129,7 @@ export function ModRow({ h }: { h: ModHit }) {
   }
 
   const onInst = () => {
-    if (done) return
+    if (sayInstalled()) return
     if (h.slug && hasTauri() && ['mod', 'resourcepack', 'datapack', 'shader'].includes(modTab)) {
       void installContentFlow({ source: 'modrinth', slug: h.slug }, modTab, h.title)
       return

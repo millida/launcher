@@ -21,6 +21,7 @@ import {
   rebaseCss,
 } from '../lib/theme-draft'
 import type { ThemeDraft, TokenDef } from '../lib/theme-draft'
+import { apiErrorText } from '../lib/apiError'
 
 const BASES: { value: ThemeBase; label: string }[] = [
   { value: 'any', label: 'Любая палитра' },
@@ -190,7 +191,7 @@ export function ThemeEditor({
       onSaved(theme)
       return theme
     } catch (e) {
-      showToast(e instanceof Error ? e.message : String(e), 'error')
+      showToast(apiErrorText(e, 'Не удалось сохранить тему'), 'error')
       return null
     } finally {
       setBusy(false)
@@ -219,7 +220,7 @@ export function ThemeEditor({
       await navigator.clipboard.writeText('url(' + name + ')').catch(() => {})
       showToast('Файл добавлен: ' + name + ' — «url(' + name + ')» скопировано в буфер')
     } catch (e) {
-      showToast(e instanceof Error ? e.message : String(e), 'error')
+      showToast(apiErrorText(e, 'Не удалось сохранить тему'), 'error')
     }
   }
 

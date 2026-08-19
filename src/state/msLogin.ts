@@ -8,6 +8,7 @@ import { enterApp } from '../lib/session'
 import { refreshSessionState } from '../lib/secure'
 import { copyText } from '../lib/clipboard'
 import { copyLink } from '../lib/links'
+import { apiErrorText } from '../lib/apiError'
 
 interface MsLoginState {
   busy: boolean
@@ -73,8 +74,8 @@ export async function startMsLogin() {
   try {
     init = await msDeviceStart()
   } catch (e) {
-    reset(String(e))
-    showToast('Microsoft: ' + e, 'error')
+    reset(apiErrorText(e, 'Microsoft не ответила — повтори попытку'))
+    showToast('Microsoft: ' + apiErrorText(e, 'нет ответа'), 'error')
     return
   }
   const url = init.verification_uri || MS_VERIFY_URL

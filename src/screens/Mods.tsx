@@ -82,8 +82,9 @@ export function Mods({ on }: { on: boolean }) {
             <Icon id="i-search" />
             <input
               placeholder="Поиск по контенту…"
+              value={mods.mq}
               onChange={(e) => {
-                mods.set({ mq: e.target.value.trim() })
+                mods.set({ mq: e.target.value })
                 clearTimeout(searchTimer.current)
                 searchTimer.current = setTimeout(reload, 350)
               }}

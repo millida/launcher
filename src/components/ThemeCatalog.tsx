@@ -14,6 +14,7 @@ import {
 } from '../ipc/commands'
 import type { CatalogTheme, InstalledThemeFile, OwnCatalogTheme } from '../ipc/commands'
 import { hasMillidaAccount } from '../lib/api'
+import { apiErrorText } from '../lib/apiError'
 import { installId } from '../lib/telemetry'
 import type { ThemePack } from '../lib/themes'
 
@@ -37,14 +38,6 @@ function size(bytes: number): string {
   if (!bytes) return ''
   const kb = bytes / 1024
   return kb < 1024 ? Math.round(kb) + ' КБ' : (kb / 1024).toFixed(1) + ' МБ'
-}
-
-function errText(e: unknown): string {
-  const msg = e instanceof Error ? e.message : String(e)
-  if (msg.includes('unauthorized') || msg.includes('401')) {
-    return 'Нужен вход в аккаунт Millida'
-  }
-  return msg
 }
 
 function Swatches({ colors }: { colors: string[] }) {
@@ -93,7 +86,7 @@ export function ThemeCatalog({
         setItems((prev) => (offset ? [...prev, ...page.items] : page.items))
         setTotal(page.total)
       } catch (e) {
-        setFailed(errText(e))
+        setFailed(apiErrorText(e, 'Каталог не ответил'))
       } finally {
         setLoading(false)
       }
@@ -107,7 +100,7 @@ export function ThemeCatalog({
     try {
       setMine(await catalogMyThemes())
     } catch (e) {
-      setFailed(errText(e))
+      setFailed(apiErrorText(e, 'Каталог не ответил'))
     } finally {
       setLoading(false)
     }
@@ -148,7 +141,7 @@ export function ThemeCatalog({
         )
       }
     } catch (e) {
-      showToast(errText(e), 'error')
+      showToast(apiErrorText(e, 'Каталог не ответил'), 'error')
     } finally {
       setBusy('')
     }
@@ -165,7 +158,7 @@ export function ThemeCatalog({
         prev.map((t) => (t.slug === theme.slug ? { ...t, liked: res.liked, likes: res.likes } : t)),
       )
     } catch (e) {
-      showToast(errText(e), 'error')
+      showToast(apiErrorText(e, 'Каталог не ответил'), 'error')
     }
   }
 
@@ -186,7 +179,7 @@ export function ThemeCatalog({
           : 'Тема отправлена на проверку — появится в каталоге после модерации',
       )
     } catch (e) {
-      showToast(errText(e), 'error')
+      showToast(apiErrorText(e, 'Каталог не ответил'), 'error')
     } finally {
       setBusy('')
     }
@@ -203,7 +196,7 @@ export function ThemeCatalog({
       await loadMine()
       showToast('Тема снята с каталога')
     } catch (e) {
-      showToast(errText(e), 'error')
+      showToast(apiErrorText(e, 'Каталог не ответил'), 'error')
     }
   }
 

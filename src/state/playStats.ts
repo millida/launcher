@@ -35,12 +35,15 @@ usePrivacy.subscribe((s) => {
 
 interface State {
   stats: PlayStats
+  /** Секунды, которые подтвердил сервер; null — ещё не спрашивали. */
+  verifiedSeconds: number | null
   loaded: boolean
   refresh: () => Promise<void>
 }
 
 export const usePlayStats = create<State>((set) => ({
   stats: EMPTY,
+  verifiedSeconds: null,
   loaded: false,
   refresh: async () => {
     if (!hasTauri()) {
@@ -58,6 +61,16 @@ export const usePlayStats = create<State>((set) => ({
 }))
 
 export const refreshPlayStats = () => usePlayStats.getState().refresh()
+
+/**
+ * Локальный счётчик и подтверждённое время считаются по-разному: второе растёт
+ * только пока сервер видит удары. Показываем оба, иначе разница читается как
+ * потерянные часы.
+ */
+export const setVerifiedSeconds = (seconds: number | null) => {
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds < 0) return
+  usePlayStats.setState({ verifiedSeconds: Math.round(seconds) })
+}
 
 export const buildStat = (build: string) =>
   usePlayStats.getState().stats.builds.find((b) => b.key === build) || null

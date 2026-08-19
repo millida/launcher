@@ -13,6 +13,7 @@ import {
   useRooms,
   type Room,
 } from '../state/rooms'
+import { apiErrorText } from '../lib/apiError'
 
 /** Тот же потолок, что и на сервере: список друзей не должен предлагать больше. */
 const MAX_MEMBERS = 10
@@ -92,7 +93,7 @@ function RoomCreate({ close, onCreated }: { close: () => void; onCreated?: (room
       close()
       if (onCreated) onCreated(room)
     } catch (e) {
-      showToast(String((e as Error).message || e) || 'Не удалось создать группу', 'error')
+      showToast(apiErrorText(e, 'Не удалось создать группу'), 'error')
     } finally {
       setBusy(false)
     }
@@ -182,7 +183,7 @@ function RoomManage({ room, close }: { room: Room; close: () => void }) {
     try {
       await inviteToRoom(fresh.id, [userId])
     } catch (e) {
-      showToast(String((e as Error).message || e) || 'Не удалось позвать', 'error')
+      showToast(apiErrorText(e, 'Не удалось позвать'), 'error')
     } finally {
       setBusy(false)
     }

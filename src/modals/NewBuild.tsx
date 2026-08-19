@@ -5,6 +5,7 @@ import { hasTauri } from '../ipc/tauri'
 import { createProfile, listVersions, pickCoverImage } from '../ipc/commands'
 import { track } from '../lib/telemetry'
 import { BLOCK_ICONS } from '../lib/icons'
+import { BUILD_NAME_MAX } from '../lib/format'
 import { useProfiles } from '../state/profiles'
 import { takeNewBuildPreset } from '../state/newBuild'
 import type { JoinIntent } from '../state/newBuild'
@@ -43,11 +44,15 @@ export function NewBuildModal() {
     if (pre?.loader) setLoader(pre.loader)
     setJoin(pre?.join || null)
     setLoaderVer(AUTO_LOADER_VERSION)
-    ;(hasTauri() ? listVersions() : Promise.resolve(['1.21.4', '1.21.1', '1.20.1'])).then((v) => {
-      setVers(v)
-      const wanted = pre?.version ? pickVersionForServer(v, [pre.version]) : ''
-      setVer((cur) => wanted || cur || v[0] || '')
-    })
+    ;(hasTauri() ? listVersions() : Promise.resolve(['1.21.4', '1.21.1', '1.20.1']))
+      .then((v) => {
+        setVers(v)
+        const wanted = pre?.version ? pickVersionForServer(v, [pre.version]) : ''
+        setVer((cur) => wanted || cur || v[0] || '')
+      })
+      .catch((e) =>
+        showToast('Список версий Minecraft не загрузился: ' + e + '. Проверь интернет и открой окно заново', 'error'),
+      )
   }, [modal.open])
 
   if (!modal.open) return null
@@ -65,7 +70,13 @@ export function NewBuildModal() {
         <div className="field" style={{ marginBottom: '14px' }}>
           <label>Название</label>
           <div className="input">
-            <input id="nbName" placeholder="Моя сборка" value={name} onChange={(e) => setName(e.target.value)} />
+            <input
+              id="nbName"
+              placeholder="Моя сборка"
+              maxLength={BUILD_NAME_MAX}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
           </div>
         </div>
         <div className="field" style={{ marginBottom: '14px' }}>

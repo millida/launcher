@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { soundAllowed } from './sound'
+import { isPrimaryPress, soundAllowed } from './sound'
 import type { SoundEvent, SoundMode } from './sound'
 
 const cases: Array<[string, SoundEvent, SoundMode, boolean, boolean]> = [
@@ -16,5 +16,22 @@ const cases: Array<[string, SoundEvent, SoundMode, boolean, boolean]> = [
 for (const [name, ev, mode, gesture, want] of cases) {
   test(name, () => {
     expect(soundAllowed(ev, mode, gesture)).toBe(want)
+  })
+}
+
+// Кнопки лаунчера работают по нажатию левой кнопкой: остальные не запускают
+// действие, поэтому не должны ни звучать, ни рисовать нажатие.
+const pressCases: Array<[string, number, boolean, boolean]> = [
+  ['левая кнопка нажимает', 0, true, true],
+  ['правая кнопка не нажимает', 2, true, false],
+  ['средняя кнопка не нажимает', 1, true, false],
+  ['кнопка «назад» не нажимает', 3, true, false],
+  ['кнопка «вперёд» не нажимает', 4, true, false],
+  ['второе касание мультитача не нажимает', 0, false, false],
+]
+
+for (const [name, button, isPrimary, want] of pressCases) {
+  test(name, () => {
+    expect(isPrimaryPress({ button, isPrimary })).toBe(want)
   })
 }

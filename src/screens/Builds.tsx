@@ -15,6 +15,7 @@ export function Builds({ on }: { on: boolean }) {
   const { profiles, groups } = useProfiles()
   const updates = useModUpdates()
   const stats = usePlayStats((s) => s.stats)
+  const verifiedSeconds = usePlayStats((s) => s.verifiedSeconds)
   const packCode = usePackCode()
 
   useEffect(() => {
@@ -85,6 +86,14 @@ export function Builds({ on }: { on: boolean }) {
           <div className="play-stat-main">
             <span className="play-stat-cap">Наиграно в лаунчере</span>
             <b className="play-stat-total">{fmtPlaytime(stats.total_seconds)}</b>
+            {verifiedSeconds !== null && verifiedSeconds < stats.total_seconds ? (
+              <span
+                className="faint-note"
+                title="На сайте засчитывается только время, которое видел сервер: игра без интернета и без входа в аккаунт Millida в него не попадает."
+              >
+                на сайте подтверждено {fmtPlaytime(verifiedSeconds)}
+              </span>
+            ) : null}
             <span className="faint-note">
               {[
                 stats.sessions
@@ -136,17 +145,7 @@ export function Builds({ on }: { on: boolean }) {
             {ungrouped.map(buildCard)}
             {groupNames.map((g) => (
               <Fragment key={g}>
-                <div
-                  style={{
-                    gridColumn: '1/-1',
-                    fontSize: '12px',
-                    fontWeight: 700,
-                    color: 'var(--m-fg-subtle)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '.04em',
-                    margin: '6px 2px 2px',
-                  }}
-                >
+                <div className="build-group-cap" title={g}>
                   {g}
                 </div>
                 {profiles.filter((p) => (groups[p.name] || '') === g).map(buildCard)}

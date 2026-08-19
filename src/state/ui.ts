@@ -1,6 +1,7 @@
 import { startTransition } from 'react'
 import { create } from 'zustand'
 import { playSound } from '../lib/sound'
+import { TOAST_TEXT_MAX, clipText } from '../lib/format'
 import type { SoundEvent } from '../lib/sound'
 
 export type ScreenId = 'play' | 'builds' | 'servers' | 'mods' | 'skins' | 'friends' | 'hosting' | 'settings'
@@ -108,7 +109,9 @@ export const useUi = create<UiState>((set, get) => ({
   setScreen: (s) => startTransition(() => set({ screen: s })),
   showToast: (msg, kind, sound, action) => {
     const k = kind || (ERROR_RE.test(msg) ? 'error' : 'ok')
-    set({ toastMsg: msg, toastKind: k, toastShow: true, toastAction: action || null })
+    // A build name or a server answer can be arbitrarily long; the toast is a
+    // notice, not a place to read one, so it carries a bounded text.
+    set({ toastMsg: clipText(msg, TOAST_TEXT_MAX), toastKind: k, toastShow: true, toastAction: action || null })
     if (sound !== false) playSound(sound || (k === 'error' ? 'error' : 'success'))
     clearTimeout(toastTimer)
     toastTimer = setTimeout(() => get().hideToast(), action ? TOAST_ACTION_MS : TOAST_MS)

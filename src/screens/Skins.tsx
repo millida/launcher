@@ -25,7 +25,7 @@ import { loadMine3d } from '../lib/mine3d'
 import type { Mine3dModule } from '../lib/mine3d'
 import type { ShotPresetId, SkinAnimId, SkinViewEngine } from '../vendor/mine3d'
 import { textureSource } from '../lib/textureSource'
-import { capeTitle, dedupeByTitle, dedupeCapes, textureHash } from '../lib/capes'
+import { contentFingerprint, dedupeCapes, textureHash } from '../lib/capes'
 import { Select } from '../components/Select'
 import { SkinBody } from '../components/SkinBody'
 import { SkinDiag } from '../components/SkinDiag'
@@ -49,6 +49,7 @@ import { hasMillidaAccount, openExt } from '../lib/api'
 import { track } from '../lib/telemetry'
 import { loadMillidaProfile } from '../lib/session'
 import { ensureMsAuth } from '../state/msLogin'
+import { apiErrorText } from '../lib/apiError'
 
 interface CatalogSkin {
   key: string
@@ -457,6 +458,8 @@ async function toPngBase64(url: string): Promise<string> {
   return canvas.toDataURL('image/png').replace(/^data:image\/png;base64,/, '')
 }
 
+const localMark = (url: string, slim: boolean) => url + '|' + (slim ? 'slim' : 'classic')
+
 // Cape back face: UV (1,1) sized 10x16 on the standard 64x32 cape texture.
 function CapePreview({ url, h: askedH = 64 }: { url: string; h?: number }) {
   const h = snapPx(askedH, CAPE_CELLS)
@@ -606,6 +609,21 @@ export function Skins({ on }: { on: boolean }) {
     }
   }, [])
 
+  // Локальную копию читает мод скинов в игре. Она обновляется только тем, что
+  // делает лаунчер, поэтому скин, надетый на сайте или пришедший из заказа,
+  // оставлял в игре текстуру с прошлого «Применить»: другие игроки видели новую,
+  // сам игрок — старую.
+  const localSkinRef = useRef('')
+  const syncLocalSkin = async (url: string | null, slim: boolean) => {
+    if (!hasTauri() || !url) return
+    const mark = localMark(url, slim)
+    if (localSkinRef.current === mark) return
+    // Плащ не трогаем: null оставляет его как есть, а на этом компьютере может
+    // быть надет плащ, которого на аккаунте нет.
+    await setLocalSkin(await toPngBase64(url), null, slim)
+    localSkinRef.current = mark
+  }
+
   const refreshWardrobe = async () => {
     if (!hasMillidaAccount()) return
     try {
@@ -618,6 +636,9 @@ export function Skins({ on }: { on: boolean }) {
       )
       const cur = w.items.find((i) => i.kind === 'skin' && i.url === w.active.skinUrl)
       setActiveWardrobe(cur ? cur.id : null)
+      await syncLocalSkin(w.active.skinUrl, w.active.model === 'slim').catch((e) =>
+        showToast('На этом компьютере скин не обновился — в сборках останется прежний: ' + e, 'error'),
+      )
       if (!wardrobeVariantRef.current) {
         wardrobeVariantRef.current = true
         const key = cur ? 'w:' + cur.id : null
@@ -809,7 +830,7 @@ export function Skins({ on }: { on: boolean }) {
   }, [catQuery])
   const catFound = useMemo(() => catGroups.flatMap((s) => s.items), [catGroups])
 
-  const capes = useMemo<CapeOption[]>(
+  const capeSources = useMemo<CapeOption[]>(
     () => {
       const licensed: CapeOption[] = []
       const licensedHashes = new Set<string>()
@@ -833,13 +854,9 @@ export function Skins({ on }: { on: boolean }) {
         .filter((a) => textures[a.id] && textures[a.id].cape && !msCapes[a.id])
         .map((a) => ({ nick: a.nick, kind: a.kind, id: a.id, url: textures[a.id].cape as string, hash: textureHash(textures[a.id].cape) }))
       const accHashes = new Set(accCapes.map((c) => c.hash).filter(Boolean))
-      // Копии одного плаща, накопленные прошлыми версиями (каждое «Применить»
-      // заливало его заново), различаются адресом, но не именем.
-      const stored: CapeOption[] = dedupeByTitle(
-        wardrobe
-          .filter((i) => i.kind === 'cape')
-          .map((i) => ({ id: 'w:' + i.id, name: i.name, url: i.url, sub: 'В каталоге Millida', wardrobeId: i.id })),
-      )
+      const stored: CapeOption[] = wardrobe
+        .filter((i) => i.kind === 'cape')
+        .map((i) => ({ id: 'w:' + i.id, name: i.name, url: i.url, sub: 'В каталоге Millida', wardrobeId: i.id }))
       // Плащ на аккаунт Millida ставит сервер по идентификатору карточки
       // (catalogId), файл туда не уходит: список открытых плащей — серверный.
       const official: CapeOption[] = OFFICIAL_CAPES.filter((c) => !licensedHashes.has(c.hash)).map((c) => ({
@@ -862,20 +879,10 @@ export function Skins({ on }: { on: boolean }) {
       const design: CapeOption[] = [
         { id: 'millida', catalogId: 'design:millida', name: 'Millida', url: MILLIDA_CAPE, sub: 'Плащ лаунчера' },
       ]
-      // Плащи каталога Millida. Уже лежащие в гардеробе аккаунта не дублируем.
-      const storedHashes = new Set(stored.map((s) => textureHash(s.url)).filter(Boolean))
-      const storedUrls = new Set(stored.map((s) => s.url))
-      // Надетый плащ каталога лежит в аккаунте уже своей копией: адрес у неё
-      // другой, а имя — то же, по нему повтор и опознаётся.
-      const storedNames = new Set(stored.map((s) => capeTitle(s.name)))
+      // Повторы между каталогом Millida, гардеробом аккаунта и списком Mojang
+      // схлопывает dedupeCapes: у него один набор правил на все источники.
       const catalog: CapeOption[] = capeCatalog
-        .filter(
-          (c) =>
-            c.url &&
-            !storedUrls.has(c.url) &&
-            !storedNames.has(capeTitle(c.name)) &&
-            !(textureHash(c.url) && storedHashes.has(textureHash(c.url))),
-        )
+        .filter((c) => c.url)
         .map((c) => {
           const locked = c.unlocked === false
           const target = c.progressTarget || 0
@@ -903,11 +910,38 @@ export function Skins({ on }: { on: boolean }) {
       }))
       const open = catalog.filter((c) => !c.locked)
       const shut = catalog.filter((c) => c.locked)
-      return dedupeCapes(
-        licensed.concat(stored).concat(open).concat(acc).concat(design).concat(mine).concat(official).concat(shut),
-      )
+      return licensed.concat(stored).concat(open).concat(acc).concat(design).concat(mine).concat(official).concat(shut)
     },
     [accounts, textures, myCapes, msCapes, wardrobe, capeCatalog],
+  )
+
+  // Отпечатки текстур: один и тот же плащ приезжает из каталога Millida и из
+  // гардероба аккаунта по разным адресам без хеша Mojang в них, и опознать его
+  // можно только по самим байтам. Картинки уже читаются для превью, так что
+  // повторного скачивания здесь нет.
+  const [capeContent, setCapeContent] = useState<Record<string, string>>({})
+  useEffect(() => {
+    const missing = Array.from(new Set(capeSources.map((c) => c.url))).filter((u) => u && !(u in capeContent))
+    if (!missing.length) return
+    let alive = true
+    void Promise.all(
+      missing.map((u) =>
+        textureSource(u).then(
+          (src) => [u, contentFingerprint(src)] as const,
+          () => [u, ''] as const,
+        ),
+      ),
+    ).then((pairs) => {
+      if (alive) setCapeContent((prev) => ({ ...prev, ...Object.fromEntries(pairs) }))
+    })
+    return () => {
+      alive = false
+    }
+  }, [capeSources, capeContent])
+
+  const capes = useMemo<CapeOption[]>(
+    () => dedupeCapes(capeSources, (u) => capeContent[u] || undefined),
+    [capeSources, capeContent],
   )
 
   useEffect(() => {
@@ -1204,11 +1238,17 @@ export function Skins({ on }: { on: boolean }) {
       try {
         await addToWardrobe({ kind: 'skin', name: name.replace(/\.png$/i, ''), pngBase64: await toPngBase64(data), slim })
         await refreshWardrobe()
+        // Обновление каталога подсвечивает скин, надетый на аккаунте, а надет
+        // там пока прежний: без этого «Применить» уходило под его именем.
+        setActiveWardrobe(null)
+        setActiveMy(0)
       } catch (e) {
         showToast('В каталог аккаунта не сохранилось: ' + e, 'error')
       }
     }
-    showToast('Скин «' + name + '» загружен · ' + (slim ? 'тонкие руки' : 'классические руки'))
+    showToast(
+      'Скин «' + name + '» загружен (' + (slim ? 'тонкие руки' : 'классические руки') + ') — нажми «Применить скин»',
+    )
   }
 
   const [savingAvatar, setSavingAvatar] = useState(false)
@@ -1224,7 +1264,7 @@ export function Skins({ on }: { on: boolean }) {
       const path = await exportPng('avatar-' + nick, png)
       if (path) showToast('Аватар сохранён: ' + path)
     } catch (e) {
-      showToast('Аватар не сохранился: ' + String(e).replace(/^Error:\s*/, ''), 'error')
+      showToast(apiErrorText(e, 'Аватар не сохранился'), 'error')
     } finally {
       setSavingAvatar(false)
     }
@@ -1323,14 +1363,10 @@ export function Skins({ on }: { on: boolean }) {
       showToast('Не удалось надеть скин: ' + e, 'error')
       return
     }
-    // Локальную копию обновляем тем же скином: сборки с модом скинов читают её,
-    // и без этой записи в игре оставался скин с прошлого «Применить».
-    if (hasTauri()) {
-      try {
-        await setLocalSkin(await toPngBase64(item.url), null, item.model === 'slim')
-      } catch (e) {
-        showToast('На этом компьютере скин не обновился — в сборках останется прежний: ' + e, 'error')
-      }
+    try {
+      await syncLocalSkin(item.url, item.model === 'slim')
+    } catch (e) {
+      showToast('На этом компьютере скин не обновился — в сборках останется прежний: ' + e, 'error')
     }
   }
 
@@ -1371,7 +1407,7 @@ export function Skins({ on }: { on: boolean }) {
     setActiveMy(null)
     setActiveWardrobe(null)
     autoVariant(texture, it.url ? 's:' + it.url : 'n:' + (it.nick || 'MHF_Steve'))
-    showToast('Скин «' + it.label + '» применён')
+    showToast('Скин «' + it.label + '» выбран — нажми «Применить скин»')
   }
 
   const readyRewards = rewards.filter((r) => r.done && !r.claimed).length
@@ -1463,12 +1499,15 @@ export function Skins({ on }: { on: boolean }) {
         const applied = await uploadTexture('skin', skin, variant === 'slim', skinTitle()).catch((e) => {
           throw new Error(
             'скин не сохранился в аккаунте Millida (' +
-              String(e).replace(/^Error:\s*/, '') +
+              apiErrorText(e, 'Millida не приняла скин') +
               ')' +
               (licensed ? ' — на лицензии он уже применён' : ''),
           )
         })
         if (!applied || !applied.skinUrl) throw new Error('сервер не сохранил скин')
+        // Локальная копия только что записана этими же байтами: помечаем её,
+        // чтобы обновление каталога не качало тот же скин ещё раз.
+        if (hasTauri()) localSkinRef.current = localMark(applied.skinUrl, variant === 'slim')
         // Плащ из каталога аккаунта надевается по id: повторная заливка того же
         // PNG заводит в каталоге вторую карточку той же текстуры.
         // Плащ на аккаунт ставится только по идентификатору: из каталога
@@ -1506,7 +1545,7 @@ export function Skins({ on }: { on: boolean }) {
         licensed,
       })
     } catch (e) {
-      showToast('Не удалось применить скин: ' + String(e).replace(/^Error:\s*/, ''), 'error')
+      showToast(apiErrorText(e, 'Не удалось применить скин'), 'error')
     } finally {
       setApplying(false)
     }
@@ -1839,7 +1878,7 @@ export function Skins({ on }: { on: boolean }) {
                       setActiveMy(i)
                       setActiveWardrobe(null)
                       chooseVariant('m:' + sk.file, sk.slim ? 'slim' : 'classic', false)
-                      showToast('Скин «' + sk.name + '» применён')
+                      showToast('Скин «' + sk.name + '» выбран — нажми «Применить скин»')
                     }}
                   >
                     <span className="skin-thumb">
@@ -1928,7 +1967,7 @@ export function Skins({ on }: { on: boolean }) {
                           const worn = capes.find((c) => textureHash(c.url) === textureHash(t.cape))
                           chooseCape(worn ? worn.id : 'acc:' + a.id)
                         }
-                        showToast('Скин аккаунта ' + a.nick + ' применён')
+                        showToast('Скин аккаунта ' + a.nick + ' выбран — нажми «Применить скин»')
                       }}
                     >
                       <span className="skin-thumb">

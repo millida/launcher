@@ -11,12 +11,13 @@ import {
 import { RU_LOADER, fmtSize } from '../lib/format'
 import { renderMarkdown } from '../lib/markdown'
 import { askPlanForVersion, installContentFlow, installExtras, resolveTargetBuild } from '../lib/install'
-import { keyCfModpack, keyContent, keyMrModpack } from '../lib/installKeys'
+import { keyCfModpack, keyContent, keyMrModpack, pickTargetName } from '../lib/installKeys'
 import { runInstall, useInstalls } from '../state/installs'
 import { trackTimed } from '../lib/telemetry'
 import { uiConfirm } from '../state/confirm'
 import { useProfiles } from '../state/profiles'
 import { useProject } from '../state/project'
+import { catalogTargetBuild, useMods } from '../state/mods'
 import type { ProjectVersion } from '../state/project'
 import { closeModal, showToast, useUi } from '../state/ui'
 import { backdropClose } from '../lib/dismiss'
@@ -28,7 +29,13 @@ export function ProjectModal() {
   const tasks = useInstalls((s) => s.tasks)
   const doneKeys = useInstalls((s) => s.done)
   const doneVersion = useInstalls((s) => s.doneVersion)
-  const selectedBuild = useProfiles((s) => s.selected)
+  // The build this window reports about is the build the install writes into:
+  // asking about one and installing into another left the button saying
+  // «Установлено» while every press downloaded the mod again.
+  const scoped = useMods((s) => s.targetBuild)
+  const allProfiles = useProfiles((s) => s.profiles)
+  const selected = useProfiles((s) => s.selected)
+  const selectedBuild = pickTargetName(scoped, allProfiles.map((p) => p.name), selected || '')
   const isCf = pj.source === 'curseforge'
   const src = isCf ? 'cf' : 'mr'
   const project: string | number = isCf ? pj.cfid : pj.slug
@@ -42,6 +49,21 @@ export function ProjectModal() {
     const t = tasks[key]
     if (t && t.state === 'run') return t.pct > 0 ? t.label + ' ' + Math.round(t.pct) + '%' : t.label
     return doneKeys[key] ? 'Установлено' : idle
+  }
+  /// «Установлено» — это состояние, а не кнопка: повторное нажатие качало тот же
+  /// файл заново и ничего не меняло на экране. Сменить версию можно во вкладке
+  /// «Версии», об этом и говорим.
+  const alreadyDone = (key: string): boolean => {
+    if (!doneKeys[key]) return false
+    showToast(
+      pj.kind === 'modpack'
+        ? 'Модпак уже установлен — во вкладке «Версии» можно поставить другую версию'
+        : 'Уже в сборке' + (selectedBuild ? ' «' + selectedBuild + '»' : '') +
+          ' — другую версию можно выбрать во вкладке «Версии»',
+      'ok',
+      false,
+    )
+    return true
   }
   // The install task key covers the whole project (backend refuses two
   // concurrent jobs writing into the same profile slot), so a single running
@@ -134,6 +156,7 @@ export function ProjectModal() {
 
   // fileId pins a concrete CurseForge file; Modrinth uses its own version id.
   const install = (fileId?: number) => {
+    if (fileId === undefined && alreadyDone(packKey)) return
     if (!hasTauri()) {
       showToast('Установка доступна в приложении')
       return
@@ -169,6 +192,7 @@ export function ProjectModal() {
         versionId: 'cf' + fileId,
         run: () => cfInstall(pj.cfid, (pr && pr.version) || '', prof, pj.kind, fileId),
         onDone: (r) => {
+          void useMods.getState().refreshInstalled()
           installExtras(prof, pj.kind, extras)
           showToast('CurseForge → «' + prof + '»: ' + r.file, 'ok', 'install')
         },
@@ -181,6 +205,11 @@ export function ProjectModal() {
       showToast('Доступно в приложении')
       return
     }
+    // Ставить другую версию поверх — обычное дело; ту же самую — уже стоит.
+    if (doneVersion[packKey] === v.id) {
+      showToast('Эта версия уже стоит' + (selectedBuild ? ' в «' + selectedBuild + '»' : ''), 'ok', false)
+      return
+    }
     if (isCf) {
       install(v.cfFileId)
       return
@@ -189,8 +218,7 @@ export function ProjectModal() {
       installPack(undefined, v.id)
       return
     }
-    const { selected, profiles } = useProfiles.getState()
-    const prof = selected || (profiles[0] || { name: '' }).name || 'default'
+    const prof = catalogTargetBuild() || (useProfiles.getState().profiles[0] || { name: '' }).name || 'default'
     void askPlanForVersion(prof, pj.kind, 'modrinth', pj.slug, v.id).then((extras) => {
       if (!extras) return
       runInstall({
@@ -200,6 +228,7 @@ export function ProjectModal() {
         versionId: v.id,
         run: () => installVersion(pj.slug, v.id, prof, pj.kind),
         onDone: (r) => {
+          void useMods.getState().refreshInstalled()
           installExtras(prof, pj.kind, extras)
           showToast('В «' + prof + '»: ' + r.file + (r.warning ? ' · ' + r.warning : ''), 'ok', 'install')
         },

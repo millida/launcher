@@ -11,6 +11,7 @@ import { copyLink } from '../lib/links'
 import { api } from '../lib/api'
 import { flushTelemetry, track } from '../lib/telemetry'
 import { markMillidaEver, millidaEver } from './onboarding'
+import { apiErrorText } from '../lib/apiError'
 
 interface LauncherInit {
   deviceCode: string
@@ -56,7 +57,26 @@ const openUrlAnywhere = (url: string) => {
 
 let pollTimer: ReturnType<typeof setTimeout> | null = null
 
-function resetLogin(hint?: string) {
+/// A code lives 15 minutes on the server, and the server caps how many it hands
+/// out to one address. Every press of the button used to spend a fresh one, so a
+/// browser that did not come up, a wrong account or a second try burned the
+/// budget and the answer turned into 429. While the last code is still alive it
+/// is reused instead.
+let issued: { init: LauncherInit; deadline: number } | null = null
+
+const REUSE_MARGIN_MS = 30_000
+
+function reusableInit(): LauncherInit | null {
+  if (!issued) return null
+  if (Date.now() > issued.deadline - REUSE_MARGIN_MS) {
+    issued = null
+    return null
+  }
+  return issued.init
+}
+
+function resetLogin(hint?: string, dropCode = false) {
+  if (dropCode) issued = null
   if (pollTimer) clearTimeout(pollTimer)
   pollTimer = null
   useLogin.getState().set({
@@ -84,6 +104,16 @@ function adoptUser(user: LauncherUser) {
   if (prev && prev !== id) resetGameNick()
   if (id) localStorage.setItem(MILLIDA_USER_KEY, id)
   else localStorage.removeItem(MILLIDA_USER_KEY)
+}
+
+/// A refusal by the rate limit is not a breakage: the same code still works, so
+/// the message says to wait instead of sending the player to reinstall.
+function loginStartError(e: unknown): string {
+  const text = String(e)
+  if (text.includes('429') || text.toLowerCase().includes('too many')) {
+    return 'Слишком много попыток входа подряд. Подожди пару минут и нажми «Войти» ещё раз.'
+  }
+  return apiErrorText(e, 'Не удалось начать вход')
 }
 
 export function cancelWebLogin() {
@@ -115,15 +145,21 @@ export async function startWebLogin(reopen = false) {
   }
   s.set({ webBusy: true, webLabel: 'Ждём подтверждения…' })
   let init: LauncherInit
-  try {
-    init = await api<LauncherInit>('/auth/launcher/init', {
-      method: 'POST',
-      body: JSON.stringify({ clientName: 'Millida Launcher' }),
-    })
-  } catch (e) {
-    resetLogin()
-    showToast('Не удалось начать вход: ' + e)
-    return
+  const reused = reusableInit()
+  if (reused) {
+    init = reused
+  } else {
+    try {
+      init = await api<LauncherInit>('/auth/launcher/init', {
+        method: 'POST',
+        body: JSON.stringify({ clientName: 'Millida Launcher' }),
+      })
+    } catch (e) {
+      resetLogin()
+      showToast(loginStartError(e), 'error')
+      return
+    }
+    issued = { init, deadline: Date.now() + Math.max(60, init.expiresInSec) * 1000 }
   }
 
   // Show the code before touching the clipboard: the webview clipboard can hang.
@@ -139,12 +175,12 @@ export async function startWebLogin(reopen = false) {
     useLogin.getState().set({ hintText: 'Код скопирован. ' + MANUAL_HINT })
   })
 
-  const deadline = Date.now() + Math.max(60, init.expiresInSec) * 1000
+  const deadline = issued ? issued.deadline : Date.now() + Math.max(60, init.expiresInSec) * 1000
   const intervalMs = Math.max(2, init.intervalSec || 3) * 1000
 
   const poll = async () => {
     if (Date.now() > deadline) {
-      resetLogin('Время вышло — нажми «Войти» ещё раз.')
+      resetLogin('Время вышло — нажми «Войти» ещё раз.', true)
       return
     }
     let r
@@ -160,7 +196,7 @@ export async function startWebLogin(reopen = false) {
       await refreshSessionState()
       markMillidaEver()
       useAccounts.getState().add({ nick, kind: 'millida' })
-      resetLogin()
+      resetLogin(undefined, true)
       enterApp()
       track('account_link', { kind: 'millida' })
       void flushTelemetry()
@@ -168,12 +204,12 @@ export async function startWebLogin(reopen = false) {
       return
     }
     if (r.status === 'denied') {
-      resetLogin('Вход отклонён на сайте.')
+      resetLogin('Вход отклонён на сайте.', true)
       showToast('Вход отклонён')
       return
     }
     if (r.status === 'expired') {
-      resetLogin('Код устарел — нажми «Войти» ещё раз.')
+      resetLogin('Код устарел — нажми «Войти» ещё раз.', true)
       return
     }
     pollTimer = setTimeout(() => void poll(), intervalMs)

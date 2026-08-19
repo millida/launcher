@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { Head } from '../components/Head'
 import { PROFILE_URL, api, openExt } from '../lib/api'
+import { apiErrorText } from '../lib/apiError'
 import { copyText } from '../lib/clipboard'
 import { logoutToLogin } from '../lib/session'
 import { showToast } from '../state/ui'
@@ -26,11 +27,16 @@ async function sendRequest(opts: Record<string, string>, clear: () => void) {
   try {
     const r = await api('/friends/request', { method: 'POST', body: JSON.stringify(opts) })
     showToast(r.status === 'accepted' || r.status === 'already_friends' ? 'Теперь в друзьях' : 'Заявка отправлена')
-  } catch {
-    showToast('Не удалось отправить заявку — войди в аккаунт Millida')
+  } catch (e) {
+    // Сервер объясняет отказ сам: нет такого ника, человек уже в друзьях, он
+    // закрыл заявки. Всё это раньше показывалось как «войди в аккаунт» и
+    // отправляло игрока чинить вход, с которым всё было в порядке.
+    showToast(apiErrorText(e, 'Не удалось отправить заявку'), 'error')
+    return
+  } finally {
+    void loadFriends()
   }
   clear()
-  void loadFriends()
 }
 
 interface Blocked {
@@ -106,6 +112,7 @@ export function Friends({ on }: { on: boolean }) {
   const [filter, setFilter] = useState('')
   const [addOpen, setAddOpen] = useState(false)
   const [menuFor, setMenuFor] = useState<string | null>(null)
+  const [searchFailed, setSearchFailed] = useState('')
   const [blocked, setBlocked] = useState<Blocked[]>([])
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
 
@@ -187,6 +194,7 @@ export function Friends({ on }: { on: boolean }) {
   const onSearch = (v: string) => {
     setQ(v)
     clearTimeout(timer.current)
+    setSearchFailed('')
     const val = v.trim()
     if (val.length < 2) {
       set({ found: null })
@@ -196,9 +204,14 @@ export function Friends({ on }: { on: boolean }) {
       let results: FoundUser[] = []
       try {
         results = (await api('/friends/search?q=' + encodeURIComponent(val))).results || []
-      } catch {
-        results = []
+      } catch (e) {
+        // Пустой список — это ответ «никого нет», а не «спросить не вышло»:
+        // молчаливая подмена одного другим выглядела как отсутствующий игрок.
+        setSearchFailed(apiErrorText(e, 'Поиск недоступен'))
+        set({ found: [] })
+        return
       }
+      setSearchFailed('')
       set({ found: results.filter((r) => !isTechnicalNick(r.nickname)).slice(0, 6) })
     }, 350)
   }
@@ -419,7 +432,7 @@ export function Friends({ on }: { on: boolean }) {
                 ))
               ) : (
                 <p className="faint-note" style={{ padding: '6px 4px' }}>
-                  Никого не нашли по нику «{q.trim()}»
+                  {searchFailed || 'Никого не нашли по нику «' + q.trim() + '»'}
                 </p>
               )}
             </div>

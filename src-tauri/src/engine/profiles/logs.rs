@@ -40,8 +40,11 @@ pub fn duplicate_profile(name: &str) -> Result<Vec<Profile>, String> {
     Ok(all)
 }
 
+/// The same cached manifest an install reads: without the cache one unreachable
+/// request left the version picker holding a single option — the build's current
+/// version — and changing the version looked impossible with nothing said.
 pub async fn list_versions() -> Result<Vec<String>, String> {
-    let m = get_json(MANIFEST).await?;
+    let m = get_json_fresh(MANIFEST, &game_root().join("version_manifest_v2.json"), MANIFEST_TTL).await?;
     Ok(m["versions"]
         .as_array()
         .map(|a| {
