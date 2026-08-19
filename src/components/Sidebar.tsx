@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import type { MouseEvent as ReactMouseEvent } from 'react'
 import { Icon } from './Icon'
 import { AccountMenu } from './AccountMenu'
 import { Head } from './Head'
@@ -7,8 +8,10 @@ import { getAccount, isMillidaKind, useAccounts } from '../state/accounts'
 import { useGameNick } from '../state/gameNick'
 import { unreadTotal, useFriends } from '../state/friends'
 import { roomsUnreadTotal, useRooms } from '../state/rooms'
-import { useUi } from '../state/ui'
+import { showToast, useUi } from '../state/ui'
+import { hideNavHint, noteHostingOpen, restoreNavHint, useNavHint } from '../state/navHint'
 import type { ScreenId } from '../state/ui'
+import type { HintStage } from '../state/navHint'
 import { useHasMillida } from '../state/auth'
 import { PL_STAGES, cancelPrelaunch } from '../lib/launch'
 import { preloadScreen } from '../screens/registry'
@@ -24,6 +27,23 @@ const NAV: { id: ScreenId; icon: string; label: string; pill?: string; tip?: str
   { id: 'settings', icon: 'i-settings', label: 'Настройки' },
 ]
 
+/**
+ * Подсказка «бесплатно» продаёт хостинг только тому, кто его ещё не пробовал:
+ * дальше она сама тускнеет и исчезает (см. state/navHint), а правый клик по
+ * пункту убирает её сразу.
+ */
+function pillOf(id: ScreenId, pill: string | undefined, hosting: HintStage): string | undefined {
+  if (!pill) return undefined
+  if (id === 'hosting' && hosting === 'off') return undefined
+  return pill
+}
+
+function dismissHint(e: ReactMouseEvent) {
+  e.preventDefault()
+  hideNavHint()
+  showToast('Подсказка убрана', 'ok', false, { label: 'Вернуть', run: restoreNavHint })
+}
+
 export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
   const screen = useUi((s) => s.screen)
   const prelaunch = useUi((s) => s.prelaunch)
@@ -31,6 +51,7 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
   const reqIn = useFriends((s) => s.reqIn)
   const rooms = useRooms((s) => s.rooms)
   const millida = useHasMillida()
+  const hostingHint = useNavHint((s) => s.hosting)
   useAccounts()
   const acc = getAccount()
   const gameName = useGameNick((s) => s.name)
@@ -93,11 +114,17 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
             data-tip={n.tip || n.label}
             onMouseEnter={() => preloadScreen(n.id)}
             onFocus={() => preloadScreen(n.id)}
-            onClick={() => onNav(n.id)}
+            onClick={() => {
+              if (n.id === 'hosting') noteHostingOpen()
+              onNav(n.id)
+            }}
+            onContextMenu={pillOf(n.id, n.pill, hostingHint) ? dismissHint : undefined}
           >
             <Icon id={n.icon} />
             <span className="nav-label">{n.label}</span>
-            {n.pill ? <span className="nav-pill">{n.pill}</span> : null}
+            {pillOf(n.id, n.pill, hostingHint) ? (
+              <span className={'nav-pill' + (hostingHint === 'quiet' ? ' quiet' : '')}>{n.pill}</span>
+            ) : null}
             {n.id === 'friends' ? (
               <>
                 {frOnline ? (

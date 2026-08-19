@@ -63,8 +63,13 @@ export async function reconcileGameSession(): Promise<void> {
 
 export const discordEnabled = () => localStorage.getItem('m-discord') !== '0'
 
-export function discordPresence(status?: string, server?: string | null) {
-  if (!hasTauri() || !discordEnabled()) return
+/**
+ * Показывается ли прямо сейчас активность Millida в Discord и на каком
+ * аккаунте. Опыт за часы платится только за это время, поэтому сервер узнаёт
+ * id из ответа ядра (READY-кадр сокета), а не со слов вьюхи.
+ */
+export function discordPresence(status?: string, server?: string | null): Promise<string> {
+  if (!hasTauri() || !discordEnabled()) return Promise.resolve('')
   const playing = status === 'playing'
   const nick = (getAccount() || { nick: '' }).nick || ''
   const build = session ? session.profile : ''
@@ -76,26 +81,42 @@ export function discordPresence(status?: string, server?: string | null) {
   const place = (session && (session.serverName || session.server)) || server || ''
   const state = playing && place ? 'Сервер: ' + place : nick ? 'Ник: ' + nick : 'Millida Launcher'
   const joinUrl = playing && addr ? joinPageUrl(addr, (session && session.serverName) || null) : ''
-  ipcDiscordPresence(details, state, playing, icon, build, joinUrl, profileSlug()).catch(() => {})
+  return ipcDiscordPresence(details, state, playing, icon, build, joinUrl, profileSlug())
+    .then((st) => (st && st.userId) || '')
+    .catch(() => '')
 }
+
+/** Дольше этого удар присутствия не ждёт ответа сокета Discord. */
+const PRESENCE_WAIT_MS = 2000
 
 export function heartbeat(status?: string, server?: string | null) {
   const beat = beatStatus(status, !!session, hasTauri())
   if (beat === 'playing' && session && (!status || status === 'lobby'))
     server = session.serverName || session.server
   const playing = beat === 'playing'
+  // Активность ставится до удара: сервер платит опыт за час, проведённый с
+  // видимой активностью, и id её аккаунта должен уехать этим же ударом. Ждать
+  // её дольше пары секунд нельзя: сокет Discord может висеть, а из-за него не
+  // должны пропадать игровые часы — они дороже одной дискорд-минуты.
+  const presence = Promise.race([
+    discordPresence(beat, server),
+    new Promise<string>((resolve) => setTimeout(() => resolve(''), PRESENCE_WAIT_MS)),
+  ])
   if (hasMillidaAccount())
-    api('/friends/presence/heartbeat', {
-      method: 'POST',
-      body: JSON.stringify({
-        status: beat,
-        server: (playing && (server || (session && (session.serverName || session.server)))) || null,
-        serverIp: (playing && session && session.server) || null,
-        build: (playing && session && session.profile) || null,
-      }),
-    })
-      .then((r: unknown) => setVerifiedSeconds((r as { verifiedSeconds?: number | null })?.verifiedSeconds ?? null))
-      .catch(() => {})
+    presence.then((discordUserId) =>
+      api('/friends/presence/heartbeat', {
+        method: 'POST',
+        body: JSON.stringify({
+          status: beat,
+          server: (playing && (server || (session && (session.serverName || session.server)))) || null,
+          serverIp: (playing && session && session.server) || null,
+          build: (playing && session && session.profile) || null,
+          discordUserId: discordUserId || null,
+        }),
+      })
+        .then((r: unknown) => setVerifiedSeconds((r as { verifiedSeconds?: number | null })?.verifiedSeconds ?? null))
+        .catch(() => {}),
+    )
   const build = (playing && session && session.profile) || null
   const pack = build ? useProfiles.getState().profiles.find((p) => p.name === build) : undefined
   void liveBeat(playing ? 'playing' : 'idle', {
@@ -103,7 +124,6 @@ export function heartbeat(status?: string, server?: string | null) {
     mc: (pack && pack.version) || null,
     server: (playing && (server || (session && (session.serverName || session.server)))) || null,
   })
-  discordPresence(beat, server)
 }
 
 export function ramMbFor(profile: string): number {

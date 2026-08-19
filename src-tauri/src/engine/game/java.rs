@@ -770,6 +770,33 @@ mod tests {
         }
     }
 
+    /// Discord labels any process named java/javaw as Minecraft and that label
+    /// replaces our Rich Presence: the game must start under a name Discord has
+    /// no game entry for, and it must stay in the JRE's own bin/ or the JVM
+    /// fails to find its home.
+    #[test]
+    fn game_process_is_never_named_like_java() {
+        let dir = std::env::temp_dir().join("millida-java-brand").join("bin");
+        std::fs::create_dir_all(&dir).unwrap();
+        let java = dir.join(if cfg!(target_os = "windows") { "java.exe" } else { "java" });
+        std::fs::write(&java, b"jre").unwrap();
+
+        let exe = branded_java(&java);
+
+        let name = exe.file_name().unwrap().to_string_lossy().to_ascii_lowercase();
+        assert!(
+            !name.starts_with("java"),
+            "the game started as {name:?}: Discord matches process names and would show Minecraft              instead of Millida Launcher",
+        );
+        assert_eq!(
+            exe.parent(),
+            java.parent(),
+            "the renamed copy left the JRE bin/ ({exe:?}): the JVM locates its home relative to the              executable and would refuse to start",
+        );
+        assert!(exe.exists(), "the copy the game is started from must exist");
+        std::fs::remove_file(&java).ok();
+    }
+
     /// The webview can pass any string to `test_java`; only binaries the core
     /// itself discovered or the user picked in the native dialog may run.
     #[test]

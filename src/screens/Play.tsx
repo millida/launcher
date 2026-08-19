@@ -10,7 +10,7 @@ import { LOADER_NAME } from '../lib/format'
 import { VIDEOS } from '../lib/wallpaper'
 import { hasTauri } from '../ipc/tauri'
 import { useProfiles } from '../state/profiles'
-import { useServers } from '../state/servers'
+import { PAGE_SIZE, loadMoreServers, useServers } from '../state/servers'
 import { useWallpaper } from '../state/wallpaper'
 import { convertFileSrc, fpsBoostState, pickWallpaper, setFpsBoost } from '../ipc/commands'
 import { useMods } from '../state/mods'
@@ -23,12 +23,16 @@ import { stopRunningGame, useGame } from '../state/game'
 
 // Главный экран заканчивается серверами: блок «Популярные сборки» уехал в
 // раздел контента, а список занимает освободившийся экран целиком.
-const SERVERS_ON_PLAY = 8
+const SERVERS_ON_PLAY = PAGE_SIZE
 
 export function Play({ on }: { on: boolean }) {
   const profiles = useProfiles((s) => s.profiles)
   const selected = useProfiles((s) => s.selected)
   const servers = useServers((s) => s.list)
+  const serversTotal = useServers((s) => s.total)
+  const serversLoadingMore = useServers((s) => s.loadingMore)
+  const [serversShown, setServersShown] = useState(SERVERS_ON_PLAY)
+  const moreServers = Math.min(PAGE_SIZE, Math.max(servers.length, serversTotal) - serversShown)
   const wp = useWallpaper()
   const hero = useHeroWallpaper(on)
   const setMusicOpen = useMusic((s) => s.setOpen)
@@ -405,11 +409,27 @@ export function Play({ on }: { on: boolean }) {
               <Icon id="i-chev-r" />
             </button>
           </div>
-          <div className="stack" id="promoRow" style={{ marginBottom: '22px' }}>
-            {servers.slice(0, SERVERS_ON_PLAY).map((sv, i) => (
+          <div className="stack" id="promoRow">
+            {servers.slice(0, serversShown).map((sv, i) => (
               <ServerRow key={sv.slug + i} sv={sv} />
             ))}
           </div>
+          {moreServers > 0 ? (
+            <div style={{ display: 'flex', justifyContent: 'center', margin: '16px 0 22px' }}>
+              <button
+                className="btn md secondary"
+                disabled={serversLoadingMore}
+                onClick={() => {
+                  setServersShown((n) => n + PAGE_SIZE)
+                  void loadMoreServers()
+                }}
+              >
+                {serversLoadingMore ? 'Загружаем…' : 'Показать ещё ' + moreServers}
+              </button>
+            </div>
+          ) : (
+            <div style={{ marginBottom: '22px' }} />
+          )}
         </>
       ) : null}
 

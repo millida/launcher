@@ -7,10 +7,17 @@ pub const LABEL: &str = "overlay";
 
 const PREF_ENABLED: &str = "overlay-enabled";
 const PREF_HOTKEY: &str = "overlay-hotkey";
+const PREF_TOASTS: &str = "overlay-toasts";
 pub const DEFAULT_HOTKEY: &str = "Alt+M";
 
 pub fn enabled() -> bool {
     crate::engine::ui_pref(PREF_ENABLED).as_deref() == Some("1")
+}
+
+/// Desktop toasts are on unless the user turned them off: they are the only way
+/// a friend event reaches someone whose launcher sits in the tray.
+pub fn toasts_enabled() -> bool {
+    crate::engine::ui_pref(PREF_TOASTS).as_deref() != Some("0")
 }
 
 pub fn hotkey() -> String {

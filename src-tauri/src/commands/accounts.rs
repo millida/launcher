@@ -9,7 +9,7 @@ pub fn discord_presence(
     large_text: Option<String>,
     join_url: Option<String>,
     profile_slug: Option<String>,
-) {
+) -> discord::DiscordStatus {
     discord::set_activity(
         &details,
         &state,
@@ -19,6 +19,7 @@ pub fn discord_presence(
         &join_url.unwrap_or_default(),
         &profile_slug.unwrap_or_default(),
     );
+    discord::status()
 }
 
 #[tauri::command]

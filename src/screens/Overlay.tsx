@@ -12,6 +12,8 @@ interface OverlayMessage {
   nick: string
   text: string
   ts: number
+  kind?: 'msg' | 'online' | 'play'
+  nicks?: string[]
 }
 
 const CARD_TTL_MS = 9_000
@@ -44,7 +46,7 @@ export function Overlay() {
       .listen<OverlayMessage>('overlay-message', (e) => {
         const m = { ...e.payload, ts: e.payload.ts || Date.now() }
         setMsgs((prev) => prev.concat([m]).slice(-HISTORY))
-        setTo((cur) => cur || m)
+        if (!m.kind || m.kind === 'msg') setTo((cur) => cur || m)
       })
       .then((un) => offs.push(un))
       .catch(() => {})
@@ -68,6 +70,7 @@ export function Overlay() {
   // rest of the screen must stay clickable for the game underneath.
   const now = Date.now()
   const fresh = msgs.filter((m) => now - m.ts < CARD_TTL_MS)
+  const chat = msgs.filter((m) => !m.kind || m.kind === 'msg')
   useEffect(() => {
     if (interactive) return
     // An always-on-top window with nothing left to show still costs a
@@ -108,8 +111,12 @@ export function Overlay() {
         <SvgSprite />
         <div className="ov-cards">
           {fresh.map((m) => (
-            <div className="ov-card" key={m.uid + m.ts}>
-              <Head nick={m.nick} size={30} />
+            <div className={'ov-card ov-' + (m.kind || 'msg')} key={m.uid + m.ts}>
+              <div className="ov-card-heads">
+                {(m.nicks?.length ? m.nicks : [m.nick]).slice(0, 3).map((n, i) => (
+                  <Head key={n + i} nick={n} size={30} />
+                ))}
+              </div>
               <div className="ov-card-body">
                 <b>{m.nick}</b>
                 <span>{m.text}</span>
@@ -134,8 +141,8 @@ export function Overlay() {
           </button>
         </div>
         <div className="ov-list" ref={listRef}>
-          {msgs.length ? (
-            msgs.map((m) => (
+          {chat.length ? (
+            chat.map((m) => (
               <div className={'ov-msg' + (m.nick === 'Ты' ? ' me' : '')} key={m.uid + m.ts}>
                 <b>{m.nick}</b>
                 <span>{m.text}</span>

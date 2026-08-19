@@ -28,6 +28,9 @@ import { initCalls } from './state/call'
 import { overlayNotify } from './ipc/commands'
 import { ServerDetail } from './components/ServerDetail'
 import { pushChatNotify } from './state/chatNotify'
+import { notifyAudible, notifyShown } from './state/notifyPrefs'
+import { presenceEvents, presenceText, presenceTitle } from './state/presenceNotify'
+import { initDesktopToasts, showDesktopToast } from './lib/desktopToast'
 import { parseInvite } from './lib/invite'
 import { parseCallLog } from './lib/call/callLog'
 import { getAccount, getMillidaAccount, isMillidaKind, useAccounts } from './state/accounts'
@@ -103,7 +106,7 @@ function applyRoomPoll(r: RoomPoll) {
         replyTo: m.replyTo || null,
         reactions: m.reactions || [],
       })
-      playSound('notify')
+      if (notifyAudible('room')) playSound('notify')
       void api('/friends/rooms/' + encodeURIComponent(m.roomId) + '/read', { method: 'POST' }).catch(() => {})
       bumpRoom(m.roomId, m.ts || Date.now(), false)
       return
@@ -119,13 +122,16 @@ function applyRoomPoll(r: RoomPoll) {
       actionLabel: 'Открыть группу',
       action: () => void openRoomChat(m.roomId, title),
     })
-    if (useGame.getState().list.length)
-      void overlayNotify({
+    if (notifyShown('room')) {
+      const card = {
         uid: m.roomId,
         nick: title,
         text: (nick ? nick + ': ' : '') + previewOf(m),
         ts: m.ts || Date.now(),
-      }).catch(() => {})
+        kind: 'msg' as const,
+      }
+      if (!showDesktopToast(card) && useGame.getState().list.length) void overlayNotify(card).catch(() => {})
+    }
   })
   ;(r.roomUpdates || []).forEach((u) => {
     if (useFriends.getState().chatRoom === u.roomId) applyChatMessage(u as ChatMessage)
@@ -175,31 +181,48 @@ import { SESSION_EXPIRED_EVENT, api, hasMillidaAccount } from './lib/api'
 import { hasTauri, tauri } from './ipc/tauri'
 import type { UnlistenFn } from './ipc/tauri'
 
-function notifyStartedPlaying(before: Friend[], now: Friend[]) {
-  const was = new Map(before.map((f) => [f.userId, !!f.playing]))
-  now
-    .filter((f) => f.playing && was.get(f.userId) === false)
-    .slice(0, 2)
-    .forEach((f) => {
-      const addr = f.serverIp || ''
-      const where = f.serverName || f.serverIp || f.build || ''
-      pushChatNotify({
-        uid: f.userId,
-        nick: f.nickname || 'Друг',
-        text: where ? 'Играет · ' + where : 'Зашёл в игру',
-        kind: 'play',
-        actionLabel: addr ? 'Зайти к нему' : 'Открыть друзей',
-        action: () => {
-          if (!addr) {
-            gotoScreen('friends')
-            return
-          }
-          const name = f.serverName || 'Сервер ' + (f.nickname || 'друга')
-          rememberServerName(addr, name)
-          void quickJoin(addr, name).catch(() => {})
-        },
-      })
-    })
+function joinAction(f: Friend): (() => void) | undefined {
+  const addr = f.serverIp || ''
+  if (!addr) return undefined
+  const name = f.serverName || 'Сервер ' + (f.nickname || 'друга')
+  return () => {
+    rememberServerName(addr, name)
+    void quickJoin(addr, name).catch(() => {})
+  }
+}
+
+/// One card per batch, Steam-style: a poll tick that brings five friends online
+/// used to stack five toasts and five sounds.
+function announcePresence(list: Friend[], kind: 'play' | 'online') {
+  if (!list.length || !notifyShown(kind)) return
+  const head = list[0]
+  const card = {
+    uid: kind + ':' + head.userId,
+    nick: presenceTitle(list),
+    text: presenceText(list, kind),
+    ts: Date.now(),
+    kind,
+    nicks: list.map((f) => f.nickname || 'Друг'),
+  }
+  if (showDesktopToast(card)) {
+    if (notifyAudible(kind)) playSound('notify')
+    return
+  }
+  const join = list.length === 1 && kind === 'play' ? joinAction(head) : undefined
+  pushChatNotify({
+    uid: card.uid,
+    nick: card.nick,
+    text: card.text,
+    kind,
+    actionLabel: join ? 'Зайти к нему' : 'Открыть друзей',
+    action: join || (() => gotoScreen('friends')),
+  })
+}
+
+function notifyPresence(before: Friend[], now: Friend[]) {
+  const { started, cameOnline } = presenceEvents(before, now)
+  announcePresence(started, 'play')
+  announcePresence(cameOnline, 'online')
 }
 
 export function App() {
@@ -221,6 +244,7 @@ export function App() {
     initTray()
     initMusic()
     initSounds()
+    void initDesktopToasts()
     initDeepLinks()
     initInstalls()
     initCalls()
@@ -427,7 +451,7 @@ export function App() {
           if (r.presence) {
             const before = useFriends.getState().friends
             useFriends.getState().set({ friends: r.presence })
-            if (!firstPass) notifyStartedPlaying(before, r.presence)
+            if (!firstPass) notifyPresence(before, r.presence)
           }
           if (r.requests) {
             const seen = new Set(useFriends.getState().reqIn.map((x) => x.id))
@@ -458,15 +482,18 @@ export function App() {
                 replyTo: m.replyTo || null,
                 reactions: m.reactions || [],
               })
-              playSound('notify')
+              if (notifyAudible('msg')) playSound('notify')
               void api('/friends/chat/' + encodeURIComponent(m.from) + '/read', { method: 'POST' }).catch(() => {})
             } else {
               const nick = m.fromNick || f.friends.find((x) => x.userId === m.from)?.nickname || ''
               pushChatNotify({ uid: m.from, nick, text: previewOf(m) })
               // While the game holds the screen, the launcher's own toast is
               // invisible — the card has to go over the game instead.
-              if (useGame.getState().list.length)
-                void overlayNotify({ uid: m.from, nick, text: previewOf(m), ts: m.ts || Date.now() }).catch(() => {})
+              if (notifyShown('msg')) {
+                const card = { uid: m.from, nick, text: previewOf(m), ts: m.ts || Date.now(), kind: 'msg' as const }
+                if (!showDesktopToast(card) && useGame.getState().list.length)
+                  void overlayNotify(card).catch(() => {})
+              }
             }
           })
           ;(r.updates || []).forEach((u: PolledUpdate) => {
