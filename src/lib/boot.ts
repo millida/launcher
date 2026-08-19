@@ -15,3 +15,10 @@ export function hideBoot() {
     setTimeout(() => el.remove(), 400)
   }, wait)
 }
+
+/// The splash is a full-screen opaque layer in `index.html`. Only the main
+/// window ever hides it, so any other window that loads the same bundle - the
+/// overlay - has to drop it before it paints over the whole screen.
+export function dropBootSplash(doc: Pick<Document, 'getElementById'>) {
+  doc.getElementById('boot')?.remove()
+}

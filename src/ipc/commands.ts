@@ -972,6 +972,7 @@ export const overlayNotify = (payload: OverlayCard) => invoke<void>('overlay_not
 export const overlaySetToasts = (on: boolean) => invoke<void>('overlay_set_toasts', { on })
 export const overlayToast = (payload: OverlayCard) => invoke<void>('overlay_toast', { payload })
 export const overlayHide = () => invoke<void>('overlay_hide')
+export const overlayReady = () => invoke<void>('overlay_ready')
 
 
 // ---- Shared file store across builds ----

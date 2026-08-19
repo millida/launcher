@@ -11,6 +11,7 @@ import './styles/09-wide.css'
 import './styles/10-call.css'
 import './styles/11-rooms.css'
 import { App } from './App'
+import { dropBootSplash } from './lib/boot'
 import { Overlay } from './screens/Overlay'
 
 if (!import.meta.env.DEV) {
@@ -24,6 +25,9 @@ if (!import.meta.env.DEV) {
 // The overlay is the same bundle under a hash route: a second entry point
 // would double the build and drift from the main one.
 const isOverlay = location.hash.replace('#', '').split('?')[0] === 'overlay'
-if (isOverlay) document.documentElement.classList.add('overlay-root')
+if (isOverlay) {
+  document.documentElement.classList.add('overlay-root')
+  dropBootSplash(document)
+}
 
 createRoot(document.getElementById('root')!).render(isOverlay ? <Overlay /> : <App />)

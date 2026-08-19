@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { SvgSprite } from '../components/SvgSprite'
 import { tauri } from '../ipc/tauri'
-import { overlayHide } from '../ipc/commands'
+import { overlayHide, overlayReady } from '../ipc/commands'
 import { api } from '../lib/api'
 import { Head } from '../components/Head'
 import { apiErrorText } from '../lib/apiError'
@@ -18,6 +18,9 @@ interface OverlayMessage {
 
 const CARD_TTL_MS = 9_000
 const HISTORY = 24
+/// A window shown for a card that never arrived must not stay: it is
+/// full-screen, always on top and has no close button of its own.
+const EMPTY_TTL_MS = 4_000
 
 /// The overlay owns no polling of its own: two pollers would share one `since`
 /// cursor and eat each other's messages. The main window relays what it got.
@@ -50,6 +53,7 @@ export function Overlay() {
       })
       .then((un) => offs.push(un))
       .catch(() => {})
+    void overlayReady().catch(() => {})
     return () => offs.forEach((un) => un())
   }, [])
 
@@ -75,12 +79,11 @@ export function Overlay() {
     if (interactive) return
     // An always-on-top window with nothing left to show still costs a
     // compositor layer over the game, so it goes away with its last card.
-    // Nothing to show yet on a freshly created window: the first event is still
-    // in flight, and hiding here would swallow it.
-    if (!msgs.length) return
+    // A freshly created window may have no card yet, but waiting forever is how
+    // an empty overlay ends up covering the whole screen with no way out.
     if (!fresh.length) {
-      void overlayHide()
-      return
+      const t = setTimeout(() => void overlayHide(), msgs.length ? 0 : EMPTY_TTL_MS)
+      return () => clearTimeout(t)
     }
     const t = setTimeout(() => setMsgs((prev) => prev.filter((m) => Date.now() - m.ts < CARD_TTL_MS)), 1000)
     return () => clearTimeout(t)
