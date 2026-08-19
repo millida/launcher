@@ -380,6 +380,8 @@ export interface DiscordStatus {
   app_id: string
   last_error: string
   last_activity: string
+  /** Discord account the activity is shown on; empty when nothing is shown. */
+  userId: string
 }
 
 export const discordPresence = (
@@ -390,7 +392,7 @@ export const discordPresence = (
   largeText?: string,
   joinUrl?: string,
   profileSlug?: string,
-) => invoke<void>('discord_presence', { details, state, playing, largeImage, largeText, joinUrl, profileSlug })
+) => invoke<DiscordStatus>('discord_presence', { details, state, playing, largeImage, largeText, joinUrl, profileSlug })
 
 export const discordStatus = () => invoke<DiscordStatus>('discord_status')
 
@@ -953,12 +955,22 @@ export const hideToTray = () => invoke<void>('hide_to_tray')
 export const showFromTray = () => invoke<void>('show_from_tray')
 export const setRestoreOnExitNative = (on: boolean) => invoke<void>('set_restore_on_exit', { on })
 
-export interface OverlayState { enabled: boolean; hotkey: string }
+export interface OverlayState { enabled: boolean; toasts: boolean; hotkey: string }
+
+export interface OverlayCard {
+  uid: string
+  nick: string
+  text: string
+  ts: number
+  kind?: 'msg' | 'online' | 'play'
+  nicks?: string[]
+}
 export const overlayState = () => invoke<OverlayState>('overlay_state')
 export const overlaySetEnabled = (on: boolean) => invoke<void>('overlay_set_enabled', { on })
 export const overlaySetHotkey = (hotkey: string) => invoke<void>('overlay_set_hotkey', { hotkey })
-export const overlayNotify = (payload: { uid: string; nick: string; text: string; ts: number }) =>
-  invoke<void>('overlay_notify', { payload })
+export const overlayNotify = (payload: OverlayCard) => invoke<void>('overlay_notify', { payload })
+export const overlaySetToasts = (on: boolean) => invoke<void>('overlay_set_toasts', { on })
+export const overlayToast = (payload: OverlayCard) => invoke<void>('overlay_toast', { payload })
 export const overlayHide = () => invoke<void>('overlay_hide')
 
 

@@ -11,6 +11,7 @@ import { addServer } from '../ipc/commands'
 import { useProfiles } from '../state/profiles'
 import { rememberServerName } from '../state/playStats'
 import { useHasMillida } from '../state/auth'
+import { noteHostingServers } from '../state/navHint'
 import { joinWithAuth, showLaunchError } from '../lib/launch'
 import { setScreen, showToast } from '../state/ui'
 import { Head } from '../components/Head'
@@ -152,6 +153,7 @@ export function Hosting({ on }: { on: boolean }) {
     }
     const arr = Array.isArray(data) ? data : []
     loadedRef.current = arr.length > 0
+    noteHostingServers(arr.length)
     setList(arr)
     setView(arr.length ? 'list' : 'empty')
     try {

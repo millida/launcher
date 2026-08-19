@@ -4,6 +4,7 @@
 //! than `RETRY_AFTER`.
 
 use discord_rich_presence::{activity, activity::ActivityType, DiscordIpc, DiscordIpcClient};
+use serde_json::json;
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -35,6 +36,14 @@ static LAST_TRY: Mutex<Option<Instant>> = Mutex::new(None);
 static LAST_ERROR: Mutex<String> = Mutex::new(String::new());
 static LAST_OK: Mutex<String> = Mutex::new(String::new());
 static LAST_SLUG: Mutex<String> = Mutex::new(String::new());
+/// Discord account the local client is signed in as, taken from the READY
+/// frame. The exp bridge pays for hours only while the launcher activity is
+/// actually visible on the player's own Discord, so the server has to know
+/// whose Discord it is - the id is proof of connection, not a claim.
+static USER_ID: Mutex<String> = Mutex::new(String::new());
+/// Is our activity on the profile right now. A live socket is not enough: the
+/// player can switch presence off, and cleared activity earns nothing.
+static VISIBLE: Mutex<bool> = Mutex::new(false);
 
 fn note_err(msg: String) {
     if let Ok(mut e) = LAST_ERROR.lock() {
@@ -48,6 +57,8 @@ pub struct DiscordStatus {
     pub app_id: String,
     pub last_error: String,
     pub last_activity: String,
+    #[serde(rename = "userId")]
+    pub user_id: String,
 }
 
 pub fn status() -> DiscordStatus {
@@ -56,6 +67,11 @@ pub fn status() -> DiscordStatus {
         app_id: app_id(),
         last_error: LAST_ERROR.lock().map(|e| e.clone()).unwrap_or_default(),
         last_activity: LAST_OK.lock().map(|e| e.clone()).unwrap_or_default(),
+        user_id: if VISIBLE.lock().map(|v| *v).unwrap_or(false) {
+            USER_ID.lock().map(|e| e.clone()).unwrap_or_default()
+        } else {
+            String::new()
+        },
     }
 }
 
@@ -87,12 +103,15 @@ fn ensure_connected(guard: &mut Option<DiscordIpcClient>) -> bool {
     }
 
     match DiscordIpcClient::new(&id) {
-        Ok(mut c) => match c.connect() {
-            Ok(_) => {
+        Ok(mut c) => match handshake(&mut c, &id) {
+            Ok(user) => {
+                set_user(&user);
                 *guard = Some(c);
                 true
             }
             Err(e) => {
+                set_user("");
+                set_visible(false);
                 note_err(format!("нет соединения с Discord: {}", e));
                 false
             }
@@ -102,6 +121,28 @@ fn ensure_connected(guard: &mut Option<DiscordIpcClient>) -> bool {
             false
         }
     }
+}
+
+fn set_user(id: &str) {
+    if let Ok(mut u) = USER_ID.lock() {
+        *u = id.to_string();
+    }
+}
+
+fn set_visible(on: bool) {
+    if let Ok(mut v) = VISIBLE.lock() {
+        *v = on;
+    }
+}
+
+/// `DiscordIpc::connect` swallows the READY frame, and with it the only proof
+/// of which Discord account the socket belongs to: the handshake is done by
+/// hand so that id survives.
+fn handshake(c: &mut DiscordIpcClient, id: &str) -> Result<String, Box<dyn std::error::Error>> {
+    c.connect_ipc()?;
+    c.send(json!({ "v": 1, "client_id": id }), 0)?;
+    let (_, val) = c.recv()?;
+    Ok(val["data"]["user"]["id"].as_str().unwrap_or_default().to_string())
 }
 
 const JOIN_PREFIX: &str = "https://millida.net/join?";
@@ -182,6 +223,8 @@ pub fn set_activity(
         note_err(format!("активность не поставилась: {}", e));
         let _ = client.close();
         *guard = None;
+        set_user("");
+        set_visible(false);
         return;
     }
     // The crate ignores Discord's reply, so rejected activities would pass
@@ -189,12 +232,14 @@ pub fn set_activity(
     match client.recv() {
         Ok((_, val)) => {
             if val["evt"].as_str() == Some("ERROR") {
+                set_visible(false);
                 note_err(format!("Discord отклонил активность: {}", val["data"]["message"].as_str().unwrap_or("?")));
                 return;
             }
         }
         Err(e) => note_err(format!("нет ответа от Discord: {}", e)),
     }
+    set_visible(true);
     if let Ok(mut ok) = LAST_OK.lock() {
         *ok = format!("{} · {}", details, state);
     }
@@ -214,6 +259,7 @@ pub fn clear() {
     if let Ok(mut s) = SINCE.lock() {
         *s = None;
     }
+    set_visible(false);
 }
 
 #[cfg(test)]

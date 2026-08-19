@@ -35,6 +35,9 @@ import { useUpdate } from '../state/update'
 import { discordPresence } from '../lib/launch'
 import { fetchSounds, playSound, setSoundMode, soundMode, soundVolume } from '../lib/sound'
 import type { SoundMode } from '../lib/sound'
+import { notifyLevel, setNotifyLevel } from '../state/notifyPrefs'
+import { setDesktopToasts } from '../lib/desktopToast'
+import type { NotifyKind, NotifyLevel } from '../state/notifyPrefs'
 import { Slider } from '../components/Slider'
 import { Select } from '../components/Select'
 import { writePref } from '../lib/prefs'
@@ -177,7 +180,7 @@ export function Settings({ on }: { on: boolean }) {
   const [accent, setAccent] = useState(initialAccent)
   const [customHex, setCustomHex] = useState(initialCustomHex)
   const [pickerOpen, setPickerOpen] = useState(false)
-  const [overlay, setOverlay] = useState<OverlayState>({ enabled: false, hotkey: 'Alt+M' })
+  const [overlay, setOverlay] = useState<OverlayState>({ enabled: false, toasts: true, hotkey: 'Alt+M' })
   const [cacheMb, setCacheMb] = useState<number | null>(null)
   const [clearing, setClearing] = useState(false)
   const [moving, setMoving] = useState(false)
@@ -191,6 +194,13 @@ export function Settings({ on }: { on: boolean }) {
   const [soundMd, setSoundMd] = useState<SoundMode>(soundMode)
   const [soundVol, setSoundVol] = useState(soundVolume)
   const [soundBusy, setSoundBusy] = useState(false)
+  const [notifyLv, setNotifyLv] = useState<Record<NotifyKind, NotifyLevel>>(() => ({
+    msg: notifyLevel('msg'),
+    play: notifyLevel('play'),
+    online: notifyLevel('online'),
+    request: notifyLevel('request'),
+    room: notifyLevel('room'),
+  }))
   const [ver, setVer] = useState('')
   const [diagBusy, setDiagBusy] = useState(false)
   const [diagText, setDiagText] = useState('')
@@ -882,6 +892,67 @@ export function Settings({ on }: { on: boolean }) {
         </div>
 
         <div className="set-group">
+          <div className="cap">Уведомления</div>
+          <div className="set-row">
+            <span className="lab">
+              Показывать поверх всего
+              <small>Карточка в углу экрана, даже когда лаунчер свёрнут или идёт игра — как в Steam</small>
+            </span>
+            <span
+              className={'tgl' + (overlay.toasts ? ' on' : '')}
+              onClick={() => {
+                const next = !overlay.toasts
+                setOverlay({ ...overlay, toasts: next })
+                setDesktopToasts(next).catch((err) => {
+                  setOverlay({ ...overlay, toasts: !next })
+                  showToast('' + err, 'error', false)
+                })
+                showToast(next ? 'Карточки будут поверх всего' : 'Карточки только внутри лаунчера', 'ok', false)
+              }}
+            ></span>
+          </div>
+          {(
+            [
+              ['msg', 'Личные сообщения', 'Карточка, когда пишут в личку'],
+              ['room', 'Сообщения в группах', 'Карточка по новым сообщениям в общих чатах'],
+              ['play', 'Друг зашёл в игру', 'Карточка, когда друг начал играть'],
+              ['online', 'Друг в сети', 'Карточка, когда друг появился в лаунчере'],
+              ['request', 'Заявки в друзья', 'Карточка о новой входящей заявке'],
+            ] as [NotifyKind, string, string][]
+          ).map(([kind, label, hint]) => (
+            <div className="set-row" key={kind}>
+              <span className="lab">
+                {label}
+                <small>{hint}</small>
+              </span>
+              <div className="segs">
+                {(
+                  [
+                    ['sound', 'Со звуком'],
+                    ['silent', 'Без звука'],
+                    ['off', 'Выкл'],
+                  ] as [NotifyLevel, string][]
+                ).map(([v, seg]) => (
+                  <button
+                    key={v}
+                    data-nosound
+                    className={'seg' + (notifyLv[kind] === v ? ' on' : '')}
+                    style={{ height: '32px', fontSize: '12.5px' }}
+                    onClick={() => {
+                      setNotifyLv((prev) => ({ ...prev, [kind]: v }))
+                      setNotifyLevel(kind, v)
+                      if (v === 'sound') playSound('notify')
+                    }}
+                  >
+                    {seg}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="set-group">
           <div className="cap">Устройства</div>
           <AudioSettings />
         </div>
@@ -939,7 +1010,11 @@ export function Settings({ on }: { on: boolean }) {
           <div className="cap">Видно другим</div>
           <div className="set-row">
             <span className="lab">
-              Активность в Discord<small>Показывать друзьям, во что играешь</small>
+              Активность в Discord
+              <small>
+                Показывать друзьям, во что играешь. Опыт в Discord Minecraft RU начисляется за часы с включённой
+                активностью — выключишь, и часы перестанут оплачиваться.
+              </small>
             </span>
             <span
               className={'tgl' + (discord ? ' on' : '')}
@@ -947,7 +1022,7 @@ export function Settings({ on }: { on: boolean }) {
                 const next = !discord
                 setDiscord(next)
                 localStorage.setItem('m-discord', next ? '1' : '0')
-                if (next) discordPresence('lobby')
+                if (next) void discordPresence('lobby')
                 else discordClear().catch(() => {})
                 showToast(next ? 'Активность в Discord включена' : 'Активность в Discord выключена')
               }}

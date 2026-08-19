@@ -20,6 +20,12 @@ const DURABLE = [
   'm-onb-done',
   'm-tour-done',
   'm-mil-ever',
+  'm-hint-hosting',
+  'm-notify-msg',
+  'm-notify-play',
+  'm-notify-online',
+  'm-notify-request',
+  'm-notify-room',
 ] as const
 
 export type PrefKey = (typeof DURABLE)[number]
