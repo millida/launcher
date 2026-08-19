@@ -67,3 +67,11 @@ pub async fn overlay_toast(app: tauri::AppHandle, payload: serde_json::Value) ->
 pub fn overlay_hide(app: tauri::AppHandle) {
     overlay::hide(&app);
 }
+
+/// The overlay webview says it is listening. Anything queued while it was
+/// starting is only delivered now: an event sent into the gap before this is
+/// lost, and the window would hang on screen with nothing on it.
+#[tauri::command]
+pub fn overlay_ready(app: tauri::AppHandle) {
+    overlay::drain_pending(&app);
+}

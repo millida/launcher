@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
 /// A separate always-on-top window, not a Minecraft mod: the launcher blocks
@@ -9,6 +11,17 @@ const PREF_ENABLED: &str = "overlay-enabled";
 const PREF_HOTKEY: &str = "overlay-hotkey";
 const PREF_TOASTS: &str = "overlay-toasts";
 pub const DEFAULT_HOTKEY: &str = "Alt+M";
+
+/// Cards the webview could not receive yet: a window that has just been created
+/// has no listener, and an event emitted into that gap is lost for good - the
+/// overlay would then stay on screen full-size with nothing to show.
+static PENDING: Mutex<Vec<serde_json::Value>> = Mutex::new(Vec::new());
+static INTERACTIVE: AtomicBool = AtomicBool::new(false);
+static NOTIFY_SEQ: AtomicU64 = AtomicU64::new(0);
+
+/// Longest a passive card may keep the window up: the frontend hides it earlier
+/// on its own, this only catches a webview that never answered.
+const PASSIVE_MAX_MS: u64 = 15_000;
 
 pub fn enabled() -> bool {
     crate::engine::ui_pref(PREF_ENABLED).as_deref() == Some("1")
@@ -67,6 +80,7 @@ fn build(app: &AppHandle) -> Result<(tauri::WebviewWindow, bool), String> {
 /// Notifications arrive passive; the hotkey is what makes it a chat.
 pub fn show(app: &AppHandle, interactive: bool) -> Result<bool, String> {
     let (win, fresh) = build(app)?;
+    INTERACTIVE.store(interactive, Ordering::SeqCst);
     let _ = win.set_ignore_cursor_events(!interactive);
     win.show().map_err(|e| e.to_string())?;
     let _ = win.set_always_on_top(true);
@@ -78,14 +92,43 @@ pub fn show(app: &AppHandle, interactive: bool) -> Result<bool, String> {
 }
 
 pub fn hide(app: &AppHandle) {
+    INTERACTIVE.store(false, Ordering::SeqCst);
+    PENDING.lock().unwrap_or_else(|e| e.into_inner()).clear();
     if let Some(w) = app.get_webview_window(LABEL) {
         let _ = w.hide();
     }
 }
 
+/// The webview reports itself ready, and everything queued while it was booting
+/// is delivered in order.
+pub fn drain_pending(app: &AppHandle) {
+    let queued: Vec<serde_json::Value> =
+        std::mem::take(&mut *PENDING.lock().unwrap_or_else(|e| e.into_inner()));
+    for payload in queued {
+        let _ = app.emit_to(LABEL, "overlay-message", payload);
+    }
+}
+
+/// A passive overlay outliving its cards is a full-screen always-on-top layer
+/// the user cannot close, so the core takes it down even if the webview is dead.
+fn arm_watchdog(app: &AppHandle) {
+    let seq = NOTIFY_SEQ.fetch_add(1, Ordering::SeqCst) + 1;
+    let handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(PASSIVE_MAX_MS)).await;
+        if NOTIFY_SEQ.load(Ordering::SeqCst) != seq || INTERACTIVE.load(Ordering::SeqCst) {
+            return;
+        }
+        hide(&handle);
+    });
+}
+
 pub async fn notify(app: &AppHandle, payload: serde_json::Value) -> Result<(), String> {
-    if show(app, false)? {
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    let fresh = show(app, false)?;
+    arm_watchdog(app);
+    if fresh {
+        PENDING.lock().unwrap_or_else(|e| e.into_inner()).push(payload);
+        return Ok(());
     }
     app.emit_to(LABEL, "overlay-message", payload).map_err(|e| e.to_string())
 }
