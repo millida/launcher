@@ -441,7 +441,7 @@ export function Hosting({ on }: { on: boolean }) {
   return (
     <section className={'screen' + (on ? ' on' : '')} id="s-hosting">
       <div className="page-head">
-        <h1>Мой сервер</h1>
+        <h1>Хостинг</h1>
         <div className="right" style={{ gap: '10px' }}>
           {millida ? (
             <span className="host-bal">

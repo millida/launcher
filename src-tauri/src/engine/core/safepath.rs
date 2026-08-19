@@ -74,6 +74,12 @@ fn ensure_inside(base: &Path, target: &Path, whole: &str) -> Result<(), String> 
     Err(reject(whole, "ведёт за пределы папки"))
 }
 
+/// True when the target sits inside the base once both are resolved, so a
+/// symlink or junction cannot point out of the launcher's own folders.
+pub(crate) fn is_inside(base: &Path, target: &Path) -> bool {
+    !target.as_os_str().is_empty() && resolved(target).starts_with(resolved(base))
+}
+
 /// Joins an untrusted relative path onto a base, rejecting absolute paths, `..`,
 /// drive letters, UNC prefixes and Windows-reserved names.
 pub(crate) fn safe_join(base: &Path, rel: &str) -> Result<PathBuf, String> {

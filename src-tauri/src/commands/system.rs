@@ -36,6 +36,19 @@ pub async fn pick_texture() -> Result<Option<engine::PickedTexture>, String> {
     engine::pick_texture().await
 }
 
+/// Copies the picture the viewer is showing. The webview names the source, and
+/// the core reads it only when it is one of ours.
+#[tauri::command]
+pub async fn copy_picture(app: tauri::AppHandle, src: engine::PictureRef) -> Result<(), String> {
+    engine::copy_picture(app, src).await
+}
+
+/// `None` — the save dialog was dismissed.
+#[tauri::command]
+pub async fn save_picture_as(src: engine::PictureRef) -> Result<Option<String>, String> {
+    engine::save_picture_as(src).await
+}
+
 #[tauri::command]
 pub fn music_tracks() -> Vec<engine::MusicTrack> { engine::music_tracks() }
 

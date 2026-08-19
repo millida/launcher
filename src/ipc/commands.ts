@@ -1027,6 +1027,17 @@ export const deleteWorldBackup = (profile: string, file: string) =>
 export const openWorldFolder = (profile: string, folder: string) =>
   invoke<void>('open_world_folder', { profile, folder })
 
+// ---- Pictures in the viewer ----
+
+// One of the two: a link the app itself rendered, or a file the launcher wrote.
+export interface PictureRef {
+  url?: string
+  path?: string
+}
+
+export const copyPicture = (src: PictureRef) => invoke<void>('copy_picture', { src })
+export const savePictureAs = (src: PictureRef) => invoke<string | null>('save_picture_as', { src })
+
 // ---- Screenshot gallery ----
 
 export interface Screenshot {

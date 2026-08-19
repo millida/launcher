@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { hasTauri } from '../ipc/tauri'
 import { cfSearch, listContent, listWorldInstalls } from '../ipc/commands'
 import { fmt } from '../lib/format'
+import { MODRINTH_API, mirrorAsset } from '../lib/api'
 import { mergeSources } from '../lib/modMerge'
 import { pickTargetName } from '../lib/installKeys'
 import { useProfiles } from './profiles'
@@ -217,7 +218,7 @@ export const useMods = create<ModsState>((set, get) => ({
           author: 'CurseForge',
           desc: (h.summary || '').slice(0, 120),
           dl: h.downloads,
-          icon: h.logo,
+          icon: mirrorAsset(h.logo),
           cats: [],
           slug: h.slug,
           cfid: h.id,
@@ -253,7 +254,7 @@ export const useMods = create<ModsState>((set, get) => ({
             author: 'CurseForge',
             desc: (h.summary || '').slice(0, 120),
             dl: h.downloads,
-            icon: h.logo,
+            icon: mirrorAsset(h.logo),
             cats: [],
             slug: h.slug,
             cfid: h.id,
@@ -298,7 +299,8 @@ export const useMods = create<ModsState>((set, get) => ({
     const idx = query ? 'relevance' : F_SORTS[st.fSort] || 'downloads'
     const offset = append ? s.offset : 0
     const url =
-      'https://api.modrinth.com/v2/search?limit=20&offset=' +
+      MODRINTH_API +
+      '/v2/search?limit=20&offset=' +
       offset +
       '&index=' +
       idx +
@@ -312,7 +314,7 @@ export const useMods = create<ModsState>((set, get) => ({
         author: h.author,
         desc: h.description.slice(0, 120),
         dl: h.downloads,
-        icon: h.icon_url,
+        icon: mirrorAsset(h.icon_url),
         cats: (h.display_categories || h.categories || []).slice(0, 2),
         slug: h.slug,
         pid: h.project_id,

@@ -27,7 +27,7 @@ import type { ChatAttachment, ChatMessage, FriendProfile } from '../state/friend
 import { offPlatformReason } from '../lib/offPlatform'
 import { copyText } from '../lib/clipboard'
 import { VoiceMessage } from './VoiceMessage'
-import { openImage } from './ImageLightbox'
+import { copyPictureTo, openImage, savePictureTo } from './ImageLightbox'
 import { MAX_CHAT_IMAGE_BYTES, uploadChatImage, uploadVoice } from '../lib/chatMedia'
 import { VOICE_MAX_MS, canRecordVoice, fmtVoiceTime, recordVoice } from '../lib/voice'
 import type { VoiceRecorder } from '../lib/voice'
@@ -234,7 +234,7 @@ interface MenuAt {
 }
 
 const MENU_W = 210
-const MENU_H = 250
+const MENU_H = 300
 
 function MessageMenu({ at, close }: { at: MenuAt; close: () => void }) {
   const m = at.m
@@ -280,6 +280,16 @@ function MessageMenu({ at, close }: { at: MenuAt; close: () => void }) {
         >
           <Icon id="i-copy" /> Копировать текст
         </button>
+      ) : null}
+      {m.attachment?.kind === 'image' && m.attachment.url ? (
+        <>
+          <button className="msg-menu-item" onClick={run(() => void copyPictureTo({ url: m.attachment!.url }))}>
+            <Icon id="i-copy" /> Копировать картинку
+          </button>
+          <button className="msg-menu-item" onClick={run(() => void savePictureTo({ url: m.attachment!.url }))}>
+            <Icon id="i-download" /> Сохранить картинку
+          </button>
+        </>
       ) : null}
       {m.me && m.text ? (
         <button

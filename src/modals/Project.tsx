@@ -21,6 +21,7 @@ import { catalogTargetBuild, useMods } from '../state/mods'
 import type { ProjectVersion } from '../state/project'
 import { closeModal, showToast, useUi } from '../state/ui'
 import { backdropClose } from '../lib/dismiss'
+import { mirrorAsset } from '../lib/api'
 
 
 export function ProjectModal() {
@@ -246,7 +247,7 @@ export function ProjectModal() {
         <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start', marginBottom: '14px' }}>
           <img
             id="pjIcon"
-            src={pj.icon || undefined}
+            src={mirrorAsset(pj.icon) || undefined}
             style={{ width: '64px', height: '64px', borderRadius: '12px', objectFit: 'cover', background: 'var(--m-inset)' }}
           />
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -296,7 +297,7 @@ export function ProjectModal() {
           {pj.gallery.length ? (
             pj.gallery.map((x, i) => (
               <figure style={{ marginBottom: '12px' }} key={i}>
-                <img src={x.url} style={{ width: '100%', borderRadius: '12px' }} loading="lazy" />
+                <img src={mirrorAsset(x.url)} style={{ width: '100%', borderRadius: '12px' }} loading="lazy" />
                 <figcaption style={{ fontSize: '12px', color: 'var(--m-fg-subtle)', marginTop: '6px' }}>
                   {x.title || ''}
                 </figcaption>

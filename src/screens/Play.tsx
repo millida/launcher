@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Icon } from '../components/Icon'
-import { Cover } from '../components/Cover'
 import { BuildCard } from '../components/BuildCard'
 import { ServerRow } from '../components/ServerRow'
 import { MusicControls } from '../components/MusicPop'
 import { useMusic } from '../state/music'
 import { useHeroWallpaper } from '../components/HeroWallpaper'
-import { LOADER_NAME, RU_LOADER, fmt } from '../lib/format'
+import { LOADER_NAME } from '../lib/format'
 import { VIDEOS } from '../lib/wallpaper'
 import { hasTauri } from '../ipc/tauri'
 import { useProfiles } from '../state/profiles'
@@ -15,59 +14,16 @@ import { useServers } from '../state/servers'
 import { useWallpaper } from '../state/wallpaper'
 import { convertFileSrc, fpsBoostState, pickWallpaper, setFpsBoost } from '../ipc/commands'
 import { useMods } from '../state/mods'
-import { useModpackVersions } from '../state/modpack'
 import { openModal, setScreen, showToast } from '../state/ui'
-import { openProject } from '../state/project'
 import { openBuildSettings } from '../state/instance'
 import { useModUpdates } from '../state/modUpdates'
 import { usePlayStats } from '../state/playStats'
 import { realLaunch, startPrelaunch } from '../lib/launch'
 import { stopRunningGame, useGame } from '../state/game'
 
-interface ReadyHit {
-  slug: string
-  title: string
-  icon_url?: string
-  description?: string
-  downloads: number
-  cats: string[]
-}
-
-// Module-level cache: the screen remounts on every visit, the list changes daily.
-let readyCache: { at: number; hits: ReadyHit[] } | null = null
-const READY_TTL = 600000
-
-function ReadyCard({ h }: { h: ReadyHit }) {
-  return (
-    <div
-      className="card hoverable build-card ready-card"
-      data-slug={h.slug}
-      data-title={h.title}
-      onClick={() => void openProject(h.slug, 'modpack')}
-    >
-      <span className="build-cover">
-        <Cover url={h.icon_url} />
-        <span
-          className="mini-play ready-go"
-          title="Выбрать версию и установить"
-          onClick={(e) => {
-            e.stopPropagation()
-            void useModpackVersions.getState().openInstall(h.slug, h.title)
-          }}
-        >
-          <Icon id="i-download" />
-        </span>
-      </span>
-      <span className="build-body">
-        <b>{h.title}</b>
-        {h.description ? <span className="desc">{h.description}</span> : null}
-        <span className="meta">
-          {fmt(h.downloads) + ' скачиваний · ' + (h.cats.map(RU_LOADER).slice(0, 2).join(' · ') || 'Modrinth')}
-        </span>
-      </span>
-    </div>
-  )
-}
+// Главный экран заканчивается серверами: блок «Популярные сборки» уехал в
+// раздел контента, а список занимает освободившийся экран целиком.
+const SERVERS_ON_PLAY = 8
 
 export function Play({ on }: { on: boolean }) {
   const profiles = useProfiles((s) => s.profiles)
@@ -79,8 +35,6 @@ export function Play({ on }: { on: boolean }) {
   const updates = useModUpdates()
   const [boostOn, setBoostOn] = useState(false)
   const [boostBusy, setBoostBusy] = useState(false)
-  const [ready, setReady] = useState<ReadyHit[] | null>(null)
-  const [readyErr, setReadyErr] = useState('')
   const playStats = usePlayStats((s) => s.stats)
   const running = useGame((s) => s.list)
   const gameStopping = useGame((s) => s.stopping)
@@ -126,37 +80,6 @@ export function Play({ on }: { on: boolean }) {
       setBoostBusy(false)
     }
   }
-
-  useEffect(() => {
-    if (readyCache && Date.now() - readyCache.at < READY_TTL) {
-      setReady(readyCache.hits)
-      return
-    }
-    ;(async () => {
-      try {
-        const d = await (
-          await fetch(
-            'https://api.modrinth.com/v2/search?limit=8&index=downloads&facets=' +
-              encodeURIComponent(JSON.stringify([['project_type:modpack']])),
-          )
-        ).json()
-        const hits: ReadyHit[] = (d.hits || []).map((h: any) => ({
-          slug: h.slug,
-          title: h.title || '',
-          icon_url: h.icon_url,
-          description: (h.description || '').slice(0, 110),
-          downloads: h.downloads,
-          cats: h.display_categories || h.categories || [],
-        }))
-        if (hits.length) readyCache = { at: Date.now(), hits }
-        setReady(hits)
-        if (!hits.length) setReadyErr('Не удалось загрузить')
-      } catch {
-        setReady([])
-        setReadyErr('Не удалось загрузить популярные сборки')
-      }
-    })()
-  }, [])
 
   useEffect(() => {
     if (!wp.popOpen) return
@@ -299,7 +222,7 @@ export function Play({ on }: { on: boolean }) {
               <Icon id="i-settings" />
             </button>
             <button
-              className={'btn lg ' + (boostOn ? 'primary' : 'glass')}
+              className={'btn lg glass' + (boostOn ? ' on' : '')}
               id="fpsBoostBtn"
               title={
                 boostOn
@@ -312,7 +235,7 @@ export function Play({ on }: { on: boolean }) {
             >
               <span className="lbl">
                 <Icon id="i-zap" />
-                {boostBusy ? 'Меняем…' : boostOn ? 'Буст FPS: вкл' : 'Буст FPS'}
+                {boostBusy ? 'Меняем…' : 'Буст FPS'}
               </span>
             </button>
             <button
@@ -483,50 +406,13 @@ export function Play({ on }: { on: boolean }) {
             </button>
           </div>
           <div className="stack" id="promoRow" style={{ marginBottom: '22px' }}>
-            {servers.slice(0, 3).map((sv, i) => (
+            {servers.slice(0, SERVERS_ON_PLAY).map((sv, i) => (
               <ServerRow key={sv.slug + i} sv={sv} />
             ))}
           </div>
         </>
       ) : null}
 
-      <div className="sec-title sec-title-row">
-        <span>Популярные сборки</span>
-        <button
-          className="sec-link"
-          onClick={() => {
-            setScreen('mods')
-            useMods.getState().set({ modTab: 'modpack', fCats: [], fCat: 'все' })
-            void useMods.getState().load()
-          }}
-        >
-          Посмотреть все сборки
-          <Icon id="i-chev-r" />
-        </button>
-      </div>
-      <div className="ready-grid" id="readyGrid">
-        {ready === null ? (
-          /* Канон 3.9: скелетон формы карточки сборки вместо текста «Загружаем…» */
-          <>
-            {[0, 1, 2, 3].map((i) => (
-              <div className="card skel-card" key={i} style={{ display: 'flex', gap: '15px', padding: '12px', marginBottom: 0 }} aria-busy="true">
-                <span className="skel" style={{ width: '120px', height: '120px', borderRadius: '12px', flex: 'none' }} />
-                <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '8px' }}>
-                  <span className="skel skel-line" style={{ width: '62%' }} />
-                  <span className="skel skel-line" style={{ width: '100%' }} />
-                  <span className="skel skel-line" style={{ width: '48%' }} />
-                </span>
-              </div>
-            ))}
-          </>
-        ) : ready.length ? (
-          ready.map((h) => <ReadyCard key={h.slug} h={h} />)
-        ) : (
-          <p className="faint-note" style={{ gridColumn: '1/-1' }}>
-            {readyErr}
-          </p>
-        )}
-      </div>
     </section>
   )
 }

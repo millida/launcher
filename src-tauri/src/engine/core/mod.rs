@@ -1,6 +1,7 @@
 mod paths;
 mod prefs;
 mod http;
+mod mirror;
 mod archive;
 mod crash;
 mod dedup;

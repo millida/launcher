@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { cfFiles, cfProject } from '../ipc/commands'
 import { hasTauri } from '../ipc/tauri'
 import { fmt } from '../lib/format'
+import { MODRINTH_API, mirrorAsset } from '../lib/api'
 import { openModal } from './ui'
 import { useMods } from './mods'
 
@@ -85,7 +86,7 @@ export async function openCfProject(cfid: number, kind?: string, fallbackTitle?:
   try {
     const p = await cfProject(cfid)
     useProject.getState().set({
-      icon: p.logo,
+      icon: mirrorAsset(p.logo) || '',
       title: p.name,
       sub:
         fmt(p.downloads) +
@@ -94,7 +95,7 @@ export async function openCfProject(cfid: number, kind?: string, fallbackTitle?:
         (p.updated ? ' · обновлён ' + p.updated.slice(0, 10).split('-').reverse().join('.') : ''),
       tags: p.categories.slice(0, 6),
       body: p.description || p.summary,
-      gallery: p.gallery,
+      gallery: p.gallery.map((g) => ({ ...g, url: mirrorAsset(g.url) || g.url })),
       website: p.website,
       loading: false,
     })
@@ -139,9 +140,9 @@ export async function openProject(slug: string, kind?: string) {
   })
   openModal('pjModal')
   try {
-    const p = await fetch('https://api.modrinth.com/v2/project/' + encodeURIComponent(slug)).then((r) => r.json())
+    const p = await fetch(MODRINTH_API + '/v2/project/' + encodeURIComponent(slug)).then((r) => r.json())
     useProject.getState().set({
-      icon: p.icon_url || '',
+      icon: mirrorAsset(p.icon_url) || '',
       title: p.title,
       sub:
         fmt(p.downloads) +
@@ -151,11 +152,11 @@ export async function openProject(slug: string, kind?: string) {
         ((p.license && p.license.id) || '—'),
       tags: (p.categories || []).slice(0, 6),
       body: p.body || '',
-      gallery: p.gallery || [],
+      gallery: (p.gallery || []).map((g: ProjectGallery) => ({ ...g, url: mirrorAsset(g.url) || g.url })),
       website: 'https://modrinth.com/project/' + slug,
       loading: false,
     })
-    const vers = await fetch('https://api.modrinth.com/v2/project/' + encodeURIComponent(slug) + '/version').then((r) =>
+    const vers = await fetch(MODRINTH_API + '/v2/project/' + encodeURIComponent(slug) + '/version').then((r) =>
       r.json(),
     )
     useProject.getState().set({ versions: vers.slice(0, 25) })

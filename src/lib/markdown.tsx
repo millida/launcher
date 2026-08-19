@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { mirrorAsset } from './api'
 
 const H4_STYLE = { margin: '12px 0 6px', color: 'var(--m-fg)' }
 const H3_STYLE = { margin: '14px 0 6px', color: 'var(--m-fg)' }
@@ -22,7 +23,7 @@ function ref(ctx: Ctx, node: ReactNode): string {
 function transform(src: string, ctx: Ctx): string {
   let s = src.replace(/\*\*([\s\S]+?)\*\*/g, (_m, g1) => B_OPEN + g1 + B_CLOSE)
   s = s.replace(/!\[[^\]]*\]\((https?:[^)]+)\)/g, (_m, url) =>
-    ref(ctx, <img key={'md' + ctx.key++} src={url} style={IMG_STYLE} />),
+    ref(ctx, <img key={'md' + ctx.key++} src={mirrorAsset(url)} style={IMG_STYLE} />),
   )
   s = s.replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, (_m, text, href) =>
     ref(
@@ -114,7 +115,7 @@ function htmlNodes(node: Node, ctx: Ctx): ReactNode[] {
     }
     if (tag === 'IMG') {
       const src = el.getAttribute('src') || ''
-      if (/^https?:/i.test(src)) out.push(<img key={key} src={src} style={IMG_STYLE} />)
+      if (/^https?:/i.test(src)) out.push(<img key={key} src={mirrorAsset(src)} style={IMG_STYLE} />)
       return
     }
     if (tag === 'A') {

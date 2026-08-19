@@ -13,14 +13,14 @@ import { useHasMillida } from '../state/auth'
 import { PL_STAGES, cancelPrelaunch } from '../lib/launch'
 import { preloadScreen } from '../screens/registry'
 
-const NAV: { id: ScreenId; icon: string; label: string }[] = [
+const NAV: { id: ScreenId; icon: string; label: string; pill?: string; tip?: string }[] = [
   { id: 'play', icon: 'i-play', label: 'Играть' },
+  { id: 'hosting', icon: 'i-server-cog', label: 'Хостинг', pill: 'бесплатно', tip: 'Хостинг — бесплатный сервер' },
   { id: 'builds', icon: 'i-box2', label: 'Мои сборки' },
   { id: 'mods', icon: 'i-blocks', label: 'Контент' },
   { id: 'servers', icon: 'i-server', label: 'Серверы' },
   { id: 'skins', icon: 'i-shirt', label: 'Скины' },
   { id: 'friends', icon: 'i-users', label: 'Друзья' },
-  { id: 'hosting', icon: 'i-server-cog', label: 'Мой сервер' },
   { id: 'settings', icon: 'i-settings', label: 'Настройки' },
 ]
 
@@ -90,13 +90,14 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
             key={n.id}
             className={'nav-item' + (screen === n.id ? ' active' : '')}
             data-screen={n.id}
-            data-tip={n.label}
+            data-tip={n.tip || n.label}
             onMouseEnter={() => preloadScreen(n.id)}
             onFocus={() => preloadScreen(n.id)}
             onClick={() => onNav(n.id)}
           >
             <Icon id={n.icon} />
             <span className="nav-label">{n.label}</span>
+            {n.pill ? <span className="nav-pill">{n.pill}</span> : null}
             {n.id === 'friends' ? (
               <>
                 {frOnline ? (

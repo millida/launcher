@@ -6,6 +6,7 @@ import { uiConfirm } from '../../state/confirm'
 import { Cap, Empty, Loading, Row, downloadsLabel } from './kit'
 import { host, errText } from './api'
 import type { CatalogCore, CatalogHit, CurseHit, FtbPack, HostingInstall, InstallUpdate } from './api'
+import { mirrorAsset } from '../../lib/api'
 
 type Source = 'modrinth' | 'curseforge' | 'ftb'
 
@@ -257,7 +258,7 @@ export function TabContent({
               return (
                 <div className="fr-row" key={i.id}>
                   {i.iconUrl ? (
-                    <img src={i.iconUrl} alt="" style={{ width: 34, height: 34, borderRadius: 8, objectFit: 'cover' }} />
+                    <img src={mirrorAsset(i.iconUrl)} alt="" style={{ width: 34, height: 34, borderRadius: 8, objectFit: 'cover' }} />
                   ) : (
                     <span className="host-ico" style={{ width: 34, height: 34 }}>
                       <Icon id="i-box" />
@@ -339,7 +340,7 @@ export function TabContent({
                 const v = p.versions && p.versions.length ? p.versions[0] : null
                 return (
                   <div className="host-cat-card" key={p.id}>
-                    {p.iconUrl ? <img src={p.iconUrl} alt="" /> : <span className="host-cat-ico"><Icon id="i-box" /></span>}
+                    {p.iconUrl ? <img src={mirrorAsset(p.iconUrl)} alt="" /> : <span className="host-cat-ico"><Icon id="i-box" /></span>}
                     <div className="host-cat-body">
                       <div className="host-cat-name">{p.name}</div>
                       <div className="host-cat-sum">{p.summary}</div>
@@ -365,7 +366,7 @@ export function TabContent({
                 const id = source === 'curseforge' ? String((h as CurseHit).id) : (h as CatalogHit).id
                 return (
                   <div className="host-cat-card" key={id}>
-                    {h.iconUrl ? <img src={h.iconUrl} alt="" /> : <span className="host-cat-ico"><Icon id="i-box" /></span>}
+                    {h.iconUrl ? <img src={mirrorAsset(h.iconUrl)} alt="" /> : <span className="host-cat-ico"><Icon id="i-box" /></span>}
                     <div className="host-cat-body">
                       <div className="host-cat-name">{h.name}</div>
                       <div className="host-cat-sum">{h.summary}</div>

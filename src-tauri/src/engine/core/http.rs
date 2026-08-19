@@ -213,14 +213,38 @@ async fn read_json(url: &str, resp: reqwest::Response) -> Result<Value, Attempt>
         .map_err(|e| Attempt::Retry(format!("{}: неожиданный ответ ({})", url, e)))
 }
 
-pub(crate) async fn get_json(url: &str) -> Result<Value, String> {
-    retrying(|| async move {
-        match client().get(url).timeout(JSON_TIMEOUT).send().await {
-            Ok(r) => read_json(url, r).await,
-            Err(e) => Err(Attempt::Retry(format!("{}: {}", url, net_err(&e)))),
+/// Percent-encoding for path segments and query values; also used when a URL is
+/// carried as a query parameter to the mirror.
+pub(crate) fn urlencode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() * 3);
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => out.push(b as char),
+            _ => out.push_str(&format!("%{:02X}", b)),
         }
-    })
-    .await
+    }
+    out
+}
+
+pub(crate) async fn get_json(url: &str) -> Result<Value, String> {
+    let mut last = String::new();
+    for target in super::mirror::routes(url).await {
+        let attempt = retrying(|| {
+            let target = target.clone();
+            async move {
+                match client().get(&target).timeout(JSON_TIMEOUT).send().await {
+                    Ok(r) => read_json(&target, r).await,
+                    Err(e) => Err(Attempt::Retry(format!("{}: {}", target, net_err(&e)))),
+                }
+            }
+        })
+        .await;
+        match attempt {
+            Ok(v) => return Ok(v),
+            Err(e) => last = e,
+        }
+    }
+    Err(last)
 }
 
 pub(crate) async fn get_json_cached(url: &str, cache: &Path) -> Result<Value, String> {
@@ -267,13 +291,24 @@ pub(crate) async fn get_json_fresh(url: &str, cache: &Path, ttl: Duration) -> Re
 
 /// Modrinth bulk endpoints only accept a JSON body over POST.
 pub(crate) async fn post_json(url: &str, body: &Value) -> Result<Value, String> {
-    retrying(|| async move {
-        match client().post(url).json(body).timeout(JSON_TIMEOUT).send().await {
-            Ok(r) => read_json(url, r).await,
-            Err(e) => Err(Attempt::Retry(format!("{}: {}", url, net_err(&e)))),
+    let mut last = String::new();
+    for target in super::mirror::routes(url).await {
+        let attempt = retrying(|| {
+            let target = target.clone();
+            async move {
+                match client().post(&target).json(body).timeout(JSON_TIMEOUT).send().await {
+                    Ok(r) => read_json(&target, r).await,
+                    Err(e) => Err(Attempt::Retry(format!("{}: {}", target, net_err(&e)))),
+                }
+            }
+        })
+        .await;
+        match attempt {
+            Ok(v) => return Ok(v),
+            Err(e) => last = e,
         }
-    })
-    .await
+    }
+    Err(last)
 }
 
 /// Unique per call: two downloads of the same destination — a duplicated library
@@ -362,21 +397,23 @@ async fn fetch(url: &str, dest: &Path, sum: Option<Sum<'_>>, size: Option<u64>) 
     let part = part_path(dest);
     let _cleanup = PartGuard(part.clone());
     let mut last = String::new();
-    for attempt in 1..=TRIES {
-        let target = if attempt > 1 && is_stale_cdn_miss(&last) {
-            bypass_cdn_cache(url)
-        } else {
-            url.to_string()
-        };
-        match fetch_once(&target, &part, sum, size).await {
-            Ok(()) => return publish(&part, dest, sum, size),
-            Err(e) => {
-                let _ = std::fs::remove_file(&part);
-                last = e;
+    for route in super::mirror::routes(url).await {
+        for attempt in 1..=TRIES {
+            let target = if attempt > 1 && is_stale_cdn_miss(&last) {
+                bypass_cdn_cache(&route)
+            } else {
+                route.clone()
+            };
+            match fetch_once(&target, &part, sum, size).await {
+                Ok(()) => return publish(&part, dest, sum, size),
+                Err(e) => {
+                    let _ = std::fs::remove_file(&part);
+                    last = e;
+                }
             }
-        }
-        if attempt < TRIES {
-            tokio::time::sleep(Duration::from_millis(400 * attempt as u64)).await;
+            if attempt < TRIES {
+                tokio::time::sleep(Duration::from_millis(400 * attempt as u64)).await;
+            }
         }
     }
     Err(last)

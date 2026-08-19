@@ -4,6 +4,32 @@ import { hasMillidaSession } from './secure'
 
 export const LAUNCHER_API = localStorage.getItem('m-api') || 'https://api.millida.net/v2'
 
+/// Modrinth и CurseForge недоступны в России без VPN, поэтому и каталог, и
+/// картинки идут через наш API: он же отдаёт их с собственного адреса.
+export const MODRINTH_API = LAUNCHER_API + '/launcher/mr'
+
+const MIRRORED_ASSET_HOSTS = [
+  'cdn.modrinth.com',
+  'edge.forgecdn.net',
+  'mediafilez.forgecdn.net',
+  'media.forgecdn.net',
+]
+
+/// Адрес картинки с заблокированного CDN — через наш API; всё остальное как есть.
+export function mirrorAsset(url: string | undefined | null): string | undefined {
+  if (!url) return undefined
+  let host = ''
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol !== 'https:') return url
+    host = parsed.hostname.toLowerCase()
+  } catch {
+    return url
+  }
+  if (!MIRRORED_ASSET_HOSTS.includes(host)) return url
+  return LAUNCHER_API + '/launcher/dl?url=' + encodeURIComponent(url)
+}
+
 export const WALLET_URL = 'https://millida.net/profile?tab=wallet'
 
 export const PROFILE_URL = 'https://millida.net/profile'
