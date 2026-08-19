@@ -112,6 +112,8 @@ pub fn run() {
             commands::system::open_game_folder,
             commands::system::pick_wallpaper,
             commands::system::pick_texture,
+            commands::system::copy_picture,
+            commands::system::save_picture_as,
             commands::system::music_tracks,
             commands::system::open_music_folder,
             commands::system::download_mc_music,

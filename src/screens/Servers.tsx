@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { FilterPill } from '../components/FilterPill'
 import { ServerRow } from '../components/ServerRow'
+import { openExt } from '../lib/api'
 import type { SnapshotServer } from '../lib/snapshot'
 import { PAGE_SIZE, SERVER_TABS, loadLiveRating, loadMoreServers, useServers } from '../state/servers'
 
@@ -17,6 +18,8 @@ const LICENSES: [string, string][] = [
   ['CRACKED', 'Без лицензии'],
   ['LICENSE', 'Только лицензия'],
 ]
+
+const RATING_ADD_URL = 'https://millida.net/rating/add'
 
 const ONLINE_FILTERS: [string, string][] = [
   ['', 'Любой онлайн'],
@@ -79,6 +82,15 @@ export function Servers({ on }: { on: boolean }) {
             <Icon id="i-search" />
             <input placeholder="Поиск серверов…" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
+          <button
+            className="btn sm primary"
+            data-sound="open"
+            title="Добавить свой сервер в рейтинг на сайте"
+            onClick={() => openExt(RATING_ADD_URL)}
+          >
+            <Icon id="i-plus" />
+            Добавить свой сервер
+          </button>
         </div>
       </div>
 

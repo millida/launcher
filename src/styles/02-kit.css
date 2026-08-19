@@ -199,6 +199,17 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 .nav-count{margin-left:auto;min-width:20px;height:20px;padding:0 6px;border-radius:var(--m-r-pill);background:var(--m-accent-soft);color:var(--m-accent);font-size:11.5px;font-weight:700;display:grid;place-items:center}
 .nav-badge{min-width:20px;height:20px;margin-left:6px;padding:0 6px;border-radius:var(--m-r-pill);background:var(--m-danger);color:var(--m-accent-fg);font-size:11px;font-weight:700;display:grid;place-items:center}
 .sidebar.collapsed .nav-badge{position:absolute;top:1px;left:1px;margin:0;min-width:16px;height:16px;padding:0 4px;font-size:10px}
+/* Free tier is the reason people open hosting at all, so the rail says it out
+   loud. Solid accent instead of the soft tint used by counters: this is a
+   promotion, not a number, and it must not read as unread mail. */
+.nav-pill{margin-left:auto;height:18px;padding:0 7px;border-radius:var(--m-r-pill);background:var(--m-accent);color:var(--m-accent-fg);font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;display:grid;place-items:center;white-space:nowrap;flex:none;
+  box-shadow:0 0 0 0 var(--m-accent-soft);animation:nav-pill-breathe 3.6s var(--m-ease-move,ease) infinite}
+.nav-item.active .nav-pill{animation:none;box-shadow:none}
+@keyframes nav-pill-breathe{0%,72%,100%{box-shadow:0 0 0 0 rgba(0,0,0,0)}84%{box-shadow:0 0 0 4px var(--m-accent-soft)}}
+@media (prefers-reduced-motion:reduce){.nav-pill{animation:none}}
+/* Collapsed the words do not fit, but the signal must survive: the pill becomes
+   a dot on the icon, in the same corner the tooltip explains. */
+.sidebar.collapsed .nav-pill{position:absolute;top:5px;right:11px;margin:0;height:8px;width:8px;min-width:0;padding:0;font-size:0;letter-spacing:0;overflow:hidden;box-shadow:0 0 0 2px var(--m-surface)}
 .quick-row{display:flex;align-items:center;gap:4px;width:100%;padding:3px 8px 3px 12px;border-radius:10px;color:var(--m-fg-muted);transition:padding var(--m-side-t) var(--m-ease-move),background var(--m-t-fast),color var(--m-t-fast)}
 .quick-row:hover{background:rgba(255,255,255,.04);color:var(--m-fg)}
 :root[data-theme="light"] .quick-row:hover{background:rgba(18,26,20,.04)}
@@ -612,6 +623,8 @@ svg.msg-tick.read{color:var(--m-tick-read,#4C9FFE);opacity:1}
 .hero-cta .btn.glass{background:rgba(12,14,13,.72);color:rgba(242,244,243,.92);box-shadow:0 8px 24px rgba(0,0,0,.38);backdrop-filter:blur(10px)}
 .hero-cta .btn.glass:hover{background:rgba(12,14,13,.88);color:#fff;transform:translateY(-1px)}
 .hero-cta .btn.glass svg{color:var(--m-accent)}
+.hero-cta .btn.glass.on{color:#9BEC8B;box-shadow:inset 0 0 0 1.5px rgba(155,236,139,.9),0 8px 24px rgba(0,0,0,.38)}
+.hero-cta .btn.glass.on:hover{background:rgba(12,14,13,.88);color:#9BEC8B}
 /* Wallpaper switch button */
 .hero-tools{position:absolute;top:14px;right:14px;z-index:3;display:flex;gap:8px;align-items:center}
 .wp-btn{position:relative;z-index:3;height:32px;padding:0 12px;border-radius:var(--m-r-pill);background:rgba(12,14,13,.72);color:rgba(242,244,243,.85);font-size:12.5px;font-weight:600;display:inline-flex;align-items:center;gap:7px;transition:all var(--m-t-fast)}

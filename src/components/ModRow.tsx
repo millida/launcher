@@ -12,6 +12,7 @@ import { showToast } from '../state/ui'
 import { useMods } from '../state/mods'
 import type { ModHit } from '../state/mods'
 import { openCfProject, openProject } from '../state/project'
+import { mirrorAsset } from '../lib/api'
 
 const DONE_STYLE = { background: 'var(--m-accent-soft)', color: 'var(--m-accent)' }
 
@@ -172,7 +173,7 @@ export function ModRow({ h }: { h: ModHit }) {
     <div className="mod-row" data-cfweb={h.cfid !== undefined ? h.website || '' : undefined} onClick={onRow}>
       <span className="mod-icon">
         {h.icon ? (
-          <img src={h.icon} alt="" loading="lazy" onError={(e) => e.currentTarget.remove()} />
+          <img src={mirrorAsset(h.icon)} alt="" loading="lazy" onError={(e) => e.currentTarget.remove()} />
         ) : (
           <Icon id="i-box2" />
         )}

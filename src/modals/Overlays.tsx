@@ -45,7 +45,7 @@ export function ScreenshotsOverlay() {
                   cursor: 'zoom-in',
                   background: 'var(--m-inset)',
                 }}
-                onClick={() => openImage(convertFileSrc(p))}
+                onClick={() => openImage(convertFileSrc(p), { path: p })}
               />
             ))}
           </div>

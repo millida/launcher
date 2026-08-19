@@ -4,6 +4,7 @@ import { useDepPlan } from '../state/depPlan'
 import { backdropClose } from '../lib/dismiss'
 import { autoItems, depSummary, fmtBytes, planItem } from '../lib/deps'
 import type { DepNode } from '../ipc/commands'
+import { mirrorAsset } from '../lib/api'
 
 function DepRow({
   node,
@@ -27,7 +28,7 @@ function DepRow({
             onClick={onToggle}
           ></span>
         ) : null}
-        <span className="mod-art">{node.icon ? <img src={node.icon} alt="" loading="lazy" /> : <Icon id="i-box" />}</span>
+        <span className="mod-art">{node.icon ? <img src={mirrorAsset(node.icon)} alt="" loading="lazy" /> : <Icon id="i-box" />}</span>
         <span className="mod-card-body" title={node.file_name}>
           <span className="mod-card-title">
             {node.title}

@@ -90,6 +90,7 @@ import { useModpackVersions } from '../state/modpack'
 import { openProject } from '../state/project'
 import { stopRunningGame, useGame } from '../state/game'
 import { apiErrorText } from '../lib/apiError'
+import { mirrorAsset } from '../lib/api'
 
 const ramKey = (p: string) => 'm-ram-' + p
 
@@ -1148,7 +1149,7 @@ export function InstancePage() {
                             }}
                           ></span>
                           <span className="mod-art">
-                            {md.icon_url ? <img src={md.icon_url} alt="" loading="lazy" /> : <Icon id={KIND_ICON[kind]} />}
+                            {md.icon_url ? <img src={mirrorAsset(md.icon_url)} alt="" loading="lazy" /> : <Icon id={KIND_ICON[kind]} />}
                           </span>
                           <span className="mod-card-body" title={md.name}>
                             <span className="mod-card-title">

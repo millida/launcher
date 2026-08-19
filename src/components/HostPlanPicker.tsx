@@ -5,6 +5,7 @@ import { track } from '../lib/telemetry'
 import { getMillidaAccount } from '../state/accounts'
 import { showToast } from '../state/ui'
 import { backdropClose } from '../lib/dismiss'
+import { mirrorAsset } from '../lib/api'
 
 export interface HostPlan {
   code: string
@@ -269,7 +270,7 @@ export function HostPlanPicker({
                         onClick={() => setMapPick(mapPick?.id === m.id ? null : m)}
                       >
                         {m.iconUrl ? (
-                          <img src={m.iconUrl} alt="" width={36} height={36} style={{ borderRadius: '8px', flexShrink: 0 }} />
+                          <img src={mirrorAsset(m.iconUrl)} alt="" width={36} height={36} style={{ borderRadius: '8px', flexShrink: 0 }} />
                         ) : null}
                         <span style={{ minWidth: 0 }}>
                           <span className="plan-name" style={{ display: 'block' }}>{m.name}</span>

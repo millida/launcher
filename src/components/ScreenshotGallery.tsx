@@ -3,6 +3,7 @@ import { Icon } from './Icon'
 import { agoText, fmtSize } from '../lib/format'
 import { hasTauri, tauri } from '../ipc/tauri'
 import { copyText } from '../lib/clipboard'
+import { openImage } from './ImageLightbox'
 import { uiConfirm } from '../state/confirm'
 import { showToast } from '../state/ui'
 import {
@@ -23,7 +24,6 @@ export function ScreenshotGallery({ profile }: Props) {
   const [loading, setLoading] = useState(true)
   const [scope, setScope] = useState<'build' | 'all'>('build')
   const [busy, setBusy] = useState('')
-  const [zoom, setZoom] = useState<Screenshot | null>(null)
 
   const load = useCallback(() => {
     if (!hasTauri()) {
@@ -38,13 +38,6 @@ export function ScreenshotGallery({ profile }: Props) {
   }, [profile, scope])
 
   useEffect(load, [load])
-
-  useEffect(() => {
-    if (!zoom) return
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setZoom(null)
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [zoom])
 
   // convertFileSrc is the only way the webview may read a game file, and the
   // core granted these exact paths when it built the list.
@@ -94,7 +87,7 @@ export function ScreenshotGallery({ profile }: Props) {
         <div className="shot-grid">
           {shots.map((shot) => (
             <figure className="shot-card" key={shot.path}>
-              <button className="shot-thumb" onClick={() => setZoom(shot)} title="Открыть">
+              <button className="shot-thumb" onClick={() => openImage(src(shot), { path: shot.path })} title="Открыть">
                 <img src={src(shot)} alt={shot.name} loading="lazy" />
               </button>
               <figcaption>
@@ -150,11 +143,6 @@ export function ScreenshotGallery({ profile }: Props) {
         </div>
       )}
 
-      {zoom ? (
-        <div className="modal-bg open vis shot-zoom" style={{ zIndex: 220 }} onClick={() => setZoom(null)}>
-          <img src={src(zoom)} alt={zoom.name} onClick={(e) => e.stopPropagation()} />
-        </div>
-      ) : null}
     </>
   )
 }

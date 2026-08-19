@@ -3,6 +3,7 @@ import { Icon } from '../components/Icon'
 import { FilterPill } from '../components/FilterPill'
 import { ModRow } from '../components/ModRow'
 import { hasTauri } from '../ipc/tauri'
+import { MODRINTH_API } from '../lib/api'
 import { listVersions } from '../ipc/commands'
 import { LOADER_NAME, RU_LOADER, cap, loaderId } from '../lib/format'
 import { F_LOADERS, F_SIDES, F_SORTS, F_VERS, MOD_TABS, WORLD_CATS, useMods } from '../state/mods'
@@ -34,7 +35,7 @@ export function Mods({ on }: { on: boolean }) {
       useMods.getState().setCats(['все'])
       return
     }
-    fetch('https://api.modrinth.com/v2/tag/category')
+    fetch(MODRINTH_API + '/v2/tag/category')
       .then((r) => r.json())
       .then((tags: { project_type: string; name: string }[]) => {
         if (!alive) return
