@@ -23,20 +23,38 @@ export function textureHash(url: string | null | undefined): string {
 /// прошлые версии лаунчера перезаливали PNG на каждое «Применить».
 export const capeTitle = (name: string) => name.trim().toLowerCase()
 
-export const capeKey = (c: CapeIdentity) => textureHash(c.url) || c.url
+/// Отпечаток уже прочитанной текстуры. Плащ, выданный за достижение, лежит в
+/// каталоге аккаунта своей копией: адрес у неё свой, хеша Mojang в нём нет, и
+/// без сверки байтов тот же плащ показывался второй карточкой.
+export type CapeContent = (url: string) => string | undefined
+
+/// FNV-1a: сравниваем текстуры между собой, а не защищаемся от подбора.
+export function contentFingerprint(data: string): string {
+  let h = 0x811c9dc5
+  for (let i = 0; i < data.length; i++) {
+    h ^= data.charCodeAt(i)
+    h = Math.imul(h, 0x01000193)
+  }
+  return 'b' + (h >>> 0).toString(36) + '.' + data.length
+}
+
+export const capeKey = (c: CapeIdentity, content?: CapeContent) =>
+  (content && content(c.url)) || textureHash(c.url) || c.url
 
 /// Побеждает первый в списке — источник с наибольшим приоритетом. Признаки
 /// остальных к нему подмешиваются: иначе, схлопнув карточку «на аккаунте» в
 /// карточку каталога, лаунчер потерял бы id, по которому плащ переключается на
-/// лицензии.
-export function dedupeCapes<T extends CapeIdentity>(list: T[]): T[] {
+/// лицензии. Одинаковыми считаются карточки с общей текстурой (байты, хеш
+/// Mojang или адрес) либо с общим именем.
+export function dedupeCapes<T extends CapeIdentity>(list: T[], content?: CapeContent): T[] {
   const out: T[] = []
   const at = new Map<string, number>()
   for (const c of list) {
-    const key = capeKey(c)
-    const seen = key ? at.get(key) : undefined
+    const title = capeTitle(c.name)
+    const keys = [capeKey(c, content), title && 'name:' + title].filter(Boolean) as string[]
+    const seen = keys.map((k) => at.get(k)).find((v) => v !== undefined)
     if (seen === undefined) {
-      if (key) at.set(key, out.length)
+      for (const k of keys) at.set(k, out.length)
       out.push(c)
       continue
     }
@@ -49,17 +67,7 @@ export function dedupeCapes<T extends CapeIdentity>(list: T[]): T[] {
       msId: prev.msId || c.msId,
       accId: prev.accId || c.accId,
     }
+    for (const k of keys) if (!at.has(k)) at.set(k, seen)
   }
   return out
-}
-
-/// Плащи каталога аккаунта: одно имя — одна карточка.
-export function dedupeByTitle<T extends CapeIdentity>(list: T[]): T[] {
-  const seen = new Set<string>()
-  return list.filter((c) => {
-    const key = capeTitle(c.name)
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
 }

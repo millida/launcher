@@ -1,17 +1,9 @@
 import { api } from '../../lib/api'
+import { apiErrorText } from '../../lib/apiError'
 
 export const P = (id: string) => '/hosting/servers/' + encodeURIComponent(id)
 
-export const errText = (e: unknown) => {
-  const s = String((e as Error)?.message || e || '').replace(/^Error:\s*/, '')
-  if (s === 'http 401' || s.includes('unauthorized')) return 'Сессия истекла — войди заново'
-  if (s === 'http 403') return 'Недоступно на этом тарифе или нет прав'
-  if (s === 'http 404') return 'Не найдено'
-  if (s === 'http 409') return 'Занято — попробуй другое значение'
-  if (s === 'http 429') return 'Слишком часто — подожди немного'
-  if (/^http 5\d\d$/.test(s)) return 'Сервис хостинга не ответил, попробуй позже'
-  return s
-}
+export const errText = (e: unknown) => apiErrorText(e, 'Сервис хостинга не ответил, попробуй позже')
 
 export interface CatalogCore {
   id: string

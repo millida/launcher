@@ -74,7 +74,7 @@ import type {
 import { Select } from '../components/Select'
 import { Slider } from '../components/Slider'
 import { isBlockIcon } from '../lib/blockColor'
-import { LOADER_NAME, fmtPlaytime, fmtSize, loaderId, whenText } from '../lib/format'
+import { BUILD_NAME_MAX, GROUP_NAME_MAX, LOADER_NAME, fmtPlaytime, fmtSize, loaderId, whenText } from '../lib/format'
 import { AUTO_LOADER_VERSION, hasLoaderVersions, useLoaderBuilds } from '../lib/loaderBuilds'
 import { incompatibleWith } from '../lib/compat'
 import { planItem } from '../lib/deps'
@@ -89,6 +89,7 @@ import { useScreens } from '../state/screens'
 import { useModpackVersions } from '../state/modpack'
 import { openProject } from '../state/project'
 import { stopRunningGame, useGame } from '../state/game'
+import { apiErrorText } from '../lib/apiError'
 
 const ramKey = (p: string) => 'm-ram-' + p
 
@@ -363,7 +364,10 @@ export function InstancePage() {
     if (hasTauri()) {
       ;(listVersions() as Promise<string[]>)
         .then((vs) => setVerList(vs))
-        .catch(() => setVerList([]))
+        .catch((e) => {
+          setVerList([])
+          showToast('Список версий Minecraft не загрузился: ' + e + '. Проверь интернет и открой сборку заново', 'error')
+        })
       getPlayStats()
         .then((s) => {
           const b = s.builds.find((x) => x.key === profile)
@@ -650,7 +654,7 @@ export function InstancePage() {
         loadMods()
         if (after) after()
       })
-      .catch((e) => showToast(String(e), 'error'))
+      .catch((e) => showToast(apiErrorText(e, 'Не удалось выполнить действие'), 'error'))
 
   const filteredServers = wFilter !== 'single' ? servers : []
   const serversEmpty = !worldsNotice && !filteredServers.length
@@ -1207,7 +1211,7 @@ export function InstancePage() {
                               // был, а причину видели только мы в журнале ошибок.
                               toggleContent(profile!, kind, md.name, !md.enabled)
                                 .then(() => loadMods())
-                                .catch((e) => showToast(String(e), 'error'))
+                                .catch((e) => showToast(apiErrorText(e, 'Не удалось выполнить действие'), 'error'))
                             }}
                           ></span>
                           <button
@@ -1218,7 +1222,7 @@ export function InstancePage() {
                               if (await uiConfirm('Удалить ' + md.name + '?', { confirmLabel: 'Удалить' }))
                                 deleteContent(profile!, kind, md.name)
                                   .then(() => loadMods())
-                                  .catch((e) => showToast(String(e), 'error'))
+                                  .catch((e) => showToast(apiErrorText(e, 'Не удалось выполнить действие'), 'error'))
                             }}
                           >
                             <Icon id="i-trash" />
@@ -1558,6 +1562,7 @@ export function InstancePage() {
                 <div className="input sm" style={{ width: '220px' }}>
                   <input
                     id="bsRename"
+                    maxLength={BUILD_NAME_MAX}
                     value={renameVal}
                     placeholder="Название сборки"
                     onChange={(e) => setRenameVal(e.target.value)}
@@ -1913,7 +1918,7 @@ export function InstancePage() {
                         testJava(p)
                           // Статус несёт иконка тоста (i-check / i-alert), дингбаты в тексте не нужны
                           .then((v) => showToast(String(v)))
-                          .catch((e) => showToast(String(e), 'error'))
+                          .catch((e) => showToast(apiErrorText(e, 'Не удалось выполнить действие'), 'error'))
                       }}
                     >
                       Тест
@@ -2034,6 +2039,7 @@ export function InstancePage() {
                   <input
                     id="bsGroup"
                     placeholder="Напр. Технические"
+                    maxLength={GROUP_NAME_MAX}
                     value={group}
                     onChange={(e) => setGroup(e.target.value)}
                     onBlur={() => {

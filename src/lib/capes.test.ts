@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { capeKey, dedupeByTitle, dedupeCapes, textureHash } from './capes'
+import { capeKey, contentFingerprint, dedupeCapes, textureHash } from './capes'
 
 const MOJANG = 'https://textures.minecraft.net/texture/'
 const HASH_A = 'a'.repeat(64)
@@ -55,12 +55,48 @@ test('разные плащи не схлопываются', () => {
 
 test('копии одного плаща в каталоге аккаунта схлопываются по имени', () => {
   // Прошлые версии перезаливали PNG на каждое «Применить»: адрес новый, имя то же.
-  const list = dedupeByTitle([
+  const list = dedupeCapes([
     { url: 'https://cdn.millida.trade/launcher/capes/e0f-1.png', name: 'Ветеран', wardrobeId: 'w1' },
     { url: 'https://cdn.millida.trade/launcher/capes/e0f-2.png', name: ' ветеран ', wardrobeId: 'w2' },
     { url: 'https://cdn.millida.trade/launcher/capes/e0f-3.png', name: 'Страж', wardrobeId: 'w3' },
   ])
   expect(list.map((c) => c.wardrobeId)).toEqual(['w1', 'w3'])
+})
+
+test('плащ за достижение и его двойник «Дизайн Mojang» — одна карточка', () => {
+  // Плащ, выданный каталогом, лежит в аккаунте своей копией на нашем хранилище:
+  // хеша Mojang в её адресе нет, и по адресу пара не схлопывалась.
+  const list = dedupeCapes([
+    { url: 'https://cdn.millida.trade/launcher/capes/mig.png', name: 'Переселенец', wardrobeId: 'w1' },
+    { url: MOJANG + HASH_A, name: 'Переселенец' },
+  ])
+  expect(list.length).toBe(1)
+  expect(list[0].wardrobeId).toBe('w1')
+})
+
+test('одинаковые байты схлопывают плащи с разными именами и адресами', () => {
+  const bytes = new Map([
+    ['https://cdn.millida.trade/launcher/capes/mig.png', 'data:image/png;base64,AAAA'],
+    [MOJANG + HASH_A, 'data:image/png;base64,AAAA'],
+    [MOJANG + HASH_B, 'data:image/png;base64,BBBB'],
+  ])
+  const list = dedupeCapes(
+    [
+      { url: 'https://cdn.millida.trade/launcher/capes/mig.png', name: 'Мой плащ', wardrobeId: 'w1' },
+      { url: MOJANG + HASH_A, name: 'Переселенец' },
+      { url: MOJANG + HASH_B, name: 'Ванильный' },
+    ],
+    (u) => {
+      const data = bytes.get(u)
+      return data ? contentFingerprint(data) : undefined
+    },
+  )
+  expect(list.map((c) => c.name)).toEqual(['Мой плащ', 'Ванильный'])
+})
+
+test('отпечаток различает текстуры и совпадает у одинаковых', () => {
+  expect(contentFingerprint('data:image/png;base64,AAAA')).toBe(contentFingerprint('data:image/png;base64,AAAA'))
+  expect(contentFingerprint('data:image/png;base64,AAAA')).not.toBe(contentFingerprint('data:image/png;base64,AAAB'))
 })
 
 test('порядок источников сохраняется', () => {

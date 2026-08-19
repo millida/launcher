@@ -235,7 +235,7 @@ pub async fn ensure_java_major(app: &AppHandle, major: u64) -> Result<String, St
     java_version_of(&bin).ok_or_else(|| "Java установилась, но не запускается".to_string())
 }
 
-struct AdoptiumPackage {
+struct JavaPackage {
     url: String,
     sha256: String,
     size: Option<u64>,
@@ -243,18 +243,49 @@ struct AdoptiumPackage {
 
 /// The archive is executed right after unpacking, so an entry without an https
 /// link and a full sha256 is dropped rather than installed unverified.
-fn adoptium_package(assets: &serde_json::Value) -> Option<AdoptiumPackage> {
+fn adoptium_package(assets: &serde_json::Value) -> Option<JavaPackage> {
     let pkg = &assets.as_array()?.first()?["binary"]["package"];
     let url = pkg["link"].as_str().filter(|u| u.starts_with("https://"))?.to_string();
     let sha256 = pkg["checksum"].as_str()?.to_lowercase();
-    if sha256.len() != 64 || !sha256.chars().all(|c| c.is_ascii_hexdigit()) {
+    if !is_sha256(&sha256) {
         return None;
     }
-    Some(AdoptiumPackage { url, sha256, size: pkg["size"].as_u64() })
+    Some(JavaPackage { url, sha256, size: pkg["size"].as_u64() })
 }
 
-async fn install_java(app: &AppHandle, major: u64, jdir: &Path) -> Result<(), String> {
-    emit(app, "java", 0.0, &format!("Скачиваем Java {}…", major));
+fn is_sha256(digest: &str) -> bool {
+    digest.len() == 64 && digest.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+/// Azul answers a package listing without digests, so the uuid from the listing
+/// is resolved to the package record that carries sha256_hash.
+fn azul_uuid(list: &serde_json::Value) -> Option<String> {
+    let uuid = list.as_array()?.first()?["package_uuid"].as_str()?;
+    if uuid.len() > 64 || !uuid.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+        return None;
+    }
+    Some(uuid.to_string())
+}
+
+fn azul_package(detail: &serde_json::Value) -> Option<JavaPackage> {
+    let url = detail["download_url"]
+        .as_str()
+        .filter(|u| u.starts_with("https://cdn.azul.com/"))?
+        .to_string();
+    let sha256 = detail["sha256_hash"].as_str()?.to_lowercase();
+    if !is_sha256(&sha256) {
+        return None;
+    }
+    Some(JavaPackage { url, sha256, size: detail["size"].as_u64() })
+}
+
+struct Target {
+    os: &'static str,
+    ext: &'static str,
+    arch: &'static str,
+}
+
+fn target() -> Target {
     let (os, ext) = if cfg!(target_os = "macos") {
         ("mac", "tar.gz")
     } else if cfg!(target_os = "windows") {
@@ -263,30 +294,126 @@ async fn install_java(app: &AppHandle, major: u64, jdir: &Path) -> Result<(), St
         ("linux", "tar.gz")
     };
     let arch = if cfg!(target_arch = "aarch64") { "aarch64" } else { "x64" };
+    Target { os, ext, arch }
+}
+
+async fn adoptium_source(major: u64, t: &Target) -> Result<JavaPackage, String> {
     // The JRE is executed right after unpacking, so it is fetched through the
     // assets endpoint, which returns a sha256 alongside the link.
-    let assets_url = format!(
+    let url = format!(
         "https://api.adoptium.net/v3/assets/latest/{}/hotspot?architecture={}&image_type=jre&os={}&vendor=eclipse",
-        major, arch, os
+        major, t.arch, t.os
     );
     // The archive is checksum-verified, so a remembered answer is as safe as a
     // fresh one and keeps a flaky connection from blocking a launch entirely.
-    let meta_cache = data_dir().join("java").join(format!("adoptium-{}-{}-{}.json", major, os, arch));
-    let assets = get_json_cached(&assets_url, &meta_cache)
+    let cache = data_dir().join("java").join(format!("adoptium-{}-{}-{}.json", major, t.os, t.arch));
+    let assets = get_json_cached(&url, &cache).await?;
+    adoptium_package(&assets).ok_or_else(|| {
+        let _ = std::fs::remove_file(&cache);
+        "нет сборки JRE для этой системы".to_string()
+    })
+}
+
+/// Adoptium serves its archives from github.com, which whole networks cannot
+/// reach; Azul is a second vendor on an unrelated CDN, so a blocked or timing
+/// out primary no longer leaves the player without a runtime.
+async fn azul_source(major: u64, t: &Target) -> Result<JavaPackage, String> {
+    let os = match t.os {
+        "mac" => "macos",
+        other => other,
+    };
+    let list_url = format!(
+        "https://api.azul.com/metadata/v1/zulu/packages/?java_version={}&os={}&arch={}&archive_type={}&java_package_type=jre&javafx_bundled=false&release_status=ga&latest=true&availability_types=CA&page_size=1",
+        major, os, t.arch, t.ext
+    );
+    let list_cache = data_dir().join("java").join(format!("azul-{}-{}-{}.json", major, os, t.arch));
+    let list = get_json_cached(&list_url, &list_cache).await?;
+    let uuid = azul_uuid(&list).ok_or_else(|| {
+        let _ = std::fs::remove_file(&list_cache);
+        "нет сборки JRE для этой системы".to_string()
+    })?;
+    let detail_url = format!("https://api.azul.com/metadata/v1/zulu/packages/{}", uuid);
+    let detail_cache = data_dir().join("java").join(format!("azul-pkg-{}.json", uuid));
+    let detail = get_json_immutable(&detail_url, &detail_cache).await?;
+    azul_package(&detail).ok_or_else(|| {
+        let _ = std::fs::remove_file(&detail_cache);
+        let _ = std::fs::remove_file(&list_cache);
+        "ответ без sha256 — архив нечем проверить".to_string()
+    })
+}
+
+/// Vendors wrap the runtime differently: Adoptium puts bin/ at the top of the
+/// archive, Azul on macOS nests another zulu-NN.jre directory inside. One extra
+/// level is unwrapped so both land where java_bin looks.
+fn unwrap_single_dir(jdir: &Path) -> Result<(), String> {
+    if java_usable(jdir) {
+        return Ok(());
+    }
+    let mut entries = std::fs::read_dir(jdir)
+        .map_err(|e| e.to_string())?
+        .flatten()
+        .map(|e| e.path())
+        .collect::<Vec<_>>();
+    if entries.len() != 1 {
+        return Ok(());
+    }
+    let inner = entries.pop().expect("length checked above");
+    if !inner.is_dir() || !java_usable(&inner) {
+        return Ok(());
+    }
+    let lifted = jdir.with_file_name(format!(
+        "{}-lift",
+        jdir.file_name().and_then(|n| n.to_str()).unwrap_or("java")
+    ));
+    let _ = std::fs::remove_dir_all(&lifted);
+    std::fs::rename(&inner, &lifted).map_err(|e| e.to_string())?;
+    std::fs::remove_dir_all(jdir).map_err(|e| e.to_string())?;
+    std::fs::rename(&lifted, jdir).map_err(|e| e.to_string())
+}
+
+fn forget_java_metadata(major: u64, t: &Target) {
+    let dir = data_dir().join("java");
+    for name in [
+        format!("adoptium-{}-{}-{}.json", major, t.os, t.arch),
+        format!("azul-{}-{}-{}.json", major, if t.os == "mac" { "macos" } else { t.os }, t.arch),
+    ] {
+        let _ = std::fs::remove_file(dir.join(name));
+    }
+}
+
+async fn install_java(app: &AppHandle, major: u64, jdir: &Path) -> Result<(), String> {
+    emit(app, "java", 0.0, &format!("Скачиваем Java {}…", major));
+    let t = target();
+    let mut reasons = Vec::new();
+    let mut pkg = None;
+    for (vendor, found) in [
+        ("Adoptium", adoptium_source(major, &t).await),
+        ("Azul", azul_source(major, &t).await),
+    ] {
+        match found {
+            Ok(p) => {
+                pkg = Some(p);
+                break;
+            }
+            Err(e) => reasons.push(format!("{}: {}", vendor, e)),
+        }
+    }
+    let pkg = pkg.ok_or_else(|| {
+        format!(
+            "Не удалось узнать, где скачать Java {} — {}. Проверь интернет, VPN или фаервол.",
+            major,
+            reasons.join("; ")
+        )
+    })?;
+    let archive = data_dir().join(format!("java-{}.{}", major, t.ext));
+    // A remembered answer can point at a release that has since been pulled;
+    // dropping the cache turns the next attempt back into a fresh lookup.
+    download_checked(&pkg.url, &archive, Some(Sum::Sha256(&pkg.sha256)), pkg.size)
         .await
-        .map_err(|e| format!("Не удалось узнать, где скачать Java {}: {}", major, e))?;
-    let pkg = adoptium_package(&assets).ok_or_else(|| {
-        let _ = std::fs::remove_file(&meta_cache);
-        format!("Adoptium не дал пригодной ссылки на Java {} для этой системы", major)
-    })?;
-    let size = pkg.size;
-    let archive = data_dir().join(format!("java-{}.{}", major, ext));
-    download_checked(&pkg.url, &archive, Some(Sum::Sha256(&pkg.sha256)), size).await.inspect_err(|_| {
-        let _ = std::fs::remove_file(&meta_cache);
-    })?;
+        .inspect_err(|_| forget_java_metadata(major, &t))?;
     emit(app, "java", 60.0, "Распаковываем Java…");
     std::fs::create_dir_all(jdir).map_err(|e| e.to_string())?;
-    let unpacked = if ext == "zip" {
+    let unpacked = if t.ext == "zip" {
         unzip_strip1(&archive, jdir)
     } else {
         quiet(&mut Command::new("tar"))
@@ -297,6 +424,7 @@ async fn install_java(app: &AppHandle, major: u64, jdir: &Path) -> Result<(), St
     };
     let _ = std::fs::remove_file(&archive);
     unpacked?;
+    unwrap_single_dir(jdir)?;
     if java_usable(jdir) {
         Ok(())
     } else {
@@ -781,6 +909,54 @@ mod tests {
             Some(good.to_string()),
             "the digest must reach download_checked unchanged"
         );
+    }
+
+    #[test]
+    fn azul_entry_verdicts() {
+        let good = "6653196e329d393ea2ef007af90517c01781dbf5aac02fdfa84d912a55bf78f3";
+        let detail = |url: &str, sum: &str| serde_json::json!({ "download_url": url, "sha256_hash": sum });
+        // (download_url, sha256, accepted, why this case is pinned)
+        let cases: &[(&str, &str, bool, &str)] = &[
+            ("https://cdn.azul.com/zulu/bin/zulu21-jre.zip", good, true, "a normal Azul answer"),
+            ("http://cdn.azul.com/zulu/bin/zulu21-jre.zip", good, false, "plain HTTP could be swapped in transit"),
+            ("https://cdn.evil.com/zulu/bin/zulu21-jre.zip", good, false, "only the vendor CDN may serve an executed archive"),
+            ("https://cdn.azul.com/zulu/bin/zulu21-jre.zip", "", false, "no checksum means the archive cannot be verified"),
+            ("https://cdn.azul.com/zulu/bin/zulu21-jre.zip", "6653196e", false, "a truncated digest is not a sha256"),
+        ];
+        for (url, sum, expected, why) in cases {
+            let got = azul_package(&detail(url, sum)).is_some();
+            assert_eq!(got, *expected, "url {url:?} sha256 {sum:?} accepted={got}, expected {expected}. Pinned because: {why}");
+        }
+        assert_eq!(
+            azul_package(&detail("https://cdn.azul.com/zulu/bin/z.zip", good)).map(|p| p.sha256),
+            Some(good.to_string()),
+            "the digest must reach download_checked unchanged"
+        );
+    }
+
+    #[test]
+    fn azul_uuid_must_be_path_safe() {
+        let list = |uuid: &str| serde_json::json!([{ "package_uuid": uuid }]);
+        assert!(azul_uuid(&list("55b71f6b-cb92-4a1f-8d96-dcb5bc680881")).is_some(), "a normal uuid resolves the package");
+        assert!(azul_uuid(&list("../../etc/passwd")).is_none(), "the uuid reaches a URL and a cache file name");
+        assert!(azul_uuid(&list("a b")).is_none(), "a space would split the request line");
+        assert!(azul_uuid(&serde_json::json!([])).is_none(), "an empty listing offers no JRE");
+    }
+
+    #[test]
+    fn nested_runtime_is_lifted_to_the_top() {
+        let d = std::env::temp_dir().join("millida-java-test").join("nested-jre");
+        let _ = std::fs::remove_dir_all(&d);
+        let inner = d.join("zulu-21.jre");
+        let lib = java_home(&inner).join("lib");
+        std::fs::create_dir_all(&lib).unwrap();
+        std::fs::write(lib.join("jvm.cfg"), b"-server KNOWN").unwrap();
+        let bin = java_home(&inner).join("bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        std::fs::write(bin.join(if cfg!(target_os = "windows") { "java.exe" } else { "java" }), b"x").unwrap();
+        assert!(!java_usable(&d), "the runtime starts one level too deep");
+        unwrap_single_dir(&d).unwrap();
+        assert!(java_usable(&d), "a vendor that nests the runtime must still install");
     }
 
     #[test]

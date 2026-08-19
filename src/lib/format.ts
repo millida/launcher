@@ -93,6 +93,22 @@ const RU_MAP: Record<string, string> = {
 
 export const RU_LOADER = (c: string): string => RU_MAP[c] || c
 
+/// Длина текста, который пишет сам игрок. Ограничение стоит и на поле ввода, и
+/// на месте показа: поле бережёт данные, показ — вёрстку, потому что то же имя
+/// приходит и из чужой сборки, и из файла, набранного мимо лаунчера.
+export const BUILD_NAME_MAX = 40
+export const GROUP_NAME_MAX = 24
+export const TOAST_TEXT_MAX = 220
+
+/// Обрезка по границе символа с многоточием. Одна на весь интерфейс: две
+/// разъедутся, и одно и то же имя окажется обрезано по-разному в двух местах.
+export function clipText(text: string, max: number): string {
+  const value = String(text ?? '')
+  const chars = Array.from(value)
+  if (chars.length <= max) return value
+  return chars.slice(0, Math.max(1, max - 1)).join('').trimEnd() + '…'
+}
+
 /// Catalogue values arrive lower-cased from the APIs ("fabric", "любая"); only
 /// the first letter is touched so "NeoForge" and "1.21.4" stay as they are.
 export const cap = (s: string): string => (s ? s[0].toUpperCase() + s.slice(1) : s)

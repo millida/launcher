@@ -265,6 +265,32 @@ impl Installed {
     }
 }
 
+/// Mod ids that are not the catalog slug of the project publishing them. A jar
+/// declares `depends: {"fabric": "*"}`, and asking Modrinth for a project called
+/// "fabric" gets a 404 — so the launcher listed "нужен мод «fabric»" and had
+/// nothing to offer, on the single most common missing dependency there is.
+const ID_TO_SLUG: [(&str, &str); 9] = [
+    ("fabric", "fabric-api"),
+    ("architectury", "architectury-api"),
+    ("forgeconfigapiport", "forge-config-api-port"),
+    ("geckolib3", "geckolib"),
+    ("balm-fabric", "balm"),
+    ("puzzleslib", "puzzles-lib"),
+    ("yungsapi", "yungs-api"),
+    ("creative_core", "creativecore"),
+    ("roughlyenoughitems", "rei"),
+];
+
+/// The catalog slug for a mod id read out of a jar. Ids the table does not know
+/// are their own slug far more often than not, so they pass through unchanged.
+pub(crate) fn catalog_slug(mod_id: &str) -> &str {
+    ID_TO_SLUG
+        .iter()
+        .find(|(id, _)| *id == mod_id)
+        .map(|(_, slug)| *slug)
+        .unwrap_or(mod_id)
+}
+
 pub(crate) fn installed_index(profile: &str) -> Installed {
     let mut idx = Installed::default();
     for e in load_content_manifest(profile) {
@@ -767,14 +793,15 @@ pub async fn audit_deps(profile: String) -> Result<DepAudit, String> {
         if audit.issues.iter().any(|i| i.kind == "missing" && i.detail.contains(&id)) {
             continue;
         }
-        let fix = pick_modrinth(&ctx, &id, "").await.ok().map(|p| p.node);
+        let fix = pick_modrinth(&ctx, catalog_slug(&id), "").await.ok().map(|p| p.node);
         if fix.as_ref().is_some_and(|f| installed.has(&f.project_id, &f.title)) {
             continue;
         }
+        let named = fix.as_ref().map(|f| f.title.clone()).filter(|t| !t.is_empty()).unwrap_or_else(|| id.clone());
         audit.issues.push(AuditIssue {
             kind: "missing".into(),
             title: needed_by.clone(),
-            detail: format!("нужен мод «{}», в сборке его нет", id),
+            detail: format!("нужен мод «{}», в сборке его нет", named),
             file_name: String::new(),
             fix,
         });
@@ -824,6 +851,24 @@ mod tests {
         assert!(version_satisfies("1.5.0", ">=1.0.0 <2.0.0"), "space-separated clauses AND together");
         assert!(!version_satisfies("2.0.0", ">=1.0.0 <2.0.0"));
         assert!(version_satisfies("1.2.3", "^1.0.0"), "an unparsed operator is treated as still matching");
+    }
+
+    /// вход -> вердикт. A mod id read out of a jar has to reach the right catalog
+    /// project, or the audit reports "нужен мод «fabric»" with no button to press
+    /// — which is what "лаунчер предлагает докачать, но ничего не докачивает"
+    /// looked like from the player's side.
+    #[test]
+    fn declared_mod_ids_reach_their_catalog_project() {
+        let cases: [(&str, &str, &str); 5] = [
+            ("fabric", "fabric-api", "самая частая зависимость вообще: на Modrinth нет проекта «fabric»"),
+            ("architectury", "architectury-api", "то же самое у второй по частоте библиотеки"),
+            ("roughlyenoughitems", "rei", "id и slug разошлись исторически"),
+            ("cloth-config", "cloth-config", "совпадающие id проходят насквозь"),
+            ("sodium", "sodium", "неизвестный id — сам себе slug, иначе таблица стала бы белым списком"),
+        ];
+        for (id, want, why) in cases {
+            assert_eq!(catalog_slug(id), want, "«{id}» обязан вести на «{want}». Зачем случай закреплён: {why}");
+        }
     }
 
     /// input -> verdict. Embedded libraries and tools are already inside the jar:

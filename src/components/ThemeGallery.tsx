@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Icon } from './Icon'
 import { Select } from './Select'
 import { Slider } from './Slider'
@@ -26,6 +26,7 @@ import {
   storedPackId,
 } from '../lib/themes'
 import type { DensityPref, ThemeOption, ThemePack } from '../lib/themes'
+import { apiErrorText } from '../lib/apiError'
 
 /// The card for the stock look must keep showing the stock colours even while a
 /// pack is active, so it cannot read the live tokens.
@@ -123,6 +124,16 @@ export function ThemeGallery() {
 
   const active = packs.find((p) => p.id === activeId) || null
 
+  /// Единственный путь к списку тем на экране. Любое действие с темами —
+  /// установка, сохранение в редакторе, удаление, файл, положенный в папку тем
+  /// мимо лаунчера — заканчивается здесь, иначе новая тема появлялась только
+  /// после ухода со вкладки и возврата на неё.
+  const reload = useCallback(async (): Promise<ThemePack[]> => {
+    const list = await availableThemes()
+    setPacks(list)
+    return list
+  }, [])
+
   useEffect(() => {
     let alive = true
     void availableThemes().then((list) => {
@@ -136,6 +147,21 @@ export function ThemeGallery() {
     }
   }, [])
 
+  // Папка тем открывается кнопкой рядом: файл кладут в неё в другом окне, и
+  // возврат в лаунчер — единственный момент, когда об этом можно узнать.
+  useEffect(() => {
+    const onFocus = () => {
+      if (document.hidden) return
+      void reload()
+    }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onFocus)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onFocus)
+    }
+  }, [reload])
+
   async function pick(pack: ThemePack | null) {
     if (busy) return
     setBusy(true)
@@ -144,7 +170,7 @@ export function ThemeGallery() {
       setActiveId(pack ? pack.id : '')
       setValues(pack ? optionValues(pack) : {})
     } catch (e) {
-      showToast(e instanceof Error ? e.message : String(e), 'error')
+      showToast(apiErrorText(e, 'Не удалось выполнить действие с темой'), 'error')
     } finally {
       setBusy(false)
     }
@@ -172,8 +198,7 @@ export function ThemeGallery() {
     try {
       const installed = await importTheme()
       if (!installed) return
-      const list = await availableThemes()
-      setPacks(list)
+      const list = await reload()
       const pack = list.find((p) => p.id === installed.id)
       if (pack) {
         await applyThemePack(pack)
@@ -182,7 +207,7 @@ export function ThemeGallery() {
       }
       showToast('Тема «' + installed.name + '» установлена')
     } catch (e) {
-      showToast(e instanceof Error ? e.message : String(e), 'error')
+      showToast(apiErrorText(e, 'Не удалось выполнить действие с темой'), 'error')
     } finally {
       setBusy(false)
     }
@@ -206,7 +231,7 @@ export function ThemeGallery() {
       }
       setDraft(next)
     } catch (e) {
-      showToast(e instanceof Error ? e.message : String(e), 'error')
+      showToast(apiErrorText(e, 'Не удалось выполнить действие с темой'), 'error')
     }
   }
 
@@ -215,8 +240,7 @@ export function ThemeGallery() {
   async function closeEditor() {
     setDraft(null)
     if (!savedId) return
-    const list = await availableThemes()
-    setPacks(list)
+    const list = await reload()
     const pack = list.find((p) => p.id === savedId)
     setSavedId('')
     if (!pack) return
@@ -232,13 +256,12 @@ export function ThemeGallery() {
       const path = await exportTheme(pack.id)
       if (path) showToast('Тема сохранена: ' + path)
     } catch (e) {
-      showToast(e instanceof Error ? e.message : String(e), 'error')
+      showToast(apiErrorText(e, 'Не удалось выполнить действие с темой'), 'error')
     }
   }
 
   async function onCatalogInstall(file: InstalledThemeFile) {
-    const list = await availableThemes()
-    setPacks(list)
+    const list = await reload()
     const pack = list.find((p) => p.id === file.id)
     if (!pack) return
     await applyThemePack(pack)
@@ -256,11 +279,11 @@ export function ThemeGallery() {
     try {
       await deleteTheme(pack.id)
       if (activeId === pack.id) await applyThemePack(null)
-      setPacks(await availableThemes())
+      await reload()
       if (activeId === pack.id) setActiveId('')
       showToast('Тема удалена')
     } catch (e) {
-      showToast(e instanceof Error ? e.message : String(e), 'error')
+      showToast(apiErrorText(e, 'Не удалось выполнить действие с темой'), 'error')
     }
   }
 
@@ -366,7 +389,10 @@ export function ThemeGallery() {
           initial={draft}
           packs={packs}
           onClose={() => void closeEditor()}
-          onSaved={(theme) => setSavedId(theme.id)}
+          onSaved={(theme) => {
+            setSavedId(theme.id)
+            void reload()
+          }}
         />
       ) : null}
 

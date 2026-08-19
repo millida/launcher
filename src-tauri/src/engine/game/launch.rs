@@ -596,8 +596,25 @@ pub(crate) fn build_args(
     let token = if online { auth.token.clone() } else { "0".to_string() };
     let user_type = if online { "msa" } else { "legacy" };
     let xuid = if auth.xuid.is_empty() { "0".to_string() } else { auth.xuid.clone() };
+    // 1.7.6-1.8.9 pass `--userProperties ${user_properties}` and hand the value
+    // straight to Gson: an unexpanded placeholder is a syntax error that kills
+    // the game before the window opens. 1.6.4 and older want `${auth_session}`
+    // and `${game_assets}` instead, and 1.5.2 has no named argument for the
+    // nickname at all — a missed placeholder there becomes the player's name.
+    let session = format!("token:{}:{}", token, uuid);
+    // Only a virtual asset index has a laid-out directory; newer versions read
+    // the object store and never reference `${game_assets}`.
+    let game_assets = v["millidaGameAssets"]
+        .as_str()
+        .map(String::from)
+        .unwrap_or_else(|| assets_root.to_string_lossy().to_string());
     let subst = |s: &str| -> String {
         s.replace("${auth_player_name}", nick)
+            .replace("${user_properties}", "{}")
+            .replace("${user_property_map}", "{}")
+            .replace("${auth_session}", &session)
+            .replace("${game_assets}", &game_assets)
+            .replace("${profile_name}", "Millida")
             .replace("${version_name}", v["id"].as_str().unwrap_or(""))
             .replace("${game_directory}", &game_dir.to_string_lossy())
             .replace("${assets_root}", &assets_root.to_string_lossy())
@@ -734,8 +751,16 @@ pub async fn install_and_launch_in(
     if matches!(loader_id.as_str(), "fabric" | "quilt" | "forge" | "neoforge") {
         let licensed = !auth.token.is_empty() && auth.yggdrasil.is_empty();
         if want_skin {
-            if let Err(e) = ensure_custom_skin_loader(&profile, &loader_id, root.as_deref(), &nick, licensed).await {
-                warn(&app, &format!("Мод скинов не поставлен: {}", e));
+            match ensure_custom_skin_loader(&profile, &loader_id, root.as_deref(), &nick, licensed).await {
+                Err(e) => warn(&app, &format!("Мод скинов не поставлен: {}", e)),
+                Ok(off) if !off.is_empty() => warn(
+                    &app,
+                    &format!(
+                        "Выключили мод скинов другого лаунчера ({}) — он показывал скин с его сервера. Теперь скин берётся из Millida",
+                        off.join(", ")
+                    ),
+                ),
+                Ok(_) => {}
             }
         }
     } else if let Some(why) = in_game_skin_blocker(&loader_id, !auth.token.is_empty(), want_skin) {
@@ -899,6 +924,96 @@ pub async fn install_and_launch_in(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn legacy_args_of(mc_args: &str, extra: Value) -> Vec<String> {
+        let mut v = serde_json::json!({
+            "id": "1.7.10",
+            "type": "release",
+            "assetIndex": { "id": "1.7.10" },
+            "minecraftArguments": mc_args,
+        });
+        if let Some(obj) = extra.as_object() {
+            for (k, val) in obj {
+                v[k] = val.clone();
+            }
+        }
+        build_args(
+            &v,
+            "net.minecraft.client.main.Main",
+            &[PathBuf::from("client.jar")],
+            "Steve",
+            Path::new("/games/build"),
+            Path::new("/games/assets"),
+            Path::new("/games/natives"),
+            Path::new("/games/libraries"),
+            &Auth::default(),
+        )
+    }
+
+    /// вход -> вердикт. Every placeholder the released legacy argument strings
+    /// actually use. 1.7.6-1.8.9 hand `--userProperties` straight to Gson, so an
+    /// unexpanded `${user_properties}` is a syntax error that kills the game
+    /// before the window opens — which is exactly how "не запускается ниже
+    /// 1.12.2" looked to players.
+    #[test]
+    fn legacy_argument_strings_leave_no_placeholder() {
+        // (game version, its real minecraftArguments, why the case is pinned)
+        let cases: [(&str, &str, &str); 3] = [
+            (
+                "1.7.10",
+                "--username ${auth_player_name} --version ${version_name} --gameDir ${game_directory} \
+                 --assetsDir ${assets_root} --assetIndex ${assets_index_name} --uuid ${auth_uuid} \
+                 --accessToken ${auth_access_token} --userProperties ${user_properties} --userType ${user_type}",
+                "самая популярная старая версия: падала на ${user_properties}",
+            ),
+            (
+                "1.6.4",
+                "--username ${auth_player_name} --session ${auth_session} --version ${version_name} \
+                 --gameDir ${game_directory} --assetsDir ${game_assets}",
+                "виртуальные ассеты и сессия старого формата",
+            ),
+            (
+                "1.5.2",
+                "${auth_player_name} ${auth_session} --gameDir ${game_directory} --assetsDir ${game_assets}",
+                "ник и сессия идут без имени аргумента — незамена превращается в ник игрока",
+            ),
+        ];
+        for (version, mc_args, why) in cases {
+            let args = legacy_args_of(mc_args, Value::Null);
+            let left: Vec<&String> = args.iter().filter(|a| a.contains("${")).collect();
+            assert!(
+                left.is_empty(),
+                "{version}: подстановка пропустила {left:?}. Зачем случай закреплён: {why}",
+            );
+        }
+    }
+
+    #[test]
+    fn user_properties_expand_to_valid_json_and_session_carries_the_token() {
+        let args = legacy_args_of("--userProperties ${user_properties} --session ${auth_session}", Value::Null);
+        assert_eq!(args.iter().find(|a| a.starts_with('{')).map(String::as_str), Some("{}"),
+                   "Gson разбирает это значение — пустой объект единственное, что она примет без данных");
+        assert!(
+            args.iter().any(|a| a.starts_with("token:0:")),
+            "офлайн-сессия обязана быть в формате token:<токен>:<uuid>, получили {args:?}"
+        );
+    }
+
+    /// A virtual asset index is laid out on disk during the install; pointing an
+    /// old version at the object store instead gives it a world with no textures.
+    #[test]
+    fn game_assets_point_at_the_laid_out_directory_when_there_is_one() {
+        let with = legacy_args_of(
+            "--assetsDir ${game_assets}",
+            serde_json::json!({ "millidaGameAssets": "/games/assets/virtual/legacy" }),
+        );
+        assert!(with.contains(&"/games/assets/virtual/legacy".to_string()), "получили {with:?}");
+        let without = legacy_args_of("--assetsDir ${game_assets}", Value::Null);
+        assert!(
+            without.iter().any(|a| a.contains("assets")) && !without.iter().any(|a| a.contains("${")),
+            "без разложенных ассетов остаётся обычный каталог, но не плейсхолдер: {without:?}"
+        );
+    }
 
     #[test]
     fn log4j_xml_event_becomes_plain_line() {

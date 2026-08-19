@@ -16,6 +16,12 @@ const SKIN_OWNING_MODS: [&str; 6] = [
     "fabrictailor",
     "entitytexturefeatures",
 ];
+/// Skin mods another launcher puts into the game folder itself. TLauncher adds
+/// TLSkinCape to every build it runs, and an imported build keeps it: the mod
+/// answers for the skin from that launcher's own service by nickname, so the
+/// wardrobe here changed nothing, and a nickname renamed there left the player
+/// with no skin at all.
+const FOREIGN_SKIN_MODS: [&str; 3] = ["tlskincape", "tlskin", "tlauncherskin"];
 /// Pinned build used when the release feed carries no digest: the jar runs
 /// inside the player's JVM, so an unverifiable download is not acceptable.
 const CSL_PINNED_URL: &str =
@@ -120,6 +126,38 @@ fn csl_loadlist(csl_root: Option<&str>, licensed: bool, slim: bool) -> Vec<Value
     list
 }
 
+fn is_foreign_skin_mod(file_name: &str) -> bool {
+    let n = file_name.to_lowercase();
+    let flat = n.replace([' ', '-', '_', '[', ']', '(', ')'], "");
+    n.ends_with(".jar") && FOREIGN_SKIN_MODS.iter().any(|m| flat.contains(m))
+}
+
+/// Renamed, never deleted: the player keeps the file and can put it back, while
+/// a loader passes over anything that is not a `.jar`. Returns what was turned
+/// off so the launch screen can say why the skin changed hands.
+fn disable_foreign_skin_mods(mods: &std::path::Path) -> Vec<String> {
+    let mut off = vec![];
+    let Ok(rd) = std::fs::read_dir(mods) else { return off };
+    for e in rd.flatten() {
+        let name = e.file_name().to_string_lossy().to_string();
+        if !is_foreign_skin_mod(&name) {
+            continue;
+        }
+        let mut to = mods.join(format!("{}.disabled", name));
+        // An earlier launch may already have parked a copy under that name.
+        for n in 2..100 {
+            if !to.exists() {
+                break;
+            }
+            to = mods.join(format!("{}.{}.disabled", name, n));
+        }
+        if !to.exists() && std::fs::rename(e.path(), &to).is_ok() {
+            off.push(name);
+        }
+    }
+    off
+}
+
 #[derive(PartialEq, Debug)]
 enum Absent { Install, Skip, OptOut }
 
@@ -141,19 +179,24 @@ fn absent_action(switch_on: bool, disabled_copy: bool, installed_before: bool) -
 /// `licensed` means the launch runs on a Mojang account: only then may Mojang
 /// answer for this nickname — for a Millida or offline account the same name
 /// belongs to a stranger there, and the game would show that stranger's skin.
+/// Returns the skin mods of other launchers it turned off on the way.
 pub async fn ensure_custom_skin_loader(
     profile: &str,
     loader: &str,
     csl_root: Option<&str>,
     nick: &str,
     licensed: bool,
-) -> Result<(), String> {
+) -> Result<Vec<String>, String> {
     if !matches!(loader, "fabric" | "quilt" | "forge" | "neoforge") {
         return Err("сборка без загрузчика модов".into());
     }
     let dir = profile_dir(profile);
     let mods = dir.join("mods");
     std::fs::create_dir_all(&mods).map_err(|e| e.to_string())?;
+
+    // Before anything else: a mod of another launcher answers for the skin
+    // whatever this one installs or writes next.
+    let turned_off = if skin_mod_on(profile) { disable_foreign_skin_mods(&mods) } else { vec![] };
 
     let jar = mods.join(CSL_JAR);
     let other = skin_owning_mod(&mods);
@@ -165,10 +208,10 @@ pub async fn ensure_custom_skin_loader(
             profile_settings(profile)["skinModInstalled"].as_bool().unwrap_or(false),
         ) {
             Absent::Install => {}
-            Absent::Skip => return Ok(()),
+            Absent::Skip => return Ok(turned_off),
             Absent::OptOut => {
                 note_skin_mod_removed(profile);
-                return Ok(());
+                return Ok(turned_off);
             }
         }
     }
@@ -190,12 +233,12 @@ pub async fn ensure_custom_skin_loader(
     write_json_atomic(&cfg_dir.join("CustomSkinLoader.json"), &cfg)?;
 
     if jar.exists() {
-        return Ok(());
+        return Ok(turned_off);
     }
     // never add a second one: a copy of the same mod is a hard crash on the
     // loader, and a different skin mod fights ours over the same texture
     if let Some(other) = other {
-        return if is_csl(&other) { Ok(()) } else {
+        return if is_csl(&other) { Ok(turned_off) } else {
             Err(format!("в сборке уже есть свой мод скинов ({})", other))
         };
     }
@@ -206,7 +249,7 @@ pub async fn ensure_custom_skin_loader(
     // last, and only on a real success: a marker set next to the attempt would
     // make a failed download look like a jar the player deleted
     mark_installed(profile, true);
-    Ok(())
+    Ok(turned_off)
 }
 
 /// Universal jar plus its sha256 from the release feed (`digest` is
@@ -368,6 +411,43 @@ mod tests {
 
     fn source(list: &[Value], name: &str) -> Value {
         list.iter().find(|s| s["name"] == name).cloned().unwrap_or(Value::Null)
+    }
+
+    /// file name                  | verdict | why it is pinned
+    /// TLSkinCape.jar             | foreign | TLauncher's own skin mod
+    /// [1.12.2]TLSkinCape-1.2.jar | foreign | the same mod as a pack names it
+    /// CustomSkinLoader.jar       | ours    | the launcher's own copy
+    /// tlskincape.jar.disabled    | left    | already parked, no longer loaded
+    /// betterskins.jar            | other   | not from another launcher
+    #[test]
+    fn skin_mods_of_other_launchers_are_recognised() {
+        assert!(is_foreign_skin_mod("TLSkinCape.jar"));
+        assert!(is_foreign_skin_mod("[1.12.2]TLSkinCape-1.2.jar"));
+        assert!(!is_foreign_skin_mod("CustomSkinLoader.jar"));
+        assert!(!is_foreign_skin_mod("tlskincape.jar.disabled"), "выключенный мод трогать второй раз незачем");
+        assert!(!is_foreign_skin_mod("betterskins.jar"));
+    }
+
+    /// A build imported from TLauncher keeps that launcher's skin mod, and it
+    /// answers for the skin ahead of anything the wardrobe here sets — the player
+    /// then cannot change the skin in either launcher.
+    #[test]
+    fn foreign_skin_mod_is_parked_not_deleted() {
+        let mods = std::env::temp_dir().join(format!("millida-foreign-skin-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&mods);
+        std::fs::create_dir_all(&mods).unwrap();
+        std::fs::write(mods.join("TLSkinCape.jar"), b"tl").unwrap();
+        std::fs::write(mods.join("TLSkinCape.jar.disabled"), b"old").unwrap();
+        std::fs::write(mods.join("JourneyMap.jar"), b"map").unwrap();
+
+        let off = disable_foreign_skin_mods(&mods);
+
+        assert_eq!(off, vec!["TLSkinCape.jar".to_string()], "игрок должен узнать, что мод выключен");
+        assert!(!mods.join("TLSkinCape.jar").exists(), "иначе скин по-прежнему берётся из чужого лаунчера");
+        assert_eq!(std::fs::read(mods.join("TLSkinCape.jar.2.disabled")).unwrap(), b"tl", "файл сохранён, а не удалён");
+        assert_eq!(std::fs::read(mods.join("TLSkinCape.jar.disabled")).unwrap(), b"old", "ранее выключенную копию не затираем");
+        assert!(mods.join("JourneyMap.jar").exists(), "остальные моды сборки не трогаем");
+        let _ = std::fs::remove_dir_all(&mods);
     }
 
     /// account   | licensed | expected order

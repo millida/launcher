@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { listLoaderVersions, type LoaderBuild } from '../ipc/commands'
 import { hasTauri } from '../ipc/tauri'
 import type { SelectOption } from '../components/Select'
+import { apiErrorText } from './apiError'
 
 /// Empty means "let the installer pick the recommended build".
 export const AUTO_LOADER_VERSION = ''
@@ -31,7 +32,7 @@ export function useLoaderBuilds(loader: string, mcVersion: string, active: boole
       })
       .catch((e) => {
         if (!alive) return
-        setError(String(e))
+        setError(apiErrorText(e, 'Список сборок не загрузился'))
         setLoading(false)
       })
     return () => {

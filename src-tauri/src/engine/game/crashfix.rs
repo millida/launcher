@@ -133,6 +133,21 @@ pub fn diagnose(profile: &str, reason: &str, tail: &str, log_text: &str) -> Cras
         }
     }
 
+    // A loader that stopped on unmet requirements does not need a file check —
+    // it needs the missing jars fetched. "Починить сборку" only re-verifies what
+    // is already installed, so it answered this verdict by downloading nothing.
+    if low.contains("зависимост") {
+        actions.insert(
+            0,
+            CrashAction::new(
+                "install-deps",
+                "Доустановить зависимости".into(),
+                String::new(),
+                "Найдём недостающие моды и поставим их",
+            ),
+        );
+    }
+
     if low.contains("оператив") || low.contains("памяти") {
         let tuning = tune_profile(profile);
         actions.insert(
@@ -199,6 +214,48 @@ pub async fn apply_crash_fix(app: tauri::AppHandle, profile: String, kind: Strin
             patch.insert("ramMb".into(), serde_json::json!(mb));
             merge_settings(&profile, patch);
             Ok(format!("Сборке выделено {} ГБ", mb / 1024))
+        }
+        "install-deps" => {
+            let audit = audit_deps(profile.clone()).await?;
+            let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+            let items: Vec<PlanItem> = audit
+                .issues
+                .iter()
+                .filter_map(|i| i.fix.as_ref())
+                .filter(|f| seen.insert(f.project_id.clone()))
+                .map(|f| PlanItem {
+                    source: f.source.clone(),
+                    project_id: f.project_id.clone(),
+                    version_id: f.version_id.clone(),
+                })
+                .collect();
+            if items.is_empty() {
+                let stuck: Vec<&str> = audit
+                    .issues
+                    .iter()
+                    .filter(|i| i.kind == "missing")
+                    .map(|i| i.detail.as_str())
+                    .collect();
+                return Err(if stuck.is_empty() {
+                    "Недостающих зависимостей в сборке не нашли — причина вылета в другом, посмотри лог".into()
+                } else {
+                    format!(
+                        "В каталогах нет того, что требуют моды ({}). Скачай их вручную или убери моды, которые их просят.",
+                        stuck.join("; ")
+                    )
+                });
+            }
+            let want = items.len();
+            let report = install_dep_items(app, profile, "mod".into(), items).await?;
+            if !report.failed.is_empty() {
+                return Err(format!(
+                    "Поставили {} из {}, не встало: {}. Попробуй ещё раз или поставь их вручную.",
+                    report.installed.len(),
+                    want,
+                    report.failed.join("; ")
+                ));
+            }
+            Ok(format!("Доустановлено модов: {}. Запусти игру ещё раз.", report.installed.len()))
         }
         "install-java" => {
             let major: u64 = arg.parse().map_err(|_| "Некорректная версия Java".to_string())?;

@@ -95,7 +95,13 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
   display:flex;flex-direction:column;position:relative;overflow:hidden;
 }
 /* Titlebar (frameless, drag region) */
-.titlebar{height:44px;display:flex;align-items:center;gap:10px;padding:0 8px 0 16px;flex-shrink:0;user-select:none;position:relative}
+/* The window has no native frame: minimise, maximise and close exist only
+   here. Every full-screen layer (boot splash, boot update, modal backdrop,
+   onboarding, tour, lightbox) is painted over this strip and swallowed the
+   clicks — on a first run the launcher could not be minimised or closed at
+   all until it was restarted. The strip stays above all of them. */
+.titlebar{height:44px;display:flex;align-items:center;gap:10px;padding:0 8px 0 16px;flex-shrink:0;user-select:none;position:relative;z-index:10100;pointer-events:none}
+.titlebar>*{pointer-events:auto}
 .tb-center{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;align-items:center;gap:9px;pointer-events:none}
 .tb-logo{display:flex;align-items:center;gap:9px}
 .tb-mark{width:22px;height:22px;border-radius:8px;background:var(--m-grad);display:grid;place-items:center;color:var(--m-accent-fg)}
@@ -772,6 +778,9 @@ svg.msg-tick.read{color:var(--m-tick-read,#4C9FFE);opacity:1}
 .slider::-webkit-slider-thumb:hover{transform:scale(1.12)}
 .cover-ph{position:absolute;inset:0;display:grid;place-items:center;color:var(--m-fg-faint)}
 .cover-ph svg{width:34px;height:34px}
+/* The group name is typed by the user and can also arrive from the groups file
+   written outside the launcher, so the heading bounds it instead of trusting it. */
+.build-group-cap{grid-column:1/-1;margin:6px 2px 2px;font-size:12px;font-weight:700;color:var(--m-fg-subtle);text-transform:uppercase;letter-spacing:.04em;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .build-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(124px,1fr));gap:10px}
 /* Equal-width columns via grid-auto-flow, so the row can never wrap. */
 .build-grid.one-line{grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:minmax(0,132px);justify-content:start;gap:9px;container-type:inline-size}
@@ -949,9 +958,12 @@ svg.msg-tick.read{color:var(--m-tick-read,#4C9FFE);opacity:1}
 .ip-pill svg{width:14px;height:14px;color:var(--m-fg-subtle)}
 
 /* Toast */
-.toast{position:absolute;right:20px;bottom:20px;background:var(--m-raised);border-radius:var(--m-r-card);box-shadow:var(--m-shadow-lg);padding:14px 18px;display:flex;align-items:center;gap:11px;font-size:13.5px;font-weight:600;opacity:0;transform:translateY(8px);pointer-events:none;transition:all var(--m-t-slow) var(--m-ease-out);z-index:500}
+.toast{position:absolute;right:20px;bottom:20px;max-width:min(420px,calc(100% - 40px));background:var(--m-raised);border-radius:var(--m-r-card);box-shadow:var(--m-shadow-lg);padding:14px 18px;display:flex;align-items:center;gap:11px;font-size:13.5px;font-weight:600;opacity:0;transform:translateY(8px);pointer-events:none;transition:all var(--m-t-slow) var(--m-ease-out);z-index:500}
 .toast.show{opacity:1;transform:none}
-.toast svg{width:17px;height:17px;color:var(--m-success)}
+/* A build name goes into the toast as the user typed it: the notice wraps and
+   stops at four lines instead of growing across the window. */
+#toastMsg{min-width:0;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.toast svg{width:17px;height:17px;flex:none;color:var(--m-success)}
 .toast.error svg,.toast.error svg.icon{color:var(--m-danger)}
 .toast.error{box-shadow:var(--m-shadow-lg),inset 3px 0 0 var(--m-danger)}
 .toast.show.has-act{pointer-events:auto}

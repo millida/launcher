@@ -3,6 +3,7 @@ import { hasTauri } from '../ipc/tauri'
 import { cfSearch, listContent, listWorldInstalls } from '../ipc/commands'
 import { fmt } from '../lib/format'
 import { mergeSources } from '../lib/modMerge'
+import { pickTargetName } from '../lib/installKeys'
 import { useProfiles } from './profiles'
 
 export interface ModHit {
@@ -83,12 +84,25 @@ interface ModsState {
   toggleCat: (name: string) => void
   resetFilters: () => void
   load: (append?: boolean) => Promise<void>
+  refreshInstalled: () => Promise<void>
   scopeTo: (build: string | null) => void
+}
+
+/// The build the catalogue installs into, and therefore the build its rows
+/// report about. Один расчёт на весь каталог: строка, ключ задачи и список уже
+/// установленного обязаны говорить об одной и той же сборке.
+export function catalogTargetBuild(): string {
+  const { profiles, selected } = useProfiles.getState()
+  return pickTargetName(
+    useMods.getState().targetBuild,
+    profiles.map((p) => p.name),
+    selected || '',
+  )
 }
 
 async function refreshInstalledIds(kind: string): Promise<Set<string>> {
   const ids = new Set<string>()
-  const selected = useMods.getState().targetBuild || useProfiles.getState().selected
+  const selected = catalogTargetBuild()
   if (!hasTauri() || !selected) return ids
   if (kind === 'world') {
     try {
@@ -166,15 +180,22 @@ export const useMods = create<ModsState>((set, get) => ({
     })
     void get().load()
   },
+  // A finished install has to reach the row that started it: without re-reading
+  // the build, the button kept saying «Добавить» over a mod that was already in.
+  refreshInstalled: async () => set({ installedIds: await refreshInstalledIds(get().modTab) }),
   // Entering the catalog from a build pre-filters it: content for another game
-  // version installs fine and then keeps the game from starting.
-  scopeTo: (build) => set({ targetBuild: build, ...scopeFilters(build) }),
+  // version installs fine and then keeps the game from starting. The typed query
+  // belongs to the visit that typed it: kept across builds it silently hid every
+  // mod that did not match a search the player had forgotten about.
+  scopeTo: (build) => set({ targetBuild: build, mq: '', ...scopeFilters(build) }),
   load: async (append) => {
     const s = get()
     if (!append) {
       set({ offset: 0, cfOffset: 0, installedIds: await refreshInstalledIds(s.modTab) })
     }
     const st = get()
+    // The field keeps what the player typed, the request gets it trimmed.
+    const query = st.mq.trim()
     if (st.modTab === 'world') {
       if (!hasTauri()) {
         set({ hits: [], count: '', showMore: false, notice: 'Каталог карт доступен в приложении' })
@@ -183,7 +204,7 @@ export const useMods = create<ModsState>((set, get) => ({
       const idx = append ? s.cfOffset : 0
       try {
         const raw = await cfSearch(
-          st.mq,
+          query,
           'world',
           st.fVer === 'любая' ? '' : st.fVer,
           '',
@@ -226,7 +247,7 @@ export const useMods = create<ModsState>((set, get) => ({
       if (hasTauri()) {
         try {
           const loader = st.fLoader === 'любой' ? '' : st.fLoader
-          const raw = await cfSearch(st.mq, st.modTab, st.fVer === 'любая' ? '' : st.fVer, loader, cfOffset)
+          const raw = await cfSearch(query, st.modTab, st.fVer === 'любая' ? '' : st.fVer, loader, cfOffset)
           const hits: ModHit[] = raw.map((h) => ({
             title: h.name,
             author: 'CurseForge',
@@ -274,7 +295,7 @@ export const useMods = create<ModsState>((set, get) => ({
     if (st.fSide === 'server') f.push(['server_side:required', 'server_side:optional'])
     if (st.fOpenSource) f.push(['open_source:true'])
     const facets = encodeURIComponent(JSON.stringify(f))
-    const idx = st.mq ? 'relevance' : F_SORTS[st.fSort] || 'downloads'
+    const idx = query ? 'relevance' : F_SORTS[st.fSort] || 'downloads'
     const offset = append ? s.offset : 0
     const url =
       'https://api.modrinth.com/v2/search?limit=20&offset=' +
@@ -283,7 +304,7 @@ export const useMods = create<ModsState>((set, get) => ({
       idx +
       '&facets=' +
       facets +
-      (st.mq ? '&query=' + encodeURIComponent(st.mq) : '')
+      (query ? '&query=' + encodeURIComponent(query) : '')
     try {
       const d = await (await fetch(url)).json()
       const hits: ModHit[] = (d.hits || []).map((h: any) => ({

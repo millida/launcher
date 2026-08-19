@@ -28,7 +28,10 @@
   background:var(--m-inset);color:var(--m-fg-faint);
 }
 .th-act:hover{background:var(--m-raised);color:var(--m-fg)}
-.th-del:hover{background:var(--m-danger-soft);color:var(--m-danger)}
+/* --m-danger-soft is a translucent tint meant to sit on a solid surface; as the
+   whole background it let the card through and the button read as disappearing
+   under the cursor, so the tint is mixed into the opaque base instead. */
+.th-del:hover{background:color-mix(in srgb,var(--m-inset) 74%,var(--m-danger) 26%);color:var(--m-danger)}
 .th-act svg{width:13px;height:13px}
 
 /* ============ Theme editor ============ */

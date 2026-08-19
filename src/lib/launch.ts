@@ -5,10 +5,12 @@ import type { UnlistenFn } from '../ipc/tauri'
 import type { LaunchAuth } from '../ipc/commands'
 import { api, hasMillidaAccount } from './api'
 import { joinPageUrl } from './invite'
+import { beatStatus } from './presence'
 import { effectiveNick, getAccount, launchAuthKind, profileSlug } from '../state/accounts'
 import { ensureMsAuth, startMsLogin } from '../state/msLogin'
 import { uiChoice, uiConfirm } from '../state/confirm'
 import { useProfiles } from '../state/profiles'
+import { setVerifiedSeconds } from '../state/playStats'
 import { showToast, useUi } from '../state/ui'
 import { useGame } from '../state/game'
 import { applyLaunchWindowMode } from './window'
@@ -40,7 +42,14 @@ const SESSION_GRACE_MS = 3 * 60 * 1000
  * продолжал бить «playing» и копить часы без запущенной игры.
  */
 export async function reconcileGameSession(): Promise<void> {
-  if (!hasTauri() || !session || launching) return
+  if (!session || launching) return
+  // No core, no proof: a session that cannot be checked is dropped instead of
+  // beating "playing" until the daily cap on the server side.
+  if (!hasTauri()) {
+    setGameSession(null)
+    heartbeat('lobby')
+    return
+  }
   if (Date.now() - sessionAt < SESSION_GRACE_MS) return
   try {
     const list = (await runningGames()) || []
@@ -71,21 +80,22 @@ export function discordPresence(status?: string, server?: string | null) {
 }
 
 export function heartbeat(status?: string, server?: string | null) {
-  if (session && (!status || status === 'lobby')) {
-    status = 'playing'
+  const beat = beatStatus(status, !!session, hasTauri())
+  if (beat === 'playing' && session && (!status || status === 'lobby'))
     server = session.serverName || session.server
-  }
-  const playing = status === 'playing'
+  const playing = beat === 'playing'
   if (hasMillidaAccount())
     api('/friends/presence/heartbeat', {
       method: 'POST',
       body: JSON.stringify({
-        status: status || 'lobby',
+        status: beat,
         server: (playing && (server || (session && (session.serverName || session.server)))) || null,
         serverIp: (playing && session && session.server) || null,
         build: (playing && session && session.profile) || null,
       }),
-    }).catch(() => {})
+    })
+      .then((r: unknown) => setVerifiedSeconds((r as { verifiedSeconds?: number | null })?.verifiedSeconds ?? null))
+      .catch(() => {})
   const build = (playing && session && session.profile) || null
   const pack = build ? useProfiles.getState().profiles.find((p) => p.name === build) : undefined
   void liveBeat(playing ? 'playing' : 'idle', {
@@ -93,7 +103,7 @@ export function heartbeat(status?: string, server?: string | null) {
     mc: (pack && pack.version) || null,
     server: (playing && (server || (session && (session.serverName || session.server)))) || null,
   })
-  discordPresence(status, server)
+  discordPresence(beat, server)
 }
 
 export function ramMbFor(profile: string): number {
@@ -183,6 +193,8 @@ function doJoin(profile: string, world: string | null, server: string | null, se
     showToast('Игра уже запускается')
     return Promise.resolve('busy')
   }
+  // Same reason as in doLaunch: no core means no game and no way to notice it ended.
+  if (!hasTauri()) return Promise.resolve('busy')
   launching = true
   setGameSession(profile, server, serverName)
   pinHostServer(profile)
@@ -242,14 +254,18 @@ function doLaunch(name: string) {
   try {
     localStorage.setItem('m-last-' + name, String(Date.now()))
   } catch {}
-  try {
-    setGameSession(name)
-    heartbeat('playing')
-  } catch {}
+  // Without the core there is no game process to watch: the session flag would
+  // never be cleared, and every later beat reports "playing" forever. The server
+  // measures those beats itself, so one stuck flag farms hours the player never
+  // played (dark_eremite, 18.08.2026: 18 h counted locally against 70 h on the site).
   if (!hasTauri()) {
     launching = false
     return
   }
+  try {
+    setGameSession(name)
+    heartbeat('playing')
+  } catch {}
   pinHostServer(name || useProfiles.getState().selected || '')
   // The subscription can resolve after the launch finished; unsubscribe explicitly or it leaks.
   let unlisten: UnlistenFn | null = null

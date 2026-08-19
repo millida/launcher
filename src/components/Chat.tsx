@@ -38,6 +38,7 @@ import { callLogTitle, parseCallLog, type CallLog } from '../lib/call/callLog'
 import { callFriend, callSupported, fmtCallTime, useCall } from '../state/call'
 import { nickInRooms, openRoomManage, useRooms, type Room } from '../state/rooms'
 import { RoomCallButton } from './RoomCall'
+import { apiErrorText } from '../lib/apiError'
 
 function InviteCard({ addr, name, me }: { addr: string; name: string; me?: boolean }) {
   const [busy, setBusy] = useState(false)
@@ -423,7 +424,7 @@ function Composer() {
     try {
       await send(await uploadChatImage(file))
     } catch (e) {
-      showToast('Картинка не загрузилась: ' + String((e as Error).message || e), 'error')
+      showToast(apiErrorText(e, 'Картинка не загрузилась'), 'error')
     } finally {
       setBusy(false)
     }
@@ -448,7 +449,7 @@ function Composer() {
       }
       await send(await uploadVoice(take))
     } catch (e) {
-      showToast('Голосовое не отправилось: ' + String((e as Error).message || e), 'error')
+      showToast(apiErrorText(e, 'Голосовое не отправилось'), 'error')
     } finally {
       setBusy(false)
     }

@@ -128,6 +128,13 @@ let gestureUntil = 0
 
 const gestureBusy = () => performance.now() < gestureUntil
 
+/// Only the primary button activates a control, so only it may sound and press
+/// it: a right, middle or thumb click used to play the click and run the :active
+/// animation for an action that never happened on release.
+export function isPrimaryPress(e: { button: number; isPrimary: boolean }): boolean {
+  return e.button === 0 && e.isPrimary
+}
+
 export function soundAllowed(ev: SoundEvent, mode: SoundMode, gestureActive: boolean): boolean {
   if (mode === 'off') return false
   if (!UI_EVENTS.includes(ev)) return true
@@ -265,12 +272,19 @@ function onGameStart() {
 }
 
 function onDown(e: PointerEvent) {
-  gestureUntil = 0
   unlockAudio()
   const t = e.target as HTMLElement | null
   if (!t || typeof t.closest !== 'function') return
+  const primary = isPrimaryPress(e)
+  if (primary) gestureUntil = 0
   const el = t.closest('button, a[href], .tgl, .nav-item, [role="button"], [data-sound]') as HTMLElement | null
   if (!el) return
+  if (!primary) {
+    // Suppressing the compatibility mouse events is what keeps :active off the
+    // control: nothing happens on release, so nothing may look pressed either.
+    if (e.cancelable) e.preventDefault()
+    return
+  }
   if (el.hasAttribute('disabled') || el.getAttribute('aria-disabled') === 'true') return
   if (t.closest('[data-nosound]')) return
   if (!soundEnabled() || !uiClicksEnabled()) return

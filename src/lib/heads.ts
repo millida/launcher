@@ -65,6 +65,11 @@ export function warmHeads(nicks: (string | undefined)[]): void {
   for (const nick of nicks.slice(0, 60)) if (norm(nick)) void loadHead(nick)
 }
 
+/// Сколько раз голова пробуется заново, если первая попытка не удалась. На
+/// холодном старте сеть и сессия готовы не сразу: одна неудача помечала ник как
+/// нерабочий, и вместо лица до перезапуска лаунчера висела буква.
+const HEAD_TRIES = 3
+
 export function useHead(nick?: string, size = 32, override?: string | null): string {
   const px = headPx(size)
   const [src, setSrc] = useState<string>(
@@ -79,11 +84,22 @@ export function useHead(nick?: string, size = 32, override?: string | null): str
     setSrc(hit || monogramAvatar(nick, size))
     if (hit) return
     let alive = true
-    void loadHead(nick, undefined, px).then((url) => {
-      if (alive && url) setSrc(url)
-    })
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const attempt = (left: number) => {
+      void loadHead(nick, undefined, px).then((url) => {
+        if (!alive) return
+        if (url) {
+          setSrc(url)
+          return
+        }
+        if (left <= 1) return
+        timer = setTimeout(() => attempt(left - 1), RETRY_MS + 250)
+      })
+    }
+    attempt(HEAD_TRIES)
     return () => {
       alive = false
+      clearTimeout(timer)
     }
   }, [nick, size, px, override])
   return src
