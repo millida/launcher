@@ -25,7 +25,7 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     sel: '[data-screen="builds"]',
-    title: 'Мои сборки',
+    title: 'Сборки',
     text: 'Создать свою сборку, импортировать чужую, задать Java и разрешение окна — всё тут.',
   },
   {

@@ -16,16 +16,17 @@ import { useHasMillida } from '../state/auth'
 import { PL_STAGES, cancelPrelaunch } from '../lib/launch'
 import { preloadScreen } from '../screens/registry'
 
-const NAV: { id: ScreenId; icon: string; label: string; pill?: string; tip?: string }[] = [
+const NAV: { id: ScreenId; icon: string; label: string; pill?: string }[] = [
   { id: 'play', icon: 'i-play', label: 'Играть' },
-  { id: 'hosting', icon: 'i-server-cog', label: 'Хостинг', pill: 'бесплатно', tip: 'Хостинг — бесплатный сервер' },
-  { id: 'builds', icon: 'i-box2', label: 'Мои сборки' },
+  { id: 'hosting', icon: 'i-server-cog', label: 'Хостинг', pill: 'бесплатно' },
+  { id: 'builds', icon: 'i-box2', label: 'Сборки' },
   { id: 'mods', icon: 'i-blocks', label: 'Контент' },
   { id: 'servers', icon: 'i-server', label: 'Серверы' },
   { id: 'skins', icon: 'i-shirt', label: 'Скины' },
   { id: 'friends', icon: 'i-users', label: 'Друзья' },
-  { id: 'settings', icon: 'i-settings', label: 'Настройки' },
 ]
+
+const NAV_BOTTOM: { id: ScreenId; icon: string; label: string }[] = [{ id: 'settings', icon: 'i-settings', label: 'Настройки' }]
 
 /**
  * Подсказка «бесплатно» продаёт хостинг только тому, кто его ещё не пробовал:
@@ -111,7 +112,7 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
             key={n.id}
             className={'nav-item' + (screen === n.id ? ' active' : '')}
             data-screen={n.id}
-            data-tip={n.tip || n.label}
+            data-tip={n.label}
             onMouseEnter={() => preloadScreen(n.id)}
             onFocus={() => preloadScreen(n.id)}
             onClick={() => {
@@ -176,6 +177,23 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
           <div className="side-sep" style={{ marginTop: 0 }}></div>
         </>
       ) : null}
+
+      <nav className="nav-group nav-group-bottom">
+        {NAV_BOTTOM.map((n) => (
+          <button
+            key={n.id}
+            className={'nav-item' + (screen === n.id ? ' active' : '')}
+            data-screen={n.id}
+            data-tip={n.label}
+            onMouseEnter={() => preloadScreen(n.id)}
+            onFocus={() => preloadScreen(n.id)}
+            onClick={() => onNav(n.id)}
+          >
+            <Icon id={n.icon} />
+            <span className="nav-label">{n.label}</span>
+          </button>
+        ))}
+      </nav>
 
       <div
         className="account"

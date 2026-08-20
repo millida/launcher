@@ -24,6 +24,7 @@
 :root[data-density="compact"] .sidebar.collapsed .side-collapse .side-collapse-ic{width:44px;height:32px}
 :root[data-density="compact"] .side-cap{padding:2px 10px 4px}
 :root[data-density="compact"] .side-sep{margin:5px 4px}
+:root[data-density="compact"] .nav-group-bottom{margin-top:3px;margin-bottom:6px}
 :root[data-density="compact"] .side-collapse{margin-bottom:3px}
 :root[data-density="compact"] .sidebar.collapsed .side-collapse{margin-bottom:3px}
 :root[data-density="compact"] .account{padding:6px 8px;gap:8px}
@@ -125,6 +126,7 @@
 :root[data-density="roomy"] .sidebar.collapsed .side-collapse .side-collapse-ic{width:50px;height:38px}
 :root[data-density="roomy"] .side-cap{padding:3px 14px 7px}
 :root[data-density="roomy"] .side-sep{margin:10px 4px}
+:root[data-density="roomy"] .nav-group-bottom{margin-top:6px;margin-bottom:11px}
 :root[data-density="roomy"] .side-collapse{margin-bottom:8px}
 :root[data-density="roomy"] .sidebar.collapsed .side-collapse{margin-bottom:8px}
 :root[data-density="roomy"] .account{padding:10px 12px;gap:12px}

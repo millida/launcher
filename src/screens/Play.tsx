@@ -368,7 +368,7 @@ export function Play({ on }: { on: boolean }) {
       {profiles.length ? (
         <>
           <div className="sec-title sec-title-row">
-            <span>Мои сборки</span>
+            <span>Сборки</span>
             <button className="sec-link" onClick={() => setScreen('builds')}>
               Все сборки
               <Icon id="i-chev-r" />
