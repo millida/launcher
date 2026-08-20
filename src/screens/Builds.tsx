@@ -50,7 +50,7 @@ export function Builds({ on }: { on: boolean }) {
   return (
     <section className={'screen' + (on ? ' on' : '')} id="s-builds">
       <div className="page-head">
-        <h1>Мои сборки</h1>
+        <h1>Сборки</h1>
         <div className="right">
           {updates.count > 0 ? (
             <button
