@@ -3,7 +3,7 @@ import { Icon } from './Icon'
 import { hasTauri } from '../ipc/tauri'
 import { addServer } from '../ipc/commands'
 import { useProfiles } from '../state/profiles'
-import { joinWithAuth, showLaunchError } from '../lib/launch'
+import { joinStarted, joinWithAuth, showLaunchError } from '../lib/launch'
 import { openSettings, setScreen, showToast } from '../state/ui'
 import { uiConfirm } from '../state/confirm'
 import { encodeInvite, isServerAddr, parseInvite } from '../lib/invite'
@@ -58,7 +58,9 @@ function InviteCard({ addr, name, me }: { addr: string; name: string; me?: boole
     addServer(prof, name, addr).catch(() => {})
     rememberServerName(addr, name)
     joinWithAuth(prof, null, addr, name)
-      .then(() => showToast('Заходим на «' + name + '»'))
+      .then((res) => {
+        if (joinStarted(res)) showToast('Заходим на «' + name + '»')
+      })
       .catch((e) => showLaunchError(e))
       .finally(() => setBusy(false))
   }

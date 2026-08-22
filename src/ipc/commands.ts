@@ -964,6 +964,8 @@ export interface OverlayCard {
   ts: number
   kind?: 'msg' | 'online' | 'play'
   nicks?: string[]
+  // Where a click on the card should land; without it the card is just a notice.
+  open?: 'chat' | 'room' | 'friends' | 'call'
 }
 export const overlayState = () => invoke<OverlayState>('overlay_state')
 export const overlaySetEnabled = (on: boolean) => invoke<void>('overlay_set_enabled', { on })
@@ -973,6 +975,9 @@ export const overlaySetToasts = (on: boolean) => invoke<void>('overlay_set_toast
 export const overlayToast = (payload: OverlayCard) => invoke<void>('overlay_toast', { payload })
 export const overlayHide = () => invoke<void>('overlay_hide')
 export const overlayReady = () => invoke<void>('overlay_ready')
+export const overlayHitAreas = (rects: number[][]) => invoke<void>('overlay_hit_areas', { rects })
+export const overlayOpen = (payload: OverlayCard, toLauncher = false) =>
+  invoke<void>('overlay_open', { payload, toLauncher })
 
 
 // ---- Shared file store across builds ----

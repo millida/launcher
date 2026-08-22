@@ -95,7 +95,6 @@ interface Detail extends HostServer {
   subscription?: HostingSubscription | null
   canDelete?: boolean
   crashReason?: string | null
-  planFullAccess?: boolean
 }
 
 interface Stats {
@@ -1016,6 +1015,8 @@ export function HostingManage({
           <TabWorld
             serverId={server.id}
             running={running}
+            full={cur.planFullAccess !== false}
+            onTariff={() => setTab('plan')}
             onChanged={() => {
               reload()
               onRefreshList()
@@ -1179,7 +1180,9 @@ export function HostingManage({
           </div>
         ) : null}
 
-        {tab === 'files' ? <TabFiles serverId={server.id} /> : null}
+        {tab === 'files' ? (
+          <TabFiles serverId={server.id} full={cur.planFullAccess !== false} onTariff={() => setTab('plan')} />
+        ) : null}
 
         {tab === 'backups' ? (
           <div className="card" style={{ padding: '18px' }}>

@@ -16,16 +16,15 @@ fn is_skipped(b: u8) -> bool {
 
 fn murmur2(data: &[u8], seed: u32) -> u32 {
     let mut h: u32 = seed ^ (data.len() as u32);
-    let mut chunks = data.chunks_exact(4);
-    for c in chunks.by_ref() {
-        let mut k = u32::from_le_bytes([c[0], c[1], c[2], c[3]]);
+    let (chunks, tail) = data.as_chunks::<4>();
+    for c in chunks {
+        let mut k = u32::from_le_bytes(*c);
         k = k.wrapping_mul(M);
         k ^= k >> R;
         k = k.wrapping_mul(M);
         h = h.wrapping_mul(M);
         h ^= k;
     }
-    let tail = chunks.remainder();
     if !tail.is_empty() {
         if tail.len() >= 3 {
             h ^= (tail[2] as u32) << 16;

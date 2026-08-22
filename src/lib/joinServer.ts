@@ -8,7 +8,7 @@ import { setNewBuildPreset } from '../state/newBuild'
 import type { JoinIntent } from '../state/newBuild'
 import { rememberServerName } from '../state/playStats'
 import { uiChoice, uiConfirm } from '../state/confirm'
-import { joinWithAuth, showLaunchError } from './launch'
+import { joinStarted, joinWithAuth, showLaunchError } from './launch'
 import { openModal, setScreen, showToast } from '../state/ui'
 import { pickBuildForServer, serverVersions, versionFits } from './mcVersion'
 import { track } from './telemetry'
@@ -110,8 +110,8 @@ export async function quickJoin(ip: string, name: string, licensed?: boolean, ve
   addServer(prof, name, ip).catch(() => {})
   rememberServerName(ip, name)
   return joinWithAuth(prof, null, ip, name)
-    .then(() => {
-      showToast('Заходим на «' + name + '»')
+    .then((res) => {
+      if (joinStarted(res)) showToast('Заходим на «' + name + '»')
     })
     .catch((err) => {
       showLaunchError(err)

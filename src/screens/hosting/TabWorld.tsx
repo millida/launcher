@@ -4,17 +4,21 @@ import { showToast } from '../../state/ui'
 import { uiConfirm } from '../../state/confirm'
 import { hasTauri } from '../../ipc/tauri'
 import { hostDownload, hostUpload } from '../../ipc/commands'
-import { Cap, Empty, Loading, Row, Toggle, gbLabel } from './kit'
+import { Cap, Empty, Loading, LockBtn, Row, Toggle, gbLabel } from './kit'
 import { host, errText } from './api'
 import type { HostingFeatures, HostingWorld } from './api'
 
 export function TabWorld({
   serverId,
   running,
+  full,
+  onTariff,
   onChanged,
 }: {
   serverId: string
   running: boolean
+  full: boolean
+  onTariff: () => void
   onChanged: () => void
 }) {
   const [worlds, setWorlds] = useState<HostingWorld[] | null>(null)
@@ -73,10 +77,13 @@ export function TabWorld({
       return
     }
     setBusy('import')
-    showToast('Заливаем архив мира…')
     try {
       const path = await hostUpload(serverId, 'imports')
-      if (!path) return
+      if (!path) {
+        showToast('Отменено')
+        return
+      }
+      showToast('Заливаем архив мира…')
       const file = path.split('/').pop() || 'world.zip'
       const name = (file.replace(/\.(zip|tar|gz|tgz)$/i, '').replace(/[^A-Za-z0-9._-]+/g, '_') || 'world').slice(0, 40)
       await host.importWorld(serverId, path, name)
@@ -157,9 +164,13 @@ export function TabWorld({
           <div className="side-cap" style={{ padding: 0, flex: 1 }}>
             Миры сервера
           </div>
-          <button className="btn sm secondary" disabled={busy === 'import'} onClick={() => void importWorld()}>
-            <Icon id="i-upload" /> Загрузить свой
-          </button>
+          {full ? (
+            <button className="btn sm secondary" disabled={busy === 'import'} onClick={() => void importWorld()}>
+              <Icon id="i-upload" /> Загрузить свой
+            </button>
+          ) : (
+            <LockBtn label="Загрузить свой" feature="Загрузка своего мира" onTariff={onTariff} />
+          )}
           <button className="btn sm secondary" style={{ marginLeft: '8px' }} disabled={busy === 'download'} onClick={() => void download()}>
             <Icon id="i-download" /> Скачать мир
           </button>

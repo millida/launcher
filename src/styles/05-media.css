@@ -311,8 +311,8 @@
 }
 .cape-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(134px, 1fr));
+  gap: 12px;
 }
 .cape-card {
   display: flex;
@@ -343,7 +343,21 @@
 }
 .cape-sub {
   font-size: 10.5px;
+  line-height: 1.35;
+  text-align: center;
   color: var(--m-fg-subtle);
+}
+/* Кнопка карточки повторяет её ширину, а не ширину своего текста: у .btn стоит
+   nowrap с overflow:hidden, и «Не выполнено» обрезалось до «е выполнен». */
+.cape-card > .btn {
+  width: 100%;
+  height: auto;
+  min-height: 34px;
+  padding: 6px 8px;
+  font-size: 11.5px;
+  white-space: normal;
+  line-height: 1.2;
+  text-align: center;
 }
 .cape-render {
   position: relative;
@@ -696,7 +710,19 @@
 html.overlay-root,html.overlay-root body,html.overlay-root #root{background:transparent;overflow:hidden;height:100%}
 .ov{position:fixed;inset:0;font-family:inherit}
 .ov-passive{pointer-events:none}
+/* Cards are the only clickable spot of a click-through window: the core lifts
+   the flag over them, so they take the pointer while the stack does not. */
 .ov-cards{position:absolute;bottom:22px;right:22px;display:flex;flex-direction:column;gap:8px;width:330px}
+.ov-cards .ov-card{pointer-events:auto;cursor:pointer;padding-right:30px;transition:transform .12s ease,border-color .12s ease}
+.ov-cards .ov-card:hover{transform:translateX(-3px);border-color:rgba(255,255,255,.26);background:rgba(24,24,30,.94)}
+.ov-card-x{position:absolute;top:5px;right:5px;width:20px;height:20px;display:grid;place-items:center;border:0;border-radius:7px;background:transparent;color:rgba(242,242,245,.55);opacity:0;transition:opacity .12s ease,background .12s ease,color .12s ease;cursor:pointer}
+.ov-card-x svg{width:12px;height:12px}
+.ov-card:hover .ov-card-x{opacity:1}
+.ov-card-x:hover{background:rgba(255,255,255,.12);color:#fff}
+.ov-card-ttl{position:absolute;left:0;bottom:0;height:2px;width:100%;background:var(--ov-accent,#7aa2ff);opacity:.55;transform-origin:left;animation:ovTtl linear forwards}
+.ov-cards.held .ov-card-ttl{animation-play-state:paused}
+@keyframes ovTtl{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@media (prefers-reduced-motion: reduce){.ov-card-ttl{animation:none;transform:scaleX(1)}}
 .ov-card{position:relative;overflow:hidden;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:rgba(18,18,22,.86);border:1px solid rgba(255,255,255,.12);box-shadow:0 10px 30px rgba(0,0,0,.45);color:#f2f2f5;animation:ovIn .18s ease}
 .ov-card::before{content:'';position:absolute;left:0;top:10px;bottom:10px;width:2px;border-radius:2px;background:var(--ov-accent,#7aa2ff)}
 .ov-card.ov-online{--ov-accent:#5cc98a}

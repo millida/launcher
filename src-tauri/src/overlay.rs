@@ -19,9 +19,84 @@ static PENDING: Mutex<Vec<serde_json::Value>> = Mutex::new(Vec::new());
 static INTERACTIVE: AtomicBool = AtomicBool::new(false);
 static NOTIFY_SEQ: AtomicU64 = AtomicU64::new(0);
 
+/// Card rectangles in CSS pixels relative to the window, reported by the
+/// webview. A passive overlay is click-through as a whole, so the only way a
+/// card can be clicked at all is to drop that flag exactly while the pointer is
+/// over one of these.
+static HIT: Mutex<Vec<[f64; 4]>> = Mutex::new(Vec::new());
+static HOVER: AtomicBool = AtomicBool::new(false);
+static HIT_SEQ: AtomicU64 = AtomicU64::new(0);
+
+const HIT_POLL_MS: u64 = 60;
+
 /// Longest a passive card may keep the window up: the frontend hides it earlier
 /// on its own, this only catches a webview that never answered.
 const PASSIVE_MAX_MS: u64 = 15_000;
+
+pub fn set_hit_areas(rects: Vec<[f64; 4]>) {
+    *HIT.lock().unwrap_or_else(|e| e.into_inner()) = rects;
+}
+
+fn inside_card(x: f64, y: f64) -> bool {
+    HIT.lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .iter()
+        .any(|r| x >= r[0] && x <= r[0] + r[2] && y >= r[1] && y <= r[1] + r[3])
+}
+
+fn stop_hit_watch() {
+    HIT_SEQ.fetch_add(1, Ordering::SeqCst);
+    HOVER.store(false, Ordering::SeqCst);
+    HIT.lock().unwrap_or_else(|e| e.into_inner()).clear();
+}
+
+/// Passive cards must be clickable without stealing the clicks the game needs,
+/// and a click-through window receives no pointer events to hit-test with - so
+/// the core follows the cursor itself and lifts the flag only over a card.
+fn arm_hit_watch(app: &AppHandle) {
+    let seq = HIT_SEQ.fetch_add(1, Ordering::SeqCst) + 1;
+    let handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        // A second notification replaces the watcher while the pointer may
+        // already be on a card: starting from `false` would leave the window
+        // taking clicks with nobody tracking it.
+        let mut over = HOVER.load(Ordering::SeqCst);
+        loop {
+            tokio::time::sleep(std::time::Duration::from_millis(HIT_POLL_MS)).await;
+            if HIT_SEQ.load(Ordering::SeqCst) != seq || INTERACTIVE.load(Ordering::SeqCst) {
+                break;
+            }
+            let Some(win) = handle.get_webview_window(LABEL) else { break };
+            if !win.is_visible().unwrap_or(false) {
+                break;
+            }
+            let now = match (handle.cursor_position(), win.outer_position(), win.scale_factor()) {
+                (Ok(cur), Ok(pos), Ok(scale)) if scale > 0.0 => {
+                    inside_card((cur.x - pos.x as f64) / scale, (cur.y - pos.y as f64) / scale)
+                }
+                _ => false,
+            };
+            if now == over {
+                continue;
+            }
+            over = now;
+            HOVER.store(now, Ordering::SeqCst);
+            let _ = win.set_ignore_cursor_events(!now);
+            // The webview only learns about a pointer it was deaf to a moment
+            // ago on the next mouse move, so the core states it outright.
+            let _ = handle.emit_to(LABEL, "overlay-hover", now);
+        }
+        if over && HIT_SEQ.load(Ordering::SeqCst) == seq {
+            HOVER.store(false, Ordering::SeqCst);
+            if let Some(win) = handle.get_webview_window(LABEL) {
+                if !INTERACTIVE.load(Ordering::SeqCst) {
+                    let _ = win.set_ignore_cursor_events(true);
+                }
+            }
+            let _ = handle.emit_to(LABEL, "overlay-hover", false);
+        }
+    });
+}
 
 pub fn enabled() -> bool {
     crate::engine::ui_pref(PREF_ENABLED).as_deref() == Some("1")
@@ -81,6 +156,9 @@ fn build(app: &AppHandle) -> Result<(tauri::WebviewWindow, bool), String> {
 pub fn show(app: &AppHandle, interactive: bool) -> Result<bool, String> {
     let (win, fresh) = build(app)?;
     INTERACTIVE.store(interactive, Ordering::SeqCst);
+    if interactive {
+        stop_hit_watch();
+    }
     let _ = win.set_ignore_cursor_events(!interactive);
     win.show().map_err(|e| e.to_string())?;
     let _ = win.set_always_on_top(true);
@@ -93,6 +171,7 @@ pub fn show(app: &AppHandle, interactive: bool) -> Result<bool, String> {
 
 pub fn hide(app: &AppHandle) {
     INTERACTIVE.store(false, Ordering::SeqCst);
+    stop_hit_watch();
     PENDING.lock().unwrap_or_else(|e| e.into_inner()).clear();
     if let Some(w) = app.get_webview_window(LABEL) {
         let _ = w.hide();
@@ -116,6 +195,11 @@ fn arm_watchdog(app: &AppHandle) {
     let handle = app.clone();
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_millis(PASSIVE_MAX_MS)).await;
+        // A card the user is reading (or about to click) must not be yanked out
+        // from under the cursor by the watchdog.
+        while HOVER.load(Ordering::SeqCst) {
+            tokio::time::sleep(std::time::Duration::from_millis(1_000)).await;
+        }
         if NOTIFY_SEQ.load(Ordering::SeqCst) != seq || INTERACTIVE.load(Ordering::SeqCst) {
             return;
         }
@@ -126,6 +210,7 @@ fn arm_watchdog(app: &AppHandle) {
 pub async fn notify(app: &AppHandle, payload: serde_json::Value) -> Result<(), String> {
     let fresh = show(app, false)?;
     arm_watchdog(app);
+    arm_hit_watch(app);
     if fresh {
         PENDING.lock().unwrap_or_else(|e| e.into_inner()).push(payload);
         return Ok(());
@@ -160,6 +245,20 @@ pub fn rebind_hotkey(app: &AppHandle) {
             }
         });
     }
+}
+
+/// A card click either opens the conversation in the overlay itself - a running
+/// game must not be thrown to the background just to answer - or brings the
+/// launcher up when there is no game to protect.
+pub fn open_card(app: &AppHandle, payload: serde_json::Value, to_launcher: bool) -> Result<(), String> {
+    let is_call = payload.get("open").and_then(|v| v.as_str()) == Some("call");
+    if to_launcher || is_call || crate::engine::running_games().is_empty() {
+        hide(app);
+        crate::tray::show_main(app);
+        return app.emit_to("main", "overlay-open", payload).map_err(|e| e.to_string());
+    }
+    show(app, true)?;
+    app.emit_to(LABEL, "overlay-open", payload).map_err(|e| e.to_string())
 }
 
 /// Hotkey semantics: summon and focus, or dismiss if it already has the user.

@@ -1,3 +1,4 @@
+use super::gameserver::track_server_hop;
 use crate::engine::*;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -420,7 +421,12 @@ impl Log4jFilter {
     }
 }
 
-fn spawn_log_reader(reader: Box<dyn std::io::Read + Send>, file: Arc<Mutex<std::fs::File>>, app: AppHandle) {
+fn spawn_log_reader(
+    reader: Box<dyn std::io::Read + Send>,
+    file: Arc<Mutex<std::fs::File>>,
+    app: AppHandle,
+    server: ServerSlot,
+) {
     let batch: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
     let done = Arc::new(std::sync::atomic::AtomicBool::new(false));
 
@@ -439,6 +445,7 @@ fn spawn_log_reader(reader: Box<dyn std::io::Read + Send>, file: Arc<Mutex<std::
         }
     });
 
+    let app_hop = app.clone();
     std::thread::spawn(move || {
         use std::io::{BufRead, Write};
         let mut buf = std::io::BufReader::new(reader);
@@ -458,6 +465,9 @@ fn spawn_log_reader(reader: Box<dyn std::io::Read + Send>, file: Arc<Mutex<std::
                             let _ = f.write_all(l.as_bytes());
                             let _ = f.write_all(b"\n");
                         }
+                    }
+                    for l in &out {
+                        track_server_hop(l, &server, &app_hop);
                     }
                     if let Ok(mut v) = batch.lock() {
                         for l in out {
@@ -851,11 +861,12 @@ pub async fn install_and_launch_in(
     }
     let _ = app.emit("game-log-start", &profile);
     let log_file = Arc::new(Mutex::new(log_file));
+    let server_now: ServerSlot = Arc::new(Mutex::new(quick_server.as_deref().map(canon_addr)));
     if let Some(o) = child.stdout.take() {
-        spawn_log_reader(Box::new(o), log_file.clone(), app.clone());
+        spawn_log_reader(Box::new(o), log_file.clone(), app.clone(), server_now.clone());
     }
     if let Some(e) = child.stderr.take() {
-        spawn_log_reader(Box::new(e), log_file.clone(), app.clone());
+        spawn_log_reader(Box::new(e), log_file.clone(), app.clone(), server_now.clone());
     }
     // Give the JVM a moment: an immediate exit is a launch failure, not a session.
     tokio::time::sleep(std::time::Duration::from_millis(900)).await;
@@ -877,6 +888,10 @@ pub async fn install_and_launch_in(
     std::thread::spawn(move || {
         let mut written = 0u64;
         let mut new_session = true;
+        // Hours belong to the server the player was on while they were ticking,
+        // so a hop flushes what is owed before the address changes.
+        let mut here = current_server(&server_now);
+        let mut server_session = here.is_some();
         let status = loop {
             match child.try_wait() {
                 Ok(Some(s)) => break Ok(s),
@@ -885,16 +900,23 @@ pub async fn install_and_launch_in(
             }
             std::thread::sleep(EXIT_POLL);
             let elapsed = start.elapsed().as_secs();
-            if elapsed - written >= PLAYTIME_FLUSH.as_secs() {
-                record_playtime(&pname, elapsed - written, quick_server.as_deref(), new_session);
+            let now_here = current_server(&server_now);
+            let hopped = now_here != here;
+            if elapsed - written >= PLAYTIME_FLUSH.as_secs() || (hopped && elapsed > written) {
+                record_playtime(&pname, elapsed - written, here.as_deref(), new_session, server_session);
                 written = elapsed;
                 new_session = false;
+                server_session = false;
+            }
+            if hopped {
+                server_session = now_here.is_some();
+                here = now_here;
             }
         };
         forget_running(pid);
         let elapsed = start.elapsed().as_secs();
-        if elapsed > written || new_session {
-            record_playtime(&pname, elapsed - written, quick_server.as_deref(), new_session);
+        if elapsed > written || new_session || server_session {
+            record_playtime(&pname, elapsed - written, here.as_deref(), new_session, server_session);
         }
         let _ = app2.emit("game-exit", pname.clone());
         let waker = app2.clone();

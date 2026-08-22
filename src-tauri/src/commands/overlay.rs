@@ -68,6 +68,25 @@ pub fn overlay_hide(app: tauri::AppHandle) {
     overlay::hide(&app);
 }
 
+/// Where the passive cards are on screen right now, in CSS pixels relative to
+/// the overlay window. Only these spots take the pointer; everywhere else the
+/// click belongs to the game.
+#[tauri::command]
+pub fn overlay_hit_areas(rects: Vec<[f64; 4]>) {
+    overlay::set_hit_areas(rects.into_iter().filter(|r| r[2] > 0.0 && r[3] > 0.0).take(8).collect());
+}
+
+/// A click on a card: open the conversation over the game, or hand it to the
+/// launcher when no game is running.
+#[tauri::command]
+pub fn overlay_open(
+    app: tauri::AppHandle,
+    payload: serde_json::Value,
+    to_launcher: Option<bool>,
+) -> Result<(), String> {
+    overlay::open_card(&app, payload, to_launcher.unwrap_or(false))
+}
+
 /// The overlay webview says it is listening. Anything queued while it was
 /// starting is only delivered now: an event sent into the gap before this is
 /// lost, and the window would hang on screen with nothing on it.

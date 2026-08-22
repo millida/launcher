@@ -129,6 +129,7 @@ function applyRoomPoll(r: RoomPoll) {
         text: (nick ? nick + ': ' : '') + previewOf(m),
         ts: m.ts || Date.now(),
         kind: 'msg' as const,
+        open: 'room' as const,
       }
       if (!showDesktopToast(card) && useGame.getState().list.length) void overlayNotify(card).catch(() => {})
     }
@@ -152,17 +153,18 @@ function previewOf(m: PolledMessage): string {
   if (call) return call.outcome === 'done' ? 'Звонок завершён' : 'Пропущенный звонок'
   return parseInvite(text) ? 'Приглашение на сервер' : text
 }
-import { refreshPlayStats, rememberServerName } from './state/playStats'
+import { refreshPlayStats, rememberServerName, serverNameFor } from './state/playStats'
 import { quickJoin } from './lib/joinServer'
 import { refreshProfiles } from './state/profiles'
 import { initMusic, startMusicAfterLogin, stopMusicNow } from './state/music'
 import { initSounds, playSound } from './lib/sound'
 import { initDeepLinks } from './lib/deeplink'
+import { initOverlayLink } from './lib/overlayLink'
 import { useMods } from './state/mods'
 import { refreshMsAccounts } from './state/msLogin'
 import { enterApp, logoutToLogin } from './lib/session'
 import { initSecrets } from './lib/secure'
-import { listenGameCrash, listenGameExit, listenLaunchWarning, listenTrayExit } from './ipc/events'
+import { listenGameCrash, listenGameExit, listenGameServer, listenLaunchWarning, listenTrayExit } from './ipc/events'
 import { useCrash } from './state/crash'
 import { syncRunningGame, useGame } from './state/game'
 import { CrashModal } from './components/CrashModal'
@@ -175,7 +177,7 @@ let gameStartedAt = 0
 import { flushNativeCrashes, installErrorHandlers } from './lib/crash'
 import { autoUpdate, bootUpdate, installUpdateOnExit, updateReady } from './lib/updater'
 import { BootUpdate } from './components/BootUpdate'
-import { gameSession, heartbeat, reconcileGameSession, setGameSession } from './lib/launch'
+import { gameSession, heartbeat, reconcileGameSession, setGameSession, updateSessionServer } from './lib/launch'
 import { hideLauncherToTray, initTray, restoreLauncher, restoreOnGameExit, trayCloseEnabled } from './lib/window'
 import { SESSION_EXPIRED_EVENT, api, hasMillidaAccount } from './lib/api'
 import { hasTauri, tauri } from './ipc/tauri'
@@ -203,6 +205,7 @@ function announcePresence(list: Friend[], kind: 'play' | 'online') {
     ts: Date.now(),
     kind,
     nicks: list.map((f) => f.nickname || 'Друг'),
+    open: 'friends' as const,
   }
   if (showDesktopToast(card)) {
     if (notifyAudible(kind)) playSound('notify')
@@ -246,6 +249,7 @@ export function App() {
     initSounds()
     void initDesktopToasts()
     initDeepLinks()
+    initOverlayLink()
     initInstalls()
     initCalls()
     void bootUpdate().then((leaving) => {
@@ -416,6 +420,15 @@ export function App() {
     }).then((u) => {
       unlisten = u
     })
+    let unServer: UnlistenFn | null = null
+    void listenGameServer((addr) => {
+      const name = addr ? serverNameFor(addr) : ''
+      if (addr && name) rememberServerName(addr, name)
+      updateSessionServer(addr || null, name || null)
+      void refreshPlayStats()
+    }).then((u) => {
+      unServer = u
+    })
     let unCrash: UnlistenFn | null = null
     void listenGameCrash((info) => {
       track('game_crash', { code: String((info as { reason?: string })?.reason ?? 'crash').slice(0, 120) }, { ok: false })
@@ -428,6 +441,7 @@ export function App() {
       clearInterval(t)
       clearTimeout(t0)
       if (unlisten) unlisten()
+      if (unServer) unServer()
       if (unCrash) unCrash()
     }
   }, [])
@@ -490,7 +504,14 @@ export function App() {
               // While the game holds the screen, the launcher's own toast is
               // invisible — the card has to go over the game instead.
               if (notifyShown('msg')) {
-                const card = { uid: m.from, nick, text: previewOf(m), ts: m.ts || Date.now(), kind: 'msg' as const }
+                const card = {
+                  uid: m.from,
+                  nick,
+                  text: previewOf(m),
+                  ts: m.ts || Date.now(),
+                  kind: 'msg' as const,
+                  open: 'chat' as const,
+                }
                 if (!showDesktopToast(card) && useGame.getState().list.length)
                   void overlayNotify(card).catch(() => {})
               }

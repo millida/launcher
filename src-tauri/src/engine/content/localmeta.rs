@@ -2,16 +2,22 @@ use crate::engine::*;
 use base64::Engine as _;
 use serde_json::Value;
 use std::collections::HashMap;
-use std::io::Read;
+use std::io::{Read, Seek};
 use std::path::{Path, PathBuf};
 
 const DESC_LIMIT: usize = 600;
 const ICON_LIMIT: usize = 320_000;
 
+/// Guards against a crafted jar: a nested archive is read into memory whole, so
+/// both how deep the walk goes and how much it may unpack are bounded.
+const MAX_ENTRY: u64 = 64 * 1024 * 1024;
+const MAX_NESTED: usize = 128;
+const NESTED_DEPTH: u32 = 3;
+
 /// Bumped whenever the parser starts extracting a new field: cache entries are
 /// keyed by (size, mtime), so without it an old cache would keep answering with
 /// fields the previous version never filled in.
-const META_REV: u32 = 3;
+const META_REV: u32 = 4;
 
 /// A `breaks` entry as the mod author wrote it: which mod, and under what
 /// version range. `"breaks": {"fabric-api": "<0.144.3+26.1"}` means "needs a
@@ -88,15 +94,49 @@ fn clean_text(s: &str, limit: usize) -> String {
     }
 }
 
-fn entry_bytes(jar: &mut Jar, name: &str) -> Option<Vec<u8>> {
+fn entry_bytes<R: Read + Seek>(jar: &mut zip::ZipArchive<R>, name: &str) -> Option<Vec<u8>> {
     let mut f = jar.by_name(name).ok()?;
+    if f.size() > MAX_ENTRY {
+        return None;
+    }
     let mut b = Vec::new();
     f.read_to_end(&mut b).ok()?;
     Some(b)
 }
 
-fn entry_text(jar: &mut Jar, name: &str) -> Option<String> {
+fn entry_text<R: Read + Seek>(jar: &mut zip::ZipArchive<R>, name: &str) -> Option<String> {
     entry_bytes(jar, name).map(|b| String::from_utf8_lossy(&b).to_string())
+}
+
+/// Fabric API ships as one jar with ~50 modules nested inside META-INF/jars,
+/// and mods depend on those module ids directly ("fabric-rendering-fluids-v1").
+/// Reading only the outer manifest makes every such module look absent, so the
+/// audit reports missing mods that are already installed and offers no fix,
+/// because no catalog sells a module separately.
+fn nested_ids<R: Read + Seek>(jar: &mut zip::ZipArchive<R>, depth: u32, out: &mut Vec<String>) {
+    if depth == 0 {
+        return;
+    }
+    let names: Vec<String> = jar
+        .file_names()
+        .filter(|n| n.to_ascii_lowercase().ends_with(".jar"))
+        .take(MAX_NESTED)
+        .map(String::from)
+        .collect();
+    for name in names {
+        let Some(bytes) = entry_bytes(jar, &name) else { continue };
+        let Ok(mut inner) = zip::ZipArchive::new(std::io::Cursor::new(bytes)) else { continue };
+        for file in ["fabric.mod.json", "quilt.mod.json"] {
+            let Some(text) = entry_text(&mut inner, file) else { continue };
+            let Some(v) = lenient_json(&text) else { continue };
+            let root = if v["quilt_loader"].is_object() { v["quilt_loader"].clone() } else { v.clone() };
+            push_id(out, root["id"].as_str().unwrap_or(""));
+            for id in id_list(&root["provides"], false) {
+                push_id(out, &id);
+            }
+        }
+        nested_ids(&mut inner, depth - 1, out);
+    }
 }
 
 /// Some mods ship fabric.mod.json with raw newlines inside string values,
@@ -407,6 +447,7 @@ fn from_fabric(jar: &mut Jar, meta: &mut LocalMeta, quilt: bool) -> bool {
     meta.requires = id_list(depends, true);
     meta.breaks = break_list(breaks);
     meta.provides = id_list(provides, false);
+    nested_ids(jar, NESTED_DEPTH, &mut meta.provides);
     let mut icons = vec![icon_of(&root["icon"])];
     if !id.is_empty() {
         icons.push(format!("assets/{}/icon.png", id));
@@ -730,6 +771,33 @@ viewing mod.
         assert_eq!(m.breaks.len(), 1);
         assert_eq!(m.breaks[0].id, "jei");
         assert_eq!(m.breaks[0].range, "<5.0", "the version range must survive, not just the id");
+    }
+
+    /// Sodium asks for "fabric-rendering-fluids-v1"; that module exists only
+    /// inside the Fabric API jar and is sold nowhere, so missing it from the
+    /// index turns a complete build into three unfixable "missing mod" rows.
+    #[test]
+    fn nested_jars_answer_for_the_modules_they_bundle() {
+        let module = tmp("fabric-rendering-fluids-v1.jar");
+        make_jar(
+            &module,
+            &[("fabric.mod.json", br#"{"id":"fabric-rendering-fluids-v1","version":"3.1.0","name":"Fabric Rendering Fluids"}"#)],
+        );
+        let body = std::fs::read(&module).unwrap();
+        let api = tmp("fabric-api.jar");
+        make_jar(
+            &api,
+            &[
+                ("fabric.mod.json", br#"{"id":"fabric-api","version":"0.135.2","name":"Fabric API","provides":["fabric"]}"#.as_ref()),
+                ("META-INF/jars/fabric-rendering-fluids-v1.jar", body.as_slice()),
+            ],
+        );
+        let m = read_file_meta(&api, "mod", "fabric-api.jar");
+        assert!(
+            m.provides.contains(&"fabric-rendering-fluids-v1".to_string()),
+            "a module bundled inside the jar is installed; reporting it missing sends the user hunting for a file that does not exist separately",
+        );
+        assert!(m.provides.contains(&"fabric".to_string()), "the outer manifest's own provides must survive");
     }
 
     #[test]

@@ -170,3 +170,5 @@
 /* Action row above the list: one height and one weight for every button, so a
    button added later cannot come out taller or lighter than its neighbours. */
 .act-row-btn{height:32px;font-size:12.5px}
+.act-row{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 14px}
+.act-row .act-row-btn{flex:0 0 auto;padding:0 12px}

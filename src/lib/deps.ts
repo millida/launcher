@@ -1,10 +1,17 @@
-import type { DepNode, DepPlan, PlanItem } from '../ipc/commands'
+import type { DepAudit, DepNode, DepPlan, PlanItem } from '../ipc/commands'
 
 export const planItem = (n: DepNode): PlanItem => ({
   source: n.source,
   project_id: n.project_id,
   version_id: n.version_id,
 })
+
+/// Everything the audit knows how to close, one entry per project: two mods
+/// asking for the same library must not queue it twice.
+export function fixItems(audit: DepAudit | null): PlanItem[] {
+  const items = (audit ? audit.issues : []).map((i) => i.fix).filter((f): f is DepNode => !!f).map(planItem)
+  return items.filter((it, i) => items.findIndex((x) => x.project_id === it.project_id) === i)
+}
 
 /// An install that pulls in nothing and clashes with nothing must stay one
 /// click. A mismatch is not this window's question: the existing "install

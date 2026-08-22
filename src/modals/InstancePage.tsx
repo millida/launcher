@@ -77,7 +77,7 @@ import { isBlockIcon } from '../lib/blockColor'
 import { BUILD_NAME_MAX, GROUP_NAME_MAX, LOADER_NAME, fmtPlaytime, fmtSize, loaderId, whenText } from '../lib/format'
 import { AUTO_LOADER_VERSION, hasLoaderVersions, useLoaderBuilds } from '../lib/loaderBuilds'
 import { incompatibleWith } from '../lib/compat'
-import { planItem } from '../lib/deps'
+import { fixItems, planItem } from '../lib/deps'
 import { installExtras } from '../lib/install'
 import { useProfiles } from '../state/profiles'
 import { useInstance } from '../state/instance'
@@ -93,6 +93,8 @@ import { apiErrorText } from '../lib/apiError'
 import { mirrorAsset } from '../lib/api'
 
 const ramKey = (p: string) => 'm-ram-' + p
+
+const AUTO_FIX_ROUNDS = 2
 
 const KIND_ICON: Record<string, string> = {
   mod: 'i-blocks',
@@ -258,6 +260,50 @@ export function InstancePage() {
     },
     [profile],
   )
+
+  // A dependency the launcher knows how to close is not a question worth asking:
+  // the build is broken until it is installed, and the answer is always yes.
+  // Bounded rounds, because a freshly installed library may declare one of its
+  // own — and because a catalog that keeps offering a file that never satisfies
+  // the requirement must not loop forever.
+  const autoRound = useRef(0)
+
+  const runAudit = useCallback(
+    (auto: boolean) => {
+      if (!profile || !hasTauri()) return
+      setAuditBusy(true)
+      auditDeps(profile)
+        .then((r) => {
+          setAuditBusy(false)
+          setAudit(r)
+          if (!auto || autoRound.current >= AUTO_FIX_ROUNDS) return
+          const items = fixItems(r)
+          if (!items.length) return
+          autoRound.current += 1
+          installExtras(profile, 'mod', items, () => {
+            loadMods('mod')
+            runAuditRef.current(true)
+          })
+        })
+        .catch((e) => {
+          setAuditBusy(false)
+          if (!auto) showToast('Не удалось проверить: ' + e, 'error')
+        })
+    },
+    [profile, loadMods],
+  )
+
+  const runAuditRef = useRef(runAudit)
+  runAuditRef.current = runAudit
+
+  useEffect(() => {
+    if (!modal.open || !profile || !hasTauri()) {
+      autoRound.current = 0
+      return
+    }
+    autoRound.current = 0
+    runAuditRef.current(true)
+  }, [modal.open, profile])
 
   const loadWorlds = useCallback(() => {
     if (!profile) return
@@ -871,7 +917,7 @@ export function InstancePage() {
                   Удалить
                 </button>
               </div>
-              <div style={{ display: 'flex', gap: '8px', margin: '12px 0 14px' }}>
+              <div className="act-row">
                 <button
                   className="btn sm secondary act-row-btn"
                   id="bsDrop"
@@ -894,7 +940,6 @@ export function InstancePage() {
                 <button
                   className="btn sm secondary act-row-btn"
                   id="bsAddContent"
-                  style={{ flex: 1 }}
                   onClick={() => {
                     useProfiles.getState().setSelected(profile)
                     close()
@@ -1004,24 +1049,17 @@ export function InstancePage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span className="set-val">Зависимости и совместимость</span>
                     <span style={{ flex: 1 }}></span>
-                    {audit && audit.issues.some((i) => i.fix) ? (
+                    {fixItems(audit).length ? (
                       <button
                         className="btn sm secondary"
-                        onClick={() => {
-                          const items = audit.issues
-                            .map((i) => i.fix)
-                            .filter((f): f is NonNullable<typeof f> => !!f)
-                            .map(planItem)
-                          const uniq = items.filter(
-                            (it, i) => items.findIndex((x) => x.project_id === it.project_id) === i,
-                          )
-                          installExtras(profile!, 'mod', uniq, () => {
-                            loadMods()
-                            setAudit(null)
+                        onClick={() =>
+                          installExtras(profile!, 'mod', fixItems(audit), () => {
+                            loadMods('mod')
+                            runAuditRef.current(false)
                           })
-                        }}
+                        }
                       >
-                        Доустановить ({audit.issues.filter((i) => i.fix).length})
+                        Доустановить ({fixItems(audit).length})
                       </button>
                     ) : null}
                     <button
@@ -1033,16 +1071,7 @@ export function InstancePage() {
                           showToast('Доступно в приложении')
                           return
                         }
-                        setAuditBusy(true)
-                        auditDeps(profile!)
-                          .then((r) => {
-                            setAuditBusy(false)
-                            setAudit(r)
-                          })
-                          .catch((e) => {
-                            setAuditBusy(false)
-                            showToast('Не удалось проверить: ' + e, 'error')
-                          })
+                        runAudit(false)
                       }}
                     >
                       <Icon id="i-check" /> {auditBusy ? 'Проверяем…' : 'Проверить'}
@@ -1086,8 +1115,8 @@ export function InstancePage() {
                                 style={{ height: '26px' }}
                                 onClick={() =>
                                   installExtras(profile!, 'mod', [planItem(it.fix!)], () => {
-                                    loadMods()
-                                    setAudit(null)
+                                    loadMods('mod')
+                                    runAuditRef.current(false)
                                   })
                                 }
                               >

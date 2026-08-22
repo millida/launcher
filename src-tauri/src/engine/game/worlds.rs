@@ -44,9 +44,13 @@ pub fn list_servers(profile: &str) -> Vec<ServerEntry> {
         .unwrap_or_default()
 }
 
+/// Dedup by name as well as by address: a hosting server keeps its name while
+/// its address follows the entry it is routed through (PL, MSK, direct), and
+/// matching on the address alone left one duplicate per route in the list.
 pub fn add_server(profile: &str, name: String, ip: String) -> Vec<ServerEntry> {
     let mut all = list_servers(profile);
-    all.retain(|s| s.ip != ip);
+    let same_name = !name.trim().is_empty();
+    all.retain(|s| s.ip != ip && !(same_name && s.name == name));
     all.insert(0, ServerEntry { name, ip });
     write_json_quiet(&servers_file(profile), &all);
     all
@@ -72,10 +76,14 @@ pub fn pin_server_dat(profile: &str, name: &str, ip: &str) -> Result<(), String>
     if list.is_empty() && !raw.is_empty() {
         return Ok(());
     }
-    let pinned = list
+    // Same reason as in add_server: the address changes with the entry the
+    // server is routed through, the name does not.
+    let prev = list
         .iter()
-        .position(|s| s.ip == ip)
-        .map(|idx| list.remove(idx))
+        .position(|s| s.ip == ip || (!name.is_empty() && s.name == name))
+        .map(|idx| list.remove(idx));
+    list.retain(|s| s.ip != ip && !(!name.is_empty() && s.name == name));
+    let pinned = prev
         .map(|prev| ServerRecord { name: name.to_string(), ip: ip.to_string(), ..prev })
         .unwrap_or_else(|| ServerRecord::new(name, ip));
     list.insert(0, pinned);

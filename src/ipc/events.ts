@@ -92,6 +92,13 @@ export function listenGameLog(handler: (lines: string[]) => void): Promise<Unlis
     .catch(() => null)
 }
 
+// Адрес сервера, на котором игрок прямо сейчас; пустая строка — меню или одиночная игра.
+export function listenGameServer(handler: (addr: string) => void): Promise<UnlistenFn | null> {
+  const T = tauri()
+  if (!T) return Promise.resolve(null)
+  return T.event.listen<string>('game-server', (e) => handler(e.payload || '')).catch(() => null)
+}
+
 export function listenGameLogStart(handler: (profile: string) => void): Promise<UnlistenFn | null> {
   const T = tauri()
   if (!T) return Promise.resolve(null)
