@@ -137,12 +137,12 @@ impl<'a> R<'a> {
             11 => {
                 let n = self.i32()?.max(0) as usize;
                 let raw = self.take(n.checked_mul(4)?)?;
-                Nbt::IntArray(raw.chunks_exact(4).map(|c| i32::from_be_bytes(c.try_into().unwrap())).collect())
+                Nbt::IntArray(raw.as_chunks::<4>().0.iter().map(|c| i32::from_be_bytes(*c)).collect())
             }
             12 => {
                 let n = self.i32()?.max(0) as usize;
                 let raw = self.take(n.checked_mul(8)?)?;
-                Nbt::LongArray(raw.chunks_exact(8).map(|c| i64::from_be_bytes(c.try_into().unwrap())).collect())
+                Nbt::LongArray(raw.as_chunks::<8>().0.iter().map(|c| i64::from_be_bytes(*c)).collect())
             }
             _ => return None,
         })

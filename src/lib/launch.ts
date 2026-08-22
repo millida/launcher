@@ -33,6 +33,18 @@ export function setGameSession(profile: string | null, server?: string | null, s
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(profile ? 'mc-started' : 'mc-stopped'))
 }
 
+/**
+ * Куда игрок ушёл уже внутри игры: адрес приезжает из лога ядра, а не из
+ * кнопки в лаунчере. Сессию правим на месте — «игра началась» второй раз не
+ * случилось, поэтому событие mc-started здесь не шлётся.
+ */
+export function updateSessionServer(server: string | null, serverName: string | null) {
+  if (!session) return
+  if (session.server === server && session.serverName === serverName) return
+  session = { ...session, server, serverName }
+  heartbeat('playing')
+}
+
 /** Процесс успевает появиться в списке ядра не мгновенно — до этого верим сессии. */
 const SESSION_GRACE_MS = 3 * 60 * 1000
 
@@ -172,6 +184,12 @@ export function showLaunchError(e: unknown) {
 
 let launching = false
 
+/// doJoin resolves with the core's answer; this sentinel means the game was
+/// never started, so callers must not report "заходим на сервер".
+export const JOIN_SKIPPED = 'launch-skipped'
+
+export const joinStarted = (res: unknown) => res !== JOIN_SKIPPED
+
 const RELAUNCH_SAME_KEY = 'relaunch-same-build'
 const RELAUNCH_OTHER_KEY = 'relaunch-other-build'
 
@@ -198,23 +216,29 @@ function confirmSecondCopy(profile: string): Promise<boolean> {
   )
 }
 
-export function joinWithAuth(profile: string, world: string | null, server: string | null, serverName?: string | null) {
+export function joinWithAuth(
+  profile: string,
+  world: string | null,
+  server: string | null,
+  serverName?: string | null,
+  opts?: { confirmed?: boolean },
+) {
   if (launching) {
     showToast('Игра уже запускается')
-    return Promise.resolve('busy')
+    return Promise.resolve(JOIN_SKIPPED)
   }
-  if (useGame.getState().list.length)
-    return confirmSecondCopy(profile).then((ok) => (ok ? doJoin(profile, world, server, serverName) : 'busy'))
+  if (!opts?.confirmed && useGame.getState().list.length)
+    return confirmSecondCopy(profile).then((ok) => (ok ? doJoin(profile, world, server, serverName) : JOIN_SKIPPED))
   return doJoin(profile, world, server, serverName)
 }
 
 function doJoin(profile: string, world: string | null, server: string | null, serverName?: string | null) {
   if (launching) {
     showToast('Игра уже запускается')
-    return Promise.resolve('busy')
+    return Promise.resolve(JOIN_SKIPPED)
   }
   // Same reason as in doLaunch: no core means no game and no way to notice it ended.
-  if (!hasTauri()) return Promise.resolve('busy')
+  if (!hasTauri()) return Promise.resolve(JOIN_SKIPPED)
   launching = true
   setGameSession(profile, server, serverName)
   pinHostServer(profile)

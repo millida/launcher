@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { SvgSprite } from '../components/SvgSprite'
 import { tauri } from '../ipc/tauri'
-import { overlayHide, overlayReady } from '../ipc/commands'
+import { overlayHide, overlayHitAreas, overlayOpen, overlayReady } from '../ipc/commands'
 import { api } from '../lib/api'
 import { Head } from '../components/Head'
 import { apiErrorText } from '../lib/apiError'
@@ -14,7 +14,15 @@ interface OverlayMessage {
   ts: number
   kind?: 'msg' | 'online' | 'play'
   nicks?: string[]
+  open?: 'chat' | 'room' | 'friends' | 'call'
 }
+
+interface Card extends OverlayMessage {
+  /// Not a timestamp: hovering a card stops its clock, so the deadline moves.
+  expires: number
+}
+
+const CARDS_SHOWN = 3
 
 const CARD_TTL_MS = 9_000
 const HISTORY = 24
@@ -26,13 +34,18 @@ const EMPTY_TTL_MS = 4_000
 /// cursor and eat each other's messages. The main window relays what it got.
 export function Overlay() {
   const [interactive, setInteractive] = useState(false)
-  const [msgs, setMsgs] = useState<OverlayMessage[]>([])
+  const [msgs, setMsgs] = useState<Card[]>([])
+  const [hover, setHover] = useState(false)
+  const [tick, setTick] = useState(0)
   const [reply, setReply] = useState('')
   const [to, setTo] = useState<OverlayMessage | null>(null)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
+  const cardsRef = useRef<HTMLDivElement>(null)
+  const heldSince = useRef(0)
+  const sentHit = useRef('')
 
   useEffect(() => {
     const T = tauri()
@@ -47,9 +60,23 @@ export function Overlay() {
       .catch(() => {})
     void T.event
       .listen<OverlayMessage>('overlay-message', (e) => {
-        const m = { ...e.payload, ts: e.payload.ts || Date.now() }
+        const m = { ...e.payload, ts: e.payload.ts || Date.now(), expires: Date.now() + CARD_TTL_MS }
         setMsgs((prev) => prev.concat([m]).slice(-HISTORY))
         if (!m.kind || m.kind === 'msg') setTo((cur) => cur || m)
+      })
+      .then((un) => offs.push(un))
+      .catch(() => {})
+    void T.event
+      .listen<boolean>('overlay-hover', (e) => setHover(e.payload))
+      .then((un) => offs.push(un))
+      .catch(() => {})
+    // The card that was clicked decides who the reply goes to: the chat opens on
+    // that conversation instead of whatever arrived last.
+    void T.event
+      .listen<OverlayMessage>('overlay-open', (e) => {
+        const m = { ...e.payload, ts: e.payload.ts || Date.now(), expires: Date.now() + CARD_TTL_MS }
+        if (!m.kind || m.kind === 'msg') setTo(m)
+        setTimeout(() => inputRef.current?.focus(), 30)
       })
       .then((un) => offs.push(un))
       .catch(() => {})
@@ -73,10 +100,24 @@ export function Overlay() {
   // Passive mode is a HUD, not a window: only fresh cards are drawn, and the
   // rest of the screen must stay clickable for the game underneath.
   const now = Date.now()
-  const fresh = msgs.filter((m) => now - m.ts < CARD_TTL_MS)
+  const fresh = msgs.filter((m) => m.expires > now).slice(-CARDS_SHOWN)
   const chat = msgs.filter((m) => !m.kind || m.kind === 'msg')
+
+  // Reading a card takes longer than showing it: while the pointer is on the
+  // stack nothing expires, and the deadlines resume where they stopped.
   useEffect(() => {
     if (interactive) return
+    if (hover) {
+      heldSince.current = Date.now()
+      return
+    }
+    const held = heldSince.current ? Date.now() - heldSince.current : 0
+    heldSince.current = 0
+    if (held > 0) setMsgs((prev) => prev.map((m) => ({ ...m, expires: m.expires + held })))
+  }, [hover, interactive])
+
+  useEffect(() => {
+    if (interactive || hover) return
     // An always-on-top window with nothing left to show still costs a
     // compositor layer over the game, so it goes away with its last card.
     // A freshly created window may have no card yet, but waiting forever is how
@@ -85,9 +126,56 @@ export function Overlay() {
       const t = setTimeout(() => void overlayHide(), msgs.length ? 0 : EMPTY_TTL_MS)
       return () => clearTimeout(t)
     }
-    const t = setTimeout(() => setMsgs((prev) => prev.filter((m) => Date.now() - m.ts < CARD_TTL_MS)), 1000)
+    const t = setTimeout(() => setTick((n) => n + 1), 500)
     return () => clearTimeout(t)
-  }, [msgs, interactive, fresh.length])
+  }, [msgs, interactive, hover, fresh.length, tick])
+
+  // The window is click-through as a whole and the core lifts that flag only
+  // over the rectangles reported here, so a stale rectangle is a hole the game
+  // loses clicks in: they are re-sent on every change of the stack.
+  useLayoutEffect(() => {
+    const box = cardsRef.current
+    const rects =
+      interactive || !box
+        ? []
+        : Array.from(box.querySelectorAll('.ov-card')).map((el) => {
+            const r = el.getBoundingClientRect()
+            return [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)]
+          })
+    const key = JSON.stringify(rects)
+    if (key === sentHit.current) return
+    sentHit.current = key
+    void overlayHitAreas(rects).catch(() => {})
+  }, [interactive, fresh.length, msgs, tick])
+
+  const dismiss = useCallback((card: Card) => {
+    setMsgs((prev) => {
+      const left = prev.filter((m) => !(m.uid === card.uid && m.ts === card.ts))
+      if (!left.some((m) => m.expires > Date.now())) void overlayHide().catch(() => {})
+      return left
+    })
+  }, [])
+
+  const payloadOf = (m: OverlayMessage): OverlayMessage => ({
+    uid: m.uid,
+    nick: m.nick,
+    text: m.text,
+    ts: m.ts,
+    kind: m.kind,
+    nicks: m.nicks,
+    open: m.open,
+  })
+
+  const openCard = useCallback((card: Card) => {
+    void overlayOpen(payloadOf(card)).catch(() => {})
+  }, [])
+
+  const openInLauncher = useCallback(() => {
+    const target: OverlayMessage = to
+      ? { ...payloadOf(to), open: to.open || 'chat' }
+      : { uid: '', nick: '', text: '', ts: Date.now(), open: 'friends' }
+    void overlayOpen(target, true).catch(() => {})
+  }, [to])
 
   const send = async () => {
     const body = reply.trim()
@@ -95,11 +183,17 @@ export function Overlay() {
     setSending(true)
     setError('')
     try {
-      await api('/friends/chat/' + encodeURIComponent(to.uid), {
+      // A group card carries a room id, not a person: sending it to the private
+      // endpoint would post the reply into a conversation with nobody.
+      const base =
+        to.open === 'room'
+          ? '/friends/rooms/' + encodeURIComponent(to.uid) + '/chat'
+          : '/friends/chat/' + encodeURIComponent(to.uid)
+      await api(base, {
         method: 'POST',
         body: JSON.stringify({ text: body }),
       })
-      setMsgs((prev) => prev.concat([{ uid: to.uid, nick: 'Ты', text: body, ts: Date.now() }]).slice(-HISTORY))
+      setMsgs((prev) => prev.concat([{ uid: to.uid, nick: 'Ты', text: body, ts: Date.now(), expires: Date.now() + CARD_TTL_MS }]).slice(-HISTORY))
       setReply('')
     } catch (e) {
       setError(apiErrorText(e, 'Сообщение не отправлено'))
@@ -112,9 +206,16 @@ export function Overlay() {
     return (
       <div className="ov ov-passive">
         <SvgSprite />
-        <div className="ov-cards">
+        <div className={'ov-cards' + (hover ? ' held' : '')} ref={cardsRef}>
           {fresh.map((m) => (
-            <div className={'ov-card ov-' + (m.kind || 'msg')} key={m.uid + m.ts}>
+            <div
+              className={'ov-card ov-' + (m.kind || 'msg')}
+              key={m.uid + m.ts}
+              role="button"
+              tabIndex={-1}
+              title={m.open === 'call' || m.open === 'friends' ? 'Открыть лаунчер' : 'Открыть чат'}
+              onClick={() => openCard(m)}
+            >
               <div className="ov-card-heads">
                 {(m.nicks?.length ? m.nicks : [m.nick]).slice(0, 3).map((n, i) => (
                   <Head key={n + i} nick={n} size={30} />
@@ -124,6 +225,17 @@ export function Overlay() {
                 <b>{m.nick}</b>
                 <span>{m.text}</span>
               </div>
+              <button
+                className="ov-card-x"
+                title="Скрыть"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  dismiss(m)
+                }}
+              >
+                <Icon id="i-x" />
+              </button>
+              <i className="ov-card-ttl" style={{ animationDuration: CARD_TTL_MS + 'ms' }} />
             </div>
           ))}
         </div>
@@ -139,7 +251,10 @@ export function Overlay() {
           <Icon id="i-msg" />
           <b>Чат Millida</b>
           <span className="ov-hint">Esc — закрыть</span>
-          <button className="ov-x" onClick={() => void overlayHide()}>
+          <button className="ov-x" title="Открыть в лаунчере" onClick={() => openInLauncher()}>
+            <Icon id="i-ext" />
+          </button>
+          <button className="ov-x" title="Закрыть" onClick={() => void overlayHide()}>
             <Icon id="i-x" />
           </button>
         </div>

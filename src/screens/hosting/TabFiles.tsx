@@ -4,7 +4,7 @@ import { showToast } from '../../state/ui'
 import { uiConfirm } from '../../state/confirm'
 import { hasTauri } from '../../ipc/tauri'
 import { hostDownload, hostUpload } from '../../ipc/commands'
-import { Empty, Loading, sizeLabel } from './kit'
+import { Empty, Loading, LockBtn, sizeLabel } from './kit'
 import { host, errText } from './api'
 import type { HostingFileEntry } from './api'
 
@@ -20,7 +20,7 @@ const parentOf = (path: string) => {
 
 const joinPath = (dir: string, name: string) => (dir ? dir + '/' + name : name)
 
-export function TabFiles({ serverId }: { serverId: string }) {
+export function TabFiles({ serverId, full, onTariff }: { serverId: string; full: boolean; onTariff: () => void }) {
   const [dir, setDir] = useState('')
   const [entries, setEntries] = useState<HostingFileEntry[] | null>(null)
   const [editing, setEditing] = useState<{ path: string; content: string } | null>(null)
@@ -132,10 +132,13 @@ export function TabFiles({ serverId }: { serverId: string }) {
       return
     }
     setBusy('upload')
-    showToast('Заливаем файл…')
     try {
       const target = await hostUpload(serverId, dir)
-      showToast(target ? 'Загружено: ' + target : 'Отменено')
+      if (!target) {
+        showToast('Отменено')
+        return
+      }
+      showToast('Загружено: ' + target)
       load()
     } catch (e) {
       showToast('Не удалось загрузить: ' + errText(e), 'error')
@@ -191,13 +194,28 @@ export function TabFiles({ serverId }: { serverId: string }) {
           ))}
         </span>
         <span style={{ flex: 1 }}></span>
-        <button className="btn sm secondary" onClick={() => setAsk({ kind: 'mkdir', from: '', value: '' })}>
-          <Icon id="i-plus" /> Папка
-        </button>
-        <button className="btn sm secondary" disabled={busy === 'upload'} onClick={() => void upload()}>
-          <Icon id="i-upload" /> Загрузить
-        </button>
+        {full ? (
+          <button className="btn sm secondary" onClick={() => setAsk({ kind: 'mkdir', from: '', value: '' })}>
+            <Icon id="i-plus" /> Папка
+          </button>
+        ) : (
+          <LockBtn label="Папка" feature="Свои папки" onTariff={onTariff} />
+        )}
+        {full ? (
+          <button className="btn sm secondary" disabled={busy === 'upload'} onClick={() => void upload()}>
+            <Icon id="i-upload" /> Загрузить
+          </button>
+        ) : (
+          <LockBtn label="Загрузить" feature="Загрузка своих файлов" onTariff={onTariff} />
+        )}
       </div>
+
+      {full ? null : (
+        <p className="faint-note" style={{ margin: '10px 0 0' }}>
+          На бесплатном тарифе файлы открыты на просмотр, правку конфигов и удаление лишнего. Свои файлы, папки,
+          распаковка и скачивание — на любом платном тарифе.
+        </p>
+      )}
 
       {ask ? (
         <div className="host-ask">
@@ -251,22 +269,34 @@ export function TabFiles({ serverId }: { serverId: string }) {
                 </button>
                 <span className="host-file-meta">{e.dir ? 'папка' : sizeLabel(e.size)}</span>
                 {!e.dir && ARCHIVE_EXT.test(e.name) ? (
-                  <button className="btn sm secondary" disabled={busy === e.name} onClick={() => void extract(e)}>
-                    Распаковать
-                  </button>
+                  full ? (
+                    <button className="btn sm secondary" disabled={busy === e.name} onClick={() => void extract(e)}>
+                      Распаковать
+                    </button>
+                  ) : (
+                    <LockBtn label="Распаковать" feature="Распаковка архивов" onTariff={onTariff} />
+                  )
                 ) : null}
                 {!e.dir ? (
-                  <button className="btn sm ghost" title="Скачать" disabled={busy === e.name} onClick={() => void download(e)}>
-                    <Icon id="i-download" />
-                  </button>
+                  full ? (
+                    <button className="btn sm ghost" title="Скачать" disabled={busy === e.name} onClick={() => void download(e)}>
+                      <Icon id="i-download" />
+                    </button>
+                  ) : (
+                    <LockBtn feature="Скачивание файлов" icon="i-download" title="Скачивание файлов — на платном тарифе" onTariff={onTariff} />
+                  )
                 ) : null}
-                <button
-                  className="btn sm ghost"
-                  title="Переименовать"
-                  onClick={() => setAsk({ kind: 'rename', from: e.name, value: e.name })}
-                >
-                  <Icon id="i-brush" />
-                </button>
+                {full ? (
+                  <button
+                    className="btn sm ghost"
+                    title="Переименовать"
+                    onClick={() => setAsk({ kind: 'rename', from: e.name, value: e.name })}
+                  >
+                    <Icon id="i-brush" />
+                  </button>
+                ) : (
+                  <LockBtn feature="Переименование файлов" icon="i-brush" title="Переименование — на платном тарифе" onTariff={onTariff} />
+                )}
                 <button className="btn sm ghost" title="Удалить" onClick={() => void remove(e)}>
                   <Icon id="i-trash" />
                 </button>

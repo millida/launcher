@@ -255,6 +255,8 @@ pub fn run() {
             commands::overlay::overlay_toast,
             commands::overlay::overlay_hide,
             commands::overlay::overlay_ready,
+            commands::overlay::overlay_hit_areas,
+            commands::overlay::overlay_open,
             commands::themes::list_themes,
             commands::themes::read_theme,
             commands::themes::import_theme,

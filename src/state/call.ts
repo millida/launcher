@@ -584,7 +584,7 @@ async function onInvite(e: CallEvent) {
   // Пока идёт игра, окно лаунчера не трогаем: полноэкранная игра свернулась бы
   // ради вызова. Карточка уходит на оверлей поверх игры.
   if (useGame.getState().list.length) {
-    void overlayNotify({ uid: e.from, nick, text: 'Звонит — ответить можно в лаунчере', ts: Date.now() }).catch(
+    void overlayNotify({ uid: e.from, nick, text: 'Звонит — ответить можно в лаунчере', ts: Date.now(), open: 'call' }).catch(
       () => {},
     )
     return
@@ -624,6 +624,7 @@ function onRing(e: CallEvent) {
       nick,
       text: nick + ' зовёт в «' + title + '» — зайти можно в лаунчере',
       ts: Date.now(),
+      open: 'call',
     }).catch(() => {})
     return
   }

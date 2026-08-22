@@ -1,6 +1,47 @@
 import { useEffect, useState } from 'react'
 import type React from 'react'
 import { Icon } from '../../components/Icon'
+import { uiConfirm } from '../../state/confirm'
+
+const PAID_SUMMARY =
+  'Любой платный тариф открывает всё сразу: свои файлы и SFTP, своё ядро и сборку архивом, базу данных, ' +
+  'дополнительные порты, сеть серверов, доступ тех-админу и защиту от атак. Тарифы отличаются только объёмом памяти. ' +
+  'Бесплатно и без тарифа: моды, плагины и готовые сборки ставятся в один клик во вкладке «Ядро и сборки». ' +
+  'Их конфиги правятся и на бесплатном.'
+
+export async function paidLock(feature: string, onTariff: () => void) {
+  const ok = await uiConfirm(PAID_SUMMARY, {
+    title: feature + ' — на платном тарифе',
+    confirmLabel: 'Перейти на платный тариф',
+    cancelLabel: 'Закрыть',
+    danger: false,
+  })
+  if (ok) onTariff()
+}
+
+export function LockBtn({
+  label,
+  feature,
+  icon,
+  title,
+  onTariff,
+}: {
+  label?: string
+  feature: string
+  icon?: string
+  title?: string
+  onTariff: () => void
+}) {
+  return (
+    <button
+      className={'btn sm ' + (label ? 'secondary' : 'ghost')}
+      title={title || feature + ' — на платном тарифе'}
+      onClick={() => void paidLock(feature, onTariff)}
+    >
+      <Icon id={icon || 'i-lock'} /> {label}
+    </button>
+  )
+}
 
 export function Toggle({ on, busy, onChange }: { on: boolean; busy?: boolean; onChange: (v: boolean) => void }) {
   return (

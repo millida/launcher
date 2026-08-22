@@ -7,12 +7,14 @@ import { HostPlanPicker } from '../components/HostPlanPicker'
 import { useAccounts } from '../state/accounts'
 import { loadMillidaProfile, logoutToLogin } from '../lib/session'
 import { hasTauri } from '../ipc/tauri'
-import { addServer } from '../ipc/commands'
+import { addServer, pinServerDat } from '../ipc/commands'
 import { useProfiles } from '../state/profiles'
 import { rememberServerName } from '../state/playStats'
 import { useHasMillida } from '../state/auth'
 import { noteHostingServers } from '../state/navHint'
-import { joinWithAuth, showLaunchError } from '../lib/launch'
+import { joinStarted, joinWithAuth, showLaunchError } from '../lib/launch'
+import { anyGameRunning, isGameRunning } from '../state/game'
+import { uiConfirm } from '../state/confirm'
 import { setScreen, showToast } from '../state/ui'
 import { Head } from '../components/Head'
 import { openChat, useFriends } from '../state/friends'
@@ -45,6 +47,7 @@ export interface HostServer {
   planName?: string
   planCode?: string
   planRamMb?: number
+  planFullAccess?: boolean
   ramMb?: number
   maxPlayers?: number
   planMaxPlayers?: number
@@ -214,10 +217,38 @@ export function Hosting({ on }: { on: boolean }) {
         setScreen('mods')
         return
       }
-      showToast('Заходим на твой сервер…')
-      addServer(prof, s.name || 'Мой сервер', addr).catch(() => {})
-      rememberServerName(addr, s.name || 'Мой сервер')
-      joinWithAuth(prof, null, addr, s.name || 'Мой сервер').catch((e) => showLaunchError(e))
+      const sname = s.name || 'Мой сервер'
+      addServer(prof, sname, addr).catch(() => {})
+      rememberServerName(addr, sname)
+      if (anyGameRunning()) {
+        // Вторая копия ради входа на сервер почти всегда не нужна: игра уже
+        // запущена, и сервер достаточно закрепить в её списке.
+        void pinServerDat(prof, sname, addr).catch(() => {})
+        void uiConfirm(
+          isGameRunning(prof)
+            ? 'Игра уже запущена — «' + sname + '» закреплён первым в списке серверов, зайди прямо из неё. Запустить вторую копию игры?'
+            : 'Уже запущена другая сборка. «' + sname + '» закреплён в списке серверов сборки «' + prof + '». Запустить её второй копией?',
+          {
+            title: 'Игра уже запущена',
+            confirmLabel: 'Запустить вторую копию',
+            cancelLabel: 'Не запускать',
+            danger: false,
+          },
+        ).then((ok) => {
+          if (!ok) return
+          joinWithAuth(prof, null, addr, sname, { confirmed: true })
+            .then((res) => {
+              if (joinStarted(res)) showToast('Заходим на твой сервер…')
+            })
+            .catch((e) => showLaunchError(e))
+        })
+        return
+      }
+      joinWithAuth(prof, null, addr, sname)
+        .then((res) => {
+          if (joinStarted(res)) showToast('Заходим на твой сервер…')
+        })
+        .catch((e) => showLaunchError(e))
     }
     const cfg: [string, string, string][] = []
     if (s.core) cfg.push(['i-blocks', 'Ядро', s.core + (s.version ? ' ' + s.version : '')])

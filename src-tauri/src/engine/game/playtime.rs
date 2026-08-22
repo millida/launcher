@@ -75,19 +75,41 @@ fn bump(section: &mut Value, key: &str, secs: u64, ts: u64, new_session: bool) {
     });
 }
 
+/// Existing entries were written before addresses were canonicalized, and the
+/// UI still passes whatever the player typed: without this, one server splits
+/// into `Play.Example.RU` and `play.example.ru`.
+fn server_key(section: &Value, addr: &str) -> String {
+    let canon = canon_addr(addr);
+    section
+        .as_object()
+        .and_then(|m| m.keys().find(|k| canon_addr(k) == canon).cloned())
+        .unwrap_or(canon)
+}
+
 /// A session is written in slices while the game runs, so killing the launcher
 /// (tray exit, crash, reboot) loses at most one flush interval instead of the
 /// whole session. Only the first slice counts towards the session counter.
-pub(crate) fn record_playtime(profile: &str, secs: u64, server: Option<&str>, new_session: bool) {
-    if secs == 0 && !new_session { return }
+///
+/// `server_session` is separate from `new_session`: hopping to another server
+/// mid-launch starts a session for that server without inventing a second
+/// launch of the build.
+pub(crate) fn record_playtime(
+    profile: &str,
+    secs: u64,
+    server: Option<&str>,
+    new_session: bool,
+    server_session: bool,
+) {
+    if secs == 0 && !new_session && !server_session { return }
     let ts = now_secs();
     let mut doc = read_doc();
     bump(&mut doc["builds"], profile, secs, ts, new_session);
     doc["lastBuild"] = json!(profile);
     doc["lastAt"] = json!(ts);
     if let Some(addr) = server.map(str::trim).filter(|s| !s.is_empty()) {
-        bump(&mut doc["servers"], addr, secs, ts, new_session);
-        doc["lastServer"] = json!(addr);
+        let key = server_key(&doc["servers"], addr);
+        bump(&mut doc["servers"], &key, secs, ts, server_session);
+        doc["lastServer"] = json!(key);
     }
     write_doc(&doc);
 }
@@ -98,6 +120,8 @@ pub fn label_server(addr: &str, name: &str) {
     let name = name.trim();
     if addr.is_empty() || name.is_empty() { return }
     let mut doc = read_doc();
+    let key = server_key(&doc["servers"], addr);
+    let addr = key.as_str();
     let cur = doc["servers"][addr].clone();
     doc["servers"][addr] = json!({
         "seconds": cur["seconds"].as_u64().unwrap_or(0),
@@ -152,7 +176,7 @@ pub fn get_play_stats() -> PlayStats {
     let last_server = doc["lastServer"].as_str().unwrap_or("").to_string();
     let last_server_name = servers
         .iter()
-        .find(|s| s.key == last_server)
+        .find(|s| canon_addr(&s.key) == canon_addr(&last_server))
         .map(|s| s.label.clone())
         .unwrap_or_default();
     PlayStats {
