@@ -726,6 +726,20 @@ export interface DeviceSpecs {
 
 export const deviceSpecs = () => invoke<DeviceSpecs>('device_specs')
 
+/// Why the webview's render process died last time, reported once by the page
+/// that came back after it.
+export interface WebviewFailure {
+  kind: string
+  reason: string
+  freeMb: number
+  totalMb: number
+  reloaded: boolean
+}
+
+export const takeWebviewFailure = () => invoke<WebviewFailure | null>('take_webview_failure')
+
+export const setWebviewLowMemory = (on: boolean) => invoke<void>('set_webview_low_memory', { on })
+
 // Flatpak builds are updated by flatpak itself, so the in-app channel is hidden.
 export const isFlatpak = () => invoke<boolean>('is_flatpak')
 
@@ -848,8 +862,8 @@ export const catalogMyThemes = () => invoke<OwnCatalogTheme[]>('catalog_my_theme
 export const catalogInstallTheme = (slug: string) =>
   invoke<InstalledThemeFile>('catalog_install_theme', { slug })
 
-export const catalogThemeInstalled = (slug: string, installId: string) =>
-  invoke<{ downloads: number }>('catalog_theme_installed', { slug, installId })
+export const catalogThemeInstalled = (slug: string) =>
+  invoke<{ downloads: number }>('catalog_theme_installed', { slug })
 
 export const catalogPublishTheme = (id: string, changelog?: string) =>
   invoke<OwnCatalogTheme>('catalog_publish_theme', { id, changelog })

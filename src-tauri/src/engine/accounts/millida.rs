@@ -137,6 +137,35 @@ pub fn millida_token() -> Option<String> {
 }
 
 static REFRESH_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+/// Set when a refresh fails for a reason that is not the session's fault (5xx,
+/// 429, a dropped connection). Without it every background poll retries the
+/// same refresh seconds apart for as long as the launcher stays open.
+static REFRESH_BLOCKED_UNTIL: std::sync::Mutex<Option<std::time::Instant>> =
+    std::sync::Mutex::new(None);
+const REFRESH_COOLDOWN: std::time::Duration = std::time::Duration::from_secs(30);
+
+fn refresh_on_cooldown() -> bool {
+    let guard = REFRESH_BLOCKED_UNTIL.lock().unwrap_or_else(|e| e.into_inner());
+    guard.is_some_and(|until| std::time::Instant::now() < until)
+}
+
+fn set_refresh_cooldown(on: bool) {
+    let mut guard = REFRESH_BLOCKED_UNTIL.lock().unwrap_or_else(|e| e.into_inner());
+    *guard = on.then(|| std::time::Instant::now() + REFRESH_COOLDOWN);
+}
+
+/// What a failed refresh says about the stored token pair. Only the server's
+/// own 401 condemns it: a 403 is what the edge shield answers to a suspicious
+/// IP, and 5xx/429/network errors say nothing about the session at all.
+#[derive(Debug, PartialEq, Eq)]
+enum RefreshVerdict {
+    SessionOver,
+    TryLater,
+}
+
+fn verdict_for(err: &str) -> RefreshVerdict {
+    if err == "http 401" { RefreshVerdict::SessionOver } else { RefreshVerdict::TryLater }
+}
 
 enum Refreshed {
     Token(String),
@@ -154,16 +183,32 @@ async fn refresh_session(used: Option<String>) -> Refreshed {
         return Refreshed::Token(current.unwrap_or_default());
     }
     let Some(rt) = crate::secrets::get(SEC_MILLIDA_REFRESH) else { return Refreshed::Dead };
+    if refresh_on_cooldown() {
+        return Refreshed::Unavailable;
+    }
     match millida_refresh(&rt).await {
         Ok((access, next)) => {
             let _ = crate::secrets::set(SEC_MILLIDA, &access);
             let _ = crate::secrets::set(SEC_MILLIDA_REFRESH, &next);
+            set_refresh_cooldown(false);
             Refreshed::Token(access)
         }
-        // Only 401/403 means the token is actually dead; other 4xx (429, or a
-        // transient 400/404) must not log out a live session.
-        Err(e) if e == "http 401" || e == "http 403" => Refreshed::Dead,
-        Err(_) => Refreshed::Unavailable,
+        // Without dropping the condemned pair every later call retries the same
+        // dead token seconds apart, and the account stays half-signed-in until
+        // the launcher restarts.
+        Err(e) => match verdict_for(&e) {
+            RefreshVerdict::SessionOver => {
+                if let Err(e) = millida_forget_session() {
+                    eprintln!("[auth] не удалось очистить мёртвую сессию Millida: {e}");
+                }
+                set_refresh_cooldown(false);
+                Refreshed::Dead
+            }
+            RefreshVerdict::TryLater => {
+                set_refresh_cooldown(true);
+                Refreshed::Unavailable
+            }
+        },
     }
 }
 
@@ -319,7 +364,48 @@ pub async fn millida_login_poll(device_code: String) -> Result<Value, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{api_url, MILLIDA_API};
+    use super::{
+        api_url, refresh_on_cooldown, set_refresh_cooldown, verdict_for, RefreshVerdict,
+        MILLIDA_API,
+    };
+
+    #[test]
+    fn refresh_failure_verdicts() {
+        // (server answer, verdict, why this case is pinned)
+        let cases: &[(&str, RefreshVerdict, &str)] = &[
+            (
+                "http 401",
+                RefreshVerdict::SessionOver,
+                "the token itself is dead — keeping it retries forever (6087 rejected refreshes from one client in 12h)",
+            ),
+            (
+                "http 403",
+                RefreshVerdict::TryLater,
+                "the edge shield answers 403 to a suspicious IP; signing the user out over it loses a live session",
+            ),
+            ("http 429", RefreshVerdict::TryLater, "rate limits pass"),
+            ("http 502", RefreshVerdict::TryLater, "a deploy restart is not a logout"),
+            ("нет сети", RefreshVerdict::TryLater, "network errors say nothing about the session"),
+        ];
+        for (answer, expected, why) in cases {
+            assert_eq!(
+                &verdict_for(answer),
+                expected,
+                "refresh answer {answer:?} judged wrong. Reason this case is pinned: {why}",
+            );
+        }
+    }
+
+    #[test]
+    fn cooldown_gates_retries() {
+        set_refresh_cooldown(true);
+        assert!(
+            refresh_on_cooldown(),
+            "after a failure that is not the session's fault the next poll must wait,              otherwise background polls retry the refresh every few seconds",
+        );
+        set_refresh_cooldown(false);
+        assert!(!refresh_on_cooldown(), "a successful refresh must clear the block");
+    }
 
     #[test]
     fn api_path_verdicts() {

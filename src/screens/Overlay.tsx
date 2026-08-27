@@ -4,6 +4,7 @@ import { SvgSprite } from '../components/SvgSprite'
 import { tauri } from '../ipc/tauri'
 import { overlayHide, overlayHitAreas, overlayOpen, overlayReady } from '../ipc/commands'
 import { api } from '../lib/api'
+import { CARD_TTL_MS, freshCards, holdCards } from '../lib/overlayCards'
 import { Head } from '../components/Head'
 import { apiErrorText } from '../lib/apiError'
 
@@ -24,7 +25,6 @@ interface Card extends OverlayMessage {
 
 const CARDS_SHOWN = 3
 
-const CARD_TTL_MS = 9_000
 const HISTORY = 24
 /// A window shown for a card that never arrived must not stay: it is
 /// full-screen, always on top and has no close button of its own.
@@ -54,6 +54,9 @@ export function Overlay() {
     void T.event
       .listen<boolean>('overlay-mode', (e) => {
         setInteractive(e.payload)
+        // The core drops the hit areas whenever the window goes down, so an
+        // unchanged stack after a re-show would be drawn over dead rectangles.
+        sentHit.current = ''
         if (e.payload) setTimeout(() => inputRef.current?.focus(), 30)
       })
       .then((un) => offs.push(un))
@@ -100,11 +103,12 @@ export function Overlay() {
   // Passive mode is a HUD, not a window: only fresh cards are drawn, and the
   // rest of the screen must stay clickable for the game underneath.
   const now = Date.now()
-  const fresh = msgs.filter((m) => m.expires > now).slice(-CARDS_SHOWN)
+  const fresh = freshCards(msgs, now, CARDS_SHOWN)
   const chat = msgs.filter((m) => !m.kind || m.kind === 'msg')
 
-  // Reading a card takes longer than showing it: while the pointer is on the
-  // stack nothing expires, and the deadlines resume where they stopped.
+  // Reading a card takes longer than showing it: the pointer on the stack holds
+  // the deadlines, which resume where they stopped - up to the card ceiling, so
+  // a cursor left in that corner cannot make a card permanent.
   useEffect(() => {
     if (interactive) return
     if (hover) {
@@ -113,19 +117,21 @@ export function Overlay() {
     }
     const held = heldSince.current ? Date.now() - heldSince.current : 0
     heldSince.current = 0
-    if (held > 0) setMsgs((prev) => prev.map((m) => ({ ...m, expires: m.expires + held })))
+    if (held > 0) setMsgs((prev) => holdCards(prev, held))
   }, [hover, interactive])
 
   useEffect(() => {
-    if (interactive || hover) return
+    if (interactive) return
     // An always-on-top window with nothing left to show still costs a
     // compositor layer over the game, so it goes away with its last card.
     // A freshly created window may have no card yet, but waiting forever is how
     // an empty overlay ends up covering the whole screen with no way out.
     if (!fresh.length) {
-      const t = setTimeout(() => void overlayHide(), msgs.length ? 0 : EMPTY_TTL_MS)
+      const t = setTimeout(() => void overlayHide().catch(() => {}), msgs.length ? 0 : EMPTY_TTL_MS)
       return () => clearTimeout(t)
     }
+    // The tick also runs under the pointer: hovering only postpones a card up
+    // to its ceiling, and someone has to notice when that ceiling is reached.
     const t = setTimeout(() => setTick((n) => n + 1), 500)
     return () => clearTimeout(t)
   }, [msgs, interactive, hover, fresh.length, tick])
@@ -151,7 +157,7 @@ export function Overlay() {
   const dismiss = useCallback((card: Card) => {
     setMsgs((prev) => {
       const left = prev.filter((m) => !(m.uid === card.uid && m.ts === card.ts))
-      if (!left.some((m) => m.expires > Date.now())) void overlayHide().catch(() => {})
+      if (!freshCards(left, Date.now(), CARDS_SHOWN).length) void overlayHide().catch(() => {})
       return left
     })
   }, [])

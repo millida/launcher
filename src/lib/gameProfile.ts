@@ -15,11 +15,16 @@ export interface GameProfile {
   nameConflict?: boolean
 }
 
+/// «Лицензия» без аккаунта Microsoft означает, что скин не берётся ниоткуда, и
+/// в игре остаётся Стив. Настройку могла записать прошлая версия или совет
+/// поддержки, поэтому выбор проверяется при каждом чтении, а не только при клике.
 export function skinSource(): SkinSource {
-  const stored = localStorage.getItem('m-skin-source')
-  if (stored === 'millida' || stored === 'mojang') return stored
   const a = getAccount()
-  return a && a.kind === 'microsoft' ? 'mojang' : 'millida'
+  const licensed = !!a && a.kind === 'microsoft'
+  const stored = localStorage.getItem('m-skin-source')
+  if (stored === 'millida') return stored
+  if (stored === 'mojang') return licensed ? stored : 'millida'
+  return licensed ? 'mojang' : 'millida'
 }
 
 export function setSkinSource(v: SkinSource) {

@@ -8,6 +8,8 @@ pub mod tray;
 mod overlay;
 mod mic;
 mod display;
+mod webview_health;
+mod uiwatch;
 
 /// Directories the webview may read through `asset://`: the media files it
 /// plays and shows plus the images a theme pack ships, nothing else. The token
@@ -56,8 +58,10 @@ pub fn run() {
             engine::arm_dialogs(app.handle());
             if let Some(w) = app.get_webview_window("main") {
                 mic::allow_microphone(&w);
+                webview_health::watch(&w);
             }
             display::watch(app.handle());
+            uiwatch::watch(app.handle());
             overlay::rebind_hotkey(app.handle());
             if let Ok(mode) = std::env::var("MILLIDA_AUTOTEST") {
                 let h = app.handle().clone();
@@ -90,6 +94,8 @@ pub fn run() {
             commands::content::core_version,
             commands::system::app_version,
             commands::system::device_specs,
+            webview_health::take_webview_failure,
+            webview_health::set_webview_low_memory,
             commands::system::read_crashes,
             commands::system::clear_crashes,
             commands::launch::launch_game,

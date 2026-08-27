@@ -45,6 +45,27 @@ pub fn install_panic_hook(version: String) {
     }));
 }
 
+/// A frozen interface leaves no other trace: the process is alive and nothing
+/// panics, so the freeze is written where the next launch already looks.
+pub fn record_freeze(stalled: std::time::Duration) {
+    let dir = crash_dir();
+    if std::fs::create_dir_all(&dir).is_err() {
+        return;
+    }
+    let when = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let body = format!(
+        "millida-launcher {}\nos: {} {}\nместо: главный поток\nсообщение: интерфейс не отвечал {} с\n",
+        env!("CARGO_PKG_VERSION"),
+        std::env::consts::OS,
+        std::env::consts::ARCH,
+        stalled.as_secs(),
+    );
+    let _ = std::fs::write(dir.join(format!("freeze-{}.log", when)), body);
+}
+
 pub fn read_crashes() -> Vec<CrashEntry> {
     let mut out = vec![];
     let Ok(rd) = std::fs::read_dir(crash_dir()) else { return out };

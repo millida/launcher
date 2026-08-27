@@ -1,5 +1,5 @@
 import { hasTauri } from '../ipc/tauri'
-import { addServer } from '../ipc/commands'
+import { addServer, pingServer } from '../ipc/commands'
 import { getAccount } from '../state/accounts'
 import { ensureMsAuth } from '../state/msLogin'
 import { useProfiles } from '../state/profiles'
@@ -10,7 +10,7 @@ import { rememberServerName } from '../state/playStats'
 import { uiChoice, uiConfirm } from '../state/confirm'
 import { joinStarted, joinWithAuth, showLaunchError } from './launch'
 import { openModal, setScreen, showToast } from '../state/ui'
-import { pickBuildForServer, serverVersions, versionFits } from './mcVersion'
+import { pickBuildForServer, pingVersions, serverVersions, versionFits } from './mcVersion'
 import { track } from './telemetry'
 
 const addrKey = (ip: string) =>
@@ -19,11 +19,26 @@ const addrKey = (ip: string) =>
     .toLowerCase()
     .replace(/:25565$/, '')
 
+/**
+ * Версию знает не только рейтинг: на свой хостинг, к другу и по ссылке из
+ * Discord игрок заходит мимо каталога, и раньше в таких случаях запускалась
+ * текущая сборка любой версии. Спрашиваем сам сервер — он отвечает точной
+ * версией; ждём недолго, чтобы запуск не замирал из-за лежачего сервера.
+ */
+async function versionsFromPing(ip: string): Promise<string[]> {
+  const reported = await Promise.race([
+    pingServer(ip)
+      .then((p) => p.version)
+      .catch(() => ''),
+    new Promise<string>((r) => setTimeout(() => r(''), 1500)),
+  ])
+  return pingVersions(reported)
+}
+
 function versionsForAddr(ip: string): string[] {
   const key = addrKey(ip)
   if (!key) return []
-  const { list, promo } = useServers.getState()
-  const hit = list.concat(promo).find((s) => addrKey(s.ip) === key)
+  const hit = useServers.getState().list.find((s) => addrKey(s.ip) === key)
   return serverVersions(hit ? hit.versions : null)
 }
 
@@ -57,7 +72,7 @@ async function licenseGate(licensed: boolean): Promise<boolean> {
 
 // Launching a 26.2 build against a 1.21 server ends in "Outdated client" with
 // no hint of what to do, so the version gate runs before the game starts.
-async function buildForServer(join: JoinIntent, wanted: string[]): Promise<string | null> {
+export async function buildForServer(join: JoinIntent, wanted: string[]): Promise<string | null> {
   const { selected, profiles, setSelected } = useProfiles.getState()
   const current = profiles.find((p) => p.name === (selected || (profiles[0] || { name: '' }).name)) || null
   if (!profiles.length) {
@@ -103,7 +118,8 @@ export async function quickJoin(ip: string, name: string, licensed?: boolean, ve
     return Promise.reject(new Error('no-tauri'))
   }
   track('server_join', { addr: ip.slice(0, 64), name: name.slice(0, 64) })
-  const wanted = versions && versions.length ? serverVersions(versions) : versionsForAddr(ip)
+  let wanted = versions && versions.length ? serverVersions(versions) : versionsForAddr(ip)
+  if (!wanted.length) wanted = await versionsFromPing(ip)
   const prof = await buildForServer({ ip, name, licensed, versions: wanted }, wanted)
   if (!prof) return Promise.reject(new Error('no-profile'))
   if (!(await licenseGate(!!licensed))) return

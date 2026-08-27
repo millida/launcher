@@ -5,16 +5,21 @@ pub(crate) const CSL_LATEST: &str = "https://api.github.com/repos/xfl03/MCCustom
 const CSL_JAR: &str = "CustomSkinLoader.jar";
 const CSL_DISABLED: &str = "CustomSkinLoader.jar.disabled";
 const CSL_OPTOUT: &str = ".millida-skip";
-/// Mods that already answer for the player's skin. Two of them in one build
-/// patch the same texture path, and a downloaded pack that ships its own one
-/// crashed as soon as the launcher added a second.
-const SKIN_OWNING_MODS: [&str; 6] = [
+/// Mods that decide where the player's skin comes from. Two of them in one
+/// build patch the same texture path, and a downloaded pack that ships its own
+/// one crashed as soon as the launcher added a second.
+///
+/// Only a texture *source* belongs here. Mods that merely render an existing
+/// skin differently — Entity Texture Features and Entity Model Features, which
+/// Fabulously Optimized and most optimisation packs ship — fetch nothing, so
+/// listing them left every such build without the Millida skin and with no
+/// mod to load it.
+const SKIN_OWNING_MODS: [&str; 5] = [
     "customskinloader",
     "hdskins",
     "offlineskins",
     "skinrestorer",
     "fabrictailor",
-    "entitytexturefeatures",
 ];
 /// Skin mods another launcher puts into the game folder itself. TLauncher adds
 /// TLSkinCape to every build it runs, and an imported build keeps it: the mod
@@ -411,6 +416,50 @@ mod tests {
 
     fn source(list: &[Value], name: &str) -> Value {
         list.iter().find(|s| s["name"] == name).cloned().unwrap_or(Value::Null)
+    }
+
+    /// file name                                    | verdict | why it is pinned
+    /// CustomSkinLoader_Fabric-15.0.1.jar           | owns    | a second copy is a hard crash
+    /// HDSkins-1.20.jar                             | owns    | its own skin service
+    /// fabrictailor-2.1.jar                         | owns    | replaces the skin from the client
+    /// entity_texture_features-7.1.1-26.2-fabric.jar| renders | Fabulously Optimized ships it
+    /// entity_model_features-3.2.6-26.2-fabric.jar  | renders | same author, models only
+    /// sodium-fabric-0.6.jar                        | other   | nothing to do with skins
+    /// CustomSkinLoader.jar                         | ours    | never a conflict with itself
+    #[test]
+    fn only_a_texture_source_blocks_the_skin_mod() {
+        let mods = std::env::temp_dir().join(format!("millida-owning-skin-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&mods);
+        std::fs::create_dir_all(&mods).unwrap();
+        let owning = [
+            "CustomSkinLoader_Fabric-15.0.1.jar",
+            "HDSkins-1.20.jar",
+            "fabrictailor-2.1.jar",
+        ];
+        let harmless = [
+            "entity_texture_features-7.1.1-26.2-fabric.jar",
+            "entity_model_features-3.2.6-26.2-fabric.jar",
+            "sodium-fabric-0.6.jar",
+            CSL_JAR,
+        ];
+        for f in harmless {
+            std::fs::write(mods.join(f), b"x").unwrap();
+        }
+        assert!(
+            skin_owning_mod(&mods).is_none(),
+            "мод, который только рисует скин, не должен запрещать установку загрузчика скинов: \
+             так Fabulously Optimized и все сборки с Entity Texture Features остались без скина Millida"
+        );
+        for f in owning {
+            std::fs::write(mods.join(f), b"x").unwrap();
+            assert_eq!(
+                skin_owning_mod(&mods).as_deref(),
+                Some(f),
+                "{f} сам решает, откуда берётся скин — второй такой мод ломает сборку",
+            );
+            std::fs::remove_file(mods.join(f)).unwrap();
+        }
+        let _ = std::fs::remove_dir_all(&mods);
     }
 
     /// file name                  | verdict | why it is pinned

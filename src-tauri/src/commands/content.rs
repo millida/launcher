@@ -57,7 +57,7 @@ pub async fn audit_deps(profile: String) -> Result<engine::DepAudit, String> {
     engine::audit_deps(profile).await
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_content(profile: String, kind: String) -> Vec<engine::ModFile> { engine::list_content(&profile, &kind) }
 
 #[tauri::command]
@@ -75,25 +75,25 @@ pub async fn scan_content(profile: String, kind: String) -> Result<engine::ScanR
     engine::scan_content(profile, kind).await
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn toggle_content(profile: String, kind: String, name: String, enable: bool) -> Result<(), String> {
     engine::toggle_content(&profile, &kind, &name, enable)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_content(profile: String, kind: String, name: String) -> Result<(), String> {
     engine::delete_content(&profile, &kind, &name)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_mods(profile: String) -> Vec<engine::ModFile> { engine::list_mods(&profile) }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn toggle_mod(profile: String, name: String, enable: bool) -> Result<(), String> {
     engine::toggle_mod(&profile, &name, enable)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_mod(profile: String, name: String) -> Result<(), String> {
     engine::delete_mod(&profile, &name)
 }
@@ -133,7 +133,7 @@ pub async fn cf_install_world(app: tauri::AppHandle, mod_id: u32, profile: Strin
     engine::cf_install_world(app, mod_id, profile, force.unwrap_or(false)).await
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_world_installs(profile: String) -> Vec<String> { engine::list_world_installs(&profile) }
 
 /// Installs live in the engine and survive a webview reload; the frontend polls

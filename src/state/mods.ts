@@ -131,7 +131,9 @@ function scopeFilters(build: string | null): { fVer: string; fLoader: string } {
   }
 }
 
-let cfBuffer: ModHit[] = []
+// A later answer of an earlier request must not repaint the catalogue: clearing
+// the query while a search is still in flight brought the search results back.
+let loadSeq = 0
 
 // CurseForge pages hold 50 entries, Modrinth 20. One shared counter meant the
 // second CurseForge page started 20 entries in and repeated thirty rows that
@@ -190,10 +192,15 @@ export const useMods = create<ModsState>((set, get) => ({
   // mod that did not match a search the player had forgotten about.
   scopeTo: (build) => set({ targetBuild: build, mq: '', ...scopeFilters(build) }),
   load: async (append) => {
+    const seq = ++loadSeq
+    const stale = () => seq !== loadSeq
     const s = get()
     if (!append) {
-      set({ offset: 0, cfOffset: 0, installedIds: await refreshInstalledIds(s.modTab) })
+      const ids = await refreshInstalledIds(s.modTab)
+      if (stale()) return
+      set({ offset: 0, cfOffset: 0, installedIds: ids })
     }
+    let cfBuffer: ModHit[] = []
     const st = get()
     // The field keeps what the player typed, the request gets it trimmed.
     const query = st.mq.trim()
@@ -213,6 +220,7 @@ export const useMods = create<ModsState>((set, get) => ({
           st.fWorldCat,
           CF_SORTS[st.fSort] || 2,
         )
+        if (stale()) return
         const hits: ModHit[] = raw.map((h) => ({
           title: h.name,
           author: 'CurseForge',
@@ -235,6 +243,7 @@ export const useMods = create<ModsState>((set, get) => ({
           showMore: hits.length >= CF_PAGE && idx + hits.length < 9950,
         })
       } catch (e) {
+        if (stale()) return
         set({ hits: [], count: '', showMore: false, notice: 'CurseForge: ' + e })
       }
       return
@@ -249,6 +258,7 @@ export const useMods = create<ModsState>((set, get) => ({
         try {
           const loader = st.fLoader === 'любой' ? '' : st.fLoader
           const raw = await cfSearch(query, st.modTab, st.fVer === 'любая' ? '' : st.fVer, loader, cfOffset)
+          if (stale()) return
           const hits: ModHit[] = raw.map((h) => ({
             title: h.name,
             author: 'CurseForge',
@@ -275,14 +285,13 @@ export const useMods = create<ModsState>((set, get) => ({
           set({ cfOffset: cfOffset + hits.length })
           cfBuffer = hits
         } catch (e) {
+          if (stale()) return
           if (st.modSource === 'curseforge') {
             set({ hits: [], showMore: false, notice: 'CurseForge: ' + e })
             return
           }
           cfBuffer = []
         }
-      } else {
-        cfBuffer = []
       }
     }
     const f: string[][] = [['project_type:' + st.modTab]]
@@ -309,6 +318,7 @@ export const useMods = create<ModsState>((set, get) => ({
       (query ? '&query=' + encodeURIComponent(query) : '')
     try {
       const d = await (await fetch(url)).json()
+      if (stale()) return
       const hits: ModHit[] = (d.hits || []).map((h: any) => ({
         title: h.title,
         author: h.author,
@@ -322,7 +332,6 @@ export const useMods = create<ModsState>((set, get) => ({
       const shown = append ? get().hits : []
       const cfPage = cfBuffer
       const page = st.modSource === 'all' ? mergeSources(hits, cfPage, shown) : hits
-      cfBuffer = []
       set({
         count:
           st.modSource === 'all'
@@ -339,10 +348,10 @@ export const useMods = create<ModsState>((set, get) => ({
         showMore: hits.length >= MR_PAGE || cfPage.length >= CF_PAGE,
       })
     } catch {
+      if (stale()) return
       if (st.modSource === 'all' && cfBuffer.length) {
         const shown = append ? get().hits : []
         const cfPage = cfBuffer
-        cfBuffer = []
         const page = mergeSources([], cfPage, shown)
         set({
           count: shown.length + page.length + ' результатов',

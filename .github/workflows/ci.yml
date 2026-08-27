@@ -40,7 +40,7 @@ jobs:
         run: bun run typecheck
 
       - name: Tests
-        run: bun test
+        run: bun run test
 
       # Built without MILLIDA_MS_CLIENT_ID, which also proves the fallback path works.
       - name: Build web

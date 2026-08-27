@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import {
   isKnownVersion,
+  pingVersions,
   pickBuildForServer,
   pickVersionForServer,
   serverVersions,
@@ -69,4 +70,22 @@ test('the new-build preset falls back to the closest offered release', () => {
   expect(pickVersionForServer(available, ['1.21.1'])).toBe('1.21.1')
   expect(pickVersionForServer(available, ['1.21'])).toBe('1.21.4')
   expect(pickVersionForServer(available, ['1.7.10'])).toBe('')
+})
+
+// Ответ пинга -> версии, по которым судим сборку. Пустой список = не придираемся.
+const PING: [string, string[], string][] = [
+  ['Paper 1.20.1', ['1.20.1'], 'ядро и версия'],
+  ['1.16.5', ['1.16.5'], 'голая версия'],
+  ['26.2', ['26.2'], 'календарная нумерация'],
+  ['BungeeCord 1.8.x-1.21.x', [], 'прокси пускает целый диапазон'],
+  ['Velocity 1.7.2-1.21.4', [], 'диапазон без «x»'],
+  ['Unknown', [], 'сервер не назвал версию'],
+  ['', [], 'пустой ответ'],
+]
+
+test('версия из пинга берётся только когда она однозначна', () => {
+  setKnownVersions([])
+  for (const [raw, want, why] of PING) {
+    expect(pingVersions(raw), why).toEqual(want)
+  }
 })

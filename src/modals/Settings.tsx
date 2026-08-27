@@ -585,6 +585,15 @@ export function Settings({ on }: { on: boolean }) {
                   data-skinsrc={v}
                   style={{ height: '32px', fontSize: '12.5px' }}
                   onClick={() => {
+                    // Без лицензии Mojang скин брать неоткуда: в игре остаётся
+                    // Стив, и по этому пути игрок уже приходил в поддержку.
+                    if (v === 'mojang' && (!acc || acc.kind !== 'microsoft')) {
+                      showToast(
+                        'Скины из лицензии берутся только с аккаунтом Microsoft — добавь его или оставь Millida',
+                        'error',
+                      )
+                      return
+                    }
                     setSkins(v as SkinSource)
                     setSkinSource(v as SkinSource)
                   }}

@@ -8,7 +8,7 @@
     "dev": "vite",
     "build:web": "tsc -b && vite build && bun scripts/check-frontend-gate.mjs",
     "typecheck": "tsc -b",
-    "test": "bun test",
+    "test": "bun scripts/test.mjs",
     "lint": "tsc -b",
     "preview": "vite preview",
     "tauri": "tauri",

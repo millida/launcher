@@ -1,11 +1,11 @@
 use crate::engine;
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn duplicate_profile(name: String) -> Result<Vec<engine::Profile>, String> { engine::duplicate_profile(&name) }
 
 /// Both fields end up on a JVM command line on every launch, so they are checked
 /// here as well as when the command line is built.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn save_profile_settings(profile: String, jvm_args: String, width: u32, height: u32, java_path: Option<String>) -> Result<(), String> {
     if let Some(bad) = engine::rejected_jvm_arg(&jvm_args) {
         return Err(format!("Аргумент «{}» лаунчер не передаёт Java — он позволяет запускать сторонний код", bad));
@@ -61,18 +61,18 @@ pub fn set_profile_gpu(profile: String, pref: String) -> String {
 #[tauri::command]
 pub fn gpu_switch_supported() -> bool { engine::gpu_switch_supported() }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn skin_mod_state(profile: String) -> serde_json::Value { engine::skin_mod_state(&profile) }
 
 /// Off takes the jar out of the build now and keeps it out: the launcher used to
 /// put its skin mod back on the next launch, so a build it does not fit could
 /// not be fixed by removing it.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_skin_mod(profile: String, on: bool) -> Result<serde_json::Value, String> {
     engine::set_skin_mod(&profile, on)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn fps_boost_state(profile: String) -> engine::FpsBoostState { engine::fps_boost_state(&profile) }
 
 #[tauri::command]
@@ -80,7 +80,7 @@ pub async fn set_fps_boost(app: tauri::AppHandle, profile: String, on: bool) -> 
     engine::set_fps_boost(app, profile, on).await
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn load_profile_settings(profile: String) -> serde_json::Value {
     std::fs::read_to_string(engine::profile_dir(&profile).join("millida-settings.json"))
         .ok().and_then(|t| serde_json::from_str(&t).ok())
@@ -90,7 +90,7 @@ pub fn load_profile_settings(profile: String) -> serde_json::Value {
 #[tauri::command]
 pub fn open_screenshots(profile: String) { engine::open_screenshots(&profile); }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn count_screenshots(profile: String) -> usize { engine::screenshot_count(&profile) }
 
 #[tauri::command]
@@ -101,20 +101,20 @@ pub async fn update_modpack(app: tauri::AppHandle, profile: String, version_id: 
     engine::update_modpack(app, profile, version_id).await
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn modpack_info(profile: String) -> serde_json::Value { engine::modpack_info(&profile) }
 
 /// Screenshots are the only game-root files the webview shows, and the grant is
 /// per file: opening `profiles/<p>/` to `asset://` would also expose mods and
 /// worlds that a compromised webview copied there.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_screenshots(app: tauri::AppHandle, profile: String) -> Vec<String> {
     screenshot_gallery(app, profile).into_iter().map(|s| s.path).collect()
 }
 
 /// Same per-file grant as the plain list, plus the sizes and dates the gallery
 /// shows. An empty profile name means every build.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn screenshot_gallery(app: tauri::AppHandle, profile: String) -> Vec<engine::Screenshot> {
     use tauri::Manager;
     let shots = engine::gallery(&profile);
@@ -125,7 +125,7 @@ pub fn screenshot_gallery(app: tauri::AppHandle, profile: String) -> Vec<engine:
     shots
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_screenshot(profile: String, name: String) -> Result<(), String> {
     engine::delete_screenshot(&profile, &name)
 }
@@ -140,13 +140,13 @@ pub async fn share_screenshot(profile: String, name: String) -> Result<String, S
     engine::share_screenshot(profile, name).await
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_profile_group(name: String, group: String) { engine::set_profile_group(&name, &group); }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_profile_groups() -> serde_json::Value { engine::get_profile_groups() }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_profile_icon(name: String, icon: String) -> Vec<engine::Profile> {
     engine::set_profile_cover(&name, Some(icon))
 }
@@ -164,15 +164,15 @@ pub async fn pick_cover_image() -> Result<Option<String>, String> {
     engine::pick_cover_image().await
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn clear_profile_cover(profile: String) -> Vec<engine::Profile> {
     engine::set_profile_cover(&profile, None)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_profile(name: String) -> Result<Vec<engine::Profile>, String> { engine::delete_profile(&name) }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rename_profile(name: String, new_name: String) -> Result<Vec<engine::Profile>, String> {
     let nn = new_name.trim().to_string();
     if nn.is_empty() { return Err("Имя не может быть пустым".into()); }
@@ -193,7 +193,7 @@ pub fn rename_profile(name: String, new_name: String) -> Result<Vec<engine::Prof
 }
 
 /// The loader itself is installed on the next launch.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_profile_loader(
     name: String,
     version: String,
@@ -214,12 +214,12 @@ pub fn set_profile_loader(
 #[tauri::command]
 pub fn open_profile_folder(name: String) { engine::open_profile_folder(&name); }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_profiles() -> Vec<engine::Profile> {
     engine::load_profiles()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_profile(
     name: String,
     version: String,
@@ -284,7 +284,7 @@ pub async fn scan_imports() -> Result<Vec<engine::FoundInstance>, String> {
     super::blocking(engine::scan_imports).await
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn import_instance(path: String, name: String, version: String, loader: String) -> Result<engine::Profile, String> {
     engine::import_instance(path, name, version, loader)
 }

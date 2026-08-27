@@ -171,6 +171,7 @@ import { CrashModal } from './components/CrashModal'
 import { hideBoot } from './lib/boot'
 import { frontendReady } from './ipc/commands'
 import { initTelemetry, track } from './lib/telemetry'
+import { reportWebviewFailure, setLauncherIdleMemory, watchHeap } from './lib/webviewHealth'
 import { flushPrefs, hydratePrefs } from './lib/prefs'
 
 let gameStartedAt = 0
@@ -267,8 +268,10 @@ export function App() {
     const onVisible = () => {
       if (document.hidden) {
         void flushPrefs()
+        setLauncherIdleMemory(true)
         return
       }
+      setLauncherIdleMemory(false)
       void loadFriends()
       heartbeat()
     }
@@ -300,7 +303,8 @@ export function App() {
       void refreshMsAccounts()
       void flushNativeCrashes()
       hideBoot()
-      void initTelemetry(performance.now())
+      void initTelemetry(performance.now()).then(reportWebviewFailure)
+      watchHeap()
     })
     return () => {
       clearInterval(updPoll)
@@ -355,9 +359,12 @@ export function App() {
 
   useEffect(() => {
     const onExpired = () => {
-      if (!useUi.getState().logged) return
+      // Чистим состояние и при logged=false: фоновые опросы (присутствие,
+      // телеметрия, синк) идут и до входа в оболочку, и без очистки аккаунт
+      // остаётся наполовину залогиненным до перезапуска.
+      const wasLogged = useUi.getState().logged
       logoutToLogin()
-      showToast('Сессия истекла — войди заново', 'error')
+      if (wasLogged) showToast('Сессия истекла — войди заново', 'error')
     }
     window.addEventListener(SESSION_EXPIRED_EVENT, onExpired)
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired)

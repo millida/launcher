@@ -8,11 +8,12 @@ import { useAccounts } from '../state/accounts'
 import { loadMillidaProfile, logoutToLogin } from '../lib/session'
 import { hasTauri } from '../ipc/tauri'
 import { addServer, pinServerDat } from '../ipc/commands'
-import { useProfiles } from '../state/profiles'
 import { rememberServerName } from '../state/playStats'
 import { useHasMillida } from '../state/auth'
 import { noteHostingServers } from '../state/navHint'
 import { joinStarted, joinWithAuth, showLaunchError } from '../lib/launch'
+import { buildForServer } from '../lib/joinServer'
+import { serverVersions } from '../lib/mcVersion'
 import { anyGameRunning, isGameRunning } from '../state/game'
 import { uiConfirm } from '../state/confirm'
 import { setScreen, showToast } from '../state/ui'
@@ -201,7 +202,7 @@ export function Hosting({ on }: { on: boolean }) {
     const copy = async (text: string) => {
       showToast((await copyText(text)) ? 'Адрес скопирован: ' + addr : 'Скопируй адрес вручную: ' + addr)
     }
-    const join = () => {
+    const join = async () => {
       if (!addr) {
         showToast('Сервер ещё запускается')
         return
@@ -210,14 +211,12 @@ export function Hosting({ on }: { on: boolean }) {
         showToast('Вход на сервер — в приложении')
         return
       }
-      const { selected, profiles } = useProfiles.getState()
-      const prof = selected || (profiles[0] || { name: '' }).name || ''
-      if (!prof) {
-        showToast('Сначала создай сборку под свой сервер')
-        setScreen('mods')
-        return
-      }
       const sname = s.name || 'Мой сервер'
+      // Свой сервер тоже не пустит клиент чужой версии: сборку выбираем (или
+      // предлагаем создать) под версию, на которой он крутится.
+      const wanted = serverVersions(s.version ? [s.version] : [])
+      const prof = await buildForServer({ ip: addr, name: sname, licensed: false, versions: wanted }, wanted)
+      if (!prof) return
       addServer(prof, sname, addr).catch(() => {})
       rememberServerName(addr, sname)
       if (anyGameRunning()) {
