@@ -64,3 +64,16 @@ export function pickVersionForServer(available: string[], wanted: string[]): str
   }
   return ''
 }
+
+// Ответ сервера на пинг — свободная строка: «Paper 1.20.1», «1.16.5», а у
+// прокси диапазон «1.8.x-1.21.x». Точную версию берём, диапазон отбрасываем:
+// такой сервер пускает любой клиент из промежутка, и придираться не за что.
+const PING_RANGE = /\d+\.\d+(\.\d+)?\s*[-–—]\s*\d+\.\d+(\.\d+)?/
+const PING_TOKEN = /\d{1,4}\.\d{1,2}(\.\d{1,3})?/g
+
+export function pingVersions(reported: string | null | undefined): string[] {
+  const s = (reported || '').trim()
+  if (!s || PING_RANGE.test(s.replace(/\.(x|\*)\b/gi, ''))) return []
+  const hits = s.match(PING_TOKEN) || []
+  return serverVersions(hits.slice(0, 1))
+}

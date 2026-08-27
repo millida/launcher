@@ -15,7 +15,6 @@ import {
 import type { CatalogTheme, InstalledThemeFile, OwnCatalogTheme } from '../ipc/commands'
 import { hasMillidaAccount } from '../lib/api'
 import { apiErrorText } from '../lib/apiError'
-import { installId } from '../lib/telemetry'
 import type { ThemePack } from '../lib/themes'
 
 // Каталог живёт внутри страницы настроек: страница в две строки карточек не
@@ -58,10 +57,14 @@ function Swatches({ colors }: { colors: string[] }) {
  */
 export function ThemeCatalog({
   installed,
+  activeId,
   onInstalled,
+  onApply,
 }: {
   installed: ThemePack[]
+  activeId: string
   onInstalled: (theme: InstalledThemeFile) => void
+  onApply: (slug: string) => Promise<void>
 }) {
   const [tab, setTab] = useState<'catalog' | 'mine'>('catalog')
   const [q, setQ] = useState('')
@@ -134,7 +137,7 @@ export function ThemeCatalog({
       showToast('Тема «' + file.name + '» установлена')
       // Счётчик считает лаунчеры, а не нажатия: повторная установка после
       // удаления вернёт прежнее число, поэтому оно берётся из ответа каталога.
-      const counted = await catalogThemeInstalled(theme.slug, installId()).catch(() => null)
+      const counted = await catalogThemeInstalled(theme.slug).catch(() => null)
       if (counted) {
         setItems((prev) =>
           prev.map((t) => (t.slug === theme.slug ? { ...t, downloads: counted.downloads } : t)),
@@ -142,6 +145,18 @@ export function ThemeCatalog({
       }
     } catch (e) {
       showToast(apiErrorText(e, 'Каталог не ответил'), 'error')
+    } finally {
+      setBusy('')
+    }
+  }
+
+  async function apply(theme: CatalogTheme) {
+    setBusy(theme.slug)
+    try {
+      await onApply(theme.slug)
+      showToast('Тема «' + theme.name + '» выбрана')
+    } catch (e) {
+      showToast(apiErrorText(e, 'Не удалось выполнить действие с темой'), 'error')
     } finally {
       setBusy('')
     }
@@ -245,8 +260,13 @@ export function ThemeCatalog({
             {items.map((t) => {
               const local = installedVersion(t.slug)
               const fresh = local !== null && local === t.version
+              const applied = activeId === t.slug
+              const stale = local !== null && !fresh
               return (
-                <div key={t.slug} className={'th-card th-cat' + (fresh ? ' on' : '')}>
+                <div
+                  key={t.slug}
+                  className={'th-card th-cat' + (applied ? ' on' : fresh ? ' th-have' : '')}
+                >
                   <Swatches colors={t.preview} />
                   <b>{t.name}</b>
                   <span>{t.description || t.author}</span>
@@ -263,25 +283,43 @@ export function ThemeCatalog({
                     </button>
                     <span className="th-cat-size">{size(t.sizeBytes)}</span>
                   </div>
-                  <button
-                    className={'btn sm ' + (fresh ? 'ghost' : 'secondary')}
-                    disabled={busy === t.slug || fresh}
-                    onClick={() => void install(t)}
-                  >
-                    {fresh ? (
-                      <>
-                        <Icon id="i-check" /> Установлена
-                      </>
-                    ) : local !== null ? (
-                      <>
-                        <Icon id="i-download" /> Обновить до {t.version}
-                      </>
+                  {stale && local ? (
+                    <span className="th-have-note">
+                      {local} → {t.version}
+                    </span>
+                  ) : null}
+                  <div className="th-cat-btns">
+                    {applied ? (
+                      <button className="btn sm ghost" disabled>
+                        <Icon id="i-check" /> Применена
+                      </button>
+                    ) : fresh || stale ? (
+                      <button
+                        className="btn sm primary"
+                        disabled={busy === t.slug}
+                        onClick={() => void apply(t)}
+                      >
+                        <Icon id="i-brush" /> Выбрать
+                      </button>
                     ) : (
-                      <>
+                      <button
+                        className="btn sm secondary"
+                        disabled={busy === t.slug}
+                        onClick={() => void install(t)}
+                      >
                         <Icon id="i-download" /> Установить
-                      </>
+                      </button>
                     )}
-                  </button>
+                    {stale ? (
+                      <button
+                        className={'btn sm ' + (applied ? 'secondary' : 'ghost')}
+                        disabled={busy === t.slug}
+                        onClick={() => void install(t)}
+                      >
+                        <Icon id="i-download" /> Обновить
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               )
             })}

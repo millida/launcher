@@ -1,5 +1,5 @@
 import { hasTauri } from '../ipc/tauri'
-import { repairProfile } from '../ipc/commands'
+import { checkUpdates, repairProfile } from '../ipc/commands'
 import type { RepairReport } from '../ipc/commands'
 import { listenLaunchProgress } from '../ipc/events'
 import type { UnlistenFn } from '../ipc/tauri'
@@ -11,15 +11,19 @@ let running = false
 
 export const repairRunning = () => running
 
-function summary(r: RepairReport): string {
+// Починка сверяет файлы по хешам, но устаревший мод — целый файл: сборка
+// падает, а отчёт говорит «всё на месте». Число обновлений досчитываем тем же
+// проверяльщиком, что и экран сборок, и дописываем в тот же итог.
+function summary(r: RepairReport, outdated: number): string {
+  const tail = outdated ? '. Устарело модов — ' + outdated + ', обнови их на экране сборки' : ''
   if (r.broken.length) {
     const head = r.broken.slice(0, 3).join(', ')
     const rest = r.broken.length > 3 ? ' и ещё ' + (r.broken.length - 3) : ''
-    return 'Файлы игры на месте, но не удалось восстановить: ' + head + rest + ' — удали их и поставь заново'
+    return 'Файлы игры на месте, но не удалось восстановить: ' + head + rest + ' — удали их и поставь заново' + tail
   }
-  if (r.restored) return 'Готово: перекачано файлов — ' + r.restored + ', проверено модов — ' + r.checked
-  if (r.checked) return 'Всё на месте: проверено модов — ' + r.checked + ', файлы игры сверены по хешам'
-  return 'Всё на месте: файлы игры сверены по хешам'
+  if (r.restored) return 'Готово: перекачано файлов — ' + r.restored + ', проверено модов — ' + r.checked + tail
+  if (r.checked) return 'Всё на месте: проверено модов — ' + r.checked + ', файлы игры сверены по хешам' + tail
+  return 'Всё на месте: файлы игры сверены по хешам' + tail
 }
 
 /// Progress travels on the same `launch-progress` channel as a launch, so the
@@ -60,7 +64,11 @@ export async function runRepair(profile: string): Promise<RepairReport | null> {
   })
   try {
     const report = await repairProfile(profile)
-    showToast(summary(report), report.broken.length ? 'error' : 'ok')
+    // Сеть каталога могла не ответить — это не отменяет успешной починки.
+    const outdated = await checkUpdates(profile, 'mod')
+      .then((ups) => (ups ? ups.length : 0))
+      .catch(() => 0)
+    showToast(summary(report, outdated), report.broken.length ? 'error' : 'ok')
     return report
   } catch (e) {
     const msg = String(e && (e as Error).message ? (e as Error).message : e).replace(/^Error:\s*/, '')

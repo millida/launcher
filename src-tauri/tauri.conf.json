@@ -204,7 +204,9 @@
       "timestampUrl": "http://timestamp.digicert.com",
       "nsis": {
         "installerIcon": "icons/icon.ico",
-        "installMode": "currentUser"
+        "installMode": "currentUser",
+        "installerHooks": "installer-hooks.nsh",
+        "languages": ["Russian", "English"]
       }
     },
     "createUpdaterArtifacts": false

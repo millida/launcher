@@ -57,7 +57,7 @@ function Logo({ sv }: { sv: SnapshotServer }) {
   return <span className="srv-ava">{sv.name[0] || '?'}</span>
 }
 
-export function ServerRow({ sv, promo, hidden }: { sv: SnapshotServer; promo?: boolean; hidden?: boolean }) {
+export function ServerRow({ sv, hidden }: { sv: SnapshotServer; hidden?: boolean }) {
   const on = (sv.online ?? 0) > 0
   const [label, setLabel] = useState('Играть')
   const busy = useRef(false)
@@ -86,11 +86,7 @@ export function ServerRow({ sv, promo, hidden }: { sv: SnapshotServer; promo?: b
         openServerDetail(sv)
       }}
     >
-      {promo ? (
-        <span className="srv-rank promo">Промо</span>
-      ) : (
-        <span className={'srv-rank' + (sv.rank <= 3 ? ' medal' : '')}>{sv.rank}</span>
-      )}
+      <span className={'srv-rank' + (sv.rank <= 3 ? ' medal' : '')}>{sv.rank}</span>
       <Logo sv={sv} />
       <Banner sv={sv} />
       <span className="srv-body">

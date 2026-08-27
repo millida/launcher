@@ -10,7 +10,7 @@ import { useGame } from '../state/game'
 import { uiConfirm } from '../state/confirm'
 import { showToast } from '../state/ui'
 import { hasTauri } from '../ipc/tauri'
-import { deleteProfile, type PlayStats } from '../ipc/commands'
+import { deleteProfile, openProfileFolder, type PlayStats } from '../ipc/commands'
 
 type Profile = ReturnType<typeof useProfiles.getState>['profiles'][number]
 
@@ -74,6 +74,19 @@ export function BuildCard({
     { id: 'shots', label: 'Скриншоты', icon: 'i-image', onPick: () => go('shots') },
     { id: 'logs', label: 'Логи', icon: 'i-list', onPick: () => go('logs') },
     { id: 'opts', label: 'Параметры', icon: 'i-settings', onPick: () => go('opts') },
+    {
+      id: 'folder',
+      label: 'Открыть папку сборки',
+      icon: 'i-folder',
+      separated: true,
+      onPick: () => {
+        if (!hasTauri()) {
+          showToast('Доступно в приложении', 'error')
+          return
+        }
+        openProfileFolder(p.name).catch((e) => showToast('Не удалось открыть папку: ' + e, 'error'))
+      },
+    },
     { id: 'delete', label: 'Удалить сборку', icon: 'i-trash', danger: true, separated: true, onPick: remove },
   ]
 

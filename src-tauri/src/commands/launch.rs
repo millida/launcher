@@ -14,10 +14,10 @@ pub async fn launch_game(
     engine::install_and_launch(app, version, r.nick.unwrap_or(nick), fabric, ram_mb, r.auth).await
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_logs(profile: String) -> Vec<String> { engine::list_logs(&profile) }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn read_log(profile: String, name: String) -> String { engine::read_log(&profile, &name) }
 
 #[tauri::command]
@@ -63,46 +63,46 @@ pub async fn download_java_runtime(app: tauri::AppHandle, major: u64) -> Result<
     engine::download_java_runtime(&app, major).await
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_java_runtimes() -> Vec<engine::JavaRuntime> { engine::list_java_runtimes() }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn remove_java_runtime(major: u32) -> Result<u64, String> { engine::remove_java_runtime(major) }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_playtime(profile: String) -> u64 { engine::get_playtime(&profile) }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_play_stats() -> engine::PlayStats { engine::get_play_stats() }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn label_server(addr: String, name: String) { engine::label_server(&addr, &name) }
 
 #[tauri::command]
 pub async fn share_log(profile: String, name: String) -> Result<String, String> { engine::share_log(profile, name).await }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn backup_world(profile: String, folder: String) -> Result<String, String> { engine::backup_world(profile, folder) }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_backups(profile: String) -> Vec<String> { engine::list_backups(&profile) }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_worlds(profile: String) -> Vec<engine::WorldEntry> { engine::list_worlds(&profile) }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_world(profile: String, folder: String) -> Result<(), String> { engine::delete_world(&profile, &folder) }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_servers(profile: String) -> Vec<engine::ServerEntry> { engine::list_servers(&profile) }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn add_server(profile: String, name: String, ip: String) -> Vec<engine::ServerEntry> { engine::add_server(&profile, name, ip) }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn remove_server(profile: String, ip: String) -> Vec<engine::ServerEntry> { engine::remove_server(&profile, &ip) }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn pin_server_dat(profile: String, name: String, ip: String) -> Result<(), String> {
     engine::pin_server_dat(&profile, &name, &ip)
 }
@@ -174,7 +174,7 @@ pub async fn restore_world_backup(profile: String, file: String) -> Result<engin
     super::blocking(move || engine::restore_backup(&profile, &file)).await?
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_world_backup(profile: String, file: String) -> Result<(), String> {
     engine::delete_backup(&profile, &file)
 }

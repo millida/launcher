@@ -13,7 +13,6 @@ const BASES: &[&str] = &["dark", "light", "any"];
 const MAX_QUERY: usize = 60;
 const MAX_CHANGELOG: usize = 300;
 const MAX_LIMIT: u32 = 60;
-const MAX_INSTALL_ID: usize = 64;
 
 /// What the gallery may ask for. Everything is re-checked here: the webview
 /// hands over search words, never a path or a URL.
@@ -105,18 +104,17 @@ pub async fn catalog_like(slug: &str) -> Result<Value, String> {
     millida_api_auth(format!("{CATALOG}/{}/like", slug_or_err(slug)?), "POST".into(), None).await
 }
 
-/// Tells the catalogue the theme actually landed on disk. The counter it keeps
-/// is per launcher installation, so the identifier travels with the report:
-/// deleting a theme and fetching it again must not inflate anyone's numbers.
-pub async fn catalog_report_install(slug: &str, install_id: &str) -> Result<Value, String> {
+/// Tells the catalogue the theme actually landed on disk. The counter is kept
+/// per Millida account on the server, so the report only carries the session:
+/// an identifier chosen by the client would let anyone inflate a theme with a
+/// fresh random value per request. Signed-out players simply do not count.
+pub async fn catalog_report_install(slug: &str) -> Result<Value, String> {
     let slug = slug_or_err(slug)?.to_string();
-    let id: String = install_id
-        .chars()
-        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
-        .take(MAX_INSTALL_ID)
-        .collect();
-    let body = serde_json::json!({ "installId": id });
-    millida_api(format!("{CATALOG}/{slug}/installed"), "POST".into(), Some(body), None).await
+    let path = format!("{CATALOG}/{slug}/installed");
+    if millida_token().is_none() {
+        return millida_api(path, "POST".into(), None, None).await;
+    }
+    millida_api_auth(path, "POST".into(), None).await
 }
 
 pub async fn catalog_unpublish(slug: &str) -> Result<Value, String> {

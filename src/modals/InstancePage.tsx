@@ -21,6 +21,7 @@ import {
   deleteContent,
   deleteProfile,
   detectJava,
+  deviceSpecs,
   duplicateProfile,
   exportMrpack,
   getPlayStats,
@@ -74,6 +75,7 @@ import type {
 import { Select } from '../components/Select'
 import { Slider } from '../components/Slider'
 import { isBlockIcon } from '../lib/blockColor'
+import { RAM_MAX_GB, maxRamGb } from '../lib/ram'
 import { BUILD_NAME_MAX, GROUP_NAME_MAX, LOADER_NAME, fmtPlaytime, fmtSize, loaderId, whenText } from '../lib/format'
 import { AUTO_LOADER_VERSION, hasLoaderVersions, useLoaderBuilds } from '../lib/loaderBuilds'
 import { incompatibleWith } from '../lib/compat'
@@ -161,6 +163,22 @@ export function InstancePage() {
   const [noticeList, setNoticeList] = useState('')
   const [playtime, setPlaytime] = useState('')
   const [ram, setRam] = useState(4)
+  const [ramMax, setRamMax] = useState(RAM_MAX_GB)
+
+  useEffect(() => {
+    if (!hasTauri()) return
+    void deviceSpecs()
+      .then((specs) => setRamMax(maxRamGb(specs.ram_mb)))
+      .catch(() => {})
+  }, [])
+
+  // The value may have been stored while the slider reached 16 GB on any
+  // machine, leaving a build that promises itself memory the machine lacks.
+  useEffect(() => {
+    if (!profile || ram <= ramMax) return
+    setRam(ramMax)
+    localStorage.setItem(ramKey(profile), String(ramMax))
+  }, [profile, ram, ramMax])
   const [boost, setBoost] = useState<FpsBoostState | null>(null)
   const [boostBusy, setBoostBusy] = useState(false)
   const [skinMod, setSkinModState] = useState<SkinModState | null>(null)
@@ -1685,7 +1703,12 @@ export function InstancePage() {
               </div>
               <div className="set-row">
                 <span className="lab">
-                  Оперативная память<small>Для этой сборки</small>
+                  Оперативная память
+                  <small>
+                    {ramMax < RAM_MAX_GB
+                      ? `Для этой сборки · больше ${ramMax} ГБ машина не даст: остальное нужно системе`
+                      : 'Для этой сборки'}
+                  </small>
                 </span>
                 <span className="set-val" id="bsRamVal">
                   {ram + ' ГБ'}
@@ -1693,7 +1716,7 @@ export function InstancePage() {
                 <Slider
                   width={200}
                   min={1}
-                  max={16}
+                  max={ramMax}
                   value={ram}
                   onChange={(v) => {
                     setRam(v)

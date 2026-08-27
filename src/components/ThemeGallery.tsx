@@ -260,6 +260,15 @@ export function ThemeGallery() {
     }
   }
 
+  async function applyInstalled(slug: string) {
+    const list = packs.some((p) => p.id === slug) ? packs : await reload()
+    const pack = list.find((p) => p.id === slug)
+    if (!pack) throw new Error('Тема не найдена среди установленных')
+    await applyThemePack(pack)
+    setActiveId(pack.id)
+    setValues(optionValues(pack))
+  }
+
   async function onCatalogInstall(file: InstalledThemeFile) {
     const list = await reload()
     const pack = list.find((p) => p.id === file.id)
@@ -291,6 +300,9 @@ export function ThemeGallery() {
     <>
       <div className="set-group">
         <div className="cap">Тема оформления</div>
+        <div className="th-hint">
+          Нажмите на карточку, чтобы применить оформление
+        </div>
         <div className="th-grid">
           <button
             className={'th-card' + (activeId === '' ? ' on' : '')}
@@ -299,6 +311,11 @@ export function ThemeGallery() {
             <Swatches />
             <b>Millida</b>
             <span>Стандартное оформление</span>
+            {activeId === '' ? (
+              <span className="th-now">
+                <Icon id="i-check" /> Сейчас выбрана
+              </span>
+            ) : null}
           </button>
           {packs.map((p) => (
             <button
@@ -309,6 +326,11 @@ export function ThemeGallery() {
               <Swatches colors={p.preview} />
               <b>{p.name}</b>
               <span>{p.description || p.author || ''}</span>
+              {activeId === p.id ? (
+                <span className="th-now">
+                  <Icon id="i-check" /> Сейчас выбрана
+                </span>
+              ) : null}
               <span className="th-card-acts">
                 <span
                   className="th-act"
@@ -381,7 +403,12 @@ export function ThemeGallery() {
       </div>
 
       {hasTauri() ? (
-        <ThemeCatalog installed={packs} onInstalled={(file) => void onCatalogInstall(file)} />
+        <ThemeCatalog
+          installed={packs}
+          activeId={activeId}
+          onInstalled={(file) => void onCatalogInstall(file)}
+          onApply={applyInstalled}
+        />
       ) : null}
 
       {draft ? (

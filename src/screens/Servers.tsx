@@ -1,16 +1,24 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { FilterPill } from '../components/FilterPill'
 import { ServerRow } from '../components/ServerRow'
 import { openExt } from '../lib/api'
-import type { SnapshotServer } from '../lib/snapshot'
-import { PAGE_SIZE, SERVER_TABS, loadLiveRating, loadMoreServers, useServers } from '../state/servers'
+import {
+  DEFAULT_FILTERS,
+  PAGE_SIZE,
+  SERVER_TABS,
+  currentFilters,
+  isFiltered,
+  loadLiveRating,
+  loadMoreServers,
+  useServers,
+} from '../state/servers'
 
 const SORTS: [string, string][] = [
   ['rating', 'По рейтингу'],
   ['online', 'По онлайну'],
   ['name', 'По названию'],
-  ['fresh', 'Сначала новые'],
+  ['new', 'Сначала новые'],
 ]
 
 const LICENSES: [string, string][] = [
@@ -28,50 +36,41 @@ const ONLINE_FILTERS: [string, string][] = [
   ['100', 'От 100 игроков'],
 ]
 
+const SEARCH_DELAY = 400
+
 export function Servers({ on }: { on: boolean }) {
-  const { list, promo, total, status, error, loadingMore, category } = useServers()
-  const [q, setQ] = useState('')
-  const [sort, setSort] = useState('rating')
-  const [license, setLicense] = useState('')
-  const [onlineF, setOnlineF] = useState('')
-  const [version, setVersion] = useState('')
+  const { list, total, status, error, loadingMore, category, sort, license, online, version, versions, search } =
+    useServers()
+  const [q, setQ] = useState(search)
+  const typed = useRef(false)
 
-  const versions = Array.from(new Set(list.concat(promo).flatMap((sv) => sv.versions || []))).sort((a, b) =>
-    b.localeCompare(a, undefined, { numeric: true }),
-  )
-
-  const term = q.trim().toLowerCase()
-  const minOnline = onlineF === 'live' ? 1 : Number(onlineF || 0)
-  const match = (sv: SnapshotServer) =>
-    (!term ||
-      sv.name.toLowerCase().includes(term) ||
-      (sv.ip || '').toLowerCase().includes(term) ||
-      (sv.desc || '').toLowerCase().includes(term)) &&
-    (!license || sv.lic === license) &&
-    (!minOnline || (sv.online || 0) >= minOnline) &&
-    (!version || (sv.versions || []).includes(version))
-
-  const sortFn = (a: SnapshotServer, b: SnapshotServer) =>
-    sort === 'online'
-      ? (b.online || 0) - (a.online || 0)
-      : sort === 'name'
-        ? a.name.localeCompare(b.name, 'ru')
-        : sort === 'fresh'
-          ? b.rank - a.rank
-          : a.rank - b.rank
-
-  const shownPromo = promo.filter(match)
-  const shown = list.filter(match).sort(sortFn)
-  const filtered = !!(term || license || onlineF || version)
-
-  // Filters run over already loaded pages (30 per request), so keep pulling until one matches.
+  // The pills hold what the catalogue was asked for, the input holds what is
+  // being typed: they diverge only while the debounce is pending, and a reset
+  // from elsewhere has to win over a stale draft.
   useEffect(() => {
-    if (!on || !filtered) return
-    if (shown.length || shownPromo.length) return
-    if (status !== 'ok' || loadingMore || list.length >= total) return
-    void loadMoreServers()
-  }, [on, filtered, shown.length, shownPromo.length, status, loadingMore, list.length, total])
+    if (!typed.current) setQ(search)
+  }, [search])
+
+  useEffect(() => {
+    if (!typed.current || q.trim() === search.trim()) return
+    const t = setTimeout(() => {
+      typed.current = false
+      void loadLiveRating({ search: q })
+    }, SEARCH_DELAY)
+    return () => clearTimeout(t)
+  }, [q, search])
+
+  const filtered = isFiltered(currentFilters())
   const hasMore = list.length < total
+  const versionOptions = versions
+    .slice()
+    .sort((a, b) => b.version.localeCompare(a.version, undefined, { numeric: true }))
+
+  const reset = () => {
+    typed.current = false
+    setQ('')
+    void loadLiveRating(DEFAULT_FILTERS)
+  }
 
   return (
     <section className={'screen' + (on ? ' on' : '')} id="s-servers">
@@ -80,7 +79,14 @@ export function Servers({ on }: { on: boolean }) {
         <div className="right">
           <div className="input sm" style={{ width: '240px' }}>
             <Icon id="i-search" />
-            <input placeholder="Поиск серверов…" value={q} onChange={(e) => setQ(e.target.value)} />
+            <input
+              placeholder="Поиск серверов…"
+              value={q}
+              onChange={(e) => {
+                typed.current = true
+                setQ(e.target.value)
+              }}
+            />
           </div>
           <button
             className="btn sm primary"
@@ -98,20 +104,20 @@ export function Servers({ on }: { on: boolean }) {
         <FilterPill
           icon="i-grid"
           label="Категория"
-          defaultValue={SERVER_TABS[0] ? SERVER_TABS[0][1] : ''}
+          defaultValue=""
           value={category}
           width={200}
           options={SERVER_TABS.map(([label, code]) => ({ value: code, label }))}
-          onPick={(v) => void loadLiveRating(v)}
+          onPick={(v) => void loadLiveRating({ category: v })}
         />
         <FilterPill
           icon="i-filter"
           label="Сортировка"
-          defaultValue="rating"
+          defaultValue={DEFAULT_FILTERS.sort}
           value={sort}
           width={180}
           options={SORTS.map(([v, label]) => ({ value: v, label }))}
-          onPick={(v) => setSort(v)}
+          onPick={(v) => void loadLiveRating({ sort: v })}
         />
         <FilterPill
           icon="i-key"
@@ -120,40 +126,32 @@ export function Servers({ on }: { on: boolean }) {
           value={license}
           width={190}
           options={LICENSES.map(([v, label]) => ({ value: v, label }))}
-          onPick={(v) => setLicense(v)}
+          onPick={(v) => void loadLiveRating({ license: v })}
         />
         <FilterPill
           icon="i-users"
           label="Онлайн"
           defaultValue=""
-          value={onlineF}
+          value={online}
           width={190}
           options={ONLINE_FILTERS.map(([v, label]) => ({ value: v, label }))}
-          onPick={(v) => setOnlineF(v)}
+          onPick={(v) => void loadLiveRating({ online: v })}
         />
-        {versions.length ? (
+        {versionOptions.length ? (
           <FilterPill
             icon="i-box2"
             label="Версия"
             defaultValue=""
             value={version}
-            width={160}
-            options={[{ value: '', label: 'Любая версия' }].concat(versions.map((v) => ({ value: v, label: v })))}
-            onPick={(v) => setVersion(v)}
+            width={190}
+            options={[{ value: '', label: 'Любая версия' }].concat(
+              versionOptions.map((v) => ({ value: v.version, label: v.version + ' · ' + v.servers })),
+            )}
+            onPick={(v) => void loadLiveRating({ version: v })}
           />
         ) : null}
-        {license || onlineF || version || sort !== 'rating' ? (
-          <button
-            type="button"
-            className="mk-pill"
-            onClick={() => {
-              setQ('')
-              setLicense('')
-              setOnlineF('')
-              setVersion('')
-              setSort('rating')
-            }}
-          >
+        {filtered ? (
+          <button type="button" className="mk-pill" onClick={reset}>
             <Icon id="i-x" />
             <span>Сбросить</span>
           </button>
@@ -172,25 +170,13 @@ export function Servers({ on }: { on: boolean }) {
             Попробовать снова
           </button>
         </div>
-      ) : list.length || promo.length ? (
+      ) : list.length ? (
         <>
           <div className="stack" id="srvList">
-            {shownPromo.map((sv) => (
-              <ServerRow key={'promo-' + sv.slug} sv={sv} promo />
-            ))}
-            {shown.map((sv, i) => (
+            {list.map((sv, i) => (
               <ServerRow key={sv.slug + i} sv={sv} />
             ))}
           </div>
-          {filtered && !shown.length && !shownPromo.length ? (
-            <p className="faint-note">
-              {hasMore
-                ? 'Ищем дальше по каталогу — фильтр применяется к уже загруженным страницам…'
-                : term
-                  ? 'По запросу «' + q + '» в каталоге ничего нет.'
-                  : 'Под выбранные фильтры серверов нет — сбрось часть условий.'}
-            </p>
-          ) : null}
           {hasMore ? (
             <div style={{ display: 'flex', justifyContent: 'center', marginTop: '16px' }}>
               <button className="btn md secondary" disabled={loadingMore} onClick={() => void loadMoreServers()}>
@@ -203,11 +189,18 @@ export function Servers({ on }: { on: boolean }) {
               list.length +
               ' из ' +
               total +
-              ' серверов Millida Rating. Лаунчер сам подберёт версию и моды под сервер — жми «Играть».'}
+              (filtered ? ' подходящих серверов' : ' серверов Millida Rating') +
+              '. Лаунчер сам подберёт версию и моды под сервер — жми «Играть».'}
           </p>
         </>
       ) : status === 'ok' ? (
-        <p className="faint-note">В этой категории серверов пока нет.</p>
+        <p className="faint-note">
+          {filtered
+            ? search.trim()
+              ? 'По запросу «' + search.trim() + '» в каталоге ничего нет.'
+              : 'Под выбранные фильтры серверов нет — сбрось часть условий.'
+            : 'В этой категории серверов пока нет.'}
+        </p>
       ) : (
         <div className="stack">
           {Array.from({ length: 6 }, (_, i) => (

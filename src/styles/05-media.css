@@ -714,10 +714,10 @@ html.overlay-root,html.overlay-root body,html.overlay-root #root{background:tran
    the flag over them, so they take the pointer while the stack does not. */
 .ov-cards{position:absolute;bottom:22px;right:22px;display:flex;flex-direction:column;gap:8px;width:330px}
 .ov-cards .ov-card{pointer-events:auto;cursor:pointer;padding-right:30px;transition:transform .12s ease,border-color .12s ease}
-.ov-cards .ov-card:hover{transform:translateX(-3px);border-color:rgba(255,255,255,.26);background:rgba(24,24,30,.94)}
+.ov-cards.held .ov-card:hover{transform:translateX(-3px);border-color:rgba(255,255,255,.26);background:rgba(24,24,30,.94)}
 .ov-card-x{position:absolute;top:5px;right:5px;width:20px;height:20px;display:grid;place-items:center;border:0;border-radius:7px;background:transparent;color:rgba(242,242,245,.55);opacity:0;transition:opacity .12s ease,background .12s ease,color .12s ease;cursor:pointer}
 .ov-card-x svg{width:12px;height:12px}
-.ov-card:hover .ov-card-x{opacity:1}
+.ov-cards.held .ov-card-x{opacity:1}
 .ov-card-x:hover{background:rgba(255,255,255,.12);color:#fff}
 .ov-card-ttl{position:absolute;left:0;bottom:0;height:2px;width:100%;background:var(--ov-accent,#7aa2ff);opacity:.55;transform-origin:left;animation:ovTtl linear forwards}
 .ov-cards.held .ov-card-ttl{animation-play-state:paused}

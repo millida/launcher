@@ -385,32 +385,42 @@ async fn install_java(app: &AppHandle, major: u64, jdir: &Path) -> Result<(), St
     emit(app, "java", 0.0, &format!("Скачиваем Java {}…", major));
     let t = target();
     let mut reasons = Vec::new();
-    let mut pkg = None;
+    let archive = data_dir().join(format!("java-{}.{}", major, t.ext));
+    // Второй поставщик нужен не только когда молчит справочник, но и когда
+    // молчит его файловое зеркало: у Adoptium это github, и «сборка не
+    // запускается, ошибка на скачивании Java» приходила именно оттуда. Падение
+    // загрузки — повод взять следующего, а не повод сдаться.
+    let mut fetched = false;
     for (vendor, found) in [
         ("Adoptium", adoptium_source(major, &t).await),
         ("Azul", azul_source(major, &t).await),
     ] {
         match found {
-            Ok(p) => {
-                pkg = Some(p);
-                break;
-            }
             Err(e) => reasons.push(format!("{}: {}", vendor, e)),
+            Ok(pkg) => {
+                // A remembered answer can point at a release that has since been
+                // pulled; dropping the cache turns the next attempt back into a
+                // fresh lookup.
+                match download_checked(&pkg.url, &archive, Some(Sum::Sha256(&pkg.sha256)), pkg.size).await {
+                    Ok(()) => {
+                        fetched = true;
+                        break;
+                    }
+                    Err(e) => {
+                        forget_java_metadata(major, &t);
+                        reasons.push(format!("{}: {}", vendor, e));
+                    }
+                }
+            }
         }
     }
-    let pkg = pkg.ok_or_else(|| {
-        format!(
-            "Не удалось узнать, где скачать Java {} — {}. Проверь интернет, VPN или фаервол.",
+    if !fetched {
+        return Err(format!(
+            "Не удалось скачать Java {} — {}. Проверь интернет, VPN или фаервол.",
             major,
             reasons.join("; ")
-        )
-    })?;
-    let archive = data_dir().join(format!("java-{}.{}", major, t.ext));
-    // A remembered answer can point at a release that has since been pulled;
-    // dropping the cache turns the next attempt back into a fresh lookup.
-    download_checked(&pkg.url, &archive, Some(Sum::Sha256(&pkg.sha256)), pkg.size)
-        .await
-        .inspect_err(|_| forget_java_metadata(major, &t))?;
+        ));
+    }
     emit(app, "java", 60.0, "Распаковываем Java…");
     std::fs::create_dir_all(jdir).map_err(|e| e.to_string())?;
     let unpacked = if t.ext == "zip" {

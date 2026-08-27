@@ -1,7 +1,10 @@
 use crate::{discord, engine};
 
+/// Discord's socket lives on its own thread: a client that accepts the pipe and
+/// then answers nothing used to freeze the window, because a synchronous
+/// command runs on the main thread.
 #[tauri::command]
-pub fn discord_presence(
+pub async fn discord_presence(
     details: String,
     state: String,
     playing: bool,
@@ -10,15 +13,16 @@ pub fn discord_presence(
     join_url: Option<String>,
     profile_slug: Option<String>,
 ) -> discord::DiscordStatus {
-    discord::set_activity(
-        &details,
-        &state,
+    discord::set_activity(discord::Presence {
+        details,
+        state,
         playing,
-        &large_image.unwrap_or_default(),
-        &large_text.unwrap_or_default(),
-        &join_url.unwrap_or_default(),
-        &profile_slug.unwrap_or_default(),
-    );
+        large_image: large_image.unwrap_or_default(),
+        large_text: large_text.unwrap_or_default(),
+        join_url: join_url.unwrap_or_default(),
+        profile_slug: profile_slug.unwrap_or_default(),
+    })
+    .await;
     discord::status()
 }
 
@@ -26,10 +30,13 @@ pub fn discord_presence(
 pub fn discord_status() -> discord::DiscordStatus { discord::status() }
 
 #[tauri::command]
-pub fn discord_reconnect() -> discord::DiscordStatus { discord::reconnect() }
+pub async fn discord_reconnect() -> discord::DiscordStatus {
+    discord::reconnect().await;
+    discord::status()
+}
 
 #[tauri::command]
-pub fn discord_clear() { discord::clear(); }
+pub async fn discord_clear() { discord::clear().await; }
 
 #[tauri::command]
 pub async fn ms_device_start() -> Result<serde_json::Value, String> { engine::ms_device_start().await }
@@ -40,7 +47,7 @@ pub async fn ms_device_poll(device_code: String) -> Result<serde_json::Value, St
 }
 
 /// Binds the finished Microsoft login to the account row the frontend created.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn ms_session_commit(device_code: String, account_id: String) -> Result<(), String> {
     engine::ms_login_commit(&device_code, &account_id)
 }
@@ -55,7 +62,7 @@ pub async fn ms_session_validate(account_id: String) -> Result<serde_json::Value
     engine::ms_session_validate(&account_id).await
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn ms_session_forget(account_id: String) -> Result<(), String> {
     engine::ms_forget(&account_id)
 }
@@ -94,7 +101,7 @@ pub struct SessionStatus {
 }
 
 /// The only session fact the webview gets: which sessions are stored.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn session_status(account_ids: Vec<String>) -> SessionStatus {
     let (millida, accounts) = engine::session_presence(&account_ids);
     SessionStatus { millida, accounts }
@@ -105,7 +112,7 @@ pub async fn millida_login_poll(device_code: String) -> Result<serde_json::Value
     engine::millida_login_poll(device_code).await
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn millida_logout() -> Result<(), String> {
     engine::millida_forget_session()
 }
@@ -115,7 +122,7 @@ pub async fn millida_api(path: String, method: String, body: Option<serde_json::
     engine::millida_api_auth(path, method, body).await
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_local_skin(skin: Option<String>, cape: Option<String>, slim: bool) -> Result<(), String> {
     engine::set_local_skin(skin, cape, slim)
 }
@@ -127,12 +134,12 @@ pub async fn skin_diagnose(nick: String, online: bool) -> serde_json::Value {
     engine::skin_diagnose(&nick, online).await
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_textures(kind: String) -> Result<Vec<engine::TextureEntry>, String> {
     engine::list_textures(&kind)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn save_texture(kind: String, name: String, data: String, slim: bool) -> Result<Vec<engine::TextureEntry>, String> {
     engine::save_texture(&kind, &name, &data, slim)
 }
@@ -153,17 +160,17 @@ pub async fn export_png(name: String, data: String) -> Result<Option<String>, St
     Ok(Some(dest.to_string_lossy().to_string()))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_texture(kind: String, file: String) -> Result<Vec<engine::TextureEntry>, String> {
     engine::delete_texture(&kind, &file)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_texture_slim(kind: String, file: String, slim: bool, manual: bool) -> Result<Vec<engine::TextureEntry>, String> {
     engine::set_texture_slim(&kind, &file, slim, manual)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rename_texture(kind: String, file: String, name: String) -> Result<Vec<engine::TextureEntry>, String> {
     engine::rename_texture(&kind, &file, &name)
 }

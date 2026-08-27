@@ -34,6 +34,14 @@ fn boost_mods(loader: &str) -> &'static [&'static str] {
     }
 }
 
+/// Стоит ли мод режима уже в сборке. Манифест хранит канонический id проекта,
+/// а список режима задан slug'ами; старые манифесты (и офлайн-установка, где
+/// каталог не ответил) держат в том же поле slug. Совпадение по любому из двух
+/// имён значит «этот мод у игрока есть», и второй копии быть не должно.
+fn already_installed(known: &[String], slug: &str, canonical: &str) -> bool {
+    known.iter().any(|p| p == slug || p == canonical)
+}
+
 /// Значения options.txt, которые снимают нагрузку с GPU и CPU, не ломая игру.
 /// Ключи разных версий отличаются, поэтому пишем весь набор: незнакомые строки
 /// игра игнорирует.
@@ -212,8 +220,13 @@ async fn enable(app: &AppHandle, profile: &str) -> Result<FpsBoostState, String>
     let total = wanted.len().max(1);
     for (i, slug) in wanted.iter().enumerate() {
         emit(app, "fpsboost", 10.0 + 70.0 * (i as f32 / total as f32), &format!("Ставим {}…", slug));
-        // мод уже стоит у игрока — режим его не дублирует и не снимет потом
-        if known.iter().any(|p| p == slug) {
+        // Мод уже стоит у игрока — режим его не дублирует и не снимет потом.
+        // В манифесте лежит КАНОНИЧЕСКИЙ id Modrinth, а список режима — из
+        // slug'ов: сравнение id со slug'ом не совпадало никогда, и поверх
+        // Sodium игрока вставал второй Sodium. Fabric такой запуск не
+        // переживает — «включаю буст FPS в связке с модами, игра вылетает».
+        let canonical = fetch_project_meta(slug).await.0;
+        if already_installed(&known, slug, &canonical) {
             continue;
         }
         let ver = match best_version(slug, &version, &loaders).await {
@@ -312,6 +325,27 @@ mod tests {
         let mut expected = before;
         expected.sort();
         assert_eq!(rows, expected, "после выключения options.txt отличается от исходного");
+    }
+
+    #[test]
+    fn installed_mod_is_recognised_by_id_and_by_slug() {
+        // Вход → вердикт. Закреплено потому, что промах этой проверки ставил
+        // второй Sodium поверх своего и ронял игру на старте.
+        let by_id = vec!["AANobbMI".to_string()];
+        assert!(
+            already_installed(&by_id, "sodium", "AANobbMI"),
+            "мод из каталога записан каноническим id — режим обязан узнать его и не ставить второй копией"
+        );
+        let by_slug = vec!["sodium".to_string()];
+        assert!(
+            already_installed(&by_slug, "sodium", "AANobbMI"),
+            "старый манифест держит slug — он тоже значит «мод уже стоит»"
+        );
+        let other = vec!["P7dR8mSH".to_string()];
+        assert!(
+            !already_installed(&other, "sodium", "AANobbMI"),
+            "чужой мод не должен отменять установку ускорителя"
+        );
     }
 
     #[test]

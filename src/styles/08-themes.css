@@ -14,11 +14,17 @@
 .th-card b{font-size:13px;font-weight:650;overflow-wrap:anywhere}
 /* The action strip is a span too, so the clamped description must not claim it:
    -webkit-box would win over its own display and stack the icons vertically. */
-.th-card>span:not(.th-card-acts){
+.th-card>span:not(.th-card-acts):not(.th-now):not(.th-have-note){
   font-size:11.5px;line-height:1.4;color:var(--m-fg-subtle);
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
   overflow-wrap:anywhere;
 }
+.th-now{
+  display:inline-flex;align-items:center;gap:4px;margin-top:2px;
+  font-size:11px;font-weight:650;color:var(--m-accent);
+}
+.th-now svg{width:11px;height:11px}
+.th-hint{font-size:12.5px;line-height:1.6;color:var(--m-fg-subtle);margin:-2px 0 10px}
 .th-swatches{display:flex;width:100%;height:34px;border-radius:var(--m-r-mini);overflow:hidden;margin-bottom:5px}
 .th-swatches i{flex:1}
 .th-card-acts{position:absolute;top:6px;right:6px;display:none;gap:4px}
@@ -64,7 +70,10 @@
 .th-cat-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
 .th-cat-search{flex:1;min-width:160px}
 .th-cat{cursor:default;gap:6px}
-.th-cat .btn{width:100%;justify-content:center;margin-top:2px}
+.th-cat.th-have{border-color:var(--m-border-strong)}
+.th-have-note{font-size:11px;color:var(--m-fg-faint)}
+.th-cat .btn{width:100%;justify-content:center}
+.th-cat-btns{display:flex;flex-direction:column;gap:6px;width:100%;margin-top:2px}
 .th-cat-meta{
   display:flex;align-items:center;gap:10px;width:100%;
   font-size:11px;color:var(--m-fg-faint);
