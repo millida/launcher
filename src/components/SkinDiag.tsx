@@ -10,9 +10,27 @@ import { apiErrorText } from '../lib/apiError'
 
 const HEALTHY = new Set(['ok', 'never_launched', 'vanilla'])
 
+const mark = (v?: boolean) => (v ? 'ок' : 'нет')
+
+// Support reads this instead of asking for logs, so every link of both routes
+// is named: "скин и плащ отдаются" used to be printed for a profile with no
+// cape at all.
+function serverLine(s: NonNullable<SkinDiagReport['server']>): string {
+  if (!s.ok) return s.reason || 'текстуры недоступны'
+  return 'скин ' + mark(s.skinReadable) + ' · плащ ' + (s.cape ? mark(s.capeReadable) : 'не выбран')
+}
+
+function sessionLine(s: NonNullable<SkinDiagReport['session']>): string {
+  if (!s.profile) return 'профиль сессии не отдаётся · агент ' + mark(s.agent)
+  return (
+    'агент ' + mark(s.agent) + ' · подпись ' + mark(s.signed) + ' · скин ' + mark(s.skin) + ' · плащ ' + mark(s.cape) + ' · домен ' + mark(s.domainOk) + ' · текстура ' + mark(s.textureOk)
+  )
+}
+
 function reportText(r: SkinDiagReport): string {
   const lines = ['=== Скин в игре · проверка ===', 'Ник: ' + r.nick, 'Вердикт: ' + r.verdict + ' — ' + r.text]
-  if (r.server) lines.push('Сервер: ' + (r.server.ok ? 'скин и плащ отдаются' : r.server.reason || 'текстуры недоступны'))
+  if (r.server) lines.push('Сервер: ' + serverLine(r.server))
+  if (r.session) lines.push('Аккаунт: ' + sessionLine(r.session))
   r.builds.forEach((b) => {
     lines.push('- ' + b.build + ' (' + b.mc + ' · ' + b.loader + '): ' + b.text)
     b.problems.forEach((p) => lines.push('    ' + p))

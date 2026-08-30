@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { Cover } from '../components/Cover'
 import { WorldManager } from '../components/WorldManager'
@@ -29,7 +29,6 @@ import {
   listContent,
   listLogs,
   listServers,
-  listVersions,
   loadProfileSettings,
   fpsBoostState,
   gpuSwitchSupported,
@@ -81,6 +80,7 @@ import { AUTO_LOADER_VERSION, hasLoaderVersions, useLoaderBuilds } from '../lib/
 import { incompatibleWith } from '../lib/compat'
 import { fixItems, planItem } from '../lib/deps'
 import { installExtras } from '../lib/install'
+import { ensureMcVersionList, useMcVersionList, versionOptions } from '../state/mcVersionList'
 import { useProfiles } from '../state/profiles'
 import { useInstance } from '../state/instance'
 import { closeModal, setScreen, showToast, useUi } from '../state/ui'
@@ -222,9 +222,16 @@ export function InstancePage() {
   const [newLoader, setNewLoader] = useState('vanilla')
   const [newLoaderVer, setNewLoaderVer] = useState(AUTO_LOADER_VERSION)
   const [newVersion, setNewVersion] = useState('')
-  const [verList, setVerList] = useState<string[]>([])
   const [coreBusy, setCoreBusy] = useState(false)
   const lb = useLoaderBuilds(newLoader, newVersion, modal.open)
+  const mcList = useMcVersionList((s) => s.list)
+  const showSnapshots = useMcVersionList((s) => s.show)
+  // The build's own version stays selectable even when it is a snapshot and the
+  // list is filtered down to releases: hiding it would silently change the build.
+  const verOpts = useMemo(
+    () => versionOptions(mcList, showSnapshots, newVersion),
+    [mcList, showSnapshots, newVersion],
+  )
   const [note, setNote] = useState('')
   const logBodyRef = useRef<HTMLPreElement>(null)
   const kindRef = useRef(kind)
@@ -427,12 +434,9 @@ export function InstancePage() {
       setNote('')
     }
     if (hasTauri()) {
-      ;(listVersions() as Promise<string[]>)
-        .then((vs) => setVerList(vs))
-        .catch((e) => {
-          setVerList([])
-          showToast('Список версий Minecraft не загрузился: ' + e + '. Проверь интернет и открой сборку заново', 'error')
-        })
+      ensureMcVersionList().catch((e) =>
+        showToast('Список версий Minecraft не загрузился: ' + e + '. Проверь интернет и открой сборку заново', 'error'),
+      )
       getPlayStats()
         .then((s) => {
           const b = s.builds.find((x) => x.key === profile)
@@ -1207,7 +1211,11 @@ export function InstancePage() {
                                   обновление
                                 </span>
                               ) : null}
-                              {md.loader ? <span className="mod-tag">{md.loader}</span> : null}
+                              {md.loaders?.length || md.loader ? (
+                                <span className="mod-tag">
+                                  {md.loaders?.length ? md.loaders.join(' · ') : md.loader}
+                                </span>
+                              ) : null}
                               {incompatibleWith(md.mc, pr ? pr.version : '') ? (
                                 <span
                                   className="mod-upd"
@@ -1645,9 +1653,7 @@ export function InstancePage() {
                     <Select
                       width={144}
                       value={newVersion}
-                      options={[newVersion, ...verList.filter((v) => v !== newVersion)]
-                        .filter(Boolean)
-                        .map((v) => ({ value: v, label: v }))}
+                      options={verOpts}
                       onChange={(v) => {
                         setNewVersion(v)
                         setNewLoaderVer(AUTO_LOADER_VERSION)

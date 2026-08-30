@@ -12,6 +12,9 @@ pub struct ModFile {
     #[serde(skip_serializing_if = "Option::is_none")] pub description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")] pub mc: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")] pub loader: Option<String>,
+    /// Every loader the file answers for: a multi-loader release carries several,
+    /// and showing only the first one labels it as foreign to the build it runs on.
+    #[serde(skip_serializing_if = "Vec::is_empty")] pub loaders: Vec<String>,
     pub size: u64,
     pub scanned: bool,
 }
@@ -49,6 +52,7 @@ pub fn list_content(profile: &str, kind: &str) -> Vec<ModFile> {
                 description: pick(meta.map(|m| m.description.clone()), emb.map(|m| m.description.clone())),
                 mc: emb.map(|m| m.mc.clone()).filter(|x| !x.is_empty()),
                 loader: emb.map(|m| m.loader.clone()).filter(|x| !x.is_empty()),
+                loaders: emb.map(|m| m.loaders.clone()).unwrap_or_default(),
                 size: e.metadata().map(|m| m.len()).unwrap_or(0),
                 scanned: emb.is_some(),
             });

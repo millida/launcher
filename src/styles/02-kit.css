@@ -92,7 +92,14 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 .window{
   width:100vw;height:100vh;
   background:var(--m-bg);
-  display:flex;flex-direction:column;position:relative;overflow:hidden;
+  display:flex;flex-direction:column;position:relative;
+  /* The closed chat panel parks itself past the right edge (translateX), which
+     widens the scrollable area of this box. With `hidden` the box stays a
+     scroll container without a visible bar: one sideways trackpad swipe, a
+     Shift+wheel or a scroll-into-view carried the whole launcher left by the
+     width of the panel — titlebar, rail and rows off-screen — and nothing could
+     bring it back. `clip` keeps the same painting and takes the scrolling away. */
+  overflow:clip;
 }
 /* Titlebar (frameless, drag region) */
 /* The window has no native frame: minimise, maximise and close exist only
@@ -806,8 +813,8 @@ svg.msg-tick.read{color:var(--m-tick-read,#4C9FFE);opacity:1}
 .build-grid.one-line .build-body b{font-size:12px}
 .build-grid.one-line .build-body .meta{font-size:11px;margin-top:2px}
 .build-grid.one-line .build-hours{margin-top:2px}
-.build-grid.one-line .mini-play{right:6px;bottom:6px;width:26px;height:26px;border-radius:8px}
-.build-grid.one-line .mini-play svg.icon{width:14px;height:14px}
+.build-grid.one-line .mini-play{width:42px;height:42px}
+.build-grid.one-line .mini-play svg.icon{width:19px;height:19px}
 .build-grid.one-line .build-new{font-size:11.5px}
 @container (max-width:1050px){.build-grid.one-line .build-card:nth-child(n+7){display:none}}
 @container (max-width:780px){.build-grid.one-line .build-card:nth-child(n+5){display:none}}
@@ -815,11 +822,17 @@ svg.msg-tick.read{color:var(--m-tick-read,#4C9FFE);opacity:1}
 .build-cover{aspect-ratio:1;height:auto;background:var(--m-inset);position:relative;overflow:hidden}
 .cover-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
 .cover-img.block{object-fit:contain;padding:13%;image-rendering:auto;background:var(--m-inset)}
-.build-cover .mini-play{position:absolute;right:8px;bottom:8px;width:30px;height:30px;border-radius:9px;background:var(--m-grad);color:var(--m-accent-fg);display:grid;place-items:center;opacity:0;transform:translateY(6px) scale(.9);
+/* The whole cover launches the build, so the badge sits in the middle of it and
+   the scrim says the picture itself is the target; the text below still opens
+   the build settings. */
+.build-cover::after{content:'';position:absolute;inset:0;background:color-mix(in srgb,var(--m-inset) 72%,transparent);opacity:0;pointer-events:none;transition:opacity 160ms ease}
+.build-card:hover .build-cover::after{opacity:1}
+.build-cover .mini-play{position:absolute;left:50%;top:50%;z-index:1;width:52px;height:52px;border-radius:var(--m-r-pill);background:var(--m-grad);color:var(--m-accent-fg);display:grid;place-items:center;opacity:0;transform:translate(-50%,-50%) scale(.86);
   transition:opacity 160ms ease,transform 260ms var(--m-ease-out)}
-.build-card:hover .mini-play{opacity:1;transform:none}
-.build-cover .mini-play:hover{transform:scale(1.14)}
-.build-cover .mini-play:active{transform:scale(.92)}
+.build-cover .mini-play svg.icon{width:23px;height:23px}
+.build-card:hover .mini-play{opacity:1;transform:translate(-50%,-50%)}
+.build-cover .mini-play:hover{transform:translate(-50%,-50%) scale(1.08)}
+.build-cover .mini-play:active{transform:translate(-50%,-50%) scale(.94)}
 /* The arrow keeps nudging down while the card is hovered: the button installs
    something, and the pull reads as that before the tooltip does. */
 .build-card:hover .ready-go svg{animation:dl-nudge 1.5s var(--m-ease-move) infinite}

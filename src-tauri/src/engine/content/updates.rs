@@ -18,11 +18,16 @@ async fn latest_versions(
     entries: &[ContentEntry],
     game_version: &str,
     loaders: &[String],
+    bridge: &[String],
 ) -> std::collections::HashMap<String, Value> {
     let mut out: std::collections::HashMap<String, Value> = std::collections::HashMap::new();
     let hashed: Vec<&ContentEntry> = entries.iter().filter(|e| !e.sha1.is_empty()).collect();
     let hashes: Vec<String> = hashed.iter().map(|e| e.sha1.to_lowercase()).collect();
-    let by_hash = bulk_latest_by_hash(&hashes, game_version, loaders).await;
+    // A bridged build updates its Fabric jars too, so the bulk request must
+    // name both loaders — with the build's own first, it stays the preferred
+    // answer for a project that ships for both.
+    let asked: Vec<String> = loaders.iter().chain(bridge.iter()).cloned().collect();
+    let by_hash = bulk_latest_by_hash(&hashes, game_version, &asked).await;
     for e in &hashed {
         if let Some(v) = by_hash.get(&e.sha1.to_lowercase()) {
             out.insert(e.file_name.clone(), v.clone());
@@ -36,10 +41,12 @@ async fn latest_versions(
     if !rest.is_empty() {
         let gv = game_version.to_string();
         let ld = loaders.to_vec();
+        let br = bridge.to_vec();
         let found: Vec<Option<(String, Value)>> = futures::stream::iter(rest.into_iter().map(|(fname, pid)| {
             let gv = gv.clone();
             let ld = ld.clone();
-            async move { best_version(&pid, &gv, &ld).await.ok().map(|v| (fname, v)) }
+            let br = br.clone();
+            async move { best_version_bridged(&pid, &gv, &ld, &br).await.ok().map(|v| (fname, v)) }
         }))
         .buffer_unordered(8)
         .collect()
@@ -56,6 +63,7 @@ pub async fn check_updates(profile: String, kind: String) -> Result<Vec<UpdateIn
     let gv = prof.as_ref().map(|p| p.version.clone()).unwrap_or_default();
     let loader_id = prof.map(|p| p.loader_id()).unwrap_or_else(|| "vanilla".into());
     let loaders = modrinth_loaders(&loader_id, &kind);
+    let bridge = bridge_loaders(&profile, &loader_id, &kind);
     let entries: Vec<ContentEntry> = load_content_manifest(&profile)
         .into_iter()
         .filter(|e| e.kind == kind && !e.project_id.is_empty())
@@ -63,7 +71,7 @@ pub async fn check_updates(profile: String, kind: String) -> Result<Vec<UpdateIn
     if entries.is_empty() {
         return Ok(vec![]);
     }
-    let latest = latest_versions(&entries, &gv, &loaders).await;
+    let latest = latest_versions(&entries, &gv, &loaders, &bridge).await;
     let mut out = vec![];
     for e in entries {
         let Some(v) = latest.get(&e.file_name) else { continue };
@@ -118,7 +126,8 @@ pub async fn update_content(profile: String, kind: String, file_name: String) ->
     let gv = prof.as_ref().map(|p| p.version.clone()).unwrap_or_default();
     let loader_id = prof.map(|p| p.loader_id()).unwrap_or_else(|| "vanilla".into());
     let loaders = modrinth_loaders(&loader_id, &kind);
-    let ver = best_version(&entry.project_id, &gv, &loaders).await
+    let bridge = bridge_loaders(&profile, &loader_id, &kind);
+    let ver = best_version_bridged(&entry.project_id, &gv, &loaders, &bridge).await
         .map_err(|e| format!("{}: {}", if entry.title.is_empty() { file_name.clone() } else { entry.title.clone() }, e))?;
     apply_update(&profile, &kind, &file_name, &ver).await
 }
@@ -129,6 +138,7 @@ pub async fn update_all(profile: String, kind: String) -> Result<u32, String> {
     let gv = prof.as_ref().map(|p| p.version.clone()).unwrap_or_default();
     let loader_id = prof.map(|p| p.loader_id()).unwrap_or_else(|| "vanilla".into());
     let loaders = modrinth_loaders(&loader_id, &kind);
+    let bridge = bridge_loaders(&profile, &loader_id, &kind);
     let entries: Vec<ContentEntry> = load_content_manifest(&profile)
         .into_iter()
         .filter(|e| e.kind == kind && !e.project_id.is_empty())
@@ -136,7 +146,7 @@ pub async fn update_all(profile: String, kind: String) -> Result<u32, String> {
     if entries.is_empty() {
         return Ok(0);
     }
-    let latest = latest_versions(&entries, &gv, &loaders).await;
+    let latest = latest_versions(&entries, &gv, &loaders, &bridge).await;
     let ids: Vec<String> = entries.iter().map(|e| e.project_id.clone()).collect();
     warm_projects_meta(&ids).await;
     let mut n = 0;

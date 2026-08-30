@@ -22,6 +22,7 @@ import {
   setDefaultJava,
   setGameDir,
 } from '../ipc/commands'
+import { useMcVersionList } from '../state/mcVersionList'
 import { refreshProfiles } from '../state/profiles'
 import type { JavaInfo, JavaRuntime, OverlayState } from '../ipc/commands'
 import { Icon } from '../components/Icon'
@@ -181,6 +182,7 @@ export function Settings({ on }: { on: boolean }) {
   const [customHex, setCustomHex] = useState(initialCustomHex)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [overlay, setOverlay] = useState<OverlayState>({ enabled: false, toasts: true, hotkey: 'Alt+M' })
+  const showSnapshots = useMcVersionList((s) => s.show)
   const [cacheMb, setCacheMb] = useState<number | null>(null)
   const [clearing, setClearing] = useState(false)
   const [moving, setMoving] = useState(false)
@@ -619,6 +621,20 @@ export function Settings({ on }: { on: boolean }) {
                   setOverlay({ ...overlay, enabled: !next })
                   showToast('Оверлей не включился: ' + err, 'error')
                 })
+              }}
+            ></span>
+          </div>
+          <div className="set-row">
+            <span className="lab">
+              Снапшоты в списке версий
+              <small>Тестовые сборки Mojang и старые альфы появятся при выборе версии сборки</small>
+            </span>
+            <span
+              className={'tgl' + (showSnapshots ? ' on' : '')}
+              id="setSnapshots"
+              onClick={(e) => {
+                e.stopPropagation()
+                useMcVersionList.getState().setShow(!showSnapshots)
               }}
             ></span>
           </div>

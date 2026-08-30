@@ -159,6 +159,10 @@ pub(crate) struct Ctx {
     pub game_version: String,
     pub loader_id: String,
     pub loaders: Vec<String>,
+    /// Loaders this build runs only through a bridge mod (Fabric under Sinytra
+    /// Connector). Kept apart from `loaders` so a build of the profile's own
+    /// loader always wins when a project ships both.
+    pub bridge: Vec<String>,
 }
 
 pub(crate) fn ctx_of(profile: &str, kind: &str) -> Ctx {
@@ -169,7 +173,35 @@ pub(crate) fn ctx_of(profile: &str, kind: &str) -> Ctx {
         kind: kind.to_string(),
         game_version: prof.map(|p| p.version).unwrap_or_default(),
         loaders: modrinth_loaders(&loader_id, kind),
+        bridge: bridge_loaders(profile, &loader_id, kind),
         loader_id,
+    }
+}
+
+/// Fabric mods run on Forge and NeoForge when Sinytra Connector is in the build.
+/// The mix is what the bridge exists for, so the launcher must offer Fabric
+/// files, keep them updated and stop calling them foreign.
+pub(crate) fn bridge_loaders(profile: &str, loader_id: &str, kind: &str) -> Vec<String> {
+    if kind != "mod" || !matches!(loader_id, "forge" | "neoforge") {
+        return vec![];
+    }
+    if fabric_bridge_installed(profile) { vec!["fabric".into()] } else { vec![] }
+}
+
+/// Modrinth ids of Fabric API and its Forge/NeoForge implementation.
+const FABRIC_API: &str = "P7dR8mSH";
+const FORGIFIED_FABRIC_API: &str = "Aqlf1Shp";
+
+/// A Fabric mod bridged onto Forge asks for Fabric API, and the Fabric build of
+/// it does not load there at all — Connector's own port does. Installing the
+/// dependency as written would leave a build that cannot start.
+pub(crate) fn bridged_project<'a>(ctx: &Ctx, project_id: &'a str) -> &'a str {
+    if ctx.bridge.is_empty() {
+        return project_id;
+    }
+    match project_id {
+        FABRIC_API | "fabric-api" => FORGIFIED_FABRIC_API,
+        other => other,
     }
 }
 
@@ -352,11 +384,14 @@ async fn pick_modrinth(ctx: &Ctx, project_id: &str, version_id: &str) -> Result<
         get_json(&format!("https://api.modrinth.com/v2/version/{}", version_id))
             .await
             .ok()
-            .filter(|v| version_fits(v, &ctx.game_version, &ctx.loaders))
+            .filter(|v| {
+                version_fits(v, &ctx.game_version, &ctx.loaders)
+                    || (!ctx.bridge.is_empty() && version_fits(v, &ctx.game_version, &ctx.bridge))
+            })
     };
     let version = match pinned {
         Some(v) => v,
-        None => best_version(project_id, &ctx.game_version, &ctx.loaders).await?,
+        None => best_version_bridged(project_id, &ctx.game_version, &ctx.loaders, &ctx.bridge).await?,
     };
     let meta = fetch_project_meta(project_id).await;
     Ok(Pick { node: mr_node(project_id, &meta, &version), deps: mr_deps(&version), raw: version })
@@ -398,6 +433,11 @@ async fn pick_curseforge(ctx: &Ctx, mod_id: u32, file_id: Option<u64>) -> Result
 }
 
 async fn pick_any(ctx: &Ctx, source: &str, project_id: &str, version_id: &str) -> Result<Pick, String> {
+    let swapped = bridged_project(ctx, project_id);
+    // The pinned version belongs to the project that was asked for; once the
+    // project itself is swapped, the pin points at a file of another mod.
+    let (project_id, version_id) =
+        if swapped == project_id { (project_id, version_id) } else { (swapped, "") };
     match cf_mod_id(project_id) {
         Some(id) => pick_curseforge(ctx, id, version_id.parse().ok()).await,
         None if source == "curseforge" => match project_id.parse::<u32>() {
@@ -681,6 +721,23 @@ pub(crate) fn loader_mismatch(declared: &str, build_loader: &str) -> bool {
     !(build_loader == "quilt" && declared == "fabric")
 }
 
+/// A file is wrong for the build only when NONE of the loaders it declares fits.
+///
+/// Multi-loader releases (Collective, Balm) ship one jar answering for Fabric,
+/// Forge and NeoForge, and often no per-loader build exists at all. Judging by
+/// the first loader alone marked such a file as foreign on a build its author
+/// supports, and the mod was dropped as broken.
+/// `runs` lists every loader the build can actually load: its own, plus what a
+/// bridge mod adds. A Fabric jar next to Connector on Forge is the mix the
+/// bridge is installed for, and calling it foreign sent people deleting mods
+/// that worked.
+pub(crate) fn loaders_mismatch(declared: &[String], runs: &[String]) -> bool {
+    if declared.is_empty() || runs.is_empty() {
+        return false;
+    }
+    declared.iter().all(|d| runs.iter().all(|build| loader_mismatch(d, build)))
+}
+
 /// Checks a build as it stands: hard dependencies nobody satisfies, mods that
 /// declare each other incompatible, and files built for another version or
 /// loader. Everything that can be fixed comes back with the fix attached.
@@ -692,6 +749,7 @@ pub async fn audit_deps(profile: String) -> Result<DepAudit, String> {
         .map_err(|e| e.to_string())?;
     let manifest: Vec<ContentEntry> = load_content_manifest(&profile).into_iter().filter(|e| e.kind == "mod").collect();
     let installed = installed_index(&profile);
+    let runs: Vec<String> = std::iter::once(ctx.loader_id.clone()).chain(ctx.bridge.iter().cloned()).collect();
     let mut audit = DepAudit { checked: locals.len() as u32, issues: vec![] };
     let mut wanted: HashMap<String, String> = HashMap::new();
     // The installed version of whatever a `breaks` rule points at — needed to
@@ -718,11 +776,13 @@ pub async fn audit_deps(profile: String) -> Result<DepAudit, String> {
                 fix: None,
             });
         }
-        if loader_mismatch(&m.loader, &ctx.loader_id) {
+        let declared: &[String] =
+            if m.loaders.is_empty() { std::slice::from_ref(&m.loader) } else { &m.loaders };
+        if loaders_mismatch(declared, &runs) {
             audit.issues.push(AuditIssue {
                 kind: "loader".into(),
                 title: m.title.clone(),
-                detail: format!("файл для {}, а сборка на {}", m.loader, ctx.loader_id),
+                detail: format!("файл для {}, а сборка на {}", declared.join("/"), ctx.loader_id),
                 file_name: m.file_name.clone(),
                 fix: None,
             });
@@ -941,5 +1001,53 @@ mod tests {
         assert!(!loader_mismatch("fabric", "fabric"));
         assert!(!loader_mismatch("fabric", "vanilla"), "a vanilla build judges nothing");
         assert!(!loader_mismatch("", "forge"));
+    }
+
+    /// Support ticket 28.08.2026: Collective ships ONE jar for Fabric, Forge and
+    /// NeoForge, no NeoForge-only build of it exists, and the launcher labelled
+    /// it `fabric` and refused it on a NeoForge build.
+    #[test]
+    fn multi_loader_file_fits_every_loader_it_declares() {
+        let all = ["fabric".to_string(), "forge".to_string(), "neoforge".to_string()];
+        let neoforge = ["neoforge".to_string()];
+        let fabric = ["fabric".to_string()];
+        assert!(!loaders_mismatch(&all, &neoforge), "author supports NeoForge in the same file");
+        assert!(!loaders_mismatch(&all, &fabric));
+        assert!(loaders_mismatch(&fabric, &neoforge), "a Fabric-only file is still foreign");
+        assert!(!loaders_mismatch(&[], &neoforge), "a file we could not read judges nothing");
+    }
+
+    /// Report 30.08.2026: a Forge build with Sinytra Connector and Fabric mods
+    /// in it. The bridge is installed precisely to run that mix, so the Fabric
+    /// jars are not foreign files — and without the bridge they still are.
+    #[test]
+    fn bridged_build_accepts_fabric_files() {
+        let fabric = ["fabric".to_string()];
+        let forge_only = ["forge".to_string()];
+        let bridged = ["forge".to_string(), "fabric".to_string()];
+        assert!(loaders_mismatch(&fabric, &forge_only), "no bridge — a Fabric jar is still foreign on Forge");
+        assert!(!loaders_mismatch(&fabric, &bridged), "Connector is what makes the mix work");
+        assert!(loaders_mismatch(&["quilt".to_string()], &bridged), "Connector bridges Fabric, not Quilt");
+        assert!(!loaders_mismatch(&fabric, &[]), "an unknown build judges nothing");
+    }
+
+    /// A bridged Fabric mod asks for Fabric API, and its Fabric build does not
+    /// load on Forge at all: the dependency has to become Connector's port.
+    #[test]
+    fn fabric_api_becomes_forgified_when_bridged() {
+        let ctx = |bridge: Vec<String>| Ctx {
+            profile: "p".into(),
+            kind: "mod".into(),
+            game_version: "1.20.1".into(),
+            loader_id: "forge".into(),
+            loaders: vec!["forge".to_string()],
+            bridge,
+        };
+        let on = ctx(vec!["fabric".to_string()]);
+        let off = ctx(vec![]);
+        assert_eq!(bridged_project(&on, FABRIC_API), FORGIFIED_FABRIC_API);
+        assert_eq!(bridged_project(&on, "fabric-api"), FORGIFIED_FABRIC_API);
+        assert_eq!(bridged_project(&on, "sodium"), "sodium", "only Fabric API is ported");
+        assert_eq!(bridged_project(&off, FABRIC_API), FABRIC_API, "no bridge — install what was asked for");
     }
 }

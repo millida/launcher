@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const read = (name: string) => readFileSync(new URL('../styles/' + name, import.meta.url), 'utf8')
 
@@ -109,7 +110,7 @@ const tsxFiles = (dir: string): string[] =>
 /// means `.card` and `.build-card` compete on that node even though no selector
 /// ever writes them together.
 const classSets = (): Set<string>[] => {
-  const root = new URL('..', import.meta.url).pathname.replace(/^\//, '')
+  const root = fileURLToPath(new URL('..', import.meta.url))
   const out: Set<string>[] = []
   for (const f of tsxFiles(root)) {
     const src = readFileSync(f, 'utf8')

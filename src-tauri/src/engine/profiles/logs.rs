@@ -40,18 +40,32 @@ pub fn duplicate_profile(name: &str) -> Result<Vec<Profile>, String> {
     Ok(all)
 }
 
+#[derive(serde::Serialize, Clone)]
+pub struct McVersion {
+    pub id: String,
+    pub kind: String,
+}
+
 /// The same cached manifest an install reads: without the cache one unreachable
 /// request left the version picker holding a single option — the build's current
 /// version — and changing the version looked impossible with nothing said.
-pub async fn list_versions() -> Result<Vec<String>, String> {
+pub async fn list_versions_typed() -> Result<Vec<McVersion>, String> {
     let m = get_json_fresh(MANIFEST, &game_root().join("version_manifest_v2.json"), MANIFEST_TTL).await?;
     Ok(m["versions"]
         .as_array()
         .map(|a| {
             a.iter()
-                .filter(|v| v["type"] == "release")
-                .filter_map(|v| v["id"].as_str().map(String::from))
+                .filter_map(|v| {
+                    Some(McVersion {
+                        id: v["id"].as_str()?.to_string(),
+                        kind: v["type"].as_str().unwrap_or("release").to_string(),
+                    })
+                })
                 .collect()
         })
         .unwrap_or_default())
+}
+
+pub async fn list_versions() -> Result<Vec<String>, String> {
+    Ok(list_versions_typed().await?.into_iter().filter(|v| v.kind == "release").map(|v| v.id).collect())
 }

@@ -39,7 +39,27 @@ pub async fn ensure_authlib_injector() -> Result<PathBuf, String> {
         Some((u, s)) => (u, s, build),
         None => (AUTHLIB_PINNED_URL.to_string(), AUTHLIB_PINNED_SHA256.to_string(), String::new()),
     };
-    download_checked(&url, &jar, Some(Sum::Sha256(&expected)), None).await?;
-    let _ = std::fs::write(&stamp, &stamped);
-    Ok(jar)
+    // A newer build downloads next to the working agent, never over it:
+    // `download_checked` drops a file whose digest no longer matches before it
+    // fetches, so a release the player cannot reach right now used to leave the
+    // launch with no agent at all — offline mode, no multiplayer and, on a
+    // vanilla build, no skin either.
+    let next = dir.join("authlib-injector.jar.next");
+    let _ = std::fs::remove_file(&next);
+    let fetched = download_checked(&url, &next, Some(Sum::Sha256(&expected)), None)
+        .await
+        .and_then(|_| std::fs::rename(&next, &jar).map_err(|e| e.to_string()));
+    match fetched {
+        Ok(()) => {
+            let _ = std::fs::write(&stamp, &stamped);
+            Ok(jar)
+        }
+        Err(e) => {
+            let _ = std::fs::remove_file(&next);
+            if jar.exists() {
+                return Ok(jar);
+            }
+            Err(e)
+        }
+    }
 }

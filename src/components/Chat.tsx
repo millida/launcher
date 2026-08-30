@@ -1,10 +1,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { Icon } from './Icon'
-import { hasTauri } from '../ipc/tauri'
-import { addServer } from '../ipc/commands'
 import { useProfiles } from '../state/profiles'
-import { joinStarted, joinWithAuth, showLaunchError } from '../lib/launch'
-import { openSettings, setScreen, showToast } from '../state/ui'
+import { openSettings, showToast } from '../state/ui'
 import { uiConfirm } from '../state/confirm'
 import { encodeInvite, isServerAddr, parseInvite } from '../lib/invite'
 import { Head } from './Head'
@@ -40,28 +37,15 @@ import { nickInRooms, openRoomManage, useRooms, type Room } from '../state/rooms
 import { RoomCallButton } from './RoomCall'
 import { apiErrorText } from '../lib/apiError'
 
-function InviteCard({ addr, name, me }: { addr: string; name: string; me?: boolean }) {
+function InviteCard({ addr, name, version, me }: { addr: string; name: string; version?: string; me?: boolean }) {
   const [busy, setBusy] = useState(false)
+  // Приглашение вело в игру напрямую текущей сборкой: версию сервера никто не
+  // спрашивал, и гость попадал на «Outdated client». Вход идёт общим путём.
   const join = () => {
-    if (!hasTauri()) {
-      showToast('Вход на сервер — в приложении', 'error')
-      return
-    }
-    const { selected, profiles } = useProfiles.getState()
-    const prof = selected || (profiles[0] || { name: '' }).name || ''
-    if (!prof) {
-      showToast('Сначала создай сборку — версию подберём под сервер', 'error')
-      setScreen('mods')
-      return
-    }
     setBusy(true)
-    addServer(prof, name, addr).catch(() => {})
     rememberServerName(addr, name)
-    joinWithAuth(prof, null, addr, name)
-      .then((res) => {
-        if (joinStarted(res)) showToast('Заходим на «' + name + '»')
-      })
-      .catch((e) => showLaunchError(e))
+    void quickJoin(addr, name, undefined, version ? [version] : undefined)
+      .catch(() => {})
       .finally(() => setBusy(false))
   }
   return (
@@ -422,7 +406,9 @@ function Composer() {
     }
     setSrvOpen(false)
     setSrvAddr('')
-    sendChat(encodeInvite(addr.trim(), (name || addr).trim().slice(0, 48))).catch((e) =>
+    const { selected, profiles } = useProfiles.getState()
+    const mine = profiles.find((p) => p.name === selected) || profiles[0]
+    sendChat(encodeInvite(addr.trim(), (name || addr).trim().slice(0, 48), mine && mine.version)).catch((e) =>
       showToast(offPlatformReason(e) || 'Приглашение не ушло — нажми «Повторить» под ним', 'error'),
     )
   }
@@ -962,7 +948,7 @@ export function Chat() {
             return (
               <Fragment key={key}>
                 {day}
-                <InviteCard addr={inv.addr} name={inv.name} me={m.me} />
+                <InviteCard addr={inv.addr} name={inv.name} version={inv.version} me={m.me} />
               </Fragment>
             )
           if (callLog && !chatRoom)

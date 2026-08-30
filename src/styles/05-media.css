@@ -725,8 +725,8 @@ html.overlay-root,html.overlay-root body,html.overlay-root #root{background:tran
 @media (prefers-reduced-motion: reduce){.ov-card-ttl{animation:none;transform:scaleX(1)}}
 .ov-card{position:relative;overflow:hidden;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:rgba(18,18,22,.86);border:1px solid rgba(255,255,255,.12);box-shadow:0 10px 30px rgba(0,0,0,.45);color:#f2f2f5;animation:ovIn .18s ease}
 .ov-card::before{content:'';position:absolute;left:0;top:10px;bottom:10px;width:2px;border-radius:2px;background:var(--ov-accent,#7aa2ff)}
-.ov-card.ov-online{--ov-accent:#5cc98a}
-.ov-card.ov-play{--ov-accent:#f0b23c}
+.ov-card.ov-kind-online{--ov-accent:#5cc98a}
+.ov-card.ov-kind-play{--ov-accent:#f0b23c}
 .ov-card img{width:30px;height:30px;border-radius:8px;image-rendering:pixelated;flex:none}
 .ov-card-heads{display:flex;flex:none}
 .ov-card-heads img+img{margin-left:-12px;box-shadow:0 0 0 2px rgba(18,18,22,.9)}

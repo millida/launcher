@@ -210,6 +210,7 @@ async fn enable(app: &AppHandle, profile: &str) -> Result<FpsBoostState, String>
     let version = profile_version(profile);
     let wanted = boost_mods(&loader);
     let loaders = modrinth_loaders(&loader, "mod");
+    let bridge = bridge_loaders(profile, &loader, "mod");
     let known: Vec<String> = load_content_manifest(profile)
         .into_iter()
         .map(|e| e.project_id)
@@ -238,7 +239,7 @@ async fn enable(app: &AppHandle, profile: &str) -> Result<FpsBoostState, String>
         };
         match install_project_version(profile, "mod", slug, &ver).await {
             Ok(file) => {
-                for miss in resolve_deps(profile, &version, &loaders, &ver["dependencies"]).await {
+                for miss in resolve_deps(profile, &version, &loaders, &bridge, &ver["dependencies"]).await {
                     warn(app, &format!("{}: нет зависимости {} под {}", slug, miss, version));
                 }
                 if !installed.contains(&file) {

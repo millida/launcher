@@ -101,6 +101,7 @@ pub fn run() {
             commands::launch::launch_game,
             commands::content::install_mod,
             commands::content::list_versions,
+            commands::content::list_versions_typed,
             commands::content::list_loader_versions,
             commands::profiles::list_profiles,
             commands::profiles::create_profile,

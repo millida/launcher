@@ -202,6 +202,41 @@ pub(crate) fn known_game_versions(versions: &[Value]) -> String {
     seen.join(", ")
 }
 
+/// Picks the newest file the build can load, preferring its own loader over the
+/// ones a bridge adds: a project shipping both a Forge and a Fabric build must
+/// give a Forge build to a Forge instance, bridge or no bridge.
+pub(crate) fn pick_version(
+    versions: &[Value],
+    game_version: &str,
+    loaders: &[String],
+    bridge: &[String],
+) -> Option<Value> {
+    if let Some(v) = versions.iter().find(|v| version_fits(v, game_version, loaders)) {
+        return Some(v.clone());
+    }
+    if bridge.is_empty() {
+        return None;
+    }
+    versions.iter().find(|v| version_fits(v, game_version, bridge)).cloned()
+}
+
+/// Same as `best_version`, with the bridged loaders as a second choice.
+pub(crate) async fn best_version_bridged(
+    project: &str,
+    game_version: &str,
+    loaders: &[String],
+    bridge: &[String],
+) -> Result<Value, String> {
+    if bridge.is_empty() {
+        return best_version(project, game_version, loaders).await;
+    }
+    let versions = project_versions(project).await?;
+    pick_version(&versions, game_version, loaders, bridge).ok_or_else(|| {
+        let have = known_game_versions(&versions);
+        format!("нет файла под {}{}", game_version, if have.is_empty() { String::new() } else { format!(" (есть: {})", have) })
+    })
+}
+
 /// Strict: a version that does not match the profile is never returned. Callers
 /// that want it anyway ask for it explicitly via `latest_version`.
 pub(crate) async fn best_version(project: &str, game_version: &str, loaders: &[String]) -> Result<Value, String> {
@@ -260,7 +295,13 @@ pub(crate) async fn install_project_version(
 /// an install and the plan shown beforehand can never disagree. Returns the
 /// dependencies that had nothing compatible, so the caller can say so instead of
 /// leaving a build that will not start.
-pub(crate) async fn resolve_deps(profile: &str, game_version: &str, loaders: &[String], initial: &Value) -> Vec<String> {
+pub(crate) async fn resolve_deps(
+    profile: &str,
+    game_version: &str,
+    loaders: &[String],
+    bridge: &[String],
+    initial: &Value,
+) -> Vec<String> {
     let ctx = Ctx {
         profile: profile.to_string(),
         kind: "mod".into(),
@@ -268,6 +309,7 @@ pub(crate) async fn resolve_deps(profile: &str, game_version: &str, loaders: &[S
         loader_id: load_profiles().into_iter().find(|p| p.name == profile)
             .map(|p| p.loader_id()).unwrap_or_else(|| "vanilla".into()),
         loaders: loaders.to_vec(),
+        bridge: bridge.to_vec(),
     };
     let deps = mr_deps(&serde_json::json!({ "dependencies": initial }));
     install_required(&ctx, deps).await
@@ -309,9 +351,10 @@ async fn install_content_job(
     let loader_id = load_profiles().into_iter().find(|p| p.name == profile)
         .map(|p| p.loader_id()).unwrap_or_else(|| "vanilla".into());
     let loaders = modrinth_loaders(&loader_id, &kind);
+    let bridge = bridge_loaders(&profile, &loader_id, &kind);
     let versions = project_versions(&project).await?;
-    let ver = match versions.iter().find(|v| version_fits(v, &game_version, &loaders)) {
-        Some(v) => v.clone(),
+    let ver = match pick_version(&versions, &game_version, &loaders, &bridge) {
+        Some(v) => v,
         None if allow_mismatch => versions.first().cloned().ok_or("У проекта нет ни одного файла")?,
         None => {
             let have = known_game_versions(&versions);
@@ -328,7 +371,7 @@ async fn install_content_job(
     let mut warning = String::new();
     if kind == "mod" {
         job.emit(app, 70.0, "Зависимости…");
-        let missed = resolve_deps(&profile, &game_version, &loaders, &ver["dependencies"]).await;
+        let missed = resolve_deps(&profile, &game_version, &loaders, &bridge, &ver["dependencies"]).await;
         if !missed.is_empty() {
             warning = format!("не нашлось зависимостей под эту версию: {}", missed.join(", "));
         }
@@ -361,7 +404,8 @@ async fn install_version_job(
             .map(|p| p.loader_id()).unwrap_or_else(|| "vanilla".into());
         let gv = ver["game_versions"].as_array().and_then(|a| a.first()).and_then(|v| v.as_str()).unwrap_or("").to_string();
         let loaders = modrinth_loaders(&loader_id, &kind);
-        let missed = resolve_deps(&profile, &gv, &loaders, &ver["dependencies"]).await;
+        let bridge = bridge_loaders(&profile, &loader_id, &kind);
+        let missed = resolve_deps(&profile, &gv, &loaders, &bridge, &ver["dependencies"]).await;
         if !missed.is_empty() {
             warning = format!("не нашлось зависимостей под эту версию: {}", missed.join(", "));
         }

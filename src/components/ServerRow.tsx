@@ -58,7 +58,7 @@ function Logo({ sv }: { sv: SnapshotServer }) {
 }
 
 export function ServerRow({ sv, hidden }: { sv: SnapshotServer; hidden?: boolean }) {
-  const on = (sv.online ?? 0) > 0
+  const on = sv.isOnline
   const [label, setLabel] = useState('Играть')
   const busy = useRef(false)
 

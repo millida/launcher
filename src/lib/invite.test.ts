@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { encodeInvite, isServerAddr, joinPageUrl, parseInvite } from './invite'
+import { INVITE_PREFIX, encodeInvite, isServerAddr, joinPageUrl, parseInvite } from './invite'
 
 // Значение уходит в кнопку Discord-активности, которую видят посторонние:
 // любой адрес, который смог бы утащить клик на другой хост, обязан отсеяться.
@@ -71,5 +71,27 @@ describe('encodeInvite', () => {
 
   test('обычный текст приглашением не считается', () => {
     expect(parseInvite('заходи на mc.example.net')).toBe(null)
+  })
+
+  // Версия сборки приглашающего — единственный источник версии для гостя:
+  // без неё лаунчер зайдёт тем, что у гостя выбрано сейчас.
+  test('версия сборки едет в приглашении и обратно', () => {
+    expect(parseInvite(encodeInvite('mc.example.net', 'Сервер', '1.20.1'))).toEqual({
+      addr: 'mc.example.net',
+      name: 'Сервер',
+      version: '1.20.1',
+    })
+  })
+
+  test('версия-мусор из чужого клиента отбрасывается', () => {
+    expect(parseInvite(INVITE_PREFIX + '{"addr":"mc.example.net","name":"Сервер","version":"latest"}')).toEqual({
+      addr: 'mc.example.net',
+      name: 'Сервер',
+    })
+  })
+
+  test('версия уезжает в ссылку страницы входа', () => {
+    expect(new URL(joinPageUrl('mc.example.net', null, '1.21.4')).searchParams.get('version')).toBe('1.21.4')
+    expect(new URL(joinPageUrl('mc.example.net', null, 'снапшот')).searchParams.get('version')).toBe(null)
   })
 })

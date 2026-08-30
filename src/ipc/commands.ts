@@ -10,6 +10,11 @@ export interface Profile {
   icon?: string | null
 }
 
+export interface McVersion {
+  id: string
+  kind: string
+}
+
 export interface LoaderBuild {
   version: string
   stable: boolean
@@ -27,6 +32,7 @@ export interface ModFile {
   description?: string
   mc?: string
   loader?: string
+  loaders?: string[]
   size: number
   scanned: boolean
 }
@@ -489,6 +495,8 @@ export const listServers = (profile: string) => invoke<ServerEntry[]>('list_serv
 
 export const listVersions = () => invoke<string[]>('list_versions')
 
+export const listVersionsTyped = () => invoke<McVersion[]>('list_versions_typed')
+
 export const listLoaderVersions = (loader: string, mcVersion: string) =>
   invoke<LoaderBuild[]>('list_loader_versions', { loader, mcVersion })
 
@@ -909,6 +917,9 @@ export interface SkinDiagBuild {
   state: string
   text: string
   conflict: string | null
+  offReason: string | null
+  playedAt: number | null
+  agentSeen: boolean | null
   root: string | null
   rootStale: boolean
   problems: string[]
@@ -921,11 +932,23 @@ export interface SkinDiagServer {
   skinReadable?: boolean
   capeReadable?: boolean
 }
+// The account route: what a vanilla build depends on entirely.
+export interface SkinDiagSession {
+  ok: boolean
+  agent: boolean
+  profile: boolean
+  signed?: boolean
+  skin?: boolean
+  cape?: boolean
+  domainOk?: boolean
+  textureOk?: boolean
+}
 export interface SkinDiag {
   nick: string
   verdict: string
   text: string
   server: SkinDiagServer | null
+  session: SkinDiagSession | null
   builds: SkinDiagBuild[]
 }
 export const skinDiagnose = (nick: string, online: boolean) => invoke<SkinDiag>('skin_diagnose', { nick, online })
