@@ -23,7 +23,7 @@ export function ServerDetail() {
   }, [sv, close])
 
   if (!sv) return null
-  const on = (sv.online ?? 0) > 0
+  const on = sv.isOnline
 
   const copyIp = async () => {
     if (!sv.ip) return

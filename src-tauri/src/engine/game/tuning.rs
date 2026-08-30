@@ -35,8 +35,11 @@ pub const PRETOUCH_FLAG: &str = "-XX:+AlwaysPreTouch";
 
 /// Left for the system, the launcher itself and everything else the player has
 /// open. Below this Windows starts swapping and the game stutters far worse
-/// than it would with a smaller heap.
-const RESERVED_MB: u64 = 4096;
+/// than it would with a smaller heap. A flat four gigabytes took half of an
+/// 8 GB machine, so the reserve is a share with a floor -- the same rule the
+/// manual slider follows in `src/lib/ram.ts`.
+const RESERVE_RATIO_DIVISOR: u64 = 4;
+const RESERVE_MIN_MB: u64 = 2048;
 const MIN_HEAP_MB: u32 = 2048;
 const MAX_HEAP_MB: u32 = 12288;
 
@@ -89,20 +92,25 @@ fn wanted_mb(mods: u32, shaders: bool) -> u32 {
     base + if shaders { 1024 } else { 0 }
 }
 
+fn reserved_mb(total_mb: u64) -> u64 {
+    (total_mb / RESERVE_RATIO_DIVISOR).max(RESERVE_MIN_MB)
+}
+
 /// What the machine can actually give: never more than total minus the reserve,
 /// and never so little that the game cannot start.
 fn fit_to_machine(want: u32, total_mb: u64) -> (u32, Option<String>) {
     if total_mb == 0 {
         return (want.clamp(MIN_HEAP_MB, 4096), None);
     }
-    let ceiling = total_mb.saturating_sub(RESERVED_MB).max(1024) as u32;
+    let reserve = reserved_mb(total_mb);
+    let ceiling = total_mb.saturating_sub(reserve).max(1024) as u32;
     if want > ceiling {
         let capped = ceiling.clamp(1024, MAX_HEAP_MB);
         return (
             capped,
             Some(format!(
                 "Столько ОЗУ в системе нет — оставили {} ГБ системе и другим программам",
-                RESERVED_MB / 1024
+                reserve / 1024
             )),
         );
     }
@@ -236,9 +244,9 @@ mod tests {
             (0, false, 8192, 2048, "ваниль на 8 ГБ: больше двух гигабайт игре не нужно"),
             (40, false, 16384, 4096, "средняя сборка на 16 ГБ получает свои 4 ГБ"),
             (200, false, 32768, 8192, "большая сборка на 32 ГБ — 8 ГБ"),
-            (200, false, 8192, 4096, "та же сборка на 8 ГБ ужимается: системе нужно 4 ГБ"),
+            (200, false, 8192, 6144, "та же сборка на 8 ГБ ужимается до четверти под систему"),
             (40, true, 16384, 5120, "шейдеры добавляют гигабайт"),
-            (0, false, 4096, 1024, "на 4 ГБ остаётся ровно то, что можно отдать"),
+            (0, false, 4096, 2048, "на 4 ГБ ваниль умещается в половину машины"),
         ];
         for (mods, shaders, total, want, why) in cases {
             let (got, _) = fit_to_machine(wanted_mb(mods, shaders), total);
@@ -255,9 +263,10 @@ mod tests {
         for total in [2048u64, 4096, 6144, 8192, 16384, 65536] {
             let (heap, _) = fit_to_machine(wanted_mb(300, true), total);
             assert!(
-                (heap as u64) <= total.saturating_sub(RESERVED_MB).max(1024),
-                "куча {heap} МБ на машине с {total} МБ не оставляет системе {RESERVED_MB} МБ — \
+                (heap as u64) <= total.saturating_sub(reserved_mb(total)).max(1024),
+                "куча {heap} МБ на машине с {total} МБ не оставляет системе {} МБ — \
                  игра уйдёт в своп и будет тормозить сильнее, чем с меньшей кучей",
+                reserved_mb(total),
             );
         }
     }

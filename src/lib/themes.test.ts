@@ -173,7 +173,8 @@ test('a pack refused by the page policy is reported instead of half applied', as
 test('every pref key used in the app is registered as durable', async () => {
   const { readFileSync, readdirSync, statSync } = await import('node:fs')
   const { join } = await import('node:path')
-  const src = new URL('..', import.meta.url).pathname.replace(/^\//, '')
+  const { fileURLToPath } = await import('node:url')
+  const src = fileURLToPath(new URL('..', import.meta.url))
   const files: string[] = []
   const walk = (dir: string) => {
     for (const name of readdirSync(dir)) {

@@ -6,10 +6,14 @@ import { useBuildPicker } from '../state/buildPicker'
 import { useProfiles } from '../state/profiles'
 import { openModal } from '../state/ui'
 import { backdropClose } from '../lib/dismiss'
+import { versionFits } from '../lib/mcVersion'
 
 export function BuildPicker() {
-  const { open, kindLabel, choose } = useBuildPicker()
+  const { open, kindLabel, choose, title, sub, wanted } = useBuildPicker()
   const profiles = useProfiles((s) => s.profiles)
+  const list = wanted.length
+    ? [...profiles].sort((a, b) => Number(versionFits(b.version, wanted)) - Number(versionFits(a.version, wanted)))
+    : profiles
 
   useEffect(() => {
     if (!open) return
@@ -27,27 +31,30 @@ export function BuildPicker() {
       {...backdropClose(() => choose(null))}
     >
       <div className="modal mw-xs">
-        <h3>Куда добавить {kindLabel}?</h3>
-        <div className="sub">Выбери сборку — установим {kindLabel} именно в неё.</div>
+        <h3>{title || 'Куда добавить ' + kindLabel + '?'}</h3>
+        <div className="sub">{sub || 'Выбери сборку — установим ' + kindLabel + ' именно в неё.'}</div>
 
-        {profiles.length ? (
+        {list.length ? (
           <div className="bp-list">
-            {profiles.map((p) => (
-              <button key={p.name} className="bp-item" onClick={() => choose(p.name)}>
-                <span className="bp-cover">
-                  <Cover url={p.icon} />
-                </span>
-                <span className="bp-meta">
-                  <b>{p.name}</b>
-                  <span>{LOADER_NAME(p) + ' · ' + p.version}</span>
-                </span>
-                <Icon id="i-chev-r" />
-              </button>
-            ))}
+            {list.map((p) => {
+              const off = wanted.length > 0 && !versionFits(p.version, wanted)
+              return (
+                <button key={p.name} className="bp-item" onClick={() => choose(p.name)}>
+                  <span className="bp-cover">
+                    <Cover url={p.icon} />
+                  </span>
+                  <span className="bp-meta">
+                    <b>{p.name}</b>
+                    <span>{LOADER_NAME(p) + ' · ' + p.version + (off ? ' · версия не подходит' : '')}</span>
+                  </span>
+                  <Icon id="i-chev-r" />
+                </button>
+              )
+            })}
           </div>
         ) : (
           <p className="faint-note" style={{ marginTop: '14px' }}>
-            Сборок пока нет — создай первую, и мы добавим {kindLabel} в неё.
+            {title ? 'Сборок пока нет — создай первую.' : 'Сборок пока нет — создай первую, и мы добавим ' + kindLabel + ' в неё.'}
           </p>
         )}
 

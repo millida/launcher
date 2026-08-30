@@ -17,7 +17,7 @@ const NESTED_DEPTH: u32 = 3;
 /// Bumped whenever the parser starts extracting a new field: cache entries are
 /// keyed by (size, mtime), so without it an old cache would keep answering with
 /// fields the previous version never filled in.
-const META_REV: u32 = 4;
+const META_REV: u32 = 5;
 
 /// A `breaks` entry as the mod author wrote it: which mod, and under what
 /// version range. `"breaks": {"fabric-api": "<0.144.3+26.1"}` means "needs a
@@ -45,6 +45,10 @@ pub struct LocalMeta {
     #[serde(default)] pub icon: String,
     #[serde(default)] pub mc: String,
     #[serde(default)] pub loader: String,
+    /// Every loader the file answers for. A multi-loader release ships one jar
+    /// with metadata for several loaders, and `loader` alone names only the
+    /// first one the parse chain matched.
+    #[serde(default)] pub loaders: Vec<String>,
     /// Loader-level identity and relations, used by the dependency resolver for
     /// files that no catalog knows.
     #[serde(default)] pub mod_id: String,
@@ -415,6 +419,40 @@ fn pack_description(v: &Value) -> String {
     String::new()
 }
 
+/// Every loader the jar carries metadata for.
+///
+/// Mods like Collective and Balm ship a SINGLE file that answers for Fabric,
+/// Forge and NeoForge at once, and for some of them no per-loader build exists
+/// at all. The parse chain below stops at the first match, so such a file was
+/// labelled by whichever manifest came first — `fabric` — and the audit then
+/// refused it on a NeoForge build the author does support.
+fn declared_loaders(jar: &mut Jar) -> Vec<String> {
+    let mut out: Vec<String> = vec![];
+    let add = |id: &str, out: &mut Vec<String>| {
+        if !out.iter().any(|x| x == id) {
+            out.push(id.to_string());
+        }
+    };
+    if entry_text(jar, "fabric.mod.json").is_some() {
+        add("fabric", &mut out);
+    }
+    if entry_text(jar, "quilt.mod.json").is_some() {
+        add("quilt", &mut out);
+    }
+    if entry_text(jar, "META-INF/neoforge.mods.toml").is_some() {
+        add("neoforge", &mut out);
+    }
+    // Same rule as `from_forge`: before NeoForge split the file off, its mods
+    // declared themselves inside the shared mods.toml.
+    if let Some(text) = entry_text(jar, "META-INF/mods.toml") {
+        add(if text.to_lowercase().contains("neoforge") { "neoforge" } else { "forge" }, &mut out);
+    }
+    if entry_text(jar, "mcmod.info").is_some() {
+        add("forge", &mut out);
+    }
+    out
+}
+
 fn from_fabric(jar: &mut Jar, meta: &mut LocalMeta, quilt: bool) -> bool {
     let file = if quilt { "quilt.mod.json" } else { "fabric.mod.json" };
     let Some(text) = entry_text(jar, file) else { return false };
@@ -576,6 +614,7 @@ pub fn read_file_meta(path: &Path, kind: &str, file_name: &str) -> LocalMeta {
             if !parsed {
                 from_shader(&mut jar, &mut meta);
             }
+            meta.loaders = declared_loaders(&mut jar);
         }
     }
     if meta.title.is_empty() {
@@ -654,11 +693,63 @@ pub fn local_meta_map(profile: &str, kind: &str) -> HashMap<String, LocalMeta> {
         .collect()
 }
 
+/// Ids Sinytra Connector answers for. It is a Forge/NeoForge mod whose whole
+/// job is running Fabric mods, so a build that has it is a legitimate mix and
+/// not a pile of foreign files.
+const CONNECTOR_IDS: &[&str] = &["connectormod", "connector"];
+
+fn name_is_connector(file_name: &str) -> bool {
+    let low = file_name.to_lowercase();
+    low.starts_with("connector-") || low.starts_with("connector_") || low.contains("sinytra")
+}
+
+fn meta_is_connector(m: &LocalMeta) -> bool {
+    let id = m.mod_id.to_lowercase();
+    CONNECTOR_IDS.contains(&id.as_str())
+        || m.provides.iter().any(|p| CONNECTOR_IDS.contains(&p.to_lowercase().as_str()))
+}
+
+/// Whether this build runs Fabric mods through Connector. Only enabled files
+/// count: a `.disabled` bridge loads nothing, and judging by its presence would
+/// green-light Fabric jars the game is about to reject.
+pub fn fabric_bridge_installed(profile: &str) -> bool {
+    let metas = local_meta_map(profile, "mod");
+    let dir = profile_dir(profile).join(content_dir("mod"));
+    let Ok(rd) = std::fs::read_dir(&dir) else { return false };
+    for e in rd.flatten() {
+        let name = e.file_name().to_string_lossy().to_string();
+        if !name.ends_with(".jar") {
+            continue;
+        }
+        if name_is_connector(&name) {
+            return true;
+        }
+        if metas.get(&name).is_some_and(meta_is_connector) {
+            return true;
+        }
+    }
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::io::Write;
     use zip::write::SimpleFileOptions;
+
+    /// The bridge is recognised by file name too, because a jar the metadata
+    /// reader could not open is exactly the one that would silently turn the
+    /// mix back into "foreign files". Neighbouring mods must not be mistaken
+    /// for it: a false bridge green-lights Fabric jars nothing can load.
+    #[test]
+    fn connector_is_recognised_by_name_without_catching_neighbours() {
+        assert!(name_is_connector("Connector-1.0.0-beta.46+1.20.1-full.jar"));
+        assert!(name_is_connector("connector_reborn-2.0.jar"));
+        assert!(name_is_connector("sinytra-connector.jar"));
+        assert!(!name_is_connector("connectivity-1.20.1.jar"), "Connectivity is a different mod");
+        assert!(!name_is_connector("forgified-fabric-api-0.92.jar"), "the API port is not the bridge");
+    }
+
 
     fn make_jar(path: &Path, entries: &[(&str, &[u8])]) {
         let f = std::fs::File::create(path).unwrap();
@@ -729,6 +820,29 @@ viewing mod.
         assert_eq!(m.version, "");
         assert_eq!(m.loader, "forge");
         assert!(m.icon.starts_with("data:image/png;base64,"));
+    }
+
+    /// Support ticket 28.08.2026: the parse chain stops at the first manifest,
+    /// so a file answering for three loaders was labelled `fabric` and dropped
+    /// on a NeoForge build its author supports.
+    #[test]
+    fn multi_loader_jar_answers_for_every_loader_it_declares() {
+        let jar = tmp("collective.jar");
+        make_jar(
+            &jar,
+            &[
+                ("fabric.mod.json", br#"{"id":"collective","version":"7.8","name":"Collective"}"#),
+                ("META-INF/mods.toml", b"modLoader=\"javafml\"\n[[mods]]\nmodId=\"collective\"\n"),
+                ("META-INF/neoforge.mods.toml", b"modLoader=\"javafml\"\n[[mods]]\nmodId=\"collective\"\n"),
+            ],
+        );
+        let m = read_file_meta(&jar, "mod", "collective.jar");
+        assert_eq!(m.loader, "fabric", "the first manifest still names the file");
+        assert!(
+            m.loaders.iter().any(|l| l == "neoforge") && m.loaders.iter().any(|l| l == "fabric"),
+            "every declared loader must survive the parse, got {:?}",
+            m.loaders
+        );
     }
 
     #[test]

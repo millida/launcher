@@ -5,6 +5,7 @@ export interface SnapshotServer {
   desc: string
   ip: string
   online: number
+  isOnline: boolean
   banner?: string
   logo?: string
   versions: string[]

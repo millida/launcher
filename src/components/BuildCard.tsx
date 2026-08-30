@@ -98,7 +98,7 @@ export function BuildCard({
         data-sound="open"
         onClick={(e) => {
           setSelected(p.name)
-          if ((e.target as HTMLElement).closest('.mini-play')) {
+          if ((e.target as HTMLElement).closest('.build-cover')) {
             void refresh()
             realLaunch(p.name)
             return
@@ -111,7 +111,7 @@ export function BuildCard({
           setMenu({ x: e.clientX, y: e.clientY })
         }}
       >
-        <span className="build-cover">
+        <span className="build-cover" data-nosound title={running ? 'Запустить ещё одну копию' : 'Играть'}>
           <Cover url={p.icon} />
           {running ? (
             <span className="build-run">
@@ -119,7 +119,7 @@ export function BuildCard({
               Запущено
             </span>
           ) : null}
-          <span className="mini-play" data-nosound title={running ? 'Запустить ещё одну копию' : 'Играть'}>
+          <span className="mini-play" aria-hidden="true">
             <Icon id="i-play" />
           </span>
         </span>

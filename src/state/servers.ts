@@ -85,6 +85,7 @@ interface RatingServer {
   description?: string
   ip?: string
   online?: number
+  isOnline?: boolean
   avgOnline?: number
   bannerUrl?: string
   logoUrl?: string
@@ -101,6 +102,9 @@ const toCard = (sv: RatingServer, rank: number): SnapshotServer => ({
   desc: (sv.shortDesc || sv.aiDescription || sv.description || '').replace(/\n/g, ' ').slice(0, 110),
   ip: sv.ip || '',
   online: sv.online ?? sv.avgOnline ?? 0,
+  // Сервер включён, даже когда на нём никого: рейтинг отвечает фактом пинга.
+  // Старый ответ без поля судим по-прежнему, иначе весь каталог станет офлайном.
+  isOnline: sv.isOnline ?? (sv.online ?? sv.avgOnline ?? 0) > 0,
   banner: sv.bannerUrl,
   logo: sv.logoUrl,
   versions: serverVersions(sv.versionMajors),

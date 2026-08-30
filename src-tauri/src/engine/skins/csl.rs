@@ -353,6 +353,17 @@ pub fn note_skin_mod_removed(profile: &str) {
     opt_out(profile, b"removed");
 }
 
+/// Why the mod is off for this build, as the marker records it: `crash` and
+/// `removed` are decisions the launcher made on its own, and a player reading
+/// only "выключен" has no way to tell those from a switch they flipped
+/// themselves.
+pub fn skin_mod_off_reason(profile: &str) -> Option<String> {
+    std::fs::read(profile_dir(profile).join("CustomSkinLoader").join(CSL_OPTOUT))
+        .ok()
+        .map(|b| String::from_utf8_lossy(&b).trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
 pub fn skin_mod_state(profile: &str) -> Value {
     let mods = profile_dir(profile).join("mods");
     serde_json::json!({

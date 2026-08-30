@@ -26,6 +26,15 @@ const INSTALL_KIND: Record<string, string> = {
   MAP: 'Карта',
 }
 
+const INSTALL_SOURCE: Record<string, string> = {
+  modrinth: 'Modrinth',
+  curseforge: 'CurseForge',
+  ftb: 'FTB',
+  market: 'Маркет',
+  upload: 'Свой файл',
+  partner: 'Сборка партнёра',
+}
+
 const INSTALL_ST: Record<string, [string, string]> = {
   PENDING: ['Встанет при запуске', 'warn'],
   INSTALLED: ['Установлено', 'acc'],
@@ -267,7 +276,9 @@ export function TabContent({
                   <span className="fr-body">
                     <span className="fr-nick">{i.name}</span>
                     <span className="fr-status">
-                      {(INSTALL_KIND[i.kind] || i.kind) + (i.versionName ? ' · ' + i.versionName : '')}
+                      {(INSTALL_KIND[i.kind] || i.kind) +
+                        (INSTALL_SOURCE[i.source] ? ' · ' + INSTALL_SOURCE[i.source] : '') +
+                        (i.versionName ? ' · ' + i.versionName : '')}
                       {i.error ? ' · ' + i.error : ''}
                     </span>
                   </span>

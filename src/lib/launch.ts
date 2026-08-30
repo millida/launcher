@@ -92,7 +92,9 @@ export function discordPresence(status?: string, server?: string | null): Promis
   const addr = (session && session.server) || ''
   const place = (session && (session.serverName || session.server)) || server || ''
   const state = playing && place ? 'Сервер: ' + place : nick ? 'Ник: ' + nick : 'Millida Launcher'
-  const joinUrl = playing && addr ? joinPageUrl(addr, (session && session.serverName) || null) : ''
+  // Версия сборки уезжает в ссылку: принимающий лаунчер иначе знает только
+  // адрес и заходит тем, что у гостя выбрано сейчас.
+  const joinUrl = playing && addr ? joinPageUrl(addr, (session && session.serverName) || null, pack && pack.version) : ''
   return ipcDiscordPresence(details, state, playing, icon, build, joinUrl, profileSlug())
     .then((st) => (st && st.userId) || '')
     .catch(() => '')

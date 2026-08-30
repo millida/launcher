@@ -10,7 +10,9 @@ import { rememberServerName } from '../state/playStats'
 import { uiChoice, uiConfirm } from '../state/confirm'
 import { joinStarted, joinWithAuth, showLaunchError } from './launch'
 import { openModal, setScreen, showToast } from '../state/ui'
-import { pickBuildForServer, pingVersions, serverVersions, versionFits } from './mcVersion'
+import { pingVersions, serverVersions } from './mcVersion'
+import { joinPlan } from './joinPlan'
+import { pickBuildForJoin } from '../state/buildPicker'
 import { track } from './telemetry'
 
 const addrKey = (ip: string) =>
@@ -19,20 +21,30 @@ const addrKey = (ip: string) =>
     .toLowerCase()
     .replace(/:25565$/, '')
 
+const pingedVersions = new Map<string, string[]>()
+
 /**
  * Версию знает не только рейтинг: на свой хостинг, к другу и по ссылке из
  * Discord игрок заходит мимо каталога, и раньше в таких случаях запускалась
  * текущая сборка любой версии. Спрашиваем сам сервер — он отвечает точной
- * версией; ждём недолго, чтобы запуск не замирал из-за лежачего сервера.
+ * версией; ответ держим до конца сеанса, чтобы повторный вход не ждал снова.
  */
 async function versionsFromPing(ip: string): Promise<string[]> {
+  const key = addrKey(ip)
+  const seen = pingedVersions.get(key)
+  if (seen) return seen
+  // The launcher's own ping allows four seconds to connect and four to answer;
+  // cutting the wait at 1.5 s meant a server behind a proxy never reported a
+  // version, and the join fell through to whatever build was selected.
   const reported = await Promise.race([
     pingServer(ip)
       .then((p) => p.version)
       .catch(() => ''),
-    new Promise<string>((r) => setTimeout(() => r(''), 1500)),
+    new Promise<string>((r) => setTimeout(() => r(''), 6000)),
   ])
-  return pingVersions(reported)
+  const out = pingVersions(reported)
+  if (out.length) pingedVersions.set(key, out)
+  return out
 }
 
 function versionsForAddr(ip: string): string[] {
@@ -71,29 +83,58 @@ async function licenseGate(licensed: boolean): Promise<boolean> {
 }
 
 // Launching a 26.2 build against a 1.21 server ends in "Outdated client" with
-// no hint of what to do, so the version gate runs before the game starts.
+// no hint of what to do, so the version gate runs before the game starts. A
+// server that never reported its version is a question, not a silent launch of
+// the currently selected build.
 export async function buildForServer(join: JoinIntent, wanted: string[]): Promise<string | null> {
   const { selected, profiles, setSelected } = useProfiles.getState()
-  const current = profiles.find((p) => p.name === (selected || (profiles[0] || { name: '' }).name)) || null
-  if (!profiles.length) {
+  const plan = joinPlan(profiles, selected || (profiles[0] || { name: '' }).name, wanted)
+
+  if (plan.kind === 'create') {
     showToast('Нужна сборка под сервер — создадим её сейчас', 'error')
-    offerBuild(wanted[0] || '', join)
+    offerBuild(plan.version, join)
     return null
   }
-  if (!wanted.length || (current && versionFits(current.version, wanted))) return (current || profiles[0]).name
 
-  const fit = pickBuildForServer(profiles, wanted)
-  if (fit) {
-    setSelected(fit.name)
-    showToast('Сервер на ' + wanted.join(', ') + ' — заходим сборкой «' + fit.name + '» (' + fit.version + ')')
-    return fit.name
+  if (plan.kind === 'launch') return plan.build
+
+  if (plan.kind === 'switch') {
+    setSelected(plan.build)
+    showToast('Сервер на ' + wanted.join(', ') + ' — заходим сборкой «' + plan.build + '» (' + plan.version + ')')
+    return plan.build
+  }
+
+  if (plan.kind === 'unknown') {
+    const go = await uiChoice(
+      'Версию сервера «' +
+        join.name +
+        '» узнать не удалось — он не ответил на запрос. Сейчас выбрана сборка «' +
+        plan.build +
+        '» (' +
+        plan.version +
+        '). Если версии разойдутся, сервер напишет, что клиент устарел. Заходим этой сборкой?',
+      {
+        title: 'Какой сборкой заходим?',
+        confirmLabel: 'Этой сборкой',
+        cancelLabel: 'Выбрать другую',
+        danger: false,
+      },
+    )
+    if (go === 'yes') return plan.build
+    if (go === 'dismiss') return null
+    const picked = await pickBuildForJoin(join.name, wanted)
+    if (!picked) return null
+    setSelected(picked)
+    return picked
   }
 
   const make = await uiChoice(
     'Сервер работает на ' +
       wanted.join(', ') +
-      ', а сборки под эту версию у тебя нет' +
-      (current ? ' — «' + current.name + '» на ' + current.version : '') +
+      ', а сборки под эту версию у тебя нет — «' +
+      plan.build +
+      '» на ' +
+      plan.version +
       '. Сервер не пустит и напишет, что версия не подходит. Создать сборку ' +
       (wanted[0] || '') +
       '?',
@@ -107,7 +148,7 @@ export async function buildForServer(join: JoinIntent, wanted: string[]): Promis
   // Walking away from the question is not "зайти всё равно": the game must not
   // start from a window the user only closed.
   if (make === 'dismiss') return null
-  if (make === 'no') return (current || profiles[0]).name
+  if (make === 'no') return plan.build
   offerBuild(wanted[0] || '', join)
   return null
 }

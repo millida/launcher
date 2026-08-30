@@ -1,13 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { IconGrid } from '../components/IconGrid'
 import { Select } from '../components/Select'
 import { hasTauri } from '../ipc/tauri'
-import { createProfile, listVersions, pickCoverImage } from '../ipc/commands'
+import { createProfile, pickCoverImage } from '../ipc/commands'
 import { track } from '../lib/telemetry'
 import { BLOCK_ICONS } from '../lib/icons'
 import { BUILD_NAME_MAX } from '../lib/format'
 import { useProfiles } from '../state/profiles'
 import { takeNewBuildPreset } from '../state/newBuild'
+import { ensureMcVersionList, useMcVersionList, versionOptions } from '../state/mcVersionList'
 import type { JoinIntent } from '../state/newBuild'
 import { quickJoin } from '../lib/joinServer'
 import { closeModal, showToast, useUi } from '../state/ui'
@@ -26,7 +27,6 @@ const LOADERS: [string, string][] = [
 export function NewBuildModal() {
   const modal = useUi((s) => s.modals.nbModal)
   const [name, setName] = useState('')
-  const [vers, setVers] = useState<string[]>([])
   const [ver, setVer] = useState('')
   const [loader, setLoader] = useState('vanilla')
   const [loaderVer, setLoaderVer] = useState(AUTO_LOADER_VERSION)
@@ -36,6 +36,9 @@ export function NewBuildModal() {
   const custom = icon && icon.startsWith('data:') ? icon : null
   const [join, setJoin] = useState<JoinIntent | null>(null)
   const lb = useLoaderBuilds(loader, ver, modal.open)
+  const mcList = useMcVersionList((s) => s.list)
+  const showSnapshots = useMcVersionList((s) => s.show)
+  const verOpts = useMemo(() => versionOptions(mcList, showSnapshots), [mcList, showSnapshots])
 
   useEffect(() => {
     if (!modal.open) return
@@ -44,16 +47,24 @@ export function NewBuildModal() {
     if (pre?.loader) setLoader(pre.loader)
     setJoin(pre?.join || null)
     setLoaderVer(AUTO_LOADER_VERSION)
-    ;(hasTauri() ? listVersions() : Promise.resolve(['1.21.4', '1.21.1', '1.20.1']))
-      .then((v) => {
-        setVers(v)
-        const wanted = pre?.version ? pickVersionForServer(v, [pre.version]) : ''
-        setVer((cur) => wanted || cur || v[0] || '')
+    ensureMcVersionList()
+      .then(() => {
+        const rel = useMcVersionList
+          .getState()
+          .list.filter((v) => v.kind === 'release')
+          .map((v) => v.id)
+        const wanted = pre?.version ? pickVersionForServer(rel, [pre.version]) : ''
+        setVer((cur) => wanted || cur || rel[0] || '')
       })
       .catch((e) =>
         showToast('Список версий Minecraft не загрузился: ' + e + '. Проверь интернет и открой окно заново', 'error'),
       )
   }, [modal.open])
+
+  useEffect(() => {
+    if (!modal.open || !verOpts.length) return
+    if (!verOpts.some((o) => o.value === ver)) setVer(verOpts[0].value)
+  }, [modal.open, verOpts, ver])
 
   if (!modal.open) return null
   const close = () => closeModal('nbModal')
@@ -122,7 +133,7 @@ export function NewBuildModal() {
           <Select
             width="100%"
             value={ver}
-            options={vers.map((v) => ({ value: v, label: v }))}
+            options={verOpts}
             onChange={(v) => {
               setVer(v)
               setLoaderVer(AUTO_LOADER_VERSION)

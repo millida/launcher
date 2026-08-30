@@ -285,7 +285,7 @@
 :root[data-theme-pack="win98"] .build-cover .mini-play svg.icon,
 :root[data-theme-pack="win98"] .chat-send svg{color:#000080}
 :root[data-theme-pack="win98"] .build-card:hover .mini-play,
-:root[data-theme-pack="win98"] .build-cover .mini-play:hover{transform:none}
+:root[data-theme-pack="win98"] .build-cover .mini-play:hover{transform:translate(-50%,-50%)}
 :root[data-theme-pack="win98"] .chat-send:hover{transform:none;background:var(--w-face)}
 :root[data-theme-pack="win98"] .toast-act{border-radius:0;background:var(--w-face);color:#000000;border:0}
 :root[data-theme-pack="win98"] .nav-count,

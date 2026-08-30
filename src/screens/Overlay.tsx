@@ -215,7 +215,10 @@ export function Overlay() {
         <div className={'ov-cards' + (hover ? ' held' : '')} ref={cardsRef}>
           {fresh.map((m) => (
             <div
-              className={'ov-card ov-' + (m.kind || 'msg')}
+              // The kind goes into its own namespace: `ov-` + kind once produced
+              // `ov-msg`, the chat bubble class of the interactive panel, and a
+              // later rule with the same specificity took the card apart.
+              className={'ov-card ov-kind-' + (m.kind || 'msg')}
               key={m.uid + m.ts}
               role="button"
               tabIndex={-1}
