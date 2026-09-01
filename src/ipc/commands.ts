@@ -459,6 +459,40 @@ export const installModpack = (slug: string) => invoke<Profile>('install_modpack
 export const installModpackVersion = (slug: string, versionId: string) =>
   invoke<Profile>('install_modpack_version', { slug, versionId })
 
+export interface MigrateItem {
+  file_name: string
+  title: string
+  project_id: string
+  version_number: string
+  ok: boolean
+  note: string
+}
+
+export interface MigratePlan {
+  items: MigrateItem[]
+  ready: number
+  missing: number
+  unlinked: string[]
+  suggested_name: string
+}
+
+export interface MigrateResult {
+  profile: Profile
+  moved: number
+  failed: string[]
+}
+
+export const migratePlan = (profile: string, version: string, loader: string) =>
+  invoke<MigratePlan>('migrate_plan', { profile, version, loader })
+
+export const migrateProfile = (
+  profile: string,
+  version: string,
+  loader: string,
+  loaderVersion: string | null = null,
+  name: string | null = null,
+) => invoke<MigrateResult>('migrate_profile', { profile, version, loader, loaderVersion, name })
+
 export const installVersion = (project: string, versionId: string, profile: string, kind: string) =>
   invoke<ContentInstall>('install_version', { project, versionId, profile, kind })
 
@@ -770,6 +804,8 @@ export interface FallbackInstall {
 }
 
 export const updateFallbackCheck = () => invoke<FallbackUpdate | null>('update_fallback_check')
+
+export const updateNotes = () => invoke<FallbackUpdate | null>('update_notes')
 
 export const updateFallbackStage = () => invoke<FallbackInstall | null>('update_fallback_stage')
 

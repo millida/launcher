@@ -14,6 +14,9 @@ import { ProjectModal } from './modals/Project'
 import { NewBuildModal } from './modals/NewBuild'
 import { AccountAddModal } from './modals/AccountAdd'
 import { ModpackVersionsOverlay, ScreenshotsOverlay } from './modals/Overlays'
+import { MigrateBuildModal } from './modals/MigrateBuild'
+import { WhatsNewModal } from './modals/WhatsNew'
+import { initWhatsNew } from './state/whatsNew'
 import { ImageLightbox } from './components/ImageLightbox'
 import { UpdateBanner } from './components/UpdateBanner'
 import { ConfirmModal } from './components/ConfirmModal'
@@ -256,6 +259,7 @@ export function App() {
     void bootUpdate().then((leaving) => {
       if (leaving) return
       preloadScreens()
+      void initWhatsNew()
     })
     const updPoll = setInterval(() => {
       if (!updateReady()) void autoUpdate()
@@ -624,6 +628,8 @@ export function App() {
         <AccountAddModal />
         <ScreenshotsOverlay />
         <ModpackVersionsOverlay />
+        <MigrateBuildModal />
+        <WhatsNewModal />
         <BuildPicker />
         <DepPlanModal />
         <CrashModal />

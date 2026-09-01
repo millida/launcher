@@ -597,6 +597,13 @@
 .chat-notify-act svg{width:12px;height:12px}
 
 /* ---- Playtime stats ---- */
+.icon-nudge{display:flex;align-items:center;gap:14px;padding:14px 18px;margin-bottom:14px}
+.icon-nudge-art{width:40px;height:40px;flex:none;border-radius:var(--m-r-mini);background:var(--m-inset);color:var(--m-accent);display:grid;place-items:center}
+.icon-nudge-art svg.icon{width:20px;height:20px}
+.icon-nudge-text{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.icon-nudge-text .faint-note{margin-top:0}
+.icon-nudge-acts{display:flex;gap:8px;flex:none}
+@media (max-width:760px){.icon-nudge{flex-wrap:wrap}.icon-nudge-acts{width:100%;justify-content:flex-end}}
 .play-stat{display:flex;flex-wrap:wrap;gap:18px 28px;align-items:flex-start;padding:16px 18px;margin-bottom:14px}
 .play-stat-main{display:flex;flex-direction:column;gap:2px;min-width:190px;flex:1}
 .play-stat-srv,.play-stat-list{display:flex;flex-direction:column;gap:3px;align-items:flex-start;min-width:170px}
@@ -735,27 +742,82 @@ html.overlay-root,html.overlay-root body,html.overlay-root #root{background:tran
 .ov-card-body span{font-size:12px;color:rgba(242,242,245,.72);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @keyframes ovIn{from{opacity:0;transform:translate(14px,10px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion: reduce){.ov-card{animation:none}}
-.ov-active{background:rgba(0,0,0,.32);display:grid;place-items:center}
-.ov-panel{width:440px;max-height:70vh;display:flex;flex-direction:column;border-radius:16px;background:rgba(20,20,25,.96);border:1px solid rgba(255,255,255,.14);box-shadow:0 24px 60px rgba(0,0,0,.55);color:#f2f2f5;overflow:hidden}
-.ov-head{display:flex;align-items:center;gap:9px;padding:13px 15px;border-bottom:1px solid rgba(255,255,255,.1)}
-.ov-head svg{width:16px;height:16px}
-.ov-head b{flex:1;font-size:13.5px}
-.ov-hint{font-size:11px;color:rgba(242,242,245,.5)}
-.ov-x{width:26px;height:26px;display:grid;place-items:center;border:0;background:none;color:rgba(242,242,245,.6);border-radius:7px;cursor:pointer}
-.ov-x:hover{background:rgba(255,255,255,.1);color:#fff}
-.ov-x svg{width:13px;height:13px}
-.ov-list{flex:1;overflow-y:auto;padding:12px 15px;display:flex;flex-direction:column;gap:9px}
-.ov-msg{display:flex;flex-direction:column;gap:2px;max-width:88%;padding:8px 11px;border-radius:11px;background:rgba(255,255,255,.08);font-size:13px;align-self:flex-start}
-.ov-msg.me{align-self:flex-end;background:rgba(120,170,255,.22)}
-.ov-msg b{font-size:11px;color:rgba(242,242,245,.6);font-weight:650}
-.ov-empty{font-size:12.5px;color:rgba(242,242,245,.55);text-align:center;padding:18px 0}
-.ov-error{padding:0 15px 8px;font-size:11.5px;color:#ff9b9b}
-.ov-input{display:flex;gap:8px;padding:12px 15px;border-top:1px solid rgba(255,255,255,.1)}
-.ov-input input{flex:1;height:36px;padding:0 12px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#f2f2f5;font-size:13px;outline:none}
-.ov-input input:focus{border-color:rgba(140,180,255,.6)}
-.ov-input button{width:36px;height:36px;flex:none;display:grid;place-items:center;border:0;border-radius:10px;background:var(--m-accent,#5b8cff);color:#fff;cursor:pointer}
-.ov-input button:disabled{opacity:.4;pointer-events:none}
-.ov-input button svg{width:15px;height:15px}
+/* ---- Overlay chat panel: the launcher's own kit over the game ---- */
+/* The panel borrows the chat kit (.msg, .chat-day, .fr-unread, .chat-send) on
+   purpose: a second set of bubble styles drifts from the launcher within a
+   release, and the point of the overlay is that it is the same chat. */
+.ov-active{background:rgba(0,0,0,.38);display:grid;place-items:center}
+.ov-panel{width:min(920px,92vw);height:min(620px,84vh);display:flex;border-radius:20px;background:color-mix(in srgb,var(--m-surface) 88%,transparent);backdrop-filter:blur(20px) saturate(1.25);border:1px solid var(--m-border-strong);box-shadow:var(--m-shadow-lg);color:var(--m-fg);overflow:hidden;animation:ovPanelIn 180ms var(--m-ease-out)}
+@keyframes ovPanelIn{from{opacity:0;transform:scale(.985) translateY(6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce){.ov-panel{animation:none}}
+.ovc{display:grid;grid-template-columns:264px minmax(0,1fr);width:100%;min-height:0}
+.ovc-rail{display:flex;flex-direction:column;min-height:0;background:color-mix(in srgb,var(--m-inset) 70%,transparent);border-right:1px solid var(--m-border)}
+.ovc-brand{display:flex;align-items:center;gap:9px;padding:16px 16px 12px}
+.ovc-brand svg{width:17px;height:17px;color:var(--m-accent)}
+.ovc-brand b{flex:1;font-family:var(--m-font-brand);font-size:13.5px;font-weight:600}
+.ovc-search{display:flex;align-items:center;gap:8px;margin:0 12px 8px;padding:0 10px;height:34px;border-radius:var(--m-r-ctl);background:var(--m-surface-2);color:var(--m-fg-faint);transition:box-shadow var(--m-t-fast)}
+.ovc-search:focus-within{box-shadow:0 0 0 2px var(--m-accent-soft)}
+.ovc-search svg{width:14px;height:14px}
+.ovc-search input{flex:1;min-width:0;height:100%;border:0;background:none;outline:none;font-size:13px;color:var(--m-fg)}
+.ovc-list{flex:1;min-height:0;overflow-y:auto;padding:2px 8px 8px;display:flex;flex-direction:column;gap:2px}
+.ovc-row{display:flex;align-items:center;gap:11px;width:100%;padding:9px 10px;border-radius:var(--m-r-ctl);text-align:left;color:inherit;transition:background var(--m-t-fast),transform var(--m-t-fast)}
+.ovc-row.on{background:var(--m-accent-soft)}
+.ovc-row:active{transform:scale(.99)}
+@media (hover:hover) and (pointer:fine){.ovc-row:hover{background:var(--m-surface-2)}.ovc-row.on:hover{background:var(--m-accent-soft)}}
+.ovc-ava{position:relative;display:flex;flex:none}
+.ovc-ava img{border-radius:9px;image-rendering:pixelated}
+.ovc-ava.room img{border-radius:7px}
+.ovc-ava.room img+img{margin-left:-9px;box-shadow:0 0 0 2px var(--m-surface)}
+.ovc-dot{position:absolute;right:-2px;bottom:-2px;width:10px;height:10px;border-radius:var(--m-r-pill);background:var(--m-success);box-shadow:0 0 0 2px var(--m-surface)}
+.ovc-dot.play{background:var(--m-warning)}
+.ovc-row-body{flex:1;min-width:0}
+.ovc-row-top{display:flex;align-items:baseline;gap:8px}
+.ovc-row-top b{flex:1;min-width:0;font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ovc-row-top time{flex:none;font-size:10.5px;color:var(--m-fg-faint)}
+.ovc-row-sub{display:block;margin-top:1px;font-size:11.5px;color:var(--m-fg-subtle);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ovc-row.unread .ovc-row-top b{font-weight:700}
+.ovc-note{padding:14px 12px;font-size:12px;line-height:1.45;color:var(--m-fg-faint)}
+.ovc-rail-foot{display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;border-top:1px solid var(--m-border);font-size:12px;color:var(--m-fg-subtle);transition:color var(--m-t-fast),background var(--m-t-fast)}
+.ovc-rail-foot svg{width:14px;height:14px}
+@media (hover:hover) and (pointer:fine){.ovc-rail-foot:hover{color:var(--m-fg);background:var(--m-surface-2)}}
+.ovc-pane{background:color-mix(in srgb,var(--m-raised) 82%,transparent);display:flex;flex-direction:column;min-width:0;min-height:0}
+.ovc-head{display:flex;align-items:center;gap:11px;padding:13px 14px;border-bottom:1px solid var(--m-border)}
+.ovc-head-body{flex:1;min-width:0}
+.ovc-head-body b{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ovc-head-body>span{display:block;font-size:11.5px;color:var(--m-fg-subtle);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ovc-hint{flex:none;font-size:11px;color:var(--m-fg-faint)}
+.ovc-act{width:28px;height:28px;flex:none;display:grid;place-items:center;border-radius:var(--m-r-mini);color:var(--m-fg-subtle);transition:background var(--m-t-fast),color var(--m-t-fast),transform var(--m-t-fast)}
+.ovc-act svg{width:14px;height:14px}
+.ovc-act:active{transform:scale(.94)}
+@media (hover:hover) and (pointer:fine){.ovc-act:hover{background:var(--m-surface-2);color:var(--m-fg)}}
+.ovc-thread{flex:1;min-height:0;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+.ovc-older{align-self:center;padding:5px 12px;border-radius:var(--m-r-pill);background:var(--m-surface-2);font-size:11.5px;color:var(--m-fg-subtle);transition:color var(--m-t-fast)}
+@media (hover:hover) and (pointer:fine){.ovc-older:hover{color:var(--m-fg)}}
+.ovc-att{display:flex;align-items:center;gap:9px;padding:2px;text-align:left;color:inherit}
+.ovc-att svg{width:16px;height:16px;color:var(--m-accent)}
+.ovc-att span{display:flex;flex-direction:column;font-size:10.5px;color:var(--m-fg-faint)}
+.ovc-att b{font-size:13px;color:var(--m-fg)}
+.ovc-retry{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--m-danger)}
+.ovc-retry svg{width:12px;height:12px}
+.ovc-blank{margin:auto;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;padding:24px;max-width:340px}
+.ovc-blank svg{width:26px;height:26px;color:var(--m-fg-faint)}
+.ovc-blank b{font-size:14px}
+.ovc-blank p{font-size:12.5px;line-height:1.45;color:var(--m-fg-subtle)}
+.ovc-skeleton{display:flex;flex-direction:column;gap:10px}
+.ovc-sk{height:34px;border-radius:12px;background:var(--m-surface-2);animation:ovcPulse 1.4s ease-in-out infinite}
+.ovc-sk.me{align-self:flex-end;background:var(--m-accent-soft)}
+@keyframes ovcPulse{0%,100%{opacity:1}50%{opacity:.55}}
+@media (prefers-reduced-motion: reduce){.ovc-sk{animation:none}}
+.ovc-error{display:flex;align-items:center;gap:7px;padding:0 16px 8px;font-size:11.5px;color:var(--m-danger)}
+.ovc-error svg{width:13px;height:13px}
+.ovc-composer{display:flex;align-items:flex-end;gap:8px;padding:11px 14px;border-top:1px solid var(--m-border)}
+.ovc-composer textarea{flex:1;min-width:0;min-height:36px;max-height:104px;resize:none;padding:9px 12px;border:0;border-radius:var(--m-r-ctl);background:var(--m-surface-2);color:var(--m-fg);font:inherit;font-size:13.5px;line-height:1.4;outline:none;transition:box-shadow var(--m-t-fast)}
+.ovc-composer textarea:focus{box-shadow:0 0 0 2px var(--m-accent-soft)}
+.ovc-composer textarea:disabled{opacity:.55}
+/* A small display is still a whole monitor: the rail narrows before it goes,
+   because losing it means losing the way to switch conversations. */
+@media (max-width:900px){.ovc{grid-template-columns:206px minmax(0,1fr)}}
+@media (max-width:660px){.ovc{grid-template-columns:minmax(0,1fr)}.ovc-rail{display:none}}
 
 /* Audio device settings */
 .aud-meter-row{display:flex;align-items:center;gap:10px}

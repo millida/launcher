@@ -41,9 +41,12 @@
 :root[data-density="compact"] .card.skin-card{padding:0}
 :root[data-density="compact"] .card.gate-card{padding:24px 20px}
 :root[data-density="compact"] .card.play-stat{padding:12px 14px}
+:root[data-density="compact"] .card.icon-nudge{padding:12px 14px}
 :root[data-density="compact"] .card.skel-card{padding:16px}
 :root[data-density="compact"] .stack{gap:7px}
 :root[data-density="compact"] .faint-note{margin-top:7px}
+:root[data-density="compact"] .icon-nudge-text .faint-note,
+:root[data-density="compact"] .ic-ed-foot .faint-note{margin-top:0}
 
 :root[data-density="compact"] .btn.sm{height:34px;padding:0 13px;font-size:12.5px}
 :root[data-density="compact"] .btn.md{height:40px;padding:0 18px;font-size:13.5px}
@@ -99,6 +102,7 @@
 :root[data-density="compact"] .modal.mw-xl{width:700px}
 :root[data-density="compact"] .modal.onb-modal{width:560px}
 :root[data-density="compact"] .modal.th-editor{width:640px}
+:root[data-density="compact"] .modal.ic-ed{width:660px;padding:16px}
 :root[data-density="compact"] .kpi{padding:10px 12px}
 :root[data-density="compact"] .kpi .val{font-size:20px}
 :root[data-density="compact"] .kpi-row{gap:9px;margin-top:12px}
@@ -143,9 +147,12 @@
 :root[data-density="roomy"] .card.skin-card{padding:0}
 :root[data-density="roomy"] .card.gate-card{padding:38px 32px}
 :root[data-density="roomy"] .card.play-stat{padding:20px 22px}
+:root[data-density="roomy"] .card.icon-nudge{padding:20px 22px}
 :root[data-density="roomy"] .card.skel-card{padding:26px}
 :root[data-density="roomy"] .stack{gap:13px}
 :root[data-density="roomy"] .faint-note{margin-top:13px}
+:root[data-density="roomy"] .icon-nudge-text .faint-note,
+:root[data-density="roomy"] .ic-ed-foot .faint-note{margin-top:0}
 
 :root[data-density="roomy"] .btn.sm{height:44px;padding:0 18px;font-size:13.5px}
 :root[data-density="roomy"] .btn.md{height:52px;padding:0 24px;font-size:14.5px}
@@ -201,6 +208,7 @@
 :root[data-density="roomy"] .modal.mw-xl{width:860px}
 :root[data-density="roomy"] .modal.onb-modal{width:680px}
 :root[data-density="roomy"] .modal.th-editor{width:780px}
+:root[data-density="roomy"] .modal.ic-ed{width:800px;padding:26px}
 :root[data-density="roomy"] .kpi{padding:18px 20px}
 :root[data-density="roomy"] .kpi .val{font-size:28px}
 :root[data-density="roomy"] .kpi-row{gap:14px;margin-top:20px}

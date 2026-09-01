@@ -211,6 +211,15 @@ function clearUnread(uid: string) {
   s.set({ friends: s.friends.map((f) => (f.userId === uid ? { ...f, unread: 0 } : f)) })
 }
 
+/// Reading is not only the moment a conversation opens: the overlay keeps one
+/// open over the game, and a message that lands in it is read on arrival.
+export function markChatRead(id: string, room: boolean) {
+  const path = room
+    ? '/friends/rooms/' + encodeURIComponent(id) + '/read'
+    : '/friends/chat/' + encodeURIComponent(id) + '/read'
+  void api(path, { method: 'POST' }).catch(() => {})
+}
+
 export async function openChat(uid: string, nick: string, profileMode?: boolean) {
   const s = useFriends.getState()
   const resolved = nick || s.friends.find((f) => f.userId === uid)?.nickname || ''
@@ -226,7 +235,7 @@ export async function openChat(uid: string, nick: string, profileMode?: boolean)
     ...emptyThread(),
   })
   clearUnread(uid)
-  void api('/friends/chat/' + encodeURIComponent(uid) + '/read', { method: 'POST' }).catch(() => {})
+  markChatRead(uid, false)
   if (!profileMode) await renderChat()
 }
 
@@ -258,7 +267,7 @@ export async function openRoomChat(roomId: string, title: string) {
     ...emptyThread(),
   })
   clearRoomUnread(roomId)
-  void api('/friends/rooms/' + encodeURIComponent(roomId) + '/read', { method: 'POST' }).catch(() => {})
+  markChatRead(roomId, true)
   await renderChat()
 }
 

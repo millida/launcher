@@ -3,15 +3,19 @@ import type { CSSProperties } from 'react'
 import { BLOCK_ICONS } from '../lib/icons'
 import { coverGradient, dominantColor } from '../lib/blockColor'
 
-function IconCell({ src, on, onPick }: { src: string; on: boolean; onPick: () => void }) {
+function IconCell({ src, on, tint, onPick }: { src: string; on: boolean; tint: boolean; onPick: () => void }) {
   const [color, setColor] = useState<string | null>(null)
   useEffect(() => {
+    if (!tint) {
+      setColor(null)
+      return
+    }
     let alive = true
     dominantColor(src).then((c) => alive && setColor(c))
     return () => {
       alive = false
     }
-  }, [src])
+  }, [src, tint])
   const bg = color
     ? on
       ? coverGradient(color)
@@ -34,11 +38,15 @@ export function IconGrid({
   current,
   onPick,
   style,
+  flat,
 }: {
   id: string
   current?: string | null
   onPick: (v: string) => void
   style?: CSSProperties
+  /// The icon editor paints its own background behind the symbol, so a
+  /// per-symbol tint there would fight the chosen colour.
+  flat?: boolean
 }) {
   const [sel, setSel] = useState<string | null | undefined>(current)
   useEffect(() => setSel(current), [current])
@@ -49,6 +57,7 @@ export function IconGrid({
           key={src}
           src={src}
           on={src === sel}
+          tint={!flat}
           onPick={() => {
             setSel(src)
             onPick(src)

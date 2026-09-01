@@ -274,6 +274,25 @@ pub async fn install_modpack_version(app: tauri::AppHandle, slug: String, versio
     engine::install_modpack_ver(app, slug, Some(version_id), None).await
 }
 
+/// Preview of a move to another game version: which mods have a build there and
+/// which stay behind. Nothing is written until `migrate_profile`.
+#[tauri::command]
+pub async fn migrate_plan(profile: String, version: String, loader: String) -> Result<engine::MigratePlan, String> {
+    engine::migrate_plan(profile, version, loader).await
+}
+
+#[tauri::command]
+pub async fn migrate_profile(
+    app: tauri::AppHandle,
+    profile: String,
+    version: String,
+    loader: String,
+    loader_version: Option<String>,
+    name: Option<String>,
+) -> Result<engine::MigrateResult, String> {
+    engine::migrate_profile(app, profile, version, loader, loader_version, name).await
+}
+
 #[tauri::command]
 pub async fn cf_install_modpack(app: tauri::AppHandle, mod_id: u32, file_id: Option<u64>) -> Result<engine::Profile, String> {
     engine::cf_install_modpack(app, mod_id, file_id).await

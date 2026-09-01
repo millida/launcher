@@ -76,7 +76,7 @@ export function dominantColor(url: string): Promise<string | null> {
   })
 }
 
-function shade(h: string, amt: number): string {
+export function shade(h: string, amt: number): string {
   const m = /^#?([0-9a-f]{6})$/i.exec(h.trim())
   const num = m ? parseInt(m[1], 16) : 0
   const r = (num >> 16) & 255

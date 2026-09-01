@@ -10,6 +10,7 @@ mod packfile;
 mod export;
 mod share;
 mod covers;
+mod migrate;
 
 pub use store::*;
 pub use mods::*;
@@ -23,3 +24,4 @@ pub use packfile::*;
 pub use export::*;
 pub use share::*;
 pub use covers::*;
+pub use migrate::*;

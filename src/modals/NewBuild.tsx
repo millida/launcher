@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Icon } from '../components/Icon'
 import { IconGrid } from '../components/IconGrid'
+import { IconEditor } from '../components/IconEditor'
 import { Select } from '../components/Select'
 import { hasTauri } from '../ipc/tauri'
 import { createProfile, pickCoverImage } from '../ipc/commands'
 import { track } from '../lib/telemetry'
 import { BLOCK_ICONS } from '../lib/icons'
+import { rememberIconRecipe } from '../lib/iconArt'
+import type { IconRecipe } from '../lib/iconArt'
 import { BUILD_NAME_MAX } from '../lib/format'
 import { useProfiles } from '../state/profiles'
 import { takeNewBuildPreset } from '../state/newBuild'
@@ -34,6 +38,8 @@ export function NewBuildModal() {
   // A custom image arrives as a ready data URL: anything outside the block set
   // is that image, so it needs no state of its own.
   const custom = icon && icon.startsWith('data:') ? icon : null
+  const [recipe, setRecipe] = useState<IconRecipe | null>(null)
+  const [editor, setEditor] = useState(false)
   const [join, setJoin] = useState<JoinIntent | null>(null)
   const lb = useLoaderBuilds(loader, ver, modal.open)
   const mcList = useMcVersionList((s) => s.list)
@@ -46,6 +52,7 @@ export function NewBuildModal() {
     if (pre?.name) setName(pre.name)
     if (pre?.loader) setLoader(pre.loader)
     setJoin(pre?.join || null)
+    setEditor(false)
     setLoaderVer(AUTO_LOADER_VERSION)
     ensureMcVersionList()
       .then(() => {
@@ -69,6 +76,20 @@ export function NewBuildModal() {
   if (!modal.open) return null
   const close = () => closeModal('nbModal')
 
+  const chooseImage = () => {
+    if (!hasTauri()) {
+      showToast('Доступно в приложении')
+      return
+    }
+    pickCoverImage()
+      .then((data) => {
+        if (!data) return
+        setIcon(data)
+        setRecipe(null)
+      })
+      .catch((e) => showToast('Картинка не подошла: ' + e, 'error'))
+  }
+
   return (
     <div
       className={'modal-bg' + (modal.open ? ' open' : '') + (modal.vis ? ' vis' : '')}
@@ -78,60 +99,65 @@ export function NewBuildModal() {
       <div className="modal mw-sm">
         <h3>Новая сборка</h3>
         <div className="sub">Версия и загрузчик — остальное сделаем сами</div>
-        <div className="field" style={{ marginBottom: '14px' }}>
-          <label>Название</label>
-          <div className="input">
-            <input
-              id="nbName"
-              placeholder="Моя сборка"
-              maxLength={BUILD_NAME_MAX}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
+        <div className="nb-head">
+          <button className="nb-icon" id="nbPickImage" type="button" onClick={chooseImage} title="Поставить свою картинку">
+            {icon ? <img src={icon} alt="" /> : <Icon id="i-image" />}
+            <span className="nb-icon-hint">Своя картинка</span>
+          </button>
+          <div className="field" style={{ flex: 1, minWidth: 0, margin: 0 }}>
+            <label>Название</label>
+            <div className="input">
+              <input
+                id="nbName"
+                placeholder="Моя сборка"
+                maxLength={BUILD_NAME_MAX}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+            <p className="faint-note" style={{ marginTop: '8px' }}>
+              Картинку сборки можно поставить прямо сейчас — нажми на квадрат слева.
+            </p>
           </div>
         </div>
         <div className="field" style={{ marginBottom: '14px' }}>
-          <label>Иконка сборки</label>
+          <label>Или выбери блок</label>
           <IconGrid id="nbIcons" current={icon} onPick={(v) => setIcon(v)} />
           <div style={{ display: 'flex', gap: '8px', marginTop: '8px', alignItems: 'center' }}>
-            {custom ? (
-              <img
-                src={custom}
-                alt=""
-                width={32}
-                height={32}
-                style={{ borderRadius: '8px', objectFit: 'cover', flex: '0 0 auto' }}
-              />
-            ) : null}
-            <button
-              className="btn sm secondary"
-              style={{ flex: 1 }}
-              onClick={() => {
-                if (!hasTauri()) {
-                  showToast('Доступно в приложении')
-                  return
-                }
-                pickCoverImage()
-                  .then((data) => {
-                    if (!data) return
-                    setIcon(data)
-                  })
-                  .catch((e) => showToast('' + e, 'error'))
-              }}
-            >
+            <button className="btn sm secondary" style={{ flex: 1 }} data-sound="open" onClick={() => setEditor(true)}>
+              Собрать свою…
+            </button>
+            <button className="btn sm secondary" style={{ flex: 1 }} onClick={chooseImage}>
               Своя картинка…
             </button>
             {custom ? (
-              <button className="btn sm secondary" onClick={() => setIcon(BLOCK_ICONS[0] || null)}>
+              <button
+                className="btn sm secondary"
+                onClick={() => {
+                  setIcon(BLOCK_ICONS[0] || null)
+                  setRecipe(null)
+                }}
+              >
                 Сбросить
               </button>
             ) : null}
           </div>
         </div>
         <div className="field" style={{ marginBottom: '14px' }}>
-          <label>Версия Minecraft</label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ flex: 1 }}>Версия Minecraft</span>
+            <button
+              type="button"
+              className={'pill' + (showSnapshots ? ' acc' : '')}
+              id="nbSnapshots"
+              onClick={() => useMcVersionList.getState().setShow(!showSnapshots)}
+            >
+              Снапшоты
+            </button>
+          </label>
           <Select
             width="100%"
+            search
             value={ver}
             options={verOpts}
             onChange={(v) => {
@@ -166,6 +192,7 @@ export function NewBuildModal() {
             <label>Версия загрузчика</label>
             <Select
               width="100%"
+              search
               value={loaderVer}
               options={lb.options}
               disabled={lb.loading}
@@ -191,6 +218,7 @@ export function NewBuildModal() {
               if (hasTauri()) {
                 createProfile(nm, ver, loader === 'fabric', loader, icon, loaderVer || null)
                   .then(async (p) => {
+                    if (recipe) rememberIconRecipe(p.name, recipe)
                     track('build_create', { mc: ver, loader, loaderVersion: loaderVer || 'auto' })
                     await useProfiles.getState().refresh()
                     showToast('Сборка «' + p.name + '» создана', 'ok', 'achievement')
@@ -209,6 +237,17 @@ export function NewBuildModal() {
           </button>
         </div>
       </div>
+      {editor ? (
+        <IconEditor
+          current={recipe}
+          onCancel={() => setEditor(false)}
+          onSave={(data, r) => {
+            setIcon(data)
+            setRecipe(r)
+            setEditor(false)
+          }}
+        />
+      ) : null}
     </div>
   )
 }
