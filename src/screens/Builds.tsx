@@ -1,4 +1,4 @@
-import { Fragment, useEffect } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { BuildCard } from '../components/BuildCard'
 import { fmtPlaytime, plural, whenText } from '../lib/format'
@@ -6,10 +6,24 @@ import { useProfiles } from '../state/profiles'
 import { useModUpdates } from '../state/modUpdates'
 import { refreshPlayStats, usePlayStats } from '../state/playStats'
 import { rememberServerName } from '../state/playStats'
-import { openModal, setScreen } from '../state/ui'
+import { openModal, setScreen, showToast } from '../state/ui'
 import { quickJoin } from '../lib/joinServer'
 import { usePackCode } from '../state/packCode'
 import { InstallByCodeModal } from '../components/InstallByCodeModal'
+import { composeIcon, randomIconRecipe, rememberIconRecipe } from '../lib/iconArt'
+import type { IconRecipe } from '../lib/iconArt'
+import { hasTauri } from '../ipc/tauri'
+import { setProfileIcon } from '../ipc/commands'
+
+const SKIP_KEY = 'm-icon-art-skip'
+
+function readSkip(): boolean {
+  try {
+    return localStorage.getItem(SKIP_KEY) === '1'
+  } catch {
+    return false
+  }
+}
 
 export function Builds({ on }: { on: boolean }) {
   const { profiles, groups } = useProfiles()
@@ -17,6 +31,9 @@ export function Builds({ on }: { on: boolean }) {
   const stats = usePlayStats((s) => s.stats)
   const verifiedSeconds = usePlayStats((s) => s.verifiedSeconds)
   const packCode = usePackCode()
+  const [iconsSkipped, setIconsSkipped] = useState(readSkip)
+  const [iconsBusy, setIconsBusy] = useState(false)
+  const iconless = profiles.filter((p) => !p.icon)
 
   useEffect(() => {
     if (on) void refreshPlayStats()
@@ -46,6 +63,47 @@ export function Builds({ on }: { on: boolean }) {
       </span>
     </button>
   )
+
+  const skipIcons = () => {
+    setIconsSkipped(true)
+    try {
+      localStorage.setItem(SKIP_KEY, '1')
+    } catch {}
+  }
+
+  const fillIcons = async () => {
+    if (!hasTauri()) {
+      showToast('Доступно в приложении', 'error')
+      return
+    }
+    setIconsBusy(true)
+    let done = 0
+    let last: IconRecipe | null = null
+    let failure = ''
+    for (const p of iconless) {
+      const recipe = randomIconRecipe(last)
+      last = recipe
+      try {
+        const icon = await composeIcon(recipe)
+        await setProfileIcon(p.name, icon)
+        rememberIconRecipe(p.name, recipe)
+        done++
+      } catch (e) {
+        failure = '' + e
+      }
+    }
+    setIconsBusy(false)
+    await useProfiles.getState().refresh()
+    if (done) {
+      skipIcons()
+      showToast(
+        'Готово: ' + done + ' ' + plural(done, 'иконка', 'иконки', 'иконок') + ' на месте',
+        'ok',
+        'achievement',
+      )
+    }
+    if (failure) showToast('Не все иконки собрались: ' + failure, 'error')
+  }
 
   return (
     <section className={'screen' + (on ? ' on' : '')} id="s-builds">
@@ -136,6 +194,33 @@ export function Builds({ on }: { on: boolean }) {
               ))}
             </div>
           ) : null}
+        </div>
+      ) : null}
+
+      {iconless.length > 0 && !iconsSkipped ? (
+        <div className="card icon-nudge">
+          <span className="icon-nudge-art">
+            <Icon id="i-brush" />
+          </span>
+          <div className="icon-nudge-text">
+            <b>Иконки для сборок</b>
+            <span className="faint-note">
+              {'У ' +
+                iconless.length +
+                ' ' +
+                plural(iconless.length, 'сборки', 'сборок', 'сборок') +
+                ' нет иконки. Соберём случайные — фон плюс блок, потом поменяешь в параметрах сборки.'}
+            </span>
+          </div>
+          <div className="icon-nudge-acts">
+            <button className="btn sm secondary" disabled={iconsBusy} onClick={skipIcons}>
+              Не надо
+            </button>
+            <button className="btn sm primary" disabled={iconsBusy} onClick={() => void fillIcons()}>
+              <Icon id="i-brush" />
+              {iconsBusy ? 'Собираем…' : 'Выдать случайные'}
+            </button>
+          </div>
         </div>
       ) : null}
 

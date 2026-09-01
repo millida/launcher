@@ -14,6 +14,8 @@ export type ModalId =
   | 'accModal'
   | 'shotOverlay'
   | 'mpOverlay'
+  | 'mgModal'
+  | 'wnModal'
 
 export interface ModalState {
   open: boolean
@@ -101,6 +103,8 @@ export const useUi = create<UiState>((set, get) => ({
     accModal: emptyModal(),
     shotOverlay: emptyModal(),
     mpOverlay: emptyModal(),
+    mgModal: emptyModal(),
+    wnModal: emptyModal(),
   },
   prelaunch: { open: false, sub: 'Fabulously Optimized · Fabric', stage: 0, msg: null, pct: 0, mode: 'launch' },
   setLogged: (v) => set({ logged: v }),

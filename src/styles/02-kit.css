@@ -770,6 +770,17 @@ svg.msg-tick.read{color:var(--m-tick-read,#4C9FFE);opacity:1}
 .m-select-opt-lab{font-weight:600;overflow:hidden;text-overflow:ellipsis}
 .m-select-opt-sub{font-size:11px;color:var(--m-fg-subtle)}
 .m-select-opt svg{width:15px;height:15px;flex:none;color:var(--m-accent)}
+.m-select-search{position:sticky;top:-6px;z-index:1;display:flex;align-items:center;gap:7px;margin:-6px -6px 6px;padding:9px 10px;background:var(--m-surface-2);border-bottom:1px solid var(--m-border)}
+.m-select-search svg{width:14px;height:14px;flex:none;color:var(--m-fg-faint)}
+.m-select-search input{flex:1;min-width:0;border:0;background:none;color:var(--m-fg);font-size:12.5px;font-weight:600;outline:none}
+.m-select-empty{padding:10px;font-size:12px;color:var(--m-fg-subtle)}
+.nb-head{display:flex;align-items:flex-start;gap:14px;margin-bottom:14px}
+.nb-icon{position:relative;width:76px;height:76px;flex:none;border-radius:16px;overflow:hidden;background:var(--m-inset);display:grid;place-items:center;cursor:pointer;border:1px solid var(--m-border);transition:border-color var(--m-t-fast),transform var(--m-t-fast)}
+.nb-icon img{width:100%;height:100%;object-fit:cover}
+.nb-icon:active{transform:scale(.97)}
+.nb-icon-hint{position:absolute;left:0;right:0;bottom:0;padding:4px 0;text-align:center;font-size:10.5px;font-weight:700;background:color-mix(in srgb,var(--m-bg) 72%,transparent);color:var(--m-fg-muted)}
+@media (hover: hover) and (pointer: fine){.nb-icon:hover{border-color:var(--m-accent)}}
+
 
 /* Custom slider replacing native input[type=range] */
 .m-slider{display:flex;align-items:center;height:22px;cursor:pointer;touch-action:none;user-select:none}
@@ -939,6 +950,33 @@ svg.msg-tick.read{color:var(--m-tick-read,#4C9FFE);opacity:1}
 .icon-cell:hover{background:var(--m-surface-2);transform:translateY(-1px)}
 .icon-cell img{width:86%;height:86%;object-fit:contain;image-rendering:auto}
 .icon-cell.on{box-shadow:inset 0 0 0 2px var(--m-accent),0 4px 14px -4px var(--cell-color,var(--m-accent));transform:translateY(-1px)}
+
+/* Icon editor: background + symbol are mixed into one PNG, so the panel only
+   needs a live preview at the three sizes a build icon is actually shown at. */
+.ic-ed{width:720px;padding:20px}
+.ic-ed-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px}
+.ic-ed-body{display:grid;grid-template-columns:186px 1fr;gap:18px;align-items:start}
+.ic-ed-side{display:flex;flex-direction:column;gap:12px}
+.ic-ed-stage{background:var(--m-inset);border-radius:var(--m-r-card);padding:16px;display:flex;flex-direction:column;align-items:center;gap:14px}
+.ic-ed-big{width:118px;height:118px;border-radius:var(--m-r-card);overflow:hidden;flex:none}
+.ic-ed-big img{width:100%;height:100%;display:block}
+.ic-ed-sizes{display:flex;align-items:flex-end;gap:10px}
+.ic-ed-mini{border-radius:var(--m-r-mini);overflow:hidden;flex:none}
+.ic-ed-mini img{width:100%;height:100%;display:block}
+.ic-ed-roll{justify-content:center}
+.ic-ed-err{font-size:12.5px;line-height:1.5;color:var(--m-danger);margin:0}
+.ic-ed-panes{min-width:0}
+.ic-ed-cap{font-size:12.5px;font-weight:650;color:var(--m-fg-muted);margin:0 0 8px}
+.ic-bg-row{display:grid;grid-template-columns:repeat(8,1fr);gap:8px;margin:0 0 16px}
+.ic-bg{aspect-ratio:1;border:0;border-radius:12px;cursor:pointer;display:grid;place-items:center;outline:2px solid transparent;outline-offset:2px;transition:transform var(--m-t-fast),outline-color var(--m-t-fast)}
+.ic-bg.on{outline-color:var(--m-accent)}
+.ic-bg:active{transform:scale(.94)}
+.ic-bg-tick{width:20px;height:20px;border-radius:50%;background:var(--m-raised);color:var(--m-fg);display:grid;place-items:center}
+.ic-bg-tick svg.icon{width:13px;height:13px}
+.ic-ed-foot{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:18px}
+.ic-ed-foot .faint-note{margin-top:0;max-width:300px}
+@media (hover:hover) and (pointer:fine){.ic-bg:hover{transform:translateY(-1px)}}
+@media (max-width:860px){.ic-ed-body{grid-template-columns:1fr}.ic-ed-stage{flex-direction:row;justify-content:center}}
 .cape-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;width:100%}
 .cape-tile{position:relative;height:64px;border-radius:10px;overflow:hidden;background:var(--m-inset);cursor:pointer;display:grid;place-items:center;transition:transform var(--m-t-fast)}
 .cape-tile:hover{transform:translateY(-1px)}

@@ -12,6 +12,8 @@ import './styles/10-call.css'
 import './styles/11-rooms.css'
 import { App } from './App'
 import { dropBootSplash } from './lib/boot'
+import { initAccent } from './lib/accent'
+import { initTheme } from './lib/theme'
 import { Overlay } from './screens/Overlay'
 
 if (!import.meta.env.DEV) {
@@ -28,6 +30,11 @@ const isOverlay = location.hash.replace('#', '').split('?')[0] === 'overlay'
 if (isOverlay) {
   document.documentElement.classList.add('overlay-root')
   dropBootSplash(document)
+  // The overlay is a window of the same launcher, so it wears the same palette:
+  // without this it painted its own dark grey while the launcher stood in the
+  // user's theme and accent.
+  initTheme()
+  void initAccent()
 }
 
 createRoot(document.getElementById('root')!).render(isOverlay ? <Overlay /> : <App />)

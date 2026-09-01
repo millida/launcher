@@ -278,3 +278,6 @@ export const fmtSize = (bytes?: number): string => {
   if (b < 1024 * 1024) return Math.max(1, Math.round(b / 1024)) + ' КБ'
   return (b / 1024 / 1024).toFixed(b < 10 * 1024 * 1024 ? 1 : 0) + ' МБ'
 }
+
+export const timeHM = (ts?: number) =>
+  ts ? new Date(ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : ''

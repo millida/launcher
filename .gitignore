@@ -10,3 +10,4 @@ pnpm-lock.yaml
 # public/ ships to users verbatim — no dev notes there
 public/**/*.md
 public/**/*.txt
+installer/target

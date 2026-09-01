@@ -3,10 +3,9 @@ import { Icon } from '../components/Icon'
 import { SvgSprite } from '../components/SvgSprite'
 import { tauri } from '../ipc/tauri'
 import { overlayHide, overlayHitAreas, overlayOpen, overlayReady } from '../ipc/commands'
-import { api } from '../lib/api'
 import { CARD_TTL_MS, freshCards, holdCards } from '../lib/overlayCards'
 import { Head } from '../components/Head'
-import { apiErrorText } from '../lib/apiError'
+import { OverlayChat, type OverlayTarget } from '../components/OverlayChat'
 
 interface OverlayMessage {
   uid: string
@@ -37,12 +36,7 @@ export function Overlay() {
   const [msgs, setMsgs] = useState<Card[]>([])
   const [hover, setHover] = useState(false)
   const [tick, setTick] = useState(0)
-  const [reply, setReply] = useState('')
   const [to, setTo] = useState<OverlayMessage | null>(null)
-  const [sending, setSending] = useState(false)
-  const [error, setError] = useState('')
-  const inputRef = useRef<HTMLInputElement>(null)
-  const listRef = useRef<HTMLDivElement>(null)
   const cardsRef = useRef<HTMLDivElement>(null)
   const heldSince = useRef(0)
   const sentHit = useRef('')
@@ -57,7 +51,6 @@ export function Overlay() {
         // The core drops the hit areas whenever the window goes down, so an
         // unchanged stack after a re-show would be drawn over dead rectangles.
         sentHit.current = ''
-        if (e.payload) setTimeout(() => inputRef.current?.focus(), 30)
       })
       .then((un) => offs.push(un))
       .catch(() => {})
@@ -79,18 +72,12 @@ export function Overlay() {
       .listen<OverlayMessage>('overlay-open', (e) => {
         const m = { ...e.payload, ts: e.payload.ts || Date.now(), expires: Date.now() + CARD_TTL_MS }
         if (!m.kind || m.kind === 'msg') setTo(m)
-        setTimeout(() => inputRef.current?.focus(), 30)
       })
       .then((un) => offs.push(un))
       .catch(() => {})
     void overlayReady().catch(() => {})
     return () => offs.forEach((un) => un())
   }, [])
-
-  useEffect(() => {
-    const b = listRef.current
-    if (b) b.scrollTop = b.scrollHeight
-  }, [msgs.length, interactive])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -104,7 +91,6 @@ export function Overlay() {
   // rest of the screen must stay clickable for the game underneath.
   const now = Date.now()
   const fresh = freshCards(msgs, now, CARDS_SHOWN)
-  const chat = msgs.filter((m) => !m.kind || m.kind === 'msg')
 
   // Reading a card takes longer than showing it: the pointer on the stack holds
   // the deadlines, which resume where they stopped - up to the card ceiling, so
@@ -176,37 +162,19 @@ export function Overlay() {
     void overlayOpen(payloadOf(card)).catch(() => {})
   }, [])
 
-  const openInLauncher = useCallback(() => {
-    const target: OverlayMessage = to
-      ? { ...payloadOf(to), open: to.open || 'chat' }
+  const openInLauncher = useCallback((target: OverlayTarget | null) => {
+    const payload: OverlayMessage = target
+      ? { uid: target.id, nick: target.title, text: '', ts: Date.now(), open: target.room ? 'room' : 'chat' }
       : { uid: '', nick: '', text: '', ts: Date.now(), open: 'friends' }
-    void overlayOpen(target, true).catch(() => {})
-  }, [to])
+    void overlayOpen(payload, true).catch(() => {})
+  }, [])
 
-  const send = async () => {
-    const body = reply.trim()
-    if (!body || !to || sending) return
-    setSending(true)
-    setError('')
-    try {
-      // A group card carries a room id, not a person: sending it to the private
-      // endpoint would post the reply into a conversation with nobody.
-      const base =
-        to.open === 'room'
-          ? '/friends/rooms/' + encodeURIComponent(to.uid) + '/chat'
-          : '/friends/chat/' + encodeURIComponent(to.uid)
-      await api(base, {
-        method: 'POST',
-        body: JSON.stringify({ text: body }),
-      })
-      setMsgs((prev) => prev.concat([{ uid: to.uid, nick: 'Ты', text: body, ts: Date.now(), expires: Date.now() + CARD_TTL_MS }]).slice(-HISTORY))
-      setReply('')
-    } catch (e) {
-      setError(apiErrorText(e, 'Сообщение не отправлено'))
-    } finally {
-      setSending(false)
-    }
-  }
+  /// The card that brought the overlay up decides which conversation opens; a
+  /// group card carries a room id, not a person, and the two are not addressed
+  /// the same way.
+  const chatTarget: OverlayTarget | null = to
+    ? { id: to.uid, room: to.open === 'room', title: to.nick }
+    : null
 
   if (!interactive) {
     return (
@@ -256,45 +224,12 @@ export function Overlay() {
     <div className="ov ov-active" onMouseDown={(e) => e.target === e.currentTarget && void overlayHide()}>
       <SvgSprite />
       <div className="ov-panel" onMouseDown={(e) => e.stopPropagation()}>
-        <div className="ov-head">
-          <Icon id="i-msg" />
-          <b>Чат Millida</b>
-          <span className="ov-hint">Esc — закрыть</span>
-          <button className="ov-x" title="Открыть в лаунчере" onClick={() => openInLauncher()}>
-            <Icon id="i-ext" />
-          </button>
-          <button className="ov-x" title="Закрыть" onClick={() => void overlayHide()}>
-            <Icon id="i-x" />
-          </button>
-        </div>
-        <div className="ov-list" ref={listRef}>
-          {chat.length ? (
-            chat.map((m) => (
-              <div className={'ov-msg' + (m.nick === 'Ты' ? ' me' : '')} key={m.uid + m.ts}>
-                <b>{m.nick}</b>
-                <span>{m.text}</span>
-              </div>
-            ))
-          ) : (
-            <p className="ov-empty">Пока тихо. Сообщения друзей появятся здесь, не сворачивая игру.</p>
-          )}
-        </div>
-        {error ? <div className="ov-error">{error}</div> : null}
-        <div className="ov-input">
-          <input
-            ref={inputRef}
-            placeholder={to ? 'Ответить ' + to.nick + '…' : 'Некому отвечать — дождись сообщения'}
-            value={reply}
-            disabled={!to || sending}
-            onChange={(e) => setReply(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void send()
-            }}
-          />
-          <button disabled={!to || sending || !reply.trim()} onClick={() => void send()}>
-            <Icon id="i-send" />
-          </button>
-        </div>
+        <OverlayChat
+          target={chatTarget}
+          signal={msgs.length}
+          onClose={() => void overlayHide()}
+          onLauncher={openInLauncher}
+        />
       </div>
     </div>
   )

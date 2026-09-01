@@ -160,6 +160,27 @@ pub(crate) fn merge_settings(profile: &str, patch: serde_json::Map<String, Value
     write_json_quiet(&p, &s);
 }
 
+/// A fresh install never lands on an existing build: every version of a pack
+/// carries the same name in its index, so reusing it wiped the mods of the
+/// version already installed instead of putting the second one beside it.
+pub(crate) fn modpack_profile_name(pack_name: &str, version_number: &str) -> String {
+    let base = pack_name.trim();
+    let base = if base.is_empty() { "Модпак" } else { base };
+    let taken = |n: &str| load_profiles().iter().any(|p| p.name == n) || profile_dir(n).exists();
+    if !taken(base) {
+        return base.to_string();
+    }
+    let vn = version_number.trim();
+    if !vn.is_empty() {
+        let with_ver = format!("{} {}", base, vn);
+        if !taken(&with_ver) {
+            return with_ver;
+        }
+        return unique_profile_name(&with_ver);
+    }
+    unique_profile_name(base)
+}
+
 /// version_id=None picks the newest .mrpack; target=Some(name) updates or rolls
 /// back an existing profile and reinstalls its mods/.
 pub async fn install_modpack(app: AppHandle, slug: String) -> Result<Profile, String> {
@@ -203,7 +224,13 @@ async fn install_modpack_job(app: &AppHandle, job: &Job, slug: String, version_i
         else if deps.get("fabric-loader").is_some() { ("fabric", true, "fabric-loader") }
         else { ("vanilla", false, "") };
     let loader_version = deps[dep_key].as_str().filter(|v| !v.is_empty()).map(String::from);
-    let pname = target.clone().unwrap_or_else(|| idx["name"].as_str().unwrap_or(&slug).to_string());
+    let pname = match &target {
+        Some(t) => t.clone(),
+        None => modpack_profile_name(
+            idx["name"].as_str().unwrap_or(&slug),
+            ver["version_number"].as_str().unwrap_or(""),
+        ),
+    };
     job.rename(&pname);
     let pdir = profile_dir(&pname);
     // the pack owns mods/: leftovers would duplicate classes and crash the game
@@ -304,6 +331,24 @@ mod tests {
         assert_eq!(split_loader_id(""), ("vanilla".into(), None));
         // neoforge must be matched before forge
         assert_eq!(split_loader_id("NeoForge-21.1.73").0, "neoforge");
+    }
+
+    /// A second version of the same pack must not land on the first one's
+    /// folder: the index name is identical for every version, and reusing it
+    /// deleted the mods of the copy already installed.
+    #[test]
+    fn a_second_version_of_a_pack_gets_its_own_name() {
+        let free = "Модпак которого точно нет 9f3a2";
+        assert_eq!(
+            modpack_profile_name(free, "1.2.3"),
+            free,
+            "a first install keeps the pack name as it is: a version in the name only gets in the way",
+        );
+        assert_eq!(
+            modpack_profile_name("", ""),
+            "Модпак",
+            "a pack whose index carries no name still has to get one",
+        );
     }
 
     #[test]

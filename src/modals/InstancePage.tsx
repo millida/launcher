@@ -7,6 +7,8 @@ import { SafetyModal } from '../components/SafetyModal'
 import { SharePackModal } from '../components/SharePackModal'
 import { TunePanel } from '../components/TunePanel'
 import { IconGrid } from '../components/IconGrid'
+import { IconEditor } from '../components/IconEditor'
+import { recallIconRecipe, rememberIconRecipe } from '../lib/iconArt'
 import { uiConfirm } from '../state/confirm'
 import { copyText } from '../lib/clipboard'
 import { hasTauri } from '../ipc/tauri'
@@ -89,6 +91,7 @@ import { joinWithAuth, realLaunch, showLaunchError, startPrelaunch } from '../li
 import { useMods } from '../state/mods'
 import { useScreens } from '../state/screens'
 import { useModpackVersions } from '../state/modpack'
+import { useMigrate } from '../state/migrate'
 import { openProject } from '../state/project'
 import { stopRunningGame, useGame } from '../state/game'
 import { apiErrorText } from '../lib/apiError'
@@ -148,6 +151,7 @@ export function InstancePage() {
   const pr = profiles.find((x) => x.name === profile) || null
   const customCover = pr && pr.icon && !isBlockIcon(pr.icon) ? pr.icon : null
 
+  const [iconEditor, setIconEditor] = useState(false)
   const [tab, setTab] = useState('content')
   const [kind, setKind] = useState('mod')
   const [items, setItems] = useState<ModFile[]>([])
@@ -2014,7 +2018,7 @@ export function InstancePage() {
               </div>
               <div className="set-row" style={{ alignItems: 'flex-start' }}>
                 <span className="lab">
-                  Иконка сборки<small>Блок Millida или своя картинка</small>
+                  Иконка сборки<small>Блок Millida, своя сборная или картинка</small>
                 </span>
                 <div style={{ width: '340px' }}>
                   <IconGrid
@@ -2039,6 +2043,15 @@ export function InstancePage() {
                         style={{ borderRadius: '8px', objectFit: 'cover', flex: '0 0 auto' }}
                       />
                     ) : null}
+                    <button
+                      className="btn sm secondary"
+                      id="bsIconBuild"
+                      style={{ flex: 1 }}
+                      data-sound="open"
+                      onClick={() => setIconEditor(true)}
+                    >
+                      Собрать свою…
+                    </button>
                     <button
                       className="btn sm secondary"
                       id="bsCoverPick"
@@ -2142,6 +2155,21 @@ export function InstancePage() {
               </div>
               <div className="set-row">
                 <span className="lab">
+                  Перенести на другую версию<small>Копия сборки с модами под другую версию Minecraft</small>
+                </span>
+                <button
+                  className="btn sm secondary"
+                  id="bsMigrate"
+                  onClick={() => {
+                    if (!profile || !pr) return
+                    useMigrate.getState().open(profile, pr.version, loaderId(pr))
+                  }}
+                >
+                  <Icon id="i-arrow-r" /> Перенести
+                </button>
+              </div>
+              <div className="set-row">
+                <span className="lab">
                   Дублировать сборку<small>Копия со всем контентом</small>
                 </span>
                 <button
@@ -2188,6 +2216,27 @@ export function InstancePage() {
         <SafetyModal profile={profile!} onClose={() => setSafetyOpen(false)} onChanged={() => loadMods()} />
       ) : null}
       {shareOpen ? <SharePackModal profile={profile!} onClose={() => setShareOpen(false)} /> : null}
+      {iconEditor && profile ? (
+        <IconEditor
+          title={profile}
+          current={recallIconRecipe(profile)}
+          onCancel={() => setIconEditor(false)}
+          onSave={(data, r) => {
+            if (!hasTauri()) {
+              showToast('Доступно в приложении', 'error')
+              return
+            }
+            setProfileIcon(profile, data)
+              .then(() => {
+                rememberIconRecipe(profile, r)
+                setIconEditor(false)
+                void useProfiles.getState().refresh()
+                showToast('Иконка обновлена')
+              })
+              .catch((e) => showToast('Не удалось сохранить иконку: ' + e, 'error'))
+          }}
+        />
+      ) : null}
     </div>
   )
 }

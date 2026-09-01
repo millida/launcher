@@ -32,6 +32,7 @@ import { uiConfirm } from '../state/confirm'
 import { ColorPicker } from '../components/ColorPicker'
 import { AudioSettings } from '../components/AudioSettings'
 import { checkForUpdate, pendingUpdate } from '../lib/updater'
+import { openWhatsNew } from '../state/whatsNew'
 import { useUpdate } from '../state/update'
 import { discordPresence } from '../lib/launch'
 import { fetchSounds, playSound, setSoundMode, soundMode, soundVolume } from '../lib/sound'
@@ -1241,34 +1242,39 @@ export function Settings({ on }: { on: boolean }) {
                     : 'Millida Launcher'}
               </small>
             </span>
-            {upd ? (
-              <button
-                className="btn sm primary"
-                disabled={updBusy}
-                onClick={() => {
-                  setUpdBusy(true)
-                  upd.install().catch((e) => {
-                    setUpdBusy(false)
-                    showToast('Не удалось обновиться: ' + e, 'error')
-                  })
-                }}
-              >
-                {updBusy ? 'Обновляем…' : 'Обновить и перезапустить'}
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <button className="btn sm secondary" id="setWhatsNew" onClick={() => void openWhatsNew()}>
+                Что нового
               </button>
-            ) : (
-              <button
-                className="btn sm secondary"
-                disabled={updBusy}
-                onClick={() => {
-                  setUpdBusy(true)
-                  void checkForUpdate(true)
-                    .then((u) => setUpd(u))
-                    .finally(() => setUpdBusy(false))
-                }}
-              >
-                {updBusy ? 'Проверяем…' : 'Проверить обновления'}
-              </button>
-            )}
+              {upd ? (
+                <button
+                  className="btn sm primary"
+                  disabled={updBusy}
+                  onClick={() => {
+                    setUpdBusy(true)
+                    upd.install().catch((e) => {
+                      setUpdBusy(false)
+                      showToast('Не удалось обновиться: ' + e, 'error')
+                    })
+                  }}
+                >
+                  {updBusy ? 'Обновляем…' : 'Обновить и перезапустить'}
+                </button>
+              ) : (
+                <button
+                  className="btn sm secondary"
+                  disabled={updBusy}
+                  onClick={() => {
+                    setUpdBusy(true)
+                    void checkForUpdate(true)
+                      .then((u) => setUpd(u))
+                      .finally(() => setUpdBusy(false))
+                  }}
+                >
+                  {updBusy ? 'Проверяем…' : 'Проверить обновления'}
+                </button>
+              )}
+            </div>
           </div>
         </div>
         ) : null}
