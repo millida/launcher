@@ -188,6 +188,31 @@ pub(crate) fn version_fits(v: &Value, game_version: &str, loaders: &[String]) ->
     gv_ok && ld_ok
 }
 
+/// The single answer to "can this build load this file", bridge included. Every
+/// path that installs a version — picked automatically or by hand — asks it, so
+/// a Fabric jar can never reach a Forge build without the player being told.
+pub(crate) fn fits_build(v: &Value, game_version: &str, loaders: &[String], bridge: &[String]) -> bool {
+    version_fits(v, game_version, loaders) || (!bridge.is_empty() && version_fits(v, game_version, bridge))
+}
+
+/// What a single version is built for, as the mismatch prompt shows it. A
+/// hand-picked file is judged by this and not by what the project ships as a
+/// whole: the player chose this file, so the answer must describe this file.
+pub(crate) fn version_target(v: &Value) -> String {
+    let list = |key: &str| -> Vec<String> {
+        v[key].as_array().map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).take(3).collect())
+            .unwrap_or_default()
+    };
+    let games = list("game_versions");
+    let loaders = list("loaders");
+    match (games.is_empty(), loaders.is_empty()) {
+        (true, true) => "другие версии".into(),
+        (false, true) => games.join(", "),
+        (true, false) => loaders.join("/"),
+        (false, false) => format!("{} · {}", games.join(", "), loaders.join("/")),
+    }
+}
+
 /// Human-readable list of the game versions a project actually ships, used to
 /// explain a mismatch instead of silently installing something else.
 pub(crate) fn known_game_versions(versions: &[Value]) -> String {
@@ -385,26 +410,33 @@ pub async fn install_mod(app: AppHandle, project: String, game_version: String, 
 }
 
 pub async fn install_version(
-    app: AppHandle, project: String, version_id: String, profile: String, kind: String,
+    app: AppHandle, project: String, version_id: String, profile: String, kind: String, allow_mismatch: bool,
 ) -> Result<ContentInstall, String> {
     let job = Job::start(job_key_content("mr", &profile, &kind, &project), project.clone())?;
-    let res = install_version_job(&app, &job, project, version_id, profile, kind).await;
+    let res = install_version_job(&app, &job, project, version_id, profile, kind, allow_mismatch).await;
     job.finish(&app, res)
 }
 
 async fn install_version_job(
     app: &AppHandle, job: &Job, project: String, version_id: String, profile: String, kind: String,
+    allow_mismatch: bool,
 ) -> Result<ContentInstall, String> {
     job.emit(app, 20.0, "Скачиваем версию…");
     let ver = get_json(&format!("https://api.modrinth.com/v2/version/{}", version_id)).await?;
+    let prof = load_profiles().into_iter().find(|p| p.name == profile);
+    let loader_id = prof.as_ref().map(|p| p.loader_id()).unwrap_or_else(|| "vanilla".into());
+    let loaders = modrinth_loaders(&loader_id, &kind);
+    let bridge = bridge_loaders(&profile, &loader_id, &kind);
+    let build_gv = prof.map(|p| p.version).unwrap_or_default();
+    // A version picked by hand in the versions tab is still a version for some
+    // build, and it is not always this one.
+    if !allow_mismatch && !fits_build(&ver, &build_gv, &loaders, &bridge) {
+        return Ok(ContentInstall { file: String::new(), mismatch: version_target(&ver), warning: String::new() });
+    }
     let file = install_project_version(&profile, &kind, &project, &ver).await?;
     let mut warning = String::new();
     if kind == "mod" {
-        let loader_id = load_profiles().into_iter().find(|p| p.name == profile)
-            .map(|p| p.loader_id()).unwrap_or_else(|| "vanilla".into());
         let gv = ver["game_versions"].as_array().and_then(|a| a.first()).and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let loaders = modrinth_loaders(&loader_id, &kind);
-        let bridge = bridge_loaders(&profile, &loader_id, &kind);
         let missed = resolve_deps(&profile, &gv, &loaders, &bridge, &ver["dependencies"]).await;
         if !missed.is_empty() {
             warning = format!("не нашлось зависимостей под эту версию: {}", missed.join(", "));
@@ -442,6 +474,23 @@ mod tests {
         assert!(version_fits(&ver(&["26.1.2"], &["fabric"]), "26.1.2", &quilt));
         // resource packs carry no loader: an empty filter matches anything
         assert!(version_fits(&ver(&["26.1.2"], &[] as &[&str]), "26.1.2", &[]));
+    }
+
+    /// вход -> вердикт. Установка выбранной версии обходила проверку целиком,
+    /// поэтому Fabric-мод из вкладки «Версии» вставал в Forge-сборку молча.
+    #[test]
+    fn a_hand_picked_version_is_still_judged_by_the_build() {
+        let forge = vec!["forge".to_string()];
+        let bridged = vec!["fabric".to_string()];
+
+        assert!(fits_build(&ver(&["1.20.1"], &["forge"]), "1.20.1", &forge, &[]));
+        assert!(!fits_build(&ver(&["1.20.1"], &["fabric"]), "1.20.1", &forge, &[]),
+            "Fabric-файл не должен вставать в Forge-сборку");
+        assert!(!fits_build(&ver(&["1.19.2"], &["forge"]), "1.20.1", &forge, &[]),
+            "чужая версия игры ломает запуск так же");
+        assert!(fits_build(&ver(&["1.20.1"], &["fabric"]), "1.20.1", &forge, &bridged),
+            "со Sinytra Connector Fabric-файл сборке подходит");
+        assert_eq!(version_target(&ver(&["1.20.1"], &["fabric"])), "1.20.1 · fabric");
     }
 
     #[test]

@@ -84,8 +84,22 @@ fn is_fresh(path: &Path, since: std::time::SystemTime) -> bool {
         .unwrap_or(false)
 }
 
+/// Game logs are not required to be UTF-8: on a Russian Windows the JVM prints
+/// in the console code page, and strict decoding threw the whole file away —
+/// the crash dialog then had nothing to name a culprit from.
+pub(crate) fn decode_log_bytes(raw: &[u8]) -> String {
+    match std::str::from_utf8(raw) {
+        Ok(s) => s.to_string(),
+        Err(_) => encoding_rs::WINDOWS_1251.decode(raw).0.into_owned(),
+    }
+}
+
+fn read_log_file(path: &Path) -> Option<String> {
+    std::fs::read(path).ok().map(|b| decode_log_bytes(&b))
+}
+
 fn read_fresh(path: &Path, since: std::time::SystemTime) -> Option<String> {
-    is_fresh(path, since).then(|| std::fs::read_to_string(path).ok())?
+    is_fresh(path, since).then(|| read_log_file(path))?
 }
 
 fn newest_fresh_in(dir: &Path, since: std::time::SystemTime, name_starts: &str) -> Option<PathBuf> {
@@ -116,7 +130,7 @@ fn newest_crash_report(game_dir: &Path, since: std::time::SystemTime) -> Option<
 /// unrelated keyword in an old log becomes the verdict.
 fn native_crash_log(game_dir: &Path, since: std::time::SystemTime) -> Option<String> {
     let p = newest_fresh_in(game_dir, since, "hs_err_pid")?;
-    std::fs::read_to_string(&p).ok()
+    read_log_file(&p)
 }
 
 /// Captured stdout plus the game's own latest.log, the newest crash report and a
@@ -126,7 +140,7 @@ pub(crate) fn crash_text(game_dir: &Path, since: std::time::SystemTime) -> Strin
     let mut text = read_fresh(&game_dir.join("logs/launcher-latest.log"), since).unwrap_or_default();
     for extra in [
         read_fresh(&game_dir.join("logs/latest.log"), since),
-        newest_crash_report(game_dir, since).and_then(|p| std::fs::read_to_string(p).ok()),
+        newest_crash_report(game_dir, since).and_then(|p| read_log_file(&p)),
         native_crash_log(game_dir, since),
     ]
     .into_iter()
@@ -449,13 +463,17 @@ fn spawn_log_reader(
     std::thread::spawn(move || {
         use std::io::{BufRead, Write};
         let mut buf = std::io::BufReader::new(reader);
-        let mut line = String::new();
+        let mut raw: Vec<u8> = Vec::new();
         let mut filter = Log4jFilter::default();
         loop {
-            line.clear();
-            match buf.read_line(&mut line) {
+            raw.clear();
+            // read_until, not read_line: a single byte the console code page
+            // wrote instead of UTF-8 used to abort the reader for the whole
+            // session, so a Russian mod name silently ended the log.
+            match buf.read_until(b'\n', &mut raw) {
                 Ok(0) => break,
                 Ok(_) => {
+                    let line = decode_log_bytes(&raw);
                     let out = filter.feed(&line);
                     if out.is_empty() {
                         continue;
@@ -808,6 +826,20 @@ pub async fn install_and_launch_in(
             .collect();
         for (i, a) in flags.into_iter().enumerate() { args.insert(1 + i, a); }
     }
+    // Ask the JVM for UTF-8 on stdout, stderr and log files. Left of the
+    // player's own arguments on purpose: this is a default, and a player who
+    // pins another encoding must still win. Without it the game writes the
+    // console code page and every non-ASCII line arrived as mojibake.
+    for (i, a) in ["-Dfile.encoding=UTF-8", "-Dsun.stdout.encoding=UTF-8", "-Dsun.stderr.encoding=UTF-8"]
+        .into_iter()
+        .filter(|f| {
+            let key = f.split('=').next().unwrap_or_default();
+            !settings["jvmArgs"].as_str().unwrap_or("").split_whitespace().any(|a| a.starts_with(key))
+        })
+        .enumerate()
+    {
+        args.insert(1 + i, a.to_string());
+    }
     // Same order and for the same reason: auto-tuning goes to the left of the
     // player's own arguments and stays quiet once the boost mode has already
     // placed its GC profile.
@@ -872,7 +904,7 @@ pub async fn install_and_launch_in(
     tokio::time::sleep(std::time::Duration::from_millis(900)).await;
     if let Ok(Some(status)) = child.try_wait() {
         if !status.success() {
-            let log = std::fs::read_to_string(logs.join("launcher-latest.log")).unwrap_or_default();
+            let log = read_log_file(&logs.join("launcher-latest.log")).unwrap_or_default();
             let tail: Vec<&str> = log.lines().rev().take(20).collect();
             let tail: String = tail.into_iter().rev().collect::<Vec<_>>().join("\n");
             return Err(format!("Игра не запустилась (код {:?}).\n{}", status.code(), tail));
@@ -1235,6 +1267,51 @@ mod tests {
             "без кадра падения вылет в драйвере неотличим от любого другого"
         );
         assert_eq!(problematic_frame("just a log"), None);
+    }
+
+    /// Вход → вердикт для чтения лога. Закреплено, потому что каждая строка
+    /// стоила пустого окна логов у игрока на русской Windows.
+    #[test]
+    fn log_bytes_survive_console_code_page() {
+        let utf8 = "[main/INFO]: Загрузка модов".as_bytes().to_vec();
+        assert_eq!(
+            decode_log_bytes(&utf8),
+            "[main/INFO]: Загрузка модов",
+            "UTF-8 обязан читаться как есть — иначе портим то, что не сломано"
+        );
+
+        let mut cp1251: Vec<u8> = b"[main/INFO]: ".to_vec();
+        cp1251.extend_from_slice(&[0xc7, 0xe0, 0xe3, 0xf0, 0xf3, 0xe7, 0xea, 0xe0]);
+        assert_eq!(
+            decode_log_bytes(&cp1251),
+            "[main/INFO]: Загрузка",
+            "строка в кодировке консоли обязана прочитаться словами, а не мусором"
+        );
+
+        assert!(
+            !decode_log_bytes(&[0xff, 0xfe, 0x00]).is_empty(),
+            "нечитаемые байты не повод отдать пустую строку: так лента лога обрывалась молча"
+        );
+    }
+
+    /// Файл лога в кодировке консоли раньше терялся целиком: `read_to_string`
+    /// отдавал ошибку, а вызывающий подставлял пустую строку — и разбор падения
+    /// оставался без единственной улики.
+    #[test]
+    fn crash_text_reads_non_utf8_log() {
+        let dir = std::env::temp_dir().join("millida-crash-encoding-test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("logs")).unwrap();
+        let mut line = b"[main/ERROR]: ".to_vec();
+        line.extend_from_slice(&[0xcc, 0xee, 0xe4, 0x20]);
+        line.extend_from_slice(b"customskinloader.CustomSkinLoader.init(X.java:1)");
+        std::fs::write(dir.join("logs/latest.log"), &line).unwrap();
+
+        let text = crash_text(&dir, std::time::SystemTime::now());
+        assert!(
+            text.contains("Мод"),
+            "лог в кодировке консоли обязан доехать до разбора; получили: {text:?}"
+        );
     }
 
     /// A crash report left by an earlier run is not evidence about this launch.

@@ -195,7 +195,7 @@ export function Overlay() {
             >
               <div className="ov-card-heads">
                 {(m.nicks?.length ? m.nicks : [m.nick]).slice(0, 3).map((n, i) => (
-                  <Head key={n + i} nick={n} size={30} />
+                  <Head key={n + i} nick={n} size={44} />
                 ))}
               </div>
               <div className="ov-card-body">

@@ -10,7 +10,13 @@ import {
 } from '../ipc/commands'
 import { RU_LOADER, fmtSize } from '../lib/format'
 import { renderMarkdown } from '../lib/markdown'
-import { askPlanForVersion, installContentFlow, installExtras, resolveTargetBuild } from '../lib/install'
+import {
+  askPlanForVersion,
+  installContentFlow,
+  installExtras,
+  resolveTargetBuild,
+  runPickedVersionInstall,
+} from '../lib/install'
 import { keyCfModpack, keyContent, keyMrModpack, pickTargetName } from '../lib/installKeys'
 import { runInstall, useInstalls } from '../state/installs'
 import { trackTimed } from '../lib/telemetry'
@@ -186,13 +192,14 @@ export function ProjectModal() {
       const extras = await askPlanForVersion(prof, pj.kind, 'curseforge', String(pj.cfid), String(fileId))
       if (!extras) return
       const pr = useProfiles.getState().profiles.find((x) => x.name === prof)
-      runInstall({
+      runPickedVersionInstall({
         key: keyContent('cf', prof, pj.kind, pj.cfid),
         title: pj.title,
-        running: 'Скачивание…',
+        prof,
         versionId: 'cf' + fileId,
-        run: () => cfInstall(pj.cfid, (pr && pr.version) || '', prof, pj.kind, fileId),
-        onDone: (r) => {
+        run: (allowMismatch) =>
+          cfInstall(pj.cfid, (pr && pr.version) || '', prof, pj.kind, fileId, allowMismatch),
+        onInstalled: (r) => {
           void useMods.getState().refreshInstalled()
           installExtras(prof, pj.kind, extras)
           showToast('CurseForge → «' + prof + '»: ' + r.file, 'ok', 'install')
@@ -222,13 +229,13 @@ export function ProjectModal() {
     const prof = catalogTargetBuild() || (useProfiles.getState().profiles[0] || { name: '' }).name || 'default'
     void askPlanForVersion(prof, pj.kind, 'modrinth', pj.slug, v.id).then((extras) => {
       if (!extras) return
-      runInstall({
+      runPickedVersionInstall({
         key: keyContent('mr', prof, pj.kind, pj.slug),
         title: pj.title || pj.slug,
-        running: 'Скачивание…',
+        prof,
         versionId: v.id,
-        run: () => installVersion(pj.slug, v.id, prof, pj.kind),
-        onDone: (r) => {
+        run: (allowMismatch) => installVersion(pj.slug, v.id, prof, pj.kind, allowMismatch),
+        onInstalled: (r) => {
           void useMods.getState().refreshInstalled()
           installExtras(prof, pj.kind, extras)
           showToast('В «' + prof + '»: ' + r.file + (r.warning ? ' · ' + r.warning : ''), 'ok', 'install')

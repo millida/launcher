@@ -29,7 +29,7 @@ function NotifyCard({ id, uid, nick, text, kind, actionLabel, action }: Notify) 
           <Icon id="i-users" />
         </span>
       ) : (
-        <Head nick={nick} size={40} />
+        <Head nick={nick} size={48} />
       )}
       <div className="chat-notify-body">
         <b>{nick || 'Игрок'}</b>

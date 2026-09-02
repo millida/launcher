@@ -493,8 +493,13 @@ export const migrateProfile = (
   name: string | null = null,
 ) => invoke<MigrateResult>('migrate_profile', { profile, version, loader, loaderVersion, name })
 
-export const installVersion = (project: string, versionId: string, profile: string, kind: string) =>
-  invoke<ContentInstall>('install_version', { project, versionId, profile, kind })
+export const installVersion = (
+  project: string,
+  versionId: string,
+  profile: string,
+  kind: string,
+  allowMismatch = false,
+) => invoke<ContentInstall>('install_version', { project, versionId, profile, kind, allowMismatch })
 
 // Names the account to play as; the core resolves the credentials itself.
 export interface LaunchAuth {

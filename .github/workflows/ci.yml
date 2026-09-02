@@ -92,6 +92,18 @@ jobs:
       - name: Build web assets
         run: bun run build:web
 
+      # The hosted image ships rustup under /usr/local/rustup, and updating that
+      # toolchain in place fails with EXDEV: rustup renames component directories
+      # into its own tmp dir, which sits on a different mount there. Installing
+      # into the user home keeps the whole operation on one filesystem.
+      - name: Keep rustup in the user home
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          echo "RUSTUP_HOME=$HOME/.rustup" >> "$GITHUB_ENV"
+          echo "CARGO_HOME=$HOME/.cargo" >> "$GITHUB_ENV"
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -138,6 +150,18 @@ jobs:
 
       - name: Bun audit
         run: bun audit
+
+      # The hosted image ships rustup under /usr/local/rustup, and updating that
+      # toolchain in place fails with EXDEV: rustup renames component directories
+      # into its own tmp dir, which sits on a different mount there. Installing
+      # into the user home keeps the whole operation on one filesystem.
+      - name: Keep rustup in the user home
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          echo "RUSTUP_HOME=$HOME/.rustup" >> "$GITHUB_ENV"
+          echo "CARGO_HOME=$HOME/.cargo" >> "$GITHUB_ENV"
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
       - uses: dtolnay/rust-toolchain@stable
 
