@@ -384,10 +384,7 @@ async fn pick_modrinth(ctx: &Ctx, project_id: &str, version_id: &str) -> Result<
         get_json(&format!("https://api.modrinth.com/v2/version/{}", version_id))
             .await
             .ok()
-            .filter(|v| {
-                version_fits(v, &ctx.game_version, &ctx.loaders)
-                    || (!ctx.bridge.is_empty() && version_fits(v, &ctx.game_version, &ctx.bridge))
-            })
+            .filter(|v| fits_build(v, &ctx.game_version, &ctx.loaders, &ctx.bridge))
     };
     let version = match pinned {
         Some(v) => v,
@@ -398,8 +395,16 @@ async fn pick_modrinth(ctx: &Ctx, project_id: &str, version_id: &str) -> Result<
 }
 
 async fn pick_curseforge(ctx: &Ctx, mod_id: u32, file_id: Option<u64>) -> Result<Pick, String> {
-    let file = match file_id {
-        Some(fid) => cf_get(&format!("v1/mods/{}/files/{}", mod_id, fid), &[]).await?["data"].clone(),
+    // A dependency may pin a file built for another loader; the pin is a hint,
+    // the build is the requirement.
+    let pinned = match file_id {
+        Some(fid) => cf_get(&format!("v1/mods/{}/files/{}", mod_id, fid), &[]).await.ok()
+            .map(|j| j["data"].clone())
+            .filter(|f| cf_file_fits(f, &ctx.game_version, &ctx.loaders, &ctx.bridge)),
+        None => None,
+    };
+    let file = match pinned {
+        Some(f) => f,
         None => {
             let lt = if ctx.kind == "mod" { cf_loader_type(&ctx.loader_id) } else { 0 };
             cf_files_for(mod_id, &ctx.game_version, lt)

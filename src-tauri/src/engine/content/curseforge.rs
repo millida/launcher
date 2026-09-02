@@ -167,7 +167,20 @@ async fn cf_install_job(app: &AppHandle, job: &Job, req: CfInstallReq) -> Result
     let CfInstallReq { mod_id, game_version, profile, kind, file_id, allow_mismatch } = req;
     job.emit(app, 10.0, "CurseForge: подбираем файл…");
     let file = match file_id {
-        Some(fid) => cf_get(&format!("v1/mods/{}/files/{}", mod_id, fid), &[]).await?["data"].clone(),
+        Some(fid) => {
+            let picked = cf_get(&format!("v1/mods/{}/files/{}", mod_id, fid), &[]).await?["data"].clone();
+            // A file picked by hand in the versions tab is not automatically a
+            // file for this build.
+            let ctx = ctx_of(&profile, &kind);
+            if !allow_mismatch && !cf_file_fits(&picked, &ctx.game_version, &ctx.loaders, &ctx.bridge) {
+                return Ok(ContentInstall {
+                    file: String::new(),
+                    mismatch: cf_file_target(&picked),
+                    warning: String::new(),
+                });
+            }
+            picked
+        }
         None => {
             let loader_id = load_profiles().into_iter().find(|p| p.name == profile).map(|p| p.loader_id()).unwrap_or_else(|| "vanilla".into());
             let lt = if kind == "mod" { cf_loader_type(&loader_id) } else { 0 };
@@ -245,6 +258,39 @@ fn cf_file_mc_versions(file: &Value) -> Vec<String> {
             .filter(|s| s.starts_with(|c: char| c.is_ascii_digit()))
             .map(String::from).collect()
     }).unwrap_or_default()
+}
+
+/// Loader tags of a file, lowercased, from the same `gameVersions` list.
+pub(crate) fn cf_file_loaders(file: &Value) -> Vec<String> {
+    file["gameVersions"].as_array().map(|a| {
+        a.iter().filter_map(|v| v.as_str())
+            .map(|s| s.to_ascii_lowercase())
+            .filter(|s| ["forge", "neoforge", "fabric", "quilt"].contains(&s.as_str()))
+            .collect()
+    }).unwrap_or_default()
+}
+
+/// CurseForge counterpart of `fits_build`: can this build load this file. A file
+/// without loader tags (resource packs, and mods CurseForge never tagged) is
+/// judged by the game version alone.
+pub(crate) fn cf_file_fits(file: &Value, game_version: &str, loaders: &[String], bridge: &[String]) -> bool {
+    let gv_ok = game_version.is_empty() || cf_file_mc_versions(file).iter().any(|v| v == game_version);
+    let tags = cf_file_loaders(file);
+    let ld_ok = loaders.is_empty() || tags.is_empty()
+        || loaders.iter().chain(bridge.iter()).any(|l| tags.iter().any(|t| t == l));
+    gv_ok && ld_ok
+}
+
+/// What the file is built for, for the mismatch prompt.
+pub(crate) fn cf_file_target(file: &Value) -> String {
+    let games = cf_file_mc_versions(file);
+    let loaders = cf_file_loaders(file);
+    match (games.is_empty(), loaders.is_empty()) {
+        (true, true) => "другие версии".into(),
+        (false, true) => games.into_iter().take(3).collect::<Vec<_>>().join(", "),
+        (true, false) => loaders.join("/"),
+        (false, false) => format!("{} · {}", games.into_iter().take(3).collect::<Vec<_>>().join(", "), loaders.join("/")),
+    }
 }
 
 /// level.dat may sit at the archive root or a couple of levels deeper.
@@ -640,6 +686,28 @@ mod tests {
         let _ = std::fs::remove_dir_all(&p);
         std::fs::create_dir_all(&p).unwrap();
         p
+    }
+
+    /// вход -> вердикт. Файл, выбранный руками во вкладке «Версии», ставился
+    /// как есть: Fabric-jar попадал в Forge-сборку и игра не запускалась.
+    #[test]
+    fn a_hand_picked_file_is_still_judged_by_the_build() {
+        let forge = vec!["forge".to_string()];
+        let fabric_file = serde_json::json!({ "gameVersions": ["1.20.1", "Fabric"] });
+        let forge_file = serde_json::json!({ "gameVersions": ["1.20.1", "Forge"] });
+        let old_forge = serde_json::json!({ "gameVersions": ["1.19.2", "Forge"] });
+        let untagged = serde_json::json!({ "gameVersions": ["1.20.1"] });
+
+        assert!(!cf_file_fits(&fabric_file, "1.20.1", &forge, &[]),
+            "Fabric-файл не должен попадать в Forge-сборку");
+        assert!(cf_file_fits(&forge_file, "1.20.1", &forge, &[]));
+        assert!(!cf_file_fits(&old_forge, "1.20.1", &forge, &[]),
+            "файл под другую версию игры так же ломает запуск");
+        assert!(cf_file_fits(&untagged, "1.20.1", &forge, &[]),
+            "файл без пометки загрузчика судим только по версии игры");
+        assert!(cf_file_fits(&fabric_file, "1.20.1", &forge, &["fabric".to_string()]),
+            "со Sinytra Connector Fabric-файл сборке подходит");
+        assert_eq!(cf_file_target(&fabric_file), "1.20.1 · fabric");
     }
 
     #[test]

@@ -583,17 +583,19 @@
 .acc-buy-ic svg{width:18px;height:18px;color:var(--m-accent-fg)}
 
 /* ---- Incoming message popup ---- */
-.chat-notify-stack{position:absolute;top:52px;right:16px;z-index:400;display:flex;flex-direction:column;gap:8px;width:300px}
-.chat-notify{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:var(--m-surface-2);border:1px solid var(--m-border);box-shadow:var(--m-shadow-lg);cursor:pointer;animation:frMenuIn .16s ease}
+.chat-notify-stack{position:absolute;top:52px;right:16px;z-index:400;display:flex;flex-direction:column;gap:10px;width:392px;max-width:calc(100% - 32px)}
+.chat-notify{display:flex;align-items:flex-start;gap:12px;padding:14px 15px;border-radius:16px;background:var(--m-surface-2);border:1px solid var(--m-border);box-shadow:var(--m-shadow-lg);cursor:pointer;animation:frMenuIn .16s ease}
 .chat-notify:hover{background:var(--m-surface)}
-.chat-notify>img{width:38px;height:38px;border-radius:9px;image-rendering:pixelated;flex:none}
-.chat-notify-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
-.chat-notify-body b{font-size:13px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.chat-notify-body span{font-size:12px;color:var(--m-fg-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.chat-notify-x{width:24px;height:24px;flex:none;display:grid;place-items:center;border-radius:7px;color:var(--m-fg-faint)}
+.chat-notify>img{width:48px;height:48px;border-radius:12px;image-rendering:pixelated;flex:none}
+.chat-notify>.room-ava.sm{width:48px;height:48px;border-radius:12px}
+.chat-notify>.room-ava.sm svg{width:22px;height:22px}
+.chat-notify-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.chat-notify-body b{font-size:15px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-notify-body span{font-size:13.5px;line-height:1.35;color:var(--m-fg-muted);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.chat-notify-x{width:28px;height:28px;flex:none;display:grid;place-items:center;border-radius:7px;color:var(--m-fg-faint)}
 .chat-notify-x:hover{background:var(--m-inset);color:var(--m-fg)}
-.chat-notify-x svg{width:13px;height:13px}
-.chat-notify-act{display:flex;align-items:center;gap:5px;margin-top:3px;font-size:11.5px;font-weight:700;color:var(--m-accent)}
+.chat-notify-x svg{width:14px;height:14px}
+.chat-notify-act{display:flex;align-items:center;gap:5px;margin-top:5px;font-size:12.5px;font-weight:700;color:var(--m-accent)}
 .chat-notify-act svg{width:12px;height:12px}
 
 /* ---- Playtime stats ---- */
@@ -719,27 +721,27 @@ html.overlay-root,html.overlay-root body,html.overlay-root #root{background:tran
 .ov-passive{pointer-events:none}
 /* Cards are the only clickable spot of a click-through window: the core lifts
    the flag over them, so they take the pointer while the stack does not. */
-.ov-cards{position:absolute;bottom:22px;right:22px;display:flex;flex-direction:column;gap:8px;width:330px}
-.ov-cards .ov-card{pointer-events:auto;cursor:pointer;padding-right:30px;transition:transform .12s ease,border-color .12s ease}
+.ov-cards{position:absolute;bottom:22px;right:22px;display:flex;flex-direction:column;gap:10px;width:420px}
+.ov-cards .ov-card{pointer-events:auto;cursor:pointer;padding-right:34px;transition:transform .12s ease,border-color .12s ease}
 .ov-cards.held .ov-card:hover{transform:translateX(-3px);border-color:rgba(255,255,255,.26);background:rgba(24,24,30,.94)}
-.ov-card-x{position:absolute;top:5px;right:5px;width:20px;height:20px;display:grid;place-items:center;border:0;border-radius:7px;background:transparent;color:rgba(242,242,245,.55);opacity:0;transition:opacity .12s ease,background .12s ease,color .12s ease;cursor:pointer}
-.ov-card-x svg{width:12px;height:12px}
+.ov-card-x{position:absolute;top:7px;right:7px;width:24px;height:24px;display:grid;place-items:center;border:0;border-radius:7px;background:transparent;color:rgba(242,242,245,.55);opacity:0;transition:opacity .12s ease,background .12s ease,color .12s ease;cursor:pointer}
+.ov-card-x svg{width:13px;height:13px}
 .ov-cards.held .ov-card-x{opacity:1}
 .ov-card-x:hover{background:rgba(255,255,255,.12);color:#fff}
-.ov-card-ttl{position:absolute;left:0;bottom:0;height:2px;width:100%;background:var(--ov-accent,#7aa2ff);opacity:.55;transform-origin:left;animation:ovTtl linear forwards}
+.ov-card-ttl{position:absolute;left:0;bottom:0;height:3px;width:100%;background:var(--ov-accent,#7aa2ff);opacity:.55;transform-origin:left;animation:ovTtl linear forwards}
 .ov-cards.held .ov-card-ttl{animation-play-state:paused}
 @keyframes ovTtl{from{transform:scaleX(1)}to{transform:scaleX(0)}}
 @media (prefers-reduced-motion: reduce){.ov-card-ttl{animation:none;transform:scaleX(1)}}
-.ov-card{position:relative;overflow:hidden;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:rgba(18,18,22,.86);border:1px solid rgba(255,255,255,.12);box-shadow:0 10px 30px rgba(0,0,0,.45);color:#f2f2f5;animation:ovIn .18s ease}
-.ov-card::before{content:'';position:absolute;left:0;top:10px;bottom:10px;width:2px;border-radius:2px;background:var(--ov-accent,#7aa2ff)}
+.ov-card{position:relative;overflow:hidden;display:flex;align-items:flex-start;gap:12px;padding:14px 16px;border-radius:16px;background:rgba(18,18,22,.86);border:1px solid rgba(255,255,255,.12);box-shadow:0 10px 30px rgba(0,0,0,.45);color:#f2f2f5;animation:ovIn .18s ease}
+.ov-card::before{content:'';position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:2px;background:var(--ov-accent,#7aa2ff)}
 .ov-card.ov-kind-online{--ov-accent:#5cc98a}
 .ov-card.ov-kind-play{--ov-accent:#f0b23c}
-.ov-card img{width:30px;height:30px;border-radius:8px;image-rendering:pixelated;flex:none}
+.ov-card img{width:44px;height:44px;border-radius:11px;image-rendering:pixelated;flex:none}
 .ov-card-heads{display:flex;flex:none}
-.ov-card-heads img+img{margin-left:-12px;box-shadow:0 0 0 2px rgba(18,18,22,.9)}
-.ov-card-body{min-width:0;display:flex;flex-direction:column;gap:1px}
-.ov-card-body b{font-size:12.5px;font-weight:650}
-.ov-card-body span{font-size:12px;color:rgba(242,242,245,.72);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ov-card-heads img+img{margin-left:-16px;box-shadow:0 0 0 2px rgba(18,18,22,.9)}
+.ov-card-body{min-width:0;flex:1;display:flex;flex-direction:column;gap:3px}
+.ov-card-body b{font-size:15px;font-weight:650}
+.ov-card-body span{font-size:13.5px;line-height:1.35;color:rgba(242,242,245,.72);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
 @keyframes ovIn{from{opacity:0;transform:translate(14px,10px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion: reduce){.ov-card{animation:none}}
 /* ---- Overlay chat panel: the launcher's own kit over the game ---- */

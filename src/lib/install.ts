@@ -55,6 +55,40 @@ async function confirmMismatch(title: string, prof: string, mismatch: string): P
   )
 }
 
+/// A version picked by hand goes through the same gate as an automatic pick:
+/// the core answers with an empty `file` when the build cannot load it, and the
+/// install only happens after the player confirms.
+export function runPickedVersionInstall(o: {
+  key: string
+  title: string
+  prof: string
+  versionId: string
+  run: (allowMismatch: boolean) => Promise<ContentInstall>
+  onInstalled: (r: ContentInstall) => void
+}): void {
+  const start = (allowMismatch: boolean): void => {
+    runInstall<ContentInstall>({
+      key: o.key,
+      title: o.title,
+      running: allowMismatch ? 'Ставим всё равно…' : 'Скачивание…',
+      versionId: o.versionId,
+      run: () => o.run(allowMismatch),
+      keepOpen: (r) => !r.file,
+      onDone: (r) => {
+        if (!r.file) {
+          void confirmMismatch(o.title, o.prof, r.mismatch).then((ok) => {
+            if (ok) start(true)
+          })
+          return
+        }
+        o.onInstalled(r)
+      },
+      onError: (err) => showToast('' + err, 'error'),
+    })
+  }
+  start(false)
+}
+
 /// The optional dependencies the user ticked. Hard ones are pulled in by the
 /// core during the install itself, so a failure here never leaves the mod
 /// without what it cannot run without.
