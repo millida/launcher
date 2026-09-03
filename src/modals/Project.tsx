@@ -1,3 +1,4 @@
+import { Icon } from '../components/Icon'
 import { hasTauri } from '../ipc/tauri'
 import {
   cfInstall,
@@ -18,7 +19,7 @@ import {
   runPickedVersionInstall,
 } from '../lib/install'
 import { keyCfModpack, keyContent, keyMrModpack, pickTargetName } from '../lib/installKeys'
-import { runInstall, useInstalls } from '../state/installs'
+import { runInstall, stopInstall, useInstalls } from '../state/installs'
 import { trackTimed } from '../lib/telemetry'
 import { uiConfirm } from '../state/confirm'
 import { useProfiles } from '../state/profiles'
@@ -87,6 +88,8 @@ export function ProjectModal() {
 
   if (!modal.open) return null
   const close = () => closeModal('pjModal')
+  const task = tasks[packKey]
+  const running = !!task && task.state === 'run'
 
   const installWorld = (prof: string, force: boolean): void => {
     runInstall({
@@ -271,9 +274,18 @@ export function ProjectModal() {
               ))}
             </div>
           </div>
-          <button className="btn md primary" id="pjInstall" onClick={() => install()}>
-            {label(packKey, pj.kind === 'modpack' ? 'Установить' : 'Добавить в сборку')}
-          </button>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button className="btn md primary" id="pjInstall" onClick={() => install()}>
+              {label(packKey, pj.kind === 'modpack' ? 'Установить' : 'Добавить в сборку')}
+            </button>
+            {/* Отменить установку можно было только из панели загрузок, а её
+                закрывает это же окно — игрок оставался с бегущим процентом. */}
+            {running ? (
+              <button className="btn md ghost" title="Отменить установку" onClick={() => stopInstall(packKey)}>
+                <Icon id="i-x" />
+              </button>
+            ) : null}
+          </div>
         </div>
         <div className="segs" style={{ marginBottom: '14px' }}>
           {[
@@ -334,6 +346,11 @@ export function ProjectModal() {
                 >
                   {versionLabel(packKey, v.id, 'Установить')}
                 </button>
+                {running && task.versionId === v.id ? (
+                  <button className="btn sm ghost" title="Отменить установку" onClick={() => stopInstall(packKey)}>
+                    <Icon id="i-x" />
+                  </button>
+                ) : null}
               </div>
             ))
           ) : (

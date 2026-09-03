@@ -47,6 +47,14 @@
 Для Apple Silicon (M1–M4) и Intel — отдельные сборки, ссылка выше выбирает
 нужную сама.
 
+Второй способ — одна команда в Терминале. Она скачает свежую версию, проверит
+подпись, положит лаунчер в «Программы» и запустит его; шаг с «повреждено» при
+этом не понадобится:
+
+```bash
+curl -fsSL https://launcher-storage.millida.net/setup/install.sh | sh
+```
+
 ### Linux
 
 Основной способ — Flatpak: ставится и обновляется одинаково на Ubuntu, Fedora,
@@ -59,6 +67,13 @@ flatpak install --user https://launcher-flatpak.millida.net/millida-launcher.fla
 Скачанный `.flatpakref` можно просто открыть двойным кликом — GNOME Software и
 Discover поставят приложение сами. Нужны `.AppImage`, `.deb` или `.rpm` — они
 под кнопкой «Другие варианты» на [странице загрузки](https://millida.net/launcher#download).
+
+Без Flatpak — одна команда: она поставит AppImage в домашнюю папку, добавит
+ярлык в меню приложений и откроет лаунчер.
+
+```bash
+curl -fsSL https://launcher-storage.millida.net/setup/install.sh | sh
+```
 
 ### Что нужно для игры
 

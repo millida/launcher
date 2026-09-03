@@ -65,6 +65,13 @@ const markDone = (key: string, versionId?: string) =>
     doneVersion: versionId ? { ...s.doneVersion, [key]: versionId } : s.doneVersion,
   }))
 
+/// Ровно тот текст, который ядро возвращает по отмене (engine/core/jobs.rs).
+/// Отмена — не сбой: красная плашка и тост «ошибка» пугали игрока, который сам
+/// её и нажал.
+const CANCELLED = 'Установка отменена'
+
+export const isCancelled = (e: unknown): boolean => String(e).includes(CANCELLED)
+
 const HIDE_MS = 2600
 const hideTimers: Record<string, ReturnType<typeof setTimeout>> = {}
 
@@ -113,6 +120,12 @@ export function runInstall<T>(o: RunOptions<T>): boolean {
       if (o.onDone) o.onDone(r)
     })
     .catch((e) => {
+      if (isCancelled(e)) {
+        useInstalls.getState().patch(o.key, { label: '', msg: 'Отменено', state: 'error' })
+        fade(o.key)
+        showToast('Установка «' + (o.title || '') + '» отменена', 'ok', false)
+        return
+      }
       useInstalls.getState().patch(o.key, { label: '', msg: String(e), state: 'error' })
       fade(o.key, 4000)
       if (o.onError) o.onError(e)
@@ -125,7 +138,13 @@ export function stopInstall(key: string): void {
   const t = useInstalls.getState().tasks[key]
   if (!t || t.state !== 'run') return
   useInstalls.getState().patch(key, { msg: 'Отменяем…' })
-  void cancelInstall(key).catch(() => {})
+  void cancelInstall(key)
+    .then((stopped) => {
+      // Ядро уже не знает такой задачи: экран показывал прогресс, которого нет,
+      // и «Отменить» выглядело сломанным. Убираем карточку сами.
+      if (!stopped) useInstalls.getState().drop(key)
+    })
+    .catch((e) => showToast('Не удалось отменить: ' + e, 'error'))
 }
 
 export function initInstalls(): void {
@@ -135,8 +154,13 @@ export function initInstalls(): void {
     if (p.done) {
       if (!known) return
       if (p.error && known.state === 'run') {
-        useInstalls.getState().patch(p.key, { label: '', msg: p.error, state: 'error' })
-        fade(p.key, 4000)
+        const cancelled = isCancelled(p.error)
+        useInstalls.getState().patch(p.key, {
+          label: '',
+          msg: cancelled ? 'Отменено' : p.error,
+          state: 'error',
+        })
+        fade(p.key, cancelled ? HIDE_MS : 4000)
         return
       }
       if (!p.error && known.state === 'run') {

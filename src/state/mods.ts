@@ -331,7 +331,7 @@ export const useMods = create<ModsState>((set, get) => ({
       }))
       const shown = append ? get().hits : []
       const cfPage = cfBuffer
-      const page = st.modSource === 'all' ? mergeSources(hits, cfPage, shown) : hits
+      const page = st.modSource === 'all' ? mergeSources(hits, cfPage, shown, query) : hits
       set({
         count:
           st.modSource === 'all'
@@ -352,7 +352,7 @@ export const useMods = create<ModsState>((set, get) => ({
       if (st.modSource === 'all' && cfBuffer.length) {
         const shown = append ? get().hits : []
         const cfPage = cfBuffer
-        const page = mergeSources([], cfPage, shown)
+        const page = mergeSources([], cfPage, shown, query)
         set({
           count: shown.length + page.length + ' результатов',
           hits: append ? shown.concat(page) : page,

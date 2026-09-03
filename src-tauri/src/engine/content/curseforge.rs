@@ -68,6 +68,17 @@ pub(crate) fn cf_file_urls(file: &Value, fname: &str) -> Vec<String> {
 }
 
 pub(crate) async fn cf_download(file: &Value, fname: &str, dest: &Path) -> Result<String, String> {
+    cf_download_cancellable(file, fname, dest, None).await
+}
+
+/// Cancellation reaches the transfer itself: a modpack archive on a slow line
+/// takes minutes, and «Отменить» used to wait for the last byte.
+pub(crate) async fn cf_download_cancellable(
+    file: &Value,
+    fname: &str,
+    dest: &Path,
+    cancel: Option<&std::sync::atomic::AtomicBool>,
+) -> Result<String, String> {
     let sha1 = cf_sha1(file);
     let sum = if sha1.is_empty() { None } else { Some(Sum::Sha1(sha1.as_str())) };
     let size = file["fileLength"].as_u64();
@@ -78,7 +89,7 @@ pub(crate) async fn cf_download(file: &Value, fname: &str, dest: &Path) -> Resul
     }
     let mut last = String::new();
     for u in cf_file_urls(file, fname) {
-        match download_checked(&u, dest, sum, size).await {
+        match download_checked_cancellable(&u, dest, sum, size, cancel).await {
             Ok(_) => {
                 if !sha1.is_empty() { adopt_to_store(dest, &sha1); }
                 return Ok(u);
@@ -377,7 +388,7 @@ async fn cf_install_world_job(app: &AppHandle, job: &Job, mod_id: u32, profile: 
     let tmp = data_dir().join("tmp").join(format!("cfworld-{}-{}.zip", mod_id, fid));
     job.rename(&fname);
     job.emit(app, 35.0, &format!("Скачиваем {}…", fname));
-    let dl = cf_download(&file, &fname, &tmp).await
+    let dl = cf_download_cancellable(&file, &fname, &tmp, Some(job.cancel_flag())).await
         .map_err(|e| format!("Не скачалась карта: {}", e))?;
     let ex = data_dir().join("tmp").join(format!("cfworld-{}", mod_id));
     job.check()?;
@@ -545,7 +556,7 @@ async fn cf_install_modpack_job(app: &AppHandle, job: &Job, mod_id: u32, file_id
     let tmp = data_dir().join("tmp").join(format!("cf-{}-{}.zip", mod_id, fid));
     job.emit(app, 15.0, "Скачиваем модпак…");
     let _ = std::fs::remove_file(&tmp);
-    cf_download(file, &fname, &tmp).await
+    cf_download_cancellable(file, &fname, &tmp, Some(job.cancel_flag())).await
         .map_err(|e| format!("Не скачался архив модпака: {}", e))?;
     job.check()?;
     let ex = data_dir().join("tmp").join(format!("cf-{}", mod_id));
@@ -585,7 +596,7 @@ async fn cf_install_modpack_job(app: &AppHandle, job: &Job, mod_id: u32, file_id
                 match safe_file_name(d["fileName"].as_str().unwrap_or("")) {
                     Ok(fn2) => {
                         let dest = safe_child(&pdir.join("mods"), &fn2)?;
-                        if let Err(e) = cf_download(d, &fn2, &dest).await {
+                        if let Err(e) = cf_download_cancellable(d, &fn2, &dest, Some(job.cancel_flag())).await {
                             if required { failed.push(format!("{} ({})", fn2, e)) } else { skipped.push(fn2) }
                         }
                     }

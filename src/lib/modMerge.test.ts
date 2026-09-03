@@ -44,6 +44,28 @@ test('sorting stays by downloads', () => {
   expect(merged.map((h) => h.title)).toEqual(['B', 'C', 'A'])
 })
 
+// Reported 03.09.2026: a search for «vanilla like» showed RLCraft and ATM10,
+// because a 30M-download pack outranks the pack the player actually typed for.
+test('a search orders by the query, not by downloads', () => {
+  const merged = mergeSources(
+    [hit('Vanilla Like Experience', 265), hit('Vanilla But I Like It', 400)],
+    [hit('RLCraft', 30_000_000), hit('All the Mods 10', 21_000_000)],
+    [],
+    'vanilla like',
+  )
+  expect(merged.map((h) => h.title)).toEqual([
+    'Vanilla Like Experience',
+    'Vanilla But I Like It',
+    'RLCraft',
+    'All the Mods 10',
+  ])
+})
+
+test('an empty query keeps the download order', () => {
+  const merged = mergeSources([hit('A', 1), hit('B', 30)], [hit('C', 20)], [], '   ')
+  expect(merged.map((h) => h.title)).toEqual(['B', 'C', 'A'])
+})
+
 test('a title that normalises to nothing falls back to the slug', () => {
   expect(modKey(hit('(Fabric)', 1, 'shiny-mod'))).toBe('shiny-mod')
 })

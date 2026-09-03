@@ -752,7 +752,7 @@ export function HostingManage({
         ) : null}
 
         {tab === 'settings' ? (
-          <div className="card set-group" style={{ padding: '10px 20px 18px' }}>
+          <div className="card set-group host-set-grid" style={{ padding: '10px 20px 18px' }}>
             <Cap first>Сервер</Cap>
             <Row k="Название" sub="Видно в списке серверов и в панели">
               <ApplyField value={cur.name || ''} label="Сохранить" busy={saving === 'name'} onApply={rename} />

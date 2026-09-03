@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+#[cfg(windows)]
 use std::process::Command;
 use std::time::Duration;
 
@@ -28,12 +29,46 @@ const PART_BUFFER: usize = 256 * 1024;
 /// folder there would let a neighbour swap the installer between the signature
 /// check and the launch. %LOCALAPPDATA% is ours, and rules that forbid running
 /// executables out of %TEMP% do not fire on it either.
+#[cfg(windows)]
 fn base_dir() -> PathBuf {
     match std::env::var_os("LOCALAPPDATA") {
         Some(local) if !local.is_empty() => PathBuf::from(local).join("Millida").join("setup"),
         _ => std::env::temp_dir(),
     }
 }
+
+/// Same reasoning as on Windows, and /tmp is the worse case of it: shared by
+/// every account on the machine.
+#[cfg(unix)]
+fn base_dir() -> PathBuf {
+    let home = home_dir().ok();
+    #[cfg(target_os = "macos")]
+    let dir = home.map(|h| h.join("Library").join("Caches").join("Millida").join("setup"));
+    #[cfg(not(target_os = "macos"))]
+    let dir = std::env::var_os("XDG_CACHE_HOME")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| home.map(|h| h.join(".cache")))
+        .map(|cache| cache.join("millida").join("setup"));
+    dir.unwrap_or_else(std::env::temp_dir)
+}
+
+#[cfg(unix)]
+pub fn home_dir() -> Result<PathBuf, String> {
+    std::env::var_os("HOME")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .ok_or_else(|| "не найдена домашняя папка: переменная HOME пуста".to_string())
+}
+
+/// The file the manifest points at for this platform: an NSIS installer, an
+/// AppImage or a packed .app.
+#[cfg(windows)]
+pub const PAYLOAD_NAME: &str = "millida-launcher-setup.exe";
+#[cfg(target_os = "linux")]
+pub const PAYLOAD_NAME: &str = "millida-launcher.AppImage";
+#[cfg(target_os = "macos")]
+pub const PAYLOAD_NAME: &str = "millida-launcher.app.tar.gz";
 
 /// Removes the working directory on every path out, including the error ones:
 /// a half-downloaded installer left behind is what an antivirus reports.
@@ -91,6 +126,57 @@ pub fn sweep_stale() {
             let _ = std::fs::remove_dir_all(entry.path());
         }
     }
+}
+
+/// The lock a second copy trips over: two installers would race over the same
+/// working files and hand the same app to two unpackers at once.
+#[cfg(unix)]
+pub struct Lock(PathBuf);
+
+#[cfg(unix)]
+impl Drop for Lock {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+#[cfg(unix)]
+pub enum Instance {
+    Held(#[allow(dead_code)] Lock),
+    AlreadyRunning,
+    Unknown,
+}
+
+/// A lock file that could not be taken at all is not a second copy: refusing to
+/// start there would look like the installer doing nothing.
+#[cfg(unix)]
+pub fn single_instance() -> Instance {
+    let dir = base_dir();
+    if std::fs::create_dir_all(&dir).is_err() {
+        return Instance::Unknown;
+    }
+    let path = dir.join("setup.lock");
+    for _ in 0..2 {
+        match std::fs::OpenOptions::new().write(true).create_new(true).open(&path) {
+            Ok(_) => return Instance::Held(Lock(path)),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                // A killed run leaves the file behind, and only a fresh one
+                // really means another installer is working right now.
+                let fresh = std::fs::metadata(&path)
+                    .and_then(|meta| meta.modified())
+                    .map(|time| time.elapsed().map(|age| age < STALE_AFTER).unwrap_or(true))
+                    .unwrap_or(true);
+                if fresh {
+                    return Instance::AlreadyRunning;
+                }
+                if std::fs::remove_file(&path).is_err() {
+                    return Instance::Unknown;
+                }
+            }
+            Err(_) => return Instance::Unknown,
+        }
+    }
+    Instance::Unknown
 }
 
 pub fn client() -> Result<Client, String> {
@@ -423,6 +509,7 @@ pub fn verify(file: &Path, signature: &str) -> Result<(), String> {
 /// /S installs without questions, /R starts the launcher afterwards. The NSIS
 /// bundle is built in currentUser mode, so neither step asks for administrator
 /// rights — with a per-machine bundle a silent install would fail silently.
+#[cfg(windows)]
 pub fn run_installer(file: &Path, cwd: &Path) -> Result<(), String> {
     let status = Command::new(file)
         .args(["/S", "/R"])
