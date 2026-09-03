@@ -65,6 +65,12 @@ impl Job {
         Ok(Job { key, cancel })
     }
 
+    /// Handed to the transfer layer so a long download stops mid-body instead
+    /// of only between files.
+    pub(crate) fn cancel_flag(&self) -> &AtomicBool {
+        &self.cancel
+    }
+
     pub(crate) fn cancelled(&self) -> bool {
         self.cancel.load(Ordering::Relaxed)
     }

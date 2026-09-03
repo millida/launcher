@@ -205,7 +205,12 @@ async fn install_modpack_job(app: &AppHandle, job: &Job, slug: String, version_i
     let file = ver["files"].as_array().and_then(|fs| fs.iter().find(|f| f["primary"]==true).or(fs.first())).ok_or("Файл модпака не найден")?;
     let tmp = data_dir().join("tmp").join(format!("{}-{}.mrpack", slug, vid));
     job.emit(app, 15.0, "Скачиваем модпак…");
-    download_fresh(file["url"].as_str().ok_or("Нет ссылки на файл модпака")?, &tmp).await?;
+    download_fresh_cancellable(
+        file["url"].as_str().ok_or("Нет ссылки на файл модпака")?,
+        &tmp,
+        job.cancel_flag(),
+    )
+    .await?;
     let ex = data_dir().join("tmp").join(&slug);
     let _ = std::fs::remove_dir_all(&ex);
     std::fs::create_dir_all(&ex).map_err(|e| e.to_string())?;

@@ -17,7 +17,23 @@ pub const MANIFEST_URLS: &[&str] = &[
     "https://millida.net/launcher/install.json",
 ];
 
+/// The keys of latest.json, which the release pipeline fills per target. A stub
+/// built for a target with no key would install someone else's build.
+#[cfg(all(windows, target_arch = "x86_64"))]
 pub const PLATFORM_KEY: &str = "windows-x86_64";
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+pub const PLATFORM_KEY: &str = "linux-x86_64";
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+pub const PLATFORM_KEY: &str = "darwin-aarch64";
+#[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+pub const PLATFORM_KEY: &str = "darwin-x86_64";
+
+#[cfg(not(any(
+    all(windows, target_arch = "x86_64"),
+    all(target_os = "linux", target_arch = "x86_64"),
+    all(target_os = "macos", any(target_arch = "aarch64", target_arch = "x86_64"))
+)))]
+compile_error!("для этой платформы лаунчер не собирается — стаб ставить нечего");
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Build {
@@ -61,7 +77,7 @@ pub fn parse(doc: &str) -> Result<Build, String> {
     let url = entry["url"].as_str().unwrap_or("").trim().to_string();
     let signature = entry["signature"].as_str().unwrap_or("").trim().to_string();
     if url.is_empty() || signature.is_empty() {
-        return Err("в списке сборок нет сборки под Windows".into());
+        return Err(format!("в списке сборок нет сборки под {}", PLATFORM_KEY));
     }
     check_url(&url)?;
     Ok(Build { version, url, signature })
@@ -70,6 +86,21 @@ pub fn parse(doc: &str) -> Result<Build, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The stub must never install a build meant for another platform: the
+    /// manifest is one document with an entry per key.
+    #[test]
+    fn parse_ignores_other_platforms() {
+        let other = if PLATFORM_KEY == "linux-x86_64" { "windows-x86_64" } else { "linux-x86_64" };
+        let doc = format!(
+            r#"{{"version":"1.0.9","platforms":{{"{}":{{"url":"https://launcher-storage.millida.net/a","signature":"c2ln"}}}}}}"#,
+            other
+        );
+        assert!(
+            parse(&doc).is_err(),
+            "сборка под чужую платформу обязана отклоняться, иначе стаб скачает неисполняемый файл"
+        );
+    }
 
     /// The key is baked into the stub and never updated. Drift from
     /// tauri.conf.json and the stub installs nothing, with no way to ship a fix.
@@ -86,8 +117,8 @@ mod tests {
 
     fn doc(url: &str) -> String {
         format!(
-            r#"{{"version":"1.0.9","platforms":{{"windows-x86_64":{{"url":"{}","signature":"c2ln"}}}}}}"#,
-            url
+            r#"{{"version":"1.0.9","platforms":{{"{}":{{"url":"{}","signature":"c2ln"}}}}}}"#,
+            PLATFORM_KEY, url
         )
     }
 
@@ -120,7 +151,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_takes_windows_build() {
+    fn parse_takes_own_platform_build() {
         let b = parse(&doc("https://launcher-storage.millida.net/1.0.9/x/a-setup.exe"))
             .expect("манифест должен разбираться");
         assert_eq!(b.version, "1.0.9", "версия берётся из манифеста");
@@ -138,13 +169,13 @@ mod tests {
     #[test]
     fn parse_rejects_missing_pieces() {
         let cases = [
-            r#"{"platforms":{"windows-x86_64":{"url":"https://millida.net/a.exe","signature":"c2ln"}}}"#,
-            r#"{"version":"1.0.9","platforms":{"linux-x86_64":{"url":"https://millida.net/a","signature":"c2ln"}}}"#,
-            r#"{"version":"1.0.9","platforms":{"windows-x86_64":{"url":"https://millida.net/a.exe"}}}"#,
-            "не json",
+            format!(r#"{{"platforms":{{"{}":{{"url":"https://millida.net/launcher/a","signature":"c2ln"}}}}}}"#, PLATFORM_KEY),
+            r#"{"version":"1.0.9","platforms":{"solaris-sparc":{"url":"https://millida.net/launcher/a","signature":"c2ln"}}}"#.to_string(),
+            format!(r#"{{"version":"1.0.9","platforms":{{"{}":{{"url":"https://millida.net/launcher/a"}}}}}}"#, PLATFORM_KEY),
+            "не json".to_string(),
         ];
         for case in cases {
-            assert!(parse(case).is_err(), "неполный манифест обязан отклоняться: {}", case);
+            assert!(parse(&case).is_err(), "неполный манифест обязан отклоняться: {}", case);
         }
     }
 }

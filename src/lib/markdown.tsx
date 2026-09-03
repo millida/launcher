@@ -36,13 +36,17 @@ function transform(src: string, ctx: Ctx): string {
   return s
 }
 
+/// Markdown списки — самая частая разметка в описаниях модов, а рендерились
+/// они одной слипшейся строкой: одиночный перевод строки не давал разрыва.
+const LIST_RE = /^([ \t]*)(?:[-*+]|\d{1,2}[.)])[ \t]+/
+const HR_RE = /^[ \t]*(?:-{3,}|\*{3,}|_{3,})[ \t]*$/
+
 function pushText(out: ReactNode[], ctx: Ctx, text: string) {
-  const parts = text.split(/\n{2,}/)
-  parts.forEach((part, i) => {
-    if (i > 0) {
-      out.push(<br key={'md' + ctx.key++} />)
-      out.push(<br key={'md' + ctx.key++} />)
-    }
+  const lines = text.split('\n')
+  lines.forEach((line, i) => {
+    if (i > 0) out.push(<br key={'md' + ctx.key++} />)
+    if (HR_RE.test(line)) return
+    const part = line.replace(LIST_RE, (_m, pad: string) => pad + '• ')
     if (part) out.push(part)
   })
 }
@@ -80,15 +84,25 @@ function assemble(s: string, ctx: Ctx): ReactNode[] {
   return out
 }
 
-const HTML_RE = /<(p|div|br|h[1-6]|strong|em|b|i|ul|ol|li|img|a|blockquote|code|pre|table)\b[^>]*>/i
-
 const BLOCK_TAGS = new Set(['P', 'DIV', 'UL', 'OL', 'LI', 'BLOCKQUOTE', 'PRE', 'SECTION', 'ARTICLE'])
 const HEADING_TAGS = new Set(['H1', 'H2', 'H3', 'H4', 'H5', 'H6'])
 const BOLD_TAGS = new Set(['B', 'STRONG'])
 const ITALIC_TAGS = new Set(['I', 'EM'])
+const TABLE_TAGS = new Set(['TABLE', 'THEAD', 'TBODY', 'TR', 'TH', 'TD'])
 
 const LI_STYLE = { display: 'list-item', marginLeft: '18px' }
 const CODE_STYLE = { fontFamily: 'ui-monospace, monospace', fontSize: '12.5px' }
+const DETAILS_STYLE = {
+  margin: '8px 0',
+  padding: '8px 10px',
+  borderRadius: '10px',
+  background: 'var(--m-inset)',
+}
+const SUMMARY_STYLE = { cursor: 'pointer', fontWeight: 600, color: 'var(--m-fg)' }
+const HR_STYLE = { border: 0, borderTop: '1px solid var(--m-border)', margin: '12px 0' }
+const TABLE_STYLE = { borderCollapse: 'collapse' as const, width: '100%', margin: '8px 0', fontSize: '12.5px' }
+const CELL_STYLE = { border: '1px solid var(--m-border)', padding: '4px 8px', textAlign: 'left' as const }
+const CENTER_STYLE = { textAlign: 'center' as const, margin: '0 0 8px' }
 
 /// Some Modrinth descriptions are stored as raw HTML; parsed into React nodes through an
 /// allowlist instead of dangerouslySetInnerHTML.
@@ -147,6 +161,43 @@ function htmlNodes(node: Node, ctx: Ctx): ReactNode[] {
     }
     if (ITALIC_TAGS.has(tag)) {
       out.push(<i key={key}>{htmlNodes(el, ctx)}</i>)
+      return
+    }
+    if (tag === 'DETAILS') {
+      out.push(
+        <details key={key} style={DETAILS_STYLE}>
+          {htmlNodes(el, ctx)}
+        </details>,
+      )
+      return
+    }
+    if (tag === 'SUMMARY') {
+      out.push(
+        <summary key={key} style={SUMMARY_STYLE}>
+          {htmlNodes(el, ctx)}
+        </summary>,
+      )
+      return
+    }
+    if (tag === 'HR') {
+      out.push(<hr key={key} style={HR_STYLE} />)
+      return
+    }
+    if (tag === 'CENTER') {
+      out.push(
+        <div key={key} style={CENTER_STYLE}>
+          {htmlNodes(el, ctx)}
+        </div>,
+      )
+      return
+    }
+    if (TABLE_TAGS.has(tag)) {
+      const Tag = tag.toLowerCase() as 'table' | 'thead' | 'tbody' | 'tr' | 'th' | 'td'
+      out.push(
+        <Tag key={key} style={tag === 'TABLE' ? TABLE_STYLE : tag === 'TH' || tag === 'TD' ? CELL_STYLE : undefined}>
+          {htmlNodes(el, ctx)}
+        </Tag>,
+      )
       return
     }
     if (tag === 'CODE' || tag === 'PRE') {
@@ -210,7 +261,10 @@ function mdBlock(body: string, ctx: Ctx): ReactNode[] {
   return out
 }
 
+/// Описания приходят и как Markdown, и как HTML, и как их смесь — часть тегов
+/// (details, table, center) не попадала ни в один список и уезжала игроку
+/// текстом. Единственный путь: разобрать всё как HTML, а текстовые узлы внутри
+/// прогнать через Markdown.
 export function renderMarkdown(body: string): ReactNode[] {
-  if (HTML_RE.test(body)) return renderHtml(body)
-  return mdBlock(body, { nodes: [], key: 0 })
+  return renderHtml(body)
 }

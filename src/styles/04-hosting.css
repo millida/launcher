@@ -229,7 +229,18 @@
 .host-crash-t{font-size:13.5px;font-weight:700;color:var(--m-danger)}
 .host-crash-s{font-size:12.5px;color:var(--m-fg-muted);line-height:1.5;margin-top:3px}
 
+/* Server settings: one setting per cell instead of one per screen row —
+   the list ran for six screens and the value sat far from its label. */
+.host-set-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px;align-items:start}
+.host-set-grid>.cap,.host-set-grid>.faint-note{grid-column:1/-1}
+.host-manage-body .host-set-grid .set-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;min-height:46px;padding:8px 12px;border:1px solid var(--m-border);border-radius:var(--m-r-md);background:var(--m-inset)}
+.host-set-grid .set-row .lab{flex:1 1 120px;font-size:13px}
+.host-set-grid .set-row .lab small{font-size:11.5px;margin-top:1px}
+.host-set-grid .set-row>div:last-child{flex:0 1 auto;min-width:0;flex-wrap:wrap;justify-content:flex-end}
+.host-set-grid .set-row .input.sm{width:auto!important;min-width:110px;max-width:190px}
+
 @media(max-width:900px){
   .host-cat-grid{grid-template-columns:1fr}
   .host-notify-k{min-width:auto}
+  .host-set-grid{grid-template-columns:1fr}
 }

@@ -93,6 +93,8 @@
 :root[data-density="compact"] .set-row{padding:8px 0;gap:10px}
 :root[data-density="compact"] .set-row .lab{font-size:13px}
 :root[data-density="compact"] .host-manage-body .set-row{padding:8px 0}
+:root[data-density="compact"] .host-manage-body .host-set-grid .set-row{padding:6px 10px;gap:6px;min-height:40px}
+:root[data-density="compact"] .host-set-grid .set-row .lab{font-size:12.5px}
 :root[data-density="compact"] .set-row.th-publish{gap:6px}
 :root[data-density="compact"] .modal{width:500px;padding:18px}
 :root[data-density="compact"] .modal.mw-xs{width:390px}
@@ -199,6 +201,8 @@
 :root[data-density="roomy"] .set-row{padding:14px 0;gap:14px}
 :root[data-density="roomy"] .set-row .lab{font-size:15px}
 :root[data-density="roomy"] .host-manage-body .set-row{padding:14px 0}
+:root[data-density="roomy"] .host-manage-body .host-set-grid .set-row{padding:12px 14px;gap:12px;min-height:54px}
+:root[data-density="roomy"] .host-set-grid .set-row .lab{font-size:14px}
 :root[data-density="roomy"] .set-row.th-publish{gap:10px}
 :root[data-density="roomy"] .modal{width:600px;padding:28px}
 :root[data-density="roomy"] .modal.mw-xs{width:470px}

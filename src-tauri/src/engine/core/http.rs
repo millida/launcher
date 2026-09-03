@@ -2,8 +2,11 @@ use futures::StreamExt;
 use serde_json::Value;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
 use std::time::Duration;
+
+use super::jobs::CANCELLED;
 
 const UA: &str = "MillidaLauncher/1.0 (+https://millida.net)";
 const JSON_TIMEOUT: Duration = Duration::from_secs(30);
@@ -388,6 +391,16 @@ fn publish(part: &Path, dest: &Path, sum: Option<Sum<'_>>, size: Option<u64>) ->
 /// Streams into a private `.part` file and renames on success so an aborted
 /// download can never be mistaken for a complete file.
 async fn fetch(url: &str, dest: &Path, sum: Option<Sum<'_>>, size: Option<u64>) -> Result<(), String> {
+    fetch_cancellable(url, dest, sum, size, None).await
+}
+
+async fn fetch_cancellable(
+    url: &str,
+    dest: &Path,
+    sum: Option<Sum<'_>>,
+    size: Option<u64>,
+    cancel: Option<&AtomicBool>,
+) -> Result<(), String> {
     if url.trim().is_empty() {
         return Err("пустая ссылка на файл".into());
     }
@@ -404,12 +417,18 @@ async fn fetch(url: &str, dest: &Path, sum: Option<Sum<'_>>, size: Option<u64>) 
             } else {
                 route.clone()
             };
-            match fetch_once(&target, &part, sum, size).await {
+            match fetch_once(&target, &part, sum, size, cancel).await {
                 Ok(()) => return publish(&part, dest, sum, size),
                 Err(e) => {
                     let _ = std::fs::remove_file(&part);
                     last = e;
                 }
+            }
+            // A cancelled download must not be retried: three mirrors × three
+            // attempts kept a slow connection busy long after the player asked
+            // the install to stop.
+            if cancelled(cancel) {
+                return Err(CANCELLED.into());
             }
             if attempt < TRIES {
                 tokio::time::sleep(Duration::from_millis(400 * attempt as u64)).await;
@@ -419,7 +438,20 @@ async fn fetch(url: &str, dest: &Path, sum: Option<Sum<'_>>, size: Option<u64>) 
     Err(last)
 }
 
-async fn fetch_once(url: &str, part: &Path, sum: Option<Sum<'_>>, size: Option<u64>) -> Result<(), String> {
+fn cancelled(cancel: Option<&AtomicBool>) -> bool {
+    cancel.is_some_and(|c| c.load(Ordering::Relaxed))
+}
+
+async fn fetch_once(
+    url: &str,
+    part: &Path,
+    sum: Option<Sum<'_>>,
+    size: Option<u64>,
+    cancel: Option<&AtomicBool>,
+) -> Result<(), String> {
+    if cancelled(cancel) {
+        return Err(CANCELLED.into());
+    }
     let resp = client().get(url).send().await.map_err(|e| format!("{}: {}", url, net_err(&e)))?;
     if !resp.status().is_success() {
         return Err(format!("{} → {}", url, resp.status()));
@@ -429,6 +461,12 @@ async fn fetch_once(url: &str, part: &Path, sum: Option<Sum<'_>>, size: Option<u
     let mut written: u64 = 0;
     let mut stream = resp.bytes_stream();
     while let Some(chunk) = stream.next().await {
+        // Cancellation has to reach the body loop: a modpack archive on a slow
+        // line takes minutes, and until it landed pressing «Отменить» changed
+        // nothing the player could see.
+        if cancelled(cancel) {
+            return Err(CANCELLED.into());
+        }
         let chunk = chunk.map_err(|e| format!("{}: обрыв загрузки ({})", url, e))?;
         if let Some(h) = hasher.as_mut() {
             h.update(&chunk);
@@ -472,6 +510,16 @@ pub(crate) async fn download_fresh(url: &str, dest: &Path) -> Result<(), String>
     fetch(url, dest, None, None).await
 }
 
+/// Same, for archives an install job downloads: the job's cancel flag stops the
+/// transfer mid-body instead of after the last byte.
+pub(crate) async fn download_fresh_cancellable(
+    url: &str,
+    dest: &Path,
+    cancel: &AtomicBool,
+) -> Result<(), String> {
+    fetch_cancellable(url, dest, None, None, Some(cancel)).await
+}
+
 /// Verification reads and hashes the file, so it runs off the async runtime to
 /// avoid blocking the worker thread that other downloads share.
 pub(crate) async fn download_checked(
@@ -479,6 +527,16 @@ pub(crate) async fn download_checked(
     dest: &Path,
     sum: Option<Sum<'_>>,
     size: Option<u64>,
+) -> Result<(), String> {
+    download_checked_cancellable(url, dest, sum, size, None).await
+}
+
+pub(crate) async fn download_checked_cancellable(
+    url: &str,
+    dest: &Path,
+    sum: Option<Sum<'_>>,
+    size: Option<u64>,
+    cancel: Option<&AtomicBool>,
 ) -> Result<(), String> {
     if dest.exists() {
         let owned: Option<(u8, String)> = sum.map(|s| match s {
@@ -502,7 +560,7 @@ pub(crate) async fn download_checked(
         }
         let _ = std::fs::remove_file(dest);
     }
-    fetch(url, dest, sum, size).await
+    fetch_cancellable(url, dest, sum, size, cancel).await
 }
 
 /// Same contract as `download_checked`, plus the shared store: a file another
@@ -578,6 +636,22 @@ mod tests {
         assert!(
             publish(&missing_part, &dest, None, Some(999)).is_err(),
             "чужой файл другого размера принимать нельзя"
+        );
+    }
+
+    /// Отмена во время загрузки: раньше флаг смотрели только между файлами, и
+    /// «Отменить» на архиве модпака ждало последнего байта, а три зеркала по три
+    /// попытки продолжали качать после нажатия.
+    #[tokio::test]
+    async fn a_cancelled_download_gives_up_at_once() {
+        let dest = tmp("cancel").join("pack.mrpack");
+        let flag = AtomicBool::new(true);
+        let err = download_fresh_cancellable(DEAD, &dest, &flag).await.unwrap_err();
+        assert_eq!(err, CANCELLED, "отменённая загрузка обязана вернуть именно отмену");
+        assert!(!dest.exists(), "после отмены целевой файл не создаётся");
+        assert!(
+            !part_path(&dest).exists(),
+            "временный файл отменённой загрузки не должен оставаться на диске"
         );
     }
 
