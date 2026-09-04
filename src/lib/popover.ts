@@ -9,6 +9,9 @@ export interface Popover<T extends HTMLElement> {
   closing: boolean
   mounted: boolean
   ref: React.RefObject<T | null>
+  /// A panel rendered through a portal is no longer a child of `ref`, so an
+  /// outside click has to know about it or the first click inside closes it.
+  panelRef: React.RefObject<HTMLElement | null>
   toggle: () => void
   close: () => void
 }
@@ -19,6 +22,7 @@ export function usePopover<T extends HTMLElement>(): Popover<T> {
   const [open, setOpen] = useState(false)
   const [closing, setClosing] = useState(false)
   const ref = useRef<T>(null)
+  const panelRef = useRef<HTMLElement>(null)
   const exit = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   const close = () => {
@@ -44,7 +48,10 @@ export function usePopover<T extends HTMLElement>(): Popover<T> {
   useEffect(() => {
     if (!open) return
     const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) close()
+      const target = e.target as Node
+      if (ref.current && ref.current.contains(target)) return
+      if (panelRef.current && panelRef.current.contains(target)) return
+      if (ref.current) close()
     }
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') close()
@@ -57,5 +64,5 @@ export function usePopover<T extends HTMLElement>(): Popover<T> {
     }
   }, [open])
 
-  return { open, closing, mounted: open || closing, ref, toggle, close }
+  return { open, closing, mounted: open || closing, ref, panelRef, toggle, close }
 }
