@@ -98,8 +98,19 @@ export function micGateStep(
   return { noise, gate: s.gate + (target - s.gate) * speed, hold }
 }
 
+/**
+ * Уровень, который слышат ворота: сигнал ПОСЛЕ усиления. Усиление существует
+ * ради тихого микрофона, а ворота на сыром сигнале держали такой микрофон
+ * закрытым при любом положении ползунка — собеседник слышал обрывки, и
+ * «усиление не помогает» было буквальной правдой.
+ */
+export function micGateInput(rms: number, gain: number): number {
+  return rms * gain
+}
+
 const SOURCE = `
 const micGateStep = ${micGateStep.toString()}
+const micGateInput = ${micGateInput.toString()}
 class MillidaMic extends AudioWorkletProcessor {
   constructor(options) {
     super()
@@ -128,7 +139,7 @@ class MillidaMic extends AudioWorkletProcessor {
     }
     let sum = 0
     for (let i = 0; i < input.length; i++) sum += input[i] * input[i]
-    const rms = Math.sqrt(sum / input.length)
+    const rms = micGateInput(Math.sqrt(sum / input.length), this.gain)
 
     const t = this.tune
     this.state = micGateStep(this.state, rms, t.open, t.floor, t.residual)
