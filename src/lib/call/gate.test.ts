@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { MIC_TUNING, micGateStep, type GateState } from './mic-worklet'
+import { MIC_TUNING, micGateInput, micGateStep, type GateState } from './mic-worklet'
 
 const START: GateState = { noise: 0.01, gate: 0, hold: 0 }
 
@@ -44,6 +44,15 @@ describe('шумоподавление микрофона', () => {
     const soft = run(START, 0.009, 300, 'standard')
     const hard = run(START, 0.009, 300, 'strong')
     expect(hard.gate).toBeLessThan(soft.gate)
+  })
+
+  it('тихий микрофон с усилением открывает ворота: ползунок усиления обязан помогать', () => {
+    const room = run(START, 0.001, 200, 'standard')
+    const quietSpeech = 0.003
+    const raw = run(room, micGateInput(quietSpeech, 1), 30, 'standard')
+    const boosted = run(room, micGateInput(quietSpeech, 2.5), 30, 'standard')
+    expect(raw.gate).toBeLessThan(0.2)
+    expect(boosted.gate).toBeGreaterThan(0.9)
   })
 
   it('выключенное шумоподавление пропускает всё как есть', () => {

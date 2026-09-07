@@ -43,8 +43,25 @@ export function NewBuildModal() {
   const [join, setJoin] = useState<JoinIntent | null>(null)
   const lb = useLoaderBuilds(loader, ver, modal.open)
   const mcList = useMcVersionList((s) => s.list)
+  const mcListError = useMcVersionList((s) => s.error)
   const showSnapshots = useMcVersionList((s) => s.show)
   const verOpts = useMemo(() => versionOptions(mcList, showSnapshots), [mcList, showSnapshots])
+  const [verLoading, setVerLoading] = useState(false)
+
+  const loadVersions = (preferred?: string) => {
+    setVerLoading(true)
+    ensureMcVersionList()
+      .then(() => {
+        const rel = useMcVersionList
+          .getState()
+          .list.filter((v) => v.kind === 'release')
+          .map((v) => v.id)
+        const wanted = preferred ? pickVersionForServer(rel, [preferred]) : ''
+        setVer((cur) => wanted || cur || rel[0] || '')
+      })
+      .catch((e) => showToast('Список версий Minecraft не загрузился: ' + e, 'error'))
+      .finally(() => setVerLoading(false))
+  }
 
   useEffect(() => {
     if (!modal.open) return
@@ -54,18 +71,7 @@ export function NewBuildModal() {
     setJoin(pre?.join || null)
     setEditor(false)
     setLoaderVer(AUTO_LOADER_VERSION)
-    ensureMcVersionList()
-      .then(() => {
-        const rel = useMcVersionList
-          .getState()
-          .list.filter((v) => v.kind === 'release')
-          .map((v) => v.id)
-        const wanted = pre?.version ? pickVersionForServer(rel, [pre.version]) : ''
-        setVer((cur) => wanted || cur || rel[0] || '')
-      })
-      .catch((e) =>
-        showToast('Список версий Minecraft не загрузился: ' + e + '. Проверь интернет и открой окно заново', 'error'),
-      )
+    loadVersions(pre?.version)
   }, [modal.open])
 
   useEffect(() => {
@@ -160,11 +166,25 @@ export function NewBuildModal() {
             search
             value={ver}
             options={verOpts}
+            disabled={!verOpts.length}
+            placeholder={verLoading ? 'Загружаем список…' : 'Список версий не загрузился'}
             onChange={(v) => {
               setVer(v)
               setLoaderVer(AUTO_LOADER_VERSION)
             }}
           />
+          {!verOpts.length && !verLoading && mcListError ? (
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: '8px' }}>
+              <p className="faint-note" style={{ flex: 1, margin: 0 }}>
+                Список версий Minecraft не загрузился: {mcListError.replace(/^Error:\s*/, '')}. Проверь интернет или
+                VPN.
+              </p>
+              <button type="button" className="btn sm secondary" onClick={() => loadVersions()}>
+                <Icon id="i-restart" />
+                Повторить
+              </button>
+            </div>
+          ) : null}
         </div>
         <div className="field">
           <label>Загрузчик</label>
