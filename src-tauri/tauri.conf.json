@@ -221,9 +221,9 @@
     },
     "updater": {
       "endpoints": [
-        "https://launcher-storage.millida.net/latest.json"
+        "https://launcher-storage.millida.net/v2/latest.json"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENGQUI2NEEwQjYwMUZFM0MKUldROC9nRzJvR1NyejZ5M0Z6UmpaaVRWb2F6cDI2VlJOTVN6OGZLRlhMWEZCa21VYUlMb3Erdi8K",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDI5MzUwRDVGRUE4NUI5NzcKUldSM3VZWHFYdzAxS1VyamhaeUdwQkRTNzZwN3U2WXRjaDFpWDZ6b3FvLzN0bkFvY3JwWEFQeCsK",
       "windows": {
         "installMode": "passive"
       }
