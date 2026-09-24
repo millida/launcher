@@ -191,16 +191,54 @@ pub async fn pick_content_files(kind: String) -> Result<Vec<String>, String> {
         "shader" => ("Шейдеры", "Выбери шейдеры"),
         _ => ("Файлы", "Выбери файлы"),
     };
-    let picked = pick_files(dialog().add_filter(filter, exts).set_title(title)).await;
-    Ok(picked
-        .unwrap_or_default()
-        .iter()
-        .map(|p| p.to_string_lossy().to_string())
-        .collect())
+    let picked = pick_files(dialog().add_filter(filter, exts).set_title(title)).await.unwrap_or_default();
+    grant_user_files(&picked);
+    Ok(picked.iter().map(|p| p.to_string_lossy().to_string()).collect())
+}
+
+/// Файлы, которые игрок сам отдал лаунчеру: выбрал в системном диалоге или
+/// перетащил в окно. `add_local_file` копирует только их — путь, придуманный
+/// страницей (XSS, UNC-путь `\\host\share` ради NTLM), в сборку не попадёт
+/// (аудит 24.09.2026, CORE-4).
+fn user_files() -> &'static std::sync::Mutex<std::collections::HashSet<PathBuf>> {
+    static SET: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<PathBuf>>> =
+        std::sync::OnceLock::new();
+    SET.get_or_init(Default::default)
+}
+
+const MAX_USER_FILES: usize = 1024;
+
+pub fn grant_user_files(paths: &[PathBuf]) {
+    let mut set = user_files().lock().unwrap_or_else(|e| e.into_inner());
+    if set.len() + paths.len() > MAX_USER_FILES {
+        set.clear();
+    }
+    set.extend(paths.iter().take(MAX_USER_FILES).cloned());
+}
+
+/// Разрешение одноразовое: файл, который уже скопировали, второй раз по тому же
+/// пути без нового выбора не возьмётся.
+fn take_user_file(path: &std::path::Path) -> bool {
+    user_files().lock().unwrap_or_else(|e| e.into_inner()).remove(path)
+}
+
+fn has_content_ext(kind: &str, path: &std::path::Path) -> bool {
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
+    content_exts(kind).contains(&ext.as_str())
 }
 
 pub async fn add_local_file(profile: String, kind: String, src: String) -> Result<String, String> {
     let srcp = PathBuf::from(&src);
+    if !has_content_ext(&kind, &srcp) {
+        return Err("Файл такого типа в сборку не добавить".into());
+    }
+    if !take_user_file(&srcp) {
+        return Err("Выбери файл кнопкой «С диска» или перетащи его в окно".into());
+    }
+    let meta = std::fs::metadata(&srcp).map_err(|e| e.to_string())?;
+    if !meta.is_file() {
+        return Err("Это не файл".into());
+    }
     let fname = safe_file_name(&srcp.file_name().ok_or("нет имени файла")?.to_string_lossy())?;
     let dir = profile_dir(&profile).join(content_dir(&kind));
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
@@ -232,4 +270,21 @@ pub async fn add_local_file(profile: String, kind: String, src: String) -> Resul
         }
     }
     Ok(fname)
+}
+
+#[cfg(test)]
+mod user_file_tests {
+    use super::*;
+
+    #[test]
+    fn only_a_granted_file_of_the_right_type_passes_and_only_once() {
+        let picked = PathBuf::from("/tmp/millida-test/picked-mod.jar");
+        assert!(!take_user_file(&picked), "без выбора путь не разрешён");
+        grant_user_files(std::slice::from_ref(&picked));
+        assert!(take_user_file(&picked));
+        assert!(!take_user_file(&picked), "разрешение одноразовое");
+        assert!(has_content_ext("mod", &picked));
+        assert!(!has_content_ext("mod", std::path::Path::new("/etc/passwd")));
+        assert!(!has_content_ext("shader", &picked));
+    }
 }

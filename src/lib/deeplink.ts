@@ -13,7 +13,7 @@ import { usePackCode } from '../state/packCode'
 import { runInstall } from '../state/installs'
 import { installCatalogPack } from '../ipc/commands'
 import { keyCatalogPack } from './installKeys'
-import { useFriends, openChat, loadFriends } from '../state/friends'
+import { useFriends, openChatFromLink, loadFriends } from '../state/friends'
 import { callFriend } from '../state/call'
 import { rememberServerName } from '../state/playStats'
 import { quickJoin } from './joinServer'
@@ -148,7 +148,7 @@ function handle(raw: string) {
   if (action === 'chat') {
     const uid = rest || q.get('user') || ''
     setScreen('friends')
-    if (uid) void openChat(uid, q.get('nick') || '').catch(() => {})
+    if (uid) void openChatFromLink(uid).catch(() => {})
     return
   }
   if (action === 'call') {

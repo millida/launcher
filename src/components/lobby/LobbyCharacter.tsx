@@ -341,6 +341,11 @@ export function LobbyCharacter({ on }: { on: boolean }) {
     return () => {
       canvas.removeEventListener('webglcontextlost', onLost)
       viewerRef.current = null
+      // Ссылка для замеров не должна держать снесённую сцену с её холстом.
+      if (import.meta.env.DEV) {
+        const w = window as unknown as { __lobbyEngine?: SkinViewEngine }
+        if (w.__lobbyEngine === engine) delete w.__lobbyEngine
+      }
       setReady(0)
       releaseEngine(engine)
     }

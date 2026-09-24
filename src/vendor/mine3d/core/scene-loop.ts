@@ -1201,6 +1201,7 @@ export class SkinViewEngine {
     if (this._disposed) return;
     this._disposed = true;
     this.stop();
+    this._releaseSharedLut();
     this._nudgeUnbind?.();
     this._nudgeUnbind = null;
     this._disposeDebugOverlays();
@@ -1210,11 +1211,62 @@ export class SkinViewEngine {
     this._postFx = null;
     this._resizeObserver?.disconnect();
     this._outerVoxels.dispose(this.playerObject.skin);
+    this._releaseControlsDocumentListeners();
     this.controls.dispose();
     this.skinTexture?.dispose();
     this.capeTexture?.dispose();
     this._envMap?.dispose();
     this.renderer.dispose();
+  }
+
+  /**
+   * three r182 держит одну DFG-таблицу (DataTexture 'DFG_LUT') на весь модуль
+   * для всех PBR-материалов. Каждый WebGLRenderer вешает на неё слушатель
+   * 'dispose' со своим контекстом WebGL, а renderer.dispose() его не снимает:
+   * таблица в памяти модуля навсегда держит контекст, холст и оторванный экран
+   * вокруг (аудит 24.09.2026, UI-6). dispose() таблицы вызывает все эти
+   * слушатели и снимает их; живые сцены при следующем кадре просто загрузят её
+   * заново (16×16 пикселей). Искать нужно до того, как материалы освобождены.
+   */
+  private _releaseSharedLut(): void {
+    const luts = new Set<Texture>();
+    try {
+      this.scene.traverse((node) => {
+        const material = (node as Mesh).material as Material | Material[] | undefined;
+        if (!material) return;
+        for (const m of Array.isArray(material) ? material : [material]) {
+          const props = this.renderer.properties.get(m) as { uniforms?: Record<string, { value?: unknown }> };
+          const lut = props?.uniforms?.dfgLUT?.value as Texture | undefined;
+          if (lut && typeof lut.dispose === "function") luts.add(lut);
+        }
+      });
+    } catch {
+      // Не нашли — утечка останется, но сцену всё равно освобождаем.
+    }
+    for (const lut of luts) lut.dispose();
+  }
+
+  /**
+   * OrbitControls снимает свой keydown с `canvas.getRootNode()`. Экраны
+   * лаунчера зовут dispose() из очистки эффекта React, когда холст уже вынут
+   * из документа: корнем тогда оказывается сам оторванный узел, слушатель на
+   * document остаётся навсегда и держит холст со всем экраном вокруг него
+   * (аудит 24.09.2026, UI-6: +177 узлов на каждый заход в лобби). Снимаем его
+   * с документа явно, где бы ни был холст.
+   */
+  private _releaseControlsDocumentListeners(): void {
+    const doc = this.canvas.ownerDocument;
+    const c = this.controls as unknown as {
+      _interceptControlDown?: EventListener;
+      _interceptControlUp?: EventListener;
+      _onPointerMove?: EventListener;
+      _onPointerUp?: EventListener;
+    };
+    if (!doc) return;
+    if (c._interceptControlDown) doc.removeEventListener("keydown", c._interceptControlDown, { capture: true });
+    if (c._interceptControlUp) doc.removeEventListener("keyup", c._interceptControlUp, { capture: true });
+    if (c._onPointerMove) doc.removeEventListener("pointermove", c._onPointerMove);
+    if (c._onPointerUp) doc.removeEventListener("pointerup", c._onPointerUp);
   }
 
   /** Product pose ног (±1.9, y=−12, z=0) — после idle ноги не анимируем */

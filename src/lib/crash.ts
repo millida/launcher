@@ -68,13 +68,27 @@ export function recentIssues(): RecentIssue[] {
   return issues.slice()
 }
 
+// Единственная дверь наружу для отчётов об ошибках: отказ от телеметрии
+// выключает их все, а текст и стек уходят без путей с именем пользователя и
+// без токенов (аудит 24.09.2026, CORE-9).
+async function send(body: ErrorReport) {
+  if (!telemetryEnabled()) return
+  const clean: ErrorReport = {
+    ...body,
+    message: redactSecrets(body.message),
+    stack: body.stack ? redactSecrets(body.stack) : undefined,
+    url: body.url ? redactSecrets(body.url) : undefined,
+  }
+  try {
+    await api('/errors', { method: 'POST', body: JSON.stringify(clean) })
+  } catch {}
+}
+
 async function post(body: ErrorReport) {
-  if (sent >= 10) return
+  if (!telemetryEnabled() || sent >= 10) return
   if (isUserEnvironmentError(`${body.name ?? ''} ${body.message} ${body.stack ?? ''}`)) return
   sent += 1
-  try {
-    await api('/errors', { method: 'POST', body: JSON.stringify(body) })
-  } catch {}
+  await send(body)
 }
 
 const gate = createReportGate()
@@ -85,12 +99,11 @@ async function releaseTag(): Promise<string> {
 }
 
 async function postScoped(channel: ReportChannel, body: ErrorReport) {
+  if (!telemetryEnabled()) return
   if (isUserEnvironmentError(`${body.name ?? ''} ${body.message} ${body.stack ?? ''}`)) return
   if (!gate.admit(channel, (body.name ?? '') + '\n' + body.message)) return
   const release = await releaseTag()
-  try {
-    await api('/errors', { method: 'POST', body: JSON.stringify({ ...body, release }) })
-  } catch {}
+  await send({ ...body, release })
 }
 
 function compact(context: Record<string, unknown>): Record<string, unknown> {
@@ -229,6 +242,7 @@ export async function reportInstallFailure(key: string, title: string, err: unkn
 export async function reportError(where: string, err: unknown, fatal = false) {
   const e = err instanceof Error ? err : new Error(String(err))
   remember('error', (where ? where + ': ' : '') + (e.name && e.name !== 'Error' ? e.name + ' ' : '') + e.message)
+  if (!telemetryEnabled()) return
   if (!version && hasTauri()) version = await appVersion().catch(() => '')
   await post({
     source: 'LAUNCHER',
@@ -248,7 +262,9 @@ export async function flushNativeCrashes() {
     if (!crashes.length) return
     if (!version) version = await appVersion().catch(() => '')
     for (const c of crashes) remember('crash', c.file + ': ' + c.message)
-    for (const c of crashes.slice(0, 5)) {
+    // Без согласия на телеметрию паники только показываются в диагностике и
+    // стираются с диска — наружу не уходят.
+    for (const c of telemetryEnabled() ? crashes.slice(0, 5) : []) {
       await post({
         source: 'LAUNCHER',
         level: 'FATAL',

@@ -14,7 +14,7 @@ mod uiwatch;
 mod navguard;
 
 /// Directories the webview may read through `asset://`: the media files it
-/// plays and shows plus the images a theme pack ships, nothing else. The token
+/// plays and shows, nothing else. The token
 /// vault (`secrets.bin`, `vault.key`) sits directly under `data_dir()` and
 /// imported files land in `game_root()/profiles/...`, so neither root may ever
 /// be granted — an XSS would read the vault and any copied file straight out of
@@ -23,7 +23,7 @@ mod navguard;
 /// for the list (see `commands::profiles::list_screenshots`).
 pub fn asset_dirs() -> Vec<std::path::PathBuf> {
     let data = engine::data_dir();
-    vec![data.join("wallpaper"), data.join("music"), data.join("sounds-v2"), data.join("themes")]
+    vec![data.join("wallpaper"), data.join("music"), data.join("sounds-v2")]
 }
 
 pub fn allow_assets(app: &tauri::AppHandle) {
@@ -287,21 +287,6 @@ pub fn run() {
             commands::overlay::overlay_ready,
             commands::overlay::overlay_hit_areas,
             commands::overlay::overlay_open,
-            commands::themes::list_themes,
-            commands::themes::read_theme,
-            commands::themes::import_theme,
-            commands::themes::delete_theme,
-            commands::themes::open_themes_folder,
-            commands::themes::export_theme,
-            commands::themes::save_theme,
-            commands::themes::add_theme_asset,
-            commands::themes::catalog_themes,
-            commands::themes::catalog_my_themes,
-            commands::themes::catalog_install_theme,
-            commands::themes::catalog_theme_installed,
-            commands::themes::catalog_publish_theme,
-            commands::themes::catalog_unpublish_theme,
-            commands::themes::catalog_like_theme,
             commands::system::dedupe_scan,
             commands::system::dedupe_run,
             commands::system::dedupe_gc,
