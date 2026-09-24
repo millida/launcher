@@ -1,0 +1,1568 @@
+/* ============================================================
+   «ВО ЧТО ИГРАЕМ» — КАТАЛОГ РЕЖИМОВ (приказ владельца 23.09.2026)
+   ------------------------------------------------------------
+   Полки как Discover в Fortnite: карточка — картинка 16:9, название,
+   живой онлайн. Первым — герой премиум-сборки. Серверный режим —
+   крупная карточка с баннером лучшего сервера, внутри список серверов.
+   Текст поверх картинки лежит на плотной подложке: градиентов нет.
+   ============================================================ */
+
+.playhub.on { display: flex; flex-direction: column; gap: 26px; padding-bottom: 32px; }
+
+.ph-head { display: flex; align-items: center; gap: 14px; }
+.ph-head h1 { font: 800 26px/1.1 var(--m-font); letter-spacing: -0.02em; color: var(--m-fg); }
+.ph-back { flex: none; }
+
+/* ---------- герой ---------- */
+.ph-hero {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  width: 100%;
+  height: clamp(220px, 30vh, 320px);
+  padding: 22px 24px;
+  overflow: hidden;
+  text-align: left;
+  color: var(--m-fg);
+  background: var(--m-inset);
+  --px-n: 10px; clip-path: var(--px-10);
+}
+.ph-hero > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 220ms var(--m-ease-move);
+}
+.ph-hero:hover > img { transform: scale(1.03); }
+.ph-hero-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 60%;
+  padding: 14px 16px;
+  background: color-mix(in srgb, var(--m-bg) 84%, transparent);
+  --px-n: 10px; clip-path: var(--px-10);
+}
+.ph-hero-body b { font: 800 30px/1.05 var(--m-font); letter-spacing: -0.02em; }
+.ph-hero-line { font-size: 13.5px; color: var(--m-fg-subtle); }
+.ph-hero-cta { position: relative; flex: none; min-width: 180px; justify-content: center; }
+.ph-hero.skel { display: block; }
+
+/* ---------- полки ---------- */
+.ph-shelf { display: flex; flex-direction: column; gap: 10px; }
+.ph-shelf h2 { font: 700 18px/1.2 var(--m-font); color: var(--m-fg); }
+.ph-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 12px;
+}
+.ph-row.modes { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+
+/* ---------- карточка ---------- */
+.ph-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+  color: inherit;
+  background: var(--m-surface);
+  --px-n: 10px; clip-path: var(--px-10);
+}
+.ph-card:hover { background: var(--m-surface-2); }
+.ph-card:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--m-accent); --px-ol: var(--m-accent); --px-ol-w: 2px; --px-ft: transparent; --px-fb: transparent; --px-fl: transparent; --px-fr: transparent; }
+.ph-card.on { background: var(--m-accent-soft); }
+.ph-card.on .ph-card-body b { color: var(--m-accent); }
+
+.ph-card-art {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  color: var(--m-fg-subtle);
+  background: var(--m-inset);
+}
+.ph-card-art > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 180ms var(--m-ease-move);
+}
+.ph-card:hover .ph-card-art > img { transform: scale(1.05); }
+.ph-card-cover { position: relative; display: grid; place-items: center; }
+.ph-card-cover :is(img, .cover-ph) { width: 72px; height: 72px; }
+.ph-fill { position: absolute; inset: 0; }
+
+.ph-card-tag {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 8px;
+  font: 700 11.5px/1 var(--m-font);
+  color: #06200e;
+  background: var(--m-accent);
+  --px-n: 4px; clip-path: var(--px-4);
+}
+.ph-hero-body .ph-card-tag { position: static; }
+.ph-card-tag svg { width: 13px; height: 13px; }
+.ph-card-on {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  color: #06200e;
+  background: var(--m-accent);
+  --px-n: 4px; clip-path: var(--px-4);
+}
+.ph-card-on svg { width: 15px; height: 15px; }
+
+.ph-card-body { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px 12px; min-width: 0; }
+.ph-card-body b {
+  font: 650 14.5px/1.2 var(--m-font);
+  color: var(--m-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ph-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  color: var(--m-fg-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ph-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  background: var(--m-accent);
+}
+
+/* Номер версии крупно по картинке: карточки версий различаются с одного взгляда. */
+.ph-ver {
+  position: relative;
+  padding: 6px 12px;
+  font: 800 26px/1 var(--m-font);
+  letter-spacing: -0.02em;
+  color: var(--m-fg);
+  background: color-mix(in srgb, var(--m-bg) 80%, transparent);
+  --px-n: 5px; clip-path: var(--px-5);
+}
+
+/* Крупная карточка режима: название — плашкой по картинке, в теле только онлайн. */
+.ph-card.big .ph-card-body b { display: none; }
+.ph-card.big .ph-card-meta { font-size: 13px; color: var(--m-fg-subtle); }
+
+/* Рендеры блоков — 96px: крупнее 64px на Retina они растягиваются и мылятся.
+   Поэтому не один большой блок, а горка из трёх в родном размере. */
+.ph-pile { position: absolute; right: 9%; top: 50%; width: 118px; height: 104px; transform: translateY(-50%); }
+.ph-pile img {
+  position: absolute;
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 0 rgba(0, 0, 0, 0.25));
+}
+.ph-pile .b1 { left: 0; bottom: 0; }
+.ph-pile .b2 { right: 0; bottom: 0; }
+.ph-pile .b3 { left: 27px; top: 0; z-index: 1; }
+.ph-card:hover .ph-pile .b3 { animation: ph-hop 420ms steps(4) 1; }
+@keyframes ph-hop {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.skel-card { pointer-events: none; }
+
+/* ---------- страница режима ---------- */
+.ph-mode { display: flex; flex-direction: column; gap: 16px; }
+.ph-mode-hero {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: flex-start;
+  height: 200px;
+  padding: 16px 18px;
+  overflow: hidden;
+  background: var(--m-inset);
+  --px-n: 10px; clip-path: var(--px-10);
+}
+.ph-mode-bg { position: absolute; inset: 0; overflow: hidden; }
+.ph-mode-bg img {
+  position: absolute;
+  right: 8%;
+  top: 50%;
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  transform: translateY(-50%);
+  image-rendering: auto;
+  filter: drop-shadow(0 12px 0 rgba(0, 0, 0, 0.3));
+}
+.ph-mode-hero .ph-back { position: relative; }
+.ph-mode-title {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 16px;
+  background: color-mix(in srgb, var(--m-bg) 84%, transparent);
+  --px-n: 10px; clip-path: var(--px-10);
+}
+.ph-mode-title h1 { font: 800 30px/1 var(--m-font); letter-spacing: -0.02em; color: var(--m-fg); }
+.ph-mode-meta { display: flex; align-items: center; gap: 6px; font-size: 13.5px; color: var(--m-fg-subtle); }
+
+.ph-list { display: flex; flex-direction: column; gap: 8px; }
+.ph-srv {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px;
+  background: var(--m-surface);
+  --px-n: 10px; clip-path: var(--px-10);
+}
+.ph-srv.on { background: var(--m-accent-soft); }
+.ph-srv.off { opacity: 0.6; }
+.ph-srv-logo {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  overflow: hidden;
+  color: var(--m-fg-subtle);
+  background: var(--m-inset);
+  --px-n: 5px; clip-path: var(--px-5);
+}
+.ph-srv-logo img { width: 100%; height: 100%; object-fit: cover; }
+.ph-srv-ban {
+  position: relative;
+  flex: none;
+  width: 220px;
+  height: 52px;
+  overflow: hidden;
+  background: var(--m-inset);
+  --px-n: 5px; clip-path: var(--px-5);
+}
+.ph-srv-ban img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.ph-srv-ban.none { display: grid; place-items: center; opacity: 0.55; }
+.ph-srv-ban img.ph-srv-block { position: static; width: 34px; height: 34px; object-fit: contain; }
+.ph-srv-body { flex: 1 1 auto; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ph-srv-body b {
+  font: 650 15px/1.2 var(--m-font);
+  color: var(--m-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ph-srv-meta { display: flex; gap: 10px; font-size: 12.5px; color: var(--m-fg-muted); }
+.ph-srv-online {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 64px;
+  justify-content: flex-end;
+  font: 700 15px/1 var(--m-font);
+  font-variant-numeric: tabular-nums;
+  color: var(--m-fg);
+}
+.ph-srv.off .ph-srv-online { font-weight: 500; font-size: 12.5px; color: var(--m-fg-muted); }
+
+.ph-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 48px 0;
+  color: var(--m-fg-subtle);
+}
+.ph-empty svg { width: 32px; height: 32px; }
+
+@media (max-width: 900px) {
+  .ph-srv-ban { display: none; }
+  .ph-hero-body { max-width: 100%; }
+  .ph-hero { flex-direction: column; align-items: flex-start; justify-content: flex-end; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ph-card:hover .ph-pile .b3 { animation: none; }
+  .ph-card .ph-card-art > img,
+  .ph-hero > img { transition: none; }
+}
+
+/* ---------- перестройка 23.09.2026: сборка в герое, «Новая сборка», серверы ---------- */
+.ph-new { margin-left: auto; }
+.ph-hero { cursor: default; }
+.ph-hero-facts { font-size: 13px; font-weight: 600; color: var(--m-fg); opacity: 0.8; }
+.ph-hero-acts { position: relative; display: flex; align-items: center; gap: 10px; flex: none; }
+.ph-hero-srv { gap: 8px; }
+.ph-hero-srv-n { display: inline-flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums; }
+
+.ph-card.act .ph-card-art { color: var(--m-fg-subtle); }
+.ph-card.act .ph-card-art > svg { width: 34px; height: 34px; }
+.ph-card.act:hover .ph-card-art { color: var(--m-accent); }
+
+.ph-shelf-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+@media (max-width: 900px) {
+  .ph-hero-acts { width: 100%; }
+  .ph-hero-cta { flex: 1; }
+}
+
+/* ---------- полка в одну строку + «Все» (правка владельца 23.09.2026) ---------- */
+.ph-row.one { grid-template-rows: auto; grid-auto-rows: 0; row-gap: 0; overflow: hidden; }
+.ph-count { font-variant-numeric: tabular-nums; opacity: 0.6; }
+
+/* Свой сервер Millida — широкая карточка первой строкой. */
+.ph-own {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-height: 150px;
+  padding: 18px 22px;
+  overflow: hidden;
+  background: #1d7a36;
+  --px-n: 10px; clip-path: var(--px-10);
+}
+.ph-own-face { position: relative; flex: none; width: 150px; height: 110px; }
+.ph-own-face .ph-pile { right: auto; left: 8px; }
+.ph-own-body { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; flex: 1; }
+.ph-own-body b { font: 800 28px/1.05 var(--m-font); letter-spacing: -0.02em; color: #fff; }
+.ph-own-line { font-size: 13.5px; color: rgba(255, 255, 255, 0.78); }
+.ph-own-online { display: inline-flex; align-items: center; gap: 6px; font: 700 15px/1 var(--m-font); color: #fff; }
+.ph-own .ph-card-tag { position: static; background: #fff; color: #06200e; }
+
+.ph-hero-x {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  color: var(--m-fg);
+  background: color-mix(in srgb, var(--m-bg) 80%, transparent);
+  --px-n: 5px; clip-path: var(--px-5);
+}
+.ph-hero-x svg { width: 16px; height: 16px; }
+
+/* ============================================================
+   Каталог сборок, продающая страница, герой версии, OneBlock
+   (приказ владельца 23.09.2026, analysis/2026-09-23_premium-pack-page.md)
+   ============================================================ */
+
+/* Золото премиума — тёплый токен кита (--m-warning), не свой хардкод. */
+.playhub { --ph-gold: var(--m-warning); --ph-on-gold: #241600; }
+
+.ph-card-tag.gold { background: var(--ph-gold); color: var(--ph-on-gold); }
+
+/* Премиум-карточка: на две колонки, золотая кайма inset-тенью, живая обложка. */
+.ph-card.prem { grid-column: span 2; }
+.ph-card.prem .ph-card-art { aspect-ratio: auto; min-height: 0; flex: 1; }
+/* Кайма поверх обложки: inset-тень самой карточки картинка перекрывает. */
+.ph-card.prem::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 3px var(--ph-gold); --px-n: 10px; --px-ol: var(--ph-gold); --px-ol-w: 3px; --px-ft: transparent; --px-fb: transparent; --px-fl: transparent; --px-fr: transparent;
+}
+.ph-card.prem .ph-card-body { padding: 10px 14px 12px; }
+.ph-card.prem .ph-card-body b { font-size: 17px; font-weight: 800; }
+.ph-card.prem .ph-card-art > img { animation: ph-kb 16s ease-in-out infinite alternate; }
+.ph-card.prem:hover .ph-card-art > img { animation-play-state: paused; }
+.ph-card .ph-card-price {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 6px 10px;
+  font: 800 14px/1 var(--m-font);
+  color: var(--ph-on-gold);
+  background: var(--ph-gold);
+  --px-n: 4px; clip-path: var(--px-4);
+}
+/* Медленный наезд камеры, как фон героя в сторах. Только transform. */
+@keyframes ph-kb {
+  from { transform: scale(1) translate(0, 0); }
+  to { transform: scale(1.1) translate(-2%, -1.5%); }
+}
+
+/* Строка с часами: иконка, «Ты наиграл», «Всего». */
+.ph-hours { display: inline-flex; align-items: center; gap: 10px; font-size: 13px; color: var(--m-fg-subtle); }
+.ph-hours svg { width: 15px; height: 15px; flex: none; }
+.ph-hours b { color: var(--m-fg); font-weight: 750; font-variant-numeric: tabular-nums; }
+.ph-hours-all { opacity: 0.8; }
+
+/* ---------- герой версии ---------- */
+.ph-fps {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 12px;
+  font: 650 13.5px/1 var(--m-font);
+  color: var(--m-fg);
+  background: color-mix(in srgb, var(--m-bg) 84%, transparent);
+  --px-n: 5px; clip-path: var(--px-5);
+  cursor: pointer;
+}
+.ph-fps > svg { width: 16px; height: 16px; color: var(--m-accent); }
+
+/* ---------- страница премиум-сборки ---------- */
+.pp { display: flex; flex-direction: column; gap: 16px; }
+.pp-head {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-start;
+  height: clamp(260px, 42vh, 420px);
+  padding: 16px 18px;
+  overflow: hidden;
+  background: var(--m-inset);
+  --px-n: 10px; clip-path: var(--px-10);
+}
+.pp-cover, .pp-video { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; object-fit: cover; }
+.pp-cover { animation: ph-kb 20s ease-in-out infinite alternate; }
+.pp-video { z-index: 1; }
+.pp-back { position: relative; z-index: 2; }
+.pp-play {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  color: var(--px-on-accent);
+  background: var(--m-accent);
+  box-shadow: var(--px-btn); --px-ol: var(--px-btn-ol); --px-ol-w: 2px; --px-ft: var(--px-btn-t); --px-ft-w: 3px; --px-fb: var(--px-btn-b); --px-fb-w: 5px; --px-fl: var(--px-btn-l); --px-fl-w: 3px; --px-fr: var(--px-btn-r); --px-fr-w: 3px;
+  --px-n: 10px; clip-path: var(--px-10);
+  transform: translate(-50%, -50%);
+}
+.pp-play svg { width: 30px; height: 30px; }
+.pp-play:hover { transform: translate(-50%, -50%) scale(1.06); }
+.pp-title {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 62%;
+  padding: 14px 16px;
+  background: color-mix(in srgb, var(--m-bg) 86%, transparent);
+  --px-n: 10px; clip-path: var(--px-10);
+}
+.pp-title .ph-card-tag { position: static; }
+.pp-title h1 { font: 800 34px/1.02 var(--m-font); letter-spacing: -0.02em; color: var(--m-fg); }
+.pp-line { font-size: 14px; color: var(--m-fg-subtle); }
+
+.pp-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.pp-fact {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  background: var(--m-surface);
+  box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+  --px-n: 10px; clip-path: var(--px-10);
+}
+.pp-fact b { font: 800 28px/1 var(--m-font); letter-spacing: -0.02em; color: var(--m-fg); font-variant-numeric: tabular-nums; }
+.pp-fact span { font-size: 12.5px; color: var(--m-fg-muted); }
+
+.pp-cols { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+.pp-main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.pp-buy {
+  position: sticky;
+  top: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  padding: 16px;
+  background: var(--m-surface);
+  box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+  --px-n: 10px; clip-path: var(--px-10);
+}
+.pp-buy.gold { box-shadow: inset 0 0 0 2px var(--ph-gold), var(--px-plate); --px-ol: var(--ph-gold); --px-ol-w: 2px; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent; }
+.pp-buy .pm-price { display: flex; flex-direction: column; gap: 3px; }
+.pp-buy .pm-price b { font: 800 30px/1 var(--m-font); color: var(--m-fg); }
+.pp-buy .pm-price i { font-style: normal; font-size: 12.5px; color: var(--m-fg-muted); }
+.pp-cta, .pp-cta-wrap > .btn { width: 100%; justify-content: center; }
+.pp-cta-wrap { display: flex; }
+.pp-srv { justify-content: center; gap: 8px; }
+.pp-buy .pm-note { font-size: 12px; }
+.pp-legal { display: flex; gap: 8px; align-items: center; font-size: 11.5px; color: var(--m-fg-muted); }
+.pp-legal b { padding: 2px 5px; font-weight: 700; color: var(--m-fg); background: var(--m-inset); --px-n: 4px; clip-path: var(--px-4); }
+
+.pp-block { display: flex; flex-direction: column; gap: 10px; }
+.pp-block h2 { font: 800 18px/1.1 var(--m-font); color: var(--m-fg); }
+.pp-inc { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; list-style: none; padding: 0; margin: 0; }
+.pp-inc li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  font-size: 13.5px;
+  color: var(--m-fg);
+  background: var(--m-surface);
+  --px-n: 5px; clip-path: var(--px-5);
+}
+.pp-inc svg { width: 16px; height: 16px; color: var(--m-accent); flex: none; }
+.pp-patches { display: flex; flex-direction: column; gap: 6px; list-style: none; padding: 0; margin: 0; }
+.pp-patches li { display: flex; gap: 10px; font-size: 13.5px; color: var(--m-fg); }
+.pp-patches span { flex: none; min-width: 90px; color: var(--m-fg-muted); }
+
+/* ---------- карусель кадров ---------- */
+.ph-car {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: var(--m-inset);
+  --px-n: 10px; clip-path: var(--px-10);
+  outline: none;
+}
+.ph-car-track { display: flex; height: 100%; transition: transform 320ms var(--m-ease-move); }
+.ph-car-shot { flex: 0 0 100%; height: 100%; padding: 0; cursor: zoom-in; }
+.ph-car-shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ph-car-arr {
+  position: absolute;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 56px;
+  color: var(--m-fg);
+  background: color-mix(in srgb, var(--m-bg) 80%, transparent);
+  --px-n: 5px; clip-path: var(--px-5);
+  transform: translateY(-50%);
+}
+.ph-car-arr.l { left: 10px; }
+.ph-car-arr.r { right: 10px; }
+.ph-car-arr svg { width: 22px; height: 22px; }
+.ph-car-arr:hover { color: var(--px-on-accent); background: var(--m-accent); }
+.ph-car-dots {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  display: flex;
+  gap: 6px;
+  padding: 6px 8px;
+  background: color-mix(in srgb, var(--m-bg) 80%, transparent);
+  --px-n: 4px; clip-path: var(--px-4);
+  transform: translateX(-50%);
+}
+.ph-car-dot { width: 10px; height: 10px; padding: 0; background: color-mix(in srgb, var(--m-fg) 35%, transparent); }
+.ph-car-dot.on { width: 22px; background: var(--m-accent); }
+
+/* ---------- баннер OneBlock ---------- */
+.ph-ob {
+  position: relative;
+  grid-column: span 2;
+  display: flex;
+  align-items: flex-end;
+  min-height: 0;
+  aspect-ratio: 32 / 9;
+  overflow: hidden;
+  background: #5ab4f0;
+  --px-n: 10px; clip-path: var(--px-10);
+}
+.ph-row.modes .ph-ob { aspect-ratio: auto; }
+.ph-ob-sky { position: absolute; inset: 0; width: 100%; height: 100%; }
+.ph-ob-drops { position: absolute; inset: 0; pointer-events: none; }
+.ph-ob-drops img {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  filter: drop-shadow(0 5px 0 rgba(0, 0, 0, 0.2));
+}
+.ph-ob-drops .d1 { right: 30%; top: 16%; width: 40px; height: 40px; }
+.ph-ob-drops .d2 { right: 6%; top: 10%; }
+.ph-ob-drops .d3 { right: 9%; bottom: 14%; width: 36px; height: 36px; }
+.ph-ob:hover .ph-ob-drops .d1 { animation: ph-hop 420ms steps(4) 1; }
+.ph-ob-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 18px 20px;
+}
+.ph-ob-name {
+  font: 900 44px/0.95 var(--m-font);
+  letter-spacing: -0.03em;
+  color: #fff;
+  text-shadow: 3px 3px 0 #1d4f7a, 0 3px 0 #1d4f7a;
+}
+.ph-ob-online {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  font: 700 13px/1 var(--m-font);
+  color: #fff;
+  background: rgba(10, 40, 70, 0.55);
+  --px-n: 4px; clip-path: var(--px-4);
+}
+.ph-ob-cta { min-width: 150px; justify-content: center; }
+
+@media (max-width: 900px) {
+  .pp-cols { grid-template-columns: 1fr; }
+  .pp-buy { position: static; }
+  .pp-title { max-width: 100%; }
+  .ph-card.prem, .ph-ob { grid-column: span 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ph-card.prem .ph-card-art > img,
+  .pp-cover { animation: none; }
+  .ph-car-track { transition: none; }
+  .ph-ob:hover .ph-ob-drops .d1 { animation: none; }
+}
+
+/* Главная кнопка страницы сборки — крупная, как «Играть» в герое. */
+.pp-buy .pp-cta,
+.pp-cta-wrap > .btn { height: 52px; font-size: 16px; }
+/* Кадры не выше экрана: на широком окне 16:9 во всю колонку уводил цену из вида. */
+.pp-main .ph-car { max-height: 460px; }
+
+/* ---------- правки владельца 23.09.2026, 18:32 ---------- */
+/* Свёрнутая полка в две строки: остальные ряды нулевой высоты. */
+/* Промежуток между строками — отступом карточки, а не row-gap: row-gap
+   складывался и у скрытых рядов нулевой высоты, и под полкой росла дыра. */
+.ph-row.two { grid-template-rows: auto auto; grid-auto-rows: 0; row-gap: 0; overflow: hidden; }
+.ph-row.two > * { min-height: 0; margin-bottom: 12px; }
+.ph-shelf:has(> .ph-row.two) { margin-bottom: -12px; }
+.ph-row.one > *, .ph-row.two > * { overflow: hidden; }
+
+/* Источник чужой сборки — меткой в строке, не картинкой. */
+.ph-src {
+  flex: none;
+  padding: 2px 6px;
+  font: 700 10.5px/1.3 var(--m-font);
+  color: var(--m-fg);
+  background: var(--m-inset);
+  --px-n: 4px; clip-path: var(--px-4);
+}
+
+/* Премиум-полка: первая (Arcania) — шире; если она одна — во всю ширину. */
+.ph-card.prem.solo { grid-column: 1 / -1; flex-direction: row; height: 232px; }
+.ph-card.prem.solo .ph-card-art { flex: 1 1 64%; aspect-ratio: auto; height: 100%; }
+.ph-card.prem.solo .ph-card-body {
+  flex: 0 0 min(36%, 380px);
+  justify-content: center;
+  gap: 10px;
+  padding: 24px 26px;
+}
+.ph-card.prem.solo .ph-card-body b { font-size: 30px; line-height: 1.05; white-space: normal; }
+.ph-card.prem.solo .ph-card-meta { white-space: normal; font-size: 14px; line-height: 1.4; color: var(--m-fg-subtle); }
+
+/* ---------- страница сборки: автор и описание ---------- */
+.pp-author { font-size: 12.5px; color: var(--m-fg-muted); }
+.pp-desc {
+  position: relative;
+  max-height: 260px;
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--m-fg);
+}
+.pp-desc.full { max-height: none; }
+.pp-desc p { margin: 0 0 10px; }
+.pp-desc h3 { margin: 14px 0 8px; font: 800 15px/1.2 var(--m-font); }
+.pp-desc ul { display: flex; flex-direction: column; gap: 6px; list-style: none; margin: 0 0 10px; padding: 0; }
+.pp-desc li { display: flex; gap: 8px; align-items: flex-start; }
+.pp-desc li > svg { flex: none; width: 15px; height: 15px; margin-top: 3px; color: var(--m-accent); }
+.pp-desc img { max-width: 100%; height: auto; }
+.pp-desc .md :is(ul, ol) { display: block; padding-left: 18px; list-style: disc; }
+.pp-desc .md li { display: list-item; }
+.pp-more { align-self: flex-start; }
+
+/* ---------- окно «Куда поставить?» ---------- */
+.modal.hi { display: flex; flex-direction: column; gap: 12px; }
+.hi > .sub { margin-top: -6px; }
+.hi-list { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow-y: auto; }
+.hi-srv {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  text-align: left;
+  color: var(--m-fg);
+  background: var(--m-surface-2);
+  --px-n: 5px; clip-path: var(--px-5);
+}
+.hi-srv:hover { background: var(--m-inset); }
+.hi-srv.on { box-shadow: inset 0 0 0 2px var(--m-accent); --px-ol: var(--m-accent); --px-ol-w: 2px; --px-ft: transparent; --px-fb: transparent; --px-fl: transparent; --px-fr: transparent; background: var(--m-accent-soft); }
+.hi-srv-main { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.hi-srv-main b { font: 650 14px/1.2 var(--m-font); }
+.hi-srv-main span { font-size: 12px; color: var(--m-fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hi-plus { display: grid; place-items: center; width: 36px; height: 36px; color: var(--m-accent); background: var(--m-inset); --px-n: 5px; clip-path: var(--px-5); }
+.hi-plus svg { width: 18px; height: 18px; }
+.hi-skel { display: block; height: 56px; }
+.hi-code { width: 100%; letter-spacing: 0.06em; }
+.hi-warn { font-size: 12.5px; color: var(--m-warning); }
+.hi-err { font-size: 12.5px; color: var(--m-danger); }
+.hi-note { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; color: var(--m-fg-subtle); }
+.hi-acts { display: flex; justify-content: flex-end; gap: 8px; }
+.hi-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 0 6px; text-align: center; }
+.hi-empty > svg { width: 32px; height: 32px; color: var(--m-accent); }
+
+@media (max-width: 900px) {
+  .ph-card.prem.solo .ph-card-body { padding: 16px 18px; }
+  .ph-card.prem.solo .ph-card-body b { font-size: 24px; }
+}
+.ph-car-count { font: 700 12.5px/1 var(--m-font); color: var(--m-fg); font-variant-numeric: tabular-nums; padding: 7px 10px; }
+
+/* ---------- страница версии (правка владельца 23.09.2026, 19:04) ---------- */
+.vp-mods { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
+.vp-mod {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: var(--m-surface);
+  box-shadow: var(--px-plate);
+  clip-path: var(--px-10);
+}
+.vp-mod-ico {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  overflow: hidden;
+  color: var(--m-accent);
+  background: var(--m-inset);
+  clip-path: var(--px-5);
+}
+.vp-mod-ico img { width: 100%; height: 100%; object-fit: cover; }
+.vp-mod-ico svg { width: 20px; height: 20px; }
+.vp-mod-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.vp-mod-main b { font: 700 14px/1.2 var(--m-font); color: var(--m-fg); }
+.vp-mod-main span {
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--m-fg-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.vp-mod-skel { display: block; height: 68px; }
+/* Режим выключен — моды остаются в списке, но видно, что их не будет. */
+.vp-off .vp-mod { opacity: 0.45; }
+.vp-fps { justify-content: space-between; height: 44px; }
+.vp-fps > span { flex: 1; }
+.ph-shelf-extra { margin-left: auto; }
+
+/* ---------- «Мои сборки» (правка владельца 23.09.2026, 19:23) ---------- */
+.ph-shelf-extra { display: inline-flex; gap: 8px; }
+.ph-mine { cursor: pointer; }
+/* Блок Millida — в родном размере, не крупнее 64 px (рендеры 96 px мылятся
+   при растяжении); подложка карточки ровная, без градиента обложки. */
+.ph-mine .ph-card-art .cover-img.block {
+  inset: 50% auto auto 50%;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  transform: translate(-50%, -50%);
+  background: none !important;
+}
+.ph-mine .ph-card-art .cover-img:not(.block) { object-fit: cover; }
+.ph-mine-play { position: absolute; right: 8px; bottom: 8px; z-index: 1; }
+.ph-mine-h { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; color: var(--m-fg-subtle); }
+.ph-mine-h svg { width: 12px; height: 12px; }
+
+/* ---------- правки владельца 23.09.2026, 19:40–19:42 ---------- */
+/* Экран «Все …» полки: «← Назад» и заголовок, ниже — сетка без свёртки. */
+.ph-page { display: flex; flex-direction: column; gap: 16px; }
+.ph-page-head { display: flex; align-items: center; gap: 14px; }
+.ph-page-head h1 { font: 800 26px/1.1 var(--m-font); letter-spacing: -0.02em; color: var(--m-fg); }
+
+/* Мои сборки: иконка сборки на глубокой тёмной подложке, как в Modrinth. */
+.ph-mine-art { background: var(--m-bg); }
+.ph-mine-art .bi-edit { z-index: 1; }
+.ph-mine .ph-mine-play { opacity: 0; transition: opacity var(--m-t-fast); }
+.ph-mine:hover .ph-mine-play, .ph-mine:focus-within .ph-mine-play, .ph-mine.on .ph-mine-play { opacity: 1; }
+@media (hover: none) { .ph-mine .ph-mine-play { opacity: 1; } }
+.ph-act-ic {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  color: var(--m-fg-subtle);
+  background-color: var(--m-surface-2);
+  --px-n: 5px; clip-path: var(--px-5);
+  transition: background-color var(--m-t-fast), color var(--m-t-fast);
+}
+.ph-act-ic svg { width: 28px; height: 28px; }
+.ph-card.act:hover .ph-act-ic { color: var(--px-on-accent, #06200e); background-color: var(--m-accent); }
+
+/* Чипы всех режимов на экране «Режимы». */
+.ph-feed-retry { align-self: center; }
+.ph-feed-tail { height: 1px; }
+
+.ph-mine-art { background: color-mix(in srgb, var(--m-bg) 55%, #000); }
+.ph-noans { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; height: 64px; padding: 0 16px; color: var(--m-fg-subtle); background-color: var(--m-surface); --px-n: 10px; clip-path: var(--px-10); }
+.ph-noans > svg { width: 18px; height: 18px; color: var(--m-warning); }
+.ph-noans b { flex: 1; font-size: 14px; color: var(--m-fg); }
+/* «Импорт» и «Новая сборка» в верхней полосе экрана (правка 23.09.2026, 21:10). */
+.ph-bar { display: inline-flex; gap: 8px; align-items: center; }
+
+/* Своя сборка: фон иконки на всю верхнюю часть карточки, иконка крупная
+   (правка владельца 23.09.2026, 21:19: «квадратик на чёрном — кринж»). */
+.ph-mine .ph-mine-art { background: var(--mine-bg, #2a2017); }
+.ph-mine .ph-mine-art .bi { background: transparent; width: 100%; height: 100%; clip-path: none; }
+.ph-mine .ph-mine-art .bi img { width: 72%; height: 72%; }
+.ph-mine .ph-mine-art .bi.photo img { width: 100%; height: 100%; }
+.ph-mine .ph-mine-art .bi-edit { position: absolute; inset: 0; display: grid; place-items: center; }
+/* «⋯» — управление: настроить, переименовать, папка, удалить. */
+.ph-mine-more {
+  position: absolute; z-index: 3; top: 8px; right: 8px; width: 32px; height: 32px;
+  display: grid; place-items: center; color: #fff; background: rgba(0, 0, 0, 0.45);
+  clip-path: var(--px-4); opacity: 0; transition: opacity var(--m-t-fast);
+}
+.ph-mine:hover .ph-mine-more, .ph-mine.menu-open .ph-mine-more, .ph-mine-more:focus-visible { opacity: 1; }
+.ph-mine-more:hover { background: rgba(0, 0, 0, 0.7); }
+.ph-mine-more svg { width: 18px; height: 18px; }
+/* Меню «⋯» (правка владельца 24.09.2026: «в моих сборках хуёво выглядят
+   эти эмодзи»): подложка со срезом 10px и сплошной обводкой (слой рамки
+   в 12-pixel.css), значки — одноцветные пиксельные силуэты 16px в цвет
+   строки, строки одной высоты, «Удалить» — красным. «⋯» лежит над меню
+   и становится крестиком. */
+.ph-mine.menu-open .ph-mine-more { z-index: 6; opacity: 1; }
+.ph-mine-menu {
+  position: absolute; z-index: 5; inset: 6px; padding: 40px 6px 6px;
+  display: flex; flex-direction: column; justify-content: flex-end; gap: 2px;
+  background: var(--m-raised);
+  --px-n: 10px; clip-path: var(--px-10);
+  --px-ol: color-mix(in srgb, var(--m-fg) 16%, transparent); --px-ol-w: 2px;
+  --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px;
+}
+.ph-mine-menu-t {
+  position: absolute; top: 14px; left: 16px; right: 48px;
+  font: 800 13px/1.2 var(--m-font); color: var(--m-fg-subtle);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ph-mine-menu button {
+  display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px; flex: none;
+  font: 700 13px/1 var(--m-font); color: var(--m-fg); text-align: left; background: transparent;
+  clip-path: var(--px-4);
+}
+.ph-mine-menu button:hover, .ph-mine-menu button:focus-visible { background: var(--m-surface-2); outline: none; }
+.ph-mine-menu button svg { width: 16px; height: 16px; flex: none; color: var(--m-fg-muted); }
+.ph-mine-menu button:hover svg { color: var(--m-fg); }
+.ph-mine-menu button.danger, .ph-mine-menu button.danger svg { color: var(--m-danger, #ff5a5a); }
+.ph-mine-menu button.danger:hover { background: color-mix(in srgb, var(--m-danger, #ff5a5a) 14%, transparent); }
+/* Назад — только в верхней строке экрана (правка 22:38). */
+.pp-back { display: none !important; }
+
+/* ---------- плитки режимов (правка владельца 23.09.2026, 22:47) ----------
+   Все режимы сразу, плитки одного размера. Фон — свет лобби в цвете режима
+   (modeArt.ts) через --px-img, поверх него — сплошная ступенчатая рамка. */
+.ph-row.ph-mts { grid-template-columns: repeat(auto-fill, minmax(184px, 1fr)); }
+.ph-row.ph-mts .ph-ob { aspect-ratio: auto; min-height: 184px; grid-column: span 2; }
+@media (max-width: 600px) { .ph-row.ph-mts .ph-ob { grid-column: 1 / -1; } }
+.ph-row.ph-mts > .skel-card { aspect-ratio: 1; }
+.ph-card.ph-mt {
+  aspect-ratio: 1;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  justify-items: center;
+  align-items: center;
+  overflow: hidden;
+  background-color: #000;
+  --px-img-size: cover;
+  --px-img-pos: center;
+  --px-img-repeat: no-repeat;
+  --px-img-origin: border-box;
+  --px-ol: rgba(0, 0, 0, 0.34); --px-ol-w: 2px;
+  --px-ft: rgba(255, 255, 255, 0.22); --px-ft-w: 3px;
+  --px-fb: rgba(0, 0, 0, 0.3); --px-fb-w: 5px;
+}
+.ph-card.ph-mt:hover { background-color: #000; }
+.ph-card.ph-mt.on { --px-ol: var(--m-accent); --px-ol-w: 3px; }
+.ph-mt-ic {
+  image-rendering: pixelated;
+  filter: drop-shadow(0 6px 0 rgba(0, 0, 0, 0.28));
+  transform: translateY(6px);
+  pointer-events: none;
+}
+/* Покачивание — только при наведении: 28 вечных анимаций тормозили экран. */
+.ph-mt:hover .ph-mt-ic { animation: ph-mt-hop 420ms steps(4) 1; }
+@keyframes ph-mt-hop {
+  0%, 100% { transform: translateY(6px); }
+  50% { transform: translateY(-6px); }
+}
+.ph-mt-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 0 12px 14px;
+}
+.ph-mt-foot b {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font: 800 16px/1.1 var(--m-font);
+  letter-spacing: -0.01em;
+  color: #fff;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
+}
+.ph-mt-on {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: 700 12.5px/1 var(--m-font);
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ph-mt-ic, .ph-mt:hover .ph-mt-ic { animation: none; }
+}
+
+
+/* ============================================================
+   Первый экран хаба и «Сегодня» (ресёрч 2026-09-24, §1 и §3)
+   Слева «Продолжить», справа один hero-слот за сессию; ниже три
+   карточки дня. Все подложки — .ph-card: срез 10px и сплошная
+   ступенчатая рамка из общего слоя 12-pixel.css.
+   ============================================================ */
+.ph-top {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 12px;
+  height: clamp(240px, 32vh, 320px);
+}
+.ph-top > * { min-height: 0; height: 100%; }
+.ph-top .skel { background: var(--m-surface); }
+
+/* «Продолжить» */
+.ph-cont { overflow: hidden; }
+.ph-cont-art {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: var(--mine-bg, var(--m-inset));
+}
+.ph-cont-cover { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.ph-cont.build .ph-cont-art .bi { background: transparent; clip-path: none; }
+.ph-cont.build .ph-cont-art .bi img { width: 100%; height: 100%; image-rendering: pixelated; filter: drop-shadow(0 8px 0 rgba(0, 0, 0, 0.28)); }
+.ph-cont-body { display: flex; align-items: center; gap: 12px; padding: 12px 14px; }
+.ph-cont-text { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.ph-cont-text b {
+  font: 800 19px/1.15 var(--m-font);
+  letter-spacing: -0.01em;
+  color: var(--m-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ph-cont-play { flex: none; min-width: 140px; justify-content: center; }
+
+/* hero-слот */
+.ph-hs { position: relative; overflow: hidden; }
+.ph-hs-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform 220ms var(--m-ease-move); }
+button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
+.ph-hs.gold { justify-content: flex-end; background: var(--m-inset); --px-ol: var(--ph-gold); --px-ol-w: 3px; }
+/* Золотая кайма — слой рамки .ph-card под обложкой: обложка отступает на
+   толщину каймы с ТОЙ ЖЕ ступенькой 10px, линия идёт сплошной по срезу. */
+.ph-hs.gold > .ph-hs-img { inset: 3px; width: calc(100% - 6px); height: calc(100% - 6px); clip-path: var(--px-10); }
+.ph-hs-body {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: min(70%, 420px);
+  margin: 14px;
+  padding: 14px 16px;
+  background: color-mix(in srgb, var(--m-bg) 86%, transparent);
+  --px-n: 10px; clip-path: var(--px-10);
+}
+.ph-hs-body .ph-card-tag { position: static; }
+.ph-hs-body > b { font: 800 26px/1.05 var(--m-font); letter-spacing: -0.02em; color: var(--m-fg); }
+.ph-hs-row { display: flex; align-items: center; gap: 10px; }
+.ph-hs-price { font: 800 16px/1 var(--m-font); color: var(--ph-gold); font-variant-numeric: tabular-nums; }
+.ph-hs-cta { pointer-events: none; }
+
+.ph-hs.ob > .ph-ob { height: 100%; aspect-ratio: auto; }
+
+.ph-hs.week { background: var(--m-inset); }
+.ph-hs-week { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.ph-hs-pick { position: relative; display: flex; align-items: flex-end; min-width: 0; padding: 0; overflow: hidden; background: var(--m-surface); }
+.ph-hs-pick:hover > .ph-hs-img { transform: scale(1.05); }
+.ph-hs-pick-name {
+  position: relative;
+  width: 100%;
+  padding: 10px 12px;
+  font: 750 14px/1.2 var(--m-font);
+  text-align: left;
+  color: var(--m-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: color-mix(in srgb, var(--m-bg) 86%, transparent);
+}
+.ph-hs-week-tag { top: 12px; left: 12px; z-index: 1; height: 28px; padding: 0 10px; font-size: 13px; }
+
+/* «Сегодня» */
+.ph-today-left { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--m-fg-muted); }
+.ph-today-left svg { width: 14px; height: 14px; }
+.ph-today-left b { color: var(--m-fg); font-weight: 750; font-variant-numeric: tabular-nums; }
+.ph-row.ph-today-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 720px) {
+  .ph-top { grid-template-columns: 1fr; height: auto; }
+  .ph-top > * { height: 250px; }
+  .ph-row.ph-today-row { grid-template-columns: 1fr; }
+}
+@media (max-width: 1000px) {
+  .ph-hs-body > b { font-size: 21px; }
+  .ph-cont-play { min-width: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ph-hs-img { transition: none; }
+}
+
+
+/* ============================================================
+   ПЕРЕКЛЮЧАТЕЛЬ «ИГРАТЬ / СОБРАТЬ» (приказ владельца 24.09.2026)
+   Как выбор режима в Brawl Stars: тёмный жёлоб со сплошной ступенчатой
+   рамкой (слой .ph-card), по нему шагами ездит плотная зелёная плашка
+   (.btn.primary — объём и подошва из кита). Значок выбранной вкладки
+   подпрыгивает. Только transform, шаги — steps(), без плавного «мыла».
+   ============================================================ */
+.hub-sw-wrap { display: flex; justify-content: center; }
+.ph-card.hub-sw {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  width: min(960px, 100%);
+  height: 68px;
+  padding: 6px;
+  background-color: var(--m-inset);
+  --px-ol: var(--px-well-ol); --px-ol-w: 2px;
+  --px-ft: var(--px-well-t); --px-ft-w: 4px;
+  --px-fb: var(--px-plate-t); --px-fb-w: 2px;
+}
+.ph-card.hub-sw:hover { background-color: var(--m-inset); }
+:root:root .hub-sw .hub-sw-thumb {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 6px;
+  width: calc((100% - 12px) / 4);
+  height: auto;
+  padding: 0;
+  pointer-events: none;
+  transform: translateX(0);
+  transition: transform 200ms steps(4, end);
+}
+:root:root .hub-sw.at-1 .hub-sw-thumb { transform: translateX(100%); }
+:root:root .hub-sw.at-2 .hub-sw-thumb { transform: translateX(200%); }
+:root:root .hub-sw.at-3 .hub-sw-thumb { transform: translateX(300%); }
+/* Переезд через две вкладки — те же шаги, только дольше. */
+:root:root .hub-sw .hub-sw-thumb { transition-duration: 240ms; }
+/* Две вкладки (хаб v3): «Каталог / Мои сборки» — уже и плашка на половину. */
+.ph-card.hub-sw.n2 { grid-template-columns: repeat(2, 1fr); width: min(560px, 100%); }
+:root:root .hub-sw.n2 .hub-sw-thumb { width: calc((100% - 12px) / 2); }
+.hub-sw-lab { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-sw-btn {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 0 12px 4px;
+  font: 800 19px/1 var(--m-font);
+  letter-spacing: -0.01em;
+  color: var(--m-fg-muted);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  /* Цвет меняется, когда плашка доехала, а не в начале пути. */
+  transition: color 0ms linear 150ms;
+}
+.hub-sw-btn:hover:not(.on) { color: var(--m-fg); }
+.hub-sw-btn.on { color: var(--px-on-accent); cursor: default; }
+.hub-sw-btn:focus-visible { outline: none; text-decoration: underline; text-underline-offset: 4px; }
+.hub-sw-ic { flex: none; width: 24px; height: 24px; }
+.hub-sw-btn:not(.on) .hub-sw-ic { opacity: 0.7; }
+.hub-sw-btn.on .hub-sw-ic { animation: hub-hop 360ms steps(3, end) 150ms 1 both; }
+@keyframes hub-hop {
+  0%, 100% { transform: translateY(0); }
+  45% { transform: translateY(-6px); }
+}
+
+/* Панель вкладки въезжает шагами снизу. */
+.hub-pane { display: flex; flex-direction: column; gap: 26px; min-width: 0; }
+.hub-pane[hidden] { display: none; }
+.hub-pane:not([hidden]) { animation: hub-in 240ms steps(4, end) 1; }
+@keyframes hub-in {
+  from { transform: translateY(12px); opacity: 0.4; }
+  to { transform: none; opacity: 1; }
+}
+
+/* ---------- «Сегодня»: три карточки одной формы ---------- */
+.ph-row.ph-today-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ph-card.td-card { height: 100%; cursor: pointer; }
+.td-art { aspect-ratio: 16 / 9; background-size: cover; background-position: center; background-repeat: no-repeat; }
+.td-art > img.td-mode-ic {
+  position: relative;
+  inset: auto;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 6px 0 rgba(0, 0, 0, 0.28));
+}
+.ph-card:hover .td-art > img.td-mode-ic { transform: none; animation: ph-mt-hop 420ms steps(4) 1; }
+/* Иконка мода: без обложки — крупно по центру, с обложкой — плашкой в углу. */
+.td-art > img.td-mod-ic {
+  position: absolute;
+  inset: auto 8px 8px auto;
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  background: var(--m-bg);
+  --px-n: 5px; clip-path: var(--px-5);
+}
+.td-art > img.td-mod-ic:only-of-type { position: relative; inset: auto; width: 76px; height: 76px; background: none; clip-path: none; }
+.ph-card:hover .td-art > img.td-mod-ic { transform: none; }
+.td-body { display: flex; align-items: center; gap: 12px; padding: 12px 14px 14px; min-width: 0; margin-top: auto; }
+.td-text { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 0; }
+.td-text b { font: 750 15px/1.2 var(--m-font); color: var(--m-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.td-text .ph-card-meta svg { width: 12px; height: 12px; }
+.td-cta { flex: none; }
+/* Узкое окно: кнопка под названием во всю ширину, чтобы название не резалось. */
+@media (max-width: 1100px) {
+  .td-body { flex-wrap: wrap; }
+  .td-cta { flex: 1 1 100%; justify-content: center; }
+}
+
+/* ---------- «Режимы»: соцдоказательство и плитка «Все режимы» ---------- */
+.ph-mt-foot { flex-direction: column; align-items: flex-start; gap: 5px; }
+.ph-mt-foot b { width: 100%; }
+.ph-mt-on { font-size: 11.5px; opacity: 0.92; }
+.ph-card.ph-mt.ph-mt-all {
+  background-color: var(--m-surface);
+  --px-ol: transparent;
+  --px-ft: var(--px-plate-t); --px-fb: var(--px-plate-b);
+}
+.ph-card.ph-mt.ph-mt-all:hover { background-color: var(--m-surface-2); }
+.ph-mt-all-ic {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  color: var(--m-fg-subtle);
+  background: var(--m-inset);
+  --px-n: 5px; clip-path: var(--px-5);
+}
+.ph-mt-all-ic svg { width: 30px; height: 30px; }
+.ph-mt-all:hover .ph-mt-all-ic { color: var(--px-on-accent); background: var(--m-accent); }
+.ph-mt-all .ph-mt-foot b { color: var(--m-fg); text-shadow: none; }
+.ph-mt-all .ph-mt-on { color: var(--m-fg-muted); text-shadow: none; }
+/* Пять колонок: баннер OneBlock (2) + 7 плиток + «Остальные» = два полных ряда. */
+.ph-row.ph-mts { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (max-width: 760px) { .ph-row.ph-mts { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* ---------- «Собрать»: верстак своих сборок ---------- */
+.bd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 12px; }
+.ph-card.bd-card { flex-direction: row; align-items: stretch; min-height: 136px; cursor: pointer; }
+.ph-card.bd-card.on { --px-ol: var(--m-accent); --px-ol-w: 2px; }
+/* Иконка отступает от края на толщину обводки и режет левые углы той же
+   ступенькой 10px: обводка выбранной сборки идёт по всему силуэту без
+   разрывов (ПИКСЕЛЬНЫЙ-ЯЗЫК, приказ 23.09 — внутренний срез = внешнему). */
+.bd-art {
+  position: relative;
+  flex: none;
+  width: 124px;
+  margin: 2px 0 2px 2px;
+  display: grid;
+  place-items: center;
+  background: var(--mine-bg, #2a2017);
+  clip-path: polygon(10px 0, 100% 0, 100% 100%, 10px 100%, 10px calc(100% - 10px), 0 calc(100% - 10px), 0 10px, 10px 10px);
+}
+.bd-art .bi-edit { position: absolute; inset: 0; display: grid; place-items: center; }
+.bd-art .bi { background: transparent; width: 100%; height: 100%; clip-path: none; }
+.bd-art .bi img { width: 84px; height: 84px; image-rendering: pixelated; }
+.bd-art .bi.photo img { width: 100%; height: 100%; }
+.bd-art .bi-edit-lab { clip-path: none; }
+.ph-card:hover .bd-art .bi img { animation: ph-mt-hop 420ms steps(4) 1; }
+.bd-main { display: flex; flex-direction: column; justify-content: center; gap: 7px; flex: 1; min-width: 0; padding: 14px 16px; }
+.bd-name { font: 800 17px/1.15 var(--m-font); letter-spacing: -0.01em; color: var(--m-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 30px; }
+.bd-card.on .bd-name { color: var(--m-accent); }
+.bd-facts { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12.5px; color: var(--m-fg-muted); }
+.bd-fact { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bd-fact svg { width: 12px; height: 12px; }
+.bd-acts { display: flex; gap: 8px; margin-top: 4px; }
+.bd-acts .btn svg { width: 12px; height: 12px; }
+
+.bd-new { display: grid; grid-template-rows: 1fr 1fr; gap: 8px; min-height: 136px; }
+.ph-card.bd-act { flex-direction: row; align-items: center; gap: 12px; padding: 0 14px; cursor: pointer; }
+.ph-card.bd-act b { font: 750 15px/1.2 var(--m-font); color: var(--m-fg); }
+.bd-act-ic { flex: none; display: grid; place-items: center; width: 40px; height: 40px; color: var(--m-fg-subtle); background: var(--m-inset); --px-n: 5px; clip-path: var(--px-5); }
+.bd-act-ic svg { width: 20px; height: 20px; }
+.bd-act.main .bd-act-ic, .bd-act:hover .bd-act-ic { color: var(--px-on-accent); background: var(--m-accent); }
+.bd-act-n { margin-left: auto; font: 700 12px/1 var(--m-font); color: var(--m-accent); }
+
+/* Каталог во вкладке «Собрать» — без своей шапки экрана. */
+.hub-cat { display: flex; flex-direction: column; min-width: 0; }
+
+@media (max-width: 720px) {
+  .ph-card.hub-sw { height: 60px; }
+  .hub-sw-btn { font-size: 17px; }
+  .bd-grid { grid-template-columns: 1fr; }
+  .bd-new { grid-template-rows: none; grid-template-columns: 1fr 1fr; min-height: 64px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root:root .hub-sw .hub-sw-thumb { transition: none; }
+  .hub-sw-btn { transition: none; }
+  .hub-sw-btn.on .hub-sw-ic, .hub-pane:not([hidden]), .ph-card:hover .bd-art .bi img, .ph-card:hover .td-art > img.td-mode-ic { animation: none; }
+}
+
+/* ---------- Поиск «Сервер, сборка или режим» ---------- */
+.hs { position: relative; z-index: 4; }
+.input.hs-field { display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 8px 0 16px; cursor: text; }
+.hs-field > svg { flex: none; width: 18px; height: 18px; color: var(--m-fg-subtle); }
+.hs-field input { flex: 1 1 auto; min-width: 0; font-size: 15px; }
+.hs-clear { flex: none; display: grid; place-items: center; width: 32px; height: 32px; color: var(--m-fg-subtle); background: none; }
+.hs-clear:hover { color: var(--m-fg); }
+.hs-clear svg { width: 14px; height: 14px; }
+.ph-card.hs-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  max-height: 420px;
+  overflow: auto;
+  padding: 6px;
+  gap: 2px;
+  background-color: var(--m-raised);
+  --px-ol: color-mix(in srgb, var(--m-fg) 16%, transparent); --px-ol-w: 2px;
+  --px-ft: var(--px-plate-t); --px-fb: var(--px-plate-b);
+}
+.ph-card.hs-pop:hover { background-color: var(--m-raised); }
+.hs-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 6px 10px;
+  text-align: left;
+  color: var(--m-fg);
+  background: none;
+  --px-n: 5px; clip-path: var(--px-5);
+}
+.hs-row:hover, .hs-row:focus-visible { background: var(--m-surface-2); outline: none; }
+.hs-row > b { flex: 1 1 auto; min-width: 0; font: 700 14px/1.2 var(--m-font); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hs-ic { flex: none; display: grid; place-items: center; width: 36px; height: 36px; overflow: hidden; color: var(--m-fg-subtle); background: var(--m-inset); --px-n: 4px; clip-path: var(--px-4); }
+.hs-ic img { width: 100%; height: 100%; object-fit: cover; }
+.hs-ic svg { width: 18px; height: 18px; }
+.hs-kind { flex: none; font-size: 12px; color: var(--m-fg-muted); }
+.hs-meta { flex: none; display: inline-flex; align-items: center; gap: 5px; min-width: 56px; justify-content: flex-end; font: 700 12.5px/1 var(--m-font); font-variant-numeric: tabular-nums; }
+.hs-none { display: flex; align-items: center; gap: 8px; padding: 14px 10px; font-size: 13.5px; color: var(--m-fg-muted); }
+.hs-none svg { width: 16px; height: 16px; }
+.hs-row.skel-row { pointer-events: none; }
+
+/* ---------- «Мои серверы»: компактная строка ---------- */
+.ms-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); grid-template-rows: auto; grid-auto-rows: 0; row-gap: 0; column-gap: 10px; overflow: hidden; }
+.ph-card.ms-chip { flex-direction: row; align-items: center; gap: 10px; height: 60px; padding: 0 14px 0 10px; }
+.ms-ic { flex: none; display: grid; place-items: center; width: 38px; height: 38px; color: var(--m-fg-subtle); background: var(--m-inset); --px-n: 4px; clip-path: var(--px-4); }
+.ms-ic svg { width: 18px; height: 18px; }
+.ms-text { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.ms-text b { font: 700 14px/1.2 var(--m-font); color: var(--m-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ms-text span { font-size: 12px; color: var(--m-fg-muted); }
+.ms-chip > svg:last-child { flex: none; width: 16px; height: 16px; color: var(--m-fg-subtle); }
+.ms-chip:hover > svg:last-child { color: var(--m-accent); }
+
+/* ============================================================
+   Четыре вкладки хаба (24.09.2026): «Мои сборки», «Мои серверы»,
+   «Режимы», «Каталог Millida».
+   ============================================================ */
+@media (max-width: 1100px) {
+  .hub-sw-btn { gap: 8px; padding: 0 8px 4px; font-size: 16px; }
+  .hub-sw-ic { width: 20px; height: 20px; }
+}
+@media (max-width: 760px) {
+  .hub-sw-btn { font-size: 14px; }
+  .hub-sw-ic { display: none; }
+}
+
+/* «Продолжить» во всю ширину: картинка слева, название и «Играть» справа. */
+.ph-top.solo { grid-template-columns: 1fr; height: clamp(180px, 24vh, 240px); }
+.ph-top.solo .ph-cont { flex-direction: row; }
+.ph-top.solo .ph-cont-art { flex: 0 0 44%; }
+.ph-top.solo .ph-cont-body { flex: 1; min-width: 0; padding: 20px 24px; gap: 20px; }
+.ph-top.solo .ph-cont-text b { font-size: 28px; white-space: normal; }
+.ph-top.solo .ph-cont-play { min-width: 180px; }
+@media (max-width: 720px) {
+  .ph-top.solo { height: auto; }
+  .ph-top.solo .ph-cont { flex-direction: column; }
+  .ph-top.solo .ph-cont-art { flex: none; height: 160px; }
+  .ph-top.solo .ph-cont-text b { font-size: 21px; }
+}
+
+/* «Мои серверы»: свои серверы хостинга. */
+.hsv-list { display: flex; flex-direction: column; gap: 10px; }
+.ph-card.hsv { flex-direction: row; align-items: center; gap: 16px; min-height: 88px; padding: 14px 16px 14px 14px; cursor: default; }
+.ph-card.hsv.skel { height: 88px; background: var(--m-surface); }
+.hsv-ic { flex: none; display: grid; place-items: center; width: 60px; height: 60px; overflow: hidden; background: var(--m-inset); --px-n: 5px; clip-path: var(--px-5); }
+.hsv-ic img { width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; }
+.hsv-ic img.hsv-block { width: 44px; height: 44px; object-fit: contain; }
+.hsv-body { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
+.hsv-body > b { font: 800 19px/1.15 var(--m-font); color: var(--m-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hsv-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; font-size: 13px; color: var(--m-fg-muted); }
+.hsv-st { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
+.hsv-st.on { color: var(--m-accent); }
+.hsv-st.wait { color: var(--m-warning); }
+.hsv-dot { width: 8px; height: 8px; background: currentColor; }
+.hsv-addr { font-family: var(--m-font-mono, ui-monospace, monospace); }
+.hsv-acts { flex: none; display: flex; gap: 8px; }
+@media (max-width: 1000px) {
+  .ph-card.hsv { flex-wrap: wrap; }
+  .hsv-acts { flex-basis: 100%; }
+  .hsv-acts .btn { flex: 1 1 0; min-width: 0; justify-content: center; }
+}
+
+/* Своего сервера нет — одна крупная карточка. */
+.ph-card.hsv-new { flex-direction: row; align-items: center; gap: 24px; min-height: 200px; padding: 16px 32px 16px 16px; cursor: default; overflow: hidden; }
+.hsv-new-art { flex: none; width: min(40%, 320px); height: 180px; object-fit: contain; image-rendering: pixelated; }
+.hsv-new-body { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; min-width: 0; }
+.hsv-new-body > b { font: 800 28px/1.1 var(--m-font); letter-spacing: -0.02em; color: var(--m-fg); }
+@media (max-width: 720px) {
+  .ph-card.hsv-new { flex-direction: column; align-items: stretch; padding: 16px; }
+  .hsv-new-art { width: 100%; height: 140px; }
+  .hsv-new-body > b { font-size: 22px; }
+}
+
+/* Поле «Имя или адрес сервера» с кнопкой «Зайти» внутри. */
+.hs-field .btn.hs-go { flex: none; }
+/* Недавние серверы во вкладке — все строки, а не одна. */
+.ms-row.all { grid-auto-rows: auto; row-gap: 10px; }
+
+/* Hero каталога — одна полоса над поиском. */
+.hub-cat-hero { display: grid; height: clamp(200px, 26vh, 280px); margin-bottom: 14px; }
+.hub-cat-hero > * { min-height: 0; height: 100%; }
+.hub-cat-hero .skel { background: var(--m-surface); }
+
+/* Страница режима: фон — цвет режима, справа картинка плитки режима. */
+.ph-mode-hero .ph-mode-bg { background: color-mix(in srgb, var(--mode-c, var(--m-inset)) 28%, #000); }
+.ph-mode-art {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  background-size: cover;
+  background-position: center;
+}
+.ph-mode-hero .ph-mode-bg .ph-mode-art img { position: static; transform: none; image-rendering: pixelated; }
+.input.hs-field.ph-mode-find { height: 48px; }
+
+/* Одна страница без переключателей (24.09.2026, 14:32): разделы подряд. */
+.hub-sec { margin-bottom: 28px; scroll-margin-top: 12px; }
+.hub-sec > .ph-shelf-head h2 { font-size: 22px; }
+
+/* ============================================================
+   Хаб v3 (24.09.2026): «Каталог / Мои сборки».
+   «Попробуйте» — Arcania крупно, справа до двух платных сборок.
+   ============================================================ */
+.playhub > .hub-sw-wrap { margin-bottom: -8px; }
+.hub-pane > .hub-sec { margin-bottom: 0; }
+.hub-try { display: grid; gap: 12px; height: clamp(210px, 28vh, 260px); }
+/* Первый ряд «Каталога»: Мой сервер слева, Попробуйте справа, одной высоты. */
+.hub-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.75fr); gap: 16px; align-items: stretch; }
+.hub-top.solo { grid-template-columns: 1fr; }
+.hub-top > .hub-sec, .hub-top .ph-shelf { display: flex; flex-direction: column; min-width: 0; }
+.hub-top > .hub-sec > :last-child, .hub-top .ph-shelf > :last-child, .hub-top .hsv-list > :only-child { flex: 1; }
+.hub-top .hub-try { height: auto; min-height: 196px; }
+.hub-top .hub-try.n1, .hub-top .hub-try.n2 { grid-template-columns: minmax(0, 1.4fr) repeat(auto-fit, minmax(0, 1fr)); }
+/* Свой сервер в узкой колонке: имя и статус сверху, кнопки снизу, «Зайти» во всю ширину. */
+.hub-top:not(.solo) .ph-card.hsv { flex-wrap: wrap; align-content: center; }
+.hub-top:not(.solo) .hsv-acts { flex-basis: 100%; flex-wrap: wrap; }
+.hub-top:not(.solo) .hsv-acts .btn { flex: 1 1 0; min-width: 0; justify-content: center; }
+.hub-top:not(.solo) .hsv-acts .btn.primary { flex-basis: 100%; }
+.hub-top:not(.solo) .ph-card.hsv-new { flex-direction: column; align-items: stretch; gap: 12px; min-height: 0; padding: 14px 16px 16px; }
+.hub-top:not(.solo) .hsv-new-art { width: 100%; height: 104px; }
+.hub-top:not(.solo) .hsv-new-body > b { font-size: 22px; }
+.hub-top:not(.solo) .hsv-new-body .btn { align-self: stretch; justify-content: center; }
+@media (max-width: 760px) { .hub-top { grid-template-columns: 1fr; } }
+.hub-try.n1 { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+.hub-try.n2 { grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr)); }
+.hub-try > * { min-height: 0; height: 100%; }
+.hub-try .skel { background: var(--m-surface); }
+@media (max-width: 760px) {
+  .hub-try, .hub-try.n1, .hub-try.n2 { grid-template-columns: 1fr; height: auto; }
+  .hub-try > * { height: 230px; }
+}
+/* Хаб v4 (24.09.2026, 15:59): одна страница. «Сборки» — ОДНА строка
+   компактных карточек: 6 на 1200, 4 на 900; лишние прячутся, «Все» в шапке
+   ведёт в полный каталог. Вся карточка — ссылка, отдельной кнопки нет. */
+.cat3-grid.hub-packs { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+.hub-packs .cat3-acts { display: none; }
+.hub-packs .cat3-body { padding: 8px 10px 10px; gap: 4px; }
+.hub-packs .cat3-body b { font-size: 13px; }
+.hub-packs .cat3-line { gap: 8px; font-size: 11px; }
+@media (max-width: 1040px) {
+  .cat3-grid.hub-packs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .hub-packs > :nth-child(n + 5) { display: none; }
+}
+@media (max-width: 640px) {
+  .cat3-grid.hub-packs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hub-packs > :nth-child(n + 5) { display: flex; }
+}
+/* Премиум-карточки рядом с Arcania — прежняя полка «Arcania Labs». */
+.hub-try > .ph-card.hub-prem { overflow: hidden; }
+.hub-prem .ph-card-art { flex: 1 1 auto; aspect-ratio: auto; min-height: 0; }
+/* «Мои сборки» на главной — компактно: одна строка карточек пониже. */
+.hub-mine .bd-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.hub-mine .ph-card.bd-card { min-height: 112px; }
+.hub-top .hsv-addr { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-mine .bd-art { width: 96px; }
+.hub-mine .bd-art .bi img { width: 64px; height: 64px; }
+.hub-mine .bd-main { gap: 6px; padding: 10px 14px; }
+.hub-mine > .ph-shelf { margin-bottom: 0; }
+.hub-mine .ph-shelf-head h2 { font-size: 22px; }
+/* Узкая колонка сервера (окно ~900): вторичные кнопки ужимают поля, а не режут значок. */
+@media (max-width: 1040px) { .hub-top:not(.solo) .hsv-acts .btn:not(.primary) { padding-inline: 8px; gap: 6px; } }
+
+/* ============================================================
+   Хаб v5 (владелец 24.09.2026, 16:09): «Мои сборки» обычными
+   карточками с обложкой, под ними «Для тебя» — один ряд карточек
+   того же размера с меткой типа. 6 в ряд на 1200, 4 на 900.
+   ============================================================ */
+.hub-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+.hub-grid.one, .hub-grid.fy-row { grid-template-rows: auto; grid-auto-rows: 0; row-gap: 0; overflow: hidden; }
+.hub-grid.one > *, .hub-grid.fy-row > * { min-height: 0; }
+@media (max-width: 1040px) {
+  .hub-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .hub-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.hub-grid .ph-card-tag { max-width: calc(100% - 16px); overflow: hidden; white-space: nowrap; }
+.fy-card .ph-card-meta svg { width: 12px; height: 12px; flex: none; }
+.fy-card .ph-card-meta .hsv-st { gap: 5px; }
+.fy-card .ph-card-meta .hsv-st:not(.on):not(.wait) { color: var(--m-fg-muted); }
+.fy-sky { position: absolute; inset: 0; display: grid; place-items: center; background: #5ab4f0; }
+.fy-sky img { image-rendering: pixelated; filter: drop-shadow(0 4px 0 rgba(0, 0, 0, 0.3)); transition: transform 180ms var(--m-ease-move); }
+.fy-card:hover .fy-sky img { transform: translateY(-3px); }
+
+/* Карточки крупнее: 5 в ряд вместо 6 (владелец 24.09.2026, 17:31). */
+.hub-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (max-width: 1040px) { .hub-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .hub-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* «Для тебя» — ровно две строки; лишнее прячется. */
+.hub-grid.fy-grid { grid-template-rows: auto auto; grid-auto-rows: 0; row-gap: 10px; overflow: hidden; }
+.hub-grid.fy-grid > * { min-height: 0; }
+/* Свой сервер — на две клетки, как баннер. */
+.ph-card.fy-wide { grid-column: span 2; }
+.ph-card.fy-wide .ph-card-art img { object-fit: cover; object-position: center 30%; }
+/* «Все версии» — плитка создания новой сборки. */
+.ph-allver-art { display: grid; place-items: center; background: #1b2a1f; color: var(--m-accent); }
+.ph-allver-art svg { width: 40px; height: 40px; }
+.ph-allver:hover .ph-allver-art { background: #22362a; }
+/* Широкий баннер той же высоты, что соседи: две клетки + зазор по ширине. */
+.ph-card.fy-wide .ph-card-art { aspect-ratio: 33 / 9; }
+
+/* Баннер хостинга в «Для тебя»: на две клетки, арт слева, текст и кнопка
+   справа (владелец 24.09.2026, 17:47). */
+.ph-card.fy-host {
+  position: relative; display: grid; grid-template-columns: 44% 1fr; align-items: stretch;
+  min-height: 100%; padding: 0; overflow: hidden; text-align: left; background: #123a24;
+}
+.ph-card.fy-host:hover { background: #164a2d; }
+.fy-host-art { width: 100%; height: 100%; object-fit: cover; object-position: center 25%; image-rendering: pixelated; }
+.fy-host-body { display: flex; flex-direction: column; justify-content: center; gap: 8px; padding: 16px 18px; min-width: 0; }
+.fy-host-body .ph-card-tag { position: static; align-self: flex-start; }
+.fy-host-body b { font: 900 22px/1.1 var(--m-font); color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,0.35); }
+.fy-host-line { font: 700 13px/1.3 var(--m-font); color: rgba(255,255,255,0.78); }
+.fy-host-cta { align-self: flex-start; margin-top: 4px; pointer-events: none; }
+@media (max-width: 1040px) { .fy-host-body b { font-size: 18px; } .fy-host-line { display: none; } }
+/* Персонажи баннера целиком, руки не обрезаются (17:50). */
+.ph-card.fy-host .fy-host-art { object-fit: contain; object-position: center bottom; padding: 10px 0 0 8px; }
+
+/* Заголовки разделов «Во что играем»: крупнее, чисто белые с пиксельной
+   тенью-ступенькой и ровным отступом до карточек (владелец 24.09.2026, 18:01:
+   градиент с размытой тенью смотрелся криво). */
+#s-playhub .ph-shelf-head { margin: 0 0 12px; min-height: 34px; align-items: flex-end; }
+#s-playhub .ph-shelf-head h2 {
+  margin: 0; font: 900 26px/1.1 var(--m-font); letter-spacing: -0.01em; color: #fff;
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.55);
+}
+#s-playhub .hub-sec + .hub-sec, #s-playhub section + section { margin-top: 0; }
+@media (max-width: 1040px) { #s-playhub .ph-shelf-head h2 { font-size: 22px; } }
+
+/* Баннер режима на всю ширину (владелец 24.09.2026, 18:29): свет режима на
+   всём баннере, крупная сцена из блоков справа, название крупно слева. */
+.ph-mode-hero { height: 260px; padding: 22px 26px; }
+.ph-mode-hero .ph-mode-bg .ph-mode-art {
+  left: 0; right: 0; aspect-ratio: auto; background-size: cover; background-position: center;
+  justify-items: end; padding-right: 9%;
+}
+.ph-mode-hero .ph-mode-bg .ph-mode-art img { filter: drop-shadow(0 10px 0 rgba(0, 0, 0, 0.3)); animation: ph-mode-bob 3s steps(6) infinite; }
+@keyframes ph-mode-bob { 0%, 100% { transform: translateY(4px); } 50% { transform: translateY(-4px); } }
+.ph-mode-hero .ph-mode-title h1 { font: 900 44px/1 var(--m-font); color: #fff; text-shadow: 0 4px 0 rgba(0, 0, 0, 0.45); }
+.ph-mode-hero .ph-mode-meta { font: 800 15px/1 var(--m-font); color: #fff; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.45); }
+@media (prefers-reduced-motion: reduce) { .ph-mode-hero .ph-mode-bg .ph-mode-art img { animation: none; } }
+.ph-allsrv-h { margin: 0 0 12px; font: 900 26px/1.1 var(--m-font); color: #fff; }
+#s-playhub .hub-sec .ph-allsrv-h { display: none; }
+/* Сервер, которому материал не подходит: причина вместо адреса, выбрать нельзя. */
+.hi-srv.off { opacity: 0.55; cursor: default; }
+.hi-srv.off:hover { background: var(--m-surface-2); }
+.hi-srv.off .hi-srv-main span { color: var(--m-warning); white-space: normal; }
+.hi-empty .hi-acts { margin-top: 4px; }
+.hpp-then { display: block; margin: -4px 0 14px; color: var(--m-fg-muted); }
+/* «Редактировать» на карточке своей сборки — появляется при наведении. */
+.ph-mine-art { position: relative; }
+.ph-mine-edit {
+  position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%);
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px 8px;
+  font: 800 12px/1 var(--m-font); color: #fff; background: rgba(12, 16, 13, 0.88);
+  clip-path: var(--px-4); opacity: 0; transition: opacity 90ms steps(2, end);
+}
+.ph-mine-edit svg { width: 13px; height: 13px; }
+.ph-card:hover .ph-mine-edit, .ph-mine-edit:focus-visible { opacity: 1; }
+.ph-mine-edit:hover { background: var(--m-accent); color: var(--px-on-accent, #06200e); }

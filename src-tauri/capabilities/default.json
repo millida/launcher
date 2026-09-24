@@ -20,6 +20,7 @@
     "deep-link:allow-get-current",
     "clipboard-manager:allow-write-text",
     "process:allow-restart",
-    "process:allow-exit"
+    "process:allow-exit",
+    "main-commands"
   ]
 }

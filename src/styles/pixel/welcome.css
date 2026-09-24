@@ -1,0 +1,49 @@
+/* Заставка «С возвращением, <ник>» — src/components/Welcome.tsx.
+   Фон — зелёная сцена лобби (как у PixelField), текст крупный и жирный,
+   появляется ступенями. Уход — растворение клетками на холсте. */
+.welcome {
+  position: fixed; inset: 0; z-index: 9000;
+  display: grid; place-items: center;
+  background: linear-gradient(160deg, #23883d 0%, #0e4a20 100%);
+  cursor: pointer;
+}
+.welcome.is-out { background: none; }
+.welcome-cells { position: absolute; inset: 0; width: 100%; height: 100%; }
+.welcome-body {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px;
+  text-align: center; color: #fff;
+}
+.welcome.is-out .welcome-body { opacity: 0; transition: opacity 120ms steps(2, end); }
+.welcome-logo { width: 72px; height: 72px; margin-bottom: 8px; animation: welcome-pop 420ms steps(4, end) both; }
+.welcome-hi {
+  font: 800 26px/1.1 var(--m-font); color: rgba(255, 255, 255, 0.88);
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.3);
+  animation: welcome-up 360ms steps(3, end) 180ms both;
+}
+.welcome-nick {
+  font: 900 64px/1 var(--m-font); letter-spacing: -0.02em; color: #fff;
+  text-shadow: 0 5px 0 #0b3a18;
+  animation: welcome-up 360ms steps(3, end) 360ms both;
+}
+@keyframes welcome-pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  60% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes welcome-up {
+  0% { transform: translateY(18px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .welcome-logo, .welcome-hi, .welcome-nick { animation: none; }
+}
+
+/* Подарок новичку (модель предметов v2): карточка вещи падает под приветствием. */
+.welcome-gift { width: 260px; margin-top: 18px; align-items: center; text-align: center; animation: welcome-gift 520ms steps(5, end) 260ms both; }
+.welcome-gift .sh-art.lg { width: 100%; height: 190px; }
+.welcome-gift .sh-art.lg img { width: 160px; height: 160px; }
+.welcome-gift-tag { align-self: center; padding: 3px 10px; background: var(--m-accent); color: var(--px-on-accent, #06200e); font-size: 12px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; clip-path: var(--px-4); }
+.welcome-gift-foot { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.welcome-gift-on { font-size: 12px; font-weight: 900; color: var(--m-accent); }
+@keyframes welcome-gift { from { opacity: 0; transform: translateY(-40px); } 60% { opacity: 1; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .welcome-gift { animation: none; } }

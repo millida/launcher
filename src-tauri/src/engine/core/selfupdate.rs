@@ -5,6 +5,7 @@ use tauri::AppHandle;
 
 use super::http::{download_fresh, get_json};
 use super::paths::{data_dir, is_flatpak};
+use super::prefs::ui_pref;
 use super::safepath::safe_file_name;
 #[cfg(not(windows))]
 use super::paths::open_path;
@@ -14,6 +15,26 @@ use super::paths::open_path;
 // tauri.conf.json, so the fallback is not a hole through which a compromised CDN
 // could run an arbitrary installer.
 const FALLBACK_ENDPOINTS: &[&str] = &["https://launcher-storage.millida.net/latest.json"];
+
+// Testing channel. The player opts in from settings and then sees a release
+// before everyone else, so a heavy change lands on a few hundred machines
+// before it lands on all of them.
+const BETA_PREF: &str = "m-beta";
+
+pub(crate) fn beta_channel() -> bool {
+    ui_pref(BETA_PREF).as_deref() == Some("1")
+}
+
+/// The beta manifest sits next to the stable one under the same name, signed by
+/// the same key: the setting picks a file, never a host. A URL the webview could
+/// choose would be an update channel anyone with XSS could point anywhere.
+fn beta_url(url: &str) -> Option<String> {
+    let (head, tail) = url.rsplit_once('/')?;
+    match tail {
+        "latest.json" => Some(format!("{}/beta.json", head)),
+        _ => None,
+    }
+}
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -48,29 +69,43 @@ fn platform_key() -> Result<&'static str, String> {
 
 /// Endpoints come from the updater plugin config; the constant above is only a
 /// safety net for an empty config.
-fn endpoints(app: &AppHandle) -> Vec<String> {
+/// Порядок опроса манифестов. Вынесен из чтения конфига, потому что именно
+/// порядок и решает, что получит тестировщик: бета обязана стоять перед своим
+/// же стабильным соседом, а сеть тут ни при чём.
+fn channel_order(configured: &[String], beta: bool) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
+    let push = |url: String, out: &mut Vec<String>| {
+        if !out.contains(&url) {
+            out.push(url);
+        }
+    };
+    for url in configured.iter().map(|u| u.to_string()).chain(FALLBACK_ENDPOINTS.iter().map(|u| u.to_string())) {
+        if beta {
+            if let Some(b) = beta_url(&url) {
+                push(b, &mut out);
+            }
+        }
+        push(url, &mut out);
+    }
+    out
+}
+
+fn endpoints(app: &AppHandle) -> Vec<String> {
+    let mut configured: Vec<String> = Vec::new();
     if let Some(cfg) = app.config().plugins.0.get("updater") {
         if let Some(list) = cfg["endpoints"].as_array() {
             for e in list {
                 if let Some(url) = e.as_str() {
-                    let url = url
-                        .replace("{{target}}", std::env::consts::OS)
-                        .replace("{{arch}}", std::env::consts::ARCH)
-                        .replace("{{current_version}}", &app.package_info().version.to_string());
-                    if !out.contains(&url) {
-                        out.push(url);
-                    }
+                    configured.push(
+                        url.replace("{{target}}", std::env::consts::OS)
+                            .replace("{{arch}}", std::env::consts::ARCH)
+                            .replace("{{current_version}}", &app.package_info().version.to_string()),
+                    );
                 }
             }
         }
     }
-    for url in FALLBACK_ENDPOINTS {
-        if !out.iter().any(|u| u == url) {
-            out.push((*url).to_string());
-        }
-    }
-    out
+    channel_order(&configured, beta_channel())
 }
 
 fn pubkey(app: &AppHandle) -> Result<String, String> {
@@ -128,7 +163,12 @@ async fn fetch_manifest(app: &AppHandle, require_newer: bool) -> Result<Option<F
     let key = platform_key()?;
     let current = app.package_info().version.to_string();
     let mut last = "нет ни одного источника обновления".to_string();
+    // Beta sits in front of its own stable sibling, and only that pair is
+    // compared: the scan still stops at the first stable manifest that works, so
+    // a manifest signed by another key never competes with this one.
+    let mut best: Option<FallbackUpdate> = None;
     for url in endpoints(app) {
+        let beta = url.ends_with("/beta.json");
         let doc = match get_json(&url).await {
             Ok(v) => v,
             Err(e) => {
@@ -141,9 +181,6 @@ async fn fetch_manifest(app: &AppHandle, require_newer: bool) -> Result<Option<F
             last = format!("{}: в манифесте нет версии", url);
             continue;
         }
-        if require_newer && !is_newer(&version, &current) {
-            return Ok(None);
-        }
         let entry = &doc["platforms"][key];
         let link = entry["url"].as_str().unwrap_or("").trim().to_string();
         let signature = entry["signature"].as_str().unwrap_or("").trim().to_string();
@@ -151,16 +188,28 @@ async fn fetch_manifest(app: &AppHandle, require_newer: bool) -> Result<Option<F
             last = format!("{}: в манифесте нет сборки для {}", url, key);
             continue;
         }
-        return Ok(Some(FallbackUpdate {
+        let found = FallbackUpdate {
             file: file_from_url(&link)?,
             version,
             notes: doc["notes"].as_str().unwrap_or("").to_string(),
             url: link,
             signature,
             source: url,
-        }));
+        };
+        if best.as_ref().is_none_or(|b| is_newer(&found.version, &b.version)) {
+            best = Some(found);
+        }
+        if !beta {
+            break;
+        }
     }
-    Err(last)
+    let Some(found) = best else {
+        return Err(last);
+    };
+    if require_newer && !is_newer(&found.version, &current) {
+        return Ok(None);
+    }
+    Ok(Some(found))
 }
 
 fn decode_text(b64: &str) -> Result<String, String> {
@@ -244,6 +293,12 @@ pub async fn fallback_stage_latest(app: &AppHandle) -> Result<Option<FallbackIns
     Ok(Some(FallbackInstall { version: upd.version, path: file.to_string_lossy().to_string(), started: false }))
 }
 
+/// Same switches the updater plugin passes. Without `/UPDATE` the NSIS wizard
+/// defaults to running the old uninstaller with its "delete app data" box,
+/// which wipes the game folder and the saved login.
+#[cfg(any(windows, test))]
+const NSIS_UPDATE_ARGS: [&str; 3] = ["/P", "/R", "/UPDATE"];
+
 /// Windows hands off to the installer; macOS and Linux replace the .app bundle
 /// or AppImage in place. When there is nothing to replace (deb/rpm, not launched
 /// from a bundle) the containing folder is opened instead.
@@ -262,6 +317,7 @@ pub fn run_installer(file: &Path) -> Result<bool, String> {
     #[cfg(windows)]
     {
         let mut cmd = std::process::Command::new(file);
+        cmd.args(NSIS_UPDATE_ARGS);
         super::proc::quiet(&mut cmd);
         cmd.spawn().map_err(|e| format!("установщик не запустился: {}", e))?;
         Ok(true)
@@ -434,6 +490,83 @@ fn install_appimage(file: &Path) -> Result<bool, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// input -> verdict. The testing channel picks a FILE next to the stable
+    /// manifest, never a host: a setting that could name a URL would be an
+    /// update channel anyone with a webview hole could aim anywhere.
+    #[test]
+    fn testing_channel_only_swaps_the_manifest_name() {
+        let cases: [(&str, Option<&str>); 5] = [
+            (
+                "https://launcher-storage.millida.net/v2/latest.json",
+                Some("https://launcher-storage.millida.net/v2/beta.json"),
+            ),
+            (
+                "https://launcher-storage.millida.net/latest.json",
+                Some("https://launcher-storage.millida.net/beta.json"),
+            ),
+            ("https://launcher-storage.millida.net/v2/install.json", None),
+            ("https://evil.example/latest.json.txt", None),
+            ("latest.json", None),
+        ];
+        for (input, want) in cases {
+            assert_eq!(
+                beta_url(input).as_deref(),
+                want,
+                "{input:?} must map to {want:?}: the testing channel may only point at a                  beta.json beside the manifest the build was configured with"
+            );
+        }
+    }
+
+    /// вход → вердикт: что и в каком порядке спрашивает канал обновлений.
+    ///
+    /// Порядок здесь и есть вся фича: бета стоит перед своим стабильным
+    /// соседом, а без галки её адрес не спрашивается вовсе — иначе «тестируем
+    /// на части людей» превратилось бы в «стучимся всеми».
+    #[test]
+    fn testing_channel_asks_beta_before_its_own_stable_neighbour() {
+        let configured = vec!["https://launcher-storage.millida.net/v2/latest.json".to_string()];
+
+        let off = channel_order(&configured, false);
+        assert_eq!(
+            off,
+            vec![
+                "https://launcher-storage.millida.net/v2/latest.json".to_string(),
+                "https://launcher-storage.millida.net/latest.json".to_string(),
+            ],
+            "без галки бета не спрашивается вовсе"
+        );
+
+        let on = channel_order(&configured, true);
+        assert_eq!(
+            on,
+            vec![
+                "https://launcher-storage.millida.net/v2/beta.json".to_string(),
+                "https://launcher-storage.millida.net/v2/latest.json".to_string(),
+                "https://launcher-storage.millida.net/beta.json".to_string(),
+                "https://launcher-storage.millida.net/latest.json".to_string(),
+            ],
+            "с галкой каждая бета идёт перед своим стабильным соседом"
+        );
+
+        assert!(
+            on.iter().position(|u| u.ends_with("/v2/beta.json"))
+                < on.iter().position(|u| u.ends_with("/v2/latest.json")),
+            "бета обязана опрашиваться первой: иначе тестировщик получит общую сборку"
+        );
+    }
+
+    #[test]
+    fn fallback_installer_runs_in_update_mode() {
+        assert!(
+            NSIS_UPDATE_ARGS.contains(&"/UPDATE"),
+            "без /UPDATE мастер NSIS запускает старый деинсталлятор с галкой «Удалить данные» — игрок теряет сборки и вход"
+        );
+        assert!(
+            NSIS_UPDATE_ARGS.contains(&"/P"),
+            "без /P установщик открывает полный мастер вместо тихой установки поверх"
+        );
+    }
 
     #[test]
     fn compares_versions() {

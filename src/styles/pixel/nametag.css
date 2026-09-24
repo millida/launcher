@@ -1,0 +1,20 @@
+/* Ник над персонажем — как nametag в игре (Monocraft, OFL 1.1). */
+@font-face {
+  font-family: 'Monocraft';
+  src: url('/fonts/Monocraft-nametag.woff2') format('woff2');
+  font-display: swap;
+}
+
+.mc-nametag {
+  position: absolute;
+  z-index: 2;
+  transform: translate(-50%, -100%);
+  padding: 2px 6px 3px;
+  font: 400 17px/1.15 'Monocraft', monospace;
+  color: #fff;
+  white-space: nowrap;
+  background: rgba(0, 0, 0, 0.36);
+  text-shadow: 2px 2px 0 #3f3f3f;
+  pointer-events: none;
+  user-select: none;
+}

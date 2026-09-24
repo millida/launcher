@@ -96,7 +96,6 @@
 
 /* Console */
 .host-console{height:300px;overflow-y:auto;background:#0c0f0d;border-radius:12px;padding:12px 14px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;line-height:1.6;color:#c8d4cc}
-:root[data-theme="light"] .host-console{background:#0f1512;color:#d4ddd6}
 .host-console .cmd{color:var(--m-accent)}
 .host-console .err{color:var(--m-danger)}
 .host-console .lvl-err{color:#ff6b74}

@@ -6,6 +6,8 @@ mod scan;
 mod deps;
 mod safety;
 mod fingerprint;
+mod millida_mod;
+mod catalog_pack;
 
 pub use deps::*;
 pub use safety::*;
@@ -15,3 +17,5 @@ pub use curseforge::*;
 pub use updates::*;
 pub use localmeta::*;
 pub use scan::*;
+pub use millida_mod::*;
+pub use catalog_pack::*;

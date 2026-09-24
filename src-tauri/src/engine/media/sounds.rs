@@ -10,27 +10,37 @@ pub struct UiSound {
 /// UI sounds are downloaded from the Mojang asset CDN rather than bundled, so
 /// no game assets are redistributed. The second key is a fallback for versions
 /// where the first one no longer exists in the asset index.
+/// Короткие мелодичные звуки нотного блока и опыта вместо сундуков и маяка
+/// (владелец 24.09.2026, 14:01: «мелодичные, маленькие, миленькие»).
 const UI_SOUNDS: &[(&str, &[&str])] = &[
-    ("click", &["random/click.ogg"]),
-    ("nav", &["random/wood_click.ogg", "block/cherrywood_button/cherrywood_click.ogg"]),
+    ("click", &["note/xylobone.ogg", "random/click.ogg"]),
+    ("nav", &["note/bit.ogg", "random/click.ogg"]),
     ("toggle", &["random/pop.ogg"]),
-    ("open", &["random/chestopen.ogg"]),
-    ("close", &["random/chestclosed.ogg"]),
-    ("notify", &["note/pling.ogg"]),
+    ("open", &["note/pling.ogg"]),
+    ("close", &["note/pling.ogg"]),
+    ("notify", &["note/bell.ogg", "note/pling.ogg"]),
     ("success", &["random/orb.ogg"]),
-    ("install", &["random/levelup.ogg"]),
-    ("achievement", &["ui/toast/challenge_complete.ogg", "random/levelup.ogg"]),
-    ("error", &["random/break.ogg"]),
-    ("delete", &["random/glass1.ogg"]),
-    ("login", &["ui/toast/in.ogg"]),
-    ("launch", &["block/beacon/activate.ogg", "random/bow.ogg"]),
-    ("crash", &["random/explode1.ogg", "mob/ghast/scream1.ogg"]),
+    ("install", &["note/icechime.ogg", "random/orb.ogg"]),
+    ("achievement", &["random/levelup.ogg"]),
+    ("error", &["note/bass.ogg", "note/didgeridoo.ogg"]),
+    ("delete", &["item/bundle/remove_one1.ogg", "random/pop.ogg"]),
+    ("login", &["note/flute.ogg", "ui/toast/in.ogg"]),
+    ("launch", &["random/levelup.ogg"]),
+    ("crash", &["note/didgeridoo.ogg", "note/bass.ogg"]),
+    // Сундук — звуки Minecraft (владелец 24.09.2026, 18:56).
+    ("chest_hit", &["dig/wood1.ogg", "dig/wood2.ogg"]),
+    ("chest_crack", &["random/break.ogg"]),
+    ("chest_open", &["random/chestopen.ogg"]),
+    ("chest_card", &["random/orb.ogg"]),
+    ("chest_rare", &["block/amethyst/break1.ogg", "random/orb.ogg"]),
+    ("chest_epic", &["ui/toast/challenge_complete.ogg", "random/levelup.ogg"]),
+    ("chest_gold", &["item/armor/equip_gold1.ogg", "random/orb.ogg"]),
 ];
 
 const PREFIX: &str = "minecraft/sounds/";
 
 fn sounds_dir() -> PathBuf {
-    data_dir().join("sounds")
+    data_dir().join("sounds-v2")
 }
 
 pub fn ui_sounds() -> Vec<UiSound> {

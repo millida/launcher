@@ -9,6 +9,7 @@
 use serde::Serialize;
 
 use crate::engine::*;
+use super::launch::SYSTEM_MEMORY_REASON;
 
 /// One button under the crash message. `kind` is a closed set the core knows
 /// how to perform; `arg` is its only parameter and is re-checked when applied.
@@ -148,7 +149,7 @@ pub fn diagnose(profile: &str, reason: &str, tail: &str, log_text: &str) -> Cras
         );
     }
 
-    if low.contains("оператив") || low.contains("памяти") {
+    if (low.contains("оператив") || low.contains("памяти")) && reason != SYSTEM_MEMORY_REASON {
         let tuning = tune_profile(profile);
         actions.insert(
             0,

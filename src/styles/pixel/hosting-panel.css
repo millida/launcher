@@ -1,0 +1,86 @@
+/* ============================================================
+   ХОСТИНГ — ОБЩИЕ ДЕТАЛИ ПАНЕЛИ (23.09.2026)
+   ------------------------------------------------------------
+   Сцена сервера и вкладки — в hosting-scene.css. Здесь то, что
+   нужно разделам: компактная плашка баланса, секция с заголовком
+   (журнал, тариф) и опасная зона. Рамки — общим слоем «Ступенчатая
+   рамка» (12-pixel.css), через переменные --px-*.
+   Подключается из screens/Hosting.tsx.
+   ============================================================ */
+
+/* ---------- Баланс: кошелёк, сумма, «+» — пополнение ---------- */
+.hp-balance {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 4px 0 12px;
+  background: color-mix(in srgb, var(--m-accent) 14%, transparent);
+  border-radius: var(--m-r-ctl);
+  color: var(--m-fg);
+  font-size: 14px;
+  white-space: nowrap;
+  cursor: pointer;
+  flex: none;
+  transition: background-color var(--m-t-fast);
+}
+.hp-balance > svg { width: 17px; height: 17px; color: var(--m-accent); }
+.hp-balance b { font-weight: 800; font-variant-numeric: tabular-nums; }
+.hp-balance-add {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-left: 2px;
+  background: var(--m-accent);
+  color: var(--px-on-accent, #06200e);
+  border-radius: var(--m-r-mini);
+}
+.hp-balance-add svg { width: 15px; height: 15px; }
+.hp-balance:hover { background-color: color-mix(in srgb, var(--m-accent) 22%, transparent); }
+
+/* ---------- Секция раздела ---------- */
+.hp-panel { padding: 18px 20px 20px; background: var(--m-surface); border-radius: var(--m-r-card); min-width: 0; }
+.hp-panel-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.hp-panel-head h3 { flex: 1; font-size: 16px; font-weight: 800; color: var(--m-fg); }
+.hp-panel-act { display: flex; gap: 8px; }
+.hp-set .set-row { border-color: transparent !important; }
+.hp-danger { background: var(--m-danger-soft); }
+.hp-danger h3 { font-size: 16px; font-weight: 800; color: var(--m-danger); margin-bottom: 10px; }
+
+/* ---------- Логотип и статус (их берёт и окно установки в «Во что играем») ---------- */
+.hp-ico { display: grid; place-items: center; flex: none; background: var(--m-surface-2); border-radius: var(--m-r-md); overflow: hidden; }
+.hp-ico img { width: 70%; height: 70%; object-fit: contain; }
+.hp-ico img.is-own { width: 100%; height: 100%; image-rendering: pixelated; }
+.hp-badge { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; font-size: 12px; font-weight: 700; white-space: nowrap; border-radius: var(--m-r-pill); flex: none; }
+.hp-badge.is-success { background: var(--m-success-soft); color: var(--m-success); }
+.hp-badge.is-warning { background: var(--m-warning-soft); color: var(--m-warning); }
+.hp-badge.is-danger { background: var(--m-danger-soft); color: var(--m-danger); }
+.hp-badge.is-neutral { background: var(--m-surface-2); color: var(--m-fg-muted); }
+.hp-dot { width: 6px; height: 6px; background: currentColor; flex: none; }
+.hp-dot.hollow { background: transparent; box-shadow: inset 0 0 0 1.5px currentColor; }
+
+/* Верх экрана управления: «К серверам» слева, баланс справа. */
+.hsx-manage-top { justify-content: space-between; }
+
+/* ---------- Пиксельная форма ---------- */
+:root:root .hp-balance {
+  border-radius: 0;
+  --px-n: 5px; clip-path: var(--px-5);
+  --px-ol: color-mix(in srgb, var(--m-accent) 32%, transparent); --px-ol-w: 2px;
+  --px-ft: transparent; --px-fb: transparent; --px-fl: transparent; --px-fr: transparent;
+}
+:root:root .hp-balance-add {
+  border-radius: 0;
+  /* Тот же срез, что у плашки баланса: зазор до каймы одной ширины и на ступеньке. */
+  --px-n: 5px; clip-path: var(--px-5);
+  --px-ol: transparent; --px-ft: rgba(255, 255, 255, 0.3); --px-ft-w: 2px; --px-fb: rgba(0, 0, 0, 0.3); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+:root:root .hp-panel {
+  border-radius: 0;
+  --px-n: 10px; clip-path: var(--px-10);
+  --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+:root:root :is(.hp-ico, .hp-badge) { border-radius: 0; clip-path: var(--px-4); }
+:root:root .hp-ico { clip-path: var(--px-5); }
+:root:root .hp-danger { --px-ft: transparent; --px-fb: rgba(0, 0, 0, 0.26); }

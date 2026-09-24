@@ -3,7 +3,6 @@ use serde_json::Value;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::OnceLock;
 use std::time::Duration;
 
 use super::jobs::CANCELLED;
@@ -12,7 +11,32 @@ const UA: &str = "MillidaLauncher/1.0 (+https://millida.net)";
 const JSON_TIMEOUT: Duration = Duration::from_secs(30);
 const TRIES: u32 = 3;
 
-static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+/*
+ * С какого размера оборванную закачку выгоднее продолжить, чем начать заново.
+ * Мелочь (мод, ассет) перекачивается за секунды, и докачка для неё — лишний
+ * риск: дописанный хвост поверх чужого начала не виден до сверки хеша. Сборка
+ * весит гигабайты, и там верно обратное.
+ */
+const RESUME_MIN_BYTES: u64 = 64 * 1024 * 1024;
+
+/// How long a launch waits for fresh metadata it already holds a copy of. Past
+/// it the copy is used and a late answer still lands in the cache for the next
+/// launch: a dead or filtered connection used to hold the game back for minutes
+/// on data that was already on disk.
+const REFRESH_BUDGET: Duration = Duration::from_secs(4);
+
+const PROXY_RECHECK: Duration = Duration::from_secs(5);
+
+struct Shared {
+    client: reqwest::Client,
+    proxy: String,
+    checked: std::time::Instant,
+}
+
+/// VPN clients in "system proxy" mode switch the proxy on and off while the
+/// launcher sits in the tray, and a client built before the switch kept going
+/// direct — straight into the resets the VPN was turned on to avoid.
+static CLIENT: std::sync::Mutex<Option<Shared>> = std::sync::Mutex::new(None);
 
 /// When off, a matching file size is accepted as intact; full rehashing is only
 /// enabled during an explicit repair pass.
@@ -41,9 +65,52 @@ pub(crate) fn deep_verify() -> bool {
 
 /// The bundled webpki roots alone are not enough: HTTPS-inspecting antivirus and
 /// corporate proxies re-sign traffic with a CA that only exists in the OS store.
+/// Редирект только на https: иначе разрешённый хост мог бы увести запрос на
+/// http и на локальный адрес (аудит 24.09.2026, R5). В тестах — локальные
+/// http-серверы, для них исключение.
+fn redirect_policy() -> reqwest::redirect::Policy {
+    reqwest::redirect::Policy::custom(|attempt| {
+        if attempt.previous().len() >= 10 {
+            attempt.error("слишком много перенаправлений")
+        } else if attempt.url().scheme() != "https" && !cfg!(test) {
+            attempt.error("перенаправление не на https")
+        } else {
+            attempt.follow()
+        }
+    })
+}
+
+/// Предел ответа API в JSON/тексте.
+pub(crate) const JSON_MAX_BYTES: usize = 16 * 1024 * 1024;
+
+fn too_big(max: usize) -> String {
+    if max >= 1024 * 1024 {
+        format!("ответ больше {} МБ", max / (1024 * 1024))
+    } else {
+        format!("ответ больше {} КБ", max / 1024)
+    }
+}
+
+/// Тело ответа с пределом: сначала по Content-Length, потом по факту, кусками —
+/// сервер без Content-Length не забьёт память гигабайтами.
+pub(crate) async fn read_capped(mut resp: reqwest::Response, max: usize) -> Result<Vec<u8>, String> {
+    if resp.content_length().is_some_and(|n| n > max as u64) {
+        return Err(too_big(max));
+    }
+    let mut out: Vec<u8> = Vec::new();
+    while let Some(chunk) = resp.chunk().await.map_err(|e| net_err(&e))? {
+        if out.len() + chunk.len() > max {
+            return Err(too_big(max));
+        }
+        out.extend_from_slice(&chunk);
+    }
+    Ok(out)
+}
+
 fn build_client(native_roots: bool) -> Result<reqwest::Client, reqwest::Error> {
     reqwest::Client::builder()
         .user_agent(UA)
+        .redirect(redirect_policy())
         .connect_timeout(Duration::from_secs(15))
         .read_timeout(Duration::from_secs(60))
         .pool_idle_timeout(Duration::from_secs(90))
@@ -52,14 +119,42 @@ fn build_client(native_roots: bool) -> Result<reqwest::Client, reqwest::Error> {
         .build()
 }
 
+#[cfg(windows)]
+fn system_proxy() -> String {
+    let Ok(key) = windows_registry::CURRENT_USER.open(r"Software\Microsoft\Windows\CurrentVersion\Internet Settings")
+    else {
+        return String::new();
+    };
+    if key.get_u32("ProxyEnable").unwrap_or(0) == 0 {
+        return String::new();
+    }
+    format!(
+        "{}\n{}",
+        key.get_string("ProxyServer").unwrap_or_default(),
+        key.get_string("ProxyOverride").unwrap_or_default()
+    )
+}
+
+#[cfg(not(windows))]
+fn system_proxy() -> String {
+    String::new()
+}
+
 pub(crate) fn client() -> reqwest::Client {
-    CLIENT
-        .get_or_init(|| {
-            build_client(true)
-                .or_else(|_| build_client(false))
-                .unwrap_or_else(|_| reqwest::Client::new())
-        })
-        .clone()
+    let mut slot = CLIENT.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(shared) = slot.as_ref().filter(|s| s.checked.elapsed() < PROXY_RECHECK) {
+        return shared.client.clone();
+    }
+    let proxy = system_proxy();
+    if let Some(shared) = slot.as_mut().filter(|s| s.proxy == proxy) {
+        shared.checked = std::time::Instant::now();
+        return shared.client.clone();
+    }
+    let client = build_client(true)
+        .or_else(|_| build_client(false))
+        .unwrap_or_else(|_| reqwest::Client::new());
+    *slot = Some(Shared { client: client.clone(), proxy, checked: std::time::Instant::now() });
+    client
 }
 
 #[cfg(test)]
@@ -202,18 +297,26 @@ where
 /// The body is read inside the attempt, not after it: a connection cut halfway
 /// through a chunked response is the common failure on filtered networks, and
 /// reqwest reports it as an opaque decode error long after the status said 200.
+///
+/// The cause goes first and the URL last on purpose. These strings are joined
+/// into one line that a toast truncates, and an API URL with its query runs past
+/// a hundred characters: with the URL in front the player only ever saw the
+/// address and never the reason, while net_err already carries the advice that
+/// resolves the failure ("antivirus is intercepting HTTPS", "check DNS").
 async fn read_json(url: &str, resp: reqwest::Response) -> Result<Value, Attempt> {
     let status = resp.status();
     if !status.is_success() {
-        let msg = format!("{} → {}", url, status);
+        let msg = format!("{} от {}", status, url);
         return Err(if retryable(status) { Attempt::Retry(msg) } else { Attempt::Fatal(msg) });
     }
-    let body = resp
-        .bytes()
+    if resp.content_length().is_some_and(|n| n > JSON_MAX_BYTES as u64) {
+        return Err(Attempt::Fatal(format!("ответ больше 16 МБ — {}", url)));
+    }
+    let body = read_capped(resp, JSON_MAX_BYTES)
         .await
-        .map_err(|e| Attempt::Retry(format!("{}: ответ оборвался ({})", url, net_err(&e))))?;
+        .map_err(|e| Attempt::Retry(format!("ответ оборвался: {} — {}", e, url)))?;
     serde_json::from_slice(&body)
-        .map_err(|e| Attempt::Retry(format!("{}: неожиданный ответ ({})", url, e)))
+        .map_err(|e| Attempt::Retry(format!("неожиданный ответ: {} — {}", e, url)))
 }
 
 /// Percent-encoding for path segments and query values; also used when a URL is
@@ -237,7 +340,7 @@ pub(crate) async fn get_json(url: &str) -> Result<Value, String> {
             async move {
                 match client().get(&target).timeout(JSON_TIMEOUT).send().await {
                     Ok(r) => read_json(&target, r).await,
-                    Err(e) => Err(Attempt::Retry(format!("{}: {}", target, net_err(&e)))),
+                    Err(e) => Err(Attempt::Retry(format!("{} — {}", net_err(&e), target))),
                 }
             }
         })
@@ -289,7 +392,31 @@ pub(crate) async fn get_json_fresh(url: &str, cache: &Path, ttl: Duration) -> Re
             return Ok(v);
         }
     }
-    get_json_cached(url, cache).await
+    get_json_revalidated(url, cache).await
+}
+
+/// The network answer when it comes within `REFRESH_BUDGET`, the copy from an
+/// earlier run otherwise. Without a copy there is nothing else to use, so the
+/// request runs to its own end.
+pub(crate) async fn get_json_revalidated(url: &str, cache: &Path) -> Result<Value, String> {
+    revalidated_within(url, cache, REFRESH_BUDGET).await
+}
+
+async fn revalidated_within(url: &str, cache: &Path, budget: Duration) -> Result<Value, String> {
+    let Ok(copy) = read_json_file(cache) else {
+        return get_json_cached(url, cache).await;
+    };
+    let (url, cache) = (url.to_string(), cache.to_path_buf());
+    // Its own task, so running out of budget does not cancel the request.
+    let refresh = tauri::async_runtime::spawn(async move {
+        let v = get_json(&url).await.ok()?;
+        super::paths::write_json_quiet(&cache, &v);
+        Some(v)
+    });
+    match tokio::time::timeout(budget, refresh).await {
+        Ok(Ok(Some(v))) => Ok(v),
+        _ => Ok(copy),
+    }
 }
 
 /// Modrinth bulk endpoints only accept a JSON body over POST.
@@ -301,7 +428,7 @@ pub(crate) async fn post_json(url: &str, body: &Value) -> Result<Value, String> 
             async move {
                 match client().post(&target).json(body).timeout(JSON_TIMEOUT).send().await {
                     Ok(r) => read_json(&target, r).await,
-                    Err(e) => Err(Attempt::Retry(format!("{}: {}", target, net_err(&e)))),
+                    Err(e) => Err(Attempt::Retry(format!("{} — {}", net_err(&e), target))),
                 }
             }
         })
@@ -391,8 +518,11 @@ fn publish(part: &Path, dest: &Path, sum: Option<Sum<'_>>, size: Option<u64>) ->
 /// Streams into a private `.part` file and renames on success so an aborted
 /// download can never be mistaken for a complete file.
 async fn fetch(url: &str, dest: &Path, sum: Option<Sum<'_>>, size: Option<u64>) -> Result<(), String> {
-    fetch_cancellable(url, dest, sum, size, None).await
+    fetch_cancellable(url, dest, sum, size, None, None).await
 }
+
+/// Сколько байт уже легло и сколько ожидается. Зовётся на каждом куске тела.
+pub(crate) type Progress<'a> = dyn Fn(u64, Option<u64>) + Send + Sync + 'a;
 
 async fn fetch_cancellable(
     url: &str,
@@ -400,6 +530,7 @@ async fn fetch_cancellable(
     sum: Option<Sum<'_>>,
     size: Option<u64>,
     cancel: Option<&AtomicBool>,
+    on: Option<&Progress<'_>>,
 ) -> Result<(), String> {
     if url.trim().is_empty() {
         return Err("пустая ссылка на файл".into());
@@ -410,6 +541,7 @@ async fn fetch_cancellable(
     let part = part_path(dest);
     let _cleanup = PartGuard(part.clone());
     let mut last = String::new();
+    let mut resume_from: u64 = 0;
     for route in super::mirror::routes(url).await {
         for attempt in 1..=TRIES {
             let target = if attempt > 1 && is_stale_cdn_miss(&last) {
@@ -417,10 +549,22 @@ async fn fetch_cancellable(
             } else {
                 route.clone()
             };
-            match fetch_once(&target, &part, sum, size, cancel).await {
+            match fetch_once(&target, &part, sum, size, cancel, resume_from, on).await {
                 Ok(()) => return publish(&part, dest, sum, size),
                 Err(e) => {
-                    let _ = std::fs::remove_file(&part);
+                    /*
+                     * Оборванную закачку большого файла оставляем на диске и
+                     * продолжаем с того же места: сборка весит гигабайты, и
+                     * обрыв на девяноста процентах не должен стоить полного
+                     * повтора. Всё остальное — мелочь, для которой докачка
+                     * дороже обычного перекачивания, и битый хвост в ней
+                     * опаснее: файл дописался бы поверх чужого начала.
+                     */
+                    let have = std::fs::metadata(&part).map(|m| m.len()).unwrap_or(0);
+                    resume_from = resume_after(&e, have);
+                    if resume_from == 0 {
+                        let _ = std::fs::remove_file(&part);
+                    }
                     last = e;
                 }
             }
@@ -442,23 +586,76 @@ fn cancelled(cancel: Option<&AtomicBool>) -> bool {
     cancel.is_some_and(|c| c.load(Ordering::Relaxed))
 }
 
+/// Сколько уже скачанного можно оставить после неудачной попытки.
+///
+/// Ноль — начать заново. Не ноль — продолжить с этого места.
+///
+/// Битую контрольную сумму и неверный размер продолжать нельзя: испорчен сам
+/// скачанный кусок, и докачка поверх него даст файл, который не сойдётся уже
+/// никогда. Всё остальное — обрыв связи, ответ щита пятисоткой, закрытое
+/// соединение — портит только хвост, и его довозит следующая попытка.
+fn resume_after(err: &str, have: u64) -> u64 {
+    if have < RESUME_MIN_BYTES {
+        return 0;
+    }
+    if err.contains("контрольная сумма") || err.contains("размер") {
+        return 0;
+    }
+    have
+}
+
 async fn fetch_once(
     url: &str,
     part: &Path,
     sum: Option<Sum<'_>>,
     size: Option<u64>,
     cancel: Option<&AtomicBool>,
+    resume_from: u64,
+    on: Option<&Progress<'_>>,
 ) -> Result<(), String> {
     if cancelled(cancel) {
         return Err(CANCELLED.into());
     }
-    let resp = client().get(url).send().await.map_err(|e| format!("{}: {}", url, net_err(&e)))?;
+    let mut req = client().get(url);
+    if resume_from > 0 {
+        req = req.header("Range", format!("bytes={}-", resume_from));
+    }
+    let resp = req.send().await.map_err(|e| format!("{}: {}", url, net_err(&e)))?;
     if !resp.status().is_success() {
         return Err(format!("{} → {}", url, resp.status()));
     }
-    let mut file = std::fs::File::create(part).map_err(|e| format!("{}: {}", part.display(), e))?;
+    /*
+     * Сервер вправе не поддержать докачку и ответить целым файлом: тогда
+     * дописывать к уже скачанному нельзя — получится склейка двух начал,
+     * которая сойдётся по размеру далеко не всегда, а по хешу не сойдётся
+     * никогда, и разбираться в этом будет игрок.
+     */
+    let resumed = resume_from > 0 && resp.status() == reqwest::StatusCode::PARTIAL_CONTENT;
     let mut hasher = sum.filter(|s| s.is_usable()).map(|s| Hasher::for_sum(&s));
     let mut written: u64 = 0;
+    let mut file = if resumed {
+        // Хеш считается по ходу закачки, поэтому уже лежащий кусок нужно
+        // прогнать через него заново — это чтение с диска против повторной
+        // закачки двух гигабайт по сети.
+        if let Some(h) = hasher.as_mut() {
+            let mut fh = std::fs::File::open(part).map_err(|e| format!("{}: {}", part.display(), e))?;
+            let mut buf = vec![0u8; 1 << 20];
+            loop {
+                let n = std::io::Read::read(&mut fh, &mut buf).map_err(|e| e.to_string())?;
+                if n == 0 {
+                    break;
+                }
+                h.update(&buf[..n]);
+            }
+        }
+        written = resume_from;
+        std::fs::OpenOptions::new()
+            .append(true)
+            .open(part)
+            .map_err(|e| format!("{}: {}", part.display(), e))?
+    } else {
+        std::fs::File::create(part).map_err(|e| format!("{}: {}", part.display(), e))?
+    };
     let mut stream = resp.bytes_stream();
     while let Some(chunk) = stream.next().await {
         // Cancellation has to reach the body loop: a modpack archive on a slow
@@ -473,6 +670,9 @@ async fn fetch_once(
         }
         written += chunk.len() as u64;
         file.write_all(&chunk).map_err(|e| e.to_string())?;
+        if let Some(report) = on {
+            report(if resumed { resume_from + written } else { written }, size);
+        }
     }
     file.flush().map_err(|e| e.to_string())?;
     drop(file);
@@ -512,12 +712,15 @@ pub(crate) async fn download_fresh(url: &str, dest: &Path) -> Result<(), String>
 
 /// Same, for archives an install job downloads: the job's cancel flag stops the
 /// transfer mid-body instead of after the last byte.
+/// Сейчас вызывается только тестом отмены: установка каталожных сборок ушла на
+/// свой путь загрузки, а функция остаётся общим инструментом.
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) async fn download_fresh_cancellable(
     url: &str,
     dest: &Path,
     cancel: &AtomicBool,
 ) -> Result<(), String> {
-    fetch_cancellable(url, dest, None, None, Some(cancel)).await
+    fetch_cancellable(url, dest, None, None, Some(cancel), None).await
 }
 
 /// Verification reads and hashes the file, so it runs off the async runtime to
@@ -560,7 +763,24 @@ pub(crate) async fn download_checked_cancellable(
         }
         let _ = std::fs::remove_file(dest);
     }
-    fetch_cancellable(url, dest, sum, size, cancel).await
+    fetch_cancellable(url, dest, sum, size, cancel, None).await
+}
+
+/// То же скачивание, но с отчётом о ходе. Архив сборки весит гигабайты, и без
+/// отчёта полоса стоит на одном числе всю закачку - игрок читает это как
+/// зависание и приходит в поддержку (KoMaM, 16.09.2026: «бесконечная загрузка 12%»).
+pub(crate) async fn download_checked_progress(
+    url: &str,
+    dest: &Path,
+    sum: Option<Sum<'_>>,
+    size: Option<u64>,
+    cancel: Option<&AtomicBool>,
+    on: &Progress<'_>,
+) -> Result<(), String> {
+    if dest.exists() {
+        let _ = std::fs::remove_file(dest);
+    }
+    fetch_cancellable(url, dest, sum, size, cancel, Some(on)).await
 }
 
 /// Same contract as `download_checked`, plus the shared store: a file another
@@ -592,6 +812,26 @@ pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    /// ошибка + сколько скачано -> с чего продолжать. Сборка весит гигабайты, и
+    /// обрыв на девяноста процентах не должен стоить полного повтора; но
+    /// испорченный кусок продолжать нельзя ни при каком размере.
+    #[test]
+    fn a_broken_download_resumes_only_when_the_bytes_are_still_good() {
+        let big = RESUME_MIN_BYTES + 1;
+        let table: [(&str, u64, u64, &str); 6] = [
+            ("https://x/y.zip → 502 Bad Gateway", big, big, "щит ответил ошибкой — байты целы, довозим хвост"),
+            ("https://x/y.zip: обрыв загрузки (connection reset)", big, big, "обрыв связи портит только хвост"),
+            ("https://x/y.zip: контрольная сумма не сошлась", big, 0, "испорчен сам файл — докачка его не починит"),
+            ("https://x/y.zip: размер 5 вместо 7", big, 0, "недовезённый файл считается испорченным"),
+            ("https://x/y.zip → 502 Bad Gateway", 1024, 0, "мелочь перекачать дешевле, чем возобновлять"),
+            ("https://x/y.zip → 502 Bad Gateway", 0, 0, "нечего продолжать"),
+        ];
+        for (err, have, want, why) in table {
+            assert_eq!(resume_after(err, have), want, "{}", why);
+        }
+    }
+
     use super::*;
 
     // Port 1 refuses immediately, so any network attempt fails fast.
@@ -717,6 +957,78 @@ mod tests {
         assert_eq!(v["latest"]["release"], "26.2");
         let v2 = get_json_fresh(DEAD, &cache, Duration::from_millis(0)).await.unwrap();
         assert_eq!(v2["latest"]["release"], "26.2");
+    }
+
+    #[tokio::test]
+    async fn body_over_the_cap_is_refused() {
+        let url = serve_once(Duration::ZERO, r#"{"a":"0123456789012345678901234567890123456789"}"#).await;
+        let res = client().get(&url).send().await.unwrap();
+        assert!(read_capped(res, 16).await.is_err(), "тело больше предела не читается");
+        let url = serve_once(Duration::ZERO, r#"{"a":1}"#).await;
+        let res = client().get(&url).send().await.unwrap();
+        assert_eq!(read_capped(res, 16).await.unwrap(), br#"{"a":1}"#.to_vec());
+    }
+
+    async fn serve_once(delay: Duration, body: &'static str) -> String {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/meta.json", listener.local_addr().unwrap());
+        tokio::spawn(async move {
+            let (mut sock, _) = listener.accept().await.unwrap();
+            let mut buf = [0u8; 1024];
+            let _ = sock.read(&mut buf).await;
+            tokio::time::sleep(delay).await;
+            let head = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            let _ = sock.write_all(head.as_bytes()).await;
+            let _ = sock.shutdown().await;
+        });
+        url
+    }
+
+    async fn cache_becomes(cache: &Path, want: &str) -> bool {
+        for _ in 0..60 {
+            if read_json_file(cache).is_ok_and(|v| v["v"] == want) {
+                return true;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        false
+    }
+
+    /// Metadata with a copy on disk: a network inside the budget gives fresh
+    /// data, a slow one never holds the launch past the budget, and its late
+    /// answer still refreshes the copy for the next launch.
+    #[tokio::test]
+    async fn a_launch_waits_for_fresh_metadata_only_within_the_budget() {
+        let budget = Duration::from_millis(300);
+        let cases: [(&str, Duration, &str, &str); 2] = [
+            ("fast", Duration::ZERO, "new", "сеть успела — запуск получает свежие данные"),
+            ("slow", Duration::from_millis(900), "old", "сеть не успела — запуск идёт на копии и не ждёт"),
+        ];
+        for (name, delay, want, why) in cases {
+            let url = serve_once(delay, r#"{"v":"new"}"#).await;
+            let cache = tmp(&format!("revalidate-{}", name)).join("meta.json");
+            std::fs::write(&cache, br#"{"v":"old"}"#).unwrap();
+            let started = std::time::Instant::now();
+            let v = revalidated_within(&url, &cache, budget).await.expect("копия на диске - ошибки быть не может");
+            assert_eq!(v["v"], want, "{}: {}", name, why);
+            assert!(
+                started.elapsed() < budget + Duration::from_millis(250),
+                "{}: запуск ждал {:?} при бюджете {:?}",
+                name,
+                started.elapsed(),
+                budget
+            );
+            assert!(
+                cache_becomes(&cache, "new").await,
+                "{}: ответ сети обязан лечь в копию, иначе без сети запуск навсегда останется на старых данных",
+                name
+            );
+        }
     }
 
     // Both modes live in one test: DEEP_VERIFY is process-global and parallel

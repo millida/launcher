@@ -2,11 +2,12 @@ import { create } from 'zustand'
 import { openMic, storedCallVolume, type MicChain } from '../lib/call/audio'
 import { iceConfig, supportsCalls } from '../lib/call/ice'
 import { CallSession, politeToward, type PeerState } from '../lib/call/session'
-import { SCREEN_MAX_VIEWERS, canShareScreenTo } from '../lib/call/mesh-rules'
+import { CAM_MAX_VIEWERS, SCREEN_MAX_VIEWERS, canShareScreenTo, canShowCamTo, peerFlagsPatch } from '../lib/call/mesh-rules'
 import type { PeerFlags, PeerQuality } from '../lib/call/peer'
 import { newCallId, sendSignal, startSignalPump, type CallEvent } from '../lib/call/signal'
 import { startRing, stopRing } from '../lib/call/ringtone'
 import { canShareScreen, screenErrorText, shareScreen, storedScreenQuality, type ScreenShare } from '../lib/call/screen'
+import { canUseCamera, cameraErrorText, openCamera, storedCamera, storedCameraQuality, type CameraShare } from '../lib/call/camera'
 import { micErrorText, storedMicProcessing, type MicProcessing } from '../lib/audioDevices'
 import { storedMicGain, storedNoiseMode, type NoiseMode } from '../lib/call/mic-worklet'
 import { openSettings, showToast } from './ui'
@@ -41,6 +42,12 @@ interface CallState {
   muted: boolean
   deafened: boolean
   sharing: boolean
+  /** Своя камера включена и её картинка — она же уходит собеседникам. */
+  camOn: boolean
+  camStream: MediaStream | null
+  /** Чья камера развёрнута на весь экран; пусто — своя плитка и чужие в доке. */
+  camOf: string
+  camFull: boolean
   /** Уровень своего микрофона и факт речи — для индикатора в панели. */
   level: number
   speaking: boolean
@@ -66,6 +73,10 @@ const IDLE = {
   muted: false,
   deafened: false,
   sharing: false,
+  camOn: false,
+  camStream: null as MediaStream | null,
+  camOf: '',
+  camFull: false,
   level: 0,
   speaking: false,
   parts: [] as CallParticipant[],
@@ -98,6 +109,7 @@ const VOICE_BEAT_MS = 15_000
 let session: CallSession | null = null
 let mic: MicChain | null = null
 let screen: ScreenShare | null = null
+let camera: CameraShare | null = null
 let ringTimer: ReturnType<typeof setTimeout> | null = null
 let statsTimer: ReturnType<typeof setInterval> | null = null
 let beatTimer: ReturnType<typeof setInterval> | null = null
@@ -127,11 +139,13 @@ function blankPart(userId: string, nick: string): CallParticipant {
     muted: false,
     deafened: false,
     sharing: false,
+    camOn: false,
     level: 0,
     speaking: false,
     connection: 'new',
     quality: null,
     screen: null,
+    cam: null,
   }
 }
 
@@ -155,6 +169,8 @@ function teardown() {
   stopRing()
   if (screen) screen.stop()
   screen = null
+  if (camera) camera.stop()
+  camera = null
   if (session) session.close()
   session = null
   if (mic) mic.close()
@@ -425,6 +441,56 @@ export async function toggleScreen() {
   }
 }
 
+/**
+ * Камера в разговоре. Включается по нажатию и только на время разговора: дорожка
+ * живёт ровно столько, сколько горит лампочка рядом с объективом.
+ */
+export async function toggleCamera() {
+  const cur = st()
+  if (cur.status !== 'active' && cur.status !== 'connecting') return
+  if (!session) return
+  if (cur.camOn) {
+    if (camera) camera.stop()
+    camera = null
+    await session.setCam(null)
+    shareFlags({ cam: false })
+    cur.set({ camOn: false, camStream: null, camFull: false })
+    return
+  }
+  if (!canUseCamera()) {
+    showToast(cameraErrorText(new Error('unsupported')), 'error')
+    return
+  }
+  if (cur.mode === 'room' && !canShowCamTo(cur.parts.length)) {
+    showToast(
+      'Камеру можно включить, пока в разговоре не больше ' +
+        (CAM_MAX_VIEWERS + 1) +
+        ' человек — дальше картинка съест канал вместе с голосом',
+      'error',
+    )
+    return
+  }
+  try {
+    const shot = await openCamera(storedCamera(), storedCameraQuality())
+    // Пока система спрашивала разрешение, разговор мог закончиться: дорожку
+    // тогда надо закрыть, иначе лампочка камеры останется гореть после звонка.
+    if (!session || st().status === 'idle') {
+      shot.stop()
+      return
+    }
+    camera = shot
+    await session.setCam(shot.video, shot.fps)
+    shareFlags({ cam: true })
+    st().set({ camOn: true, camStream: shot.stream })
+    // Камеру отбирают и снаружи: выдернули провод, забрала другая программа.
+    shot.video.onended = () => {
+      if (st().camOn) void toggleCamera()
+    }
+  } catch (e) {
+    showToast(cameraErrorText(e), 'error')
+  }
+}
+
 export function setCallVolume(pct: number) {
   st().set({ volume: pct })
   if (session) session.setVolume(pct)
@@ -644,7 +710,7 @@ async function onRoomEvent(e: CallEvent, roomId: string) {
   }
   if (cur.mode !== 'room' || cur.roomId !== roomId || !session) return
   if (e.kind === 'state') {
-    patchPart(e.from, peerStatePatch(e.data as PeerFlags))
+    patchPart(e.from, peerFlagsPatch(e.data as PeerFlags))
     return
   }
   if (e.kind === 'offer' || e.kind === 'answer' || e.kind === 'ice') {
@@ -657,19 +723,6 @@ async function onRoomEvent(e: CallEvent, roomId: string) {
     }
     await session.accept(e.from, e.kind, e.data)
   }
-}
-
-function peerStatePatch(flags: PeerFlags): Partial<CallParticipant> {
-  const patch: Partial<CallParticipant> = {}
-  if (typeof flags.muted === 'boolean') {
-    patch.muted = flags.muted
-    if (flags.muted) {
-      patch.level = 0
-      patch.speaking = false
-    }
-  }
-  if (typeof flags.screen === 'boolean') patch.sharing = flags.screen
-  return patch
 }
 
 async function onEvent(e: CallEvent) {
@@ -702,7 +755,7 @@ async function onEvent(e: CallEvent) {
     return
   }
   if (e.kind === 'state') {
-    patchPart(cur.peerId, peerStatePatch(e.data as PeerFlags))
+    patchPart(cur.peerId, peerFlagsPatch(e.data as PeerFlags))
     return
   }
   if (!session) return

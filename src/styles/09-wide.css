@@ -12,10 +12,13 @@
    `:root[data-density="…"] .x`, and this file loads after 07-density.css, so a
    tie resolves here. A plain class would lose at every density but the default. */
 
+/* Колонка шире прежних 1400/1560/1720: на 1920 по бокам оставалось по
+   260 px пустоты (владелец 23.09.2026: «гигантские поля»). Лобби колонкой
+   не ограничено вовсе — у него фон на всё окно (pixel/lobby.css). */
 @media (min-width: 1500px) {
   :root:root .screen,
   :root:root .login-wrap {
-    max-width: 1400px;
+    max-width: 1760px;
     margin-inline: auto;
   }
 }
@@ -23,7 +26,7 @@
 @media (min-width: 2000px) {
   :root:root .screen,
   :root:root .login-wrap {
-    max-width: 1560px;
+    max-width: 1960px;
   }
   /* Three cards across a 1560px column give 500px tiles — the roomy count is
      meant for a window half this wide. */
@@ -42,7 +45,7 @@
 @media (min-width: 2560px) {
   :root:root .screen,
   :root:root .login-wrap {
-    max-width: 1720px;
+    max-width: 2240px;
   }
   :root:root .skin-cards {
     grid-template-columns: repeat(5, 1fr);

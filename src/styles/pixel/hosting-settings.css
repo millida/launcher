@@ -1,0 +1,166 @@
+/* ============================================================
+   ХОСТИНГ И НАСТРОЙКИ — пиксельный язык (22.09.2026)
+   ------------------------------------------------------------
+   Зона: screens/Hosting*, screens/hosting/*, HostPlanPicker,
+   modals/Settings, AudioSettings, CloudSync, TunePanel.
+   Раскладка (hs-*) держится на токенах --m-*, форма среза — под :root:root.
+   ============================================================ */
+
+/* ---------- Витрина хостинга: гость и «сервера ещё нет» ---------- */
+/* Заголовок + три плашки с живыми цифрами бесплатного тарифа + одна кнопка. */
+.hs-pitch {
+  max-width: 520px;
+  margin: 24px auto;
+  padding: 30px 26px 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  text-align: center;
+}
+.hs-pitch-title {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+.hs-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  width: 100%;
+}
+.hs-fact {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 8px 12px;
+  background: var(--m-inset);
+  border-radius: var(--m-r-card);
+}
+.hs-fact img {
+  width: 48px;
+  height: 48px;
+  image-rendering: pixelated;
+  margin-bottom: 4px;
+}
+.hs-fact b {
+  font-size: 20px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.hs-fact span {
+  font-size: 12px;
+  color: var(--m-fg-subtle);
+}
+.hs-pitch-btn { min-width: 220px; }
+
+/* ---------- Состояния: ошибка / пусто ---------- */
+.hs-state {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 20px;
+}
+.hs-state > svg { width: 20px; height: 20px; color: var(--m-warning, var(--m-fg-subtle)); flex: none; }
+.hs-state > b { flex: 1; font-size: 14px; font-weight: 700; }
+.hs-state-row { display: flex; align-items: center; gap: 12px; margin: 6px 0 10px; }
+.hs-state-row .faint-note { margin: 0; flex: 1; }
+
+/* ---------- Карточка сервера ---------- */
+.hs-invite-empty { width: 100%; }
+
+/* Кнопка питания в шапке управления: одна, крупная, всегда справа. */
+.host-manage-head .hs-power { min-width: 150px; }
+.host-manage-head .hs-icon-btn,
+.hs-icon-btn { width: 48px; padding: 0; justify-content: center; flex: none; }
+.host-manage-head .hs-icon-btn svg { width: 17px; height: 17px; }
+
+/* «Нужен перезапуск» — полоса с действием вместо строки-объяснения. */
+.hs-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 10px 12px 10px 14px;
+  background: color-mix(in srgb, var(--m-warning, #f5c93b) 12%, var(--m-inset));
+  border-radius: var(--m-r-card);
+}
+.hs-banner > svg { width: 16px; height: 16px; color: var(--m-warning, #f5c93b); flex: none; }
+.hs-banner > b { flex: 1; font-size: 13px; font-weight: 700; }
+
+/* Действия в строке игрока: тихие кнопки, наказания — иконки в конце. */
+.hs-row-acts { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; justify-content: flex-end; }
+.hs-row-acts .btn.sm { padding: 0 10px; }
+.hs-row-acts .btn.sm[aria-label] { width: 40px; padding: 0; }
+.hs-danger-ic:hover { color: var(--m-danger); }
+
+/* Подсказки команд под консолью — нажал, и команда в поле. */
+.hs-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.hs-chip {
+  height: 28px;
+  padding: 0 10px;
+  background: var(--m-inset);
+  color: var(--m-fg-muted);
+  border-radius: var(--m-r-ctl);
+  font-size: 12px;
+  cursor: pointer;
+}
+.hs-chip:hover { background: var(--m-raised); color: var(--m-fg); }
+.hs-chip code { font-family: var(--m-mono); font-size: 12px; }
+
+/* Хвост адреса прямо в поле. */
+.hs-suffix {
+  flex: none;
+  font-size: 12.5px;
+  color: var(--m-fg-faint);
+  padding-left: 2px;
+  white-space: nowrap;
+}
+.hs-addr { display: inline-flex; align-items: center; gap: 6px; font-family: var(--m-mono); }
+.hs-addr svg { width: 13px; height: 13px; }
+
+/* Каталог на сервере: название + одна строка. */
+#s-hosting .host-cat-sum { -webkit-line-clamp: 1; }
+
+/* Подсказки к кнопкам-иконкам — общий components/PixelTip.tsx (data-tip). */
+
+/* ============ Пиксельная форма ============ */
+
+:root:root :is(.hs-pitch, .hs-state, .hs-banner) {
+  border-radius: 0;
+  --px-n: 10px; clip-path: var(--px-10);
+}
+:root:root :is(.hs-pitch, .hs-state) { box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent; }
+:root:root .hs-fact {
+  border-radius: 0;
+  --px-n: 5px; clip-path: var(--px-5);
+  box-shadow: var(--px-well); --px-ol: var(--px-well-ol); --px-ol-w: 1px; --px-ft: var(--px-well-t); --px-ft-w: 3px; --px-fb: transparent; --px-fl: transparent; --px-fr: transparent;
+}
+:root:root :is(.hs-chip, .hs-tip) {
+  border-radius: 0;
+  --px-n: 4px; clip-path: var(--px-4);
+}
+:root:root .hs-tip { box-shadow: none; outline: 0; }
+:root:root .hs-banner { box-shadow: inset 4px 0 0 var(--m-warning, #f5c93b), inset 0 -3px 0 rgba(0, 0, 0, 0.2); --px-ol: transparent; --px-ft: transparent; --px-fb: rgba(0, 0, 0, 0.2); --px-fb-w: 3px; --px-fl: var(--m-warning, #f5c93b); --px-fl-w: 4px; --px-fr: transparent; }
+:root:root .host-graph {
+  border-radius: 0;
+  --px-n: 5px; clip-path: var(--px-5);
+}
+:root:root :is(.host-day, .host-crumb, .ip-pill) {
+  border-radius: 0;
+  --px-n: 4px; clip-path: var(--px-4);
+}
+
+/* Узкое окно: плашки витрины в столбик не складываем — сжимаем. */
+@media (max-width: 520px) {
+  .hs-pitch { padding: 24px 16px; }
+  .hs-fact b { font-size: 17px; }
+  .hs-pitch-btn { width: 100%; min-width: 0; }
+}
+
+/* Карточка сервера: полоска «Статус» снята (повторяла плашку у имени) —
+   две оставшиеся делят ряд поровну. */
+.host-card .kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }

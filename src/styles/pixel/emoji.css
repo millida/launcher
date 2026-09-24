@@ -1,0 +1,63 @@
+/* Пиксельные эмодзи eltaller47 в чате: в тексте, в цитате, в уведомлении и в выборе. */
+
+/* В строке — по высоте текста, пиксели не мылятся. */
+.elt-emoji {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  margin: -4px 1px;
+  vertical-align: baseline;
+  image-rendering: pixelated;
+  user-select: none;
+}
+/* Сообщение только из эмодзи — крупно. */
+.msg-text .elt-only .elt-emoji {
+  width: 48px;
+  height: 48px;
+  margin: 2px 2px 0 0;
+}
+/* Цитата и уведомление — мельче, в строку. */
+:is(.msg-reply, .chat-quote-body, .chat-notify-body) .elt-emoji {
+  width: 18px;
+  height: 18px;
+  margin: -3px 1px;
+}
+
+/* Выбор: одна сетка пиксельных смайлов — обычных и стикеров больше нет
+   (владелец 24.09.2026, 13:33). */
+.chat-emoji-pop.elt-pop {
+  width: 336px;
+  max-height: 300px;
+  grid-template-columns: repeat(8, 1fr);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.chat-emoji.elt {
+  height: 36px;
+}
+.chat-emoji.elt .elt-emoji {
+  width: 28px;
+  height: 28px;
+  margin: 0;
+}
+/* Кнопка выбора — сам пиксельный смайл вместо контурного значка. */
+.chat-elt-btn .elt-emoji {
+  width: 24px;
+  height: 24px;
+  margin: 0;
+}
+.chat-elt-btn.on {
+  background: var(--m-inset);
+}
+
+/* Реакции — пиксельные двойники тех же символов (в сеть уходит символ). */
+.msg-reaction .msg-react-art {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+.msg-menu-emoji .msg-react-art {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+}

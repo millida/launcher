@@ -235,10 +235,7 @@ pub async fn fetch_texture(url: String) -> Result<String, String> {
     if !res.status().is_success() {
         return Err(format!("Ссылка ответила {}", res.status().as_u16()));
     }
-    let bytes = res.bytes().await.map_err(|e| e.to_string())?;
-    if bytes.len() > MAX_BYTES {
-        return Err("PNG больше 2 МБ".into());
-    }
+    let bytes = read_capped(res, MAX_BYTES).await.map_err(|_| "PNG больше 2 МБ".to_string())?;
     if !bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
         return Err("По ссылке не PNG".into());
     }

@@ -1,0 +1,263 @@
+/* ============================================================
+   ЗОНА «SHELL»: первый экран «Играть», каркас окна, вход (22.09.2026)
+   ------------------------------------------------------------
+   Дополняет 12-pixel.css. Разбор кнопок и текста —
+   docs/audit-2026-09-22/shell.md.
+
+   Базовые правила (без :root:root) здесь только там,
+   где разметка потеряла инлайн-стили: меню аккаунтов и плашка обновления.
+   ============================================================ */
+
+/* ---------- Меню аккаунтов (раньше — инлайн-стили в AccountMenu.tsx) ---------- */
+.acc-menu {
+  position: fixed;
+  z-index: 140;
+  width: 284px;
+  background: var(--m-surface-2);
+  border: 1px solid var(--m-border);
+  border-radius: 14px;
+  box-shadow: var(--m-shadow-lg);
+  padding: 12px;
+}
+.acc-menu-cap {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--m-fg-subtle);
+  padding: 2px 6px 10px;
+}
+.acc-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 10px;
+  margin-bottom: 2px;
+  border-radius: 11px;
+  cursor: pointer;
+}
+.acc-item img,
+.acc-item canvas { border-radius: 8px; }
+.acc-item.on,
+.acc-item.on:hover { background: var(--m-accent-soft); }
+.acc-item-nick {
+  display: block;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.acc-item-kind { font-size: 11px; color: var(--m-fg-subtle); }
+.acc-item-kind.lost { color: var(--m-danger); font-weight: 700; }
+.acc-menu-empty { padding: 8px; color: var(--m-fg-faint); font-size: 12.5px; }
+.acc-menu-sep { height: 1px; background: var(--m-border); margin: 8px 4px; }
+
+/* ---------- Плашка обновления (раньше — инлайн, белый текст на зелёном 2,6:1) ---------- */
+@keyframes updDrop {
+  from { opacity: 0; transform: translate(-50%, -14px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+.upd-banner {
+  position: fixed;
+  top: 62px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 8px 8px 16px;
+  max-width: calc(100% - 40px);
+  background: var(--m-raised);
+  color: var(--m-fg);
+  border-radius: 999px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  animation: updDrop 0.4s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.upd-banner > svg { width: 18px; height: 18px; flex: none; color: var(--m-accent); }
+.upd-banner-txt { font-size: 13.5px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.upd-banner .btn { flex: none; }
+
+/* ---------- Полоска шагов гайда (вместо «Шаг 3 из 10») ---------- */
+.tour-bar { display: flex; gap: 4px; margin-bottom: 12px; }
+.tour-bar-seg { flex: 1; height: 4px; border-radius: 2px; background: var(--m-inset); }
+.tour-bar-seg.on { background: var(--m-accent); }
+
+/* ---------- Живые числа первого экрана ---------- */
+.hero-num {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(242, 244, 243, 0.78);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.45);
+  margin-left: 4px;
+}
+.hero-num:first-child { margin-left: 0; }
+.hero-num svg { width: 15px; height: 15px; color: var(--m-accent); }
+.hero-num b { color: #f2f4f3; font-weight: 800; font-variant-numeric: tabular-nums; }
+.hero-cta .btn .spin,
+.btn .spin { width: 14px; height: 14px; }
+
+/* Поиск сборок в первой настройке: крутилка вместо «Ищем… это до минуты». */
+.onb-scan { display: flex; align-items: center; gap: 10px; }
+.onb-scan .spin { width: 14px; height: 14px; flex: none; }
+
+/* Кнопка гостя — отступ вместо разделителя «или без сервисов». */
+.login-guest { margin-top: 14px; }
+.login-code-box .login-reg { margin-top: 2px; font-size: 12px; }
+
+/* ============================================================
+   Пиксельный язык
+   ============================================================ */
+
+/* Сайдбар режется срезом 10px, а clip-path обрезает и всё, что торчит за край:
+   подсказки свёрнутого меню (data-tip) и выпадашки. Контур повторяет срез
+   на всех четырёх углах, но справа, между верхним и нижним уступом, открыт
+   на 480px — фона сайдбара там нет, видны только вылезающие подсказки. */
+/* clip-path создаёт свой слой: подсказки внутри сайдбара с z-index 80 оказывались
+   под первым экраном (у него transform). Слой сайдбара поднят над контентом —
+   его фон справа не рисуется, так что перекрывает он только свои подсказки. */
+:root:root aside.sidebar {
+  position: relative;
+  z-index: 70;
+  clip-path: polygon(
+    10px 0, calc(100% - 10px) 0, calc(100% - 10px) 10px, 100% 10px,
+    calc(100% + 480px) 10px, calc(100% + 480px) calc(100% - 10px),
+    100% calc(100% - 10px), calc(100% - 10px) calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%,
+    10px calc(100% - 10px), 0 calc(100% - 10px), 0 10px, 10px 10px
+  );
+}
+/* Сама подсказка — ::after пункта, а пункт тоже режется срезом 5px: в свёрнутом
+   меню контур пункта так же открыт вправо, иначе подсказку не видно вовсе. */
+:root:root .sidebar.collapsed :is(.nav-item, .side-collapse, .account)[data-tip] {
+  clip-path: polygon(
+    5px 0, calc(100% - 5px) 0, calc(100% - 5px) 5px, 100% 5px,
+    calc(100% + 320px) 5px, calc(100% + 320px) calc(100% - 5px),
+    100% calc(100% - 5px), calc(100% - 5px) calc(100% - 5px), calc(100% - 5px) 100%, 5px 100%,
+    5px calc(100% - 5px), 0 calc(100% - 5px), 0 5px, 5px 5px
+  );
+}
+/* Подсказка свёрнутого меню — плашка со срезом, как остальные. */
+:root:root .sidebar.collapsed [data-tip]::after {
+  border: 0;
+  border-radius: 0;
+  --px-n: 4px; clip-path: var(--px-4);
+  box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+
+/* Меню аккаунтов и его строки. */
+:root:root .acc-menu {
+  border: 0;
+  border-radius: 0;
+  --px-n: 10px; clip-path: var(--px-10);
+  box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+  background: var(--m-raised);
+}
+:root:root :is(.acc-item, .acc-add-btn, .acc-item-del, .acc-opt, .acc-buy, .acc-code, .side-collapse, .sec-link, .mus-btn, .mus-item, #musPop .icon-btn, .wp-item-del, .login-code) {
+  border-radius: 0;
+  --px-n: 5px; clip-path: var(--px-5);
+}
+:root:root :is(.acc-item img, .acc-item canvas, .acc-opt-ic, .acc-buy-ic, .ava) {
+  border-radius: 0;
+  --px-n: 4px; clip-path: var(--px-4);
+}
+:root:root .ava.is-plus { outline: 0; box-shadow: inset 0 0 0 2px var(--m-accent); --px-ol: var(--m-accent); --px-ol-w: 2px; --px-ft: transparent; --px-fb: transparent; --px-fl: transparent; --px-fr: transparent; }
+:root:root .acc-item.on,
+:root:root .acc-item.on:hover {
+  box-shadow: inset 3px 0 0 var(--m-accent); --px-ol: transparent; --px-ft: transparent; --px-fb: transparent; --px-fl: var(--m-accent); --px-fl-w: 3px; --px-fr: transparent;
+}
+:root:root .acc-add-btn {
+  border: 0;
+  background: var(--m-surface-2);
+  box-shadow: var(--px-btn); --px-ol: var(--px-btn-ol); --px-ol-w: 2px; --px-ft: var(--px-btn-t); --px-ft-w: 3px; --px-fb: var(--px-btn-b); --px-fb-w: 5px; --px-fl: var(--px-btn-l); --px-fl-w: 3px; --px-fr: var(--px-btn-r); --px-fr-w: 3px;
+  padding-bottom: 3px;
+}
+:root:root .acc-add-btn:hover { background: var(--m-raised); }
+:root:root .acc-add-btn:active { transform: translateY(2px); box-shadow: var(--px-btn-press); --px-ol: rgba(0, 0, 0, 0.2); --px-ol-w: 2px; --px-ft: rgba(0, 0, 0, 0.22); --px-ft-w: 3px; --px-fb: rgba(0, 0, 0, 0.22); --px-fb-w: 2px; --px-fl: transparent; --px-fr: transparent; }
+
+/* Выбор типа аккаунта: строки-плиты. Значки — одноцветные пиксельные
+   силуэты акцентом, как до перехода спрайта на цветные предметы
+   (23.09.2026, 22:50: ключ-золото, щит, человечек читались как эмодзи).
+   «Купить лицензию» — плотный акцент с тёмным текстом и подошвой, как
+   прежний зелёный баннер, но без градиента. */
+:root:root .acc-opt { box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent; }
+:root:root :is(.acc-opt-ic, .acc-buy-ic) svg { width: 20px; height: 20px; }
+:root:root .acc-buy {
+  background: var(--m-accent);
+  color: var(--px-on-accent);
+  padding-bottom: 15px;
+  box-shadow: var(--px-btn); --px-ol: var(--px-btn-ol); --px-ol-w: 2px; --px-ft: var(--px-btn-t); --px-ft-w: 3px; --px-fb: var(--px-btn-b); --px-fb-w: 5px; --px-fl: var(--px-btn-l); --px-fl-w: 3px; --px-fr: var(--px-btn-r); --px-fr-w: 3px;
+}
+:root:root .acc-buy:hover { background: var(--m-accent); filter: brightness(1.06); transform: none; }
+:root:root .acc-buy:active { transform: translateY(2px); }
+:root:root .acc-buy-ic { background: rgba(0, 0, 0, 0.14); }
+:root:root .acc-buy-ic svg { color: var(--px-on-accent); }
+:root:root .acc-buy > svg { color: var(--px-on-accent); opacity: 0.8; }
+:root:root .acc-buy-sub { font-size: 12px; color: var(--px-on-accent); opacity: 0.75; }
+:root:root .acc-code { border: 0; box-shadow: var(--px-well); --px-ol: var(--px-well-ol); --px-ol-w: 1px; --px-ft: var(--px-well-t); --px-ft-w: 3px; --px-fb: transparent; --px-fl: transparent; --px-fr: transparent; }
+
+/* Плашка обновления — плита со срезом, кнопка — обычная главная. */
+:root:root .upd-banner {
+  border-radius: 0;
+  --px-n: 10px; clip-path: var(--px-10);
+  box-shadow: var(--px-plate), inset 4px 0 0 var(--m-accent); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: var(--m-accent); --px-fl-w: 4px; --px-fr: transparent;
+}
+
+/* Полоска шагов гайда и первой настройки — квадратные сегменты. */
+:root:root .tour-bar-seg { border-radius: 0; }
+/* Дыра подсветки в гиде — квадратная, как всё вокруг. */
+:root:root .tour-hole { border-radius: 0; }
+
+/* Логотип входа и приветствия — в тот же срез. */
+/* Логотипы не режем: у самого знака скруглённая подложка, срез превращал его в крест. */
+:root:root .login-logo { margin-bottom: 22px; }
+:root:root .login-form h1 { font-size: 30px; }
+:root:root .login-form .sub { margin-bottom: 20px; }
+
+/* Метка «Запущено» на обложке сборки — плашка со срезом. */
+:root:root .build-run { border-radius: 0; --px-n: 4px; clip-path: var(--px-4); }
+
+/* Первый экран: заголовок крупнее — это главный экран, как на millida.net. */
+:root:root .hero-body h2 { font-size: 28px; font-weight: 850; }
+:root:root .hero-cta .btn.secondary { padding-left: 16px; padding-right: 16px; }
+:root:root .hero-meta { gap: 10px; }
+/* Серые кнопки на обоях: плотная подложка, чтобы не терялись на светлом кадре. */
+:root:root .hero-cta .btn.secondary {
+  background: rgba(22, 25, 24, 0.9);
+  color: #f2f4f3;
+}
+:root:root .hero-cta .btn.secondary:hover { background: rgba(34, 38, 36, 0.94); }
+:root:root .hero-cta .btn.secondary svg { color: var(--m-accent); }
+:root:root :is(.hero-cta .btn.glass, .hero-cta .btn.running, .hero-cta .btn.danger) {
+  backdrop-filter: none;
+  box-shadow: var(--px-btn); --px-ol: var(--px-btn-ol); --px-ol-w: 2px; --px-ft: var(--px-btn-t); --px-ft-w: 3px; --px-fb: var(--px-btn-b); --px-fb-w: 5px; --px-fl: var(--px-btn-l); --px-fl-w: 3px; --px-fr: var(--px-btn-r); --px-fr-w: 3px;
+}
+:root:root .hero-cta .btn.glass.on,
+:root:root .hero-cta .btn.running {
+  box-shadow: inset 0 0 0 2px var(--m-accent), inset 0 -5px 0 rgba(0, 0, 0, 0.32); --px-ol: var(--m-accent); --px-ol-w: 2px; --px-ft: transparent; --px-fb: rgba(0, 0, 0, 0.32); --px-fb-w: 5px; --px-fl: transparent; --px-fr: transparent;
+}
+:root:root .hero-cta .btn.danger {
+  box-shadow: inset 0 0 0 2px rgba(255, 156, 146, 0.75), inset 0 -5px 0 rgba(0, 0, 0, 0.32); --px-ol: rgba(255, 156, 146, 0.75); --px-ol-w: 2px; --px-ft: transparent; --px-fb: rgba(0, 0, 0, 0.32); --px-fb-w: 5px; --px-fl: transparent; --px-fr: transparent;
+}
+
+/* «Выйти из Millida» — под «Добавить аккаунт», тише и с красным значком. */
+.acc-logout-btn { margin-top: 6px; background: transparent; }
+.acc-logout-btn svg { color: var(--m-danger); }
+.acc-logout-btn:hover { border-color: var(--m-danger); }
+
+/* Меню аккаунтов пропорциональнее (правка 23.09.2026, 21:22): шире, строки
+   выше, голова 40px, «Добавить аккаунт» — полноценная кнопка той же ширины. */
+:root:root .acc-menu { width: 330px; padding: 10px; }
+.acc-menu .acc-item { min-height: 56px; padding: 8px 10px; gap: 12px; }
+.acc-menu .acc-item-nick { font-size: 15px; font-weight: 800; }
+.acc-menu .acc-item-kind { font-size: 12px; }
+.acc-menu .acc-item-del { width: 34px; height: 34px; }
+.acc-menu .acc-add-btn { height: 44px; font-size: 14px; font-weight: 800; justify-content: center; }
+
+/* Всплывающие окна не заезжают под полосу заголовка «MILLIDA LAUNCHER»
+   (правка владельца 23.09.2026, 22:28): затемнение начинается под ней, окно
+   не выше доступной высоты. */
+:root .modal-bg { top: 44px; }
+:root .modal-bg .modal { max-height: calc(100% - 32px); }

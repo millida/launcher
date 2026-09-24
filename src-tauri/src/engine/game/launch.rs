@@ -11,6 +11,10 @@ pub static RUNNING: Mutex<Vec<(String, u32)>> = Mutex::new(Vec::new());
 
 const EXIT_POLL: std::time::Duration = std::time::Duration::from_secs(2);
 const PLAYTIME_FLUSH: std::time::Duration = std::time::Duration::from_secs(60);
+/// Сколько секунд сессии считается доказательством, что сборка открылась.
+/// Полторы минуты — это дальше загрузки модов и окна входа; всё, что короче,
+/// одинаково похоже и на запуск, и на вылет на середине загрузки.
+const LAUNCH_CHECK_ALIVE: u64 = 90;
 
 /// Pids killed on user request: a non-zero exit code for them is not a crash.
 static STOPPED: Mutex<Vec<u32>> = Mutex::new(Vec::new());
@@ -130,7 +134,13 @@ fn newest_crash_report(game_dir: &Path, since: std::time::SystemTime) -> Option<
 /// unrelated keyword in an old log becomes the verdict.
 fn native_crash_log(game_dir: &Path, since: std::time::SystemTime) -> Option<String> {
     let p = newest_fresh_in(game_dir, since, "hs_err_pid")?;
-    read_log_file(&p)
+    read_log_file(&p).map(|text| fatal_error_report(&text).to_string())
+}
+
+const HS_ERR_PROCESS_SECTION: &str = "---------------  P R O C E S S  ---------------";
+
+fn fatal_error_report(text: &str) -> &str {
+    text.find(HS_ERR_PROCESS_SECTION).map_or(text, |i| &text[..i])
 }
 
 /// Captured stdout plus the game's own latest.log, the newest crash report and a
@@ -204,6 +214,36 @@ fn skin_mod_implicated(text: &str) -> bool {
     text.lines().any(|l| {
         let low = l.to_lowercase();
         low.contains("customskinloader") && FAILURE_MARKERS.iter().any(|m| low.contains(m))
+    })
+}
+
+/// Наш собственный мод в строке, которая сама по себе — отказ.
+///
+/// Тот же приём, что и с модом скинов: имя мода стоит в каждом запуске в списке
+/// загруженных, и по одному имени судить нельзя. Отдельно ловится
+/// UnsupportedClassVersionError: так выглядит мод, собранный под Java новее
+/// игры, и это единственная поломка, которая валит ВСЕ модовые сборки сразу
+/// (16.09.2026).
+pub(crate) fn own_mod_implicated(text: &str) -> bool {
+    text.lines().any(|l| {
+        let low = l.to_lowercase();
+        // Совпадение ищется по НАШИМ опознавательным знакам, а не по слову
+        // «millida»: оно стоит в пути к папке лаунчера, и тогда виноватым
+        // оказывался бы любой вылет у любого игрока.
+        const OURS: [&str; 5] = [
+            "net/millida",
+            "net.millida",
+            "millidaforge",
+            "millida.mixins",
+            "millida-mod-",
+        ];
+        let ours = OURS.iter().any(|m| low.contains(m))
+            || (low.contains("millida") && low.contains("class loading"));
+        if !ours {
+            return false;
+        }
+        low.contains("unsupportedclassversionerror")
+            || FAILURE_MARKERS.iter().any(|m| low.contains(m))
     })
 }
 
@@ -286,6 +326,43 @@ fn mod_fault_reason(faults: &[ModFault]) -> String {
     }
 }
 
+const CERTIFICATE_REJECTION_MARKERS: [&str; 4] =
+    ["pkix path", "certification path", "certificate_unknown", "sslhandshakeexception"];
+
+/// Only the loaders' own refusal lines: Forge prints "fmlcore-….jar is missing
+/// mods.toml file" on every healthy start, so a loose "missing mods" match
+/// labelled almost every Forge crash as a missing dependency.
+const MISSING_DEPENDENCY_MARKERS: [&str; 4] = [
+    "mandatory dependencies",
+    "missingmodsexception",
+    ", which is missing!",
+    "but only the wrong version is present",
+];
+
+fn loader_reported_missing_dependency(low: &str) -> bool {
+    MISSING_DEPENDENCY_MARKERS.iter().any(|m| low.contains(m))
+}
+
+/// The machine ran out of commit memory, not the game out of heap: the JVM
+/// prints a bare "java.lang.OutOfMemoryError" next to these lines, so they must
+/// be checked first. Raising -Xmx here reserves even more and crashes sooner.
+const SYSTEM_MEMORY_MARKERS: [&str; 4] = [
+    "native memory allocation",
+    "insufficient memory for the java runtime environment",
+    "could not reserve enough space",
+    "paging file is too small",
+];
+
+pub(crate) const SYSTEM_MEMORY_REASON: &str = "Компьютеру не хватило памяти: Windows не смогла выдать игре ни ОЗУ, ни файл подкачки. Прибавка ОЗУ в настройках сборки тут сделает только хуже — поставь меньше, чем сейчас, закрой браузер и другие тяжёлые программы и проверь, что файл подкачки Windows включён.";
+
+fn system_memory_exhausted(low: &str) -> bool {
+    SYSTEM_MEMORY_MARKERS.iter().any(|m| low.contains(m))
+}
+
+fn auth_server_certificate_rejected(low: &str) -> bool {
+    low.contains("failed to fetch metadata") && CERTIFICATE_REJECTION_MARKERS.iter().any(|m| low.contains(m))
+}
+
 pub(crate) fn analyze_crash(game_dir: &Path, since: std::time::SystemTime) -> (String, String) {
     let text = crash_text(game_dir, since);
     let low = text.to_lowercase();
@@ -299,13 +376,21 @@ pub(crate) fn analyze_crash(game_dir: &Path, since: std::time::SystemTime) -> (S
         .flatten()
         .and_then(|f| gpu_driver_vendor(&f));
     let faults = mod_faults(&text);
-    let reason = if low.contains("outofmemoryerror") || low.contains("could not reserve enough space") || low.contains("out of memory") {
+    let reason = if auth_server_certificate_rejected(&low) {
+        "Java этой сборки не доверяет сертификату сервера входа Millida, поэтому игра закрылась на старте. Чаще всего сертификат подменяет антивирус с проверкой защищённых соединений (Kaspersky, ESET, Dr.Web, AdGuard) — выключи в нём проверку HTTPS. Если на компьютере старая версия Java, поставь свежую кнопкой ниже."
+    } else if system_memory_exhausted(&low) {
+        SYSTEM_MEMORY_REASON
+    } else if low.contains("outofmemoryerror") || low.contains("out of memory") {
         "Не хватило оперативной памяти. Добавь ОЗУ в настройках сборки."
     } else if low.contains("unsupportedclassversionerror") || low.contains("class file version") || low.contains("compiled by a more recent version of the java") {
         "Нужна другая версия Java для этой сборки."
+    } else if let Some(vendor) = gpu_vendor {
+        return (driver_crash_reason(vendor), crash_tail(&text));
+    } else if fatal_jvm {
+        "Java аварийно завершилась. Отчёт hs_err_pid лежит в папке сборки — пришли его в поддержку."
     } else if !faults.is_empty() {
         return (mod_fault_reason(&faults), crash_tail(&text));
-    } else if low.contains("mandatory dependencies") || low.contains("missing mods") || (low.contains("requires") && low.contains("mod")) {
+    } else if loader_reported_missing_dependency(&low) {
         "Не хватает зависимости одного из модов."
     } else if low.contains("duplicate mods") || low.contains("incompatible mod") || low.contains("found a duplicate mod")
         || low.contains("mod resolution encountered an incompatible mod set") || low.contains("duplicate mod") {
@@ -321,12 +406,8 @@ pub(crate) fn analyze_crash(game_dir: &Path, since: std::time::SystemTime) -> (S
         // игры уже нет. Так падает сборка, перенесённая на другую версию, — часто
         // не на запуске, а при входе на сервер, когда мод впервые доходит до дела.
         "Один из модов собран под другую версию игры: он зовёт код, которого в ней нет. Обнови моды сборки под её версию."
-    } else if let Some(vendor) = gpu_vendor {
-        return (driver_crash_reason(vendor), crash_tail(&text));
     } else if low.contains("glfw") || low.contains("pixel format") || low.contains("failed to create window") || low.contains("no opengl") {
         "Игра не смогла открыть окно — дело в видеокарте или её драйвере. Обнови драйвер видеокарты."
-    } else if fatal_jvm {
-        "Java аварийно завершилась. Отчёт hs_err_pid лежит в папке сборки — пришли его в поддержку."
     } else if text.trim().is_empty() {
         "Игра закрылась без единой строчки в логе — чаще всего её закрыл антивирус. Добавь папку игры в исключения."
     } else {
@@ -545,9 +626,11 @@ pub(crate) async fn resolve_profile_java(app: &AppHandle, profile: &str) -> Resu
 }
 
 /// JVM flags that hand the JVM something to execute: native/Java agents, hooks
-/// fired on VM errors, and options that decide which classes get loaded. Stored
-/// settings are replayed on every launch, so one accepted flag would be code
-/// execution on every start.
+/// fired on VM errors, and options that decide which classes get loaded.
+///
+/// This black list only guards flags from our own API (pack launch tokens) and
+/// from loader version jsons. Flags a player or a shared build can write go
+/// through the white list in `user_jvm_arg_allowed`.
 const BLOCKED_JVM_PREFIXES: &[&str] = &[
     "-javaagent",
     "-agentlib",
@@ -563,6 +646,26 @@ const BLOCKED_JVM_PREFIXES: &[&str] = &[
     "--module-path=",
     "--upgrade-module-path=",
     "--patch-module=",
+    // not code by themselves, but each one redirects what the game loads or
+    // where the JVM writes: a log4j config with a JNDI appender, an extra mod
+    // folder, native libraries from anywhere, arbitrary file writes
+    "-djava.library.path",
+    "-dlog4j.configurationfile",
+    "-dlog4j2.configurationfile",
+    "-dfabric.addmods",
+    "-dfabric.loadmods",
+    "-djava.system.class.loader",
+    "-djava.security.manager",
+    "-djava.security.policy",
+    "-djdk.attach.allowattachself",
+    "-xx:heapdumppath",
+    "-xx:errorfile",
+    "-xx:logfile",
+    "-xx:startflightrecording",
+    "-xlog",
+    "-xloggc",
+    "-xshare:",
+    "-xx:sharedarchivefile",
 ];
 
 /// Same idea, but for flags whose value is a separate token: matching them by
@@ -588,13 +691,170 @@ pub fn jvm_arg_allowed(arg: &str) -> bool {
     !BLOCKED_JVM_EXACT.contains(&low.as_str()) && !BLOCKED_JVM_PREFIXES.iter().any(|p| low.starts_with(p))
 }
 
+/// `-XX:+Name` / `-XX:-Name` switches a player may set: GC choice and the
+/// tuning switches from the popular guides (Aikar, Obydux, ZGC/Shenandoah
+/// guides). Anything not listed is refused rather than guessed about.
+const USER_XX_BOOL: &[&str] = &[
+    "UseG1GC", "UseZGC", "ZGenerational", "UseShenandoahGC", "UseParallelGC", "UseSerialGC",
+    "UseConcMarkSweepGC", "UseParNewGC", "ParallelRefProcEnabled", "UnlockExperimentalVMOptions",
+    "UnlockDiagnosticVMOptions", "DisableExplicitGC", "ExplicitGCInvokesConcurrent", "AlwaysPreTouch",
+    "PerfDisableSharedMem", "UseLargePages", "UseTransparentHugePages", "UseStringDeduplication",
+    "UseCompressedOops", "UseCompressedClassPointers", "UseNUMA", "UseFastUnorderedTimeStamps",
+    "UseVectorCmov", "UseCriticalJavaThreadPriority", "OmitStackTraceInFastThrow", "UseAdaptiveSizePolicy",
+    "UseCondCardMark", "UseFPUForSpilling", "AggressiveOpts", "DisableAttachMechanism",
+    "UseDynamicNumberOfGCThreads", "ZUncommit", "ZProactive", "ShenandoahUncommit", "UseJVMCICompiler",
+    "EnableJVMCI", "EagerJVMCI", "UseCodeCacheFlushing", "SegmentedCodeCache", "TieredCompilation",
+    "UseTLAB", "ResizeTLAB", "UseCMSInitiatingOccupancyOnly", "CMSParallelRemarkEnabled",
+    "UseLoopPredicate", "RangeCheckElimination", "EliminateLocks", "DoEscapeAnalysis",
+    "OptimizeStringConcat", "UseStringCache", "UseCompressedStrings",
+    "UseXMMForArrayCopy", "UseThreadPriorities", "UseBiasedLocking", "UseAES", "UseAESIntrinsics",
+    "UseSHA", "UseFMA", "UseNewLongLShift", "UseXmmI2D", "UseXmmI2F", "UseXmmLoadAndClearUpper",
+    "UseXmmRegToRegMoveAll", "UseInlineCaches", "UseVectorizedMismatchIntrinsic", "UseTypeProfile",
+    "UseJVMCINativeLibrary", "AlwaysActAsServerClassMachine", "UseFastJNIAccessors",
+];
+
+/// `-XX:Name=<number>` (or a bare word such as a Shenandoah mode) a player may set.
+const USER_XX_VALUE: &[&str] = &[
+    "MaxGCPauseMillis", "G1NewSizePercent", "G1MaxNewSizePercent", "G1HeapRegionSize", "G1ReservePercent",
+    "G1HeapWastePercent", "G1MixedGCCountTarget", "InitiatingHeapOccupancyPercent",
+    "G1MixedGCLiveThresholdPercent", "G1RSetUpdatingPauseTimePercent", "G1ConcRefinementThreads",
+    "G1SATBBufferEnqueueingThresholdPercent", "G1ConcMarkStepDurationMillis", "G1ConcRSHotCardLimit",
+    "G1ConcRefinementServiceIntervalMillis", "G1PeriodicGCInterval", "SurvivorRatio", "MaxTenuringThreshold",
+    "ParallelGCThreads", "ConcGCThreads", "ReservedCodeCacheSize", "MaxMetaspaceSize", "MetaspaceSize",
+    "CICompilerCount", "NmethodSweepActivity", "LargePageSizeInBytes", "AllocatePrefetchStyle",
+    "ThreadPriorityPolicy", "SoftRefLRUPolicyMSPerMB", "MaxInlineLevel", "MaxInlineSize", "FreqInlineSize",
+    "InlineSmallCode", "MaxNodeLimit", "NodeLimitFudgeFactor", "LoopUnrollLimit", "ZCollectionInterval",
+    "ZAllocationSpikeTolerance", "ZUncommitDelay", "ShenandoahGCMode", "ShenandoahGCHeuristics",
+    "CMSInitiatingOccupancyFraction", "NewRatio", "NewSize", "MaxNewSize", "MaxDirectMemorySize",
+    "TrimNativeHeapInterval", "GCTimeRatio", "AutoBoxCacheMax", "UseAVX", "UseSSE", "MaxRAMPercentage",
+    "InitialRAMPercentage", "MinRAMPercentage", "MaxHeapFreeRatio", "MinHeapFreeRatio", "ThreadStackSize",
+    "CompileThreshold", "Tier4InvocationThreshold", "MaxRAM", "SoftMaxHeapSize",
+];
+
+/// `-D` properties a player may set: encodings, the well-known Forge/FML and
+/// networking switches, Log4Shell mitigation, locale. Properties that make the
+/// game load something (log4j config files, extra mod folders, native library
+/// paths, class loaders) are exactly what a malicious share would use.
+const USER_D_PROPS: &[&str] = &[
+    "file.encoding", "sun.jnu.encoding", "sun.stdout.encoding", "sun.stderr.encoding", "stdout.encoding",
+    "stderr.encoding", "fml.ignoreInvalidMinecraftCertificates", "fml.ignorePatchDiscrepancies",
+    "fml.earlyprogresswindow", "fml.readTimeout", "fml.loginTimeout", "java.net.preferIPv4Stack",
+    "java.net.preferIPv6Addresses", "java.net.useSystemProxies", "log4j2.formatMsgNoLookups",
+    "user.language", "user.country", "user.region", "java.awt.headless", "sun.java2d.opengl",
+    "sun.java2d.d3d", "sun.java2d.noddraw", "org.lwjgl.opengl.Display.allowSoftwareOpenGL",
+    "org.lwjgl.util.NoChecks", "java.util.concurrent.ForkJoinPool.common.parallelism", "sun.rmi.dgc.server.gcInterval",
+    "sun.rmi.dgc.client.gcInterval", "jdk.gamemode", "forge.logging.console.level", "forge.logging.markers",
+    "fabric.skipMcProvider", "sodium.checks.issue2561", "mixin.env.disableRefMap",
+];
+
+fn size_value_ok(v: &str) -> bool {
+    let digits = v.trim_end_matches(['k', 'K', 'm', 'M', 'g', 'G', 't', 'T']);
+    !digits.is_empty() && digits.len() <= 12 && v.len() - digits.len() <= 1 && digits.bytes().all(|b| b.is_ascii_digit())
+}
+
+/// Numbers, sizes (`8M`) and bare words (`generational`, `adaptive`): nothing
+/// that can name a file.
+fn xx_value_ok(v: &str) -> bool {
+    size_value_ok(v)
+        || (v.len() <= 32 && !v.is_empty() && v.bytes().all(|b| b.is_ascii_alphabetic()))
+        || (v.len() <= 16 && v.parse::<f64>().is_ok() && v.bytes().all(|b| b.is_ascii_digit() || b == b'.'))
+}
+
+fn d_value_ok(v: &str) -> bool {
+    v.len() <= 64 && v.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
+}
+
+/// White list for flags a player (or a shared build, or a stored setting) can
+/// write: heap and stack sizes, listed `-XX` GC/performance options, listed
+/// `-D` properties and `--add-opens/--add-exports`. Everything else — agents,
+/// hooks, file-writing and file-loading options — is refused.
+pub fn user_jvm_arg_allowed(arg: &str) -> bool {
+    let a = arg.trim();
+    if a != arg || a.is_empty() {
+        return false;
+    }
+    for x in ["-Xmx", "-Xms", "-Xss", "-Xmn"] {
+        if let Some(v) = a.strip_prefix(x) {
+            return size_value_ok(v);
+        }
+    }
+    if let Some(rest) = a.strip_prefix("-XX:") {
+        if let Some(name) = rest.strip_prefix('+').or_else(|| rest.strip_prefix('-')) {
+            return USER_XX_BOOL.contains(&name);
+        }
+        if let Some((name, v)) = rest.split_once('=') {
+            return USER_XX_VALUE.contains(&name) && xx_value_ok(v);
+        }
+        return false;
+    }
+    if let Some(rest) = a.strip_prefix("-D") {
+        let (name, v) = rest.split_once('=').unwrap_or((rest, ""));
+        return USER_D_PROPS.contains(&name) && d_value_ok(v);
+    }
+    for x in ["--add-opens=", "--add-exports="] {
+        if let Some(v) = a.strip_prefix(x) {
+            let Some((what, to)) = v.split_once('=') else { return false };
+            return !what.is_empty()
+                && what.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'/'))
+                && !to.is_empty()
+                && to.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b',' | b'-'));
+        }
+    }
+    false
+}
+
 /// The first argument the launcher refuses to pass on, if any.
 pub fn rejected_jvm_arg(raw: &str) -> Option<String> {
-    raw.split_whitespace().find(|a| !jvm_arg_allowed(a)).map(str::to_string)
+    raw.split_whitespace().find(|a| !user_jvm_arg_allowed(a)).map(str::to_string)
 }
 
 pub fn sanitize_jvm_args(raw: &str) -> Vec<String> {
-    raw.split_whitespace().filter(|a| jvm_arg_allowed(a)).map(str::to_string).collect()
+    raw.split_whitespace().filter(|a| user_jvm_arg_allowed(a)).map(str::to_string).collect()
+}
+
+/// Flags whose value is the next token in a loader json (Forge 1.17+ lays out
+/// its module path this way).
+const LOADER_VALUE_FLAGS: &[&str] = &["-p", "--module-path", "--add-modules", "--add-opens", "--add-exports", "--add-reads"];
+/// Flags dropped together with their value token.
+const LOADER_DROP_WITH_VALUE: &[&str] = &["-cp", "-classpath", "--class-path", "--upgrade-module-path", "--patch-module"];
+
+/// `arguments.jvm` of a non-Mojang version json (Fabric/Quilt meta, a Forge
+/// installer's profile). The black list applies; the module-path flags Forge
+/// needs are kept together with their value, and a bare token is only accepted
+/// as such a value — anywhere else the JVM would take it as the main class.
+pub(crate) fn filter_loader_jvm_args(list: Vec<String>) -> Vec<String> {
+    let mut out = Vec::with_capacity(list.len());
+    let mut expect_value = false;
+    let mut skip_value = false;
+    for a in list {
+        if skip_value {
+            skip_value = false;
+            if !a.starts_with('-') {
+                continue;
+            }
+        }
+        if expect_value {
+            expect_value = false;
+            if !a.starts_with('-') && !a.starts_with('@') {
+                out.push(a);
+                continue;
+            }
+        }
+        let low = a.to_ascii_lowercase();
+        if LOADER_VALUE_FLAGS.contains(&low.as_str()) {
+            out.push(a);
+            expect_value = true;
+        } else if LOADER_DROP_WITH_VALUE.contains(&low.as_str()) {
+            skip_value = true;
+        } else if jvm_arg_allowed(&a) {
+            out.push(a);
+        }
+    }
+    if expect_value {
+        // a value flag at the very end has no value: drop it
+        out.pop();
+    }
+    out
 }
 
 /// Builds jvm+game arguments from the version json, expanding `${...}` placeholders.
@@ -681,10 +941,16 @@ pub(crate) fn build_args(
     };
     // 1.13+ has an `arguments` object; <=1.12 only has the `minecraftArguments`
     // string and no jvm arguments at all, so classpath/natives are passed manually.
+    // loader jvm arguments come from a json the launcher did not write
+    let loader_jvm = |fj: &Value, args: &mut Vec<String>| {
+        let mut raw = vec![];
+        collect(&fj["jvm"], &mut raw);
+        args.extend(filter_loader_jvm_args(raw));
+    };
     if v["arguments"].is_object() {
         collect(&v["arguments"]["jvm"], &mut args);
         if let Some(fj) = v.get("fabricArguments") {
-            collect(&fj["jvm"], &mut args);
+            loader_jvm(fj, &mut args);
         }
         args.push(main_class.to_string());
         collect(&v["arguments"]["game"], &mut args);
@@ -696,7 +962,7 @@ pub(crate) fn build_args(
         args.push("-cp".into());
         args.push(cp.clone());
         if let Some(fj) = v.get("fabricArguments") {
-            collect(&fj["jvm"], &mut args);
+            loader_jvm(fj, &mut args);
         }
         args.push(main_class.to_string());
         let mc_args = v["minecraftArguments"].as_str().unwrap_or("");
@@ -732,6 +998,8 @@ pub async fn install_and_launch_in(
     auth: Auth,
 ) -> Result<String, String> {
     CANCEL.store(false, std::sync::atomic::Ordering::SeqCst);
+    // the nick lands on the command line and in an argfile
+    let nick = launch_nick(&nick);
     let prof = load_profiles().into_iter().find(|p| p.name == profile);
     let loader_id = prof.as_ref().map(|p| p.loader_id())
         .unwrap_or_else(|| if with_fabric { "fabric".into() } else { "vanilla".into() });
@@ -743,16 +1011,77 @@ pub async fn install_and_launch_in(
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or(Value::Null);
     let java_pick = resolve_profile_java(&app, &profile).await?;
-    let (v, main_class, classpath, java) =
-        install_loader_with_java(&app, &version_id, &loader_id, loader_ver.as_deref(), java_pick).await?;
-    check_cancel()?;
-    let root = game_root_ready()?;
     let game_dir = profile_dir(&profile);
+    /*
+     * A catalogue pack that brought its own game is launched by its own
+     * description: it ships libraries, minecraft.jar, assets and natives, and
+     * its content is loaded out of those libraries rather than out of `mods/`.
+     * Assembling such a build from parts gives a folder that starts without
+     * most of what the player paid for.
+     */
+    // the descriptor is a file in the profile folder: it is honoured only for
+    // a build the core itself installed from the catalogue
+    let pack = trusted_pack_launch_spec(&profile);
+    let (v, main_class, classpath, java, assets_root, natives_dir, libraries_dir) = match &pack {
+        Some(spec) => {
+            emit(&app, "launch", 20.0, "Готовим сборку…");
+            let token = if spec.needs_token {
+                match pack_launch_token(&spec.slug).await {
+                    Ok(t) => t,
+                    Err(e) => {
+                        if let Ok(Some(PackAccess::Lost(reason))) = pack_access(&spec.slug).await {
+                            return Err(forfeit_pack(&app, &profile, &spec.slug, &reason).await);
+                        }
+                        return Err(e);
+                    }
+                }
+            } else {
+                Vec::new()
+            };
+            let java = match java_pick {
+                Some(p) => p,
+                None => ensure_java(&app, spec.java_major).await?,
+            };
+            let cp = pack_classpath(&profile, spec)?;
+            let natives = game_dir.join(&spec.natives_dir);
+            let mut extra_jvm = token;
+            if let Some(arg) = lwjgl_library_path_arg(&nested_native_dirs(&natives)) {
+                extra_jvm.push(arg);
+            }
+            let mut v = pack_version_json(spec, &extra_jvm);
+            /*
+             * A pack built on a vanilla version may leave the sounds and
+             * languages out and name the version instead: the objects are the
+             * same for every pack of that version, so they live once in the
+             * shared store rather than inside each archive.
+             */
+            let assets_root = if spec.vanilla_assets.is_empty() {
+                game_dir.join(&spec.assets_dir)
+            } else {
+                let root = game_root_ready()?;
+                let (vid, vjson) = vanilla_meta(&app, &root, &spec.vanilla_assets).await?;
+                if let Some(dir) = ensure_assets(&app, &root, &vjson, &vid).await? {
+                    v["millidaGameAssets"] = Value::String(dir.to_string_lossy().to_string());
+                }
+                if spec.asset_index.is_empty() {
+                    v["assetIndex"]["id"] = vjson["assetIndex"]["id"].clone();
+                }
+                root.join("assets")
+            };
+            (v, spec.main_class.clone(), cp, java, assets_root, natives, game_dir.join("libraries"))
+        }
+        None => {
+            let (v, main_class, classpath, java) =
+                install_loader_with_java(&app, &version_id, &loader_id, loader_ver.as_deref(), java_pick).await?;
+            let root = game_root_ready()?;
+            let resolved_vid = v["id"].as_str().unwrap_or(&version_id).to_string();
+            let natives = root.join("versions").join(&resolved_vid).join("natives");
+            let libs = root.join("libraries");
+            (v, main_class, classpath, java, game_root().join("assets"), natives, libs)
+        }
+    };
+    check_cancel()?;
     std::fs::create_dir_all(game_dir.join("mods")).ok();
-    let assets_root = game_root().join("assets");
-    let resolved_vid = v["id"].as_str().unwrap_or(&version_id).to_string();
-    let natives_dir = root.join("versions").join(&resolved_vid).join("natives");
-    let libraries_dir = root.join("libraries");
 
     check_cancel()?;
     emit(&app, "launch", 92.0, "Запускаем игру…");
@@ -776,7 +1105,32 @@ pub async fn install_and_launch_in(
         Some(format!("{}/csl/", auth.yggdrasil.trim_end_matches('/')))
     } else { None };
     let want_skin = want_in_game_skins(root.as_deref());
-    if matches!(loader_id.as_str(), "fabric" | "quilt" | "forge" | "neoforge") {
+    // Наш мод умеет всё, что умел CustomSkinLoader, и сверх того косметику,
+    // поэтому сначала пробуем его. Под связку, которой у мода ещё нет варианта,
+    // остаётся прежний путь: игроку нужен скин и на такой сборке.
+    let mut own_mod = false;
+    /*
+     * A protected pack checks its own files, and its content lives in signed
+     * libraries rather than in `mods/`. Dropping our skin mod into that folder
+     * either changes what the pack verifies or simply never loads — either way
+     * it is a change to someone else's build made behind their back.
+     */
+    let touch_mods = pack.is_none();
+    let mut own_mod_jar = String::new();
+    if touch_mods && matches!(loader_id.as_str(), "fabric" | "quilt" | "forge" | "neoforge") {
+        let licensed = !auth.token.is_empty() && auth.yggdrasil.is_empty();
+        match ensure_millida_mod(&app, &profile, &nick, licensed).await {
+            Ok(Some(jar)) => {
+                own_mod = true;
+                // Какой именно файл поехал в сборку: если он её и уронит, под
+                // карантин пойдёт он, а не «мод вообще».
+                own_mod_jar = jar;
+            }
+            Ok(None) => {}
+            Err(e) => warn(&app, &format!("Мод Millida не поставлен: {}", e)),
+        }
+    }
+    if touch_mods && matches!(loader_id.as_str(), "fabric" | "quilt" | "forge" | "neoforge") && !own_mod {
         let licensed = !auth.token.is_empty() && auth.yggdrasil.is_empty();
         if want_skin {
             match ensure_custom_skin_loader(&profile, &loader_id, root.as_deref(), &nick, licensed).await {
@@ -791,11 +1145,27 @@ pub async fn install_and_launch_in(
                 Ok(_) => {}
             }
         }
-    } else if let Some(why) = in_game_skin_blocker(&loader_id, !auth.token.is_empty(), want_skin) {
-        warn(&app, why);
+    } else if touch_mods && !own_mod {
+        if let Some(why) = in_game_skin_blocker(&loader_id, !auth.token.is_empty(), want_skin) {
+            warn(&app, why);
+        }
     }
     let mut args = build_args(&v, &main_class, &classpath, &nick, &game_dir, &assets_root, &natives_dir, &libraries_dir, &auth);
-    args.insert(0, format!("-Xmx{}M", tuned_ram_mb(&profile, ram_mb)));
+    /*
+     * A pack states the memory it was built for. The player's own choice still
+     * wins inside those bounds; outside them the pack's number is used, because
+     * «не хватило памяти» on a paid build reads as a broken build.
+     */
+    let mut ram = tuned_ram_mb(&profile, ram_mb);
+    if let Some(spec) = &pack {
+        if spec.min_ram_mb > 0 && ram < spec.min_ram_mb {
+            ram = spec.min_ram_mb;
+        }
+        if spec.max_ram_mb > 0 && ram > spec.max_ram_mb {
+            ram = spec.max_ram_mb;
+        }
+    }
+    args.insert(0, format!("-Xmx{}M", ram));
     if let Some(a) = agent { args.insert(1, a); }
     // Log4Shell mitigation for 1.7-1.18; harmless on newer versions.
     args.insert(1, "-Dlog4j2.formatMsgNoLookups=true".into());
@@ -872,21 +1242,50 @@ pub async fn install_and_launch_in(
             args.push(sv);
         }
     }
+    // Токен для мода — узкий, из /launcher/mod-session; нет его — мод без входа.
+    let mod_token = if own_mod { mod_session_token().await } else { None };
     check_cancel()?;
     let exe = branded_java(&java);
     let mut cmd = Command::new(&exe);
     // CREATE_NO_WINDOW on Windows, otherwise every launch pops a console window.
     quiet(&mut cmd);
     apply_gpu_pref(&mut cmd, &exe, GpuPref::parse(settings["gpu"].as_str().unwrap_or("auto")));
-    cmd.args(&args)
-        .current_dir(&game_dir)
+    /*
+     * Сборка со своим classpath не влезает в командную строку Windows: четыреста
+     * jar дают 80 000 символов при пределе в 32 767, и процесс не стартует
+     * вовсе. Длинный запуск уезжает в файл аргументов, короткий идёт как шёл —
+     * файл на каждый обычный старт был бы лишней записью на диск.
+     */
+    let argfile = if args_need_file(&args) {
+        Some(write_argfile(&game_dir, &args)?)
+    } else {
+        None
+    };
+    match &argfile {
+        Some(path) => {
+            cmd.arg(format!("@{}", path.to_string_lossy()));
+        }
+        None => {
+            cmd.args(&args);
+        }
+    }
+    cmd.current_dir(&game_dir)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
+    // Токен мод берёт из окружения запуска: в свой файл настроек он его не
+    // пишет, а файл настроек игроки пересылают вместе со сборкой. Это узкий
+    // токен мода, не токен аккаунта.
+    if let Some(token) = mod_token {
+        cmd.env("MILLIDA_TOKEN", token);
+    }
     let start = std::time::Instant::now();
     // Wall clock too: crash evidence is filtered by file mtime, and Instant has
     // no common ground with a file timestamp.
     let start_wall = std::time::SystemTime::now();
     let mut child = cmd.spawn().map_err(|e| format!("Запуск Java: {}", e))?;
+    if let Some(path) = argfile.clone() {
+        drop_argfile_later(path);
+    }
     if cancelled() {
         let _ = child.kill();
         return Err("Запуск отменён".into());
@@ -907,7 +1306,11 @@ pub async fn install_and_launch_in(
             let log = read_log_file(&logs.join("launcher-latest.log")).unwrap_or_default();
             let tail: Vec<&str> = log.lines().rev().take(20).collect();
             let tail: String = tail.into_iter().rev().collect::<Vec<_>>().join("\n");
-            return Err(format!("Игра не запустилась (код {:?}).\n{}", status.code(), tail));
+            let failure = format!("Игра не запустилась (код {:?}).\n{}", status.code(), tail);
+            // Проверочная версия узнаёт о своём падении здесь же: «не
+            // открылась вовсе» — самый важный из ответов, ради которых её ставили.
+            report_review_launch(&profile, false, &failure).await;
+            return Err(failure);
         }
     }
     let pname = profile.clone();
@@ -916,6 +1319,9 @@ pub async fn install_and_launch_in(
     let pid = child.id();
     if let Ok(mut v) = RUNNING.lock() {
         v.push((profile.clone(), pid));
+    }
+    if let Some(spec) = pack.as_ref().filter(|s| s.needs_token && !s.slug.is_empty()) {
+        tauri::async_runtime::spawn(watch_pack_access(app.clone(), profile.clone(), spec.slug.clone(), pid));
     }
     std::thread::spawn(move || {
         let mut written = 0u64;
@@ -956,6 +1362,19 @@ pub async fn install_and_launch_in(
             std::thread::sleep(std::time::Duration::from_millis(1500));
             crate::tray::restore_after_game(&waker);
         });
+        /*
+         * Итог для проверочной версии. Успехом считается либо чистый выход,
+         * либо живая сессия: игрок закрывает окно кнопкой, и код возврата в
+         * этот момент не говорит ничего, а полторы минуты в игре говорят всё.
+         * Отправка живёт в своей задаче: поток выхода не должен ждать сеть.
+         */
+        let review_ok = matches!(&status, Ok(s) if s.success()) || elapsed >= LAUNCH_CHECK_ALIVE;
+        if review_ok {
+            let checked = pname.clone();
+            tauri::async_runtime::spawn(async move {
+                report_review_launch(&checked, true, &format!("сессия {} с", elapsed)).await;
+            });
+        }
         if was_stopped(pid) {
             return;
         }
@@ -968,7 +1387,26 @@ pub async fn install_and_launch_in(
             if skin_mod_implicated(&log_text) && drop_custom_skin_loader(&pname) {
                 reason = "Мод скинов Millida не ужился со сборкой — мы его убрали. Запусти игру ещё раз.".into();
             }
+            // Наш мод ставится принудительно, и сломанный выпуск иначе делает
+            // сборку неиграбельной навсегда: вернуть её игрок не может ничем.
+            // Под карантин попадает конкретная версия — следующая поставится
+            // сама, и косметика вернётся без его участия.
+            else if own_mod_implicated(&log_text) {
+                let jar = own_mod_jar.clone();
+                if !jar.is_empty() && quarantine_millida_mod(&pname, &jar) {
+                    reason =
+                        "Косметика Millida не запустилась на этой сборке — мы её отключили. Запусти игру ещё раз, а мы починим и вернём её сами."
+                            .into();
+                }
+            }
             let _ = app2.emit("game-crash", diagnose(&pname, &reason, &tail, &log_text));
+            if !review_ok {
+                let checked = pname.clone();
+                let why = reason.clone();
+                tauri::async_runtime::spawn(async move {
+                    report_review_launch(&checked, false, &why).await;
+                });
+            }
         }
     });
     emit(&app, "launch", 100.0, "Игра запущена");
@@ -1135,6 +1573,66 @@ mod tests {
         }
     }
 
+    /// Flags a player or a shared build can write: the white list.
+    #[test]
+    fn user_jvm_args_are_white_listed() {
+        let aikar = "-Xms4G -Xmx4G -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200 \
+            -XX:+UnlockExperimentalVMOptions -XX:+DisableExplicitGC -XX:+AlwaysPreTouch -XX:G1NewSizePercent=30 \
+            -XX:G1MaxNewSizePercent=40 -XX:G1HeapRegionSize=8M -XX:G1ReservePercent=20 -XX:G1HeapWastePercent=5 \
+            -XX:G1MixedGCCountTarget=4 -XX:InitiatingHeapOccupancyPercent=15 -XX:G1MixedGCLiveThresholdPercent=90 \
+            -XX:G1RSetUpdatingPauseTimePercent=5 -XX:SurvivorRatio=32 -XX:+PerfDisableSharedMem -XX:MaxTenuringThreshold=1 \
+            -Dusing.aikars.flags=https://mcflags.emc.gs -Daikars.new.flags=true";
+        // Aikar's two marker properties are harmless but not on the list: they
+        // are dropped, everything that tunes the JVM passes
+        let kept = sanitize_jvm_args(aikar);
+        assert_eq!(kept.len(), aikar.split_whitespace().count() - 2, "{kept:?}");
+        for good in [
+            "-Xss4M", "-Xmn512m", "-XX:+UseZGC", "-XX:+ZGenerational", "-XX:+UseShenandoahGC",
+            "-XX:ShenandoahGCMode=iu", "-XX:-UseAdaptiveSizePolicy", "-XX:+UseLargePages",
+            "-Dfile.encoding=UTF-8", "-Dfml.ignoreInvalidMinecraftCertificates=true",
+            "-Djava.net.preferIPv4Stack=true", "-Dlog4j2.formatMsgNoLookups=true",
+            "--add-opens=java.base/java.lang=ALL-UNNAMED",
+        ] {
+            assert!(user_jvm_arg_allowed(good), "{good} — обычный флаг настройки");
+        }
+        for bad in [
+            "-Dfabric.addMods=/tmp/evil.jar",
+            "-Djava.library.path=/tmp",
+            "-Dlog4j.configurationFile=http://evil/x.xml",
+            "-Dlog4j2.configurationFile=/tmp/x.xml",
+            "-XX:HeapDumpPath=/Users/x/.ssh/authorized_keys",
+            "-Xlog:gc:file=/tmp/x",
+            "-Xlog:file=/tmp/x",
+            "-Xloggc:/tmp/x",
+            "-XX:+HeapDumpOnOutOfMemoryError",
+            "-XX:ErrorFile=/tmp/x",
+            "-XX:OnError=calc",
+            "-javaagent:x.jar",
+            "-Dsomething=value",
+            "-Dfile.encoding=../../x",
+            "-Xmx4G;calc",
+            "-XX:MaxGCPauseMillis=/tmp",
+            "-cp",
+            "@args.txt",
+            "-Xbootclasspath/a:x.jar",
+            "--add-opens=java.base/java.lang=ALL UNNAMED",
+        ] {
+            assert!(!user_jvm_arg_allowed(bad), "{bad} обязан отклоняться");
+        }
+    }
+
+    /// Loader jsons keep the module path Forge needs, lose agents and strays.
+    #[test]
+    fn loader_jvm_args_keep_forge_module_path_and_drop_the_rest() {
+        let v = |xs: &[&str]| xs.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let forge = v(&["-DignoreList=a,b", "-p", "/libs/a.jar:/libs/b.jar", "--add-modules", "ALL-MODULE-PATH",
+            "--add-opens", "java.base/java.util.jar=cpw.mods.securejarhandler"]);
+        assert_eq!(filter_loader_jvm_args(forge.clone()), forge);
+        let evil = v(&["-javaagent:/tmp/x.jar", "-cp", "/tmp/evil", "stray.Main", "-Dfabric.addMods=/tmp",
+            "-Djava.library.path=/tmp", "-XX:HeapDumpPath=/tmp/x", "-Xlog:file=/tmp/x", "-p"]);
+        assert!(filter_loader_jvm_args(evil).is_empty());
+    }
+
     #[test]
     fn sanitize_keeps_tuning_and_drops_agents() {
         let raw = "-Xmx6G -javaagent:evil.jar -XX:+UseG1GC @argfile -XX:OnError=calc";
@@ -1155,6 +1653,57 @@ mod tests {
     fn plain_lines_pass_through() {
         let mut f = Log4jFilter::default();
         assert_eq!(f.feed("[12:00:00] [main/INFO]: Loading\n"), vec!["[12:00:00] [main/INFO]: Loading"]);
+    }
+
+    /// Карантин собственного мода: за что он включается, а за что нет.
+    ///
+    /// Цена ошибки несимметрична. Не сработает — сборка не запускается вовсе и
+    /// починить её игрок не может: мод ставится принудительно. Сработает зря —
+    /// человек остаётся без косметики до следующего выпуска. Поэтому имя мода в
+    /// обычной строке не считается, а отдельно ловится байткод новее игры: так
+    /// выглядела поломка 16.09.2026, свалившая все модовые сборки разом.
+    #[test]
+    fn only_a_real_failure_quarantines_our_own_mod() {
+        let cases: [(&str, bool, &str); 6] = [
+            (
+                "[main/INFO]: Loading 92 mods:
+	- millida 0.1.0",
+                false,
+                "список загруженных модов печатается при КАЖДОМ запуске — это не поломка",
+            ),
+            (
+                r"|  12 | Millida | millida | 0.1.0 | Forge | <game>\mods\millida-mod-forge-1.20.1-0.1.0.jar |",
+                false,
+                "таблица модов в отчёте о вылете повторяет те же имена",
+            ),
+            (
+                "java.lang.UnsupportedClassVersionError: net/millida/mod/MillidaForge has been compiled by a more recent version of the Java Runtime",
+                true,
+                "мод собран под Java новее игры — ровно эта поломка валила все сборки",
+            ),
+            (
+                "	at net.millida.mod.cosmetics.CosmeticRenderer.render(CosmeticRenderer.java:88)",
+                true,
+                "кадр стека в нашем моде — это и есть его отказ",
+            ),
+            (
+                "[main/ERROR]: Mixin apply failed millida.mixins.json:PlayerTabOverlayMixin",
+                true,
+                "не лёгший мискин — классическое расхождение с версией игры",
+            ),
+            (
+                "java.lang.UnsupportedClassVersionError: net/other/mod/Thing has been compiled by a more recent version",
+                false,
+                "чужой мод с тем же изъяном нашу косметику не отключает",
+            ),
+        ];
+        for (text, expected, why) in cases {
+            assert_eq!(
+                own_mod_implicated(text),
+                expected,
+                "own_mod_implicated({text:?}) обязан быть {expected}. Закреплено потому, что: {why}"
+            );
+        }
     }
 
     /// The line the mod is named on decides whether it is the culprit.
@@ -1400,6 +1949,58 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    #[test]
+    fn jvm_history_in_hs_err_is_not_crash_evidence() {
+        let process_section = "---------------  P R O C E S S  ---------------\n\
+             Internal exceptions (10 events):\n\
+             Event: 3.412 Thread 0x000001d2 Exception <a 'java/lang/NoSuchMethodError'{0x00000007}: 'java.lang.Object java.lang.invoke.DirectMethodHandle$Holder.invokeStatic(java.lang.Object, java.lang.Object)'> (0x00000007) thrown [s\\src\\hotspot\\share\\interpreter\\linkResolver.cpp, line 773]\n\
+             Event: 3.518 Thread 0x000001d2 Exception <a 'java/lang/ClassNotFoundException'{0x00000008}: net/millida/mod/compat/Probe> (0x00000008) thrown [s\\src\\hotspot\\share\\classfile\\systemDictionary.cpp, line 312]\n\
+             Dynamic libraries:\n0x00007ff6 C:\\Windows\\SYSTEM32\\glfw.dll\n";
+        let cases: &[(&str, &str, &str)] = &[
+            (
+                "C  [atio6axx.dll+0x196200]",
+                "AMD",
+                "вылет в драйвере AMD на свежей сборке NeoForge 1.21.1 (Supra_hab, 19.09.2026) читался как «мод собран под другую версию» из-за NoSuchMethodError в истории JVM",
+            ),
+            (
+                "V  [jvm.dll+0x5f0a2b]",
+                "Java аварийно",
+                "падение в самой JVM без драйвера — отчёт hs_err нужен поддержке, а не поиск мода",
+            ),
+        ];
+        for (frame, expected, why) in cases {
+            let dir = std::env::temp_dir().join(format!("millida-hserr-history-{}", frame.len()));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(dir.join("logs")).unwrap();
+            std::fs::write(
+                dir.join("logs/latest.log"),
+                "[main/INFO]: ModLauncher running\n[main/WARN]: Skipping optional integration: java.lang.NoClassDefFoundError: dev/emi/emi/api/EmiPlugin",
+            )
+            .unwrap();
+            std::fs::write(
+                dir.join("hs_err_pid4242.log"),
+                format!(
+                    "#\n# A fatal error has been detected by the Java Runtime Environment:\n#\n\
+                     #  EXCEPTION_ACCESS_VIOLATION (0xc0000005)\n#\n# Problematic frame:\n# {frame}\n#\n{process_section}"
+                ),
+            )
+            .unwrap();
+
+            let (reason, _) = analyze_crash(&dir, std::time::SystemTime::now());
+            let text = crash_text(&dir, std::time::SystemTime::now());
+            let _ = std::fs::remove_dir_all(&dir);
+
+            assert!(
+                reason.contains(expected),
+                "кадр {frame:?}: вердикт обязан содержать {expected:?}, получили {reason:?}. Зачем случай закреплён: {why}"
+            );
+            assert!(
+                !own_mod_implicated(&text),
+                "кадр {frame:?}: промах поиска класса мода в истории JVM не повод отправлять косметику в карантин. Зачем случай закреплён: {why}"
+            );
+        }
+    }
+
     /// Тот же отчёт не должен по пути превратиться в обвинение мода скинов:
     /// именно так игрок и потерял скины, ни разу не узнав про драйвер.
     #[test]
@@ -1412,5 +2013,146 @@ mod tests {
             !skin_mod_implicated(log),
             "мод назван только в таблице загрузки — трогать его нельзя, вылет в драйвере видеокарты"
         );
+    }
+
+    #[test]
+    fn rejected_auth_server_certificate_gets_its_own_reason() {
+        let cases: &[(&str, bool, &str)] = &[
+            (
+                "[authlib-injector] [INFO] Authentication server: https://api.millida.net/v2/yggdrasil\n\
+                 [authlib-injector] [ERROR] Failed to fetch metadata: javax.net.ssl.SSLHandshakeException: sun.security.validator.ValidatorException: PKIX path building failed: sun.security.provider.certpath.SunCertPathBuilderException: unable to find valid certification path to requested target",
+                true,
+                "дословно из заявки игрока (1.16.5 Fabric на Java 8): агент закрывает JVM через секунды, а окно вылета отвечало «Загляни в лог»",
+            ),
+            (
+                "[authlib-injector] [ERROR] Failed to fetch metadata: javax.net.ssl.SSLHandshakeException: (certificate_unknown) PKIX path building failed",
+                true,
+                "так тот же отказ пишет Java 11 и новее",
+            ),
+            (
+                "[authlib-injector] [ERROR] Failed to fetch metadata: java.net.UnknownHostException: api.millida.net",
+                false,
+                "нет связи с сервером — это не сертификат, и совет выключить проверку HTTPS увёл бы игрока не туда",
+            ),
+            (
+                "[main/WARN]: Update check failed: javax.net.ssl.SSLHandshakeException: PKIX path building failed",
+                false,
+                "мод не проверил своё обновление — игре это не мешает, причину вылета надо искать дальше",
+            ),
+        ];
+        for (i, (log, expected, why)) in cases.iter().enumerate() {
+            let dir = std::env::temp_dir().join(format!("millida-crash-auth-cert-{i}"));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(dir.join("logs")).unwrap();
+            std::fs::write(dir.join("logs/launcher-latest.log"), log).unwrap();
+
+            let (reason, _) = analyze_crash(&dir, std::time::SystemTime::now());
+            let _ = std::fs::remove_dir_all(&dir);
+
+            assert_eq!(
+                reason.contains("сертификату сервера входа"),
+                *expected,
+                "лог {log:?}: получили {reason:?}. Зачем случай закреплён: {why}"
+            );
+            if *expected {
+                let diag = diagnose("Test", &reason, "", log);
+                assert!(
+                    diag.actions.iter().any(|a| a.kind == "install-java"),
+                    "кнопка «Поставить Java» — починка в один клик для устаревшей Java 8: она скачивает свежую и закрепляет её за сборкой, поэтому вердикт обязан её показывать"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn system_memory_exhaustion_is_not_a_heap_verdict() {
+        const HEAP: &str = "Не хватило оперативной памяти. Добавь ОЗУ в настройках сборки.";
+        let cases: &[(&str, &str, &str)] = &[
+            (
+                "[Server thread/WARN] [mixin/]: Method overwrite conflict for removeIf\n\
+                 java.lang.OutOfMemoryError\n#\n\
+                 # There is insufficient memory for the Java Runtime Environment to continue.\n\
+                 # Native memory allocation (malloc) failed to allocate 1107856 bytes. Error detail: Chunk::new",
+                SYSTEM_MEMORY_REASON,
+                "заявка hnophen 23.09 (Biohazard, 16 ГБ): ставил 12, 10, 8, 4 ГБ — окно каждый раз советовало добавить ОЗУ, а кончилась память Windows",
+            ),
+            (
+                "Error occurred during initialization of VM\nCould not reserve enough space for 12582912KB object heap",
+                SYSTEM_MEMORY_REASON,
+                "JVM не смогла даже зарезервировать кучу — совет прибавить ОЗУ повторяет ту же ошибку",
+            ),
+            (
+                "# Native memory allocation (mmap) failed to map 268435456 bytes. Error detail: G1 virtual space\n\
+                 # The paging file is too small for this operation to complete",
+                SYSTEM_MEMORY_REASON,
+                "так пишет Windows с выключенным файлом подкачки",
+            ),
+            (
+                "[Server thread/ERROR]: Encountered an unexpected exception\njava.lang.OutOfMemoryError: Java heap space",
+                HEAP,
+                "настоящая нехватка кучи — тут прибавка ОЗУ и есть лечение",
+            ),
+        ];
+        for (i, (log, expected, why)) in cases.iter().enumerate() {
+            let dir = std::env::temp_dir().join(format!("millida-crash-system-memory-{i}"));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(dir.join("logs")).unwrap();
+            std::fs::write(dir.join("logs/launcher-latest.log"), log).unwrap();
+
+            let (reason, _) = analyze_crash(&dir, std::time::SystemTime::now());
+            let _ = std::fs::remove_dir_all(&dir);
+
+            assert_eq!(&reason, expected, "лог {log:?}. Зачем случай закреплён: {why}");
+            let offers_more_ram = diagnose("Test", &reason, "", log).actions.iter().any(|a| a.kind == "set-ram");
+            assert_eq!(
+                offers_more_ram,
+                *expected == HEAP,
+                "кнопка «Выделить N ГБ» уместна только при нехватке кучи; при нехватке памяти Windows она ускоряет следующий вылет. Зачем случай закреплён: {why}"
+            );
+        }
+    }
+
+    #[test]
+    fn missing_dependency_verdict_needs_the_loader_refusal() {
+        const VERDICT: &str = "Не хватает зависимости одного из модов.";
+        let cases: &[(&str, bool, &str)] = &[
+            (
+                "[main/WARN] [net.minecraftforge.fml.loading.moddiscovery.ModFileParser/LOADING]: Mod file C:\\Users\\Nest\\AppData\\Roaming\\net.millida.launcher\\minecraft\\libraries\\net\\minecraftforge\\fmlcore\\1.20.1-47.4.10\\fmlcore-1.20.1-47.4.10.jar is missing mods.toml file\n\
+                 [main/INFO] [cpw.mods.modlauncher.LaunchServiceHandler/MODLAUNCHER]: Launching target 'forgeclient' with arguments\n\
+                 [Render thread/INFO] [minecraft/Minecraft]: Backend library: LWJGL version 3.3.1",
+                false,
+                "заявка 21.09 (Immortal): Forge пишет «is missing mods.toml file» на каждом здоровом запуске — 1104 вылета Forge за два дня получили ложный вердикт",
+            ),
+            (
+                "[main/INFO]: Loading 258 mods, requires Java 17\n[Render thread/INFO]: Mod 'create' registered 412 blocks",
+                false,
+                "слова requires и mod в обычных строках загрузки — это не отказ загрузчика",
+            ),
+            (
+                "[main/ERROR] [net.minecraftforge.fml.loading.ModSorter/LOADING]: Missing or unsupported mandatory dependencies:",
+                true,
+                "отказ Forge/NeoForge 1.13+, у которого хвост лога срезал строки с именами модов: заголовка достаточно для вердикта",
+            ),
+            (
+                "net.minecraftforge.fml.common.MissingModsException: Mod ic2 (IndustrialCraft 2) requires [forge@[14.23.5.2847,)]",
+                true,
+                "так отказывает Forge 1.12 — сборки на нём всё ещё в каталоге",
+            ),
+        ];
+        for (i, (log, expected, why)) in cases.iter().enumerate() {
+            let dir = std::env::temp_dir().join(format!("millida-crash-missing-dep-{i}"));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(dir.join("logs")).unwrap();
+            std::fs::write(dir.join("logs/launcher-latest.log"), log).unwrap();
+
+            let (reason, _) = analyze_crash(&dir, std::time::SystemTime::now());
+            let _ = std::fs::remove_dir_all(&dir);
+
+            assert_eq!(
+                reason == VERDICT,
+                *expected,
+                "лог {log:?}: получили {reason:?}. Зачем случай закреплён: {why}"
+            );
+        }
     }
 }

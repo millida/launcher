@@ -12,11 +12,34 @@ export const SCREEN_MIN_BITRATE = 600_000
 /// растёт. Кадры терять можно, буквы — нет.
 const SCREEN_DEGRADATION: RTCDegradationPreference = 'maintain-resolution'
 
+/** Потолок камеры одному зрителю; на группу он делится между ними. */
+export const CAM_MAX_BITRATE = 900_000
+
+/** Ниже этого лицо превращается в набор квадратов — показывать нечего. */
+export const CAM_MIN_BITRATE = 150_000
+
+/// В отличие от экрана, камере разрешение уступать можно: мелкое лицо остаётся
+/// узнаваемым, а рывки в разговоре замечают все.
+const CAM_DEGRADATION: RTCDegradationPreference = 'balanced'
+
 export interface PeerFlags {
   muted?: boolean
   deafened?: boolean
   screen?: boolean
+  cam?: boolean
 }
+
+/** Что именно уходит видеодорожкой: одного её вида для этого недостаточно. */
+export type VideoRole = 'screen' | 'cam'
+
+/**
+ * Карта «m-секция → роль». Экран и камера — две одинаковые с виду видеодорожки,
+ * и различить их у получателя нечем: движок не передаёт назначение. Роль едет
+ * рядом с описанием, в том же конверте — так она заведомо приходит до дорожки,
+ * которую объясняет, и старая сторона без карты трактует видео как экран, то
+ * есть ровно так, как делала до камеры.
+ */
+export type VideoRoles = Record<string, VideoRole>
 
 export interface PeerQuality {
   rttMs: number | null
@@ -30,6 +53,7 @@ export interface PeerCallbacks {
   /** Звук показываемого экрана приходит отдельной дорожкой и играет отдельно от голоса. */
   onRemoteScreenAudio: (stream: MediaStream | null) => void
   onRemoteScreen: (stream: MediaStream | null) => void
+  onRemoteCam: (stream: MediaStream | null) => void
   onFlags: (flags: PeerFlags) => void
   onConnection: (state: RTCPeerConnectionState) => void
 }
@@ -37,6 +61,7 @@ export interface PeerCallbacks {
 export interface Peer {
   setMicTrack: (track: MediaStreamTrack) => Promise<void>
   setScreenTrack: (track: MediaStreamTrack | null, encoding?: RTCRtpEncodingParameters) => Promise<void>
+  setCamTrack: (track: MediaStreamTrack | null, encoding?: RTCRtpEncodingParameters) => Promise<void>
   setScreenAudioTrack: (track: MediaStreamTrack | null) => Promise<void>
   /** Возвращает, ушло ли состояние: закрытый канал — повод отправить его сигналингом. */
   sendFlags: (flags: PeerFlags) => boolean
@@ -64,11 +89,36 @@ export function createPeer(
   let makingOffer = false
   let micSender: RTCRtpSender | null = null
   let screenSender: RTCRtpSender | null = null
+  let camSender: RTCRtpSender | null = null
   let screenAudioSender: RTCRtpSender | null = null
   let lastBytes = 0
   let lastAt = 0
   const remoteAudio = new MediaStream()
   const remoteScreen = new MediaStream()
+  const remoteCam = new MediaStream()
+  const remoteRoles = new Map<string, VideoRole>()
+
+  /// Карта считается по живым отправителям, а не запоминается при включении:
+  /// секцию, освободившуюся после выключенного показа, движок вправе отдать
+  /// камере, и запомненная роль тогда указывала бы на чужую дорожку.
+  const videoRoles = (): VideoRoles => {
+    const roles: VideoRoles = {}
+    for (const t of pc.getTransceivers()) {
+      if (!t.mid) continue
+      if (screenSender && t.sender === screenSender) roles[t.mid] = 'screen'
+      else if (camSender && t.sender === camSender) roles[t.mid] = 'cam'
+    }
+    return roles
+  }
+
+  const takeRoles = (data: Record<string, unknown>) => {
+    const roles = data.video as VideoRoles | undefined
+    if (!roles || typeof roles !== 'object') return
+    remoteRoles.clear()
+    for (const [mid, role] of Object.entries(roles)) {
+      if (role === 'screen' || role === 'cam') remoteRoles.set(mid, role)
+    }
+  }
 
   const channel = pc.createDataChannel('state', { negotiated: true, id: 0 })
   channel.onmessage = (e) => {
@@ -89,7 +139,7 @@ export function createPeer(
       // Описание собирается явно: неявная форма setLocalDescription() есть не во
       // всех движках, на которых работает лаунчер.
       await pc.setLocalDescription(await pc.createOffer())
-      if (pc.localDescription) cb.onSignal('offer', { sdp: pc.localDescription.toJSON() })
+      if (pc.localDescription) cb.onSignal('offer', { sdp: pc.localDescription.toJSON(), video: videoRoles() })
     } catch {
       // Пересогласование сорвалось — состояние соединения расскажет об этом само.
     } finally {
@@ -114,16 +164,19 @@ export function createPeer(
       track.onunmute = () => cb.onRemoteScreenAudio(extra)
       return
     }
-    remoteScreen.getVideoTracks().forEach((t) => remoteScreen.removeTrack(t))
-    remoteScreen.addTrack(track)
-    cb.onRemoteScreen(remoteScreen)
-    // Собеседник выключил показ — дорожка кончается, и картинку надо убрать.
+    const cam = remoteRoles.get(e.transceiver.mid || '') === 'cam'
+    const stream = cam ? remoteCam : remoteScreen
+    const emit = cam ? cb.onRemoteCam : cb.onRemoteScreen
+    stream.getVideoTracks().forEach((t) => stream.removeTrack(t))
+    stream.addTrack(track)
+    emit(stream)
+    // Собеседник выключил картинку — дорожка кончается, и убрать её надо сразу.
     track.onended = () => {
-      remoteScreen.removeTrack(track)
-      cb.onRemoteScreen(null)
+      stream.removeTrack(track)
+      emit(null)
     }
-    track.onmute = () => cb.onRemoteScreen(null)
-    track.onunmute = () => cb.onRemoteScreen(remoteScreen)
+    track.onmute = () => emit(null)
+    track.onunmute = () => emit(stream)
   }
 
   return {
@@ -149,6 +202,22 @@ export function createPeer(
       params.degradationPreference = SCREEN_DEGRADATION
       params.encodings = [encoding]
       await screenSender.setParameters(params).catch(() => {})
+    },
+    async setCamTrack(track, encoding = { maxBitrate: CAM_MAX_BITRATE, maxFramerate: 24 }) {
+      // Камеру за разговор включают и выключают много раз, поэтому дорожка
+      // снимается заменой на пустую: снятие отправителя каждый раз добавляло бы
+      // в описание новую секцию, а оно ограничено по размеру. Картинка у
+      // собеседника гаснет сразу — по флагу, не дожидаясь тишины в дорожке.
+      if (!track) {
+        if (camSender) await camSender.replaceTrack(null)
+        return
+      }
+      if (!camSender) camSender = pc.addTrack(track)
+      else await camSender.replaceTrack(track)
+      const params = camSender.getParameters()
+      params.degradationPreference = CAM_DEGRADATION
+      params.encodings = [encoding]
+      await camSender.setParameters(params).catch(() => {})
     },
     async setScreenAudioTrack(track) {
       if (!track) {
@@ -179,6 +248,9 @@ export function createPeer(
       }
       const description = data.sdp as RTCSessionDescriptionInit | undefined
       if (!description) return
+      // Роли встают до описания: дорожки приезжают внутри setRemoteDescription,
+      // и к этому моменту уже должно быть известно, кто из них камера.
+      takeRoles(data)
       const offerCollision = description.type === 'offer' && (makingOffer || pc.signalingState !== 'stable')
       if (!polite && offerCollision) return
       if (offerCollision) {
@@ -189,7 +261,7 @@ export function createPeer(
       await pc.setRemoteDescription(description)
       if (description.type !== 'offer') return
       await pc.setLocalDescription(await pc.createAnswer())
-      if (pc.localDescription) cb.onSignal('answer', { sdp: pc.localDescription.toJSON() })
+      if (pc.localDescription) cb.onSignal('answer', { sdp: pc.localDescription.toJSON(), video: videoRoles() })
     },
     async quality() {
       const stats = await pc.getStats()

@@ -69,6 +69,12 @@ windows-sys = { version = "0.61", features = ["Win32_Security_Cryptography", "Wi
 # being bounced back at them on every recording.
 webview2-com = "0.38"
 windows = { version = "0.61", features = ["Win32_Foundation"] }
+# VPN clients in "system proxy" mode (v2rayN, Hiddify, Clash) only set the
+# WinINet proxy. Without this feature the core went straight past it into the
+# resets the player turned the VPN on to avoid, while the browser worked.
+reqwest = { version = "0.12", default-features = false, features = ["system-proxy"] }
+# Same registry values hyper-util reads, so the client is rebuilt when they change.
+windows-registry = "0.5"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 libc = "0.2"

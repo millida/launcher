@@ -32,7 +32,7 @@ export function BuildPicker() {
     >
       <div className="modal mw-xs">
         <h3>{title || 'Куда добавить ' + kindLabel + '?'}</h3>
-        <div className="sub">{sub || 'Выбери сборку — установим ' + kindLabel + ' именно в неё.'}</div>
+        {sub ? <div className="sub">{sub}</div> : null}
 
         {list.length ? (
           <div className="bp-list">
@@ -45,7 +45,7 @@ export function BuildPicker() {
                   </span>
                   <span className="bp-meta">
                     <b>{p.name}</b>
-                    <span>{LOADER_NAME(p) + ' · ' + p.version + (off ? ' · версия не подходит' : '')}</span>
+                    <span>{LOADER_NAME(p) + ' · ' + p.version + (off ? ' · не та версия' : '')}</span>
                   </span>
                   <Icon id="i-chev-r" />
                 </button>
@@ -53,14 +53,15 @@ export function BuildPicker() {
             })}
           </div>
         ) : (
-          <p className="faint-note" style={{ marginTop: '14px' }}>
-            {title ? 'Сборок пока нет — создай первую.' : 'Сборок пока нет — создай первую, и мы добавим ' + kindLabel + ' в неё.'}
-          </p>
+          <div className="bx-mini-empty">
+            <Icon id="i-box2" />
+            <b>Сборок пока нет</b>
+          </div>
         )}
 
         <div style={{ display: 'flex', gap: '10px', marginTop: '18px' }}>
           <button
-            className="btn md secondary"
+            className={'btn md ' + (list.length ? 'secondary' : 'primary')}
             style={{ flex: 1 }}
             onClick={() => {
               choose(null)

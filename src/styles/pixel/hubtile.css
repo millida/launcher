@@ -1,0 +1,190 @@
+/* ============================================================
+   ПЛИТКИ ЛОББИ: «Магазин» и «Свой сервер» (23.09.2026)
+   ------------------------------------------------------------
+   src/components/lobby/HubTile.tsx. Стоят столбиком под сундуком
+   <DailyChest hero/>, ширина та же — 196 px. Рецепт — docs/DESIGN-JUICE.md.
+
+   Рамка — СЛОЯМИ, а не inset-тенью: .ht-frame (силуэт цвета обводки,
+   срез 10px) → .ht-plate (отступ 3px и ТОТ ЖЕ срез 10px: внутренний угол
+   ступеньки уходит на 3px по обеим осям, линия одной толщины везде.
+   Срез 7px = «10 − 3» сводил линию в ноль на внутреннем углу — ошибка 23.09) → грани .ht-edge-t / -b внутри плиты
+   (их режет тот же срез). Подошва — один drop-shadow на кнопке: он
+   считается по силуэту рамки и арта вместе.
+   ============================================================ */
+
+.ht {
+  --ht-7: var(--px-10);
+  position: relative; display: block; flex: none;
+  width: 196px; height: var(--ht-h, 118px); padding: 0;
+  /* Головы над кромкой занимают место сверху — плитка держит его сама,
+     чтобы в столбике не залезать на соседа выше. */
+  margin: var(--ht-over, 0px) 0 0;
+  border: 0; background: none; color: #fff; font: inherit; text-align: left; cursor: pointer;
+  filter: drop-shadow(0 5px 0 rgba(0, 0, 0, 0.45));
+  transition: transform 90ms steps(2, end), filter 90ms steps(2, end);
+}
+.ht:active { transform: translateY(3px); filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.45)); }
+.ht:focus-visible { outline: none; }
+.ht:focus-visible .ht-frame { background: #fff; }
+
+.ht-frame { position: absolute; inset: 0; background: var(--ht-ol); clip-path: var(--px-10); }
+.ht-plate {
+  position: absolute; inset: 3px; overflow: hidden;
+  background: var(--ht-bg); clip-path: var(--ht-7);
+  transition: background-color 90ms steps(2, end);
+}
+.ht:hover .ht-plate { background-color: var(--ht-bg-hi); }
+.ht-edge-t { position: absolute; z-index: 2; left: 0; right: 0; top: 0; height: 4px; background: rgba(255, 255, 255, 0.3); }
+
+/* Лучи за артом: жёсткие стопы, без растушёвки — это рисунок, а не свечение. */
+.ht-rays {
+  position: absolute; z-index: 0; width: 320px; height: 320px;
+  left: calc(var(--ht-ray-x, 140px) - 160px); top: calc(var(--ht-ray-y, 30px) - 160px);
+  background: repeating-conic-gradient(from 4deg, var(--ht-ray) 0deg 9deg, transparent 9deg 22.5deg);
+}
+
+/* Арт СТОИТ на плитке: коробка = плита (отступ 3px), низ со срезом 10px,
+   сверху открыта на 40px — над кромкой выходят только головы. Бока режутся
+   по плите, поэтому арт можно брать шире плитки. */
+.ht-artbox {
+  position: absolute; z-index: 2; inset: 3px; pointer-events: none;
+  clip-path: polygon(
+    0 -40px, 100% -40px, 100% calc(100% - 10px), calc(100% - 10px) calc(100% - 10px),
+    calc(100% - 10px) 100%, 10px 100%, 10px calc(100% - 10px), 0 calc(100% - 10px)
+  );
+}
+.ht-art {
+  position: absolute; bottom: 0; left: 50%; display: block; max-width: none;
+  height: var(--ht-art-h); width: auto; transform: translateX(var(--ht-art-x, -50%));
+  user-select: none;
+  transition: transform 120ms steps(2, end);
+}
+.ht:hover .ht-art { transform: translateX(var(--ht-art-x, -50%)) translateY(-4px); }
+
+/* Подпись — на плотной плашке поверх низа арта (ноги уходят под неё).
+   Низ плашки повторяет срез плиты (10px); сверху — тёмная линия-шов 3px. */
+.ht-band {
+  position: absolute; z-index: 3; left: 3px; right: 3px; bottom: 3px;
+  display: flex; flex-direction: column; justify-content: center; gap: 2px;
+  min-height: 44px; padding: 7px 10px 9px;
+  background: var(--ht-band);
+  /* Сверху клип открыт на 20px: лента «Бесплатно» сидит на шве. Фон
+     плашки дальше своего бокса не рисуется, так что открыть клип безопасно. */
+  clip-path: polygon(
+    0 -20px, 100% -20px, 100% calc(100% - 10px), calc(100% - 10px) calc(100% - 10px),
+    calc(100% - 10px) 100%, 10px 100%, 10px calc(100% - 10px), 0 calc(100% - 10px)
+  );
+}
+.ht-band::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--ht-ol); }
+.ht-band::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 5px; background: rgba(0, 0, 0, 0.3); }
+.ht-title {
+  font: 900 21px/1 var(--m-font); letter-spacing: -0.015em; color: #fff;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.38);
+}
+.ht-sub {
+  font: 750 12.5px/1.15 var(--m-font); color: rgba(255, 255, 255, 0.9); white-space: nowrap;
+}
+
+/* ---------- Магазин: плита цвета рубина, персонаж в скине ---------- */
+.ht-shop {
+  --ht-h: 124px;
+  --ht-bg: var(--m-ruby);
+  --ht-bg-hi: color-mix(in srgb, var(--m-ruby) 88%, #fff);
+  --ht-ol: color-mix(in srgb, var(--m-ruby-lo) 45%, #000);
+  --ht-band: color-mix(in srgb, var(--m-ruby-lo) 78%, #000);
+  --ht-ray: color-mix(in srgb, var(--m-ruby-hi) 42%, transparent);
+  --ht-ray-x: 130px; --ht-ray-y: 30px;
+  /* Портрет по пояс: коробка арта 118px, арт 140 → над кромкой 22px (16%). */
+  --ht-art-h: 140px; --ht-art-x: -28%; --ht-over: 22px;
+}
+
+/* Подарок дня: золотая плашка в углу с пиксельной коробкой, подпрыгивает
+   ступенями — единственное, что движется в покое (это уведомление). */
+/* Значок «!» — белая плашка с тёмной ступенчатой рамкой и красным знаком:
+   читается на жёлтом, зелёном и красном (правка владельца 23.09.2026). */
+.ht-gift {
+  position: absolute; z-index: 4; left: -6px; top: -8px; display: grid; place-items: center;
+  width: 30px; height: 30px; padding-bottom: 2px;
+  font: 900 22px/1 var(--m-font); color: #e8202a;
+  background: #fff;
+  --px-n: 5px; clip-path: var(--px-5);
+  --px-ol: #1a0d05; --px-ol-w: 3px; --px-fb: rgba(0, 0, 0, 0.18); --px-fb-w: 3px;
+  animation: ht-hop 1.4s steps(1, end) infinite;
+}
+@keyframes ht-hop {
+  0%, 60%, 100% { transform: translateY(0); }
+  70% { transform: translateY(-3px); }
+  80% { transform: translateY(-5px); }
+  90% { transform: translateY(-2px); }
+}
+
+/* ---------- Свой сервер: двое игроков почти во всю ширину ---------- */
+.ht-server {
+  --ht-h: 132px;
+  --ht-bg: color-mix(in srgb, var(--m-accent) 62%, #0b1f0e);
+  --ht-bg-hi: color-mix(in srgb, var(--m-accent) 72%, #0b1f0e);
+  --ht-ol: color-mix(in srgb, var(--m-accent) 18%, #000);
+  --ht-band: color-mix(in srgb, var(--m-accent) 26%, #06140a);
+  --ht-ray: color-mix(in srgb, var(--m-accent) 34%, transparent);
+  --ht-ray-x: 95px; --ht-ray-y: 40px;
+  /* 1483×1000: коробка 126px, арт 150 → ширина 222 (бока режет плита),
+     над кромкой только макушки — 24px (16% высоты арта). */
+  --ht-art-h: 150px; --ht-art-x: -52%; --ht-over: 24px;
+}
+.ht-ribbon {
+  /* Лента на верхнем шве плашки подписи, справа: лица открыты. */
+  position: absolute; z-index: 4; right: 8px; top: -11px; padding: 4px 7px 5px;
+  background: var(--m-rarity-legendary); color: var(--px-on-accent);
+  font: 900 11px/1 var(--m-font); letter-spacing: 0.02em;
+  clip-path: var(--px-4);
+}
+
+/* Подарок дня ждёт (правка владельца 23.09.2026: «чтобы выделялась»):
+   рамка мигает золотом ступенями, лента «Бонус», строка «Подарок ждёт». */
+.ht.is-gift { --ht-ol: #ffc23a; }
+.ht.is-gift .ht-frame { animation: ht-gold 1.2s steps(1, end) infinite; }
+.ht.is-gift .ht-sub { color: #ffe08a; }
+.ht.is-gift .ht-gift { width: 34px; height: 34px; font-size: 24px; }
+@keyframes ht-gold {
+  0%, 100% { background: #ffc23a; }
+  50% { background: #fff1b8; }
+}
+
+/* ---------- Бонус за вход: янтарная плита, персонажи в плащах ----------
+   Вместо золотой «Battle Pass» (правка владельца 23.09.2026: «мы для
+   Майнкрафта, а не игра — бонус за вход, доброе»). Клик — окно наград. */
+.ht-daily {
+  --ht-h: 124px;
+  --ht-bg: #e89a1c;
+  --ht-bg-hi: #f2a930;
+  --ht-ol: #4a2a00;
+  --ht-band: #8a4a06;
+  --ht-ray: rgba(255, 226, 140, 0.4);
+  --ht-ray-x: 120px; --ht-ray-y: 34px;
+  /* Арт — житель с монетами (рендер каталога сайта) вместо сундука
+     (правка владельца 23.09.2026: «сундук — хуйня, персонажа какого-нибудь»). */
+  --ht-art-h: 140px; --ht-art-x: -30%; --ht-over: 22px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ht, .ht-art, .ht-plate { transition: none; }
+  .ht-gift, .ht.is-gift .ht-frame { animation: none; }
+}
+/* «Ежедневный бонус» — в одну строку на 196 px. */
+.ht-daily .ht-title { font-size: 17.5px; white-space: nowrap; }
+
+/* ---------- Мой скин (гардероб): голубая плита, персонажи в плащах ---------- */
+.ht-wardrobe {
+  --ht-h: 124px;
+  --ht-bg: #2f8fd6;
+  --ht-bg-hi: #3da0e8;
+  --ht-ol: #0a2a44;
+  --ht-band: #17507d;
+  --ht-ray: rgba(170, 225, 255, 0.4);
+  --ht-ray-x: 120px; --ht-ray-y: 30px;
+  --ht-art-h: 150px; --ht-art-x: -50%; --ht-over: 24px;
+}
+
+/* «Играть с друзьями» — в одну строку: в две плашка вырастала и налезала на
+   персонажей (владелец 24.09.2026, 16:59). */
+.ht-server .ht-title { font-size: 17px; white-space: nowrap; }

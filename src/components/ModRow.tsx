@@ -1,22 +1,34 @@
-import { Icon } from './Icon'
-import { fmt, RU_LOADER } from '../lib/format'
+import { CatalogRow } from './catalog/CatalogRow'
+import { PackKeyModal } from './PackKeyModal'
 import { hasTauri } from '../ipc/tauri'
-import { cfInstallModpack, cfInstallWorld, installModpack } from '../ipc/commands'
-import { installContentFlow, resolveTargetBuild } from '../lib/install'
-import { keyCfModpack, keyContent, keyMrModpack, pickTargetName } from '../lib/installKeys'
+import {
+  PACK_ACCESS_PREFIX,
+  cfInstallModpack,
+  cfInstallWorld,
+  installCatalogPack,
+  installModpack,
+  installPackCandidate,
+} from '../ipc/commands'
+import { catalogInstallTracker, installContentFlow, resolveTargetBuild } from '../lib/install'
+import { keyCatalogPack, keyCfModpack, keyContent, keyMrModpack, pickTargetName } from '../lib/installKeys'
 import { runInstall, useInstalls } from '../state/installs'
 import { trackTimed } from '../lib/telemetry'
 import { useProfiles } from '../state/profiles'
 import { uiConfirm } from '../state/confirm'
 import { showToast } from '../state/ui'
+import { useState } from 'react'
 import { useMods } from '../state/mods'
 import type { ModHit } from '../state/mods'
 import { openCfProject, openProject } from '../state/project'
-import { mirrorAsset } from '../lib/api'
+import { DEMO_USER } from '../lib/demo'
+import { loadPackView } from './premium/packView'
 
-const DONE_STYLE = { background: 'var(--m-accent-soft)', color: 'var(--m-accent)' }
-
-export function ModRow({ h }: { h: ModHit }) {
+/**
+ * Всё, что делает вещь каталога: подпись и состояние главной кнопки, установка
+ * из нужного источника, открытие карточки и окно ключа платной сборки. Одно на
+ * строку и на плитку — иначе они разошлись бы в том, что считать «установлено».
+ */
+export function useModAction(h: ModHit) {
   const modTab = useMods((s) => s.modTab)
   const installedIds = useMods((s) => s.installedIds)
   const installed = !!(h.pid && installedIds.has(h.pid))
@@ -27,22 +39,27 @@ export function ModRow({ h }: { h: ModHit }) {
   const selected = useProfiles((s) => s.selected)
   const target = pickTargetName(scoped, profiles.map((p) => p.name), selected || '')
   const key =
-    h.cfid !== undefined
-      ? modTab === 'modpack'
-        ? keyCfModpack(h.cfid)
-        : keyContent('cf', target || '', modTab, h.cfid)
-      : modTab === 'modpack'
-        ? keyMrModpack(h.slug || '')
-        : keyContent('mr', target || '', modTab, h.slug || '')
+    h.packSlug
+      ? keyCatalogPack(h.packSlug)
+      : h.cfid !== undefined
+        ? modTab === 'modpack'
+          ? keyCfModpack(h.cfid)
+          : keyContent('cf', target || '', modTab, h.cfid)
+        : modTab === 'modpack'
+          ? keyMrModpack(h.slug || '')
+          : keyContent('mr', target || '', modTab, h.slug || '')
   const task = useInstalls((s) => s.tasks[key])
   const doneKeys = useInstalls((s) => s.done)
   const done = installed || !!doneKeys[key]
-  const idle = done ? 'Установлено' : modTab === 'modpack' ? 'Установить' : 'Добавить'
+  // Сборку ставят, а не добавляют: «Добавить» — про мод, который кладут в
+  // существующую сборку, и на готовой сборке читается как другое действие.
+  const idle = done ? 'Установлено' : modTab === 'modpack' || h.packSlug ? 'Установить' : 'Добавить'
   const running = task && task.state === 'run'
   const text = running ? (task.pct > 0 ? task.label + ' ' + Math.round(task.pct) + '%' : task.label) : idle
 
   const installWorld = (prof: string, force: boolean): void => {
     const startedAt = performance.now()
+    const installed = catalogInstallTracker('world', h.cfid, 'maps')
     runInstall({
       key: keyContent('cf', prof, 'world', h.cfid!),
       title: h.title || String(h.cfid),
@@ -73,6 +90,7 @@ export function ModRow({ h }: { h: ModHit }) {
           kind: 'world',
           source: 'curseforge',
         })
+        installed()
         showToast('Карта «' + r.folder + '» → «' + prof + '»: заходи в одиночную игру', 'ok', 'install')
       },
     })
@@ -84,7 +102,7 @@ export function ModRow({ h }: { h: ModHit }) {
     if (!done) return false
     showToast(
       modTab === 'modpack'
-        ? 'Модпак уже установлен — открой карточку, чтобы выбрать другую версию'
+        ? 'Сборка уже установлена — открой карточку, чтобы выбрать другую версию'
         : 'Уже в сборке' + (target ? ' «' + target + '»' : '') + ' — версию можно сменить в карточке',
       'ok',
       false,
@@ -107,6 +125,7 @@ export function ModRow({ h }: { h: ModHit }) {
     }
     if (modTab === 'modpack') {
       const cfStartedAt = performance.now()
+      const installed = catalogInstallTracker('modpack', h.cfid, 'modpacks')
       runInstall({
         key: keyCfModpack(h.cfid!),
         title: h.title || String(h.cfid),
@@ -119,9 +138,10 @@ export function ModRow({ h }: { h: ModHit }) {
             loader: p.loader || (p.fabric ? 'fabric' : 'vanilla'),
             source: 'curseforge',
           })
+          installed()
           useProfiles.getState().setSelected(p.name)
           void useProfiles.getState().refresh()
-          showToast('Модпак «' + p.name + '» готов — жми «Играть»', 'ok', 'achievement')
+          showToast('Сборка «' + p.name + '» готова — жми «Играть»', 'ok', 'achievement')
         },
       })
       return
@@ -135,8 +155,23 @@ export function ModRow({ h }: { h: ModHit }) {
       void installContentFlow({ source: 'modrinth', slug: h.slug }, modTab, h.title)
       return
     }
+    // Своя сборка ставится своим путём: у неё есть право доступа, свой архив и
+    // свой запуск, и ни Modrinth, ни CurseForge про неё ничего не знают.
+    if (h.packSlug && hasTauri()) {
+      startPackInstall()
+      return
+    }
+    // Демо в браузере (dev, ?preview=user): ставить нечем, поэтому платная
+    // сборка сразу показывает то, что увидит человек без доступа, — баннер.
+    if (h.packSlug && DEMO_USER) {
+      void loadPackView(h.packSlug)
+        .then((v) => (v && v.accessRequired ? setKeyFor('') : showToast('Установка доступна в приложении')))
+        .catch(() => showToast('Установка доступна в приложении'))
+      return
+    }
     if (h.slug && hasTauri() && modTab === 'modpack') {
       const modpackStartedAt = performance.now()
+      const installed = catalogInstallTracker('modpack', h.slug, 'modpacks')
       runInstall({
         key: keyMrModpack(h.slug),
         title: h.title || h.slug,
@@ -150,6 +185,7 @@ export function ModRow({ h }: { h: ModHit }) {
             loader: p.loader || (p.fabric ? 'fabric' : 'vanilla'),
             source: 'modrinth',
           })
+          installed()
           useProfiles.getState().setSelected(p.name)
           void useProfiles.getState().refresh()
           showToast('Сборка «' + p.name + '» готова к запуску', 'ok', 'achievement')
@@ -160,54 +196,117 @@ export function ModRow({ h }: { h: ModHit }) {
     showToast('Установка доступна в приложении')
   }
 
-  const onRow = (e: React.MouseEvent<HTMLDivElement>) => {
+  const [keyFor, setKeyFor] = useState<string | null>(null)
+
+  // Установка своей сборки. Вынесена отдельно, потому что к ней возвращаются:
+  // платная упирается в доступ, и после активации ключа установку нужно
+  // продолжить тем же путём, а не просить человека нажать кнопку заново.
+  const startPackInstall = () => {
+    if (!h.packSlug) return
+    const startedAt = performance.now()
+    const installed = catalogInstallTracker(h.packPaid ? 'premium' : 'modpack', h.packSlug, 'modpacks')
+    runInstall({
+      key: keyCatalogPack(h.packSlug),
+      title: h.title || h.packSlug,
+      running: 'Скачивание…',
+      run: () => installCatalogPack(h.packSlug!),
+      onError: (e) => {
+        const text = String(e)
+        if (text.startsWith(PACK_ACCESS_PREFIX)) {
+          setKeyFor(text.slice(PACK_ACCESS_PREFIX.length))
+          return
+        }
+        showToast(text, 'error')
+      },
+      onDone: (p) => {
+        trackTimed('modpack_install', startedAt, {
+          name: h.packSlug!,
+          kind: 'modpack',
+          mc: p.version,
+          loader: p.loader || (p.fabric ? 'fabric' : 'vanilla'),
+          source: 'millida',
+        })
+        installed()
+        useProfiles.getState().setSelected(p.name)
+        void useProfiles.getState().refresh()
+        showToast('Сборка «' + p.name + '» готова к запуску', 'ok', 'achievement')
+      },
+    })
+  }
+
+  const startCandidateInstall = () => {
+    if (!h.packSlug || !h.packCandidate) return
+    runInstall({
+      // Ключ тот же, что у обычной установки: события прогресса ядро шлёт
+      // по адресу сборки, и свой ключ оставил бы полоску неподвижной.
+      key: keyCatalogPack(h.packSlug),
+      title: (h.title || h.packSlug) + ' ' + h.packCandidate.version,
+      running: 'Скачивание…',
+      run: () => installPackCandidate(h.packSlug!),
+      onError: (e) => showToast(String(e), 'error'),
+      onDone: (p) => {
+        useProfiles.getState().setSelected(p.name)
+        void useProfiles.getState().refresh()
+        showToast('Версия на проверке установлена — запусти её, и мы запишем результат', 'ok')
+      },
+    })
+  }
+
+  const onRow = (e: React.MouseEvent<HTMLElement>) => {
     if ((e.target as HTMLElement).closest('button')) return
     if (h.cfid !== undefined) {
       void openCfProject(h.cfid, modTab, h.title)
       return
     }
+    // Своя сборка не живёт на Modrinth: открытая по её адресу карточка чужого
+    // каталога показывала «Не удалось загрузить» и кнопку «Открыть на Modrinth».
+    if (h.packSlug) return
     if (h.slug) void openProject(h.slug, modTab)
   }
 
+  const modal =
+    keyFor !== null ? (
+      <PackKeyModal
+        slug={h.packSlug || ''}
+        title={h.title}
+        reason={keyFor}
+        onClose={() => setKeyFor(null)}
+        onUnlocked={startPackInstall}
+      />
+    ) : null
+
+  return {
+    modTab,
+    text,
+    done,
+    running: !!running,
+    onClick: h.cfid !== undefined ? onCf : onInst,
+    onOpen: onRow,
+    modal,
+    candidate: h.packSlug && h.packCandidate ? startCandidateInstall : undefined,
+  }
+}
+
+export function ModRow({ h }: { h: ModHit }) {
+  const a = useModAction(h)
   return (
-    <div className="mod-row" data-cfweb={h.cfid !== undefined ? h.website || '' : undefined} onClick={onRow}>
-      <span className="mod-icon">
-        {h.icon ? (
-          <img src={mirrorAsset(h.icon)} alt="" loading="lazy" onError={(e) => e.currentTarget.remove()} />
-        ) : (
-          <Icon id="i-box2" />
-        )}
-      </span>
-      <span className="mod-body">
-        <span className="mod-name">
-          <b>{h.title}</b>
-          <span>от {h.author}</span>
-        </span>
-        <span className="mod-desc">{h.desc || ''}</span>
-        <span className="mod-meta">
-          <b>{fmt(h.dl)}</b> скачиваний
-          {h.cats && h.cats.length ? ' · ' + h.cats.map(RU_LOADER).join(' · ') : ''}
-        </span>
-      </span>
-      {h.cfid !== undefined ? (
-        <button
-          className={'btn sm secondary cfinst' + (done ? ' done' : '')}
-          data-cf={h.cfid}
-          style={done ? DONE_STYLE : undefined}
-          onClick={onCf}
-        >
-          {text}
+    <>
+      {a.modal}
+      <CatalogRow
+        icon={h.icon}
+        title={h.title}
+        author={h.author}
+        desc={h.desc}
+        downloads={h.dl}
+        onOpen={a.onOpen}
+        action={{ label: a.text, done: a.done, onClick: a.onClick }}
+      />
+      {a.candidate && h.packCandidate ? (
+        // Версия на проверке — только у проверяющих (ветка main, ef1c98f).
+        <button className="btn sm secondary" onClick={a.candidate}>
+          Проверить {h.packCandidate.version}
         </button>
-      ) : (
-        <button
-          className={'btn sm secondary inst' + (done ? ' done' : '')}
-          data-slug={h.slug || ''}
-          style={done ? DONE_STYLE : undefined}
-          onClick={onInst}
-        >
-          {text}
-        </button>
-      )}
-    </div>
+      ) : null}
+    </>
   )
 }

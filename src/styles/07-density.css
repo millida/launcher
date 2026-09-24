@@ -23,6 +23,8 @@
 :root[data-density="compact"] .sidebar.collapsed .quick-open{padding-left:7px}
 :root[data-density="compact"] .sidebar.collapsed .side-collapse .side-collapse-ic{width:44px;height:32px}
 :root[data-density="compact"] .side-cap{padding:2px 10px 4px}
+:root[data-density="compact"] .card > .side-cap{padding-left:0;padding-right:0}
+:root[data-density="compact"] .set-row + .side-cap{padding-top:10px}
 :root[data-density="compact"] .side-sep{margin:5px 4px}
 :root[data-density="compact"] .nav-group-bottom{margin-top:3px;margin-bottom:6px}
 :root[data-density="compact"] .side-collapse{margin-bottom:3px}
@@ -95,7 +97,6 @@
 :root[data-density="compact"] .host-manage-body .set-row{padding:8px 0}
 :root[data-density="compact"] .host-manage-body .host-set-grid .set-row{padding:6px 10px;gap:6px;min-height:40px}
 :root[data-density="compact"] .host-set-grid .set-row .lab{font-size:12.5px}
-:root[data-density="compact"] .set-row.th-publish{gap:6px}
 :root[data-density="compact"] .modal{width:500px;padding:18px}
 :root[data-density="compact"] .modal.mw-xs{width:390px}
 :root[data-density="compact"] .modal.mw-sm{width:440px}
@@ -103,18 +104,11 @@
 :root[data-density="compact"] .modal.mw-lg{width:590px}
 :root[data-density="compact"] .modal.mw-xl{width:700px}
 :root[data-density="compact"] .modal.onb-modal{width:560px}
-:root[data-density="compact"] .modal.th-editor{width:640px}
 :root[data-density="compact"] .modal.ic-ed{width:660px;padding:16px}
 :root[data-density="compact"] .kpi{padding:10px 12px}
 :root[data-density="compact"] .kpi .val{font-size:20px}
 :root[data-density="compact"] .kpi-row{gap:9px;margin-top:12px}
 :root[data-density="compact"] .chat{width:300px}
-
-:root[data-density="compact"] .th-grid{grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:8px}
-:root[data-density="compact"] .th-card{padding:8px}
-:root[data-density="compact"] .th-card b{font-size:12.5px}
-:root[data-density="compact"] .th-card>span{font-size:11px}
-:root[data-density="compact"] .th-swatches{height:28px;margin-bottom:4px}
 
 :root[data-density="roomy"] body{font-size:15px;line-height:1.6}
 :root[data-density="roomy"] .titlebar{height:48px}
@@ -131,6 +125,8 @@
 :root[data-density="roomy"] .sidebar.collapsed .quick-open{padding-left:8px}
 :root[data-density="roomy"] .sidebar.collapsed .side-collapse .side-collapse-ic{width:50px;height:38px}
 :root[data-density="roomy"] .side-cap{padding:3px 14px 7px}
+:root[data-density="roomy"] .card > .side-cap{padding-left:0;padding-right:0}
+:root[data-density="roomy"] .set-row + .side-cap{padding-top:14px}
 :root[data-density="roomy"] .side-sep{margin:10px 4px}
 :root[data-density="roomy"] .nav-group-bottom{margin-top:6px;margin-bottom:11px}
 :root[data-density="roomy"] .side-collapse{margin-bottom:8px}
@@ -203,7 +199,6 @@
 :root[data-density="roomy"] .host-manage-body .set-row{padding:14px 0}
 :root[data-density="roomy"] .host-manage-body .host-set-grid .set-row{padding:12px 14px;gap:12px;min-height:54px}
 :root[data-density="roomy"] .host-set-grid .set-row .lab{font-size:14px}
-:root[data-density="roomy"] .set-row.th-publish{gap:10px}
 :root[data-density="roomy"] .modal{width:600px;padding:28px}
 :root[data-density="roomy"] .modal.mw-xs{width:470px}
 :root[data-density="roomy"] .modal.mw-sm{width:540px}
@@ -211,15 +206,9 @@
 :root[data-density="roomy"] .modal.mw-lg{width:720px}
 :root[data-density="roomy"] .modal.mw-xl{width:860px}
 :root[data-density="roomy"] .modal.onb-modal{width:680px}
-:root[data-density="roomy"] .modal.th-editor{width:780px}
 :root[data-density="roomy"] .modal.ic-ed{width:800px;padding:26px}
 :root[data-density="roomy"] .kpi{padding:18px 20px}
 :root[data-density="roomy"] .kpi .val{font-size:28px}
 :root[data-density="roomy"] .kpi-row{gap:14px;margin-top:20px}
 :root[data-density="roomy"] .chat{width:370px}
 
-:root[data-density="roomy"] .th-grid{grid-template-columns:repeat(auto-fill,minmax(172px,1fr));gap:13px}
-:root[data-density="roomy"] .th-card{padding:13px}
-:root[data-density="roomy"] .th-card b{font-size:14px}
-:root[data-density="roomy"] .th-card>span{font-size:12.5px}
-:root[data-density="roomy"] .th-swatches{height:40px;margin-bottom:7px}

@@ -97,15 +97,14 @@ fn settings_of(profile: &str) -> Value {
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or(Value::Null);
     // Only the knobs that describe the build travel. Java paths, covers and
-    // anything naming this machine stay here.
+    // anything naming this machine stay here. JVM flags never travel: they are
+    // code execution in someone else's game. Neither does the Modrinth pack
+    // link: "update the pack" wipes mods/ and reinstalls from that slug.
     serde_json::json!({
-        "jvmArgs": s["jvmArgs"].as_str().unwrap_or(""),
         "width": s["width"].as_u64().unwrap_or(0),
         "height": s["height"].as_u64().unwrap_or(0),
         "autoTune": s["autoTune"].as_bool().unwrap_or(true),
         "fpsBoost": s["fpsBoost"].as_bool().unwrap_or(false),
-        "modpackSlug": s["modpackSlug"].as_str().unwrap_or(""),
-        "modpackVersionId": s["modpackVersionId"].as_str().unwrap_or(""),
     })
 }
 
@@ -267,19 +266,50 @@ pub(crate) fn parse_manifest(raw: &Value) -> Result<PackManifest, String> {
     if manifest.format_version > PACK_FORMAT {
         return Err("Сборку сделали в более новой версии лаунчера — обнови лаунчер".into());
     }
-    if manifest.game.trim().is_empty() {
+    manifest.game = manifest.game.trim().to_string();
+    if manifest.game.is_empty() {
         return Err("В сборке не указана версия Minecraft".into());
     }
+    // the version names a folder and a file under versions/
+    check_version_id(&manifest.game)?;
+    manifest.loader_version = manifest.loader_version.trim().to_string();
+    if !manifest.loader_version.is_empty() {
+        check_loader_version(&manifest.loader_version)?;
+    }
+    if !manifest.icon.starts_with("https://") {
+        manifest.icon.clear();
+    }
     manifest.files.truncate(MAX_FILES);
-    manifest.files.retain(|f| {
+    manifest.files.retain_mut(|f| {
+        let Some(path) = shared_file_path(&f.kind, &f.path) else { return false };
+        f.path = path;
         url_allowed(&f.url)
             && f.sha1.len() == 40
             && f.sha1.bytes().all(|b| b.is_ascii_hexdigit())
-            && !f.path.contains("..")
     });
     manifest.name = manifest.name.chars().filter(|c| !c.is_control()).take(64).collect();
     manifest.summary = manifest.summary.chars().filter(|c| !c.is_control() || *c == '\n').take(MAX_SUMMARY).collect();
     Ok(manifest)
+}
+
+/// Kinds a manifest may carry, and the only place each may land:
+/// `<content dir of the kind>/<plain file name>`. Anything else (a config, a
+/// launcher service file, a nested path) is not catalogue content.
+const SHARED_KINDS: [&str; 4] = ["mod", "resourcepack", "shader", "datapack"];
+
+fn shared_file_path(kind: &str, path: &str) -> Option<String> {
+    if !SHARED_KINDS.contains(&kind) {
+        return None;
+    }
+    let (dir, name) = path.split_once('/')?;
+    if dir != content_dir(kind) {
+        return None;
+    }
+    let name = safe_file_name(name).ok()?;
+    if name != path[dir.len() + 1..] || is_launcher_service_file(&name) {
+        return None;
+    }
+    Some(format!("{}/{}", dir, name))
 }
 
 /// Installs a manifest as a build. Shared by the code flow and by cloud sync,
@@ -299,7 +329,10 @@ pub(crate) async fn install_manifest(
     let total = manifest.files.len().max(1);
     let mut entries: Vec<ContentEntry> = load_content_manifest(&name);
     for (i, f) in manifest.files.iter().enumerate() {
-        let dest = safe_join(&pdir, &f.path).map_err(|e| format!("Сборка содержит небезопасный путь: {}", e))?;
+        // parse_manifest already normalised the path; re-derived here so a
+        // caller that builds a manifest by hand cannot skip the check
+        let rel = shared_file_path(&f.kind, &f.path).ok_or_else(|| format!("Сборка содержит небезопасный путь: {}", f.path))?;
+        let dest = safe_join(&pdir, &rel).map_err(|e| format!("Сборка содержит небезопасный путь: {}", e))?;
         download_verify(&f.url, &dest, Some(&f.sha1), if f.size > 0 { Some(f.size) } else { None })
             .await
             .map_err(|e| format!("Не скачался файл {}: {}", f.path, e))?;
@@ -328,16 +361,18 @@ pub(crate) async fn install_manifest(
     };
     if let Some(obj) = manifest.settings.as_object() {
         let mut patch = serde_json::Map::new();
-        for key in ["jvmArgs", "width", "height", "autoTune", "fpsBoost", "modpackSlug", "modpackVersionId"] {
-            if let Some(v) = obj.get(key) {
-                patch.insert(key.to_string(), v.clone());
+        // JVM flags and the Modrinth pack link are not accepted from a shared
+        // build at all: flags run code, and the pack link decides what "update"
+        // deletes and downloads. Values are type-checked, not copied as is.
+        for key in ["width", "height"] {
+            if let Some(v) = obj.get(key).and_then(Value::as_u64).filter(|v| *v <= 16384) {
+                patch.insert(key.to_string(), Value::from(v));
             }
         }
-        // A shared build must not carry command-line flags into someone else's
-        // JVM: the same filter as the settings screen decides what survives.
-        if let Some(args) = patch.get("jvmArgs").and_then(Value::as_str) {
-            let clean = sanitize_jvm_args(args).join(" ");
-            patch.insert("jvmArgs".into(), Value::String(clean));
+        for key in ["autoTune", "fpsBoost"] {
+            if let Some(v) = obj.get(key).and_then(Value::as_bool) {
+                patch.insert(key.to_string(), Value::Bool(v));
+            }
         }
         merge_settings(&name, patch);
     }
@@ -443,7 +478,12 @@ mod tests {
                 {"path": "mods/ok.jar", "kind": "mod", "sha1": "a".repeat(40), "url": "https://cdn.modrinth.com/ok.jar"},
                 {"path": "../../evil.jar", "kind": "mod", "sha1": "b".repeat(40), "url": "https://cdn.modrinth.com/evil.jar"},
                 {"path": "mods/evil.jar", "kind": "mod", "sha1": "c".repeat(40), "url": "https://evil.example/x.jar"},
-                {"path": "mods/nohash.jar", "kind": "mod", "sha1": "", "url": "https://cdn.modrinth.com/x.jar"}
+                {"path": "mods/nohash.jar", "kind": "mod", "sha1": "", "url": "https://cdn.modrinth.com/x.jar"},
+                {"path": "millida-args.txt", "kind": "mod", "sha1": "d".repeat(40), "url": "https://cdn.modrinth.com/a.txt"},
+                {"path": "mods/millida-pack-launch.json", "kind": "mod", "sha1": "d".repeat(40), "url": "https://cdn.modrinth.com/a.json"},
+                {"path": "config/x.toml", "kind": "config", "sha1": "d".repeat(40), "url": "https://cdn.modrinth.com/a.toml"},
+                {"path": "resourcepacks/x.jar", "kind": "mod", "sha1": "d".repeat(40), "url": "https://cdn.modrinth.com/b.jar"},
+                {"path": "mods/sub/x.jar", "kind": "mod", "sha1": "d".repeat(40), "url": "https://cdn.modrinth.com/c.jar"}
             ]
         });
         let m = parse_manifest(&raw).expect("манифест должен разобраться");
@@ -453,6 +493,23 @@ mod tests {
             "остаться должен только файл с проверяемым хешем и адресом каталога",
         );
         assert_eq!(m.name, "Сборка", "управляющие символы в имени станут именем папки");
+    }
+
+    #[test]
+    fn manifest_versions_must_look_like_versions() {
+        let base = |game: &str, lv: &str| serde_json::json!({"formatVersion": 1, "name": "X", "game": game, "loader": "fabric", "loaderVersion": lv, "files": []});
+        assert!(parse_manifest(&base("1.21.4", "0.16.10")).is_ok());
+        assert!(parse_manifest(&base("../../../x", "")).is_err());
+        assert!(parse_manifest(&base("1.21", "../../x")).is_err());
+        assert!(parse_manifest(&base("1.21/x", "")).is_err());
+    }
+
+    #[test]
+    fn shared_settings_carry_no_jvm_args_or_pack_link() {
+        let v = settings_of("профиль-которого-нет-3f9");
+        assert!(v.get("jvmArgs").is_none());
+        assert!(v.get("modpackSlug").is_none());
+        assert!(v.get("modpackVersionId").is_none());
     }
 
     #[test]

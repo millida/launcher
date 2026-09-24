@@ -1,0 +1,432 @@
+/* ============================================================
+   ЗОНА «SOCIAL» — Скины, Магазин (рубины), Друзья, чат, звонки
+   Пиксельный язык (docs/PIXEL-LANGUAGE.md), 22.09.2026.
+
+   Две части:
+   1. Раскладка нового разметочного слоя (гостевой магазин, строка входа
+      в скинах, значки вместо абзацев у друзей).
+   2. Форма (срез угла, грани) — под :root:root, как весь 12-pixel.css.
+   Пузыри сообщений, приглашения и итоги звонков в ленте чата остаются
+   скруглёнными: это правило языка («пузыри сообщений — как есть»).
+   ============================================================ */
+
+/* ---------- 1. Раскладка ---------- */
+
+/* Скины: конфликт игрового ника — одна строка + кнопка вместо абзаца. */
+.sk-conflict {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sk-conflict > svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--m-danger);
+}
+.sk-conflict > span {
+  flex: 1;
+  min-width: 0;
+}
+.sk-conflict .btn {
+  flex: none;
+}
+
+/* Скины: вход в Millida — строка с кнопкой, а не абзац-уговор. */
+.sk-login-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 8px 8px 8px 12px;
+  background: var(--m-inset);
+  border-radius: var(--m-r-card);
+  font-size: 12.5px;
+  color: var(--m-fg-subtle);
+}
+.sk-login-row > svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: var(--m-fg-faint);
+}
+.sk-login-row > span {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Скины: заказ — одна строка-кнопка. */
+.skin-order-banner {
+  padding: 8px 12px;
+}
+.skin-order-banner .skin-order-mark {
+  width: 30px;
+  height: 30px;
+}
+.skin-order-banner .skin-order-body b {
+  font-size: 13.5px;
+}
+
+/* Скины: активный аккаунт — значок в углу карточки. */
+.skin-thumb {
+  position: relative;
+}
+.sk-active-mark {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  background: var(--m-accent);
+  color: var(--px-on-accent, #06200e);
+  border-radius: var(--m-r-mini);
+}
+.sk-active-mark svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* Магазин без входа: витрина пакетов + одна кнопка. */
+.rb-guest {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.rb-guest-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.rb-guest-art {
+  display: flex;
+  align-items: flex-end;
+  flex: none;
+}
+.rb-guest-art > :last-child {
+  margin-left: -14px;
+}
+.rb-guest-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.rb-skel-pack {
+  height: 196px;
+}
+.rb-skel-card {
+  height: 170px;
+}
+.rb-skel-line {
+  display: block;
+  width: 120px;
+  height: 10px;
+  margin-top: 4px;
+}
+
+/* Магазин: итог коллекции числами. */
+.rb-inv-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 14px;
+}
+.rb-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--m-inset);
+  border-radius: var(--m-r-mini);
+  font-size: 12px;
+  color: var(--m-fg-subtle);
+}
+.rb-stat b {
+  color: var(--m-fg);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.rb-stat small {
+  font-size: 12px;
+}
+.rb-stat > svg {
+  width: 14px;
+  height: 14px;
+  color: var(--m-fg-faint);
+}
+.rb-stat.rarity > i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+/* Друзья без входа: что даёт вход — значками. */
+.fr-gate-feats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  max-width: 340px;
+  margin: 8px 0 20px;
+}
+/* Это перечень возможностей, а не кнопки: без подложки и среза, иначе
+   ребёнок жмёт на «Чат» и ничего не происходит (сведение 22.09.2026).
+   Значок стоит в мягком квадрате — как пункт списка. */
+.fr-gate-feats > span {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  background: none !important;
+  clip-path: none !important;
+  box-shadow: none !important;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--m-fg-muted);
+  text-align: left;
+}
+.fr-gate-feats svg {
+  flex: none;
+  box-sizing: content-box;
+  width: 16px;
+  height: 16px;
+  padding: 7px;
+  color: var(--m-accent);
+  background: var(--m-accent-soft);
+  --px-n: 4px; clip-path: var(--px-4);
+}
+.gate-card .btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Друзья: пустой список. */
+.fr-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 16px;
+  color: var(--m-fg-subtle);
+}
+.fr-empty > svg {
+  width: 28px;
+  height: 28px;
+  color: var(--m-fg-faint);
+}
+.fr-empty b {
+  font-size: 15px;
+  color: var(--m-fg);
+}
+
+/* Чат: скелет стикеров вместо «Загружаем…». */
+.sc-skel-sticker {
+  display: block;
+  height: 60px;
+}
+
+/* ---------- 2. Форма ---------- */
+
+/* Карточки скинов: выбранная — кайма акцентом через inset. Общий слой снимает
+   border-color у .card, и без этого выбранный скин ничем не отличался. */
+:root:root .skin-card {
+  border: 0;
+}
+:root:root .skin-card.on {
+  box-shadow: inset 0 0 0 2px var(--m-accent), inset 0 -3px 0 rgba(0, 0, 0, 0.26); --px-ol: var(--m-accent); --px-ol-w: 2px; --px-ft: transparent; --px-fb: rgba(0, 0, 0, 0.26); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+/* «Загрузить» и «Импорт» — пустые слоты: вдавленная подложка вместо пунктира
+   (пунктир border по срезу рвётся на углах). */
+:root:root .skin-card.skin-add {
+  background: color-mix(in srgb, var(--m-fg) 3%, transparent);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--m-fg) 10%, transparent); --px-ol: color-mix(in srgb, var(--m-fg) 10%, transparent); --px-ol-w: 2px; --px-ft: transparent; --px-fb: transparent; --px-fl: transparent; --px-fr: transparent;
+}
+:root:root .skin-card.skin-add .skin-thumb {
+  background: transparent;
+}
+:root:root .skin-card.skin-add:hover {
+  background: var(--m-accent-soft);
+  box-shadow: inset 0 0 0 2px var(--m-accent); --px-ol: var(--m-accent); --px-ol-w: 2px; --px-ft: transparent; --px-fb: transparent; --px-fl: transparent; --px-fr: transparent;
+}
+
+/* Плитки вещей, плащей и сундуков. */
+:root:root .cape-card {
+  border: 0;
+  border-radius: 0;
+  --px-n: 5px; clip-path: var(--px-5);
+}
+:root:root .cape-card.on {
+  box-shadow: inset 0 0 0 2px var(--m-accent), inset 0 -3px 0 rgba(0, 0, 0, 0.26); --px-ol: var(--m-accent); --px-ol-w: 2px; --px-ft: transparent; --px-fb: rgba(0, 0, 0, 0.26); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+:root:root .cape-card.trying {
+  box-shadow: inset 0 0 0 2px var(--m-accent); --px-ol: var(--m-accent); --px-ol-w: 2px; --px-ft: transparent; --px-fb: transparent; --px-fl: transparent; --px-fr: transparent;
+}
+@media (hover: hover) and (pointer: fine) {
+  :root:root .cape-card:hover:not(.on):not(.trying) {
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--m-accent) 30%, transparent); --px-ol: color-mix(in srgb, var(--m-accent) 30%, transparent); --px-ol-w: 2px; --px-ft: transparent; --px-fb: transparent; --px-fl: transparent; --px-fr: transparent;
+  }
+}
+:root:root :is(.cape-lock, .cape-star, .cape-price, .sk-del, .sk-active-mark, .fitting-off) {
+  border-radius: 0;
+  --px-n: 4px; clip-path: var(--px-4);
+}
+
+/* Подложки зоны: строки, предложения, пакеты, клетки ленты наград. */
+:root:root :is(.skin-order-banner, .plus-offer, .pack-card, .load-again, .sk-login-row) {
+  border: 0;
+  border-radius: 0;
+  --px-n: 10px; clip-path: var(--px-10);
+  box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+:root:root :is(.skin-order-banner, .plus-offer) {
+  box-shadow: var(--px-plate), inset 3px 0 0 var(--m-accent); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: var(--m-accent); --px-fl-w: 3px; --px-fr: transparent;
+}
+:root:root :is(.pass-cell, .wallet-cell, .pack-art, .rb-stat, .fr-gate-feats > span) {
+  border-radius: 0;
+  --px-n: 5px; clip-path: var(--px-5);
+}
+:root:root .wallet-cell.as-link {
+  border: 0;
+}
+:root:root :is(.skin-order-mark, .plus-offer-mark, .wallet-mark, .gate-ic) {
+  border-radius: 0;
+  --px-n: 5px; clip-path: var(--px-5);
+}
+
+/* Всплывающие окна зоны: меню друга, поиск друга, меню сообщения, выборы в чате,
+   уведомления о сообщениях, итог сундука. */
+:root:root :is(
+  .fr-menu, .fr-add-pop, .msg-menu, .chat-emoji-pop, .chat-srv-pop, .chat-sticker-pop,
+  .chat-notify, .chest-reveal-box
+) {
+  border-color: transparent;
+  border-radius: 0;
+  --px-n: 10px; clip-path: var(--px-10);
+  box-shadow: var(--px-plate), inset 0 0 0 1px color-mix(in srgb, var(--m-fg) 8%, transparent); --px-ol: color-mix(in srgb, var(--m-fg) 8%, transparent); --px-ol-w: 1px; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+:root:root :is(.fr-menu button, .msg-menu-item, .msg-menu-emoji, .chat-srv-row, .chat-sticker-tab, .chat-notify-x) {
+  border-radius: 0;
+  --px-n: 4px; clip-path: var(--px-4);
+}
+/* Меню друга висит в корне документа (FriendRow, портал): строке больше не
+   снимают срез на время меню — из-под снятого среза вылезали серые углы рамки
+   строки («серая штука перед меню», жалоба 24.09.2026). */
+.fr-menu.fr-menu-float {
+  z-index: 400;
+}
+
+/* Круглые служебные кнопки чата и звонка — в тот же срез, что и кнопки. */
+:root:root :is(.chat-emoji-btn, .chat-send, .chat-rec-x, .chat-quote-x, .chat-down, .msg-act, .call-screen-x, .call-screen-max, .ovc-act) {
+  border-radius: 0;
+  --px-n: 5px; clip-path: var(--px-5);
+}
+
+/* ---------- Друзья: крупные действия (владелец 24.09.2026, 13:33) ----------
+   «Пригласить на сервер» и «Сообщение» были мелкими и непонятными — теперь две
+   кнопки с подписью: «Позвать играть» (или «Зайти») и «Написать». */
+.fr-acts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.fr-acts .btn.md {
+  height: 40px;
+  padding: 0 16px;
+  font-size: 13.5px;
+}
+.fr-row > .fr-more {
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+.fr-row > .fr-more.on {
+  color: var(--m-accent);
+}
+
+/* Свой сервер через друзей: картинка компании, заголовок, одна кнопка. */
+.fr-host {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 84px;
+  margin-bottom: 10px;
+  padding: 0 18px 0 0;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--m-accent) 13%, var(--m-surface));
+  clip-path: var(--px-10);
+}
+.fr-host-art {
+  flex: none;
+  align-self: flex-end;
+  width: 150px;
+  height: 84px;
+  object-fit: cover;
+  object-position: 50% 18%;
+}
+.fr-host-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 800;
+}
+.fr-host-btn {
+  flex: none;
+}
+.fr-blank + .fr-host {
+  margin-top: 14px;
+}
+
+/* Хостинг: кого позовём, когда сервер будет готов. */
+.host-inv-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 6px 0 8px;
+  font-size: 13px;
+  color: var(--m-fg-muted);
+  background: color-mix(in srgb, var(--m-accent) 14%, var(--m-surface));
+  clip-path: var(--px-5);
+}
+.host-inv-chip b {
+  color: var(--m-fg);
+}
+.host-inv-chip > img {
+  width: 24px;
+  height: 24px;
+  image-rendering: pixelated;
+}
+.host-inv-chip > svg {
+  width: 16px;
+  height: 16px;
+}
+.host-inv-x {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  color: var(--m-fg-faint);
+}
+.host-inv-x svg {
+  width: 12px;
+  height: 12px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .host-inv-x:hover {
+    color: var(--m-fg);
+  }
+}
+
+/* Отправка — плотный акцент с тёмным значком, как главная кнопка, без градиента. */
+:root:root .chat-send {
+  background: var(--m-accent);
+  color: var(--px-on-accent, #06200e);
+}

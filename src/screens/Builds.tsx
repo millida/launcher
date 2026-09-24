@@ -55,15 +55,6 @@ export function Builds({ on }: { on: boolean }) {
     <BuildCard key={p.name} p={p} hours={hoursOf(p.name)} withLast />
   )
 
-  const newBuildBtn = (
-    <button className="build-new" data-sound="open" onClick={() => openModal('nbModal')}>
-      <span className="inner">
-        <Icon id="i-plus" />
-        Новая сборка
-      </span>
-    </button>
-  )
-
   const skipIcons = () => {
     setIconsSkipped(true)
     try {
@@ -109,59 +100,45 @@ export function Builds({ on }: { on: boolean }) {
     <section className={'screen' + (on ? ' on' : '')} id="s-builds">
       <div className="page-head">
         <h1>Сборки</h1>
-        <div className="right">
-          {updates.count > 0 ? (
-            <button
-              className="btn sm secondary"
-              disabled={updates.updating}
-              onClick={() => void updates.runAll()}
-              title="Обновить моды во всех сборках"
-            >
-              <Icon id="i-restart" />
-              {updates.updating ? 'Обновляем…' : 'Обновить моды'}
-              <span className="nav-count" style={{ marginLeft: '4px' }}>
-                {updates.count}
-              </span>
+        {/* Пустой экран держит все входы в своей карточке: тулбар с теми же
+            кнопками над ней был дублем (аудит 22.09.2026). «По коду» живёт
+            в окне «Импорт» — это третий способ принести чужую сборку. */}
+        {profiles.length ? (
+          <div className="right">
+            {updates.count > 0 ? (
+              <button className="btn sm secondary" disabled={updates.updating} onClick={() => void updates.runAll()}>
+                <Icon id="i-restart" />
+                {updates.updating ? 'Обновляем…' : 'Обновить моды'}
+                <span className="nav-count" style={{ marginLeft: '4px' }}>
+                  {updates.count}
+                </span>
+              </button>
+            ) : null}
+            <button className="btn sm secondary" data-sound="open" onClick={() => openModal('impModal')}>
+              <Icon id="i-download" />
+              Импорт
             </button>
-          ) : null}
-          <button className="btn sm secondary" data-sound="open" onClick={() => usePackCode.getState().show()}>
-            <Icon id="i-link" />
-            По коду
-          </button>
-          <button className="btn sm secondary" data-sound="open" onClick={() => openModal('impModal')}>
-            <Icon id="i-download" />
-            Импорт
-          </button>
-          <button className="btn sm primary" data-sound="open" onClick={() => openModal('nbModal')}>
-            <Icon id="i-plus" />
-            Новая сборка
-          </button>
-        </div>
+            <button className="btn sm primary" data-sound="open" onClick={() => openModal('nbModal')}>
+              <Icon id="i-plus" />
+              Новая сборка
+            </button>
+          </div>
+        ) : null}
       </div>
 
       {stats.total_seconds ? (
         <div className="card play-stat">
           <div className="play-stat-main">
-            <span className="play-stat-cap">Наиграно в лаунчере</span>
+            <span className="play-stat-cap">Наиграно</span>
             <b className="play-stat-total">{fmtPlaytime(stats.total_seconds)}</b>
             {verifiedSeconds !== null && verifiedSeconds < stats.total_seconds ? (
-              <span
-                className="faint-note"
-                title="На сайте засчитывается только время, которое видел сервер: игра без интернета и без входа в аккаунт Millida в него не попадает."
-              >
-                на сайте подтверждено {fmtPlaytime(verifiedSeconds)}
+              <span className="faint-note">на сайте {fmtPlaytime(verifiedSeconds)}</span>
+            ) : null}
+            {stats.sessions ? (
+              <span className="faint-note">
+                {stats.sessions + ' ' + plural(stats.sessions, 'запуск', 'запуска', 'запусков')}
               </span>
             ) : null}
-            <span className="faint-note">
-              {[
-                stats.sessions
-                  ? stats.sessions + ' ' + plural(stats.sessions, 'запуск', 'запуска', 'запусков')
-                  : '',
-                stats.last_build ? 'последняя сборка «' + stats.last_build + '»' : '',
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            </span>
           </div>
           {lastServerName ? (
             <div className="play-stat-srv">
@@ -177,15 +154,15 @@ export function Builds({ on }: { on: boolean }) {
                     void quickJoin(stats.last_server, name).catch(() => {})
                   }}
                 >
-                  <Icon id="i-login" />
-                  Вернуться
+                  <Icon id="i-play" />
+                  Играть
                 </button>
               ) : null}
             </div>
           ) : null}
           {stats.servers.length > 1 ? (
             <div className="play-stat-list">
-              <span className="play-stat-cap">Больше всего играл</span>
+              <span className="play-stat-cap">Любимые серверы</span>
               {stats.servers.slice(0, 3).map((s) => (
                 <span className="play-stat-row" key={s.key}>
                   <span>{s.label || s.key}</span>
@@ -199,26 +176,21 @@ export function Builds({ on }: { on: boolean }) {
 
       {iconless.length > 0 && !iconsSkipped ? (
         <div className="card icon-nudge">
-          <span className="icon-nudge-art">
-            <Icon id="i-brush" />
+          <span className="icon-nudge-art bx-stack" aria-hidden="true">
+            <img src="/block-icons/Block7Millida.png" alt="" />
+            <img src="/block-icons/Block20Millida.png" alt="" />
+            <img src="/block-icons/Block35Millida.png" alt="" />
           </span>
           <div className="icon-nudge-text">
-            <b>Иконки для сборок</b>
-            <span className="faint-note">
-              {'У ' +
-                iconless.length +
-                ' ' +
-                plural(iconless.length, 'сборки', 'сборок', 'сборок') +
-                ' нет иконки. Соберём случайные — фон плюс блок, потом поменяешь в параметрах сборки.'}
-            </span>
+            <b>{'Иконки для ' + iconless.length + ' ' + plural(iconless.length, 'сборки', 'сборок', 'сборок')}</b>
           </div>
           <div className="icon-nudge-acts">
-            <button className="btn sm secondary" disabled={iconsBusy} onClick={skipIcons}>
+            <button className="btn sm ghost" disabled={iconsBusy} onClick={skipIcons}>
               Не надо
             </button>
             <button className="btn sm primary" disabled={iconsBusy} onClick={() => void fillIcons()}>
               <Icon id="i-brush" />
-              {iconsBusy ? 'Собираем…' : 'Выдать случайные'}
+              {iconsBusy ? 'Собираем…' : 'Раздать'}
             </button>
           </div>
         </div>
@@ -230,30 +202,30 @@ export function Builds({ on }: { on: boolean }) {
             {ungrouped.map(buildCard)}
             {groupNames.map((g) => (
               <Fragment key={g}>
-                <div className="build-group-cap" title={g}>
+                <div className="build-group-cap">
                   {g}
                 </div>
                 {profiles.filter((p) => (groups[p.name] || '') === g).map(buildCard)}
               </Fragment>
             ))}
-            {newBuildBtn}
           </>
         ) : (
-          <div className="card" style={{ gridColumn: '1/-1', padding: '28px 24px', textAlign: 'center' }}>
-            <div style={{ fontSize: '17px', fontWeight: 700, marginBottom: '6px' }}>Создай первую сборку</div>
-            <p className="faint-note" style={{ maxWidth: '460px', margin: '0 auto 16px', lineHeight: 1.55 }}>
-              Выбери версию и загрузчик — Minecraft, Java и загрузчик поставим сами. Или импортируй сборку из другого
-              лаунчера, или поставь готовый модпак из раздела «Контент».
-            </p>
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <div className="card bx-empty">
+            <span className="bx-stack lg" aria-hidden="true">
+              <img src="/block-icons/Block7Millida.png" alt="" />
+              <img src="/block-icons/Block45Millida.png" alt="" />
+              <img src="/block-icons/Block35Millida.png" alt="" />
+            </span>
+            <b className="bx-empty-title">Создай первую сборку</b>
+            <div className="bx-empty-acts">
               <button className="btn md primary" data-sound="open" onClick={() => openModal('nbModal')}>
                 <Icon id="i-plus" /> Новая сборка
               </button>
-              <button className="btn md secondary" data-sound="open" onClick={() => openModal('impModal')}>
-                Импорт из лаунчера
-              </button>
               <button className="btn md secondary" onClick={() => setScreen('mods')}>
-                Готовый модпак
+                <Icon id="i-blocks" /> Готовые сборки
+              </button>
+              <button className="btn md secondary" data-sound="open" onClick={() => openModal('impModal')}>
+                <Icon id="i-download" /> Импорт
               </button>
             </div>
           </div>

@@ -6,6 +6,8 @@ export {
   DEFAULT_CAMERA_SETTINGS,
   ENGINE_VERSION,
   ENGINE_DISPLAY_NAME,
+  type CosmeticAnchorName,
+  type PoseHookContext,
 } from "./core/scene-loop";
 export { DEFAULT_LIGHT_SETTINGS, ProductLighting } from "./core/product-visuals";
 export {

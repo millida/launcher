@@ -31,11 +31,23 @@ pub(crate) async fn cf_get(path: &str, q: &[(String, String)]) -> Result<Value, 
         .query(q)
         .send()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|_| unreachable_text())?;
     if !r.status().is_success() {
         return Err(format!("CurseForge ответил {}", r.status()));
     }
     r.json::<Value>().await.map_err(|e| e.to_string())
+}
+
+/// Что показать, когда не ответили ОБА пути к CurseForge.
+///
+/// Здесь сходятся наш прокси и зеркало: если не дошло ни туда, ни туда, дело
+/// почти всегда в сети самого игрока - провайдер режет домен, включён VPN,
+/// который сам не пускает. Дословная ошибка библиотеки («error sending request
+/// for url…») про это не говорит ничего: человек читает незнакомый адрес и
+/// несёт скриншот в поддержку, хотя чинить надо у себя.
+fn unreachable_text() -> String {
+    "CurseForge не отвечает. Так бывает, когда провайдер режет к нему доступ: включи или выключи VPN и повтори. Моды с Modrinth при этом ставятся как обычно."
+        .to_string()
 }
 
 pub(crate) fn cf_class_id(kind: &str) -> u32 { match kind { "resourcepack" => 12, "shader" => 6552, "modpack" => 4471, "datapack" => 6945, "world" => 17, _ => 6 } }
@@ -54,7 +66,10 @@ pub(crate) fn cf_sha1(file: &Value) -> String {
 pub(crate) fn cf_file_urls(file: &Value, fname: &str) -> Vec<String> {
     let fid = file["id"].as_u64().unwrap_or(0);
     let mut out: Vec<String> = vec![];
-    if let Some(u) = file["downloadUrl"].as_str().filter(|s| !s.is_empty()) {
+    // Метаданные могут прийти с запасного зеркала (api.curse.tools), поэтому
+    // ссылке на файл верим, только если она ведёт на CDN CurseForge (аудит
+    // 24.09.2026, R3). Иначе остаются собранные ниже адреса forgecdn.
+    if let Some(u) = file["downloadUrl"].as_str().filter(|s| is_forgecdn_url(s)) {
         out.push(u.to_string());
     }
     if fid > 0 {
@@ -65,6 +80,13 @@ pub(crate) fn cf_file_urls(file: &Value, fname: &str) -> Vec<String> {
         }
     }
     out
+}
+
+/// Только https и только *.forgecdn.net.
+fn is_forgecdn_url(u: &str) -> bool {
+    let Ok(p) = url::Url::parse(u) else { return false };
+    p.scheme() == "https"
+        && p.host_str().is_some_and(|h| h.to_ascii_lowercase().ends_with(".forgecdn.net"))
 }
 
 pub(crate) async fn cf_download(file: &Value, fname: &str, dest: &Path) -> Result<String, String> {
@@ -523,7 +545,7 @@ fn cf_file_info(f: &Value) -> CfFileInfo {
 /// modLoaders, files[{projectID,fileID}]) → every mod fetched via the CF API
 /// into mods/, then overrides/ copied over the profile.
 pub async fn cf_install_modpack(app: AppHandle, mod_id: u32, file_id: Option<u64>) -> Result<Profile, String> {
-    let job = Job::start(job_key_modpack_cf(mod_id), format!("Модпак #{}", mod_id))?;
+    let job = Job::start(job_key_modpack_cf(mod_id), format!("Сборка #{}", mod_id))?;
     let res = cf_install_modpack_job(&app, &job, mod_id, file_id).await;
     job.finish(&app, res)
 }
@@ -540,38 +562,52 @@ fn pick_modpack_file(list: &[Value]) -> Option<Value> {
     pool.iter().find(|f| f["releaseType"].as_u64() == Some(1)).or_else(|| pool.first()).map(|f| (*f).clone())
 }
 
+/// A fresh CurseForge install gets its own build, like a Modrinth one:
+/// `modpack_profile_name` adds the pack version, then a counter.
+fn cf_pack_profile_name(man: &Value, taken: &dyn Fn(&str) -> bool) -> String {
+    let name = man["name"].as_str().filter(|n| !n.trim().is_empty()).unwrap_or("CurseForge Pack");
+    modpack_profile_name_with(name, man["version"].as_str().unwrap_or(""), taken)
+}
+
 async fn cf_install_modpack_job(app: &AppHandle, job: &Job, mod_id: u32, file_id: Option<u64>) -> Result<Profile, String> {
-    job.emit(app, 5.0, "CurseForge: читаем модпак…");
+    job.emit(app, 5.0, "CurseForge: читаем сборку…");
     let file = match file_id {
         Some(fid) => cf_get(&format!("v1/mods/{}/files/{}", mod_id, fid), &[]).await?["data"].clone(),
         None => {
             let files: Value = cf_get(&format!("v1/mods/{}/files", mod_id), &[("pageSize".to_string(), "30".to_string())]).await?;
             pick_modpack_file(&files["data"].as_array().cloned().unwrap_or_default())
-                .ok_or("Файл модпака не найден")?
+                .ok_or("Файл сборки не найден")?
         }
     };
     let file = &file;
     let fid = file["id"].as_u64().unwrap_or(0);
     let fname = safe_file_name(file["fileName"].as_str().unwrap_or("pack.zip"))?;
     let tmp = data_dir().join("tmp").join(format!("cf-{}-{}.zip", mod_id, fid));
-    job.emit(app, 15.0, "Скачиваем модпак…");
+    job.emit(app, 15.0, "Скачиваем сборку…");
     let _ = std::fs::remove_file(&tmp);
     cf_download_cancellable(file, &fname, &tmp, Some(job.cancel_flag())).await
-        .map_err(|e| format!("Не скачался архив модпака: {}", e))?;
+        .map_err(|e| format!("Не скачался архив сборки: {}", e))?;
     job.check()?;
     let ex = data_dir().join("tmp").join(format!("cf-{}", mod_id));
     let _ = std::fs::remove_dir_all(&ex);
     std::fs::create_dir_all(&ex).map_err(|e| e.to_string())?;
     unzip_to(&tmp, &ex)?;
     let man_raw = std::fs::read(ex.join("manifest.json"))
-        .map_err(|_| "В архиве нет manifest.json — CurseForge отдал не клиентский модпак".to_string())?;
+        .map_err(|_| "В архиве нет manifest.json — CurseForge отдал не клиентскую сборку".to_string())?;
     let man: Value = serde_json::from_slice(&man_raw).map_err(|e| e.to_string())?;
     let mc = man["minecraft"]["version"].as_str().ok_or("Нет версии MC в манифесте")?.to_string();
     let loader_full = man["minecraft"]["modLoaders"].as_array()
         .and_then(|a| a.iter().find(|m| m["primary"] == true).or_else(|| a.first()))
         .and_then(|m| m["id"].as_str()).unwrap_or("").to_string();
     let (lid, loader_version) = split_loader_id(&loader_full);
-    let pname = man["name"].as_str().unwrap_or("CurseForge Pack").to_string();
+    // Версии из чужого манифеста уходят в пути и в командную строку игры.
+    check_version_id(&mc)?;
+    if let Some(v) = loader_version.as_deref() {
+        check_loader_version(v)?;
+    }
+    // Имя из манифеста — только основа: пак «Survival» не должен лечь на уже
+    // установленную сборку с тем же именем (стёр бы её mods/ и затёр saves/).
+    let pname = cf_pack_profile_name(&man, &profile_name_taken);
     job.rename(&pname);
     let pdir = profile_dir(&pname);
     // the pack owns mods/: leftovers from a previous install would duplicate mods
@@ -609,14 +645,16 @@ async fn cf_install_modpack_job(app: &AppHandle, job: &Job, mod_id: u32, file_id
     }
     if !failed.is_empty() {
         let _ = std::fs::remove_dir_all(&ex);
-        return Err(format!("Не скачались файлы модпака: {}", failed.join("; ")));
+        return Err(format!("Не скачались файлы сборки: {}", failed.join("; ")));
     }
     // the overrides folder name comes from the archive manifest, hence the path check
-    job.emit(app, 80.0, "Конфиги и ресурсы модпака…");
+    job.emit(app, 80.0, "Конфиги и ресурсы сборки…");
     for name in [man["overrides"].as_str().filter(|s| !s.is_empty()).unwrap_or("overrides"), "client-overrides"] {
         let ov = safe_join(&ex, name)
-            .map_err(|e| format!("Манифест модпака указывает небезопасную папку overrides: {}", e))?;
-        if ov.exists() { copy_dir_all(&ov, &pdir).map_err(|e| e.to_string())?; }
+            .map_err(|e| format!("Манифест сборки указывает небезопасную папку overrides: {}", e))?;
+        // Служебные файлы лаунчера (millida-args.txt, millida-settings.json…)
+        // из архива не принимаются: copy_overrides их пропускает.
+        if ov.exists() { copy_overrides(&ov, &pdir).map_err(|e| e.to_string())?; }
     }
     let _ = std::fs::remove_file(&tmp);
     let _ = std::fs::remove_dir_all(&ex);
@@ -640,8 +678,8 @@ async fn cf_install_modpack_job(app: &AppHandle, job: &Job, mod_id: u32, file_id
     patch.insert("cfModpackId".into(), Value::from(mod_id));
     patch.insert("cfModpackFileId".into(), Value::from(fid));
     merge_settings(&pname, patch);
-    let done_msg = if skipped.is_empty() { "Модпак установлен".to_string() }
-        else { format!("Модпак установлен, пропущено необязательных файлов: {}", skipped.len()) };
+    let done_msg = if skipped.is_empty() { "Сборка установлена".to_string() }
+        else { format!("Сборка установлена, пропущено необязательных файлов: {}", skipped.len()) };
     job.emit(app, 100.0, &done_msg);
     Ok(prof)
 }
@@ -697,6 +735,28 @@ mod tests {
         let _ = std::fs::remove_dir_all(&p);
         std::fs::create_dir_all(&p).unwrap();
         p
+    }
+
+    /// CORE-2: пак CurseForge с именем уже установленной сборки ставился
+    /// поверх неё — стирал mods/ и затирал saves/. Теперь, как у Modrinth,
+    /// рядом: сначала с версией пака, потом со счётчиком.
+    #[test]
+    fn a_curseforge_pack_never_lands_on_an_existing_build() {
+        let man = serde_json::json!({ "name": "Survival", "version": "1.4" });
+        let none = |_: &str| false;
+        assert_eq!(cf_pack_profile_name(&man, &none), "Survival");
+
+        let survival = |n: &str| n == "Survival";
+        assert_eq!(cf_pack_profile_name(&man, &survival), "Survival 1.4");
+
+        let both = |n: &str| n == "Survival" || n == "Survival 1.4";
+        assert_eq!(cf_pack_profile_name(&man, &both), "Survival 1.4 (2)");
+
+        let unversioned = serde_json::json!({ "name": "Survival" });
+        assert_eq!(cf_pack_profile_name(&unversioned, &survival), "Survival (2)");
+
+        let nameless = serde_json::json!({ "name": "  " });
+        assert_eq!(cf_pack_profile_name(&nameless, &none), "CurseForge Pack");
     }
 
     /// вход -> вердикт. Файл, выбранный руками во вкладке «Версии», ставился
@@ -817,6 +877,11 @@ mod tests {
         let urls = cf_file_urls(&f, "A Mod.jar");
         assert_eq!(urls[0], "https://edge.forgecdn.net/files/4567/890/A%20Mod.jar");
         assert!(urls.iter().any(|u| u.starts_with("https://mediafilez.forgecdn.net/files/4567/890/A%20Mod.jar")));
+        let evil = serde_json::json!({ "id": 4567890, "downloadUrl": "https://evil.example/files/A%20Mod.jar" });
+        let urls_evil = cf_file_urls(&evil, "A Mod.jar");
+        assert!(urls_evil.iter().all(|u| u.contains(".forgecdn.net/")), "чужой хост в downloadUrl отбрасывается: {urls_evil:?}");
+        let fake = serde_json::json!({ "id": 4567890, "downloadUrl": "https://forgecdn.net.evil.example/x.jar" });
+        assert!(cf_file_urls(&fake, "x.jar").iter().all(|u| !u.contains("evil")));
         let bare = serde_json::json!({ "id": 4567890, "downloadUrl": Value::Null });
         assert_eq!(cf_file_urls(&bare, "A Mod.jar").len(), 2);
     }

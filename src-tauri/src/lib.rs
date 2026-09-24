@@ -7,9 +7,11 @@ mod commands;
 pub mod tray;
 mod overlay;
 mod mic;
+mod packdrop;
 mod display;
 mod webview_health;
 mod uiwatch;
+mod navguard;
 
 /// Directories the webview may read through `asset://`: the media files it
 /// plays and shows plus the images a theme pack ships, nothing else. The token
@@ -21,7 +23,7 @@ mod uiwatch;
 /// for the list (see `commands::profiles::list_screenshots`).
 pub fn asset_dirs() -> Vec<std::path::PathBuf> {
     let data = engine::data_dir();
-    vec![data.join("wallpaper"), data.join("music"), data.join("sounds"), data.join("themes")]
+    vec![data.join("wallpaper"), data.join("music"), data.join("sounds-v2"), data.join("themes")]
 }
 
 pub fn allow_assets(app: &tauri::AppHandle) {
@@ -38,6 +40,7 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             tray::show_main(app);
         }))
+        .plugin(navguard::init())
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
@@ -60,9 +63,12 @@ pub fn run() {
                 mic::allow_microphone(&w);
                 webview_health::watch(&w);
             }
+            packdrop::watch(app.handle());
             display::watch(app.handle());
             uiwatch::watch(app.handle());
             overlay::rebind_hotkey(app.handle());
+            // Автотест — только в отладочной сборке (аудит 24.09.2026, S-04).
+            #[cfg(debug_assertions)]
             if let Ok(mode) = std::env::var("MILLIDA_AUTOTEST") {
                 let h = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
@@ -100,6 +106,10 @@ pub fn run() {
             commands::system::clear_crashes,
             commands::launch::launch_game,
             commands::content::install_mod,
+            commands::content::millida_mod_state,
+            commands::content::millida_mod_install,
+            commands::content::millida_mod_enabled,
+            commands::content::set_millida_mod_enabled,
             commands::content::list_versions,
             commands::content::list_versions_typed,
             commands::content::list_loader_versions,
@@ -110,6 +120,13 @@ pub fn run() {
             commands::profiles::install_modpack_version,
             commands::profiles::migrate_plan,
             commands::profiles::migrate_profile,
+            commands::profiles::install_catalog_pack,
+            commands::profiles::install_pack_candidate,
+            commands::profiles::pack_review_candidate,
+            commands::profiles::pack_review_queue,
+            commands::profiles::millida_packs,
+            commands::profiles::redeem_pack_key,
+            commands::profiles::pack_buy_url,
             commands::profiles::cf_install_modpack,
             commands::system::open_url,
             commands::launch::cancel_launch,
@@ -161,8 +178,10 @@ pub fn run() {
             commands::profiles::fps_boost_state,
             commands::profiles::set_fps_boost,
             commands::profiles::scan_imports,
+            commands::profiles::pick_import_dir,
             commands::profiles::import_instance,
             commands::profiles::import_pack_file,
+            commands::profiles::import_dropped_pack,
             commands::accounts::ms_device_start,
             commands::accounts::ms_device_poll,
             commands::accounts::ms_session_commit,
@@ -262,6 +281,7 @@ pub fn run() {
             commands::overlay::overlay_set_hotkey,
             commands::overlay::overlay_notify,
             commands::overlay::overlay_set_toasts,
+            commands::overlay::overlay_set_card_ms,
             commands::overlay::overlay_toast,
             commands::overlay::overlay_hide,
             commands::overlay::overlay_ready,
@@ -337,6 +357,8 @@ mod tests {
         "clipboard-manager:allow-write-text",
         "process:allow-restart",
         "process:allow-exit",
+        // Все собственные команды ядра (build.rs, AppManifest): только главное окно.
+        "main-commands",
     ];
 
     /// Namespaces that only ever exist to move secret material around. A Tauri
@@ -357,7 +379,9 @@ mod tests {
     /// The overlay is a second window over a running game. It holds no window
     /// controls and no plugin access on purpose: everything it can do goes
     /// through the app's own commands, which the core validates itself.
-    const OVERLAY_PERMISSIONS: &[&str] = &["core:event:allow-listen", "core:event:allow-unlisten"];
+    /// overlay-commands — узкий набор из build.rs (OVERLAY_COMMANDS), а не все команды.
+    const OVERLAY_PERMISSIONS: &[&str] =
+        &["core:event:allow-listen", "core:event:allow-unlisten", "overlay-commands"];
 
     fn overlay_capabilities_json() -> serde_json::Value {
         let raw = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/capabilities/overlay.json"));

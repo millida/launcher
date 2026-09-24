@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
-import { Cover } from '../components/Cover'
+import { BuildIcon } from '../components/playhub/BuildIcon'
+import { BuildIconPicker, BuildMenuItems, useMenuDismiss } from '../components/playhub/MyBuilds'
 import { WorldManager } from '../components/WorldManager'
 import { ScreenshotGallery } from '../components/ScreenshotGallery'
 import { SafetyModal } from '../components/SafetyModal'
@@ -74,6 +75,7 @@ import type {
   SkinModState,
 } from '../ipc/commands'
 import { Select } from '../components/Select'
+import { ContextMenu, type ContextItem } from '../components/ContextMenu'
 import { Slider } from '../components/Slider'
 import { isBlockIcon } from '../lib/blockColor'
 import { RAM_MAX_GB, maxRamGb } from '../lib/ram'
@@ -89,7 +91,6 @@ import { closeModal, setScreen, showToast, useUi } from '../state/ui'
 import { runRepair } from '../lib/repair'
 import { joinWithAuth, realLaunch, showLaunchError, startPrelaunch } from '../lib/launch'
 import { useMods } from '../state/mods'
-import { useScreens } from '../state/screens'
 import { useModpackVersions } from '../state/modpack'
 import { useMigrate } from '../state/migrate'
 import { openProject } from '../state/project'
@@ -152,6 +153,9 @@ export function InstancePage() {
   const customCover = pr && pr.icon && !isBlockIcon(pr.icon) ? pr.icon : null
 
   const [iconEditor, setIconEditor] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
+  const [pickIcon, setPickIcon] = useState(false)
+  useMenuDismiss(moreOpen, () => setMoreOpen(false), '.inst-menu, .inst-more')
   const [tab, setTab] = useState('content')
   const [kind, setKind] = useState('mod')
   const [items, setItems] = useState<ModFile[]>([])
@@ -218,7 +222,7 @@ export function InstancePage() {
   const gameStopping = useGame((s) => s.stopping)
   const thisRunning = !!profile && running.includes(profile)
   const liveRef = useRef<HTMLPreElement>(null)
-  const [shareLabel, setShareLabel] = useState('Поделиться (mclo.gs)')
+  const [shareLabel, setShareLabel] = useState('Поделиться')
   const [updateAllLabel, setUpdateAllLabel] = useState('Обновить всё')
   const [bulkUpdLabel, setBulkUpdLabel] = useState('Обновить')
   const [renameVal, setRenameVal] = useState('')
@@ -246,6 +250,11 @@ export function InstancePage() {
   const [shareOpen, setShareOpen] = useState(false)
   const [dropActive, setDropActive] = useState(false)
   const [dropBusy, setDropBusy] = useState(false)
+  // Редкие действия со списком (опознать, проверить, экспорт) — в меню «Ещё»:
+  // семь кнопок в ряд читались как одна серая полоса (аудит 22.09.2026).
+  const [moreMenu, setMoreMenu] = useState<{ x: number; y: number } | null>(null)
+  // Java, аргументы JVM и размер окна — для опытных, по умолчанию свёрнуты.
+  const [advanced, setAdvanced] = useState(false)
 
   const loadMods = useCallback(
     (k?: string) => {
@@ -428,7 +437,7 @@ export function InstancePage() {
     setWFilter('all')
     setWsName('')
     setWsIp('')
-    setShareLabel('Поделиться (mclo.gs)')
+    setShareLabel('Поделиться')
     setUpdateAllLabel('Обновить всё')
     setBulkUpdLabel('Обновить')
     setRenameVal(profile)
@@ -577,13 +586,13 @@ export function InstancePage() {
   const applyCore = async () => {
     if (!profile || !pr) return
     if (!hasTauri()) {
-      showToast('Смена версии/ядра доступна в приложении', 'error')
+      showToast('Доступно в приложении', 'error')
       return
     }
     const ver = (newVersion || pr.version).trim()
     const lver = hasLoaderVersions(newLoader) ? newLoaderVer : AUTO_LOADER_VERSION
     if (ver === pr.version && newLoader === loaderId(pr) && lver === (pr.loader_version || AUTO_LOADER_VERSION)) {
-      showToast('Версия и ядро не менялись')
+      showToast('Ничего не поменялось')
       return
     }
     const label = (CORE_OPTS.find((c) => c[0] === newLoader)?.[1] || newLoader) + (lver ? ' ' + lver : '')
@@ -603,10 +612,10 @@ export function InstancePage() {
         void useProfiles.getState().refresh()
         if (modCount > 0 && newLoader !== loaderId(pr)) {
           showToast(
-            'Ядро сменили на ' + label + '. Проверь моды (' + modCount + ' шт.) — часть может не подойти под новое ядро.',
+            'Загрузчик сменили на ' + label + '. Проверь моды (' + modCount + ' шт.) — часть может не подойти.',
           )
         } else {
-          showToast('Готово: ' + label + ' · ' + ver + '. Ядро доустановим при запуске.')
+          showToast('Готово: ' + label + ' · ' + ver + '. Доустановим при запуске.')
         }
       })
       .catch((e) => showToast('Не удалось сменить: ' + e, 'error'))
@@ -718,6 +727,50 @@ export function InstancePage() {
     saveOpts()
   }
 
+  const runScan = () => {
+    if (!hasTauri()) {
+      showToast('Доступно в приложении')
+      return
+    }
+    setScanLabel('Сканируем…')
+    scanContent(profile!, kind)
+      .then((r) => {
+        setScanLabel('Сканировать')
+        if (kindRef.current === kind) setItems(r.items)
+        showToast(
+          r.identified
+            ? 'Опознано ' +
+              r.identified +
+              ' из ' +
+              r.scanned +
+              ' (' +
+              [
+                r.modrinth ? 'Modrinth: ' + r.modrinth : '',
+                r.curseforge ? 'CurseForge: ' + r.curseforge : '',
+              ]
+                .filter(Boolean)
+                .join(', ') +
+              ')'
+            : 'Разобрано файлов: ' + r.scanned,
+        )
+      })
+      .catch((e) => {
+        setScanLabel('Сканировать')
+        showToast('Не удалось просканировать: ' + e, 'error')
+      })
+  }
+
+  const runExport = () => {
+    if (!hasTauri()) {
+      showToast('Доступно в приложении')
+      return
+    }
+    showToast('Собираем .mrpack…')
+    exportMrpack(profile!, profile!, '1.0.0', pr ? LOADER_NAME(pr) + ' ' + pr.version : '')
+      .then((p) => showToast('Экспортировано: ' + ('' + p).split('/').pop()))
+      .catch((e) => showToast('' + e))
+  }
+
   const close = () => closeModal('bsModal')
 
   const bulk = (names: string[], fn: (n: string) => Promise<unknown>, after?: () => void) =>
@@ -750,7 +803,7 @@ export function InstancePage() {
           </button>
           <div className="inst-hero">
             <div className="inst-icon" id="bsIconBig">
-              <Cover url={pr ? pr.icon : null} />
+              <BuildIcon icon={pr ? pr.icon : null} size={70} />
             </div>
             <div className="inst-titles">
               <h1 id="bsTitle">{profile}</h1>
@@ -761,7 +814,6 @@ export function InstancePage() {
             <div className="inst-actions">
               <button
                 className="btn lg secondary"
-                title="Получить код сборки, чтобы её поставил друг"
                 onClick={() => {
                   if (!hasTauri()) {
                     showToast('Доступно в приложении')
@@ -775,7 +827,6 @@ export function InstancePage() {
               <button
                 className={'btn lg ' + (thisRunning ? 'running' : 'primary')}
                 id="bsPlay"
-                title={thisRunning ? 'Игра идёт — нажми, чтобы запустить ещё одну копию' : undefined}
                 onClick={() => {
                   close()
                   if (hasTauri()) realLaunch(profile!)
@@ -792,11 +843,42 @@ export function InstancePage() {
                   </>
                 )}
               </button>
+              {/* «⋯» — те же изменения, что на карточке «Мои сборки» (24.09.2026, 18:35). */}
+              <span className="inst-more-wrap">
+                <button
+                  type="button"
+                  className={'btn lg secondary inst-more' + (moreOpen ? ' on' : '')}
+                  aria-label="Управление сборкой"
+                  aria-expanded={moreOpen}
+                  data-track="build_menu"
+                  onClick={() => setMoreOpen((v) => !v)}
+                >
+                  <Icon id={moreOpen ? 'i-x' : 'i-dots'} />
+                </button>
+                {moreOpen && profile ? (
+                  <span className="ph-mine-menu inst-menu" role="menu">
+                    <BuildMenuItems
+                      name={profile}
+                      onClose={() => setMoreOpen(false)}
+                      onIcon={() => setPickIcon(true)}
+                      onRemoved={close}
+                      onTab={(t, rename) => {
+                        setTab(t)
+                        if (rename)
+                          requestAnimationFrame(() => {
+                            const input = document.getElementById('bsRename') as HTMLInputElement | null
+                            input?.focus()
+                            input?.select()
+                          })
+                      }}
+                    />
+                  </span>
+                ) : null}
+              </span>
               {thisRunning ? (
                 <button
                   className="btn lg danger"
                   disabled={gameStopping}
-                  title="Остановить игру"
                   onClick={() => stopRunningGame(profile!)}
                 >
                   <Icon id="i-power" /> {gameStopping ? 'Останавливаем…' : 'Остановить'}
@@ -825,40 +907,13 @@ export function InstancePage() {
                 }}
               >
                 <Icon id={ic} /> {label}
+                {id === 'shots' && /^\d/.test(shotCount) ? (
+                  <span className="nav-count" style={{ marginLeft: 'auto' }}>
+                    {parseInt(shotCount)}
+                  </span>
+                ) : null}
               </button>
             ))}
-            <div className="inst-tab-sep"></div>
-            <button
-              className="inst-tab danger-tab"
-              id="bsDelete"
-              onClick={async () => {
-                if (
-                  !(await uiConfirm(
-                    'Удалить сборку «' + profile + '» со всеми модами, мирами и часами игры? Отменить будет нельзя.',
-                    { confirmLabel: 'Удалить' },
-                  ))
-                )
-                  return
-                if (hasTauri()) {
-                  deleteProfile(profile!)
-                    .then(() => {
-                      close()
-                      useProfiles.getState().setSelected(null)
-                      void useProfiles.getState().refresh()
-                      showToast('Сборка удалена', 'ok', 'delete')
-                    })
-                    .catch((e) => {
-                      void useProfiles.getState().refresh()
-                      showToast('' + e, 'error')
-                    })
-                } else {
-                  close()
-                  showToast('Удалено (демо)')
-                }
-              }}
-            >
-              <Icon id="i-trash" /> Удалить сборку
-            </button>
           </nav>
           <div className="inst-content">
             <div id="bsTabContent" style={{ display: tab === 'content' ? '' : 'none' }}>
@@ -892,7 +947,8 @@ export function InstancePage() {
                     'chk' + (sel.size > 0 && sel.size === shownItems.length ? ' on' : sel.size ? ' part' : '')
                   }
                   id="bsSelAll"
-                  title="Выбрать всё"
+                  role="checkbox"
+                  aria-checked={sel.size > 0 && sel.size === shownItems.length}
                   style={{ flex: 'none' }}
                   onClick={() => {
                     if (sel.size === shownItems.length) setSel(new Set())
@@ -945,10 +1001,23 @@ export function InstancePage() {
               </div>
               <div className="act-row">
                 <button
+                  className="btn sm primary act-row-btn"
+                  id="bsAddContent"
+                  onClick={() => {
+                    useProfiles.getState().setSelected(profile)
+                    close()
+                    setScreen('mods')
+                    useMods.getState().scopeTo(profile)
+                    useMods.getState().set({ modTab: 'mod' })
+                    void useMods.getState().load()
+                  }}
+                >
+                  <Icon id="i-plus" /> Добавить
+                </button>
+                <button
                   className="btn sm secondary act-row-btn"
                   id="bsDrop"
                   disabled={dropBusy}
-                  title={'Выбрать ' + extsOf(kind).map((e) => '.' + e).join(' / ') + ' на диске'}
                   onClick={() => {
                     if (!hasTauri()) {
                       showToast('Доступно в приложении', 'error')
@@ -961,123 +1030,81 @@ export function InstancePage() {
                       .catch((e) => showToast('Не удалось открыть выбор файлов: ' + e, 'error'))
                   }}
                 >
-                  <Icon id="i-upload" /> {dropBusy ? 'Добавляем…' : 'Файл'}
+                  <Icon id="i-upload" /> {dropBusy ? 'Добавляем…' : 'С диска'}
                 </button>
+                {Object.keys(upd).length ? (
+                  <button
+                    className="btn sm secondary act-row-btn"
+                    id="bsUpdateAll"
+                    onClick={() => {
+                      if (!hasTauri()) return
+                      setUpdateAllLabel('Обновляем…')
+                      updateAll(profile!, kind)
+                        .then((n) => {
+                          setUpdateAllLabel('Обновить всё')
+                          loadMods()
+                          showToast(n ? 'Обновлено: ' + n : 'Всё актуально')
+                        })
+                        .catch((e) => {
+                          setUpdateAllLabel('Обновить всё')
+                          showToast('' + e)
+                        })
+                    }}
+                  >
+                    <Icon id="i-restart" /> {updateAllLabel}
+                    <span className="nav-count" style={{ marginLeft: '4px' }}>
+                      {Object.keys(upd).length}
+                    </span>
+                  </button>
+                ) : null}
+                <span style={{ flex: 1 }}></span>
                 <button
-                  className="btn sm secondary act-row-btn"
-                  id="bsAddContent"
-                  onClick={() => {
-                    useProfiles.getState().setSelected(profile)
-                    close()
-                    setScreen('mods')
-                    useMods.getState().scopeTo(profile)
-                    useMods.getState().set({ modTab: 'mod' })
-                    void useMods.getState().load()
+                  className="btn sm ghost act-row-btn"
+                  id="bsMore"
+                  aria-label="Ещё"
+                  onClick={(e) => {
+                    const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                    setMoreMenu({ x: r.left, y: r.bottom + 4 })
                   }}
                 >
-                  <Icon id="i-plus" /> Добавить из каталога
+                  <Icon id="i-dots" /> Ещё
                 </button>
-                <button
-                  className="btn sm secondary act-row-btn"
-                  id="bsUpdateAll"
-                  onClick={() => {
-                    if (!hasTauri()) return
-                    setUpdateAllLabel('Обновляем…')
-                    updateAll(profile!, kind)
-                      .then((n) => {
-                        setUpdateAllLabel('Обновить всё')
-                        loadMods()
-                        showToast(n ? 'Обновлено: ' + n : 'Всё актуально')
-                      })
-                      .catch((e) => {
-                        setUpdateAllLabel('Обновить всё')
-                        showToast('' + e)
-                      })
-                  }}
-                >
-                  <Icon id="i-restart" /> {updateAllLabel}
-                </button>
-                <button
-                  className="btn sm secondary act-row-btn"
-                  id="bsScan"
-                  title="Прочитать метаданные файлов и опознать их на Modrinth и CurseForge"
-                  disabled={scanLabel !== 'Сканировать' || !items.length}
-                  onClick={() => {
-                    if (!hasTauri()) {
-                      showToast('Доступно в приложении')
-                      return
+                {moreMenu ? (
+                  <ContextMenu
+                    x={moreMenu.x}
+                    y={moreMenu.y}
+                    onClose={() => setMoreMenu(null)}
+                    items={
+                      [
+                        items.length && scanLabel === 'Сканировать'
+                          ? { id: 'scan', label: 'Опознать файлы', icon: 'i-search', onPick: runScan }
+                          : null,
+                        kind === 'mod' && items.length
+                          ? { id: 'safety', label: 'Проверить безопасность', icon: 'i-shield', onPick: () => setSafetyOpen(true) }
+                          : null,
+                        { id: 'export', label: 'Экспорт в .mrpack', icon: 'i-download', onPick: runExport },
+                      ].filter(Boolean) as ContextItem[]
                     }
-                    setScanLabel('Сканируем…')
-                    scanContent(profile!, kind)
-                      .then((r) => {
-                        setScanLabel('Сканировать')
-                        if (kindRef.current === kind) setItems(r.items)
-                        showToast(
-                          r.identified
-                            ? 'Опознано ' +
-                              r.identified +
-                              ' из ' +
-                              r.scanned +
-                              ' (' +
-                              [
-                                r.modrinth ? 'Modrinth: ' + r.modrinth : '',
-                                r.curseforge ? 'CurseForge: ' + r.curseforge : '',
-                              ]
-                                .filter(Boolean)
-                                .join(', ') +
-                              ')'
-                            : 'Разобрано файлов: ' + r.scanned,
-                        )
-                      })
-                      .catch((e) => {
-                        setScanLabel('Сканировать')
-                        showToast('Не удалось просканировать: ' + e, 'error')
-                      })
-                  }}
-                >
-                  <Icon id="i-search" /> {scanLabel}
-                </button>
-                <button
-                  className="btn sm secondary act-row-btn"
-                  disabled={kind !== 'mod' || !items.length}
-                  title="Сверить моды с каталогами и заглянуть внутрь jar"
-                  onClick={() => setSafetyOpen(true)}
-                >
-                  <Icon id="i-shield" /> Проверить моды
-                </button>
-                <button
-                  className="btn sm secondary act-row-btn"
-                  id="bsExport"
-                  title="Экспорт сборки в файл .mrpack"
-                  onClick={() => {
-                    if (!hasTauri()) {
-                      showToast('Доступно в приложении')
-                      return
-                    }
-                    showToast('Собираем .mrpack…')
-                    exportMrpack(profile!, profile!, '1.0.0', pr ? LOADER_NAME(pr) + ' ' + pr.version : '')
-                      .then((p) => showToast('Экспортировано: ' + ('' + p).split('/').pop()))
-                      .catch((e) => showToast('' + e))
-                  }}
-                >
-                  <Icon id="i-download" /> Экспорт
-                </button>
+                  />
+                ) : null}
               </div>
               {kind === 'mod' ? (
-                <div
-                  style={{
-                    margin: '0 0 14px',
-                    borderTop: '1px solid var(--m-border)',
-                    borderBottom: '1px solid var(--m-border)',
-                    padding: '12px 0 14px',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span className="set-val">Зависимости и совместимость</span>
+                <div className={'bx-audit' + (audit && audit.issues.length ? ' bad' : audit ? ' ok' : '')}>
+                  <div className="bx-audit-row">
+                    <Icon id={audit && audit.issues.length ? 'i-alert' : 'i-shield'} />
+                    <span className="bx-audit-text">
+                      {auditBusy
+                        ? 'Проверяем совместимость…'
+                        : !audit
+                          ? 'Совместимость'
+                          : !audit.issues.length
+                            ? 'Всё совместимо · ' + audit.checked + ' файлов'
+                            : 'Проблем: ' + audit.issues.length}
+                    </span>
                     <span style={{ flex: 1 }}></span>
                     {fixItems(audit).length ? (
                       <button
-                        className="btn sm secondary"
+                        className="btn sm primary"
                         onClick={() =>
                           installExtras(profile!, 'mod', fixItems(audit), () => {
                             loadMods('mod')
@@ -1089,9 +1116,8 @@ export function InstancePage() {
                       </button>
                     ) : null}
                     <button
-                      className="btn sm secondary"
+                      className="btn sm ghost"
                       disabled={auditBusy}
-                      title="Проверить, всё ли нужное стоит и не конфликтуют ли моды между собой"
                       onClick={() => {
                         if (!hasTauri()) {
                           showToast('Доступно в приложении')
@@ -1100,18 +1126,10 @@ export function InstancePage() {
                         runAudit(false)
                       }}
                     >
-                      <Icon id="i-check" /> {auditBusy ? 'Проверяем…' : 'Проверить'}
+                      <Icon id="i-restart" /> {auditBusy ? 'Проверяем…' : 'Проверить'}
                     </button>
                   </div>
-                  {!audit ? (
-                    <p className="faint-note">
-                      Найдём моды, которым не хватает библиотек, конфликтующие пары и файлы не под эту версию игры.
-                    </p>
-                  ) : !audit.issues.length ? (
-                    <p className="faint-note">
-                      Проверено файлов: {audit.checked} — недостающих зависимостей и конфликтов не нашли.
-                    </p>
-                  ) : (
+                  {!audit || !audit.issues.length ? null : (
                     <div style={{ marginTop: '8px', maxHeight: '260px', overflowY: 'auto' }}>
                       {audit.issues.map((it: AuditIssue, i) => (
                         <div className="mod-card" key={it.kind + it.title + it.detail + i} style={{ marginBottom: '6px' }}>
@@ -1173,9 +1191,13 @@ export function InstancePage() {
                 {noticeList ? (
                   <p className="faint-note">{noticeList}</p>
                 ) : emptyList ? (
-                  <p className="faint-note">Пусто. Добавь из каталога или перетащи .jar сюда.</p>
+                  <div className="bx-mini-empty">
+                    <Icon id={KIND_ICON[kind]} />
+                    <b>Пока пусто</b>
+                    <span>Перетащи {extsOf(kind).map((e) => '.' + e).join(' / ')} сюда</span>
+                  </div>
                 ) : !shownItems.length ? (
-                  <p className="faint-note">Ничего не найдено по «{contentQuery.trim()}».</p>
+                  <p className="faint-note">Ничего по «{contentQuery.trim()}»</p>
                 ) : (
                   shownItems.map((md) => {
                     const up = upd[md.name]
@@ -1187,6 +1209,7 @@ export function InstancePage() {
                       md.version_number ? 'версия ' + md.version_number : '',
                       md.mc ? 'MC ' + md.mc : '',
                       md.author ? 'автор: ' + md.author : '',
+                      md.loaders?.length ? md.loaders.join(' · ') : md.loader || '',
                       fmtSize(md.size),
                     ].filter(Boolean)
                     return (
@@ -1195,7 +1218,8 @@ export function InstancePage() {
                           <span
                             className={'chk mod-sel' + (sel.has(md.name) ? ' on' : '')}
                             data-sel={md.name}
-                            title={sel.has(md.name) ? 'Убрать из выбора' : 'Выбрать'}
+                            role="checkbox"
+                            aria-checked={sel.has(md.name)}
                             onClick={() => {
                               const next = new Set(sel)
                               if (next.has(md.name)) next.delete(md.name)
@@ -1206,27 +1230,16 @@ export function InstancePage() {
                           <span className="mod-art">
                             {md.icon_url ? <img src={mirrorAsset(md.icon_url)} alt="" loading="lazy" /> : <Icon id={KIND_ICON[kind]} />}
                           </span>
-                          <span className="mod-card-body" title={md.name}>
+                          <span className="mod-card-body">
                             <span className="mod-card-title">
                               {title}
                               {md.version_number ? <span className="mod-ver">{md.version_number}</span> : null}
-                              {up ? (
-                                <span className="mod-upd" title={'Новая версия: ' + up}>
-                                  обновление
-                                </span>
-                              ) : null}
-                              {md.loaders?.length || md.loader ? (
-                                <span className="mod-tag">
-                                  {md.loaders?.length ? md.loaders.join(' · ') : md.loader}
-                                </span>
-                              ) : null}
                               {incompatibleWith(md.mc, pr ? pr.version : '') ? (
                                 <span
                                   className="mod-upd"
                                   style={{ background: 'var(--m-danger-soft)', color: 'var(--m-danger)' }}
-                                  title={'Файл собран под MC ' + md.mc + ', а сборка на ' + (pr ? pr.version : '—') + ' — вероятная причина вылета'}
                                 >
-                                  не для {pr ? pr.version : 'этой версии'}
+                                  для {md.mc}
                                 </span>
                               ) : null}
                             </span>
@@ -1234,7 +1247,7 @@ export function InstancePage() {
                           </span>
                           {up ? (
                             <button
-                              className="btn sm secondary"
+                              className="btn sm primary"
                               data-upd={md.name}
                               style={{ height: '26px' }}
                               onClick={() => {
@@ -1250,12 +1263,16 @@ export function InstancePage() {
                                   })
                               }}
                             >
-                              {itemLabels[md.name] || 'Обновить'}
+                              {itemLabels[md.name] || (
+                                <>
+                                  <Icon id="i-arrow-up" /> Обновить
+                                </>
+                              )}
                             </button>
                           ) : null}
                           <button
                             className={'icon-btn mod-info' + (info ? ' on' : '')}
-                            title="Подробнее"
+                            aria-label="Подробнее"
                             onClick={() => setOpenInfo(info ? '' : md.name)}
                           >
                             <Icon id="i-info" />
@@ -1263,7 +1280,8 @@ export function InstancePage() {
                           <span
                             className={'tgl' + (md.enabled ? ' on' : '')}
                             data-tg={md.name}
-                            title={md.enabled ? 'Выключить в игре' : 'Включить в игре'}
+                            role="switch"
+                            aria-checked={md.enabled}
                             onClick={() => {
                               // Отказ ядра обязан доехать до игрока: пока `.then`
                               // стоял без пары, переключение мода при запущенной
@@ -1277,7 +1295,7 @@ export function InstancePage() {
                           <button
                             className="icon-btn del"
                             data-del={md.name}
-                            title="Удалить файл"
+                            aria-label="Удалить"
                             onClick={async () => {
                               if (await uiConfirm('Удалить ' + md.name + '?', { confirmLabel: 'Удалить' }))
                                 deleteContent(profile!, kind, md.name)
@@ -1290,7 +1308,7 @@ export function InstancePage() {
                         </div>
                         {info ? (
                           <div className="mod-card-info">
-                            <p className="mod-card-desc">{md.description || 'Автор не оставил описания в файле.'}</p>
+                            {md.description ? <p className="mod-card-desc">{md.description}</p> : null}
                             {facts.length ? (
                               <div className="mod-card-facts">
                                 {facts.map((f) => (
@@ -1304,7 +1322,7 @@ export function InstancePage() {
                             <div className="mod-card-acts">
                               {modrinth ? (
                                 <button className="btn sm secondary" onClick={() => openProject(modrinth, kind)}>
-                                  Карточка на Modrinth
+                                  <Icon id="i-ext" /> Modrinth
                                 </button>
                               ) : null}
                               {curse ? (
@@ -1312,13 +1330,17 @@ export function InstancePage() {
                                   className="btn sm secondary"
                                   onClick={() => openUrl('https://www.curseforge.com/projects/' + curse)}
                                 >
-                                  Открыть на CurseForge
+                                  <Icon id="i-ext" /> CurseForge
                                 </button>
                               ) : null}
                               {!md.project_id ? (
-                                <span className="faint-note" style={{ margin: 0 }}>
-                                  Файла нет в каталогах — нажми «Сканировать», поищем его на Modrinth.
-                                </span>
+                                <button
+                                  className="btn sm secondary"
+                                  disabled={scanLabel !== 'Сканировать'}
+                                  onClick={runScan}
+                                >
+                                  <Icon id="i-search" /> {scanLabel === 'Сканировать' ? 'Найти в каталогах' : scanLabel}
+                                </button>
                               ) : null}
                             </div>
                           </div>
@@ -1366,7 +1388,7 @@ export function InstancePage() {
                 {worldsNotice ? (
                   <p className="faint-note">{worldsNotice}</p>
                 ) : serversEmpty ? (
-                  <p className="faint-note">Серверов пока нет — добавь адрес ниже.</p>
+                  wFilter === 'server' ? <p className="faint-note">Серверов пока нет</p> : null
                 ) : (
                   <>
                     {filteredServers.map((s2) => {
@@ -1402,7 +1424,7 @@ export function InstancePage() {
                           </span>
                         </span>
                         <button
-                          className="btn sm secondary w-join"
+                          className="btn sm primary w-join"
                           data-ip={s2.ip}
                           style={{ marginLeft: '8px' }}
                           onClick={() => {
@@ -1411,10 +1433,11 @@ export function InstancePage() {
                             joinWithAuth(profile!, null, s2.ip, s2.name).catch((e) => showLaunchError(e))
                           }}
                         >
-                          Зайти
+                          <Icon id="i-play" /> Играть
                         </button>
                         <button
                           className="icon-btn del w-del"
+                          aria-label="Удалить сервер"
                           data-ip={s2.ip}
                           onClick={() => removeServer(profile!, s2.ip).then(() => loadWorlds())}
                         >
@@ -1430,13 +1453,21 @@ export function InstancePage() {
                 <div className="input sm" style={{ flex: 1 }}>
                   <input
                     id="wsName"
-                    placeholder="Название сервера"
+                    placeholder="Название"
                     value={wsName}
                     onChange={(e) => setWsName(e.target.value)}
                   />
                 </div>
                 <div className="input sm" style={{ flex: 1 }}>
-                  <input id="wsIp" placeholder="mc.example.net" value={wsIp} onChange={(e) => setWsIp(e.target.value)} />
+                  <input
+                    id="wsIp"
+                    placeholder="mc.example.net"
+                    value={wsIp}
+                    onChange={(e) => setWsIp(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') (document.getElementById('wsAdd') as HTMLButtonElement | null)?.click()
+                    }}
+                  />
                 </div>
                 <button
                   className="btn sm secondary"
@@ -1453,7 +1484,7 @@ export function InstancePage() {
                     })
                   }}
                 >
-                  Добавить
+                  <Icon id="i-plus" /> Сервер
                 </button>
               </div>
               <button
@@ -1469,7 +1500,7 @@ export function InstancePage() {
                   void useMods.getState().load()
                 }}
               >
-                <Icon id="i-map" /> Скачать карту из каталога
+                <Icon id="i-map" /> Карты из каталога
               </button>
             </div>
 
@@ -1486,7 +1517,7 @@ export function InstancePage() {
                   style={{ height: '32px', fontSize: '12.5px' }}
                   onClick={() => setLogView('live')}
                 >
-                  <Icon id="i-list" /> Прямой эфир
+                  <Icon id="i-list" /> Консоль
                   {liveLines.length ? <span className="log-live-dot"></span> : null}
                 </button>
                 <button
@@ -1504,20 +1535,10 @@ export function InstancePage() {
                     {liveLines.length ? (
                       liveLines.map((l, i) => <div key={i}>{l}</div>)
                     ) : (
-                      <div className="faint-note">Запусти игру — здесь будет живой вывод консоли в реальном времени.</div>
+                      <div className="faint-note">Запусти игру — вывод появится здесь</div>
                     )}
                   </pre>
                   <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
-                    {thisRunning ? (
-                      <button
-                        className="btn sm danger"
-                        style={{ flex: 1 }}
-                        disabled={gameStopping}
-                        onClick={() => stopRunningGame(profile!)}
-                      >
-                        <Icon id="i-power" /> {gameStopping ? 'Останавливаем…' : 'Остановить игру'}
-                      </button>
-                    ) : null}
                     <button className="btn sm secondary" style={{ flex: 1 }} onClick={() => setLiveLines([])}>
                       <Icon id="i-trash" /> Очистить
                     </button>
@@ -1578,7 +1599,7 @@ export function InstancePage() {
                     showToast('Лог скопирован')
                   }}
                 >
-                  Скопировать
+                  <Icon id="i-copy" /> Скопировать
                 </button>
                 <button
                   className="btn sm secondary"
@@ -1597,34 +1618,35 @@ export function InstancePage() {
                     setShareLabel('Загружаем…')
                     shareLog(profile!, name)
                       .then((url) => {
-                        setShareLabel('Поделиться (mclo.gs)')
+                        setShareLabel('Поделиться')
                         void copyText(url)
                         showToast('Ссылка на лог скопирована: ' + url)
                         openUrl(url)
                       })
                       .catch((e) => {
-                        setShareLabel('Поделиться (mclo.gs)')
+                        setShareLabel('Поделиться')
                         showToast('' + e)
                       })
                   }}
                 >
-                  {shareLabel}
+                  <Icon id="i-link" /> {shareLabel}
                 </button>
               </div>
               </div>
             </div>
 
             <div id="bsTabOpts" style={{ display: tab === 'opts' ? '' : 'none' }}>
+              <div className="bx-opts-cap">Сборка</div>
               <div className="set-row">
                 <span className="lab">
-                  Название сборки<small>Переименуем и перенесём все файлы</small>
+                  Название
                 </span>
                 <div className="input sm" style={{ width: '220px' }}>
                   <input
                     id="bsRename"
                     maxLength={BUILD_NAME_MAX}
                     value={renameVal}
-                    placeholder="Название сборки"
+                    placeholder="Название"
                     onChange={(e) => setRenameVal(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') doRename()
@@ -1641,7 +1663,7 @@ export function InstancePage() {
               </div>
               <div className="set-row" style={{ alignItems: 'flex-start' }}>
                 <span className="lab">
-                  Версия и ядро<small>Загрузчик и версия Minecraft — доустановим при запуске</small>
+                  Версия и загрузчик
                 </span>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '300px' }}>
                   <div style={{ display: 'flex', gap: '8px' }}>
@@ -1685,18 +1707,115 @@ export function InstancePage() {
                     }
                     onClick={() => void applyCore()}
                   >
-                    {coreBusy ? 'Меняем…' : 'Применить версию и ядро'}
+                    {coreBusy ? 'Меняем…' : 'Сменить'}
                   </button>
                 </div>
               </div>
               <div className="set-row" style={{ alignItems: 'flex-start' }}>
                 <span className="lab">
-                  Заметка<small>Личная пометка к сборке — видишь только ты</small>
+                  Иконка
+                </span>
+                <div style={{ width: '340px' }}>
+                  <IconGrid
+                    id="bsIcons"
+                    current={pr ? pr.icon : null}
+                    style={{ width: '100%', gridTemplateColumns: 'repeat(7,1fr)', maxHeight: '140px' }}
+                    onPick={(v) => {
+                      if (hasTauri() && profile)
+                        setProfileIcon(profile, v).then(() => {
+                          void useProfiles.getState().refresh()
+                          showToast('Иконка обновлена')
+                        })
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: '6px', marginTop: '8px', alignItems: 'center' }}>
+                    {customCover ? (
+                      <img
+                        src={customCover}
+                        alt=""
+                        width={32}
+                        height={32}
+                        style={{ borderRadius: '8px', objectFit: 'cover', flex: '0 0 auto' }}
+                      />
+                    ) : null}
+                    <button
+                      className="btn sm secondary"
+                      id="bsIconBuild"
+                      style={{ flex: 1 }}
+                      data-sound="open"
+                      onClick={() => setIconEditor(true)}
+                    >
+                      <Icon id="i-brush" /> Собрать
+                    </button>
+                    <button
+                      className="btn sm secondary"
+                      id="bsCoverPick"
+                      style={{ flex: 1 }}
+                      onClick={() => {
+                        if (!hasTauri()) {
+                          showToast('Доступно в приложении')
+                          return
+                        }
+                        if (!profile) return
+                        pickProfileCover(profile)
+                          .then((all) => {
+                            if (!all) return
+                            void useProfiles.getState().refresh()
+                            showToast('Обложка обновлена')
+                          })
+                          .catch((e) => showToast('' + e, 'error'))
+                      }}
+                    >
+                      <Icon id="i-image" /> Картинка
+                    </button>
+                    {customCover ? (
+                      <button
+                        className="btn sm secondary"
+                        id="bsCoverClear"
+                        onClick={() => {
+                          if (!hasTauri() || !profile) return
+                          clearProfileCover(profile).then(() => {
+                            void useProfiles.getState().refresh()
+                            showToast('Вернули блок Millida')
+                          })
+                        }}
+                      >
+                        Убрать
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+              <div className="set-row">
+                <span className="lab">
+                  Группа
+                </span>
+                <div className="input sm" style={{ width: '180px' }}>
+                  <input
+                    id="bsGroup"
+                    placeholder="Технические"
+                    maxLength={GROUP_NAME_MAX}
+                    value={group}
+                    onChange={(e) => setGroup(e.target.value)}
+                    onBlur={() => {
+                      if (!hasTauri() || !profile) return
+                      const g = group.trim()
+                      setProfileGroup(profile, g).then(() => {
+                        void useProfiles.getState().refresh()
+                        showToast(g ? 'Группа: ' + g : 'Убрано из группы')
+                      })
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="set-row" style={{ alignItems: 'flex-start' }}>
+                <span className="lab">
+                  Заметка
                 </span>
                 <div className="input sm" style={{ width: '300px' }}>
                   <input
                     id="bsNote"
-                    placeholder="Например: сборка для игры с друзьями"
+                    placeholder="Для игры с друзьями"
                     value={note}
                     maxLength={200}
                     onChange={(e) => setNote(e.target.value)}
@@ -1711,14 +1830,23 @@ export function InstancePage() {
                   />
                 </div>
               </div>
+              <div className="set-row" id="bsModpackRow" style={{ display: mpSlug ? '' : 'none' }}>
+                <span className="lab">
+                  Версия модпака
+                </span>
+                <button
+                  className="btn sm secondary"
+                  id="bsModpackUpd"
+                  onClick={() => useModpackVersions.getState().open(profile!, mpSlug, mpVersion)}
+                >
+                  Версии
+                </button>
+              </div>
+              <div className="bx-opts-cap">Игра</div>
               <div className="set-row">
                 <span className="lab">
-                  Оперативная память
-                  <small>
-                    {ramMax < RAM_MAX_GB
-                      ? `Для этой сборки · больше ${ramMax} ГБ машина не даст: остальное нужно системе`
-                      : 'Для этой сборки'}
-                  </small>
+                  Память
+                  {ramMax < RAM_MAX_GB ? <small>{`Максимум ${ramMax} ГБ — остальное нужно системе`}</small> : null}
                 </span>
                 <span className="set-val" id="bsRamVal">
                   {ram + ' ГБ'}
@@ -1738,15 +1866,7 @@ export function InstancePage() {
               <div className="set-row">
                 <span className="lab">
                   Видеокарта
-                  <small>
-                    {!gpuOk
-                      ? 'В этой системе карту выбирает сама ОС — настройка недоступна'
-                      : gpu === 'discrete'
-                        ? 'Игра пойдёт на дискретной карте — так и нужно на ноутбуках со встройкой'
-                        : gpu === 'integrated'
-                          ? 'Встроенная карта: меньше нагрев и расход батареи, меньше FPS'
-                          : 'Как решит система — обычно это встроенная карта на ноутбуке'}
-                  </small>
+                  {!gpuOk ? <small>Здесь карту выбирает система</small> : null}
                 </span>
                 <Select
                   width={230}
@@ -1779,365 +1899,67 @@ export function InstancePage() {
                   }}
                 />
               </div>
-              <div className="set-row" style={{ alignItems: 'flex-start' }}>
+              <div className="set-row">
                 <span className="lab">
                   Буст FPS
                   <small>
-                    {boost && boost.enabled
-                      ? 'Включён: моды-ускорители, профиль JVM и лёгкая графика' +
-                        (boost.skipped.length ? '. Нет под эту версию: ' + boost.skipped.join(', ') : '')
+                    {boost && boost.enabled && boost.skipped.length
+                      ? 'Нет под эту версию: ' + boost.skipped.join(', ')
                       : boost && boost.vanilla
-                        ? 'Ускорит JVM и настройки графики; моды доступны на Fabric/Forge'
-                        : 'Ставит Sodium/Embeddium и компанию, чинит GC и убирает тяжёлую графику'}
+                        ? 'Java и графика; моды — на Fabric/Forge'
+                        : 'Sodium, настройки Java и лёгкая графика'}
                   </small>
                 </span>
-                <div className="segs">
-                  {[
-                    ['on', 'Включить'],
-                    ['off', 'Выключить'],
-                  ].map(([v, label]) => {
-                    const active = (v === 'on') === !!(boost && boost.enabled)
-                    return (
-                      <button
-                        key={v}
-                        className={'seg' + (active ? ' on' : '')}
-                        data-fpsboost={v}
-                        style={{ height: '32px', fontSize: '12.5px' }}
-                        disabled={boostBusy || active}
-                        onClick={() => void toggleBoost()}
-                      >
-                        {boostBusy ? 'Меняем…' : label}
-                      </button>
-                    )
-                  })}
-                </div>
+                <span
+                  className={'tgl' + (boost && boost.enabled ? ' on' : '') + (boostBusy ? ' busy' : '')}
+                  data-fpsboost={boost && boost.enabled ? 'on' : 'off'}
+                  role="switch"
+                  aria-checked={!!(boost && boost.enabled)}
+                  aria-label="Буст FPS"
+                  onClick={() => {
+                    if (!boostBusy) void toggleBoost()
+                  }}
+                ></span>
               </div>
               {pr && loaderId(pr) !== 'vanilla' ? (
-                <div className="set-row" style={{ alignItems: 'flex-start' }}>
+                <div className="set-row">
                   <span className="lab">
                     Скин Millida в игре
                     <small>
                       {skinMod?.conflict
-                        ? 'В сборке уже есть свой мод скинов (' + skinMod.conflict + ') — свой лаунчер не добавляет'
+                        ? 'Уже есть свой мод скинов: ' + skinMod.conflict
                         : skinMod?.on
-                          ? 'Лаунчер добавляет в сборку CustomSkinLoader, чтобы твой скин было видно на серверах'
-                          : 'Выключено: мод в эту сборку не добавляется. Включай, если скин не виден в игре'}
+                          ? 'Твой скин видно на серверах'
+                          : 'Включи, если скин не виден в игре'}
                     </small>
                   </span>
-                  <div className="segs">
-                    {[
-                      ['on', 'Включить'],
-                      ['off', 'Выключить'],
-                    ].map(([v, label]) => {
-                      const active = (v === 'on') === !!skinMod?.on
-                      return (
-                        <button
-                          key={v}
-                          className={'seg' + (active ? ' on' : '')}
-                          data-skinmod={v}
-                          style={{ height: '32px', fontSize: '12.5px' }}
-                          disabled={skinModBusy || active || !skinMod}
-                          onClick={() => void toggleSkinMod()}
-                        >
-                          {skinModBusy ? 'Меняем…' : label}
-                        </button>
-                      )
-                    })}
-                  </div>
+                  <span
+                    className={'tgl' + (skinMod?.on ? ' on' : '') + (skinModBusy || !skinMod ? ' busy' : '')}
+                    data-skinmod={skinMod?.on ? 'on' : 'off'}
+                    role="switch"
+                    aria-checked={!!skinMod?.on}
+                    aria-label="Скин Millida в игре"
+                    onClick={() => {
+                      if (!skinModBusy && skinMod) void toggleSkinMod()
+                    }}
+                  ></span>
                 </div>
               ) : null}
+              <div className="bx-opts-cap">Файлы</div>
               <div className="set-row">
                 <span className="lab">
-                  Аргументы JVM<small>Для опытных — тюнинг сборщика мусора</small>
-                </span>
-                <div className="input sm" style={{ width: '220px' }}>
-                  <input
-                    id="bsJvm"
-                    placeholder="-XX:+UseG1GC"
-                    value={jvm}
-                    onChange={(e) => setJvm(e.target.value)}
-                    onBlur={saveOpts}
-                  />
-                </div>
-              </div>
-              <div className="set-row" style={{ alignItems: 'flex-start' }}>
-                <span className="lab">
-                  Java
-                  <small>
-                    {javaBusy
-                      ? 'Качаем Java ' + javaBusy + ', это займёт минуту…'
-                      : javaMajor
-                        ? 'Сборка запускается на Java ' + javaMajor + ' — её скачал лаунчер'
-                        : 'Пусто = ставим ту, которую просит версия. Можно вписать номер — например 25'}
-                  </small>
-                </span>
-                <div style={{ width: '300px' }}>
-                  <Select
-                    width="100%"
-                    value={String(javaMajor)}
-                    disabled={!!javaBusy}
-                    options={[
-                      { value: '0', label: 'Версия Java: авто', sub: 'Ту, которую просит сборка' },
-                      ...javaAll.map((m) => ({ value: String(m), label: 'Java ' + m, sub: 'Скачаем и закрепим за сборкой' })),
-                    ]}
-                    onChange={(v) => pinJavaMajor(Number(v))}
-                  />
-                  <div className="input sm" style={{ margin: '6px 0' }}>
-                    <input
-                      id="bsJava"
-                      placeholder="Номер версии (25) или путь к java"
-                      value={java}
-                      onChange={(e) => setJava(e.target.value)}
-                      onBlur={saveJavaField}
-                    />
-                  </div>
-                  <Select
-                    width="100%"
-                    value={java && javaList.some((j) => j.path === java) ? java : ''}
-                    disabled={!javaList.length}
-                    placeholder={
-                      javaList.length ? '— выбрать найденную (' + javaList.length + ') —' : 'Ищем Java в системе…'
-                    }
-                    options={javaList.map((j) => ({ value: j.path, label: j.version, sub: j.path }))}
-                    onChange={(v) => {
-                      setJava(v)
-                      if (hasTauri() && profile)
-                        saveProfileSettings(profile, jvm || '', +w || 0, +h || 0, v)
-                          .then(() => {
-                            setJavaMajor(0)
-                            showToast('Java выбрана')
-                          })
-                          .catch((e) => showToast('' + e, 'error'))
-                    }}
-                  />
-                  <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
-                    <button
-                      className="btn sm secondary"
-                      id="bsJavaBrowse"
-                      style={{ flex: 1 }}
-                      onClick={() => {
-                        if (!hasTauri()) {
-                          showToast('Доступно в приложении')
-                          return
-                        }
-                        pickJavaPath()
-                          .then((j) => {
-                            if (!j) return
-                            setJava(j.path)
-                            setJavaList((l) => (l.some((x) => x.path === j.path) ? l : [j, ...l]))
-                            if (profile)
-                              saveProfileSettings(profile, jvm || '', +w || 0, +h || 0, j.path)
-                                .then(() => setJavaMajor(0))
-                                .catch((e) => showToast('' + e, 'error'))
-                            showToast('Java выбрана: ' + j.version)
-                          })
-                          .catch((e) => showToast('' + e, 'error'))
-                      }}
-                    >
-                      Обзор…
-                    </button>
-                    <button
-                      className="btn sm secondary"
-                      id="bsJavaDetect"
-                      style={{ flex: 1 }}
-                      onClick={() => {
-                        if (!hasTauri()) {
-                          showToast('Доступно в приложении')
-                          return
-                        }
-                        setDetectLabel('Ищем…')
-                        detectJava()
-                          .then((list) => {
-                            setDetectLabel('Найти')
-                            setJavaList(list)
-                            showToast(
-                              list.length
-                                ? 'Найдено Java: ' + list.length
-                                : 'Java в системе не найдена — жми «Обзор…» или оставь пусто, скачаем сами',
-                            )
-                          })
-                          .catch((e) => {
-                            setDetectLabel('Найти')
-                            showToast('' + e)
-                          })
-                      }}
-                    >
-                      {detectLabel}
-                    </button>
-                    <button
-                      className="btn sm secondary"
-                      id="bsJavaTest"
-                      style={{ flex: 1 }}
-                      onClick={() => {
-                        if (!hasTauri()) {
-                          showToast('Доступно в приложении')
-                          return
-                        }
-                        const p = java.trim()
-                        if (!p) {
-                          showToast('Пусто = скачаем нужную Java сами')
-                          return
-                        }
-                        testJava(p)
-                          // Статус несёт иконка тоста (i-check / i-alert), дингбаты в тексте не нужны
-                          .then((v) => showToast(String(v)))
-                          .catch((e) => showToast(apiErrorText(e, 'Не удалось выполнить действие'), 'error'))
-                      }}
-                    >
-                      Тест
-                    </button>
-                  </div>
-                </div>
-              </div>
-              <div className="set-row">
-                <span className="lab">
-                  Разрешение окна<small>0 = как в игре</small>
-                </span>
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  <div className="input sm" style={{ width: '80px' }}>
-                    <input
-                      id="bsW"
-                      type="number"
-                      placeholder="Ширина"
-                      value={w}
-                      onChange={(e) => setW(e.target.value)}
-                      onBlur={saveOpts}
-                    />
-                  </div>
-                  <div className="input sm" style={{ width: '80px' }}>
-                    <input
-                      id="bsH"
-                      type="number"
-                      placeholder="Высота"
-                      value={h}
-                      onChange={(e) => setH(e.target.value)}
-                      onBlur={saveOpts}
-                    />
-                  </div>
-                </div>
-              </div>
-              <div className="set-row" style={{ alignItems: 'flex-start' }}>
-                <span className="lab">
-                  Иконка сборки<small>Блок Millida, своя сборная или картинка</small>
-                </span>
-                <div style={{ width: '340px' }}>
-                  <IconGrid
-                    id="bsIcons"
-                    current={pr ? pr.icon : null}
-                    style={{ width: '100%', gridTemplateColumns: 'repeat(7,1fr)', maxHeight: '140px' }}
-                    onPick={(v) => {
-                      if (hasTauri() && profile)
-                        setProfileIcon(profile, v).then(() => {
-                          void useProfiles.getState().refresh()
-                          showToast('Иконка обновлена')
-                        })
-                    }}
-                  />
-                  <div style={{ display: 'flex', gap: '6px', marginTop: '8px', alignItems: 'center' }}>
-                    {customCover ? (
-                      <img
-                        src={customCover}
-                        alt=""
-                        width={32}
-                        height={32}
-                        style={{ borderRadius: '8px', objectFit: 'cover', flex: '0 0 auto' }}
-                      />
-                    ) : null}
-                    <button
-                      className="btn sm secondary"
-                      id="bsIconBuild"
-                      style={{ flex: 1 }}
-                      data-sound="open"
-                      onClick={() => setIconEditor(true)}
-                    >
-                      Собрать свою…
-                    </button>
-                    <button
-                      className="btn sm secondary"
-                      id="bsCoverPick"
-                      style={{ flex: 1 }}
-                      onClick={() => {
-                        if (!hasTauri()) {
-                          showToast('Доступно в приложении')
-                          return
-                        }
-                        if (!profile) return
-                        pickProfileCover(profile)
-                          .then((all) => {
-                            if (!all) return
-                            void useProfiles.getState().refresh()
-                            showToast('Обложка обновлена')
-                          })
-                          .catch((e) => showToast('' + e, 'error'))
-                      }}
-                    >
-                      Своя картинка…
-                    </button>
-                    {customCover ? (
-                      <button
-                        className="btn sm secondary"
-                        id="bsCoverClear"
-                        onClick={() => {
-                          if (!hasTauri() || !profile) return
-                          clearProfileCover(profile).then(() => {
-                            void useProfiles.getState().refresh()
-                            showToast('Вернули блок Millida')
-                          })
-                        }}
-                      >
-                        Убрать
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-              <div className="set-row" id="bsModpackRow" style={{ display: mpSlug ? '' : 'none' }}>
-                <span className="lab">
-                  Модпак<small>Обновить версию или откатиться</small>
+                  Починить сборку
                 </span>
                 <button
                   className="btn sm secondary"
-                  id="bsModpackUpd"
-                  onClick={() => useModpackVersions.getState().open(profile!, mpSlug, mpVersion)}
-                >
-                  Версии…
-                </button>
-              </div>
-              <div className="set-row">
-                <span className="lab">
-                  Группа<small>Для порядка в списке сборок</small>
-                </span>
-                <div className="input sm" style={{ width: '180px' }}>
-                  <input
-                    id="bsGroup"
-                    placeholder="Напр. Технические"
-                    maxLength={GROUP_NAME_MAX}
-                    value={group}
-                    onChange={(e) => setGroup(e.target.value)}
-                    onBlur={() => {
-                      if (!hasTauri() || !profile) return
-                      const g = group.trim()
-                      setProfileGroup(profile, g).then(() => {
-                        void useProfiles.getState().refresh()
-                        showToast(g ? 'Группа: ' + g : 'Убрано из группы')
-                      })
-                    }}
-                  />
-                </div>
-              </div>
-              <div className="set-row">
-                <span className="lab">
-                  Скриншоты<small id="bsShotCount">{shotCount}</small>
-                </span>
-                <button
-                  className="btn sm secondary"
-                  id="bsShots"
+                  id="bsRepair"
+                  disabled={repairBusy}
                   onClick={() => {
-                    if (hasTauri()) void useScreens.getState().open(profile!)
-                    else showToast('Доступно в приложении')
+                    setRepairBusy(true)
+                    runRepair(profile!).finally(() => setRepairBusy(false))
                   }}
                 >
-                  Открыть папку
+                  <Icon id="i-restart" /> {repairBusy ? 'Чиним…' : 'Починить'}
                 </button>
               </div>
               <div className="set-row">
@@ -2150,27 +1972,12 @@ export function InstancePage() {
                     else showToast('Папка (демо)')
                   }}
                 >
-                  Открыть
+                  <Icon id="i-folder" /> Открыть
                 </button>
               </div>
               <div className="set-row">
                 <span className="lab">
-                  Перенести на другую версию<small>Копия сборки с модами под другую версию Minecraft</small>
-                </span>
-                <button
-                  className="btn sm secondary"
-                  id="bsMigrate"
-                  onClick={() => {
-                    if (!profile || !pr) return
-                    useMigrate.getState().open(profile, pr.version, loaderId(pr))
-                  }}
-                >
-                  <Icon id="i-arrow-r" /> Перенести
-                </button>
-              </div>
-              <div className="set-row">
-                <span className="lab">
-                  Дублировать сборку<small>Копия со всем контентом</small>
+                  Копия сборки
                 </span>
                 <button
                   className="btn sm secondary"
@@ -2189,23 +1996,235 @@ export function InstancePage() {
                       .catch((e) => showToast('Не удалось продублировать: ' + e, 'error'))
                   }}
                 >
-                  Дублировать
+                  <Icon id="i-copy" /> Дублировать
                 </button>
               </div>
               <div className="set-row">
                 <span className="lab">
-                  Починить сборку<small>Сверить файлы игры и моды по хешам, перекачать битые</small>
+                  Копия под другую версию
                 </span>
                 <button
                   className="btn sm secondary"
-                  id="bsRepair"
-                  disabled={repairBusy}
+                  id="bsMigrate"
                   onClick={() => {
-                    setRepairBusy(true)
-                    runRepair(profile!).finally(() => setRepairBusy(false))
+                    if (!profile || !pr) return
+                    useMigrate.getState().open(profile, pr.version, loaderId(pr))
                   }}
                 >
-                  <Icon id="i-restart" /> {repairBusy ? 'Чиним…' : 'Починить'}
+                  <Icon id="i-arrow-r" /> Перенести
+                </button>
+              </div>
+              <button
+                className={'bx-opts-cap bx-opts-toggle' + (advanced ? ' on' : '')}
+                aria-expanded={advanced}
+                onClick={() => setAdvanced((v) => !v)}
+              >
+                <Icon id={advanced ? 'i-chev-d' : 'i-chev-r'} /> Для опытных
+              </button>
+              <div style={{ display: advanced ? '' : 'none' }}>
+                <div className="set-row">
+                  <span className="lab">
+                    Аргументы JVM
+                  </span>
+                  <div className="input sm" style={{ width: '220px' }}>
+                    <input
+                      id="bsJvm"
+                      placeholder="-XX:+UseG1GC"
+                      value={jvm}
+                      onChange={(e) => setJvm(e.target.value)}
+                      onBlur={saveOpts}
+                    />
+                  </div>
+                </div>
+                <div className="set-row" style={{ alignItems: 'flex-start' }}>
+                  <span className="lab">
+                    Java
+                    <small>
+                      {javaBusy
+                        ? 'Качаем Java ' + javaBusy + '…'
+                        : javaMajor
+                          ? 'Java ' + javaMajor + ' от лаунчера'
+                          : 'Пусто — подберём сами'}
+                    </small>
+                  </span>
+                  <div style={{ width: '300px' }}>
+                    <Select
+                      width="100%"
+                      value={String(javaMajor)}
+                      disabled={!!javaBusy}
+                      options={[
+                        { value: '0', label: 'Версия Java: авто', sub: 'Ту, которую просит сборка' },
+                        ...javaAll.map((m) => ({ value: String(m), label: 'Java ' + m, sub: 'Скачаем и закрепим за сборкой' })),
+                      ]}
+                      onChange={(v) => pinJavaMajor(Number(v))}
+                    />
+                    <div className="input sm" style={{ margin: '6px 0' }}>
+                      <input
+                        id="bsJava"
+                        placeholder="Номер версии (25) или путь к java"
+                        value={java}
+                        onChange={(e) => setJava(e.target.value)}
+                        onBlur={saveJavaField}
+                      />
+                    </div>
+                    <Select
+                      width="100%"
+                      value={java && javaList.some((j) => j.path === java) ? java : ''}
+                      disabled={!javaList.length}
+                      placeholder={
+                        javaList.length ? 'Найденные (' + javaList.length + ')' : 'Ищем Java…'
+                      }
+                      options={javaList.map((j) => ({ value: j.path, label: j.version, sub: j.path }))}
+                      onChange={(v) => {
+                        setJava(v)
+                        if (hasTauri() && profile)
+                          saveProfileSettings(profile, jvm || '', +w || 0, +h || 0, v)
+                            .then(() => {
+                              setJavaMajor(0)
+                              showToast('Java выбрана')
+                            })
+                            .catch((e) => showToast('' + e, 'error'))
+                      }}
+                    />
+                    <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                      <button
+                        className="btn sm secondary"
+                        id="bsJavaBrowse"
+                        style={{ flex: 1 }}
+                        onClick={() => {
+                          if (!hasTauri()) {
+                            showToast('Доступно в приложении')
+                            return
+                          }
+                          pickJavaPath()
+                            .then((j) => {
+                              if (!j) return
+                              setJava(j.path)
+                              setJavaList((l) => (l.some((x) => x.path === j.path) ? l : [j, ...l]))
+                              if (profile)
+                                saveProfileSettings(profile, jvm || '', +w || 0, +h || 0, j.path)
+                                  .then(() => setJavaMajor(0))
+                                  .catch((e) => showToast('' + e, 'error'))
+                              showToast('Java выбрана: ' + j.version)
+                            })
+                            .catch((e) => showToast('' + e, 'error'))
+                        }}
+                      >
+                        Обзор…
+                      </button>
+                      <button
+                        className="btn sm secondary"
+                        id="bsJavaDetect"
+                        style={{ flex: 1 }}
+                        onClick={() => {
+                          if (!hasTauri()) {
+                            showToast('Доступно в приложении')
+                            return
+                          }
+                          setDetectLabel('Ищем…')
+                          detectJava()
+                            .then((list) => {
+                              setDetectLabel('Найти')
+                              setJavaList(list)
+                              showToast(
+                                list.length
+                                  ? 'Найдено Java: ' + list.length
+                                  : 'Java в системе не найдена — жми «Обзор…» или оставь пусто, скачаем сами',
+                              )
+                            })
+                            .catch((e) => {
+                              setDetectLabel('Найти')
+                              showToast('' + e)
+                            })
+                        }}
+                      >
+                        {detectLabel}
+                      </button>
+                      <button
+                        className="btn sm secondary"
+                        id="bsJavaTest"
+                        style={{ flex: 1 }}
+                        onClick={() => {
+                          if (!hasTauri()) {
+                            showToast('Доступно в приложении')
+                            return
+                          }
+                          const p = java.trim()
+                          if (!p) {
+                            showToast('Пусто = скачаем нужную Java сами')
+                            return
+                          }
+                          testJava(p)
+                            // Статус несёт иконка тоста (i-check / i-alert), дингбаты в тексте не нужны
+                            .then((v) => showToast(String(v)))
+                            .catch((e) => showToast(apiErrorText(e, 'Не удалось выполнить действие'), 'error'))
+                        }}
+                      >
+                        Тест
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div className="set-row">
+                  <span className="lab">
+                    Размер окна
+                  </span>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <div className="input sm" style={{ width: '80px' }}>
+                      <input
+                        id="bsW"
+                        type="number"
+                        placeholder="Ширина"
+                        value={w}
+                        onChange={(e) => setW(e.target.value)}
+                        onBlur={saveOpts}
+                      />
+                    </div>
+                    <div className="input sm" style={{ width: '80px' }}>
+                      <input
+                        id="bsH"
+                        type="number"
+                        placeholder="Высота"
+                        value={h}
+                        onChange={(e) => setH(e.target.value)}
+                        onBlur={saveOpts}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="set-row bx-danger-row">
+                <span className="lab">Удалить сборку</span>
+                <button
+                  className="btn sm danger"
+                  id="bsDelete"
+                  onClick={async () => {
+                    if (
+                      !(await uiConfirm(
+                        'Удалить сборку «' + profile + '» со всеми модами, мирами и часами игры? Отменить будет нельзя.',
+                        { confirmLabel: 'Удалить' },
+                      ))
+                    )
+                      return
+                    if (hasTauri()) {
+                      deleteProfile(profile!)
+                        .then(() => {
+                          close()
+                          useProfiles.getState().setSelected(null)
+                          void useProfiles.getState().refresh()
+                          showToast('Сборка удалена', 'ok', 'delete')
+                        })
+                        .catch((e) => {
+                          void useProfiles.getState().refresh()
+                          showToast('' + e, 'error')
+                        })
+                    } else {
+                      close()
+                      showToast('Удалено (демо)')
+                    }
+                  }}
+                >
+                  <Icon id="i-trash" /> Удалить
                 </button>
               </div>
             </div>
@@ -2216,6 +2235,7 @@ export function InstancePage() {
         <SafetyModal profile={profile!} onClose={() => setSafetyOpen(false)} onChanged={() => loadMods()} />
       ) : null}
       {shareOpen ? <SharePackModal profile={profile!} onClose={() => setShareOpen(false)} /> : null}
+      {pickIcon && profile ? <BuildIconPicker name={profile} icon={pr ? pr.icon : null} onClose={() => setPickIcon(false)} /> : null}
       {iconEditor && profile ? (
         <IconEditor
           title={profile}

@@ -6,19 +6,12 @@ import type { FoundInstance } from '../ipc/commands'
 import { useProfiles } from '../state/profiles'
 import { showToast } from '../state/ui'
 import { ONBOARDING_STEPS, finishOnboarding, onboardingBack, onboardingNext, useOnboarding } from '../state/onboarding'
+import { TOUR_STEPS } from '../state/tour'
 import { getAccount, useAccounts } from '../state/accounts'
-import { applyTheme, storedTheme } from '../lib/theme'
 import { foundKey } from '../lib/imports'
-import type { ThemeId } from '../lib/theme'
 import { setSoundMode, soundMode } from '../lib/sound'
 import { setMusicAutostart } from '../state/music'
 import { track } from '../lib/telemetry'
-
-const THEMES: [ThemeId, string][] = [
-  ['', 'Тёмная'],
-  ['light', 'Светлая'],
-  ['auto', 'Как в системе'],
-]
 
 function Welcome({ nick }: { nick: string }) {
   return (
@@ -27,29 +20,28 @@ function Welcome({ nick }: { nick: string }) {
         <img src="/millida-logo.svg" alt="" />
         <div>
           <h3>Привет{nick ? ', ' + nick : ''}!</h3>
-          <div className="sub">Сейчас настроим лаунчер под тебя — это займёт минуту.</div>
         </div>
       </div>
       <div className="onb-list">
         <div className="onb-point">
           <Icon id="i-box2" />
           <span>
-            <b>Перенесём твои сборки</b>
-            <small>Из Prism, MultiMC, CurseForge, GDLauncher, ATLauncher, Modrinth и .minecraft</small>
+            <b>Перенесём сборки</b>
+            <small>Prism, MultiMC, CurseForge и другие</small>
           </span>
         </div>
         <div className="onb-point">
           <Icon id="i-image" />
           <span>
             <b>Подберём оформление</b>
-            <small>Тема, музыка и звуки — всё меняется потом в настройках</small>
+            <small>Тема, музыка, звуки</small>
           </span>
         </div>
         <div className="onb-point">
           <Icon id="i-play" />
           <span>
-            <b>Покажем, где что нажимать</b>
-            <small>Короткий гайд по лаунчеру в конце настройки</small>
+            <b>Покажем, где что</b>
+            <small>{TOUR_STEPS.length} подсказок в конце</small>
           </span>
         </div>
       </div>
@@ -90,7 +82,8 @@ function ImportStep() {
         useProfiles.getState().setSelected(p.name)
         ok++
       } catch (err) {
-        showToast('Не удалось импортировать «' + it.name + '»: ' + err, 'error')
+        console.error('[onb-import]', it.path, err)
+        showToast('Не удалось перенести «' + it.name + '»', 'error')
       }
     }
     setBusy('')
@@ -114,7 +107,11 @@ function ImportStep() {
       })
       .catch((err) => {
         if (String(err).includes('Отменено')) return
-        showToast('' + err, 'error')
+        // Своя фраза бэкенда («Файл не найден», «Не удалось распаковать») — до двоеточия;
+        // системный хвост и английские ошибки ОС — только в лог.
+        console.error('[onb-import-file]', err)
+        const head = String(err).split(':')[0].trim()
+        showToast(/^[А-ЯЁ]/.test(head) ? head : 'Не удалось импортировать файл', 'error')
       })
       .finally(() => setFileBusy(false))
   }
@@ -122,12 +119,15 @@ function ImportStep() {
   return (
     <>
       <h3>Перенесём сборки</h3>
-      <div className="sub">Нашли сборки других лаунчеров на всех дисках. Отметь, что перенести — файлы копируются, оригинал остаётся на месте.</div>
+      <div className="sub">Оригиналы останутся на месте</div>
       <div className="onb-scroll">
         {failed ? (
-          <p className="faint-note">Не удалось просканировать диски. Сборки можно импортировать позже — «Сборки» → «Импорт».</p>
+          <p className="faint-note">Не удалось найти сборки</p>
         ) : list === null ? (
-          <p className="faint-note">Ищем сборки на дисках… Это до минуты на HDD — можно сразу жать «Далее», перенести получится и потом.</p>
+          <p className="faint-note onb-scan">
+            <span className="spin"></span>
+            Ищем на дисках
+          </p>
         ) : list.length ? (
           list.map((it) => {
             const key = foundKey(it)
@@ -151,10 +151,7 @@ function ImportStep() {
             )
           })
         ) : (
-          <p className="faint-note">
-            Сборок других лаунчеров не нашли. Ничего страшного — сборку можно создать с нуля или загрузить модпак прямо
-            из лаунчера.
-          </p>
+          <p className="faint-note">Других сборок не нашли</p>
         )}
       </div>
       <div className="onb-inline">
@@ -163,7 +160,7 @@ function ImportStep() {
         </button>
         {importable.length ? (
           <button className="btn sm primary" onClick={() => void runImport()} disabled={!selected.length || !!busy}>
-            {busy ? 'Переносим…' : 'Перенести выбранные (' + selected.length + ')'}
+            {busy ? 'Переносим…' : 'Перенести (' + selected.length + ')'}
           </button>
         ) : null}
       </div>
@@ -172,35 +169,15 @@ function ImportStep() {
 }
 
 function LookStep() {
-  const [theme, setTheme] = useState<ThemeId>(storedTheme)
   const [music, setMusic] = useState(() => localStorage.getItem('m-mus-auto') !== '0')
   const [sound, setSound] = useState(() => soundMode() !== 'off')
 
   return (
     <>
-      <h3>Под тебя</h3>
-      <div className="sub">Всё это меняется потом в настройках — сейчас просто выбери, как удобнее.</div>
-      <div className="set-row">
-        <span className="lab">Тема</span>
-        <div className="segs">
-          {THEMES.map(([v, label]) => (
-            <button
-              key={label}
-              className={'seg' + (theme === v ? ' on' : '')}
-              style={{ height: '32px', fontSize: '12.5px' }}
-              onClick={() => {
-                setTheme(v)
-                applyTheme(v)
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <h3>Звук</h3>
       <div className="set-row">
         <span className="lab">
-          Музыка в лаунчере<small>Спокойные треки, пока выбираешь сборку</small>
+          Музыка
         </span>
         <span
           className={'tgl' + (music ? ' on' : '')}
@@ -213,7 +190,7 @@ function LookStep() {
       </div>
       <div className="set-row">
         <span className="lab">
-          Звуки интерфейса<small>Клики, уведомления от друзей</small>
+          Звуки
         </span>
         <span
           className={'tgl' + (sound ? ' on' : '')}
@@ -231,21 +208,20 @@ function LookStep() {
 function ReadyStep() {
   return (
     <>
-      <h3>Готово — можно играть</h3>
-      <div className="sub">Осталось короткое знакомство с лаунчером: где сборки, контент, серверы и друзья.</div>
+      <h3>Готово</h3>
       <div className="onb-list">
         <div className="onb-point">
           <Icon id="i-play" />
           <span>
-            <b>Гайд занимает меньше минуты</b>
-            <small>10 подсказок по разделам, можно прервать в любой момент</small>
+            <b>Гайд по разделам</b>
+            <small>{TOUR_STEPS.length} подсказок, можно прервать</small>
           </span>
         </div>
         <div className="onb-point">
           <Icon id="i-settings" />
           <span>
-            <b>Запустить заново</b>
-            <small>Настройки → «Показать гайд по лаунчеру»</small>
+            <b>Повторить потом</b>
+            <small>Настройки → «Показать гайд»</small>
           </span>
         </div>
       </div>
@@ -287,7 +263,7 @@ export function OnboardingModal() {
             </button>
           ) : (
             <button className="btn md ghost" onClick={() => finishOnboarding(false)}>
-              Пропустить настройку
+              Пропустить
             </button>
           )}
           <span className="tour-spacer"></span>

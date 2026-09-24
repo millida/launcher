@@ -23,13 +23,17 @@ export const storedOutput = () => localStorage.getItem(OUT_KEY) || ''
 export const setStoredMic = (id: string) => localStorage.setItem(MIC_KEY, id)
 export const setStoredOutput = (id: string) => localStorage.setItem(OUT_KEY, id)
 
+export const isSystemAlias = (id: string) => id === 'default' || id === 'communications'
+
 /**
  * Labels stay empty until the page has been granted the microphone once — the
  * browser hides them from a page that never asked. A silent probe is the price
  * of a usable list, so callers ask for it explicitly.
  */
-export async function listAudioDevices(probe = false): Promise<{ inputs: AudioDevice[]; outputs: AudioDevice[] }> {
-  if (!navigator.mediaDevices?.enumerateDevices) return { inputs: [], outputs: [] }
+export async function listAudioDevices(
+  probe = false,
+): Promise<{ inputs: AudioDevice[]; outputs: AudioDevice[]; named: boolean }> {
+  if (!navigator.mediaDevices?.enumerateDevices) return { inputs: [], outputs: [], named: true }
   if (probe) {
     try {
       const s = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -39,13 +43,18 @@ export async function listAudioDevices(probe = false): Promise<{ inputs: AudioDe
     }
   }
   const all = await navigator.mediaDevices.enumerateDevices()
-  const pick = (kind: MediaDeviceKind, fallback: string) =>
+  const audio = all.filter((d) => d.kind === 'audioinput' || d.kind === 'audiooutput')
+  // A nameless entry cannot be told from its neighbour, and the aliases of the
+  // system default only repeat the first option of the list.
+  const named = audio.length === 0 || audio.some((d) => !!d.label)
+  const pick = (kind: MediaDeviceKind) =>
     all
-      .filter((d) => d.kind === kind)
-      .map((d, i) => ({ id: d.deviceId, label: d.label || fallback + ' ' + (i + 1) }))
+      .filter((d) => d.kind === kind && !!d.label && !isSystemAlias(d.deviceId))
+      .map((d) => ({ id: d.deviceId, label: d.label }))
   return {
-    inputs: pick('audioinput', 'Микрофон'),
-    outputs: pick('audiooutput', 'Устройство'),
+    inputs: pick('audioinput'),
+    outputs: pick('audiooutput'),
+    named,
   }
 }
 

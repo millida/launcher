@@ -1,8 +1,9 @@
 use url::{Host, Url};
 
 /// Same key as the updater plugin in tauri.conf.json: the stub must not become a
-/// second, weaker way to run code that the launcher itself would refuse.
-pub const PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENGQUI2NEEwQjYwMUZFM0MKUldROC9nRzJvR1NyejZ5M0Z6UmpaaVRWb2F6cDI2VlJOTVN6OGZLRlhMWEZCa21VYUlMb3Erdi8K";
+/// second, weaker way to run code that the launcher itself would refuse. The key
+/// of the legacy channel leaked on 05.09.2026, so only the v2 pair counts.
+pub const PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDI5MzUwRDVGRUE4NUI5NzcKUldSM3VZWHFYdzAxS1VyamhaeUdwQkRTNzZwN3U2WXRjaDFpWDZ6b3FvLzN0bkFvY3JwWEFQeCsK";
 
 /// millida.net is a multi-tenant site where users upload files, so only the
 /// launcher folder counts as ours; the storage domain serves nothing else.
@@ -10,11 +11,13 @@ const ALLOWED: &[(&str, &str)] = &[("launcher-storage.millida.net", "/"), ("mill
 
 /// install.json is the first-install manifest and can be pinned to an older
 /// build by hand; latest.json is the auto-update one and only serves as a
-/// fallback, so a missing install.json never blocks new installs.
+/// fallback, so a missing install.json never blocks new installs. Both live
+/// under v2/: the manifests at the root are signed with the leaked key and a
+/// fresh install must never trust them.
 pub const MANIFEST_URLS: &[&str] = &[
-    "https://launcher-storage.millida.net/install.json",
-    "https://launcher-storage.millida.net/latest.json",
-    "https://millida.net/launcher/install.json",
+    "https://launcher-storage.millida.net/v2/install.json",
+    "https://launcher-storage.millida.net/v2/latest.json",
+    "https://millida.net/launcher/v2/install.json",
 ];
 
 /// The keys of latest.json, which the release pipeline fills per target. A stub
@@ -100,6 +103,20 @@ mod tests {
             parse(&doc).is_err(),
             "сборка под чужую платформу обязана отклоняться, иначе стаб скачает неисполняемый файл"
         );
+    }
+
+    /// The root manifests are still served for launchers 1.0.89 and older and are
+    /// signed with the key that leaked on 05.09.2026. A stub reading them would
+    /// install anything that leak can sign.
+    #[test]
+    fn manifests_come_from_the_rotated_channel() {
+        for url in MANIFEST_URLS {
+            assert!(
+                url.contains("/v2/"),
+                "источник {} лежит вне канала v2 — он подписан утёкшим ключом",
+                url
+            );
+        }
     }
 
     /// The key is baked into the stub and never updated. Drift from

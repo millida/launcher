@@ -119,6 +119,9 @@ pub fn millida_logout() -> Result<(), String> {
 
 #[tauri::command]
 pub async fn millida_api(path: String, method: String, body: Option<serde_json::Value>) -> Result<serde_json::Value, String> {
+    if !engine::webview_path_allowed(&path) {
+        return Err("bad path".into());
+    }
     engine::millida_api_auth(path, method, body).await
 }
 

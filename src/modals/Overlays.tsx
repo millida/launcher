@@ -75,7 +75,7 @@ export function ModpackVersionsOverlay() {
       {...backdropClose(close)}
     >
       <div className="modal mw-lg" style={{ maxHeight: '88%' }}>
-        <h3>{install ? 'Установить «' + title + '»' : 'Версии модпака'}</h3>
+        <h3>{install ? 'Установить «' + title + '»' : 'Версии сборки'}</h3>
         <div className="sub">
           {install
             ? 'Выбери версию сборки — Minecraft, загрузчик и моды поставим сами. Запускать сразу не будем.'
@@ -122,7 +122,7 @@ export function ModpackVersionsOverlay() {
                             if (started) setLabel(v.id, 'Ставим…')
                             return
                           }
-                          if (!(await uiConfirm('Переустановить модпак на эту версию? Моды сборки заменятся.', { confirmLabel: 'Переустановить' })))
+                          if (!(await uiConfirm('Переустановить сборку на эту версию? Моды заменятся.', { confirmLabel: 'Переустановить' })))
                             return
                           const upd = runInstall({
                             key: keyMrModpack(slug, profile),
@@ -131,7 +131,7 @@ export function ModpackVersionsOverlay() {
                             onDone: () => {
                               close()
                               void useProfiles.getState().refresh()
-                              showToast('Модпак обновлён')
+                              showToast('Сборка обновлена')
                             },
                             onError: (er) => {
                               setLabel(v.id, 'Поставить')

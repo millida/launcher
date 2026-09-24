@@ -1,47 +1,75 @@
 import { useEffect, useState } from 'react'
-import type { ReactNode } from 'react'
 import { Icon } from '../components/Icon'
-import { BuildCard } from '../components/BuildCard'
-import { ServerRow } from '../components/ServerRow'
-import { MusicControls } from '../components/MusicPop'
-import { useMusic } from '../state/music'
+import { BuildIcon } from '../components/playhub/BuildIcon'
+import { LobbyCharacter } from '../components/lobby/LobbyCharacter'
+import { EmoteBubble } from '../components/lobby/EmoteBubble'
+import { Recommend } from '../components/lobby/Recommend'
+import { PixelField } from '../components/lobby/PixelField'
+import { HubTile } from '../components/lobby/HubTile'
 import { useHeroWallpaper } from '../components/HeroWallpaper'
-import { LOADER_NAME } from '../lib/format'
+import { LOADER_NAME, fmtN, fmtPlaytime } from '../lib/format'
 import { VIDEOS } from '../lib/wallpaper'
 import { hasTauri } from '../ipc/tauri'
 import { useProfiles } from '../state/profiles'
-import { PAGE_SIZE, loadMoreServers, useServers } from '../state/servers'
+import { useLobby } from '../state/lobbyMode'
+import type { LobbyMode } from '../state/lobbyMode'
+import { playMode } from '../lib/lobbyPlay'
 import { useWallpaper } from '../state/wallpaper'
-import { convertFileSrc, fpsBoostState, pickWallpaper, setFpsBoost } from '../ipc/commands'
-import { useMods } from '../state/mods'
-import { openModal, setScreen, showToast } from '../state/ui'
-import { openBuildSettings } from '../state/instance'
+import { convertFileSrc, pickWallpaper } from '../ipc/commands'
+import { setScreen, showToast, useUi } from '../state/ui'
+import { PL_STAGES, cancelPrelaunch } from '../lib/launch'
+import { playTier } from '../lib/playTiers'
 import { useModUpdates } from '../state/modUpdates'
 import { usePlayStats } from '../state/playStats'
-import { realLaunch, startPrelaunch } from '../lib/launch'
 import { stopRunningGame, useGame } from '../state/game'
+// Пиксельный слой главного экрана. Пока файл не подключён в main.tsx,
+// импорт стоит здесь — иначе полки стоят без своих правил.
+import '../styles/pixel/play.css'
+import '../styles/pixel/lobby.css'
 
-// Главный экран заканчивается серверами: блок «Популярные сборки» уехал в
-// раздел контента, а список занимает освободившийся экран целиком.
-const SERVERS_ON_PLAY = PAGE_SIZE
+/* Разделы на лобби, как в Brawl Stars: у каждого ровно один вход (владелец
+   23.09.2026: «всё дублируется»). Режимы и каталог открывает плашка «Что
+   играем сегодня», гардероб — кнопка под персонажем, друзей — список справа,
+   настройки — шестерёнка в углу. Слева под сундуком — плитки «Магазин» и
+   «Свой сервер» (HubTile). */
+
+/**
+ * Пустая плашка режима: вместо значка-сетки по очереди сменяются обложки —
+ * версии, сборки, режимы, как барабан (правка владельца 23.09.2026, 21:45).
+ */
+const REEL = [
+  '/versions/26.3.webp',
+  '/versions/1.20.1.webp',
+  '/versions/1.21.11.webp',
+  '/versions/26.2.webp',
+  '/versions/1.21.4.webp',
+  '/versions/1.16.5.webp',
+  '/versions/1.12.2.webp',
+]
+function ModeReel() {
+  const [i, setI] = useState(0)
+  useEffect(() => {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    const t = setInterval(() => setI((n) => (n + 1) % REEL.length), 2600)
+    return () => clearInterval(t)
+  }, [])
+  return <img key={i} className="lobby-mode-reel" src={REEL[i]} alt="" />
+}
 
 export function Play({ on }: { on: boolean }) {
   const profiles = useProfiles((s) => s.profiles)
-  const selected = useProfiles((s) => s.selected)
-  const servers = useServers((s) => s.list)
-  const serversTotal = useServers((s) => s.total)
-  const serversLoadingMore = useServers((s) => s.loadingMore)
-  const [serversShown, setServersShown] = useState(SERVERS_ON_PLAY)
-  const moreServers = Math.min(PAGE_SIZE, Math.max(servers.length, serversTotal) - serversShown)
+  const picked = useLobby((s) => s.picked)
+  const lobbyServers = useLobby((s) => s.servers)
+  const loadLobby = useLobby((s) => s.load)
   const wp = useWallpaper()
-  const hero = useHeroWallpaper(on)
-  const setMusicOpen = useMusic((s) => s.setOpen)
+  // Обои убраны (владелец 23.09.2026): фон — только цветная сцена PixelField.
+  const hero = useHeroWallpaper(false)
   const updates = useModUpdates()
-  const [boostOn, setBoostOn] = useState(false)
-  const [boostBusy, setBoostBusy] = useState(false)
   const playStats = usePlayStats((s) => s.stats)
   const running = useGame((s) => s.list)
   const gameStopping = useGame((s) => s.stopping)
+  // Ход подготовки к запуску — прямо на кнопке: скачиваем → запускаем → в игре.
+  const prelaunch = useUi((s) => s.prelaunch)
   const hoursOf = (name: string) => playStats.builds.find((b) => b.key === name) || null
 
   useEffect(() => {
@@ -50,40 +78,14 @@ export function Play({ on }: { on: boolean }) {
   }, [on, profiles.length])
 
   useEffect(() => {
-    if (!hasTauri() || !selected) {
-      setBoostOn(false)
-      return
-    }
-    let alive = true
-    fpsBoostState(selected)
-      .then((st) => {
-        if (alive) setBoostOn(st.enabled)
-      })
-      .catch(() => {})
-    return () => {
-      alive = false
-    }
-  }, [selected, on])
+    if (on) void loadLobby()
+  }, [on])
 
-  const toggleBoost = async (name: string) => {
-    setBoostBusy(true)
-    try {
-      const next = await setFpsBoost(name, !boostOn)
-      setBoostOn(next.enabled)
-      void useMods.getState().load()
-      showToast(
-        next.enabled
-          ? next.vanilla
-            ? 'Буст FPS включён: профиль JVM и лёгкая графика'
-            : 'Буст FPS включён: ' + next.mods.length + ' мод(ов), профиль JVM и лёгкая графика'
-          : 'Буст FPS выключен — вернули как было',
-      )
-    } catch (e) {
-      showToast('Не удалось переключить буст FPS: ' + e, 'error')
-    } finally {
-      setBoostBusy(false)
-    }
-  }
+  // Часы на «Играть»: статистику лобби грузит само, не ждёт «Во что играем».
+  useEffect(() => {
+    if (on) void usePlayStats.getState().refresh()
+  }, [on])
+
 
   useEffect(() => {
     if (!wp.popOpen) return
@@ -96,67 +98,85 @@ export function Play({ on }: { on: boolean }) {
     return () => document.removeEventListener('click', onDoc)
   }, [wp.popOpen])
 
-  const sel = profiles.find((p) => p.name === selected) || profiles[0]
+  // «Что играем сегодня» — только то, что человек выбрал сам (в каталоге
+  // режимов или запуском). Ничего не подставляем: «Играть» без выбора ведёт
+  // в каталог, а не молча запускает сборку дня (владелец 23.09.2026).
+  const tier = playTier(playStats.total_seconds)
+  const mode: LobbyMode | null =
+    picked && (picked.kind !== 'build' || profiles.some((p) => p.name === picked.name)) ? picked : null
+  const sel = mode && mode.kind === 'build' ? profiles.find((p) => p.name === mode.name) || null : null
   const selRunning = !!sel && running.includes(sel.name)
+  const selHours = sel ? hoursOf(sel.name) : null
+  const liveServer = mode && mode.kind === 'server' ? lobbyServers.find((s) => s.slug === mode.slug) || null : null
 
-  let heroName: string
-  let heroMeta: ReactNode
-  let heroEyebrow: string
-  if (profiles.length && sel) {
-    heroName = sel.name
-    heroEyebrow = 'Продолжить'
-    heroMeta = (
-      <>
-        <span className="pill">{LOADER_NAME(sel)}</span>
-        <span className="pill">{sel.version}</span>
-      </>
-    )
-  } else {
-    heroName = 'Своя сборка за минуту'
-    heroEyebrow = 'Millida Launcher'
-    heroMeta = (
-      <>
-        <span className="pill">Minecraft и Java поставим сами</span>
-        <span className="pill">Моды в один клик</span>
-      </>
-    )
-  }
+  // Для аналитики: что стоит в «Сегодня играем» (имя своей сборки — только как id сборки).
+  const modeId =
+    mode?.kind === 'build'
+      ? mode.name
+      : mode?.kind === 'version'
+        ? mode.version
+        : mode?.kind === 'premium'
+          ? mode.slug || mode.id
+          : mode?.kind === 'server'
+            ? mode.slug
+            : undefined
 
-  const byRecent = profiles
-    .map((p) => ({ p, t: Number(localStorage.getItem('m-last-' + p.name) || 0) }))
-    .sort((a, b) => b.t - a.t)
-    .map((x) => x.p)
-
-  const buildCard = (p: (typeof profiles)[number]) => <BuildCard key={p.name} p={p} hours={hoursOf(p.name)} />
-
-  const newBuildBtn = (
-    <button className="build-new" id="newBuild2" data-sound="open" onClick={() => openModal('nbModal')}>
-      <span className="inner">
-        <Icon id="i-plus" />
-        Новая сборка
+  const modeArt =
+    mode?.kind === 'build' ? (
+      // Иконка сборки крупно по центру — как на карточке «Моих сборок»
+      // (владелец 24.09.2026: мелкий сундук в углу).
+      <span className="lobby-mode-cover lobby-mode-bi">
+        <BuildIcon icon={sel?.icon} size={104} />
       </span>
-    </button>
-  )
+    ) : mode?.kind === 'version' ? (
+      <img src={'/versions/' + mode.version + '.webp'} alt="" onError={(e) => (e.currentTarget.style.display = 'none')} />
+    ) : mode?.kind === 'premium' ? (
+      mode.cover ? <img src={mode.cover} alt="" /> : null
+    ) : mode?.kind === 'server' ? (
+      mode.banner || mode.logo ? <img src={(mode.banner || mode.logo) as string} alt="" /> : null
+    ) : (
+      <ModeReel />
+    )
+  const modeTitle =
+    mode?.kind === 'build' ? mode.name : mode?.kind === 'version' ? 'Minecraft ' + mode.version : mode?.kind === 'premium' ? mode.title : mode?.kind === 'server' ? mode.name : 'Ещё не выбрано'
+  const modeMeta =
+    mode?.kind === 'build' && sel ? (
+      <>
+        {LOADER_NAME(sel) + ' · ' + sel.version}
+        {/* «меньше минуты» не пишем — это пустяк, а не наигранные часы */}
+        {selHours && selHours.seconds >= 3600 ? (
+          <span className="hero-num">
+            <Icon id="i-clock" />
+            <b>{fmtPlaytime(selHours.seconds)}</b>
+          </span>
+        ) : null}
+      </>
+    ) : mode?.kind === 'version' ? (
+      'Fabric'
+    ) : mode?.kind === 'premium' ? (
+      mode.meta
+    ) : mode?.kind === 'server' && liveServer ? (
+      <span className="hero-num">
+        <Icon id="i-users" />
+        <b>{fmtN(liveServer.online)}</b>
+      </span>
+    ) : null
+  const modeTag =
+    mode?.kind === 'premium' ? (
+      <>
+        <Icon id="i-crown" />
+        Премиум
+      </>
+    ) : mode?.kind === 'server' ? (
+      <>
+        <Icon id="i-server" />
+        Сервер
+      </>
+    ) : null
 
   return (
-    <section className={'screen' + (on ? ' on' : '')} id="s-play">
-      <div className="hero-live-wrap">
-        <div className="hero-tools">
-          <MusicControls />
-          <button
-            className="wp-btn"
-            id="wpBtn"
-            onClick={(e) => {
-              e.stopPropagation()
-              const next = !wp.popOpen
-              if (next) setMusicOpen(false)
-              wp.setPopOpen(next)
-            }}
-          >
-            <Icon id="i-image" />
-            Фон
-          </button>
-        </div>
+    <section className={'screen lobby' + (on ? ' on' : '')} id="s-play">
+      <div className="hero-live-wrap lobby-wrap">
       <div
         className="hero-live"
         id="heroLive"
@@ -164,123 +184,158 @@ export function Play({ on }: { on: boolean }) {
         onMouseMove={hero.onMouseMove}
         onMouseLeave={hero.onMouseLeave}
       >
-        <img
-          id="wpPoster"
-          className={hero.posterReady ? 'ready' : undefined}
-          alt=""
-          src={hero.posterSrc || undefined}
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-        />
-        <video
-          id="wpVideo"
-          ref={hero.videoRef}
-          className={hero.videoReady ? 'ready' : undefined}
-          muted
-          loop
-          playsInline
-          preload="auto"
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-        ></video>
-        <canvas id="wpCanvas" ref={hero.canvasRef} className={hero.canvasReady ? 'ready' : undefined}></canvas>
-        {wp.wpCur === 'custom' && wp.custom ? (
-          wp.custom.kind === 'video' ? (
-            <video
-              key={wp.custom.path}
-              className="ready"
-              src={convertFileSrc(wp.custom.path)}
-              muted
-              loop
-              playsInline
-              autoPlay={wp.wpAnimOn}
-              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 1 }}
-            />
-          ) : (
-            <img
-              key={wp.custom.path}
-              className="ready"
-              alt=""
-              src={convertFileSrc(wp.custom.path)}
-              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 1 }}
-            />
-          )
-        ) : null}
-        <div className="hero-scrim"></div>
+        <PixelField on={on} />
 
-        <div className="hero-overlay">
-          <div className="hero-body">
-            <span className="eyebrow">{heroEyebrow}</span>
-            <h2 id="heroName">{heroName}</h2>
-            <div className="hero-meta" id="heroMeta">
-              {heroMeta}
-            </div>
-          </div>
-          <div className="hero-cta" style={{ flexDirection: 'row', alignItems: 'center', gap: '10px' }}>
-            <button
-              className="hero-gear"
-              id="heroConfig"
-              data-sound="open"
-              title="Настроить сборку"
-              style={sel ? undefined : { display: 'none' }}
-              onClick={() => sel && openBuildSettings(sel.name)}
-            >
-              <Icon id="i-settings" />
-            </button>
-            <button
-              className={'btn lg glass' + (boostOn ? ' on' : '')}
-              id="fpsBoostBtn"
-              title={
-                boostOn
-                  ? 'Буст FPS включён — нажми, чтобы вернуть обычные настройки'
-                  : 'Больше FPS: моды-ускорители, профиль JVM и лёгкая графика'
-              }
-              style={sel && hasTauri() ? undefined : { display: 'none' }}
-              disabled={boostBusy}
-              onClick={() => sel && void toggleBoost(sel.name)}
-            >
-              <span className="lbl">
-                <Icon id="i-zap" />
-                {boostBusy ? 'Меняем…' : 'Буст FPS'}
+      </div>
+      <LobbyCharacter on={on} />
+      <EmoteBubble />
+      <Recommend on={on} />
+      {/* Левый край — как в Brawl Stars: крупный сундук и под ним разделы.
+          Боковой полосы на главной нет (владелец 23.09.2026). */}
+      {/* Ежедневный бонус живёт в магазине (правка владельца 21:43): плитки
+          бонуса нет, у «Магазина» «!», пока бонус не забран. */}
+      <div className="lobby-left">
+        <nav className="lobby-nav" aria-label="Разделы">
+          <HubTile kind="shop" />
+          <HubTile kind="wardrobe" />
+          <HubTile kind="server" />
+        </nav>
+      </div>
+      <div className="lobby-who">
+        {playStats.total_seconds >= 3600 ? (
+          <span
+            className="lobby-hours"
+            title={tier.next ? 'Наиграно · следующая ступень ' + tier.next + ' ч' : 'Наиграно'}
+          >
+            <Icon id="i-trophy" />
+            {fmtPlaytime(playStats.total_seconds)}
+            {tier.next ? (
+              <span className="lobby-hours-bar" aria-hidden="true">
+                <span style={{ width: Math.round(tier.progress * 100) + '%' }} />
               </span>
-            </button>
-            <button
-              className={'btn lg ' + (selRunning ? 'running' : 'primary')}
-              id="playBtn"
-              title={selRunning ? 'Игра идёт — нажми, чтобы запустить ещё одну копию' : undefined}
-              onClick={() => {
-                if (!sel) {
-                  openModal('nbModal')
-                  return
-                }
-                if (hasTauri()) realLaunch(sel.name)
-                else startPrelaunch(sel.name)
-              }}
-            >
-              <span className="fill"></span>
-              <span className="lbl">
-                {selRunning ? <span className="run-dot"></span> : <Icon id={sel ? 'i-play' : 'i-plus'} />}
-                <span id="playLbl">{selRunning ? 'Запущено' : sel ? 'Играть' : 'Создать сборку'}</span>
-              </span>
-            </button>
+            ) : null}
+          </span>
+        ) : null}
+      </div>
+
+      <div className="lobby-side">
+        {/* Над рядом — подпись и мелкие действия сборки; сам ряд — плашка
+            режима и «Играть» одной высоты, как в Brawl Stars. */}
+        <div className="lobby-side-top">
+          <span />
+          <span className="lobby-tools">
             {running.length ? (
-              <button
-                className="btn lg danger"
-                id="stopBtn"
-                disabled={gameStopping}
-                title="Остановить игру"
-                onClick={() => stopRunningGame()}
-              >
-                <span className="lbl">
-                  <Icon id="i-power" />
-                  {gameStopping ? 'Останавливаем…' : 'Остановить'}
-                </span>
+              <button className="lobby-tool stop" id="stopBtn" data-track="stop_game" disabled={gameStopping} onClick={() => stopRunningGame()}>
+                <Icon id="i-power" />
+                {gameStopping ? 'Останавливаем…' : 'Остановить'}
               </button>
             ) : null}
-          </div>
+          </span>
+        </div>
+        <div className="lobby-row">
+          {/* OneBlock в лобби убран (владелец 24.09.2026, 07:26: «пока убираем»). */}
+          {/* Плашка ведёт в каталог режимов, «Играть» — только запуск. */}
+          <button
+            className="lobby-mode"
+            data-sound="open"
+            data-track="today"
+            data-section="today"
+            data-src="today"
+            data-kind={mode?.kind}
+            data-id={modeId}
+            data-private={mode?.kind === 'build' ? '' : undefined}
+            onClick={() => setScreen('playhub')}
+          >
+            {/* Панель на всю ширину (правка владельца 22:44): крупная обложка
+                меняется раз в пару секунд — «загляни, может найдёшь интереснее». */}
+            <span className={'lobby-mode-card' + (mode ? ' kind-' + mode.kind : ' empty')}>
+              <span className="lobby-mode-art">
+                {mode ? modeArt : null}
+                <span className={'lobby-mode-reelbox' + (mode ? ' under' : '')}>
+                  <ModeReel />
+                </span>
+                {modeTag ? <span className="mode-tile-tag">{modeTag}</span> : null}
+              </span>
+              <span className="lobby-mode-body">
+                <span className="lobby-mode-lab">Сегодня играем</span>
+                <b>{modeTitle}</b>
+                {modeMeta ? <span className="meta">{modeMeta}</span> : null}
+              </span>
+            </span>
+          </button>
+          {/* Кнопка запуска стоит на постоянном месте и видна на первом кадре:
+              наведение её не вызывает и не прячет (антипаттерн Modrinth). */}
+          <button
+            className={'btn lg ' + (selRunning ? 'running' : prelaunch.open ? 'primary loading' : 'primary')}
+            id="playBtn"
+            data-track="play"
+            data-src="lobby_play"
+            data-kind={mode?.kind}
+            data-id={modeId}
+            data-private={mode?.kind === 'build' ? '' : undefined}
+            data-sound={mode ? undefined : 'open'}
+            onClick={() => {
+              // Второе нажатие во время подготовки — отмена запуска
+              // (владелец 24.09.2026, 17:26).
+              if (prelaunch.open) {
+                cancelPrelaunch()
+                return
+              }
+              if (!mode) {
+                setScreen('playhub')
+                return
+              }
+              void playMode(mode, profiles)
+            }}
+          >
+            <span className="fill" style={prelaunch.open ? { width: Math.round(prelaunch.pct) + '%' } : undefined}></span>
+            <span className="lbl">
+              {selRunning ? (
+                <span className="run-dot"></span>
+              ) : prelaunch.open ? (
+                <span className="spin"></span>
+              ) : (
+                <Icon id="i-play" />
+              )}
+              <span id="playLbl">
+                {selRunning ? (
+                  'Запущено'
+                ) : prelaunch.open ? (
+                  <>
+                    <span className="play-stage">{(PL_STAGES[prelaunch.stage] || 'Запуск') + ' · нажми — отмена'}</span>
+                    {Math.round(prelaunch.pct) + '%'}
+                  </>
+                ) : (
+                  <>
+                    Играть
+                    {/* Сколько наиграно через лаунчер — видно при каждом заходе
+                        (владелец 24.09.2026, 13:31). */}
+                    {playStats.total_seconds >= 3600 ? (
+                      <span className="play-hours">
+                        <Icon id="i-clock" />
+                        {fmtPlaytime(playStats.total_seconds)} в игре
+                      </span>
+                    ) : null}
+                  </>
+                )}
+              </span>
+            </span>
+          </button>
         </div>
       </div>
         <div className={'wp-pop' + (wp.popOpen ? ' open' : '')} id="wpPop">
           <div className="cap">Живые обои</div>
           <div className="wp-grid" id="wpGrid">
+            <div
+              className={'wp-item wp-item-pixels' + (wp.wpCur === 'pixels' ? ' on' : '')}
+              data-id="pixels"
+              onClick={() => wp.pick('pixels', 'Сцена')}
+            >
+              <span className="wp-item-ph" aria-hidden="true">
+                <Icon id="i-grid" />
+              </span>
+              <span>Сцена</span>
+            </div>
             {VIDEOS.map((v) => (
               <div
                 key={v.id}
@@ -303,7 +358,6 @@ export function Play({ on }: { on: boolean }) {
               <div
                 key={c.path}
                 className={'wp-item' + (wp.wpCur === 'custom' && wp.custom && wp.custom.path === c.path ? ' on' : '')}
-                title={c.name || 'Свой фон'}
                 onClick={() => wp.setCustom(c)}
               >
                 {c.kind === 'video' ? (
@@ -320,7 +374,7 @@ export function Play({ on }: { on: boolean }) {
                 <span>{c.name || 'Свой фон'}</span>
                 <button
                   className="wp-item-del"
-                  title="Удалить фон"
+                  aria-label="Удалить фон"
                   onClick={(e) => {
                     e.stopPropagation()
                     wp.removeCustom(c.path)
@@ -332,7 +386,6 @@ export function Play({ on }: { on: boolean }) {
             ))}
             <div
               className="wp-item wp-item-add"
-              title="Загрузить свой фон"
               onClick={() => {
                 if (!hasTauri()) {
                   showToast('Загрузка своего фона доступна в приложении', 'error')
@@ -342,7 +395,10 @@ export function Play({ on }: { on: boolean }) {
                   .then((w) => {
                     if (w) wp.addCustom({ kind: w.kind, path: w.path, name: w.name })
                   })
-                  .catch((e) => showToast('Не удалось загрузить фон: ' + e, 'error'))
+                  .catch((e) => {
+                    console.error('[wallpaper]', e)
+                    showToast('Не удалось загрузить фон', 'error')
+                  })
               }}
             >
               <span className="wp-item-ph">
@@ -364,74 +420,6 @@ export function Play({ on }: { on: boolean }) {
           </div>
         </div>
       </div>
-
-      {profiles.length ? (
-        <>
-          <div className="sec-title sec-title-row">
-            <span>Сборки</span>
-            <button className="sec-link" onClick={() => setScreen('builds')}>
-              Все сборки
-              <Icon id="i-chev-r" />
-            </button>
-          </div>
-          <div className="build-grid one-line" id="buildGrid" style={{ marginBottom: '22px' }}>
-            {byRecent.slice(0, 8).map(buildCard)}
-            {newBuildBtn}
-          </div>
-        </>
-      ) : (
-        <div className="card" style={{ padding: '28px 24px', textAlign: 'center' }}>
-          <div style={{ fontSize: '17px', fontWeight: 700, marginBottom: '6px' }}>Создай первую сборку</div>
-          <p className="faint-note" style={{ maxWidth: '460px', margin: '0 auto 16px', lineHeight: 1.55 }}>
-            Выбери версию и загрузчик — Minecraft, Java и загрузчик поставим сами. Или импортируй сборку из другого
-            лаунчера, или поставь готовый модпак.
-          </p>
-          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
-            <button className="btn md primary" id="obNew" data-sound="open" onClick={() => openModal('nbModal')}>
-              <Icon id="i-plus" /> Новая сборка
-            </button>
-            <button className="btn md secondary" id="obImport" data-sound="open" onClick={() => openModal('impModal')}>
-              Импорт из лаунчера
-            </button>
-            <button className="btn md secondary" id="obModpack" onClick={() => setScreen('mods')}>
-              Готовый модпак
-            </button>
-          </div>
-        </div>
-      )}
-
-      {servers.length ? (
-        <>
-          <div className="sec-title sec-title-row">
-            <span>Рекомендуемые серверы</span>
-            <button className="sec-link" onClick={() => setScreen('servers')}>
-              Все серверы
-              <Icon id="i-chev-r" />
-            </button>
-          </div>
-          <div className="stack" id="promoRow">
-            {servers.slice(0, serversShown).map((sv, i) => (
-              <ServerRow key={sv.slug + i} sv={sv} />
-            ))}
-          </div>
-          {moreServers > 0 ? (
-            <div style={{ display: 'flex', justifyContent: 'center', margin: '16px 0 22px' }}>
-              <button
-                className="btn md secondary"
-                disabled={serversLoadingMore}
-                onClick={() => {
-                  setServersShown((n) => n + PAGE_SIZE)
-                  void loadMoreServers()
-                }}
-              >
-                {serversLoadingMore ? 'Загружаем…' : 'Показать ещё ' + moreServers}
-              </button>
-            </div>
-          ) : (
-            <div style={{ marginBottom: '22px' }} />
-          )}
-        </>
-      ) : null}
 
     </section>
   )

@@ -296,7 +296,7 @@ mod tests {
     fn boost_flags_survive_the_jvm_filter() {
         for f in boost_flags() {
             assert!(
-                jvm_arg_allowed(f),
+                user_jvm_arg_allowed(f),
                 "флаг {f} режима «Буст FPS» отсеивается фильтром аргументов JVM — он не дойдёт до игры",
             );
         }

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Icon } from './Icon'
 import { fmtVoiceTime } from '../lib/voice'
+import { isOwnMediaUrl } from '../lib/ownMedia'
 import { applyOutput } from '../lib/audioDevices'
 import type { ChatAttachment } from '../state/friends'
 
@@ -62,6 +63,10 @@ export function VoiceMessage({ att, me }: { att: ChatAttachment; me?: boolean })
 
   const toggle = () => {
     let a = audioRef.current
+    if (!a && !isOwnMediaUrl(att.url)) {
+      setFailed('Файл не из хранилища Millida')
+      return
+    }
     if (!a) {
       a = new Audio(att.url)
       a.preload = 'none'

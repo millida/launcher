@@ -10,7 +10,10 @@ import { setNewBuildPreset } from '../state/newBuild'
 import { openModal } from '../state/ui'
 import { useProfiles } from '../state/profiles'
 import { usePackCode } from '../state/packCode'
-import { useFriends, openChat } from '../state/friends'
+import { runInstall } from '../state/installs'
+import { installCatalogPack } from '../ipc/commands'
+import { keyCatalogPack } from './installKeys'
+import { useFriends, openChat, loadFriends } from '../state/friends'
 import { callFriend } from '../state/call'
 import { rememberServerName } from '../state/playStats'
 import { quickJoin } from './joinServer'
@@ -35,15 +38,18 @@ function handle(raw: string) {
     const addr = rest || q.get('addr') || ''
     if (!addr) return
     const name = q.get('name') || addr
-    rememberServerName(addr, name)
     // Any web page can fire a millida:// link, so starting the game and joining
-    // someone else's server asks first.
-    void uiConfirm(`Запустить игру и зайти на сервер «${name}»?`, {
+    // someone else's server asks first. Имя приходит из ссылки и может врать —
+    // поэтому рядом всегда настоящий адрес, а запоминаем имя только после «да».
+    const label = name === addr ? `«${addr}»` : `«${name}» (${addr})`
+    void uiConfirm(`Запустить игру и зайти на сервер ${label}?`, {
       title: 'Millida',
       confirmLabel: 'Запустить',
       danger: false,
     }).then((ok) => {
-      if (ok) void quickJoin(addr, name, q.get('licensed') === '1', q.getAll('version')).catch(() => {})
+      if (!ok) return
+      rememberServerName(addr, name)
+      void quickJoin(addr, name, q.get('licensed') === '1', q.getAll('version')).catch(() => {})
     })
     return
   }
@@ -100,6 +106,34 @@ function handle(raw: string) {
     usePackCode.getState().show(code)
     return
   }
+  // Готовая сборка каталога: сайт не отдаёт её файлом, установка живёт только
+  // здесь. Как и «join», ссылку может открыть любая страница, поэтому спрашиваем
+  // до того, как качать гигабайты.
+  if (action === 'modpack') {
+    const slug = rest || q.get('slug') || ''
+    if (!slug) return
+    setScreen('builds')
+    const title = q.get('name') || slug
+    void uiConfirm(title === slug ? `Установить сборку «${slug}»?` : `Установить сборку «${title}» (${slug})?`, {
+      title: 'Millida',
+      confirmLabel: 'Установить',
+      danger: false,
+    }).then((ok) => {
+      if (!ok) return
+      runInstall({
+        key: keyCatalogPack(slug),
+        title,
+        running: 'Скачивание…',
+        run: () => installCatalogPack(slug),
+        onDone: (p) => {
+          useProfiles.getState().setSelected(p.name)
+          void useProfiles.getState().refresh()
+          showToast('Сборка «' + p.name + '» готова к запуску', 'ok', 'achievement')
+        },
+      })
+    })
+    return
+  }
   if (action === 'skins') {
     setScreen('skins')
     return
@@ -121,14 +155,25 @@ function handle(raw: string) {
     const uid = rest || q.get('user') || ''
     setScreen('friends')
     if (!uid) return
-    const nick = q.get('nick') || useFriends.getState().friends.find((f) => f.userId === uid)?.nickname || ''
-    // Any web page can fire a millida:// link, so calling someone asks first.
-    void uiConfirm(`Позвонить ${nick || 'этому игроку'}?`, {
-      title: 'Millida',
-      confirmLabel: 'Позвонить',
-      danger: false,
-    }).then((ok) => {
-      if (ok) void callFriend(uid, nick).catch(() => {})
+    // Звоним только друзьям и называем их по нику из списка друзей: ник из
+    // ссылки мог подсунуть кто угодно (аудит 24.09.2026).
+    const find = () => useFriends.getState().friends.find((f) => f.userId === uid)
+    // При холодном старте список друзей ещё не загружен.
+    void (find() ? Promise.resolve() : loadFriends().catch(() => {})).then(() => {
+      const friend = find()
+      if (!friend) {
+        showToast('Позвонить по ссылке можно только другу', 'error')
+        return
+      }
+      const nick = friend.nickname || ''
+      // Any web page can fire a millida:// link, so calling someone asks first.
+      void uiConfirm(`Позвонить ${nick || 'этому игроку'}?`, {
+        title: 'Millida',
+        confirmLabel: 'Позвонить',
+        danger: false,
+      }).then((ok) => {
+        if (ok) void callFriend(uid, nick).catch(() => {})
+      })
     })
   }
 }

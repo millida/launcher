@@ -3,16 +3,14 @@ import type React from 'react'
 import { Icon } from '../../components/Icon'
 import { uiConfirm } from '../../state/confirm'
 
-const PAID_SUMMARY =
-  'Любой платный тариф открывает всё сразу: свои файлы и SFTP, своё ядро и сборку архивом, базу данных, ' +
-  'дополнительные порты, сеть серверов, доступ тех-админу и защиту от атак. Тарифы отличаются только объёмом памяти. ' +
-  'Бесплатно и без тарифа: моды, плагины и готовые сборки ставятся в один клик во вкладке «Ядро и сборки». ' +
-  'Их конфиги правятся и на бесплатном.'
+// Раньше здесь был абзац на четыре строки. Тарифы отличаются только памятью,
+// поэтому достаточно одной строки: что открывается и что для этого нужно.
+const PAID_SUMMARY = 'Файлы, SFTP, своё ядро, база и порты — на любом платном тарифе.'
 
 export async function paidLock(feature: string, onTariff: () => void) {
   const ok = await uiConfirm(PAID_SUMMARY, {
-    title: feature + ' — на платном тарифе',
-    confirmLabel: 'Перейти на платный тариф',
+    title: feature + ' — на платном',
+    confirmLabel: 'Выбрать тариф',
     cancelLabel: 'Закрыть',
     danger: false,
   })
@@ -35,7 +33,8 @@ export function LockBtn({
   return (
     <button
       className={'btn sm ' + (label ? 'secondary' : 'ghost')}
-      title={title || feature + ' — на платном тарифе'}
+      aria-label={title || feature + ' — на платном тарифе'}
+      data-tip={label ? undefined : title || feature + ' — на платном'}
       onClick={() => void paidLock(feature, onTariff)}
     >
       <Icon id={icon || 'i-lock'} /> {label}
@@ -171,6 +170,7 @@ export function ApplyField({
   label,
   busy,
   width,
+  suffix,
   onApply,
 }: {
   value: string
@@ -178,6 +178,8 @@ export function ApplyField({
   label: string
   busy?: boolean
   width?: string
+  /// Хвост адреса прямо в поле (.millida.host) — вместо подписи-объяснения.
+  suffix?: string
   onApply: (v: string) => void
 }) {
   const [v, setV] = useState(value)
@@ -192,6 +194,7 @@ export function ApplyField({
           onChange={(e) => setV(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && v.trim() && onApply(v.trim())}
         />
+        {suffix ? <span className="hs-suffix">{suffix}</span> : null}
       </div>
       <button className="btn sm secondary" disabled={busy || !v.trim() || v === value} onClick={() => onApply(v.trim())}>
         {label}
@@ -200,6 +203,9 @@ export function ApplyField({
   )
 }
 
+/// Подсказка к кнопке-иконке. Нативный `title` запрещён контрактом, а CSS-плашку
+/// на ::after срезает clip-path кнопки и карточки — поэтому одна плашка на
+/// экран, вынесенная в body. Работает для любого `[data-tip]` внутри `root`.
 export function Empty({ icon, text }: { icon?: string; text: string }) {
   return (
     <div className="host-empty">

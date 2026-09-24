@@ -14,6 +14,7 @@ import { pingVersions, serverVersions } from './mcVersion'
 import { joinPlan } from './joinPlan'
 import { pickBuildForJoin } from '../state/buildPicker'
 import { track } from './telemetry'
+import { launchAttribution } from './uiTrack'
 
 const addrKey = (ip: string) =>
   (ip || '')
@@ -158,7 +159,14 @@ export async function quickJoin(ip: string, name: string, licensed?: boolean, ve
     showToast('Подключение к серверу доступно в приложении', 'error')
     return Promise.reject(new Error('no-tauri'))
   }
-  track('server_join', { addr: ip.slice(0, 64), name: name.slice(0, 64) })
+  // Адрес и имя пишем только для серверов рейтинга: приватный сервер друга
+  // (домашний IP, название) в телеметрию не уходит (аудит 24.09.2026).
+  const key = addrKey(ip)
+  const rated = key ? useServers.getState().list.find((s) => s.slug && addrKey(s.ip) === key) : undefined
+  track('server_join', {
+    ...(rated ? { addr: ip.slice(0, 64), name: name.slice(0, 64), slug: rated.slug.slice(0, 80) } : { rated: false }),
+    ...launchAttribution('other'),
+  })
   let wanted = versions && versions.length ? serverVersions(versions) : versionsForAddr(ip)
   if (!wanted.length) wanted = await versionsFromPing(ip)
   const prof = await buildForServer({ ip, name, licensed, versions: wanted }, wanted)

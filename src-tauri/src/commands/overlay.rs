@@ -6,11 +6,17 @@ pub struct OverlayState {
     pub enabled: bool,
     pub toasts: bool,
     pub hotkey: String,
+    pub card_ms: u64,
 }
 
 #[tauri::command]
 pub fn overlay_state() -> OverlayState {
-    OverlayState { enabled: overlay::enabled(), toasts: overlay::toasts_enabled(), hotkey: overlay::hotkey() }
+    OverlayState {
+        enabled: overlay::enabled(),
+        toasts: overlay::toasts_enabled(),
+        hotkey: overlay::hotkey(),
+        card_ms: overlay::card_ms(),
+    }
 }
 
 #[tauri::command]
@@ -31,6 +37,14 @@ pub fn overlay_set_hotkey(app: tauri::AppHandle, hotkey: String) -> Result<(), S
     crate::engine::set_ui_pref("overlay-hotkey".into(), hotkey)?;
     overlay::rebind_hotkey(&app);
     Ok(())
+}
+
+/// How long a notification card stays on screen. Out-of-range values are pulled
+/// back into the usable range rather than rejected: the card is the only way the
+/// message reaches a player in game, so it must never end up unreadably short.
+#[tauri::command]
+pub fn overlay_set_card_ms(ms: u64) -> Result<(), String> {
+    overlay::set_card_ms(ms)
 }
 
 /// Called by the main window when a message arrives while a game is running:

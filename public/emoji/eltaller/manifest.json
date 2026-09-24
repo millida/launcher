@@ -1,0 +1,392 @@
+{
+ "pack": "eltaller47",
+ "title": "eltaller47",
+ "source": "https://t.me/addemoji/eltaller47",
+ "items": [
+  {
+   "id": "01",
+   "emoji": "🥺",
+   "file": "01.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "02",
+   "emoji": "👀",
+   "file": "02.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "03",
+   "emoji": "😑",
+   "file": "03.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "04",
+   "emoji": "👏",
+   "file": "04.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "05",
+   "emoji": "💩",
+   "file": "05.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "06",
+   "emoji": "😥",
+   "file": "06.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "07",
+   "emoji": "🤯",
+   "file": "07.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "08",
+   "emoji": "🤪",
+   "file": "08.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "09",
+   "emoji": "🤦‍♂️",
+   "file": "09.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "10",
+   "emoji": "😴",
+   "file": "10.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "11",
+   "emoji": "😡",
+   "file": "11.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "12",
+   "emoji": "😉",
+   "file": "12.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "13",
+   "emoji": "😔",
+   "file": "13.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "14",
+   "emoji": "🤫",
+   "file": "14.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "15",
+   "emoji": "😓",
+   "file": "15.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "16",
+   "emoji": "😫",
+   "file": "16.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "17",
+   "emoji": "🥳",
+   "file": "17.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "18",
+   "emoji": "🫡",
+   "file": "18.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "19",
+   "emoji": "😖",
+   "file": "19.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "20",
+   "emoji": "👋",
+   "file": "20.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "21",
+   "emoji": "👌",
+   "file": "21.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "22",
+   "emoji": "❤️",
+   "file": "22.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "23",
+   "emoji": "👍",
+   "file": "23.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "24",
+   "emoji": "🍗",
+   "file": "24.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "25",
+   "emoji": "👎",
+   "file": "25.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "26",
+   "emoji": "😐",
+   "file": "26.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "27",
+   "emoji": "😂",
+   "file": "27.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "28",
+   "emoji": "🤔",
+   "file": "28.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "29",
+   "emoji": "💅",
+   "file": "29.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "30",
+   "emoji": "😵‍💫",
+   "file": "30.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "31",
+   "emoji": "🤩",
+   "file": "31.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "32",
+   "emoji": "💋",
+   "file": "32.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "33",
+   "emoji": "🙄",
+   "file": "33.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "34",
+   "emoji": "✨",
+   "file": "34.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "35",
+   "emoji": "🫠",
+   "file": "35.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "36",
+   "emoji": "🤨",
+   "file": "36.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "37",
+   "emoji": "🥲",
+   "file": "37.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "38",
+   "emoji": "😭",
+   "file": "38.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "39",
+   "emoji": "🫣",
+   "file": "39.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "40",
+   "emoji": "😎",
+   "file": "40.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "41",
+   "emoji": "😄",
+   "file": "41.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "42",
+   "emoji": "🤕",
+   "file": "42.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "43",
+   "emoji": "😈",
+   "file": "43.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "44",
+   "emoji": "🙏",
+   "file": "44.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "45",
+   "emoji": "🤭",
+   "file": "45.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "46",
+   "emoji": "😍",
+   "file": "46.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "47",
+   "emoji": "😳",
+   "file": "47.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "48",
+   "emoji": "😱",
+   "file": "48.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "49",
+   "emoji": "☺️",
+   "file": "49.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "50",
+   "emoji": "🔥",
+   "file": "50.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "51",
+   "emoji": "😮‍💨",
+   "file": "51.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "52",
+   "emoji": "🙂",
+   "file": "52.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "53",
+   "emoji": "😨",
+   "file": "53.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "54",
+   "emoji": "😶",
+   "file": "54.webp",
+   "animated": false,
+   "size": 100
+  },
+  {
+   "id": "55",
+   "emoji": "😮",
+   "file": "55.webp",
+   "animated": false,
+   "size": 100
+  }
+ ]
+}

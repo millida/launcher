@@ -9,9 +9,7 @@ static CONSOLE_GEN: AtomicU64 = AtomicU64::new(0);
 
 #[tauri::command]
 pub async fn host_console_start(app: AppHandle, id: String) -> Result<(), String> {
-    if id.is_empty() || id.contains('/') || id.contains("..") {
-        return Err("bad id".into());
-    }
+    check_id(&id)?;
     let token = secrets::get("millida")
         .or_else(|| secrets::get("mc"))
         .ok_or("нет токена Millida")?;
@@ -30,9 +28,18 @@ pub async fn host_console_start(app: AppHandle, id: String) -> Result<(), String
             }
         };
         if !res.status().is_success() {
+            // Служба уже объяснила отказ словами («сервер переезжает», «ноды
+            // недоступны»), и это ровно то, что человеку надо прочитать. Номер
+            // кода не говорит ему ничего и отправляет в поддержку.
+            let code = res.status().as_u16();
+            let body = res.text().await.unwrap_or_default();
+            let said = console_refusal(&body);
             let _ = app.emit(
                 "host-console",
-                format!("⚠ поток недоступен (http {})", res.status().as_u16()),
+                match said {
+                    Some(text) => format!("⚠ {}", text),
+                    None => format!("⚠ консоль недоступна (код {})", code),
+                },
             );
             return;
         }
@@ -47,7 +54,14 @@ pub async fn host_console_start(app: AppHandle, id: String) -> Result<(), String
                     while let Some(pos) = buf.find('\n') {
                         let line: String = buf.drain(..=pos).collect();
                         let line = line.trim_end_matches(['\r', '\n']);
-                        // SSE: only "data:" frames matter, ": ping" comments are skipped
+                        // SSE: only "data:" frames matter, ": ping" comments are skipped.
+                        // The node replays the tail of the log before this
+                        // marker, so the client can tell the history it already
+                        // shows from what the server writes next.
+                        if line.trim_start_matches(':').trim() == "replay-end" {
+                            let _ = app.emit("host-console-replay-end", ());
+                            continue;
+                        }
                         let data = line
                             .strip_prefix("data: ")
                             .or_else(|| line.strip_prefix("data:"));
@@ -94,8 +108,13 @@ fn token() -> Result<String, String> {
         .ok_or_else(|| "нет токена Millida".to_string())
 }
 
+/// id сервера подставляется в путь API: только [A-Za-z0-9_-], иначе «?», «#»,
+/// «%2f» или «\\» увели бы запрос с токеном на другую ручку (аудит 24.09.2026, R7).
 fn check_id(id: &str) -> Result<(), String> {
-    if id.is_empty() || id.contains('/') || id.contains("..") {
+    let ok = !id.is_empty()
+        && id.len() <= 64
+        && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-');
+    if !ok {
         return Err("bad id".into());
     }
     Ok(())
@@ -196,4 +215,54 @@ pub async fn host_upload(id: String, dir: String) -> Result<Option<String>, Stri
         append = true;
     }
     Ok(Some(target))
+}
+
+/// Что служба ответила об отказе. Тело приходит от сети, поэтому берём только
+/// короткую человеческую строку и ничего не додумываем: длинный текст в консоли
+/// - это чужой HTML страницы ошибки, а не объяснение.
+fn console_refusal(body: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(body).ok()?;
+    let said = value["message"].as_str()?.trim();
+    if said.is_empty() || said.chars().count() > 200 {
+        return None;
+    }
+    Some(said.to_string())
+}
+
+#[cfg(test)]
+mod console_tests {
+    use super::console_refusal;
+
+    /// Вход → вердикт. «http 409» игрок читал как поломку лаунчера и шёл в
+    /// поддержку, хотя служба в том же ответе писала, что сервер переезжает.
+    #[test]
+    fn server_id_is_a_plain_token() {
+        for good in ["abc", "A-1_b", "0f3e2a"] {
+            assert!(super::check_id(good).is_ok(), "{good}");
+        }
+        for bad in ["", "a/b", "..", "a?x=1", "a#b", "a%2fb", "a\\b", "a b", "а"] {
+            assert!(super::check_id(bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_refusal_is_shown_in_words_when_the_service_gave_any() {
+        assert_eq!(
+            console_refusal(r#"{"message":"Сервер переезжает на другую ноду","statusCode":409}"#).as_deref(),
+            Some("Сервер переезжает на другую ноду"),
+        );
+        assert_eq!(console_refusal("").as_deref(), None, "пустое тело объяснением не считается");
+        assert_eq!(console_refusal("<html>502</html>").as_deref(), None, "страница ошибки - не объяснение");
+        assert_eq!(console_refusal(r#"{"message":""}"#).as_deref(), None);
+        assert_eq!(
+            console_refusal(r#"{"message":"Ноды хостинга сейчас недоступны — попробуй через минуту"}"#).as_deref(),
+            Some("Ноды хостинга сейчас недоступны — попробуй через минуту"),
+        );
+        let long = "я".repeat(201);
+        assert_eq!(
+            console_refusal(&format!(r#"{{"message":"{}"}}"#, long)).as_deref(),
+            None,
+            "простыню в консоль не льём: там её никто не прочитает",
+        );
+    }
 }

@@ -73,21 +73,29 @@ export function ScreenshotGallery({ profile }: Props) {
           </button>
         ))}
         <button className="btn sm ghost" style={{ marginLeft: 'auto' }} onClick={() => openScreenshots(profile)}>
-          Открыть папку
+          <Icon id="i-folder" /> Папка
         </button>
       </div>
 
       {loading ? (
-        <p className="faint-note">Собираем галерею…</p>
+        <div className="shot-grid" aria-busy="true">
+          <span className="skel bx-skel-shot" />
+          <span className="skel bx-skel-shot" />
+          <span className="skel bx-skel-shot" />
+        </div>
       ) : shots.length === 0 ? (
-        <p className="faint-note">
-          Скриншотов пока нет. В игре их делает клавиша F2 — они попадут сюда сразу.
-        </p>
+        <div className="bx-mini-empty">
+          <Icon id="i-cam" />
+          <b>Скриншотов пока нет</b>
+          <span>
+            В игре жми <kbd className="bx-kbd">F2</kbd>
+          </span>
+        </div>
       ) : (
         <div className="shot-grid">
           {shots.map((shot) => (
             <figure className="shot-card" key={shot.path}>
-              <button className="shot-thumb" onClick={() => openImage(src(shot), { path: shot.path })} title="Открыть">
+              <button className="shot-thumb" onClick={() => openImage(src(shot), { path: shot.path })} aria-label="Открыть">
                 <img src={src(shot)} alt={shot.name} loading="lazy" />
               </button>
               <figcaption>
@@ -106,7 +114,7 @@ export function ScreenshotGallery({ profile }: Props) {
               <div className="shot-acts">
                 <button
                   className="icon-btn"
-                  title="Поделиться ссылкой"
+                  aria-label="Поделиться ссылкой"
                   disabled={busy === shot.path}
                   onClick={() => share(shot)}
                 >
@@ -114,7 +122,7 @@ export function ScreenshotGallery({ profile }: Props) {
                 </button>
                 <button
                   className="icon-btn"
-                  title="Сохранить как…"
+                  aria-label="Сохранить как…"
                   onClick={() =>
                     saveScreenshotAs(shot.profile, shot.name)
                       .then((p) => p && showToast('Сохранено', 'ok'))
@@ -125,7 +133,7 @@ export function ScreenshotGallery({ profile }: Props) {
                 </button>
                 <button
                   className="icon-btn del"
-                  title="Удалить"
+                  aria-label="Удалить"
                   onClick={() => {
                     void uiConfirm('Удалить скриншот «' + shot.name + '»?', { confirmLabel: 'Удалить' }).then((ok) => {
                       if (!ok) return

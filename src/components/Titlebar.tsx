@@ -36,7 +36,7 @@ export function Titlebar() {
           <button
             className="tb-btn"
             id="winMin"
-            title="Свернуть"
+            aria-label="Свернуть"
             onClick={() => windowAction('свернуть', (w) => w.minimize())}
           >
             <Icon id="i-minus" />
@@ -44,7 +44,7 @@ export function Titlebar() {
           <button
             className="tb-btn"
             id="winMax"
-            title="Развернуть"
+            aria-label="Развернуть"
             onClick={() => windowAction('развернуть', (w) => w.toggleMaximize())}
           >
             <Icon id="i-max" />
@@ -52,7 +52,7 @@ export function Titlebar() {
           <button
             className="tb-btn close"
             id="winClose"
-            title="Закрыть"
+            aria-label="Закрыть"
             onClick={() => windowAction('закрыть', (w) => w.close())}
           >
             <Icon id="i-x" />

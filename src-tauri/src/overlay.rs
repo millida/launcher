@@ -10,7 +10,14 @@ pub const LABEL: &str = "overlay";
 const PREF_ENABLED: &str = "overlay-enabled";
 const PREF_HOTKEY: &str = "overlay-hotkey";
 const PREF_TOASTS: &str = "overlay-toasts";
+const PREF_CARD_MS: &str = "overlay-card-ms";
 pub const DEFAULT_HOTKEY: &str = "Alt+M";
+
+/// How long a passive card stays on screen. The frontend runs the clock; the
+/// core needs the same number for its watchdog, and both read it from here.
+pub const DEFAULT_CARD_MS: u64 = 9_000;
+pub const MIN_CARD_MS: u64 = 3_000;
+pub const MAX_CARD_MS: u64 = 30_000;
 
 /// Cards the webview could not receive yet: a window that has just been created
 /// has no listener, and an event emitted into that gap is lost for good - the
@@ -29,9 +36,11 @@ static HIT_SEQ: AtomicU64 = AtomicU64::new(0);
 
 const HIT_POLL_MS: u64 = 25;
 
-/// Longest a passive card may keep the window up: the frontend hides it earlier
-/// on its own, this only catches a webview that never answered.
-const PASSIVE_MAX_MS: u64 = 15_000;
+/// Extra time the watchdog gives the webview past the card's own deadline: the
+/// frontend hides the window on its own, this only catches one that never
+/// answered. Yanking the window at exactly the card deadline would cut the
+/// closing animation of a card that is working fine.
+const PASSIVE_GRACE_MS: u64 = 6_000;
 
 /// A hovered card stops its own clock, so a pointer resting in the corner where
 /// cards appear used to pin an always-on-top card on screen for good.
@@ -120,6 +129,21 @@ pub fn enabled() -> bool {
 /// a friend event reaches someone whose launcher sits in the tray.
 pub fn toasts_enabled() -> bool {
     crate::engine::ui_pref(PREF_TOASTS).as_deref() != Some("0")
+}
+
+pub fn clamp_card_ms(ms: u64) -> u64 {
+    ms.clamp(MIN_CARD_MS, MAX_CARD_MS)
+}
+
+pub fn card_ms() -> u64 {
+    crate::engine::ui_pref(PREF_CARD_MS)
+        .and_then(|s| s.parse::<u64>().ok())
+        .map(clamp_card_ms)
+        .unwrap_or(DEFAULT_CARD_MS)
+}
+
+pub fn set_card_ms(ms: u64) -> Result<(), String> {
+    crate::engine::set_ui_pref(PREF_CARD_MS.into(), clamp_card_ms(ms).to_string())
 }
 
 pub fn hotkey() -> String {
@@ -214,7 +238,7 @@ fn arm_watchdog(app: &AppHandle) {
     let seq = NOTIFY_SEQ.fetch_add(1, Ordering::SeqCst) + 1;
     let handle = app.clone();
     tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_millis(PASSIVE_MAX_MS)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(card_ms() + PASSIVE_GRACE_MS)).await;
         // A card the user is reading (or about to click) must not be yanked out
         // from under the cursor by the watchdog - but a pointer that merely
         // rests there is not a reader, so the reprieve is finite.
@@ -343,8 +367,27 @@ mod tests {
     #[test]
     fn hover_reprieve_is_finite_and_outlives_the_passive_window() {
         const {
-            assert!(HOLD_MAX_MS > PASSIVE_MAX_MS, "a reader must get more time than the plain timeout");
+            assert!(
+                HOLD_MAX_MS > MAX_CARD_MS + PASSIVE_GRACE_MS,
+                "a reader must get more time than the plain timeout, even at the longest card"
+            );
             assert!(HOLD_MAX_MS <= 120_000, "a parked pointer must not keep a card for minutes");
+        }
+    }
+
+    /// A duration typed into the pref file by hand (or left by an older build)
+    /// must not produce a card that blinks out or never leaves the screen.
+    #[test]
+    fn card_duration_is_clamped_to_a_usable_range() {
+        let cases = [
+            (0, MIN_CARD_MS, "zero would hide the card before it is read"),
+            (1_000, MIN_CARD_MS, "below the floor is raised to it"),
+            (9_000, 9_000, "a value inside the range is kept as is"),
+            (30_000, MAX_CARD_MS, "the ceiling itself is allowed"),
+            (600_000, MAX_CARD_MS, "ten minutes on top of the game is not a notification"),
+        ];
+        for (given, want, why) in cases {
+            assert_eq!(clamp_card_ms(given), want, "clamp_card_ms({given}) must be {want}: {why}");
         }
     }
 }

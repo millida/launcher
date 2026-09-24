@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { HostingManage } from './HostingManage'
-import { WALLET_URL, api, hasMillidaAccount, openExt } from '../lib/api'
-import { track } from '../lib/telemetry'
+import { api, hasMillidaAccount, openExt } from '../lib/api'
 import { HostPlanPicker } from '../components/HostPlanPicker'
-import { useAccounts } from '../state/accounts'
 import { loadMillidaProfile, logoutToLogin } from '../lib/session'
 import { hasTauri } from '../ipc/tauri'
 import { addServer, pinServerDat } from '../ipc/commands'
@@ -21,19 +19,17 @@ import { Head } from '../components/Head'
 import { openChat, useFriends } from '../state/friends'
 import { encodeInvite } from '../lib/invite'
 import { usePolling } from '../lib/usePolling'
-import { copyText } from '../lib/clipboard'
-
-const HOST_ST: Record<string, [string, string]> = {
-  RUNNING: ['Работает', 'acc'],
-  STARTING: ['Запускается', 'warn'],
-  STOPPING: ['Останавливается', 'warn'],
-  STOPPED: ['Остановлен', 'off'],
-  SUSPENDED: ['Приостановлен', 'danger'],
-  QUEUED: ['В очереди', 'warn'],
-  SLEEPING: ['Спит', 'off'],
-  CRASHED: ['Упал', 'danger'],
-  INSTALLING: ['Устанавливается', 'warn'],
-}
+import { noteMyServers } from '../state/playInvite'
+import { InviteChip } from '../components/friends/InviteChip'
+import { HostRoads, hostPlanFacts } from '../components/hosting/HostRoads'
+import type { HostPlanLite } from '../components/hosting/HostRoads'
+import { HostScene, HostStat } from '../components/hosting/HostScene'
+import { BalancePill } from '../components/hosting/HostKit'
+// Стиль экрана подключается здесь: App импортируется в main.tsx после кита и
+// 12-pixel.css, поэтому порядок правил сохраняется.
+import '../styles/pixel/hosting2.css'
+import '../styles/pixel/hosting-scene.css'
+import '../styles/pixel/hosting-panel.css'
 
 export interface HostServer {
   id: string
@@ -48,6 +44,7 @@ export interface HostServer {
   planName?: string
   planCode?: string
   planRamMb?: number
+  planDiskMb?: number
   planFullAccess?: boolean
   ramMb?: number
   maxPlayers?: number
@@ -58,6 +55,8 @@ export interface HostServer {
   planPriceKopecks?: number | null
   expiresAt?: string | null
   worldDeleteAt?: string | null
+  lastSeenAt?: string | null
+  diskUsedMb?: number
 }
 
 const fmtDate = (iso?: string | null) => {
@@ -68,33 +67,26 @@ const fmtDate = (iso?: string | null) => {
 
 type View = 'initial' | 'gate' | 'loading' | 'error' | 'empty' | 'list'
 
-const MODDED_CORE = /forge|fabric|quilt|curse|ftb|modrinth|mohist|magma|arclight|catserver|banner|sponge/i
-
-const isModded = (s: HostServer) => MODDED_CORE.test((s.core || '') + ' ' + (s.preset || ''))
-
 function HostSkeleton() {
   return (
-    <div className="card skel-card">
-      <div className="skel-row">
-        <span className="skel" style={{ width: '34px', height: '34px', borderRadius: '8px' }}></span>
-        <span className="skel skel-line" style={{ width: '180px' }}></span>
-        <span className="skel skel-line" style={{ width: '90px', height: '22px', borderRadius: '999px' }}></span>
-        <span style={{ marginLeft: 'auto' }}></span>
-        <span className="skel skel-line" style={{ width: '150px', height: '30px', borderRadius: '999px' }}></span>
-      </div>
-      <div className="skel skel-line" style={{ width: '220px', marginTop: '12px' }}></div>
-      <div className="kpi-row">
-        {[0, 1, 2].map((i) => (
-          <div className="kpi" key={i}>
-            <div className="skel skel-line" style={{ width: '60px', height: '10px' }}></div>
-            <div className="skel skel-line" style={{ width: '80px', height: '18px', margin: '8px 0' }}></div>
-            <div className="skel" style={{ height: '6px', borderRadius: '999px' }}></div>
+    <div className="hsx-scene is-skel" aria-busy="true">
+      <div className="hsx-green">
+        <div className="hsx-id">
+          <span className="skel" style={{ width: 56, height: 56 }}></span>
+          <div className="hsx-id-txt">
+            <span className="skel skel-line" style={{ width: 90 }}></span>
+            <span className="skel skel-line" style={{ width: 200, height: 26, marginTop: 8 }}></span>
           </div>
-        ))}
+        </div>
+        <span className="skel skel-line" style={{ width: 260, height: 40 }}></span>
+        <div className="hsx-acts">
+          <span className="skel" style={{ width: 180, height: 52 }}></span>
+          <span className="skel" style={{ width: 150, height: 52 }}></span>
+        </div>
       </div>
-      <div className="skel-row" style={{ marginTop: '20px' }}>
-        {[150, 130, 140, 160].map((w, i) => (
-          <span key={i} className="skel skel-line" style={{ width: w + 'px', height: '38px', borderRadius: '12px' }}></span>
+      <div className="hsx-navy">
+        {[0, 1].map((i) => (
+          <span key={i} className="skel" style={{ height: 76 }}></span>
         ))}
       </div>
     </div>
@@ -107,13 +99,28 @@ export function Hosting({ on }: { on: boolean }) {
   const [list, setList] = useState<HostServer[]>([])
   const [manageId, setManageId] = useState<string | null>(null)
   const [inviteFor, setInviteFor] = useState<string | null>(null)
-  const [picker, setPicker] = useState<{ mode: 'create' | 'upgrade'; serverId?: string; currentCode?: string | null } | null>(null)
+  const [picker, setPicker] = useState<{
+    mode: 'create' | 'upgrade'
+    serverId?: string
+    currentCode?: string | null
+    focus?: 'free' | 'paid'
+  } | null>(null)
+  const [plans, setPlans] = useState<HostPlanLite[]>([])
   const friends = useFriends((s) => s.friends)
   const millida = useHasMillida()
   const loadedRef = useRef(false)
-  const accList = useAccounts((s) => s.list)
-  const millidaAcc = accList.find((a) => a.kind === 'millida' || a.kind === 'tg')
-  const balance = ((millidaAcc?.balance || 0) / 100) | 0
+
+  // Числа платных тарифов нужны и полосе продажи под карточкой сервера.
+  useEffect(() => {
+    if (!on) return
+    let alive = true
+    api('/hosting/plans')
+      .then((r) => alive && setPlans(Array.isArray(r) ? r : []))
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [on])
 
   useEffect(() => {
     if (!inviteFor) return
@@ -151,6 +158,8 @@ export function Hosting({ on }: { on: boolean }) {
       data = await api('/hosting/servers/me')
     } catch (e) {
       if (silent) return
+      // Текст ошибки нужен логам, а не игроку: на экране — фраза и «Повторить».
+      console.error('[hosting] servers/me', e)
       setErr('' + e)
       setView('error')
       return
@@ -160,6 +169,9 @@ export function Hosting({ on }: { on: boolean }) {
     noteHostingServers(arr.length)
     setList(arr)
     setView(arr.length ? 'list' : 'empty')
+    // «Позвать играть» из друзей ждёт сервер: как только у него есть адрес,
+    // приглашение уходит само (state/playInvite).
+    noteMyServers(arr)
     try {
       const primary = arr.find((s) => s.address)
       if (primary) localStorage.setItem('m-host-pin', JSON.stringify({ name: primary.name || 'Мой сервер', addr: primary.address }))
@@ -182,265 +194,181 @@ export function Hosting({ on }: { on: boolean }) {
       showToast(ok)
       setTimeout(() => void load(), 1200)
     } catch (e) {
-      showToast('Ошибка: ' + e)
+      console.error('[hosting] ' + path, e)
+      showToast('Не получилось — попробуй ещё раз', 'error')
       void load()
     }
   }
 
+  const facts = hostPlanFacts(plans)
+  const planRub = (k: number) => Math.round(k / 100).toLocaleString('ru-RU')
+  const planGb = (mb: number) => (mb / 1024).toFixed(mb % 1024 === 0 ? 0 : 1).replace('.', ',')
+
+  const joinServer = async (s: HostServer) => {
+    const addr = s.address || ''
+    if (!addr) {
+      showToast('Сервер ещё запускается')
+      return
+    }
+    if (!hasTauri()) {
+      showToast('Вход на сервер — в приложении')
+      return
+    }
+    const sname = s.name || 'Мой сервер'
+    // Свой сервер тоже не пустит клиент чужой версии: сборку выбираем (или
+    // предлагаем создать) под версию, на которой он крутится.
+    const wanted = serverVersions(s.version ? [s.version] : [])
+    const prof = await buildForServer({ ip: addr, name: sname, licensed: false, versions: wanted }, wanted)
+    if (!prof) return
+    addServer(prof, sname, addr).catch(() => {})
+    rememberServerName(addr, sname)
+    if (anyGameRunning()) {
+      // Вторая копия ради входа на сервер почти всегда не нужна: игра уже
+      // запущена, и сервер достаточно закрепить в её списке.
+      void pinServerDat(prof, sname, addr).catch(() => {})
+      void uiConfirm(
+        isGameRunning(prof)
+          ? 'Игра уже запущена — «' + sname + '» закреплён первым в списке серверов, зайди прямо из неё. Запустить вторую копию игры?'
+          : 'Уже запущена другая сборка. «' + sname + '» закреплён в списке серверов сборки «' + prof + '». Запустить её второй копией?',
+        {
+          title: 'Игра уже запущена',
+          confirmLabel: 'Запустить вторую копию',
+          cancelLabel: 'Не запускать',
+          danger: false,
+        },
+      ).then((ok) => {
+        if (!ok) return
+        joinWithAuth(prof, null, addr, sname, { confirmed: true })
+          .then((res) => {
+            if (joinStarted(res)) showToast('Заходим на твой сервер…')
+          })
+          .catch((e) => showLaunchError(e))
+      })
+      return
+    }
+    joinWithAuth(prof, null, addr, sname)
+      .then((res) => {
+        if (joinStarted(res)) showToast('Заходим на твой сервер…')
+      })
+      .catch((e) => showLaunchError(e))
+  }
+
   const card = (s: HostServer) => {
-    const st = HOST_ST[s.status || ''] || ['—', 'off']
-    // planRamMb is the plan cap; ramMb without a cap is allocated memory, not usage.
     const ramCap = s.planRamMb || 0
-    const ramUsed = s.ramMb || 0
-    const hasRamUse = ramCap > 0 && ramUsed > 0
-    const ramGb = (mb: number) => (mb / 1024).toFixed(mb % 1024 === 0 ? 0 : 1).replace('.', ',')
-    const totalRamMb = ramCap || ramUsed || 0
-    const ramPct = hasRamUse ? Math.min(100, Math.round((ramUsed / ramCap) * 100)) : 0
+    const ramMb = s.ramMb || 0
     const maxP = s.maxPlayers || s.planMaxPlayers || 0
+    const onl = s.playersOnline || 0
     const running = s.status === 'RUNNING'
     const addr = s.address || ''
-    const copy = async (text: string) => {
-      showToast((await copyText(text)) ? 'Адрес скопирован: ' + addr : 'Скопируй адрес вручную: ' + addr)
-    }
-    const join = async () => {
-      if (!addr) {
-        showToast('Сервер ещё запускается')
-        return
-      }
-      if (!hasTauri()) {
-        showToast('Вход на сервер — в приложении')
-        return
-      }
-      const sname = s.name || 'Мой сервер'
-      // Свой сервер тоже не пустит клиент чужой версии: сборку выбираем (или
-      // предлагаем создать) под версию, на которой он крутится.
-      const wanted = serverVersions(s.version ? [s.version] : [])
-      const prof = await buildForServer({ ip: addr, name: sname, licensed: false, versions: wanted }, wanted)
-      if (!prof) return
-      addServer(prof, sname, addr).catch(() => {})
-      rememberServerName(addr, sname)
-      if (anyGameRunning()) {
-        // Вторая копия ради входа на сервер почти всегда не нужна: игра уже
-        // запущена, и сервер достаточно закрепить в её списке.
-        void pinServerDat(prof, sname, addr).catch(() => {})
-        void uiConfirm(
-          isGameRunning(prof)
-            ? 'Игра уже запущена — «' + sname + '» закреплён первым в списке серверов, зайди прямо из неё. Запустить вторую копию игры?'
-            : 'Уже запущена другая сборка. «' + sname + '» закреплён в списке серверов сборки «' + prof + '». Запустить её второй копией?',
-          {
-            title: 'Игра уже запущена',
-            confirmLabel: 'Запустить вторую копию',
-            cancelLabel: 'Не запускать',
-            danger: false,
-          },
-        ).then((ok) => {
-          if (!ok) return
-          joinWithAuth(prof, null, addr, sname, { confirmed: true })
-            .then((res) => {
-              if (joinStarted(res)) showToast('Заходим на твой сервер…')
-            })
-            .catch((e) => showLaunchError(e))
-        })
-        return
-      }
-      joinWithAuth(prof, null, addr, sname)
-        .then((res) => {
-          if (joinStarted(res)) showToast('Заходим на твой сервер…')
-        })
-        .catch((e) => showLaunchError(e))
-    }
-    const cfg: [string, string, string][] = []
-    if (s.core) cfg.push(['i-blocks', 'Ядро', s.core + (s.version ? ' ' + s.version : '')])
-    else if (s.version) cfg.push(['i-blocks', 'Версия', s.version])
-    if (s.preset) cfg.push(['i-box', 'Сборка', s.preset])
-    if (s.planName || s.planCode) cfg.push(['i-star', 'Тариф', s.planName || s.planCode || ''])
-    if (totalRamMb) cfg.push(['i-monitor', 'Память', ramGb(totalRamMb) + ' ГБ'])
-    if (maxP) cfg.push(['i-users', 'Слотов', String(maxP)])
+    const coreTag = [s.core, s.version].filter(Boolean).join(' ')
+    const planFree = !s.planPriceKopecks
+    // Полоса продажи: живые числа платных тарифов и одна кнопка. Верхний тариф
+    // её не показывает — предлагать там нечего.
+    const canUpsell = facts.ramHigh > 0 && (planFree || (s.planRamMb || 0) < facts.ramHigh)
+    const note =
+      s.expiresAt && fmtDate(s.expiresAt)
+        ? 'Оплачен до ' + fmtDate(s.expiresAt)
+        : planFree && s.worldDeleteAt && fmtDate(s.worldDeleteAt)
+          ? 'Мир хранится до ' + fmtDate(s.worldDeleteAt)
+          : undefined
     return (
-      <div className="card host-card" style={{ padding: '22px', marginBottom: '14px' }} data-sid={s.id} data-addr={addr} key={s.id}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          {s.icon ? (
-            <img
-              src={s.icon}
-              alt=""
-              onError={(e) => {
-                e.currentTarget.src = '/millida-logo.svg'
-              }}
-              style={{ width: '34px', height: '34px', borderRadius: '8px', objectFit: 'cover' }}
-            />
-          ) : !s.planPriceKopecks ? (
-            <span className="host-ico free">
-              <img src="/millida-logo.svg" alt="" />
-            </span>
-          ) : (
-            <span className="host-ico">
-              <Icon id="i-server-cog" />
-            </span>
-          )}
-          <h2 style={{ fontSize: '19px', fontWeight: 700 }}>{s.name || s.slug}</h2>
-          <span className={'pill ' + st[1]}>
-            <span className="dot"></span> {st[0]}
-          </span>
-          <span style={{ marginLeft: 'auto' }}></span>
-          <button className="ip-pill host-ip" data-ip={addr} onClick={() => void copy(addr)}>
-            {addr || '—'}
-            <Icon id="i-copy" />
-          </button>
-        </div>
-
-        {cfg.length ? (
-          <div className="host-cfg">
-            {cfg.map(([ic, k, v]) => (
-              <div className="host-cfg-row" key={k}>
-                <Icon id={ic} />
-                <span className="host-cfg-k">{k}</span>
-                <span className="host-cfg-v">{v}</span>
-              </div>
-            ))}
-          </div>
-        ) : null}
-
-        {s.expiresAt && fmtDate(s.expiresAt) ? (
-          <div className="host-expiry">
-            <Icon id="i-clock" />
-            Оплачен до {fmtDate(s.expiresAt)} · следующая оплата {fmtDate(s.expiresAt)}
-          </div>
-        ) : !s.planPriceKopecks && s.worldDeleteAt && fmtDate(s.worldDeleteAt) ? (
-          <div className="host-expiry">
-            <Icon id="i-clock" />
-            Бесплатный тариф · мир хранится до {fmtDate(s.worldDeleteAt)}
-          </div>
-        ) : null}
-
-        <div className="kpi-row">
-          <div className="kpi">
-            <div className="cap">Игроки</div>
-            <div className="val">
-              {s.playersOnline || 0}
-              {maxP ? <span> / {maxP}</span> : null}
-            </div>
-            <div className="bar">
-              <i style={{ width: (maxP ? Math.min(100, ((s.playersOnline || 0) / maxP) * 100) : 0) + '%' }}></i>
-            </div>
-          </div>
-          <div className="kpi">
-            <div className="cap">Память</div>
-            <div className="val">
-              {hasRamUse ? (
-                <>
-                  {ramGb(ramUsed)} <span>/ {ramGb(ramCap)} ГБ</span>
-                </>
-              ) : totalRamMb ? (
-                <>
-                  {ramGb(totalRamMb)} <span>ГБ выделено</span>
-                </>
-              ) : (
-                '—'
-              )}
-            </div>
-            <div className="bar">
-              <i style={{ width: (hasRamUse ? ramPct : totalRamMb ? 100 : 0) + '%' }}></i>
-            </div>
-          </div>
-          <div className="kpi">
-            <div className="cap">Статус</div>
-            <div className="val" style={{ fontSize: '15px' }}>
-              {st[0]}
-            </div>
-            <div className="bar">
-              <i className={'st-' + st[1]} style={{ width: running ? '100%' : '35%' }}></i>
-            </div>
-          </div>
-        </div>
-        <div className="host-actions">
-          {running ? (
-            <button className="btn md primary host-join" onClick={join}>
-              <Icon id="i-play" /> Зайти на сервер
-            </button>
-          ) : (
-            <button
-              className="btn md primary host-start"
-              disabled={s.status === 'STARTING' || s.status === 'INSTALLING'}
-              onClick={() => void act(s.id, '/start', 'Запускаем сервер…', 'Сервер запускается')}
-            >
-              <Icon id="i-play" /> Запустить
-            </button>
-          )}
-          <button className="btn md secondary host-manage-btn" onClick={() => setManageId(s.id)}>
-            <Icon id="i-server-cog" /> Управлять
-          </button>
-
-          <div className="host-invite-wrap">
-            <button
-              className="btn md secondary host-invite"
-              onClick={(e) => {
-                e.stopPropagation()
-                setInviteFor(inviteFor === s.id ? null : s.id)
-              }}
-            >
-              <Icon id="i-users" /> Пригласить друга
-            </button>
-            {inviteFor === s.id ? (
-              <div className="host-invite-pop" onClick={(e) => e.stopPropagation()}>
-                <div className="host-invite-cap">Кого позвать на сервер</div>
-                {friends.length ? (
-                  friends.map((f) => (
-                    <button
-                      key={f.userId}
-                      className="host-invite-friend"
-                      onClick={() => void invite(f.userId, f.nickname || '', s)}
-                    >
-                      <Head nick={f.nickname} size={40} />
-                      <span className="host-invite-nick">{f.nickname || ''}</span>
-                      <span className={'host-invite-dot' + (f.online ? ' on' : '')}></span>
-                    </button>
-                  ))
-                ) : (
-                  <p className="faint-note" style={{ padding: '6px 8px', margin: 0 }}>
-                    Добавь друзей в разделе «Друзья» — сможешь звать их сюда.
-                  </p>
-                )}
-              </div>
-            ) : null}
-          </div>
-
-          {running ? (
+      <div className="host-card hsx-card" data-sid={s.id} data-addr={addr} key={s.id}>
+        <HostScene
+          name={s.name || s.slug || 'Мой сервер'}
+          status={s.status || ''}
+          address={addr}
+          icon={s.icon}
+          free={planFree}
+          tag={coreTag}
+          note={note}
+          actions={
             <>
-              <button
-                className="btn md ghost host-restart"
-                title="Перезапустить"
-                onClick={() => void act(s.id, '/restart', 'Перезапускаем…', 'Сервер перезапускается')}
-              >
-                <Icon id="i-restart" />
+              {/* Карточка в списке: одна главная кнопка, «Управлять» и «Позвать».
+                  Перезапуск и остановка без подписей отсюда ушли в «Управлять» —
+                  там они с подписью и с подтверждением (приказ 23.09.2026). */}
+              {running ? (
+                <button className="btn lg primary host-join hsx-main" onClick={() => void joinServer(s)}>
+                  <Icon id="i-play" /> Играть
+                </button>
+              ) : (
+                <button
+                  className="btn lg primary host-start hsx-main"
+                  disabled={s.status === 'STARTING' || s.status === 'INSTALLING'}
+                  onClick={() => void act(s.id, '/start', 'Запускаем сервер…', 'Сервер запускается')}
+                >
+                  <Icon id="i-play" /> Запустить
+                </button>
+              )}
+              <button className="btn lg secondary host-manage-btn" onClick={() => setManageId(s.id)}>
+                <Icon id="i-server-cog" /> Управлять
               </button>
-              <button
-                className="btn md ghost host-stop"
-                title="Остановить"
-                onClick={() => void act(s.id, '/stop', 'Останавливаем…', 'Сервер остановлен')}
-              >
-                <Icon id="i-power" />
-              </button>
+              <div className="host-invite-wrap">
+                <button
+                  className="btn lg secondary host-invite"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setInviteFor(inviteFor === s.id ? null : s.id)
+                  }}
+                >
+                  <Icon id="i-users" /> Позвать
+                </button>
+                {inviteFor === s.id ? (
+                  <div className="host-invite-pop" onClick={(e) => e.stopPropagation()}>
+                    <div className="host-invite-cap">Кого позвать</div>
+                    {friends.length ? (
+                      friends.map((f) => (
+                        <button
+                          key={f.userId}
+                          className="host-invite-friend"
+                          onClick={() => void invite(f.userId, f.nickname || '', s)}
+                        >
+                          <Head nick={f.nickname} size={40} />
+                          <span className="host-invite-nick">{f.nickname || ''}</span>
+                          <span className={'host-invite-dot' + (f.online ? ' on' : '')}></span>
+                        </button>
+                      ))
+                    ) : (
+                      <button className="btn sm secondary hs-invite-empty" onClick={() => setScreen('friends')}>
+                        <Icon id="i-plus" /> Найти друзей
+                      </button>
+                    )}
+                  </div>
+                ) : null}
+              </div>
             </>
-          ) : null}
-
-          <button
-            className="btn md ghost host-upgrade"
-            onClick={() => setPicker({ mode: 'upgrade', serverId: s.id, currentCode: s.planCode })}
-          >
-            <Icon id="i-arrow-up" /> Улучшить тариф
-          </button>
-          {isModded(s) ? (
-            <button
-              className="btn md ghost host-modpack"
-              onClick={() => {
-                setScreen('mods')
-                showToast('Выбери модпак — поставим на сервер или себе')
-              }}
-            >
-              Установить модпак
-            </button>
-          ) : null}
-        </div>
+          }
+          stats={
+            <>
+              <HostStat
+                block={32}
+                big={
+                  <>
+                    {onl}
+                    {maxP ? <small> / {maxP}</small> : null}
+                  </>
+                }
+                small="игроков в сети"
+                pct={maxP ? (onl / maxP) * 100 : null}
+              />
+              {/* ramMb у сервера — выделенная память, а не занятая (тип HostingServer
+                  на сайте): живой расход — только в «Управлять», из /stats. */}
+              {ramCap || ramMb ? <HostStat block={20} big={planGb(ramCap || ramMb) + ' ГБ'} small="памяти" /> : null}
+              {canUpsell ? (
+                <HostStat
+                  block={1}
+                  big={planFree ? 'Тарифы' : s.planName || 'Тариф'}
+                  small={
+                    (planFree && facts.minPrice > 0 ? 'от ' + planRub(facts.minPrice) + ' ₽ · ' : '') +
+                    'до ' +
+                    planGb(facts.ramHigh) +
+                    ' ГБ'
+                  }
+                  onClick={() => setPicker({ mode: 'upgrade', serverId: s.id, currentCode: s.planCode, focus: 'paid' })}
+                />
+              ) : null}
+            </>
+          }
+        />
       </div>
     )
   }
@@ -452,6 +380,7 @@ export function Hosting({ on }: { on: boolean }) {
         <HostingManage
           server={manageServer}
           onBack={() => setManageId(null)}
+          onPlay={() => void joinServer(manageServer)}
           onRefreshList={() => void load(true)}
           onUpgrade={(sid, code) => setPicker({ mode: 'upgrade', serverId: sid, currentCode: code })}
         />
@@ -460,6 +389,7 @@ export function Hosting({ on }: { on: boolean }) {
             mode={picker.mode}
             serverId={picker.serverId}
             currentCode={picker.currentCode}
+            focus={picker.focus}
             freeServer={null}
             onOpenServer={(id) => setManageId(id)}
             onClose={() => setPicker(null)}
@@ -475,22 +405,11 @@ export function Hosting({ on }: { on: boolean }) {
       <div className="page-head">
         <h1>Хостинг</h1>
         <div className="right" style={{ gap: '10px' }}>
-          {millida ? (
-            <span className="host-bal">
-              Баланс: <b>{balance.toLocaleString('ru-RU')} ₽</b>
-              <button
-                className="btn sm ghost"
-                onClick={() => {
-                  track('store_open', { where: 'wallet_topup' })
-                  openExt(WALLET_URL)
-                }}
-              >
-                <Icon id="i-wallet" /> Пополнить
-              </button>
-            </span>
-          ) : null}
-          {(view === 'list' || view === 'empty') && millida ? (
-            <button className="btn sm primary" onClick={() => setPicker({ mode: 'create' })}>
+          <InviteChip />
+          {/* Баланс — компактной плашкой: кошелёк, сумма, «+» — пополнение. */}
+          {millida ? <BalancePill /> : null}
+          {view === 'list' && millida ? (
+            <button className="btn sm secondary" onClick={() => setPicker({ mode: 'create', focus: 'paid' })}>
               <Icon id="i-plus" /> Новый сервер
             </button>
           ) : null}
@@ -504,54 +423,29 @@ export function Hosting({ on }: { on: boolean }) {
           </button>
         </div>
       </div>
-
       <div id="hostBody">
         {view === 'initial' || view === 'loading' ? <HostSkeleton /> : null}
         {view === 'gate' ? (
-          <div className="card gate-card">
-            <div className="gate-ic">
-              <Icon id="i-server" />
-            </div>
-            <div className="gate-title">Твой сервер — в аккаунте Millida</div>
-            <p className="faint-note gate-text">
-              Войди в Millida — увидишь свои серверы Millida Hosting, сможешь запускать, останавливать и заходить на них
-              прямо из лаунчера.
-            </p>
-            <button className="btn md primary gate-btn" id="hostLoginCta" onClick={() => logoutToLogin()}>
-              Войти в Millida
-            </button>
-          </div>
+          // Сервер живёт в аккаунте Millida: обе дороги ведут на вход, после него
+          // человек вернётся сюда и выберет тариф по-настоящему.
+          <HostRoads paidId="hostLoginCta" freeId="hostLoginFree" onPaid={() => logoutToLogin()} onFree={() => logoutToLogin()} />
         ) : null}
         {view === 'error' ? (
-          <div className="card" style={{ padding: '20px' }}>
-            <p className="faint-note">
-              {'Не удалось загрузить серверы: ' + err + '. '}
-              <a
-                href="#"
-                id="hostRetry"
-                onClick={(ev) => {
-                  ev.preventDefault()
-                  void load()
-                }}
-              >
-                Повторить
-              </a>
-            </p>
+          <div className="card hs-state" data-err={err}>
+            <Icon id="i-alert" />
+            <b>Серверы не загрузились</b>
+            <button className="btn sm secondary" id="hostRetry" onClick={() => void load()}>
+              <Icon id="i-restart" /> Повторить
+            </button>
           </div>
         ) : null}
         {view === 'empty' ? (
-          <div className="card" style={{ padding: '26px', maxWidth: '560px' }}>
-            <div className="eyebrow" style={{ marginBottom: '8px' }}>
-              Своего сервера ещё нет
-            </div>
-            <p style={{ fontSize: '13.5px', color: 'var(--m-fg-muted)', lineHeight: 1.6, marginBottom: '16px' }}>
-              Сервер на Millida Hosting — от 219 ₽ в месяц: 2 ГБ памяти, моды и бэкапы. Запускается за минуту, друзья
-              заходят по короткому адресу.
-            </p>
-            <button className="btn md primary" id="hostCreate" onClick={() => setPicker({ mode: 'create' })}>
-              <Icon id="i-plus" /> Создать сервер
-            </button>
-          </div>
+          <HostRoads
+            paidId="hostCreate"
+            freeId="hostCreateFree"
+            onPaid={() => setPicker({ mode: 'create', focus: 'paid' })}
+            onFree={() => setPicker({ mode: 'create', focus: 'free' })}
+          />
         ) : null}
         {view === 'list' ? list.map(card) : null}
       </div>
@@ -561,6 +455,7 @@ export function Hosting({ on }: { on: boolean }) {
           mode={picker.mode}
           serverId={picker.serverId}
           currentCode={picker.currentCode}
+          focus={picker.focus}
           freeServer={
             picker.mode === 'create'
               ? (list.find((s) => !s.planPriceKopecks) ?? null)

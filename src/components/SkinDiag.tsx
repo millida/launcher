@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { skinDiagnose } from '../ipc/commands'
+import { useCallback, useEffect, useState } from 'react'
+import { setSkinMod, skinDiagnose } from '../ipc/commands'
 import type { SkinDiag as SkinDiagReport } from '../ipc/commands'
 import { backdropClose } from '../lib/dismiss'
 import { copyText } from '../lib/clipboard'
@@ -41,26 +41,53 @@ function reportText(r: SkinDiagReport): string {
 export function SkinDiag({ nick, online, onClose }: { nick: string; online: boolean; onClose: () => void }) {
   const [report, setReport] = useState<SkinDiagReport | null>(null)
   const [failed, setFailed] = useState('')
+  const [fixing, setFixing] = useState(false)
+
+  const check = useCallback(
+    (alive: () => boolean) =>
+      skinDiagnose(nick, online)
+        .then((r) => {
+          if (!alive()) return
+          setReport(r)
+          setFailed('')
+          track('skin_diag', { verdict: r.verdict, builds: r.builds.length })
+        })
+        .catch((e) => {
+          if (alive()) setFailed(apiErrorText(e, 'Проверка скина не прошла'))
+        }),
+    [nick, online],
+  )
 
   useEffect(() => {
     let alive = true
-    skinDiagnose(nick, online)
-      .then((r) => {
-        if (!alive) return
-        setReport(r)
-        track('skin_diag', { verdict: r.verdict, builds: r.builds.length })
-      })
-      .catch((e) => alive && setFailed(apiErrorText(e, 'Проверка скина не прошла')))
+    void check(() => alive)
     return () => {
       alive = false
     }
-  }, [nick, online])
+  }, [check])
+
+  // The whole point of the button: the player presses it and the launcher does
+  // the repair, instead of the report naming a switch in build settings.
+  const repair = async (fix: NonNullable<SkinDiagReport['fix']>) => {
+    setFixing(true)
+    try {
+      await setSkinMod(fix.build, true)
+      await check(() => true)
+      showToast('Мод скинов включён для сборки «' + fix.build + '» — запусти её заново')
+    } catch (e) {
+      showToast(apiErrorText(e, 'Не удалось включить мод скинов'), 'error')
+    } finally {
+      setFixing(false)
+    }
+  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
+
+  const fix = report?.fix || null
 
   return (
     <div className="modal-bg open vis" {...backdropClose(onClose)}>
@@ -73,7 +100,7 @@ export function SkinDiag({ nick, online, onClose }: { nick: string; online: bool
         ) : null}
         {failed ? (
           <div className="sub" style={{ marginTop: '10px' }}>
-            Проверка не прошла: {failed}
+            {failed}
           </div>
         ) : null}
         {report ? (
@@ -112,6 +139,12 @@ export function SkinDiag({ nick, online, onClose }: { nick: string; online: bool
           </>
         ) : null}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
+          {fix ? (
+            <button className="btn md primary" disabled={fixing} onClick={() => void repair(fix)}>
+              <Icon id="i-check" />
+              {fixing ? 'Чиним…' : 'Починить'}
+            </button>
+          ) : null}
           {report ? (
             <button
               className="btn md secondary"
@@ -122,10 +155,22 @@ export function SkinDiag({ nick, online, onClose }: { nick: string; online: bool
               }
             >
               <Icon id="i-copy" />
-              Скопировать для поддержки
+              Копировать отчёт
             </button>
           ) : null}
-          <button className="btn md primary" onClick={onClose}>
+          {failed ? (
+            <button
+              className="btn md secondary"
+              onClick={() => {
+                setFailed('')
+                void check(() => true)
+              }}
+            >
+              <Icon id="i-restart" />
+              Повторить
+            </button>
+          ) : null}
+          <button className={'btn md' + (fix ? ' secondary' : ' primary')} onClick={onClose}>
             Закрыть
           </button>
         </div>

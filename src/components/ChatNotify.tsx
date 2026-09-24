@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { Icon } from './Icon'
 import { Head } from './Head'
+import { EltText } from '../lib/eltaller'
 import { openChat } from '../state/friends'
 import { useChatNotify } from '../state/chatNotify'
 import type { ChatNotify as Notify } from '../state/chatNotify'
@@ -33,7 +34,7 @@ function NotifyCard({ id, uid, nick, text, kind, actionLabel, action }: Notify) 
       )}
       <div className="chat-notify-body">
         <b>{nick || 'Игрок'}</b>
-        <span>{text}</span>
+        <span><EltText text={text} /></span>
         {actionLabel ? (
           <span className="chat-notify-act">
             {kind && ICON[kind] ? <Icon id={ICON[kind]} /> : null}
@@ -59,7 +60,7 @@ export function ChatNotify() {
   const items = useChatNotify((s) => s.items)
   if (!items.length) return null
   return (
-    <div className="chat-notify-stack">
+    <div className="chat-notify-stack" data-private data-section="chat_notify">
       {items.map((n) => (
         <NotifyCard key={n.id} {...n} />
       ))}

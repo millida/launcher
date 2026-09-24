@@ -3,6 +3,13 @@ import { hasTauri } from '../ipc/tauri'
 import { getProfileGroups, listContent, listProfiles } from '../ipc/commands'
 import type { Profile, ProfileGroups } from '../ipc/commands'
 import { setInventory } from '../lib/telemetry'
+import { DEMO_USER } from '../lib/demo'
+
+const DEMO_PROFILES: Profile[] = [
+  { name: 'Выживание с друзьями', version: '1.21.1', fabric: true, loader: 'fabric', icon: '/build-icons/grass.png#bg=1f3b22' },
+  { name: 'Техно 1.20.1', version: '1.20.1', fabric: false, loader: 'forge', icon: '/block-icons/Block30Millida.png#bg=16304a' },
+  { name: 'Minecraft 26.2', version: '26.2', fabric: true, loader: 'fabric', icon: null },
+]
 
 async function reportInventory(profiles: Profile[]) {
   if (!hasTauri()) return
@@ -40,6 +47,9 @@ export const useProfiles = create<ProfilesState>((set, get) => ({
       } catch {
         profiles = []
       }
+    } else if (DEMO_USER) {
+      // Демо-вход в браузере: пара сборок, чтобы «Мои сборки» было что показать.
+      profiles = get().profiles.length ? get().profiles : DEMO_PROFILES
     }
     if (!profiles.length) {
       set({ profiles: [], groups: {} })

@@ -1,9 +1,4 @@
 try {
-  var t = localStorage.getItem('m-theme')
-  var light = t === 'light' || (t === 'auto' && window.matchMedia('(prefers-color-scheme: light)').matches)
-  if (light) document.documentElement.dataset.theme = 'light'
-} catch (e) {}
-try {
   var ac = JSON.parse(localStorage.getItem('m-accent') || 'null')
   if (ac) {
     var r = document.documentElement.style

@@ -7,6 +7,7 @@ import { dayKey, dayLabel, isGrouped, isRead } from '../lib/chatGroup'
 import { apiErrorText } from '../lib/apiError'
 import { chatItems, chatKey, chatWhen, unreadOf, type OverlayChatItem } from '../lib/overlayChats'
 import { initSecrets } from '../lib/secure'
+import { isOwnMediaUrl } from '../lib/ownMedia'
 import { overlayState } from '../ipc/commands'
 import {
   loadFriends,
@@ -233,7 +234,7 @@ export function OverlayChat({
               <span className="msg-gone">Сообщение удалено</span>
             ) : (
               <>
-                {att && att.kind === 'image' ? (
+                {att && att.kind === 'image' && isOwnMediaUrl(att.url) ? (
                   <img className="msg-img" src={att.url} alt="" loading="lazy" />
                 ) : att ? (
                   <button className="ovc-att" onClick={() => onLauncher(current ? asTarget(current) : null)}>
@@ -265,7 +266,7 @@ export function OverlayChat({
   }
 
   return (
-    <div className="ovc">
+    <div className="ovc" data-private data-section="overlay_chat">
       <aside className="ovc-rail">
         <div className="ovc-brand">
           <Icon id="i-msg" />
@@ -305,7 +306,7 @@ export function OverlayChat({
           ))}
           {!items.length ? (
             <p className="ovc-note">
-              {filter.trim() ? 'Никого по «' + filter.trim() + '»' : 'Друзей пока нет — добавь их в лаунчере.'}
+              {filter.trim() ? 'Никого по «' + filter.trim() + '»' : 'Друзей пока нет'}
             </p>
           ) : null}
         </div>
@@ -332,7 +333,6 @@ export function OverlayChat({
           ) : (
             <span className="ovc-head-body">
               <b>Переписки</b>
-              <span>Игра остаётся запущенной</span>
             </span>
           )}
           <span className="ovc-hint">{hotkey ? hotkey + ' или Esc — закрыть' : 'Esc — закрыть'}</span>
@@ -360,7 +360,6 @@ export function OverlayChat({
             <div className="ovc-blank">
               <Icon id="i-msg" />
               <b>Выбери переписку слева</b>
-              <p>Ответ уйдёт прямо отсюда — сворачивать игру не нужно.</p>
             </div>
           ) : loading && !msgs.length ? (
             <Skeleton />
@@ -375,8 +374,7 @@ export function OverlayChat({
               {!msgs.length ? (
                 <div className="ovc-blank">
                   <Icon id="i-msg" />
-                  <b>Здесь пока пусто</b>
-                  <p>Напиши первым — сообщение придёт человеку в лаунчер и в игру.</p>
+                  <b>Напиши первым</b>
                 </div>
               ) : null}
             </>

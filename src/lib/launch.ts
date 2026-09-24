@@ -1,5 +1,5 @@
 import { hasTauri } from '../ipc/tauri'
-import { cancelLaunch, launchGame, launchProfile, quickPlay, pinServerDat, runningGames, discordPresence as ipcDiscordPresence } from '../ipc/commands'
+import { cancelLaunch, launchGame, launchProfile, loadProfileSettings, quickPlay, pinServerDat, runningGames, discordPresence as ipcDiscordPresence } from '../ipc/commands'
 import { listenLaunchProgress } from '../ipc/events'
 import type { UnlistenFn } from '../ipc/tauri'
 import type { LaunchAuth } from '../ipc/commands'
@@ -15,6 +15,9 @@ import { showToast, useUi } from '../state/ui'
 import { useGame } from '../state/game'
 import { applyLaunchWindowMode } from './window'
 import { liveBeat, track, trackTimed } from './telemetry'
+import { launchAttribution } from './uiTrack'
+import { failedHost } from './userEnvError'
+import { buildTag, errorCode } from './telemetryPrivacy'
 
 export const PL_STAGES = ['Проверка файлов', 'Java', 'Ассеты и библиотеки', 'Запуск игры']
 
@@ -103,6 +106,15 @@ export function discordPresence(status?: string, server?: string | null): Promis
 /** Дольше этого удар присутствия не ждёт ответа сокета Discord. */
 const PRESENCE_WAIT_MS = 2000
 
+/// Ник, под которым друга видно в самой игре: у лицензии Microsoft он свой, и
+/// без него список друзей называет человека именем, которого нет в игре.
+/// Без аккаунта не спрашивается: `effectiveNick` выдумал бы нового «Player1234»
+/// на каждый удар.
+function gameNick(): string {
+  const acc = getAccount()
+  return acc && acc.nick ? effectiveNick() : ''
+}
+
 export function heartbeat(status?: string, server?: string | null) {
   const beat = beatStatus(status, !!session, hasTauri())
   if (beat === 'playing' && session && (!status || status === 'lobby'))
@@ -125,6 +137,7 @@ export function heartbeat(status?: string, server?: string | null) {
           server: (playing && (server || (session && (session.serverName || session.server)))) || null,
           serverIp: (playing && session && session.server) || null,
           build: (playing && session && session.profile) || null,
+          gameNick: (playing && gameNick()) || null,
           discordUserId: discordUserId || null,
         }),
       })
@@ -133,11 +146,15 @@ export function heartbeat(status?: string, server?: string | null) {
     )
   const build = (playing && session && session.profile) || null
   const pack = build ? useProfiles.getState().profiles.find((p) => p.name === build) : undefined
-  void liveBeat(playing ? 'playing' : 'idle', {
-    build,
-    mc: (pack && pack.version) || null,
-    server: (playing && (server || (session && (session.serverName || session.server)))) || null,
-  })
+  // Имя сборки придумал игрок — в телеметрию уходит слаг каталога или отпечаток.
+  const slug = build && hasTauri() ? loadProfileSettings(build).catch(() => null) : Promise.resolve(null)
+  void slug.then((st) =>
+    liveBeat(playing ? 'playing' : 'idle', {
+      build: buildTag(build, st?.catalogPackSlug || st?.modpackSlug),
+      mc: (pack && pack.version) || null,
+      server: (playing && (server || (session && (session.serverName || session.server)))) || null,
+    }),
+  )
 }
 
 export function ramMbFor(profile: string): number {
@@ -336,14 +353,27 @@ function doLaunch(name: string) {
   )
   const launchStartedAt = performance.now()
   const launched = prof ? useProfiles.getState().profiles.find((p) => p.name === prof) : null
-  const launchInfo = {
+  const launchInfo: Record<string, string> = {
     build: prof || 'default',
     mc: (launched && launched.version) || 'latest',
     loader: (launched && (launched.loader || (launched.fabric ? 'fabric' : 'vanilla'))) || 'vanilla',
+    ...launchAttribution('other'),
   }
+  const packInfo: Promise<Record<string, string>> = prof
+    ? loadProfileSettings(prof)
+        .then((s) => {
+          const pack = (s?.catalogPackSlug || '').trim()
+          const out: Record<string, string> = {}
+          if (pack) out.pack = pack
+          if (pack && s?.catalogPackVersion) out.packVersion = s.catalogPackVersion
+          if (s?.modpackSlug) out.modpack = s.modpackSlug
+          return out
+        })
+        .catch(() => ({}))
+    : Promise.resolve({})
   inv
     .then(() => {
-      trackTimed('game_launch', launchStartedAt, launchInfo)
+      void packInfo.then((pack) => trackTimed('game_launch', launchStartedAt, { ...launchInfo, ...pack }))
       useGame.getState().addRunning(prof || 'default')
       window.dispatchEvent(new Event('millida-game-started'))
       setTimeout(() => {
@@ -358,8 +388,16 @@ function doLaunch(name: string) {
       setPrelaunch({ open: false })
       setGameSession(null)
       if (String(err).includes('отмен')) return
-      trackTimed('game_launch', launchStartedAt, { ...launchInfo, code: String(err).slice(0, 120) }, false)
-      track('error', { code: String(err).slice(0, 120), where: 'launch' }, { ok: false })
+      const host = failedHost(err)
+      void packInfo.then((pack) =>
+        trackTimed(
+          'game_launch',
+          launchStartedAt,
+          { ...launchInfo, ...pack, code: errorCode(err), ...(host ? { host } : {}) },
+          false,
+        ),
+      )
+      track('error', { code: errorCode(err), where: 'launch' }, { ok: false })
       showLaunchError(err)
     })
     .finally(() => {

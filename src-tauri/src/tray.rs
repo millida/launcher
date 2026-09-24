@@ -14,7 +14,18 @@ pub fn show_main(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
         let _ = w.unminimize();
+        // Windows refuses to raise a window for a process that does not own the
+        // foreground: show() succeeds, the window stays behind everything else,
+        // and the tray icon reads as dead. Pinning it on top for the length of
+        // the focus call is the documented way around that restriction.
+        let pinned = w.is_always_on_top().unwrap_or(false);
+        if !pinned {
+            let _ = w.set_always_on_top(true);
+        }
         let _ = w.set_focus();
+        if !pinned {
+            let _ = w.set_always_on_top(false);
+        }
         let _ = app.emit("window-visibility", true);
     }
 }
@@ -78,8 +89,14 @@ pub fn init(app: &AppHandle) {
             _ => {}
         })
         .on_tray_icon_event(|tray, e| {
-            if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = e {
-                show_main(tray.app_handle());
+            // Двойной клик по значку — привычка из других программ, и без него
+            // часть попыток открыть лаунчер просто пропадала.
+            match e {
+                TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. }
+                | TrayIconEvent::DoubleClick { button: MouseButton::Left, .. } => {
+                    show_main(tray.app_handle());
+                }
+                _ => {}
             }
         });
     if let Some(icon) = app.default_window_icon().cloned() {

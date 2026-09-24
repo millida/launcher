@@ -215,3 +215,28 @@ pub async fn scan_mod_safety(profile: String) -> Result<engine::SafetyReport, St
 pub async fn quarantine_mods(profile: String, files: Vec<String>) -> Result<u32, String> {
     super::blocking(move || engine::quarantine(&profile, files)).await?
 }
+
+/// Косметика Millida: подбор варианта под сборку и установка одной кнопкой.
+#[tauri::command]
+pub async fn millida_mod_state(profile: String) -> Result<engine::MillidaModState, String> {
+    engine::millida_mod_state(profile).await
+}
+
+#[tauri::command]
+pub async fn millida_mod_install(
+    app: tauri::AppHandle,
+    profile: String,
+) -> Result<engine::MillidaModState, String> {
+    engine::millida_mod_install(app, profile).await
+}
+
+#[tauri::command(async)]
+pub fn millida_mod_enabled() -> bool {
+    engine::millida_mod_enabled()
+}
+
+#[tauri::command(async)]
+pub fn set_millida_mod_enabled(on: bool) -> Result<(), String> {
+    engine::set_millida_mod_enabled(on)
+}
+

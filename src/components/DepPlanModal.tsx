@@ -24,12 +24,13 @@ function DepRow({
         {onToggle ? (
           <span
             className={'chk' + (checked ? ' on' : '')}
-            title={checked ? 'Не ставить' : 'Поставить вместе с модом'}
+            role="checkbox"
+            aria-checked={!!checked}
             onClick={onToggle}
           ></span>
         ) : null}
         <span className="mod-art">{node.icon ? <img src={mirrorAsset(node.icon)} alt="" loading="lazy" /> : <Icon id="i-box" />}</span>
-        <span className="mod-card-body" title={node.file_name}>
+        <span className="mod-card-body">
           <span className="mod-card-title">
             {node.title}
             {node.problem ? (
@@ -72,7 +73,7 @@ export function DepPlanModal() {
     <div className="modal-bg open vis" style={{ zIndex: 470 }} {...backdropClose(() => decide({ go: false, extras: [] }))}>
       <div className="modal mw-sm">
         <h3>«{plan.title}» — что поставим</h3>
-        <div className="sub">{depSummary(plan) || 'Дополнительных модов не требуется.'}</div>
+        {depSummary(plan) ? <div className="sub">{depSummary(plan)}</div> : null}
 
         <div style={{ maxHeight: '360px', overflowY: 'auto', marginTop: '14px' }}>
           {plan.conflicts.length ? (
@@ -92,7 +93,7 @@ export function DepPlanModal() {
                     borderRadius: '10px',
                   }}
                 >
-                  <Icon id="i-alert" /> «{c.title}» и «{c.with}» вместе не работают — {c.reason}. Оставь что-то одно.
+                  <Icon id="i-alert" /> «{c.title}» и «{c.with}» несовместимы: {c.reason}
                 </p>
               ))}
             </>
@@ -101,7 +102,7 @@ export function DepPlanModal() {
           {plan.required.length ? (
             <>
               <div className="set-val" style={{ margin: '10px 0 6px' }}>
-                Поставим вместе с модом
+                Вместе с модом
               </div>
               {plan.required.map((n) => (
                 <DepRow node={n} key={n.project_id} />
@@ -112,7 +113,7 @@ export function DepPlanModal() {
           {plan.missing.length ? (
             <>
               <div className="set-val" style={{ color: 'var(--m-danger)', margin: '10px 0 6px' }}>
-                Не нашлось под эту сборку
+                Нет под эту версию
               </div>
               {plan.missing.map((n) => (
                 <DepRow node={n} key={n.project_id} />
@@ -123,7 +124,7 @@ export function DepPlanModal() {
           {plan.optional.length ? (
             <>
               <div className="set-val" style={{ margin: '10px 0 6px' }}>
-                По желанию — отметь, что нужно
+                По желанию
               </div>
               {plan.optional.map((n) => (
                 <DepRow
@@ -143,17 +144,14 @@ export function DepPlanModal() {
         </div>
 
         {plan.truncated ? (
-          <p className="faint-note">Зависимостей слишком много — показали первые. Остальные подтянутся при установке.</p>
+          <p className="faint-note">Показаны первые — остальные подтянутся сами</p>
         ) : null}
         {plan.missing.length ? (
-          <p className="faint-note">
-            Без них мод, скорее всего, не запустится: у зависимостей нет файлов под эту версию игры и загрузчик.
-            Поставить можно, но лучше выбрать другую версию мода.
-          </p>
+          <p className="faint-note">Без них мод может не запуститься — лучше взять другую версию мода</p>
         ) : null}
 
         <div style={{ display: 'flex', gap: '10px', marginTop: '18px' }}>
-          <button className="btn md" style={{ flex: 1 }} onClick={() => decide({ go: true, extras })}>
+          <button className="btn md primary" style={{ flex: 1 }} onClick={() => decide({ go: true, extras })}>
             <Icon id="i-download" /> Установить{total ? ' + ' + total : ''}
           </button>
           <button className="btn md ghost" onClick={() => decide({ go: false, extras: [] })}>

@@ -53,12 +53,15 @@ Object.defineProperty(globalThis, 'window', {
 
 const { playSound } = await import('./sound')
 
-test('уведомление о сообщении звучит, даже если звуки не скачались и контекст был приостановлен', async () => {
+// Звуки — только из Minecraft (приказ владельца 22.09.2026): пока файлы игры
+// не скачались, уведомление молчит. Раньше здесь синтезировался тон, и это
+// был единственный чужой звук в лаунчере.
+test('звуки игры не скачаны — лаунчер будит аудио, но ничего не синтезирует', async () => {
   playSound('notify')
   await Promise.resolve()
   await Promise.resolve()
   expect(resumed).toBe(1)
-  expect(started.map((s) => s.freq)).toEqual([880, 1318])
+  expect(started.map((s) => s.freq)).toEqual([])
 })
 
 test('выключенный звук ничего не будит', async () => {

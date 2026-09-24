@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Icon } from './Icon'
+import { Row } from './SetKit'
 import { hasTauri } from '../ipc/tauri'
 import { showToast } from '../state/ui'
 import { dedupeGc, dedupeRun, dedupeScan, type DedupReport } from '../ipc/commands'
@@ -48,28 +48,28 @@ export function SharedStore() {
   }
 
   return (
-    <div className="set-row">
-      <span className="lab">
-        Общее хранилище модов
-        <small>
-          {busy === 'scan' || !report
-            ? 'Считаем, сколько файлов повторяется в сборках…'
-            : report.savedBytes
-              ? `${report.files} файлов в сборках, ${report.unique} разных. Общими они занимают на ${mb(report.savedBytes)} МБ меньше`
-              : 'Повторяющихся модов между сборками нет'}
-        </small>
-      </span>
+    <Row
+      title="Общие моды"
+      keys="общее хранилище моды дубли повторы место объединить"
+      hint={
+        busy === 'scan' || !report
+          ? 'Считаем повторы…'
+          : report.savedBytes
+            ? 'Повторов на ' + mb(report.savedBytes) + ' МБ'
+            : 'Повторов между сборками нет'
+      }
+    >
       <button className="btn sm secondary" disabled={busy !== ''} onClick={run}>
-        <Icon id="i-zap" /> {busy === 'run' ? 'Объединяем…' : 'Объединить'}
+        {busy === 'run' ? 'Объединяем…' : 'Объединить'}
       </button>
       <button
-        className="btn sm secondary"
+        className="btn sm ghost"
         disabled={busy !== ''}
-        title="Убрать из хранилища файлы, которых больше нет ни в одной сборке"
+        data-tip="Убрать файлы, которых больше нет ни в одной сборке"
         onClick={gc}
       >
         {busy === 'gc' ? 'Чистим…' : 'Подчистить'}
       </button>
-    </div>
+    </Row>
   )
 }

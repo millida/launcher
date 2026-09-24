@@ -4,7 +4,19 @@ import { playSound } from '../lib/sound'
 import { TOAST_TEXT_MAX, clipText } from '../lib/format'
 import type { SoundEvent } from '../lib/sound'
 
-export type ScreenId = 'play' | 'builds' | 'servers' | 'mods' | 'skins' | 'friends' | 'hosting' | 'settings'
+export type ScreenId =
+  | 'play'
+  | 'premium'
+  | 'builds'
+  | 'servers'
+  | 'mods'
+  | 'skins'
+  | 'rubies'
+  | 'friends'
+  | 'chat'
+  | 'hosting'
+  | 'playhub'
+  | 'settings'
 export type ModalId =
   | 'nbModal'
   | 'bsModal'
@@ -32,7 +44,7 @@ export interface PrelaunchState {
 }
 
 export type ToastKind = 'ok' | 'error'
-export type SettingsTab = 'look' | 'sound' | 'game' | 'window' | 'privacy' | 'about'
+export type SettingsTab = 'look' | 'sound' | 'notify' | 'game' | 'files' | 'window' | 'privacy' | 'about'
 export type SettingsFocus = 'mic' | null
 
 export interface ToastAction {

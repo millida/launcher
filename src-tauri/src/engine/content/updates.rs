@@ -74,6 +74,12 @@ pub async fn check_updates(profile: String, kind: String) -> Result<Vec<UpdateIn
     let latest = latest_versions(&entries, &gv, &loaders, &bridge).await;
     let mut out = vec![];
     for e in entries {
+        // A pack's load-bearing Fabric API is pinned to what it shipped: a newer
+        // one on Modrinth installs by loader tag yet breaks the pack's bridge at
+        // world load, so it is never offered as an update here.
+        if fabric_api_pinned(&profile, &bridge, &e.project_id) {
+            continue;
+        }
         let Some(v) = latest.get(&e.file_name) else { continue };
         let nid = v["id"].as_str().unwrap_or("");
         if !nid.is_empty() && nid != e.version_id {
@@ -127,6 +133,9 @@ pub async fn update_content(profile: String, kind: String, file_name: String) ->
     let loader_id = prof.map(|p| p.loader_id()).unwrap_or_else(|| "vanilla".into());
     let loaders = modrinth_loaders(&loader_id, &kind);
     let bridge = bridge_loaders(&profile, &loader_id, &kind);
+    if fabric_api_pinned(&profile, &bridge, &entry.project_id) {
+        return Err("Fabric API этой сборки закреплён под неё — обновлять его отдельно нельзя.".into());
+    }
     let ver = best_version_bridged(&entry.project_id, &gv, &loaders, &bridge).await
         .map_err(|e| format!("{}: {}", if entry.title.is_empty() { file_name.clone() } else { entry.title.clone() }, e))?;
     apply_update(&profile, &kind, &file_name, &ver).await
@@ -151,6 +160,9 @@ pub async fn update_all(profile: String, kind: String) -> Result<u32, String> {
     warm_projects_meta(&ids).await;
     let mut n = 0;
     for e in entries {
+        if fabric_api_pinned(&profile, &bridge, &e.project_id) {
+            continue;
+        }
         let Some(v) = latest.get(&e.file_name) else { continue };
         let nid = v["id"].as_str().unwrap_or("");
         if nid.is_empty() || nid == e.version_id {
@@ -193,7 +205,8 @@ pub async fn add_local_file(profile: String, kind: String, src: String) -> Resul
     let dir = profile_dir(&profile).join(content_dir(&kind));
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let dest = safe_child(&dir, &fname)?;
-    std::fs::copy(&srcp, &dest).map_err(|e| e.to_string())?;
+    // A mod of the same name may be a hard link into the shared store.
+    copy_replacing(&srcp, &dest).map_err(|e| e.to_string())?;
     // sha1 lookup identifies the file on Modrinth when possible
     let bytes = std::fs::read(&dest).map_err(|e| e.to_string())?;
     let mut h = Sha1::new(); h.update(&bytes);

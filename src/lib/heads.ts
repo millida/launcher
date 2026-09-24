@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { hasTauri } from '../ipc/tauri'
 import { headAvatar } from '../ipc/commands'
-import { monogramAvatar } from './format'
 
 const OFFLINE_NICK = 'MHF_Steve'
 
@@ -70,10 +69,31 @@ export function warmHeads(nicks: (string | undefined)[]): void {
 /// нерабочий, и вместо лица до перезапуска лаунчера висела буква.
 const HEAD_TRIES = 3
 
+/**
+ * Заглушка, пока голова грузится или у ника нет скина: лицо Стива 8×8, как в
+ * самой игре. Буква на цветном квадрате выглядела чужеродно в лаунчере Minecraft
+ * (правка владельца 23.09.2026).
+ */
+const STEVE_ROWS = ['HHHHHHHH', 'HHHHHHHH', 'HSSSSSSH', 'SSSSSSSS', 'SWESSEWS', 'SSSNNSSS', 'SSMMMMSS', 'SSSSSSSS']
+const STEVE_COLORS: Record<string, string> = { H: '#2f200d', S: '#b8866a', W: '#ffffff', E: '#4a3a86', N: '#8a5845', M: '#6a3a2a' }
+let steveCache = ''
+function steveFace(): string {
+  if (steveCache) return steveCache
+  let rects = ''
+  STEVE_ROWS.forEach((row, y) =>
+    [...row].forEach((c, x) => {
+      rects += '<rect x="' + x + '" y="' + y + '" width="1" height="1" fill="' + STEVE_COLORS[c] + '"/>'
+    }),
+  )
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8" shape-rendering="crispEdges">' + rects + '</svg>'
+  steveCache = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
+  return steveCache
+}
+
 export function useHead(nick?: string, size = 32, override?: string | null): string {
   const px = headPx(size)
   const [src, setSrc] = useState<string>(
-    () => override || cachedHead(nick, undefined, px) || monogramAvatar(nick, size),
+    () => override || cachedHead(nick, undefined, px) || steveFace(),
   )
   useEffect(() => {
     if (override) {
@@ -81,7 +101,7 @@ export function useHead(nick?: string, size = 32, override?: string | null): str
       return
     }
     const hit = cachedHead(nick, undefined, px)
-    setSrc(hit || monogramAvatar(nick, size))
+    setSrc(hit || steveFace())
     if (hit) return
     let alive = true
     let timer: ReturnType<typeof setTimeout> | undefined

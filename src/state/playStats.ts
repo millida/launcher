@@ -65,6 +65,28 @@ export const usePlayStats = create<State>((set) => ({
 export const refreshPlayStats = () => usePlayStats.getState().refresh()
 
 /**
+ * Пока игра идёт, счёт часов перечитывается сам.
+ *
+ * Ядро сбрасывает наигранное на диск раз в минуту, а интерфейс до сих пор
+ * спрашивал его только при ВЫХОДЕ из игры. Снаружи это выглядело как «время не
+ * записывается»: сборка запущена, час идёт, а под карточкой пусто - и первым,
+ * что человек видел, был ноль у той сборки, в которую он прямо сейчас играет.
+ *
+ * Тот же период, что у сброса на диск: чаще спрашивать нечего, реже - и
+ * показанное число отстаёт сильнее, чем длится сессия у большинства.
+ */
+const WHILE_PLAYING = 60_000
+let ticking: ReturnType<typeof setInterval> | null = null
+
+export function watchPlaytimeWhileRunning(running: () => boolean): void {
+  if (ticking) return
+  ticking = setInterval(() => {
+    if (!running()) return
+    void refreshPlayStats()
+  }, WHILE_PLAYING)
+}
+
+/**
  * Локальный счётчик и подтверждённое время считаются по-разному: второе растёт
  * только пока сервер видит удары. Показываем оба, иначе разница читается как
  * потерянные часы.

@@ -17,6 +17,13 @@ export type SoundEvent =
   | 'login'
   | 'launch'
   | 'crash'
+  | 'chest_hit'
+  | 'chest_crack'
+  | 'chest_open'
+  | 'chest_card'
+  | 'chest_rare'
+  | 'chest_epic'
+  | 'chest_gold'
 
 const GAIN: Record<SoundEvent, number> = {
   click: 0.5,
@@ -33,6 +40,13 @@ const GAIN: Record<SoundEvent, number> = {
   login: 0.6,
   launch: 0.5,
   crash: 0.45,
+  chest_hit: 0.7,
+  chest_crack: 0.55,
+  chest_open: 0.7,
+  chest_card: 0.55,
+  chest_rare: 0.6,
+  chest_epic: 0.6,
+  chest_gold: 0.6,
 }
 
 const UI_EVENTS: SoundEvent[] = ['click', 'nav', 'toggle', 'open', 'close']
@@ -146,6 +160,26 @@ export function playSound(ev: SoundEvent) {
   emit(ev)
 }
 
+/** Высота звука: одна нота нотного блока звучит разными ступенями. */
+const RATE: Partial<Record<SoundEvent, number>> = { nav: 1.19, open: 1.335, close: 1, notify: 1.12, login: 1.26 }
+/** Клики — по пентатонике по кругу: подряд складываются в мелодию, а не долбят одну ноту. */
+const CLICK_STEPS = [1, 1.122, 1.26, 1.498, 1.682]
+let clickStep = 0
+/** Потолок длины: звуки короткие, хвост гасится плавно (владелец 24.09.2026). */
+const MAX_S: Partial<Record<SoundEvent, number>> = {
+  click: 0.22,
+  nav: 0.22,
+  toggle: 0.2,
+  open: 0.32,
+  close: 0.32,
+  delete: 0.3,
+  error: 0.4,
+  notify: 0.6,
+  login: 0.6,
+  install: 0.7,
+  success: 0.6,
+}
+
 function playBuffer(ac: AudioContext, ev: SoundEvent, level: number): boolean {
   const buf = buffers.get(ev)
   if (!buf) return false
@@ -153,10 +187,18 @@ function playBuffer(ac: AudioContext, ev: SoundEvent, level: number): boolean {
     const node = ac.createBufferSource()
     const gain = ac.createGain()
     node.buffer = buf
+    node.playbackRate.value = ev === 'click' ? CLICK_STEPS[clickStep++ % CLICK_STEPS.length]! : RATE[ev] ?? 1
     gain.gain.value = level
     node.connect(gain)
     gain.connect(ac.destination)
+    const max = MAX_S[ev]
+    const t = ac.currentTime
     node.start()
+    if (max) {
+      gain.gain.setValueAtTime(level, t + max * 0.6)
+      gain.gain.linearRampToValueAtTime(0, t + max)
+      node.stop(t + max + 0.02)
+    }
     return true
   } catch {
     return false
@@ -177,40 +219,9 @@ function playFile(ev: SoundEvent, level: number, onFail: () => void): boolean {
   }
 }
 
-const TONE: Partial<Record<SoundEvent, number[]>> = {
-  notify: [880, 1318],
-  success: [660, 990],
-  error: [330, 220],
-  crash: [220, 165],
-  achievement: [784, 1046],
-  install: [587, 880],
-  login: [523, 784],
-  launch: [440, 660],
-  delete: [392, 294],
-}
-
-// Last resort when the game assets never downloaded: a notification must never be mute.
-function playTone(ac: AudioContext, ev: SoundEvent, level: number) {
-  const notes = TONE[ev]
-  if (!notes) return
-  try {
-    const start = ac.currentTime
-    notes.forEach((hz, i) => {
-      const at = start + i * 0.11
-      const osc = ac.createOscillator()
-      const gain = ac.createGain()
-      osc.type = 'sine'
-      osc.frequency.value = hz
-      gain.gain.setValueAtTime(0.0001, at)
-      gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, level * 0.5), at + 0.012)
-      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.3)
-      osc.connect(gain)
-      gain.connect(ac.destination)
-      osc.start(at)
-      osc.stop(at + 0.32)
-    })
-  } catch {}
-}
+/// Звуки — ТОЛЬКО из Minecraft (нотный блок, опыт; с 24.09.2026 — мелодичные) (приказ владельца 22.09.2026). Синтезированные
+/// тоны-пищалки как запасной вариант убраны: чужой звук в интерфейсе слышно
+/// сразу, лучше тишина. Нет файлов — молчим и качаем их при первой возможности.
 
 function emit(ev: SoundEvent) {
   const vol = soundVolume()
@@ -225,8 +236,7 @@ function emit(ev: SoundEvent) {
 
   if (ac && ac.state === 'running') {
     if (playBuffer(ac, ev, level)) return
-    if (playFile(ev, level, () => playTone(ac, ev, level))) return
-    playTone(ac, ev, level)
+    playFile(ev, level, () => {})
     return
   }
 
@@ -236,7 +246,7 @@ function emit(ev: SoundEvent) {
       .resume()
       .then(() => {
         if (ac.state !== 'running') return
-        if (!playBuffer(ac, ev, level)) playTone(ac, ev, level)
+        playBuffer(ac, ev, level)
       })
       .catch(() => {})
   }
@@ -244,6 +254,27 @@ function emit(ev: SoundEvent) {
 }
 
 export const playNotifySound = () => playSound('notify')
+
+/** Звук-образец с высотой (сундук: каждый удар выше). Уважает режим звука. */
+export function playSample(ev: SoundEvent, rate = 1) {
+  if (soundMode() === 'off') return
+  const vol = soundVolume()
+  if (vol <= 0) return
+  const ac = audioCtx()
+  const buf = buffers.get(ev)
+  if (!ac || !buf) return
+  try {
+    if (ac.state !== 'running') void ac.resume()
+    const node = ac.createBufferSource()
+    const gain = ac.createGain()
+    node.buffer = buf
+    node.playbackRate.value = rate
+    gain.gain.value = Math.max(0, Math.min(1, (vol / 100) * GAIN[ev]))
+    node.connect(gain)
+    gain.connect(ac.destination)
+    node.start()
+  } catch {}
+}
 
 async function load(force: boolean): Promise<number> {
   if (!hasTauri()) return 0

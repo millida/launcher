@@ -45,3 +45,11 @@ const PATTERNS: RegExp[] = [
 export function isUserEnvironmentError(text: string): boolean {
   return PATTERNS.some((p) => p.test(text))
 }
+
+// The core puts the cause first and the address last, and telemetry keeps only
+// 120 characters of the text: without a field of its own the host that dropped
+// the connection was cut off.
+export function failedHost(err: unknown): string | null {
+  const m = /https?:\/\/([a-z0-9.-]+)/i.exec(String(err))
+  return m ? m[1].toLowerCase() : null
+}

@@ -78,12 +78,18 @@ export function WorldManager({ profile, onPlay }: Props) {
 
   const backupsOf = (folder: string) => backups.filter((b) => b.startsWith(folder + '-'))
 
-  if (loading) return <p className="faint-note">Читаем миры…</p>
+  if (loading)
+    return (
+      <div className="bx-skel-list" aria-busy="true">
+        <span className="skel" />
+        <span className="skel" />
+      </div>
+    )
 
   return (
     <>
       {worlds.length === 0 ? (
-        <p className="faint-note">Миров пока нет — они появятся после игры или можно внести архив.</p>
+        <p className="faint-note">Миров пока нет</p>
       ) : null}
       <div className="wm-list">
         {worlds.map((w) => {
@@ -116,15 +122,16 @@ export function WorldManager({ profile, onPlay }: Props) {
                   </span>
                 </span>
                 <button
-                  className="btn sm secondary"
+                  className="btn sm primary"
                   disabled={w.unreadable}
                   onClick={() => onPlay(w.folder, w.name)}
                 >
-                  Играть
+                  <Icon id="i-play" /> Играть
                 </button>
                 <button
                   className="icon-btn"
-                  title="Ещё"
+                  aria-label="Ещё"
+                  aria-expanded={expanded}
                   onClick={() => {
                     setOpen(expanded ? '' : w.folder)
                     setRename(w.name)
@@ -179,17 +186,17 @@ export function WorldManager({ profile, onPlay }: Props) {
                       disabled={busy === w.folder}
                       onClick={() => run(w.folder, exportWorld(profile, w.folder), 'Мир сохранён в архив')}
                     >
-                      <Icon id="i-box2" /> Экспорт в zip
+                      <Icon id="i-box2" /> В архив
                     </button>
                     <button
                       className="btn sm secondary"
                       disabled={busy === w.folder}
                       onClick={() => run(w.folder, duplicateWorld(profile, w.folder), 'Копия мира создана')}
                     >
-                      <Icon id="i-copy" /> Дублировать
+                      <Icon id="i-copy" /> Копия
                     </button>
                     <button className="btn sm ghost" onClick={() => void openWorldFolder(profile, w.folder)}>
-                      Открыть папку
+                      <Icon id="i-folder" /> Папка
                     </button>
                     <button
                       className="btn sm danger"
@@ -225,7 +232,7 @@ export function WorldManager({ profile, onPlay }: Props) {
                           </button>
                           <button
                             className="icon-btn del"
-                            title="Удалить бэкап"
+                            aria-label="Удалить бэкап"
                             onClick={() => run(b, deleteWorldBackup(profile, b), 'Бэкап удалён')}
                           >
                             <Icon id="i-trash" />
@@ -246,7 +253,7 @@ export function WorldManager({ profile, onPlay }: Props) {
         disabled={busy === 'import'}
         onClick={() => run('import', importWorld(profile), 'Мир внесён в сборку')}
       >
-        <Icon id="i-upload" /> Внести мир из архива
+        <Icon id="i-upload" /> Мир из архива
       </button>
     </>
   )

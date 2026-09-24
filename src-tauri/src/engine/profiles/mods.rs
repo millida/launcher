@@ -133,6 +133,7 @@ pub fn delete_profile(name: &str) -> Result<Vec<Profile>, String> {
 /// Playtime and groups live outside the profile folder and are keyed by name, so
 /// a rebuilt profile with the same name inherited them.
 fn forget_profile_side_data(name: &str) {
+    forget_pack_launch(name);
     set_profile_group(name, "");
     forget_playtime(name);
 }

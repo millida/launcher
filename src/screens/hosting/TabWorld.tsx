@@ -203,7 +203,7 @@ export function TabWorld({
             ))}
           </div>
         ) : (
-          <Empty icon="i-grid" text="Миров пока нет — они появятся после первого запуска сервера." />
+          <Empty icon="i-grid" text="Миров пока нет" />
         )}
       </div>
 
@@ -213,7 +213,7 @@ export function TabWorld({
             <Toggle
             />
           </Row>
-          <Row k="Онлайн-карта мира" sub={features.map.url ? features.map.url : 'Карта сервера в браузере'}>
+          <Row k="Онлайн-карта мира" sub={features.map.url || undefined}>
             <Toggle
               on={features.map.enabled}
               busy={busy === 'map' || !features.compatible}
@@ -222,7 +222,7 @@ export function TabWorld({
           </Row>
           {!features.compatible ? (
             <p className="faint-note" style={{ marginTop: '10px' }}>
-              Ядро {features.core} это не поддерживает — нужно Paper, Purpur или Spigot.
+              Нужно ядро Paper, Purpur или Spigot
             </p>
           ) : null}
         </div>
@@ -235,7 +235,7 @@ export function TabWorld({
         <div className="host-danger-row">
           <div>
             <div className="host-danger-k">Пересоздать мир</div>
-            <div className="host-danger-sub">Новый мир с новым сидом. Плагины, моды и настройки остаются.</div>
+            <div className="host-danger-sub">Моды и настройки останутся</div>
           </div>
           <button className="btn sm secondary" disabled={busy === 'regen'} onClick={() => void regenerate()}>
             Пересоздать
@@ -243,8 +243,8 @@ export function TabWorld({
         </div>
         <div className="host-danger-row">
           <div>
-            <div className="host-danger-k">Полный сброс сервера</div>
-            <div className="host-danger-sub">Чистая установка: мир, плагины, моды и конфиги удаляются.</div>
+            <div className="host-danger-k">Сбросить сервер</div>
+            <div className="host-danger-sub">Удалит мир, моды и настройки</div>
           </div>
           <button className="btn sm danger" disabled={busy === 'reinstall'} onClick={() => void reinstall()}>
             Сбросить
@@ -252,7 +252,7 @@ export function TabWorld({
         </div>
         {running ? (
           <p className="faint-note" style={{ marginTop: '10px' }}>
-            Сервер работает — перед сбросом его лучше остановить.
+            Сначала останови сервер
           </p>
         ) : null}
       </div>

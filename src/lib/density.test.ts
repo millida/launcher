@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 
 const read = (name: string) => readFileSync(new URL('../styles/' + name, import.meta.url), 'utf8')
 
-const BASE_FILES = ['02-kit.css', '03-mods.css', '04-hosting.css', '05-media.css', '06-onboarding.css', '08-themes.css']
+const BASE_FILES = ['02-kit.css', '03-mods.css', '04-hosting.css', '05-media.css', '06-onboarding.css']
 const DENSITY_FILE = '07-density.css'
 
 type Rule = { selector: string; props: string[]; spec: number; order: number }

@@ -6,6 +6,7 @@ import { copyText } from '../lib/clipboard'
 import { backdropClose } from '../lib/dismiss'
 import { showToast } from '../state/ui'
 import { myPacks, shareProfile, unshareProfile, type SharedPack } from '../ipc/commands'
+import { apiErrorText } from '../lib/apiError'
 
 interface Props {
   profile: string
@@ -57,7 +58,10 @@ export function SharePackModal({ profile, onClose }: Props) {
         setRevoked(false)
         setPack(fresh)
       })
-      .catch((e) => showToast('' + e, 'error'))
+      .catch((e) => {
+        console.error('shareProfile', e)
+        showToast(apiErrorText(e, 'Не получилось выдать код'), 'error')
+      })
       .finally(() => setBusy(false))
   }
 
@@ -80,8 +84,7 @@ export function SharePackModal({ profile, onClose }: Props) {
           <>
             <div className="share-code">{pack.code.slice(0, 4) + '-' + pack.code.slice(4)}</div>
             <p className="faint-note" style={{ textAlign: 'center' }}>
-              Друг вводит этот код в лаунчере — и получает ту же сборку: {pack.files} файлов
-              {pack.sizeBytes ? ', ' + fmtSize(pack.sizeBytes) + ' описания вместо гигабайтов' : ''}.
+              {pack.files + ' файлов' + (pack.sizeBytes ? ' · ' + fmtSize(pack.sizeBytes) : '') + ' · Импорт → По коду'}
             </p>
             <div className="wm-row" style={{ marginTop: '12px' }}>
               <div className="input sm" style={{ flex: 1 }}>
@@ -99,9 +102,7 @@ export function SharePackModal({ profile, onClose }: Props) {
             </div>
             {pack.skipped.length ? (
               <p className="faint-note" style={{ marginTop: '10px' }}>
-                Не поедут файлы, которых нет в каталогах ({pack.skipped.length}):{' '}
-                {pack.skipped.slice(0, 4).join(', ')}
-                {pack.skipped.length > 4 ? ' и другие' : ''}. Их придётся передать отдельно.
+                {'Не поедут (' + pack.skipped.length + '): ' + pack.skipped.slice(0, 4).join(', ') + (pack.skipped.length > 4 ? '…' : '')}
               </p>
             ) : null}
             {/* Код живёт, пока автор его не отозвал: без этой кнопки сборку,
@@ -122,19 +123,14 @@ export function SharePackModal({ profile, onClose }: Props) {
                   .finally(() => setBusy(false))
               }}
             >
-              {revoked ? 'Код отозван' : 'Убрать из общего доступа'}
+              {revoked ? 'Код отозван' : 'Отозвать код'}
             </button>
           </>
         ) : (
           <>
-            <p className="faint-note">
-              Уедет только описание сборки: версия, ядро и список модов из Modrinth и CurseForge с их
-              хешами. Сами файлы друг скачает из каталогов — так сборка занимает килобайты и остаётся
-              проверяемой.
-            </p>
             <div className="input sm" style={{ marginTop: '12px' }}>
               <input
-                placeholder="Короткое описание (необязательно)"
+                placeholder="Описание — можно пусто"
                 maxLength={300}
                 value={summary}
                 onChange={(e) => setSummary(e.target.value)}
@@ -153,7 +149,7 @@ export function SharePackModal({ profile, onClose }: Props) {
                 showToast('Код скопирован', 'ok')
               }}
             >
-              <Icon id="i-copy" /> Скопировать код
+              <Icon id="i-copy" /> Код
             </button>
           ) : (
             <button className="btn md primary" style={{ flex: 1 }} disabled={busy} onClick={publish}>

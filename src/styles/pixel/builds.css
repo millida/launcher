@@ -1,0 +1,241 @@
+/* ============================================================
+   ПИКСЕЛЬНЫЙ ЯЗЫК — зона «Сборки» (22.09.2026)
+   Экран «Сборки», мастер «Новая сборка», «Импорт», страница сборки,
+   окна краша, проверки модов, «Поделиться», «По коду», выбор сборки.
+   Общий слой (кнопки, поля, карточки) — в 12-pixel.css, здесь только
+   то, чего там нет. Всё под :root:root там, где меняется форма.
+   ============================================================ */
+
+/* ---------- Стопка блоков: вместо иконки-кисти и абзаца ---------- */
+.bx-stack { display: inline-flex; align-items: flex-end; flex: none; }
+.bx-stack img { width: 30px; height: 30px; object-fit: contain; image-rendering: pixelated; }
+.bx-stack img + img { margin-left: -8px; }
+.bx-stack img:nth-child(2) { transform: translateY(-5px); }
+.bx-stack.lg img { width: 58px; height: 58px; }
+.bx-stack.lg img + img { margin-left: -14px; }
+.bx-stack.lg img:nth-child(2) { transform: translateY(-10px); }
+.icon-nudge-art.bx-stack { display: inline-flex; width: auto; height: auto; background: none; }
+
+/* ---------- Пустой экран «Сборки» ---------- */
+.bx-empty {
+  grid-column: 1 / -1;
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  padding: 34px 24px 30px; text-align: center;
+}
+.bx-empty-title { font-size: 19px; font-weight: 750; }
+.bx-empty-acts { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+/* ---------- Маленькое пустое/ошибочное состояние внутри блока ---------- */
+.bx-mini-empty {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 22px 12px; text-align: center; color: var(--m-fg-muted); font-size: 13px;
+}
+.bx-mini-empty > svg.icon { width: 26px; height: 26px; color: var(--m-fg-subtle); }
+.bx-mini-empty b { color: var(--m-fg); font-size: 14px; font-weight: 700; }
+.bx-chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; max-width: 420px; }
+.bx-kbd {
+  display: inline-grid; place-items: center; min-width: 28px; height: 24px; padding: 0 6px;
+  font: 800 12px/1 var(--m-mono); color: var(--m-fg);
+  background: var(--m-surface-2);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.1), inset 0 -3px 0 rgba(0, 0, 0, 0.35); --px-ol: transparent; --px-ft: rgba(255, 255, 255, 0.1); --px-ft-w: 2px; --px-fb: rgba(0, 0, 0, 0.35); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+:root:root .bx-kbd { --px-n: 4px; clip-path: var(--px-4); }
+
+/* ---------- Скелетоны вместо «Загружаем…» ---------- */
+.bx-skel-list { display: flex; flex-direction: column; gap: 8px; padding: 4px 0; }
+.bx-skel-list .skel { display: block; height: 44px; }
+.bx-skel-shot { display: block; aspect-ratio: 16 / 9; }
+:root:root :is(.bx-skel-list .skel, .bx-skel-shot) { border-radius: 0; --px-n: 10px; clip-path: var(--px-10); }
+
+/* ---------- Ошибка строкой: значок, фраза, «Повторить» ---------- */
+.nb-err {
+  display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 8px 8px 8px 12px;
+  background: var(--m-danger-soft); color: var(--m-fg); font-size: 13px;
+}
+.nb-err > svg.icon { width: 16px; height: 16px; color: var(--m-danger); flex: none; }
+.nb-err > span { flex: 1; min-width: 0; }
+:root:root .nb-err { --px-n: 5px; clip-path: var(--px-5); }
+
+/* ---------- Мастер «Новая сборка» (переделан 23.09.2026) ----------
+   Владелец: «кнопки скачут, иконки слишком маленькие». Поэтому здесь всё
+   фиксированной высоты: подписи 24px, поля и выпадашки 44px, плитки
+   загрузчиков 112px, лента обложек 64px. Поле «Версия загрузчика» стоит
+   всегда (у Ваниллы — выключено), загрузка — скелетон той же высоты,
+   ошибка — кнопка той же высоты на месте выпадашки. */
+#nbModal .modal.nb-modal { width: 600px; }
+.nb-modal h3 { margin-bottom: 16px; }
+.nb-modal .nb-field { margin: 0; }
+.nb-modal .nb-field > label {
+  display: flex; align-items: center; gap: 10px; height: 24px; margin-bottom: 8px;
+  font-size: 13.5px; font-weight: 600; color: var(--m-fg);
+}
+.nb-modal .nb-field > label > span:first-child { flex: 1; min-width: 0; }
+.nb-modal .nb-field > label .pill { height: 24px; }
+.nb-modal .input { height: 44px; }
+.nb-modal .m-select { display: block; }
+.nb-modal .m-select-btn { height: 44px; padding: 0 12px 0 16px; font-size: 14px; }
+.nb-skel { display: block; height: 44px; }
+
+/* Шапка: большая обложка слева, справа название и лента обложек. */
+.nb-modal .nb-head { display: flex; align-items: flex-start; gap: 16px; margin: 0 0 18px; }
+.nb-preview {
+  position: relative; flex: none; width: 140px; height: 140px; overflow: hidden;
+  background: var(--m-inset);
+}
+.nb-preview .cover-img.block { padding: 16%; }
+/* Своя картинка и редактор — две кнопки на самой обложке: это действия над
+   ней, а не варианты в ленте. Лента начинается с фонов, выбранный по
+   умолчанию фон всегда виден без прокрутки. */
+.nb-preview-acts { position: absolute; left: 8px; bottom: 8px; display: flex; gap: 6px; }
+.nb-act {
+  display: grid; place-items: center; width: 34px; height: 34px; padding: 0;
+  background: color-mix(in srgb, var(--m-bg) 78%, transparent); color: var(--m-fg);
+  transition: background-color var(--m-t-fast), color var(--m-t-fast);
+}
+.nb-act svg.icon { width: 17px; height: 17px; }
+@media (hover: hover) and (pointer: fine) { .nb-act:hover { background: var(--m-surface-2); } }
+.nb-act.on { background: var(--m-accent); color: #06200e; }
+.nb-head-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+
+/* Лента обложек: одна строка плиток 64px, листается вбок (и колесом). */
+.nb-strip {
+  display: grid; grid-auto-flow: column; grid-auto-columns: 64px; gap: 6px;
+  height: 64px; box-sizing: content-box; padding-bottom: 8px;
+  overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+.nb-tile {
+  position: relative; width: 64px; height: 64px; padding: 0; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--tile-c, var(--m-surface-2)) 22%, var(--m-inset));
+  color: var(--m-fg-muted);
+  transition: background-color var(--m-t-fast), color var(--m-t-fast);
+}
+/* Блоки — рендеры 96px: показываем 48px внутри 64px плитки, без pixelated
+   (это не пиксель-арт, при ступенчатом сглаживании грани рвутся). */
+.nb-tile img { width: 48px; height: 48px; object-fit: contain; image-rendering: auto; pointer-events: none; }
+.nb-tile.photo img { width: 100%; height: 100%; object-fit: cover; }
+@media (hover: hover) and (pointer: fine) {
+  .nb-tile:hover { background: color-mix(in srgb, var(--tile-c, var(--m-surface-2)) 40%, var(--m-inset)); color: var(--m-fg); }
+}
+.nb-tile.on::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  box-shadow: inset 0 0 0 3px var(--m-accent); --px-ol: var(--m-accent); --px-ol-w: 3px; --px-ft: transparent; --px-fb: transparent; --px-fl: transparent; --px-fr: transparent;
+}
+.nb-tile.on { background: color-mix(in srgb, var(--tile-c, var(--m-accent)) 45%, var(--m-inset)); }
+
+/* Загрузчики: пять плиток одной высоты, у каждой строка подписи (пустая
+   тоже держит место), поэтому ряд не меняет высоту при выборе. */
+.nb-loaders { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-bottom: 18px; }
+.nb-loader {
+  display: grid; grid-template-rows: 56px 18px 14px; justify-items: center; align-items: center; row-gap: 4px;
+  height: 112px; padding: 10px 4px 0;
+  background: var(--m-inset); color: var(--m-fg-muted);
+  box-shadow: var(--px-well, inset 0 0 0 1px var(--m-border)); --px-ol: var(--px-well-ol); --px-ol-w: 1px; --px-ft: var(--px-well-t); --px-ft-w: 3px; --px-fb: transparent; --px-fl: transparent; --px-fr: transparent;
+  transition: background-color var(--m-t-fast), color var(--m-t-fast);
+}
+.nb-loader img { width: 56px; height: 56px; object-fit: contain; image-rendering: auto; pointer-events: none; }
+.nb-loader b { font-size: 13.5px; font-weight: 700; color: var(--m-fg); line-height: 18px; white-space: nowrap; }
+.nb-loader span { font-size: 11.5px; color: var(--m-fg-subtle); line-height: 14px; white-space: nowrap; }
+@media (hover: hover) and (pointer: fine) { .nb-loader:hover { background: var(--m-surface-2); } }
+.nb-loader.on {
+  background: var(--m-accent-soft);
+  box-shadow: inset 0 0 0 3px var(--m-accent), inset 0 -4px 0 rgba(0, 0, 0, 0.22); --px-ol: var(--m-accent); --px-ol-w: 3px; --px-ft: transparent; --px-fb: rgba(0, 0, 0, 0.22); --px-fb-w: 4px; --px-fl: transparent; --px-fr: transparent;
+}
+.nb-loader.on b { color: var(--m-accent); }
+
+/* Версии: всегда две колонки, одна высота. */
+.nb-vers { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.nb-retry {
+  display: flex; align-items: center; gap: 10px; width: 100%; height: 44px; padding: 0 14px;
+  background: var(--m-danger-soft); color: var(--m-fg); font-size: 13.5px; font-weight: 600; text-align: left;
+}
+.nb-retry > span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nb-retry svg.icon { width: 16px; height: 16px; flex: none; }
+.nb-retry svg.icon:first-child { color: var(--m-danger); }
+
+/* Низ: кнопки фиксированной ширины; «Создать» в ожидании прячет слово,
+   но держит его место, поверх — крутилка. */
+.nb-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+.nb-foot .btn { min-width: 128px; justify-content: center; }
+.nb-create { position: relative; }
+.nb-create.busy .nb-create-lab { visibility: hidden; }
+.nb-create-spin { position: absolute; left: 50%; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-color: currentColor; border-top-color: transparent; }
+
+:root:root :is(.nb-loader, .nb-tile, .nb-retry, .nb-skel, .nb-act) { border-radius: 0; --px-n: 5px; clip-path: var(--px-5); }
+:root:root .nb-preview { border-radius: 0; --px-n: 10px; clip-path: var(--px-10); }
+:root:root .nb-tile.on::after { --px-n: 5px; clip-path: var(--px-5); }
+:root:root :is(.nb-icon, .inst-icon) { border-radius: 0; --px-n: 10px; clip-path: var(--px-10); border-color: transparent; }
+:root:root .icon-grid { border-radius: 0; --px-n: 10px; clip-path: var(--px-10); }
+:root:root .icon-cell { border-radius: 0; --px-n: 4px; clip-path: var(--px-4); }
+
+/* ---------- Импорт ---------- */
+.imp-list { max-height: 300px; overflow-y: auto; margin-top: 4px; }
+.imp-ways { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 14px; }
+.imp-way {
+  display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 12px; align-items: center;
+  padding: 12px 14px; text-align: left; background: var(--m-surface-2); color: var(--m-fg);
+  box-shadow: var(--px-btn, inset 0 0 0 1px var(--m-border)); --px-ol: var(--px-btn-ol); --px-ol-w: 2px; --px-ft: var(--px-btn-t); --px-ft-w: 3px; --px-fb: var(--px-btn-b); --px-fb-w: 5px; --px-fl: var(--px-btn-l); --px-fl-w: 3px; --px-fr: var(--px-btn-r); --px-fr-w: 3px;
+  transition: background-color var(--m-t-fast), transform var(--m-t-fast);
+}
+.imp-way > svg.icon { grid-row: 1 / 3; width: 22px; height: 22px; color: var(--m-accent); }
+.imp-way b { font-size: 14px; font-weight: 750; }
+.imp-way span { font-size: 11.5px; color: var(--m-fg-subtle); font-family: var(--m-mono); }
+.imp-way:disabled { opacity: 0.6; }
+@media (hover: hover) and (pointer: fine) { .imp-way:hover:not(:disabled) { background: var(--m-raised); transform: translateY(-1px); } }
+.imp-way:active:not(:disabled) { transform: translateY(2px); box-shadow: var(--px-btn-press, none); --px-ol: rgba(0, 0, 0, 0.2); --px-ol-w: 2px; --px-ft: rgba(0, 0, 0, 0.22); --px-ft-w: 3px; --px-fb: rgba(0, 0, 0, 0.22); --px-fb-w: 2px; --px-fl: transparent; --px-fr: transparent; }
+:root:root .imp-way { border-radius: 0; --px-n: 5px; clip-path: var(--px-5); }
+
+/* ---------- Страница сборки ---------- */
+:root:root :is(.inst-back, .inst-tab, .log-file-chip) { border-radius: 0; --px-n: 5px; clip-path: var(--px-5); }
+/* Выбранная вкладка — как пункт сайдбара: мягкая подсветка + грань слева.
+   Сплошной акцент оставлен только главной кнопке («Играть»): три зелёные
+   плашки на экране спорили друг с другом (сведение 22.09.2026). */
+:root:root .inst-tab.on {
+  background: var(--m-accent-soft); color: var(--m-accent);
+  box-shadow: inset 3px 0 0 var(--m-accent), inset 0 -3px 0 rgba(0, 0, 0, 0.2); --px-ol: transparent; --px-ft: transparent; --px-fb: rgba(0, 0, 0, 0.2); --px-fb-w: 3px; --px-fl: var(--m-accent); --px-fl-w: 3px; --px-fr: transparent;
+}
+:root:root #bsLogBody,
+:root:root .instance-page .host-console { border-radius: 0 !important; --px-n: 10px; clip-path: var(--px-10); }
+
+/* Совместимость — одна строка со статусом вместо заголовка и абзаца. */
+.bx-audit { margin: 0 0 14px; padding: 10px 10px 10px 14px; background: var(--m-surface); }
+.bx-audit-row { display: flex; align-items: center; gap: 10px; }
+.bx-audit-row > svg.icon { width: 18px; height: 18px; color: var(--m-fg-subtle); flex: none; }
+.bx-audit-text { font-size: 13.5px; font-weight: 650; }
+.bx-audit.ok .bx-audit-row > svg.icon { color: var(--m-accent); }
+.bx-audit.bad { background: var(--m-danger-soft); }
+.bx-audit.bad .bx-audit-row > svg.icon { color: var(--m-danger); }
+.bx-audit .mod-card:first-child { margin-top: 10px; }
+:root:root .bx-audit { --px-n: 10px; clip-path: var(--px-10); box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent; }
+
+/* Параметры: подписи разделов и свёрнутый «Для опытных». */
+.bx-opts-cap {
+  display: flex; align-items: center; gap: 6px; width: 100%;
+  margin: 22px 0 4px; font-size: 11px; font-weight: 750; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--m-fg-subtle); text-align: left;
+}
+#bsTabOpts > .bx-opts-cap:first-child { margin-top: 0; }
+.bx-opts-toggle { padding: 8px 0; cursor: pointer; }
+.bx-opts-toggle:hover, .bx-opts-toggle.on { color: var(--m-fg); }
+.bx-opts-toggle svg.icon { width: 14px; height: 14px; }
+.bx-danger-row { margin-top: 18px; border-bottom: 0 !important; }
+.bx-danger-row .lab { color: var(--m-danger); }
+
+/* ---------- Окно краша: точная починка — во всю ширину ---------- */
+.crash-fixes.has-main .crash-main-fix { flex: 1 0 100%; }
+:root:root :is(.crash-reason, .crash-ic, .share-code) { border-radius: 0; --px-n: 10px; clip-path: var(--px-10); }
+:root:root .crash-ic { --px-n: 5px; clip-path: var(--px-5); }
+/* У «Поделиться», «По коду» и «Проверки модов» значок был красным, как у
+   краша: модификатора .ok в стилях не было. Красный — только для беды. */
+.crash-ic.ok { background: var(--m-accent-soft); color: var(--m-accent); }
+
+/* «⋯» на странице сборки (правка владельца 24.09.2026, 18:35): те же пункты,
+   что на карточке «Мои сборки», выпадают под кнопкой. Подложка и рамка —
+   от .ph-mine-menu (слой рамки в 12-pixel.css), здесь только место. */
+.inst-more-wrap { position: relative; display: inline-flex; }
+.inst-more { width: 48px; padding: 0; justify-content: center; }
+.inst-more svg { width: 18px; height: 18px; }
+.ph-mine-menu.inst-menu {
+  inset: auto; top: calc(100% + 8px); right: 0; z-index: 30;
+  width: 220px; padding: 8px; justify-content: flex-start;
+}

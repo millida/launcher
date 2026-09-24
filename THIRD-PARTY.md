@@ -76,9 +76,29 @@ Millida Launcher распространяется под [GPL-3.0-only](LICENSE)
 OFL 1.1 совместима с GPL: шрифты — самостоятельные произведения, распространяются
 под своей лицензией и не превращают программу в производную от них.
 
+## Музыка
+
+Треки в `public/music/` — чужие произведения под свободными лицензиями,
+на них GPL не распространяется:
+
+- «Chibi Ninja», «Jumpshot», «HHavok», «A Night Of Dizzy Spells» —
+  Music: Eric Skiff — Resistor Anthems — https://ericskiff.com/music/ —
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+- «Secret Base» — PPEAK (Preston Peak), «FREE Action Chiptune Music Pack» —
+  https://opengameart.org/content/free-action-chiptune-music-pack —
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+- «Starlight City» — Zane Little —
+  https://opengameart.org/content/starlight-city-loop-included —
+  [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
+- «Level 2» — Juhani Junkala (SubspaceAudio), «5 Chiptunes (Action)» —
+  https://opengameart.org/content/5-chiptunes-action —
+  [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
+
+Изменения: громкость выровнена (EBU R128, −18 LUFS), файлы перекодированы в MP3.
+
 ## Прочие ресурсы
 
-- Фоновые изображения и видео (`public/bg/`), музыка (`public/music/`), иконки
+- Фоновые изображения и видео (`public/bg/`), иконки
   блоков (`public/block-icons/`), фирменные изображения — см. `TRADEMARK.md`;
   бренд-ассеты Millida под GPL не подпадают.
 - Minecraft, ресурсы Mojang/Microsoft, а также контент CurseForge/Modrinth

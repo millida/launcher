@@ -9,12 +9,33 @@ export type BodyModel = 'default' | 'slim' | 'auto-detect'
 const cache = new Map<string, string>()
 const inflight = new Map<string, Promise<string>>()
 let engine: any = null
-let engineFailed = false
+/** Когда движок не создался. Не навсегда: в WKWebView контекст WebGL не
+ *  выдаётся, пока браузер не отберёт чужой, и через пару секунд он есть. Раньше
+ *  одна неудача переводила все фигурки до перезапуска в плоский 2D-вид —
+ *  «мой скин стоит как партизан» (владелец 24.09.2026). */
+let engineFailedAt = 0
+const ENGINE_RETRY_MS = 4000
 let queue: Promise<unknown> = Promise.resolve()
 
+/** Контекст WebGL отобрали: рисовать им больше нельзя, нужен новый движок. */
+function contextLost(e: any): boolean {
+  try {
+    const gl = e?.renderer?.getContext?.()
+    return !!gl && typeof gl.isContextLost === 'function' && gl.isContextLost()
+  } catch {
+    return false
+  }
+}
+
 async function ensureEngine(): Promise<any> {
+  if (engine && contextLost(engine)) {
+    try {
+      engine.dispose()
+    } catch {}
+    engine = null
+  }
   if (engine) return engine
-  if (engineFailed) throw new Error('3D-превью недоступно')
+  if (engineFailedAt && Date.now() - engineFailedAt < ENGINE_RETRY_MS) throw new Error('3D-превью недоступно')
   try {
     const m3d = await loadMine3d()
     const canvas = document.createElement('canvas')
@@ -30,9 +51,10 @@ async function ensureEngine(): Promise<any> {
     engine.setContactShadowVisible(true)
   } catch (e) {
     engine = null
-    engineFailed = true
+    engineFailedAt = Date.now()
     throw e
   }
+  engineFailedAt = 0
   return engine
 }
 
@@ -89,7 +111,9 @@ function loadTexture(url: string): Promise<HTMLImageElement> {
     (src) =>
       new Promise<HTMLImageElement>((resolve, reject) => {
         const img = new Image()
-        img.crossOrigin = 'anonymous'
+        // data:/blob: — свои байты: crossOrigin им не нужен, а blob: в WKWebView
+        // с ним не грузится вовсе.
+        if (!/^(data|blob):/i.test(src)) img.crossOrigin = 'anonymous'
         const timer = window.setTimeout(() => {
           img.src = ''
           reject(new Error('текстура не загрузилась: ' + url))
@@ -107,8 +131,17 @@ function loadTexture(url: string): Promise<HTMLImageElement> {
   )
 }
 
-export function renderSkinBody(url: string, model: BodyModel = 'auto-detect'): Promise<string> {
-  const key = model + '|' + url
+/** Забыть отрисованные фигурки текстуры: она сменилась, а ключ кеша остался прежним. */
+export function forgetSkinBody(url: string): void {
+  for (const key of Array.from(cache.keys())) if (key.endsWith('|' + url)) cache.delete(key)
+}
+
+/**
+ * Фигурка в позе CoolPose. yaw — поворот корпуса: карточки образов ставят
+ * фигуры под разными углами, иначе ряд одинаковых силуэтов не различить.
+ */
+export function renderSkinBody(url: string, model: BodyModel = 'auto-detect', yaw = 0): Promise<string> {
+  const key = model + '|' + (yaw ? yaw.toFixed(2) + '|' : '') + url
   const hit = cache.get(key)
   if (hit) return Promise.resolve(hit)
   const running = inflight.get(key)
@@ -122,8 +155,12 @@ export function renderSkinBody(url: string, model: BodyModel = 'auto-detect'): P
         e.setModelType(model === 'slim' ? m3d.SkinModelType.Slim : m3d.SkinModelType.Classic)
       }
       e.clearCape()
+      e.setPlayerYaw(yaw)
       e.fitPlayerToFrame({ fillY: 0.86, offsetY: 0 })
       e.renderFrame()
+      e.setPlayerYaw(0)
+      // Контекст отобрали посреди кадра — картинка пустая, в кеш её не кладём.
+      if (contextLost(e)) throw new Error('3D-превью потеряло контекст')
       const data = e.canvas.toDataURL('image/png')
       cache.set(key, data)
       return data

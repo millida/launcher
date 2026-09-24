@@ -1,0 +1,338 @@
+/* ============================================================
+   НАСТРОЙКИ (modals/Settings.tsx) — упрощены 23.09.2026.
+   Сверху заголовок с поиском и вкладки (.set-tabs кита), ниже одна
+   колонка плит: название · управление справа.
+   ============================================================ */
+
+.s2 {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+/* ---------- Шапка и вкладки ---------- */
+.s2-head { display: flex; align-items: center; gap: 16px; }
+.s2-title {
+  flex: 1;
+  margin: 4px 0 0;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.s2-search { width: 220px; flex: none; }
+.s2-search input { min-width: 0; }
+.s2-search-x {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  color: var(--m-fg-faint);
+}
+.s2-search-x:hover { color: var(--m-fg); }
+.s2-search-x svg { width: 14px; height: 14px; }
+/* Липкая полоса вкладок: .content даёт отступ 14px сверху — полоса закрывает его своим фоном. */
+.s2 .s2-tabs { top: -14px; gap: 8px; padding: 14px 0 12px; margin: -8px 0 0; }
+.s2 .s2-tabs .set-tab { height: 38px; padding: 0 18px; font-size: 14px; font-weight: 700; }
+
+/* ---------- Плиты и строки ---------- */
+.s2-body { min-width: 0; display: flex; flex-direction: column; gap: 22px; padding-bottom: 32px; }
+
+.s2-group { display: flex; flex-direction: column; gap: 8px; }
+.s2-cap {
+  padding-left: 4px;
+  font-size: 11.5px;
+  font-weight: 750;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--m-fg-faint);
+}
+.s2-plate {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 20px;
+  background: var(--m-surface);
+}
+
+.s2-row,
+.s2 .s2-plate > .set-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 56px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--m-border);
+}
+.s2-plate > :last-child { border-bottom: 0; }
+.s2-lab { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.s2-lab b { font-size: 14px; font-weight: 700; }
+.s2-lab small {
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--m-fg-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.s2-ctl { display: flex; align-items: center; gap: 8px; flex: none; justify-content: flex-end; }
+.s2-ctl .segs { flex-wrap: nowrap; gap: 6px; }
+.s2-ctl .seg { height: 34px; padding: 0 13px; }
+
+/* Вложенные блоки (облако, устройства, общее хранилище) рисуют старую строку
+   .set-row с .lab — выравниваем её под новую, чтобы плита была однородной. */
+.s2 .set-row { gap: 12px; }
+.s2 .set-row .lab { flex: 1 1 auto; min-width: 0; font-size: 14px; font-weight: 700; }
+.s2 .set-row .lab small { display: block; margin-top: 2px; font-size: 12.5px; font-weight: 550; color: var(--m-fg-subtle); }
+
+/* ---------- Цвет кнопок ---------- */
+.s2-swatches { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 16px 0 14px; }
+.s2-sw {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  color: var(--m-fg-subtle);
+  transition: transform var(--m-t-fast);
+}
+.s2-sw:hover { transform: translateY(-2px); }
+.s2-sw svg { width: 18px; height: 18px; }
+.s2-sw-wrap { position: relative; display: inline-flex; }
+.s2-sw.custom:not(.on) { background: var(--m-inset); }
+/* Живой образец: так выглядят главная кнопка, тумблер и полоса с выбранным цветом. */
+.s2-sw-demo {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 0 16px;
+  border-top: 1px solid var(--m-border);
+  pointer-events: none;
+}
+.s2-sw-demo-bar { flex: 1; max-width: 240px; height: 10px; background: var(--m-inset); }
+.s2-sw-demo-bar i { display: block; width: 62%; height: 100%; background: var(--m-accent); }
+
+/* ---------- Фоны ---------- */
+.s2-wp {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));
+  gap: 10px;
+  padding: 14px 0 12px;
+  border-bottom: 1px solid var(--m-border);
+}
+.s2-wp-tile {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  padding: 0;
+  background: var(--m-inset);
+  cursor: pointer;
+}
+.s2-wp-tile img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+/* Превью живого фона «Пиксели» (PixelField): зелёный, сетка, два пикселя. */
+.s2-wp-pixels {
+  position: absolute; inset: 0;
+  background:
+    linear-gradient(#fff8 0 0) 22% 30% / 8px 8px no-repeat,
+    linear-gradient(#fff5 0 0) 74% 58% / 12px 12px no-repeat,
+    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px) 0 0 / 14px 14px,
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px) 0 0 / 14px 14px,
+    #17692f;
+}
+.s2-wp-tile > span:not(.s2-wp-ph) {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  padding: 16px 8px 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #fff;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.72));
+}
+.s2-wp-tile.on::after {
+  content: '';
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  width: 10px;
+  height: 10px;
+  background: var(--m-accent);
+}
+.s2-wp-ph { position: absolute; inset: 0; display: grid; place-items: center; color: var(--m-fg-subtle); }
+.s2-wp-ph svg { width: 22px; height: 22px; }
+.s2-wp-tile.add > span:not(.s2-wp-ph) { background: none; color: var(--m-fg-subtle); text-align: center; }
+.s2-wp-tile.add:hover { background-color: var(--m-accent-soft); }
+.s2-wp-tile.add:hover .s2-wp-ph { color: var(--m-accent); }
+.s2-wp-del {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  display: none;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.6);
+}
+.s2-wp-del svg { width: 14px; height: 14px; }
+.s2-wp-tile:hover .s2-wp-del,
+.s2-wp-tile:focus-within .s2-wp-del { display: grid; }
+.s2-wp-del:hover { background: var(--m-danger); }
+
+/* ---------- Громкость ---------- */
+.s2-slider { display: flex; align-items: center; gap: 8px; width: 320px; }
+.s2-slider > :first-child { flex: 1; }
+.s2-val { width: 40px; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* ---------- Таблица уведомлений ---------- */
+.s2-matrix { display: flex; flex-direction: column; padding: 4px 0; }
+.s2-mx-head,
+.s2-mx-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(3, 96px);
+  align-items: center;
+}
+.s2-mx-head { padding: 8px 0; border-bottom: 1px solid var(--m-border); }
+.s2-mx-col { text-align: center; font-size: 12px; font-weight: 700; color: var(--m-fg-subtle); }
+.s2-mx-row { min-height: 50px; border-bottom: 1px solid var(--m-border); }
+.s2-mx-row:last-child { border-bottom: 0; }
+.s2-mx-lab { font-size: 14px; font-weight: 700; min-width: 0; }
+.s2-mx-cell { display: grid; place-items: center; }
+.s2-dot {
+  width: 24px;
+  height: 24px;
+  background: var(--m-inset);
+  transition: background-color var(--m-t-fast);
+}
+.s2-dot.on { background-color: var(--m-accent); }
+.s2-dot.off.on { background-color: var(--m-fg-faint); }
+
+/* ---------- Лаунчер ---------- */
+.s2-hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  background: var(--m-surface);
+}
+.s2-hero img { flex: none; image-rendering: pixelated; }
+.s2-hero-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.s2-hero-txt b { font-size: 18px; font-weight: 800; }
+.s2-hero-txt small { font-size: 13px; color: var(--m-fg-subtle); }
+.s2-kbd {
+  display: inline-block;
+  padding: 1px 7px 3px;
+  font: 700 11.5px var(--m-mono);
+  color: var(--m-fg-muted);
+  background: var(--m-inset);
+}
+.s2-diag {
+  width: 100%;
+  min-height: 200px;
+  margin: 4px 0 12px;
+  padding: 10px 12px;
+  resize: vertical;
+  font: 11.5px/1.5 var(--m-mono);
+  color: var(--m-fg);
+  background: var(--m-inset);
+  border: 0;
+}
+
+/* ---------- Поиск ---------- */
+.s2-found { display: flex; flex-direction: column; gap: 14px; }
+.s2-found-sec {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 750;
+  color: var(--m-accent);
+}
+.s2-found-sec svg { width: 15px; height: 15px; }
+/* Пустые плиты и разделы при поиске прячутся сами: строки, не подошедшие
+   под запрос, не рендерятся, а :has смотрит, осталось ли что-то живое. */
+.s2-found .s2-group:not(:has(.s2-row, .set-row, .s2-matrix, .s2-wp, .s2-swatches)) { display: none; }
+.s2-found:not(:has(.s2-row, .set-row, .s2-matrix, .s2-wp, .s2-swatches, .s2-hero)) { display: none; }
+.s2-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 48px 0; color: var(--m-fg-subtle); }
+.s2-empty svg { width: 28px; height: 28px; }
+.s2-empty b { font-size: 15px; color: var(--m-fg); }
+.s2-body:has(.s2-found .s2-row, .s2-found .set-row, .s2-found .s2-matrix, .s2-found .s2-wp, .s2-found .s2-swatches, .s2-found .s2-hero) .s2-empty { display: none; }
+
+/* Группа, чей блок ничего не нарисовал (облако вне приложения), не оставляет
+   пустую плиту с заголовком. */
+.s2-group:has(> .s2-plate:empty) { display: none; }
+
+/* ---------- Узкое окно ---------- */
+@media (max-width: 860px) {
+  .s2-search { width: 160px; }
+  .s2 .s2-tabs .set-tab { padding: 0 13px; }
+  .s2-mx-head,
+  .s2-mx-row { grid-template-columns: minmax(0, 1fr) repeat(3, 72px); }
+  .s2-row { flex-wrap: wrap; }
+  .s2-slider { width: 100%; }
+}
+
+/* ============ Пиксельный язык ============
+   Срез: подложки 10px, плитки и поля 5px, мелочь 4px. Рамки и грани —
+   общим слоем «Ступенчатая рамка» (12-pixel.css), не inset-тенью. */
+:root:root :is(.s2-plate, .s2-hero) {
+  --px-n: 10px; clip-path: var(--px-10);
+  --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px;
+}
+:root:root :is(.s2-wp-tile, .s2-wp-del, .s2-diag) { --px-n: 5px; clip-path: var(--px-5); }
+:root:root :is(.s2-sw, .s2-dot, .s2-kbd, .s2-sw-demo-bar, .s2-sw-demo-bar i) { --px-n: 4px; clip-path: var(--px-4); }
+
+/* Образец цвета: светлая грань сверху, подошва снизу. */
+:root:root .s2-sw { --px-ft: rgba(255, 255, 255, 0.28); --px-ft-w: 3px; --px-fb: rgba(0, 0, 0, 0.3); --px-fb-w: 4px; }
+/* Выбранный: зазор цветом плиты и белая ступенчатая рамка вокруг. */
+:root:root .s2-sw.on {
+  --px-ol: var(--m-surface); --px-ol-w: 3px;
+  --px-ft: var(--m-fg); --px-ft-w: 6px; --px-fb: var(--m-fg); --px-fb-w: 6px;
+  --px-fl: var(--m-fg); --px-fl-w: 6px; --px-fr: var(--m-fg); --px-fr-w: 6px;
+}
+:root:root .s2-sw.custom:not(.on) { --px-ol: var(--m-border-strong); --px-ol-w: 2px; --px-ft: transparent; --px-fb: transparent; }
+
+:root:root .s2-wp-tile.on::before {
+  /* Рамка выбранного фона — поверх картинки, иначе картинка её закрывает. */
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  --px-n: 5px;
+  --px-ol: var(--m-accent); --px-ol-w: 3px;
+}
+:root:root .s2-wp-tile.add { --px-ol: var(--m-border-strong); --px-ol-w: 2px; }
+
+:root:root .s2-dot { --px-ol: var(--m-border-strong); --px-ol-w: 2px; }
+:root:root .s2-dot:hover { --px-ol: var(--m-accent); }
+/* Выбранная клетка — плотный акцент с гранью сверху и подошвой, как кнопка. */
+:root:root .s2-dot.on { --px-ol: transparent; --px-ft: rgba(255, 255, 255, 0.3); --px-ft-w: 3px; --px-fb: rgba(0, 0, 0, 0.3); --px-fb-w: 4px; }
+:root:root .s2-kbd { --px-fb: rgba(0, 0, 0, 0.3); --px-fb-w: 2px; }
+
+/* Всплывающая палитра «Свой цвет» живёт внутри плиты со срезом — даём ей
+   выйти за край: плита не режет, пока открыт выбор цвета. */
+:root:root .s2-plate:has(.s2-sw-wrap > :nth-child(2)) { clip-path: none; }
+
+/* Вкладки прилипают к верху: при прокрутке длинного «Вида» не уезжают,
+   переключение не дёргает страницу (правка владельца 23.09.2026). */
+#s-settings .s2-tabs {
+  position: sticky; top: 0; z-index: 6;
+  background: var(--m-bg);
+  padding-top: 8px; margin-top: -8px;
+}
+
+/* Настройки не дёргаются при смене вкладки (владелец 22:39): полоса прокрутки
+   есть всегда — у коротких вкладок она пропадала и страница прыгала вбок
+   (WebKit не поддерживает scrollbar-gutter), а каждая вкладка не ниже экрана. */
+.content:has(> #s-settings.on), .content:has(#s-settings.on) { overflow-y: scroll; }
+#s-settings .s2-body { min-height: calc(100vh - 150px); }

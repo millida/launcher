@@ -1,0 +1,78 @@
+/* ============================================================
+   Подарок дня (правки владельца 23.09.2026). Первая плитка магазина,
+   две клетки общей сетки. Сцена с наградой крупно, одна строка текста,
+   «Забрать» — главная кнопка; после — таймер до следующего подарка.
+   Сплошной зелёный лист убран: осколок на нём сливался, а кнопка
+   терялась. Теперь плитка — подложка с зелёной гранью, как у «Предмета дня».
+   ============================================================ */
+.gf {
+  position: relative; display: flex; flex-direction: column; align-items: stretch; gap: 8px;
+  min-width: 0; padding: 14px 14px 14px; text-align: center; overflow: hidden;
+  background-color: color-mix(in srgb, var(--m-accent) 12%, var(--m-surface));
+  color: var(--m-fg);
+  --px-n: 10px; --px-ol: transparent; --px-ft: var(--m-accent); --px-ft-w: 5px; --px-fb: var(--px-plate-b); --px-fb-w: 3px;
+}
+:root:root .gf { clip-path: var(--px-10); }
+/* 12-pixel.css красит .gf рамкой главной кнопки (старый зелёный лист) — здесь плитка-подложка. */
+:root:root:root .gf {
+  --px-n: 10px; --px-ol: transparent; --px-ft: var(--m-accent); --px-ft-w: 5px; --px-fb: var(--px-plate-b); --px-fb-w: 3px;
+  --px-fl: transparent; --px-fr: transparent; --px-img: none;
+}
+.gf-kicker {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font-size: 12px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; color: var(--m-accent);
+}
+
+/* Сцена: тёмный колодец, за наградой медленно вращается пиксельная звезда. */
+.gf-stage {
+  position: relative; flex: 1; min-height: 0; display: grid; place-items: center; overflow: hidden;
+  background: color-mix(in srgb, var(--sh-tone, var(--m-accent)) 14%, var(--m-inset));
+}
+:root:root .gf-stage { clip-path: var(--px-5); }
+.gf-rays {
+  position: absolute; width: 170px; height: 170px; left: 50%; top: 50%; margin: -85px 0 0 -85px;
+  background: color-mix(in srgb, var(--sh-tone, var(--m-accent)) 22%, transparent);
+  clip-path: polygon(50% 0, 58% 36%, 94% 20%, 66% 48%, 100% 62%, 62% 64%, 70% 100%, 50% 72%, 30% 100%, 38% 64%, 0 62%, 34% 48%, 6% 20%, 42% 36%);
+  animation: gf-spin 24s linear infinite;
+}
+.gf-prize { position: relative; display: grid; place-items: center; width: 96px; height: 96px; }
+.gf-prize img { max-width: 96px; max-height: 96px; object-fit: contain; }
+.gf-prize > svg.icon { width: 48px; height: 48px; color: var(--m-fg-faint); }
+/* Число — поверх сцены в правом нижнем углу, как счётчик на иконке в Brawl Stars. */
+.gf-amount {
+  position: absolute; right: 10px; bottom: 6px;
+  font-size: 34px; font-weight: 900; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
+  color: #fff; text-shadow: 2px 2px 0 #071322, -2px 0 0 #071322, 0 -2px 0 #071322, 2px 0 0 #071322, 0 2px 0 #071322;
+}
+.gf-line { display: flex; flex-direction: column; align-items: center; gap: 1px; min-height: 20px; justify-content: center; }
+.gf-line b { font-size: 15px; font-weight: 900; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.gf-line i { font-style: normal; font-size: 11px; font-weight: 900; color: var(--sh-tone); }
+.gf-btn, .gf-next { width: 100%; justify-content: center; }
+.gf-next { height: 38px; }
+.gf.is-claimed:not(.is-fresh) .gf-prize, .gf.is-claimed:not(.is-fresh) .gf-amount { opacity: 0.5; }
+.gf.is-claimed .gf-rays { animation: none; opacity: 0.4; }
+
+/* Получение: награда выпрыгивает, за ней вспышка. */
+.gf.is-fresh .gf-prize { animation: gf-plop 0.55s cubic-bezier(0.2, 1.6, 0.4, 1) both; }
+.gf.is-fresh .gf-amount, .gf.is-fresh .gf-line { animation: gf-rise 0.35s 0.15s ease-out both; }
+.gf-burst {
+  position: absolute; left: 50%; top: 50%; width: 150px; height: 150px; margin: -75px 0 0 -75px;
+  background: rgba(255, 255, 255, 0.5);
+  animation: gf-burst 0.6s ease-out both; pointer-events: none;
+}
+@keyframes gf-spin { to { transform: rotate(360deg); } }
+@keyframes gf-plop {
+  0% { transform: translateY(24px) scale(0.3); opacity: 0; }
+  55% { transform: translateY(-14px) scale(1.18); opacity: 1; }
+  80% { transform: translateY(0) scale(0.95); }
+  100% { transform: none; }
+}
+@keyframes gf-rise { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes gf-burst { from { transform: scale(0.2); opacity: 1; } to { transform: scale(1.4); opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .gf-rays, .gf.is-fresh .gf-prize, .gf.is-fresh .gf-amount, .gf.is-fresh .gf-line, .gf-burst { animation: none; }
+}
+/* Точка «подарок не забран» на вкладке: маленький квадрат без среза (срез 4px на 8px дал бы крест). */
+.sh-dot.pip { min-width: 0; width: 8px; height: 8px; padding: 0; background: var(--m-accent); }
+:root:root .sh-dot.pip { clip-path: none; }

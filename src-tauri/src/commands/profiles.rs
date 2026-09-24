@@ -8,7 +8,7 @@ pub fn duplicate_profile(name: String) -> Result<Vec<engine::Profile>, String> {
 #[tauri::command(async)]
 pub fn save_profile_settings(profile: String, jvm_args: String, width: u32, height: u32, java_path: Option<String>) -> Result<(), String> {
     if let Some(bad) = engine::rejected_jvm_arg(&jvm_args) {
-        return Err(format!("Аргумент «{}» лаунчер не передаёт Java — он позволяет запускать сторонний код", bad));
+        return Err(format!("Аргумент «{}» лаунчер не передаёт Java: можно память (-Xmx, -Xms), известные флаги -XX и безопасные -D", bad));
     }
     let java_path = java_path.map(|p| p.trim().to_string()).unwrap_or_default();
     if !java_path.is_empty() && !engine::java_path_allowed(std::path::Path::new(&java_path)) {
@@ -185,11 +185,25 @@ pub fn rename_profile(name: String, new_name: String) -> Result<Vec<engine::Prof
     if old_dir != new_dir {
         if new_dir.exists() { return Err("Папка с таким именем уже занята — выбери другое".into()); }
         if old_dir.exists() { std::fs::rename(&old_dir, &new_dir).map_err(|e| e.to_string())?; }
+        engine::move_pack_launch_trust(&name, &nn);
     }
     for p in all.iter_mut() { if p.name == name { p.name = nn.clone(); } }
     engine::save_profiles(&all)?;
     engine::rename_profile_group(&name, &nn);
     Ok(all)
+}
+
+/// The version and the loader build become folder and file names under
+/// versions/ and parts of download URLs, so the webview cannot name them freely.
+fn check_version_and_loader(version: &str, loader: &str, loader_version: Option<&str>) -> Result<(), String> {
+    engine::check_version_id(version)?;
+    if !["vanilla", "fabric", "quilt", "forge", "neoforge"].contains(&loader) {
+        return Err(format!("Неизвестный загрузчик «{}»", loader.chars().take(32).collect::<String>()));
+    }
+    if let Some(lv) = loader_version.map(str::trim).filter(|v| !v.is_empty()) {
+        engine::check_loader_version(lv)?;
+    }
+    Ok(())
 }
 
 /// The loader itself is installed on the next launch.
@@ -200,6 +214,7 @@ pub fn set_profile_loader(
     loader: String,
     loader_version: Option<String>,
 ) -> Result<Vec<engine::Profile>, String> {
+    check_version_and_loader(&version, &loader, loader_version.as_deref())?;
     let mut all = engine::load_profiles();
     let p = all.iter_mut().find(|p| p.name == name).ok_or("Сборка не найдена")?;
     p.version = version;
@@ -230,6 +245,7 @@ pub fn create_profile(
 ) -> Result<engine::Profile, String> {
     let mut all = engine::load_profiles();
     let lid = loader.unwrap_or_else(|| if fabric { "fabric".into() } else { "vanilla".into() });
+    check_version_and_loader(&version, &lid, loader_version.as_deref())?;
     let fab = lid == "fabric";
     let pinned = loader_version
         .filter(|v| !v.trim().is_empty())
@@ -293,6 +309,53 @@ pub async fn migrate_profile(
     engine::migrate_profile(app, profile, version, loader, loader_version, name).await
 }
 
+/// Где купить ключ от платной сборки.
+#[tauri::command]
+pub async fn pack_buy_url(slug: String) -> Result<String, String> {
+    engine::pack_buy_url(&slug).await
+}
+
+/// Активация ключа доступа к платной сборке.
+#[tauri::command]
+pub async fn redeem_pack_key(slug: String, code: String) -> Result<serde_json::Value, String> {
+    engine::redeem_pack_key(&slug, &code).await
+}
+
+/// Наши готовые сборки — тот же список, что на сайте.
+#[tauri::command]
+pub async fn millida_packs() -> Result<serde_json::Value, String> {
+    engine::catalog_packs().await
+}
+
+/// Ready-made pack from the Millida catalogue. The webview names only the
+/// catalogue address; the file, the link and the hash are the core's business.
+#[tauri::command]
+pub async fn install_catalog_pack(app: tauri::AppHandle, slug: String) -> Result<engine::Profile, String> {
+    engine::install_catalog_pack(app, slug, false).await
+}
+
+/// Same pack, but the version that is still waiting to be reviewed.
+///
+/// A separate command instead of a flag on the previous one: the review channel
+/// must not be reachable by passing an extra field from the webview. The core
+/// asks the API, and the API answers only reviewers.
+#[tauri::command]
+pub async fn install_pack_candidate(app: tauri::AppHandle, slug: String) -> Result<engine::Profile, String> {
+    engine::install_catalog_pack(app, slug, true).await
+}
+
+/// Packs whose unreviewed versions this account may install.
+#[tauri::command]
+pub async fn pack_review_queue() -> Result<serde_json::Value, String> {
+    engine::pack_review_queue().await
+}
+
+/// Is there a version waiting for review, and what is known about it.
+#[tauri::command]
+pub async fn pack_review_candidate(slug: String) -> Result<serde_json::Value, String> {
+    engine::pack_review_candidate(&slug).await
+}
+
 #[tauri::command]
 pub async fn cf_install_modpack(app: tauri::AppHandle, mod_id: u32, file_id: Option<u64>) -> Result<engine::Profile, String> {
     engine::cf_install_modpack(app, mod_id, file_id).await
@@ -303,6 +366,16 @@ pub async fn scan_imports() -> Result<Vec<engine::FoundInstance>, String> {
     super::blocking(engine::scan_imports).await
 }
 
+/// «Выбрать папку» в импорте: выбор папки и поиск сборок в ней.
+/// `None` — диалог закрыли.
+#[tauri::command]
+pub async fn pick_import_dir() -> Result<Option<Vec<engine::FoundInstance>>, String> {
+    let Some(dir) = engine::pick_folder(engine::dialog().set_title("Папка со сборками")).await else {
+        return Ok(None);
+    };
+    super::blocking(move || engine::scan_import_dir(&dir)).await.map(Some)
+}
+
 #[tauri::command(async)]
 pub fn import_instance(path: String, name: String, version: String, loader: String) -> Result<engine::Profile, String> {
     engine::import_instance(path, name, version, loader)
@@ -311,6 +384,12 @@ pub fn import_instance(path: String, name: String, version: String, loader: Stri
 #[tauri::command]
 pub async fn import_pack_file(app: tauri::AppHandle, path: Option<String>) -> Result<engine::Profile, String> {
     engine::import_pack_file(app, path).await
+}
+
+#[tauri::command]
+pub async fn import_dropped_pack(app: tauri::AppHandle, id: u64) -> Result<engine::Profile, String> {
+    let path = crate::packdrop::take(id).ok_or("Файл больше не доступен — перетащи его заново")?;
+    engine::import_pack_path(app, path).await
 }
 
 #[tauri::command]

@@ -15,7 +15,6 @@ import { detectGpu } from './gpu'
 import { recentIssues } from './crash'
 import { installId, telemetryEnabled } from './telemetry'
 import { pendingUpdate, updateReady } from './updater'
-import { storedTheme } from './theme'
 import { soundMode, soundVolume } from './sound'
 import { skinSource } from './gameProfile'
 import { hasTray, launchWindowMode, restoreOnGameExit, trayCloseEnabled } from './window'
@@ -41,11 +40,6 @@ function accentId(): string {
   } catch {
     return 'green'
   }
-}
-
-function themeLabel(): string {
-  const t = storedTheme()
-  return t === 'light' ? 'светлая' : t === 'auto' ? 'авто' : 'тёмная'
 }
 
 function windowModeLabel(): string {
@@ -160,7 +154,7 @@ export async function buildDiagnostics(): Promise<string> {
     ...skinBlock(skin),
     '',
     '--- Настройки ---',
-    'Тема: ' + themeLabel() + ' · акцент: ' + accentId(),
+    'Акцент: ' + accentId(),
     'Звук: ' + soundMode() + ' · громкость ' + soundVolume() + '%',
     'При запуске игры: ' + windowModeLabel() + ' · возврат после игры: ' + yesNo(restoreOnGameExit()),
     'Трей: ' + (hasTray() ? 'доступен' : 'недоступен') + ' · закрывать в трей: ' + yesNo(trayCloseEnabled()),

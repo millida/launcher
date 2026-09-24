@@ -151,7 +151,7 @@ export function TabAccess({ serverId }: { serverId: string }) {
                     <span className="fr-nick">{s.nickname || s.email || 'участник'}</span>
                     <span className="fr-status">{s.email || ''}</span>
                   </span>
-                  <button className="btn sm ghost" title="Забрать доступ" onClick={() => void removeShare(s)}>
+                  <button className="btn sm ghost" aria-label="Забрать доступ" data-tip="Забрать доступ" onClick={() => void removeShare(s)}>
                     <Icon id="i-trash" />
                   </button>
                 </div>
@@ -171,7 +171,7 @@ export function TabAccess({ serverId }: { serverId: string }) {
             ))}
           </div>
         ) : (
-          <Empty icon="i-users" text="Пока только ты. Дай доступ другу — сможет запускать сервер и держать консоль." />
+          <Empty icon="i-users" text="Пока только ты" />
         )}
       </div>
 
@@ -182,7 +182,7 @@ export function TabAccess({ serverId }: { serverId: string }) {
         <div className="host-ask">
           <div className="input sm" style={{ flex: 1 }}>
             <input
-              placeholder="Название ключа — например «бот Discord»"
+              placeholder="Название, например «бот Discord»"
               value={keyName}
               onChange={(e) => setKeyName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && void createKey()}
@@ -198,7 +198,8 @@ export function TabAccess({ serverId }: { serverId: string }) {
             <code className="host-cred-v">{freshKey}</code>
             <button
               className="btn sm ghost"
-              title="Копировать"
+              aria-label="Копировать"
+              data-tip="Копировать"
               onClick={() => void copyText(freshKey).then((ok) => showToast(ok ? 'Ключ скопирован' : 'Не удалось скопировать ключ'))}
             >
               <Icon id="i-copy" />
@@ -220,14 +221,14 @@ export function TabAccess({ serverId }: { serverId: string }) {
                     {k.prefix}… · {k.lastUsedAt ? 'использован ' + new Date(k.lastUsedAt).toLocaleDateString('ru-RU') : 'ещё не использован'}
                   </span>
                 </span>
-                <button className="btn sm ghost" title="Отозвать" onClick={() => void revokeKey(k)}>
+                <button className="btn sm ghost" aria-label="Отозвать ключ" data-tip="Отозвать ключ" onClick={() => void revokeKey(k)}>
                   <Icon id="i-trash" />
                 </button>
               </div>
             ))}
           </div>
         ) : (
-          <Empty icon="i-key" text="Ключей нет. Нужны, если сервером управляет свой бот." />
+          <Empty icon="i-key" text="Ключей нет" />
         )}
       </div>
 

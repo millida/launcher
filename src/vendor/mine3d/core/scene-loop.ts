@@ -1,5 +1,24 @@
 // Фасад движка: Three.js + PlayerObject из skin3d, продуктовый рендер под референс
 import { PlayerObject } from "skin3d";
+
+/**
+ * Точка, где висящая вещь держится на спине, в координатах фигуры. Те же
+ * координаты, что у мода (MeshPose.HANG = 0, 2, 2 в модели): ось высоты и ось
+ * глубины у просмотрщика смотрят в другую сторону, отсюда минусы.
+ */
+const HANG_Y = -2;
+const HANG_Z = -2;
+
+/** Кость фигуры, на которую вешается вещь. */
+export type CosmeticAnchorName =
+  | "root"
+  | "head"
+  | "body"
+  | "cape"
+  | "rightArm"
+  | "leftArm"
+  | "rightLeg"
+  | "leftLeg";
 import {
   inferModelType,
   isTextureSource,
@@ -40,6 +59,7 @@ import {
   type FrameFitOptions,
   type FrameFitResult,
   type FrameMeasure,
+  type NdcBox,
 } from "./camera-framing";
 import {
   applySkinUVInsets,
@@ -53,6 +73,7 @@ import {
   applyPose,
   blendPoses,
   BustPoseAnimation,
+  CAPE_REST_X,
   capturePose,
   CoolPoseAnimation,
   easeOutCubic,
@@ -98,6 +119,16 @@ export const ENGINE_DISPLAY_NAME = "Mine3D Embedded";
 export const ENGINE_VERSION = "0.2.0";
 
 const MAX_PIXEL_RATIO = 2;
+/**
+ * Transparent preview has no SMAA (StudioPostFx is skipped there), and MSAA on
+ * the default framebuffer is not enough for a pixel-art silhouette at DPR 1:
+ * the outline shows a visible staircase. Render at twice the display density
+ * and let the browser downscale — supersampling smooths the silhouette without
+ * the UV fringing MSAA-on-render-target produces with NearestFilter.
+ */
+const SUPERSAMPLE_FACTOR = 2;
+const SUPERSAMPLE_MAX_PIXEL_RATIO = 3;
+const SUPERSAMPLE_LONG_SIDE_BUDGET = 1100;
 
 const LOOK_YAW_LIMIT = 1.22;
 const LOOK_YAW_SPEED = 4;
@@ -107,7 +138,7 @@ const LOOK_WEIGHT_RATE = 5;
 
 const QUALITY_TARGET_FPS = 45;
 const QUALITY_WINDOW_SEC = 2.5;
-const QUALITY_LOW_PIXEL_RATIO = 1;
+const QUALITY_LOW_PIXEL_RATIO = 1.5;
 const QUALITY_LOW_SHADOW_MAP = 1024;
 
 /** Ближняя/дальняя плоскости камеры; модель ~32 units, орбита ≥ 18 units */
@@ -130,6 +161,19 @@ function toSkin3dModelType(type: SkinModelType): "default" | "slim" {
   return type === SkinModelType.Slim ? "slim" : "default";
 }
 
+/** Что получает поправка позы каждый кадр. */
+export interface PoseHookContext {
+  head: Object3D;
+  camera: PerspectiveCamera;
+  canvas: HTMLCanvasElement;
+  /** Секунды с прошлого кадра */
+  dt: number;
+  /** Угол от лица фигуры к камере вокруг вертикали: 0 — смотрит в камеру */
+  facing: number;
+  /** Сейчас покой (idle), а не клип или эмоция, и голову не занял толчок */
+  idle: boolean;
+}
+
 /**
  * Главный класс движка.
  * Геометрия/UV — skin3d; визуал — продуктовый three-quarter shot.
@@ -146,6 +190,14 @@ export class SkinViewEngine {
   private readonly camera: PerspectiveCamera;
   private readonly renderer: WebGLRenderer;
   private readonly playerObject: PlayerObject;
+  private _cosmetics: { part: Object3D; object: Object3D }[] = [];
+  /**
+   * Вещи, которые висят на игроке и обязаны качаться вместе с тканью: плащи,
+   * накидки, всё, что нарисовано свисающим со спины. До 16.09.2026 такая вещь
+   * висела на корпусе неподвижно, а родной плащ рядом качался - на бегу это
+   * читалось как доска, приклеенная к спине.
+   */
+  private _swaying: Object3D[] = [];
   private readonly playerWrapper: Group;
   private readonly skinCanvas: HTMLCanvasElement;
   private readonly capeCanvas: HTMLCanvasElement;
@@ -217,6 +269,8 @@ export class SkinViewEngine {
   private _particlesEnabled = true;
   private _lookWeight = 0;
   private _lookYaw = 0;
+  /** Поправка позы после анимации, до кадра (взгляд за мышкой — src/lib/headLook.ts) */
+  private _poseHook: ((ctx: PoseHookContext) => void) | null = null;
   private _qualityLevel = 0;
   private _qualityElapsed = 0;
   /** Клик по модели: запомнить попадание и точку, чтобы отличить от вращения */
@@ -230,6 +284,8 @@ export class SkinViewEngine {
   private _shotPreset: ShotPresetId | null = null;
   /** Частицы / «переоделся» — выкл. на мини-превью */
   private readonly _enableEffects: boolean;
+  /** Плотность рендера при полном качестве; ниже опускает только _adaptQuality */
+  private _basePixelRatio = 1;
 
   constructor(canvas: HTMLCanvasElement, options: EngineOptions = {}) {
     this.canvas = canvas;
@@ -281,7 +337,8 @@ export class SkinViewEngine {
       premultipliedAlpha: false,
       powerPreference: "high-performance",
     });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
+    this._basePixelRatio = this._targetPixelRatio(options.transparent === true);
+    this.renderer.setPixelRatio(this._basePixelRatio);
     this.renderer.setClearColor(0x222222, 1);
     this.renderer.sortObjects = true;
     configureProductRenderer(this.renderer);
@@ -364,6 +421,18 @@ export class SkinViewEngine {
    * null — заморозить текущую позу.
    */
   setAnimation(animation: SkinAnimation | null): void {
+    // Эмоция двигает части фигуры с места (src/lib/cosmeticEmote.ts), а бленд
+    // ниже помнит только повороты: без возврата рука так и висела бы там, где
+    // её оставил танец.
+    const skin = this.playerObject.skin as unknown as Record<string, { userData?: Record<string, unknown>; position?: { set(x: number, y: number, z: number): void } } | undefined>;
+    for (const name of ["head", "body", "leftArm", "rightArm", "leftLeg", "rightLeg"]) {
+      const part = skin[name];
+      const rest = part?.userData?.["millidaRest"] as [number, number, number] | undefined;
+      if (rest && part?.position) part.position.set(rest[0], rest[1], rest[2]);
+    }
+    // Плащ эмоция тоже сдвигала вслед за телом — возвращаем на место.
+    const capeRest = this.playerObject.cape.userData?.["millidaRest"] as [number, number, number] | undefined;
+    if (capeRest) this.playerObject.cape.position.set(capeRest[0], capeRest[1], capeRest[2]);
     // Снимок до смены — из него начинаем бленд к новой анимации
     this._blendFrom = capturePose(this.playerObject);
     this._blendElapsed = 0;
@@ -387,6 +456,33 @@ export class SkinViewEngine {
       this._cursorAimY = 0;
     }
     this._syncIdleLookSuppression();
+  }
+
+  /**
+   * Поправка позы: вызывается каждый кадр после анимации и до отрисовки —
+   * то, что она запишет в кости, попадёт в кадр, анимация это не перетрёт.
+   */
+  setPoseHook(fn: ((ctx: PoseHookContext) => void) | null): void {
+    this._poseHook = fn;
+  }
+
+  private _runPoseHook(dt: number): void {
+    const fn = this._poseHook;
+    if (!fn) return;
+    const viewYaw = Math.atan2(
+      this.camera.position.x - this.playerWrapper.position.x,
+      this.camera.position.z - this.playerWrapper.position.z,
+    );
+    const d = viewYaw - (this.playerWrapper.rotation.y + this.playerObject.rotation.y);
+    const idleAnim = this._animation instanceof HeroIdleAnimation ? this._animation : null;
+    fn({
+      head: this.playerObject.skin.head,
+      camera: this.camera,
+      canvas: this.canvas,
+      dt,
+      facing: Math.atan2(Math.sin(d), Math.cos(d)),
+      idle: !!idleAnim && !idleAnim.blocksCursorLook,
+    });
   }
 
   /** Idle не анимирует голову, пока взгляд ведёт курсор */
@@ -467,6 +563,9 @@ export class SkinViewEngine {
   /** Прозрачный фон: без атмосферы, пола и контактной тени */
   setTransparentBackground(enabled: boolean): void {
     this._transparent = enabled;
+    // Прозрачный кадр идёт мимо SMAA — плотность рендера пересчитываем, иначе
+    // после переключения силуэт остаётся с лесенкой.
+    if (this._qualityLevel === 0) this._applyPixelRatio(this._targetPixelRatio(enabled));
     if (enabled) {
       this.scene.background = null;
       this.renderer.setClearColor(0x000000, 0);
@@ -683,6 +782,105 @@ export class SkinViewEngine {
     };
   }
 
+  /**
+   * Вешает вещь на кость фигуры: шляпа едет с головой, наручи — с рукой.
+   * Косметика приходит из мода, движок про неё ничего не знает и не должен:
+   * его дело — держать объект там, куда его повесили.
+   */
+  attachCosmetic(anchor: CosmeticAnchorName, object: Object3D): void {
+    const part = this.cosmeticAnchor(anchor);
+    if (anchor === "cape") {
+      // Плащ игрока и плащ-вещь занимают одно место: показывать оба - значит
+      // показать ткань, торчащую сквозь ткань. Свой плащ уступает надетому.
+      this.playerObject.cape.visible = true;
+      this.playerObject.cape.cape.visible = false;
+      this.playerObject.elytra.visible = false;
+    }
+    if (anchor === "cape") {
+      part.add(this._hanging(object));
+      this._cosmetics.push({ part, object });
+      return;
+    }
+    part.add(object);
+    this._cosmetics.push({ part, object });
+  }
+
+  /**
+   * Подвес: вещь качается вокруг точки, где ткань держится на спине, а не
+   * вокруг начала модели у шеи. Те же координаты, что у мода (MeshPose.HANG),
+   * иначе в окне и в игре ткань ходила бы по разным дугам.
+   */
+  private _hanging(object: Object3D): Object3D {
+    const pivot = new Group();
+    pivot.position.set(0, HANG_Y, HANG_Z);
+    const back = new Group();
+    back.position.set(0, -HANG_Y, -HANG_Z);
+    back.add(object);
+    pivot.add(back);
+    this._swaying.push(pivot);
+    return pivot;
+  }
+
+  /**
+   * Наклон подвеса за родным плащом: вещь-плащ обязана отклоняться в ту же
+   * сторону и на тот же угол, что ткань рядом. Знак проверен замером - кончик
+   * вещи и кончик плаща уходят назад с одинаковой скоростью на радиан угла.
+   */
+  private _swayCosmetics(): void {
+    if (this._swaying.length === 0) return;
+    const swing = this.playerObject.cape.rotation.x - CAPE_REST_X;
+    for (const pivot of this._swaying) {
+      pivot.rotation.x = swing;
+    }
+  }
+
+  /** Снимает всё, что вешали: смена набора не должна копить старые вещи. */
+  clearCosmetics(): void {
+    // Свой плащ возвращается ровно в то состояние, в каком его оставили: он
+    // виден, только когда у игрока есть его текстура.
+    this.playerObject.cape.cape.visible = true;
+    this.playerObject.cape.visible = Boolean(this.capeTexture);
+    this._swaying = [];
+    for (const worn of this._cosmetics) {
+      const hung = worn.object.parent?.parent;
+      if (hung && hung !== worn.part) {
+        worn.part.remove(hung);
+      }
+      worn.part.remove(worn.object);
+      worn.object.traverse((node) => {
+        const mesh = node as Mesh;
+        if (mesh.geometry) mesh.geometry.dispose();
+      });
+    }
+    this._cosmetics = [];
+  }
+
+  private cosmeticAnchor(anchor: CosmeticAnchorName): Object3D {
+    const skin = this.playerObject.skin;
+    switch (anchor) {
+      // Корень вещи меряется от шеи игрока, а она внутри скина: сам
+      // playerObject стоит на восемь пикселей ниже, и вещь съезжала к тазу.
+      case "root":
+        return skin;
+      case "cape":
+        // Вещь-плащ стоит в координатах фигуры, а не внутри откинутой назад
+        // части своего плаща: художник рисует её вокруг игрока.
+        return skin;
+      case "head":
+        return skin.head;
+      case "rightArm":
+        return skin.rightArm;
+      case "leftArm":
+        return skin.leftArm;
+      case "rightLeg":
+        return skin.rightLeg;
+      case "leftLeg":
+        return skin.leftLeg;
+      default:
+        return skin.body;
+    }
+  }
+
   /** Поворот модели вокруг Y (рад); π — вид со спины для превью плаща */
   setPlayerYaw(yaw: number): void {
     this.playerObject.rotation.y = yaw;
@@ -815,8 +1013,37 @@ export class SkinViewEngine {
    * Замер кадрирования: экранный bbox модели (NDC), доля кадра и смещение от
    * центра. Камеру не меняет — нужен для проверки кадра в тестах и отладке.
    */
-  measurePlayerFrame(): FrameMeasure | null {
-    return measureObjectFrame(this.playerWrapper, this.camera);
+  measurePlayerFrame(options: { withCosmetics?: boolean } = {}): FrameMeasure | null {
+    if (options.withCosmetics) return measureObjectFrame(this.playerWrapper, this.camera);
+    return this._bodyOnly(() => measureObjectFrame(this.playerWrapper, this.camera));
+  }
+
+  /**
+   * Замер по одному телу: вещи, свой плащ и элитры на время замера скрыты.
+   * Кадр и центр считаются по фигуре — крылья, питомец или плащ за спиной
+   * расширяли облако точек, и при надевании персонаж отъезжал вбок и мельчал
+   * (владелец 23.09.2026: «неправильно стоит, не по центру»).
+   */
+  private _bodyOnly<T>(measure: () => T): T {
+    const hidden: Object3D[] = [];
+    const hide = (node: Object3D | null | undefined): void => {
+      if (!node || !node.visible) return;
+      node.visible = false;
+      hidden.push(node);
+    };
+    for (const worn of this._cosmetics) {
+      // Плащ-вещь висит на подвесе: прятать его целиком, а не только модель
+      const pivot = worn.object.parent?.parent;
+      hide(pivot && this._swaying.includes(pivot) ? pivot : worn.object);
+    }
+    hide(this.playerObject.cape);
+    hide(this.playerObject.elytra);
+    hide(this.playerObject.ears);
+    try {
+      return measure();
+    } finally {
+      for (const node of hidden) node.visible = true;
+    }
   }
 
   /**
@@ -827,7 +1054,7 @@ export class SkinViewEngine {
    * Перед замером кратко ставится нейтральная стойка (без смещений анимации),
    * иначе бег/плащ уводят центр кадра. После замера поза восстанавливается.
    */
-  fitPlayerToFrame(options: FrameFitOptions = {}): FrameFitResult | null {
+  fitPlayerToFrame(options: FrameFitOptions = {}): (FrameFitResult & { outfit: NdcBox }) | null {
     const savedPose = capturePose(this.playerObject);
     const savedProgress = this._animation?.progress ?? 0;
     const savedBlend = this._blendFrom;
@@ -845,12 +1072,17 @@ export class SkinViewEngine {
     }
     this._applyPresentationVisibility();
 
-    const result = fitObjectToFrame(this.playerWrapper, this.camera, this.lookTarget, {
-      ...options,
-      centerX: true,
-      // По умолчанию строго по центру; явный offsetY от вызывающего сохраняем
-      offsetY: options.offsetY ?? 0,
-    });
+    const result = this._bodyOnly(() =>
+      fitObjectToFrame(this.playerWrapper, this.camera, this.lookTarget, {
+        ...options,
+        centerX: true,
+        // По умолчанию строго по центру; явный offsetY от вызывающего сохраняем
+        offsetY: options.offsetY ?? 0,
+      }),
+    );
+    // Габарит вместе с вещами — в той же нейтральной стойке: по нему ставят
+    // ник над самой высокой вещью, но кадр от него не зависит.
+    const outfit = result ? measureObjectFrame(this.playerWrapper, this.camera) : null;
 
     applyPose(this.playerObject, savedPose);
     if (this._animation) this._animation.progress = savedProgress;
@@ -866,7 +1098,7 @@ export class SkinViewEngine {
     if (result.distance < this.controls.minDistance) this.controls.minDistance = result.distance;
     this.controls.target.copy(this.lookTarget);
     this.controls.update();
-    return result;
+    return { ...result, outfit: outfit ? outfit.ndc : result.ndc };
   }
 
   // ===== Освещение =====
@@ -914,8 +1146,15 @@ export class SkinViewEngine {
 
     this._qualityLevel += 1;
     if (this._qualityLevel === 1) {
-      this.renderer.setPixelRatio(QUALITY_LOW_PIXEL_RATIO);
-      this._postFx?.setPixelRatio(QUALITY_LOW_PIXEL_RATIO);
+      // Плотность режем не до 1: на слабой машине лесенка видна так же, как на
+      // быстрой, поэтому запас суперсэмплинга снимаем только наполовину.
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      this._applyPixelRatio(
+        Math.min(
+          this._basePixelRatio,
+          Math.max(QUALITY_LOW_PIXEL_RATIO, dpr, this._basePixelRatio / SUPERSAMPLE_FACTOR),
+        ),
+      );
       this.lighting.setShadowMapSize(QUALITY_LOW_SHADOW_MAP);
       this._particlesEnabled = false;
       this._particles.group.visible = false;
@@ -1129,8 +1368,10 @@ export class SkinViewEngine {
     this._sampleAnimationPose(animDt);
     if (!(this._debugEnabled && this._debugOpts.pauseAnimation)) {
       this._applyCursorLook(deltaTime);
+      this._runPoseHook(deltaTime);
       this._updateDressEffect(deltaTime);
     }
+    this._swayCosmetics();
     this._syncIdleFx(deltaTime);
     this._atmosphere.update(deltaTime);
     if (this._particlesEnabled && (!this._debugEnabled || this._debugOpts.particles)) {
@@ -1506,11 +1747,51 @@ export class SkinViewEngine {
     });
   }
 
+  /**
+   * Плотность рендера. Кадр без SMAA (прозрачный фон или превью без эффектов)
+   * рисуется с суперсэмплингом — иначе силуэт идёт лесенкой.
+   */
+  private _targetPixelRatio(transparent: boolean): number {
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const antialiasedByPostFx = this._enableEffects && !transparent;
+    if (antialiasedByPostFx) return Math.min(dpr, MAX_PIXEL_RATIO);
+    return Math.min(dpr * SUPERSAMPLE_FACTOR, SUPERSAMPLE_MAX_PIXEL_RATIO);
+  }
+
+  /**
+   * Плотность под текущий размер кадра. Бюджет по длинной стороне держит
+   * буфер в разумных пределах: крупному кадру суперсэмплинг уже не нужен, а
+   * снимок через toDataURL иначе разрастается в несколько мегабайт.
+   */
+  private _resolvePixelRatio(width: number, height: number): number {
+    const longest = Math.max(1, width, height);
+    const budget = Math.max(1, SUPERSAMPLE_LONG_SIDE_BUDGET / longest);
+    // Плотность не ниже экранной и только целая сверх неё. Дробная (2.15 на
+    // Retina при кадре 440x512) заставляла браузер пережимать буфер 945 в 880
+    // точек: тексели скина выходили разной ширины, а при DPR 3 бюджет опускал
+    // плотность ниже экрана и персонаж мылился растяжением.
+    const native = Math.min(this._basePixelRatio, Math.max(1, window.devicePixelRatio || 1));
+    const wanted = Math.min(this._basePixelRatio, budget);
+    if (wanted <= native) return Math.max(1, native);
+    return Math.max(native, Math.floor(wanted));
+  }
+
+  private _applyPixelRatio(ratio: number): void {
+    this._basePixelRatio = ratio;
+    const size = this.renderer.getSize(new Vector2());
+    this.setSize(size.x, size.y);
+  }
+
   /** Размер viewport (CSS-пиксели); при autoResize вызывается автоматически */
   setSize(width: number, height: number): void {
     const safeWidth = Math.max(1, Math.floor(width));
     const safeHeight = Math.max(1, Math.floor(height));
 
+    const ratio = this._resolvePixelRatio(safeWidth, safeHeight);
+    if (Math.abs(this.renderer.getPixelRatio() - ratio) >= 0.001) {
+      this.renderer.setPixelRatio(ratio);
+      this._postFx?.setPixelRatio(ratio);
+    }
     this.camera.aspect = safeWidth / safeHeight;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(safeWidth, safeHeight, false);

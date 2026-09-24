@@ -1,0 +1,546 @@
+/* ============================================================
+   ГАРДЕРОБ, 23.09.2026 — второй заход
+   ------------------------------------------------------------
+   Слева крупно персонаж, под ним примерка и полоса «Надето».
+   Справа два уровня навигации — разделы с картинкой вещи и чипы
+   подкатегорий — и сетка крупных карточек (Roblox / Essential,
+   Работа/Проекты/millida/analysis/2026-09-23_wardrobe-research.md).
+   Форма — пиксельный язык: срез 10px у подложек, 5px у кнопок и
+   чипов, 4px у мелких плашек (docs/PIXEL-LANGUAGE.md).
+   ============================================================ */
+
+#s-skins { --ch-h: calc(100dvh - 128px); }
+
+.ch-grid {
+  display: grid;
+  grid-template-columns: minmax(300px, 36%) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+/* ---- левая колонка: сцена, примерка, «Надето» ---- */
+.ch-center {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: var(--ch-h);
+  min-height: 460px;
+}
+.ch-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 240px;
+  overflow: hidden;
+  background: var(--m-surface);
+  cursor: grab;
+  user-select: none;
+  display: grid;
+  place-items: center;
+}
+.ch-stage:active { cursor: grabbing }
+.ch-stage canvas { width: 100%; height: 100%; display: block; position: relative; z-index: 1 }
+
+/* ---- примерочная ---- */
+.ch-fit {
+  flex: none;
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  background: var(--m-surface-2);
+}
+/* Карточка образа: фигура под своим углом + вещи образа столбиком справа. */
+.ch-look-art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  /* Свой цвет подложки у каждого образа — ряд карточек различим с первого взгляда. */
+  background: color-mix(in srgb, var(--look-tone, var(--m-accent)) 26%, var(--m-inset));
+}
+.ch-look-items { position: absolute; right: 6px; top: 6px; bottom: 6px; display: flex; flex-direction: column; gap: 4px; justify-content: center }
+.ch-look-item { width: 34px; height: 34px; display: grid; place-items: center; background: color-mix(in srgb, #fff 16%, var(--m-surface-2)); overflow: hidden }
+.ch-look-item img { max-width: 30px; max-height: 30px }
+.ch-look-item .cosmetic-sign { transform: scale(0.5) }
+
+/* Сет: миниатюры примеренного, одна касса (владелец 24.09.2026). */
+.ch-set-head { display: flex; align-items: center; gap: 8px }
+.ch-set-head b { font-size: 14px }
+.ch-set-head small { font-size: 12px; color: var(--m-fg-faint) }
+.ch-set-head .btn { margin-left: auto }
+.ch-set-list { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin }
+.ch-set-item { flex: none; display: grid; justify-items: center; gap: 4px; width: 60px }
+.ch-set-art { width: 60px; height: 60px; display: grid; place-items: center; background: var(--m-inset); overflow: hidden }
+.ch-set-art img { max-width: 54px; max-height: 54px }
+.ch-set-art .cosmetic-sign { transform: scale(0.6) }
+.ch-set-art:hover { background: var(--m-surface-3, var(--m-inset)) }
+.ch-set-item.is-loading .ch-set-art { opacity: 0.55 }
+.ch-set-price {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.ch-set-price.plus { color: var(--m-rarity-legendary) }
+.ch-fit-tones { display: inline-flex; gap: 4px }
+.ch-tone { width: 16px; height: 16px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35) }
+.ch-tone.on { box-shadow: 0 0 0 2px var(--m-accent) }
+.ch-fit-buy { display: flex; align-items: center; gap: 8px }
+.ch-fit-buy .btn { flex: 1 }
+.ch-fit-have {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--m-fg-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- «Надето» ----
+   Подложка — через .ch-looks (она уже в общем слое рамки, 12-pixel.css). */
+.ch-worn {
+  flex: none;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  background: var(--m-surface-2);
+}
+.ch-worn-head { display: flex; align-items: center; gap: 8px; min-height: 30px }
+.ch-worn-head b { font-size: 13px }
+.ch-worn-head small { font-size: 11px; color: var(--m-fg-faint); font-variant-numeric: tabular-nums }
+.ch-worn-head .btn { margin-left: auto }
+.ch-worn-saved {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 60%;
+  font-size: 12px;
+  color: var(--m-accent);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ch-worn-saved svg { width: 13px; height: 13px; flex: none }
+.ch-worn-row {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding-bottom: 2px;
+}
+.ch-worn-item {
+  flex: none;
+  position: relative;
+  width: 56px;
+  height: 56px;
+  background: var(--m-inset);
+}
+.ch-worn-item.busy { opacity: 0.5 }
+.ch-worn-hit {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+.ch-worn-hit img,
+.ch-worn-hit canvas { max-width: 44px; max-height: 44px; image-rendering: pixelated }
+.ch-worn-item:hover { background: var(--m-surface-3, var(--m-surface)) }
+.ch-worn-off {
+  position: absolute;
+  right: 2px;
+  top: 2px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  color: #fff;
+  background: var(--m-danger);
+  opacity: 0;
+  transition: opacity var(--m-t-fast, 120ms);
+}
+.ch-worn-off svg { width: 11px; height: 11px }
+.ch-worn-item:hover .ch-worn-off,
+.ch-worn-off:focus-visible { opacity: 1 }
+
+/* ---- правая колонка ---- */
+.ch-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: var(--ch-h);
+  min-height: 460px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  padding-right: 2px;
+}
+.ch-panel > * { flex: none }
+
+/* Разделы: картинка вещи + название, одной строкой через всю панель. */
+.ch-secs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+.ch-slot {
+  flex: 1 1 0;
+  min-width: 64px;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 4px;
+  padding: 8px 6px 7px;
+  min-height: 82px;
+  background: var(--m-surface-2);
+  color: var(--m-fg-subtle);
+}
+.ch-slot:hover { color: var(--m-fg); background: var(--m-surface-3, var(--m-inset)) }
+.ch-slot.on { background: var(--m-accent); color: var(--m-bg) }
+.ch-slot-art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  overflow: hidden;
+}
+.ch-slot-art svg { width: 24px; height: 24px }
+/* Значок раздела — 16 клеток ровно в 2 пикселя экрана, без дробного масштаба. */
+.ch-slot-art svg.ch-slot-px { width: 32px; height: 32px; display: block }
+.ch-slot-art img,
+.ch-slot-art canvas,
+.ch-slot-art .skin-body3d { max-width: 100%; max-height: 100%; image-rendering: pixelated }
+.ch-slot-name { font-size: 13px; font-weight: 700; line-height: 1.1; white-space: nowrap }
+.ch-slot-alert {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 9px;
+  height: 9px;
+  background: var(--m-danger);
+}
+
+/* Полоса под разделами: чипы слева, поиск и «Все/Мои» справа. */
+.ch-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-height: 36px }
+.ch-bar-title { font-size: 16px; margin: 0 }
+.ch-chips { gap: 6px }
+.ch-chips .seg small {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+}
+.ch-tools { display: flex; align-items: center; gap: 8px; margin-left: auto }
+.ch-own { flex: none; gap: 4px }
+.ch-add { display: flex; gap: 6px; margin-left: auto }
+.ch-search { width: 220px; max-width: 100% }
+.ch-bar > .ch-search { width: 100% }
+.ch-search-x { display: grid; place-items: center; width: 22px; height: 22px; color: var(--m-fg-faint) }
+.ch-search-x:hover { color: var(--m-fg) }
+.ch-search-x svg { width: 13px; height: 13px }
+.ch-import { display: flex; gap: 6px; align-items: center }
+.ch-import .input { flex: 1 }
+.ch-nothing { padding: 28px 0; text-align: center; color: var(--m-fg-faint); font-size: 13px }
+/* Хвост ленты: невидимая полоса, по подходу к которой раскрывается следующая порция. */
+.ch-tail { height: 1px }
+
+.ch-warn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  background: var(--m-inset);
+}
+.ch-warn > span { flex: 1; min-width: 0 }
+.ch-warn > svg { color: var(--m-fg-faint); flex: none }
+
+/* ---- сетка вещей ---- */
+.ch-grid-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
+  gap: 10px;
+}
+.ch-tile {
+  position: relative;
+  background: var(--m-surface-2);
+  overflow: hidden;
+}
+/* Редкость — полоса у нижнего края, без текста. */
+.ch-tile::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--ch-rarity, transparent);
+}
+.ch-tile-hit {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 10px 10px 11px;
+}
+.ch-tile:hover { background: var(--m-surface-3, var(--m-inset)) }
+.ch-tile.locked .ch-tile-art > :first-child { opacity: 0.6 }
+.ch-tile-art {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 136px;
+  position: relative;
+  overflow: hidden;
+}
+.ch-tile-art img,
+.ch-tile-art canvas { max-width: 100%; max-height: 100%; image-rendering: pixelated }
+.ch-tile-name {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  max-width: 100%;
+  min-height: 2.4em;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  text-align: center;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+/* Одна строка статуса: надето / цена / как получить. */
+.ch-tile-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 16px;
+  max-width: 100%;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--m-fg-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.ch-tile-status.on { color: var(--m-accent) }
+.ch-tile-status.try { color: var(--m-rarity-rare) }
+.ch-tile-status.plus { color: var(--m-rarity-legendary) }
+.ch-tile-status.price { color: var(--m-fg) }
+.ch-tile-lock {
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  color: var(--m-fg-muted);
+  background: var(--m-inset);
+}
+.ch-tile-lock svg { width: 12px; height: 12px }
+.ch-tile-mark {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  background: var(--m-accent);
+}
+.ch-tile-mark svg { width: 13px; height: 13px }
+.ch-tile-star {
+  position: absolute;
+  right: 6px;
+  top: 6px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  color: var(--m-fg-faint);
+  opacity: 0;
+  transition: opacity var(--m-t-fast, 120ms);
+}
+.ch-tile:hover .ch-tile-star,
+.ch-tile-star.on { opacity: 1 }
+.ch-tile-star.on { color: var(--m-rarity-legendary) }
+.ch-tile-star:hover { color: var(--m-fg) }
+.ch-tile-load {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--m-bg) 55%, transparent);
+  animation: chLoadPulse 0.9s steps(2) infinite;
+}
+@keyframes chLoadPulse { 50% { opacity: 0.4 } }
+@media (prefers-reduced-motion: reduce) { .ch-tile-load { animation: none } }
+
+/* Удалить — плотная плашка в левом верхнем углу, над рендером скина: внизу
+   справа её накрывала вытянутая рука тонкой модели (владелец 23.09.2026).
+   Зона клика 30 px, появляется при наведении и по фокусу с клавиатуры;
+   после нажатия — тост с «Отменить». */
+.ch-tile-del {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  color: #fff;
+  background: var(--m-danger);
+  opacity: 0;
+  transition: opacity var(--m-t-fast, 120ms), background-color var(--m-t-fast, 120ms);
+}
+.ch-tile-del svg { width: 16px; height: 16px }
+.ch-tile:hover .ch-tile-del,
+.ch-tile-del:focus-visible { opacity: 1 }
+.ch-tile-del:hover { background: color-mix(in srgb, var(--m-danger) 80%, #000) }
+
+/* Кнопки образа: переименовать, удалить. */
+.ch-tile-tools {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  display: grid;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity var(--m-t-fast, 120ms);
+}
+.ch-tile:hover .ch-tile-tools,
+.ch-tile-tools:focus-within { opacity: 1 }
+.ch-tile-tools button {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  color: var(--m-fg-subtle);
+  background: var(--m-inset);
+}
+.ch-tile-tools button:hover { color: var(--m-fg) }
+.ch-tile-tools svg { width: 14px; height: 14px }
+.ch-look-wrap { display: grid }
+.ch-look-input {
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  font: 700 13px/1 var(--m-font);
+  text-align: center;
+  color: var(--m-fg);
+  background: var(--m-bg);
+  border: 0;
+  outline: none;
+}
+
+/* Плитка-действие: «Сохранить образ», «Открыть с PLUS», «Заказать скин». */
+.ch-tile.action .ch-tile-name { color: var(--m-fg) }
+.ch-action-art { position: relative; display: grid; place-items: center; width: 100%; height: 100% }
+/* Фигура — в полный цвет, плюс — маленький значок в углу, не на лице
+   (владелец 24.09.2026: серая фигура с плюсом посередине выглядела странно). */
+.ch-action-plus {
+  position: absolute;
+  right: 10px;
+  bottom: 6px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  clip-path: var(--px-4);
+  color: var(--px-on-accent, #06200e);
+  background: var(--m-accent);
+}
+.ch-action-plus svg { width: 16px; height: 16px }
+.ch-plus-art {
+  display: grid;
+  place-items: center;
+  width: 88px;
+  height: 88px;
+  color: var(--m-rarity-legendary);
+  background: var(--m-inset);
+}
+.ch-plus-art svg { width: 40px; height: 40px }
+.ch-plus-art.brush { color: var(--m-accent) }
+
+/* Узкое окно: колонки остаются рядом до 900px — персонаж слева, как на широком. */
+@media (max-width: 1100px) {
+  .ch-grid { grid-template-columns: minmax(260px, 34%) minmax(0, 1fr); gap: 12px }
+  .ch-grid-items { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px }
+  .ch-tile-art { height: 116px }
+  .ch-secs { gap: 4px }
+  .ch-slot { min-width: 60px; min-height: 70px; padding: 6px 2px }
+  .ch-slot-art { width: 36px; height: 36px }
+  .ch-slot-name { font-size: 11.5px }
+  .ch-search { width: 160px }
+  .ch-worn-item { width: 48px; height: 48px }
+  .ch-worn-hit img,
+  .ch-worn-hit canvas { max-width: 38px; max-height: 38px }
+}
+@media (max-width: 900px) {
+  .ch-grid { grid-template-columns: 1fr }
+  .ch-center { position: static; height: auto; min-height: 0 }
+  .ch-stage { flex: none; height: 360px }
+  .ch-panel { height: auto; min-height: 0; overflow: visible }
+}
+
+
+/* ------------------------------------------------------------
+   Форма пиксельного языка — отдельным блоком.
+   ------------------------------------------------------------ */
+:root:root .ch-slot,
+:root:root .ch-set-art,
+:root:root .ch-look-item,
+:root:root .ch-look-art,
+:root:root .ch-warn,
+:root:root .ch-worn-item,
+:root:root .ch-tile-tools button,
+:root:root .ch-action-plus,
+:root:root .ch-look-input { --px-n: 5px; clip-path: var(--px-5) }
+
+:root:root .ch-slot-alert,
+:root:root .ch-tile-lock,
+:root:root .ch-tile-mark,
+:root:root .ch-tile-del,
+:root:root .ch-worn-off { --px-n: 4px; clip-path: var(--px-4) }
+
+:root:root .ch-stage,
+:root:root .ch-fit,
+:root:root .ch-looks,
+:root:root .ch-plus-art,
+:root:root .ch-tile { --px-n: 10px; clip-path: var(--px-10) }
+
+/* Подложки: светлая грань сверху, тёмная «подошва» снизу — общим слоем рамки. */
+:root:root .ch-stage,
+:root:root .ch-fit,
+:root:root .ch-looks,
+:root:root .ch-tile { --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent; }
+/* Надето — сплошная обводка акцентом по всему силуэту, примерка — синим. */
+:root:root .ch-tile.on { --px-ol: var(--m-accent); --px-ol-w: 2px; }
+:root:root .ch-tile.trying { --px-ol: var(--m-rarity-rare); --px-ol-w: 2px; }
+:root:root .ch-slot.on { --px-ol: var(--px-btn-ol); --px-ol-w: 2px; --px-ft: var(--px-btn-t); --px-ft-w: 3px; --px-fb: var(--px-btn-b); --px-fb-w: 5px; --px-fl: var(--px-btn-l); --px-fl-w: 3px; --px-fr: var(--px-btn-r); --px-fr-w: 3px; color: var(--px-on-accent, #06200e) }
+:root:root .ch-tile-mark { color: var(--px-on-accent, #06200e) }
+
+/* «Снять» / «Снять всё» в строке раздела (правка 23.09.2026, 22:00). */
+.ch-off { display: inline-flex; gap: 6px; margin-left: auto; }
+
+/* Сцена гардероба — цветной фон лобби вместо серой подложки (22:35). */
+#s-skins .ch-center { position: relative; }
+#s-skins .ch-stage-bg { position: absolute; left: 0; right: 0; top: var(--stage-top, 0); height: var(--stage-h, 60%); z-index: 0; pointer-events: none; overflow: hidden; clip-path: var(--px-10); }
+#s-skins .ch-stage-bg > canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+#s-skins .ch-stage { background: transparent; z-index: 1; }
+
+/* ---------- Модель предметов v2: фрагменты на плитке (24.09.2026) ----------
+   Начатая вещь — под статусом полоса «7/20» цвета редкости (FragBar, rarity.css).
+   Эффект редкости — слой RarityFx по data-rar, общий с магазином и сундуком. */
+.ch-tile-frag { display: block; width: 100%; margin-top: 2px; }
+.ch-tile-frag .rar-fbar { font-size: 10px; gap: 4px; }

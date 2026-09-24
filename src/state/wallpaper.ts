@@ -33,17 +33,20 @@ const initCustom = readCustom() || initGallery[0] || null
 const firstRun = localStorage.getItem('m-wp-seen') !== '1'
 localStorage.setItem('m-wp-seen', '1')
 const initMode = firstRun ? 'fixed' : localStorage.getItem('m-wp-mode') || 'random'
-const storedCur = localStorage.getItem('m-wp') || 'bg4'
+// По умолчанию в лобби — живой фон «Пиксели» (PixelField, владелец 23.09.2026).
+// Обои и видео остаются выбором: кто сам выбрал фон или включил «случайный»,
+// тот его и видит.
+const PIXELS = 'pixels'
+const storedCur = localStorage.getItem('m-wp') || PIXELS
+const explicitMode = localStorage.getItem('m-wp-mode')
 const initCur = notScene(
-  firstRun
-    ? 'bg4'
-    : storedCur === 'custom' && initCustom
+  storedCur === 'custom'
+    ? initCustom
       ? 'custom'
-      : initMode === 'random'
-        ? VIDS[Math.floor(Math.random() * 4)]
-        : storedCur === 'custom'
-          ? 'bg4'
-          : storedCur,
+      : PIXELS
+    : !firstRun && explicitMode && initMode === 'random'
+      ? VIDS[Math.floor(Math.random() * 4)]
+      : storedCur,
 )
 // WebKitGTK decodes video in software by default, so an animated wallpaper costs
 // a full core on Linux. Default it to a still frame; the toggle still overrides.

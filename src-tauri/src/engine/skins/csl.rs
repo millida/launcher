@@ -319,7 +319,7 @@ fn opt_out(profile: &str, why: &[u8]) {
     merge_settings(profile, patch);
 }
 
-fn profile_settings(profile: &str) -> Value {
+pub(crate) fn profile_settings(profile: &str) -> Value {
     std::fs::read(profile_dir(profile).join("millida-settings.json")).ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or(Value::Null)

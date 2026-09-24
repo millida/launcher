@@ -6,6 +6,8 @@ export const keyCfModpack = (modId: number): string => 'cf-modpack:' + modId
 export const keyMrModpack = (slug: string, target?: string): string =>
   target ? 'mr-modpack:' + slug + ':' + target : 'mr-modpack:' + slug
 
+export const keyCatalogPack = (slug: string): string => 'catalog-pack:' + slug
+
 export const keyMigrate = (profile: string): string => 'migrate:' + profile
 
 export const keyContent = (source: 'cf' | 'mr', profile: string, kind: string, project: string | number): string =>

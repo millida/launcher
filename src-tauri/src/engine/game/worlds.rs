@@ -103,6 +103,17 @@ pub async fn quick_play(
 ) -> Result<String, String> {
     let p = load_profiles().into_iter().find(|x| x.name == profile)
         .ok_or("Сборка не найдена")?;
+    // both go onto the game's command line (`--quickPlaySingleplayer`,
+    // `--server`): a newline or other control character there would split
+    // one argument into several once the line goes through an argfile
+    let world = world.map(|w| w.trim().to_string()).filter(|w| !w.is_empty());
+    let server = server.map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+    if world.as_deref().is_some_and(|w| !cmdline_text_ok(w, 128)) {
+        return Err("Некорректное имя мира".into());
+    }
+    if server.as_deref().is_some_and(|s| !cmdline_text_ok(s, 255) || s.starts_with('-')) {
+        return Err("Некорректный адрес сервера".into());
+    }
     QUICK.lock().unwrap().replace((world, server));
     let r = install_and_launch_in(app, p.version.clone(), nick, p.fabric, ram_mb, profile, auth).await;
     QUICK.lock().unwrap().take();

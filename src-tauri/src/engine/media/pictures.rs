@@ -68,12 +68,39 @@ async fn remote_bytes(url: &str) -> Result<Vec<u8>, String> {
     Ok(out)
 }
 
-/// A path arriving over IPC is untrusted: only files the launcher itself wrote
-/// are readable, so an XSS cannot turn the viewer into a file reader.
+/// Folders the viewer shows pictures from: screenshots of every build, the
+/// custom wallpaper and theme images. The rest of the launcher's folders hold
+/// account data, session files and settings, which "Save as" would otherwise
+/// hand to any path an XSS names.
+fn picture_folder_ok(file: &std::path::Path) -> bool {
+    let profiles = game_root().join("profiles");
+    if is_inside(&profiles, file) {
+        let base = profiles.canonicalize().unwrap_or(profiles);
+        let real = file.canonicalize().unwrap_or_else(|_| file.to_path_buf());
+        let rel: Vec<String> = real
+            .strip_prefix(&base)
+            .map(|r| r.components().map(|c| c.as_os_str().to_string_lossy().to_string()).collect())
+            .unwrap_or_default();
+        return rel.len() >= 3 && rel[1] == "screenshots";
+    }
+    ["wallpaper", "themes"].iter().any(|d| is_inside(&data_dir().join(d), file))
+}
+
+/// PNG, JPEG, WebP, GIF or BMP by their first bytes, whatever the extension.
+pub(crate) fn looks_like_image(b: &[u8]) -> bool {
+    b.starts_with(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A])
+        || b.starts_with(&[0xFF, 0xD8, 0xFF])
+        || (b.len() >= 12 && &b[0..4] == b"RIFF" && &b[8..12] == b"WEBP")
+        || b.starts_with(b"GIF87a")
+        || b.starts_with(b"GIF89a")
+        || b.starts_with(b"BM")
+}
+
+/// A path arriving over IPC is untrusted: only pictures in the viewer's own
+/// folders are readable, so an XSS cannot turn the viewer into a file reader.
 fn local_file(path: &str) -> Result<PathBuf, String> {
     let file = PathBuf::from(path);
-    let ours = [game_root(), data_dir()].into_iter().any(|base| is_inside(&base, &file));
-    if !ours {
+    if path.is_empty() || !picture_folder_ok(&file) {
         return Err("Эта картинка лежит вне папок лаунчера".into());
     }
     let meta = std::fs::metadata(&file).map_err(|e| format!("Файл не читается: {}", e))?;
@@ -114,7 +141,11 @@ async fn bytes_of(src: &PictureRef) -> Result<Vec<u8>, String> {
     if let Some(path) = src.path.as_deref().filter(|p| !p.is_empty()) {
         let file = local_file(path)?;
         return tauri::async_runtime::spawn_blocking(move || {
-            std::fs::read(&file).map_err(|e| format!("Файл не читается: {}", e))
+            let bytes = std::fs::read(&file).map_err(|e| format!("Файл не читается: {}", e))?;
+            if !looks_like_image(&bytes) {
+                return Err("Файл не похож на изображение".to_string());
+            }
+            Ok(bytes)
         })
         .await
         .map_err(|e| e.to_string())?;
@@ -197,5 +228,21 @@ mod tests {
         assert!(local_file(r"C:\Windows\System32\config\SAM").is_err());
         assert!(local_file("/etc/shadow").is_err());
         assert!(local_file("").is_err());
+        // launcher's own data outside the picture folders
+        assert!(!picture_folder_ok(&data_dir().join("accounts.json")));
+        assert!(!picture_folder_ok(&game_root().join("profiles.json")));
+        assert!(!picture_folder_ok(&game_root().join("profiles").join("A").join("millida-settings.json")));
+        assert!(!picture_folder_ok(&game_root().join("profiles").join("A").join("mods").join("x.png")));
+        assert!(picture_folder_ok(&game_root().join("profiles").join("A").join("screenshots").join("1.png")));
+        assert!(picture_folder_ok(&data_dir().join("wallpaper").join("w.png")));
+    }
+
+    #[test]
+    fn image_signature_is_checked() {
+        assert!(looks_like_image(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 0]));
+        assert!(looks_like_image(&[0xFF, 0xD8, 0xFF, 0xE0]));
+        assert!(looks_like_image(b"RIFF\0\0\0\0WEBPVP8 "));
+        assert!(!looks_like_image(b"{\"token\":\"x\"}"));
+        assert!(!looks_like_image(b""));
     }
 }
