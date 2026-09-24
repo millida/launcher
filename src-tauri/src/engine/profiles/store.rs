@@ -124,13 +124,22 @@ pub(crate) fn unique_profile_name(base: &str) -> String {
     let base = base.trim();
     let base = if base.is_empty() { "Импортированная сборка" } else { base };
     let all = load_profiles();
+    unique_name_with(base, &|n: &str| all.iter().any(|p| p.name == n) || profile_dir(n).exists())
+}
+
+fn unique_name_with(base: &str, taken: &dyn Fn(&str) -> bool) -> String {
     let mut nm = base.to_string();
     let mut i = 2;
-    while all.iter().any(|p| p.name == nm) || profile_dir(&nm).exists() {
+    while taken(&nm) {
         nm = format!("{} ({})", base, i);
         i += 1;
     }
     nm
+}
+
+/// Name taken by a build in the list or by a folder on disk.
+pub(crate) fn profile_name_taken(n: &str) -> bool {
+    load_profiles().iter().any(|p| p.name == n) || profile_dir(n).exists()
 }
 
 pub fn profile_dir(name: &str) -> PathBuf {
@@ -164,21 +173,25 @@ pub(crate) fn merge_settings(profile: &str, patch: serde_json::Map<String, Value
 /// carries the same name in its index, so reusing it wiped the mods of the
 /// version already installed instead of putting the second one beside it.
 pub(crate) fn modpack_profile_name(pack_name: &str, version_number: &str) -> String {
+    modpack_profile_name_with(pack_name, version_number, &profile_name_taken)
+}
+
+pub(crate) fn modpack_profile_name_with(
+    pack_name: &str,
+    version_number: &str,
+    taken: &dyn Fn(&str) -> bool,
+) -> String {
     let base = pack_name.trim();
-    let base = if base.is_empty() { "Модпак" } else { base };
-    let taken = |n: &str| load_profiles().iter().any(|p| p.name == n) || profile_dir(n).exists();
+    let base = if base.is_empty() { "Сборка" } else { base };
     if !taken(base) {
         return base.to_string();
     }
     let vn = version_number.trim();
     if !vn.is_empty() {
         let with_ver = format!("{} {}", base, vn);
-        if !taken(&with_ver) {
-            return with_ver;
-        }
-        return unique_profile_name(&with_ver);
+        return unique_name_with(&with_ver, taken);
     }
-    unique_profile_name(base)
+    unique_name_with(base, taken)
 }
 
 /// version_id=None picks the newest .mrpack; target=Some(name) updates or rolls
@@ -188,39 +201,69 @@ pub async fn install_modpack(app: AppHandle, slug: String) -> Result<Profile, St
 }
 
 pub async fn install_modpack_ver(app: AppHandle, slug: String, version_id: Option<String>, target: Option<String>) -> Result<Profile, String> {
+    // the slug arrives from the webview, a `millida://` link or a profile's
+    // settings file, and lands in an API path and in job keys
+    check_modpack_slug(&slug)?;
+    if let Some(v) = &version_id {
+        if !modrinth_id_ok(v) {
+            return Err("Некорректная версия сборки".into());
+        }
+    }
     let job = Job::start(job_key_modpack_mr(&slug, target.as_deref()), target.clone().unwrap_or_else(|| slug.clone()))?;
     let res = install_modpack_job(&app, &job, slug, version_id, target).await;
     job.finish(&app, res)
 }
 
 async fn install_modpack_job(app: &AppHandle, job: &Job, slug: String, version_id: Option<String>, target: Option<String>) -> Result<Profile, String> {
-    job.emit(app, 5.0, "Читаем модпак…");
+    job.emit(app, 5.0, "Читаем сборку…");
     let versions = get_json(&format!("https://api.modrinth.com/v2/project/{}/version", slug)).await?;
     let has_mrpack = |v: &Value| v["files"].as_array().is_some_and(|fs| fs.iter().any(|f| f["filename"].as_str().unwrap_or("").ends_with(".mrpack")));
     let ver = match &version_id {
-        Some(vid) => versions.as_array().and_then(|a| a.iter().find(|v| v["id"].as_str() == Some(vid.as_str()))).ok_or("Версия модпака не найдена")?,
+        Some(vid) => versions.as_array().and_then(|a| a.iter().find(|v| v["id"].as_str() == Some(vid.as_str()))).ok_or("Версия сборки не найдена")?,
         None => versions.as_array().and_then(|a| a.iter().find(|v| has_mrpack(v))).ok_or("mrpack не найден")?,
     };
     let vid = ver["id"].as_str().unwrap_or("").to_string();
-    let file = ver["files"].as_array().and_then(|fs| fs.iter().find(|f| f["primary"]==true).or(fs.first())).ok_or("Файл модпака не найден")?;
-    let tmp = data_dir().join("tmp").join(format!("{}-{}.mrpack", slug, vid));
-    job.emit(app, 15.0, "Скачиваем модпак…");
-    download_fresh_cancellable(
-        file["url"].as_str().ok_or("Нет ссылки на файл модпака")?,
+    if !modrinth_id_ok(&vid) {
+        return Err("Некорректная версия сборки".into());
+    }
+    let file = ver["files"].as_array().and_then(|fs| fs.iter().find(|f| f["primary"]==true).or(fs.first())).ok_or("Файл сборки не найден")?;
+    let url = file["url"].as_str().ok_or("Нет ссылки на файл сборки")?;
+    if !pack_download_allowed(url) {
+        return Err("Файл сборки лежит на чужом адресе — установка остановлена".into());
+    }
+    // the archive is code: without the hash Modrinth published for it there is
+    // nothing to check it against
+    let sha512 = file["hashes"]["sha512"].as_str().unwrap_or("").to_string();
+    if sha512.len() != 128 || !sha512.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err("У сборки нет контрольной суммы — ставить такой архив нельзя".into());
+    }
+    // temp names come from a hash: the slug and the id are untrusted, and the
+    // extraction folder below is wiped with remove_dir_all
+    let tmp_name = hashed_name(&["mrpack", &slug, &vid]);
+    let tmp = data_dir().join("tmp").join(format!("{}.mrpack", tmp_name));
+    job.emit(app, 15.0, "Скачиваем сборку…");
+    if let Some(p) = tmp.parent() {
+        std::fs::create_dir_all(p).map_err(|e| e.to_string())?;
+    }
+    download_checked_cancellable(
+        url,
         &tmp,
-        job.cancel_flag(),
+        Some(Sum::Sha512(&sha512)),
+        file["size"].as_u64(),
+        Some(job.cancel_flag()),
     )
     .await?;
-    let ex = data_dir().join("tmp").join(&slug);
+    let ex = data_dir().join("tmp").join(format!("mrpack-{}", tmp_name));
     let _ = std::fs::remove_dir_all(&ex);
     std::fs::create_dir_all(&ex).map_err(|e| e.to_string())?;
     unzip_to(&tmp, &ex)?;
     job.check()?;
     let idx_raw = std::fs::read(ex.join("modrinth.index.json"))
-        .map_err(|_| "В архиве модпака нет modrinth.index.json — файл повреждён".to_string())?;
+        .map_err(|_| "В архиве сборки нет modrinth.index.json — файл повреждён".to_string())?;
     let idx: Value = serde_json::from_slice(&idx_raw).map_err(|e| e.to_string())?;
     let deps = &idx["dependencies"];
-    let mc = deps["minecraft"].as_str().ok_or("Нет версии MC в модпаке")?.to_string();
+    let mc = deps["minecraft"].as_str().ok_or("Нет версии MC в сборке")?.to_string();
+    check_version_id(&mc)?;
     // dependency key names the loader, its value pins the exact build the pack
     // was built against
     let (lid, fabric, dep_key) = if deps.get("neoforge").is_some() { ("neoforge", false, "neoforge") }
@@ -229,6 +272,9 @@ async fn install_modpack_job(app: &AppHandle, job: &Job, slug: String, version_i
         else if deps.get("fabric-loader").is_some() { ("fabric", true, "fabric-loader") }
         else { ("vanilla", false, "") };
     let loader_version = deps[dep_key].as_str().filter(|v| !v.is_empty()).map(String::from);
+    if let Some(lv) = &loader_version {
+        check_loader_version(lv)?;
+    }
     let pname = match &target {
         Some(t) => t.clone(),
         None => modpack_profile_name(
@@ -254,23 +300,22 @@ async fn install_modpack_job(app: &AppHandle, job: &Job, slug: String, version_i
         let Some(path) = f["path"].as_str() else { continue };
         // paths come from the pack index and are untrusted
         let dest = safe_join(&pdir, path)
-            .map_err(|e| format!("Модпак содержит небезопасный путь: {}", e))?;
-        let sha1 = f["hashes"]["sha1"].as_str();
-        let size = f["fileSize"].as_u64();
+            .map_err(|e| format!("Сборка содержит небезопасный путь: {}", e))?;
+        let (sha1, size) = pack_file_check(f).map_err(|e| format!("{}: {}", path, e))?;
         let mut done = false;
         if let Some(urls) = f["downloads"].as_array() {
             for u in urls {
-                if let Some(u) = u.as_str() {
-                    if download_verify(u, &dest, sha1, size).await.is_ok() { done = true; break; }
+                if let Some(u) = u.as_str().filter(|u| pack_download_allowed(u)) {
+                    if download_verify(u, &dest, Some(&sha1), size).await.is_ok() { done = true; break; }
                 }
             }
         }
-        if !done { return Err(format!("Не удалось скачать файл модпака: {}", path)); }
-        job.emit(app, 20.0 + 60.0*(i as f32/total as f32), &format!("Файлы модпака {}/{}", i+1, total));
+        if !done { return Err(format!("Не удалось скачать файл сборки: {}", path)); }
+        job.emit(app, 20.0 + 60.0*(i as f32/total as f32), &format!("Файлы сборки {}/{}", i+1, total));
     }
     for ov in ["overrides", "client-overrides"] {
         let src = ex.join(ov);
-        if src.exists() { let _ = copy_dir_all(&src, &pdir); }
+        if src.exists() { let _ = copy_overrides(&src, &pdir); }
     }
     let _ = std::fs::remove_file(&tmp);
     let _ = std::fs::remove_dir_all(&ex);
@@ -291,11 +336,12 @@ async fn install_modpack_job(app: &AppHandle, job: &Job, slug: String, version_i
     patch.insert("modpackSlug".into(), Value::String(slug.clone()));
     patch.insert("modpackVersionId".into(), Value::String(vid));
     merge_settings(&pname, patch);
-    job.emit(app, 100.0, "Модпак установлен");
+    job.emit(app, 100.0, "Сборка установлена");
     Ok(prof)
 }
 
 pub async fn modpack_versions(slug: String) -> Result<Value, String> {
+    check_modpack_slug(&slug)?;
     let versions = get_json(&format!("https://api.modrinth.com/v2/project/{}/version", slug)).await?;
     let out: Vec<Value> = versions.as_array().map(|a| a.iter()
         .filter(|v| v["files"].as_array().is_some_and(|fs| fs.iter().any(|f| f["filename"].as_str().unwrap_or("").ends_with(".mrpack"))))
@@ -310,7 +356,8 @@ pub async fn update_modpack(app: AppHandle, profile: String, version_id: String)
     let settings: Value = std::fs::read(profile_dir(&profile).join("millida-settings.json")).ok()
         .and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or(Value::Null);
     let slug = settings["modpackSlug"].as_str().unwrap_or("").to_string();
-    if slug.is_empty() { return Err("Эта сборка создана не из модпака".into()); }
+    if slug.is_empty() { return Err("Эта сборка создана не из готовой сборки каталога".into()); }
+    check_modpack_slug(&slug)?;
     install_modpack_ver(app, slug, Some(version_id), Some(profile)).await
 }
 
@@ -323,9 +370,70 @@ pub fn modpack_info(profile: &str) -> Value {
     })
 }
 
+/// Hosts a pack index may send the launcher to. Modrinth's own rules for
+/// .mrpack allow exactly these (plus our mirror, which the downloader applies
+/// on its own): anything else is a pack pulling code from an arbitrary server.
+const PACK_FILE_HOSTS: [&str; 4] = ["cdn.modrinth.com", "github.com", "raw.githubusercontent.com", "gitlab.com"];
+
+pub(crate) fn pack_download_allowed(raw: &str) -> bool {
+    let Ok(u) = url::Url::parse(raw) else { return false };
+    u.scheme() == "https"
+        && u.port().is_none()
+        && u.username().is_empty()
+        && u.host_str().is_some_and(|h| PACK_FILE_HOSTS.contains(&h))
+}
+
+/// sha1 is what the downloader checks and the shared store is keyed by; a file
+/// entry without it (or with a malformed one) is refused, not fetched unchecked.
+pub(crate) fn pack_file_check(f: &Value) -> Result<(String, Option<u64>), String> {
+    let sha1 = f["hashes"]["sha1"].as_str().unwrap_or("").to_ascii_lowercase();
+    let sha512 = f["hashes"]["sha512"].as_str().unwrap_or("");
+    if sha1.len() != 40 || !sha1.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err("у файла нет контрольной суммы".into());
+    }
+    if !sha512.is_empty() && (sha512.len() != 128 || !sha512.chars().all(|c| c.is_ascii_hexdigit())) {
+        return Err("повреждённая контрольная сумма".into());
+    }
+    Ok((sha1, f["fileSize"].as_u64()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pack_files_come_only_from_known_hosts() {
+        for good in [
+            "https://cdn.modrinth.com/data/AANobbMI/versions/x/sodium.jar",
+            "https://github.com/a/b/releases/download/1/x.jar",
+            "https://raw.githubusercontent.com/a/b/main/x.jar",
+            "https://gitlab.com/a/b/-/raw/x.jar",
+        ] {
+            assert!(pack_download_allowed(good), "{good}");
+        }
+        for bad in [
+            "http://cdn.modrinth.com/x.jar",
+            "https://cdn.modrinth.com.evil.example/x.jar",
+            "https://evil.example/cdn.modrinth.com/x.jar",
+            "https://user@cdn.modrinth.com/x.jar",
+            "https://cdn.modrinth.com:8443/x.jar",
+            "file:///etc/passwd",
+            "https://127.0.0.1/x.jar",
+            "",
+        ] {
+            assert!(!pack_download_allowed(bad), "{bad}");
+        }
+    }
+
+    #[test]
+    fn pack_file_without_hash_is_refused() {
+        let ok = serde_json::json!({"hashes": {"sha1": "a".repeat(40), "sha512": "b".repeat(128)}, "fileSize": 5});
+        assert_eq!(pack_file_check(&ok).unwrap(), ("a".repeat(40), Some(5)));
+        assert!(pack_file_check(&serde_json::json!({"hashes": {}})).is_err());
+        assert!(pack_file_check(&serde_json::json!({"hashes": {"sha1": ""}})).is_err());
+        assert!(pack_file_check(&serde_json::json!({"hashes": {"sha1": "zz"}})).is_err());
+        assert!(pack_file_check(&serde_json::json!({"hashes": {"sha1": "a".repeat(40), "sha512": "x"}})).is_err());
+    }
 
     #[test]
     fn loader_id_splits_off_the_build() {
@@ -343,7 +451,7 @@ mod tests {
     /// deleted the mods of the copy already installed.
     #[test]
     fn a_second_version_of_a_pack_gets_its_own_name() {
-        let free = "Модпак которого точно нет 9f3a2";
+        let free = "Сборка которой точно нет 9f3a2";
         assert_eq!(
             modpack_profile_name(free, "1.2.3"),
             free,
@@ -351,7 +459,7 @@ mod tests {
         );
         assert_eq!(
             modpack_profile_name("", ""),
-            "Модпак",
+            "Сборка",
             "a pack whose index carries no name still has to get one",
         );
     }

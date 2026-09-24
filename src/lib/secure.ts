@@ -1,5 +1,6 @@
 import { hasTauri } from '../ipc/tauri'
 import { sessionStatus } from '../ipc/commands'
+import { DEMO_USER } from './demo'
 
 export const SECRETS_CHANGED_EVENT = 'millida-secrets-changed'
 
@@ -14,6 +15,10 @@ function announce() {
 }
 
 export function hasMillidaSession(): boolean {
+  // Демо-просмотр в браузере (?preview=user, только dev): сессии Millida без
+  // Tauri нет, и без этого половина экранов упирается в «Войти». В релизе
+  // DEMO_USER — константа false, и ветка вырезается сборкой.
+  if (import.meta.env.DEV && DEMO_USER) return true
   return millida
 }
 

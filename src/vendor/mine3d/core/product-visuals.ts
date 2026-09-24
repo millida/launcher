@@ -96,9 +96,13 @@ function configureKeyLightShadow(
   key.shadow.camera.right = 28;
   key.shadow.camera.top = 28;
   key.shadow.camera.bottom = -28;
-  // Малый normalBias — contact/self-shadows на блоках 4–12 units
-  key.shadow.bias = -0.0002;
-  key.shadow.normalBias = 0.0004;
+  // Сдвиг против «теневых прыщей» (shadow acne). При normalBias 0.0004 грани
+  // вокселей второго слоя и копланарные грани оверлея затеняли сами себя, и по
+  // скину шла штриховка тёмных линий — «чёрные швы» (владелец 23.09.2026).
+  // Тексель карты теней — 56/2048 ≈ 0.027 единицы (0.055 на 1024 при
+  // сниженном качестве): сдвиг по нормали берём с запасом на оба размера.
+  key.shadow.bias = -0.0005;
+  key.shadow.normalBias = 0.04;
   key.shadow.radius = shadowRadius;
   key.shadow.intensity = shadowIntensity;
   key.shadow.camera.updateProjectionMatrix();

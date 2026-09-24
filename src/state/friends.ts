@@ -19,6 +19,9 @@ export interface Friend {
   serverIp?: string
   serverName?: string
   build?: string
+  /// Ник, под которым друга видно в самой игре. Приходит только когда он не
+  /// совпадает с ником Millida — на лицензии Microsoft это другое имя.
+  gameNick?: string | null
   lastSeen?: number | null
   unread?: number
 }
@@ -41,10 +44,12 @@ export interface FoundUser {
 
 export interface ChatAttachment {
   url: string
-  kind: 'image' | 'voice' | 'file'
+  kind: 'image' | 'voice' | 'file' | 'sticker'
   name?: string
   durationMs?: number | null
   peaks?: number[]
+  /// Стикер набора: адрес и подпись сервер берёт по нему из справочника сам.
+  stickerId?: string
 }
 
 export interface ChatReaction {

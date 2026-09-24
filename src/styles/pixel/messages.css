@@ -1,0 +1,339 @@
+/* ============================================================
+   Экран «Сообщения» (владелец 24.09.2026, 13:33): полноэкранный чат как
+   в Telegram — слева колонка чатов (личка и группы вместе), справа открытая
+   переписка на всю высоту. Раньше переписка была панелью, выезжающей справа.
+   Пиксельный язык: подложки со срезом 10px, строки списка — срез 5px,
+   пузыри сообщений скруглены (правило языка: «пузыри — как есть»).
+   ============================================================ */
+
+.content:has(#s-chat.msgs.on) {
+  overflow: hidden;
+  scrollbar-gutter: auto;
+}
+#s-chat.msgs.on {
+  display: grid;
+  grid-template-columns: minmax(250px, 310px) minmax(0, 1fr);
+  gap: 12px;
+  height: 100%;
+  min-height: 0;
+}
+
+/* Обе колонки — подложки со срезом 10px, без рамки (форму держит заливка). */
+.msgs-side,
+.msgs-main {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--m-surface);
+  clip-path: var(--px-10);
+}
+
+/* ---------- Колонка чатов ---------- */
+.msgs-side-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 12px 8px;
+}
+.msgs-q {
+  flex: 1;
+  min-width: 0;
+}
+.msgs-q input {
+  min-width: 0;
+}
+.msgs-new {
+  flex: none;
+}
+.msgs-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2px 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.msgs-cap {
+  padding: 10px 8px 4px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--m-fg-subtle);
+}
+.msgs-none-q {
+  padding: 16px 8px;
+}
+.msgs-blank {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 36px 12px;
+  color: var(--m-fg-muted);
+}
+
+/* Строка чата: голова, имя и время, строка состояния и непрочитанное. */
+.cl-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  min-height: 60px;
+  padding: 8px 10px;
+  border: 0;
+  background: none;
+  color: var(--m-fg);
+  text-align: left;
+  cursor: pointer;
+  clip-path: var(--px-5);
+  transition: background-color var(--m-t-fast);
+}
+@media (hover: hover) and (pointer: fine) {
+  .cl-row:hover {
+    background: var(--m-surface-2);
+  }
+}
+.cl-row:active {
+  background: var(--m-inset);
+}
+/* Открытый чат — плотная подложка и полоса акцента слева, как выбранный пункт. */
+.cl-row.on {
+  background: color-mix(in srgb, var(--m-accent) 16%, var(--m-surface-2));
+  box-shadow: inset 3px 0 0 var(--m-accent);
+}
+.cl-ava {
+  position: relative;
+  flex: none;
+  width: 40px;
+  height: 40px;
+}
+.cl-ava > img,
+.cl-ava .room-ava {
+  width: 40px;
+  height: 40px;
+  image-rendering: pixelated;
+}
+.cl-dot {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 11px;
+  height: 11px;
+  background: var(--m-accent);
+  box-shadow: 0 0 0 2px var(--m-surface);
+}
+.cl-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.cl-top,
+.cl-bottom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.cl-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cl-when {
+  flex: none;
+  font-size: 11.5px;
+  color: var(--m-fg-faint);
+  font-variant-numeric: tabular-nums;
+}
+.cl-line {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--m-fg-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cl-row.unread .cl-title {
+  color: var(--m-fg);
+}
+.cl-row.unread .cl-when {
+  color: var(--m-accent);
+}
+.cl-n {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--px-on-accent, #06200e);
+  background: var(--m-accent);
+  clip-path: var(--px-4);
+}
+
+/* Скелет списка вместо «Загружаем…». */
+.cl-skel {
+  cursor: default;
+}
+.cl-skel-ava {
+  width: 40px;
+  height: 40px;
+  flex: none;
+}
+.cl-skel-line {
+  display: block;
+  height: 12px;
+}
+.cl-skel-line.sm {
+  height: 10px;
+}
+
+/* ---------- Открытая переписка ---------- */
+.msgs-main {
+  position: relative;
+}
+.msgs-empty {
+  flex: 1;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  color: var(--m-fg-faint);
+}
+.msgs-empty svg {
+  width: 36px;
+  height: 36px;
+}
+
+.chat-thread {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.chat-thread .chat-head {
+  gap: 12px;
+  min-height: 68px;
+  padding: 12px 16px;
+}
+.chat-thread .chat-head > img {
+  width: 36px;
+  height: 36px;
+}
+.chat-thread .chat-head-body b {
+  flex: none;
+  font-size: 15px;
+}
+.chat-thread .chat-head-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+}
+.chat-thread .chat-head-sub.on {
+  color: var(--m-accent);
+}
+.chat-thread .chat-head-sub .dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  background: currentColor;
+}
+.chat-thread .chat-body {
+  padding: 16px 20px;
+}
+.chat-thread .msg {
+  max-width: min(560px, 72%);
+}
+.chat-thread .msg-reactions {
+  max-width: min(560px, 72%);
+}
+.chat-thread .chat-input {
+  padding: 12px 16px;
+  gap: 8px;
+}
+.chat-thread .chat-input > .input {
+  height: 40px;
+}
+.chat-thread .chat-down {
+  bottom: 84px;
+  right: 22px;
+}
+
+/* Догрузка истории — полоса-скелет, а не текст. */
+.chat-older {
+  align-self: center;
+  width: 160px;
+  height: 22px;
+  flex: none;
+}
+
+/* Профиль друга над перепиской (клик по строке в «Друзьях»). */
+.chat-prof {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 8px 0 14px;
+}
+.chat-prof-body {
+  height: 128px;
+  image-rendering: pixelated;
+}
+.chat-prof-txt {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+}
+.chat-prof-txt b {
+  font-size: 16px;
+}
+.chat-prof-txt span {
+  font-size: 12.5px;
+  color: var(--m-fg-subtle);
+}
+.chat-prof .fr-stat {
+  width: min(420px, 100%);
+}
+
+/* «Позвать играть» в шапке: крупная кнопка с подписью, выбор сервера под ней. */
+.chat-invite-wrap {
+  position: relative;
+  flex: none;
+}
+.chat-invite-wrap .chat-srv-pop {
+  top: calc(100% + 8px);
+  right: 0;
+  bottom: auto;
+  left: auto;
+  width: 340px;
+  z-index: 30;
+}
+.chat-srv-row.mine .chat-srv-addr {
+  color: var(--m-accent);
+}
+.chat-srv-row.make {
+  color: var(--m-accent);
+}
+.chat-srv-row.make svg {
+  color: currentColor;
+}
+
+@media (max-width: 860px) {
+  #s-chat.msgs.on {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+  .chat-invite-btn {
+    padding: 0 12px;
+  }
+}

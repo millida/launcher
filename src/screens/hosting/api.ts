@@ -187,6 +187,8 @@ export interface HostingSubscription {
   paidUntil: string
   periodDays: number
   priceKopecks: number
+  /** Сколько не хватает на балансе на следующее списание (считает бэкенд). */
+  renewShortfallKopecks?: number
 }
 
 export const HOST_PERMISSIONS: [string, string][] = [

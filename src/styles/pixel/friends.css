@@ -1,0 +1,303 @@
+/* Экран «Друзья»: три вкладки (Друзья · Чаты · Заявки), одно поле «Ник друга»,
+   часы как публичный показатель. Форма — пиксельный язык (docs/PIXEL-LANGUAGE.md). */
+
+/* --- Поле «Ник друга» в шапке: фильтр и заявка в одном --- */
+.fr-q {
+  width: 300px;
+  max-width: 38vw;
+}
+.fr-q input {
+  min-width: 0;
+}
+.fr-q-x {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  color: var(--m-fg-faint);
+}
+.fr-q-x:hover {
+  color: var(--m-fg);
+}
+.fr-q-x svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* --- Вкладки и инструмент вкладки в одной строке --- */
+.fr-tabbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.fr-tabs .seg {
+  height: 38px;
+}
+.fr-tabbar-tool {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.fr-sort .seg {
+  height: 30px;
+  padding: 0 11px;
+  font-size: 12.5px;
+}
+.fr-sort.segs {
+  gap: 4px;
+}
+
+/* Счётчик на вкладке: серый — просто число, плотный акцент — ждёт ответа. */
+.fr-tab-n {
+  display: inline-grid;
+  place-items: center;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--m-fg-muted);
+  background: var(--m-inset);
+  border-radius: 5px;
+}
+.fr-tab-n.hot {
+  color: var(--px-on-accent, #06200e);
+  background: var(--m-accent);
+}
+
+/* --- Подписи секций: обычным регистром (приказ 23.09.2026) --- */
+.fr-cap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 30px;
+  padding: 12px 2px 2px;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--m-fg-muted);
+}
+.fr-list > .fr-cap:first-child {
+  padding-top: 0;
+}
+.fr-cap-act {
+  margin-left: auto;
+}
+
+/* --- Строка: вся кликабельна, фокус с клавиатуры видно --- */
+.fr-list .fr-row[role='button'] {
+  cursor: pointer;
+}
+.fr-list .fr-row[role='button']:hover {
+  background: var(--m-surface-2);
+}
+.fr-list .fr-row[role='button']:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--m-accent); --px-ol: var(--m-accent); --px-ol-w: 2px; --px-ft: transparent; --px-fb: transparent; --px-fl: transparent; --px-fr: transparent;
+}
+
+/* Голова с числом непрочитанных — число в углу, а не в кнопке. */
+.fr-ava {
+  position: relative;
+  flex: none;
+  display: grid;
+  width: 40px;
+  height: 40px;
+}
+.fr-ava-n {
+  position: absolute;
+  top: -5px;
+  right: -7px;
+  display: grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  font-size: 10.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--px-on-accent, #06200e);
+  background: var(--m-accent);
+  border-radius: 5px;
+  box-shadow: 0 0 0 2px var(--m-surface);
+}
+.fr-row.off > .fr-ava > img {
+  opacity: 0.55;
+}
+.fr-row.unread .fr-nick {
+  font-weight: 800;
+}
+
+/* Время последнего сообщения. */
+.fr-when {
+  flex: none;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--m-fg-faint);
+}
+.fr-row.unread .fr-when {
+  color: var(--m-accent);
+  font-weight: 700;
+}
+.fr-chat .room-ava {
+  border: 0;
+}
+
+/* Строка «Добавить ник» — первой в выдаче поиска. */
+.fr-add-ic {
+  border: 0;
+}
+.fr-add .fr-status {
+  color: var(--m-fg-faint);
+}
+
+/* --- Пусто: значок, строка, иногда кнопка --- */
+.fr-blank {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 40px 16px 30px;
+  color: var(--m-fg-subtle);
+}
+.fr-blank > svg {
+  width: 28px;
+  height: 28px;
+  color: var(--m-fg-faint);
+}
+.fr-blank b {
+  font-size: 15px;
+  color: var(--m-fg);
+}
+.fr-blank .faint-note {
+  margin: 0;
+}
+.fr-none {
+  padding: 8px 2px;
+}
+
+/* --- Скелет строки вместо «Загружаем…» --- */
+.fr-skel {
+  pointer-events: none;
+}
+.fr-skel-ava,
+.fr-skel-line {
+  display: block;
+  background: var(--m-surface-2);
+  animation: frSkel 1.3s ease-in-out infinite;
+}
+.fr-skel-ava {
+  flex: none;
+  width: 40px;
+  height: 40px;
+}
+.fr-skel-line {
+  height: 12px;
+  max-width: 100%;
+}
+.fr-skel-line.sm {
+  height: 10px;
+  margin-top: 8px;
+}
+@keyframes frSkel {
+  50% {
+    opacity: 0.5;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fr-skel-ava,
+  .fr-skel-line {
+    animation: none;
+  }
+}
+
+/* --- Часы в игре. Число, а не слово: стоит перед действиями строки. --- */
+.fr-hours {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--m-fg-muted);
+  background: var(--m-inset);
+}
+.fr-hours svg {
+  width: 13px;
+  height: 13px;
+  color: var(--m-fg-faint);
+}
+.fr-row.off .fr-hours {
+  color: var(--m-fg-subtle);
+}
+
+/* Место в срезе «Часы». Только цифра — подпись «место» ничего не добавит. */
+.fr-rank {
+  flex: none;
+  width: 20px;
+  margin-right: -4px;
+  font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--m-fg-faint);
+  text-align: right;
+}
+#frList .fr-row:nth-child(1) .fr-rank,
+#frList .fr-row:nth-child(2) .fr-rank,
+#frList .fr-row:nth-child(3) .fr-rank {
+  color: var(--m-accent);
+}
+
+/* Ник в самой игре — тише основного. */
+.fr-gamenick {
+  font-weight: 500;
+  color: var(--m-fg-faint);
+}
+
+/* Пункт меню «Позвонить», пока идёт другой звонок. */
+.fr-menu button:disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+@media (max-width: 780px) {
+  .fr-hours {
+    display: none;
+  }
+}
+@media (max-width: 900px) {
+  .fr-q {
+    width: 220px;
+  }
+}
+
+:root:root :is(.fr-hours, .fr-tab-n, .fr-ava-n) {
+  border-radius: 0;
+  --px-n: 4px; clip-path: var(--px-4);
+}
+:root:root .fr-ava-n {
+  box-shadow: none;
+}
+:root:root :is(.fr-chat .room-ava, .fr-add-ic, .fr-skel-ava, .fr-q-x) {
+  border-radius: 0;
+  --px-n: 5px; clip-path: var(--px-5);
+}
+:root:root .fr-list .fr-row[role='button']:focus-visible {
+  box-shadow: var(--px-plate), inset 0 0 0 2px var(--m-accent); --px-ol: var(--m-accent); --px-ol-w: 2px; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+
+/* Часы — заметным золотом (правка владельца 23.09.2026): плотная плашка
+   цвета легендарки с тёмным текстом; у тех, кто не в сети, — приглушённая. */
+.fr-hours {
+  font-size: 13px; font-weight: 900; color: #2a1702;
+  background: var(--m-rarity-legendary, #ffc23a);
+  clip-path: var(--px-4);
+}
+.fr-hours svg { color: #2a1702; }
+.fr-row.off .fr-hours { color: #2a1702; background: color-mix(in srgb, var(--m-rarity-legendary, #ffc23a) 55%, var(--m-surface)); }

@@ -1,120 +1,98 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { Head } from '../components/Head'
 import { PROFILE_URL, api, openExt } from '../lib/api'
-import { apiErrorText } from '../lib/apiError'
 import { copyText } from '../lib/clipboard'
+import { apiErrorText } from '../lib/apiError'
 import { logoutToLogin } from '../lib/session'
 import { showToast } from '../state/ui'
 import { useHasMillida } from '../state/auth'
 import { refreshGameNick, useGameNick } from '../state/gameNick'
-import { loadFriends, openChat, openFriendProfile, openRoomChat, useFriends } from '../state/friends'
-import { callFriend, callSupported, useCall } from '../state/call'
-import { loadRooms, nickInRooms, openRoomCreate, openRoomManage, useRooms } from '../state/rooms'
-import { RoomCallButton } from '../components/RoomCall'
-import { rememberServerName } from '../state/playStats'
+import { loadFriends, openFriendProfile, unreadTotal, useFriends } from '../state/friends'
+import { loadFriendHours, useFriendHours } from '../state/friendHours'
+import { loadRooms, roomsUnreadTotal, useRooms } from '../state/rooms'
+import { openMessages } from '../state/chatScreen'
+import { useCall } from '../state/call'
 import { uiConfirm } from '../state/confirm'
-import { quickJoin } from '../lib/joinServer'
-import type { Friend, FoundUser } from '../state/friends'
-
-const TECHNICAL_NICK = /^(skins|smx|guest|user)_\d{6,}$/i
-const isTechnicalNick = (nick?: string) => TECHNICAL_NICK.test((nick || '').trim())
-
-const friendServer = (f: Friend): string | undefined =>
-  f.serverIp || (f as { server?: string; serverAddress?: string }).server || (f as { serverAddress?: string }).serverAddress
-
-async function sendRequest(opts: Record<string, string>, clear: () => void) {
-  try {
-    const r = await api('/friends/request', { method: 'POST', body: JSON.stringify(opts) })
-    showToast(r.status === 'accepted' || r.status === 'already_friends' ? 'Теперь в друзьях' : 'Заявка отправлена')
-  } catch (e) {
-    // Сервер объясняет отказ сам: нет такого ника, человек уже в друзьях, он
-    // закрыл заявки. Всё это раньше показывалось как «войди в аккаунт» и
-    // отправляло игрока чинить вход, с которым всё было в порядке.
-    showToast(apiErrorText(e, 'Не удалось отправить заявку'), 'error')
-    return
-  } finally {
-    void loadFriends()
-  }
-  clear()
-}
+import { FriendRow } from '../components/friends/FriendRow'
+import { AddRows, exactOf, isTechnicalNick, requestFor, sendRequest, useNickLookup } from '../components/friends/FriendSearch'
+import { FriendsEmpty } from '../components/friends/FriendsEmpty'
+import { unreadText } from '../components/friends/ChatRow'
+import { PlayTogether } from '../components/friends/PlayTogether'
+import { RequestsTab } from '../components/friends/RequestsTab'
+import {
+  addCandidate,
+  loadTab,
+  matchFriend,
+  matchRequest,
+  norm,
+  saveTab,
+} from '../components/friends/friendsView'
+import type { FriendsTab } from '../components/friends/friendsView'
+import { FRIENDS_TAB_EVENT } from '../components/friends/friendsView'
+import type { Friend } from '../state/friends'
+import '../styles/pixel/friends.css'
 
 interface Blocked {
   blockedId: string
   user?: { id: string; nickname?: string; displayName?: string; avatarUrl?: string | null } | null
 }
 
-/**
- * Группы. Карточка отвечает на два вопроса сразу: есть ли непрочитанное и идёт
- * ли там сейчас разговор — второе видно по головам участников в голосе, поэтому
- * зайти к своим можно одним нажатием, не открывая переписку.
- */
-function RoomsSection() {
-  const rooms = useRooms((s) => s.rooms)
-  const callStatus = useCall((s) => s.status)
-  const callRoom = useCall((s) => s.roomId)
+/// «Не в сети» длиннее этого — свёрнут: те, кто сейчас не ответит, не должны
+/// выталкивать играющих за экран.
+const OFFLINE_FOLD = 8
+
+function Skeleton() {
   return (
-    <div className="stack rooms-stack">
-      <div className="side-cap rooms-cap">{rooms.length ? 'Группы — ' + rooms.length : 'Группы'}</div>
-      {rooms.length ? (
-        rooms.map((r) => {
-          const inside = r.voice || []
-          const here = callRoom === r.id && callStatus !== 'idle'
-          return (
-            <div
-              className={'fr-row room-row' + (r.unread ? ' unread' : '')}
-              key={r.id}
-              onClick={(e) => {
-                if ((e.target as HTMLElement).closest('button')) return
-                void openRoomChat(r.id, r.title)
-              }}
-            >
-              <span className="room-ava">
-                <Icon id="i-users" />
-              </span>
-              <span className="fr-body">
-                <span className="fr-nick">{r.title}</span>
-                <span className={'fr-status' + (inside.length ? ' on' : '')}>
-                  {inside.length ? <span className="dot"></span> : null}
-                  {inside.length
-                    ? 'В разговоре: ' + inside.map((v) => nickInRooms(v.userId) || '…').join(', ')
-                    : r.members.map((m) => m.nickname).join(', ')}
-                </span>
-              </span>
-              {callSupported() ? (
-                <RoomCallButton room={r} here={here} busy={callStatus !== 'idle'} row />
-              ) : null}
-              <button className="btn sm secondary fr-msg" onClick={() => void openRoomChat(r.id, r.title)}>
-                <Icon id="i-msg" />
-                Открыть
-                {r.unread ? <span className="fr-unread">{r.unread > 9 ? '9+' : r.unread}</span> : null}
-              </button>
-              <button className="tb-btn" title="Участники" onClick={() => openRoomManage(r.id)}>
-                <Icon id="i-dots" />
-              </button>
-            </div>
-          )
-        })
-      ) : (
-        <p className="faint-note">
-          Группа — общий чат и общий разговор для своих. Позови в неё друзей: голос держится сам, заходить можно
-          в любой момент.
-        </p>
-      )}
-    </div>
+    <>
+      {[0, 1, 2, 3].map((i) => (
+        <div className="fr-row fr-skel" key={i}>
+          <span className="fr-skel-ava" />
+          <span className="fr-body">
+            <span className="fr-skel-line" style={{ width: 120 + i * 24 }} />
+            <span className="fr-skel-line sm" style={{ width: 80 + i * 18 }} />
+          </span>
+        </div>
+      ))}
+    </>
   )
 }
 
 export function Friends({ on }: { on: boolean }) {
-  const { friends, reqIn, reqOut, found, set } = useFriends()
+  const friends = useFriends((s) => s.friends)
+  const reqIn = useFriends((s) => s.reqIn)
+  const reqOut = useFriends((s) => s.reqOut)
+  const rooms = useRooms((s) => s.rooms)
   const millida = useHasMillida()
+  const [tab, setTabState] = useState<FriendsTab>(loadTab)
   const [q, setQ] = useState('')
-  const [filter, setFilter] = useState('')
-  const [addOpen, setAddOpen] = useState(false)
+  const [view, setView] = useState<'now' | 'hours'>('now')
+  const [showOffline, setShowOffline] = useState(false)
   const [menuFor, setMenuFor] = useState<string | null>(null)
-  const [searchFailed, setSearchFailed] = useState('')
   const [blocked, setBlocked] = useState<Blocked[]>([])
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const [ready, setReady] = useState(false)
+  const hoursMap = useFriendHours((s) => s.sec)
+  const callBusy = useCall((s) => s.status) !== 'idle'
+  const findRef = useRef<HTMLInputElement>(null)
+
+  const setTab = (t: FriendsTab) => {
+    setTabState(t)
+    saveTab(t)
+    setMenuFor(null)
+  }
+
+  // Уведомление о заявке зовёт сразу на «Заявки».
+  useEffect(() => {
+    const on = (e: Event) => {
+      const t = (e as CustomEvent).detail as FriendsTab
+      if (t) {
+        setTabState(t)
+        setMenuFor(null)
+      }
+    }
+    window.addEventListener(FRIENDS_TAB_EVENT, on)
+    return () => window.removeEventListener(FRIENDS_TAB_EVENT, on)
+  }, [])
 
   const loadBlocked = async () => {
     try {
@@ -126,102 +104,70 @@ export function Friends({ on }: { on: boolean }) {
   }
   useEffect(() => {
     if (!on || !millida) return
-    void loadFriends()
-    void loadRooms()
+    void Promise.all([loadFriends(), loadRooms()]).finally(() => setReady(true))
     void loadBlocked()
     void refreshGameNick()
   }, [on, millida])
 
-  const unblock = (b: Blocked) => {
-    const nick = b.user?.nickname || b.user?.displayName || ''
-    api('/core/blocks/' + encodeURIComponent(b.blockedId), { method: 'DELETE' })
-      .catch(() => {})
-      .finally(() => {
-        showToast(nick + ' разблокирован')
-        void loadBlocked()
-      })
-  }
+  // Часы приходят по одному из профиля: список их не отдаёт (см. state/friendHours).
+  useEffect(() => {
+    if (!on || !millida || !friends.length) return
+    loadFriendHours(friends.map((f) => f.userId))
+  }, [on, millida, friends])
 
   useEffect(() => {
     if (!menuFor) return
     const close = () => setMenuFor(null)
+    // Меню висит в корне документа на месте кнопки: прокрутка увела бы строку
+    // из-под него.
     document.addEventListener('click', close)
-    return () => document.removeEventListener('click', close)
+    window.addEventListener('scroll', close, true)
+    window.addEventListener('resize', close)
+    return () => {
+      document.removeEventListener('click', close)
+      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
+    }
   }, [menuFor])
 
-  useEffect(() => {
-    if (!addOpen) return
-    const close = (e: MouseEvent) => {
-      if ((e.target as HTMLElement).closest('.fr-add-wrap')) return
-      setAddOpen(false)
-      set({ found: null })
-    }
-    document.addEventListener('click', close)
-    return () => document.removeEventListener('click', close)
-  }, [addOpen, set])
+  // Тост успеха — только после ответа службы: на сбое игрок видел
+  // «заблокирован», а человек оставался в друзьях.
+  const unblock = (b: Blocked) => {
+    const nick = b.user?.nickname || b.user?.displayName || ''
+    api('/core/blocks/' + encodeURIComponent(b.blockedId), { method: 'DELETE' })
+      .then(() => showToast(nick + ' разблокирован'))
+      .catch((e) => showToast(apiErrorText(e, 'Не удалось разблокировать'), 'error'))
+      .finally(() => void loadBlocked())
+  }
 
   const removeFriend = async (f: Friend) => {
     const nick = f.nickname || ''
     setMenuFor(null)
     if (!(await uiConfirm('Убрать ' + nick + ' из друзей?', { confirmLabel: 'Убрать' }))) return
     api('/friends/remove', { method: 'POST', body: JSON.stringify({ userId: f.userId }) })
-      .catch(() => {})
-      .finally(() => {
-        showToast(nick + ' удалён из друзей', 'ok', 'delete')
-        void loadFriends()
-      })
+      .then(() => showToast(nick + ' удалён из друзей', 'ok', 'delete'))
+      .catch((e) => showToast(apiErrorText(e, 'Не удалось убрать из друзей'), 'error'))
+      .finally(() => void loadFriends())
   }
   const blockFriend = async (f: Friend) => {
     const nick = f.nickname || ''
     setMenuFor(null)
-    if (!(await uiConfirm('Заблокировать ' + nick + '? Он пропадёт из друзей и не сможет писать и добавляться.', { confirmLabel: 'Заблокировать' })))
-      return
-    api('/friends/block', { method: 'POST', body: JSON.stringify({ userId: f.userId }) })
-      .catch(() => {})
-      .finally(() => {
-        showToast(nick + ' заблокирован и убран из друзей')
-        void loadFriends()
-        void loadBlocked()
-      })
-  }
-
-  const clear = () => {
-    setQ('')
-    set({ found: null })
-    setAddOpen(false)
-  }
-
-  const onSearch = (v: string) => {
-    setQ(v)
-    clearTimeout(timer.current)
-    setSearchFailed('')
-    const val = v.trim()
-    if (val.length < 2) {
-      set({ found: null })
+    const ok = await uiConfirm('Заблокировать ' + nick + '? Он пропадёт из друзей и не сможет писать.', {
+      confirmLabel: 'Заблокировать',
+    })
+    if (!ok) return
+    try {
+      await api('/friends/block', { method: 'POST', body: JSON.stringify({ userId: f.userId }) })
+    } catch (e) {
+      showToast(apiErrorText(e, 'Не удалось заблокировать'), 'error')
       return
     }
-    timer.current = setTimeout(async () => {
-      let results: FoundUser[] = []
-      try {
-        results = (await api('/friends/search?q=' + encodeURIComponent(val))).results || []
-      } catch (e) {
-        // Пустой список — это ответ «никого нет», а не «спросить не вышло»:
-        // молчаливая подмена одного другим выглядела как отсутствующий игрок.
-        setSearchFailed(apiErrorText(e, 'Поиск недоступен'))
-        set({ found: [] })
-        return
-      }
-      setSearchFailed('')
-      set({ found: results.filter((r) => !isTechnicalNick(r.nickname)).slice(0, 6) })
-    }, 350)
-  }
-
-  const joinFriend = (f: Friend) => {
-    const addr = friendServer(f)
-    if (!addr) return
-    const name = f.serverName || 'Сервер ' + (f.nickname || 'друга')
-    rememberServerName(addr, name)
-    void quickJoin(addr, name).catch(() => {})
+    // Служба пока только записывает блокировку, дружба остаётся (аудит F1):
+    // убираем из друзей сами, чтобы обещание в вопросе было правдой.
+    await api('/friends/remove', { method: 'POST', body: JSON.stringify({ userId: f.userId }) }).catch(() => {})
+    showToast(nick + ' заблокирован и убран из друзей')
+    void loadFriends()
+    void loadBlocked()
   }
 
   const gated = !millida
@@ -231,362 +177,264 @@ export function Friends({ on }: { on: boolean }) {
     const ok = await copyText(myNick)
     showToast(ok ? 'Ник скопирован: ' + myNick : 'Не удалось скопировать ник', ok ? 'ok' : 'error')
   }
-  const callBusy = useCall((s) => s.status) !== 'idle'
-  const needle = filter.trim().toLowerCase()
-  const visible = needle
-    ? friends.filter((f) => (f.nickname || '').toLowerCase().includes(needle))
-    : friends
+
+  // ── Поиск: одно поле фильтрует вкладку и превращается в заявку ─────────────
+  const needle = norm(q)
+  const visible = useMemo(() => friends.filter((f) => matchFriend(f, needle)), [friends, needle])
+  const inShown = reqIn.filter((r) => matchRequest(r, needle))
+  const outShown = reqOut.filter((r) => matchRequest(r, needle))
+  const candidate = gated ? '' : addCandidate(q, friends, reqOut, myNick)
+  const found = useNickLookup(candidate)
+  const clearQ = () => setQ('')
+
   const playing = visible.filter((f) => f.playing)
   const online = visible.filter((f) => f.online && !f.playing)
   const offline = visible.filter((f) => !f.online)
+  const offlineFolded = !needle && !showOffline && offline.length > OFFLINE_FOLD
 
-  const row = (f: Friend) => (
-    <div
+  /// Срез «кто больше играет»: те, чьи часы известны, по убыванию; остальные —
+  /// следом, без выдуманного нуля.
+  const byHours = useMemo(() => {
+    const val = (f: Friend) => hoursMap[f.userId] ?? -1
+    return visible.slice().sort((a, b) => val(b) - val(a))
+  }, [visible, hoursMap])
+
+  /// Что сделает Enter: первое, что стоит в списке вкладки. Строка «Добавить»
+  /// первая, только когда совпадений нет — иначе «Kir» + Enter отправлял бы
+  /// заявку незнакомцу вместо того, чтобы открыть Kirpich.
+  const tabHits = tab === 'friends' ? visible.length : inShown.length + outShown.length
+  const addFirst = !!candidate && (!needle || tabHits === 0)
+  const addRows = candidate ? <AddRows nick={candidate} found={found} onSent={clearQ} lead={addFirst} /> : null
+  const enter = () => {
+    if (!needle) return
+    if (tab === 'friends' && visible.length) {
+      const first = view === 'hours' ? byHours[0] : playing[0] || online[0] || offline[0]
+      void openFriendProfile(first.userId, first.nickname || '')
+      return
+    }
+    // На «Заявках» у строки два ответа (принять/отклонить) — Enter не выбирает за человека.
+    if (candidate && addFirst) void sendRequest(requestFor(candidate, exactOf(candidate, found)), clearQ)
+  }
+
+
+  const row = (f: Friend, rank?: number) => (
+    <FriendRow
       key={f.userId}
-      className={'fr-row' + (f.online ? '' : ' off') + (f.unread ? ' unread' : '')}
-      data-uid={f.userId}
-      data-nick={f.nickname || ''}
-      onClick={(e) => {
-        if ((e.target as HTMLElement).closest('button')) return
-        void openFriendProfile(f.userId, f.nickname || '')
-      }}
-    >
-      <Head nick={f.nickname} size={40} />
-      <span className="fr-body">
-        <span className="fr-nick">{f.nickname || ''}</span>
-        <span className={'fr-status' + (f.online ? ' on' : '') + (f.place === 'web' ? ' web' : '')}>
-          {f.online ? <span className="dot"></span> : null}
-          {f.text || ''}
-          {f.playing && f.build ? <span className="fr-build">{f.build}</span> : null}
-        </span>
-      </span>
-      {f.playing ? (
-        friendServer(f) ? (
-          <button className="btn sm secondary fr-join" onClick={() => joinFriend(f)}>
-            <Icon id="i-login" />
-            Зайти к нему
-          </button>
-        ) : (
-          <span className="pill acc fr-playing" title="Друг в игре">
-            <span className="dot"></span>В игре
-          </span>
-        )
-      ) : null}
-      {callSupported() ? (
-        <button
-          className="btn sm secondary call-start"
-          title={callBusy ? 'Уже идёт звонок' : 'Позвонить'}
-          disabled={callBusy}
-          onClick={() => void callFriend(f.userId, f.nickname || '')}
-        >
-          <Icon id="i-phone" />
-        </button>
-      ) : null}
-      <button
-        className="btn sm secondary fr-msg"
-        onClick={() => void openChat(f.userId, f.nickname || '')}
-      >
-        <Icon id="i-msg" />
-        Написать
-        {f.unread ? <span className="fr-unread">{f.unread > 9 ? '9+' : f.unread}</span> : null}
-      </button>
-      <span className="fr-more-wrap">
-        <button
-          className="tb-btn fr-more"
-          title="Ещё"
-          style={{ display: 'grid' }}
-          onClick={(e) => {
-            e.stopPropagation()
-            setMenuFor(menuFor === f.userId ? null : f.userId)
-          }}
-        >
-          <Icon id="i-dots" />
-        </button>
-        {menuFor === f.userId ? (
-          <div className="fr-menu" onClick={(e) => e.stopPropagation()}>
-            <button
-              onClick={() => {
-                setMenuFor(null)
-                void openFriendProfile(f.userId, f.nickname || '')
-              }}
-            >
-              <Icon id="i-user" /> Профиль
-            </button>
-            <button
-              onClick={() => {
-                setMenuFor(null)
-                void openChat(f.userId, f.nickname || '')
-              }}
-            >
-              <Icon id="i-msg" /> Написать
-            </button>
-            <button className="danger" onClick={() => removeFriend(f)}>
-              <Icon id="i-trash" /> Убрать из друзей
-            </button>
-            <button className="danger" onClick={() => blockFriend(f)}>
-              <Icon id="i-ban" /> Заблокировать
-            </button>
-          </div>
-        ) : null}
-      </span>
-    </div>
+      f={f}
+      rank={rank}
+      hours={hoursMap[f.userId] ?? null}
+      callBusy={callBusy}
+      menuOpen={menuFor === f.userId}
+      onMenu={() => setMenuFor(menuFor === f.userId ? null : f.userId)}
+      onRemove={() => void removeFriend(f)}
+      onBlock={() => void blockFriend(f)}
+    />
   )
 
-  const section = (title: string, list: Friend[], top?: boolean) =>
+  const section = (title: string, list: Friend[]) =>
     list.length ? (
       <>
-        <div className="side-cap" style={{ padding: (top ? '0' : '12px') + ' 2px 2px' }}>
-          {title + ' — ' + list.length}
-        </div>
-        {list.map(row)}
+        <div className="fr-cap">{title + ' · ' + list.length}</div>
+        {list.map((f) => row(f))}
       </>
     ) : null
+
+  const chatUnread = unreadTotal(friends) + roomsUnreadTotal(rooms)
+  const loading = !ready && !friends.length && !rooms.length
+
+  const friendsTab = () => {
+    if (loading) return <Skeleton />
+    if (!friends.length) return needle ? null : <FriendsEmpty myNick={myNick} onFind={() => findRef.current?.focus()} />
+    if (!visible.length) return needle && !candidate ? <p className="faint-note fr-none">Никого не нашли</p> : null
+    if (view === 'hours') return byHours.map((f, i) => row(f, i + 1))
+    return (
+      <>
+        {section('Играют сейчас', playing)}
+        {section('В сети', online)}
+        {offline.length ? (
+          <>
+            <div className="fr-cap">
+              {'Не в сети · ' + offline.length}
+              {offlineFolded ? (
+                <button className="btn sm ghost fr-cap-act" data-track="friends_show_offline" onClick={() => setShowOffline(true)}>
+                  <Icon id="i-chev-d" />
+                  Показать всех
+                </button>
+              ) : null}
+            </div>
+            {offlineFolded ? null : offline.map((f) => row(f))}
+          </>
+        ) : null}
+      </>
+    )
+  }
 
   return (
     <section className={'screen' + (on ? ' on' : '')} id="s-friends">
       <div className="page-head">
         <h1>Друзья</h1>
-        <div className="right fr-add-wrap">
-          {!gated && friends.length > 4 ? (
-            <div className="input sm fr-filter">
+        {!gated ? (
+          <div className="right">
+            <div className="input sm fr-q">
               <Icon id="i-search" />
-              <input placeholder="Найти в списке…" value={filter} onChange={(e) => setFilter(e.target.value)} />
+              <input
+                ref={findRef}
+                id="frQ"
+                placeholder="Ник друга"
+                value={q}
+                spellCheck={false}
+                autoComplete="off"
+                onChange={(e) => setQ(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') enter()
+                  else if (e.key === 'Escape') {
+                    e.stopPropagation()
+                    clearQ()
+                  }
+                }}
+              />
+              {q ? (
+                <button className="fr-q-x" aria-label="Очистить" data-track="search_clear" onClick={clearQ}>
+                  <Icon id="i-x" />
+                </button>
+              ) : null}
             </div>
-          ) : null}
-          {!gated ? (
-            <button className="btn sm secondary" onClick={openRoomCreate}>
-              <Icon id="i-users" />
-              Создать группу
-            </button>
-          ) : null}
-          <button
-            className="btn sm primary"
-            id="frAddBtn"
-            onClick={(e) => {
-              e.stopPropagation()
-              setAddOpen((v) => !v)
-              if (addOpen) set({ found: null })
-            }}
-          >
-            <Icon id="i-plus" />
-            Добавить друга
-          </button>
+          </div>
+        ) : null}
+      </div>
 
-          {addOpen ? (
-            <div className="fr-add-pop" id="frFound" onClick={(e) => e.stopPropagation()}>
-              <div className="fr-add-pop-cap">
-                <Icon id="i-user" /> Добавить друга по нику Millida
-              </div>
-              <div className="input sm" style={{ width: '100%', marginBottom: '10px' }}>
-                <Icon id="i-search" />
-                <input
-                  id="frAdd"
-                  autoFocus
-                  placeholder="Ник в Millida…"
-                  value={q}
-                  onChange={(e) => onSearch(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key !== 'Enter') return
-                    const first = found && found[0]
-                    if (first && !first.isFriend && !first.pending)
-                      void sendRequest(first.userId ? { targetId: first.userId } : { nickname: first.nickname || '' }, clear)
-                    else if (q.trim()) void sendRequest({ nickname: q.trim() }, clear)
-                  }}
-                />
-              </div>
-              {found === null ? (
-                <p className="faint-note" style={{ padding: '4px 4px 2px' }}>
-                  Введи ник друга в Millida — минимум 2 символа.
-                </p>
-              ) : found.length ? (
-                found.map((r, i) => (
-                  <div className="fr-row compact" key={i}>
-                    <Head nick={r.nickname} size={40} />
-                    <span className="fr-body">
-                      <span className="fr-nick" title={r.nickname || ''}>
-                        {r.nickname || ''}
+      {gated ? (
+        <div className="card gate-card">
+          <div className="gate-ic">
+            <Icon id="i-users" />
+          </div>
+          <div className="gate-title">Играй вместе с друзьями</div>
+          {/* Что даёт вход — значками, а не абзацем. */}
+          <div className="fr-gate-feats">
+            <span>
+              <Icon id="i-play" />
+              Кто играет
+            </span>
+            <span>
+              <Icon id="i-login" />
+              Зайти к другу
+            </span>
+            <span>
+              <Icon id="i-msg" />
+              Чат
+            </span>
+            <span>
+              <Icon id="i-phone" />
+              Звонки
+            </span>
+          </div>
+          <button className="btn md primary gate-btn" id="frLoginCta" data-track="login" onClick={() => logoutToLogin()}>
+            <Icon id="i-login" />
+            Войти
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="fr-tabbar">
+            <div className="segs fr-tabs" role="tablist">
+              <button
+                className={'seg' + (tab === 'friends' ? ' on' : '')}
+                role="tab"
+                aria-selected={tab === 'friends'}
+                data-track="friends_tab_friends"
+                onClick={() => setTab('friends')}
+              >
+                <Icon id="i-users" />
+                Друзья
+                {friends.length ? <span className="fr-tab-n">{friends.length}</span> : null}
+              </button>
+              <button
+                className={'seg' + (tab === 'requests' ? ' on' : '')}
+                role="tab"
+                aria-selected={tab === 'requests'}
+                data-track="friends_tab_requests"
+                onClick={() => setTab('requests')}
+              >
+                <Icon id="i-inbox" />
+                Заявки
+                {reqIn.length ? <span className="fr-tab-n hot">{unreadText(reqIn.length)}</span> : null}
+              </button>
+            </div>
+            <div className="fr-tabbar-tool">
+              {tab === 'friends' && friends.length > 1 ? (
+                <div className="segs fr-sort">
+                  <button className={'seg' + (view === 'now' ? ' on' : '')} data-track="friends_sort_now" onClick={() => setView('now')}>
+                    Сейчас
+                  </button>
+                  <button className={'seg' + (view === 'hours' ? ' on' : '')} data-track="friends_sort_hours" onClick={() => setView('hours')}>
+                    <Icon id="i-clock" />
+                    Часы
+                  </button>
+                </div>
+              ) : null}
+              {/* Переписки и группы — свой экран, как в Telegram (владелец 24.09.2026). */}
+              <button className="btn sm secondary fr-to-chat" data-track="nav_messages" onClick={openMessages}>
+                <Icon id="i-msg" />
+                Сообщения
+                {chatUnread ? <span className="fr-tab-n hot">{unreadText(chatUnread)}</span> : null}
+              </button>
+            </div>
+          </div>
+
+          <div className="stack fr-list" id="frList" data-private data-section="friends_list">
+            {addFirst ? addRows : null}
+            {tab === 'friends' && !needle && friends.length ? <PlayTogether /> : null}
+            {tab === 'friends' ? friendsTab() : <RequestsTab incoming={inShown} outgoing={outShown} />}
+            {!addFirst && needle ? addRows : null}
+
+            {tab === 'friends' && !needle && blocked.length ? (
+              <>
+                <div className="fr-cap">{'Заблокированные · ' + blocked.length}</div>
+                {blocked.map((b) => {
+                  const nick = b.user?.nickname || b.user?.displayName || 'Пользователь'
+                  return (
+                    <div className="fr-row off" key={b.blockedId}>
+                      <Head nick={b.user?.nickname} size={40} style={{ filter: 'grayscale(1)' }} />
+                      <span className="fr-body">
+                        <span className="fr-nick">{nick}</span>
+                        <span className="fr-status">
+                          <Icon id="i-ban" /> Заблокирован
+                        </span>
                       </span>
-                      <span className="fr-status">
-                        {r.isFriend ? 'Уже в друзьях' : r.pending ? 'Заявка отправлена' : r.text || 'Игрок Millida'}
-                      </span>
-                    </span>
-                    {r.isFriend || r.pending ? (
-                      <span className="fr-done">
-                        <Icon id="i-check" />
-                      </span>
-                    ) : (
-                      <button
-                        className="btn sm primary fr-send"
-                        data-uid={r.userId}
-                        data-nick={r.nickname || ''}
-                        title={'Добавить ' + (r.nickname || '')}
-                        onClick={() =>
-                          void sendRequest(r.userId ? { targetId: r.userId } : { nickname: r.nickname || '' }, clear)
-                        }
-                      >
-                        <Icon id="i-plus" />
-                        <span>Добавить</span>
+                      <button className="btn sm secondary" data-track="unblock" onClick={() => unblock(b)}>
+                        <Icon id="i-check" /> Разблокировать
                       </button>
-                    )}
-                  </div>
-                ))
-              ) : (
-                <p className="faint-note" style={{ padding: '6px 4px' }}>
-                  {searchFailed || 'Никого не нашли по нику «' + q.trim() + '»'}
+                    </div>
+                  )
+                })}
+              </>
+            ) : null}
+          </div>
+
+          {tab === 'friends' && friends.length && !needle ? (
+            <div className="fr-nick-note">
+              {myNick ? (
+                <p className="faint-note">
+                  Твой ник для друзей: <b>{myNick}</b>
                 </p>
+              ) : (
+                <p className="faint-note">Ник служебный — друзья тебя не найдут</p>
+              )}
+              {myNick ? (
+                <button className="btn sm ghost" data-track="copy_my_nick" onClick={() => void copyNick()}>
+                  <Icon id="i-copy" />
+                  Скопировать
+                </button>
+              ) : (
+                <button className="btn sm ghost" data-track="set_nick" onClick={() => openExt(PROFILE_URL)}>
+                  <Icon id="i-user" />
+                  Задать ник
+                </button>
               )}
             </div>
           ) : null}
-        </div>
-      </div>
-      <div className="stack" id="frReq">
-        {reqIn.length || reqOut.length ? (
-          <>
-            <div className="side-cap" style={{ padding: '0 2px 2px' }}>
-              Заявки
-            </div>
-            {reqIn.map((r) => (
-              <div className="fr-row" key={r.id}>
-                <Head nick={r.nickname} size={40} />
-                <span className="fr-body">
-                  <span className="fr-nick">{r.nickname || ''}</span>
-                  <span className="fr-status">Хочет добавить тебя в друзья</span>
-                </span>
-                <button
-                  className="btn sm primary fr-acc"
-                  data-id={r.id}
-                  onClick={() =>
-                    api('/friends/accept', { method: 'POST', body: JSON.stringify({ id: r.id }) })
-                      .catch(() => {})
-                      .finally(() => {
-                        showToast('Теперь в друзьях')
-                        void loadFriends()
-                      })
-                  }
-                >
-                  <Icon id="i-check" />
-                  Принять
-                </button>
-                <button
-                  className="btn sm secondary fr-dec"
-                  data-id={r.id}
-                  onClick={() =>
-                    api('/friends/decline', { method: 'POST', body: JSON.stringify({ id: r.id }) })
-                      .catch(() => {})
-                      .finally(() => void loadFriends())
-                  }
-                >
-                  <Icon id="i-x" />
-                  Отклонить
-                </button>
-              </div>
-            ))}
-            {reqOut.map((r) => (
-              <div className="fr-row off" key={r.id}>
-                <Head nick={r.nickname} size={40} />
-                <span className="fr-body">
-                  <span className="fr-nick">{r.nickname || ''}</span>
-                  <span className="fr-status">Заявка отправлена</span>
-                </span>
-                <button
-                  className="btn sm secondary fr-cancel"
-                  data-id={r.id}
-                  onClick={() =>
-                    api('/friends/cancel', { method: 'POST', body: JSON.stringify({ id: r.id }) })
-                      .catch(() => {})
-                      .finally(() => void loadFriends())
-                  }
-                >
-                  <Icon id="i-x" />
-                  Отменить
-                </button>
-              </div>
-            ))}
-          </>
-        ) : null}
-      </div>
-      {!gated ? <RoomsSection /> : null}
-      <div className="stack" id="frList" style={{ marginTop: '10px' }}>
-        {gated ? (
-          <div className="card gate-card">
-            <div className="gate-ic">
-              <Icon id="i-users" />
-            </div>
-            <div className="gate-title">Друзья — в аккаунте Millida</div>
-            <p className="faint-note gate-text">
-              Войди в Millida — сможешь добавлять друзей по нику, видеть кто в сети и играет, и переписываться прямо в
-              лаунчере.
-            </p>
-            <button className="btn md primary gate-btn" id="frLoginCta" onClick={() => logoutToLogin()}>
-              Войти в Millida
-            </button>
-          </div>
-        ) : friends.length ? (
-          visible.length ? (
-            <>
-              {section('Играют сейчас', playing, true)}
-              {section('В сети', online, !playing.length)}
-              {section('Не в сети', offline, !playing.length && !online.length)}
-            </>
-          ) : (
-            <p className="faint-note">{'Никого не нашли по «' + filter.trim() + '»'}</p>
-          )
-        ) : (
-          <p className="faint-note">Пока никого. Нажми «Добавить друга» и найди его по нику Millida.</p>
-        )}
-
-        {!gated && blocked.length ? (
-          <>
-            <div className="side-cap" style={{ padding: '14px 2px 2px' }}>
-              {'Заблокированные — ' + blocked.length}
-            </div>
-            {blocked.map((b) => {
-              const nick = b.user?.nickname || b.user?.displayName || 'Пользователь'
-              return (
-                <div className="fr-row off" key={b.blockedId}>
-                  <Head nick={b.user?.nickname} size={40} style={{ filter: 'grayscale(1)' }} />
-                  <span className="fr-body">
-                    <span className="fr-nick">{nick}</span>
-                    <span className="fr-status">
-                      <Icon id="i-ban" /> Заблокирован
-                    </span>
-                  </span>
-                  <button className="btn sm secondary" onClick={() => unblock(b)}>
-                    <Icon id="i-check" /> Разблокировать
-                  </button>
-                </div>
-              )
-            })}
-          </>
-        ) : null}
-      </div>
-
-      {!gated ? (
-        <div className="fr-nick-note">
-          {myNick ? (
-            <p className="faint-note">
-              Тебя находят по нику Millida — <b>{myNick}</b>. Игровой аккаунт не важен: с лицензией или без, пока
-              лаунчер открыт, друзья видят тебя в сети, а в игре — на каком ты сервере.
-            </p>
-          ) : (
-            <p className="faint-note">
-              Чтобы друзья нашли тебя, задай ник Millida в профиле на сайте — сейчас у тебя служебный. Игровой аккаунт
-              не важен: с лицензией или без, пока лаунчер открыт, друзья видят тебя в сети.
-            </p>
-          )}
-          {myNick ? (
-            <button className="btn sm ghost" onClick={() => void copyNick()}>
-              <Icon id="i-copy" />
-              Скопировать ник
-            </button>
-          ) : (
-            <button className="btn sm ghost" onClick={() => openExt(PROFILE_URL)}>
-              <Icon id="i-user" />
-              Задать ник в профиле
-            </button>
-          )}
-        </div>
-      ) : null}
+        </>
+      )}
     </section>
   )
 }

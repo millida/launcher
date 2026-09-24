@@ -2,12 +2,17 @@ use crate::engine::*;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
+/// Symlinks are skipped: an export follows every file it lists, and a link in
+/// a build or a world (config -> ~/.ssh) would pack the target into an archive
+/// the player then hands to others.
 pub(crate) fn walk(dir: &Path) -> Vec<PathBuf> {
     let mut out = vec![];
     if let Ok(rd) = std::fs::read_dir(dir) {
         for e in rd.flatten() {
+            let Ok(ft) = e.file_type() else { continue };
+            if ft.is_symlink() { continue; }
             let p = e.path();
-            if p.is_dir() { out.extend(walk(&p)); } else { out.push(p); }
+            if ft.is_dir() { out.extend(walk(&p)); } else if ft.is_file() { out.push(p); }
         }
     }
     out

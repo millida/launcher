@@ -1,0 +1,658 @@
+/* ============================================================
+   ГЛАВНАЯ-ЛОББИ (приказ владельца 23.09.2026)
+   ------------------------------------------------------------
+   Как лобби Fortnite и Brawl Stars: на весь экран фон, на нём стоит
+   персонаж игрока во всём, что он надел, справа внизу — «Что играем
+   сегодня» и одна большая «Играть». Полок под героем больше нет: свои
+   сборки, премиум и серверы живут в окне выбора режима.
+   ============================================================ */
+
+/* Лобби от края до края, как в Brawl Stars: под верхней полосой вкладок
+   фон на всё окно, без полей и без колонки 1400 px на широком экране, UI поверх
+   (владелец 23.09.2026: «убери айфон», «на весь экран»). :root:root — чтобы
+   перебить 09-wide.css и плотности (они тоже на :root). */
+.content:has(#s-play.on) { padding: 0; overflow: hidden; scrollbar-gutter: auto; }
+:root:root .screen.lobby { position: relative; max-width: none; margin: 0; height: 100%; }
+
+:root:root .lobby-wrap {
+  position: relative;
+  height: 100%;
+  min-height: 560px;
+  margin-bottom: 0;
+}
+
+:root:root .lobby .hero-live {
+  position: absolute;
+  inset: 0;
+  height: auto;
+  border-radius: 0;
+  clip-path: none;
+}
+
+/* Звук, музыка и фон — компактным рядом под углом с рубинами и аккаунтом,
+   над списком друзей: ни с чем не пересекаются. */
+:root:root .lobby .hero-tools { top: 64px; right: 20px; }
+
+/* Фон — задник, а не картинка: персонаж и карточка читаются поверх него. */
+.lobby .hero-scrim {
+  background:
+    linear-gradient(180deg, rgba(10, 12, 11, 0.05) 0%, rgba(10, 12, 11, 0.1) 55%, rgba(10, 12, 11, 0.7) 100%),
+    linear-gradient(90deg, rgba(10, 12, 11, 0) 50%, rgba(10, 12, 11, 0.45) 100%);
+}
+
+/* Персонаж — строго по центру сцены (владелец 23.09.2026). */
+.lobby-char {
+  position: absolute;
+  z-index: 3;
+  /* Широкий холст: руки в эмоциях («6-7» и др.) не упираются в край
+     (правка владельца 23.09.2026). Фигура по центру — кадр считает сам. */
+  left: 20%;
+  /* Сверху место под ник над головой. */
+  top: 56px;
+  bottom: 100px;
+  width: 60%;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 240ms linear;
+  touch-action: none;
+}
+.lobby-char.shown { opacity: 1; }
+/* Тени под ногами в CSS больше нет: её рисует сцена (PixelField) прямо по
+   траве подиума — пикселями верхней грани (владелец 23.09.2026). */
+.lobby-char:active { cursor: grabbing; }
+.lobby-char canvas { display: block; width: 100%; height: 100%; }
+
+.lobby-who {
+  position: absolute;
+  z-index: 4;
+  left: 30%;
+  width: 40%;
+  /* Прямо под ногами (ноги — LOBBY_FEET_AT = 70% сцены, characterStage.ts):
+     кнопка выше «Играть», а не на одной линии с ней (правка 23.09.2026). */
+  top: calc(77% + 14px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.lobby-who b {
+  font: 700 16px/1 var(--m-font);
+  color: #f2f4f3;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+/* Правый низ: режим и запуск. */
+.lobby-side {
+  position: absolute;
+  z-index: 4;
+  right: 24px;
+  bottom: 24px;
+  width: min(440px, 37%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lobby-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0;
+  text-align: left;
+  background: none;
+  color: inherit;
+}
+.lobby-mode-cap {
+  /* Крупно и жирно, по-игровому (правка владельца 23.09.2026). */
+  font: 900 24px/1.05 var(--m-font);
+  letter-spacing: -0.01em;
+  color: #fff;
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.35);
+}
+@media (max-width: 1180px) { .lobby-mode-cap { font-size: 19px; } }
+.lobby-mode-card {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr) 32px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  background: var(--m-surface);
+  --px-n: 10px; clip-path: var(--px-10);
+  box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+.lobby-mode:hover .lobby-mode-card { background: var(--m-surface-2); }
+.lobby-mode:hover .lobby-mode-swap { color: var(--m-accent); }
+
+.lobby-mode-art {
+  position: relative;
+  width: 84px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  color: var(--m-fg-muted);
+  background: var(--m-inset);
+  --px-n: 5px; clip-path: var(--px-5);
+}
+.lobby-mode-art > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.lobby-mode-art > svg { width: 28px; height: 28px; }
+.lobby-mode-art .mode-tile-tag { top: 4px; left: 4px; }
+.lobby-mode-cover { width: 100%; height: 100%; display: grid; place-items: center; }
+.lobby-mode-cover .cover-ph { width: 56px; height: 56px; }
+/* Обложка сборки не растягивается: блок (рендер бывает 96×62) вписывается
+   целиком и без pixelated, фото и фон — заполняют окно с обрезкой. */
+.lobby-mode-cover .cover-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: auto;
+}
+/* Всё, что не фото (блоки, составные иконки 96×62, свои png), — целиком. */
+.lobby-mode-cover .cover-img:not([src*="/bg/"]):not([src^="data:image/jpeg"]) { object-fit: contain; }
+.lobby-mode-cover .cover-img.block { padding: 6px; }
+
+.lobby-mode-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.lobby-mode-body b {
+  font: 700 16px/1.15 var(--m-font);
+  color: var(--m-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lobby-mode-body .meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--m-fg-muted);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.lobby-mode-swap {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  color: var(--m-fg-subtle);
+  background: var(--m-surface-2);
+  --px-n: 5px; clip-path: var(--px-5);
+}
+.lobby-mode-swap svg { width: 18px; height: 18px; }
+
+.lobby-side-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; min-height: 32px; }
+.lobby-tools { display: flex; gap: 6px; }
+.lobby-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0 8px;
+  font: 600 12px/1 var(--m-font);
+  color: var(--m-fg-muted);
+  background: var(--m-surface);
+  --px-n: 5px; clip-path: var(--px-5);
+}
+.lobby-tool:hover:not(:disabled) { color: var(--m-fg); background: var(--m-surface-2); }
+.lobby-tool.on { color: var(--m-accent); }
+.lobby-tool.stop { color: var(--m-danger, #ff6b6b); }
+.lobby-tool svg { width: 16px; height: 16px; }
+
+/* Плашка режима и «Играть» — один ряд, одна высота. Кнопка — самое громкое
+   на экране: крупная, плотный акцент, подошва (как в Brawl Stars). */
+.lobby-row { display: flex; align-items: stretch; gap: 10px; }
+.lobby-row .lobby-mode { flex: 1 1 auto; min-width: 0; }
+.lobby-row .lobby-mode-card { height: 100%; }
+/* Ничего не выбрано: подпись целиком, в две строки, значок только слева. */
+.lobby-mode-card.empty { grid-template-columns: 84px minmax(0, 1fr); }
+.lobby-mode-card.empty .lobby-mode-body b { white-space: normal; }
+.lobby-mode-card.empty .lobby-mode-art { color: var(--m-accent); }
+.lobby-row #playBtn {
+  flex: 0 0 150px;
+  height: auto;
+  min-height: 92px;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+.lobby-row #playBtn svg { width: 26px; height: 26px; }
+
+/* Метка вида режима на обложке (Премиум, Сервер). */
+.mode-tile-tag {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  font: 700 11px/1.2 var(--m-font);
+  color: var(--m-fg);
+  background: var(--m-surface);
+  --px-n: 5px; clip-path: var(--px-5);
+}
+.mode-tile-tag svg { width: 12px; height: 12px; color: var(--m-accent); }
+
+@media (max-width: 1100px) {
+  .lobby-side { width: min(400px, 38%); }
+  .lobby-row #playBtn { flex-basis: 130px; font-size: 21px; }
+}
+
+/* ---------- Наиграно и друзья онлайн ---------- */
+
+.lobby-hours {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: 600 13px/1 var(--m-font);
+  color: rgba(242, 244, 243, 0.85);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+.lobby-hours svg { width: 14px; height: 14px; color: var(--m-accent); }
+/* Путь до следующей ступени часов — полоска без подписи, цифра в подсказке. */
+.lobby-hours-bar { display: inline-block; width: 44px; height: 6px; margin-left: 4px; background: rgba(0, 0, 0, 0.45); }
+.lobby-hours-bar > span { display: block; height: 100%; background: var(--m-accent); }
+
+/* Пати — рядом с персонажем, как напарники в лобби Fortnite. */
+.lobby-party {
+  position: absolute;
+  z-index: 4;
+  right: 20px;
+  /* Сверху справа — шестерёнка (44px), под ней друзья (правка 23.09.2026). */
+  top: 76px;
+  width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lobby-mate {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 6px 6px 8px;
+  text-align: left;
+  color: inherit;
+  background: var(--m-surface);
+  --px-n: 5px; clip-path: var(--px-5);
+  --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px;
+}
+.lobby-mate.more { grid-template-columns: 36px minmax(0, 1fr) auto; }
+
+/* Никого в сети: строка и «Пригласить» (ссылка на профиль). */
+.lobby-invite {
+  display: flex; flex-direction: column; align-items: stretch; gap: 8px;
+  padding: 12px; background: var(--m-surface);
+  --px-n: 5px; clip-path: var(--px-5);
+  --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px;
+}
+.lobby-invite b { font: 800 14px/1.1 var(--m-font); color: var(--m-fg); }
+.lobby-invite-btn { justify-content: center; width: 100%; min-height: 40px; }
+.lobby-mate-badge {
+  min-width: 20px;
+  height: 20px;
+  margin-right: 4px;
+  padding: 0 5px;
+  display: grid;
+  place-items: center;
+  font: 800 11px/1 var(--m-font);
+  color: #fff;
+  background: var(--m-danger, #e5484d);
+}
+.lobby-mate.more:hover { background: var(--m-surface-2); }
+.lobby-mate-head {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  color: var(--m-fg-subtle);
+  background: var(--m-inset);
+  image-rendering: pixelated;
+}
+.lobby-mate-head svg { width: 18px; height: 18px; }
+.lobby-mate-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.lobby-mate-body b {
+  font: 600 13px/1.1 var(--m-font);
+  color: var(--m-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lobby-mate-body .meta {
+  font-size: 11.5px;
+  color: var(--m-accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lobby-mate-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 10px;
+  font: 600 12px/1 var(--m-font);
+  color: var(--m-fg);
+  background: var(--m-surface-2);
+  --px-n: 5px; clip-path: var(--px-5);
+}
+.lobby-mate-act:hover:not(:disabled) { color: #06200e; background: var(--m-accent); }
+.lobby-mate-act:disabled { color: var(--m-accent); }
+.lobby-mate-act svg { width: 14px; height: 14px; }
+
+/* Подготовка к запуску на самой кнопке: сплошная заливка акцентом,
+   без градиента кита (пиксельный язык). */
+.lobby-row #playBtn.loading { background: var(--m-surface-2); color: var(--m-fg); font-size: 24px; font-weight: 800; }
+.lobby-row #playBtn.loading #playLbl { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.lobby-row #playBtn .play-stage { font-size: 12px; font-weight: 600; color: var(--m-fg-muted); white-space: nowrap; }
+.lobby-row #playBtn.loading .fill { background: var(--m-accent); opacity: 0.35; }
+.lobby-row #playBtn .lbl { position: relative; z-index: 1; }
+
+/* Левый край столбиком, как в Brawl Stars: сундук → Магазин → Свой сервер
+   (плитки — HubTile, свой стиль в hubtile.css). */
+.lobby-left {
+  position: absolute;
+  z-index: 5;
+  left: 20px;
+  top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+/* Запас под арт над плиткой HubTile резервирует сама (margin-top). */
+.lobby-nav { display: flex; flex-direction: column; gap: 12px; }
+
+/* «Гардероб» по центру под ногами персонажа — единственный вход в гардероб,
+   поэтому заметный: плотная небесная подложка (не спорит с зелёной «Играть»
+   и золотым сундуком), объём кнопки и сплошная ступенчатая рамка общим слоем,
+   подскок на наведении. */
+:root .lobby-who .btn.lobby-wardrobe {
+  height: 60px;
+  padding: 0 28px 4px 22px;
+  gap: 12px;
+  font: 800 19px/1 var(--m-font);
+  letter-spacing: 0.005em;
+  color: #062033;
+  background-color: #4cb8f5;
+  box-shadow: none;
+  --px-n: 5px;
+  --px-ol: rgba(0, 0, 0, 0.35); --px-ol-w: 2px;
+  --px-ft: rgba(255, 255, 255, 0.4); --px-ft-w: 3px;
+  --px-fb: rgba(0, 0, 0, 0.3); --px-fb-w: 5px;
+  --px-fl: rgba(255, 255, 255, 0.14); --px-fr: rgba(0, 0, 0, 0.14);
+  transition: transform 160ms cubic-bezier(0.34, 1.56, 0.64, 1), background-color var(--m-t-fast), filter var(--m-t-fast);
+}
+:root .lobby-who .btn.lobby-wardrobe svg { width: 26px; height: 26px; color: #062033; }
+@media (hover: hover) and (pointer: fine) {
+  :root .lobby-who .btn.lobby-wardrobe:hover { transform: translateY(-4px); background-color: #63c4f8; }
+}
+:root .lobby-who .btn.lobby-wardrobe:active {
+  transform: translateY(2px);
+  --px-ft: rgba(0, 0, 0, 0.2); --px-fb: rgba(0, 0, 0, 0.2); --px-fb-w: 2px; --px-fl: transparent; --px-fr: transparent;
+}
+
+/* Живой пиксельный фон: холст на всю сцену, под персонажем и интерфейсом. */
+.lobby .hero-live canvas.pixel-field {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  opacity: 1;
+  image-rendering: auto;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* На большом окне фон и персонаж растут вместе с окном, а панели оставались
+   размером под 1280 — мелкие островки по углам. Интерфейс лобби масштабируем
+   ступенями вслед за шириной. */
+@media (min-width: 1800px) {
+  .lobby-left,
+  .lobby-side,
+  .lobby-party,
+  .lobby-who,
+  .lobby .hero-tools { zoom: 1.3; }
+  /* Ник стоит по координатам сцены — zoom сдвинул бы его, растим шрифт. */
+  .lobby .mc-nametag { font-size: 22px; }
+}
+@media (min-width: 2400px) {
+  .lobby-left,
+  .lobby-side,
+  .lobby-party,
+  .lobby-who,
+  .lobby .hero-tools { zoom: 1.6; }
+  .lobby .mc-nametag { font-size: 27px; }
+}
+/* Слой ника поверх сцены персонажа: двигается вслед за головой (transform
+   ставит LobbyCharacter). Во всю сцену — чтобы координаты ника не менялись. */
+.lobby-tag-follow { position: absolute; inset: 0; pointer-events: none; will-change: transform; }
+
+/* ---------- Плашка режима как в Brawl Stars (правка владельца 23.09.2026) ----------
+   Одна яркая плашка цвета режима: крупная картинка, маленькая подпись
+   «Во что играем», жирное название. Отдельного большого заголовка над
+   ней больше нет — плашка сама зовёт выбрать. */
+.lobby-mode-card {
+  grid-template-columns: 92px minmax(0, 1fr) 36px;
+  min-height: 92px;
+  padding: 8px 10px 11px 8px;
+  /* Не зелёная: на зелёной сцене рядом с зелёной «Играть» сливалась. */
+  --mode-bg: #1f4f99; --mode-hi: #2660b8; --mode-art: #143566;
+  background: var(--mode-bg);
+  --px-ol: rgba(0, 0, 0, 0.35); --px-ol-w: 3px;
+  --px-ft: rgba(255, 255, 255, 0.22); --px-ft-w: 3px; --px-fb: rgba(0, 0, 0, 0.3); --px-fb-w: 5px;
+}
+.lobby-mode:hover .lobby-mode-card { background: var(--mode-hi); }
+.lobby-mode-card.kind-premium { --mode-bg: #a8700c; --mode-hi: #c0820f; --mode-art: #6e4705; }
+.lobby-mode-card.kind-server { --mode-bg: #5b3aa8; --mode-hi: #6c47c4; --mode-art: #3a2270; }
+.lobby-mode-card.empty { grid-template-columns: 92px minmax(0, 1fr); --mode-art: #6b4304; --mode-hi: #d18a12; animation: lobby-mode-call 1.6s steps(1, end) infinite; }
+@keyframes lobby-mode-call { 0%, 100% { --mode-bg: #b8760d; } 50% { --mode-bg: #cf8a15; } }
+@property --mode-bg { syntax: '<color>'; inherits: true; initial-value: #1f4f99; }
+.lobby-mode-art { width: 92px; height: 72px; background: var(--mode-art); color: #fff; }
+.lobby-mode-art > svg { width: 34px; height: 34px; }
+.lobby-mode-lab {
+  font: 800 11px/1 var(--m-font); letter-spacing: 0.06em; text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.72);
+}
+.lobby-mode-body { gap: 4px; }
+.lobby-mode-body b {
+  font: 900 20px/1.1 var(--m-font); letter-spacing: -0.01em; color: #fff;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+}
+.lobby-mode-card.empty .lobby-mode-body b { font-size: 19px; }
+.lobby-mode-body .meta { color: rgba(255, 255, 255, 0.82); }
+.lobby-mode-swap { width: 36px; height: 36px; color: #fff; background: rgba(0, 0, 0, 0.25); }
+.lobby-mode:hover .lobby-mode-swap { color: #fff; background: rgba(0, 0, 0, 0.4); }
+@media (prefers-reduced-motion: reduce) { .lobby-mode-card.empty { animation: none; } }
+.lobby-mode-card.empty .lobby-mode-art { color: #ffd36b; }
+
+/* Режим и «Играть» — одна широкая панель на общей подложке (правка
+   владельца 23.09.2026, 21:07: «чтобы было как одна штука, а не две»). */
+.lobby-side { width: min(620px, 48%); }
+@media (max-width: 1180px) { .lobby-side { width: min(520px, 54%); } }
+.lobby-row {
+  gap: 6px; padding: 6px;
+  background: rgba(4, 20, 10, 0.55);
+  --px-n: 10px; clip-path: var(--px-10);
+  --px-ol: rgba(0, 0, 0, 0.45); --px-ol-w: 3px;
+}
+.lobby-row #playBtn { flex-basis: 200px; }
+
+.lobby-right { position: absolute; z-index: 5; top: 100px; right: 20px; }
+@media (min-width: 1800px) { .lobby-right { zoom: 1.3; top: 120px; } }
+@media (min-width: 2400px) { .lobby-right { zoom: 1.6; } }
+
+/* Колонка разделов слева: бонус, магазин, мой скин, сервер — чуть меньше,
+   как кнопки Brawl Stars (правка владельца 23.09.2026, 21:31). */
+.lobby-left { zoom: 0.84; }
+@media (max-height: 700px) { .lobby-left { zoom: 0.74; } }
+@media (min-width: 1800px) { .lobby-left { zoom: 1.1; } }
+@media (min-width: 2400px) { .lobby-left { zoom: 1.35; } }
+
+/* Барабан обложек в пустой плашке режима: смена ступенькой с «подскоком». */
+.lobby-mode-reel { animation: lobby-reel 1400ms steps(1, end) both; }
+@keyframes lobby-reel {
+  0% { transform: translateY(8px); opacity: 0.4; }
+  8% { transform: translateY(-3px); opacity: 1; }
+  14%, 100% { transform: translateY(0); opacity: 1; }
+}
+/* Текст плашки режима — крупнее и короче (правка 21:46). */
+.lobby-mode-card.empty .lobby-mode-body b { font-size: 23px; line-height: 1.1; white-space: normal; }
+.lobby-mode-card .lobby-mode-body b { font-size: 22px; }
+.lobby-mode-card.empty .lobby-mode-art { background: #000; }
+
+/* Слой искр поверх фона, под персонажем. */
+.lobby .hero-live canvas.pixel-fx { z-index: 2; pointer-events: none; image-rendering: pixelated; }
+
+/* ---------- Нижний ряд: две маленькие карточки и «Играть» (правка 22:52) ---------- */
+.lobby-side { left: auto; right: 20px; width: auto !important; bottom: 20px; }
+.lobby-row { align-items: stretch; }
+.lobby-row .lobby-mode { flex: 0 0 340px; }
+.lobby-mode-reelbox { position: absolute; inset: 0; }
+.lobby-mode-reelbox > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.lobby-mode-reelbox.under { display: none; }
+.lobby-promo {
+  flex: 0 0 200px; display: grid; place-items: center; padding: 10px;
+  background: #3a3f3c;
+  --px-n: 10px; clip-path: var(--px-10);
+  --px-ol: rgba(0, 0, 0, 0.35); --px-ol-w: 3px;
+  --px-ft: rgba(255, 255, 255, 0.12); --px-ft-w: 3px; --px-fb: rgba(0, 0, 0, 0.3); --px-fb-w: 5px;
+}
+.lobby-promo-art { width: 100%; height: 100%; min-height: 72px; background: #4a504c; clip-path: var(--px-5); }
+@media (max-width: 1100px) { .lobby-row .lobby-mode { flex-basis: 290px; } .lobby-promo { flex-basis: 150px; } }
+/* Ряд по ширине содержимого: «Играть» не выдавливается (правка 22:54). */
+:root .lobby-side { width: max-content !important; max-width: calc(100% - 40px); }
+:root .lobby-row #playBtn { flex: 0 0 200px; min-width: 200px; }
+@media (max-width: 1100px) { :root .lobby-row #playBtn { flex-basis: 160px; min-width: 160px; } }
+/* WebKit (окно приложения) считает max-content ряда по содержимому, а не по
+   flex-basis: задаём ширину явно, иначе «Играть» обрезалась краем подложки. */
+:root .lobby-row .lobby-promo { width: 200px; }
+:root .lobby-row .lobby-mode { width: 340px; }
+:root .lobby-row #playBtn { width: 200px; }
+@media (max-width: 1100px) {
+  :root .lobby-row .lobby-promo { width: 150px; }
+  :root .lobby-row .lobby-mode { width: 290px; }
+  :root .lobby-row #playBtn { width: 160px; }
+}
+
+/* Живой OneBlock: холст на всю карточку, блок справа, подпись слева
+   (правки владельца 22:58–23:00). Выбран — жёлтая рамка и подъём;
+   плашка режима рядом гаснет, чтобы было видно, во что играем. */
+:root .lobby-row .lobby-promo {
+  position: relative; display: block; padding: 0; overflow: hidden;
+  text-align: left; color: #fff; cursor: pointer; background: #4fa8e8;
+  --px-ol: rgba(0, 0, 0, 0.45); --px-ol-w: 3px;
+  transition: transform 120ms steps(2, end);
+}
+:root .lobby-row .lobby-promo:hover { transform: translateY(-2px); }
+:root .lobby-row .lobby-promo.on { --px-ol: #ffd23f; --px-ol-w: 4px; transform: translateY(-3px); }
+.lobby-promo-live {
+  /* Отступ под общую ступенчатую рамку: она — фон карточки, холст её закрыл бы. */
+  position: absolute; inset: 4px 4px 6px; width: calc(100% - 8px); height: calc(100% - 10px);
+  clip-path: var(--px-5);
+  image-rendering: pixelated; object-fit: cover; object-position: right center;
+}
+.lobby-promo-body {
+  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+  display: flex; flex-direction: column; gap: 4px; min-width: 0; pointer-events: none;
+}
+.lobby-promo-body b {
+  font: 900 19px/1 var(--m-font); letter-spacing: -0.01em;
+  text-shadow: 0 2px 0 #1d4f7a, 2px 0 0 #1d4f7a, -2px 0 0 #1d4f7a, 0 -2px 0 #1d4f7a, 0 4px 0 rgba(0, 0, 0, 0.3);
+}
+.lobby-promo-body i {
+  align-self: flex-start; padding: 3px 6px;
+  font: 800 11px/1 var(--m-font); font-style: normal; letter-spacing: 0.02em; text-transform: uppercase;
+  color: #1a2d45; background: rgba(255, 255, 255, 0.9); clip-path: var(--px-4);
+}
+.lobby-promo.on .lobby-promo-body i { background: #ffd23f; color: #1a0d05; }
+:root .lobby-row .lobby-mode.off { opacity: 0.55; filter: saturate(0.4); }
+:root .lobby-row .lobby-mode.off:hover { opacity: 0.85; filter: none; }
+@media (prefers-reduced-motion: reduce) {
+  :root .lobby-row .lobby-promo, :root .lobby-row .lobby-promo.on { transform: none; transition: none; }
+}
+
+/* Ник над персонажем убран (владелец 24.09.2026, 13:23: с украшениями
+   смотрится плохо). Узел остаётся невидимым — по нему встаёт облачко эмоции. */
+.lobby .mc-nametag { visibility: hidden; }
+
+/* «Рекомендуем»: справа по центру, между верхними кнопками и «Играть». */
+.lobby-rec {
+  position: absolute; z-index: 5; right: 20px; top: 50%; transform: translateY(-58%);
+  display: grid; grid-template-columns: 96px minmax(0, 1fr); grid-template-rows: 1fr auto; gap: 8px 12px;
+  width: 320px; padding: 10px 10px 12px; text-align: left; color: #fff; cursor: pointer;
+  background: rgba(10, 30, 16, 0.78);
+  --px-n: 10px; clip-path: var(--px-10);
+  --px-ol: rgba(0, 0, 0, 0.5); --px-ol-w: 3px;
+  --px-ft: rgba(255, 255, 255, 0.12); --px-ft-w: 3px; --px-fb: rgba(0, 0, 0, 0.35); --px-fb-w: 5px;
+  animation: lrec-in 320ms steps(4, end) both;
+}
+.lobby-rec:hover { background: rgba(14, 42, 22, 0.88); }
+@keyframes lrec-in { 0% { opacity: 0; transform: translate(24px, -58%); } 100% { opacity: 1; transform: translate(0, -58%); } }
+.lrec-art { grid-row: 1 / 3; width: 96px; height: 96px; overflow: hidden; clip-path: var(--px-5); background: #1b2a20; }
+.lrec-cover { width: 100%; height: 100%; object-fit: cover; }
+.lrec-scene { display: grid; place-items: center; width: 100%; height: 100%; background-size: cover; background-position: center; }
+.lrec-scene.sky { background: #5ab4f0; }
+.lrec-scene img { image-rendering: pixelated; filter: drop-shadow(0 4px 0 rgba(0, 0, 0, 0.3)); animation: lrec-bob 2.4s steps(6) infinite; }
+@keyframes lrec-bob { 0%, 100% { transform: translateY(3px); } 50% { transform: translateY(-3px); } }
+.lrec-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.lrec-lab { font: 800 11px/1 var(--m-font); letter-spacing: 0.06em; text-transform: uppercase; color: #ffd23f; }
+.lrec-body b { font: 900 20px/1.1 var(--m-font); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35); }
+.lrec-body i { display: inline-flex; align-items: center; gap: 4px; font: 700 12px/1 var(--m-font); font-style: normal; color: rgba(255, 255, 255, 0.72); }
+.lrec-body i svg { width: 12px; height: 12px; }
+.lrec-go {
+  justify-self: start; display: inline-flex; align-items: center; gap: 4px; padding: 7px 10px 9px;
+  font: 800 13px/1 var(--m-font); color: var(--px-on-accent, #06200e); background: var(--m-accent);
+  clip-path: var(--px-5); box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.25);
+}
+.lrec-go svg { width: 12px; height: 12px; }
+@media (max-height: 640px) { .lobby-rec { display: none; } }
+@media (prefers-reduced-motion: reduce) { .lobby-rec, .lrec-scene img { animation: none; } }
+
+/* «Сегодня играем» + «Играть» — по центру под персонажем и в 1,5 раза
+   крупнее (владелец 24.09.2026, 13:30). */
+:root .lobby-side { left: 50% !important; right: auto !important; transform: translateX(-50%); bottom: 18px; }
+:root .lobby-row .lobby-mode { flex: 0 0 500px; width: 500px; }
+:root .lobby-row #playBtn { flex: 0 0 290px; width: 290px; min-width: 290px; font-size: 34px; }
+:root .lobby-row #playBtn svg { width: 34px; height: 34px; }
+:root .lobby-row .lobby-mode-card { grid-template-columns: 138px minmax(0, 1fr); min-height: 120px; gap: 16px; }
+:root .lobby-row .lobby-mode-card .lobby-mode-art { width: 138px; height: 104px; }
+:root .lobby-row .lobby-mode-card .lobby-mode-body b { font-size: 30px; }
+:root .lobby-row .lobby-mode-card.empty .lobby-mode-body b { font-size: 31px; }
+:root .lobby-row .lobby-mode-card .lobby-mode-lab { font-size: 14px; }
+:root .lobby-row .lobby-mode-card .meta { font-size: 15px; }
+@media (max-width: 1100px) {
+  :root .lobby-row .lobby-mode { flex-basis: 400px; width: 400px; }
+  :root .lobby-row #playBtn { flex-basis: 230px; width: 230px; min-width: 230px; font-size: 28px; }
+  :root .lobby-row .lobby-mode-card { grid-template-columns: 110px minmax(0, 1fr); }
+  :root .lobby-row .lobby-mode-card .lobby-mode-art { width: 110px; height: 88px; }
+  :root .lobby-row .lobby-mode-card .lobby-mode-body b { font-size: 24px; }
+}
+
+/* Наиграно через лаунчер — строкой под «Играть» (13:31). */
+.lobby-row #playBtn:not(.loading):not(.running) #playLbl { display: inline-flex; flex-direction: column; align-items: flex-start; line-height: 1; gap: 6px; }
+.lobby-row #playBtn .play-hours {
+  display: inline-flex; align-items: center; gap: 5px;
+  font: 800 14px/1 var(--m-font); letter-spacing: 0; color: rgba(6, 32, 14, 0.72);
+}
+:root .lobby-row #playBtn .play-hours svg { width: 14px; height: 14px; }
+
+/* Ряд прижат к низу окна, как док (владелец 13:32): нижняя кромка подложки
+   уходит за край, сверху — ступенчатые углы. Содержимое приподнято отступом. */
+:root .lobby-side { bottom: 0; }
+:root .lobby-row {
+  padding: 8px 8px 10px;
+  clip-path: polygon(10px 0, calc(100% - 10px) 0, calc(100% - 10px) 10px, 100% 10px, 100% 100%, 0 100%, 0 10px, 10px 10px);
+}
+
+/* Холст персонажа на всю высоту и шире: крылья и руки в танце больше не
+   обрезаются краем (владелец 24.09.2026, 13:55). Сам персонаж того же
+   размера — место над головой считает lobbyFrame. */
+:root .lobby-char { top: 0; bottom: 0; left: 10%; width: 80%; }
+
+/* Звук и музыка в верхней полосе: выключено — значок приглушён. */
+.lb-btn.lb-toggle.off svg { opacity: 0.4; }
+/* Иконка своей сборки в «Сегодня играем» — по центру, на всю плитку. */
+.lobby-mode-cover.lobby-mode-bi { display: grid; place-items: center; width: 100%; height: 100%; }
+.lobby-mode-cover.lobby-mode-bi .bi { width: 100%; height: 100%; }

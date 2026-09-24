@@ -84,8 +84,11 @@ export function Tour() {
         <div className="tour-dim" />
       )}
       <div className="tour-card" style={{ left: pos.left, top: pos.top, width: CARD_W }}>
-        <div className="tour-step">
-          Шаг {index + 1} из {TOUR_STEPS.length}
+        {/* Счётчик шагов — полоской, как в первой настройке: видно без чтения. */}
+        <div className="tour-bar" aria-label={'Шаг ' + (index + 1) + ' из ' + TOUR_STEPS.length}>
+          {TOUR_STEPS.map((_, i) => (
+            <span key={i} className={'tour-bar-seg' + (i <= index ? ' on' : '')}></span>
+          ))}
         </div>
         <h4>{step.title}</h4>
         <p>{step.text}</p>

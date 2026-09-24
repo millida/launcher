@@ -12,6 +12,8 @@ import { track, trackTimed } from './telemetry'
 import { runInstall } from '../state/installs'
 import { keyContent } from './installKeys'
 import { LOADER_NAME } from './format'
+import { actionSource } from './uiTrack'
+import { errorCode } from './telemetryPrivacy'
 
 const RU: Record<string, string> = {
   mod: 'мод',
@@ -19,6 +21,18 @@ const RU: Record<string, string> = {
   datapack: 'дата-пак',
   shader: 'шейдер',
   world: 'карту',
+}
+
+/**
+ * Успешная установка из каталога — для воронки «клик → установка».
+ * Источник (catalog / foryou / recommend…) берётся в момент нажатия, поэтому
+ * трекер создают сразу, а вызывают, когда установка закончилась: скачивание
+ * бывает дольше 20 секунд, за которые клик-источник живёт.
+ */
+export function catalogInstallTracker(kind: string, id: string | number | undefined | null, section?: string) {
+  const source = actionSource('catalog').source
+  return () =>
+    track('catalog_install', { kind, id: String(id ?? '').slice(0, 80), source, section: (section || kind).slice(0, 32) })
 }
 
 export async function resolveTargetBuild(kind: string): Promise<string | null> {
@@ -126,6 +140,7 @@ export async function askPlanForVersion(
 }
 
 export async function installContentFlow(src: Source, kind: string, title?: string): Promise<boolean> {
+  const done = catalogInstallTracker(kind, src.source === 'curseforge' ? src.cfid : src.slug)
   if (!hasTauri()) {
     showToast('Установка доступна в приложении')
     return false
@@ -176,6 +191,7 @@ export async function installContentFlow(src: Source, kind: string, title?: stri
           return
         }
         trackTimed('content_install', startedAt, { name: label, kind, mc: gv, loader, source: src.source })
+        done()
         void useMods.getState().refreshInstalled()
         installExtras(prof, kind, extras)
         showToast(
@@ -188,10 +204,10 @@ export async function installContentFlow(src: Source, kind: string, title?: stri
         trackTimed(
           'content_install',
           startedAt,
-          { name: label, kind, mc: gv, loader, source: src.source, code: String(err).slice(0, 120) },
+          { name: label, kind, mc: gv, loader, source: src.source, code: errorCode(err) },
           false,
         )
-        track('error', { code: String(err).slice(0, 120), where: 'content_install' }, { ok: false })
+        track('error', { code: errorCode(err), where: 'content_install' }, { ok: false })
         showToast('' + err, 'error')
       },
     })

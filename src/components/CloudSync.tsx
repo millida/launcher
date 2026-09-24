@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
+import { apiErrorText } from '../lib/apiError'
 import { Icon } from './Icon'
+import { Row } from './SetKit'
 import { fmtSize, whenText } from '../lib/format'
 import { hasTauri } from '../ipc/tauri'
 import { uiConfirm } from '../state/confirm'
 import { showToast } from '../state/ui'
 import { useProfiles } from '../state/profiles'
 import { cloudForget, cloudPull, cloudPush, cloudStatus, type CloudStatus } from '../ipc/commands'
+import { logoutToLogin } from '../lib/session'
 
 // The server sends an ISO date, while whenText counts in epoch seconds.
 const syncedAgo = (iso: string): string => {
@@ -24,7 +27,7 @@ export function CloudSync() {
     if (!hasTauri()) return
     cloudStatus()
       .then(setStatus)
-      .catch((e) => showToast('' + e, 'error'))
+      .catch((e) => showToast(apiErrorText(e, 'Облако не ответило'), 'error'))
   }, [])
 
   useEffect(load, [load])
@@ -36,7 +39,7 @@ export function CloudSync() {
         setStatus(s)
         showToast('Сборки и настройки выгружены в облако', 'ok')
       })
-      .catch((e) => showToast('' + e, 'error'))
+      .catch((e) => showToast(apiErrorText(e, 'Облако не ответило'), 'error'))
       .finally(() => setBusy(''))
   }
 
@@ -52,36 +55,34 @@ export function CloudSync() {
         ].filter(Boolean)
         showToast(parts.length ? 'Сборки: ' + parts.join(', ') : 'Всё уже на месте', r.failed.length ? 'error' : 'ok')
         if (r.failed.length) r.failed.slice(0, 3).forEach((f) => showToast(f, 'error'))
-        if (r.themesMissing.length) showToast('Темы из облака ещё не установлены: ' + r.themesMissing.join(', '))
         load()
       })
-      .catch((e) => showToast('' + e, 'error'))
+      .catch((e) => showToast(apiErrorText(e, 'Облако не ответило'), 'error'))
       .finally(() => setBusy(''))
   }
 
   if (!status) return null
   if (!status.signedIn) {
     return (
-      <div className="set-row">
-        <span className="lab">
-          Облачный профиль<small>Войди в аккаунт Millida — и сборки будут на любом компьютере</small>
-        </span>
-        <span className="set-val">Нужен вход</span>
-      </div>
+      <Row title="Сборки в облаке" hint="Нужен аккаунт Millida" keys="облако облачный профиль синхронизация сборки выгрузить забрать">
+        <button className="btn sm primary" onClick={() => logoutToLogin()}>
+          <Icon id="i-login" /> Войти
+        </button>
+      </Row>
     )
   }
 
   return (
     <>
-      <div className="set-row">
-        <span className="lab">
-          Облачный профиль
-          <small>
-            {status.hasRemote
-              ? `В облаке ${status.remoteProfiles} сборок · ${fmtSize(status.sizeBytes)} · ${status.device || 'другой компьютер'} · ${syncedAgo(status.updatedAt)}`
-              : 'В облаке пока пусто — выгрузи сборки, чтобы поднять их на другом компьютере'}
-          </small>
-        </span>
+      <Row
+        title="Сборки в облаке"
+        keys="облако облачный профиль синхронизация сборки выгрузить забрать"
+        hint={
+          status.hasRemote
+            ? `${status.remoteProfiles} сборок · ${fmtSize(status.sizeBytes)} · ${syncedAgo(status.updatedAt)}`
+            : 'Пока пусто'
+        }
+      >
         <button className="btn sm secondary" disabled={busy !== ''} onClick={push}>
           <Icon id="i-upload" /> {busy === 'push' ? 'Выгружаем…' : 'Выгрузить'}
         </button>
@@ -89,39 +90,29 @@ export function CloudSync() {
           className="btn sm secondary"
           disabled={busy !== '' || !status.hasRemote}
           onClick={() => pull(null)}
-          title="Поставит сборки, которых на этом компьютере нет"
         >
           <Icon id="i-download" /> {busy === 'pull' ? 'Ставим…' : 'Забрать'}
         </button>
-      </div>
+      </Row>
 
       {status.missingHere.length ? (
-        <div className="set-row">
-          <span className="lab">
-            Есть в облаке, нет здесь<small>{status.missingHere.join(', ')}</small>
-          </span>
+        <Row title="Есть в облаке, нет здесь" hint={status.missingHere.join(', ')} keys="облако поставить сборки">
           <button className="btn sm primary" disabled={busy !== ''} onClick={() => pull(status.missingHere)}>
             Поставить {status.missingHere.length}
           </button>
-        </div>
+        </Row>
       ) : null}
 
       {status.missingThere.length ? (
-        <div className="set-row">
-          <span className="lab">
-            Есть здесь, нет в облаке<small>{status.missingThere.join(', ')}</small>
-          </span>
+        <Row title="Есть здесь, нет в облаке" hint={status.missingThere.join(', ')} keys="облако выгрузить сборки">
           <button className="btn sm secondary" disabled={busy !== ''} onClick={push}>
             Выгрузить
           </button>
-        </div>
+        </Row>
       ) : null}
 
       {status.hasRemote ? (
-        <div className="set-row">
-          <span className="lab">
-            Удалить копию из облака<small>Сборки на этом компьютере останутся на месте</small>
-          </span>
+        <Row title="Удалить копию из облака" hint="Сборки здесь останутся" keys="облако удалить копию">
           <button
             className="btn sm danger"
             disabled={busy !== ''}
@@ -134,14 +125,14 @@ export function CloudSync() {
                     showToast('Облачная копия удалена', 'ok')
                     load()
                   })
-                  .catch((e) => showToast('' + e, 'error'))
+                  .catch((e) => showToast(apiErrorText(e, 'Облако не ответило'), 'error'))
                   .finally(() => setBusy(''))
               })
             }}
           >
             Удалить
           </button>
-        </div>
+        </Row>
       ) : null}
     </>
   )

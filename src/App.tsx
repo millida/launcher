@@ -3,11 +3,27 @@ import { SvgSprite } from './components/SvgSprite'
 import { Titlebar } from './components/Titlebar'
 import { Sidebar } from './components/Sidebar'
 import { Toast } from './components/Toast'
-import { Chat } from './components/Chat'
+import { RewardHost } from './components/reward/RewardReveal'
+import { initChatScreen } from './state/chatScreen'
 import { Login } from './screens/Login'
+import { PixelTip } from './components/PixelTip'
 // Screens are mounted only while open, and their chunks are prewarmed after boot
 // so switching tabs stays instant.
-import { Builds, Friends, Hosting, Mods, Play, Servers, Settings, Skins, preloadScreens } from './screens/registry'
+import {
+  Builds,
+  Friends,
+  Hosting,
+  Messages,
+  Mods,
+  PlayHub,
+  Play,
+  Premium,
+  Rubies,
+  Servers,
+  Settings,
+  Skins,
+  preloadScreens,
+} from './screens/registry'
 const InstancePage = lazy(() => import('./modals/InstancePage').then((m) => ({ default: m.InstancePage })))
 import { ImportModal } from './modals/Import'
 import { ProjectModal } from './modals/Project'
@@ -26,26 +42,28 @@ import { ChatNotify } from './components/ChatNotify'
 import { CallPanel } from './components/CallPanel'
 import { RoomModals } from './components/RoomManage'
 import { Installs } from './components/Installs'
+import { PackDrop } from './components/PackDrop'
 import { initInstalls } from './state/installs'
 import { initCalls } from './state/call'
 import { overlayNotify } from './ipc/commands'
 import { ServerDetail } from './components/ServerDetail'
 import { pushChatNotify } from './state/chatNotify'
 import { notifyAudible, notifyShown } from './state/notifyPrefs'
-import { presenceEvents, presenceText, presenceTitle } from './state/presenceNotify'
+import { createPresenceMemo, presenceEvents, presenceText, presenceTitle } from './state/presenceNotify'
 import { initDesktopToasts, showDesktopToast } from './lib/desktopToast'
 import { parseInvite } from './lib/invite'
 import { parseCallLog } from './lib/call/callLog'
-import { getAccount, getMillidaAccount, isMillidaKind, useAccounts } from './state/accounts'
+import { effectiveNick, getAccount, getMillidaAccount, isMillidaKind, useAccounts } from './state/accounts'
 import { markMillidaEver, millidaEver } from './state/onboarding'
 import { OnboardingModal } from './modals/Onboarding'
 import { Tour } from './components/Tour'
 import { initAccent } from './lib/accent'
-import { initTheme } from './lib/theme'
-import { initThemePacks } from './lib/themes'
+import { initDensity } from './lib/density'
 import { refreshGameNick } from './state/gameNick'
 import { warmHeads } from './lib/heads'
+import { Guard } from './components/Guard'
 import { useUi, closeModal, setScreen as gotoScreen, showToast } from './state/ui'
+import { modalToClose, openLayers } from './lib/escClose'
 import { useWallpaper } from './state/wallpaper'
 import { loadLiveRating } from './state/servers'
 import { appendChatMessage, applyChatMessage, loadFriends, openRoomChat, useFriends } from './state/friends'
@@ -156,18 +174,19 @@ function previewOf(m: PolledMessage): string {
   if (call) return call.outcome === 'done' ? 'Звонок завершён' : 'Пропущенный звонок'
   return parseInvite(text) ? 'Приглашение на сервер' : text
 }
-import { refreshPlayStats, rememberServerName, serverNameFor } from './state/playStats'
+import { refreshPlayStats, rememberServerName, serverNameFor, watchPlaytimeWhileRunning } from './state/playStats'
 import { quickJoin } from './lib/joinServer'
-import { refreshProfiles } from './state/profiles'
+import { findProfile, refreshProfiles } from './state/profiles'
 import { initMusic, startMusicAfterLogin, stopMusicNow } from './state/music'
 import { initSounds, playSound } from './lib/sound'
+import { initUiTracking } from './lib/uiTrack'
 import { initDeepLinks } from './lib/deeplink'
 import { initOverlayLink } from './lib/overlayLink'
 import { useMods } from './state/mods'
 import { refreshMsAccounts } from './state/msLogin'
 import { enterApp, logoutToLogin } from './lib/session'
 import { initSecrets } from './lib/secure'
-import { listenGameCrash, listenGameExit, listenGameServer, listenLaunchWarning, listenTrayExit } from './ipc/events'
+import { listenGameCrash, listenGameExit, listenGameServer, listenLaunchWarning, listenPackAccessLost, listenTrayExit } from './ipc/events'
 import { useCrash } from './state/crash'
 import { syncRunningGame, useGame } from './state/game'
 import { CrashModal } from './components/CrashModal'
@@ -178,10 +197,13 @@ import { reportWebviewFailure, setLauncherIdleMemory, watchHeap } from './lib/we
 import { flushPrefs, hydratePrefs } from './lib/prefs'
 
 let gameStartedAt = 0
-import { flushNativeCrashes, installErrorHandlers } from './lib/crash'
+import { flushNativeCrashes, installErrorHandlers, reportGameCrash } from './lib/crash'
 import { autoUpdate, bootUpdate, installUpdateOnExit, updateReady } from './lib/updater'
 import { BootUpdate } from './components/BootUpdate'
-import { gameSession, heartbeat, reconcileGameSession, setGameSession, updateSessionServer } from './lib/launch'
+import { Welcome } from './components/Welcome'
+import { ScreenWave } from './components/ScreenWave'
+import { gameSession, heartbeat, ramMbFor, reconcileGameSession, setGameSession, updateSessionServer } from './lib/launch'
+import { POLL_BASE_MS, pollDelayMs, pollIntervalFrom } from './lib/pollPace'
 import { hideLauncherToTray, initTray, restoreLauncher, restoreOnGameExit, trayCloseEnabled } from './lib/window'
 import { SESSION_EXPIRED_EVENT, api, hasMillidaAccount } from './lib/api'
 import { hasTauri, tauri } from './ipc/tauri'
@@ -226,8 +248,10 @@ function announcePresence(list: Friend[], kind: 'play' | 'online') {
   })
 }
 
+const presenceMemo = createPresenceMemo()
+
 function notifyPresence(before: Friend[], now: Friend[]) {
-  const { started, cameOnline } = presenceEvents(before, now)
+  const { started, cameOnline } = presenceEvents(before, now, presenceMemo)
   announcePresence(started, 'play')
   announcePresence(cameOnline, 'online')
 }
@@ -245,12 +269,16 @@ export function App() {
     // reinstalls the launcher.
     void frontendReady()
     installErrorHandlers()
-    initTheme()
+    initChatScreen()
     void initAccent()
-    void initThemePacks()
+    void initDensity()
     initTray()
     initMusic()
     initSounds()
+    initUiTracking(
+      () => useUi.getState().screen,
+      (cb) => useUi.subscribe((st, prev) => cb(st.screen, prev.screen)),
+    )
     void initDesktopToasts()
     initDeepLinks()
     initOverlayLink()
@@ -413,6 +441,10 @@ export function App() {
     }
     window.addEventListener('millida-game-started', onGameStarted)
 
+    // Пока идёт игра, счёт часов перечитывается сам: ядро пишет его раз в
+    // минуту, а до сих пор интерфейс спрашивал только при выходе, и под
+    // запущенной сборкой время не появлялось вовсе.
+    watchPlaytimeWhileRunning(() => useGame.getState().list.length > 0)
     void listenGameExit((profile) => {
       track('game_exit', {}, { durationMs: gameStartedAt ? Date.now() - gameStartedAt : undefined })
       useGame.getState().removeRunning(profile)
@@ -444,8 +476,22 @@ export function App() {
     void listenGameCrash((info) => {
       track('game_crash', { code: String((info as { reason?: string })?.reason ?? 'crash').slice(0, 120) }, { ok: false })
       useCrash.getState().show(info)
+      if (info && info.profile) {
+        void reportGameCrash(info, {
+          profile: findProfile(info.profile),
+          ramRequestedMb: ramMbFor(info.profile),
+          nick: effectiveNick(),
+        })
+      }
     }).then((u) => {
       unCrash = u
+    })
+    let unPackAccess: UnlistenFn | null = null
+    void listenPackAccessLost((info) => {
+      showToast(info.message, 'error')
+      if (info.removed) void refreshProfiles()
+    }).then((u) => {
+      unPackAccess = u
     })
     return () => {
       window.removeEventListener('millida-game-started', onGameStarted)
@@ -454,6 +500,7 @@ export function App() {
       if (unlisten) unlisten()
       if (unServer) unServer()
       if (unCrash) unCrash()
+      if (unPackAccess) unPackAccess()
     }
   }, [])
 
@@ -466,11 +513,19 @@ export function App() {
     let since = Number(localStorage.getItem(CURSOR)) || Date.now()
     let firstPass = true
     let timer: ReturnType<typeof setTimeout>
+    // Частоту задаёт сервер: установленный лаунчер живёт у игрока днями, и
+    // жёсткое значение в клиенте нельзя пересмотреть без выпуска версии.
+    let serverPollMs = POLL_BASE_MS
+    let failures = 0
+    let waited = false
     const loop = async () => {
       if (stopped) return
       if (hasMillidaAccount()) {
         try {
-          const r = await api('/friends/poll?since=' + since)
+          const r = await api('/friends/poll?wait=1&since=' + since)
+          serverPollMs = pollIntervalFrom(r.nextPollMs)
+          waited = r.waited === true
+          failures = 0
           since = r.now || Date.now()
           localStorage.setItem(CURSOR, String(since))
           if (r.presence) {
@@ -539,9 +594,12 @@ export function App() {
             chat.set({ chatTyping: (r.typing || []).includes(chat.chatWith) })
           }
           firstPass = false
-        } catch {}
+        } catch {
+          failures += 1
+          waited = false
+        }
       }
-      timer = setTimeout(loop, document.hidden ? 30000 : 5000)
+      timer = setTimeout(loop, pollDelayMs(serverPollMs, failures, document.hidden, Math.random, waited))
     }
     const wake = () => {
       if (document.hidden) return
@@ -563,15 +621,9 @@ export function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
-      const f = useFriends.getState()
-      if (f.chatOpen) {
-        f.set({ chatOpen: false })
-        return
-      }
-      closeModal('accModal')
-      closeModal('nbModal')
-      closeModal('bsModal')
+      if (e.key !== 'Escape' || e.defaultPrevented) return
+      const id = modalToClose(openLayers())
+      if (id) closeModal(id)
       useWallpaper.getState().setPopOpen(false)
     }
     document.addEventListener('keydown', onKey)
@@ -582,6 +634,8 @@ export function App() {
     <>
       <SvgSprite />
       <BootUpdate />
+      <Welcome />
+      <ScreenWave />
       <div className="window" id="win">
         <Titlebar />
         <UpdateBanner />
@@ -591,7 +645,6 @@ export function App() {
         <div className="app" id="scr-app" style={{ display: logged ? 'flex' : 'none' }}>
           <Sidebar
             onNav={(s) => {
-              track('screen_view', { screen: s })
               if (s === 'hosting') track('hosting_open', {})
               if (s === 'servers') track('rating_open', {})
               if (s === 'mods') useMods.getState().scopeTo(null)
@@ -605,12 +658,24 @@ export function App() {
                 the very first render. */}
             <Suspense fallback={null}>
               {screen === 'play' && <Play on />}
+              {screen === 'premium' && <Premium on />}
               {screen === 'builds' && <Builds on />}
               {screen === 'servers' && <Servers on />}
               {screen === 'mods' && <Mods on />}
-              {screen === 'skins' && <Skins on />}
+              {screen === 'skins' && (
+                <Guard what="Экран скинов">
+                  <Skins on />
+                </Guard>
+              )}
+              {screen === 'rubies' && (
+                <Guard what="Магазин">
+                  <Rubies on />
+                </Guard>
+              )}
               {screen === 'friends' && <Friends on />}
+              {screen === 'chat' && <Messages on />}
               {screen === 'hosting' && <Hosting on />}
+              {screen === 'playhub' && <PlayHub on />}
               {screen === 'settings' && <Settings on />}
             </Suspense>
           </main>
@@ -624,7 +689,6 @@ export function App() {
         <ImportModal />
         <ProjectModal />
         <NewBuildModal />
-        <Chat />
         <AccountAddModal />
         <ScreenshotsOverlay />
         <ModpackVersionsOverlay />
@@ -644,7 +708,10 @@ export function App() {
         <OnboardingModal />
         <Tour />
         <Installs />
+        <PackDrop />
         <Toast />
+        <RewardHost />
+        <PixelTip />
       </div>
     </>
   )

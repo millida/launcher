@@ -48,6 +48,9 @@ pub(crate) struct BuildFacts {
     /// Whether the last launch of this build carried the session agent. `None`
     /// when there is no launcher log to read it from.
     pub(crate) agent: Option<bool>,
+    /// Position in the report's build list, so the verdict can name the build
+    /// the launcher is about to repair.
+    pub(crate) idx: usize,
 }
 
 /// Faults worth telling the player about, in the order they outrank each other.
@@ -55,29 +58,36 @@ const BUILD_FAULTS: [(BuildSkin, &str, &str); 5] = [
     (
         BuildSkin::Conflict,
         "conflict",
-        "В сборке стоит свой мод скинов — он перебивает наш. Убери его или выключи наш мод в настройках сборки.",
+        "В сборке есть другой мод на скины, и скин показывает он. Убери его из списка модов сборки.",
     ),
     (
         BuildSkin::ModSilent,
         "mod_silent",
-        "Мод скинов не запускается с этой версией игры — поэтому скина и плаща в ней нет. Собери сборку на версии, где мод работает, либо играй на серверах Millida: там скин виден и без мода.",
+        "В этой версии игры скин не показывается. Заходи на серверы Millida — там скин виден всегда.",
     ),
     (
         BuildSkin::ModComplains,
         "mod_complains",
-        "Мод скинов запускается, но ругается в своём журнале — смотри строки ниже.",
+        "Мод скинов работает, но жалуется. Нажми «Скопировать для поддержки» и пришли нам отчёт.",
     ),
     (
         BuildSkin::Missing,
         "missing",
-        "В сборке нет мода скинов: его убрали вручную или он не поставился. Включи мод скинов в настройках сборки.",
+        "В сборке нет мода на скины. Нажми «Починить» — лаунчер поставит его сам.",
     ),
     (
         BuildSkin::Off,
         "off",
-        "Мод скинов выключен для этой сборки — включи его в настройках сборки.",
+        "Мод на скины выключен для этой сборки. Нажми «Починить» — лаунчер включит его сам.",
     ),
 ];
+
+/// What the launcher can repair without sending a child into build settings.
+/// A foreign skin mod is not on the list: removing someone else's file is the
+/// owner's call, and a mod that never loads is the game version's fault.
+pub(crate) fn auto_fix(state: BuildSkin) -> Option<&'static str> {
+    matches!(state, BuildSkin::Off | BuildSkin::Missing).then_some("enable_mod")
+}
 
 impl BuildSkin {
     fn id(self) -> &'static str {
@@ -311,7 +321,7 @@ fn build_report(profile: &Profile, root: &str) -> (Value, BuildFacts) {
             "rootStale": cfg_root.as_deref().map(|r| r != root).unwrap_or(false),
             "problems": problems,
         }),
-        BuildFacts { state: verdict, played, agent },
+        BuildFacts { state: verdict, played, agent, idx: 0 },
     )
 }
 
@@ -468,11 +478,12 @@ pub(crate) fn overall(
     session: &Value,
     builds: &[BuildFacts],
     online: bool,
-) -> (&'static str, String) {
+) -> (&'static str, String, Option<usize>) {
     if !online {
         return (
             "offline",
             "Вход Millida не выполнен — скин из гардероба игре брать неоткуда. Войди в аккаунт в лаунчере.".into(),
+            None,
         );
     }
     if !server["ok"].as_bool().unwrap_or(false) {
@@ -481,15 +492,15 @@ pub(crate) fn overall(
         } else {
             "Текстуры скина сейчас не отдаются нашим сервером — это на нашей стороне, уже смотрим."
         };
-        return ("server", text.into());
+        return ("server", text.into(), None);
     }
     if let Some((id, text)) = session_fault(session) {
-        return (id, text.into());
+        return (id, text.into(), None);
     }
     let played: Vec<&BuildFacts> = builds.iter().filter(|b| b.played.is_some()).collect();
     let active: Option<BuildFacts> = played.iter().max_by_key(|b| b.played).map(|b| **b);
     if let Some((id, text)) = active.map(|b| b.state).and_then(build_fault) {
-        return (id, text.into());
+        return (id, text.into(), active.map(|b| b.idx));
     }
     // A vanilla build has no second route: if the agent did not announce itself
     // in the last launch, the game ran without our session and the skin had
@@ -498,14 +509,15 @@ pub(crate) fn overall(
         return (
             "agent",
             "Последний запуск этой сборки прошёл без сессии Millida — в журнале нет строки входа, а ванильной сборке скин брать больше неоткуда. Так бывает, когда сборку запускают лицензией Microsoft или когда лаунчер ушёл в офлайн-режим: выбери аккаунт Millida и запусти сборку заново.".into(),
+            None,
         );
     }
     // Nothing has been launched yet: then any build may be the one the player is
     // asking about, and a switched-off mod is still worth saying out loud.
     if active.is_none() {
         for (bad, id, text) in BUILD_FAULTS {
-            if builds.iter().any(|b| b.state == bad) {
-                return (id, text.into());
+            if let Some(b) = builds.iter().find(|b| b.state == bad) {
+                return (id, text.into(), Some(b.idx));
             }
         }
     }
@@ -523,11 +535,13 @@ pub(crate) fn overall(
         return (
             "vanilla",
             format!("Скин на месте и приходит из аккаунта — ванильной сборке мод для этого не нужен. Если в игре всё ещё Стив, выйди в главное меню и зайди в мир заново; на чужом сервере в офлайн-режиме скин подставляет сам сервер, и наш там не появится.{}", elsewhere),
+            None,
         );
     }
     (
         "ok",
         format!("Скин и плащ на месте: сервер их отдаёт, мод в сборке отработал. Если в игре всё ещё старая текстура — выйди в меню и зайди в мир заново.{}", elsewhere),
+        None,
     )
 }
 
@@ -546,10 +560,17 @@ pub async fn skin_diagnose(nick: &str, online: bool) -> Value {
     let profiles = load_profiles();
     let reports: Vec<(Value, BuildFacts)> =
         profiles.iter().take(MAX_BUILDS).map(|p| build_report(p, &root)).collect();
-    let facts: Vec<BuildFacts> = reports.iter().map(|(_, f)| *f).collect();
+    let facts: Vec<BuildFacts> =
+        reports.iter().enumerate().map(|(idx, (_, f))| BuildFacts { idx, ..*f }).collect();
     let builds: Vec<Value> = reports.into_iter().map(|(v, _)| v).collect();
-    let (verdict, text) = overall(&server, &session, &facts, online);
-    json!({ "nick": nick, "verdict": verdict, "text": text, "server": server, "session": session, "builds": builds })
+    let (verdict, text, culprit) = overall(&server, &session, &facts, online);
+    // The one thing the player has to press: everything the launcher can put
+    // right itself is named here, so the report never sends a child looking for
+    // build settings.
+    let fix = culprit
+        .and_then(|i| Some((auto_fix(facts.get(i)?.state)?, builds.get(i)?["build"].as_str()?)))
+        .map(|(action, build)| json!({ "action": action, "build": build }));
+    json!({ "nick": nick, "verdict": verdict, "text": text, "fix": fix, "server": server, "session": session, "builds": builds })
 }
 
 #[cfg(test)]
@@ -557,7 +578,7 @@ mod tests {
     use super::*;
 
     fn facts(state: BuildSkin, played: Option<u64>) -> BuildFacts {
-        BuildFacts { state, played, agent: Some(true) }
+        BuildFacts { state, played, agent: Some(true), idx: 0 }
     }
 
     /// modded | on | jar | conflict | launched | log | complains | verdict
@@ -720,7 +741,7 @@ mod tests {
         let live = json!({ "agent": true, "profile": true, "signed": true, "skin": true, "domainOk": true, "textureOk": true, "ok": true });
         let today = facts(BuildSkin::Vanilla, Some(1_756_400_000));
         let yesterday = facts(BuildSkin::Off, Some(1_756_300_000));
-        let (verdict, text) = overall(&good, &live, &[yesterday, today], true);
+        let (verdict, text, _) = overall(&good, &live, &[yesterday, today], true);
         assert_eq!(
             verdict, "vanilla",
             "выключенный мод в отложенной сборке не объясняет отсутствие скина в той, где игрок сидит сейчас"
@@ -750,7 +771,7 @@ mod tests {
     fn a_vanilla_launch_that_carried_no_session_agent_is_named_as_such() {
         let good = json!({ "ok": true, "skin": true, "cape": true });
         let live = json!({ "agent": true, "profile": true, "signed": true, "skin": true, "domainOk": true, "textureOk": true, "ok": true });
-        let vanilla = |agent| BuildFacts { state: BuildSkin::Vanilla, played: Some(10), agent };
+        let vanilla = |agent| BuildFacts { state: BuildSkin::Vanilla, played: Some(10), agent, idx: 0 };
         assert_eq!(
             overall(&good, &live, &[vanilla(Some(false))], true).0,
             "agent",
@@ -761,6 +782,41 @@ mod tests {
             overall(&good, &live, &[vanilla(None)], true).0,
             "vanilla",
             "без журнала запуска утверждать, что сессии не было, нельзя"
+        );
+    }
+
+    /// состояние сборки | кнопка «Починить» | почему закреплено
+    /// off              | да                | лаунчер сам включает мод
+    /// missing          | да                | мод доставится при следующем запуске
+    /// conflict         | нет               | чужой мод удаляет только владелец сборки
+    /// mod_silent       | нет               | версия игры, лаунчеру чинить нечего
+    #[test]
+    fn a_repair_button_is_offered_only_where_the_launcher_can_finish_the_repair() {
+        assert_eq!(auto_fix(BuildSkin::Off), Some("enable_mod"));
+        assert_eq!(auto_fix(BuildSkin::Missing), Some("enable_mod"));
+        assert_eq!(
+            auto_fix(BuildSkin::Conflict),
+            None,
+            "кнопка тут удалила бы чужой мод из сборки — это решение владельца, а не лаунчера"
+        );
+        assert_eq!(
+            auto_fix(BuildSkin::ModSilent),
+            None,
+            "нажатие ничего не изменит: мод не грузится этой версией игры, и обещать починку нельзя"
+        );
+        let good = json!({ "ok": true, "skin": true, "cape": true });
+        let live = json!({ "agent": true, "profile": true, "signed": true, "skin": true, "domainOk": true, "textureOk": true, "ok": true });
+        let healthy = BuildFacts { state: BuildSkin::Vanilla, played: Some(100), agent: Some(true), idx: 0 };
+        let broken = BuildFacts { state: BuildSkin::Off, played: Some(200), agent: Some(true), idx: 1 };
+        assert_eq!(
+            overall(&good, &live, &[healthy, broken], true).2,
+            Some(1),
+            "кнопка чинит именно ту сборку, которую назвал вердикт: по имени первой в списке она включила бы мод не там"
+        );
+        assert_eq!(
+            overall(&good, &live, &[healthy], true).2,
+            None,
+            "у здорового вердикта чинить нечего, и кнопка не должна появляться"
         );
     }
 

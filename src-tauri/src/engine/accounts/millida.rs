@@ -54,6 +54,28 @@ fn api_url(path: &str) -> Result<url::Url, String> {
     Ok(resolved)
 }
 
+/// Пути, которые webview не может вызвать через команду millida_api, даже с
+/// валидным форматом: вход и выпуск токенов живут только в ядре (аудит
+/// 24.09.2026, R2). Вызов из ядра (millida_api_auth напрямую) не ограничен.
+pub fn webview_path_allowed(path: &str) -> bool {
+    let route = path.split(['?', '#']).next().unwrap_or_default();
+    let low = route.to_ascii_lowercase();
+    // Закодированный разделитель внутри сегмента сервер может раскрыть уже
+    // после нашей проверки префикса.
+    if low.contains("%2f") || low.contains("%5c") || low.contains('\\') {
+        return false;
+    }
+    let clean = low.trim_end_matches('/');
+    if clean == "/auth" || clean.starts_with("/auth/") {
+        // Webview начинает вход по коду сам; всё остальное в /auth — дело ядра.
+        return clean == "/auth/launcher/init";
+    }
+    if clean == "/launcher/game-session" || clean == "/launcher/mod-session" {
+        return false;
+    }
+    !clean.ends_with("/launch-token")
+}
+
 pub async fn millida_api(
     path: String,
     method: String,
@@ -94,7 +116,11 @@ pub async fn millida_api(
         Err(e) => return Err(net_err(&e)),
     };
     let status = res.status();
-    let text = res.text().await.unwrap_or_default();
+    let text = match read_capped(res, JSON_MAX_BYTES).await {
+        Ok(b) => String::from_utf8_lossy(&b).into_owned(),
+        Err(e) if status.is_success() => return Err(e),
+        Err(_) => String::new(),
+    };
     if !status.is_success() {
         // 401 is returned as a code so callers know to refresh the session;
         // other failures carry the server's own explanation
@@ -134,6 +160,17 @@ pub const UNAUTHORIZED: &str = "unauthorized";
 
 pub fn millida_token() -> Option<String> {
     crate::secrets::get(SEC_MILLIDA).or_else(|| crate::secrets::get(SEC_MILLIDA_LEGACY))
+}
+
+/// Узкий токен для нашего мода в игре: только косметика, живёт 12 часов
+/// (POST /launcher/mod-session). Полный токен аккаунта в окружение игры не
+/// уходит: его прочитал бы любой мод сборки (аудит 24.09.2026). Ручка не
+/// ответила — мод работает без входа (каталог и косметика на игроках видны и так).
+pub async fn mod_session_token() -> Option<String> {
+    millida_token()?;
+    let call = millida_api_auth("/launcher/mod-session".into(), "POST".into(), None);
+    let v = tokio::time::timeout(std::time::Duration::from_secs(6), call).await.ok()?.ok()?;
+    v.get("token")?.as_str().map(str::trim).filter(|t| !t.is_empty()).map(str::to_string)
 }
 
 static REFRESH_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
@@ -257,7 +294,11 @@ pub async fn millida_upload(
     // would publish the same version twice.
     let res = req.send().await.map_err(|e| net_err(&e))?;
     let status = res.status();
-    let text = res.text().await.unwrap_or_default();
+    let text = match read_capped(res, JSON_MAX_BYTES).await {
+        Ok(b) => String::from_utf8_lossy(&b).into_owned(),
+        Err(e) if status.is_success() => return Err(e),
+        Err(_) => String::new(),
+    };
     if !status.is_success() {
         if status.as_u16() == 401 {
             return Err("http 401".into());
@@ -358,14 +399,14 @@ pub async fn millida_login_poll(device_code: String) -> Result<Value, String> {
     if let Some(rt) = r["refreshToken"].as_str().filter(|s| !s.is_empty()) {
         pairs.push((SEC_MILLIDA_REFRESH.to_string(), rt.to_string()));
     }
-    crate::secrets::set_many(pairs)?;
+    crate::secrets::store_login(pairs)?;
     Ok(serde_json::json!({ "status": "ok", "user": r["user"].clone() }))
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        api_url, refresh_on_cooldown, set_refresh_cooldown, verdict_for, RefreshVerdict,
+        api_url, refresh_on_cooldown, webview_path_allowed, set_refresh_cooldown, verdict_for, RefreshVerdict,
         MILLIDA_API,
     };
 
@@ -442,6 +483,29 @@ mod tests {
                  Reason this case is pinned: {why}",
                 if *expected_ok { "Ok" } else { "Err" },
             );
+        }
+    }
+
+    #[test]
+    fn webview_path_verdicts() {
+        let cases: &[(&str, bool)] = &[
+            ("/auth/launcher/init", true),
+            ("/users/me", true),
+            ("/friends/chat/upload", true),
+            ("/core/list?page=1&next=/auth/x", true),
+            ("/auth/refresh", false),
+            ("/auth/launcher/poll", false),
+            ("/AUTH/launcher/poll", false),
+            ("/auth", false),
+            ("/launcher/game-session", false),
+            ("/launcher/game-session/", false),
+            ("/launcher/mod-session", false),
+            ("/catalog/packs/arcania/launch-token", false),
+            ("/core/a%2f..%2fauth/refresh", false),
+            ("/core/a%5Cb", false),
+        ];
+        for (input, ok) in cases {
+            assert_eq!(webview_path_allowed(input), *ok, "{input}");
         }
     }
 

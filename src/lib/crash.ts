@@ -1,17 +1,48 @@
 import { api } from './api'
 import { hasTauri } from '../ipc/tauri'
-import { appVersion, readCrashes, clearCrashes } from '../ipc/commands'
+import {
+  appVersion,
+  readCrashes,
+  clearCrashes,
+  defaultJava,
+  deviceSpecs,
+  listJavaRuntimes,
+  loadProfileSettings,
+  onCoreFailure,
+  testJava,
+  tuneProfile,
+} from '../ipc/commands'
+import type { DeviceSpecs, JavaRuntime, Profile, ProfileSettings } from '../ipc/commands'
+import type { CrashInfo } from '../ipc/events'
 import { isUserEnvironmentError } from './userEnvError'
+import { telemetryEnabled } from './telemetry'
+import {
+  createReportGate,
+  errorText,
+  expectedFailure,
+  failureDetails,
+  failureMessage,
+  gameCrashMessage,
+  installTarget,
+  javaMajorOf,
+  maskValues,
+  ramChoice,
+  redactSecrets,
+  safeArgs,
+  tailForReport,
+} from './errorReport'
+import type { ReportChannel } from './errorReport'
 
 const RELEASE = 'launcher'
 
 interface ErrorReport {
   source: 'LAUNCHER'
-  level: 'ERROR' | 'FATAL'
+  level: 'WARN' | 'ERROR' | 'FATAL'
   name?: string
   message: string
   stack?: string
   release?: string
+  url?: string
   context?: Record<string, unknown>
 }
 
@@ -44,6 +75,155 @@ async function post(body: ErrorReport) {
   try {
     await api('/errors', { method: 'POST', body: JSON.stringify(body) })
   } catch {}
+}
+
+const gate = createReportGate()
+
+async function releaseTag(): Promise<string> {
+  if (!version && hasTauri()) version = await appVersion().catch(() => '')
+  return RELEASE + '@' + (version || 'dev')
+}
+
+async function postScoped(channel: ReportChannel, body: ErrorReport) {
+  if (isUserEnvironmentError(`${body.name ?? ''} ${body.message} ${body.stack ?? ''}`)) return
+  if (!gate.admit(channel, (body.name ?? '') + '\n' + body.message)) return
+  const release = await releaseTag()
+  try {
+    await api('/errors', { method: 'POST', body: JSON.stringify({ ...body, release }) })
+  } catch {}
+}
+
+function compact(context: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(context)) {
+    if (v === null || v === undefined || v === '') continue
+    if (Array.isArray(v) && !v.length) continue
+    out[k] = typeof v === 'string' ? redactSecrets(v) : v
+  }
+  return out
+}
+
+let specs: Promise<DeviceSpecs | null> | null = null
+
+function machine(): Promise<DeviceSpecs | null> {
+  if (!specs) specs = deviceSpecs().catch(() => null)
+  return specs
+}
+
+const inside = (file: string, dir: string) => {
+  const norm = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+  return norm(file).startsWith(norm(dir) + '/')
+}
+
+async function javaAt(path: string, knownVersion?: string): Promise<{ major: number | null; origin: 'launcher' | 'system' }> {
+  const runtimes = await listJavaRuntimes().catch((): JavaRuntime[] => [])
+  const own = runtimes.find((r) => inside(path, r.path))
+  if (own) return { major: own.major, origin: 'launcher' }
+  const probed = knownVersion ?? (await testJava(path).catch(() => ''))
+  return { major: javaMajorOf(probed), origin: 'system' }
+}
+
+// Mirrors the core's pick (engine/game/launch.rs, resolve_profile_java): a
+// pinned major, then the build's own path, then the default from settings, then
+// the runtime the version asks for, which the UI cannot see without a new command.
+async function javaFacts(s: ProfileSettings | null): Promise<{ javaMajor: number | null; javaSource: string }> {
+  const pinned = Number(s?.javaMajor) || 0
+  if (pinned) return { javaMajor: pinned, javaSource: 'pinned' }
+  const own = (s?.javaPath || '').trim()
+  if (own) {
+    const j = await javaAt(own)
+    return { javaMajor: j.major, javaSource: 'build-path:' + j.origin }
+  }
+  const def = await defaultJava().catch(() => null)
+  if (def) {
+    const j = await javaAt(def.path, def.version)
+    return { javaMajor: j.major, javaSource: 'settings-default:' + j.origin }
+  }
+  return { javaMajor: null, javaSource: 'auto' }
+}
+
+export interface CrashMeta {
+  profile: Profile | null
+  ramRequestedMb: number
+  nick?: string
+}
+
+export async function reportGameCrash(info: CrashInfo, meta: CrashMeta): Promise<void> {
+  if (!telemetryEnabled() || !hasTauri() || !info) return
+  const name = info.profile || ''
+  const [settings, spec, tuning, release] = await Promise.all([
+    name ? loadProfileSettings(name).catch(() => null) : Promise.resolve(null),
+    machine(),
+    name ? tuneProfile(name).catch(() => null) : Promise.resolve(null),
+    releaseTag(),
+  ])
+  const hide = (text: string) => maskValues(redactSecrets(text), [[meta.nick, '<nick>']])
+  const pack = (settings?.catalogPackSlug || '').trim()
+  const java = await javaFacts(settings)
+  const ram = ramChoice(meta.ramRequestedMb, Number(settings?.ramMb) || 0, settings?.autoTune !== false, tuning?.ramMb ?? null)
+  const p = meta.profile
+  await postScoped('crash', {
+    source: 'LAUNCHER',
+    level: pack ? 'ERROR' : 'WARN',
+    name: 'GameCrash',
+    message: redactSecrets(gameCrashMessage({ reason: info.reason, catalogPack: pack, culprits: info.culprits, tail: info.tail })),
+    stack: tailForReport(hide(info.tail || '')) || undefined,
+    url: pack ? 'catalog-pack:' + pack : undefined,
+    context: compact({
+      profile: name,
+      mc: p?.version,
+      loader: p ? p.loader || (p.fabric ? 'fabric' : 'vanilla') : null,
+      loaderVersion: p?.loader_version,
+      catalogPack: pack,
+      catalogPackVersion: settings?.catalogPackVersion,
+      modpack: settings?.modpackSlug,
+      javaMajor: java.javaMajor,
+      javaSource: java.javaSource,
+      ramMb: ram.ramMb,
+      ramSource: ram.ramSource,
+      machineRamMb: spec?.ram_mb || tuning?.totalRamMb,
+      os: spec ? (spec.os + ' ' + spec.os_version).trim() : navigator.platform,
+      arch: spec?.arch,
+      launcher: release,
+      culprits: (info.culprits || []).slice(0, 20).map(hide),
+      actions: (info.actions || []).map((a) => a.kind),
+    }),
+  })
+}
+
+export async function reportCoreFailure(cmd: string, err: unknown, args?: Record<string, unknown>): Promise<void> {
+  if (!telemetryEnabled()) return
+  const text = errorText(err)
+  if (!text || expectedFailure(text, cmd)) return
+  const raw = (key: string) => (args && typeof args[key] === 'string' ? (args[key] as string) : null)
+  await postScoped('core', {
+    source: 'LAUNCHER',
+    level: 'ERROR',
+    name: 'CoreCommandFailed',
+    message: failureMessage(cmd, text, [
+      [raw('profile'), '<profile>'],
+      [raw('name'), '<name>'],
+      [raw('newName'), '<name>'],
+    ]),
+    stack: failureDetails(text),
+    context: compact({ command: cmd, ...safeArgs(args) }),
+  })
+}
+
+export async function reportInstallFailure(key: string, title: string, err: unknown): Promise<void> {
+  if (!telemetryEnabled()) return
+  const text = errorText(err)
+  if (!text || expectedFailure(text)) return
+  const target = installTarget(key)
+  await postScoped('install', {
+    source: 'LAUNCHER',
+    level: 'ERROR',
+    name: 'InstallFailed',
+    message: failureMessage(target.kind, text, [[target.profile, '<profile>']]),
+    stack: failureDetails(text),
+    url: target.catalogPack ? 'catalog-pack:' + target.catalogPack : undefined,
+    context: compact({ kind: target.kind, key, title, profile: target.profile, catalogPack: target.catalogPack }),
+  })
 }
 
 export async function reportError(where: string, err: unknown, fatal = false) {
@@ -84,6 +264,7 @@ export async function flushNativeCrashes() {
 }
 
 export function installErrorHandlers() {
+  onCoreFailure(reportCoreFailure)
   window.addEventListener('error', (e) => {
     void reportError('window', e.error || e.message)
   })

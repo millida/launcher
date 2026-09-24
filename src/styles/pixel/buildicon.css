@@ -1,0 +1,166 @@
+/* ============================================================
+   ИКОНКА СБОРКИ И ВЫБОР ИКОНКИ (правка владельца 23.09.2026, 19:40)
+   Квадрат глубокого плотного цвета и блок на нём, как в Modrinth.
+   Рамки — общим ступенчатым слоем --px-* (селекторы в 12-pixel.css).
+   ============================================================ */
+
+.bi {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--bi-size, 72px);
+  height: var(--bi-size, 72px);
+  overflow: hidden;
+  background-color: var(--bi-bg, #2a2017);
+  --px-n: 5px; clip-path: var(--px-5);
+}
+/* Рендер набора — 96 px, блок в нём занимает 60 px с прозрачным полем.
+   Картинка ~106 % квадрата: блок ≈ 2/3 стороны (48 px в квадрате 72),
+   и это уменьшение исходника, а не растяжение. Теней и свечения нет. */
+.bi img {
+  flex: none;
+  width: calc(var(--bi-size, 72px) * 1.06);
+  height: calc(var(--bi-size, 72px) * 1.06);
+  max-width: none;
+  object-fit: contain;
+  pointer-events: none;
+  filter: none;
+}
+/* Свой рендер травы (240 px) — блок без поля: 2/3 стороны. */
+.bi.big img { width: 66%; height: 66%; }
+.bi.photo img { width: 100%; height: 100%; object-fit: cover; }
+
+/* ---------- окно выбора ---------- */
+.ip-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.55);
+}
+.ip {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(520px, 100%);
+  max-height: calc(100vh - 32px);
+  padding: 18px;
+  color: var(--m-fg);
+  background-color: var(--m-surface);
+  --px-n: 10px; clip-path: var(--px-10);
+  --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px;
+}
+.ip-head { display: flex; align-items: center; gap: 14px; }
+.ip-head b { flex: 1; font: 800 18px/1.1 var(--m-font); }
+.ip-x { flex: none; }
+
+.ip-colors { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 6px; }
+.ip-color {
+  height: 32px;
+  padding: 0;
+  background-color: var(--c);
+  --px-n: 5px; clip-path: var(--px-5);
+  --px-ol: rgba(255, 255, 255, 0.08); --px-ol-w: 2px;
+}
+.ip-color.on { --px-ol: var(--m-accent); --px-ol-w: 3px; }
+
+/* Сетка блоков: вертикальная прокрутка, вбок ничего не листается. */
+.ip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+  gap: 6px;
+  min-height: 0;
+  max-height: 300px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 2px;
+  scrollbar-width: thin;
+}
+.ip-block {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  padding: 0;
+  background-color: color-mix(in srgb, var(--c) 70%, var(--m-inset));
+  --px-n: 5px; clip-path: var(--px-5);
+  transition: background-color var(--m-t-fast);
+}
+.ip-block img { width: 52px; height: 52px; max-width: none; object-fit: contain; pointer-events: none; }
+.ip-block.big img { width: 32px; height: 32px; }
+.ip-block { overflow: hidden; }
+@media (hover: hover) and (pointer: fine) { .ip-block:hover { background-color: var(--c); } }
+.ip-block.on { background-color: var(--c); --px-ol: var(--m-accent); --px-ol-w: 3px; }
+
+.ip-foot { display: flex; justify-content: space-between; gap: 10px; }
+.ip-foot .btn.on { color: var(--m-accent); }
+
+/* ---------- «Изменить» поверх иконки на карточке ---------- */
+.bi-edit { position: relative; flex: none; display: grid; padding: 0; background: none; }
+.bi-edit-lab {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 4px;
+  font: 800 12px/1 var(--m-font);
+  color: #fff;
+  background: rgba(0, 0, 0, 0.62);
+  opacity: 0;
+  --px-n: 5px; clip-path: var(--px-5);
+  transition: opacity var(--m-t-fast);
+}
+.bi-edit-lab svg { width: 16px; height: 16px; }
+.bi-edit-lab { font-size: 11px; }
+.bi-edit:hover .bi-edit-lab,
+.bi-edit:focus-visible .bi-edit-lab { opacity: 1; }
+
+@media (max-width: 600px) {
+  .ip-colors { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+/* Цвета фона иконки не слипаются: зазор шире, обводки не касаются (17:55). */
+.ip-colors { gap: 10px; }
+.ip-grid, .ip-blocks { gap: 10px; }
+
+/* Иконки богаче (владелец 24.09.2026, 18:14: «очень обычно»): плитки крупнее,
+   с объёмом «кнопки» (светлая кромка сверху, тёмная подошва), блок на
+   подсвеченном пятачке, при наведении подпрыгивает, выбранный — с рамкой
+   акцента и золотой звездой. */
+.ip-grid { grid-template-columns: repeat(auto-fill, minmax(66px, 1fr)); gap: 10px; max-height: 330px; padding: 4px; }
+.ip-block {
+  position: relative;
+  background-color: color-mix(in srgb, var(--c) 55%, #2a302b);
+  --px-ft: rgba(255, 255, 255, 0.16); --px-ft-w: 3px;
+  --px-fb: rgba(0, 0, 0, 0.38); --px-fb-w: 5px;
+  --px-ol: rgba(0, 0, 0, 0.45); --px-ol-w: 2px;
+  transition: transform 90ms steps(2, end), background-color 90ms steps(2, end);
+}
+.ip-block::before {
+  content: ''; position: absolute; left: 22%; right: 22%; bottom: 18%; height: 12%;
+  background: rgba(0, 0, 0, 0.28); pointer-events: none;
+}
+.ip-block img { position: relative; width: 50px; height: 50px; filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.35)); transition: transform 90ms steps(2, end); }
+@media (hover: hover) and (pointer: fine) {
+  .ip-block:hover { transform: translateY(-2px); background-color: color-mix(in srgb, var(--c) 75%, #3a423c); }
+  .ip-block:hover img { transform: translateY(-3px) scale(1.06); }
+}
+.ip-block.on { background-color: color-mix(in srgb, var(--c) 80%, #3a423c); --px-ol: var(--m-accent); --px-ol-w: 3px; }
+.ip-block.on::after {
+  content: '★'; position: absolute; top: 3px; right: 5px; font: 900 13px/1 var(--m-font); color: #ffd23f;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
+}
+.ip-color { height: 30px; --px-ft: rgba(255, 255, 255, 0.18); --px-ft-w: 2px; --px-fb: rgba(0, 0, 0, 0.35); --px-fb-w: 4px; }
+.ip-color:hover { transform: translateY(-1px); }
+@media (prefers-reduced-motion: reduce) { .ip-block, .ip-block img { transition: none; } }
+/* Блок крупнее, без отдельной тени-полоски. */
+.ip-block::before { display: none; }
+.ip-block img { width: 60px; height: 60px; }
+/* Отступы окна иконки (владелец 24.09.2026, 18:35): шире окно и поля,
+   сетка не прилипает к краям и полосе прокрутки. */
+.ip { width: min(600px, 100%); padding: 24px 26px; gap: 18px; }
+.ip-colors { padding: 2px 4px; }
+.ip-grid { gap: 14px; padding: 6px 10px 6px 4px; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
+.ip-foot { padding-top: 4px; }

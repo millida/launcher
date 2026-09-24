@@ -8,11 +8,14 @@ export function SkinBody({
   model = 'auto-detect',
   height = 132,
   fallback,
+  yaw = 0,
 }: {
   url: string
   model?: BodyModel
   height?: number
   fallback?: ReactNode
+  /** Поворот фигуры, рад. */
+  yaw?: number
 }) {
   const holder = useRef<HTMLSpanElement>(null)
   const [near, setNear] = useState(false)
@@ -40,22 +43,31 @@ export function SkinBody({
     return () => io.disconnect()
   }, [near])
 
+  // Неудача 3D-рендера чаще всего временная (контекст WebGL занят другой
+  // сценой): пробуем ещё дважды, а плоская заглушка стоит только в промежутке.
+  const [tries, setTries] = useState(0)
+  useEffect(() => setTries(0), [url, model, yaw])
   useEffect(() => {
     if (!near || !url) return
     let alive = true
+    let timer: ReturnType<typeof setTimeout> | undefined
     setSrc('')
-    setFailed(false)
-    renderSkinBody(url, model)
+    renderSkinBody(url, model, yaw)
       .then((data) => {
-        if (alive) setSrc(data)
+        if (!alive) return
+        setFailed(false)
+        setSrc(data)
       })
       .catch(() => {
-        if (alive) setFailed(true)
+        if (!alive) return
+        setFailed(true)
+        if (tries < 2) timer = setTimeout(() => setTries((n) => n + 1), 4500)
       })
     return () => {
       alive = false
+      clearTimeout(timer)
     }
-  }, [near, url, model])
+  }, [near, url, model, yaw, tries])
 
   if (failed && fallback) return <>{fallback}</>
 

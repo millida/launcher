@@ -2,6 +2,8 @@ import { useRef } from 'react'
 import { Icon } from '../components/Icon'
 import { cancelWebLogin, copyUserCode, copyVerifyLink, quickStart, startWebLogin, useLogin } from '../state/login'
 import { millidaEver } from '../state/onboarding'
+import { PixelField } from '../components/lobby/PixelField'
+import '../styles/pixel/login.css'
 
 export function Login({ on }: { on: boolean }) {
   const login = useLogin()
@@ -17,22 +19,22 @@ export function Login({ on }: { on: boolean }) {
   }
 
   return (
-    <div id="scr-login" className={on ? 'on' : undefined} onMouseMove={onMove}>
-      <div className="login-wrap">
-        <div className="login-form">
+    <div id="scr-login" className={'lg2' + (on ? ' on' : '')} onMouseMove={onMove}>
+      {/* Сцена лобби фоном (правка владельца 23.09.2026: экраны входа были
+          в старом UI со старыми персонажами). */}
+      <PixelField on={on} />
+      <div className="login-wrap lg2-wrap">
+        <div className="login-form lg2-card">
           <div className="login-logo">
-            <img src="/millida-logo.svg" alt="" style={{ width: '44px', height: '44px', borderRadius: '12px' }} />
-            <div>
-              <b>MILLIDA Launcher</b>
-              <span>Часть экосистемы Millida</span>
-            </div>
+            <img src="/millida-logo.svg" alt="" width={56} height={56} />
           </div>
-          <h1>Вход в аккаунт Millida</h1>
-          <p className="sub">Один аккаунт — лаунчер, друзья, серверы и все сервисы Millida.</p>
+          <h1>Вход в Millida</h1>
+          {/* Одна строка вместо абзаца: остальное показывает сам поток входа —
+              код, «Открыть страницу», «Копировать ссылку» (аудит 22.09.2026). */}
+          <p className="sub">Нет аккаунта — создастся при входе</p>
 
           <button
-            className="btn md primary"
-            style={{ width: '100%', gap: '9px' }}
+            className="btn lg primary lg2-main"
             id="webLogin"
             disabled={login.webBusy}
             onClick={() => void startWebLogin()}
@@ -42,7 +44,7 @@ export function Login({ on }: { on: boolean }) {
           </button>
           {login.webBusy ? (
             <div className="login-code-box">
-              <button className="login-code" title="Скопировать код" onClick={() => void copyUserCode()}>
+              <button className="login-code" aria-label="Скопировать код" onClick={() => void copyUserCode()}>
                 <span>{login.userCode}</span>
                 <Icon id="i-copy" />
               </button>
@@ -50,39 +52,35 @@ export function Login({ on }: { on: boolean }) {
                 <button className="btn sm secondary" onClick={() => void startWebLogin(true)}>
                   Открыть страницу
                 </button>
-                <button className="btn sm ghost" title="Скопировать ссылку" onClick={copyVerifyLink}>
-                  Скопировать ссылку
+                <button className="btn sm ghost" onClick={copyVerifyLink}>
+                  Копировать ссылку
                 </button>
                 <button className="btn sm ghost" onClick={cancelWebLogin}>
                   Отмена
                 </button>
               </div>
+              {/* Браузер открывается не всегда: адрес для ручного ввода кода обязан быть виден. */}
+              <div className="login-reg">Не открылось — millida.net/auth/launcher</div>
             </div>
           ) : (
-            <p className="faint-note login-hint">
-              Откроется страница Millida — подтверди код, и лаунчер войдёт сам. Не открылась — введи код на
-              millida.net/auth/launcher. Нет аккаунта? Он создастся при входе.
-            </p>
+            <div className="login-reg" id="tgHint" style={{ display: login.hintShown ? 'block' : 'none' }}>
+              {login.hintText}
+            </div>
           )}
-          <div className="login-reg" id="tgHint" style={{ display: login.hintShown ? 'block' : 'none' }}>
-            {login.hintText}
-          </div>
 
           {guestAllowed ? (
-            <>
-              <div className="or">или без сервисов</div>
-              <button className="btn sm ghost" style={{ width: '100%' }} id="quickStart" onClick={quickStart}>
-                Играть гостем (без друзей и профиля)
-              </button>
-            </>
+            <button className="btn md secondary login-guest lg2-guest" id="quickStart" onClick={quickStart}>
+              Играть гостем
+            </button>
           ) : null}
           <div className="trust">
             <Icon id="i-shield" />
-            <span>Пароль вводится только на сайте Millida — лаунчер его не видит.</span>
+            <span>Пароль — только на сайте Millida</span>
           </div>
         </div>
-        <div className="login-art">
-          <img ref={artRef} src="/hero-11.png" alt="" />
+        <div className="login-art lg2-art">
+          <img ref={artRef} src="/lobby/duo@2x.webp" alt="" />
+          <span className="lg2-shadow" aria-hidden="true" />
         </div>
       </div>
     </div>

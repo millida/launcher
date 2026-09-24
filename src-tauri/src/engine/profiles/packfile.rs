@@ -21,12 +21,16 @@ async fn from_mrpack(app: &AppHandle, ex: &Path, name_hint: &str) -> Result<Prof
         .map_err(|e| e.to_string())?;
     let deps = &idx["dependencies"];
     let mc = deps["minecraft"].as_str().ok_or("В .mrpack нет версии Minecraft")?.to_string();
+    check_version_id(&mc)?;
     let (lid, fabric, dep_key) = if deps.get("neoforge").is_some() { ("neoforge", false, "neoforge") }
         else if deps.get("forge").is_some() { ("forge", false, "forge") }
         else if deps.get("quilt-loader").is_some() { ("quilt", true, "quilt-loader") }
         else if deps.get("fabric-loader").is_some() { ("fabric", true, "fabric-loader") }
         else { ("vanilla", false, "") };
     let loader_version = deps[dep_key].as_str().filter(|v| !v.is_empty()).map(String::from);
+    if let Some(lv) = &loader_version {
+        check_loader_version(lv)?;
+    }
     let pname = unique_name(idx["name"].as_str().unwrap_or(name_hint));
     let pdir = profile_dir(&pname);
     std::fs::create_dir_all(pdir.join("mods")).map_err(|e| e.to_string())?;
@@ -42,11 +46,18 @@ async fn from_mrpack(app: &AppHandle, ex: &Path, name_hint: &str) -> Result<Prof
                 return Err(format!("Сборка содержит небезопасный путь: {}", e));
             }
         };
+        let (sha1, size) = match pack_file_check(f) {
+            Ok(v) => v,
+            Err(e) => {
+                let _ = std::fs::remove_dir_all(&pdir);
+                return Err(format!("Сборка отклонена — {}: {}", path, e));
+            }
+        };
         let mut done = false;
         if let Some(urls) = f["downloads"].as_array() {
             for u in urls {
-                if let Some(u) = u.as_str() {
-                    if download_verify(u, &dest, f["hashes"]["sha1"].as_str(), f["fileSize"].as_u64()).await.is_ok() {
+                if let Some(u) = u.as_str().filter(|u| pack_download_allowed(u)) {
+                    if download_verify(u, &dest, Some(&sha1), size).await.is_ok() {
                         done = true;
                         break;
                     }
@@ -61,7 +72,7 @@ async fn from_mrpack(app: &AppHandle, ex: &Path, name_hint: &str) -> Result<Prof
     }
     for ov in ["overrides", "client-overrides"] {
         let src = ex.join(ov);
-        if src.exists() { let _ = copy_dir_all(&src, &pdir); }
+        if src.exists() { let _ = copy_overrides(&src, &pdir); }
     }
     commit(Profile { name: pname, version: mc, fabric, loader: Some(lid.into()), loader_version, icon: None })
 }
@@ -71,10 +82,14 @@ async fn from_cf_manifest(app: &AppHandle, ex: &Path, name_hint: &str) -> Result
     let man: Value = serde_json::from_slice(&std::fs::read(ex.join("manifest.json")).map_err(|e| e.to_string())?)
         .map_err(|e| e.to_string())?;
     let mc = man["minecraft"]["version"].as_str().ok_or("В manifest.json нет версии Minecraft")?.to_string();
+    check_version_id(&mc)?;
     let loader_full = man["minecraft"]["modLoaders"].as_array()
         .and_then(|a| a.iter().find(|m| m["primary"] == true).or_else(|| a.first()))
         .and_then(|m| m["id"].as_str()).unwrap_or("").to_string();
     let (lid, loader_version) = split_loader_id(&loader_full);
+    if let Some(lv) = &loader_version {
+        check_loader_version(lv)?;
+    }
     let pname = unique_name(man["name"].as_str().unwrap_or(name_hint));
     let pdir = profile_dir(&pname);
     std::fs::create_dir_all(pdir.join("mods")).map_err(|e| e.to_string())?;
@@ -104,7 +119,7 @@ async fn from_cf_manifest(app: &AppHandle, ex: &Path, name_hint: &str) -> Result
     }
     for name in [man["overrides"].as_str().filter(|s| !s.is_empty()).unwrap_or("overrides"), "client-overrides"] {
         let ov = safe_join(ex, name)?;
-        if ov.exists() { copy_dir_all(&ov, &pdir).map_err(|e| e.to_string())?; }
+        if ov.exists() { copy_overrides(&ov, &pdir).map_err(|e| e.to_string())?; }
     }
     let fabric = matches!(lid.as_str(), "fabric" | "quilt");
     commit(Profile { name: pname, version: mc, fabric, loader: Some(lid), loader_version, icon: None })
@@ -127,8 +142,9 @@ fn base_name(p: &Path) -> String {
 }
 
 pub async fn import_pack_file(app: AppHandle, path: Option<String>) -> Result<Profile, String> {
-    // The path from the webview is ignored: only a native pick may name a file,
-    // so a compromised webview cannot aim the import at arbitrary files.
+    // The path from the webview is ignored: only a native pick or a drop the OS
+    // itself handed to the window may name a file, so a compromised webview
+    // cannot aim the import at arbitrary files.
     let _ = path;
     let picked = pick_file(
         dialog()
@@ -137,6 +153,10 @@ pub async fn import_pack_file(app: AppHandle, path: Option<String>) -> Result<Pr
     )
     .await
     .ok_or("Отменено")?;
+    import_pack_path(app, picked).await
+}
+
+pub async fn import_pack_path(app: AppHandle, picked: std::path::PathBuf) -> Result<Profile, String> {
     if picked.is_dir() { return from_plain_dir(&picked, &base_name(&picked)); }
     if !picked.exists() { return Err("Файл не найден".into()) }
     emit(&app, "mod", 10.0, "Распаковываем сборку…");

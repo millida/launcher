@@ -120,14 +120,17 @@ export function blendPoses(player: any, from: PoseSnapshot, to: PoseSnapshot, t:
 /** Yaw плаща в skin3d — без него текстура «задом наперёд» */
 const CAPE_YAW = Math.PI;
 /** Угол покоя плаща (CapeDefaultAngle из skin3d) */
-const CAPE_REST_X = (10.8 * Math.PI) / 180;
+export const CAPE_REST_X = (10.8 * Math.PI) / 180;
 
 export function resetLimbPose(player: any): void {
   player.position.set(0, 0, 0);
   player.rotation.x = 0;
   player.rotation.z = 0;
   for (const name of PARTS) {
-    player.skin[name].rotation.set(0, 0, 0);
+    // Порядок осей тоже сбрасываем: эмоция из каталога ставит частям 'ZYX'
+    // (src/lib/cosmeticEmote.ts), и после неё покой и встроенные движения
+    // крутили руки в чужом порядке — поза выходила перекошенной.
+    player.skin[name].rotation.set(0, 0, 0, "XYZ");
   }
   // Сохраняем yaw π — иначе плащ смотрит не туда и «15» зеркалится
   player.cape.rotation.set(CAPE_REST_X, CAPE_YAW, 0);

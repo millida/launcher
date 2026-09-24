@@ -19,6 +19,7 @@ export function FilterPill({
   defaultValue,
   align = 'left',
   width = 200,
+  track,
 }: {
   icon?: string
   label: string
@@ -31,6 +32,8 @@ export function FilterPill({
   defaultValue?: string
   align?: 'left' | 'right'
   width?: number
+  /** Машинное имя фильтра для аналитики кликов: filter_<track>. */
+  track?: string
 }) {
   const pop = usePopover<HTMLDivElement>()
 
@@ -40,7 +43,7 @@ export function FilterPill({
   // Untouched filters name the facet ("Загрузчик"), not their catch-all value
   // ("любой"), which said nothing about what the pill even filters.
   const showsValue = !!cur && (defaultValue === undefined || active)
-  const trigger = multi ? label + (nSel ? ' · ' + nSel : '') : showsValue ? cap(cur!.label) : label
+  const trigger = multi ? label : showsValue ? cap(cur!.label) : label
 
   return (
     <div className="mk-pill-wrap" ref={pop.ref}>
@@ -48,11 +51,13 @@ export function FilterPill({
         type="button"
         className={'mk-pill' + (active ? ' is-active' : '') + (pop.open ? ' open' : '')}
         aria-expanded={pop.open}
-        title={label}
+        aria-label={label}
+        data-track={track ? 'filter_' + track : undefined}
         onClick={pop.toggle}
       >
         {icon ? <Icon id={icon} /> : null}
         <span>{trigger}</span>
+        {multi && nSel ? <span className="cat-pill-n">{nSel}</span> : null}
         <Icon id="i-chev-d" className="mk-chev-inline" />
       </button>
       {pop.mounted ? (
@@ -67,6 +72,8 @@ export function FilterPill({
                 key={o.value}
                 type="button"
                 className={'mk-menu-opt' + (on ? ' on' : '')}
+                data-track={track ? 'filter_' + track + '_opt' : undefined}
+                data-id={track ? o.value : undefined}
                 onClick={() => {
                   if (multi) onToggle && onToggle(o.value)
                   else {

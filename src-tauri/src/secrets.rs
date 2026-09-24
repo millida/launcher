@@ -4,7 +4,8 @@ use aes_gcm::{Aes256Gcm, Nonce};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, MutexGuard, OnceLock};
 
 // Token vault. The OS keychain is not used: the binary hash changes on every
@@ -33,7 +34,7 @@ fn legacy_mask_path() -> PathBuf {
     crate::engine::data_dir().join("secrets.key")
 }
 
-fn write_private(path: &PathBuf, bytes: &[u8]) -> std::io::Result<()> {
+fn write_private_synced(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
@@ -46,7 +47,8 @@ fn write_private(path: &PathBuf, bytes: &[u8]) -> std::io::Result<()> {
     }
     let mut f = opts.open(path)?;
     restrict_existing(&f)?;
-    f.write_all(bytes)
+    f.write_all(bytes)?;
+    f.sync_all()
 }
 
 #[cfg(unix)]
@@ -61,7 +63,7 @@ fn restrict_existing(_f: &std::fs::File) -> std::io::Result<()> {
 }
 
 /// Fails instead of overwriting, so a race for the key cannot clobber it.
-fn create_new_private(path: &PathBuf, bytes: &[u8]) -> std::io::Result<()> {
+fn create_new_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
@@ -164,6 +166,10 @@ fn device_key() -> Vec<u8> {
     KEY.get_or_init(load_device_key).clone()
 }
 
+/// False while the key in use lives only in memory: records written with it
+/// become unreadable after a restart.
+static KEY_PERSISTED: AtomicBool = AtomicBool::new(false);
+
 fn unwrap_device_key(raw: &[u8]) -> Option<Vec<u8>> {
     #[cfg(windows)]
     let out = dpapi(raw, false);
@@ -172,35 +178,71 @@ fn unwrap_device_key(raw: &[u8]) -> Option<Vec<u8>> {
     out.filter(|k| k.len() == 32)
 }
 
+fn seal_device_key(key: &[u8]) -> Vec<u8> {
+    #[cfg(windows)]
+    let sealed = dpapi(key, true).unwrap_or_else(|| key.to_vec());
+    #[cfg(not(windows))]
+    let sealed = key.to_vec();
+    sealed
+}
+
 #[cfg(unix)]
-fn restrict_path(path: &PathBuf) {
+fn restrict_path(path: &Path) {
     if let Ok(f) = std::fs::File::open(path) {
         let _ = restrict_existing(&f);
     }
 }
 
 #[cfg(not(unix))]
-fn restrict_path(_path: &PathBuf) {}
+fn restrict_path(_path: &Path) {}
+
+fn read_device_key(path: &Path) -> Option<Vec<u8>> {
+    std::fs::read(path).ok().as_deref().and_then(unwrap_device_key)
+}
 
 fn load_device_key() -> Vec<u8> {
     let path = device_key_path();
-    if let Some(k) = std::fs::read(&path).ok().as_deref().and_then(unwrap_device_key) {
+    if let Some(k) = read_device_key(&path) {
         restrict_path(&path);
+        KEY_PERSISTED.store(true, Ordering::SeqCst);
         return k;
     }
     let fresh = random_bytes(32);
-    #[cfg(windows)]
-    let stored = dpapi(&fresh, true).unwrap_or_else(|| fresh.clone());
-    #[cfg(not(windows))]
-    let stored = fresh.clone();
+    let stored = seal_device_key(&fresh);
     match create_new_private(&path, &stored) {
-        Ok(()) => fresh,
-        Err(_) => std::fs::read(&path)
-            .ok()
-            .as_deref()
-            .and_then(unwrap_device_key)
-            .unwrap_or(fresh),
+        Ok(()) => {
+            let readable = unwrap_device_key(&stored).as_deref() == Some(&fresh[..]);
+            KEY_PERSISTED.store(readable, Ordering::SeqCst);
+            fresh
+        }
+        Err(_) => match read_device_key(&path) {
+            Some(k) => {
+                KEY_PERSISTED.store(true, Ordering::SeqCst);
+                k
+            }
+            None => fresh,
+        },
     }
+}
+
+/// On an explicit sign-in an unreadable vault.key is moved aside and the key
+/// already in use is saved in its place, so the new tokens survive a restart.
+fn persist_device_key_for_login(stamp: u64) -> Result<(), String> {
+    let key = device_key();
+    if KEY_PERSISTED.load(Ordering::SeqCst) {
+        return Ok(());
+    }
+    let sealed = seal_device_key(&key);
+    if unwrap_device_key(&sealed).as_deref() != Some(&key[..]) {
+        return Err("ключ хранилища не удалось защитить средствами Windows".into());
+    }
+    let path = device_key_path();
+    if path.exists() {
+        quarantine(&path, stamp)?;
+    }
+    create_new_private(&path, &sealed).map_err(|e| format!("не удалось записать vault.key ({e})"))?;
+    KEY_PERSISTED.store(true, Ordering::SeqCst);
+    Ok(())
 }
 
 fn cipher() -> Aes256Gcm {
@@ -308,10 +350,21 @@ fn classify(text: &str, mask_present: bool) -> Stored {
     if looks_like_v1 { Stored::V1(raw) } else { Stored::Foreign }
 }
 
+/// Only a missing file is empty. Any other read failure may hide real tokens,
+/// so it is treated like a foreign file and never written over.
+fn read_stored_at(path: &Path, mask_present: bool) -> Stored {
+    match std::fs::read(path) {
+        Ok(bytes) => match String::from_utf8(bytes) {
+            Ok(text) => classify(&text, mask_present),
+            Err(_) => Stored::Foreign,
+        },
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Stored::Absent,
+        Err(_) => Stored::Foreign,
+    }
+}
+
 fn read_stored() -> Stored {
-    let Ok(bytes) = std::fs::read(vault_path()) else { return Stored::Absent };
-    let Ok(text) = String::from_utf8(bytes) else { return Stored::Foreign };
-    classify(&text, legacy_mask_path().exists())
+    read_stored_at(&vault_path(), legacy_mask_path().exists())
 }
 
 /// Secret commands run concurrently on Tauri's thread pool; without a shared
@@ -322,20 +375,80 @@ fn vault_lock() -> MutexGuard<'static, ()> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// Written via a temp file so an interrupted write cannot truncate the vault.
-fn write_items(items: &Map<String, Value>) {
+struct TempFile {
+    path: PathBuf,
+    keep: bool,
+}
+
+impl Drop for TempFile {
+    fn drop(&mut self) {
+        if !self.keep {
+            let _ = std::fs::remove_file(&self.path);
+        }
+    }
+}
+
+// Antivirus and indexers briefly hold freshly written files open on Windows,
+// so the first rename can fail with a sharing violation.
+const RENAME_RETRY_MS: [u64; 4] = [25, 50, 100, 200];
+
+fn rename_with_retry(from: &Path, to: &Path) -> std::io::Result<()> {
+    let mut result = std::fs::rename(from, to);
+    for pause in RENAME_RETRY_MS {
+        if result.is_ok() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(pause));
+        result = std::fs::rename(from, to);
+    }
+    result
+}
+
+fn sibling(path: &Path, suffix: &str) -> PathBuf {
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    path.with_file_name(format!("{name}{suffix}"))
+}
+
+fn save_error(e: &std::io::Error) -> String {
+    format!(
+        "не удалось сохранить вход на диск ({e}) — проверь, что папка лаунчера доступна для записи и её не блокирует антивирус"
+    )
+}
+
+/// The old file is replaced only by a complete, flushed copy; on failure it is
+/// left exactly as it was.
+fn replace_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    let mut tmp = TempFile { path: sibling(path, ".tmp"), keep: false };
+    write_private_synced(&tmp.path, bytes).map_err(|e| save_error(&e))?;
+    rename_with_retry(&tmp.path, path).map_err(|e| save_error(&e))?;
+    tmp.keep = true;
+    Ok(())
+}
+
+fn write_items_at(path: &Path, items: &Map<String, Value>) -> Result<(), String> {
     let doc = serde_json::json!({ "v": 2, "items": Value::Object(items.clone()) });
-    let Ok(s) = serde_json::to_string(&doc) else { return };
-    let path = vault_path();
-    let tmp = path.with_extension("bin.tmp");
-    if write_private(&tmp, s.as_bytes()).is_err() {
-        let _ = write_private(&path, s.as_bytes());
-        return;
+    let s = serde_json::to_string(&doc).map_err(|e| e.to_string())?;
+    replace_file(path, s.as_bytes())
+}
+
+fn write_items(items: &Map<String, Value>) -> Result<(), String> {
+    write_items_at(&vault_path(), items)
+}
+
+/// Moves an unreadable file aside instead of deleting it: it may still hold
+/// tokens that a newer build can read.
+fn quarantine(path: &Path, stamp: u64) -> Result<PathBuf, String> {
+    for n in 0..100u32 {
+        let suffix = if n == 0 { format!(".foreign-{stamp}") } else { format!(".foreign-{stamp}-{n}") };
+        let target = sibling(path, &suffix);
+        if target.exists() {
+            continue;
+        }
+        return rename_with_retry(path, &target)
+            .map(|()| target)
+            .map_err(|e| format!("не удалось отложить повреждённое хранилище ({e})"));
     }
-    if std::fs::rename(&tmp, &path).is_err() {
-        let _ = write_private(&path, s.as_bytes());
-        let _ = std::fs::remove_file(&tmp);
-    }
+    Err("не удалось отложить повреждённое хранилище: все имена заняты".into())
 }
 
 fn migrate_v1(raw: &Map<String, Value>) -> Map<String, Value> {
@@ -348,8 +461,12 @@ fn migrate_v1(raw: &Map<String, Value>) -> Map<String, Value> {
             migrated.insert(k.clone(), rec);
         }
     }
-    write_items(&migrated);
-    let _ = std::fs::remove_file(legacy_mask_path());
+    match write_items(&migrated) {
+        Ok(()) => {
+            let _ = std::fs::remove_file(legacy_mask_path());
+        }
+        Err(e) => eprintln!("[secrets] миграция хранилища не сохранена, маска оставлена: {e}"),
+    }
     migrated
 }
 
@@ -379,15 +496,7 @@ pub fn set(key: &str, value: &str) -> Result<(), String> {
     if key.is_empty() {
         return Err("empty key".into());
     }
-    let _guard = vault_lock();
-    let mut vault = items();
-    if !vault.writable {
-        return Err(FOREIGN_VAULT.into());
-    }
-    let rec = encrypt(key, value).ok_or("не удалось зашифровать секрет")?;
-    vault.items.insert(key.to_string(), rec);
-    write_items(&vault.items);
-    Ok(())
+    set_many(vec![(key.to_string(), value.to_string())])
 }
 
 pub fn get(key: &str) -> Option<String> {
@@ -401,25 +510,75 @@ pub fn delete(key: &str) -> Result<(), String> {
     let _guard = vault_lock();
     let mut vault = items();
     if vault.items.remove(key).is_some() && vault.writable {
-        write_items(&vault.items);
+        write_items(&vault.items)?;
     }
     Ok(())
 }
 
-pub fn set_many(pairs: Vec<(String, String)>) -> Result<(), String> {
-    let _guard = vault_lock();
-    let mut vault = items();
-    if !vault.writable {
-        return Err(FOREIGN_VAULT.into());
-    }
+fn insert_pairs(items: &mut Map<String, Value>, pairs: Vec<(String, String)>) -> Result<(), String> {
     for (key, value) in pairs {
         if key.is_empty() {
             continue;
         }
         let rec = encrypt(&key, &value).ok_or("не удалось зашифровать секрет")?;
-        vault.items.insert(key, rec);
+        items.insert(key, rec);
     }
-    write_items(&vault.items);
+    Ok(())
+}
+
+fn set_many_at(path: &Path, mask_present: bool, pairs: Vec<(String, String)>) -> Result<(), String> {
+    let mut items = match read_stored_at(path, mask_present) {
+        Stored::Foreign => return Err(FOREIGN_VAULT.into()),
+        Stored::Absent => Map::new(),
+        Stored::V2(items) => items,
+        Stored::V1(raw) => migrate_v1(&raw),
+    };
+    insert_pairs(&mut items, pairs)?;
+    write_items_at(path, &items)
+}
+
+pub fn set_many(pairs: Vec<(String, String)>) -> Result<(), String> {
+    let _guard = vault_lock();
+    set_many_at(&vault_path(), legacy_mask_path().exists(), pairs)
+}
+
+/// Background writes keep refusing a foreign vault, so a downgrade never
+/// destroys it. An explicit sign-in is the user asking to start over: the
+/// unreadable file is moved aside and a fresh vault takes its place.
+fn store_login_at(
+    path: &Path,
+    mask_present: bool,
+    pairs: Vec<(String, String)>,
+    stamp: u64,
+) -> Result<Option<PathBuf>, String> {
+    let (mut items, moved) = match read_stored_at(path, mask_present) {
+        Stored::Foreign => (Map::new(), Some(quarantine(path, stamp)?)),
+        Stored::Absent => (Map::new(), None),
+        Stored::V2(items) => (items, None),
+        Stored::V1(raw) => (migrate_v1(&raw), None),
+    };
+    insert_pairs(&mut items, pairs)?;
+    write_items_at(path, &items)?;
+    Ok(moved)
+}
+
+fn unix_now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or_default()
+}
+
+pub fn store_login(pairs: Vec<(String, String)>) -> Result<(), String> {
+    let _guard = vault_lock();
+    let stamp = unix_now();
+    if let Err(e) = persist_device_key_for_login(stamp) {
+        eprintln!("[secrets] ключ хранилища сохранится только до перезапуска: {e}");
+    }
+    let moved = store_login_at(&vault_path(), legacy_mask_path().exists(), pairs, stamp)?;
+    if let Some(moved) = moved {
+        eprintln!("[secrets] нечитаемое хранилище отложено в {}", moved.display());
+    }
     Ok(())
 }
 
@@ -511,6 +670,193 @@ mod tests {
                  Reason this case is pinned: {why}",
             );
         }
+    }
+
+    struct Scratch(PathBuf);
+
+    impl Scratch {
+        fn new(tag: &str) -> Self {
+            let nanos = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or_default();
+            let dir = std::env::temp_dir().join(format!("millida-secrets-{tag}-{}-{nanos}", std::process::id()));
+            std::fs::create_dir_all(&dir).expect("scratch dir");
+            Scratch(dir)
+        }
+
+        fn vault(&self) -> PathBuf {
+            self.0.join("secrets.bin")
+        }
+
+        fn temp_leftovers(&self) -> Vec<String> {
+            std::fs::read_dir(&self.0)
+                .expect("scratch listing")
+                .filter_map(|e| e.ok())
+                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .filter(|n| n.ends_with(".tmp"))
+                .collect()
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn login_pairs() -> Vec<(String, String)> {
+        vec![("millida".to_string(), "fresh-access".to_string())]
+    }
+
+    fn stored_token(path: &Path) -> Option<String> {
+        match read_stored_at(path, false) {
+            Stored::V2(items) => decrypt("millida", items.get("millida")?),
+            _ => None,
+        }
+    }
+
+    type VaultCase = (&'static str, fn(&Path), Stored, &'static str);
+
+    #[test]
+    fn read_failure_verdicts() {
+        // (what lies at the vault path, expected verdict, why this case is pinned)
+        let cases: &[VaultCase] = &[
+            ("missing", |_| {}, Stored::Absent, "a clean install has nothing to lose"),
+            (
+                "directory",
+                |p| std::fs::create_dir_all(p).expect("dir"),
+                Stored::Foreign,
+                "a read error is not an empty vault: writing over it could destroy live tokens",
+            ),
+            (
+                "non-utf8",
+                |p| std::fs::write(p, [0xff, 0xfe, 0x00]).expect("bytes"),
+                Stored::Foreign,
+                "bytes this build cannot parse may still be a damaged real vault",
+            ),
+            (
+                "v2",
+                |p| std::fs::write(p, r#"{"v":2,"items":{}}"#).expect("v2"),
+                Stored::V2(Map::new()),
+                "the current format must keep loading",
+            ),
+        ];
+        for (name, setup, expected, why) in cases {
+            let scratch = Scratch::new("read");
+            setup(&scratch.vault());
+            let verdict = read_stored_at(&scratch.vault(), false);
+            assert_eq!(verdict, *expected, "vault path holding {name} judged {verdict:?}. Reason this case is pinned: {why}");
+        }
+    }
+
+    #[test]
+    fn explicit_login_verdicts() {
+        // (vault contents before sign-in, moved aside, why this case is pinned)
+        let cases: &[(&str, Option<&[u8]>, bool, &str)] = &[
+            ("no vault", None, false, "a first sign-in just creates the vault"),
+            ("empty file", Some(b""), false, "an empty file holds nothing worth keeping"),
+            (
+                "truncated json",
+                Some(b"{\"v\":2,\"items\":{\"mill"),
+                true,
+                "a vault cut short by a crash used to block every sign-in with \u{ab}code expired\u{bb} for days",
+            ),
+            (
+                "newer format",
+                Some(br#"{"v":9,"items":{"millida":{"n":"00","c":"00"}}}"#),
+                true,
+                "a newer build's vault is kept on disk for that build, not destroyed",
+            ),
+            ("binary garbage", Some(&[0xff, 0xfe, 0x00]), true, "unparsable bytes must not block the sign-in"),
+        ];
+        for (name, before, moved_expected, why) in cases {
+            let scratch = Scratch::new("login");
+            let vault = scratch.vault();
+            if let Some(bytes) = before {
+                std::fs::write(&vault, bytes).expect("seed vault");
+            }
+            let moved = store_login_at(&vault, false, login_pairs(), 42)
+                .unwrap_or_else(|e| panic!("sign-in over {name} failed with {e:?}. Reason this case is pinned: {why}"));
+            assert_eq!(
+                stored_token(&vault).as_deref(),
+                Some("fresh-access"),
+                "sign-in over {name} did not leave a readable token. Reason this case is pinned: {why}",
+            );
+            assert_eq!(moved.is_some(), *moved_expected, "sign-in over {name}: moved aside = {moved:?}. Reason: {why}");
+            if let (Some(moved), Some(bytes)) = (moved, before) {
+                assert_eq!(
+                    std::fs::read(&moved).expect("moved file").as_slice(),
+                    *bytes,
+                    "the unreadable vault from {name} must survive byte for byte: it may hold a newer build's tokens",
+                );
+            }
+            assert!(scratch.temp_leftovers().is_empty(), "sign-in over {name} left temp files behind");
+        }
+    }
+
+    #[test]
+    fn explicit_login_keeps_other_accounts() {
+        let scratch = Scratch::new("keep");
+        let vault = scratch.vault();
+        let mut items = Map::new();
+        items.insert("ms-refresh".into(), encrypt("ms-refresh", "keep-me").expect("encrypt"));
+        write_items_at(&vault, &items).expect("seed");
+        let moved = store_login_at(&vault, false, login_pairs(), 1).expect("sign-in");
+        assert!(moved.is_none(), "a readable vault must never be moved aside");
+        let Stored::V2(after) = read_stored_at(&vault, false) else { panic!("vault unreadable after sign-in") };
+        assert_eq!(
+            after.get("ms-refresh").and_then(|r| decrypt("ms-refresh", r)).as_deref(),
+            Some("keep-me"),
+            "signing in to Millida must not drop the Microsoft accounts stored next to it",
+        );
+    }
+
+    #[test]
+    fn background_writes_still_refuse_foreign_vault() {
+        let scratch = Scratch::new("bg");
+        let vault = scratch.vault();
+        let original = br#"{"v":9,"items":{}}"#;
+        std::fs::write(&vault, original).expect("seed");
+        let result = set_many_at(&vault, false, login_pairs());
+        assert_eq!(result, Err(FOREIGN_VAULT.to_string()), "a token refresh must not start over a vault it cannot read");
+        assert_eq!(
+            std::fs::read(&vault).expect("vault").as_slice(),
+            original,
+            "only an explicit sign-in may move a foreign vault; a downgrade must leave it intact",
+        );
+    }
+
+    #[test]
+    fn replace_file_verdicts() {
+        let scratch = Scratch::new("replace");
+        let target = scratch.0.join("ok.bin");
+        std::fs::write(&target, b"old").expect("seed");
+        replace_file(&target, b"new").expect("replace");
+        assert_eq!(std::fs::read(&target).expect("read"), b"new", "a successful save must replace the content");
+
+        let blocked = scratch.0.join("blocked.bin");
+        std::fs::create_dir_all(blocked.join("inside")).expect("dir");
+        let result = replace_file(&blocked, b"new");
+        assert!(result.is_err(), "a rename that keeps failing must reach the caller, not be swallowed");
+        assert!(
+            blocked.join("inside").is_dir(),
+            "a failed save must leave the original untouched: the old code wrote straight over it",
+        );
+        assert!(scratch.temp_leftovers().is_empty(), "the temp file must be removed on the error path too");
+    }
+
+    #[test]
+    fn quarantine_never_overwrites_earlier_copy() {
+        let scratch = Scratch::new("quarantine");
+        let vault = scratch.vault();
+        std::fs::write(&vault, b"second").expect("seed");
+        let earlier = sibling(&vault, ".foreign-7");
+        std::fs::write(&earlier, b"first").expect("earlier");
+        let moved = quarantine(&vault, 7).expect("quarantine");
+        assert_eq!(std::fs::read(&earlier).expect("earlier"), b"first", "an earlier set-aside copy must survive");
+        assert_eq!(std::fs::read(&moved).expect("moved"), b"second", "the new copy must land under a free name");
+        assert!(!vault.exists(), "the vault path must be free for the fresh vault");
     }
 
     #[test]

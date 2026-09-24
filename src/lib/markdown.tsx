@@ -1,10 +1,20 @@
 import type { ReactNode } from 'react'
-import { mirrorAsset } from './api'
+import { mirrorAsset, openExt } from './api'
 
 const H4_STYLE = { margin: '12px 0 6px', color: 'var(--m-fg)' }
 const H3_STYLE = { margin: '14px 0 6px', color: 'var(--m-fg)' }
 const IMG_STYLE = { maxWidth: '100%', borderRadius: '10px', margin: '8px 0' }
 const LINK_STYLE = { color: 'var(--m-accent)' }
+
+// Картинки из чужих описаний: хост не должен узнать, откуда пришёл запрос,
+// а прокси /launcher/dl принимает только известные CDN (mirrorAsset).
+const IMG_SAFE = { referrerPolicy: 'no-referrer' as const, loading: 'lazy' as const }
+
+/// Ссылка из описания открывается в браузере: иначе окно лаунчера уходит на чужой сайт.
+const external = (href: string) => (e: { preventDefault(): void }) => {
+  e.preventDefault()
+  openExt(href)
+}
 
 const REF = '\u0000'
 const B_OPEN = '\u0001'
@@ -23,12 +33,12 @@ function ref(ctx: Ctx, node: ReactNode): string {
 function transform(src: string, ctx: Ctx): string {
   let s = src.replace(/\*\*([\s\S]+?)\*\*/g, (_m, g1) => B_OPEN + g1 + B_CLOSE)
   s = s.replace(/!\[[^\]]*\]\((https?:[^)]+)\)/g, (_m, url) =>
-    ref(ctx, <img key={'md' + ctx.key++} src={mirrorAsset(url)} style={IMG_STYLE} />),
+    ref(ctx, <img key={'md' + ctx.key++} src={mirrorAsset(url)} style={IMG_STYLE} {...IMG_SAFE} />),
   )
   s = s.replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, (_m, text, href) =>
     ref(
       ctx,
-      <a key={'md' + ctx.key++} href={href} style={LINK_STYLE}>
+      <a key={'md' + ctx.key++} href={href} style={LINK_STYLE} onClick={external(href)}>
         {assemble(text, ctx)}
       </a>,
     ),
@@ -129,14 +139,14 @@ function htmlNodes(node: Node, ctx: Ctx): ReactNode[] {
     }
     if (tag === 'IMG') {
       const src = el.getAttribute('src') || ''
-      if (/^https?:/i.test(src)) out.push(<img key={key} src={mirrorAsset(src)} style={IMG_STYLE} />)
+      if (/^https?:/i.test(src)) out.push(<img key={key} src={mirrorAsset(src)} style={IMG_STYLE} {...IMG_SAFE} />)
       return
     }
     if (tag === 'A') {
       const href = el.getAttribute('href') || ''
       out.push(
         /^https?:/i.test(href) ? (
-          <a key={key} href={href} style={LINK_STYLE}>
+          <a key={key} href={href} style={LINK_STYLE} onClick={external(href)}>
             {htmlNodes(el, ctx)}
           </a>
         ) : (

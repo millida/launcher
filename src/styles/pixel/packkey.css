@@ -1,0 +1,100 @@
+/* ============================================================
+   БАННЕР ПЛАТНОЙ СБОРКИ «нет доступа» (24.09.2026, правка владельца 16:39).
+   Вместо сухого окна ключа — обложка сборки, факты крупно, плюсы значками,
+   цена и «Купить», ниже ввод ключа. Рамка и срез угла — от .modal (12-pixel).
+   Золото — тёплый токен кита (--m-warning), как у премиума в «Во что играем».
+   ============================================================ */
+
+.modal.pkb {
+  display: flex;
+  flex-direction: column;
+  width: 720px;
+  max-width: calc(100vw - 32px);
+  padding: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.pkb-art {
+  position: relative;
+  flex: none;
+  height: 240px;
+  overflow: hidden;
+  background: var(--m-inset);
+}
+.pkb-art > img,
+.pkb-art-ph {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.pkb-tag {
+  position: absolute;
+  top: 14px;
+  left: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 9px;
+  font: 800 12px/1 var(--m-font);
+  color: #241600;
+  background: var(--m-warning);
+  --px-n: 4px;
+  clip-path: var(--px-4);
+}
+.pkb-tag svg { width: 14px; height: 14px; }
+.btn.pkb-x { position: absolute; top: 12px; right: 12px; width: 34px; padding: 0; justify-content: center; }
+.btn.pkb-x svg { width: 16px; height: 16px; }
+
+.pkb-body { display: flex; flex-direction: column; gap: 16px; padding: 18px 22px 22px; }
+.pkb-head { display: flex; flex-direction: column; gap: 6px; }
+.modal.pkb .pkb-head h3 { margin: 0; font: 800 30px/1.05 var(--m-font); letter-spacing: -0.02em; color: var(--m-fg); }
+.pkb-line { margin: 0; font-size: 14px; line-height: 1.4; color: var(--m-fg-muted); }
+
+.pkb-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+.pkb-fact {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 70px;
+  padding: 12px 14px;
+  background: var(--m-surface);
+  --px-n: 5px;
+  clip-path: var(--px-5);
+}
+.pkb-fact b { font: 800 26px/1 var(--m-font); letter-spacing: -0.02em; color: var(--m-fg); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pkb-fact span { font-size: 12.5px; color: var(--m-fg-muted); }
+
+.pkb-plus { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; margin: 0; padding: 0; list-style: none; }
+.pkb-plus li { display: flex; align-items: center; gap: 10px; min-width: 0; font: 650 14px/1.25 var(--m-font); color: var(--m-fg); }
+.pkb-plus svg {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  padding: 7px;
+  color: var(--m-warning);
+  background: color-mix(in srgb, var(--m-warning) 14%, transparent);
+  --px-n: 4px;
+  clip-path: var(--px-4);
+}
+
+.pkb-buy { display: flex; align-items: center; justify-content: flex-end; gap: 16px; }
+.pkb-price { margin-right: auto; font: 800 26px/1 var(--m-font); color: var(--m-warning); font-variant-numeric: tabular-nums; }
+.btn.pkb-cta { min-width: 180px; justify-content: center; }
+.pkb-buy:not(:has(.pkb-price)) .btn.pkb-cta { flex: 1; }
+
+.pkb-key { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px 14px; background: var(--m-inset); --px-n: 5px; clip-path: var(--px-5); }
+.pkb-key-why { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--m-fg-subtle); }
+.pkb-key-why svg { width: 14px; height: 14px; }
+.pkb-key-row { display: flex; gap: 8px; }
+.pkb-key-row .input { flex: 1; min-width: 0; letter-spacing: 0.06em; }
+.pkb-err { font-size: 13px; color: var(--m-danger); }
+
+@media (max-width: 640px) {
+  .pkb-art { height: 180px; }
+  .pkb-plus { grid-template-columns: minmax(0, 1fr); }
+  .pkb-key-row { flex-direction: column; }
+}

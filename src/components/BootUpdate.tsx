@@ -24,9 +24,8 @@ export function BootUpdate() {
             style={pct ? { width: pct + '%' } : undefined}
           />
         </div>
-        <div className="boot-upd-note">
-          {phase === 'installing' ? 'Лаунчер перезапустится сам' : 'Это займёт несколько секунд'}
-        </div>
+        {/* «Это займёт несколько секунд» снято: обещание без замера (аудит 22.09.2026). */}
+        {phase === 'installing' ? <div className="boot-upd-note">Лаунчер перезапустится сам</div> : null}
       </div>
     </div>
   )

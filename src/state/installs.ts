@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { activeInstalls, cancelInstall } from '../ipc/commands'
 import { listenInstallProgress } from '../ipc/events'
 import { hasTauri } from '../ipc/tauri'
+import { reportInstallFailure } from '../lib/crash'
 import { showToast } from './ui'
 
 // Install jobs live in the core and outlive the component that started them, so
@@ -126,6 +127,7 @@ export function runInstall<T>(o: RunOptions<T>): boolean {
         showToast('Установка «' + (o.title || '') + '» отменена', 'ok', false)
         return
       }
+      void reportInstallFailure(o.key, o.title, e)
       useInstalls.getState().patch(o.key, { label: '', msg: String(e), state: 'error' })
       fade(o.key, 4000)
       if (o.onError) o.onError(e)
@@ -152,6 +154,9 @@ export function initInstalls(): void {
   void listenInstallProgress((p) => {
     const known = useInstalls.getState().tasks[p.key]
     if (p.done) {
+      // Reported here and in runInstall alike: whichever lands second carries
+      // the same text and is dropped by the reporter's per-session dedupe.
+      if (p.error && !isCancelled(p.error)) void reportInstallFailure(p.key, p.title, p.error)
       if (!known) return
       if (p.error && known.state === 'run') {
         const cancelled = isCancelled(p.error)

@@ -205,6 +205,30 @@ pub(crate) fn bridged_project<'a>(ctx: &Ctx, project_id: &'a str) -> &'a str {
     }
 }
 
+/// Fabric API in either of its two Modrinth guises: the stock project and the
+/// Forge/NeoForge port Connector installs in its place.
+pub(crate) fn is_fabric_api_family(project_id: &str) -> bool {
+    matches!(project_id, FABRIC_API | FORGIFIED_FABRIC_API | "fabric-api")
+}
+
+/// A build installed from the catalogue, rather than assembled by the player.
+/// Its mod set is one tested whole shipped by us, so a jar it carries is not a
+/// free choice the launcher may second-guess against Modrinth "latest".
+fn is_catalog_pack(profile: &str) -> bool {
+    profile_settings(profile)["catalogPackSlug"].as_str().is_some_and(|s| !s.is_empty())
+}
+
+/// Whether this build's Fabric API is load-bearing and must stay exactly as it
+/// was installed. It is on a catalogue pack (Celestia 3.0 ships Fabric API 0.92.7
+/// under Kilt, and the stock 0.92.12 installs cleanly by loader tag, then its
+/// tag mixins collide with Kilt and the world never loads), and on a bridged
+/// build, where Connector's own port is the only Fabric API that loads at all.
+/// In both cases the launcher did not pick the version freely, so "newer on
+/// Modrinth" is not a reason to swap the jar out from under the pack.
+pub(crate) fn fabric_api_pinned(profile: &str, bridge: &[String], project_id: &str) -> bool {
+    is_fabric_api_family(project_id) && (!bridge.is_empty() || is_catalog_pack(profile))
+}
+
 /// Modrinth spells the relation out; anything else (embedded libraries, tools)
 /// is already inside the jar and must not become an install of its own.
 pub(crate) fn mr_relation(t: &str) -> &'static str {
@@ -1054,5 +1078,34 @@ mod tests {
         assert_eq!(bridged_project(&on, "fabric-api"), FORGIFIED_FABRIC_API);
         assert_eq!(bridged_project(&on, "sodium"), "sodium", "only Fabric API is ported");
         assert_eq!(bridged_project(&off, FABRIC_API), FABRIC_API, "no bridge — install what was asked for");
+    }
+
+    /// Both spellings of Fabric API — the stock project and Connector's Forge port
+    /// — count as the same jar, so no update path (batch, single or bulk) can swap
+    /// one in for the other and none can be missed.
+    #[test]
+    fn fabric_api_family_covers_both_spellings() {
+        assert!(is_fabric_api_family(FABRIC_API), "stock Fabric API");
+        assert!(is_fabric_api_family(FORGIFIED_FABRIC_API), "Connector's Forge port of it");
+        assert!(is_fabric_api_family("fabric-api"), "the jar-declared id spelled out");
+        assert!(!is_fabric_api_family("sodium"), "an ordinary mod updates freely");
+        assert!(!is_fabric_api_family(""), "an empty id is not the family");
+    }
+
+    /// Celestia 3.0 upgraded its shipped Fabric API 0.92.7 to the Modrinth latest
+    /// 0.92.12; the newer tag mixins then collided with Kilt and the world hung on
+    /// creation. The pin has to hold on a bridged build (Connector's port) and,
+    /// with no bridge at all, whenever the build came from the catalogue — and it
+    /// must never touch an ordinary mod. The catalogue branch reads profile
+    /// settings from disk; a name with no profile behind it stands in for a
+    /// hand-built Fabric instance, where Fabric API updates as usual.
+    #[test]
+    fn fabric_api_is_pinned_on_bridged_and_catalogue_builds() {
+        let bridged = ["fabric".to_string()];
+        let no_bridge: [String; 0] = [];
+        assert!(fabric_api_pinned("no-such-profile", &bridged, FABRIC_API), "bridged build pins it regardless of origin");
+        assert!(fabric_api_pinned("no-such-profile", &bridged, FORGIFIED_FABRIC_API), "the Forge port is the same pin");
+        assert!(!fabric_api_pinned("no-such-profile", &bridged, "sodium"), "only Fabric API is pinned, not the whole build");
+        assert!(!fabric_api_pinned("no-such-profile", &no_bridge, FABRIC_API), "a hand-built Fabric instance updates Fabric API freely");
     }
 }

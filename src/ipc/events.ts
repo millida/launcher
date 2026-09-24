@@ -34,6 +34,23 @@ export function listenInstallProgress(handler: (p: InstallProgress) => void): Pr
   return T.event.listen<InstallProgress>('install-progress', (e) => handler(e.payload)).catch(() => null)
 }
 
+export interface DroppedPack {
+  id: number
+  name: string
+}
+
+export function listenPackDrag(handler: (over: boolean) => void): Promise<UnlistenFn | null> {
+  const T = tauri()
+  if (!T) return Promise.resolve(null)
+  return T.event.listen<boolean>('pack-drag', (e) => handler(e.payload)).catch(() => null)
+}
+
+export function listenPackDrop(handler: (packs: DroppedPack[]) => void): Promise<UnlistenFn | null> {
+  const T = tauri()
+  if (!T) return Promise.resolve(null)
+  return T.event.listen<DroppedPack[]>('pack-drop', (e) => handler(e.payload || [])).catch(() => null)
+}
+
 export function listenGameExit(handler: (profile: string) => void): Promise<UnlistenFn | null> {
   const T = tauri()
   if (!T) return Promise.resolve(null)
@@ -83,6 +100,14 @@ export function listenHostConsole(handler: (line: string) => void): Promise<Unli
   return T.event.listen<string>('host-console', (e) => handler(e.payload)).catch(() => null)
 }
 
+/// End of the log the node replays on connect. What came before it is history
+/// the server had already written, what comes after is live.
+export function listenHostConsoleReplayEnd(handler: () => void): Promise<UnlistenFn | null> {
+  const T = tauri()
+  if (!T) return Promise.resolve(null)
+  return T.event.listen('host-console-replay-end', () => handler()).catch(() => null)
+}
+
 // The core batches lines; a bare string is still accepted for older core builds.
 export function listenGameLog(handler: (lines: string[]) => void): Promise<UnlistenFn | null> {
   const T = tauri()
@@ -118,6 +143,16 @@ export interface CrashInfo {
   tail: string
   culprits?: string[]
   actions?: CrashAction[]
+}
+export interface PackAccessLost {
+  profile: string
+  message: string
+  removed: boolean
+}
+export function listenPackAccessLost(handler: (info: PackAccessLost) => void): Promise<UnlistenFn | null> {
+  const T = tauri()
+  if (!T) return Promise.resolve(null)
+  return T.event.listen<PackAccessLost>('pack-access-lost', (e) => handler(e.payload)).catch(() => null)
 }
 export function listenGameCrash(handler: (info: CrashInfo) => void): Promise<UnlistenFn | null> {
   const T = tauri()

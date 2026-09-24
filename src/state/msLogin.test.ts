@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test'
+import { beforeEach, describe, expect, jest, mock, test } from 'bun:test'
 
 const store = new Map<string, string>()
 // Stands in for the core vault: the webview only ever learns that a session exists.
@@ -135,6 +135,26 @@ describe('ensureMsAuth', () => {
     const r = await ensureMsAuth()
     expect(r?.id).toBe('a1')
     expect(vault.has('a1')).toBe(true)
+  })
+
+  test('Microsoft молчит — запуск не ждёт продления дольше 15 с и идёт с сохранённым токеном', async () => {
+    seed(Date.now() - HOUR)
+    let answer: (v: unknown) => void = () => {}
+    refreshImpl = () =>
+      new Promise((resolve) => {
+        answer = resolve
+      })
+    jest.useFakeTimers()
+    try {
+      const pending = ensureMsAuth()
+      jest.advanceTimersByTime(15000)
+      const r = await pending
+      expect(r?.id).toBe('a1')
+      expect(vault.has('a1')).toBe(true)
+    } finally {
+      jest.useRealTimers()
+      answer({ status: 'none' })
+    }
   })
 
   test('без сохранённой сессии Minecraft не опрашивается', async () => {

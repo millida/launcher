@@ -1,9 +1,9 @@
 import { playRemote, type RemoteAudio } from './audio'
 import { iceConfig } from './ice'
 import { createPeer, type Peer, type PeerFlags } from './peer'
-import { peerFlagsPatch, screenEncodingFor, type PeerState } from './mesh-rules'
+import { camEncodingFor, peerFlagsPatch, screenEncodingFor, type PeerState } from './mesh-rules'
 
-export { peerFlagsPatch, politeToward, screenBitrateFor, screenEncodingFor } from './mesh-rules'
+export { camBitrateFor, camEncodingFor, peerFlagsPatch, politeToward, screenBitrateFor, screenEncodingFor } from './mesh-rules'
 export type { PeerState } from './mesh-rules'
 
 export type SignalKind = 'offer' | 'answer' | 'ice'
@@ -37,6 +37,8 @@ export class CallSession {
   private screenVideo: MediaStreamTrack | null = null
   private screenAudio: MediaStreamTrack | null = null
   private screenFps = 30
+  private camVideo: MediaStreamTrack | null = null
+  private camFps = 24
   private volume = 100
   private deafened = false
 
@@ -79,6 +81,7 @@ export class CallSession {
         slot.screenAudio.setDeafened(this.deafened)
       },
       onRemoteScreen: (stream) => this.cb.onPeer(peerId, { screen: stream, sharing: !!stream }),
+      onRemoteCam: (stream) => this.cb.onPeer(peerId, { cam: stream, camOn: !!stream }),
       onFlags: (flags: PeerFlags) => this.cb.onPeer(peerId, peerFlagsPatch(flags)),
       onConnection: (state) => {
         this.cb.onPeer(peerId, { connection: state })
@@ -89,6 +92,7 @@ export class CallSession {
     if (this.mic) await slot.peer.setMicTrack(this.mic)
     if (this.screenVideo) await slot.peer.setScreenTrack(this.screenVideo, this.screenEncoding())
     if (this.screenAudio) await slot.peer.setScreenAudioTrack(this.screenAudio)
+    if (this.camVideo) await slot.peer.setCamTrack(this.camVideo, this.camEncoding())
   }
 
   drop(peerId: string): void {
@@ -129,8 +133,19 @@ export class CallSession {
     }
   }
 
+  async setCam(video: MediaStreamTrack | null, fps = this.camFps): Promise<void> {
+    this.camVideo = video
+    this.camFps = fps
+    const encoding = this.camEncoding()
+    for (const slot of this.slots.values()) await slot.peer.setCamTrack(video, encoding)
+  }
+
   private screenEncoding(): RTCRtpEncodingParameters {
     return screenEncodingFor(this.slots.size, this.screenFps)
+  }
+
+  private camEncoding(): RTCRtpEncodingParameters {
+    return camEncodingFor(this.slots.size, this.camFps)
   }
 
 
@@ -175,5 +190,6 @@ export class CallSession {
     this.mic = null
     this.screenVideo = null
     this.screenAudio = null
+    this.camVideo = null
   }
 }

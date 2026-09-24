@@ -12,21 +12,21 @@ type Kind = 'millida' | 'microsoft' | 'offline'
 const KINDS: { id: Kind; ic: string; title: string; sub: string }[] = [
   {
     id: 'millida',
-    ic: 'i-key',
+    ic: 'i-mo-key',
     title: 'Аккаунт Millida',
-    sub: 'Почта, Discord или Telegram — ник, друзья и баланс Millida',
+    sub: 'Друзья, ник и баланс',
   },
   {
     id: 'microsoft',
-    ic: 'i-shield',
+    ic: 'i-mo-shield',
     title: 'Лицензия Microsoft',
-    sub: 'Официальный Minecraft: сервера с лицензией, свой скин и плащ',
+    sub: 'Лицензионные серверы, свой скин',
   },
   {
     id: 'offline',
-    ic: 'i-user',
+    ic: 'i-mo-user',
     title: 'Офлайн-аккаунт',
-    sub: 'Без лицензии — только ник для пиратских серверов',
+    sub: 'Только ник, без лицензии',
   },
 ]
 
@@ -101,7 +101,7 @@ function KindPanel({ kind, onBack, onDone }: { kind: Kind; onBack: () => void; o
             />
           </div>
           <button className="btn md primary" style={{ width: '100%', marginTop: '12px' }} onClick={createOffline}>
-            Создать аккаунт
+            Создать
           </button>
         </div>
       ) : (
@@ -110,7 +110,7 @@ function KindPanel({ kind, onBack, onDone }: { kind: Kind; onBack: () => void; o
             <>
               <button
                 className="acc-code"
-                title="Скопировать код"
+                aria-label="Скопировать код"
                 onClick={() => void (kind === 'millida' ? copyUserCode() : copyMsCode())}
               >
                 <span>{code}</span>
@@ -126,10 +126,9 @@ function KindPanel({ kind, onBack, onDone }: { kind: Kind; onBack: () => void; o
                 </button>
                 <button
                   className="btn sm ghost"
-                  title="Скопировать ссылку"
                   onClick={() => (kind === 'millida' ? copyVerifyLink() : copyMsVerifyLink())}
                 >
-                  Ссылка
+                  Копировать ссылку
                 </button>
                 <button
                   className="btn sm ghost"
@@ -150,12 +149,13 @@ function KindPanel({ kind, onBack, onDone }: { kind: Kind; onBack: () => void; o
               {busy ? 'Ждём подтверждения…' : kind === 'millida' ? 'Войти через Millida' : 'Войти через Microsoft'}
             </button>
           )}
-          <p className="faint-note" style={{ marginTop: '12px', lineHeight: 1.55 }}>
-            {hint ||
-              (kind === 'millida'
-                ? 'Откроется страница Millida — войди почтой, Discord или Telegram и подтверди код.'
-                : 'Откроется страница Microsoft — введи код и войди в аккаунт с лицензией Minecraft.')}
-          </p>
+          {/* Пояснение по умолчанию снято: кнопка «Войти через …» и код говорят сами.
+              Живую подсказку процесса входа (hint) оставляем — это статус, а не абзац. */}
+          {hint ? (
+            <p className="faint-note" style={{ marginTop: '12px', lineHeight: 1.5 }}>
+              {hint}
+            </p>
+          ) : null}
         </div>
       )}
     </>
@@ -190,7 +190,6 @@ export function AccountAddModal() {
     >
       <div className="modal mw-sm" style={{ display: 'flex', flexDirection: 'column' }}>
         <h3>Добавить аккаунт</h3>
-        <div className="sub">Аккаунты можно переключать в любой момент — прогресс и сборки общие.</div>
 
         <div style={{ marginTop: '18px', display: 'flex', flexDirection: 'column' }}>
           {kind ? (
@@ -218,11 +217,11 @@ export function AccountAddModal() {
                 }}
               >
                 <span className="acc-buy-ic">
-                  <Icon id="i-bag" />
+                  <Icon id="i-mo-bag" />
                 </span>
                 <span style={{ flex: 1, minWidth: 0 }}>
-                  <b style={{ display: 'block', fontSize: '13.5px', fontWeight: 700 }}>Купить лицензию Minecraft</b>
-                  <span style={{ fontSize: '12px', opacity: 0.9 }}>Официальный ключ на Blups — дешевле и сразу</span>
+                  <b style={{ display: 'block', fontSize: '13.5px', fontWeight: 700 }}>Купить лицензию</b>
+                  <span className="acc-buy-sub">Ключ Minecraft на Blups</span>
                 </span>
                 <Icon id="i-ext" />
               </a>

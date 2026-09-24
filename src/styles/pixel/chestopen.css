@@ -1,0 +1,329 @@
+/* Открытие сундука — src/components/daily/ChestOpen.tsx (24.09.2026).
+   Сцена тёмная, свет только в сцене: лучи и ореол цвета редкости. Плашки —
+   плотная заливка, рамка двумя слоями со ступенькой 10 px (внешний и
+   внутренний срез равны — линия сплошная по всему силуэту).
+   --co-glow — свет в щелях (растёт по ударам до лучшей вещи),
+   --rw-tone — цвет сцены (лучи и взрыв из reward.css), --co-it — цвет вещи,
+   --co-k — доля ударов 0…1. */
+
+.co {
+  position: fixed;
+  inset: 0;
+  z-index: 970;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: rgba(3, 6, 10, 0.95);
+  color: #fff;
+  user-select: none;
+  animation: co-in 0.18s linear both;
+}
+.co.stage-hit { cursor: pointer; }
+@keyframes co-in { from { opacity: 0; } }
+
+/* ── Шапка ── */
+.co-head {
+  position: absolute;
+  z-index: 6;
+  /* Ниже полосы заголовка окна лаунчера (44 px). */
+  top: 56px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.co-title { font-size: 18px; font-weight: 900; letter-spacing: 0.01em; }
+.co-left {
+  padding: 3px 8px;
+  font-size: 13px;
+  font-weight: 800;
+  background: rgba(255, 255, 255, 0.12);
+  clip-path: var(--px-4);
+}
+.co-i,
+.co-x {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  padding: 0;
+  color: #fff;
+  font: 900 17px/1 var(--m-font, inherit);
+  background: rgba(255, 255, 255, 0.14);
+  clip-path: var(--px-5);
+  cursor: pointer;
+}
+.co-i { margin-left: auto; }
+.co-i:hover,
+.co-x:hover { background: rgba(255, 255, 255, 0.24); }
+.co-x svg { width: 18px; height: 18px; }
+
+/* ── Сцена ── */
+.co-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+}
+.co-rays {
+  opacity: 0.35;
+  transform: scale(0.45);
+  transition: transform 0.35s steps(4, end), opacity 0.35s steps(4, end);
+}
+.co-rays.on { opacity: calc(0.45 + var(--co-k) * 0.55); transform: scale(calc(0.55 + var(--co-k) * 0.5)); }
+.stage-burst .co-rays,
+.stage-card .co-rays { opacity: 1; transform: scale(1.15); }
+
+/* Ореол за сундуком: свет в щелях разгорается по ударам. */
+.co-halo {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 460px;
+  height: 460px;
+  margin: -250px 0 0 -230px;
+  pointer-events: none;
+  background: radial-gradient(circle, color-mix(in srgb, var(--co-glow) 55%, transparent) 0, transparent 60%);
+  opacity: calc(0.25 + var(--co-k) * 0.75);
+  transition: opacity 0.2s steps(2, end);
+}
+
+.co-chest {
+  position: relative;
+  z-index: 2;
+  display: block;
+  line-height: 0;
+  animation: co-idle 1.2s steps(1, end) infinite;
+}
+.co-chest img {
+  display: block;
+  width: min(320px, 70vw);
+  height: auto;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+/* Ожидание: сундук подпрыгивает ступенями, приглашая ударить. */
+@keyframes co-idle {
+  0%, 60%, 100% { transform: translateY(0); }
+  70% { transform: translateY(-6px); }
+  80% { transform: translateY(-2px); }
+}
+/* Удар: вдавить, тряхнуть, отпустить — ступенями, как пиксель-арт. */
+.co-chest.kick { animation: co-kick 0.3s steps(1, end) both; }
+@keyframes co-kick {
+  0% { transform: translate(0, 6px) scale(1.08, 0.9); }
+  20% { transform: translate(-8px, -4px) rotate(-4deg); }
+  40% { transform: translate(7px, 0) rotate(3deg); }
+  60% { transform: translate(-4px, -2px) rotate(-2deg); }
+  80% { transform: translate(2px, 0) rotate(1deg); }
+  100% { transform: none; }
+}
+.co-chest.pop { animation: co-pop 0.5s cubic-bezier(0.2, 1.6, 0.4, 1) both; }
+@keyframes co-pop {
+  0% { transform: scale(0.85, 1.15); }
+  100% { transform: scale(1); }
+}
+
+.co-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  background: #fff;
+  pointer-events: none;
+  animation: co-flash 0.45s steps(3, end) both;
+}
+@keyframes co-flash { from { opacity: 0.9; } to { opacity: 0; } }
+
+.co-pips { position: relative; z-index: 2; display: flex; gap: 8px; }
+.co-pips > i {
+  width: 16px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.16);
+  clip-path: var(--px-4);
+}
+.co-pips > i.on { background: var(--co-glow); }
+.co-tap {
+  position: relative;
+  z-index: 2;
+  font-size: 22px;
+  font-weight: 900;
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.45);
+  animation: co-tap 0.9s steps(1, end) infinite;
+}
+@keyframes co-tap { 50% { transform: scale(1.08); } }
+
+.co-err {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  font-size: 18px;
+  text-align: center;
+}
+
+/* ── Карточка награды: рамка цвета редкости → плита с той же ступенькой ── */
+.co-card {
+  position: relative;
+  display: block;
+  box-sizing: border-box;
+  width: 250px;
+  height: 310px;
+  padding: 5px;
+  background: var(--co-it);
+  clip-path: var(--px-10);
+}
+.co-card-plate {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  box-sizing: border-box;
+  height: 100%;
+  padding: 14px 12px 18px;
+  overflow: hidden;
+  text-align: center;
+  background: color-mix(in srgb, var(--co-it) 24%, #10141a);
+  clip-path: var(--px-10);
+}
+.co-edge-t { position: absolute; left: 0; right: 0; top: 0; height: 4px; background: rgba(255, 255, 255, 0.2); }
+.co-edge-b { position: absolute; left: 0; right: 0; bottom: 0; height: 7px; background: rgba(0, 0, 0, 0.32); }
+.co-art { display: grid; place-items: center; min-height: 150px; }
+.co-art img { display: block; object-fit: contain; image-rendering: pixelated; }
+.co-art svg { color: #fff; }
+.co-name { font-size: 20px; font-weight: 900; line-height: 1.15; }
+.co-sub {
+  padding: 3px 8px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #10141a;
+  background: var(--co-it);
+  clip-path: var(--px-4);
+}
+.co-card.dup .co-sub { color: #fff; background: rgba(255, 255, 255, 0.16); }
+/* Рубашка: вся плита цветом редкости, в центре сундук. */
+.co-card.tease .co-card-plate { background: color-mix(in srgb, var(--co-it) 70%, #000); }
+.co-back img { display: block; image-rendering: pixelated; opacity: 0.55; }
+
+.co-card.sm { width: 128px; height: 156px; padding: 4px; }
+.co-card.sm .co-card-plate { gap: 5px; padding: 8px 6px 10px; }
+.co-card.sm .co-art { min-height: 64px; }
+.co-card.sm .co-name { font-size: 13px; }
+.co-card.sm .co-sub { font-size: 11px; padding: 2px 5px; }
+
+/* ── Модель предметов v2: слот — фрагменты вещи ── */
+.co-art { position: relative; }
+/* «+6» с кусочком пазла в углу картинки: сколько фрагментов пришло сейчас. */
+.co-frag-gain {
+  position: absolute; right: -10px; bottom: 2px; display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 8px 3px 6px; background: #10141a; color: #fff; font-size: 18px; font-weight: 900;
+  font-variant-numeric: tabular-nums; clip-path: var(--px-4);
+}
+.co-card.sm .co-frag-gain { right: -6px; gap: 3px; padding: 1px 4px 1px 3px; font-size: 11px; }
+.co-foot { width: 100%; padding: 0 8px; }
+.co-card.sm .co-foot { padding: 0 2px; }
+.co-card.sm .co-foot .rar-fbar { font-size: 10px; gap: 3px; }
+.co-card.sm .co-foot .rar-fbar .rar-frag { display: none; }
+.co-card .rar-plate { align-self: center; }
+/* Собрано — плашка акцентом: вещь теперь твоя. */
+.co-card.done .co-sub { background: var(--m-accent); color: #06200e; }
+/* Мифическая: рамка карточки переливается ступенями. */
+.co-card[data-rar='MYTHIC'] { animation: rar-prism 2.4s steps(1, end) infinite; }
+@media (prefers-reduced-motion: reduce) { .co-card[data-rar='MYTHIC'] { animation: none; } }
+
+/* Вылет карточки из сундука и «плюх». */
+.co-fly {
+  position: relative;
+  z-index: 3;
+  animation: co-fly 0.52s cubic-bezier(0.2, 1.5, 0.4, 1) both;
+}
+@keyframes co-fly {
+  0% { transform: translateY(160px) scale(0.2); opacity: 0; }
+  40% { opacity: 1; }
+  100% { transform: none; }
+}
+/* Тизер эпической и легендарной: рубашка дрожит, пока нарастает нота. */
+.co-fly.tease { animation: co-fly 0.4s cubic-bezier(0.2, 1.5, 0.4, 1) both, co-tease 0.12s steps(1, end) 0.4s infinite; }
+@keyframes co-tease {
+  0% { transform: translate(-3px, 0) rotate(-1deg); }
+  50% { transform: translate(3px, -2px) rotate(1deg); }
+}
+.co.big.teasing .co-rays > i { animation-duration: 3s; }
+.co-count { position: relative; z-index: 3; font-size: 15px; font-weight: 800; opacity: 0.7; font-variant-numeric: tabular-nums; }
+.co-next { position: relative; z-index: 3; min-width: 180px; }
+
+/* ── Итог ── */
+.co-sum {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  padding: 16px;
+}
+.co-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; max-width: 700px; }
+.co-sum-cell { animation: co-fly 0.42s cubic-bezier(0.2, 1.5, 0.4, 1) calc(var(--i) * 90ms) both; }
+.co-acts { display: flex; gap: 10px; }
+
+/* ── «i»: что внутри ── */
+.co-odds {
+  position: absolute;
+  z-index: 7;
+  top: 100px;
+  right: 16px;
+  width: min(300px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 14px;
+  color: var(--m-fg);
+  background: var(--m-surface);
+  clip-path: var(--px-10);
+  cursor: default;
+}
+.co-odds-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.co-odds-head b { font-size: 15px; font-weight: 900; }
+.co-odds .co-x { width: 28px; height: 28px; color: var(--m-fg); background: var(--m-surface-2); }
+.co-odds-line { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; font-size: 13px; font-weight: 700; }
+.co-odds-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.co-odds-list li { display: grid; grid-template-columns: 12px 1fr auto; align-items: center; gap: 8px; font-size: 13px; }
+.co-odds-list i { width: 12px; height: 12px; background: var(--co-it); }
+.co-odds-list b { font-variant-numeric: tabular-nums; }
+.co-odds-foot { margin: 10px 0 0; font-size: 12px; color: var(--m-fg-muted, var(--m-fg)); opacity: 0.8; }
+
+@media (max-height: 700px) {
+  .co-chest img { width: min(200px, 50vw); }
+  .co-card { width: 210px; height: 260px; }
+  .co-art { min-height: 110px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .co, .co-chest, .co-chest.kick, .co-chest.pop, .co-fly, .co-fly.tease, .co-sum-cell, .co-tap, .co-flash { animation: none; }
+}
+
+/* Эскалация ранга по ударам (v3.1, как Starr Drop): плашка ранга под сундуком
+   сменяется ступенью вверх — цвет, а не текст, говорит «становится лучше». */
+.co-climb {
+  position: absolute; left: 50%; bottom: 22%; transform: translateX(-50%); z-index: 4;
+  padding: 6px 14px 8px; background: var(--co-it); color: #14110a;
+  font-size: 15px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase;
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.35); --px-n: 5px; clip-path: var(--px-4);
+  animation: co-climb-in 0.28s steps(3, end) both;
+}
+.co-climb[data-rar='RELIC'] { background: #060608; color: var(--m-rarity-relic); }
+.co-climb[data-rar='MYTHIC'], .co-climb[data-rar='RELIC'] { animation: co-climb-in 0.28s steps(3, end) both, co-climb-pulse 0.6s steps(1, end) infinite 0.3s; }
+@keyframes co-climb-in { 0% { transform: translateX(-50%) scale(0.6); opacity: 0; } 100% { transform: translateX(-50%) scale(1); opacity: 1; } }
+@keyframes co-climb-pulse { 50% { filter: brightness(1.35); } }
+
+/* Счётчик гарантии в итоге: сколько сундуков до эпической и легендарной. */
+.co-pity { margin: 10px 0 0; text-align: center; font-size: 13px; font-weight: 800; color: var(--m-fg-muted); }
+.co-pity > b { color: var(--m-fg); font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .co-climb { animation: none !important; } }

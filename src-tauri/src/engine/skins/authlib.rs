@@ -17,7 +17,14 @@ pub async fn ensure_authlib_injector() -> Result<PathBuf, String> {
     let jar = dir.join("authlib-injector.jar");
     let stamp = dir.join("authlib-injector.version");
 
-    let meta: Value = get_json(AUTHLIB_LATEST).await.unwrap_or(Value::Null);
+    // With an agent on disk the feed only decides whether to update it, and a
+    // feed host that never answers must not keep the game from starting.
+    let meta: Value = if jar.exists() {
+        get_json_revalidated(AUTHLIB_LATEST, &dir.join("authlib-injector.latest.json")).await
+    } else {
+        get_json(AUTHLIB_LATEST).await
+    }
+    .unwrap_or(Value::Null);
     let build = meta["build_number"].as_u64().map(|b| b.to_string()).unwrap_or_default();
     let have = std::fs::read_to_string(&stamp).unwrap_or_default();
     if jar.exists() && (build.is_empty() || have == build) {

@@ -1,0 +1,132 @@
+/* ============================================================
+   ПИКСЕЛЬНЫЙ ЯЗЫК — единая система редкости (модель предметов v3, 24.09.2026)
+   Одна таблица на весь лаунчер: карточка витрины (.sh-card), плитка гардероба
+   (.ch-tile), карта сундука (.co-card), награды. Корень карточки несёт
+   data-rar="EPIC" и цвет в --rar (rarityProps() в shop/rarity.ts), эффект —
+   слой <RarityFx/> внутри. Ранг — у расцветки.
+
+     COMMON      серый       грань
+     UNCOMMON    зелёный     грань
+     RARE        синий       грань + подложка тоном
+     EPIC        фиолетовый  + полоса сверху, искры (статично)
+     LEGENDARY   золотой     + плашка заливкой, искры (статично)
+     MYTHIC      красный     АНИМАЦИЯ: блик жёсткими стопами, искры мерцают
+     RELIC       чёрный      АНИМАЦИЯ: чёрная подложка, радужная полоса ступенями, блик
+     (Невозможная)
+
+   Анимация — только у двух верхних (решение владельца 24.09.2026). Без
+   свечения-размытия и плавных градиентов: блик — полосы с жёсткими стопами,
+   цвет меняется steps(). Рамка у среза — полоса внутри силуэта.
+   ============================================================ */
+
+:root {
+  --m-rarity-mythic: hsl(352 86% 60%);
+  /* Невозможная: жемчужный текст и грань поверх чёрной подложки. */
+  --m-rarity-relic: hsl(240 20% 94%);
+}
+
+/* ---------- Слой эффекта ---------- */
+.rar-fx {
+  position: absolute; inset: 0; z-index: 2; pointer-events: none; overflow: hidden;
+}
+.rar-fx > i { position: absolute; display: block; }
+
+/* Редкая и выше — подложка тоном редкости: видно издалека, до чтения подписи. */
+.rar-fx > .rar-rv { display: none; }
+.ch-tile[data-rar='RARE'], .ch-tile[data-rar='EPIC'] { background: color-mix(in srgb, var(--rar) 9%, var(--m-surface-2)); }
+.ch-tile[data-rar='LEGENDARY'], .ch-tile[data-rar='MYTHIC'] { background: color-mix(in srgb, var(--rar) 14%, var(--m-surface-2)); }
+[data-rar='RELIC']:is(.ch-tile, .sh-card, .co-card) { background: #060608; }
+[data-rar='RELIC'] > .co-card-plate { background: #060608; }
+.ch-tile[data-rar]:not([data-rar='COMMON']):not([data-rar='UNCOMMON'])::after { height: 4px; }
+.ch-tile[data-rar]:not([data-rar='COMMON']):not([data-rar='UNCOMMON']):not([data-rar='RELIC']):hover { background: color-mix(in srgb, var(--rar) 20%, var(--m-surface-2)); }
+
+/* Полоса сверху: эпическая и легендарная — статично, невозможная — радуга ступенями. */
+.rar-fx > .rar-bar { display: none; left: 0; right: 0; top: 0; height: 5px; background: var(--rar); }
+[data-rar='EPIC'] > .rar-fx > .rar-bar,
+[data-rar='LEGENDARY'] > .rar-fx > .rar-bar,
+[data-rar='MYTHIC'] > .rar-fx > .rar-bar,
+[data-rar='RELIC'] > .rar-fx > .rar-bar { display: block; }
+[data-rar='RELIC'] > .rar-fx > .rar-bar { animation: rar-prism 2.4s steps(1, end) infinite; }
+/* Невозможная: вторая радужная полоса снизу — рамка «в радугу» без обводки. */
+[data-rar='RELIC'] > .rar-fx > .rar-rv { display: block; left: 0; right: 0; bottom: 0; height: 5px; animation: rar-prism 2.4s steps(1, end) infinite; animation-delay: -1.2s; }
+@keyframes rar-prism {
+  0% { background: #ff4d5e; } 16.6% { background: #ff9a3c; } 33.3% { background: #ffe14d; }
+  50% { background: #5ee06a; } 66.6% { background: #4dc4ff; } 83.3% { background: #b877ff; }
+}
+
+/* Искры: пиксельные крестики. Эпическая и легендарная — статично, две верхние мерцают. */
+.rar-fx > .rar-sp { display: none; width: 3px; height: 3px; background: #fff; }
+.rar-fx > .rar-sp::before, .rar-fx > .rar-sp::after { content: ''; position: absolute; background: var(--rar); opacity: 0.85; }
+.rar-fx > .rar-sp::before { left: -3px; top: 0; width: 9px; height: 3px; }
+.rar-fx > .rar-sp::after { left: 0; top: -3px; width: 3px; height: 9px; }
+.rar-fx > .rar-sp.s1 { left: 14%; top: 16%; }
+.rar-fx > .rar-sp.s2 { right: 12%; top: 30%; animation-delay: 0.8s; }
+.rar-fx > .rar-sp.s3 { left: 26%; top: 52%; animation-delay: 1.6s; }
+[data-rar='EPIC'] > .rar-fx > .rar-sp,
+[data-rar='LEGENDARY'] > .rar-fx > .rar-sp,
+[data-rar='MYTHIC'] > .rar-fx > .rar-sp,
+[data-rar='RELIC'] > .rar-fx > .rar-sp { display: block; }
+[data-rar='EPIC'] > .rar-fx > .rar-sp.s3 { display: none; }
+[data-rar='MYTHIC'] > .rar-fx > .rar-sp,
+[data-rar='RELIC'] > .rar-fx > .rar-sp { opacity: 0; animation: rar-tw 1.6s steps(1, end) infinite; }
+[data-rar='RELIC'] > .rar-fx > .rar-sp::before, [data-rar='RELIC'] > .rar-fx > .rar-sp::after { animation: rar-prism 2.4s steps(1, end) infinite; }
+@keyframes rar-tw { 0%, 80% { opacity: 0; transform: scale(0.5); } 83% { opacity: 1; transform: scale(1); } 88% { opacity: 0.6; transform: scale(0.5); } 91%, 100% { opacity: 0; } }
+
+/* Блик двух верхних: полоса с жёсткими стопами проходит ступенями раз в 3 с. */
+.rar-fx > .rar-gl {
+  display: none; inset: 0;
+  background: linear-gradient(105deg, #0000 0 40%, rgba(255, 255, 255, 0.26) 40% 47%, #0000 47% 51%, rgba(255, 255, 255, 0.14) 51% 54%, #0000 54%);
+  background-size: 280% 100%; background-repeat: no-repeat; background-position: 160% 0;
+  animation: rar-glint 3s steps(1, end) infinite;
+}
+[data-rar='MYTHIC'] > .rar-fx > .rar-gl, [data-rar='RELIC'] > .rar-fx > .rar-gl { display: block; }
+[data-rar='MYTHIC'] > .rar-fx > .rar-gl {
+  background-image: linear-gradient(105deg, #0000 0 40%, color-mix(in srgb, var(--rar) 55%, transparent) 40% 47%, #0000 47% 51%, rgba(255, 255, 255, 0.18) 51% 54%, #0000 54%);
+}
+@keyframes rar-glint {
+  0% { background-position: 160% 0; } 3% { background-position: 125% 0; } 6% { background-position: 90% 0; }
+  9% { background-position: 55% 0; } 12% { background-position: 20% 0; } 15% { background-position: -15% 0; }
+  18%, 100% { background-position: -60% 0; }
+}
+
+/* ---------- Плашка редкости ---------- */
+.rar-plate {
+  display: inline-flex; align-items: center; gap: 5px; align-self: flex-start; max-width: 100%;
+  padding: 2px 6px 2px 5px; background: color-mix(in srgb, var(--rar, var(--m-rarity-common)) 22%, var(--m-inset));
+  color: var(--rar, var(--m-fg-muted)); font-size: 10px; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rar-plate::before { content: ''; flex: none; width: 6px; height: 6px; background: currentColor; }
+:root:root .rar-plate { --px-n: 4px; clip-path: var(--px-4); }
+.rar-plate[data-rar='LEGENDARY'], .rar-plate[data-rar='MYTHIC'] { background: var(--rar); color: #1b1300; }
+.rar-plate[data-rar='RELIC'] { background: #060608; color: var(--rar); }
+.rar-plate[data-rar='RELIC']::before { animation: rar-prism 2.4s steps(1, end) infinite; }
+.rar-plate.sm { padding: 1px 5px 1px 4px; font-size: 9px; }
+
+/* ---------- Фрагменты: значок и полоса «7/20» ---------- */
+.rar-frag { display: block; flex: none; }
+.rar-fbar {
+  display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 11px; font-weight: 900;
+  color: var(--m-fg); font-variant-numeric: tabular-nums;
+}
+.rar-fbar > b { flex: none; }
+.rar-fbar > b > s { text-decoration: none; color: var(--m-fg-faint); font-weight: 800; }
+.rar-fbar-track { position: relative; flex: 1 1 auto; min-width: 24px; height: 8px; background: var(--m-inset); }
+.rar-fbar-track > i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--rar, var(--m-rarity-rare)); }
+/* Деления: каждая пятая часть — тёмная риска, полоса читается как «кусочки». */
+.rar-fbar-track > u { position: absolute; top: 0; bottom: 0; width: 2px; background: rgba(0, 0, 0, 0.45); }
+.rar-fbar.done { color: var(--m-accent); }
+.rar-fbar.done .rar-fbar-track > i { background: var(--m-accent); }
+:root:root .rar-fbar-track { --px-n: 3px; clip-path: var(--px-4); }
+
+@media (prefers-reduced-motion: reduce) {
+  .rar-fx > i, .rar-plate::before { animation: none !important; }
+  .rar-fx > .rar-gl { display: none !important; }
+}
+
+/* Карточка со слоем эффекта: искры превью (.sh-tw) не дублируем. */
+[data-rar] > .rar-fx ~ .sh-art .sh-tw,
+[data-rar] > .rar-fx ~ * .sh-art .sh-tw { display: none; }
+/* Плашка в строке мета карточки магазина стоит в строку с текстом. */
+.sh-card-meta > .rar-plate { align-self: center; }
+.sh-card-meta > .rar-fbar { flex: 1 1 100%; }

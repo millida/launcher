@@ -1,13 +1,22 @@
 import { useEffect, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { hasTauri } from '../ipc/tauri'
-import { importInstance, importPackFile, scanImports } from '../ipc/commands'
+import { importInstance, importPackFile, pickImportDir, scanImports } from '../ipc/commands'
 import type { FoundInstance } from '../ipc/commands'
 import { useProfiles } from '../state/profiles'
 import { closeModal, showToast, useUi } from '../state/ui'
 import { track } from '../lib/telemetry'
 import { foundKey } from '../lib/imports'
 import { backdropClose } from '../lib/dismiss'
+import { usePackCode } from '../state/packCode'
+import { showReward } from '../components/reward/RewardReveal'
+import { BuildIcon } from '../components/playhub/BuildIcon'
+
+const imported = (p: { name: string; icon?: string | null }) =>
+  showReward({ level: 'mid', items: [{ name: p.name, art: <BuildIcon icon={p.icon} size={60} /> }], title: 'Сборка импортирована', sub: p.name })
+
+/// Где ищем сборки — показываем значками вместо абзаца со списком.
+const SOURCES = ['Prism', 'MultiMC', 'CurseForge', 'GDLauncher', 'ATLauncher', 'Modrinth App', 'TLauncher']
 
 type RowState = 'idle' | 'busy' | 'done'
 
@@ -31,7 +40,7 @@ export function ImportModal() {
         track('build_import', { source: 'file', mc: p.version, loader: p.loader || (p.fabric ? 'fabric' : 'vanilla') })
         useProfiles.getState().setSelected(p.name)
         void useProfiles.getState().refresh()
-        showToast('Импортировано: ' + p.name)
+        imported(p)
         close()
       })
       .catch((err) => {
@@ -41,14 +50,41 @@ export function ImportModal() {
       .finally(() => setFileBusy(false))
   }
 
-  useEffect(() => {
-    if (!modal.open) return
+  // Сам ничего не нашёл — человек показывает папку (правка владельца 22:03):
+  // .minecraft, папка экземпляров другого лаунчера или одна сборка.
+  const fromDir = () => {
+    if (!hasTauri()) {
+      showToast('Доступно в приложении лаунчера', 'error')
+      return
+    }
+    pickImportDir()
+      .then((l) => {
+        if (!l) return
+        if (!l.length) {
+          showToast('В этой папке сборок нет', 'error')
+          return
+        }
+        setFailed(false)
+        setList((cur) => [...(cur || []), ...l.filter((x) => !(cur || []).some((c) => c.path === x.path))])
+      })
+      .catch((e) => showToast('Папка не открылась: ' + e, 'error'))
+  }
+
+  const scan = () => {
     setList(null)
     setFailed(false)
     setRows({})
     ;(hasTauri() ? scanImports() : Promise.resolve([] as FoundInstance[]))
       .then((l) => setList(l))
-      .catch(() => setFailed(true))
+      .catch((e) => {
+        console.error('scanImports', e)
+        setFailed(true)
+      })
+  }
+
+  useEffect(() => {
+    if (!modal.open) return
+    scan()
   }, [modal.open])
 
   const existing = new Set(profiles.map((p) => p.name))
@@ -64,12 +100,21 @@ export function ImportModal() {
     >
       <div className="modal mw-md">
         <h3>Импорт сборок</h3>
-        <div className="sub">Сборки других лаунчеров на всех дисках — или свой файл сборки</div>
-        <div id="impList" style={{ maxHeight: '320px', overflowY: 'auto' }}>
+        <div id="impList" className="imp-list">
           {failed ? (
-            <p className="faint-note">Не удалось просканировать</p>
+            <div className="bx-mini-empty">
+              <Icon id="i-alert" />
+              <b>Не получилось поискать</b>
+              <button className="btn sm secondary" onClick={scan}>
+                <Icon id="i-restart" /> Повторить
+              </button>
+            </div>
           ) : list === null ? (
-            <p className="faint-note">Ищем сборки…</p>
+            <div className="bx-skel-list" aria-busy="true">
+              <span className="skel" />
+              <span className="skel" />
+              <span className="skel" />
+            </div>
           ) : list.length ? (
             list.map((it, i) => {
               const state = rows[i] || 'idle'
@@ -79,17 +124,16 @@ export function ImportModal() {
                   <span className="mod-mini">
                     <Icon id="i-box2" />
                   </span>
-                  <b title={it.name + '\n' + it.path}>{it.name}</b>
+                  <b>{it.name}</b>
                   <span className="pill" style={{ marginRight: '6px' }}>
                     {it.source}
                   </span>
                   <span className="pill">{it.loader + ' · ' + it.version}</span>
                   <button
-                    className="btn sm secondary imp-go"
+                    className={'btn sm imp-go ' + (already ? 'ghost' : 'primary')}
                     data-i={i}
                     style={{ marginLeft: '8px' }}
                     disabled={state !== 'idle' || already}
-                    title={already ? 'Такая сборка уже есть в лаунчере' : undefined}
                     onClick={() => {
                       setRows((r) => ({ ...r, [i]: 'busy' }))
                       importInstance(it.path, it.name, it.version, it.loader)
@@ -98,7 +142,7 @@ export function ImportModal() {
                           setRows((r) => ({ ...r, [i]: 'done' }))
                           useProfiles.getState().setSelected(p.name)
                           void useProfiles.getState().refresh()
-                          showToast('Импортировано: ' + p.name)
+                          imported(p)
                         })
                         .catch((err) => {
                           setRows((r) => ({ ...r, [i]: 'idle' }))
@@ -106,30 +150,56 @@ export function ImportModal() {
                         })
                     }}
                   >
-                    {state === 'busy' ? 'Импорт…' : already ? 'Уже в лаунчере' : 'Импортировать'}
+                    {state === 'busy' ? 'Добавляем…' : already ? <><Icon id="i-check" /> Уже есть</> : 'Добавить'}
                   </button>
                 </div>
               )
             })
           ) : (
-            <p className="faint-note">
-              Сборок в других лаунчерах не нашли. Поддерживаем Prism, MultiMC, CurseForge, GDLauncher, ATLauncher,
-              Modrinth App и общую .minecraft (TLauncher, официальный). Если сборка лежит файлом — жми «Импорт из
-              файла».
-            </p>
+            <div className="bx-mini-empty">
+              <b>Других лаунчеров не нашли</b>
+              <div className="bx-chips">
+                {SOURCES.map((x) => (
+                  <span className="pill" key={x}>
+                    {x}
+                  </span>
+                ))}
+              </div>
+            </div>
           )}
         </div>
-        <div style={{ display: 'flex', gap: '10px', marginTop: '18px', justifyContent: 'space-between' }}>
-          <button className="btn md primary" onClick={fromFile} disabled={fileBusy}>
-            <Icon id="i-box2" /> {fileBusy ? 'Импортируем…' : 'Импорт из файла'}
+        {/* Три других входа — одной строкой, одинаковыми плитками: файл,
+            код от друга. Раньше «По коду» висел отдельной кнопкой на экране
+            «Сборки», а форматы файла объяснял абзац под кнопками. */}
+        <div className="imp-ways">
+          <button className="imp-way" onClick={fromDir}>
+            <Icon id="i-folder" />
+            <b>Из папки</b>
+            <span>Другой лаунчер</span>
           </button>
+          <button className="imp-way" onClick={fromFile} disabled={fileBusy}>
+            <Icon id="i-upload" />
+            <b>{fileBusy ? 'Добавляем…' : 'Из файла'}</b>
+            <span>.mrpack · .zip</span>
+          </button>
+          <button
+            className="imp-way"
+            data-sound="open"
+            onClick={() => {
+              close()
+              usePackCode.getState().show()
+            }}
+          >
+            <Icon id="i-link" />
+            <b>По коду</b>
+            <span>AB23-CD45</span>
+          </button>
+        </div>
+        <div style={{ display: 'flex', marginTop: '14px', justifyContent: 'flex-end' }}>
           <button className="btn md secondary" id="impClose" data-sound="close" onClick={close}>
             Закрыть
           </button>
         </div>
-        <p className="faint-note" style={{ marginTop: '10px' }}>
-          Подходит .mrpack (Modrinth), zip модпака CurseForge и zip готового клиента с папками mods/config.
-        </p>
       </div>
     </div>
   )

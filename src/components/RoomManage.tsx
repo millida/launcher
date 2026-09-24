@@ -38,7 +38,7 @@ function FriendPicker({
     [friends, needle],
   )
   if (!friends.length) {
-    return <p className="faint-note">Сначала добавь друзей — звать в группу можно только их.</p>
+    return <p className="faint-note">Сначала добавь друзей</p>
   }
   return (
     <>
@@ -101,20 +101,20 @@ function RoomCreate({ close, onCreated }: { close: () => void; onCreated?: (room
 
   return (
     <div className="room-modal-back" onClick={close}>
-      <div className="room-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="room-modal" data-private data-section="room" onClick={(e) => e.stopPropagation()}>
         <div className="room-modal-head">
           <span className="room-ava">
             <Icon id="i-users" />
           </span>
           <b>Новая группа</b>
-          <button className="tb-btn" title="Закрыть" onClick={close}>
+          <button className="tb-btn" aria-label="Закрыть" onClick={close}>
             <Icon id="i-x" />
           </button>
         </div>
         <div className="input sm">
           <input
             autoFocus
-            placeholder="Название — «Наши», «Технoблок», «Выживание»"
+            placeholder="Название группы"
             maxLength={48}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -201,7 +201,7 @@ function RoomManage({ room, close }: { room: Room; close: () => void }) {
   const quit = async () => {
     const ok = await uiConfirm(
       owner
-        ? 'Ты создатель — группа перейдёт к тому, кто в ней дольше всех.'
+        ? 'Группа перейдёт к тому, кто в ней дольше всех.'
         : 'Переписка группы останется у остальных.',
       { title: 'Выйти из «' + fresh.title + '»?', confirmLabel: 'Выйти', danger: true },
     )
@@ -220,13 +220,13 @@ function RoomManage({ room, close }: { room: Room; close: () => void }) {
 
   return (
     <div className="room-modal-back" onClick={close}>
-      <div className="room-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="room-modal" data-private data-section="room" onClick={(e) => e.stopPropagation()}>
         <div className="room-modal-head">
           <span className="room-ava">
             <Icon id="i-users" />
           </span>
           <b>{fresh.title}</b>
-          <button className="tb-btn" title="Закрыть" onClick={close}>
+          <button className="tb-btn" aria-label="Закрыть" onClick={close}>
             <Icon id="i-x" />
           </button>
         </div>
@@ -243,7 +243,12 @@ function RoomManage({ room, close }: { room: Room; close: () => void }) {
                 }}
               />
             </div>
-            <button className="btn sm" disabled={busy || !title.trim() || title.trim() === fresh.title} onClick={() => void rename()}>
+            <button
+              className="btn sm secondary"
+              aria-label="Переименовать"
+              disabled={busy || !title.trim() || title.trim() === fresh.title}
+              onClick={() => void rename()}
+            >
               <Icon id="i-check" />
             </button>
           </div>
@@ -260,14 +265,14 @@ function RoomManage({ room, close }: { room: Room; close: () => void }) {
                 {m.role === 'owner' ? <span className="room-tag own">создатель</span> : null}
               </span>
               {inVoice.has(m.userId) ? (
-                <span className="room-inv" title="Сейчас в разговоре">
+                <span className="room-inv" aria-label="Сейчас в разговоре">
                   <Icon id="i-headset" />
                 </span>
               ) : null}
               {owner && m.userId !== me ? (
                 <button
                   className="tb-btn danger"
-                  title="Убрать из группы"
+                  aria-label="Убрать из группы"
                   onClick={() => void kick(m.userId, m.nickname)}
                 >
                   <Icon id="i-x" />
@@ -287,7 +292,7 @@ function RoomManage({ room, close }: { room: Room; close: () => void }) {
             />
           </>
         ) : (
-          <p className="faint-note">Группа заполнена — {MAX_MEMBERS} человек.</p>
+          <p className="faint-note">Группа заполнена</p>
         )}
 
         <div className="room-modal-acts">

@@ -1,0 +1,86 @@
+/* Облачко-реплика над персонажем в лобби: светлая подложка со срезом 5px,
+   сплошная ступенчатая рамка (общий слой из 12-pixel.css), хвостик
+   ступеньками к нику. Облачко светлое — это реплика, как в комиксе. */
+
+.emote-bubble {
+  --eb-fill: #f6f5ef;
+  --eb-ink: #17171b;
+  --eb-u: 3px; /* клетка хвоста и толщина рамки */
+  position: absolute;
+  z-index: 3;
+  /* Хвост встаёт над правой половиной ника, облачко — выше и правее. */
+  transform: translate(-6px, calc(-100% - 4 * var(--eb-u) - 4px));
+  transform-origin: 18px calc(100% + 4 * var(--eb-u));
+  pointer-events: none;
+  user-select: none;
+  animation: eb-in 260ms steps(4, end) both;
+}
+.emote-bubble.out {
+  animation: eb-out 180ms steps(3, end) both;
+}
+
+.eb-body {
+  padding: 8px;
+  background-color: var(--eb-fill);
+  box-shadow: 0 0 0 var(--eb-u) var(--eb-ink);
+}
+:root:root .eb-body {
+  clip-path: var(--px-5);
+  --px-n: 5px;
+  --px-ol: var(--eb-ink);
+  --px-ol-w: 3px;
+  --px-ft: #fff;
+  --px-ft-w: 2px;
+  --px-fb: rgba(0, 0, 0, 0.12);
+  --px-fb-w: 3px;
+}
+.eb-body img {
+  display: block;
+  width: 44px;
+  height: 44px;
+  image-rendering: pixelated;
+}
+
+/* Хвост: клетки 3px тенями одной точки. Верхний ряд ложится на нижнюю рамку
+   облачка и открывает его вниз. */
+.eb-tail {
+  position: absolute;
+  left: 12px;
+  top: calc(100% - var(--eb-u));
+  width: var(--eb-u);
+  height: var(--eb-u);
+  --d: var(--eb-ink);
+  --w: var(--eb-fill);
+  box-shadow:
+    0 0 0 var(--d),
+    calc(1 * var(--eb-u)) 0 0 var(--w),
+    calc(2 * var(--eb-u)) 0 0 var(--w),
+    calc(3 * var(--eb-u)) 0 0 var(--w),
+    calc(4 * var(--eb-u)) 0 0 var(--d),
+    0 calc(1 * var(--eb-u)) 0 var(--d),
+    calc(1 * var(--eb-u)) calc(1 * var(--eb-u)) 0 var(--w),
+    calc(2 * var(--eb-u)) calc(1 * var(--eb-u)) 0 var(--w),
+    calc(3 * var(--eb-u)) calc(1 * var(--eb-u)) 0 var(--d),
+    0 calc(2 * var(--eb-u)) 0 var(--d),
+    calc(1 * var(--eb-u)) calc(2 * var(--eb-u)) 0 var(--w),
+    calc(2 * var(--eb-u)) calc(2 * var(--eb-u)) 0 var(--d),
+    0 calc(3 * var(--eb-u)) 0 var(--d),
+    calc(1 * var(--eb-u)) calc(3 * var(--eb-u)) 0 var(--d);
+}
+
+/* Пружинка ступенями: мало → чуть больше → на место. */
+@keyframes eb-in {
+  0% { transform: translate(-6px, calc(-100% - 4 * var(--eb-u) - 4px)) scale(0.3); opacity: 0; }
+  50% { transform: translate(-6px, calc(-100% - 4 * var(--eb-u) - 4px)) scale(1.12); opacity: 1; }
+  100% { transform: translate(-6px, calc(-100% - 4 * var(--eb-u) - 4px)) scale(1); opacity: 1; }
+}
+@keyframes eb-out {
+  to { transform: translate(-6px, calc(-100% - 4 * var(--eb-u) - 4px)) scale(0.5); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .emote-bubble,
+  .emote-bubble.out {
+    animation: none;
+  }
+}

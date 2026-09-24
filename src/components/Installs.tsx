@@ -22,7 +22,7 @@ export function Installs() {
             ) : null}
           </div>
           {t.state === 'run' ? (
-            <button className="inst-stop" title="Отменить установку" onClick={() => stopInstall(t.key)}>
+            <button className="inst-stop" aria-label="Отменить установку" onClick={() => stopInstall(t.key)}>
               <Icon id="i-x" />
             </button>
           ) : null}

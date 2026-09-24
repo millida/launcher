@@ -6,6 +6,7 @@ import { LOADER_NAME, fmtPlaytime, whenText } from '../lib/format'
 import { useProfiles } from '../state/profiles'
 import { openBuildSettings, openBuildShare, type InstanceTab } from '../state/instance'
 import { realLaunch } from '../lib/launch'
+import { useLobby } from '../state/lobbyMode'
 import { useGame } from '../state/game'
 import { uiConfirm } from '../state/confirm'
 import { showToast } from '../state/ui'
@@ -36,7 +37,7 @@ export function BuildCard({
 
   const remove = () => {
     void uiConfirm(
-      'Удалить сборку «' + p.name + '» со всеми модами, мирами и часами игры? Отменить будет нельзя.',
+      'Сборка «' + p.name + '» удалится с модами, мирами и часами игры. Вернуть нельзя.',
       { title: 'Удаление сборки', confirmLabel: 'Удалить' },
     ).then((ok) => {
       if (!ok) return
@@ -52,13 +53,21 @@ export function BuildCard({
         })
         .catch((e) => {
           void refresh()
-          showToast('' + e, 'error')
+          console.error('[build-delete]', e)
+          showToast('Не удалось удалить сборку', 'error', false, { label: 'Повторить', run: remove })
         })
     })
   }
 
+  // Запуск сборки — тоже выбор режима: лобби вернёт в неё, как Fortnite
+  // возвращает в последний режим.
+  const play = () => {
+    useLobby.getState().pick({ kind: 'build', name: p.name })
+    realLaunch(p.name)
+  }
+
   const items: ContextItem[] = [
-    { id: 'play', label: running ? 'Запустить ещё копию' : 'Играть', icon: 'i-play', onPick: () => realLaunch(p.name) },
+    { id: 'play', label: running ? 'Запустить ещё копию' : 'Играть', icon: 'i-play', onPick: () => play() },
     { id: 'rename', label: 'Переименовать', icon: 'i-edit', separated: true, onPick: () => go('opts', true) },
     {
       id: 'share',
@@ -76,7 +85,7 @@ export function BuildCard({
     { id: 'opts', label: 'Параметры', icon: 'i-settings', onPick: () => go('opts') },
     {
       id: 'folder',
-      label: 'Открыть папку сборки',
+      label: 'Папка сборки',
       icon: 'i-folder',
       separated: true,
       onPick: () => {
@@ -84,7 +93,10 @@ export function BuildCard({
           showToast('Доступно в приложении', 'error')
           return
         }
-        openProfileFolder(p.name).catch((e) => showToast('Не удалось открыть папку: ' + e, 'error'))
+        openProfileFolder(p.name).catch((e) => {
+          console.error('[build-folder]', e)
+          showToast('Не удалось открыть папку', 'error')
+        })
       },
     },
     { id: 'delete', label: 'Удалить сборку', icon: 'i-trash', danger: true, separated: true, onPick: remove },
@@ -96,11 +108,16 @@ export function BuildCard({
         className={'card hoverable build-card' + (p.name === selected ? ' selected' : '') + (running ? ' running' : '')}
         data-prof={p.name}
         data-sound="open"
+        data-track="build_card"
+        data-kind="build"
+        data-id={p.name}
+        data-src="hub_card"
+        data-private
         onClick={(e) => {
           setSelected(p.name)
           if ((e.target as HTMLElement).closest('.build-cover')) {
             void refresh()
-            realLaunch(p.name)
+            play()
             return
           }
           openBuildSettings(p.name)
@@ -111,7 +128,7 @@ export function BuildCard({
           setMenu({ x: e.clientX, y: e.clientY })
         }}
       >
-        <span className="build-cover" data-nosound title={running ? 'Запустить ещё одну копию' : 'Играть'}>
+        <span className="build-cover" data-nosound aria-label={running ? 'Запустить ещё одну копию' : 'Играть'}>
           <Cover url={p.icon} />
           {running ? (
             <span className="build-run">

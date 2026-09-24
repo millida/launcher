@@ -11,7 +11,7 @@ import { copyLink } from '../lib/links'
 import { api } from '../lib/api'
 import { flushTelemetry, track } from '../lib/telemetry'
 import { markMillidaEver, millidaEver } from './onboarding'
-import { apiErrorText } from '../lib/apiError'
+import { apiErrorText, isTransientApiError } from '../lib/apiError'
 
 interface LauncherInit {
   deviceCode: string
@@ -186,8 +186,14 @@ export async function startWebLogin(reopen = false) {
     let r
     try {
       r = await millidaLoginPoll(init.deviceCode)
-    } catch {
-      pollTimer = setTimeout(() => void poll(), intervalMs)
+    } catch (e) {
+      if (isTransientApiError(e)) {
+        pollTimer = setTimeout(() => void poll(), intervalMs)
+        return
+      }
+      const reason = apiErrorText(e, 'Не удалось сохранить вход')
+      resetLogin(reason, true)
+      showToast(reason, 'error')
       return
     }
     if (r.status === 'ok') {

@@ -300,12 +300,34 @@ pub fn scan_imports() -> Vec<FoundInstance> {
 }
 
 fn walk_imports() -> Vec<FoundInstance> {
-    let mut out: Vec<FoundInstance> = vec![];
     let (extra_dots, extra_insts) = extra_roots();
     let dots: Vec<(String, PathBuf)> = dot_minecraft_roots().into_iter()
         .map(|(s, p)| (s.to_string(), p)).chain(extra_dots).collect();
     let insts: Vec<(String, PathBuf)> = launcher_roots().into_iter()
         .map(|(s, p)| (s.to_string(), p)).chain(extra_insts).collect();
+    walk_roots(dots, insts)
+}
+
+/// Builds in a folder the player pointed at when the automatic search found
+/// nothing: read it as a .minecraft (versions/), as a folder of instances,
+/// and as one instance on its own. Found paths are vouched like scan results,
+/// so import_instance accepts them.
+pub fn scan_import_dir(dir: &Path) -> Vec<FoundInstance> {
+    let src = "Папка".to_string();
+    let mut out = walk_roots(vec![(src.clone(), dir.to_path_buf())], vec![(src.clone(), dir.to_path_buf())]);
+    if let Some(parent) = dir.parent() {
+        for f in walk_roots(vec![], vec![(src.clone(), parent.to_path_buf())]) {
+            if Path::new(&f.path) == dir && !out.iter().any(|x| x.path == f.path) {
+                out.push(f);
+            }
+        }
+    }
+    vouch_all(&out);
+    out
+}
+
+fn walk_roots(dots: SourceRoots, insts: SourceRoots) -> Vec<FoundInstance> {
+    let mut out: Vec<FoundInstance> = vec![];
     for (src, root) in dots {
         let versions = root.join("versions");
         let Ok(rd) = std::fs::read_dir(&versions) else { continue };
@@ -431,12 +453,17 @@ fn copy_game_files(game: &Path, dst: &Path) -> Result<usize, String> {
     let mut copied = 0;
     for sub in ["mods", "config", "saves", "resourcepacks", "shaderpacks", "datapacks", "options.txt"] {
         let src = game.join(sub);
-        if !src.exists() { continue; }
+        // a symlink is not followed: `mods` pointing at ~/.ssh would otherwise
+        // copy the target into the game folder (copy_dir_all skips nested ones)
+        let Ok(meta) = std::fs::symlink_metadata(&src) else { continue };
+        if meta.file_type().is_symlink() { continue; }
         let to = dst.join(sub);
-        let r = if src.is_dir() {
+        let r = if meta.is_dir() {
             std::fs::create_dir_all(&to).and_then(|_| copy_dir_all(&src, &to))
-        } else {
+        } else if meta.is_file() {
             std::fs::copy(&src, &to).map(|_| ())
+        } else {
+            continue;
         };
         r.map_err(|e| format!("Не удалось скопировать {}: {}", sub, e))?;
         copied += 1;
@@ -448,6 +475,10 @@ pub fn import_instance(path: String, name: String, version: String, loader: Stri
     let src = PathBuf::from(&path);
     if !is_vouched(&src) {
         return Err("Импортировать можно только сборку из списка найденных или выбранную в проводнике".into());
+    }
+    check_version_id(&version)?;
+    if !["vanilla", "fabric", "quilt", "forge", "neoforge"].contains(&loader.as_str()) {
+        return Err("Неизвестный загрузчик сборки".into());
     }
     // Prism/MultiMC keep game files under .minecraft/ or minecraft/
     let game = ["minecraft", ".minecraft"].iter().map(|d| src.join(d)).find(|p| p.exists()).unwrap_or(src.clone());

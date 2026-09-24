@@ -13,6 +13,7 @@ import { RU_LOADER, fmtSize } from '../lib/format'
 import { renderMarkdown } from '../lib/markdown'
 import {
   askPlanForVersion,
+  catalogInstallTracker,
   installContentFlow,
   installExtras,
   resolveTargetBuild,
@@ -65,7 +66,7 @@ export function ProjectModal() {
     if (!doneKeys[key]) return false
     showToast(
       pj.kind === 'modpack'
-        ? 'Модпак уже установлен — во вкладке «Версии» можно поставить другую версию'
+        ? 'Сборка уже установлена — во вкладке «Версии» можно поставить другую версию'
         : 'Уже в сборке' + (selectedBuild ? ' «' + selectedBuild + '»' : '') +
           ' — другую версию можно выбрать во вкладке «Версии»',
       'ok',
@@ -92,6 +93,7 @@ export function ProjectModal() {
   const running = !!task && task.state === 'run'
 
   const installWorld = (prof: string, force: boolean): void => {
+    const installed = catalogInstallTracker('world', pj.cfid, 'project')
     runInstall({
       key: keyContent('cf', prof, 'world', pj.cfid),
       title: pj.title,
@@ -117,6 +119,7 @@ export function ProjectModal() {
           })
           return
         }
+        installed()
         showToast('Карта «' + r.folder + '» → «' + prof + '»: заходи в одиночную игру', 'ok', 'install')
       },
     })
@@ -124,6 +127,7 @@ export function ProjectModal() {
 
   const installPack = (fileId?: number, mrVersionId?: string) => {
     const startedAt = performance.now()
+    const installed = catalogInstallTracker('modpack', isCf ? pj.cfid : pj.slug, 'project')
     runInstall({
       key: packKey,
       title: pj.title || pj.slug,
@@ -143,6 +147,7 @@ export function ProjectModal() {
           loader: p.loader || (p.fabric ? 'fabric' : 'vanilla'),
           source: isCf ? 'curseforge' : 'modrinth',
         })
+        installed()
         useProfiles.getState().setSelected(p.name)
         void useProfiles.getState().refresh()
         showToast('Сборка «' + p.name + '» готова — жми «Играть»', 'ok', 'achievement')
@@ -195,6 +200,7 @@ export function ProjectModal() {
       const extras = await askPlanForVersion(prof, pj.kind, 'curseforge', String(pj.cfid), String(fileId))
       if (!extras) return
       const pr = useProfiles.getState().profiles.find((x) => x.name === prof)
+      const installed = catalogInstallTracker(pj.kind, pj.cfid, 'project')
       runPickedVersionInstall({
         key: keyContent('cf', prof, pj.kind, pj.cfid),
         title: pj.title,
@@ -205,6 +211,7 @@ export function ProjectModal() {
         onInstalled: (r) => {
           void useMods.getState().refreshInstalled()
           installExtras(prof, pj.kind, extras)
+          installed()
           showToast('CurseForge → «' + prof + '»: ' + r.file, 'ok', 'install')
         },
       })
@@ -230,6 +237,7 @@ export function ProjectModal() {
       return
     }
     const prof = catalogTargetBuild() || (useProfiles.getState().profiles[0] || { name: '' }).name || 'default'
+    const installed = catalogInstallTracker(pj.kind, pj.slug, 'project')
     void askPlanForVersion(prof, pj.kind, 'modrinth', pj.slug, v.id).then((extras) => {
       if (!extras) return
       runPickedVersionInstall({
@@ -241,6 +249,7 @@ export function ProjectModal() {
         onInstalled: (r) => {
           void useMods.getState().refreshInstalled()
           installExtras(prof, pj.kind, extras)
+          installed()
           showToast('В «' + prof + '»: ' + r.file + (r.warning ? ' · ' + r.warning : ''), 'ok', 'install')
         },
       })
@@ -253,7 +262,13 @@ export function ProjectModal() {
       id="pjModal"
       {...backdropClose(close)}
     >
-      <div className="modal mw-xl" style={{ maxHeight: '88%' }}>
+      <div
+        className="modal mw-xl"
+        style={{ maxHeight: '88%' }}
+        data-section="project"
+        data-kind={pj.kind === 'world' ? 'map' : pj.kind}
+        data-id={isCf ? String(pj.cfid) : pj.slug}
+      >
         <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start', marginBottom: '14px' }}>
           <img
             id="pjIcon"
@@ -266,7 +281,6 @@ export function ProjectModal() {
               {pj.sub}
             </div>
             <div id="pjTags" style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
-              <span className="pill">{isCf ? 'CurseForge' : 'Modrinth'}</span>
               {pj.tags.map((c) => (
                 <span className="pill" key={c}>
                   {RU_LOADER(c)}
@@ -275,13 +289,13 @@ export function ProjectModal() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <button className="btn md primary" id="pjInstall" onClick={() => install()}>
-              {label(packKey, pj.kind === 'modpack' ? 'Установить' : 'Добавить в сборку')}
+            <button className="btn md primary" id="pjInstall" data-track={pj.kind === 'modpack' ? 'install' : 'add_to_build'} onClick={() => install()}>
+              {label(packKey, pj.kind === 'modpack' ? 'Установить' : 'Добавить')}
             </button>
             {/* Отменить установку можно было только из панели загрузок, а её
                 закрывает это же окно — игрок оставался с бегущим процентом. */}
             {running ? (
-              <button className="btn md ghost" title="Отменить установку" onClick={() => stopInstall(packKey)}>
+              <button className="btn md ghost" aria-label="Отменить установку" data-track="install_cancel" onClick={() => stopInstall(packKey)}>
                 <Icon id="i-x" />
               </button>
             ) : null}
@@ -292,11 +306,15 @@ export function ProjectModal() {
             ['desc', 'Описание'],
             ['gallery', 'Галерея'],
             ['versions', 'Версии'],
-          ].map(([k, text]) => (
+          ]
+            // Пустая вкладка — лишний клик в «Галереи нет»: прячем, пока открыта не она.
+            .filter(([k]) => k !== 'gallery' || pj.loading || pj.gallery.length > 0 || pj.tab === 'gallery')
+            .map(([k, text]) => (
             <button
               key={k}
               className={'seg' + (pj.tab === k ? ' on' : '')}
               data-pjtab={k}
+              data-track={'pj_tab_' + k}
               onClick={() => pj.set({ tab: k })}
             >
               {text}
@@ -305,7 +323,11 @@ export function ProjectModal() {
         </div>
         <div id="pjDesc" className="pj-body pj-pane" style={{ display: pj.tab === 'desc' ? '' : 'none' }}>
           {pj.loading ? (
-            <p className="faint-note">Загружаем описание…</p>
+            <div className="cat-pj-skel" aria-hidden="true">
+              {[90, 100, 96, 72, 100, 84, 60].map((w, i) => (
+                <span key={i} className="skel skel-line" style={{ width: w + '%' }}></span>
+              ))}
+            </div>
           ) : pj.body ? (
             renderMarkdown(pj.body)
           ) : (
@@ -336,31 +358,41 @@ export function ProjectModal() {
                     {v.game_versions.slice(0, 2).join(', ')}
                   </span>
                 ) : null}
-                {v.loaders && v.loaders.length ? <span className="pill">{v.loaders.join(', ')}</span> : null}
+                {v.loaders && v.loaders.length ? <span className="pill">{v.loaders.map(RU_LOADER).join(', ')}</span> : null}
                 {v.size ? <span className="mod-ver">{fmtSize(v.size)}</span> : null}
                 <button
                   className="btn sm secondary pj-ver"
                   data-vid={v.id}
+                  data-track="install_version"
                   style={{ marginLeft: '8px' }}
                   onClick={() => installVer(v)}
                 >
-                  {versionLabel(packKey, v.id, 'Установить')}
+                  {versionLabel(packKey, v.id, pj.kind === 'modpack' ? 'Установить' : 'Добавить')}
                 </button>
                 {running && task.versionId === v.id ? (
-                  <button className="btn sm ghost" title="Отменить установку" onClick={() => stopInstall(packKey)}>
+                  <button className="btn sm ghost" aria-label="Отменить установку" data-track="install_cancel" onClick={() => stopInstall(packKey)}>
                     <Icon id="i-x" />
                   </button>
                 ) : null}
               </div>
             ))
           ) : (
-            <p className="faint-note">{pj.loading ? 'Загружаем версии…' : 'Версий нет'}</p>
+            pj.loading ? (
+              <div className="cat-pj-skel" aria-hidden="true">
+                {[0, 1, 2, 3].map((i) => (
+                  <span key={i} className="skel skel-line" style={{ width: '100%', height: '34px' }}></span>
+                ))}
+              </div>
+            ) : (
+              <p className="faint-note">Версий нет</p>
+            )
           )}
         </div>
         <div style={{ display: 'flex', gap: '10px', marginTop: '18px', justifyContent: 'space-between' }}>
           <button
             className="btn sm ghost"
             id="pjOpen"
+            data-track="open_source_site"
             disabled={!pj.website}
             onClick={() => {
               if (!pj.website) return
@@ -368,9 +400,10 @@ export function ProjectModal() {
               else window.open(pj.website, '_blank')
             }}
           >
-            {isCf ? 'Открыть на CurseForge' : 'Открыть на Modrinth'}
+            <Icon id="i-ext" />
+            {isCf ? 'CurseForge' : 'Modrinth'}
           </button>
-          <button className="btn md secondary" id="pjClose" data-sound="close" onClick={close}>
+          <button className="btn md secondary" id="pjClose" data-sound="close" data-track="close" onClick={close}>
             Закрыть
           </button>
         </div>

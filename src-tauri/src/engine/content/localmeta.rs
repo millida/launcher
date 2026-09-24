@@ -117,6 +117,10 @@ fn entry_text<R: Read + Seek>(jar: &mut zip::ZipArchive<R>, name: &str) -> Optio
 /// Reading only the outer manifest makes every such module look absent, so the
 /// audit reports missing mods that are already installed and offers no fix,
 /// because no catalog sells a module separately.
+///
+/// Forge and NeoForge do the same through JarJar (META-INF/jarjar), and there
+/// the bundled jar is a whole mod, not a module: Create 6 ships Flywheel that
+/// way. Its manifest is a toml, so both metadata shapes are read here.
 fn nested_ids<R: Read + Seek>(jar: &mut zip::ZipArchive<R>, depth: u32, out: &mut Vec<String>) {
     if depth == 0 {
         return;
@@ -139,8 +143,29 @@ fn nested_ids<R: Read + Seek>(jar: &mut zip::ZipArchive<R>, depth: u32, out: &mu
                 push_id(out, &id);
             }
         }
+        for file in ["META-INF/neoforge.mods.toml", "META-INF/mods.toml"] {
+            let Some(text) = entry_text(&mut inner, file) else { continue };
+            for id in forge_mod_ids(&text) {
+                push_id(out, &id);
+            }
+        }
         nested_ids(&mut inner, depth - 1, out);
     }
+}
+
+/// Every `[[mods]]` block of a Forge/NeoForge manifest. A bundled jar may carry
+/// more than one mod, and each of those ids is something another mod can require.
+fn forge_mod_ids(text: &str) -> Vec<String> {
+    let mut out = vec![];
+    for (header, kv) in toml_sections(text) {
+        if header != "mods" {
+            continue;
+        }
+        if let Some(id) = kv.get("modId") {
+            push_id(&mut out, id);
+        }
+    }
+    out
 }
 
 /// Some mods ship fabric.mod.json with raw newlines inside string values,
@@ -518,6 +543,7 @@ fn from_forge(jar: &mut Jar, meta: &mut LocalMeta) -> bool {
         icons.push(format!("assets/{}/icon.png", id));
     }
     meta.icon = read_icon(jar, &icons);
+    nested_ids(jar, NESTED_DEPTH, &mut meta.provides);
     true
 }
 
@@ -912,6 +938,51 @@ viewing mod.
             "a module bundled inside the jar is installed; reporting it missing sends the user hunting for a file that does not exist separately",
         );
         assert!(m.provides.contains(&"fabric".to_string()), "the outer manifest's own provides must survive");
+    }
+
+    /// Create 6 requires "flywheel" in its own manifest and ships it inside
+    /// META-INF/jarjar. Reading only the outer toml makes a complete build look
+    /// broken: "нужен мод «flywheel», в сборке его нет" with no file to add.
+    #[test]
+    fn jarjar_nested_forge_mods_count_as_installed() {
+        let inner = tmp("flywheel-neoforge.jar");
+        make_jar(
+            &inner,
+            &[(
+                "META-INF/neoforge.mods.toml",
+                b"modLoader=\"javafml\"
+[[mods]]
+modId=\"flywheel\"
+version=\"1.0.6\"
+",
+            )],
+        );
+        let body = std::fs::read(&inner).unwrap();
+        let outer = tmp("create-neoforge.jar");
+        make_jar(
+            &outer,
+            &[
+                (
+                    "META-INF/neoforge.mods.toml",
+                    b"modLoader=\"javafml\"
+[[mods]]
+modId=\"create\"
+version=\"6.0.10\"
+[[dependencies.create]]
+modId=\"flywheel\"
+type=\"required\"
+".as_ref(),
+                ),
+                ("META-INF/jarjar/flywheel-neoforge.jar", body.as_slice()),
+            ],
+        );
+        let m = read_file_meta(&outer, "mod", "create-neoforge.jar");
+        assert_eq!(m.mod_id, "create");
+        assert!(m.requires.contains(&"flywheel".to_string()), "the dependency itself is still declared");
+        assert!(
+            m.provides.contains(&"flywheel".to_string()),
+            "the bundled jar answers the dependency; without it the audit blocks a build that runs fine",
+        );
     }
 
     #[test]

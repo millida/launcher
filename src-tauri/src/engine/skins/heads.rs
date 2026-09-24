@@ -75,8 +75,8 @@ async fn download_head_service(nick: &str, px: u32) -> Result<Vec<u8>, String> {
     if !res.status().is_success() {
         return Err(format!("сервис голов ответил {}", res.status().as_u16()));
     }
-    let bytes = res.bytes().await.map_err(|e| e.to_string())?;
-    if bytes.len() > MAX_BYTES || !bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
+    let bytes = read_capped(res, MAX_BYTES).await?;
+    if !bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
         return Err("сервис голов отдал не PNG".into());
     }
     Ok(bytes.to_vec())
@@ -98,10 +98,7 @@ async fn download_millida(nick: &str, px: u32) -> Result<Vec<u8>, String> {
     if !res.status().is_success() {
         return Err(format!("скин Millida недоступен ({})", res.status().as_u16()));
     }
-    let bytes = res.bytes().await.map_err(|e| e.to_string())?;
-    if bytes.len() > 2_000_000 {
-        return Err("скин слишком большой".into());
-    }
+    let bytes = read_capped(res, 2_000_000).await.map_err(|_| "скин слишком большой".to_string())?;
     tokio::task::spawn_blocking(move || head_from_skin(&bytes, px))
         .await
         .map_err(|e| e.to_string())?

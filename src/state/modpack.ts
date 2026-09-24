@@ -31,7 +31,7 @@ export const useModpackVersions = create<ModpackState>((set, get) => ({
       showToast('Доступно в приложении')
       return
     }
-    showToast('Загружаем версии модпака…')
+    showToast('Загружаем версии сборки…')
     try {
       const list = await modpackVersions(slug)
       set({ profile, slug, mode: 'update', curId, list: list || [], labels: {} })

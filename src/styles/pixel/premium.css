@@ -1,0 +1,347 @@
+/* ============================================================
+   ПРЕМИУМ: витрина платных сборок (docs/REDESIGN-2026-09-22.md §2.2).
+   Раскладка и срез угла, как во всём 12-pixel.css.
+   ============================================================ */
+
+/* ---------- Герой ---------- */
+.pm-hero {
+  position: relative;
+  height: 320px;
+  overflow: hidden;
+  background: var(--m-surface-2);
+  border-radius: var(--m-r-card);
+  margin-bottom: 14px;
+}
+:root:root .pm-hero {
+  border-radius: 0;
+  --px-n: 10px; clip-path: var(--px-10);
+}
+.pm-hero-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.pm-art-none {
+  display: grid;
+  place-items: center;
+  background: var(--m-surface-2);
+  color: var(--m-fg-faint);
+}
+.pm-art-none svg { width: 38px; height: 38px; }
+.pm-hero-plate {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 16px 18px;
+  background: rgba(8, 10, 12, 0.72);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pm-hero-plate h2 {
+  font-size: 26px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+.pm-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.pm-line {
+  margin: 0;
+  font-size: 13.5px;
+  color: rgba(255, 255, 255, 0.78);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pm-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+/* Главная кнопка зоны крупнее строчной: её видно с первого взгляда. */
+.pm-actions > .btn,
+.pm-buy .btn.primary {
+  min-height: 38px;
+  padding-left: 18px;
+  padding-right: 18px;
+  font-size: 14px;
+}
+
+/* ---------- Бейдж подписки и возрастная метка ---------- */
+.pm-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  background: var(--m-accent);
+  color: var(--m-accent-fg);
+  border-radius: var(--m-r-mini);
+}
+.pm-badge svg { width: 13px; height: 13px; }
+.pm-badge.sm { position: absolute; top: 8px; right: 8px; }
+:root:root .pm-badge {
+  border-radius: 0;
+  --px-n: 4px; clip-path: var(--px-4);
+  /* Плотный акцент с тёмным текстом — как у primary-кнопки. */
+  color: var(--px-on-accent);
+  background-image: var(--px-dots); --px-img: var(--px-dots); --px-img-size: var(--px-dots-size); --px-img-pos: var(--px-dots-pos); --px-img-repeat: var(--px-dots-repeat); --px-img-origin: var(--px-dots-origin);
+}
+.pm-age {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 3px 7px;
+  color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: var(--m-r-mini);
+}
+:root:root .pm-age { border-radius: 0; --px-n: 4px; clip-path: var(--px-4); }
+
+/* ---------- Цена ---------- */
+.pm-price {
+  display: inline-flex;
+  flex-direction: column;
+  line-height: 1.25;
+  margin-left: 4px;
+}
+.pm-price b { font-size: 16px; font-weight: 750; font-variant-numeric: tabular-nums; }
+.pm-price i {
+  font-style: normal;
+  font-size: 11.5px;
+  color: var(--m-fg-subtle);
+}
+.pm-hero-plate .pm-price i { color: rgba(255, 255, 255, 0.7); }
+
+/* ---------- Лента карточек ---------- */
+.pm-shelf { margin-top: 18px; }
+.pm-shelf h3,
+.pm-block h3 {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 0 10px;
+  color: var(--m-fg);
+}
+.pm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+.pm-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 0 10px;
+  background: var(--m-surface);
+  border-radius: var(--m-r-card);
+  text-align: left;
+  cursor: pointer;
+  color: var(--m-fg);
+  border: 0;
+  transition: transform var(--m-t-fast) var(--m-ease-out);
+}
+:root:root .pm-card {
+  border-radius: 0;
+  --px-n: 10px; clip-path: var(--px-10);
+  box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+.pm-card:hover { transform: translateY(-2px); }
+.pm-card.is-active { box-shadow: inset 0 0 0 2px var(--m-accent); --px-ol: var(--m-accent); --px-ol-w: 2px; --px-ft: transparent; --px-fb: transparent; --px-fl: transparent; --px-fr: transparent; }
+.pm-card-art {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: var(--m-surface-2);
+}
+.pm-card-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pm-card-art .pm-art-none { position: absolute; inset: 0; }
+.pm-card-name {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 7px 10px;
+  background: rgba(8, 10, 12, 0.72);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pm-card-foot {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 10px;
+}
+.pm-card-facts {
+  font-size: 12px;
+  color: var(--m-fg-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pm-card-foot b.pm-dl {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--m-fg-muted);
+}
+.pm-card-foot b.pm-dl svg { width: 13px; height: 13px; color: var(--m-fg-faint); }
+.pm-card-foot b {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---------- Страница сборки ---------- */
+.pm-page { display: flex; flex-direction: column; }
+.pm-back { margin-bottom: 10px; }
+.pm-media {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  margin-bottom: 14px;
+}
+.pm-shot {
+  flex: none;
+  width: 214px;
+  aspect-ratio: 16 / 9;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  background: var(--m-surface-2);
+  border-radius: var(--m-r-md);
+  cursor: pointer;
+}
+:root:root .pm-shot { border-radius: 0; --px-n: 5px; clip-path: var(--px-5); }
+.pm-shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pm-video { display: grid; place-items: center; color: var(--m-fg-muted); }
+.pm-video svg { width: 30px; height: 30px; }
+
+.pm-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.pm-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  background: var(--m-surface);
+  border-radius: var(--m-r-md);
+}
+:root:root .pm-tile {
+  border-radius: 0;
+  --px-n: 10px; clip-path: var(--px-10);
+  box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+.pm-tile span { font-size: 11.5px; color: var(--m-fg-faint); }
+.pm-tile b { font-size: 18px; font-weight: 750; font-variant-numeric: tabular-nums; }
+
+.pm-block { margin-bottom: 16px; }
+.pm-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.pm-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--m-fg-muted);
+}
+.pm-list svg { width: 15px; height: 15px; color: var(--m-accent); flex: none; }
+
+.pm-plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.pm-plan-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  background: var(--m-surface);
+  border-radius: var(--m-r-card);
+}
+:root:root .pm-plan-card {
+  border-radius: 0;
+  --px-n: 10px; clip-path: var(--px-10);
+  box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+.pm-plan-price { margin-left: auto; font-weight: 750; font-variant-numeric: tabular-nums; }
+.pm-plan { font-size: 12px; color: var(--m-fg-subtle); }
+
+.pm-patches { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.pm-patches li { font-size: 13px; color: var(--m-fg-muted); display: flex; gap: 10px; }
+.pm-patches span { color: var(--m-fg-faint); white-space: nowrap; min-width: 92px; }
+
+/* ---------- Блок покупки внизу: дубль героя ---------- */
+.pm-buy {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  background: var(--m-surface);
+  border-radius: var(--m-r-card);
+  margin-top: 4px;
+}
+:root:root .pm-buy {
+  border-radius: 0;
+  --px-n: 10px; clip-path: var(--px-10);
+  box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+.pm-buy-left { display: flex; flex-direction: column; gap: 4px; }
+.pm-buy-left > b { font-size: 15px; font-weight: 750; }
+.pm-buy-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+
+/* ---------- Заметки: срок, отмена, право ---------- */
+.pm-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--m-fg-subtle);
+  padding: 10px 2px;
+}
+.pm-note svg { width: 15px; height: 15px; color: var(--m-fg-faint); flex: none; }
+.pm-legal {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  color: var(--m-fg-faint);
+}
+
+/* ---------- Состояния ---------- */
+.pm-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 48px 16px 44px;
+  text-align: center;
+}
+.pm-state svg { width: 30px; height: 30px; color: var(--m-fg-faint); }
+.pm-state b { font-size: 16px; font-weight: 750; }
+.pm-skel { display: flex; flex-direction: column; gap: 14px; }
+.pm-skel-hero { display: block; height: 320px; border-radius: var(--m-r-card); }
+.pm-skel-card { display: block; height: 176px; border-radius: var(--m-r-card); }
+:root:root :is(.pm-skel-hero, .pm-skel-card) {
+  border-radius: 0;
+  --px-n: 10px; clip-path: var(--px-10);
+}

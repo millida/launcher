@@ -31,7 +31,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     sel: '[data-screen="mods"]',
     title: 'Контент',
-    text: 'Моды, модпаки, шейдеры, ресурспаки и карты из Modrinth и CurseForge — ставятся в сборку в один клик.',
+    text: 'Моды, сборки, шейдеры, ресурспаки и карты из Modrinth и CurseForge — ставятся в сборку в один клик.',
   },
   {
     sel: '[data-screen="servers"]',

@@ -1,0 +1,139 @@
+/* ============================================================
+   КАТАЛОГ: «Контент» (моды, сборки, шейдеры, карты) и «Серверы»
+   Пиксельный язык, 22.09.2026. Раскладка (пустые состояния, скелетоны,
+   число скачиваний) и форма среза, как во всём 12-pixel.css.
+   ============================================================ */
+
+/* ---------- Пустое состояние: иконка, заголовок, кнопка ---------- */
+.cat-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 48px 16px 40px;
+  text-align: center;
+}
+.cat-empty b {
+  font-size: 16px;
+  font-weight: 750;
+  color: var(--m-fg);
+}
+.cat-empty-ic {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  background: var(--m-surface-2);
+  color: var(--m-fg-subtle);
+  border-radius: 14px;
+}
+.cat-empty-ic svg { width: 28px; height: 28px; }
+:root:root .cat-empty-ic {
+  border-radius: 0;
+  --px-n: 10px; clip-path: var(--px-10);
+  box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+
+/* ---------- Скелетоны строк ---------- */
+.cat-skel { pointer-events: none; }
+.cat-skel .mod-body .skel { display: block; }
+.cat-skel-icon { width: 52px; height: 52px; flex: none; }
+.cat-skel-btn { width: 104px; height: 32px; flex: none; }
+:root:root :is(.cat-skel-icon, .cat-skel-btn) {
+  border-radius: 0;
+  --px-n: 5px; clip-path: var(--px-5);
+}
+.cat-pj-skel .skel { display: block; }
+.cat-pj-skel { display: flex; flex-direction: column; gap: 12px; padding: 6px 0; }
+
+/* Пока грузится новая выдача, старая остаётся на месте, но гаснет. */
+.cat-dim { opacity: 0.55; transition: opacity var(--m-t-fast); pointer-events: none; }
+
+/* ---------- Строка мода ---------- */
+.cat-dl {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  font-size: 12.5px;
+  color: var(--m-fg-subtle);
+  font-variant-numeric: tabular-nums;
+  min-width: 72px;
+  justify-content: flex-end;
+}
+.cat-dl svg { width: 14px; height: 14px; color: var(--m-fg-faint); }
+.cat-dl b { color: var(--m-fg-muted); font-weight: 650; }
+/* Кнопка строки одной ширины: «Добавить», «Установить» и «Установлено» не
+   прыгают, и колонка кнопок читается ровной линией. */
+.mod-row .btn.inst,
+.mod-row .btn.cfinst { min-width: 112px; justify-content: center; }
+
+/* ---------- Фильтры ---------- */
+.cat-count {
+  font-size: 12px;
+  color: var(--m-fg-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* Выбранный фильтр читается без цвета: плотная акцентная грань слева. */
+:root:root .mods-filters .mk-pill.is-active {
+  background: var(--m-accent-soft);
+  color: var(--m-accent);
+  box-shadow: inset 3px 0 0 var(--m-accent), inset 0 -3px 0 rgba(0, 0, 0, 0.3); --px-ol: transparent; --px-ft: transparent; --px-fb: rgba(0, 0, 0, 0.3); --px-fb-w: 3px; --px-fl: var(--m-accent); --px-fl-w: 3px; --px-fr: transparent;
+}
+.cat-pill-n {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  font-size: 11px;
+  font-weight: 800;
+  background: var(--m-accent);
+  color: var(--px-on-accent, #06200e);
+  border-radius: 9px;
+  font-variant-numeric: tabular-nums;
+}
+:root:root .cat-pill-n { border-radius: 0; --px-n: 4px; clip-path: var(--px-4); }
+.mk-pill.cat-reset { color: var(--m-fg-subtle); }
+
+/* Сборка, под которую открыт каталог. */
+.cat-scope .mk-chip { padding: 0 12px; background: var(--m-surface-2); color: var(--m-fg-muted); }
+.cat-scope .mk-chip.is-on { background: var(--m-accent-soft); color: var(--m-accent); }
+.cat-scope .mk-chip svg { width: 14px; height: 14px; }
+
+/* ---------- Строка сервера ---------- */
+.srv-meta.cat-srv-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; }
+.cat-srv-fact { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.cat-srv-fact svg { width: 13px; height: 13px; flex: none; color: var(--m-fg-faint); }
+.cat-srv-fact b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.srv-online.cat-srv-online { gap: 6px; }
+.cat-srv-online svg { width: 14px; height: 14px; color: var(--m-accent); }
+.srv-online.cat-srv-online b { color: var(--m-fg); font-size: 14px; }
+.cat-srv-online.off { color: var(--m-fg-faint); }
+.srv-row .btn.srv-join { min-width: 96px; justify-content: center; }
+/* Узкое окно: баннер уступает место названию и кнопке. */
+@media (max-width: 1100px) {
+  .srv-row .srv-banner { width: 200px; height: 56px; }
+}
+@media (max-width: 900px) {
+  .srv-row .srv-banner { display: none; }
+}
+
+/* «Показать ещё» во время загрузки — без слова «Загружаем», кнопка гаснет. */
+.btn.cat-busy { opacity: 0.6; }
+
+/* ---------- Карточка сервера ---------- */
+.cat-warn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--m-warning, #f5923b);
+}
+.cat-warn svg { width: 15px; height: 15px; flex: none; }
+:root:root .srv-detail-fact { border-radius: 0; --px-n: 5px; clip-path: var(--px-5); }
+.srv-detail-fact.as-btn { cursor: pointer; }
+.srv-detail-fact.as-btn:hover b { color: var(--m-accent); }

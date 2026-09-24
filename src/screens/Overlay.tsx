@@ -2,8 +2,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { Icon } from '../components/Icon'
 import { SvgSprite } from '../components/SvgSprite'
 import { tauri } from '../ipc/tauri'
-import { overlayHide, overlayHitAreas, overlayOpen, overlayReady } from '../ipc/commands'
-import { CARD_TTL_MS, freshCards, holdCards } from '../lib/overlayCards'
+import { overlayHide, overlayHitAreas, overlayOpen, overlayReady, overlayState } from '../ipc/commands'
+import { CARD_TTL_MS, clampCardTtl, freshCards, holdCards } from '../lib/overlayCards'
 import { Head } from '../components/Head'
 import { OverlayChat, type OverlayTarget } from '../components/OverlayChat'
 
@@ -40,6 +40,18 @@ export function Overlay() {
   const cardsRef = useRef<HTMLDivElement>(null)
   const heldSince = useRef(0)
   const sentHit = useRef('')
+  /// How long a card lives is a setting, and the listeners below are registered
+  /// once: they read the current value through the ref, not through a closure
+  /// captured before the core answered.
+  const [ttl, setTtl] = useState(CARD_TTL_MS)
+  const ttlRef = useRef(CARD_TTL_MS)
+  ttlRef.current = ttl
+
+  useEffect(() => {
+    void overlayState()
+      .then((s) => setTtl(clampCardTtl(s.cardMs)))
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     const T = tauri()
@@ -56,7 +68,7 @@ export function Overlay() {
       .catch(() => {})
     void T.event
       .listen<OverlayMessage>('overlay-message', (e) => {
-        const m = { ...e.payload, ts: e.payload.ts || Date.now(), expires: Date.now() + CARD_TTL_MS }
+        const m = { ...e.payload, ts: e.payload.ts || Date.now(), expires: Date.now() + ttlRef.current }
         setMsgs((prev) => prev.concat([m]).slice(-HISTORY))
         if (!m.kind || m.kind === 'msg') setTo((cur) => cur || m)
       })
@@ -70,7 +82,7 @@ export function Overlay() {
     // that conversation instead of whatever arrived last.
     void T.event
       .listen<OverlayMessage>('overlay-open', (e) => {
-        const m = { ...e.payload, ts: e.payload.ts || Date.now(), expires: Date.now() + CARD_TTL_MS }
+        const m = { ...e.payload, ts: e.payload.ts || Date.now(), expires: Date.now() + ttlRef.current }
         if (!m.kind || m.kind === 'msg') setTo(m)
       })
       .then((un) => offs.push(un))
@@ -212,7 +224,7 @@ export function Overlay() {
               >
                 <Icon id="i-x" />
               </button>
-              <i className="ov-card-ttl" style={{ animationDuration: CARD_TTL_MS + 'ms' }} />
+              <i className="ov-card-ttl" style={{ animationDuration: ttl + 'ms' }} />
             </div>
           ))}
         </div>

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { apiErrorText } from './apiError'
+import { apiErrorText, isTransientApiError } from './apiError'
 
 // Вход → вердикт. Закреплено потому, что «Друзья» показывали «войди в аккаунт»
 // на любую неудачу: игрок с живой сессией шёл чинить вход вместо ника.
@@ -18,10 +18,35 @@ const cases: Array<[string, unknown, string]> = [
   ['сбой сервера объясняется, а не показывается кодом', new Error('http 500'), 'Сбой на стороне Millida — повтори через минуту'],
   ['неизвестный код дополняется задачей', new Error('http 418'), 'Не удалось отправить заявку (http 418)'],
   ['пустая ошибка не оставляет игрока без текста', new Error(''), 'Не удалось отправить заявку'],
+  // UI-3: в Магазине игрок читал «Cannot read properties of undefined (reading 'id')».
+  ['сбой кода не доезжает до игрока', new TypeError("Cannot read properties of undefined (reading 'id')"), 'Не удалось отправить заявку'],
+  ['битый JSON — тоже сбой, а не ответ', new SyntaxError('Unexpected token < in JSON at position 0'), 'Не удалось отправить заявку'],
+  ['сбой кода строкой узнаётся по тексту', "undefined is not an object (evaluating 'r.id')", 'Не удалось отправить заявку'],
+  ['обрыв fetch остаётся обрывом', new TypeError('Failed to fetch'), 'Нет связи с Millida — проверь интернет и повтори'],
 ]
 
 for (const [name, error, want] of cases) {
   test(name, () => {
     expect(apiErrorText(error, 'Не удалось отправить заявку')).toBe(want)
+  })
+}
+
+const transient: Array<[string, unknown, boolean]> = [
+  ['обрыв связи переживается повтором опроса', 'нет связи (connection reset)', true],
+  ['таймаут переживается повтором', new Error('operation timed out'), true],
+  ['перезапуск сервера при выкатке не обрывает вход', 'http 502', true],
+  ['лимит частоты не обрывает вход', 'http 429', true],
+  [
+    'сбой хранилища после выдачи токенов обязан показаться: код уже погашен, повтор опроса ответит «устарел»',
+    'хранилище секретов повреждено или создано другой версией лаунчера — удали secrets.bin, чтобы войти заново',
+    false,
+  ],
+  ['ответ без токена — не повод крутить опрос по погашенному коду', 'в ответе нет accessToken', false],
+  ['отказ прав не повторяется молча', 'http 403', false],
+]
+
+for (const [name, error, want] of transient) {
+  test(name, () => {
+    expect(isTransientApiError(error)).toBe(want)
   })
 }

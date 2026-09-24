@@ -63,7 +63,22 @@ fn probe_major(path: &Path) -> Option<u32> {
         return None;
     }
     // JAVA_TOOL_OPTIONS makes the JVM print a notice above the version line.
-    text.lines().find_map(parse_major)
+    let line = version_line(&text)?;
+    let major = parse_major(&line)?;
+    trusts_lets_encrypt(major, &line).then_some(major)
+}
+
+const JAVA8_FIRST_UPDATE_WITH_ISRG_ROOT: u32 = 141;
+
+fn java8_update(version_line: &str) -> Option<u32> {
+    let quoted = version_line.split('"').nth(1)?;
+    let update = quoted.strip_prefix("1.8.0_")?;
+    let digits: String = update.chars().take_while(char::is_ascii_digit).collect();
+    digits.parse().ok()
+}
+
+fn trusts_lets_encrypt(major: u32, version_line: &str) -> bool {
+    major != 8 || java8_update(version_line).is_some_and(|u| u >= JAVA8_FIRST_UPDATE_WITH_ISRG_ROOT)
 }
 
 fn push_children(out: &mut Vec<PathBuf>, base: &Path) {
@@ -745,6 +760,23 @@ mod tests {
         assert_eq!(parse_major("java version \"1.8.0_402\""), Some(8));
         assert_eq!(parse_major("openjdk version \"17\""), Some(17));
         assert_eq!(parse_major("openjdk 21.0.2"), None);
+    }
+
+    #[test]
+    fn system_java8_without_lets_encrypt_root_is_never_picked_on_its_own() {
+        let cases = [
+            ("java version \"1.8.0_51\"", false, "Mojang's legacy runtime has no ISRG root: authlib-injector cannot fetch the Millida metadata and exits the game on start"),
+            ("java version \"1.8.0_131\"", false, "the last Java 8 update shipped before ISRG Root X1 entered cacerts"),
+            ("java version \"1.8.0_141\"", true, "the first Java 8 update that trusts Let's Encrypt"),
+            ("openjdk version \"1.8.0_462\"", true, "a current Java 8 build must keep saving the download"),
+            ("openjdk version \"1.8.0_402-internal\"", true, "a vendor suffix after the update number is not part of it"),
+            ("java version \"1.8.0\"", false, "Java 8 GA has no update number and no ISRG root"),
+            ("openjdk version \"17.0.2\" 2022-01-18", true, "every Java 9+ ships the ISRG roots, the floor is for Java 8 only"),
+        ];
+        for (line, want, why) in cases {
+            let major = parse_major(line).expect("every case is a real version line");
+            assert_eq!(trusts_lets_encrypt(major, line), want, "{line}: {why}");
+        }
     }
 
     fn temp_file(name: &str) -> PathBuf {

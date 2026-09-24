@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { apiErrorText } from '../lib/apiError'
 import { Icon } from './Icon'
 import { hasTauri } from '../ipc/tauri'
 import { showToast } from '../state/ui'
@@ -34,13 +35,13 @@ export function TunePanel({ profile, manualGb }: Props) {
   return (
     <div className="set-row" style={{ alignItems: 'flex-start' }}>
       <span className="lab">
-        Авто-подбор памяти и JVM
+        Авто-подбор памяти
         <small>
           {overridden
-            ? `Память задана вручную: ${manualGb} ГБ. Автоподбор предложил бы ${Math.round(tuning.ramMb / 1024)} ГБ`
+            ? `Вручную ${manualGb} ГБ · авто дал бы ${Math.round(tuning.ramMb / 1024)} ГБ`
             : on
-              ? `Сборке достанется ${Math.round(tuning.ramMb / 1024)} ГБ и профиль сборщика мусора G1`
-              : 'Выключен — память берётся как половина ОЗУ, флаги не добавляются'}
+              ? `${Math.round(tuning.ramMb / 1024)} ГБ памяти`
+              : 'Выключен — половина ОЗУ'}
         </small>
       </span>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '320px' }}>
@@ -54,11 +55,10 @@ export function TunePanel({ profile, manualGb }: Props) {
                 .then(load)
                 .catch((err) => {
                   setOn(!next)
-                  showToast('' + err, 'error')
+                  showToast(apiErrorText(err, 'Не сохранилось'), 'error')
                 })
             }}
           ></span>
-          <span className="set-val">Подбирать автоматически</span>
         </span>
         <ul className="tune-why">
           {tuning.reasons.map((r) => (
@@ -66,7 +66,7 @@ export function TunePanel({ profile, manualGb }: Props) {
           ))}
         </ul>
         <button className="crash-toggle" onClick={() => setShowFlags((v) => !v)}>
-          <Icon id={showFlags ? 'i-chev-d' : 'i-chev-r'} /> {showFlags ? 'Скрыть флаги JVM' : 'Показать флаги JVM'}
+          <Icon id={showFlags ? 'i-chev-d' : 'i-chev-r'} /> {showFlags ? 'Скрыть флаги' : 'Флаги JVM'}
         </button>
         {showFlags ? <pre className="host-console crash-tail">{tuning.flags.join('\n')}</pre> : null}
       </div>

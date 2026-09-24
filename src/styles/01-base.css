@@ -1,3 +1,13 @@
 /* Local fonts: the app must render without network */
 @font-face{font-family:'Geist';src:url('/fonts/Geist-Variable.woff2') format('woff2');font-weight:100 900;font-style:normal;font-display:swap}
 @font-face{font-family:'Unbounded';src:url('/fonts/Unbounded-latin.woff2') format('woff2');font-weight:200 900;font-display:swap;unicode-range:U+0000-00FF}
+
+/* Приложение, а не страница: двойной клик по сундуку, кнопке, карточке не
+   выделяет текст (владелец 24.09.2026, 17:58). Выделять можно только там,
+   где пишут или копируют: поля ввода, тексты сообщений, описания, адреса. */
+html, body { -webkit-user-select: none; user-select: none; }
+input, textarea, [contenteditable], [contenteditable] *,
+.msg-text, .chat-text, .cm-text, .pp-desc, .md, .markdown, .selectable, .selectable *, code, pre, kbd {
+  -webkit-user-select: text; user-select: text;
+}
+img, svg, canvas { -webkit-user-drag: none; }

@@ -6,6 +6,8 @@ export interface SnapshotServer {
   ip: string
   online: number
   isOnline: boolean
+  /** Онлайн не из живого пинга, а приблизительный: печатаем со знаком «~». */
+  onlineApprox?: boolean
   banner?: string
   logo?: string
   versions: string[]

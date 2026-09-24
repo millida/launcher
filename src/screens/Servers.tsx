@@ -3,6 +3,7 @@ import { Icon } from '../components/Icon'
 import { FilterPill } from '../components/FilterPill'
 import { ServerRow } from '../components/ServerRow'
 import { openExt } from '../lib/api'
+import { track } from '../lib/telemetry'
 import {
   DEFAULT_FILTERS,
   PAGE_SIZE,
@@ -60,6 +61,22 @@ export function Servers({ on }: { on: boolean }) {
     return () => clearTimeout(t)
   }, [q, search])
 
+  // Аналитика поиска серверов: длина запроса и число найденных, без текста.
+  const searched = useRef('')
+  useEffect(() => {
+    const s = search.trim()
+    if (s.length < 2 || status !== 'ok' || searched.current === s) return
+    const t = setTimeout(() => {
+      searched.current = s
+      track('catalog_search', { section: 'servers', len: s.length, results: total })
+    }, 800)
+    return () => clearTimeout(t)
+  }, [search, status, total])
+
+  useEffect(() => {
+    if (status === 'error' && error) console.warn('[servers] rating load failed:', error)
+  }, [status, error])
+
   const filtered = isFiltered(currentFilters())
   const hasMore = list.length < total
   const versionOptions = versions
@@ -80,7 +97,7 @@ export function Servers({ on }: { on: boolean }) {
           <div className="input sm" style={{ width: '240px' }}>
             <Icon id="i-search" />
             <input
-              placeholder="Поиск серверов…"
+              placeholder="Поиск"
               value={q}
               onChange={(e) => {
                 typed.current = true
@@ -88,14 +105,10 @@ export function Servers({ on }: { on: boolean }) {
               }}
             />
           </div>
-          <button
-            className="btn sm primary"
-            data-sound="open"
-            title="Добавить свой сервер в рейтинг на сайте"
-            onClick={() => openExt(RATING_ADD_URL)}
-          >
+          {/* Для владельцев серверов, не для игрока: главное на экране — «Играть» в строке. */}
+          <button className="btn sm secondary" data-sound="open" data-track="rating_add_server" onClick={() => openExt(RATING_ADD_URL)}>
             <Icon id="i-plus" />
-            Добавить свой сервер
+            Свой сервер
           </button>
         </div>
       </div>
@@ -104,6 +117,7 @@ export function Servers({ on }: { on: boolean }) {
         <FilterPill
           icon="i-grid"
           label="Категория"
+          track="category"
           defaultValue=""
           value={category}
           width={200}
@@ -113,6 +127,7 @@ export function Servers({ on }: { on: boolean }) {
         <FilterPill
           icon="i-filter"
           label="Сортировка"
+          track="sort"
           defaultValue={DEFAULT_FILTERS.sort}
           value={sort}
           width={180}
@@ -122,6 +137,7 @@ export function Servers({ on }: { on: boolean }) {
         <FilterPill
           icon="i-key"
           label="Лицензия"
+          track="license"
           defaultValue=""
           value={license}
           width={190}
@@ -131,6 +147,7 @@ export function Servers({ on }: { on: boolean }) {
         <FilterPill
           icon="i-users"
           label="Онлайн"
+          track="online"
           defaultValue=""
           value={online}
           width={190}
@@ -141,6 +158,7 @@ export function Servers({ on }: { on: boolean }) {
           <FilterPill
             icon="i-box2"
             label="Версия"
+            track="version"
             defaultValue=""
             value={version}
             width={190}
@@ -151,7 +169,7 @@ export function Servers({ on }: { on: boolean }) {
           />
         ) : null}
         {filtered ? (
-          <button type="button" className="mk-pill" onClick={reset}>
+          <button type="button" className="mk-pill" data-track="filter_reset" onClick={reset}>
             <Icon id="i-x" />
             <span>Сбросить</span>
           </button>
@@ -159,60 +177,59 @@ export function Servers({ on }: { on: boolean }) {
       </div>
 
       {status === 'error' ? (
-        <div className="card" style={{ padding: '24px', textAlign: 'center' }}>
-          <div style={{ fontSize: '15px', fontWeight: 700, marginBottom: '6px' }}>Рейтинг серверов недоступен</div>
-          <p className="faint-note" style={{ maxWidth: '440px', margin: '0 auto 14px', lineHeight: 1.55 }}>
-            Не удалось получить данные Millida Rating{error ? ' (' + error + ')' : ''}. Старый список показывать не
-            будем — он был бы неактуальным.
-          </p>
-          <button className="btn sm secondary" onClick={() => void loadLiveRating()}>
+        // Причина (код ответа, текст исключения) — в консоль, не игроку.
+        <div className="cat-empty">
+          <span className="cat-empty-ic">
+            <Icon id="i-alert" />
+          </span>
+          <b>Серверы не загрузились</b>
+          <button className="btn md primary" data-track="retry" onClick={() => void loadLiveRating()}>
             <Icon id="i-restart" />
-            Попробовать снова
+            Повторить
           </button>
         </div>
       ) : list.length ? (
         <>
-          <div className="stack" id="srvList">
+          <div className="stack" id="srvList" data-section="servers" data-src={search.trim() ? 'server_search' : 'hub_card'}>
             {list.map((sv, i) => (
-              <ServerRow key={sv.slug + i} sv={sv} />
+              <ServerRow key={sv.slug + i} sv={sv} pos={i} />
             ))}
           </div>
           {hasMore ? (
             <div style={{ display: 'flex', justifyContent: 'center', marginTop: '16px' }}>
-              <button className="btn md secondary" disabled={loadingMore} onClick={() => void loadMoreServers()}>
-                {loadingMore ? 'Загружаем…' : 'Показать ещё ' + Math.min(PAGE_SIZE, total - list.length)}
+              <button
+                className={'btn md secondary' + (loadingMore ? ' cat-busy' : '')}
+                disabled={loadingMore}
+                data-track="load_more"
+                onClick={() => void loadMoreServers()}
+              >
+                Показать ещё {Math.min(PAGE_SIZE, total - list.length)}
               </button>
             </div>
           ) : null}
-          <p className="faint-note">
-            {'Показано ' +
-              list.length +
-              ' из ' +
-              total +
-              (filtered ? ' подходящих серверов' : ' серверов Millida Rating') +
-              '. Лаунчер сам подберёт версию и моды под сервер — жми «Играть».'}
-          </p>
         </>
       ) : status === 'ok' ? (
-        <p className="faint-note">
-          {filtered
-            ? search.trim()
-              ? 'По запросу «' + search.trim() + '» в каталоге ничего нет.'
-              : 'Под выбранные фильтры серверов нет — сбрось часть условий.'
-            : 'В этой категории серверов пока нет.'}
-        </p>
+        <div className="cat-empty">
+          <span className="cat-empty-ic">
+            <Icon id={filtered ? 'i-search' : 'i-server'} />
+          </span>
+          <b>{filtered ? 'Ничего не нашли' : 'Здесь пока пусто'}</b>
+          {filtered ? (
+            <button className="btn md secondary" data-track="filter_reset" onClick={reset}>
+              Сбросить
+            </button>
+          ) : null}
+        </div>
       ) : (
         <div className="stack">
           {Array.from({ length: 6 }, (_, i) => (
             <div key={i} className="card skel-card" style={{ padding: '16px' }}>
               <div className="skel-row">
-                <span className="skel" style={{ width: '44px', height: '44px', borderRadius: '10px' }}></span>
+                <span className="skel cat-skel-icon"></span>
+                <span className="skel" style={{ width: '240px', height: '60px' }}></span>
                 <span className="skel skel-line" style={{ width: '220px' }}></span>
                 <span style={{ marginLeft: 'auto' }}></span>
-                <span
-                  className="skel skel-line"
-                  style={{ width: '110px', height: '32px', borderRadius: '999px' }}
-                ></span>
+                <span className="skel cat-skel-btn"></span>
               </div>
             </div>
           ))}

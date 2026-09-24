@@ -43,13 +43,13 @@ for (const c of cases) {
 
 test('созданный узел надевает нонс документа', () => {
   documentStyles = [{ nonce: 'n1' }]
-  const el = createStyleNode('m-theme-pack-css')
-  expect(el.id).toBe('m-theme-pack-css')
+  const el = createStyleNode('m-accent-css')
+  expect(el.id).toBe('m-accent-css')
   expect(el.nonce).toBe('n1')
 })
 
 test('без нонса в документе атрибут не выставляется', () => {
-  const el = createStyleNode('m-theme-pack-css')
+  const el = createStyleNode('m-accent-css')
   expect(el.nonce).toBe('')
 })
 

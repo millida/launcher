@@ -66,6 +66,13 @@
 .call-screen-max{position:absolute;top:6px;right:6px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:var(--m-r-ctl);border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.55);color:#fff;cursor:pointer;opacity:.72;transition:opacity .12s linear}
 .call-screen-max svg{width:14px;height:14px}
 .call-screen-mini:hover .call-screen-max{opacity:1}
+.call-cams{display:grid;grid-template-columns:1fr;gap:6px}
+.call-cams.many{grid-template-columns:1fr 1fr}
+.call-cam{position:relative;border-radius:var(--m-r-md);overflow:hidden;background:var(--m-inset);aspect-ratio:16/9}
+.call-cam video{width:100%;height:100%;object-fit:cover;display:block}
+/* Своя картинка зеркальная: незеркальное лицо читается как чужое. */
+.call-cam.self video{transform:scaleX(-1)}
+.call-cam:not(.self){cursor:zoom-in}
 .call-screen-full{position:fixed;inset:0;z-index:880;background:rgba(0,0,0,.94);display:flex;align-items:center;justify-content:center;padding:20px}
 /* Картинка растягивается на весь экран: сама дорожка приходит в том разрешении,
    которое выбрал кодек, и по своему размеру она заняла бы угол чёрного поля. */

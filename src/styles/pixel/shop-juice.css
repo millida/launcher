@@ -1,0 +1,143 @@
+/* ============================================================
+   МАГАЗИН v2 — лента, пасс в ленте, «Хочу» и «сок» (23.09.2026, 21:43–21:54)
+   Правки владельца: «магазин слипся — на разделы», «напичкан, много текста,
+   спецэффектов мало», «бонус — в магазине вместо подарка дня», «Хочу —
+   по-умному». Рецепт движения — docs/DESIGN-JUICE.md: всё движение UI —
+   только steps(), свет — жёсткими стопами, без размытых свечений в плашках.
+   Форма и рамки — общий слой --px-* (12-pixel.css): все новые плитки — .sh-card.
+   ============================================================ */
+
+/* ---------- Лента и воздух между блоками ---------- */
+/* Одна лента вместо вкладок (правка 21:58); 36 px между блоками («32–40»). */
+.sh-feed { gap: 36px; }
+.sh-row2 { margin-top: var(--sh-gap); }
+
+/* Кошелёк: награда долетела — число подпрыгивает. */
+.sh-bal.bump { animation: sj-bump 0.5s steps(3, end); }
+.sh-bal.bump b { color: var(--m-accent); }
+@keyframes sj-bump { 0% { transform: none; } 34% { transform: translateY(-4px) scale(1.08); } 67% { transform: translateY(1px); } 100% { transform: none; } }
+
+/* ---------- Пасс в ленте: первым, во всю ширину ---------- */
+.sh-pass .dp-head { margin-bottom: 12px; }
+.sh-pass .dp-head h2 { margin: 0; font-size: 22px; font-weight: 900; letter-spacing: -0.01em; }
+.dp2-body.inline { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 12px; align-items: stretch; }
+.dp2-body.inline > .dp2-top { display: flex; flex-direction: column; margin: 0; }
+.dp2-body.inline > .dp2-top > .dp2-hero { flex: 1; min-height: 300px; }
+.dp2-body.inline > .dp2-pass { min-width: 0; }
+/* Сезон без сундука (23.09.2026, 22:22): слева ничего нет — трек во всю ширину. */
+.dp2-body.inline:has(> .dp2-pass:only-child) { grid-template-columns: minmax(0, 1fr); }
+@container shop (max-width: 900px) {
+  .dp2-body.inline { grid-template-columns: minmax(0, 1fr); }
+  .dp2-body.inline > .dp2-top > .dp2-hero { min-height: 240px; }
+}
+.sh-pass { container: shop / inline-size; }
+.sh-pass .dp2-claim { animation: sj-hop 1.4s steps(1, end) infinite; }
+
+/* Сундуки, открытые одним раскрытием: остальные — рядком под главным. */
+.chest-more { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; justify-content: center; }
+.chest-more-i {
+  display: grid; place-items: center; width: 56px; height: 56px; background: color-mix(in srgb, currentColor 18%, var(--m-inset));
+  animation: sh-plop 0.5s cubic-bezier(0.2, 1.5, 0.4, 1) calc(0.3s + var(--i) * 0.12s) both;
+}
+.chest-more-i img { width: 46px; height: 46px; object-fit: contain; }
+:root:root .chest-more-i { clip-path: var(--px-5); }
+
+/* Промокод — ссылкой в самом низу, без плитки. */
+.sh-promo-foot { display: flex; justify-content: center; margin-top: -12px; }
+.sh-promo-foot .sh-promo { margin: 0; width: 100%; max-width: 420px; }
+.sh-link { border: 0; padding: 4px 6px; background: none; color: var(--m-fg-faint); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.sh-link:hover { color: var(--m-fg-muted); }
+
+/* ---------- «Сок» карточек ---------- */
+/* Блик по новым карточкам: полоса жёсткими стопами (рисунок, не свечение)
+   проходит ступенями один раз при открытии вкладки, по очереди. */
+.sh-shine { overflow: hidden; }
+.sh-shine::after {
+  content: ''; position: absolute; inset: 0; z-index: 3; pointer-events: none;
+  background: linear-gradient(105deg, #0000 0 38%, rgba(255, 255, 255, 0.2) 38% 45%, #0000 45% 50%, rgba(255, 255, 255, 0.11) 50% 53%, #0000 53%);
+  background-size: 260% 100%; background-repeat: no-repeat; background-position: 150% 0;
+  animation: sj-shine 0.9s steps(9, end) calc(0.25s + var(--i, 0) * 0.08s) both;
+}
+@keyframes sj-shine { from { background-position: 150% 0; } to { background-position: -60% 0; } }
+/* Предмет дня бликует снова каждые 7 секунд — «живая» витрина. */
+.sh-feat.sh-shine::after { animation: sj-shine-loop 7s steps(1, end) 0.25s infinite; }
+@keyframes sj-shine-loop {
+  0% { background-position: 150% 0; } 1.4% { background-position: 120% 0; } 2.8% { background-position: 90% 0; }
+  4.2% { background-position: 60% 0; } 5.6% { background-position: 30% 0; } 7% { background-position: 0% 0; }
+  8.4% { background-position: -30% 0; } 9.8%, 100% { background-position: -60% 0; }
+}
+
+/* Мерцание редкости: пиксели-искры в превью эпических и легендарных. */
+.sh-art { position: relative; }
+.sh-tw { position: absolute; z-index: 1; width: 3px; height: 3px; background: #fff; opacity: 0; pointer-events: none; animation: sj-tw 2.4s steps(1, end) infinite; }
+.sh-tw::before, .sh-tw::after { content: ''; position: absolute; background: var(--sh-tone); }
+.sh-tw::before { left: -3px; top: 0; width: 9px; height: 3px; opacity: 0.8; }
+.sh-tw::after { left: 0; top: -3px; width: 3px; height: 9px; opacity: 0.8; }
+.sh-tw.t1 { left: 16%; top: 18%; }
+.sh-tw.t2 { right: 14%; top: 34%; animation-delay: 0.8s; }
+.sh-tw.t3 { left: 30%; bottom: 16%; animation-delay: 1.6s; }
+[data-rar='LEGENDARY'] .sh-tw { animation-duration: 1.6s; }
+@keyframes sj-tw { 0%, 80% { opacity: 0; transform: scale(0.5); } 83% { opacity: 1; transform: scale(1); } 88% { opacity: 0.6; transform: scale(0.5); } 91%, 100% { opacity: 0; } }
+
+/* Скидка: линия зачёркивает старую цену ступенями, плашка «−N%» подпрыгивает. */
+.sh-pr.is-off s { position: relative; text-decoration: none; }
+.sh-pr.is-off s::after {
+  content: ''; position: absolute; left: -2px; right: -2px; top: 50%; height: 2px; margin-top: -1px;
+  background: var(--m-rarity-legendary); transform-origin: left; animation: sj-strike 0.36s steps(4, end) 0.1s both;
+}
+@keyframes sj-strike { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.sh-pr.is-off b { color: var(--m-rarity-legendary); }
+.sh-deal .sh-off.big { animation: sj-hop 1.4s steps(1, end) 0.6s infinite; }
+:root:root .sh-deal > .sh-wish { top: 12px; right: 12px; --px-n: 5px; clip-path: var(--px-5); }
+.sh-deal > .sh-card-foot { flex-direction: column; align-items: stretch; gap: 8px; }
+
+/* «Можно забрать» — подпрыгивание ступенью (как готовый сундук в лобби). */
+.sh-chest.can-take .sh-chest-art { animation: sj-hop 1.4s steps(1, end) infinite; }
+.card.sh-weekly.is-ready .btn.primary { animation: sj-hop 1.4s steps(1, end) infinite; }
+@keyframes sj-hop { 0%, 84% { transform: none; } 86% { transform: translateY(-4px); } 92% { transform: translateY(-2px); } 96% { transform: translateY(1px); } }
+
+/* ---------- «Хочу» ---------- */
+/* Все карточки «Хочу» одной высоты картинки: низ — как у «цена + кнопка». */
+.sh-wcard .sh-card-foot { min-height: 66px; justify-content: flex-end; }
+.sh-wcard.is-returns .sh-art, .sh-wcard.is-earn .sh-art { opacity: 0.72; }
+.sh-wcard.is-shop { background: color-mix(in srgb, var(--m-accent) 12%, var(--m-surface-2)); --px-ft: var(--m-accent); }
+.sh-wnow {
+  position: absolute; z-index: 2; top: 12px; left: 12px; padding: 3px 7px 4px;
+  background: var(--m-accent); color: var(--px-on-accent); font-size: 11px; font-weight: 900;
+  animation: sj-hop 1.4s steps(1, end) infinite;
+}
+:root:root .sh-wnow { clip-path: var(--px-4); }
+.sh-wstate { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 34px; font-size: 12px; font-weight: 850; color: var(--m-fg-muted); font-variant-numeric: tabular-nums; }
+.sh-wstate > svg.icon { width: 12px; height: 12px; }
+.sh-wstate.earn { color: var(--m-rarity-legendary); }
+.sh-wish-lead .sh-lead-body { gap: 10px; }
+.sh-wsum { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--m-fg-faint); }
+.sh-wsum b { font-size: 22px; font-weight: 900; color: var(--m-fg); font-variant-numeric: tabular-nums; }
+.sh-wshort { font-size: 14px; font-weight: 800; color: var(--m-fg-muted); }
+.sh-wshort b { color: var(--m-fg); font-variant-numeric: tabular-nums; }
+.sh-wshort.ok { display: inline-flex; align-items: center; gap: 6px; color: var(--m-accent); }
+.sh-wshort.ok > svg.icon { width: 13px; height: 13px; }
+.sh-wempty { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 40px 18px; }
+.sh-wempty-art { display: grid; place-items: center; width: 72px; height: 72px; background: var(--m-inset); color: var(--m-danger); }
+.sh-wempty-art > svg.icon { width: 36px; height: 36px; }
+:root:root .sh-wempty-art { clip-path: var(--px-10); }
+.sh-wempty b { font-size: 18px; font-weight: 900; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sh-pass .dp2-claim, .chest-more-i, .sh-shine::after, .sh-feat.sh-shine::after, .sh-tw,
+  .sh-pr.is-off s::after, .sh-deal .sh-off.big, .sh-chest.can-take .sh-chest-art, .card.sh-weekly.is-ready .btn.primary,
+  .sh-wnow, .sh-bal.bump { animation: none !important; }
+  .sh-shine::after { display: none; }
+}
+
+/* ---------- Достижения v2: награда и «Перейти» в строке ---------- */
+.sh-ach2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 10px; }
+@container shop (max-width: 900px) { .sh-ach2 { grid-template-columns: minmax(0, 1fr); } }
+.sh-ach2 .sh-ach-row { min-height: 52px; }
+.sh-ach-rw { display: inline-flex; align-items: center; gap: 4px; min-width: 56px; justify-content: flex-end; font-size: 13px; font-weight: 900; color: var(--m-fg-muted); font-variant-numeric: tabular-nums; }
+.sh-ach-rw.item { position: relative; min-width: 0; }
+.sh-ach-rw.item .sh-art.sm { width: 40px; height: 40px; }
+.sh-ach-rw.item .sh-art.sm img { width: 34px; height: 34px; }
+.sh-ach-rw.excl > svg.icon { position: absolute; top: -6px; right: -6px; width: 14px; height: 14px; color: var(--m-rarity-legendary); }
+.sh-ach-go { flex: none; }
+.sh-ach-row.done .sh-ach-rw { opacity: 0.5; }

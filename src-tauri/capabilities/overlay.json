@@ -1,12 +1,13 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "overlay",
-  "description": "Оверлей поверх игры: только приём событий ядра, ничего больше",
+  "description": "Оверлей поверх игры: события ядра и только свои команды (overlay-commands)",
   "windows": [
     "overlay"
   ],
   "permissions": [
     "core:event:allow-listen",
-    "core:event:allow-unlisten"
+    "core:event:allow-unlisten",
+    "overlay-commands"
   ]
 }

@@ -1,0 +1,706 @@
+/* ============================================================
+   ЕЖЕДНЕВНЫЙ СУНДУК И ТРЕК PLUS (23.09.2026)
+   ------------------------------------------------------------
+   src/components/daily/*. Плашка в углу лобби (.dc) и окно трека (.dp).
+   Язык — docs/PIXEL-LANGUAGE.md: срез 10px у подложек, 5px у кнопок,
+   4px у мелких плашек; рамки только inset-тенью; без градиентов.
+   Движение — ступенями (steps), как в Minecraft; при
+   prefers-reduced-motion всё стоит на месте.
+   ============================================================ */
+
+/* ---------- Сундук ---------- */
+.dc-art {
+  position: relative; flex: none; display: grid; place-items: center;
+  width: var(--dc-size, 52px); height: var(--dc-size, 52px);
+}
+.dc-bob { position: relative; z-index: 2; display: block; }
+.dc-bob img { display: block; width: var(--dc-size, 52px); height: auto; image-rendering: pixelated; }
+
+/* Ореол: плотная плитка акцента со срезом за сундуком, как подсвеченный
+   слот инвентаря. Мигает ступенями; градиента и живого фильтра нет. */
+.dc-halo {
+  position: absolute; z-index: 1; inset: -4px;
+  background: var(--m-accent); opacity: 0.24;
+  --px-n: 10px; clip-path: var(--px-10);
+}
+/* Искры — квадраты 4px, загораются по очереди. */
+.dc-spark {
+  position: absolute; z-index: 3; width: 4px; height: 4px; background: var(--m-accent);
+  opacity: 0;
+}
+.dc-spark.s1 { top: 4%; left: 12%; }
+.dc-spark.s2 { top: 16%; right: 2%; width: 3px; height: 3px; }
+.dc-spark.s3 { bottom: 10%; left: 0; width: 3px; height: 3px; }
+.dc-spark.s4 { bottom: 2%; right: 14%; }
+
+.dc-art.ready .dc-bob { animation: dc-hop 1.4s steps(1, end) infinite; }
+.dc-art.ready .dc-halo { animation: dc-glow 1.4s steps(1, end) infinite; }
+.dc-art.ready .dc-spark,
+.dc-art.opening .dc-spark { animation: dc-spark 1.4s steps(1, end) infinite; }
+.dc-spark.s2 { animation-delay: 0.35s !important; }
+.dc-spark.s3 { animation-delay: 0.7s !important; }
+.dc-spark.s4 { animation-delay: 1.05s !important; }
+
+/* Прыжок в четыре кадра по 2px — пиксельный, без плавной дуги. */
+@keyframes dc-hop {
+  0% { transform: translateY(0); }
+  8% { transform: translateY(-2px); }
+  16% { transform: translateY(-4px); }
+  24% { transform: translateY(-6px); }
+  32% { transform: translateY(-4px); }
+  40% { transform: translateY(-2px); }
+  48%, 100% { transform: translateY(0); }
+}
+@keyframes dc-glow {
+  0% { opacity: 0.16; }
+  24% { opacity: 0.32; }
+  48% { opacity: 0.22; }
+  72%, 100% { opacity: 0.16; }
+}
+@keyframes dc-spark {
+  0% { opacity: 1; transform: scale(1); }
+  12% { opacity: 1; transform: scale(1.5); }
+  24% { opacity: 0; transform: scale(1); }
+  100% { opacity: 0; }
+}
+
+/* ---------- Плашка в углу лобби ---------- */
+.dc {
+  display: flex; align-items: center; gap: 10px;
+  width: 320px; min-height: 92px; padding: 10px 14px 10px 10px;
+  background: color-mix(in srgb, var(--m-surface) 94%, transparent);
+  color: var(--m-fg); box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+  border-radius: var(--m-r-card); font: inherit; text-align: left;
+}
+.dc.compact { width: 260px; height: 72px; min-height: 0; padding: 8px 8px 8px 8px; gap: 7px; }
+:root:root .dc { border-radius: 0; --px-n: 10px; clip-path: var(--px-10); }
+.dc.clickable { cursor: pointer; transition: background-color var(--m-t-fast); }
+.dc.clickable:hover { background: var(--m-surface-2); }
+.dc.clickable:focus-visible { outline: none; background: var(--m-surface-2); }
+/* Готовый сундук зовёт ореолом и прыжком, а не каймой: inset-кайма на срезе
+   рвётся на углах и выглядит надорванной. */
+.dc.compact .dc-act { padding-left: 10px; padding-right: 10px; }
+
+.dc-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.dc-title {
+  font-size: 15px; font-weight: 800; line-height: 1.15; letter-spacing: -0.01em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.dc.compact .dc-title { font-size: 13.5px; }
+.dc.compact .dc-body { gap: 6px; }
+.dc-sub {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12px; font-weight: 650; color: var(--m-fg-muted); white-space: nowrap;
+}
+.dc-sub > svg.icon { width: 12px; height: 12px; color: var(--m-rarity-legendary); flex: none; }
+.dc-act { flex: none; }
+.dc-chev { flex: none; width: 16px; height: 16px; color: var(--m-fg-faint); }
+.dc:not(.ready) .dc-art { opacity: 0.62; }
+
+.dc-skel-art { flex: none; width: 68px; height: 68px; }
+.dc.compact .dc-skel-art { width: 44px; height: 44px; }
+.dc-skel-line { display: block; height: 14px; width: 70%; }
+.dc-skel-line.short { height: 11px; width: 44%; }
+
+/* ---------- Окно трека ---------- */
+.dp-bg { position: fixed; z-index: 900; }
+.modal.dp { position: relative; padding: 20px; }
+.dp-head { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.dp-head h3 { margin: 0; }
+.dp-x { margin-left: auto; }
+.dp-streak {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px;
+  background: var(--m-surface-2); color: var(--m-fg); font-size: 12px; font-weight: 700;
+}
+.dp-streak b { font-size: 15px; font-weight: 800; }
+.dp-streak > svg.icon { width: 14px; height: 14px; color: var(--m-rarity-legendary); }
+:root:root .dp-streak { --px-n: 4px; clip-path: var(--px-4); }
+
+.dp-track { display: grid; grid-auto-rows: auto; gap: 6px; align-items: stretch; }
+.dp-cap {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  font-size: 11px; font-weight: 800; letter-spacing: 0.04em; color: var(--m-fg-muted);
+  text-transform: uppercase;
+}
+.dp-cap > svg.icon { width: 18px; height: 18px; color: var(--m-fg-faint); }
+.dp-cap.plus { color: var(--m-rarity-legendary); }
+.dp-cap.plus > svg.icon { color: var(--m-rarity-legendary); }
+
+.dp-cell {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px; min-width: 0; min-height: 88px; padding: 8px 4px;
+  background: var(--m-surface-2); color: var(--m-fg); border: 0; font: inherit; text-align: center;
+  box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent; border-radius: var(--m-r-md);
+}
+.dp-cell.plus { min-height: 72px; background: color-mix(in srgb, var(--m-rarity-legendary) 12%, var(--m-surface-2)); }
+:root:root .dp-cell { border-radius: 0; --px-n: 10px; clip-path: var(--px-10); }
+.dp-cell b { font-size: 12px; font-weight: 800; line-height: 1.15; white-space: nowrap; }
+.dp-cell img { flex: none; }
+.dp-day > svg.icon { width: 13px; height: 13px; display: block; }
+.dp-day { display: flex; align-items: center; min-height: 13px; font-size: 10.5px; font-weight: 800; color: var(--m-fg-faint); letter-spacing: 0.03em; white-space: nowrap; }
+
+.dp-cell.got { opacity: 0.44; }
+.dp-cell.now {
+  background: var(--m-accent); background-image: var(--px-dots); --px-img: var(--px-dots); --px-img-size: var(--px-dots-size); --px-img-pos: var(--px-dots-pos); --px-img-repeat: var(--px-dots-repeat); --px-img-origin: var(--px-dots-origin);
+  color: var(--px-on-accent); box-shadow: var(--px-btn); --px-ol: var(--px-btn-ol); --px-ol-w: 2px; --px-ft: var(--px-btn-t); --px-ft-w: 3px; --px-fb: var(--px-btn-b); --px-fb-w: 5px; --px-fl: var(--px-btn-l); --px-fl-w: 3px; --px-fr: var(--px-btn-r); --px-fr-w: 3px;
+}
+.dp-cell.now .dp-day { color: rgba(6, 32, 14, 0.72); }
+.dp-cell.now img { animation: dc-hop 1.4s steps(1, end) infinite; }
+.dp-cell.next { background: color-mix(in srgb, var(--m-fg) 10%, var(--m-surface-2)); }
+.dp-cell.locked { cursor: pointer; }
+.dp-cell.locked > img, .dp-cell.locked > b { opacity: 0.5; }
+.dp-cell.locked:hover { background: color-mix(in srgb, var(--m-rarity-legendary) 20%, var(--m-surface-2)); }
+
+.dp-mark {
+  position: absolute; top: 5px; right: 5px; display: grid; place-items: center;
+  width: 18px; height: 18px; background: var(--m-surface); color: var(--m-fg);
+}
+.dp-mark > svg.icon { width: 11px; height: 11px; }
+.dp-mark.lock { color: var(--m-rarity-legendary); }
+.dp-cell.now .dp-mark { background: rgba(6, 32, 14, 0.24); color: var(--px-on-accent); }
+:root:root .dp-mark { --px-n: 4px; clip-path: var(--px-4); }
+
+.dp-skel { display: block; height: 172px; }
+
+.dp-foot { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
+.dp-foot-body { flex: 1; min-width: 0; font-size: 14px; }
+.dp-timer { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.dp-timer > svg.icon { width: 15px; height: 15px; color: var(--m-fg-muted); }
+.dp-price { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.1; }
+.dp-price b { font-size: 15px; font-weight: 800; white-space: nowrap; }
+.dp-price small { font-size: 11px; color: var(--m-fg-muted); }
+.dp-plus > svg.icon { color: var(--m-rarity-legendary); }
+
+/* ============================================================
+   РАДИО ЛОББИ (src/components/radio/RadioToggle.tsx)
+   Один тумблер: иконка, слово, три столбика-эквалайзер.
+   ============================================================ */
+.radio-eq { display: none; align-items: flex-end; gap: 2px; width: 10px; height: 10px; }
+.radio-btn.on .radio-eq { display: inline-flex; }
+.radio-eq i { display: block; width: 2px; height: 2px; background: currentColor; }
+.radio-btn.on { color: var(--m-accent); }
+.radio-btn.on .radio-eq i { opacity: 1; animation: radio-eq 0.9s steps(1, end) infinite; }
+.radio-btn.on .radio-eq i:nth-child(2) { animation-delay: -0.3s; }
+.radio-btn.on .radio-eq i:nth-child(3) { animation-delay: -0.6s; }
+@keyframes radio-eq {
+  0% { height: 4px; }
+  25% { height: 10px; }
+  50% { height: 6px; }
+  75% { height: 8px; }
+  100% { height: 4px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .radio-btn.on .radio-eq i { animation: none; height: 8px; }
+}
+
+/* ============================================================
+   НАГРАДЫ ЗА ВХОД, СХЕМА 23.09.2026
+   ------------------------------------------------------------
+   «Сундуки выглядят совсем хуёво; награды как в Brawl Stars — вещи;
+   PLUS должен быть ультимативным» (владелец, 23.09.2026).
+   - 3D-сундук (.c3d) — сцена three.js, свет и лучи живут в ней;
+   - трек (.dp2-*) — PLUS сверху золотом, бесплатная строка снизу, скобка
+     слева «забирает обе»: подписчик получает обе строки, а не одну из двух;
+   - раскрытие (.rv-*) — на весь экран, карточки вылетают по одной.
+   Подложки — срез 10px, мелкие плашки 4px, без градиентов. Свечение
+   (drop-shadow цвета редкости, лучи) — только у карточек в сцене раскрытия.
+   ============================================================ */
+
+/* Тир сундука красит ореол 2D-рисунка. */
+.dc-art.tier-rare .dc-halo, .dc-art.tier-rare .dc-spark { background: var(--m-rarity-rare); }
+.dc-art.tier-epic .dc-halo, .dc-art.tier-epic .dc-spark { background: var(--m-rarity-epic); }
+.dc-art.tier-legend .dc-halo, .dc-art.tier-legend .dc-spark { background: var(--m-rarity-legendary); }
+
+/* ---------- 3D-сундук ---------- */
+.c3d { position: relative; overflow: hidden; }
+.c3d > canvas { display: block; width: 100%; height: 100%; opacity: 0; transition: opacity 200ms linear; }
+.c3d > canvas.on { opacity: 1; }
+.c3d-flat { position: absolute; inset: 0; display: grid; place-items: center; }
+.c3d-flat.shake .dc-bob { animation: dp-shake 0.3s steps(1, end) infinite; }
+@keyframes dp-shake {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(-3px, 0) rotate(-3deg); }
+  50% { transform: translate(3px, -2px) rotate(3deg); }
+  75% { transform: translate(-2px, 0) rotate(-2deg); }
+  100% { transform: translate(0, 0); }
+}
+
+/* ---------- Картинки наград ---------- */
+.ra {
+  position: relative; flex: none; display: grid; place-items: center;
+  width: var(--ra-size, 52px); height: var(--ra-size, 52px);
+}
+.ra img { display: block; }
+.ra-shard {
+  display: grid; place-items: center; width: 92%; height: 92%;
+  background: color-mix(in srgb, var(--ra-tone) 34%, var(--m-surface));
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.18), inset 0 -4px 0 rgba(0, 0, 0, 0.3);
+  /* Осколок: кристалл с гранями, внутри — превью вещи, из которой он. */
+  clip-path: polygon(50% 0, 100% 28%, 86% 100%, 14% 100%, 0 28%);
+}
+.ra-shard img { width: 96%; height: 96%; object-fit: contain; margin-top: 8%; }
+.ra-count {
+  position: absolute; right: -4px; bottom: -2px; padding: 1px 5px 2px;
+  background: var(--ra-tone); color: var(--px-on-accent);
+  font-size: 11px; font-weight: 900; line-height: 1.2; font-variant-numeric: tabular-nums;
+}
+:root:root .ra-count { --px-n: 4px; clip-path: var(--px-4); }
+.ra-frame {
+  display: grid; place-items: center; width: 100%; height: 100%;
+  background: color-mix(in srgb, var(--ra-tone) 24%, var(--m-surface));
+  box-shadow: inset 0 0 0 2px var(--ra-tone), inset 0 -4px 0 rgba(0, 0, 0, 0.28); --px-ol: var(--ra-tone); --px-ol-w: 2px; --px-ft: transparent; --px-fb: rgba(0, 0, 0, 0.28); --px-fb-w: 4px; --px-fl: transparent; --px-fr: transparent;
+}
+:root:root .ra-frame { --px-n: 4px; clip-path: var(--px-4); }
+.ra-frame img { width: 94%; height: 94%; object-fit: contain; }
+.ra-item.owned .ra-frame { opacity: 0.55; }
+/* Закрытая карта: вещь той недели ещё неизвестна клиенту. */
+.ra-q { font-size: calc(var(--ra-size, 52px) * 0.5); font-weight: 900; line-height: 1; color: var(--ra-tone); }
+.ra-mystery .ra-frame, .ra-mystery .ra-shard { background: color-mix(in srgb, var(--ra-tone) 14%, var(--m-bg)); }
+
+/* ---------- Вещь двух недель ---------- */
+.wi {
+  display: flex; align-items: center; gap: 16px; min-width: 0; padding: 14px 16px;
+  background: var(--m-surface-2); box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+:root:root .wi { --px-n: 10px; clip-path: var(--px-10); }
+.wi-art {
+  position: relative; flex: none; display: grid; place-items: center; width: 132px; height: 132px;
+  background: color-mix(in srgb, var(--wi-tone) 22%, var(--m-surface));
+  box-shadow: inset 0 0 0 3px var(--wi-tone), inset 0 -6px 0 rgba(0, 0, 0, 0.28); --px-ol: var(--wi-tone); --px-ol-w: 3px; --px-ft: transparent; --px-fb: rgba(0, 0, 0, 0.28); --px-fb-w: 6px; --px-fl: transparent; --px-fr: transparent;
+}
+:root:root .wi-art { --px-n: 10px; clip-path: var(--px-10); }
+.wi-art img { width: 124px; height: 124px; object-fit: contain; }
+.wi-got {
+  position: absolute; right: 8px; bottom: 8px; display: grid; place-items: center; width: 24px; height: 24px;
+  background: var(--m-accent); color: var(--px-on-accent);
+}
+.wi-got > svg.icon { width: 15px; height: 15px; }
+.wi-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.wi-kicker { font-size: 11px; font-weight: 850; letter-spacing: 0.06em; text-transform: uppercase; color: var(--wi-tone); }
+.wi-name { font-size: 21px; font-weight: 850; line-height: 1.1; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wi-prog { display: flex; align-items: center; gap: 10px; }
+.wi-prog > b { font-size: 15px; font-weight: 850; font-variant-numeric: tabular-nums; }
+.wi-cells { display: flex; gap: 3px; }
+.wi-cells i {
+  display: block; width: 20px; height: 16px;
+  background: color-mix(in srgb, var(--m-fg) 12%, transparent);
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.22);
+}
+.wi-cells i.on {
+  background: var(--wi-tone);
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.34), inset 0 -3px 0 rgba(0, 0, 0, 0.26);
+}
+.wi-cells i.fresh { animation: wi-fill 0.36s steps(3, end) both; animation-delay: calc(var(--wi-d, 0ms) + 200ms); }
+@keyframes wi-fill {
+  0% { background: color-mix(in srgb, var(--m-fg) 12%, transparent); transform: scale(1); }
+  50% { background: #fff; transform: scale(1.3); }
+  100% { background: var(--wi-tone); transform: scale(1); }
+}
+.wi-left { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 650; color: var(--m-fg-muted); }
+.wi-left > svg.icon { width: 13px; height: 13px; }
+
+/* Полоска в плашке лобби: X/10. */
+.wi-strip { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.wi-strip-bar { flex: 1; min-width: 24px; height: 6px; background: color-mix(in srgb, var(--m-fg) 16%, transparent); }
+.wi-strip-bar i { display: block; height: 100%; background: var(--wi-tone); }
+.wi-strip b { font-size: 11px; font-weight: 800; color: var(--m-fg-muted); font-variant-numeric: tabular-nums; }
+
+/* ---------- Окно трека ---------- */
+.modal.dp2 { width: 980px; max-width: calc(100vw - 32px); max-height: calc(100% - 24px); padding: 18px 20px 20px; }
+.dp2 .dp-head { margin-bottom: 12px; }
+.dp2-top { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 10px; margin-bottom: 10px; }
+/* Старый ответ без вещи периода: сундук на всю ширину окна. */
+.dp2-top:has(> :only-child) { grid-template-columns: minmax(0, 1fr); }
+.dp2-hero {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+  height: 176px; padding: 0 12px 12px; background: var(--m-bg); box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+:root:root .dp2-hero { --px-n: 10px; clip-path: var(--px-10); }
+.dp2-hero-stage { position: absolute; inset: 0 0 58px; }
+.dp2-claim { position: relative; z-index: 2; min-width: 160px; }
+.dp2-claim-n {
+  display: inline-grid; place-items: center; min-width: 22px; height: 22px; margin-left: 8px; padding: 0 5px;
+  background: rgba(6, 32, 14, 0.24); font-size: 13px; font-weight: 900;
+}
+:root:root .dp2-claim-n { --px-n: 4px; clip-path: var(--px-4); }
+.dp-season { font-size: 12px; font-weight: 700; color: var(--m-fg-muted); }
+
+.dp2-timer { position: relative; z-index: 2; font-size: 18px; font-weight: 850; min-height: 40px; }
+.dp2-hero:not(.ready) .dp2-hero-stage { opacity: 0.7; }
+
+.dp2-plusbar {
+  display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 14px; margin-bottom: 6px;
+  background: color-mix(in srgb, var(--m-rarity-legendary) 16%, var(--m-surface-2));
+}
+:root:root .dp2-plusbar { --px-n: 10px; clip-path: var(--px-10); }
+.dp2-plusbar-tag {
+  display: inline-flex; align-items: center; gap: 6px; margin-right: auto;
+  font-size: 15px; font-weight: 900; letter-spacing: 0.04em; color: var(--m-rarity-legendary);
+}
+.dp2-plusbar-tag > svg.icon { width: 18px; height: 18px; }
+.dp-plus > svg.icon { color: var(--m-rarity-legendary); }
+
+/* Лента 28 дней: подписи строк слева закреплены, дни листаются вбок (колесо,
+   перетаскивание, стрелки). Ширины колонок — COL/COL_TODAY в DailyPassModal. */
+.dp2-rail { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 6px; }
+.dp2-view { display: grid; grid-template-columns: 30px minmax(0, 1fr) 30px; gap: 6px; min-width: 0; }
+.dp2-scroll {
+  overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain;
+  scrollbar-width: none; cursor: grab; user-select: none;
+}
+.dp2-scroll::-webkit-scrollbar { display: none; }
+.dp2-scroll.drag { cursor: grabbing; }
+.dp2-scroll img { -webkit-user-drag: none; }
+.dp2-track {
+  display: grid; grid-template-rows: 24px 124px 124px; gap: 6px; align-items: stretch;
+  width: max-content;
+}
+/* Новая неделя цикла — отступ, чтобы недели читались блоками по 7. */
+.dp2-head.wk, .dp2-cell.wk { margin-left: 12px; }
+.dp2-arrow {
+  grid-row: 1; align-self: stretch; margin-top: 30px;
+  display: grid; place-items: center; border: 0; padding: 0; cursor: pointer;
+  background: var(--m-surface); color: var(--m-fg); box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+:root:root .dp2-arrow { --px-n: 10px; clip-path: var(--px-10); }
+.dp2-arrow > svg.icon { width: 20px; height: 20px; }
+.dp2-arrow.l { grid-column: 1; }
+.dp2-arrow.r { grid-column: 3; }
+.dp2-scroll { grid-column: 2; grid-row: 1; }
+.dp2-arrow:hover:not(:disabled) { background: var(--m-accent); color: var(--px-on-accent); }
+.dp2-arrow:disabled { opacity: 0.35; cursor: default; }
+.dp2-head {
+  display: flex; align-items: center; justify-content: center; gap: 4px; min-height: 22px;
+  font-size: 11px; font-weight: 850; letter-spacing: 0.04em; text-transform: uppercase; color: var(--m-fg-faint);
+  white-space: nowrap;
+}
+.dp2-head > svg.icon { width: 12px; height: 12px; }
+.dp2-head.claimed { color: var(--m-fg-muted); }
+.dp2-head.ready { background: var(--m-accent); color: var(--px-on-accent); }
+:root:root .dp2-head.ready { --px-n: 4px; clip-path: var(--px-4); }
+
+/* Подписи строк слева: «Без подписки» сверху, «С PLUS» снизу — по центру своей строки. */
+.dp2-side {
+  height: 254px; margin-top: 30px;
+  display: grid; grid-template-rows: 124px 124px; gap: 6px; align-items: center;
+}
+.dp2-side-free { font-size: 13px; font-weight: 600; line-height: 1.25; color: var(--m-fg-faint); }
+.dp2-side-plus { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.dp2-side-plus > i { font-style: normal; font-size: 12px; font-weight: 800; line-height: 1.2; color: var(--m-rarity-legendary); }
+
+/* Золотой бейдж PLUS с короной: плотное золото, тёмный текст, подошва, срез угла. */
+.plus-badge {
+  display: inline-flex; align-items: center; gap: 5px; padding: 5px 9px 7px;
+  background: #ffc933; color: #3a2400;
+  font-size: 14px; font-weight: 900; letter-spacing: 0.06em; line-height: 1;
+  box-shadow: inset 0 -3px 0 #c98a00, inset 0 2px 0 #ffe79a;
+  clip-path: polygon(0 4px, 4px 4px, 4px 0, calc(100% - 4px) 0, calc(100% - 4px) 4px, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 4px calc(100% - 4px), 0 calc(100% - 4px));
+}
+.plus-badge > svg.icon { width: 16px; height: 16px; color: #3a2400; }
+
+.dp2-cell {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px; min-width: 0; min-height: 0; padding: 10px 6px 8px;
+  background: var(--m-surface-2); color: var(--m-fg); border: 0; font: inherit; text-align: center;
+  box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+:root:root .dp2-cell { --px-n: 10px; clip-path: var(--px-10); }
+/* Состояния клетки пасса (23.09.2026, вечер). Выделяет заливка, не рамка:
+   inset-тень на срезе рвётся на углах. */
+.dp2-cell.plus { background: color-mix(in srgb, var(--m-rarity-legendary) 14%, var(--m-surface-2)); }
+/* Можно забрать: плотный цвет строки, награда прыгает, внизу «Забрать». */
+.dp2-cell.ready { cursor: pointer; }
+.dp2-cell.free.ready { background: color-mix(in srgb, var(--m-accent) 26%, var(--m-surface-2)); }
+.dp2-cell.plus.ready { background: color-mix(in srgb, var(--m-rarity-legendary) 34%, var(--m-surface-2)); }
+.dp2-cell.ready .ra { animation: dc-hop 1.4s steps(1, end) infinite; }
+.dp2-cell.free.ready:hover { background: color-mix(in srgb, var(--m-accent) 38%, var(--m-surface-2)); }
+.dp2-cell.plus.ready:hover { background: color-mix(in srgb, var(--m-rarity-legendary) 46%, var(--m-surface-2)); }
+.dp2-take {
+  padding: 3px 10px 4px; background: var(--m-accent); color: var(--px-on-accent);
+  font-size: 12px; font-weight: 900; line-height: 1.15;
+  animation: dc-breathe 1.2s steps(2, end) infinite;
+}
+.dp2-cell.plus .dp2-take { background: var(--m-rarity-legendary); }
+:root:root .dp2-take { --px-n: 4px; clip-path: var(--px-4); }
+/* Забрана: серая, с галочкой. */
+.dp2-cell.claimed { background: var(--m-surface-2); }
+.dp2-cell.claimed .dp2-arts { opacity: 0.35; filter: grayscale(1); }
+.dp2-cell.claimed .dp2-label { color: var(--m-fg-faint); }
+/* PLUS без подписки: награда во всей красе, только замок. */
+.dp2-cell.locked { cursor: pointer; }
+.dp2-cell.plus.locked:hover { background: color-mix(in srgb, var(--m-rarity-legendary) 26%, var(--m-surface-2)); }
+/* Ещё закрыта: приглушена; у ближайшей бесплатной — таймер. */
+.dp2-cell.future .dp2-arts { opacity: 0.55; }
+.dp2-cell.future .dp2-label { color: var(--m-fg-muted); }
+.dp2-soon {
+  display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px 3px;
+  background: var(--m-bg); color: var(--m-accent);
+  font-size: 11.5px; font-weight: 850; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.dp2-soon > svg.icon { width: 12px; height: 12px; }
+:root:root .dp2-soon { --px-n: 4px; clip-path: var(--px-4); }
+.dp2-arts { display: flex; align-items: center; justify-content: center; gap: 4px; }
+.dp2-label {
+  max-width: 100%; font-size: 12px; font-weight: 800; line-height: 1.15;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums;
+}
+.dp2-mark {
+  position: absolute; top: 6px; right: 6px; display: grid; place-items: center; width: 20px; height: 20px;
+}
+.dp2-mark > svg.icon { width: 12px; height: 12px; }
+.dp2-mark.lock { background: var(--m-rarity-legendary); color: var(--px-on-accent); }
+.dp2-mark.got { background: var(--m-accent); color: var(--px-on-accent); }
+:root:root .dp2-mark { --px-n: 4px; clip-path: var(--px-4); }
+/* Отступ 8 + срез 4 = ступенька клетки 10 + грань 2: значок не наезжает
+   на рамку клетки на ступеньке (при 6px замок перекрывал её). */
+:root:root .dp2-mark { top: 8px; right: 8px; }
+
+/* ---------- Раскрытие на весь экран ---------- */
+.rv {
+  position: fixed; inset: 0; z-index: 950;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+  /* Сверху, а не по центру: карточки появляются по одной, и сундук не должен
+     прыгать вверх с каждой новой. */
+  padding: max(16px, 5vh) 16px 16px; overflow-y: auto; background: rgba(3, 7, 5, 0.94); color: var(--m-fg);
+  animation: rv-in 0.2s linear both;
+}
+@keyframes rv-in { from { opacity: 0; } to { opacity: 1; } }
+.rv-stage { flex: none; width: min(620px, 92vw); height: clamp(220px, 44vh, 380px); }
+.rv-stage .c3d { width: 100%; height: 100%; }
+.rv-stage .c3d-flat .dc-art { --dc-size: 140px !important; width: 140px; height: 140px; }
+/* Без сундука: карточки по центру экрана. */
+.rv.nochest { justify-content: center; }
+.rv.nochest .rv-flow { margin-top: 0; }
+.rv-flow { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 14px; margin-top: -18px; }
+.rv-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; }
+.rv-groups { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: center; gap: 14px 36px; }
+.rv-card.k-item .rv-card-label { text-align: center; }
+
+/* Карточка: снаружи свечение редкости (drop-shadow считается по силуэту
+   среза), внутри плита со срезом. Свечение гаснет до мягкого после «плюха». */
+.rv-card {
+  display: block; animation: rv-plop 0.52s cubic-bezier(0.2, 1.5, 0.4, 1) both, rv-glow 1.1s ease-out both;
+}
+.rv-card-in {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  width: 136px; min-height: 156px; padding: 16px 8px 12px; overflow: hidden;
+  background: color-mix(in srgb, var(--rv-tone) 16%, var(--m-surface));
+  box-shadow: inset 0 0 0 3px var(--rv-tone), inset 0 3px 0 rgba(255, 255, 255, 0.12), inset 0 -7px 0 rgba(0, 0, 0, 0.3); --px-ol: var(--rv-tone); --px-ol-w: 3px; --px-ft: rgba(255, 255, 255, 0.12); --px-ft-w: 3px; --px-fb: rgba(0, 0, 0, 0.3); --px-fb-w: 7px; --px-fl: transparent; --px-fr: transparent;
+}
+:root:root .rv-card-in { --px-n: 10px; clip-path: var(--px-10); }
+.rv-card-art { position: relative; z-index: 1; }
+.rv-card-label {
+  position: relative; z-index: 1; max-width: 100%; font-size: 17px; font-weight: 900; line-height: 1.1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums;
+}
+.rv-card.k-item .rv-card-label { font-size: 13px; white-space: normal; }
+.rv-flash { position: absolute; inset: 0; background: var(--rv-tone); opacity: 0; animation: rv-flash 0.5s steps(4, end) both; }
+.rv-card-crown {
+  position: absolute; z-index: 2; top: 0; left: 50%; transform: translateX(-50%);
+  display: grid; place-items: center; width: 28px; height: 20px;
+  background: var(--m-rarity-legendary); color: var(--px-on-accent);
+}
+.rv-card-crown > svg.icon { width: 14px; height: 14px; }
+.rv-card.plus .rv-card-in { background: color-mix(in srgb, var(--m-rarity-legendary) 14%, var(--m-surface)); }
+@keyframes rv-plop {
+  0% { transform: translateY(-160px) scale(0.2); opacity: 0; }
+  55% { transform: translateY(10px) scale(1.14); opacity: 1; }
+  78% { transform: translateY(0) scale(0.95); }
+  100% { transform: none; opacity: 1; }
+}
+@keyframes rv-glow {
+  0% { filter: drop-shadow(0 0 0 transparent); }
+  35% { filter: drop-shadow(0 0 22px var(--rv-tone)); }
+  100% { filter: drop-shadow(0 0 8px color-mix(in srgb, var(--rv-tone) 60%, transparent)); }
+}
+@keyframes rv-flash {
+  0% { opacity: 0.85; }
+  100% { opacity: 0; }
+}
+
+.rv-wave { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.rv-wave-tag {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px 6px;
+  background: var(--m-rarity-legendary); color: var(--px-on-accent);
+  font-size: 14px; font-weight: 900; letter-spacing: 0.06em;
+  animation: rv-plop 0.45s cubic-bezier(0.2, 1.5, 0.4, 1) both;
+}
+.rv-wave-tag > svg.icon { width: 16px; height: 16px; }
+:root:root .rv-wave-tag { --px-n: 4px; clip-path: var(--px-4); }
+
+.rv-missed {
+  display: flex; align-items: center; gap: 18px; padding: 12px 14px 12px 18px;
+  background: var(--m-surface); box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--m-rarity-legendary) 70%, transparent), var(--px-plate); --px-ol: color-mix(in srgb, var(--m-rarity-legendary) 70%, transparent); --px-ol-w: 2px; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+  animation: rv-rise 0.3s steps(3, end) both;
+}
+:root:root .rv-missed { --px-n: 10px; clip-path: var(--px-10); }
+.rv-missed-head { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 800; color: var(--m-rarity-legendary); white-space: nowrap; }
+.rv-missed-head > svg.icon { width: 16px; height: 16px; }
+.rv-missed-row { display: flex; gap: 10px; }
+.rv-missed-item { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 128px; }
+.rv-missed-item > b { max-width: 100%; font-size: 11px; font-weight: 750; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rv-missed-act { display: flex; align-items: center; gap: 10px; }
+.rv-price { font-size: 13px; font-weight: 800; white-space: nowrap; }
+@keyframes rv-rise {
+  from { transform: translateY(10px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+.rv-week {
+  display: flex; align-items: center; gap: 12px; padding: 8px 16px 8px 8px;
+  background: var(--m-surface-2); box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent; animation: rv-rise 0.3s steps(3, end) both;
+}
+:root:root .rv-week { --px-n: 10px; clip-path: var(--px-10); }
+.rv-week > img { width: 52px; height: 52px; object-fit: contain; }
+.rv-week-body { display: flex; flex-direction: column; gap: 6px; }
+.rv-week-body > b { font-size: 13px; font-weight: 800; }
+.rv-week-n { font-size: 18px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.rv-acts { display: flex; gap: 10px; margin-top: 4px; animation: rv-rise 0.3s steps(3, end) both; }
+
+/* Вещь собрана — отдельный праздничный кадр поверх раскрытия. */
+.rv-unlock {
+  position: fixed; inset: 0; z-index: 960; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  background: rgba(3, 7, 5, 0.95); animation: rv-in 0.2s linear both;
+}
+.rv-unlock-rays {
+  position: absolute; left: 50%; top: 42%; width: 900px; height: 900px; margin: -450px 0 0 -450px;
+  background: repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--rv-tone) 30%, transparent) 0deg 9deg, transparent 9deg 24deg);
+  -webkit-mask: radial-gradient(circle, #000 0, transparent 62%);
+  mask: radial-gradient(circle, #000 0, transparent 62%);
+  animation: rv-spin 18s linear infinite;
+}
+@keyframes rv-spin { to { transform: rotate(360deg); } }
+.rv-unlock-art {
+  position: relative; display: grid; place-items: center; width: 220px; height: 220px;
+  background: color-mix(in srgb, var(--rv-tone) 22%, var(--m-surface));
+  box-shadow: inset 0 0 0 4px var(--rv-tone), inset 0 -8px 0 rgba(0, 0, 0, 0.3); --px-ol: var(--rv-tone); --px-ol-w: 4px; --px-ft: transparent; --px-fb: rgba(0, 0, 0, 0.3); --px-fb-w: 8px; --px-fl: transparent; --px-fr: transparent;
+  animation: rv-plop 0.6s cubic-bezier(0.2, 1.5, 0.4, 1) both;
+}
+:root:root .rv-unlock-art { --px-n: 10px; clip-path: var(--px-10); }
+.rv-unlock-art img { width: 200px; height: 200px; object-fit: contain; }
+.rv-unlock-kicker {
+  position: relative; margin-top: 8px; font-size: 13px; font-weight: 900; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--rv-tone);
+}
+.rv-unlock-name { position: relative; font-size: 28px; font-weight: 900; letter-spacing: -0.01em; }
+.rv-unlock .btn { position: relative; margin-top: 8px; }
+
+@media (max-height: 760px) {
+  .rv-stage { height: clamp(200px, 36vh, 300px); }
+  .rv-card-in { min-height: 138px; width: 124px; padding-top: 12px; gap: 8px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-art.ready .dc-bob, .dc-art.ready .dc-halo, .dc-spark, .dp2-cell.ready .ra, .dp2-take,
+  .c3d-flat .dc-bob, .wi-cells i.fresh, .rv, .rv-card, .rv-flash, .rv-wave-tag,
+  .rv-missed, .rv-week, .rv-acts, .rv-unlock, .rv-unlock-rays, .rv-unlock-art { animation: none !important; }
+  .rv-card { filter: drop-shadow(0 0 8px color-mix(in srgb, var(--rv-tone) 60%, transparent)); }
+  .dc-art.ready .dc-spark { opacity: 1; }
+}
+@keyframes dc-breathe {
+  0%, 100% { transform: translateY(0); filter: brightness(1); }
+  50% { transform: translateY(-2px); filter: brightness(1.12); }
+}
+
+/* ============================================================
+   БОНУС БЕЗ ВЕЩЕЙ (24.09.2026): «Забрать всё», «Мои сундуки», карточка PLUS
+   ------------------------------------------------------------
+   Клетки дают осколки и сундуки. Сундук копится в «Моих сундуках» и
+   открывается когда угодно; шансы — полоской цвета редкости у «Открыть».
+   Закрытая клетка PLUS открывает карточку с ценой, а не сразу оплату.
+   ============================================================ */
+.dp-head .dp-all { margin-left: auto; }
+.dp-head .dp-all + .dp-x { margin-left: 4px; }
+
+/* ---------- Мои сундуки: лента уровней, как в Brawl Stars ---------- */
+.mc {
+  margin-top: 10px; padding: 12px 14px 14px;
+  background: var(--m-bg); box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+:root:root .mc { --px-n: 10px; clip-path: var(--px-10); }
+.mc-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.mc-head h4 { margin: 0; font-size: 16px; font-weight: 850; }
+.mc-count {
+  display: inline-grid; place-items: center; min-width: 24px; height: 22px; padding: 0 6px;
+  background: var(--m-accent); color: var(--px-on-accent); font-size: 13px; font-weight: 900; font-variant-numeric: tabular-nums;
+}
+:root:root .mc-count { --px-n: 4px; clip-path: var(--px-4); }
+.mc-view { display: grid; grid-template-columns: 30px minmax(0, 1fr) 30px; gap: 6px; }
+.mc-scroll { grid-column: 1 / -1; grid-row: 1; overflow-x: auto; scrollbar-width: none; cursor: grab; }
+.mc-view:has(.dp2-arrow) .mc-scroll { grid-column: 2; }
+.mc-scroll::-webkit-scrollbar { display: none; }
+.mc-scroll.drag { cursor: grabbing; }
+.mc-scroll img { -webkit-user-drag: none; }
+.mc-row { display: flex; gap: 10px; width: max-content; }
+.mc-view .dp2-arrow { grid-row: 1; }
+.mc-head .mc-all { margin-left: auto; }
+/* Клетка ленты: один сундук по порядку получения (правка владельца 18:12). */
+.mc-cell {
+  position: relative; overflow: hidden; flex: none; width: 128px;
+  display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 6px 10px;
+  background-color: color-mix(in srgb, var(--mc-tone) 16%, var(--m-surface-2)); color: inherit; border: 0; cursor: pointer;
+  --px-ol: transparent; --px-ft: var(--mc-tone); --px-ft-w: 4px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+  animation: mc-in 0.32s steps(4, end) calc(var(--i, 0) * 0.05s) both;
+}
+:root:root .mc-cell { --px-n: 10px; clip-path: var(--px-10); }
+.mc-cell:hover:not(:disabled) { background-color: color-mix(in srgb, var(--mc-tone) 28%, var(--m-surface-2)); }
+.mc-cell:hover:not(:disabled) .mc-art { transform: translateY(-3px); }
+.mc-cell:disabled { cursor: default; }
+.mc-cell:focus-visible { outline: 3px solid var(--mc-tone); outline-offset: -3px; }
+@keyframes mc-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.mc-art { display: block; width: 80px; height: 92px; image-rendering: pixelated; pointer-events: none; }
+/* Первый в ленте — тот, что открыть сейчас: подпрыгивает ступенями, как в Brawl Stars. */
+.mc-cell:first-child .mc-art { animation: mc-hop 1.8s steps(1, end) infinite; }
+@keyframes mc-hop { 0%, 70%, 100% { transform: translateY(0); } 76% { transform: translateY(-6px); } 84% { transform: translateY(-2px); } }
+.mc-name { position: relative; z-index: 1; font-size: 13px; font-weight: 900; line-height: 1.2; }
+.mc-cell.tier-rare .mc-name { color: var(--m-rarity-rare); }
+.mc-cell.tier-epic .mc-name { color: var(--m-rarity-epic); }
+.mc-cell.tier-legend .mc-name { color: var(--m-rarity-legendary); }
+.mc-src { position: relative; z-index: 1; max-width: 100%; font-size: 11px; font-weight: 750; color: var(--m-fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Искры-квадраты по уровню: редкий и выше. */
+.mc-sparks { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.mc-sparks > i {
+  position: absolute; width: 4px; height: 4px; background: var(--mc-tone); opacity: 0;
+  animation: mc-spark 2.4s steps(1, end) infinite;
+}
+.mc-sparks > i:nth-child(1) { left: 16px; top: 22px; }
+.mc-sparks > i:nth-child(2) { right: 18px; top: 14px; animation-delay: 0.8s; }
+.mc-sparks > i:nth-child(3) { right: 26px; top: 70px; animation-delay: 1.6s; background: #fff; }
+@keyframes mc-spark { 0% { opacity: 1; transform: translateY(0); } 25% { opacity: 1; transform: translateY(-6px); } 40% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .mc-cell, .mc-sparks > i, .mc-cell:first-child .mc-art { animation: none; }
+}
+
+/* ---------- Карточка PLUS ---------- */
+.pc-bg { position: fixed; z-index: 940; }
+.modal.pc { width: 440px; max-width: calc(100vw - 32px); padding: 16px 18px 18px; display: flex; flex-direction: column; align-items: stretch; gap: 14px; }
+.pc-head { display: flex; align-items: center; }
+.pc-tag {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px 6px;
+  background: var(--m-rarity-legendary); color: var(--px-on-accent); font-size: 14px; font-weight: 900; letter-spacing: 0.06em;
+}
+.pc-tag > svg.icon { width: 16px; height: 16px; }
+:root:root .pc-tag { --px-n: 4px; clip-path: var(--px-4); }
+.pc-x { margin-left: auto; }
+.pc-price { display: flex; align-items: baseline; gap: 10px; }
+.pc-price b { font-size: 34px; font-weight: 900; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.pc-price small { font-size: 14px; font-weight: 700; color: var(--m-fg-muted); }
+.pc-price-skel { display: inline-block; width: 120px; height: 34px; }
+.pc-gifts { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 6px; }
+.pc-gift {
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 2px; min-height: 108px; padding: 8px 4px 8px;
+  background: color-mix(in srgb, var(--m-rarity-legendary) 12%, var(--m-surface-2));
+}
+:root:root .pc-gift { --px-n: 10px; clip-path: var(--px-10); }
+.pc-gift b { font-size: 18px; font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.pc-gift small { font-size: 11px; font-weight: 750; color: var(--m-fg-muted); }
+.pc-gift.tier-rare b { color: var(--m-rarity-rare); }
+.pc-gift.tier-epic b { color: var(--m-rarity-epic); }
+.pc-gift.shards { justify-content: flex-end; }
+.pc-gift.shards .sh-shard { margin-bottom: 6px; }
+.pc-boost { font-size: 30px; font-weight: 900; line-height: 1; color: var(--m-rarity-legendary); margin-bottom: 8px; }
+.pc-go { width: 100%; }
+.pc-wait { display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--m-fg-muted); }
+.pc-wait > svg.icon { width: 14px; height: 14px; }

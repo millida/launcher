@@ -1,0 +1,121 @@
+/* ============================================================
+   «НОВАЯ СБОРКА» (правки владельца 23.09.2026, 19:40)
+   Иконка сборки, загрузчики со знаками проектов, версии — сеткой
+   с вертикальной прокруткой (вбок ничего не листается).
+   Рамки выбранных плиток — общим слоем --px-* (12-pixel.css).
+   ============================================================ */
+
+#nbModal .modal.nb-modal.nb2 { width: min(660px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow-y: auto; }
+.nb2 .nb-field > label { display: flex; align-items: center; gap: 10px; }
+
+.nb2-head { display: flex; align-items: flex-end; gap: 16px; margin: 0 0 18px; }
+.nb2-name { flex: 1; min-width: 0; }
+
+/* ---------- загрузчики ---------- */
+.nb2-loaders { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-bottom: 18px; }
+.nb2-lt {
+  display: grid;
+  grid-template-rows: 44px 18px 14px;
+  justify-items: center;
+  align-items: center;
+  row-gap: 4px;
+  height: 104px;
+  padding: 10px 4px 0;
+  color: var(--m-fg-muted);
+  background-color: var(--m-inset);
+  --px-n: 5px; clip-path: var(--px-5);
+  --px-ol: var(--px-well-ol); --px-ol-w: 1px; --px-ft: var(--px-well-t); --px-ft-w: 3px;
+  transition: background-color var(--m-t-fast), color var(--m-t-fast);
+}
+.nb2-lt img { width: 40px; height: 40px; object-fit: contain; pointer-events: none; }
+.nb2-lt b { font-size: 13.5px; font-weight: 700; line-height: 18px; color: var(--m-fg); white-space: nowrap; }
+.nb2-lt span { font-size: 11.5px; line-height: 14px; color: var(--m-fg-subtle); white-space: nowrap; }
+@media (hover: hover) and (pointer: fine) { .nb2-lt:hover:not(:disabled) { background-color: var(--m-surface-2); } }
+.nb2-lt.on {
+  background-color: var(--m-accent-soft);
+  --px-ol: var(--m-accent); --px-ol-w: 3px; --px-ft: transparent; --px-fb: rgba(0, 0, 0, 0.22); --px-fb-w: 4px;
+}
+.nb2-lt.on b { color: var(--m-accent); }
+/* Нельзя поставить на эту версию: видно, но неактивно, с причиной. */
+.nb2-lt:disabled { cursor: not-allowed; }
+.nb2-lt:disabled img, .nb2-lt:disabled b { opacity: 0.35; filter: grayscale(1); }
+.nb2-lt:disabled span { color: var(--m-warning); }
+
+/* ---------- версии ---------- */
+.nb2-vhead { flex-wrap: nowrap; }
+.nb2-vhead > span:first-child { flex: none; }
+.nb2-vhead > .tgl { margin-left: auto; }
+.nb2-tgl-lab { font-size: 12.5px; font-weight: 600; color: var(--m-fg-subtle); cursor: pointer; white-space: nowrap; }
+.nb2-search { display: flex; align-items: center; gap: 6px; width: 132px; height: 32px !important; padding: 0 10px; }
+.nb2-search svg { flex: none; width: 14px; height: 14px; color: var(--m-fg-subtle); }
+.nb2-search input { min-width: 0; width: 100%; font-size: 13px; }
+
+.nb2-vgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  grid-auto-rows: 40px;
+  gap: 6px;
+  height: 222px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+  margin-bottom: 18px;
+  scrollbar-width: thin;
+}
+.nb2-ver {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 0 6px;
+  color: var(--m-fg);
+  background-color: var(--m-surface-2);
+  --px-n: 5px; clip-path: var(--px-5);
+  --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px;
+  transition: background-color var(--m-t-fast);
+}
+.nb2-ver b { max-width: 100%; font: 700 13px/1.1 var(--m-font); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nb2-ver span { font-size: 10px; line-height: 1; font-weight: 700; color: var(--m-warning); }
+@media (hover: hover) and (pointer: fine) { .nb2-ver:hover { background-color: var(--m-raised); } }
+.nb2-ver.on {
+  color: var(--px-on-accent, #06200e);
+  background-color: var(--m-accent);
+  --px-ol: var(--px-btn-ol); --px-ol-w: 2px; --px-ft: var(--px-btn-t); --px-fb: var(--px-btn-b);
+}
+.nb2-ver.on span { color: inherit; opacity: 0.75; }
+.nb2-ver-skel { display: block; height: 40px; --px-n: 5px; clip-path: var(--px-5); }
+.nb2-none { grid-column: 1 / -1; align-self: center; text-align: center; font-size: 13px; color: var(--m-fg-subtle); }
+
+/* ---------- версия загрузчика и Буст FPS ---------- */
+.nb2-opts { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 12px; }
+.nb2-fps {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 12px;
+  background-color: var(--m-inset);
+  --px-n: 5px; clip-path: var(--px-5);
+}
+.nb2-fps > svg { width: 16px; height: 16px; color: var(--m-accent); }
+.nb2-fps b { font-size: 13.5px; font-weight: 700; white-space: nowrap; }
+.nb2-fps.off { opacity: 0.45; }
+.nb2-fps.off .tgl { cursor: not-allowed; }
+
+@media (max-width: 600px) {
+  .nb2-loaders { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .nb2-opts { grid-template-columns: 1fr; }
+  .nb2-search { width: 100px; }
+}
+
+/* Предупреждение перед Vanilla — поверх окна «Новая сборка». */
+.nb2 { position: relative; }
+.nb2-ask { position: absolute; inset: 0; z-index: 5; display: grid; place-items: center; background: rgb(0 0 0 / 0.6); }
+.nb2-ask-box { display: grid; justify-items: center; gap: 10px; width: min(360px, calc(100% - 32px)); padding: 22px 20px 18px; background: var(--m-surface-2); clip-path: var(--px-10); text-align: center; }
+.nb2-ask-box > svg.icon { width: 34px; height: 34px; color: var(--m-warning, #ffc933); }
+.nb2-ask-box > b { font-size: 18px; }
+.nb2-ask-box ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 13.5px; color: var(--m-fg-muted); }
+.nb2-ask-foot { display: grid; gap: 8px; width: 100%; margin-top: 6px; }

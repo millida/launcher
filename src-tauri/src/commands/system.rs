@@ -20,7 +20,11 @@ pub async fn pick_game_dir() -> Result<Option<String>, String> {
     let start = engine::game_root();
     let picked =
         engine::pick_folder(engine::dialog().set_directory(&start).set_title("Папка игры Millida")).await;
-    Ok(picked.map(|d| d.to_string_lossy().to_string()))
+    let Some(d) = picked else { return Ok(None) };
+    // refused at pick time, so the player sees why right away
+    engine::game_root_candidate_ok(&d)?;
+    engine::vouch_game_root(&d);
+    Ok(Some(d.to_string_lossy().to_string()))
 }
 
 #[tauri::command]

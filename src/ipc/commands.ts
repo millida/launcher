@@ -98,6 +98,11 @@ export interface ProfileSettings {
   javaPath?: string
   javaMajor?: number
   gpu?: GpuPref
+  ramMb?: number
+  autoTune?: boolean
+  catalogPackSlug?: string
+  catalogPackVersion?: string
+  modpackSlug?: string
 }
 
 export type GpuPref = 'auto' | 'discrete' | 'integrated'
@@ -149,10 +154,24 @@ export interface McTextures {
 
 export type ProfileGroups = Record<string, string>
 
+type CoreFailureReporter = (cmd: string, err: unknown, args?: Record<string, unknown>) => void | Promise<void>
+
+let coreFailureReporter: CoreFailureReporter | null = null
+
+// Registered from lib/crash.ts rather than imported: crash.ts sends its report
+// through this very wrapper, and a direct import would close a module cycle.
+export const onCoreFailure = (fn: CoreFailureReporter | null) => {
+  coreFailureReporter = fn
+}
+
 const invoke = <T>(cmd: string, args?: Record<string, unknown>): Promise<T> => {
   const T = tauri()
   if (!T) return Promise.reject(new Error('no tauri'))
-  return T.core.invoke<T>(cmd, args)
+  return T.core.invoke<T>(cmd, args).catch((err: unknown) => {
+    const report = coreFailureReporter
+    if (report) void Promise.resolve().then(() => report(cmd, err, args))
+    throw err
+  })
 }
 
 export const convertFileSrc = (path: string): string => {
@@ -443,6 +462,8 @@ export const importInstance = (path: string, name: string, version: string, load
 
 export const importPackFile = (path?: string) => invoke<Profile>('import_pack_file', { path: path || null })
 
+export const importDroppedPack = (id: number) => invoke<Profile>('import_dropped_pack', { id })
+
 export const installContent = (
   project: string,
   gameVersion: string,
@@ -458,6 +479,68 @@ export const installModpack = (slug: string) => invoke<Profile>('install_modpack
 
 export const installModpackVersion = (slug: string, versionId: string) =>
   invoke<Profile>('install_modpack_version', { slug, versionId })
+
+/** Готовая сборка каталога Millida: ставится только отсюда, файла в вебе нет. */
+export const installCatalogPack = (slug: string) => invoke<Profile>('install_catalog_pack', { slug })
+
+export interface PackCandidate {
+  fileId: string
+  version: string
+  side: string
+  size: number
+  sha512: string | null
+  report: unknown
+  launchChecked: { ok: boolean; at: string } | null
+}
+
+/**
+ * Версия сборки, которая ждёт проверки. Для всех, кроме проверяющих, ответ
+ * пустой — кнопка появляется только у них, и не потому, что мы её прячем.
+ */
+export const packReviewCandidate = (slug: string) =>
+  invoke<{ slug: string; title?: string; candidate: PackCandidate | null }>('pack_review_candidate', { slug })
+
+export interface PackReviewItem {
+  slug: string
+  title: string
+  fileId: string
+  version: string
+  size: number
+  launchChecked: { ok: boolean; at: string } | null
+}
+
+/** Что ждёт проверки лично у меня. У игрока список пустой. */
+export const packReviewQueue = () => invoke<PackReviewItem[]>('pack_review_queue')
+
+/** Поставить версию с проверки: запустить её и есть вся работа проверяющего. */
+export const installPackCandidate = (slug: string) =>
+  invoke<Profile>('install_pack_candidate', { slug })
+
+export interface MillidaPack {
+  slug: string
+  title: string
+  summary: string
+  cover: string | null
+  downloads: number
+  game: string
+  loader: string
+  /** Платная сборка: ставится по доступу на аккаунте. */
+  accessRequired: boolean
+  hasServer: boolean
+  /** Кто собрал. Пусто — подписи нет. */
+  author?: string | null
+}
+
+/** Наши сборки для списка «Контент» — рядом с Modrinth и CurseForge. */
+export const millidaPacks = () => invoke<MillidaPack[]>('millida_packs')
+
+/** Активация ключа доступа к платной сборке. */
+export const packBuyUrl = (slug: string) => invoke<string>('pack_buy_url', { slug })
+export const redeemPackKey = (slug: string, code: string) =>
+  invoke<{ ok: boolean; already: boolean }>('redeem_pack_key', { slug, code })
+
+/** Признак отказа по доступу: по нему открывается окно ввода ключа. */
+export const PACK_ACCESS_PREFIX = 'pack-access: '
 
 export interface MigrateItem {
   file_name: string
@@ -720,6 +803,8 @@ export const setProfileJavaMajor = (profile: string, major: number | null) =>
   invoke<string>('set_profile_java_major', { profile, major })
 
 export const scanImports = () => invoke<FoundInstance[]>('scan_imports')
+/** «Выбрать папку» в импорте: выбор папки и сборки в ней. null — диалог закрыли. */
+export const pickImportDir = () => invoke<FoundInstance[] | null>('pick_import_dir')
 
 export const setProfileGroup = (name: string, group: string) =>
   invoke<void>('set_profile_group', { name, group })
@@ -817,112 +902,6 @@ export const updateFallbackStage = () => invoke<FallbackInstall | null>('update_
 export const updateFallbackRun = (path: string) => invoke<FallbackInstall>('update_fallback_run', { path })
 
 
-export interface ThemeOptionFile {
-  key: string
-  kind: 'toggle' | 'color' | 'select' | 'slider'
-  label: string
-  hint?: string
-  default: string
-  items?: { value: string; label: string }[]
-  min?: number
-  max?: number
-  step?: number
-  unit?: string
-}
-
-export interface InstalledThemeFile {
-  id: string
-  name: string
-  author?: string
-  version?: string
-  description?: string
-  base: 'dark' | 'light' | 'any'
-  preview?: string[]
-  options?: ThemeOptionFile[]
-  dir: string
-}
-
-export interface ThemeSourceFile {
-  css: string
-  dir: string
-}
-
-export const listThemes = () => invoke<InstalledThemeFile[]>('list_themes')
-
-export const readTheme = (id: string) => invoke<ThemeSourceFile>('read_theme', { id })
-
-export const importTheme = () => invoke<InstalledThemeFile | null>('import_theme')
-
-export const deleteTheme = (id: string) => invoke<void>('delete_theme', { id })
-
-export const openThemesFolder = () => invoke<void>('open_themes_folder')
-
-export interface ThemeDraftFile {
-  manifest: Omit<InstalledThemeFile, 'dir'>
-  css: string
-}
-
-export const saveTheme = (draft: ThemeDraftFile) =>
-  invoke<InstalledThemeFile>('save_theme', { draft })
-
-/// Возвращает имя скопированного в папку темы файла или null, если диалог закрыли.
-export const addThemeAsset = (id: string) => invoke<string | null>('add_theme_asset', { id })
-
-export interface CatalogTheme {
-  slug: string
-  name: string
-  description: string
-  author: string
-  base: 'dark' | 'light' | 'any'
-  preview: string[]
-  version: string
-  sizeBytes: number
-  sha256: string
-  downloads: number
-  likes: number
-  liked: boolean
-  mine: boolean
-  updatedAt: string
-}
-
-export interface OwnCatalogTheme extends CatalogTheme {
-  status: 'PENDING' | 'ACTIVE' | 'REJECTED'
-  moderationNote: string | null
-  /// Версия, которая ждёт модерации; игроки пока получают предыдущую.
-  pendingVersion: string | null
-}
-
-export interface CatalogQuery {
-  q?: string
-  sort?: 'popular' | 'new' | 'liked'
-  base?: 'dark' | 'light' | 'any'
-  limit?: number
-  offset?: number
-}
-
-/// Возвращает путь сохранённого файла или null, если диалог закрыли.
-export const exportTheme = (id: string) => invoke<string | null>('export_theme', { id })
-
-export const catalogThemes = (query: CatalogQuery) =>
-  invoke<{ items: CatalogTheme[]; total: number }>('catalog_themes', { query })
-
-export const catalogMyThemes = () => invoke<OwnCatalogTheme[]>('catalog_my_themes')
-
-export const catalogInstallTheme = (slug: string) =>
-  invoke<InstalledThemeFile>('catalog_install_theme', { slug })
-
-export const catalogThemeInstalled = (slug: string) =>
-  invoke<{ downloads: number }>('catalog_theme_installed', { slug })
-
-export const catalogPublishTheme = (id: string, changelog?: string) =>
-  invoke<OwnCatalogTheme>('catalog_publish_theme', { id, changelog })
-
-export const catalogUnpublishTheme = (slug: string) =>
-  invoke<{ ok: boolean }>('catalog_unpublish_theme', { slug })
-
-export const catalogLikeTheme = (slug: string) =>
-  invoke<{ liked: boolean; likes: number }>('catalog_like_theme', { slug })
-
 export const uiPrefs = () => invoke<Record<string, string>>('ui_prefs')
 
 export const setUiPref = (key: string, value: string) => invoke<void>('set_ui_pref', { key, value })
@@ -984,10 +963,17 @@ export interface SkinDiagSession {
   domainOk?: boolean
   textureOk?: boolean
 }
+// What the launcher can put right by itself, and in which build: the report
+// names it so the modal offers one button instead of a route into settings.
+export interface SkinDiagFix {
+  action: 'enable_mod'
+  build: string
+}
 export interface SkinDiag {
   nick: string
   verdict: string
   text: string
+  fix: SkinDiagFix | null
   server: SkinDiagServer | null
   session: SkinDiagSession | null
   builds: SkinDiagBuild[]
@@ -1033,7 +1019,7 @@ export const hideToTray = () => invoke<void>('hide_to_tray')
 export const showFromTray = () => invoke<void>('show_from_tray')
 export const setRestoreOnExitNative = (on: boolean) => invoke<void>('set_restore_on_exit', { on })
 
-export interface OverlayState { enabled: boolean; toasts: boolean; hotkey: string }
+export interface OverlayState { enabled: boolean; toasts: boolean; hotkey: string; cardMs: number }
 
 export interface OverlayCard {
   uid: string
@@ -1050,6 +1036,7 @@ export const overlaySetEnabled = (on: boolean) => invoke<void>('overlay_set_enab
 export const overlaySetHotkey = (hotkey: string) => invoke<void>('overlay_set_hotkey', { hotkey })
 export const overlayNotify = (payload: OverlayCard) => invoke<void>('overlay_notify', { payload })
 export const overlaySetToasts = (on: boolean) => invoke<void>('overlay_set_toasts', { on })
+export const overlaySetCardMs = (ms: number) => invoke<void>('overlay_set_card_ms', { ms })
 export const overlayToast = (payload: OverlayCard) => invoke<void>('overlay_toast', { payload })
 export const overlayHide = () => invoke<void>('overlay_hide')
 export const overlayReady = () => invoke<void>('overlay_ready')
@@ -1249,7 +1236,6 @@ export interface PullReport {
   updated: string[]
   failed: string[]
   prefsApplied: number
-  themesMissing: string[]
 }
 
 export const cloudStatus = () => invoke<CloudStatus>('cloud_status')
@@ -1259,3 +1245,18 @@ export const cloudPush = () => invoke<CloudStatus>('cloud_push')
 export const cloudPull = (only: string[] | null, applyPrefs: boolean) =>
   invoke<PullReport>('cloud_pull', { only, applyPrefs })
 export const cloudForget = () => invoke<void>('cloud_forget')
+
+export interface MillidaModState {
+  installed: string
+  available: string
+  version: string
+  loader: string
+  game_version: string
+  reason: string
+  enabled: boolean
+}
+
+export const millidaModState = (profile: string) => invoke<MillidaModState>('millida_mod_state', { profile })
+export const millidaModInstall = (profile: string) => invoke<MillidaModState>('millida_mod_install', { profile })
+export const millidaModEnabled = () => invoke<boolean>('millida_mod_enabled')
+export const setMillidaModEnabled = (on: boolean) => invoke<void>('set_millida_mod_enabled', { on })

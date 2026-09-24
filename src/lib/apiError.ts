@@ -48,6 +48,26 @@ function statusOf(raw: string): number {
   return match ? Number(match[1]) : 0
 }
 
+export function isTransientApiError(e: unknown): boolean {
+  const raw = String((e as { message?: string } | null)?.message ?? e ?? '').trim()
+  if (OFFLINE.test(raw) || TIMEOUT.test(raw)) return true
+  const status = statusOf(raw)
+  return status === 429 || status >= 500 || /^too many requests$/i.test(raw) || /^throttlerexception/i.test(raw)
+}
+
+/// Сбой кода, а не ответ службы: «Cannot read properties of undefined» игроку
+/// ничего не говорит, ему нужен запасной текст экрана.
+const CODE_FAULT =
+  /cannot read propert|cannot set propert|is not a function|is not defined|is not iterable|is not an object|undefined is not|null is not|unexpected token|unexpected end of json|is not valid json|maximum call stack/i
+
+function isCodeFault(e: unknown, raw: string): boolean {
+  if (e instanceof TypeError || e instanceof ReferenceError || e instanceof RangeError || e instanceof SyntaxError) {
+    // fetch падает TypeError'ом при обрыве связи — это не сбой кода.
+    return !OFFLINE.test(raw)
+  }
+  return CODE_FAULT.test(raw)
+}
+
 export function apiErrorText(e: unknown, fallback: string): string {
   const raw = String((e as { message?: string } | null)?.message ?? e ?? '')
     .replace(/^Error:\s*/, '')
@@ -58,6 +78,7 @@ export function apiErrorText(e: unknown, fallback: string): string {
 
   if (OFFLINE.test(raw)) return 'Нет связи с Millida — проверь интернет и повтори'
   if (TIMEOUT.test(raw)) return 'Millida не ответила вовремя — повтори попытку'
+  if (isCodeFault(e, raw)) return fallback
 
   const status = statusOf(raw)
   if (status === 429 || /^too many requests$/i.test(raw) || /^throttlerexception/i.test(raw)) {

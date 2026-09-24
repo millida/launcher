@@ -1,0 +1,58 @@
+/* Отзыв о лаунчере — src/components/Feedback.tsx (24.09.2026). */
+.fb-bg {
+  position: fixed; inset: 44px 0 0; z-index: 9500; display: grid; place-items: center;
+  background: rgba(6, 12, 8, 0.72);
+}
+.fb-box {
+  position: relative; width: min(520px, calc(100vw - 32px)); padding: 26px 24px 20px;
+  display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center;
+  background: #1b1f1c; color: #fff;
+  --px-n: 10px; clip-path: var(--px-10);
+  animation: fb-in 220ms steps(3, end) both;
+}
+@keyframes fb-in { 0% { transform: translateY(16px); opacity: 0; } 100% { transform: none; opacity: 1; } }
+.fb-x { position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; display: grid; place-items: center; color: rgba(255,255,255,0.6); }
+.fb-x:hover { color: #fff; }
+.fb-title { font: 900 24px/1.15 var(--m-font); }
+.fb-gift {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px 8px;
+  font: 800 14px/1 var(--m-font); color: #06200e; background: #7dd3fc;
+  clip-path: var(--px-4); box-shadow: inset 0 -3px 0 rgba(0,0,0,0.2);
+  animation: fb-glow 1.4s steps(2, end) infinite;
+}
+@keyframes fb-glow { 50% { background: #bae6fd; } }
+.fb-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; }
+.fb-opt {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  min-height: 132px; padding: 16px; color: #fff; background: #262b27; clip-path: var(--px-10);
+  font: 800 16px/1.1 var(--m-font);
+}
+.fb-opt:hover { background: #2f3530; transform: translateY(-2px); }
+.fb-opt.rate { background: var(--m-accent); color: var(--px-on-accent, #06200e); }
+.fb-opt.rate:hover { filter: brightness(1.08); }
+.fb-stars-ic { font-size: 22px; letter-spacing: 2px; color: #ffd23f; text-shadow: 0 2px 0 rgba(0,0,0,0.35); }
+.fb-stars { display: flex; gap: 6px; }
+.fb-star { font-size: 36px; line-height: 1; color: rgba(255,255,255,0.18); transition: transform 80ms steps(2); }
+.fb-star.on { color: #ffd23f; text-shadow: 0 3px 0 rgba(0,0,0,0.35); }
+.fb-star:hover { transform: translateY(-3px); }
+.fb-word { font: 700 13px/1 var(--m-font); color: rgba(255,255,255,0.6); min-height: 13px; }
+.fb-kinds { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.fb-kind { padding: 8px 12px 10px; font: 700 13px/1 var(--m-font); color: #fff; background: #262b27; clip-path: var(--px-4); }
+.fb-kind.on { background: var(--m-accent); color: var(--px-on-accent, #06200e); }
+.fb-text {
+  width: 100%; min-height: 120px; padding: 12px; resize: vertical;
+  font: 500 14px/1.4 var(--m-font); color: #fff; background: #111412; border: 0; outline: none;
+  clip-path: var(--px-5);
+}
+.fb-foot { display: flex; justify-content: space-between; width: 100%; gap: 10px; }
+
+/* Кнопка в верхней полосе лобби: зелёная, с «+50», пока доступна награда. */
+:root .lb-btn.lb-fb { position: relative; background: var(--m-accent); }
+:root .lb-btn.lb-fb:hover { filter: brightness(1.1); }
+:root .lb-btn.lb-fb.has-gift { animation: lb-fb-pulse 1.6s steps(2, end) infinite; }
+@keyframes lb-fb-pulse { 50% { filter: brightness(1.18); } }
+.lb-fb-gift {
+  position: absolute; right: 3px; bottom: 3px; padding: 2px 4px 3px;
+  font: 900 11px/1 var(--m-font); color: #06200e; background: #7dd3fc; clip-path: var(--px-4);
+}
+@media (prefers-reduced-motion: reduce) { :root .lb-btn.lb-fb.has-gift, .fb-gift { animation: none; } }

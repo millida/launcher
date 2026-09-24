@@ -1,0 +1,82 @@
+/* ============================================================
+   ПИКСЕЛЬНЫЙ ЯЗЫК — главный экран «Играть» (22.09.2026)
+   Герой активной сборки и полки: «Мои сборки», «Премиум»,
+   «Куда пойти играть». Общий кит — 02-kit.css и 12-pixel.css,
+   здесь только то, чего там нет.
+   ============================================================ */
+
+/* ---------- Полка ---------- */
+.pl-shelf { margin-bottom: 22px; }
+.pl-shelf .sec-title { margin-top: 0; }
+
+/* ---------- Герой: обложка сборки рядом с названием ---------- */
+.pl-hero-body { display: flex; align-items: center; gap: 14px; }
+.pl-hero-text { min-width: 0; display: block; }
+.pl-hero-cover {
+  position: relative; flex: none; width: 64px; height: 64px; overflow: hidden;
+  background: var(--m-inset); box-shadow: 0 6px 20px rgba(0, 0, 0, .38);
+}
+.pl-hero-cover .cover-img,
+.pl-hero-cover .cover-ph {
+  width: 100%; height: 100%; object-fit: cover; display: grid; place-items: center;
+}
+.pl-hero-cover .cover-img.block { image-rendering: pixelated; padding: 8px; }
+.pl-hero-cta { flex-direction: row; align-items: center; gap: 10px; }
+
+:root:root .pl-hero-cover { --px-n: 10px; clip-path: var(--px-10); border-radius: 0; }
+
+/* ---------- Полка «Премиум» ---------- */
+.pl-prem-row {
+  display: grid; gap: 12px; grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 260px); justify-content: start;
+  container-type: inline-size;
+}
+.pl-prem {
+  display: flex; flex-direction: column; text-align: left; padding: 0; overflow: hidden;
+  background: var(--m-surface-2); color: inherit; border: 0; cursor: pointer;
+  box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent; transition: transform var(--m-t-fast), box-shadow var(--m-t-fast);
+}
+.pl-prem:hover { transform: translateY(-2px); }
+.pl-prem-art {
+  position: relative; display: block; aspect-ratio: 16 / 9; background: var(--m-inset);
+}
+.pl-prem-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.pl-prem-badge {
+  position: absolute; top: 8px; left: 8px; z-index: 1;
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 8px; font-size: 11px; font-weight: 700; line-height: 1.5;
+  background: var(--m-accent); color: var(--px-on-accent, #06200e);
+}
+.pl-prem-badge svg.icon { width: 13px; height: 13px; }
+.pl-prem-body { display: block; padding: 9px 11px 11px; min-width: 0; }
+.pl-prem-body b {
+  display: block; font-size: 13px; font-weight: 700;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pl-prem-body .meta { display: block; margin-top: 3px; font-size: 11.5px; color: var(--m-fg-faint); }
+
+:root:root .pl-prem { --px-n: 10px; clip-path: var(--px-10); border-radius: 0; }
+:root:root .pl-prem-badge { --px-n: 4px; clip-path: var(--px-4); border-radius: 0; }
+
+@container (max-width: 860px) { .pl-prem:nth-child(n + 4) { display: none; } }
+@container (max-width: 600px) { .pl-prem:nth-child(n + 3) { display: none; } }
+
+/* ---------- Полка серверов: чей это ряд ---------- */
+.pl-srv { position: relative; }
+.pl-srv-tag {
+  /* Левый верх строки: справа стоит число онлайна, и метка его перекрывала. */
+  position: absolute; top: 0; left: 0; z-index: 2;
+  padding: 2px 7px; font-size: 10.5px; font-weight: 700; line-height: 1.6;
+  letter-spacing: .01em;
+}
+.pl-srv-tag.own { background: var(--m-accent); color: var(--px-on-accent, #06200e); }
+.pl-srv-tag.ad { background: var(--m-surface-3, var(--m-inset)); color: var(--m-fg-faint); }
+
+:root:root .pl-srv-tag { --px-n: 4px; clip-path: var(--px-4); border-radius: 0; }
+
+/* ---------- Карточка сборки: значок запуска виден сразу ----------
+   Клик по обложке запускает игру, клик по остальной карточке открывает
+   её настройки. Пока значок ▶ появлялся только при наведении, догадаться
+   об этом было нечем (аудит 22.09.2026) — на полке он виден всегда. */
+.pl-shelf .build-cover .mini-play { opacity: 1; transform: translate(-50%, -50%) scale(.94); }
+.pl-shelf .build-card:hover .mini-play { transform: translate(-50%, -50%); }

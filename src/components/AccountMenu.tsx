@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { RefObject } from 'react'
 import { Icon } from './Icon'
 import { Head } from './Head'
@@ -11,6 +12,9 @@ import { openModal, showToast } from '../state/ui'
 import { uiConfirm } from '../state/confirm'
 import { forgetMillidaIfGone, logoutToLogin } from '../lib/session'
 
+/** Ширина меню (.acc-menu): по ней меню прижимается к правому краю окна. */
+const ACC_MENU_W = 330
+
 export function AccountMenu({
   open,
   onClose,
@@ -21,7 +25,7 @@ export function AccountMenu({
   chipRef: RefObject<HTMLDivElement | null>
 }) {
   const { list, active, setActive, remove } = useAccounts()
-  const [pos, setPos] = useState<{ left: number; bottom: number }>({ left: 8, bottom: 8 })
+  const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number }>({ left: 8, bottom: 8 })
 
   const lost = (a: Account) => a.kind === 'microsoft' && (!hasLicenseSession(a) || msTokenExpired(a))
 
@@ -37,7 +41,14 @@ export function AccountMenu({
     const el = chipRef.current
     if (el) {
       const r = el.getBoundingClientRect()
-      setPos({ left: Math.max(8, r.left), bottom: window.innerHeight - r.top + 8 })
+      // Кнопка аккаунта теперь в верхней полосе справа (23.09.2026): меню
+      // открывается под ней и не вылезает за правый край окна. Снизу — как было.
+      const left = Math.max(8, Math.min(r.left, window.innerWidth - ACC_MENU_W - 8))
+      setPos(
+        r.top < window.innerHeight / 2
+          ? { left, top: r.bottom + 8 }
+          : { left, bottom: window.innerHeight - r.top + 8 },
+      )
     }
   }, [open, chipRef])
 
@@ -50,52 +61,29 @@ export function AccountMenu({
     return () => document.removeEventListener('keydown', onKey)
   }, [open, onClose])
 
-  return (
+  // Меню уходит в body: у сайдбара срез угла (clip-path), и всё, что вылезает
+  // за его край, обрезалось — меню шириной 284px показывалось наполовину.
+  return createPortal(
     <>
       <div
         id="accMenu"
         data-acc-menu=""
+        data-private
+        data-section="accounts"
+        className="acc-menu"
         style={{
-          position: 'fixed',
-          zIndex: 140,
-          width: '284px',
-          background: 'var(--m-surface-2)',
-          border: '1px solid var(--m-border)',
-          borderRadius: '14px',
-          boxShadow: 'var(--m-shadow-lg)',
-          padding: '12px',
           display: open ? 'block' : 'none',
           left: pos.left + 'px',
-          bottom: pos.bottom + 'px',
+          top: pos.top != null ? pos.top + 'px' : undefined,
+          bottom: pos.bottom != null ? pos.bottom + 'px' : undefined,
         }}
       >
-        <div
-          style={{
-            fontSize: '11px',
-            fontWeight: 700,
-            letterSpacing: '.05em',
-            textTransform: 'uppercase',
-            color: 'var(--m-fg-subtle)',
-            padding: '2px 6px 10px',
-          }}
-        >
-          Аккаунты
-        </div>
+        <div className="acc-menu-cap">Аккаунты</div>
         {list.length ? (
           list.map((a) => (
             <div
               key={a.id}
-              className="acc-item"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '11px',
-                padding: '9px 10px',
-                marginBottom: '2px',
-                borderRadius: '11px',
-                cursor: 'pointer',
-                ...(a.id === active ? { background: 'var(--m-accent-soft)' } : {}),
-              }}
+              className={'acc-item' + (a.id === active ? ' on' : '')}
               onClick={() => {
                 setActive(a.id)
                 if (lost(a)) {
@@ -119,32 +107,26 @@ export function AccountMenu({
                 nick={a.nick}
                 kind={a.kind}
                 src={a.avatar}
-                size={30}
-                style={{ flex: 'none', objectFit: 'cover', borderRadius: '8px' }}
+                size={40}
+                style={{ flex: 'none', objectFit: 'cover' }}
               />
               <span style={{ flex: 1, minWidth: 0 }}>
-                <b
-                  style={{
-                    display: 'block',
-                    fontSize: '13px',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                  }}
-                >
-                  {a.nick}
-                </b>
-                <span style={{ fontSize: '11px', color: lost(a) ? 'var(--m-danger)' : 'var(--m-fg-subtle)' }}>
-                  {lost(a) ? 'Вход слетел — нажми, чтобы войти' : accKindLabel(a.kind)}
+                <b className="acc-item-nick">{a.nick}</b>
+                <span className={'acc-item-kind' + (lost(a) ? ' lost' : '')}>
+                  {lost(a) ? 'Войти заново' : accKindLabel(a.kind)}
                 </span>
               </span>
               {a.id === active ? <Icon id="i-check" style={{ color: 'var(--m-accent)', flex: 'none' }} /> : null}
               <button
                 className="acc-item-del"
-                title="Убрать аккаунт"
+                aria-label="Выйти из аккаунта"
+                data-track="account_remove"
+                title="Выйти из аккаунта"
                 onClick={async (e) => {
                   e.stopPropagation()
-                  if (await uiConfirm('Убрать аккаунт «' + a.nick + '» из лаунчера?', { confirmLabel: 'Убрать' })) {
+                  // Убрать аккаунт = выйти из него (правка владельца 23.09.2026:
+                  // отдельной «Выйти из Millida» больше нет).
+                  if (await uiConfirm('Выйти из аккаунта «' + a.nick + '»?', { confirmLabel: 'Выйти' })) {
                     remove(a.id)
                     forgetMillidaIfGone()
                     if (!useAccounts.getState().list.length) logoutToLogin()
@@ -156,12 +138,13 @@ export function AccountMenu({
             </div>
           ))
         ) : (
-          <div style={{ padding: '8px', color: 'var(--m-fg-faint)', fontSize: '12.5px' }}>Пока нет аккаунтов</div>
+          <div className="acc-menu-empty">Пока нет аккаунтов</div>
         )}
-        <div style={{ height: '1px', background: 'var(--m-border)', margin: '8px 4px' }}></div>
+        <div className="acc-menu-sep"></div>
         <button
           id="accAddBtn"
           className="acc-add-btn"
+          data-track="account_add"
           onClick={() => {
             onClose()
             openModal('accModal')
@@ -171,6 +154,7 @@ export function AccountMenu({
           Добавить аккаунт
         </button>
       </div>
-    </>
+    </>,
+    document.body,
   )
 }

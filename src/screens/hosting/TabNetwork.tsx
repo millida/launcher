@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { showToast } from '../../state/ui'
 import { uiConfirm } from '../../state/confirm'
-import { ApplyField, Cap, Empty, Loading, Row } from './kit'
+import { ApplyField, Cap, Empty, Loading, LockBtn, Row } from './kit'
 import { host, errText } from './api'
 import type { HostingDatabaseInfo, HostingSftp, HostingSftpCredentials } from './api'
 import { copyText } from '../../lib/clipboard'
@@ -12,14 +12,21 @@ export function TabNetwork({
   slug,
   address,
   customDomain,
+  full = true,
+  onTariff,
   onChanged,
 }: {
   serverId: string
   slug: string
   address: string
   customDomain: string | null
+  /// Бесплатный тариф: порты, база и SFTP закрыты — вместо кнопки, которая
+  /// кончается ошибкой, стоит кнопка с замком, объясняющая себя.
+  full?: boolean
+  onTariff?: () => void
   onChanged: () => void
 }) {
+  const locked = !full && !!onTariff
   const [busy, setBusy] = useState<string | null>(null)
   const [ports, setPorts] = useState<{ ports: { port: number; note?: string }[]; limit: number; address: string } | null>(null)
   const [db, setDb] = useState<HostingDatabaseInfo | null | undefined>(undefined)
@@ -161,10 +168,10 @@ export function TabNetwork({
             <Icon id="i-copy" />
           </button>
         </Row>
-        <Row k="Короткий адрес" sub="Латиница, цифры и тире — часть до .millida.host">
-          <ApplyField value={slug} label="Сменить" busy={busy === 'slug'} width="200px" onApply={changeAddress} />
+        <Row k="Короткий адрес" sub="Латиница, цифры и тире">
+          <ApplyField value={slug} label="Сменить" busy={busy === 'slug'} width="260px" suffix=".millida.host" onApply={changeAddress} />
         </Row>
-        <Row k="Свой домен" sub={dns ? 'CNAME на ' + dns : 'Например play.мойсервер.ру. Пусто — отвязать'}>
+        <Row k="Свой домен" sub={dns ? 'CNAME на ' + dns : 'Пусто — отвязать'}>
           <ApplyField
             value={customDomain || ''}
             placeholder="play.example.ru"
@@ -181,12 +188,16 @@ export function TabNetwork({
           <div className="side-cap" style={{ padding: 0, flex: 1 }}>
             Дополнительные порты {ports ? '· занято ' + ports.ports.length + ' из ' + ports.limit : ''}
           </div>
-          <button className="btn sm secondary" disabled={busy === 'port'} onClick={() => void addPort()}>
-            <Icon id="i-plus" /> Выдать порт
-          </button>
+          {locked ? (
+            <LockBtn label="Выдать порт" feature="Дополнительные порты" onTariff={onTariff!} />
+          ) : (
+            <button className="btn sm secondary" disabled={busy === 'port'} onClick={() => void addPort()}>
+              <Icon id="i-plus" /> Выдать порт
+            </button>
+          )}
         </div>
         {ports === null ? (
-          <Empty icon="i-link" text="Дополнительные порты доступны на платных тарифах." />
+          <Empty icon="i-lock" text="Только на платном тарифе" />
         ) : ports.ports.length ? (
           <div className="stack">
             {ports.ports.map((p) => (
@@ -196,19 +207,19 @@ export function TabNetwork({
                 </span>
                 <span className="fr-body">
                   <span className="fr-nick">{ports.address + ':' + p.port}</span>
-                  <span className="fr-status">{p.note || 'для плагина или голосового чата'}</span>
+                  {p.note ? <span className="fr-status">{p.note}</span> : null}
                 </span>
-                <button className="btn sm ghost" title="Копировать" onClick={() => void copy(ports.address + ':' + p.port, 'Адрес')}>
+                <button className="btn sm ghost" aria-label="Копировать" data-tip="Копировать" onClick={() => void copy(ports.address + ':' + p.port, 'Адрес')}>
                   <Icon id="i-copy" />
                 </button>
-                <button className="btn sm ghost" title="Освободить" onClick={() => void removePort(p.port)}>
+                <button className="btn sm ghost" aria-label="Освободить порт" data-tip="Освободить порт" onClick={() => void removePort(p.port)}>
                   <Icon id="i-trash" />
                 </button>
               </div>
             ))}
           </div>
         ) : (
-          <Empty icon="i-link" text="Портов нет. Выдай, если плагину нужен свой порт — например голосовому чату." />
+          <Empty icon="i-link" text="Портов нет" />
         )}
       </div>
 
@@ -221,6 +232,8 @@ export function TabNetwork({
             <button className="btn sm ghost" onClick={() => void dropDb()}>
               <Icon id="i-trash" /> Удалить
             </button>
+          ) : locked ? (
+            <LockBtn label="Создать" feature="База данных" onTariff={onTariff!} />
           ) : (
             <button className="btn sm secondary" disabled={busy === 'db' || db === undefined} onClick={() => void createDb()}>
               <Icon id="i-plus" /> Создать
@@ -241,14 +254,14 @@ export function TabNetwork({
               <div className="host-cred-row" key={k}>
                 <span className="host-cred-k">{k}</span>
                 <code className="host-cred-v">{v}</code>
-                <button className="btn sm ghost" title="Копировать" onClick={() => void copy(v, k)}>
+                <button className="btn sm ghost" aria-label="Копировать" data-tip="Копировать" onClick={() => void copy(v, k)}>
                   <Icon id="i-copy" />
                 </button>
               </div>
             ))}
           </div>
         ) : (
-          <Empty icon="i-server" text="Базы нет. Нужна плагинам вроде LuckPerms или экономики — создаётся на платных тарифах." />
+          <Empty icon="i-server" text="Базы нет" />
         )}
       </div>
 
@@ -262,9 +275,13 @@ export function TabNetwork({
               Отозвать
             </button>
           ) : null}
-          <button className="btn sm secondary" style={{ marginLeft: '8px' }} disabled={busy === 'sftp'} onClick={() => void issueSftp()}>
-            <Icon id="i-key" /> {sftp?.active ? 'Новый пароль' : 'Выдать доступ'}
-          </button>
+          {locked && !sftp?.active ? (
+            <LockBtn label="Выдать доступ" feature="SFTP" onTariff={onTariff!} />
+          ) : (
+            <button className="btn sm secondary" style={{ marginLeft: '8px' }} disabled={busy === 'sftp'} onClick={() => void issueSftp()}>
+              <Icon id="i-key" /> {sftp?.active ? 'Новый пароль' : 'Выдать доступ'}
+            </button>
+          )}
         </div>
         {sftp?.active ? (
           <div className="host-creds">
@@ -272,19 +289,22 @@ export function TabNetwork({
               ['Хост', sftp.host || '—'],
               ['Порт', String(sftp.port)],
               ['Логин', sftp.login],
-              ['Пароль', sftpPass ? sftpPass.password : 'показывается один раз при выдаче'],
+              // Пароль показывается один раз при выдаче; потом — только «Новый пароль».
+              ['Пароль', sftpPass ? sftpPass.password : ''],
             ].map(([k, v]) => (
               <div className="host-cred-row" key={k}>
                 <span className="host-cred-k">{k}</span>
-                <code className="host-cred-v">{v}</code>
-                <button className="btn sm ghost" title="Копировать" onClick={() => void copy(v, k)}>
-                  <Icon id="i-copy" />
-                </button>
+                <code className="host-cred-v">{v || '••••••'}</code>
+                {v ? (
+                  <button className="btn sm ghost" aria-label="Копировать" data-tip="Копировать" onClick={() => void copy(v, k)}>
+                    <Icon id="i-copy" />
+                  </button>
+                ) : null}
               </div>
             ))}
           </div>
         ) : (
-          <Empty icon="i-key" text="Доступ по SFTP удобен для больших сборок: файлы кидаются папкой из привычного клиента." />
+          <Empty icon="i-key" text="Доступ не выдан" />
         )}
       </div>
     </>

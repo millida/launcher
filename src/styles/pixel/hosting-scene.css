@@ -1,0 +1,511 @@
+/* ============================================================
+   ХОСТИНГ — СЦЕНА СЕРВЕРА КАК НА MILLIDA.NET/HOSTING (23.09.2026)
+   ------------------------------------------------------------
+   Приказ владельца: «как на официальном сайте — супер просто, те же
+   цвета; сейчас старые цвета, старые кнопки, управление странное».
+
+   Что взято с сайта (замер computed-стилей millida.net/hosting 23.09.2026):
+   - две половины первого экрана: зелёная (#23883d → #0e4a20 у сайта,
+     здесь плотный средний тон — градиенты в компонентах запрещены) и
+     тёмно-синяя (#161b26 → #05070b, здесь плотный #10141d);
+   - белые плашки-чипы с воксельным блоком: текст #10161b 800, подпись
+     того же цвета 62 %;
+   - главная кнопка: плотный --m-accent, тёмный текст, на зелёной половине
+     кайма 3px rgba(0,0,0,.34) — иначе край теряется (контракт §2).
+
+   Подложки со срезом рисует ::before, а не сам блок: clip-path на блоке
+   резал бы выпадашку «Позвать» и меню «Ещё», которые живут внутри.
+   Палитра сайта заведена переменными --hs-*.
+   Файл подключается из screens/Hosting.tsx после кита и 12-pixel.css.
+   ============================================================ */
+
+#s-hosting {
+  --hs-green: var(--m-surface-2);
+  --hs-navy: var(--m-surface);
+  --hs-pill: var(--m-inset);
+  --hs-ink: var(--m-fg);
+  --hs-ink-2: var(--m-fg-subtle);
+  --hs-on: var(--m-fg);
+  --hs-on-2: var(--m-fg-subtle);
+  --hs-shade: color-mix(in srgb, var(--m-fg) 8%, transparent);
+  --hs-cut-l: polygon(10px 0, 100% 0, 100% 100%, 10px 100%, 10px calc(100% - 10px), 0 calc(100% - 10px), 0 10px, 10px 10px);
+  --hs-cut-r: polygon(0 0, calc(100% - 10px) 0, calc(100% - 10px) 10px, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
+}
+:root:root #s-hosting {
+  --hs-green: #1d7a36;
+  --hs-navy: #10141d;
+  --hs-pill: #ffffff;
+  --hs-ink: #10161b;
+  --hs-ink-2: rgba(16, 22, 27, 0.62);
+  --hs-on: #ffffff;
+  --hs-on-2: rgba(255, 255, 255, 0.78);
+  --hs-shade: rgba(0, 0, 0, 0.26);
+}
+
+/* ---------- Сцена: две половины ---------- */
+.hsx-scene {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  margin-bottom: 16px;
+}
+.hsx-green,
+.hsx-navy,
+.hsx-road {
+  position: relative;
+  isolation: isolate;
+}
+.hsx-green::before,
+.hsx-navy::before,
+.hsx-road::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: var(--m-r-card);
+}
+.hsx-green::before,
+.hsx-road.is-green::before {
+  background-color: var(--hs-green);
+  background-image: var(--px-dots);
+}
+.hsx-navy::before,
+.hsx-road.is-navy::before { background: var(--hs-navy); }
+:root:root :is(.hsx-green, .hsx-navy, .hsx-road)::before { border-radius: 0; }
+:root:root :is(.hsx-green, .hsx-road.is-green)::before { clip-path: var(--hs-cut-l); }
+:root:root :is(.hsx-navy, .hsx-road.is-navy)::before { clip-path: var(--hs-cut-r); }
+.hsx-green::before { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.hsx-navy::before { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+
+.hsx-green {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 26px 28px 30px;
+  color: var(--hs-on);
+  min-width: 0;
+}
+.hsx-navy {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: center;
+  gap: 12px;
+  padding: 24px;
+  min-width: 0;
+}
+
+.hsx-id { display: flex; align-items: center; gap: 16px; min-width: 0; max-width: 100%; }
+.hsx-ico { width: 56px; height: 56px; flex: none; display: grid; place-items: center; }
+.hsx-ico img { width: 48px; height: 48px; object-fit: contain; }
+.hsx-id-txt { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; }
+.hsx-id h2 {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  color: var(--hs-on);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hsx-scene.is-compact .hsx-id h2 { font-size: 28px; }
+
+.hsx-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 26px;
+  padding: 0 10px;
+  background: var(--hs-pill);
+  color: var(--hs-ink);
+  font-size: 12.5px;
+  font-weight: 800;
+  border-radius: var(--m-r-ctl);
+  white-space: nowrap;
+}
+.hsx-status .dot { width: 8px; height: 8px; background: var(--m-fg-faint); flex: none; border-radius: 50%; }
+.hsx-status.is-on .dot { background: var(--m-accent); box-shadow: 0 0 0 2px rgba(6, 32, 14, 0.25); }
+.hsx-status.is-warn .dot { background: var(--m-warning); }
+.hsx-status.is-danger .dot { background: var(--m-danger); }
+.hsx-status em { font-style: normal; font-weight: 600; color: var(--hs-ink-2); padding-left: 8px; margin-left: 1px; box-shadow: inset 1px 0 0 var(--hs-shade); }
+
+.hsx-addr {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 42px;
+  max-width: 100%;
+  padding: 0 14px;
+  background: rgba(0, 0, 0, 0.26);
+  color: var(--hs-on);
+  font-family: var(--m-mono);
+  font-size: 14px;
+  border-radius: var(--m-r-ctl);
+  cursor: pointer;
+}
+.hsx-addr span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hsx-addr svg { width: 15px; height: 15px; flex: none; opacity: 0.85; }
+.hsx-addr:hover:not(:disabled) { background: rgba(0, 0, 0, 0.36); }
+.hsx-addr:disabled { cursor: default; font-family: inherit; color: var(--hs-on-2); }
+
+.hsx-note { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--hs-on-2); }
+.hsx-note svg { width: 14px; height: 14px; }
+
+.hsx-acts { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: auto; padding-top: 6px; }
+.hsx-acts .hsx-main { min-width: 180px; font-size: 16px; }
+:root:root .hsx-green .btn.primary,
+:root:root .hsx-road.is-green .btn.primary {
+  /* Акцент на зелёной половине: контраст 1,9:1, край держит кайма (контракт §2). */
+  --px-ol: rgba(0, 0, 0, 0.34); --px-ol-w: 3px;
+}
+:root:root .hsx-green .btn.secondary { background: rgba(0, 0, 0, 0.3); color: var(--hs-on); }
+:root:root .hsx-green .btn.secondary:hover:not(:disabled) { background: rgba(0, 0, 0, 0.42); }
+/* Зелёная половина выше синей: выпадашка «Позвать» ложится поверх неё. */
+.hsx-green { z-index: 1; }
+:root:root .hsx-road.is-navy .btn.secondary { background: rgba(255, 255, 255, 0.12); color: var(--hs-on); }
+:root:root .hsx-road.is-navy .btn.secondary:hover { background: rgba(255, 255, 255, 0.18); }
+
+/* ---------- Белая плашка с блоком ---------- */
+.hsx-stat {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px 16px 14px 12px;
+  background: var(--hs-pill);
+  color: var(--hs-ink);
+  border-radius: var(--m-r-card);
+  text-align: left;
+}
+.hsx-stat img { width: 40px; height: 40px; flex: none; object-fit: contain; }
+.hsx-stat-txt { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.hsx-stat b {
+  font-size: 21px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hsx-stat b small { font-size: 14px; font-weight: 700; color: var(--hs-ink-2); }
+.hsx-stat i {
+  font-style: normal;
+  font-size: 13px;
+  color: var(--hs-ink-2);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hsx-stat > svg { width: 16px; height: 16px; flex: none; color: var(--hs-ink-2); }
+.hsx-stat.is-link { cursor: pointer; transition: transform var(--m-t-fast) linear; }
+.hsx-stat.is-link:hover { transform: translateY(-1px); }
+.hsx-stat.is-link:hover > svg { color: var(--hs-ink); }
+.hsx-stat-skel { height: 68px; display: block; }
+
+/* Шкала-клетки: плотный акцент, без градиента. */
+.hsx-meter { display: flex; gap: 2px; margin-top: 7px; }
+.hsx-meter i {
+  flex: 1;
+  max-width: 14px;
+  height: 7px;
+  background: color-mix(in srgb, var(--hs-ink) 12%, transparent);
+}
+.hsx-meter i.on { background: var(--m-accent); box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.28); }
+.hsx-meter.is-warn i.on { background: var(--m-warning); }
+.hsx-meter.is-danger i.on { background: var(--m-danger); }
+
+/* ---------- Список серверов ---------- */
+.hsx-card { margin-bottom: 16px; }
+.hsx-card .hsx-scene { grid-template-columns: minmax(0, 1.5fr) minmax(250px, 1fr); }
+.hsx-card .hsx-navy { grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 20px 22px; }
+.hsx-scene.is-skel .hsx-navy { grid-template-columns: minmax(0, 1fr); }
+
+/* ---------- Гость и «сервера ещё нет»: две дороги ---------- */
+.hsx-roads {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  margin: 4px 0 18px;
+}
+.hsx-road {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 30px 28px 28px;
+  min-height: 430px;
+  color: var(--hs-on);
+}
+.hsx-road-head { display: flex; flex-direction: column; gap: 6px; }
+.hsx-road-head h2 { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.05; color: var(--hs-on); }
+.hsx-price { font-size: 14px; color: var(--hs-on-2); display: flex; align-items: baseline; gap: 6px; }
+.hsx-price b { font-size: 26px; font-weight: 800; color: var(--hs-on); font-variant-numeric: tabular-nums; }
+.hsx-road-stats {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: center;
+  gap: 12px;
+}
+.hsx-road.is-navy .hsx-road-stats { grid-template-columns: minmax(0, 1fr); }
+.hsx-cta { width: 100%; }
+
+/* ---------- Управление: вкладки ---------- */
+.hsx-manage { gap: 0; }
+.hsx-manage-top { display: flex; align-items: center; margin: -4px 0 10px; }
+.hsx-back { padding-left: 8px; }
+
+.hsx-tabs { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+.hsx-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+  width: 100%;
+  height: 54px;
+  padding: 0 12px;
+  background: var(--m-surface-2);
+  color: var(--m-fg-subtle);
+  font-size: 15px;
+  font-weight: 700;
+  border-radius: var(--m-r-ctl);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.hsx-tab svg { width: 18px; height: 18px; flex: none; }
+.hsx-tab:hover { color: var(--m-fg); background: var(--m-raised); }
+.hsx-tab.on { background: var(--m-accent-soft); color: var(--m-accent); }
+.hsx-more { position: relative; }
+.hsx-more .hsx-tab svg:last-child { width: 14px; height: 14px; margin-left: -2px; opacity: 0.7; }
+.hsx-more-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  min-width: 210px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--m-raised);
+  border-radius: var(--m-r-card);
+  box-shadow: var(--m-shadow-lg);
+}
+.hsx-more-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--m-fg-muted);
+  border-radius: var(--m-r-ctl);
+  cursor: pointer;
+  text-align: left;
+}
+.hsx-more-item svg { width: 16px; height: 16px; }
+.hsx-more-item:hover { background: var(--m-raised); color: var(--m-fg); }
+.hsx-more-item.on { color: var(--m-accent); }
+
+/* ---------- Обзор ---------- */
+.hsx-overview { display: flex; flex-direction: column; gap: 14px; }
+.hsx-overview .host-crash,
+.hsx-overview .hs-banner { margin: 0; }
+.hsx-graphs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(190px, 0.55fr);
+  gap: 14px;
+}
+.hsx-graph {
+  padding: 16px 18px 18px;
+  background: var(--m-surface);
+  border-radius: var(--m-r-card);
+  min-width: 0;
+}
+.hsx-graph-skel { height: 138px; display: block; }
+.hsx-graph-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.hsx-graph-head span { font-size: 14px; font-weight: 700; color: var(--m-fg-muted); }
+.hsx-graph-head b { font-size: 22px; font-weight: 800; color: var(--m-accent); font-variant-numeric: tabular-nums; }
+.hsx-bars { position: relative; display: flex; align-items: stretch; gap: 2px; height: 84px; margin-top: 12px; }
+.hsx-bars { box-shadow: inset 0 -2px 0 var(--m-inset); }
+.hsx-bar { flex: 1; display: flex; align-items: flex-end; min-width: 0; }
+.hsx-bar i { display: block; width: 100%; background: var(--m-accent); box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.28); }
+.hsx-bar.is-empty::after { content: ""; display: block; width: 100%; height: 6px; background: var(--m-inset); }
+.hsx-bar.is-hover i { filter: brightness(1.18); }
+.hsx-bars-tip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 5px 9px;
+  background: var(--m-raised);
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+  border-radius: var(--m-r-ctl);
+  box-shadow: var(--m-shadow-lg);
+}
+.hsx-bars-tip span { color: var(--m-fg-subtle); }
+.hsx-disk { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center; }
+.hsx-disk img { width: 48px; height: 48px; object-fit: contain; margin-bottom: 4px; }
+.hsx-disk b { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.hsx-disk b small { font-size: 14px; color: var(--m-fg-subtle); font-weight: 700; }
+.hsx-disk span { font-size: 13px; color: var(--m-fg-subtle); }
+.hsx-disk .hsx-meter { width: 100%; max-width: 160px; justify-content: center; }
+.hsx-disk .hsx-meter i { background: var(--m-inset); }
+.hsx-disk .hsx-meter i.on { background: var(--m-accent); }
+
+.hsx-off {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  background: var(--m-surface);
+  border-radius: var(--m-r-card);
+}
+.hsx-off img { width: 48px; height: 48px; object-fit: contain; }
+.hsx-off b { font-size: 18px; font-weight: 800; }
+
+/* Опасные действия — отдельной полосой внизу «Обзора», у каждого подтверждение. */
+.hsx-danger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 14px 16px 14px 20px;
+  background: var(--m-surface);
+  border-radius: var(--m-r-card);
+}
+.hsx-danger-t { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 160px; color: var(--m-fg-muted); }
+.hsx-danger-t svg { width: 18px; height: 18px; color: var(--m-danger); }
+.hsx-danger-t b { font-size: 15px; font-weight: 800; color: var(--m-fg); }
+.hsx-danger .hsx-kill { color: var(--m-danger); }
+
+/* ---------- Настройки: главное + «Для опытных» ---------- */
+.hsx-settings { display: flex; flex-direction: column; gap: 12px; }
+.hsx-settings .hsx-plate { padding: 10px 20px 18px; }
+.hsx-settings .hs-banner { margin: 0; }
+.hsx-adv {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 54px;
+  padding: 0 20px;
+  background: var(--m-surface);
+  color: var(--m-fg-muted);
+  border-radius: var(--m-r-card);
+  cursor: pointer;
+  text-align: left;
+}
+.hsx-adv b { flex: 1; font-size: 15px; font-weight: 800; color: var(--m-fg); }
+.hsx-adv svg { width: 17px; height: 17px; }
+.hsx-adv svg:last-child { transition: transform var(--m-t-fast); }
+.hsx-adv.open svg:last-child { transform: rotate(180deg); }
+.hsx-adv:hover { background: var(--m-surface-2); }
+
+/* Шесть главных параметров — плитки в два столбца: слева что, справа как. */
+.hsx-settings .hsx-main-set {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 14px;
+}
+.hsx-main-set .set-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 66px;
+  padding: 10px 16px;
+  background: var(--m-inset);
+  border: 0;
+  border-radius: var(--m-r-md);
+}
+.hsx-main-set .set-row .lab { flex: 1 1 auto; font-size: 15px; font-weight: 700; min-width: 0; }
+.hsx-main-set .set-row > div:last-child { flex: none; }
+/* Плитки «Для опытных»: рамка 1px из кита — обводка, контракт её запрещает. */
+#s-hosting .host-manage-body .host-set-grid .set-row { border-color: transparent; }
+
+/* Подписи капсом по экрану хостинга — обычным регистром (приказ 23.09.2026). */
+#s-hosting :is(.host-manage-body .cap, .side-cap, .kpi .cap, .host-invite-cap) {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--m-fg-muted);
+}
+/* Полоски кита рисуются градиентом --m-grad — здесь плотный акцент. */
+#s-hosting .bar i { background: var(--m-accent); }
+#s-hosting .bar i.st-danger { background: var(--m-danger); }
+
+/* ---------- Пиксельная форма ----------
+   Рамки и грани — общим слоем «Ступенчатая рамка» (12-pixel.css):
+   переменные --px-*, никаких inset-теней и border на срезанных элементах. */
+:root:root :is(.hsx-stat, .hsx-graph, .hsx-off, .hsx-danger, .hsx-adv, .hsx-more-pop) {
+  border-radius: 0;
+  --px-n: 10px; clip-path: var(--px-10);
+  box-shadow: none;
+  --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+/* Белая плашка: тёмная подошва снизу, как у чипов сайта. */
+:root:root .hsx-stat { --px-n: 5px; clip-path: var(--px-5); --px-ft: transparent; --px-fb: rgba(0, 0, 0, 0.14); --px-fb-w: 4px; }
+:root:root :is(.hsx-status, .hsx-addr, .hsx-tab, .hsx-more-item, .hsx-bars-tip) {
+  border-radius: 0;
+  --px-n: 4px; clip-path: var(--px-4);
+}
+:root:root :is(.hsx-addr, .hsx-tab) { --px-n: 5px; clip-path: var(--px-5); }
+:root:root .hsx-tab { box-shadow: none; --px-ol: transparent; --px-ft: transparent; --px-fl: transparent; --px-fr: transparent; --px-fb: rgba(0, 0, 0, 0.26); --px-fb-w: 3px; }
+:root:root .hsx-tab.on { --px-fb: var(--m-accent); --px-fb-w: 3px; }
+:root:root .hsx-status .dot { border-radius: 0; }
+:root:root .hsx-green .host-invite-pop { border-radius: 0; clip-path: var(--px-10); border: 0; }
+:root:root :is(.hsx-main-set .set-row, #s-hosting .host-manage-body .host-set-grid .set-row) {
+  border-radius: 0;
+  --px-n: 5px; clip-path: var(--px-5);
+  box-shadow: none;
+  --px-ol: var(--px-well-ol); --px-ol-w: 1px; --px-ft: var(--px-well-t); --px-ft-w: 3px; --px-fb: transparent; --px-fl: transparent; --px-fr: transparent;
+}
+:root:root #s-hosting .host-console { border-radius: 0; clip-path: var(--px-10); }
+:root:root .hsx-settings .hsx-plate {
+  border-radius: 0;
+  --px-n: 10px; clip-path: var(--px-10);
+  box-shadow: none;
+  --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+
+/* ---------- Узкое окно: половины — две отдельные карточки (контракт §9) ---------- */
+@media (max-width: 1280px) {
+  .hsx-stat { gap: 10px; padding: 10px 12px 12px 10px; }
+  .hsx-stat img { width: 32px; height: 32px; }
+  .hsx-stat b { font-size: 18px; }
+  .hsx-navy .hsx-stat > svg { display: none; }
+}
+@media (max-width: 1180px) {
+  .hsx-graphs { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .hsx-disk { grid-column: 1 / -1; flex-direction: row; justify-content: flex-start; gap: 14px; text-align: left; }
+  .hsx-disk img { margin: 0; }
+  .hsx-disk .hsx-meter { margin-left: auto; }
+}
+@media (max-width: 980px) {
+  .hsx-scene,
+  .hsx-roads { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .hsx-green::before,
+  .hsx-navy::before { border-radius: var(--m-r-card); }
+  :root:root :is(.hsx-green, .hsx-navy, .hsx-road)::before { clip-path: var(--px-10); }
+  .hsx-navy,
+  .hsx-card .hsx-navy { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; padding: 16px; }
+  .hsx-card .hsx-scene { grid-template-columns: minmax(0, 1fr); }
+  .hsx-road { min-height: 0; }
+  .hsx-road.is-navy .hsx-road-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .hsx-usage { grid-template-columns: minmax(0, 1fr); }
+  .hsx-settings .hsx-main-set { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .hsx-graphs { grid-template-columns: minmax(0, 1fr); }
+  .hsx-id h2 { font-size: 24px; }
+  .hsx-acts .btn { flex: 1 1 auto; }
+  .hsx-road-stats,
+  .hsx-road.is-navy .hsx-road-stats { grid-template-columns: minmax(0, 1fr); }
+}

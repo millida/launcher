@@ -1,6 +1,4 @@
 import { create } from 'zustand'
-import { hasTauri } from '../ipc/tauri'
-import { convertFileSrc, downloadMcMusic, musicTracks } from '../ipc/commands'
 import { listenWindowVisibility } from '../ipc/events'
 import { showToast, useUi } from './ui'
 import { hydratePrefs, readPref, writePref } from '../lib/prefs'
@@ -20,23 +18,42 @@ export interface Track {
   src: string
   title: string
   author?: string
+  /** Лицензия и страница трека — для экрана «Авторы музыки» (CC BY требует указать автора). */
+  license?: 'CC0 1.0' | 'CC BY 4.0'
+  url?: string
 }
 
-// The file ships from the CDN (assets.json), so a build may legitimately lack it;
-// the flag is resolved by vite.config.ts from what is really in public/.
-const BUNDLED: Track[] = __HAS_BUNDLED_MUSIC__
-  ? [{ src: '/music/ambient.mp3', title: 'Тихий вечер', author: 'Millida' }]
-  : []
+const SKIFF = 'https://ericskiff.com/music/'
+const PPEAK = 'https://opengameart.org/content/free-action-chiptune-music-pack'
+const JUNKALA = 'https://opengameart.org/content/5-chiptunes-action'
+const ZANE = 'https://opengameart.org/content/starlight-city-loop-included'
 
+/**
+ * Радио Millida: чиптюн 115–160 BPM, мажор, громкость выровнена до −18 LUFS.
+ * Первым всегда идёт «Starlight City» — с него лаунчер звучит при первом
+ * запуске. Откуда треки и почему они — docs/MUSIC.md.
+ */
+export const RADIO: Track[] = [
+  { src: '/music/01-starlight-city.mp3', title: 'Starlight City', author: 'Zane Little', license: 'CC0 1.0', url: ZANE },
+  { src: '/music/02-chibi-ninja.mp3', title: 'Chibi Ninja', author: 'Eric Skiff', license: 'CC BY 4.0', url: SKIFF },
+  { src: '/music/03-secret-base.mp3', title: 'Secret Base', author: 'PPEAK', license: 'CC BY 4.0', url: PPEAK },
+  { src: '/music/04-jumpshot.mp3', title: 'Jumpshot', author: 'Eric Skiff', license: 'CC BY 4.0', url: SKIFF },
+  { src: '/music/05-level-2.mp3', title: 'Level 2', author: 'Juhani Junkala', license: 'CC0 1.0', url: JUNKALA },
+  { src: '/music/06-hhavok.mp3', title: 'HHavok', author: 'Eric Skiff', license: 'CC BY 4.0', url: SKIFF },
+  { src: '/music/07-dizzy-spells.mp3', title: 'A Night Of Dizzy Spells', author: 'Eric Skiff', license: 'CC BY 4.0', url: SKIFF },
+]
+
+// Файлы лежат в public/music; сборка без медиа (чистый checkout) должна
+// собираться — флаг ставит vite.config.ts по тому, что реально лежит на диске.
+const BUNDLED: Track[] = __HAS_BUNDLED_MUSIC__ ? RADIO : []
+
+/**
+ * Плейлист радио — только встроенный чиптюн. Музыку Minecraft (C418, Lena Raine)
+ * радио больше не подмешивает: она спокойная и растворяла энергию лобби
+ * (docs/MUSIC.md, 24.09.2026). Команда ядра download_mc_music осталась, но не вызывается.
+ */
 async function loadPlaylist(): Promise<Track[]> {
-  const out: Track[] = [...BUNDLED]
-  if (hasTauri()) {
-    try {
-      const own = await musicTracks()
-      own.forEach((t) => out.push({ src: convertFileSrc(t.path), title: t.title, author: 'Своя музыка' }))
-    } catch {}
-  }
-  return out
+  return [...BUNDLED]
 }
 
 interface MusicState {
@@ -45,15 +62,15 @@ interface MusicState {
   tracks: Track[]
   index: number
   playing: boolean
+  /** Остался для совместимости: Play.tsx закрывает им старый поповер. Радио поповера не имеет. */
   open: boolean
   setOpen: (v: boolean) => void
   setVolume: (v: number) => void
   toggleMute: () => void
   togglePlay: () => void
+  /** Радио: один тумблер. Включает с того места, где плейлист остановился. */
+  toggleRadio: () => void
   next: () => void
-  prev: () => void
-  play: (i: number) => void
-  refresh: () => Promise<void>
 }
 
 // The player lives outside the React tree so navigation cannot unmount audio.
@@ -195,42 +212,47 @@ export const useMusic = create<MusicState>((set, get) => ({
   },
   togglePlay: () => {
     if (!get().tracks.length) {
-      showToast('Треков нет — добавь mp3 в папку с музыкой', 'error')
+      showToast('Радио ещё загружается', 'error')
       return
     }
     writePref('m-mus-muted', '0')
     set({ muted: false })
     setPlaying(!get().playing, FADE_MS)
   },
+  toggleRadio: () => {
+    const s = get()
+    if (radioOn(s)) {
+      setPlaying(false, FADE_MS)
+      return
+    }
+    if (!s.tracks.length) {
+      showToast('Радио ещё загружается', 'error')
+      return
+    }
+    // Выключенный звук или нулевая громкость — это тоже «радио выключено»:
+    // включение обязано быть слышно, поэтому громкость возвращается к базовой.
+    if (s.level === 0) {
+      writePref('m-mus-vol', String(DEFAULT_LEVEL))
+      set({ level: DEFAULT_LEVEL })
+    }
+    writePref('m-mus-muted', '0')
+    set({ muted: false })
+    setPlaying(true, FADE_MS)
+  },
+  // Плейлист идёт по кругу: после последнего трека снова первый.
   next: () => {
     const { tracks, index } = get()
     set({ index: tracks.length ? (index + 1) % tracks.length : 0 })
     apply(FADE_MS)
   },
-  prev: () => {
-    const { tracks, index } = get()
-    set({ index: tracks.length ? (index - 1 + tracks.length) % tracks.length : 0 })
-    apply(FADE_MS)
-  },
-  play: (i) => {
-    writePref('m-mus-muted', '0')
-    set({ index: i, muted: false })
-    setPlaying(true, FADE_MS)
-  },
-  refresh: async () => {
-    const list = await loadPlaylist()
-    set({ tracks: list, index: get().index < list.length ? get().index : 0 })
-    apply()
-    showToast(list.length ? 'Треков в плейлисте: ' + list.length : 'Треков не нашлось', list.length ? 'ok' : 'error')
-  },
 }))
 
+// Каждый запуск открывается одной и той же темой (как меню Brawl Stars):
+// повтор первых секунд и делает её «звуком Millida». Дальше — по кругу.
 function pickStart(list: Track[]) {
   if (started || !list.length) return
   started = true
-  const first = localStorage.getItem('m-mus-seen') !== '1'
-  localStorage.setItem('m-mus-seen', '1')
-  useMusic.setState({ index: first ? 0 : Math.floor(Math.random() * list.length) })
+  useMusic.setState({ index: 0 })
 }
 
 let inited = false
@@ -253,6 +275,11 @@ export function initMusic() {
   // Hidden in the tray the webview keeps running, so audio has to be stopped
   // explicitly — otherwise the launcher looks closed but still plays.
   void listenWindowVisibility((visible) => (visible ? resumeMusic() : suspendMusic()))
+}
+
+/** Радио играет: слышно прямо сейчас (или ждёт жеста пользователя, чтобы начать). */
+export function radioOn(s: Pick<MusicState, 'playing' | 'muted' | 'level'>): boolean {
+  return s.playing && !s.muted && s.level > 0
 }
 
 export function suspendMusic() {
@@ -279,20 +306,10 @@ export function stopMusicNow() {
 }
 
 function boot() {
-  return loadPlaylist().then(async (list) => {
+  return loadPlaylist().then((list) => {
     useMusic.setState({ tracks: list })
     pickStart(list)
     autostart()
-    if (!hasTauri() || list.length >= 5) return
-    try {
-      await downloadMcMusic()
-    } catch {}
-    const full = await loadPlaylist()
-    if (full.length !== list.length) {
-      useMusic.setState({ tracks: full })
-      pickStart(full)
-      apply()
-    }
   })
 }
 

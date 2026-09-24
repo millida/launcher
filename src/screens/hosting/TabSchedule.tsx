@@ -78,7 +78,7 @@ export function TabSchedule({ serverId }: { serverId: string }) {
     <div className="card" style={{ padding: '18px' }}>
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: '12px' }}>
         <div className="side-cap" style={{ padding: 0, flex: 1 }}>
-          Задачи по времени (Москва)
+          Расписание · время МСК
         </div>
         <button className="btn sm secondary" onClick={add} disabled={(list || []).length >= 10}>
           <Icon id="i-plus" /> Добавить
@@ -114,7 +114,7 @@ export function TabSchedule({ serverId }: { serverId: string }) {
                   />
                 </div>
                 <span style={{ flex: 1 }}></span>
-                <button className="btn sm ghost" title="Удалить" onClick={() => remove(s.id)}>
+                <button className="btn sm ghost" aria-label="Удалить задачу" data-tip="Удалить задачу" onClick={() => remove(s.id)}>
                   <Icon id="i-trash" />
                 </button>
               </div>
@@ -152,7 +152,7 @@ export function TabSchedule({ serverId }: { serverId: string }) {
           ))}
         </div>
       ) : (
-        <Empty icon="i-clock" text="Задач нет. Например: перезапуск каждую ночь в 05:00 — сервер работает ровнее." />
+        <Empty icon="i-clock" text="Задач нет" />
       )}
     </div>
   )

@@ -2,6 +2,7 @@ import { hasTauri } from '../ipc/tauri'
 import { appVersion, deviceSpecs, millidaApi } from '../ipc/commands'
 import { LAUNCHER_API, apiHeaders } from './api'
 import { detectGpu } from './gpu'
+import { scrubPaths } from './telemetryPrivacy'
 
 export type TelemetryEventType =
   | 'app_start'
@@ -24,6 +25,15 @@ export type TelemetryEventType =
   | 'hosting_action'
   | 'rating_open'
   | 'store_open'
+  | 'pack_buy_click'
+  | 'ui_click'
+  | 'impression'
+  | 'catalog_search'
+  | 'catalog_install'
+  | 'mode_open'
+  | 'purchase_start'
+  | 'purchase_result'
+  | 'feedback_send'
   | 'update_applied'
   | 'error'
   | 'perf'
@@ -166,11 +176,15 @@ export function setInventory(buildsCount: number, modsCount: number) {
   device.modsCount = modsCount
 }
 
+/// The collector still expects the appearance fields; the launcher has a single
+/// dark look now, so they are constant.
+const APPEARANCE = { themePack: '', themeMode: 'dark' } as const
+
 /// Sent through the core (reqwest) rather than fetch: the webview origin tauri://localhost is
 /// blocked by CORS.
 async function send(events: QueuedEvent[]): Promise<boolean> {
   const dev = await initDevice()
-  const payload = { device: dev, events }
+  const payload = { device: { ...dev, ...APPEARANCE }, events }
   if (hasTauri()) {
     try {
       await millidaApi('/launcher/telemetry', 'POST', payload)
@@ -244,6 +258,9 @@ export function track(
   extra?: { durationMs?: number; ok?: boolean },
 ) {
   if (!telemetryEnabled()) return
+  // Домашняя папка в любом текстовом поле (коды ошибок, пути) не уходит наружу.
+  if (data)
+    data = Object.fromEntries(Object.entries(data).map(([k, v]) => [k, typeof v === 'string' ? scrubPaths(v) : v]))
   queue.push({ type, data, durationMs: extra?.durationMs, ok: extra?.ok })
   saveQueue()
   if (queue.length >= MAX_QUEUE) void flushTelemetry()

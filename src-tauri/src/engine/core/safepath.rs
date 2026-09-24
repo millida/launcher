@@ -112,6 +112,27 @@ pub(crate) fn safe_join(base: &Path, rel: &str) -> Result<PathBuf, String> {
     Ok(out)
 }
 
+/// Syntactic half of safe_join for a relative path that is joined later (a
+/// descriptor stores it as text): no absolute paths, `..`, drive letters or
+/// Windows traps.
+pub(crate) fn rel_path_ok(rel: &str) -> bool {
+    let cleaned = rel.replace('\\', "/");
+    if cleaned.trim().is_empty() || cleaned.starts_with('/') {
+        return false;
+    }
+    let mut depth = 0usize;
+    for seg in cleaned.split('/') {
+        if seg.is_empty() || seg == "." {
+            continue;
+        }
+        if seg == ".." || segment_ok(seg, rel).is_err() {
+            return false;
+        }
+        depth += 1;
+    }
+    depth > 0
+}
+
 /// Same as safe_join for a single file name: separators are rejected outright.
 pub(crate) fn safe_child(base: &Path, name: &str) -> Result<PathBuf, String> {
     if name.contains('/') || name.contains('\\') {
@@ -185,6 +206,15 @@ mod tests {
         assert!(safe_join(&b, "   ").is_err());
         assert!(safe_join(&b, ".").is_err());
         assert!(safe_join(&b, "././").is_err());
+    }
+
+    #[test]
+    fn rel_path_syntax() {
+        assert!(rel_path_ok("assets"));
+        assert!(rel_path_ok("natives/mustdie"));
+        for bad in ["", "/etc", "../x", "a/../../x", "C:/x", r"\\srv\x", "nul", "a:b"] {
+            assert!(!rel_path_ok(bad), "{bad}");
+        }
     }
 
     #[test]

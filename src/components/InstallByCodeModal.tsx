@@ -6,6 +6,15 @@ import { backdropClose } from '../lib/dismiss'
 import { showToast } from '../state/ui'
 import { useProfiles } from '../state/profiles'
 import { installSharedPack, packPreview, type PackPreview } from '../ipc/commands'
+import { apiErrorText } from '../lib/apiError'
+
+/// Сырой ответ сервера («Unexpected token '<'», JSON) игроку не показываем:
+/// сам текст уходит в консоль, на экране — короткая фраза.
+function humanError(e: unknown, fallback: string): string {
+  console.error('pack code', e)
+  const t = apiErrorText(e, fallback)
+  return /unexpected token|json|doctype|<html/i.test(t) ? fallback : t
+}
 
 interface Props {
   onClose: () => void
@@ -32,7 +41,7 @@ export function InstallByCodeModal({ onClose, initialCode = '' }: Props) {
     setError('')
     packPreview(value)
       .then(setPreview)
-      .catch((e) => setError('' + e))
+      .catch((e) => setError(humanError(e, 'Код не найден')))
       .finally(() => setBusy(false))
   }
 
@@ -51,7 +60,7 @@ export function InstallByCodeModal({ onClose, initialCode = '' }: Props) {
         void useProfiles.getState().refresh()
         onClose()
       })
-      .catch((e) => showToast('' + e, 'error'))
+      .catch((e) => showToast(humanError(e, 'Не получилось поставить сборку'), 'error'))
       .finally(() => setBusy(false))
   }
 
@@ -86,11 +95,19 @@ export function InstallByCodeModal({ onClose, initialCode = '' }: Props) {
             />
           </div>
           <button className="btn sm secondary" disabled={busy || !code.trim()} onClick={() => look(code)}>
-            Найти
+            <Icon id="i-search" /> Найти
           </button>
         </div>
 
-        {error ? <p className="faint-note">{error}</p> : null}
+        {error ? (
+          <div className="nb-err">
+            <Icon id="i-alert" />
+            <span>{error}</span>
+            <button className="btn sm secondary" disabled={busy} onClick={() => look(code)}>
+              <Icon id="i-restart" /> Повторить
+            </button>
+          </div>
+        ) : null}
 
         {preview ? (
           <div className="pack-preview">
@@ -113,7 +130,7 @@ export function InstallByCodeModal({ onClose, initialCode = '' }: Props) {
 
         <div style={{ display: 'flex', gap: '10px', marginTop: '18px' }}>
           <button className="btn md primary" style={{ flex: 1 }} disabled={!preview || busy} onClick={install}>
-            {busy ? 'Ставим…' : 'Установить'}
+            <Icon id="i-download" /> {busy ? 'Ставим…' : 'Установить'}
           </button>
           <button className="btn md secondary" onClick={onClose}>
             Отмена

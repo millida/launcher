@@ -1,0 +1,872 @@
+/* ============================================================
+   ПИКСЕЛЬНЫЙ ЯЗЫК — зона «Магазин» (экономика вещей, 23.09.2026)
+   Экран src/screens/Rubies.tsx и src/components/shop/*.
+   Общий слой (кнопки, карточки, поля) — 12-pixel.css; здесь только своё.
+   Цвет даёт редкость вещи (--sh-tone ← --m-rarity-*), а не декор:
+   без градиентов в плашках, без border (рамка — inset-тенью),
+   срезы угла — clip-path. Картинки — без pixelated: превью каталога
+   нарисованы гладкими, «лесенка» на них выглядит браком.
+   ============================================================ */
+
+/* ---------- Шапка экрана: заголовок, вкладки, кошелёк ---------- */
+.sh-top { flex-wrap: wrap; row-gap: 10px; }
+.sh-tabs .seg { position: relative; }
+.sh-dot {
+  display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px;
+  background: var(--m-accent); color: var(--px-on-accent); font-size: 11px; font-weight: 900;
+}
+:root:root .sh-dot { --px-n: 4px; clip-path: var(--px-4); }
+.sh-wallet2 { flex-wrap: wrap; }
+.sh-bal {
+  display: inline-flex; align-items: center; gap: 7px; height: 38px; padding: 0 12px;
+  background: var(--m-surface-2); box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+  font-variant-numeric: tabular-nums;
+}
+.sh-bal b { font-size: 16px; font-weight: 850; letter-spacing: -0.01em; }
+:root:root .sh-bal { --px-n: 5px; clip-path: var(--px-5); }
+
+/* ---------- Поток блоков ---------- */
+.sh-flow { display: flex; flex-direction: column; gap: 14px; padding-bottom: 24px; }
+.sh-block { margin: 0; }
+
+.sh-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+.sh-head h2 {
+  display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; margin: 0;
+  font-size: 17px; font-weight: 850; letter-spacing: -0.01em;
+}
+.sh-note { font-size: 12px; color: var(--m-fg-faint); }
+.sh-kicker {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 11px; font-weight: 850; letter-spacing: 0.08em; text-transform: uppercase; color: var(--m-fg-faint);
+}
+.sh-tag {
+  display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px;
+  background: var(--m-surface-2); color: var(--m-fg-muted); font-size: 11px; font-weight: 850;
+  box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+.sh-tag > svg.icon { width: 12px; height: 12px; }
+:root:root .sh-tag { --px-n: 4px; clip-path: var(--px-4); }
+.sh-shard { display: block; flex: none; }
+
+/* ---------- Превью вещи на подложке редкости ---------- */
+.sh-art {
+  display: grid; place-items: center; flex: none;
+  background: color-mix(in srgb, var(--sh-tone, var(--m-rarity-common)) 13%, var(--m-inset));
+  /* Без каймы: inset-рамка на срезе рвётся на углах (daily.css, 23.09.2026). */
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.22); --px-ol: transparent; --px-ft: transparent; --px-fb: rgba(0, 0, 0, 0.22); --px-fb-w: 4px; --px-fl: transparent; --px-fr: transparent;
+}
+.sh-art img { display: block; object-fit: contain; }
+.sh-art > svg.icon { color: var(--m-fg-faint); }
+.sh-art.sm { width: 56px; height: 56px; }
+.sh-art.sm img { width: 48px; height: 48px; }
+.sh-art.sm > svg.icon { width: 22px; height: 22px; }
+.sh-art.md { width: 100%; height: 108px; }
+.sh-art.md img { width: 92px; height: 92px; }
+.sh-art.md > svg.icon { width: 34px; height: 34px; }
+.sh-art.lg { width: 232px; height: 232px; }
+.sh-art.lg img { width: 196px; height: 196px; }
+.sh-art.lg > svg.icon { width: 64px; height: 64px; }
+:root:root .sh-art { --px-n: 5px; clip-path: var(--px-5); }
+:root:root .sh-art.lg { --px-n: 10px; clip-path: var(--px-10); }
+
+/* ---------- Цена ---------- */
+.sh-pr { display: inline-flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sh-pr b { font-size: 15px; font-weight: 850; }
+.sh-pr s { font-size: 12px; color: var(--m-fg-faint); text-decoration-thickness: 2px; }
+.sh-pr.big b { font-size: 26px; font-weight: 900; letter-spacing: -0.02em; }
+.sh-pr.big s { font-size: 15px; }
+
+/* Скидка: плотная жёлтая плашка с тёмным текстом. */
+.sh-off {
+  position: absolute; z-index: 2; top: 8px; left: 8px; padding: 3px 7px 4px;
+  background: var(--m-rarity-legendary); color: var(--px-on-accent);
+  font-size: 12px; font-weight: 900; font-variant-numeric: tabular-nums;
+}
+.sh-off.inline { position: static; }
+.sh-off.big { font-size: 15px; padding: 4px 9px 5px; }
+:root:root .sh-off { --px-n: 4px; clip-path: var(--px-4); }
+
+/* Куплено: спокойная плашка вместо кнопки. */
+.sh-owned {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 30px; padding: 0 10px;
+  background: var(--m-surface); color: var(--m-fg-faint); font-size: 12px; font-weight: 800;
+  box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+.sh-owned.md { height: 38px; font-size: 13px; padding: 0 14px; }
+.sh-owned > svg.icon { width: 13px; height: 13px; color: var(--m-accent); }
+:root:root .sh-owned { --px-n: 5px; clip-path: var(--px-5); }
+
+/* «Хочу» — сердце в углу карточки. */
+.sh-wish {
+  position: absolute; z-index: 2; top: 6px; right: 6px; display: grid; place-items: center;
+  width: 30px; height: 30px; padding: 0; border: 0; cursor: pointer;
+  background: color-mix(in srgb, var(--m-surface) 80%, transparent); color: var(--m-fg-subtle);
+}
+.sh-wish > svg.icon { width: 18px; height: 18px; }
+.sh-wish:hover { color: var(--m-danger); background: var(--m-surface); }
+/* Пустое сердце — только при наведении на вещь; отмеченное видно всегда. */
+.sh-wish:not(.on) { opacity: 0; transition: opacity var(--m-t-fast) linear; }
+:is(.sh-card, .sh-feat-stage):hover > .sh-wish, .sh-wish:focus-visible { opacity: 1; }
+@media (hover: none) { .sh-wish:not(.on) { opacity: 1; } }
+.sh-wish.on { color: var(--m-danger); }
+.sh-wish.on > svg.icon { fill: currentColor; }
+:root:root .sh-wish { --px-n: 4px; clip-path: var(--px-4); }
+/* Сердце — в углу превью (отступ 10 = поле карточки), тот же срез 5px, что у
+   превью: при отступе 6 и срезе 4 оно наезжало на грань карточки на ступеньке. */
+:root:root .sh-card > .sh-wish { top: 10px; right: 10px; --px-n: 5px; clip-path: var(--px-5); }
+.sh-wish-item .sh-wish { position: static; width: 38px; height: 38px; }
+
+/* Открытие на весь экран: сундук трясётся и открывается, вещь показывает общий миг награды. */
+.sh-xo {
+  position: fixed; inset: 0; z-index: 950; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: max(16px, 5vh) 16px 16px; overflow-y: auto; background: rgba(3, 7, 5, 0.94); color: var(--m-fg);
+  animation: sh-fade 0.2s linear both;
+}
+@keyframes sh-fade { from { opacity: 0; } to { opacity: 1; } }
+.sh-xo-stage { flex: none; width: min(620px, 92vw); height: clamp(220px, 44vh, 380px); }
+.sh-xo-stage .c3d { width: 100%; height: 100%; }
+.sh-xo-stage .c3d-flat .dc-art { --dc-size: 140px !important; width: 140px; height: 140px; }
+@keyframes sh-plop {
+  0% { transform: translateY(-140px) scale(0.2); opacity: 0; }
+  55% { transform: translateY(10px) scale(1.12); opacity: 1; }
+  78% { transform: translateY(0) scale(0.96); }
+  100% { transform: none; opacity: 1; }
+}
+
+/* ---------- Полоса-счётчик (осколки, часы, очки) ---------- */
+.sh-meter { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+.sh-meter > svg.icon { width: 20px; height: 20px; color: var(--m-fg-subtle); }
+.sh-meter > b { font-size: 16px; font-weight: 850; font-variant-numeric: tabular-nums; }
+.sh-meter-bar { flex: 1 1 160px; height: 12px; background: var(--m-inset); box-shadow: var(--px-well); --px-ol: var(--px-well-ol); --px-ol-w: 1px; --px-ft: var(--px-well-t); --px-ft-w: 3px; --px-fb: transparent; --px-fl: transparent; --px-fr: transparent; overflow: hidden; }
+.sh-meter-bar i { display: block; height: 100%; background: var(--m-accent); box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.25); }
+:root:root .sh-meter-bar { --px-n: 4px; clip-path: var(--px-4); }
+/* Рамка поля — поверх заливки: иначе заливка закрывает кайму, и линия
+   обрывается там, где кончается прогресс. Слои — в 12-pixel.css (::after). */
+:root:root :is(.sh-meter-bar, .sh-bar) { position: relative; --px-ol: transparent; --px-ft: transparent; }
+:root:root :is(.sh-meter-bar, .sh-bar)::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  --px-n: 4px; --px-ol: var(--px-well-ol); --px-ol-w: 1px; --px-ft: var(--px-well-t); --px-ft-w: 3px;
+}
+.sh-meter-cap { font-size: 12px; color: var(--m-fg-faint); }
+.sh-meter-cap.full { color: var(--m-warning); font-weight: 800; }
+
+/* ---------- Выбор вещей (окно старого набора PLUS) ---------- */
+.sh-pick {
+  position: relative; display: flex; flex-direction: column; gap: 6px; padding: 10px; text-align: left;
+  border: 0; font: inherit; color: var(--m-fg); cursor: pointer;
+  background: color-mix(in srgb, var(--sh-tone) 7%, var(--m-surface-2));
+  box-shadow: inset 0 4px 0 var(--sh-tone), var(--px-plate); --px-ol: transparent; --px-ft: var(--sh-tone); --px-ft-w: 4px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+  transition: transform var(--m-t-fast) linear;
+}
+.sh-pick:hover:not(:disabled) { transform: translateY(-2px); }
+.sh-pick:disabled { opacity: 0.45; cursor: default; }
+.sh-pick.on { box-shadow: inset 0 4px 0 var(--m-accent), var(--px-plate); --px-ol: transparent; --px-ft: var(--m-accent); --px-ft-w: 4px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent; background: color-mix(in srgb, var(--m-accent) 22%, var(--m-surface-2)); }
+.sh-pick-mark {
+  position: absolute; top: 8px; right: 8px; display: grid; place-items: center; width: 22px; height: 22px;
+  background: var(--m-accent); color: var(--px-on-accent); opacity: 0; transform: scale(0.6);
+  transition: opacity var(--m-t-fast), transform var(--m-t-fast);
+}
+.sh-pick-mark > svg.icon { width: 13px; height: 13px; }
+.sh-pick.on .sh-pick-mark { opacity: 1; transform: none; }
+:root:root :is(.sh-pick) { --px-n: 10px; clip-path: var(--px-10); }
+:root:root .sh-pick-mark { --px-n: 4px; clip-path: var(--px-4); }
+/* Галочка — в углу превью, срезом превью: при 8px она залезала на верхнюю грань 4px. */
+:root:root .sh-pick-mark { top: 10px; right: 10px; --px-n: 5px; clip-path: var(--px-5); }
+.sh-pick-foot { display: flex; justify-content: flex-start; margin-top: 12px; }
+
+/* ---------- Путь: плащи за часы ---------- */
+.sh-road { position: relative; height: 90px; margin: 6px 34px 0; }
+.sh-road-line { position: absolute; left: 0; right: 0; top: 23px; height: 10px; background: var(--m-inset); box-shadow: var(--px-well); }
+.sh-road-line i { display: block; height: 100%; background: var(--m-accent); box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.25); }
+.sh-road-step {
+  position: absolute; top: 0; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+}
+.sh-road-step b { font-size: 12px; font-weight: 850; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sh-road-step:not(.got) .sh-art { opacity: 0.55; }
+.sh-road-step.next .sh-art { opacity: 1; background: color-mix(in srgb, var(--m-accent) 26%, var(--m-inset)); }
+.sh-road-step.next b { color: var(--m-accent); }
+.sh-road-mark {
+  position: absolute; top: -4px; right: -4px; display: grid; place-items: center; width: 20px; height: 20px;
+  background: var(--m-accent); color: var(--px-on-accent);
+}
+.sh-road-mark > svg.icon { width: 12px; height: 12px; }
+:root:root .sh-road-mark { --px-n: 4px; clip-path: var(--px-4); }
+
+/* ---------- Достижения ---------- */
+.sh-ach { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px; }
+.sh-ach-list { display: flex; flex-direction: column; gap: 6px; }
+.sh-ach-row {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+  background: var(--m-surface-2); box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+:root:root .sh-ach-row { --px-n: 5px; clip-path: var(--px-5); }
+.sh-ach-mark { display: grid; place-items: center; width: 26px; height: 26px; flex: none; background: var(--m-inset); color: var(--m-fg-faint); }
+.sh-ach-mark > svg.icon { width: 14px; height: 14px; }
+.sh-ach-row.done .sh-ach-mark { background: var(--m-accent); color: var(--px-on-accent); }
+:root:root .sh-ach-mark { --px-n: 4px; clip-path: var(--px-4); }
+.sh-ach-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.sh-ach-body b { font-size: 13px; font-weight: 800; }
+.sh-ach-row.done .sh-ach-body b { color: var(--m-fg-muted); }
+.sh-ach-bar { display: block; height: 6px; background: var(--m-inset); overflow: hidden; }
+.sh-ach-bar i { display: block; height: 100%; background: var(--m-accent); }
+.sh-ach-n { font-size: 12px; color: var(--m-fg-faint); font-variant-numeric: tabular-nums; }
+.sh-ach-pts { min-width: 38px; text-align: right; font-size: 12px; font-weight: 900; color: var(--m-rarity-legendary); }
+.sh-ach-prizes { display: flex; flex-direction: column; gap: 8px; }
+.sh-ach-prizes .sh-meter { margin-bottom: 4px; }
+.sh-prize {
+  display: flex; align-items: center; gap: 10px; padding: 6px 10px 6px 6px;
+  background: color-mix(in srgb, var(--sh-tone) 6%, var(--m-surface-2)); box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+:root:root .sh-prize { --px-n: 5px; clip-path: var(--px-5); }
+.sh-prize-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.sh-prize-body b { font-size: 13px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sh-prize-n { font-size: 13px; font-weight: 900; font-variant-numeric: tabular-nums; color: var(--m-fg-muted); }
+.sh-prize-n > svg.icon { width: 16px; height: 16px; color: var(--m-accent); }
+.sh-prize:not(.got) .sh-art { opacity: 0.6; }
+
+/* ---------- Гость ---------- */
+.sh-guest { display: flex; align-items: center; gap: 14px; }
+.sh-guest b { flex: 1; font-size: 16px; font-weight: 850; }
+
+/* ---------- Бесплатные сундуки и шансы ---------- */
+.sh-odds { display: flex; flex-direction: column; gap: 8px; }
+.sh-odd { display: flex; align-items: center; gap: 10px; }
+.sh-odd > b { width: 118px; flex: none; font-size: 12px; font-weight: 750; }
+.sh-bar { display: flex; flex: 1; height: 14px; background: var(--m-inset); box-shadow: var(--px-well); --px-ol: var(--px-well-ol); --px-ol-w: 1px; --px-ft: var(--px-well-t); --px-ft-w: 3px; --px-fb: transparent; --px-fl: transparent; --px-fr: transparent; overflow: hidden; }
+.sh-bar i { display: block; height: 100%; }
+:root:root .sh-bar { --px-n: 4px; clip-path: var(--px-4); }
+.sh-legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; font-size: 11px; color: var(--m-fg-muted); }
+.sh-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.sh-legend i { width: 9px; height: 9px; display: block; }
+.sh-legend em { font-style: normal; color: var(--m-fg-faint); }
+
+:root:root .sh-chest { --px-n: 10px; clip-path: var(--px-10); }
+
+.sh-row { display: flex; align-items: center; gap: 10px; }
+.sh-promo { margin-top: 14px; max-width: 420px; }
+.sh-skel { display: block; height: 92px; }
+:root:root .sh-skel { border-radius: 0; --px-n: 10px; clip-path: var(--px-10); }
+
+@media (prefers-reduced-motion: reduce) {
+  .sh-nc-in { transition: none; }
+  .sh-nc:not(.open) .sh-nc-back, .sh-nc-glint { animation: none; }
+  .sh-xo { animation: none; }
+}
+.sh-block > .sh-meter:last-child { margin-bottom: 0; }
+
+/* ============================================================
+   СЕТКА МАГАЗИНА (правки владельца 23.09.2026, 21:01)
+   «Витрина дня в две строки — некрасиво»: одна сетка на весь магазин —
+   8 колонок, у́же — 4, совсем узко — 2. Карточка = одна клетка, одна высота
+   во всех блоках (блоки одной ширины и с одним полем). Ведущая плитка блока
+   (--l8/--l4/--l2 из leadSpans) добирает ряд до полного, поэтому рваных
+   рядов нет ни при 8, ни при 4, ни при 2 колонках.
+   ============================================================ */
+.sh-flow { --sh-card-h: 264px; --sh-gap: 10px; --sh-pad: 18px; }
+.sh-flow > .sh-block { padding: var(--sh-pad); container: shop / inline-size; }
+.sh-zone { padding: 0 var(--sh-pad); container: shop / inline-size; }
+.sh-grid {
+  display: grid; grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-auto-rows: var(--sh-card-h); gap: var(--sh-gap);
+}
+.sh-lead { --lead: var(--l8); grid-column: span var(--lead); min-width: 0; }
+.sh-fill { grid-column: span var(--f8); }
+.sh-fill.f8-0 { display: none; }
+@container shop (max-width: 1080px) {
+  .sh-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .sh-lead { --lead: var(--l4); }
+  .sh-fill { display: flex; grid-column: span var(--f4); }
+  .sh-fill.f4-0 { display: none; }
+}
+@container shop (max-width: 520px) {
+  .sh-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sh-lead { --lead: var(--l2); }
+  .sh-fill { display: flex; grid-column: span var(--f2); }
+  .sh-fill.f2-0 { display: none; }
+}
+
+/* ---------- Карточка вещи: одна клетка ---------- */
+.sh-card {
+  position: relative; display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 0; padding: 10px;
+  background: color-mix(in srgb, var(--sh-tone, var(--m-rarity-common)) 7%, var(--m-surface-2));
+  --px-n: 10px; --px-ol: transparent; --px-ft: var(--sh-tone, var(--m-rarity-common)); --px-ft-w: 4px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+:root:root .sh-card { --px-n: 10px; clip-path: var(--px-10); }
+.sh-card > .sh-art.md { flex: 1 1 auto; height: auto; min-height: 72px; margin-top: 2px; }
+.sh-card > .sh-art.md img { width: auto; height: auto; max-width: 92%; max-height: 92%; }
+.sh-card.is-owned .sh-art { opacity: 0.5; }
+.sh-card-name {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  flex: none; min-height: 2.4em; font-size: 13px; font-weight: 800; line-height: 1.2;
+}
+.sh-card-meta { display: flex; flex-wrap: wrap; column-gap: 6px; font-size: 11px; color: var(--m-fg-faint); line-height: 1.3; flex: none; }
+.sh-card-meta > * { white-space: nowrap; }
+.sh-card-meta i { font-style: normal; font-weight: 850; color: var(--sh-tone, var(--m-fg-faint)); }
+.sh-card-meta s { text-decoration-thickness: 2px; }
+.sh-card-foot { display: flex; flex-direction: column; align-items: stretch; gap: 8px; flex: none; padding-top: 2px; }
+.sh-card-foot > .btn, .sh-card-foot > .sh-owned { width: 100%; }
+.sh-card-foot > .sh-owned.sm { height: 34px; }
+.sh-card-foot.row { flex-direction: row; align-items: center; justify-content: space-between; }
+.sh-card-foot.row > .btn, .sh-card-foot.row > .sh-owned { width: auto; min-width: 96px; }
+/* Карточка без покупки: низ — отметка «Есть», «Навсегда» или цена. */
+.sh-card.is-show .sh-card-foot { min-height: 34px; justify-content: center; }
+.sh-forever { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 900; color: var(--m-rarity-legendary); }
+.sh-forever > svg.icon { width: 14px; height: 14px; }
+.sh-unwish > svg.icon { color: var(--m-danger); fill: currentColor; }
+
+/* Хвост ряда без ведущей плитки: тихий таймер обновления. */
+.sh-fill { align-items: center; justify-content: center; background: var(--m-surface); --px-ft: var(--px-plate-t); --px-ft-w: 2px; }
+.sh-fill-in { display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--m-fg-faint); }
+.sh-fill-in > svg.icon { width: 26px; height: 26px; }
+.sh-fill-in b { font-size: 18px; font-weight: 900; font-variant-numeric: tabular-nums; color: var(--m-fg-muted); }
+
+/* ---------- Таймер: спокойная плашка ---------- */
+.sh-timer { height: 26px; padding: 0 9px; gap: 6px; font-size: 12px; font-weight: 750; color: var(--m-fg-faint); white-space: nowrap; }
+.sh-timer > svg.icon { width: 12px; height: 12px; color: var(--m-fg-subtle); }
+.sh-timer b { font-weight: 900; color: var(--m-fg-muted); font-variant-numeric: tabular-nums; }
+.sh-timer.big { height: 34px; font-size: 14px; }
+
+/* ---------- Ведущая плитка блока ---------- */
+.sh-lead.sh-card { background: var(--m-surface-2); --px-ft: var(--px-plate-t); --px-ft-w: 2px; container: lead / inline-size; flex-direction: column; justify-content: center; gap: 12px; padding: 14px; }
+.sh-lead-body { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; }
+.sh-lead-title { font-size: 20px; font-weight: 900; line-height: 1.1; letter-spacing: -0.01em; }
+.sh-lead-mark { display: grid; place-items: center; width: 64px; height: 64px; flex: none; background: var(--m-inset); color: var(--m-fg-muted); }
+.sh-lead-mark > svg.icon { width: 30px; height: 30px; }
+.sh-lead-mark.gold { color: var(--m-rarity-legendary); background: color-mix(in srgb, var(--m-rarity-legendary) 16%, var(--m-inset)); }
+.sh-lead-mark.ruby { background: color-mix(in srgb, var(--m-danger) 14%, var(--m-inset)); }
+:root:root .sh-lead-mark { clip-path: var(--px-5); }
+.sh-lead .btn { max-width: 100%; }
+/* Широкая ведущая плитка (2+ клетки) — картинка слева, текст справа. */
+@container lead (min-width: 300px) {
+  .sh-lead-row { flex-direction: row; align-items: center; }
+}
+.sh-lead.sh-card:is(.sh-bundle-lead, .sh-plus2-lead, .sh-packs-lead, .sh-work-lead, .sh-wish-lead) { flex-direction: row; align-items: center; justify-content: flex-start; }
+/* Ведущая плитка в одну клетку (при 4 или 2 колонках) — столбиком, без большой картинки. */
+.sh-lead.sh-card.l8-1 { flex-direction: column !important; align-items: stretch !important; }
+@container shop (max-width: 1080px) {
+  .sh-lead.sh-card.l4-1 { flex-direction: column !important; align-items: stretch !important; }
+  .sh-lead.sh-card:not(.l4-1) { flex-direction: row; }
+}
+@container shop (max-width: 520px) {
+  .sh-lead.sh-card.l2-1 { flex-direction: column !important; align-items: stretch !important; }
+  .sh-lead.sh-card:not(.l2-1) .sh-lead-mark { display: none; }
+}
+.sh-lead-bare { display: flex; min-height: 0; }
+.sh-lead-bare > * { flex: 1; min-width: 0; }
+
+/* ---------- Первый ряд: подарок 2 + предмет дня 4 + скидка 2 ---------- */
+.sh-hero > .gf { grid-column: span 2; }
+.sh-hero > .sh-feat { grid-column: span 4; }
+.sh-hero > .sh-deal { grid-column: span 2; }
+.sh-hero:not(.has-gift) > .sh-feat { grid-column: span 6; }
+@container shop (max-width: 1080px) {
+  .sh-hero > .sh-feat, .sh-hero:not(.has-gift) > .sh-feat { grid-column: span 4; order: -1; }
+  .sh-hero:not(.has-gift) > .sh-deal { grid-column: span 4; }
+}
+@container shop (max-width: 520px) {
+  .sh-hero > * { grid-column: span 2 !important; }
+  .sh-hero { grid-auto-rows: auto; }
+}
+.sh-feat {
+  position: relative; display: flex; gap: 20px; align-items: center; min-width: 0; padding: 18px;
+  background: color-mix(in srgb, var(--sh-tone) 17%, var(--m-surface));
+  --px-n: 10px; --px-ol: transparent; --px-ft: var(--sh-tone); --px-ft-w: 5px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+:root:root .sh-feat { --px-n: 10px; clip-path: var(--px-10); }
+.sh-feat-stage { flex: none; position: relative; }
+:root:root .sh-feat-stage > .sh-wish { top: 10px; right: 10px; --px-n: 5px; clip-path: var(--px-5); }
+/* Цена и «Уйдёт через» — одна строка, таймер по центру цены. */
+.sh-feat-price { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.sh-feat .sh-art.lg { width: calc(var(--sh-card-h) - 40px); height: calc(var(--sh-card-h) - 40px); }
+.sh-feat .sh-art.lg img { width: 86%; height: 86%; }
+.sh-feat-body { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; min-width: 0; }
+.sh-feat .sh-kicker { color: var(--sh-tone); }
+.sh-feat-name { font-size: 24px; font-weight: 900; line-height: 1.08; letter-spacing: -0.02em; }
+.sh-feat .sh-card-meta { font-size: 12px; }
+.sh-feat-acts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+@container shop (max-width: 520px) {
+  .sh-feat { flex-direction: column; align-items: stretch; }
+  .sh-feat .sh-art.lg { width: 100%; height: 180px; }
+}
+
+.sh-deal {
+  position: relative; display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 14px;
+  background: color-mix(in srgb, var(--m-rarity-legendary) 10%, var(--m-surface));
+  --px-n: 10px; --px-ol: transparent; --px-ft: var(--m-rarity-legendary); --px-ft-w: 5px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+:root:root .sh-deal { --px-n: 10px; clip-path: var(--px-10); }
+.sh-deal-top { display: flex; align-items: center; gap: 8px; flex: none; }
+.sh-deal .sh-kicker { color: var(--m-rarity-legendary); }
+.sh-deal-left { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; font-size: 12px; font-weight: 800; color: var(--m-fg-faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sh-deal-left > svg.icon { width: 13px; height: 13px; }
+.sh-deal > .sh-art.md { flex: 1 1 auto; height: auto; min-height: 80px; }
+.sh-deal > .sh-art.md img { width: auto; height: auto; max-width: 90%; max-height: 90%; }
+.sh-deal .sh-card-name { font-size: 15px; min-height: 0; -webkit-line-clamp: 1; }
+
+/* ---------- Набор: превью вещей внахлёст вместо значка ---------- */
+.sh-collage { position: relative; display: flex; align-items: center; flex: none; height: 104px; padding-left: 4px; }
+.sh-collage-i {
+  display: grid; place-items: center; width: 84px; height: 96px; margin-left: -26px;
+  background: color-mix(in srgb, var(--sh-tone) 22%, var(--m-inset));
+  box-shadow: 0 0 0 0 transparent;
+}
+.sh-collage-i:first-child { margin-left: 0; }
+.sh-collage-i:nth-child(even) { transform: translateY(6px); }
+.sh-collage-i img { width: 76px; height: 76px; object-fit: contain; }
+:root:root .sh-collage-i { clip-path: var(--px-5); }
+@container shop (max-width: 1080px) {
+  .sh-collage { height: 80px; justify-content: center; }
+  .sh-collage-i { width: 58px; height: 70px; margin-left: -22px; }
+  .sh-collage-i img { width: 52px; height: 52px; }
+}
+
+/* ---------- Ночной рынок ---------- */
+.card.sh-night {
+  background-color: color-mix(in srgb, var(--m-rarity-epic) 30%, #0c0716);
+  background-image: var(--px-dots); --px-img: var(--px-dots); --px-img-size: var(--px-dots-size); --px-img-pos: var(--px-dots-pos); --px-img-repeat: var(--px-dots-repeat); --px-img-origin: var(--px-dots-origin);
+  color: #f4ecff;
+}
+.sh-night-lead { display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 12px; padding: 4px 6px; }
+.sh-night-title { display: inline-flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 900; }
+.sh-night-clock { display: flex; flex-direction: column; gap: 2px; }
+.sh-night-clock b { font-size: 40px; font-weight: 900; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.sh-night-clock span { font-size: 13px; font-weight: 750; color: rgba(244, 236, 255, 0.7); }
+.sh-night .sh-note { color: rgba(244, 236, 255, 0.7); }
+@container shop (max-width: 1080px) { .sh-night-clock b { font-size: 32px; } }
+
+.sh-nc { position: relative; min-width: 0; perspective: 900px; }
+.sh-nc-in {
+  position: relative; width: 100%; height: 100%;
+  transform-style: preserve-3d; transition: transform 620ms cubic-bezier(0.25, 1.4, 0.4, 1);
+}
+.sh-nc.open .sh-nc-in { transform: rotateY(180deg); }
+.sh-nc-back, .sh-nc-face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.sh-nc-back {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; overflow: hidden;
+  border: 0; padding: 0; cursor: pointer; font: inherit; color: #fff;
+  background-color: var(--m-rarity-epic); --px-img: var(--px-dots); --px-img-size: var(--px-dots-size); --px-img-pos: var(--px-dots-pos); --px-img-repeat: var(--px-dots-repeat); --px-img-origin: var(--px-dots-origin);
+  --px-n: 10px; --px-ol: transparent; --px-ft: rgba(255, 255, 255, 0.3); --px-ft-w: 4px; --px-fb: rgba(0, 0, 0, 0.32); --px-fb-w: 8px; --px-fl: transparent; --px-fr: transparent;
+  transition: background-color var(--m-t-fast) linear;
+}
+/* Закрытые карты по очереди подпрыгивают — видно, что их можно трогать.
+   Цикл = число закрытых × 0,7 с; каждая стартует со своим сдвигом. */
+.sh-nc:not(.open) .sh-nc-back {
+  animation: sh-nc-hop calc(var(--nc-n) * 0.7s + 1.4s) calc(var(--nc-i) * 0.7s) ease-out infinite;
+}
+.sh-nc-back:hover { background-color: color-mix(in srgb, var(--m-rarity-epic) 80%, #fff); animation-play-state: paused; }
+.sh-nc-glint {
+  position: absolute; top: -20%; bottom: -20%; left: -40%; width: 26%;
+  background: rgba(255, 255, 255, 0.2); transform: skewX(-18deg); pointer-events: none;
+  animation: sh-nc-glint calc(var(--nc-n) * 0.7s + 1.4s) calc(var(--nc-i) * 0.7s) linear infinite;
+}
+.sh-nc-cta {
+  display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 14px;
+  background: #f4ecff; color: #2a0f4a; font-size: 14px; font-weight: 900;
+}
+:root:root .sh-nc-cta { clip-path: var(--px-5); }
+.sh-nc-face {
+  transform: rotateY(180deg);
+  display: flex; flex-direction: column; gap: 6px; padding: 10px;
+  background-color: color-mix(in srgb, var(--sh-tone) 12%, var(--m-surface)); color: var(--m-fg);
+  --px-n: 10px; --px-ol: transparent; --px-ft: var(--sh-tone); --px-ft-w: 5px; --px-fb: rgba(0, 0, 0, 0.26); --px-fb-w: 5px; --px-fl: transparent; --px-fr: transparent;
+}
+.sh-nc-face .sh-off { top: 12px; left: 12px; }
+.sh-nc-face > .sh-art.md { flex: 1 1 auto; height: auto; min-height: 72px; margin-top: 2px; }
+.sh-nc-face > .sh-art.md img { width: auto; height: auto; max-width: 90%; max-height: 90%; }
+:root:root :is(.sh-nc-back, .sh-nc-face) { --px-n: 10px; clip-path: var(--px-10); }
+@keyframes sh-nc-hop {
+  0% { transform: none; }
+  6% { transform: translateY(-10px); }
+  12% { transform: none; }
+  16% { transform: translateY(-3px); }
+  20%, 100% { transform: none; }
+}
+@keyframes sh-nc-glint {
+  0% { left: -40%; }
+  18%, 100% { left: 130%; }
+}
+
+/* ---------- Рентген-кейс: ведущая плитка «Для тебя» ---------- */
+.sh-card.sh-xray { flex-direction: row; align-items: center; gap: 14px; padding: 14px; }
+.sh-xray-stage {
+  flex: none; width: 44%; max-width: 230px; height: 100%;
+  background: color-mix(in srgb, var(--sh-tone) 10%, var(--m-inset));
+  --px-n: 10px; --px-ol: var(--px-well-ol); --px-ol-w: 1px; --px-ft: var(--px-well-t); --px-ft-w: 3px; --px-fb: transparent; --px-fl: transparent; --px-fr: transparent;
+}
+.sh-xray-stage .c3d { width: 100%; height: 100%; }
+:root:root .sh-xray-stage { --px-n: 10px; clip-path: var(--px-10); }
+.sh-xray-body { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; flex: 1; min-width: 0; }
+.sh-xray-body .sh-kicker { color: var(--sh-tone); }
+.sh-xray-body .sh-kicker > svg.icon { width: 14px; height: 14px; }
+.sh-xray-item { display: flex; align-items: center; gap: 10px; min-width: 0; max-width: 100%; }
+.sh-xray-item > span:last-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sh-xray-item b { font-size: 16px; font-weight: 900; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sh-xray-item i { font-style: normal; font-size: 12px; font-weight: 850; color: var(--sh-tone); }
+.sh-xray-wait { font-size: 15px; font-weight: 850; }
+.sh-xray.is-wait .sh-xray-stage { opacity: 0.7; }
+@container shop (max-width: 520px) { .sh-card.sh-xray { flex-direction: column; } .sh-xray-stage { width: 100%; max-width: none; height: 130px; } }
+
+/* ---------- PLUS ---------- */
+.card.sh-plus2 {
+  background-color: color-mix(in srgb, var(--m-rarity-legendary) 10%, var(--m-surface));
+  --px-ol: transparent; --px-ft: var(--m-rarity-legendary); --px-ft-w: 5px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+.sh-plus2-lead { background: color-mix(in srgb, var(--m-rarity-legendary) 8%, var(--m-surface-2)) !important; }
+.sh-perk2 { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--m-fg-muted); white-space: nowrap; }
+.sh-perk2 b { font-size: 15px; font-weight: 900; color: var(--m-fg); }
+.sh-mig {
+  display: flex; align-items: center; gap: 12px; margin-top: 14px; padding: 12px 14px;
+  background: color-mix(in srgb, var(--m-accent) 12%, var(--m-surface-2));
+  --px-n: 10px; --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+.sh-mig > svg.icon { width: 24px; height: 24px; color: var(--m-accent); flex: none; }
+.sh-mig > span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.sh-mig b { font-size: 14px; font-weight: 850; }
+.sh-mig small { font-size: 12px; color: var(--m-fg-faint); }
+:root:root .sh-mig { --px-n: 10px; clip-path: var(--px-10); }
+.sh-modal-bg { position: fixed; inset: 0; z-index: 960; display: grid; place-items: center; padding: 16px; background: rgba(0, 0, 0, 0.62); }
+.sh-mig-modal { width: min(900px, 94vw); max-height: 86vh; overflow-y: auto; padding: 18px; background: var(--m-surface); }
+.sh-mig-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 10px; }
+.sh-mig-modal .sh-pick-foot { position: sticky; bottom: -18px; padding: 12px 0 2px; background: var(--m-surface); }
+
+/* ---------- Пакеты рубинов ---------- */
+.sh-card.sh-pack { align-items: center; justify-content: space-between; background: var(--m-surface-2); --px-ft: var(--px-plate-t); --px-ft-w: 2px; }
+.sh-pack-art { display: grid; place-items: center; flex: 1; min-height: 0; }
+.sh-pack-art img { max-width: 84px; max-height: 84px; }
+.sh-pack-count { display: flex; align-items: center; gap: 6px; font-size: 20px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.sh-pack-bonus { min-height: 14px; font-size: 11px; font-weight: 800; color: var(--m-rarity-uncommon); }
+.sh-pack .btn { width: 100%; }
+.sh-best {
+  position: absolute; top: 10px; right: 10px; padding: 3px 7px;
+  background: var(--m-accent); color: var(--px-on-accent); font-size: 10px; font-weight: 850;
+  letter-spacing: 0.03em; text-transform: uppercase;
+}
+:root:root .sh-best { --px-n: 4px; clip-path: var(--px-4); }
+.sh-cell { height: auto; }
+
+/* ---------- Мастерская ---------- */
+.sh-work-lead .sh-meter { width: 100%; margin: 0; flex-wrap: nowrap; }
+.sh-work-lead .sh-meter-bar { flex: 1 1 60px; min-width: 40px; }
+.sh-work-lead .sh-lead-body { flex: 1; }
+
+/* ---------- Недельный путь ---------- */
+.card.sh-wp.is-ready { background-color: color-mix(in srgb, var(--m-accent) 7%, var(--m-surface)); --px-ft: var(--m-accent); --px-ft-w: 5px; }
+.sh-wp .sh-grid { grid-auto-rows: auto; }
+.sh-wp-prize { grid-column: span 1; height: var(--sh-card-h); align-self: start; }
+.sh-wp-prize .sh-kicker { color: var(--sh-tone); }
+.sh-wp-main { grid-column: span 7; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.sh-wp-main .sh-head { margin-bottom: 0; }
+@container shop (max-width: 1080px) { .sh-wp-main { grid-column: span 3; } }
+@container shop (max-width: 520px) { .sh-wp-prize { grid-column: span 2; } .sh-wp-main { grid-column: span 2; } }
+.sh-wp-track { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 6px; }
+.sh-wp-cell { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+.sh-wp-cell > svg.icon {
+  width: 100%; height: 34px; padding: 8px 0; box-sizing: border-box;
+  background: var(--m-inset); color: var(--m-fg-faint);
+}
+:root:root .sh-wp-cell > svg.icon { clip-path: var(--px-4); }
+.sh-wp-cell.got > svg.icon { background: var(--m-accent); color: var(--px-on-accent); fill: currentColor; }
+.sh-wp-gift {
+  display: inline-flex; align-items: center; justify-content: center; gap: 3px; height: 24px; padding: 0 6px;
+  border: 0; font: inherit; font-size: 12px; font-weight: 900; font-variant-numeric: tabular-nums; white-space: nowrap;
+  background: var(--m-surface-2); color: var(--m-fg-muted);
+}
+.sh-wp-gift > svg.icon { width: 13px; height: 13px; color: var(--m-accent); }
+.sh-wp-gift.ready { background: var(--m-accent); color: var(--px-on-accent); cursor: pointer; }
+.sh-wp-gift.ready:hover { filter: brightness(1.08); }
+.sh-wp-gift.done { opacity: .6; }
+:root:root .sh-wp-gift { clip-path: var(--px-4); }
+.sh-wp-tasks { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 6px; }
+.sh-wp-tasks .sh-ach-pts { display: inline-flex; align-items: center; justify-content: flex-end; gap: 3px; min-width: 44px; }
+.sh-wp-tasks .sh-ach-pts > svg.icon { width: 12px; height: 12px; fill: currentColor; }
+.sh-wp-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sh-wp-foot .sh-tag.on { color: var(--m-rarity-legendary); }
+.sh-wp-foot .sh-tag > svg.icon { color: var(--m-rarity-legendary); }
+.sh-wp-boost { margin-left: auto; gap: 6px; }
+.sh-wp-boost > svg.icon { width: 14px; height: 14px; fill: currentColor; color: var(--m-rarity-legendary); }
+.sh-wp-boost .sh-pr { margin-left: 6px; }
+
+/* ---------- «Хочу»: лента, не сетка ---------- */
+.sh-wishes { display: flex; flex-wrap: wrap; gap: 10px; }
+.sh-wish-item {
+  display: flex; align-items: center; gap: 10px; width: 260px; max-width: 100%; padding: 8px;
+  background: var(--m-surface-2);
+  --px-n: 10px; --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+:root:root .sh-wish-item { --px-n: 10px; clip-path: var(--px-10); }
+.sh-wish-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sh-wish-body b { font-size: 13px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sh-wish-body i { font-style: normal; font-size: 11px; font-weight: 850; color: var(--sh-tone); }
+.sh-wish-item .sh-wish { position: static; width: 34px; height: 34px; }
+
+/* ---------- Кнопка и «Куплено» в карточке — одной высоты ---------- */
+.sh-card-foot > .btn.sm, .sh-card-foot > .sh-owned.sm { height: 36px; }
+
+/* ---------- PLUS: плюсы подписки — карточками с картинкой, не строками ---------- */
+.sh-card.sh-perk-card { align-items: center; justify-content: center; gap: 4px; text-align: center; background: color-mix(in srgb, var(--m-rarity-legendary) 6%, var(--m-surface-2)); --px-ft: var(--m-rarity-legendary); }
+.sh-perk-art { display: grid; place-items: center; flex: 1; min-height: 0; }
+.sh-perk-n { font-size: 30px; font-weight: 900; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+
+/* ---------- Широкая ведущая плитка: картинка растёт с шириной ---------- */
+.sh-lead.sh-card .sh-lead-mark { width: clamp(64px, 26cqw, 168px); height: clamp(64px, 26cqw, 168px); max-height: 100%; }
+.sh-lead.sh-card .sh-lead-mark > svg.icon { width: 46%; height: 46%; }
+.sh-lead.sh-card .sh-lead-mark > img { width: 62% !important; height: 62% !important; }
+.sh-lead.sh-card:is(.sh-bundle-lead, .sh-plus2-lead, .sh-packs-lead, .sh-work-lead) { gap: clamp(12px, 3cqw, 28px); padding: 16px clamp(14px, 3cqw, 28px); }
+.sh-bundle-lead .sh-collage { height: 100%; max-height: 200px; }
+.sh-bundle-lead .sh-collage-i { width: clamp(58px, 15cqw, 124px); height: clamp(70px, 17cqw, 150px); margin-left: calc(clamp(58px, 15cqw, 124px) * -0.3); }
+.sh-bundle-lead .sh-collage-i:first-child { margin-left: 0; }
+.sh-bundle-lead .sh-collage-i img { width: 88%; height: 88%; }
+@container shop (max-width: 1080px) {
+  .sh-lead.sh-card.l4-1 .sh-lead-mark { display: none; }
+  .sh-lead.sh-card.l4-1 .sh-collage-i { width: 46px; height: 58px; margin-left: -18px; }
+}
+@container shop (max-width: 520px) {
+  .sh-lead.sh-card.l2-1 .sh-lead-mark, .sh-lead.sh-card.l2-1 .sh-collage { display: none; }
+}
+
+/* ---------- Сундуки: ведущая плитка с промокодом + карточки сундуков ---------- */
+.sh-chest-grid { margin-bottom: 14px; }
+.sh-chest-lead .sh-lead-body { width: 100%; }
+.sh-chest-lead .sh-promo { width: 100%; max-width: 420px; margin: 4px 0 0; }
+.sh-card.sh-chest { align-items: center; text-align: center; background: var(--m-surface-2); --px-ft: var(--px-plate-t); --px-ft-w: 2px; }
+.sh-chest-art { display: grid; place-items: center; flex: 1; min-height: 0; }
+.sh-chest .sh-card-name { min-height: 0; }
+.sh-chest .sh-card-foot { width: 100%; }
+.sh-lead-mark.shard { background: color-mix(in srgb, var(--m-rarity-rare) 14%, var(--m-inset)); }
+.sh-lead.sh-card .sh-lead-mark.shard > svg { width: 60%; height: 60%; }
+.sh-plus2-title { display: inline-flex; align-items: center; gap: 8px; font-size: 26px; }
+.sh-plus2-title > svg.icon { width: 26px; height: 26px; color: var(--m-rarity-legendary); }
+.sh-wp-tasks { grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); }
+.sh-ach-body b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sh-wp-prize .sh-kicker { margin-top: 4px; }
+
+/* ============================================================
+   ПРАВКИ ВЛАДЕЛЬЦА 24.09.2026
+   «Баннер на полстроки, потом целая строчка — не очень»: у секции
+   шапка-строка (заголовок + таймер/баланс справа), под ней ровная сетка
+   одинаковых карточек. Колонки считает gridCols() в parts.tsx
+   (--c8/--c4/--c2), чтобы ряды были полными.
+   ============================================================ */
+.sh-grid.is-fit { grid-template-columns: repeat(var(--c8, 8), minmax(0, 1fr)); }
+@container shop (max-width: 1080px) { .sh-grid.is-fit { grid-template-columns: repeat(var(--c4, 4), minmax(0, 1fr)); } }
+@container shop (max-width: 520px) { .sh-grid.is-fit { grid-template-columns: repeat(var(--c2, 2), minmax(0, 1fr)); } }
+.sh-head-act { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sh-head > .sh-note { white-space: nowrap; }
+
+/* Витрина без скидки: предмет дня добирает ряд. */
+.sh-hero.has-gift > .sh-feat:last-child { grid-column: span 6; }
+@container shop (max-width: 1080px) {
+  .sh-hero.has-gift > .sh-feat:last-child { grid-column: span 4; }
+  .sh-hero.has-gift > .gf:has(+ .sh-feat:last-child) { grid-column: span 4; }
+}
+
+/* «Для тебя»: рентген-кейс — герой на полряда, рядом 4 карточки. */
+.sh-span-hero { grid-column: span 4; }
+@container shop (max-width: 520px) { .sh-span-hero { grid-column: span 2; } }
+
+/* ---------- «Бесплатно»: подарок дня покачивается и светится шагами ---------- */
+.sh-hero > .gf-skel { grid-column: span 2; min-height: 240px; }
+.sh-free-rays { transform: scale(0.34); }
+.sh-free.is-ready .sh-free-prize { animation: sh-sway 1.8s steps(6) infinite; }
+.sh-free.is-ready .gf-stage { animation: sh-glow 1.6s steps(4) infinite alternate; }
+.sh-free.is-ready .gf-btn { animation: sh-nudge 2.4s steps(3) infinite; }
+@keyframes sh-sway {
+  0%, 100% { transform: rotate(0) translateY(0); }
+  25% { transform: rotate(-6deg) translateY(-4px); }
+  50% { transform: rotate(0) translateY(-8px); }
+  75% { transform: rotate(6deg) translateY(-4px); }
+}
+@keyframes sh-glow {
+  from { background-color: color-mix(in srgb, var(--m-accent) 10%, var(--m-inset)); }
+  to { background-color: color-mix(in srgb, var(--m-accent) 30%, var(--m-inset)); }
+}
+@keyframes sh-nudge {
+  0%, 70%, 100% { transform: none; }
+  80% { transform: translateY(-3px); }
+}
+
+/* ---------- Обмен осколков: осколок → вещь, баланс, источники ---------- */
+.sh-work-how {
+  display: flex; align-items: center; gap: 18px 22px; flex-wrap: wrap; margin-bottom: 12px; padding: 12px 16px;
+  background: color-mix(in srgb, var(--m-rarity-rare) 9%, var(--m-surface-2));
+  --px-n: 10px; --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+:root:root .sh-work-how { --px-n: 10px; clip-path: var(--px-10); }
+.sh-work-eq { display: inline-flex; align-items: center; gap: 10px; flex: none; }
+.sh-work-eq > svg.icon { width: 22px; height: 22px; color: var(--m-accent); animation: sh-arrow 1.2s steps(3) infinite; }
+.sh-work-coin { display: grid; place-items: center; width: 56px; height: 56px; background: color-mix(in srgb, var(--m-rarity-rare) 16%, var(--m-inset)); }
+:root:root .sh-work-coin { clip-path: var(--px-5); }
+.sh-work-bal { display: flex; flex-direction: column; gap: 6px; flex: 1 1 220px; min-width: 180px; max-width: 420px; }
+.sh-work-num { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.sh-work-num b { font-size: 22px; font-weight: 900; letter-spacing: -0.01em; }
+.sh-work-num > span { font-size: 14px; font-weight: 800; color: var(--m-fg-faint); }
+.sh-work-bal .sh-meter-bar { flex: none; width: 100%; height: 10px; }
+.sh-work-goal { font-size: 12px; font-weight: 750; color: var(--m-fg-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sh-work-src { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+.sh-src {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 11px;
+  border: 0; font: inherit; font-size: 12px; font-weight: 850; color: var(--m-fg-muted); cursor: pointer;
+  background: var(--m-surface);
+  --px-n: 5px; --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+.sh-src > svg.icon { width: 14px; height: 14px; color: var(--m-accent); }
+.sh-src:hover { color: var(--m-fg); background-color: var(--m-surface-3, var(--m-surface-2)); }
+:root:root .sh-src { --px-n: 5px; clip-path: var(--px-5); }
+@keyframes sh-arrow { 0%, 100% { transform: none; } 50% { transform: translateX(4px); } }
+
+/* ---------- Задания недели: вещь недели — герой во всю ширину ---------- */
+.sh-wp-hero {
+  position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px 28px;
+  margin-bottom: 14px; padding: 14px 24px 14px 14px; overflow: hidden;
+  background: color-mix(in srgb, var(--sh-tone) 16%, var(--m-surface));
+  --px-n: 10px; --px-ol: transparent; --px-ft: var(--sh-tone); --px-ft-w: 5px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+:root:root .sh-wp-hero { --px-n: 10px; clip-path: var(--px-10); }
+.sh-wp-stage {
+  position: relative; display: grid; place-items: center; width: 240px; height: 220px; overflow: hidden;
+  background: color-mix(in srgb, var(--sh-tone) 12%, var(--m-inset));
+  animation: sh-wp-glow 1.8s steps(4) infinite alternate;
+}
+:root:root .sh-wp-stage { clip-path: var(--px-10); }
+.sh-wp-rays { transform: scale(0.5); }
+.sh-wp-float { position: relative; z-index: 1; animation: sh-sway 2.4s steps(6) infinite; }
+.sh-wp-float .sh-art.lg { width: 200px; height: 200px; background: transparent; }
+.sh-wp-float .sh-art.lg img { width: 180px; height: 180px; }
+.sh-wp-hero.is-owned .sh-wp-stage, .sh-wp-hero.is-owned .sh-wp-float { animation: none; }
+.sh-wp-info { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; min-width: 0; }
+.sh-wp-info .sh-kicker { color: var(--sh-tone); }
+.sh-wp-info .sh-card-meta { font-size: 12px; }
+.sh-wp-goal { display: flex; align-items: center; gap: 12px; width: min(460px, 100%); }
+.sh-wp-bar { flex: 1; height: 14px; background: var(--m-inset); overflow: hidden; }
+.sh-wp-bar i { display: block; height: 100%; background: var(--sh-tone); }
+:root:root .sh-wp-bar { clip-path: var(--px-4); }
+.sh-wp-count { display: inline-flex; align-items: center; gap: 5px; font-size: 22px; font-weight: 900; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sh-wp-count > svg.icon { width: 20px; height: 20px; color: var(--m-rarity-legendary); fill: currentColor; }
+.sh-wp-count > span { font-size: 14px; font-weight: 800; color: var(--m-fg-faint); }
+.sh-wp-hero .sh-wp-boost { margin-left: 0; }
+@keyframes sh-wp-glow {
+  from { background-color: color-mix(in srgb, var(--sh-tone) 8%, var(--m-inset)); }
+  to { background-color: color-mix(in srgb, var(--sh-tone) 28%, var(--m-inset)); }
+}
+@container shop (max-width: 520px) {
+  .sh-wp-hero { grid-template-columns: 1fr; padding: 14px; }
+  .sh-wp-stage { width: 100%; height: 180px; }
+}
+
+/* Строка-суть: Задания → ★ → награды. */
+.sh-wp-sum { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; font-size: 13px; font-weight: 850; color: var(--m-fg-muted); }
+.sh-wp-sum > span { display: inline-flex; align-items: center; gap: 6px; }
+.sh-wp-sum > span > svg.icon { width: 15px; height: 15px; color: var(--m-accent); }
+.sh-wp-sum > span.star > svg.icon { width: 18px; height: 18px; color: var(--m-rarity-legendary); fill: currentColor; }
+.sh-wp-sum > svg.icon { width: 14px; height: 14px; color: var(--m-fg-faint); }
+.sh-wp-sum .sh-art.sm { width: 28px; height: 28px; }
+.sh-wp-sum .sh-art.sm img { width: 24px; height: 24px; }
+
+/* Дорожка: над звездой — что она даёт. */
+.sh-wp-over { display: grid; place-items: end center; height: 34px; }
+.sh-wp-cell > small { font-size: 10px; font-weight: 800; color: var(--m-fg-faint); font-variant-numeric: tabular-nums; }
+.sh-wp-cell.got > small { color: var(--m-fg-muted); }
+.sh-wp-prizemini { display: grid; place-items: center; width: 34px; height: 34px; background: color-mix(in srgb, var(--sh-tone) 30%, var(--m-inset)); }
+.sh-wp-prizemini .sh-art.sm { width: 34px; height: 34px; background: transparent; }
+.sh-wp-prizemini .sh-art.sm img { width: 30px; height: 30px; }
+.sh-wp-prizemini.done { opacity: 0.5; }
+:root:root .sh-wp-prizemini { clip-path: var(--px-4); }
+.sh-wp-cell.step:last-child > svg.icon { background: color-mix(in srgb, var(--m-rarity-legendary) 22%, var(--m-inset)); color: var(--m-rarity-legendary); }
+.sh-wp-cell.step.got:last-child > svg.icon { background: var(--m-rarity-legendary); color: #2a1c00; }
+
+/* Сколько звёзд даёт задание. */
+.sh-wp-stars { display: inline-flex; align-items: center; justify-content: flex-end; gap: 3px; min-width: 44px; font-size: 14px; font-weight: 900; color: var(--m-rarity-legendary); font-variant-numeric: tabular-nums; }
+.sh-wp-stars > svg.icon { width: 13px; height: 13px; fill: currentColor; }
+.sh-wp-stars.done { color: var(--m-fg-faint); }
+
+/* ---------- Поддержать автора ---------- */
+/* ---------- Код автора (как Support-a-Creator в Fortnite, 24.09.2026) ----------
+   Баннер в самом низу ленты: слева «дата-арт» — пиксельное сердце на лучах,
+   рассыпанные значки; справа сундук за первый код. Цвета плоские, лучи —
+   многоугольники svg, а не градиент. */
+.card.sh-cc {
+  position: relative; overflow: hidden;
+  background-color: color-mix(in srgb, var(--m-danger) 11%, var(--m-surface));
+  --px-ol: transparent; --px-ft: var(--m-danger); --px-ft-w: 5px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+.sh-cc-in {
+  display: grid; grid-template-columns: 200px minmax(0, 1fr) auto; align-items: center; gap: 12px 28px;
+  min-height: 196px;
+}
+.sh-cc-art { position: relative; align-self: stretch; min-height: 168px; display: grid; place-items: center; }
+.sh-cc-rays {
+  position: absolute; left: 50%; top: 50%; width: 460px; height: 460px; margin: -230px 0 0 -230px;
+  fill: var(--m-danger); opacity: 0.16; pointer-events: none;
+  animation: sh-cc-spin 36s steps(72, end) infinite;
+}
+@keyframes sh-cc-spin { to { transform: rotate(360deg); } }
+.sh-cc-heart { position: relative; z-index: 1; display: grid; filter: drop-shadow(0 5px 0 rgba(0, 0, 0, 0.4)); animation: sh-cc-beat 1.6s steps(1, end) infinite; }
+.sh-cc-heart > svg { display: block; width: 120px; height: 120px; }
+@keyframes sh-cc-beat { 0%, 100% { transform: none; } 12% { transform: scale(1.1); } 24% { transform: none; } 36% { transform: scale(1.05); } }
+.sh-cc-bit { position: absolute; z-index: 1; opacity: 0.85; }
+.sh-cc-bit.b1 { top: 6%; left: 4%; }
+.sh-cc-bit.b2 { top: 10%; right: 6%; color: var(--m-rarity-legendary); }
+.sh-cc-bit.b3 { bottom: 16%; left: 10%; }
+.sh-cc-bit.b4 { bottom: 6%; right: 12%; }
+.sh-cc-bit.b5 { top: 44%; left: -4%; opacity: 0.5; }
+.sh-cc-bit.b6 { top: 30%; right: -2%; color: var(--m-fg); }
+.sh-cc-body { position: relative; z-index: 1; min-width: 0; }
+.sh-cc-body h2 { margin: 0; font-size: 28px; font-weight: 900; line-height: 1.1; letter-spacing: -0.01em; }
+.sh-cc-lead { margin: 6px 0 0; font-size: 14px; color: var(--m-fg-muted); }
+.sh-cc-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+.sh-cc-input { flex: 0 1 280px; min-width: 180px; }
+.sh-cc-input input { text-transform: uppercase; letter-spacing: 0.06em; font-weight: 800; }
+.sh-cc-input input::placeholder { text-transform: none; letter-spacing: 0; font-weight: 600; }
+.sh-cc-input.is-err { --px-ol: var(--m-danger); }
+/* «Стать автором» — маленькая золотая кнопка в правом верхнем углу баннера. */
+.card.sh-cc { position: relative; }
+.sh-cc-become {
+  position: absolute; z-index: 2; top: 14px; right: 16px;
+  display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px 9px;
+  font: 800 13px/1 var(--m-font); color: #2a1a00; background: #ffd23f;
+  clip-path: var(--px-4); box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.22);
+}
+.sh-cc-become:hover { background: #ffe066; transform: translateY(-1px); }
+.sh-cc-err { margin: 8px 0 0; font-size: 13px; font-weight: 750; color: var(--m-danger); }
+.sh-cc-gift {
+  position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  width: 188px; padding: 16px 12px 14px; text-align: center;
+  background: color-mix(in srgb, var(--m-accent) 12%, var(--m-surface-2));
+}
+.sh-cc-gift .dc-art { margin-bottom: 6px; }
+.sh-cc-gift b { font-size: 17px; font-weight: 900; line-height: 1.15; color: var(--m-accent); }
+.sh-cc-gift small { font-size: 12px; font-weight: 700; color: var(--m-fg-muted); }
+:root:root .sh-cc-gift { --px-n: 10px; clip-path: var(--px-10); }
+.sh-cc-who { display: flex; align-items: center; gap: 18px; }
+.sh-cc-face { display: grid; place-items: center; flex: none; width: 96px; height: 96px; background: var(--m-inset); }
+:root:root .sh-cc-face { --px-n: 10px; clip-path: var(--px-10); }
+.sh-cc-who-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sh-cc-who-t small { font-size: 12px; font-weight: 750; color: var(--m-fg-muted); }
+.sh-cc-who-t b { font-size: 30px; font-weight: 900; line-height: 1.1; overflow-wrap: anywhere; }
+.sh-cc-rw-head { display: block; width: 128px; height: 128px; }
+.sh-skel.sh-cc-skel { height: 220px; }
+@container shop (max-width: 880px) {
+  .sh-cc-in { grid-template-columns: minmax(0, 1fr) auto; }
+  .sh-cc-art { min-height: 132px; }
+  .sh-cc-heart > svg { width: 96px; height: 96px; }
+  .sh-cc-body { grid-column: 1 / -1; grid-row: 2; }
+  .sh-cc-gift { grid-column: 2; grid-row: 1; width: 164px; }
+  /* «Поддерживаешь»: сердце уходит фоном вправо, строка автора — сверху. */
+  .sh-cc.is-on .sh-cc-art { position: absolute; top: 0; right: 0; bottom: 0; width: 200px; }
+  .sh-cc.is-on .sh-cc-body { grid-row: 1; }
+  .sh-cc-body h2 { font-size: 24px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sh-free.is-ready .sh-free-prize, .sh-free.is-ready .gf-stage, .sh-free.is-ready .gf-btn,
+  .sh-work-eq > svg.icon, .sh-wp-stage, .sh-wp-float, .sh-cc-rays, .sh-cc-heart { animation: none; }
+}
+
+/* ---------- Модель предметов v2: дневной лимит осколков и начатые вещи ---------- */
+.sh-work-today { font-size: 11px; font-weight: 800; color: var(--m-fg-faint); font-variant-numeric: tabular-nums; }
+.sh-work-today b { color: var(--m-fg); }
+.sh-work-today.full b { color: var(--m-rarity-legendary); }
+.sh-collect { margin-top: 14px; }
+.sh-collect-h { margin: 0 0 10px; font-size: 15px; font-weight: 850; }
+

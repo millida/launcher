@@ -12,20 +12,19 @@ const DURABLE = [
   'm-mus-play',
   'm-sound-vol',
   'm-sound-mode',
-  'm-theme',
   'm-accent',
-  'm-theme-pack',
-  'm-theme-vals',
   'm-density',
   'm-onb-done',
   'm-tour-done',
   'm-mil-ever',
   'm-hint-hosting',
+  'm-seen-cosmetics',
   'm-notify-msg',
   'm-notify-play',
   'm-notify-online',
   'm-notify-request',
   'm-notify-room',
+  'm-beta',
 ] as const
 
 export type PrefKey = (typeof DURABLE)[number]

@@ -77,7 +77,7 @@ export const currentFilters = (): ServerFilters => {
   return { category: s.category, sort: s.sort, license: s.license, online: s.online, version: s.version, search: s.search }
 }
 
-interface RatingServer {
+export interface RatingServer {
   name: string
   slug: string
   shortDesc?: string
@@ -86,6 +86,7 @@ interface RatingServer {
   ip?: string
   online?: number
   isOnline?: boolean
+  onlineApprox?: boolean
   avgOnline?: number
   bannerUrl?: string
   logoUrl?: string
@@ -95,16 +96,19 @@ interface RatingServer {
   license?: string
 }
 
-const toCard = (sv: RatingServer, rank: number): SnapshotServer => ({
+export const toCard = (sv: RatingServer, rank: number): SnapshotServer => ({
   rank,
   name: sv.name,
   slug: sv.slug,
   desc: (sv.shortDesc || sv.aiDescription || sv.description || '').replace(/\n/g, ' ').slice(0, 110),
   ip: sv.ip || '',
   online: sv.online ?? sv.avgOnline ?? 0,
+  onlineApprox: sv.onlineApprox === true,
   // Сервер включён, даже когда на нём никого: рейтинг отвечает фактом пинга.
-  // Старый ответ без поля судим по-прежнему, иначе весь каталог станет офлайном.
-  isOnline: sv.isOnline ?? (sv.online ?? sv.avgOnline ?? 0) > 0,
+  // Старый ответ без поля судим по числу игроков, иначе весь каталог станет
+  // офлайном — но приблизительное число так судить нельзя: у карточки мёртвого
+  // адреса оно взято из засеянного рейтинга, а не из ответа сервера.
+  isOnline: sv.isOnline ?? (sv.onlineApprox !== true && (sv.online ?? sv.avgOnline ?? 0) > 0),
   banner: sv.bannerUrl,
   logo: sv.logoUrl,
   versions: serverVersions(sv.versionMajors),

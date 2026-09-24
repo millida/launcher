@@ -210,12 +210,8 @@ export function TabFiles({ serverId, full, onTariff }: { serverId: string; full:
         )}
       </div>
 
-      {full ? null : (
-        <p className="faint-note" style={{ margin: '10px 0 0' }}>
-          На бесплатном тарифе файлы открыты на просмотр, правку конфигов и удаление лишнего. Свои файлы, папки,
-          распаковка и скачивание — на любом платном тарифе.
-        </p>
-      )}
+      {/* Абзац про ограничения бесплатного тарифа снят: закрытые действия
+          стоят с замком и по нажатию объясняют себя одной строкой. */}
 
       {ask ? (
         <div className="host-ask">
@@ -262,7 +258,7 @@ export function TabFiles({ serverId, full, onTariff }: { serverId: string; full:
             .map((e) => (
               <div className="fr-row host-file-row" key={e.name}>
                 <span className="host-ico" style={{ width: 30, height: 30 }}>
-                  <Icon id={e.dir ? 'i-box' : TEXT_EXT.test(e.name) ? 'i-list' : 'i-box2'} />
+                  <Icon id={e.dir ? 'i-folder' : TEXT_EXT.test(e.name) ? 'i-list' : 'i-box2'} />
                 </span>
                 <button className="host-file-name" onClick={() => void open(e)}>
                   {e.name}
@@ -279,7 +275,7 @@ export function TabFiles({ serverId, full, onTariff }: { serverId: string; full:
                 ) : null}
                 {!e.dir ? (
                   full ? (
-                    <button className="btn sm ghost" title="Скачать" disabled={busy === e.name} onClick={() => void download(e)}>
+                    <button className="btn sm ghost" aria-label="Скачать" data-tip="Скачать" disabled={busy === e.name} onClick={() => void download(e)}>
                       <Icon id="i-download" />
                     </button>
                   ) : (
@@ -289,7 +285,8 @@ export function TabFiles({ serverId, full, onTariff }: { serverId: string; full:
                 {full ? (
                   <button
                     className="btn sm ghost"
-                    title="Переименовать"
+                    aria-label="Переименовать"
+                    data-tip="Переименовать"
                     onClick={() => setAsk({ kind: 'rename', from: e.name, value: e.name })}
                   >
                     <Icon id="i-brush" />
@@ -297,14 +294,14 @@ export function TabFiles({ serverId, full, onTariff }: { serverId: string; full:
                 ) : (
                   <LockBtn feature="Переименование файлов" icon="i-brush" title="Переименование — на платном тарифе" onTariff={onTariff} />
                 )}
-                <button className="btn sm ghost" title="Удалить" onClick={() => void remove(e)}>
+                <button className="btn sm ghost" aria-label="Удалить" data-tip="Удалить" onClick={() => void remove(e)}>
                   <Icon id="i-trash" />
                 </button>
               </div>
             ))}
         </div>
       ) : (
-        <Empty icon="i-inbox" text="Папка пуста." />
+        <Empty icon="i-inbox" text="Папка пуста" />
       )}
     </div>
   )

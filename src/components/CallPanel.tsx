@@ -11,16 +11,18 @@ import {
   ringRoom,
   setCallVolume,
   sharedScreens,
+  toggleCamera,
   toggleDeafen,
   toggleMute,
   toggleScreen,
   useCall,
   type CallParticipant,
 } from '../state/call'
-import { SCREEN_MAX_VIEWERS, canShareScreenTo } from '../lib/call/mesh-rules'
+import { CAM_MAX_VIEWERS, SCREEN_MAX_VIEWERS, canShareScreenTo, canShowCamTo } from '../lib/call/mesh-rules'
 import { setStoredCallVolume } from '../lib/call/audio'
 import { openChat, openRoomChat } from '../state/friends'
 import { canShareScreen } from '../lib/call/screen'
+import { canUseCamera } from '../lib/call/camera'
 
 /// Индикатор связи: точное значение задержки в панели звонка никому не нужно,
 /// нужен ответ на вопрос «нормально ли слышно».
@@ -43,7 +45,7 @@ function Timer({ from }: { from: number }) {
 function IncomingCard() {
   const nick = useCall((s) => s.peerNick)
   return (
-    <div className="call-ring">
+    <div className="call-ring" data-private data-section="call">
       <div className="call-ring-card">
         <Head nick={nick || 'MHF_Steve'} size={56} />
         <div className="call-ring-body">
@@ -403,6 +405,7 @@ function RoomParticipants({ parts, screenOf }: { parts: CallParticipant[]; scree
           {p.sharing ? (
             <Icon id="i-screen-share" />
           ) : null}
+          {p.camOn ? <Icon id="i-cam" /> : null}
           {p.userId === screenOf ? <span className="call-part-live" /> : null}
         </button>
       ))}
@@ -424,6 +427,37 @@ function ScreenVideo({ stream }: { stream: MediaStream }) {
   // Звук показа идёт отдельной дорожкой через свой элемент, поэтому видео
   // немое: иначе он играл бы дважды.
   return <video ref={ref} muted playsInline />
+}
+
+/**
+ * Камеры разговора: своя рядом с чужими. Своя показывается зеркальной — человек
+ * привык видеть себя в зеркале, и незеркальная картинка читается как чужая.
+ */
+function CamTiles({ mine, parts }: { mine: MediaStream | null; parts: CallParticipant[] }) {
+  const set = useCall((s) => s.set)
+  const others = parts.filter((p) => p.cam)
+  if (!mine && !others.length) return null
+  return (
+    <div className={'call-cams' + (others.length + (mine ? 1 : 0) > 1 ? ' many' : '')}>
+      {mine ? (
+        <div className="call-cam self" title="Твоя камера">
+          <ScreenVideo stream={mine} />
+          <span className="call-screen-hint">Ты</span>
+        </div>
+      ) : null}
+      {others.map((p) => (
+        <div
+          key={p.userId}
+          className="call-cam"
+          title={p.nick + ' — нажми, чтобы развернуть'}
+          onClick={() => set({ camOf: p.userId, camFull: true })}
+        >
+          <ScreenVideo stream={p.cam as MediaStream} />
+          <span className="call-screen-hint">{p.nick}</span>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 function ScreenFull({ stream, onClose }: { stream: MediaStream; onClose: () => void }) {
@@ -461,6 +495,10 @@ export function CallPanel() {
   const answeredAt = useCall((s) => s.answeredAt)
   const screenOf = useCall((s) => s.screenOf)
   const screenFull = useCall((s) => s.screenFull)
+  const camOn = useCall((s) => s.camOn)
+  const camStream = useCall((s) => s.camStream)
+  const camOf = useCall((s) => s.camOf)
+  const camFull = useCall((s) => s.camFull)
   const volume = useCall((s) => s.volume)
   const set = useCall((s) => s.set)
   const peer = parts[0]
@@ -469,6 +507,8 @@ export function CallPanel() {
   const quality = callQuality(parts)
   const shown = sharedScreens(parts)
   const screenBlocked = mode === 'room' && !sharing && !canShareScreenTo(parts.length)
+  const camBlocked = mode === 'room' && !camOn && !canShowCamTo(parts.length)
+  const fullCam = camFull ? parts.find((p) => p.userId === camOf)?.cam || null : null
   const remoteScreen = (shown.find((p) => p.userId === screenOf) || shown[0])?.screen || null
   const [volOpen, setVolOpen] = useState(false)
   const dockRef = useRef<HTMLDivElement>(null)
@@ -492,7 +532,7 @@ export function CallPanel() {
     'call-dock' +
     (speaking ? ' talking' : '') +
     (peerSpeaking ? ' peer-talking' : '') +
-    (remoteScreen && screenFull ? ' above' : '') +
+    ((remoteScreen && screenFull) || fullCam ? ' above' : '') +
     (dragging ? ' dragging' : '')
 
   return (
@@ -500,9 +540,12 @@ export function CallPanel() {
       {remoteScreen && screenFull ? (
         <ScreenFull stream={remoteScreen} onClose={() => set({ screenFull: false })} />
       ) : null}
+      {fullCam ? <ScreenFull stream={fullCam} onClose={() => set({ camFull: false })} /> : null}
       <div
         ref={dockRef}
         className={dockCls}
+        data-private
+        data-section="call"
         style={dockStyle}
         onPointerDown={(e) => {
           if (e.button !== 0) return
@@ -551,6 +594,8 @@ export function CallPanel() {
 
         {mode === 'room' ? <RoomParticipants parts={parts} screenOf={screenOf} /> : null}
 
+        <CamTiles mine={camStream} parts={parts} />
+
         {remoteScreen && !screenFull ? (
           <div
             className="call-screen-mini"
@@ -561,7 +606,7 @@ export function CallPanel() {
             <span className="call-screen-hint">
               {(mode === 'room'
                 ? 'Экран · ' + (shown.find((p) => p.screen === remoteScreen)?.nick || 'участник')
-                : 'Экран собеседника') + ' · нажми, чтобы развернуть'}
+                : 'Экран собеседника')}
             </span>
             <button
               className="call-screen-max"
@@ -602,6 +647,22 @@ export function CallPanel() {
               onClick={() => void toggleScreen()}
             >
               <Icon id="i-screen-share" />
+            </button>
+          ) : null}
+          {canUseCamera() ? (
+            <button
+              className={'tb-btn' + (camOn ? ' on' : '')}
+              title={
+                camBlocked
+                  ? 'Камера — пока в разговоре не больше ' + (CAM_MAX_VIEWERS + 1) + ' человек'
+                  : camOn
+                    ? 'Выключить камеру'
+                    : 'Включить камеру'
+              }
+              disabled={status !== 'active' || camBlocked}
+              onClick={() => void toggleCamera()}
+            >
+              <Icon id="i-cam" />
             </button>
           ) : null}
           <button

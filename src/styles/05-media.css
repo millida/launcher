@@ -112,10 +112,13 @@
 /* ---- Skins screen ---- */
 .skin-stage {
   position: relative;
-  width: 250px;
-  height: 360px;
+  width: 300px;
+  height: 430px;
   background: transparent;
   overflow: hidden;
+  /* Фигура держит свой размер: полотно рисуется движком, и сжатие рамки
+     срезало бы ему ноги вместо того, чтобы дать карточке прокрутиться. */
+  flex: none;
 }
 .skin-aura {
   position: absolute;
@@ -154,6 +157,9 @@
   align-items: center;
   gap: 5px;
   width: 100%;
+  /* Подпись под вещью переносится на две строки, и без этого вторая строка
+     прижималась к левому краю - карточка выглядела кривой. */
+  text-align: center;
 }
 .sk-del {
   position: absolute;
@@ -299,47 +305,142 @@
   pointer-events: none;
   z-index: 2;
 }
-.skin-cape-cur {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin-top: 14px;
-  font-size: 12.5px;
-  color: var(--m-fg-muted);
-  min-height: 34px;
-  width: 100%;
-}
 .cape-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(134px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 12px;
 }
+/* Неделя входов — ровно семь столбцов: цикл читается строкой, а седьмой день
+   с сундуком не должен уезжать вниз в одиночестве. */
+.day-cards {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+@media (max-width: 900px) {
+  .day-cards {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+/* Итог открытого сундука: раньше он дописывался строкой в самый хвост карточки,
+   ниже пустого состояния, и нажатие читалось как «ничего не произошло». Теперь
+   стоит первым, на месте нажатой плитки, и приезжает коротким появлением —
+   движение здесь подтверждает действие, поэтому при prefers-reduced-motion
+   снимается только оно, а сам блок остаётся. */
+.chest-open {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  margin-bottom: 12px;
+  border-radius: 12px;
+  background: var(--m-surface-2);
+  animation: chestOpenIn var(--m-t-slow) var(--m-ease-out) both;
+}
+.chest-open-thumb {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 72px;
+  height: 72px;
+  border-radius: 10px;
+  background: var(--m-inset);
+  overflow: hidden;
+}
+.chest-open-body {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+.chest-open-body b {
+  font-size: 14px;
+  font-weight: 600;
+}
+.chest-open-sub {
+  font-size: 12px;
+  color: var(--m-fg-subtle);
+}
+@keyframes chestOpenIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chest-open {
+    animation: none;
+  }
+}
+/* В узком окне кнопка уходит под текст: превью, три подписи и кнопка в одну
+   строку сжимают название выпавшей вещи до многоточия. */
+@media (max-width: 560px) {
+  .chest-open {
+    flex-wrap: wrap;
+  }
+  .chest-open-body {
+    min-width: 150px;
+  }
+}
 .cape-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 5px;
   padding: 12px 8px;
   border-radius: 12px;
-  background: var(--m-surface);
+  /* Плитка лежит на карточке того же цвета: без своей подложки десятки вещей
+     сливались в одно полотно, и взгляд не цеплялся за границы. */
+  background: var(--m-inset);
   border: 2px solid transparent;
   cursor: pointer;
   transition: all var(--m-t-fast);
 }
-.cape-card:hover {
-  background: var(--m-surface-2);
+/* Наведение подсвечивает карточку целиком: из сетки в семьсот плиток человек
+   должен видеть, на какой он стоит, до нажатия. */
+@media (hover: hover) and (pointer: fine) {
+  .cape-card:hover {
+    background: var(--m-surface-2);
+    border-color: color-mix(in srgb, var(--m-accent) 22%, transparent);
+  }
 }
 .cape-card.on {
   border-color: var(--m-accent);
   background: var(--m-accent-soft);
 }
+/* Картинка растягивается на всю плитку, сохраняя пропорции: так вещь выходит
+   настолько крупной, насколько позволяет карточка. Светлый контур в один
+   пиксель отделяет тёмную вещь от подложки, не трогая её собственный цвет. */
+.cape-render > img,
+.cape-render > canvas {
+  --m-art-edge: color-mix(in srgb, var(--m-accent-fg) 22%, transparent);
+  filter: drop-shadow(1px 0 0 var(--m-art-edge)) drop-shadow(-1px 0 0 var(--m-art-edge))
+    drop-shadow(0 1px 0 var(--m-art-edge)) drop-shadow(0 -1px 0 var(--m-art-edge));
+}
+.cape-render > img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Имя вещи ложится в две строки: половина каталога называется длиннее одной,
+   и обрезка многоточием превращала разные вещи в одинаковые огрызки. */
 .cape-card b {
   font-size: 12.5px;
   font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.25;
   max-width: 100%;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
 }
 .cape-sub {
   font-size: 10.5px;
@@ -359,16 +460,48 @@
   line-height: 1.2;
   text-align: center;
 }
+/* Плитка занимает всю ширину карточки: вещи нарисованы с разным запасом полей,
+   и в узкой плитке одна выглядела крупной, другая - потерянной. */
 .cape-render {
   position: relative;
-  width: 58px;
-  height: 92px;
+  width: 100%;
+  height: 132px;
   display: grid;
   place-items: center;
   background: var(--m-inset);
   border-radius: 8px;
   overflow: hidden;
 }
+/* Косые полосы под вещью: чёрных вещей в каталоге больше всего, и на ровной
+   тёмной подложке они пропадали - силуэт было видно только вплотную. Рисунок
+   даёт контур, за который цепляется глаз, и не спорит с цветом самой вещи.
+   Полосы нарисованы маской, а не картинкой: цвет берётся из токена. */
+.cape-render::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-color: var(--m-fg);
+  opacity: 0.014;
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'%3E%3Cpath d='M-3 3 L3 -3 M0 10 L10 0 M7 13 L13 7' stroke='black' stroke-width='3'/%3E%3C/svg%3E");
+  mask-size: 10px 10px;
+}
+.cape-render > * {
+  position: relative;
+  z-index: 1;
+}
+/* Рубин и сундук - предметы, а не плащ: им квадратная плитка, а не высокая
+   фигура в рост. В плащовой рамке рубин читался как силуэт плаща. */
+.ruby-tile {
+  position: relative;
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  background: var(--m-inset);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
 .cape-render.empty {
   color: var(--m-fg-faint);
   font-size: 12px;
@@ -378,31 +511,51 @@
   height: 18px;
 }
 /* Закрытый плащ каталога: видно, но надеть нельзя. Прячем — теряем мотивацию,
-   поэтому показываем затемнённым, с замком и прогрессом по условию. */
+   поэтому показываем затемнённым, с замком и условием по нажатию. На нажатие
+   он отвечает как все остальные: карточка, которая молчит под курсором,
+   читается как неживая, и на неё перестают нажимать - а именно нажатием и
+   открывается условие. */
 .cape-card.locked,
 .cape-card.locked .cape-hit {
-  cursor: default;
-}
-.cape-card.locked:hover {
-  background: var(--m-surface);
-}
-.cape-card.locked .cape-render canvas {
-  filter: grayscale(1) brightness(0.55);
+  cursor: pointer;
 }
 .cape-card.locked b,
 .cape-card.locked .cape-sub {
   color: var(--m-fg-subtle);
 }
+/* Замок - метка в углу плитки, а не завеса поверх вещи: из-под завесы не было
+   видно, что именно закрыто, и человек проходил мимо, не разглядев вещь. Угол
+   нижний: верхние заняты звездой и кнопкой «Подробнее», которые всплывают при
+   наведении, и замок перекрывал бы их. */
+/* Замок стоит на самой вещи, в нижнем углу плитки - напротив звезды в верхнем.
+   Сидит он не внутри плитки, а на карточке: плитка обрезает всё за своим краем,
+   и подсказка с ценой из неё не вылезла бы. Оба значка убраны внутрь квадрата,
+   чтобы не липнуть к кнопкам, которые всплывают по наведению. */
 .cape-lock {
   position: absolute;
-  inset: 0;
+  z-index: 3;
+  top: 114px;
+  left: 16px;
   display: grid;
   place-items: center;
-  background: color-mix(in srgb, var(--m-inset) 55%, transparent);
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--m-border);
+  border-radius: var(--m-r-mini);
+  background: var(--m-raised);
+  color: var(--m-fg-subtle);
+}
+/* Условие выполнено — плащ ждёт, чтобы его забрали. Замок остаётся замком:
+   галочка читалась как «уже получен», и человек проходил мимо своей награды. */
+.cape-lock.ready {
+  background: var(--m-accent-soft);
+}
+.cape-lock.ready svg {
+  color: var(--m-accent);
 }
 .cape-lock svg {
-  width: 16px;
-  height: 16px;
+  width: 13px;
+  height: 13px;
   color: var(--m-fg-muted);
 }
 .cape-prog {
@@ -424,6 +577,16 @@
 .cape-prog-txt {
   font-size: 10px;
   color: var(--m-fg-faint);
+}
+/* Плащ в окне условия: ради него и открывают окно, поэтому он крупный и сразу
+   под именем. */
+.cape-info-art {
+  display: grid;
+  place-items: center;
+  margin: 12px 0;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--m-inset);
 }
 
 /* ---- Friend row menu ---- */
@@ -701,6 +864,11 @@
 .crash-toggle:hover{color:var(--m-fg)}
 .crash-toggle svg{width:14px;height:14px}
 .crash-tail{height:180px;margin-top:10px;font-size:11px}
+.crash-acts{display:flex;flex-direction:column;gap:10px;margin-top:18px}
+.crash-acts .btn.lg{width:100%}
+.crash-help{margin:2px 0 0;font-size:12.5px;line-height:1.5;text-align:center;color:var(--m-fg-muted)}
+.crash-acts-min{display:flex;gap:10px;margin-top:2px}
+.crash-acts-min .btn{flex:1}
 
 /* Boot-time update screen, shown before the launcher UI. */
 .boot-upd{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;background:var(--m-bg)}
@@ -840,3 +1008,1156 @@ html.overlay-root,html.overlay-root body,html.overlay-root #root{background:tran
 .lightbox-btn:hover{background:var(--m-inset);color:var(--m-fg)}
 .lightbox-btn svg{width:15px;height:15px}
 .lightbox-zoom{min-width:44px;text-align:center;font-size:12px;font-weight:600;color:var(--m-fg-muted);font-variant-numeric:tabular-nums}
+
+/* Подпись внутри карточки встаёт по её левому краю. Класс родом из бокового
+   рельса и несёт его отступ в 12px: рядом с заголовком карточки текст уезжал
+   вправо и выглядел съехавшим. */
+.card > .side-cap {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* Плитка пакета рубинов: рисунок занимает её целиком, пиксели не сглаживаем -
+   арт нарисован по клеткам, и честное сглаживание превращает его в мыло. */
+.pack-tile {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  display: grid;
+  place-items: center;
+  background: var(--m-inset);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.pack-tile img {
+  width: 64px;
+  height: 64px;
+  image-rendering: pixelated;
+}
+
+/* Вещь без картинки - эмоция или эффект: рисовать нечего, поэтому плитка
+   показывает знак вида, а не пустоту, которую читают как сбой загрузки. */
+.cosmetic-sign {
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  color: var(--m-fg-faint);
+  font-size: 11px;
+}
+.cosmetic-sign svg {
+  width: 22px;
+  height: 22px;
+}
+/* Счётчик на полке фильтра: сколько вещей за ней стоит. */
+.seg-count {
+  margin-left: 6px;
+  opacity: 0.6;
+  font-size: 11px;
+}
+
+/* Открытие сундука во весь экран. Ответ приходит за доли секунды, и без этой
+   сцены нажатие проходит мимо глаз: сундук трясётся, потом искры и приз. Это
+   единственное место, где движение самоценно - ради него сюда и возвращаются. */
+.chest-reveal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.62);
+  animation: chestFade var(--m-t-base) var(--m-ease-out) both;
+}
+.chest-reveal-box {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 28px 32px;
+  border-radius: var(--m-r-md);
+  background: var(--m-surface);
+  box-shadow: var(--m-shadow-lg);
+  text-align: center;
+  max-width: 90vw;
+  animation: chestBoxIn 420ms var(--m-ease-out) both;
+}
+.chest-reveal-box > b {
+  font-size: 19px;
+  font-weight: 700;
+  animation: chestLineIn 360ms var(--m-ease-out) 140ms both;
+}
+.chest-reveal-sub {
+  font-size: 13px;
+  font-weight: 600;
+  animation: chestLineIn 360ms var(--m-ease-out) 220ms both;
+}
+.chest-shake {
+  display: grid;
+  place-items: center;
+  width: 120px;
+  height: 120px;
+  margin-bottom: 8px;
+  border-radius: var(--m-r-md);
+  background: var(--m-inset);
+  animation:
+    chestShake 260ms var(--m-ease-move, ease-in-out) infinite,
+    chestCharge 1100ms var(--m-ease-out) both;
+}
+.chest-shake img {
+  width: 92px;
+  height: 92px;
+}
+.chest-burst {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 150px;
+  height: 150px;
+  margin-bottom: 8px;
+}
+/* Кольцо редкости: цвет говорит, что именно выпало, раньше подписи. */
+.chest-prize {
+  display: grid;
+  place-items: center;
+  width: 108px;
+  height: 108px;
+  border-radius: var(--m-r-md);
+  background: var(--m-inset);
+  border: 2px solid currentColor;
+  animation:
+    chestPrize 620ms cubic-bezier(0.18, 1.5, 0.4, 1) both,
+    chestBreathe 2600ms var(--m-ease-move, ease-in-out) 700ms infinite;
+}
+.chest-prize img {
+  width: 92px;
+  height: 92px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+.chest-prize svg {
+  width: 52px;
+  height: 52px;
+  color: var(--m-fg-muted);
+}
+/* Вспышка в момент, когда крышка сходит: держится меньше трети секунды. */
+.chest-flash {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--m-r-pill);
+  background: currentColor;
+  animation: chestFlash 340ms var(--m-ease-out) both;
+  pointer-events: none;
+}
+/* Волна расходится от приза и задаёт ему размер, пока он влетает. */
+.chest-ring {
+  position: absolute;
+  inset: 12px;
+  border: 2px solid currentColor;
+  border-radius: var(--m-r-pill);
+  animation: chestRing 760ms var(--m-ease-out) both;
+  pointer-events: none;
+}
+.chest-ring.late {
+  animation-delay: 160ms;
+}
+.chest-burst i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin: -3px 0 0 -3px;
+  border-radius: 2px;
+  background: currentColor;
+  transform-origin: 50% 50%;
+  animation: chestSpark 820ms var(--m-ease-out) both;
+}
+/* Счёт награды: цифра доезжает сама, поэтому она в моноширинных цифрах. */
+.chest-count {
+  font-variant-numeric: tabular-nums;
+}
+@keyframes chestFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes chestBoxIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes chestLineIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes chestShake {
+  0% { transform: translateX(0) rotate(0deg); }
+  25% { transform: translateX(-4px) rotate(-3deg); }
+  50% { transform: translateX(0) rotate(0deg); }
+  75% { transform: translateX(4px) rotate(3deg); }
+  100% { transform: translateX(0) rotate(0deg); }
+}
+@keyframes chestCharge {
+  from { scale: 1; }
+  to { scale: 1.12; }
+}
+@keyframes chestPrize {
+  from { opacity: 0; transform: scale(0.55) rotate(-8deg); }
+  to { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+@keyframes chestBreathe {
+  0% { scale: 1; }
+  50% { scale: 1.03; }
+  100% { scale: 1; }
+}
+@keyframes chestFlash {
+  0% { opacity: 0.85; scale: 0.4; }
+  100% { opacity: 0; scale: 1.6; }
+}
+@keyframes chestRing {
+  0% { opacity: 0.9; scale: 0.35; }
+  100% { opacity: 0; scale: 1.9; }
+}
+@keyframes chestSpark {
+  from { opacity: 1; transform: rotate(var(--spark-turn, 0deg)) translateY(0) scale(1); }
+  to { opacity: 0; transform: rotate(var(--spark-turn, 0deg)) translateY(-104px) scale(0.3); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chest-reveal,
+  .chest-reveal-box,
+  .chest-reveal-box > b,
+  .chest-reveal-sub,
+  .chest-shake,
+  .chest-prize,
+  .chest-flash,
+  .chest-ring,
+  .chest-burst i {
+    animation: none;
+  }
+  .chest-burst i,
+  .chest-flash,
+  .chest-ring {
+    opacity: 0;
+  }
+}
+
+/* Заголовок внутри карточки не липнет к тому, что под ним: без отступа лента
+   дней начиналась вплотную к строке и читалась как её продолжение. */
+.card > .cap {
+  margin-bottom: 10px;
+}
+
+/* Предложение подписки стоит над каталогом: закрытых вещей больше, чем
+   открытых, и человек должен видеть, чем они открываются, до того как начнёт
+   тыкать в замки. */
+.plus-offer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  border-radius: var(--m-r-card);
+  background: var(--m-surface);
+  border: 1px solid var(--m-accent-soft);
+}
+.plus-offer-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--m-r-mini);
+  background: var(--m-accent-soft);
+  color: var(--m-accent);
+}
+.plus-offer-mark svg {
+  width: 19px;
+  height: 19px;
+}
+.plus-offer-body {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+}
+/* Подпись в плашке идёт по левому краю под заголовком: класс родом из карточки,
+   где текст стоит по центру, и здесь он расползался посередине строки. */
+.plus-offer-body .cape-sub {
+  text-align: left;
+}
+/* Цена стоит у кнопки, а не в конце описания: решение принимают, глядя на
+   число рядом с действием. «В месяц» — приписка под ним, а не часть суммы. */
+.plus-offer-price {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.2;
+}
+.plus-offer-price b {
+  font-size: 15px;
+  font-weight: 650;
+}
+.plus-offer-price small {
+  font-size: 11px;
+  color: var(--m-fg-faint);
+}
+
+/* Картинку вещи можно приблизить: на мелком пикселе не видно, чем одна пара
+   крыльев отличается от другой. */
+.cape-info-art.zoomable {
+  width: 100%;
+  border: 0;
+  cursor: zoom-in;
+  transition: padding var(--m-t-base);
+}
+.cape-info-art.zoomable.zoomed {
+  cursor: zoom-out;
+  padding: 20px;
+}
+.cape-info-art.zoomable:active {
+  transform: scale(0.99);
+}
+
+/* Пока картинка вещи едет, плитка держит её место мерцающей заглушкой: пустое
+   место читается как «картинки нет», хотя она просто ещё не пришла. */
+.cosmetic-wait {
+  display: block;
+  width: 72px;
+  max-width: 100%;
+  border-radius: var(--m-r-mini);
+  background: var(--m-surface-2);
+  animation: cosmeticWait 1.6s ease-in-out infinite;
+}
+@keyframes cosmeticWait {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 0.85; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cosmetic-wait { animation: none; }
+}
+
+/* Пакеты рубинов — витрина, а не список: четыре крупные карточки во всю
+   ширину, рисунок сверху, цена на кнопке. Мелкими плитками их пролистывали
+   мимо, не разглядев, чем один отличается от другого. */
+.pack-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  width: 100%;
+}
+.pack-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 14px 14px;
+  border-radius: var(--m-r-card);
+  background: var(--m-surface);
+  border: 1px solid var(--m-border);
+}
+/* Название и количество — одна группа, поэтому стоят вплотную и ровно между
+   рисунком и кнопкой. По отдельности они висели ближе к кнопке и читались как
+   её подпись. */
+.pack-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+}
+.pack-card b {
+  font-size: 14px;
+  font-weight: 650;
+}
+/* Подъём кнопки на пиксель поднимал слой рисования всей плитки, и знак рубина
+   рядом с числом перерисовывался с новым округлением — он дёргался вверх-вниз,
+   хотя двигалась кнопка. Плитка получает свой слой заранее, и перерисовки
+   больше нет. */
+.pack-card {
+  transform: translateZ(0);
+}
+.pack-count img {
+  flex: none;
+}
+.pack-art {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 104px;
+  border-radius: var(--m-r-mini);
+  background: var(--m-inset);
+}
+.pack-art img {
+  width: 96px;
+  height: 96px;
+  image-rendering: pixelated;
+}
+.pack-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  /* Высота строки фиксирована: без неё строка меряется по картинке, и любая
+     перерисовка сдвигала её на полпикселя. */
+  height: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--m-fg-muted);
+}
+@media (max-width: 900px) {
+  .pack-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.bonus-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 24px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .bonus-split {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+}
+
+/* Неделя входов - как боевой пропуск: линия PLUS сверху, обычная снизу, а
+   между ними дорожка дней. Закрытая линия PLUS видна целиком, чтобы было
+   понятно, что именно человек пропускает без подписки. */
+.pass-scroll {
+  overflow-x: auto;
+  margin-bottom: 14px;
+}
+.pass {
+  display: grid;
+  grid-template-columns: 104px repeat(7, minmax(72px, 1fr));
+  grid-template-rows: auto 44px auto;
+  gap: 0 6px;
+  min-width: 620px;
+}
+.pass-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px;
+  border-radius: var(--m-r-card);
+  background: var(--m-inset);
+  font-size: 12px;
+  text-align: center;
+}
+.pass-head.plus {
+  background: var(--m-accent-soft);
+  color: var(--m-accent);
+}
+.pass-head.plus b {
+  color: var(--m-fg);
+  font-size: 14px;
+}
+.pass-head > svg {
+  width: 22px;
+  height: 22px;
+}
+.pass-head-note {
+  color: var(--m-fg-muted);
+}
+.pass-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 112px;
+  padding: 10px 4px;
+  border-radius: var(--m-r-card);
+  background: var(--m-inset);
+  color: inherit;
+  font: inherit;
+  font-size: 11.5px;
+  text-align: center;
+}
+.pass-cell b {
+  font-weight: 600;
+}
+.pass-cell.plus {
+  background: var(--m-accent-soft);
+}
+.pass-cell.plus b {
+  font-size: 13px;
+}
+.pass-cell.locked > :not(.pass-badge) {
+  opacity: 0.45;
+}
+.pass-cell.got > :not(.pass-badge) {
+  opacity: 0.4;
+}
+.pass-cell.ready {
+  outline: 2px solid var(--m-accent);
+  outline-offset: -2px;
+}
+.pass-cell.prize,
+.pass-cell.locked {
+  border: 0;
+  cursor: pointer;
+  transition: transform var(--m-t-fast) var(--m-ease-out);
+}
+.pass-cell.prize b {
+  color: var(--m-rarity-legendary);
+}
+.pass-cell.prize:active,
+.pass-cell.locked:active {
+  transform: scale(0.97);
+}
+.pass-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--m-r-pill);
+  background: var(--m-accent);
+  color: var(--m-accent-fg);
+}
+.pass-badge.lock {
+  background: var(--m-surface-2);
+  color: var(--m-fg-muted);
+}
+.pass-badge svg {
+  width: 12px;
+  height: 12px;
+}
+.chest-info-art {
+  display: grid;
+  place-items: center;
+  padding: 14px 0 6px;
+}
+/* Дорожка идёт через середину номеров и обрывается по краям недели. */
+.pass-node {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+.pass-node::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: -3px;
+  right: -3px;
+  height: 4px;
+  margin-top: -2px;
+  background: var(--m-inset);
+}
+.pass-node.got::before {
+  background: var(--m-accent);
+}
+.pass-node:not(.pass-node + .pass-node)::before {
+  left: 50%;
+}
+.pass-node:last-of-type::before {
+  right: 50%;
+}
+.pass-node b {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--m-r-pill);
+  background: var(--m-surface-2);
+  color: var(--m-fg-muted);
+  font-size: 12px;
+}
+.pass-node.got b {
+  background: var(--m-accent);
+  color: var(--m-accent-fg);
+}
+.pass-node.ready b {
+  background: var(--m-accent-soft);
+  color: var(--m-accent);
+  outline: 2px solid var(--m-accent);
+}
+
+/* Строка без разделителя: баланс и предложение подписки — одна мысль, черта
+   между ними делила её пополам без причины. */
+.set-row.bare {
+  border-bottom: 0;
+}
+
+/* Примерочная: что надето на фигуру в окне, но ещё не на игроке. Список стоит
+   под фигурой, потому что решение принимают, глядя на неё, а не на каталог. */
+/* Цвета одной вещи: половина каталога нарисована в нескольких, и первый из
+   них не всегда тот, за которым пришли. */
+/* Значок места на теле в фильтре: категория узнаётся быстрее, чем по слову. */
+.seg-art {
+  width: 16px;
+  height: 16px;
+  margin-right: 2px;
+}
+
+.tone-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+/* Расцветки под строкой примерки: ряд принадлежит своей вещи, а не панели, и
+   прижат к ней вплотную, иначе при двух примеренных вещах не видно, чей он. */
+.fitting-list .tone-row {
+  margin: 2px 0 8px 2px;
+  gap: 6px;
+}
+.fitting-list .tone {
+  width: 18px;
+  height: 18px;
+}
+.tone {
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--m-border);
+  border-radius: var(--m-r-pill);
+  padding: 0;
+  cursor: pointer;
+  transition:
+    transform var(--m-t-fast),
+    border-color var(--m-t-fast);
+}
+.tone:active {
+  transform: scale(0.96);
+}
+.tone.on {
+  border-color: var(--m-accent);
+}
+
+.fitting {
+  width: 100%;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--m-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.fitting-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.fitting-head b {
+  font-size: 13px;
+  font-weight: 650;
+}
+.fitting-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.fitting-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.fitting-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fitting-price {
+  color: var(--m-fg-faint);
+  font-variant-numeric: tabular-nums;
+}
+.fitting-off {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  padding: 0;
+  border-radius: var(--m-r-mini);
+  background: transparent;
+  color: var(--m-fg-faint);
+  cursor: pointer;
+}
+.fitting-off:hover {
+  background: var(--m-inset);
+  color: var(--m-fg);
+}
+.fitting-off svg {
+  width: 12px;
+  height: 12px;
+}
+.fitting-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+.fitting-total small {
+  display: block;
+  font-size: 11px;
+  color: var(--m-fg-faint);
+}
+.fitting-total b {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+/* Вещь на примерке видно и в каталоге: иначе, пролистав вниз, не вспомнишь,
+   что именно висит на фигуре. */
+.cape-card.trying {
+  border-color: var(--m-accent);
+}
+/* Подробности вещи — отдельной кнопкой: нажатие на саму карточку примеряет, и
+   отнимать у неё это ради описания значит ломать главный жест. */
+/* Звёздочка на карточке: отмеченное поднимается в начало своего раздела. */
+/* Звезда и «Подробнее» лежат над плиткой: картинка вещи поднята внутри плитки,
+   и без своего слоя кнопки оказывались под ней и не ловили нажатие. */
+/* Звезда - в правом верхнем углу: там её ищут по привычке, и вместе с замком
+   в левом нижнем они встают по диагонали, а не друг под другом. */
+/* Цена стоит на карточке, а не всплывает подсказкой: до покупки человек
+   сравнивает вещи между собой, и ради каждого числа наводить курсор - значит
+   не сравнить ничего. Угол верхний левый, напротив звезды. */
+.cape-price {
+  position: absolute;
+  z-index: 3;
+  top: 20px;
+  left: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+  padding: 0 6px;
+  border: 1px solid var(--m-border);
+  border-radius: var(--m-r-pill);
+  background: var(--m-raised);
+  color: var(--m-fg-muted);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.cape-price.plus {
+  border-color: color-mix(in srgb, var(--m-accent) 45%, transparent);
+  background: var(--m-accent-soft);
+  color: var(--m-accent);
+  letter-spacing: 0.04em;
+}
+
+.cape-star {
+  position: absolute;
+  z-index: 3;
+  top: 20px;
+  right: 16px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--m-border);
+  padding: 0;
+  border-radius: var(--m-r-mini);
+  background: var(--m-raised);
+  color: var(--m-fg-subtle);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity var(--m-t-fast),
+    color var(--m-t-fast),
+    background var(--m-t-fast);
+}
+.cape-star svg {
+  width: 13px;
+  height: 13px;
+}
+.cape-card:hover .cape-star,
+.cape-star.on {
+  opacity: 1;
+}
+.cape-star.on {
+  color: var(--m-rarity-legendary);
+}
+.cape-star:hover {
+  color: var(--m-fg);
+  background: var(--m-surface-2);
+}
+
+
+/* Выбранный стиль рук отмечается тем же знаком, что и выбранная карточка скина
+   рядом - акцентной рамкой. Серая заливка сегмента возле неё читалась как
+   «ничего не выбрано». */
+.seg[data-skvar].on {
+  background: var(--m-accent-soft);
+  color: var(--m-accent);
+  box-shadow: inset 0 0 0 1.5px var(--m-accent);
+}
+
+/* «Примерить» всплывает по наведению посередине плитки: нажатие на саму карточку
+   делает то же самое, но по кнопке это видно, а по картинке - нет. Там, где
+   наведения нет (телефон), кнопка стоит всегда. */
+/* Замок, имя и кнопки живут в одной строке под вещью: так замок и «Примерить»
+   стоят на одной линии, а не каждый по своей. */
+.cape-name {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 100%;
+  min-height: 24px;
+}
+
+/* Примерка и покупка всплывают в нижнем ряду плитки, на одной линии с замком:
+   имя при этом остаётся на месте, а низ вещи закрывает меньше, чем середина.
+   Покупка - узкая, чтобы случайное нажатие не стоило рубинов. */
+/* Своя подсказка под замком вместо системной: браузерная приходит с задержкой,
+   рисуется чужим шрифтом в светлой рамке и не умеет показать знак рубина -
+   а цена без знака читается как случайное число. */
+.lock-tip {
+  position: absolute;
+  z-index: 4;
+  top: 50%;
+  left: calc(100% + 6px);
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border-radius: var(--m-r-mini);
+  background: var(--m-raised);
+  color: var(--m-fg);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: var(--m-shadow-lg);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--m-t-fast);
+}
+/* Условие плаща длиннее цены, но плитка обрезает всё, что шире её: подсказка
+   переносится по строкам внутри этой ширины, а не уезжает за край. */
+.lock-tip.wide {
+  width: 96px;
+  white-space: normal;
+  line-height: 1.3;
+}
+.cape-lock:hover .lock-tip,
+.cape-star:hover .lock-tip {
+  opacity: 1;
+}
+/* Подсказки верхних кнопок открываются вниз и внутрь карточки: вверх им некуда,
+   а вправо у правой кнопки край. */
+.lock-tip.below {
+  top: calc(100% + 6px);
+  left: 0;
+  transform: none;
+}
+.lock-tip.below.right {
+  left: auto;
+  right: 0;
+}
+
+/* Пока модель вещи едет с CDN, фигура выглядит так, будто нажатие не сработало.
+   Плашка снизу сцены говорит, что примерка началась и вот-вот покажется. */
+.stage-note {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-radius: var(--m-r-pill);
+  background: var(--m-raised);
+  color: var(--m-fg);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: var(--m-shadow-lg);
+}
+.stage-spin,
+.cape-load {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--m-border);
+  border-top-color: var(--m-accent);
+  animation: skin-spin 0.8s linear infinite;
+}
+/* На карточке кружок стоит по центру вещи: видно, какая именно вещь грузится. */
+.cape-load {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0 -10px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .stage-spin,
+  .cape-load {
+    animation-duration: 2.4s;
+  }
+}
+
+/* Украшения - новый раздел, и его надо заметить: вкладка носит свой цвет и
+   метку, пока новизна не выветрилась. Цвет отдельный от акцента: акцентом
+   помечается выбранное, а тут речь о «смотри сюда», а не «ты здесь». */
+.seg.seg-new {
+  color: var(--m-rarity-epic);
+  background: color-mix(in srgb, var(--m-rarity-epic) 10%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--m-rarity-epic) 35%, transparent);
+}
+@media (hover: hover) and (pointer: fine) {
+  .seg.seg-new:hover {
+    background: color-mix(in srgb, var(--m-rarity-epic) 16%, transparent);
+  }
+}
+.seg.seg-new.on {
+  color: var(--m-fg);
+  background: color-mix(in srgb, var(--m-rarity-epic) 22%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--m-rarity-epic);
+}
+.seg-new-mark {
+  padding: 1px 5px;
+  border-radius: var(--m-r-pill);
+  background: var(--m-rarity-epic);
+  color: var(--m-accent-fg);
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+/* Что падает из сундука - показываем значками мест на теле, а не перечислением
+   через запятую: список из шести слов человек не дочитывает. */
+.chest-drops {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 4px 0 12px;
+}
+.chest-drop {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--m-r-mini);
+  background: var(--m-inset);
+  color: var(--m-fg-subtle);
+}
+.chest-drop svg {
+  width: 17px;
+  height: 17px;
+}
+/* Шансы - полоса, а не строка процентов: доли видно глазом, без чтения. */
+.chest-tier {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.chest-bar {
+  display: flex;
+  height: 10px;
+  border-radius: var(--m-r-pill);
+  overflow: hidden;
+  background: var(--m-inset);
+}
+.chest-bar i {
+  display: block;
+  height: 100%;
+}
+.chest-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 12px 0 8px;
+  font-size: 11.5px;
+  color: var(--m-fg-subtle);
+}
+.chest-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.chest-legend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+}
+
+/* Не доехавший список - это не пустой список: человеку нужна кнопка, а не
+   сообщение о том, что вещей нет. */
+.load-again {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  border-radius: var(--m-r-card);
+  background: var(--m-inset);
+  color: var(--m-fg-subtle);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+/* Заказ скина стоит отдельной строкой над своими скинами, а не плиткой среди
+   них: плитка читалась как ещё один готовый скин, и услугу не замечали. */
+.skin-order-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  border-radius: var(--m-r-card);
+  background: var(--m-surface);
+  border: 1px solid var(--m-accent-soft);
+  cursor: pointer;
+  transition:
+    background var(--m-t-fast),
+    border-color var(--m-t-fast),
+    transform var(--m-t-fast);
+}
+@media (hover: hover) and (pointer: fine) {
+  .skin-order-banner:hover {
+    background: var(--m-surface-2);
+    border-color: var(--m-accent);
+  }
+}
+.skin-order-banner:active {
+  transform: scale(0.985);
+}
+.skin-order-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--m-r-mini);
+  background: var(--m-accent-soft);
+  color: var(--m-accent);
+}
+.skin-order-mark svg {
+  width: 19px;
+  height: 19px;
+}
+.skin-order-body {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+}
+.skin-order-body b {
+  font-size: 13.5px;
+}
+.skin-order-body .cape-sub {
+  text-align: left;
+}
+.skin-order-banner > svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--m-fg-faint);
+}
+
+/* Два счёта в одной строке: рубины и деньги. Пока стоял только один, из магазина
+   уходили в профиль проверять, хватит ли на пакет. */
+.wallet-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.wallet-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 200px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: var(--m-r-card);
+  background: var(--m-inset);
+  text-align: left;
+}
+.wallet-cell.as-link {
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition:
+    background var(--m-t-fast),
+    border-color var(--m-t-fast),
+    transform var(--m-t-fast);
+}
+@media (hover: hover) and (pointer: fine) {
+  .wallet-cell.as-link:hover {
+    background: var(--m-surface-2);
+    border-color: var(--m-accent);
+  }
+}
+.wallet-cell.as-link:active {
+  transform: scale(0.985);
+}
+.wallet-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--m-r-mini);
+  background: var(--m-accent-soft);
+  color: var(--m-accent);
+}
+.wallet-mark svg {
+  width: 17px;
+  height: 17px;
+}
+.wallet-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.wallet-body b {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.wallet-body small {
+  font-size: 11px;
+  color: var(--m-fg-subtle);
+}
+
+/* Что даёт подписка - списком под ценой. Одно число «100 предметов» не отвечало
+   на вопрос, за что платят. */
+.plus-perks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: -4px 2px 0;
+}
+.plus-perk {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--m-fg-muted);
+}
+.plus-perk svg {
+  width: 14px;
+  height: 14px;
+  color: var(--m-accent);
+}
+

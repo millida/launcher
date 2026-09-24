@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import type React from 'react'
 import { Icon } from '../components/Icon'
 import { Select } from '../components/Select'
 import { api } from '../lib/api'
@@ -9,11 +8,18 @@ import { showToast } from '../state/ui'
 import { hasTauri } from '../ipc/tauri'
 import { hostConsoleStart, hostConsoleStop, openUrl, pickTexture } from '../ipc/commands'
 import { uiConfirm } from '../state/confirm'
-import { listenHostConsole } from '../ipc/events'
+import {
+  beginConsoleReplay,
+  consoleLines,
+  endConsoleReplay,
+  pushConsoleLine,
+  useHostConsole,
+} from '../state/hostConsole'
+import { listenHostConsole, listenHostConsoleReplayEnd } from '../ipc/events'
 import { usePolling } from '../lib/usePolling'
 import type { HostServer } from './Hosting'
 import { Head } from '../components/Head'
-import { ApplyField, Cap, NumField, Row, Seg, TextField, Toggle } from './hosting/kit'
+import { ApplyField, Cap, Empty, NumField, Row, Seg, TextField, Toggle } from './hosting/kit'
 import { host, errText, P } from './hosting/api'
 import type { HostingSubscription } from './hosting/api'
 import { TabContent } from './hosting/TabContent'
@@ -22,11 +28,18 @@ import { TabFiles } from './hosting/TabFiles'
 import { TabSchedule } from './hosting/TabSchedule'
 import { TabNetwork } from './hosting/TabNetwork'
 import { TabAccess } from './hosting/TabAccess'
-import { TabPlan } from './hosting/TabPlan'
+import { Journal, TabPlan } from './hosting/TabPlan'
+import { HostScene, HostStat, PixMeter } from '../components/hosting/HostScene'
+import { BalancePill } from '../components/hosting/HostKit'
 
 // Console error prefix: a word, not a "⚠" dingbat (rule 5.1 — Lucide icons only).
 // The .err class is applied by matching this same prefix.
 const LOG_ERR = 'Ошибка: '
+
+/// How long the replayed history is held back before it is shown as ordinary
+/// output: the marker that ends it arrives right after the tail, and a node that
+/// sends none must not leave the console blank.
+const REPLAY_WAIT_MS = 3_000
 
 interface Rules {
   gamemode?: string
@@ -120,18 +133,6 @@ interface Backup {
   createdAt: string
 }
 
-const HOST_ST: Record<string, [string, string]> = {
-  RUNNING: ['Работает', 'acc'],
-  STARTING: ['Запускается', 'warn'],
-  STOPPING: ['Останавливается', 'warn'],
-  STOPPED: ['Остановлен', 'off'],
-  SUSPENDED: ['Приостановлен', 'danger'],
-  QUEUED: ['В очереди', 'warn'],
-  SLEEPING: ['Спит', 'off'],
-  CRASHED: ['Упал', 'danger'],
-  INSTALLING: ['Устанавливается', 'warn'],
-}
-
 const BACKUP_ST: Record<string, string> = {
   pending: 'собирается',
   ready: 'готова',
@@ -144,6 +145,9 @@ const ROLE_LABEL: Record<string, string> = {
   MODERATOR: 'модератор',
   PLAYER: 'игрок',
 }
+
+// Подсказки в консоли: нажал — команда встала в поле. Раньше это была строка текста.
+const CMD_HINTS = ['say привет', 'time set day', 'weather clear']
 
 const gb = (mb: number) => (mb / 1024).toFixed(mb % 1024 === 0 ? 0 : 1).replace('.', ',')
 
@@ -164,84 +168,32 @@ const clockAt = (msAgo: number) =>
     second: '2-digit',
   })
 
-function Sparkline({ data, stepMs = 5000 }: { data: number[]; stepMs?: number }) {
-  const ref = useRef<HTMLCanvasElement>(null)
+/// Живой график нагрузки: столбики из клеток плотным акцентом, по одному на
+/// замер (раз в 5 с). Линия с градиентной заливкой снята — градиенты запрещены
+/// контрактом, а ровная линия на 26% выглядела пустой плашкой (23.09.2026).
+function PixBars({ data: all, stepMs = 5000, slots = 24 }: { data: number[]; stepMs?: number; slots?: number }) {
   const [hover, setHover] = useState<number | null>(null)
-
-  useEffect(() => {
-    const cv = ref.current
-    if (!cv) return
-    const w = (cv.width = cv.clientWidth * 2)
-    const h = (cv.height = cv.clientHeight * 2)
-    const g = cv.getContext('2d')
-    if (!g) return
-    g.clearRect(0, 0, w, h)
-    const css = getComputedStyle(document.documentElement)
-    const color = css.getPropertyValue('--m-accent').trim() || '#5EC64D'
-    const grid = css.getPropertyValue('--m-border').trim() || 'rgba(255,255,255,.08)'
-
-    g.strokeStyle = grid
-    g.lineWidth = 1
-    for (let k = 1; k < 4; k++) {
-      const gy = (h / 4) * k
-      g.beginPath()
-      g.moveTo(0, gy)
-      g.lineTo(w, gy)
-      g.stroke()
-    }
-    if (data.length < 2) return
-
-    const n = data.length
-    const x = (i: number) => (i / (n - 1)) * w
-    const y = (v: number) => h - (Math.max(0, Math.min(100, v)) / 100) * h * 0.9 - h * 0.05
-    const fill = g.createLinearGradient(0, 0, 0, h)
-    fill.addColorStop(0, color)
-    fill.addColorStop(1, 'transparent')
-    g.beginPath()
-    data.forEach((v, i) => (i ? g.lineTo(x(i), y(v)) : g.moveTo(x(i), y(v))))
-    g.lineTo(x(n - 1), h)
-    g.lineTo(x(0), h)
-    g.closePath()
-    g.globalAlpha = 0.16
-    g.fillStyle = fill
-    g.fill()
-    g.globalAlpha = 1
-    g.beginPath()
-    data.forEach((v, i) => (i ? g.lineTo(x(i), y(v)) : g.moveTo(x(i), y(v))))
-    g.strokeStyle = color
-    g.lineWidth = 3
-    g.lineJoin = 'round'
-    g.stroke()
-
-    if (hover == null || hover >= n) return
-    g.strokeStyle = color
-    g.globalAlpha = 0.45
-    g.lineWidth = 2
-    g.beginPath()
-    g.moveTo(x(hover), 0)
-    g.lineTo(x(hover), h)
-    g.stroke()
-    g.globalAlpha = 1
-    g.beginPath()
-    g.arc(x(hover), y(data[hover]), 7, 0, Math.PI * 2)
-    g.fillStyle = color
-    g.fill()
-  }, [data, hover])
-
-  const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const box = e.currentTarget.getBoundingClientRect()
-    if (data.length < 2 || !box.width) return
-    const ratio = Math.max(0, Math.min(1, (e.clientX - box.left) / box.width))
-    setHover(Math.round(ratio * (data.length - 1)))
-  }
-
-  const tipLeft = hover != null && data.length > 1 ? (hover / (data.length - 1)) * 100 : 0
+  const data = all.slice(-slots)
+  const pad = Math.max(0, slots - data.length)
+  const tipLeft = hover != null ? ((pad + hover + 0.5) / slots) * 100 : 0
   return (
-    <div className="host-spark" onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
-      <canvas ref={ref} />
+    <div className="hsx-bars" onMouseLeave={() => setHover(null)}>
+      {Array.from({ length: slots }, (_, i) => {
+        const k = i - pad
+        const v = k >= 0 ? data[k] : null
+        return (
+          <span
+            key={i}
+            className={'hsx-bar' + (v == null ? ' is-empty' : '') + (hover === k ? ' is-hover' : '')}
+            onMouseEnter={() => (v != null ? setHover(k) : setHover(null))}
+          >
+            {v != null ? <i style={{ height: Math.max(4, Math.min(100, v)) + '%' }}></i> : null}
+          </span>
+        )
+      })}
       {hover != null && hover < data.length ? (
         <div
-          className="host-spark-tip"
+          className="hsx-bars-tip"
           style={{ left: tipLeft + '%', transform: `translateX(${tipLeft > 70 ? '-100%' : tipLeft < 30 ? '0' : '-50%'})` }}
         >
           <b>{Math.round(data[hover]) + '%'}</b>
@@ -272,9 +224,12 @@ export function HostingManage({
   onBack,
   onRefreshList,
   onUpgrade,
+  onPlay,
 }: {
   server: HostServer
   onBack: () => void
+  /// Войти в игру на этот сервер — та же логика, что у «Играть» в списке.
+  onPlay?: () => void
   onRefreshList: () => void
   onUpgrade?: (serverId: string, planCode?: string | null) => void
 }) {
@@ -289,9 +244,12 @@ export function HostingManage({
   const [cmd, setCmd] = useState('')
   const [busyPower, setBusyPower] = useState(false)
   const [newPlayer, setNewPlayer] = useState('')
+  const [moreOpen, setMoreOpen] = useState(false)
+  const [advOpen, setAdvOpen] = useState(false)
+  const [statsWait, setStatsWait] = useState(true)
   const [crash, setCrash] = useState<{ reason: string | null; hint: { title: string; advice: string } | null; lines: string[] } | null>(null)
   const logRef = useRef<HTMLDivElement>(null)
-  const [log, setLog] = useState<string[]>([])
+  const log = useHostConsole((s) => consoleLines(s, server.id))
 
   const reload = () => {
     void api(P(server.id))
@@ -304,7 +262,17 @@ export function HostingManage({
     setCpuHist([])
     setMemHist([])
     setTab('overview')
+    setStatsWait(true)
+    const t = setTimeout(() => setStatsWait(false), 15_000)
+    return () => clearTimeout(t)
   }, [server.id])
+
+  useEffect(() => {
+    if (!moreOpen) return
+    const close = () => setMoreOpen(false)
+    document.addEventListener('click', close)
+    return () => document.removeEventListener('click', close)
+  }, [moreOpen])
 
   usePolling(
     () => {
@@ -337,11 +305,10 @@ export function HostingManage({
       .catch(() => {})
   }
   useEffect(() => {
-    if (tab === 'backups') loadBackups()
+    if (tab === 'world') loadBackups()
   }, [tab, server.id])
 
   const status = (detail || server).status || ''
-  const st = HOST_ST[status] || ['—', 'off']
   const running = status === 'RUNNING'
   const rules = (detail?.rules || {}) as Rules
   const free = !(detail || server).planPriceKopecks
@@ -360,19 +327,34 @@ export function HostingManage({
   // Rust reads the SSE stream and re-emits console lines as the "host-console" event.
   useEffect(() => {
     if (tab !== 'console' || !hasTauri()) return
-    let unlisten: (() => void) | null = null
+    const subs: Array<() => void> = []
     let alive = true
-    listenHostConsole((line) => {
-      setLog((l) => [...l.slice(-400), line])
-      setTimeout(() => logRef.current?.scrollTo(0, 1e9), 20)
-    }).then((u) => {
+    const keep = (u: (() => void) | null) => {
       if (!alive && u) u()
-      else unlisten = u
-    })
+      else if (u) subs.push(u)
+    }
+    const toBottom = () => setTimeout(() => logRef.current?.scrollTo(0, 1e9), 20)
+    beginConsoleReplay(server.id)
+    // A node that never sends the marker must not leave its replay invisible.
+    const noMarker = setTimeout(() => endConsoleReplay(server.id, false), REPLAY_WAIT_MS)
+    listenHostConsole((line) => {
+      pushConsoleLine(server.id, line)
+      toBottom()
+    }).then(keep)
+    listenHostConsoleReplayEnd(() => {
+      clearTimeout(noMarker)
+      endConsoleReplay(server.id, true)
+      toBottom()
+    }).then(keep)
     void hostConsoleStart(server.id).catch(() => {})
+    // Coming back to the tab lands on the lines that were already there, and a
+    // restored buffer scrolled to its top hides exactly what the player left on.
+    toBottom()
     return () => {
       alive = false
-      if (unlisten) unlisten()
+      clearTimeout(noMarker)
+      endConsoleReplay(server.id, false)
+      subs.forEach((u) => u())
       void hostConsoleStop().catch(() => {})
     }
   }, [tab, server.id])
@@ -389,7 +371,10 @@ export function HostingManage({
           onRefreshList()
         }, 1200)
       })
-      .catch((e) => showToast('Ошибка: ' + errText(e), 'error'))
+      .catch((e) => {
+        console.error('[hosting] ' + path, e)
+        showToast('Не получилось — попробуй ещё раз', 'error')
+      })
       .finally(() => setBusyPower(false))
   }
 
@@ -513,14 +498,14 @@ export function HostingManage({
     const c = cmd.trim()
     if (!c) return
     track('hosting_action', { action: 'console' })
-    setLog((l) => [...l.slice(-200), '> ' + c])
+    pushConsoleLine(server.id, '> ' + c)
     api(P(server.id) + '/console/command', { method: 'POST', body: JSON.stringify({ command: c }) })
       .then(() => {
         setCmd('')
         setTimeout(() => logRef.current?.scrollTo(0, 1e9), 30)
       })
       .catch((e) => {
-        setLog((l) => [...l.slice(-200), LOG_ERR + 'команда не ушла — ' + errText(e)])
+        pushConsoleLine(server.id, LOG_ERR + 'команда не ушла — ' + errText(e))
         showToast('Не удалось отправить команду', 'error')
       })
   }
@@ -572,179 +557,258 @@ export function HostingManage({
     }
   }
 
-  const TABS: [string, string, string][] = [
-    ['overview', 'i-monitor', 'Обзор'],
-    ['settings', 'i-settings', 'Настройки'],
-    ['content', 'i-blocks', 'Ядро и сборки'],
-    ['world', 'i-grid', 'Мир'],
-    ['players', 'i-users', 'Игроки'],
+  // Пять крупных вкладок самого нужного, остальное — в «Ещё» (правка владельца
+  // 23.09.2026: «всё то же, что в веб-панели, только проще»). Все разделы
+  // веб-панели на месте: Консоль, Моды, Игроки, Мир и копии — на виду;
+  // Настройки, Файлы, Сеть, Автоматика и журнал, Доступ, Тариф — в «Ещё».
+  const MAIN_TABS: [string, string, string][] = [
+    ['overview', 'i-play', 'Обзор'],
     ['console', 'i-list', 'Консоль'],
-    ['files', 'i-box', 'Файлы'],
-    ['backups', 'i-box2', 'Копии'],
-    ['schedule', 'i-clock', 'Расписание'],
-    ['network', 'i-link', 'Сеть и домен'],
+    ['content', 'i-blocks', 'Моды'],
+    ['players', 'i-users', 'Игроки'],
+    ['world', 'i-map', 'Мир'],
+  ]
+  const MORE_TABS: [string, string, string][] = [
+    ['settings', 'i-settings', 'Настройки'],
+    ['files', 'i-folder', 'Файлы'],
+    ['network', 'i-link', 'Сеть'],
+    ['schedule', 'i-clock', 'Автоматика'],
     ['access', 'i-key', 'Доступ'],
     ['plan', 'i-star', 'Тариф'],
   ]
+  const moreCur = MORE_TABS.find((t) => t[0] === tab)
 
   const memPct = stats && stats.memoryLimitMb ? Math.min(100, Math.round((stats.memoryUsedMb / stats.memoryLimitMb) * 100)) : 0
   const diskPct = stats && stats.diskLimitMb ? Math.min(100, Math.round((stats.diskUsedMb / stats.diskLimitMb) * 100)) : 0
   const cur = detail || server
   const maxSlots = server.planMaxPlayers && server.planMaxPlayers > 0 ? server.planMaxPlayers : 1000
+  const onl = cur.playersOnline || 0
+  const maxP = cur.maxPlayers || cur.planMaxPlayers || 0
+  const ramCap = stats?.memoryLimitMb || cur.planRamMb || cur.ramMb || 0
+  const canKill = status === 'CRASHED' || status === 'STOPPING' || running
+  const coreTag = [cur.core, cur.version].filter(Boolean).join(' ')
+
+  const stop = async () => {
+    if (
+      !(await uiConfirm('Игроков выкинет из игры, мир сохранится.', {
+        title: 'Остановить сервер?',
+        confirmLabel: 'Остановить',
+        cancelLabel: 'Отмена',
+      }))
+    )
+      return
+    power('/stop', 'Останавливаем…', 'Сервер остановлен')
+  }
 
   return (
-    <div className="host-manage">
-      <div className="host-manage-head">
-        <button className="inst-back" onClick={onBack}>
+    <div className="host-manage hsx-manage">
+      <div className="hsx-manage-top">
+        <button className="btn sm ghost hsx-back" onClick={onBack}>
           <Icon id="i-chev-l" /> К серверам
         </button>
-        <h2>{cur.name || server.slug}</h2>
-        <span className={'pill ' + st[1]}>
-          <span className="dot"></span> {st[0]}
-        </span>
-        <span style={{ flex: 1 }}></span>
-        {running ? (
-          <>
-            <button className="btn sm secondary" disabled={busyPower} onClick={() => power('/restart', 'Перезапускаем…', 'Перезапуск запущен')}>
-              <Icon id="i-restart" /> Перезапустить
-            </button>
-            <button className="btn sm secondary" disabled={busyPower} onClick={() => power('/stop', 'Останавливаем…', 'Сервер остановлен')}>
-              <Icon id="i-power" /> Остановить
-            </button>
-          </>
-        ) : (
-          <button className="btn sm primary" disabled={busyPower} onClick={() => power('/start', 'Запускаем…', 'Сервер запускается')}>
-            <Icon id="i-play" /> Запустить
-          </button>
-        )}
+        <BalancePill />
       </div>
 
-      <div className="segs host-manage-tabs">
-        {TABS.map(([id, ic, label]) => (
-          <button key={id} className={'seg' + (tab === id ? ' on' : '')} onClick={() => setTab(id)}>
+      <HostScene
+        name={cur.name || server.slug || 'Мой сервер'}
+        status={status}
+        address={cur.address || ''}
+        icon={cur.icon}
+        free={free}
+        tag={coreTag}
+        compact
+        actions={
+          running ? (
+            <>
+              <button className="btn lg primary hsx-main" onClick={() => onPlay && onPlay()}>
+                <Icon id="i-play" /> Играть
+              </button>
+              <button
+                className="btn lg secondary"
+                disabled={busyPower}
+                onClick={() => power('/restart', 'Перезапускаем…', 'Перезапуск запущен')}
+              >
+                <Icon id="i-restart" /> Перезапустить
+              </button>
+            </>
+          ) : (
+            <button
+              className="btn lg primary hsx-main hs-power"
+              disabled={busyPower || status === 'STARTING' || status === 'INSTALLING' || status === 'STOPPING'}
+              onClick={() => power('/start', 'Запускаем…', 'Сервер запускается')}
+            >
+              <Icon id="i-power" /> Запустить сервер
+            </button>
+          )
+        }
+        stats={
+          <>
+            <HostStat
+              block={32}
+              big={
+                <>
+                  {onl}
+                  {maxP ? <small> / {maxP}</small> : null}
+                </>
+              }
+              small="игроков в сети"
+              pct={maxP ? (onl / maxP) * 100 : null}
+            />
+            <HostStat
+              block={20}
+              big={
+                stats && running ? (
+                  <>
+                    {gb(stats.memoryUsedMb)}
+                    <small> / {gb(stats.memoryLimitMb)} ГБ</small>
+                  </>
+                ) : ramCap ? (
+                  <>
+                    {gb(ramCap)}
+                    <small> ГБ</small>
+                  </>
+                ) : (
+                  '—'
+                )
+              }
+              small={stats && running ? 'памяти занято' : 'памяти'}
+              pct={stats && running ? memPct : null}
+            />
+            {stats && running ? (
+              <HostStat block={19} big={Math.round(stats.cpuPercent) + '%'} small="процессор" pct={stats.cpuPercent} />
+            ) : null}
+            <HostStat
+              block={1}
+              big={Math.round((cur.planPriceKopecks || 0) / 100).toLocaleString('ru-RU') + ' ₽'}
+              small={free ? cur.planName || 'Бесплатный' : 'в месяц' + (cur.planName ? ' · ' + cur.planName : '')}
+              onClick={() => setTab('plan')}
+            />
+          </>
+        }
+      />
+
+      <nav className="hsx-tabs" aria-label="Разделы сервера">
+        {MAIN_TABS.map(([id, ic, label]) => (
+          <button key={id} className={'hsx-tab' + (tab === id ? ' on' : '')} aria-current={tab === id ? 'page' : undefined} onClick={() => setTab(id)}>
             <Icon id={ic} /> {label}
           </button>
         ))}
-      </div>
+        <div className="hsx-more">
+          <button
+            className={'hsx-tab' + (moreCur ? ' on' : '')}
+            aria-expanded={moreOpen}
+            onClick={(e) => {
+              e.stopPropagation()
+              setMoreOpen(!moreOpen)
+            }}
+          >
+            <Icon id={moreCur ? moreCur[1] : 'i-dots'} /> {moreCur ? moreCur[2] : 'Ещё'}
+            <Icon id="i-chev-d" />
+          </button>
+          {moreOpen ? (
+            <div className="hsx-more-pop" role="menu" onClick={(e) => e.stopPropagation()}>
+              {MORE_TABS.map(([id, ic, label]) => (
+                <button
+                  key={id}
+                  role="menuitem"
+                  className={'hsx-more-item' + (tab === id ? ' on' : '')}
+                  onClick={() => {
+                    setTab(id)
+                    setMoreOpen(false)
+                  }}
+                >
+                  <Icon id={ic} /> {label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </nav>
 
       <div className="host-manage-body">
         {tab === 'overview' ? (
-          <div className="card" style={{ padding: '20px' }}>
+          <div className="hsx-overview">
             {crash ? (
               <div className="host-crash">
                 <Icon id="i-alert" />
                 <div>
                   <div className="host-crash-t">{crash.hint?.title || 'Сервер упал'}</div>
-                  <div className="host-crash-s">{crash.hint?.advice || crash.reason || 'Посмотри консоль — там причина.'}</div>
+                  <div className="host-crash-s">{crash.hint?.advice || crash.reason || 'Причина — в консоли'}</div>
                 </div>
               </div>
             ) : null}
-            <div className="kpi-row">
-              <div className="kpi">
-                <div className="cap">Память</div>
-                <div className="val">
-                  {stats ? (
-                    <>
-                      {gb(stats.memoryUsedMb)} <span>/ {gb(stats.memoryLimitMb)} ГБ</span>
-                    </>
-                  ) : (
-                    '—'
-                  )}
-                </div>
-                <div className="bar">
-                  <i style={{ width: memPct + '%' }}></i>
-                </div>
-              </div>
-              <div className="kpi">
-                <div className="cap">Процессор</div>
-                <div className="val">{stats ? Math.round(stats.cpuPercent) + '%' : '—'}</div>
-                <div className="bar">
-                  <i style={{ width: (stats ? Math.min(100, stats.cpuPercent) : 0) + '%' }}></i>
-                </div>
-              </div>
-              <div className="kpi">
-                <div className="cap">Диск</div>
-                <div className="val">
-                  {stats ? (
-                    <>
-                      {gb(stats.diskUsedMb)} <span>/ {gb(stats.diskLimitMb)} ГБ</span>
-                    </>
-                  ) : (
-                    '—'
-                  )}
-                </div>
-                <div className="bar">
-                  <i style={{ width: diskPct + '%' }}></i>
-                </div>
-              </div>
-            </div>
 
-            {cpuHist.length > 1 ? (
-              <div className="host-graphs">
-                <div className="host-graph">
-                  <div className="host-graph-head">
+            {cur.pendingRestart && cur.pendingRestart.length ? (
+              <div className="hs-banner">
+                <Icon id="i-restart" />
+                <b>Нужен перезапуск</b>
+                {running ? (
+                  <button className="btn sm secondary" disabled={busyPower} onClick={() => power('/restart', 'Перезапускаем…', 'Перезапуск запущен')}>
+                    Перезапустить
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+
+            {/* График — только из живых замеров. Пока замеров нет, 15 секунд
+                стоит скелетон; не пришли — блока нет совсем: пустой серой
+                плашки на экране быть не должно (приказ 23.09.2026). */}
+            {running && cpuHist.length > 1 ? (
+              <div className="hsx-graphs">
+                <div className="hsx-graph">
+                  <div className="hsx-graph-head">
                     <span>Процессор</span>
                     <b>{stats ? Math.round(stats.cpuPercent) + '%' : '—'}</b>
                   </div>
-                  <Sparkline data={cpuHist} />
+                  <PixBars data={cpuHist} />
                 </div>
-                <div className="host-graph">
-                  <div className="host-graph-head">
+                <div className="hsx-graph">
+                  <div className="hsx-graph-head">
                     <span>Память</span>
-                    <b>{Math.round(memPct) + '%'}</b>
+                    <b>{memPct + '%'}</b>
                   </div>
-                  <Sparkline data={memHist} />
+                  <PixBars data={memHist} />
                 </div>
+                {stats && stats.diskLimitMb ? (
+                  <div className="hsx-graph hsx-disk">
+                    <img src="/block-icons/Block38Millida.png" alt="" width={48} height={48} />
+                    <b>
+                      {gb(stats.diskUsedMb)}
+                      <small> / {gb(stats.diskLimitMb)} ГБ</small>
+                    </b>
+                    <span>на диске</span>
+                    <PixMeter pct={diskPct} tone={diskPct >= 90 ? 'danger' : diskPct >= 75 ? 'warn' : undefined} />
+                  </div>
+                ) : null}
               </div>
-            ) : (
-              <p className="faint-note" style={{ marginTop: '16px' }}>
-                Собираем данные нагрузки — график появится через несколько секунд…
-              </p>
-            )}
-
-            <div className="host-cfg" style={{ marginTop: '18px' }}>
-              {cur.address ? (
-                <div className="host-cfg-row">
-                  <Icon id="i-link" />
-                  <span className="host-cfg-k">Адрес</span>
-                  <span className="host-cfg-v">{cur.address}</span>
-                </div>
-              ) : null}
-              {cur.core ? (
-                <div className="host-cfg-row">
-                  <Icon id="i-blocks" />
-                  <span className="host-cfg-k">Ядро</span>
-                  <span className="host-cfg-v">
-                    {cur.core} {cur.version || ''}
-                  </span>
-                </div>
-              ) : null}
-              {cur.planName || cur.planCode ? (
-                <div className="host-cfg-row">
-                  <Icon id="i-star" />
-                  <span className="host-cfg-k">Тариф</span>
-                  <span className="host-cfg-v">{cur.planName || cur.planCode}</span>
-                </div>
-              ) : null}
-              <div className="host-cfg-row">
-                <Icon id="i-users" />
-                <span className="host-cfg-k">Игроки</span>
-                <span className="host-cfg-v">
-                  {(cur.playersOnline || 0) + (cur.maxPlayers ? ' / ' + cur.maxPlayers : '')}
-                </span>
+            ) : running && statsWait ? (
+              <div className="hsx-graphs" aria-busy="true">
+                {[0, 1, 2].map((i) => (
+                  <span className="skel hsx-graph-skel" key={i}></span>
+                ))}
               </div>
-            </div>
-
-            {cur.pendingRestart && cur.pendingRestart.length ? (
-              <p className="faint-note" style={{ marginTop: '14px' }}>
-                Часть изменений применится после перезапуска сервера.
-              </p>
             ) : null}
 
-            {status === 'CRASHED' || status === 'STOPPING' || running ? (
-              <div style={{ marginTop: '16px' }}>
-                <button className="btn sm ghost" onClick={() => void kill()}>
-                  <Icon id="i-power" /> Принудительно завершить
+            {!running && !crash ? (
+              <div className="hsx-off">
+                <img src="/block-icons/Block24Millida.png" alt="" width={56} height={56} />
+                <b>{status === 'STARTING' || status === 'INSTALLING' ? 'Сервер запускается' : 'Сервер выключен'}</b>
+              </div>
+            ) : null}
+
+            {canKill ? (
+              <div className="hsx-danger">
+                <div className="hsx-danger-t">
+                  <Icon id="i-power" />
+                  <b>Выключение</b>
+                </div>
+                {running ? (
+                  <button className="btn md danger" disabled={busyPower} onClick={() => void stop()}>
+                    <Icon id="i-power" /> Остановить
+                  </button>
+                ) : null}
+                <button className="btn md ghost hsx-kill" onClick={() => void kill()}>
+                  <Icon id="i-zap" /> Завершить процесс
                 </button>
               </div>
             ) : null}
@@ -752,248 +816,265 @@ export function HostingManage({
         ) : null}
 
         {tab === 'settings' ? (
-          <div className="card set-group host-set-grid" style={{ padding: '10px 20px 18px' }}>
-            <Cap first>Сервер</Cap>
-            <Row k="Название" sub="Видно в списке серверов и в панели">
-              <ApplyField value={cur.name || ''} label="Сохранить" busy={saving === 'name'} onApply={rename} />
-            </Row>
-            <Row k="Иконка" sub={detail?.iconLocked ? 'На бесплатном тарифе стоит логотип Millida' : 'PNG, приведём к 64×64'}>
-              {cur.icon ? (
-                <img
-                  src={cur.icon}
-                  alt=""
-                  onError={(e) => {
-                    e.currentTarget.src = '/millida-logo.svg'
-                  }}
-                  style={{ width: 28, height: 28, borderRadius: 6 }}
-                />
-              ) : null}
-              <button className="btn sm secondary" disabled={saving === 'icon' || detail?.iconLocked} onClick={() => void changeIcon()}>
-                Выбрать
-              </button>
-              {cur.icon && !detail?.iconLocked ? (
-                <button className="btn sm ghost" disabled={saving === 'icon'} onClick={() => void clearIcon()}>
-                  Убрать
-                </button>
-              ) : null}
-            </Row>
-            <Row k="Описание в списке серверов">
-              <TextField value={rules.motd || ''} placeholder={cur.name || 'Мой сервер'} busy={saving === 'motd'} onSave={(v) => save({ motd: v }, 'motd')} />
-            </Row>
-            <Row k="Вторая строка описания" sub={free ? 'На бесплатном тарифе занята подписью Millida' : undefined}>
-              <TextField value={rules.motdLine2 || ''} placeholder="—" busy={saving === 'motdLine2' || free} onSave={(v) => save({ motdLine2: v }, 'motdLine2')} />
-            </Row>
-
-            <Cap>Режим игры</Cap>
-            <Row k="Режим">
-              <Seg
-                value={rules.gamemode || 'survival'}
-                busy={saving === 'gamemode'}
-                options={[
-                  ['survival', 'Выживание'],
-                  ['creative', 'Творческий'],
-                  ['adventure', 'Приключение'],
-                ]}
-                onPick={(v) => save({ gamemode: v }, 'gamemode')}
-              />
-            </Row>
-            <Row k="Сложность">
-              <Seg
-                value={rules.difficulty || 'normal'}
-                busy={saving === 'difficulty'}
-                options={[
-                  ['peaceful', 'Мирная'],
-                  ['easy', 'Лёгкая'],
-                  ['normal', 'Норм'],
-                  ['hard', 'Сложная'],
-                ]}
-                onPick={(v) => save({ difficulty: v }, 'difficulty')}
-              />
-            </Row>
-            <Row k="PvP" sub="Драки между игроками">
-              <Toggle on={!!rules.pvp} busy={saving === 'pvp'} onChange={(v) => save({ pvp: v }, 'pvp')} />
-            </Row>
-            <Row k="Сохранять инвентарь" sub="Предметы остаются после смерти">
-              <Toggle on={!!rules.keepInventory} busy={saving === 'keepInventory'} onChange={(v) => save({ keepInventory: v }, 'keepInventory')} />
-            </Row>
-            <Row k="Вечный день" sub="Ночь и фазы луны не наступают">
-              <Toggle on={!!rules.alwaysDay} busy={saving === 'alwaysDay'} onChange={(v) => save({ alwaysDay: v }, 'alwaysDay')} />
-            </Row>
-            <Row k="Гриферство мобов" sub="Крипер ломает блоки, эндермен таскает">
-              <Toggle on={rules.mobGriefing !== false} busy={saving === 'mobGriefing'} onChange={(v) => save({ mobGriefing: v }, 'mobGriefing')} />
-            </Row>
-            <Row k="Хардкор" sub="Одна жизнь на всех">
-              <Toggle on={!!rules.hardcore} busy={saving === 'hardcore'} onChange={(v) => save({ hardcore: v }, 'hardcore')} />
-            </Row>
-            <Row k="Всем режим по умолчанию" sub="Принудительно возвращать режим при входе">
-              <Toggle on={!!rules.forceGamemode} busy={saving === 'forceGamemode'} onChange={(v) => save({ forceGamemode: v }, 'forceGamemode')} />
-            </Row>
-
-            <Cap>Игроки и доступ</Cap>
-            <Row k="Максимум игроков">
-              <NumField
-                value={rules.maxPlayers ?? (server.planMaxPlayers && server.planMaxPlayers > 0 ? server.planMaxPlayers : 20)}
-                min={1}
-                max={maxSlots}
-                busy={saving === 'maxPlayers'}
-                onSave={(v) => save({ maxPlayers: v }, 'maxPlayers')}
-              />
-            </Row>
-            <Row k="Вайтлист" sub="Только приглашённые">
-              <Toggle on={!!rules.whitelist} busy={saving === 'whitelist'} onChange={(v) => save({ whitelist: v }, 'whitelist')} />
-            </Row>
-            <Row k="Лицензия Mojang" sub="online-mode: пускать только по лицензии">
-              <Toggle on={rules.onlineMode !== false} busy={saving === 'onlineMode'} onChange={(v) => save({ onlineMode: v }, 'onlineMode')} />
-            </Row>
-            {rules.onlineMode === false ? (
-              <Row k="Авторизация Millida" sub="Пускать игроков Millida по нику">
-                <Toggle on={rules.millidaAuth === true} busy={saving === 'millidaAuth'} onChange={(v) => save({ millidaAuth: v }, 'millidaAuth')} />
+          <div className="hsx-settings">
+            <div className="card set-group hsx-plate hsx-main-set">
+              <Row k="Название">
+                <ApplyField value={cur.name || ''} label="Сохранить" busy={saving === 'name'} onApply={rename} />
               </Row>
+              <Row k="Режим">
+                <Seg
+                  value={rules.gamemode || 'survival'}
+                  busy={saving === 'gamemode'}
+                  options={[
+                    ['survival', 'Выживание'],
+                    ['creative', 'Творческий'],
+                    ['adventure', 'Приключение'],
+                  ]}
+                  onPick={(v) => save({ gamemode: v }, 'gamemode')}
+                />
+              </Row>
+              <Row k="Сложность">
+                <Seg
+                  value={rules.difficulty || 'normal'}
+                  busy={saving === 'difficulty'}
+                  options={[
+                    ['peaceful', 'Мирная'],
+                    ['easy', 'Лёгкая'],
+                    ['normal', 'Норм'],
+                    ['hard', 'Сложная'],
+                  ]}
+                  onPick={(v) => save({ difficulty: v }, 'difficulty')}
+                />
+              </Row>
+              <Row k="PvP">
+                <Toggle on={!!rules.pvp} busy={saving === 'pvp'} onChange={(v) => save({ pvp: v }, 'pvp')} />
+              </Row>
+              <Row k="Вайтлист" sub="Только приглашённые">
+                <Toggle on={!!rules.whitelist} busy={saving === 'whitelist'} onChange={(v) => save({ whitelist: v }, 'whitelist')} />
+              </Row>
+              <Row k="Максимум игроков">
+                <NumField
+                  value={rules.maxPlayers ?? (server.planMaxPlayers && server.planMaxPlayers > 0 ? server.planMaxPlayers : 20)}
+                  min={1}
+                  max={maxSlots}
+                  busy={saving === 'maxPlayers'}
+                  onSave={(v) => save({ maxPlayers: v }, 'maxPlayers')}
+                />
+              </Row>
+            </div>
+            <button className={'hsx-adv' + (advOpen ? ' open' : '')} aria-expanded={advOpen} onClick={() => setAdvOpen(!advOpen)}>
+              <Icon id="i-settings" />
+              <b>Для опытных</b>
+              <Icon id="i-chev-d" />
+            </button>
+            {advOpen ? (
+              <div className="card set-group host-set-grid hsx-plate">
+                <Cap first>Сервер</Cap>
+                <Row k="Иконка" sub={detail?.iconLocked ? 'На бесплатном — логотип Millida' : 'PNG, 64×64'}>
+                  {cur.icon ? (
+                    <img
+                      src={cur.icon}
+                      alt=""
+                      onError={(e) => {
+                        e.currentTarget.src = '/millida-logo.svg'
+                      }}
+                      style={{ width: 28, height: 28, borderRadius: 6 }}
+                    />
+                  ) : null}
+                  <button className="btn sm secondary" disabled={saving === 'icon' || detail?.iconLocked} onClick={() => void changeIcon()}>
+                    Выбрать
+                  </button>
+                  {cur.icon && !detail?.iconLocked ? (
+                    <button className="btn sm ghost" disabled={saving === 'icon'} onClick={() => void clearIcon()}>
+                      Убрать
+                    </button>
+                  ) : null}
+                </Row>
+                <Row k="Описание в списке серверов">
+                  <TextField value={rules.motd || ''} placeholder={cur.name || 'Мой сервер'} busy={saving === 'motd'} onSave={(v) => save({ motd: v }, 'motd')} />
+                </Row>
+                <Row k="Вторая строка описания" sub={free ? 'На бесплатном — подпись Millida' : undefined}>
+                  <TextField value={rules.motdLine2 || ''} placeholder="—" busy={saving === 'motdLine2' || free} onSave={(v) => save({ motdLine2: v }, 'motdLine2')} />
+                </Row>
+
+                <Cap>Режим игры</Cap>
+                <Row k="Сохранять инвентарь" sub="Предметы остаются после смерти">
+                  <Toggle on={!!rules.keepInventory} busy={saving === 'keepInventory'} onChange={(v) => save({ keepInventory: v }, 'keepInventory')} />
+                </Row>
+                <Row k="Вечный день">
+                  <Toggle on={!!rules.alwaysDay} busy={saving === 'alwaysDay'} onChange={(v) => save({ alwaysDay: v }, 'alwaysDay')} />
+                </Row>
+                <Row k="Мобы ломают блоки">
+                  <Toggle on={rules.mobGriefing !== false} busy={saving === 'mobGriefing'} onChange={(v) => save({ mobGriefing: v }, 'mobGriefing')} />
+                </Row>
+                <Row k="Хардкор" sub="Одна жизнь на всех">
+                  <Toggle on={!!rules.hardcore} busy={saving === 'hardcore'} onChange={(v) => save({ hardcore: v }, 'hardcore')} />
+                </Row>
+                <Row k="Возвращать режим при входе">
+                  <Toggle on={!!rules.forceGamemode} busy={saving === 'forceGamemode'} onChange={(v) => save({ forceGamemode: v }, 'forceGamemode')} />
+                </Row>
+
+                <Cap>Игроки и доступ</Cap>
+                <Row k="Только с лицензией">
+                  <Toggle on={rules.onlineMode !== false} busy={saving === 'onlineMode'} onChange={(v) => save({ onlineMode: v }, 'onlineMode')} />
+                </Row>
+                {rules.onlineMode === false ? (
+                  <Row k="Авторизация Millida" sub="Пускать игроков Millida по нику">
+                    <Toggle on={rules.millidaAuth === true} busy={saving === 'millidaAuth'} onChange={(v) => save({ millidaAuth: v }, 'millidaAuth')} />
+                  </Row>
+                ) : null}
+                <Row k="Подписанный чат" sub="Сообщения с подписью Mojang">
+                  <Toggle
+                    on={rules.enforceSecureProfile !== false}
+                    busy={saving === 'enforceSecureProfile'}
+                    onChange={(v) => save({ enforceSecureProfile: v }, 'enforceSecureProfile')}
+                  />
+                </Row>
+                <Row k="Кик за простой, минут" sub="0 — не кикать">
+                  <NumField value={rules.playerIdleTimeout ?? 0} min={0} max={180} busy={saving === 'playerIdleTimeout'} onSave={(v) => save({ playerIdleTimeout: v }, 'playerIdleTimeout')} />
+                </Row>
+                <Row k="Уровень прав оператора" sub="1–4, стандарт 4">
+                  <NumField value={rules.opPermissionLevel ?? 4} min={1} max={4} width="80px" busy={saving === 'opPermissionLevel'} onSave={(v) => save({ opPermissionLevel: v }, 'opPermissionLevel')} />
+                </Row>
+                <Row k="Уровень прав функций" sub="1–4, стандарт 2">
+                  <NumField value={rules.functionPermissionLevel ?? 2} min={1} max={4} width="80px" busy={saving === 'functionPermissionLevel'} onSave={(v) => save({ functionPermissionLevel: v }, 'functionPermissionLevel')} />
+                </Row>
+                <Row k="Команды видны операторам">
+                  <Toggle on={rules.broadcastConsoleToOps !== false} busy={saving === 'broadcastConsoleToOps'} onChange={(v) => save({ broadcastConsoleToOps: v }, 'broadcastConsoleToOps')} />
+                </Row>
+
+                <Cap>Мир</Cap>
+                <Row k="Тип мира">
+                  <Seg
+                    value={rules.levelType || 'normal'}
+                    busy={saving === 'levelType'}
+                    options={[
+                      ['normal', 'Обычный'],
+                      ['flat', 'Плоский'],
+                      ['large_biomes', 'Большие биомы'],
+                      ['amplified', 'Гористый'],
+                    ]}
+                    onPick={(v) => save({ levelType: v }, 'levelType')}
+                  />
+                </Row>
+                <Row k="Сид мира">
+                  <TextField value={rules.levelSeed || ''} placeholder="случайный" busy={saving === 'levelSeed'} onSave={(v) => save({ levelSeed: v }, 'levelSeed')} />
+                </Row>
+                <Row k="Папка мира">
+                  <TextField value={rules.levelName || ''} placeholder="world" busy={saving === 'levelName'} onSave={(v) => save({ levelName: v }, 'levelName')} />
+                </Row>
+                <Row k="Граница мира, блоков" sub="0 — без ограничения">
+                  <NumField value={rules.worldBorder ?? 0} min={0} max={100000} busy={saving === 'worldBorder'} onSave={(v) => save({ worldBorder: v }, 'worldBorder')} />
+                </Row>
+                <Row k="Ад и Край">
+                  <Toggle on={rules.allowNether !== false} busy={saving === 'allowNether'} onChange={(v) => save({ allowNether: v }, 'allowNether')} />
+                </Row>
+                <Row k="Деревни и постройки">
+                  <Toggle on={rules.generateStructures !== false} busy={saving === 'generateStructures'} onChange={(v) => save({ generateStructures: v }, 'generateStructures')} />
+                </Row>
+                <Row k="Монстры">
+                  <Toggle on={rules.spawnMonsters !== false} busy={saving === 'spawnMonsters'} onChange={(v) => save({ spawnMonsters: v }, 'spawnMonsters')} />
+                </Row>
+                <Row k="Животные">
+                  <Toggle on={rules.spawnAnimals !== false} busy={saving === 'spawnAnimals'} onChange={(v) => save({ spawnAnimals: v }, 'spawnAnimals')} />
+                </Row>
+                <Row k="Жители деревень">
+                  <Toggle on={rules.spawnNpcs !== false} busy={saving === 'spawnNpcs'} onChange={(v) => save({ spawnNpcs: v }, 'spawnNpcs')} />
+                </Row>
+                <Row k="Защита спавна, блоков">
+                  <NumField value={rules.spawnProtection ?? 0} min={0} max={10000} busy={saving === 'spawnProtection'} onSave={(v) => save({ spawnProtection: v }, 'spawnProtection')} />
+                </Row>
+                <Row k="Полёт" sub="Не кикать за полёт">
+                  <Toggle on={!!rules.allowFlight} busy={saving === 'allowFlight'} onChange={(v) => save({ allowFlight: v }, 'allowFlight')} />
+                </Row>
+                <Row k="Командные блоки">
+                  <Toggle on={!!rules.commandBlocks} busy={saving === 'commandBlocks'} onChange={(v) => save({ commandBlocks: v }, 'commandBlocks')} />
+                </Row>
+
+                <Cap>Производительность</Cap>
+                <Row k="Прорисовка, чанков" sub="Сильнее всего грузит сервер">
+                  <NumField value={rules.viewDistance ?? 10} min={3} max={32} busy={saving === 'viewDistance'} onSave={(v) => save({ viewDistance: v }, 'viewDistance')} />
+                </Row>
+                <Row k="Дальность активности, чанков">
+                  <NumField value={rules.simulationDistance ?? 10} min={3} max={32} busy={saving === 'simulationDistance'} onSave={(v) => save({ simulationDistance: v }, 'simulationDistance')} />
+                </Row>
+                <Row k="Видимость сущностей, %">
+                  <NumField value={rules.entityBroadcastRange ?? 100} min={10} max={1000} busy={saving === 'entityBroadcastRange'} onSave={(v) => save({ entityBroadcastRange: v }, 'entityBroadcastRange')} />
+                </Row>
+                <Row k="Сжатие пакетов, байт" sub="-1 — выключить">
+                  <NumField value={rules.networkCompressionThreshold ?? 256} min={-1} max={65536} busy={saving === 'networkCompressionThreshold'} onSave={(v) => save({ networkCompressionThreshold: v }, 'networkCompressionThreshold')} />
+                </Row>
+                <Row k="Сторож зависаний, мс" sub="-1 — выключить">
+                  <NumField value={rules.maxTickTime ?? 60000} min={-1} max={600000} width="130px" busy={saving === 'maxTickTime'} onSave={(v) => save({ maxTickTime: v }, 'maxTickTime')} />
+                </Row>
+                <Row k="Антифлуд, пакетов/с" sub="0 — выключить">
+                  <NumField value={rules.rateLimit ?? 0} min={0} max={10000} busy={saving === 'rateLimit'} onSave={(v) => save({ rateLimit: v }, 'rateLimit')} />
+                </Row>
+                <Row k="Синхронная запись чанков" sub="Надёжнее, но медленнее">
+                  <Toggle on={!!rules.syncChunkWrites} busy={saving === 'syncChunkWrites'} onChange={(v) => save({ syncChunkWrites: v }, 'syncChunkWrites')} />
+                </Row>
+                <Row k="Оптимизированная сеть">
+                  <Toggle on={rules.useNativeTransport !== false} busy={saving === 'useNativeTransport'} onChange={(v) => save({ useNativeTransport: v }, 'useNativeTransport')} />
+                </Row>
+                <Row k="Фантомы только к бессонным" sub="Только Paper">
+                  <Toggle on={!!rules.paperNoPhantoms} busy={saving === 'paperNoPhantoms'} onChange={(v) => save({ paperNoPhantoms: v }, 'paperNoPhantoms')} />
+                </Row>
+                <Row k="Прятать руды от читов" sub="Только Paper">
+                  <Toggle on={!!rules.paperAntiXray} busy={saving === 'paperAntiXray'} onChange={(v) => save({ paperAntiXray: v }, 'paperAntiXray')} />
+                </Row>
+
+                <Cap>Java</Cap>
+                <Row k="Версия Java" sub="Авто — под версию игры">
+                  <Select
+                    value={String(rules.javaVersion || 0)}
+                    options={JAVA_OPTIONS}
+                    width={180}
+                    disabled={saving === 'javaVersion'}
+                    onChange={(v) => save({ javaVersion: Number(v) || undefined }, 'javaVersion')}
+                  />
+                </Row>
+                <Row k="Флаги JVM">
+                  <Seg
+                    value={rules.jvmProfile || 'shared'}
+                    busy={saving === 'jvmProfile'}
+                    options={[
+                      ['shared', 'Общий'],
+                      ['aikar', 'Aikar'],
+                      ['vanilla', 'Без флагов'],
+                    ]}
+                    onPick={(v) => save({ jvmProfile: v }, 'jvmProfile')}
+                  />
+                </Row>
+
+                <Cap>Ресурспак и видимость</Cap>
+                <Row k="Ссылка на ресурспак">
+                  <TextField value={rules.resourcePack || ''} placeholder="https://…" busy={saving === 'resourcePack'} onSave={(v) => save({ resourcePack: v }, 'resourcePack')} />
+                </Row>
+                <Row k="SHA1 ресурспака" sub="Без него клиент качает пак каждый вход">
+                  <TextField value={rules.resourcePackSha1 || ''} placeholder="—" busy={saving === 'resourcePackSha1'} onSave={(v) => save({ resourcePackSha1: v }, 'resourcePackSha1')} />
+                </Row>
+                <Row k="Ресурспак обязателен">
+                  <Toggle on={!!rules.requireResourcePack} busy={saving === 'requireResourcePack'} onChange={(v) => save({ requireResourcePack: v }, 'requireResourcePack')} />
+                </Row>
+                <Row k="Виден в списке серверов">
+                  <Toggle on={rules.enableStatus !== false} busy={saving === 'enableStatus'} onChange={(v) => save({ enableStatus: v }, 'enableStatus')} />
+                </Row>
+                <Row k="Прятать список игроков">
+                  <Toggle on={!!rules.hideOnlinePlayers} busy={saving === 'hideOnlinePlayers'} onChange={(v) => save({ hideOnlinePlayers: v }, 'hideOnlinePlayers')} />
+                </Row>
+
+              </div>
             ) : null}
-            <Row k="Подписанный чат" sub="enforce-secure-profile: сообщения с подписью Mojang">
-              <Toggle
-                on={rules.enforceSecureProfile !== false}
-                busy={saving === 'enforceSecureProfile'}
-                onChange={(v) => save({ enforceSecureProfile: v }, 'enforceSecureProfile')}
-              />
-            </Row>
-            <Row k="Кик за простой, минут" sub="0 — не кикать">
-              <NumField value={rules.playerIdleTimeout ?? 0} min={0} max={180} busy={saving === 'playerIdleTimeout'} onSave={(v) => save({ playerIdleTimeout: v }, 'playerIdleTimeout')} />
-            </Row>
-            <Row k="Уровень прав оператора" sub="1–4, стандарт 4">
-              <NumField value={rules.opPermissionLevel ?? 4} min={1} max={4} width="80px" busy={saving === 'opPermissionLevel'} onSave={(v) => save({ opPermissionLevel: v }, 'opPermissionLevel')} />
-            </Row>
-            <Row k="Уровень прав функций" sub="1–4, стандарт 2">
-              <NumField value={rules.functionPermissionLevel ?? 2} min={1} max={4} width="80px" busy={saving === 'functionPermissionLevel'} onSave={(v) => save({ functionPermissionLevel: v }, 'functionPermissionLevel')} />
-            </Row>
-            <Row k="Команды видны операторам" sub="broadcast-console-to-ops">
-              <Toggle on={rules.broadcastConsoleToOps !== false} busy={saving === 'broadcastConsoleToOps'} onChange={(v) => save({ broadcastConsoleToOps: v }, 'broadcastConsoleToOps')} />
-            </Row>
-
-            <Cap>Мир</Cap>
-            <Row k="Тип мира">
-              <Seg
-                value={rules.levelType || 'normal'}
-                busy={saving === 'levelType'}
-                options={[
-                  ['normal', 'Обычный'],
-                  ['flat', 'Плоский'],
-                  ['large_biomes', 'Большие биомы'],
-                  ['amplified', 'Гористый'],
-                ]}
-                onPick={(v) => save({ levelType: v }, 'levelType')}
-              />
-            </Row>
-            <Row k="Сид мира" sub="Пусто — случайный">
-              <TextField value={rules.levelSeed || ''} placeholder="случайный" busy={saving === 'levelSeed'} onSave={(v) => save({ levelSeed: v }, 'levelSeed')} />
-            </Row>
-            <Row k="Папка мира" sub="level-name: имя каталога с миром">
-              <TextField value={rules.levelName || ''} placeholder="world" busy={saving === 'levelName'} onSave={(v) => save({ levelName: v }, 'levelName')} />
-            </Row>
-            <Row k="Граница мира, блоков" sub="0 — без ограничения">
-              <NumField value={rules.worldBorder ?? 0} min={0} max={100000} busy={saving === 'worldBorder'} onSave={(v) => save({ worldBorder: v }, 'worldBorder')} />
-            </Row>
-            <Row k="Ад и Край">
-              <Toggle on={rules.allowNether !== false} busy={saving === 'allowNether'} onChange={(v) => save({ allowNether: v }, 'allowNether')} />
-            </Row>
-            <Row k="Деревни и постройки" sub="generate-structures">
-              <Toggle on={rules.generateStructures !== false} busy={saving === 'generateStructures'} onChange={(v) => save({ generateStructures: v }, 'generateStructures')} />
-            </Row>
-            <Row k="Монстры">
-              <Toggle on={rules.spawnMonsters !== false} busy={saving === 'spawnMonsters'} onChange={(v) => save({ spawnMonsters: v }, 'spawnMonsters')} />
-            </Row>
-            <Row k="Животные">
-              <Toggle on={rules.spawnAnimals !== false} busy={saving === 'spawnAnimals'} onChange={(v) => save({ spawnAnimals: v }, 'spawnAnimals')} />
-            </Row>
-            <Row k="Жители деревень">
-              <Toggle on={rules.spawnNpcs !== false} busy={saving === 'spawnNpcs'} onChange={(v) => save({ spawnNpcs: v }, 'spawnNpcs')} />
-            </Row>
-            <Row k="Защита спавна" sub="Блоков вокруг точки появления">
-              <NumField value={rules.spawnProtection ?? 0} min={0} max={10000} busy={saving === 'spawnProtection'} onSave={(v) => save({ spawnProtection: v }, 'spawnProtection')} />
-            </Row>
-            <Row k="Полёт" sub="Разрешить моды/плагины полёта">
-              <Toggle on={!!rules.allowFlight} busy={saving === 'allowFlight'} onChange={(v) => save({ allowFlight: v }, 'allowFlight')} />
-            </Row>
-            <Row k="Командные блоки">
-              <Toggle on={!!rules.commandBlocks} busy={saving === 'commandBlocks'} onChange={(v) => save({ commandBlocks: v }, 'commandBlocks')} />
-            </Row>
-
-            <Cap>Производительность</Cap>
-            <Row k="Дальность прорисовки" sub="Чанки, влияет на нагрузку сильнее всего">
-              <NumField value={rules.viewDistance ?? 10} min={3} max={32} busy={saving === 'viewDistance'} onSave={(v) => save({ viewDistance: v }, 'viewDistance')} />
-            </Row>
-            <Row k="Дальность активности" sub="simulation-distance">
-              <NumField value={rules.simulationDistance ?? 10} min={3} max={32} busy={saving === 'simulationDistance'} onSave={(v) => save({ simulationDistance: v }, 'simulationDistance')} />
-            </Row>
-            <Row k="Видимость сущностей, %" sub="entity-broadcast-range-percentage">
-              <NumField value={rules.entityBroadcastRange ?? 100} min={10} max={1000} busy={saving === 'entityBroadcastRange'} onSave={(v) => save({ entityBroadcastRange: v }, 'entityBroadcastRange')} />
-            </Row>
-            <Row k="Сжатие пакетов, байт" sub="-1 — выключить">
-              <NumField value={rules.networkCompressionThreshold ?? 256} min={-1} max={65536} busy={saving === 'networkCompressionThreshold'} onSave={(v) => save({ networkCompressionThreshold: v }, 'networkCompressionThreshold')} />
-            </Row>
-            <Row k="Watchdog, мс" sub="max-tick-time, -1 — выключить">
-              <NumField value={rules.maxTickTime ?? 60000} min={-1} max={600000} width="130px" busy={saving === 'maxTickTime'} onSave={(v) => save({ maxTickTime: v }, 'maxTickTime')} />
-            </Row>
-            <Row k="Антифлуд, пакетов/с" sub="0 — выключить">
-              <NumField value={rules.rateLimit ?? 0} min={0} max={10000} busy={saving === 'rateLimit'} onSave={(v) => save({ rateLimit: v }, 'rateLimit')} />
-            </Row>
-            <Row k="Синхронная запись чанков" sub="Надёжнее при сбое питания, но медленнее">
-              <Toggle on={!!rules.syncChunkWrites} busy={saving === 'syncChunkWrites'} onChange={(v) => save({ syncChunkWrites: v }, 'syncChunkWrites')} />
-            </Row>
-            <Row k="Оптимизированная сеть" sub="use-native-transport">
-              <Toggle on={rules.useNativeTransport !== false} busy={saving === 'useNativeTransport'} onChange={(v) => save({ useNativeTransport: v }, 'useNativeTransport')} />
-            </Row>
-            <Row k="Фантомы только к бессонным" sub="Paper: не трогают тех, кто спит">
-              <Toggle on={!!rules.paperNoPhantoms} busy={saving === 'paperNoPhantoms'} onChange={(v) => save({ paperNoPhantoms: v }, 'paperNoPhantoms')} />
-            </Row>
-            <Row k="Anti-Xray" sub="Paper: прячет руды от читерских клиентов">
-              <Toggle on={!!rules.paperAntiXray} busy={saving === 'paperAntiXray'} onChange={(v) => save({ paperAntiXray: v }, 'paperAntiXray')} />
-            </Row>
-
-            <Cap>Java</Cap>
-            <Row k="Версия Java" sub="Автоматически — подберём под версию игры">
-              <Select
-                value={String(rules.javaVersion || 0)}
-                options={JAVA_OPTIONS}
-                width={180}
-                disabled={saving === 'javaVersion'}
-                onChange={(v) => save({ javaVersion: Number(v) || undefined }, 'javaVersion')}
-              />
-            </Row>
-            <Row k="Флаги JVM" sub="Общий профиль подходит почти всем">
-              <Seg
-                value={rules.jvmProfile || 'shared'}
-                busy={saving === 'jvmProfile'}
-                options={[
-                  ['shared', 'Общий'],
-                  ['aikar', 'Aikar'],
-                  ['vanilla', 'Без флагов'],
-                ]}
-                onPick={(v) => save({ jvmProfile: v }, 'jvmProfile')}
-              />
-            </Row>
-
-            <Cap>Ресурспак и видимость</Cap>
-            <Row k="Ссылка на ресурспак">
-              <TextField value={rules.resourcePack || ''} placeholder="https://…" busy={saving === 'resourcePack'} onSave={(v) => save({ resourcePack: v }, 'resourcePack')} />
-            </Row>
-            <Row k="SHA1 ресурспака" sub="Без него клиент качает пак каждый вход">
-              <TextField value={rules.resourcePackSha1 || ''} placeholder="—" busy={saving === 'resourcePackSha1'} onSave={(v) => save({ resourcePackSha1: v }, 'resourcePackSha1')} />
-            </Row>
-            <Row k="Ресурспак обязателен">
-              <Toggle on={!!rules.requireResourcePack} busy={saving === 'requireResourcePack'} onChange={(v) => save({ requireResourcePack: v }, 'requireResourcePack')} />
-            </Row>
-            <Row k="Отвечать на пинг" sub="enable-status: сервер виден в списке">
-              <Toggle on={rules.enableStatus !== false} busy={saving === 'enableStatus'} onChange={(v) => save({ enableStatus: v }, 'enableStatus')} />
-            </Row>
-            <Row k="Прятать список игроков">
-              <Toggle on={!!rules.hideOnlinePlayers} busy={saving === 'hideOnlinePlayers'} onChange={(v) => save({ hideOnlinePlayers: v }, 'hideOnlinePlayers')} />
-            </Row>
-
             {cur.pendingRestart && cur.pendingRestart.length ? (
-              <p className="faint-note" style={{ marginTop: '14px' }}>
-                Часть изменений применится после перезапуска сервера.
-              </p>
+              <div className="hs-banner">
+                <Icon id="i-restart" />
+                <b>Нужен перезапуск</b>
+                {running ? (
+                  <button className="btn sm secondary" disabled={busyPower} onClick={() => power('/restart', 'Перезапускаем…', 'Перезапуск запущен')}>
+                    Перезапустить
+                  </button>
+                ) : null}
+              </div>
             ) : null}
           </div>
         ) : null}
@@ -1012,6 +1093,7 @@ export function HostingManage({
         ) : null}
 
         {tab === 'world' ? (
+          <>
           <TabWorld
             serverId={server.id}
             running={running}
@@ -1022,6 +1104,46 @@ export function HostingManage({
               onRefreshList()
             }}
           />
+          <div className="card" style={{ padding: '18px', marginTop: '14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '12px' }}>
+              <div className="side-cap" style={{ padding: 0, flex: 1 }}>
+                Резервные копии
+              </div>
+              <button className="btn sm primary" onClick={runBackup}>
+                <Icon id="i-plus" /> Создать копию
+              </button>
+            </div>
+            {backups.length ? (
+              <div className="stack">
+                {backups.map((b) => (
+                  <div className="fr-row" key={b.id}>
+                    <span className="host-ico" style={{ width: 34, height: 34 }}>
+                      <Icon id="i-box2" />
+                    </span>
+                    <span className="fr-body">
+                      <span className="fr-nick">{new Date(b.createdAt).toLocaleString('ru')}</span>
+                      <span className="fr-status">
+                        {b.sizeMb ? gb(b.sizeMb) + ' ГБ' : '—'}
+                        {b.status && b.status.toLowerCase() !== 'ready' ? ' · ' + (BACKUP_ST[b.status.toLowerCase()] || b.status) : ''}
+                        {b.locked ? ' · защищена' : ''}
+                      </span>
+                    </span>
+                    <button className="btn sm secondary" disabled={(b.status || '').toLowerCase() === 'pending'} onClick={() => restoreBackup(b)}>
+                      <Icon id="i-restart" /> Восстановить
+                    </button>
+                    {b.locked ? null : (
+                      <button className="btn sm ghost" aria-label="Удалить копию" data-tip="Удалить копию" onClick={() => deleteBackup(b)}>
+                        <Icon id="i-trash" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <Empty icon="i-box2" text="Копий пока нет" />
+            )}
+          </div>
+          </>
         ) : null}
 
         {tab === 'players' ? (
@@ -1037,34 +1159,37 @@ export function HostingManage({
                     <span className="fr-body">
                       <span className="fr-nick">{p.name}</span>
                     </span>
-                    <button className="btn sm secondary" onClick={() => playerAction(p.name, 'op', 'Выдаём права')}>
-                      <Icon id="i-key" /> OP
-                    </button>
-                    <button className="btn sm secondary" onClick={() => playerAction(p.name, 'creative', 'Творческий для')}>
-                      Творческий
-                    </button>
-                    <button className="btn sm secondary" onClick={() => playerAction(p.name, 'survival', 'Выживание для')}>
-                      Выживание
-                    </button>
-                    <button className="btn sm secondary" onClick={() => playerAction(p.name, 'heal', 'Лечим')}>
-                      Лечить
-                    </button>
-                    <button className="btn sm secondary" onClick={() => playerAction(p.name, 'spawn', 'На спавн')}>
-                      На спавн
-                    </button>
-                    <button className="btn sm secondary" onClick={() => playerAction(p.name, 'kick', 'Кикаем')}>
-                      <Icon id="i-logout" /> Кик
-                    </button>
-                    <button className="btn sm secondary" onClick={() => playerAction(p.name, 'ban', 'Баним')}>
-                      <Icon id="i-shield" /> Бан
-                    </button>
+                    {/* Семь одинаковых серых кнопок сливались в полосу. Теперь: что
+                        сделать с игроком — тихие кнопки словами, наказания — иконками
+                        в конце строки. */}
+                    <span className="hs-row-acts">
+                      <button className="btn sm ghost" onClick={() => playerAction(p.name, 'op', 'Выдаём права')}>
+                        <Icon id="i-key" /> OP
+                      </button>
+                      <button className="btn sm ghost" onClick={() => playerAction(p.name, 'creative', 'Творческий для')}>
+                        Творческий
+                      </button>
+                      <button className="btn sm ghost" onClick={() => playerAction(p.name, 'survival', 'Выживание для')}>
+                        Выживание
+                      </button>
+                      <button className="btn sm ghost" onClick={() => playerAction(p.name, 'heal', 'Лечим')}>
+                        Лечить
+                      </button>
+                      <button className="btn sm ghost" onClick={() => playerAction(p.name, 'spawn', 'На спавн')}>
+                        На спавн
+                      </button>
+                      <button className="btn sm ghost" aria-label="Кикнуть" data-tip="Кикнуть" onClick={() => playerAction(p.name, 'kick', 'Кикаем')}>
+                        <Icon id="i-logout" />
+                      </button>
+                      <button className="btn sm ghost hs-danger-ic" aria-label="Забанить" data-tip="Забанить" onClick={() => playerAction(p.name, 'ban', 'Баним')}>
+                        <Icon id="i-ban" />
+                      </button>
+                    </span>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="faint-note">
-                {running ? 'Пока никто не в игре.' : 'Сервер выключен — запусти, чтобы видеть игроков.'}
-              </p>
+              <Empty icon={running ? 'i-users' : 'i-power'} text={running ? 'Никого нет в игре' : 'Сервер выключен'} />
             )}
 
             <div className="side-cap" style={{ padding: '18px 2px 8px' }}>
@@ -1079,13 +1204,16 @@ export function HostingManage({
                   onKeyDown={(e) => e.key === 'Enter' && void addPlayer()}
                 />
               </div>
-              <button className="btn sm secondary" disabled={!newPlayer.trim()} onClick={() => void addPlayer()}>
+              <button className="btn sm primary" disabled={!newPlayer.trim()} onClick={() => void addPlayer()}>
                 <Icon id="i-plus" /> Добавить
               </button>
             </div>
             {detail?.players && detail.players.length ? (
               <div className="stack" style={{ marginTop: '10px' }}>
-                {detail.players.map((p) => (
+                {detail.players.map((raw) => {
+                  // Роль приходит заглавными (OWNER/ADMIN…); старые записи — строчными.
+                  const p = { ...raw, role: (raw.role || '').toUpperCase() }
+                  return (
                   <div className="fr-row" key={p.id}>
                     <Head nick={p.nickname} size={32} />
                     <span className="fr-body">
@@ -1108,19 +1236,25 @@ export function HostingManage({
                           ]}
                           onChange={(v) => void changeRole(p, v)}
                         />
-                        <button className="btn sm ghost" title={p.banned ? 'Разбанить' : 'Забанить'} onClick={() => void banRoster(p)}>
+                        <button
+                          className="btn sm ghost"
+                          aria-label={p.banned ? 'Разбанить' : 'Забанить'}
+                          data-tip={p.banned ? 'Разбанить' : 'Забанить'}
+                          onClick={() => void banRoster(p)}
+                        >
                           <Icon id={p.banned ? 'i-check' : 'i-ban'} />
                         </button>
-                        <button className="btn sm ghost" title="Убрать" onClick={() => void removeRoster(p)}>
+                        <button className="btn sm ghost" aria-label="Убрать из команды" data-tip="Убрать из команды" onClick={() => void removeRoster(p)}>
                           <Icon id="i-trash" />
                         </button>
                       </>
                     ) : null}
                   </div>
-                ))}
+                  )
+                })}
               </div>
             ) : (
-              <p className="faint-note">Пока никого. Добавь ник — игрок попадёт в вайтлист и получит роль.</p>
+              <Empty icon="i-users" text="Пока никого" />
             )}
           </div>
         ) : null}
@@ -1154,12 +1288,16 @@ export function HostingManage({
                     )}
                   </div>
                 ))
-              ) : (
-                <div className="faint-note">
-                  {running ? 'Подключаемся к консоли сервера…' : 'Сервер выключен — запусти, чтобы видеть живой вывод.'}
-                  <br />
-                  Команды: <code>say привет</code>, <code>time set day</code>, <code>weather clear</code>.
+              ) : running && !hasTauri() ? (
+                <Empty icon="i-monitor" text="Консоль — в приложении" />
+              ) : running ? (
+                <div aria-busy="true">
+                  {[62, 48, 71, 40].map((w, i) => (
+                    <span key={i} className="skel skel-line" style={{ display: 'block', width: w + '%', margin: '6px 0' }}></span>
+                  ))}
                 </div>
+              ) : (
+                <Empty icon="i-power" text="Сервер выключен" />
               )}
             </div>
             <div className="host-console-input">
@@ -1172,11 +1310,17 @@ export function HostingManage({
                   onKeyDown={(e) => e.key === 'Enter' && sendCmd()}
                 />
               </div>
-              <button className="btn sm primary" onClick={sendCmd} disabled={!running}>
+              <button className={'btn sm ' + (running ? 'primary' : 'secondary')} onClick={sendCmd} disabled={!running}>
                 <Icon id="i-arrow-r" /> Отправить
               </button>
             </div>
-            {!running ? <p className="faint-note" style={{ marginTop: '8px' }}>Запусти сервер, чтобы отправлять команды.</p> : null}
+            <div className="hs-chips">
+              {CMD_HINTS.map((c) => (
+                <button key={c} className="hs-chip" onClick={() => setCmd(c)}>
+                  <code>{c}</code>
+                </button>
+              ))}
+            </div>
           </div>
         ) : null}
 
@@ -1184,49 +1328,15 @@ export function HostingManage({
           <TabFiles serverId={server.id} full={cur.planFullAccess !== false} onTariff={() => setTab('plan')} />
         ) : null}
 
-        {tab === 'backups' ? (
-          <div className="card" style={{ padding: '18px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '12px' }}>
-              <div className="side-cap" style={{ padding: 0, flex: 1 }}>
-                Резервные копии
-              </div>
-              <button className="btn sm primary" onClick={runBackup}>
-                <Icon id="i-plus" /> Создать копию
-              </button>
-            </div>
-            {backups.length ? (
-              <div className="stack">
-                {backups.map((b) => (
-                  <div className="fr-row" key={b.id}>
-                    <span className="host-ico" style={{ width: 34, height: 34 }}>
-                      <Icon id="i-box2" />
-                    </span>
-                    <span className="fr-body">
-                      <span className="fr-nick">{new Date(b.createdAt).toLocaleString('ru')}</span>
-                      <span className="fr-status">
-                        {b.sizeMb ? gb(b.sizeMb) + ' ГБ' : '—'}
-                        {b.status && b.status !== 'ready' ? ' · ' + (BACKUP_ST[b.status] || b.status) : ''}
-                        {b.locked ? ' · защищена' : ''}
-                      </span>
-                    </span>
-                    <button className="btn sm secondary" disabled={b.status === 'pending'} onClick={() => restoreBackup(b)}>
-                      <Icon id="i-restart" /> Восстановить
-                    </button>
-                    {b.locked ? null : (
-                      <button className="btn sm secondary" onClick={() => deleteBackup(b)}>
-                        <Icon id="i-trash" /> Удалить
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="faint-note">Копий пока нет. Создай первую — вернёшь мир в один клик.</p>
-            )}
-          </div>
-        ) : null}
 
-        {tab === 'schedule' ? <TabSchedule serverId={server.id} /> : null}
+        {tab === 'schedule' ? (
+          <>
+            <TabSchedule serverId={server.id} />
+            <div style={{ marginTop: '14px' }}>
+              <Journal serverId={server.id} />
+            </div>
+          </>
+        ) : null}
 
         {tab === 'network' ? (
           <TabNetwork
@@ -1234,6 +1344,8 @@ export function HostingManage({
             slug={cur.slug || ''}
             address={cur.address || ''}
             customDomain={detail?.customDomain ?? null}
+            full={cur.planFullAccess !== false}
+            onTariff={() => setTab('plan')}
             onChanged={() => {
               reload()
               onRefreshList()

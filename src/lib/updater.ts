@@ -9,6 +9,7 @@ import {
   updateFallbackStage,
   type FallbackUpdate,
 } from '../ipc/commands'
+import { readPref } from './prefs'
 import { showToast } from '../state/ui'
 import { useUpdate } from '../state/update'
 import { rememberNotes } from '../state/whatsNew'
@@ -94,7 +95,15 @@ function markPluginFailed(version: string) {
   } catch {}
 }
 
+/// The plugin reads one endpoint baked into the build, so a tester cannot be
+/// pointed at the testing manifest through it. The core's own channel reads both
+/// manifests and verifies each with the same key, so testers go that way.
+export function betaChannel(): boolean {
+  return readPref('m-beta', '') === '1'
+}
+
 async function pluginGaveUp(): Promise<boolean> {
+  if (betaChannel()) return true
   let target: string | null = null
   try {
     target = localStorage.getItem(FAILED_KEY)

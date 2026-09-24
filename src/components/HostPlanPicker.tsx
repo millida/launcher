@@ -4,8 +4,10 @@ import { WALLET_URL, api, openExt } from '../lib/api'
 import { track } from '../lib/telemetry'
 import { getMillidaAccount } from '../state/accounts'
 import { showToast } from '../state/ui'
+import { uiConfirm } from '../state/confirm'
 import { backdropClose } from '../lib/dismiss'
 import { mirrorAsset } from '../lib/api'
+import { showReward } from './reward/RewardReveal'
 
 export interface HostPlan {
   code: string
@@ -13,10 +15,14 @@ export interface HostPlan {
   tagline?: string
   ramMb?: number
   maxPlayers?: number
+  // У платных тарифов maxPlayers = 0 (слоты не режутся), комфортный онлайн
+  // отдаётся отдельным числом.
+  playersComfort?: number
   diskMb?: number
   cpuCores?: number
   priceKopecks?: number
   priceYearKopecks?: number
+  featured?: boolean
 }
 
 const PLAY_KINDS: [string, string, string][] = [
@@ -28,6 +34,10 @@ const PLAY_KINDS: [string, string, string][] = [
 
 const gb = (mb?: number) => ((mb || 0) / 1024).toFixed((mb || 0) % 1024 === 0 ? 0 : 1).replace('.', ',')
 const rub = (k?: number) => Math.round((k || 0) / 100).toLocaleString('ru-RU')
+
+/** Свой сервер создан — большой миг награды. */
+const serverBorn = (sub: string) =>
+  showReward({ items: [{ name: 'Сервер', icon: 'server' }], tone: 'var(--m-accent)', kicker: 'Свой сервер', title: 'Сервер создаётся', sub })
 
 export interface CurseMap {
   id: number
@@ -74,14 +84,20 @@ export function HostPlanPicker({
   mode,
   serverId,
   currentCode,
+  focus,
   freeServer,
   onClose,
   onDone,
   onOpenServer,
+  then,
 }: {
   mode: 'create' | 'upgrade'
+  /** Что поставим на новый сервер после создания («На сервер» из каталога). */
+  then?: string
   serverId?: string
   currentCode?: string | null
+  // С какой дороги пришли с первого экрана: зелёная кнопка встаёт на тот тариф.
+  focus?: 'free' | 'paid'
   freeServer?: { id: string; name?: string } | null
   onClose: () => void
   onDone: () => void
@@ -141,6 +157,17 @@ export function HostPlanPicker({
   const pick = async (p: HostPlan) => {
     if (busy) return
     const isFree = !p.priceKopecks
+    // Платный тариф списывается с кошелька сразу — раньше без единого шага
+    // подтверждения (аудит 22.09.2026, docs/audit-2026-09-22/hosting-settings.md).
+    if (
+      !isFree &&
+      !(await uiConfirm(rub(p.priceKopecks) + ' ₽ в месяц спишем с кошелька Millida.', {
+        title: 'Тариф «' + p.name + '»',
+        confirmLabel: 'Оплатить ' + rub(p.priceKopecks) + ' ₽',
+        danger: false,
+      }))
+    )
+      return
     setBusy(p.code)
     track('store_open', { where: mode === 'create' ? 'hosting_create' : 'hosting_plan', plan: p.code })
     try {
@@ -167,16 +194,16 @@ export function HostPlanPicker({
             method: 'POST',
             body: JSON.stringify({ projectId: String(mapPick.id), source: 'curseforge' }),
           })
-          showToast('Сервер с картой «' + mapPick.name + '» создаётся')
+          serverBorn('С картой «' + mapPick.name + '»')
         } else {
-          showToast('Сервер создаётся — появится в списке через минуту')
+          serverBorn('Появится в списке через минуту')
         }
       } else {
         await api('/hosting/servers/' + serverId + '/plan', {
           method: 'POST',
           body: JSON.stringify({ code: p.code, period: 'month' }),
         })
-        showToast('Тариф изменён на «' + p.name + '»')
+        showReward({ level: 'mid', items: [{ name: p.name, icon: 'server' }], title: 'Тариф изменён', sub: '«' + p.name + '»' })
       }
       onDone()
       onClose()
@@ -186,7 +213,9 @@ export function HostPlanPicker({
         showToast('Не хватает средств на балансе Millida — пополни и повтори', 'error')
         openExt(WALLET_URL)
       } else {
-        showToast('Не получилось: ' + msg, 'error')
+        // Сырой текст ошибки — в лог, игроку — фраза.
+        console.error('[hosting] plan pick', msg)
+        showToast('Не получилось — попробуй ещё раз', 'error')
       }
     } finally {
       setBusy('')
@@ -199,17 +228,13 @@ export function HostPlanPicker({
       {...backdropClose(onClose)}
     >
       <div className="modal mw-lg">
-        <h2>{mode === 'create' ? 'Новый сервер' : 'Улучшить тариф'}</h2>
-        <div className="sub">
-          {mode === 'create'
-            ? 'Выбери тариф — бесплатный запускается сразу, платный даёт больше памяти и не засыпает.'
-            : 'Больше памяти и слотов, без сна. Списывается с баланса Millida.'}
-        </div>
+        <h2>{mode === 'create' ? 'Новый сервер' : 'Сменить тариф'}</h2>
+        {mode === 'create' && then ? <span className="sub hpp-then">Потом поставим «{then}»</span> : null}
 
         {mode === 'create' ? (
           <>
             <div className="field" style={{ marginBottom: '12px' }}>
-              <label>Название сервера (необязательно)</label>
+              <label>Название</label>
               <div className="input">
                 <input
                   value={name}
@@ -218,11 +243,11 @@ export function HostPlanPicker({
                   maxLength={40}
                 />
               </div>
-              <div className="faint-note" style={{ marginTop: '6px', fontSize: '12px' }}>
-                {autoAddress
-                  ? 'Оставь пустым — сервер будет называться «' + ownNick + '», адрес ' + autoAddress
-                  : 'Оставь пустым — придумаем название и адрес сами'}
-              </div>
+              {autoAddress ? (
+                <div className="faint-note hs-addr" style={{ marginTop: '6px', fontSize: '12px' }}>
+                  <Icon id="i-link" /> {autoAddress}
+                </div>
+              ) : null}
             </div>
             <div className="field" style={{ marginBottom: '16px' }}>
               <label>Во что играем</label>
@@ -255,11 +280,17 @@ export function HostPlanPicker({
                   />
                 </div>
                 {mapErr ? (
-                  <p className="faint-note" style={{ color: 'var(--danger)' }}>{mapErr}</p>
+                  <p className="faint-note" style={{ color: 'var(--danger)' }} data-err={mapErr}>
+                    Каталог карт не ответил
+                  </p>
                 ) : maps === null ? (
-                  <p className="faint-note">Ищем карты…</p>
+                  <div style={{ display: 'grid', gap: '8px' }} aria-busy="true">
+                    {[0, 1, 2].map((i) => (
+                      <span key={i} className="skel" style={{ display: 'block', height: '48px' }}></span>
+                    ))}
+                  </div>
                 ) : maps.length === 0 ? (
-                  <p className="faint-note">Ничего не нашлось — попробуй другое название</p>
+                  <p className="faint-note">Ничего не нашлось</p>
                 ) : (
                   <div style={{ display: 'grid', gap: '8px', maxHeight: '230px', overflowY: 'auto' }}>
                     {maps.map((m) => (
@@ -282,21 +313,15 @@ export function HostPlanPicker({
                     ))}
                   </div>
                 )}
-                <p className="faint-note" style={{ marginTop: '8px' }}>
-                  Версия сервера подстроится под карту автоматически, и мир развернётся при первом запуске.
-                </p>
               </div>
             ) : null}
 
             {freeServer ? (
               <div className="field" style={{ marginBottom: '16px' }}>
-                <p className="faint-note">
-                  Бесплатный сервер у тебя уже есть — «{freeServer.name || 'без названия'}», он один на аккаунт.
-                  Карту можно поменять прямо на нём, а второй сервер живёт на платном тарифе.
-                </p>
+                <p className="faint-note">Бесплатный сервер уже есть — один на аккаунт</p>
                 {onOpenServer ? (
                   <button
-                    className="btn sm ghost"
+                    className="btn sm secondary"
                     style={{ marginTop: '8px' }}
                     onClick={() => {
                       onOpenServer(freeServer.id)
@@ -335,8 +360,22 @@ export function HostPlanPicker({
               ))}
             </>
           ) : (
-            plans.map((p) => {
+            plans.map((p, _i, all) => {
+              // Одна зелёная кнопка на окно: первый доступный тариф (бесплатный,
+              // если он ещё свободен). Девять зелёных подряд читались стеной.
+              const free0 = (x: HostPlan) => !x.priceKopecks
               const free = !p.priceKopecks
+              const taken = (x: HostPlan) =>
+                (currentCode && x.code === currentCode) || (mode === 'create' && free0(x) && !!freeServer)
+              const open = all.filter((x) => !taken(x))
+              // Пришли с платной дороги — зелёная кнопка на том, что берут чаще
+              // всего (featured в /hosting/plans), иначе на самом дешёвом платном.
+              const mainCode =
+                focus === 'paid'
+                  ? (open.find((x) => !free0(x) && x.featured) || open.find((x) => !free0(x)) || open[0])?.code
+                  : focus === 'free'
+                    ? (open.find(free0) || open[0])?.code
+                    : open[0]?.code
               const isCur = currentCode && p.code === currentCode
               const freeBlocked = mode === 'create' && free && !!freeServer
               const needMap = mode === 'create' && playKind === 'map' && !mapPick
@@ -348,14 +387,18 @@ export function HostPlanPicker({
                       <span className="plan-price">{free ? 'Бесплатно' : rub(p.priceKopecks) + ' ₽/мес'}</span>
                     )}
                   </div>
-                  {p.tagline ? <div className="plan-tag">{p.tagline}</div> : null}
+                  {p.featured ? <div className="plan-pick">Берут чаще всего</div> : p.tagline ? <div className="plan-tag">{p.tagline}</div> : null}
                   <div className="plan-specs">
                     {p.ramMb ? <span><Icon id="i-monitor" /> {gb(p.ramMb)} ГБ</span> : null}
-                    {p.maxPlayers ? <span><Icon id="i-users" /> {p.maxPlayers} слотов</span> : null}
+                    {p.maxPlayers || p.playersComfort ? (
+                      <span>
+                        <Icon id="i-users" /> {p.maxPlayers ? p.maxPlayers : 'до ' + p.playersComfort} игроков
+                      </span>
+                    ) : null}
                     {p.diskMb ? <span><Icon id="i-box" /> {gb(p.diskMb)} ГБ диск</span> : null}
                   </div>
                   <button
-                    className={'btn sm ' + (isCur ? 'ghost' : 'primary')}
+                    className={'btn sm ' + (isCur ? 'ghost' : p.code === mainCode ? 'primary' : 'secondary')}
                     style={{ width: '100%', marginTop: '10px' }}
                     disabled={!!isCur || busy === p.code || freeBlocked || needMap}
                     onClick={() => void pick(p)}

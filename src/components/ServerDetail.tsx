@@ -9,6 +9,7 @@ import { useServerDetail } from '../state/serverDetail'
 import { copyText } from '../lib/clipboard'
 import { serverVersions, versionFits } from '../lib/mcVersion'
 import { backdropClose } from '../lib/dismiss'
+import { versionRange } from './ServerRow'
 
 export function ServerDetail() {
   const { sv, close } = useServerDetail()
@@ -59,7 +60,13 @@ export function ServerDetail() {
       style={{ zIndex: 190 }}
       {...backdropClose(close)}
     >
-      <div className="modal mw-md srv-detail" style={{ padding: 0, overflow: 'hidden' }}>
+      <div
+        className="modal mw-md srv-detail"
+        style={{ padding: 0, overflow: 'hidden' }}
+        data-section="server_detail"
+        data-kind="server"
+        data-id={sv.slug || sv.ip || undefined}
+      >
         <div className="srv-detail-banner">
           {sv.banner ? (
             <img src={sv.banner} alt="" onError={(e) => e.currentTarget.remove()} />
@@ -72,7 +79,7 @@ export function ServerDetail() {
               ))}
             </span>
           ) : null}
-          <button className="srv-detail-close" data-sound="close" onClick={close} title="Закрыть">
+          <button className="srv-detail-close" data-sound="close" data-track="close" onClick={close} aria-label="Закрыть">
             <Icon id="i-x" />
           </button>
         </div>
@@ -93,7 +100,8 @@ export function ServerDetail() {
                 {sv.lic === 'CRACKED' ? <span className="pill">Без лицензии</span> : null}
                 {on ? (
                   <span className="pill acc">
-                    <span className="dot"></span> {fmtN(sv.online)} онлайн
+                    <span className="dot"></span> {sv.onlineApprox ? '~' : ''}
+                    {fmtN(sv.online)} онлайн
                   </span>
                 ) : (
                   <span className="pill">офлайн</span>
@@ -108,45 +116,38 @@ export function ServerDetail() {
             {sv.versions && sv.versions.length ? (
               <div className="srv-detail-fact">
                 <Icon id="i-blocks" />
-                <span>Версии</span>
-                <b>{sv.versions.join(', ')}</b>
+                <b>{versionRange(sv.versions)}</b>
               </div>
             ) : null}
             {sv.ip ? (
-              <button className="srv-detail-fact as-btn" onClick={copyIp} title="Скопировать адрес">
-                <Icon id="i-copy" />
-                <span>Адрес</span>
+              <button className="srv-detail-fact as-btn" data-track="copy_ip" onClick={copyIp} aria-label="Скопировать адрес">
+                <Icon id="i-link" />
                 <b>{sv.ip}</b>
+                <Icon id="i-copy" />
               </button>
             ) : null}
           </div>
 
           {wanted.length && !hasBuildForServer ? (
-            <p className="faint-note" style={{ marginTop: '14px' }}>
-              Сборки под {wanted.join(', ')} нет — сервер не пустит. Нажми «Сборка под сервер», версию подставим сами.
+            <p className="cat-warn">
+              <Icon id="i-alert" />
+              Нет сборки под {versionRange(wanted)}
             </p>
           ) : null}
 
           <div style={{ display: 'flex', gap: '10px', marginTop: '18px', flexWrap: 'wrap' }}>
             {sv.ip ? (
-              <button className="btn md primary" style={{ flex: 1 }} disabled={!on || busy.current} onClick={join}>
+              <button className="btn md primary" style={{ flex: 1 }} disabled={!on || busy.current} data-track="join" onClick={join}>
                 <Icon id="i-play" /> {label}
               </button>
             ) : (
               <span className="pill" style={{ flex: 1, justifyContent: 'center', display: 'flex', alignItems: 'center' }}>
-                Владелец не указал адрес
+                Вход по заявке
               </span>
             )}
-            <button
-              className="btn md secondary"
-              onClick={makeBuild}
-              title={serverVersion ? 'Создать сборку ' + serverVersion : 'Создать сборку'}
-            >
+            <button className="btn md secondary" data-track="server_make_build" onClick={makeBuild}>
               <Icon id="i-plus" />
-              {hasBuildForServer ? 'Ещё сборка' : 'Сборка под сервер'}
-            </button>
-            <button className="btn md secondary" onClick={close}>
-              Закрыть
+              {hasBuildForServer ? 'Ещё сборка' : 'Сборка ' + (serverVersion || 'под сервер')}
             </button>
           </div>
         </div>

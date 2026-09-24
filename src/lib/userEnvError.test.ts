@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { isUserEnvironmentError } from './userEnvError'
+import { failedHost, isUserEnvironmentError } from './userEnvError'
 
 const cases: Array<[string, string, boolean]> = [
   [
@@ -57,5 +57,28 @@ const cases: Array<[string, string, boolean]> = [
 for (const [why, text, expected] of cases) {
   test(why, () => {
     expect(isUserEnvironmentError(text)).toBe(expected)
+  })
+}
+
+// Текст ошибки запуска -> хост для телеметрии. Адрес стоит в конце и
+// обрезается вместе с текстом, а без хоста не понять, кто рвёт соединение.
+const hosts: Array<[string, string, string | null]> = [
+  [
+    'обрыв на зеркале: адрес в самом конце, после длинной причины',
+    'нет связи (Удаленный хост принудительно разорвал существующее подключение. (os error 10054) — соединение не установилось: проверь брандмауэр, VPN и антивирус) — https://api.millida.net/v2/launcher/dl?url=https%3A%2F%2Fmeta.fabricmc.net',
+    'api.millida.net',
+  ],
+  [
+    'загрузка файла: адрес в начале строки',
+    'https://piston-data.mojang.com/v1/objects/37fd/client.jar: нет связи (operation timed out)',
+    'piston-data.mojang.com',
+  ],
+  ['регистр адреса не плодит разные хосты', 'нет связи — HTTPS://Meta.FabricMC.net/v2/versions/loader', 'meta.fabricmc.net'],
+  ['ошибка без адреса не придумывает хост', 'Запуск Java: Отказано в доступе. (os error 5)', null],
+]
+
+for (const [why, text, expected] of hosts) {
+  test(why, () => {
+    expect(failedHost(new Error(text))).toBe(expected)
   })
 }

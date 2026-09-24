@@ -46,13 +46,25 @@ export const useMcVersionList = create<State>((set) => ({
   },
 }))
 
+// В браузере (предпросмотр) — тот же манифест Mojang напрямую, что ядро
+// читает в приложении; не ответил — короткий демо-список.
+const MANIFEST = 'https://piston-meta.mojang.com/mc/game/version_manifest_v2.json'
+function browserManifest(): Promise<McVersion[]> {
+  return fetch(MANIFEST)
+    .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+    .then((m: { versions?: { id: string; type: string }[] }) =>
+      (m.versions || []).map((v) => ({ id: v.id, kind: v.type || 'release' })),
+    )
+    .catch(() => DEMO)
+}
+
 let pending: Promise<void> | null = null
 
 // One fetch feeds every picker: the manifest is the same for all of them, and a
 // second request only bought a second way to show a different list.
 export function ensureMcVersionList(): Promise<void> {
   if (pending) return pending
-  pending = (hasTauri() ? listVersionsTyped() : Promise.resolve(DEMO))
+  pending = (hasTauri() ? listVersionsTyped() : browserManifest())
     .then((list) => {
       if (!Array.isArray(list) || !list.length) throw new Error('Mojang вернул пустой список версий')
       useMcVersionList.setState({ list, error: '' })

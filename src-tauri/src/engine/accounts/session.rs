@@ -206,8 +206,31 @@ pub async fn resolve_launch_auth(app: &AppHandle, args: Option<AuthArgs>) -> Res
     }
 }
 
+/// Longest a launch waits for the game session before starting offline, as it
+/// already does when the API refuses. A dead connection used to spend three
+/// full connect timeouts here before the window opened.
+const SESSION_BUDGET: Duration = Duration::from_secs(12);
+
 /// Our own Yggdrasil session, issued per launch and handed to authlib-injector.
+/// The request runs as its own task: dropping it on the budget could cut a token
+/// refresh after the server had already rotated the pair, and the reused
+/// refresh token then signs the player out.
 async fn millida_launch_auth(app: &AppHandle) -> ResolvedAuth {
+    let issued = tauri::async_runtime::spawn(issue_game_session());
+    let last = match tokio::time::timeout(SESSION_BUDGET, issued).await {
+        Ok(Ok(Ok(auth))) => return auth,
+        Ok(Ok(Err(e))) => e,
+        Ok(Err(e)) => e.to_string(),
+        Err(_) => format!("сервер не ответил за {} с", SESSION_BUDGET.as_secs()),
+    };
+    crate::engine::warn(
+        app,
+        &format!("Вход Millida не выдан, играем офлайн (Multiplayer и Realms будут недоступны): {}", last),
+    );
+    ResolvedAuth { auth: Auth::default(), nick: None }
+}
+
+async fn issue_game_session() -> Result<ResolvedAuth, String> {
     let mut last = String::new();
     for attempt in 0..SESSION_ATTEMPTS {
         let body = Some(serde_json::json!({}));
@@ -215,7 +238,7 @@ async fn millida_launch_auth(app: &AppHandle) -> ResolvedAuth {
             Ok(v) => {
                 let token = v["accessToken"].as_str().unwrap_or_default().to_string();
                 if !token.is_empty() {
-                    return ResolvedAuth {
+                    return Ok(ResolvedAuth {
                         auth: Auth {
                             token,
                             uuid: v["uuid"].as_str().unwrap_or_default().to_string(),
@@ -223,7 +246,7 @@ async fn millida_launch_auth(app: &AppHandle) -> ResolvedAuth {
                             yggdrasil: format!("{}/yggdrasil", MILLIDA_API),
                         },
                         nick: v["name"].as_str().filter(|s| !s.is_empty()).map(|s| s.to_string()),
-                    };
+                    });
                 }
                 last = "в ответе нет accessToken".into();
             }
@@ -237,11 +260,7 @@ async fn millida_launch_auth(app: &AppHandle) -> ResolvedAuth {
             tokio::time::sleep(Duration::from_millis(700 * (attempt as u64 + 1))).await;
         }
     }
-    crate::engine::warn(
-        app,
-        &format!("Вход Millida не выдан, играем офлайн (Multiplayer и Realms будут недоступны): {}", last),
-    );
-    ResolvedAuth { auth: Auth::default(), nick: None }
+    Err(last)
 }
 
 #[cfg(test)]

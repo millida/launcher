@@ -62,24 +62,46 @@ fn forge_builds(all: &serde_json::Value, vid: &str) -> Vec<String> {
     b
 }
 
-/// NeoForge versioning: MC "1.A.B" -> prefix "A.B.", MC "1.A" -> "A.0."
-/// (MC 1.21.1 -> 21.1.x, MC 1.21 -> 21.0.x). Newest first.
-fn neoforge_builds(list: &serde_json::Value, vid: &str) -> Vec<String> {
+/// A prerelease build is marked by a qualifier ("21.1.0-beta",
+/// "26.1.0.0-alpha.1+snapshot-1"); release numbers carry digits only.
+pub(crate) fn neoforge_prerelease(v: &str) -> bool {
+    v.contains('-')
+}
+
+/// NeoForge tracks the Minecraft version: "1.A.B" -> "A.B.", "1.A" -> "A.0."
+/// (MC 1.21.1 -> 21.1.x, MC 1.21 -> 21.0.x). Year-based releases keep their own
+/// number and gain a patch element instead (MC 26.2 -> 26.2.0.x), so the longer
+/// prefix is tried first and the plain one covers a future patch layout.
+fn neoforge_prefixes(vid: &str) -> Vec<String> {
     let parts: Vec<&str> = vid.split('.').collect();
-    let prefix = format!("{}.{}.", parts.get(1).copied().unwrap_or(""), parts.get(2).copied().unwrap_or("0"));
-    let mut cands: Vec<String> = list["versions"]
+    if parts.first() == Some(&"1") {
+        let a = parts.get(1).copied().unwrap_or("");
+        let b = parts.get(2).copied().unwrap_or("0");
+        return vec![format!("{}.{}.", a, b)];
+    }
+    match parts.len() {
+        2 => vec![format!("{}.0.", vid), format!("{}.", vid)],
+        _ => vec![format!("{}.", vid)],
+    }
+}
+
+/// Builds for one Minecraft version, newest first, prereleases included.
+pub(crate) fn neoforge_builds(list: &serde_json::Value, vid: &str) -> Vec<String> {
+    let all: Vec<&str> = list["versions"]
         .as_array()
-        .map(|a| {
-            a.iter()
-                .filter_map(|v| v.as_str())
-                .filter(|v| v.starts_with(&prefix))
-                .map(String::from)
-                .collect()
-        })
+        .map(|a| a.iter().filter_map(|v| v.as_str()).collect())
         .unwrap_or_default();
-    cands.sort_by_key(|v| num_key(v));
-    cands.reverse();
-    cands
+    for prefix in neoforge_prefixes(vid) {
+        let mut cands: Vec<String> =
+            all.iter().filter(|v| v.starts_with(&prefix)).map(|v| v.to_string()).collect();
+        if cands.is_empty() {
+            continue;
+        }
+        cands.sort_by_key(|v| num_key(v));
+        cands.reverse();
+        return cands;
+    }
+    vec![]
 }
 
 async fn forge(vid: &str, cache_dir: &std::path::Path) -> Result<Vec<LoaderBuild>, String> {
@@ -124,11 +146,11 @@ async fn neoforge(vid: &str, cache_dir: &std::path::Path) -> Result<Vec<LoaderBu
     if cands.is_empty() {
         return Err(format!("NeoForge для {} не найден", vid));
     }
-    let rec = cands.iter().find(|v| !v.contains("beta")).cloned();
+    let rec = cands.iter().find(|v| !neoforge_prerelease(v)).or(cands.first()).cloned();
     Ok(cands
         .into_iter()
         .map(|v| LoaderBuild {
-            stable: !v.contains("beta"),
+            stable: !neoforge_prerelease(&v),
             recommended: rec.as_deref() == Some(v.as_str()),
             version: v,
         })
@@ -191,6 +213,41 @@ mod tests {
             neoforge_builds(&list, "1.21"),
             vec!["21.0.167"],
             "MC без третьего числа означает ветку x.0.y"
+        );
+    }
+
+    /// вход -> вердикт: Minecraft перешёл на номера по годам ("26.2"), NeoForge
+    /// повторяет их как "26.2.0.<сборка>". Старое правило «отбросить 1.» давало
+    /// префикс "2.0.", список выходил пустым и установка падала с «NeoForge для
+    /// этой версии не найден» на любой выбранной сборке.
+    #[test]
+    fn neoforge_builds_follow_year_based_mc_versions() {
+        let list = json!({ "versions": [
+            "21.1.248", "26.1.0.7", "26.1.2.9", "26.1.2.109", "26.2.0.9", "26.2.0.83",
+            "26.2.0.12-beta", "26.3.0.1",
+        ]});
+        assert_eq!(
+            neoforge_builds(&list, "26.2"),
+            vec!["26.2.0.83", "26.2.0.12-beta", "26.2.0.9"],
+            "у версии MC по годам сборки берутся из ветки 26.2.0.x"
+        );
+        assert_eq!(
+            neoforge_builds(&list, "26.1.2"),
+            vec!["26.1.2.109", "26.1.2.9"],
+            "патч-версия MC по годам берёт свою ветку, а не соседнюю 26.1.0.x"
+        );
+        assert_eq!(
+            neoforge_builds(&list, "26.1"),
+            vec!["26.1.0.7"],
+            "26.1 означает ветку 26.1.0.x и не подхватывает сборки версии 26.1.2"
+        );
+        assert!(
+            neoforge_builds(&list, "26.4").is_empty(),
+            "версия без сборок не должна подхватывать соседнюю ветку"
+        );
+        assert!(
+            neoforge_prerelease("26.2.0.12-beta") && !neoforge_prerelease("26.2.0.83"),
+            "квалификатор в номере отличает нестабильную сборку от релиза"
         );
     }
 }

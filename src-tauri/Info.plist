@@ -7,5 +7,7 @@
        attributes a child process to the launcher bundle) can reach the mic. -->
   <key>NSMicrophoneUsageDescription</key>
   <string>Микрофон нужен для голосовых сообщений в чате лаунчера и для голосового чата в игре.</string>
+  <key>NSCameraUsageDescription</key>
+  <string>Камера нужна только для видео в звонках лаунчера и включается по нажатию.</string>
 </dict>
 </plist>

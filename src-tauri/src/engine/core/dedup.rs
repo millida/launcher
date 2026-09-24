@@ -93,7 +93,16 @@ fn link_over(object: &Path, dest: &Path) -> bool {
 /// its digest, so linking it is the same file the CDN would have sent.
 pub(crate) fn link_from_store(sha1: &str, dest: &Path, size: Option<u64>) -> bool {
     let Some(object) = object_path(sha1) else { return false };
-    let Ok(meta) = std::fs::metadata(&object) else { return false };
+    link_object(&object, sha1, dest, size)
+}
+
+/// The object's name is only a claim: every build's copy is the same inode, so
+/// anything that ever wrote through one of them (an override copied over a
+/// linked mod, a hand edit) changed the object too. Its bytes are hashed again
+/// before they go into another build, and a mismatching object is dropped from
+/// the store so the file is downloaded and verified afresh.
+fn link_object(object: &Path, sha1: &str, dest: &Path, size: Option<u64>) -> bool {
+    let Ok(meta) = std::fs::metadata(object) else { return false };
     if !meta.is_file() || meta.len() < MIN_SHARE_BYTES {
         return false;
     }
@@ -102,7 +111,15 @@ pub(crate) fn link_from_store(sha1: &str, dest: &Path, size: Option<u64>) -> boo
             return false;
         }
     }
-    link_over(&object, dest)
+    match file_sha1(object) {
+        Some(got) if got.eq_ignore_ascii_case(sha1) => {}
+        Some(_) => {
+            let _ = std::fs::remove_file(object);
+            return false;
+        }
+        None => return false,
+    }
+    link_over(object, dest)
 }
 
 /// Puts a freshly downloaded file into the store. The object is a hard link to
@@ -268,6 +285,63 @@ mod tests {
                  build's edit into every other build that has the same file",
             );
         }
+    }
+
+    fn big(fill: u8) -> Vec<u8> {
+        vec![fill; MIN_SHARE_BYTES as usize + 1]
+    }
+
+    /// CORE-1: an object whose bytes no longer match its name must never be
+    /// linked into another build — it is removed, and the caller downloads.
+    #[test]
+    fn a_tampered_object_is_not_linked_and_leaves_the_store() {
+        let dir = tmp("tampered");
+        let genuine = big(1);
+        let sum = {
+            let p = dir.join("genuine.bin");
+            std::fs::write(&p, &genuine).unwrap();
+            file_sha1(&p).unwrap()
+        };
+        let object = dir.join("object");
+        std::fs::write(&object, big(2)).unwrap();
+        let dest = dir.join("mods/lib.jar");
+
+        assert!(!link_object(&object, &sum, &dest, Some(genuine.len() as u64)));
+        assert!(!dest.exists(), "nothing may be placed from a tampered object");
+        assert!(!object.exists(), "the tampered object must leave the store");
+    }
+
+    #[test]
+    fn a_genuine_object_is_linked() {
+        let dir = tmp("genuine");
+        let object = dir.join("object");
+        std::fs::write(&object, big(3)).unwrap();
+        let sum = file_sha1(&object).unwrap();
+        let dest = dir.join("mods/lib.jar");
+
+        assert!(link_object(&object, &sum.to_ascii_uppercase(), &dest, None));
+        assert_eq!(std::fs::read(&dest).unwrap(), big(3));
+    }
+
+    /// CORE-1: pack overrides land on top of files that are hard links to the
+    /// shared store. Writing through the link would rewrite the library in
+    /// every build that has it; the copy has to replace the directory entry.
+    #[test]
+    fn overrides_never_write_through_a_shared_link() {
+        let dir = tmp("overrides");
+        let object = dir.join("object");
+        std::fs::write(&object, big(4)).unwrap();
+        let profile = dir.join("profile");
+        let dest = profile.join("mods/lib.jar");
+        assert!(link_over(&object, &dest));
+
+        let overrides = dir.join("overrides");
+        std::fs::create_dir_all(overrides.join("mods")).unwrap();
+        std::fs::write(overrides.join("mods/lib.jar"), big(5)).unwrap();
+        super::super::archive::copy_overrides(&overrides, &profile).unwrap();
+
+        assert_eq!(std::fs::read(&dest).unwrap(), big(5), "the build gets the override");
+        assert_eq!(std::fs::read(&object).unwrap(), big(4), "the shared object is untouched");
     }
 
     #[test]

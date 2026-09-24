@@ -10,19 +10,19 @@ const VERDICTS: Record<ModVerdict['verdict'], { label: string; tone: string; hel
   blocked: {
     label: 'Опасный',
     tone: 'danger',
-    help: 'Файл есть в списке вредоносных. Его нужно убрать из сборки.',
+    help: 'В списке вредоносных — убери из сборки',
   },
   suspicious: {
     label: 'Подозрительный',
     tone: 'warn',
-    help: 'Внутри есть то, чего обычному моду не требуется. Проверь, откуда файл.',
+    help: 'Внутри лишнее — проверь, откуда файл',
   },
   unknown: {
     label: 'Неизвестный',
     tone: '',
-    help: 'Файла нет в каталогах — так выглядит и самосбор, и мод из чужой сборки.',
+    help: 'Нет в каталогах',
   },
-  ok: { label: 'Из каталога', tone: 'ok', help: 'Файл в точности такой же, как в Modrinth или CurseForge.' },
+  ok: { label: 'Из каталога', tone: 'ok', help: 'Совпадает с Modrinth или CurseForge' },
 }
 
 interface Props {
@@ -36,15 +36,20 @@ export function SafetyModal({ profile, onClose, onChanged }: Props) {
   const [busy, setBusy] = useState(true)
   const [error, setError] = useState('')
 
-  useEffect(() => {
+  const scan = () => {
     if (!hasTauri()) return
     setBusy(true)
     setError('')
     scanModSafety(profile)
       .then(setReport)
-      .catch((e) => setError('' + e))
+      .catch((e) => {
+        console.error('scanModSafety', e)
+        setError('' + e)
+      })
       .finally(() => setBusy(false))
-  }, [profile])
+  }
+
+  useEffect(scan, [profile])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -81,15 +86,25 @@ export function SafetyModal({ profile, onClose, onChanged }: Props) {
           <div>
             <h3>Проверка модов</h3>
             <div className="sub" style={{ marginTop: '2px' }}>
-              Сборка «{profile}»
+              {profile}
             </div>
           </div>
         </div>
 
         {busy && !report ? (
-          <p className="faint-note">Считаем хеши и читаем содержимое модов…</p>
+          <div className="bx-skel-list" aria-busy="true">
+            <span className="skel" />
+            <span className="skel" />
+            <span className="skel" />
+          </div>
         ) : error ? (
-          <p className="faint-note">Проверка не прошла: {error}</p>
+          <div className="bx-mini-empty">
+            <Icon id="i-alert" />
+            <b>Проверка не удалась</b>
+            <button className="btn sm secondary" onClick={scan}>
+              <Icon id="i-restart" /> Повторить
+            </button>
+          </div>
         ) : report ? (
           <>
             <div className="safety-sum">
@@ -101,7 +116,7 @@ export function SafetyModal({ profile, onClose, onChanged }: Props) {
               {report.blocked ? <span className="safety-pill danger">{report.blocked} опасных</span> : null}
             </div>
             {report.note ? <p className="faint-note">{report.note}</p> : null}
-            {report.checked === 0 ? <p className="faint-note">В сборке нет модов — проверять нечего.</p> : null}
+            {report.checked === 0 ? <p className="faint-note">Модов нет</p> : null}
 
             <div className="safety-list">
               {report.items.map((item) => {
@@ -133,7 +148,7 @@ export function SafetyModal({ profile, onClose, onChanged }: Props) {
         <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
           {risky.length ? (
             <button className="btn md danger" style={{ flex: 1 }} disabled={busy} onClick={disableRisky}>
-              <Icon id="i-ban" /> Отключить найденные ({risky.length})
+              <Icon id="i-ban" /> Отключить ({risky.length})
             </button>
           ) : null}
           <button className="btn md secondary" onClick={onClose}>

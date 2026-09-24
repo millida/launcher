@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'bun:test'
-import { CARD_MAX_MS, CARD_TTL_MS, cardDeadline, freshCards, holdCards } from './overlayCards'
+import {
+  CARD_MAX_MS,
+  CARD_TTL_CHOICES,
+  CARD_TTL_MAX_MS,
+  CARD_TTL_MIN_MS,
+  CARD_TTL_MS,
+  cardDeadline,
+  clampCardTtl,
+  freshCards,
+  holdCards,
+} from './overlayCards'
 
 const card = (ts: number, expires = ts + CARD_TTL_MS) => ({ ts, expires, uid: 'u' + ts })
 
@@ -45,5 +55,35 @@ describe('срок жизни карточки оверлея', () => {
   it('показываются только последние три: пачка друзей не застилает экран', () => {
     const list = [card(1), card(2), card(3), card(4)]
     expect(freshCards(list, 5, 3).map((c) => c.ts)).toEqual([2, 3, 4])
+  })
+})
+
+// Длительность карточки настраивается, но приходит из настроек ядра — то есть
+// извне. Вход → вердикт.
+describe('длительность карточки из настроек', () => {
+  const cases: Array<[number, number, string]> = [
+    [5_000, 5_000, 'значение из набора берётся как есть'],
+    [0, CARD_TTL_MIN_MS, 'ноль скрыл бы карточку раньше, чем её успели прочитать'],
+    [-10_000, CARD_TTL_MIN_MS, 'отрицательное не должно давать карточку без срока'],
+    [600_000, CARD_TTL_MAX_MS, 'десять минут поверх игры — уже не уведомление'],
+    [Number.NaN, CARD_TTL_MS, 'нечисло из настроек не должно ломать отсчёт'],
+  ]
+
+  for (const [given, want, why] of cases) {
+    it(why, () => {
+      expect(clampCardTtl(given)).toBe(want)
+    })
+  }
+
+  it('каждый вариант в настройках попадает в разрешённый диапазон: иначе кнопка врёт', () => {
+    for (const ms of CARD_TTL_CHOICES) expect(clampCardTtl(ms)).toBe(ms)
+  })
+
+  it('значение по умолчанию есть среди вариантов — иначе ни одна кнопка не подсвечена', () => {
+    expect(CARD_TTL_CHOICES).toContain(CARD_TTL_MS)
+  })
+
+  it('потолок удержания выше самой длинной карточки: иначе наведение укорачивало бы её', () => {
+    expect(CARD_MAX_MS).toBeGreaterThan(CARD_TTL_MAX_MS)
   })
 })

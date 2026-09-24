@@ -131,18 +131,18 @@ export function ImageLightbox() {
     >
       <div className="lightbox-top" onClick={(e) => e.stopPropagation()}>
         <div className="lightbox-bar">
-          <button className="lightbox-btn" title="Отдалить" onClick={() => zoomTo(scale / STEP)}>
+          <button className="lightbox-btn" aria-label="Отдалить" onClick={() => zoomTo(scale / STEP)}>
             <Icon id="i-minus" />
           </button>
           <span className="lightbox-zoom">{Math.round(scale * 100) + '%'}</span>
-          <button className="lightbox-btn" title="Приблизить" onClick={() => zoomTo(scale * STEP)}>
+          <button className="lightbox-btn" aria-label="Приблизить" onClick={() => zoomTo(scale * STEP)}>
             <Icon id="i-plus" />
           </button>
         </div>
         <div className="lightbox-bar">
           <button
             className="lightbox-btn"
-            title="Копировать картинку (Ctrl+C)"
+            aria-label="Копировать картинку (Ctrl+C)"
             onClick={() => void copyPictureTo(pic)}
           >
             <Icon id="i-copy" />
@@ -150,14 +150,14 @@ export function ImageLightbox() {
           {hasTauri() ? (
             <button
               className="lightbox-btn"
-              title="Сохранить как… (Ctrl+S)"
+              aria-label="Сохранить как… (Ctrl+S)"
               onClick={() => void savePictureTo(pic)}
             >
               <Icon id="i-download" />
             </button>
           ) : null}
         </div>
-        <button className="lightbox-close" title="Закрыть (Esc)" data-sound="close" onClick={close}>
+        <button className="lightbox-close" aria-label="Закрыть (Esc)" data-sound="close" onClick={close}>
           <Icon id="i-x" />
           <span>Закрыть</span>
         </button>

@@ -2,7 +2,6 @@ import { hydratePrefs, readPref, writePref } from './prefs'
 import { createStyleNode } from './style-node'
 
 const STYLE_ID = 'm-accent-css'
-const PACK_STYLE_ID = 'm-theme-pack-css'
 
 const VARS = [
   '--m-accent',
@@ -38,7 +37,7 @@ function toHex(r: number, g: number, b: number) {
   return '#' + h(r) + h(g) + h(b)
 }
 
-function shade(hex: string, amt: number) {
+export function shade(hex: string, amt: number) {
   const { r, g, b } = hexToRgb(hex)
   const t = amt < 0 ? 0 : 255
   const p = Math.abs(amt)
@@ -55,9 +54,7 @@ function luminance(hex: string) {
 }
 
 /// Достраивает акцент по базовому цвету: контрастный текст на заливке, читаемый
-/// цвет самого акцента на светлом фоне, градиент и rgb для свечения. Одна
-/// реализация на всё приложение — палитра в настройках и тема из редактора
-/// обязаны считать эти значения одинаково.
+/// цвет самого акцента, градиент и rgb для свечения.
 export function computeAccent(a: Accent): Accent {
   const lum = luminance(a.c)
   const { r, g, b } = hexToRgb(a.c)
@@ -90,14 +87,9 @@ function node(): HTMLStyleElement {
   const found = document.getElementById(STYLE_ID)
   styleEl = found instanceof HTMLStyleElement ? found : createStyleNode(STYLE_ID)
   styleEl.id = STYLE_ID
-  // `:root:root` and a pack's `:root[data-theme-pack=…]` weigh the same, so the
-  // pack only wins while it is written later. It also has to stay ahead of the
-  // light palette, which is why the doubled selector is there at all.
-  if (!styleEl.isConnected) {
-    const pack = document.getElementById(PACK_STYLE_ID)
-    if (pack) document.head.insertBefore(styleEl, pack)
-    else document.head.appendChild(styleEl)
-  }
+  // `:root:root` outranks the plain `:root` palette in the kit wherever the
+  // style node lands in <head>.
+  if (!styleEl.isConnected) document.head.appendChild(styleEl)
   return styleEl
 }
 
@@ -119,14 +111,22 @@ function declarations(a: AccentVars): string {
 }
 
 /// `boot.js` paints the accent inline on `<html>` before any app stylesheet
-/// exists, and an inline declaration outranks every rule a theme pack can write
-/// — a pack's own accent was silently lost for anyone who had ever picked a
-/// colour. Once the kit is loaded the same values move into a rule, so a pack
-/// wins while a pack that leaves the accent alone still shows the user's colour.
+/// exists; once the kit is loaded the same values move into a rule.
+export const ACCENT_EVENT = 'm-accent-change'
+
+/** Базовый цвет акцента как #rrggbb — от него строятся фон лобби и волна. */
+export function accentBase(): string {
+  const rgb = getComputedStyle(document.documentElement).getPropertyValue('--m-accent-rgb').trim()
+  const m = /^(\d+)\s*,\s*(\d+)\s*,\s*(\d+)$/.exec(rgb)
+  return m ? toHex(+m[1], +m[2], +m[3]) : '#5ec64d'
+}
+
 export function paintAccent(a: AccentVars) {
   const inline = document.documentElement.style
   for (const v of VARS) inline.removeProperty(v)
   node().textContent = ':root:root{' + declarations(a) + '}'
+  // Фон лобби и волна перехода перекрашиваются вслед (правка владельца 23.09.2026).
+  window.dispatchEvent(new CustomEvent(ACCENT_EVENT, { detail: a.c }))
 }
 
 const ACCENT_KEY = 'm-accent'
@@ -152,11 +152,32 @@ function paintStored(): boolean {
   return false
 }
 
-/// The accent shares the fate of the theme pack: web storage can start empty
+/// Web storage can start empty
 /// while the durable copy still holds it, so the paint runs again once that copy
 /// has landed. Until then the inline values `boot.js` wrote stay in place.
 export async function initAccent(): Promise<void> {
   if (!paintStored()) for (const v of VARS) document.documentElement.style.removeProperty(v)
   await hydratePrefs()
   paintStored()
+}
+
+const PAINT_MS = 320
+let paintTimer: ReturnType<typeof setTimeout> | undefined
+
+/// Colours live in CSS variables, and a variable swap repaints instantly. The
+/// class turns on a blanket colour transition only while the accent changes, so
+/// nothing pays for it during normal use.
+export function withColorFade(change: () => void) {
+  const root = document.documentElement
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    change()
+    return
+  }
+  root.classList.add('color-fade')
+  // A transition only starts when the declaration that carries it was already in
+  // effect on the previous computed style: the flush gives it a "before".
+  void root.offsetWidth
+  change()
+  clearTimeout(paintTimer)
+  paintTimer = setTimeout(() => root.classList.remove('color-fade'), PAINT_MS)
 }

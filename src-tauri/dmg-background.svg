@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="460" viewBox="0 0 640 460">
+  <defs>
+    <linearGradient id="brandArrow" x1="250" y1="195" x2="392" y2="140" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#11998E"/>
+      <stop offset="1" stop-color="#5EC64D"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="640" height="460" fill="#F7F8F7"/>
+  <rect y="280" width="640" height="180" fill="#EDEFED"/>
+
+  <g fill="#5EC64D" opacity="0.16">
+    <rect x="52" y="52" width="22" height="22" rx="6"/>
+    <rect x="86" y="86" width="12" height="12" rx="4"/>
+    <rect x="588" y="54" width="16" height="16" rx="5"/>
+    <rect x="566" y="86" width="10" height="10" rx="3"/>
+  </g>
+
+  <g fill="none" stroke="url(#brandArrow)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M250 186 C 288 146, 352 142, 390 168"/>
+    <path d="M368 162 L392 170 L384 194"/>
+  </g>
+</svg>

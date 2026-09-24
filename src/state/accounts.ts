@@ -10,6 +10,8 @@ export interface Account {
   uuid?: string
   xuid?: string
   avatar?: string
+  /// Из какого скина нарисовано лицо: по нему видно, что оно устарело.
+  avatarFrom?: string
   balance?: number
   exp?: number
 }
@@ -25,8 +27,8 @@ function readAccounts(): Account[] {
     const list = JSON.parse(localStorage.getItem('m-accounts') || 'null') || []
     return Array.isArray(list)
       ? list.map((a: Account & { token?: string }) => {
-          const { token: _drop, avatar, ...rest } = a
-          return (isHeadAvatar(avatar) ? { ...rest, avatar } : rest) as Account
+          const { token: _drop, avatar, avatarFrom, ...rest } = a
+          return (isHeadAvatar(avatar) ? { ...rest, avatar, avatarFrom } : rest) as Account
         })
       : []
   } catch {
@@ -35,7 +37,7 @@ function readAccounts(): Account[] {
 }
 
 function persist(list: Account[]) {
-  const clean = list.map((a) => (isHeadAvatar(a.avatar) ? a : { ...a, avatar: undefined }))
+  const clean = list.map((a) => (isHeadAvatar(a.avatar) ? a : { ...a, avatar: undefined, avatarFrom: undefined }))
   localStorage.setItem('m-accounts', JSON.stringify(clean))
 }
 

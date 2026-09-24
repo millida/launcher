@@ -174,12 +174,33 @@ async function refreshMsAccount(a: Account): Promise<MsAuth | null> {
   return { id: a.id, uuid: r.uuid || a.uuid || '', xuid: r.xuid || a.xuid || '' }
 }
 
+// Past this the launch goes on with the stored token. Without a network the
+// renewal hangs on connect timeouts for a minute and more, and the game itself
+// says so if the session is refused.
+const RENEW_WAIT_MS = 15000
+
+function withinRenewWait<T>(work: Promise<T>): Promise<T | 'late'> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const late = new Promise<'late'>((resolve) => {
+    timer = setTimeout(() => resolve('late'), RENEW_WAIT_MS)
+  })
+  return Promise.race([work, late]).finally(() => clearTimeout(timer))
+}
+
 // A present token is not enough: MC tokens last a day while the launcher can sit
 // in the tray for longer, and the game would then fail joinServer with 401.
 export async function ensureMsAuth(acc?: Account | null): Promise<MsAuth | null> {
   const a = acc || getAccount()
   if (!a || a.kind !== 'microsoft' || !hasTauri()) return null
   if (msTokenFresh(a)) return authOf(a)
+  // The renewal is not cancelled: it keeps going and saves the new token for
+  // the next launch.
+  const renewed = await withinRenewWait(renewMsAuth(a))
+  if (renewed !== 'late') return renewed
+  return hasLicenseSession(a) ? authOf(a) : null
+}
+
+async function renewMsAuth(a: Account): Promise<MsAuth | null> {
   const fresh = await refreshMsAccount(a)
   if (fresh) return fresh
   if (!hasLicenseSession(a)) return null
