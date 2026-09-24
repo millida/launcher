@@ -3,7 +3,7 @@ import { hasTauri } from '../ipc/tauri'
 import { cfSearch, listContent, listWorldInstalls } from '../ipc/commands'
 import { fmt } from '../lib/format'
 import { MODRINTH_API, mirrorAsset } from '../lib/api'
-import { mergeSources } from '../lib/modMerge'
+import { mergeSources, normalizedModTitle } from '../lib/modMerge'
 import { pickTargetName } from '../lib/installKeys'
 import { useProfiles } from './profiles'
 
@@ -78,6 +78,7 @@ interface ModsState {
   cfOffset: number
   showMore: boolean
   installedIds: Set<string>
+  installedTitles: Set<string>
   targetBuild: string | null
   setVers: (v: string[]) => void
   setCats: (v: string[]) => void
@@ -101,24 +102,32 @@ export function catalogTargetBuild(): string {
   )
 }
 
-async function refreshInstalledIds(kind: string): Promise<Set<string>> {
+interface InstalledCatalogItems {
+  ids: Set<string>
+  titles: Set<string>
+}
+
+async function refreshInstalledItems(kind: string): Promise<InstalledCatalogItems> {
   const ids = new Set<string>()
+  const titles = new Set<string>()
   const selected = catalogTargetBuild()
-  if (!hasTauri() || !selected) return ids
+  if (!hasTauri() || !selected) return { ids, titles }
   if (kind === 'world') {
     try {
       ;(await listWorldInstalls(selected)).forEach((p) => ids.add(p))
     } catch {}
-    return ids
+    return { ids, titles }
   }
-  for (const k of ['mod', 'resourcepack', 'datapack', 'shader']) {
+  if (['mod', 'resourcepack', 'datapack', 'shader'].includes(kind)) {
     try {
-      ;(await listContent(selected, k)).forEach((i) => {
+      ;(await listContent(selected, kind)).forEach((i) => {
         if (i.project_id) ids.add(i.project_id)
+        const title = normalizedModTitle(i.title || '')
+        if (title) titles.add(title)
       })
     } catch {}
   }
-  return ids
+  return { ids, titles }
 }
 
 function scopeFilters(build: string | null): { fVer: string; fLoader: string } {
@@ -162,6 +171,7 @@ export const useMods = create<ModsState>((set, get) => ({
   cfOffset: 0,
   showMore: false,
   installedIds: new Set<string>(),
+  installedTitles: new Set<string>(),
   targetBuild: null,
   setVers: (v) => set({ vers: v }),
   setCats: (v) => set({ cats: v }),
@@ -185,7 +195,10 @@ export const useMods = create<ModsState>((set, get) => ({
   },
   // A finished install has to reach the row that started it: without re-reading
   // the build, the button kept saying «Добавить» over a mod that was already in.
-  refreshInstalled: async () => set({ installedIds: await refreshInstalledIds(get().modTab) }),
+  refreshInstalled: async () => {
+    const installed = await refreshInstalledItems(get().modTab)
+    set({ installedIds: installed.ids, installedTitles: installed.titles })
+  },
   // Entering the catalog from a build pre-filters it: content for another game
   // version installs fine and then keeps the game from starting. The typed query
   // belongs to the visit that typed it: kept across builds it silently hid every
@@ -196,9 +209,14 @@ export const useMods = create<ModsState>((set, get) => ({
     const stale = () => seq !== loadSeq
     const s = get()
     if (!append) {
-      const ids = await refreshInstalledIds(s.modTab)
+      const installed = await refreshInstalledItems(s.modTab)
       if (stale()) return
-      set({ offset: 0, cfOffset: 0, installedIds: ids })
+      set({
+        offset: 0,
+        cfOffset: 0,
+        installedIds: installed.ids,
+        installedTitles: installed.titles,
+      })
     }
     let cfBuffer: ModHit[] = []
     const st = get()

@@ -13,13 +13,15 @@ import { useMods } from '../state/mods'
 import type { ModHit } from '../state/mods'
 import { openCfProject, openProject } from '../state/project'
 import { mirrorAsset } from '../lib/api'
+import { isCatalogItemInstalled } from '../lib/modMerge'
 
 const DONE_STYLE = { background: 'var(--m-accent-soft)', color: 'var(--m-accent)' }
 
 export function ModRow({ h }: { h: ModHit }) {
   const modTab = useMods((s) => s.modTab)
   const installedIds = useMods((s) => s.installedIds)
-  const installed = !!(h.pid && installedIds.has(h.pid))
+  const installedTitles = useMods((s) => s.installedTitles)
+  const installed = isCatalogItemInstalled(h, installedIds, installedTitles)
   // The same build the install itself will use, so a finished install shows on
   // this very row instead of under a key nobody reads.
   const scoped = useMods((s) => s.targetBuild)

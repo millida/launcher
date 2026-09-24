@@ -4,6 +4,13 @@ export interface MergeableHit {
   dl: number
 }
 
+export interface CatalogIdentity {
+  title?: string
+  slug?: string
+  pid?: string
+  cfid?: number
+}
+
 // Loader and edition words the same project carries on one site and not the
 // other: "Sodium" on Modrinth is "Sodium (Fabric)" on CurseForge, "Jade" is
 // "Jade 🔍". Without stripping them the two entries looked like two mods.
@@ -12,13 +19,29 @@ const NOISE = /\b(fabric|forge|neoforge|quilt|rift|edition|mod|port|unofficial|o
 // Rendered as one project by both catalogues; the marker sits in the title.
 const BRACKETS = /[([{][^)\]}]*[)\]}]/g
 
-export function modKey(hit: MergeableHit): string {
-  const fromTitle = (hit.title || '')
+export function normalizedModTitle(title: string): string {
+  return (title || '')
     .toLowerCase()
     .replace(BRACKETS, ' ')
     .replace(NOISE, ' ')
     .replace(/[^a-zа-я0-9]+/gi, '')
+}
+
+export function modKey(hit: MergeableHit): string {
+  const fromTitle = normalizedModTitle(hit.title)
   return fromTitle || (hit.slug || '').toLowerCase()
+}
+
+export function isCatalogItemInstalled(
+  item: CatalogIdentity,
+  installedIds: ReadonlySet<string>,
+  installedTitles: ReadonlySet<string>,
+): boolean {
+  if (item.pid && installedIds.has(item.pid)) return true
+  if (item.slug && installedIds.has(item.slug)) return true
+  if (item.cfid !== undefined && installedIds.has('cf:' + item.cfid)) return true
+  const title = normalizedModTitle(item.title || '')
+  return !!title && installedTitles.has(title)
 }
 
 function terms(query: string): string[] {
