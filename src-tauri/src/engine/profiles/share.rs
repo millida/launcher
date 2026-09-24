@@ -191,9 +191,9 @@ pub fn pack_link(code: &str) -> String {
     format!("https://millida.net/p/{}", code)
 }
 
-/// Publishes the build and returns the code to pass on. Re-publishing the same
-/// build keeps the code: the link a player already sent to friends must not go
-/// stale because they added a mod.
+/// Publishes the current build snapshot and returns the code to pass on. The
+/// server may reuse a code only for an identical manifest; changed content is
+/// sent again so an old immutable code never pretends to describe the update.
 pub async fn share_profile(profile: String, summary: Option<String>) -> Result<SharedPack, String> {
     let (mut manifest, skipped) = build_manifest(&profile)?;
     if manifest.files.is_empty() {

@@ -5,7 +5,7 @@ import { hasTauri } from '../ipc/tauri'
 import { copyText } from '../lib/clipboard'
 import { backdropClose } from '../lib/dismiss'
 import { showToast } from '../state/ui'
-import { myPacks, shareProfile, unshareProfile, type SharedPack } from '../ipc/commands'
+import { shareProfile, unshareProfile, type SharedPack } from '../ipc/commands'
 
 interface Props {
   profile: string
@@ -25,29 +25,6 @@ export function SharePackModal({ profile, onClose }: Props) {
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
-
-  // A build has one code and it lives until revoked: if it was already issued,
-  // show it right away instead of republishing for the same value.
-  useEffect(() => {
-    if (!hasTauri()) return
-    let cancelled = false
-    void myPacks()
-      .then((list) => {
-        const mine = list.find((x) => x.name === profile)
-        if (!mine || cancelled) return
-        setPack({
-          code: mine.code,
-          url: 'https://millida.net/p/' + mine.code,
-          files: mine.files,
-          skipped: [],
-          sizeBytes: 0,
-        })
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [profile])
 
   const publish = () => {
     if (!hasTauri()) return
@@ -130,7 +107,8 @@ export function SharePackModal({ profile, onClose }: Props) {
             <p className="faint-note">
               Уедет только описание сборки: версия, ядро и список модов из Modrinth и CurseForge с их
               хешами. Сами файлы друг скачает из каталогов — так сборка занимает килобайты и остаётся
-              проверяемой.
+              проверяемой. Если после прошлого кода сборка изменилась, будет создан новый код с её
+              актуальным содержимым.
             </p>
             <div className="input sm" style={{ marginTop: '12px' }}>
               <input

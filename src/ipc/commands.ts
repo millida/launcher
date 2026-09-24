@@ -1222,8 +1222,8 @@ export interface MyPack {
   updatedAt: string
 }
 
-// Codes already issued: the share window shows the existing one instead of
-// printing a new one on every open.
+// Kept for account/history screens. A code from this list must not be treated
+// as the current local snapshot merely because its profile name is the same.
 export const myPacks = () => invoke<MyPack[]>('my_packs')
 
 export const unshareProfile = (code: string) => invoke<void>('unshare_profile', { code })
