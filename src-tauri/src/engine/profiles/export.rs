@@ -44,6 +44,19 @@ pub(crate) fn zip_add_overrides(
 
 /// .mrpack layout: files known to Modrinth go into modrinth.index.json, the
 /// rest (configs, local files) into overrides/.
+/// Имя файла выгрузки: название, которое ввёл игрок, а если в нём не осталось
+/// допустимых символов — имя сборки, очищенное тем же фильтром. Ни разделителей
+/// пути, ни точек в результате не бывает, поэтому файл всегда ложится прямо в
+/// папку `exports`.
+pub fn export_file_stem(name: &str, profile: &str) -> String {
+    fn clean(s: &str) -> String {
+        let kept: String =
+            s.chars().filter(|c| c.is_alphanumeric() || *c == ' ' || *c == '-' || *c == '_').take(80).collect();
+        kept.trim().to_string()
+    }
+    [clean(name), clean(profile)].into_iter().find(|s| !s.is_empty()).unwrap_or_else(|| "modpack".into())
+}
+
 pub fn export_mrpack(
     profile: String, out_path: String, name: String, version: String, description: String,
 ) -> Result<String, String> {
@@ -95,4 +108,18 @@ pub fn export_mrpack(
     zip_add_overrides(&mut zip, &pdir, &["config", "mods", "resourcepacks", "shaderpacks", "datapacks"], &known, opts)?;
     zip.finish().map_err(|e| e.to_string())?;
     Ok(out_path)
+}
+
+#[cfg(test)]
+mod export_name_tests {
+    use super::export_file_stem;
+
+    #[test]
+    fn empty_title_never_lets_the_build_name_escape_exports() {
+        assert_eq!(export_file_stem("", "../../../Library/LaunchAgents/x"), "LibraryLaunchAgentsx");
+        assert_eq!(export_file_stem("!!!", "..\\..\\evil"), "evil");
+        assert_eq!(export_file_stem("", "../.."), "modpack");
+        assert_eq!(export_file_stem("  Моя сборка ", "p"), "Моя сборка");
+        assert_eq!(export_file_stem("", "Survival_1"), "Survival_1");
+    }
 }

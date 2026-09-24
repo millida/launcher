@@ -6,6 +6,12 @@ import {
   Box3,
   CanvasTexture,
   CircleGeometry,
+  CubeUVReflectionMapping,
+  DataTexture,
+  HalfFloatType,
+  LinearFilter,
+  LinearSRGBColorSpace,
+  RGBAFormat,
   Color,
   DirectionalLight,
   DoubleSide,
@@ -22,7 +28,7 @@ import {
   SRGBColorSpace,
   Vector3,
 } from "three";
-import type { Object3D, Texture, WebGLRenderer } from "three";
+import type { Object3D, Texture, WebGLRenderer, WebGLRenderTarget } from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import type { LightSettings } from "../types";
 
@@ -70,13 +76,63 @@ export function configureProductRenderer(renderer: WebGLRenderer): void {
   renderer.outputColorSpace = SRGBColorSpace;
 }
 
+/**
+ * Готовая IBL-карта, прочитанная с видеокарты после первого расчёта. Сцена
+ * окружения всегда одна (RoomEnvironment, sigma 0.04), а PMREM с 256 выборками
+ * GGX на каждый пиксель — самая дорогая часть создания движка: без аппаратного
+ * ускорения (SwiftShader: WebView2 с видеокартой из чёрного списка, виртуалки)
+ * это ~0,8 с замёрзшего окна на каждый заход в лобби или «Мой скин» (аудит
+ * 24.09.2026, UI-7). Считаем один раз за сеанс, дальше только загружаем.
+ */
+let cachedEnv: { data: Uint16Array; width: number; height: number } | null = null;
+let envReadFailed = false;
+
+function envFromCache(): Texture | null {
+  if (!cachedEnv) return null;
+  const texture = new DataTexture(cachedEnv.data, cachedEnv.width, cachedEnv.height, RGBAFormat, HalfFloatType);
+  texture.mapping = CubeUVReflectionMapping;
+  texture.colorSpace = LinearSRGBColorSpace;
+  texture.minFilter = LinearFilter;
+  texture.magFilter = LinearFilter;
+  texture.generateMipmaps = false;
+  texture.flipY = false;
+  texture.name = "PMREM.cubeUv";
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function rememberEnv(renderer: WebGLRenderer, target: WebGLRenderTarget): void {
+  if (envReadFailed || cachedEnv) return;
+  try {
+    const { width, height } = target;
+    const data = new Uint16Array(width * height * 4);
+    const gl = renderer.getContext();
+    while (gl.getError() !== gl.NO_ERROR) {
+      // старые ошибки не должны выдать себя за ошибку чтения
+    }
+    renderer.readRenderTargetPixels(target, 0, 0, width, height, data);
+    // Не каждая видеокарта отдаёт half float: пустой буфер или ошибка GL —
+    // значит, так и будем считать карту заново, как раньше.
+    if (gl.getError() !== gl.NO_ERROR || !data.some((v) => v !== 0)) {
+      envReadFailed = true;
+      return;
+    }
+    cachedEnv = { data, width, height };
+  } catch {
+    envReadFailed = true;
+  }
+}
+
 /** RoomEnvironment + PMREM — компактная IBL для пластикового блика */
 export function createPlasticEnvironment(renderer: WebGLRenderer): Texture {
+  const cached = envFromCache();
+  if (cached) return cached;
   const pmrem = new PMREMGenerator(renderer);
   pmrem.compileEquirectangularShader();
-  const texture = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  const target = pmrem.fromScene(new RoomEnvironment(), 0.04);
+  rememberEnv(renderer, target);
   pmrem.dispose();
-  return texture;
+  return target.texture;
 }
 
 /** Frustum/bias key-света под персонажа (~32 units tall) */

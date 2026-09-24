@@ -191,8 +191,9 @@ pub async fn install_version(app: tauri::AppHandle, project: String, version_id:
 
 #[tauri::command]
 pub async fn export_mrpack(profile: String, name: String, version: String, description: String) -> Result<String, String> {
-    let safe: String = name.chars().filter(|c| c.is_alphanumeric() || *c==' ' || *c=='-' || *c=='_').collect();
-    let base = if safe.trim().is_empty() { profile.clone() } else { safe.trim().to_string() };
+    // Имя файла собирается только из безопасных символов — и из названия, и из
+    // имени сборки, если название пустое (аудит 24.09.2026, CORE-3).
+    let base = engine::export_file_stem(&name, &profile);
     let out = engine::data_dir().join("exports").join(format!("{}.mrpack", base));
     let dst = out.to_string_lossy().to_string();
     let res = super::blocking(move || engine::export_mrpack(profile, dst, name, version, description)).await??;

@@ -83,7 +83,7 @@ fn picture_folder_ok(file: &std::path::Path) -> bool {
             .unwrap_or_default();
         return rel.len() >= 3 && rel[1] == "screenshots";
     }
-    ["wallpaper", "themes"].iter().any(|d| is_inside(&data_dir().join(d), file))
+    is_inside(&data_dir().join("wallpaper"), file)
 }
 
 /// PNG, JPEG, WebP, GIF or BMP by their first bytes, whatever the extension.

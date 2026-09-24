@@ -227,7 +227,9 @@ export function markChatRead(id: string, room: boolean) {
 
 export async function openChat(uid: string, nick: string, profileMode?: boolean) {
   const s = useFriends.getState()
-  const resolved = nick || s.friends.find((f) => f.userId === uid)?.nickname || ''
+  // Ник из списка друзей пришёл с сервера — ему верим больше, чем переданному
+  // извне (аудит 24.09.2026, CORE-12).
+  const resolved = s.friends.find((f) => f.userId === uid)?.nickname || nick || ''
   s.set({
     chatWith: uid,
     chatRoom: '',
@@ -242,6 +244,22 @@ export async function openChat(uid: string, nick: string, profileMode?: boolean)
   clearUnread(uid)
   markChatRead(uid, false)
   if (!profileMode) await renderChat()
+}
+
+/**
+ * Переписка по ссылке millida://chat/<uid>. Ник в ссылке мог подставить кто
+ * угодно, поэтому шапку подписываем только ником с сервера: из списка друзей, а
+ * для не-друга — из его профиля (аудит 24.09.2026, CORE-12).
+ */
+export async function openChatFromLink(uid: string) {
+  const known = () => useFriends.getState().friends.find((f) => f.userId === uid)?.nickname || ''
+  if (!known()) await loadFriends().catch(() => {})
+  const nick = known()
+  await openChat(uid, nick)
+  if (nick) return
+  const p = await api<{ nickname?: string }>('/friends/profile/' + encodeURIComponent(uid)).catch(() => null)
+  const s = useFriends.getState()
+  if (p?.nickname && s.chatWith === uid && !s.chatRoom) s.set({ chatNick: p.nickname })
 }
 
 /**

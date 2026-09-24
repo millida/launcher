@@ -24,8 +24,17 @@
   transition: transform 90ms steps(2, end), filter 90ms steps(2, end);
 }
 .ht:active { transform: translateY(3px); filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.45)); }
+/* Фокус с клавиатуры — пиксельное кольцо снаружи плитки тем же срезом 10px:
+   белая линия 3px, между ней и рамкой тёмный зазор 2px. Кольцо не мигает
+   и не зависит от цвета рамки: у плитки с подарком золотая рамка сама мигает
+   белым, и перекраска рамки фокус не выдавала (аудит 24.09.2026, UI-8). */
 .ht:focus-visible { outline: none; }
-.ht:focus-visible .ht-frame { background: #fff; }
+.ht:focus-visible::before,
+.ht:focus-visible::after {
+  content: ''; position: absolute; z-index: -1; pointer-events: none; clip-path: var(--px-10);
+}
+.ht:focus-visible::before { inset: -5px; background: #fff; }
+.ht:focus-visible::after { inset: -2px; background: #07140a; }
 
 .ht-frame { position: absolute; inset: 0; background: var(--ht-ol); clip-path: var(--px-10); }
 .ht-plate {

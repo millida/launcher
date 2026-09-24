@@ -36,6 +36,8 @@ pub struct Snapshot {
     pub profiles: Vec<CloudProfile>,
     #[serde(default)]
     pub prefs: Value,
+    /// Каталог тем убран 23.09.2026: поле осталось, чтобы старые копии в облаке
+    /// читались, новые пишут пустой список.
     #[serde(default)]
     pub themes: Vec<String>,
 }
@@ -80,8 +82,7 @@ pub fn build_snapshot() -> Result<Snapshot, String> {
         profiles.push(CloudProfile { group: group_of(&groups, &p.name), name: p.name, manifest });
     }
     let prefs = serde_json::to_value(ui_prefs()).unwrap_or(Value::Null);
-    let themes: Vec<String> = list_themes().into_iter().map(|t| t.manifest.id).collect();
-    Ok(Snapshot { format_version: SNAPSHOT_FORMAT, device: device_name(), profiles, prefs, themes })
+    Ok(Snapshot { format_version: SNAPSHOT_FORMAT, device: device_name(), profiles, prefs, themes: vec![] })
 }
 
 pub async fn cloud_status() -> Result<CloudStatus, String> {
@@ -145,7 +146,6 @@ pub struct PullReport {
     pub updated: Vec<String>,
     pub failed: Vec<String>,
     pub prefs_applied: u32,
-    pub themes_missing: Vec<String>,
 }
 
 /// Restores builds from the cloud. Existing builds are left alone unless named
@@ -203,8 +203,6 @@ pub async fn cloud_pull(app: AppHandle, only: Option<Vec<String>>, apply_prefs: 
             }
         }
     }
-    let installed_themes: Vec<String> = list_themes().into_iter().map(|t| t.manifest.id).collect();
-    report.themes_missing = snapshot.themes.into_iter().filter(|t| !installed_themes.contains(t)).collect();
     Ok(report)
 }
 

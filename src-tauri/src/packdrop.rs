@@ -75,6 +75,9 @@ pub fn watch(app: &AppHandle) {
             }
             DragDropEvent::Drop { paths, .. } => {
                 let _ = handle.emit("pack-drag", false);
+                // Брошенные в окно файлы можно добавить в сборку (моды, паки):
+                // их путь дала система, а не страница.
+                crate::engine::grant_user_files(paths);
                 let found = remember(paths);
                 let _ = handle.emit("pack-drop", found);
             }
