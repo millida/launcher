@@ -15,6 +15,7 @@ import { joinPlan } from './joinPlan'
 import { pickBuildForJoin } from '../state/buildPicker'
 import { track } from './telemetry'
 import { launchAttribution } from './uiTrack'
+import { ensureVersionBuild } from './versionBuild'
 
 const addrKey = (ip: string) =>
   (ip || '')
@@ -88,12 +89,27 @@ async function licenseGate(licensed: boolean): Promise<boolean> {
 // server that never reported its version is a question, not a silent launch of
 // the currently selected build.
 export async function buildForServer(join: JoinIntent, wanted: string[]): Promise<string | null> {
-  const { selected, profiles, setSelected } = useProfiles.getState()
-  const plan = joinPlan(profiles, selected || (profiles[0] || { name: '' }).name, wanted)
+  const { selected, profiles: all, setSelected } = useProfiles.getState()
+  // На сервер заходим чистой сборкой (владелец 24.09.2026, 23:05: HypeGO
+  // запускался модпаком Immortal на Forge). Forge/NeoForge/Quilt — это
+  // модпаки, сервер их не ждёт; берём Vanilla/Fabric нужной версии.
+  const profiles = all.filter((p) => !p.loader || p.loader === 'vanilla' || p.loader === 'fabric')
+  const cur = selected && profiles.some((p) => p.name === selected) ? selected : (profiles[0] || { name: '' }).name
+  const plan = joinPlan(profiles, cur, wanted)
 
-  if (plan.kind === 'create') {
-    showToast('Нужна сборка под сервер — создадим её сейчас', 'error')
-    offerBuild(plan.version, join)
+  // Подходящей чистой сборки нет — создаём её сами, без окон и вопросов.
+  if (plan.kind === 'create' || (plan.kind === 'mismatch' && wanted[0])) {
+    const version = plan.kind === 'create' ? plan.version : wanted[0]!
+    if (version) {
+      showToast('Готовим сборку ' + version + ' под «' + join.name + '»')
+      const made = await ensureVersionBuild(version, { fps: true })
+      if (made) {
+        await useProfiles.getState().refresh()
+        setSelected(made)
+        return made
+      }
+    }
+    offerBuild(version || '', join)
     return null
   }
 
