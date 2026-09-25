@@ -27,6 +27,7 @@ import {
   type Texture,
 } from 'three'
 import type { ChestTier } from '../../lib/rubies'
+import { onRenderGate, renderLive } from '../../lib/renderGate'
 import { CHEST_PALETTE, faceCanvas, type FaceKind } from './chestPaint'
 
 /**
@@ -49,6 +50,8 @@ export type ChestMode = 'closed' | 'ready' | 'shake' | 'open'
 
 export interface ChestScene {
   setMode(mode: ChestMode): void
+  /** Сундук на экране: за краем прокрутки в покое не рисуется. */
+  setVisible(visible: boolean): void
   setTier(tier: ChestTier): void
   resize(w: number, h: number): void
   dispose(): void
@@ -314,7 +317,17 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
 
   function frame(now: number) {
     if (dead) return
+    // Игра поверх, окно убрано или сундук прокручен за край — стоит; цикл
+    // снова заведёт гейт или setVisible.
+    const idle = mode === 'closed' || mode === 'ready'
+    if (!renderLive() || (!inView && idle)) {
+      raf = 0
+      return
+    }
     raf = requestAnimationFrame(frame)
+    // Покой и «можно забрать» — 30 кадров хватает (пиксельные ступени), тряска
+    // и открытие — каждый кадр монитора.
+    if (idle && now - last < 32) return
     const dt = Math.min(0.05, (now - last) / 1000)
     last = now
     const t = now / 1000
@@ -432,12 +445,24 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
     renderer.render(scene, camera)
   }
   raf = requestAnimationFrame(frame)
+  let inView = true
+  const wake = () => {
+    if (dead || raf || !renderLive()) return
+    last = performance.now()
+    raf = requestAnimationFrame(frame)
+  }
+  const offGate = onRenderGate(wake)
 
   return {
+    setVisible(v) {
+      inView = v
+      wake()
+    },
     setMode(next) {
       if (next === mode) return
       mode = next
       modeAt = performance.now()
+      wake()
       if (next !== 'open') opened = false
     },
     setTier(next) {
@@ -459,6 +484,7 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
     },
     dispose() {
       dead = true
+      offGate()
       cancelAnimationFrame(raf)
       scene.traverse((o) => {
         const m = o as Mesh

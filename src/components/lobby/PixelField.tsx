@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { ACCENT_EVENT, accentBase, shade } from '../../lib/accent'
+import { onRenderGate, renderLive } from '../../lib/renderGate'
 import { WORLD_SRC, makePal, paintScene, paintVignette, stageGrid } from './stageArt'
 import type { Pal } from './stageArt'
 
@@ -17,9 +18,9 @@ import type { Pal } from './stageArt'
  *     рваный фронт, клетка на миг встаёт тёмной со светлой вспышкой;
  *  3. ступенчатая виньетка.
  *
- * Фон сам не шевелится — двигается только волна. ≤30 кадров в секунду и
- * только пока идёт волна; пауза при скрытом окне; «Уменьшить движение» — один
- * кадр. Второго WebGL нет: только 2D.
+ * Фон сам не шевелится — двигается волна и искры: искры ≤30 кадров в
+ * секунду, волна ≤60; пауза при скрытом окне и пока поверх идёт игра
+ * (lib/renderGate); «Уменьшить движение» — один кадр. Второго WebGL нет: только 2D.
  */
 
 const WCELL = 36 // клетка волны, css px — как у заставки Welcome
@@ -270,9 +271,16 @@ export function PixelField({ on }: { on: boolean }) {
       paint(ctx, scene, performance.now(), false)
     }
 
+    let lastFrame = 0
     const tick = (now: number) => {
       raf = requestAnimationFrame(tick)
       if (!scene) return
+      // Кадр волны — до 60 в секунду (одобрено владельцем), искрам в
+      // промежутке хватает 30: мерцание ступенчатое. На мониторе 144 Гц
+      // холст во всё окно больше не перерисовывается 144 раза в секунду.
+      const gap = scene.waves.length || scene.prev.size ? 15 : 32
+      if (now - lastFrame < gap) return
+      lastFrame = now
       paint(ctx, scene, now, true)
       if (fxg) {
         const w = scene.W / scene.dpr
@@ -292,7 +300,8 @@ export function PixelField({ on }: { on: boolean }) {
     }
     const run = () => {
       cancelAnimationFrame(raf)
-      if (!still && !document.hidden) raf = requestAnimationFrame(tick)
+      raf = 0
+      if (!still && !document.hidden && renderLive()) raf = requestAnimationFrame(tick)
     }
 
     fit()
@@ -300,6 +309,7 @@ export function PixelField({ on }: { on: boolean }) {
     const ro = new ResizeObserver(() => fit())
     ro.observe(cv)
     document.addEventListener('visibilitychange', run)
+    const offGate = onRenderGate(run)
     // Цвет кнопок сменили в Настройках — сцена перекрашивается целиком. Пока
     // тянут ползунок, событие летит десятки раз в секунду: перерисовка — через
     // 150 мс после последнего.
@@ -315,6 +325,7 @@ export function PixelField({ on }: { on: boolean }) {
       cancelAnimationFrame(raf)
       ro.disconnect()
       document.removeEventListener('visibilitychange', run)
+      offGate()
       window.removeEventListener(ACCENT_EVENT, onAccent)
     }
   }, [on])

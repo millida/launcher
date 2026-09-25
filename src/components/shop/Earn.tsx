@@ -1,8 +1,8 @@
-import type { CSSProperties } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { Icon } from '../Icon'
 import { Rays } from '../reward/RewardReveal'
 import { Ruby } from '../Ruby'
-import { RARITY_NAMES, type EconomyProgress, type ItemRef, type Workshop } from '../../lib/rubies'
+import { RARITY_NAMES, type EconomyProgress, type ItemRef, type WeeklyParcel, type Workshop } from '../../lib/rubies'
 import { gridCols, Head, ItemArt, Shard, Timer, toneStyle } from './parts'
 import { FragBar, RarityFx, RarityPlate } from './rarityUi'
 import type { WeeklyPath } from './weekly'
@@ -155,6 +155,83 @@ function Collecting({ list }: { list: NonNullable<Workshop['fragments']> }) {
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+/**
+ * Посылка недели (как в CS2) — то, что служба отдаёт сейчас: три часа игры за
+ * неделю открывают одну вещь на выбор из трёх (не выше редкой). Часы — только
+ * подтверждённые сервером. Забрал — «Твоя» и таймер до новой.
+ */
+export function ParcelBlock({ data, busy, onClaim }: { data: WeeklyParcel; busy: string; onClaim: (item: ItemRef) => void }) {
+  const [pick, setPick] = useState('')
+  const claimed = !!data.claimedAt
+  const choices = data.ready && !claimed && data.choices?.length ? data.choices : null
+  const have = Math.min(data.hours, data.need)
+  const pct = Math.min(100, (have / data.need) * 100)
+  const left = Math.max(0, data.need - data.hours)
+  const chosen = choices?.find((c) => c.code === pick) ?? null
+  return (
+    <div className={'card sh-block sh-weekly' + (choices ? ' is-ready' : '') + (claimed ? ' is-claimed' : '')} id="shop-weekly" data-section="weekly">
+      <Head title="Посылка недели">
+        <Timer to={data.resetsAt} label={claimed ? 'Новая через' : 'Сгорит через'} />
+      </Head>
+      <div className="sh-meter sh-parcel-meter">
+        <Icon id="i-clock" />
+        <b>
+          {hrs(have)}/{data.need} ч
+        </b>
+        <span className="sh-meter-bar">
+          <i style={{ width: pct + '%' }} />
+        </span>
+        {claimed ? (
+          <span className="sh-owned">
+            <Icon id="i-check" />
+            Забрана
+          </span>
+        ) : choices ? null : (
+          <span className="sh-meter-cap">Ещё {hrs(left)} ч в игре</span>
+        )}
+      </div>
+      {choices ? (
+        <>
+          <div className="sh-pick3" role="radiogroup" aria-label="Вещь из посылки">
+            {choices.map((it) => (
+              <button
+                key={it.code}
+                className={'sh-pick' + (pick === it.code ? ' on' : '')}
+                style={toneStyle(it)}
+                role="radio"
+                aria-checked={pick === it.code}
+                data-track="weekly_pick"
+                data-kind="item"
+                data-id={it.code}
+                onClick={() => setPick(it.code)}
+              >
+                <ItemArt item={it} size="lg" />
+                <b className="sh-card-name">{it.name}</b>
+                <span className="sh-card-meta">
+                  <RarityPlate rarity={it.rarity} small />
+                </span>
+                <span className="sh-pick-mark">
+                  <Icon id="i-check" />
+                </span>
+              </button>
+            ))}
+          </div>
+          <div className="sh-pick-foot">
+            <button
+              className="btn md primary"
+              disabled={!chosen || busy === 'weekly'}
+              data-track="weekly_claim"
+              onClick={() => chosen && onClaim(chosen)}
+            >
+              {chosen ? 'Забрать' : 'Выбери одну'}
+            </button>
+          </div>
+        </>
+      ) : null}
     </div>
   )
 }

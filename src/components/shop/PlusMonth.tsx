@@ -23,6 +23,7 @@ export function PlusMonth({
   busy,
   onSubscribe,
   onManage,
+  onMigrate,
 }: {
   plus: PlusEconomy | null
   busy: string
@@ -34,6 +35,7 @@ export function PlusMonth({
   if (!plus) return null
   const active = plus.active
   const tiers = (['LEGEND', 'EPIC', 'RARE'] as const).filter((t) => (PLUS_PASS.chests[t] || 0) > 0)
+  const left = migrationLeft(plus)
   return (
     <div className="card sh-block sh-plus2" data-section="plus">
       <div className="sh-head">
@@ -79,8 +81,28 @@ export function PlusMonth({
           <span className="sh-note">расцветки навсегда</span>
         </div>
       </div>
+      {left > 0 && onMigrate ? (
+        <div className="sh-mig">
+          <Icon id="i-gift" />
+          <span>
+            <b>Выбери {left} из старого набора</b>
+            <small>Навсегда — за то, что был с PLUS</small>
+          </span>
+          <button className="btn md primary" data-track="plus_migrate_open" onClick={onMigrate}>
+            Выбрать
+          </button>
+        </div>
+      ) : null}
     </div>
   )
+}
+
+/** Сколько вещей старого набора бывший подписчик ещё может выбрать (не больше, чем осталось в наборе). */
+export function migrationLeft(plus: PlusEconomy | null): number {
+  const m = plus?.migration
+  if (!m || !m.eligible || !Array.isArray(m.pool) || !Array.isArray(m.picked)) return 0
+  const free = m.pool.filter((it) => !m.picked.includes(it.code)).length
+  return Math.max(0, Math.min(m.picks - m.picked.length, free))
 }
 
 /** Окно выбора вещей старого набора PLUS (бывшим подписчикам: 10 + 1 за каждый оплаченный месяц). */

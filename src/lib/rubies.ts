@@ -341,11 +341,19 @@ export function openChest(id: string, clientSeed: string) {
   })
 }
 
-/** Покупка из гардероба: код вещи-расцветки («КОД~имя») — служба v3.1 знает его сама. */
+/**
+ * Покупка из гардероба: код вещи-расцветки («КОД~имя») и источник `wardrobe` —
+ * служба продаёт так любую вещь магазина по базовой цене, а не только витрину
+ * дня (без источника отвечала «Этой вещи сейчас нет на витрине»). Служба до
+ * этой правки источник не знает («Неизвестная витрина») — тогда прежний запрос.
+ */
 export const buyCosmetic = (code: string) =>
-  api<{ code: string; name: string; spent: number; balance: number }>('/rubies/shop/buy', {
+  api<{ balance: number; granted?: ItemRef[] }>('/rubies/shop/buy', {
     method: 'POST',
-    body: JSON.stringify({ code }),
+    body: JSON.stringify({ code, source: 'wardrobe' }),
+  }).catch((e) => {
+    if (!/неизвестная витрина/i.test(String((e as { message?: string } | null)?.message ?? e))) throw e
+    return api<{ balance: number; granted?: ItemRef[] }>('/rubies/shop/buy', { method: 'POST', body: JSON.stringify({ code }) })
   })
 
 export const buyPack = (pack: string) =>
@@ -404,7 +412,7 @@ export interface ShopCard {
   fragments?: { have: number; need: number; off: number }
 }
 
-export type ShopSource = 'day' | 'deal' | 'featured' | 'forYou' | 'night' | 'bundle'
+export type ShopSource = 'day' | 'deal' | 'featured' | 'forYou' | 'night' | 'bundle' | 'wardrobe'
 
 export interface ShopBundle {
   id: string

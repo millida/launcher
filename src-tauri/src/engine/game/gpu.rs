@@ -37,14 +37,25 @@ pub fn gpu_switch_supported() -> bool {
 }
 
 pub fn apply_gpu_pref(cmd: &mut Command, java: &Path, pref: GpuPref) {
+    #[cfg(windows)]
+    win_registry(java, windows_pref(pref));
     if pref == GpuPref::Auto {
+        let _ = (cmd, java);
         return;
     }
     #[cfg(target_os = "linux")]
     linux_env(cmd, pref);
-    #[cfg(windows)]
-    win_registry(java, pref);
     let _ = (cmd, java);
+}
+
+/// На Windows «Авто» — это «производительная видеокарта». Игра идёт как
+/// копия MillidaLauncher.exe, а не javaw.exe: профили драйвера NVIDIA/AMD
+/// под Java её не узнают, и «Пусть Windows решает» на ноутбуке с двумя
+/// видеокартами отдаёт OpenGL встроенной — FPS вдвое ниже (25.09.2026).
+/// На машине с одной видеокартой запись ничего не меняет.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn windows_pref(pref: GpuPref) -> GpuPref {
+    if pref == GpuPref::Auto { GpuPref::Discrete } else { pref }
 }
 
 /// PRIME offload is per-process and env-driven on every current driver stack:
@@ -104,6 +115,13 @@ fn win_registry(java: &Path, pref: GpuPref) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn auto_on_windows_asks_for_the_fast_card_and_explicit_choices_stay() {
+        assert_eq!(windows_pref(GpuPref::Auto), GpuPref::Discrete);
+        assert_eq!(windows_pref(GpuPref::Discrete), GpuPref::Discrete);
+        assert_eq!(windows_pref(GpuPref::Integrated), GpuPref::Integrated);
+    }
 
     #[test]
     fn pref_round_trips_and_unknown_falls_back_to_auto() {

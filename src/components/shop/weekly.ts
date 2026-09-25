@@ -1,5 +1,5 @@
 import { api } from '../../lib/api'
-import type { ItemRef } from '../../lib/rubies'
+import type { ItemRef, WeeklyParcel } from '../../lib/rubies'
 
 /**
  * Недельный путь — замена «посылки недели» (правка владельца 23.09.2026:
@@ -59,6 +59,26 @@ const post = (body: unknown): RequestInit => ({ method: 'POST', body: JSON.strin
  * а не путь со ступенями: без проверки формы экран магазина падал на
  * `steps.find` (1.0.115, 25.09.2026). Чужая форма — блока нет.
  */
+/** Посылка недели (что служба отдаёт сейчас): часы, порог, три вещи на выбор. */
+const isParcel = (d: unknown): d is WeeklyParcel => {
+  const x = d as Partial<WeeklyParcel> | null
+  return !!x && typeof x.hours === 'number' && typeof x.need === 'number' && x.need > 0 && typeof x.resetsAt === 'string'
+    && (x.choices === null || x.choices === undefined || Array.isArray(x.choices))
+}
+
+/**
+ * Один запрос /rubies/weekly — какой блок рисовать: путь со ступенями (если
+ * служба когда-нибудь его отдаст) или посылку недели. Чужая форма — ничего.
+ */
+export type WeeklyAny = { path: WeeklyPath; parcel?: undefined } | { parcel: WeeklyParcel; path?: undefined } | null
+export const loadWeeklyAny = (): Promise<WeeklyAny> =>
+  api<unknown>('/rubies/weekly').then((d) => {
+    const x = d as Partial<WeeklyPath> | null
+    if (x && Array.isArray(x.steps) && Array.isArray(x.tasks ?? [])) return { path: d as WeeklyPath }
+    if (isParcel(d)) return { parcel: { ...d, choices: Array.isArray(d.choices) ? d.choices : null } }
+    return null
+  })
+
 export const loadWeeklyPath = () =>
   api<WeeklyPath>('/rubies/weekly').then((d) =>
     d && Array.isArray((d as Partial<WeeklyPath>).steps) && Array.isArray((d as Partial<WeeklyPath>).tasks ?? []) ? d : null,

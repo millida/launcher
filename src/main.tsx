@@ -29,6 +29,7 @@ import { dropBootSplash } from './lib/boot'
 import { initAccent } from './lib/accent'
 import { Overlay } from './screens/Overlay'
 import { openExt } from './lib/api'
+import { initRenderGate } from './lib/renderGate'
 
 if (!import.meta.env.DEV) {
   document.addEventListener('contextmenu', (e) => {
@@ -58,6 +59,9 @@ if (isOverlay) {
   // without this it painted its own dark grey while the launcher stood in the
   // user's accent.
   void initAccent()
+} else {
+  // Окно лаунчера замирает, пока не видно или поверх идёт игра.
+  initRenderGate()
 }
 
 createRoot(document.getElementById('root')!).render(isOverlay ? <Overlay /> : <App />)

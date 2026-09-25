@@ -11,3 +11,7 @@ input, textarea, [contenteditable], [contenteditable] *,
   -webkit-user-select: text; user-select: text;
 }
 img, svg, canvas { -webkit-user-drag: none; }
+
+/* Игра поверх или окно убрано — ни одна CSS-анимация не гоняет кадры
+   (lib/renderGate.ts): встроенная видеокарта нужна игре. */
+html.m-quiet *, html.m-quiet *::before, html.m-quiet *::after { animation-play-state: paused !important; }

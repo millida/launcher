@@ -40,6 +40,9 @@ pub const PRETOUCH_FLAG: &str = "-XX:+AlwaysPreTouch";
 /// manual slider follows in `src/lib/ram.ts`.
 const RESERVE_RATIO_DIVISOR: u64 = 4;
 const RESERVE_MIN_MB: u64 = 2048;
+
+/// Ниже этого свободная сейчас память кучу не урезает (см. `safe_ceiling_mb`).
+const FREE_FLOOR_MB: u64 = 4096;
 const MIN_HEAP_MB: u32 = 2048;
 const MAX_HEAP_MB: u32 = 12288;
 
@@ -103,9 +106,19 @@ fn reserved_mb(total_mb: u64) -> u64 {
 /// Windows, лаунчер и браузер. Поэтому: не больше половины ОЗУ на машинах до
 /// 16 ГБ, не больше «всё минус 6 ГБ» на больших, и не больше того, что сейчас
 /// реально свободно (минус запас на внекучевую память).
+///
+/// Свободное «сейчас» режет кучу не ниже `FREE_FLOOR_MB`: -Xmx — только предел,
+/// G1 занимает память по мере надобности, а браузер, открытый в момент нажатия
+/// «Играть», потом закрывают. Без пола 8–12 ГБ машина с открытым браузером
+/// давала сборке на 200 модов 2 ГБ кучи — сборщик мусора без остановки и FPS
+/// вдвое ниже (жалоба 25.09.2026).
 fn safe_ceiling_mb(total_mb: u64, available_mb: u64) -> u64 {
     let by_total = if total_mb <= 16 * 1024 { total_mb / 2 } else { total_mb.saturating_sub(6 * 1024) };
-    let by_free = if available_mb > 0 { (available_mb * 10 / 13).saturating_sub(512) } else { u64::MAX };
+    let by_free = if available_mb > 0 {
+        (available_mb * 10 / 13).saturating_sub(512).max(FREE_FLOOR_MB)
+    } else {
+        u64::MAX
+    };
     by_total.min(by_free).max(MIN_HEAP_MB as u64)
 }
 
@@ -359,9 +372,22 @@ mod tests {
     fn a_16gb_laptop_never_gives_the_heap_more_than_half() {
         assert_eq!(super::safe_ceiling_mb(16 * 1024, 12 * 1024), 8 * 1024);
         assert_eq!(super::safe_ceiling_mb(32 * 1024, 0), 26 * 1024);
-        // Свободно мало — куча под то, что есть, но не меньше минимума.
+        // Свободно мало — куча под то, что есть, но не меньше пола в 4 ГБ.
         assert!(super::safe_ceiling_mb(16 * 1024, 5 * 1024) <= 5 * 1024);
-        assert_eq!(super::safe_ceiling_mb(8 * 1024, 1024), super::MIN_HEAP_MB as u64);
+        assert_eq!(super::safe_ceiling_mb(8 * 1024, 1024), 4 * 1024);
+    }
+
+    /// Открытый браузер в момент запуска не должен душить большую сборку:
+    /// 2 ГБ кучи на 200 модов — это сборка мусора каждый кадр.
+    #[test]
+    fn busy_ram_at_launch_does_not_starve_a_big_pack() {
+        for total in [8u64, 12, 16] {
+            let total_mb = total * 1024;
+            let free_mb = total_mb * 4 / 10;
+            let (heap, _) = super::fit_to_machine_with(super::wanted_mb(250, false), total_mb, free_mb);
+            assert!(heap >= 4096, "{total} ГБ, свободно 40 %: куча {heap} МБ");
+            assert!(heap as u64 <= total_mb / 2);
+        }
     }
 
     use super::*;

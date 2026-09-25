@@ -37,6 +37,7 @@ mod win {
     const WM_DISPLAYCHANGE: u32 = 0x007E;
     const WM_DPICHANGED: u32 = 0x02E0;
     const WM_SIZE: u32 = 0x0005;
+    const WM_SHOWWINDOW: u32 = 0x0018;
     const SIZE_MINIMIZED: WPARAM = 1;
 
     const SUBCLASS_ID: usize = 0x4D4C_4443;
@@ -83,6 +84,11 @@ mod win {
                 schedule();
             }
         }
+        // Убранное в трей окно (hide) не шлёт WM_SIZE: WebView2 считал себя
+        // видимым и рисовал лобби каждый кадр прямо поверх идущей игры.
+        if msg == WM_SHOWWINDOW {
+            set_webview_visible(wparam != 0 && !MINIMIZED.load(Ordering::Relaxed));
+        }
         if msg == WM_SIZE {
             let away = wparam == SIZE_MINIMIZED;
             MINIMIZED.store(away, Ordering::Relaxed);
@@ -99,7 +105,8 @@ mod win {
     /// the wallpaper behind the interface — stays painted on the desktop, so the
     /// button reads as broken. WebView2 expects the host to say when it is off
     /// screen; nothing in Tauri does it, so the message loop does. It is also
-    /// what stops the wallpaper from being rendered while nobody looks at it.
+    /// what stops the wallpaper from being rendered while nobody looks at it —
+    /// in the tray (WM_SHOWWINDOW) as well as minimized (WM_SIZE).
     fn set_webview_visible(visible: bool) {
         // Окно разрушается на выходе и шлёт WM_SIZE; событие в главный поток
         // после разрушения цикла роняет tao («cannot move state from Destroyed»).
@@ -140,7 +147,9 @@ mod win {
         }
         let Some(window) = app.get_webview_window("main") else { return };
         fit_to_monitor(&window);
-        let _ = window.with_webview(|webview| unsafe {
+        // Окно в трее остаётся невидимым для WebView2 и после смены экрана.
+        let shown = window.is_visible().unwrap_or(true);
+        let _ = window.with_webview(move |webview| unsafe {
             let controller = webview.controller();
             let mut parent = windows::Win32::Foundation::HWND::default();
             if controller.ParentWindow(&mut parent).is_err() {
@@ -159,7 +168,7 @@ mod win {
             // Without this the webview keeps hit-testing against the position
             // the window had before the display was reset.
             let _ = controller.NotifyParentWindowPositionChanged();
-            let _ = controller.SetIsVisible(true);
+            let _ = controller.SetIsVisible(shown);
             SetWindowPos(
                 parent,
                 std::ptr::null_mut(),

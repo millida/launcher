@@ -18,6 +18,7 @@ import { useWallpaper } from '../state/wallpaper'
 import { convertFileSrc, pickWallpaper } from '../ipc/commands'
 import { setScreen, showToast, useUi } from '../state/ui'
 import { PL_STAGES, cancelPrelaunch } from '../lib/launch'
+import { renderLive } from '../lib/renderGate'
 import { playTier } from '../lib/playTiers'
 import { useModUpdates } from '../state/modUpdates'
 import { usePlayStats } from '../state/playStats'
@@ -50,7 +51,8 @@ function ModeReel() {
   const [i, setI] = useState(0)
   useEffect(() => {
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return
-    const t = setInterval(() => setI((n) => (n + 1) % REEL.length), 2600)
+    // Игра поверх — картинки не листаются: каждая смена декодирует новую.
+    const t = setInterval(() => renderLive() && setI((n) => (n + 1) % REEL.length), 2600)
     return () => clearInterval(t)
   }, [])
   return <img key={i} className="lobby-mode-reel" src={REEL[i]} alt="" />

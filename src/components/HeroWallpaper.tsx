@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { H, SCENES, VIDEOS, W, isVideoWp, markVideoBroken, videoSrcOf } from '../lib/wallpaper'
 import { useWallpaper } from '../state/wallpaper'
 import { tauri } from '../ipc/tauri'
+import { onRenderGate, renderLive } from '../lib/renderGate'
 import type { UnlistenFn } from '../ipc/tauri'
 
 const PAUSE_DELAY = 1500
@@ -29,7 +30,7 @@ export function useHeroWallpaper(screenOn = true) {
 
   const onScreen = () => {
     const s = vis.current
-    return s.screen && s.shown && s.focus && s.inView
+    return s.screen && s.shown && s.focus && s.inView && renderLive()
   }
 
   const pauseTimer = useRef(0)
@@ -198,6 +199,7 @@ export function useHeroWallpaper(screenOn = true) {
     document.addEventListener('visibilitychange', onVis)
     window.addEventListener('focus', onFocus)
     window.addEventListener('blur', onBlur)
+    const offGate = onRenderGate(sync)
     const T = tauri()
     let dead = false
     const un: UnlistenFn[] = []
@@ -212,6 +214,7 @@ export function useHeroWallpaper(screenOn = true) {
         })
         .catch(() => {})
     return () => {
+      offGate()
       dead = true
       document.removeEventListener('visibilitychange', onVis)
       window.removeEventListener('focus', onFocus)
