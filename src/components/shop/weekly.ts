@@ -54,7 +54,15 @@ export interface WeeklyPath {
 
 const post = (body: unknown): RequestInit => ({ method: 'POST', body: JSON.stringify(body) })
 
-export const loadWeeklyPath = () => api<WeeklyPath>('/rubies/weekly')
+/**
+ * Служба на /rubies/weekly теперь отдаёт посылку недели (hours/need/choices),
+ * а не путь со ступенями: без проверки формы экран магазина падал на
+ * `steps.find` (1.0.115, 25.09.2026). Чужая форма — блока нет.
+ */
+export const loadWeeklyPath = () =>
+  api<WeeklyPath>('/rubies/weekly').then((d) =>
+    d && Array.isArray((d as Partial<WeeklyPath>).steps) && Array.isArray((d as Partial<WeeklyPath>).tasks ?? []) ? d : null,
+  )
 export const claimWeeklyStep = (at: number) =>
   api<{ path: WeeklyPath; balance: number; shards: number; granted: WeeklyReward }>('/rubies/weekly/claim', post({ at }))
 export const boostWeekly = (stars: number) =>

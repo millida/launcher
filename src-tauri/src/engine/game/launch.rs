@@ -1001,6 +1001,12 @@ pub async fn install_and_launch_in(
     // the nick lands on the command line and in an argfile
     let nick = launch_nick(&nick);
     let prof = load_profiles().into_iter().find(|p| p.name == profile);
+    // The window may still hold the loader id the build was imported with
+    // ("neoforge-21.1.233"); the stored build already has the game version.
+    let version_id = match &prof {
+        Some(p) if split_loader_version_id(&version_id).is_some() => p.version.clone(),
+        _ => version_id,
+    };
     let loader_id = prof.as_ref().map(|p| p.loader_id())
         .unwrap_or_else(|| if with_fabric { "fabric".into() } else { "vanilla".into() });
     let loader_ver = prof.as_ref().and_then(|p| p.loader_version.clone());
@@ -1038,7 +1044,28 @@ pub async fn install_and_launch_in(
             } else {
                 Vec::new()
             };
-            let java = match java_pick {
+            /*
+             * A pack names the Java it was built for, and a player's own Java
+             * older than that never starts it: Java 8 does not even read the
+             * argument file, so a 1.20.1 pack dies with «Could not find or load
+             * main class @…millida-args.txt». Such a pick is set aside for this
+             * pack only; a newer Java than required is still the player's call.
+             */
+            let pick = java_pick.filter(|p| match java_major_at(p) {
+                Some(m) if u64::from(m) >= spec.java_major => true,
+                found => {
+                    warn(
+                        &app,
+                        &format!(
+                            "Выбранная Java {} не подходит сборке — ей нужна Java {}. Запускаем на своей",
+                            found.map(|m| m.to_string()).unwrap_or_else(|| "неизвестной версии".into()),
+                            spec.java_major
+                        ),
+                    );
+                    false
+                }
+            });
+            let java = match pick {
                 Some(p) => p,
                 None => ensure_java(&app, spec.java_major).await?,
             };

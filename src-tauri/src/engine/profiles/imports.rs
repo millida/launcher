@@ -203,8 +203,7 @@ pub(crate) fn detect_from_game_dir(dir: &Path) -> Option<(String, String)> {
             let id = e.file_name().to_string_lossy().to_string();
             let Ok(txt) = std::fs::read_to_string(p.join(format!("{}.json", id))) else { continue };
             let Ok(v) = serde_json::from_str::<Value>(&txt) else { continue };
-            let inherits = v["inheritsFrom"].as_str().unwrap_or("").to_string();
-            let ver = base_version(&id, &inherits);
+            let ver = game_version_of(&id, &v);
             if ver.is_empty() { continue }
             let loader = match loader_from_version_json(&v) {
                 Some(l) => l,
@@ -273,13 +272,155 @@ pub(crate) fn loader_from_id(id: &str) -> String {
 }
 
 /// Extracts the plain game version out of ids like "1.20.1-forge-47.2.0".
+///
+/// Returns empty when neither value carries a game version: TLauncher names a
+/// modpack's version folder after the pack («NightfallCraft - The Casket of
+/// Reveries -2.2.9.7»), and taking that name for the game version gave a build
+/// that every launch refused with «Версия … не найдена».
 pub(crate) fn base_version(id: &str, inherits: &str) -> String {
-    if !inherits.is_empty() { return inherits.to_string() }
-    let mut best = String::new();
-    for part in id.split(|c: char| !(c.is_ascii_digit() || c == '.')) {
-        if part.starts_with('1') && part.contains('.') && part.len() > best.len() { best = part.to_string() }
+    if !inherits.is_empty() {
+        return snapshot_like(inherits).or_else(|| mc_token(inherits)).unwrap_or_else(|| inherits.to_string());
     }
-    if best.is_empty() { id.to_string() } else { best }
+    snapshot_like(id).or_else(|| mc_token(id)).unwrap_or_default()
+}
+
+/// The longest `1.N` / `1.N.M` token in free text.
+fn mc_token(s: &str) -> Option<String> {
+    let mut best: Option<String> = None;
+    for part in s.split(|c: char| !(c.is_ascii_digit() || c == '.')) {
+        let part = part.trim_matches('.');
+        let nums: Vec<&str> = part.split('.').collect();
+        let shaped = nums.len() >= 2
+            && nums.len() <= 3
+            && nums[0] == "1"
+            && nums.iter().all(|n| !n.is_empty() && n.len() <= 2);
+        if shaped && best.as_ref().is_none_or(|b| part.len() > b.len()) {
+            best = Some(part.to_string());
+        }
+    }
+    best
+}
+
+/// Game versions without a `1.N` in them: snapshots and the old eras.
+fn snapshot_like(s: &str) -> Option<String> {
+    let s = s.trim();
+    if s.is_empty() || s.len() > 32 || !s.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_')) {
+        return None;
+    }
+    let b = s.as_bytes();
+    let weekly = b.len() >= 6
+        && b[..2].iter().all(u8::is_ascii_digit)
+        && b[2] == b'w'
+        && b[3..5].iter().all(u8::is_ascii_digit)
+        && b[5].is_ascii_lowercase();
+    let old = ["b1.", "a1.", "c0.", "rd-", "inf-"].iter().any(|p| s.starts_with(p));
+    (weekly || old).then(|| s.to_string())
+}
+
+/// The game version a full version json was built on, read from what the
+/// loader itself put there: its libraries and its `--fml.mcVersion`.
+fn version_from_meta(meta: &Value) -> Option<String> {
+    if let Some(v) = meta["jar"].as_str().and_then(mc_token) {
+        return Some(v);
+    }
+    if let Some(args) = meta["arguments"]["game"].as_array() {
+        let flat: Vec<&str> = args.iter().filter_map(|a| a.as_str()).collect();
+        if let Some(i) = flat.iter().position(|a| *a == "--fml.mcVersion") {
+            if let Some(v) = flat.get(i + 1).and_then(|v| mc_token(v)) {
+                return Some(v);
+            }
+        }
+    }
+    for lib in meta["libraries"].as_array().into_iter().flatten() {
+        let name = lib["name"].as_str().unwrap_or("");
+        let mut it = name.split(':');
+        let (Some(group), Some(artifact), Some(ver)) = (it.next(), it.next(), it.next()) else { continue };
+        match (group, artifact) {
+            ("net.minecraftforge", "forge" | "fmlloader" | "fmlcore" | "minecraftforge")
+            | ("net.fabricmc", "intermediary")
+            | ("org.quiltmc", "hashed")
+            | ("net.minecraft", "client") => {
+                if let Some(v) = mc_token(ver) {
+                    return Some(v);
+                }
+            }
+            // NeoForge numbers itself after the game: 20.4.x is 1.20.4, 21.0.x is 1.21
+            ("net.neoforged", "neoforge") => {
+                let mut n = ver.split(['.', '-']);
+                if let (Some(major), Some(minor)) = (n.next(), n.next()) {
+                    if major.parse::<u32>().is_ok() && minor.parse::<u32>().is_ok() {
+                        return Some(if minor == "0" { format!("1.{}", major) } else { format!("1.{}.{}", major, minor) });
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Game version of a `versions/<id>/<id>.json`: its parent, then what the
+/// loader wrote into it, then the folder name. Empty when none of them knows.
+pub(crate) fn game_version_of(id: &str, meta: &Value) -> String {
+    let inherits = meta["inheritsFrom"].as_str().unwrap_or("").trim();
+    if let Some(v) = snapshot_like(inherits).or_else(|| mc_token(inherits)) {
+        return v;
+    }
+    if let Some(v) = version_from_meta(meta) {
+        return v;
+    }
+    base_version(id, "")
+}
+
+/// Game version a build was made for, voted by the names of its mods:
+/// «zmedievalmusic-1.20.1-2.2.jar», «caelus-forge-3.2.0+1.20.1.jar». Used to
+/// mend builds imported before the version folder name stopped being taken for
+/// the game version — their original folder is gone, their mods are not.
+pub(crate) fn version_from_mod_names(dir: &Path) -> Option<String> {
+    let rd = std::fs::read_dir(dir.join("mods")).ok()?;
+    let mut votes: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for e in rd.flatten() {
+        let name = e.file_name().to_string_lossy().to_lowercase();
+        let Some(stem) = name.strip_suffix(".jar") else { continue };
+        if let Some(v) = mc_token(stem) {
+            *votes.entry(v).or_default() += 1;
+        }
+    }
+    let mut ranked: Vec<(String, usize)> = votes.into_iter().collect();
+    ranked.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    let (top, n) = ranked.first()?.clone();
+    let second = ranked.get(1).map(|x| x.1).unwrap_or(0);
+    (n >= 3 && n >= second * 2).then_some(top)
+}
+
+/// Whether a stored game version can be one at all. A name with spaces or
+/// non-Latin letters is a pack title that got into the version field.
+pub(crate) fn version_is_plausible(v: &str) -> bool {
+    v == "latest" || mc_token(v).is_some() || snapshot_like(v).is_some()
+}
+
+/// A build whose version field holds a pack title instead of a game version
+/// (imported from TLauncher before `base_version` stopped taking the folder
+/// name). The version is recovered from its mods and saved; if the mods do not
+/// tell it, the player gets told what to do instead of «Версия … не найдена».
+pub fn mend_profile_version(p: &mut Profile) -> Result<(), String> {
+    if version_is_plausible(&p.version) {
+        return Ok(());
+    }
+    let Some(v) = version_from_mod_names(&profile_dir(&p.name)) else {
+        return Err(format!(
+            "Сборка «{}» не знает свою версию Minecraft — в ней записано «{}». Открой настройки сборки и выбери версию игры или импортируй её заново",
+            p.name,
+            p.version.chars().take(64).collect::<String>()
+        ));
+    };
+    p.version = v;
+    let mut all = load_profiles();
+    if let Some(x) = all.iter_mut().find(|x| x.name == p.name) {
+        x.version = p.version.clone();
+        save_profiles(&all)?;
+    }
+    Ok(())
 }
 
 pub fn scan_imports() -> Vec<FoundInstance> {
@@ -341,7 +482,7 @@ fn walk_roots(dots: SourceRoots, insts: SourceRoots) -> Vec<FoundInstance> {
                 .and_then(|t| serde_json::from_str::<Value>(&t).ok())
                 .unwrap_or(Value::Null);
             let inherits = meta["inheritsFrom"].as_str().unwrap_or("").to_string();
-            let version = base_version(&id, &inherits);
+            let version = game_version_of(&id, &meta);
             if version.is_empty() { continue }
             let mut loader = loader_from_id(&id);
             if loader == "vanilla" {
@@ -555,6 +696,69 @@ mod tests {
         use std::io::Write;
         z.write_all(body.as_bytes()).unwrap();
         z.finish().unwrap();
+    }
+
+    /// TLauncher называет папку версии модпака его заголовком. Раньше имя
+    /// уходило в версию игры целиком, и каждый запуск NightfallCraft падал с
+    /// «Версия NightfallCraft - … -2.2.9.7 не найдена» (21% запусков сборки).
+    #[test]
+    fn a_pack_titled_version_folder_is_not_a_game_version() {
+        let id = "NightfallCraft - The Casket of Reveries The Casket of Reveries -2.2.9.7";
+        assert_eq!(base_version(id, ""), "", "заголовок сборки — не версия игры");
+        let forge = serde_json::json!({
+            "id": id,
+            "mainClass": "cpw.mods.bootstraplauncher.BootstrapLauncher",
+            "arguments": { "game": ["--launchTarget", "forgeclient", "--fml.mcVersion", "1.20.1", "--fml.forgeVersion", "47.3.0"] },
+            "libraries": [{ "name": "net.minecraftforge:fmlloader:1.20.1-47.3.0" }]
+        });
+        assert_eq!(game_version_of(id, &forge), "1.20.1");
+        let by_lib = serde_json::json!({ "libraries": [{ "name": "net.minecraftforge:forge:1.20.1-47.3.0:universal" }] });
+        assert_eq!(game_version_of(id, &by_lib), "1.20.1");
+        let neo = serde_json::json!({ "libraries": [{ "name": "net.neoforged:neoforge:21.1.77" }] });
+        assert_eq!(game_version_of("My Pack", &neo), "1.21.1");
+        let neo0 = serde_json::json!({ "libraries": [{ "name": "net.neoforged:neoforge:21.0.167" }] });
+        assert_eq!(game_version_of("My Pack", &neo0), "1.21");
+        assert_eq!(game_version_of(id, &serde_json::json!({})), "", "ничего не известно — сборка не предлагается");
+        assert_eq!(game_version_of("x", &serde_json::json!({ "inheritsFrom": "1.20.1-forge-47.3.0" })), "1.20.1");
+    }
+
+    /// Обычные имена папок и старые версии читаются как раньше.
+    #[test]
+    fn ordinary_version_ids_still_resolve() {
+        assert_eq!(base_version("1.20.1-forge-47.2.0", ""), "1.20.1");
+        assert_eq!(base_version("fabric-loader-0.16.9-1.21.1", ""), "1.21.1");
+        assert_eq!(base_version("Forge 1.12.2", ""), "1.12.2");
+        assert_eq!(base_version("anything", "1.19.2"), "1.19.2");
+        assert_eq!(base_version("24w14a", ""), "24w14a");
+        assert_eq!(base_version("b1.7.3", ""), "b1.7.3");
+        assert!(version_is_plausible("1.20.1"));
+        assert!(version_is_plausible("latest"));
+        assert!(version_is_plausible("1.21-pre1"));
+        assert!(!version_is_plausible("NightfallCraft - The Casket of Reveries The Casket of Reveries -2.2.9.7"));
+        assert!(!version_is_plausible("Arcania Origins Arcania Origins"));
+        assert!(!version_is_plausible("arcaniaaa"));
+    }
+
+    /// Уже импортированные сборки чинятся по именам модов: папки TLauncher
+    /// у игрока может не остаться, а моды лежат в самой сборке.
+    #[test]
+    fn mods_vote_for_the_game_version() {
+        let dir = tmp("mod-vote");
+        std::fs::create_dir_all(dir.join("mods")).unwrap();
+        for f in [
+            "zmedievalmusic-1.20.1-2.2.jar",
+            "caelus-forge-3.2.0+1.20.1.jar",
+            "jei-1.20.1-forge-15.3.0.4.jar",
+            "somemod-1.0.3.jar",
+            "config.txt",
+        ] {
+            std::fs::write(dir.join("mods").join(f), b"").unwrap();
+        }
+        assert_eq!(version_from_mod_names(&dir).as_deref(), Some("1.20.1"));
+        let few = tmp("mod-vote-few");
+        std::fs::create_dir_all(few.join("mods")).unwrap();
+        std::fs::write(few.join("mods").join("a-1.20.1.jar"), b"").unwrap();
+        assert_eq!(version_from_mod_names(&few), None, "одного мода мало, чтобы решать за игрока");
     }
 
     #[test]

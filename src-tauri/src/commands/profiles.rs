@@ -272,10 +272,11 @@ pub async fn launch_profile(
     ram_mb: u32,
     auth: Option<engine::AuthArgs>,
 ) -> Result<String, String> {
-    let p = engine::load_profiles()
+    let mut p = engine::load_profiles()
         .into_iter()
         .find(|x| x.name == profile)
         .unwrap_or(engine::Profile { name: "default".into(), version: "latest".into(), fabric: false, loader: Some("vanilla".into()), loader_version: None, icon: None });
+    engine::mend_profile_version(&mut p)?;
     let r = engine::resolve_launch_auth(&app, auth).await;
     engine::install_and_launch_in(app, p.version, r.nick.unwrap_or(nick), p.fabric, ram_mb, p.name, r.auth).await
 }

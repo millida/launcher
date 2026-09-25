@@ -202,16 +202,54 @@ enum MavenMiss {
     Unreachable(String),
 }
 
+/// Сумма инсталлятора: сначала встроенная таблица (maven не нужен вовсе), потом
+/// maven по кругу прямой путь → наше зеркало → снова прямой.
+async fn installer_sha1(url: &str) -> Result<String, MavenMiss> {
+    if let Some(sum) = known_installer_sha1(url) {
+        return Ok(sum.to_string());
+    }
+    maven_sha1_via(&routes_round_trip(&format!("{}.sha1", url)).await).await
+}
+
+/// Одна попытка на адрес — мало: `.sha1` весит 40 байт, и падает он не от
+/// размера, а от того, что соединение до maven рвётся через раз. Поэтому каждый
+/// путь пробуется дважды с растущей паузой.
+const SUM_TRIES_PER_ROUTE: u32 = 2;
+const SUM_TIMEOUT: Duration = Duration::from_secs(15);
+
+fn sum_backoff(step: u32) -> Duration {
+    Duration::from_millis((500u64 << step.min(3)).min(4000))
+}
+
+async fn maven_sha1_via(targets: &[String]) -> Result<String, MavenMiss> {
+    let mut last = String::from("нет адреса");
+    let mut step = 0u32;
+    for target in targets {
+        for _ in 0..SUM_TRIES_PER_ROUTE {
+            if step > 0 {
+                tokio::time::sleep(sum_backoff(step - 1)).await;
+            }
+            step += 1;
+            match maven_sha1_once(target).await {
+                Ok(hex) => return Ok(hex),
+                Err(MavenMiss::Absent) => return Err(MavenMiss::Absent),
+                Err(MavenMiss::Unreachable(e)) => last = e,
+            }
+        }
+    }
+    Err(MavenMiss::Unreachable(last))
+}
+
 /// Reads the maven sibling `.sha1`; the body is bare hex, sometimes followed by
-/// a file name, so only the first word is taken and validated.
-async fn maven_sha1(url: &str) -> Result<String, MavenMiss> {
-    let sum = format!("{}.sha1", url);
+/// a file name, so only the first word is taken and validated. 404/410 is
+/// maven's own answer "no such file" — through our mirror it comes back the same.
+async fn maven_sha1_once(sum: &str) -> Result<String, MavenMiss> {
     let res = client()
-        .get(&sum)
-        .timeout(Duration::from_secs(30))
+        .get(sum)
+        .timeout(SUM_TIMEOUT)
         .send()
         .await
-        .map_err(|e| MavenMiss::Unreachable(e.to_string()))?;
+        .map_err(|e| MavenMiss::Unreachable(net_err(&e)))?;
     if res.status() == 404 || res.status() == 410 {
         return Err(MavenMiss::Absent);
     }
@@ -221,15 +259,19 @@ async fn maven_sha1(url: &str) -> Result<String, MavenMiss> {
         .text()
         .await
         .map_err(|e| MavenMiss::Unreachable(e.to_string()))?;
-    let hex = text
-        .split_whitespace()
-        .next()
-        .unwrap_or_default()
-        .to_lowercase();
-    if hex.len() == 40 && hex.chars().all(|c| c.is_ascii_hexdigit()) {
-        return Ok(hex);
-    }
-    Err(MavenMiss::Unreachable("контрольная сумма нечитаема".into()))
+    parse_sha1(&text).ok_or_else(|| MavenMiss::Unreachable("контрольная сумма нечитаема".into()))
+}
+
+/// Сумма библиотеки загрузчика: необязательна, поэтому одна попытка — без неё
+/// файл всё равно качается, а круг с паузами на десятках библиотек растянул бы
+/// установку на плохой сети на минуты.
+async fn maven_sha1(url: &str) -> Result<String, MavenMiss> {
+    maven_sha1_once(&format!("{}.sha1", url)).await
+}
+
+fn parse_sha1(text: &str) -> Option<String> {
+    let hex = text.split_whitespace().next().unwrap_or_default().to_lowercase();
+    (hex.len() == 40 && hex.chars().all(|c| c.is_ascii_hexdigit())).then_some(hex)
 }
 
 /// What to tell the player when no installer candidate worked.
@@ -266,6 +308,65 @@ fn forge_installers(vid: &str, build: &str) -> Vec<(String, String)> {
         (format!("{MAVEN}/{f}/forge-{f}-installer.jar"), dir_name.clone()),
         (format!("{MAVEN}/{f}-{vid}/forge-{f}-{vid}-installer.jar"), dir_name),
     ]
+}
+
+const NEOFORGE_MAVEN: &str = "https://maven.neoforged.net";
+
+/// NeoForge для 1.20.1 — ещё форк Forge: он лежит под координатами
+/// `net.neoforged:forge` со сборками `1.20.1-47.1.x`, а его инсталлятор создаёт
+/// профиль `1.20.1-forge-47.1.x`. Лаунчер искал его в `net.neoforged:neoforge`,
+/// где такой ветки нет, и каждая сборка NeoForge 1.20.1 падала с «NeoForge для
+/// этой версии не найден» (275 запусков за две недели).
+fn neoforge_on_forge_coords(vid: &str) -> bool {
+    vid == "1.20.1"
+}
+
+/// Инсталлятор сборки NeoForge и имя папки, которую он создаёт.
+fn neoforge_installer(vid: &str, build: &str) -> (String, String) {
+    if neoforge_on_forge_coords(vid) {
+        let b = build.strip_prefix("1.20.1-").unwrap_or(build);
+        return (
+            format!("{NEOFORGE_MAVEN}/releases/net/neoforged/forge/1.20.1-{b}/forge-1.20.1-{b}-installer.jar"),
+            format!("1.20.1-forge-{b}"),
+        );
+    }
+    (
+        format!("{NEOFORGE_MAVEN}/releases/net/neoforged/neoforge/{build}/neoforge-{build}-installer.jar"),
+        format!("neoforge-{}", build),
+    )
+}
+
+fn neoforge_versions_url(vid: &str) -> String {
+    let artifact = if neoforge_on_forge_coords(vid) { "forge" } else { "neoforge" };
+    format!("{NEOFORGE_MAVEN}/api/maven/versions/releases/net/neoforged/{artifact}")
+}
+
+fn neoforge_versions_cache(vid: &str) -> &'static str {
+    if neoforge_on_forge_coords(vid) { "neoforge-forge-versions.json" } else { "neoforge-versions.json" }
+}
+
+/// Сборки NeoForge для версии MC, новые первыми.
+fn neoforge_candidates(list: &Value, vid: &str) -> Vec<String> {
+    if !neoforge_on_forge_coords(vid) {
+        return neoforge_builds(list, vid);
+    }
+    let mut builds: Vec<String> = list["versions"]
+        .as_array()
+        .map(|a| a.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>())
+        .unwrap_or_default()
+        .into_iter()
+        .map(|v| v.strip_prefix("1.20.1-").unwrap_or(v).to_string())
+        .filter(|v| v.starts_with("47.1."))
+        .collect();
+    builds.sort_by_key(|v| v.split(['.', '-']).map(|p| p.parse::<u64>().unwrap_or(0)).collect::<Vec<_>>());
+    builds.dedup();
+    builds.reverse();
+    builds
+}
+
+fn exact_loader_dir(vdir: &Path, name: &str) -> Option<PathBuf> {
+    let dir = vdir.join(name);
+    dir.join(format!("{}.json", name)).exists().then_some(dir)
 }
 
 /// Forge installers written before the 1.13 spec carry no client CLI at all:
@@ -594,56 +695,79 @@ pub async fn install_loader_with_java(
         let vdir = root.join("versions");
         // An already installed loader needs neither the NeoForge version list
         // nor the Forge promotions file, so launching stays offline-capable.
+        let legacy_neo = loader == "neoforge" && neoforge_on_forge_coords(&vid);
         let pinned_dir_name = loader_version.map(|pin| if loader == "neoforge" {
-            format!("neoforge-{}", pin)
+            neoforge_installer(&vid, pin).1
         } else {
             format!("{}-forge-{}", vid, pin)
         });
         let mut found = match &pinned_dir_name {
             // A pinned build accepts only an exact match.
             Some(name) => Some(vdir.join(name)).filter(|d| d.join(format!("{}.json", name)).exists()),
+            // NeoForge 1.20.1 names its dir like Forge does, so a guess by name
+            // would pick up plain Forge: only an exact candidate counts there.
+            None if legacy_neo => None,
             None => resolve_loader_dir(&vdir, loader, "", &vid),
         };
         if found.is_none() {
             emit(app, "files", 50.0, &format!("{}-инсталлер…", loader));
             let mut installers: Vec<(String, String)> = if loader == "neoforge" {
+                /*
+                 * Список версий нужен только чтобы выбрать сборку. Если maven и
+                 * наше зеркало его не отдали, а офлайн-копии нет, сборка с
+                 * закреплённой версией ставится по ней, остальные — по сборкам
+                 * из встроенной таблицы. Раньше любой сбой списка обрывал
+                 * установку, даже когда номер сборки был известен заранее.
+                 */
                 let list = get_json_cached(
-                    "https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoforge",
-                    &lcache.join("neoforge-versions.json"),
-                ).await?;
-                let all = neoforge_builds(&list, &vid);
+                    &neoforge_versions_url(&vid),
+                    &lcache.join(neoforge_versions_cache(&vid)),
+                ).await;
+                let mut all = list.as_ref().map(|l| neoforge_candidates(l, &vid)).unwrap_or_default();
+                if all.is_empty() {
+                    all = known_builds("neoforge", &vid);
+                }
                 // Releases first, but a branch that only ever shipped
                 // prereleases still has to be installable.
                 let mut cands: Vec<&String> = all.iter().filter(|v| !neoforge_prerelease(v)).collect();
                 if cands.is_empty() { cands = all.iter().collect() }
                 if cands.is_empty() && loader_version.is_none() {
-                    return Err("NeoForge для этой версии не найден".into())
+                    return Err(match list {
+                        Err(e) => format!("Не получили список версий NeoForge: {}", e),
+                        Ok(_) => "NeoForge для этой версии не найден".into(),
+                    });
                 }
-                cands.iter().take(3).map(|nv| (
-                    format!("https://maven.neoforged.net/releases/net/neoforged/neoforge/{v}/neoforge-{v}-installer.jar", v = nv),
-                    format!("neoforge-{}", nv),
-                )).collect()
+                cands.iter().take(3).map(|nv| neoforge_installer(&vid, nv)).collect()
             } else {
                 let promos = get_json_cached(
                     "https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json",
                     &lcache.join("forge-promos.json"),
-                ).await?;
+                ).await;
                 let mut builds: Vec<String> = vec![];
-                for key in [format!("{}-recommended", vid), format!("{}-latest", vid)] {
-                    if let Some(fv) = promos["promos"][&key].as_str() {
-                        if !builds.iter().any(|b| b == fv) { builds.push(fv.to_string()) }
+                if let Ok(promos) = &promos {
+                    for key in [format!("{}-recommended", vid), format!("{}-latest", vid)] {
+                        if let Some(fv) = promos["promos"][&key].as_str() {
+                            if !builds.iter().any(|b| b == fv) { builds.push(fv.to_string()) }
+                        }
                     }
                 }
-                if builds.is_empty() { return Err("Forge для этой версии не найден".into()) }
+                // Promotions unreachable: the builds the launcher knows
+                // checksums for are a working answer, not a guess.
+                if builds.is_empty() && promos.is_err() {
+                    builds = known_builds("forge", &vid);
+                }
+                if builds.is_empty() && loader_version.is_none() {
+                    return Err(match promos {
+                        Err(e) => format!("Не получили список сборок Forge: {}", e),
+                        Ok(_) => "Forge для этой версии не найден".into(),
+                    });
+                }
                 builds.iter().flat_map(|fv| forge_installers(&vid, fv)).collect()
             };
             // The modpack's pinned build is tried first.
             if let Some(pin) = loader_version {
                 let pinned = if loader == "neoforge" {
-                    vec![(
-                        format!("https://maven.neoforged.net/releases/net/neoforged/neoforge/{v}/neoforge-{v}-installer.jar", v = pin),
-                        format!("neoforge-{}", pin),
-                    )]
+                    vec![neoforge_installer(&vid, pin)]
                 } else {
                     forge_installers(&vid, pin)
                 };
@@ -659,6 +783,7 @@ pub async fn install_loader_with_java(
                 .map(|(_, name)| name.clone())
                 .ok_or_else(|| format!("{} для этой версии не найден", loader))?;
             found = match loader_version {
+                _ if legacy_neo => exact_loader_dir(&vdir, &ver_dir_name),
                 // A pinned build must not resolve to a neighbouring one, but the
                 // legacy Forge installer names its dir "<mc>-Forge<build>-<mc>",
                 // so the exact name is a hint rather than the only answer.
@@ -687,7 +812,7 @@ pub async fn install_loader_with_java(
                     let inst = data_dir().join("tmp").join(format!("{}-installer.jar", name));
                     // The installer is executed by a JVM, so it is only accepted
                     // with the maven-published sha1.
-                    let sha1 = match maven_sha1(inst_url).await {
+                    let sha1 = match installer_sha1(inst_url).await {
                         Ok(sum) => sum,
                         Err(MavenMiss::Absent) => {
                             absent.push(name.clone());
@@ -739,7 +864,11 @@ pub async fn install_loader_with_java(
                         last_err = installer_failure(&out);
                         continue;
                     }
-                    found = resolve_loader_dir(&vdir, loader, name, &vid);
+                    found = if legacy_neo {
+                        exact_loader_dir(&vdir, name)
+                    } else {
+                        resolve_loader_dir(&vdir, loader, name, &vid)
+                    };
                     if found.is_some() { break }
                     last_err = format!("Инсталлер отработал, но профиль {} не появился", name);
                 }
@@ -1248,6 +1377,120 @@ e";
         assert!(
             !natives_up_to_date(&dir, stamp, true),
             "«Проверить файлы» обязана разложить нативы заново даже при целой метке"
+        );
+    }
+
+    /// Отдаёт один HTTP-ответ с заданным статусом и телом.
+    async fn serve_status(status: &'static str, body: &'static str) -> String {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/forge-installer.jar.sha1", listener.local_addr().unwrap());
+        tokio::spawn(async move {
+            let (mut sock, _) = listener.accept().await.unwrap();
+            let mut buf = [0u8; 1024];
+            let _ = sock.read(&mut buf).await;
+            let head = format!(
+                "HTTP/1.1 {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                status,
+                body.len(),
+                body
+            );
+            let _ = sock.write_all(head.as_bytes()).await;
+            let _ = sock.shutdown().await;
+        });
+        url
+    }
+
+    /// Адрес, по которому никто не слушает: так выглядит заблокированный maven.
+    async fn dead_url() -> String {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/x.jar.sha1", listener.local_addr().unwrap());
+        drop(listener);
+        url
+    }
+
+    /// Первый путь мёртв, второй отвечает пятисоткой, третий — суммой: сумма
+    /// должна дойти. Раньше хватало одного обрыва на прямом пути, чтобы игрок
+    /// читал «не дошли до maven за контрольной суммой инсталлера».
+    #[tokio::test]
+    async fn installer_sum_survives_a_dead_route() {
+        const SUM: &str = "66bfea9963bfa60d88bab6b2750e74a958392715";
+        let targets = vec![
+            dead_url().await,
+            serve_status("502 Bad Gateway", "").await,
+            serve_status("200 OK", "66BFEA9963BFA60D88BAB6B2750E74A958392715  forge-installer.jar").await,
+        ];
+        match maven_sha1_via(&targets).await {
+            Ok(sum) => assert_eq!(sum, SUM, "сумма читается первым словом и в нижнем регистре"),
+            Err(_) => panic!("живой третий путь обязан дать сумму"),
+        }
+    }
+
+    /// 404 — ответ самого репозитория «такого файла нет»: второе имя сборки
+    /// отсеивается сразу, без круга по зеркалам.
+    #[tokio::test]
+    async fn installer_sum_404_is_absent_at_once() {
+        let targets = vec![serve_status("404 Not Found", "").await, dead_url().await];
+        assert!(matches!(maven_sha1_via(&targets).await, Err(MavenMiss::Absent)));
+    }
+
+    /// Все пути мертвы — причина сети доходит до игрока, а не «нет билда».
+    #[tokio::test]
+    async fn installer_sum_all_routes_dead_is_unreachable() {
+        let targets = vec![dead_url().await];
+        assert!(matches!(maven_sha1_via(&targets).await, Err(MavenMiss::Unreachable(_))));
+    }
+
+    /// Встроенная таблица срабатывает ровно на тех адресах, которые строит
+    /// установка: строка, до которой установка никогда не доходит, бесполезна.
+    #[test]
+    fn every_known_sum_matches_an_installer_url_the_launcher_builds() {
+        for (loader, mc, build, file, sum) in super::super::loader_sums::rows() {
+            let urls: Vec<String> = if *loader == "neoforge" {
+                vec![neoforge_installer(mc, build).0]
+            } else {
+                forge_installers(mc, build).into_iter().map(|(u, _)| u).collect()
+            };
+            let hit = urls.iter().find(|u| u.ends_with(&format!("/{}", file)));
+            let Some(url) = hit else { panic!("{} {} {}: установка не строит адрес {}", loader, mc, build, file) };
+            assert_eq!(known_installer_sha1(url), Some(*sum), "{}", url);
+        }
+    }
+
+    /// вход -> адрес и папка: NeoForge 1.20.1 живёт под координатами forge и
+    /// создаёт профиль с именем как у Forge; остальные ветки — как раньше.
+    #[test]
+    fn neoforge_1_20_1_uses_forge_coordinates() {
+        let cases: [(&str, &str, &str, &str); 3] = [
+            (
+                "1.20.1",
+                "47.1.106",
+                "https://maven.neoforged.net/releases/net/neoforged/forge/1.20.1-47.1.106/forge-1.20.1-47.1.106-installer.jar",
+                "1.20.1-forge-47.1.106",
+            ),
+            (
+                "1.20.1",
+                "1.20.1-47.1.101",
+                "https://maven.neoforged.net/releases/net/neoforged/forge/1.20.1-47.1.101/forge-1.20.1-47.1.101-installer.jar",
+                "1.20.1-forge-47.1.101",
+            ),
+            (
+                "1.21.1",
+                "21.1.233",
+                "https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.233/neoforge-21.1.233-installer.jar",
+                "neoforge-21.1.233",
+            ),
+        ];
+        for (vid, build, url, dir) in cases {
+            assert_eq!(neoforge_installer(vid, build), (url.to_string(), dir.to_string()), "{} {}", vid, build);
+        }
+        assert!(neoforge_versions_url("1.20.1").ends_with("/net/neoforged/forge"));
+        assert!(neoforge_versions_url("1.21.1").ends_with("/net/neoforged/neoforge"));
+        let list = serde_json::json!({ "versions": ["47.1.82", "1.20.1-47.1.9", "1.20.1-47.1.106", "1.20.1-47.1.100"] });
+        assert_eq!(
+            neoforge_candidates(&list, "1.20.1"),
+            vec!["47.1.106", "47.1.100", "47.1.82", "47.1.9"],
+            "номера без префикса MC, числовой порядок"
         );
     }
 }

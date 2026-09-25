@@ -33,6 +33,7 @@ import { useAccounts } from '../state/accounts'
 import { showToast } from '../state/ui'
 import { showReward, type RewardEntry } from '../components/reward/RewardReveal'
 import { logoutToLogin } from '../lib/session'
+import { Guard } from '../components/Guard'
 import { uiConfirm } from '../state/confirm'
 import { Packs, topUpKopecks } from '../components/shop/Packs'
 import { rarityOfPrice, shardWord, word } from '../components/shop/rarity'
@@ -521,9 +522,12 @@ export function Rubies({ on }: { on: boolean }) {
    */
   const feed = day ? (
     <div className="sh-flow sh-feed">
+      <Guard what="Бонус за вход" silent>
       <div className="card sh-block sh-pass dp2" id="shop-today" data-section="pass">
         {on ? <PassBody active={on} inline /> : <span className="skel sh-skel" style={{ height: '420px' }} />}
       </div>
+      </Guard>
+      <Guard what="Витрина" silent>
       <Showcase
         featured={day.day.featured}
         deal={day.day.deal}
@@ -533,7 +537,9 @@ export function Rubies({ on }: { on: boolean }) {
         onEnd={reload}
         {...buy}
       />
+      </Guard>
       {/* Наборов нет (решение владельца 24.09.2026, 19:37): каждая вещь — отдельно. */}
+      <Guard what="Для тебя" silent>
       {day.xray || day.day.forYou.length ? (
         <ForYou
           lead={day.xray ? <XrayCard offer={day.xray} balance={balance} busy={busy} onBuy={(o) => void doXray(o)} onEnd={reload} /> : null}
@@ -542,12 +548,16 @@ export function Rubies({ on }: { on: boolean }) {
           {...buy}
         />
       ) : null}
-      {day.nightMarket ? <NightMarket endsAt={day.nightMarket.endsAt} cards={day.nightMarket.cards} onEnd={reload} {...buy} /> : null}
+      </Guard>
+      <Guard what="Ночной рынок" silent>{day.nightMarket ? <NightMarket endsAt={day.nightMarket.endsAt} cards={day.nightMarket.cards} onEnd={reload} {...buy} /> : null}</Guard>
+      <Guard what="Задания недели" silent>
       {weekly ? (
         <WeeklyPathBlock data={weekly} busy={busy} onClaim={(at) => void doWeekly(at)} onBoost={(n) => void doWeeklyBoost(n)} />
       ) : null}
-      {workshop ? <WorkshopBlock data={workshop} busy={busy} onCraft={(w) => void doCraft(w)} /> : null}
-      {progress ? <PathBlock data={progress} /> : null}
+      </Guard>
+      <Guard what="Мастерская" silent>{workshop ? <WorkshopBlock data={workshop} busy={busy} onCraft={(w) => void doCraft(w)} /> : null}</Guard>
+      <Guard what="Путь" silent>{progress ? <PathBlock data={progress} /> : null}</Guard>
+      <Guard what="Рубины" silent>
       <Packs
         packs={day.packs}
         busy={busy}
@@ -555,6 +565,8 @@ export function Rubies({ on }: { on: boolean }) {
         wallet={walletKnown ? walletKopecks : undefined}
         onTopUp={(n) => doWalletTopUp(n)}
       />
+      </Guard>
+      <Guard what="PLUS" silent>
       <PlusMonth
         plus={plus}
         busy={busy}
@@ -563,6 +575,8 @@ export function Rubies({ on }: { on: boolean }) {
         onClaim={() => void doPlusMonth()}
         onMigrate={() => setMigOpen(true)}
       />
+      </Guard>
+      <Guard what="Хочу" silent>
       {wishes && wishes.items.length ? (
         <div id="shop-wish" data-section="wishlist">
           <Wishlist
@@ -576,7 +590,10 @@ export function Rubies({ on }: { on: boolean }) {
           />
         </div>
       ) : null}
-      <CreatorCode />
+      </Guard>
+      <Guard what="Код автора" silent>
+        <CreatorCode />
+      </Guard>
     </div>
   ) : (
     <div className="sh-flow" aria-hidden="true">

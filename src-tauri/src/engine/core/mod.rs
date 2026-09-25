@@ -17,6 +17,7 @@ mod dialogs;
 pub use paths::*;
 pub use prefs::*;
 pub(crate) use http::*;
+pub(crate) use mirror::routes_round_trip;
 pub(crate) use archive::*;
 pub use crash::*;
 pub use dedup::*;
