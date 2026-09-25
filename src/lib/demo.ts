@@ -641,7 +641,7 @@ const ROUTES: [RegExp, Handler][] = [
 
   // Новая покупка (source из контракта) идёт в экономику; старая — прежний ответ.
   [/^\/rubies\/shop\/buy$/, (_p, _m, body) =>
-    body && body.source
+    body && body.source && body.source !== 'wardrobe'
       ? economy.buy(body)
       : { code: (body && body.code) || '', name: 'Вещь', spent: 0, balance: RUBY_BALANCE.balance }],
   [/^\/rubies\/packs\/buy$/, () => ({ pack: 'demo', rubies: 0, kopecks: 0, balance: RUBY_BALANCE.balance })],

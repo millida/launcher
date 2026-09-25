@@ -8,6 +8,7 @@ import {
   buyShopCard,
   buyXray,
   claimPlusMonth,
+  claimWeekly,
   craftItem,
   loadEconomyProgress,
   loadPlusEconomy,
@@ -25,6 +26,7 @@ import {
   type ShopDay,
   type ShopPack,
   type ShopSource,
+  type WeeklyParcel,
   type Workshop,
   type XrayOffer,
 } from '../lib/rubies'
@@ -41,14 +43,14 @@ import { Shard } from '../components/shop/parts'
 import { ForYou, Showcase, type BuyProps } from '../components/shop/Storefront'
 import { NightMarket } from '../components/shop/NightMarket'
 import { XrayCard, XrayOpening } from '../components/shop/Xray'
-import { PathBlock, WeeklyPathBlock, WorkshopBlock } from '../components/shop/Earn'
-import { boostWeekly, claimWeeklyStep, loadWeeklyPath, type WeeklyPath } from '../components/shop/weekly'
-import { MigrationModal, PlusMonth } from '../components/shop/PlusMonth'
+import { ParcelBlock, PathBlock, WeeklyPathBlock, WorkshopBlock } from '../components/shop/Earn'
+import { boostWeekly, claimWeeklyStep, loadWeeklyAny, type WeeklyPath } from '../components/shop/weekly'
+import { MigrationModal, migrationLeft, PlusMonth } from '../components/shop/PlusMonth'
 import { useShopGift } from '../components/shop/giftState'
 import { PassBody } from '../components/daily/DailyPassModal'
 import { Wishlist } from '../components/shop/Wishlist'
 import { CreatorCode } from '../components/shop/CreatorCode'
-import { buyExact, kopecksFor, loadWishlist, wishesFromShop, type WishEntry, type WishList } from '../components/shop/wish'
+import { buyExact, kopecksFor, wishesFromShop, type WishEntry, type WishList } from '../components/shop/wish'
 import { useDaily } from '../state/daily'
 import { purchaseFlow } from '../lib/purchaseTrack'
 import { trackFailure } from '../lib/telemetry'
@@ -74,6 +76,9 @@ function insufficientKopecks(e: unknown): number | null {
 
 
 /** Вещь каталога — плашка мига награды. */
+/** Окно выбора старого набора PLUS уже открывалось само в этом запуске. */
+let migAsked = false
+
 const entry = (it: ItemRef): RewardEntry => ({ name: it.name, preview: it.preview, rarity: it.rarity })
 /** «Надеть» из награды — сразу на фигуру (владелец 24.09.2026, 19:56). */
 const wearItems = (list: ItemRef[]) => wearNow(list.map((it) => ({ code: it.code, variant: it.variant })))
@@ -103,6 +108,7 @@ export function Rubies({ on }: { on: boolean }) {
   const [day, setDay] = useState<ShopDay | null>(null)
   const [workshop, setWorkshop] = useState<Workshop | null>(null)
   const [weekly, setWeekly] = useState<WeeklyPath | null>(null)
+  const [parcel, setParcel] = useState<WeeklyParcel | null>(null)
   const [progress, setProgress] = useState<EconomyProgress | null>(null)
   const [plus, setPlus] = useState<PlusEconomy | null>(null)
   const [rules, setRules] = useState<Rules | null>(null)
@@ -131,13 +137,13 @@ export function Rubies({ on }: { on: boolean }) {
         return null
       })
 
-  /** «Хочу»: ручка службы, а у старой — сборка на клиенте из магазина дня. */
-  const reloadWishes = (d: ShopDay | null = day, w: Workshop | null = workshop) =>
-    loadWishlist()
-      .then(setWishes)
-      .catch(() => {
-        if (d) setWishes(wishesFromShop(d, w, catalog))
-      })
+  /**
+   * «Хочу» собирается на клиенте из магазина дня, мастерской и каталога: ручки
+   * /rubies/wishlist у службы нет, запрос давал 404 на каждый заход (QA 2.0.1).
+   */
+  const reloadWishes = (d: ShopDay | null = day, w: Workshop | null = workshop) => {
+    if (d) setWishes(wishesFromShop(d, w, catalog))
+  }
 
   useEffect(() => {
     if (!on) return
@@ -148,7 +154,15 @@ export function Rubies({ on }: { on: boolean }) {
       if (d) useShopGift.getState().seeWishes(d)
     })
     loadWorkshop().then(setWorkshop).catch(() => setWorkshop(null))
-    loadWeeklyPath().then(setWeekly).catch(() => setWeekly(null))
+    loadWeeklyAny()
+      .then((w) => {
+        setWeekly(w?.path ?? null)
+        setParcel(w?.parcel ?? null)
+      })
+      .catch(() => {
+        setWeekly(null)
+        setParcel(null)
+      })
     loadEconomyProgress()
       .then((p) => setProgress(Array.isArray(p.hourItems) ? p : null))
       .catch(() => setProgress(null))
@@ -176,10 +190,19 @@ export function Rubies({ on }: { on: boolean }) {
   // «Хочу» пересобирается, когда меняется магазин, мастерская или список.
   useEffect(() => {
     if (!on || !day) return
-    void reloadWishes(day, workshop)
+    reloadWishes(day, workshop)
   }, [on, day, workshop, catalog])
 
   useEffect(() => () => window.clearTimeout(bumpTimer.current), [])
+
+  // Бывшему подписчику окно выбора вещей старого набора открывается само — один
+  // раз за запуск; дальше — кнопкой «Выбрать» в блоке PLUS.
+  const migLeft = migrationLeft(plus)
+  useEffect(() => {
+    if (!on || migLeft <= 0 || migAsked) return
+    migAsked = true
+    setMigOpen(true)
+  }, [on, migLeft])
 
   const balance = day?.balance ?? 0
   const shards = workshop?.shards ?? day?.shards ?? 0
@@ -335,6 +358,21 @@ export function Rubies({ on }: { on: boolean }) {
       const g = res.granted
       if (g.kind === 'ITEM') showReward({ items: [entry(g.item)], kicker: 'Недельный путь', onWear: () => wearItems([g.item]) })
       else showReward({ level: 'small', items: [{ name: 'Осколки', icon: 'shard' }], title: '+' + g.amount + ' ' + shardWord(g.amount) })
+    } catch (e) {
+      trackFailure('shop', e, { step: 'action' })
+      showToast(apiErrorText(e, ERR), 'error')
+    } finally {
+      setBusy('')
+    }
+  }
+
+  /** Посылка недели: одна вещь из трёх, навсегда. */
+  const doParcel = async (item: ItemRef) => {
+    setBusy('weekly')
+    try {
+      const res = await claimWeekly(item.code)
+      setParcel((p) => (p ? { ...p, ready: false, choices: null, claimedAt: new Date().toISOString() } : p))
+      showReward({ items: [entry(res.item ?? item)], kicker: 'Посылка недели', onWear: () => wearItems([res.item ?? item]) })
     } catch (e) {
       trackFailure('shop', e, { step: 'action' })
       showToast(apiErrorText(e, ERR), 'error')
@@ -559,6 +597,8 @@ export function Rubies({ on }: { on: boolean }) {
       <Guard what="Задания недели" silent>
       {weekly ? (
         <WeeklyPathBlock data={weekly} busy={busy} onClaim={(at) => void doWeekly(at)} onBoost={(n) => void doWeeklyBoost(n)} />
+      ) : parcel ? (
+        <ParcelBlock data={parcel} busy={busy} onClaim={(it) => void doParcel(it)} />
       ) : null}
       </Guard>
       <Guard what="Мастерская" silent>{workshop ? <WorkshopBlock data={workshop} busy={busy} weekly={!!weekly} onCraft={(w) => void doCraft(w)} /> : null}</Guard>
@@ -667,10 +707,10 @@ export function Rubies({ on }: { on: boolean }) {
         />
       ) : null}
 
-      {migOpen && plus?.migration ? (
+      {migOpen && plus?.migration && migLeft > 0 ? (
         <MigrationModal
           pool={plus.migration.pool.filter((it) => !plus.migration!.picked.includes(it.code))}
-          left={plus.migration.picks - plus.migration.picked.length}
+          left={migLeft}
           busy={busy === 'migration'}
           onPick={(codes) => void doMigrate(codes)}
           onClose={() => setMigOpen(false)}

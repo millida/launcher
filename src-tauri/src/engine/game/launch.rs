@@ -755,6 +755,9 @@ const USER_XX_BOOL: &[&str] = &[
     "UseSHA", "UseFMA", "UseNewLongLShift", "UseXmmI2D", "UseXmmI2F", "UseXmmLoadAndClearUpper",
     "UseXmmRegToRegMoveAll", "UseInlineCaches", "UseVectorizedMismatchIntrinsic", "UseTypeProfile",
     "UseJVMCINativeLibrary", "AlwaysActAsServerClassMachine", "UseFastJNIAccessors",
+    // Флаги JIT из гайдов по FPS (Obydux, GraalVM): фильтр 24.09 молча их выкидывал.
+    "UseFastStosb", "OptimizeFill", "UseSuperWord", "AlignVector", "UseLargePagesInMetaspace",
+    "EnableJVMCIProduct",
 ];
 
 /// `-XX:Name=<number>` (or a bare word such as a Shenandoah mode) a player may set.
@@ -773,6 +776,7 @@ const USER_XX_VALUE: &[&str] = &[
     "TrimNativeHeapInterval", "GCTimeRatio", "AutoBoxCacheMax", "UseAVX", "UseSSE", "MaxRAMPercentage",
     "InitialRAMPercentage", "MinRAMPercentage", "MaxHeapFreeRatio", "MinHeapFreeRatio", "ThreadStackSize",
     "CompileThreshold", "Tier4InvocationThreshold", "MaxRAM", "SoftMaxHeapSize",
+    "NonNMethodCodeHeapSize", "ProfiledCodeHeapSize", "NonProfiledCodeHeapSize", "JVMCIThreads",
 ];
 
 /// `-D` properties a player may set: encodings, the well-known Forge/FML and

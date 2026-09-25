@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { blockColors, renderScene } from './iso'
 import type { Rendered } from './iso'
+import { onRenderGate, renderLive } from '../../lib/renderGate'
 
 /**
  * Живой OneBlock для слота в лобби (правка владельца 23.09.2026, 22:58:
@@ -170,21 +171,23 @@ export function OneBlockLive({ className }: { className?: string }) {
         g.fillRect(Math.round(c.x), Math.round(c.y), 2, 2)
       }
 
-      if (!still) raf = requestAnimationFrame(draw)
+      if (!still && renderLive()) raf = requestAnimationFrame(draw)
     }
     raf = requestAnimationFrame(draw)
-    // Окно свернули — не жжём кадры.
+    // Окно свернули или поверх идёт игра — не жжём кадры.
     const vis = () => {
       cancelAnimationFrame(raf)
-      if (!document.hidden && !still) {
+      if (!document.hidden && !still && renderLive()) {
         last = performance.now()
         raf = requestAnimationFrame(draw)
       }
     }
     document.addEventListener('visibilitychange', vis)
+    const offGate = onRenderGate(vis)
     return () => {
       cancelAnimationFrame(raf)
       document.removeEventListener('visibilitychange', vis)
+      offGate()
     }
   }, [])
 

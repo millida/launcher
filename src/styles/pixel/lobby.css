@@ -447,8 +447,11 @@
 .lobby-mode-card.kind-premium { --mode-bg: #a8700c; --mode-hi: #c0820f; --mode-art: #6e4705; }
 .lobby-mode-card.kind-server { --mode-bg: #5b3aa8; --mode-hi: #6c47c4; --mode-art: #3a2270; }
 .lobby-mode-card.empty { grid-template-columns: 92px minmax(0, 1fr); --mode-art: #6b4304; --mode-hi: #d18a12; animation: lobby-mode-call 1.6s steps(1, end) infinite; }
-@keyframes lobby-mode-call { 0%, 100% { --mode-bg: #b8760d; } 50% { --mode-bg: #cf8a15; } }
-@property --mode-bg { syntax: '<color>'; inherits: true; initial-value: #1f4f99; }
+/* Мигает сам цвет фона, а не переменная --mode-bg: анимация зарегистрированной
+   переменной пересчитывала стили плашки каждый кадр — 33 мс работы в секунду
+   на M5 Pro, на слабом ноутбуке кратно больше (замер 25.09.2026). */
+@keyframes lobby-mode-call { 0%, 100% { background-color: #b8760d; } 50% { background-color: #cf8a15; } }
+.lobby-mode:hover .lobby-mode-card.empty { animation: none; }
 .lobby-mode-art { width: 92px; height: 72px; background: var(--mode-art); color: #fff; }
 .lobby-mode-art > svg { width: 34px; height: 34px; }
 .lobby-mode-lab {

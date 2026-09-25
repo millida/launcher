@@ -34,6 +34,7 @@ export function Chest3D({
   useEffect(() => {
     let alive = true
     let ro: ResizeObserver | null = null
+    let io: IntersectionObserver | null = null
     import('./chestScene')
       .then((m) => {
         if (!alive || !canvas.current || !wrap.current) return
@@ -53,12 +54,16 @@ export function Chest3D({
         scene.resize(el.clientWidth, el.clientHeight)
         ro = new ResizeObserver(() => scene.resize(el.clientWidth, el.clientHeight))
         ro.observe(el)
+        // Сундук за краем ленты магазина не жжёт кадры.
+        io = new IntersectionObserver((es) => scene.setVisible(es.some((e) => e.isIntersecting)))
+        io.observe(el)
         setState('ready')
       })
       .catch(() => alive && setState('failed'))
     return () => {
       alive = false
       ro?.disconnect()
+      io?.disconnect()
       sceneRef.current?.dispose()
       sceneRef.current = null
     }

@@ -53,18 +53,21 @@
    проходит ступенями один раз при открытии вкладки, по очереди. */
 .sh-shine { overflow: hidden; }
 .sh-shine::after {
-  content: ''; position: absolute; inset: 0; z-index: 3; pointer-events: none;
+  content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 260%; z-index: 3; pointer-events: none;
   background: linear-gradient(105deg, #0000 0 38%, rgba(255, 255, 255, 0.2) 38% 45%, #0000 45% 50%, rgba(255, 255, 255, 0.11) 50% 53%, #0000 53%);
-  background-size: 260% 100%; background-repeat: no-repeat; background-position: 150% 0;
+  transform: translateX(-92.31%);
   animation: sj-shine 0.9s steps(9, end) calc(0.25s + var(--i, 0) * 0.08s) both;
 }
-@keyframes sj-shine { from { background-position: 150% 0; } to { background-position: -60% 0; } }
+/* Блик едет сдвигом (transform), а не background-position: фон пересчитывал
+   стили всего магазина каждый кадр (замер 25.09.2026). Полоса 260 % ширины;
+   ступени те же, что у прежних 150 % → −60 %. */
+@keyframes sj-shine { from { transform: translateX(-92.31%); } to { transform: translateX(36.92%); } }
 /* Предмет дня бликует снова каждые 7 секунд — «живая» витрина. */
 .sh-feat.sh-shine::after { animation: sj-shine-loop 7s steps(1, end) 0.25s infinite; }
 @keyframes sj-shine-loop {
-  0% { background-position: 150% 0; } 1.4% { background-position: 120% 0; } 2.8% { background-position: 90% 0; }
-  4.2% { background-position: 60% 0; } 5.6% { background-position: 30% 0; } 7% { background-position: 0% 0; }
-  8.4% { background-position: -30% 0; } 9.8%, 100% { background-position: -60% 0; }
+  0% { transform: translateX(-92.31%); } 1.4% { transform: translateX(-73.85%); } 2.8% { transform: translateX(-55.38%); }
+  4.2% { transform: translateX(-36.92%); } 5.6% { transform: translateX(-18.46%); } 7% { transform: translateX(0%); }
+  8.4% { transform: translateX(18.46%); } 9.8%, 100% { transform: translateX(36.92%); }
 }
 
 /* Мерцание редкости: пиксели-искры в превью эпических и легендарных. */

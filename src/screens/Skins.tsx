@@ -8,6 +8,7 @@ import type { Account } from '../state/accounts'
 import { noteCosmeticsSeen } from '../state/newHint'
 import { setScreen, showToast } from '../state/ui'
 import { accKindLabel } from '../lib/format'
+import { onRenderGate, renderLive } from '../lib/renderGate'
 import { hasTauri } from '../ipc/tauri'
 import {
   deleteTexture,
@@ -2179,17 +2180,20 @@ export function Skins({ on }: { on: boolean }) {
       else engine.start()
       setViewerAwake(!v)
     }
-    const onVis = () => setPaused(document.hidden)
+    const onVis = () => setPaused(document.hidden || !on || !renderLive())
     const onBlur = () => setPaused(true)
-    const onFocus = () => setPaused(false)
+    const onFocus = () => setPaused(!on || !renderLive())
     document.addEventListener('visibilitychange', onVis)
     window.addEventListener('blur', onBlur)
     window.addEventListener('focus', onFocus)
-    setPaused(document.hidden || !document.hasFocus() || !on)
+    // Игра поверх или окно в трее — 3D стоит (lib/renderGate).
+    const offGate = onRenderGate(() => setPaused(document.hidden || !on || !renderLive() || !document.hasFocus()))
+    setPaused(document.hidden || !document.hasFocus() || !on || !renderLive())
     return () => {
       document.removeEventListener('visibilitychange', onVis)
       window.removeEventListener('blur', onBlur)
       window.removeEventListener('focus', onFocus)
+      offGate()
     }
   }, [engineReady, on])
 

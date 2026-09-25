@@ -173,6 +173,15 @@
 /* Галочка — в углу превью, срезом превью: при 8px она залезала на верхнюю грань 4px. */
 :root:root .sh-pick-mark { top: 10px; right: 10px; --px-n: 5px; clip-path: var(--px-5); }
 .sh-pick-foot { display: flex; justify-content: flex-start; margin-top: 12px; }
+/* Посылка недели: три вещи на выбор ровной сеткой; на узком окне — в столбик. */
+.sh-pick3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.sh-pick3 .sh-pick { align-items: center; text-align: center; padding: 14px 10px 12px; }
+.sh-pick3 .sh-card-name { font-size: 14px; }
+.sh-parcel-meter { margin-bottom: 14px; }
+.sh-parcel-meter > b { font-size: 20px; font-weight: 900; }
+.sh-parcel-meter .sh-meter-bar { height: 14px; }
+.card.sh-weekly.is-claimed .sh-meter-bar i { background: var(--m-fg-faint); }
+@media (max-width: 720px) { .sh-pick3 { grid-template-columns: 1fr; } }
 
 /* ---------- Путь: плащи за часы ---------- */
 .sh-road { position: relative; height: 90px; margin: 6px 34px 0; }
@@ -482,9 +491,11 @@
   16% { transform: translateY(-3px); }
   20%, 100% { transform: none; }
 }
+/* Блик едет сдвигом, а не left: left пересчитывал раскладку каждый кадр.
+   170 % ширины карты = 654 % ширины блика (26 %). */
 @keyframes sh-nc-glint {
-  0% { left: -40%; }
-  18%, 100% { left: 130%; }
+  0% { transform: translateX(0) skewX(-18deg); }
+  18%, 100% { transform: translateX(654%) skewX(-18deg); }
 }
 
 /* ---------- Рентген-кейс: ведущая плитка «Для тебя» ---------- */

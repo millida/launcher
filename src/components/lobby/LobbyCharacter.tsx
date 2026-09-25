@@ -16,6 +16,7 @@ import { defaultVariant } from '../../lib/cosmeticVariants'
 import { Nametag, nametagSpot } from '../character/Nametag'
 import { Vector3 } from 'three'
 import { setScreen } from '../../state/ui'
+import { onRenderGate, renderLive } from '../../lib/renderGate'
 import {
   IDLE_SHOW,
   IDLE_SHOW_FIRST_MAX,
@@ -291,8 +292,10 @@ export function LobbyCharacter({ on }: { on: boolean }) {
   }
 
 
+  // Ник ходит за головой, только пока сцена живая: остановленная модель не
+  // двигается, а пустой цикл кадров будил бы видеокарту и поверх игры.
   useEffect(() => {
-    if (!shown) return
+    if (!shown || !awake) return
     let raf = 0
     const tick = () => {
       raf = requestAnimationFrame(tick)
@@ -304,7 +307,7 @@ export function LobbyCharacter({ on }: { on: boolean }) {
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [shown])
+  }, [shown, awake])
   useEffect(() => {
     const canvas = canvasRef.current
     if (!m3d || !canvas) return
@@ -567,17 +570,19 @@ export function LobbyCharacter({ on }: { on: boolean }) {
       else engine.start()
       setAwake(!v)
     }
-    const onVis = () => setPaused(document.hidden || !on)
+    const onVis = () => setPaused(document.hidden || !on || !renderLive())
     const onBlur = () => setPaused(true)
-    const onFocus = () => setPaused(!on)
+    const onFocus = () => setPaused(!on || !renderLive())
     document.addEventListener('visibilitychange', onVis)
     window.addEventListener('blur', onBlur)
     window.addEventListener('focus', onFocus)
-    setPaused(document.hidden || !on)
+    const offGate = onRenderGate(() => setPaused(document.hidden || !on || !renderLive() || !document.hasFocus()))
+    setPaused(document.hidden || !on || !renderLive())
     return () => {
       document.removeEventListener('visibilitychange', onVis)
       window.removeEventListener('blur', onBlur)
       window.removeEventListener('focus', onFocus)
+      offGate()
     }
   }, [ready, on])
 

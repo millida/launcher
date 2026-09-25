@@ -44,9 +44,7 @@ export interface WishList {
   missing: number
 }
 
-export const loadWishlist = () => api<WishList>('/rubies/wishlist')
-
-/** Докупить ровно недостающее по базовому курсу (5 рубинов = 1 ₽), без пакета. */
+/** Докупить ровно недостающее по базовому курсу (7 рубинов = 1 ₽), без пакета. */
 export const buyExact = (rubies: number) =>
   api<{ rubies: number; kopecks: number; balance: number }>('/rubies/topup', {
     method: 'POST',

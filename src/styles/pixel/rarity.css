@@ -73,20 +73,24 @@
 @keyframes rar-tw { 0%, 80% { opacity: 0; transform: scale(0.5); } 83% { opacity: 1; transform: scale(1); } 88% { opacity: 0.6; transform: scale(0.5); } 91%, 100% { opacity: 0; } }
 
 /* Блик двух верхних: полоса с жёсткими стопами проходит ступенями раз в 3 с. */
+/* Полоса шириной 280 % едет сдвигом (transform), а не background-position:
+   сдвиг считает видеокарта, фон пересчитывал стили каждый кадр — в магазине
+   это была половина работы окна в покое (замер 25.09.2026). */
 .rar-fx > .rar-gl {
-  display: none; inset: 0;
+  display: none; top: 0; bottom: 0; left: 0; width: 280%;
   background: linear-gradient(105deg, #0000 0 40%, rgba(255, 255, 255, 0.26) 40% 47%, #0000 47% 51%, rgba(255, 255, 255, 0.14) 51% 54%, #0000 54%);
-  background-size: 280% 100%; background-repeat: no-repeat; background-position: 160% 0;
+  transform: translateX(-102.86%);
   animation: rar-glint 3s steps(1, end) infinite;
 }
 [data-rar='MYTHIC'] > .rar-fx > .rar-gl, [data-rar='RELIC'] > .rar-fx > .rar-gl { display: block; }
 [data-rar='MYTHIC'] > .rar-fx > .rar-gl {
   background-image: linear-gradient(105deg, #0000 0 40%, color-mix(in srgb, var(--rar) 55%, transparent) 40% 47%, #0000 47% 51%, rgba(255, 255, 255, 0.18) 51% 54%, #0000 54%);
 }
+/* Те же ступени, что у прежнего background-position 160 % → −60 %. */
 @keyframes rar-glint {
-  0% { background-position: 160% 0; } 3% { background-position: 125% 0; } 6% { background-position: 90% 0; }
-  9% { background-position: 55% 0; } 12% { background-position: 20% 0; } 15% { background-position: -15% 0; }
-  18%, 100% { background-position: -60% 0; }
+  0% { transform: translateX(-102.86%); } 3% { transform: translateX(-80.36%); } 6% { transform: translateX(-57.86%); }
+  9% { transform: translateX(-35.36%); } 12% { transform: translateX(-12.86%); } 15% { transform: translateX(9.64%); }
+  18%, 100% { transform: translateX(38.57%); }
 }
 
 /* ---------- Плашка редкости ---------- */

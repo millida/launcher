@@ -10,7 +10,9 @@
  *   &rubies=N          — баланс рубинов;
  *   &night=0           — ночной рынок закрыт;
  *   &xray=wait         — рентген-кейс уже куплен, следующий через N ч;
- *   &weekly=wait|done  — недельный путь в начале / пройден целиком;
+ *   &weekly=parcel|parcel-wait|parcel-done — посылка недели (форма службы сейчас;
+ *                      по умолчанию — готова, три вещи на выбор);
+ *   &weekly=path|wait|done — недельный путь (пока служба его не отдаёт);
  *   &plus-migration=1  — бывший подписчик, окно выбора вещей старого набора;
  *   &gift=rubies|shards|item|claimed — старый подарок дня (по умолчанию его нет:
  *                      с 23.09.2026, 21:43 вместо него ежедневный бонус);
@@ -395,7 +397,10 @@ async function build(catalog: DemoCatalogItem[], wallet: { balance: number }, pa
       month: { items: monthPlus.map(ref), claimed: false },
       rubiesOnPay: 750,
       shardBoost: 1.5,
-      migration: migrationOn ? { eligible: true, picks: 12, picked: [], pool: plusPool.slice(0, 100).map(ref) } : null,
+      // Живой каталог уже без вещей access=PLUS — для показа берём продаваемые.
+      migration: migrationOn
+        ? { eligible: true, picks: 12, picked: [], pool: (plusPool.length ? plusPool : catalog.filter((x) => x.priceRubies)).slice(0, 40).map(ref) }
+        : null,
     },
   }
 }
@@ -568,8 +573,33 @@ export function demoEconomy(deps: {
     return { shards: s.workshop.shards, item: w.item }
   }
 
-  const weeklyClaim = async (body: { at?: number }) => {
+  /** Посылка недели в форме службы (/rubies/weekly сейчас). */
+  let parcelClaimed: string | null = null
+  const parcelMode = () => {
+    const m = new URLSearchParams(location.search).get('weekly')
+    return m === 'path' || m === 'wait' || m === 'done' ? null : m || 'parcel'
+  }
+  const parcel = (s: State) => {
+    const mode = parcelMode()
+    const monday = new Date(s.weekly.resetsAt).toISOString()
+    const claimedAt = mode === 'parcel-done' ? new Date(Date.now() - 3_600_000).toISOString() : parcelClaimed
+    const hours = mode === 'parcel-wait' ? 1.4 : 3.6
+    const ready = !claimedAt && hours >= 3
+    const choices = s.shop.day.items.filter((c) => ['COMMON', 'UNCOMMON', 'RARE'].includes(c.item.rarity)).slice(0, 3).map((c) => c.item)
+    return { hours, need: 3, ready, choices: ready ? choices : null, claimedAt, resetsAt: monday }
+  }
+
+  const weeklyClaim = async (body: { at?: number; code?: string }) => {
     const s = await get()
+    if (parcelMode()) {
+      const view = parcel(s)
+      const item = view.choices?.find((c) => c.code === body.code)
+      if (!item) return fail('Этой вещи нет в посылке недели')
+      parcelClaimed = new Date().toISOString()
+      s.owned.add(item.code)
+      syncOwned(s)
+      return { item: clone(item) }
+    }
     const w = s.weekly
     const step = w.steps.find((st) => st.at === body.at)
     if (!step || step.claimed || w.stars < step.at) return fail('not ready')
@@ -694,6 +724,7 @@ export function demoEconomy(deps: {
     workshop: async () => clone((await get()).workshop),
     weekly: async () => {
       const s = await get()
+      if (parcelMode()) return parcel(s)
       priceBoost(s.weekly)
       return clone(s.weekly)
     },
