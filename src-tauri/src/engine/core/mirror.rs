@@ -117,6 +117,23 @@ pub(crate) async fn routes(url: &str) -> Vec<String> {
     }
 }
 
+/// Прямой путь → наше зеркало → снова прямой. Для мелких, но обязательных
+/// запросов (контрольная сумма инсталлятора, список версий загрузчика): проверка
+/// доступности делается раз за запуск и к моменту установки может устареть, а
+/// зеркало само бывает недоступно — последняя попытка возвращается к первому
+/// пути, который к тому времени мог ожить.
+pub(crate) async fn routes_round_trip(url: &str) -> Vec<String> {
+    with_return(routes(url).await)
+}
+
+fn with_return(mut routes: Vec<String>) -> Vec<String> {
+    if routes.len() > 1 {
+        let first = routes[0].clone();
+        routes.push(first);
+    }
+    routes
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -178,6 +195,18 @@ mod tests {
                 why
             );
         }
+    }
+
+    #[test]
+    fn round_trip_returns_to_the_first_route() {
+        let two = vec!["https://maven.minecraftforge.net/a".to_string(), "https://api.millida.net/v2/launcher/dl?url=a".to_string()];
+        assert_eq!(
+            with_return(two.clone()),
+            vec![two[0].clone(), two[1].clone(), two[0].clone()],
+            "прямой → зеркало → снова прямой"
+        );
+        let one = vec!["https://launchermeta.mojang.com/x.json".to_string()];
+        assert_eq!(with_return(one.clone()), one, "без зеркала повторять нечего");
     }
 
     /// Хост проверяется разбором адреса, а не поиском подстроки: иначе чужой

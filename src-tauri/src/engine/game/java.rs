@@ -365,10 +365,6 @@ struct Target {
     arch: &'static str,
 }
 
-fn target() -> Target {
-    target_arch(None)
-}
-
 fn target_arch(force: Option<&'static str>) -> Target {
     let (os, ext) = if cfg!(target_os = "macos") {
         ("mac", "tar.gz")
@@ -627,6 +623,11 @@ pub fn remove_java_runtime(major: u32) -> Result<u64, String> {
 /// installed Java version and let a dead binary through every check below.
 fn version_line(stderr: &str) -> Option<String> {
     stderr.lines().map(str::trim).find(|l| parse_major(l).is_some()).map(str::to_string)
+}
+
+/// Major version of the Java at `path`, read from `java -version`.
+pub(crate) fn java_major_at(path: &Path) -> Option<u32> {
+    parse_major(&java_version_of(path)?)
 }
 
 pub(crate) fn java_version_of(path: &Path) -> Option<String> {

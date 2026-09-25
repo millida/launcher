@@ -252,8 +252,58 @@ pub fn write_argfile(game_dir: &Path, args: &[String]) -> Result<PathBuf, String
         opts.mode(0o600);
     }
     let mut file = opts.open(&path).map_err(fail)?;
-    std::io::Write::write_all(&mut file, body.as_bytes()).map_err(fail)?;
+    std::io::Write::write_all(&mut file, &argfile_bytes(&body, ansi_codepage())).map_err(fail)?;
     Ok(path)
+}
+
+/// Байты файла аргументов в той кодировке, в которой его прочтёт java.
+///
+/// Лаунчер java на Windows читает `@файл` не как UTF-8, а в ANSI-кодировке
+/// системы (у русской Windows это cp1251). Путь `C:/Users/Рустам/…`,
+/// записанный в UTF-8, java видит как «РСѓСЃС‚Р°Рј» и не находит ни агент
+/// входа, ни библиотеки: на телеметрии 24.09 это 340 из 425 упавших запусков
+/// Arcania у игроков с кириллицей в имени пользователя. Если в строке есть
+/// символ, которого в кодовой странице нет, файл остаётся в UTF-8 — хуже, чем
+/// было, от этого не станет.
+pub(crate) fn argfile_bytes(body: &str, codepage: Option<u32>) -> Vec<u8> {
+    let Some(enc) = codepage.and_then(codepage_encoding) else { return body.as_bytes().to_vec() };
+    if enc == encoding_rs::UTF_8 {
+        return body.as_bytes().to_vec();
+    }
+    let (bytes, _, unmappable) = enc.encode(body);
+    if unmappable {
+        body.as_bytes().to_vec()
+    } else {
+        bytes.into_owned()
+    }
+}
+
+fn codepage_encoding(cp: u32) -> Option<&'static encoding_rs::Encoding> {
+    let label = match cp {
+        65001 => "utf-8".to_string(),
+        874 | 1250..=1258 => format!("windows-{}", cp),
+        866 => "ibm866".into(),
+        932 => "shift_jis".into(),
+        936 => "gbk".into(),
+        949 => "euc-kr".into(),
+        950 => "big5".into(),
+        _ => return None,
+    };
+    encoding_rs::Encoding::for_label(label.as_bytes())
+}
+
+#[cfg(windows)]
+fn ansi_codepage() -> Option<u32> {
+    extern "system" {
+        fn GetACP() -> u32;
+    }
+    // SAFETY: GetACP не принимает аргументов и только читает настройку системы.
+    Some(unsafe { GetACP() })
+}
+
+#[cfg(not(windows))]
+fn ansi_codepage() -> Option<u32> {
+    None
 }
 
 /// JVM читает файл аргументов при старте; через 10 секунд он уже не нужен и
@@ -593,6 +643,25 @@ mod tests {
             assert_eq!(mode, 0o600, "файл с ключом подписи читает только владелец");
         }
         let _ = std::fs::remove_file(&path);
+    }
+
+    /// Русская Windows читает файл аргументов в cp1251: путь с кириллицей в
+    /// UTF-8 превращался в кракозябры, и java не находила агент входа.
+    #[test]
+    fn argfile_is_written_in_the_ansi_code_page() {
+        let body = "\"-javaagent:C:/Users/Рустам/AppData/Roaming/agents/authlib-injector.jar\"\n";
+        let cp1251 = argfile_bytes(body, Some(1251));
+        let (back, _, bad) = encoding_rs::WINDOWS_1251.decode(&cp1251);
+        assert!(!bad);
+        assert_eq!(back, body);
+        assert_ne!(cp1251, body.as_bytes(), "кириллица обязана уйти однобайтной");
+        assert_eq!(argfile_bytes("C:/Users/Ivan", Some(1251)), b"C:/Users/Ivan", "ASCII не меняется");
+        // Нет кодовой страницы (не Windows) или UTF-8 в системе — как было.
+        assert_eq!(argfile_bytes(body, None), body.as_bytes());
+        assert_eq!(argfile_bytes(body, Some(65001)), body.as_bytes());
+        // Символа нет в кодовой странице — UTF-8, а не «&#1056;» вместо буквы.
+        assert_eq!(argfile_bytes("C:/Users/Рустам/中", Some(1251)), "C:/Users/Рустам/中".as_bytes());
+        assert_eq!(argfile_bytes(body, Some(12345)), body.as_bytes(), "неизвестная страница — UTF-8");
     }
 
     /// Сборка раскладывает нативы по своим именам папок — у Arcania Windows

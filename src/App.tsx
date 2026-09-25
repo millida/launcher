@@ -667,11 +667,31 @@ export function App() {
             {/* Navigation runs in a transition, so the fallback only ever shows on
                 the very first render. */}
             <Suspense fallback={null}>
-              {screen === 'play' && <Play on />}
-              {screen === 'premium' && <Premium on />}
-              {screen === 'builds' && <Builds on />}
-              {screen === 'servers' && <Servers on />}
-              {screen === 'mods' && <Mods on />}
+              {screen === 'play' && (
+                <Guard what="Лобби">
+                  <Play on />
+                </Guard>
+              )}
+              {screen === 'premium' && (
+                <Guard what="PLUS">
+                  <Premium on />
+                </Guard>
+              )}
+              {screen === 'builds' && (
+                <Guard what="Сборки">
+                  <Builds on />
+                </Guard>
+              )}
+              {screen === 'servers' && (
+                <Guard what="Серверы">
+                  <Servers on />
+                </Guard>
+              )}
+              {screen === 'mods' && (
+                <Guard what="Каталог">
+                  <Mods on />
+                </Guard>
+              )}
               {screen === 'skins' && (
                 <Guard what="Экран скинов">
                   <Skins on />
@@ -682,11 +702,31 @@ export function App() {
                   <Rubies on />
                 </Guard>
               )}
-              {screen === 'friends' && <Friends on />}
-              {screen === 'chat' && <Messages on />}
-              {screen === 'hosting' && <Hosting on />}
-              {screen === 'playhub' && <PlayHub on />}
-              {screen === 'settings' && <Settings on />}
+              {screen === 'friends' && (
+                <Guard what="Друзья">
+                  <Friends on />
+                </Guard>
+              )}
+              {screen === 'chat' && (
+                <Guard what="Сообщения">
+                  <Messages on />
+                </Guard>
+              )}
+              {screen === 'hosting' && (
+                <Guard what="Хостинг">
+                  <Hosting on />
+                </Guard>
+              )}
+              {screen === 'playhub' && (
+                <Guard what="Библиотека">
+                  <PlayHub on />
+                </Guard>
+              )}
+              {screen === 'settings' && (
+                <Guard what="Настройки">
+                  <Settings on />
+                </Guard>
+              )}
             </Suspense>
           </main>
         </div>

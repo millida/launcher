@@ -36,6 +36,74 @@ pub(crate) fn split_loader_id(full: &str) -> (String, Option<String>) {
     (id.to_string(), ver)
 }
 
+/// A loader's own version id stored where the game version belongs:
+/// "neoforge-21.1.233", "1.20.1-forge-47.4.10", "fabric-loader-0.16.10-1.21.1".
+/// Such ids come from a version folder imported from TLauncher or the vanilla
+/// launcher; the launch then asked Mojang for version "neoforge-21.1.233" and
+/// stopped at «Версия neoforge-21.1.233 не найдена» (macOS 1.0.106–1.0.115,
+/// aeronautics). Returns (game version, loader, loader build).
+pub(crate) fn split_loader_version_id(id: &str) -> Option<(String, String, String)> {
+    let id = id.trim();
+    let low = id.to_ascii_lowercase();
+    let numeric = |s: &str| !s.is_empty() && s.split('.').all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()));
+    let game_like = |s: &str| numeric(s) && s.starts_with("1.") && s.split('.').count() <= 3;
+    if let Some(build) = low.strip_prefix("neoforge-") {
+        let core = build.split('-').next().unwrap_or("");
+        if !numeric(core) {
+            return None;
+        }
+        let parts: Vec<&str> = core.split('.').collect();
+        let mc = match parts.as_slice() {
+            // Year-based MC (26.1.2) keeps its number and adds the build.
+            [a, b, c, _] if a.parse::<u32>().is_ok_and(|n| n >= 26) => {
+                if *c == "0" { format!("{}.{}", a, b) } else { format!("{}.{}.{}", a, b, c) }
+            }
+            [a, b, _] => {
+                if *b == "0" { format!("1.{}", a) } else { format!("1.{}.{}", a, b) }
+            }
+            _ => return None,
+        };
+        return Some((mc, "neoforge".into(), build.to_string()));
+    }
+    for loader in ["fabric", "quilt"] {
+        if let Some(rest) = low.strip_prefix(&format!("{}-loader-", loader)) {
+            let (build, mc) = rest.rsplit_once('-')?;
+            if game_like(mc) && !build.is_empty() {
+                return Some((mc.to_string(), loader.into(), build.to_string()));
+            }
+            return None;
+        }
+    }
+    // "1.20.1-forge-47.4.10" and the legacy "1.7.10-Forge10.13.4.1614-1.7.10".
+    let (mc, rest) = low.split_once("-forge")?;
+    if !game_like(mc) {
+        return None;
+    }
+    let rest = rest.trim_start_matches('-');
+    let build = rest.strip_suffix(&format!("-{}", mc)).unwrap_or(rest);
+    numeric(build).then(|| (mc.to_string(), "forge".into(), build.to_string()))
+}
+
+/// Puts the game version back into builds that hold a loader id instead.
+/// The loader the build already names wins: NeoForge for 1.20.1 has a
+/// Forge-shaped id ("1.20.1-forge-47.1.106").
+fn mend_loader_version_ids(all: &mut [Profile]) -> bool {
+    let mut changed = false;
+    for p in all.iter_mut() {
+        let Some((mc, loader, build)) = split_loader_version_id(&p.version) else { continue };
+        let named = p.loader.clone().filter(|l| l != "vanilla" && !l.is_empty());
+        let loader = named.unwrap_or(loader);
+        p.fabric = matches!(loader.as_str(), "fabric" | "quilt");
+        p.loader = Some(loader);
+        if p.loader_version.as_deref().is_none_or(|v| v.trim().is_empty()) {
+            p.loader_version = Some(build);
+        }
+        p.version = mc;
+        changed = true;
+    }
+    changed
+}
+
 pub(crate) fn profiles_path() -> PathBuf { data_dir().join("profiles.json") }
 
 fn read_profiles_file() -> Vec<Profile> {
@@ -100,7 +168,8 @@ fn adopt_disk_profiles(all: &mut Vec<Profile>) -> bool {
 
 pub fn load_profiles() -> Vec<Profile> {
     let mut all = read_profiles_file();
-    if adopt_disk_profiles(&mut all) {
+    let adopted = adopt_disk_profiles(&mut all);
+    if mend_loader_version_ids(&mut all) | adopted {
         let _ = save_profiles(&all);
     }
     all
@@ -400,6 +469,70 @@ pub(crate) fn pack_file_check(f: &Value) -> Result<(String, Option<u64>), String
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// вход -> (MC, загрузчик, сборка): id папки загрузчика, попавший в поле
+    /// версии игры при импорте из TLauncher, превращается обратно в версию MC.
+    #[test]
+    fn loader_ids_give_back_the_game_version() {
+        let t = |a: &str, b: &str, c: &str| Some((a.to_string(), b.to_string(), c.to_string()));
+        type Split = Option<(String, String, String)>;
+        let cases: [(&str, Split, &str); 11] = [
+            ("neoforge-21.1.233", t("1.21.1", "neoforge", "21.1.233"), "aeronautics на macOS"),
+            ("neoforge-21.0.167", t("1.21", "neoforge", "21.0.167"), "ветка x.0 — это 1.21"),
+            ("neoforge-20.4.237-beta", t("1.20.4", "neoforge", "20.4.237-beta"), "бета-сборка"),
+            ("neoforge-26.1.2.109", t("26.1.2", "neoforge", "26.1.2.109"), "MC по годам"),
+            ("neoforge-26.2.0.83", t("26.2", "neoforge", "26.2.0.83"), "MC по годам без патча"),
+            ("1.20.1-forge-47.4.10", t("1.20.1", "forge", "47.4.10"), "Forge"),
+            ("1.7.10-Forge10.13.4.1614-1.7.10", t("1.7.10", "forge", "10.13.4.1614"), "легаси-имя Forge"),
+            ("fabric-loader-0.16.10-1.21.1", t("1.21.1", "fabric", "0.16.10"), "Fabric"),
+            ("quilt-loader-0.26.4-1.20.1", t("1.20.1", "quilt", "0.26.4"), "Quilt"),
+            ("1.21.1", None, "обычная версия не трогается"),
+            ("All of Aeronautics - NeoForge 21.1.248", None, "заголовок сборки — не id загрузчика"),
+        ];
+        for (id, want, why) in cases {
+            assert_eq!(split_loader_version_id(id), want, "{}: {}", id, why);
+        }
+    }
+
+    #[test]
+    fn a_build_holding_a_loader_id_is_mended_once() {
+        let mut all = vec![
+            Profile {
+                name: "neoforge-21.1.233".into(),
+                version: "neoforge-21.1.233".into(),
+                fabric: false,
+                loader: Some("neoforge".into()),
+                loader_version: None,
+                icon: None,
+            },
+            Profile {
+                name: "NeoForge 1.20.1".into(),
+                version: "1.20.1-forge-47.1.106".into(),
+                fabric: false,
+                loader: Some("neoforge".into()),
+                loader_version: None,
+                icon: None,
+            },
+            Profile {
+                name: "ok".into(),
+                version: "1.20.1".into(),
+                fabric: false,
+                loader: Some("forge".into()),
+                loader_version: Some("47.4.10".into()),
+                icon: None,
+            },
+        ];
+        assert!(mend_loader_version_ids(&mut all));
+        assert_eq!((all[0].version.as_str(), all[0].loader_version.as_deref()), ("1.21.1", Some("21.1.233")));
+        assert_eq!(all[0].loader.as_deref(), Some("neoforge"));
+        assert_eq!(
+            (all[1].version.as_str(), all[1].loader.as_deref(), all[1].loader_version.as_deref()),
+            ("1.20.1", Some("neoforge"), Some("47.1.106")),
+            "загрузчик, записанный в сборке, важнее формы id"
+        );
+        assert_eq!(all[2].version, "1.20.1");
+        assert!(!mend_loader_version_ids(&mut all), "второй проход ничего не меняет");
+    }
 
     #[test]
     fn pack_files_come_only_from_known_hosts() {
