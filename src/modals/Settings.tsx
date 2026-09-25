@@ -49,7 +49,7 @@ import { Slider } from '../components/Slider'
 import { Select } from '../components/Select'
 import { writePref } from '../lib/prefs'
 import { setMusicAutostart } from '../state/music'
-import { setTelemetryEnabled, telemetryEnabled, track } from '../lib/telemetry'
+import { setTelemetryEnabled, telemetryEnabled, track, trackFailure } from '../lib/telemetry'
 import { getAccount, getMillidaAccount, useAccounts } from '../state/accounts'
 import { WALLET_URL, openExt } from '../lib/api'
 // Наличие аккаунта берём из стора, а не вызовом hasMillidaAccount(): вызов не
@@ -698,7 +698,10 @@ export function Settings({ on }: { on: boolean }) {
                     showToast('Java для всех сборок: ' + j.version)
                   })
                 })
-                .catch((e) => showToast(apiErrorText(e, 'Не получилось — попробуй ещё раз'), 'error'))
+                .catch((e) => {
+                  trackFailure('settings', e, { step: 'java_pick' })
+                  showToast(apiErrorText(e, 'Не получилось — попробуй ещё раз'), 'error')
+                })
             }}
           >
             Указать
@@ -712,7 +715,10 @@ export function Settings({ on }: { on: boolean }) {
                     setJavaDef(null)
                     showToast('Java снова выбирается сама')
                   })
-                  .catch((e) => showToast(apiErrorText(e, 'Не получилось — попробуй ещё раз'), 'error'))
+                  .catch((e) => {
+                    trackFailure('settings', e, { step: 'java_reset' })
+                    showToast(apiErrorText(e, 'Не получилось — попробуй ещё раз'), 'error')
+                  })
               }}
             >
               Сбросить
@@ -737,7 +743,10 @@ export function Settings({ on }: { on: boolean }) {
                   showToast('Java готова: ' + v)
                   void listJavaRuntimes().then(setJavas).catch(() => {})
                 })
-                .catch((e) => showToast(apiErrorText(e, 'Не получилось — попробуй ещё раз'), 'error'))
+                .catch((e) => {
+                  trackFailure('settings', e, { step: 'java_download', major: javaWant })
+                  showToast(apiErrorText(e, 'Не получилось — попробуй ещё раз'), 'error')
+                })
                 .finally(() => setJavaBusy(0))
             }}
           >

@@ -8,8 +8,11 @@ import { cachedCatalog } from '../../lib/catalogCache'
  * на двух экранах не расходились.
  */
 
-/** Блок описания нашего каталога: абзац, заголовок, список. */
-export type DescBlock = { type: 'paragraph' | 'heading'; text: string } | { type: 'list'; items: string[] }
+/** Блок описания нашего каталога: абзац, заголовок, список, картинка (catalog/admin-item-text.ts). */
+export type DescBlock =
+  | { type: 'paragraph' | 'heading'; text: string }
+  | { type: 'list'; items: string[] }
+  | { type: 'image'; src: string; alt?: string }
 
 /** GET /catalog/packs/:slug — карточка сборки для лаунчера. */
 export interface PackView {
@@ -49,7 +52,7 @@ export const LOADER: Record<string, string> = { fabric: 'Fabric', forge: 'Forge'
 /** Число модов из текста описания автора («291 мод», «258 модов»): не выдумываем, а читаем. */
 export function modsFromText(blocks: DescBlock[] | null | undefined): number | null {
   for (const b of blocks || []) {
-    const text = b.type === 'list' ? b.items.join(' ') : b.text
+    const text = b.type === 'list' ? (b.items || []).join(' ') : b.type === 'image' ? '' : b.text || ''
     const m = /(\d{2,4})\s+мод(?:ов|а)?(?![а-яё])/i.exec(text)
     if (m) return Number(m[1])
   }

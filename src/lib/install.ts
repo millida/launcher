@@ -207,7 +207,7 @@ export async function installContentFlow(src: Source, kind: string, title?: stri
           { name: label, kind, mc: gv, loader, source: src.source, code: errorCode(err) },
           false,
         )
-        track('error', { code: errorCode(err), where: 'content_install' }, { ok: false })
+        // Событие error шлёт сам runInstall (trackFailure, where=content_install).
         showToast('' + err, 'error')
       },
     })

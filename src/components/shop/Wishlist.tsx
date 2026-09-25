@@ -3,7 +3,7 @@ import { Ruby } from '../Ruby'
 import { RARITY_NAMES, rubles, type ShopCard } from '../../lib/rubies'
 import { BuyBtn, WishBtn, type BuyProps } from './Storefront'
 import { gridCols, Head, ItemArt, Price, Shard, toneStyle } from './parts'
-import { daysUntil, kopecksFor, sortWishes, type WishEntry, type WishHow, type WishList } from './wish'
+import { daysUntil, kopecksFor, sortWishes, topUpRubies, type WishEntry, type WishHow, type WishList } from './wish'
 import { word } from './rarity'
 
 const HOW: Record<WishHow, string> = {
@@ -116,7 +116,7 @@ export function Wishlist({
       </div>
     )
   const missing = data.missing
-  const kopecks = kopecksFor(missing)
+  const kopecks = kopecksFor(topUpRubies(missing))
   return (
     <div className="card sh-block">
       <Head title={'Хочу · ' + items.length}>
@@ -132,7 +132,7 @@ export function Wishlist({
               disabled={p.busy === 'topup'}
               data-track="wish_topup"
               data-tip={'Не хватает ' + missing.toLocaleString('ru-RU') + ' ' + word(missing) + (wallet < kopecks ? ' · на кошельке ' + rubles(wallet) : '')}
-              onClick={() => onTopUp(missing)}
+              onClick={() => onTopUp(topUpRubies(missing))}
             >
               Докупить · {rubles(kopecks)}
             </button>

@@ -467,7 +467,7 @@ function priceBundle(s: State) {
 }
 
 function syncOwned(s: State) {
-  const all = [s.shop.day.featured, s.shop.day.deal, ...s.shop.day.items, ...s.shop.day.forYou, ...(s.shop.nightMarket?.cards || [])]
+  const all = [s.shop.day.featured, s.shop.day.deal, ...s.shop.day.items, ...s.shop.day.forYou, ...(s.shop.nightMarket?.cards || [])].filter((c): c is ShopCard => !!c)
   all.forEach((c) => (c.owned = s.owned.has(c.item.code)))
   s.workshop.workshop.items.forEach((w) => (w.owned = s.owned.has(w.item.code)))
   priceBundle(s)
@@ -515,7 +515,7 @@ export function demoEconomy(deps: {
 
   const buy = async (body: { code?: string; source?: string; bundleId?: string }) => {
     const s = await get()
-    const cards = [s.shop.day.featured, s.shop.day.deal, ...s.shop.day.items, ...s.shop.day.forYou, ...(s.shop.nightMarket?.cards || [])]
+    const cards = [s.shop.day.featured, s.shop.day.deal, ...s.shop.day.items, ...s.shop.day.forYou, ...(s.shop.nightMarket?.cards || [])].filter((c): c is ShopCard => !!c)
     if (body.source === 'bundle') {
       const b = s.shop.bundle
       if (!b || b.id !== body.bundleId) return fail('bundle gone')
@@ -617,8 +617,8 @@ export function demoEconomy(deps: {
     const s = await get()
     syncOwned(s)
     const cards: [ShopCard, WishEntry['source']][] = [
-      [s.shop.day.featured, 'featured'],
-      [s.shop.day.deal, 'deal'],
+      ...(s.shop.day.featured ? [[s.shop.day.featured, 'featured'] as [ShopCard, WishEntry['source']]] : []),
+      ...(s.shop.day.deal ? [[s.shop.day.deal, 'deal'] as [ShopCard, WishEntry['source']]] : []),
       ...s.shop.day.items.map((c) => [c, 'day'] as [ShopCard, WishEntry['source']]),
       ...s.shop.day.forYou.map((c) => [c, 'forYou'] as [ShopCard, WishEntry['source']]),
       ...(s.shop.nightMarket?.cards || []).map((c) => [c, 'night'] as [ShopCard, WishEntry['source']]),

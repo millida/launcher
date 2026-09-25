@@ -11,6 +11,9 @@ static READY: AtomicBool = AtomicBool::new(false);
 pub fn available() -> bool { READY.load(Ordering::Relaxed) }
 
 pub fn show_main(app: &AppHandle) {
+    if crate::exiting() {
+        return;
+    }
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
         let _ = w.unminimize();
@@ -37,7 +40,7 @@ static RESTORE_ON_EXIT: AtomicBool = AtomicBool::new(true);
 pub fn set_restore_on_exit(on: bool) { RESTORE_ON_EXIT.store(on, Ordering::Relaxed); }
 
 pub fn restore_after_game(app: &AppHandle) {
-    if !RESTORE_ON_EXIT.load(Ordering::Relaxed) {
+    if !RESTORE_ON_EXIT.load(Ordering::Relaxed) || crate::exiting() {
         return;
     }
     if let Some(w) = app.get_webview_window("main") {
@@ -49,6 +52,9 @@ pub fn restore_after_game(app: &AppHandle) {
 }
 
 pub fn hide_main(app: &AppHandle) {
+    if crate::exiting() {
+        return;
+    }
     if let Some(w) = app.get_webview_window("main") {
         if available() { let _ = w.hide(); } else { let _ = w.minimize(); }
         let _ = app.emit("window-visibility", false);
@@ -58,11 +64,19 @@ pub fn hide_main(app: &AppHandle) {
 /// Quit is delegated to the frontend, which applies a staged update on close;
 /// if the webview does not answer in time we exit anyway.
 fn quit(app: &AppHandle) {
+    if crate::exiting() {
+        return;
+    }
     let _ = app.emit("tray-exit", ());
     let h = app.clone();
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
-        h.exit(0);
+        // Интерфейс уже закрыл приложение сам (или ставит обновление): второй
+        // выход уходит в разрушенный цикл событий и роняет tao.
+        if !crate::exiting() {
+            crate::mark_exiting();
+            h.exit(0);
+        }
     });
 }
 

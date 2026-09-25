@@ -4,6 +4,7 @@ import type { RepairReport } from '../ipc/commands'
 import { listenLaunchProgress } from '../ipc/events'
 import type { UnlistenFn } from '../ipc/tauri'
 import { showToast, useUi } from '../state/ui'
+import { trackFailure } from './telemetry'
 
 const STAGE_IDX: Record<string, number> = { files: 0, java: 1, assets: 2, content: 3, mod: 0, launch: 3 }
 
@@ -72,6 +73,7 @@ export async function runRepair(profile: string): Promise<RepairReport | null> {
     return report
   } catch (e) {
     const msg = String(e && (e as Error).message ? (e as Error).message : e).replace(/^Error:\s*/, '')
+    trackFailure('repair', profile.length >= 2 ? msg.split(profile).join('<build>') : msg)
     showToast(/отмен/i.test(msg) ? 'Починка отменена' : 'Не удалось починить: ' + msg, 'error')
     return null
   } finally {

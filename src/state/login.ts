@@ -9,7 +9,7 @@ import { refreshSessionState } from '../lib/secure'
 import { copyText } from '../lib/clipboard'
 import { copyLink } from '../lib/links'
 import { api } from '../lib/api'
-import { flushTelemetry, track } from '../lib/telemetry'
+import { flushTelemetry, track, trackFailure } from '../lib/telemetry'
 import { markMillidaEver, millidaEver } from './onboarding'
 import { apiErrorText, isTransientApiError } from '../lib/apiError'
 
@@ -156,6 +156,7 @@ export async function startWebLogin(reopen = false) {
       })
     } catch (e) {
       resetLogin()
+      trackFailure('login', e, { provider: 'millida', step: 'init' })
       showToast(loginStartError(e), 'error')
       return
     }
@@ -192,6 +193,7 @@ export async function startWebLogin(reopen = false) {
         return
       }
       const reason = apiErrorText(e, 'Не удалось сохранить вход')
+      trackFailure('login', e, { provider: 'millida', step: 'poll' })
       resetLogin(reason, true)
       showToast(reason, 'error')
       return

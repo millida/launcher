@@ -59,11 +59,19 @@ export const RUBY_KOPECKS = 100 / 7
 /** Копейки за N рубинов, вверх до копейки: дробной цены не бывает. */
 export const kopecksFor = (rubies: number) => Math.ceil(rubies * RUBY_KOPECKS)
 
+/**
+ * Сколько рубинов просить у /rubies/topup: вверх до кратного 7. Служба считает
+ * `rubies * 100/7` копеек и кладёт в целое поле — на некратном числе падала
+ * с 500 (6 раз из 7). Кратное 7 — ровные рубли, лишних максимум 6 рубинов.
+ */
+export const topUpRubies = (missing: number) => Math.max(7, Math.ceil(missing / 7) * 7)
+
 /** Карточки магазина дня с их источником покупки. */
 export function shopCards(day: ShopDay): [ShopCard, ShopSource][] {
   return [
-    [day.day.featured, 'featured'],
-    [day.day.deal, 'deal'],
+    // featured/deal служба шлёт null, когда пул витрины пуст (ruby-showcase.service).
+    ...(day.day.featured ? [[day.day.featured, 'featured'] as [ShopCard, ShopSource]] : []),
+    ...(day.day.deal ? [[day.day.deal, 'deal'] as [ShopCard, ShopSource]] : []),
     ...day.day.items.map((c) => [c, 'day'] as [ShopCard, ShopSource]),
     ...day.day.forYou.map((c) => [c, 'forYou'] as [ShopCard, ShopSource]),
     ...(day.nightMarket?.cards ?? []).map((c) => [c, 'night'] as [ShopCard, ShopSource]),

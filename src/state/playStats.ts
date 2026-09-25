@@ -116,6 +116,8 @@ export function rememberServerName(addr: string, name: string) {
   void labelServer(addr, name).catch(() => {})
 }
 
+const cut = (v: string | null | undefined) => (v ? v.slice(0, 64) : undefined)
+
 async function syncPlayStats(stats: PlayStats) {
   if (!hasMillidaAccount() || !statsShared() || !stats.total_seconds) return
   try {
@@ -124,18 +126,19 @@ async function syncPlayStats(stats: PlayStats) {
       body: JSON.stringify({
         totalSeconds: stats.total_seconds,
         sessions: stats.sessions,
-        lastBuild: stats.last_build || undefined,
-        lastServer: stats.last_server || undefined,
-        lastServerName: stats.last_server_name || undefined,
+        // Служба режет строки на 64 символа (PlayStatsDto) и отбрасывает всё тело с 400.
+        lastBuild: cut(stats.last_build),
+        lastServer: cut(stats.last_server),
+        lastServerName: cut(stats.last_server_name),
         lastPlayedAt: stats.last_at ? stats.last_at * 1000 : undefined,
         builds: stats.builds.slice(0, 5).map((b) => ({
-          name: b.key,
+          name: cut(b.key) || '?',
           seconds: b.seconds,
           last: b.last * 1000,
         })),
         servers: stats.servers.slice(0, 5).map((s) => ({
-          addr: s.key,
-          name: s.label || undefined,
+          addr: cut(s.key) || '?',
+          name: cut(s.label),
           seconds: s.seconds,
           last: s.last * 1000,
         })),

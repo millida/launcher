@@ -26,6 +26,38 @@ pub fn asset_dirs() -> Vec<std::path::PathBuf> {
     vec![data.join("wallpaper"), data.join("music"), data.join("sounds-v2")]
 }
 
+/// Выход начат: цикл событий вот-вот закроется. После этого ни одно окно не
+/// создаётся и не трогается, и в главный поток ничего не отправляется — tao на
+/// Windows падает «cannot move state from Destroyed», получив событие после
+/// разрушения цикла (1105 отчётов), и «subclass_result.as_bool()», создавая окно
+/// на выходе (22).
+static EXITING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn exiting() -> bool {
+    EXITING.load(std::sync::atomic::Ordering::SeqCst)
+}
+
+pub(crate) fn mark_exiting() {
+    EXITING.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
+fn on_run_event(app: &tauri::AppHandle, event: &tauri::RunEvent) {
+    match event {
+        tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => mark_exiting(),
+        // Главное окно закрыто, а скрытый оверлей ещё жив: Tauri не считает это
+        // «все окна закрыты», и процесс оставался висеть без окна. Значок в трее
+        // и второй запуск (single-instance) звали show_main у окна, которого нет,
+        // — лаунчер «не открывался» до перезагрузки.
+        tauri::RunEvent::WindowEvent { label, event: tauri::WindowEvent::Destroyed, .. }
+            if label == "main" && !exiting() =>
+        {
+            mark_exiting();
+            app.exit(0);
+        }
+        _ => {}
+    }
+}
+
 pub fn allow_assets(app: &tauri::AppHandle) {
     let scope = app.asset_protocol_scope();
     for dir in asset_dirs() {
@@ -317,8 +349,9 @@ pub fn run() {
             commands::profiles::cloud_pull,
             commands::profiles::cloud_forget
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(|app, event| on_run_event(app, &event));
 }
 
 #[cfg(test)]

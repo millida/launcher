@@ -3,6 +3,9 @@ import { activeInstalls, cancelInstall } from '../ipc/commands'
 import { listenInstallProgress } from '../ipc/events'
 import { hasTauri } from '../ipc/tauri'
 import { reportInstallFailure } from '../lib/crash'
+import { installTarget } from '../lib/errorReport'
+import { trackFailure } from '../lib/telemetry'
+import { buildTag } from '../lib/telemetryPrivacy'
 import { showToast } from './ui'
 
 // Install jobs live in the core and outlive the component that started them, so
@@ -10,6 +13,30 @@ import { showToast } from './ui'
 // attaches to the running job instead of racing it over the same temp files.
 
 export type InstallState = 'run' | 'done' | 'error'
+
+/// Сценарий установки для события error: ключи совпадают с тем, что уже
+/// считают дашборды (content_install), остальные — по виду задачи.
+export function installWhere(key: string): string {
+  const kind = installTarget(key).kind
+  if (/^(mr|cf)-(?!modpack)[a-z]+$/.test(kind)) return 'content_install'
+  if (kind === 'mr-modpack' || kind === 'cf-modpack' || kind === 'catalog-pack') return 'modpack_install'
+  if (kind === 'millida-mod') return 'millida_mod_install'
+  if (kind === 'migrate') return 'build_migrate'
+  return 'install'
+}
+
+/// Один сбой установки — одно событие: промис задачи и событие прогресса ядра
+/// несут один текст, повтор за минуту телеметрия отбрасывает сама.
+function trackInstallFailure(key: string, err: unknown) {
+  const t = installTarget(key)
+  const text = String(err && (err as Error).message ? (err as Error).message : err)
+  const masked = t.profile && t.profile.length >= 2 ? text.split(t.profile).join('<build>') : text
+  trackFailure(installWhere(key), masked, {
+    job: t.kind.slice(0, 24),
+    build: buildTag(t.profile, t.catalogPack),
+    pack: t.catalogPack,
+  })
+}
 
 export interface InstallTask {
   key: string
@@ -128,6 +155,7 @@ export function runInstall<T>(o: RunOptions<T>): boolean {
         return
       }
       void reportInstallFailure(o.key, o.title, e)
+      trackInstallFailure(o.key, e)
       useInstalls.getState().patch(o.key, { label: '', msg: String(e), state: 'error' })
       fade(o.key, 4000)
       if (o.onError) o.onError(e)
@@ -156,7 +184,10 @@ export function initInstalls(): void {
     if (p.done) {
       // Reported here and in runInstall alike: whichever lands second carries
       // the same text and is dropped by the reporter's per-session dedupe.
-      if (p.error && !isCancelled(p.error)) void reportInstallFailure(p.key, p.title, p.error)
+      if (p.error && !isCancelled(p.error)) {
+        void reportInstallFailure(p.key, p.title, p.error)
+        trackInstallFailure(p.key, p.error)
+      }
       if (!known) return
       if (p.error && known.state === 'run') {
         const cancelled = isCancelled(p.error)

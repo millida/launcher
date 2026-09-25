@@ -9,6 +9,7 @@ import { refreshSessionState } from '../lib/secure'
 import { copyText } from '../lib/clipboard'
 import { copyLink } from '../lib/links'
 import { apiErrorText } from '../lib/apiError'
+import { track, trackFailure } from '../lib/telemetry'
 
 interface MsLoginState {
   busy: boolean
@@ -59,6 +60,8 @@ export async function copyMsCode() {
   showToast((await copyText(code)) ? 'Код скопирован: ' + code : 'Скопируй код вручную: ' + code)
 }
 
+const maskNick = (e: unknown, nick: string) => (nick ? String(e).split(nick).join('<nick>') : String(e))
+
 export async function startMsLogin() {
   const s = useMsLogin.getState()
   if (s.busy) {
@@ -74,6 +77,7 @@ export async function startMsLogin() {
   try {
     init = await msDeviceStart()
   } catch (e) {
+    trackFailure('login', e, { provider: 'microsoft', step: 'start' })
     reset(apiErrorText(e, 'Microsoft не ответила — повтори попытку'))
     showToast('Microsoft: ' + apiErrorText(e, 'нет ответа'), 'error')
     return
@@ -102,6 +106,7 @@ export async function startMsLogin() {
     try {
       r = await msDevicePoll(init.device_code)
     } catch (e) {
+      trackFailure('login', e, { provider: 'microsoft', step: 'poll' })
       reset(String(e))
       showToast('Microsoft: ' + e, 'error')
       return
@@ -121,6 +126,7 @@ export async function startMsLogin() {
       await msSessionCommit(init.device_code, acc.id)
     } catch (e) {
       useAccounts.getState().remove(acc.id)
+      trackFailure('login', maskNick(e, r.nick), { provider: 'microsoft', step: 'commit' })
       reset(String(e))
       showToast('Microsoft: ' + e, 'error')
       return
@@ -128,6 +134,7 @@ export async function startMsLogin() {
     await refreshSessionState()
     reset()
     enterApp()
+    track('account_link', { kind: 'microsoft' })
     showToast('Лицензия подключена: ' + r.nick)
   }
   pollTimer = setTimeout(() => void poll(), intervalMs)

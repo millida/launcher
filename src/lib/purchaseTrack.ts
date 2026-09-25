@@ -1,4 +1,4 @@
-import { track } from './telemetry'
+import { track, trackFailure } from './telemetry'
 import { actionSource } from './uiTrack'
 
 /**
@@ -21,11 +21,14 @@ export function purchaseFlow(product: string, id: string, price?: number, cur?: 
   if (cur) start.cur = cur
   track('purchase_start', start)
   let done = false
-  return (ok: boolean, reason?: PurchaseReason) => {
+  return (ok: boolean, reason?: PurchaseReason, err?: unknown) => {
     if (done) return
     done = true
     const data: Record<string, string | number | boolean> = { ...base, ok }
     if (reason) data.reason = reason
     track('purchase_result', data, { ok })
+    // Сбой службы — ещё и событие error с текстом и классом; отказ и нехватка
+    // средств — ответ игроку, не сбой.
+    if (reason === 'error') trackFailure('purchase', err ?? 'purchase_error:' + product, { product })
   }
 }

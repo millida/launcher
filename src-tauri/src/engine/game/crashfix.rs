@@ -40,21 +40,42 @@ pub struct CrashDiag {
     /// Files in mods/ the loader complained about.
     pub culprits: Vec<String>,
     pub actions: Vec<CrashAction>,
+    /// Стабильный класс вылета для телеметрии: own_mod, skin_mod, missing_deps,
+    /// wrong_mc, mixin, conflict, api_mismatch, gpu, gpu_driver, amd_driver,
+    /// oom, system_memory, java_version, jvm_fatal, auth_cert, no_log, unknown.
+    pub kind: String,
+    /// Первая осмысленная строка ошибки (≤300 символов), без домашней папки,
+    /// имени сборки, ника и токенов.
+    pub cause: String,
 }
 
-/// Java the game version needs. The mapping is Mojang's own: 1.20.5 moved to
-/// 21, 1.17 moved to 17, everything older still runs on 8.
+impl CrashDiag {
+    pub fn classified(mut self, kind: &str, cause: String) -> Self {
+        self.kind = kind.to_string();
+        self.cause = cause;
+        self
+    }
+}
+
+/// Java the game version needs. The mapping is Mojang's own: 26.x (new
+/// year-based numbering) moved to 25, 1.20.5 moved to 21, 1.17 moved to 17,
+/// everything older still runs on 8.
 pub(crate) fn java_major_for(version: &str) -> u64 {
     let parts: Vec<&str> = version.split(['.', '-', ' ']).take(3).collect();
     let num = |i: usize| parts.get(i).and_then(|p| p.parse::<u32>().ok());
-    // A snapshot ("25w05a") has no release number at all: it is always newer
-    // than the last release, so it gets the current runtime.
+    // Снапшот («25w05a», «26w14a») начинается с года: 26-й год — это уже
+    // 26.x на Java 25, всё раньше — 1.21.x на Java 21.
+    let lead: u32 = parts
+        .first()
+        .map(|p| p.chars().take_while(char::is_ascii_digit).collect::<String>())
+        .and_then(|d| d.parse().ok())
+        .unwrap_or(0);
     let (major, minor, patch) = match num(0) {
         Some(m) => (m, num(1).unwrap_or(0), num(2).unwrap_or(0)),
-        None => return 21,
+        None => return if lead >= 26 { 25 } else { 21 },
     };
     if major != 1 {
-        return 21;
+        return if major >= 26 { 25 } else { 21 };
     }
     match (minor, patch) {
         (m, _) if m >= 21 => 21,
@@ -116,6 +137,10 @@ pub fn diagnose(profile: &str, reason: &str, tail: &str, log_text: &str) -> Cras
     let mut culprits: Vec<String> = vec![];
 
     for fault in mod_faults(log_text) {
+        // Наш мод лаунчер убирает сам (карантин) — кнопка на него лишняя.
+        if fault.name.eq_ignore_ascii_case("millida") {
+            continue;
+        }
         if let Some(file) = file_for_mod(profile, &fault.name) {
             if culprits.contains(&file) {
                 continue;
@@ -193,7 +218,15 @@ pub fn diagnose(profile: &str, reason: &str, tail: &str, log_text: &str) -> Cras
     actions.push(CrashAction::new("repair", "Починить сборку".into(), String::new(), "Проверит и перекачает файлы игры"));
     actions.push(CrashAction::new("share-log", "Поделиться логом".into(), String::new(), "Ссылку можно отправить в поддержку"));
 
-    CrashDiag { profile: profile.to_string(), reason: reason.to_string(), tail: tail.to_string(), culprits, actions }
+    CrashDiag {
+        profile: profile.to_string(),
+        reason: reason.to_string(),
+        tail: tail.to_string(),
+        culprits,
+        actions,
+        kind: "unknown".into(),
+        cause: String::new(),
+    }
 }
 
 /// Performs one offered action. The webview names the kind and passes the arg
@@ -279,7 +312,10 @@ mod tests {
     /// as a button that installs the wrong runtime and leaves the build broken.
     #[test]
     fn java_major_follows_the_game_version() {
-        let cases: [(&str, u64, &str); 8] = [
+        let cases: [(&str, u64, &str); 11] = [
+            ("26.3", 25, "новая нумерация 26.x требует Java 25"),
+            ("26.1.2", 25, "любая 26.x — Java 25"),
+            ("26w14a", 25, "снапшот 26-го года — уже 26.x"),
             ("1.21.4", 21, "современные версии — Java 21"),
             ("1.20.6", 21, "1.20.5 перешла на 21"),
             ("1.20.4", 17, "до 1.20.5 хватает 17"),

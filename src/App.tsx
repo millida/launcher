@@ -177,6 +177,7 @@ function previewOf(m: PolledMessage): string {
 import { refreshPlayStats, rememberServerName, serverNameFor, watchPlaytimeWhileRunning } from './state/playStats'
 import { quickJoin } from './lib/joinServer'
 import { findProfile, refreshProfiles } from './state/profiles'
+import { gameCrashData } from './lib/crashEvent'
 import { initMusic, startMusicAfterLogin, stopMusicNow } from './state/music'
 import { initSounds, playSound } from './lib/sound'
 import { initUiTracking } from './lib/uiTrack'
@@ -192,8 +193,8 @@ import { syncRunningGame, useGame } from './state/game'
 import { CrashModal } from './components/CrashModal'
 import { hideBoot } from './lib/boot'
 import { frontendReady } from './ipc/commands'
-import { initTelemetry, track } from './lib/telemetry'
-import { reportWebviewFailure, setLauncherIdleMemory, watchHeap } from './lib/webviewHealth'
+import { initTelemetry, track, trackAppExit } from './lib/telemetry'
+import { reportWebviewFailure, setLauncherIdleMemory, watchHeap, watchWebviewContext } from './lib/webviewHealth'
 import { flushPrefs, hydratePrefs } from './lib/prefs'
 
 let gameStartedAt = 0
@@ -278,6 +279,10 @@ export function App() {
     initUiTracking(
       () => useUi.getState().screen,
       (cb) => useUi.subscribe((st, prev) => cb(st.screen, prev.screen)),
+    )
+    watchWebviewContext(
+      () => useUi.getState().screen,
+      (cb) => useUi.subscribe((st, prev) => void (st.screen !== prev.screen && cb(st.screen))),
     )
     void initDesktopToasts()
     initDeepLinks()
@@ -378,6 +383,7 @@ export function App() {
   useEffect(() => {
     let unlisten: UnlistenFn | null = null
     void listenTrayExit(() => {
+      trackAppExit()
       stopMusicNow()
       void flushPrefs()
       if (updateReady()) void installUpdateOnExit()
@@ -474,16 +480,15 @@ export function App() {
     })
     let unCrash: UnlistenFn | null = null
     void listenGameCrash((info) => {
-      const code = String((info as { reason?: string })?.reason ?? 'crash').slice(0, 120)
       // Слаг сборки в событии — чтобы «здоровье сборки» знало, чья это
-      // ошибка, а не угадывало по последнему запуску на устройстве.
+      // ошибка, а не угадывало по последнему запуску на устройстве; mc и
+      // загрузчик — чтобы не склеивать их с запусками задним числом.
       const crashed = info && info.profile ? info.profile : ''
+      const prof = crashed ? findProfile(crashed) : null
       void (crashed ? loadProfileSettings(crashed).catch(() => null) : Promise.resolve(null)).then((s) => {
-        const data: Record<string, string> = { code }
-        const pack = (s?.catalogPackSlug || '').trim()
-        if (pack) data.pack = pack
-        if (s?.modpackSlug) data.modpack = s.modpackSlug
-        track('game_crash', data, { ok: false })
+        track('game_crash', gameCrashData(info, prof, s, crashed ? [[crashed, '<build>'], [effectiveNick(), '<nick>']] : []), {
+          ok: false,
+        })
       })
       useCrash.getState().show(info)
       if (info && info.profile) {

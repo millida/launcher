@@ -19,6 +19,7 @@ import { loadPlus, subscribePlus, type PlusStatus } from '../lib/gameProfile'
 import { logoutToLogin } from '../lib/session'
 import { watchPlusPurchase } from './plusWatch'
 import { purchaseFlow } from '../lib/purchaseTrack'
+import { trackFailure } from '../lib/telemetry'
 import { usePlus } from './plus'
 import { showToast } from './ui'
 import { passCols, readyCells, seasonal, type ClaimTarget, type DailyView } from '../components/daily/track'
@@ -235,6 +236,7 @@ export const useDaily = create<DailyState>((set, get) => ({
       seq++
       set({ status: res, reveal: res })
     } catch (e) {
+      trackFailure('daily_claim', e)
       showToast(apiErrorText(e, 'Служба рубинов не ответила, попробуй позже'), 'error')
     } finally {
       set({ busy: '' })
@@ -272,7 +274,7 @@ export const useDaily = create<DailyState>((set, get) => ({
         void get().load()
       })
     } catch (e) {
-      result(false, 'error')
+      result(false, 'error', e)
       showToast(apiErrorText(e, 'Не удалось оформить подписку'), 'error')
     } finally {
       set({ busy: '' })
@@ -318,8 +320,15 @@ export const useDaily = create<DailyState>((set, get) => ({
         drop()
         return { error: 'Этот сундук уже открыт' }
       }
-      if (/\b404\b|not found|сундука нет|cannot post/i.test(raw))
+      // «Сундука нет» — служба не знает этот id (уже открыт в другом окне или
+      // пропал): это не «старая служба», убираем его из списка.
+      if (/сундука нет/i.test(raw)) {
+        drop()
+        return { error: 'Этого сундука уже нет' }
+      }
+      if (/\b404\b|not found|cannot post/i.test(raw))
         return { error: 'Откроется после обновления Millida', outdated: true }
+      trackFailure('chest_open', e)
       return { error: apiErrorText(e, 'Сундук не открылся, попробуй ещё раз') }
     }
   },

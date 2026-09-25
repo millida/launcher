@@ -106,11 +106,9 @@ fn link_object(object: &Path, sha1: &str, dest: &Path, size: Option<u64>) -> boo
     if !meta.is_file() || meta.len() < MIN_SHARE_BYTES {
         return false;
     }
-    if let Some(want) = size {
-        if meta.len() != want {
-            return false;
-        }
-    }
+    // Размер из индекса сборки бывает неверным при верном хеше: объект всё
+    // равно проверяется по sha1 ниже, так что размер здесь не повод отказать.
+    let _ = size;
     match file_sha1(object) {
         Some(got) if got.eq_ignore_ascii_case(sha1) => {}
         Some(_) => {

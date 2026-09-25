@@ -62,7 +62,7 @@ import type {
 } from '../lib/gameProfile'
 import { refreshGameNick, useGameNick } from '../state/gameNick'
 import { hasMillidaAccount, LAUNCHER_API, openExt, SUPPORT_URL } from '../lib/api'
-import { track } from '../lib/telemetry'
+import { track, trackFailure } from '../lib/telemetry'
 import { purchaseFlow } from '../lib/purchaseTrack'
 import { loadMillidaProfile, logoutToLogin } from '../lib/session'
 import { ensureMsAuth } from '../state/msLogin'
@@ -1029,6 +1029,7 @@ export function Skins({ on }: { on: boolean }) {
     } catch (e) {
       setWardrobeFailed(true)
       console.warn('[skins] wardrobe', e)
+      trackFailure('skins', e, { step: 'wardrobe_load' })
       showToast('Каталог скинов не загрузился', 'error')
     }
   }
@@ -1103,7 +1104,10 @@ export function Skins({ on }: { on: boolean }) {
         setFitting((now) => now.filter((c) => !mine.some((m) => m.slot === c.slot)))
         showToast('Надето — видно в игре', 'ok')
       })
-      .catch((e) => showToast(apiErrorText(e, 'Не удалось надеть'), 'error'))
+      .catch((e) => {
+        trackFailure('skins', e, { step: 'cosmetic_wear' })
+        showToast(apiErrorText(e, 'Не удалось надеть'), 'error')
+      })
       .finally(() => setCosmeticBusy(''))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wearRefs, cosReady, cosmetics])
@@ -1309,7 +1313,7 @@ export function Skins({ on }: { on: boolean }) {
         void refreshCosmetics()
       })
     } catch (e) {
-      result(false, 'error')
+      result(false, 'error', e)
       showToast(apiErrorText(e, 'Не удалось оформить подписку'), 'error')
     } finally {
       setPlusBusy(false)
@@ -1866,7 +1870,10 @@ export function Skins({ on }: { on: boolean }) {
     void uploadTexture('cape', null)
       .then(() => refreshWardrobe())
       .then(() => showToast('Плащ снят'))
-      .catch((e) => showToast(apiErrorText(e, 'Плащ не снялся — попробуй ещё раз'), 'error'))
+      .catch((e) => {
+        trackFailure('skins', e, { step: 'cape_remove' })
+        showToast(apiErrorText(e, 'Плащ не снялся — попробуй ещё раз'), 'error')
+      })
   }
 
   const fitViewer = () => {
@@ -2268,7 +2275,10 @@ export function Skins({ on }: { on: boolean }) {
       .then(async (p) => {
         if (p) await acceptSkin(p.name, p.data)
       })
-      .catch((e) => showToast('Не удалось загрузить: ' + e, 'error'))
+      .catch((e) => {
+        trackFailure('skins', e, { step: 'skin_pick' })
+        showToast('Не удалось загрузить: ' + e, 'error')
+      })
   }
   pickSkinRef.current = pickSkin
 
@@ -2621,6 +2631,7 @@ export function Skins({ on }: { on: boolean }) {
       try {
         licensed = await applyLicensedCape()
       } catch (e) {
+        trackFailure('skins', e, { step: 'license_cape' })
         showToast('Плащ лицензии не переключился: ' + e, 'error')
       }
       // Скин на лицензию уходит независимо от аккаунта Millida: раньше он был
@@ -2634,6 +2645,7 @@ export function Skins({ on }: { on: boolean }) {
             texCache.delete(acc.uuid || acc.nick)
             licensed = true
           } catch (e) {
+            trackFailure('skins', e, { step: 'license_skin' })
             showToast('На лицензию скин не уехал: ' + e, 'error')
           }
         }
@@ -2702,6 +2714,7 @@ export function Skins({ on }: { on: boolean }) {
         licensed,
       })
     } catch (e) {
+      if (!stale()) trackFailure('skins', e, { step: 'apply' })
       if (!stale()) showToast(apiErrorText(e, 'Не удалось применить скин'), 'error')
     }
   }
@@ -2836,6 +2849,7 @@ export function Skins({ on }: { on: boolean }) {
       if (skipped) showToast('«' + o.name + '» надет, закрытых вещей пропущено: ' + skipped)
       else showReward({ level: 'small', items: [{ name: o.name, icon: 'looks' }], title: '«' + o.name + '» надет' })
     } catch (e) {
+      trackFailure('skins', e, { step: 'outfit' })
       showToast(apiErrorText(e, 'Образ надет не целиком'), 'error')
     } finally {
       setOutfitBusy(null)

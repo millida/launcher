@@ -197,54 +197,50 @@ fn gpu_driver_vendor(frame: &str) -> Option<&'static str> {
         .map(|(vendor, _)| *vendor)
 }
 
-/// Lines that carry a failure. A mod is named on plenty of healthy lines — the
-/// loader prints a table of every jar it loaded, and a crash report repeats that
-/// list — so the name alone proves nothing.
-const FAILURE_MARKERS: [&str; 8] =
-    ["/error]", "/fatal]", "exception", "caused by", "\tat ", "error:", "failed", "could not"];
-
-/// True only when the injected skin mod appears in a line that is itself a
-/// failure: a stack frame, a mixin apply error, a loader complaint.
+/// True only when the injected skin mod is the one that failed: its code at the
+/// top of a real (not WARN) stack, its mixin, or the loader naming it.
 ///
 /// Matching the bare name anywhere in the log blamed the mod for every crash in
 /// a build that merely had it installed — the loader's "Loading N mods" table
 /// names it on every single launch. The build then lost its skins and kept
 /// crashing for the original, still undiagnosed reason.
 fn skin_mod_implicated(text: &str) -> bool {
-    text.lines().any(|l| {
-        let low = l.to_lowercase();
-        low.contains("customskinloader") && FAILURE_MARKERS.iter().any(|m| low.contains(m))
-    })
+    super::crashcause::mod_implicated(text, &super::crashcause::SKIN_MOD)
 }
 
-/// Наш собственный мод в строке, которая сама по себе — отказ.
+/// Наш собственный мод — виновник, а не свидетель.
 ///
-/// Тот же приём, что и с модом скинов: имя мода стоит в каждом запуске в списке
-/// загруженных, и по одному имени судить нельзя. Отдельно ловится
+/// Имя мода стоит в каждом запуске в списке загруженных, а его логгер пишет о
+/// своих сетевых неудачах под WARN — ни то ни другое вылетом не является.
+/// Улики перечислены в `crashcause::mod_implicated`. Отдельно ловится
 /// UnsupportedClassVersionError: так выглядит мод, собранный под Java новее
 /// игры, и это единственная поломка, которая валит ВСЕ модовые сборки сразу
 /// (16.09.2026).
 pub(crate) fn own_mod_implicated(text: &str) -> bool {
-    text.lines().any(|l| {
-        let low = l.to_lowercase();
-        // Совпадение ищется по НАШИМ опознавательным знакам, а не по слову
-        // «millida»: оно стоит в пути к папке лаунчера, и тогда виноватым
-        // оказывался бы любой вылет у любого игрока.
-        const OURS: [&str; 5] = [
-            "net/millida",
-            "net.millida",
-            "millidaforge",
-            "millida.mixins",
-            "millida-mod-",
-        ];
-        let ours = OURS.iter().any(|m| low.contains(m))
-            || (low.contains("millida") && low.contains("class loading"));
-        if !ours {
-            return false;
-        }
-        low.contains("unsupportedclassversionerror")
-            || FAILURE_MARKERS.iter().any(|m| low.contains(m))
-    })
+    super::crashcause::mod_implicated(text, &super::crashcause::OWN_MOD)
+}
+
+/// Кого из наших модов винить в вылете, и какие чужие моды назвал загрузчик.
+pub(crate) struct Blame {
+    pub skin: bool,
+    pub own: bool,
+    pub others: Vec<ModFault>,
+}
+
+/// Загрузчик отказался собрать моды: ни один мод до своего кода не дошёл, и
+/// винить наши моды можно только если отказ назвал их самих. Так 25.09.2026
+/// walkers без craftedcore обернулся «мод скинов не ужился» — у игрока забрали
+/// скины, а причину спрятали.
+pub(crate) fn blame(text: &str) -> Blame {
+    let faults = mod_faults(text);
+    let is_own = |f: &ModFault| f.name.eq_ignore_ascii_case("millida");
+    let is_skin = |f: &ModFault| f.name.to_lowercase().replace(' ', "") == "customskinloader";
+    let resolved = faults.is_empty();
+    Blame {
+        skin: faults.iter().any(is_skin) || (resolved && skin_mod_implicated(text)),
+        own: faults.iter().any(is_own) || (resolved && own_mod_implicated(text)),
+        others: faults.into_iter().filter(|f| !is_own(f) && !is_skin(f)).collect(),
+    }
 }
 
 /// A mod the loader refused to load. `wrong_version` — the unmet requirement is
@@ -363,8 +359,48 @@ fn auth_server_certificate_rejected(low: &str) -> bool {
     low.contains("failed to fetch metadata") && CERTIFICATE_REJECTION_MARKERS.iter().any(|m| low.contains(m))
 }
 
+/// Вердикт о вылете: текст игроку, хвост лога, стабильный класс для
+/// телеметрии и сырая строка-причина (маскируется перед отправкой).
+pub(crate) struct CrashVerdict {
+    pub reason: String,
+    pub tail: String,
+    pub kind: &'static str,
+    pub cause: String,
+}
+
+/// Игра дошла до меню: звук поднят, атласы текстур собраны. После этого окно
+/// уже открыто, и слова «GLFW»/«OpenGL» в логе — не отказ окна.
+fn startup_finished(low: &str) -> bool {
+    low.contains("sound engine started") || low.contains("-atlas") || low.contains("[chat]")
+}
+
+/// Отказ открыть окно — только по строкам, которые это и говорят, и только
+/// если игра до окна не дошла. Голое «glfw» есть в любом отчёте о вылете
+/// посреди игры: 112 из 344 «видеокарта не открыла окно» случились после
+/// десяти минут игры (25.09.2026).
+const WINDOW_FAILURE_MARKERS: [&str; 9] = [
+    "failed to create window",
+    "pixel format",
+    "no opengl",
+    "glfw error 65542",
+    "glfw error 65543",
+    "wglcreatecontext",
+    "could not create context",
+    "failed to initialize glfw",
+    "opengl version is not supported",
+];
+
+fn window_failed(low: &str) -> bool {
+    !startup_finished(low) && WINDOW_FAILURE_MARKERS.iter().any(|m| low.contains(m))
+}
+
+#[cfg(test)]
 pub(crate) fn analyze_crash(game_dir: &Path, since: std::time::SystemTime) -> (String, String) {
-    let text = crash_text(game_dir, since);
+    let v = crash_verdict(&crash_text(game_dir, since));
+    (v.reason, v.tail)
+}
+
+pub(crate) fn crash_verdict(text: &str) -> CrashVerdict {
     let low = text.to_lowercase();
     // "Problematic frame" is written by nothing but a JVM fatal-error log, so it
     // stands on its own: a truncated hs_err (the header cut off by a rotating
@@ -372,31 +408,39 @@ pub(crate) fn analyze_crash(game_dir: &Path, since: std::time::SystemTime) -> (S
     let fatal_jvm = low.contains("a fatal error has been detected by the java runtime")
         || low.contains("# problematic frame:");
     let gpu_vendor = fatal_jvm
-        .then(|| problematic_frame(&text))
+        .then(|| problematic_frame(text))
         .flatten()
         .and_then(|f| gpu_driver_vendor(&f));
-    let faults = mod_faults(&text);
-    let reason = if auth_server_certificate_rejected(&low) {
-        "Java этой сборки не доверяет сертификату сервера входа Millida, поэтому игра закрылась на старте. Чаще всего сертификат подменяет антивирус с проверкой защищённых соединений (Kaspersky, ESET, Dr.Web, AdGuard) — выключи в нём проверку HTTPS. Если на компьютере старая версия Java, поставь свежую кнопкой ниже."
+    let faults = mod_faults(text);
+    let verdict = |reason: String, kind: &'static str| CrashVerdict {
+        reason,
+        tail: crash_tail(text),
+        kind,
+        cause: super::crashcause::crash_cause(text),
+    };
+    let (reason, kind): (&str, &'static str) = if auth_server_certificate_rejected(&low) {
+        ("Java этой сборки не доверяет сертификату сервера входа Millida, поэтому игра закрылась на старте. Чаще всего сертификат подменяет антивирус с проверкой защищённых соединений (Kaspersky, ESET, Dr.Web, AdGuard) — выключи в нём проверку HTTPS. Если на компьютере старая версия Java, поставь свежую кнопкой ниже.", "auth_cert")
     } else if system_memory_exhausted(&low) {
-        SYSTEM_MEMORY_REASON
+        (SYSTEM_MEMORY_REASON, "system_memory")
     } else if low.contains("outofmemoryerror") || low.contains("out of memory") {
-        "Не хватило оперативной памяти. Добавь ОЗУ в настройках сборки."
+        ("Не хватило оперативной памяти. Добавь ОЗУ в настройках сборки.", "oom")
     } else if low.contains("unsupportedclassversionerror") || low.contains("class file version") || low.contains("compiled by a more recent version of the java") {
-        "Нужна другая версия Java для этой сборки."
+        ("Нужна другая версия Java для этой сборки.", "java_version")
     } else if let Some(vendor) = gpu_vendor {
-        return (driver_crash_reason(vendor), crash_tail(&text));
+        let kind = if vendor == "AMD" { "amd_driver" } else { "gpu_driver" };
+        return verdict(driver_crash_reason(vendor), kind);
     } else if fatal_jvm {
-        "Java аварийно завершилась. Отчёт hs_err_pid лежит в папке сборки — пришли его в поддержку."
+        ("Java аварийно завершилась. Отчёт hs_err_pid лежит в папке сборки — пришли его в поддержку.", "jvm_fatal")
     } else if !faults.is_empty() {
-        return (mod_fault_reason(&faults), crash_tail(&text));
+        let kind = if faults.iter().any(|f| f.wrong_version) { "wrong_mc" } else { "missing_deps" };
+        return verdict(mod_fault_reason(&faults), kind);
     } else if loader_reported_missing_dependency(&low) {
-        "Не хватает зависимости одного из модов."
+        ("Не хватает зависимости одного из модов.", "missing_deps")
     } else if low.contains("duplicate mods") || low.contains("incompatible mod") || low.contains("found a duplicate mod")
         || low.contains("mod resolution encountered an incompatible mod set") || low.contains("duplicate mod") {
-        "Конфликт модов — есть дубли или несовместимые моды."
+        ("Конфликт модов — есть дубли или несовместимые моды.", "conflict")
     } else if low.contains("mixin apply failed") || low.contains("mixinapplyerror") || low.contains("mixintransformererror") {
-        "Один из модов не подошёл к этой версии игры (ошибка миксина)."
+        ("Один из модов не подошёл к этой версии игры (ошибка миксина).", "mixin")
     } else if low.contains("nosuchmethoderror")
         || low.contains("noclassdeffounderror")
         || low.contains("nosuchfielderror")
@@ -405,15 +449,15 @@ pub(crate) fn analyze_crash(game_dir: &Path, since: std::time::SystemTime) -> (S
         // Загрузчик пропустил мод, а код внутри него зовёт то, чего в этой версии
         // игры уже нет. Так падает сборка, перенесённая на другую версию, — часто
         // не на запуске, а при входе на сервер, когда мод впервые доходит до дела.
-        "Один из модов собран под другую версию игры: он зовёт код, которого в ней нет. Обнови моды сборки под её версию."
-    } else if low.contains("glfw") || low.contains("pixel format") || low.contains("failed to create window") || low.contains("no opengl") {
-        "Игра не смогла открыть окно — дело в видеокарте или её драйвере. Обнови драйвер видеокарты."
+        ("Один из модов собран под другую версию игры: он зовёт код, которого в ней нет. Обнови моды сборки под её версию.", "api_mismatch")
+    } else if window_failed(&low) {
+        ("Игра не смогла открыть окно — дело в видеокарте или её драйвере. Обнови драйвер видеокарты.", "gpu")
     } else if text.trim().is_empty() {
-        "Игра закрылась без единой строчки в логе — чаще всего её закрыл антивирус. Добавь папку игры в исключения."
+        ("Игра закрылась без единой строчки в логе — чаще всего её закрыл антивирус. Добавь папку игры в исключения.", "no_log")
     } else {
-        "Игра вылетела. Загляни в лог — там причина."
+        ("Игра вылетела. Загляни в лог — там причина.", "unknown")
     };
-    (reason.to_string(), crash_tail(&text))
+    verdict(reason.to_string(), kind)
 }
 
 const TAIL_LINES: usize = 18;
@@ -1259,7 +1303,7 @@ pub async fn install_and_launch_in(
     // happen before the game logger is initialized.
     let logs = game_dir.join("logs");
     std::fs::create_dir_all(&logs).ok();
-    let log_file = std::fs::File::create(logs.join("launcher-latest.log")).map_err(|e| e.to_string())?;
+    let log_path = logs.join("launcher-latest.log");
     let mut quick_server: Option<String> = None;
     if let Some((w, sv)) = QUICK.lock().unwrap().clone() {
         if let Some(w) = w { args.push("--quickPlaySingleplayer".into()); args.push(w); }
@@ -1272,11 +1316,9 @@ pub async fn install_and_launch_in(
     // Токен для мода — узкий, из /launcher/mod-session; нет его — мод без входа.
     let mod_token = if own_mod { mod_session_token().await } else { None };
     check_cancel()?;
-    let exe = branded_java(&java);
-    let mut cmd = Command::new(&exe);
-    // CREATE_NO_WINDOW on Windows, otherwise every launch pops a console window.
-    quiet(&mut cmd);
-    apply_gpu_pref(&mut cmd, &exe, GpuPref::parse(settings["gpu"].as_str().unwrap_or("auto")));
+    // Флаги из четырёх источников сводятся под выбранную Java: разблокировка
+    // экспериментальных, один сборщик мусора, опции новее этой Java — прочь.
+    fit_jvm_args(&mut args, java_major_of_bin(&java));
     /*
      * Сборка со своим classpath не влезает в командную строку Windows: четыреста
      * jar дают 80 000 символов при пределе в 32 767, и процесс не стартует
@@ -1288,61 +1330,108 @@ pub async fn install_and_launch_in(
     } else {
         None
     };
-    match &argfile {
-        Some(path) => {
-            cmd.arg(format!("@{}", path.to_string_lossy()));
+    // Файл аргументов убирается при любом выходе из запуска, в том числе по
+    // ошибке: в нём ключ подписи сборки.
+    let _argfile_guard = ArgfileGuard(argfile.clone());
+    let gpu = GpuPref::parse(settings["gpu"].as_str().unwrap_or("auto"));
+    let build = |exe: &Path| -> Command {
+        let mut cmd = Command::new(exe);
+        // CREATE_NO_WINDOW on Windows, otherwise every launch pops a console window.
+        quiet(&mut cmd);
+        apply_gpu_pref(&mut cmd, exe, gpu);
+        match &argfile {
+            Some(path) => {
+                cmd.arg(format!("@{}", path.to_string_lossy()));
+            }
+            None => {
+                cmd.args(&args);
+            }
         }
-        None => {
-            cmd.args(&args);
+        cmd.current_dir(&game_dir)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+        // Токен мод берёт из окружения запуска: в свой файл настроек он его не
+        // пишет, а файл настроек игроки пересылают вместе со сборкой. Это узкий
+        // токен мода, не токен аккаунта.
+        if let Some(token) = &mod_token {
+            cmd.env("MILLIDA_TOKEN", token);
         }
-    }
-    cmd.current_dir(&game_dir)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped());
-    // Токен мод берёт из окружения запуска: в свой файл настроек он его не
-    // пишет, а файл настроек игроки пересылают вместе со сборкой. Это узкий
-    // токен мода, не токен аккаунта.
-    if let Some(token) = mod_token {
-        cmd.env("MILLIDA_TOKEN", token);
-    }
-    let start = std::time::Instant::now();
-    // Wall clock too: crash evidence is filtered by file mtime, and Instant has
-    // no common ground with a file timestamp.
-    let start_wall = std::time::SystemTime::now();
-    let mut child = cmd.spawn().map_err(|e| format!("Запуск Java: {}", e))?;
-    if let Some(path) = argfile.clone() {
-        drop_argfile_later(path);
-    }
-    if cancelled() {
-        let _ = child.kill();
-        return Err("Запуск отменён".into());
-    }
-    let _ = app.emit("game-log-start", &profile);
-    let log_file = Arc::new(Mutex::new(log_file));
-    let server_now: ServerSlot = Arc::new(Mutex::new(quick_server.as_deref().map(canon_addr)));
-    if let Some(o) = child.stdout.take() {
-        spawn_log_reader(Box::new(o), log_file.clone(), app.clone(), server_now.clone());
-    }
-    if let Some(e) = child.stderr.take() {
-        spawn_log_reader(Box::new(e), log_file.clone(), app.clone(), server_now.clone());
-    }
-    // Give the JVM a moment: an immediate exit is a launch failure, not a session.
-    tokio::time::sleep(std::time::Duration::from_millis(900)).await;
-    if let Ok(Some(status)) = child.try_wait() {
-        if !status.success() {
-            let log = read_log_file(&logs.join("launcher-latest.log")).unwrap_or_default();
-            let tail: Vec<&str> = log.lines().rev().take(20).collect();
-            let tail: String = tail.into_iter().rev().collect::<Vec<_>>().join("\n");
-            let failure = format!("Игра не запустилась (код {:?}).\n{}", status.code(), tail);
-            // Проверочная версия узнаёт о своём падении здесь же: «не
-            // открылась вовсе» — самый важный из ответов, ради которых её ставили.
-            report_review_launch(&profile, false, &failure).await;
-            return Err(failure);
+        cmd
+    };
+    // Одна повторная попытка: занятый антивирусом java.exe — через паузу,
+    // пропавший или неполный наш рантайм — после переустановки.
+    let mut java = java;
+    let mut retried = false;
+    let (mut child, start, start_wall, server_now) = loop {
+        let log_file = std::fs::File::create(&log_path).map_err(|e| io_fail("Лог запуска", &log_path, &e))?;
+        let start = std::time::Instant::now();
+        // Wall clock too: crash evidence is filtered by file mtime, and Instant has
+        // no common ground with a file timestamp.
+        let start_wall = std::time::SystemTime::now();
+        let exe = branded_java(&java);
+        let spawned = match build(&exe).spawn() {
+            Ok(c) => Ok(c),
+            // Копию java.exe под нашим именем антивирус блокирует чаще
+            // оригинала: без неё теряется только метка в Discord.
+            Err(_) if exe != java => build(&java).spawn(),
+            Err(e) => Err(e),
+        };
+        let mut child = match spawned {
+            Ok(c) => c,
+            Err(e) => {
+                if !retried && spawn_missing(&e) {
+                    if let Some(fresh) = reinstall_managed_java(&app, &java).await {
+                        java = fresh?;
+                        retried = true;
+                        continue;
+                    }
+                }
+                if !retried && spawn_blocked(&e) {
+                    retried = true;
+                    tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+                    continue;
+                }
+                return Err(spawn_failure(&e, &java));
+            }
+        };
+        if cancelled() {
+            let _ = child.kill();
+            return Err("Запуск отменён".into());
         }
-    }
+        let _ = app.emit("game-log-start", &profile);
+        let log_file = Arc::new(Mutex::new(log_file));
+        let server_now: ServerSlot = Arc::new(Mutex::new(quick_server.as_deref().map(canon_addr)));
+        if let Some(o) = child.stdout.take() {
+            spawn_log_reader(Box::new(o), log_file.clone(), app.clone(), server_now.clone());
+        }
+        if let Some(e) = child.stderr.take() {
+            spawn_log_reader(Box::new(e), log_file.clone(), app.clone(), server_now.clone());
+        }
+        // Give the JVM a moment: an immediate exit is a launch failure, not a session.
+        tokio::time::sleep(std::time::Duration::from_millis(900)).await;
+        if let Ok(Some(status)) = child.try_wait() {
+            if !status.success() {
+                let log = read_log_file(&log_path).unwrap_or_default();
+                if !retried && broken_runtime(&log) {
+                    if let Some(fresh) = reinstall_managed_java(&app, &java).await {
+                        java = fresh?;
+                        retried = true;
+                        continue;
+                    }
+                }
+                let failure = early_exit_message(status.code(), &log);
+                // Проверочная версия узнаёт о своём падении здесь же: «не
+                // открылась вовсе» — самый важный из ответов, ради которых её ставили.
+                report_review_launch(&profile, false, &failure).await;
+                return Err(failure);
+            }
+        }
+        break (child, start, start_wall, server_now);
+    };
     let pname = profile.clone();
     let app2 = app.clone();
     let gdir = game_dir.clone();
+    let crash_nick = nick.clone();
     let pid = child.id();
     if let Ok(mut v) = RUNNING.lock() {
         v.push((profile.clone(), pid));
@@ -1406,27 +1495,43 @@ pub async fn install_and_launch_in(
             return;
         }
         if matches!(&status, Ok(s) if !s.success()) {
-            let (mut reason, tail) = analyze_crash(&gdir, start_wall);
+            let log_text = crash_text(&gdir, start_wall);
+            let verdict = crash_verdict(&log_text);
+            let (mut reason, tail, mut kind) = (verdict.reason, verdict.tail, verdict.kind);
+            let Blame { skin: skin_blamed, own: own_blamed, others } = blame(&log_text);
             // The injected skin mod must never break a profile permanently: if
             // the crash actually implicates it, remove it and say so. Anything
             // weaker than "implicates" costs the player their skins for nothing.
-            let log_text = crash_text(&gdir, start_wall);
-            if skin_mod_implicated(&log_text) && drop_custom_skin_loader(&pname) {
-                reason = "Мод скинов Millida не ужился со сборкой — мы его убрали. Запусти игру ещё раз.".into();
+            if skin_blamed && drop_custom_skin_loader(&pname) {
+                if others.is_empty() {
+                    reason = "Мод скинов Millida не ужился со сборкой — мы его убрали. Запусти игру ещё раз.".into();
+                    kind = "skin_mod";
+                } else {
+                    reason = mod_fault_reason(&others);
+                }
             }
             // Наш мод ставится принудительно, и сломанный выпуск иначе делает
             // сборку неиграбельной навсегда: вернуть её игрок не может ничем.
             // Под карантин попадает конкретная версия — следующая поставится
             // сама, и косметика вернётся без его участия.
-            else if own_mod_implicated(&log_text) {
+            else if own_blamed {
                 let jar = own_mod_jar.clone();
                 if !jar.is_empty() && quarantine_millida_mod(&pname, &jar) {
-                    reason =
-                        "Косметика Millida не запустилась на этой сборке — мы её отключили. Запусти игру ещё раз, а мы починим и вернём её сами."
-                            .into();
+                    if others.is_empty() {
+                        reason =
+                            "Косметика Millida не запустилась на этой сборке — мы её отключили. Запусти игру ещё раз, а мы починим и вернём её сами."
+                                .into();
+                        kind = "own_mod";
+                    } else {
+                        // Наш мод убран молча: игроку нужны чужие моды, которые
+                        // и держат сборку.
+                        reason = mod_fault_reason(&others);
+                    }
                 }
             }
-            let _ = app2.emit("game-crash", diagnose(&pname, &reason, &tail, &log_text));
+            let home = dirs::home_dir().map(|h| h.to_string_lossy().into_owned());
+            let cause = super::crashcause::scrub_cause(&verdict.cause, home.as_deref(), &crash_nick);
+            let _ = app2.emit("game-crash", diagnose(&pname, &reason, &tail, &log_text).classified(kind, cause));
             if !review_ok {
                 let checked = pname.clone();
                 let why = reason.clone();
@@ -1733,6 +1838,38 @@ mod tests {
         }
     }
 
+    /// Отказ загрузчика из-за чужого мода не обвиняет наши моды — дословно
+    /// из GameCrash 25.09.2026 (Forge 1.20.1, walkers без craftedcore).
+    #[test]
+    fn a_loader_refusal_over_another_mod_blames_neither_of_ours() {
+        let log = "[25сент.2026 13:29:03.409] [main/ERROR] [net.minecraftforge.fml.loading.ModSorter/LOADING]: Missing or unsupported mandatory dependencies:\n\
+                   \tMod ID: 'minecraft', Requested by: 'walkers', Expected range: '[1.20.4,)', Actual version: '1.20.1'\n\
+                   \tMod ID: 'craftedcore', Requested by: 'walkers', Expected range: '[5.8.1,)', Actual version: '[MISSING]'\n\
+                   [25сент.2026 13:29:05.189] [main/INFO] [CustomSkinLoader Bootstrap/]: Loaded 4 CustomSkinLoader bootstrap transformer(s)\n\
+                   [25сент.2026 13:29:05.300] [main/ERROR] [customskinloader.Bootstrap/]: Failed to transform class: java.lang.IllegalStateException\n\
+                   \tat customskinloader.forge.Transformer.apply(Transformer.java:10)";
+        let b = blame(log);
+        assert!(!b.skin && !b.own, "виноват walkers, скины и косметику не трогаем");
+        assert_eq!(b.others.first().map(|f| f.name.as_str()), Some("walkers"));
+
+        let own = "[main/ERROR]: Incompatible mods found!\n\t - Mod 'Millida' (millida) 0.1.11 requires any version of fabric-api, which is missing!";
+        let b = blame(own);
+        assert!(b.own && b.others.is_empty(), "отказ назвал наш мод — он и уходит в карантин, чтобы не падать каждый запуск");
+    }
+
+    /// Окно — только до меню. «GLFW»/«OpenGL» в отчёте о вылете посреди игры
+    /// окно не обвиняют (112 из 344 таких вердиктов — после 10 минут игры).
+    #[test]
+    fn window_failure_is_a_startup_verdict() {
+        let early = "[Render thread/ERROR]: GLFW error 65542: WGL: The driver does not appear to support OpenGL";
+        assert_eq!(crash_verdict(early).kind, "gpu");
+        let late = "[Sound Library Loader/INFO]: Sound engine started\n[Render thread/INFO]: Created: 1024x512x4 minecraft:textures/atlas/blocks.png-atlas\n\
+                    ---- Minecraft Crash Report ----\nDescription: Ticking entity\n\njava.lang.NullPointerException: pixel format\n\tat com.foo.Bar.tick(Bar.java:1)";
+        let v = crash_verdict(late);
+        assert_ne!(v.kind, "gpu", "окно давно открыто — вылет не про него");
+        assert!(v.cause.contains("NullPointerException"), "причина достаётся из отчёта: {}", v.cause);
+    }
+
     /// The line the mod is named on decides whether it is the culprit.
     /// Every loader prints its jar list on a healthy launch, so the name by
     /// itself is not evidence — that is what cost players their skins after an
@@ -1900,7 +2037,11 @@ mod tests {
         std::fs::create_dir_all(dir.join("crash-reports")).unwrap();
         std::fs::create_dir_all(dir.join("logs")).unwrap();
         let stale = dir.join("crash-reports/crash-old.txt");
-        std::fs::write(&stale, "\tat customskinloader.CustomSkinLoader.init(X.java:1)").unwrap();
+        std::fs::write(
+            &stale,
+            "---- Minecraft Crash Report ----\nDescription: Initializing game\n\njava.lang.NullPointerException\n\tat customskinloader.CustomSkinLoader.init(X.java:1)",
+        )
+        .unwrap();
         std::fs::write(dir.join("logs/latest.log"), "[main/INFO]: Loading 3 mods").unwrap();
 
         // Дата файлов = «сейчас», а запуск считаем случившимся сильно позже.

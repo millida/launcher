@@ -3,6 +3,7 @@ import { api, hasMillidaAccount } from '../lib/api'
 import { coalesce } from '../lib/coalesce'
 import { offPlatformReason } from '../lib/offPlatform'
 import { warmHeads } from '../lib/heads'
+import { trackFailure } from '../lib/telemetry'
 import { clearRoomUnread } from './rooms'
 
 export interface Friend {
@@ -186,7 +187,8 @@ const fetchFriends = coalesce(async () => {
     const [f, req] = await Promise.all([api('/friends'), api('/friends/requests')])
     set({ friends: f.friends || [], reqIn: req.incoming || [], reqOut: req.outgoing || [] })
     warmHeads((f.friends || []).filter((x: Friend) => !x.avatarUrl).map((x: Friend) => x.nickname))
-  } catch {
+  } catch (e) {
+    trackFailure('friends', e, { step: 'load' })
     set({ friends: [], reqIn: [], reqOut: [] })
   }
 })
@@ -413,11 +415,23 @@ export async function retryChat(localId: string) {
 
 /// Ответ сервера — целое сообщение: правка, удаление и реакция возвращают его
 /// же, поэтому применяется одинаково, откуда бы ни пришло (действие или опрос).
-export function applyChatMessage(view: ChatMessage) {
+export function applyChatMessage(view: ChatMessage, fromEdit = false) {
   const s = useFriends.getState()
   if (!view.id || !s.chatMsgs.some((m) => m.id === view.id)) return
   s.set({
-    chatMsgs: s.chatMsgs.map((m) => (m.id === view.id ? { ...m, ...view } : m)),
+    // Ответ правки/реакции служба собирает без цитаты (replyTo: null), а у правки
+    // «без изменений» — ещё и без реакций ([]): не затираем ими то, что уже есть.
+    // Пустые реакции ответа на реакцию — настоящие (снял последнюю), их берём.
+    chatMsgs: s.chatMsgs.map((m) =>
+      m.id === view.id
+        ? {
+            ...m,
+            ...view,
+            replyTo: view.deleted ? view.replyTo : (view.replyTo ?? m.replyTo),
+            reactions: fromEdit && !view.deleted && !view.reactions?.length ? m.reactions : view.reactions,
+          }
+        : m,
+    ),
     chatSeq: s.chatSeq + 1,
   })
 }
@@ -428,7 +442,7 @@ export async function editChatMessage(id: string, text: string) {
   applyChatMessage(await api('/friends/chat/message/' + encodeURIComponent(id) + '/edit', {
     method: 'POST',
     body: JSON.stringify({ text: body }),
-  }))
+  }), true)
 }
 
 export async function deleteChatMessage(id: string) {

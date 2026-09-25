@@ -12,6 +12,7 @@ import { foundKey } from '../lib/imports'
 import { setSoundMode, soundMode } from '../lib/sound'
 import { setMusicAutostart } from '../state/music'
 import { track } from '../lib/telemetry'
+import { trackImportFailure } from '../lib/importTrack'
 
 function Welcome({ nick }: { nick: string }) {
   return (
@@ -83,6 +84,7 @@ function ImportStep() {
         ok++
       } catch (err) {
         console.error('[onb-import]', it.path, err)
+        trackImportFailure(it.source, err, it)
         showToast('Не удалось перенести «' + it.name + '»', 'error')
       }
     }
@@ -110,6 +112,7 @@ function ImportStep() {
         // Своя фраза бэкенда («Файл не найден», «Не удалось распаковать») — до двоеточия;
         // системный хвост и английские ошибки ОС — только в лог.
         console.error('[onb-import-file]', err)
+        trackImportFailure('file', err)
         const head = String(err).split(':')[0].trim()
         showToast(/^[А-ЯЁ]/.test(head) ? head : 'Не удалось импортировать файл', 'error')
       })

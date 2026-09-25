@@ -126,7 +126,13 @@ async function loadLook(nick: string, signedIn: boolean): Promise<Look> {
   look.cape = wardrobe?.active.capeUrl ? fresh(wardrobe.active.capeUrl) : null
   look.show = pickShow(catalog.items || [])
   for (const w of worn) {
-    const item = (catalog.items || []).find((c) => c.id === w.id)
+    // Служба отдаёт базовый код вещи; если ответ пришёл раньше каталога, fromServer
+    // не развернул его в «КОД~расцветка» — ищем карточку по baseId и имени расцветки.
+    const all = catalog.items || []
+    const item =
+      all.find((c) => c.id === w.id) ??
+      all.find((c) => c.baseId === w.id && c.variants?.[0]?.name === w.variant) ??
+      all.find((c) => c.baseId === w.id)
     if (!item || !item.model) continue
     const list = item.variants ?? []
     const variant = list.find((v) => v.name === w.variant) ?? (list.length ? defaultVariant(list) : null)

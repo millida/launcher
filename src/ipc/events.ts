@@ -143,6 +143,10 @@ export interface CrashInfo {
   tail: string
   culprits?: string[]
   actions?: CrashAction[]
+  /// Устойчивый класс вылета из ядра (own_mod, missing_deps, oom, …).
+  kind?: string
+  /// Первая осмысленная строка исключения (≤300), пути и ник уже вычищены ядром.
+  cause?: string
 }
 export interface PackAccessLost {
   profile: string

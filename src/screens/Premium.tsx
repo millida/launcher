@@ -6,6 +6,7 @@ import { PremiumPage } from '../components/premium/PremiumPage'
 import { CancelLine } from '../components/premium/PremiumBuy'
 import { useLobby } from '../state/lobbyMode'
 import { loadShowcase, type PremiumPack, type PremiumPlan, type PremiumShowcase } from '../lib/premium'
+import { trackFailure } from '../lib/telemetry'
 
 /// Витрина платных сборок (docs/REDESIGN-2026-09-22.md §2.2).
 ///
@@ -42,7 +43,10 @@ export function Premium({ on }: { on: boolean }) {
         if (/404/.test(String(e))) {
           setData({ packs: [] })
           setState('ready')
-        } else setState('error')
+        } else {
+          trackFailure('premium', e, { step: 'load' })
+          setState('error')
+        }
       })
     return () => {
       alive = false

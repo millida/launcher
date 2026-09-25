@@ -102,16 +102,18 @@ function Desc({ blocks, markdown }: { blocks?: DescBlock[] | null; markdown?: st
         <h3 key={i}>{b.text}</h3>
       ) : b.type === 'list' ? (
         <ul key={i}>
-          {b.items.map((x) => (
+          {(b.items || []).map((x) => (
             <li key={x}>
               <Icon id="i-check" />
               {x}
             </li>
           ))}
         </ul>
-      ) : (
+      ) : b.type === 'image' ? (
+        b.src ? <img key={i} className="pk-desc-img" src={mirrorAsset(b.src)} alt={b.alt || ''} loading="lazy" draggable={false} /> : null
+      ) : b.type === 'paragraph' ? (
         <p key={i}>{b.text}</p>
-      ),
+      ) : null,
     )
   else if (markdown) body = <div className="md">{renderMarkdown(markdown)}</div>
   if (!body) return null

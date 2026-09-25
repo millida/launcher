@@ -29,18 +29,21 @@ export const hasAccess = (pack: PremiumPack, sub?: PremiumSubscription | null): 
   !!pack.owned || (!!sub?.active && !!pack.inSubscription)
 
 /** Оплата идёт в браузере: исход для лаунчера — открылась ли страница оплаты. */
-async function openPayment(run: () => Promise<{ paymentUrl: string }>, result: (ok: boolean, reason?: 'checkout' | 'error') => void) {
+async function openPayment(
+  run: () => Promise<{ paymentUrl: string }>,
+  result: (ok: boolean, reason?: 'checkout' | 'error', err?: unknown) => void,
+) {
   try {
     const answer = await run()
     if (answer && answer.paymentUrl) {
       const opened = openPaymentUrl(answer.paymentUrl)
-      result(opened, opened ? 'checkout' : 'error')
+      result(opened, opened ? 'checkout' : 'error', opened ? undefined : 'payment_url_not_opened')
     } else {
-      result(false, 'error')
+      result(false, 'error', 'no_payment_url')
       showToast('Оплата не открылась', 'error')
     }
-  } catch {
-    result(false, 'error')
+  } catch (e) {
+    result(false, 'error', e)
     showToast('Оплата не открылась', 'error')
   }
 }

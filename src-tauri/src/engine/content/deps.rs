@@ -36,7 +36,7 @@ fn cmp_version(a: &str, b: &str) -> Ordering {
 /// Anything this cannot parse (carets, tildes, OR-groups) is left unresolved and
 /// counted as a match, so an incompatibility the launcher cannot verify still
 /// gets flagged instead of silently disappearing.
-fn version_satisfies(version: &str, range: &str) -> bool {
+pub(crate) fn version_satisfies(version: &str, range: &str) -> bool {
     let range = range.trim();
     if range.is_empty() || range == "*" {
         return true;

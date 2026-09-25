@@ -51,6 +51,7 @@ import { CreatorCode } from '../components/shop/CreatorCode'
 import { buyExact, kopecksFor, loadWishlist, wishesFromShop, type WishEntry, type WishList } from '../components/shop/wish'
 import { useDaily } from '../state/daily'
 import { purchaseFlow } from '../lib/purchaseTrack'
+import { trackFailure } from '../lib/telemetry'
 import '../styles/pixel/shop-juice.css'
 import { wearNow } from '../state/wearIntent'
 
@@ -125,6 +126,7 @@ export function Rubies({ on }: { on: boolean }) {
         return d
       })
       .catch((e) => {
+        trackFailure('shop', e, { step: 'load' })
         setError(apiErrorText(e, ERR))
         return null
       })
@@ -242,7 +244,7 @@ export function Rubies({ on }: { on: boolean }) {
       await reloadShop()
       showReward({ items: [entry(res.granted[0] ?? card.item)], onWear: () => wearItems([res.granted[0] ?? card.item]) })
     } catch (e) {
-      result(false, 'error')
+      result(false, 'error', e)
       showToast(apiErrorText(e, ERR), 'error')
     } finally {
       setBusy('')
@@ -258,6 +260,7 @@ export function Rubies({ on }: { on: boolean }) {
       setDay((d) => (d ? { ...d, wishlist: res.wishlist } : d))
       if (next) showToast('В «Хочу». Вернётся — напомним', 'ok')
     } catch (e) {
+      trackFailure('shop', e, { step: 'action' })
       showToast(apiErrorText(e, ERR), 'error')
       void reloadShop()
     }
@@ -284,7 +287,7 @@ export function Rubies({ on }: { on: boolean }) {
       setDay((d) => (d ? { ...d, balance: res.balance } : d))
       setXray({ tier: offer.tier, item: res.item })
     } catch (e) {
-      result(false, 'error')
+      result(false, 'error', e)
       setXray(null)
       showToast(apiErrorText(e, ERR), 'error')
     } finally {
@@ -315,7 +318,7 @@ export function Rubies({ on }: { on: boolean }) {
       )
       showReward({ items: [entry(res.item)], kicker: 'Мастерская', onWear: () => wearItems([res.item]) })
     } catch (e) {
-      result(false, 'error')
+      result(false, 'error', e)
       showToast(apiErrorText(e, ERR), 'error')
     } finally {
       setBusy('')
@@ -333,6 +336,7 @@ export function Rubies({ on }: { on: boolean }) {
       if (g.kind === 'ITEM') showReward({ items: [entry(g.item)], kicker: 'Недельный путь', onWear: () => wearItems([g.item]) })
       else showReward({ level: 'small', items: [{ name: 'Осколки', icon: 'shard' }], title: '+' + g.amount + ' ' + shardWord(g.amount) })
     } catch (e) {
+      trackFailure('shop', e, { step: 'action' })
       showToast(apiErrorText(e, ERR), 'error')
     } finally {
       setBusy('')
@@ -369,7 +373,7 @@ export function Rubies({ on }: { on: boolean }) {
         sub: 'Забирай вещь',
       })
     } catch (e) {
-      result(false, 'error')
+      result(false, 'error', e)
       showToast(apiErrorText(e, ERR), 'error')
     } finally {
       setBusy('')
@@ -396,6 +400,7 @@ export function Rubies({ on }: { on: boolean }) {
         onWear: () => wearItems(res.items),
       })
     } catch (e) {
+      trackFailure('shop', e, { step: 'action' })
       showToast(apiErrorText(e, ERR), 'error')
     } finally {
       setBusy('')
@@ -417,6 +422,7 @@ export function Rubies({ on }: { on: boolean }) {
         onWear: () => wearItems(res.granted),
       })
     } catch (e) {
+      trackFailure('shop', e, { step: 'action' })
       showToast(apiErrorText(e, ERR), 'error')
     } finally {
       setBusy('')
@@ -462,7 +468,7 @@ export function Rubies({ on }: { on: boolean }) {
     } catch (e) {
       // Служба (fix/payments): 400 {status:'insufficient_funds', missingKopecks}.
       const miss = insufficientKopecks(e)
-      result(false, miss !== null ? 'insufficient' : 'error')
+      result(false, miss !== null ? 'insufficient' : 'error', e)
       if (miss !== null) doWalletTopUp(topUpKopecks(miss || pack.kopecks - walletKopecks) || pack.kopecks)
       else showToast(apiErrorText(e, ERR), 'error')
     } finally {
@@ -495,7 +501,7 @@ export function Rubies({ on }: { on: boolean }) {
         sub: res.rubies.toLocaleString('ru-RU') + ' ' + word(res.rubies),
       })
     } catch (e) {
-      result(false, 'error')
+      result(false, 'error', e)
       showToast(apiErrorText(e, ERR), 'error')
     } finally {
       setBusy('')
@@ -533,7 +539,7 @@ export function Rubies({ on }: { on: boolean }) {
         deal={day.day.deal}
         items={day.day.items}
         refreshAt={day.day.refreshAt}
-        onTry={() => wearNow([{ code: day.day.featured.item.code, variant: day.day.featured.item.variant }])}
+        onTry={() => day.day.featured && wearNow([{ code: day.day.featured.item.code, variant: day.day.featured.item.variant }])}
         onEnd={reload}
         {...buy}
       />
@@ -555,7 +561,7 @@ export function Rubies({ on }: { on: boolean }) {
         <WeeklyPathBlock data={weekly} busy={busy} onClaim={(at) => void doWeekly(at)} onBoost={(n) => void doWeeklyBoost(n)} />
       ) : null}
       </Guard>
-      <Guard what="Мастерская" silent>{workshop ? <WorkshopBlock data={workshop} busy={busy} onCraft={(w) => void doCraft(w)} /> : null}</Guard>
+      <Guard what="Мастерская" silent>{workshop ? <WorkshopBlock data={workshop} busy={busy} weekly={!!weekly} onCraft={(w) => void doCraft(w)} /> : null}</Guard>
       <Guard what="Путь" silent>{progress ? <PathBlock data={progress} /> : null}</Guard>
       <Guard what="Рубины" silent>
       <Packs

@@ -15,6 +15,7 @@ import { useUpdate } from '../state/update'
 import { rememberNotes } from '../state/whatsNew'
 import { openExt } from './api'
 import { reportError } from './crash'
+import { cancelAppExit, trackAppExit, trackFailure } from './telemetry'
 
 export interface UpdateInfo {
   version: string
@@ -39,6 +40,14 @@ let lastProbe = 0
 
 export const pendingUpdate = () => pending
 export const updateReady = () => (downloaded && !!current) || !!fallbackFile
+
+/// Сбой обновления: отчёт в /errors и событие телеметрии; если выход уже
+/// записан перед установкой — он не случился.
+function updateFailed(where: string, e: unknown) {
+  cancelAppExit()
+  void reportError(where, e)
+  trackFailure('updater', e, { step: where })
+}
 
 const updatesAllowed = () => hasTauri() && !import.meta.env.DEV
 
@@ -80,6 +89,7 @@ function ensureDownloaded(): Promise<Update> {
 }
 
 async function quit(): Promise<void> {
+  trackAppExit()
   try {
     await exit(0)
   } catch {
@@ -136,7 +146,7 @@ async function probeFallback(): Promise<FallbackUpdate | null> {
     void stageFallback().catch(() => {})
     return upd
   } catch (e) {
-    void reportError('updater-fallback', e)
+    updateFailed('updater-fallback', e)
     return null
   }
 }
@@ -152,7 +162,7 @@ function stageFallback(): Promise<string | null> {
       })
       .catch((e) => {
         fallbackStaging = null
-        void reportError('updater-fallback', e)
+        updateFailed('updater-fallback', e)
         throw e
       })
   }
@@ -217,6 +227,7 @@ export async function bootUpdate(): Promise<boolean> {
     downloaded = true
     installing = true
     useUpdate.getState().set({ bootPhase: 'installing', bootPct: 100 })
+    trackAppExit()
     await upd.install()
     await relaunch()
     return true
@@ -225,7 +236,7 @@ export async function bootUpdate(): Promise<boolean> {
     downloading = null
     useUpdate.getState().set({ bootPhase: 'idle' })
     if (noticeIfTranslocated(e)) return false
-    void reportError('updater-boot', e)
+    updateFailed('updater-boot', e)
     if (current) markPluginFailed(current.version)
     void autoUpdate()
     return false
@@ -253,7 +264,7 @@ export async function autoUpdate(): Promise<{ version: string } | null> {
     return { version: upd.version }
   } catch (e) {
     downloading = null
-    void reportError('updater', e)
+    updateFailed('updater', e)
     const f = await probeFallback()
     return f ? { version: f.version } : null
   }
@@ -268,7 +279,7 @@ export async function installUpdateOnExit(): Promise<boolean> {
     try {
       await updateFallbackRun(fallbackFile)
     } catch (e) {
-      void reportError('updater-fallback', e)
+      updateFailed('updater-fallback', e)
     }
     await quit()
     return true
@@ -281,7 +292,7 @@ export async function installUpdateOnExit(): Promise<boolean> {
     await current.install()
   } catch (e) {
     markPluginFailed(current.version)
-    void reportError('updater', e)
+    updateFailed('updater', e)
   }
   await quit()
   return true
@@ -305,7 +316,7 @@ export async function applyFallback(): Promise<void> {
   } catch (e) {
     st.set({ busy: false, failed: true })
     if (noticeIfTranslocated(e)) return
-    void reportError('updater-fallback', e)
+    updateFailed('updater-fallback', e)
     showToast('Обновиться не вышло: ' + e, 'error')
   }
 }
@@ -331,13 +342,14 @@ export async function applyUpdate(): Promise<void> {
     if (!downloaded) showToast('Качаем обновление ' + (st.version || '') + '…')
     const upd = await ensureDownloaded()
     installing = true
+    trackAppExit()
     await upd.install()
     await relaunch()
   } catch (e) {
     installing = false
     st.set({ busy: false })
     markPluginFailed(current.version)
-    void reportError('updater', e)
+    updateFailed('updater', e)
     showToast('Ставим запасным способом…')
     if (await probeFallback()) await applyFallback()
     else {
@@ -371,12 +383,12 @@ export async function checkForUpdate(loud = false): Promise<UpdateInfo | null> {
     if (!current || current.version !== upd.version) remember(upd)
     void ensureDownloaded().catch((err) => {
       downloading = null
-      void reportError('updater', err)
+      updateFailed('updater', err)
       void probeFallback()
     })
     return pending
   } catch (e) {
-    void reportError('updater', e)
+    updateFailed('updater', e)
     const f = await probeFallback()
     if (f) return pending
     if (loud) showToast('Не удалось проверить обновления: ' + e, 'error')

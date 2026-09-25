@@ -372,14 +372,18 @@ async fn install_modpack_job(app: &AppHandle, job: &Job, slug: String, version_i
             .map_err(|e| format!("Сборка содержит небезопасный путь: {}", e))?;
         let (sha1, size) = pack_file_check(f).map_err(|e| format!("{}: {}", path, e))?;
         let mut done = false;
+        let mut why = String::from("нет разрешённой ссылки на файл");
         if let Some(urls) = f["downloads"].as_array() {
             for u in urls {
                 if let Some(u) = u.as_str().filter(|u| pack_download_allowed(u)) {
-                    if download_verify(u, &dest, Some(&sha1), size).await.is_ok() { done = true; break; }
+                    match download_verify(u, &dest, Some(&sha1), size).await {
+                        Ok(()) => { done = true; break; }
+                        Err(e) => why = e,
+                    }
                 }
             }
         }
-        if !done { return Err(format!("Не удалось скачать файл сборки: {}", path)); }
+        if !done { return Err(format!("Не удалось скачать файл сборки: {} ({})", path, why)); }
         job.emit(app, 20.0 + 60.0*(i as f32/total as f32), &format!("Файлы сборки {}/{}", i+1, total));
     }
     for ov in ["overrides", "client-overrides"] {

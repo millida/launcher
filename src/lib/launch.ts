@@ -14,10 +14,11 @@ import { setVerifiedSeconds } from '../state/playStats'
 import { showToast, useUi } from '../state/ui'
 import { useGame } from '../state/game'
 import { applyLaunchWindowMode } from './window'
-import { liveBeat, track, trackTimed } from './telemetry'
+import { liveBeat, trackFailure, trackTimed } from './telemetry'
 import { launchAttribution } from './uiTrack'
 import { failedHost } from './userEnvError'
-import { buildTag, errorCode } from './telemetryPrivacy'
+import { buildTag } from './telemetryPrivacy'
+import { launchFailure } from './launchFailure'
 
 export const PL_STAGES = ['Проверка файлов', 'Java', 'Ассеты и библиотеки', 'Запуск игры']
 
@@ -262,6 +263,21 @@ function doJoin(profile: string, world: string | null, server: string | null, se
   setGameSession(profile, server, serverName)
   pinHostServer(profile)
   heartbeat('playing', serverName || server)
+  let stage = 'prepare'
+  let unlisten: UnlistenFn | null = null
+  let finished = false
+  listenLaunchProgress((p) => {
+    if (p.stage) stage = String(p.stage).slice(0, 24)
+  }).then((u) => {
+    if (!u) return
+    if (finished) u()
+    else unlisten = u
+  })
+  const stopProgress = () => {
+    finished = true
+    if (unlisten) unlisten()
+    unlisten = null
+  }
   return resolveAuth()
     .then((a) => quickPlay(profile, a.nick, ramMbFor(profile), world, server, a.auth))
     .then((res) => {
@@ -272,9 +288,26 @@ function doJoin(profile: string, world: string | null, server: string | null, se
     .catch((e) => {
       setGameSession(null)
       heartbeat('lobby')
+      // Быстрый вход (мир / сервер) раньше не оставлял в телеметрии ничего.
+      const fail = launchFailure(e, stage, [
+        [profile, '<build>'],
+        [world, '<world>'],
+        [serverName, '<server>'],
+        [server, '<addr>'],
+        [effectiveNick(), '<nick>'],
+      ])
+      const pr = useProfiles.getState().profiles.find((p) => p.name === profile)
+      trackFailure('join', fail.text, {
+        stage: fail.stage,
+        detail: fail.detail,
+        target: world ? 'world' : server ? 'server' : 'build',
+        mc: pr?.version,
+        loader: pr ? pr.loader || (pr.fabric ? 'fabric' : 'vanilla') : undefined,
+      })
       throw e
     })
     .finally(() => {
+      stopProgress()
       launching = false
     })
 }
@@ -338,7 +371,10 @@ function doLaunch(name: string) {
     if (unlisten) unlisten()
     unlisten = null
   }
+  // Этап, на котором запуск сорвался, уходит в телеметрию вместе с ошибкой.
+  let lastStage = 'prepare'
   listenLaunchProgress((p) => {
+    if (p.stage) lastStage = String(p.stage).slice(0, 24)
     setPrelaunch({ stage: STAGE_IDX[p.stage] ?? 0, pct: p.pct, msg: p.msg })
   }).then((u) => {
     if (!u) return
@@ -353,8 +389,10 @@ function doLaunch(name: string) {
   )
   const launchStartedAt = performance.now()
   const launched = prof ? useProfiles.getState().profiles.find((p) => p.name === prof) : null
+  // Имя своей сборки — личное (аудит 24.09.2026): в событие идёт слаг каталога
+  // или отпечаток имени.
   const launchInfo: Record<string, string> = {
-    build: prof || 'default',
+    build: prof ? buildTag(prof) || 'default' : 'default',
     mc: (launched && launched.version) || 'latest',
     loader: (launched && (launched.loader || (launched.fabric ? 'fabric' : 'vanilla'))) || 'vanilla',
     ...launchAttribution('other'),
@@ -365,6 +403,7 @@ function doLaunch(name: string) {
           const pack = (s?.catalogPackSlug || '').trim()
           const out: Record<string, string> = {}
           if (pack) out.pack = pack
+          if (pack) out.build = buildTag(prof, pack) || 'default'
           if (pack && s?.catalogPackVersion) out.packVersion = s.catalogPackVersion
           if (s?.modpackSlug) out.modpack = s.modpackSlug
           return out
@@ -389,15 +428,22 @@ function doLaunch(name: string) {
       setGameSession(null)
       if (String(err).includes('отмен')) return
       const host = failedHost(err)
-      void packInfo.then((pack) =>
-        trackTimed(
-          'game_launch',
-          launchStartedAt,
-          { ...launchInfo, ...pack, code: errorCode(err), ...(host ? { host } : {}) },
-          false,
-        ),
-      )
-      track('error', { code: errorCode(err), where: 'launch' }, { ok: false })
+      const fail = launchFailure(err, lastStage, [
+        [prof, '<build>'],
+        [effectiveNick(), '<nick>'],
+      ])
+      // Ключи провала — первыми: старый сервер оставляет только первые 12.
+      const failData = { code: fail.code, kind: fail.kind, stage: fail.stage }
+      void packInfo.then((pack) => {
+        trackTimed('game_launch', launchStartedAt, { ...failData, ...launchInfo, ...pack, ...(host ? { host } : {}) }, false)
+        trackFailure('launch', fail.text, {
+          stage: fail.stage,
+          detail: fail.detail,
+          mc: launchInfo.mc,
+          loader: launchInfo.loader,
+          pack: pack.pack,
+        })
+      })
       showLaunchError(err)
     })
     .finally(() => {

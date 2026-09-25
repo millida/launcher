@@ -14,8 +14,8 @@ pub(crate) fn zip_readable(path: &Path) -> bool {
 }
 
 pub(crate) fn unzip_to(archive: &Path, dest: &Path) -> Result<(), String> {
-    let f = std::fs::File::open(archive).map_err(|e| e.to_string())?;
-    let mut zip = zip::ZipArchive::new(f).map_err(|e| e.to_string())?;
+    let f = std::fs::File::open(archive).map_err(|e| super::io_fail("Распаковка", archive, &e))?;
+    let mut zip = zip::ZipArchive::new(f).map_err(|e| format!("Архив повреждён: {}", e))?;
     for i in 0..zip.len() {
         let mut file = zip.by_index(i).map_err(|e| e.to_string())?;
         // enclosed_name blocks `..` and absolute paths, but not Windows traps
@@ -25,8 +25,8 @@ pub(crate) fn unzip_to(archive: &Path, dest: &Path) -> Result<(), String> {
         if file.is_dir() { std::fs::create_dir_all(&out).ok(); continue; }
         if let Some(p) = out.parent() { std::fs::create_dir_all(p).ok(); }
         let _ = std::fs::remove_file(&out);
-        let mut o = std::fs::File::create(&out).map_err(|e| e.to_string())?;
-        std::io::copy(&mut file, &mut o).map_err(|e| e.to_string())?;
+        let mut o = std::fs::File::create(&out).map_err(|e| super::io_fail("Распаковка", &out, &e))?;
+        std::io::copy(&mut file, &mut o).map_err(|e| super::io_fail("Распаковка", &out, &e))?;
     }
     Ok(())
 }
@@ -34,8 +34,8 @@ pub(crate) fn unzip_to(archive: &Path, dest: &Path) -> Result<(), String> {
 /// Drops the archive's top-level directory (`tar --strip-components=1`), the
 /// layout Adoptium JRE archives use.
 pub(crate) fn unzip_strip1(archive: &Path, dest: &Path) -> Result<(), String> {
-    let f = std::fs::File::open(archive).map_err(|e| e.to_string())?;
-    let mut zip = zip::ZipArchive::new(f).map_err(|e| e.to_string())?;
+    let f = std::fs::File::open(archive).map_err(|e| super::io_fail("Распаковка", archive, &e))?;
+    let mut zip = zip::ZipArchive::new(f).map_err(|e| format!("Архив повреждён: {}", e))?;
     for i in 0..zip.len() {
         let mut file = zip.by_index(i).map_err(|e| e.to_string())?;
         let Some(name) = file.enclosed_name() else { continue };
@@ -47,8 +47,8 @@ pub(crate) fn unzip_strip1(archive: &Path, dest: &Path) -> Result<(), String> {
         if file.is_dir() { std::fs::create_dir_all(&out).ok(); continue }
         if let Some(p) = out.parent() { std::fs::create_dir_all(p).ok(); }
         let _ = std::fs::remove_file(&out);
-        let mut o = std::fs::File::create(&out).map_err(|e| e.to_string())?;
-        std::io::copy(&mut file, &mut o).map_err(|e| e.to_string())?;
+        let mut o = std::fs::File::create(&out).map_err(|e| super::io_fail("Распаковка", &out, &e))?;
+        std::io::copy(&mut file, &mut o).map_err(|e| super::io_fail("Распаковка", &out, &e))?;
     }
     Ok(())
 }

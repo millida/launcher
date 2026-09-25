@@ -1,7 +1,7 @@
 import { hasTauri } from '../../ipc/tauri'
 import { createProfile } from '../../ipc/commands'
 import { installContentFlow } from '../../lib/install'
-import { track } from '../../lib/telemetry'
+import { track, trackFailure } from '../../lib/telemetry'
 import { useMods, type ModHit } from '../../state/mods'
 import { useProfiles } from '../../state/profiles'
 import { showToast } from '../../state/ui'
@@ -58,6 +58,7 @@ export async function newBuildFrom(h: ModHit, kind: string): Promise<void> {
     const p = await createProfile(h.title.slice(0, 24), version, loader === 'fabric', loader, null)
     name = p.name
   } catch (e) {
+    trackFailure('build_create', e, { step: 'create', from: 'catalog', mc: version, loader })
     showToast('Не удалось создать сборку: ' + e, 'error')
     return
   }

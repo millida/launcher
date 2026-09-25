@@ -4,6 +4,7 @@ import { Head } from '../components/Head'
 import { PROFILE_URL, api, openExt } from '../lib/api'
 import { copyText } from '../lib/clipboard'
 import { apiErrorText } from '../lib/apiError'
+import { trackFailure } from '../lib/telemetry'
 import { logoutToLogin } from '../lib/session'
 import { showToast } from '../state/ui'
 import { useHasMillida } from '../state/auth'
@@ -136,7 +137,10 @@ export function Friends({ on }: { on: boolean }) {
     const nick = b.user?.nickname || b.user?.displayName || ''
     api('/core/blocks/' + encodeURIComponent(b.blockedId), { method: 'DELETE' })
       .then(() => showToast(nick + ' разблокирован'))
-      .catch((e) => showToast(apiErrorText(e, 'Не удалось разблокировать'), 'error'))
+      .catch((e) => {
+        trackFailure('friends', e, { step: 'unblock' })
+        showToast(apiErrorText(e, 'Не удалось разблокировать'), 'error')
+      })
       .finally(() => void loadBlocked())
   }
 
@@ -146,7 +150,10 @@ export function Friends({ on }: { on: boolean }) {
     if (!(await uiConfirm('Убрать ' + nick + ' из друзей?', { confirmLabel: 'Убрать' }))) return
     api('/friends/remove', { method: 'POST', body: JSON.stringify({ userId: f.userId }) })
       .then(() => showToast(nick + ' удалён из друзей', 'ok', 'delete'))
-      .catch((e) => showToast(apiErrorText(e, 'Не удалось убрать из друзей'), 'error'))
+      .catch((e) => {
+        trackFailure('friends', e, { step: 'remove' })
+        showToast(apiErrorText(e, 'Не удалось убрать из друзей'), 'error')
+      })
       .finally(() => void loadFriends())
   }
   const blockFriend = async (f: Friend) => {
@@ -159,6 +166,7 @@ export function Friends({ on }: { on: boolean }) {
     try {
       await api('/friends/block', { method: 'POST', body: JSON.stringify({ userId: f.userId }) })
     } catch (e) {
+      trackFailure('friends', e, { step: 'block' })
       showToast(apiErrorText(e, 'Не удалось заблокировать'), 'error')
       return
     }
