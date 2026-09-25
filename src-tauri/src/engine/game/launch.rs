@@ -1165,9 +1165,27 @@ pub async fn install_and_launch_in(
     // and fail session checks, so a failure here falls back to offline mode.
     let mut auth = auth;
     let mut agent: Option<String> = None;
+    // Метаданные сервера входа лаунчер берёт сам и отдаёт агенту готовыми:
+    // иначе authlib-injector качает их из игры при старте, и сбой DNS у игрока
+    // или 502 на выкатке роняет игру до окна (2.0.122, 25.09.2026: 13 игроков
+    // за 6 часов). Сети нет даже у лаунчера — игра идёт офлайн, а не падает.
+    let mut prefetched: Option<String> = None;
     if !auth.yggdrasil.is_empty() {
         match ensure_authlib_injector().await {
-            Ok(jar) => agent = Some(format!("-javaagent:{}={}", jar.to_string_lossy(), auth.yggdrasil)),
+            Ok(jar) => match get_json(&auth.yggdrasil).await {
+                Ok(meta) => {
+                    use base64::Engine as _;
+                    prefetched = Some(format!(
+                        "-Dauthlibinjector.yggdrasil.prefetched={}",
+                        base64::engine::general_purpose::STANDARD.encode(meta.to_string())
+                    ));
+                    agent = Some(format!("-javaagent:{}={}", jar.to_string_lossy(), auth.yggdrasil));
+                }
+                Err(e) => {
+                    warn(&app, &format!("Сервер скинов Millida не ответил ({}) — запускаем в офлайн-режиме", e));
+                    auth = Auth::default();
+                }
+            },
             Err(e) => {
                 warn(&app, &format!("Скины Millida недоступны ({}) — запускаем в офлайн-режиме", e));
                 auth = Auth::default();
@@ -1242,6 +1260,7 @@ pub async fn install_and_launch_in(
     }
     args.insert(0, format!("-Xmx{}M", ram));
     if let Some(a) = agent { args.insert(1, a); }
+    if let Some(p) = prefetched { args.insert(1, p); }
     // Log4Shell mitigation for 1.7-1.18; harmless on newer versions.
     args.insert(1, "-Dlog4j2.formatMsgNoLookups=true".into());
     // 1.7-1.11.2 predate that property and can only be patched via Mojang's
