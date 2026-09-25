@@ -13,9 +13,15 @@ const AUTHLIB_PINNED_SHA256: &str = "9c7f4343e6c82034958ffb48c14a2cb0c85928be728
 
 pub async fn ensure_authlib_injector() -> Result<PathBuf, String> {
     let dir = data_dir().join("agents");
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| io_fail("Агент скинов", &dir, &e))?;
     let jar = dir.join("authlib-injector.jar");
     let stamp = dir.join("authlib-injector.version");
+    // Обрезанный или пустой агент JVM не грузит и выходит до окна («Error
+    // opening zip file or JAR manifest missing»): такой файл качаем заново.
+    if jar.exists() && !zip_readable(&jar) {
+        let _ = std::fs::remove_file(&jar);
+        let _ = std::fs::remove_file(&stamp);
+    }
 
     // With an agent on disk the feed only decides whether to update it, and a
     // feed host that never answers must not keep the game from starting.

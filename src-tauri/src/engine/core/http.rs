@@ -456,11 +456,14 @@ fn part_path(dest: &Path) -> PathBuf {
 
 fn file_matches(path: &Path, sum: Option<Sum<'_>>, size: Option<u64>) -> bool {
     let Ok(meta) = std::fs::metadata(path) else { return false };
+    let hashed = sum.as_ref().is_some_and(|s| s.is_usable());
     if let Some(want) = size {
-        if meta.len() != want {
+        // Размер из манифеста бывает неверным при верном хеше (см. fetch_once):
+        // несовпадение тогда решает хеш, а не отказ.
+        if meta.len() != want && !hashed {
             return false;
         }
-        if !deep_verify() {
+        if meta.len() == want && !deep_verify() {
             return true;
         }
     }
@@ -676,15 +679,20 @@ async fn fetch_once(
     }
     file.flush().map_err(|e| e.to_string())?;
     drop(file);
-    if let Some(want) = size {
-        if written != want {
-            return Err(format!("{}: размер {} вместо {}", url, written, want));
-        }
-    }
+    // Хеш сильнее размера: у популярных сборок в индексе встречается неверный
+    // fileSize при верном sha1 (Better MC: Structory 1286460 против реальных
+    // 1286462), и такой файл не скачивался никогда — сотни отказов в неделю.
+    // Размер решает сам только там, где проверить хеш нечем.
     if let (Some(h), Some(s)) = (hasher, sum) {
         let got = h.hex();
         if !s.matches(&got) {
             return Err(format!("{}: контрольная сумма не сошлась", url));
+        }
+        return Ok(());
+    }
+    if let Some(want) = size {
+        if written != want {
+            return Err(format!("{}: размер {} вместо {}", url, written, want));
         }
     }
     Ok(())
@@ -1060,5 +1068,22 @@ mod tests {
         std::fs::write(&g, b"012").unwrap();
         let r2 = download_checked(DEAD, &g, None, Some(10)).await;
         assert!(r2.is_err(), "размер не сошёлся — файл должен качаться заново");
+    }
+
+    /// вход -> вердикт. Индекс сборки Better MC обещает Structory в 1286460 байт,
+    /// а файл весит 1286462 при верном sha1: такой файл не скачивался никогда.
+    /// Верный хеш побеждает неверный размер, а без хеша размер решает сам.
+    #[tokio::test]
+    async fn a_matching_hash_beats_a_wrong_declared_size() {
+        let dir = tmp("hash-over-size");
+        let f = dir.join("structory.jar");
+        std::fs::write(&f, b"0123456789").unwrap();
+        let right = "87acec17cd9dcd20a716cc2cf67417b71c8a7016";
+        download_checked(DEAD, &f, Some(Sum::Sha1(right)), Some(12))
+            .await
+            .expect("хеш сошёлся — неверный размер из индекса не повод качать заново");
+        let wrong = "0000000000000000000000000000000000000000";
+        let r = download_checked(DEAD, &f, Some(Sum::Sha1(wrong)), Some(12)).await;
+        assert!(r.is_err(), "не сошлись ни размер, ни хеш — файл чужой");
     }
 }

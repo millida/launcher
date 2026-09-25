@@ -5,7 +5,7 @@ import { BuildIcon, IconPicker } from '../components/playhub/BuildIcon'
 import { hasTauri } from '../ipc/tauri'
 import { createProfile, setFpsBoost } from '../ipc/commands'
 import type { McVersion } from '../ipc/commands'
-import { track } from '../lib/telemetry'
+import { track, trackFailure } from '../lib/telemetry'
 import { BUILD_NAME_MAX } from '../lib/format'
 import { DEFAULT_ICON } from '../lib/buildIcon'
 import { useProfiles } from '../state/profiles'
@@ -97,6 +97,7 @@ export function NewBuildModal() {
       })
       .catch((e) => {
         console.error('mc version list', e)
+        trackFailure('build_create', e, { step: 'versions' })
         showToast('Версии Minecraft не загрузились', 'error')
       })
       .finally(() => setVerLoading(false))
@@ -165,6 +166,7 @@ export function NewBuildModal() {
       })
       .catch((e) => {
         setBusy(false)
+        trackFailure('build_create', nm.length >= 2 ? String(e).split(nm).join('<build>') : e, { step: 'create', mc: ver, loader })
         showToast('Не удалось создать сборку: ' + e, 'error')
       })
   }

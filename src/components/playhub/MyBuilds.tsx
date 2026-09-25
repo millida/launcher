@@ -21,6 +21,7 @@ import { DEFAULT_ICON } from '../../lib/buildIcon'
 import { BuildIcon, IconPicker } from './BuildIcon'
 import { hoursText } from './Hours'
 import '../../styles/pixel/playhub.css'
+import { trackImportFailure } from '../../lib/importTrack'
 
 /**
  * «Мои сборки» — первой полкой «Во что играем» (правки владельца 23.09.2026,
@@ -321,6 +322,7 @@ export function TakeAllCard({ have, bar }: { have: string[]; bar?: boolean }) {
         ok++
       } catch (e) {
         console.error('[take-all]', it.name, e)
+        trackImportFailure(it.source, e, it)
       }
       setDone((d) => d + 1)
     }
@@ -345,6 +347,7 @@ export function TakeAllCard({ have, bar }: { have: string[]; bar?: boolean }) {
         showToast('Импортировано: ' + p.name, 'ok')
       })
       .catch((err) => {
+        trackImportFailure('file', err)
         if (!String(err).includes('Отменено')) showToast('' + err, 'error')
       })
       .finally(() => setBusy(false))

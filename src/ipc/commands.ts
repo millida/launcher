@@ -842,6 +842,8 @@ export interface CrashEntry {
   file: string
   message: string
   details: string
+  /** freeze — сторож интерфейса (не паника), panic — паника ядра. Старое ядро поля не шлёт. */
+  kind?: 'freeze' | 'panic'
 }
 
 export const appVersion = () => invoke<string>('app_version')

@@ -3,6 +3,7 @@ import { Icon } from '../Icon'
 import { Head } from '../Head'
 import { api } from '../../lib/api'
 import { apiErrorText } from '../../lib/apiError'
+import { trackFailure } from '../../lib/telemetry'
 import { showToast } from '../../state/ui'
 import { loadFriends } from '../../state/friends'
 import type { FoundUser } from '../../state/friends'
@@ -20,6 +21,8 @@ export async function sendRequest(opts: Record<string, string>, clear: () => voi
   } catch (e) {
     // Сервер объясняет отказ сам: нет такого ника, человек уже в друзьях, он
     // закрыл заявки. Всё это раньше показывалось как «войди в аккаунт».
+    const nick = (opts.nickname || '').trim()
+    trackFailure('friends', nick ? String(e).split(nick).join('<nick>') : e, { step: 'request' })
     showToast(apiErrorText(e, 'Не удалось отправить заявку'), 'error')
     return
   } finally {

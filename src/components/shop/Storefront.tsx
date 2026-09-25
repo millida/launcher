@@ -150,11 +150,12 @@ export function Showcase({
   onTry,
   onEnd,
   ...p
-}: { featured: ShopCard; deal: ShopCard; items: ShopCard[]; refreshAt: string; onTry: () => void; onEnd?: () => void } & BuyProps) {
-  const f = featured.item
-  const d = deal.item
+}: { featured: ShopCard | null; deal: ShopCard | null; items: ShopCard[]; refreshAt: string; onTry: () => void; onEnd?: () => void } & BuyProps) {
+  // featured/deal бывают null (пустой пул витрины) — карточку просто не рисуем.
+  const f = featured?.item
+  const d = deal?.item
   // Показ витрины дня — для CTR карточек: предмет дня, скидка, ряд вещей.
-  const shown = [f.code, d.code, ...byRarity(items).map((c) => c.item.code)]
+  const shown = [...(f ? [f.code] : []), ...(d ? [d.code] : []), ...byRarity(items).map((c) => c.item.code)]
   const shownKey = shown.join(',')
   useEffect(() => {
     trackImpression('storefront', shown, 'rubies')
@@ -166,6 +167,7 @@ export function Showcase({
       </Head>
       <div className="sh-grid sh-hero has-gift">
         <FreeDaily />
+        {featured && f ? (
         <div className="sh-feat sh-shine" style={toneStyle(f)} data-rar={f.rarity} data-kind="offer" data-id={f.code} data-pos={0}>
           <RarityFx />
           <span className="sh-feat-stage">
@@ -190,6 +192,8 @@ export function Showcase({
             </span>
           </span>
         </div>
+        ) : null}
+        {deal && d ? (
         <div
           className="sh-deal sh-shine"
           style={{ ...toneStyle(d), ['--i' as string]: 1 }}
@@ -211,6 +215,7 @@ export function Showcase({
             <BuyBtn card={deal} source="deal" balance={p.balance} busy={p.busy} onBuy={p.onBuy} />
           </span>
         </div>
+        ) : null}
       </div>
       <div className="sh-grid sh-row2 is-fit" style={gridCols(items.length)}>
         {byRarity(items).map((c, i) => (

@@ -61,10 +61,25 @@ fn passthrough(interactive: bool, hover: bool) -> bool {
 /// clock stopped by that same flag, never expires either.
 fn set_hover(app: &AppHandle, hover: bool) {
     HOVER.store(hover, Ordering::SeqCst);
+    if crate::exiting() {
+        return;
+    }
     if let Some(win) = app.get_webview_window(LABEL) {
-        let _ = win.set_ignore_cursor_events(passthrough(INTERACTIVE.load(Ordering::SeqCst), hover));
+        set_passthrough(&win, passthrough(INTERACTIVE.load(Ordering::SeqCst), hover));
     }
     let _ = app.emit_to(LABEL, "overlay-hover", hover);
+}
+
+/// Click-through для окна. На Linux tao берёт GdkWindow через `unwrap()`, а у
+/// окна, которое ещё ни разу не показывали, его нет: оверлей, созданный скрытым,
+/// ронял лаунчер паникой в event_loop.rs:457 (54 отчёта). Там флаг ставится
+/// только видимому окну, а `show` повторяет его сразу после показа.
+fn set_passthrough(win: &tauri::WebviewWindow, on: bool) {
+    #[cfg(target_os = "linux")]
+    if !win.is_visible().unwrap_or(false) {
+        return;
+    }
+    let _ = win.set_ignore_cursor_events(on);
 }
 
 fn hits(rects: &[[f64; 4]], x: f64, y: f64) -> bool {
@@ -94,7 +109,9 @@ fn arm_hit_watch(app: &AppHandle) {
         let mut over: Option<bool> = None;
         loop {
             tokio::time::sleep(std::time::Duration::from_millis(HIT_POLL_MS)).await;
-            if HIT_SEQ.load(Ordering::SeqCst) != seq || INTERACTIVE.load(Ordering::SeqCst) {
+            // Каждый тик — три запроса в главный поток; после выхода они уходят в
+            // разрушенный цикл событий.
+            if HIT_SEQ.load(Ordering::SeqCst) != seq || INTERACTIVE.load(Ordering::SeqCst) || crate::exiting() {
                 break;
             }
             let Some(win) = handle.get_webview_window(LABEL) else { break };
@@ -155,6 +172,10 @@ pub fn hotkey() -> String {
 /// The bool says whether the window had to be created: a webview that only just
 /// started has no listener yet, so the first event has to wait for it.
 fn build(app: &AppHandle) -> Result<(tauri::WebviewWindow, bool), String> {
+    // Окно, создаваемое на выходе, роняет tao на Windows (subclass_result).
+    if crate::exiting() {
+        return Err("Лаунчер закрывается".into());
+    }
     if let Some(w) = app.get_webview_window(LABEL) {
         return Ok((w, false));
     }
@@ -175,7 +196,7 @@ fn build(app: &AppHandle) -> Result<(tauri::WebviewWindow, bool), String> {
         let _ = win.set_size(mon.size().to_owned());
     }
     // Passive by default: the overlay must not eat clicks meant for the game.
-    let _ = win.set_ignore_cursor_events(true);
+    set_passthrough(&win, true);
     let handle = app.clone();
     win.on_window_event(move |e| {
         // Closing the overlay must never take the launcher down with it.
@@ -198,8 +219,10 @@ pub fn show(app: &AppHandle, interactive: bool) -> Result<bool, String> {
         stop_hit_watch(app);
     }
     let hover = !interactive && HOVER.load(Ordering::SeqCst);
-    let _ = win.set_ignore_cursor_events(passthrough(interactive, hover));
+    set_passthrough(&win, passthrough(interactive, hover));
     win.show().map_err(|e| e.to_string())?;
+    #[cfg(target_os = "linux")]
+    set_passthrough(&win, passthrough(interactive, hover));
     let _ = win.set_always_on_top(true);
     if interactive {
         let _ = win.set_focus();
@@ -215,6 +238,9 @@ pub fn show(app: &AppHandle, interactive: bool) -> Result<bool, String> {
 
 pub fn hide(app: &AppHandle) {
     INTERACTIVE.store(false, Ordering::SeqCst);
+    if crate::exiting() {
+        return;
+    }
     stop_hit_watch(app);
     PENDING.lock().unwrap_or_else(|e| e.into_inner()).clear();
     if let Some(w) = app.get_webview_window(LABEL) {
@@ -310,7 +336,7 @@ pub fn open_card(app: &AppHandle, payload: serde_json::Value, to_launcher: bool)
 
 /// Hotkey semantics: summon and focus, or dismiss if it already has the user.
 pub fn toggle(app: &AppHandle) {
-    if !enabled() {
+    if !enabled() || crate::exiting() {
         return;
     }
     let interactive_now = app

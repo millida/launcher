@@ -24,6 +24,7 @@ mock.module('../ipc/tauri', () => ({ hasTauri: () => true, tauri: () => null }))
 mock.module('../lib/session', () => ({ enterApp() {} }))
 mock.module('../lib/clipboard', () => ({ copyText: async () => true }))
 mock.module('./ui', () => ({ showToast() {} }))
+mock.module('../lib/telemetry', () => ({ track() {}, trackFailure: () => null }))
 mock.module('../ipc/commands', () => ({
   msDeviceStart: async () => ({}),
   msDevicePoll: async () => ({}),

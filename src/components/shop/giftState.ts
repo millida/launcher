@@ -93,7 +93,9 @@ useShopGift.subscribe((st, prev) => {
  */
 export function useShopGiftReady(): boolean {
   const known = useShopGift((st) => st.known)
-  const ready = useShopGift((st) => (!!st.gift && !st.gift.claimed) || st.wishNew.length > 0)
+  // Подарок службы (`gift`) не учитываем: забрать его в лаунчере негде — «Бесплатно»
+  // на витрине забирает клетку бонуса за вход. Иначе «!» на плитке горел бы каждый день.
+  const ready = useShopGift((st) => st.wishNew.length > 0)
   useEffect(() => {
     if (!known) ask()
   }, [known])

@@ -377,8 +377,8 @@ fn exact_loader_dir(vdir: &Path, name: &str) -> Option<PathBuf> {
 /// installs it itself. `None` means a modern profile, which its own installer
 /// still has to apply because of the patch processors.
 fn install_legacy_forge(installer: &Path, vdir: &Path, libs: &Path) -> Result<Option<PathBuf>, String> {
-    let f = std::fs::File::open(installer).map_err(|e| e.to_string())?;
-    let mut zip = zip::ZipArchive::new(std::io::BufReader::new(f)).map_err(|e| e.to_string())?;
+    let f = std::fs::File::open(installer).map_err(|e| io_fail("Инсталлер загрузчика", installer, &e))?;
+    let mut zip = zip::ZipArchive::new(std::io::BufReader::new(f)).map_err(|e| format!("Инсталлер загрузчика повреждён: {}", e))?;
     let profile: Value = {
         let entry = zip
             .by_name("install_profile.json")
@@ -396,7 +396,7 @@ fn install_legacy_forge(installer: &Path, vdir: &Path, libs: &Path) -> Result<Op
     let packed = profile["install"]["filePath"].as_str().ok_or("в профиле загрузчика нет ядра")?;
     let jar = safe_join(libs, &maven_path(coord))?;
     if let Some(p) = jar.parent() {
-        std::fs::create_dir_all(p).map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(p).map_err(|e| io_fail("Установка Forge", p, &e))?;
     }
     let tmp = jar.with_extension(format!("{}.part", std::process::id()));
     {
@@ -411,7 +411,7 @@ fn install_legacy_forge(installer: &Path, vdir: &Path, libs: &Path) -> Result<Op
     // The version json is what marks the loader as installed, so it is written
     // only after the core jar is in place.
     let dir = vdir.join(&id);
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| io_fail("Установка Forge", &dir, &e))?;
     write_json_atomic(&dir.join(format!("{}.json", id)), &vinfo)?;
     Ok(Some(dir))
 }
@@ -517,6 +517,7 @@ pub async fn install_loader_with_java(
 
     let (vid, vjson) = vanilla_meta(app, &root, version_id).await?;
     check_version_id(&vid)?;
+    let java_override = java_override.and_then(|j| java_fits(app, j, java_major_of(&vjson, &vid), &vid));
 
     emit(app, "files", 12.0, &format!("Minecraft {} — клиент…", vid));
     let client_jar = root.join("versions").join(&vid).join(format!("{}.jar", vid));
@@ -858,7 +859,8 @@ pub async fn install_loader_with_java(
                         quiet(&mut Command::new(&jp)).arg("-Djava.net.useSystemProxies=true")
                             .arg("-jar").arg(&ip).arg("--installClient").arg(&rp)
                             .current_dir(&rp).output()
-                    }).await.map_err(|e| e.to_string())?.map_err(|e| e.to_string())?;
+                            .map_err(|e| spawn_failure(&e, &jp).replacen("Запуск Java", "Инсталлер загрузчика: запуск Java", 1))
+                    }).await.map_err(|e| e.to_string())??;
                     let _ = std::fs::remove_file(&inst);
                     if !out.status.success() {
                         last_err = installer_failure(&out);

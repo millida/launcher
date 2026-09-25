@@ -30,7 +30,18 @@ const SOURCES: { icon: string; label: string; to: string }[] = [
  * потолок копилки 1 500, дневной лимит из сундуков и подарка — 100.
  * Под сеткой — начатые вещи: фрагменты из сундуков, «7/20».
  */
-export function WorkshopBlock({ data, busy, onCraft }: { data: Workshop; busy: string; onCraft: (w: { item: ItemRef; cost: number }) => void }) {
+export function WorkshopBlock({
+  data,
+  busy,
+  onCraft,
+  weekly = true,
+}: {
+  data: Workshop
+  busy: string
+  onCraft: (w: { item: ItemRef; cost: number }) => void
+  /** Блок «Задания недели» на экране: без него кнопки-источники к нему не ведут. */
+  weekly?: boolean
+}) {
   const full = data.shards >= data.cap
   const open = data.workshop.items.filter((w) => !w.owned)
   // Цель — самая дешёвая вещь, на которую ещё не хватает; хватает на всё — самая дорогая.
@@ -73,7 +84,7 @@ export function WorkshopBlock({ data, busy, onCraft }: { data: Workshop; busy: s
           ) : null}
         </span>
         <span className="sh-work-src">
-          {SOURCES.map((s) => (
+          {SOURCES.filter((s) => weekly || s.to !== 'shop-weekly').map((s) => (
             <button key={s.label} className="sh-src" data-track={'workshop_src_' + s.to} onClick={() => scrollTo(s.to)}>
               <Icon id={s.icon} />
               {s.label}

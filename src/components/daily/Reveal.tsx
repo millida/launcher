@@ -47,9 +47,15 @@ function CountUp({ to, run }: { to: number; run: boolean }) {
  */
 export function grantedOf(res: DailyClaim): GrantedReward[] {
   if (res.granted?.length)
-    return res.granted.map((g) =>
-      g.kind === 'FRAGMENTS' && g.convertedRubies ? { kind: 'RUBIES', amount: g.convertedRubies, source: g.source } : g,
-    )
+    return res.granted.map((g): GrantedReward => {
+      if (g.kind === 'FRAGMENTS' && g.convertedRubies) return { kind: 'RUBIES', amount: g.convertedRubies, source: g.source }
+      // Вещь сезона уже есть: служба шлёт {kind:'ITEM', owned:true, shards:N} без item —
+      // пришли осколки, их и показываем, а не пустую рамку.
+      const back = g as GrantedReward & { owned?: boolean; shards?: number }
+      if (g.kind === 'ITEM' && back.owned && typeof back.shards === 'number' && back.shards > 0)
+        return { kind: 'SHARDS', amount: back.shards, source: g.source, day: g.day }
+      return g
+    })
   const list: GrantedReward[] = []
   if (res.gained > 0) list.push({ kind: 'RUBIES', amount: res.gained, source: 'free' })
   if (res.chestId) list.push({ kind: 'CHEST', tier: res.todayChest || 'COMMON', source: 'free' })

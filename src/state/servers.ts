@@ -4,6 +4,7 @@ import { api } from '../lib/api'
 import { serverVersions } from '../lib/mcVersion'
 import { ensureMcVersions } from './mcVersions'
 import { apiErrorText } from '../lib/apiError'
+import { trackFailure } from '../lib/telemetry'
 import { DEFAULT_FILTERS, pageUrl, type ServerFilters } from '../lib/serverQuery'
 
 const CAT: Record<string, string> = {
@@ -142,6 +143,7 @@ export async function loadLiveRating(patch?: Partial<ServerFilters>) {
     })
   } catch (e) {
     if (my !== seq) return
+    trackFailure('servers', e, { step: 'list' })
     useServers.getState().set({
       status: 'error',
       error: apiErrorText(e, 'Список серверов не загрузился'),

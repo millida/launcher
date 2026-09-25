@@ -16,6 +16,7 @@ import type { DeviceSpecs, JavaRuntime, Profile, ProfileSettings } from '../ipc/
 import type { CrashInfo } from '../ipc/events'
 import { isUserEnvironmentError } from './userEnvError'
 import { telemetryEnabled } from './telemetry'
+import { buildTag, shortHash } from './telemetryPrivacy'
 import {
   createReportGate,
   errorText,
@@ -170,7 +171,11 @@ export async function reportGameCrash(info: CrashInfo, meta: CrashMeta): Promise
     name ? tuneProfile(name).catch(() => null) : Promise.resolve(null),
     releaseTag(),
   ])
-  const hide = (text: string) => maskValues(redactSecrets(text), [[meta.nick, '<nick>']])
+  const hide = (text: string) =>
+    maskValues(redactSecrets(text), [
+      [meta.nick, '<nick>'],
+      [name, '<build>'],
+    ])
   const pack = (settings?.catalogPackSlug || '').trim()
   const java = await javaFacts(settings)
   const ram = ramChoice(meta.ramRequestedMb, Number(settings?.ramMb) || 0, settings?.autoTune !== false, tuning?.ramMb ?? null)
@@ -179,11 +184,12 @@ export async function reportGameCrash(info: CrashInfo, meta: CrashMeta): Promise
     source: 'LAUNCHER',
     level: pack ? 'ERROR' : 'WARN',
     name: 'GameCrash',
-    message: redactSecrets(gameCrashMessage({ reason: info.reason, catalogPack: pack, culprits: info.culprits, tail: info.tail })),
+    message: hide(gameCrashMessage({ reason: info.reason, catalogPack: pack, culprits: info.culprits, tail: info.tail })),
     stack: tailForReport(hide(info.tail || '')) || undefined,
     url: pack ? 'catalog-pack:' + pack : undefined,
     context: compact({
-      profile: name,
+      // Имя своей сборки — личное: слаг каталога или отпечаток (аудит 24.09.2026).
+      profile: buildTag(name, pack),
       mc: p?.version,
       loader: p ? p.loader || (p.fabric ? 'fabric' : 'vanilla') : null,
       loaderVersion: p?.loader_version,
@@ -204,6 +210,19 @@ export async function reportGameCrash(info: CrashInfo, meta: CrashMeta): Promise
   })
 }
 
+// Аргументы команды с именами сборок (profile, name, newName) уходят только
+// отпечатком: одинаковые склеиваются, а само имя не видно. Имена импорта
+// (import_instance name) — тоже.
+const NAME_ARGS = ['profile', 'name', 'newName'] as const
+
+function hashNames(cmd: string, args: Record<string, string | number>): Record<string, string | number> {
+  const out = { ...args }
+  // У импорта «версия» — имя папки версии из чужого лаунчера, его выбирал человек.
+  const keys: readonly string[] = cmd === 'import_instance' ? [...NAME_ARGS, 'version'] : NAME_ARGS
+  for (const k of keys) if (typeof out[k] === 'string' && out[k]) out[k] = 'h:' + shortHash(out[k] as string)
+  return out
+}
+
 export async function reportCoreFailure(cmd: string, err: unknown, args?: Record<string, unknown>): Promise<void> {
   if (!telemetryEnabled()) return
   const text = errorText(err)
@@ -214,20 +233,22 @@ export async function reportCoreFailure(cmd: string, err: unknown, args?: Record
   const launched = cmd === 'launch_profile' ? raw('profile') : null
   const settings = launched ? await loadProfileSettings(launched).catch(() => null) : null
   const pack = (settings?.catalogPackSlug || '').trim()
+  const masks: Array<[string | null, string]> = [
+    [raw('profile'), '<profile>'],
+    [raw('name'), '<name>'],
+    [raw('newName'), '<name>'],
+    [cmd === 'import_instance' ? raw('version') : null, '<version>'],
+  ]
   await postScoped('core', {
     source: 'LAUNCHER',
     level: 'ERROR',
     name: 'CoreCommandFailed',
-    message: failureMessage(cmd, text, [
-      [raw('profile'), '<profile>'],
-      [raw('name'), '<name>'],
-      [raw('newName'), '<name>'],
-    ]),
-    stack: failureDetails(text),
+    message: failureMessage(cmd, text, masks),
+    stack: failureDetails(maskValues(text, masks)),
     url: pack ? 'catalog-pack:' + pack : undefined,
     context: compact({
       command: cmd,
-      ...safeArgs(args),
+      ...hashNames(cmd, safeArgs(args)),
       catalogPack: pack,
       catalogPackVersion: pack ? settings?.catalogPackVersion : null,
       modpack: settings?.modpackSlug,
@@ -245,9 +266,15 @@ export async function reportInstallFailure(key: string, title: string, err: unkn
     level: 'ERROR',
     name: 'InstallFailed',
     message: failureMessage(target.kind, text, [[target.profile, '<profile>']]),
-    stack: failureDetails(text),
+    stack: failureDetails(maskValues(text, [[target.profile, '<profile>']])),
     url: target.catalogPack ? 'catalog-pack:' + target.catalogPack : undefined,
-    context: compact({ kind: target.kind, key, title, profile: target.profile, catalogPack: target.catalogPack }),
+    context: compact({
+      kind: target.kind,
+      key: target.profile ? key.split(target.profile).join('<profile>') : key,
+      title: target.profile && title ? maskValues(title, [[target.profile, '<profile>']]) : title,
+      profile: buildTag(target.profile, target.catalogPack),
+      catalogPack: target.catalogPack,
+    }),
   })
 }
 
@@ -280,11 +307,13 @@ export async function flushNativeCrashes() {
       await post({
         source: 'LAUNCHER',
         level: 'FATAL',
-        name: 'RustPanic',
+        // Зависание интерфейса — не паника: раньше оно шло как RustPanic и
+        // одной группой в 27 тыс. событий заслоняло настоящие падения ядра.
+        name: c.kind === 'freeze' || /^freeze-/.test(c.file) ? 'UiFreeze' : 'RustPanic',
         message: c.message,
         stack: c.details,
         release: RELEASE + '@' + (version || 'dev'),
-        context: { file: c.file, native: true },
+        context: { file: c.file, native: true, kind: c.kind || (/^freeze-/.test(c.file) ? 'freeze' : 'panic') },
       })
     }
     await clearCrashes()

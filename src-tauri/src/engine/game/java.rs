@@ -41,10 +41,60 @@ fn has_jvm_cfg(home: &Path) -> bool {
         .unwrap_or(false)
 }
 
+/// Библиотеки, без которых JVM не стартует: «could not find java.dll» и
+/// «Could not find Java SE Runtime Environment» приходили от рантаймов, где был
+/// java.exe и jvm.cfg, но не было самой машины (телеметрия 25.09.2026).
+#[cfg(target_os = "windows")]
+const CORE_LIBS: [&str; 2] = ["java.dll", "jvm.dll"];
+#[cfg(target_os = "macos")]
+const CORE_LIBS: [&str; 2] = ["libjava.dylib", "libjvm.dylib"];
+#[cfg(all(unix, not(target_os = "macos")))]
+const CORE_LIBS: [&str; 2] = ["libjava.so", "libjvm.so"];
+
+/// Метка «этот рантайм сломан»: ставится, когда папку не удалось удалить
+/// (её держит антивирус или запущенная игра), чтобы её больше не выбирать.
+const BROKEN_MARK: &str = ".millida-broken";
+
+fn nonempty(p: &Path) -> bool {
+    std::fs::metadata(p).is_ok_and(|m| m.is_file() && m.len() > 0)
+}
+
+/// Файл с таким именем где-то в `dir` не глубже `depth` уровней: у Java 8 на
+/// Linux машина лежит в lib/amd64/server, у Java 9+ — в lib/server или bin/server.
+fn has_file_within(dir: &Path, name: &str, depth: u32) -> bool {
+    let Ok(rd) = std::fs::read_dir(dir) else { return false };
+    for e in rd.flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            if depth > 0 && has_file_within(&p, name, depth - 1) {
+                return true;
+            }
+        } else if e.file_name().to_str().is_some_and(|n| n.eq_ignore_ascii_case(name)) && nonempty(&p) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Ключевые файлы рантайма: библиотека классов (lib/modules у Java 9+,
+/// lib/rt.jar у Java 8) и обе нативные библиотеки JVM.
+fn runtime_complete(home: &Path) -> bool {
+    let lib = home.join("lib");
+    let classes = nonempty(&lib.join("modules")) || nonempty(&lib.join("rt.jar"));
+    classes
+        && CORE_LIBS
+            .iter()
+            .all(|n| has_file_within(&home.join("bin"), n, 2) || has_file_within(&lib, n, 2))
+}
+
 /// The archive unpacks alphabetically, so bin/ appears long before lib/: an
 /// interrupted extraction leaves a runnable-looking JRE with no jvm.cfg.
 fn java_usable(jdir: &Path) -> bool {
-    java_bin(jdir).exists() && has_jvm_cfg(&java_home(jdir))
+    let home = java_home(jdir);
+    nonempty(&java_bin(jdir))
+        && has_jvm_cfg(&home)
+        && runtime_complete(&home)
+        && !jdir.join(BROKEN_MARK).exists()
 }
 
 fn parse_major(first_line: &str) -> Option<u32> {
@@ -186,32 +236,134 @@ fn system_java(major: u64) -> Option<PathBuf> {
 /// directory name, so it never comes from the webview unchecked.
 pub const JAVA_MAJORS: &[u64] = &[8, 11, 17, 21, 25];
 
+/// Имя папки рантайма: «21», а Intel-сборка под Rosetta — «21-x64».
+fn runtime_base(major: u64, arch: Option<&str>) -> String {
+    match arch {
+        Some(a) => format!("{}-{}", major, a),
+        None => major.to_string(),
+    }
+}
+
+/// Папки рантайма: основная и запасные «21~метка». В запасную ставим, когда
+/// основную не дали удалить — её держит антивирус или запущенная с неё игра.
+/// Иначе каждая попытка упиралась в «Папка не пуста (os error 145)» (273
+/// игрока за две недели, телеметрия 25.09.2026). Новые запасные идут первыми.
+fn runtime_dirs(base: &str) -> Vec<PathBuf> {
+    let root = data_dir().join("java");
+    let prefix = format!("{}~", base);
+    let mut alts: Vec<(std::time::SystemTime, PathBuf)> = std::fs::read_dir(&root)
+        .map(|rd| {
+            rd.flatten()
+                .filter(|e| e.file_name().to_string_lossy().starts_with(&prefix) && e.path().is_dir())
+                .map(|e| {
+                    let t = e.metadata().and_then(|m| m.modified()).unwrap_or(std::time::UNIX_EPOCH);
+                    (t, e.path())
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    alts.sort_by_key(|a| std::cmp::Reverse(a.0));
+    std::iter::once(root.join(base)).chain(alts.into_iter().map(|(_, p)| p)).collect()
+}
+
+fn managed_runtime(base: &str) -> Option<PathBuf> {
+    runtime_dirs(base).into_iter().find(|d| java_usable(d))
+}
+
+/// Установки одной Java не должны идти параллельно: вторая подчищала бы
+/// временную папку первой.
+static INSTALL_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+/// Хвосты прошлых попыток: временные папки распаковки и сломанные рантаймы.
+/// Удаляем без повторов — что не удалилось, просто не будет выбрано.
+fn sweep_leftovers(root: &Path, base: &str) {
+    let staging = format!(".{}-new", base);
+    let Ok(rd) = std::fs::read_dir(root) else { return };
+    for e in rd.flatten() {
+        let name = e.file_name().to_string_lossy().to_string();
+        let ours = name == base || name.starts_with(&format!("{}~", base));
+        let stale = name.starts_with(&staging) || name.starts_with(&format!(".{}-trash", base));
+        if stale || (ours && e.path().is_dir() && !java_usable(&e.path())) {
+            let _ = std::fs::remove_dir_all(e.path());
+        }
+    }
+}
+
+/// Скачивает и ставит рантайм. Распаковка идёт в свою уникальную временную
+/// папку, проверяется и только потом переезжает на место одним rename — с
+/// повторами (антивирус держит свежие файлы) и запасным именем, если старую
+/// папку не удаётся убрать.
+async fn install_runtime(app: &AppHandle, major: u64, arch: Option<&'static str>) -> Result<PathBuf, String> {
+    let base = runtime_base(major, arch);
+    let _guard = INSTALL_LOCK.lock().await;
+    if let Some(d) = managed_runtime(&base) {
+        return Ok(d);
+    }
+    let root = data_dir().join("java");
+    std::fs::create_dir_all(&root).map_err(|e| io_fail("Установка Java", &root, &e))?;
+    sweep_leftovers(&root, &base);
+    let staging = root.join(format!(".{}-new-{}", base, unique_tag()));
+    if let Err(e) = install_java_arch(app, major, &staging, arch).await {
+        remove_dir_retrying(&staging).await;
+        return Err(e);
+    }
+    let published = publish_runtime(&staging, &root, &base).await;
+    if published.is_err() {
+        remove_dir_retrying(&staging).await;
+    }
+    published
+}
+
+async fn publish_runtime(staging: &Path, root: &Path, base: &str) -> Result<PathBuf, String> {
+    let mut last = String::new();
+    for target in [root.join(base), root.join(format!("{}~{}", base, unique_tag()))] {
+        if !remove_dir_retrying(&target).await {
+            // Остатки держит чужой процесс: помечаем их, чтобы не выбрать
+            // снова, и ставим рядом под новым именем.
+            let _ = std::fs::write(target.join(BROKEN_MARK), b"1");
+            last = format!("Установка Java: не удалось убрать старую папку — {}", mask_home(&target.to_string_lossy()));
+            continue;
+        }
+        match rename_retrying(staging, &target).await {
+            Ok(()) if java_usable(&target) => return Ok(target),
+            Ok(()) => return Err("Java распаковалась не полностью — попробуй запустить ещё раз".into()),
+            Err(e) => last = io_fail("Установка Java", &target, &e),
+        }
+    }
+    Err(last)
+}
+
 /// Downloads a managed runtime into the data directory, skipping whatever the
 /// system already offers. Shared by the automatic path and the explicit
 /// "download this major" action so both install exactly the same way.
 pub(crate) async fn install_managed_java(app: &AppHandle, major: u64) -> Result<PathBuf, String> {
-    let jdir = data_dir().join("java").join(major.to_string());
-    let bin = java_bin(&jdir);
-    if java_usable(&jdir) {
-        return Ok(bin);
+    install_runtime(app, major, None).await.map(|d| java_bin(&d))
+}
+
+/// Наш ли это рантайм и какой: (major, arch) по имени его папки.
+fn managed_identity(bin: &Path) -> Option<(PathBuf, u64, Option<&'static str>)> {
+    let root = data_dir().join("java");
+    let rel = bin.strip_prefix(&root).ok()?;
+    let name = rel.components().next()?.as_os_str().to_str()?.to_string();
+    let base = name.split('~').next()?;
+    let (num, arch) = match base.strip_suffix("-x64") {
+        Some(n) => (n, Some("x64")),
+        None => (base, None),
+    };
+    let major = num.parse::<u64>().ok().filter(|m| JAVA_MAJORS.contains(m))?;
+    Some((root.join(&name), major, arch))
+}
+
+/// Переставляет наш рантайм, который не запустился: убирает папку (или
+/// помечает сломанной, если её держат) и ставит заново. `None` — это не наш
+/// рантайм, и трогать его нельзя.
+pub(crate) async fn reinstall_managed_java(app: &AppHandle, bin: &Path) -> Option<Result<PathBuf, String>> {
+    let (dir, major, arch) = managed_identity(bin)?;
+    emit(app, "java", 0.0, &format!("Java {} повреждена — ставим заново…", major));
+    if !remove_dir_retrying(&dir).await {
+        let _ = std::fs::write(dir.join(BROKEN_MARK), b"1");
     }
-    let _ = std::fs::remove_dir_all(&jdir);
-    // Unpack into staging and move with a single rename so the target directory
-    // is either complete or absent.
-    let staging = data_dir().join("java").join(format!(".{}-new", major));
-    let _ = std::fs::remove_dir_all(&staging);
-    if let Err(e) = install_java(app, major, &staging).await {
-        let _ = std::fs::remove_dir_all(&staging);
-        return Err(e);
-    }
-    if let Some(p) = jdir.parent() {
-        std::fs::create_dir_all(p).map_err(|e| e.to_string())?;
-    }
-    std::fs::rename(&staging, &jdir).map_err(|e| {
-        let _ = std::fs::remove_dir_all(&staging);
-        format!("Не удалось установить Java: {}", e)
-    })?;
-    if java_usable(&jdir) { Ok(bin) } else { Err("Java не найдена после распаковки".into()) }
+    Some(install_runtime(app, major, arch).await.map(|d| java_bin(&d)))
 }
 
 pub(crate) async fn ensure_java(app: &AppHandle, major: u64) -> Result<PathBuf, String> {
@@ -219,14 +371,58 @@ pub(crate) async fn ensure_java(app: &AppHandle, major: u64) -> Result<PathBuf, 
     if let Some(bin) = bundled_java(major) {
         return Ok(bin);
     }
-    let jdir = data_dir().join("java").join(major.to_string());
-    if java_usable(&jdir) {
-        return Ok(java_bin(&jdir));
+    if let Some(d) = managed_runtime(&runtime_base(major, None)) {
+        return Ok(java_bin(&d));
     }
     if let Some(sys) = system_java(major) {
         return Ok(sys);
     }
     install_managed_java(app, major).await
+}
+
+/// Major Java по её `java -version`. Запоминается на сессию по пути и времени
+/// изменения файла: запуск спрашивает его на каждом старте.
+pub(crate) fn java_major_of_bin(bin: &Path) -> Option<u32> {
+    type Seen = std::collections::HashMap<PathBuf, (Option<std::time::SystemTime>, u32)>;
+    static CACHE: std::sync::Mutex<Option<Seen>> = std::sync::Mutex::new(None);
+    let stamp = std::fs::metadata(bin).and_then(|m| m.modified()).ok();
+    if let Ok(guard) = CACHE.lock() {
+        if let Some((t, m)) = guard.as_ref().and_then(|c| c.get(bin)) {
+            if *t == stamp {
+                return Some(*m);
+            }
+        }
+    }
+    let major = parse_major(&java_version_of(bin)?)?;
+    if let Ok(mut guard) = CACHE.lock() {
+        guard.get_or_insert_with(Default::default).insert(bin.to_path_buf(), (stamp, major));
+    }
+    Some(major)
+}
+
+fn too_old(have: u32, need: u64) -> bool {
+    u64::from(have) < need
+}
+
+/// Java, выбранная игроком (путь, номер или Java по умолчанию), не должна
+/// быть старше той, что требует версия: Java 8 на Forge 1.20.1 падала с
+/// «Unrecognized option: -p», Java 21 на 26.x — с «--sun-misc-unsafe-memory-access»
+/// (телеметрия 25.09.2026). Такая Java пропускается с предупреждением, и
+/// запуск берёт нужную сам. `None` — ставить автоматически.
+pub(crate) fn java_fits(app: &AppHandle, picked: PathBuf, need: u64, version: &str) -> Option<PathBuf> {
+    match java_major_of_bin(&picked) {
+        Some(have) if too_old(have, need) => {
+            warn(
+                app,
+                &format!(
+                    "Выбранная Java {} слишком старая для Minecraft {} — нужна {} или новее. Запускаем на подходящей Java",
+                    have, version, need
+                ),
+            );
+            None
+        }
+        _ => Some(picked),
+    }
 }
 
 /// Версии до 1.19 везут нативные библиотеки LWJGL только под Intel: на Mac с
@@ -272,22 +468,7 @@ pub(crate) async fn ensure_java_for(app: &AppHandle, major: u64, version: &str) 
         }
     }
     let major = if major == 16 { 17 } else { major };
-    let jdir = data_dir().join("java").join(format!("{}-x64", major));
-    if java_usable(&jdir) {
-        return Ok(java_bin(&jdir));
-    }
-    let _ = std::fs::remove_dir_all(&jdir);
-    let staging = data_dir().join("java").join(format!(".{}-x64-new", major));
-    let _ = std::fs::remove_dir_all(&staging);
-    if let Err(e) = install_java_arch(app, major, &staging, Some("x64")).await {
-        let _ = std::fs::remove_dir_all(&staging);
-        return Err(e);
-    }
-    std::fs::rename(&staging, &jdir).map_err(|e| {
-        let _ = std::fs::remove_dir_all(&staging);
-        format!("Не удалось установить Java: {}", e)
-    })?;
-    if java_usable(&jdir) { Ok(java_bin(&jdir)) } else { Err("Java не найдена после распаковки".into()) }
+    install_runtime(app, major, Some("x64")).await.map(|d| java_bin(&d))
 }
 
 /// Fetches a major on demand. The webview may only name a version from the
@@ -315,6 +496,8 @@ struct JavaPackage {
     url: String,
     sha256: String,
     size: Option<u64>,
+    /// Имя файла у Adoptium: по нему архив ищется на зеркале.
+    name: Option<String>,
 }
 
 /// The archive is executed right after unpacking, so an entry without an https
@@ -326,7 +509,8 @@ fn adoptium_package(assets: &serde_json::Value) -> Option<JavaPackage> {
     if !is_sha256(&sha256) {
         return None;
     }
-    Some(JavaPackage { url, sha256, size: pkg["size"].as_u64() })
+    let name = pkg["name"].as_str().map(str::to_string);
+    Some(JavaPackage { url, sha256, size: pkg["size"].as_u64(), name })
 }
 
 fn is_sha256(digest: &str) -> bool {
@@ -356,7 +540,7 @@ fn azul_package(detail: &serde_json::Value) -> Option<JavaPackage> {
     // 40158493), и точная сверка отбрасывала целый архив — Java 8 на Mac arm64
     // есть только у Azul, и 1.12.2 не запускалась (владелец 25.09.2026).
     // Целостность и так гарантирует sha256.
-    Some(JavaPackage { url, sha256, size: None })
+    Some(JavaPackage { url, sha256, size: None, name: None })
 }
 
 struct Target {
@@ -430,7 +614,7 @@ fn unwrap_single_dir(jdir: &Path) -> Result<(), String> {
         return Ok(());
     }
     let mut entries = std::fs::read_dir(jdir)
-        .map_err(|e| e.to_string())?
+        .map_err(|e| io_fail("Установка Java", jdir, &e))?
         .flatten()
         .map(|e| e.path())
         .collect::<Vec<_>>();
@@ -446,9 +630,9 @@ fn unwrap_single_dir(jdir: &Path) -> Result<(), String> {
         jdir.file_name().and_then(|n| n.to_str()).unwrap_or("java")
     ));
     let _ = std::fs::remove_dir_all(&lifted);
-    std::fs::rename(&inner, &lifted).map_err(|e| e.to_string())?;
-    std::fs::remove_dir_all(jdir).map_err(|e| e.to_string())?;
-    std::fs::rename(&lifted, jdir).map_err(|e| e.to_string())
+    std::fs::rename(&inner, &lifted).map_err(|e| io_fail("Установка Java", &lifted, &e))?;
+    std::fs::remove_dir_all(jdir).map_err(|e| io_fail("Установка Java", jdir, &e))?;
+    std::fs::rename(&lifted, jdir).map_err(|e| io_fail("Установка Java", jdir, &e))
 }
 
 fn forget_java_metadata(major: u64, t: &Target) {
@@ -461,8 +645,50 @@ fn forget_java_metadata(major: u64, t: &Target) {
     }
 }
 
-async fn install_java(app: &AppHandle, major: u64, jdir: &Path) -> Result<(), String> {
-    install_java_arch(app, major, jdir, None).await
+/// Причина отказа одной строкой без адреса: сообщение уходит в тост и в
+/// телеметрию (120 символов), и ссылка на github съедала его целиком — причину
+/// у второго поставщика не было видно вовсе.
+fn short_reason(e: &str) -> String {
+    let words: Vec<&str> = e.split_whitespace().filter(|w| !w.contains("://")).collect();
+    let joined = words.join(" ");
+    let mut s = joined.split(" — ").next().unwrap_or(&joined).trim().to_string();
+    for tail in [" от", ":", "—", " -"] {
+        while let Some(t) = s.strip_suffix(tail) {
+            s = t.trim_end().to_string();
+        }
+    }
+    if s.matches('(').count() > s.matches(')').count() {
+        s.push(')');
+    }
+    const MAX: usize = 70;
+    if s.chars().count() > MAX {
+        s = s.chars().take(MAX).collect::<String>() + "…";
+    }
+    if s.is_empty() { "нет ответа".into() } else { s }
+}
+
+/// Файла по ссылке больше нет или он другой: ответ справочника устарел.
+fn stale_package(e: &str) -> bool {
+    e.contains("404") || e.contains("410") || e.contains("контрольная сумма") || e.contains("размер")
+}
+
+fn disk_full(e: &str) -> bool {
+    let low = e.to_lowercase();
+    low.contains("os error 112") || low.contains("os error 28") || low.contains("no space left") || low.contains("недостаточно места")
+}
+
+/// Зеркало Adoptium на TUNA (университет Цинхуа) раскладывает те же файлы под
+/// теми же именами. Архив сверяется по sha256 из ответа самого Adoptium, так
+/// что зеркало не может подсунуть другой файл, а github — главный источник
+/// обрывов у игроков из России.
+const ADOPTIUM_MIRROR: &str = "https://mirrors.tuna.tsinghua.edu.cn/Adoptium";
+
+fn adoptium_mirror_url(major: u64, t: &Target, name: &str) -> Option<String> {
+    let safe = !name.is_empty()
+        && name.len() <= 128
+        && name.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
+        && !name.starts_with('.');
+    safe.then(|| format!("{}/{}/jre/{}/{}/{}", ADOPTIUM_MIRROR, major, t.arch, t.os, name))
 }
 
 async fn install_java_arch(app: &AppHandle, major: u64, jdir: &Path, arch: Option<&'static str>) -> Result<(), String> {
@@ -475,25 +701,39 @@ async fn install_java_arch(app: &AppHandle, major: u64, jdir: &Path, arch: Optio
     // запускается, ошибка на скачивании Java» приходила именно оттуда. Падение
     // загрузки — повод взять следующего, а не повод сдаться.
     let mut fetched = false;
-    for (vendor, found) in [
+    'vendors: for (vendor, found) in [
         ("Adoptium", adoptium_source(major, &t).await),
         ("Azul", azul_source(major, &t).await),
     ] {
-        match found {
-            Err(e) => reasons.push(format!("{}: {}", vendor, e)),
-            Ok(pkg) => {
-                // A remembered answer can point at a release that has since been
-                // pulled; dropping the cache turns the next attempt back into a
-                // fresh lookup.
-                match download_checked(&pkg.url, &archive, Some(Sum::Sha256(&pkg.sha256)), pkg.size).await {
-                    Ok(()) => {
-                        fetched = true;
-                        break;
-                    }
-                    Err(e) => {
+        let pkg = match found {
+            Err(e) => {
+                reasons.push(format!("{}: {}", vendor, short_reason(&e)));
+                continue;
+            }
+            Ok(pkg) => pkg,
+        };
+        let mut urls = vec![(vendor, pkg.url.clone())];
+        if let Some(m) = pkg.name.as_deref().and_then(|n| adoptium_mirror_url(major, &t, n)) {
+            urls.push(("зеркало", m));
+        }
+        for (label, url) in urls {
+            match download_checked(&url, &archive, Some(Sum::Sha256(&pkg.sha256)), pkg.size).await {
+                Ok(()) => {
+                    fetched = true;
+                    break 'vendors;
+                }
+                Err(e) => {
+                    // A remembered answer can point at a release that has since
+                    // been pulled; dropping the cache turns the next attempt
+                    // back into a fresh lookup. Обрыв связи — не тот случай:
+                    // кэш нужен именно тогда, когда справочник недоступен.
+                    if stale_package(&e) {
                         forget_java_metadata(major, &t);
-                        reasons.push(format!("{}: {}", vendor, e));
                     }
+                    if disk_full(&e) {
+                        return Err(format!("Не удалось скачать Java {} — не хватает места на диске. Освободи пару гигабайт и запусти ещё раз.", major));
+                    }
+                    reasons.push(format!("{}: {}", label, short_reason(&e)));
                 }
             }
         }
@@ -506,14 +746,14 @@ async fn install_java_arch(app: &AppHandle, major: u64, jdir: &Path, arch: Optio
         ));
     }
     emit(app, "java", 60.0, "Распаковываем Java…");
-    std::fs::create_dir_all(jdir).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(jdir).map_err(|e| io_fail("Установка Java", jdir, &e))?;
     let unpacked = if t.ext == "zip" {
-        unzip_strip1(&archive, jdir)
+        unzip_strip1(&archive, jdir).map_err(|e| format!("Распаковка Java: {}", e))
     } else {
         quiet(&mut Command::new("tar"))
             .args(["-xzf"]).arg(&archive).arg("-C").arg(jdir).arg("--strip-components=1")
             .status()
-            .map_err(|e| e.to_string())
+            .map_err(|e| io_fail("Распаковка Java", &archive, &e))
             .and_then(|s| if s.success() { Ok(()) } else { Err("Не удалось распаковать Java".into()) })
     };
     let _ = std::fs::remove_file(&archive);
@@ -587,14 +827,21 @@ fn required_majors() -> std::collections::HashSet<u32> {
 
 pub fn list_java_runtimes() -> Vec<JavaRuntime> {
     let need = required_majors();
-    let mut out = vec![];
+    let mut out: Vec<JavaRuntime> = vec![];
     if let Ok(rd) = std::fs::read_dir(data_dir().join("java")) {
         for e in rd.flatten() {
-            let Some(major) = e.file_name().to_string_lossy().parse::<u32>().ok() else { continue };
+            // «21» и запасные «21~метка» — одна и та же Java.
+            let name = e.file_name().to_string_lossy().to_string();
+            let Some(major) = name.split('~').next().and_then(|n| n.parse::<u32>().ok()) else { continue };
             if !e.path().is_dir() { continue }
+            let size = dir_size(&e.path());
+            if let Some(r) = out.iter_mut().find(|r| r.major == major) {
+                r.size += size;
+                continue;
+            }
             out.push(JavaRuntime {
                 major,
-                size: dir_size(&e.path()),
+                size,
                 path: e.path().to_string_lossy().to_string(),
                 in_use: need.contains(&major),
             });
@@ -608,12 +855,16 @@ pub fn remove_java_runtime(major: u32) -> Result<u64, String> {
     if required_majors().contains(&major) {
         return Err("Эта Java нужна одной из сборок".into());
     }
-    let dir = data_dir().join("java").join(major.to_string());
-    if !dir.is_dir() {
+    let dirs: Vec<PathBuf> = runtime_dirs(&major.to_string()).into_iter().filter(|d| d.is_dir()).collect();
+    if dirs.is_empty() {
         return Err("Такая Java не установлена".into());
     }
-    let freed = dir_size(&dir);
-    std::fs::remove_dir_all(&dir).map_err(|e| format!("Не удалось удалить: {}", e))?;
+    let mut freed = 0;
+    for dir in dirs {
+        let size = dir_size(&dir);
+        std::fs::remove_dir_all(&dir).map_err(|e| format!("Не удалось удалить: {}", e))?;
+        freed += size;
+    }
     Ok(freed)
 }
 
@@ -641,7 +892,8 @@ fn java_candidates() -> Vec<PathBuf> {
     let mut cands: Vec<PathBuf> = vec![];
     let bin_name = if cfg!(target_os = "windows") { "java.exe" } else { "java" };
     if let Ok(rd) = std::fs::read_dir(data_dir().join("java")) {
-        for e in rd.flatten() {
+        // временные папки распаковки («.21-new-…») рантаймами не считаются
+        for e in rd.flatten().filter(|e| !e.file_name().to_string_lossy().starts_with('.')) {
             let b = if cfg!(target_os = "macos") { e.path().join("Contents/Home/bin").join(bin_name) }
                     else { e.path().join("bin").join(bin_name) };
             if b.exists() { cands.push(b); }
@@ -813,6 +1065,87 @@ mod tests {
         d
     }
 
+    /// Полный рантайм: jvm.cfg, библиотека классов и обе нативные библиотеки.
+    fn complete(d: &Path, java8: bool) {
+        let home = java_home(d);
+        let lib = if java8 && !cfg!(target_os = "macos") { home.join("lib").join("amd64") } else { home.join("lib") };
+        std::fs::create_dir_all(lib.join("server")).unwrap();
+        std::fs::write(lib.join("jvm.cfg"), b"-server KNOWN").unwrap();
+        std::fs::write(home.join("lib").join(if java8 { "rt.jar" } else { "modules" }), b"classes").unwrap();
+        let (core, jvm) = (CORE_LIBS[0], CORE_LIBS[1]);
+        if cfg!(target_os = "windows") {
+            std::fs::create_dir_all(home.join("bin").join("server")).unwrap();
+            std::fs::write(home.join("bin").join(core), b"x").unwrap();
+            std::fs::write(home.join("bin").join("server").join(jvm), b"x").unwrap();
+        } else {
+            std::fs::write(lib.join(core), b"x").unwrap();
+            std::fs::write(lib.join("server").join(jvm), b"x").unwrap();
+        }
+    }
+
+    #[test]
+    fn runtime_without_the_jvm_itself_is_not_usable() {
+        let d = make("no-dll");
+        complete(&d, false);
+        assert!(java_usable(&d), "полный рантайм годен");
+        let home = java_home(&d);
+        let core = if cfg!(target_os = "windows") { home.join("bin").join(CORE_LIBS[0]) } else { home.join("lib").join(CORE_LIBS[0]) };
+        std::fs::remove_file(&core).unwrap();
+        assert!(!java_usable(&d), "без {} JVM падает с «could not find java.dll» — такой рантайм надо ставить заново", CORE_LIBS[0]);
+        let d = make("no-modules");
+        complete(&d, false);
+        std::fs::remove_file(java_home(&d).join("lib").join("modules")).unwrap();
+        assert!(!java_usable(&d), "без lib/modules JVM не найдёт java.lang.Object");
+        let d = make("marked");
+        complete(&d, false);
+        std::fs::write(d.join(BROKEN_MARK), b"1").unwrap();
+        assert!(!java_usable(&d), "помеченный сломанным рантайм больше не выбирается");
+    }
+
+    #[test]
+    fn download_failure_keeps_every_vendor_visible() {
+        let cases = [
+            (
+                "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.4.1%2B1/OpenJDK25U-jre_x64_windows_hotspot_25.0.4.1_1.zip: нет связи (operation timed out — сервер не ответил вовремя: проверь интернет и VPN)",
+                "нет связи (operation timed out)",
+            ),
+            (
+                "ответ оборвался: нет связи (connection reset) — https://api.adoptium.net/v3/assets/latest/21/hotspot?architecture=x64",
+                "ответ оборвался: нет связи (connection reset)",
+            ),
+            ("404 Not Found от https://api.azul.com/x", "404 Not Found"),
+            ("https://x.y/z → 502 Bad Gateway", "→ 502 Bad Gateway"),
+        ];
+        for (raw, want) in cases {
+            assert_eq!(short_reason(raw), want, "{raw}");
+        }
+        assert!(short_reason(&"а".repeat(500)).chars().count() <= 71, "причина одного поставщика не съедает всё сообщение");
+    }
+
+    #[test]
+    fn mirror_url_follows_the_adoptium_layout() {
+        let t = Target { os: "windows", ext: "zip", arch: "x64" };
+        assert_eq!(
+            adoptium_mirror_url(21, &t, "OpenJDK21U-jre_x64_windows_hotspot_21.0.12.1_1.zip").as_deref(),
+            Some("https://mirrors.tuna.tsinghua.edu.cn/Adoptium/21/jre/x64/windows/OpenJDK21U-jre_x64_windows_hotspot_21.0.12.1_1.zip"),
+        );
+        for bad in ["", "../x.zip", "a/b.zip", "x.zip?y=1", ".hidden"] {
+            assert!(adoptium_mirror_url(21, &t, bad).is_none(), "{bad:?}: имя идёт в адрес и не должно его менять");
+        }
+    }
+
+    #[test]
+    fn managed_runtime_is_recognised_by_its_folder() {
+        let root = data_dir().join("java");
+        let bin = |dir: &str| root.join(dir).join("bin").join("java");
+        let id = |dir: &str| managed_identity(&bin(dir)).map(|(_, m, a)| (m, a));
+        assert_eq!(id("21"), Some((21, None)));
+        assert_eq!(id("25~1a2b"), Some((25, None)), "запасная папка — та же Java");
+        assert_eq!(id("8-x64"), Some((8, Some("x64"))), "Intel-сборка под Rosetta");
+        assert_eq!(id("99"), None, "версию вне списка лаунчер не ставит");
+        assert_eq!(managed_identity(Path::new("/usr/lib/jvm/java-21/bin/java")), None, "системную Java не трогаем");
+    }
+
     #[test]
     fn half_unpacked_jre_is_not_usable() {
         let d = make("broken");
@@ -822,9 +1155,7 @@ mod tests {
     #[test]
     fn jre_with_jvm_cfg_is_usable() {
         let d = make("ok");
-        let lib = java_home(&d).join("lib");
-        std::fs::create_dir_all(&lib).unwrap();
-        std::fs::write(lib.join("jvm.cfg"), b"-server KNOWN").unwrap();
+        complete(&d, false);
         assert!(java_usable(&d));
     }
 
@@ -1101,9 +1432,7 @@ mod tests {
         let d = std::env::temp_dir().join("millida-java-test").join("nested-jre");
         let _ = std::fs::remove_dir_all(&d);
         let inner = d.join("zulu-21.jre");
-        let lib = java_home(&inner).join("lib");
-        std::fs::create_dir_all(&lib).unwrap();
-        std::fs::write(lib.join("jvm.cfg"), b"-server KNOWN").unwrap();
+        complete(&inner, false);
         let bin = java_home(&inner).join("bin");
         std::fs::create_dir_all(&bin).unwrap();
         std::fs::write(bin.join(if cfg!(target_os = "windows") { "java.exe" } else { "java" }), b"x").unwrap();
@@ -1115,9 +1444,7 @@ mod tests {
     #[test]
     fn java8_arch_subdir_is_usable() {
         let d = make("java8");
-        let lib = java_home(&d).join("lib").join("amd64");
-        std::fs::create_dir_all(&lib).unwrap();
-        std::fs::write(lib.join("jvm.cfg"), b"-server KNOWN").unwrap();
+        complete(&d, true);
         assert!(java_usable(&d));
     }
 }

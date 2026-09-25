@@ -11,6 +11,7 @@ import { backdropClose } from '../lib/dismiss'
 import { usePackCode } from '../state/packCode'
 import { showReward } from '../components/reward/RewardReveal'
 import { BuildIcon } from '../components/playhub/BuildIcon'
+import { trackImportFailure } from '../lib/importTrack'
 
 const imported = (p: { name: string; icon?: string | null }) =>
   showReward({ level: 'mid', items: [{ name: p.name, art: <BuildIcon icon={p.icon} size={60} /> }], title: 'Сборка импортирована', sub: p.name })
@@ -45,6 +46,7 @@ export function ImportModal() {
       })
       .catch((err) => {
         if (String(err).includes('Отменено')) return
+        trackImportFailure('file', err)
         showToast('' + err, 'error')
       })
       .finally(() => setFileBusy(false))
@@ -145,6 +147,7 @@ export function ImportModal() {
                           imported(p)
                         })
                         .catch((err) => {
+                          trackImportFailure(it.source, err, it)
                           setRows((r) => ({ ...r, [i]: 'idle' }))
                           showToast('' + err, 'error')
                         })

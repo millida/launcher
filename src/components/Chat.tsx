@@ -38,6 +38,7 @@ import { callFriend, callSupported, fmtCallTime, useCall } from '../state/call'
 import { nickInRooms, openRoomManage, useRooms, type Room } from '../state/rooms'
 import { RoomCallButton } from './RoomCall'
 import { apiErrorText } from '../lib/apiError'
+import { trackFailure } from '../lib/telemetry'
 import { inviteViaNewServer, loadMyServers, serverTitle, usePlayInvite } from '../state/playInvite'
 import type { InviteTarget } from '../state/playInvite'
 import { statusText } from './friends/FriendRow'
@@ -427,6 +428,7 @@ function Composer() {
       await sendChat(body, attachment, quoted ? replyPreviewOf(quoted) : null)
     } catch (e) {
       const held = offPlatformReason(e)
+      if (!held) trackFailure('chat', e, { step: 'send' })
       showToast(held || 'Сообщение не ушло — нажми «Повторить» под ним', 'error')
     }
   }
@@ -440,6 +442,7 @@ function Composer() {
     try {
       await send(await uploadChatImage(file))
     } catch (e) {
+      trackFailure('chat', e, { step: 'image' })
       showToast(apiErrorText(e, 'Картинка не загрузилась'), 'error')
     } finally {
       setBusy(false)
@@ -465,6 +468,7 @@ function Composer() {
       }
       await send(await uploadVoice(take))
     } catch (e) {
+      trackFailure('chat', e, { step: 'voice' })
       showToast(apiErrorText(e, 'Голосовое не отправилось'), 'error')
     } finally {
       setBusy(false)

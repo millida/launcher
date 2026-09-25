@@ -96,7 +96,12 @@ import { useMigrate } from '../state/migrate'
 import { openProject } from '../state/project'
 import { stopRunningGame, useGame } from '../state/game'
 import { apiErrorText } from '../lib/apiError'
+import { trackFailure } from '../lib/telemetry'
 import { mirrorAsset } from '../lib/api'
+
+/// Имя сборки в тексте ошибки — личное.
+const maskBuild = (e: unknown, name: string | null | undefined) =>
+  name && name.length >= 2 ? String(e).split(name).join('<build>') : String(e)
 
 const ramKey = (p: string) => 'm-ram-' + p
 
@@ -689,7 +694,10 @@ export function InstancePage() {
       .then(() => {
         if (java.trim()) setJavaMajor(0)
       })
-      .catch((e) => showToast('' + e, 'error'))
+      .catch((e) => {
+        trackFailure('build_settings', maskBuild(e, profile), { step: 'save' })
+        showToast('' + e, 'error')
+      })
   }
 
   const pinJavaMajor = (major: number) => {
@@ -2083,7 +2091,10 @@ export function InstancePage() {
                               setJavaMajor(0)
                               showToast('Java выбрана')
                             })
-                            .catch((e) => showToast('' + e, 'error'))
+                            .catch((e) => {
+                              trackFailure('build_settings', maskBuild(e, profile), { step: 'java_select' })
+                              showToast('' + e, 'error')
+                            })
                       }}
                     />
                     <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
@@ -2104,10 +2115,16 @@ export function InstancePage() {
                               if (profile)
                                 saveProfileSettings(profile, jvm || '', +w || 0, +h || 0, j.path)
                                   .then(() => setJavaMajor(0))
-                                  .catch((e) => showToast('' + e, 'error'))
+                                  .catch((e) => {
+                                    trackFailure('build_settings', maskBuild(e, profile), { step: 'java_save' })
+                                    showToast('' + e, 'error')
+                                  })
                               showToast('Java выбрана: ' + j.version)
                             })
-                            .catch((e) => showToast('' + e, 'error'))
+                            .catch((e) => {
+                              trackFailure('build_settings', e, { step: 'java_pick' })
+                              showToast('' + e, 'error')
+                            })
                         }}
                       >
                         Обзор…

@@ -451,7 +451,7 @@ export interface ShopDay {
   balance: number
   shards: number
   plus: boolean
-  day: { featured: ShopCard; deal: ShopCard; items: ShopCard[]; forYou: ShopCard[]; refreshAt: string }
+  day: { featured: ShopCard | null; deal: ShopCard | null; items: ShopCard[]; forYou: ShopCard[]; refreshAt: string }
   bundle: ShopBundle | null
   nightMarket: { endsAt: string; cards: ShopCard[] } | null
   xray: XrayOffer | null

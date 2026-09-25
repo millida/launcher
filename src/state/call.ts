@@ -18,6 +18,7 @@ import { useFriends } from './friends'
 import { api } from '../lib/api'
 import { nickInRooms, useRooms, type VoiceMember } from './rooms'
 import { apiErrorText } from '../lib/apiError'
+import { trackFailure } from '../lib/telemetry'
 
 export type CallStatus = 'idle' | 'outgoing' | 'incoming' | 'connecting' | 'active'
 
@@ -194,6 +195,7 @@ async function openMicOrFail(): Promise<MicChain | null> {
     chain.setMuted(st().muted)
     return chain
   } catch (e) {
+    trackFailure('call', errName(e), { step: 'mic' })
     showToast(micErrorText(e), 'error', undefined, {
       label: 'Настроить',
       run: () => openSettings('sound', 'mic'),
@@ -226,12 +228,20 @@ function startStats() {
   }, 3000)
 }
 
+/// Ошибка устройства (микрофон, камера, экран): имя DOMException и текст —
+/// без названия устройства, оно может быть личным.
+const errName = (e: unknown) => {
+  const n = (e as { name?: string } | null)?.name
+  return n && n !== 'Error' ? n : String((e as { message?: string } | null)?.message ?? e).slice(0, 80)
+}
+
 /// Ответ получен, но соединение может так и не собраться — например, когда у
 /// обеих сторон закрытый NAT, а ретранслятор не настроен. Ждать вечно нельзя.
 function armConnectTimeout() {
   if (ringTimer) clearTimeout(ringTimer)
   ringTimer = setTimeout(() => {
     if (st().status !== 'connecting') return
+    trackFailure('call', 'connect_timeout', { step: 'connect', mode: st().mode })
     showToast('Не удалось соединиться — попробуй позвонить ещё раз', 'error')
     void finish('failed')
   }, CONNECT_TIMEOUT_MS)
@@ -256,6 +266,7 @@ async function recover(peerId: string) {
   if (cur.status === 'idle' || !session) return
   const used = retries.get(peerId) || 0
   if (used >= RETRY_LIMIT) {
+    trackFailure('call', 'peer_lost', { step: 'recover', mode: cur.mode })
     if (cur.mode === 'dm') {
       showToast('Связь оборвалась', 'error')
       await finish('failed')
@@ -336,6 +347,7 @@ export async function callFriend(peerId: string, nick: string) {
   try {
     await sendSignal(callId, peerId, 'invite', {})
   } catch (e) {
+    trackFailure('call', e, { step: 'invite' })
     reset()
     showToast(apiErrorText(e, 'Не удалось начать звонок'), 'error')
     return
@@ -437,6 +449,7 @@ export async function toggleScreen() {
     }
   } catch (e) {
     const text = screenErrorText(e)
+    if (text) trackFailure('call', errName(e), { step: 'screen' })
     if (text) showToast(text, 'error')
   }
 }
@@ -487,6 +500,7 @@ export async function toggleCamera() {
       if (st().camOn) void toggleCamera()
     }
   } catch (e) {
+    trackFailure('call', errName(e), { step: 'camera' })
     showToast(cameraErrorText(e), 'error')
   }
 }
@@ -553,6 +567,7 @@ export async function joinRoomVoice(roomId: string, title: string) {
       method: 'POST',
     })
   } catch (e) {
+    trackFailure('call', e, { step: 'room_join' })
     reset()
     showToast(apiErrorText(e, 'Не удалось войти в разговор'), 'error')
     return

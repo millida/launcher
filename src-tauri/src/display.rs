@@ -101,6 +101,11 @@ mod win {
     /// screen; nothing in Tauri does it, so the message loop does. It is also
     /// what stops the wallpaper from being rendered while nobody looks at it.
     fn set_webview_visible(visible: bool) {
+        // Окно разрушается на выходе и шлёт WM_SIZE; событие в главный поток
+        // после разрушения цикла роняет tao («cannot move state from Destroyed»).
+        if crate::exiting() {
+            return;
+        }
         let Some(app) = APP.get().cloned() else { return };
         let _ = app.clone().run_on_main_thread(move || {
             let Some(window) = app.get_webview_window("main") else { return };
@@ -121,6 +126,9 @@ mod win {
         tauri::async_runtime::spawn(async move {
             tokio::time::sleep(SETTLE).await;
             PENDING.store(false, Ordering::SeqCst);
+            if crate::exiting() {
+                return;
+            }
             let _ = app.clone().run_on_main_thread(move || recover(&app));
         });
     }

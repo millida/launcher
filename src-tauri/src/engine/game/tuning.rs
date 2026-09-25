@@ -96,14 +96,40 @@ fn reserved_mb(total_mb: u64) -> u64 {
     (total_mb / RESERVE_RATIO_DIVISOR).max(RESERVE_MIN_MB)
 }
 
+/// Сколько куче можно на этой машине, считая то, чего куча не видит (25.09.2026:
+/// у игрока на ноутбуке 16 ГБ с Radeon 660M сборка на 10 ГБ уронила Windows).
+/// Java сверх кучи тратит ещё ~30 % (метаспейс, нативные буферы модов),
+/// встроенная видеокарта берёт свою память из той же ОЗУ, а рядом живут
+/// Windows, лаунчер и браузер. Поэтому: не больше половины ОЗУ на машинах до
+/// 16 ГБ, не больше «всё минус 6 ГБ» на больших, и не больше того, что сейчас
+/// реально свободно (минус запас на внекучевую память).
+fn safe_ceiling_mb(total_mb: u64, available_mb: u64) -> u64 {
+    let by_total = if total_mb <= 16 * 1024 { total_mb / 2 } else { total_mb.saturating_sub(6 * 1024) };
+    let by_free = if available_mb > 0 { (available_mb * 10 / 13).saturating_sub(512) } else { u64::MAX };
+    by_total.min(by_free).max(MIN_HEAP_MB as u64)
+}
+
+pub fn available_ram_mb() -> u64 {
+    let mut sys = sysinfo::System::new();
+    sys.refresh_memory();
+    sys.available_memory() / 1024 / 1024
+}
+
 /// What the machine can actually give: never more than total minus the reserve,
 /// and never so little that the game cannot start.
 fn fit_to_machine(want: u32, total_mb: u64) -> (u32, Option<String>) {
+    fit_to_machine_with(want, total_mb, available_ram_mb())
+}
+
+fn fit_to_machine_with(want: u32, total_mb: u64, available_mb: u64) -> (u32, Option<String>) {
     if total_mb == 0 {
         return (want.clamp(MIN_HEAP_MB, 4096), None);
     }
     let reserve = reserved_mb(total_mb);
-    let ceiling = total_mb.saturating_sub(reserve).max(1024) as u32;
+    let ceiling = total_mb
+        .saturating_sub(reserve)
+        .min(safe_ceiling_mb(total_mb, available_mb))
+        .max(1024) as u32;
     if want > ceiling {
         let capped = ceiling.clamp(1024, MAX_HEAP_MB);
         return (
@@ -196,6 +222,102 @@ fn flag_name(arg: &str) -> &str {
     arg.split('=').next().unwrap_or(arg)
 }
 
+/// Опции, которые HotSpot принимает только после -XX:+UnlockExperimentalVMOptions.
+/// Гайды копируют их без разблокировки, и игра падала до окна: «VM option
+/// 'G1NewSizePercent' is experimental» (телеметрия 25.09.2026). UseG1GC здесь
+/// ради старых JVM, где G1 ещё экспериментальный.
+const EXPERIMENTAL_XX: &[&str] = &[
+    "G1NewSizePercent",
+    "G1MaxNewSizePercent",
+    "G1MixedGCLiveThresholdPercent",
+    "UseG1GC",
+    "UseZGC",
+    "UseShenandoahGC",
+    "UseEpsilonGC",
+    "EnableJVMCI",
+    "UseJVMCICompiler",
+    "EagerJVMCI",
+    "UseJVMCINativeLibrary",
+    "UseFastUnorderedTimeStamps",
+    "UseCriticalJavaThreadPriority",
+    "UseVectorCmov",
+    "TrimNativeHeapInterval",
+];
+
+const UNLOCK_EXPERIMENTAL: &str = "-XX:+UnlockExperimentalVMOptions";
+
+fn xx_name(arg: &str) -> Option<&str> {
+    let rest = arg.strip_prefix("-XX:")?;
+    let rest = rest.strip_prefix('+').or_else(|| rest.strip_prefix('-')).unwrap_or(rest);
+    Some(rest.split('=').next().unwrap_or(rest))
+}
+
+/// Выбор сборщика мусора: два сразу JVM не принимает («Multiple garbage
+/// collectors selected»).
+fn gc_choice(arg: &str) -> bool {
+    arg.starts_with("-XX:+Use")
+        && matches!(
+            xx_name(arg),
+            Some("UseG1GC" | "UseZGC" | "UseShenandoahGC" | "UseParallelGC" | "UseSerialGC" | "UseConcMarkSweepGC" | "UseEpsilonGC")
+        )
+}
+
+/// Опции запускатора, которых нет в старой Java: с ними JVM выходит сразу с
+/// «Unrecognized option». (опция, первая Java, где она есть)
+const LAUNCHER_OPTIONS_SINCE: &[(&str, u32)] = &[
+    ("--sun-misc-unsafe-memory-access", 23),
+    ("--enable-native-access", 17),
+];
+
+/// Последняя правка аргументов JVM перед запуском. Флаги собираются из
+/// четырёх мест (описание версии, автоподбор, буст, свои аргументы игрока), и
+/// каждое по отдельности верно, а вместе они роняли JVM до окна:
+/// - экспериментальная опция без разблокировки перед ней;
+/// - два сборщика мусора (свой игрока и наш G1) — остаётся последний, то есть
+///   выбор игрока: его аргументы стоят правее наших;
+/// - опции запускатора новее выбранной Java.
+///
+/// Незнакомые этой Java -XX (UseBiasedLocking на Java 21 и т.п.) JVM с
+/// -XX:+IgnoreUnrecognizedVMOptions пропускает вместо выхода.
+pub fn fit_jvm_args(args: &mut Vec<String>, java_major: Option<u32>) {
+    if let Some(major) = java_major {
+        args.retain(|a| {
+            let name = a.split('=').next().unwrap_or(a);
+            !LAUNCHER_OPTIONS_SINCE.iter().any(|(opt, since)| name == *opt && major < *since)
+        });
+    }
+    let gcs: Vec<usize> = (0..args.len()).filter(|&i| gc_choice(&args[i])).collect();
+    if let Some((&keep, rest)) = gcs.split_last() {
+        let keep_name = xx_name(&args[keep]).map(str::to_string);
+        let drop: Vec<usize> = rest
+            .iter()
+            .copied()
+            .filter(|&i| xx_name(&args[i]).map(str::to_string) != keep_name)
+            .collect();
+        for i in drop.into_iter().rev() {
+            args.remove(i);
+        }
+    }
+    args.retain(|a| a != "-XX:-UnlockExperimentalVMOptions");
+    let first_exp = args
+        .iter()
+        .position(|a| xx_name(a).is_some_and(|n| EXPERIMENTAL_XX.contains(&n)));
+    if let Some(i) = first_exp {
+        if !args[..i].iter().any(|a| a == UNLOCK_EXPERIMENTAL) {
+            args.retain(|a| a != UNLOCK_EXPERIMENTAL);
+            let i = args
+                .iter()
+                .position(|a| xx_name(a).is_some_and(|n| EXPERIMENTAL_XX.contains(&n)))
+                .unwrap_or(0);
+            args.insert(i, UNLOCK_EXPERIMENTAL.to_string());
+        }
+    }
+    if !args.iter().any(|a| a.contains("IgnoreUnrecognizedVMOptions")) {
+        let at = usize::from(!args.is_empty() && args[0].starts_with("-Xmx"));
+        args.insert(at, "-XX:+IgnoreUnrecognizedVMOptions".into());
+    }
+}
+
 /// Memory for a launch: an explicit request wins, otherwise the tuned value.
 pub fn tuned_ram_mb(profile: &str, requested: u32) -> u32 {
     if requested > 0 {
@@ -233,6 +355,15 @@ pub fn profile_content_bytes(profile: &str) -> u64 {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_16gb_laptop_never_gives_the_heap_more_than_half() {
+        assert_eq!(super::safe_ceiling_mb(16 * 1024, 12 * 1024), 8 * 1024);
+        assert_eq!(super::safe_ceiling_mb(32 * 1024, 0), 26 * 1024);
+        // Свободно мало — куча под то, что есть, но не меньше минимума.
+        assert!(super::safe_ceiling_mb(16 * 1024, 5 * 1024) <= 5 * 1024);
+        assert_eq!(super::safe_ceiling_mb(8 * 1024, 1024), super::MIN_HEAP_MB as u64);
+    }
+
     use super::*;
 
     /// mods x machine -> heap. Every row is a machine we actually see in
@@ -244,12 +375,12 @@ mod tests {
             (0, false, 8192, 2048, "ваниль на 8 ГБ: больше двух гигабайт игре не нужно"),
             (40, false, 16384, 4096, "средняя сборка на 16 ГБ получает свои 4 ГБ"),
             (200, false, 32768, 8192, "большая сборка на 32 ГБ — 8 ГБ"),
-            (200, false, 8192, 6144, "та же сборка на 8 ГБ ужимается до четверти под систему"),
+            (200, false, 8192, 4096, "та же сборка на 8 ГБ — не больше половины ОЗУ: Java сверх кучи и встройка тоже едят память"),
             (40, true, 16384, 5120, "шейдеры добавляют гигабайт"),
             (0, false, 4096, 2048, "на 4 ГБ ваниль умещается в половину машины"),
         ];
         for (mods, shaders, total, want, why) in cases {
-            let (got, _) = fit_to_machine(wanted_mb(mods, shaders), total);
+            let (got, _) = fit_to_machine_with(wanted_mb(mods, shaders), total, 0);
             assert_eq!(
                 got, want,
                 "{mods} модов на машине с {total} МБ должны дать {want} МБ кучи, получили {got}. \
@@ -261,7 +392,7 @@ mod tests {
     #[test]
     fn machine_reserve_is_never_eaten() {
         for total in [2048u64, 4096, 6144, 8192, 16384, 65536] {
-            let (heap, _) = fit_to_machine(wanted_mb(300, true), total);
+            let (heap, _) = fit_to_machine_with(wanted_mb(300, true), total, 0);
             assert!(
                 (heap as u64) <= total.saturating_sub(reserved_mb(total)).max(1024),
                 "куча {heap} МБ на машине с {total} МБ не оставляет системе {} МБ — \
@@ -289,6 +420,49 @@ mod tests {
             !kept.iter().any(|f| f.starts_with("-XX:MaxGCPauseMillis")),
             "свой -XX:MaxGCPauseMillis игрока должен остаться единственным",
         );
+    }
+
+    fn v(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn experimental_options_get_unlocked_before_them() {
+        let mut a = v(&["-Xmx4096M", "-XX:G1NewSizePercent=30", "-XX:+UseG1GC", "net.minecraft.client.main.Main"]);
+        fit_jvm_args(&mut a, Some(21));
+        let unlock = a.iter().position(|x| x == UNLOCK_EXPERIMENTAL).expect("разблокировка добавлена");
+        let exp = a.iter().position(|x| x.starts_with("-XX:G1NewSizePercent")).unwrap();
+        assert!(unlock < exp, "разблокировка стоит перед опцией, иначе JVM всё равно выходит: {a:?}");
+
+        let mut late = v(&["-Xmx2G", "-XX:G1NewSizePercent=30", UNLOCK_EXPERIMENTAL, "Main"]);
+        fit_jvm_args(&mut late, None);
+        assert_eq!(late.iter().filter(|x| *x == UNLOCK_EXPERIMENTAL).count(), 1, "разблокировка одна: {late:?}");
+        assert!(late.iter().position(|x| x == UNLOCK_EXPERIMENTAL) < late.iter().position(|x| x.starts_with("-XX:G1New")));
+
+        let mut ok = v(&["-Xmx2G", UNLOCK_EXPERIMENTAL, "-XX:G1NewSizePercent=30", "Main"]);
+        fit_jvm_args(&mut ok, None);
+        assert_eq!(ok.iter().filter(|x| *x == UNLOCK_EXPERIMENTAL).count(), 1, "правильный порядок не трогаем");
+    }
+
+    #[test]
+    fn only_the_players_gc_survives() {
+        let mut a = v(&["-Xmx4G", "-XX:+UseG1GC", "-XX:MaxGCPauseMillis=50", "-XX:+UseZGC", "Main"]);
+        fit_jvm_args(&mut a, Some(21));
+        assert!(!a.contains(&"-XX:+UseG1GC".to_string()), "наш G1 уступает выбору игрока: {a:?}");
+        assert!(a.contains(&"-XX:+UseZGC".to_string()));
+    }
+
+    #[test]
+    fn launcher_options_newer_than_java_are_dropped() {
+        let mut a = v(&["-Xmx4G", "--sun-misc-unsafe-memory-access=allow", "--enable-native-access=ALL-UNNAMED", "Main"]);
+        let mut on25 = a.clone();
+        fit_jvm_args(&mut on25, Some(25));
+        assert!(on25.iter().any(|x| x.starts_with("--sun-misc")), "Java 25 опцию знает");
+        fit_jvm_args(&mut a, Some(21));
+        assert!(!a.iter().any(|x| x.starts_with("--sun-misc")), "на Java 21 — «Unrecognized option»: {a:?}");
+        assert!(a.iter().any(|x| x.starts_with("--enable-native-access")), "с Java 17 она есть");
+        assert!(a.contains(&"-XX:+IgnoreUnrecognizedVMOptions".to_string()));
+        assert_eq!(a[0], "-Xmx4G", "память остаётся первой");
     }
 
     #[test]

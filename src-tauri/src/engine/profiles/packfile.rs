@@ -54,19 +54,23 @@ async fn from_mrpack(app: &AppHandle, ex: &Path, name_hint: &str) -> Result<Prof
             }
         };
         let mut done = false;
+        let mut why = String::from("нет разрешённой ссылки на файл");
         if let Some(urls) = f["downloads"].as_array() {
             for u in urls {
                 if let Some(u) = u.as_str().filter(|u| pack_download_allowed(u)) {
-                    if download_verify(u, &dest, Some(&sha1), size).await.is_ok() {
-                        done = true;
-                        break;
+                    match download_verify(u, &dest, Some(&sha1), size).await {
+                        Ok(()) => {
+                            done = true;
+                            break;
+                        }
+                        Err(e) => why = e,
                     }
                 }
             }
         }
         if !done {
             let _ = std::fs::remove_dir_all(&pdir);
-            return Err(format!("Не удалось скачать файл сборки: {}", path));
+            return Err(format!("Не удалось скачать файл сборки: {} ({})", path, why));
         }
         emit(app, "mod", 20.0 + 60.0 * (i as f32 / total as f32), &format!("Файлы сборки {}/{}", i + 1, total));
     }

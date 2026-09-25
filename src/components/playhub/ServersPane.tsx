@@ -9,6 +9,7 @@ import type { HostServer } from '../../screens/Hosting'
 import type { LobbyMode } from '../../state/lobbyMode'
 import { HubSearch, MyServers } from './HubSearch'
 import { blockArt } from './data'
+import { trackFailure } from '../../lib/telemetry'
 
 /**
  * Вкладка «Мои серверы» хаба: свои серверы хостинга Millida (статус, «Зайти»,
@@ -104,6 +105,7 @@ export function ServersPane({ on, onPlay, part }: { on: boolean; onPlay: (m: Lob
       setList(arr.length ? arr : 'none')
     } catch (e) {
       console.warn('[hub] servers/me', e)
+      trackFailure('servers', e, { step: 'my_servers' })
       setList((l) => (Array.isArray(l) ? l : 'error'))
     }
   }

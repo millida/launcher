@@ -240,18 +240,29 @@ pub fn write_json_quiet<T: serde::Serialize + ?Sized>(path: &std::path::Path, va
 pub fn write_bytes_atomic(path: &std::path::Path, bytes: &[u8]) -> Result<(), String> {
     static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(dir).map_err(|e| super::io_fail("Запись файла", dir, &e))?;
     }
     let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let mut tmp_name = path.file_name().map(|n| n.to_os_string()).unwrap_or_default();
     tmp_name.push(format!(".{}.{}.tmp", std::process::id(), seq));
     let tmp = path.with_file_name(tmp_name);
-    std::fs::write(&tmp, bytes).map_err(|e| e.to_string())?;
-    match std::fs::rename(&tmp, path) {
-        Ok(()) => Ok(()),
-        Err(e) => {
-            let _ = std::fs::remove_file(&tmp);
-            Err(e.to_string())
+    std::fs::write(&tmp, bytes).map_err(|e| super::io_fail("Запись файла", &tmp, &e))?;
+    // На Windows замена отказывает, пока файл читает антивирус или игра:
+    // короткие повторы вместо голого «Отказано в доступе».
+    let mut pauses = [50u64, 200, 500].into_iter();
+    loop {
+        match std::fs::rename(&tmp, path) {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                if super::is_locked_error(&e) {
+                    if let Some(ms) = pauses.next() {
+                        std::thread::sleep(std::time::Duration::from_millis(ms));
+                        continue;
+                    }
+                }
+                let _ = std::fs::remove_file(&tmp);
+                return Err(super::io_fail("Запись файла", path, &e));
+            }
         }
     }
 }
