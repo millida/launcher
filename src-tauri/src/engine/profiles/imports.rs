@@ -284,17 +284,40 @@ pub(crate) fn base_version(id: &str, inherits: &str) -> String {
     snapshot_like(id).or_else(|| mc_token(id)).unwrap_or_default()
 }
 
-/// The longest `1.N` / `1.N.M` token in free text.
+const FIRST_YEAR_RELEASE: u32 = 26;
+
+/// Year-based releases can not be newer than next year. The bound keeps loader
+/// builds that share the shape out: «1.19.2-forge-43.2.14» must read as 1.19.2.
+fn newest_year_release() -> u32 {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let year = (1970 + secs / 31_556_952) % 100;
+    (year as u32 + 1).max(FIRST_YEAR_RELEASE + 1)
+}
+
+/// A release number of the game: the old `1.N` / `1.N.M` or the year-based
+/// `26.N` / `26.N.M` that followed 1.21.11.
+pub(crate) fn is_release_version(s: &str) -> bool {
+    let nums: Vec<&str> = s.split('.').collect();
+    if !(2..=3).contains(&nums.len()) || !nums.iter().all(|n| (1..=2).contains(&n.len()) && n.bytes().all(|b| b.is_ascii_digit())) {
+        return false;
+    }
+    if nums[0] == "1" {
+        return true;
+    }
+    let year = nums[0].parse::<u32>().unwrap_or(0);
+    let drop = nums[1].parse::<u32>().unwrap_or(0);
+    (FIRST_YEAR_RELEASE..=newest_year_release()).contains(&year) && drop >= 1
+}
+
+/// The longest release number in free text.
 fn mc_token(s: &str) -> Option<String> {
     let mut best: Option<String> = None;
     for part in s.split(|c: char| !(c.is_ascii_digit() || c == '.')) {
         let part = part.trim_matches('.');
-        let nums: Vec<&str> = part.split('.').collect();
-        let shaped = nums.len() >= 2
-            && nums.len() <= 3
-            && nums[0] == "1"
-            && nums.iter().all(|n| !n.is_empty() && n.len() <= 2);
-        if shaped && best.as_ref().is_none_or(|b| part.len() > b.len()) {
+        if is_release_version(part) && best.as_ref().is_none_or(|b| part.len() > b.len()) {
             best = Some(part.to_string());
         }
     }
@@ -344,13 +367,9 @@ fn version_from_meta(meta: &Value) -> Option<String> {
                     return Some(v);
                 }
             }
-            // NeoForge numbers itself after the game: 20.4.x is 1.20.4, 21.0.x is 1.21
             ("net.neoforged", "neoforge") => {
-                let mut n = ver.split(['.', '-']);
-                if let (Some(major), Some(minor)) = (n.next(), n.next()) {
-                    if major.parse::<u32>().is_ok() && minor.parse::<u32>().is_ok() {
-                        return Some(if minor == "0" { format!("1.{}", major) } else { format!("1.{}.{}", major, minor) });
-                    }
+                if let Some(v) = neoforge_game_version(ver) {
+                    return Some(v);
                 }
             }
             _ => {}
@@ -737,6 +756,43 @@ mod tests {
         assert!(!version_is_plausible("NightfallCraft - The Casket of Reveries The Casket of Reveries -2.2.9.7"));
         assert!(!version_is_plausible("Arcania Origins Arcania Origins"));
         assert!(!version_is_plausible("arcaniaaa"));
+    }
+
+    /// вход -> вердикт. После 1.21.11 игра нумеруется по годам (26.1, 26.2).
+    /// В 2.0.0 проверка версии знала только «1.N», и каждый запуск сборки на
+    /// 26.x падал с «Сборка … не знает свою версию Minecraft» — 4,6 тыс.
+    /// запусков у сотни игроков за три дня.
+    #[test]
+    fn year_based_game_versions_are_versions() {
+        let plausible: [(&str, bool, &str); 10] = [
+            ("26.2", true, "Fabulously Optimized, OptiPVP — релиз по годам"),
+            ("26.1.2", true, "патч по годам"),
+            ("26.3", true, "свежий дроп"),
+            ("26.1-snapshot-7", true, "снапшот новой нумерации"),
+            ("26.2-rc-1", true, "кандидат новой нумерации"),
+            ("1.21.11", true, "старая нумерация не потерялась"),
+            ("26.0", false, "дропов с нулём не бывает — это сборка загрузчика"),
+            ("15.0.0", false, "номер самой сборки, а не игры"),
+            ("47.2.0", false, "сборка Forge"),
+            ("Fabulously Optimized", false, "заголовок, а не версия"),
+        ];
+        for (v, want, why) in plausible {
+            assert_eq!(version_is_plausible(v), want, "{}: {}", v, why);
+        }
+        let parsed: [(&str, &str, &str); 7] = [
+            ("OptiPVP 26.2 OpenGL 26.2-OpenGL-1.1", "26.2", "версия игры в заголовке сборки"),
+            ("fabric-loader-0.18.1-26.2", "26.2", "папка Fabric на новой версии"),
+            ("26.1.2-forge-62.0.3", "26.1.2", "папка Forge на новой версии"),
+            ("1.19.2-forge-43.2.14", "1.19.2", "сборка Forge длиннее версии игры, но не версия"),
+            ("1.16.5-forge-36.2.39", "1.16.5", "сборка Forge 36.x не читается как год"),
+            ("1.20-forge-46.0.14", "1.20", "короткая версия игры рядом с длинной сборкой"),
+            ("Fabulously Optimized 15.0.0-alpha.3", "", "номер сборки — не версия игры"),
+        ];
+        for (id, want, why) in parsed {
+            assert_eq!(base_version(id, ""), want, "{}: {}", id, why);
+        }
+        let neo = serde_json::json!({ "libraries": [{ "name": "net.neoforged:neoforge:26.2.0.83" }] });
+        assert_eq!(game_version_of("My Pack", &neo), "26.2", "NeoForge по годам, а не 1.26.2");
     }
 
     /// Уже импортированные сборки чинятся по именам модов: папки TLauncher

@@ -11,11 +11,10 @@ import '../styles/pixel/feedback.css'
 /**
  * Отзыв о лаунчере (владелец 24.09.2026, 16:41): зелёный «жучок» в верхней
  * полосе лобби — оценить лаунчер звёздами или сообщить о баге.
- * Отзыв со входом идёт в POST /launcher/feedback: сервер кладёт его в
- * баг-репорты и сам решает, давать ли осколки (раз в неделю). Показываем
- * ровно то, что ответил сервер. Пока ручки нет на проде (404) или игрок без
- * аккаунта Millida — отзыв уходит в POST /bug-reports, как раньше, без награды.
- * Баг-репорт — всегда POST /bug-reports.
+ * Отзыв идёт в POST /launcher/feedback: сервер кладёт его в оценки сервисов,
+ * а не в баг-репорты, и сам решает, давать ли осколки (раз в неделю).
+ * Показываем ровно то, что ответил сервер. Отзыв привязан к аккаунту Millida:
+ * без входа его некуда положить. Баг-репорт — всегда POST /bug-reports.
  */
 
 type Mode = 'pick' | 'rate' | 'bug'
@@ -119,18 +118,12 @@ async function send(body: Record<string, unknown>) {
   await api('/bug-reports', { method: 'POST', body: JSON.stringify({ service: 'launcher', ...body }) })
 }
 
-/** Отзыв с наградой; null — ручки нет или нет входа, отзыв надо слать по-старому. */
-async function sendFeedback(text: string, stars: number): Promise<FeedbackAnswer | null> {
-  if (!hasMillidaAccount()) return null
-  try {
-    return await api<FeedbackAnswer>('/launcher/feedback', {
-      method: 'POST',
-      body: JSON.stringify(stars ? { text, stars } : { text }),
-    })
-  } catch (e) {
-    if (isMissing(e)) return null
-    throw e
-  }
+async function sendFeedback(text: string, stars: number): Promise<FeedbackAnswer> {
+  if (!hasMillidaAccount()) throw new Error('Отзыв привязывается к аккаунту Millida — войди в него и отправь ещё раз')
+  return api<FeedbackAnswer>('/launcher/feedback', {
+    method: 'POST',
+    body: JSON.stringify(stars ? { text, stars } : { text }),
+  })
 }
 
 /**
@@ -156,24 +149,13 @@ export function FeedbackModal({ onClose, about, kind: startKind }: { onClose: ()
       if (mode === 'rate') {
         const t = text.trim()
         const answer = await sendFeedback(t, stars)
-        if (answer) {
-          applyStatus(false, answer.nextAt)
-          showReward({
-            level: 'mid',
-            kicker: 'Спасибо за отзыв',
-            title: answer.granted ? '+' + answer.shards + ' осколков' : 'Отзыв принят',
-            sub: answer.granted ? 'Мы читаем каждый' : 'Награда раз в неделю',
-          })
-        } else {
-          await send({
-            category: 'other',
-            severity: 'low',
-            title: 'Отзыв о лаунчере' + (stars ? ' · ' + stars + '/5' : ''),
-            description: (stars ? 'Оценка: ' + stars + ' из 5. ' : '') + t,
-          })
-          markFeedback()
-          showReward({ level: 'mid', kicker: 'Спасибо за отзыв', title: 'Отзыв принят', sub: 'Мы читаем каждый' })
-        }
+        applyStatus(false, answer.nextAt)
+        showReward({
+          level: 'mid',
+          kicker: 'Спасибо за отзыв',
+          title: answer.granted ? '+' + answer.shards + ' осколков' : 'Отзыв принят',
+          sub: answer.granted ? 'Мы читаем каждый' : 'Награда раз в неделю',
+        })
       } else {
         const t = text.trim()
         await send({
