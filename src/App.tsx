@@ -45,7 +45,7 @@ import { Installs } from './components/Installs'
 import { PackDrop } from './components/PackDrop'
 import { initInstalls } from './state/installs'
 import { initCalls } from './state/call'
-import { overlayNotify } from './ipc/commands'
+import { loadProfileSettings, overlayNotify } from './ipc/commands'
 import { ServerDetail } from './components/ServerDetail'
 import { pushChatNotify } from './state/chatNotify'
 import { notifyAudible, notifyShown } from './state/notifyPrefs'
@@ -474,7 +474,17 @@ export function App() {
     })
     let unCrash: UnlistenFn | null = null
     void listenGameCrash((info) => {
-      track('game_crash', { code: String((info as { reason?: string })?.reason ?? 'crash').slice(0, 120) }, { ok: false })
+      const code = String((info as { reason?: string })?.reason ?? 'crash').slice(0, 120)
+      // Слаг сборки в событии — чтобы «здоровье сборки» знало, чья это
+      // ошибка, а не угадывало по последнему запуску на устройстве.
+      const crashed = info && info.profile ? info.profile : ''
+      void (crashed ? loadProfileSettings(crashed).catch(() => null) : Promise.resolve(null)).then((s) => {
+        const data: Record<string, string> = { code }
+        const pack = (s?.catalogPackSlug || '').trim()
+        if (pack) data.pack = pack
+        if (s?.modpackSlug) data.modpack = s.modpackSlug
+        track('game_crash', data, { ok: false })
+      })
       useCrash.getState().show(info)
       if (info && info.profile) {
         void reportGameCrash(info, {

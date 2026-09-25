@@ -50,6 +50,14 @@ pub struct PackLaunch {
     pub needs_token: bool,
 }
 
+
+/// Флаги, которые общий фильтр JVM режет (игроку их ставить нельзя), но
+/// которые нужны конкретным сборкам каталога — строго с этим значением.
+/// Загрузчик RetroFuturaBootstrap (lwjgl3ify, 1.7.10 на Java 21): его класс
+/// лежит в jar-ах самой сборки, а моды сборки и так исполняют свой код, так
+/// что лишнего доступа он не даёт.
+const PACK_JVM_EXACT: &[&str] = &["-Djava.system.class.loader=com.gtnewhorizons.retrofuturabootstrap.RfbSystemClassLoader"];
+
 fn text(v: &Value, key: &str) -> String {
     v[key].as_str().unwrap_or("").trim().to_string()
 }
@@ -154,7 +162,7 @@ pub fn parse_pack_launch(v: &Value) -> Option<PackLaunch> {
         jvm_args: list(v, "jvmArgs")
             .into_iter()
             .chain(platform_jvm)
-            .filter(|a| jvm_arg_allowed(a))
+            .filter(|a| jvm_arg_allowed(a) || PACK_JVM_EXACT.contains(&a.as_str()))
             .collect(),
         game_args,
         vanilla_assets,
@@ -374,7 +382,7 @@ pub async fn pack_launch_token(slug: &str) -> Result<Vec<String>, String> {
         .as_array()
         .map(|a| a.iter().filter_map(|x| x.as_str()).map(str::to_string).collect())
         .unwrap_or_default();
-    let kept: Vec<String> = args.into_iter().filter(|a| jvm_arg_allowed(a)).collect();
+    let kept: Vec<String> = args.into_iter().filter(|a| jvm_arg_allowed(a) || PACK_JVM_EXACT.contains(&a.as_str())).collect();
     if kept.is_empty() {
         return Err("Сервер не выдал ключ запуска сборки".into());
     }

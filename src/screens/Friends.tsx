@@ -38,8 +38,8 @@ interface Blocked {
   user?: { id: string; nickname?: string; displayName?: string; avatarUrl?: string | null } | null
 }
 
-/// «Не в сети» длиннее этого — свёрнут: те, кто сейчас не ответит, не должны
-/// выталкивать играющих за экран.
+/// «Не в сети» длиннее этого можно свернуть вручную; по умолчанию список
+/// открыт (владелец 25.09.2026: «не должны быть скрыты автоматически»).
 const OFFLINE_FOLD = 8
 
 function Skeleton() {
@@ -67,7 +67,7 @@ export function Friends({ on }: { on: boolean }) {
   const [tab, setTabState] = useState<FriendsTab>(loadTab)
   const [q, setQ] = useState('')
   const [view, setView] = useState<'now' | 'hours'>('now')
-  const [showOffline, setShowOffline] = useState(false)
+  const [showOffline, setShowOffline] = useState(true)
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const [blocked, setBlocked] = useState<Blocked[]>([])
   const [ready, setReady] = useState(false)

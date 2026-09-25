@@ -669,7 +669,7 @@ pub async fn install_loader_with_java(
             if found.is_none() {
                 let java_pre = match java_override.clone() {
                     Some(j) => j,
-                    None => ensure_java(app, java_major_of(&vjson, &vid)).await?,
+                    None => ensure_java_for(app, java_major_of(&vjson, &vid), &vid).await?,
                 };
                 // The installer refuses to run without launcher_profiles.json.
                 let lp = root.join("launcher_profiles.json");
@@ -796,7 +796,7 @@ pub async fn install_loader_with_java(
 
     let java = match java_override {
         Some(j) => j,
-        None => ensure_java(app, java_major_of(&vjson, &vid)).await?,
+        None => ensure_java_for(app, java_major_of(&vjson, &vid), &vid).await?,
     };
 
     Ok((merged, main_class, classpath, java))

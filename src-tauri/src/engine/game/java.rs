@@ -229,6 +229,67 @@ pub(crate) async fn ensure_java(app: &AppHandle, major: u64) -> Result<PathBuf, 
     install_managed_java(app, major).await
 }
 
+/// Версии до 1.19 везут нативные библиотеки LWJGL только под Intel: на Mac с
+/// M-чипом JVM под arm64 падает на `liblwjgl.dylib` ещё до окна (владелец
+/// 25.09.2026: 1.12.2 не запускалась). Как Prism и MultiMC, такие версии
+/// идут на Java для Intel через Rosetta 2.
+pub(crate) fn needs_rosetta(version: &str) -> bool {
+    if !(cfg!(target_os = "macos") && cfg!(target_arch = "aarch64")) {
+        return false;
+    }
+    legacy_natives_version(version)
+}
+
+/// Версия без arm64-нативов для macOS: всё до 1.19 и старые альфы/беты.
+pub(crate) fn legacy_natives_version(version: &str) -> bool {
+    let v = version.trim();
+    if let Some(rest) = v.strip_prefix("1.") {
+        let minor: u32 = rest.split(|c: char| !c.is_ascii_digit()).next().and_then(|n| n.parse().ok()).unwrap_or(99);
+        return minor < 19;
+    }
+    ["a1.", "b1.", "c0.", "rd-", "inf-"].iter().any(|p| v.starts_with(p))
+}
+
+/// Rosetta стоит, если есть её рантайм. `arch -x86_64 /usr/bin/true` не годится:
+/// системные утилиты в новых macOS только под arm64 и дают «Bad CPU type».
+fn rosetta_ready() -> bool {
+    std::path::Path::new("/Library/Apple/usr/libexec/oah/libRosettaRuntime").exists()
+}
+
+/// Java под нужную версию игры: на Mac с M-чипом для старых версий — Intel-сборка
+/// через Rosetta (ставится системным окном, если её нет).
+pub(crate) async fn ensure_java_for(app: &AppHandle, major: u64, version: &str) -> Result<PathBuf, String> {
+    if !needs_rosetta(version) {
+        return ensure_java(app, major).await;
+    }
+    if !rosetta_ready() {
+        emit(app, "java", 0.0, "Для этой версии нужна Rosetta — подтверди установку");
+        let _ = quiet(&mut Command::new("/usr/bin/osascript"))
+            .args(["-e", "do shell script \"/usr/sbin/softwareupdate --install-rosetta --agree-to-license\" with administrator privileges"])
+            .status();
+        if !rosetta_ready() {
+            return Err("Версии до 1.19 на Mac с M-чипом запускаются через Rosetta. Установи её и запусти ещё раз.".into());
+        }
+    }
+    let major = if major == 16 { 17 } else { major };
+    let jdir = data_dir().join("java").join(format!("{}-x64", major));
+    if java_usable(&jdir) {
+        return Ok(java_bin(&jdir));
+    }
+    let _ = std::fs::remove_dir_all(&jdir);
+    let staging = data_dir().join("java").join(format!(".{}-x64-new", major));
+    let _ = std::fs::remove_dir_all(&staging);
+    if let Err(e) = install_java_arch(app, major, &staging, Some("x64")).await {
+        let _ = std::fs::remove_dir_all(&staging);
+        return Err(e);
+    }
+    std::fs::rename(&staging, &jdir).map_err(|e| {
+        let _ = std::fs::remove_dir_all(&staging);
+        format!("Не удалось установить Java: {}", e)
+    })?;
+    if java_usable(&jdir) { Ok(java_bin(&jdir)) } else { Err("Java не найдена после распаковки".into()) }
+}
+
 /// Fetches a major on demand. The webview may only name a version from the
 /// published list: the number ends up in the Adoptium URL and in a path.
 pub async fn download_java_runtime(app: &AppHandle, major: u64) -> Result<String, String> {
@@ -291,7 +352,11 @@ fn azul_package(detail: &serde_json::Value) -> Option<JavaPackage> {
     if !is_sha256(&sha256) {
         return None;
     }
-    Some(JavaPackage { url, sha256, size: detail["size"].as_u64() })
+    // Azul отдаёт размер, округлённый до сотни байт (40158500 при реальных
+    // 40158493), и точная сверка отбрасывала целый архив — Java 8 на Mac arm64
+    // есть только у Azul, и 1.12.2 не запускалась (владелец 25.09.2026).
+    // Целостность и так гарантирует sha256.
+    Some(JavaPackage { url, sha256, size: None })
 }
 
 struct Target {
@@ -301,6 +366,10 @@ struct Target {
 }
 
 fn target() -> Target {
+    target_arch(None)
+}
+
+fn target_arch(force: Option<&'static str>) -> Target {
     let (os, ext) = if cfg!(target_os = "macos") {
         ("mac", "tar.gz")
     } else if cfg!(target_os = "windows") {
@@ -308,7 +377,7 @@ fn target() -> Target {
     } else {
         ("linux", "tar.gz")
     };
-    let arch = if cfg!(target_arch = "aarch64") { "aarch64" } else { "x64" };
+    let arch = force.unwrap_or(if cfg!(target_arch = "aarch64") { "aarch64" } else { "x64" });
     Target { os, ext, arch }
 }
 
@@ -397,10 +466,14 @@ fn forget_java_metadata(major: u64, t: &Target) {
 }
 
 async fn install_java(app: &AppHandle, major: u64, jdir: &Path) -> Result<(), String> {
+    install_java_arch(app, major, jdir, None).await
+}
+
+async fn install_java_arch(app: &AppHandle, major: u64, jdir: &Path, arch: Option<&'static str>) -> Result<(), String> {
     emit(app, "java", 0.0, &format!("Скачиваем Java {}…", major));
-    let t = target();
+    let t = target_arch(arch);
     let mut reasons = Vec::new();
-    let archive = data_dir().join(format!("java-{}.{}", major, t.ext));
+    let archive = data_dir().join(format!("java-{}-{}.{}", major, t.arch, t.ext));
     // Второй поставщик нужен не только когда молчит справочник, но и когда
     // молчит его файловое зеркало: у Adoptium это github, и «сборка не
     // запускается, ошибка на скачивании Java» приходила именно оттуда. Падение
@@ -785,6 +858,16 @@ mod tests {
         let p = d.join(name);
         std::fs::write(&p, b"x").unwrap();
         p
+    }
+
+    #[test]
+    fn legacy_versions_need_intel_natives_on_apple_silicon() {
+        for v in ["1.12.2", "1.8.9", "1.7.10", "1.16.5", "1.18.2", "b1.7.3"] {
+            assert!(legacy_natives_version(v), "{} — нативы LWJGL только под Intel", v);
+        }
+        for v in ["1.19", "1.20.1", "1.21.11", "26.3", "24w14a"] {
+            assert!(!legacy_natives_version(v), "{} — есть arm64-нативы", v);
+        }
     }
 
     #[test]
