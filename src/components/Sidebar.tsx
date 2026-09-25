@@ -182,18 +182,20 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
           {/* Друзья — первыми, аккаунт за ними: друзей смотрят постоянно,
               аккаунт меняют редко (владелец 24.09.2026, 07:47). Лица тех, кто в сети, внахлёст (как пати в Fortnite):
               живые головы вместо контурной иконки. Никого — серые Стив и Алекс. */}
-          <button className="lb-btn lb-friends" data-sound="nav" data-track="nav_friends" aria-label={'Друзья, в сети ' + online} onClick={() => onNav('friends')}>
-            <span className={'lb-heads' + (online ? '' : ' off')} aria-hidden="true">
-              {(online ? onlineList.slice(0, 3) : [{ userId: 's', nickname: 'MHF_Steve' }, { userId: 'a', nickname: 'MHF_Alex' }]).map((f) => (
-                <Head key={f.userId} nick={f.nickname || 'MHF_Steve'} src={'avatarUrl' in f ? f.avatarUrl : undefined} size={36} className="lb-head" />
-              ))}
-            </span>
-            <span className="lb-txt">
-              <b>{online}</b>
-              <i>в сети</i>
-            </span>
+          <span className="lb-badge-wrap">
+            <button className="lb-btn lb-friends" data-sound="nav" data-track="nav_friends" aria-label={'Друзья, в сети ' + online} onClick={() => onNav('friends')}>
+              <span className={'lb-heads' + (online ? '' : ' off')} aria-hidden="true">
+                {(online ? onlineList.slice(0, 3) : [{ userId: 's', nickname: 'MHF_Steve' }, { userId: 'a', nickname: 'MHF_Alex' }]).map((f) => (
+                  <Head key={f.userId} nick={f.nickname || 'MHF_Steve'} src={'avatarUrl' in f ? f.avatarUrl : undefined} size={36} className="lb-head" />
+                ))}
+              </span>
+              <span className="lb-txt">
+                <b>{online}</b>
+                <i>в сети</i>
+              </span>
+            </button>
             {badge(reqIn.length)}
-          </button>
+          </span>
           <div
             className="lb-btn lb-acc account"
             role="button"
@@ -220,17 +222,19 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
           </div>
           {/* Звук и музыка — квадратами перед чатом (владелец 24.09.2026, 13:57). */}
           <LobbySoundBtns />
-          <button
-            className="lb-btn lb-msg"
-            data-sound="nav"
-            data-track="nav_messages"
-            aria-label={unread ? 'Сообщения, непрочитанных ' + unread : 'Сообщения'}
-            onMouseEnter={() => preloadScreen('chat')}
-            onClick={openMessages}
-          >
-            <MsgPx />
+          <span className="lb-badge-wrap">
+            <button
+              className="lb-btn lb-msg"
+              data-sound="nav"
+              data-track="nav_messages"
+              aria-label={unread ? 'Сообщения, непрочитанных ' + unread : 'Сообщения'}
+              onMouseEnter={() => preloadScreen('chat')}
+              onClick={openMessages}
+            >
+              <MsgPx />
+            </button>
             {badge(unread)}
-          </button>
+          </span>
           {/* Отзыв и баги — зелёный «жучок» между чатом и настройками (16:41). */}
           <button
             className={'lb-btn lb-fb' + (fbReward ? ' has-gift' : '')}
@@ -265,21 +269,25 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
        Название раздела не пишем: у каждого экрана свой заголовок. Вкладок
        разделов нет: в другой раздел — через лобби, как в Brawl Stars. */
     <header className="topbar">
-      <button
-        className="tb-back"
-        data-screen="play"
-        data-sound="nav"
-        data-track={topBack ? 'nav_back' : 'nav_play'}
-        onClick={() => (topBack ? topBack() : onNav('play'))}
-      >
-        <Icon id="i-chev-l" />
-        {topBack ? 'Назад' : 'Лобби'}
+      {/* Счётчик — красным значком на углу кнопки, как «!» у плиток лобби
+          (владелец 25.09.2026): внутри кнопки его срезал угол. */}
+      <span className="tb-back-wrap">
+        <button
+          className="tb-back"
+          data-screen="play"
+          data-sound="nav"
+          data-track={topBack ? 'nav_back' : 'nav_play'}
+          onClick={() => (topBack ? topBack() : onNav('play'))}
+        >
+          <Icon id="i-chev-l" />
+          {topBack ? 'Назад' : 'Лобби'}
+        </button>
         {frAlerts ? (
           <span className="tb-badge" aria-label="Новые сообщения и заявки">
             {frAlerts > 99 ? '99+' : frAlerts}
           </span>
         ) : null}
-      </button>
+      </span>
       {/* «Библиотека | Ресурсы» — в самой верхней полосе, по центру
           (владелец 24.09.2026, 17:24). */}
       {screen === 'playhub' ? <HubTopTabs /> : null}

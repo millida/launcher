@@ -56,15 +56,14 @@
 
 .tb-back:hover { filter: brightness(1.06); }
 
+.tb-back-wrap { position: relative; display: inline-flex; }
 .tb-badge {
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  display: grid;
-  place-items: center;
-  font: 800 11px/1 var(--m-font);
-  color: #fff;
-  background: var(--m-danger, #e5484d);
+  position: absolute; top: -8px; right: -10px; z-index: 2; pointer-events: none;
+  min-width: 22px; height: 22px; padding: 0 5px;
+  display: grid; place-items: center;
+  font: 900 12px/1 var(--m-font); color: #fff;
+  background: #e8202a; box-shadow: inset 0 -2px 0 #9e0f16;
+  clip-path: polygon(3px 0, calc(100% - 3px) 0, calc(100% - 3px) 3px, 100% 3px, 100% calc(100% - 3px), calc(100% - 3px) calc(100% - 3px), calc(100% - 3px) 100%, 3px 100%, 3px calc(100% - 3px), 0 calc(100% - 3px), 0 3px, 3px 3px);
 }
 
 .tb-right { display: flex; align-items: center; gap: 8px; margin-left: auto; min-width: 0; }
@@ -278,3 +277,8 @@ span.tb-rubies { cursor: default; }
   .topbar .tb-tab .px-icon { display: none; }
   .ph-bar-imp .btn { font-size: 0; padding: 0 10px; }
 }
+
+/* Счётчики лобби — на углу кнопки поверх рамки, как «!» у плиток (25.09.2026).
+   Кнопка режется clip-path, поэтому значок стоит рядом с ней, а не внутри. */
+.lb-badge-wrap { position: relative; display: inline-flex; }
+.lb-badge-wrap > .lb-badge { top: -8px; right: -8px; z-index: 2; pointer-events: none; min-width: 22px; height: 22px; font-size: 12px; box-shadow: inset 0 -2px 0 #9e0f16; }

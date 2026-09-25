@@ -209,6 +209,11 @@ export async function reportCoreFailure(cmd: string, err: unknown, args?: Record
   const text = errorText(err)
   if (!text || expectedFailure(text, cmd)) return
   const raw = (key: string) => (args && typeof args[key] === 'string' ? (args[key] as string) : null)
+  // Отказ запуска сборки каталога помечается её слагом: по нему сервер
+  // собирает логи для разбора «здоровья сборки» (как у GameCrash).
+  const launched = cmd === 'launch_profile' ? raw('profile') : null
+  const settings = launched ? await loadProfileSettings(launched).catch(() => null) : null
+  const pack = (settings?.catalogPackSlug || '').trim()
   await postScoped('core', {
     source: 'LAUNCHER',
     level: 'ERROR',
@@ -219,7 +224,14 @@ export async function reportCoreFailure(cmd: string, err: unknown, args?: Record
       [raw('newName'), '<name>'],
     ]),
     stack: failureDetails(text),
-    context: compact({ command: cmd, ...safeArgs(args) }),
+    url: pack ? 'catalog-pack:' + pack : undefined,
+    context: compact({
+      command: cmd,
+      ...safeArgs(args),
+      catalogPack: pack,
+      catalogPackVersion: pack ? settings?.catalogPackVersion : null,
+      modpack: settings?.modpackSlug,
+    }),
   })
 }
 

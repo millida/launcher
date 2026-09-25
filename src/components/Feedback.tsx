@@ -133,12 +133,17 @@ async function sendFeedback(text: string, stars: number): Promise<FeedbackAnswer
   }
 }
 
-export function FeedbackModal({ onClose }: { onClose: () => void }) {
-  const [mode, setMode] = useState<Mode>('pick')
+/**
+ * `about` — открыть сразу баг-репорт про конкретную вещь (страница сборки:
+ * «Сообщить о проблеме»). Строка уходит в заголовок и описание, чтобы
+ * поддержка видела, о какой сборке речь, без вопросов игроку.
+ */
+export function FeedbackModal({ onClose, about, kind: startKind }: { onClose: () => void; about?: string; kind?: string }) {
+  const [mode, setMode] = useState<Mode>(about ? 'bug' : 'pick')
   const [stars, setStars] = useState(0)
   const [hover, setHover] = useState(0)
   const [text, setText] = useState('')
-  const [kind, setKind] = useState('crash')
+  const [kind, setKind] = useState(startKind || 'crash')
   const [busy, setBusy] = useState(false)
 
   const submit = async () => {
@@ -174,8 +179,8 @@ export function FeedbackModal({ onClose }: { onClose: () => void }) {
         await send({
           category: kind,
           severity: kind === 'crash' || kind === 'game_launch' || kind === 'auth' ? 'high' : 'medium',
-          title: (BUG_KINDS.find((k) => k[0] === kind)?.[1] || 'Баг') + ': ' + t.slice(0, 60),
-          description: t,
+          title: (BUG_KINDS.find((k) => k[0] === kind)?.[1] || 'Баг') + ': ' + (about ? about + ' — ' : '') + t.slice(0, 60),
+          description: about ? about + '\n\n' + t : t,
         })
         showToast('Баг отправлен — спасибо, разберёмся', 'ok')
       }

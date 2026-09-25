@@ -19,6 +19,7 @@ import { keyCatalogPack, keyMrModpack } from '../../lib/installKeys'
 import type { SnapshotServer } from '../../lib/snapshot'
 import { Carousel } from './Carousel'
 import { Hours } from './Hours'
+import { PackHealthLine } from './PackHealthLine'
 import { HostInstall } from './HostInstall'
 import type { HostTarget } from './HostInstall'
 import { hostingPackFor, loadHostingPacks } from './data'
@@ -415,6 +416,7 @@ export function PackPage({
 
         <aside className={'pp-buy' + (pack.premium ? ' gold' : '')}>
           {cta}
+          {slug ? <PackHealthLine slug={slug} title={full.title} /> : null}
           {hostTarget ? (
             <button className="btn md secondary pp-srv" data-sound="open" data-track="host_install" onClick={() => setHostOpen(true)}>
               <Icon id="i-server-cog" /> Поставить на хостинг

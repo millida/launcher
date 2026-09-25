@@ -1566,3 +1566,15 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
 .ph-mine-edit svg { width: 13px; height: 13px; }
 .ph-card:hover .ph-mine-edit, .ph-mine-edit:focus-visible { opacity: 1; }
 .ph-mine-edit:hover { background: var(--m-accent); color: var(--px-on-accent, #06200e); }
+
+/* ---------- здоровье сборки (25.09.2026) ---------- */
+/* «Работает · запускали 2 ч назад», ниже «97% запусков без ошибок». */
+.pp-health { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; line-height: 1.35; color: var(--m-fg-muted); }
+.pp-health-row { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
+.pp-health-row b { font-weight: 800; color: var(--m-fg); }
+.pp-health-when::before { content: '·'; margin-right: 6px; }
+.pp-health-pct b { font-weight: 800; color: var(--m-fg); }
+.pp-health.warn .ph-dot { background: var(--m-warning); }
+.pp-health.warn .pp-health-row b,
+.pp-health.warn .pp-health-pct b { color: var(--m-warning); }
+.pp-health-report { width: 100%; justify-content: center; margin-top: 4px; }

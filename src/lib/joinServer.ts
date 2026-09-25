@@ -16,6 +16,8 @@ import { pickBuildForJoin } from '../state/buildPicker'
 import { track } from './telemetry'
 import { launchAttribution } from './uiTrack'
 import { ensureVersionBuild } from './versionBuild'
+import { pickVersionForServer } from './mcVersion'
+import { ensureMcVersionList, useMcVersionList } from '../state/mcVersionList'
 
 const addrKey = (ip: string) =>
   (ip || '')
@@ -99,7 +101,10 @@ export async function buildForServer(join: JoinIntent, wanted: string[]): Promis
 
   // Подходящей чистой сборки нет — создаём её сами, без окон и вопросов.
   if (plan.kind === 'create' || (plan.kind === 'mismatch' && wanted[0])) {
-    const version = plan.kind === 'create' ? plan.version : wanted[0]!
+    // Рейтинг отдаёт версии от старой к новой («1.8 … 1.21»): берём самую
+    // новую, которую сервер заявил, и ближайший к ней релиз Mojang (владелец
+    // 25.09.2026: HypeGO создавал 1.12.2 вместо свежей).
+    const version = await newestReleaseFor(wanted)
     if (version) {
       showToast('Готовим сборку ' + version + ' под «' + join.name + '»')
       const made = await ensureVersionBuild(version, { fps: true })
@@ -198,4 +203,35 @@ export async function quickJoin(ip: string, name: string, licensed?: boolean, ve
       showLaunchError(err)
       throw err
     })
+}
+
+const verCmp = (a: string, b: string) => {
+  const pa = a.split('.').map(Number)
+  const pb = b.split('.').map(Number)
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] ?? 0) - (pb[i] ?? 0)
+    if (d) return d
+  }
+  return 0
+}
+
+/** Самая новая версия из заявленных сервером → точный релиз Mojang (линия «1.21» → 1.21.x). */
+export async function newestReleaseFor(wanted: string[]): Promise<string> {
+  const desc = [...wanted].sort((a, b) => verCmp(b, a))
+  await ensureMcVersionList().catch(() => {})
+  const rel = useMcVersionList
+    .getState()
+    .list.filter((v) => v.kind === 'release')
+    .map((v) => v.id)
+  if (!rel.length) return desc[0] || ''
+  for (const w of desc) {
+    if (rel.includes(w)) {
+      // «1.21» как линия: берём последний релиз этой линии, если сервер не назвал патч.
+      const line = rel.filter((v) => v === w || v.startsWith(w + '.'))
+      return w.split('.').length === 2 && line.length ? line.sort((a, b) => verCmp(b, a))[0]! : w
+    }
+    const line = rel.filter((v) => v.startsWith(w + '.'))
+    if (line.length) return line.sort((a, b) => verCmp(b, a))[0]!
+  }
+  return pickVersionForServer(rel, desc) || desc[0] || ''
 }
