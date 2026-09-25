@@ -46,29 +46,14 @@ pub(crate) fn split_loader_version_id(id: &str) -> Option<(String, String, Strin
     let id = id.trim();
     let low = id.to_ascii_lowercase();
     let numeric = |s: &str| !s.is_empty() && s.split('.').all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()));
-    let game_like = |s: &str| numeric(s) && s.starts_with("1.") && s.split('.').count() <= 3;
     if let Some(build) = low.strip_prefix("neoforge-") {
-        let core = build.split('-').next().unwrap_or("");
-        if !numeric(core) {
-            return None;
-        }
-        let parts: Vec<&str> = core.split('.').collect();
-        let mc = match parts.as_slice() {
-            // Year-based MC (26.1.2) keeps its number and adds the build.
-            [a, b, c, _] if a.parse::<u32>().is_ok_and(|n| n >= 26) => {
-                if *c == "0" { format!("{}.{}", a, b) } else { format!("{}.{}.{}", a, b, c) }
-            }
-            [a, b, _] => {
-                if *b == "0" { format!("1.{}", a) } else { format!("1.{}.{}", a, b) }
-            }
-            _ => return None,
-        };
+        let mc = neoforge_game_version(build)?;
         return Some((mc, "neoforge".into(), build.to_string()));
     }
     for loader in ["fabric", "quilt"] {
         if let Some(rest) = low.strip_prefix(&format!("{}-loader-", loader)) {
             let (build, mc) = rest.rsplit_once('-')?;
-            if game_like(mc) && !build.is_empty() {
+            if is_release_version(mc) && !build.is_empty() {
                 return Some((mc.to_string(), loader.into(), build.to_string()));
             }
             return None;
@@ -76,12 +61,32 @@ pub(crate) fn split_loader_version_id(id: &str) -> Option<(String, String, Strin
     }
     // "1.20.1-forge-47.4.10" and the legacy "1.7.10-Forge10.13.4.1614-1.7.10".
     let (mc, rest) = low.split_once("-forge")?;
-    if !game_like(mc) {
+    if !is_release_version(mc) {
         return None;
     }
     let rest = rest.trim_start_matches('-');
     let build = rest.strip_suffix(&format!("-{}", mc)).unwrap_or(rest);
     numeric(build).then(|| (mc.to_string(), "forge".into(), build.to_string()))
+}
+
+/// NeoForge numbers itself after the game: 21.1.x is 1.21.1, 21.0.x is 1.21.
+/// Year-based MC (26.1.2) keeps its number and adds the build: 26.1.2.109.
+pub(crate) fn neoforge_game_version(build: &str) -> Option<String> {
+    let core = build.split('-').next().unwrap_or("");
+    let parts: Vec<&str> = core.split('.').collect();
+    if parts.iter().any(|p| p.is_empty() || !p.bytes().all(|b| b.is_ascii_digit())) {
+        return None;
+    }
+    let mc = match parts.as_slice() {
+        [a, b, c, _] if a.parse::<u32>().is_ok_and(|n| n >= 26) => {
+            if *c == "0" { format!("{}.{}", a, b) } else { format!("{}.{}.{}", a, b, c) }
+        }
+        [a, b, _] => {
+            if *b == "0" { format!("1.{}", a) } else { format!("1.{}.{}", a, b) }
+        }
+        _ => return None,
+    };
+    Some(mc)
 }
 
 /// Puts the game version back into builds that hold a loader id instead.
@@ -480,7 +485,9 @@ mod tests {
     fn loader_ids_give_back_the_game_version() {
         let t = |a: &str, b: &str, c: &str| Some((a.to_string(), b.to_string(), c.to_string()));
         type Split = Option<(String, String, String)>;
-        let cases: [(&str, Split, &str); 11] = [
+        let cases: [(&str, Split, &str); 13] = [
+            ("fabric-loader-0.18.1-26.2", t("26.2", "fabric", "0.18.1"), "Fabric на MC по годам"),
+            ("26.1.2-forge-62.0.3", t("26.1.2", "forge", "62.0.3"), "Forge на MC по годам"),
             ("neoforge-21.1.233", t("1.21.1", "neoforge", "21.1.233"), "aeronautics на macOS"),
             ("neoforge-21.0.167", t("1.21", "neoforge", "21.0.167"), "ветка x.0 — это 1.21"),
             ("neoforge-20.4.237-beta", t("1.20.4", "neoforge", "20.4.237-beta"), "бета-сборка"),
