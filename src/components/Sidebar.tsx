@@ -78,11 +78,11 @@ function HubTopTabs() {
   }
   return (
     <div className="tb-tabs" role="tablist" aria-label="Во что играем">
-      <button role="tab" aria-selected={!all} className={'tb-tab' + (!all ? ' on' : '')} data-sound="nav" data-track="hub_tab_library" onClick={() => go(false)}>
-        <PxIcon name="chest" size={22} /> Библиотека
+      <button role="tab" aria-selected={!all} className={'btn md tb-tab ' + (!all ? 'primary on' : 'secondary')} data-sound="nav" data-track="hub_tab_library" onClick={() => go(false)}>
+        <PxIcon name="chest" size={30} /> Библиотека
       </button>
-      <button role="tab" aria-selected={all} className={'tb-tab' + (all ? ' on' : '')} data-sound="nav" data-track="hub_tab_resources" onClick={() => go(true)}>
-        <PxIcon name="book" size={22} /> Ресурсы
+      <button role="tab" aria-selected={all} className={'btn md tb-tab ' + (all ? 'primary on' : 'secondary')} data-sound="nav" data-track="hub_tab_resources" onClick={() => go(true)}>
+        <PxIcon name="book" size={30} /> Ресурсы
       </button>
     </div>
   )

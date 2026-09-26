@@ -132,6 +132,19 @@ interface CatalogSkin {
 
 const mojangTexture = (hash: string) => 'https://textures.minecraft.net/texture/' + hash
 
+const EARNED_BY: Record<string, string> = {
+  ACHIEVEMENT: 'Достижение',
+  HOURS: 'Часы в игре',
+  QUEST: 'Задание',
+  SEASON: 'Сезон',
+  PLUS_MONTH: 'PLUS',
+  WELCOME: 'Подарок',
+}
+
+const onSale = (c: CosmeticItem) => c.access === 'PURCHASE' && (c.priceRubies ?? 0) > 0
+
+const earnedNote = (c: CosmeticItem) => (c.access === 'PURCHASE' && !onSale(c) ? EARNED_BY[c.channel ?? ''] ?? 'Не продаётся' : undefined)
+
 
 /** Дата словами: «до 14 октября» читается, «2026-10-14T00:00:00Z» - нет. */
 
@@ -1078,7 +1091,7 @@ export function Skins({ on }: { on: boolean }) {
   }, [fitting, fitKey])
 
   /** Что из примеренного придётся купить и сколько это стоит. */
-  const fittingBill = fitting.filter((c) => cosmeticLocked(c) && c.access === 'PURCHASE')
+  const fittingBill = fitting.filter((c) => cosmeticLocked(c) && onSale(c))
   const fittingTotal = fittingBill.reduce((sum, c) => sum + (c.priceRubies ?? 0), 0)
 
   /**
@@ -2890,7 +2903,8 @@ export function Skins({ on }: { on: boolean }) {
         rarity={(c as CosmeticItem & { rarity?: string }).rarity}
         locked={locked}
         plus={locked && c.access === 'PLUS'}
-        priceRubies={locked && c.access === 'PURCHASE' ? c.priceRubies : undefined}
+        priceRubies={locked && onSale(c) ? c.priceRubies : undefined}
+        note={locked ? earnedNote(c) : undefined}
         on={worn.some((w) => w.id === c.id)}
         trying={fitting.some((f) => f.id === c.id)}
         loading={fitLoading.includes(c.id) || cosmeticBusy === c.id}
@@ -3247,7 +3261,8 @@ export function Skins({ on }: { on: boolean }) {
                 id: item.id,
                 name: item.name,
                 art: <CosmeticArt item={item} height={54} />,
-                price: locked && item.access === 'PURCHASE' ? item.priceRubies ?? 0 : undefined,
+                price: locked && onSale(item) ? item.priceRubies : undefined,
+                note: locked ? earnedNote(item) : undefined,
                 plus: locked && item.access === 'PLUS',
                 loading: fitLoading.includes(item.id),
                 tones: item.variants,

@@ -9,11 +9,7 @@ export function hoursText(seconds: number): string {
   return (h < 10 ? Math.round(h * 10) / 10 : Math.round(h)).toLocaleString('ru-RU') + ' ч'
 }
 
-/**
- * «Ты наиграл N ч» в этой сборке и «Всего N ч» — счётчик ядра
- * (state/playStats.ts). Ноль не показываем: «0 ч» читается как упрёк, а не факт.
- * Нет сборки на компьютере — только общее.
- */
+/** «Ты наиграл N ч» в этой сборке — счётчик ядра (state/playStats.ts). Ноль не показываем. */
 export function Hours({ build }: { build?: string | null }) {
   const stats = usePlayStats((s) => s.stats)
   const loaded = usePlayStats((s) => s.loaded)
@@ -21,22 +17,13 @@ export function Hours({ build }: { build?: string | null }) {
     if (!loaded) void usePlayStats.getState().refresh()
   }, [loaded])
   const here = build ? stats.builds.find((b) => b.key === build) : null
-  const mine = here && here.seconds >= 60 ? here.seconds : 0
-  const total = stats.total_seconds >= 60 ? stats.total_seconds : 0
-  if (!mine && !total) return null
+  if (!here || here.seconds < 60) return null
   return (
     <span className="ph-hours">
       <Icon id="i-clock" />
-      {mine ? (
-        <span>
-          Ты наиграл <b>{hoursText(mine)}</b>
-        </span>
-      ) : null}
-      {total ? (
-        <span className="ph-hours-all">
-          Всего <b>{hoursText(total)}</b>
-        </span>
-      ) : null}
+      <span>
+        Ты наиграл <b>{hoursText(here.seconds)}</b>
+      </span>
     </span>
   )
 }

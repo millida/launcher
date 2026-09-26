@@ -9,6 +9,7 @@ import type { MapHit } from './SiteRow'
 import { SERVER_SECTIONS, SITE_SECTIONS, materials, peekHit, sectionBySlug, sectionByKind } from './site'
 import type { SiteSection } from './site'
 import { activeFilters, useServerSite, useSite } from './siteStore'
+import type { SiteAccess } from './siteStore'
 import { mrTail, nextLoad } from './mrTail'
 import { CatalogCtx, useCatalogCtx } from './target'
 import type { CatalogTarget } from './target'
@@ -110,6 +111,24 @@ function SearchField({ value, label, onCommit }: { value: string; label: string;
         </button>
       ) : null}
     </form>
+  )
+}
+
+const ACCESS: [SiteAccess, string][] = [
+  ['all', 'Все'],
+  ['premium', 'Премиум'],
+  ['free', 'Обычные'],
+]
+
+function Access({ value, onPick }: { value: SiteAccess; onPick: (v: SiteAccess) => void }) {
+  return (
+    <div className="segs mr-sort" role="group" aria-label="Премиум или обычные сборки">
+      {ACCESS.map(([id, label]) => (
+        <button key={id} className={'seg' + (value === id ? ' on' : '')} aria-pressed={value === id} data-track={'access_' + id} onClick={() => onPick(id)}>
+          {label}
+        </button>
+      ))}
+    </div>
   )
 }
 
@@ -386,7 +405,8 @@ function Frame({
 }
 
 function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: boolean; onOpenPack?: (slug: string) => void }) {
-  const s = useCatalogCtx().store()
+  const store = useCatalogCtx().store
+  const s = store()
   const [open, setOpen] = useState(false)
   const q = s.q.trim()
   useSearchTrack(sec.slug, q, s.page && !s.busy ? s.total : s.failed ? 0 : null)
@@ -415,7 +435,12 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
       onOpen={() => setOpen((v) => !v)}
       search={<SearchField value={s.q} label={'Поиск по разделу «' + sec.title + '»'} onCommit={(v) => s.patch({ q: v })} />}
       count={count}
-      sort={<Sort value={s.sort} onPick={(v) => s.patch({ sort: v })} />}
+      sort={
+        <>
+          {sec.slug === 'modpacks' && store === useSite ? <Access value={s.access} onPick={(v) => s.patch({ access: v })} /> : null}
+          <Sort value={s.sort} onPick={(v) => s.patch({ sort: v })} />
+        </>
+      }
     >
       {s.failed ? (
         <CatalogNotice note={{ icon: 'i-alert', title: 'Каталог не ответил', action: { label: 'Повторить', primary: true, icon: 'i-restart', onClick: () => void s.load() } }} />

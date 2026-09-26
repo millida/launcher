@@ -15,6 +15,7 @@ export interface SetPiece {
   /** Цена в рубинах. Пусто — вещь открывает PLUS. */
   price?: number
   plus?: boolean
+  note?: string
   /** Модель ещё едет — на фигуре вещи пока нет. */
   loading?: boolean
   tones?: { name: string; color?: string }[]
@@ -90,7 +91,7 @@ export function FittingBar({
                   {piece.price}
                 </>
               ) : (
-                'твоя'
+                piece.note ?? 'твоя'
               )}
             </span>
             {(piece.tones?.length ?? 0) > 1 ? (

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useUi } from '../state/ui'
 import type { ScreenId } from '../state/ui'
-import { ACCENT_EVENT, accentBase, shade } from '../lib/accent'
+import { ACCENT_EVENT, accentBase, shade, type AccentChange } from '../lib/accent'
 import { gpuLite } from '../lib/gpuLite'
 import { currentDeviceTier, maxCanvasPixelRatio } from '../lib/deviceTier'
 import { tabTransitionMs } from '../state/viewPrefs'
@@ -111,14 +111,17 @@ export function ScreenWave() {
     // Свой цвет тянут ползунком — событий десятки в секунду. Волна одна,
     // когда цвет перестал меняться (баг 23.09.2026: волна мешала смотреть).
     const on = (e: Event) => {
-      const c = String((e as CustomEvent).detail || '').toLowerCase()
+      const change = (e as CustomEvent<AccentChange | undefined>).detail
+      const c = String(change?.color || '').toLowerCase()
       if (!c) return
       clearTimeout(timer)
-      timer = setTimeout(() => {
+      const wave = () => {
         if (c === last) return
         last = c
         run(shade(c, -0.55), shade(c, -0.1))
-      }, 450)
+      }
+      if (change?.settled) wave()
+      else timer = setTimeout(wave, 450)
     }
     window.addEventListener(ACCENT_EVENT, on)
     return () => {

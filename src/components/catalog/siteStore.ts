@@ -16,6 +16,7 @@ import { inTime } from '../../lib/deadline'
  */
 
 export type SiteSort = 'popular' | 'new'
+export type SiteAccess = 'all' | 'premium' | 'free'
 
 export interface SiteState {
   section: SiteSlug
@@ -24,6 +25,7 @@ export interface SiteState {
   category: string | null
   q: string
   sort: SiteSort
+  access: SiteAccess
   items: SiteCard[]
   total: number
   page: number
@@ -36,7 +38,7 @@ export interface SiteState {
   busy: boolean
   failed: boolean
   setSection: (s: SiteSlug) => void
-  patch: (p: Partial<Pick<SiteState, 'version' | 'loader' | 'category' | 'q' | 'sort'>>) => void
+  patch: (p: Partial<Pick<SiteState, 'version' | 'loader' | 'category' | 'q' | 'sort' | 'access'>>) => void
   reset: () => void
   load: (more?: boolean) => Promise<void>
 }
@@ -95,6 +97,7 @@ function createSiteStore(linked: boolean): SiteStore {
     category: null,
     q: '',
     sort: 'popular',
+    access: 'all',
     items: [],
     total: 0,
     page: 0,
@@ -109,7 +112,7 @@ function createSiteStore(linked: boolean): SiteStore {
         useMods.getState().set({ modTab: sec.kind, fCats: [], fCat: 'все', count: '' })
         void useMods.getState().refreshInstalled()
       }
-      set({ section: s, version: null, loader: null, category: null, q: '', items: [], total: 0, page: 0, facets: null, ...MR_EMPTY })
+      set({ section: s, version: null, loader: null, category: null, q: '', access: 'all', items: [], total: 0, page: 0, facets: null, ...MR_EMPTY })
       void get().load()
     },
     patch: (p) => {
@@ -170,7 +173,14 @@ function createSiteStore(linked: boolean): SiteStore {
       }
       const paid = new Set(premium.map((p) => p.slug))
       let got = listing.items.map((c) => (paid.has(c.slug) ? { ...c, premium: true } : c))
-      if (!more && packs && st.sort === 'popular') got = pinPremium(got, premium, st, q)
+      if (packs && st.access === 'premium') {
+        const only = premiumOnly(premium, st, q)
+        set({ items: only, total: only.length, page: 1, pages: 1, facets: facets || get().facets, ...MR_EMPTY, busy: false })
+        return
+      }
+      if (packs && st.access === 'free') got = got.filter((c) => !c.premium)
+      else if (!more && packs && st.sort === 'popular') got = pinArcania(got, premium, st, q)
+      const hidden = packs && st.access === 'free' ? premium.filter((p) => matchesFilters(p, st, q)).length : 0
       // Лента могла сдвинуться между страницами (новый материал сверху) — без дублей.
       const items = more ? get().items.concat(got.filter((i) => !get().items.some((x) => x.slug === i.slug))) : got
       const mrState = more
@@ -178,7 +188,7 @@ function createSiteStore(linked: boolean): SiteStore {
         : mrFirst
           ? { mr: mrFirst.cards, mrTotal: mrFirst.total, mrOffset: mrFirst.got, mrMore: mrHasMore(0, mrFirst.got, mrFirst.total, MR_PAGE) }
           : MR_EMPTY
-      set({ items, total: listing.total, page: listing.page, pages: listing.pages, facets: facets || get().facets, ...mrState, busy: false })
+      set({ items, total: Math.max(0, listing.total - hidden), page: listing.page, pages: listing.pages, facets: facets || get().facets, ...mrState, busy: false })
     },
   }))
 }
@@ -188,30 +198,35 @@ export const useSite = createSiteStore(true)
 /** Каталог сервера — вкладка контента панели хостинга. */
 export const useServerSite = createSiteStore(false)
 
-/**
- * Платные сборки — первыми в «Популярных» (правка владельца 24.09.2026, 16:39:
- * «Arcania — первой»). Порядок — как в `/catalog/packs`. Сборка, которой нет на
- * первой странице выдачи, встаёт строкой из каталога сборок, если подходит под
- * выбранные версию, загрузчик и поиск; под категорию — только если её вернул
- * сам сайт (категорий у карточки сборки нет).
- */
-function pinPremium(page: SiteCard[], premium: MillidaPack[], st: Pick<SiteState, 'version' | 'loader' | 'category'>, q: string): SiteCard[] {
-  if (!premium.length) return page
+const ARCANIA = 'arcania'
+
+/** Подходит ли платная сборка под выбранные версию, загрузчик и поиск: категорий у неё нет. */
+function matchesFilters(p: MillidaPack, st: Pick<SiteState, 'version' | 'loader' | 'category'>, q: string): boolean {
   const needle = q.length >= 2 ? q.toLowerCase() : ''
-  const top: SiteCard[] = []
-  for (const p of premium) {
-    const hit = page.find((c) => c.slug === p.slug)
-    if (hit) top.push(hit)
-    else if (
-      !st.category &&
-      (!st.version || p.game === st.version) &&
-      (!st.loader || p.loader === st.loader) &&
-      (!needle || (p.title + ' ' + p.summary).toLowerCase().includes(needle))
-    )
-      top.push(premiumCard(p))
-  }
-  const slugs = new Set(top.map((c) => c.slug))
-  return top.concat(page.filter((c) => !slugs.has(c.slug)))
+  return (
+    !st.category &&
+    (!st.version || p.game === st.version) &&
+    (!st.loader || p.loader === st.loader) &&
+    (!needle || (p.title + ' ' + p.summary).toLowerCase().includes(needle))
+  )
+}
+
+/**
+ * В «Популярных» первой стоит только Arcania, остальные платные идут в ленте
+ * вперемешку с бесплатными (владелец, 26.09.2026). Нет её на первой странице —
+ * встаёт строкой из каталога сборок, если подходит под фильтры.
+ */
+function pinArcania(page: SiteCard[], premium: MillidaPack[], st: Pick<SiteState, 'version' | 'loader' | 'category'>, q: string): SiteCard[] {
+  const hit = page.find((c) => c.slug === ARCANIA)
+  const pack = premium.find((p) => p.slug === ARCANIA)
+  const top = hit || (pack && matchesFilters(pack, st, q) ? premiumCard(pack) : null)
+  return top ? [top, ...page.filter((c) => c.slug !== ARCANIA)] : page
+}
+
+/** Фильтр «Премиум»: только платные сборки, Arcania первой. */
+function premiumOnly(premium: MillidaPack[], st: Pick<SiteState, 'version' | 'loader' | 'category'>, q: string): SiteCard[] {
+  const cards = premium.filter((p) => matchesFilters(p, st, q)).map(premiumCard)
+  return [...cards.filter((c) => c.slug === ARCANIA), ...cards.filter((c) => c.slug !== ARCANIA)]
 }
 
 /** Сколько фильтров выбрано — число на кнопке «Фильтры» в узком окне. */

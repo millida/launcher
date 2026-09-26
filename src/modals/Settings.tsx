@@ -121,9 +121,9 @@ const ACCENTS: (Accent & { name: string })[] = [
   ).map(([id, name, hex]) => ({ ...accentFromHex(hex), id, name })),
 ]
 
-function applyAccent(raw: Accent) {
+function applyAccent(raw: Accent, settled = false) {
   const a = computeAccent(raw)
-  paintAccent(a)
+  paintAccent(a, settled)
   saveAccent(a)
 }
 
@@ -357,7 +357,7 @@ export function Settings({ on }: { on: boolean }) {
                 className={'s2-sw' + (a.id === accent ? ' on' : '')}
                 style={{ background: a.c }}
                 onClick={() => {
-                  withColorFade(() => applyAccent(a))
+                  withColorFade(() => applyAccent(a, true))
                   setAccent(a.id)
                 }}
               ></button>

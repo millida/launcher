@@ -535,8 +535,13 @@ export function App() {
     let serverPollMs = POLL_BASE_MS
     let failures = 0
     let waited = false
+    // Refocusing the window wakes the loop early; a second loop next to one still
+    // waiting on the long poll would fetch the same messages and notify twice.
+    let inFlight = false
+    const seenMessages = new Set<string>()
     const loop = async () => {
-      if (stopped) return
+      if (stopped || inFlight) return
+      inFlight = true
       if (hasMillidaAccount()) {
         try {
           const r = await api('/friends/poll?wait=1&since=' + since)
@@ -569,6 +574,9 @@ export function App() {
                 )
           }
           ;(r.messages || []).forEach((m: PolledMessage) => {
+            if (m.id && seenMessages.has(m.id)) return
+            if (m.id) seenMessages.add(m.id)
+            if (seenMessages.size > 500) seenMessages.delete(seenMessages.values().next().value as string)
             const f = useFriends.getState()
             if (f.chatOpen && f.chatWith === m.from) {
               appendChatMessage({
@@ -616,10 +624,11 @@ export function App() {
           waited = false
         }
       }
+      inFlight = false
       timer = setTimeout(loop, pollDelayMs(serverPollMs, failures, document.hidden, Math.random, waited))
     }
     const wake = () => {
-      if (document.hidden) return
+      if (document.hidden || inFlight) return
       clearTimeout(timer)
       timer = setTimeout(loop, 200)
     }

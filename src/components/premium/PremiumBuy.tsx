@@ -106,7 +106,7 @@ export function BuyButton({ pack, plan, sub, size }: BuyProps & { size?: 'sm' })
 }
 
 /// Сборка партнёра открывается двумя подписками: ею одной или всеми сборками
-/// партнёра. Главная кнопка — эта сборка: человек пришёл за ней.
+/// партнёра. Главная кнопка — все сборки: партнёр продвигает общую подписку.
 export function PlanButtons({
   pack,
   plans,
@@ -164,9 +164,10 @@ export function PlanButtons({
         <Icon id="i-clock" /> Ждём оплату
       </button>,
     )
+  const ordered = [...plans].sort((a, b) => Number(a.id === 'pack') - Number(b.id === 'pack'))
   return (
     <>
-      {plans.map((plan, i) =>
+      {ordered.map((plan, i) =>
         boxed(
           plan.id,
           <button
@@ -177,7 +178,7 @@ export function PlanButtons({
             data-plan={plan.id}
             onClick={() => start(plan)}
           >
-            <Icon id={i === 0 ? 'i-crown' : 'i-blocks'} /> {plan.id === 'pack' ? 'Эта сборка' : 'Все сборки'} · {planPrice(plan)}
+            <Icon id={i === 0 ? 'i-crown' : 'i-blocks'} /> {plan.id === 'pack' ? 'Эта сборка' : plan.title || 'Все сборки'} · {planPrice(plan)}
           </button>,
         ),
       )}
