@@ -4,6 +4,7 @@ import { coalesce } from '../lib/coalesce'
 import { offPlatformReason } from '../lib/offPlatform'
 import { warmHeads } from '../lib/heads'
 import { trackFailure } from '../lib/telemetry'
+import { getMillidaAccount } from './accounts'
 import { clearRoomUnread } from './rooms'
 
 export interface Friend {
@@ -177,19 +178,25 @@ export const useFriends = create<FriendsState>((set) => ({
   load: () => loadFriends(),
 }))
 
+/// A failed refresh keeps the last list: refocusing the window reloads friends, and a
+/// transient network error must not flash the "add your first friend" screen.
+let listOwner = ''
+
 const fetchFriends = coalesce(async () => {
   const set = useFriends.setState
-  if (!hasMillidaAccount()) {
+  const owner = hasMillidaAccount() ? getMillidaAccount()?.id || '' : ''
+  if (owner !== listOwner) {
+    listOwner = owner
     set({ friends: [], reqIn: [], reqOut: [] })
-    return
   }
+  if (!owner) return
   try {
     const [f, req] = await Promise.all([api('/friends'), api('/friends/requests')])
+    if (listOwner !== owner) return
     set({ friends: f.friends || [], reqIn: req.incoming || [], reqOut: req.outgoing || [] })
     warmHeads((f.friends || []).filter((x: Friend) => !x.avatarUrl).map((x: Friend) => x.nickname))
   } catch (e) {
     trackFailure('friends', e, { step: 'load' })
-    set({ friends: [], reqIn: [], reqOut: [] })
   }
 })
 

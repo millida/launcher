@@ -638,8 +638,8 @@ svg.msg-tick.read{color:var(--m-tick-read,#4C9FFE);opacity:1}
 .login-code:hover{background:var(--m-surface-2)}
 .login-code span{font-family:var(--m-mono);font-size:19px;font-weight:700;letter-spacing:.14em;line-height:1}
 .login-code svg{width:15px;height:15px;color:var(--m-fg-subtle);flex-shrink:0}
-.login-code-actions{display:flex;gap:8px}
-.login-code-actions .btn{flex:1;min-width:0}
+.login-code-actions{display:flex;flex-wrap:wrap;gap:8px}
+.login-code-actions .btn{flex:1}
 .wp-pop{position:absolute;top:52px;right:14px;z-index:40;background:var(--m-raised);border-radius:var(--m-r-card);box-shadow:var(--m-shadow-lg);padding:12px;width:284px;display:none;max-height:min(72vh,520px);overflow-y:auto;overscroll-behavior:contain}
 .wp-pop.open{display:block;animation:screenIn var(--m-t-base) var(--m-ease-out)}
 .wp-pop .cap{font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--m-fg-subtle);margin:14px 2px 10px}

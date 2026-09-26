@@ -415,7 +415,6 @@
 .ph-hours { display: inline-flex; align-items: center; gap: 10px; font-size: 13px; color: var(--m-fg-subtle); }
 .ph-hours svg { width: 15px; height: 15px; flex: none; }
 .ph-hours b { color: var(--m-fg); font-weight: 750; font-variant-numeric: tabular-nums; }
-.ph-hours-all { opacity: 0.8; }
 
 /* ---------- герой версии ---------- */
 .ph-fps {

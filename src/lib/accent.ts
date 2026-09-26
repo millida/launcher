@@ -121,12 +121,17 @@ export function accentBase(): string {
   return m ? toHex(+m[1], +m[2], +m[3]) : '#5ec64d'
 }
 
-export function paintAccent(a: AccentVars) {
+export interface AccentChange {
+  color: string
+  settled: boolean
+}
+
+export function paintAccent(a: AccentVars, settled = false) {
   const inline = document.documentElement.style
   for (const v of VARS) inline.removeProperty(v)
   node().textContent = ':root:root{' + declarations(a) + '}'
   // Фон лобби и волна перехода перекрашиваются вслед (правка владельца 23.09.2026).
-  window.dispatchEvent(new CustomEvent(ACCENT_EVENT, { detail: a.c }))
+  window.dispatchEvent(new CustomEvent<AccentChange>(ACCENT_EVENT, { detail: { color: a.c, settled } }))
 }
 
 const ACCENT_KEY = 'm-accent'

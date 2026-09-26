@@ -199,6 +199,7 @@ export interface CosmeticItem {
   /// Адрес картинки вещи — той самой, что рисует мод.
   texture?: string
   access: string
+  channel?: string
   /// Вещь на обкатке: её видно только команде.
   staffOnly?: boolean
   /// Цена в рубинах. Пусто у бесплатных и у тех, что открывает подписка.

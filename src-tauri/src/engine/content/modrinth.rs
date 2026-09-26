@@ -278,6 +278,12 @@ pub(crate) async fn best_version(project: &str, game_version: &str, loaders: &[S
 pub(crate) async fn install_project_version(
     profile: &str, kind: &str, project: &str, version: &Value,
 ) -> Result<String, String> {
+    install_project_version_cancellable(profile, kind, project, version, None).await
+}
+
+async fn install_project_version_cancellable(
+    profile: &str, kind: &str, project: &str, version: &Value, cancel: Option<&std::sync::atomic::AtomicBool>,
+) -> Result<String, String> {
     let file = version["files"].as_array()
         .and_then(|fs| fs.iter().find(|f| f["primary"] == true).or_else(|| fs.first()))
         .ok_or("Файл не найден")?;
@@ -294,7 +300,7 @@ pub(crate) async fn install_project_version(
     let shared = !dest.exists() && !sha1.is_empty()
         && link_from_store(sha1, &dest, file["size"].as_u64());
     if !shared {
-        download_checked(file["url"].as_str().unwrap_or(""), &dest, Some(sum), file["size"].as_u64()).await?;
+        download_checked_cancellable(file["url"].as_str().unwrap_or(""), &dest, Some(sum), file["size"].as_u64(), cancel).await?;
         if !sha1.is_empty() { adopt_to_store(&dest, sha1); }
     }
     let (pid, title, icon, summary) = fetch_project_meta(project).await;
@@ -392,7 +398,7 @@ async fn install_content_job(
     };
     job.check()?;
     job.emit(app, 40.0, "Скачиваем…");
-    let file = install_project_version(&profile, &kind, &project, &ver).await?;
+    let file = install_project_version_cancellable(&profile, &kind, &project, &ver, Some(job.cancel_flag())).await?;
     let mut warning = String::new();
     if kind == "mod" {
         job.emit(app, 70.0, "Зависимости…");
@@ -433,7 +439,7 @@ async fn install_version_job(
     if !allow_mismatch && !fits_build(&ver, &build_gv, &loaders, &bridge) {
         return Ok(ContentInstall { file: String::new(), mismatch: version_target(&ver), warning: String::new() });
     }
-    let file = install_project_version(&profile, &kind, &project, &ver).await?;
+    let file = install_project_version_cancellable(&profile, &kind, &project, &ver, Some(job.cancel_flag())).await?;
     let mut warning = String::new();
     if kind == "mod" {
         let gv = ver["game_versions"].as_array().and_then(|a| a.first()).and_then(|v| v.as_str()).unwrap_or("").to_string();
