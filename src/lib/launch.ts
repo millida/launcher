@@ -1,5 +1,6 @@
 import { hasTauri } from '../ipc/tauri'
-import { cancelLaunch, launchGame, launchProfile, loadProfileSettings, quickPlay, pinServerDat, runningGames, discordPresence as ipcDiscordPresence } from '../ipc/commands'
+import { PACK_ACCESS_PREFIX, cancelLaunch, launchGame, launchProfile, loadProfileSettings, quickPlay, pinServerDat, runningGames, discordPresence as ipcDiscordPresence } from '../ipc/commands'
+import { usePackKey } from '../state/packKey'
 import { listenLaunchProgress } from '../ipc/events'
 import type { UnlistenFn } from '../ipc/tauri'
 import type { LaunchAuth } from '../ipc/commands'
@@ -444,6 +445,17 @@ function doLaunch(name: string) {
           pack: pack.pack,
         })
       })
+      const text = String(err)
+      const at = text.indexOf(PACK_ACCESS_PREFIX)
+      if (at >= 0 && prof) {
+        // The service refused a paid pack: the player gets the subscribe window, not a red error.
+        const reason = text.slice(at + PACK_ACCESS_PREFIX.length)
+        void packInfo.then((pack) => {
+          if (pack.pack) usePackKey.getState().show(pack.pack, prof, reason, () => realLaunch(prof))
+          else showLaunchError(err)
+        })
+        return
+      }
       showLaunchError(err)
     })
     .finally(() => {

@@ -5,6 +5,7 @@ export const STORE_MODALS: readonly ModalId[] = [
   'nbModal',
   'bsModal',
   'impModal',
+  'mvModal',
   'pjModal',
   'setModal',
   'accModal',

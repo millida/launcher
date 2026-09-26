@@ -4,6 +4,8 @@ import { headLook } from '../../lib/headLook'
 import type { Mine3dModule } from '../../lib/mine3d'
 import type { SkinAnimation, SkinViewEngine } from '../../vendor/mine3d'
 import { textureSource } from '../../lib/textureSource'
+import { detectSlimFromUrl } from '../../lib/skinArms'
+import { useViewPrefs } from '../../state/viewPrefs'
 import { LOOK_EVENT, gameProfile, loadCosmeticCatalog, loadWardrobe, loadWornCosmetics, lookVersion } from '../../lib/gameProfile'
 import type { CosmeticItem } from '../../lib/gameProfile'
 import { useHasMillida } from '../../state/auth'
@@ -14,6 +16,9 @@ import { emoteSequence } from '../../lib/emoteSequence'
 import { readAnimations } from '../../lib/cosmeticAnimation'
 import { defaultVariant } from '../../lib/cosmeticVariants'
 import { Nametag, nametagSpot } from '../character/Nametag'
+import { FlatFigure } from '../character/FlatFigure'
+import { gpuLite, noteContextLost, useGpuLite } from '../../lib/gpuLite'
+import { webviewFailure } from '../../lib/webviewHealth'
 import { Vector3 } from 'three'
 import { setScreen } from '../../state/ui'
 import { onRenderGate, renderLive } from '../../lib/renderGate'
@@ -30,6 +35,7 @@ import {
   releaseEngine,
   nickSkinUrl,
   lobbyFrame,
+  lobbyHitBox,
   tagBox,
 } from '../../lib/characterStage'
 
@@ -108,8 +114,13 @@ async function loadLook(nick: string, signedIn: boolean): Promise<Look> {
   const catalogAsked = loadCosmeticCatalog().catch(() => ({ items: [] as CosmeticItem[] }))
   const pickShow = (items: CosmeticItem[]) =>
     LOBBY_EMOTES.map((id) => items.find((c) => c.id === id)).filter((c): c is CosmeticItem => Boolean(c && c.model))
+  // A skin found by nick carries no arm type, so it is read from the texture
+  // exactly as the wardrobe does; otherwise an Alex skin got Steve arms here.
+  const nickArms = () => detectSlimFromUrl(look.skin).catch(() => false)
   if (!signedIn) {
-    look.show = pickShow((await catalogAsked).items || [])
+    const [catalog, slim] = await Promise.all([catalogAsked, nickArms()])
+    look.show = pickShow(catalog.items || [])
+    look.slim = slim
     return look
   }
   const [wardrobe, catalog, worn] = await Promise.all([
@@ -123,7 +134,7 @@ async function loadLook(nick: string, signedIn: boolean): Promise<Look> {
   if (wardrobe?.active.skinUrl) {
     look.skin = fresh(wardrobe.active.skinUrl)
     look.slim = wardrobe.active.model === 'slim'
-  }
+  } else look.slim = await nickArms()
   look.cape = wardrobe?.active.capeUrl ? fresh(wardrobe.active.capeUrl) : null
   look.show = pickShow(catalog.items || [])
   for (const w of worn) {
@@ -174,6 +185,7 @@ export function LobbyCharacter({ on }: { on: boolean }) {
   // не появлялись до следующего захода на главную (владелец 23.09.2026:
   // «косметика полностью вся пропала»).
   const signedIn = useHasMillida()
+  const charAnim = useViewPrefs((s) => s.charAnim)
   const [m3d, setM3d] = useState<Mine3dModule | null>(null)
   // Номер живой сцены, 0 — сцены нет. Не флаг: при потере контекста WebGL
   // старая сцена гасит его, новая зажигает в том же кадре, React видел то же
@@ -194,6 +206,8 @@ export function LobbyCharacter({ on }: { on: boolean }) {
   const tagWrap = useRef<HTMLSpanElement>(null)
   const pressAt = useRef<{ x: number; y: number } | null>(null)
   const headRest = useRef<{ x: number; y: number } | null>(null)
+  // Габарит тела в NDC последнего кадра: по нему считаем зону клика в гардероб.
+  const bodyNdc = useRef<{ minX: number; maxX: number; minY: number; maxY: number } | null>(null)
   /** Идёт эмоция — голова её, за мышкой не следим. */
   const busyRef = useRef(false)
   // Контекст WebGL всё-таки отобрали — сцену собираем заново на новом холсте:
@@ -224,18 +238,25 @@ export function LobbyCharacter({ on }: { on: boolean }) {
     }
   }, [on, nick, activeId, signedIn, lookVer])
 
+  // Лёгкая графика после сбоя видеокарты: без WebGL, плоская фигурка.
+  const lite = useGpuLite()
+  const [flatShown, setFlatShown] = useState(false)
   useEffect(() => {
-    if (!on || m3d) return
+    if (!on || m3d || lite) return
     let alive = true
-    loadMine3d()
+    // Сначала узнаём, не убил ли прошлое окно сбой видеокарты: тогда WebGL
+    // не создаём вовсе (иначе окно падало снова и снова).
+    webviewFailure()
+      .then(() => (gpuLite() ? null : loadMine3d()))
       .then((mod) => {
+        if (!mod) return
         if (alive) setM3d(mod)
       })
       .catch((e) => console.error('[lobby] 3d', e))
     return () => {
       alive = false
     }
-  }, [on, m3d])
+  }, [on, m3d, lite])
 
   const headScreen = (): { x: number; y: number } | null => {
     const engine = viewerRef.current as unknown as {
@@ -287,6 +308,7 @@ export function LobbyCharacter({ on }: { on: boolean }) {
       if (r) {
         setTag(nametagSpot(tagBox(r), w, h))
         headRest.current = headScreen()
+        bodyNdc.current = r.ndc
       }
     } catch {}
   }
@@ -310,10 +332,11 @@ export function LobbyCharacter({ on }: { on: boolean }) {
   }, [shown, awake])
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!m3d || !canvas) return
+    if (!m3d || !canvas || lite) return
     const onLost = (ev: Event) => {
       ev.preventDefault()
       console.warn('[lobby] webgl context lost')
+      noteContextLost()
       setSkinFor('')
       setDressedFor('')
       setGlEpoch((n) => n + 1)
@@ -358,7 +381,7 @@ export function LobbyCharacter({ on }: { on: boolean }) {
       setReady(0)
       releaseEngine(engine)
     }
-  }, [m3d, glEpoch])
+  }, [m3d, glEpoch, lite])
 
   useEffect(() => {
     const engine = viewerRef.current
@@ -458,6 +481,9 @@ export function LobbyCharacter({ on }: { on: boolean }) {
     }
     rest()
     if (!awake) return
+    // Персонаж перестаёт танцевать по выбору в «Настройки → Вид»: остаётся
+    // спокойная стойка без периодических эмоций (владелец 25.09.2026).
+    if (!charAnim) return
     if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) return
     let alive = true
     let timer: ReturnType<typeof setTimeout> | undefined
@@ -547,7 +573,7 @@ export function LobbyCharacter({ on }: { on: boolean }) {
       clearTimeout(timer)
       dropProps()
     }
-  }, [m3d, ready, awake, emoting, look])
+  }, [m3d, ready, awake, emoting, look, charAnim])
 
   useEffect(() => {
     if (!ready) return
@@ -588,6 +614,17 @@ export function LobbyCharacter({ on }: { on: boolean }) {
 
   const drag = useRef<{ x: number; yaw: number } | null>(null)
 
+  if (lite) {
+    return (
+      <div className={'lobby-char lobby-char-flat' + (flatShown ? ' shown' : '')} onClick={() => setScreen('skins')}>
+        <span className="lobby-flat-tag">
+          <Nametag nick={nick} at={{ x: 0, y: 0 }} />
+        </span>
+        {look ? <FlatFigure url={look.skin} slim={look.slim} onReady={() => setFlatShown(true)} /> : null}
+      </div>
+    )
+  }
+
   return (
     <div
       ref={stageRef}
@@ -597,6 +634,7 @@ export function LobbyCharacter({ on }: { on: boolean }) {
         if (!engine || e.button !== 0) return
         drag.current = { x: e.clientX, yaw: engine.playerYaw }
         pressAt.current = { x: e.clientX, y: e.clientY }
+        e.currentTarget.style.cursor = 'grabbing'
         try {
           e.currentTarget.setPointerCapture(e.pointerId)
         } catch {}
@@ -604,16 +642,40 @@ export function LobbyCharacter({ on }: { on: boolean }) {
       onPointerMove={(e) => {
         const engine = viewerRef.current
         const held = drag.current
-        if (!engine || !held) return
-        engine.setPlayerYaw(held.yaw + (e.clientX - held.x) * TURN_PER_PIXEL)
+        if (engine && held) {
+          engine.setPlayerYaw(held.yaw + (e.clientX - held.x) * TURN_PER_PIXEL)
+          return
+        }
+        // Указатель — только над самой фигурой (клик туда открывает гардероб);
+        // на остальной сцене это перетаскивание, курсор обычный (владелец
+        // 25.09.2026: «не указательный, там область перетаскивания»).
+        const stage = stageRef.current
+        const ndc = bodyNdc.current
+        if (!stage || !ndc) return
+        const rect = stage.getBoundingClientRect()
+        const box = lobbyHitBox(ndc, rect.width, rect.height)
+        const x = e.clientX - rect.left
+        const y = e.clientY - rect.top
+        const over = x >= box.left && x <= box.left + box.width && y >= box.top && y <= box.top + box.height
+        stage.style.cursor = over ? 'pointer' : 'grab'
       }}
       onPointerUp={(e) => {
         drag.current = null
-        // Клик без перетаскивания — в «Мой скин» (правка владельца 21:56);
-        // перетаскивание по-прежнему крутит персонажа.
+        e.currentTarget.style.cursor = 'grab'
+        // Клик без перетаскивания и по самой фигуре — в «Мой скин» (правка
+        // владельца 21:56; зона сужена до рамки тела 25.09.2026). Перетаскивание
+        // по-прежнему крутит персонажа.
         const p = pressAt.current
         pressAt.current = null
-        if (p && Math.hypot(e.clientX - p.x, e.clientY - p.y) < 6) setScreen('skins')
+        if (!p || Math.hypot(e.clientX - p.x, e.clientY - p.y) >= 6) return
+        const stage = stageRef.current
+        const ndc = bodyNdc.current
+        if (!stage || !ndc) return
+        const rect = stage.getBoundingClientRect()
+        const box = lobbyHitBox(ndc, rect.width, rect.height)
+        const x = e.clientX - rect.left
+        const y = e.clientY - rect.top
+        if (x >= box.left && x <= box.left + box.width && y >= box.top && y <= box.top + box.height) setScreen('skins')
       }}
       onPointerCancel={() => {
         drag.current = null

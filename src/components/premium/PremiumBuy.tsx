@@ -1,12 +1,15 @@
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Icon } from '../Icon'
 import { showToast } from '../../state/ui'
 import { track } from '../../lib/telemetry'
 import { useModpackVersions } from '../../state/modpack'
+import { watchPackPurchase } from '../../state/packWatch'
 import { PackInstallButton } from './PackInstall'
 import { purchaseFlow } from '../../lib/purchaseTrack'
 import { openPaymentUrl } from '../../lib/openPayment'
 import {
   buyPremiumPack,
+  planPrice,
   priceLabel,
   subscribePremium,
   untilText,
@@ -100,6 +103,86 @@ export function BuyButton({ pack, plan, sub, size }: BuyProps & { size?: 'sm' })
       </button>
     )
   return null
+}
+
+/// Сборка партнёра открывается двумя подписками: ею одной или всеми сборками
+/// партнёра. Главная кнопка — эта сборка: человек пришёл за ней.
+export function PlanButtons({
+  pack,
+  plans,
+  onOwned,
+  size,
+  wrap,
+}: {
+  pack: PremiumPack
+  plans: PremiumPlan[]
+  onOwned: () => void
+  size?: 'sm'
+  /// Класс обёртки каждой кнопки: у колонки покупки кнопка на всю ширину.
+  wrap?: string
+}) {
+  const [waiting, setWaiting] = useState(false)
+  const stop = useRef<(() => void) | null>(null)
+  useEffect(() => () => stop.current?.(), [])
+  const id = pack.slug || pack.id
+  const sm = size === 'sm' ? ' sm' : ''
+
+  const start = (plan: PremiumPlan) => {
+    track('store_open', { where: 'premium_subscribe' })
+    const result = purchaseFlow('premium_sub', plan.id + ':' + id, plan.priceKopecks, 'kopecks')
+    void openPayment(
+      () => subscribePremium(plan.id, id),
+      (ok, reason, err) => {
+        result(ok, reason, err)
+        if (!ok) return
+        setWaiting(true)
+        stop.current?.()
+        stop.current = watchPackPurchase(pack.id, () => {
+          setWaiting(false)
+          showToast('Подписка оформлена')
+          onOwned()
+        })
+      },
+    )
+  }
+
+  const boxed = (key: string, node: ReactNode) =>
+    wrap ? (
+      <span className={wrap} key={key}>
+        {node}
+      </span>
+    ) : (
+      <span key={key} style={{ display: 'contents' }}>
+        {node}
+      </span>
+    )
+
+  if (waiting)
+    return boxed(
+      'wait',
+      <button className={'btn primary' + sm} disabled aria-busy="true">
+        <Icon id="i-clock" /> Ждём оплату
+      </button>,
+    )
+  return (
+    <>
+      {plans.map((plan, i) =>
+        boxed(
+          plan.id,
+          <button
+            className={'btn ' + (i === 0 ? 'primary' : 'secondary') + sm}
+            data-track="premium_subscribe"
+            data-kind="premium"
+            data-id={id}
+            data-plan={plan.id}
+            onClick={() => start(plan)}
+          >
+            <Icon id={i === 0 ? 'i-crown' : 'i-blocks'} /> {plan.id === 'pack' ? 'Эта сборка' : 'Все сборки'} · {planPrice(plan)}
+          </button>,
+        ),
+      )}
+    </>
+  )
 }
 
 /// Цена рядом с кнопкой: подписка отдельной строкой от разовой цены, чтобы они

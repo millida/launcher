@@ -66,13 +66,10 @@ test('the Millida-login flag is off until a login marks it, and then it sticks',
   expect(prefs.get('m-mil-ever')).toBe('1')
 })
 
-test('a step that names a screen navigates to it, a step without one leaves the screen alone', () => {
+test('every guide step stays on the lobby, since all sections now live there', () => {
   startTour()
-  expect(screens).toEqual(['play'])
-  tourNext()
-  expect(screens).toEqual(['play', 'play'])
-  tourNext()
-  expect(screens.length).toBe(2)
+  for (let i = 0; i < TOUR_STEPS.length - 1; i++) tourNext()
+  expect([...new Set(screens)], 'the rebuilt guide points at lobby elements only, so it must never leave the lobby').toEqual(['play'])
 })
 
 /// The last "Далее" is the only way most users end the tour, so it must also

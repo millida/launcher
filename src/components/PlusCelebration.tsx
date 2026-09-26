@@ -16,7 +16,7 @@ export function PlusCelebration({ onDone }: { items?: number; onDone: () => void
       tone: 'var(--m-rarity-legendary)',
       kicker: 'Подписка',
       title: 'PLUS открыт',
-      sub: 'Вещи PLUS и вторая награда дня',
+      sub: 'Вторая награда дня',
       onDone: () => done.current(),
     })
     // StrictMode монтирует дважды — первое раскрытие убираем без onDone.

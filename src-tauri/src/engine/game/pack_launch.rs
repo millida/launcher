@@ -384,8 +384,12 @@ pub fn lwjgl_library_path_arg(dirs: &[PathBuf]) -> Option<String> {
 
 /// Наши сборки для списка «Контент». Открыто, как и карточка: игрок должен
 /// видеть, что у нас есть, ещё до входа в аккаунт.
+///
+/// The token rides along when there is one: a partner's tester also sees the
+/// draft packs they check. The service ignores a stale token instead of
+/// refusing, so the public list never breaks on it.
 pub async fn catalog_packs() -> Result<Value, String> {
-    millida_api("/catalog/packs".into(), "GET".into(), None, None).await
+    millida_api("/catalog/packs".into(), "GET".into(), None, millida_token()).await
 }
 
 /// Маркер «сборка закрыта доступом» для окна ввода ключа.
@@ -479,6 +483,43 @@ pub fn pack_access_from(res: &Value) -> Option<PackAccess> {
 pub async fn pack_access(slug: &str) -> Result<Option<PackAccess>, String> {
     let res = millida_api_auth(format!("/catalog/packs/{}/access", slug), "POST".into(), None).await?;
     Ok(pack_access_from(&res))
+}
+
+const LAUNCH_GATE_WAIT_SECS: u64 = 6;
+
+/// The catalogue slug a profile was installed from, if it still has the shape
+/// our API gives out. The settings file is on the player's disk, and whatever
+/// is written there goes into a request path.
+pub fn launch_gate_slug(settings: &Value) -> Option<String> {
+    let slug = settings["catalogPackSlug"].as_str()?.trim();
+    let shaped = !slug.is_empty()
+        && slug.len() <= 120
+        && slug.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_');
+    shaped.then(|| slug.to_string())
+}
+
+/// Access check for a catalogue pack installed as an ordinary profile: it has
+/// no launch descriptor, so without this a subscription pack would keep
+/// starting after the subscription ended. Only an explicit refusal of our API
+/// keeps the game closed, and the files stay on disk, so renewing is the whole
+/// fix. No network means we do not know, and not knowing must never cost a
+/// paying player their game.
+pub async fn pack_launch_gate(slug: &str) -> Result<(), String> {
+    let wait = std::time::Duration::from_secs(LAUNCH_GATE_WAIT_SECS);
+    if millida_token().is_none() {
+        let view = tokio::time::timeout(wait, millida_api(format!("/catalog/packs/{}", slug), "GET".into(), None, None)).await;
+        return match view {
+            Ok(Ok(v)) if v["accessRequired"].as_bool() == Some(true) => Err(format!(
+                "{}Войди в аккаунт Millida — эта сборка открывается по подписке",
+                PACK_ACCESS_PREFIX
+            )),
+            _ => Ok(()),
+        };
+    }
+    match tokio::time::timeout(wait, pack_access(slug)).await {
+        Ok(Ok(Some(PackAccess::Lost(reason)))) => Err(format!("{}{}", PACK_ACCESS_PREFIX, reason)),
+        _ => Ok(()),
+    }
 }
 
 fn pid_running(pid: u32) -> bool {
@@ -581,6 +622,23 @@ pub fn pack_version_json(spec: &PackLaunch, extra_jvm: &[String]) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Слаг из файла настроек -> пойдёт ли он в адрес проверки доступа.
+    #[test]
+    fn only_a_catalogue_shaped_slug_reaches_the_access_check() {
+        let cases: [(Value, Option<&str>, &str); 7] = [
+            (json!({ "catalogPackSlug": "aeronautics" }), Some("aeronautics"), "обычная сборка каталога"),
+            (json!({ "catalogPackSlug": " lost-souls-2 " }), Some("lost-souls-2"), "пробелы вокруг не мешают"),
+            (json!({ "catalogPackSlug": "my_pack" }), Some("my_pack"), "подчёркивание бывает в слагах Modrinth"),
+            (json!({}), None, "своя сборка без каталога не проверяется"),
+            (json!({ "catalogPackSlug": "" }), None, "пустой слаг — не сборка каталога"),
+            (json!({ "catalogPackSlug": "../admin" }), None, "путь в адресе запроса недопустим"),
+            (json!({ "catalogPackSlug": "Arcania" }), None, "чужая форма слага не угадывается"),
+        ];
+        for (settings, want, why) in cases {
+            assert_eq!(launch_gate_slug(&settings).as_deref(), want, "{}", why);
+        }
+    }
 
     fn spec_json() -> Value {
         json!({

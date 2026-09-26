@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
+import { TopbarPortal } from '../components/TopbarPortal'
 import { HostingManage } from './HostingManage'
 import { api, hasMillidaAccount, openExt } from '../lib/api'
 import { HostPlanPicker } from '../components/HostPlanPicker'
@@ -402,27 +403,23 @@ export function Hosting({ on }: { on: boolean }) {
 
   return (
     <section className={'screen' + (on ? ' on' : '')} id="s-hosting">
-      <div className="page-head">
-        <h1>Хостинг</h1>
-        <div className="right" style={{ gap: '10px' }}>
+      {/* Заголовок «Хостинг» убран, действия и баланс — в верхней полосе рядом с
+          «← Лобби» (владелец 25.09.2026). */}
+      <TopbarPortal>
+        <div className="tb-actions">
           <InviteChip />
-          {/* Баланс — компактной плашкой: кошелёк, сумма, «+» — пополнение. */}
           {millida ? <BalancePill /> : null}
           {view === 'list' && millida ? (
             <button className="btn sm secondary" onClick={() => setPicker({ mode: 'create', focus: 'paid' })}>
               <Icon id="i-plus" /> Новый сервер
             </button>
           ) : null}
-          <button
-            className="btn sm ghost"
-            id="hostPanel"
-            onClick={() => openExt('https://millida.net/hosting')}
-          >
+          <button className="btn sm ghost" id="hostPanel" onClick={() => openExt('https://millida.net/hosting')}>
             Веб-панель
             <Icon id="i-ext" />
           </button>
         </div>
-      </div>
+      </TopbarPortal>
       <div id="hostBody">
         {view === 'initial' || view === 'loading' ? <HostSkeleton /> : null}
         {view === 'gate' ? (

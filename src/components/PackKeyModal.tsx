@@ -7,8 +7,10 @@ import { redeemPackKey } from '../ipc/commands'
 import { openExt } from '../lib/api'
 import { fmtN } from '../lib/format'
 import { track } from '../lib/telemetry'
-import { priceLabel } from '../lib/premium'
+import { hasPlanChoice, loadPremiumPack, priceLabel } from '../lib/premium'
+import type { PremiumPackDetail } from '../lib/premium'
 import { useLobby } from '../state/lobbyMode'
+import { PlanButtons } from './premium/PremiumBuy'
 import { LOADER, gb, loadPackDownloads, loadPackView, modsFromText, packPluses, plusIcon } from './premium/packView'
 import type { PackView } from './premium/packView'
 import '../styles/pixel/packkey.css'
@@ -60,6 +62,7 @@ export function PackKeyModal({ slug, title, onClose, onUnlocked }: Props) {
   const [view, setView] = useState<PackView | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [downloads, setDownloads] = useState<number | null>(null)
+  const [offer, setOffer] = useState<PremiumPackDetail | null>(null)
   const lobbyPack = useLobby((s) => s.premium.find((p) => (p.slug || p.id) === slug))
 
   useEffect(() => {
@@ -71,6 +74,9 @@ export function PackKeyModal({ slug, title, onClose, onUnlocked }: Props) {
       .finally(() => alive && setLoaded(true))
     void loadPackDownloads(slug)
       .then((n) => alive && setDownloads(n))
+      .catch(() => {})
+    void loadPremiumPack(slug)
+      .then((d) => alive && setOffer(d))
       .catch(() => {})
     return () => {
       alive = false
@@ -102,8 +108,10 @@ export function PackKeyModal({ slug, title, onClose, onUnlocked }: Props) {
 
   const name = view?.title || lobbyPack?.title || title
   const cover = view?.banner || view?.cover || lobbyPack?.coverUrl || view?.gallery?.[0] || null
-  const buyUrl = view?.accessBuyUrl && /^https:\/\//.test(view.accessBuyUrl) ? view.accessBuyUrl : ''
-  const price = lobbyPack ? priceLabel(lobbyPack) : ''
+  const plans = offer && hasPlanChoice(offer) ? offer.plans || [] : []
+  const keyEntry = !plans.length || !!offer?.acceptsKeys
+  const buyUrl = !plans.length && view?.accessBuyUrl && /^https:\/\//.test(view.accessBuyUrl) ? view.accessBuyUrl : ''
+  const price = !plans.length && lobbyPack ? priceLabel(lobbyPack) : ''
 
   const mods = modsFromText(view?.description) || (lobbyPack?.modsCount && lobbyPack.modsCount > 0 ? lobbyPack.modsCount : null)
   const game = view?.game || lobbyPack?.mcVersion || null
@@ -171,7 +179,18 @@ export function PackKeyModal({ slug, title, onClose, onUnlocked }: Props) {
             </ul>
           ) : null}
 
-          {buyUrl || price ? (
+          {plans.length && offer ? (
+            <div className="pkb-buy">
+              <PlanButtons
+                pack={offer}
+                plans={plans}
+                onOwned={() => {
+                  onClose()
+                  onUnlocked()
+                }}
+              />
+            </div>
+          ) : buyUrl || price ? (
             <div className="pkb-buy">
               {price ? <span className="pkb-price">{price}</span> : null}
               {buyUrl ? (
@@ -182,6 +201,7 @@ export function PackKeyModal({ slug, title, onClose, onUnlocked }: Props) {
             </div>
           ) : null}
 
+          {keyEntry ? (
           <div className="pkb-key">
             <span className="pkb-key-why">
               <Icon id="i-lock" /> На этом аккаунте доступа нет
@@ -205,6 +225,7 @@ export function PackKeyModal({ slug, title, onClose, onUnlocked }: Props) {
             </div>
             {error ? <span className="pkb-err">{error}</span> : null}
           </div>
+          ) : null}
         </div>
       </div>
     </div>,

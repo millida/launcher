@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { Ruby } from '../components/Ruby'
-import { hasMillidaAccount, openExt, PLUS_MANAGE_URL, WALLET_URL } from '../lib/api'
+import { TopbarPortal } from '../components/TopbarPortal'
+import { hasMillidaAccount, openExt, WALLET_URL } from '../lib/api'
 import { apiErrorText } from '../lib/apiError'
 import {
   buyPack,
   buyShopCard,
   buyXray,
-  claimPlusMonth,
   claimWeekly,
   craftItem,
   loadEconomyProgress,
@@ -15,7 +15,6 @@ import {
   loadRules,
   loadShopDay,
   loadWorkshop,
-  pickPlusMigration,
   rubles,
   wishItem,
   type EconomyProgress,
@@ -45,7 +44,7 @@ import { NightMarket } from '../components/shop/NightMarket'
 import { XrayCard, XrayOpening } from '../components/shop/Xray'
 import { ParcelBlock, PathBlock, WeeklyPathBlock, WorkshopBlock } from '../components/shop/Earn'
 import { boostWeekly, claimWeeklyStep, loadWeeklyAny, type WeeklyPath } from '../components/shop/weekly'
-import { MigrationModal, migrationLeft, PlusMonth } from '../components/shop/PlusMonth'
+import { PlusMonth } from '../components/shop/PlusMonth'
 import { useShopGift } from '../components/shop/giftState'
 import { PassBody } from '../components/daily/DailyPassModal'
 import { Wishlist } from '../components/shop/Wishlist'
@@ -56,6 +55,8 @@ import { purchaseFlow } from '../lib/purchaseTrack'
 import { trackFailure } from '../lib/telemetry'
 import '../styles/pixel/shop-juice.css'
 import { wearNow } from '../state/wearIntent'
+import { topUpFragments } from '../components/shop/topUp'
+import { fragmentWord } from '../components/shop/rarity'
 
 /** Пакеты для гостя — те же пять, что в магазине дня (модель экономики 23.09.2026). */
 const GUEST_PACKS = ['handful', 'pouch', 'casket', 'hoard', 'trove']
@@ -76,9 +77,6 @@ function insufficientKopecks(e: unknown): number | null {
 
 
 /** Вещь каталога — плашка мига награды. */
-/** Окно выбора старого набора PLUS уже открывалось само в этом запуске. */
-let migAsked = false
-
 const entry = (it: ItemRef): RewardEntry => ({ name: it.name, preview: it.preview, rarity: it.rarity })
 /** «Надеть» из награды — сразу на фигуру (владелец 24.09.2026, 19:56). */
 const wearItems = (list: ItemRef[]) => wearNow(list.map((it) => ({ code: it.code, variant: it.variant })))
@@ -117,7 +115,6 @@ export function Rubies({ on }: { on: boolean }) {
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
   const [xray, setXray] = useState<{ tier: XrayOffer['tier']; item: ItemRef | null } | null>(null)
-  const [migOpen, setMigOpen] = useState(false)
   /** Счётчик в шапке «подпрыгивает», когда в него прилетела награда бонуса. */
   const [bump, setBump] = useState<{ rubies?: boolean; shards?: boolean }>({})
   const bumpTimer = useRef(0)
@@ -136,6 +133,12 @@ export function Rubies({ on }: { on: boolean }) {
         setError(apiErrorText(e, ERR))
         return null
       })
+
+  const reloadWorkshop = () => void loadWorkshop().then(setWorkshop).catch(() => undefined)
+  const reloadProgress = () =>
+    void loadEconomyProgress()
+      .then((p) => setProgress(Array.isArray(p.hourItems) ? p : null))
+      .catch(() => undefined)
 
   /**
    * «Хочу» собирается на клиенте из магазина дня, мастерской и каталога: ручки
@@ -194,15 +197,6 @@ export function Rubies({ on }: { on: boolean }) {
   }, [on, day, workshop, catalog])
 
   useEffect(() => () => window.clearTimeout(bumpTimer.current), [])
-
-  // Бывшему подписчику окно выбора вещей старого набора открывается само — один
-  // раз за запуск; дальше — кнопкой «Выбрать» в блоке PLUS.
-  const migLeft = migrationLeft(plus)
-  useEffect(() => {
-    if (!on || migLeft <= 0 || migAsked) return
-    migAsked = true
-    setMigOpen(true)
-  }, [on, migLeft])
 
   const balance = day?.balance ?? 0
   const shards = workshop?.shards ?? day?.shards ?? 0
@@ -320,9 +314,9 @@ export function Rubies({ on }: { on: boolean }) {
 
   const doCraft = async (w: { item: ItemRef; cost: number }) => {
     const result = purchaseFlow('craft', w.item.code, w.cost, 'shards')
-    const ok = await uiConfirm(w.item.name + ' за ' + w.cost.toLocaleString('ru-RU') + ' осколков', {
-      title: 'Собрать вещь',
-      confirmLabel: 'Собрать',
+    const ok = await uiConfirm(w.cost.toLocaleString('ru-RU') + ' осколков → половина фрагментов: ' + w.item.name + '. Остаток докупается за рубины', {
+      title: 'Обменять осколки',
+      confirmLabel: 'Обменять',
       danger: false,
     })
     if (!ok) return result(false, 'cancel')
@@ -330,19 +324,34 @@ export function Rubies({ on }: { on: boolean }) {
     try {
       const res = await craftItem(w.item.code)
       result(true)
-      setWorkshop((was) =>
-        was
-          ? {
-              ...was,
-              shards: res.shards,
-              workshop: { ...was.workshop, items: was.workshop.items.map((x) => (x.item.code === w.item.code ? { ...x, owned: true } : x)) },
-            }
-          : was,
-      )
-      showReward({ items: [entry(res.item)], kicker: 'Мастерская', onWear: () => wearItems([res.item]) })
+      setWorkshop((was) => (was ? { ...was, shards: res.shards } : was))
+      reloadWorkshop()
+      const got = res.fragments
+      showToast(got ? '+' + got.amount + ' ' + fragmentWord(got.amount) + ': ' + res.item.name + ' ' + got.have + '/' + got.need : res.item.name, 'ok')
     } catch (e) {
       result(false, 'error', e)
       showToast(apiErrorText(e, ERR), 'error')
+    } finally {
+      setBusy('')
+    }
+  }
+
+  /** «Докупить фрагменты»: вещь твоя только после ответа службы. */
+  const doFragmentsTopUp = async (f: { item: ItemRef; topUp: number }) => {
+    if (!signedIn) return logoutToLogin()
+    if (f.topUp > balance) {
+      showToast('Не хватает ' + (f.topUp - balance) + ' ' + word(f.topUp - balance), 'error')
+      return toPacks()
+    }
+    setBusy(f.item.code)
+    try {
+      const res = await topUpFragments(f.item, f.topUp)
+      if (!res) return
+      setDay((d) => (d ? { ...d, balance: res.balance } : d))
+      reloadWorkshop()
+      reloadProgress()
+      const got = res.granted[0] ?? f.item
+      showReward({ items: [entry(got)], kicker: 'Фрагменты докуплены', onWear: () => wearItems([got]) })
     } finally {
       setBusy('')
     }
@@ -366,13 +375,15 @@ export function Rubies({ on }: { on: boolean }) {
     }
   }
 
-  /** Посылка недели: одна вещь из трёх, навсегда. */
+  /** Посылка недели: фрагменты одной вещи из трёх, остаток докупается. */
   const doParcel = async (item: ItemRef) => {
     setBusy('weekly')
     try {
       const res = await claimWeekly(item.code)
       setParcel((p) => (p ? { ...p, ready: false, choices: null, claimedAt: new Date().toISOString() } : p))
-      showReward({ items: [entry(res.item ?? item)], kicker: 'Посылка недели', onWear: () => wearItems([res.item ?? item]) })
+      reloadWorkshop()
+      const got = res.fragments
+      showToast(got ? '+' + got.amount + ' ' + fragmentWord(got.amount) + ': ' + (res.item ?? item).name + ' ' + got.have + '/' + got.need : 'Посылка забрана', 'ok')
     } catch (e) {
       trackFailure('shop', e, { step: 'action' })
       showToast(apiErrorText(e, ERR), 'error')
@@ -424,47 +435,6 @@ export function Rubies({ on }: { on: boolean }) {
   const doPlus = async () => {
     if (!signedIn) return logoutToLogin()
     useDaily.getState().setPlusCard(true)
-  }
-  const doPlusMonth = async () => {
-    setBusy('plus-month')
-    try {
-      const res = await claimPlusMonth()
-      setPlus((p) => (p && p.month ? { ...p, month: { ...p.month, claimed: true } } : p))
-      showReward({
-        items: res.items.map(entry),
-        kicker: 'PLUS',
-        title: res.items.length > 1 ? 'Вещи месяца' : undefined,
-        tone: 'var(--m-rarity-legendary)',
-        onWear: () => wearItems(res.items),
-      })
-    } catch (e) {
-      trackFailure('shop', e, { step: 'action' })
-      showToast(apiErrorText(e, ERR), 'error')
-    } finally {
-      setBusy('')
-    }
-  }
-
-  const doMigrate = async (codes: string[]) => {
-    setBusy('migration')
-    try {
-      const res = await pickPlusMigration(codes)
-      setPlus((p) => (p && p.migration ? { ...p, migration: { ...p.migration, picked: [...p.migration.picked, ...codes] } } : p))
-      setMigOpen(false)
-      showReward({
-        items: res.granted.map(entry),
-        kicker: 'PLUS',
-        title: 'Навсегда твои',
-        sub: res.granted.length > 1 ? res.granted.length + ' вещи' : undefined,
-        tone: 'var(--m-rarity-legendary)',
-        onWear: () => wearItems(res.granted),
-      })
-    } catch (e) {
-      trackFailure('shop', e, { step: 'action' })
-      showToast(apiErrorText(e, ERR), 'error')
-    } finally {
-      setBusy('')
-    }
   }
 
   /**
@@ -601,7 +571,7 @@ export function Rubies({ on }: { on: boolean }) {
         <ParcelBlock data={parcel} busy={busy} onClaim={(it) => void doParcel(it)} />
       ) : null}
       </Guard>
-      <Guard what="Мастерская" silent>{workshop ? <WorkshopBlock data={workshop} busy={busy} weekly={!!weekly} onCraft={(w) => void doCraft(w)} /> : null}</Guard>
+      <Guard what="Мастерская" silent>{workshop ? <WorkshopBlock data={workshop} busy={busy} weekly={!!weekly} onCraft={(w) => void doCraft(w)} onTopUp={(f) => void doFragmentsTopUp(f)} /> : null}</Guard>
       <Guard what="Путь" silent>{progress ? <PathBlock data={progress} /> : null}</Guard>
       <Guard what="Рубины" silent>
       <Packs
@@ -613,14 +583,7 @@ export function Rubies({ on }: { on: boolean }) {
       />
       </Guard>
       <Guard what="PLUS" silent>
-      <PlusMonth
-        plus={plus}
-        busy={busy}
-        onSubscribe={() => void doPlus()}
-        onManage={() => openExt(PLUS_MANAGE_URL)}
-        onClaim={() => void doPlusMonth()}
-        onMigrate={() => setMigOpen(true)}
-      />
+      <PlusMonth plus={plus} busy={busy} onSubscribe={() => void doPlus()} />
       </Guard>
       <Guard what="Хочу" silent>
       {wishes && wishes.items.length ? (
@@ -650,10 +613,11 @@ export function Rubies({ on }: { on: boolean }) {
 
   return (
     <section className={'screen' + (on ? ' on' : '')} id="s-rubies">
-      <div className="page-head sh-top">
-        <h1>Магазин</h1>
-        {signedIn ? (
-          <div className="right sh-wallet2">
+      {/* Заголовок «Магазин» убран, баланс и «Пополнить» — в верхней полосе
+          рядом с «← Лобби» (владелец 25.09.2026). */}
+      {signedIn ? (
+        <TopbarPortal>
+          <div className="tb-actions sh-wallet2">
             <span className={'sh-bal' + (bump.rubies ? ' bump' : '')} data-cur="rubies" data-tip="Рубины">
               <Ruby size={20} />
               <b>{day ? balance.toLocaleString('ru-RU') : '—'}</b>
@@ -662,13 +626,13 @@ export function Rubies({ on }: { on: boolean }) {
               <Shard size={20} />
               <b>{day || workshop ? shards.toLocaleString('ru-RU') : '—'}</b>
             </span>
-            <button className="btn md primary" data-track="top_up" onClick={toPacks}>
+            <button className="btn sm primary" data-track="top_up" onClick={toPacks}>
               <Icon id="i-plus" />
               Пополнить
             </button>
           </div>
-        ) : null}
-      </div>
+        </TopbarPortal>
+      ) : null}
 
       {!signedIn ? (
         <>
@@ -704,16 +668,6 @@ export function Rubies({ on }: { on: boolean }) {
             void reloadShop()
             showReward({ items: [entry(item)], kicker: 'Рентген-кейс', onWear: () => wearItems([item]) })
           }}
-        />
-      ) : null}
-
-      {migOpen && plus?.migration && migLeft > 0 ? (
-        <MigrationModal
-          pool={plus.migration.pool.filter((it) => !plus.migration!.picked.includes(it.code))}
-          left={migLeft}
-          busy={busy === 'migration'}
-          onPick={(codes) => void doMigrate(codes)}
-          onClose={() => setMigOpen(false)}
         />
       ) : null}
 

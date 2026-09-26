@@ -1,3 +1,4 @@
+import { noteGpuCrash } from './gpuLite'
 import { hasTauri } from '../ipc/tauri'
 import { appVersion, setWebviewLowMemory, takeWebviewFailure } from '../ipc/commands'
 import { showToast } from '../state/ui'
@@ -103,9 +104,22 @@ export function contextFields(c: WebviewContext | null): Record<string, string |
  * previous one. Sent as `error` rather than a type of its own so it lands in the
  * dashboards that already exist.
  */
+let failure: ReturnType<typeof takeWebviewFailure> | null = null
+/** Причину прошлой смерти окна забираем один раз и как можно раньше: сбой
+ *  видеокарты должен выключить WebGL до того, как лобби его создаст. */
+export function webviewFailure(): ReturnType<typeof takeWebviewFailure> {
+  if (!failure) {
+    failure = hasTauri() ? takeWebviewFailure().catch(() => null) : Promise.resolve(null)
+    void failure.then((f) => {
+      if (f && f.kind === 'gpu') noteGpuCrash()
+    })
+  }
+  return failure
+}
+
 export async function reportWebviewFailure(): Promise<void> {
   if (!hasTauri()) return
-  const f = await takeWebviewFailure().catch(() => null)
+  const f = await webviewFailure()
   if (!f) return
   track(
     'error',
@@ -122,6 +136,10 @@ export async function reportWebviewFailure(): Promise<void> {
   )
   if (f.reason === 'out_of_memory') {
     showToast('Машине не хватило памяти — окно лаунчера перезапустилось само. Уменьши память сборке или закрой лишние программы', 'error')
+    return
+  }
+  if (f.kind === 'gpu') {
+    showToast('Видеокарта сбросила окно — включили лёгкую графику без 3D', 'error')
     return
   }
   showToast('Окно лаунчера подвисло и перезапустилось само', 'error')

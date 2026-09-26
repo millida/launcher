@@ -74,6 +74,28 @@ export interface FoundInstance {
   loader: string
   path: string
   source: string
+  /** Prism, MultiMC или Modrinth App: сборку можно перенести целиком. */
+  movable?: boolean
+}
+
+export interface MoveCandidate {
+  path: string
+  name: string
+  version: string
+  loader: string
+  launcher: string
+  bytes: number
+  files: number
+  worlds: number
+  mods: number
+  same_drive: boolean
+}
+
+export interface MoveOutcome {
+  profile: Profile
+  instant: boolean
+  source_removed: boolean
+  note: string | null
 }
 
 export interface JavaInfo {
@@ -102,6 +124,8 @@ export interface ProfileSettings {
   autoTune?: boolean
   catalogPackSlug?: string
   catalogPackVersion?: string
+  /** Non-empty when a review candidate is installed instead of the published version. */
+  catalogPackReviewFile?: string
   modpackSlug?: string
 }
 
@@ -483,6 +507,9 @@ export const installModpackVersion = (slug: string, versionId: string) =>
 /** Готовая сборка каталога Millida: ставится только отсюда, файла в вебе нет. */
 export const installCatalogPack = (slug: string) => invoke<Profile>('install_catalog_pack', { slug })
 
+/** The core resolves pack, version and file from the build's settings: the webview names only the build. */
+export const updateCatalogPack = (profile: string) => invoke<Profile>('update_catalog_pack', { profile })
+
 export interface PackCandidate {
   fileId: string
   version: string
@@ -636,11 +663,13 @@ export interface FpsBoostState {
   flags: string[]
   video: boolean
   vanilla: boolean
+  stale: boolean
 }
 
 export const fpsBoostState = (profile: string) => invoke<FpsBoostState>('fps_boost_state', { profile })
 
-export const setFpsBoost = (profile: string, on: boolean) => invoke<FpsBoostState>('set_fps_boost', { profile, on })
+export const setFpsBoost = (profile: string, on: boolean, keepOptions = false) =>
+  invoke<FpsBoostState>('set_fps_boost', { profile, on, keepOptions })
 
 export const millidaApi = <T = unknown>(path: string, method: string, body?: unknown) =>
   invoke<T>('millida_api', { path, method, body: body === undefined ? null : body })
@@ -803,6 +832,9 @@ export const setProfileJavaMajor = (profile: string, major: number | null) =>
   invoke<string>('set_profile_java_major', { profile, major })
 
 export const scanImports = () => invoke<FoundInstance[]>('scan_imports')
+export const planMoves = () => invoke<MoveCandidate[]>('plan_moves')
+export const moveInstance = (path: string, removeSource: boolean) =>
+  invoke<MoveOutcome>('move_instance', { path, removeSource })
 /** «Выбрать папку» в импорте: выбор папки и сборки в ней. null — диалог закрыли. */
 export const pickImportDir = () => invoke<FoundInstance[] | null>('pick_import_dir')
 
@@ -926,7 +958,7 @@ export const hostUpload = (id: string, dir: string) => invoke<string | null>('ho
 
 export interface PingResult { online: number; max: number; motd: string; version: string; favicon: string | null; ms: number }
 export const pingServer = (addr: string) => invoke<PingResult>('ping_server', { addr })
-export interface RepairReport { checked: number; restored: number; broken: string[] }
+export interface RepairReport { checked: number; restored: number; broken: string[]; refused: string[] }
 export const repairProfile = (profile: string) => invoke<RepairReport>('repair_profile', { profile })
 
 export const setLocalSkin = (skin: string | null, cape: string | null, slim: boolean) =>

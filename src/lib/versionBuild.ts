@@ -18,8 +18,9 @@ import { MODRINTH_API, api, mirrorAsset } from './api'
  * нашей косметики, ни модов-ускорителей. Одна сборка на версию.
  *
  * FPS-моды ставит ядро режимом «Буст FPS» (engine/game/fpsboost.rs): Sodium,
- * Lithium, FerriteCore, EntityCulling, ImmediatelyFast, ModernFix — только то,
- * у чего на Modrinth есть файл под эту версию, остальное ядро пропускает.
+ * Lithium, FerriteCore, EntityCulling, ImmediatelyFast, ModernFix, Dynamic FPS,
+ * MoreCulling — только то, у чего на Modrinth есть файл под эту версию,
+ * остальное ядро пропускает.
  * Выключение здесь НЕ снимает моды (ядро при выключении режима их удаляет),
  * а переименовывает в .disabled: включить обратно — без скачивания.
  */
@@ -56,9 +57,14 @@ export function versionLoader(version: string): 'fabric' | 'forge' {
 export const loaderTitle = (version: string) => (versionLoader(version) === 'forge' ? 'Forge' : 'Fabric')
 
 /** Моды режима «Буст FPS» по загрузчику — тот же список, что в ядре (fpsboost.rs). */
-const FPS_MODS: Record<'fabric' | 'forge', string[]> = {
-  fabric: ['sodium', 'lithium', 'ferrite-core', 'entityculling', 'immediatelyfast', 'modernfix'],
-  forge: ['embeddium', 'ferrite-core', 'entityculling', 'immediatelyfast', 'modernfix'],
+export const FPS_MODS: Record<'fabric' | 'forge', string[]> = {
+  fabric: ['sodium', 'lithium', 'ferrite-core', 'entityculling', 'immediatelyfast', 'modernfix', 'dynamic-fps', 'moreculling'],
+  forge: ['embeddium', 'ferrite-core', 'entityculling', 'immediatelyfast', 'modernfix', 'dynamic-fps'],
+}
+
+/** The core installs release files, beta when there is no release, never alpha. */
+export function stableFile<T extends { version_type?: string }>(files: T[]): T | null {
+  return files.find((f) => f.version_type === 'release') || files.find((f) => f.version_type === 'beta') || null
 }
 
 /** FPS-мод, у которого есть файл под версию: что покажет страница версии. */
@@ -84,7 +90,7 @@ export function fpsMods(version: string): Promise<FpsMod[] | null> {
   const get = <T,>(path: string) =>
     fetch(MODRINTH_API + path).then((r) => (r.ok ? (r.json() as Promise<T>) : Promise.reject(r.status)))
   const one = async (slug: string): Promise<FpsMod | null> => {
-    const files = await get<{ version_number: string }[]>(
+    const files = await get<{ version_number: string; version_type?: string }[]>(
       '/v2/project/' +
         slug +
         '/version?loaders=' +
@@ -92,11 +98,12 @@ export function fpsMods(version: string): Promise<FpsMod[] | null> {
         '&game_versions=' +
         encodeURIComponent(JSON.stringify([version])),
     )
-    if (!Array.isArray(files) || !files.length) return null
+    const file = Array.isArray(files) ? stableFile(files) : null
+    if (!file) return null
     const p = await get<{ title: string; icon_url?: string | null; description?: string }>('/v2/project/' + slug).catch(
       () => ({ title: slug, icon_url: null, description: '' }),
     )
-    return { slug, title: p.title, icon: mirrorAsset(p.icon_url) || null, summary: p.description || '', file: files[0]!.version_number }
+    return { slug, title: p.title, icon: mirrorAsset(p.icon_url) || null, summary: p.description || '', file: file.version_number }
   }
   const asked = Promise.all(FPS_MODS[loader].map((m) => one(m).then((x) => ({ x }), () => null))).then((all) =>
     all.every((r) => r === null) ? null : all.flatMap((r) => (r && r.x ? [r.x] : [])),
@@ -150,9 +157,10 @@ async function fabricBuild(version: string): Promise<string | null> {
 async function applyFps(profile: string, on: boolean): Promise<void> {
   const st = await fpsBoostState(profile)
   if (on && !st.enabled) {
-    await setFpsBoost(profile, true)
+    await setFpsBoost(profile, true, true)
     return
   }
+  if (on && st.stale) await setFpsBoost(profile, true, true)
   // Режим уже включён: его моды могли быть выключены этим же переключателем.
   for (const file of st.mods) await toggleContent(profile, 'mod', file, on).catch(() => {})
 }
@@ -247,7 +255,7 @@ export async function ensurePresetBuild(v: PopularVersion, icon: string | null):
       return null
     }
   }
-  if (v.loader === 'fabric' || v.loader === 'forge') {
+  if (v.loader !== 'vanilla') {
     const fps = await fpsAvailable(v.mc)
     if (fps) await applyFps(built, true).catch((e) => console.error('[preset-build] fps', e))
   }

@@ -77,6 +77,8 @@ import type { SkinSource } from '../lib/gameProfile'
 import { logoutToLogin } from '../lib/session'
 import { accentFromHex, computeAccent, paintAccent, saveAccent, withColorFade } from '../lib/accent'
 import type { Accent } from '../lib/accent'
+import { TAB_MS_DEFAULT, useViewPrefs } from '../state/viewPrefs'
+import type { PerfMode } from '../state/viewPrefs'
 
 /* ============================================================
    НАСТРОЙКИ — упрощены 23.09.2026 по правкам владельца:
@@ -245,6 +247,10 @@ export function Settings({ on }: { on: boolean }) {
   const [beta, setBeta] = useState(betaChannel)
   const updStaged = useUpdate((s) => s.staged)
   const [skins, setSkins] = useState<SkinSource>(skinSource)
+  const charAnim = useViewPrefs((s) => s.charAnim)
+  const bgAnim = useViewPrefs((s) => s.bgAnim)
+  const tabMs = useViewPrefs((s) => s.tabMs)
+  const perf = useViewPrefs((s) => s.perf)
   useAccounts()
   const acc = getAccount()
   const millidaAcc = getMillidaAccount()
@@ -381,7 +387,39 @@ export function Settings({ on }: { on: boolean }) {
         </Group>
       </Block>
 
-
+      <Block keys="анимация движение персонаж танцует фон переход между вкладками скорость плавность оптимизация качество слабый пк производительность лаги fps">
+        <Group title="Анимация">
+          <Row title="Оптимизация" keys="оптимизация качество слабый пк производительность лаги fps плавность">
+            <Segs<PerfMode>
+              value={perf}
+              options={[
+                ['auto', 'Авто'],
+                ['high', 'Полное'],
+                ['low', 'Слабый ПК'],
+              ]}
+              onPick={(v) => useViewPrefs.getState().setPerf(v)}
+            />
+          </Row>
+          <Row title="Персонаж танцует" keys="персонаж анимация танец движение">
+            <Toggle label="Персонаж танцует" on={charAnim} onChange={() => useViewPrefs.getState().setCharAnim(!charAnim)} />
+          </Row>
+          <Row title="Живой фон" keys="фон анимация сцена лобби волна искры">
+            <Toggle label="Живой фон" on={bgAnim} onChange={() => useViewPrefs.getState().setBgAnim(!bgAnim)} />
+          </Row>
+          <Row title="Переход между вкладками" keys="переход вкладки скорость длительность плавность анимация">
+            <Segs<number>
+              value={tabMs}
+              options={[
+                [0, 'Выкл'],
+                [190, 'Быстро'],
+                [TAB_MS_DEFAULT, 'Обычно'],
+                [640, 'Медленно'],
+              ]}
+              onPick={(v) => useViewPrefs.getState().setTabMs(v)}
+            />
+          </Row>
+        </Group>
+      </Block>
     </>
   )
 

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ChestTier } from '../../lib/rubies'
 import type { ChestMode, ChestScene } from './chestScene'
 import { ChestArt } from './ChestArt'
+import { gpuLite, noteContextLost } from '../../lib/gpuLite'
 
 const reducedMotion = () => !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
@@ -34,6 +35,13 @@ export function Chest3D({
   useEffect(() => {
     let alive = true
     let ro: ResizeObserver | null = null
+    let onLost: ((ev: Event) => void) | null = null
+    const cvAtMount = canvas.current
+    // Лёгкая графика после сбоя видеокарты — сразу 2D-рисунок, без WebGL.
+    if (gpuLite()) {
+      setState('failed')
+      return
+    }
     let io: IntersectionObserver | null = null
     import('./chestScene')
       .then((m) => {
@@ -50,6 +58,17 @@ export function Chest3D({
           return
         }
         sceneRef.current = scene
+        // Видеокарта отобрала контекст — дальше рисунок; второй раз за сеанс
+        // включает лёгкую графику (lib/gpuLite).
+        const cv = canvas.current
+        onLost = (ev: Event) => {
+          ev.preventDefault()
+          noteContextLost()
+          sceneRef.current?.dispose()
+          sceneRef.current = null
+          setState('failed')
+        }
+        cv.addEventListener('webglcontextlost', onLost)
         const el = wrap.current
         scene.resize(el.clientWidth, el.clientHeight)
         ro = new ResizeObserver(() => scene.resize(el.clientWidth, el.clientHeight))
@@ -63,6 +82,7 @@ export function Chest3D({
     return () => {
       alive = false
       ro?.disconnect()
+      if (onLost) cvAtMount?.removeEventListener('webglcontextlost', onLost)
       io?.disconnect()
       sceneRef.current?.dispose()
       sceneRef.current = null

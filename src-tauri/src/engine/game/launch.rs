@@ -1076,6 +1076,11 @@ pub async fn install_and_launch_in(
     // the descriptor is a file in the profile folder: it is honoured only for
     // a build the core itself installed from the catalogue
     let pack = trusted_pack_launch_spec(&profile);
+    if !pack.as_ref().is_some_and(|spec| spec.needs_token) {
+        if let Some(slug) = launch_gate_slug(&settings) {
+            pack_launch_gate(&slug).await?;
+        }
+    }
     let (v, main_class, classpath, java, assets_root, natives_dir, libraries_dir) = match &pack {
         Some(spec) => {
             emit(&app, "launch", 20.0, "Готовим сборку…");

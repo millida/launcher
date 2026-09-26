@@ -13,6 +13,7 @@ import { setSoundMode, soundMode } from '../lib/sound'
 import { setMusicAutostart } from '../state/music'
 import { track } from '../lib/telemetry'
 import { trackImportFailure } from '../lib/importTrack'
+import { MovePanel } from './MoveBuilds'
 
 function Welcome({ nick }: { nick: string }) {
   return (
@@ -58,10 +59,13 @@ function ImportStep() {
   const [done, setDone] = useState<Record<string, boolean>>({})
   const [busy, setBusy] = useState('')
   const [fileBusy, setFileBusy] = useState(false)
+  const [movable, setMovable] = useState(0)
 
   useEffect(() => {
     ;(hasTauri() ? scanImports() : Promise.resolve([] as FoundInstance[]))
-      .then((l) => {
+      .then((all) => {
+        const l = all.filter((it) => !it.movable)
+        setMovable(all.length - l.length)
         setList(l)
         setPicked(Object.fromEntries(l.map((it) => [foundKey(it), true])))
       })
@@ -122,7 +126,8 @@ function ImportStep() {
   return (
     <>
       <h3>Перенесём сборки</h3>
-      <div className="sub">Оригиналы останутся на месте</div>
+      <div className="sub">{movable ? 'Сборки Prism и Modrinth App переедут в Millida целиком — с мирами и настройками' : 'Оригиналы останутся на месте'}</div>
+      {movable ? <MovePanel /> : null}
       <div className="onb-scroll">
         {failed ? (
           <p className="faint-note">Не удалось найти сборки</p>
@@ -131,7 +136,7 @@ function ImportStep() {
             <span className="spin"></span>
             Ищем на дисках
           </p>
-        ) : list.length ? (
+        ) : movable && !list.length ? null : list.length ? (
           list.map((it) => {
             const key = foundKey(it)
             const already = existing.has(it.name) || done[key]

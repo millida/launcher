@@ -29,6 +29,7 @@ import { headLook } from '../lib/headLook'
 import type { Mine3dModule } from '../lib/mine3d'
 import type { SkinAnimation, SkinViewEngine } from '../vendor/mine3d'
 import { textureSource } from '../lib/textureSource'
+import { detectSlim, detectSlimFromUrl, loadImg } from '../lib/skinArms'
 import { contentFingerprint, dedupeCapes, textureHash } from '../lib/capes'
 import { SkinBody } from '../components/SkinBody'
 import {
@@ -69,6 +70,7 @@ import { loadMillidaProfile, logoutToLogin } from '../lib/session'
 import { ensureMsAuth } from '../state/msLogin'
 import { apiErrorText } from '../lib/apiError'
 import { buildCosmetic } from '../lib/cosmeticModel'
+import { sectionTakeOff } from '../lib/sectionTakeOff'
 import { CosmeticEmote, emoteClip } from '../lib/cosmeticEmote'
 import { emoteSequence } from '../lib/emoteSequence'
 import { defaultVariant } from '../lib/cosmeticVariants'
@@ -118,6 +120,8 @@ import '../styles/pixel/character.css'
 import { showReward } from '../components/reward/RewardReveal'
 import { rarityOfPrice } from '../components/shop/rarity'
 import { openPaymentUrl } from '../lib/openPayment'
+import { drawFront } from '../lib/skinFlat'
+import { noteContextLost } from '../lib/gpuLite'
 
 interface CatalogSkin {
   key: string
@@ -504,81 +508,6 @@ const skinUrl = (n: string) => {
 }
 
 /// Сброс скина проходит на лицензии сразу, а /v2/heads отдаёт прежнюю текстуру:
-function loadImg(url: string): Promise<HTMLImageElement> {
-  return textureSource(url).then(
-    (src) =>
-      new Promise<HTMLImageElement>((res, rej) => {
-        const i = new Image()
-        if (!/^(data|blob):/i.test(src)) i.crossOrigin = 'anonymous'
-        i.onload = () => res(i)
-        i.onerror = () => rej(new Error('текстура недоступна: ' + url))
-        i.src = src
-      }),
-  )
-}
-
-type SkinArea = [number, number, number, number]
-
-const AREAS_UNUSED_BY_SLIM: SkinArea[] = [
-  [50, 16, 2, 4],
-  [54, 20, 2, 12],
-  [42, 48, 2, 4],
-  [46, 52, 2, 12],
-]
-
-type PixelTest = (d: Uint8ClampedArray, i: number) => boolean
-
-const isBlackPixel: PixelTest = (d, i) => d[i] === 0 && d[i + 1] === 0 && d[i + 2] === 0 && d[i + 3] === 255
-const isWhitePixel: PixelTest = (d, i) => d[i] === 255 && d[i + 1] === 255 && d[i + 2] === 255 && d[i + 3] === 255
-
-function detectSlim(img: HTMLImageElement): boolean {
-  if (img.height < img.width) return false
-  try {
-    const c = document.createElement('canvas')
-    c.width = img.width
-    c.height = img.height
-    const g = c.getContext('2d', { willReadFrequently: true })
-    if (!g) return false
-    g.drawImage(img, 0, 0)
-    const s = img.width / 64
-    const everyPixel = (a: SkinArea, ok: PixelTest) => {
-      const d = g.getImageData(
-        Math.round(a[0] * s),
-        Math.round(a[1] * s),
-        Math.max(1, Math.round(a[2] * s)),
-        Math.max(1, Math.round(a[3] * s)),
-      ).data
-      for (let i = 0; i < d.length; i += 4) if (!ok(d, i)) return false
-      return true
-    }
-    // Руки определяем сами (правка владельца 23.09.2026: переключатель убран).
-    // Столбцы, которых у тонкой модели нет: у Alex они в основном прозрачные
-    // или залиты одним цветом (чаще чёрным); у Steve это живые пиксели руки.
-    const px: number[][] = []
-    for (const r of AREAS_UNUSED_BY_SLIM) {
-      const d = g.getImageData(
-        Math.round(r[0] * s),
-        Math.round(r[1] * s),
-        Math.max(1, Math.round(r[2] * s)),
-        Math.max(1, Math.round(r[3] * s)),
-      ).data
-      for (let i = 0; i < d.length; i += 4) px.push([d[i], d[i + 1], d[i + 2], d[i + 3]])
-    }
-    if (!px.length) return false
-    const clear = px.filter((p) => p[3] < 128).length / px.length
-    if (clear >= 0.5) return true
-    const solid = px.filter((p) => p[3] >= 128)
-    const [r0, g0, b0] = solid[0]
-    const flat = solid.every((p) => Math.abs(p[0] - r0) + Math.abs(p[1] - g0) + Math.abs(p[2] - b0) <= 6)
-    return flat && (everyPixel(AREAS_UNUSED_BY_SLIM[1], isBlackPixel) || everyPixel(AREAS_UNUSED_BY_SLIM[1], isWhitePixel) || solid.length === px.length)
-  } catch {
-    return false
-  }
-}
-
-function detectSlimFromUrl(url: string): Promise<boolean> {
-  return loadImg(url).then(detectSlim)
-}
 
 // Manual arm type wins over autodetect, which misreads skins without transparent areas.
 const VARIANT_KEY = 'm-skin-variant'
@@ -608,35 +537,6 @@ function rememberVariant(key: string, variant: string) {
   } catch {}
 }
 
-/// Front projection of a skin texture; legacy 64x32 has no second layer and mirrors limbs.
-function drawFront(g: CanvasRenderingContext2D, img: HTMLImageElement, slim: boolean) {
-  const s = img.width / 64
-  const is64 = img.height >= img.width
-  const armW = slim ? 3 : 4
-  g.imageSmoothingEnabled = false
-  g.clearRect(0, 0, 16, 32)
-  const px = (sx: number, sy: number, sw: number, sh: number, dx: number, dy: number) => {
-    try {
-      g.drawImage(img, sx * s, sy * s, sw * s, sh * s, dx, dy, sw, sh)
-    } catch {}
-  }
-  px(8, 8, 8, 8, 4, 0) // head
-  px(20, 20, 8, 12, 4, 8) // body
-  px(44, 20, armW, 12, 4 - armW, 8) // right arm
-  if (is64) px(36, 52, armW, 12, 12, 8)
-  else px(44, 20, armW, 12, 12, 8) // left arm (legacy: mirrored right arm)
-  px(4, 20, 4, 12, 4, 20) // right leg
-  if (is64) px(20, 52, 4, 12, 8, 20)
-  else px(4, 20, 4, 12, 8, 20) // left leg
-  if (is64) {
-    px(40, 8, 8, 8, 4, 0) // hat layer
-    px(20, 36, 8, 12, 4, 8) // jacket
-    px(44, 36, armW, 12, 4 - armW, 8) // right sleeve
-    px(52, 52, armW, 12, 12, 8) // left sleeve
-    px(4, 36, 4, 12, 4, 20) // right pant
-    px(4, 52, 4, 12, 8, 20) // left pant
-  }
-}
 
 // The figure is 32 skin pixels tall, so only a multiple of 32 keeps every pixel
 // the same height on screen; 132 px gave rows of 4 and 5 pixels side by side.
@@ -1922,6 +1822,8 @@ export function Skins({ on }: { on: boolean }) {
     if (!m3d || !canvas) return
     const onLost = (ev: Event) => {
       ev.preventDefault()
+      // Второй потерянный контекст за сеанс — лёгкая графика в лобби и превью.
+      noteContextLost()
       setModelShown(false)
       setGlEpoch((n) => n + 1)
     }
@@ -3409,18 +3311,25 @@ export function Skins({ on }: { on: boolean }) {
                 слева, справа «Снять» (если в разделе что-то надето) и «Все/Мои».
                 Поиска по вещам и «Снять всё» нет. */}
             {(() => {
-              const here = (sections.find((x) => x.key === section)?.chips ?? []).flatMap((c) => c.slots)
-              const wornHere = section === 'cape' ? !!currentCape : worn.some((w) => here.includes(w.slot))
+              const off = sectionTakeOff(
+                section,
+                (sections.find((x) => x.key === section)?.chips ?? []).flatMap((c) => c.slots),
+                worn,
+                !!currentCape,
+              )
               const cosmetic = section !== 'skin' && section !== 'looks'
-              if (!wornHere && !cosmetic) return null
+              if (!off && !cosmetic) return null
               return (
                 <div className="ch-tools">
-                  {wornHere ? (
+                  {off ? (
                     <button
                       className="btn sm secondary"
                       disabled={!!cosmeticBusy}
                       data-track="take_off_section"
-                      onClick={() => (section === 'cape' ? takeOffCape() : void takeOffSlots(here))}
+                      onClick={() => {
+                        if (off.accountCape) takeOffCape()
+                        void takeOffSlots(off.slots)
+                      }}
                     >
                       <Icon id="i-x" /> Снять
                     </button>

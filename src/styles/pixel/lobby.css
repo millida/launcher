@@ -51,7 +51,9 @@
   top: 56px;
   bottom: 100px;
   width: 60%;
-  cursor: pointer;
+  /* Вся сцена — перетаскивание (курсор задаёт JS: «указатель» только над
+     фигурой, иначе «grab»). */
+  cursor: grab;
   opacity: 0;
   transition: opacity 240ms linear;
   touch-action: none;
@@ -61,15 +63,21 @@
    траве подиума — пикселями верхней грани (владелец 23.09.2026). */
 .lobby-char:active { cursor: grabbing; }
 .lobby-char canvas { display: block; width: 100%; height: 100%; }
+/* Лёгкая графика (lib/gpuLite): плоская фигурка скина вместо 3D. */
+.lobby-char-flat { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 3%; }
+.lobby-char-flat canvas.flat-figure { width: auto; height: 76% !important; }
+.lobby-flat-tag { position: relative; width: 0; height: 0; margin-bottom: 14px; }
 
 .lobby-who {
   position: absolute;
   z-index: 4;
   left: 30%;
   width: 40%;
-  /* Прямо под ногами (ноги — LOBBY_FEET_AT = 70% сцены, characterStage.ts):
-     кнопка выше «Играть», а не на одной линии с ней (правка 23.09.2026). */
-  top: calc(77% + 14px);
+  /* Строго над доком «Сегодня играем · Играть», между персонажем и выбором
+     сборок (владелец 25.09.2026): раньше строка налезала на док, потом ушла
+     слишком высоко к коленям. Держим прямо над доком снизу. */
+  top: auto;
+  bottom: 150px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -427,7 +435,7 @@
 }
 /* Слой ника поверх сцены персонажа: двигается вслед за головой (transform
    ставит LobbyCharacter). Во всю сцену — чтобы координаты ника не менялись. */
-.lobby-tag-follow { position: absolute; inset: 0; pointer-events: none; will-change: transform; }
+.lobby-tag-follow { position: absolute; inset: 0; pointer-events: none; }
 
 /* ---------- Плашка режима как в Brawl Stars (правка владельца 23.09.2026) ----------
    Одна яркая плашка цвета режима: крупная картинка, маленькая подпись
@@ -624,7 +632,12 @@
 :root .lobby-row .lobby-mode-card .lobby-mode-body b { font-size: 30px; }
 :root .lobby-row .lobby-mode-card.empty .lobby-mode-body b { font-size: 31px; }
 :root .lobby-row .lobby-mode-card .lobby-mode-lab { font-size: 14px; }
-:root .lobby-row .lobby-mode-card .meta { font-size: 15px; }
+/* Строка «загрузчик · версия · наиграно» — мельче: под крупным названием она
+   была почти с него ростом (владелец 25.09.2026: «слишком огромная»). */
+:root .lobby-row .lobby-mode-card .meta { font-size: 12px; gap: 8px; }
+:root .lobby-row .lobby-mode-card .meta .hero-num { font-size: 12px; margin-left: 0; }
+:root .lobby-row .lobby-mode-card .meta .hero-num svg { width: 12px; height: 12px; }
+:root .lobby-row .lobby-mode-card .meta .hero-num b { font-weight: 700; }
 @media (max-width: 1100px) {
   :root .lobby-row .lobby-mode { flex-basis: 400px; width: 400px; }
   :root .lobby-row #playBtn { flex-basis: 230px; width: 230px; min-width: 230px; font-size: 28px; }
@@ -633,13 +646,14 @@
   :root .lobby-row .lobby-mode-card .lobby-mode-body b { font-size: 24px; }
 }
 
-/* Наиграно через лаунчер — строкой под «Играть» (13:31). */
-.lobby-row #playBtn:not(.loading):not(.running) #playLbl { display: inline-flex; flex-direction: column; align-items: flex-start; line-height: 1; gap: 6px; }
+/* Наиграно через лаунчер — тихой строкой под «Играть»: соц-статус, а не
+   акцент (владелец 25.09.2026: «маленьким шрифтом, еле заметно»). Без иконки. */
+.lobby-row #playBtn:not(.loading):not(.running) #playLbl { display: inline-flex; flex-direction: column; align-items: flex-start; line-height: 1; gap: 5px; }
 .lobby-row #playBtn .play-hours {
   display: inline-flex; align-items: center; gap: 5px;
-  font: 800 14px/1 var(--m-font); letter-spacing: 0; color: rgba(6, 32, 14, 0.72);
+  font: 600 11px/1 var(--m-font); letter-spacing: 0; color: rgba(6, 32, 14, 0.5);
 }
-:root .lobby-row #playBtn .play-hours svg { width: 14px; height: 14px; }
+:root .lobby-row #playBtn .play-hours svg { width: 11px; height: 11px; }
 
 /* Ряд прижат к низу окна, как док (владелец 13:32): нижняя кромка подложки
    уходит за край, сверху — ступенчатые углы. Содержимое приподнято отступом. */

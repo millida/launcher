@@ -151,9 +151,8 @@ function at(list: Keyframe[], time: number, fallback: number): [number, number, 
     if (time < from.time || time > to.time) continue
     const span = to.time - from.time
     const k = span <= 0 ? 0 : (time - from.time) / span
-    // Плавность catmullrom мод считает по соседям; на глаз разница видна
-    // только на длинных клипах, поэтому берём ту же сглаженную ступень.
-    const t = to.interpolation === 'catmullrom' ? k * k * (3 - 2 * k) : k
+    // The key the curve leaves sets its easing: the game eases a segment by its opening key.
+    const t = from.interpolation === 'catmullrom' ? k * k * (3 - 2 * k) : k
     const target = to.before ?? to.value
     return [
       from.value[0] + (target[0] - from.value[0]) * t,

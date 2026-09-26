@@ -11,7 +11,8 @@ import { openModal } from '../state/ui'
 import { useProfiles } from '../state/profiles'
 import { usePackCode } from '../state/packCode'
 import { runInstall } from '../state/installs'
-import { installCatalogPack } from '../ipc/commands'
+import { PACK_ACCESS_PREFIX, installCatalogPack } from '../ipc/commands'
+import { usePackKey } from '../state/packKey'
 import { keyCatalogPack } from './installKeys'
 import { useFriends, openChatFromLink, loadFriends } from '../state/friends'
 import { callFriend } from '../state/call'
@@ -119,18 +120,7 @@ function handle(raw: string) {
       confirmLabel: 'Установить',
       danger: false,
     }).then((ok) => {
-      if (!ok) return
-      runInstall({
-        key: keyCatalogPack(slug),
-        title,
-        running: 'Скачивание…',
-        run: () => installCatalogPack(slug),
-        onDone: (p) => {
-          useProfiles.getState().setSelected(p.name)
-          void useProfiles.getState().refresh()
-          showToast('Сборка «' + p.name + '» готова к запуску', 'ok', 'achievement')
-        },
-      })
+      if (ok) installPackFromLink(slug, title)
     })
     return
   }
@@ -184,4 +174,26 @@ export function initDeepLinks() {
     .then((urls) => (urls || []).forEach(handle))
     .catch(() => {})
   void onOpenUrl((urls) => urls.forEach(handle)).catch(() => {})
+}
+
+function installPackFromLink(slug: string, title: string): void {
+  runInstall({
+    key: keyCatalogPack(slug),
+    title,
+    running: 'Скачивание…',
+    run: () => installCatalogPack(slug),
+    onError: (e) => {
+      const text = String(e)
+      if (text.startsWith(PACK_ACCESS_PREFIX)) {
+        usePackKey.getState().show(slug, title, text.slice(PACK_ACCESS_PREFIX.length), () => installPackFromLink(slug, title))
+        return
+      }
+      showToast(text, 'error')
+    },
+    onDone: (p) => {
+      useProfiles.getState().setSelected(p.name)
+      void useProfiles.getState().refresh()
+      showToast('Сборка «' + p.name + '» готова к запуску', 'ok', 'achievement')
+    },
+  })
 }

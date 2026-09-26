@@ -42,7 +42,7 @@ export const DEMO_USER: boolean = !!import.meta.env.DEV && demoParam()
  * трогая аккаунт. Только dev: в релизе ветка вырезается сборкой.
  */
 export const ECONOMY_SHOWCASE: boolean = !!import.meta.env.DEV && import.meta.env.VITE_ECONOMY_SHOWCASE === '1'
-const ECONOMY_PATHS = /^\/(rubies\/(balance|wishlist|topup|shop(\/.*)?|xray\/.*|shards(\/.*)?|weekly(\/.*)?|progress|welcome(\/claim)?)|launcher\/plus(\/(month|migration)\/.*)?|launcher\/creator-code|creator-codes\/public\/[^/]+)$/
+const ECONOMY_PATHS = /^\/(rubies\/(balance|wishlist|topup|shop(\/.*)?|xray\/.*|shards(\/.*)?|weekly(\/.*)?|progress|welcome(\/claim)?)|launcher\/plus|launcher\/creator-code|creator-codes\/public\/[^/]+)$/
 
 function apiBase(): string {
   try {
@@ -600,9 +600,7 @@ const ROUTES: [RegExp, Handler][] = [
       ...(await economy.plus()),
     }
   }],
-  [/^\/launcher\/plus\/month\/claim$/, () => economy.plusMonthClaim()],
   [/^\/rubies\/welcome\/claim$/, () => economy.welcomeClaim()],
-  [/^\/launcher\/plus\/migration\/pick$/, (_p, _m, body) => economy.migrationPick(body || {})],
 
   // Рубины
   [/^\/rubies\/balance$/, () => RUBY_BALANCE],
@@ -625,6 +623,7 @@ const ROUTES: [RegExp, Handler][] = [
   [/^\/rubies\/xray\/buy$/, (_p, _m, body) => economy.xrayBuy(body || {})],
   [/^\/rubies\/shards$/, () => economy.workshop()],
   [/^\/rubies\/shards\/craft$/, (_p, _m, body) => economy.craft(body || {})],
+  [/^\/rubies\/fragments\/complete$/, (_p, _m, body) => economy.completeFragments(body || {})],
   [/^\/rubies\/weekly$/, () => economy.weekly()],
   [/^\/rubies\/weekly\/claim$/, (_p, _m, body) => economy.weeklyClaim(body || {})],
   [/^\/rubies\/weekly\/boost$/, (_p, _m, body) => economy.weeklyBoost(body || {})],

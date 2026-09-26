@@ -296,6 +296,102 @@ fn loader_profile_json(dir: &Path) -> Option<Value> {
     serde_json::from_slice(&std::fs::read(dir.join(format!("{}.json", name))).ok()?).ok()
 }
 
+/// The Forge/NeoForge installer writes the version json before it downloads
+/// mappings and runs its patch processors, so an installer that died halfway
+/// leaves a dir that looks installed while the patched client jars FML loads
+/// are missing. The dir counts as installed only next to this record, written
+/// once every processor output is on disk.
+const LOADER_OUTPUTS_FILE: &str = "millida-loader-outputs.json";
+
+fn read_install_profile(installer: &Path) -> Result<Value, String> {
+    let f = std::fs::File::open(installer).map_err(|e| io_fail("Инсталлер загрузчика", installer, &e))?;
+    let mut zip = zip::ZipArchive::new(std::io::BufReader::new(f)).map_err(|e| format!("Инсталлер загрузчика повреждён: {}", e))?;
+    let entry = zip
+        .by_name("install_profile.json")
+        .map_err(|_| "в инсталлере нет install_profile.json".to_string())?;
+    serde_json::from_reader(entry).map_err(|e| format!("install_profile.json инсталлера не читается: {}", e))
+}
+
+/// Library paths the client-side processors of an install profile read or
+/// write. Arguments are either `[maven coords]` or `{KEY}` looked up in the
+/// profile's `data`; server-only steps (unpacking the server bundle) never run
+/// for a client install, so their outputs are not expected.
+fn processor_outputs(profile: &Value) -> Vec<String> {
+    let mut out: Vec<String> = vec![];
+    for p in profile["processors"].as_array().into_iter().flatten() {
+        let for_client = p["sides"]
+            .as_array()
+            .is_none_or(|sides| sides.iter().any(|s| s.as_str() == Some("client")));
+        if !for_client {
+            continue;
+        }
+        for arg in p["args"].as_array().into_iter().flatten().filter_map(Value::as_str) {
+            let resolved = match arg.strip_prefix('{').and_then(|k| k.strip_suffix('}')) {
+                Some(key) => profile["data"][key]["client"].as_str(),
+                None => Some(arg),
+            };
+            let Some(coord) = resolved.and_then(|r| r.strip_prefix('[')).and_then(|r| r.strip_suffix(']')) else {
+                continue;
+            };
+            let rel = maven_path(coord);
+            if !out.contains(&rel) {
+                out.push(rel);
+            }
+        }
+    }
+    out
+}
+
+fn missing_outputs(libs: &Path, outputs: &[String]) -> Result<Vec<String>, String> {
+    let mut missing = vec![];
+    for rel in outputs {
+        let path = safe_join(libs, rel).map_err(|e| format!("Профиль загрузчика ссылается на файл вне папки: {}", e))?;
+        if !loader_lib_intact(&path) {
+            missing.push(rel.clone());
+        }
+    }
+    Ok(missing)
+}
+
+fn record_outputs(dir: &Path, outputs: &[String]) -> Result<(), String> {
+    write_json_atomic(&dir.join(LOADER_OUTPUTS_FILE), outputs)
+}
+
+fn recorded_outputs(dir: &Path) -> Option<Vec<String>> {
+    serde_json::from_slice(&std::fs::read(dir.join(LOADER_OUTPUTS_FILE)).ok()?).ok()
+}
+
+/// The installer that created a loader dir, recovered from the dir name, so a
+/// dir without a completeness record is checked against its own build rather
+/// than whatever the promotions list recommends today. Pre-1.13 Forge dirs are
+/// named `<mc>-Forge<build>-<mc>`, match nothing here and have no processors
+/// to check.
+fn installers_for_dir(loader: &str, vid: &str, dir_name: &str) -> Option<Vec<(String, String)>> {
+    let forge_prefix = format!("{}-forge-", vid);
+    let prefix = if loader == "neoforge" && !neoforge_on_forge_coords(vid) { "neoforge-" } else { &forge_prefix };
+    let build = dir_name.strip_prefix(prefix).filter(|b| check_loader_version(b).is_ok())?;
+    let installers = if loader == "neoforge" { vec![neoforge_installer(vid, build)] } else { forge_installers(vid, build) };
+    installers.iter().all(|(_, name)| name == dir_name).then_some(installers)
+}
+
+enum LoaderDir {
+    Ready,
+    Broken(Vec<String>),
+    Unverified,
+}
+
+fn loader_dir_state(dir: &Path, libs: &Path, loader: &str, vid: &str) -> Result<LoaderDir, String> {
+    if let Some(outputs) = recorded_outputs(dir) {
+        let missing = missing_outputs(libs, &outputs)?;
+        return Ok(if missing.is_empty() { LoaderDir::Ready } else { LoaderDir::Broken(missing) });
+    }
+    let name = dir.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    Ok(match installers_for_dir(loader, vid, &name) {
+        Some(_) => LoaderDir::Unverified,
+        None => LoaderDir::Ready,
+    })
+}
+
 /// Forge published its installer under two names: `forge-<mc>-<build>` and, up
 /// to MC 1.9.4, `forge-<mc>-<build>-<mc>`. Only one of them exists per build, so
 /// both are offered and the missing one is skipped on its 404.
@@ -377,17 +473,12 @@ fn exact_loader_dir(vdir: &Path, name: &str) -> Option<PathBuf> {
 /// installs it itself. `None` means a modern profile, which its own installer
 /// still has to apply because of the patch processors.
 fn install_legacy_forge(installer: &Path, vdir: &Path, libs: &Path) -> Result<Option<PathBuf>, String> {
-    let f = std::fs::File::open(installer).map_err(|e| io_fail("Инсталлер загрузчика", installer, &e))?;
-    let mut zip = zip::ZipArchive::new(std::io::BufReader::new(f)).map_err(|e| format!("Инсталлер загрузчика повреждён: {}", e))?;
-    let profile: Value = {
-        let entry = zip
-            .by_name("install_profile.json")
-            .map_err(|_| "в инсталлере нет install_profile.json".to_string())?;
-        serde_json::from_reader(entry).map_err(|e| e.to_string())?
-    };
+    let profile = read_install_profile(installer)?;
     let Some(vinfo) = profile.get("versionInfo").filter(|v| v.is_object()).cloned() else {
         return Ok(None);
     };
+    let f = std::fs::File::open(installer).map_err(|e| io_fail("Инсталлер загрузчика", installer, &e))?;
+    let mut zip = zip::ZipArchive::new(std::io::BufReader::new(f)).map_err(|e| format!("Инсталлер загрузчика повреждён: {}", e))?;
     // The id names the version directory and the maven coordinates name the jar
     // path, and both come out of a downloaded archive, so both go through the
     // path guards.
@@ -710,9 +801,29 @@ pub async fn install_loader_with_java(
             None if legacy_neo => None,
             None => resolve_loader_dir(&vdir, loader, "", &vid),
         };
+        let mut suspect: Option<(PathBuf, Vec<String>)> = None;
+        let mut unverified: Option<PathBuf> = None;
+        if let Some(dir) = found.clone() {
+            match loader_dir_state(&dir, &libs_root, loader, &vid)? {
+                LoaderDir::Ready => {}
+                LoaderDir::Broken(missing) => suspect = Some((dir, missing)),
+                LoaderDir::Unverified => {
+                    unverified = Some(dir.clone());
+                    suspect = Some((dir, vec![]));
+                }
+            }
+        }
+        if suspect.is_some() {
+            found = None;
+        }
+        let own_installers = suspect.as_ref().and_then(|(dir, _)| {
+            installers_for_dir(loader, &vid, &dir.file_name()?.to_string_lossy())
+        });
         if found.is_none() {
             emit(app, "files", 50.0, &format!("{}-инсталлер…", loader));
-            let mut installers: Vec<(String, String)> = if loader == "neoforge" {
+            let mut installers: Vec<(String, String)> = if let Some(own) = own_installers {
+                own
+            } else if loader == "neoforge" {
                 /*
                  * Список версий нужен только чтобы выбрать сборку. Если maven и
                  * наше зеркало его не отдали, а офлайн-копии нет, сборка с
@@ -784,6 +895,7 @@ pub async fn install_loader_with_java(
                 .map(|(_, name)| name.clone())
                 .ok_or_else(|| format!("{} для этой версии не найден", loader))?;
             found = match loader_version {
+                _ if suspect.is_some() => None,
                 _ if legacy_neo => exact_loader_dir(&vdir, &ver_dir_name),
                 // A pinned build must not resolve to a neighbouring one, but the
                 // legacy Forge installer names its dir "<mc>-Forge<build>-<mc>",
@@ -807,6 +919,7 @@ pub async fn install_loader_with_java(
                 // и его «maven не дал контрольную сумму» затирало отказ
                 // инсталлера, который владелец и должен был прочитать.
                 let mut absent: Vec<String> = vec![];
+                let mut profile_read = false;
                 for (inst_url, name) in &installers {
                     // Name carries the build, otherwise one installer file would
                     // be reused for every build.
@@ -832,22 +945,38 @@ pub async fn install_loader_with_java(
                     emit(app, "files", 60.0, "Ставим загрузчик (может занять минуту)…");
                     // A pre-1.13 profile is laid out here: its installer would
                     // only answer that it does not know `--installClient`.
-                    let (ip, vd, lb) = (inst.clone(), vdir.clone(), root.join("libraries"));
-                    match tokio::task::spawn_blocking(move || install_legacy_forge(&ip, &vd, &lb))
-                        .await
-                        .map_err(|e| e.to_string())?
-                    {
-                        Ok(Some(dir)) => {
+                    let (ip, vd, lb) = (inst.clone(), vdir.clone(), libs_root.clone());
+                    let laid = tokio::task::spawn_blocking(move || {
+                        let legacy = install_legacy_forge(&ip, &vd, &lb)?;
+                        let outputs = match legacy {
+                            Some(_) => vec![],
+                            None => processor_outputs(&read_install_profile(&ip)?),
+                        };
+                        Ok::<_, String>((legacy, outputs))
+                    })
+                    .await
+                    .map_err(|e| e.to_string())?;
+                    let outputs = match laid {
+                        Ok((Some(dir), outputs)) => {
                             let _ = std::fs::remove_file(&inst);
+                            record_outputs(&dir, &outputs)?;
                             found = Some(dir);
                             break;
                         }
-                        Ok(None) => {}
+                        Ok((None, outputs)) => outputs,
                         Err(e) => {
                             let _ = std::fs::remove_file(&inst);
                             last_err = format!("{}: {}", name, e);
                             continue;
                         }
+                    };
+                    profile_read = true;
+                    let laid_out = vdir.join(name);
+                    if laid_out.join(format!("{}.json", name)).exists() && missing_outputs(&libs_root, &outputs)?.is_empty() {
+                        let _ = std::fs::remove_file(&inst);
+                        record_outputs(&laid_out, &outputs)?;
+                        found = Some(laid_out);
+                        break;
                     }
                     let (jp, ip, rp) = (java_pre.clone(), inst.clone(), root.clone());
                     // The installer's own output is the only account of why it
@@ -871,11 +1000,36 @@ pub async fn install_loader_with_java(
                     } else {
                         resolve_loader_dir(&vdir, loader, name, &vid)
                     };
-                    if found.is_some() { break }
-                    last_err = format!("Инсталлер отработал, но профиль {} не появился", name);
+                    let Some(dir) = found.clone() else {
+                        last_err = format!("Инсталлер отработал, но профиль {} не появился", name);
+                        continue;
+                    };
+                    let missing = missing_outputs(&libs_root, &outputs)?;
+                    if missing.is_empty() {
+                        record_outputs(&dir, &outputs)?;
+                        break;
+                    }
+                    found = None;
+                    last_err = format!(
+                        "Инсталлер {} завершился без ошибки, но не создал {} — проверь, что антивирус не удаляет файлы из папки игры, и запусти ещё раз",
+                        name,
+                        missing.join(", ")
+                    );
                 }
                 if found.is_none() {
-                    return Err(installer_giveup(loader, &last_err, &absent));
+                    found = unverified.filter(|_| !profile_read);
+                }
+                if found.is_none() {
+                    let reason = installer_giveup(loader, &last_err, &absent);
+                    return Err(match suspect {
+                        Some((_, missing)) if !missing.is_empty() => format!(
+                            "{} установлен не полностью (нет {}), а переустановить не получилось: {}",
+                            loader,
+                            missing.join(", "),
+                            reason
+                        ),
+                        _ => reason,
+                    });
                 }
             }
         }
@@ -1313,6 +1467,164 @@ e";
         let by_coord = legacy_installer(&base, "core.jar", "1.7.10-forge", "..:..:..");
         assert!(install_legacy_forge(&by_coord, &vdir, &libs).is_err(), "координаты решают, где окажется ядро");
         assert!(!base.join("evil").exists() && !base.join("evil.jar").exists(), "за пределы папки игры не записано ничего");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    fn forge_1_20_1_profile() -> Value {
+        serde_json::json!({
+            "data": {
+                "MAPPINGS": { "client": "[de.oceanlabs.mcp:mcp_config:1.20.1-20230612.114412:mappings@txt]" },
+                "MOJMAPS": { "client": "[net.minecraft:client:1.20.1-20230612.114412:mappings@txt]" },
+                "MERGED_MAPPINGS": { "client": "[de.oceanlabs.mcp:mcp_config:1.20.1-20230612.114412:mappings-merged@txt]" },
+                "BINPATCH": { "client": "/data/client.lzma" },
+                "MC_UNPACKED": { "client": "[net.minecraft:client:1.20.1-20230612.114412:unpacked]" },
+                "MC_SLIM": { "client": "[net.minecraft:client:1.20.1-20230612.114412:slim]" },
+                "MC_SLIM_SHA": { "client": "'de86b035d2da0f78940796bb95c39a932ed84834'" },
+                "MC_EXTRA": { "client": "[net.minecraft:client:1.20.1-20230612.114412:extra]" },
+                "MC_SRG": { "client": "[net.minecraft:client:1.20.1-20230612.114412:srg]" },
+                "PATCHED": { "client": "[net.minecraftforge:forge:1.20.1-47.4.10:client]" },
+                "MCP_VERSION": { "client": "'20230612.114412'" }
+            },
+            "processors": [
+                { "sides": ["server"], "args": ["--task", "BUNDLER_EXTRACT", "--input", "{MINECRAFT_JAR}", "--output", "{MC_UNPACKED}", "--jar-only"] },
+                { "args": ["--task", "MCP_DATA", "--input", "[de.oceanlabs.mcp:mcp_config:1.20.1-20230612.114412@zip]", "--output", "{MAPPINGS}", "--key", "mappings"] },
+                { "args": ["--task", "DOWNLOAD_MOJMAPS", "--version", "1.20.1", "--side", "{SIDE}", "--output", "{MOJMAPS}"] },
+                { "args": ["--task", "MERGE_MAPPING", "--left", "{MAPPINGS}", "--right", "{MOJMAPS}", "--output", "{MERGED_MAPPINGS}"] },
+                { "sides": ["client"], "args": ["--input", "{MINECRAFT_JAR}", "--slim", "{MC_SLIM}", "--extra", "{MC_EXTRA}", "--srg", "{MERGED_MAPPINGS}"] },
+                { "sides": ["server"], "args": ["--input", "{MC_UNPACKED}", "--slim", "{MC_SLIM}", "--extra", "{MC_EXTRA}"] },
+                { "args": ["--input", "{MC_SLIM}", "--output", "{MC_SRG}", "--names", "{MERGED_MAPPINGS}"] },
+                { "args": ["--clean", "{MC_SRG}", "--output", "{PATCHED}", "--apply", "{BINPATCH}"] }
+            ]
+        })
+    }
+
+    /// The three jars FML could not find in the Immortal crash log
+    /// ("Invalid paths argument, contained no existing paths") are exactly the
+    /// processor outputs a half-finished installer leaves missing.
+    const IMMORTAL_CRASH_JARS: [&str; 3] = [
+        "net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-srg.jar",
+        "net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-extra.jar",
+        "net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-client.jar",
+    ];
+
+    #[test]
+    fn processor_outputs_cover_what_fml_loads_and_skip_server_steps() {
+        let outputs = processor_outputs(&forge_1_20_1_profile());
+        let cases: [(&str, bool, &str); 7] = [
+            (IMMORTAL_CRASH_JARS[0], true, "srg-клиент грузит FML: без него игра падает на старте"),
+            (IMMORTAL_CRASH_JARS[1], true, "extra-часть клиента грузит FML"),
+            (IMMORTAL_CRASH_JARS[2], true, "пропатченный клиент Forge — последний шаг процессоров"),
+            ("net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-mappings.txt", true, "@txt даёт .txt, а не .jar"),
+            ("de/oceanlabs/mcp/mcp_config/1.20.1-20230612.114412/mcp_config-1.20.1-20230612.114412.zip", true, "координаты прямо в аргументе тоже учитываются"),
+            ("net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-unpacked.jar", false, "серверный шаг на клиенте не выполняется — его файл не ждём, иначе переустановка по кругу"),
+            ("data/client.lzma", false, "путь внутри инсталлера — не файл библиотеки"),
+        ];
+        for (rel, expected, why) in cases {
+            assert_eq!(outputs.iter().any(|o| o == rel), expected, "{}: {}", rel, why);
+        }
+        assert_eq!(outputs.len(), outputs.iter().collect::<std::collections::HashSet<_>>().len(), "файл, упомянутый несколькими шагами, проверяется один раз");
+    }
+
+    #[test]
+    fn profile_without_processors_expects_nothing() {
+        let cases: [(Value, &str); 2] = [
+            (serde_json::json!({ "versionInfo": { "id": "1.7.10-Forge10.13.4.1614-1.7.10" } }), "легаси-профиль ставится без процессоров"),
+            (serde_json::json!({ "processors": [], "data": {} }), "пустой список процессоров ничего не создаёт"),
+        ];
+        for (profile, why) in cases {
+            assert!(processor_outputs(&profile).is_empty(), "{}", why);
+        }
+    }
+
+    #[test]
+    fn maven_path_honours_the_extension_suffix() {
+        let cases: [(&str, &str, &str); 4] = [
+            ("net.minecraftforge:forge:1.20.1-47.4.10:client", "net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-client.jar", "без @ — jar"),
+            ("net.minecraft:client:1.20.1-20230612.114412:mappings@txt", "net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-mappings.txt", "классификатор и @txt"),
+            ("de.oceanlabs.mcp:mcp_config:1.20.1-20230612.114412@zip", "de/oceanlabs/mcp/mcp_config/1.20.1-20230612.114412/mcp_config-1.20.1-20230612.114412.zip", "@ после версии без классификатора"),
+            ("org.ow2.asm:asm:9.5", "org/ow2/asm/asm/9.5/asm-9.5.jar", "обычная библиотека не меняется"),
+        ];
+        for (coord, rel, why) in cases {
+            assert_eq!(maven_path(coord), rel, "{}", why);
+        }
+    }
+
+    #[test]
+    fn installers_for_dir_recovers_the_build_that_made_the_dir() {
+        let cases: [(&str, &str, &str, Option<&str>, &str); 7] = [
+            ("forge", "1.20.1", "1.20.1-forge-47.4.10", Some("https://maven.minecraftforge.net/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-installer.jar"), "папка Forge называет свою сборку"),
+            ("neoforge", "1.21.1", "neoforge-21.1.209", Some("https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.209/neoforge-21.1.209-installer.jar"), "папка NeoForge называет свою сборку"),
+            ("neoforge", "1.20.1", "1.20.1-forge-47.1.106", Some("https://maven.neoforged.net/releases/net/neoforged/forge/1.20.1-47.1.106/forge-1.20.1-47.1.106-installer.jar"), "NeoForge 1.20.1 живёт на координатах Forge"),
+            ("forge", "1.7.10", "1.7.10-Forge10.13.4.1614-1.7.10", None, "легаси-папка без процессоров — проверять нечего"),
+            ("forge", "1.20.1", "1.19.2-forge-43.3.0", None, "чужая версия MC — не наша папка"),
+            ("forge", "1.20.1", "1.20.1-forge-../../evil", None, "сборка из имени папки уходит в URL и проходит проверку"),
+            ("neoforge", "1.21.1", "1.21.1-forge-47.1.0", None, "Forge-папка не выдаётся за NeoForge"),
+        ];
+        for (loader, vid, dir, url, why) in cases {
+            let got = installers_for_dir(loader, vid, dir);
+            assert_eq!(got.as_ref().and_then(|v| v.first()).map(|(u, _)| u.as_str()), url, "{} {}: {}", loader, dir, why);
+        }
+    }
+
+    #[test]
+    fn loader_dir_counts_as_installed_only_with_every_output_on_disk() {
+        let base = std::env::temp_dir().join(format!("millida-loader-state-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let (vdir, libs) = (base.join("versions"), base.join("libraries"));
+        let outputs: Vec<String> = IMMORTAL_CRASH_JARS.iter().map(|s| s.to_string()).collect();
+        let lay = |name: &str, record: bool, present: bool| -> PathBuf {
+            let dir = vdir.join(name);
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join(format!("{}.json", name)), b"{}").unwrap();
+            if record {
+                record_outputs(&dir, &outputs).unwrap();
+            }
+            for rel in &outputs {
+                let p = libs.join(rel);
+                if present {
+                    // A real archive: another test may switch on deep verification, which opens every jar.
+                    use std::io::Write;
+                    std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+                    let mut z = zip::ZipWriter::new(std::fs::File::create(&p).unwrap());
+                    z.start_file("a.class", zip::write::SimpleFileOptions::default()).unwrap();
+                    z.write_all(b"x").unwrap();
+                    z.finish().unwrap();
+                } else {
+                    let _ = std::fs::remove_file(&p);
+                }
+            }
+            dir
+        };
+        let state = |dir: &Path| -> &'static str {
+            match loader_dir_state(dir, &libs, "forge", "1.20.1").unwrap() {
+                LoaderDir::Ready => "ready",
+                LoaderDir::Broken(_) => "broken",
+                LoaderDir::Unverified => "unverified",
+            }
+        };
+        let cases: [(&str, bool, bool, &str, &str); 4] = [
+            ("1.20.1-forge-47.4.10", true, true, "ready", "всё на месте — запуск без сети и без инсталлера"),
+            ("1.20.1-forge-47.4.10", true, false, "broken", "json есть, а процессоры не дошли — это случай Immortal, нужна переустановка"),
+            ("1.20.1-forge-47.4.10", false, true, "unverified", "папка от старой версии лаунчера сверяется со своим инсталлером"),
+            ("1.7.10-Forge10.13.4.1614-1.7.10", false, false, "ready", "легаси-Forge без процессоров не гоняется на переустановку"),
+        ];
+        for (name, record, present, expected, why) in cases {
+            let _ = std::fs::remove_dir_all(&vdir);
+            let dir = lay(name, record, present);
+            assert_eq!(state(&dir), expected, "{}: {}", name, why);
+        }
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn recorded_outputs_may_not_walk_out_of_libraries() {
+        let base = std::env::temp_dir().join(format!("millida-loader-escape-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        assert!(
+            missing_outputs(&base.join("libraries"), &["../../evil.jar".to_string()]).is_err(),
+            "список выходов лежит на диске и мог быть подменён — путь за пределы libraries/ отклоняется"
+        );
         let _ = std::fs::remove_dir_all(&base);
     }
 

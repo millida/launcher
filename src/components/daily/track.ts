@@ -129,16 +129,15 @@ const shards = (amount: number): Reward => ({ kind: 'SHARDS', amount })
 const rubies = (amount: number): Reward => ({ kind: 'RUBIES', amount })
 const chest = (tier: ChestTier): Reward => ({ kind: 'CHEST', tier })
 const frags = (rarity: Rarity, amount: number): Reward => ({ kind: 'FRAGMENTS', rarity, amount })
-const variantOf = (rarity: Rarity): Reward => ({ kind: 'ITEM', rarity })
 /** Модель v3 (копия SEASON_TRACK службы). Бесплатно: сундук 4-го дня по неделям. */
 const DAY4_FREE: ChestTier[] = ['COMMON', 'COMMON', 'RARE', 'COMMON']
 /** 7-й день бесплатной строки: во 2-ю и 4-ю неделю сундук, в 1-ю и 3-ю осколки. */
 const DAY7_FREE: Reward[] = [shards(60), chest('RARE'), shards(60), chest('EPIC')]
 /** Бесплатные рубины: клетка → сумма (230 за сезон; с горстями ≤ 500 за 30 дней). */
 const FREE_RUBIES: Record<number, number> = { 6: 50, 13: 60, 20: 60, 27: 60 }
-/** PLUS: сундук 3-го дня по неделям и расцветка сезона 7-го дня. */
+/** PLUS: сундук 3-го дня по неделям и осколки 7-го дня (вещей PLUS не даёт). */
 const DAY3_PLUS: ChestTier[] = ['RARE', 'RARE', 'EPIC', 'RARE']
-const DAY7_PLUS: Rarity[] = ['RARE', 'EPIC', 'RARE', 'LEGENDARY']
+const DAY7_PLUS_SHARDS = [60, 175, 60, 480]
 
 /** Награды клетки 1…28 по таблице сезона (копия SEASON_TRACK службы, модель v3). */
 export function seasonCell(n: number): { free: Reward[]; plus: Reward[] } {
@@ -160,7 +159,7 @@ export function seasonCell(n: number): { free: Reward[]; plus: Reward[] } {
     case 6:
       return { free: withRubies([shards(30)]), plus: [chest('EPIC')] }
     default: {
-      const top = variantOf(DAY7_PLUS[week] ?? 'RARE')
+      const top = shards(DAY7_PLUS_SHARDS[week] ?? 60)
       return {
         free: withRubies([DAY7_FREE[week] ?? shards(60)]),
         plus: week === TRACK_DAYS / CYCLE_DAYS - 1 ? [top, chest('LEGEND')] : [top],

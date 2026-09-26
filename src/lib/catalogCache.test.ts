@@ -1,6 +1,6 @@
 import { beforeEach, expect, test } from 'bun:test'
 
-import { cachedCatalog, clearCatalogCache, peekCatalog } from './catalogCache'
+import { cachedCatalog, clearCatalogCache, forgetCatalog, peekCatalog } from './catalogCache'
 
 beforeEach(() => clearCatalogCache())
 
@@ -57,4 +57,42 @@ test('сбой не кэшируется и не запирает ключ', asy
 
   expect(peekCatalog('k')).toBeUndefined()
   expect(await cachedCatalog('k', async () => 'ответ')).toBe('ответ')
+})
+
+// Вход → вердикт: ответ в кэше, ключ забыт → следующий запрос идёт в сеть, соседний
+// ключ остаётся в кэше. Закреплено потому, что после обновления сборки карточка
+// из кэша называла только что поставленную версию «новой» и строка предлагала
+// обновиться обратно.
+test('забытый ключ читается заново, соседние остаются', async () => {
+  let calls = 0
+  const load = async () => ++calls
+  await cachedCatalog('pack-view:a', load)
+  await cachedCatalog('pack-view:b', async () => 'b')
+
+  forgetCatalog('pack-view:a')
+
+  expect(await cachedCatalog('pack-view:a', load)).toBe(2)
+  expect(peekCatalog<string>('pack-view:b')).toBe('b')
+})
+
+// Вход → вердикт: запрос ушёл, ключ забыт, ответ пришёл позже → в кэш он не ложится,
+// а следующий запрос не приклеивается к старому. Иначе ответ, начатый до обновления,
+// вернул бы в кэш ту же устаревшую карточку.
+test('ответ запроса, начатого до забывания, в кэш не возвращается', async () => {
+  let release: (v: string) => void = () => {}
+  const early = cachedCatalog(
+    'k',
+    () =>
+      new Promise<string>((r) => {
+        release = r
+      }),
+  )
+
+  forgetCatalog('k')
+  const fresh = cachedCatalog('k', async () => 'свежий')
+  release('старый')
+
+  expect(await early).toBe('старый')
+  expect(await fresh).toBe('свежий')
+  expect(peekCatalog<string>('k')).toBe('свежий')
 })

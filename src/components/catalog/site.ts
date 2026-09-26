@@ -112,6 +112,7 @@ export interface SiteCard {
   categories: string[]
   publishedAt: string | null
   updatedAt: string | null
+  mrHit?: ModHit
 }
 
 export interface SiteListing {
@@ -250,7 +251,7 @@ const LOADER_LABEL: Record<string, string> = {
 export const loaderLabel = (slug: string): string => LOADER_LABEL[slug] || slug
 
 /** Наши русские категории → значок категории Modrinth с тем же смыслом. */
-const MR_CATEGORY: Record<string, string> = {
+export const MR_CATEGORY: Record<string, string> = {
   утилиты: 'utility', декор: 'decoration', приключения: 'adventure', библиотеки: 'library',
   'генерация мира': 'worldgen', оптимизация: 'optimization', механика: 'game-mechanics', оружие: 'equipment',
   техника: 'technology', мобы: 'mobs', управление: 'management', хранилища: 'storage', социальные: 'social',
@@ -387,6 +388,7 @@ export async function resolveHit(card: SiteCard): Promise<ModHit | null> {
 }
 
 export function peekHit(card: SiteCard): ModHit | null | undefined {
+  if (card.mrHit) return card.mrHit
   if (card.launcherOnly) return ownPackHit(card)
   return peekCatalog<ModHit | null>('site:hit:' + card.slug)
 }

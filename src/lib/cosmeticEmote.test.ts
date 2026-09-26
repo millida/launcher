@@ -103,3 +103,68 @@ describe('an emote keeps the figure in one piece', () => {
     })
   }
 })
+
+/**
+ * Legs hang off the same node the torso does - body_ext under body_orbit - the
+ * way 98 of the hundred emotes rig them, so a lean of body_orbit carries the
+ * torso and the legs together. The hip has to stay whole for the same reason
+ * the neck and shoulders do: the leg's top sits where the torso's bottom sits.
+ * The "figure in one piece" cases above pin the neck and the shoulders but not
+ * the hip, and a torso that leaned while its legs hung off root would pass them
+ * while the lower body tore away below.
+ */
+const LEGS_UNDER_BODY = {
+  format_version: '1.12.0',
+  'minecraft:geometry': [
+    {
+      description: { identifier: 'geometry.rig', texture_width: 64, texture_height: 64 },
+      bones: [
+        { name: 'root', pivot: [0, 0, 0] },
+        { name: 'body_orbit', parent: 'root', pivot: [0, 18, 0] },
+        { name: 'body_ext', parent: 'body_orbit', pivot: [0, 12, 0] },
+        { name: 'body', parent: 'body_ext', pivot: [0, 12, 0] },
+        { name: 'head', parent: 'body', pivot: [0, 24, 0] },
+        { name: 'arm_left', parent: 'body', pivot: [5, 22, 0] },
+        { name: 'arm_right', parent: 'body', pivot: [-5, 22, 0] },
+        { name: 'legs', parent: 'body_ext', pivot: [0, 12, 0] },
+        { name: 'leg_left', parent: 'legs', pivot: [1.9, 12, 0] },
+        { name: 'leg_right', parent: 'legs', pivot: [-1.9, 12, 0] },
+      ],
+    },
+  ],
+}
+
+const LEAN = readAnimations({
+  'animation.rig.lean': {
+    loop: true,
+    animation_length: 2,
+    bones: {
+      body_orbit: { rotation: { '0': [0, 0, 0], '1': [25, -30, 18], '2': [0, 0, 0] } },
+      leg_left: { rotation: { '0': [0, 0, 0], '1': [-35, 0, 0], '2': [0, 0, 0] } },
+      leg_right: { rotation: { '0': [0, 0, 0], '1': [30, 0, 0], '2': [0, 0, 0] } },
+    },
+  },
+})['animation.rig.lean']!
+
+describe('an emote keeps the legs on the hips', () => {
+  it('the top of each leg stays under the torso through a body lean', () => {
+    const emote = new CosmeticEmote(emoteSequence({}, LEAN)!, LEGS_UNDER_BODY)
+    const body = figure()
+    // The rest hip already sits 0.1 px behind the torso (the leg's own z), so
+    // the lean may not add more than a hair to that on top of it.
+    for (const step of [0.25, 0.5, 0.75, 1, 1.25]) {
+      emote.progress = step
+      emote.update(body, 0)
+      body.parent.updateMatrixWorld(true)
+      const torso = body.skin['body']!
+      for (const [leg, side] of [['leftLeg', 1.9], ['rightLeg', -1.9]] as const) {
+        const hip = torso.localToWorld(new Vector3(side, -6, 0))
+        const joint = body.skin[leg]!.getWorldPosition(new Vector3())
+        expect(
+          hip.distanceTo(joint),
+          `at ${step}s the ${leg} hangs ${hip.distanceTo(joint).toFixed(2)} px off the hip: the lower body tears away`,
+        ).toBeLessThan(0.15)
+      }
+    }
+  })
+})

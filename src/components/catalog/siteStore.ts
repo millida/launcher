@@ -1,8 +1,10 @@
 import { create } from 'zustand'
 import type { StoreApi, UseBoundStore } from 'zustand'
-import { useMods } from '../../state/mods'
+import { MR_PAGE, loadMr, mrSearchUrl, mrToHit, useMods } from '../../state/mods'
 import { PER_PAGE, loadFacets, loadListing, loadPremiumPacks, premiumCard, sectionByKind, sectionBySlug } from './site'
 import type { SiteCard, SiteFacets, SiteSlug } from './site'
+import { appendMr, cardFromMrHit, mrHasMore, mrTarget, nextLoad } from './mrTail'
+import type { MrTarget } from './mrTail'
 import type { MillidaPack } from '../../ipc/commands'
 import { inTime } from '../../lib/deadline'
 
@@ -27,6 +29,10 @@ export interface SiteState {
   page: number
   pages: number
   facets: SiteFacets | null
+  mr: SiteCard[]
+  mrTotal: number
+  mrOffset: number
+  mrMore: boolean
   busy: boolean
   failed: boolean
   setSection: (s: SiteSlug) => void
@@ -36,6 +42,43 @@ export interface SiteState {
 }
 
 export type SiteStore = UseBoundStore<StoreApi<SiteState>>
+
+const MR_EMPTY = { mr: [] as SiteCard[], mrTotal: 0, mrOffset: 0, mrMore: false }
+
+interface MrPage {
+  cards: SiteCard[]
+  got: number
+  total: number
+}
+
+async function loadMrPage(
+  target: MrTarget,
+  st: Pick<SiteState, 'section' | 'version' | 'loader' | 'sort'>,
+  q: string,
+  offset: number,
+): Promise<MrPage> {
+  const loaderFacet = st.loader && (target.type === 'mod' || target.type === 'modpack') ? st.loader : null
+  const shaderLoader = st.loader && target.type === 'shader' ? [st.loader] : []
+  const data = await loadMr(
+    mrSearchUrl({
+      tab: target.type,
+      ver: st.version || 'любая',
+      loader: loaderFacet || 'любой',
+      cat: target.category || 'все',
+      cats: shaderLoader,
+      side: 'any',
+      openSource: false,
+      sort: st.sort === 'new' ? 'Новые' : 'Популярные',
+      query: q,
+      offset,
+    }),
+  )
+  if (!data || !Array.isArray(data.hits)) throw new Error('Modrinth search answered without hits')
+  const cards = data.hits
+    .map((h: unknown) => cardFromMrHit(mrToHit(h), st.section))
+    .filter((c: SiteCard | null): c is SiteCard => !!c)
+  return { cards, got: data.hits.length, total: typeof data.total_hits === 'number' ? data.total_hits : 0 }
+}
 
 /**
  * Состояние одного экземпляра каталога. `linked` — каталог «Ресурсов»: раздел
@@ -57,6 +100,7 @@ function createSiteStore(linked: boolean): SiteStore {
     page: 0,
     pages: 0,
     facets: null,
+    ...MR_EMPTY,
     busy: false,
     failed: false,
     setSection: (s) => {
@@ -65,7 +109,7 @@ function createSiteStore(linked: boolean): SiteStore {
         useMods.getState().set({ modTab: sec.kind, fCats: [], fCat: 'все', count: '' })
         void useMods.getState().refreshInstalled()
       }
-      set({ section: s, version: null, loader: null, category: null, q: '', items: [], total: 0, page: 0, facets: null })
+      set({ section: s, version: null, loader: null, category: null, q: '', items: [], total: 0, page: 0, facets: null, ...MR_EMPTY })
       void get().load()
     },
     patch: (p) => {
@@ -80,12 +124,31 @@ function createSiteStore(linked: boolean): SiteStore {
       const my = ++seq
       const st = get()
       if (sectionBySlug(st.section).kind === 'world') return
+      const q = st.q.trim()
+      const mrq = linked ? mrTarget(st.section, st.category) : null
+      if (more && nextLoad(st) !== 'millida') {
+        if (!mrq || nextLoad(st) !== 'modrinth') return
+        set({ busy: true })
+        const got = await inTime(loadMrPage(mrq, st, q.length >= 2 ? q : '', st.mrOffset)).catch(() => null)
+        if (my !== seq) return
+        if (!got) {
+          set({ busy: false })
+          return
+        }
+        set({
+          mr: appendMr(get().mr, got.cards),
+          mrTotal: got.total,
+          mrOffset: st.mrOffset + got.got,
+          mrMore: mrHasMore(st.mrOffset, got.got, got.total, MR_PAGE),
+          busy: false,
+        })
+        return
+      }
       const page = more ? st.page + 1 : 1
       set({ busy: true, failed: false })
-      const q = st.q.trim()
       // Платные сборки — только в «Ресурсах»: на сервер они не ставятся.
       const packs = linked && st.section === 'modpacks'
-      const [listing, facets, premium] = await Promise.all([
+      const [listing, facets, premium, mrFirst] = await Promise.all([
         inTime(loadListing({
           section: st.section,
           version: st.version,
@@ -98,6 +161,7 @@ function createSiteStore(linked: boolean): SiteStore {
         })).catch(() => null),
         more ? Promise.resolve(get().facets) : inTime(loadFacets(st.section, st.version, st.loader)).catch(() => null),
         packs ? inTime(loadPremiumPacks()).catch(() => [] as MillidaPack[]) : Promise.resolve([] as MillidaPack[]),
+        !more && mrq ? inTime(loadMrPage(mrq, st, q.length >= 2 ? q : '', 0)).catch(() => null) : Promise.resolve(null),
       ])
       if (my !== seq) return
       if (!listing) {
@@ -109,7 +173,12 @@ function createSiteStore(linked: boolean): SiteStore {
       if (!more && packs && st.sort === 'popular') got = pinPremium(got, premium, st, q)
       // Лента могла сдвинуться между страницами (новый материал сверху) — без дублей.
       const items = more ? get().items.concat(got.filter((i) => !get().items.some((x) => x.slug === i.slug))) : got
-      set({ items, total: listing.total, page: listing.page, pages: listing.pages, facets: facets || get().facets, busy: false })
+      const mrState = more
+        ? {}
+        : mrFirst
+          ? { mr: mrFirst.cards, mrTotal: mrFirst.total, mrOffset: mrFirst.got, mrMore: mrHasMore(0, mrFirst.got, mrFirst.total, MR_PAGE) }
+          : MR_EMPTY
+      set({ items, total: listing.total, page: listing.page, pages: listing.pages, facets: facets || get().facets, ...mrState, busy: false })
     },
   }))
 }

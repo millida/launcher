@@ -10,26 +10,72 @@ pub fn boost_flags() -> Vec<&'static str> {
     GC_FLAGS.iter().copied().chain(std::iter::once(PRETOUCH_FLAG)).collect()
 }
 
+/// Bumped whenever `boost_mods` changes: builds that enabled the mode under an
+/// older set get the new mods on their next launch instead of never.
+pub const BOOST_SET_REV: u64 = 2;
+
+/// Mods a version had no stable file for are asked about again after this long:
+/// performance mods reach a fresh game version weeks after it ships.
+const RECHECK_SKIPPED_SECS: u64 = 24 * 60 * 60;
+
+/// One job in the boost set. A slot is filled once: by any of `counts` the build
+/// already has, otherwise by the first of `install` with a stable file for the
+/// version. Two Sodium-family renderers in one build crash on start.
+#[derive(Debug, Clone, Copy)]
+pub struct Slot {
+    pub install: &'static [&'static str],
+    pub counts: &'static [&'static str],
+    /// Crashes or renders garbage next to OptiFine.
+    pub optifine_clash: bool,
+}
+
+const fn one(slug: &'static [&'static str]) -> Slot {
+    Slot { install: slug, counts: slug, optifine_clash: false }
+}
+
+const fn clashing(slug: &'static [&'static str]) -> Slot {
+    Slot { install: slug, counts: slug, optifine_clash: true }
+}
+
+const RENDERERS: &[&str] = &["sodium", "embeddium", "rubidium"];
+
+const FABRIC_SET: &[Slot] = &[
+    Slot { install: &["sodium"], counts: RENDERERS, optifine_clash: true },
+    one(&["lithium"]),
+    one(&["ferrite-core"]),
+    one(&["entityculling"]),
+    clashing(&["immediatelyfast"]),
+    one(&["modernfix"]),
+    one(&["dynamic-fps"]),
+    clashing(&["moreculling"]),
+];
+
+const FORGE_SET: &[Slot] = &[
+    Slot { install: &["embeddium"], counts: RENDERERS, optifine_clash: true },
+    one(&["ferrite-core"]),
+    one(&["entityculling"]),
+    clashing(&["immediatelyfast"]),
+    one(&["modernfix"]),
+    one(&["dynamic-fps"]),
+];
+
+const NEOFORGE_SET: &[Slot] = &[
+    Slot { install: &["sodium", "embeddium"], counts: RENDERERS, optifine_clash: true },
+    one(&["ferrite-core"]),
+    one(&["entityculling"]),
+    clashing(&["immediatelyfast"]),
+    one(&["modernfix"]),
+    one(&["dynamic-fps"]),
+];
+
 /// Моды-ускорители по загрузчику. Slug'и Modrinth; ставится то, у чего есть
 /// сборка под версию профиля, остальное пропускается — режим не должен
 /// разваливаться из-за одного мода, отставшего от новой версии игры.
-fn boost_mods(loader: &str) -> &'static [&'static str] {
+pub fn boost_mods(loader: &str) -> &'static [Slot] {
     match loader {
-        "fabric" | "quilt" => &[
-            "sodium",
-            "lithium",
-            "ferrite-core",
-            "entityculling",
-            "immediatelyfast",
-            "modernfix",
-        ],
-        "forge" | "neoforge" => &[
-            "embeddium",
-            "ferrite-core",
-            "entityculling",
-            "immediatelyfast",
-            "modernfix",
-        ],
+        "fabric" | "quilt" => FABRIC_SET,
+        "forge" => FORGE_SET,
+        "neoforge" => NEOFORGE_SET,
         _ => &[],
     }
 }
@@ -40,6 +86,57 @@ fn boost_mods(loader: &str) -> &'static [&'static str] {
 /// имён значит «этот мод у игрока есть», и второй копии быть не должно.
 fn already_installed(known: &[String], slug: &str, canonical: &str) -> bool {
     known.iter().any(|p| p == slug || p == canonical)
+}
+
+fn squash(s: &str) -> String {
+    s.chars().filter(|c| c.is_ascii_alphanumeric()).collect::<String>().to_ascii_lowercase()
+}
+
+/// Jars dropped in by hand never reach the manifest, and a second copy of the
+/// same mod id stops Fabric and Forge before the window opens.
+fn jar_present(jars: &[String], slug: &str) -> bool {
+    let want = squash(slug);
+    jars.iter().any(|j| squash(j).starts_with(&want))
+}
+
+fn optifine_among(jars: &[String]) -> bool {
+    jars.iter().any(|j| {
+        let n = j.to_ascii_lowercase();
+        n.contains("optifine") || n.contains("optifabric")
+    })
+}
+
+fn enabled_jars(profile: &str) -> Vec<String> {
+    std::fs::read_dir(profile_dir(profile).join(content_dir("mod")))
+        .map(|rd| {
+            rd.flatten()
+                .map(|e| e.file_name().to_string_lossy().to_string())
+                .filter(|n| n.to_ascii_lowercase().ends_with(".jar"))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Release first, beta if nothing else exists; alpha never. A boost that
+/// crashes the game costs more frames than it saves.
+fn stable_pick(versions: &[Value], game_version: &str, loaders: &[String]) -> Option<Value> {
+    ["release", "beta"].iter().find_map(|kind| {
+        versions
+            .iter()
+            .find(|v| v["version_type"].as_str() == Some(kind) && version_fits(v, game_version, loaders))
+            .cloned()
+    })
+}
+
+fn now_unix() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+fn needs_top_up(enabled: bool, rev: u64, skipped: usize, checked_at: u64, now: u64) -> bool {
+    enabled && (rev != BOOST_SET_REV || (skipped > 0 && now.saturating_sub(checked_at) >= RECHECK_SKIPPED_SECS))
 }
 
 /// Значения options.txt, которые снимают нагрузку с GPU и CPU, не ломая игру.
@@ -75,6 +172,8 @@ pub struct FpsBoostState {
     pub video: bool,
     /// Загрузчик не держит моды — ускоряем только JVM и настройки графики.
     pub vanilla: bool,
+    /// The mode is on, but the set changed or skipped mods are due a recheck.
+    pub stale: bool,
 }
 
 fn settings_of(profile: &str) -> Value {
@@ -116,6 +215,13 @@ pub fn fps_boost_state(profile: &str) -> FpsBoostState {
         flags: boost_flags().iter().map(|f| f.to_string()).collect(),
         video: s["fpsBoostVideo"].is_object(),
         vanilla: boost_mods(&loader).is_empty(),
+        stale: needs_top_up(
+            s["fpsBoost"].as_bool().unwrap_or(false),
+            s["fpsBoostSet"].as_u64().unwrap_or(1),
+            str_list(&s["fpsBoostSkipped"]).len(),
+            s["fpsBoostCheckedAt"].as_u64().unwrap_or(0),
+            now_unix(),
+        ),
     }
 }
 
@@ -194,18 +300,28 @@ fn patch(profile: &str, entries: Vec<(&str, Value)>) {
     merge_settings(profile, m);
 }
 
-pub async fn set_fps_boost(app: AppHandle, profile: String, on: bool) -> Result<FpsBoostState, String> {
+pub async fn set_fps_boost(app: AppHandle, profile: String, on: bool, keep_options: bool) -> Result<FpsBoostState, String> {
     if !load_profiles().iter().any(|p| p.name == profile) {
         return Err("Сборка не найдена".into());
     }
     if on {
-        enable(&app, &profile).await
+        enable(&app, &profile, keep_options).await
     } else {
         disable(&profile)
     }
 }
 
-async fn enable(app: &AppHandle, profile: &str) -> Result<FpsBoostState, String> {
+/// What the build already has for a slot, by manifest id or by a hand-dropped jar.
+fn slot_filled(slot: &Slot, known: &[String], canon: &std::collections::HashMap<&str, String>, jars: &[String]) -> bool {
+    slot.counts.iter().any(|slug| {
+        let id = canon.get(slug).map(String::as_str).unwrap_or(slug);
+        already_installed(known, slug, id) || jar_present(jars, slug)
+    })
+}
+
+/// `keep_options`: an automatic caller (version builds, presets) only fills in
+/// an options.txt the game has not written yet; the player's own is theirs.
+async fn enable(app: &AppHandle, profile: &str, keep_options: bool) -> Result<FpsBoostState, String> {
     let loader = profile_loader(profile);
     let version = profile_version(profile);
     let wanted = boost_mods(&loader);
@@ -215,27 +331,45 @@ async fn enable(app: &AppHandle, profile: &str) -> Result<FpsBoostState, String>
         .into_iter()
         .map(|e| e.project_id)
         .collect();
+    let jars = enabled_jars(profile);
+    let optifine = optifine_among(&jars);
+    let before = settings_of(profile);
+    let was_on = before["fpsBoost"].as_bool().unwrap_or(false);
 
-    let mut installed = str_list(&settings_of(profile)["fpsBoostMods"]);
+    let mut installed = str_list(&before["fpsBoostMods"]);
     let mut skipped: Vec<String> = vec![];
     let total = wanted.len().max(1);
-    for (i, slug) in wanted.iter().enumerate() {
-        emit(app, "fpsboost", 10.0 + 70.0 * (i as f32 / total as f32), &format!("Ставим {}…", slug));
+    for (i, slot) in wanted.iter().enumerate() {
+        let name = slot.install.first().copied().unwrap_or_default();
+        emit(app, "fpsboost", 10.0 + 70.0 * (i as f32 / total as f32), &format!("Ставим {}…", name));
+        if optifine && slot.optifine_clash {
+            warn(app, &format!("{}: не ставим рядом с OptiFine — вместе они роняют игру", name));
+            continue;
+        }
         // Мод уже стоит у игрока — режим его не дублирует и не снимет потом.
         // В манифесте лежит КАНОНИЧЕСКИЙ id Modrinth, а список режима — из
         // slug'ов: сравнение id со slug'ом не совпадало никогда, и поверх
         // Sodium игрока вставал второй Sodium. Fabric такой запуск не
         // переживает — «включаю буст FPS в связке с модами, игра вылетает».
-        let canonical = fetch_project_meta(slug).await.0;
-        if already_installed(&known, slug, &canonical) {
+        let mut canon = std::collections::HashMap::new();
+        for slug in slot.counts {
+            canon.insert(*slug, fetch_project_meta(slug).await.0);
+        }
+        if slot_filled(slot, &known, &canon, &jars) {
             continue;
         }
-        let ver = match best_version(slug, &version, &loaders).await {
-            Ok(v) => v,
-            Err(_) => {
-                skipped.push((*slug).to_string());
-                continue;
+        let mut picked: Option<(&str, Value)> = None;
+        for slug in slot.install {
+            if let Ok(all) = project_versions(slug).await {
+                if let Some(v) = stable_pick(&all, &version, &loaders) {
+                    picked = Some((*slug, v));
+                    break;
+                }
             }
+        }
+        let Some((slug, ver)) = picked else {
+            skipped.push(name.to_string());
+            continue;
         };
         match install_project_version(profile, "mod", slug, &ver).await {
             Ok(file) => {
@@ -248,20 +382,28 @@ async fn enable(app: &AppHandle, profile: &str) -> Result<FpsBoostState, String>
             }
             Err(e) => {
                 warn(app, &format!("Мод {} не поставился: {}", slug, e));
-                skipped.push((*slug).to_string());
+                skipped.push(slug.to_string());
             }
         }
     }
 
     emit(app, "fpsboost", 90.0, "Настройки графики…");
-    let previous = tune_video(profile)?;
+    let video = if was_on {
+        before["fpsBoostVideo"].clone()
+    } else if keep_options && options_path(profile).exists() {
+        Value::Null
+    } else {
+        Value::Object(tune_video(profile)?)
+    };
     patch(
         profile,
         vec![
             ("fpsBoost", Value::Bool(true)),
             ("fpsBoostMods", Value::Array(installed.iter().map(|f| Value::String(f.clone())).collect())),
             ("fpsBoostSkipped", Value::Array(skipped.iter().map(|f| Value::String(f.clone())).collect())),
-            ("fpsBoostVideo", Value::Object(previous)),
+            ("fpsBoostVideo", video),
+            ("fpsBoostSet", Value::from(BOOST_SET_REV)),
+            ("fpsBoostCheckedAt", Value::from(now_unix())),
         ],
     );
     emit(app, "fpsboost", 100.0, "Буст FPS включён");
@@ -281,6 +423,8 @@ fn disable(profile: &str) -> Result<FpsBoostState, String> {
             ("fpsBoostMods", Value::Array(vec![])),
             ("fpsBoostSkipped", Value::Array(vec![])),
             ("fpsBoostVideo", Value::Null),
+            ("fpsBoostSet", Value::Null),
+            ("fpsBoostCheckedAt", Value::Null),
         ],
     );
     Ok(fps_boost_state(profile))
@@ -349,12 +493,118 @@ mod tests {
         );
     }
 
+    fn installs(loader: &str) -> Vec<Vec<&'static str>> {
+        boost_mods(loader).iter().map(|s| s.install.to_vec()).collect()
+    }
+
+    /// Pin of the whole set per loader. Changing it means bumping BOOST_SET_REV,
+    /// or builds that already have the mode never receive the change.
     #[test]
-    fn mod_set_matches_loader() {
-        assert!(boost_mods("fabric").contains(&"sodium"), "на Fabric ускоритель рендера — Sodium");
-        assert!(boost_mods("quilt").contains(&"sodium"), "Quilt грузит Fabric-моды");
-        assert!(boost_mods("forge").contains(&"embeddium"), "на Forge Sodium не грузится, нужен Embeddium");
-        assert!(boost_mods("neoforge").contains(&"embeddium"), "NeoForge использует тот же порт Sodium");
-        assert!(boost_mods("vanilla").is_empty(), "ванилла не умеет грузить моды — только JVM и графика");
+    fn boost_set_is_pinned_per_loader() {
+        let fabric: Vec<Vec<&str>> = vec![
+            vec!["sodium"],
+            vec!["lithium"],
+            vec!["ferrite-core"],
+            vec!["entityculling"],
+            vec!["immediatelyfast"],
+            vec!["modernfix"],
+            vec!["dynamic-fps"],
+            vec!["moreculling"],
+        ];
+        let cases: [(&str, Vec<Vec<&str>>, &str); 5] = [
+            ("fabric", fabric.clone(), "Fabric: Sodium and the Fabulously Optimized core"),
+            ("quilt", fabric, "Quilt loads Fabric mods, so it gets the same set"),
+            (
+                "forge",
+                vec![vec!["embeddium"], vec!["ferrite-core"], vec!["entityculling"], vec!["immediatelyfast"], vec!["modernfix"], vec!["dynamic-fps"]],
+                "Forge: Sodium does not load, Embeddium is the port",
+            ),
+            (
+                "neoforge",
+                vec![vec!["sodium", "embeddium"], vec!["ferrite-core"], vec!["entityculling"], vec!["immediatelyfast"], vec!["modernfix"], vec!["dynamic-fps"]],
+                "NeoForge: official Sodium where it exists (1.21.1+), Embeddium before it",
+            ),
+            ("vanilla", vec![], "vanilla cannot load mods, only JVM flags and options apply"),
+        ];
+        for (loader, want, why) in cases {
+            assert_eq!(installs(loader), want, "boost set for {loader} changed without a pin update: {why}");
+        }
+        assert_eq!(BOOST_SET_REV, 2, "the set above is revision 2; a new set needs a new revision");
+    }
+
+    #[test]
+    fn exactly_one_renderer_slot_and_it_counts_every_sodium_port() {
+        for loader in ["fabric", "quilt", "forge", "neoforge"] {
+            let renderer: Vec<&Slot> = boost_mods(loader).iter().filter(|s| s.counts.contains(&"sodium")).collect();
+            assert_eq!(renderer.len(), 1, "{loader}: two renderer slots would install two Sodium ports and crash");
+            for port in ["sodium", "embeddium", "rubidium"] {
+                assert!(
+                    renderer[0].counts.contains(&port),
+                    "{loader}: a build with {port} already has a renderer; installing another one crashes on start",
+                );
+            }
+            assert!(renderer[0].optifine_clash, "{loader}: Sodium ports and OptiFine crash together");
+        }
+    }
+
+    #[test]
+    fn hand_dropped_jars_are_recognised() {
+        let cases: [(&str, &str, bool, &str); 6] = [
+            ("ferritecore-6.0.1-fabric.jar", "ferrite-core", true, "jar name drops the dash of the slug"),
+            ("sodium-fabric-0.5.13+mc1.20.1.jar", "sodium", true, "plain Sodium jar"),
+            ("dynamic-fps-3.11.4+minecraft-1.21.0-fabric.jar", "dynamic-fps", true, "dash kept in the jar"),
+            ("embeddium-0.3.31+mc1.20.1.jar", "sodium", false, "Embeddium is not Sodium by name; the slot counts it separately"),
+            ("lithostitched-1.4.jar", "lithium", false, "a prefix of the letters is not the same mod"),
+            ("create-1.20.1-6.0.jar", "modernfix", false, "unrelated mod"),
+        ];
+        for (jar, slug, want, why) in cases {
+            assert_eq!(jar_present(&[jar.to_string()], slug), want, "{jar} vs {slug}: {why}");
+        }
+    }
+
+    #[test]
+    fn optifine_is_detected_by_jar_name() {
+        let cases: [(&str, bool, &str); 4] = [
+            ("OptiFine_1.20.1_HD_U_I6.jar", true, "Forge OptiFine jar"),
+            ("optifabric-1.14.3.jar", true, "OptiFabric pulls OptiFine into Fabric"),
+            ("sodium-fabric-0.5.13.jar", false, "Sodium is not OptiFine"),
+            ("entityculling-forge-1.6.jar", false, "unrelated mod"),
+        ];
+        for (jar, want, why) in cases {
+            assert_eq!(optifine_among(&[jar.to_string()]), want, "{jar}: {why}");
+        }
+    }
+
+    #[test]
+    fn only_release_or_beta_files_are_installed() {
+        let v = |kind: &str, n: &str| serde_json::json!({"version_type": kind, "version_number": n, "game_versions": ["1.21.11"], "loaders": ["fabric"]});
+        let fabric = vec!["fabric".to_string()];
+        let cases: [(Vec<Value>, Option<&str>, &str); 4] = [
+            (vec![v("alpha", "a"), v("release", "r"), v("beta", "b")], Some("r"), "release wins over a newer alpha"),
+            (vec![v("alpha", "a"), v("beta", "b")], Some("b"), "beta when no release exists"),
+            (vec![v("alpha", "a")], None, "alpha only: skip, a crash costs more than the frames"),
+            (vec![], None, "nothing published for the version"),
+        ];
+        for (list, want, why) in cases {
+            let got = stable_pick(&list, "1.21.11", &fabric);
+            assert_eq!(got.as_ref().and_then(|x| x["version_number"].as_str()), want, "{why}");
+        }
+        assert!(stable_pick(&[v("release", "r")], "26.2", &fabric).is_none(), "a file for another game version is never picked");
+    }
+
+    #[test]
+    fn builds_enabled_under_an_older_set_are_topped_up() {
+        let day = RECHECK_SKIPPED_SECS;
+        let cases: [(bool, u64, usize, u64, u64, bool, &str); 6] = [
+            (true, 1, 0, 0, 10, true, "enabled before the set grew: the new mods must arrive"),
+            (true, BOOST_SET_REV, 0, 0, 10 * day, false, "current set, nothing skipped: no network on launch"),
+            (true, BOOST_SET_REV, 2, 100, 100 + day - 1, false, "skipped mods are not re-asked on every launch"),
+            (true, BOOST_SET_REV, 2, 100, 100 + day, true, "a day later skipped mods are asked again: Sodium reaches new versions late"),
+            (false, 1, 3, 0, 10 * day, false, "mode off: nothing to top up"),
+            (false, BOOST_SET_REV, 0, 0, 0, false, "mode off stays off"),
+        ];
+        for (enabled, rev, skipped, checked, now, want, why) in cases {
+            assert_eq!(needs_top_up(enabled, rev, skipped, checked, now), want, "{why}");
+        }
     }
 }

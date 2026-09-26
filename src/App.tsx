@@ -26,6 +26,7 @@ import {
 } from './screens/registry'
 const InstancePage = lazy(() => import('./modals/InstancePage').then((m) => ({ default: m.InstancePage })))
 import { ImportModal } from './modals/Import'
+import { MoveBuildsModal } from './modals/MoveBuilds'
 import { ProjectModal } from './modals/Project'
 import { NewBuildModal } from './modals/NewBuild'
 import { AccountAddModal } from './modals/AccountAdd'
@@ -38,6 +39,7 @@ import { UpdateBanner } from './components/UpdateBanner'
 import { ConfirmModal } from './components/ConfirmModal'
 import { BuildPicker } from './components/BuildPicker'
 import { DepPlanModal } from './components/DepPlanModal'
+import { PackKeyHost } from './components/PackKeyHost'
 import { ChatNotify } from './components/ChatNotify'
 import { CallPanel } from './components/CallPanel'
 import { RoomModals } from './components/RoomManage'
@@ -742,6 +744,7 @@ export function App() {
           </Suspense>
         )}
         <ImportModal />
+        <MoveBuildsModal />
         <ProjectModal />
         <NewBuildModal />
         <AccountAddModal />
@@ -751,6 +754,7 @@ export function App() {
         <WhatsNewModal />
         <BuildPicker />
         <DepPlanModal />
+        <PackKeyHost />
         <CrashModal />
         <ServerDetail />
         <ChatNotify />

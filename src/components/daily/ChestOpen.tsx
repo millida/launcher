@@ -11,11 +11,12 @@ import { FragBar, FragmentIcon, RarityFx, RarityPlate } from '../shop/rarityUi'
 import { loadRules, type ChestDrop, type ChestTier, type PendingChest, type Rarity, type Rules } from '../../lib/rubies'
 import { playSound } from '../../lib/sound'
 import { useDaily, type ChestOpenAnswer } from '../../state/daily'
-import { CHEST_DROPS, CHEST_ODDS, bpOf, hasRarity, pctOfBp, PITY_AFTER, PITY_LEGEND_AFTER, RARITY_NAME, RARITY_ORDER, TIER_ORDER, viewOf, type OpenedView } from './chestDrops'
+import { CHEST_CONFIG, CHEST_DROPS, CHEST_ODDS, bpOf, hasRarity, pctOfBp, PITY_AFTER, PITY_LEGEND_AFTER, RARITY_NAME, RARITY_ORDER, TIER_ORDER, viewOf, type OpenedView } from './chestDrops'
 import { burstSound, cardSound, hitSound, teaseSound } from './chestSound'
 import { chestSprite, CRACK_STEPS, SPRITE_H, SPRITE_W } from './chestSprite'
 import { CHEST_NAME } from './rewards'
 import '../../styles/pixel/chestopen.css'
+import { topUpFragments } from '../shop/topUp'
 import { wearNow } from '../../state/wearIntent'
 
 /*
@@ -191,6 +192,9 @@ function Odds({ tier, rules, onClose }: { tier: ChestTier; rules: Rules | null; 
     })(),
   })).filter((c) => c.p > 0)
   const pity = rules?.chests.pityAfter ?? PITY_AFTER
+  const wholeFree = row?.wholePct !== undefined ? row.wholePct * 100 : def.wholeBp
+  const wholePayer = row?.wholePayerPct !== undefined ? row.wholePayerPct * 100 : def.wholePayerBp
+  const payerDays = rules?.chests.payerWindowDays ?? CHEST_CONFIG.payerWindowDays
   return (
     <div className="co-odds" role="dialog" aria-label="Что внутри" onClick={(e) => e.stopPropagation()}>
       <div className="co-odds-head">
@@ -216,7 +220,7 @@ function Odds({ tier, rules, onClose }: { tier: ChestTier; rules: Rules | null; 
           </li>
         ))}
       </ul>
-      <p className="co-odds-foot">Эпическая и выше — раз в {pity}, легендарная и выше — раз в {rules?.chests.pityLegendAfter ?? PITY_LEGEND_AFTER} сундуков. Целая вещь — {pctOfBp(def.wholeBp)}, иначе фрагменты.</p>
+      <p className="co-odds-foot">Эпическая и выше — раз в {pity}, легендарная и выше — раз в {rules?.chests.pityLegendAfter ?? PITY_LEGEND_AFTER} сундуков. {wholeFree > 0 ? <>Целая вещь — {pctOfBp(wholeFree)}, иначе фрагменты. </> : <>Без подписки внутри только фрагменты, осколки и рубины: вещь собирается докупкой недостающих фрагментов. </>}С PLUS или после покупки рубинов за {payerDays} дней целая вещь — {pctOfBp(wholePayer)}.</p>
     </div>
   )
 }
@@ -234,6 +238,8 @@ function Opening({ chest, left, onDone, onNext }: { chest: PendingChest; left: n
   const [teasing, setTeasing] = useState(false)
   const [info, setInfo] = useState(false)
   const [rules, setRules] = useState<Rules | null>(null)
+  const [bought, setBought] = useState<Set<number>>(() => new Set())
+  const [buying, setBuying] = useState(-1)
   const waitRef = useRef(false)
   const timers = useRef<number[]>([])
   const later = (fn: () => void, ms: number) => timers.current.push(window.setTimeout(fn, ms))
@@ -456,11 +462,37 @@ function Opening({ chest, left, onDone, onNext }: { chest: PendingChest; left: n
       {stage === 'sum' ? (
         <div className="co-sum" onClick={(e) => e.stopPropagation()}>
           <div className="co-grid">
-            {drops.map((d, i) => (
-              <span key={i} className="co-sum-cell" style={{ '--i': i } as CSSProperties}>
-                <DropCard d={d} small />
-              </span>
-            ))}
+            {drops.map((d, i) => {
+              const topUp = d.kind === 'FRAGMENTS' && d.item && !d.completed && d.topUp ? d.topUp : 0
+              const item = d.kind === 'FRAGMENTS' ? d.item : null
+              return (
+                <span key={i} className={'co-sum-cell' + (topUp ? ' has-topup' : '')} style={{ '--i': i } as CSSProperties}>
+                  <DropCard d={d} small />
+                  {topUp && item ? (
+                    bought.has(i) ? (
+                      <span className="co-topup-done">
+                        <Icon id="i-check" /> Твоя
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn sm secondary co-topup"
+                        disabled={buying === i}
+                        data-track="chest_topup"
+                        onClick={async () => {
+                          setBuying(i)
+                          const res = await topUpFragments(item, topUp)
+                          setBuying(-1)
+                          if (res) setBought((was) => new Set(was).add(i))
+                        }}
+                      >
+                        Докупить <Ruby size={14} /> {topUp.toLocaleString('ru-RU')}
+                      </button>
+                    )
+                  ) : null}
+                </span>
+              )
+            })}
           </div>
           {view?.pityLeft ? (
             <p className="co-pity">

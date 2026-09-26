@@ -306,6 +306,7 @@ export function TakeAllCard({ have, bar }: { have: string[]; bar?: boolean }) {
   }, [])
   const taken = new Set(have)
   const rest = (found || []).filter((x) => !taken.has(x.name))
+  const movable = rest.filter((x) => x.movable)
 
   const takeAll = async (list: FoundInstance[]) => {
     setBusy(true)
@@ -361,6 +362,12 @@ export function TakeAllCard({ have, bar }: { have: string[]; bar?: boolean }) {
           <span className="spin" /> {rest.length ? 'Забираем ' + done + ' из ' + rest.length : 'Импорт…'}
         </button>
       )
+    if (movable.length)
+      return (
+        <button className="btn md secondary" data-sound="open" data-track="move_found" title={foundText(movable)} onClick={() => openModal('mvModal')}>
+          <Icon id="i-download" /> Перенести в Millida · {movable.length}
+        </button>
+      )
     if (rest.length)
       return (
         <button className="btn md secondary" data-sound="open" data-track="import_found" title={foundText(rest)} onClick={() => openModal('impModal')}>
@@ -387,6 +394,8 @@ export function TakeAllCard({ have, bar }: { have: string[]; bar?: boolean }) {
     )
   if (busy)
     return <ActCard icon="i-download" title="Забираем" meta={rest.length ? done + ' из ' + rest.length : 'Файл сборки'} busy onClick={() => {}} />
+  if (movable.length)
+    return <ActCard icon="i-download" title="Перенести в Millida" meta={foundText(movable)} track="move_found" onClick={() => openModal('mvModal')} />
   if (rest.length)
     return <ActCard icon="i-download" title="Забрать всё" meta={foundText(rest)} track="import_take_all" onClick={() => void takeAll(rest)} />
   return <ActCard icon="i-upload" title="Импорт" meta="Файл сборки" track="import" onClick={importFile} />

@@ -30,6 +30,7 @@ import { initAccent } from './lib/accent'
 import { Overlay } from './screens/Overlay'
 import { openExt } from './lib/api'
 import { initRenderGate } from './lib/renderGate'
+import { webviewFailure } from './lib/webviewHealth'
 
 if (!import.meta.env.DEV) {
   document.addEventListener('contextmenu', (e) => {
@@ -62,6 +63,8 @@ if (isOverlay) {
 } else {
   // Окно лаунчера замирает, пока не видно или поверх идёт игра.
   initRenderGate()
+  // Прошлое окно убил сбой видеокарты — WebGL выключаем до первого кадра лобби.
+  void webviewFailure()
 }
 
 createRoot(document.getElementById('root')!).render(isOverlay ? <Overlay /> : <App />)

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { CHEST_DROPS, CHEST_ODDS, demoOpen, fragmentOff, FRAGMENTS_NEED, ODDS_TOTAL, RARITY_ORDER, TIER_ORDER, viewOf } from './chestDrops'
+import { CHEST_DROPS, CHEST_ODDS, demoOpen, fragmentCap, fragmentOff, fragmentTopUp, FRAGMENTS_NEED, ODDS_TOTAL, RARITY_ORDER, TIER_ORDER, viewOf } from './chestDrops'
 import type { ChestOpenResult } from '../../lib/rubies'
 
 const legacy: ChestOpenResult = {
@@ -21,6 +21,38 @@ describe('таблица сундуков', () => {
       expect(RARITY_ORDER.reduce((n, r) => n + CHEST_ODDS[t][r], 0)).toBe(ODDS_TOTAL)
       for (const r of RARITY_ORDER) expect(CHEST_ODDS[t][r]).toBeGreaterThan(0)
       expect(CHEST_ODDS[t]).toEqual(CHEST_ODDS.COMMON)
+    }
+  })
+  test.each([
+    ['COMMON', 0, 600, 'обычный: без оплаты целой вещи нет, платящему 6 %'],
+    ['RARE', 0, 800, 'редкий: 0 / 8 %'],
+    ['EPIC', 0, 1000, 'эпический: 0 / 10 %'],
+    ['LEGEND', 0, 1200, 'легендарный: 0 / 12 %'],
+  ] as const)('целая вещь %s: без оплаты %i bp, платящему %i bp — зеркало службы (%s)', (tier, free, payer, why) => {
+    expect({ why, free: CHEST_DROPS[tier].wholeBp, payer: CHEST_DROPS[tier].wholePayerBp }).toEqual({ why, free, payer })
+  })
+  test('без оплаты целой вещи нет, платящему — от 6 %', () => {
+    for (const t of TIER_ORDER) {
+      expect(CHEST_DROPS[t].wholeBp).toBe(0)
+      expect(CHEST_DROPS[t].wholePayerBp).toBeGreaterThanOrEqual(600)
+    }
+  })
+  test.each([
+    ['COMMON', 1, 140, 'один фрагмент из 15 — почти полная цена'],
+    ['COMMON', 14, 10, 'на пороге need − 1 последний шаг всё равно платный'],
+    ['EPIC', 35, 700, 'половина эпической — половина цены'],
+    ['RELIC', 1, 11170, 'невозможная — вдвое дороже мифической'],
+  ] as const)('докупка %s при %i фрагментах = %i — зеркало службы (%s)', (r, have, price, why) => {
+    expect({ why, price: fragmentTopUp(r, have) }).toEqual({ why, price })
+  })
+  test('демо-сундук никогда не собирает вещь: фрагменты упираются в need − 1, у каждой — цена докупки', () => {
+    for (let n = 0; n < 300; n++) {
+      for (const d of demoOpen('c' + n, 'LEGEND').drops) {
+        if (d.kind !== 'FRAGMENTS' || !d.item) continue
+        expect(d.completed).toBe(false)
+        expect(d.have).toBeLessThanOrEqual(fragmentCap(d.rarity))
+        expect(d.topUp).toBe(fragmentTopUp(d.rarity, d.have))
+      }
     }
   })
   test('фрагменты: редкая вещь собирается дольше, скидка не больше половины', () => {

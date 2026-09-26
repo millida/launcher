@@ -5,9 +5,9 @@ import { MODRINTH_API, api, mirrorAsset } from '../../lib/api'
 import { fmtN } from '../../lib/format'
 import { renderMarkdown } from '../../lib/markdown'
 import { installedPack } from '../../lib/lobbyPlay'
-import { loadPremium, loadPremiumPack, untilText } from '../../lib/premium'
+import { hasPlanChoice, liveSubscription, loadPremium, loadPremiumPack, untilText } from '../../lib/premium'
 import type { PremiumPackDetail, PremiumPlan, PremiumSubscription } from '../../lib/premium'
-import { BuyButton, CancelLine, PriceLine } from '../premium/PremiumBuy'
+import { BuyButton, CancelLine, PlanButtons, PriceLine, hasAccess } from '../premium/PremiumBuy'
 import { installModpack } from '../../ipc/commands'
 import { hasTauri } from '../../ipc/tauri'
 import { useProfiles } from '../../state/profiles'
@@ -339,6 +339,19 @@ export function PackPage({
       </button>
     )
   else if (mr) cta = <MrInstallButton pack={pack} />
+  else if (detail && hasPlanChoice(detail) && !hasAccess(full, sub))
+    cta = (
+      <PlanButtons
+        pack={full}
+        plans={detail.plans || []}
+        wrap="pp-cta-wrap"
+        onOwned={() => {
+          void loadPremiumPack(pack.id)
+            .then((d) => setDetail(d))
+            .catch(() => {})
+        }}
+      />
+    )
   else
     cta = (
       <>
@@ -436,7 +449,7 @@ export function PackPage({
             </button>
           ) : null}
           <Hours build={installed} />
-          {pack.premium ? <CancelLine sub={sub} /> : null}
+          {pack.premium ? <CancelLine sub={liveSubscription(detail) ?? sub} /> : null}
           <span className="pp-legal">
             {full.ageRating ? <b>{full.ageRating}</b> : null}
             Не продукт Mojang

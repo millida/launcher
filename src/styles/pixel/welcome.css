@@ -2,7 +2,10 @@
    Фон — зелёная сцена лобби (как у PixelField), текст крупный и жирный,
    появляется ступенями. Уход — растворение клетками на холсте. */
 .welcome {
-  position: fixed; inset: 0; z-index: 9000;
+  /* Выше загрузочного экрана (#boot, z-index 9999): заставка перекрывает его и
+     лобби с первого кадра, иначе при гашении #boot на миг мелькало лобби
+     (владелец 25.09.2026). */
+  position: fixed; inset: 0; z-index: 10000;
   display: grid; place-items: center;
   background: linear-gradient(160deg, #23883d 0%, #0e4a20 100%);
   cursor: pointer;

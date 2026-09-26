@@ -19,7 +19,10 @@ export function loaderOf(p: Pick<Profile, 'loader' | 'fabric'> | null | undefine
 export function gameCrashData(
   info: CrashInfo | null | undefined,
   profile: Pick<Profile, 'version' | 'loader' | 'fabric'> | null | undefined,
-  settings: { catalogPackSlug?: string | null; modpackSlug?: string | null } | null | undefined,
+  settings:
+    | { catalogPackSlug?: string | null; catalogPackVersion?: string | null; modpackSlug?: string | null }
+    | null
+    | undefined,
   masks: Array<[string | null | undefined, string]> = [],
 ): Record<string, string> {
   const hide = (t: string) => maskValues(t, masks)
@@ -39,6 +42,8 @@ export function gameCrashData(
   if (loader) data.loader = loader
   const pack = (settings?.catalogPackSlug || '').trim()
   if (pack) data.pack = pack
+  const packVersion = (settings?.catalogPackVersion || '').trim()
+  if (pack && packVersion) data.packVersion = packVersion.slice(0, 64)
   if (settings?.modpackSlug) data.modpack = settings.modpackSlug
   return data
 }

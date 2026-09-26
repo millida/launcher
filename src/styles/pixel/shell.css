@@ -52,25 +52,27 @@
 .acc-menu-empty { padding: 8px; color: var(--m-fg-faint); font-size: 12.5px; }
 .acc-menu-sep { height: 1px; background: var(--m-border); margin: 8px 4px; }
 
-/* ---------- Плашка обновления (раньше — инлайн, белый текст на зелёном 2,6:1) ---------- */
+/* ---------- Плашка обновления ---------- */
+/* Баннер справа под верхним рядом кнопок, а не по центру сверху: центральная
+   пилюля наезжала на аккаунт и кнопки лобби (владелец 25.09.2026). Стиль —
+   как у прочих баннеров: плита со срезом, въезжает справа. */
 @keyframes updDrop {
-  from { opacity: 0; transform: translate(-50%, -14px); }
-  to { opacity: 1; transform: translate(-50%, 0); }
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 .upd-banner {
   position: fixed;
-  top: 62px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 92px;
+  right: 16px;
   z-index: 200;
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 8px 8px 8px 16px;
-  max-width: calc(100% - 40px);
+  max-width: calc(100% - 32px);
   background: var(--m-raised);
   color: var(--m-fg);
-  border-radius: 999px;
+  border-radius: 14px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   animation: updDrop 0.4s cubic-bezier(0.2, 0.9, 0.3, 1);
 }
