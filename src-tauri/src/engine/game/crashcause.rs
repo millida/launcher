@@ -204,7 +204,7 @@ pub(crate) fn mod_implicated(text: &str, marks: &ModMarks) -> bool {
 
 /// Строка — исключение Java: «java.lang.IllegalStateException: …»,
 /// «Caused by: net.foo.BarError», «Exception in thread "main" …».
-fn is_exception_line(line: &str) -> bool {
+pub(crate) fn is_exception_line(line: &str) -> bool {
     let t = line.trim();
     if t.starts_with("at ") || t.is_empty() {
         return false;
@@ -251,7 +251,16 @@ fn root_cause<'a>(lines: &[&'a str], from: usize) -> Option<&'a str> {
 }
 
 /// Строки загрузчика, отказавшегося собрать моды.
+/// Fabric lists optional mods it would like as "recommends …, which is missing!"
+/// under a WARN and starts anyway: such a line is never why the game stopped.
+pub(crate) fn is_recommendation(low: &str) -> bool {
+    low.contains(" recommends ")
+}
+
 fn is_resolution_line(low: &str) -> bool {
+    if is_recommendation(low) {
+        return false;
+    }
     low.contains("requested by:")
         || (low.contains("requires") && low.contains("mod '"))
         || low.contains(", which is missing")

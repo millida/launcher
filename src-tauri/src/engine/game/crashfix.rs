@@ -41,7 +41,7 @@ pub struct CrashDiag {
     pub culprits: Vec<String>,
     pub actions: Vec<CrashAction>,
     /// Стабильный класс вылета для телеметрии: own_mod, skin_mod, missing_deps,
-    /// wrong_mc, mixin, conflict, api_mismatch, gpu, gpu_driver, amd_driver,
+    /// wrong_mc, mixin, conflict, api_mismatch, gpu, gpu_driver, amd_driver, gpu_fallback,
     /// oom, system_memory, java_version, jvm_fatal, auth_cert, no_log, unknown.
     pub kind: String,
     /// Первая осмысленная строка ошибки (≤300 символов), без домашней папки,

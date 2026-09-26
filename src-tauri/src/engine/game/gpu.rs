@@ -53,9 +53,12 @@ pub fn apply_gpu_pref(cmd: &mut Command, java: &Path, pref: GpuPref) {
 /// под Java её не узнают, и «Пусть Windows решает» на ноутбуке с двумя
 /// видеокартами отдаёт OpenGL встроенной — FPS вдвое ниже (25.09.2026).
 /// На машине с одной видеокартой запись ничего не меняет.
-#[cfg_attr(not(windows), allow(dead_code))]
 fn windows_pref(pref: GpuPref) -> GpuPref {
     if pref == GpuPref::Auto { GpuPref::Discrete } else { pref }
+}
+
+pub fn auto_runs_on_discrete(pref: GpuPref) -> bool {
+    cfg!(windows) && windows_pref(pref) != pref
 }
 
 /// PRIME offload is per-process and env-driven on every current driver stack:

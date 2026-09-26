@@ -47,7 +47,7 @@ describe('таблица сундуков', () => {
   })
   test('демо-сундук никогда не собирает вещь: фрагменты упираются в need − 1, у каждой — цена докупки', () => {
     for (let n = 0; n < 300; n++) {
-      for (const d of demoOpen('c' + n, 'LEGEND').drops) {
+      for (const d of demoOpen('c' + n, 'LEGEND').drops ?? []) {
         if (d.kind !== 'FRAGMENTS' || !d.item) continue
         expect(d.completed).toBe(false)
         expect(d.have).toBeLessThanOrEqual(fragmentCap(d.rarity))
