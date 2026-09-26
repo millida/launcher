@@ -342,6 +342,34 @@ fn processor_outputs(profile: &Value) -> Vec<String> {
     out
 }
 
+/// FML opens the universal jar, fmlcore and the language providers straight from
+/// the libraries folder, and only the installer downloads them: the version json
+/// does not list them, so nothing else would notice that one is gone.
+fn installer_libraries(profile: &Value) -> Vec<String> {
+    profile["libraries"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|lib| {
+            lib["downloads"]["artifact"]["path"]
+                .as_str()
+                .filter(|p| !p.is_empty())
+                .map(str::to_string)
+                .or_else(|| lib["name"].as_str().map(maven_path))
+        })
+        .collect()
+}
+
+fn install_outputs(profile: &Value) -> Vec<String> {
+    let mut out: Vec<String> = vec![];
+    for rel in installer_libraries(profile).into_iter().chain(processor_outputs(profile)) {
+        if !out.contains(&rel) {
+            out.push(rel);
+        }
+    }
+    out
+}
+
 fn missing_outputs(libs: &Path, outputs: &[String]) -> Result<Vec<String>, String> {
     let mut missing = vec![];
     for rel in outputs {
@@ -950,7 +978,7 @@ pub async fn install_loader_with_java(
                         let legacy = install_legacy_forge(&ip, &vd, &lb)?;
                         let outputs = match legacy {
                             Some(_) => vec![],
-                            None => processor_outputs(&read_install_profile(&ip)?),
+                            None => install_outputs(&read_install_profile(&ip)?),
                         };
                         Ok::<_, String>((legacy, outputs))
                     })
@@ -1523,6 +1551,28 @@ e";
             assert_eq!(outputs.iter().any(|o| o == rel), expected, "{}: {}", rel, why);
         }
         assert_eq!(outputs.len(), outputs.iter().collect::<std::collections::HashSet<_>>().len(), "файл, упомянутый несколькими шагами, проверяется один раз");
+    }
+
+    #[test]
+    fn install_outputs_include_the_jars_only_the_installer_downloads() {
+        let mut profile = forge_1_20_1_profile();
+        profile["libraries"] = serde_json::json!([
+            { "name": "net.minecraftforge:forge:1.20.1-47.4.10:universal", "downloads": { "artifact": { "path": "net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-universal.jar" } } },
+            { "name": "net.minecraftforge:fmlcore:1.20.1-47.4.10" },
+            { "name": "net.minecraftforge:mclanguage:1.20.1-47.4.10", "downloads": { "artifact": { "path": "" } } },
+        ]);
+        let outputs = install_outputs(&profile);
+        let cases: [(&str, &str); 5] = [
+            ("net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-universal.jar", "без universal FML падает «Invalid paths argument» (Immortal 3.0.1, 25.09)"),
+            ("net/minecraftforge/fmlcore/1.20.1-47.4.10/fmlcore-1.20.1-47.4.10.jar", "без пути в downloads берётся путь по координатам"),
+            ("net/minecraftforge/mclanguage/1.20.1-47.4.10/mclanguage-1.20.1-47.4.10.jar", "пустой путь в downloads не прячет библиотеку"),
+            (IMMORTAL_CRASH_JARS[0], "выходы процессоров по-прежнему проверяются"),
+            (IMMORTAL_CRASH_JARS[2], "пропатченный клиент по-прежнему проверяется"),
+        ];
+        for (rel, why) in cases {
+            assert!(outputs.iter().any(|o| o == rel), "{} должен проверяться: {}", rel, why);
+        }
+        assert_eq!(outputs.len(), outputs.iter().collect::<std::collections::HashSet<_>>().len(), "каждый файл проверяется один раз");
     }
 
     #[test]

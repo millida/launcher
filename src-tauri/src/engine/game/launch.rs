@@ -336,7 +336,9 @@ const MISSING_DEPENDENCY_MARKERS: [&str; 4] = [
 ];
 
 fn loader_reported_missing_dependency(low: &str) -> bool {
-    MISSING_DEPENDENCY_MARKERS.iter().any(|m| low.contains(m))
+    low.lines()
+        .filter(|l| !super::crashcause::is_recommendation(l))
+        .any(|l| MISSING_DEPENDENCY_MARKERS.iter().any(|m| l.contains(m)))
 }
 
 /// The machine ran out of commit memory, not the game out of heap: the JVM
@@ -392,6 +394,27 @@ const WINDOW_FAILURE_MARKERS: [&str; 9] = [
 
 fn window_failed(low: &str) -> bool {
     !startup_finished(low) && WINDOW_FAILURE_MARKERS.iter().any(|m| low.contains(m))
+}
+
+const GRAPHICS_START_MARKERS: [&str; 2] = ["backend library: lwjgl", "trying gl version"];
+
+const DISCRETE_FALLBACK_REASON: &str = "Игра закрылась, пока открывала окно. Лаунчер переключил сборку на встроенную видеокарту — запусти игру ещё раз. Вернуть прежний выбор можно в настройках сборки, пункт «Видеокарта».";
+
+/// A weak or outdated second card can take the process down while the game
+/// creates its window, with no Java exception at all: the log just stops.
+fn died_bringing_up_graphics(kind: &str, cause: &str, text: &str) -> bool {
+    let low = text.to_lowercase();
+    if startup_finished(&low) {
+        return false;
+    }
+    match kind {
+        "gpu" | "gpu_driver" | "amd_driver" => true,
+        "unknown" | "jvm_fatal" => {
+            GRAPHICS_START_MARKERS.iter().any(|m| low.contains(m))
+                && !cause.split(" | ").any(super::crashcause::is_exception_line)
+        }
+        _ => false,
+    }
 }
 
 #[cfg(test)]
@@ -1557,6 +1580,13 @@ pub async fn install_and_launch_in(
                     }
                 }
             }
+            else if auto_runs_on_discrete(gpu) && died_bringing_up_graphics(kind, &verdict.cause, &log_text) {
+                let mut patch = serde_json::Map::new();
+                patch.insert("gpu".into(), serde_json::json!(GpuPref::Integrated.as_str()));
+                merge_settings(&pname, patch);
+                reason = DISCRETE_FALLBACK_REASON.into();
+                kind = "gpu_fallback";
+            }
             let home = dirs::home_dir().map(|h| h.to_string_lossy().into_owned());
             let cause = super::crashcause::scrub_cause(&verdict.cause, home.as_deref(), &crash_nick);
             let _ = app2.emit("game-crash", diagnose(&pname, &reason, &tail, &log_text).classified(kind, cause));
@@ -1883,6 +1913,39 @@ mod tests {
         let own = "[main/ERROR]: Incompatible mods found!\n\t - Mod 'Millida' (millida) 0.1.11 requires any version of fabric-api, which is missing!";
         let b = blame(own);
         assert!(b.own && b.others.is_empty(), "отказ назвал наш мод — он и уходит в карантин, чтобы не падать каждый запуск");
+    }
+
+    #[test]
+    fn a_silent_death_while_opening_the_window_moves_the_build_off_the_discrete_card() {
+        let fabric_amd = "[Render thread/INFO]: Backend library: LWJGL version 3.4.1-snapshot\n[Render thread/INFO]: Modifying process environment to apply workarounds for the AMD graphics driver...";
+        let forge_early = "[main/INFO]: Trying GL version 4.6\n[main/INFO]: If this message is the only thing at the bottom of your log before a crash, you probably have a driver issue.";
+        let mod_throw = "[Render thread/INFO]: Backend library: LWJGL version 3.4.1\n[Render thread/ERROR]: java.lang.IllegalStateException: boom";
+        let in_menu = "[Render thread/INFO]: Backend library: LWJGL version 3.4.1\n[Sound Library Loader/INFO]: Sound engine started";
+        let cases: [(&str, &str, bool, &str); 7] = [
+            ("unknown", fabric_amd, true, "Gobses 25.09: Vega 3 + Radeon 535, лог обрывается на окне, 26.2 Fabric"),
+            ("unknown", forge_early, true, "тот же ПК, 26.1 Forge: окно раннего экрана Forge"),
+            ("unknown", mod_throw, false, "исключение Java — вылет мода, а не видеокарты"),
+            ("unknown", in_menu, false, "игра дошла до меню — окно открылось"),
+            ("unknown", "[main/INFO]: Loading 51 mods", false, "до окна игра не дошла вовсе"),
+            ("amd_driver", "EXCEPTION_ACCESS_VIOLATION", true, "падение внутри драйвера до меню"),
+            ("missing_deps", fabric_amd, false, "понятный вердикт по модам не подменяется"),
+        ];
+        for (kind, log, want, why) in cases {
+            let cause = super::super::crashcause::crash_cause(log);
+            assert_eq!(died_bringing_up_graphics(kind, &cause, log), want, "{kind} / {log:?}: {why}");
+        }
+    }
+
+    #[test]
+    fn a_recommended_mod_is_not_a_missing_dependency() {
+        let log = "[main/WARN]: Warnings were found!\n - Mod 'Debugify' (debugify) 1.20.1+2.0 recommends any 3.x version of yet-another-config-lib, which is missing!\n\
+                   [main/ERROR]: Uncaught exception in thread \"main\"\n\
+                   java.lang.NullPointerException: Cannot invoke \"java.nio.file.Path.toRealPath(java.nio.file.LinkOption[])\" because \"path\" is null";
+        let v = crash_verdict(log);
+        assert_ne!(v.kind, "missing_deps", "рекомендация Fabric не мешает запуску — «Доустановить зависимости» ничего не чинила (Arcania, 25.09)");
+        assert!(v.cause.contains("NullPointerException"), "в причину попадает настоящее исключение: {}", v.cause);
+        let required = " - Mod 'Archers' (archers) 1.0.6 requires version 0.12.3 or later of spell_engine, which is missing!";
+        assert_eq!(crash_verdict(required).kind, "missing_deps", "обязательная зависимость по-прежнему распознаётся");
     }
 
     /// Окно — только до меню. «GLFW»/«OpenGL» в отчёте о вылете посреди игры
