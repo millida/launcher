@@ -21,9 +21,7 @@ import { failedHost } from './userEnvError'
 import { buildTag } from './telemetryPrivacy'
 import { launchFailure } from './launchFailure'
 
-export const PL_STAGES = ['Проверка файлов', 'Java', 'Ассеты и библиотеки', 'Запуск игры']
-
-export const REPAIR_STAGES = ['Файлы игры', 'Java', 'Ассеты и библиотеки', 'Моды и контент']
+export { PL_STAGES, REPAIR_STAGES } from './launchView'
 
 const STAGE_IDX: Record<string, number> = { files: 0, assets: 2, java: 1, launch: 3, mod: 0, content: 3 }
 

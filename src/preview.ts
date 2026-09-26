@@ -55,6 +55,13 @@ if (import.meta.env.DEV && !('__TAURI_INTERNALS__' in window) && new URLSearchPa
     if (document.body) mark()
     else document.addEventListener('DOMContentLoaded', mark, { once: true })
   }
+
+  // `&launch=installing|running` и `&screen=…` — состояния запуска (src/lib/demoLaunch.ts).
+  const launchDemo = new URLSearchParams(location.search).get('launch')
+  if (launchDemo) {
+    const screen = new URLSearchParams(location.search).get('screen')
+    setTimeout(() => void import('./lib/demoLaunch').then((m) => m.installLaunchDemo(launchDemo, screen)), 800)
+  }
 }
 
 // Тишина при разработке: VITE_NO_MUSIC=1 в .env.local выключает автозапуск

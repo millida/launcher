@@ -239,7 +239,7 @@ fn write_settings(dir: &Path, licensed: bool) -> Result<(), String> {
     cfg.insert("allowNameLookup".into(), Value::Bool(false));
     let hosts = cfg.entry("textureHosts".to_string()).or_insert_with(|| Value::Array(vec![]));
     if let Some(list) = hosts.as_array_mut() {
-        for host in ["millida.net", "cdn.millida.net", "textures.minecraft.net"] {
+        for host in ["millida.net", "cdn.millida.net", "cdn.millida.trade", "textures.minecraft.net"] {
             if !list.iter().any(|h| h.as_str() == Some(host)) {
                 list.push(Value::String(host.into()));
             }

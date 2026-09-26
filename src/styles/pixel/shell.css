@@ -263,3 +263,29 @@
    не выше доступной высоты. */
 :root .modal-bg { top: 44px; }
 :root .modal-bg .modal { max-height: calc(100% - 32px); }
+
+/* Ход запуска вне лобби — тем же тостом, что и остальные уведомления: в лобби
+   его показывает сама «Играть». Обычный тост встаёт над ним, а не поверх. */
+:root:root .toast.launch-toast {
+  width: 320px; gap: 12px; padding: 12px 10px 12px 16px;
+  animation: screenIn var(--m-t-base) var(--m-ease-out);
+}
+.launch-toast > .spin { width: 14px; height: 14px; flex: none; }
+.launch-toast-body { display: flex; flex-direction: column; gap: 7px; flex: 1; min-width: 0; }
+.launch-toast-row { display: flex; align-items: center; gap: 8px; line-height: 1; }
+.launch-toast-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.launch-toast-pct { font-weight: 800; color: var(--m-accent); font-variant-numeric: tabular-nums; }
+.launch-toast-bar { display: block; height: 6px; background: var(--m-inset); }
+.launch-toast-bar > i { display: block; height: 100%; background: var(--m-accent); transition: width 240ms linear; }
+.launch-toast-x {
+  flex: none; display: grid; place-items: center; width: 28px; height: 28px;
+  color: var(--m-fg-muted); background: var(--m-surface-2);
+  --px-n: 5px; clip-path: var(--px-5);
+  transition: color var(--m-t-fast), background-color var(--m-t-fast);
+}
+:root:root .launch-toast-x svg { width: 14px; height: 14px; color: currentColor; }
+@media (hover: hover) and (pointer: fine) {
+  .launch-toast-x:hover { color: var(--m-fg); background-color: var(--m-inset); }
+}
+.launch-toast ~ #toast { bottom: 88px; }
+@media (prefers-reduced-motion: reduce) { :root:root .toast.launch-toast { animation: none; } }
