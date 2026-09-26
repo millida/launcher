@@ -66,7 +66,7 @@ pub fn list_mods(profile: &str) -> Vec<ModFile> { list_content(profile, "mod") }
 /// A running JVM keeps every loaded jar open, and Windows refuses to rename or
 /// delete an open file. Refusing up front says what to do; the raw OS text did
 /// not — and it arrived as an unhandled rejection, so nothing said it at all.
-fn assert_not_running(profile: &str, then: &str) -> Result<(), String> {
+pub(crate) fn assert_not_running(profile: &str, then: &str) -> Result<(), String> {
     if running_games().iter().any(|p| p == profile) {
         return Err(format!("Сборка сейчас запущена — закрой игру и {}", then));
     }

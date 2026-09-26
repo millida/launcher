@@ -6,6 +6,7 @@ import { WorldManager } from '../components/WorldManager'
 import { ScreenshotGallery } from '../components/ScreenshotGallery'
 import { SafetyModal } from '../components/SafetyModal'
 import { SharePackModal } from '../components/SharePackModal'
+import { PackUpdateRow } from '../components/PackUpdateRow'
 import { TunePanel } from '../components/TunePanel'
 import { IconGrid } from '../components/IconGrid'
 import { IconEditor } from '../components/IconEditor'
@@ -924,6 +925,7 @@ export function InstancePage() {
             ))}
           </nav>
           <div className="inst-content">
+            {modal.open && profile ? <PackUpdateRow profile={profile} onUpdated={() => loadMods()} /> : null}
             <div id="bsTabContent" style={{ display: tab === 'content' ? '' : 'none' }}>
               <div className="segs" style={{ marginBottom: '12px' }}>
                 {KINDS.map(([k, label]) => (

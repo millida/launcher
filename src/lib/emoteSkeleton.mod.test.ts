@@ -121,6 +121,37 @@ describe('the fitting room reads a pose the way the mod does', () => {
   })
 })
 
+/** A leg goes from a linear key to a catmullrom one and back: between keys the mod eases it by the key it left. */
+const STEP = {
+  'animation.rig.step': {
+    loop: true,
+    animation_length: 2,
+    bones: {
+      leg_left: {
+        rotation: { '0': [0, 0, 0], '1': { post: [40, 0, 0], lerp_mode: 'catmullrom' }, '2': [0, 0, 0] },
+        position: { '0': [0, 0, 0], '1': { post: [0, 0, -4], lerp_mode: 'catmullrom' }, '2': [0, 0, 0] },
+      },
+    },
+  },
+}
+
+/** Moment of the clip -> the left leg as the mod places it (shift in pixels, turn in radians) -> why it is pinned. */
+const EASING: [number, number[], string][] = [
+  [0.25, [0, 0, -1, 0.17453, 0, 0], 'from a linear key the leg moves evenly, though the next key is catmullrom'],
+  [1.25, [0, 0, -3.375, 0.58905, 0, 0], 'from a catmullrom key the leg eases out, though the next key is linear'],
+]
+
+describe('the fitting room eases a clip between keys the way the mod does', () => {
+  for (const [seconds, wanted, why] of EASING) {
+    it(why, () => {
+      const skeleton = EmoteSkeleton.of(RIG)
+      const clip = readAnimations(STEP)['animation.rig.step']
+      expect(clip).toBeDefined()
+      check(skeleton!.poseAt(clip!, seconds), { leg_left: wanted })
+    })
+  }
+})
+
 function check(posed: Record<string, { shift: number[]; turn: number[] }>, want: Record<string, number[]>) {
   {
     for (const [part, wanted] of Object.entries(want)) {

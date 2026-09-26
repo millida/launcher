@@ -13,7 +13,6 @@
  *   &weekly=parcel|parcel-wait|parcel-done — посылка недели (форма службы сейчас;
  *                      по умолчанию — готова, три вещи на выбор);
  *   &weekly=path|wait|done — недельный путь (пока служба его не отдаёт);
- *   &plus-migration=1  — бывший подписчик, окно выбора вещей старого набора;
  *   &gift=rubies|shards|item|claimed — старый подарок дня (по умолчанию его нет:
  *                      с 23.09.2026, 21:43 вместо него ежедневный бонус);
  *   &wish=0            — пустой «Хочу».
@@ -21,6 +20,7 @@
 import type {
   Achievement,
   EconomyProgress,
+  FragmentCard,
   ItemRef,
   PlusEconomy,
   ShopCard,
@@ -33,7 +33,7 @@ import type {
 import { rarityOfPrice } from './rarity'
 import type { Rarity } from '../../lib/rubies'
 import { variantCode, variantTitles } from '../../lib/variantNames'
-import { FLAGSHIP_SLOTS, FRAGMENTS_NEED, SHARD_CAP, SHARD_DAILY_LIMIT, WORKSHOP_COST, fragmentOff } from '../daily/chestDrops'
+import { FLAGSHIP_SLOTS, FRAGMENTS_NEED, SHARD_CAP, SHARD_DAILY_LIMIT, WORKSHOP_COST, fragmentCap, fragmentOff, fragmentTopUp } from '../daily/chestDrops'
 import type { WeeklyPath, WeeklyReward } from './weekly'
 import type { WishEntry, WishHow, WishList } from './wish'
 
@@ -153,7 +153,6 @@ async function build(catalog: DemoCatalogItem[], wallet: { balance: number }, pa
   const now = Date.now()
   const refresh = nextMskMidnight(now)
   const shop = catalog.filter((x) => x.access === 'PURCHASE' && (x.priceRubies || 0) > 0)
-  const plusPool = catalog.filter((x) => x.access === 'PLUS')
   const used = new Set<string>()
   const random = rng(Math.floor((refresh - 21 * HOUR) / DAY) * 7919)
   const take = (list: DemoCatalogItem[], test: (x: DemoCatalogItem) => boolean): DemoCatalogItem => {
@@ -283,11 +282,6 @@ async function build(catalog: DemoCatalogItem[], wallet: { balance: number }, pa
     nextAt: xrayWait ? new Date(now + 3 * HOUR + 20 * 60_000).toISOString() : null,
   }
 
-  const monthPlus = plusPool
-    .filter((x) => ['WINGS', 'PET', 'BACK', 'FULL_BODY'].includes(x.slot))
-    .filter((x, i, all) => all.findIndex((o) => o.slot === x.slot) === i)
-    .slice(0, 3)
-
   // Недельный путь сбрасывается в понедельник 00:00 МСК.
   const monday = (() => {
     const mskDay = (new Date(refresh).getUTCDay() + 1) % 7
@@ -311,8 +305,6 @@ async function build(catalog: DemoCatalogItem[], wallet: { balance: number }, pa
     go,
   }))
   const points = achievements.filter((a) => a.done).reduce((n, a) => n + a.points, 0)
-
-  const migrationOn = p.get('plus-migration') === '1'
 
   // Подарок дня меняется каждый день: рубины, осколки, вещь — по кругу.
   const dayIndex = Math.floor((refresh - 21 * HOUR) / DAY)
@@ -374,7 +366,7 @@ async function build(catalog: DemoCatalogItem[], wallet: { balance: number }, pa
       cap: SHARD_CAP,
       today: { earned: 60, limit: SHARD_DAILY_LIMIT, resetsAt: new Date(refresh).toISOString() },
       fragments: [...frags.entries()]
-        .map(([id, have]) => ({ item: refs.get(id)!, have, need: FRAGMENTS_NEED[refs.get(id)!.rarity] }))
+        .map(([id, have]) => ({ item: refs.get(id)!, have, need: FRAGMENTS_NEED[refs.get(id)!.rarity], topUp: fragmentTopUp(refs.get(id)!.rarity, have) }))
         .filter((f) => f.item && f.need),
       workshop: {
         items: workshopItems.map((x) => ({
@@ -394,13 +386,8 @@ async function build(catalog: DemoCatalogItem[], wallet: { balance: number }, pa
       pointItems: [50, 100, 150, 250, 400].map((pt, i) => ({ points: pt, item: ref(achItems[i]!), owned: points >= pt })),
     },
     plus: {
-      month: { items: monthPlus.map(ref), claimed: false },
       rubiesOnPay: 750,
       shardBoost: 1.5,
-      // Живой каталог уже без вещей access=PLUS — для показа берём продаваемые.
-      migration: migrationOn
-        ? { eligible: true, picks: 12, picked: [], pool: (plusPool.length ? plusPool : catalog.filter((x) => x.priceRubies)).slice(0, 40).map(ref) }
-        : null,
     },
   }
 }
@@ -568,9 +555,35 @@ export function demoEconomy(deps: {
     if (!w || s.owned.has(w.item.code)) return fail('not craftable')
     if (s.workshop.shards < w.cost) return fail('http 402')
     s.workshop.shards -= w.cost
-    s.owned.add(w.item.code)
+    return { shards: s.workshop.shards, item: w.item, fragments: addDemoFragments(s, w.item) }
+  }
+
+  /** Половина фрагментов вещи, не выше need − 1: так служба выдаёт бывшие бесплатные вещи. */
+  const addDemoFragments = (s: State, item: ItemRef) => {
+    const list: FragmentCard[] = (s.workshop.fragments ??= [])
+    const need = FRAGMENTS_NEED[item.rarity]
+    const row = list.find((f) => f.item.code === item.code)
+    const before = row?.have ?? 0
+    const have = Math.max(before, Math.min(before + Math.ceil(need / 2), fragmentCap(item.rarity)))
+    const topUp = fragmentTopUp(item.rarity, have)
+    if (row) Object.assign(row, { have, topUp })
+    else list.push({ item, have, need, topUp })
+    return { amount: have - before, have, need, topUp }
+  }
+
+  /** «Докупить фрагменты» в демо: списание по цене прогресса, вещь своя. */
+  const completeFragments = async (body: { code?: string }) => {
+    const s = await get()
+    const list = s.workshop.fragments ?? []
+    const row = list.find((f) => f.item.code === body.code)
+    if (!row) return fail('У этой вещи нет фрагментов: её можно купить в магазине')
+    const price = fragmentTopUp(row.item.rarity, row.have)
+    if (deps.wallet.balance < price) return fail('Не хватает рубинов')
+    deps.wallet.balance -= price
+    s.workshop.fragments = list.filter((f) => f !== row)
+    s.owned.add(row.item.code)
     syncOwned(s)
-    return { shards: s.workshop.shards, item: w.item }
+    return { balance: deps.wallet.balance, price, granted: [row.item] }
   }
 
   /** Посылка недели в форме службы (/rubies/weekly сейчас). */
@@ -596,9 +609,7 @@ export function demoEconomy(deps: {
       const item = view.choices?.find((c) => c.code === body.code)
       if (!item) return fail('Этой вещи нет в посылке недели')
       parcelClaimed = new Date().toISOString()
-      s.owned.add(item.code)
-      syncOwned(s)
-      return { item: clone(item) }
+      return { item: clone(item), fragments: addDemoFragments(s, item) }
     }
     const w = s.weekly
     const step = w.steps.find((st) => st.at === body.at)
@@ -682,28 +693,14 @@ export function demoEconomy(deps: {
     return { rubies: n, kopecks: n * 20, balance: deps.wallet.balance }
   }
 
-  const plusMonthClaim = async () => {
-    const s = await get()
-    return fail(s.plus.month ? 'plus required' : 'no month')
-  }
-
-  /** Подарок новичку (модель v2): нимб из живого каталога, навсегда и сразу надет. */
+  /** Подарок новичку: половина фрагментов нимба из живого каталога, остаток докупается. */
   const welcomeClaim = async () => {
     const s = await get()
-    const item = s.refs.get('ANGEL_HALO') || null
-    const granted = !!item && !s.owned.has('ANGEL_HALO')
-    if (item) s.owned.add('ANGEL_HALO')
-    return { item: item ? { ...item, rarity: 'UNCOMMON' as const } : null, claimed: !!item, granted, equipped: granted }
-  }
-
-  const migrationPick = async (body: { codes?: string[] }) => {
-    const s = await get()
-    const m = s.plus.migration
-    if (!m) return fail('not eligible')
-    const codes = (body.codes || []).filter((c) => !m.picked.includes(c)).slice(0, m.picks - m.picked.length)
-    m.picked.push(...codes)
-    codes.forEach((c) => s.owned.add(c))
-    return { granted: m.pool.filter((i) => codes.includes(i.code)) }
+    const found = s.refs.get('ANGEL_HALO') || null
+    if (!found) return { item: null, claimed: false, granted: false, equipped: false, fragments: null }
+    const item = { ...found, rarity: 'UNCOMMON' as const }
+    const fragments = addDemoFragments(s, item)
+    return { item, claimed: true, granted: fragments.amount > 0, equipped: false, fragments }
   }
 
   return {
@@ -716,10 +713,9 @@ export function demoEconomy(deps: {
     wish,
     xrayBuy,
     craft,
+    completeFragments,
     weeklyClaim,
     weeklyBoost,
-    plusMonthClaim,
-    migrationPick,
     welcomeClaim,
     workshop: async () => clone((await get()).workshop),
     weekly: async () => {

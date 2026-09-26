@@ -55,7 +55,7 @@ function WishCard({
               data-id={it.code}
               onClick={() => onCraft(w)}
             >
-              Собрать
+              Обменять
             </button>
           </>
         ) : w.status === 'RETURNS' ? (

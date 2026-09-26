@@ -83,7 +83,10 @@ pub struct SharedPack {
     pub size_bytes: u64,
 }
 
-fn url_allowed(raw: &str) -> bool {
+/// Shared with «Починить», which restores a mod only from these hosts too: the
+/// record it reads sits in the game folder, where archives and imports can put
+/// their own.
+pub(crate) fn url_allowed(raw: &str) -> bool {
     let Ok(url) = url::Url::parse(raw) else { return false };
     if url.scheme() != "https" {
         return false;

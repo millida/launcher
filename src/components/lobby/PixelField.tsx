@@ -1,6 +1,9 @@
 import { useEffect, useRef } from 'react'
 import { ACCENT_EVENT, accentBase, shade } from '../../lib/accent'
+import { currentDeviceTier, maxCanvasPixelRatio } from '../../lib/deviceTier'
 import { onRenderGate, renderLive } from '../../lib/renderGate'
+import { gpuLite } from '../../lib/gpuLite'
+import { VIEW_PREFS_EVENT, bgAnimOn } from '../../state/viewPrefs'
 import { WORLD_SRC, makePal, paintScene, paintVignette, stageGrid } from './stageArt'
 import type { Pal } from './stageArt'
 
@@ -247,7 +250,9 @@ export function PixelField({ on }: { on: boolean }) {
     if (!cv || !on) return
     const ctx = cv.getContext('2d', { alpha: false })
     if (!ctx) return
-    const still = matchMedia('(prefers-reduced-motion: reduce)').matches
+    // Лёгкая графика после сбоя видеокарты — один статичный кадр без искр.
+    const lite = gpuLite()
+    const still = () => lite || matchMedia('(prefers-reduced-motion: reduce)').matches || !bgAnimOn()
     let scene: Scene | null = null
     let raf = 0
     const fx = fxRef.current
@@ -260,13 +265,16 @@ export function PixelField({ on }: { on: boolean }) {
       if (!alive) return
       const r = cv.getBoundingClientRect()
       if (!r.width || !r.height) return
-      const dpr = window.devicePixelRatio || 1
+      // Два холста во всё окно: при DPR 2 это ~40 МБ видеопамяти. Пиксель-арт
+      // выше 1.5 не выигрывает, в лёгкой графике — 1; слабые устройства режут сильнее.
+      const dpr = lite ? 1 : Math.min(window.devicePixelRatio || 1, 1.5, maxCanvasPixelRatio(currentDeviceTier()))
       scene = build(r.width, r.height, dpr, !!cv.closest('.lobby'), fit)
       cv.width = scene.W
       cv.height = scene.H
+      // Искр без движения нет — и буфер под них не нужен.
       if (fx) {
-        fx.width = scene.W
-        fx.height = scene.H
+        fx.width = still() ? 0 : scene.W
+        fx.height = still() ? 0 : scene.H
       }
       paint(ctx, scene, performance.now(), false)
     }
@@ -301,7 +309,12 @@ export function PixelField({ on }: { on: boolean }) {
     const run = () => {
       cancelAnimationFrame(raf)
       raf = 0
-      if (!still && !document.hidden && renderLive()) raf = requestAnimationFrame(tick)
+      if (!still() && !document.hidden && renderLive()) raf = requestAnimationFrame(tick)
+      else if (scene) {
+        // Анимацию фона выключили — оставляем статичный кадр без волны и искр.
+        paint(ctx, scene, performance.now(), false)
+        if (fxg) fxg.clearRect(0, 0, scene.W, scene.H)
+      }
     }
 
     fit()
@@ -309,6 +322,7 @@ export function PixelField({ on }: { on: boolean }) {
     const ro = new ResizeObserver(() => fit())
     ro.observe(cv)
     document.addEventListener('visibilitychange', run)
+    window.addEventListener(VIEW_PREFS_EVENT, run)
     const offGate = onRenderGate(run)
     // Цвет кнопок сменили в Настройках — сцена перекрашивается целиком. Пока
     // тянут ползунок, событие летит десятки раз в секунду: перерисовка — через
@@ -325,6 +339,7 @@ export function PixelField({ on }: { on: boolean }) {
       cancelAnimationFrame(raf)
       ro.disconnect()
       document.removeEventListener('visibilitychange', run)
+      window.removeEventListener(VIEW_PREFS_EVENT, run)
       offGate()
       window.removeEventListener(ACCENT_EVENT, onAccent)
     }

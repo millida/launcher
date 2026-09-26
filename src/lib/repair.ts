@@ -12,16 +12,23 @@ let running = false
 
 export const repairRunning = () => running
 
+function fileList(names: string[]): string {
+  const head = names.slice(0, 3).join(', ')
+  return names.length > 3 ? head + ' и ещё ' + (names.length - 3) : head
+}
+
 // Починка сверяет файлы по хешам, но устаревший мод — целый файл: сборка
 // падает, а отчёт говорит «всё на месте». Число обновлений досчитываем тем же
 // проверяльщиком, что и экран сборок, и дописываем в тот же итог.
 function summary(r: RepairReport, outdated: number): string {
   const tail = outdated ? '. Устарело модов — ' + outdated + ', обнови их на экране сборки' : ''
+  const refused = r.refused.length
+    ? 'Починка не качает моды с незнакомых адресов: ' + fileList(r.refused) + ' — поставь их заново из каталога'
+    : ''
   if (r.broken.length) {
-    const head = r.broken.slice(0, 3).join(', ')
-    const rest = r.broken.length > 3 ? ' и ещё ' + (r.broken.length - 3) : ''
-    return 'Файлы игры на месте, но не удалось восстановить: ' + head + rest + ' — удали их и поставь заново' + tail
+    return 'Файлы игры на месте, но не удалось восстановить: ' + fileList(r.broken) + ' — удали их и поставь заново' + (refused ? '. ' + refused : '') + tail
   }
+  if (refused) return 'Файлы игры на месте. ' + refused + tail
   if (r.restored) return 'Готово: перекачано файлов — ' + r.restored + ', проверено модов — ' + r.checked + tail
   if (r.checked) return 'Всё на месте: проверено модов — ' + r.checked + ', файлы игры сверены по хешам' + tail
   return 'Всё на месте: файлы игры сверены по хешам' + tail
@@ -69,7 +76,7 @@ export async function runRepair(profile: string): Promise<RepairReport | null> {
     const outdated = await checkUpdates(profile, 'mod')
       .then((ups) => (ups ? ups.length : 0))
       .catch(() => 0)
-    showToast(summary(report, outdated), report.broken.length ? 'error' : 'ok')
+    showToast(summary(report, outdated), report.broken.length || report.refused.length ? 'error' : 'ok')
     return report
   } catch (e) {
     const msg = String(e && (e as Error).message ? (e as Error).message : e).replace(/^Error:\s*/, '')

@@ -418,6 +418,8 @@
 .mr-gal-foot .mr-actions { margin: 0; }
 
 .mr-more { display: flex; justify-content: center; margin-top: 16px; }
+.mr-src-divider { display: flex; align-items: center; gap: 12px; margin: 16px 0 8px; font: 600 13px/1 var(--m-font); color: var(--m-fg-subtle); }
+.mr-src-divider::before, .mr-src-divider::after { content: ''; flex: 1; height: 2px; background: var(--m-surface-2); }
 .mr-more .btn { width: 100%; }
 
 /* ── Главная каталога: «Категории» (mk-hub-cat) ──

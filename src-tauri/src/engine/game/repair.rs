@@ -35,6 +35,31 @@ pub struct RepairReport {
     pub restored: u32,
     /// Files that are damaged but carry no catalog record to restore them from.
     pub broken: Vec<String>,
+    /// Damaged files whose record names an address outside the catalogue hosts.
+    /// They stay as they are: the record may have come from someone else's
+    /// archive, and following it would put an arbitrary jar into mods/.
+    pub refused: Vec<String>,
+}
+
+/// Where a damaged file may be restored from.
+#[derive(Debug, PartialEq)]
+enum RestoreFrom {
+    Nowhere,
+    Refused,
+    Catalog,
+}
+
+/// Downloads go through Millida mirrors, so the final host legitimately differs
+/// from the recorded one: the recorded hash, not the host, is what proves the
+/// bytes are the catalogue's file. Without a hash nothing is restored.
+fn restore_from(download_url: &str, has_hash: bool) -> RestoreFrom {
+    if download_url.is_empty() {
+        RestoreFrom::Nowhere
+    } else if url_allowed(download_url) && has_hash {
+        RestoreFrom::Catalog
+    } else {
+        RestoreFrom::Refused
+    }
 }
 
 const CONTENT_KINDS: [&str; 4] = ["mod", "resourcepack", "shader", "datapack"];
@@ -91,11 +116,13 @@ async fn repair_content(app: &AppHandle, profile: &str, report: &mut RepairRepor
         if content_file_intact(&path, entry) {
             continue;
         }
-        if entry.download_url.is_empty() {
-            report.broken.push(entry.file_name.clone());
-            continue;
+        // Decided before anything is deleted: a refused source leaves the
+        // player's current copy in place.
+        match restore_from(&entry.download_url, !entry.sha512.is_empty() || !entry.sha1.is_empty()) {
+            RestoreFrom::Catalog => damaged.push((entry.clone(), path, enabled)),
+            RestoreFrom::Refused => report.refused.push(entry.file_name.clone()),
+            RestoreFrom::Nowhere => report.broken.push(entry.file_name.clone()),
         }
-        damaged.push((entry.clone(), path, enabled));
     }
 
     let total = damaged.len();
@@ -229,6 +256,28 @@ mod tests {
         assert!(!content_file_intact(&empty, &cut), "пустой файл не может быть модом");
 
         assert!(!content_file_intact(&dir.join("gone.jar"), &good), "отсутствующий файл всегда битый");
+    }
+
+    /// recorded address -> where the repair may restore from. The record sits
+    /// in the game folder, so a pack archive or an import can bring its own,
+    /// and whatever it names lands in mods/.
+    #[test]
+    fn repair_restores_only_from_catalogue_hosts() {
+        let cases: &[(&str, bool, RestoreFrom, &str)] = &[
+            ("https://cdn.modrinth.com/data/AANobbMI/versions/x/sodium.jar", true, RestoreFrom::Catalog, "обычный адрес Modrinth с хешем"),
+            ("https://edge.forgecdn.net/files/1/2/jei.jar", true, RestoreFrom::Catalog, "обычный адрес CurseForge с хешем"),
+            ("https://cdn.modrinth.com/data/AANobbMI/versions/x/sodium.jar", false, RestoreFrom::Refused, "без хеша зеркало или редирект могут отдать любой jar, и сверить его не с чем"),
+            ("", true, RestoreFrom::Nowhere, "мод без записи каталога чинить не из чего — это «не удалось восстановить», а не отказ"),
+            ("https://evil.example/sodium.jar", true, RestoreFrom::Refused, "чужой хост из подложенной записи положил бы в mods/ любой jar"),
+            ("https://cdn.modrinth.com.evil.example/x.jar", true, RestoreFrom::Refused, "хост каталога в начале чужого имени — не каталог"),
+            ("http://cdn.modrinth.com/x.jar", true, RestoreFrom::Refused, "без https файл подменяют по дороге"),
+            ("https://127.0.0.1/x.jar", true, RestoreFrom::Refused, "локальный адрес — не каталог"),
+            ("file:///C:/Windows/System32/x.dll", true, RestoreFrom::Refused, "локальный файл — не каталог"),
+            ("не адрес", true, RestoreFrom::Refused, "мусор в записи не должен уходить в загрузчик"),
+        ];
+        for (url, has_hash, want, why) in cases {
+            assert_eq!(&restore_from(url, *has_hash), want, "«{url}», хеш {has_hash}: {why}");
+        }
     }
 
     #[test]

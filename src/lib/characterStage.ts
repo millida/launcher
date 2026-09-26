@@ -124,3 +124,24 @@ export function lobbyFrame(h: number, top: number, scene: number): { fillY: numb
   const fillY = Math.max(0.3, Math.min(LOBBY_MAX_FILL_Y, (head - feet) / 2))
   return { fillY, offsetY: feet + fillY }
 }
+
+/**
+ * Где клик по лобби ведёт в «Мой скин»: коробка вокруг самой фигуры, а не
+ * вся сцена на 80% ширины окна (владелец 25.09.2026: «кликаю далеко от
+ * персонажа и попадаю в гардероб»). На окне по умолчанию площадь вдвое
+ * меньше прежней: ширина — полтора роста, по высоте запас над головой.
+ */
+export const LOBBY_HIT_WIDTH = 1.5
+export const LOBBY_HIT_ABOVE = 0.3
+export const LOBBY_HIT_BELOW = 0.1
+
+export function lobbyHitBox(ndc: Ndc, w: number, h: number): { left: number; top: number; width: number; height: number } {
+  const top = ((1 - ndc.maxY) / 2) * h
+  const bottom = ((1 - ndc.minY) / 2) * h
+  const tall = Math.max(0, bottom - top)
+  const cx = ((ndc.minX + ndc.maxX) / 2 + 1) / 2 * w
+  const width = Math.min(w, tall * LOBBY_HIT_WIDTH)
+  const y0 = Math.max(0, top - tall * LOBBY_HIT_ABOVE)
+  const y1 = Math.min(h, bottom + tall * LOBBY_HIT_BELOW)
+  return { left: Math.max(0, cx - width / 2), top: y0, width, height: Math.max(0, y1 - y0) }
+}

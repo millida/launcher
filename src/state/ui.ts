@@ -21,6 +21,7 @@ export type ModalId =
   | 'nbModal'
   | 'bsModal'
   | 'impModal'
+  | 'mvModal'
   | 'pjModal'
   | 'setModal'
   | 'accModal'
@@ -110,6 +111,7 @@ export const useUi = create<UiState>((set, get) => ({
     nbModal: emptyModal(),
     bsModal: emptyModal(),
     impModal: emptyModal(),
+    mvModal: emptyModal(),
     pjModal: emptyModal(),
     setModal: emptyModal(),
     accModal: emptyModal(),

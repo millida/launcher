@@ -25,6 +25,10 @@ const DURABLE = [
   'm-notify-request',
   'm-notify-room',
   'm-beta',
+  'm-anim-char',
+  'm-anim-bg',
+  'm-tab-ms',
+  'm-perf-mode',
 ] as const
 
 export type PrefKey = (typeof DURABLE)[number]

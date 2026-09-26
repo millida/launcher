@@ -44,6 +44,17 @@ struct PackMeta {
     loader_version: String,
 }
 
+/// The archive is someone else's upload, and launcher service files steer what
+/// the launcher does with a build: settings carry JVM flags, the content record
+/// carries the addresses «Починить» downloads from. So the archive's copies
+/// never reach the profile, by the same rule pack overrides follow. The one
+/// exception is the launch description at the root, spelled exactly: that is
+/// the file catalogue review reads, and only a catalogue install is trusted to
+/// run it.
+fn strip_pack_service_files(dir: &Path) -> Result<(), String> {
+    drop_launcher_service_files(dir, &[PACK_LAUNCH_FILE]).map_err(|e| io_fail("Распаковка", dir, &e))
+}
+
 fn read_pack_manifest(dir: &Path) -> Option<Value> {
     let raw = std::fs::read(dir.join(MANIFEST_NAME)).ok()?;
     serde_json::from_slice(&raw).ok()
@@ -162,18 +173,29 @@ pub async fn install_catalog_pack(app: AppHandle, slug: String, review: bool) ->
     job.finish(&app, res)
 }
 
-async fn install_catalog_pack_job(
-    app: &AppHandle,
-    job: &Job,
-    slug: &str,
-    review: bool,
-) -> Result<Profile, String> {
+/// A pack version checked against its hash and unpacked, not yet anybody's
+/// build. The temp guard travels with it, so a caller that stops early still
+/// leaves no gigabytes behind.
+struct Fetched {
+    view: Value,
+    title: String,
+    meta: PackMeta,
+    unpacked: PathBuf,
+    /// The hash the downloaded archive was checked against, lowercase hex.
+    sha512: String,
+    _temp: TempPaths,
+}
+
+/// The one road from the catalogue to a verified, unpacked tree, for a fresh
+/// install and for an update alike: the access check, the host allowlist and
+/// the hash live here once.
+async fn fetch_pack(app: &AppHandle, job: &Job, slug: &str, review: bool) -> Result<Fetched, String> {
     job.emit(app, 4.0, "Читаем сборку…");
     let view = if review {
         let answer = pack_review_candidate(slug).await?;
         view_from_candidate(slug, &answer)?
     } else {
-        millida_api(format!("/catalog/packs/{}", slug), "GET".into(), None, None).await?
+        millida_api(format!("/catalog/packs/{}", slug), "GET".into(), None, millida_token()).await?
     };
     let (file_id, size, sha512) = client_file(&view)?;
     let title = view["title"].as_str().unwrap_or(slug).to_string();
@@ -215,7 +237,7 @@ async fn install_catalog_pack_job(
     std::fs::create_dir_all(&tmp_dir).map_err(|e| e.to_string())?;
     let archive = tmp_dir.join(format!("pack-{}.zip", slug));
     let unpacked = tmp_dir.join(format!("pack-{}", slug));
-    let _guard = TempPaths(vec![archive.clone(), unpacked.clone()]);
+    let temp = TempPaths(vec![archive.clone(), unpacked.clone()]);
 
     job.emit(app, 12.0, "Скачиваем сборку…");
     // Скачивание занимает почти всё время установки, поэтому оно и занимает
@@ -246,12 +268,25 @@ async fn install_catalog_pack_job(
     let from = archive.clone();
     let into = unpacked.clone();
     let _ = std::fs::remove_dir_all(&into);
-    tokio::task::spawn_blocking(move || unzip_to(&from, &into))
-        .await
-        .map_err(|e| e.to_string())??;
+    tokio::task::spawn_blocking(move || -> Result<(), String> {
+        unzip_to(&from, &into)?;
+        strip_pack_service_files(&into)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
     job.check()?;
 
     let meta = meta_from(&view, read_pack_manifest(&unpacked).as_ref())?;
+    Ok(Fetched { view, title, meta, unpacked, sha512: sha512.to_ascii_lowercase(), _temp: temp })
+}
+
+async fn install_catalog_pack_job(
+    app: &AppHandle,
+    job: &Job,
+    slug: &str,
+    review: bool,
+) -> Result<Profile, String> {
+    let Fetched { view, title, meta, unpacked, sha512, _temp } = fetch_pack(app, job, slug, review).await?;
     let pname = modpack_profile_name(
         if meta.name.is_empty() { &title } else { &meta.name },
         &meta.version,
@@ -272,52 +307,233 @@ async fn install_catalog_pack_job(
     if pdir.exists() {
         return Err(format!("Папка сборки «{}» уже занята", pname));
     }
-    if std::fs::rename(&unpacked, &pdir).is_err() {
-        std::fs::create_dir_all(&pdir).map_err(|e| e.to_string())?;
-        copy_dir_all(&unpacked, &pdir).map_err(|e| e.to_string())?;
-    }
+    place_unpacked(&unpacked, &pdir)?;
     let _ = std::fs::remove_file(pdir.join(MANIFEST_NAME));
     record_shipped(&pdir)?;
     trust_pack_launch(&pname, slug);
     restore_player_files(&pdir, slug);
 
-    let prof = Profile {
-        name: pname.clone(),
-        version: meta.game.clone(),
-        fabric: matches!(meta.loader.as_str(), "fabric" | "quilt"),
-        loader: Some(meta.loader.clone()),
-        loader_version: if meta.loader_version.is_empty() { None } else { Some(meta.loader_version.clone()) },
-        icon: view["cover"].as_str().filter(|s| !s.is_empty()).map(String::from),
-    };
-    let mut all = load_profiles();
-    if let Some(p) = all.iter_mut().find(|p| p.name == prof.name) {
-        *p = prof.clone();
-    } else {
-        all.insert(0, prof.clone());
-    }
-    save_profiles(&all)?;
+    let prof = pack_profile(&pname, &meta, view["cover"].as_str().filter(|s| !s.is_empty()).map(String::from));
+    put_profile(&prof)?;
 
-    let mut patch = serde_json::Map::new();
-    patch.insert("catalogPackSlug".into(), Value::String(slug.to_string()));
-    patch.insert("catalogPackVersion".into(), Value::String(meta.version.clone()));
     /*
      * Профиль помнит, что он проверочный. Иначе отчёт о запуске некуда
      * привязать: к моменту, когда игра закроется, от установки остаётся только
      * папка, а вопрос «эта версия вообще открылась?» решает, уедет она к
      * игрокам или нет.
      */
-    patch.insert(
-        "catalogPackReviewFile".into(),
-        Value::String(if review {
-            view["reviewFileId"].as_str().unwrap_or_default().to_string()
-        } else {
-            String::new()
-        }),
-    );
-    merge_settings(&pname, patch);
+    let review_file = if review { view["reviewFileId"].as_str().unwrap_or_default() } else { "" };
+    let review_sha512 = if review { sha512.as_str() } else { "" };
+    merge_settings(&pname, pack_identity(slug, &meta.version, review_file, review_sha512));
 
     job.emit(app, 100.0, "Сборка установлена");
     Ok(prof)
+}
+
+fn place_unpacked(unpacked: &Path, dest: &Path) -> Result<(), String> {
+    if std::fs::rename(unpacked, dest).is_ok() {
+        return Ok(());
+    }
+    std::fs::create_dir_all(dest).map_err(|e| e.to_string())?;
+    copy_dir_all(unpacked, dest).map_err(|e| e.to_string())
+}
+
+fn pack_profile(name: &str, meta: &PackMeta, icon: Option<String>) -> Profile {
+    Profile {
+        name: name.to_string(),
+        version: meta.game.clone(),
+        fabric: matches!(meta.loader.as_str(), "fabric" | "quilt"),
+        loader: Some(meta.loader.clone()),
+        loader_version: if meta.loader_version.is_empty() { None } else { Some(meta.loader_version.clone()) },
+        icon,
+    }
+}
+
+fn put_profile(prof: &Profile) -> Result<(), String> {
+    let mut all = load_profiles();
+    if let Some(p) = all.iter_mut().find(|p| p.name == prof.name) {
+        *p = prof.clone();
+    } else {
+        all.insert(0, prof.clone());
+    }
+    save_profiles(&all)
+}
+
+/// What a build remembers about the catalogue pack it came from. The install
+/// and the update write it through here: two spellings of it would drift, and
+/// the launcher would stop recognising its own builds.
+fn pack_identity(slug: &str, version: &str, review_file: &str, review_sha512: &str) -> serde_json::Map<String, Value> {
+    let mut m = serde_json::Map::new();
+    m.insert("catalogPackSlug".into(), Value::String(slug.to_string()));
+    m.insert("catalogPackVersion".into(), Value::String(version.to_string()));
+    m.insert("catalogPackReviewFile".into(), Value::String(review_file.to_string()));
+    m.insert("catalogPackReviewSha512".into(), Value::String(review_sha512.to_string()));
+    m
+}
+
+/// The next published version of a catalogue build in place of the installed
+/// one. The build keeps its name and folder, so its worlds, playtime, group and
+/// settings stay where the player left them; the pack itself comes by the same
+/// road as an install, access check included.
+pub async fn update_catalog_pack(app: AppHandle, profile: String) -> Result<Profile, String> {
+    let current = load_profiles()
+        .into_iter()
+        .find(|p| p.name == profile)
+        .ok_or("Сборка не найдена — открой список сборок заново")?;
+    let slug = profile_settings(&profile)["catalogPackSlug"]
+        .as_str()
+        .map(str::trim)
+        .filter(|s| slug_ok(s))
+        .map(String::from)
+        .ok_or("Эта сборка поставлена не из каталога Millida — обновлять её неоткуда")?;
+    let job = Job::start(job_key_catalog_pack(&slug), profile.clone())?;
+    let res = update_catalog_pack_job(&app, &job, &current, &slug).await;
+    job.finish(&app, res)
+}
+
+async fn update_catalog_pack_job(app: &AppHandle, job: &Job, current: &Profile, slug: &str) -> Result<Profile, String> {
+    let profile = current.name.as_str();
+    let pdir = profile_dir(profile);
+    let (staged, previous) = update_side_dirs(&pdir)?;
+    settle_interrupted_update(&pdir, &staged, &previous)?;
+    let _staged = TempPaths(vec![staged.clone()]);
+    let meta = prepare_update(app, job, profile, slug, &pdir, &staged).await.map_err(old_version_kept)?;
+
+    job.emit(app, 95.0, "Меняем версию…");
+    // The installed version may have been started while the next one downloaded.
+    assert_not_running(profile, "обнови ещё раз").map_err(old_version_kept)?;
+    swap_in(&pdir, &staged, &previous)?;
+    let prof = pack_profile(profile, &meta, current.icon.clone());
+    if let Err(e) = put_profile(&prof) {
+        return Err(match swap_back(&pdir, &staged, &previous) {
+            Ok(()) => old_version_kept(e),
+            Err(lost) => lost,
+        });
+    }
+    trust_pack_launch(profile, slug);
+    forget_skin_mod_install(profile);
+    if let Err(e) = std::fs::remove_dir_all(&previous) {
+        eprintln!("[pack] старая версия «{}» не удалилась, уберём при следующем обновлении: {}", profile, e);
+    }
+    job.emit(app, 100.0, "Сборка обновлена");
+    Ok(prof)
+}
+
+/// Everything up to the switch. The installed build is only read here.
+async fn prepare_update(
+    app: &AppHandle,
+    job: &Job,
+    profile: &str,
+    slug: &str,
+    pdir: &Path,
+    staged: &Path,
+) -> Result<PackMeta, String> {
+    assert_not_running(profile, "обнови ещё раз")?;
+    if !pdir.is_dir() {
+        return Err("Папки сборки нет на диске — установи сборку из каталога заново".into());
+    }
+    let Fetched { meta, unpacked, _temp, .. } = fetch_pack(app, job, slug, false).await?;
+    job.rename(profile);
+    job.emit(app, 80.0, "Переносим миры и настройки…");
+    let settings = carried_settings(profile, slug, &meta.version);
+    let (from, to, slug) = (pdir.to_path_buf(), staged.to_path_buf(), slug.to_string());
+    tokio::task::spawn_blocking(move || -> Result<(), String> {
+        place_unpacked(&unpacked, &to)?;
+        let _ = std::fs::remove_file(to.join(MANIFEST_NAME));
+        record_shipped(&to)?;
+        carry_player_files(&from, &to, &slug)?;
+        write_json_atomic(&to.join("millida-settings.json"), &settings)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    job.check()?;
+    Ok(meta)
+}
+
+/// The build's own settings (memory, Java, JVM flags, window size) stay with
+/// it; only what names the pack version changes.
+fn carried_settings(profile: &str, slug: &str, version: &str) -> serde_json::Map<String, Value> {
+    let mut s = profile_settings(profile).as_object().cloned().unwrap_or_default();
+    s.extend(pack_identity(slug, version, "", ""));
+    s
+}
+
+/// Where the next version of a build is put together, and where the installed
+/// one waits while the two change places. Beside the build, so both moves are
+/// renames on one disk; dot-named, so the build list never adopts them.
+fn update_side_dirs(pdir: &Path) -> Result<(PathBuf, PathBuf), String> {
+    let name = pdir.file_name().map(|n| n.to_string_lossy().into_owned()).filter(|n| !n.is_empty());
+    let (Some(name), Some(root)) = (name, pdir.parent()) else {
+        return Err("Некорректная папка сборки".into());
+    };
+    Ok((root.join(format!(".millida-update-{}", name)), root.join(format!(".millida-previous-{}", name))))
+}
+
+/// Leftovers of an update cut short by a closed launcher. The next version is
+/// only ever a copy, so it goes. The installed version is put back if the cut
+/// fell between the two renames of the switch, and dropped if the switch had
+/// already finished.
+fn settle_interrupted_update(pdir: &Path, staged: &Path, previous: &Path) -> Result<(), String> {
+    let busy = |e: std::io::Error| format!("Остались файлы прошлого обновления, и их не удалось убрать: {}. Закрой папку сборки в проводнике и обнови ещё раз", e);
+    if previous.is_dir() {
+        if pdir.exists() {
+            std::fs::remove_dir_all(previous).map_err(busy)?;
+        } else {
+            std::fs::rename(previous, pdir).map_err(busy)?;
+        }
+    }
+    if staged.is_dir() {
+        std::fs::remove_dir_all(staged).map_err(busy)?;
+    }
+    Ok(())
+}
+
+/// The build folder changes to the next version in two renames on one disk.
+/// Nothing is deleted here: the installed version waits beside it until the
+/// build list agrees, and a failed step puts it back.
+fn swap_in(pdir: &Path, staged: &Path, previous: &Path) -> Result<(), String> {
+    std::fs::rename(pdir, previous).map_err(|e| {
+        old_version_kept(format!("Папку сборки не удалось сдвинуть: {}. Закрой её в проводнике и обнови ещё раз", e))
+    })?;
+    if let Err(e) = std::fs::rename(staged, pdir) {
+        return Err(match std::fs::rename(previous, pdir) {
+            Ok(()) => old_version_kept(format!(
+                "Новая версия не встала на место: {}. Закрой папку сборки в проводнике и обнови ещё раз",
+                e
+            )),
+            Err(back) => switch_lost(previous, &back),
+        });
+    }
+    Ok(())
+}
+
+fn swap_back(pdir: &Path, staged: &Path, previous: &Path) -> Result<(), String> {
+    std::fs::rename(pdir, staged).map_err(|e| switch_lost(previous, &e))?;
+    std::fs::rename(previous, pdir).map_err(|e| switch_lost(previous, &e))
+}
+
+/// Only the folder name goes into the text: the full path carries the Windows
+/// user name, and the text is also a failure report.
+fn switch_lost(previous: &Path, e: &std::io::Error) -> String {
+    let name = previous.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    format!(
+        "Старая версия сборки не вернулась на место ({}). Её файлы и миры целы — в папке «{}» рядом со сборками. Напиши в поддержку, поможем вернуть",
+        e, name
+    )
+}
+
+/// Every failure before the switch leaves the installed version as it was, and
+/// saying so tells the player they can go on playing. A refused access and a
+/// cancel pass unchanged: the key window and the cancel toast read them as
+/// they are.
+fn old_version_kept(e: String) -> String {
+    if e == CANCELLED || e.starts_with(PACK_ACCESS_PREFIX) {
+        return e;
+    }
+    format!(
+        "{}. Старая версия сборки на месте — в неё можно играть, а обновить позже",
+        e.trim_end_matches(['.', ' '])
+    )
 }
 
 /// Builds whose `millida-pack-launch.json` the core honours, kept outside every
@@ -417,14 +633,15 @@ pub fn trusted_pack_launch_spec(profile: &str) -> Option<PackLaunch> {
 /// каждый следующий выход из игры слал бы её заново, а после одобрения — ещё и
 /// про версию, которая давно у всех.
 pub async fn report_review_launch(profile: &str, ok: bool, detail: &str) {
-    let file_id = profile_settings(profile)["catalogPackReviewFile"]
+    let settings = profile_settings(profile);
+    let file_id = settings["catalogPackReviewFile"]
         .as_str()
         .unwrap_or("")
         .to_string();
     if file_id.is_empty() {
         return;
     }
-    let body = serde_json::json!({ "ok": ok, "detail": detail.chars().take(400).collect::<String>() });
+    let body = launch_check_body(&settings, ok, detail);
     match millida_api_auth(
         format!("/catalog/packs/review/{}/launch-check", file_id),
         "POST".into(),
@@ -435,12 +652,27 @@ pub async fn report_review_launch(profile: &str, ok: bool, detail: &str) {
         Ok(_) => {
             let mut patch = serde_json::Map::new();
             patch.insert("catalogPackReviewFile".into(), Value::String(String::new()));
+            patch.insert("catalogPackReviewSha512".into(), Value::String(String::new()));
             merge_settings(profile, patch);
         }
         // Проглотить нельзя: без отчёта версия висит в очереди, и человек
         // ждёт результата проверки, которого никогда не будет.
         Err(e) => eprintln!("[pack] отчёт о проверке запуска «{}» не ушёл: {}", profile, e),
     }
+}
+
+/// The hash ties the report to the bytes this launcher installed, so a version
+/// re-uploaded after the install is not approved by this launch. A build
+/// installed before the hash was kept has none, and a malformed one would make
+/// the server refuse the whole report: without the field the report still
+/// arrives and waits for a moderator.
+fn launch_check_body(settings: &Value, ok: bool, detail: &str) -> Value {
+    let mut body = serde_json::json!({ "ok": ok, "detail": detail.chars().take(400).collect::<String>() });
+    let sha512 = settings["catalogPackReviewSha512"].as_str().unwrap_or("").trim().to_ascii_lowercase();
+    if sha512_ok(&sha512) {
+        body["sha512"] = Value::String(sha512);
+    }
+    body
 }
 
 /// Removes the download and the unpacked tree on every path out, including the
@@ -509,6 +741,40 @@ mod tests {
         }
     }
 
+    /// path in the archive -> kept. The archive is someone else's upload: its
+    /// copies of launcher service files would steer the launch and the repair
+    /// of the build it becomes, so they go by the same rule as pack overrides.
+    /// Each case gets its own folder: two spellings of one name share a file on
+    /// Windows.
+    #[test]
+    fn pack_archive_brings_no_launcher_service_files() {
+        let cases: &[(&str, bool, &str)] = &[
+            ("millida-pack-launch.json", true, "описание запуска в корне читает проверка каталога, а запускает его только сборка из каталога"),
+            ("Millida-Pack-Launch.json", false, "другое написание проверка не сверяет, а Windows всё равно откроет его как описание запуска"),
+            ("config/millida-pack-launch.json", false, "вложенную копию никто не проверял; правило то же, что у overrides"),
+            ("millida-settings.json", false, "в настройках сборки лежат JVM-флаги — это запуск чужого кода"),
+            ("millida-content.json", false, "по адресам из этой записи «Починить» качает моды в mods/"),
+            ("millida-local-meta.json", false, "служебная запись лаунчера о модах сборки"),
+            ("millida-args.txt", false, "лишние аргументы запуска игры"),
+            ("servers.dat.millida", false, "служебная копия списка серверов"),
+            ("mods/millida-content.json", false, "служебный файл глубже корня всё равно служебный"),
+            ("millida-content.json/x.jar", false, "папка со служебным именем уходит целиком"),
+            ("mods/sodium.jar", true, "содержимое сборки не трогается"),
+            ("millida.pack.json", true, "манифест сборки установщик читает после распаковки и убирает сам"),
+        ];
+        let base = std::env::temp_dir().join(format!("millida-pack-strip-{}", std::process::id()));
+        for (i, (path, kept, why)) in cases.iter().enumerate() {
+            let dir = base.join(i.to_string());
+            let _ = std::fs::remove_dir_all(&dir);
+            let file = dir.join(path);
+            std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+            std::fs::write(&file, b"x").unwrap();
+            strip_pack_service_files(&dir).expect("разбор распакованной сборки не должен падать на обычных файлах");
+            assert_eq!(file.exists(), *kept, "«{path}»: {why}");
+        }
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
     /// slug -> verdict. The slug arrives from a `millida://` link, which any web
     /// page can fire, and lands in an API path and a temp file name.
     #[test]
@@ -529,6 +795,27 @@ mod tests {
         assert!(!sha512_ok(&"a".repeat(127)), "обрезанный хеш — не хеш");
         assert!(!sha512_ok(""), "пустой хеш означает «проверять нечем»");
         assert!(!sha512_ok(&"z".repeat(128)), "не-hex значит, что в поле лежит не хеш");
+    }
+
+    /// settings -> sha512 in the launch-check body. The hash lets the server
+    /// count the launch only for the bytes it ran on; a value the server would
+    /// refuse must not cost the whole report.
+    #[test]
+    fn launch_check_carries_the_installed_archive_hash() {
+        let hex = "ab".repeat(64);
+        let cases: &[(Value, Option<&str>, &str)] = &[
+            (serde_json::json!({ "catalogPackReviewSha512": hex }), Some(hex.as_str()), "хеш, с которым сверялся скачанный архив, уходит как есть"),
+            (serde_json::json!({ "catalogPackReviewSha512": hex.to_uppercase() }), Some(hex.as_str()), "сервер сверяет строчный hex: регистр не должен ронять отчёт"),
+            (serde_json::json!({}), None, "сборка, поставленная до этой версии лаунчера, хеша не помнит: отчёт уходит модератору без него"),
+            (serde_json::json!({ "catalogPackReviewSha512": "" }), None, "обычная установка и обновление хеш не записывают"),
+            (serde_json::json!({ "catalogPackReviewSha512": "ab".repeat(63) }), None, "обрезанный хеш сервер отклонил бы вместе со всем отчётом"),
+            (serde_json::json!({ "catalogPackReviewSha512": 42 }), None, "файл настроек лежит у игрока на диске, в поле может оказаться что угодно"),
+        ];
+        for (settings, want, why) in cases {
+            let body = launch_check_body(settings, true, "сессия 30 с");
+            assert_eq!(body["sha512"].as_str(), *want, "{why}");
+            assert_eq!(body["ok"], true, "{why}: итог запуска обязан дойти при любом хеше");
+        }
     }
 
     /// api/manifest -> meta. The card is authoritative where it has a value:
@@ -565,5 +852,107 @@ mod tests {
         let server_only = serde_json::json!({ "files": [{ "id": "abc1234567", "side": "server" }] });
         assert!(client_file(&server_only).is_err(), "серверную половину нельзя ставить как клиент");
         assert!(client_file(&serde_json::json!({ "files": [] })).is_err(), "пустой список файлов — не установка");
+    }
+
+    /// error -> what the player reads. Before the switch the installed version
+    /// is untouched, and the text has to say so; the key window and the cancel
+    /// toast match their own markers and must get them unchanged.
+    #[test]
+    fn a_failed_update_says_the_old_version_is_still_there() {
+        let cases: &[(&str, bool, &str)] = &[
+            ("Не скачались файлы сборки: 502", true, "сбой сети до подмены: игроку важно знать, что играть можно"),
+            ("Архив повреждён: bad zip.", true, "точка в конце причины не удваивается"),
+            (CANCELLED, false, "отмену окно узнаёт по точному тексту"),
+            ("pack-access: Подписка закончилась", false, "по маркеру открывается окно ключа, приписка испортила бы текст причины"),
+        ];
+        for (input, noted, why) in cases {
+            let out = old_version_kept(input.to_string());
+            assert_eq!(out.contains("Старая версия сборки на месте"), *noted, "«{input}»: {why}");
+            assert!(out.starts_with(input.trim_end_matches('.')), "«{input}»: исходная причина обязана остаться в начале текста");
+            assert!(!out.contains(".."), "«{input}»: {why}");
+        }
+    }
+
+    /// build folder -> side folders. Both sit next to the build, because the
+    /// switch is two renames and a rename cannot cross disks, and both start
+    /// with a dot, because the build list adopts every other folder as a build.
+    #[test]
+    fn update_folders_sit_beside_the_build_and_stay_out_of_the_list() {
+        let pdir = std::env::temp_dir().join("profiles").join("Arcania");
+        let (staged, previous) = update_side_dirs(&pdir).expect("у папки сборки есть имя и родитель");
+        for side in [&staged, &previous] {
+            assert_eq!(side.parent(), pdir.parent(), "{side:?}: подмена — это переименование, на другой диск оно не переносит");
+            let name = side.file_name().unwrap().to_string_lossy().into_owned();
+            assert!(name.starts_with('.'), "{side:?}: папку без точки список сборок подхватит как ещё одну сборку");
+            assert!(name.ends_with("Arcania"), "{side:?}: у двух сборок не должно быть общей папки обновления");
+        }
+        assert_ne!(staged, previous, "новая и старая версии не могут делить одну папку");
+    }
+
+    fn mark(dir: &Path, body: &str) {
+        std::fs::create_dir_all(dir).unwrap();
+        std::fs::write(dir.join("which"), body).unwrap();
+    }
+
+    fn which(dir: &Path) -> Option<String> {
+        std::fs::read_to_string(dir.join("which")).ok()
+    }
+
+    /// Folders left by a launcher closed mid-update -> the build after the next
+    /// attempt. The next version is only ever a copy; the installed one holds
+    /// the only copy of the player's worlds and is never the one that goes.
+    #[test]
+    fn a_cut_update_is_settled_without_losing_the_installed_version() {
+        let base = std::env::temp_dir().join(format!("millida-pack-settle-{}", std::process::id()));
+        type Case<'a> = (&'a [(&'a str, &'a str)], &'a str, &'a str);
+        let cases: &[Case] = &[
+            (&[("build", "old"), ("staged", "new")], "old", "недоделанная новая версия — копия, её можно убрать"),
+            (&[("previous", "old")], "old", "обрыв между двумя переименованиями: старая версия возвращается на место"),
+            (&[("build", "new"), ("previous", "old")], "new", "подмена прошла, не успела только уборка"),
+        ];
+        for (i, (layout, want, why)) in cases.iter().enumerate() {
+            let root = base.join(i.to_string());
+            let _ = std::fs::remove_dir_all(&root);
+            let pdir = root.join("Build");
+            let (staged, previous) = update_side_dirs(&pdir).unwrap();
+            for (at, body) in layout.iter() {
+                let dir = match *at {
+                    "build" => &pdir,
+                    "staged" => &staged,
+                    _ => &previous,
+                };
+                mark(dir, body);
+            }
+            settle_interrupted_update(&pdir, &staged, &previous).expect(why);
+            assert_eq!(which(&pdir).as_deref(), Some(*want), "{why}");
+            assert!(!staged.exists() && !previous.exists(), "{why}: после разбора рядом со сборкой не остаётся лишних гигабайт");
+        }
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// The switch: the next version takes the folder and the installed one
+    /// waits beside it; a switch that cannot finish puts the installed version
+    /// back where it was.
+    #[test]
+    fn the_switch_puts_the_old_version_back_when_the_new_one_cannot_move_in() {
+        let base = std::env::temp_dir().join(format!("millida-pack-swap-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let pdir = base.join("Build");
+        let (staged, previous) = update_side_dirs(&pdir).unwrap();
+
+        mark(&pdir, "old");
+        mark(&staged, "new");
+        swap_in(&pdir, &staged, &previous).expect("обе папки на месте — подмена обязана пройти");
+        assert_eq!(which(&pdir).as_deref(), Some("new"), "после подмены в папке сборки новая версия");
+        assert_eq!(which(&previous).as_deref(), Some("old"), "старая версия ждёт рядом, пока не записан список сборок");
+
+        swap_back(&pdir, &staged, &previous).expect("откат, когда список сборок не записался");
+        assert_eq!(which(&pdir).as_deref(), Some("old"), "откат возвращает игроку старую версию");
+
+        let _ = std::fs::remove_dir_all(&staged);
+        let err = swap_in(&pdir, &staged, &previous).expect_err("без новой версии подменять нечем");
+        assert_eq!(which(&pdir).as_deref(), Some("old"), "неудачная подмена обязана вернуть старую версию на место");
+        assert!(err.contains("Старая версия сборки на месте"), "игрок должен узнать, что играть можно: {err}");
+        let _ = std::fs::remove_dir_all(&base);
     }
 }

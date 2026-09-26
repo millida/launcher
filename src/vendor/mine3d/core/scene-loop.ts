@@ -73,7 +73,7 @@ import {
   applyPose,
   blendPoses,
   BustPoseAnimation,
-  CAPE_REST_X,
+  capeSwing,
   capturePose,
   CoolPoseAnimation,
   easeOutCubic,
@@ -97,6 +97,7 @@ import {
 } from "./product-visuals";
 import { StudioAtmosphere, STUDIO_CLEAR_COLOR } from "./studio-atmosphere";
 import { StudioPostFx } from "./studio-postfx";
+import { currentDeviceTier, maxCanvasPixelRatio } from "../../../lib/deviceTier";
 import {
   DEFAULT_SKIN_DEBUG_OPTIONS,
   SkinModelType,
@@ -828,7 +829,7 @@ export class SkinViewEngine {
    */
   private _swayCosmetics(): void {
     if (this._swaying.length === 0) return;
-    const swing = this.playerObject.cape.rotation.x - CAPE_REST_X;
+    const swing = capeSwing(this.playerObject.cape);
     for (const pivot of this._swaying) {
       pivot.rotation.x = swing;
     }
@@ -1805,9 +1806,13 @@ export class SkinViewEngine {
    */
   private _targetPixelRatio(transparent: boolean): number {
     const dpr = Math.max(1, window.devicePixelRatio || 1);
+    // Weak devices cap the render density; high-end returns Infinity here, so
+    // its numbers stay exactly as before.
+    const cap = maxCanvasPixelRatio(currentDeviceTier());
     const antialiasedByPostFx = this._enableEffects && !transparent;
-    if (antialiasedByPostFx) return Math.min(dpr, MAX_PIXEL_RATIO);
-    return Math.min(dpr * SUPERSAMPLE_FACTOR, SUPERSAMPLE_MAX_PIXEL_RATIO);
+    if (antialiasedByPostFx) return Math.min(dpr, MAX_PIXEL_RATIO, cap);
+    const supersample = cap <= 1 ? 1 : SUPERSAMPLE_FACTOR;
+    return Math.min(dpr * supersample, SUPERSAMPLE_MAX_PIXEL_RATIO, cap);
   }
 
   /**

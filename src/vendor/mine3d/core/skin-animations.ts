@@ -1,5 +1,21 @@
 // Кастомные анимации в духе трейлеров Mojang + бленд поз для переключения.
 // Свой базовый класс — без импорта PlayerAnimation из skin3d (конфликт @types/three).
+import { Vector3, type Quaternion } from "three";
+import { STOCK_LEFT_LEG_POSE, STOCK_RIGHT_LEG_POSE } from "./skin-leg-stock";
+
+/**
+ * Where each limb group stands before anything moves it, in one place so the
+ * per-frame reset and the rest an emote reads agree. The legs share the stock
+ * pose the engine forces every idle frame; the rest are the skin3d build.
+ */
+const NEUTRAL_PART_POS: Record<string, [number, number, number]> = {
+  head: [0, 0, 0],
+  body: [0, -6, 0],
+  leftArm: [5, -2, 0],
+  rightArm: [-5, -2, 0],
+  leftLeg: [STOCK_LEFT_LEG_POSE.x, STOCK_LEFT_LEG_POSE.y, STOCK_LEFT_LEG_POSE.z],
+  rightLeg: [STOCK_RIGHT_LEG_POSE.x, STOCK_RIGHT_LEG_POSE.y, STOCK_RIGHT_LEG_POSE.z],
+};
 
 /** Минимальный контракт анимации */
 export interface SkinAnimation {
@@ -11,15 +27,30 @@ export interface SkinAnimation {
   update(player: any, deltaTime: number): void;
 }
 
-/** Снимок углов частей тела для кроссфейда */
+/** Turn and place of one limb group at a moment, for the crossfade. */
+export interface PartPose {
+  rx: number;
+  ry: number;
+  rz: number;
+  px: number;
+  py: number;
+  pz: number;
+}
+
+/**
+ * Снимок позы для кроссфейда. У частей тела берём и поворот, и СМЕЩЕНИЕ: эмоция
+ * из каталога двигает торс и ноги с места (присед, наклон), и без смещения в
+ * бленде торс мгновенно уезжал в позу эмоции, пока поворот ещё догонял покой, —
+ * низ туловища отрывался от ног на время кроссфейда.
+ */
 export interface PoseSnapshot {
   root: { x: number; y: number; z: number; rx: number; ry: number; rz: number };
-  head: { x: number; y: number; z: number };
-  body: { x: number; y: number; z: number };
-  leftArm: { x: number; y: number; z: number };
-  rightArm: { x: number; y: number; z: number };
-  leftLeg: { x: number; y: number; z: number };
-  rightLeg: { x: number; y: number; z: number };
+  head: PartPose;
+  body: PartPose;
+  leftArm: PartPose;
+  rightArm: PartPose;
+  leftLeg: PartPose;
+  rightLeg: PartPose;
   cape: { x: number; y: number; z: number };
 }
 
@@ -42,6 +73,24 @@ function writeRot(obj: any, r: { x: number; y: number; z: number }): void {
   obj.rotation.z = r.z;
 }
 
+function readPart(obj: any): PartPose {
+  return {
+    rx: obj.rotation.x,
+    ry: obj.rotation.y,
+    rz: obj.rotation.z,
+    px: obj.position.x,
+    py: obj.position.y,
+    pz: obj.position.z,
+  };
+}
+
+function writePart(obj: any, p: PartPose): void {
+  obj.rotation.x = p.rx;
+  obj.rotation.y = p.ry;
+  obj.rotation.z = p.rz;
+  obj.position.set(p.px, p.py, p.pz);
+}
+
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
@@ -52,6 +101,17 @@ function lerpRot(
   t: number,
 ): { x: number; y: number; z: number } {
   return { x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t), z: lerp(a.z, b.z, t) };
+}
+
+function lerpPart(a: PartPose, b: PartPose, t: number): PartPose {
+  return {
+    rx: lerp(a.rx, b.rx, t),
+    ry: lerp(a.ry, b.ry, t),
+    rz: lerp(a.rz, b.rz, t),
+    px: lerp(a.px, b.px, t),
+    py: lerp(a.py, b.py, t),
+    pz: lerp(a.pz, b.pz, t),
+  };
 }
 
 /** Быстрый ease для короткого кроссфейда */
@@ -74,12 +134,12 @@ export function capturePose(player: any): PoseSnapshot {
       ry: player.rotation.y,
       rz: player.rotation.z,
     },
-    head: readRot(player.skin.head),
-    body: readRot(player.skin.body),
-    leftArm: readRot(player.skin.leftArm),
-    rightArm: readRot(player.skin.rightArm),
-    leftLeg: readRot(player.skin.leftLeg),
-    rightLeg: readRot(player.skin.rightLeg),
+    head: readPart(player.skin.head),
+    body: readPart(player.skin.body),
+    leftArm: readPart(player.skin.leftArm),
+    rightArm: readPart(player.skin.rightArm),
+    leftLeg: readPart(player.skin.leftLeg),
+    rightLeg: readPart(player.skin.rightLeg),
     cape: readRot(player.cape),
   };
 }
@@ -89,12 +149,12 @@ export function applyPose(player: any, pose: PoseSnapshot): void {
   player.rotation.x = pose.root.rx;
   player.rotation.y = pose.root.ry;
   player.rotation.z = pose.root.rz;
-  writeRot(player.skin.head, pose.head);
-  writeRot(player.skin.body, pose.body);
-  writeRot(player.skin.leftArm, pose.leftArm);
-  writeRot(player.skin.rightArm, pose.rightArm);
-  writeRot(player.skin.leftLeg, pose.leftLeg);
-  writeRot(player.skin.rightLeg, pose.rightLeg);
+  writePart(player.skin.head, pose.head);
+  writePart(player.skin.body, pose.body);
+  writePart(player.skin.leftArm, pose.leftArm);
+  writePart(player.skin.rightArm, pose.rightArm);
+  writePart(player.skin.leftLeg, pose.leftLeg);
+  writePart(player.skin.rightLeg, pose.rightLeg);
   writeRot(player.cape, pose.cape);
 }
 
@@ -108,12 +168,12 @@ export function blendPoses(player: any, from: PoseSnapshot, to: PoseSnapshot, t:
   player.rotation.x = lerp(from.root.rx, to.root.rx, k);
   player.rotation.y = lerp(from.root.ry, to.root.ry, k);
   player.rotation.z = lerp(from.root.rz, to.root.rz, k);
-  writeRot(player.skin.head, lerpRot(from.head, to.head, k));
-  writeRot(player.skin.body, lerpRot(from.body, to.body, k));
-  writeRot(player.skin.leftArm, lerpRot(from.leftArm, to.leftArm, k));
-  writeRot(player.skin.rightArm, lerpRot(from.rightArm, to.rightArm, k));
-  writeRot(player.skin.leftLeg, lerpRot(from.leftLeg, to.leftLeg, k));
-  writeRot(player.skin.rightLeg, lerpRot(from.rightLeg, to.rightLeg, k));
+  writePart(player.skin.head, lerpPart(from.head, to.head, k));
+  writePart(player.skin.body, lerpPart(from.body, to.body, k));
+  writePart(player.skin.leftArm, lerpPart(from.leftArm, to.leftArm, k));
+  writePart(player.skin.rightArm, lerpPart(from.rightArm, to.rightArm, k));
+  writePart(player.skin.leftLeg, lerpPart(from.leftLeg, to.leftLeg, k));
+  writePart(player.skin.rightLeg, lerpPart(from.rightLeg, to.rightLeg, k));
   writeRot(player.cape, lerpRot(from.cape, to.cape, k));
 }
 
@@ -121,6 +181,17 @@ export function blendPoses(player: any, from: PoseSnapshot, to: PoseSnapshot, t:
 const CAPE_YAW = Math.PI;
 /** Угол покоя плаща (CapeDefaultAngle из skin3d) */
 export const CAPE_REST_X = (10.8 * Math.PI) / 180;
+
+/**
+ * Read from where the cloth points, not from the Euler x: an emote sets the
+ * cape's turn as a quaternion, and three.js then spells the very same rest as
+ * (x - PI, 0, PI), which read as a half-turn and hung a cape cosmetic upside
+ * down over the head.
+ */
+export function capeSwing(cape: { quaternion: Quaternion }): number {
+  const hang = new Vector3(0, -1, 0).applyQuaternion(cape.quaternion);
+  return Math.atan2(-hang.z, -hang.y) - CAPE_REST_X;
+}
 
 export function resetLimbPose(player: any): void {
   player.position.set(0, 0, 0);
@@ -131,6 +202,12 @@ export function resetLimbPose(player: any): void {
     // (src/lib/cosmeticEmote.ts), и после неё покой и встроенные движения
     // крутили руки в чужом порядке — поза выходила перекошенной.
     player.skin[name].rotation.set(0, 0, 0, "XYZ");
+    // И смещение возвращаем в покой: эмоция запоминает покой части с первого
+    // своего кадра, а движение до неё (skin3d walk/run сдвигают части) оставило
+    // бы торс или ноги смещёнными — эмоция считала бы всё от кривого покоя, и
+    // низ фигуры стойко висел бы отдельно от туловища.
+    const rest = NEUTRAL_PART_POS[name];
+    if (rest) player.skin[name].position.set(rest[0], rest[1], rest[2]);
   }
   // Сохраняем yaw π — иначе плащ смотрит не туда и «15» зеркалится
   player.cape.rotation.set(CAPE_REST_X, CAPE_YAW, 0);

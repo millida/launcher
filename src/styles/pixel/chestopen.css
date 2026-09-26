@@ -273,6 +273,9 @@
 }
 .co-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; max-width: 700px; }
 .co-sum-cell { animation: co-fly 0.42s cubic-bezier(0.2, 1.5, 0.4, 1) calc(var(--i) * 90ms) both; }
+.co-sum-cell.has-topup { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.co-topup { gap: 4px; }
+.co-topup-done { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
 .co-acts { display: flex; gap: 10px; }
 
 /* ── «i»: что внутри ── */

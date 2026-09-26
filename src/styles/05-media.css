@@ -127,7 +127,6 @@
   pointer-events: none;
   background: radial-gradient(150px 190px at 50% 46%, var(--m-accent-soft), transparent 72%);
   animation: skinAura 7s ease-in-out infinite;
-  will-change: transform, opacity;
 }
 @media (prefers-reduced-motion: reduce) {
   .skin-aura { animation: none; }

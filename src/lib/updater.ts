@@ -325,6 +325,12 @@ export async function applyUpdate(): Promise<void> {
   const st = useUpdate.getState()
   if (st.busy) return
   if (st.failed) {
+    st.set({ failed: false })
+    if (fallback || (await probeFallback())) {
+      await applyFallback()
+      if (!useUpdate.getState().failed) return
+    }
+    showToast('Автоматически обновиться не вышло — скачай установщик на открывшейся странице и запусти его поверх', 'error')
     openExt(DOWNLOAD_PAGE)
     return
   }

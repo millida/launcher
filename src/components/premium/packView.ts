@@ -1,6 +1,6 @@
 import { realDownloads } from '../../lib/realDownloads'
 import { api } from '../../lib/api'
-import { cachedCatalog } from '../../lib/catalogCache'
+import { cachedCatalog, forgetCatalog } from '../../lib/catalogCache'
 
 /*
  * Карточка сборки нашего каталога — общие данные страницы сборки (PackPage) и
@@ -35,8 +35,12 @@ export interface PackView {
   files?: { side: string; version: string; size: number }[]
 }
 
+const packViewKey = (slug: string) => 'pack-view:' + slug
+
 export const loadPackView = (slug: string): Promise<PackView> =>
-  cachedCatalog('pack-view:' + slug, () => api<PackView>('/catalog/packs/' + encodeURIComponent(slug)))
+  cachedCatalog(packViewKey(slug), () => api<PackView>('/catalog/packs/' + encodeURIComponent(slug)))
+
+export const forgetPackView = (slug: string): void => forgetCatalog(packViewKey(slug))
 
 /** Наши скачивания сборки — из карточки сайта. */
 export const loadPackDownloads = (slug: string): Promise<number | null> =>

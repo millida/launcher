@@ -7,7 +7,7 @@ import { Recommend } from '../components/lobby/Recommend'
 import { PixelField } from '../components/lobby/PixelField'
 import { HubTile } from '../components/lobby/HubTile'
 import { useHeroWallpaper } from '../components/HeroWallpaper'
-import { LOADER_NAME, fmtN, fmtPlaytime } from '../lib/format'
+import { LOADER_NAME, fmtN, fmtPlaytime, plural } from '../lib/format'
 import { VIDEOS } from '../lib/wallpaper'
 import { hasTauri } from '../ipc/tauri'
 import { useProfiles } from '../state/profiles'
@@ -314,8 +314,10 @@ export function Play({ on }: { on: boolean }) {
                         (владелец 24.09.2026, 13:31). */}
                     {playStats.total_seconds >= 3600 ? (
                       <span className="play-hours">
-                        <Icon id="i-clock" />
-                        {fmtPlaytime(playStats.total_seconds)} в игре
+                        {(() => {
+                          const h = Math.floor(playStats.total_seconds / 3600)
+                          return h + ' ' + plural(h, 'час', 'часа', 'часов') + ' в игре'
+                        })()}
                       </span>
                     ) : null}
                   </>

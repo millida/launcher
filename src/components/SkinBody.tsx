@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { BODY_H, BODY_W, renderSkinBody } from '../lib/skinBody'
 import type { BodyModel } from '../lib/skinBody'
+import { FlatFigure } from './character/FlatFigure'
 
 export function SkinBody({
   url,
@@ -69,7 +70,7 @@ export function SkinBody({
     }
   }, [near, url, model, yaw, tries])
 
-  if (failed && fallback) return <>{fallback}</>
+  if (failed) return fallback ? <>{fallback}</> : <FlatFigure url={url} slim={model === 'auto-detect' ? undefined : model === 'slim'} height={height} />
 
   return (
     <span

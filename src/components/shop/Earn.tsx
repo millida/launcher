@@ -2,7 +2,7 @@ import { useState, type CSSProperties } from 'react'
 import { Icon } from '../Icon'
 import { Rays } from '../reward/RewardReveal'
 import { Ruby } from '../Ruby'
-import { RARITY_NAMES, type EconomyProgress, type ItemRef, type WeeklyParcel, type Workshop } from '../../lib/rubies'
+import { RARITY_NAMES, type EconomyProgress, type FragmentCard, type ItemRef, type WeeklyParcel, type Workshop } from '../../lib/rubies'
 import { gridCols, Head, ItemArt, Shard, Timer, toneStyle } from './parts'
 import { FragBar, RarityFx, RarityPlate } from './rarityUi'
 import type { WeeklyPath } from './weekly'
@@ -34,11 +34,14 @@ export function WorkshopBlock({
   data,
   busy,
   onCraft,
+  onTopUp,
   weekly = true,
 }: {
   data: Workshop
   busy: string
   onCraft: (w: { item: ItemRef; cost: number }) => void
+  /** «Докупить фрагменты» у начатой вещи. */
+  onTopUp: (f: FragmentCard & { topUp: number }) => void
   /** Блок «Задания недели» на экране: без него кнопки-источники к нему не ведут. */
   weekly?: boolean
 }) {
@@ -56,7 +59,7 @@ export function WorkshopBlock({
         <Timer to={data.workshop.rotatesAt} label="Новые через" />
       </Head>
       <div className="sh-work-how">
-        <span className="sh-work-eq" aria-label="Осколки меняются на вещи">
+        <span className="sh-work-eq" aria-label="Осколки меняются на фрагменты вещей">
           <span className="sh-work-coin">
             <Shard size={42} />
           </span>
@@ -122,7 +125,7 @@ export function WorkshopBlock({
                     data-id={w.item.code}
                     onClick={() => onCraft(w)}
                   >
-                    {short > 0 ? 'Ещё ' + num(short) : 'Собрать'}
+                    {short > 0 ? 'Ещё ' + num(short) : 'Обменять'}
                   </button>
                 )}
               </span>
@@ -130,16 +133,24 @@ export function WorkshopBlock({
           )
         })}
       </div>
-      {data.fragments && data.fragments.length ? <Collecting list={data.fragments} /> : null}
+      {data.fragments && data.fragments.length ? <Collecting list={data.fragments} busy={busy} onTopUp={onTopUp} /> : null}
     </div>
   )
 }
 
 /**
- * Начатые вещи: фрагменты из сундуков копятся в вещь («7/20»). Собралась —
- * вещь твоя; не хочется ждать — в магазине она дешевле на долю собранного.
+ * Начатые вещи: фрагменты из сундуков, посылки, обмена и наград копятся в
+ * вещь («7/20»), но бесплатно не собирают её — последний шаг «Докупить».
  */
-function Collecting({ list }: { list: NonNullable<Workshop['fragments']> }) {
+function Collecting({
+  list,
+  busy,
+  onTopUp,
+}: {
+  list: FragmentCard[]
+  busy: string
+  onTopUp: (f: FragmentCard & { topUp: number }) => void
+}) {
   return (
     <div className="sh-collect" data-section="fragments">
       <h3 className="sh-collect-h">Собираются</h3>
@@ -152,6 +163,24 @@ function Collecting({ list }: { list: NonNullable<Workshop['fragments']> }) {
             <span className="sh-card-meta">
               <FragBar have={f.have} need={f.need} rarity={f.item.rarity} />
             </span>
+            {f.topUp ? (
+              <span className="sh-card-foot">
+                <button
+                  className="btn sm primary"
+                  disabled={busy === f.item.code}
+                  data-track="fragments_topup"
+                  data-kind="item"
+                  data-id={f.item.code}
+                  onClick={() => onTopUp({ ...f, topUp: f.topUp as number })}
+                >
+                  Докупить
+                  <span className="sh-pr">
+                    <Ruby size={15} />
+                    <b>{num(f.topUp)}</b>
+                  </span>
+                </button>
+              </span>
+            ) : null}
           </div>
         ))}
       </div>
@@ -160,9 +189,9 @@ function Collecting({ list }: { list: NonNullable<Workshop['fragments']> }) {
 }
 
 /**
- * Посылка недели (как в CS2) — то, что служба отдаёт сейчас: три часа игры за
- * неделю открывают одну вещь на выбор из трёх (не выше редкой). Часы — только
- * подтверждённые сервером. Забрал — «Твоя» и таймер до новой.
+ * Посылка недели (как в CS2): три часа игры за неделю открывают фрагменты одной
+ * вещи на выбор из трёх (не выше редкой) — половину нужного, остаток докупается.
+ * Часы — только подтверждённые сервером. Забрал — «Забрана» и таймер до новой.
  */
 export function ParcelBlock({ data, busy, onClaim }: { data: WeeklyParcel; busy: string; onClaim: (item: ItemRef) => void }) {
   const [pick, setPick] = useState('')
@@ -196,7 +225,7 @@ export function ParcelBlock({ data, busy, onClaim }: { data: WeeklyParcel; busy:
       </div>
       {choices ? (
         <>
-          <div className="sh-pick3" role="radiogroup" aria-label="Вещь из посылки">
+          <div className="sh-pick3" role="radiogroup" aria-label="Фрагменты какой вещи забрать">
             {choices.map((it) => (
               <button
                 key={it.code}
@@ -227,7 +256,7 @@ export function ParcelBlock({ data, busy, onClaim }: { data: WeeklyParcel; busy:
               data-track="weekly_claim"
               onClick={() => chosen && onClaim(chosen)}
             >
-              {chosen ? 'Забрать' : 'Выбери одну'}
+              {chosen ? 'Забрать фрагменты' : 'Выбери одну'}
             </button>
           </div>
         </>
@@ -410,9 +439,8 @@ export function WeeklyPathBlock({
 const at = (h: number, max: number) => (Math.log10(Math.max(1, h)) / Math.log10(max)) * 100
 
 /**
- * «Плащи за часы»: вещи, которые не продаются — только за часы в игре
- * (8 плащей, как Starr Road). Достижения убраны 24.09.2026 (владелец:
- * «непонятно, зачем — отказываемся»).
+ * «Плащи за часы» (8 плащей, как Starr Road): порог часов даёт половину
+ * фрагментов плаща, остаток докупается в «Собираются» (26.09.2026).
  */
 export function PathBlock({ data }: { data: EconomyProgress }) {
   const steps = data.hourItems
@@ -427,8 +455,8 @@ export function PathBlock({ data }: { data: EconomyProgress }) {
       <div className="card sh-block sh-path" id="shop-hours" data-section="hours_path">
         <Head title="Плащи за часы">
           <span className="sh-tag">
-            <Icon id="i-lock" />
-            Не купишь
+            <Icon id="i-clock" />
+            Половина — за часы
           </span>
         </Head>
         <div className="sh-meter">
@@ -445,7 +473,7 @@ export function PathBlock({ data }: { data: EconomyProgress }) {
               key={s.hours}
               className={'sh-road-step' + (s.owned ? ' got' : '') + (s === nextHours ? ' next' : '')}
               style={{ left: pos(s.hours) + '%', ...toneStyle(s.item) } as CSSProperties}
-              data-tip={s.item.name}
+              data-tip={s.fragments ? s.item.name + ' · ' + s.fragments.have + '/' + s.fragments.need : s.item.name}
             >
               <ItemArt item={s.item} size="sm" />
               <b>{num(s.hours)} ч</b>

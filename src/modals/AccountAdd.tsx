@@ -93,6 +93,9 @@ function KindPanel({ kind, onBack, onDone }: { kind: Kind; onBack: () => void; o
               placeholder="Ник в игре (латиница, 3–16)"
               maxLength={16}
               autoFocus
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               value={nick}
               onChange={(e) => setNick(e.target.value)}
               onKeyDown={(e) => {

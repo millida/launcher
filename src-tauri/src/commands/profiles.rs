@@ -76,8 +76,13 @@ pub fn set_skin_mod(profile: String, on: bool) -> Result<serde_json::Value, Stri
 pub fn fps_boost_state(profile: String) -> engine::FpsBoostState { engine::fps_boost_state(&profile) }
 
 #[tauri::command]
-pub async fn set_fps_boost(app: tauri::AppHandle, profile: String, on: bool) -> Result<engine::FpsBoostState, String> {
-    engine::set_fps_boost(app, profile, on).await
+pub async fn set_fps_boost(
+    app: tauri::AppHandle,
+    profile: String,
+    on: bool,
+    keep_options: Option<bool>,
+) -> Result<engine::FpsBoostState, String> {
+    engine::set_fps_boost(app, profile, on, keep_options.unwrap_or(false)).await
 }
 
 #[tauri::command(async)]
@@ -345,6 +350,14 @@ pub async fn install_pack_candidate(app: tauri::AppHandle, slug: String) -> Resu
     engine::install_catalog_pack(app, slug, true).await
 }
 
+/// The published version of a catalogue build in place of the installed one.
+/// The webview names only the build: which pack, which version and which file
+/// come from the build's own settings and from the catalogue.
+#[tauri::command]
+pub async fn update_catalog_pack(app: tauri::AppHandle, profile: String) -> Result<engine::Profile, String> {
+    engine::update_catalog_pack(app, profile).await
+}
+
 /// Packs whose unreviewed versions this account may install.
 #[tauri::command]
 pub async fn pack_review_queue() -> Result<serde_json::Value, String> {
@@ -380,6 +393,19 @@ pub async fn pick_import_dir() -> Result<Option<Vec<engine::FoundInstance>>, Str
 #[tauri::command(async)]
 pub fn import_instance(path: String, name: String, version: String, loader: String) -> Result<engine::Profile, String> {
     engine::import_instance(path, name, version, loader)
+}
+
+/// Builds of Prism, MultiMC and Modrinth App that can move into Millida whole.
+#[tauri::command]
+pub async fn plan_moves() -> Result<Vec<engine::MoveCandidate>, String> {
+    super::blocking(engine::plan_moves).await
+}
+
+/// Moves one build from `plan_moves` into Millida; the source goes only after
+/// the copy is checked, and only when `remove_source` is set.
+#[tauri::command]
+pub async fn move_instance(path: String, remove_source: bool) -> Result<engine::MoveOutcome, String> {
+    super::blocking(move || engine::move_instance(path, remove_source)).await?
 }
 
 #[tauri::command]

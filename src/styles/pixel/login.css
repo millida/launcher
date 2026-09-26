@@ -25,12 +25,16 @@
 .lg2 .lg2-guest { width: 100%; margin-top: 10px; min-height: 44px; justify-content: center; }
 .lg2 .trust { margin-top: 16px; }
 .lg2 .lg2-art {
-  /* Арт обрезан по пояс — стоит срезом на нижнем крае окна, не висит. */
-  position: absolute; right: 3vw; bottom: 0; height: 88%; width: 58%;
-  display: flex; align-items: flex-end; justify-content: center; pointer-events: none;
+  /* Персонажи целиком в правом нижнем углу, без обрезки: раньше базовый
+     .login-art с overflow:hidden срезал их по бёдра (владелец 25.09.2026). */
+  position: absolute; right: 3vw; bottom: 0; height: 92%; width: 56%;
+  display: flex; align-items: flex-end; justify-content: flex-end;
+  overflow: visible; padding: 0; pointer-events: none;
 }
 .lg2 .lg2-art img {
-  display: block; height: 100%; width: auto; max-width: 100%; object-fit: contain; object-position: bottom;
+  display: block; width: 100%; height: auto;
+  max-width: 100%; max-height: 100%;
+  object-fit: contain; object-position: bottom right;
   transition: transform 120ms linear;
 }
 .lg2 .lg2-shadow { display: none; }

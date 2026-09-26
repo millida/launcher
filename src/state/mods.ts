@@ -210,7 +210,7 @@ let loadSeq = 0
 // second CurseForge page started 20 entries in and repeated thirty rows that
 // were already on screen.
 const CF_PAGE = 50
-const MR_PAGE = 20
+export const MR_PAGE = 20
 
 interface CfQuery {
   query: string
@@ -254,7 +254,7 @@ function loadCf(q: CfQuery): Promise<ModHit[]> {
   )
 }
 
-interface MrQuery {
+export interface MrQuery {
   tab: string
   ver: string
   loader: string
@@ -270,7 +270,7 @@ interface MrQuery {
 /// Один сборщик адреса на поиск и на предзагрузку соседних вкладок: разойдись
 /// они хоть одним полем — предзагрузка грела бы не тот ключ, и переключение
 /// снова стало бы походом в сеть.
-function mrSearchUrl(q: MrQuery): string {
+export function mrSearchUrl(q: MrQuery): string {
   const f: string[][] = [['project_type:' + q.tab]]
   if (q.ver !== 'любая') f.push(['versions:' + q.ver])
   // Loader is a facet only for mods and modpacks; other types have no such category.
@@ -295,7 +295,23 @@ function mrSearchUrl(q: MrQuery): string {
   )
 }
 
-function loadMr(url: string): Promise<any> {
+export function mrToHit(h: any): ModHit {
+  return {
+    title: h.title,
+    author: h.author,
+    desc: h.description.slice(0, 120),
+    dl: h.downloads,
+    icon: mirrorAsset(h.icon_url),
+    cats: (h.display_categories || h.categories || []).slice(0, 2),
+    slug: h.slug,
+    pid: h.project_id,
+    cover: mirrorAsset(h.featured_gallery || (h.gallery && h.gallery[0])),
+    gameVers: Array.isArray(h.versions) ? h.versions : undefined,
+    loaders: (h.categories || []).filter((c: string) => LOADER_TAGS.includes(c)),
+  }
+}
+
+export function loadMr(url: string): Promise<any> {
   return cachedCatalog('mr:' + url, async () => (await fetch(url)).json())
 }
 
@@ -609,19 +625,7 @@ export const useMods = create<ModsState>((set, get) => ({
       return
     }
     const d = mr.data
-    const hits: ModHit[] = (d.hits || []).map((h: any) => ({
-      title: h.title,
-      author: h.author,
-      desc: h.description.slice(0, 120),
-      dl: h.downloads,
-      icon: mirrorAsset(h.icon_url),
-      cats: (h.display_categories || h.categories || []).slice(0, 2),
-      slug: h.slug,
-      pid: h.project_id,
-      cover: mirrorAsset(h.featured_gallery || (h.gallery && h.gallery[0])),
-      gameVers: Array.isArray(h.versions) ? h.versions : undefined,
-      loaders: (h.categories || []).filter((c: string) => LOADER_TAGS.includes(c)),
-    }))
+    const hits: ModHit[] = (d.hits || []).map(mrToHit)
     const shown = append ? get().hits : []
     const merged = st.modSource === 'all' ? mergeSources(hits, cfBuffer, shown, query) : hits
     // Свои сборки первыми и без дублей: тот же адрес мог прийти и из чужого

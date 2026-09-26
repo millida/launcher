@@ -196,6 +196,8 @@ export type ChestDrop =
       need: number
       completed: boolean
       shards: number
+      /** Докупить недостающее, рубинов: вещь собирается только покупкой остатка. Старая служба не шлёт. */
+      topUp?: number
     }
 
 export interface ChestOpenResult {
@@ -249,8 +251,13 @@ export interface Rules {
       hits?: number
       items?: number
       shards?: { min: number; max: number }
+      /** Шанс целой вещи, %: без оплаты и у платящего (26.09.2026). Старая служба не шлёт. */
+      wholePct?: number
+      wholePayerPct?: number
     }[]
     pityAfter: number
+    /** Платящий — PLUS или пакет рубинов за столько дней. */
+    payerWindowDays?: number
     /** Легендарная и выше — раз в столько сундуков (v3.1). */
     pityLegendAfter?: number
     duplicateShare?: number
@@ -469,13 +476,24 @@ export interface ShopDay {
   gift?: ShopGift | null
 }
 
+/** Прогресс вещи фрагментами и цена докупки остатка в рубинах. Старая служба topUp не шлёт. */
+export interface FragmentProgress {
+  have: number
+  need: number
+  topUp?: number
+}
+
+export interface FragmentCard extends FragmentProgress {
+  item: ItemRef
+}
+
 export interface Workshop {
   shards: number
   cap: number
   /** Дневной лимит осколков из сундуков, подарка и фрагментов (сутки МСК). Старая служба не шлёт. */
   today?: { earned: number; limit: number; resetsAt: string }
-  /** Начатые вещи: фрагменты копятся до need, потом вещь выдаётся сама. */
-  fragments?: { item: ItemRef; have: number; need: number }[]
+  /** Начатые вещи: фрагменты копятся до need - 1, остаток докупается за рубины (topUp). */
+  fragments?: FragmentCard[]
   workshop: { items: { item: ItemRef; cost: number; owned: boolean }[]; rotatesAt: string }
 }
 
@@ -506,10 +524,10 @@ export interface Achievement {
 
 export interface EconomyProgress {
   hours: number
-  hourItems: { hours: number; item: ItemRef; owned: boolean }[]
+  hourItems: { hours: number; item: ItemRef; owned: boolean; fragments?: FragmentProgress | null }[]
   achievements: Achievement[]
   points: number
-  pointItems: { points: number; item: ItemRef; owned: boolean }[]
+  pointItems: { points: number; item: ItemRef; owned: boolean; fragments?: FragmentProgress | null }[]
 }
 
 /** Новые поля GET /launcher/plus поверх прежних (PlusStatus). */
@@ -518,10 +536,8 @@ export interface PlusEconomy {
   paidUntil: string | null
   canceled: boolean
   priceKopecks: number
-  month?: { items: ItemRef[]; claimed: boolean }
   rubiesOnPay?: number
   shardBoost?: number
-  migration?: { eligible: boolean; picks: number; picked: string[]; pool: ItemRef[] } | null
 }
 
 const post = (body: unknown): RequestInit => ({ method: 'POST', body: JSON.stringify(body) })
@@ -536,24 +552,26 @@ export const wishItem = (code: string, on: boolean) => api<{ wishlist: string[] 
 export const buyXray = (id: string) =>
   api<{ balance: number; item: ItemRef; chestId: string }>('/rubies/xray/buy', post({ id }))
 export const loadWorkshop = () => api<Workshop>('/rubies/shards')
-export const craftItem = (code: string) => api<{ shards: number; item: ItemRef }>('/rubies/shards/craft', post({ code }))
+export const craftItem = (code: string) =>
+  api<{ shards: number; item: ItemRef; fragments?: FragmentProgress & { amount: number } }>('/rubies/shards/craft', post({ code }))
 export const loadWeekly = () => api<WeeklyParcel>('/rubies/weekly')
-export const claimWeekly = (code: string) => api<{ item: ItemRef }>('/rubies/weekly/claim', post({ code }))
+export const claimWeekly = (code: string) =>
+  api<{ item: ItemRef; fragments?: FragmentProgress & { amount: number } }>('/rubies/weekly/claim', post({ code }))
+/** «Докупить фрагменты»: единственный путь собрать начатую вещь. Код - вещь-расцветка. */
+export const completeFragments = (code: string) =>
+  api<{ balance: number; price: number; granted: ItemRef[] }>('/rubies/fragments/complete', post({ code }))
 export const loadEconomyProgress = () => api<EconomyProgress>('/rubies/progress')
 export const loadPlusEconomy = () => api<PlusEconomy>('/launcher/plus')
-export const claimPlusMonth = () => api<{ items: ItemRef[] }>('/launcher/plus/month/claim', { method: 'POST' })
-export const pickPlusMigration = (codes: string[]) =>
-  api<{ granted: ItemRef[] }>('/launcher/plus/migration/pick', post({ codes }))
 
 /**
- * Подарок новичку (модель предметов v2, решение владельца 24.09.2026, 18:23):
- * единственная бесплатная вещь — нимб при первом запуске, навсегда и сразу надет.
- * Повтор ничего не выдаёт. Старая служба ручки не знает — экран без подарка.
+ * Подарок новичку (26.09.2026): половина фрагментов нимба, остаток докупается
+ * за рубины. Повтор ничего не выдаёт. Старая служба ручки не знает — экран без подарка.
  */
 export interface WelcomeGift {
   item: ItemRef | null
   claimed: boolean
   granted?: boolean
   equipped?: boolean
+  fragments?: FragmentProgress | null
 }
 export const claimWelcome = () => api<WelcomeGift>('/rubies/welcome/claim', { method: 'POST' })

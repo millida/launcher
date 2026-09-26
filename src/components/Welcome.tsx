@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { claimWelcome, type ItemRef } from '../lib/rubies'
+import { claimWelcome, type FragmentProgress, type ItemRef } from '../lib/rubies'
 import { getAccount, isMillidaKind } from '../state/accounts'
 import { useGameNick } from '../state/gameNick'
 import { useUi } from '../state/ui'
 import '../styles/pixel/welcome.css'
 import { Burst, Confetti, Rays } from './reward/RewardReveal'
 import { ItemArt } from './shop/parts'
-import { RarityFx, RarityPlate } from './shop/rarityUi'
+import { FragBar, RarityFx, RarityPlate } from './shop/rarityUi'
 import { rarityProps } from './shop/rarity'
 
 /**
@@ -16,10 +16,9 @@ import { rarityProps } from './shop/rarity'
  * Уходит пиксельным растворением: клетки гаснут волной от центра, на фронте
  * вспыхивают зелёным (как переход Arcania Lab).
  *
- * Первый запуск аккаунта Millida — подарок новичку (модель предметов v2,
- * решение владельца 24.09.2026, 18:23): единственная бесплатная вещь, нимб,
- * выдаётся службой и сразу надевается. Заставка держится дольше и показывает
- * вещь карточкой с плашкой «Надето».
+ * Первый запуск аккаунта Millida — подарок новичку (26.09.2026): половина
+ * фрагментов нимба, остаток докупается в магазине. Заставка держится дольше и
+ * показывает вещь карточкой с полосой фрагментов.
  */
 
 const SEEN_KEY = 'm-welcomed'
@@ -46,37 +45,43 @@ export function Welcome() {
   const gameName = useGameNick((s) => s.name)
   const [phase, setPhase] = useState<'off' | 'in' | 'out'>('off')
   const [first, setFirst] = useState(false)
-  const [gift, setGift] = useState<ItemRef | null>(null)
+  const [gift, setGift] = useState<{ item: ItemRef; fragments: FragmentProgress | null } | null>(null)
   const canvas = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
     if (!logged || shownThisRun) return
-    // Ждём, пока уйдёт загрузочный экран из index.html: иначе заставка
-    // отыграет под ним.
-    let t: ReturnType<typeof setTimeout>
-    const go = () => {
-      if (document.getElementById('boot')) t = setTimeout(go, 80)
-      else if (!shownThisRun) {
-        shownThisRun = true
-        const isFirst = firstEver() || new URLSearchParams(location.search).get('welcome') === 'first'
-        setFirst(isFirst)
-        setPhase('in')
-        const acc = getAccount()
-        if (isFirst && acc && isMillidaKind(acc.kind)) {
-          void claimWelcome()
-            .then((r) => r && r.item && setGift(r.item))
-            .catch(() => undefined)
-        }
-      }
+    // Заставка встаёт сразу (слой выше #boot), чтобы лобби не мелькнуло, пока
+    // гаснет загрузочный экран. Отсчёт показа начнётся, когда #boot уйдёт.
+    shownThisRun = true
+    const isFirst = firstEver() || new URLSearchParams(location.search).get('welcome') === 'first'
+    setFirst(isFirst)
+    setPhase('in')
+    const acc = getAccount()
+    if (isFirst && acc && isMillidaKind(acc.kind)) {
+      void claimWelcome()
+        .then((r) => r && r.item && setGift({ item: r.item, fragments: r.fragments ?? null }))
+        .catch(() => undefined)
     }
-    go()
-    return () => clearTimeout(t)
   }, [logged])
 
+  // Держим заставку положенное время только после того, как исчез #boot: иначе
+  // отсчёт съедался, пока загрузочный экран ещё сверху.
   useEffect(() => {
     if (phase !== 'in') return
-    const t = setTimeout(() => setPhase('out'), gift ? GIFT_HOLD_MS : HOLD_MS)
-    return () => clearTimeout(t)
+    let hold: ReturnType<typeof setTimeout>
+    let poll: ReturnType<typeof setTimeout>
+    const start = () => {
+      if (document.getElementById('boot')) {
+        poll = setTimeout(start, 80)
+        return
+      }
+      hold = setTimeout(() => setPhase('out'), gift ? GIFT_HOLD_MS : HOLD_MS)
+    }
+    start()
+    return () => {
+      clearTimeout(hold)
+      clearTimeout(poll)
+    }
   }, [phase, gift])
 
   // Растворение: весь слой — холст, клетки стираются по порядку.
@@ -147,14 +152,18 @@ export function Welcome() {
         <span className="welcome-hi">{first ? 'Добро пожаловать' : 'С возвращением,'}</span>
         <b className="welcome-nick">{first ? 'в Millida' : nick || 'игрок'}</b>
         {gift ? (
-          <div className="welcome-gift sh-card is-show" {...rarityProps(gift.rarity)}>
+          <div className="welcome-gift sh-card is-show" {...rarityProps(gift.item.rarity)}>
             <RarityFx />
             <span className="welcome-gift-tag">Подарок</span>
-            <ItemArt item={gift} size="lg" />
-            <b className="sh-card-name">{gift.name}</b>
+            <ItemArt item={gift.item} size="lg" />
+            <b className="sh-card-name">{gift.item.name}</b>
             <span className="welcome-gift-foot">
-              <RarityPlate rarity={gift.rarity} small />
-              <span className="welcome-gift-on">Надето</span>
+              <RarityPlate rarity={gift.item.rarity} small />
+              {gift.fragments ? (
+                <FragBar have={gift.fragments.have} need={gift.fragments.need} rarity={gift.item.rarity} />
+              ) : (
+                <span className="welcome-gift-on">Надето</span>
+              )}
             </span>
           </div>
         ) : null}

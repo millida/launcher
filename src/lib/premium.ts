@@ -69,6 +69,8 @@ export interface PremiumPack {
   /// Откуда пришла карточка. 'catalog' — наш каталог сборок: цены и подписки в
   /// нём нет, доступ открывается ключом, установка идёт путём каталога.
   source?: 'premium' | 'catalog'
+  /// Продавец сборки выдаёт свои ключи: рядом с подпиской остаётся ввод ключа.
+  acceptsKeys?: boolean
 }
 
 export interface PremiumPatch {
@@ -85,7 +87,23 @@ export interface PremiumPackDetail extends PremiumPack {
   plans?: PremiumPlan[]
   patches?: PremiumPatch[]
   updatedAt?: string | null
+  /// Подписка на эту сборку отдельно.
+  subscription?: PremiumSubscription | null
+  /// Подписка на все сборки того же партнёра.
+  bundle?: PremiumSubscription | null
 }
+
+/// Подписка, которой человек пользуется сейчас: своя на сборку или на все сборки.
+export function liveSubscription(detail: PremiumPackDetail | null): PremiumSubscription | null {
+  if (!detail) return null
+  if (detail.bundle?.active) return detail.bundle
+  if (detail.subscription?.active) return detail.subscription
+  return null
+}
+
+/// Сборка открывается несколькими подписками: одна эта или все сборки партнёра.
+export const hasPlanChoice = (detail: PremiumPackDetail | null): boolean =>
+  !!detail && Array.isArray(detail.plans) && detail.plans.length > 1
 
 export interface PremiumShowcase {
   subscription?: PremiumSubscription | null

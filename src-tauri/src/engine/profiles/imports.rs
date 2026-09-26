@@ -5,7 +5,16 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 #[derive(Clone, serde::Serialize)]
-pub struct FoundInstance { pub name: String, pub version: String, pub loader: String, pub path: String, pub source: String }
+pub struct FoundInstance {
+    pub name: String,
+    pub version: String,
+    pub loader: String,
+    pub path: String,
+    pub source: String,
+    /// The instance lives in its own folder of a launcher Millida can take it
+    /// from whole (see `move_source_kind`), not in a shared .minecraft.
+    pub movable: bool,
+}
 
 /// A spinning HDD with a full drive can walk for minutes; the user is waiting on
 /// a modal, so the sweep stops with whatever it found by then.
@@ -36,7 +45,11 @@ fn vouch_all(found: &[FoundInstance]) {
     }
 }
 
-fn is_vouched(path: &Path) -> bool {
+pub(crate) fn vouched_paths() -> Vec<PathBuf> {
+    VOUCHED.lock().unwrap_or_else(|e| e.into_inner()).clone()
+}
+
+pub(crate) fn is_vouched(path: &Path) -> bool {
     VOUCHED.lock().unwrap_or_else(|e| e.into_inner()).iter().any(|p| p == path)
 }
 
@@ -442,6 +455,11 @@ pub fn mend_profile_version(p: &mut Profile) -> Result<(), String> {
     Ok(())
 }
 
+/// A moved instance is gone from its launcher; the next scan must not offer it.
+pub(crate) fn forget_scan() {
+    *CACHE.lock().unwrap_or_else(|e| e.into_inner()) = None;
+}
+
 pub fn scan_imports() -> Vec<FoundInstance> {
     {
         let hit = CACHE.lock().unwrap_or_else(|e| e.into_inner());
@@ -520,6 +538,7 @@ fn walk_roots(dots: SourceRoots, insts: SourceRoots) -> Vec<FoundInstance> {
                 loader,
                 path,
                 source: src.clone(),
+                movable: false,
             });
         }
     }
@@ -528,85 +547,93 @@ fn walk_roots(dots: SourceRoots, insts: SourceRoots) -> Vec<FoundInstance> {
         for e in rd.flatten() {
             let dir = e.path();
             if !dir.is_dir() { continue }
-            let name = dir.file_name().unwrap().to_string_lossy().to_string();
-            let mut version = String::new();
-            let mut loader = "vanilla".to_string();
-            if let Ok(txt) = std::fs::read_to_string(dir.join("mmc-pack.json")) {
-                if let Ok(v) = serde_json::from_str::<Value>(&txt) {
-                    for c in v["components"].as_array().cloned().unwrap_or_default() {
-                        match c["uid"].as_str().unwrap_or("") {
-                            "net.minecraft" => version = c["version"].as_str().unwrap_or("").to_string(),
-                            "net.fabricmc.fabric-loader" => loader = "fabric".into(),
-                            "org.quiltmc.quilt-loader" => loader = "quilt".into(),
-                            "net.minecraftforge" => loader = "forge".into(),
-                            "net.neoforged" => loader = "neoforge".into(),
-                            _ => {}
-                        }
-                    }
-                }
-            }
-            if version.is_empty() {
-                if let Ok(txt) = std::fs::read_to_string(dir.join("profile.json")) {
-                    if let Ok(v) = serde_json::from_str::<Value>(&txt) {
-                        version = v["metadata"]["game_version"].as_str()
-                            .or(v["game_version"].as_str())
-                            .unwrap_or("").to_string();
-                        let ml = v["metadata"]["loader"].as_str()
-                            .or(v["loader"].as_str())
-                            .unwrap_or("").to_lowercase();
-                        if !ml.is_empty() && ml != "vanilla" { loader = loader_from_id(&ml) }
-                    }
-                }
-            }
-            if version.is_empty() {
-                for f in ["minecraftinstance.json", "instance.json", "config.json", "manifest.json"] {
-                    if let Ok(txt) = std::fs::read_to_string(dir.join(f)) {
-                        if let Ok(v) = serde_json::from_str::<Value>(&txt) {
-                            version = v["gameVersion"].as_str()
-                                .or(v["baseModLoader"]["minecraftVersion"].as_str())
-                                .or(v["minecraft"]["version"].as_str())
-                                .or(v["loaderVersion"]["minecraftVersion"].as_str())
-                                // ATLauncher writes a version-json shaped instance.json,
-                                // where the version sits in inheritsFrom/id
-                                .or(v["inheritsFrom"].as_str())
-                                .or(v["launcher"]["version"].as_str())
-                                .or(v["id"].as_str())
-                                .unwrap_or("").to_string();
-                            let ml = v["baseModLoader"]["name"].as_str()
-                                .or(v["loaderVersion"]["loaderType"].as_str())
-                                .or(v["launcher"]["loaderVersion"]["type"].as_str())
-                                .or(v["minecraft"]["modLoaders"][0]["id"].as_str()).unwrap_or("").to_lowercase();
-                            if ml.contains("fabric") { loader = "fabric".into() }
-                            else if ml.contains("quilt") { loader = "quilt".into() }
-                            else if ml.contains("neoforge") { loader = "neoforge".into() }
-                            else if ml.contains("forge") { loader = "forge".into() }
-                            if !version.is_empty() {
-                                if loader == "vanilla" { loader = loader_from_id(&version) }
-                                version = base_version(&version, "");
-                                break
-                            }
-                        }
-                    }
-                }
-            }
-            let game = ["minecraft", ".minecraft"].iter().map(|d| dir.join(d)).find(|p| p.exists()).unwrap_or(dir.clone());
-            if version.is_empty() {
-                if let Some((v, l)) = detect_from_game_dir(&game) {
-                    version = v;
-                    if loader == "vanilla" { loader = l }
-                }
-            }
-            // launcher manifests often omit the loader, the mods do not
-            if loader == "vanilla" {
-                if let Some(l) = loader_from_mods_dir(&game) { loader = l }
-            }
-            if version.is_empty() { continue }
-            let path = dir.to_string_lossy().to_string();
-            if out.iter().any(|x: &FoundInstance| x.path == path) { continue }
-            out.push(FoundInstance { name, version, loader, path, source: src.clone() });
+            let Some(found) = read_instance_dir(&dir, &src) else { continue };
+            if out.iter().any(|x: &FoundInstance| x.path == found.path) { continue }
+            out.push(found);
         }
     }
     out
+}
+
+/// One instance folder of a launcher that keeps each build apart (Prism,
+/// MultiMC, CurseForge, Modrinth App…): name, game version and loader.
+pub(crate) fn read_instance_dir(dir: &Path, src: &str) -> Option<FoundInstance> {
+    let name = dir.file_name()?.to_string_lossy().to_string();
+    let mut version = String::new();
+    let mut loader = "vanilla".to_string();
+    if let Ok(txt) = std::fs::read_to_string(dir.join("mmc-pack.json")) {
+        if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+            for c in v["components"].as_array().cloned().unwrap_or_default() {
+                match c["uid"].as_str().unwrap_or("") {
+                    "net.minecraft" => version = c["version"].as_str().unwrap_or("").to_string(),
+                    "net.fabricmc.fabric-loader" => loader = "fabric".into(),
+                    "org.quiltmc.quilt-loader" => loader = "quilt".into(),
+                    "net.minecraftforge" => loader = "forge".into(),
+                    "net.neoforged" => loader = "neoforge".into(),
+                    _ => {}
+                }
+            }
+        }
+    }
+    if version.is_empty() {
+        if let Ok(txt) = std::fs::read_to_string(dir.join("profile.json")) {
+            if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+                version = v["metadata"]["game_version"].as_str()
+                    .or(v["game_version"].as_str())
+                    .unwrap_or("").to_string();
+                let ml = v["metadata"]["loader"].as_str()
+                    .or(v["loader"].as_str())
+                    .unwrap_or("").to_lowercase();
+                if !ml.is_empty() && ml != "vanilla" { loader = loader_from_id(&ml) }
+            }
+        }
+    }
+    if version.is_empty() {
+        for f in ["minecraftinstance.json", "instance.json", "config.json", "manifest.json"] {
+            if let Ok(txt) = std::fs::read_to_string(dir.join(f)) {
+                if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+                    version = v["gameVersion"].as_str()
+                        .or(v["baseModLoader"]["minecraftVersion"].as_str())
+                        .or(v["minecraft"]["version"].as_str())
+                        .or(v["loaderVersion"]["minecraftVersion"].as_str())
+                        // ATLauncher writes a version-json shaped instance.json,
+                        // where the version sits in inheritsFrom/id
+                        .or(v["inheritsFrom"].as_str())
+                        .or(v["launcher"]["version"].as_str())
+                        .or(v["id"].as_str())
+                        .unwrap_or("").to_string();
+                    let ml = v["baseModLoader"]["name"].as_str()
+                        .or(v["loaderVersion"]["loaderType"].as_str())
+                        .or(v["launcher"]["loaderVersion"]["type"].as_str())
+                        .or(v["minecraft"]["modLoaders"][0]["id"].as_str()).unwrap_or("").to_lowercase();
+                    if ml.contains("fabric") { loader = "fabric".into() }
+                    else if ml.contains("quilt") { loader = "quilt".into() }
+                    else if ml.contains("neoforge") { loader = "neoforge".into() }
+                    else if ml.contains("forge") { loader = "forge".into() }
+                    if !version.is_empty() {
+                        if loader == "vanilla" { loader = loader_from_id(&version) }
+                        version = base_version(&version, "");
+                        break
+                    }
+                }
+            }
+        }
+    }
+    let game = ["minecraft", ".minecraft"].iter().map(|d| dir.join(d)).find(|p| p.exists()).unwrap_or_else(|| dir.to_path_buf());
+    if version.is_empty() {
+        if let Some((v, l)) = detect_from_game_dir(&game) {
+            version = v;
+            if loader == "vanilla" { loader = l }
+        }
+    }
+    // launcher manifests often omit the loader, the mods do not
+    if loader == "vanilla" {
+        if let Some(l) = loader_from_mods_dir(&game) { loader = l }
+    }
+    if version.is_empty() { return None }
+    let path = dir.to_string_lossy().to_string();
+    let movable = move_source_kind(dir).is_some();
+    Some(FoundInstance { name, version, loader, path, source: src.to_string(), movable })
 }
 
 fn copy_game_files(game: &Path, dst: &Path) -> Result<usize, String> {

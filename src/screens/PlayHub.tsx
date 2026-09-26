@@ -5,6 +5,7 @@ import { modeBackground, modeLook } from '../components/playhub/modeArt'
 import { modeScene } from '../components/iso/modeScenes'
 import { Icon } from '../components/Icon'
 import { fmtN, plural } from '../lib/format'
+import { buildsShelf } from '../lib/buildsShelf'
 import { openModal, setScreen } from '../state/ui'
 import { useProfiles } from '../state/profiles'
 import { premiumMode, sameMode, serverMode, useLobby } from '../state/lobbyMode'
@@ -270,6 +271,7 @@ export function PlayHub({ on }: { on?: boolean }) {
   const [mrPacks, setMrPacks] = useState<HubPack[] | null>(null)
   /** Режимы: 7 плиток, «Остальные» раскрывает остальные на месте. */
   const [allModes, setAllModes] = useState(false)
+  const [allBuilds, setAllBuilds] = useState(false)
   const lobbyLoaded = useLobby((s) => s.loaded)
   const [openCat, setOpenCat] = useState<string | null>(null)
   /** Сборка на своей странице. */
@@ -284,6 +286,7 @@ export function PlayHub({ on }: { on?: boolean }) {
   // выставить вкладку, — обычный useEffect затирал бы её.
   useLayoutEffect(() => () => useHubTab.getState().reset(), [])
   const mine = useMyBuilds(profiles)
+  const shelf = buildsShelf(mine, current && current.kind === 'build' ? current.name : null, allBuilds)
   /** «Повторить» у блока, которому прод не ответил. */
   const [tick, setTick] = useState(0)
   const retry = () => {
@@ -559,7 +562,7 @@ export function PlayHub({ on }: { on?: boolean }) {
             'builds',
             'Мои сборки',
             <div className="hub-grid" data-section="my_builds" data-src="hub_card" data-private>
-              {mine.map((p, i) => (
+              {shelf.shown.map((p, i) => (
                 <MyBuildCard
                   key={p.name}
                   p={p}
@@ -583,6 +586,28 @@ export function PlayHub({ on }: { on?: boolean }) {
                   <span className="ph-card-meta">Новая сборка</span>
                 </span>
               </button>
+              {/* Same skeleton as the shelf's action tiles, so the toggle is exactly as tall as a build card. */}
+              {shelf.toggle ? (
+                <button
+                  className="ph-card act"
+                  data-sound="nav"
+                  data-track={allBuilds ? 'builds_less' : 'builds_more'}
+                  aria-expanded={allBuilds}
+                  onClick={() => setAllBuilds((v) => !v)}
+                >
+                  <span className="ph-card-art ph-mine-art">
+                    <span className="ph-act-ic">
+                      <Icon id={allBuilds ? 'i-chev-u' : 'i-grid'} />
+                    </span>
+                  </span>
+                  <span className="ph-card-body">
+                    <b>{allBuilds ? 'Свернуть' : 'Показать ещё'}</b>
+                    <span className="ph-card-meta">
+                      {(allBuilds ? mine.length : shelf.hidden) + ' ' + plural(allBuilds ? mine.length : shelf.hidden, 'сборка', 'сборки', 'сборок')}
+                    </span>
+                  </span>
+                </button>
+              ) : null}
             </div>,
           )
         : head(

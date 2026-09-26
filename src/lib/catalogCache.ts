@@ -62,6 +62,7 @@ export function cachedCatalog<T>(key: string, load: () => Promise<T>): Promise<T
   // заперла бы ключ до перезапуска лаунчера.
   const started = load()
     .then((value) => {
+      if (inflight.get(key) !== started) return value
       if (rows.size >= LIMIT) evictOldest()
       rows.set(key, { at: Date.now(), value })
       return value
@@ -71,6 +72,12 @@ export function cachedCatalog<T>(key: string, load: () => Promise<T>): Promise<T
     })
   inflight.set(key, started)
   return started
+}
+
+/** The next read of the key goes to the network; a request already under way does not put its answer back. */
+export function forgetCatalog(key: string): void {
+  rows.delete(key)
+  inflight.delete(key)
 }
 
 export function clearCatalogCache(): void {

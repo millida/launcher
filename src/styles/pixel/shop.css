@@ -274,6 +274,10 @@
    ============================================================ */
 .sh-flow { --sh-card-h: 264px; --sh-gap: 10px; --sh-pad: 18px; }
 .sh-flow > .sh-block { padding: var(--sh-pad); container: shop / inline-size; }
+/* Секции ленты за пределами экрана не считаются, не перекрашиваются и их
+   бесконечные анимации (искры, блик, подскоки) не тикают, пока не подкрутишь к
+   ним. Высота секции запоминается (auto), поэтому полоса прокрутки не прыгает. */
+.sh-feed > * { content-visibility: auto; contain-intrinsic-size: auto 600px; }
 .sh-zone { padding: 0 var(--sh-pad); container: shop / inline-size; }
 .sh-grid {
   display: grid; grid-template-columns: repeat(8, minmax(0, 1fr));
@@ -805,13 +809,22 @@
   display: grid; grid-template-columns: 200px minmax(0, 1fr) auto; align-items: center; gap: 12px 28px;
   min-height: 196px;
 }
-.sh-cc-art { position: relative; align-self: stretch; min-height: 168px; display: grid; place-items: center; }
+.sh-cc-art { position: relative; align-self: stretch; min-height: 168px; display: grid; place-items: center; overflow: hidden; }
 .sh-cc-rays {
-  position: absolute; left: 50%; top: 50%; width: 460px; height: 460px; margin: -230px 0 0 -230px;
+  position: absolute; left: 50%; top: 50%; width: 300px; height: 300px; margin: -150px 0 0 -150px;
   fill: var(--m-danger); opacity: 0.16; pointer-events: none;
-  animation: sh-cc-spin 36s steps(72, end) infinite;
+  /* Лучи гаснут к краю радиальной маской, а не срезаются рамкой карточки:
+     подсветка растворяется, а не обрывается линией (владелец 25.09.2026).
+     Маска — не фон-градиент, а прозрачность по радиусу. */
+  -webkit-mask: radial-gradient(circle closest-side, #000 40%, transparent 66%);
+  mask: radial-gradient(circle closest-side, #000 40%, transparent 66%);
+  /* Вращение — на собственном слое (transform на GPU): было 460px с бесконечным
+     rotate, на слабых машинах баннер подлагивал (владелец 25.09.2026). */
+  transform: translateZ(0);
+  will-change: transform;
+  animation: sh-cc-spin 60s linear infinite;
 }
-@keyframes sh-cc-spin { to { transform: rotate(360deg); } }
+@keyframes sh-cc-spin { to { transform: translateZ(0) rotate(360deg); } }
 .sh-cc-heart { position: relative; z-index: 1; display: grid; filter: drop-shadow(0 5px 0 rgba(0, 0, 0, 0.4)); animation: sh-cc-beat 1.6s steps(1, end) infinite; }
 .sh-cc-heart > svg { display: block; width: 120px; height: 120px; }
 @keyframes sh-cc-beat { 0%, 100% { transform: none; } 12% { transform: scale(1.1); } 24% { transform: none; } 36% { transform: scale(1.05); } }

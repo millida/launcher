@@ -4,7 +4,7 @@ import { hasTauri } from '../ipc/tauri'
 import { importInstance, importPackFile, pickImportDir, scanImports } from '../ipc/commands'
 import type { FoundInstance } from '../ipc/commands'
 import { useProfiles } from '../state/profiles'
-import { closeModal, showToast, useUi } from '../state/ui'
+import { closeModal, openModal, showToast, useUi } from '../state/ui'
 import { track } from '../lib/telemetry'
 import { foundKey } from '../lib/imports'
 import { backdropClose } from '../lib/dismiss'
@@ -90,6 +90,8 @@ export function ImportModal() {
   }, [modal.open])
 
   const existing = new Set(profiles.map((p) => p.name))
+  const toMove = (list || []).filter((it) => it.movable && !existing.has(it.name))
+  const toCopy = (list || []).filter((it) => !it.movable)
 
   if (!modal.open) return null
   const close = () => closeModal('impModal')
@@ -117,8 +119,32 @@ export function ImportModal() {
               <span className="skel" />
               <span className="skel" />
             </div>
-          ) : list.length ? (
-            list.map((it, i) => {
+          ) : toMove.length || toCopy.length ? (
+            <>
+            {toMove.length ? (
+              <div className="mod-line">
+                <span className="mod-mini">
+                  <Icon id="i-download" />
+                </span>
+                <b>Перенести в Millida целиком</b>
+                <span className="pill" style={{ marginRight: '6px' }}>
+                  Prism · Modrinth App
+                </span>
+                <span className="pill">{toMove.length}</span>
+                <button
+                  className="btn sm primary"
+                  style={{ marginLeft: '8px' }}
+                  data-sound="open"
+                  onClick={() => {
+                    close()
+                    openModal('mvModal')
+                  }}
+                >
+                  Перенести
+                </button>
+              </div>
+            ) : null}
+            {toCopy.map((it, i) => {
               const state = rows[i] || 'idle'
               const already = state === 'done' || existing.has(it.name)
               return (
@@ -157,7 +183,8 @@ export function ImportModal() {
                   </button>
                 </div>
               )
-            })
+            })}
+            </>
           ) : (
             <div className="bx-mini-empty">
               <b>Других лаунчеров не нашли</b>

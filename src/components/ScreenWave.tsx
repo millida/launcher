@@ -2,6 +2,9 @@ import { useEffect, useRef } from 'react'
 import { useUi } from '../state/ui'
 import type { ScreenId } from '../state/ui'
 import { ACCENT_EVENT, accentBase, shade } from '../lib/accent'
+import { gpuLite } from '../lib/gpuLite'
+import { currentDeviceTier, maxCanvasPixelRatio } from '../lib/deviceTier'
+import { tabTransitionMs } from '../state/viewPrefs'
 
 /**
  * Переход между экранами — пиксельное растворение, как у заставки «С
@@ -11,7 +14,6 @@ import { ACCENT_EVENT, accentBase, shade } from '../lib/accent'
  */
 
 const CELL = 36
-const DISSOLVE_MS = 380
 const FLASH_MS = 60
 
 /** Цвет экрана: плотный тон и вспышка фронта. */
@@ -41,8 +43,10 @@ export function ScreenWave() {
     stop.current?.()
     const cv = canvas.current
     const ctx = cv?.getContext('2d')
-    if (!cv || !ctx || matchMedia('(prefers-reduced-motion: reduce)').matches) return
-    const dpr = window.devicePixelRatio || 1
+    const dissolveMs = tabTransitionMs()
+    if (!cv || !ctx || dissolveMs <= 0 || gpuLite() || matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    // Full-screen transition canvas: weak devices cap dpr, high-end unchanged.
+    const dpr = Math.min(window.devicePixelRatio || 1, maxCanvasPixelRatio(currentDeviceTier()))
     const w = window.innerWidth
     const h = window.innerHeight
     cv.width = Math.round(w * dpr)
@@ -59,6 +63,13 @@ export function ScreenWave() {
         if (d > max) max = d
       }
     cv.style.display = 'block'
+    // Спрятанный слой держал буфер во всё окно в памяти видеокарты между
+    // переходами — отдаём его сразу после волны.
+    const hide = () => {
+      cv.style.display = 'none'
+      cv.width = 0
+      cv.height = 0
+    }
     const t0 = performance.now()
     let raf = 0
     const tick = (now: number) => {
@@ -66,19 +77,19 @@ export function ScreenWave() {
       ctx.clearRect(0, 0, w, h)
       let left = 0
       for (let i = 0; i < order.length; i++) {
-        const at = (order[i] / max) * DISSOLVE_MS
+        const at = (order[i] / max) * dissolveMs
         if (t >= at + FLASH_MS) continue
         left++
         ctx.fillStyle = t >= at ? flash : tone
         ctx.fillRect((i % cols) * CELL, Math.floor(i / cols) * CELL, CELL, CELL)
       }
       if (left) raf = requestAnimationFrame(tick)
-      else cv.style.display = 'none'
+      else hide()
     }
     raf = requestAnimationFrame(tick)
     stop.current = () => {
       cancelAnimationFrame(raf)
-      cv.style.display = 'none'
+      hide()
     }
   }
 

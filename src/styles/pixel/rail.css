@@ -67,6 +67,10 @@
 }
 
 .tb-right { display: flex; align-items: center; gap: 8px; margin-left: auto; min-width: 0; }
+/* Слот верхней полосы: магазин и хостинг переносят сюда баланс и действия. */
+.tb-slot:empty { display: none; }
+.tb-slot, .tb-actions { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: nowrap; }
+.tb-actions.sh-wallet2 { flex-wrap: nowrap; }
 .tb-icon {
   display: grid;
   place-items: center;

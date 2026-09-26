@@ -1,5 +1,6 @@
 import { loadMine3d } from './mine3d'
 import { textureSource } from './textureSource'
+import { gpuLite } from './gpuLite'
 
 export const BODY_W = 300
 export const BODY_H = 480
@@ -35,6 +36,8 @@ async function ensureEngine(): Promise<any> {
     engine = null
   }
   if (engine) return engine
+  // Лёгкая графика после сбоя видеокарты: превью рисуют плоские заглушки.
+  if (gpuLite()) throw new Error('лёгкая графика: 3D-превью выключено')
   if (engineFailedAt && Date.now() - engineFailedAt < ENGINE_RETRY_MS) throw new Error('3D-превью недоступно')
   try {
     const m3d = await loadMine3d()

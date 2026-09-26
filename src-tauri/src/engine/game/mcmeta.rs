@@ -60,14 +60,15 @@ pub(crate) fn cp_put(cp: &mut Vec<(String, PathBuf)>, rel: &str, path: PathBuf) 
 }
 
 pub(crate) fn maven_path(coord: &str) -> String {
-    // group:artifact:version[:classifier] -> group/artifact/version/artifact-version[-classifier].jar
+    // group:artifact:version[:classifier][@ext] -> group/artifact/version/artifact-version[-classifier].ext
     // `coord` comes from remote JSON, so malformed names must not panic.
+    let (coord, ext) = coord.split_once('@').unwrap_or((coord, "jar"));
     let parts: Vec<&str> = coord.split(':').collect();
     let g = parts.first().map(|s| s.replace('.', "/")).unwrap_or_default();
     let a = parts.get(1).copied().unwrap_or("");
     let v = parts.get(2).copied().unwrap_or("");
     let cls = parts.get(3).map(|c| format!("-{}", c)).unwrap_or_default();
-    format!("{}/{}/{}/{}-{}{}.jar", g, a, v, a, v, cls)
+    format!("{}/{}/{}/{}-{}{}.{}", g, a, v, a, v, cls, ext)
 }
 
 /// Vanilla offline player UUID: version 3 UUID of md5("OfflinePlayer:" + name).

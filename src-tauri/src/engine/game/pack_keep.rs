@@ -75,12 +75,14 @@ fn read_shipped(pdir: &Path) -> Option<HashSet<String>> {
 
 /// Paths inside the pack folder that belong to the player. Without a record of
 /// what the pack shipped (installed before it was kept) only the well-known
-/// player folders are kept.
+/// player folders are kept. Launcher service files are never the player's: they
+/// describe the mods of the version they were written for, and «Починить» would
+/// download that version's mods into the next one.
 pub fn player_entries(pdir: &Path) -> Vec<String> {
     let shipped = read_shipped(pdir);
     let mut out = Vec::new();
     for name in names_in(pdir) {
-        if NEVER_KEEP.contains(&name.as_str()) || name == PACK_LAUNCH_FILE {
+        if NEVER_KEEP.contains(&name.as_str()) || name == PACK_LAUNCH_FILE || is_launcher_service_file(&name) {
             continue;
         }
         if PER_ENTRY.contains(&name.as_str()) {
@@ -173,6 +175,92 @@ pub fn restore_player_files(pdir: &Path, slug: &str) {
     let _ = std::fs::remove_dir(&root);
 }
 
+/// What the player made or chose in the game: worlds, screenshots, schematics,
+/// game settings and the server list. On an update their copy beats the one the
+/// next version ships.
+fn player_made(rel: &str) -> bool {
+    ALWAYS_KEEP.contains(&rel) && !PER_ENTRY.contains(&rel)
+}
+
+/// Copies the player's files from the installed version of a pack into the
+/// next version, unpacked beside it. Copies, not moves: until the next version
+/// takes the old one's place, the old one stays whole, so a failure anywhere
+/// before that leaves the player exactly what they had.
+///
+/// The player's own things win a clash, folders entry by entry, so a world the
+/// next version adds still arrives. Everything else the player or the game
+/// added yields to what the next version ships, since a repaired config must
+/// not be put back to the broken one, and the player's copy goes to the keep
+/// folder instead of the bin.
+pub fn carry_player_files(from: &Path, to: &Path, slug: &str) -> Result<usize, String> {
+    carry_into(from, to, &keep_root(slug)?)
+}
+
+fn carry_into(from: &Path, to: &Path, keep: &Path) -> Result<usize, String> {
+    let entries = player_entries(from);
+    for rel in &entries {
+        let src = from.join(rel);
+        let dst = to.join(rel);
+        let real_dir = std::fs::symlink_metadata(&src).is_ok_and(|m| m.is_dir());
+        let res = if player_made(rel) && real_dir {
+            replace_each(&src, &dst)
+        } else if player_made(rel) {
+            replace_path(&src, &dst)
+        } else if dst.exists() {
+            copy_path(&src, &free_target(keep.join(rel)))
+        } else {
+            copy_path(&src, &dst)
+        };
+        res.map_err(|e| format!("не удалось перенести «{}»: {}", rel, e))?;
+    }
+    Ok(entries.len())
+}
+
+/// A link is refused rather than skipped: the new version would silently come
+/// without the world behind it, and copying through it could pull in any
+/// folder on the disk.
+fn copy_path(from: &Path, to: &Path) -> std::io::Result<()> {
+    let meta = std::fs::symlink_metadata(from)?;
+    if meta.file_type().is_symlink() {
+        return Err(std::io::Error::other(
+            "это ссылка на другую папку — перенеси её содержимое в сборку вручную и обнови снова",
+        ));
+    }
+    if let Some(parent) = to.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    if meta.is_dir() {
+        std::fs::create_dir_all(to)?;
+        copy_dir_all(from, to)
+    } else {
+        copy_replacing(from, to).map(|_| ())
+    }
+}
+
+/// The player's entry replaces the version's one whole: a world merged file by
+/// file with another world is neither of them.
+fn replace_path(from: &Path, to: &Path) -> std::io::Result<()> {
+    if let Ok(meta) = std::fs::symlink_metadata(to) {
+        if meta.is_dir() {
+            std::fs::remove_dir_all(to)?;
+        } else if from.is_dir() {
+            std::fs::remove_file(to)?;
+        }
+    }
+    copy_path(from, to)
+}
+
+fn replace_each(from: &Path, to: &Path) -> std::io::Result<()> {
+    if to.is_file() {
+        std::fs::remove_file(to)?;
+    }
+    std::fs::create_dir_all(to)?;
+    for name in names_in(from) {
+        replace_path(&from.join(&name), &to.join(&name))?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -209,6 +297,8 @@ mod tests {
             "journeymap/data.bin",
             "logs/latest.log",
             "mods/stolen.jar",
+            "millida-content.json",
+            "millida-local-meta.json",
         ] {
             touch(&dir.join(f));
         }
@@ -220,7 +310,94 @@ mod tests {
         for never in ["libraries", "mods", "minecraft.jar", "millida-args.txt", "millida-pack-launch.json", "resourcepacks/Arcania.zip", "config", "logs"] {
             assert!(!kept.contains(never), "«{}» — это сборка или ключ запуска, с игроком он уйти не может", never);
         }
+        for service in ["millida-content.json", "millida-local-meta.json"] {
+            assert!(
+                !kept.contains(service),
+                "«{}» появился после установки, но это запись лаунчера о модах этой версии: в другой версии «Починить» скачал бы по ней старые моды",
+                service
+            );
+        }
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Installed version and next version -> what the player finds after the
+    /// update. Keeping too little costs a world or the player's settings;
+    /// keeping too much puts the broken version's config back over the repaired
+    /// one.
+    #[test]
+    fn an_update_brings_the_players_files_and_keeps_the_new_version() {
+        let base = std::env::temp_dir().join(format!("millida-pack-carry-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let (old, new, keep) = (base.join("old"), base.join("new"), base.join("keep"));
+        fn put(root: &Path, files: &[(&str, &str)]) {
+            for (rel, body) in files {
+                let p = root.join(rel);
+                std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+                std::fs::write(p, body).unwrap();
+            }
+        }
+        put(&old, &[
+            ("mods/a.jar", "old"),
+            ("config/a.toml", "broken"),
+            ("options.txt", "pack"),
+            ("resourcepacks/Pack.zip", "old"),
+            ("saves/Island/level.dat", "pack"),
+        ]);
+        record_shipped(&old).unwrap();
+        put(&old, &[
+            ("options.txt", "player"),
+            ("saves/Island/level.dat", "played"),
+            ("saves/Mine/level.dat", "player"),
+            ("screenshots/1.png", "player"),
+            ("resourcepacks/Faithful.zip", "player"),
+            ("journeymap/data.bin", "player"),
+            ("kubejs/a.js", "player"),
+            ("millida-content.json", "old record"),
+            ("logs/latest.log", "old"),
+        ]);
+        put(&new, &[
+            ("mods/a.jar", "new"),
+            ("config/a.toml", "fixed"),
+            ("options.txt", "pack"),
+            ("resourcepacks/Pack.zip", "new"),
+            ("saves/Island/level.dat", "pack"),
+            ("saves/Tutorial/level.dat", "pack"),
+            ("kubejs/a.js", "new"),
+        ]);
+        record_shipped(&new).unwrap();
+
+        carry_into(&old, &new, &keep).expect("перенос обычных файлов игрока не должен падать");
+
+        let cases: &[(&str, Option<&str>, &str)] = &[
+            ("options.txt", Some("player"), "настройки игры принадлежат игроку, даже если новая версия везёт свои"),
+            ("saves/Island/level.dat", Some("played"), "сыгранный мир не заменяется чистой копией из сборки"),
+            ("saves/Mine/level.dat", Some("player"), "свой мир игрока переезжает"),
+            ("saves/Tutorial/level.dat", Some("pack"), "мир, который принесла новая версия, остаётся рядом с мирами игрока"),
+            ("screenshots/1.png", Some("player"), "скриншоты переезжают"),
+            ("resourcepacks/Faithful.zip", Some("player"), "свой ресурспак игрока переезжает"),
+            ("resourcepacks/Pack.zip", Some("new"), "ресурспак самой сборки берётся из новой версии"),
+            ("journeymap/data.bin", Some("player"), "добавленное игроком переезжает, если новой версии там нечего положить"),
+            ("kubejs/a.js", Some("new"), "то, что новая версия везёт сама, не перетирается старой копией"),
+            ("config/a.toml", Some("fixed"), "починенный конфиг новой версии не откатывается на сломанный"),
+            ("mods/a.jar", Some("new"), "моды берутся только из новой версии"),
+            ("millida-content.json", None, "запись о модах старой версии не едет в новую"),
+            ("logs/latest.log", None, "логи старой версии не переезжают"),
+        ];
+        for (rel, want, why) in cases {
+            let got = std::fs::read_to_string(new.join(rel)).ok();
+            assert_eq!(got.as_deref(), *want, "«{rel}»: {why}");
+        }
+        assert_eq!(
+            std::fs::read_to_string(old.join("saves/Island/level.dat")).ok().as_deref(),
+            Some("played"),
+            "до подмены старая версия обязана остаться целой: при сбое игрок играет в то, что было"
+        );
+        assert_eq!(
+            std::fs::read_to_string(keep.join("kubejs/a.js")).ok().as_deref(),
+            Some("player"),
+            "копия игрока, уступившая новой версии, откладывается, а не выбрасывается"
+        );
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     /// Installed before the record existed: the well-known player folders are
