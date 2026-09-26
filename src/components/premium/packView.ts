@@ -63,21 +63,42 @@ export function modsFromText(blocks: DescBlock[] | null | undefined): number | n
   return null
 }
 
+const words = (s: string) => s.split(/\s+/).filter(Boolean).length
+const capital = (s: string) => s.charAt(0).toLocaleUpperCase('ru') + s.slice(1)
+
+function benefitOf(item: string): string | null {
+  const at = item.search(/\s[—–]\s/)
+  if (at < 0) return null
+  const tail = item.slice(at + 3).trim().replace(/[.;]+$/, '')
+  if (!tail) return null
+  if (words(tail) <= 5) return capital(tail)
+  const clause = tail.split(/,\s+/)[0]!.trim()
+  return clause && words(clause) <= 5 ? capital(clause) : null
+}
+
+function headOf(item: string): string | null {
+  const head = item.split(/\s*[:—–]\s*|,\s+/)[0]!.trim()
+  return head && words(head) <= 4 ? head : null
+}
+
 /**
- * Плюсы сборки коротко — из списка «Что внутри» её же описания: берём голову
- * пункта до двоеточия, тире или запятой («Пять классов: паладин…» → «Пять
- * классов»). Длиннее четырёх слов — пропускаем: это уже не значок, а абзац.
+ * Плюсы сборки коротко — из списка «Что внутри» её же описания. Сначала польза
+ * из пунктов «Моды — что дают»: игроку важнее «Магия», чем название мода.
+ * Не хватило — добираем головами пунктов. Длинное пропускаем: это уже абзац.
  */
 export function packPluses(blocks: DescBlock[] | null | undefined, max = 4): string[] {
   const list = blocks || []
   const at = list.findIndex((b) => b.type === 'heading' && /внутри|особенност|что есть/i.test(b.text))
   const src = (at >= 0 ? list.slice(at + 1) : list).find((b) => b.type === 'list')
   if (!src || src.type !== 'list') return []
+  const benefits = src.items.map(benefitOf)
+  const heads = src.items.map((item, i) => (benefits[i] ? null : headOf(item)))
   const out: string[] = []
-  for (const item of src.items) {
-    const head = item.split(/\s*[:—–]\s*|,\s+/)[0]!.trim()
-    if (!head || head.split(/\s+/).length > 4) continue
-    out.push(head)
+  const seen = new Set<string>()
+  for (const x of [...benefits, ...heads]) {
+    if (!x || seen.has(x.toLowerCase())) continue
+    seen.add(x.toLowerCase())
+    out.push(x)
     if (out.length >= max) break
   }
   return out

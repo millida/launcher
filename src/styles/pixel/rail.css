@@ -98,23 +98,6 @@
 .tb-rubies svg { width: 18px; height: 18px; color: #ff5a8a; }
 button.tb-rubies:hover { background-color: var(--m-inset); }
 
-.tb-dl {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 38px;
-  padding: 0 4px 0 12px;
-  font: 600 12.5px/1 var(--m-font);
-  color: var(--m-fg);
-  background: var(--m-surface-2);
-  clip-path: var(--px-5);
-}
-.tb-dl-name { max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tb-dl-pct { color: var(--m-accent); font-weight: 800; }
-.tb-dl-track { width: 80px; height: 6px; background: var(--m-inset); }
-.tb-dl-track > span { display: block; height: 100%; background: var(--m-accent); transition: width 0.3s linear; }
-.tb-dl .tb-icon { width: 30px; height: 30px; background: none; }
-
 .topbar .account {
   display: flex;
   align-items: center;
@@ -138,9 +121,9 @@ button.tb-rubies:hover { background-color: var(--m-inset); }
 }
 
 /* Плашки в углу — подложка с гранями общим слоем рамки. */
-:is(.tb-icon, .tb-rubies, .tb-dl, .topbar .account) { --px-n: 5px; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; }
+:is(.tb-icon, .tb-rubies, .topbar .account) { --px-n: 5px; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; }
 /* В лобби угол лежит на фоне — плашки плотнее, чтобы не тонуть в обоях. */
-.topbar.is-lobby :is(.tb-icon, .tb-rubies, .tb-dl, .account) { background-color: var(--m-surface); height: 42px; }
+.topbar.is-lobby :is(.tb-icon, .tb-rubies, .account) { background-color: var(--m-surface); height: 42px; }
 .topbar.is-lobby .tb-icon { width: 42px; }
 .topbar.is-lobby .tb-icon svg { width: 20px; height: 20px; }
 .topbar.is-lobby .tb-icon:hover,
@@ -149,8 +132,6 @@ button.tb-rubies:hover { background-color: var(--m-inset); }
 /* Аватар внутри плашки аккаунта — тем же срезом 5px, что плашка: кольцо фона вокруг ровное и на ступеньке. */
 :root:root .topbar .account .ava { --px-n: 5px; clip-path: var(--px-5); }
 .topbar.is-lobby .tb-rubies { font-size: 15px; }
-
-.tb-dl .tb-icon { --px-ft: transparent; --px-fb: transparent; }
 
 /* Контент под полосой — со своими полями, как раньше рядом с полосой. */
 :root:root .app > .content { padding: 14px 16px 12px; }

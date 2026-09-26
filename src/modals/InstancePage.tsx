@@ -833,25 +833,29 @@ export function InstancePage() {
               >
                 <Icon id="i-link" /> Поделиться
               </button>
-              <button
-                className={'btn lg ' + (thisRunning ? 'running' : 'primary')}
-                id="bsPlay"
-                onClick={() => {
-                  close()
-                  if (hasTauri()) realLaunch(profile!)
-                  else startPrelaunch(profile!)
-                }}
-              >
-                {thisRunning ? (
-                  <>
-                    <span className="run-dot"></span> Запущено
-                  </>
-                ) : (
-                  <>
-                    <Icon id="i-play" /> Играть
-                  </>
-                )}
-              </button>
+              {thisRunning ? (
+                <button
+                  className="btn lg stop"
+                  id="bsPlay"
+                  data-track="stop_game"
+                  disabled={gameStopping}
+                  onClick={() => stopRunningGame(profile!)}
+                >
+                  <Icon id="i-power" /> {gameStopping ? 'Останавливаем…' : 'Остановить'}
+                </button>
+              ) : (
+                <button
+                  className="btn lg primary"
+                  id="bsPlay"
+                  onClick={() => {
+                    close()
+                    if (hasTauri()) realLaunch(profile!)
+                    else startPrelaunch(profile!)
+                  }}
+                >
+                  <Icon id="i-play" /> Играть
+                </button>
+              )}
               {/* «⋯» — те же изменения, что на карточке «Мои сборки» (24.09.2026, 18:35). */}
               <span className="inst-more-wrap">
                 <button
@@ -884,15 +888,6 @@ export function InstancePage() {
                   </span>
                 ) : null}
               </span>
-              {thisRunning ? (
-                <button
-                  className="btn lg danger"
-                  disabled={gameStopping}
-                  onClick={() => stopRunningGame(profile!)}
-                >
-                  <Icon id="i-power" /> {gameStopping ? 'Останавливаем…' : 'Остановить'}
-                </button>
-              ) : null}
             </div>
           </div>
         </div>

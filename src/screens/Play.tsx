@@ -17,7 +17,8 @@ import { playMode } from '../lib/lobbyPlay'
 import { useWallpaper } from '../state/wallpaper'
 import { convertFileSrc, pickWallpaper } from '../ipc/commands'
 import { setScreen, showToast, useUi } from '../state/ui'
-import { PL_STAGES, cancelPrelaunch } from '../lib/launch'
+import { cancelPrelaunch } from '../lib/launch'
+import { playButtonState } from '../lib/launchView'
 import { renderLive } from '../lib/renderGate'
 import { playTier } from '../lib/playTiers'
 import { useModUpdates } from '../state/modUpdates'
@@ -107,7 +108,7 @@ export function Play({ on }: { on: boolean }) {
   const mode: LobbyMode | null =
     picked && (picked.kind !== 'build' || profiles.some((p) => p.name === picked.name)) ? picked : null
   const sel = mode && mode.kind === 'build' ? profiles.find((p) => p.name === mode.name) || null : null
-  const selRunning = !!sel && running.includes(sel.name)
+  const btn = playButtonState({ modeKind: mode ? mode.kind : null, selected: sel ? sel.name : null, running, prelaunch })
   const selHours = sel ? hoursOf(sel.name) : null
   const liveServer = mode && mode.kind === 'server' ? lobbyServers.find((s) => s.slug === mode.slug) || null : null
 
@@ -225,14 +226,7 @@ export function Play({ on }: { on: boolean }) {
             режима и «Играть» одной высоты, как в Brawl Stars. */}
         <div className="lobby-side-top">
           <span />
-          <span className="lobby-tools">
-            {running.length ? (
-              <button className="lobby-tool stop" id="stopBtn" data-track="stop_game" disabled={gameStopping} onClick={() => stopRunningGame()}>
-                <Icon id="i-power" />
-                {gameStopping ? 'Останавливаем…' : 'Остановить'}
-              </button>
-            ) : null}
-          </span>
+          <span className="lobby-tools" />
         </div>
         <div className="lobby-row">
           {/* OneBlock в лобби убран (владелец 24.09.2026, 07:26: «пока убираем»). */}
@@ -267,64 +261,82 @@ export function Play({ on }: { on: boolean }) {
           </button>
           {/* Кнопка запуска стоит на постоянном месте и видна на первом кадре:
               наведение её не вызывает и не прячет (антипаттерн Modrinth). */}
-          <button
-            className={'btn lg ' + (selRunning ? 'running' : prelaunch.open ? 'primary loading' : 'primary')}
-            id="playBtn"
-            data-track="play"
-            data-src="lobby_play"
-            data-kind={mode?.kind}
-            data-id={modeId}
-            data-private={mode?.kind === 'build' ? '' : undefined}
-            data-sound={mode ? undefined : 'open'}
-            onClick={() => {
-              // Второе нажатие во время подготовки — отмена запуска
-              // (владелец 24.09.2026, 17:26).
-              if (prelaunch.open) {
-                cancelPrelaunch()
-                return
-              }
-              if (!mode) {
-                setScreen('playhub')
-                return
-              }
-              void playMode(mode, profiles)
-            }}
-          >
-            <span className="fill" style={prelaunch.open ? { width: Math.round(prelaunch.pct) + '%' } : undefined}></span>
-            <span className="lbl">
-              {selRunning ? (
-                <span className="run-dot"></span>
-              ) : prelaunch.open ? (
-                <span className="spin"></span>
-              ) : (
-                <Icon id="i-play" />
-              )}
-              <span id="playLbl">
-                {selRunning ? (
-                  'Запущено'
-                ) : prelaunch.open ? (
-                  <>
-                    <span className="play-stage">{(PL_STAGES[prelaunch.stage] || 'Запуск') + ' · нажми — отмена'}</span>
-                    {Math.round(prelaunch.pct) + '%'}
-                  </>
-                ) : (
-                  <>
-                    Играть
-                    {/* Сколько наиграно через лаунчер — видно при каждом заходе
-                        (владелец 24.09.2026, 13:31). */}
-                    {playStats.total_seconds >= 3600 ? (
-                      <span className="play-hours">
-                        {(() => {
-                          const h = Math.floor(playStats.total_seconds / 3600)
-                          return h + ' ' + plural(h, 'час', 'часа', 'часов') + ' в игре'
-                        })()}
-                      </span>
-                    ) : null}
-                  </>
-                )}
+          {btn.kind === 'stop' ? (
+            <button
+              className="btn lg stop"
+              id="playBtn"
+              data-track="stop_game"
+              data-kind={mode?.kind}
+              data-id={modeId}
+              data-private={mode?.kind === 'build' ? '' : undefined}
+              disabled={gameStopping}
+              onClick={() => stopRunningGame(btn.profile)}
+            >
+              <span className="lbl">
+                <Icon id="i-power" />
+                <span id="playLbl">{gameStopping ? 'Останавливаем…' : 'Остановить'}</span>
               </span>
-            </span>
-          </button>
+            </button>
+          ) : (
+            <button
+              className={'btn lg primary' + (btn.kind === 'installing' ? ' loading' : '')}
+              id="playBtn"
+              data-track="play"
+              data-src="lobby_play"
+              data-kind={mode?.kind}
+              data-id={modeId}
+              data-private={mode?.kind === 'build' ? '' : undefined}
+              data-sound={mode ? undefined : 'open'}
+              onClick={() => {
+                // Второе нажатие во время подготовки — отмена запуска
+                // (владелец 24.09.2026, 17:26).
+                if (btn.kind === 'installing') {
+                  cancelPrelaunch()
+                  return
+                }
+                if (!mode) {
+                  setScreen('playhub')
+                  return
+                }
+                void playMode(mode, profiles)
+              }}
+            >
+              <span className="fill" style={btn.kind === 'installing' ? { width: btn.pct + '%' } : undefined}></span>
+              <span className="lbl">
+                {btn.kind === 'installing' ? null : <Icon id="i-play" />}
+                <span id="playLbl">
+                  {btn.kind === 'installing' ? (
+                    <>
+                      <span className="play-stage">{btn.stage}</span>
+                      <span className="play-pct">
+                        <span className="spin" aria-hidden="true"></span>
+                        {btn.pct + '%'}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      Играть
+                      {/* Сколько наиграно через лаунчер — видно при каждом заходе
+                          (владелец 24.09.2026, 13:31). */}
+                      {playStats.total_seconds >= 3600 ? (
+                        <span className="play-hours">
+                          {(() => {
+                            const h = Math.floor(playStats.total_seconds / 3600)
+                            return h + ' ' + plural(h, 'час', 'часа', 'часов') + ' в игре'
+                          })()}
+                        </span>
+                      ) : null}
+                    </>
+                  )}
+                </span>
+              </span>
+            </button>
+          )}
+          {btn.kind === 'installing' ? (
+            <button className="play-cancel" aria-label="Отменить запуск" data-track="cancel_launch" onClick={cancelPrelaunch}>
+              <Icon id="i-x" />
+            </button>
+          ) : null}
         </div>
       </div>
         <div className={'wp-pop' + (wp.popOpen ? ' open' : '')} id="wpPop">

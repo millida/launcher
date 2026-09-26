@@ -2,7 +2,7 @@ import { Suspense, lazy, useEffect } from 'react'
 import { SvgSprite } from './components/SvgSprite'
 import { Titlebar } from './components/Titlebar'
 import { Sidebar } from './components/Sidebar'
-import { Toast } from './components/Toast'
+import { LaunchToast, Toast } from './components/Toast'
 import { RewardHost } from './components/reward/RewardReveal'
 import { initChatScreen } from './state/chatScreen'
 import { Login } from './screens/Login'
@@ -768,6 +768,7 @@ export function App() {
         <Tour />
         <Installs />
         <PackDrop />
+        <LaunchToast />
         <Toast />
         <RewardHost />
         <PixelTip />

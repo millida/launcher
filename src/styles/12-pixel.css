@@ -168,7 +168,7 @@
   /* premium.css */
   .pm-card, .pm-card.is-active, .pm-tile, .pm-plan-card, .pm-buy,
   /* rail.css */
-  .rail-inner, .sidebar.rail .rail-inner, .tb-back, .tb-icon, .tb-rubies, .tb-dl, .topbar .account,
+  .rail-inner, .sidebar.rail .rail-inner, .tb-back, .tb-icon, .tb-rubies, .topbar .account,
   /* settings.css */
   .s2-plate, .s2-hero, .s2-sw, .s2-sw.on, .s2-sw.custom, .s2-wp-tile.add, .s2-dot, .s2-dot.on, .s2-kbd,
   /* shell.css */
@@ -272,6 +272,16 @@
   --px-ft: rgba(255, 255, 255, 0.1); --px-ft-w: 3px; --px-fb: rgba(0, 0, 0, 0.26); --px-fb-w: 5px;
 }
 :root:root .btn.danger:hover { background-color: var(--m-danger); color: #fff; }
+/* «Остановить» на месте «Играть»: та же залитая кнопка с объёмом, цвет — danger. */
+:root:root .btn.stop {
+  background-color: var(--m-danger);
+  color: var(--m-accent-fg);
+  box-shadow: none;
+  --px-ol: var(--px-btn-ol); --px-ft: var(--px-btn-t); --px-ft-w: 3px; --px-fb: var(--px-btn-b); --px-fb-w: 5px; --px-fl: var(--px-btn-l); --px-fr: var(--px-btn-r);
+  font-weight: 800;
+  padding-bottom: 3px;
+}
+:root:root .btn.stop svg { color: var(--m-accent-fg); }
 :root:root .btn.running {
   box-shadow: none;
   --px-ol: var(--m-accent); --px-fb: rgba(0, 0, 0, 0.22); --px-fb-w: 5px;
@@ -282,14 +292,16 @@
 }
 @media (hover: hover) and (pointer: fine) {
   :root:root .btn.primary:hover:not(:disabled),
-  :root:root .btn.secondary:hover:not(:disabled) {
+  :root:root .btn.secondary:hover:not(:disabled),
+  :root:root .btn.stop:hover:not(:disabled) {
     transform: translateY(-1px);
     filter: brightness(1.07);
   }
 }
 /* Нажатие вдавливает кнопку: грани меняются местами. */
 :root:root .btn.primary:active:not(:disabled),
-:root:root .btn.secondary:active:not(:disabled) {
+:root:root .btn.secondary:active:not(:disabled),
+:root:root .btn.stop:active:not(:disabled) {
   transform: translateY(2px);
   --px-ol: rgba(0, 0, 0, 0.2); --px-ft: rgba(0, 0, 0, 0.22); --px-ft-w: 3px;
   --px-fb: rgba(0, 0, 0, 0.22); --px-fb-w: 2px; --px-fl: transparent; --px-fr: transparent;

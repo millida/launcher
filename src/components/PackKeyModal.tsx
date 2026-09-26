@@ -180,10 +180,11 @@ export function PackKeyModal({ slug, title, onClose, onUnlocked }: Props) {
           ) : null}
 
           {plans.length && offer ? (
-            <div className="pkb-buy">
+            <div className="pkb-plans">
               <PlanButtons
                 pack={offer}
                 plans={plans}
+                wrap="pkb-plan"
                 onOwned={() => {
                   onClose()
                   onUnlocked()

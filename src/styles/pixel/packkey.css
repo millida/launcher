@@ -54,19 +54,23 @@
 .modal.pkb .pkb-head h3 { margin: 0; font: 800 30px/1.05 var(--m-font); letter-spacing: -0.02em; color: var(--m-fg); }
 .pkb-line { margin: 0; font-size: 14px; line-height: 1.4; color: var(--m-fg-muted); }
 
-.pkb-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+.pkb-body { container-type: inline-size; }
+.pkb-facts { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: clamp(4px, 1.2cqi, 8px); }
 .pkb-fact {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
   min-height: 70px;
-  padding: 12px 14px;
+  padding: 12px clamp(8px, 2cqi, 14px);
   background: var(--m-surface);
   --px-n: 5px;
   clip-path: var(--px-5);
 }
-.pkb-fact b { font: 800 26px/1 var(--m-font); letter-spacing: -0.02em; color: var(--m-fg); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.pkb-fact span { font-size: 12.5px; color: var(--m-fg-muted); }
+.pkb-fact b,
+.pkb-fact span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.pkb-fact b { font: 800 clamp(16px, 3.9cqi, 26px)/1 var(--m-font); letter-spacing: -0.02em; color: var(--m-fg); font-variant-numeric: tabular-nums; }
+.pkb-fact span { font-size: clamp(11px, 1.9cqi, 12.5px); color: var(--m-fg-muted); }
 
 .pkb-plus { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; margin: 0; padding: 0; list-style: none; }
 .pkb-plus li { display: flex; align-items: center; gap: 10px; min-width: 0; font: 650 14px/1.25 var(--m-font); color: var(--m-fg); }
@@ -86,6 +90,11 @@
 .btn.pkb-cta { min-width: 180px; justify-content: center; }
 .pkb-buy:not(:has(.pkb-price)) .btn.pkb-cta { flex: 1; }
 
+.pkb-plans { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.pkb-plan { display: flex; min-width: 0; }
+.pkb-plan:only-child { grid-column: 1 / -1; }
+.pkb-plan > .btn { flex: 1; min-width: 0; height: 48px; padding: 0 18px 3px; font-size: 14px; }
+
 .pkb-key { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px 14px; background: var(--m-inset); --px-n: 5px; clip-path: var(--px-5); }
 .pkb-key-why { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--m-fg-subtle); }
 .pkb-key-why svg { width: 14px; height: 14px; }
@@ -96,5 +105,6 @@
 @media (max-width: 640px) {
   .pkb-art { height: 180px; }
   .pkb-plus { grid-template-columns: minmax(0, 1fr); }
+  .pkb-plans { grid-template-columns: minmax(0, 1fr); gap: 10px; }
   .pkb-key-row { flex-direction: column; }
 }

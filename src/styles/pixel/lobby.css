@@ -205,7 +205,6 @@
 }
 .lobby-tool:hover:not(:disabled) { color: var(--m-fg); background: var(--m-surface-2); }
 .lobby-tool.on { color: var(--m-accent); }
-.lobby-tool.stop { color: var(--m-danger, #ff6b6b); }
 .lobby-tool svg { width: 16px; height: 16px; }
 
 /* Плашка режима и «Играть» — один ряд, одна высота. Кнопка — самое громкое
@@ -357,6 +356,26 @@
 .lobby-row #playBtn .play-stage { font-size: 12px; font-weight: 600; color: var(--m-fg-muted); white-space: nowrap; }
 .lobby-row #playBtn.loading .fill { background: var(--m-accent); opacity: 0.35; }
 .lobby-row #playBtn .lbl { position: relative; z-index: 1; }
+.lobby-row #playBtn .play-pct { display: inline-flex; align-items: center; gap: 10px; line-height: 1; }
+.lobby-row #playBtn .play-pct .spin { width: 16px; height: 16px; flex: none; }
+
+/* Отмена подготовки — отдельный крестик в углу «Играть», а не подпись на
+   самой кнопке: кнопка вложенной кнопки не допускает, поэтому крестик стоит
+   рядом, поверх её угла. */
+.lobby-row { position: relative; }
+.play-cancel {
+  position: absolute; z-index: 2; top: 14px; right: 14px;
+  display: grid; place-items: center; width: 28px; height: 28px;
+  color: var(--m-fg-muted); background: var(--m-surface);
+  --px-n: 5px; clip-path: var(--px-5);
+  --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px;
+  transition: color var(--m-t-fast), background-color var(--m-t-fast), transform 90ms steps(2, end);
+}
+.play-cancel svg { width: 14px; height: 14px; }
+@media (hover: hover) and (pointer: fine) {
+  .play-cancel:hover { color: var(--m-fg); background-color: var(--m-surface-2); }
+}
+.play-cancel:active { transform: translateY(1px); }
 
 /* Левый край столбиком, как в Brawl Stars: сундук → Магазин → Свой сервер
    (плитки — HubTile, свой стиль в hubtile.css). */
@@ -627,6 +646,9 @@
 :root .lobby-row .lobby-mode { flex: 0 0 500px; width: 500px; }
 :root .lobby-row #playBtn { flex: 0 0 290px; width: 290px; min-width: 290px; font-size: 34px; }
 :root .lobby-row #playBtn svg { width: 34px; height: 34px; }
+/* «Остановить» длиннее «Играть» — тот же размер кнопки, шрифт мельче. */
+:root .lobby-row #playBtn.stop { font-size: 24px; padding: 0 14px 3px; }
+:root .lobby-row #playBtn.stop svg { width: 26px; height: 26px; }
 :root .lobby-row .lobby-mode-card { grid-template-columns: 138px minmax(0, 1fr); min-height: 120px; gap: 16px; }
 :root .lobby-row .lobby-mode-card .lobby-mode-art { width: 138px; height: 104px; }
 :root .lobby-row .lobby-mode-card .lobby-mode-body b { font-size: 30px; }
@@ -641,6 +663,7 @@
 @media (max-width: 1100px) {
   :root .lobby-row .lobby-mode { flex-basis: 400px; width: 400px; }
   :root .lobby-row #playBtn { flex-basis: 230px; width: 230px; min-width: 230px; font-size: 28px; }
+  :root .lobby-row #playBtn.stop { font-size: 20px; }
   :root .lobby-row .lobby-mode-card { grid-template-columns: 110px minmax(0, 1fr); }
   :root .lobby-row .lobby-mode-card .lobby-mode-art { width: 110px; height: 88px; }
   :root .lobby-row .lobby-mode-card .lobby-mode-body b { font-size: 24px; }

@@ -19,7 +19,6 @@ import { useUi } from '../state/ui'
 import type { ScreenId } from '../state/ui'
 import { useHasMillida } from '../state/auth'
 import { usePlus } from '../state/plus'
-import { PL_STAGES, cancelPrelaunch } from '../lib/launch'
 import { preloadScreen } from '../screens/registry'
 
 /* Навигация как в Brawl Stars: у каждого раздела ровно один вход (владелец
@@ -112,7 +111,6 @@ function MsgPx() {
 export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
   const screen = useUi((s) => s.screen)
   const topBack = useTopBar((s) => s.back)
-  const prelaunch = useUi((s) => s.prelaunch)
   const friends = useFriends((s) => s.friends)
   const reqIn = useFriends((s) => s.reqIn)
   const rooms = useRooms((s) => s.rooms)
@@ -148,23 +146,6 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
 
   const lobby = screen === 'play'
 
-  const dl = prelaunch.open ? (
-    <div className="tb-dl" role="status">
-      <span className="spin"></span>
-      <span className="tb-dl-name">{PL_STAGES[prelaunch.stage] || prelaunch.msg || prelaunch.sub}</span>
-      <span className="tb-dl-pct" id="dlPct">
-        {Math.round(prelaunch.pct)}%
-      </span>
-      <span className="tb-dl-track">
-        <span id="dlFill" style={{ width: prelaunch.pct + '%' }}></span>
-      </span>
-      <button className="tb-icon" aria-label="Отменить запуск" data-track="cancel_launch" onClick={cancelPrelaunch}>
-        <Icon id="i-x" />
-      </button>
-    </div>
-  ) : null
-
-
   if (lobby) {
     const onlineList = friends.filter((f) => f.online)
     const online = onlineList.length
@@ -177,7 +158,6 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
          настройки. Без общей плашки-блока. */
       <>
       <header className="topbar is-lobby">
-        {dl}
         <div className="lb-btns">
           {/* Друзья — первыми, аккаунт за ними: друзей смотрят постоянно,
               аккаунт меняют редко (владелец 24.09.2026, 07:47). Лица тех, кто в сети, внахлёст (как пати в Fortnite):
@@ -303,7 +283,6 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
             </button>
           </span>
         ) : null}
-        {dl}
         {/* Слот верхней полосы: магазин и хостинг ставят сюда баланс и действия,
             на один уровень с «← Лобби» (владелец 25.09.2026: убрать крупный
             заголовок, кошелёк — наверх). Экран заполняет его через TopbarPortal. */}
