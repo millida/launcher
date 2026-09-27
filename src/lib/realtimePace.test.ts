@@ -39,6 +39,7 @@ for (const [name, input, enabled] of grants) {
 // Пинок принимается только из личного канала и только с известной темой.
 const pokes: Array<[string, unknown, unknown, ReturnType<typeof pokeTopic>]> = [
   ['друзья', 'personal:#42', { t: 'friends' }, 'friends'],
+  ['статус друга: сервер шлёт его отдельно от сообщений', 'personal:#42', { t: 'presence' }, 'presence'],
   ['звонки', 'personal:#42', { t: 'calls' }, 'calls'],
   ['счётчики сайта', 'personal:#42', { t: 'inbox' }, 'inbox'],
   ['неизвестная тема', 'personal:#42', { t: 'wallet' }, null],

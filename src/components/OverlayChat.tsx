@@ -165,10 +165,12 @@ export function OverlayChat({
     const t = setInterval(() => {
       if (refreshDue(isRealtimeLive(), last, Date.now())) refresh()
     }, LIST_POLL_MS)
-    const off = onRealtime('friends', refresh)
+    const offFriends = onRealtime('friends', refresh)
+    const offPresence = onRealtime('presence', refresh)
     return () => {
       clearInterval(t)
-      off()
+      offFriends()
+      offPresence()
     }
   }, [])
 

@@ -1,6 +1,6 @@
 import { pollDelayMs } from './pollPace'
 
-export const REALTIME_TOPICS = ['friends', 'calls', 'inbox'] as const
+export const REALTIME_TOPICS = ['friends', 'presence', 'calls', 'inbox'] as const
 export type RealtimeTopic = (typeof REALTIME_TOPICS)[number]
 
 export const REALTIME_HOST = 'api.millida.net'

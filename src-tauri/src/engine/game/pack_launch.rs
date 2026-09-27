@@ -522,6 +522,39 @@ pub async fn pack_launch_gate(slug: &str) -> Result<(), String> {
     }
 }
 
+/// Where a catalogue build remembers whether our card opted it into the Millida mod.
+pub const PACK_MILLIDA_MOD_KEY: &str = "catalogPackMillidaMod";
+
+/// Only a boolean from our card counts: an older API without the field says
+/// nothing, and nothing must not switch a pack's opt-in off.
+pub fn pack_millida_mod_flag(view: &Value) -> Option<bool> {
+    view["millidaMod"].as_bool()
+}
+
+/// The stored value stands in for an unreachable card, so an offline start
+/// keeps what the last online one decided.
+pub fn millida_mod_opt_in(fresh: Option<bool>, settings: &Value) -> bool {
+    fresh.or_else(|| settings[PACK_MILLIDA_MOD_KEY].as_bool()).unwrap_or(false)
+}
+
+/// (opted in now, opted in before) for a catalogue pack about to start.
+pub async fn pack_millida_mod(profile: &str, slug: &str) -> (bool, bool) {
+    let wait = std::time::Duration::from_secs(LAUNCH_GATE_WAIT_SECS);
+    let card = millida_api(format!("/catalog/packs/{}", slug), "GET".into(), None, millida_token());
+    let fresh = match tokio::time::timeout(wait, card).await {
+        Ok(Ok(view)) => pack_millida_mod_flag(&view),
+        _ => None,
+    };
+    let settings = profile_settings(profile);
+    let before = settings[PACK_MILLIDA_MOD_KEY].as_bool().unwrap_or(false);
+    if let Some(on) = fresh.filter(|on| settings[PACK_MILLIDA_MOD_KEY].as_bool() != Some(*on)) {
+        let mut patch = serde_json::Map::new();
+        patch.insert(PACK_MILLIDA_MOD_KEY.into(), Value::Bool(on));
+        merge_settings(profile, patch);
+    }
+    (millida_mod_opt_in(fresh, &settings), before)
+}
+
 fn pid_running(pid: u32) -> bool {
     RUNNING.lock().map(|v| v.iter().any(|(_, id)| *id == pid)).unwrap_or(false)
 }
@@ -638,6 +671,26 @@ mod tests {
         for (settings, want, why) in cases {
             assert_eq!(launch_gate_slug(&settings).as_deref(), want, "{}", why);
         }
+    }
+
+    /// (card answer, stored value) -> does our mod go into the pack.
+    #[test]
+    fn the_mod_opt_in_comes_from_our_card_and_survives_offline() {
+        let cases: [(Option<bool>, Value, bool, &str); 7] = [
+            (Some(true), json!({}), true, "OneBlock card opts in on the first start"),
+            (Some(false), json!({ PACK_MILLIDA_MOD_KEY: true }), false, "a withdrawn opt-in wins over the stored one"),
+            (None, json!({ PACK_MILLIDA_MOD_KEY: true }), true, "offline start keeps the cosmetics the last online one had"),
+            (None, json!({}), false, "no card and nothing stored: a pack is not touched by default"),
+            (None, json!({ PACK_MILLIDA_MOD_KEY: "true" }), false, "the settings file is on the player's disk: only a real boolean counts"),
+            (Some(true), json!({ PACK_MILLIDA_MOD_KEY: false }), true, "a fresh opt-in replaces a stored refusal"),
+            (None, Value::Null, false, "unreadable settings are no opt-in"),
+        ];
+        for (fresh, settings, want, why) in cases {
+            assert_eq!(millida_mod_opt_in(fresh, &settings), want, "{}", why);
+        }
+        assert_eq!(pack_millida_mod_flag(&json!({ "slug": "arcania" })), None, "an older API without the field says nothing");
+        assert_eq!(pack_millida_mod_flag(&json!({ "millidaMod": 1 })), None, "only a boolean from the card counts");
+        assert_eq!(pack_millida_mod_flag(&json!({ "millidaMod": true })), Some(true));
     }
 
     fn spec_json() -> Value {

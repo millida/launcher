@@ -327,6 +327,28 @@ fn remove_mod_from(profile: &str) {
     let _ = keep_only(profile, "");
 }
 
+pub fn remove_millida_mod(profile: &str) {
+    remove_mod_from(profile);
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum OwnMod {
+    Place,
+    Remove,
+    Leave,
+}
+
+/// A catalogue pack that launches by its own description is someone else's
+/// verified build, so our jar goes into it only when our own catalogue card
+/// opted it in. A pack that was opted in and no longer is gets our jar back
+/// out; any other such pack is not touched at all.
+pub fn own_mod_action(catalog_pack: bool, opted_in: bool, opted_in_before: bool, enabled: bool) -> OwnMod {
+    if catalog_pack && !opted_in {
+        return if opted_in_before { OwnMod::Remove } else { OwnMod::Leave };
+    }
+    if enabled { OwnMod::Place } else { OwnMod::Remove }
+}
+
 /// Файл карантина: какая версия мода завалила запуск этой сборки.
 ///
 /// Мод ставится в сборку принудительно — на нём держатся скины, плащи и
@@ -534,7 +556,15 @@ fn read_declared(path: &Path) -> Option<Declared> {
         d.fabric_loader = predicates(&v["depends"]["fabricloader"]);
         return Some(d);
     }
-    let raw = text("META-INF/neoforge.mods.toml").or_else(|| text("META-INF/mods.toml"))?;
+    let Some(raw) = text("META-INF/neoforge.mods.toml").or_else(|| text("META-INF/mods.toml")) else {
+        // Forge 1.7.10-1.12.2 describes a mod only in mcmod.info, and FML does not
+        // enforce the game version written there.
+        let raw = text("mcmod.info")?;
+        let v: Value = serde_json::from_str(&raw).ok()?;
+        let list = v.as_array().or_else(|| v["modList"].as_array())?;
+        d.ids.extend(list.iter().filter_map(|m| m["modid"].as_str().map(str::to_string)));
+        return Some(d);
+    };
     let (mut section, mut mod_id, mut range) = (String::new(), String::new(), String::new());
     let flush = |section: &str, mod_id: &str, range: &str, d: &mut Declared| {
         if !section.starts_with("[[dependencies") {
@@ -986,10 +1016,39 @@ mod tests {
         );
         assert!(jar_fits(&neo, &profile("1.21.1", "neoforge", None)), "1.21.1 → NeoForge 21.1");
         assert!(!jar_fits(&neo, &profile("1.21", "neoforge", None)), "1.21 → NeoForge 21.0, jar просит 21.1");
+        let legacy = jar_with(
+            &dir,
+            "millida-mod-forge-1.7.10-0.1.15.jar",
+            "mcmod.info",
+            r#"[{"modid":"millida","name":"Millida","version":"0.1.15","mcversion":"1.7.10"}]"#,
+        );
+        assert!(
+            jar_fits(&legacy, &profile("1.7.10", "forge", Some("10.13.4.1614"))),
+            "Forge 1.7.10-1.12.2 jars carry only mcmod.info: reading it as broken took the mod out of every such build, OneBlock included"
+        );
         let broken = dir.join("millida-mod-broken.jar");
         std::fs::write(&broken, b"not a zip").unwrap();
         assert!(!jar_fits(&broken, &profile("1.21.1", "neoforge", None)), "битый jar в сборку не идёт");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// (catalogue pack, opted in now, opted in before, player switch) -> what launch does with our jar.
+    #[test]
+    fn own_mod_goes_into_a_catalogue_pack_only_on_our_opt_in() {
+        use OwnMod::*;
+        let cases: [(bool, bool, bool, bool, OwnMod, &str); 8] = [
+            (false, false, false, true, Place, "an ordinary build always carries the mod"),
+            (false, false, false, false, Remove, "the player turned the mod off for every build"),
+            (true, false, false, true, Leave, "Arcania: a protected pack verifies its own files, our jar is a change behind the author's back"),
+            (true, false, false, false, Leave, "a pack we never touched stays untouched even when the switch is off"),
+            (true, true, false, true, Place, "OneBlock 27.09: players see each other's Millida cosmetics"),
+            (true, true, true, false, Remove, "the player's off switch wins over our opt-in"),
+            (true, false, true, true, Remove, "an opt-in we withdrew takes our jar back out of the pack"),
+            (true, true, true, true, Place, "an opt-in that stands keeps the mod in place"),
+        ];
+        for (pack, opted, before, enabled, want, why) in cases {
+            assert_eq!(own_mod_action(pack, opted, before, enabled), want, "{}", why);
+        }
     }
 
     #[test]

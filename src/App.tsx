@@ -435,10 +435,12 @@ export function App() {
     const t = setInterval(() => {
       if (refreshDue(isRealtimeLive(), last, Date.now())) refresh()
     }, 30000)
-    const off = onRealtime('friends', refresh)
+    const offFriends = onRealtime('friends', refresh)
+    const offPresence = onRealtime('presence', refresh)
     return () => {
       clearInterval(t)
-      off()
+      offFriends()
+      offPresence()
     }
   }, [])
 
@@ -649,6 +651,7 @@ export function App() {
     }
     const gate = pokeGate(() => inFlight, fire)
     const offPoke = onRealtime('friends', gate.poke)
+    const offPresencePoke = onRealtime('presence', gate.poke)
     const offLive = onRealtimeLiveChange((live) => {
       if (!live) gate.poke()
     })
@@ -663,6 +666,7 @@ export function App() {
       stopped = true
       clearTimeout(timer)
       offPoke()
+      offPresencePoke()
       offLive()
       document.removeEventListener('visibilitychange', wake)
     }

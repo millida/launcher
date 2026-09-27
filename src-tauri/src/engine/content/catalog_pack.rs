@@ -150,6 +150,7 @@ fn view_from_candidate(slug: &str, answer: &Value) -> Result<Value, String> {
         "title": answer["title"],
         "cover": answer["cover"],
         "accessRequired": answer["accessRequired"],
+        "millidaMod": answer["millidaMod"],
         "version": c["version"],
         "game": c["game"],
         "loader": c["loader"],
@@ -324,7 +325,9 @@ async fn install_catalog_pack_job(
      */
     let review_file = if review { view["reviewFileId"].as_str().unwrap_or_default() } else { "" };
     let review_sha512 = if review { sha512.as_str() } else { "" };
-    merge_settings(&pname, pack_identity(slug, &meta.version, review_file, review_sha512));
+    let mut identity = pack_identity(slug, &meta.version, review_file, review_sha512);
+    remember_mod_opt_in(&mut identity, &view);
+    merge_settings(&pname, identity);
 
     job.emit(app, 100.0, "Сборка установлена");
     Ok(prof)
@@ -369,6 +372,14 @@ fn pack_identity(slug: &str, version: &str, review_file: &str, review_sha512: &s
     m.insert("catalogPackReviewFile".into(), Value::String(review_file.to_string()));
     m.insert("catalogPackReviewSha512".into(), Value::String(review_sha512.to_string()));
     m
+}
+
+/// A build started offline still knows whether our card opted it into the
+/// Millida mod.
+fn remember_mod_opt_in(settings: &mut serde_json::Map<String, Value>, view: &Value) {
+    if let Some(on) = pack_millida_mod_flag(view) {
+        settings.insert(PACK_MILLIDA_MOD_KEY.into(), Value::Bool(on));
+    }
 }
 
 /// The next published version of a catalogue build in place of the installed
@@ -435,10 +446,11 @@ async fn prepare_update(
     if !pdir.is_dir() {
         return Err("Папки сборки нет на диске — установи сборку из каталога заново".into());
     }
-    let Fetched { meta, unpacked, _temp, .. } = fetch_pack(app, job, slug, false).await?;
+    let Fetched { view, meta, unpacked, _temp, .. } = fetch_pack(app, job, slug, false).await?;
     job.rename(profile);
     job.emit(app, 80.0, "Переносим миры и настройки…");
-    let settings = carried_settings(profile, slug, &meta.version);
+    let mut settings = carried_settings(profile, slug, &meta.version);
+    remember_mod_opt_in(&mut settings, &view);
     let (from, to, slug) = (pdir.to_path_buf(), staged.to_path_buf(), slug.to_string());
     tokio::task::spawn_blocking(move || -> Result<(), String> {
         place_unpacked(&unpacked, &to)?;

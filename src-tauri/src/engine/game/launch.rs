@@ -1241,20 +1241,30 @@ pub async fn install_and_launch_in(
      * either changes what the pack verifies or simply never loads — either way
      * it is a change to someone else's build made behind their back.
      */
+    // Our own cosmetics mod is the one exception, and only for a pack our card
+    // opted in: the archive cannot ask for it itself.
     let touch_mods = pack.is_none();
+    let (pack_mod, pack_mod_before) = match &pack {
+        Some(spec) => pack_millida_mod(&profile, &spec.slug).await,
+        None => (false, false),
+    };
     let mut own_mod_jar = String::new();
-    if touch_mods && matches!(loader_id.as_str(), "fabric" | "quilt" | "forge" | "neoforge") {
-        let licensed = !auth.token.is_empty() && auth.yggdrasil.is_empty();
-        match ensure_millida_mod(&app, &profile, &nick, licensed).await {
-            Ok(Some(jar)) => {
-                own_mod = true;
-                // Какой именно файл поехал в сборку: если он её и уронит, под
-                // карантин пойдёт он, а не «мод вообще».
-                own_mod_jar = jar;
+    match own_mod_action(pack.is_some(), pack_mod, pack_mod_before, millida_mod_enabled()) {
+        OwnMod::Place if matches!(loader_id.as_str(), "fabric" | "quilt" | "forge" | "neoforge") => {
+            let licensed = !auth.token.is_empty() && auth.yggdrasil.is_empty();
+            match ensure_millida_mod(&app, &profile, &nick, licensed).await {
+                Ok(Some(jar)) => {
+                    own_mod = true;
+                    // Какой именно файл поехал в сборку: если он её и уронит, под
+                    // карантин пойдёт он, а не «мод вообще».
+                    own_mod_jar = jar;
+                }
+                Ok(None) => {}
+                Err(e) => warn(&app, &format!("Мод Millida не поставлен: {}", e)),
             }
-            Ok(None) => {}
-            Err(e) => warn(&app, &format!("Мод Millida не поставлен: {}", e)),
         }
+        OwnMod::Remove => remove_millida_mod(&profile),
+        OwnMod::Place | OwnMod::Leave => {}
     }
     if touch_mods && matches!(loader_id.as_str(), "fabric" | "quilt" | "forge" | "neoforge") && !own_mod {
         let licensed = !auth.token.is_empty() && auth.yggdrasil.is_empty();
