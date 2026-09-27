@@ -7,6 +7,7 @@ import {
   storedNoiseMode,
   type NoiseMode,
 } from './mic-worklet'
+import { sharedAudio } from '../audioHub'
 
 export interface MicLevel {
   level: number
@@ -35,6 +36,17 @@ interface Nodes {
 const audioCtor = (): typeof AudioContext =>
   window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
 
+async function startContext(): Promise<AudioContext> {
+  const ctx = new (audioCtor())()
+  try {
+    if (ctx.state === 'suspended') await ctx.resume()
+    return ctx
+  } catch (e) {
+    void ctx.close().catch(() => {})
+    throw e
+  }
+}
+
 /**
  * Микрофон для звонка: захват, шумоподавление, усиление и мут одним объектом.
  *
@@ -44,8 +56,10 @@ const audioCtor = (): typeof AudioContext =>
  */
 export async function openMic(): Promise<MicChain> {
   const stream = await navigator.mediaDevices.getUserMedia({ audio: micConstraint(), video: false })
-  const ctx = new (audioCtor())()
-  if (ctx.state === 'suspended') await ctx.resume()
+  const ctx = await startContext().catch((e: unknown) => {
+    stream.getTracks().forEach((t) => t.stop())
+    throw e
+  })
   const source = ctx.createMediaStreamSource(stream)
   const dest = ctx.createMediaStreamDestination()
   let worklet: AudioWorkletNode | null = null
@@ -133,24 +147,14 @@ const SPEAK_HOLD_MS = 260
  * Замер громкости чужой дорожки для индикатора. Работает в обход громкости и
  * глушения: показывать надо, что собеседник говорит, а не как громко его слышно.
  */
-/// Контекст замеров один на все чужие дорожки: в групповом разговоре их до
-/// пяти, а движок держит всего несколько аудиоконтекстов на страницу — по
-/// контексту на собеседника упёрлось бы в этот потолок.
-let meterCtx: AudioContext | null = null
-
-function sharedMeterContext(): AudioContext | null {
-  if (meterCtx && meterCtx.state !== 'closed') return meterCtx
-  try {
-    meterCtx = new (audioCtor())()
-  } catch {
-    meterCtx = null
-  }
-  return meterCtx
-}
-
+/// Meters share the page context: a group call has up to five remote tracks and
+/// the engine allows only a few contexts per page. The lease keeps it running
+/// for the meter's lifetime only, so after the call the output device is freed.
 function meterStream(stream: MediaStream, cb: (l: MicLevel) => void): () => void {
-  const ctx = sharedMeterContext()
+  const ctx = sharedAudio.context()
   if (!ctx) return () => {}
+  const release = sharedAudio.lease()
+  if (ctx.state === 'suspended') void ctx.resume().catch(() => {})
   const source = ctx.createMediaStreamSource(stream)
   const analyser = ctx.createAnalyser()
   analyser.fftSize = 1024
@@ -193,6 +197,7 @@ function meterStream(stream: MediaStream, cb: (l: MicLevel) => void): () => void
     } catch {
       // Контекст мог закрыться раньше — освобождать уже нечего.
     }
+    release()
   }
 }
 

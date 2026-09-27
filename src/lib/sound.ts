@@ -1,6 +1,7 @@
 import { convertFileSrc, downloadUiSounds, uiSounds } from '../ipc/commands'
 import { hasTauri } from '../ipc/tauri'
 import { writePref } from './prefs'
+import { sharedAudio } from './audioHub'
 
 export type SoundEvent =
   | 'click'
@@ -96,25 +97,27 @@ export function soundVolume(): number {
 // Decoded into memory once: <audio> refetches through the asset protocol and drops rapid clicks.
 const buffers = new Map<SoundEvent, AudioBuffer>()
 const urls = new Map<SoundEvent, string>()
-let ctx: AudioContext | null = null
+const audioCtx = (): AudioContext | null => sharedAudio.context()
 
-function audioCtx(): AudioContext | null {
-  try {
-    const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
-    if (!AC) return null
-    ctx = ctx || new AC()
-    return ctx
-  } catch {
-    return null
-  }
-}
+// Autoplay policy only lets the first resume() through while a real gesture is
+// being handled; after that the page is activated and the idle hub may suspend
+// and resume the context freely, so the gesture hook has nothing left to do.
+let unlocked = false
 
-// Autoplay policy only lets resume() through while a real gesture is being handled;
-// without this the context stays suspended and background notifications are silent.
 function unlockAudio() {
+  if (unlocked) return
   const ac = audioCtx()
-  if (!ac || ac.state === 'running') return
-  void ac.resume().catch(() => {})
+  if (!ac) return
+  if (ac.state === 'running') {
+    unlocked = true
+    return
+  }
+  void ac
+    .resume()
+    .then(() => {
+      if (ac.state === 'running') unlocked = true
+    })
+    .catch(() => {})
 }
 
 async function collect(list: { event: string; path: string }[]) {
@@ -180,6 +183,9 @@ const MAX_S: Partial<Record<SoundEvent, number>> = {
   success: 0.6,
 }
 
+const playMs = (buf: AudioBuffer, rate: number, max?: number): number =>
+  Math.ceil(Math.min(max ?? Infinity, buf.duration / (rate > 0 ? rate : 1)) * 1000) + 50
+
 function playBuffer(ac: AudioContext, ev: SoundEvent, level: number): boolean {
   const buf = buffers.get(ev)
   if (!buf) return false
@@ -199,6 +205,7 @@ function playBuffer(ac: AudioContext, ev: SoundEvent, level: number): boolean {
       gain.gain.linearRampToValueAtTime(0, t + max)
       node.stop(t + max + 0.02)
     }
+    sharedAudio.hold(playMs(buf, node.playbackRate.value, max))
     return true
   } catch {
     return false
@@ -240,6 +247,17 @@ function emit(ev: SoundEvent) {
     return
   }
 
+  if (ac && unlocked && buffers.has(ev)) {
+    const fallback = () => void playFile(ev, level, () => {})
+    void ac
+      .resume()
+      .then(() => {
+        if (ac.state !== 'running' || !playBuffer(ac, ev, level)) fallback()
+      })
+      .catch(fallback)
+    return
+  }
+
   const resumeAndPlay = () => {
     if (!ac) return
     void ac
@@ -273,6 +291,7 @@ export function playSample(ev: SoundEvent, rate = 1) {
     node.connect(gain)
     gain.connect(ac.destination)
     node.start()
+    sharedAudio.hold(playMs(buf, rate))
   } catch {}
 }
 

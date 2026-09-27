@@ -49,27 +49,60 @@ function MicMeter({ deviceId, onFail }: { deviceId: string; onFail: () => void }
   const [level, setLevel] = useState(0)
   const [busy, setBusy] = useState(false)
   const stopRef = useRef<(() => void) | null>(null)
+  const attempt = useRef(0)
 
-  useEffect(() => () => stopRef.current?.(), [])
+  // The capture is asynchronous (on macOS it may wait on the permission prompt):
+  // a stop, a second click or leaving the page while it is pending must still
+  // release it, or the mic stays open and Bluetooth headsets drop to call quality.
+  const halt = () => {
+    attempt.current++
+    const stop = stopRef.current
+    stopRef.current = null
+    if (stop) stop()
+  }
+
+  useEffect(() => halt, [])
 
   const listen = async () => {
-    if (stopRef.current) {
-      stopRef.current()
-      stopRef.current = null
+    if (busy) {
+      halt()
       setBusy(false)
       setLevel(0)
       return
     }
+    const mine = ++attempt.current
     setBusy(true)
+    let stream: MediaStream
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: micConstraint() })
-      const ctx = new AudioContext()
+      stream = await navigator.mediaDevices.getUserMedia({ audio: micConstraint() })
+    } catch (error) {
+      if (attempt.current !== mine) return
+      setBusy(false)
+      onFail()
+      showToast(micErrorText(error), 'error')
+      return
+    }
+    if (attempt.current !== mine) {
+      stream.getTracks().forEach((t) => t.stop())
+      return
+    }
+    let raf = 0
+    let ctx: AudioContext | null = null
+    const monitor = new Audio()
+    stopRef.current = () => {
+      cancelAnimationFrame(raf)
+      monitor.pause()
+      monitor.srcObject = null
+      stream.getTracks().forEach((t) => t.stop())
+      if (ctx) void ctx.close().catch(() => {})
+    }
+    try {
+      ctx = new AudioContext()
       const src = ctx.createMediaStreamSource(stream)
       const analyser = ctx.createAnalyser()
       analyser.fftSize = 1024
       src.connect(analyser)
       const buf = new Float32Array(analyser.fftSize)
-      let raf = 0
       const tick = () => {
         analyser.getFloatTimeDomainData(buf)
         let peak = 0
@@ -81,19 +114,15 @@ function MicMeter({ deviceId, onFail }: { deviceId: string; onFail: () => void }
       // The meter alone proved only that the device sends something; the player
       // wants to hear how they sound, so the check plays the mic back into the
       // headphones picked below.
-      const monitor = new Audio()
       monitor.srcObject = stream
       await applyOutput(monitor)
+      if (attempt.current !== mine) return
       void monitor.play().catch(() => showToast('Не удалось вывести звук микрофона в наушники — проверь их в списке ниже', 'error'))
-      stopRef.current = () => {
-        cancelAnimationFrame(raf)
-        monitor.pause()
-        monitor.srcObject = null
-        stream.getTracks().forEach((t) => t.stop())
-        void ctx.close().catch(() => {})
-      }
     } catch (error) {
+      if (attempt.current !== mine) return
+      halt()
       setBusy(false)
+      setLevel(0)
       onFail()
       showToast(micErrorText(error), 'error')
     }

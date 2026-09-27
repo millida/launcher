@@ -154,12 +154,14 @@ export async function playTestTone(): Promise<void> {
   osc.connect(gain)
   gain.connect(dest)
   el.srcObject = dest.stream
-  await applyOutput(el)
-  osc.start()
-  await el.play()
-  await new Promise((r) => setTimeout(r, 900))
-  osc.stop()
-  el.pause()
-  el.srcObject = null
-  await ctx.close()
+  try {
+    await applyOutput(el)
+    osc.start()
+    await el.play()
+    await new Promise((r) => setTimeout(r, 900))
+  } finally {
+    el.pause()
+    el.srcObject = null
+    await ctx.close().catch(() => {})
+  }
 }

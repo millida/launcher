@@ -238,10 +238,12 @@ mod tests {
         assert_eq!(section["build"]["last"].as_u64(), Some(185), "last must track the newest flush");
     }
 
+    type WallCase<'a> = (&'a str, &'a [(u64, u64)], u64, &'a str);
+
     /// Slices from builds running at once -> wall total -> why it is pinned.
     #[test]
     fn parallel_games_count_real_time_once() {
-        let cases: [(&str, &[(u64, u64)], u64, &str); 4] = [
+        let cases: [WallCase; 4] = [
             ("one game, back to back slices", &[(60, 100), (60, 160)], 120, "a single game still counts every second"),
             ("three games in the same minute", &[(60, 100), (60, 100), (60, 100)], 60, "three windows open for a minute are one minute of the player's time"),
             ("second game joins halfway", &[(60, 100), (60, 130)], 90, "only the half not already covered is new time"),

@@ -184,6 +184,15 @@ function reset() {
   st().set({ ...IDLE })
 }
 
+/// The capture can wait on the macOS permission prompt; a call hung up in the
+/// meantime has no teardown left to close it, and the mic would stay open.
+function micStillWanted(callId: string, status: CallState['status'], chain: MicChain): boolean {
+  const cur = st()
+  if (cur.callId === callId && cur.status === status) return true
+  chain.close()
+  return false
+}
+
 async function openMicOrFail(): Promise<MicChain | null> {
   try {
     const chain = await openMic()
@@ -340,9 +349,10 @@ export async function callFriend(peerId: string, nick: string) {
   cur.set({ ...IDLE, mode: 'dm', status: 'outgoing', callId, peerId, peerNick: nick })
   const chain = await openMicOrFail()
   if (!chain) {
-    reset()
+    if (st().callId === callId) reset()
     return
   }
+  if (!micStillWanted(callId, 'outgoing', chain)) return
   mic = chain
   try {
     await sendSignal(callId, peerId, 'invite', {})
@@ -363,12 +373,14 @@ export async function callFriend(peerId: string, nick: string) {
 export async function acceptCall() {
   const cur = st()
   if (cur.status !== 'incoming') return
+  const callId = cur.callId
   stopRing()
   const chain = await openMicOrFail()
   if (!chain) {
-    void finish('decline')
+    if (st().callId === callId) void finish('decline')
     return
   }
+  if (!micStillWanted(callId, 'incoming', chain)) return
   mic = chain
   cur.set({ status: 'connecting', parts: [blankPart(cur.peerId, cur.peerNick)] })
   armConnectTimeout()
@@ -557,9 +569,10 @@ export async function joinRoomVoice(roomId: string, title: string) {
   cur.set({ ...IDLE, mode: 'room', status: 'connecting', callId: roomId, roomId, roomTitle: title })
   const chain = await openMicOrFail()
   if (!chain) {
-    reset()
+    if (st().callId === roomId) reset()
     return
   }
+  if (!micStillWanted(roomId, 'connecting', chain)) return
   mic = chain
   let reply: VoiceReply
   try {

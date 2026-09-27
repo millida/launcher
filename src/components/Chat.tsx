@@ -381,9 +381,12 @@ function Composer() {
   const fileRef = useRef<HTMLInputElement>(null)
   const recRef = useRef<VoiceRecorder | null>(null)
   recRef.current = rec
+  const recAttempt = useRef(0)
+  const recPending = useRef(false)
 
   useEffect(
     () => () => {
+      recAttempt.current++
       if (recRef.current) recRef.current.cancel()
     },
     [],
@@ -483,25 +486,37 @@ function Composer() {
       })
       return
     }
+    // A recorder that resolves after a second click or after the chat closed has
+    // no owner left to stop it, and a mic left open degrades Bluetooth headsets.
+    if (recPending.current || recRef.current) return
+    recPending.current = true
+    const mine = ++recAttempt.current
     setRecMs(0)
     setBars([])
     try {
-      setRec(
-        await recordVoice(
-          (lvl, ms) => {
-            // Speech peaks sit low on a linear scale; the root spreads a quiet
-            // voice across the strip instead of leaving it a flat line.
-            setBars((prev) => prev.concat([Math.min(1, Math.sqrt(lvl) * 1.35)]).slice(-REC_BARS))
-            setRecMs(ms)
-          },
-          () => void stopRecording(true),
-        ),
+      const recorder = await recordVoice(
+        (lvl, ms) => {
+          // Speech peaks sit low on a linear scale; the root spreads a quiet
+          // voice across the strip instead of leaving it a flat line.
+          setBars((prev) => prev.concat([Math.min(1, Math.sqrt(lvl) * 1.35)]).slice(-REC_BARS))
+          setRecMs(ms)
+        },
+        () => void stopRecording(true),
       )
+      if (recAttempt.current !== mine) {
+        recorder.cancel()
+        return
+      }
+      recRef.current = recorder
+      setRec(recorder)
     } catch (error) {
+      if (recAttempt.current !== mine) return
       showToast(micErrorText(error), 'error', undefined, {
         label: 'Как исправить',
         run: () => openSettings('sound', 'mic'),
       })
+    } finally {
+      recPending.current = false
     }
   }
 

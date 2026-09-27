@@ -204,10 +204,12 @@ mod tests {
         assert!(!cancelled(), "outside a launch nothing is cancelled: repair and downloads run there");
     }
 
+    type SlotCase<'a> = (&'a [(String, bool)], Slot, &'a str);
+
     #[test]
     fn one_launch_per_build() {
         let a = "Minecraft1211";
-        let cases: [(&[(String, bool)], Slot, &str); 5] = [
+        let cases: [SlotCase; 5] = [
             (&[], Slot::Free, "nothing starting"),
             (&[("Other".into(), false)], Slot::Free, "another build does not block this one"),
             (&[(a.into(), false)], Slot::Busy, "a live launch of the same build owns .fabric/remappedJars"),

@@ -1,4 +1,5 @@
 import { playSample, soundEnabled, soundVolume } from '../../lib/sound'
+import { sharedAudio } from '../../lib/audioHub'
 
 /**
  * Звук ударов по сундуку: нота нотного блока, каждая следующая выше по
@@ -7,17 +8,11 @@ import { playSample, soundEnabled, soundVolume } from '../../lib/sound'
  * идти ступенями. Громкость и «выключено» — общие настройки звука.
  */
 
-let ctx: AudioContext | null = null
-
 function ac(): AudioContext | null {
   if (!soundEnabled()) return null
-  try {
-    ctx = ctx || new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
-    if (ctx.state === 'suspended') void ctx.resume()
-    return ctx
-  } catch {
-    return null
-  }
+  const ctx = sharedAudio.context()
+  if (ctx && ctx.state === 'suspended') void ctx.resume().catch(() => {})
+  return ctx
 }
 
 /** Пентатоника от до второй октавы: 0 — первый удар. */
@@ -38,6 +33,7 @@ function pling(freq: number, at: number, len: number, gain: number, type: Oscill
   o.connect(g).connect(a.destination)
   o.start(t)
   o.stop(t + len + 0.02)
+  sharedAudio.hold(Math.ceil((at + len) * 1000) + 50)
 }
 
 const level = () => (soundVolume() / 100) * 0.22

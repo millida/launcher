@@ -44,6 +44,11 @@ pub(crate) fn mark_exiting() {
 fn on_run_event(app: &tauri::AppHandle, event: &tauri::RunEvent) {
     match event {
         tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => mark_exiting(),
+        // macOS never starts a second copy on a Dock or Finder click: it only
+        // tells the running one to reopen. has_visible_windows is not checked
+        // because the overlay counts as visible while the launcher is in the tray.
+        #[cfg(target_os = "macos")]
+        tauri::RunEvent::Reopen { .. } => tray::show_main(app),
         // Главное окно закрыто, а скрытый оверлей ещё жив: Tauri не считает это
         // «все окна закрыты», и процесс оставался висеть без окна. Значок в трее
         // и второй запуск (single-instance) звали show_main у окна, которого нет,
