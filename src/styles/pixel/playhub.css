@@ -1401,7 +1401,8 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
   background-position: center;
 }
 .ph-mode-hero .ph-mode-bg .ph-mode-art img { position: static; transform: none; image-rendering: pixelated; }
-.input.hs-field.ph-mode-find { height: 48px; flex: 1 1 240px; min-width: 0; }
+.input.hs-field.ph-mode-find { height: 48px; }
+.ph-mode-tools .input.hs-field.ph-mode-find { flex: 1 1 240px; min-width: 0; }
 .ph-mode-tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .ph-mode-sort .seg { height: 48px; }
 
