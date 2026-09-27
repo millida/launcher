@@ -108,17 +108,55 @@ export function millidaExhausted(page: number, pages: number): boolean {
   return page > 0 && page >= pages
 }
 
+function tailVisible(page: number, pages: number, searching: boolean): boolean {
+  return page > 0 && (searching || millidaExhausted(page, pages))
+}
+
+function takenKeys(items: SiteCard[], resolved: (card: SiteCard) => ModHit | null | undefined, shown: SiteCard[] = []): Set<string> {
+  const taken = new Set<string>()
+  for (const c of items) for (const k of millidaKeys(c, resolved(c))) taken.add(k)
+  for (const c of shown) for (const k of mrKeys(c)) taken.add(k)
+  return taken
+}
+
+/**
+ * While browsing, Millida pages come first and Modrinth waits for the end of them.
+ * A search shows it right away: the player typed a name and the mirror may lack
+ * that mod for the chosen version and loader.
+ */
 export function mrTail(
   items: SiteCard[],
   mr: SiteCard[],
   page: number,
   pages: number,
   resolved: (card: SiteCard) => ModHit | null | undefined,
+  searching = false,
 ): SiteCard[] {
-  if (!mr.length || !millidaExhausted(page, pages)) return []
-  const taken = new Set<string>()
-  for (const c of items) for (const k of millidaKeys(c, resolved(c))) taken.add(k)
+  if (!mr.length || !tailVisible(page, pages, searching)) return []
+  const taken = takenKeys(items, resolved)
   return mr.filter((c) => !mrKeys(c).some((k) => taken.has(k)))
+}
+
+export const CF_TAIL = 20
+
+export function cfTail(
+  items: SiteCard[],
+  mrShown: SiteCard[],
+  cf: SiteCard[],
+  page: number,
+  pages: number,
+  resolved: (card: SiteCard) => ModHit | null | undefined,
+  searching: boolean,
+): SiteCard[] {
+  if (!cf.length || !tailVisible(page, pages, searching)) return []
+  const taken = takenKeys(items, resolved, mrShown)
+  return appendMr([], cf.filter((c) => !mrKeys(c).some((k) => taken.has(k)))).slice(0, CF_TAIL)
+}
+
+/** CurseForge is asked only for a typed search without a theme: its categories do not map onto ours. */
+export function cfKind(section: SiteSlug, category: string | null, q: string): string | null {
+  const type = MR_TYPE[section]
+  return type && !category && q.length >= 2 ? type : null
 }
 
 export function mrHasMore(offset: number, got: number, total: number, pageSize: number): boolean {

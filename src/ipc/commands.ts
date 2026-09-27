@@ -286,6 +286,7 @@ export interface AuditIssue {
   detail: string
   file_name: string
   fix: DepNode | null
+  dep?: string
 }
 
 export interface DepAudit {

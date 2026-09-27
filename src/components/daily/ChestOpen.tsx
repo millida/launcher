@@ -8,10 +8,10 @@ import { Ruby } from '../Ruby'
 import { useVariantPreview } from '../../lib/variantArt'
 import { fragmentWord, RARITY_TONE, rarityProps, shardWord, word } from '../shop/rarity'
 import { FragBar, FragmentIcon, RarityFx, RarityPlate } from '../shop/rarityUi'
-import { loadRules, type ChestDrop, type ChestTier, type PendingChest, type Rarity, type Rules } from '../../lib/rubies'
+import { type ChestDrop, type ChestTier, type PendingChest, type Rarity } from '../../lib/rubies'
 import { playSound } from '../../lib/sound'
 import { useDaily, type ChestOpenAnswer } from '../../state/daily'
-import { CHEST_CONFIG, CHEST_DROPS, CHEST_ODDS, bpOf, hasRarity, pctOfBp, PITY_AFTER, PITY_LEGEND_AFTER, RARITY_NAME, RARITY_ORDER, TIER_ORDER, viewOf, type OpenedView } from './chestDrops'
+import { CHEST_DROPS, hasRarity, RARITY_NAME, RARITY_ORDER, TIER_ORDER, viewOf, type OpenedView } from './chestDrops'
 import { burstSound, cardSound, hitSound, teaseSound } from './chestSound'
 import { chestSprite, CRACK_STEPS, SPRITE_H, SPRITE_W } from './chestSprite'
 import { CHEST_NAME } from './rewards'
@@ -34,8 +34,7 @@ import { wearNow } from '../../state/wearIntent'
  *           сундук, если открывали несколько.
  *
  * Запрос к службе уходит сразу при открытии окна — к последнему удару ответ
- * уже есть. Шансы на витрине не печатаются (решение владельца), только «i»
- * внутри открытия.
+ * уже есть.
  */
 
 type Stage = 'hit' | 'burst' | 'card' | 'sum' | 'error'
@@ -178,53 +177,6 @@ function DropCard({ d, tease, small, tier = 'COMMON' }: { d: ChestDrop; tease?: 
   )
 }
 
-/** Панель «i»: что внутри и шансы этого уровня. Только тут, не на витрине. */
-function Odds({ tier, rules, onClose }: { tier: ChestTier; rules: Rules | null; onClose: () => void }) {
-  const row = rules?.chests.items.find((i) => i.tier === tier)
-  const def = CHEST_DROPS[tier]
-  const items = row?.items ?? def.items
-  const sh = row?.shards ? [row.shards.min, row.shards.max] : def.shards
-  const chances = RARITY_ORDER.map((r) => ({
-    r,
-    p: (() => {
-      const c = row?.chances.find((x) => x.rarity === r)
-      return c ? bpOf(c) : CHEST_ODDS[tier][r]
-    })(),
-  })).filter((c) => c.p > 0)
-  const pity = rules?.chests.pityAfter ?? PITY_AFTER
-  const wholeFree = row?.wholePct !== undefined ? row.wholePct * 100 : def.wholeBp
-  const wholePayer = row?.wholePayerPct !== undefined ? row.wholePayerPct * 100 : def.wholePayerBp
-  const payerDays = rules?.chests.payerWindowDays ?? CHEST_CONFIG.payerWindowDays
-  return (
-    <div className="co-odds" role="dialog" aria-label="Что внутри" onClick={(e) => e.stopPropagation()}>
-      <div className="co-odds-head">
-        <b>{CHEST_NAME[tier]} сундук</b>
-        <button type="button" className="co-x" aria-label="Закрыть" onClick={onClose}>
-          <Icon id="i-x" />
-        </button>
-      </div>
-      <p className="co-odds-line">
-        <Shard size={16} /> {sh[0]}–{sh[1]} {shardWord(sh[1])} · вещей: {items}
-      </p>
-      {def.rubies ? (
-        <p className="co-odds-line">
-          <Ruby size={16} /> {def.rubies.amount[0]}–{def.rubies.amount[1]} · {def.rubies.pct} %
-        </p>
-      ) : null}
-      <ul className="co-odds-list">
-        {chances.map(({ r, p }) => (
-          <li key={r} style={{ '--co-it': tone(r) } as CSSProperties}>
-            <i />
-            <span>{RARITY_NAME[r]}</span>
-            <b>{pctOfBp(p)}</b>
-          </li>
-        ))}
-      </ul>
-      <p className="co-odds-foot">Эпическая и выше — раз в {pity}, легендарная и выше — раз в {rules?.chests.pityLegendAfter ?? PITY_LEGEND_AFTER} сундуков. {wholeFree > 0 ? <>Целая вещь — {pctOfBp(wholeFree)}, иначе фрагменты. </> : <>Без подписки внутри только фрагменты, осколки и рубины: вещь собирается докупкой недостающих фрагментов. </>}С PLUS или после покупки рубинов за {payerDays} дней целая вещь — {pctOfBp(wholePayer)}.</p>
-    </div>
-  )
-}
-
 /** Одно открытие: удары → взрыв → карточки → итог. */
 function Opening({ chest, left, onDone, onNext }: { chest: PendingChest; left: number; onDone: () => void; onNext: () => void }) {
   const reduced = useMemo(reducedMotion, [])
@@ -236,8 +188,6 @@ function Opening({ chest, left, onDone, onNext }: { chest: PendingChest; left: n
   const [kick, setKick] = useState(0)
   const [card, setCard] = useState(0)
   const [teasing, setTeasing] = useState(false)
-  const [info, setInfo] = useState(false)
-  const [rules, setRules] = useState<Rules | null>(null)
   const [bought, setBought] = useState<Set<number>>(() => new Set())
   const [buying, setBuying] = useState(-1)
   const waitRef = useRef(false)
@@ -347,12 +297,6 @@ function Opening({ chest, left, onDone, onNext }: { chest: PendingChest; left: n
     )
   }
 
-  const openInfo = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    setInfo((v) => !v)
-    if (!rules) void loadRules().then(setRules).catch(() => undefined)
-  }
-
   // Клавиатура: пробел/Enter — удар и «Дальше», Esc — закрыть после итога.
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
@@ -383,16 +327,12 @@ function Opening({ chest, left, onDone, onNext }: { chest: PendingChest; left: n
       <div className="co-head" onClick={(e) => e.stopPropagation()}>
         <b className="co-title">{CHEST_NAME[tier]} сундук</b>
         {left > 0 ? <span className="co-left">ещё {left}</span> : null}
-        <button type="button" className="co-i" aria-label="Что внутри" data-track="chest_odds" onClick={openInfo}>
-          i
-        </button>
         {stage === 'sum' || stage === 'error' ? (
           <button type="button" className="co-x" aria-label="Закрыть" onClick={onDone}>
             <Icon id="i-x" />
           </button>
         ) : null}
       </div>
-      {info ? <Odds tier={tier} rules={rules} onClose={() => setInfo(false)} /> : null}
 
       {stage === 'hit' || stage === 'burst' || stage === 'error' ? (
         <div className="co-stage">
@@ -494,11 +434,6 @@ function Opening({ chest, left, onDone, onNext }: { chest: PendingChest; left: n
               )
             })}
           </div>
-          {view?.pityLeft ? (
-            <p className="co-pity">
-              До эпической <b>{view.pityLeft.epic}</b> · до легендарной <b>{view.pityLeft.legend}</b>
-            </p>
-          ) : null}
           <div className="co-acts">
             {fresh ? (
               <button type="button" className="btn lg secondary" data-track="chest_wear" onClick={wear}>

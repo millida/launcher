@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useLayoutEffect } from 'react'
+import { useEffect, useLayoutEffect } from 'react'
+import { closeAiBuilder, openAiBuilder, useAiBuilder } from '../state/aiBuilder'
 import { openHubBuild } from '../components/playhub/hubTab'
 import { SiteCatalog } from '../components/catalog/SiteCatalog'
 import { AiBuilder } from '../components/catalog/AiBuilder'
@@ -37,16 +37,19 @@ export function Mods({ on }: { on: boolean }) {
  * это реклама, что у нас есть нейронка»).
  */
 function AiFab() {
-  const [open, setOpen] = useState(false)
+  const open = useAiBuilder((s) => s.open)
+  const preset = useAiBuilder((s) => s.preset)
+  const seq = useAiBuilder((s) => s.seq)
+  useEffect(() => closeAiBuilder, [])
   return open ? (
     <div className="aif-panel" role="dialog" aria-label="ИИ-сборщик">
-      <button className="aif-x" aria-label="Свернуть" onClick={() => setOpen(false)}>
+      <button className="aif-x" aria-label="Свернуть" onClick={closeAiBuilder}>
         <Icon id="i-x" />
       </button>
-      <AiBuilder />
+      <AiBuilder key={seq} preset={preset} />
     </div>
   ) : (
-    <button className="aif-btn" data-sound="open" data-track="ai_fab" onClick={() => setOpen(true)}>
+    <button className="aif-btn" data-sound="open" data-track="ai_fab" onClick={() => openAiBuilder()}>
       <PxIcon name="sparkle" size={22} /> ИИ соберёт сборку
     </button>
   )

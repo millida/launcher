@@ -19,7 +19,7 @@ import { readAnimations } from '../../lib/cosmeticAnimation'
 import { defaultVariant } from '../../lib/cosmeticVariants'
 import { Nametag, nametagSpot } from '../character/Nametag'
 import { FlatFigure } from '../character/FlatFigure'
-import { gpuLite, noteContextLost, useGpuLite } from '../../lib/gpuLite'
+import { gpuLite, noteContextCreated, noteContextLost, useGpuLite } from '../../lib/gpuLite'
 import { webviewFailure } from '../../lib/webviewHealth'
 import { Vector3 } from 'three'
 import { setScreen } from '../../state/ui'
@@ -346,6 +346,7 @@ export function LobbyCharacter({ on }: { on: boolean }) {
     canvas.addEventListener('webglcontextlost', onLost)
     let engine: SkinViewEngine
     try {
+      noteContextCreated()
       engine = new m3d.SkinViewEngine(canvas, {
         autoResize: false,
         autoDetectModel: false,

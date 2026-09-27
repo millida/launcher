@@ -10,9 +10,12 @@ pub async fn launch_game(
     ram_mb: u32,
     auth: Option<engine::AuthArgs>,
 ) -> Result<String, String> {
-    engine::begin_launch();
-    let r = engine::resolve_launch_auth(&app, auth).await;
-    engine::install_and_launch(app, version, r.nick.unwrap_or(nick), fabric, ram_mb, r.auth).await
+    engine::begin_launch()
+        .run(async move {
+            let r = engine::resolve_launch_auth(&app, auth).await;
+            engine::install_and_launch(app, version, r.nick.unwrap_or(nick), fabric, ram_mb, r.auth).await
+        })
+        .await
 }
 
 #[tauri::command(async)]
@@ -118,9 +121,12 @@ pub async fn quick_play(
     server: Option<String>,
     auth: Option<engine::AuthArgs>,
 ) -> Result<String, String> {
-    engine::begin_launch();
-    let r = engine::resolve_launch_auth(&app, auth).await;
-    engine::quick_play(app, profile, r.nick.unwrap_or(nick), ram_mb, world, server, r.auth).await
+    engine::begin_launch()
+        .run(async move {
+            let r = engine::resolve_launch_auth(&app, auth).await;
+            engine::quick_play(app, profile, r.nick.unwrap_or(nick), ram_mb, world, server, r.auth).await
+        })
+        .await
 }
 
 #[tauri::command]
@@ -142,7 +148,7 @@ pub async fn ping_server(addr: String) -> Result<engine::PingResult, String> {
 
 #[tauri::command]
 pub async fn repair_profile(app: tauri::AppHandle, profile: String) -> Result<engine::RepairReport, String> {
-    engine::repair_profile_files(app, profile).await
+    engine::begin_launch().run(engine::repair_profile_files(app, profile)).await
 }
 
 #[tauri::command]

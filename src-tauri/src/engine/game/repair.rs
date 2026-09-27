@@ -181,7 +181,6 @@ pub async fn repair_profile_files(app: AppHandle, profile: String) -> Result<Rep
     let loader = known.as_ref().map(|p| p.loader_id()).unwrap_or_else(|| "vanilla".into());
     let loader_version = known.as_ref().and_then(|p| p.loader_version.clone());
 
-    CANCEL.store(false, Ordering::SeqCst);
     let _deep = DeepVerify::hold();
     emit(&app, "files", 2.0, "Сверяем файлы игры…");
     let java_pick = resolve_profile_java(&app, &profile).await?;

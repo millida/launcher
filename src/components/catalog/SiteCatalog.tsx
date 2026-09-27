@@ -10,7 +10,7 @@ import { SERVER_SECTIONS, SITE_SECTIONS, materials, peekHit, sectionBySlug, sect
 import type { SiteSection } from './site'
 import { activeFilters, useServerSite, useSite } from './siteStore'
 import type { SiteAccess } from './siteStore'
-import { mrTail, nextLoad } from './mrTail'
+import { cfTail, mrTail, nextLoad } from './mrTail'
 import { CatalogCtx, useCatalogCtx } from './target'
 import type { CatalogTarget } from './target'
 import { host } from '../../screens/hosting/api'
@@ -410,8 +410,10 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
   const [open, setOpen] = useState(false)
   const q = s.q.trim()
   useSearchTrack(sec.slug, q, s.page && !s.busy ? s.total : s.failed ? 0 : null)
-  const count = s.page ? (q || s.category ? 'Найдено: ' : '') + materials(s.total + s.mrTotal) : null
-  const tail = useMemo(() => mrTail(s.items, s.mr, s.page, s.pages, peekHit), [s.items, s.mr, s.page, s.pages])
+  const searching = q.length >= 2
+  const tail = useMemo(() => mrTail(s.items, s.mr, s.page, s.pages, peekHit, searching), [s.items, s.mr, s.page, s.pages, searching])
+  const cfRows = useMemo(() => cfTail(s.items, tail, s.cf, s.page, s.pages, peekHit, searching), [s.items, tail, s.cf, s.page, s.pages, searching])
+  const count = s.page ? (q || s.category ? 'Найдено: ' : '') + materials(s.total + s.mrTotal + cfRows.length) : null
   const filters = (
     <SiteFilters
       sec={sec}
@@ -448,7 +450,7 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
         <div className={sec.gallery ? 'mr-galgrid' : 'mr-list'}>
           <RowSkeleton gallery={sec.gallery} />
         </div>
-      ) : !s.items.length && !tail.length ? (
+      ) : !s.items.length && !tail.length && !cfRows.length ? (
         <CatalogNotice
           note={
             q || s.category || s.version || s.loader
@@ -473,6 +475,18 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
               <div className={(sec.gallery ? 'mr-galgrid' : 'mr-list') + (s.busy && s.page === 1 ? ' cat-dim' : '')}>
                 {tail.map((c, i) => (
                   <Card key={'mr:' + c.slug} card={c} sec={sec} pos={s.items.length + i} onOpenPack={onOpenPack} />
+                ))}
+              </div>
+            </>
+          ) : null}
+          {cfRows.length ? (
+            <>
+              <div className="mr-src-divider" role="separator">
+                <span>Ещё с CurseForge</span>
+              </div>
+              <div className={(sec.gallery ? 'mr-galgrid' : 'mr-list') + (s.busy && s.page === 1 ? ' cat-dim' : '')}>
+                {cfRows.map((c, i) => (
+                  <Card key={'cf:' + c.slug} card={c} sec={sec} pos={s.items.length + tail.length + i} onOpenPack={onOpenPack} />
                 ))}
               </div>
             </>

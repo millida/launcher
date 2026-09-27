@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
-import { autoItems, depSummary, planItem, planNeedsPrompt } from './deps'
-import type { DepNode, DepPlan } from '../ipc/commands'
+import { autoItems, depSummary, issueInstall, planItem, planNeedsPrompt } from './deps'
+import type { AuditIssue, DepNode, DepPlan } from '../ipc/commands'
 
 const node = (id: string, relation: string): DepNode => ({
   source: 'modrinth',
@@ -74,4 +74,30 @@ test('the summary names every kind of finding', () => {
     expect(s, 'the header must not hide a finding').toContain(part)
   }
   expect(depSummary(plan({}))).toBe('')
+})
+
+test('one click on a missing dependency installs something real', () => {
+  const issue = (over: Partial<AuditIssue>): AuditIssue => ({
+    kind: 'missing',
+    title: 'Lithium',
+    detail: 'нужен мод «cloth-config», в сборке его нет',
+    file_name: '',
+    fix: null,
+    ...over,
+  })
+  const cases: Array<[string, AuditIssue, ReturnType<typeof issueInstall>]> = [
+    [
+      'resolved fix installs the exact version the audit picked',
+      issue({ fix: node('cloth', 'required') }),
+      { source: 'modrinth', project_id: 'cloth', version_id: 'v-cloth' },
+    ],
+    [
+      'no fix because the catalogue was down: the click looks the project up again',
+      issue({ dep: 'cloth-config' }),
+      { source: 'modrinth', project_id: 'cloth-config', version_id: '' },
+    ],
+    ['nothing to look up: no button, not a dead one', issue({}), null],
+    ['a conflict is never "installed"', issue({ kind: 'conflict', dep: 'x' }), null],
+  ]
+  for (const [why, input, want] of cases) expect(issueInstall(input), why).toEqual(want)
 })

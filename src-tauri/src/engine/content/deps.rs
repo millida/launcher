@@ -137,6 +137,10 @@ pub struct AuditIssue {
     pub file_name: String,
     /// Present when the launcher knows what to install to close the issue.
     pub fix: Option<DepNode>,
+    /// Modrinth project a missing dependency is looked up by when the audit
+    /// could not resolve a fix, so one click can try again.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub dep: String,
 }
 
 #[derive(Default, serde::Serialize)]
@@ -772,6 +776,7 @@ pub(crate) fn loaders_mismatch(declared: &[String], runs: &[String]) -> bool {
 /// loader. Everything that can be fixed comes back with the fix attached.
 pub async fn audit_deps(profile: String) -> Result<DepAudit, String> {
     let ctx = ctx_of(&profile, "mod");
+    let loader_version = load_profiles().into_iter().find(|p| p.name == profile).and_then(|p| p.loader_version);
     let prof = profile.clone();
     let locals = tauri::async_runtime::spawn_blocking(move || scan_local_meta(&prof, "mod", false))
         .await
@@ -803,6 +808,7 @@ pub async fn audit_deps(profile: String) -> Result<DepAudit, String> {
                 detail: format!("файл собран под MC {}, а сборка на {}", m.mc, ctx.game_version),
                 file_name: m.file_name.clone(),
                 fix: None,
+                dep: String::new(),
             });
         }
         let declared: &[String] =
@@ -814,6 +820,7 @@ pub async fn audit_deps(profile: String) -> Result<DepAudit, String> {
                 detail: format!("файл для {}, а сборка на {}", declared.join("/"), ctx.loader_id),
                 file_name: m.file_name.clone(),
                 fix: None,
+                dep: String::new(),
             });
         }
         for b in &m.breaks {
@@ -833,11 +840,12 @@ pub async fn audit_deps(profile: String) -> Result<DepAudit, String> {
                     detail: format!("объявляет несовместимость с «{}»", other),
                     file_name: m.file_name.clone(),
                     fix: None,
+                    dep: String::new(),
                 });
             }
         }
         for r in &m.requires {
-            if installed.mod_ids.contains(r) {
+            if installed.mod_ids.contains(r) || loader_provides(&ctx.loader_id, loader_version.as_deref(), r) {
                 continue;
             }
             wanted.entry(r.clone()).or_insert_with(|| m.title.clone());
@@ -862,6 +870,7 @@ pub async fn audit_deps(profile: String) -> Result<DepAudit, String> {
                         detail: format!("несовместим с «{}»", if title.is_empty() { dep.project_id.clone() } else { title }),
                         file_name: e.file_name.clone(),
                         fix: None,
+                        dep: String::new(),
                     });
                 }
                 continue;
@@ -874,7 +883,8 @@ pub async fn audit_deps(profile: String) -> Result<DepAudit, String> {
                 continue;
             }
             let fix = pick_modrinth(&ctx, &dep.project_id, &dep.version_id).await.ok().map(|p| p.node);
-            push_missing(&mut audit, e.title.clone(), if title.is_empty() { dep.project_id } else { title }, fix);
+            let named = if title.is_empty() { dep.project_id.clone() } else { title };
+            push_missing(&mut audit, e.title.clone(), named, fix, dep.project_id);
         }
     }
 
@@ -893,12 +903,23 @@ pub async fn audit_deps(profile: String) -> Result<DepAudit, String> {
             detail: format!("нужен мод «{}», в сборке его нет", named),
             file_name: String::new(),
             fix,
+            dep: catalog_slug(&id).to_string(),
         });
     }
     Ok(audit)
 }
 
-fn push_missing(audit: &mut DepAudit, needed_by: String, missing: String, fix: Option<DepNode>) {
+/// Fabric Loader bundles MixinExtras since 0.15 and answers for its id itself:
+/// Lithium asking for «mixinextras» was reported missing on every such build.
+const FABRIC_BUNDLES_MIXINEXTRAS: &str = "0.15.0";
+
+fn loader_provides(loader_id: &str, loader_version: Option<&str>, mod_id: &str) -> bool {
+    mod_id == "mixinextras"
+        && loader_id == "fabric"
+        && !loader_version.is_some_and(|v| cmp_version(v, FABRIC_BUNDLES_MIXINEXTRAS) == Ordering::Less)
+}
+
+fn push_missing(audit: &mut DepAudit, needed_by: String, missing: String, fix: Option<DepNode>, dep: String) {
     if audit.issues.iter().any(|i| i.kind == "missing" && i.detail.contains(&missing)) {
         return;
     }
@@ -908,11 +929,28 @@ fn push_missing(audit: &mut DepAudit, needed_by: String, missing: String, fix: O
         detail: format!("нужен мод «{}», в сборке его нет", missing),
         file_name: String::new(),
         fix,
+        dep,
     });
 }
 
 #[cfg(test)]
 mod tests {
+    /// (loader, loader version, mod id) -> satisfied by the loader itself.
+    #[test]
+    fn loader_bundled_libraries_are_not_missing() {
+        let cases: [(&str, Option<&str>, &str, bool, &str); 6] = [
+            ("fabric", None, "mixinextras", true, "latest Fabric Loader bundles MixinExtras"),
+            ("fabric", Some("0.19.5"), "mixinextras", true, "the player's loader, Lithium must not ask for it"),
+            ("fabric", Some("0.15.0"), "mixinextras", true, "first loader that bundles it"),
+            ("fabric", Some("0.14.25"), "mixinextras", false, "older loaders really need the mod"),
+            ("forge", None, "mixinextras", false, "not claimed for other loaders"),
+            ("fabric", None, "cloth-config", false, "ordinary dependencies stay dependencies"),
+        ];
+        for (loader, ver, id, want, why) in cases {
+            assert_eq!(super::loader_provides(loader, ver, id), want, "{} {:?} {}: {}", loader, ver, id, why);
+        }
+    }
+
     use super::*;
     use serde_json::json;
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { appendMr, cardFromMrHit, millidaExhausted, mrCategory, mrHasMore, mrTail, mrTarget, nextLoad, titleKey } from './mrTail'
+import { CF_TAIL, appendMr, cardFromMrHit, cfKind, cfTail, millidaExhausted, mrCategory, mrHasMore, mrTail, mrTarget, nextLoad, titleKey } from './mrTail'
 import type { SiteCard, SiteSlug } from './site'
 import type { ModHit } from '../../state/mods'
 
@@ -114,6 +114,12 @@ describe('хвост Modrinth: дубли и когда он виден', () => 
     expect(tailSlugs([mr('iris-renamed', 'Renamed', { pid: 'YL57xq9U' })], 1, 1, peek)).toEqual([])
   })
 
+  it('поиск показывает Modrinth сразу: зеркало могло не знать мод под эту версию и загрузчик', () => {
+    const got = mrTail(items, pool, 1, 3, resolved, true).map((c) => c.slug)
+    expect(got, 'searching for a mod by name must not hide Modrinth behind unloaded Millida pages').toEqual(['lithium'])
+    expect(mrTail(items, pool, 0, 0, resolved, true), 'nothing before the first answer, even while searching').toEqual([])
+  })
+
   it('millidaExhausted: страница 0 — ещё не загружено', () => {
     expect(millidaExhausted(0, 0)).toBe(false)
     expect(millidaExhausted(2, 2)).toBe(true)
@@ -163,4 +169,45 @@ describe('находка Modrinth → строка ленты', () => {
   it('находка без адреса не превращается в строку', () => {
     expect(cardFromMrHit(hit('', 'x', { slug: undefined }), 'mods')).toBeNull()
   })
+})
+
+describe('хвост CurseForge: без дублей Millida и Modrinth', () => {
+  const items = [site('sodium-dlya-minecraft', 'Sodium — скачать мод на Fabric')]
+  const cf = (slug: string, title: string, id: number): SiteCard => cardFromMrHit(hit(slug, title, { pid: 'cf:' + id, cfid: id, author: 'CurseForge' }), 'mods')!
+  const mrShown = [mr('lithium', 'Lithium')]
+
+  const cases: [string, SiteCard[], number, number, boolean, string[]][] = [
+    ['дубль Millida по названию и дубль Modrinth по адресу сняты, новое осталось', [cf('sodium', 'Sodium', 1), cf('lithium', 'Lithium', 2), cf('jei', 'Just Enough Items (JEI)', 3)], 1, 1, true, ['jei']],
+    ['при просмотре без поиска CurseForge ждёт конца страниц Millida', [cf('jei', 'JEI', 3)], 1, 3, false, []],
+    ['при поиске виден сразу', [cf('jei', 'JEI', 3)], 1, 3, true, ['jei']],
+    ['до первого ответа ничего', [cf('jei', 'JEI', 3)], 0, 0, true, []],
+  ]
+  for (const [why, pool, page, pages, searching, want] of cases)
+    it(why, () => {
+      expect(cfTail(items, mrShown, pool, page, pages, none, searching).map((c) => c.slug), why).toEqual(want)
+    })
+
+  it('не больше CF_TAIL строк: страница CurseForge — полсотни', () => {
+    const many = Array.from({ length: 50 }, (_, i) => cf('m' + i, 'Mod ' + i, 100 + i))
+    expect(cfTail([], [], many, 1, 1, none, true).length, 'fifty rows per search would flood the list').toBe(CF_TAIL)
+  })
+
+  it('строка CurseForge ставится путём CurseForge: номер проекта сохранён', () => {
+    expect(cf('jei', 'JEI', 238222).mrHit!.cfid, 'without cfid the row would try to install from Modrinth').toBe(238222)
+  })
+})
+
+describe('когда спрашивать CurseForge', () => {
+  const cases: [SiteSlug, string | null, string, string | null, string][] = [
+    ['mods', null, 'sodium', 'mod', 'поиск модов'],
+    ['shaders', null, 'bsl', 'shader', 'поиск шейдеров'],
+    ['mods', null, '', null, 'без поиска не спрашиваем: бюджет запросов'],
+    ['mods', null, 's', null, 'одна буква — не поиск'],
+    ['mods', 'магия', 'sodium', null, 'тема выбрана — у CurseForge другие категории'],
+    ['maps', null, 'sky', null, 'карты идут своим путём'],
+  ]
+  for (const [section, category, q, want, why] of cases)
+    it(why, () => {
+      expect(cfKind(section, category, q), why).toBe(want)
+    })
 })

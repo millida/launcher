@@ -26,6 +26,7 @@ import {
   type Material,
   type Texture,
 } from 'three'
+import { noteContextCreated } from '../../lib/gpuLite'
 import type { ChestTier } from '../../lib/rubies'
 import { onRenderGate, renderLive } from '../../lib/renderGate'
 import { CHEST_PALETTE, faceCanvas, type FaceKind } from './chestPaint'
@@ -161,6 +162,7 @@ const easeOutBack = (t: number) => {
 export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOptions): ChestScene | null {
   let renderer: WebGLRenderer
   try {
+    noteContextCreated()
     renderer = new WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'low-power' })
   } catch {
     return null

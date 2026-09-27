@@ -1,6 +1,7 @@
 import { loadMine3d } from './mine3d'
 import { textureSource } from './textureSource'
-import { gpuLite } from './gpuLite'
+import { gpuLite, noteContextCreated } from './gpuLite'
+import { releaseEngine } from './characterStage'
 
 export const BODY_W = 300
 export const BODY_H = 480
@@ -17,6 +18,41 @@ let engine: any = null
 let engineFailedAt = 0
 const ENGINE_RETRY_MS = 4000
 let queue: Promise<unknown> = Promise.resolve()
+
+const BODY_CACHE_MAX = 48
+/** The shared renderer holds a WebGL context and its buffers; pictures are rendered in bursts, so it is freed between them. */
+const ENGINE_IDLE_MS = 20_000
+let idleTimer: ReturnType<typeof setTimeout> | null = null
+
+function releaseWhenIdle() {
+  if (idleTimer) clearTimeout(idleTimer)
+  const tail = queue
+  idleTimer = setTimeout(() => {
+    idleTimer = null
+    if (queue !== tail || !engine) return
+    const e = engine
+    engine = null
+    releaseEngine(e)
+  }, ENGINE_IDLE_MS)
+}
+
+function enqueue<T>(task: Promise<T>) {
+  queue = task.then(
+    () => undefined,
+    () => undefined,
+  )
+  void queue.then(releaseWhenIdle)
+}
+
+function remember(key: string, data: string) {
+  cache.delete(key)
+  cache.set(key, data)
+  while (cache.size > BODY_CACHE_MAX) {
+    const oldest = cache.keys().next().value
+    if (oldest === undefined) break
+    cache.delete(oldest)
+  }
+}
 
 /** Контекст WebGL отобрали: рисовать им больше нельзя, нужен новый движок. */
 function contextLost(e: any): boolean {
@@ -42,6 +78,7 @@ async function ensureEngine(): Promise<any> {
   try {
     const m3d = await loadMine3d()
     const canvas = document.createElement('canvas')
+    noteContextCreated()
     engine = new m3d.SkinViewEngine(canvas, {
       idleAnimation: new m3d.CoolPoseAnimation(),
       enableControls: false,
@@ -99,10 +136,7 @@ export function renderAvatar(url: string, model: BodyModel): Promise<string> {
       e.setSize(BODY_W, BODY_H)
     }
   })
-  queue = task.then(
-    () => undefined,
-    () => undefined,
-  )
+  enqueue(task)
   return task
 }
 
@@ -146,7 +180,10 @@ export function forgetSkinBody(url: string): void {
 export function renderSkinBody(url: string, model: BodyModel = 'auto-detect', yaw = 0): Promise<string> {
   const key = model + '|' + (yaw ? yaw.toFixed(2) + '|' : '') + url
   const hit = cache.get(key)
-  if (hit) return Promise.resolve(hit)
+  if (hit) {
+    remember(key, hit)
+    return Promise.resolve(hit)
+  }
   const running = inflight.get(key)
   if (running) return running
   const task = loadTexture(url).then((img) => {
@@ -165,13 +202,10 @@ export function renderSkinBody(url: string, model: BodyModel = 'auto-detect', ya
       // Контекст отобрали посреди кадра — картинка пустая, в кеш её не кладём.
       if (contextLost(e)) throw new Error('3D-превью потеряло контекст')
       const data = e.canvas.toDataURL('image/png')
-      cache.set(key, data)
+      remember(key, data)
       return data
     })
-    queue = gpu.then(
-      () => undefined,
-      () => undefined,
-    )
+    enqueue(gpu)
     return gpu
   })
   inflight.set(key, task)

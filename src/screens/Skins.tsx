@@ -123,7 +123,7 @@ import { showReward } from '../components/reward/RewardReveal'
 import { rarityOfPrice } from '../components/shop/rarity'
 import { openPaymentUrl } from '../lib/openPayment'
 import { drawFront } from '../lib/skinFlat'
-import { noteContextLost } from '../lib/gpuLite'
+import { noteContextCreated, noteContextLost } from '../lib/gpuLite'
 
 interface CatalogSkin {
   key: string
@@ -1863,6 +1863,7 @@ export function Skins({ on }: { on: boolean }) {
     try {
       // Камеру вокруг фигуры не возим: в гардеробе крутят самого персонажа, и
       // две системы вращения на один холст дают рывки друг об друга.
+      noteContextCreated()
       engine = new m3d.SkinViewEngine(canvas, {
         autoResize: false,
         autoDetectModel: false,

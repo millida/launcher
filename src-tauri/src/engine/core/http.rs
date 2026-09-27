@@ -589,6 +589,30 @@ fn cancelled(cancel: Option<&AtomicBool>) -> bool {
     cancel.is_some_and(|c| c.load(Ordering::Relaxed))
 }
 
+const CANCEL_POLL: Duration = Duration::from_millis(200);
+
+/// A stalled connection delivers nothing until the read timeout, so a flag
+/// checked only between chunks kept a cancelled download alive for a minute,
+/// long enough for the next launch to start next to it.
+async fn or_cancel<F: std::future::Future>(fut: F, cancel: Option<&AtomicBool>) -> Result<F::Output, String> {
+    let Some(flag) = cancel else { return Ok(fut.await) };
+    if flag.load(Ordering::Relaxed) {
+        return Err(CANCELLED.into());
+    }
+    tokio::pin!(fut);
+    let mut tick = tokio::time::interval(CANCEL_POLL);
+    loop {
+        tokio::select! {
+            out = &mut fut => return Ok(out),
+            _ = tick.tick() => {
+                if flag.load(Ordering::Relaxed) {
+                    return Err(CANCELLED.into());
+                }
+            }
+        }
+    }
+}
+
 /// Сколько уже скачанного можно оставить после неудачной попытки.
 ///
 /// Ноль — начать заново. Не ноль — продолжить с этого места.
@@ -623,7 +647,7 @@ async fn fetch_once(
     if resume_from > 0 {
         req = req.header("Range", format!("bytes={}-", resume_from));
     }
-    let resp = req.send().await.map_err(|e| format!("{}: {}", url, net_err(&e)))?;
+    let resp = or_cancel(req.send(), cancel).await?.map_err(|e| format!("{}: {}", url, net_err(&e)))?;
     if !resp.status().is_success() {
         return Err(format!("{} → {}", url, resp.status()));
     }
@@ -660,13 +684,7 @@ async fn fetch_once(
         std::fs::File::create(part).map_err(|e| format!("{}: {}", part.display(), e))?
     };
     let mut stream = resp.bytes_stream();
-    while let Some(chunk) = stream.next().await {
-        // Cancellation has to reach the body loop: a modpack archive on a slow
-        // line takes minutes, and until it landed pressing «Отменить» changed
-        // nothing the player could see.
-        if cancelled(cancel) {
-            return Err(CANCELLED.into());
-        }
+    while let Some(chunk) = or_cancel(stream.next(), cancel).await? {
         let chunk = chunk.map_err(|e| format!("{}: обрыв загрузки ({})", url, e))?;
         if let Some(h) = hasher.as_mut() {
             h.update(&chunk);
@@ -901,6 +919,49 @@ mod tests {
             !part_path(&dest).exists(),
             "временный файл отменённой загрузки не должен оставаться на диске"
         );
+    }
+
+    /// Server state -> how long a cancel takes to land. A launch cancelled
+    /// while Java was downloading over a stalled link kept going for the full
+    /// read timeout, and a retry in that window started a second game.
+    #[tokio::test]
+    async fn cancel_reaches_a_stalled_download() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let cases: [(&str, &[u8]); 2] = [
+            ("stalled before headers", b""),
+            ("stalled mid-body", b"HTTP/1.1 200 OK
+Content-Length: 1000000
+
+PK"),
+        ];
+        for (name, sent) in cases {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let url = format!("http://{}/java.zip", listener.local_addr().unwrap());
+            tokio::spawn(async move {
+                let (mut sock, _) = listener.accept().await.unwrap();
+                let mut buf = [0u8; 1024];
+                let _ = sock.read(&mut buf).await;
+                let _ = sock.write_all(sent).await;
+                tokio::time::sleep(Duration::from_secs(120)).await;
+            });
+            let dest = tmp("stall").join(format!("{}.zip", name.len()));
+            let flag = std::sync::Arc::new(AtomicBool::new(false));
+            let setter = flag.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_millis(300)).await;
+                setter.store(true, Ordering::SeqCst);
+            });
+            let noop = |_: u64, _: Option<u64>| {};
+            let res = tokio::time::timeout(
+                Duration::from_secs(5),
+                download_checked_progress(&url, &dest, None, None, Some(&flag), &noop),
+            )
+            .await;
+            match res {
+                Ok(Err(e)) => assert_eq!(e, CANCELLED, "{}: cancel must end the download as a cancel", name),
+                other => panic!("{}: cancel did not land within 5 s ({:?}); the next launch would start beside it", name, other.map(|r| r.is_ok())),
+            }
+        }
     }
 
     #[test]

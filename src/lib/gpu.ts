@@ -1,3 +1,5 @@
+import { noteContextCreated } from './gpuLite'
+
 const SOFTWARE = /swiftshader|llvmpipe|softpipe|software|basic render|generic renderer/i
 const VENDOR_ONLY = /^(nvidia|amd|ati|intel|apple|microsoft|google|mesa|qualcomm|arm)\.?$/i
 
@@ -38,6 +40,7 @@ export function detectGpu(): string | undefined {
   try {
     if (typeof document === 'undefined') return undefined
     const canvas = document.createElement('canvas')
+    noteContextCreated()
     const gl = (canvas.getContext('webgl2') ?? canvas.getContext('webgl')) as WebGLRenderingContext | null
     if (!gl) return undefined
     const info = gl.getExtension('WEBGL_debug_renderer_info')

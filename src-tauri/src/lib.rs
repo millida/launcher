@@ -120,8 +120,8 @@ pub fn run() {
                         }
                     };
                     let started = std::time::Instant::now();
-                    engine::begin_launch();
-                    match engine::install_and_launch_in(h, version, "Grash".into(), false, 0, name, engine::Auth::default()).await {
+                    let run = engine::install_and_launch_in(h, version, "Grash".into(), false, 0, name, engine::Auth::default());
+                    match engine::begin_launch().run(run).await {
                         Ok(_) => eprintln!("[AUTOTEST] OK: game started in {} ms", started.elapsed().as_millis()),
                         Err(e) => eprintln!("[AUTOTEST] FAIL: {}", e),
                     }

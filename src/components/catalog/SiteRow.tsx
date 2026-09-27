@@ -10,7 +10,7 @@ import type { CatalogTarget } from './target'
 import { openExt } from '../../lib/api'
 import { useModAction } from '../ModRow'
 import { hasTauri } from '../../ipc/tauri'
-import { openProject } from '../../state/project'
+import { openCfProject, openProject } from '../../state/project'
 import type { ModHit } from '../../state/mods'
 import { useLobby } from '../../state/lobbyMode'
 import { priceLabel } from '../../lib/premium'
@@ -345,6 +345,8 @@ function useServerButton(card: SiteCard, sec: SiteSection): ReactNode {
   // в панели сервера серверные моды ставятся, как и раньше.
   const ok = target.kind === 'server' ? hostable(sec, card) : sec.kind !== 'mod' && hostable(sec, card)
   if (!ok) return null
+  if (card.mrHit && card.mrHit.cfid !== undefined)
+    return <ServerButton target={{ kind: 'curseforge', projectId: String(card.mrHit.cfid), title }} primary={primary} />
   if (card.mrHit) {
     const projectId = card.mrHit.pid || card.mrHit.slug
     return projectId ? <ServerButton target={{ kind: 'modrinth', projectId, title }} primary={primary} /> : null
@@ -433,7 +435,8 @@ function useOpen({ card, sec, onOpenPack }: RowProps, resolve: () => Promise<Mod
       return
     }
     void resolve().then((h) => {
-      if (h && h.slug) void openProject(h.slug, sec.kind)
+      if (h && h.cfid !== undefined) void openCfProject(h.cfid, sec.kind, h.title)
+      else if (h && h.slug) void openProject(h.slug, sec.kind)
       else openOnSite(sec.slug, card.slug)
     })
   }

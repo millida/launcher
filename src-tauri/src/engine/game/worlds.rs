@@ -120,26 +120,4 @@ pub async fn quick_play(
     r
 }
 
-/// Set from the UI, checked between install steps and right before the JVM starts.
-pub static CANCEL: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-pub fn cancel_launch() {
-    CANCEL.store(true, std::sync::atomic::Ordering::SeqCst);
-}
-
-/// Clears a stale cancel at the very start of a launch command. Clearing it later,
-/// after auth was resolved, swallowed a cancel pressed during that wait and the
-/// game started anyway.
-pub fn begin_launch() {
-    CANCEL.store(false, std::sync::atomic::Ordering::SeqCst);
-}
-
-pub(crate) fn cancelled() -> bool {
-    CANCEL.load(std::sync::atomic::Ordering::SeqCst)
-}
-
-pub(crate) fn check_cancel() -> Result<(), String> {
-    if cancelled() { Err("Запуск отменён".into()) } else { Ok(()) }
-}
-
 pub static QUICK: std::sync::Mutex<Option<(Option<String>, Option<String>)>> = std::sync::Mutex::new(None);

@@ -1068,6 +1068,8 @@ pub async fn install_and_launch_in(
     profile: String,
     auth: Auth,
 ) -> Result<String, String> {
+    check_cancel()?;
+    let _slot = claim_profile_start(&profile, || emit(&app, "files", 2.0, "Останавливаем прошлый запуск этой сборки…")).await?;
     // the nick lands on the command line and in an argfile
     let nick = launch_nick(&nick);
     let prof = load_profiles().into_iter().find(|p| p.name == profile);
@@ -1184,6 +1186,10 @@ pub async fn install_and_launch_in(
     };
     check_cancel()?;
     std::fs::create_dir_all(game_dir.join("mods")).ok();
+    if loader_id == "fabric" && !running_games().iter().any(|p| p == &profile) {
+        let dir = game_dir.clone();
+        let _ = tokio::task::spawn_blocking(move || drop_broken_remap_cache(&dir)).await;
+    }
 
     check_cancel()?;
     emit(&app, "launch", 92.0, "Запускаем игру…");
@@ -1459,6 +1465,10 @@ pub async fn install_and_launch_in(
         }
         // Give the JVM a moment: an immediate exit is a launch failure, not a session.
         tokio::time::sleep(std::time::Duration::from_millis(900)).await;
+        if cancelled() {
+            let _ = child.kill();
+            return Err(LAUNCH_CANCELLED.into());
+        }
         if let Ok(Some(status)) = child.try_wait() {
             if !status.success() {
                 let log = read_log_file(&log_path).unwrap_or_default();

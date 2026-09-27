@@ -7,6 +7,7 @@ import { showToast } from '../state/ui'
 import { uiConfirm } from '../state/confirm'
 import { backdropClose } from '../lib/dismiss'
 import { mirrorAsset } from '../lib/api'
+import { apiErrorText } from '../lib/apiError'
 import { showReward } from './reward/RewardReveal'
 
 export interface HostPlan {
@@ -213,9 +214,8 @@ export function HostPlanPicker({
         showToast('Не хватает средств на балансе Millida — пополни и повтори', 'error')
         openExt(WALLET_URL)
       } else {
-        // Сырой текст ошибки — в лог, игроку — фраза.
         console.error('[hosting] plan pick', msg)
-        showToast('Не получилось — попробуй ещё раз', 'error')
+        showToast(apiErrorText(e, 'Не получилось — попробуй ещё раз'), 'error')
       }
     } finally {
       setBusy('')

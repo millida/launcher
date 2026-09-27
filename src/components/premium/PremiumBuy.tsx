@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Icon } from '../Icon'
 import { showToast } from '../../state/ui'
+import { uiConfirm } from '../../state/confirm'
 import { track } from '../../lib/telemetry'
 import { useModpackVersions } from '../../state/modpack'
 import { watchPackPurchase } from '../../state/packWatch'
@@ -146,6 +147,14 @@ export function PlanButtons({
     )
   }
 
+  const confirmBundle = (plan: PremiumPlan) => {
+    void uiConfirm((plan.items || []).join('. ') || 'Все сборки автора в одной подписке.', {
+      title: plan.title || 'Все сборки',
+      confirmLabel: 'Оформить · ' + planPrice(plan),
+      cancelLabel: 'Отмена',
+    }).then((yes) => yes && start(plan))
+  }
+
   const boxed = (key: string, node: ReactNode) =>
     wrap ? (
       <span className={wrap} key={key}>
@@ -176,9 +185,9 @@ export function PlanButtons({
             data-kind="premium"
             data-id={id}
             data-plan={plan.id}
-            onClick={() => start(plan)}
+            onClick={() => (plan.id === 'pack' ? start(plan) : confirmBundle(plan))}
           >
-            <Icon id={i === 0 ? 'i-crown' : 'i-blocks'} /> {plan.id === 'pack' ? 'Эта сборка' : plan.title || 'Все сборки'} · {planPrice(plan)}
+            <Icon id={i === 0 ? 'i-crown' : 'i-blocks'} /> {plan.id === 'pack' ? 'Эта сборка' : 'Все сборки'} · {planPrice(plan)}
           </button>,
         ),
       )}

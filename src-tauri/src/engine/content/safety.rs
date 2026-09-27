@@ -118,7 +118,8 @@ fn inspect_jar(path: &Path) -> Inspection {
         return (reasons, 1);
     };
     let mut names: Vec<String> = vec![];
-    let mut hits: Vec<(&'static str, bool)> = vec![];
+    let mut hits: Vec<(String, bool)> = vec![];
+    let (mut disguised, mut nested) = (0u32, 0u32);
     let mut has_code = false;
     for i in 0..zip.len().min(MAX_ENTRIES) {
         let Ok(mut entry) = zip.by_index(i) else { continue };
@@ -135,18 +136,19 @@ fn inspect_jar(path: &Path) -> Inspection {
         if name.ends_with(".class") {
             has_code = true;
             for m in MARKERS {
-                if buf.windows(m.needle.len()).any(|w| w == m.needle) && !hits.iter().any(|(r, _)| *r == m.reason) {
-                    hits.push((m.reason, m.strong));
+                if buf.windows(m.needle.len()).any(|w| w == m.needle) && !hits.iter().any(|(r, _)| r == m.reason) {
+                    hits.push((m.reason.to_string(), m.strong));
                 }
             }
         } else if disguised_class(&name, &buf) {
-            hits.push(("В архиве лежит класс под видом ресурса", true));
+            disguised += 1;
         } else if name.ends_with(".jar") && buf.starts_with(b"PK") {
-            hits.push(("Внутри лежит ещё один jar", false));
+            nested += 1;
         }
     }
+    hits.extend(counted_findings(disguised, nested));
     for (reason, is_strong) in hits {
-        reasons.push(reason.to_string());
+        reasons.push(reason);
         if is_strong {
             strong += 1;
         }
@@ -156,6 +158,24 @@ fn inspect_jar(path: &Path) -> Inspection {
         strong += 1;
     }
     (reasons, strong)
+}
+
+/// Findings that repeat per entry are one finding each: Fabric API alone
+/// bundles dozens of module jars, and a line per jar buried the report. A
+/// second disguised class is also not a second independent sign.
+fn counted_findings(disguised: u32, nested: u32) -> Vec<(String, bool)> {
+    let mut out = vec![];
+    match disguised {
+        0 => {}
+        1 => out.push(("В архиве лежит класс под видом ресурса".to_string(), true)),
+        n => out.push((format!("В архиве лежат классы под видом ресурсов — {} шт.", n), true)),
+    }
+    match nested {
+        0 => {}
+        1 => out.push(("Внутри лежит ещё один jar".to_string(), false)),
+        n => out.push((format!("Внутри лежат вложенные jar — {} шт.", n), false)),
+    }
+    out
 }
 
 fn blocklist_cache() -> std::path::PathBuf {
@@ -423,6 +443,66 @@ mod tests {
         let v = verdict_for(&jar("sodium.jar"), "b".repeat(40), Some(&why), Some("modrinth"), "Sodium".into(), (vec![], 0));
         assert_eq!(v.verdict, "blocked");
         assert_eq!(v.reasons, vec![why]);
+    }
+
+    /// jar contents -> reasons. Fabric API ships dozens of module jars inside,
+    /// and the report listed «Внутри лежит ещё один jar» once per module.
+    #[test]
+    fn repeated_findings_are_reported_once_with_a_count() {
+        use std::io::Write;
+        let class = [0xCA, 0xFE, 0xBA, 0xBE, 0, 0];
+        let jar_bytes: &[u8] = b"PK\x03\x04inner";
+        struct Case {
+            name: &'static str,
+            entries: Vec<(String, Vec<u8>)>,
+            want: Vec<&'static str>,
+            want_strong: u32,
+            why: &'static str,
+        }
+        let meta = ("fabric.mod.json".to_string(), b"{}".to_vec());
+        let cases = [
+            Case {
+                name: "fabric-api",
+                entries: std::iter::once(meta.clone())
+                    .chain((0..40).map(|i| (format!("META-INF/jars/module-{}.jar", i), jar_bytes.to_vec())))
+                    .collect(),
+                want: vec!["Внутри лежат вложенные jar — 40 шт."],
+                want_strong: 0,
+                why: "сорок модулей — одна строка, а не сорок",
+            },
+            Case {
+                name: "one-nested",
+                entries: vec![meta.clone(), ("META-INF/jars/lib.jar".into(), jar_bytes.to_vec())],
+                want: vec!["Внутри лежит ещё один jar"],
+                want_strong: 0,
+                why: "одиночный вложенный jar описан как раньше",
+            },
+            Case {
+                name: "two-disguised",
+                entries: vec![meta.clone(), ("a.png".into(), class.to_vec()), ("b.png".into(), class.to_vec())],
+                want: vec!["В архиве лежат классы под видом ресурсов — 2 шт."],
+                want_strong: 1,
+                why: "два одинаковых признака — не два независимых, иначе мод сразу «подозрительный»",
+            },
+        ];
+        let dir = std::env::temp_dir().join(format!("millida-safety-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        for case in cases {
+            let path = dir.join(format!("{}.jar", case.name));
+            {
+                let f = std::fs::File::create(&path).unwrap();
+                let mut z = zip::ZipWriter::new(f);
+                for (name, body) in &case.entries {
+                    z.start_file(name.as_str(), zip::write::SimpleFileOptions::default()).unwrap();
+                    z.write_all(body).unwrap();
+                }
+                z.finish().unwrap();
+            }
+            let (reasons, strong) = inspect_jar(&path);
+            assert_eq!(reasons, case.want, "{}: причины {:?}; {}", case.name, reasons, case.why);
+            assert_eq!(strong, case.want_strong, "{}: сильных признаков {}; {}", case.name, strong, case.why);
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

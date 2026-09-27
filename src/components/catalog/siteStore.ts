@@ -1,12 +1,13 @@
 import { create } from 'zustand'
 import type { StoreApi, UseBoundStore } from 'zustand'
-import { MR_PAGE, loadMr, mrSearchUrl, mrToHit, useMods } from '../../state/mods'
+import { MR_PAGE, loadCf, loadMr, mrSearchUrl, mrToHit, useMods } from '../../state/mods'
 import { PER_PAGE, loadFacets, loadListing, loadPremiumPacks, premiumCard, sectionByKind, sectionBySlug } from './site'
 import type { SiteCard, SiteFacets, SiteSlug } from './site'
-import { appendMr, cardFromMrHit, mrHasMore, mrTarget, nextLoad } from './mrTail'
+import { appendMr, cardFromMrHit, cfKind, mrHasMore, mrTarget, nextLoad } from './mrTail'
 import type { MrTarget } from './mrTail'
 import type { MillidaPack } from '../../ipc/commands'
 import { inTime } from '../../lib/deadline'
+import { hasTauri } from '../../ipc/tauri'
 
 /*
  * Состояние каталога сайта в лаунчере: раздел и фильтры — как адрес страницы
@@ -35,6 +36,7 @@ export interface SiteState {
   mrTotal: number
   mrOffset: number
   mrMore: boolean
+  cf: SiteCard[]
   busy: boolean
   failed: boolean
   setSection: (s: SiteSlug) => void
@@ -45,7 +47,7 @@ export interface SiteState {
 
 export type SiteStore = UseBoundStore<StoreApi<SiteState>>
 
-const MR_EMPTY = { mr: [] as SiteCard[], mrTotal: 0, mrOffset: 0, mrMore: false }
+const MR_EMPTY = { mr: [] as SiteCard[], mrTotal: 0, mrOffset: 0, mrMore: false, cf: [] as SiteCard[] }
 
 interface MrPage {
   cards: SiteCard[]
@@ -80,6 +82,19 @@ async function loadMrPage(
     .map((h: unknown) => cardFromMrHit(mrToHit(h), st.section))
     .filter((c: SiteCard | null): c is SiteCard => !!c)
   return { cards, got: data.hits.length, total: typeof data.total_hits === 'number' ? data.total_hits : 0 }
+}
+
+async function loadCfPage(kind: string, st: Pick<SiteState, 'section' | 'version' | 'loader'>, q: string): Promise<SiteCard[]> {
+  const hits = await loadCf({
+    query: q,
+    kind,
+    ver: st.version || '',
+    loader: st.loader && (kind === 'mod' || kind === 'modpack') ? st.loader : '',
+    index: 0,
+    category: 0,
+    sort: 0,
+  })
+  return hits.map((h) => cardFromMrHit(h, st.section)).filter((c): c is SiteCard => !!c)
 }
 
 /**
@@ -129,6 +144,7 @@ function createSiteStore(linked: boolean): SiteStore {
       if (sectionBySlug(st.section).kind === 'world') return
       const q = st.q.trim()
       const mrq = linked ? mrTarget(st.section, st.category) : null
+      const cfq = linked && hasTauri() ? cfKind(st.section, st.category, q) : null
       if (more && nextLoad(st) !== 'millida') {
         if (!mrq || nextLoad(st) !== 'modrinth') return
         set({ busy: true })
@@ -151,7 +167,7 @@ function createSiteStore(linked: boolean): SiteStore {
       set({ busy: true, failed: false })
       // Платные сборки — только в «Ресурсах»: на сервер они не ставятся.
       const packs = linked && st.section === 'modpacks'
-      const [listing, facets, premium, mrFirst] = await Promise.all([
+      const [listing, facets, premium, mrFirst, cfFirst] = await Promise.all([
         inTime(loadListing({
           section: st.section,
           version: st.version,
@@ -165,6 +181,7 @@ function createSiteStore(linked: boolean): SiteStore {
         more ? Promise.resolve(get().facets) : inTime(loadFacets(st.section, st.version, st.loader)).catch(() => null),
         packs ? inTime(loadPremiumPacks()).catch(() => [] as MillidaPack[]) : Promise.resolve([] as MillidaPack[]),
         !more && mrq ? inTime(loadMrPage(mrq, st, q.length >= 2 ? q : '', 0)).catch(() => null) : Promise.resolve(null),
+        !more && cfq ? inTime(loadCfPage(cfq, st, q)).catch(() => [] as SiteCard[]) : Promise.resolve([] as SiteCard[]),
       ])
       if (my !== seq) return
       if (!listing) {
@@ -186,8 +203,8 @@ function createSiteStore(linked: boolean): SiteStore {
       const mrState = more
         ? {}
         : mrFirst
-          ? { mr: mrFirst.cards, mrTotal: mrFirst.total, mrOffset: mrFirst.got, mrMore: mrHasMore(0, mrFirst.got, mrFirst.total, MR_PAGE) }
-          : MR_EMPTY
+          ? { mr: mrFirst.cards, mrTotal: mrFirst.total, mrOffset: mrFirst.got, mrMore: mrHasMore(0, mrFirst.got, mrFirst.total, MR_PAGE), cf: cfFirst }
+          : { ...MR_EMPTY, cf: cfFirst }
       set({ items, total: Math.max(0, listing.total - hidden), page: listing.page, pages: listing.pages, facets: facets || get().facets, ...mrState, busy: false })
     },
   }))

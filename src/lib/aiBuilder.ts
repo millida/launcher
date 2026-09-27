@@ -11,6 +11,23 @@ import { DEMO_USER } from './demo'
 
 export type AiLoader = 'fabric' | 'forge' | 'neoforge' | 'quilt'
 
+const AI_LOADERS: readonly string[] = ['fabric', 'forge', 'neoforge', 'quilt']
+/** The server accepts release versions only; a snapshot would come back as 400. */
+const AI_MC_VERSION_RX = /^(?:1|2[6-9]|[3-9]\d)\.\d{1,2}(?:\.\d{1,2})?$/
+
+export interface AiPreset {
+  mcVersion?: string
+  loader?: AiLoader
+}
+
+/** Version and loader picked in «Новая сборка», only what the server will accept. */
+export function aiPresetFor(loader: string, mcVersion: string): AiPreset {
+  const out: AiPreset = {}
+  if (AI_MC_VERSION_RX.test(mcVersion)) out.mcVersion = mcVersion
+  if (AI_LOADERS.includes(loader)) out.loader = loader as AiLoader
+  return out
+}
+
 export interface AiMod {
   projectId: string
   slug: string
@@ -27,6 +44,11 @@ export interface AiPlan {
   mcVersion: string
   loader: AiLoader
   mods: AiMod[]
+  /** Absent in plans built before resource packs and shaders were picked. */
+  resourcepacks?: AiMod[]
+  shaders?: AiMod[]
+  /** Iris or Oculus; installed only together with a chosen shader. */
+  shaderLoader?: AiMod | null
   notes: string
   limit: number
   remaining: number
@@ -60,9 +82,9 @@ export function aiErrorText(e: unknown): string {
   return apiErrorText(e, 'ИИ не ответил — попробуй ещё раз')
 }
 
-export async function buildPlan(prompt: string, opts: { mcVersion?: string; loader?: AiLoader } = {}): Promise<AiPlan> {
+export async function buildPlan(prompt: string, opts: AiPreset = {}): Promise<AiPlan> {
   const body = { prompt: prompt.trim().slice(0, PROMPT_MAX), ...opts }
-  if (import.meta.env.DEV && DEMO_USER) return demoPlan(body.prompt)
+  if (import.meta.env.DEV && DEMO_USER) return demoPlan(body.prompt, opts)
   return api<AiPlan>('/catalog/ai/build', { method: 'POST', body: JSON.stringify(body) })
 }
 
@@ -98,16 +120,29 @@ const DEMO_MODS: AiMod[] = [
   { projectId: 'dxrOAhj5', slug: 'horror-messages', title: 'Horror messages', icon: cdn('dxrOAhj5', '2f352e073728145924cb3be5d33898adef7dda25_96.webp'), why: 'Жуткие сообщения в чате раз в 10–15 минут', source: 'modrinth', base: false },
 ]
 
-async function demoPlan(prompt: string): Promise<AiPlan> {
+const DEMO_PACKS: AiMod[] = [
+  { projectId: '50dA9Sha', slug: 'fresh-animations', title: 'Fresh Animations', icon: cdn('50dA9Sha', '3132c10e9e3c73fde9799720fd3da5561071708c_96.webp'), why: 'Зомби двигаются живее и страшнее', source: 'modrinth', base: false },
+]
+
+const DEMO_SHADERS: AiMod[] = [
+  { projectId: 'HVnmMxH1', slug: 'complementary-reimagined', title: 'Complementary Reimagined', icon: cdn('HVnmMxH1', '79cb7c8123bbc54945305b2ebad6b8881efdf5f8_96.webp'), why: 'Густые тени и туман по ночам', source: 'modrinth', base: false },
+]
+
+const DEMO_IRIS: AiMod = { projectId: 'YL57xq9U', slug: 'iris', title: 'Iris Shaders', icon: cdn('YL57xq9U', '18d0e7f076d3d6ed5bedd472b853909aac5da202_96.webp'), why: 'Нужен, чтобы работали шейдеры', source: 'modrinth', base: true }
+
+async function demoPlan(prompt: string, opts: AiPreset): Promise<AiPlan> {
   await new Promise((r) => setTimeout(r, 2600))
   if (DEMO_LEFT <= 0) throw new Error('http 429')
   DEMO_LEFT -= 1
   void prompt
   return {
     title: 'Ночь мертвецов',
-    mcVersion: '1.20.1',
-    loader: 'fabric',
+    mcVersion: opts.mcVersion || '1.20.1',
+    loader: opts.loader || 'fabric',
     mods: DEMO_MODS,
+    resourcepacks: DEMO_PACKS,
+    shaders: DEMO_SHADERS,
+    shaderLoader: DEMO_IRIS,
     notes: 'Играй ночью и держи факелы под рукой',
     limit: 3,
     remaining: DEMO_LEFT,

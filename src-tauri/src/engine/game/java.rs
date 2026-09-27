@@ -295,7 +295,14 @@ fn sweep_leftovers(root: &Path, base: &str) {
 /// папку не удаётся убрать.
 async fn install_runtime(app: &AppHandle, major: u64, arch: Option<&'static str>) -> Result<PathBuf, String> {
     let base = runtime_base(major, arch);
-    let _guard = INSTALL_LOCK.lock().await;
+    let _guard = match INSTALL_LOCK.try_lock() {
+        Ok(g) => g,
+        Err(_) => {
+            emit(app, "java", 0.0, &format!("Ждём, пока докачается Java {}…", major));
+            INSTALL_LOCK.lock().await
+        }
+    };
+    check_cancel()?;
     if let Some(d) = managed_runtime(&base) {
         return Ok(d);
     }
@@ -693,6 +700,7 @@ fn adoptium_mirror_url(major: u64, t: &Target, name: &str) -> Option<String> {
 
 async fn install_java_arch(app: &AppHandle, major: u64, jdir: &Path, arch: Option<&'static str>) -> Result<(), String> {
     emit(app, "java", 0.0, &format!("Скачиваем Java {}…", major));
+    let cancel = launch_cancel_flag();
     let t = target_arch(arch);
     let mut reasons = Vec::new();
     let archive = data_dir().join(format!("java-{}-{}.{}", major, t.arch, t.ext));
@@ -717,11 +725,28 @@ async fn install_java_arch(app: &AppHandle, major: u64, jdir: &Path, arch: Optio
             urls.push(("зеркало", m));
         }
         for (label, url) in urls {
-            match download_checked(&url, &archive, Some(Sum::Sha256(&pkg.sha256)), pkg.size).await {
+            let shown = std::sync::atomic::AtomicU32::new(u32::MAX);
+            let report = |got: u64, total: Option<u64>| {
+                let Some(pct) = download_pct(got, total.or(pkg.size)) else { return };
+                if shown.swap(pct, std::sync::atomic::Ordering::Relaxed) != pct {
+                    emit(app, "java", pct as f32 * 0.58, &format!("Скачиваем Java {}… {}%", major, pct));
+                }
+            };
+            let fetched_now = download_checked_progress(
+                &url,
+                &archive,
+                Some(Sum::Sha256(&pkg.sha256)),
+                pkg.size,
+                cancel.as_deref(),
+                &report,
+            )
+            .await;
+            match fetched_now {
                 Ok(()) => {
                     fetched = true;
                     break 'vendors;
                 }
+                Err(e) if e == CANCELLED => return Err(LAUNCH_CANCELLED.into()),
                 Err(e) => {
                     // A remembered answer can point at a release that has since
                     // been pulled; dropping the cache turns the next attempt
@@ -764,6 +789,13 @@ async fn install_java_arch(app: &AppHandle, major: u64, jdir: &Path, arch: Optio
     } else {
         Err("Java распаковалась не полностью — попробуй запустить ещё раз".into())
     }
+}
+
+/// Whole percent of a download, when its size is known. Without it the Java
+/// card sat on «0%» for the whole download and read as a hang.
+fn download_pct(got: u64, total: Option<u64>) -> Option<u32> {
+    let total = total.filter(|t| *t > 0)?;
+    Some((got.min(total) * 100 / total) as u32)
 }
 
 /// Discord detects games by process name and labels any java.exe as Minecraft,

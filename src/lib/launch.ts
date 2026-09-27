@@ -292,6 +292,7 @@ function doJoin(profile: string, world: string | null, server: string | null, se
       return res
     })
     .catch((e) => {
+      if (epoch !== cancelEpoch) throw e
       setGameSession(null)
       heartbeat('lobby')
       if (String(e).includes(CANCELLED_TEXT)) throw e
@@ -315,7 +316,7 @@ function doJoin(profile: string, world: string | null, server: string | null, se
     })
     .finally(() => {
       stopProgress()
-      launching = false
+      if (epoch === cancelEpoch) launching = false
     })
 }
 
@@ -433,6 +434,9 @@ function doLaunch(name: string) {
     })
     .catch((err) => {
       stopProgress()
+      // The core unwinds a cancelled launch later, when the card and the flag
+      // may already belong to the next launch.
+      if (epoch !== cancelEpoch) return
       setPrelaunch({ open: false })
       setGameSession(null)
       if (String(err).includes('отмен')) return
@@ -467,7 +471,7 @@ function doLaunch(name: string) {
       showLaunchError(err)
     })
     .finally(() => {
-      launching = false
+      if (epoch === cancelEpoch) launching = false
     })
 }
 

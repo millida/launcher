@@ -212,7 +212,7 @@ let loadSeq = 0
 const CF_PAGE = 50
 export const MR_PAGE = 20
 
-interface CfQuery {
+export interface CfQuery {
   query: string
   kind: string
   ver: string
@@ -247,7 +247,7 @@ function cfToHit(h: {
   }
 }
 
-function loadCf(q: CfQuery): Promise<ModHit[]> {
+export function loadCf(q: CfQuery): Promise<ModHit[]> {
   const key = ['cf', q.kind, q.query, q.ver, q.loader, q.index, q.category, q.sort].join('|')
   return cachedCatalog(key, async () =>
     (await cfSearch(q.query, q.kind, q.ver, q.loader, q.index, q.category, q.sort)).map(cfToHit),
@@ -312,7 +312,12 @@ export function mrToHit(h: any): ModHit {
 }
 
 export function loadMr(url: string): Promise<any> {
-  return cachedCatalog('mr:' + url, async () => (await fetch(url)).json())
+  return cachedCatalog('mr:' + url, async () => {
+    const r = await fetch(url)
+    // The proxy answers 429/502 with a JSON body; caching it hid Modrinth results for the whole cache lifetime.
+    if (!r.ok) throw new Error('Modrinth search answered ' + r.status)
+    return r.json()
+  })
 }
 
 async function loadPacks(): Promise<MillidaPack[]> {

@@ -1,4 +1,4 @@
-import type { DepAudit, DepNode, DepPlan, PlanItem } from '../ipc/commands'
+import type { AuditIssue, DepAudit, DepNode, DepPlan, PlanItem } from '../ipc/commands'
 
 export const planItem = (n: DepNode): PlanItem => ({
   source: n.source,
@@ -11,6 +11,14 @@ export const planItem = (n: DepNode): PlanItem => ({
 export function fixItems(audit: DepAudit | null): PlanItem[] {
   const items = (audit ? audit.issues : []).map((i) => i.fix).filter((f): f is DepNode => !!f).map(planItem)
   return items.filter((it, i) => items.findIndex((x) => x.project_id === it.project_id) === i)
+}
+
+/// What one click on a missing dependency installs: the resolved fix, or a
+/// fresh lookup of the project when the audit could not reach the catalogue.
+export function issueInstall(it: AuditIssue): PlanItem | null {
+  if (it.kind !== 'missing') return null
+  if (it.fix) return planItem(it.fix)
+  return it.dep ? { source: 'modrinth', project_id: it.dep, version_id: '' } : null
 }
 
 /// An install that pulls in nothing and clashes with nothing must stay one

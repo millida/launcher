@@ -238,18 +238,6 @@
 .sh-guest { display: flex; align-items: center; gap: 14px; }
 .sh-guest b { flex: 1; font-size: 16px; font-weight: 850; }
 
-/* ---------- Бесплатные сундуки и шансы ---------- */
-.sh-odds { display: flex; flex-direction: column; gap: 8px; }
-.sh-odd { display: flex; align-items: center; gap: 10px; }
-.sh-odd > b { width: 118px; flex: none; font-size: 12px; font-weight: 750; }
-.sh-bar { display: flex; flex: 1; height: 14px; background: var(--m-inset); box-shadow: var(--px-well); --px-ol: var(--px-well-ol); --px-ol-w: 1px; --px-ft: var(--px-well-t); --px-ft-w: 3px; --px-fb: transparent; --px-fl: transparent; --px-fr: transparent; overflow: hidden; }
-.sh-bar i { display: block; height: 100%; }
-:root:root .sh-bar { --px-n: 4px; clip-path: var(--px-4); }
-.sh-legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; font-size: 11px; color: var(--m-fg-muted); }
-.sh-legend span { display: inline-flex; align-items: center; gap: 5px; }
-.sh-legend i { width: 9px; height: 9px; display: block; }
-.sh-legend em { font-style: normal; color: var(--m-fg-faint); }
-
 :root:root .sh-chest { --px-n: 10px; clip-path: var(--px-10); }
 
 .sh-row { display: flex; align-items: center; gap: 10px; }

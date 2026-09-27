@@ -46,6 +46,33 @@ const PASSIVE_GRACE_MS: u64 = 6_000;
 /// cards appear used to pin an always-on-top card on screen for good.
 const HOLD_MAX_MS: u64 = 45_000;
 
+/// A hidden overlay is a whole second webview process. Between games it is
+/// closed after a quiet spell and rebuilt by the next card; during a game it
+/// stays, so the chat hotkey opens without a cold start.
+const IDLE_CLOSE_MS: u64 = 120_000;
+static IDLE_SEQ: AtomicU64 = AtomicU64::new(0);
+
+fn close_when_idle(app: &AppHandle) {
+    let seq = IDLE_SEQ.fetch_add(1, Ordering::SeqCst) + 1;
+    let handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_millis(IDLE_CLOSE_MS)).await;
+            if IDLE_SEQ.load(Ordering::SeqCst) != seq || crate::exiting() {
+                return;
+            }
+            if crate::engine::running_games().is_empty() {
+                break;
+            }
+        }
+        let Some(win) = handle.get_webview_window(LABEL) else { return };
+        if win.is_visible().unwrap_or(true) || IDLE_SEQ.load(Ordering::SeqCst) != seq {
+            return;
+        }
+        let _ = win.destroy();
+    });
+}
+
 pub fn set_hit_areas(rects: Vec<[f64; 4]>) {
     *HIT.lock().unwrap_or_else(|e| e.into_inner()) = rects;
 }
@@ -213,6 +240,7 @@ fn build(app: &AppHandle) -> Result<(tauri::WebviewWindow, bool), String> {
 /// `interactive` decides whether the window takes the pointer and the keyboard.
 /// Notifications arrive passive; the hotkey is what makes it a chat.
 pub fn show(app: &AppHandle, interactive: bool) -> Result<bool, String> {
+    IDLE_SEQ.fetch_add(1, Ordering::SeqCst);
     let (win, fresh) = build(app)?;
     INTERACTIVE.store(interactive, Ordering::SeqCst);
     if interactive {
@@ -245,6 +273,7 @@ pub fn hide(app: &AppHandle) {
     PENDING.lock().unwrap_or_else(|e| e.into_inner()).clear();
     if let Some(w) = app.get_webview_window(LABEL) {
         let _ = w.hide();
+        close_when_idle(app);
     }
 }
 

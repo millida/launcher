@@ -41,7 +41,6 @@
   background: rgba(255, 255, 255, 0.12);
   clip-path: var(--px-4);
 }
-.co-i,
 .co-x {
   display: grid;
   place-items: center;
@@ -55,8 +54,7 @@
   clip-path: var(--px-5);
   cursor: pointer;
 }
-.co-i { margin-left: auto; }
-.co-i:hover,
+.co-head > .co-x { margin-left: auto; }
 .co-x:hover { background: rgba(255, 255, 255, 0.24); }
 .co-x svg { width: 18px; height: 18px; }
 
@@ -278,30 +276,6 @@
 .co-topup-done { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
 .co-acts { display: flex; gap: 10px; }
 
-/* ── «i»: что внутри ── */
-.co-odds {
-  position: absolute;
-  z-index: 7;
-  top: 100px;
-  right: 16px;
-  width: min(300px, calc(100vw - 32px));
-  box-sizing: border-box;
-  padding: 14px;
-  color: var(--m-fg);
-  background: var(--m-surface);
-  clip-path: var(--px-10);
-  cursor: default;
-}
-.co-odds-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.co-odds-head b { font-size: 15px; font-weight: 900; }
-.co-odds .co-x { width: 28px; height: 28px; color: var(--m-fg); background: var(--m-surface-2); }
-.co-odds-line { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; font-size: 13px; font-weight: 700; }
-.co-odds-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
-.co-odds-list li { display: grid; grid-template-columns: 12px 1fr auto; align-items: center; gap: 8px; font-size: 13px; }
-.co-odds-list i { width: 12px; height: 12px; background: var(--co-it); }
-.co-odds-list b { font-variant-numeric: tabular-nums; }
-.co-odds-foot { margin: 10px 0 0; font-size: 12px; color: var(--m-fg-muted, var(--m-fg)); opacity: 0.8; }
-
 @media (max-height: 700px) {
   .co-chest img { width: min(200px, 50vw); }
   .co-card { width: 210px; height: 260px; }
@@ -326,7 +300,4 @@
 @keyframes co-climb-in { 0% { transform: translateX(-50%) scale(0.6); opacity: 0; } 100% { transform: translateX(-50%) scale(1); opacity: 1; } }
 @keyframes co-climb-pulse { 50% { filter: brightness(1.35); } }
 
-/* Счётчик гарантии в итоге: сколько сундуков до эпической и легендарной. */
-.co-pity { margin: 10px 0 0; text-align: center; font-size: 13px; font-weight: 800; color: var(--m-fg-muted); }
-.co-pity > b { color: var(--m-fg); font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) { .co-climb { animation: none !important; } }

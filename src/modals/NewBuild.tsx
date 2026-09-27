@@ -21,6 +21,10 @@ import { useLoaderBlocks, versionTag } from '../lib/loaderSupport'
 import type { LoaderId } from '../lib/loaderSupport'
 import '../styles/pixel/newbuild.css'
 import { showReward } from '../components/reward/RewardReveal'
+import { PxIcon } from '../components/PxIcon'
+import { openHubBuild } from '../components/playhub/hubTab'
+import { aiPresetFor } from '../lib/aiBuilder'
+import { openAiBuilder } from '../state/aiBuilder'
 
 /**
  * «Новая сборка» (правки владельца 23.09.2026, 19:40): иконка сборки как в
@@ -358,6 +362,21 @@ export function NewBuildModal() {
         </div>
 
         <div className="nb-foot">
+          <button
+            type="button"
+            className="btn md ghost"
+            id="nbAi"
+            data-track="ai_from_new_build"
+            disabled={busy}
+            onClick={() => {
+              close()
+              openHubBuild()
+              openAiBuilder(aiPresetFor(loader, ver))
+            }}
+          >
+            <PxIcon name="sparkle" size={18} />
+            ИИ соберёт сборку
+          </button>
           <button className="btn md secondary" id="nbCancel" data-sound="close" onClick={close}>
             Отмена
           </button>

@@ -83,7 +83,7 @@ import { RAM_MAX_GB, maxRamGb } from '../lib/ram'
 import { BUILD_NAME_MAX, GROUP_NAME_MAX, LOADER_NAME, fmtPlaytime, fmtSize, loaderId, whenText } from '../lib/format'
 import { AUTO_LOADER_VERSION, hasLoaderVersions, useLoaderBuilds } from '../lib/loaderBuilds'
 import { incompatibleWith } from '../lib/compat'
-import { fixItems, planItem } from '../lib/deps'
+import { fixItems, issueInstall } from '../lib/deps'
 import { installExtras } from '../lib/install'
 import { ensureMcVersionList, useMcVersionList, versionOptions } from '../state/mcVersionList'
 import { useProfiles } from '../state/profiles'
@@ -313,20 +313,20 @@ export function InstancePage() {
   const autoRound = useRef(0)
 
   const runAudit = useCallback(
-    (auto: boolean) => {
+    (auto: boolean, fix: boolean = auto) => {
       if (!profile || !hasTauri()) return
       setAuditBusy(true)
       auditDeps(profile)
         .then((r) => {
           setAuditBusy(false)
           setAudit(r)
-          if (!auto || autoRound.current >= AUTO_FIX_ROUNDS) return
+          if (!fix || autoRound.current >= AUTO_FIX_ROUNDS) return
           const items = fixItems(r)
           if (!items.length) return
           autoRound.current += 1
           installExtras(profile, 'mod', items, () => {
             loadMods('mod')
-            runAuditRef.current(true)
+            runAuditRef.current(auto, fix)
           })
         })
         .catch((e) => {
@@ -1128,7 +1128,8 @@ export function InstancePage() {
                           showToast('Доступно в приложении')
                           return
                         }
-                        runAudit(false)
+                        autoRound.current = 0
+                        runAudit(false, true)
                       }}
                     >
                       <Icon id="i-restart" /> {auditBusy ? 'Проверяем…' : 'Проверить'}
@@ -1158,12 +1159,12 @@ export function InstancePage() {
                               </span>
                               <span className="mod-card-sub">{it.detail}</span>
                             </span>
-                            {it.fix ? (
+                            {issueInstall(it) ? (
                               <button
                                 className="btn sm secondary"
                                 style={{ height: '26px' }}
                                 onClick={() =>
-                                  installExtras(profile!, 'mod', [planItem(it.fix!)], () => {
+                                  installExtras(profile!, 'mod', [issueInstall(it)!], () => {
                                     loadMods('mod')
                                     runAuditRef.current(false)
                                   })
