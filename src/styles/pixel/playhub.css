@@ -860,9 +860,10 @@
    в 12-pixel.css), значки — одноцветные пиксельные силуэты 16px в цвет
    строки, строки одной высоты, «Удалить» — красным. «⋯» лежит над меню
    и становится крестиком. */
-.ph-mine.menu-open .ph-mine-more { z-index: 6; opacity: 1; }
+.ph-mine.menu-open .ph-mine-more { z-index: 6; opacity: 1; top: 14px; right: 14px; background: var(--m-surface-2); }
+.ph-mine.menu-open .ph-mine-more:hover { background: var(--m-inset); }
 .ph-mine-menu {
-  position: absolute; z-index: 5; inset: 6px; padding: 40px 6px 6px;
+  position: absolute; z-index: 5; inset: 6px; padding: 6px; overflow: hidden;
   display: flex; flex-direction: column; justify-content: flex-end; gap: 2px;
   background: var(--m-raised);
   --px-n: 10px; clip-path: var(--px-10);
@@ -870,12 +871,12 @@
   --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px;
 }
 .ph-mine-menu-t {
-  position: absolute; top: 14px; left: 16px; right: 48px;
-  font: 800 13px/1.2 var(--m-font); color: var(--m-fg-subtle);
+  flex: none; margin-bottom: auto; padding: 12px 48px 8px 10px;
+  font: 800 16px/1.2 var(--m-font); color: var(--m-fg);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .ph-mine-menu button {
-  display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px; flex: none;
+  display: flex; align-items: center; gap: 10px; flex: 1 1 0; min-height: 24px; max-height: 32px; padding: 0 10px;
   font: 700 13px/1 var(--m-font); color: var(--m-fg); text-align: left; background: transparent;
   clip-path: var(--px-4);
 }
@@ -1400,7 +1401,9 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
   background-position: center;
 }
 .ph-mode-hero .ph-mode-bg .ph-mode-art img { position: static; transform: none; image-rendering: pixelated; }
-.input.hs-field.ph-mode-find { height: 48px; }
+.input.hs-field.ph-mode-find { height: 48px; flex: 1 1 240px; min-width: 0; }
+.ph-mode-tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.ph-mode-sort .seg { height: 48px; }
 
 /* Одна страница без переключателей (24.09.2026, 14:32): разделы подряд. */
 .hub-sec { margin-bottom: 28px; scroll-margin-top: 12px; }

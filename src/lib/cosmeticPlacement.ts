@@ -72,6 +72,7 @@ export interface RigBone {
   /** Покой кости в градусах, уже в знаках игры. */
   rotation: [number, number, number]
   quads: MeshQuad[]
+  side?: string
 }
 
 export interface Rig {
@@ -170,6 +171,7 @@ export function buildRig(mesh: CosmeticMesh): Rig {
       offset,
       rotation: [bone.rotation[0], bone.rotation[1], bone.rotation[2]],
       quads: bone.quads,
+      ...(bone.side ? { side: bone.side } : {}),
     })
   }
 

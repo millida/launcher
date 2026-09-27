@@ -1,6 +1,6 @@
 // Кастомные анимации в духе трейлеров Mojang + бленд поз для переключения.
 // Свой базовый класс — без импорта PlayerAnimation из skin3d (конфликт @types/three).
-import { Vector3, type Quaternion } from "three";
+import { Quaternion, Vector3 } from "three";
 import { STOCK_LEFT_LEG_POSE, STOCK_RIGHT_LEG_POSE } from "./skin-leg-stock";
 
 /**
@@ -51,7 +51,12 @@ export interface PoseSnapshot {
   rightArm: PartPose;
   leftLeg: PartPose;
   rightLeg: PartPose;
-  cape: { x: number; y: number; z: number };
+  /**
+   * As a quaternion, not Euler angles: an emote turns the cape by quaternion and three then
+   * spells the same rest as (x - PI, 0, PI) instead of (x, PI, 0); lerping those angles swung
+   * the cape through half a turn for the length of the crossfade.
+   */
+  cape: Quaternion;
 }
 
 const PARTS = [
@@ -63,15 +68,7 @@ const PARTS = [
   "rightLeg",
 ] as const;
 
-function readRot(obj: any): { x: number; y: number; z: number } {
-  return { x: obj.rotation.x, y: obj.rotation.y, z: obj.rotation.z };
-}
 
-function writeRot(obj: any, r: { x: number; y: number; z: number }): void {
-  obj.rotation.x = r.x;
-  obj.rotation.y = r.y;
-  obj.rotation.z = r.z;
-}
 
 function readPart(obj: any): PartPose {
   return {
@@ -95,13 +92,6 @@ function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
-function lerpRot(
-  a: { x: number; y: number; z: number },
-  b: { x: number; y: number; z: number },
-  t: number,
-): { x: number; y: number; z: number } {
-  return { x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t), z: lerp(a.z, b.z, t) };
-}
 
 function lerpPart(a: PartPose, b: PartPose, t: number): PartPose {
   return {
@@ -140,7 +130,7 @@ export function capturePose(player: any): PoseSnapshot {
     rightArm: readPart(player.skin.rightArm),
     leftLeg: readPart(player.skin.leftLeg),
     rightLeg: readPart(player.skin.rightLeg),
-    cape: readRot(player.cape),
+    cape: player.cape.quaternion.clone(),
   };
 }
 
@@ -155,7 +145,7 @@ export function applyPose(player: any, pose: PoseSnapshot): void {
   writePart(player.skin.rightArm, pose.rightArm);
   writePart(player.skin.leftLeg, pose.leftLeg);
   writePart(player.skin.rightLeg, pose.rightLeg);
-  writeRot(player.cape, pose.cape);
+  player.cape.quaternion.copy(pose.cape);
 }
 
 export function blendPoses(player: any, from: PoseSnapshot, to: PoseSnapshot, t: number): void {
@@ -174,7 +164,7 @@ export function blendPoses(player: any, from: PoseSnapshot, to: PoseSnapshot, t:
   writePart(player.skin.rightArm, lerpPart(from.rightArm, to.rightArm, k));
   writePart(player.skin.leftLeg, lerpPart(from.leftLeg, to.leftLeg, k));
   writePart(player.skin.rightLeg, lerpPart(from.rightLeg, to.rightLeg, k));
-  writeRot(player.cape, lerpRot(from.cape, to.cape, k));
+  player.cape.quaternion.slerpQuaternions(from.cape, to.cape, k);
 }
 
 /** Yaw плаща в skin3d — без него текстура «задом наперёд» */

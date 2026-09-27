@@ -57,6 +57,8 @@ export function Recommend({ on }: { on: boolean }) {
   const list = useMemo<Rec[]>(() => {
     // Чередуем: сборки каталога, изредка карта с друзьями.
     // OneBlock пока не выходит — не рекомендуем.
+    const arcania = packs.find((p) => p.slug === 'arcania')
+    if (arcania) return [{ kind: 'pack', pack: arcania }]
     const out: Rec[] = []
     const n = Math.max(packs.length, maps.length)
     for (let i = 0; i < n; i++) {

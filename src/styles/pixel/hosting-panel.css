@@ -62,6 +62,7 @@
 
 /* Верх экрана управления: «К серверам» слева, баланс справа. */
 .hsx-manage-top { justify-content: space-between; }
+.hsx-manage-top-r { display: flex; align-items: center; gap: 10px; }
 
 /* ---------- Пиксельная форма ---------- */
 :root:root .hp-balance {

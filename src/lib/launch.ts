@@ -202,6 +202,9 @@ export function showLaunchError(e: unknown) {
 }
 
 let launching = false
+/// Растёт при каждом «Отменить»: запуск, который ещё ждал входа, по нему видит отмену и не зовёт ядро.
+let cancelEpoch = 0
+const CANCELLED_TEXT = 'Запуск отменён'
 
 /// doJoin resolves with the core's answer; this sentinel means the game was
 /// never started, so callers must not report "заходим на сервер".
@@ -277,8 +280,12 @@ function doJoin(profile: string, world: string | null, server: string | null, se
     if (unlisten) unlisten()
     unlisten = null
   }
+  const epoch = cancelEpoch
   return resolveAuth()
-    .then((a) => quickPlay(profile, a.nick, ramMbFor(profile), world, server, a.auth))
+    .then((a) => {
+      if (epoch !== cancelEpoch) throw new Error(CANCELLED_TEXT)
+      return quickPlay(profile, a.nick, ramMbFor(profile), world, server, a.auth)
+    })
     .then((res) => {
       useGame.getState().addRunning(profile)
       applyLaunchWindowMode()
@@ -287,6 +294,7 @@ function doJoin(profile: string, world: string | null, server: string | null, se
     .catch((e) => {
       setGameSession(null)
       heartbeat('lobby')
+      if (String(e).includes(CANCELLED_TEXT)) throw e
       // Быстрый вход (мир / сервер) раньше не оставлял в телеметрии ничего.
       const fail = launchFailure(e, stage, [
         [profile, '<build>'],
@@ -381,11 +389,13 @@ function doLaunch(name: string) {
     else unlisten = u
   })
   const prof = name || useProfiles.getState().selected
-  const inv = resolveAuth().then((a) =>
-    prof
+  const epoch = cancelEpoch
+  const inv = resolveAuth().then((a) => {
+    if (epoch !== cancelEpoch) throw new Error(CANCELLED_TEXT)
+    return prof
       ? launchProfile(prof, a.nick, ramMbFor(prof), a.auth)
-      : launchGame('latest', a.nick, false, ramMbFor('default'), a.auth),
-  )
+      : launchGame('latest', a.nick, false, ramMbFor('default'), a.auth)
+  })
   const launchStartedAt = performance.now()
   const launched = prof ? useProfiles.getState().profiles.find((p) => p.name === prof) : null
   // Имя своей сборки — личное (аудит 24.09.2026): в событие идёт слаг каталога
@@ -488,6 +498,7 @@ export function startPrelaunch(name: string) {
 }
 
 export function cancelPrelaunch() {
+  cancelEpoch++
   if (plTimer) clearInterval(plTimer)
   const ui = useUi.getState()
   // A repair reports its own outcome once the core unwinds; announcing anything

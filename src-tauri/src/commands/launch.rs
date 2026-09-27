@@ -10,6 +10,7 @@ pub async fn launch_game(
     ram_mb: u32,
     auth: Option<engine::AuthArgs>,
 ) -> Result<String, String> {
+    engine::begin_launch();
     let r = engine::resolve_launch_auth(&app, auth).await;
     engine::install_and_launch(app, version, r.nick.unwrap_or(nick), fabric, ram_mb, r.auth).await
 }
@@ -117,6 +118,7 @@ pub async fn quick_play(
     server: Option<String>,
     auth: Option<engine::AuthArgs>,
 ) -> Result<String, String> {
+    engine::begin_launch();
     let r = engine::resolve_launch_auth(&app, auth).await;
     engine::quick_play(app, profile, r.nick.unwrap_or(nick), ram_mb, world, server, r.auth).await
 }

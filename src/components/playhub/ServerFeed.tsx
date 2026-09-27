@@ -2,7 +2,7 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Icon } from '../Icon'
 import type { SnapshotServer } from '../../lib/snapshot'
-import { loadFeedPage } from './data'
+import { loadFeedPage, type FeedSort } from './data'
 
 /**
  * Бесконечная лента серверов рейтинга (правка владельца 23.09.2026, 19:42):
@@ -13,12 +13,14 @@ import { loadFeedPage } from './data'
 export function ServerFeed({
   category,
   search = '',
+  sort = 'rating',
   render,
   onFirstPage,
 }: {
   category?: string
   /** Имя или адрес: лента того же режима, суженная поиском рейтинга. */
   search?: string
+  sort?: FeedSort
   render: (s: SnapshotServer, pos: number) => ReactNode
   /** Первая страница пришла: сколько всего нашлось (для аналитики поиска). */
   onFirstPage?: (total: number, search: string) => void
@@ -36,7 +38,7 @@ export function ServerFeed({
     const my = gen.current
     setBusy(true)
     setFailed(false)
-    loadFeedPage(from, category, search || undefined)
+    loadFeedPage(from, category, search || undefined, sort)
       .then((page) => {
         if (my !== gen.current) return
         const fresh = page.servers.filter((s) => {
@@ -62,7 +64,7 @@ export function ServerFeed({
     setOffset(0)
     setTotal(null)
     more(0)
-  }, [category, search])
+  }, [category, search, sort])
 
   const done = total !== null && offset >= total
 

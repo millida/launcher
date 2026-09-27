@@ -6,7 +6,8 @@ import { createPortal } from 'react-dom'
 /// без подсказки превращаются в загадку. Один слушатель на весь документ:
 /// - `data-tip` — явная подсказка;
 /// - `title` — переносится в `data-tip` при первом наведении, чтобы ОС не всплыла;
-/// - `aria-label` — только у элементов без видимого текста (кнопка-значок).
+/// - `aria-label` — только у элементов без видимого текста (кнопка-значок);
+/// - `data-notip` — без плашки: под кнопкой уже всплывает своё окошко.
 /// Плашка живёт в `document.body`: срез угла у карточек (clip-path) иначе её обрезал бы.
 
 interface Tip {
@@ -20,6 +21,7 @@ const SELECTOR = '[data-tip],[title],button[aria-label],[role="button"][aria-lab
 const DELAY_MS = 380
 
 function tipText(el: HTMLElement): string {
+  if (el.hasAttribute('data-notip')) return ''
   const title = el.getAttribute('title')
   if (title) {
     el.dataset.tip = title

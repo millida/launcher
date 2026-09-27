@@ -17,6 +17,7 @@ import { poseOf, readAnimations, type AnimationClip } from './cosmeticAnimation'
 import { anchorShift, buildRig, type CosmeticAnchor, type RigBone } from './cosmeticPlacement'
 import { cosmeticInflate } from './cosmeticSlots'
 import type { EmoteSequence } from './emoteSequence'
+import { hiddenJoints, type PieceCover } from './cosmeticCover'
 
 /** Столько кадров ленты в секунду показывает игра. */
 const ATLAS_FPS = 20
@@ -134,6 +135,7 @@ export function buildCosmetic(
   animations?: unknown,
   clipName?: string,
   timeline?: EmoteTimeline,
+  cover?: PieceCover,
 ): CosmeticPiece[] {
   const mesh = readCosmeticMesh(model, cosmeticInflate(slot))
   if (!mesh) return []
@@ -163,27 +165,29 @@ export function buildCosmetic(
 
   const rig = buildRig(mesh)
   const clip = pickClip(readAnimations(animations), clipName)
+  const hidden = hiddenJoints(rig.bones, cover)
 
   const joints: Object3D[] = []
   const roots = new Map<CosmeticAnchor, Group>()
   let drawn = 0
 
-  for (const bone of rig.bones) {
+  rig.bones.forEach((bone, index) => {
     const joint = new Object3D()
     joint.name = bone.name
+    joint.visible = !hidden[index]
     joint.position.set(bone.offset[0], bone.offset[1], bone.offset[2])
     // Игра крутит кость вокруг z, затем y, затем x - тот же порядок и здесь.
     poseJoint(joint, bone.rotation, [0, 0, 0])
     const geometry = boneGeometry(bone)
     if (geometry) {
       joint.add(new Mesh(geometry, material))
-      drawn += 1
+      if (!hidden[index]) drawn += 1
     }
     joints.push(joint)
 
     if (bone.parent >= 0) {
       ;(joints[bone.parent] as Object3D).add(joint)
-      continue
+      return
     }
     const anchor = bone.anchor ?? 'root'
     let root = roots.get(anchor)
@@ -196,11 +200,12 @@ export function buildCosmetic(
       roots.set(anchor, root)
     }
     root.add(joint)
-  }
+  })
 
   if (!drawn) return []
 
-  const first = joints.find((joint) => joint.children.some((child) => (child as Mesh).isMesh))
+  // A hidden joint is never rendered, so the clock must hang on a drawn one.
+  const first = joints.find((joint, index) => !hidden[index] && joint.children.some((child) => (child as Mesh).isMesh))
   const ticker = first ? (first.children.find((child) => (child as Mesh).isMesh) as Mesh) : null
   if (ticker) {
     const started = performance.now()

@@ -73,7 +73,7 @@ describe('качание плаща-вещи вслед за плащом фиг
     player.cape.quaternion.setFromEuler(new Euler(CAPE_REST_X, Math.PI, 0))
     const pivot = new Group()
     const sway = (SkinViewEngine.prototype as unknown as { _swayCosmetics(this: unknown): void })._swayCosmetics
-    sway.call({ playerObject: player, _swaying: [pivot] })
+    sway.call({ playerObject: player, _swaying: [pivot], _fastened: [] })
     expect(
       pivot.rotation.x,
       'подвес плаща-вещи повёрнут при плаще в покое: движок снова читает x углов и переворачивает вещь',
@@ -179,4 +179,68 @@ describe('an emote reads its rest from a clean pose, not a shifted one', () => {
       `the emote read its rest from the shifted torso and left the legs ${hipGap(player).toFixed(2)} px off the hip`,
     ).toBeLessThan(0.15)
   })
+})
+
+/**
+ * Crossfade from an emote back to rest. The emote leaves the cape written as a quaternion,
+ * which three reads back as (x - PI, 0, PI); rest is (x, PI, 0). Both are the same hang, so
+ * every frame of the blend must stay near it instead of spinning through half a turn.
+ */
+describe('the crossfade keeps the cape hanging', () => {
+  const STEPS: [number, string][] = [
+    [0.1, 'the first frames after an emote ends - where the cape twitched'],
+    [0.5, 'the middle of the crossfade, farthest from both ends'],
+    [0.9, 'just before the blend lands on rest'],
+  ]
+  for (const [t, why] of STEPS) {
+    it(`t=${t}: ${why}`, () => {
+      const player = new PlayerObject()
+      resetLimbPose(player)
+      const rest = capturePose(player)
+      player.cape.quaternion.setFromEuler(new Euler(CAPE_REST_X - Math.PI, 0, Math.PI))
+      const emoteEnd = capturePose(player)
+      blendPoses(player, emoteEnd, rest, t)
+      expect(
+        Math.abs(capeSwing(player.cape)),
+        'the cape left its hang mid-crossfade: angles are being lerped instead of the rotation itself',
+      ).toBeLessThan(0.01)
+    })
+  }
+})
+
+/**
+ * A bow leans only the torso. A cape cosmetic is fastened to the figure, so it
+ * must be carried along with the torso: fastened to the root it stayed upright
+ * and stood off the bent back (tester report 27.09.2026).
+ */
+describe('a cape cosmetic stays on the back when the torso leans', () => {
+  const LEANS: [number, string][] = [
+    [0, 'standing: the cape hangs where it always did'],
+    [0.6, 'a nod forward, as in the idle emotes'],
+    [1.3, 'a deep bow, where the cape stood off the back'],
+  ]
+  for (const [lean, why] of LEANS) {
+    it(`lean ${lean}: ${why}`, async () => {
+      const SkinViewEngine = await loadEngine()
+      const player = new PlayerObject()
+      resetLimbPose(player)
+      const proto = SkinViewEngine.prototype as unknown as {
+        _hanging(this: unknown, o: Group): Group
+        _swayCosmetics(this: unknown): void
+      }
+      const self = { playerObject: player, _swaying: [] as Group[], _fastened: [] as Group[] }
+      const cloth = new Group()
+      const mount = proto._hanging.call(self, cloth)
+      player.skin.add(mount)
+      player.skin.body.rotation.x = lean
+      proto._swayCosmetics.call(self)
+      player.updateMatrixWorld(true)
+      const fastened = self._swaying[0]!.getWorldPosition(new Vector3())
+      const onBack = player.skin.body.localToWorld(new Vector3(0, 4, -2))
+      expect(
+        fastened.distanceTo(onBack),
+        'the cape is fastened away from the back: it no longer follows the torso',
+      ).toBeLessThan(1e-6)
+    })
+  }
 })

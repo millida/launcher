@@ -1068,7 +1068,6 @@ pub async fn install_and_launch_in(
     profile: String,
     auth: Auth,
 ) -> Result<String, String> {
-    CANCEL.store(false, std::sync::atomic::Ordering::SeqCst);
     // the nick lands on the command line and in an argfile
     let nick = launch_nick(&nick);
     let prof = load_profiles().into_iter().find(|p| p.name == profile);

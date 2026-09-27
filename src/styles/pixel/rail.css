@@ -241,7 +241,8 @@ span.tb-rubies { cursor: default; }
 .topbar .btn.md.tb-tab { height: 50px; padding: 0 30px; gap: 10px; font-size: 18px; font-weight: 800; }
 .topbar .tb-tab .px-icon { image-rendering: pixelated; }
 /* «Импорт» мельче «Новой сборки». */
-.ph-bar-imp .btn { height: 40px; padding: 0 12px; font-size: 13px; opacity: 0.9; }
+.ph-bar-imp { display: flex; }
+.ph-bar-imp .btn { padding: 0 12px; font-size: 13px; opacity: 0.9; }
 /* Узкое окно: вкладки остаются крупными и со значками, ужимаются только
    поля; «Импорт» — одним значком, чтобы кнопки справа не налезали. */
 @media (max-width: 1040px) {

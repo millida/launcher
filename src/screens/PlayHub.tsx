@@ -24,7 +24,7 @@ import {
   playVersions,
   versionCover,
 } from '../components/playhub/data'
-import type { HubPack, LiveMode, ModeStats, ServerModeDef } from '../components/playhub/data'
+import type { FeedSort, HubPack, LiveMode, ModeStats, ServerModeDef } from '../components/playhub/data'
 import { HeroSkel } from '../components/playhub/HubTop'
 import { PackPage } from '../components/playhub/PackPage'
 import { MyBuildCard, useMyBuilds } from '../components/playhub/MyBuilds'
@@ -113,6 +113,13 @@ function versionSpan(list: string[]): string {
 
 const servers = (n: number) => fmtN(n) + ' ' + plural(n, 'сервер', 'сервера', 'серверов')
 
+const FEED_SORTS: [FeedSort, string][] = [
+  ['rating', 'По рейтингу'],
+  ['online', 'По онлайну'],
+  ['votes', 'По голосам'],
+  ['new', 'Новые'],
+]
+
 /** Серверы одного режима — лента рейтинга по его тегу: выбрал — играешь. */
 function ModePage({
   def,
@@ -134,6 +141,7 @@ function ModePage({
   }, [def.cat])
   // Поиск по серверам режима: запрос уходит в рейтинг через паузу в наборе.
   const [q, setQ] = useState('')
+  const [sort, setSort] = useState<FeedSort>('rating')
   const [search, setSearch] = useState('')
   useEffect(() => {
     const t = window.setTimeout(() => setSearch(q.trim().length >= 2 ? q.trim() : ''), 300)
@@ -166,18 +174,35 @@ function ModePage({
           ) : null}
         </div>
       </header>
-      <label className="input hs-field ph-mode-find">
-        <Icon id="i-search" />
-        <input value={q} placeholder="Имя или адрес сервера" maxLength={60} onChange={(e) => setQ(e.target.value)} />
-        {q ? (
-          <button type="button" className="hs-clear" aria-label="Очистить" data-track="search_clear" onClick={() => setQ('')}>
-            <Icon id="i-x" />
-          </button>
-        ) : null}
-      </label>
+      <div className="ph-mode-tools">
+        <label className="input hs-field ph-mode-find">
+          <Icon id="i-search" />
+          <input value={q} placeholder="Имя или адрес сервера" maxLength={60} onChange={(e) => setQ(e.target.value)} />
+          {q ? (
+            <button type="button" className="hs-clear" aria-label="Очистить" data-track="search_clear" onClick={() => setQ('')}>
+              <Icon id="i-x" />
+            </button>
+          ) : null}
+        </label>
+        <div className="segs mr-sort ph-mode-sort" role="group" aria-label="Сортировка серверов">
+          {FEED_SORTS.map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              className={'seg' + (sort === id ? ' on' : '')}
+              aria-pressed={sort === id}
+              data-track={'mode_sort_' + id}
+              onClick={() => setSort(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
       <ServerFeed
         category={def.cat}
         search={search}
+        sort={sort}
         onFirstPage={(total, s) => setFound({ search: s, total })}
         render={(s, i) => <ServerRow s={s} def={def} pos={i} current={current} onPlay={onPick} />}
       />
@@ -312,6 +337,13 @@ export function PlayHub({ on }: { on?: boolean }) {
   // Подстраница открыта — верхняя «← Лобби» становится «← Назад» (правка
   // владельца 22:38), своих кнопок «Назад» на подстраницах больше нет.
   const setBack = useTopBar((st) => st.setBack)
+  const setBare = useTopBar((st) => st.setBare)
+  // Серверы режима — страница мониторинга: наверху только «← Назад», без
+  // вкладок «Библиотека | Ресурсы» (владелец 27.09.2026).
+  useEffect(() => {
+    setBare(on !== false && !!openCat)
+    return () => setBare(false)
+  }, [on, openCat])
   useEffect(() => {
     // «Каталог Millida» — вкладка переключателя, а не подстраница: наверху
     // остаётся «Лобби» (владелец 24.09.2026, 16:52).

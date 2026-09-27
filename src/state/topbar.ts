@@ -8,11 +8,16 @@ import { create } from 'zustand'
 interface TopBarState {
   back: (() => void) | null
   setBack: (fn: (() => void) | null) => void
+  /** Подстраница без вкладок «Библиотека | Ресурсы» наверху — только «← Назад». */
+  bare: boolean
+  setBare: (v: boolean) => void
 }
 
 export const useTopBar = create<TopBarState>((set) => ({
   back: null,
   setBack: (fn) => set({ back: fn }),
+  bare: false,
+  setBare: (v) => set({ bare: v }),
 }))
 
 /** Гардероб: кнопки верхней строки зовут экран событиями. */

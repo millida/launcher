@@ -70,6 +70,8 @@ import { loadMillidaProfile, logoutToLogin } from '../lib/session'
 import { ensureMsAuth } from '../state/msLogin'
 import { apiErrorText } from '../lib/apiError'
 import { buildCosmetic } from '../lib/cosmeticModel'
+import { hidesRegularCape, maskUrls, pieceCover } from '../lib/cosmeticCover'
+import { maskedSkin } from '../lib/maskedSkin'
 import { sectionTakeOff } from '../lib/sectionTakeOff'
 import { CosmeticEmote, emoteClip } from '../lib/cosmeticEmote'
 import { emoteSequence } from '../lib/emoteSequence'
@@ -1051,6 +1053,22 @@ export function Skins({ on }: { on: boolean }) {
 
   const textureOf = (item: CosmeticItem) => variantOf(item)?.texture ?? item.texture
 
+  // Примеряемое вытесняет надетое на том же месте: на голове не может быть
+  // двух шляп, и показывать обе - врать о том, как это будет выглядеть.
+  const dressed = useMemo(() => {
+    const busySlots = new Set(fitting.map((c) => c.slot))
+    return worn
+      .filter((w) => !busySlots.has(w.slot))
+      .map((w) => cosmetics.find((c) => c.id === w.id))
+      .concat(fitting)
+      .filter((c): c is CosmeticItem => Boolean(c))
+  }, [worn, fitting, cosmetics])
+  const skinMasks = useMemo(
+    () => maskUrls(dressed, variant === 'slim', dressed.find((c) => c.slot === 'EMOTE')).join(' '),
+    [dressed, variant],
+  )
+  const capeCovered = useMemo(() => hidesRegularCape(dressed), [dressed])
+
   /** Надеть вещь на фигуру в окне или снять её оттуда. Покупка тут ни при чём. */
   const tryOn = (item: CosmeticItem) => {
     setFitting((now) =>
@@ -1888,28 +1906,36 @@ export function Skins({ on }: { on: boolean }) {
     const engine = viewerRef.current
     if (!engine) return
     let alive = true
-    void textureSource(skinSrc || skinUrl(nick)).then((src) => {
-      if (!alive) return
-      engine
-        .setSkin(src)
-        .then(() => {
-          if (!alive) return
-          fitViewer()
-          requestAnimationFrame(() => requestAnimationFrame(() => setModelShown(true)))
-        })
-        .catch((e) => {
-          // Текстура не прочиталась: фигура остаётся в прежнем скине, но не
-          // пропадает, и человек видит, почему скин не сменился.
-          console.warn('[skins] setSkin', e)
-          if (!alive) return
-          setModelShown(true)
-          showToast('Скин не прочитался — проверь, что это PNG 64×64', 'error')
-        })
-    })
+    const masks = skinMasks ? skinMasks.split(' ') : []
+    void textureSource(skinSrc || skinUrl(nick))
+      .then((src) =>
+        maskedSkin(src, masks, variant === 'slim').catch((e: unknown) => {
+          console.warn('[skins] skin under the outfit was not cut', e)
+          return src
+        }),
+      )
+      .then((src) => {
+        if (!alive) return
+        engine
+          .setSkin(src)
+          .then(() => {
+            if (!alive) return
+            fitViewer()
+            requestAnimationFrame(() => requestAnimationFrame(() => setModelShown(true)))
+          })
+          .catch((e) => {
+            // Текстура не прочиталась: фигура остаётся в прежнем скине, но не
+            // пропадает, и человек видит, почему скин не сменился.
+            console.warn('[skins] setSkin', e)
+            if (!alive) return
+            setModelShown(true)
+            showToast('Скин не прочитался — проверь, что это PNG 64×64', 'error')
+          })
+      })
     return () => {
       alive = false
     }
-  }, [nick, skinSrc, engineReady])
+  }, [nick, skinSrc, skinMasks, variant, engineReady])
 
   useEffect(() => {
     const engine = viewerRef.current
@@ -1930,13 +1956,7 @@ export function Skins({ on }: { on: boolean }) {
     if (!engine || !engineReady || typeof engine.clearCosmetics !== 'function') return
     let alive = true
     engine.clearCosmetics()
-    // Примеряемое вытесняет надетое на том же месте: на голове не может быть
-    // двух шляп, и показывать обе - врать о том, как это будет выглядеть.
-    const busySlots = new Set(fitting.map((c) => c.slot))
-    const shown = worn
-      .filter((w) => !busySlots.has(w.slot))
-      .map((w) => cosmetics.find((c) => c.id === w.id))
-      .concat(fitting)
+    const shown = dressed
       // Эмоции рисовать нечего: у них нет ни картинки, ни кубов - только клип,
       // который двигает самого игрока. Модель им всё равно нужна.
       .filter((c): c is CosmeticItem => Boolean(c && c.model && (textureOf(c) || c.slot === 'EMOTE')))
@@ -1978,6 +1998,7 @@ export function Skins({ on }: { on: boolean }) {
               got.file.animations,
               got.item.animation,
               got === emote && playing && sequence ? { sequence, clock: () => playing.progress } : undefined,
+              pieceCover(dressed, got.item),
             )) {
               engine.attachCosmetic(piece.anchor, piece.object)
             }
@@ -1996,13 +2017,13 @@ export function Skins({ on }: { on: boolean }) {
       setFitLoading([])
       engine.clearCosmetics()
     }
-  }, [worn, fitting, cosmetics, variant, variantById, engineReady])
+  }, [dressed, variant, variantById, engineReady])
 
   useEffect(() => {
     const engine = viewerRef.current
     if (!engine) return
     const c = capes.find((x) => x.id === cape)
-    if (!c) {
+    if (!c || capeCovered) {
       engine.clearCape()
       return
     }
@@ -2019,7 +2040,7 @@ export function Skins({ on }: { on: boolean }) {
     return () => {
       alive = false
     }
-  }, [cape, capes, engineReady])
+  }, [cape, capes, capeCovered, engineReady])
 
   /// Автопоказ: покой — это idle, изредка персонаж проигрывает один из клипов и
   /// возвращается в покой. Порядок берётся из перемешанного мешка, а пауза —

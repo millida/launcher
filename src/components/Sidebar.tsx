@@ -8,7 +8,9 @@ import { useGameNick } from '../state/gameNick'
 import { unreadTotal, useFriends } from '../state/friends'
 import { radioOn, useMusic } from '../state/music'
 import { BugPx, FEEDBACK_SHARDS, FeedbackModal, feedbackRewardReady } from './Feedback'
-import { playSound, setSoundMode, soundMode } from '../lib/sound'
+import { playSound, setSoundMode, soundMode, soundVolume } from '../lib/sound'
+import { writePref } from '../lib/prefs'
+import { Slider } from './Slider'
 import { roomsUnreadTotal, useRooms } from '../state/rooms'
 import { openMessages } from '../state/chatScreen'
 import { PlayhubBar } from './playhub/MyBuilds'
@@ -27,9 +29,24 @@ import { preloadScreen } from '../screens/registry'
    шапка с «← Лобби» и ходом запуска. Имя компонента осталось Sidebar, чтобы не
    трогать раскладку App.tsx. */
 /** Две квадратные кнопки лобби: звуки интерфейса и музыка (по умолчанию играет). */
+/** Громкость под кнопкой — всплывает при наведении (правка 27.09.2026): крутить её в настройках долго. */
+function VolumePop({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+  return (
+    <span className="lb-vol-pop" role="group" aria-label={label}>
+      <span className="lb-vol-card">
+        <Slider value={value} min={0} max={100} onChange={onChange} width={140} />
+        <b>{value + '%'}</b>
+      </span>
+    </span>
+  )
+}
+
 function LobbySoundBtns() {
   const music = useMusic((s) => radioOn(s))
   const toggleMusic = useMusic((s) => s.toggleRadio)
+  const musicLevel = useMusic((s) => s.level)
+  const setMusicLevel = useMusic((s) => s.setVolume)
+  const [sfxLevel, setSfxLevel] = useState(soundVolume)
   const [ui, setUi] = useState(() => soundMode() === 'all')
   useEffect(() => {
     const sync = () => setUi(soundMode() === 'all')
@@ -38,11 +55,13 @@ function LobbySoundBtns() {
   }, [])
   return (
     <>
+      <span className="lb-vol">
       <button
         className={'lb-btn lb-toggle' + (ui ? '' : ' off')}
         aria-pressed={ui}
         aria-label={ui ? 'Выключить звуки' : 'Включить звуки'}
         data-track={ui ? 'sound_off' : 'sound_on'}
+        data-notip
         data-nosound
         onClick={() => {
           const next = !ui
@@ -53,15 +72,29 @@ function LobbySoundBtns() {
       >
         <Icon id={ui ? 'i-volume' : 'i-mute'} />
       </button>
+      <VolumePop
+        label="Громкость звуков"
+        value={sfxLevel}
+        onChange={(v) => {
+          setSfxLevel(v)
+          writePref('m-sound-vol', String(v))
+          playSound('click')
+        }}
+      />
+      </span>
+      <span className="lb-vol">
       <button
         className={'lb-btn lb-toggle' + (music ? '' : ' off')}
         aria-pressed={music}
         aria-label={music ? 'Выключить музыку' : 'Включить музыку'}
         data-track={music ? 'music_off' : 'music_on'}
+        data-notip
         onClick={() => toggleMusic()}
       >
         <Icon id={music ? 'i-music' : 'i-music-off'} />
       </button>
+      <VolumePop label="Громкость музыки" value={musicLevel} onChange={setMusicLevel} />
+      </span>
     </>
   )
 }
@@ -111,6 +144,7 @@ function MsgPx() {
 export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
   const screen = useUi((s) => s.screen)
   const topBack = useTopBar((s) => s.back)
+  const topBare = useTopBar((s) => s.bare)
   const friends = useFriends((s) => s.friends)
   const reqIn = useFriends((s) => s.reqIn)
   const rooms = useRooms((s) => s.rooms)
@@ -270,9 +304,9 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
       </span>
       {/* «Библиотека | Ресурсы» — в самой верхней полосе, по центру
           (владелец 24.09.2026, 17:24). */}
-      {screen === 'playhub' ? <HubTopTabs /> : null}
+      {screen === 'playhub' && !topBare ? <HubTopTabs /> : null}
       <div className="tb-right">
-        {screen === 'playhub' ? <PlayhubBar /> : null}
+        {screen === 'playhub' && !topBare ? <PlayhubBar /> : null}
         {screen === 'skins' ? (
           <span className="ph-bar">
             <button className="btn md secondary" data-sound="open" data-track="skin_import" onClick={() => window.dispatchEvent(new Event(SKINS_IMPORT_EVENT))}>

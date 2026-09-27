@@ -127,6 +127,13 @@ pub fn cancel_launch() {
     CANCEL.store(true, std::sync::atomic::Ordering::SeqCst);
 }
 
+/// Clears a stale cancel at the very start of a launch command. Clearing it later,
+/// after auth was resolved, swallowed a cancel pressed during that wait and the
+/// game started anyway.
+pub fn begin_launch() {
+    CANCEL.store(false, std::sync::atomic::Ordering::SeqCst);
+}
+
 pub(crate) fn cancelled() -> bool {
     CANCEL.load(std::sync::atomic::Ordering::SeqCst)
 }

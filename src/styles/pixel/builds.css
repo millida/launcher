@@ -239,3 +239,4 @@
   inset: auto; top: calc(100% + 8px); right: 0; z-index: 30;
   width: 220px; padding: 8px; justify-content: flex-start;
 }
+.ph-mine-menu.inst-menu button { flex: none; height: 32px; }

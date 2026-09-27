@@ -4,6 +4,7 @@ import { Select } from './Select'
 import { Slider } from './Slider'
 import { showToast, useUi } from '../state/ui'
 import {
+  applyOutput,
   canPickOutput,
   isSystemAlias,
   listAudioDevices,
@@ -77,8 +78,17 @@ function MicMeter({ deviceId, onFail }: { deviceId: string; onFail: () => void }
         raf = requestAnimationFrame(tick)
       }
       tick()
+      // The meter alone proved only that the device sends something; the player
+      // wants to hear how they sound, so the check plays the mic back into the
+      // headphones picked below.
+      const monitor = new Audio()
+      monitor.srcObject = stream
+      await applyOutput(monitor)
+      void monitor.play().catch(() => showToast('Не удалось вывести звук микрофона в наушники — проверь их в списке ниже', 'error'))
       stopRef.current = () => {
         cancelAnimationFrame(raf)
+        monitor.pause()
+        monitor.srcObject = null
         stream.getTracks().forEach((t) => t.stop())
         void ctx.close().catch(() => {})
       }
@@ -91,7 +101,7 @@ function MicMeter({ deviceId, onFail }: { deviceId: string; onFail: () => void }
 
   return (
     <div className="aud-meter-row">
-      <button className="btn sm ghost" onClick={() => void listen()}>
+      <button className="btn sm secondary" onClick={() => void listen()}>
         <Icon id="i-mic" />
         {busy ? 'Остановить' : 'Проверить'}
       </button>
@@ -368,7 +378,7 @@ export function AudioSettings() {
       </div>
       <div className="set-row" style={{ alignItems: 'flex-start' }}>
         <span className="lab">
-          Проверка записи<small>Скажи что-нибудь — полоса должна двигаться</small>
+          Проверка записи<small>Скажи что-нибудь — услышишь себя в наушниках</small>
         </span>
         <div style={{ width: 230 }}>
           <MicMeter deviceId={mic} onFail={() => setMicFailed(true)} />

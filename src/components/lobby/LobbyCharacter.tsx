@@ -11,6 +11,8 @@ import type { CosmeticItem } from '../../lib/gameProfile'
 import { useHasMillida } from '../../state/auth'
 import { getAccount, useAccounts } from '../../state/accounts'
 import { buildCosmetic } from '../../lib/cosmeticModel'
+import { hidesRegularCape, maskUrls, pieceCover } from '../../lib/cosmeticCover'
+import { maskedSkin } from '../../lib/maskedSkin'
 import { CosmeticEmote, emoteClip } from '../../lib/cosmeticEmote'
 import { emoteSequence } from '../../lib/emoteSequence'
 import { readAnimations } from '../../lib/cosmeticAnimation'
@@ -388,28 +390,38 @@ export function LobbyCharacter({ on }: { on: boolean }) {
     if (!engine || !m3d || !look) return
     let alive = true
     engine.setModelType(look.slim ? m3d.SkinModelType.Slim : m3d.SkinModelType.Classic)
-    void textureSource(look.skin).then((src) =>
-      engine
-        .setSkin(src)
-        .then(() => {
-          if (!alive) return
-          fit()
-          requestAnimationFrame(() => requestAnimationFrame(() => alive && setSkinFor(lookKey(look))))
-        })
-        // Скин не прочитался — всё равно показываем персонажа (запасной
-        // скин по нику), а не оставляем его невидимым навсегда.
-        .catch(() =>
-          engine
-            .setSkin(nickSkinUrl(nick))
-            .catch(() => {})
-            .finally(() => {
-              if (!alive) return
-              fit()
-              setSkinFor(lookKey(look))
-            }),
-        ),
-    )
-    if (look.cape) {
+    const outfit = look.items.map((x) => x.item)
+    const masks = maskUrls(outfit, look.slim, outfit.find((item) => item.slot === 'EMOTE'))
+    void textureSource(look.skin)
+      .then((src) =>
+        maskedSkin(src, masks, look.slim).catch((e: unknown) => {
+          console.warn('[lobby] skin under the outfit was not cut', e)
+          return src
+        }),
+      )
+      .then((src) => {
+        if (!alive) return
+        return engine
+          .setSkin(src)
+          .then(() => {
+            if (!alive) return
+            fit()
+            requestAnimationFrame(() => requestAnimationFrame(() => alive && setSkinFor(lookKey(look))))
+          })
+          // Скин не прочитался — всё равно показываем персонажа (запасной
+          // скин по нику), а не оставляем его невидимым навсегда.
+          .catch(() =>
+            engine
+              .setSkin(nickSkinUrl(nick))
+              .catch(() => {})
+              .finally(() => {
+                if (!alive) return
+                fit()
+                setSkinFor(lookKey(look))
+              }),
+          )
+      })
+    if (look.cape && !hidesRegularCape(outfit)) {
       void textureSource(look.cape).then((src) => {
         if (alive)
           engine
@@ -430,6 +442,7 @@ export function LobbyCharacter({ on }: { on: boolean }) {
     if (!engine || !ready || !look || typeof engine.clearCosmetics !== 'function') return
     let alive = true
     engine.clearCosmetics()
+    const outfit = look.items.map((x) => x.item)
     const worn = look.items.filter((x) => x.texture || x.item.slot === 'EMOTE')
     void Promise.all(worn.map((x) => cosmeticModel(x.item.model as string).then((file) => ({ ...x, file })))).then(
       (loaded) => {
@@ -451,6 +464,7 @@ export function LobbyCharacter({ on }: { on: boolean }) {
               got.file.animations,
               got.item.animation,
               got === emote && playing && sequence ? { sequence, clock: () => playing.progress } : undefined,
+              pieceCover(outfit, got.item),
             )) {
               engine.attachCosmetic(piece.anchor, piece.object)
             }
@@ -556,6 +570,7 @@ export function LobbyCharacter({ on }: { on: boolean }) {
             file.animations,
             item.animation,
             { sequence, clock: () => playing.progress },
+            pieceCover([...(look?.items ?? []).map((x) => x.item), item], item),
           )) {
             e.attachCosmetic(piece.anchor, piece.object)
             props.push(piece)

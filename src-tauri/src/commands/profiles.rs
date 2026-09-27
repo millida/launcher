@@ -277,6 +277,7 @@ pub async fn launch_profile(
     ram_mb: u32,
     auth: Option<engine::AuthArgs>,
 ) -> Result<String, String> {
+    engine::begin_launch();
     let mut p = engine::load_profiles()
         .into_iter()
         .find(|x| x.name == profile)

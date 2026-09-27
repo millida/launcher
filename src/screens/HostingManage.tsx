@@ -274,20 +274,28 @@ export function HostingManage({
     return () => document.removeEventListener('click', close)
   }, [moreOpen])
 
-  usePolling(
-    () => {
-      void api(P(server.id) + '/stats')
-        .then((s: Stats) => {
-          setStats(s)
-          const mem = s.memoryLimitMb ? Math.min(100, (s.memoryUsedMb / s.memoryLimitMb) * 100) : 0
-          setCpuHist((h) => [...h.slice(-47), Math.max(0, Math.min(100, s.cpuPercent))])
-          setMemHist((h) => [...h.slice(-47), mem])
-        })
-        .catch(() => {})
-    },
-    5000,
-    { hiddenMs: 0 },
-  )
+  const pullStats = () => {
+    void api(P(server.id) + '/stats')
+      .then((s: Stats) => {
+        setStats(s)
+        const mem = s.memoryLimitMb ? Math.min(100, (s.memoryUsedMb / s.memoryLimitMb) * 100) : 0
+        setCpuHist((h) => [...h.slice(-47), Math.max(0, Math.min(100, s.cpuPercent))])
+        setMemHist((h) => [...h.slice(-47), mem])
+      })
+      .catch(() => {})
+  }
+  usePolling(pullStats, 5000, { hiddenMs: 0 })
+
+  // Status, address and plan change without the owner touching this page (the
+  // server finishes starting, crashes, gets stopped from the site), so the card
+  // is re-read on its own instead of only after an action here.
+  usePolling(reload, 10_000, { immediate: false })
+
+  const refreshAll = () => {
+    reload()
+    pullStats()
+    onRefreshList()
+  }
 
   usePolling(
     () => {
@@ -606,7 +614,12 @@ export function HostingManage({
         <button className="btn sm ghost hsx-back" onClick={onBack}>
           <Icon id="i-chev-l" /> К серверам
         </button>
-        <BalancePill />
+        <span className="hsx-manage-top-r">
+          <button className="btn sm secondary" data-track="host_refresh" onClick={refreshAll}>
+            <Icon id="i-restart" /> Обновить
+          </button>
+          <BalancePill />
+        </span>
       </div>
 
       <HostScene

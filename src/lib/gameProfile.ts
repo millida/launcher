@@ -218,6 +218,9 @@ export interface CosmeticItem {
   /// v3.1: цвет своей расцветки и базовой — превью перекрашивается из второго в первый.
   tint?: string
   tintFrom?: string
+  hides?: unknown
+  masks?: Record<string, string>
+  side?: string
 }
 
 /**

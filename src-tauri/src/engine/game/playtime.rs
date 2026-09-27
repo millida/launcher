@@ -75,6 +75,27 @@ fn bump(section: &mut Value, key: &str, secs: u64, ts: u64, new_session: bool) {
     });
 }
 
+/// Adds a slice `[ts - secs, ts]` to the wall-clock total, counting only the part
+/// no earlier slice already covered. Every running game writes its own slices,
+/// so three builds open side by side used to add three minutes per real minute
+/// to the lobby total; each build's own seconds stay exact either way.
+///
+/// A file written before this total existed starts from the sum of the builds:
+/// past overlap can no longer be told apart, so history is kept as it was.
+fn bump_wall(doc: &mut Value, secs: u64, ts: u64) {
+    let base = doc["wallSeconds"].as_u64().unwrap_or_else(|| {
+        doc["builds"]
+            .as_object()
+            .map(|m| m.values().map(|e| e["seconds"].as_u64().unwrap_or(0)).sum())
+            .unwrap_or(0)
+    });
+    let until = doc["wallUntil"].as_u64().unwrap_or(0);
+    let start = ts.saturating_sub(secs).max(until);
+    let fresh = ts.saturating_sub(start);
+    doc["wallSeconds"] = json!(base + fresh);
+    doc["wallUntil"] = json!(until.max(ts));
+}
+
 /// Existing entries were written before addresses were canonicalized, and the
 /// UI still passes whatever the player typed: without this, one server splits
 /// into `Play.Example.RU` and `play.example.ru`.
@@ -103,6 +124,7 @@ pub(crate) fn record_playtime(
     if secs == 0 && !new_session && !server_session { return }
     let ts = now_secs();
     let mut doc = read_doc();
+    bump_wall(&mut doc, secs, ts);
     bump(&mut doc["builds"], profile, secs, ts, new_session);
     doc["lastBuild"] = json!(profile);
     doc["lastAt"] = json!(ts);
@@ -180,7 +202,7 @@ pub fn get_play_stats() -> PlayStats {
         .map(|s| s.label.clone())
         .unwrap_or_default();
     PlayStats {
-        total_seconds: builds.iter().map(|b| b.seconds).sum(),
+        total_seconds: doc["wallSeconds"].as_u64().unwrap_or_else(|| builds.iter().map(|b| b.seconds).sum()),
         sessions: builds.iter().map(|b| b.sessions).sum(),
         last_build: doc["lastBuild"].as_str().unwrap_or("").to_string(),
         last_at: doc["lastAt"].as_u64().unwrap_or(0),
@@ -214,6 +236,35 @@ mod tests {
             "one launch must stay one session no matter how many flushes it took"
         );
         assert_eq!(section["build"]["last"].as_u64(), Some(185), "last must track the newest flush");
+    }
+
+    /// Slices from builds running at once -> wall total -> why it is pinned.
+    #[test]
+    fn parallel_games_count_real_time_once() {
+        let cases: [(&str, &[(u64, u64)], u64, &str); 4] = [
+            ("one game, back to back slices", &[(60, 100), (60, 160)], 120, "a single game still counts every second"),
+            ("three games in the same minute", &[(60, 100), (60, 100), (60, 100)], 60, "three windows open for a minute are one minute of the player's time"),
+            ("second game joins halfway", &[(60, 100), (60, 130)], 90, "only the half not already covered is new time"),
+            ("a gap between sessions", &[(60, 100), (60, 1000)], 120, "time between two sessions is not played time"),
+        ];
+        for (name, slices, want, why) in cases {
+            let mut doc = json!({ "builds": {}, "wallSeconds": 0 });
+            for &(secs, ts) in slices {
+                bump_wall(&mut doc, secs, ts);
+            }
+            assert_eq!(doc["wallSeconds"].as_u64(), Some(want), "{}: {}", name, why);
+        }
+    }
+
+    #[test]
+    fn wall_total_starts_from_existing_history() {
+        let mut doc = json!({ "builds": { "a": { "seconds": 3000 }, "b": { "seconds": 600 } } });
+        bump_wall(&mut doc, 60, 5000);
+        assert_eq!(
+            doc["wallSeconds"].as_u64(),
+            Some(3660),
+            "an old file without the wall total must keep the hours it already shows"
+        );
     }
 
     #[test]

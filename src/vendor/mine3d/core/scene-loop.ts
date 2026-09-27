@@ -8,6 +8,14 @@ import { PlayerObject } from "skin3d";
  */
 const HANG_Y = -2;
 const HANG_Z = -2;
+/** The torso's rest position inside the figure, the same as NEUTRAL_PART_POS.body. */
+const TORSO_REST: readonly [number, number, number] = [0, -6, 0];
+
+/** How far the torso leans forward or back, read from where its down axis points. */
+function torsoLean(q: Quaternion): number {
+  const down = new Vector3(0, -1, 0).applyQuaternion(q);
+  return Math.atan2(-down.z, -down.y);
+}
 
 /** Кость фигуры, на которую вешается вещь. */
 export type CosmeticAnchorName =
@@ -40,6 +48,7 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   PerspectiveCamera,
+  type Quaternion,
   Raycaster,
   Scene,
   SphereGeometry,
@@ -199,6 +208,8 @@ export class SkinViewEngine {
    * читалось как доска, приклеенная к спине.
    */
   private _swaying: Object3D[] = [];
+  /** Where each cape cosmetic is fastened: carried along with the torso every frame. */
+  private _fastened: Object3D[] = [];
   private readonly playerWrapper: Group;
   private readonly skinCanvas: HTMLCanvasElement;
   private readonly capeCanvas: HTMLCanvasElement;
@@ -819,7 +830,16 @@ export class SkinViewEngine {
     back.add(object);
     pivot.add(back);
     this._swaying.push(pivot);
-    return pivot;
+    // The cape is drawn around the figure, but a bow or a squat moves only the
+    // torso: fastened to the figure root, the cape stayed upright and stood off
+    // the bent back. The mount replays the torso's move from its rest pose.
+    const mount = new Group();
+    const rest = new Group();
+    rest.position.set(-TORSO_REST[0], -TORSO_REST[1], -TORSO_REST[2]);
+    rest.add(pivot);
+    mount.add(rest);
+    this._fastened.push(mount);
+    return mount;
   }
 
   /**
@@ -829,7 +849,14 @@ export class SkinViewEngine {
    */
   private _swayCosmetics(): void {
     if (this._swaying.length === 0) return;
-    const swing = capeSwing(this.playerObject.cape);
+    const body = this.playerObject.skin.body;
+    for (const mount of this._fastened) {
+      mount.position.copy(body.position);
+      mount.quaternion.copy(body.quaternion);
+    }
+    // The mount already carries the torso's lean; the swing is measured against
+    // the figure, so that lean is taken back out or the cloth would tilt twice.
+    const swing = capeSwing(this.playerObject.cape) - torsoLean(body.quaternion);
     for (const pivot of this._swaying) {
       pivot.rotation.x = swing;
     }
@@ -842,12 +869,11 @@ export class SkinViewEngine {
     this.playerObject.cape.cape.visible = true;
     this.playerObject.cape.visible = Boolean(this.capeTexture);
     this._swaying = [];
+    this._fastened = [];
     for (const worn of this._cosmetics) {
-      const hung = worn.object.parent?.parent;
-      if (hung && hung !== worn.part) {
-        worn.part.remove(hung);
-      }
-      worn.part.remove(worn.object);
+      let top: Object3D = worn.object;
+      while (top.parent && top.parent !== worn.part) top = top.parent;
+      worn.part.remove(top);
       worn.object.traverse((node) => {
         const mesh = node as Mesh;
         if (mesh.geometry) mesh.geometry.dispose();

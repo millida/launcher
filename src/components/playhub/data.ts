@@ -183,12 +183,16 @@ export function loadLiveModes(): Promise<LiveMode[]> {
  * Лента серверов рейтинга: страница за страницей в порядке рейтинга, без
  * дублей одного проекта по имени (рейтинг собран из нескольких мониторингов).
  */
+/** Порядок ленты серверов — те же ключи, что у мониторинга на millida.net. */
+export type FeedSort = 'rating' | 'online' | 'votes' | 'new'
+
 export async function loadFeedPage(
   offset: number,
   category?: string,
   search?: string,
+  sort: FeedSort = 'rating',
 ): Promise<{ servers: SnapshotServer[]; total: number }> {
-  const q = new URLSearchParams({ limit: '30', offset: String(offset), sort: 'rating' })
+  const q = new URLSearchParams({ limit: '30', offset: String(offset), sort })
   if (category) q.set('category', category)
   if (search) q.set('search', search.slice(0, 60))
   const r = await api<{ servers?: RatingServer[]; total?: number }>('/rating/servers?' + q.toString())
