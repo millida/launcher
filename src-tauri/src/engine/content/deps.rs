@@ -219,7 +219,11 @@ pub(crate) fn is_fabric_api_family(project_id: &str) -> bool {
 /// Its mod set is one tested whole shipped by us, so a jar it carries is not a
 /// free choice the launcher may second-guess against Modrinth "latest".
 fn is_catalog_pack(profile: &str) -> bool {
-    profile_settings(profile)["catalogPackSlug"].as_str().is_some_and(|s| !s.is_empty())
+    catalog_pack_settings(&profile_settings(profile))
+}
+
+fn catalog_pack_settings(settings: &Value) -> bool {
+    settings["catalogPackSlug"].as_str().is_some_and(|s| !s.is_empty())
 }
 
 /// Whether this build's Fabric API is load-bearing and must stay exactly as it
@@ -781,6 +785,9 @@ pub async fn audit_deps(profile: String) -> Result<DepAudit, String> {
     let locals = tauri::async_runtime::spawn_blocking(move || scan_local_meta(&prof, "mod", false))
         .await
         .map_err(|e| e.to_string())?;
+    if is_catalog_pack(&profile) {
+        return Ok(shipped_pack_audit(locals.len()));
+    }
     let manifest: Vec<ContentEntry> = load_content_manifest(&profile).into_iter().filter(|e| e.kind == "mod").collect();
     let installed = installed_index(&profile);
     let runs: Vec<String> = std::iter::once(ctx.loader_id.clone()).chain(ctx.bridge.iter().cloned()).collect();
@@ -909,6 +916,15 @@ pub async fn audit_deps(profile: String) -> Result<DepAudit, String> {
     Ok(audit)
 }
 
+/// A catalogue pack is judged by its author, not by the files in `mods/`: a
+/// protected pack loads most of its mods from `libraries` (Arcania keeps 308
+/// there, Prism among them) and carries Forge jars its loader skips, so the
+/// folder alone reported 120 problems for a pack that runs as shipped. It must
+/// not be offered fixes either: the page installs every offered fix by itself.
+fn shipped_pack_audit(checked: usize) -> DepAudit {
+    DepAudit { checked: checked as u32, issues: vec![] }
+}
+
 /// Fabric Loader bundles MixinExtras since 0.15 and answers for its id itself:
 /// Lithium asking for «mixinextras» was reported missing on every such build.
 const FABRIC_BUNDLES_MIXINEXTRAS: &str = "0.15.0";
@@ -936,6 +952,22 @@ fn push_missing(audit: &mut DepAudit, needed_by: String, missing: String, fix: O
 #[cfg(test)]
 mod tests {
     /// (loader, loader version, mod id) -> satisfied by the loader itself.
+    #[test]
+    fn a_catalogue_pack_is_audited_as_shipped() {
+        let cases: [(serde_json::Value, bool, &str); 4] = [
+            (serde_json::json!({ "catalogPackSlug": "arcania" }), true, "Arcania 27.09: «Проблем: 120» for a pack that starts as shipped, and Check installed the «fixes» into it"),
+            (serde_json::json!({ "catalogPackSlug": "" }), false, "an empty slug is not a catalogue pack"),
+            (serde_json::json!({}), false, "a player's own build keeps the full audit"),
+            (serde_json::json!({ "catalogPackSlug": null }), false, "a cleared slug is not a catalogue pack"),
+        ];
+        for (settings, want, why) in cases {
+            assert_eq!(catalog_pack_settings(&settings), want, "{}", why);
+        }
+        let audit = shipped_pack_audit(291);
+        assert!(audit.issues.is_empty(), "a shipped pack reports nothing the player is asked to fix or install");
+        assert_eq!(audit.checked, 291, "the page still says how many files were looked at");
+    }
+
     #[test]
     fn loader_bundled_libraries_are_not_missing() {
         let cases: [(&str, Option<&str>, &str, bool, &str); 6] = [
