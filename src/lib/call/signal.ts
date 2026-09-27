@@ -1,4 +1,6 @@
 import { api, hasMillidaAccount } from '../api'
+import { isRealtimeLive, onRealtime, onRealtimeLiveChange } from '../realtime'
+import { REALTIME_FALLBACK_MS, pokeGate } from '../realtimePace'
 
 export type CallSignalKind =
   | 'invite'
@@ -70,8 +72,30 @@ interface Pump {
 export function startSignalPump(onEvent: (e: CallEvent) => void): Pump {
   let stopped = false
   let cursor = Number(localStorage.getItem(CURSOR_KEY)) || 0
+  let busy = false
+  let wakeNow: (() => void) | null = null
 
   const pause = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+  const sleep = (ms: number) =>
+    new Promise<void>((resolve) => {
+      const done = () => {
+        clearTimeout(t)
+        wakeNow = null
+        resolve()
+      }
+      const t = setTimeout(done, ms)
+      wakeNow = done
+    })
+
+  const gate = pokeGate(
+    () => busy,
+    () => wakeNow?.(),
+  )
+  const offPoke = onRealtime('calls', gate.poke)
+  const offLive = onRealtimeLiveChange((live) => {
+    if (!live) wakeNow?.()
+  })
 
   // Цикл держится на ожидании ответа, а не на таймере: в свёрнутом окне таймеры
   // замедляются до минуты, и звонок во время игры пришёл бы с опозданием.
@@ -81,8 +105,15 @@ export function startSignalPump(onEvent: (e: CallEvent) => void): Pump {
         await pause(RETRY_MS)
         continue
       }
+      if (isRealtimeLive() && !gate.take()) {
+        await sleep(REALTIME_FALLBACK_MS)
+        if (stopped) return
+        if (!hasMillidaAccount()) continue
+      }
+      const wait = isRealtimeLive() ? '&wait=0' : ''
+      busy = true
       try {
-        const r = await api<{ cursor?: number; events?: CallEvent[] }>('/friends/call/poll?after=' + cursor)
+        const r = await api<{ cursor?: number; events?: CallEvent[] }>('/friends/call/poll?after=' + cursor + wait)
         if (stopped) return
         if (typeof r.cursor === 'number') {
           cursor = r.cursor
@@ -97,6 +128,8 @@ export function startSignalPump(onEvent: (e: CallEvent) => void): Pump {
         })
       } catch {
         await pause(RETRY_MS)
+      } finally {
+        busy = false
       }
     }
   }
@@ -105,6 +138,9 @@ export function startSignalPump(onEvent: (e: CallEvent) => void): Pump {
   return {
     stop: () => {
       stopped = true
+      offPoke()
+      offLive()
+      wakeNow?.()
     },
   }
 }

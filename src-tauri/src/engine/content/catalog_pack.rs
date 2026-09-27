@@ -400,6 +400,9 @@ async fn update_catalog_pack_job(app: &AppHandle, job: &Job, current: &Profile, 
     let meta = prepare_update(app, job, profile, slug, &pdir, &staged).await.map_err(old_version_kept)?;
 
     job.emit(app, 95.0, "Меняем версию…");
+    // A launch of this build starting during the switch would read a folder
+    // that is half the old version and half the new one.
+    let _slot = claim_profile_start(profile, || {}).await.map_err(old_version_kept)?;
     // The installed version may have been started while the next one downloaded.
     assert_not_running(profile, "обнови ещё раз").map_err(old_version_kept)?;
     swap_in(&pdir, &staged, &previous)?;

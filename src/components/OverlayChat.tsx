@@ -7,6 +7,8 @@ import { dayKey, dayLabel, isGrouped, isRead } from '../lib/chatGroup'
 import { apiErrorText } from '../lib/apiError'
 import { chatItems, chatKey, chatWhen, unreadOf, type OverlayChatItem } from '../lib/overlayChats'
 import { initSecrets } from '../lib/secure'
+import { isRealtimeLive, onRealtime, retainRealtime } from '../lib/realtime'
+import { refreshDue } from '../lib/realtimePace'
 import { isOwnMediaUrl } from '../lib/ownMedia'
 import { overlayState } from '../ipc/commands'
 import {
@@ -134,18 +136,40 @@ export function OverlayChat({
     if (openId) void renderChat()
   }, [signal, openId])
 
+  useEffect(() => retainRealtime(), [])
+
   useEffect(() => {
     if (!openId) return
-    const t = setInterval(() => void renderChat(), THREAD_POLL_MS)
-    return () => clearInterval(t)
+    let last = 0
+    const refresh = () => {
+      last = Date.now()
+      void renderChat()
+    }
+    const t = setInterval(() => {
+      if (refreshDue(isRealtimeLive(), last, Date.now())) refresh()
+    }, THREAD_POLL_MS)
+    const off = onRealtime('friends', refresh)
+    return () => {
+      clearInterval(t)
+      off()
+    }
   }, [openId])
 
   useEffect(() => {
-    const t = setInterval(() => {
+    let last = 0
+    const refresh = () => {
+      last = Date.now()
       void loadFriends()
       void loadRooms()
+    }
+    const t = setInterval(() => {
+      if (refreshDue(isRealtimeLive(), last, Date.now())) refresh()
     }, LIST_POLL_MS)
-    return () => clearInterval(t)
+    const off = onRealtime('friends', refresh)
+    return () => {
+      clearInterval(t)
+      off()
+    }
   }, [])
 
   // Reading over the game is still reading: a thread that grew while it was on

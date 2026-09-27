@@ -20,6 +20,9 @@ import { launchAttribution } from './uiTrack'
 import { failedHost } from './userEnvError'
 import { buildTag } from './telemetryPrivacy'
 import { launchFailure } from './launchFailure'
+import { packStepForLaunch, runPackUpdateForLaunch } from './packLaunch'
+import { afterPackUpdate } from './packUpdate'
+import { stopInstall } from '../state/installs'
 
 export { PL_STAGES, REPAIR_STAGES } from './launchView'
 
@@ -205,6 +208,42 @@ let launching = false
 /// Растёт при каждом «Отменить»: запуск, который ещё ждал входа, по нему видит отмену и не зовёт ядро.
 let cancelEpoch = 0
 const CANCELLED_TEXT = 'Запуск отменён'
+/// Install key of the pack update this launch started; cancelling the launch cancels it too.
+let updatingKey: string | null = null
+
+/**
+ * A catalogue build is brought to its published version before the game
+ * starts, so players who only ever press Play still get the fixed build.
+ * `openCard` shows the launch progress for paths that have no card of their own.
+ */
+async function freshenPack(profile: string, epoch: number, openCard: boolean): Promise<void> {
+  const step = await packStepForLaunch(profile)
+  if (epoch !== cancelEpoch) throw new Error(CANCELLED_TEXT)
+  if (step.kind === 'launch-unchecked') {
+    showToast('Не удалось проверить обновление сборки: ' + step.reason + '. Запускаем установленную версию')
+    return
+  }
+  if (step.kind !== 'update') return
+  const u = step.update
+  const label = 'Обновляем сборку до ' + u.to + '…'
+  const open = openCard ? { open: true, sub: profile, stage: 0, msg: null, mode: 'launch' as const } : {}
+  useUi.getState().setPrelaunch({ ...open, label, pct: 0 })
+  const job = runPackUpdateForLaunch(profile, u, (pct) => {
+    if (epoch === cancelEpoch) useUi.getState().setPrelaunch({ pct })
+  })
+  if (job.own) updatingKey = job.key
+  const outcome = await job.outcome.finally(() => {
+    if (updatingKey === job.key) updatingKey = null
+  })
+  if (epoch !== cancelEpoch) throw new Error(CANCELLED_TEXT)
+  useUi.getState().setPrelaunch(openCard ? { open: false, label: null } : { label: null, pct: 2, msg: 'Готовимся…' })
+  const next = afterPackUpdate(u, outcome)
+  if (next.toast) showToast(next.toast, 'error')
+  if (!next.launch) {
+    showToast('Обновление сборки отменено — игра не запускалась')
+    throw new Error(CANCELLED_TEXT)
+  }
+}
 
 /// doJoin resolves with the core's answer; this sentinel means the game was
 /// never started, so callers must not report "заходим на сервер".
@@ -281,7 +320,8 @@ function doJoin(profile: string, world: string | null, server: string | null, se
     unlisten = null
   }
   const epoch = cancelEpoch
-  return resolveAuth()
+  return freshenPack(profile, epoch, true)
+    .then(() => resolveAuth())
     .then((a) => {
       if (epoch !== cancelEpoch) throw new Error(CANCELLED_TEXT)
       return quickPlay(profile, a.nick, ramMbFor(profile), world, server, a.auth)
@@ -391,12 +431,14 @@ function doLaunch(name: string) {
   })
   const prof = name || useProfiles.getState().selected
   const epoch = cancelEpoch
-  const inv = resolveAuth().then((a) => {
-    if (epoch !== cancelEpoch) throw new Error(CANCELLED_TEXT)
-    return prof
-      ? launchProfile(prof, a.nick, ramMbFor(prof), a.auth)
-      : launchGame('latest', a.nick, false, ramMbFor('default'), a.auth)
-  })
+  const inv = (prof ? freshenPack(prof, epoch, false) : Promise.resolve())
+    .then(() => resolveAuth())
+    .then((a) => {
+      if (epoch !== cancelEpoch) throw new Error(CANCELLED_TEXT)
+      return prof
+        ? launchProfile(prof, a.nick, ramMbFor(prof), a.auth)
+        : launchGame('latest', a.nick, false, ramMbFor('default'), a.auth)
+    })
   const launchStartedAt = performance.now()
   const launched = prof ? useProfiles.getState().profiles.find((p) => p.name === prof) : null
   // Имя своей сборки — личное (аудит 24.09.2026): в событие идёт слаг каталога
@@ -407,7 +449,8 @@ function doLaunch(name: string) {
     loader: (launched && (launched.loader || (launched.fabric ? 'fabric' : 'vanilla'))) || 'vanilla',
     ...launchAttribution('other'),
   }
-  const packInfo: Promise<Record<string, string>> = prof
+  // Read when reported, not up front: the update before the launch changes the pack version.
+  const packInfo = (): Promise<Record<string, string>> => prof
     ? loadProfileSettings(prof)
         .then((s) => {
           const pack = (s?.catalogPackSlug || '').trim()
@@ -422,7 +465,7 @@ function doLaunch(name: string) {
     : Promise.resolve({})
   inv
     .then(() => {
-      void packInfo.then((pack) => trackTimed('game_launch', launchStartedAt, { ...launchInfo, ...pack }))
+      void packInfo().then((pack) => trackTimed('game_launch', launchStartedAt, { ...launchInfo, ...pack }))
       useGame.getState().addRunning(prof || 'default')
       window.dispatchEvent(new Event('millida-game-started'))
       setTimeout(() => {
@@ -447,7 +490,7 @@ function doLaunch(name: string) {
       ])
       // Ключи провала — первыми: старый сервер оставляет только первые 12.
       const failData = { code: fail.code, kind: fail.kind, stage: fail.stage }
-      void packInfo.then((pack) => {
+      void packInfo().then((pack) => {
         trackTimed('game_launch', launchStartedAt, { ...failData, ...launchInfo, ...pack, ...(host ? { host } : {}) }, false)
         trackFailure('launch', fail.text, {
           stage: fail.stage,
@@ -462,7 +505,7 @@ function doLaunch(name: string) {
       if (at >= 0 && prof) {
         // The service refused a paid pack: the player gets the subscribe window, not a red error.
         const reason = text.slice(at + PACK_ACCESS_PREFIX.length)
-        void packInfo.then((pack) => {
+        void packInfo().then((pack) => {
           if (pack.pack) usePackKey.getState().show(pack.pack, prof, reason, () => realLaunch(prof))
           else showLaunchError(err)
         })
@@ -509,6 +552,7 @@ export function cancelPrelaunch() {
   // here would race it with a second toast.
   const repair = ui.prelaunch.mode === 'repair'
   if (hasTauri()) cancelLaunch().catch(() => {})
+  if (updatingKey) stopInstall(updatingKey)
   if (repair) {
     ui.setPrelaunch({ msg: 'Отменяем…' })
     return

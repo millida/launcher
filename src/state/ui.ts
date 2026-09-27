@@ -42,6 +42,7 @@ export interface PrelaunchState {
   msg: string | null
   pct: number
   mode: 'launch' | 'repair'
+  label?: string | null
 }
 
 export type ToastKind = 'ok' | 'error'
@@ -162,7 +163,11 @@ export const useUi = create<UiState>((set, get) => ({
       set({ modals: { ...get().modals, [id]: { open: false, vis: false } } })
     }, 240)
   },
-  setPrelaunch: (p) => set({ prelaunch: { ...get().prelaunch, ...p } }),
+  // A card opened afresh must not inherit the label of a launch that was cancelled mid-update.
+  setPrelaunch: (p) => {
+    const cur = get().prelaunch
+    set({ prelaunch: { ...cur, ...(p.open && !cur.open ? { label: null } : {}), ...p } })
+  },
 }))
 
 export const showToast = (msg: string, kind?: ToastKind, sound?: SoundEvent | false, action?: ToastAction) =>

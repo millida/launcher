@@ -47,6 +47,16 @@ describe('prelaunchStageName и prelaunchPct — подпись и число в
     expect(prelaunchStageName({ stage: 3, mode: 'repair' })).toBe(REPAIR_STAGES[3]!)
     expect(prelaunchStageName({ stage: 3, mode: 'launch' })).toBe(PL_STAGES[3]!)
   })
+  test('пока сборка обновляется перед запуском, кнопка и тост говорят это, а не «Проверка файлов»', () => {
+    const label = 'Обновляем сборку до 1.0.6…'
+    expect(prelaunchStageName({ stage: 0, mode: 'launch', label })).toBe(label)
+    expect(playButtonState({ modeKind: 'build', selected: 'A', running: [], prelaunch: { ...busy, stage: 0, pct: 37.2, label } })).toEqual({
+      kind: 'installing',
+      stage: label,
+      pct: 37,
+    })
+    expect(prelaunchStageName({ stage: 0, mode: 'launch', label: null })).toBe(PL_STAGES[0]!)
+  })
   test('стадия за краем списка не оставляет пустую подпись', () => {
     expect(prelaunchStageName({ stage: 99, mode: 'launch' })).toBe(PL_STAGES[PL_STAGES.length - 1]!)
     expect(prelaunchStageName({ stage: -1, mode: 'launch' })).toBe(PL_STAGES[0]!)

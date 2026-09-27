@@ -34,7 +34,7 @@ const hit = (title: string) => ({
 
 const answer = (title: string, delayMs: number) =>
   new Promise((resolve) =>
-    setTimeout(() => resolve({ json: async () => ({ hits: [hit(title)], total_hits: 1 }) }), delayMs),
+    setTimeout(() => resolve({ ok: true, json: async () => ({ hits: [hit(title)], total_hits: 1 }) }), delayMs),
   )
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -66,7 +66,7 @@ test('повторное открытие вкладки берёт выдачу
   let requests = 0
   globalThis.fetch = (() => {
     requests++
-    return Promise.resolve({ json: async () => ({ hits: [hit('первая строка')], total_hits: 1 }) })
+    return Promise.resolve({ ok: true, json: async () => ({ hits: [hit('первая строка')], total_hits: 1 }) })
   }) as never
 
   useMods.setState({ modSource: 'modrinth', modTab: 'resourcepack', mq: '', hits: [] })
@@ -88,7 +88,7 @@ test('CurseForge и Modrinth спрашиваются разом, а не по �
   hasTauriNow = true
   globalThis.fetch = (() =>
     new Promise((resolve) =>
-      setTimeout(() => resolve({ json: async () => ({ hits: [hit('modrinth')], total_hits: 1 }) }), 120),
+      setTimeout(() => resolve({ ok: true, json: async () => ({ hits: [hit('modrinth')], total_hits: 1 }) }), 120),
     )) as never
 
   useMods.setState({ modSource: 'all', modTab: 'mod', mq: '', hits: [] })

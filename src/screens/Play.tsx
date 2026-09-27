@@ -14,6 +14,7 @@ import { useProfiles } from '../state/profiles'
 import { useLobby } from '../state/lobbyMode'
 import type { LobbyMode } from '../state/lobbyMode'
 import { playMode } from '../lib/lobbyPlay'
+import { usePackUpdateHint } from '../lib/packUpdateHint'
 import { useWallpaper } from '../state/wallpaper'
 import { convertFileSrc, pickWallpaper } from '../ipc/commands'
 import { setScreen, showToast, useUi } from '../state/ui'
@@ -108,6 +109,7 @@ export function Play({ on }: { on: boolean }) {
   const mode: LobbyMode | null =
     picked && (picked.kind !== 'build' || profiles.some((p) => p.name === picked.name)) ? picked : null
   const sel = mode && mode.kind === 'build' ? profiles.find((p) => p.name === mode.name) || null : null
+  const packUpdate = usePackUpdateHint(mode, profiles, on)
   const btn = playButtonState({ modeKind: mode ? mode.kind : null, selected: sel ? sel.name : null, running, prelaunch })
   const selHours = sel ? hoursOf(sel.name) : null
   const liveServer = mode && mode.kind === 'server' ? lobbyServers.find((s) => s.slug === mode.slug) || null : null
@@ -256,6 +258,14 @@ export function Play({ on }: { on: boolean }) {
                 <span className="lobby-mode-lab">Сегодня играем</span>
                 <b>{modeTitle}</b>
                 {modeMeta ? <span className="meta">{modeMeta}</span> : null}
+                {packUpdate ? (
+                  <span className="meta" id="lobbyPackUpdate">
+                    <span className="hero-num">
+                      <Icon id="i-download" />
+                      Доступно обновление сборки
+                    </span>
+                  </span>
+                ) : null}
               </span>
             </span>
           </button>

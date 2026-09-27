@@ -1,27 +1,20 @@
 import { useEffect, useState } from 'react'
 import { Icon } from './Icon'
 import { hasTauri } from '../ipc/tauri'
-import { PACK_ACCESS_PREFIX, loadProfileSettings, updateCatalogPack } from '../ipc/commands'
+import { PACK_ACCESS_PREFIX } from '../ipc/commands'
 import { keyCatalogPack } from '../lib/installKeys'
-import { catalogPackSlug, packUpdateFor, type PackUpdate } from '../lib/packUpdate'
-import { forgetPackView, loadPackView } from './premium/packView'
+import { findPackUpdate, packUpdateJob } from '../lib/packLaunch'
+import type { PackUpdate } from '../lib/packUpdate'
 import { runInstall, useInstalls } from '../state/installs'
 import { usePackKey } from '../state/packKey'
 import { useProfiles } from '../state/profiles'
 import { uiConfirm } from '../state/confirm'
 import { showToast } from '../state/ui'
 
-async function findPackUpdate(profile: string): Promise<PackUpdate | null> {
-  const settings = await loadProfileSettings(profile)
-  const slug = catalogPackSlug(settings)
-  if (!slug) return null
-  return packUpdateFor(settings, await loadPackView(slug))
-}
-
 /**
- * The newer published version of a catalogue build. Nothing happens until the
- * player asks: the core then installs it beside the old one and switches only
- * once it is complete.
+ * The newer published version of a catalogue build, to take ahead of time;
+ * Play takes it anyway before the game starts. The core installs it beside the
+ * old one and switches only once it is complete.
  */
 export function PackUpdateRow({ profile, onUpdated }: { profile: string; onUpdated?: () => void }) {
   const [update, setUpdate] = useState<PackUpdate | null>(null)
@@ -63,14 +56,7 @@ export function PackUpdateRow({ profile, onUpdated }: { profile: string; onUpdat
       key: keyCatalogPack(u.slug),
       title: profile,
       running: 'Обновляем…',
-      // The cached card can be older than the version just installed, and
-      // compared with it the row would offer that older version as an update.
-      // Dropped before the job reports done, so every later read is fresh.
-      run: () =>
-        updateCatalogPack(profile).then((p) => {
-          forgetPackView(u.slug)
-          return p
-        }),
+      run: () => packUpdateJob(profile, u.slug),
       onError: (e) => {
         const text = String(e)
         if (text.startsWith(PACK_ACCESS_PREFIX)) {

@@ -100,6 +100,10 @@ const CANCELLED = 'Установка отменена'
 
 export const isCancelled = (e: unknown): boolean => String(e).includes(CANCELLED)
 
+const CANCELLED_MSG = 'Отменено'
+
+export const taskCancelled = (t: InstallTask): boolean => t.state === 'error' && t.msg === CANCELLED_MSG
+
 const HIDE_MS = 2600
 const hideTimers: Record<string, ReturnType<typeof setTimeout>> = {}
 
@@ -115,6 +119,7 @@ interface RunOptions<T> {
   run: () => Promise<T>
   onDone?: (r: T) => void
   onError?: (e: unknown) => void
+  onCancel?: () => void
   keepOpen?: (r: T) => boolean
   // Which version this call targets, when the key covers a whole project —
   // lets the UI show progress only on that version's row instead of every one.
@@ -149,9 +154,10 @@ export function runInstall<T>(o: RunOptions<T>): boolean {
     })
     .catch((e) => {
       if (isCancelled(e)) {
-        useInstalls.getState().patch(o.key, { label: '', msg: 'Отменено', state: 'error' })
+        useInstalls.getState().patch(o.key, { label: '', msg: CANCELLED_MSG, state: 'error' })
         fade(o.key)
-        showToast('Установка «' + (o.title || '') + '» отменена', 'ok', false)
+        if (o.onCancel) o.onCancel()
+        else showToast('Установка «' + (o.title || '') + '» отменена', 'ok', false)
         return
       }
       void reportInstallFailure(o.key, o.title, e)
@@ -193,7 +199,7 @@ export function initInstalls(): void {
         const cancelled = isCancelled(p.error)
         useInstalls.getState().patch(p.key, {
           label: '',
-          msg: cancelled ? 'Отменено' : p.error,
+          msg: cancelled ? CANCELLED_MSG : p.error,
           state: 'error',
         })
         fade(p.key, cancelled ? HIDE_MS : 4000)

@@ -206,7 +206,9 @@ import { BootUpdate } from './components/BootUpdate'
 import { Welcome } from './components/Welcome'
 import { ScreenWave } from './components/ScreenWave'
 import { gameSession, heartbeat, ramMbFor, reconcileGameSession, setGameSession, updateSessionServer } from './lib/launch'
-import { POLL_BASE_MS, pollDelayMs, pollIntervalFrom } from './lib/pollPace'
+import { POLL_BASE_MS, pollIntervalFrom } from './lib/pollPace'
+import { friendsPollDelayMs, friendsPollWait, pokeGate, refreshDue } from './lib/realtimePace'
+import { isRealtimeLive, onRealtime, onRealtimeLiveChange, retainRealtime } from './lib/realtime'
 import { hideLauncherToTray, initTray, restoreLauncher, restoreOnGameExit, trayCloseEnabled } from './lib/window'
 import { SESSION_EXPIRED_EVENT, api, hasMillidaAccount } from './lib/api'
 import { hasTauri, tauri } from './ipc/tauri'
@@ -290,6 +292,7 @@ export function App() {
     initDeepLinks()
     initOverlayLink()
     initInstalls()
+    const releaseRealtime = retainRealtime()
     initCalls()
     void bootUpdate().then((leaving) => {
       if (leaving) return
@@ -346,6 +349,7 @@ export function App() {
       watchHeap()
     })
     return () => {
+      releaseRealtime()
       clearInterval(updPoll)
       clearInterval(msPoll)
       document.removeEventListener('visibilitychange', onVisible)
@@ -421,14 +425,21 @@ export function App() {
   }, [])
 
   useEffect(() => {
+    let last = 0
+    const refresh = () => {
+      if (document.hidden || useUi.getState().screen !== 'friends') return
+      last = Date.now()
+      void loadFriends()
+      void loadRooms()
+    }
     const t = setInterval(() => {
-      if (document.hidden) return
-      if (useUi.getState().screen === 'friends') {
-        void loadFriends()
-        void loadRooms()
-      }
+      if (refreshDue(isRealtimeLive(), last, Date.now())) refresh()
     }, 30000)
-    return () => clearInterval(t)
+    const off = onRealtime('friends', refresh)
+    return () => {
+      clearInterval(t)
+      off()
+    }
   }, [])
 
   useEffect(() => {
@@ -544,7 +555,7 @@ export function App() {
       inFlight = true
       if (hasMillidaAccount()) {
         try {
-          const r = await api('/friends/poll?wait=1&since=' + since)
+          const r = await api('/friends/poll?wait=' + friendsPollWait(isRealtimeLive()) + '&since=' + since)
           serverPollMs = pollIntervalFrom(r.nextPollMs)
           waited = r.waited === true
           failures = 0
@@ -625,8 +636,22 @@ export function App() {
         }
       }
       inFlight = false
-      timer = setTimeout(loop, pollDelayMs(serverPollMs, failures, document.hidden, Math.random, waited))
+      timer = setTimeout(
+        loop,
+        friendsPollDelayMs(isRealtimeLive(), serverPollMs, failures, document.hidden, Math.random, waited),
+      )
+      if (gate.take()) fire()
     }
+    const fire = () => {
+      if (stopped) return
+      clearTimeout(timer)
+      timer = setTimeout(loop, 0)
+    }
+    const gate = pokeGate(() => inFlight, fire)
+    const offPoke = onRealtime('friends', gate.poke)
+    const offLive = onRealtimeLiveChange((live) => {
+      if (!live) gate.poke()
+    })
     const wake = () => {
       if (document.hidden || inFlight) return
       clearTimeout(timer)
@@ -637,6 +662,8 @@ export function App() {
     return () => {
       stopped = true
       clearTimeout(timer)
+      offPoke()
+      offLive()
       document.removeEventListener('visibilitychange', wake)
     }
   }, [])

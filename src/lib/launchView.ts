@@ -7,9 +7,11 @@ export interface PrelaunchView {
   stage: number
   pct: number
   mode: 'launch' | 'repair'
+  label?: string | null
 }
 
-export function prelaunchStageName(pl: Pick<PrelaunchView, 'stage' | 'mode'>): string {
+export function prelaunchStageName(pl: Pick<PrelaunchView, 'stage' | 'mode' | 'label'>): string {
+  if (pl.label) return pl.label
   const stages = pl.mode === 'repair' ? REPAIR_STAGES : PL_STAGES
   const at = Math.max(0, Math.min(Math.floor(pl.stage) || 0, stages.length - 1))
   return stages[at]!
