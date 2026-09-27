@@ -510,6 +510,9 @@ export const installCatalogPack = (slug: string) => invoke<Profile>('install_cat
 
 /** The core resolves pack, version and file from the build's settings: the webview names only the build. */
 export const updateCatalogPack = (profile: string) => invoke<Profile>('update_catalog_pack', { profile })
+/** Card icon and content protection onto an installed catalogue build; true when something changed. */
+export const syncCatalogPack = (profile: string) => invoke<boolean>('sync_catalog_pack', { profile })
+export const protectedBuilds = () => invoke<string[]>('protected_builds')
 
 export interface PackCandidate {
   fileId: string

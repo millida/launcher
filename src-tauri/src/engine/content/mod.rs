@@ -8,6 +8,7 @@ mod safety;
 mod fingerprint;
 mod millida_mod;
 mod catalog_pack;
+mod pack_card;
 
 pub use deps::*;
 pub use safety::*;
@@ -19,3 +20,4 @@ pub use localmeta::*;
 pub use scan::*;
 pub use millida_mod::*;
 pub use catalog_pack::*;
+pub use pack_card::*;

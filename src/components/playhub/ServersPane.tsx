@@ -114,7 +114,7 @@ export function ServersPane({ on, onPlay, part }: { on: boolean; onPlay: (m: Lob
   useEffect(() => {
     if (on && own) void load()
   }, [on, own])
-  usePolling(() => void load(), 20000, { enabled: own && on && Array.isArray(list), hiddenMs: 0, immediate: false })
+  usePolling(() => void load(), 20000, { enabled: own && on && Array.isArray(list), hiddenMs: 0, immediate: false, realtime: 'hosting' })
 
   const start = async (s: HostServer) => {
     showToast('Запускаем сервер…')

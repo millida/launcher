@@ -362,6 +362,19 @@ pub async fn update_catalog_pack(app: tauri::AppHandle, profile: String) -> Resu
     engine::update_catalog_pack(app, profile).await
 }
 
+/// The catalogue card applied to an installed build: its icon and whether its
+/// contents are hidden. The webview names only the build.
+#[tauri::command]
+pub async fn sync_catalog_pack(profile: String) -> Result<bool, String> {
+    engine::sync_catalog_pack(profile).await
+}
+
+/// Builds whose author keeps the contents to themselves.
+#[tauri::command(async)]
+pub fn protected_builds() -> Vec<String> {
+    engine::protected_builds()
+}
+
 /// Packs whose unreviewed versions this account may install.
 #[tauri::command]
 pub async fn pack_review_queue() -> Result<serde_json::Value, String> {

@@ -15,7 +15,7 @@ import { setVerifiedSeconds } from '../state/playStats'
 import { showToast, useUi } from '../state/ui'
 import { useGame } from '../state/game'
 import { applyLaunchWindowMode } from './window'
-import { liveBeat, trackFailure, trackTimed } from './telemetry'
+import { liveBeat, liveBeatPayload, trackFailure, trackTimed } from './telemetry'
 import { launchAttribution } from './uiTrack'
 import { failedHost } from './userEnvError'
 import { buildTag } from './telemetryPrivacy'
@@ -131,9 +131,26 @@ export function heartbeat(status?: string, server?: string | null) {
     discordPresence(beat, server),
     new Promise<string>((resolve) => setTimeout(() => resolve(''), PRESENCE_WAIT_MS)),
   ])
-  if (hasMillidaAccount())
-    presence.then((discordUserId) =>
-      api('/friends/presence/heartbeat', {
+  const build = (playing && session && session.profile) || null
+  const pack = build ? useProfiles.getState().profiles.find((p) => p.name === build) : undefined
+  // Имя сборки придумал игрок — в телеметрию уходит слаг каталога или отпечаток.
+  const slug = build && hasTauri() ? loadProfileSettings(build).catch(() => null) : Promise.resolve(null)
+  const liveMeta = slug.then((st) => ({
+    build: buildTag(build, st?.catalogPackSlug || st?.modpackSlug),
+    mc: (pack && pack.version) || null,
+    server: (playing && (server || (session && (session.serverName || session.server)))) || null,
+  }))
+  const liveStatus = playing ? 'playing' : 'idle'
+  if (!hasMillidaAccount()) {
+    void liveMeta.then((meta) => liveBeat(liveStatus, meta))
+    return
+  }
+  // A signed-in launcher sends one request per beat: the launcher heartbeat rides inside
+  // the presence one instead of going out as a second request.
+  void Promise.all([presence, liveMeta])
+    .then(async ([discordUserId, meta]) => {
+      const telemetry = await liveBeatPayload(liveStatus, meta).catch(() => null)
+      return api('/friends/presence/heartbeat', {
         method: 'POST',
         body: JSON.stringify({
           status: beat,
@@ -142,22 +159,12 @@ export function heartbeat(status?: string, server?: string | null) {
           build: (playing && session && session.profile) || null,
           gameNick: (playing && gameNick()) || null,
           discordUserId: discordUserId || null,
+          ...(telemetry ? { telemetry } : {}),
         }),
       })
-        .then((r: unknown) => setVerifiedSeconds((r as { verifiedSeconds?: number | null })?.verifiedSeconds ?? null))
-        .catch(() => {}),
-    )
-  const build = (playing && session && session.profile) || null
-  const pack = build ? useProfiles.getState().profiles.find((p) => p.name === build) : undefined
-  // Имя сборки придумал игрок — в телеметрию уходит слаг каталога или отпечаток.
-  const slug = build && hasTauri() ? loadProfileSettings(build).catch(() => null) : Promise.resolve(null)
-  void slug.then((st) =>
-    liveBeat(playing ? 'playing' : 'idle', {
-      build: buildTag(build, st?.catalogPackSlug || st?.modpackSlug),
-      mc: (pack && pack.version) || null,
-      server: (playing && (server || (session && (session.serverName || session.server)))) || null,
-    }),
-  )
+    })
+    .then((r: unknown) => setVerifiedSeconds((r as { verifiedSeconds?: number | null })?.verifiedSeconds ?? null))
+    .catch(() => {})
 }
 
 export function ramMbFor(profile: string): number {

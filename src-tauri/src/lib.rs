@@ -161,6 +161,8 @@ pub fn run() {
             commands::profiles::install_catalog_pack,
             commands::profiles::install_pack_candidate,
             commands::profiles::update_catalog_pack,
+            commands::profiles::sync_catalog_pack,
+            commands::profiles::protected_builds,
             commands::profiles::pack_review_candidate,
             commands::profiles::pack_review_queue,
             commands::profiles::millida_packs,

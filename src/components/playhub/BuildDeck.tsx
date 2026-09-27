@@ -7,7 +7,7 @@ import type { Profile } from '../../ipc/commands'
 import { hasTauri } from '../../ipc/tauri'
 import { openBuildSettings } from '../../state/instance'
 import { usePlayStats } from '../../state/playStats'
-import { useProfiles } from '../../state/profiles'
+import { useGuarded, useProfiles } from '../../state/profiles'
 import { showToast } from '../../state/ui'
 import { DEFAULT_ICON, parseIcon } from '../../lib/buildIcon'
 import { BuildIcon, IconPicker } from './BuildIcon'
@@ -64,6 +64,7 @@ function DeckCard({
 }) {
   const seconds = usePlayStats((s) => s.stats.builds.find((b) => b.key === p.name)?.seconds || 0)
   const mods = useModCount(p.name)
+  const guarded = useGuarded(p.name)
   const [edit, setEdit] = useState(false)
   const art = parseIcon(p.icon)
   return (
@@ -97,7 +98,7 @@ function DeckCard({
         <b className="bd-name">{p.name}</b>
         <span className="bd-facts">
           <span className="bd-fact">{LOADER_NAME(p) + ' ' + p.version}</span>
-          {mods !== null ? (
+          {mods !== null && !guarded ? (
             <span className="bd-fact">
               <Icon id="i-blocks" />
               {mods + ' ' + plural(mods, 'мод', 'мода', 'модов')}

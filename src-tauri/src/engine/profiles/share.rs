@@ -197,6 +197,7 @@ pub fn pack_link(code: &str) -> String {
 /// build keeps the code: the link a player already sent to friends must not go
 /// stale because they added a mod.
 pub async fn share_profile(profile: String, summary: Option<String>) -> Result<SharedPack, String> {
+    refuse_protected(&profile)?;
     let (mut manifest, skipped) = build_manifest(&profile)?;
     if manifest.files.is_empty() {
         return Err("В сборке нет файлов из Modrinth или CurseForge — передавать нечего".into());

@@ -176,6 +176,7 @@ async function refreshInstalledIds(kind: string): Promise<Set<string>> {
   const ids = new Set<string>()
   const selected = catalogTargetBuild()
   if (!hasTauri() || !selected) return ids
+  if (useProfiles.getState().guarded.includes(selected)) return ids
   if (kind === 'world') {
     try {
       ;(await listWorldInstalls(selected)).forEach((p) => ids.add(p))

@@ -186,7 +186,7 @@ export function Hosting({ on }: { on: boolean }) {
     if (hasMillidaAccount()) void loadMillidaProfile()
   }, [on])
 
-  usePolling(() => void load(true), 20000, { enabled: on, hiddenMs: 0, immediate: false })
+  usePolling(() => void load(true), 20000, { enabled: on, hiddenMs: 0, immediate: false, realtime: 'hosting' })
 
   const act = async (sid: string, path: string, label: string, ok: string) => {
     showToast(label)

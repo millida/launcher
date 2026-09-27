@@ -41,6 +41,7 @@ const pokes: Array<[string, unknown, unknown, ReturnType<typeof pokeTopic>]> = [
   ['друзья', 'personal:#42', { t: 'friends' }, 'friends'],
   ['статус друга: сервер шлёт его отдельно от сообщений', 'personal:#42', { t: 'presence' }, 'presence'],
   ['звонки', 'personal:#42', { t: 'calls' }, 'calls'],
+  ['статус сервера хостинга', 'personal:#42', { t: 'hosting' }, 'hosting'],
   ['счётчики сайта', 'personal:#42', { t: 'inbox' }, 'inbox'],
   ['неизвестная тема', 'personal:#42', { t: 'wallet' }, null],
   ['чужой канал', 'news', { t: 'friends' }, null],

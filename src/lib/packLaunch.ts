@@ -1,4 +1,4 @@
-import { loadProfileSettings, updateCatalogPack } from '../ipc/commands'
+import { loadProfileSettings, syncCatalogPack, updateCatalogPack } from '../ipc/commands'
 import type { Profile } from '../ipc/commands'
 import { hasTauri } from '../ipc/tauri'
 import { forgetPackView, loadPackView } from '../components/premium/packView'
@@ -10,10 +10,31 @@ import { keyCatalogPack } from './installKeys'
 import { catalogPackSlug, packLaunchStep, packNeedsCheck, packUpdateFor } from './packUpdate'
 import type { PackCard, PackLaunchStep, PackUpdate, PackUpdateOutcome } from './packUpdate'
 
+const CARD_SYNC_GAP_MS = 10 * 60 * 1000
+const cardSynced = new Map<string, number>()
+
+/**
+ * The card's icon and content protection onto an installed build. The lobby
+ * asks on every window focus, so a build is synced at most once in ten minutes;
+ * a failed sync only leaves the build as it was and is tried at the next check.
+ */
+function syncPackCard(profile: string): void {
+  const now = Date.now()
+  const last = cardSynced.get(profile)
+  if (last !== undefined && now - last < CARD_SYNC_GAP_MS) return
+  cardSynced.set(profile, now)
+  syncCatalogPack(profile)
+    .then((changed) => {
+      if (changed) void useProfiles.getState().refresh()
+    })
+    .catch(() => cardSynced.delete(profile))
+}
+
 export async function findPackUpdate(profile: string): Promise<PackUpdate | null> {
   const settings = await loadProfileSettings(profile)
   const slug = catalogPackSlug(settings)
   if (!slug) return null
+  syncPackCard(profile)
   return packUpdateFor(settings, await loadPackView(slug))
 }
 

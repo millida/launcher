@@ -151,6 +151,7 @@ fn view_from_candidate(slug: &str, answer: &Value) -> Result<Value, String> {
         "cover": answer["cover"],
         "accessRequired": answer["accessRequired"],
         "millidaMod": answer["millidaMod"],
+        "protectedContent": answer["protectedContent"],
         "version": c["version"],
         "game": c["game"],
         "loader": c["loader"],
@@ -327,10 +328,12 @@ async fn install_catalog_pack_job(
     let review_sha512 = if review { sha512.as_str() } else { "" };
     let mut identity = pack_identity(slug, &meta.version, review_file, review_sha512);
     remember_mod_opt_in(&mut identity, &view);
+    remember_protected(&mut identity, &view);
     merge_settings(&pname, identity);
+    sync_pack_icon(&pname, &view).await;
 
     job.emit(app, 100.0, "Сборка установлена");
-    Ok(prof)
+    Ok(installed_profile(prof))
 }
 
 fn place_unpacked(unpacked: &Path, dest: &Path) -> Result<(), String> {
@@ -350,6 +353,12 @@ fn pack_profile(name: &str, meta: &PackMeta, icon: Option<String>) -> Profile {
         loader_version: if meta.loader_version.is_empty() { None } else { Some(meta.loader_version.clone()) },
         icon,
     }
+}
+
+/// The build as the list now has it: the catalogue icon may have been put on
+/// it after the profile was written.
+fn installed_profile(prof: Profile) -> Profile {
+    load_profiles().into_iter().find(|p| p.name == prof.name).unwrap_or(prof)
 }
 
 fn put_profile(prof: &Profile) -> Result<(), String> {
@@ -408,7 +417,7 @@ async fn update_catalog_pack_job(app: &AppHandle, job: &Job, current: &Profile, 
     let (staged, previous) = update_side_dirs(&pdir)?;
     settle_interrupted_update(&pdir, &staged, &previous)?;
     let _staged = TempPaths(vec![staged.clone()]);
-    let meta = prepare_update(app, job, profile, slug, &pdir, &staged).await.map_err(old_version_kept)?;
+    let (meta, view) = prepare_update(app, job, profile, slug, &pdir, &staged).await.map_err(old_version_kept)?;
 
     job.emit(app, 95.0, "Меняем версию…");
     // A launch of this build starting during the switch would read a folder
@@ -429,8 +438,9 @@ async fn update_catalog_pack_job(app: &AppHandle, job: &Job, current: &Profile, 
     if let Err(e) = std::fs::remove_dir_all(&previous) {
         eprintln!("[pack] старая версия «{}» не удалилась, уберём при следующем обновлении: {}", profile, e);
     }
+    sync_pack_icon(profile, &view).await;
     job.emit(app, 100.0, "Сборка обновлена");
-    Ok(prof)
+    Ok(installed_profile(prof))
 }
 
 /// Everything up to the switch. The installed build is only read here.
@@ -441,7 +451,7 @@ async fn prepare_update(
     slug: &str,
     pdir: &Path,
     staged: &Path,
-) -> Result<PackMeta, String> {
+) -> Result<(PackMeta, Value), String> {
     assert_not_running(profile, "обнови ещё раз")?;
     if !pdir.is_dir() {
         return Err("Папки сборки нет на диске — установи сборку из каталога заново".into());
@@ -451,6 +461,7 @@ async fn prepare_update(
     job.emit(app, 80.0, "Переносим миры и настройки…");
     let mut settings = carried_settings(profile, slug, &meta.version);
     remember_mod_opt_in(&mut settings, &view);
+    remember_protected(&mut settings, &view);
     let (from, to, slug) = (pdir.to_path_buf(), staged.to_path_buf(), slug.to_string());
     tokio::task::spawn_blocking(move || -> Result<(), String> {
         place_unpacked(&unpacked, &to)?;
@@ -462,7 +473,7 @@ async fn prepare_update(
     .await
     .map_err(|e| e.to_string())??;
     job.check()?;
-    Ok(meta)
+    Ok((meta, view))
 }
 
 /// The build's own settings (memory, Java, JVM flags, window size) stay with

@@ -30,6 +30,8 @@ permissions = [
   "allow-install-catalog-pack",
   "allow-install-pack-candidate",
   "allow-update-catalog-pack",
+  "allow-sync-catalog-pack",
+  "allow-protected-builds",
   "allow-pack-review-candidate",
   "allow-pack-review-queue",
   "allow-millida-packs",

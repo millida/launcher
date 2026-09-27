@@ -61,6 +61,7 @@ pub fn export_mrpack(
     profile: String, out_path: String, name: String, version: String, description: String,
 ) -> Result<String, String> {
     use std::io::Write;
+    refuse_protected(&profile)?;
     let pdir = profile_dir(&profile);
     let prof = load_profiles().into_iter().find(|p| p.name == profile);
     let gv = prof.as_ref().map(|p| p.version.clone()).unwrap_or_default();

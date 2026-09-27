@@ -158,6 +158,21 @@ describe('очередь телеметрии', () => {
     expect(code).not.toContain('abc.def')
   })
 
+  // Вошедший лаунчер шлёт стук телеметрии внутри стука присутствия: тело то же,
+  // частоту и отказ от телеметрии соблюдает тот же liveBeatPayload.
+  test('тело стука лаунчера собирается с устройством, повтор раньше срока — пусто', async () => {
+    const first = await T.liveBeatPayload('playing', { build: 'b', mc: '1.21.1', server: 'mc.example' }, true)
+    expect(first?.installId).toBeTruthy()
+    expect(first).toMatchObject({ status: 'playing', os: 'windows', mc: '1.21.1', server: 'mc.example' })
+    expect(await T.liveBeatPayload('playing', {})).toBeNull()
+  })
+
+  test('выключенная телеметрия не уезжает и внутри стука присутствия', async () => {
+    T.setTelemetryEnabled(false)
+    expect(await T.liveBeatPayload('idle', {}, true)).toBeNull()
+    T.setTelemetryEnabled(true)
+  })
+
   test('отказ от телеметрии чистит сохранённую очередь', () => {
     T.track('ui_click', {})
     expect(store.get('m-telemetry-queue')).toBeDefined()

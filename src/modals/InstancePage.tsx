@@ -86,7 +86,8 @@ import { incompatibleWith } from '../lib/compat'
 import { fixItems, issueInstall } from '../lib/deps'
 import { installExtras } from '../lib/install'
 import { ensureMcVersionList, useMcVersionList, versionOptions } from '../state/mcVersionList'
-import { useProfiles } from '../state/profiles'
+import { useGuarded, useProfiles } from '../state/profiles'
+import { catalogPackSlug } from '../lib/packUpdate'
 import { useInstance } from '../state/instance'
 import { closeModal, setScreen, showToast, useUi } from '../state/ui'
 import { runRepair } from '../lib/repair'
@@ -143,6 +144,23 @@ const acceptsFile = (kind: string, p: string) => {
   return parts.length > 1 && extsOf(kind).includes(parts[parts.length - 1].toLowerCase())
 }
 
+const CATALOG_PACK_PAGE = 'https://millida.net/modpacks/'
+
+/** A protected build is shared by its catalogue page: its own files are the author's to show. */
+function shareCatalogLink(profile: string) {
+  loadProfileSettings(profile)
+    .then((s) => {
+      const slug = catalogPackSlug(s)
+      if (!slug) throw new Error('у сборки нет страницы в каталоге')
+      return copyText(CATALOG_PACK_PAGE + slug)
+    })
+    .then((copied) => {
+      if (!copied) throw new Error('буфер обмена занят — попробуй ещё раз')
+      showToast('Ссылка на сборку в каталоге скопирована', 'ok')
+    })
+    .catch((e) => showToast('Не удалось скопировать ссылку: ' + apiErrorText(e, 'попробуй ещё раз'), 'error'))
+}
+
 const CORE_OPTS: [string, string][] = [
   ['vanilla', 'Ванилла'],
   ['fabric', 'Fabric'],
@@ -156,6 +174,7 @@ export function InstancePage() {
   const profile = useInstance((s) => s.profile)
   const profiles = useProfiles((s) => s.profiles)
   const pr = profiles.find((x) => x.name === profile) || null
+  const guarded = useGuarded(profile)
   const customCover = pr && pr.icon && !isBlockIcon(pr.icon) ? pr.icon : null
 
   const [iconEditor, setIconEditor] = useState(false)
@@ -269,6 +288,12 @@ export function InstancePage() {
       setUpd({})
       setItemLabels({})
       if (!profile) return
+      if (useProfiles.getState().guarded.includes(profile)) {
+        setItems([])
+        setEmptyList(false)
+        setNoticeList('')
+        return
+      }
       if (!hasTauri()) {
         setItems([])
         setNoticeList('Список появится в приложении')
@@ -314,7 +339,7 @@ export function InstancePage() {
 
   const runAudit = useCallback(
     (auto: boolean, fix: boolean = auto) => {
-      if (!profile || !hasTauri()) return
+      if (!profile || !hasTauri() || useProfiles.getState().guarded.includes(profile)) return
       setAuditBusy(true)
       auditDeps(profile)
         .then((r) => {
@@ -430,7 +455,9 @@ export function InstancePage() {
       })
       useInstance.getState().set({ focusRename: false })
     }
-    setShareOpen(wantShare)
+    const shareLink = wantShare && useProfiles.getState().guarded.includes(profile)
+    setShareOpen(wantShare && !shareLink)
+    if (shareLink) shareCatalogLink(profile)
     if (wantShare) useInstance.getState().set({ share: false })
     setKind('mod')
     setPlaytime('')
@@ -671,12 +698,14 @@ export function InstancePage() {
     listenDragDrop((paths) => {
       setDropActive(false)
       if (!useUi.getState().modals.bsModal.open || tabRef.current !== 'content') return
+      if (useProfiles.getState().guarded.includes(useInstance.getState().profile || '')) return
       void addFiles(paths || [])
     }).then((u) => {
       unlistenDrop = u
     })
     listenDragState((active) => {
-      setDropActive(active && useUi.getState().modals.bsModal.open && tabRef.current === 'content')
+      const shut = useProfiles.getState().guarded.includes(useInstance.getState().profile || '')
+      setDropActive(active && !shut && useUi.getState().modals.bsModal.open && tabRef.current === 'content')
     }).then((u) => {
       unlistenState = u
     })
@@ -828,6 +857,10 @@ export function InstancePage() {
                     showToast('Доступно в приложении')
                     return
                   }
+                  if (guarded) {
+                    shareCatalogLink(profile!)
+                    return
+                  }
                   setShareOpen(true)
                 }}
               >
@@ -922,6 +955,14 @@ export function InstancePage() {
           <div className="inst-content">
             {modal.open && profile ? <PackUpdateRow profile={profile} onUpdated={() => loadMods()} /> : null}
             <div id="bsTabContent" style={{ display: tab === 'content' ? '' : 'none' }}>
+              {guarded ? (
+                <div className="bx-mini-empty" id="bsGuarded">
+                  <Icon id="i-shield" />
+                  <b>Содержимое сборки защищено автором</b>
+                  <span>Играть, обновлять сборку, смотреть миры, скриншоты и логи можно как обычно</span>
+                </div>
+              ) : (
+              <>
               <div className="segs" style={{ marginBottom: '12px' }}>
                 {KINDS.map(([k, label]) => (
                   <button
@@ -1357,6 +1398,8 @@ export function InstancePage() {
                 )}
               </div>
               </div>
+              </>
+              )}
             </div>
 
             <div id="bsTabWorlds" style={{ display: tab === 'worlds' ? '' : 'none' }}>
@@ -1968,6 +2011,7 @@ export function InstancePage() {
                   <Icon id="i-restart" /> {repairBusy ? 'Чиним…' : 'Починить'}
                 </button>
               </div>
+              {guarded ? null : (
               <div className="set-row">
                 <span className="lab">Папка сборки</span>
                 <button
@@ -1981,6 +2025,7 @@ export function InstancePage() {
                   <Icon id="i-folder" /> Открыть
                 </button>
               </div>
+              )}
               <div className="set-row">
                 <span className="lab">
                   Копия сборки

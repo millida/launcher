@@ -541,16 +541,27 @@ pub fn millida_mod_opt_in(fresh: Option<bool>, settings: &Value) -> bool {
 pub async fn pack_millida_mod(profile: &str, slug: &str) -> (bool, bool) {
     let wait = std::time::Duration::from_secs(LAUNCH_GATE_WAIT_SECS);
     let card = millida_api(format!("/catalog/packs/{}", slug), "GET".into(), None, millida_token());
-    let fresh = match tokio::time::timeout(wait, card).await {
-        Ok(Ok(view)) => pack_millida_mod_flag(&view),
+    let view = match tokio::time::timeout(wait, card).await {
+        Ok(Ok(view)) => Some(view),
         _ => None,
     };
+    let fresh = view.as_ref().and_then(pack_millida_mod_flag);
     let settings = profile_settings(profile);
     let before = settings[PACK_MILLIDA_MOD_KEY].as_bool().unwrap_or(false);
+    let mut patch = serde_json::Map::new();
     if let Some(on) = fresh.filter(|on| settings[PACK_MILLIDA_MOD_KEY].as_bool() != Some(*on)) {
-        let mut patch = serde_json::Map::new();
         patch.insert(PACK_MILLIDA_MOD_KEY.into(), Value::Bool(on));
+    }
+    if let Some(view) = &view {
+        remember_protected(&mut patch, view);
+    }
+    if !patch.is_empty() {
         merge_settings(profile, patch);
+    }
+    if let Some(view) = view {
+        // The icon download must not hold the game back.
+        let profile = profile.to_string();
+        tauri::async_runtime::spawn(async move { sync_pack_icon(&profile, &view).await });
     }
     (millida_mod_opt_in(fresh, &settings), before)
 }

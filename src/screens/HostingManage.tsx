@@ -289,7 +289,7 @@ export function HostingManage({
   // Status, address and plan change without the owner touching this page (the
   // server finishes starting, crashes, gets stopped from the site), so the card
   // is re-read on its own instead of only after an action here.
-  usePolling(reload, 10_000, { immediate: false })
+  usePolling(reload, 10_000, { immediate: false, realtime: 'hosting' })
 
   const refreshAll = () => {
     reload()

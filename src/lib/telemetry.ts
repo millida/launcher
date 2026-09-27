@@ -281,18 +281,31 @@ export function flushTelemetry(): Promise<void> {
   return flushing
 }
 
-export async function liveBeat(
+export type LiveBeatPayload = {
+  installId: string
+  status: 'idle' | 'playing'
+  os?: string
+  appVersion?: string
+  locale?: string
+  timezone?: string
+  build?: string
+  mc?: string
+  server?: string
+}
+
+/** The launcher heartbeat body, or null when telemetry is off or a beat was sent too recently. */
+export async function liveBeatPayload(
   status: 'idle' | 'playing',
   meta?: { build?: string | null; mc?: string | null; server?: string | null },
   force = false,
-): Promise<void> {
-  if (!telemetryEnabled()) return
+): Promise<LiveBeatPayload | null> {
+  if (!telemetryEnabled()) return null
   const now = Date.now()
-  if (!force && status === lastBeatStatus && now - lastBeatAt < BEAT_MIN_MS) return
+  if (!force && status === lastBeatStatus && now - lastBeatAt < BEAT_MIN_MS) return null
   lastBeatAt = now
   lastBeatStatus = status
   const dev = await initDevice()
-  const payload = {
+  return {
     installId: dev.installId,
     status,
     os: dev.os,
@@ -303,6 +316,15 @@ export async function liveBeat(
     mc: (meta && meta.mc) || undefined,
     server: (meta && meta.server) || undefined,
   }
+}
+
+export async function liveBeat(
+  status: 'idle' | 'playing',
+  meta?: { build?: string | null; mc?: string | null; server?: string | null },
+  force = false,
+): Promise<void> {
+  const payload = await liveBeatPayload(status, meta, force)
+  if (!payload) return
   if (hasTauri()) {
     try {
       await millidaApi('/launcher/heartbeat', 'POST', payload)

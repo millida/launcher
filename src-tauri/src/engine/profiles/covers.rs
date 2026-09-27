@@ -38,8 +38,48 @@ fn cover_data_url(path: &std::path::Path) -> Result<String, String> {
         .map_err(|e| e.to_string())?
         .decode()
         .map_err(|_| "Не удалось прочитать картинку — нужен PNG, JPEG или WebP".to_string())?;
+    square_png_data_url(&img, image::imageops::FilterType::Lanczos3)
+}
+
+/// A catalogue pack's own icon, downloaded as bytes, in the same shape a picked
+/// cover takes. Pixel art scaled by a whole factor keeps its hard edges.
+pub(crate) fn pack_icon_data_url(bytes: &[u8]) -> Result<String, String> {
+    let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes))
+        .with_guessed_format()
+        .map_err(|e| e.to_string())?;
+    let mut limits = image::Limits::default();
+    limits.max_image_width = Some(ICON_MAX_SIDE);
+    limits.max_image_height = Some(ICON_MAX_SIDE);
+    reader.limits(limits);
+    let img = reader.decode().map_err(|_| "Иконка сборки не читается как картинка".to_string())?;
+    let filter = if pixel_art(&img) { image::imageops::FilterType::Nearest } else { image::imageops::FilterType::Lanczos3 };
+    square_png_data_url(&img, filter)
+}
+
+const ICON_MAX_SIDE: u32 = 2048;
+
+/// A square that maps onto the cover grid by a whole factor: blown up from a
+/// smaller one, or drawn in solid blocks of the factor's size. Smoothing such a
+/// picture only blurs its pixels.
+pub(crate) fn pixel_art(img: &image::DynamicImage) -> bool {
+    let (w, h) = (img.width(), img.height());
+    if w != h || w == 0 {
+        return false;
+    }
+    if COVER_PX.is_multiple_of(w) {
+        return true;
+    }
+    if !w.is_multiple_of(COVER_PX) {
+        return false;
+    }
+    let k = w / COVER_PX;
+    let rgba = img.to_rgba8();
+    rgba.enumerate_pixels().all(|(x, y, p)| p == rgba.get_pixel(x - x % k, y - y % k))
+}
+
+fn square_png_data_url(img: &image::DynamicImage, filter: image::imageops::FilterType) -> Result<String, String> {
     // resize_to_fill centre-crops instead of stretching
-    let square = img.resize_to_fill(COVER_PX, COVER_PX, image::imageops::FilterType::Lanczos3);
+    let square = img.resize_to_fill(COVER_PX, COVER_PX, filter);
     let mut png: Vec<u8> = vec![];
     square
         .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)

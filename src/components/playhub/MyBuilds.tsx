@@ -15,7 +15,7 @@ import { presetName } from '../../lib/versionBuild'
 import type { PopularVersion } from '../../lib/versionBuild'
 import { hasTauri } from '../../ipc/tauri'
 import { usePlayStats } from '../../state/playStats'
-import { useProfiles } from '../../state/profiles'
+import { useGuarded, useProfiles } from '../../state/profiles'
 import { openModal, showToast } from '../../state/ui'
 import { DEFAULT_ICON } from '../../lib/buildIcon'
 import { BuildIcon, IconPicker } from './BuildIcon'
@@ -107,6 +107,7 @@ export function BuildMenuItems({
   onTab?: (tab: 'opts', rename: boolean) => void
 }) {
   const go = (rename: boolean) => (onTab ? onTab('opts', rename) : openBuildSettings(name, 'opts', rename))
+  const guarded = useGuarded(name)
   return (
     <>
       <button role="menuitem" data-track="build_rename" onClick={() => (onClose(), go(true))}>
@@ -121,7 +122,7 @@ export function BuildMenuItems({
         <Icon id="i-mo-gear" />
         Настройки
       </button>
-      {hasTauri() ? (
+      {hasTauri() && !guarded ? (
         <button role="menuitem" data-track="build_folder" onClick={() => (onClose(), void openProfileFolder(name).catch(() => {}))}>
           <Icon id="i-mo-folder" />
           Папка
