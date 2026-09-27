@@ -354,6 +354,7 @@ export type HubPack = PremiumPack & {
   origin: 'millida' | 'modrinth'
   /** Modrinth: запускается на сервере (server_side не unsupported). */
   serverOk?: boolean
+  preview?: boolean
 }
 
 interface MrHit {

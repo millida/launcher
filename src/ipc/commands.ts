@@ -557,6 +557,8 @@ export interface MillidaPack {
   hasServer: boolean
   /** Кто собрал. Пусто — подписи нет. */
   author?: string | null
+  /** Draft shown only to this account's reviewers. */
+  preview?: boolean
 }
 
 /** Наши сборки для списка «Контент» — рядом с Modrinth и CurseForge. */

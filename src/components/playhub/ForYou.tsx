@@ -233,7 +233,14 @@ export function ForYou({
       ),
     }))
     // Карт нет (браузер, CurseForge молчит) — место отдаём сборкам.
-    const packCards: Pick[] = pickN(packs.slice(0, 30), mapCards.length ? 5 : 7, 23).map((p) => ({
+    // A tester must always find the draft he checks: the daily random pick hid it among published packs.
+    const previews = packs.filter((p) => p.preview)
+    const packSlots = mapCards.length ? 5 : 7
+    const packPool = [
+      ...previews.slice(0, packSlots),
+      ...pickN(packs.filter((p) => !p.preview).slice(0, 30), Math.max(0, packSlots - previews.length), 23),
+    ]
+    const packCards: Pick[] = packPool.map((p) => ({
       key: 'pack:' + p.id,
       node: (
         <Card

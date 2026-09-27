@@ -382,7 +382,7 @@ export function PlayHub({ on }: { on?: boolean }) {
   const catalogPacks = useMemo<HubPack[]>(() => {
     const ours = (packs || [])
       .filter((c) => !c.accessRequired)
-      .map((c): HubPack => ({ ...packFromCatalog(c), premium: false, origin: 'millida' }))
+      .map((c): HubPack => ({ ...packFromCatalog(c), premium: false, origin: 'millida', preview: !!c.preview }))
     return [...ours, ...(mrPacks || [])]
   }, [packs, mrPacks])
 
