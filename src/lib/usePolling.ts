@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { isRealtimeLive, onRealtime, onRealtimeLiveChange } from './realtime'
-import { REALTIME_STRETCHED_MS, type RealtimeTopic } from './realtimePace'
+import { realtimePaceMs, type RealtimeTopic } from './realtimePace'
 
 interface Options {
   hiddenMs?: number
@@ -20,7 +20,7 @@ export function usePolling(fn: () => void, ms: number, opts: Options = {}) {
     let timer: ReturnType<typeof setTimeout>
     let stopped = false
 
-    const pace = () => (realtime && isRealtimeLive() ? Math.max(ms, REALTIME_STRETCHED_MS) : ms)
+    const pace = () => realtimePaceMs(!!realtime && isRealtimeLive(), ms)
     const delay = () => (document.hidden ? hiddenMs : pace())
 
     const tick = () => {

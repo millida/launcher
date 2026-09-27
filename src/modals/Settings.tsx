@@ -36,7 +36,6 @@ import { ColorPicker } from '../components/ColorPicker'
 import { AudioSettings } from '../components/AudioSettings'
 import { RadioCredits, RadioVolume } from '../components/radio'
 import { betaChannel, checkForUpdate, pendingUpdate } from '../lib/updater'
-import { openWhatsNew } from '../state/whatsNew'
 import { useUpdate } from '../state/update'
 import { discordPresence } from '../lib/launch'
 import { radioOn, useMusic } from '../state/music'
@@ -970,11 +969,6 @@ export function Settings({ on }: { on: boolean }) {
       </Block>
 
       <Group>
-        <Row title="Что нового" keys="список изменений версия">
-          <button className="btn sm secondary" id="setWhatsNew" onClick={() => void openWhatsNew()}>
-            Открыть
-          </button>
-        </Row>
         <Row title="Тестовые версии" hint={beta ? 'Раньше всех, бывают поломки' : undefined} keys="бета тестирование обновления раньше">
           <Toggle
             label="Тестовые версии"

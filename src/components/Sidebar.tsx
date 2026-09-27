@@ -21,6 +21,7 @@ import { useUi } from '../state/ui'
 import type { ScreenId } from '../state/ui'
 import { useHasMillida } from '../state/auth'
 import { usePlus } from '../state/plus'
+import { onRealtime } from '../lib/realtime'
 import { preloadScreen } from '../screens/registry'
 
 /* Навигация как в Brawl Stars: у каждого раздела ровно один вход (владелец
@@ -173,6 +174,8 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
   useEffect(() => {
     void usePlus.getState().load()
   }, [millida])
+
+  useEffect(() => onRealtime('account', () => void usePlus.getState().load()), [])
 
   // Непрочитанное в группах считается тем же счётчиком: для человека это одно
   // и то же «мне написали», а не два разных места.

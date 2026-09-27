@@ -1,10 +1,9 @@
 import { pollDelayMs } from './pollPace'
 
-export const REALTIME_TOPICS = ['friends', 'presence', 'calls', 'inbox', 'hosting'] as const
+export const REALTIME_TOPICS = ['friends', 'presence', 'calls', 'inbox', 'hosting', 'account'] as const
 export type RealtimeTopic = (typeof REALTIME_TOPICS)[number]
 
 export const REALTIME_HOST = 'api.millida.net'
-export const REALTIME_FALLBACK_MS = 60_000
 export const REALTIME_STRETCHED_MS = 120_000
 export const REALTIME_OFF_RETRY_MS = 600_000
 export const REALTIME_ERROR_RETRY_MS = 60_000
@@ -54,8 +53,16 @@ export function friendsPollDelayMs(
   random: () => number,
   waited: boolean,
 ): number {
-  if (live) return pollDelayMs(REALTIME_FALLBACK_MS, failures, hidden, random)
+  if (live) return pollDelayMs(REALTIME_STRETCHED_MS, failures, hidden, random)
   return pollDelayMs(serverMs, failures, hidden, random, waited)
+}
+
+export function realtimePaceMs(live: boolean, ms: number): number {
+  return live ? Math.max(ms, REALTIME_STRETCHED_MS) : ms
+}
+
+export function idleBeforePollMs(live: boolean, poked: boolean): number {
+  return live && !poked ? REALTIME_STRETCHED_MS : 0
 }
 
 export function refreshDue(live: boolean, lastAt: number, now: number): boolean {

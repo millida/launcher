@@ -32,8 +32,10 @@ serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 encoding_rs = "0.8"
 # rustls rather than native-tls: on macOS native-tls goes through the Keychain,
-# which re-prompts for a password after every auto-update changes the binary hash
-reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "multipart", "rustls-tls-webpki-roots", "rustls-tls-native-roots", "charset", "http2"] }
+# which re-prompts for a password after every auto-update changes the binary hash.
+# gzip: API JSON is several times smaller compressed, and a player's traffic is
+# the server's outbound bill. Pure Rust (flate2), unlike zstd, which needs a C build.
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "multipart", "rustls-tls-webpki-roots", "rustls-tls-native-roots", "charset", "http2", "gzip"] }
 futures = "0.3"
 dirs = "6"
 md-5 = "0.10"

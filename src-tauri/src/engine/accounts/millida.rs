@@ -76,6 +76,48 @@ pub fn webview_path_allowed(path: &str) -> bool {
     !clean.ends_with("/launch-token")
 }
 
+/// A GET answer the server tagged with an ETag. The next poll of the same
+/// address asks "changed?" and gets an empty 304 instead of the same body: the
+/// cosmetics catalog alone is 1.4 MB, and every open launcher re-read it every
+/// couple of minutes.
+#[derive(Clone)]
+struct Tagged {
+    etag: String,
+    body: String,
+}
+
+const ETAG_CACHE_BUDGET: usize = 24 * 1024 * 1024;
+
+static ETAG_CACHE: std::sync::Mutex<std::collections::BTreeMap<String, Tagged>> =
+    std::sync::Mutex::new(std::collections::BTreeMap::new());
+
+/// The account is part of the key: a personal answer cached for one session
+/// must never be replayed to the next one signed in on the same launcher.
+fn etag_key(token: Option<&String>, url: &str) -> String {
+    let account = token.map(|t| sha256_hex(t.as_bytes())).unwrap_or_default();
+    format!("{}\n{}", account, url)
+}
+
+fn remembered(key: &str) -> Option<Tagged> {
+    ETAG_CACHE.lock().unwrap_or_else(|e| e.into_inner()).get(key).cloned()
+}
+
+fn remember(key: String, etag: String, body: String) {
+    let mut cache = ETAG_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    remember_in(&mut cache, key, etag, body);
+}
+
+fn remember_in(cache: &mut std::collections::BTreeMap<String, Tagged>, key: String, etag: String, body: String) {
+    if body.len() > ETAG_CACHE_BUDGET / 4 {
+        return;
+    }
+    cache.insert(key.clone(), Tagged { etag, body });
+    while cache.values().map(|t| t.body.len()).sum::<usize>() > ETAG_CACHE_BUDGET {
+        let Some(victim) = cache.keys().find(|k| **k != key).cloned() else { break };
+        cache.remove(&victim);
+    }
+}
+
 pub async fn millida_api(
     path: String,
     method: String,
@@ -89,6 +131,8 @@ pub async fn millida_api(
         return Err("bad method".into());
     }
     let token = token.filter(|t| !t.is_empty());
+    let conditional = (m == "GET").then(|| etag_key(token.as_ref(), url));
+    let known = conditional.as_deref().and_then(remembered);
     let build = || {
         let mut req = match m.as_str() {
             "GET" => client().get(url),
@@ -103,6 +147,9 @@ pub async fn millida_api(
         if let Some(b) = body.as_ref() {
             req = req.json(b);
         }
+        if let Some(k) = known.as_ref() {
+            req = req.header(reqwest::header::IF_NONE_MATCH, k.etag.as_str());
+        }
         req
     };
     // a connect/timeout error means the request never reached the server, so
@@ -116,11 +163,26 @@ pub async fn millida_api(
         Err(e) => return Err(net_err(&e)),
     };
     let status = res.status();
+    if status == reqwest::StatusCode::NOT_MODIFIED {
+        if let Some(k) = known {
+            return parse_api_body(&k.body);
+        }
+    }
+    let etag = res
+        .headers()
+        .get(reqwest::header::ETAG)
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string);
     let text = match read_capped(res, JSON_MAX_BYTES).await {
         Ok(b) => String::from_utf8_lossy(&b).into_owned(),
         Err(e) if status.is_success() => return Err(e),
         Err(_) => String::new(),
     };
+    if status.is_success() {
+        if let (Some(key), Some(tag)) = (conditional, etag) {
+            remember(key, tag, text.clone());
+        }
+    }
     if !status.is_success() {
         // 401 is returned as a code so callers know to refresh the session;
         // other failures carry the server's own explanation
@@ -134,10 +196,14 @@ pub async fn millida_api(
         }
         return Err(api_error_message(&text).unwrap_or_else(|| format!("http {}", status.as_u16())));
     }
+    parse_api_body(&text)
+}
+
+fn parse_api_body(text: &str) -> Result<Value, String> {
     if text.trim().is_empty() {
         return Ok(Value::Null);
     }
-    serde_json::from_str(&text).map_err(|e| e.to_string())
+    serde_json::from_str(text).map_err(|e| e.to_string())
 }
 
 /// Marker the webview matches on to show the reason instead of «send failed».
@@ -406,9 +472,50 @@ pub async fn millida_login_poll(device_code: String) -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        api_url, refresh_on_cooldown, webview_path_allowed, set_refresh_cooldown, verdict_for, RefreshVerdict,
-        MILLIDA_API,
+        api_url, etag_key, refresh_on_cooldown, remember_in, webview_path_allowed, set_refresh_cooldown, verdict_for,
+        RefreshVerdict, Tagged, ETAG_CACHE_BUDGET, MILLIDA_API,
     };
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn a_remembered_answer_is_replayed_only_to_its_own_account_and_address() {
+        let url = "https://api.millida.net/v2/cosmetics/catalog";
+        let alice = "token-alice".to_string();
+        let bob = "token-bob".to_string();
+        let mut cache: BTreeMap<String, Tagged> = BTreeMap::new();
+        remember_in(&mut cache, etag_key(Some(&alice), url), "\"v1\"".into(), "{\"items\":[]}".into());
+        // (account, address, expected etag, why this case is pinned)
+        let cases: [(Option<&String>, &str, Option<&str>, &str); 4] = [
+            (Some(&alice), url, Some("\"v1\""), "the same session asks again and gets a 304 instead of 1.4 MB"),
+            (Some(&bob), url, None, "another account must never see a personal answer cached for the first one"),
+            (None, url, None, "a signed-out call is a different audience from a signed-in one"),
+            (Some(&alice), "https://api.millida.net/v2/cosmetics/owned", None, "one address never answers for another"),
+        ];
+        for (account, address, expected, why) in cases {
+            let got = cache.get(&etag_key(account, address)).map(|t| t.etag.as_str());
+            assert_eq!(got, expected, "{}", why);
+        }
+    }
+
+    #[test]
+    fn the_etag_cache_stays_within_its_budget() {
+        let mut cache: BTreeMap<String, Tagged> = BTreeMap::new();
+        let quarter = "x".repeat(ETAG_CACHE_BUDGET / 4);
+        for i in 0..8 {
+            remember_in(&mut cache, format!("budget-{i}"), format!("\"{i}\""), quarter.clone());
+        }
+        let held: usize = cache.values().map(|t| t.body.len()).sum();
+        assert!(held <= ETAG_CACHE_BUDGET, "the cache holds {held} bytes over its {ETAG_CACHE_BUDGET} budget");
+        assert!(
+            cache.contains_key("budget-7"),
+            "the newest answer must survive eviction, or the next poll downloads it again"
+        );
+        remember_in(&mut cache, "budget-huge".into(), "\"huge\"".into(), "x".repeat(ETAG_CACHE_BUDGET / 4 + 1));
+        assert!(
+            !cache.contains_key("budget-huge"),
+            "an answer larger than a quarter of the budget would evict everything else and is not kept"
+        );
+    }
 
     #[test]
     fn refresh_failure_verdicts() {

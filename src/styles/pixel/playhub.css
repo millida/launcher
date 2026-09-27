@@ -914,8 +914,9 @@
 }
 .ph-card.ph-mt:hover { background-color: #000; }
 .ph-card.ph-mt.on { --px-ol: var(--m-accent); --px-ol-w: 3px; }
-/* A square crop of the 16:9 banner halves the wordmark; zoom onto the block instead, the name sits in the foot. */
-.ph-card.ph-mt.has-banner { --px-img-size: auto 165%; --px-img-pos: 100% 55%; }
+/* Two cells wide so the 16:9 banner keeps its wordmark; the row height still comes from the square neighbours. */
+.ph-card.ph-mt.has-banner { grid-column: span 2; aspect-ratio: auto; align-self: stretch; --px-img-size: cover; --px-img-pos: center; }
+@media (max-width: 600px) { .ph-card.ph-mt.has-banner { grid-column: 1 / -1; aspect-ratio: 16 / 9; } }
 .ph-mt-ic {
   image-rendering: pixelated;
   filter: drop-shadow(0 6px 0 rgba(0, 0, 0, 0.28));

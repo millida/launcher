@@ -80,6 +80,7 @@ import { starredFirst, starredIds, toggleStar } from '../state/cosmeticStars'
 import { readAnimations } from '../lib/cosmeticAnimation'
 import { loadShowcase, showcaseSkinUrl, type ShowcaseCard, type ShowcaseKind } from '../lib/skinShowcase'
 import { buyCosmetic, loadBalance } from '../lib/rubies'
+import { onRealtime } from '../lib/realtime'
 import { useVariantPreview } from '../lib/variantArt'
 import { uiConfirm } from '../state/confirm'
 import { watchPlusPurchase } from '../state/plusWatch'
@@ -1324,6 +1325,19 @@ export function Skins({ on }: { on: boolean }) {
     void refreshRubies()
     noteCosmeticsSeen()
   }, [])
+
+  useEffect(
+    () =>
+      onRealtime('account', () => {
+        if (!hasMillidaAccount()) return
+        void refreshPlus()
+        void refreshRubies()
+        void loadCosmeticOwned()
+          .then((owned) => setCosmeticOwned(owned.items || []))
+          .catch(() => undefined)
+      }),
+    [],
+  )
 
   // Каталог аккаунта запрашивается один раз при открытии экрана, а вход к тому
   // моменту мог ещё не подхватиться: запрос тогда не уходил вовсе, и каталог

@@ -1,6 +1,6 @@
 import { api, hasMillidaAccount } from '../api'
 import { isRealtimeLive, onRealtime, onRealtimeLiveChange } from '../realtime'
-import { REALTIME_FALLBACK_MS, pokeGate } from '../realtimePace'
+import { idleBeforePollMs, pokeGate } from '../realtimePace'
 
 export type CallSignalKind =
   | 'invite'
@@ -105,8 +105,9 @@ export function startSignalPump(onEvent: (e: CallEvent) => void): Pump {
         await pause(RETRY_MS)
         continue
       }
-      if (isRealtimeLive() && !gate.take()) {
-        await sleep(REALTIME_FALLBACK_MS)
+      const idle = idleBeforePollMs(isRealtimeLive(), gate.take())
+      if (idle) {
+        await sleep(idle)
         if (stopped) return
         if (!hasMillidaAccount()) continue
       }

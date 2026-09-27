@@ -12,7 +12,6 @@ import {
 import { readPref } from './prefs'
 import { showToast } from '../state/ui'
 import { useUpdate } from '../state/update'
-import { rememberNotes } from '../state/whatsNew'
 import { openExt } from './api'
 import { reportError } from './crash'
 import { cancelAppExit, trackAppExit, trackFailure } from './telemetry'
@@ -70,7 +69,6 @@ function remember(upd: Update) {
   current = upd
   downloading = null
   downloaded = false
-  rememberNotes(upd.version, upd.body || '')
   useUpdate.getState().set({ version: upd.version, staged: false, manual: false, failed: false })
   pending = { version: upd.version, notes: upd.body || '', install: async () => applyUpdate() }
 }
@@ -140,7 +138,6 @@ async function probeFallback(): Promise<FallbackUpdate | null> {
       fallbackFile = null
       fallbackStaging = null
     }
-    rememberNotes(upd.version, upd.notes || '')
     pending = { version: upd.version, notes: upd.notes || '', install: async () => applyFallback() }
     useUpdate.getState().set({ version: upd.version, staged: !!fallbackFile, manual: true, failed: false })
     void stageFallback().catch(() => {})

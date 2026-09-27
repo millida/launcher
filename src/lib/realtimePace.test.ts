@@ -1,13 +1,14 @@
 import { expect, test } from 'bun:test'
 import { POLL_AFTER_WAIT_MS, POLL_BASE_MS, pollDelayMs } from './pollPace'
 import {
-  REALTIME_FALLBACK_MS,
   REALTIME_STRETCHED_MS,
   friendsPollDelayMs,
   friendsPollWait,
+  idleBeforePollMs,
   pokeGate,
   pokeTopic,
   readRealtimeGrant,
+  realtimePaceMs,
   refreshDue,
 } from './realtimePace'
 
@@ -43,6 +44,7 @@ const pokes: Array<[string, unknown, unknown, ReturnType<typeof pokeTopic>]> = [
   ['звонки', 'personal:#42', { t: 'calls' }, 'calls'],
   ['статус сервера хостинга', 'personal:#42', { t: 'hosting' }, 'hosting'],
   ['счётчики сайта', 'personal:#42', { t: 'inbox' }, 'inbox'],
+  ['рубины, PLUS или купленная косметика', 'personal:#42', { t: 'account' }, 'account'],
   ['неизвестная тема', 'personal:#42', { t: 'wallet' }, null],
   ['чужой канал', 'news', { t: 'friends' }, null],
   ['без данных', 'personal:#42', null, null],
@@ -73,16 +75,46 @@ test('без realtime темп опроса прежний, до единицы'
   expect(friendsPollDelayMs(false, POLL_BASE_MS, 0, false, half, false)).toBe(POLL_BASE_MS)
 })
 
-test('при живом realtime запасной опрос раз в минуту, даже после ответа «ждал»', () => {
-  expect(friendsPollDelayMs(true, POLL_BASE_MS, 0, false, half, true)).toBe(REALTIME_FALLBACK_MS)
-  expect(friendsPollDelayMs(true, POLL_BASE_MS, 0, true, half, false)).toBe(REALTIME_FALLBACK_MS)
+test('при живом realtime запасной опрос друзей раз в две минуты, даже после ответа «ждал»', () => {
+  expect(friendsPollDelayMs(true, POLL_BASE_MS, 0, false, half, true)).toBe(REALTIME_STRETCHED_MS)
+  expect(friendsPollDelayMs(true, POLL_BASE_MS, 0, true, half, false)).toBe(REALTIME_STRETCHED_MS)
 })
 
-test('ошибка при живом realtime не превращается в шторм и не ждёт дольше минуты', () => {
+test('ошибка при живом realtime не превращается в шторм и не ждёт дольше страховки', () => {
   const d = friendsPollDelayMs(true, POLL_BASE_MS, 9, false, half, false)
   expect(d).toBeGreaterThanOrEqual(POLL_BASE_MS)
-  expect(d).toBeLessThanOrEqual(REALTIME_FALLBACK_MS)
+  expect(d).toBeLessThanOrEqual(REALTIME_STRETCHED_MS)
 })
+
+// Вход → вердикт для таймера опроса по теме: живое соединение растягивает частый опрос
+// до страховки, но редкий не учащает, а без соединения темп прежний.
+const paces: Array<[string, boolean, number, number]> = [
+  ['без realtime частый опрос как был', false, 5_000, 5_000],
+  ['без realtime редкий опрос как был', false, 600_000, 600_000],
+  ['живой realtime растягивает частый опрос до страховки', true, 5_000, REALTIME_STRETCHED_MS],
+  ['живой realtime не учащает опрос реже страховки', true, 600_000, 600_000],
+]
+
+for (const [name, live, ms, expected] of paces) {
+  test(`темп опроса: ${name}`, () => {
+    expect(realtimePaceMs(live, ms)).toBe(expected)
+  })
+}
+
+// Вход → вердикт для ящика звонков: без соединения долгий опрос уходит сразу, как раньше;
+// с соединением ящик ждёт толчка, а толчок забирает входящий звонок без паузы.
+const callIdle: Array<[string, boolean, boolean, number]> = [
+  ['без realtime долгий опрос без паузы', false, false, 0],
+  ['без realtime толчок ничего не меняет', false, true, 0],
+  ['живой realtime без толчка ждёт страховку', true, false, REALTIME_STRETCHED_MS],
+  ['живой realtime с толчком забирает ящик сразу', true, true, 0],
+]
+
+for (const [name, live, poked, expected] of callIdle) {
+  test(`ящик звонков: ${name}`, () => {
+    expect(idleBeforePollMs(live, poked)).toBe(expected)
+  })
+}
 
 test('без realtime обновление экрана идёт каждым тиком таймера, как раньше', () => {
   expect(refreshDue(false, 1_000, 1_001)).toBe(true)

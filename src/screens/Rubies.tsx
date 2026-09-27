@@ -3,6 +3,7 @@ import { Icon } from '../components/Icon'
 import { Ruby } from '../components/Ruby'
 import { TopbarPortal } from '../components/TopbarPortal'
 import { hasMillidaAccount, openExt, WALLET_URL } from '../lib/api'
+import { onRealtime } from '../lib/realtime'
 import { apiErrorText } from '../lib/apiError'
 import {
   buyPack,
@@ -179,6 +180,11 @@ export function Rubies({ on }: { on: boolean }) {
     loadPackQuests()
       .then((r) => setQuests(questsToShow(r)))
       .catch(() => setQuests([]))
+  }, [on, signedIn])
+
+  useEffect(() => {
+    if (!on || !signedIn) return
+    return onRealtime('account', () => void loadPlusEconomy().then(setPlus).catch(() => undefined))
   }, [on, signedIn])
 
   // Каталог нужен только запасному «Хочу» (старая служба отдаёт одни коды).
