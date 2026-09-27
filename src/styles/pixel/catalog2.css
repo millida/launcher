@@ -371,6 +371,7 @@
   --px-n: 4px; clip-path: var(--px-4);
 }
 .mr-prem svg { width: 12px; height: 12px; }
+.mr-prem.excl { color: var(--m-accent-fg); background: var(--m-rarity-epic); }
 .mr-price { font: 800 18px/1 var(--m-font); color: var(--m-warning); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .mr-side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; min-width: 128px; text-align: right; }
 .mr-stat { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--m-fg-muted); }

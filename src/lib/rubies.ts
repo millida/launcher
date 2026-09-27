@@ -563,6 +563,26 @@ export const completeFragments = (code: string) =>
 export const loadEconomyProgress = () => api<EconomyProgress>('/rubies/progress')
 export const loadPlusEconomy = () => api<PlusEconomy>('/launcher/plus')
 
+export interface PackQuest {
+  code: string
+  title: string
+  pack: string
+  packName: string
+  minutes: number
+  needMinutes: number
+  done: boolean
+  claimed: boolean
+  item: ItemRef
+  owned: boolean
+  fragments: FragmentProgress | null
+}
+export const loadPackQuests = () => api<{ quests: PackQuest[] }>('/rubies/quests')
+export const claimPackQuest = (code: string) =>
+  api<{ quest: PackQuest; granted: (FragmentProgress & { amount: number }) | null }>(
+    '/rubies/quests/' + encodeURIComponent(code) + '/claim',
+    { method: 'POST' },
+  )
+
 /**
  * Подарок новичку (26.09.2026): половина фрагментов нимба, остаток докупается
  * за рубины. Повтор ничего не выдаёт. Старая служба ручки не знает — экран без подарка.

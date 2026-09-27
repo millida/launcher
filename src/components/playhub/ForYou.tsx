@@ -14,6 +14,7 @@ import type { HostServer } from '../../screens/Hosting'
 import { HostPlanPicker } from '../HostPlanPicker'
 import { modeScene } from '../iso/modeScenes'
 import { dayNumber, pickIndex } from './rotation'
+import { isExclusive } from './data'
 import type { HubPack } from './data'
 import { trackImpression } from '../../lib/uiTrack'
 
@@ -52,12 +53,13 @@ interface CardProps {
   art: ReactNode
   tag: string
   gold?: boolean
+  excl?: boolean
   title: string
   meta?: ReactNode
   onClick: () => void
 }
 
-function Card({ art, tag, gold, title, meta, onClick, wide, kind, id, pos }: CardProps) {
+function Card({ art, tag, gold, excl, title, meta, onClick, wide, kind, id, pos }: CardProps) {
   return (
     <button
       className={'ph-card fy-card' + (wide ? ' fy-wide' : '')}
@@ -70,7 +72,7 @@ function Card({ art, tag, gold, title, meta, onClick, wide, kind, id, pos }: Car
     >
       <span className="ph-card-art">
         {art}
-        <span className={'ph-card-tag' + (gold ? ' gold' : '')}>{tag}</span>
+        <span className={'ph-card-tag' + (gold ? ' gold' : excl ? ' excl' : '')}>{tag}</span>
       </span>
       <span className="ph-card-body">
         <b>{title}</b>
@@ -247,7 +249,8 @@ export function ForYou({
           key={'pack:' + p.id}
           kind={p.premium ? 'premium' : 'pack'}
           id={p.slug || p.id}
-          tag="Сборка"
+          tag={isExclusive(p.slug) ? 'Эксклюзив' : 'Сборка'}
+          excl={isExclusive(p.slug)}
           art={img(p.coverUrl)}
           title={p.title}
           meta={[p.loader, p.mcVersion].filter(Boolean).join(' · ') || p.tagline}
@@ -263,7 +266,8 @@ export function ForYou({
             key="oneblock"
             kind="mode"
             id="ONEBLOCK"
-            tag="Режим"
+            tag="Эксклюзив"
+            excl
             art={<SkyScene />}
             title="OneBlock"
             meta={

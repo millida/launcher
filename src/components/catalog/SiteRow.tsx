@@ -3,7 +3,7 @@ import type { CSSProperties, MouseEvent, ReactNode } from 'react'
 import { Icon } from '../Icon'
 import { HostInstall } from '../playhub/HostInstall'
 import type { HostTarget } from '../playhub/HostInstall'
-import { hostingPackFor, loadHostingPacks } from '../playhub/data'
+import { hostingPackFor, isExclusive, loadHostingPacks } from '../playhub/data'
 import type { HostingPack } from '../playhub/data'
 import { useCatalogCtx } from './target'
 import type { CatalogTarget } from './target'
@@ -490,6 +490,7 @@ export function SiteRow(props: RowProps) {
               <Icon id="i-crown" /> Премиум
             </span>
           ) : null}
+          {isExclusive(card.slug) ? <span className="mr-prem excl">Эксклюзив</span> : null}
           {card.author ? <span className="mr-by">от {card.author}</span> : null}
         </div>
         {card.summary ? <p className="mr-desc">{card.summary}</p> : null}
@@ -533,6 +534,7 @@ export function SiteGalleryCard(props: RowProps) {
     >
       <span className="mr-gal-cover" aria-hidden="true">
         {card.cover ? img(card.cover) : <Fallback slug={card.slug} section={sec.slug} title={name} />}
+        {isExclusive(card.slug) ? <span className="ph-card-tag excl">Эксклюзив</span> : null}
       </span>
       <span className="mr-gal-body">
         <span className="mr-gal-icon" aria-hidden="true">

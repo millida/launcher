@@ -378,6 +378,7 @@
 .playhub { --ph-gold: var(--m-warning); --ph-on-gold: #241600; }
 
 .ph-card-tag.gold { background: var(--ph-gold); color: var(--ph-on-gold); }
+.ph-card-tag.excl { background: var(--m-rarity-epic); color: var(--m-accent-fg); }
 
 /* Премиум-карточка: на две колонки, золотая кайма inset-тенью, живая обложка. */
 .ph-card.prem { grid-column: span 2; }
@@ -913,6 +914,8 @@
 }
 .ph-card.ph-mt:hover { background-color: #000; }
 .ph-card.ph-mt.on { --px-ol: var(--m-accent); --px-ol-w: 3px; }
+/* A square crop of the 16:9 banner halves the wordmark; zoom onto the block instead, the name sits in the foot. */
+.ph-card.ph-mt.has-banner { --px-img-size: auto 165%; --px-img-pos: 100% 55%; }
 .ph-mt-ic {
   image-rendering: pixelated;
   filter: drop-shadow(0 6px 0 rgba(0, 0, 0, 0.28));

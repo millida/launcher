@@ -140,6 +140,7 @@ export function heartbeat(status?: string, server?: string | null) {
     mc: (pack && pack.version) || null,
     server: (playing && (server || (session && (session.serverName || session.server)))) || null,
   }))
+  const catalogPack = slug.then((st) => (st?.catalogPackSlug || '').trim() || null)
   const liveStatus = playing ? 'playing' : 'idle'
   if (!hasMillidaAccount()) {
     void liveMeta.then((meta) => liveBeat(liveStatus, meta))
@@ -147,8 +148,8 @@ export function heartbeat(status?: string, server?: string | null) {
   }
   // A signed-in launcher sends one request per beat: the launcher heartbeat rides inside
   // the presence one instead of going out as a second request.
-  void Promise.all([presence, liveMeta])
-    .then(async ([discordUserId, meta]) => {
+  void Promise.all([presence, liveMeta, catalogPack])
+    .then(async ([discordUserId, meta, catalogSlug]) => {
       const telemetry = await liveBeatPayload(liveStatus, meta).catch(() => null)
       return api('/friends/presence/heartbeat', {
         method: 'POST',
@@ -158,6 +159,7 @@ export function heartbeat(status?: string, server?: string | null) {
           serverIp: (playing && session && session.server) || null,
           build: (playing && session && session.profile) || null,
           gameNick: (playing && gameNick()) || null,
+          catalogPack: (playing && catalogSlug) || null,
           discordUserId: discordUserId || null,
           ...(telemetry ? { telemetry } : {}),
         }),

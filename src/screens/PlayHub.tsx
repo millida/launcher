@@ -412,8 +412,10 @@ export function PlayHub({ on }: { on?: boolean }) {
   }, [page && page.id])
 
   const own = OWN_SERVER
-  // OneBlock — обычная плитка среди режимов, без баннера (пока не релиз).
-  const shelfModes = useMemo(() => modes || [], [modes])
+  const shelfModes = useMemo(
+    () => [...(modes || [])].sort((a, b) => Number(b.def.cat === OWN_SERVER.mode) - Number(a.def.cat === OWN_SERVER.mode)),
+    [modes],
+  )
   const wrap = (child: ReactNode) => (
     <section className={'screen playhub' + (on ? ' on' : '')} id="s-playhub">
       {child}

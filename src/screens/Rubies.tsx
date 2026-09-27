@@ -8,9 +8,11 @@ import {
   buyPack,
   buyShopCard,
   buyXray,
+  claimPackQuest,
   claimWeekly,
   craftItem,
   loadEconomyProgress,
+  loadPackQuests,
   loadPlusEconomy,
   loadRules,
   loadShopDay,
@@ -18,6 +20,7 @@ import {
   rubles,
   wishItem,
   type EconomyProgress,
+  type PackQuest,
   type ItemRef,
   type PlusEconomy,
   type Rules,
@@ -57,6 +60,8 @@ import '../styles/pixel/shop-juice.css'
 import { wearNow } from '../state/wearIntent'
 import { topUpFragments } from '../components/shop/topUp'
 import { fragmentWord } from '../components/shop/rarity'
+import { QuestsBlock } from '../components/shop/Quests'
+import { questsToShow } from '../components/shop/packQuests'
 
 /** Пакеты для гостя — те же пять, что в магазине дня (модель экономики 23.09.2026). */
 const GUEST_PACKS = ['handful', 'pouch', 'casket', 'hoard', 'trove']
@@ -108,6 +113,7 @@ export function Rubies({ on }: { on: boolean }) {
   const [weekly, setWeekly] = useState<WeeklyPath | null>(null)
   const [parcel, setParcel] = useState<WeeklyParcel | null>(null)
   const [progress, setProgress] = useState<EconomyProgress | null>(null)
+  const [quests, setQuests] = useState<PackQuest[]>([])
   const [plus, setPlus] = useState<PlusEconomy | null>(null)
   const [rules, setRules] = useState<Rules | null>(null)
   const [catalog, setCatalog] = useState<Map<string, ItemRef>>(new Map())
@@ -170,6 +176,9 @@ export function Rubies({ on }: { on: boolean }) {
       .then((p) => setProgress(Array.isArray(p.hourItems) ? p : null))
       .catch(() => setProgress(null))
     loadPlusEconomy().then(setPlus).catch(() => setPlus(null))
+    loadPackQuests()
+      .then((r) => setQuests(questsToShow(r)))
+      .catch(() => setQuests([]))
   }, [on, signedIn])
 
   // Каталог нужен только запасному «Хочу» (старая служба отдаёт одни коды).
@@ -375,6 +384,22 @@ export function Rubies({ on }: { on: boolean }) {
     }
   }
 
+  const doPackQuest = async (quest: PackQuest) => {
+    setBusy('quest:' + quest.code)
+    try {
+      const res = await claimPackQuest(quest.code)
+      setQuests((list) => list.map((q) => (q.code === res.quest.code ? res.quest : q)))
+      reloadWorkshop()
+      const got = res.granted
+      showToast(got ? '+' + got.amount + ' ' + fragmentWord(got.amount) + ': ' + res.quest.item.name + ' ' + got.have + '/' + got.need : 'Задание выполнено', 'ok')
+    } catch (e) {
+      trackFailure('shop', e, { step: 'action' })
+      showToast(apiErrorText(e, ERR), 'error')
+    } finally {
+      setBusy('')
+    }
+  }
+
   /** Посылка недели: фрагменты одной вещи из трёх, остаток докупается. */
   const doParcel = async (item: ItemRef) => {
     setBusy('weekly')
@@ -571,6 +596,7 @@ export function Rubies({ on }: { on: boolean }) {
         <ParcelBlock data={parcel} busy={busy} onClaim={(it) => void doParcel(it)} />
       ) : null}
       </Guard>
+      <Guard what="Задания сборок" silent><QuestsBlock quests={quests} busy={busy} onClaim={(q) => void doPackQuest(q)} /></Guard>
       <Guard what="Мастерская" silent>{workshop ? <WorkshopBlock data={workshop} busy={busy} weekly={!!weekly} onCraft={(w) => void doCraft(w)} onTopUp={(f) => void doFragmentsTopUp(f)} /> : null}</Guard>
       <Guard what="Путь" silent>{progress ? <PathBlock data={progress} /> : null}</Guard>
       <Guard what="Рубины" silent>

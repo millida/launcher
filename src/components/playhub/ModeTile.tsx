@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react'
 import { Icon } from '../Icon'
 import { modeBackground, modeLook } from './modeArt'
 import { modeScene } from '../iso/modeScenes'
+import { ONEBLOCK_BANNER, OWN_SERVER, isExclusive } from './data'
 
 /** Онлайн коротко, чтобы название влезло в строку: 163 400 → «163 тыс». */
 const short = (n: number) =>
@@ -36,10 +37,11 @@ export function ModeTile({
     const k = Math.max(1, Math.floor(Math.min(104 / icon.w, 104 / icon.h) * 2) / 2)
     return { bg: modeBackground(look.color), icon, k }
   }, [cat, index])
+  const banner = cat === OWN_SERVER.mode ? ONEBLOCK_BANNER : null
 
   return (
     <button
-      className={'ph-card ph-mt' + (on ? ' on' : '')}
+      className={'ph-card ph-mt' + (banner ? ' has-banner' : '') + (on ? ' on' : '')}
       data-i={index % 4}
       data-sound="nav"
       data-kind="mode"
@@ -47,17 +49,22 @@ export function ModeTile({
       data-pos={index}
       data-src="mode"
       aria-pressed={on}
-      style={{ '--px-img': 'url(' + art.bg + ')' } as CSSProperties}
+      style={{ '--px-img': 'url(' + (banner || art.bg) + ')' } as CSSProperties}
       onClick={onClick}
     >
-      <img
-        className="ph-mt-ic"
-        src={art.icon.url}
-        width={art.icon.w * art.k}
-        height={art.icon.h * art.k}
-        alt=""
-        draggable={false}
-      />
+      {isExclusive(cat) ? <span className="ph-card-tag excl">Эксклюзив</span> : null}
+      {banner ? (
+        <span className="ph-mt-ic" aria-hidden="true"></span>
+      ) : (
+        <img
+          className="ph-mt-ic"
+          src={art.icon.url}
+          width={art.icon.w * art.k}
+          height={art.icon.h * art.k}
+          alt=""
+          draggable={false}
+        />
+      )}
       <span className="ph-mt-foot">
         <b>{title}</b>
         {/* Соцдоказательство (владелец 24.09): число — только живое и не

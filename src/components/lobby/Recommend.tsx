@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { Icon } from '../Icon'
-import { loadCatalogPacks } from '../playhub/data'
+import { ONEBLOCK_PACK, isExclusive, loadCatalogPacks } from '../playhub/data'
 import { cfSearch } from '../../ipc/commands'
 import type { CfHit, MillidaPack } from '../../ipc/commands'
 import { hasTauri } from '../../ipc/tauri'
@@ -55,10 +55,10 @@ export function Recommend({ on }: { on: boolean }) {
   }, [on])
 
   const list = useMemo<Rec[]>(() => {
-    // Чередуем: сборки каталога, изредка карта с друзьями.
-    // OneBlock пока не выходит — не рекомендуем.
-    const arcania = packs.find((p) => p.slug === 'arcania')
-    if (arcania) return [{ kind: 'pack', pack: arcania }]
+    const pinned = [ONEBLOCK_PACK, 'arcania']
+      .map((slug) => packs.find((p) => p.slug === slug))
+      .filter((p): p is MillidaPack => !!p)
+    if (pinned.length) return pinned.map((pack): Rec => ({ kind: 'pack', pack }))
     const out: Rec[] = []
     const n = Math.max(packs.length, maps.length)
     for (let i = 0; i < n; i++) {
@@ -72,6 +72,7 @@ export function Recommend({ on }: { on: boolean }) {
   const rec = list[pos]!
   const recKind = rec.kind === 'oneblock' ? 'mode' : rec.kind
   const recId = rec.kind === 'pack' ? rec.pack.slug : rec.kind === 'map' ? String(rec.map.id) : 'ONEBLOCK'
+  const excl = isExclusive(recId)
 
   // Показ рекомендации — для CTR блока: одна запись на показанную карточку.
   useEffect(() => {
@@ -119,9 +120,12 @@ export function Recommend({ on }: { on: boolean }) {
       data-pos={pos}
       onClick={open}
     >
-      <span className="lrec-art">{art}</span>
+      <span className="lrec-art">
+        {art}
+        {excl ? <span className="ph-card-tag excl">Эксклюзив</span> : null}
+      </span>
       <span className="lrec-body">
-        <span className="lrec-lab">Попробуй сегодня</span>
+        <span className="lrec-lab">{excl ? 'Эксклюзивный ивент' : 'Попробуй сегодня'}</span>
         <b>{title}</b>
         <i>
           {sub}

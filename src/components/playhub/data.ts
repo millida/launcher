@@ -345,6 +345,12 @@ export const OWN_SERVER: {
   licensed: false,
 }
 
+export const ONEBLOCK_PACK = 'oneblock-metalabs'
+export const ONEBLOCK_BANNER = 'https://cdn.millida.trade/catalog/launcher-packs/oneblock-metalabs/2026-09-27/oneblock-banner.jpg'
+
+const EXCLUSIVE = new Set([ONEBLOCK_PACK, OWN_SERVER.mode])
+export const isExclusive = (key: string | null | undefined): boolean => !!key && EXCLUSIVE.has(key)
+
 /**
  * Сборка на полке и на своей странице. Источник решает, откуда брать
  * страницу и как ставить: наш каталог (в том числе платные) или Modrinth.
