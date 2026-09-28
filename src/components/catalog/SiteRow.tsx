@@ -144,25 +144,6 @@ const img = (src: string) => (
 
 /* ── Кнопки ─────────────────────────────────────────────────── */
 
-/** Не больше трёх походов за источником разом: лента — двадцать строк. */
-let active = 0
-const waiting: (() => void)[] = []
-function queued<T>(job: () => Promise<T>): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const run = () => {
-      active++
-      job()
-        .then(resolve, reject)
-        .finally(() => {
-          active--
-          waiting.shift()?.()
-        })
-    }
-    if (active < 3) run()
-    else waiting.push(run)
-  })
-}
-
 /**
  * Карточка сайта → строка лаунчера. Своя сборка готова сразу; чужой материал
  * узнаёт источник в фоне (только в приложении — в браузере ставить нечем) или
@@ -173,7 +154,7 @@ function useCardHit(card: SiteCard) {
   useEffect(() => {
     if (hit !== undefined || !hasTauri()) return
     let alive = true
-    void queued(() => resolveHit(card)).then((h) => alive && setHit(h))
+    void resolveHit(card).then((h) => alive && setHit(h))
     return () => {
       alive = false
     }

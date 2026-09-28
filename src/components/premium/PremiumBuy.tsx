@@ -3,7 +3,6 @@ import { Icon } from '../Icon'
 import { showToast } from '../../state/ui'
 import { uiConfirm } from '../../state/confirm'
 import { track } from '../../lib/telemetry'
-import { useModpackVersions } from '../../state/modpack'
 import { watchPackPurchase } from '../../state/packWatch'
 import { PackInstallButton } from './PackInstall'
 import { purchaseFlow } from '../../lib/purchaseTrack'
@@ -52,25 +51,26 @@ async function openPayment(
   }
 }
 
-export function installPack(pack: PremiumPack) {
-  if (!pack.slug) {
-    showToast('Сборка ещё не готова', 'error')
-    return
-  }
-  void useModpackVersions.getState().openInstall(pack.slug, pack.title)
-}
-
 /// Главная кнопка сборки. Одна primary на зону — всё остальное рядом ghost.
 export function BuyButton({ pack, plan, sub, size }: BuyProps & { size?: 'sm' }) {
   const cls = 'btn primary' + (size === 'sm' ? ' sm' : '')
   // Сборка каталога: цены у нас нет, доступ проверяет сервер при установке.
   if (viaCatalog(pack)) return <PackInstallButton pack={pack} size={size} />
-  if (hasAccess(pack, sub))
-    return (
-      <button className={cls} data-track="install" data-kind="premium" data-id={pack.slug || pack.id} onClick={() => installPack(pack)}>
-        <Icon id="i-download" /> Установить
-      </button>
-    )
+  /*
+   * Доступ есть — ставим тем же путём каталога. Раньше «Установить» открывал
+   * версии Modrinth, а сборок партнёров там нет: 28.09.2026 купившие Arcania
+   * получали «Не удалось получить версии: 502».
+   */
+  if (hasAccess(pack, sub)) {
+    if (!pack.slug) {
+      return (
+        <button className={cls} disabled>
+          <Icon id="i-download" /> Скоро
+        </button>
+      )
+    }
+    return <PackInstallButton pack={pack} size={size} />
+  }
   if (pack.inSubscription && plan)
     return (
       <button

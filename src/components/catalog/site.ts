@@ -375,15 +375,81 @@ export async function resolveHit(card: SiteCard): Promise<ModHit | null> {
   const hit = peekCatalog<ModHit | null>(key)
   if (hit !== undefined) return hit
   return cachedCatalog(key, async () => {
-    const item = await api<ItemView>('/catalog/items/' + encodeURIComponent(card.slug)).catch(() => null)
+    const item = await itemQueued(card.slug)
     const m = item && item.sourceUrl ? MR_URL.exec(item.sourceUrl) : null
     if (!m) return null
     const mrSlug = decodeURIComponent(m[1]!)
-    const proj = await fetch(MODRINTH_API + '/v2/project/' + encodeURIComponent(mrSlug))
-      .then((r) => (r.ok ? r.json() : null))
-      .catch(() => null)
+    const proj = await mrProject(mrSlug)
     return { ...baseHit(card), slug: (proj && proj.slug) || mrSlug, pid: proj && proj.id ? String(proj.id) : undefined }
   })
+}
+
+/** Не больше трёх карточек материала разом: лента — двадцать строк. */
+let itemsActive = 0
+const itemsWaiting: (() => void)[] = []
+function itemQueued(slug: string): Promise<ItemView | null> {
+  return new Promise((resolve) => {
+    const run = () => {
+      itemsActive++
+      api<ItemView>('/catalog/items/' + encodeURIComponent(slug))
+        .catch(() => null)
+        .then(resolve)
+        .finally(() => {
+          itemsActive--
+          itemsWaiting.shift()?.()
+        })
+    }
+    if (itemsActive < 3) run()
+    else itemsWaiting.push(run)
+  })
+}
+
+interface MrRef {
+  id: string
+  slug: string
+}
+
+/*
+ * Проект Modrinth для строки ленты — одним запросом на всю пачку.
+ *
+ * Раньше каждая строка спрашивала свой `/v2/project/:slug`: игрок листал
+ * «Ресурсы», и лаунчеры вместе упирались в лимит Modrinth (300 в минуту на
+ * адрес сервера). 28.09.2026 прокси из-за этого отвечал «Modrinth перегружен»
+ * тысячам запросов, включая установки. `/v2/projects?ids=` отвечает на
+ * пятьдесят проектов разом, строки одного экрана собираются в одну пачку.
+ */
+const MR_BATCH = 50
+const MR_BATCH_WAIT_MS = 120
+const mrWaiting = new Map<string, ((p: MrRef | null) => void)[]>()
+let mrTimer: ReturnType<typeof setTimeout> | null = null
+
+function mrProject(slug: string): Promise<MrRef | null> {
+  return new Promise((resolve) => {
+    const key = slug.toLowerCase()
+    const list = mrWaiting.get(key)
+    if (list) list.push(resolve)
+    else mrWaiting.set(key, [resolve])
+    if (!mrTimer) mrTimer = setTimeout(flushMr, MR_BATCH_WAIT_MS)
+  })
+}
+
+function flushMr() {
+  mrTimer = null
+  const batch = [...mrWaiting.entries()].slice(0, MR_BATCH)
+  for (const [key] of batch) mrWaiting.delete(key)
+  if (mrWaiting.size) mrTimer = setTimeout(flushMr, MR_BATCH_WAIT_MS)
+  const ids = batch.map(([key]) => key)
+  void fetch(MODRINTH_API + '/v2/projects?ids=' + encodeURIComponent(JSON.stringify(ids)))
+    .then((r) => (r.ok ? (r.json() as Promise<MrRef[]>) : []))
+    .catch(() => [] as MrRef[])
+    .then((found) => {
+      const list = Array.isArray(found) ? found : []
+      for (const [key, done] of batch) {
+        const p = list.find((x) => x && (String(x.slug).toLowerCase() === key || String(x.id).toLowerCase() === key))
+        const ref = p ? { id: String(p.id), slug: String(p.slug) } : null
+        for (const d of done) d(ref)
+      }
+    })
 }
 
 export function peekHit(card: SiteCard): ModHit | null | undefined {
