@@ -1633,17 +1633,16 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
   align-items: center;
   align-self: end;
   min-height: 64px;
-  padding: 10px 128px 10px 14px;
+  gap: 12px;
+  padding: 10px 12px 10px 14px;
   background: var(--m-rarity-epic);
 }
 .ph-card.ph-mt.is-own .ph-mt-foot b { width: auto; font-size: 22px; }
 .ph-card.ph-mt.is-own .ph-mt-foot { position: relative; z-index: 1; }
 .ph-card.ph-mt.is-own .ph-card-tag { z-index: 1; }
 .ph-mt-play {
-  position: absolute;
-  z-index: 1;
-  right: 12px;
-  bottom: 12px;
+  flex: none;
+  margin-left: auto;
   pointer-events: none;
 }
 .ph-card.ph-mt.is-own .ph-card-tag.excl { background: var(--m-rarity-legendary); color: var(--px-on-accent, #06200e); }

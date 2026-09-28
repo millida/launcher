@@ -44,6 +44,7 @@ import { RoomModals } from './components/RoomManage'
 import { Installs } from './components/Installs'
 import { PackDrop } from './components/PackDrop'
 import { initInstalls } from './state/installs'
+import { initPackAutoUpdate } from './lib/packAutoUpdate'
 import { initCalls } from './state/call'
 import { loadProfileSettings, overlayNotify } from './ipc/commands'
 import { ServerDetail } from './components/ServerDetail'
@@ -290,6 +291,7 @@ export function App() {
     initDeepLinks()
     initOverlayLink()
     initInstalls()
+    const stopPackAutoUpdate = initPackAutoUpdate()
     const releaseRealtime = retainRealtime()
     initCalls()
     void bootUpdate().then((leaving) => {
@@ -346,6 +348,7 @@ export function App() {
       watchHeap()
     })
     return () => {
+      stopPackAutoUpdate()
       releaseRealtime()
       clearInterval(updPoll)
       clearInterval(msPoll)

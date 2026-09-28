@@ -16,9 +16,11 @@ import {
 export type { RealtimeTopic } from './realtimePace'
 
 type Handler = () => void
+type DataHandler = (data: unknown) => void
 type LiveHandler = (live: boolean) => void
 
 const handlers = new Map<RealtimeTopic, Set<Handler>>()
+const dataHandlers = new Map<RealtimeTopic, Set<DataHandler>>()
 const liveHandlers = new Set<LiveHandler>()
 
 let client: Centrifuge | null = null
@@ -56,6 +58,17 @@ export function onRealtime(topic: RealtimeTopic, handler: Handler): () => void {
   }
   set.add(handler)
   return () => void handlers.get(topic)?.delete(handler)
+}
+
+/** Receives the publication itself, for topics whose pokes carry their payload. */
+export function onRealtimeData(topic: RealtimeTopic, handler: DataHandler): () => void {
+  let set = dataHandlers.get(topic)
+  if (!set) {
+    set = new Set()
+    dataHandlers.set(topic, set)
+  }
+  set.add(handler)
+  return () => void dataHandlers.get(topic)?.delete(handler)
 }
 
 export function isRealtimeLive(): boolean {
@@ -149,7 +162,9 @@ async function open(who: string) {
   })
   c.on('publication', (ctx) => {
     const topic = pokeTopic(ctx.channel, ctx.data)
-    if (topic) emit(topic)
+    if (!topic) return
+    emit(topic)
+    dataHandlers.get(topic)?.forEach((h) => safely(() => h(ctx.data)))
   })
   client = c
   c.connect()

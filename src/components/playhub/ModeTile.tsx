@@ -79,12 +79,12 @@ export function ModeTile({
             {short(online)} играют
           </span>
         ) : null}
+        {own ? (
+          <span className="btn md primary ph-mt-play" aria-hidden="true">
+            <Icon id="i-play" /> Играть
+          </span>
+        ) : null}
       </span>
-      {own ? (
-        <span className="btn md primary ph-mt-play" aria-hidden="true">
-          <Icon id="i-play" /> Играть
-        </span>
-      ) : null}
       {on ? (
         <span className="ph-card-on" aria-hidden="true">
           <Icon id="i-check" />

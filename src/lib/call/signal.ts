@@ -1,6 +1,6 @@
 import { api, hasMillidaAccount } from '../api'
-import { isRealtimeLive, onRealtime, onRealtimeLiveChange } from '../realtime'
-import { idleBeforePollMs, pokeGate } from '../realtimePace'
+import { isRealtimeLive, onRealtimeData, onRealtimeLiveChange } from '../realtime'
+import { createEnvelopeLog, pushedEnvelope } from './envelopes'
 
 export type CallSignalKind =
   | 'invite'
@@ -54,8 +54,8 @@ export async function sendSignal(
 
 const CURSOR_KEY = 'm-call-cursor'
 
-/// Сервер держит запрос до первого конверта, поэтому пауза между попытками
-/// нужна только когда он отвечает ошибкой — иначе это была бы петля запросов.
+/// Сервер держит запрос до первого конверта, а при живом сокете лаунчер не
+/// опрашивает вовсе, поэтому пауза нужна только после ошибки.
 const RETRY_MS = 3000
 
 interface Pump {
@@ -63,8 +63,9 @@ interface Pump {
 }
 
 /**
- * Приём сигналинга. Запрос висит на сервере до события, поэтому звонок звенит
- * сразу, а простаивающий лаунчер не опрашивает API вхолостую.
+ * Приём сигналинга. При живом сокете конверты приходят в нём самом, и лаунчер
+ * ходит в ящик только догнать пропущенное: при старте и после переподключения.
+ * Без сокета запрос висит на сервере до события, поэтому звонок всё равно звенит сразу.
  *
  * Курсор переживает перезапуск: иначе после обновления лаунчера в ящик снова
  * прилетели бы уже обработанные конверты завершённого звонка.
@@ -72,29 +73,43 @@ interface Pump {
 export function startSignalPump(onEvent: (e: CallEvent) => void): Pump {
   let stopped = false
   let cursor = Number(localStorage.getItem(CURSOR_KEY)) || 0
-  let busy = false
-  let wakeNow: (() => void) | null = null
+  let catchUp = true
+  let wake: (() => void) | null = null
+  const log = createEnvelopeLog()
 
   const pause = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
-  const sleep = (ms: number) =>
-    new Promise<void>((resolve) => {
-      const done = () => {
-        clearTimeout(t)
-        wakeNow = null
-        resolve()
-      }
-      const t = setTimeout(done, ms)
-      wakeNow = done
-    })
+  const nudge = () => {
+    const fn = wake
+    wake = null
+    fn?.()
+  }
 
-  const gate = pokeGate(
-    () => busy,
-    () => wakeNow?.(),
-  )
-  const offPoke = onRealtime('calls', gate.poke)
-  const offLive = onRealtimeLiveChange((live) => {
-    if (!live) wakeNow?.()
+  const deliver = (e: CallEvent) => {
+    if (!log.admit(e)) return
+    if (e.seq > cursor) {
+      cursor = e.seq
+      localStorage.setItem(CURSOR_KEY, String(cursor))
+    }
+    try {
+      onEvent(e)
+    } catch {
+      // Один сбойный конверт не должен обрывать приём остальных.
+    }
+  }
+
+  const offPush = onRealtimeData('calls', (data) => {
+    const pushed = pushedEnvelope(data)
+    if (pushed) {
+      deliver(pushed)
+      return
+    }
+    catchUp = true
+    nudge()
+  })
+  const offLive = onRealtimeLiveChange(() => {
+    catchUp = true
+    nudge()
   })
 
   // Цикл держится на ожидании ответа, а не на таймере: в свёрнутом окне таймеры
@@ -105,32 +120,27 @@ export function startSignalPump(onEvent: (e: CallEvent) => void): Pump {
         await pause(RETRY_MS)
         continue
       }
-      const idle = idleBeforePollMs(isRealtimeLive(), gate.take())
-      if (idle) {
-        await sleep(idle)
-        if (stopped) return
-        if (!hasMillidaAccount()) continue
+      const live = isRealtimeLive()
+      if (live && !catchUp) {
+        await new Promise<void>((resolve) => {
+          wake = resolve
+        })
+        continue
       }
-      const wait = isRealtimeLive() ? '&wait=0' : ''
-      busy = true
+      catchUp = false
       try {
-        const r = await api<{ cursor?: number; events?: CallEvent[] }>('/friends/call/poll?after=' + cursor + wait)
+        const r = await api<{ cursor?: number; events?: CallEvent[] }>(
+          '/friends/call/poll?after=' + cursor + (live ? '&wait=0' : ''),
+        )
         if (stopped) return
+        ;(r.events || []).forEach(deliver)
         if (typeof r.cursor === 'number') {
           cursor = r.cursor
           localStorage.setItem(CURSOR_KEY, String(cursor))
         }
-        ;(r.events || []).forEach((e) => {
-          try {
-            onEvent(e)
-          } catch {
-            // Один сбойный конверт не должен обрывать приём остальных.
-          }
-        })
       } catch {
+        catchUp = true
         await pause(RETRY_MS)
-      } finally {
-        busy = false
       }
     }
   }
@@ -139,9 +149,9 @@ export function startSignalPump(onEvent: (e: CallEvent) => void): Pump {
   return {
     stop: () => {
       stopped = true
-      offPoke()
+      offPush()
       offLive()
-      wakeNow?.()
+      nudge()
     },
   }
 }
