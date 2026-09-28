@@ -8,6 +8,7 @@ import type { HostingPack } from '../playhub/data'
 import { useCatalogCtx } from './target'
 import type { CatalogTarget } from './target'
 import { openExt } from '../../lib/api'
+import { rowClickOpens } from '../../lib/dismiss'
 import { useModAction } from '../ModRow'
 import { hasTauri } from '../../ipc/tauri'
 import { openCfProject, openProject } from '../../state/project'
@@ -15,6 +16,7 @@ import type { ModHit } from '../../state/mods'
 import { useLobby } from '../../state/lobbyMode'
 import { priceLabel } from '../../lib/premium'
 import { newBuildFrom, planFor } from './newBuildFrom'
+import { partnerFrame } from '../premium/packView'
 import {
   SIDE_LABEL,
   capFirst,
@@ -404,7 +406,7 @@ const trackKind = (card: SiteCard, sec: SiteSection) => (card.premium ? 'premium
 
 function useOpen({ card, sec, onOpenPack }: RowProps, resolve: () => Promise<ModHit | null>, target: CatalogTarget) {
   return (e: MouseEvent<HTMLElement>) => {
-    if ((e.target as HTMLElement).closest('button')) return
+    if (!rowClickOpens(e)) return
     // В панели сервера окно проекта лаунчера ставит в сборку, а не на сервер —
     // подробности материала открываем на сайте.
     if (target.kind === 'server') {
@@ -453,7 +455,7 @@ export function SiteRow(props: RowProps) {
   const logo = card.icon || card.cover
   return (
     <article
-      className={'card mr-row' + (card.premium ? ' is-premium' : '')}
+      className={['card mr-row', card.premium ? 'is-premium' : '', partnerFrame(card.partner)].filter(Boolean).join(' ')}
       data-track="row_open"
       data-kind={trackKind(card, sec)}
       data-id={card.slug}
@@ -506,7 +508,7 @@ export function SiteGalleryCard(props: RowProps) {
   if (range && tags.length < 4) tags.push({ label: range, node: <BranchIcon /> })
   return (
     <article
-      className="card mr-gal"
+      className={['card mr-gal', partnerFrame(card.partner)].filter(Boolean).join(' ')}
       data-track="row_open"
       data-kind={trackKind(card, sec)}
       data-id={card.slug}

@@ -454,6 +454,8 @@ pub(crate) fn crash_verdict(text: &str) -> CrashVerdict {
         return verdict(driver_crash_reason(vendor), kind);
     } else if fatal_jvm {
         ("Java аварийно завершилась. Отчёт hs_err_pid лежит в папке сборки — пришли его в поддержку.", "jvm_fatal")
+    } else if super::crashfix::renderer_missing(&low) {
+        (super::crashfix::RENDERER_MISSING_REASON, "missing_renderer")
     } else if !faults.is_empty() {
         let kind = if faults.iter().any(|f| f.wrong_version) { "wrong_mc" } else { "missing_deps" };
         return verdict(mod_fault_reason(&faults), kind);
@@ -1286,6 +1288,18 @@ pub async fn install_and_launch_in(
             warn(&app, why);
         }
     }
+    if loader_id == "forge" {
+        let off = resolve_legacy_duplicates(&profile, prof.as_ref().map(|p| p.version.as_str()).unwrap_or(&version_id)).await;
+        if !off.is_empty() {
+            warn(
+                &app,
+                &format!(
+                    "Выключили лишнюю копию мода: {}. Этот мод уже есть в сборке внутри другого файла, а с двумя копиями Forge не запускается",
+                    off.join(", ")
+                ),
+            );
+        }
+    }
     let mut args = build_args(&v, &main_class, &classpath, &nick, &game_dir, &assets_root, &natives_dir, &libraries_dir, &auth);
     /*
      * A pack states the memory it was built for. The player's own choice still
@@ -1322,7 +1336,7 @@ pub async fn install_and_launch_in(
     // Профиль GC режима «Буст FPS» встаёт левее пользовательских аргументов:
     // у JVM выигрывает последний одноимённый флаг, поэтому свой -XX игрока
     // остаётся сильнее нашего.
-    let boost_on = settings["fpsBoost"].as_bool().unwrap_or(false);
+    let boost_on = pack.is_none() && settings["fpsBoost"].as_bool().unwrap_or(false);
     if boost_on {
         let own = settings["jvmArgs"].as_str().unwrap_or("");
         let taken: Vec<&str> = own.split_whitespace().collect();
@@ -1554,7 +1568,12 @@ pub async fn install_and_launch_in(
          * этот момент не говорит ничего, а полторы минуты в игре говорят всё.
          * Отправка живёт в своей задаче: поток выхода не должен ждать сеть.
          */
-        let review_ok = matches!(&status, Ok(s) if s.success()) || elapsed >= LAUNCH_CHECK_ALIVE;
+        let log_text = if status.is_ok() { crash_text(&gdir, start_wall) } else { String::new() };
+        let crashed = match &status {
+            Ok(s) => !s.success() || super::crashcause::reports_crash(&log_text),
+            Err(_) => false,
+        };
+        let review_ok = (status.is_ok() && !crashed) || elapsed >= LAUNCH_CHECK_ALIVE;
         if review_ok {
             let checked = pname.clone();
             tauri::async_runtime::spawn(async move {
@@ -1564,8 +1583,7 @@ pub async fn install_and_launch_in(
         if was_stopped(pid) {
             return;
         }
-        if matches!(&status, Ok(s) if !s.success()) {
-            let log_text = crash_text(&gdir, start_wall);
+        if crashed {
             let verdict = crash_verdict(&log_text);
             let (mut reason, tail, mut kind) = (verdict.reason, verdict.tail, verdict.kind);
             let Blame { skin: skin_blamed, own: own_blamed, others } = blame(&log_text);

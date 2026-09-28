@@ -703,6 +703,17 @@
 .pp-desc li { display: flex; gap: 8px; align-items: flex-start; }
 .pp-desc li > svg { flex: none; width: 15px; height: 15px; margin-top: 3px; color: var(--m-accent); }
 .pp-desc img { max-width: 100%; height: auto; }
+.pp-desc .pk-desc-fig { clear: both; margin: 10px 0; }
+.pp-desc .pk-desc-fig .pk-desc-img { margin: 0; }
+.pp-desc .pk-desc-fig figcaption { margin-top: 6px; font-size: 12.5px; line-height: 1.4; color: var(--m-fg-muted); text-align: center; }
+.pp-desc .pk-desc-fig[data-align] { width: 44%; margin-top: 4px; margin-bottom: 10px; }
+.pp-desc .pk-desc-fig[data-align] .pk-desc-img { width: 100%; }
+.pp-desc .pk-desc-fig[data-align='left'] { float: left; margin-right: 16px; }
+.pp-desc .pk-desc-fig[data-align='right'] { float: right; margin-left: 16px; }
+.pp-desc h3 { clear: both; }
+@media (max-width: 700px) {
+  .pp-desc .pk-desc-fig[data-align] { float: none; width: auto; margin: 10px 0; }
+}
 .pp-desc .md :is(ul, ol) { display: block; padding-left: 18px; list-style: disc; }
 .pp-desc .md li { display: list-item; }
 .pp-more { align-self: flex-start; }
@@ -1587,3 +1598,60 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
 .pp-health.warn .pp-health-row b,
 .pp-health.warn .pp-health-pct b { color: var(--m-warning); }
 .pp-health-report { width: 100%; justify-content: center; margin-top: 4px; }
+
+/* ---------- OneBlock: our event server tile (28.09.2026) ----------
+   The one tile that starts a game instead of listing servers, so it has to read
+   as a call to play: accent frame that blinks in two steps, a glint crossing the
+   banner in steps, and a real Play button. No gradients or shadows. */
+.ph-card.ph-mt.is-own {
+  --px-ol: var(--m-accent); --px-ol-w: 4px;
+  grid-template-rows: 1fr auto;
+  animation: ph-own-frame 1.2s steps(1, end) infinite;
+}
+.ph-card.ph-mt.is-own::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -30%;
+  width: 18%;
+  background: rgba(255, 255, 255, 0.28);
+  transform: skewX(-18deg);
+  pointer-events: none;
+  animation: ph-own-glint 3.2s steps(12, end) infinite;
+}
+@keyframes ph-own-frame {
+  0%, 100% { --px-ol: var(--m-accent); }
+  50% { --px-ol: var(--m-rarity-legendary); }
+}
+@keyframes ph-own-glint {
+  0% { transform: translateX(0) skewX(-18deg); }
+  45%, 100% { transform: translateX(900%) skewX(-18deg); }
+}
+.ph-card.ph-mt.is-own .ph-mt-foot {
+  flex-direction: row;
+  align-items: center;
+  align-self: end;
+  min-height: 64px;
+  padding: 10px 128px 10px 14px;
+  background: var(--m-rarity-epic);
+}
+.ph-card.ph-mt.is-own .ph-mt-foot b { width: auto; font-size: 22px; }
+.ph-card.ph-mt.is-own .ph-mt-foot { position: relative; z-index: 1; }
+.ph-card.ph-mt.is-own .ph-card-tag { z-index: 1; }
+.ph-mt-play {
+  position: absolute;
+  z-index: 1;
+  right: 12px;
+  bottom: 12px;
+  pointer-events: none;
+}
+.ph-card.ph-mt.is-own .ph-card-tag.excl { background: var(--m-rarity-legendary); color: var(--px-on-accent, #06200e); }
+@media (hover: hover) and (pointer: fine) {
+  .ph-card.ph-mt.is-own:hover .ph-mt-play { background: var(--m-accent-hover); }
+}
+.ph-card.ph-mt.is-own:active .ph-mt-play { transform: scale(0.97); }
+@media (prefers-reduced-motion: reduce) {
+  .ph-card.ph-mt.is-own, .ph-card.ph-mt.is-own::before { animation: none; }
+  .ph-card.ph-mt.is-own::before { display: none; }
+}

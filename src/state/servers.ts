@@ -97,6 +97,13 @@ export interface RatingServer {
   license?: string
 }
 
+/**
+ * Only a card that says LICENSE asks for a Microsoft account. Most cards say
+ * nothing: an unknown mode is not a reason to warn the player off a server
+ * that lets them in (OneBlock had no value and showed «Нужна лицензия»).
+ */
+export const licenseRequired = (lic: string | null | undefined): boolean => lic === 'LICENSE'
+
 export const toCard = (sv: RatingServer, rank: number): SnapshotServer => ({
   rank,
   name: sv.name,

@@ -1,4 +1,5 @@
 import { useVariantPreview } from '../../lib/variantArt'
+import { artFit } from '../../lib/artFit'
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Icon } from '../Icon'
 import { Ruby } from '../Ruby'
@@ -148,10 +149,11 @@ export function Price({ price, base, big }: { price: number; base?: number; big?
 }
 
 /** Превью вещи на подложке цвета редкости. */
-export function ItemArt({ item, size = 'md' }: { item: ItemRef; size?: 'sm' | 'md' | 'lg' }) {
+export function ItemArt({ item, size = 'md', fit }: { item: ItemRef; size?: 'sm' | 'md' | 'lg'; fit?: boolean }) {
   // У части вещей превью на CDN ещё нет (замер 23.09.2026: плащ из линии часов
   // отдал 404) — вместо битой картинки значок слота.
   const [broken, setBroken] = useState(false)
+  const [zoom, setZoom] = useState('')
   // Мерцание редкости: у эпических и легендарных в превью вспыхивают
   // пиксели-искры (steps, без свечения) — видно издалека, что вещь особая.
   const rare = item.rarity === 'EPIC' || item.rarity === 'LEGENDARY' || item.rarity === 'MYTHIC'
@@ -167,7 +169,16 @@ export function ItemArt({ item, size = 'md' }: { item: ItemRef; size?: 'sm' | 'm
         </>
       ) : null}
       {item.preview && !src && !broken ? null : src && !broken ? (
-        <img src={src} alt="" loading="lazy" draggable={false} onError={() => setBroken(true)} />
+        <img
+          src={src}
+          alt=""
+          loading="lazy"
+          draggable={false}
+          crossOrigin={fit ? 'anonymous' : undefined}
+          style={zoom ? { transform: zoom } : undefined}
+          onLoad={fit ? (e) => setZoom(artFit(e.currentTarget)) : undefined}
+          onError={() => setBroken(true)}
+        />
       ) : (
         <Icon id={cosmeticSlotIcon(item.slot)} />
       )}

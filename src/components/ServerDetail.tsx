@@ -6,10 +6,12 @@ import { setNewBuildPreset } from '../state/newBuild'
 import { quickJoin } from '../lib/joinServer'
 import { openModal, showToast } from '../state/ui'
 import { useServerDetail } from '../state/serverDetail'
+import { licenseRequired } from '../state/servers'
 import { copyText } from '../lib/clipboard'
 import { serverVersions, versionFits } from '../lib/mcVersion'
 import { backdropClose } from '../lib/dismiss'
 import { versionRange } from './ServerRow'
+import { joinAddr } from '../lib/ownServer'
 
 export function ServerDetail() {
   const { sv, close } = useServerDetail()
@@ -35,7 +37,7 @@ export function ServerDetail() {
     if (busy.current) return
     busy.current = true
     setLabel('Подготовка…')
-    quickJoin(sv.ip || '', sv.name || 'Сервер', sv.lic !== 'CRACKED', sv.versions)
+    quickJoin(joinAddr(sv), sv.name || 'Сервер', licenseRequired(sv.lic), sv.versions)
       .then(() => close())
       .catch(() => {})
       .finally(() => {

@@ -7,6 +7,7 @@ import type { MillidaPack } from '../../ipc/commands'
 import { toCard } from '../../state/servers'
 import type { RatingServer } from '../../state/servers'
 import type { SnapshotServer } from '../../lib/snapshot'
+import { ONEBLOCK_PACK, OWN_SERVER_ADDR, OWN_SERVER_MODE, OWN_SERVER_SLUG } from '../../lib/ownServer'
 
 /**
  * Каталог режимов «Во что играем». Серверный режим — не сервер, а занятие:
@@ -57,7 +58,8 @@ export interface ModeStats {
   total: number
   online: number
   banner: string | null
-  servers: SnapshotServer[]
+  /** Slugs of the mode's busiest servers: marks the tile of the server picked in the lobby. */
+  slugs: string[]
 }
 
 /** Серверов на режим: верх по онлайну. Дальше — вкладка «Серверы». */
@@ -87,7 +89,7 @@ export function loadMode(cat: string): Promise<ModeStats | null> {
         total: typeof r.total === 'number' ? r.total : servers.length,
         online: servers.reduce((sum, s) => sum + (s.isOnline ? s.online : 0), 0),
         banner: withBanner ? withBanner.bannerUrl || null : null,
-        servers,
+        slugs: servers.map((s) => s.slug),
       }
     })
     .catch((e) => {
@@ -149,10 +151,48 @@ function modeDef(code: string, i: number): ServerModeDef {
   return { cat: code, title, block, color }
 }
 
+interface ModeSummary {
+  code: string
+  total: number
+  online: number
+  banner: string | null
+  slugs: string[]
+}
+
+/**
+ * One answer for the whole shelf. Before it the shelf asked the rating for
+ * three full pages and then a 30-card page per category — about forty
+ * requests and 5 MB of descriptions just to print "N играют", about 15 s on a
+ * cold server cache.
+ */
+async function modesFromSummary(): Promise<LiveMode[]> {
+  const r = await api<{ modes?: ModeSummary[] }>('/rating/modes')
+  const list = Array.isArray(r.modes) ? r.modes : []
+  return list
+    .filter((m) => /^[A-Z_]{2,24}$/.test(m.code) && m.slugs.length > 0)
+    .map((m, i) => ({ def: modeDef(m.code, i), stats: { total: m.total, online: m.online, banner: m.banner, slugs: m.slugs } }))
+    .sort((a, b) => b.stats.online - a.stats.online)
+}
+
 let modesCache: Promise<LiveMode[]> | null = null
 export function loadLiveModes(): Promise<LiveMode[]> {
   if (modesCache) return modesCache
-  modesCache = (async () => {
+  modesCache = modesFromSummary()
+    .then((l) => (l.length ? l : modesByCategory()))
+    .catch(() => modesByCategory())
+    .catch((e): LiveMode[] => {
+      console.error('[playhub] modes', e)
+      return []
+    })
+    .then((l) => {
+      if (!l.length) modesCache = null
+      return l
+    })
+  return modesCache
+}
+
+function modesByCategory(): Promise<LiveMode[]> {
+  return (async () => {
     const pages = await Promise.all(
       [0, 30, 60].map((off) =>
         api<{ servers?: RatingServer[]; total?: number }>('/rating/servers?limit=30&offset=' + off + '&sort=rating').catch(
@@ -169,14 +209,12 @@ export function loadLiveModes(): Promise<LiveMode[]> {
     const rows = await Promise.all(codes.map((c, i) => loadMode(c).then((st) => ({ c, i, st }))))
     const out: LiveMode[] = []
     for (const r of rows) {
-      if (!r.st || !r.st.servers.length) continue
+      if (!r.st || !r.st.slugs.length) continue
       if (all !== null && r.st.total >= all) continue
       out.push({ def: modeDef(r.c, r.i), stats: r.st })
     }
-    if (!out.length) modesCache = null
     return out.sort((a, b) => b.stats.online - a.stats.online)
   })()
-  return modesCache
 }
 
 /**
@@ -186,6 +224,9 @@ export function loadLiveModes(): Promise<LiveMode[]> {
 /** Порядок ленты серверов — те же ключи, что у мониторинга на millida.net. */
 export type FeedSort = 'rating' | 'online' | 'votes' | 'new'
 
+/** The rating stores host and port apart: "host:25567" matched nothing, so the port is dropped. */
+export const searchTerm = (search: string): string => search.trim().replace(/^([a-z0-9-]+(?:\.[a-z0-9-]+)+):\d{1,5}$/i, '$1').slice(0, 60)
+
 export async function loadFeedPage(
   offset: number,
   category?: string,
@@ -194,7 +235,7 @@ export async function loadFeedPage(
 ): Promise<{ servers: SnapshotServer[]; total: number }> {
   const q = new URLSearchParams({ limit: '30', offset: String(offset), sort })
   if (category) q.set('category', category)
-  if (search) q.set('search', search.slice(0, 60))
+  if (search) q.set('search', searchTerm(search))
   const r = await api<{ servers?: RatingServer[]; total?: number }>('/rating/servers?' + q.toString())
   const raw = Array.isArray(r.servers) ? r.servers : []
   return {
@@ -325,8 +366,8 @@ export function loadPackServer(title: string): Promise<SnapshotServer | null> {
 /**
  * Сервер OneBlock — партнёрский (приказ владельца 23.09.2026). На экране он
  * НИКАК не подписан как наш: ни «Сервер Millida», ни «наш» — просто самый
- * красивый баннер первой карточкой «Режимов». Имя, адрес и версии владелец
- * даст позже; пока адреса нет, «Играть» открывает серверы режима ONEBLOCK.
+ * красивый баннер первой карточкой «Режимов». Плитка запускает его клиент
+ * (lib/ownServer), а не открывает категорию ONEBLOCK.
  */
 export const OWN_SERVER: {
   name: string
@@ -338,18 +379,36 @@ export const OWN_SERVER: {
   licensed: boolean
 } = {
   name: 'OneBlock',
-  ip: '',
-  slug: '',
-  mode: 'ONEBLOCK',
+  ip: OWN_SERVER_ADDR,
+  slug: OWN_SERVER_SLUG,
+  mode: OWN_SERVER_MODE,
   versions: [],
   licensed: false,
 }
 
-export const ONEBLOCK_PACK = 'oneblock-metalabs'
+export { ONEBLOCK_PACK }
 export const ONEBLOCK_BANNER = 'https://cdn.millida.trade/catalog/launcher-packs/oneblock-metalabs/2026-09-27/oneblock-banner.jpg'
 
 const EXCLUSIVE = new Set([ONEBLOCK_PACK, OWN_SERVER.mode])
 export const isExclusive = (key: string | null | undefined): boolean => !!key && EXCLUSIVE.has(key)
+
+/**
+ * Players on our OneBlock right now, from its own rating card: the ONEBLOCK
+ * category sums 79 foreign servers and is not the event's audience.
+ */
+const OWN_ONLINE_TTL = 60_000
+let ownOnline: { at: number; value: Promise<number | null> } | null = null
+export function loadOwnOnline(): Promise<number | null> {
+  if (ownOnline && Date.now() - ownOnline.at < OWN_ONLINE_TTL) return ownOnline.value
+  const value = api<{ online?: number | null }>('/rating/servers/' + encodeURIComponent(OWN_SERVER.slug))
+    .then((r) => (typeof r.online === 'number' && r.online >= 0 ? r.online : null))
+    .catch(() => {
+      ownOnline = null
+      return null
+    })
+  ownOnline = { at: Date.now(), value }
+  return value
+}
 
 /**
  * Сборка на полке и на своей странице. Источник решает, откуда брать
@@ -532,7 +591,7 @@ export function loadTopMods(): Promise<HubMod[]> {
  */
 const searchCache = new Map<string, Promise<SnapshotServer[]>>()
 export function searchServers(q: string): Promise<SnapshotServer[]> {
-  const key = q.trim().toLowerCase().slice(0, 60)
+  const key = searchTerm(q).toLowerCase()
   if (key.length < 2) return Promise.resolve([])
   const hit = searchCache.get(key)
   if (hit) return hit

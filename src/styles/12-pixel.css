@@ -184,7 +184,8 @@
 :root:root .sh-meter-bar::after,
 :root:root .sh-bar::after,
 :root:root .sidebar.collapsed [data-tip]::after,
-:root:root .s2-wp-tile.on::before {
+:root:root .s2-wp-tile.on::before,
+:root:root .px-excl::after {
   box-shadow: none !important;
   background-image:
     linear-gradient(var(--px-ol) 0 0),
@@ -506,3 +507,27 @@ img[src*='/block-icons/'] {
 /* Знак Millida — пиксельный квадрат со срезанными углами и объёмом кнопки
    (23.09.2026): скругление, где оно задано инлайном, его бы съело. */
 img[src$='/millida-logo.svg'] { border-radius: 0 !important; }
+
+.px-excl { position: relative; }
+.px-excl::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  --px-n: 10px;
+  --px-ol: var(--m-warning); --px-ol-w: 2px;
+  --px-ft-w: 5px; --px-fb-w: 5px; --px-fl-w: 5px; --px-fr-w: 5px;
+  --px-excl-lit: color-mix(in srgb, var(--m-warning) 35%, var(--m-fg));
+  --px-excl-dim: color-mix(in srgb, var(--m-warning) 25%, transparent);
+  animation: px-excl-run 1.6s steps(1, end) infinite;
+}
+@keyframes px-excl-run {
+  0%, 100% { --px-ft: var(--px-excl-lit); --px-fr: var(--px-excl-dim); --px-fb: var(--px-excl-dim); --px-fl: var(--px-excl-dim); }
+  25% { --px-ft: var(--px-excl-dim); --px-fr: var(--px-excl-lit); --px-fb: var(--px-excl-dim); --px-fl: var(--px-excl-dim); }
+  50% { --px-ft: var(--px-excl-dim); --px-fr: var(--px-excl-dim); --px-fb: var(--px-excl-lit); --px-fl: var(--px-excl-dim); }
+  75% { --px-ft: var(--px-excl-dim); --px-fr: var(--px-excl-dim); --px-fb: var(--px-excl-dim); --px-fl: var(--px-excl-lit); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .px-excl::after { animation: none; --px-ft: var(--px-excl-dim); --px-fr: var(--px-excl-dim); --px-fb: var(--px-excl-dim); --px-fl: var(--px-excl-dim); }
+}

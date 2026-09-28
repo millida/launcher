@@ -68,16 +68,36 @@ const NEOFORGE_SET: &[Slot] = &[
     one(&["dynamic-fps"]),
 ];
 
+/// Forge before 1.16 has none of the set: Embeddium, FerriteCore and the rest
+/// start at 1.16.5, so asking Modrinth for 1.7.10 only produced a list of
+/// skipped mods under a switch that promises Sodium.
+fn forge_set_exists(game_version: &str) -> bool {
+    let key: Vec<u32> = game_version
+        .split(|c: char| !c.is_ascii_digit())
+        .filter(|p| !p.is_empty())
+        .filter_map(|p| p.parse().ok())
+        .collect();
+    key.first() != Some(&1) || key.get(1).is_some_and(|m| *m >= 16)
+}
+
 /// Моды-ускорители по загрузчику. Slug'и Modrinth; ставится то, у чего есть
 /// сборка под версию профиля, остальное пропускается — режим не должен
 /// разваливаться из-за одного мода, отставшего от новой версии игры.
-pub fn boost_mods(loader: &str) -> &'static [Slot] {
+pub fn boost_mods(loader: &str, game_version: &str) -> &'static [Slot] {
     match loader {
         "fabric" | "quilt" => FABRIC_SET,
-        "forge" => FORGE_SET,
+        "forge" if forge_set_exists(game_version) => FORGE_SET,
         "neoforge" => NEOFORGE_SET,
         _ => &[],
     }
+}
+
+/// A catalogue pack that starts by its own description brings its own
+/// renderer, JVM flags and options.txt (OneBlock: Angelica on lwjgl3ify, its
+/// resource packs listed in options.txt). The mode has nothing to add there and
+/// only overwrites what the author tuned.
+pub fn fps_boost_applicable(profile: &str) -> bool {
+    trusted_pack_launch_spec(profile).is_none()
 }
 
 /// Стоит ли мод режима уже в сборке. Манифест хранит канонический id проекта,
@@ -174,6 +194,8 @@ pub struct FpsBoostState {
     pub vanilla: bool,
     /// The mode is on, but the set changed or skipped mods are due a recheck.
     pub stale: bool,
+    /// False for a build the mode must not touch (see `fps_boost_applicable`).
+    pub applicable: bool,
 }
 
 fn settings_of(profile: &str) -> Value {
@@ -214,7 +236,8 @@ pub fn fps_boost_state(profile: &str) -> FpsBoostState {
         skipped: str_list(&s["fpsBoostSkipped"]),
         flags: boost_flags().iter().map(|f| f.to_string()).collect(),
         video: s["fpsBoostVideo"].is_object(),
-        vanilla: boost_mods(&loader).is_empty(),
+        vanilla: boost_mods(&loader, &profile_version(profile)).is_empty(),
+        applicable: fps_boost_applicable(profile),
         stale: needs_top_up(
             s["fpsBoost"].as_bool().unwrap_or(false),
             s["fpsBoostSet"].as_u64().unwrap_or(1),
@@ -229,18 +252,50 @@ fn options_path(profile: &str) -> std::path::PathBuf {
     profile_dir(profile).join("options.txt")
 }
 
-fn read_options(profile: &str) -> Vec<(String, String)> {
-    let raw = std::fs::read_to_string(options_path(profile)).unwrap_or_default();
-    raw.lines()
-        .filter_map(|l| l.split_once(':').map(|(k, v)| (k.to_string(), v.to_string())))
-        .collect()
+/// options.txt as the game wrote it. Minecraft 1.7.10 writes it in the system
+/// code page, so mod key names in Cyrillic are not UTF-8 there (OneBlock ships
+/// such a file). Reading it as UTF-8 failed, the failure read as an empty file,
+/// and the mode wrote back its fifteen keys alone: the pack lost its resource
+/// packs, language and key bindings. Such a file is read byte for byte instead
+/// and written back in the same bytes.
+struct Options {
+    rows: Vec<(String, String)>,
+    bytewise: bool,
 }
 
-fn write_options(profile: &str, rows: &[(String, String)]) -> Result<(), String> {
-    let body: String = rows.iter().map(|(k, v)| format!("{}:{}\n", k, v)).collect();
+fn decode_options(bytes: &[u8]) -> Options {
+    let (text, bytewise) = match std::str::from_utf8(bytes) {
+        Ok(s) => (s.to_string(), false),
+        Err(_) => (bytes.iter().map(|b| char::from(*b)).collect(), true),
+    };
+    let rows = text
+        .lines()
+        .filter_map(|l| l.split_once(':').map(|(k, v)| (k.to_string(), v.to_string())))
+        .collect();
+    Options { rows, bytewise }
+}
+
+fn encode_options(opts: &Options) -> Vec<u8> {
+    let body: String = opts.rows.iter().map(|(k, v)| format!("{}:{}\n", k, v)).collect();
+    if opts.bytewise {
+        body.chars().map(|c| u8::try_from(u32::from(c)).unwrap_or(b'?')).collect()
+    } else {
+        body.into_bytes()
+    }
+}
+
+fn read_options(profile: &str) -> Result<Options, String> {
+    match std::fs::read(options_path(profile)) {
+        Ok(bytes) => Ok(decode_options(&bytes)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Options { rows: vec![], bytewise: false }),
+        Err(e) => Err(format!("Не удалось прочитать настройки игры (options.txt): {}. Закрой игру и попробуй ещё раз", e)),
+    }
+}
+
+fn write_options(profile: &str, opts: &Options) -> Result<(), String> {
     let dir = profile_dir(profile);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    write_bytes_atomic(&options_path(profile), body.as_bytes())
+    write_bytes_atomic(&options_path(profile), &encode_options(opts))
 }
 
 /// Правит только известные ключи и запоминает их прежние значения: выключение
@@ -277,9 +332,9 @@ fn undo_tuning(rows: &mut Vec<(String, String)>, previous: &Value) {
 }
 
 fn tune_video(profile: &str) -> Result<serde_json::Map<String, Value>, String> {
-    let mut rows = read_options(profile);
-    let previous = apply_tuning(&mut rows);
-    write_options(profile, &rows)?;
+    let mut opts = read_options(profile)?;
+    let previous = apply_tuning(&mut opts.rows);
+    write_options(profile, &opts)?;
     Ok(previous)
 }
 
@@ -287,9 +342,9 @@ fn restore_video(profile: &str, previous: &Value) -> Result<(), String> {
     if !previous.is_object() {
         return Ok(());
     }
-    let mut rows = read_options(profile);
-    undo_tuning(&mut rows, previous);
-    write_options(profile, &rows)
+    let mut opts = read_options(profile)?;
+    undo_tuning(&mut opts.rows, previous);
+    write_options(profile, &opts)
 }
 
 fn patch(profile: &str, entries: Vec<(&str, Value)>) {
@@ -303,6 +358,9 @@ fn patch(profile: &str, entries: Vec<(&str, Value)>) {
 pub async fn set_fps_boost(app: AppHandle, profile: String, on: bool, keep_options: bool) -> Result<FpsBoostState, String> {
     if !load_profiles().iter().any(|p| p.name == profile) {
         return Err("Сборка не найдена".into());
+    }
+    if on && !fps_boost_applicable(&profile) {
+        return Err("Буст FPS этой сборке не нужен: графику, Java и настройки для неё подобрал автор".into());
     }
     if on {
         enable(&app, &profile, keep_options).await
@@ -324,7 +382,7 @@ fn slot_filled(slot: &Slot, known: &[String], canon: &std::collections::HashMap<
 async fn enable(app: &AppHandle, profile: &str, keep_options: bool) -> Result<FpsBoostState, String> {
     let loader = profile_loader(profile);
     let version = profile_version(profile);
-    let wanted = boost_mods(&loader);
+    let wanted = boost_mods(&loader, &version);
     let loaders = modrinth_loaders(&loader, "mod");
     let bridge = bridge_loaders(profile, &loader, "mod");
     let known: Vec<String> = load_content_manifest(profile)
@@ -472,6 +530,52 @@ mod tests {
         assert_eq!(rows, expected, "после выключения options.txt отличается от исходного");
     }
 
+    /// options.txt bytes -> what the mode keeps after tuning and after undoing
+    /// it. 1.7.10 writes the file in the system code page; OneBlock's copy has
+    /// key names in cp1251.
+    #[test]
+    fn options_in_a_legacy_code_page_survive_the_mode_byte_for_byte() {
+        let mut cp1251: Vec<u8> = b"resourcePacks:[\"MetaTextures.zip\",\"Lang.zip\"]\nlang:ru_RU\nkey_".to_vec();
+        cp1251.extend_from_slice(&[0xCF, 0xF0, 0xE8, 0xE2, 0xE5, 0xF2]);
+        cp1251.extend_from_slice(b":44\nrenderDistance:12\n");
+        let utf8 = "lang:ru_ru\nkey_Привет:44\nrenderDistance:12\n".as_bytes().to_vec();
+        let cases: [(&[u8], &str); 2] = [
+            (&cp1251, "OneBlock 28.09: the file was read as empty and written back with the mode's keys alone"),
+            (&utf8, "a modern UTF-8 file keeps working as before"),
+        ];
+        for (bytes, why) in cases {
+            let mut opts = decode_options(bytes);
+            let previous = apply_tuning(&mut opts.rows);
+            let tuned = encode_options(&opts);
+            for line in [&b"lang:"[..], &b"key_"[..]] {
+                assert!(tuned.windows(line.len()).any(|w| w == line), "{why}: the player's lines must survive tuning");
+            }
+            if bytes == cp1251.as_slice() {
+                assert!(tuned.windows(6).any(|w| w == [0xCF, 0xF0, 0xE8, 0xE2, 0xE5, 0xF2]), "{why}: the cp1251 key name must stay the same bytes");
+                assert!(tuned.windows(13).any(|w| w == b"MetaTextures."), "{why}: the pack's resource packs must stay listed");
+            }
+            let mut back = decode_options(&tuned);
+            undo_tuning(&mut back.rows, &Value::Object(previous));
+            assert_eq!(encode_options(&back), bytes, "{why}: switching the mode off must give back the file it found");
+        }
+    }
+
+    /// (loader, game version) -> does the mode install mods at all.
+    #[test]
+    fn legacy_forge_gets_no_mod_set() {
+        let cases: [(&str, &str, bool, &str); 6] = [
+            ("forge", "1.7.10", false, "OneBlock's version: no Embeddium or FerriteCore exists, only a list of skipped mods"),
+            ("forge", "1.12.2", false, "the set starts at 1.16.5"),
+            ("forge", "1.16.5", true, "first version with Embeddium and friends"),
+            ("forge", "1.20.1", true, "the common modded version"),
+            ("fabric", "1.20.1", true, "Fabric keeps its set"),
+            ("neoforge", "1.21.1", true, "NeoForge keeps its set"),
+        ];
+        for (loader, version, want, why) in cases {
+            assert_eq!(!boost_mods(loader, version).is_empty(), want, "{loader} {version}: {why}");
+        }
+    }
+
     #[test]
     fn installed_mod_is_recognised_by_id_and_by_slug() {
         // Вход → вердикт. Закреплено потому, что промах этой проверки ставил
@@ -494,7 +598,7 @@ mod tests {
     }
 
     fn installs(loader: &str) -> Vec<Vec<&'static str>> {
-        boost_mods(loader).iter().map(|s| s.install.to_vec()).collect()
+        boost_mods(loader, "1.20.1").iter().map(|s| s.install.to_vec()).collect()
     }
 
     /// Pin of the whole set per loader. Changing it means bumping BOOST_SET_REV,
@@ -535,7 +639,7 @@ mod tests {
     #[test]
     fn exactly_one_renderer_slot_and_it_counts_every_sodium_port() {
         for loader in ["fabric", "quilt", "forge", "neoforge"] {
-            let renderer: Vec<&Slot> = boost_mods(loader).iter().filter(|s| s.counts.contains(&"sodium")).collect();
+            let renderer: Vec<&Slot> = boost_mods(loader, "1.20.1").iter().filter(|s| s.counts.contains(&"sodium")).collect();
             assert_eq!(renderer.len(), 1, "{loader}: two renderer slots would install two Sodium ports and crash");
             for port in ["sodium", "embeddium", "rubidium"] {
                 assert!(

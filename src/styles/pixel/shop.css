@@ -85,6 +85,9 @@
 .sh-off.inline { position: static; }
 .sh-off.big { font-size: 15px; padding: 4px 9px 5px; }
 :root:root .sh-off { --px-n: 4px; clip-path: var(--px-4); }
+/* Same inset and 5px step as the heart in the opposite corner: at 8px with a
+   4px step the plate crossed the card's own corner step. */
+:root:root .sh-card > .sh-off { top: 10px; left: 10px; --px-n: 5px; clip-path: var(--px-5); }
 
 /* Куплено: спокойная плашка вместо кнопки. */
 .sh-owned {
@@ -233,6 +236,12 @@
 .sh-prize-n { font-size: 13px; font-weight: 900; font-variant-numeric: tabular-nums; color: var(--m-fg-muted); }
 .sh-prize-n > svg.icon { width: 16px; height: 16px; color: var(--m-accent); }
 .sh-prize:not(.got) .sh-art { opacity: 0.6; }
+/* The body is a column: the bar's own flex-basis of 160px turned into its height. */
+.sh-prize-body .sh-meter-bar { flex: none; height: 14px; }
+.sh-quest { gap: 14px; padding: 8px 14px 8px 8px; }
+.sh-quest > .sh-art.md { width: 112px; height: 112px; }
+.sh-quest > .sh-art.md img { width: 104px; height: 104px; image-rendering: pixelated; }
+.sh-quest:not(.got) .sh-art { opacity: 1; }
 
 /* ---------- Гость ---------- */
 .sh-guest { display: flex; align-items: center; gap: 14px; }

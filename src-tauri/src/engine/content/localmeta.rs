@@ -17,7 +17,7 @@ const NESTED_DEPTH: u32 = 3;
 /// Bumped whenever the parser starts extracting a new field: cache entries are
 /// keyed by (size, mtime), so without it an old cache would keep answering with
 /// fields the previous version never filled in.
-const META_REV: u32 = 5;
+const META_REV: u32 = 6;
 
 /// A `breaks` entry as the mod author wrote it: which mod, and under what
 /// version range. `"breaks": {"fabric-api": "<0.144.3+26.1"}` means "needs a
@@ -550,7 +550,17 @@ fn from_forge(jar: &mut Jar, meta: &mut LocalMeta) -> bool {
 fn from_mcmod_info(jar: &mut Jar, meta: &mut LocalMeta) -> bool {
     let Some(text) = entry_text(jar, "mcmod.info") else { return false };
     let Some(v) = lenient_json(&text) else { return false };
-    let first = v.as_array().and_then(|a| a.first().cloned()).unwrap_or(v);
+    let entries: Vec<Value> = v.as_array().cloned().or_else(|| v["modList"].as_array().cloned()).unwrap_or_else(|| vec![v.clone()]);
+    let first = entries.first().cloned().unwrap_or(v);
+    // A composite jar (UniMixins) lists every module it loads as its own entry,
+    // and FML registers each one: reading only the first hid that the jar already
+    // is GTNHMixins and SpongeMixins, and the launcher put the standalone copy
+    // next to it, which FML 1.7.10 refuses to start with.
+    for extra in entries.iter().skip(1) {
+        if let Some(id) = extra["modid"].as_str() {
+            push_id(&mut meta.provides, id);
+        }
+    }
     meta.loader = "forge".into();
     meta.title = clean_text(first["name"].as_str().unwrap_or(""), 90);
     meta.description = clean_text(first["description"].as_str().unwrap_or(""), DESC_LIMIT);
@@ -1056,6 +1066,28 @@ type="incompatible"
         let m = read_file_meta(&jar, "mod", "old.jar");
         assert_eq!(m.mod_id, "oldmod");
         assert_eq!(m.requires, vec!["cofhcore".to_string()]);
+    }
+
+    /// mcmod.info -> (own id, what else the jar registers). FML registers every
+    /// entry, so a module inside a composite jar is as installed as a standalone
+    /// jar of the same id.
+    #[test]
+    fn every_mcmod_info_entry_counts_as_installed() {
+        let unimixins = br#"[{"modid":"unimixins","name":"UniMixins"},{"modid":"spongemixins","parent":"unimixins"},{"modid":"gtnhmixins","parent":"unimixins"},{"modid":"mixinextras","parent":"unimixins"}]"#;
+        let v2 = br#"{"modListVersion":2,"modList":[{"modid":"core","name":"Core"},{"modid":"core-api"}]}"#;
+        let single = br#"[{"modid":"gtnhmixins","name":"GTNHMixins"}]"#;
+        let cases: [(&str, &[u8], &str, &[&str], &str); 3] = [
+            ("+unimixins-all-1.7.10-0.3.1.jar", unimixins, "unimixins", &["spongemixins", "gtnhmixins", "mixinextras"], "OneBlock 28.09: gtnhmixins-2.1.2 went in next to UniMixins and FML refused duplicate mod sources"),
+            ("core.jar", v2, "core", &["core-api"], "the second mcmod.info layout keeps its entries under modList"),
+            ("gtnhmixins-2.1.2.jar", single, "gtnhmixins", &[], "a standalone jar provides nothing beyond itself"),
+        ];
+        for (name, body, own, provides, why) in cases {
+            let jar = tmp(name);
+            make_jar(&jar, &[("mcmod.info", body)]);
+            let m = read_file_meta(&jar, "mod", name);
+            assert_eq!(m.mod_id, own, "{name}: {why}");
+            assert_eq!(m.provides, provides.iter().map(|s| s.to_string()).collect::<Vec<_>>(), "{name}: {why}");
+        }
     }
 
     #[test]

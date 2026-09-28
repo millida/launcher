@@ -20,6 +20,7 @@ import {
   loadCatalogPacks,
   loadLiveModes,
   loadModrinthPacks,
+  loadOwnOnline,
   loadPackServer,
   playVersions,
   versionCover,
@@ -36,6 +37,7 @@ import { useMods } from '../state/mods'
 import { ForYou } from '../components/playhub/ForYou'
 import { CatalogPane } from './Mods'
 import { track } from '../lib/telemetry'
+import { ONEBLOCK_PACK, modeAction, ownServerMode, targetsOwnServer } from '../lib/ownServer'
 import '../styles/pixel/playhub.css'
 
 /**
@@ -292,6 +294,7 @@ export function PlayHub({ on }: { on?: boolean }) {
   const profiles = useProfiles((s) => s.profiles)
 
   const [modes, setModes] = useState<LiveMode[] | null>(null)
+  const [ownOnline, setOwnOnline] = useState<number | null>(null)
   const [packs, setPacks] = useState<MillidaPack[] | null>(null)
   const [mrPacks, setMrPacks] = useState<HubPack[] | null>(null)
   /** Режимы: 7 плиток, «Остальные» раскрывает остальные на месте. */
@@ -327,6 +330,7 @@ export function PlayHub({ on }: { on?: boolean }) {
     void loadCatalogPacks().then((l) => alive && setPacks(l))
     void loadModrinthPacks().then((l) => alive && setMrPacks(l))
     void loadLiveModes().then((l) => alive && setModes(l))
+    void loadOwnOnline().then((n) => alive && setOwnOnline(n))
     return () => {
       alive = false
     }
@@ -360,9 +364,10 @@ export function PlayHub({ on }: { on?: boolean }) {
 
   /** «Играть» на этом экране — сразу запуск, как и ждёт человек от этой кнопки. */
   const launch = (m: LobbyMode) => {
-    pick(m)
+    const target = targetsOwnServer(m) ? ownMode : m
+    pick(target)
     setScreen('play')
-    void playMode(m, profiles)
+    void playMode(target, profiles)
   }
 
   // Платная сборка каталога и она же в премиуме — одна карточка, Arcania первой.
@@ -385,6 +390,9 @@ export function PlayHub({ on }: { on?: boolean }) {
       .map((c): HubPack => ({ ...packFromCatalog(c), premium: false, origin: 'millida', preview: !!c.preview }))
     return [...ours, ...(mrPacks || [])]
   }, [packs, mrPacks])
+
+  const obPack = catalogPacks.find((p) => p.slug === ONEBLOCK_PACK) || premiumPacks.find((p) => p.slug === ONEBLOCK_PACK) || null
+  const ownMode = obPack ? premiumMode(obPack) : ownServerMode()
 
   // Витрина раздела «Сборки» каталога: Arcania первой, дальше все сборки —
   // платные и бесплатные вперемешку, от самых скачиваемых. Без переключателей
@@ -480,6 +488,10 @@ export function PlayHub({ on }: { on?: boolean }) {
   }
   const pickMode = (cat: string, source: 'hub' | 'search' | 'foryou' = 'hub') => {
     track('mode_open', { mode: cat, source })
+    if (modeAction(cat) === 'launch') {
+      launch(ownMode)
+      return
+    }
     setOpenCat(cat)
     top0()
   }
@@ -489,17 +501,21 @@ export function PlayHub({ on }: { on?: boolean }) {
       key={m.def.cat}
       cat={m.def.cat}
       title={m.def.title}
-      online={m.stats.online}
+      online={m.def.cat === own.mode ? ownOnline ?? 0 : m.stats.online}
       index={i}
-      on={current && current.kind === 'server' ? m.stats.servers.some((x) => x.slug === current.slug) : false}
+      on={
+        m.def.cat === own.mode
+          ? targetsOwnServer(current)
+          : current && current.kind === 'server'
+            ? m.stats.slugs.includes(current.slug)
+            : false
+      }
       onClick={() => pickMode(m.def.cat)}
     />
   )
 
   // Онлайн OneBlock — для карточки «Для тебя» (сейчас скрыта до релиза).
-  const obStats = (modes || []).find((m) => m.def.cat === own.mode)?.stats
-  const obLive = own.slug && obStats ? obStats.servers.find((x) => x.slug === own.slug) || null : null
-  const obOnline = own.ip ? (obLive && obLive.isOnline ? obLive.online : null) : obStats ? obStats.online : null
+  const obOnline = ownOnline
   // «Для тебя»: Arcania — вторая карточка, бесплатные сборки Millida от
   // самых популярных — в ротацию.
   const arcaniaPack = premiumPacks.find(isArcania) || premiumPacks[0] || null

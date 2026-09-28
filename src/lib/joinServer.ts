@@ -18,6 +18,7 @@ import { launchAttribution } from './uiTrack'
 import { ensureVersionBuild } from './versionBuild'
 import { pickVersionForServer } from './mcVersion'
 import { ensureMcVersionList, useMcVersionList } from '../state/mcVersionList'
+import { isOwnServerAddr } from './ownServer'
 
 const addrKey = (ip: string) =>
   (ip || '')
@@ -180,6 +181,7 @@ export async function quickJoin(ip: string, name: string, licensed?: boolean, ve
     showToast('Подключение к серверу доступно в приложении', 'error')
     return Promise.reject(new Error('no-tauri'))
   }
+  if (isOwnServerAddr(ip)) return (await import('./lobbyPlay')).playOwnServer(useProfiles.getState().profiles)
   // Адрес и имя пишем только для серверов рейтинга: приватный сервер друга
   // (домашний IP, название) в телеметрию не уходит (аудит 24.09.2026).
   const key = addrKey(ip)

@@ -1948,6 +1948,7 @@ export function InstancePage() {
                   }}
                 />
               </div>
+              {boost && boost.applicable === false && !boost.enabled ? null : (
               <div className="set-row">
                 <span className="lab">
                   Буст FPS
@@ -1970,6 +1971,7 @@ export function InstancePage() {
                   }}
                 ></span>
               </div>
+              )}
               {pr && loaderId(pr) !== 'vanilla' ? (
                 <div className="set-row">
                   <span className="lab">

@@ -12,7 +12,8 @@ const short = (n: number) =>
 /**
  * Плитка режима: фон в свете лобби цвета режима, крупный пиксельный значок
  * по центру, снизу — название и онлайн одной строкой. Нажатие — серверы
- * режима. Картинки считаются один раз (modeArt кэширует).
+ * режима; у нашего сервера-ивента — сразу запуск (lib/ownServer).
+ * Картинки считаются один раз (modeArt кэширует).
  */
 export function ModeTile({
   cat,
@@ -37,18 +38,20 @@ export function ModeTile({
     const k = Math.max(1, Math.floor(Math.min(104 / icon.w, 104 / icon.h) * 2) / 2)
     return { bg: modeBackground(look.color), icon, k }
   }, [cat, index])
-  const banner = cat === OWN_SERVER.mode ? ONEBLOCK_BANNER : null
+  const own = cat === OWN_SERVER.mode
+  const banner = own ? ONEBLOCK_BANNER : null
 
   return (
     <button
-      className={'ph-card ph-mt' + (banner ? ' has-banner' : '') + (on ? ' on' : '')}
+      className={'ph-card ph-mt' + (banner ? ' has-banner' : '') + (own ? ' is-own' : '') + (on ? ' on' : '')}
       data-i={index % 4}
       data-sound="nav"
-      data-kind="mode"
+      data-kind={own ? 'own_server' : 'mode'}
       data-id={cat}
       data-pos={index}
       data-src="mode"
       aria-pressed={on}
+      aria-label={own ? 'Играть в ' + title : undefined}
       style={{ '--px-img': 'url(' + (banner || art.bg) + ')' } as CSSProperties}
       onClick={onClick}
     >
@@ -77,6 +80,11 @@ export function ModeTile({
           </span>
         ) : null}
       </span>
+      {own ? (
+        <span className="btn md primary ph-mt-play" aria-hidden="true">
+          <Icon id="i-play" /> Играть
+        </span>
+      ) : null}
       {on ? (
         <span className="ph-card-on" aria-hidden="true">
           <Icon id="i-check" />

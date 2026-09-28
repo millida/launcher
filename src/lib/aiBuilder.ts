@@ -1,6 +1,7 @@
 import { api } from './api'
 import { apiErrorText } from './apiError'
 import { DEMO_USER } from './demo'
+import type { DepAudit, PlanItem } from '../ipc/commands'
 
 /*
  * ИИ-сборщик: клиент адреса `POST /v2/catalog/ai/build` (контракт —
@@ -52,6 +53,8 @@ export interface AiPlan {
   notes: string
   limit: number
   remaining: number
+  /** The plan was served from the cache of earlier builds. */
+  cached?: boolean
 }
 
 export interface AiQuota {
@@ -82,8 +85,29 @@ export function aiErrorText(e: unknown): string {
   return apiErrorText(e, 'ИИ не ответил — попробуй ещё раз')
 }
 
-export async function buildPlan(prompt: string, opts: AiPreset = {}): Promise<AiPlan> {
-  const body = { prompt: prompt.trim().slice(0, PROMPT_MAX), ...opts }
+/** Same text and same version/loader: asking again means the player wants a new build, not the cached one. */
+export function planRequestKey(prompt: string, opts: AiPreset = {}): string {
+  return [prompt.trim().toLowerCase(), opts.mcVersion ?? '', opts.loader ?? ''].join('|')
+}
+
+/**
+ * Fixes the core's audit found for a freshly built pack: mods whose jars
+ * require a library their Modrinth page does not list. One item per project.
+ */
+export function auditFixItems(audit: Pick<DepAudit, 'issues'>): PlanItem[] {
+  const seen = new Set<string>()
+  const out: PlanItem[] = []
+  for (const issue of audit.issues) {
+    const fix = issue.fix
+    if (issue.kind !== 'missing' || !fix || !fix.project_id || seen.has(fix.project_id)) continue
+    seen.add(fix.project_id)
+    out.push({ source: fix.source, project_id: fix.project_id, version_id: fix.version_id })
+  }
+  return out
+}
+
+export async function buildPlan(prompt: string, opts: AiPreset = {}, fresh = false): Promise<AiPlan> {
+  const body = { prompt: prompt.trim().slice(0, PROMPT_MAX), ...opts, ...(fresh ? { fresh: true } : {}) }
   if (import.meta.env.DEV && DEMO_USER) return demoPlan(body.prompt, opts)
   return api<AiPlan>('/catalog/ai/build', { method: 'POST', body: JSON.stringify(body) })
 }

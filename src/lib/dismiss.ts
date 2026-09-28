@@ -15,6 +15,17 @@ import type { MouseEvent } from 'react'
  */
 const STARTED = 'backdropDown'
 
+/**
+ * React bubbles events from a portal through the component tree, so a click in
+ * a window portaled out of a clickable row still reaches the row's handler.
+ * The row acts only on clicks that landed inside its own DOM and not on a button.
+ */
+export function rowClickOpens(e: Pick<MouseEvent, 'target' | 'currentTarget'>): boolean {
+  const row = e.currentTarget as Node
+  const target = e.target as Element
+  return row.contains(target) && !target.closest('button')
+}
+
 export function backdropClose(close: () => void) {
   return {
     onPointerDown: (e: MouseEvent) => {

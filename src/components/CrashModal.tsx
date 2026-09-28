@@ -4,7 +4,7 @@ import { hasTauri } from '../ipc/tauri'
 import { applyCrashFix, openProfileFolder, openUrl } from '../ipc/commands'
 import { copyText } from '../lib/clipboard'
 import { showToast } from '../state/ui'
-import { runRepair } from '../lib/repair'
+import { NOTHING_TO_REPAIR, modFixOf, repairChangedFiles, runRepair } from '../lib/repair'
 import { useCrash } from '../state/crash'
 import { backdropClose } from '../lib/dismiss'
 import { buildCrashReport, shareCrashLog } from '../lib/crashSupport'
@@ -132,11 +132,24 @@ export function CrashModal() {
             onClick={() => {
               if (!hasTauri()) return
               setRepairing(true)
-              // The dialog closes only on a repair that actually finished: on a
-              // failure the log and the folder button stay one click away.
+              const fix = modFixOf(info.actions)
+              if (fix) {
+                applyCrashFix(info.profile, fix.kind, fix.arg ?? '')
+                  .then((msg) => {
+                    showToast(msg, 'ok')
+                    close()
+                  })
+                  .catch((e) => showToast('' + e, 'error'))
+                  .finally(() => setRepairing(false))
+                return
+              }
+              // The dialog closes only on a repair that actually changed files:
+              // a clean re-check does not remove the cause of this crash.
               runRepair(info.profile)
                 .then((r) => {
-                  if (r) close()
+                  if (!r) return
+                  if (repairChangedFiles(r)) close()
+                  else showToast(NOTHING_TO_REPAIR, 'error')
                 })
                 .finally(() => setRepairing(false))
             }}

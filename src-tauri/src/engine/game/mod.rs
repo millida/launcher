@@ -21,6 +21,7 @@ mod fpsboost;
 mod tuning;
 mod repair;
 mod gpu;
+mod legacy_dups;
 
 pub(crate) use mcmeta::*;
 pub use java::*;
@@ -43,3 +44,4 @@ pub use fpsboost::*;
 pub use tuning::*;
 pub use repair::*;
 pub use gpu::*;
+pub use legacy_dups::*;

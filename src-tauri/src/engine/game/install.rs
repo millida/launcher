@@ -345,7 +345,14 @@ fn processor_outputs(profile: &Value) -> Vec<String> {
 /// FML opens the universal jar, fmlcore and the language providers straight from
 /// the libraries folder, and only the installer downloads them: the version json
 /// does not list them, so nothing else would notice that one is gone.
+///
+/// The installer fetches these only for its processors: a profile without
+/// processors (Forge 1.12.2 on the 2.x installer) lists `mcp_config` here that
+/// is never downloaded, so waiting for it fails every install.
 fn installer_libraries(profile: &Value) -> Vec<String> {
+    if profile["processors"].as_array().is_none_or(|p| p.is_empty()) {
+        return vec![];
+    }
     profile["libraries"]
         .as_array()
         .into_iter()
@@ -1583,6 +1590,38 @@ e";
         ];
         for (profile, why) in cases {
             assert!(processor_outputs(&profile).is_empty(), "{}", why);
+        }
+    }
+
+    fn forge_1_12_2_profile() -> Value {
+        serde_json::json!({
+            "spec": 0,
+            "version": "1.12.2-forge-14.23.5.2859",
+            "data": {},
+            "processors": [],
+            "libraries": [
+                { "name": "de.oceanlabs.mcp:mcp_config:1.12.2-20200226.224830@zip", "downloads": { "artifact": { "path": "de/oceanlabs/mcp/mcp_config/1.12.2-20200226.224830/mcp_config-1.12.2-20200226.224830.zip" } } },
+                { "name": "net.minecraftforge:forge:1.12.2-14.23.5.2859", "downloads": { "artifact": { "path": "net/minecraftforge/forge/1.12.2-14.23.5.2859/forge-1.12.2-14.23.5.2859.jar", "url": "" } } }
+            ]
+        })
+    }
+
+    #[test]
+    fn install_outputs_by_forge_version() {
+        let mut modern = forge_1_20_1_profile();
+        modern["libraries"] = serde_json::json!([
+            { "name": "net.minecraftforge:forge:1.20.1-47.4.10:universal", "downloads": { "artifact": { "path": "net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-universal.jar" } } }
+        ]);
+        let mcp_1_12_2 = "de/oceanlabs/mcp/mcp_config/1.12.2-20200226.224830/mcp_config-1.12.2-20200226.224830.zip";
+        let cases: [(&str, Value, &str, bool, &str); 5] = [
+            ("1.12.2-14.23.5.2859", forge_1_12_2_profile(), mcp_1_12_2, false, "инсталлер 2.x без процессоров не качает свои библиотеки — ждать mcp_config значит ронять каждую установку 1.12.2"),
+            ("1.12.2-14.23.5.2859", forge_1_12_2_profile(), "net/minecraftforge/forge/1.12.2-14.23.5.2859/forge-1.12.2-14.23.5.2859.jar", false, "ядро 1.12.2 приходит через version.json и докачивается лаунчером, а не проверкой инсталлера"),
+            ("1.7.10-10.13.4.1614", serde_json::json!({ "versionInfo": { "id": "1.7.10-Forge10.13.4.1614-1.7.10" }, "install": { "path": "net.minecraftforge:forge:1.7.10-10.13.4.1614-1.7.10" } }), "net/minecraftforge/forge/1.7.10-10.13.4.1614-1.7.10/forge-1.7.10-10.13.4.1614-1.7.10.jar", false, "легаси-профиль ставит сам лаунчер, инсталлер не запускается"),
+            ("1.20.1-47.4.10", modern.clone(), "net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-universal.jar", true, "у профиля с процессорами библиотеки инсталлера по-прежнему проверяются (Immortal, 25.09)"),
+            ("1.20.1-47.4.10", modern, IMMORTAL_CRASH_JARS[2], true, "выходы процессоров по-прежнему проверяются"),
+        ];
+        for (build, profile, rel, expected, why) in cases {
+            assert_eq!(install_outputs(&profile).iter().any(|o| o == rel), expected, "Forge {} / {}: {}", build, rel, why);
         }
     }
 

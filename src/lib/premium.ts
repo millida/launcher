@@ -91,6 +91,7 @@ export interface PremiumPackDetail extends PremiumPack {
   subscription?: PremiumSubscription | null
   /// Подписка на все сборки того же партнёра.
   bundle?: PremiumSubscription | null
+  partner?: { slug: string; name: string } | null
 }
 
 /// Подписка, которой человек пользуется сейчас: своя на сборку или на все сборки.

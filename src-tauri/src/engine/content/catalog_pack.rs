@@ -336,12 +336,33 @@ async fn install_catalog_pack_job(
     Ok(installed_profile(prof))
 }
 
+/// When the rename cannot happen (the game folder on another disk) the copy
+/// goes into a dot-named folder beside the build and becomes the build in one
+/// rename. A copy made straight into the build folder and cut short by a full
+/// disk or a closed launcher stayed there: the build list adopts every folder,
+/// and the half pack started as plain Forge 1.7.10 without its mods.
 fn place_unpacked(unpacked: &Path, dest: &Path) -> Result<(), String> {
     if std::fs::rename(unpacked, dest).is_ok() {
         return Ok(());
     }
-    std::fs::create_dir_all(dest).map_err(|e| e.to_string())?;
-    copy_dir_all(unpacked, dest).map_err(|e| e.to_string())
+    let staging = install_staging(dest)?;
+    let _ = std::fs::remove_dir_all(&staging);
+    let placed = std::fs::create_dir_all(&staging)
+        .and_then(|_| copy_dir_all(unpacked, &staging))
+        .and_then(|_| std::fs::rename(&staging, dest))
+        .map_err(|e| io_fail("Перенос сборки", dest, &e));
+    if placed.is_err() {
+        let _ = std::fs::remove_dir_all(&staging);
+    }
+    placed
+}
+
+fn install_staging(dest: &Path) -> Result<PathBuf, String> {
+    let name = dest.file_name().map(|n| n.to_string_lossy().into_owned()).filter(|n| !n.is_empty());
+    match (name, dest.parent()) {
+        (Some(name), Some(root)) => Ok(root.join(format!(".millida-install-{}", name))),
+        _ => Err("Некорректная папка сборки".into()),
+    }
 }
 
 fn pack_profile(name: &str, meta: &PackMeta, icon: Option<String>) -> Profile {
@@ -913,6 +934,34 @@ mod tests {
             assert!(name.ends_with("Arcania"), "{side:?}: у двух сборок не должно быть общей папки обновления");
         }
         assert_ne!(staged, previous, "новая и старая версии не могут делить одну папку");
+    }
+
+    /// source -> what is left in the builds folder. A half-copied pack must
+    /// never be there under the build's name: the list adopts it and starts it.
+    #[test]
+    fn a_pack_is_placed_whole_or_not_at_all() {
+        let base = std::env::temp_dir().join(format!("millida-pack-place-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let root = base.join("profiles");
+        std::fs::create_dir_all(&root).unwrap();
+
+        let src = base.join("unpacked");
+        mark(&src.join("mods"), "jar");
+        let dest = root.join("OneBlock");
+        place_unpacked(&src, &dest).expect("целая распаковка обязана встать на место");
+        assert_eq!(which(&dest.join("mods")).as_deref(), Some("jar"), "сборка на месте целиком");
+
+        let gone = base.join("no-such-unpacked");
+        let dest2 = root.join("OneBlock2");
+        assert!(place_unpacked(&gone, &dest2).is_err(), "копировать нечего — это ошибка, а не пустая сборка");
+        assert!(!dest2.exists(), "после неудачи папки сборки нет: иначе список подхватит её и запустит без модов");
+        let staging = install_staging(&dest2).unwrap();
+        assert!(!staging.exists(), "черновик копии тоже убран");
+        assert!(
+            staging.file_name().unwrap().to_string_lossy().starts_with('.'),
+            "черновик с точкой в начале имени список сборок не подхватывает"
+        );
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     fn mark(dir: &Path, body: &str) {

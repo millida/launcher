@@ -412,9 +412,64 @@ fn hide_after(text: &str, key: &str) -> String {
     out
 }
 
+/// Minecraft catches an exception that escapes its game loop, logs it and lets
+/// `main` return, so the process can exit with code 0 after a crash on startup.
+/// These lines are printed only on that path, never on a normal quit.
+const CRASH_MARKERS: [&str; 7] = [
+    "unhandled game exception",
+    "reported exception thrown",
+    "unreported exception thrown",
+    "#@!@# game crashed",
+    "shutdown failure",
+    "minecraft has crashed",
+    "---- minecraft crash report ----",
+];
+
+pub(crate) fn reports_crash(text: &str) -> bool {
+    let low = text.to_lowercase();
+    CRASH_MARKERS.iter().any(|m| low.contains(m))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_crash_is_recognised_even_when_the_exit_code_says_success() {
+        let cases: &[(&str, bool, &str)] = &[
+            (
+                "[09:46:03] [Render thread/ERROR]: Unhandled game exception\njava.lang.RuntimeException: boom\nCaused by: java.lang.NullPointerException: No fabric renderer found",
+                true,
+                "Supplementaries без Indium на macOS: игра вышла с кодом 0, окно вылета не появилось",
+            ),
+            (
+                "[09:46:03] [Render thread/ERROR]: Shutdown failure!\njava.util.ConcurrentModificationException",
+                true,
+                "сбой при закрытии после вылета тоже вылет",
+            ),
+            ("[12:00:00] [Render thread/FATAL]: Reported exception thrown!", true, "классический отчёт о вылете"),
+            ("#@!@# Game crashed! Crash report saved to: #@!@# crash-reports/crash.txt", true, "строка отчёта в stdout"),
+            ("---- Minecraft Crash Report ----\n// Oops", true, "свежий файл crash-reports"),
+            (
+                "[12:00:00] [Render thread/INFO]: Stopping!\n[12:00:01] [Render thread/INFO]: Saving worlds",
+                false,
+                "обычный выход кнопкой не вылет",
+            ),
+            (
+                "[12:00:00] [Worker/WARN]: Could not fetch skin: java.net.SocketTimeoutException: Read timed out",
+                false,
+                "пойманное модом исключение не вылет",
+            ),
+            ("", false, "пустой лог при коде 0 — игрок закрыл игру"),
+        ];
+        for (log, want, why) in cases {
+            assert_eq!(
+                reports_crash(log),
+                *want,
+                "вылет с кодом 0 распознан неверно — игрок не увидит окно «Игра вылетела» или увидит его после обычного выхода. Случай: {why}",
+            );
+        }
+    }
 
     /// вход → вердикт: за что косметика уходит в карантин, а за что нет.
     #[test]

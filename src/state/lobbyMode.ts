@@ -3,7 +3,7 @@ import { rememberLobbyOrigin } from '../lib/uiTrack'
 import { api } from '../lib/api'
 import { loadShowcase, packFacts } from '../lib/premium'
 import type { PremiumPack } from '../lib/premium'
-import { DEFAULT_FILTERS, toCard } from './servers'
+import { DEFAULT_FILTERS, licenseRequired, toCard } from './servers'
 import type { RatingServer } from './servers'
 import type { SnapshotServer } from '../lib/snapshot'
 
@@ -79,7 +79,7 @@ export const serverMode = (s: SnapshotServer): LobbyMode => ({
   logo: s.logo ?? null,
   banner: s.banner ?? null,
   versions: s.versions,
-  licensed: s.lic !== 'CRACKED',
+  licensed: licenseRequired(s.lic),
 })
 
 export const sameMode = (a: LobbyMode | null, b: LobbyMode | null): boolean => {

@@ -12,7 +12,17 @@ import { cachedCatalog, forgetCatalog } from '../../lib/catalogCache'
 export type DescBlock =
   | { type: 'paragraph' | 'heading'; text: string }
   | { type: 'list'; items: string[] }
-  | { type: 'image'; src: string; alt?: string }
+  | { type: 'image'; src: string; alt?: string; caption?: string; align?: 'left' | 'right' }
+
+export interface PackPartner {
+  slug: string
+  name: string
+}
+
+export const PARTNER_FRAME = 'px-excl'
+
+export const partnerFrame = (partner: PackPartner | null | undefined): string =>
+  partner && partner.slug ? PARTNER_FRAME : ''
 
 /** GET /catalog/packs/:slug — карточка сборки для лаунчера. */
 export interface PackView {
@@ -32,6 +42,7 @@ export interface PackView {
   accessRequired?: boolean
   /** Где купить доступ — сайт сборки. */
   accessBuyUrl?: string | null
+  partner?: PackPartner | null
   files?: { side: string; version: string; size: number }[]
 }
 

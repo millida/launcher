@@ -562,6 +562,7 @@ export interface MillidaPack {
   author?: string | null
   /** Draft shown only to this account's reviewers. */
   preview?: boolean
+  partner?: { slug: string; name: string } | null
 }
 
 /** Наши сборки для списка «Контент» — рядом с Modrinth и CurseForge. */
@@ -670,6 +671,8 @@ export interface FpsBoostState {
   video: boolean
   vanilla: boolean
   stale: boolean
+  /** False for a catalogue pack that starts by its own description: the author tuned it. */
+  applicable?: boolean
 }
 
 export const fpsBoostState = (profile: string) => invoke<FpsBoostState>('fps_boost_state', { profile })

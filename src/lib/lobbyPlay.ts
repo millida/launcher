@@ -1,12 +1,17 @@
 import { hasTauri } from '../ipc/tauri'
-import { loadProfileSettings } from '../ipc/commands'
+import { PACK_ACCESS_PREFIX, installCatalogPack, loadProfileSettings } from '../ipc/commands'
 import { ensureVersionBuild, versionFps } from './versionBuild'
 import type { Profile } from '../ipc/commands'
 import { cancelPrelaunch, realLaunch, startPrelaunch } from './launch'
 import { quickJoin } from './joinServer'
-import { setScreen, useUi } from '../state/ui'
+import { setScreen, showToast, useUi } from '../state/ui'
 import { useLobby } from '../state/lobbyMode'
 import type { LobbyMode } from '../state/lobbyMode'
+import { useProfiles } from '../state/profiles'
+import { runInstall } from '../state/installs'
+import { keyCatalogPack } from './installKeys'
+import { catalogInstallTracker } from './install'
+import { ONEBLOCK_PACK, targetsOwnServer } from './ownServer'
 
 const launch = (name: string) => (hasTauri() ? realLaunch(name) : startPrelaunch(name))
 
@@ -36,6 +41,7 @@ export async function playMode(m: LobbyMode, profiles: Profile[]): Promise<void>
     cancelPrelaunch()
     return
   }
+  if (targetsOwnServer(m)) return playOwnServer(profiles)
   if (m.kind === 'build') return launch(m.name)
   if (m.kind === 'version') {
     // Сборка под версию — общая с каталогом режимов: Fabric, FPS-моды по
@@ -48,4 +54,34 @@ export async function playMode(m: LobbyMode, profiles: Profile[]): Promise<void>
   const have = await installedPack(m.slug, profiles)
   if (have) return launch(have)
   openPremiumPack(m.id)
+}
+
+/**
+ * OneBlock is our event server, not a pack to browse or a vanilla address:
+ * one press installs its own client when it is missing and starts it.
+ */
+export async function playOwnServer(profiles: Profile[]): Promise<void> {
+  const have = await installedPack(ONEBLOCK_PACK, profiles)
+  if (have) return launch(have)
+  if (!hasTauri()) {
+    showToast('Установка сборок — в приложении', 'error')
+    return
+  }
+  const installed = catalogInstallTracker('modpack', ONEBLOCK_PACK, 'own_server')
+  runInstall({
+    key: keyCatalogPack(ONEBLOCK_PACK),
+    title: 'OneBlock',
+    running: 'Скачивание…',
+    run: () => installCatalogPack(ONEBLOCK_PACK),
+    onError: (e) => {
+      if (String(e).startsWith(PACK_ACCESS_PREFIX)) openPremiumPack(ONEBLOCK_PACK)
+      else showToast('OneBlock не установился: ' + String(e) + '. Нажми «Играть» ещё раз.', 'error')
+    },
+    onDone: (p) => {
+      installed()
+      useProfiles.getState().setSelected(p.name)
+      void useProfiles.getState().refresh()
+      launch(p.name)
+    },
+  })
 }

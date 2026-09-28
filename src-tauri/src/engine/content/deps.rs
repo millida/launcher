@@ -325,7 +325,7 @@ impl Installed {
             return true;
         }
         let t = norm_title(title);
-        !t.is_empty() && self.titles.contains(&t)
+        !t.is_empty() && (self.titles.contains(&t) || self.mod_ids.iter().any(|id| norm_title(id) == t))
     }
 }
 
@@ -1079,6 +1079,28 @@ mod tests {
         assert!(idx.has("some-modrinth-id", "Cloth Config API"), "same mod from the other catalog");
         assert!(idx.has("fabric-api", ""), "matched by the id declared inside the jar");
         assert!(!idx.has("sodium", "Sodium"));
+    }
+
+    /// (dependency as a catalog names it) -> already in the build. UniMixins
+    /// registers gtnhmixins and spongemixins itself; a second provider of the
+    /// same mod id is a FML 1.7.10 refusal to start (OneBlock, 28.09.2026).
+    #[test]
+    fn a_dependency_a_composite_jar_already_registers_is_not_installed_again() {
+        let mut idx = Installed::default();
+        idx.titles.insert("unimixins".into());
+        for id in ["unimixins", "spongemixins", "gtnhmixins", "mixinbooterlegacy"] {
+            idx.mod_ids.insert(id.into());
+        }
+        let cases: [(&str, &str, bool, &str); 5] = [
+            ("cf:1026046", "GTNHMixins", true, "CurseForge GTNHMixins is the module UniMixins already registers"),
+            ("mr-sponge", "SpongeMixins", true, "SpongeMixins is inside UniMixins too"),
+            ("mr-booter", "MixinBooterLegacy", true, "and so is MixinBooterLegacy"),
+            ("mr-hodge", "Hodgepodge", false, "a mod the build does not have is still installed"),
+            ("mr-empty", "", false, "an empty title matches nothing"),
+        ];
+        for (pid, title, want, why) in cases {
+            assert_eq!(idx.has(pid, title), want, "{pid} «{title}»: {why}");
+        }
     }
 
     /// A jar that targets another game version is the top cause of a build that

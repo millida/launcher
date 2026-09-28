@@ -41,7 +41,7 @@ pub struct CrashDiag {
     pub culprits: Vec<String>,
     pub actions: Vec<CrashAction>,
     /// Стабильный класс вылета для телеметрии: own_mod, skin_mod, missing_deps,
-    /// wrong_mc, mixin, conflict, api_mismatch, gpu, gpu_driver, amd_driver, gpu_fallback,
+    /// wrong_mc, missing_renderer, mixin, conflict, api_mismatch, gpu, gpu_driver, amd_driver, gpu_fallback,
     /// oom, system_memory, java_version, jvm_fatal, auth_cert, no_log, unknown.
     pub kind: String,
     /// Первая осмысленная строка ошибки (≤300 символов), без домашней папки,
@@ -129,6 +129,59 @@ fn driver_link(reason: &str) -> Option<(&'static str, &'static str)> {
     DRIVER_LINKS.iter().find(|(vendor, _)| low.contains(vendor)).copied()
 }
 
+pub(crate) const RENDERER_MISSING_REASON: &str = "Моду не хватает рендерера Fabric: так бывает, когда в сборке Sodium без мода Indium.";
+
+const RENDERER_MISSING_MARKERS: [&str; 2] = ["no fabric renderer found", "fabric rendering api is not available"];
+
+pub(crate) fn renderer_missing(low: &str) -> bool {
+    RENDERER_MISSING_MARKERS.iter().any(|m| low.contains(m))
+}
+
+/// A mod the crash dialog may add on its own. The webview passes only the slug
+/// back; the Modrinth project comes from this table, never from the payload.
+pub(crate) struct Companion {
+    pub slug: &'static str,
+    pub project_id: &'static str,
+    pub title: &'static str,
+}
+
+pub(crate) const COMPANIONS: [Companion; 1] = [Companion { slug: "indium", project_id: "Orvt0mRa", title: "Indium" }];
+
+fn companion(slug: &str) -> Option<&'static Companion> {
+    COMPANIONS.iter().find(|c| c.slug == slug)
+}
+
+/// Sodium implements the Fabric Rendering API itself since 0.6; older builds
+/// switch Indigo off and leave FRAPI mods without a renderer unless Indium is
+/// installed. Accepts both the jar version ("0.5.13+mc1.20.1") and the Modrinth
+/// version number ("mc1.20.1-0.5.13-fabric").
+pub(crate) fn sodium_lacks_frapi(version: &str) -> bool {
+    let v = version.trim().to_lowercase();
+    let core = match v.strip_prefix("mc") {
+        Some(rest) => rest.split_once('-').map(|(_, r)| r).unwrap_or(""),
+        None => v.as_str(),
+    };
+    let mut parts = core.split(|c: char| !c.is_ascii_digit()).filter(|p| !p.is_empty());
+    let major: u32 = match parts.next().and_then(|p| p.parse().ok()) {
+        Some(n) => n,
+        None => return false,
+    };
+    let minor: u32 = parts.next().and_then(|p| p.parse().ok()).unwrap_or(0);
+    major == 0 && minor < 6
+}
+
+fn renderer_companion(profile: &str) -> Option<&'static Companion> {
+    let metas = local_meta_map(profile, "mod");
+    if metas.values().any(|m| m.mod_id.eq_ignore_ascii_case("indium")) {
+        return None;
+    }
+    let sodium = metas.values().find(|m| m.mod_id.eq_ignore_ascii_case("sodium"));
+    match sodium {
+        Some(m) if !sodium_lacks_frapi(&m.version) => None,
+        _ => companion("indium"),
+    }
+}
+
 /// Builds the action list for a verdict. Ordered by how likely each one is to
 /// be the actual fix, because the first button is the one that gets pressed.
 pub fn diagnose(profile: &str, reason: &str, tail: &str, log_text: &str) -> CrashDiag {
@@ -172,6 +225,20 @@ pub fn diagnose(profile: &str, reason: &str, tail: &str, log_text: &str) -> Cras
                 "Найдём недостающие моды и поставим их",
             ),
         );
+    }
+
+    if renderer_missing(&log_text.to_lowercase()) {
+        if let Some(c) = renderer_companion(profile) {
+            actions.insert(
+                0,
+                CrashAction::new(
+                    "add-mod",
+                    format!("Поставить {}", c.title),
+                    c.slug.into(),
+                    "Даст модам рендерер Fabric, которого нет у Sodium этой версии",
+                ),
+            );
+        }
     }
 
     if (low.contains("оператив") || low.contains("памяти")) && reason != SYSTEM_MEMORY_REASON {
@@ -291,6 +358,28 @@ pub async fn apply_crash_fix(app: tauri::AppHandle, profile: String, kind: Strin
             }
             Ok(format!("Доустановлено модов: {}. Запусти игру ещё раз.", report.installed.len()))
         }
+        "add-mod" => {
+            let c = companion(&arg).ok_or_else(|| "Этот мод лаунчер сам не ставит".to_string())?;
+            let item = PlanItem { source: "modrinth".into(), project_id: c.project_id.into(), version_id: String::new() };
+            let report = install_dep_items(app, profile.clone(), "mod".into(), vec![item]).await?;
+            if report.installed.is_empty() {
+                return Err(if report.failed.is_empty() {
+                    format!("{} для версии этой сборки не нашёлся. Убери мод, который требует рендерер, или смени Sodium.", c.title)
+                } else {
+                    format!("{} не встал: {}. Попробуй ещё раз.", c.title, report.failed.join("; "))
+                });
+            }
+            let prof = profile.clone();
+            let present = tauri::async_runtime::spawn_blocking(move || scan_local_meta(&prof, "mod", false))
+                .await
+                .map_err(|e| e.to_string())?
+                .iter()
+                .any(|m| m.mod_id.eq_ignore_ascii_case(c.slug));
+            if !present {
+                return Err(format!("{} скачался, но загрузчик его не видит — поставь его вручную из каталога", c.title));
+            }
+            Ok(format!("{} установлен. Запусти игру ещё раз.", c.title))
+        }
         "install-java" => {
             let major: u64 = arg.parse().map_err(|_| "Некорректная версия Java".to_string())?;
             let version = ensure_java_major(&app, major).await?;
@@ -341,6 +430,57 @@ mod tests {
         let diag = diagnose("Test", "Игра вылетела. Загляни в лог — там причина.", "", "");
         let kinds: Vec<&str> = diag.actions.iter().map(|a| a.kind.as_str()).collect();
         assert!(kinds.contains(&"repair") && kinds.contains(&"share-log"), "получили {kinds:?}");
+    }
+
+    /// Sodium version -> whether FRAPI mods need Indium next to it. A wrong
+    /// "yes" installs Indium over Sodium 0.6, which refuses to load with it.
+    #[test]
+    fn sodium_versions_without_frapi_need_indium() {
+        let cases: [(&str, bool, &str); 8] = [
+            ("0.5.13+mc1.20.1", true, "Sodium для 1.20.1 из жалобы владельца"),
+            ("mc1.20.1-0.5.13-fabric", true, "номер версии на Modrinth"),
+            ("mc1.20.4-0.5.8", true, "1.20.4 тоже на 0.5"),
+            ("0.4.10+build.27", true, "старые 1.19"),
+            ("0.6.0+mc1.21.1", false, "0.6 реализует FRAPI сама"),
+            ("mc1.21.1-0.8.13-fabric", false, "новые ветки не трогаем"),
+            ("1.0.0", false, "гипотетическая 1.x"),
+            ("", false, "версию не прочли — Indium не навязываем"),
+        ];
+        for (version, want, why) in cases {
+            assert_eq!(sodium_lacks_frapi(version), want, "Sodium {version}: {why}");
+        }
+    }
+
+    /// log line -> verdict -> repair action. The renderer crash used to fall
+    /// into "загляни в лог" with only a file re-check to offer.
+    #[test]
+    fn renderer_crash_offers_indium() {
+        let cases: [(&str, &str, Option<&str>, &str); 3] = [
+            (
+                "Caused by: java.lang.NullPointerException: No fabric renderer found
+	at net.mehvahdjukaar.supplementaries.common.utils.fabric.VibeCheckerImpl.vibeCheckModels(VibeCheckerImpl.java:131)",
+                "missing_renderer",
+                Some("indium"),
+                "Supplementaries с Sodium 0.5 без Indium",
+            ),
+            (
+                "[main/ERROR]: Fabric Rendering API is not available",
+                "missing_renderer",
+                Some("indium"),
+                "другая формулировка того же отказа",
+            ),
+            ("java.lang.NullPointerException: Cannot invoke \"Object.toString()\"", "unknown", None, "обычный NPE Indium не лечит"),
+        ];
+        for (log, kind, action, why) in cases {
+            let v = super::super::launch::crash_verdict(log);
+            assert_eq!(v.kind, kind, "класс вылета: {why}");
+            let diag = diagnose("Test-no-such-profile", &v.reason, "", log);
+            let got = diag.actions.iter().find(|a| a.kind == "add-mod").map(|a| a.arg.as_str());
+            assert_eq!(got, action, "действие ремонта: {why}");
+            if action.is_some() {
+                assert_eq!(diag.actions.first().map(|a| a.kind.as_str()), Some("add-mod"), "Indium должен быть главной кнопкой: {why}");
+            }
+        }
     }
 
     #[test]

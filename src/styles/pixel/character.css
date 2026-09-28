@@ -543,4 +543,6 @@
    Начатая вещь — под статусом полоса «7/20» цвета редкости (FragBar, rarity.css).
    Эффект редкости — слой RarityFx по data-rar, общий с магазином и сундуком. */
 .ch-tile-frag { display: block; width: 100%; margin-top: 2px; }
+.ch-tile.has-frag .ch-tile-status { margin-top: 2px; }
+.ch-tile.has-frag .ch-tile-frag { margin-top: 0; }
 .ch-tile-frag .rar-fbar { font-size: 10px; gap: 4px; }

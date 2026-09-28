@@ -1,6 +1,7 @@
 import type { Profile } from '../ipc/commands'
 import type { CrashInfo } from '../ipc/events'
 import { maskValues } from './errorReport'
+import { buildTag } from './telemetryPrivacy'
 
 const LONG_MAX = 300
 const CODE_MAX = 120
@@ -45,5 +46,7 @@ export function gameCrashData(
   const packVersion = (settings?.catalogPackVersion || '').trim()
   if (pack && packVersion) data.packVersion = packVersion.slice(0, 64)
   if (settings?.modpackSlug) data.modpack = settings.modpackSlug
+  const build = buildTag(info?.profile, pack || null)
+  if (build) data.build = build
   return data
 }

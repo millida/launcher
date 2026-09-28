@@ -23,8 +23,23 @@ test('game_crash несёт класс, причину, моды, mc и загр
     mc: '1.21.11',
     loader: 'fabric',
     pack: 'fo',
+    build: 'catalog:fo',
   })
 })
+
+const buildCases: Array<[string, string, { catalogPackSlug?: string | null } | null, string | undefined]> = [
+  ['Minecraft 1.7.10', 'the same custom:<hash> game_launch writes, so a crash joins its launches: 164 crashes on 1.7.10 in two days had no build', null, 'custom:25134a4b'],
+  ['OneBlock 1.0.9', 'a catalogue pack is named by its slug, not by the folder', { catalogPackSlug: 'oneblock-metalabs' }, 'catalog:oneblock-metalabs'],
+  ['', 'no build name, nothing to tag', null, undefined],
+]
+
+for (const [profile, why, settings, expected] of buildCases) {
+  test('game_crash.build: ' + why, () => {
+    const d = gameCrashData({ profile, reason: 'crash', tail: '', culprits: [] }, { version: '1.7.10', loader: 'forge', fabric: false }, settings)
+    expect(d.build as string | undefined).toBe(expected)
+    if (profile) expect(JSON.stringify(d)).not.toContain(profile)
+  })
+}
 
 const packVersionCases: Array<[string, { catalogPackSlug?: string | null; catalogPackVersion?: string | null }, string | undefined]> = [
   ['версия есть — здоровье считает сбои по версиям, а не по сборке целиком', { catalogPackSlug: 'arcania', catalogPackVersion: '2.3.1' }, '2.3.1'],

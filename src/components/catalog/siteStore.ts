@@ -188,8 +188,11 @@ function createSiteStore(linked: boolean): SiteStore {
         set({ busy: false, failed: !more, ...(more ? {} : { items: [] }) })
         return
       }
-      const paid = new Set(premium.map((p) => p.slug))
-      let got = listing.items.map((c) => (paid.has(c.slug) ? { ...c, premium: true } : c))
+      const paid = new Map(premium.map((p) => [p.slug, p]))
+      let got = listing.items.map((c) => {
+        const pack = paid.get(c.slug)
+        return pack ? { ...c, premium: true, partner: pack.partner ?? null } : c
+      })
       if (packs && st.access === 'premium') {
         const only = premiumOnly(premium, st, q)
         set({ items: only, total: only.length, page: 1, pages: 1, facets: facets || get().facets, ...MR_EMPTY, busy: false })

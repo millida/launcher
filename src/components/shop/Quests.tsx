@@ -27,8 +27,8 @@ function QuestRow({ quest, busy, onClaim }: { quest: PackQuest; busy: boolean; o
   const state = questState(quest)
   const tip = quest.fragments ? quest.item.name + ' · ' + quest.fragments.have + '/' + quest.fragments.need : quest.item.name
   return (
-    <div className={'sh-prize' + (state.kind === 'claimed' || state.kind === 'owned' ? ' got' : '')} style={toneStyle(quest.item)} data-tip={tip}>
-      <ItemArt item={quest.item} size="sm" />
+    <div className={'sh-prize sh-quest' + (state.kind === 'claimed' || state.kind === 'owned' ? ' got' : '')} style={toneStyle(quest.item)} data-tip={tip}>
+      <ItemArt item={quest.item} size="md" fit />
       <span className="sh-prize-body">
         <b>{quest.title}</b>
         <span className="sh-meter-bar">

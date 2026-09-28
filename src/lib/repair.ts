@@ -10,6 +10,26 @@ const STAGE_IDX: Record<string, number> = { files: 0, java: 1, assets: 2, conten
 
 let running = false
 
+/// Crash actions that change the set of mods. «Починить сборку» performs the
+/// first of them: re-checking hashes never removes a missing dependency or a
+/// conflicting jar, and that is what the player pressed the button for.
+const MOD_FIXES: readonly string[] = ['add-mod', 'install-deps', 'disable-mod']
+
+export function modFixOf<T extends { kind: string; arg?: string }>(actions: readonly T[] | null | undefined): T | null {
+  for (const kind of MOD_FIXES) {
+    const hit = (actions ?? []).find((a) => a.kind === kind)
+    if (hit) return hit
+  }
+  return null
+}
+
+export function repairChangedFiles(r: Pick<RepairReport, 'restored'>): boolean {
+  return r.restored > 0
+}
+
+export const NOTHING_TO_REPAIR =
+  'Файлы игры в порядке — эту причину вылета автоматически не убрать. Нажми «Поддержка» или поделись логом'
+
 export const repairRunning = () => running
 
 function fileList(names: string[]): string {

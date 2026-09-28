@@ -4,7 +4,9 @@ import { fmtN, motdParts } from '../lib/format'
 import { quickJoin } from '../lib/joinServer'
 import { serverMode, useLobby } from '../state/lobbyMode'
 import { openServerDetail } from '../state/serverDetail'
+import { licenseRequired } from '../state/servers'
 import { Icon } from './Icon'
+import { joinAddr } from '../lib/ownServer'
 
 /// Список версий сервера одной строкой-диапазоном: «1.8–26.3» вместо двадцати
 /// чисел через запятую. Нечисловые метки (если сервер пишет «1.8.x» или
@@ -89,7 +91,7 @@ export function ServerRow({ sv, hidden, pos }: { sv: SnapshotServer; hidden?: bo
     // Вход на сервер — тоже выбор режима: лобби вернёт на этот сервер.
     useLobby.getState().pick(serverMode(sv))
     setLabel('Подготовка…')
-    quickJoin(sv.ip || '', sv.name || 'Сервер', sv.lic !== 'CRACKED', sv.versions)
+    quickJoin(joinAddr(sv), sv.name || 'Сервер', licenseRequired(sv.lic), sv.versions)
       .catch(() => {})
       .finally(() => {
         setLabel('Играть')

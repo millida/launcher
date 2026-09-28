@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { PxIcon } from '../PxIcon'
-import { createProfile, installDepItems } from '../../ipc/commands'
+import { auditDeps, createProfile, installDepItems } from '../../ipc/commands'
 import type { DepReport, PlanItem } from '../../ipc/commands'
 import { hasTauri } from '../../ipc/tauri'
 import { mirrorAsset } from '../../lib/api'
@@ -11,7 +11,9 @@ import {
   PROMPT_MIN,
   aiErrorText,
   aiQuota,
+  auditFixItems,
   buildPlan,
+  planRequestKey,
 } from '../../lib/aiBuilder'
 import type { AiMod, AiPlan, AiPreset, AiQuota } from '../../lib/aiBuilder'
 import { DEMO_USER } from '../../lib/demo'
@@ -47,6 +49,20 @@ interface Step {
   label: string
   running: string
   items: PlanItem[]
+  /** Installs what the audit of the installed jars found missing instead of `items`. */
+  audit?: boolean
+}
+
+const NOTHING_INSTALLED: DepReport = { installed: [], failed: [] }
+
+/**
+ * Modrinth pages often omit a library the jar itself requires (YACL, Kotlin,
+ * Architectury), and the pack then stops on its first start. The installed jars
+ * are the truth, so they are audited once more before the pack is called ready.
+ */
+async function installAuditFixes(profile: string): Promise<DepReport> {
+  const items = auditFixItems(await auditDeps(profile))
+  return items.length ? installDepItems(profile, 'mod', items) : NOTHING_INSTALLED
 }
 
 const toItems = (list: AiMod[]): PlanItem[] => list.map((m) => ({ source: 'modrinth', project_id: m.projectId }))
@@ -68,10 +84,11 @@ function installSteps(plan: AiPlan, chosen: Chosen): Step[] {
   const mods = [...modsToInstall(plan, chosen)].sort((a, b) => Number(b.base) - Number(a.base))
   const steps: Step[] = [
     { kind: 'mod', label: 'Моды', running: 'Ставим моды…', items: toItems(mods) },
+    { kind: 'mod', label: 'Зависимости', running: 'Проверяем зависимости…', items: [], audit: mods.length > 0 },
     { kind: 'resourcepack', label: 'Ресурспаки', running: 'Ставим ресурспаки…', items: toItems(chosen.resourcepacks) },
     { kind: 'shader', label: 'Шейдеры', running: 'Ставим шейдеры…', items: toItems(chosen.shaders) },
   ]
-  return steps.filter((s) => s.items.length)
+  return steps.filter((s) => s.items.length || s.audit)
 }
 
 /** Сборка из плана: профиль под версию и загрузчик, затем моды, ресурспаки и шейдеры заданиями ядра. */
@@ -131,7 +148,7 @@ async function createAiBuild(
       key,
       title: created,
       running: step.running,
-      run: () => installDepItems(created, step.kind, step.items),
+      run: () => (step.audit ? installAuditFixes(created) : installDepItems(created, step.kind, step.items)),
       onDone: (r) => {
         const next = [...failed, ...r.failed]
         if (!runStep(i + 1, next)) finish(next)
@@ -259,6 +276,7 @@ export function AiBuilder({ preset }: { preset?: AiPreset | null } = {}) {
   const [key, setKey] = useState<string | null>(null)
   const [built, setBuilt] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+  const cachedKey = useRef('')
   const task = useInstalls((s) => (key ? s.tasks[key] : undefined))
 
   useEffect(() => {
@@ -283,8 +301,10 @@ export function AiBuilder({ preset }: { preset?: AiPreset | null } = {}) {
     setPlan(null)
     // Только длина запроса — сам текст не уходит.
     track('catalog_search', { section: 'ai', len: prompt.trim().length })
+    const key = planRequestKey(prompt, preset ?? {})
     try {
-      const p = await buildPlan(prompt, preset ?? {})
+      const p = await buildPlan(prompt, preset ?? {}, cachedKey.current === key)
+      cachedKey.current = p.cached ? key : ''
       setPlan(p)
       setTitle(p.title)
       setOff(new Set())

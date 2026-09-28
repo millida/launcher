@@ -24,7 +24,7 @@ import { HostInstall } from './HostInstall'
 import type { HostTarget } from './HostInstall'
 import { hostingPackFor, loadHostingPacks } from './data'
 import type { HubPack } from './data'
-import { LOADER, gb, modsFromText } from '../premium/packView'
+import { LOADER, gb, modsFromText, partnerFrame } from '../premium/packView'
 import type { DescBlock, PackView } from '../premium/packView'
 
 /**
@@ -110,7 +110,12 @@ function Desc({ blocks, markdown }: { blocks?: DescBlock[] | null; markdown?: st
           ))}
         </ul>
       ) : b.type === 'image' ? (
-        b.src ? <img key={i} className="pk-desc-img" src={mirrorAsset(b.src)} alt={b.alt || ''} loading="lazy" draggable={false} /> : null
+        b.src ? (
+          <figure key={i} className="pk-desc-fig" data-align={b.align}>
+            <img className="pk-desc-img" src={mirrorAsset(b.src)} alt={b.alt || ''} loading="lazy" draggable={false} />
+            {b.caption ? <figcaption>{b.caption}</figcaption> : null}
+          </figure>
+        ) : null
       ) : b.type === 'paragraph' ? (
         <p key={i}>{b.text}</p>
       ) : null,
@@ -364,7 +369,7 @@ export function PackPage({
 
   return (
     <div className="pp" data-section="pack_page" data-kind={pack.premium ? 'premium' : 'pack'} data-id={slug || pack.id}>
-      <header className="pp-head">
+      <header className={['pp-head', partnerFrame(view?.partner ?? detail?.partner)].filter(Boolean).join(' ')}>
         <Media video={video} cover={cover} />
         <button className="btn sm secondary ph-back pp-back" data-track="back" onClick={onBack}>
           <Icon id="i-chev-l" /> Каталог

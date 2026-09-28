@@ -107,6 +107,7 @@ export interface SiteCard {
   sourceDownloads?: number | null
   /** Платная сборка (`/catalog/packs` → `accessRequired`): плашка «Премиум». */
   premium?: boolean
+  partner?: { slug: string; name: string } | null
   versions: string[]
   loaders: string[]
   categories: string[]
@@ -211,6 +212,7 @@ export function premiumCard(p: MillidaPack): SiteCard {
     author: p.author || null,
     downloads: typeof p.downloads === 'number' ? p.downloads : null,
     premium: true,
+    partner: p.partner ?? null,
     versions: p.game ? [p.game] : [],
     loaders: p.loader ? [p.loader] : [],
     categories: [],
