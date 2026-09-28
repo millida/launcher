@@ -147,6 +147,7 @@ export interface CrashInfo {
   kind?: string
   /// Первая осмысленная строка исключения (≤300), пути и ник уже вычищены ядром.
   cause?: string
+  logFile?: string
 }
 export interface PackAccessLost {
   profile: string

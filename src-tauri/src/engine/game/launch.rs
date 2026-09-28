@@ -143,23 +143,125 @@ fn fatal_error_report(text: &str) -> &str {
     text.find(HS_ERR_PROCESS_SECTION).map_or(text, |i| &text[..i])
 }
 
+#[cfg(test)]
+pub(crate) fn crash_text(game_dir: &Path, since: std::time::SystemTime) -> String {
+    evidence_text(&crash_evidence(game_dir, since))
+}
+
+const LAUNCH_CAPTURE: &str = "logs/launcher-latest.log";
+
+type Evidence = Vec<(&'static str, String)>;
+
 /// Captured stdout plus the game's own latest.log, the newest crash report and a
 /// JVM fatal-error log — all of them only if written by THIS launch. Fabric and
 /// Quilt report mod resolution and mixin failures only in latest.log.
-pub(crate) fn crash_text(game_dir: &Path, since: std::time::SystemTime) -> String {
-    let mut text = read_fresh(&game_dir.join("logs/launcher-latest.log"), since).unwrap_or_default();
-    for extra in [
-        read_fresh(&game_dir.join("logs/latest.log"), since),
-        newest_crash_report(game_dir, since).and_then(|p| read_log_file(&p)),
-        native_crash_log(game_dir, since),
+fn crash_evidence(game_dir: &Path, since: std::time::SystemTime) -> Evidence {
+    [
+        (LAUNCH_CAPTURE, read_fresh(&game_dir.join(LAUNCH_CAPTURE), since)),
+        ("logs/latest.log", read_fresh(&game_dir.join("logs/latest.log"), since)),
+        ("crash-reports", newest_crash_report(game_dir, since).and_then(|p| read_log_file(&p))),
+        ("hs_err_pid", native_crash_log(game_dir, since)),
     ]
     .into_iter()
-    .flatten()
-    {
-        text.push('\n');
-        text.push_str(&extra);
+    .filter_map(|(name, text)| text.map(|t| (name, t)))
+    .collect()
+}
+
+fn evidence_text(evidence: &Evidence) -> String {
+    let mut text = String::new();
+    for (name, part) in evidence {
+        if *name != LAUNCH_CAPTURE {
+            text.push('\n');
+        }
+        text.push_str(part);
     }
     text
+}
+
+/// mclo.gs keeps 1.9 MB of a log and drops the head: four parts under this cap
+/// fit whole, so the launcher capture is never the part that gets cut away.
+const SNAPSHOT_PART_MAX: usize = 448 * 1024;
+const CRASH_SNAPSHOTS_KEPT: usize = 10;
+const CRASH_SNAPSHOT_PREFIX: &str = "crash-";
+
+fn tail_within(text: &str, max: usize) -> &str {
+    if text.len() <= max {
+        return text;
+    }
+    let start = (text.len() - max..text.len()).find(|i| text.is_char_boundary(*i)).unwrap_or(text.len());
+    &text[start..]
+}
+
+fn snapshot_body(evidence: &Evidence) -> String {
+    if evidence.is_empty() {
+        return "[игра не оставила лога за этот запуск]\n".into();
+    }
+    let mut out = String::new();
+    for (name, part) in evidence {
+        let kept = tail_within(part, SNAPSHOT_PART_MAX);
+        out.push_str(&format!("===== {} =====\n", name));
+        if kept.len() < part.len() {
+            out.push_str(&format!("[показаны последние {} КБ из {} КБ]\n", kept.len() / 1024, part.len() / 1024));
+        }
+        out.push_str(kept);
+        out.push('\n');
+    }
+    out
+}
+
+fn snapshot_name(launch_id: &str) -> String {
+    format!("{}{}.log", CRASH_SNAPSHOT_PREFIX, launch_id)
+}
+
+/// The crashed launch's own evidence, frozen under its launch id. The share
+/// button used to upload launcher-latest.log, which the next start of the same
+/// build overwrites: support got the healthy relaunch instead of the crash.
+fn save_crash_snapshot(game_dir: &Path, launch_id: &str, evidence: &Evidence) -> Result<String, String> {
+    let rel = format!("logs/{}", snapshot_name(launch_id));
+    let path = game_dir.join(&rel);
+    std::fs::write(&path, snapshot_body(evidence)).map_err(|e| io_fail("Снимок лога вылета", &path, &e))?;
+    prune_crash_snapshots(&game_dir.join("logs"), CRASH_SNAPSHOTS_KEPT);
+    Ok(rel)
+}
+
+fn prune_crash_snapshots(logs: &Path, keep: usize) {
+    let Ok(dir) = std::fs::read_dir(logs) else { return };
+    let mut snaps: Vec<(PathBuf, std::time::SystemTime)> = dir
+        .flatten()
+        .filter(|e| {
+            let n = e.file_name().to_string_lossy().into_owned();
+            n.starts_with(CRASH_SNAPSHOT_PREFIX) && n.ends_with(".log")
+        })
+        .map(|e| (e.path(), e.metadata().and_then(|m| m.modified()).unwrap_or(std::time::UNIX_EPOCH)))
+        .collect();
+    snaps.sort_by_key(|s| std::cmp::Reverse(s.1));
+    for (p, _) in snaps.into_iter().skip(keep) {
+        let _ = std::fs::remove_file(p);
+    }
+}
+
+pub(crate) const ALREADY_RUNNING: &str =
+    "Эта сборка уже запущена — переключись на окно игры. Чтобы запустить её заново, сначала закрой игру";
+
+/// A second JVM of a running build overwrites its logs and remaps into the
+/// same folders; the crash of the first one then reads the second one's log.
+fn refuse_second_instance(running: &[String], profile: &str) -> Result<(), String> {
+    if running.iter().any(|p| p == profile) {
+        Err(ALREADY_RUNNING.into())
+    } else {
+        Ok(())
+    }
+}
+
+const LOG_DRAIN_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// The crash stack is the last thing the JVM prints: the readers get a moment
+/// to write it out, bounded because a child process may still hold the pipe.
+fn wait_log_readers(readers: &[Arc<std::sync::atomic::AtomicBool>], limit: std::time::Duration) {
+    let deadline = std::time::Instant::now() + limit;
+    while !readers.iter().all(|d| d.load(std::sync::atomic::Ordering::Relaxed)) && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
 }
 
 /// Frame the JVM died in, e.g. "C  [nvoglv64.dll+0x9a1b30]" — the one line of a
@@ -589,9 +691,10 @@ fn spawn_log_reader(
     file: Arc<Mutex<std::fs::File>>,
     app: AppHandle,
     server: ServerSlot,
-) {
+) -> Arc<std::sync::atomic::AtomicBool> {
     let batch: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
     let done = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let finished = done.clone();
 
     let (b, d, a) = (batch.clone(), done.clone(), app.clone());
     std::thread::spawn(move || {
@@ -650,6 +753,7 @@ fn spawn_log_reader(
         }
         done.store(true, std::sync::atomic::Ordering::Relaxed);
     });
+    finished
 }
 
 /// User-selected Java for a profile, then the Java chosen in settings for every
@@ -1071,6 +1175,7 @@ pub async fn install_and_launch_in(
 ) -> Result<String, String> {
     check_cancel()?;
     let _slot = claim_profile_start(&profile, || emit(&app, "files", 2.0, "Останавливаем прошлый запуск этой сборки…")).await?;
+    refuse_second_instance(&running_games(), &profile)?;
     // the nick lands on the command line and in an argfile
     let nick = launch_nick(&nick);
     let prof = load_profiles().into_iter().find(|p| p.name == profile);
@@ -1441,7 +1546,7 @@ pub async fn install_and_launch_in(
     // пропавший или неполный наш рантайм — после переустановки.
     let mut java = java;
     let mut retried = false;
-    let (mut child, start, start_wall, server_now) = loop {
+    let (mut child, start, start_wall, server_now, readers) = loop {
         let log_file = std::fs::File::create(&log_path).map_err(|e| io_fail("Лог запуска", &log_path, &e))?;
         let start = std::time::Instant::now();
         // Wall clock too: crash evidence is filtered by file mtime, and Instant has
@@ -1480,11 +1585,12 @@ pub async fn install_and_launch_in(
         let _ = app.emit("game-log-start", &profile);
         let log_file = Arc::new(Mutex::new(log_file));
         let server_now: ServerSlot = Arc::new(Mutex::new(quick_server.as_deref().map(canon_addr)));
+        let mut readers = Vec::new();
         if let Some(o) = child.stdout.take() {
-            spawn_log_reader(Box::new(o), log_file.clone(), app.clone(), server_now.clone());
+            readers.push(spawn_log_reader(Box::new(o), log_file.clone(), app.clone(), server_now.clone()));
         }
         if let Some(e) = child.stderr.take() {
-            spawn_log_reader(Box::new(e), log_file.clone(), app.clone(), server_now.clone());
+            readers.push(spawn_log_reader(Box::new(e), log_file.clone(), app.clone(), server_now.clone()));
         }
         // Give the JVM a moment: an immediate exit is a launch failure, not a session.
         tokio::time::sleep(std::time::Duration::from_millis(900)).await;
@@ -1509,8 +1615,13 @@ pub async fn install_and_launch_in(
                 return Err(failure);
             }
         }
-        break (child, start, start_wall, server_now);
+        break (child, start, start_wall, server_now, readers);
     };
+    let launch_id = format!(
+        "{}-{}",
+        start_wall.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0),
+        child.id()
+    );
     let pname = profile.clone();
     let app2 = app.clone();
     let gdir = game_dir.clone();
@@ -1550,6 +1661,14 @@ pub async fn install_and_launch_in(
                 here = now_here;
             }
         };
+        // Read while the build still counts as running: a relaunch is refused
+        // until then, so it cannot overwrite this launch's logs mid-read.
+        let evidence = if status.is_ok() {
+            wait_log_readers(&readers, LOG_DRAIN_WAIT);
+            crash_evidence(&gdir, start_wall)
+        } else {
+            Evidence::new()
+        };
         forget_running(pid);
         let elapsed = start.elapsed().as_secs();
         if elapsed > written || new_session || server_session {
@@ -1567,7 +1686,7 @@ pub async fn install_and_launch_in(
          * этот момент не говорит ничего, а полторы минуты в игре говорят всё.
          * Отправка живёт в своей задаче: поток выхода не должен ждать сеть.
          */
-        let log_text = if status.is_ok() { crash_text(&gdir, start_wall) } else { String::new() };
+        let log_text = evidence_text(&evidence);
         let crashed = match &status {
             Ok(s) => !s.success() || super::crashcause::reports_crash(&log_text),
             Err(_) => false,
@@ -1625,7 +1744,13 @@ pub async fn install_and_launch_in(
             }
             let home = dirs::home_dir().map(|h| h.to_string_lossy().into_owned());
             let cause = super::crashcause::scrub_cause(&verdict.cause, home.as_deref(), &crash_nick);
-            let _ = app2.emit("game-crash", diagnose(&pname, &reason, &tail, &log_text).classified(kind, cause));
+            let log_file = save_crash_snapshot(&gdir, &launch_id, &evidence)
+                .map_err(|e| eprintln!("[crash] {}", e))
+                .ok();
+            let _ = app2.emit(
+                "game-crash",
+                diagnose(&pname, &reason, &tail, &log_text).classified(kind, cause).with_log_file(log_file),
+            );
             if !review_ok {
                 let checked = pname.clone();
                 let why = reason.clone();
@@ -2152,6 +2277,133 @@ mod tests {
             text.contains("Мод"),
             "лог в кодировке консоли обязан доехать до разбора; получили: {text:?}"
         );
+    }
+
+    /// (builds already running, build being launched -> refused, why pinned)
+    #[test]
+    fn a_running_build_is_not_started_twice() {
+        let running = |names: &[&str]| names.iter().map(|n| n.to_string()).collect::<Vec<_>>();
+        let cases: [(Vec<String>, &str, bool, &str); 4] = [
+            (running(&[]), "OneBlock", false, "nothing runs: the launch goes ahead"),
+            (running(&["Other"]), "OneBlock", false, "another build running does not block this one"),
+            (
+                running(&["OneBlock"]),
+                "OneBlock",
+                true,
+                "a second JVM overwrites the logs the first one's crash is read from",
+            ),
+            (running(&["Other", "OneBlock"]), "OneBlock", true, "the build is found anywhere in the list"),
+        ];
+        for (list, profile, refused, why) in cases {
+            let got = refuse_second_instance(&list, profile);
+            assert_eq!(got.is_err(), refused, "{profile} with {list:?}: {why}");
+            if refused {
+                assert_eq!(got.unwrap_err(), ALREADY_RUNNING, "the player must be told the game is already open");
+            }
+        }
+    }
+
+    fn crash_dir(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("millida-crash-snapshot-{}-{}", tag, std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("logs")).unwrap();
+        dir
+    }
+
+    /// OneBlock, 28.09: crash at 19:35:36, relaunch at 19:35:42, share at
+    /// 19:35:48 uploaded the live relaunch. The snapshot must outlive the
+    /// overwrite of launcher-latest.log and latest.log.
+    #[test]
+    fn crash_snapshot_survives_a_relaunch_of_the_build() {
+        let dir = crash_dir("relaunch");
+        std::fs::write(dir.join(LAUNCH_CAPTURE), "CRASHED-RUN launcher line\njava.lang.NullPointerException").unwrap();
+        std::fs::write(dir.join("logs/latest.log"), "CRASHED-RUN game line").unwrap();
+        let evidence = crash_evidence(&dir, std::time::SystemTime::now());
+        let rel = save_crash_snapshot(&dir, "1790000136-4242", &evidence).unwrap();
+
+        std::fs::write(dir.join(LAUNCH_CAPTURE), "LIVE-RUN launcher line").unwrap();
+        std::fs::write(dir.join("logs/latest.log"), "LIVE-RUN game line").unwrap();
+
+        assert!(is_log_path(&rel), "{rel}: share_log only uploads logs/*.log, the snapshot must pass that gate");
+        let saved = std::fs::read_to_string(dir.join(&rel)).unwrap();
+        for (needle, present, why) in [
+            ("CRASHED-RUN launcher line", true, "the crashed launch's capture is what support needs"),
+            ("NullPointerException", true, "the stack trace is the last line of the capture"),
+            ("CRASHED-RUN game line", true, "Fabric reports mixin failures only in latest.log"),
+            ("LIVE-RUN", false, "the relaunch must not leak into the crash snapshot"),
+        ] {
+            assert_eq!(saved.contains(needle), present, "{needle}: {why}; snapshot: {saved:?}");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// (launcher capture, latest.log -> text given to the verdict, why pinned)
+    #[test]
+    fn crash_text_joins_evidence_as_before() {
+        let cases: [(Option<&str>, Option<&str>, &str, &str); 4] = [
+            (Some("A"), Some("B"), "A\nB", "capture first, game log after a newline"),
+            (None, Some("B"), "\nB", "no capture: the game log still reaches the verdict"),
+            (Some("A"), None, "A", "capture alone is taken as is"),
+            (None, None, "", "no evidence at all is an empty text, not a stale file"),
+        ];
+        for (capture, game, want, why) in cases {
+            let dir = crash_dir("join");
+            if let Some(t) = capture {
+                std::fs::write(dir.join(LAUNCH_CAPTURE), t).unwrap();
+            }
+            if let Some(t) = game {
+                std::fs::write(dir.join("logs/latest.log"), t).unwrap();
+            }
+            assert_eq!(crash_text(&dir, std::time::SystemTime::now()), want, "{why}");
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+    }
+
+    /// (part size in bytes -> cut, why pinned). Cyrillic makes every other byte
+    /// a non-boundary: a byte slice there panics the exit thread.
+    #[test]
+    fn crash_snapshot_is_capped_and_keeps_the_tail() {
+        let cases: [(usize, bool, &str); 3] = [
+            (1000, false, "a small log goes whole"),
+            (SNAPSHOT_PART_MAX, false, "exactly at the cap is not cut"),
+            (SNAPSHOT_PART_MAX * 3, true, "a long session keeps its end, where the crash is"),
+        ];
+        for (size, cut, why) in cases {
+            let mut part = "ж".repeat((size - "TAIL-MARK".len()) / 2);
+            part.push_str("TAIL-MARK");
+            let body = snapshot_body(&vec![(LAUNCH_CAPTURE, part.clone())]);
+            assert!(body.contains("TAIL-MARK"), "{why}: the tail must survive");
+            assert!(body.len() <= SNAPSHOT_PART_MAX + 256, "{why}: {} bytes exceed the cap", body.len());
+            assert_eq!(body.contains("показаны последние"), cut, "{why}: a cut must be announced");
+        }
+        let four: Evidence = ["a", "b", "c", "d"].iter().map(|_| (LAUNCH_CAPTURE, "x".repeat(SNAPSHOT_PART_MAX * 2))).collect();
+        assert!(
+            snapshot_body(&four).len() < 1_900_000,
+            "mclo.gs drops the head past 1.9 MB: the launcher capture would be lost"
+        );
+    }
+
+    #[test]
+    fn old_crash_snapshots_are_pruned_and_other_logs_kept() {
+        let dir = crash_dir("prune");
+        let logs = dir.join("logs");
+        let base = std::time::SystemTime::now() - std::time::Duration::from_secs(1000);
+        for i in 0..(CRASH_SNAPSHOTS_KEPT + 3) {
+            let p = logs.join(snapshot_name(&format!("{}-1", i)));
+            std::fs::write(&p, "x").unwrap();
+            let f = std::fs::File::options().write(true).open(&p).unwrap();
+            f.set_modified(base + std::time::Duration::from_secs(i as u64)).unwrap();
+        }
+        std::fs::write(dir.join(LAUNCH_CAPTURE), "live").unwrap();
+        std::fs::write(logs.join("latest.log"), "live").unwrap();
+        prune_crash_snapshots(&logs, CRASH_SNAPSHOTS_KEPT);
+        for i in 0..(CRASH_SNAPSHOTS_KEPT + 3) {
+            let kept = logs.join(snapshot_name(&format!("{}-1", i))).exists();
+            assert_eq!(kept, i >= 3, "snapshot {i}: the newest {CRASH_SNAPSHOTS_KEPT} stay, older ones go");
+        }
+        assert!(dir.join(LAUNCH_CAPTURE).exists(), "pruning must never touch the live capture");
+        assert!(logs.join("latest.log").exists(), "pruning must never touch the game's own log");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// A crash report left by an earlier run is not evidence about this launch.

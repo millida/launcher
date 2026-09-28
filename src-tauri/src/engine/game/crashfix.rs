@@ -47,12 +47,19 @@ pub struct CrashDiag {
     /// Первая осмысленная строка ошибки (≤300 символов), без домашней папки,
     /// имени сборки, ника и токенов.
     pub cause: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log_file: Option<String>,
 }
 
 impl CrashDiag {
     pub fn classified(mut self, kind: &str, cause: String) -> Self {
         self.kind = kind.to_string();
         self.cause = cause;
+        self
+    }
+
+    pub fn with_log_file(mut self, log_file: Option<String>) -> Self {
+        self.log_file = log_file;
         self
     }
 }
@@ -293,6 +300,7 @@ pub fn diagnose(profile: &str, reason: &str, tail: &str, log_text: &str) -> Cras
         actions,
         kind: "unknown".into(),
         cause: String::new(),
+        log_file: None,
     }
 }
 

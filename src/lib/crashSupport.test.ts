@@ -40,6 +40,28 @@ describe('shareCrashLog', () => {
     })
   }
 
+  const SNAPSHOT: Array<[string[], string | undefined, string, string]> = [
+    [
+      ['logs/launcher-latest.log', 'logs/crash-1790000000-42.log'],
+      'logs/crash-1790000000-42.log',
+      'logs/crash-1790000000-42.log',
+      'снимок вылета важнее лога лаунчера: тот уже мог принадлежать новому запуску',
+    ],
+    [
+      ['logs/launcher-latest.log'],
+      'logs/crash-1790000000-42.log',
+      'logs/crash-1790000000-42.log',
+      'снимок выгружается, даже если список логов ещё не успел его показать',
+    ],
+    [['logs/launcher-latest.log'], undefined, 'logs/launcher-latest.log', 'без снимка — прежний выбор'],
+  ]
+  for (const [listing, snapshot, picked, why] of SNAPSHOT) {
+    test(why, async () => {
+      files = listing
+      expect(await shareCrashLog('Выживание', snapshot)).toBe('https://millida.net/l/' + picked)
+    })
+  }
+
   test('логов нет — ошибка, а не пустая ссылка', async () => {
     files = []
     expect(shareCrashLog('Выживание')).rejects.toThrow('Лога от этого запуска нет')
@@ -59,6 +81,12 @@ describe('buildCrashReport', () => {
     for (const part of ['Выживание', 'Exit code 1', 'https://millida.net/l/logs/launcher-latest.log', 'ОС: тестовая']) {
       expect(text).toContain(part)
     }
+  })
+
+  test('в отчёт поддержке уходит ссылка на снимок вылета, а не на текущий лог', async () => {
+    const text = await buildCrashReport({ ...crash, logFile: 'logs/crash-1790000000-42.log' })
+    expect(text).toContain('https://millida.net/l/logs/crash-1790000000-42.log')
+    expect(text).not.toContain('launcher-latest.log')
   })
 
   // Проглоченная ошибка выгрузки выглядит как обычный отчёт без строки лога:

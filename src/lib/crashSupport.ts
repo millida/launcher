@@ -5,7 +5,8 @@ import { buildDiagnostics } from './diag'
 const LAUNCH_LOG = 'logs/launcher-latest.log'
 const GAME_LOG = 'logs/latest.log'
 
-export async function shareCrashLog(profile: string): Promise<string> {
+export async function shareCrashLog(profile: string, crashLog?: string): Promise<string> {
+  if (crashLog) return shareLog(profile, crashLog)
   const files = await listLogs(profile)
   const file =
     files.find((f) => f === LAUNCH_LOG) ??
@@ -20,7 +21,7 @@ export async function shareCrashLog(profile: string): Promise<string> {
 // must see that the log is missing, not silently receive a shorter message.
 export async function buildCrashReport(info: CrashInfo): Promise<string> {
   const [log, diag] = await Promise.all([
-    shareCrashLog(info.profile).then(
+    shareCrashLog(info.profile, info.logFile).then(
       (url) => url,
       (e) => 'не выгрузился (' + e + ')',
     ),

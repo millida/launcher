@@ -102,7 +102,7 @@ export function CrashModal() {
                       return
                     }
                     if (a.kind === 'share-log') {
-                      shareCrashLog(info.profile)
+                      shareCrashLog(info.profile, info.logFile)
                         .then((url) => {
                           void copyText(url)
                           done('Ссылка на лог скопирована')
