@@ -1071,12 +1071,14 @@ type="incompatible"
     /// mcmod.info -> (own id, what else the jar registers). FML registers every
     /// entry, so a module inside a composite jar is as installed as a standalone
     /// jar of the same id.
+    type McmodCase<'a> = (&'a str, &'a [u8], &'a str, &'a [&'a str], &'a str);
+
     #[test]
     fn every_mcmod_info_entry_counts_as_installed() {
         let unimixins = br#"[{"modid":"unimixins","name":"UniMixins"},{"modid":"spongemixins","parent":"unimixins"},{"modid":"gtnhmixins","parent":"unimixins"},{"modid":"mixinextras","parent":"unimixins"}]"#;
         let v2 = br#"{"modListVersion":2,"modList":[{"modid":"core","name":"Core"},{"modid":"core-api"}]}"#;
         let single = br#"[{"modid":"gtnhmixins","name":"GTNHMixins"}]"#;
-        let cases: [(&str, &[u8], &str, &[&str], &str); 3] = [
+        let cases: [McmodCase; 3] = [
             ("+unimixins-all-1.7.10-0.3.1.jar", unimixins, "unimixins", &["spongemixins", "gtnhmixins", "mixinextras"], "OneBlock 28.09: gtnhmixins-2.1.2 went in next to UniMixins and FML refused duplicate mod sources"),
             ("core.jar", v2, "core", &["core-api"], "the second mcmod.info layout keeps its entries under modList"),
             ("gtnhmixins-2.1.2.jar", single, "gtnhmixins", &[], "a standalone jar provides nothing beyond itself"),

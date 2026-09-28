@@ -18,7 +18,7 @@ pub(crate) fn zip_readable(path: &Path) -> bool {
 /// disk. So the declared total must fit under this ceiling before anything is
 /// written, and no entry may write past its own declared size. 32 GiB is far
 /// above any honest pack, map, import or Java archive.
-const UNPACK_CEILING: u64 = 32 * 1024 * 1024 * 1024;
+pub(crate) const UNPACK_CEILING: u64 = 32 * 1024 * 1024 * 1024;
 
 pub(crate) fn unzip_to(archive: &Path, dest: &Path) -> Result<(), String> {
     extract_zip(archive, dest, UNPACK_CEILING, whole_path)

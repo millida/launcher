@@ -1,3 +1,4 @@
+use super::pack_delta;
 use crate::engine::*;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -18,7 +19,7 @@ pub(crate) fn job_key_catalog_pack(slug: &str) -> String {
     format!("catalog-pack:{}", slug)
 }
 
-fn pack_url_allowed(raw: &str) -> bool {
+pub(super) fn pack_url_allowed(raw: &str) -> bool {
     let Ok(url) = url::Url::parse(raw) else { return false };
     url.scheme() == "https" && url.host_str() == Some(PACK_HOST)
 }
@@ -191,7 +192,7 @@ struct Fetched {
 /// The one road from the catalogue to a verified, unpacked tree, for a fresh
 /// install and for an update alike: the access check, the host allowlist and
 /// the hash live here once.
-async fn fetch_pack(app: &AppHandle, job: &Job, slug: &str, review: bool) -> Result<Fetched, String> {
+async fn fetch_pack(app: &AppHandle, job: &Job, slug: &str, review: bool, reuse: Option<&Path>) -> Result<Fetched, String> {
     job.emit(app, 4.0, "Читаем сборку…");
     let view = if review {
         let answer = pack_review_candidate(slug).await?;
@@ -239,7 +240,33 @@ async fn fetch_pack(app: &AppHandle, job: &Job, slug: &str, review: bool) -> Res
     std::fs::create_dir_all(&tmp_dir).map_err(|e| e.to_string())?;
     let archive = tmp_dir.join(format!("pack-{}.zip", slug));
     let unpacked = tmp_dir.join(format!("pack-{}", slug));
-    let temp = TempPaths(vec![archive.clone(), unpacked.clone()]);
+    let mut temp = TempPaths(vec![archive.clone(), unpacked.clone()]);
+
+    if let Some(installed) = reuse {
+        let built = pack_delta::delta_dir(installed)?;
+        let span_file = tmp_dir.join(format!("pack-{}.span", slug));
+        temp.0.extend([built.clone(), span_file.clone()]);
+        let source = pack_delta::DeltaSource { file_id: &file_id, url: &url, archive_size: size, installed, into: &built, span_file: &span_file };
+        match pack_delta::after_delta(pack_delta::build_by_delta(app, job, source).await) {
+            pack_delta::AfterDelta::Built(r) => {
+                eprintln!(
+                    "[pack] «{}» обновлена по частям: скачано {} из {} байт, {} файлов новых, {} взято из установленной",
+                    slug, r.fetched_bytes, r.archive_bytes, r.fetched, r.reused
+                );
+                let into = built.clone();
+                tokio::task::spawn_blocking(move || strip_pack_service_files(&into)).await.map_err(|e| e.to_string())??;
+                job.check()?;
+                let meta = meta_from(&view, read_pack_manifest(&built).as_ref())?;
+                return Ok(Fetched { view, title, meta, unpacked: built, sha512: sha512.to_ascii_lowercase(), _temp: temp });
+            }
+            pack_delta::AfterDelta::Cancelled => return Err(CANCELLED.into()),
+            pack_delta::AfterDelta::Full(e) => {
+                eprintln!("[pack] «{}» по частям не обновилась ({}), качаем архив целиком", slug, e);
+                let _ = std::fs::remove_dir_all(&built);
+                let _ = std::fs::remove_file(&span_file);
+            }
+        }
+    }
 
     job.emit(app, 12.0, "Скачиваем сборку…");
     // Скачивание занимает почти всё время установки, поэтому оно и занимает
@@ -288,7 +315,7 @@ async fn install_catalog_pack_job(
     slug: &str,
     review: bool,
 ) -> Result<Profile, String> {
-    let Fetched { view, title, meta, unpacked, sha512, _temp } = fetch_pack(app, job, slug, review).await?;
+    let Fetched { view, title, meta, unpacked, sha512, _temp } = fetch_pack(app, job, slug, review, None).await?;
     let pname = modpack_profile_name(
         if meta.name.is_empty() { &title } else { &meta.name },
         &meta.version,
@@ -477,7 +504,7 @@ async fn prepare_update(
     if !pdir.is_dir() {
         return Err("Папки сборки нет на диске — установи сборку из каталога заново".into());
     }
-    let Fetched { view, meta, unpacked, _temp, .. } = fetch_pack(app, job, slug, false).await?;
+    let Fetched { view, meta, unpacked, _temp, .. } = fetch_pack(app, job, slug, false, Some(pdir)).await?;
     job.rename(profile);
     job.emit(app, 80.0, "Переносим миры и настройки…");
     let mut settings = carried_settings(profile, slug, &meta.version);
@@ -741,7 +768,7 @@ impl Drop for TempPaths {
 
 /// «812 МБ из 1,6 ГБ»: цифра рядом с полосой отвечает на вопрос «оно вообще
 /// движется», на который сама полоса за минуту не отвечает.
-fn fmt_bytes(done: u64, total: u64) -> String {
+pub(super) fn fmt_bytes(done: u64, total: u64) -> String {
     let gb = 1024f64 * 1024.0 * 1024.0;
     let mb = 1024f64 * 1024.0;
     if total as f64 >= gb {

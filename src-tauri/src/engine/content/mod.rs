@@ -8,6 +8,7 @@ mod safety;
 mod fingerprint;
 mod millida_mod;
 mod catalog_pack;
+mod pack_delta;
 mod pack_card;
 
 pub use deps::*;

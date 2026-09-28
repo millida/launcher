@@ -594,7 +594,7 @@ const CANCEL_POLL: Duration = Duration::from_millis(200);
 /// A stalled connection delivers nothing until the read timeout, so a flag
 /// checked only between chunks kept a cancelled download alive for a minute,
 /// long enough for the next launch to start next to it.
-async fn or_cancel<F: std::future::Future>(fut: F, cancel: Option<&AtomicBool>) -> Result<F::Output, String> {
+pub(crate) async fn or_cancel<F: std::future::Future>(fut: F, cancel: Option<&AtomicBool>) -> Result<F::Output, String> {
     let Some(flag) = cancel else { return Ok(fut.await) };
     if flag.load(Ordering::Relaxed) {
         return Err(CANCELLED.into());
