@@ -461,8 +461,7 @@ pub(crate) fn crash_verdict(text: &str) -> CrashVerdict {
         return verdict(mod_fault_reason(&faults), kind);
     } else if loader_reported_missing_dependency(&low) {
         ("Не хватает зависимости одного из модов.", "missing_deps")
-    } else if low.contains("duplicate mods") || low.contains("incompatible mod") || low.contains("found a duplicate mod")
-        || low.contains("mod resolution encountered an incompatible mod set") || low.contains("duplicate mod") {
+    } else if low.contains("duplicate mod") || low.contains("incompatible mods found") || low.contains("incompatible mod set") {
         ("Конфликт модов — есть дубли или несовместимые моды.", "conflict")
     } else if low.contains("mixin apply failed") || low.contains("mixinapplyerror") || low.contains("mixintransformererror") {
         ("Один из модов не подошёл к этой версии игры (ошибка миксина).", "mixin")
@@ -2448,6 +2447,43 @@ mod tests {
                 reason == VERDICT,
                 *expected,
                 "лог {log:?}: получили {reason:?}. Зачем случай закреплён: {why}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_mod_conflict_verdict_needs_the_loader_refusal() {
+        let oneblock = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/oneblock-rfb-sdl3-native-crash.txt"));
+        let cases: &[(&str, bool, &str)] = &[
+            (
+                oneblock,
+                false,
+                "OneBlock 28.09: нативный вылет в SDL3.dll назывался «Конфликт модов» из-за INFO-строки Angelica «other incompatible mods (if present)» — так помечен каждый вылет OneBlock в телеметрии",
+            ),
+            (
+                "[main/ERROR]: Incompatible mods found!\n\t - Mod 'a' (a) 1.0 is incompatible with mod 'b' (b)",
+                true,
+                "отказ Fabric Loader из-за несовместимых модов",
+            ),
+            (
+                "net.fabricmc.loader.impl.FormattedException: Mod resolution encountered an incompatible mod set!",
+                true,
+                "отказ Fabric Loader старых версий",
+            ),
+            (
+                "[main/ERROR]: Found a duplicate mod: jei",
+                true,
+                "дубль мода в папке mods",
+            ),
+        ];
+        for (log, expected, why) in cases {
+            let verdict = crash_verdict(log);
+            assert_eq!(
+                verdict.kind == "conflict",
+                *expected,
+                "получили вердикт {:?} ({}). Зачем случай закреплён: {why}",
+                verdict.reason,
+                verdict.kind,
             );
         }
     }

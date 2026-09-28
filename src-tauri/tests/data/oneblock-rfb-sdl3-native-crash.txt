@@ -1,0 +1,48 @@
+[0.009s][warning][cds] Archived non-system classes are disabled because the java.system.class.loader property is specified (value = "com.gtnewhorizons.retrofuturabootstrap.RfbSystemClassLoader"). To use archived non-system classes, this property must not be set
+WARNING: package sun.lwawt.macosx not in java.desktop
+[authlib-injector] [INFO] Logging file: ~\AppData\Roaming\net.millida.launcher\minecraft\profiles\OneBlock\authlib-injector.log
+[authlib-injector] [INFO] Version: 1.2.8
+[authlib-injector] [INFO] Authentication server: https://api.millida.net/v2/yggdrasil
+[19:35:44] [RFB-Main/INFO] [LaunchWrapper]: Constructing tweaker cpw.mods.fml.common.launcher.FMLTweaker
+[19:35:44] [RFB-Main/INFO] [LaunchWrapper]: Installing tweaker cpw.mods.fml.common.launcher.FMLTweaker
+[19:35:44] [RFB-Main/INFO] [FML]: Forge Mod Loader version 7.99.40.1614 for Minecraft 1.7.10 loading
+[19:35:46] [RFB-Main/ERROR] [FML]: Coremod MixinLoadEarly: Unable to class load the plugin su.metalabs.ar1ls.metaSell.mixin.MixinLoadEarly
+java.lang.ClassNotFoundException: Class bytes are null for su.metalabs.ar1ls.metaSell.mixin.MixinLoadEarly (su.metalabs.ar1ls.metaSell.mixin.MixinLoadEarly, su.metalabs.ar1ls.metaSell.mixin.MixinLoadEarly)
+	at System//net.minecraft.launchwrapper.LaunchClassLoader.findClass(LaunchClassLoader.java:326) ~[LaunchClassLoader.class:?]
+	at java.base/java.lang.ClassLoader.loadClass(ClassLoader.java:593) ~[?:?]
+	at java.base/java.lang.ClassLoader.loadClass(ClassLoader.java:526) ~[?:?]
+	at java.base/java.lang.Class.forName0(Native Method) ~[?:?]
+	at java.base/java.lang.Class.forName(Class.java:534) ~[?:?]
+	at java.base/java.lang.Class.forName(Class.java:513) ~[?:?]
+	at System//cpw.mods.fml.relauncher.CoreModManager.loadCoreMod(CoreModManager.java:460) ~[forge-1.7.10-10.13.4.1614-1.7.10.jar:?]
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[?:?]
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[?:?]
+	at System//org.spongepowered.asm.launch.platform.MixinPlatformAgentFMLLegacy.injectCorePlugin(MixinPlatformAgentFMLLegacy.java:255) ~[+unimixins-all-1.7.10-0.3.1.jar:0.15.6+mixin.0.8.7]
+	at System//org.spongepowered.asm.launch.platform.MixinPlatformAgentFMLLegacy.initFMLCoreMod(MixinPlatformAgentFMLLegacy.java:170) ~[+unimixins-all-1.7.10-0.3.1.jar:0.15.6+mixin.0.8.7]
+	at System//org.spongepowered.asm.launch.platform.MixinPlatformAgentFMLLegacy.accept(MixinPlatformAgentFMLLegacy.java:156) ~[+unimixins-all-1.7.10-0.3.1.jar:0.15.6+mixin.0.8.7]
+	at System//org.spongepowered.asm.launch.platform.MixinContainer.<init>(MixinContainer.java:74) ~[+unimixins-all-1.7.10-0.3.1.jar:0.15.6+mixin.0.8.7]
+	at System//org.spongepowered.asm.launch.platform.MixinPlatformManager.createContainerFor(MixinPlatformManager.java:150) ~[+unimixins-all-1.7.10-0.3.1.jar:0.15.6+mixin.0.8.7]
+	at System//org.spongepowered.asm.launch.platform.MixinPlatformManager.addContainer(MixinPlatformManager.java:137) ~[+unimixins-all-1.7.10-0.3.1.jar:0.15.6+mixin.0.8.7]
+	at System//org.spongepowered.asm.launch.platform.MixinPlatformManager.scanForContainers(MixinPlatformManager.java:227) ~[+unimixins-all-1.7.10-0.3.1.jar:0.15.6+mixin.0.8.7]
+	at System//org.spongepowered.asm.launch.platform.MixinPlatformManager.init(MixinPlatformManager.java:109) ~[+unimixins-all-1.7.10-0.3.1.jar:0.15.6+mixin.0.8.7]
+	at System//org.spongepowered.asm.launch.MixinBootstrap.getPlatform(MixinBootstrap.java:118) ~[+unimixins-all-1.7.10-0.3.1.jar:0.15.6+mixin.0.8.7]
+	at System//org.spongepowered.asm.launch.MixinBootstrap.start(MixinBootstrap.java:166) ~[+unimixins-all-1.7.10-0.3.1.jar:0.15.6+mixin.0.8.7]
+	at System//org.spongepowered.asm.launch.MixinTweaker.<init>(MixinTweaker.java:46) ~[+unimixins-all-1.7.10-0.3.1.jar:0.15.6+mixin.0.8.7]
+	at java.base/jdk.internal.reflect.DirectConstructorHandleAccessor.newInstance(DirectConstructorHandleAccessor.java:62) ~[?:?]
+	at java.base/java.lang.reflect.Constructor.newInstanceWithCaller(Constructor.java:502) ~[?:?]
+	at java.base/java.lang.reflect.Constructor.newInstance(Constructor.java:486) ~[?:?]
+	at System//net.minecraft.launchwrapper.Launch.rfb$realLaunch(Launch.java:219) ~[_forgePatches.jar:3.0.31]
+	at System//net.minecraft.launchwrapper.Launch.launch(Launch.java:35) ~[_forgePatches.jar:3.0.31]
+	at System//net.minecraft.launchwrapper.Launch.main(Launch.java:60) ~[_forgePatches.jar:3.0.31]
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[?:?]
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[?:?]
+	at com.gtnewhorizons.retrofuturabootstrap.Main.main(Main.java:207) ~[_forgePatches.jar:3.0.31]
+	at com.gtnewhorizons.retrofuturabootstrap.MainStartOnFirstThread.lambda$main$1(MainStartOnFirstThread.java:47) ~[_forgePatches.jar:3.0.31]
+	at java.base/java.lang.Thread.run(Thread.java:1583) [?:?]
+[19:35:48] [RFB-Main/ERROR] [org.spongepowered.asm.service.mojang.MixinServiceLaunchWrapper]: MixinBootstrap.doInit() called during a tweak constructor!
+[19:35:48] [RFB-Main/INFO] [LaunchWrapper]: Installing tweaker me.eigenraven.lwjgl3ify.relauncher.Lwjgl3ifyRelauncherTweaker
+[19:35:51] [RFB-Main/INFO] [LaunchWrapper]: Constructing tweaker com.gtnewhorizons.angelica.loading.fml.tweakers.IncompatibleModsDisablerTweaker
+[19:35:51] [RFB-Main/INFO] [FML]: [Angelica/IncompatibleModsDisablerTweaker] Disabling Optifine, Fastcraft, BetterFPS, and other incompatible mods (if present)
+[19:35:53] [RFB-Main/INFO] [Minecraft-Client]: Setting user: <nick>
+[19:35:54] [Client thread/INFO] [Minecraft-Client]: LWJGL Version: 3.4.2+13
+[19:35:57] [Client thread/ERROR] [Minecraft-Client]: Couldn't initialize twitch stream
