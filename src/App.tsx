@@ -38,6 +38,7 @@ import { ConfirmModal } from './components/ConfirmModal'
 import { BuildPicker } from './components/BuildPicker'
 import { DepPlanModal } from './components/DepPlanModal'
 import { PackKeyHost } from './components/PackKeyHost'
+import { PackCodeHost } from './components/PackCodeHost'
 import { ChatNotify } from './components/ChatNotify'
 import { CallPanel } from './components/CallPanel'
 import { RoomModals } from './components/RoomManage'
@@ -794,6 +795,7 @@ export function App() {
         <BuildPicker />
         <DepPlanModal />
         <PackKeyHost />
+        <PackCodeHost />
         <CrashModal />
         <ServerDetail />
         <ChatNotify />

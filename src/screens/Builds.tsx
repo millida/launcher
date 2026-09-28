@@ -8,8 +8,6 @@ import { refreshPlayStats, usePlayStats } from '../state/playStats'
 import { rememberServerName } from '../state/playStats'
 import { openModal, setScreen, showToast } from '../state/ui'
 import { quickJoin } from '../lib/joinServer'
-import { usePackCode } from '../state/packCode'
-import { InstallByCodeModal } from '../components/InstallByCodeModal'
 import { composeIcon, randomIconRecipe, rememberIconRecipe } from '../lib/iconArt'
 import type { IconRecipe } from '../lib/iconArt'
 import { hasTauri } from '../ipc/tauri'
@@ -30,7 +28,6 @@ export function Builds({ on }: { on: boolean }) {
   const updates = useModUpdates()
   const stats = usePlayStats((s) => s.stats)
   const verifiedSeconds = usePlayStats((s) => s.verifiedSeconds)
-  const packCode = usePackCode()
   const [iconsSkipped, setIconsSkipped] = useState(readSkip)
   const [iconsBusy, setIconsBusy] = useState(false)
   const iconless = profiles.filter((p) => !p.icon)
@@ -231,9 +228,6 @@ export function Builds({ on }: { on: boolean }) {
           </div>
         )}
       </div>
-      {packCode.open ? (
-        <InstallByCodeModal initialCode={packCode.code} onClose={() => packCode.close()} />
-      ) : null}
     </section>
   )
 }
