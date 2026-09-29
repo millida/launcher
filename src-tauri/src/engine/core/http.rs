@@ -1077,6 +1077,10 @@ PK"),
     #[tokio::test]
     async fn a_launch_waits_for_fresh_metadata_only_within_the_budget() {
         let budget = Duration::from_millis(300);
+        // The first client() loads the system certificate store — over a
+        // second on the shared Linux runner — and that is not what this
+        // test times.
+        let _ = client();
         let cases: [(&str, Duration, &str, &str); 2] = [
             ("fast", Duration::ZERO, "new", "сеть успела — запуск получает свежие данные"),
             ("slow", Duration::from_millis(900), "old", "сеть не успела — запуск идёт на копии и не ждёт"),

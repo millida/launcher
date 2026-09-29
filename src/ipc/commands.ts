@@ -236,6 +236,22 @@ export const storeGameOpen = (slug: string, via: 'steam' | 'steam-install' | 'st
   invoke<void>('store_game_open', { slug, via })
 export const storeGameInstall = (slug: string) => invoke<void>('store_game_install', { slug })
 export const gameOwnership = (accountId: string, slug: string) =>
+    reportEntitlements(r.items)
+    return r.status
+  })
+
+let entitlementsReported = false
+/**
+ * Названия покупок Microsoft (product_*, game_*) — один раз за запуск, в
+ * без Windows нельзя (29.09.2026). Только названия продуктов, без ников и токенов.
+ */
+function reportEntitlements(items?: string[]) {
+  if (entitlementsReported || !items || !items.length) return
+  entitlementsReported = true
+  const data: Record<string, string | number> = { kind: 'entitlements', n: items.length }
+  items.slice(0, 14).forEach((name, i) => (data['e' + (i + 1)] = name))
+  void import('../lib/telemetry').then((t) => t.track('account_link', data)).catch(() => {})
+}
 
 export const addLocalFile = (profile: string, kind: string, path: string) =>
   invoke<string>('add_local_file', { profile, kind, path })

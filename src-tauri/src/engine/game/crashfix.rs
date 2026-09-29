@@ -785,6 +785,7 @@ mod tests {
             }
         };
         let sourced = |file: &str| file == "sodium-fabric-0.5.3.jar" || file == "walkers-1.0.jar";
+        #[allow(clippy::type_complexity)]
         let cases: Vec<(&str, &str, Vec<(&str, &str)>)> = vec![
             (
                 "Fabric: нет зависимости — ставится она, а не отключается мод",
