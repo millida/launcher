@@ -16,6 +16,7 @@ import {
   Messages,
   Mods,
   PlayHub,
+  Game,
   Play,
   Premium,
   Rubies,
@@ -768,6 +769,11 @@ export function App() {
               {screen === 'playhub' && (
                 <Guard what="Библиотека">
                   <PlayHub on />
+                </Guard>
+              )}
+              {screen === 'game' && (
+                <Guard what="Игра">
+                  <Game on />
                 </Guard>
               )}
               {screen === 'settings' && (

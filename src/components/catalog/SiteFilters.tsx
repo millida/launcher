@@ -4,6 +4,7 @@ import { Icon } from '../Icon'
 import { MrIcon } from './SiteRow'
 import { capFirst, categoryIconSrc, fmtNum, loaderIconSrc, loaderLabel, loaderTone } from './site'
 import type { SiteFacets, SiteSection } from './site'
+import type { SiteAccess } from './siteStore'
 
 /*
  * Колонка фильтров — как на сайте (`mr-filters.tsx`): группы «Версия игры»,
@@ -93,12 +94,18 @@ function Opt({ o, name }: { o: FilterOpt; name?: string }) {
   )
 }
 
+const ACCESS: [Exclude<SiteAccess, 'all'>, string][] = [
+  ['premium', 'Премиум'],
+  ['free', 'Обычные'],
+]
+
 export function SiteFilters({
   sec,
   facets,
   version,
   loader,
   category,
+  access,
   onPatch,
   onReset,
 }: {
@@ -107,7 +114,9 @@ export function SiteFilters({
   version: string | null
   loader: string | null
   category: string | null
-  onPatch: (p: { version?: string | null; loader?: string | null; category?: string | null }) => void
+  /** Только у сборок: премиум-сборки Millida или обычные. Фильтр, а не полоса над карточками (владелец 29.09.2026). */
+  access?: SiteAccess
+  onPatch: (p: { version?: string | null; loader?: string | null; category?: string | null; access?: SiteAccess }) => void
   onReset: () => void
 }) {
   if (!facets) return <FiltersSkeleton />
@@ -145,13 +154,22 @@ export function SiteFilters({
       onPick: () => onPatch({ category: category === c.value ? null : c.value }),
     }
   })
+  const accessOpts: FilterOpt[] = access
+    ? ACCESS.map(([id, label]) => ({
+        key: id,
+        label,
+        active: access === id,
+        onPick: () => onPatch({ access: access === id ? 'all' : id }),
+      }))
+    : []
   return (
     <div className="mr-filters">
-      {version || loader || category ? (
+      {version || loader || category || (access && access !== 'all') ? (
         <button type="button" className="mr-reset" data-track="filter_reset" onClick={onReset}>
           Сбросить фильтры
         </button>
       ) : null}
+      <FilterGroup title="Доступ" name="access" opts={accessOpts} />
       <FilterGroup title="Версия игры" name="version" opts={versions} split={filled.length} />
       <FilterGroup title="Загрузчик" name="loader" opts={loaders} />
       <FilterGroup title="Категории" name="category" opts={cats} />

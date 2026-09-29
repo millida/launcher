@@ -32,6 +32,8 @@ import { MyBuildCard, useMyBuilds } from '../components/playhub/MyBuilds'
 import { ServerFeed } from '../components/playhub/ServerFeed'
 import { ModeTile } from '../components/playhub/ModeTile'
 import { useHubTab } from '../components/playhub/hubTab'
+import { GAMES, gameHero, useGame } from '../lib/games'
+import '../styles/pixel/game.css'
 import type { HubSection } from '../components/playhub/hubTab'
 import { useMods } from '../state/mods'
 import { ForYou } from '../components/playhub/ForYou'
@@ -707,6 +709,36 @@ export function PlayHub({ on }: { on?: boolean }) {
       )}
       {/* Полка «Сборки» убрана: каталог — во вкладке «Ресурсы» (17:31). */}
       {head('modes', 'Режимы', modesPane)}
+      {/* Игры Minecraft — такими же карточками, как сборки; клик открывает экран игры (владелец 29.09.2026). */}
+      {head(
+        'games',
+        'Другие игры',
+        <div className="hub-grid" data-section="games" data-src="hub_card">
+          {GAMES.map((g, i) => (
+            <button
+              key={g.slug}
+              className="ph-card"
+              data-sound="open"
+              data-track="open_game"
+              data-id={g.slug}
+              data-pos={i}
+              onClick={() => {
+                useGame.getState().open(g.slug)
+                setScreen('game')
+              }}
+            >
+              <span className="ph-card-art">
+                {img(gameHero(g.slug))}
+                {g.isNew ? <span className="gm-new gm-new-card">Новинка</span> : null}
+              </span>
+              <span className="ph-card-body">
+                <b>{g.name}</b>
+                <span className="ph-card-meta">{g.meta}</span>
+              </span>
+            </button>
+          ))}
+        </div>,
+      )}
       {/* Под режимами — вся лента серверов Millida (владелец 24.09.2026, 18:29). */}
       {head('servers', 'Серверы', <AllServers current={current} onPick={(x) => launch(serverMode(x))} />)}
       {/* «Зайти на сервер» и «Недавние» убраны из библиотеки (17:50). */}

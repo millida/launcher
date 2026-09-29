@@ -135,7 +135,7 @@ function createSiteStore(linked: boolean): SiteStore {
       void get().load()
     },
     reset: () => {
-      set({ version: null, loader: null, category: null, q: '' })
+      set({ version: null, loader: null, category: null, q: '', access: 'all' })
       void get().load()
     },
     load: async (more) => {
@@ -250,5 +250,5 @@ function premiumOnly(premium: MillidaPack[], st: Pick<SiteState, 'version' | 'lo
 }
 
 /** Сколько фильтров выбрано — число на кнопке «Фильтры» в узком окне. */
-export const activeFilters = (s: Pick<SiteState, 'version' | 'loader' | 'category'>): number =>
-  (s.version ? 1 : 0) + (s.loader ? 1 : 0) + (s.category ? 1 : 0)
+export const activeFilters = (s: Pick<SiteState, 'version' | 'loader' | 'category'> & { access?: SiteAccess }): number =>
+  (s.version ? 1 : 0) + (s.loader ? 1 : 0) + (s.category ? 1 : 0) + (s.access && s.access !== 'all' ? 1 : 0)

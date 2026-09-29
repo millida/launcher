@@ -1058,8 +1058,11 @@ PK"),
         url
     }
 
+    /// Up to 10 s: on a loaded CI runner the late answer lands well after the
+    /// 900 ms delay (3 s was not enough on the shared Linux runner, 29.09.2026).
+    /// Only the time before failing grows; a copy that never updates still fails.
     async fn cache_becomes(cache: &Path, want: &str) -> bool {
-        for _ in 0..60 {
+        for _ in 0..200 {
             if read_json_file(cache).is_ok_and(|v| v["v"] == want) {
                 return true;
             }

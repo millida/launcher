@@ -9,7 +9,6 @@ import type { MapHit } from './SiteRow'
 import { SERVER_SECTIONS, SITE_SECTIONS, materials, peekHit, sectionBySlug, sectionByKind } from './site'
 import type { SiteSection } from './site'
 import { activeFilters, useServerSite, useSite } from './siteStore'
-import type { SiteAccess } from './siteStore'
 import { cfTail, mrTail, nextLoad } from './mrTail'
 import { CatalogCtx, useCatalogCtx } from './target'
 import type { CatalogTarget } from './target'
@@ -111,24 +110,6 @@ function SearchField({ value, label, onCommit }: { value: string; label: string;
         </button>
       ) : null}
     </form>
-  )
-}
-
-const ACCESS: [SiteAccess, string][] = [
-  ['all', 'Все'],
-  ['premium', 'Премиум'],
-  ['free', 'Обычные'],
-]
-
-function Access({ value, onPick }: { value: SiteAccess; onPick: (v: SiteAccess) => void }) {
-  return (
-    <div className="segs mr-sort" role="group" aria-label="Премиум или обычные сборки">
-      {ACCESS.map(([id, label]) => (
-        <button key={id} className={'seg' + (value === id ? ' on' : '')} aria-pressed={value === id} data-track={'access_' + id} onClick={() => onPick(id)}>
-          {label}
-        </button>
-      ))}
-    </div>
   )
 }
 
@@ -421,6 +402,7 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
       version={s.version}
       loader={s.loader}
       category={s.category}
+      access={sec.slug === 'modpacks' && store === useSite ? s.access : undefined}
       onPatch={(p) => s.patch(p)}
       onReset={() => s.reset()}
     />
@@ -439,7 +421,6 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
       count={count}
       sort={
         <>
-          {sec.slug === 'modpacks' && store === useSite ? <Access value={s.access} onPick={(v) => s.patch({ access: v })} /> : null}
           <Sort value={s.sort} onPick={(v) => s.patch({ sort: v })} />
         </>
       }
