@@ -23,11 +23,11 @@ async fn latest_versions(
     let mut out: std::collections::HashMap<String, Value> = std::collections::HashMap::new();
     let hashed: Vec<&ContentEntry> = entries.iter().filter(|e| !e.sha1.is_empty()).collect();
     let hashes: Vec<String> = hashed.iter().map(|e| e.sha1.to_lowercase()).collect();
-    // A bridged build updates its Fabric jars too, so the bulk request must
-    // name both loaders — with the build's own first, it stays the preferred
-    // answer for a project that ships for both.
-    let asked: Vec<String> = loaders.iter().chain(bridge.iter()).cloned().collect();
-    let by_hash = bulk_latest_by_hash(&hashes, game_version, &asked).await;
+    // Modrinth answers the bulk request with the newest file of any named
+    // loader, so asking for the bridge too turned a Forge mod into its newer
+    // Fabric build. Only the build's own loader is asked here; bridged jars it
+    // does not answer fall through to the per-project pick, own loader first.
+    let by_hash = bulk_latest_by_hash(&hashes, game_version, loaders).await;
     for e in &hashed {
         if let Some(v) = by_hash.get(&e.sha1.to_lowercase()) {
             out.insert(e.file_name.clone(), v.clone());

@@ -30,6 +30,7 @@ import type { ProjectVersion } from '../state/project'
 import { closeModal, showToast, useUi } from '../state/ui'
 import { backdropClose } from '../lib/dismiss'
 import { mirrorAsset } from '../lib/api'
+import { modpackVersionFor } from '../lib/modpackVersion'
 
 
 export function ProjectModal() {
@@ -138,7 +139,9 @@ export function ProjectModal() {
           ? cfInstallModpack(pj.cfid, fileId)
           : mrVersionId
             ? installModpackVersion(pj.slug, mrVersionId)
-            : installModpack(pj.slug),
+            : pj.game
+              ? modpackVersionFor(pj.slug, pj.game).then((id) => installModpackVersion(pj.slug, id))
+              : installModpack(pj.slug),
       onDone: (p) => {
         trackTimed('modpack_install', startedAt, {
           name: pj.title || pj.slug,

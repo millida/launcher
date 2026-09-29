@@ -7,6 +7,7 @@ import {
   cfInstallWorld,
   installCatalogPack,
   installModpack,
+  installModpackVersion,
   installPackCandidate,
 } from '../ipc/commands'
 import { catalogInstallTracker, installContentFlow, resolveTargetBuild } from '../lib/install'
@@ -22,13 +23,14 @@ import type { ModHit } from '../state/mods'
 import { openCfProject, openProject } from '../state/project'
 import { DEMO_USER } from '../lib/demo'
 import { loadPackView } from './premium/packView'
+import { modpackVersionFor } from '../lib/modpackVersion'
 
 /**
  * Всё, что делает вещь каталога: подпись и состояние главной кнопки, установка
  * из нужного источника, открытие карточки и окно ключа платной сборки. Одно на
  * строку и на плитку — иначе они разошлись бы в том, что считать «установлено».
  */
-export function useModAction(h: ModHit) {
+export function useModAction(h: ModHit, game?: string | null) {
   const modTab = useMods((s) => s.modTab)
   const installedIds = useMods((s) => s.installedIds)
   const installed = !!(h.pid && installedIds.has(h.pid))
@@ -176,7 +178,7 @@ export function useModAction(h: ModHit) {
         key: keyMrModpack(h.slug),
         title: h.title || h.slug,
         running: 'Скачивание…',
-        run: () => installModpack(h.slug!),
+        run: () => (game ? modpackVersionFor(h.slug!, game).then((id) => installModpackVersion(h.slug!, id)) : installModpack(h.slug!)),
         onDone: (p) => {
           trackTimed('modpack_install', modpackStartedAt, {
             name: h.slug!,

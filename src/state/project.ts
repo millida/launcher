@@ -37,6 +37,7 @@ interface ProjectState {
   cfid: number
   website: string
   loading: boolean
+  game: string | null
   set: (patch: Partial<ProjectState>) => void
 }
 
@@ -55,6 +56,7 @@ export const useProject = create<ProjectState>((set) => ({
   cfid: 0,
   website: '',
   loading: false,
+  game: null,
   set: (patch) => set(patch as ProjectState),
 }))
 
@@ -77,6 +79,7 @@ export async function openCfProject(cfid: number, kind?: string, fallbackTitle?:
     tags: [],
     website: '',
     loading: true,
+    game: null,
   })
   openModal('pjModal')
   if (!hasTauri()) {
@@ -122,7 +125,7 @@ export async function openCfProject(cfid: number, kind?: string, fallbackTitle?:
   } catch {}
 }
 
-export async function openProject(slug: string, kind?: string) {
+export async function openProject(slug: string, kind?: string, game?: string | null) {
   const s = useProject.getState()
   s.set({
     slug,
@@ -137,6 +140,7 @@ export async function openProject(slug: string, kind?: string) {
     tags: [],
     website: '',
     loading: true,
+    game: game || null,
   })
   openModal('pjModal')
   try {
@@ -159,7 +163,7 @@ export async function openProject(slug: string, kind?: string) {
     const vers = await fetch(MODRINTH_API + '/v2/project/' + encodeURIComponent(slug) + '/version').then((r) =>
       r.json(),
     )
-    useProject.getState().set({ versions: vers.slice(0, 25) })
+    useProject.getState().set({ versions: vers })
   } catch {
     useProject.getState().set({ title: 'Не удалось загрузить', loading: false })
   }

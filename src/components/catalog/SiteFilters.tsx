@@ -9,9 +9,10 @@ import type { SiteAccess } from './siteStore'
 /*
  * Колонка фильтров — как на сайте (`mr-filters.tsx`): группы «Версия игры»,
  * «Загрузчик», «Категории» со сворачиванием, пиксельной галочкой и числом
- * материалов; у версий сперва наполненные (от 12 материалов), остальные под
- * «Показать все · N». Версия и загрузчик выбираются по одному, повторное
- * нажатие снимает выбор — поведение галочки на сайте.
+ * материалов; у версий сперва видны наполненные (от 12 материалов), «Показать
+ * все · N» раскрывает весь список в порядке версий. Версия и загрузчик
+ * выбираются по одному, повторное нажатие снимает выбор — поведение галочки
+ * на сайте.
  */
 
 const VISIBLE = 10
@@ -29,20 +30,20 @@ export interface FilterOpt {
 export function FilterGroup({
   title,
   opts,
-  split,
+  lead,
   name,
 }: {
   title: string
   opts: FilterOpt[]
-  split?: number
+  lead?: (o: FilterOpt) => boolean
   /** Машинное имя фильтра для аналитики: filter_<name>. */
   name?: string
 }) {
   const [open, setOpen] = useState(true)
-  const cut = Math.max(1, Math.min(VISIBLE, split ?? VISIBLE))
-  const head = opts.slice(0, cut)
-  const tail = opts.slice(cut)
-  const [more, setMore] = useState(() => tail.some((o) => o.active))
+  const head = (lead ? opts.filter(lead) : opts).slice(0, VISIBLE)
+  const shown = head.length ? head : opts.slice(0, 1)
+  const hidden = opts.length - shown.length
+  const [more, setMore] = useState(() => opts.some((o) => o.active && !shown.includes(o)))
   if (!opts.length) return null
   return (
     <div className={'card mr-group' + (open ? ' is-open' : '')}>
@@ -52,15 +53,14 @@ export function FilterGroup({
       </button>
       {open ? (
         <div className="mr-opts">
-          {head.map((o) => (
+          {(more ? opts : shown).map((o) => (
             <Opt key={o.key} o={o} name={name} />
           ))}
-          {tail.length && !more ? (
+          {hidden && !more ? (
             <button type="button" className="mr-more-btn" data-track={name ? 'filter_' + name + '_more' : undefined} onClick={() => setMore(true)}>
-              Показать все · {tail.length}
+              Показать все · {hidden}
             </button>
           ) : null}
-          {more ? tail.map((o) => <Opt key={o.key} o={o} name={name} />) : null}
         </div>
       ) : null}
     </div>
@@ -120,9 +120,8 @@ export function SiteFilters({
   onReset: () => void
 }) {
   if (!facets) return <FiltersSkeleton />
-  const filled = facets.versions.filter((v) => v.count >= 12 || v.value === version)
-  const rest = facets.versions.filter((v) => !(v.count >= 12 || v.value === version))
-  const versions: FilterOpt[] = [...filled, ...rest].map((v) => ({
+  const filled = new Set(facets.versions.filter((v) => v.count >= 12 || v.value === version).map((v) => v.value))
+  const versions: FilterOpt[] = facets.versions.map((v) => ({
     key: v.value,
     label: v.value,
     count: v.count,
@@ -170,7 +169,7 @@ export function SiteFilters({
         </button>
       ) : null}
       <FilterGroup title="Доступ" name="access" opts={accessOpts} />
-      <FilterGroup title="Версия игры" name="version" opts={versions} split={filled.length} />
+      <FilterGroup title="Версия игры" name="version" opts={versions} lead={(o) => filled.has(o.key)} />
       <FilterGroup title="Загрузчик" name="loader" opts={loaders} />
       <FilterGroup title="Категории" name="category" opts={cats} />
     </div>

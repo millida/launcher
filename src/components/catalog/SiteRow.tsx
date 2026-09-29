@@ -228,7 +228,8 @@ function ActBar({
 const CONTENT = new Set(['mod', 'resourcepack', 'shader', 'datapack'])
 
 function Bound({ h, kind, want, onFired, extra }: { h: ModHit; kind: string; want: Want | null; onFired: () => void; extra?: ReactNode }) {
-  const a = useModAction(h)
+  const game = useCatalogCtx().store((s) => s.version)
+  const a = useModAction(h, kind === 'modpack' ? game : null)
   const [making, setMaking] = useState(false)
   const content = CONTENT.has(kind)
   const canNew = content && !!planFor(h, kind)
@@ -405,6 +406,7 @@ export interface RowProps {
 const trackKind = (card: SiteCard, sec: SiteSection) => (card.premium ? 'premium' : sec.kind === 'world' ? 'map' : sec.kind)
 
 function useOpen({ card, sec, onOpenPack }: RowProps, resolve: () => Promise<ModHit | null>, target: CatalogTarget) {
+  const game = useCatalogCtx().store((s) => s.version)
   return (e: MouseEvent<HTMLElement>) => {
     if (!rowClickOpens(e)) return
     // В панели сервера окно проекта лаунчера ставит в сборку, а не на сервер —
@@ -419,7 +421,7 @@ function useOpen({ card, sec, onOpenPack }: RowProps, resolve: () => Promise<Mod
     }
     void resolve().then((h) => {
       if (h && h.cfid !== undefined) void openCfProject(h.cfid, sec.kind, h.title)
-      else if (h && h.slug) void openProject(h.slug, sec.kind)
+      else if (h && h.slug) void openProject(h.slug, sec.kind, sec.kind === 'modpack' ? game : null)
       else openOnSite(sec.slug, card.slug)
     })
   }

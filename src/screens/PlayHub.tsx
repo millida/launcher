@@ -539,7 +539,7 @@ export function PlayHub({ on }: { on?: boolean }) {
   }
   // 7 плиток + «Остальные» (владелец 24.09): с баннером OneBlock на две
   // колонки это ровно два ряда по пять.
-  const MODES_SHOWN = 9
+  const MODES_SHOWN = 8
   const shownModes = allModes ? shelfModes : shelfModes.slice(0, MODES_SHOWN)
 
   // «Режимы»: OneBlock баннером первым, 7 плиток и «Остальные»,

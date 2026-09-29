@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { TOUR_STEPS, stopTour, tourNext, tourPrev, useTour } from '../state/tour'
 
 interface Box {
@@ -29,21 +29,39 @@ function measure(sel: string): Box | null {
   return { left: r.left - PAD, top: r.top - PAD, width: r.width + PAD * 2, height: r.height + PAD * 2 }
 }
 
-function cardPos(box: Box | null): { left: number; top: number } {
-  const vw = window.innerWidth
-  const vh = window.innerHeight
-  if (!box) return { left: Math.max(GAP, (vw - CARD_W) / 2), top: Math.max(GAP, vh / 2 - 90) }
+const clamp = (v: number, min: number, max: number): number => Math.min(Math.max(min, v), Math.max(min, max))
+
+export function cardPos(
+  box: Box | null,
+  cardH: number,
+  vw: number = window.innerWidth,
+  vh: number = window.innerHeight,
+): { left: number; top: number } {
+  if (!box) return { left: Math.max(GAP, (vw - CARD_W) / 2), top: Math.max(GAP, (vh - cardH) / 2) }
+  const maxTop = vh - cardH - GAP
   const right = box.left + box.width + GAP
-  const fitsRight = right + CARD_W + GAP <= vw
-  const left = fitsRight ? right : Math.min(Math.max(GAP, box.left), vw - CARD_W - GAP)
-  const rawTop = fitsRight ? box.top : box.top + box.height + GAP
-  return { left, top: Math.min(Math.max(GAP, rawTop), Math.max(GAP, vh - 210)) }
+  if (right + CARD_W + GAP <= vw) return { left: right, top: clamp(box.top, GAP, maxTop) }
+  const left = clamp(box.left, GAP, vw - CARD_W - GAP)
+  const below = box.top + box.height + GAP
+  if (below <= maxTop) return { left, top: below }
+  const above = box.top - GAP - cardH
+  if (above >= GAP) return { left, top: above }
+  const beside = box.left - GAP - CARD_W
+  if (beside >= GAP) return { left: beside, top: clamp(box.top, GAP, maxTop) }
+  return { left, top: clamp(below, GAP, maxTop) }
 }
 
 export function Tour() {
   const active = useTour((s) => s.active)
   const index = useTour((s) => s.index)
   const [box, setBox] = useState<Box | null>(null)
+  const cardRef = useRef<HTMLDivElement>(null)
+  const [cardH, setCardH] = useState(200)
+
+  useLayoutEffect(() => {
+    const h = cardRef.current?.offsetHeight
+    if (h && Math.abs(h - cardH) >= 1) setCardH(h)
+  })
 
   useEffect(() => {
     if (!active) return
@@ -74,7 +92,7 @@ export function Tour() {
   if (!active) return null
   const step = TOUR_STEPS[index]
   const last = index === TOUR_STEPS.length - 1
-  const pos = cardPos(box)
+  const pos = cardPos(box, cardH)
 
   return (
     <div className="tour-layer" onClick={(e) => e.stopPropagation()}>
@@ -83,7 +101,7 @@ export function Tour() {
       ) : (
         <div className="tour-dim" />
       )}
-      <div className="tour-card" style={{ left: pos.left, top: pos.top, width: CARD_W }}>
+      <div ref={cardRef} className="tour-card" style={{ left: pos.left, top: pos.top, width: CARD_W }}>
         {/* Счётчик шагов — полоской, как в первой настройке: видно без чтения. */}
         <div className="tour-bar" aria-label={'Шаг ' + (index + 1) + ' из ' + TOUR_STEPS.length}>
           {TOUR_STEPS.map((_, i) => (
