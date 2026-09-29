@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 import { Group, Vector3 } from 'three'
 import { readAnimations } from './cosmeticAnimation'
+import { PlayerObject } from 'skin3d'
 import { CosmeticEmote } from './cosmeticEmote'
 import { emoteSequence } from './emoteSequence'
 
@@ -167,4 +168,39 @@ describe('an emote keeps the legs on the hips', () => {
       }
     }
   })
+})
+
+/**
+ * The vanilla cape hangs beside the skin group, eight pixels above the torso's
+ * frame, and an emote carries it with the torso. Carried in the wrong frame, it
+ * came off the back by twice that offset times the sine of half the turn: in 85
+ * of the hundred catalogue emotes more than a pixel, a full 16 in a flip.
+ *
+ * pose of the torso -> the top of the cape stays on the top of the back
+ */
+const CAPE_CASES: [string, Record<string, unknown>][] = [
+  ['a bow forward, as in most idle emotes', { rotation: { '0': [70, 0, 0] } }],
+  ['a lean to the side, as in the dances', { rotation: { '0': [0, 20, -45] } }],
+  ['upside down, as in a flip, where the gap was the largest', { rotation: { '0': [180, 0, 0] } }],
+  ['a step with a turn, shift and turn together', { rotation: { '0': [30, -35, 15] }, position: { '0': [1, -6, 3] } }],
+]
+
+describe('an emote keeps the cape on the back', () => {
+  for (const [why, body] of CAPE_CASES) {
+    it(why, () => {
+      const clip = readAnimations({
+        'animation.rig.cape': { loop: true, animation_length: 1, bones: { body } },
+      })['animation.rig.cape']!
+      const emote = new CosmeticEmote(emoteSequence({}, clip)!, rig(24))
+      const player = new PlayerObject()
+      emote.update(player, 0.5)
+      player.updateMatrixWorld(true)
+      const top = player.cape.localToWorld(new Vector3(0, 0, 0))
+      const back = player.skin.body.localToWorld(new Vector3(0, 6, -2))
+      expect(
+        top.distanceTo(back),
+        `the cape hangs ${top.distanceTo(back).toFixed(2)} px off the back: it is carried in the frame of the player, not of the skin`,
+      ).toBeLessThan(0.01)
+    })
+  }
 })

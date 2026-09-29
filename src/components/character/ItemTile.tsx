@@ -4,6 +4,8 @@ import { Ruby } from '../Ruby'
 import { loadWorkshop } from '../../lib/rubies'
 import { normRarity, rarityOfPrice, RARITY_TONE } from '../shop/rarity'
 import { FragBar, RarityFx } from '../shop/rarityUi'
+import { isDuoEmote } from '../../lib/duoEmotes'
+import '../../styles/pixel/duo.css'
 
 /**
  * Карточка вещи в гардеробе. Одна на всё: скин, плащ, украшение, закрытая
@@ -132,6 +134,11 @@ export function ItemTile(p: ItemTileProps) {
           {p.locked ? (
             <span className="ch-tile-lock" aria-hidden="true">
               <Icon id="i-lock" />
+            </span>
+          ) : null}
+          {isDuoEmote(p.itemId) ? (
+            <span className="ch-tile-duo" title="Эмоция вдвоём" aria-label="Эмоция вдвоём">
+              <Icon id="i-users" />
             </span>
           ) : null}
         </span>

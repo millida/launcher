@@ -135,6 +135,7 @@ export interface CrashAction {
   label: string
   arg?: string
   hint?: string
+  steps?: string[]
 }
 
 export interface CrashInfo {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Icon } from './Icon'
 import { hasTauri } from '../ipc/tauri'
-import { PACK_ACCESS_PREFIX } from '../ipc/commands'
+import { PACK_ACCESS_PREFIX, packAutoUpdate } from '../ipc/commands'
 import { keyCatalogPack } from '../lib/installKeys'
 import { findPackUpdate, packUpdateJob } from '../lib/packLaunch'
 import type { PackUpdate } from '../lib/packUpdate'
@@ -73,10 +73,15 @@ export function PackUpdateRow({ profile, onUpdated }: { profile: string; onUpdat
   }
 
   const start = async (u: PackUpdate) => {
+    const edited = await packAutoUpdate(profile).then(
+      (s) => s.modified,
+      () => true,
+    )
     const ok = await uiConfirm(
       'Поставим версию ' +
         u.to +
-        ' рядом со старой и перенесём миры, скриншоты и настройки игры. Старая версия удалится, только когда новая встанет на место.',
+        ' рядом со старой и перенесём миры, скриншоты и настройки игры. Старая версия удалится, только когда новая встанет на место.' +
+        (edited ? ' Моды придут в версии автора: добавленные тобой моды не перенесутся.' : ''),
       { title: 'Обновить «' + profile + '»?', confirmLabel: 'Обновить', danger: false },
     )
     if (ok) run(u)

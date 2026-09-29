@@ -21,6 +21,7 @@ import { FriendsEmpty } from '../components/friends/FriendsEmpty'
 import { unreadText } from '../components/friends/ChatRow'
 import { PlayTogether } from '../components/friends/PlayTogether'
 import { RequestsTab } from '../components/friends/RequestsTab'
+import { InviteTab } from '../components/friends/InviteTab'
 import {
   addCandidate,
   loadTab,
@@ -367,6 +368,16 @@ export function Friends({ on }: { on: boolean }) {
                 Заявки
                 {reqIn.length ? <span className="fr-tab-n hot">{unreadText(reqIn.length)}</span> : null}
               </button>
+              <button
+                className={'seg' + (tab === 'invite' ? ' on' : '')}
+                role="tab"
+                aria-selected={tab === 'invite'}
+                data-track="friends_tab_invite"
+                onClick={() => setTab('invite')}
+              >
+                <Icon id="i-gift" />
+                Пригласить
+              </button>
             </div>
             <div className="fr-tabbar-tool">
               {tab === 'friends' && friends.length > 1 ? (
@@ -392,7 +403,13 @@ export function Friends({ on }: { on: boolean }) {
           <div className="stack fr-list" id="frList" data-private data-section="friends_list">
             {addFirst ? addRows : null}
             {tab === 'friends' && !needle && friends.length ? <PlayTogether /> : null}
-            {tab === 'friends' ? friendsTab() : <RequestsTab incoming={inShown} outgoing={outShown} />}
+            {tab === 'friends' ? (
+              friendsTab()
+            ) : tab === 'invite' ? (
+              <InviteTab on={on} />
+            ) : (
+              <RequestsTab incoming={inShown} outgoing={outShown} />
+            )}
             {!addFirst && needle ? addRows : null}
 
             {tab === 'friends' && !needle && blocked.length ? (

@@ -134,6 +134,8 @@
 /* ============ Crash diagnosis and auto-tuning ============ */
 
 .crash-fixes{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.crash-plan{margin-top:10px;font-size:13px;line-height:1.5;color:var(--m-fg-muted)}
+.crash-plan ul{margin:4px 0 0;padding-left:18px;color:var(--m-fg)}
 .tune-why{margin:0;padding-left:16px;display:flex;flex-direction:column;gap:2px;font-size:11.5px;color:var(--m-fg-subtle)}
 
 /* Bulk action bar floats above the content, the way messengers do it: the list

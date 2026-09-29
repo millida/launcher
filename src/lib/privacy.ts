@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { api, hasMillidaAccount } from './api'
+import { DUO_INVITES_DEFAULT, isDuoInvites, type DuoInvites } from './duoEmotes'
 
 /// Приватность профиля — серверная настройка, общая с сайтом: переключатель в
 /// лаунчере и на millida.net правят одни и те же поля у текущего пользователя.
@@ -20,9 +21,12 @@ export interface PrivacySettings {
   showMarket: boolean
   /// Серверы, на которых игрок играет.
   showServers: boolean
+  duoInvites: DuoInvites
 }
 
-export const PRIVACY_FIELDS: (keyof PrivacySettings)[] = [
+export type PrivacyFlag = Exclude<keyof PrivacySettings, 'duoInvites'>
+
+export const PRIVACY_FIELDS: PrivacyFlag[] = [
   'showActivity',
   'showServers',
   'showPlaytime',
@@ -40,12 +44,14 @@ const DEFAULTS: PrivacySettings = {
   showAchievements: true,
   showMarket: true,
   showServers: true,
+  duoInvites: DUO_INVITES_DEFAULT,
 }
 
 function normalize(raw: unknown): PrivacySettings {
   const o = (raw || {}) as Record<string, unknown>
   const out = { ...DEFAULTS }
   for (const k of PRIVACY_FIELDS) if (o[k] !== undefined) out[k] = o[k] !== false
+  if (isDuoInvites(o.duoInvites)) out.duoInvites = o.duoInvites
   return out
 }
 

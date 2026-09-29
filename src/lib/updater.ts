@@ -62,6 +62,36 @@ async function updatesReady(): Promise<boolean> {
   return updatesAllowed() && !(await updatesManagedOutside())
 }
 
+const FLATPAK_UPDATE_COMMAND = 'flatpak update net.millida.launcher'
+
+async function managedOutsideOnly(): Promise<boolean> {
+  return updatesAllowed() && (await updatesManagedOutside())
+}
+
+/// Flatpak cannot install anything itself, but the player still has to learn
+/// that a new version is out: otherwise the launcher silently stays behind.
+async function noticeManagedUpdate(): Promise<FallbackUpdate | null> {
+  try {
+    const upd = await updateFallbackCheck()
+    if (!upd) return null
+    pending = { version: upd.version, notes: upd.notes || '', install: async () => applyUpdate() }
+    useUpdate.getState().set({ version: upd.version, staged: false, manual: true, failed: true })
+    return upd
+  } catch (e) {
+    updateFailed('updater-flatpak', e)
+    return null
+  }
+}
+
+function showManagedUpdateHint() {
+  const version = useUpdate.getState().version
+  showToast(
+    (version ? 'Вышла версия ' + version + '. ' : '') +
+      'Обнови лаунчер в магазине приложений или командой: ' +
+      FLATPAK_UPDATE_COMMAND,
+  )
+}
+
 /// The Update object is reused for the same version: rebuilding it under an in-flight download
 /// fails with "Update.install called before Update.download".
 function remember(upd: Update) {
@@ -185,6 +215,10 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
 /// Applied at startup, before the launcher UI opens: on Windows the installer terminates the
 /// running process, so it cannot be applied mid-session. Returns true when the install started.
 export async function bootUpdate(): Promise<boolean> {
+  if (await managedOutsideOnly()) {
+    void noticeManagedUpdate()
+    return false
+  }
   if (!(await updatesReady())) return false
   const st = useUpdate.getState()
   st.set({ bootPhase: 'checking', bootPct: 0 })
@@ -242,6 +276,10 @@ export async function bootUpdate(): Promise<boolean> {
 
 /// Otherwise installed on exit: a background install would kill the running process.
 export async function autoUpdate(): Promise<{ version: string } | null> {
+  if (await managedOutsideOnly()) {
+    const f = await noticeManagedUpdate()
+    return f ? { version: f.version } : null
+  }
   if (!(await updatesReady())) return null
   if (await pluginGaveUp()) {
     const f = await probeFallback()
@@ -309,7 +347,11 @@ export async function applyFallback(): Promise<void> {
       return
     }
     st.set({ busy: false })
-    showToast('Обновление скачано — замени приложение файлом из открытой папки')
+    showToast(
+      /\.(deb|rpm)$/i.test(res.path)
+        ? 'Обновление скачано — подтверди установку в открывшемся установщике пакетов'
+        : 'Обновление скачано — замени приложение файлом из открытой папки',
+    )
   } catch (e) {
     st.set({ busy: false, failed: true })
     if (noticeIfTranslocated(e)) return
@@ -321,6 +363,10 @@ export async function applyFallback(): Promise<void> {
 export async function applyUpdate(): Promise<void> {
   const st = useUpdate.getState()
   if (st.busy) return
+  if (await managedOutsideOnly()) {
+    showManagedUpdateHint()
+    return
+  }
   if (st.failed) {
     st.set({ failed: false })
     if (fallback || (await probeFallback())) {
@@ -368,8 +414,10 @@ export async function checkForUpdate(loud = false): Promise<UpdateInfo | null> {
     return null
   }
   if (await updatesManagedOutside()) {
-    if (loud) showToast('Обновляется через Flatpak: flatpak update net.millida.launcher')
-    return null
+    const f = await noticeManagedUpdate()
+    if (f && loud) showManagedUpdateHint()
+    else if (loud) showToast('Установлена последняя версия')
+    return f ? pending : null
   }
   try {
     if (await pluginGaveUp()) {

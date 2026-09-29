@@ -22,20 +22,35 @@ export interface MillidaProfile {
 
 export let MILLIDA_PROFILE: MillidaProfile | null = null
 
+/**
+ * The wallet is topped up on the site, outside the launcher, so the cached
+ * balance goes stale. Returns the fresh available amount, or null when the
+ * wallet could not be read and the cached value must not be trusted.
+ */
+export async function refreshMillidaWallet(): Promise<number | null> {
+  if (!hasMillidaAccount()) return null
+  const wallet = await api<{ availableKopecks?: number }>('/core/wallet/me/display').catch(() => null)
+  const kopecks = wallet?.availableKopecks
+  if (typeof kopecks !== 'number') return null
+  const { list, save } = useAccounts.getState()
+  const i = list.findIndex((x) => x.kind === 'millida' || x.kind === 'tg')
+  if (i < 0) return null
+  const l = list.slice()
+  l[i] = { ...l[i], balance: kopecks }
+  save(l)
+  return kopecks
+}
+
 export async function loadMillidaProfile(): Promise<MillidaProfile | null> {
   if (!hasMillidaAccount()) return null
   try {
-    const [me, wallet] = await Promise.all([
-      api<MillidaProfile>('/users/me'),
-      api<{ availableKopecks?: number }>('/core/wallet/me/display').catch(() => null),
-    ])
+    const [me] = await Promise.all([api<MillidaProfile>('/users/me'), refreshMillidaWallet()])
     MILLIDA_PROFILE = me
     const { list, save } = useAccounts.getState()
-    const l = list.slice()
-    const a = l.find((x) => x.kind === 'millida' || x.kind === 'tg')
-    if (a) {
-      if (me.nickname) a.nick = me.nickname
-      if (wallet && wallet.availableKopecks != null) a.balance = wallet.availableKopecks
+    const i = list.findIndex((x) => x.kind === 'millida' || x.kind === 'tg')
+    if (i >= 0 && me.nickname) {
+      const l = list.slice()
+      l[i] = { ...l[i], nick: me.nickname }
       save(l)
     }
     return me

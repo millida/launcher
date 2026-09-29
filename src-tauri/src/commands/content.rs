@@ -170,6 +170,16 @@ pub async fn update_content(profile: String, kind: String, name: String) -> Resu
 }
 
 #[tauri::command]
+pub async fn content_versions(profile: String, kind: String, name: String) -> Result<Vec<engine::VersionChoice>, String> {
+    engine::content_versions(profile, kind, name).await
+}
+
+#[tauri::command]
+pub async fn set_content_version(profile: String, kind: String, name: String, version_id: String) -> Result<String, String> {
+    engine::set_content_version(profile, kind, name, version_id).await
+}
+
+#[tauri::command]
 pub async fn update_all(profile: String, kind: String) -> Result<u32, String> {
     engine::update_all(profile, kind).await
 }

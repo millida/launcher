@@ -88,14 +88,10 @@ export interface MoveCandidate {
   files: number
   worlds: number
   mods: number
-  same_drive: boolean
 }
 
 export interface MoveOutcome {
   profile: Profile
-  instant: boolean
-  source_removed: boolean
-  note: string | null
 }
 
 export interface JavaInfo {
@@ -541,6 +537,17 @@ export const updateCatalogPack = (profile: string) => invoke<Profile>('update_ca
 export const syncCatalogPack = (profile: string) => invoke<boolean>('sync_catalog_pack', { profile })
 export const protectedBuilds = () => invoke<string[]>('protected_builds')
 
+export interface PackAutoUpdate {
+  catalog: boolean
+  on: boolean
+  modified: boolean
+  chosen: boolean | null
+}
+
+export const packAutoUpdate = (profile: string) => invoke<PackAutoUpdate>('pack_auto_update', { profile })
+export const setPackAutoUpdate = (profile: string, on: boolean) =>
+  invoke<PackAutoUpdate>('set_pack_auto_update', { profile, on })
+
 export interface PackCandidate {
   fileId: string
   version: string
@@ -869,8 +876,7 @@ export const setProfileJavaMajor = (profile: string, major: number | null) =>
 
 export const scanImports = () => invoke<FoundInstance[]>('scan_imports')
 export const planMoves = () => invoke<MoveCandidate[]>('plan_moves')
-export const moveInstance = (path: string, removeSource: boolean) =>
-  invoke<MoveOutcome>('move_instance', { path, removeSource })
+export const moveInstance = (path: string) => invoke<MoveOutcome>('move_instance', { path })
 /** «Выбрать папку» в импорте: выбор папки и сборки в ней. null — диалог закрыли. */
 export const pickImportDir = () => invoke<FoundInstance[] | null>('pick_import_dir')
 
@@ -902,6 +908,20 @@ export const updateAll = (profile: string, kind: string) => invoke<number>('upda
 
 export const updateContent = (profile: string, kind: string, name: string) =>
   invoke<string>('update_content', { profile, kind, name })
+
+export interface VersionChoice {
+  id: string
+  number: string
+  channel: string
+  date: string
+  current: boolean
+}
+
+export const contentVersions = (profile: string, kind: string, name: string) =>
+  invoke<VersionChoice[]>('content_versions', { profile, kind, name })
+
+export const setContentVersion = (profile: string, kind: string, name: string, versionId: string) =>
+  invoke<string>('set_content_version', { profile, kind, name, versionId })
 
 export const updateModpack = (profile: string, versionId: string) =>
   invoke<Profile>('update_modpack', { profile, versionId })

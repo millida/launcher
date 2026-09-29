@@ -61,7 +61,8 @@ import { startTour } from '../state/tour'
 import { buildDiagnostics } from '../lib/diag'
 import { copyText } from '../lib/clipboard'
 import { loadPrivacy, usePrivacy } from '../lib/privacy'
-import type { PrivacySettings } from '../lib/privacy'
+import type { PrivacyFlag, PrivacySettings } from '../lib/privacy'
+import { DUO_INVITE_OPTIONS, type DuoInvites } from '../lib/duoEmotes'
 import {
   hasTray,
   launchWindowMode,
@@ -173,7 +174,7 @@ function initialSec(): SecId {
 
 /// Тумблеры приватности профиля. Те же поля правятся на millida.net —
 /// подписи держим близкими к сайту, чтобы человек узнавал настройку.
-const PRIVACY_ROWS: { key: keyof PrivacySettings; title: string }[] = [
+const PRIVACY_ROWS: { key: PrivacyFlag; title: string }[] = [
   { key: 'showActivity', title: 'Игровая активность' },
   { key: 'showServers', title: 'Серверы' },
   { key: 'showPlaytime', title: 'Часы в игре' },
@@ -298,7 +299,15 @@ export function Settings({ on }: { on: boolean }) {
     void loadPrivacy(true)
   }, [on, hasMillida])
 
-  const togglePrivacy = (key: keyof PrivacySettings) => {
+  const pickDuoInvites = (value: DuoInvites) => {
+    if (value === privacy.settings.duoInvites || privacy.saving === 'duoInvites') return
+    privacy
+      .patch({ duoInvites: value })
+      .then(() => showToast('Эмоции вдвоём: ' + (DUO_INVITE_OPTIONS.find(([v]) => v === value)?.[1] ?? '').toLowerCase()))
+      .catch(() => showToast('Не удалось сохранить настройку приглашений', 'error'))
+  }
+
+  const togglePrivacy = (key: PrivacyFlag) => {
     const next = !privacy.settings[key]
     const row = PRIVACY_ROWS.find((r) => r.key === key)
     privacy
@@ -885,6 +894,18 @@ export function Settings({ on }: { on: boolean }) {
           </Row>
         ) : null}
       </Group>
+
+      {hasMillida ? (
+        <Group title="Эмоции вдвоём">
+          <Row title="Кто может звать" keys="эмоции вдвоём приглашение приватность друзья">
+            {!privacy.loaded && privacy.loading ? (
+              <span className="skel" style={{ width: '180px', height: '28px' }}></span>
+            ) : (
+              <Segs<DuoInvites> value={privacy.settings.duoInvites} options={DUO_INVITE_OPTIONS} onPick={pickDuoInvites} />
+            )}
+          </Row>
+        </Group>
+      ) : null}
 
       <Group title="Снаружи">
         <Row title="Активность в Discord" keys="дискорд статус rich presence приватность">

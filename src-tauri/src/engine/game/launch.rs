@@ -346,58 +346,39 @@ pub(crate) fn blame(text: &str) -> Blame {
 }
 
 /// A mod the loader refused to load. `wrong_version` — the unmet requirement is
-/// the game itself (or the loader), i.e. the jar is built for another version.
+/// the game itself, i.e. the jar is built for another version; `old_loader` —
+/// it is the loader, so the build's loader is older than the mod needs.
 #[derive(PartialEq, Debug)]
 pub(crate) struct ModFault {
     pub(crate) name: String,
     pub(crate) wrong_version: bool,
+    pub(crate) old_loader: bool,
 }
 
-/// First `'...'` after the marker. Loaders quote mod names, so the quotes are
-/// what separates the name from the sentence around it.
-fn quoted_after(line: &str, marker: &str) -> Option<String> {
-    let rest = line.split_once(marker)?.1;
-    let start = rest.find('\'')? + 1;
-    let end = rest[start..].find('\'')? + start;
-    let name = rest[start..end].trim();
-    (!name.is_empty() && name.len() <= 60).then(|| name.to_string())
-}
-
-/// The requirement a mod is missing is what the requirement is ABOUT: the game,
-/// the loader, or another mod.
-const GAME_REQUIREMENTS: [&str; 6] =
-    [" of minecraft", "'minecraft'", "'neoforge'", "'forge'", "'fabricloader'", "'fabric loader'"];
-
-/// Mods named in loader resolution failures. Fabric, Quilt and NeoForge all
-/// print one line per unmet requirement, and that line is the only place the
-/// player learns WHICH jar to update — without it the verdict stays "конфликт
-/// модов", and a fifty-mod pack is unfixable by hand.
+/// Mods a loader refused to load over an unmet requirement: the requiring
+/// mod, and whether the requirement is the game or the loader itself. Fabric,
+/// Quilt, Forge and NeoForge all print one line per requirement, and that line
+/// is the only place the player learns WHICH jar to update — the lines are read
+/// by `crashcause::loader_findings`, the single parser of loader refusals.
 pub(crate) fn mod_faults(text: &str) -> Vec<ModFault> {
     let mut out: Vec<ModFault> = vec![];
-    for line in text.lines() {
-        let low = line.to_lowercase();
-        // NeoForge: "Mod ID: 'minecraft', Requested by: 'sodium', Expected range: ..."
-        let fault = if low.contains("requested by:") {
-            quoted_after(line, "Requested by:").map(|name| ModFault {
-                name,
-                wrong_version: GAME_REQUIREMENTS.iter().any(|r| low.split("requested by:").next().unwrap_or("").contains(r)),
-            })
-        } else if low.contains("requires") && low.contains("mod '") {
-            // Fabric/Quilt: "- Mod 'Sodium' (sodium) 0.5.8 requires version 1.20.1
-            //  of minecraft, but only the wrong version is present: 1.21.1!"
-            quoted_after(line, "Mod ").map(|name| ModFault {
-                name,
-                wrong_version: GAME_REQUIREMENTS.iter().any(|r| low.contains(r)),
-            })
-        } else {
-            None
-        };
-        let Some(fault) = fault else { continue };
-        if !out.iter().any(|f| f.name == fault.name) {
-            out.push(fault);
+    for finding in super::crashcause::loader_findings(text) {
+        let super::crashcause::LoaderFinding::Requires { by, dep, .. } = finding else { continue };
+        if out.iter().any(|f| f.name == by.name) {
+            continue;
         }
+        let old_loader = super::crashfix::is_loader_id(&dep.id);
+        let wrong_version = super::crashcause::is_platform_id(&dep.id) && !old_loader;
+        out.push(ModFault { name: by.name, wrong_version, old_loader });
     }
     out
+}
+
+fn wrong_loader_file(text: &str) -> Option<String> {
+    super::crashcause::loader_findings(text).into_iter().find_map(|f| match f {
+        super::crashcause::LoaderFinding::WrongLoader { file, .. } => Some(file),
+        _ => None,
+    })
 }
 
 const FAULT_NAMES_SHOWN: usize = 3;
@@ -417,6 +398,11 @@ fn mod_fault_reason(faults: &[ModFault]) -> String {
     if faults.iter().any(|f| f.wrong_version) {
         format!(
             "Моды собраны под другую версию игры: {}. Обнови их до версии сборки или убери из папки mods.",
+            list
+        )
+    } else if faults.iter().any(|f| f.old_loader) {
+        format!(
+            "Модам нужен загрузчик новее, чем в сборке: {}. Обнови загрузчик в настройках сборки или убери эти моды.",
             list
         )
     } else {
@@ -559,13 +545,30 @@ pub(crate) fn crash_verdict(text: &str) -> CrashVerdict {
     } else if super::crashfix::renderer_missing(&low) {
         (super::crashfix::RENDERER_MISSING_REASON, "missing_renderer")
     } else if !faults.is_empty() {
-        let kind = if faults.iter().any(|f| f.wrong_version) { "wrong_mc" } else { "missing_deps" };
+        let kind = if faults.iter().any(|f| f.wrong_version) {
+            "wrong_mc"
+        } else if faults.iter().any(|f| f.old_loader) {
+            "old_loader"
+        } else {
+            "missing_deps"
+        };
         return verdict(mod_fault_reason(&faults), kind);
     } else if loader_reported_missing_dependency(&low) {
         ("Не хватает зависимости одного из модов.", "missing_deps")
-    } else if low.contains("duplicate mod") || low.contains("incompatible mods found") || low.contains("incompatible mod set") {
+    } else if let Some(file) = wrong_loader_file(text) {
+        return verdict(format!("В папке mods лежит мод для другого загрузчика: {}. Поставь версию под загрузчик сборки или убери его.", file), "wrong_loader");
+    } else if low.contains("duplicate mod")
+        || low.contains("incompatible mods found")
+        || low.contains("incompatible mod set")
+        || low.contains("incompatibilities between mods")
+        || low.contains("present in multiple files")
+    {
         ("Конфликт модов — есть дубли или несовместимые моды.", "conflict")
-    } else if low.contains("mixin apply failed") || low.contains("mixinapplyerror") || low.contains("mixintransformererror") {
+    } else if low.contains("mixin apply failed")
+        || low.contains("mixin apply for mod ")
+        || low.contains("mixinapplyerror")
+        || low.contains("mixintransformererror")
+    {
         ("Один из модов не подошёл к этой версии игры (ошибка миксина).", "mixin")
     } else if low.contains("nosuchmethoderror")
         || low.contains("noclassdeffounderror")
@@ -2204,7 +2207,7 @@ mod tests {
             let faults = mod_faults(line);
             assert_eq!(
                 faults,
-                vec![ModFault { name: name.to_string(), wrong_version: *wrong_version }],
+                vec![ModFault { name: name.to_string(), wrong_version: *wrong_version, old_loader: false }],
                 "строка {line:?} обязана назвать мод. Зачем случай закреплён: {why}",
             );
         }
@@ -2660,6 +2663,31 @@ mod tests {
     }
 
     #[test]
+    fn a_requirement_on_the_loader_asks_for_a_newer_loader() {
+        let cases: &[(&str, &str, &str)] = &[
+            (
+                "net.minecraftforge.fml.common.MissingModsException: Mod ic2 (IndustrialCraft 2) requires [forge@[14.23.5.2847,)]",
+                "old_loader",
+                "Forge 1.12 требует от мода Forge новее: это не «мод под другую версию игры», а старый загрузчик сборки",
+            ),
+            (
+                "\t - Mod 'Sodium' (sodium) 0.6.0 requires version 0.16.0 or later of fabricloader, but only the wrong version is present: 0.15.11!",
+                "old_loader",
+                "Fabric: требование к fabricloader чинится обновлением загрузчика, а не заменой мода",
+            ),
+            (
+                "\t - Mod 'Sodium' (sodium) 0.5.8 requires version 1.20.1 of minecraft, but only the wrong version is present: 1.21.1!",
+                "wrong_mc",
+                "требование к самой игре по-прежнему «мод под другую версию игры»",
+            ),
+        ];
+        for (log, kind, why) in cases {
+            let v = crash_verdict(log);
+            assert_eq!(v.kind, *kind, "лог {log:?}: вердикт {:?}. Зачем случай закреплён: {why}", v.reason);
+        }
+    }
+
+    #[test]
     fn missing_dependency_verdict_needs_the_loader_refusal() {
         const VERDICT: &str = "Не хватает зависимости одного из модов.";
         let cases: &[(&str, bool, &str)] = &[
@@ -2679,11 +2707,6 @@ mod tests {
                 "[main/ERROR] [net.minecraftforge.fml.loading.ModSorter/LOADING]: Missing or unsupported mandatory dependencies:",
                 true,
                 "отказ Forge/NeoForge 1.13+, у которого хвост лога срезал строки с именами модов: заголовка достаточно для вердикта",
-            ),
-            (
-                "net.minecraftforge.fml.common.MissingModsException: Mod ic2 (IndustrialCraft 2) requires [forge@[14.23.5.2847,)]",
-                true,
-                "так отказывает Forge 1.12 — сборки на нём всё ещё в каталоге",
             ),
         ];
         for (i, (log, expected, why)) in cases.iter().enumerate() {

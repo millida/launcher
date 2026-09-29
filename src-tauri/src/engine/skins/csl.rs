@@ -5,6 +5,10 @@ pub(crate) const CSL_LATEST: &str = "https://api.github.com/repos/xfl03/MCCustom
 const CSL_JAR: &str = "CustomSkinLoader.jar";
 const CSL_DISABLED: &str = "CustomSkinLoader.jar.disabled";
 const CSL_OPTOUT: &str = ".millida-skip";
+
+pub(crate) fn is_skin_mod_file(name: &str) -> bool {
+    name == CSL_JAR
+}
 /// Mods that decide where the player's skin comes from. Two of them in one
 /// build patch the same texture path, and a downloaded pack that ships its own
 /// one crashed as soon as the launcher added a second.

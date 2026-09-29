@@ -1,4 +1,4 @@
-import { loadProfileSettings, syncCatalogPack, updateCatalogPack } from '../ipc/commands'
+import { loadProfileSettings, packAutoUpdate, syncCatalogPack, updateCatalogPack } from '../ipc/commands'
 import type { Profile } from '../ipc/commands'
 import { hasTauri } from '../ipc/tauri'
 import { forgetPackView, loadPackView } from '../components/premium/packView'
@@ -38,6 +38,16 @@ export async function findPackUpdate(profile: string): Promise<PackUpdate | null
   return packUpdateFor(settings, await loadPackView(slug))
 }
 
+/**
+ * Whether an update may replace the build without the player pressing «Обновить».
+ * An unreadable answer counts as no: the update brings the author's mods folder whole.
+ */
+export const packAutoUpdateOn = (profile: string): Promise<boolean> =>
+  packAutoUpdate(profile).then(
+    (s) => s.catalog && s.on,
+    () => false,
+  )
+
 /** What Play does with a catalogue build before the game starts. */
 export async function packStepForLaunch(profile: string): Promise<PackLaunchStep> {
   if (!hasTauri() || !profile) return { kind: 'launch' }
@@ -45,6 +55,7 @@ export async function packStepForLaunch(profile: string): Promise<PackLaunchStep
   const settings = await loadProfileSettings(profile).catch(() => null)
   const slug = catalogPackSlug(settings)
   if (!slug || !packNeedsCheck(settings)) return { kind: 'launch' }
+  if (!(await packAutoUpdateOn(profile))) return { kind: 'launch' }
   const card: PackCard = await loadPackView(slug).then(
     (view) => ({ view }),
     (error: unknown) => ({ error }),

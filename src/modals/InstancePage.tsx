@@ -7,6 +7,7 @@ import { ScreenshotGallery } from '../components/ScreenshotGallery'
 import { SafetyModal } from '../components/SafetyModal'
 import { SharePackModal } from '../components/SharePackModal'
 import { PackUpdateRow } from '../components/PackUpdateRow'
+import { PackAutoUpdateRow } from '../components/PackAutoUpdateRow'
 import { TunePanel } from '../components/TunePanel'
 import { IconGrid } from '../components/IconGrid'
 import { IconEditor } from '../components/IconEditor'
@@ -76,6 +77,7 @@ import type {
   SkinModState,
 } from '../ipc/commands'
 import { Select } from '../components/Select'
+import { ModVersionPick } from '../components/ModVersionPick'
 import { ContextMenu, type ContextItem } from '../components/ContextMenu'
 import { Slider } from '../components/Slider'
 import { isBlockIcon } from '../lib/blockColor'
@@ -1367,6 +1369,15 @@ export function InstancePage() {
                             ) : null}
                             <div className="mod-card-file">{md.name}</div>
                             <div className="mod-card-acts">
+                              {md.project_id ? (
+                                <ModVersionPick
+                                  profile={profile!}
+                                  kind={kind}
+                                  file={md.name}
+                                  current={md.version_number || ''}
+                                  onChanged={() => loadMods()}
+                                />
+                              ) : null}
                               {modrinth ? (
                                 <button className="btn sm secondary" onClick={() => openProject(modrinth, kind)}>
                                   <Icon id="i-ext" /> Modrinth
@@ -1891,6 +1902,7 @@ export function InstancePage() {
                   Версии
                 </button>
               </div>
+              {profile ? <PackAutoUpdateRow profile={profile} /> : null}
               <div className="bx-opts-cap">Игра</div>
               <div className="set-row">
                 <span className="lab">

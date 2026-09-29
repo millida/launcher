@@ -4,7 +4,7 @@ import { installTask } from '../state/installs'
 import { useProfiles } from '../state/profiles'
 import { useUi } from '../state/ui'
 import { keyCatalogPack } from './installKeys'
-import { findPackUpdate, runPackUpdateForLaunch } from './packLaunch'
+import { findPackUpdate, packAutoUpdateOn, runPackUpdateForLaunch } from './packLaunch'
 import type { PackUpdate } from './packUpdate'
 
 export const AUTO_UPDATE_FIRST_MS = 2 * 60 * 1000
@@ -12,6 +12,7 @@ export const AUTO_UPDATE_EVERY_MS = 30 * 60 * 1000
 export const AUTO_UPDATE_PLAYED_WITHIN_MS = 14 * 24 * 60 * 60 * 1000
 
 export interface AutoUpdateInput {
+  allowed: boolean
   update: PackUpdate | null
   lastPlayedAt: number | null
   now: number
@@ -21,7 +22,7 @@ export interface AutoUpdateInput {
   failed: boolean
 }
 
-export type AutoUpdateSkip = 'current' | 'not-played' | 'game' | 'launching' | 'busy' | 'failed'
+export type AutoUpdateSkip = 'off' | 'current' | 'not-played' | 'game' | 'launching' | 'busy' | 'failed'
 
 export type AutoUpdateVerdict = { kind: 'update'; update: PackUpdate } | { kind: 'skip'; reason: AutoUpdateSkip }
 
@@ -33,6 +34,7 @@ export type AutoUpdateVerdict = { kind: 'update'; update: PackUpdate } | { kind:
  * the reason, instead of being downloaded again every half hour.
  */
 export function autoUpdateVerdict(i: AutoUpdateInput): AutoUpdateVerdict {
+  if (!i.allowed) return { kind: 'skip', reason: 'off' }
   if (!i.update) return { kind: 'skip', reason: 'current' }
   if (i.lastPlayedAt === null || i.now - i.lastPlayedAt > AUTO_UPDATE_PLAYED_WITHIN_MS) return { kind: 'skip', reason: 'not-played' }
   if (i.gameRunning) return { kind: 'skip', reason: 'game' }
@@ -80,8 +82,10 @@ export function initPackAutoUpdate(): () => void {
     try {
       for (const p of [...useProfiles.getState().profiles]) {
         if (stopped) return
-        const update = await updateOf(p.name)
+        const allowed = await packAutoUpdateOn(p.name)
+        const update = allowed ? await updateOf(p.name) : null
         const verdict = autoUpdateVerdict({
+          allowed,
           update,
           lastPlayedAt: lastPlayedAt(p.name),
           now: Date.now(),

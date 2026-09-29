@@ -171,6 +171,30 @@ function toSkin3dModelType(type: SkinModelType): "default" | "slim" {
   return type === SkinModelType.Slim ? "slim" : "default";
 }
 
+/** Where one figure of a pair stands: x and z in model pixels, yaw in radians. */
+export interface StageSpot {
+  x: number;
+  z: number;
+  yaw: number;
+}
+
+/** A second figure beside the player, playing its own half of a shared scene. */
+export interface PartnerFigure {
+  skin: SkinSource;
+  slim: boolean;
+  animation: SkinAnimation;
+  stage: () => { main: StageSpot; partner: StageSpot };
+}
+
+interface PartnerState {
+  object: PlayerObject;
+  spot: Group;
+  texture: CanvasTexture;
+  animation: SkinAnimation;
+  freeLegs: boolean;
+  stage: PartnerFigure["stage"];
+}
+
 /** Что получает поправка позы каждый кадр. */
 export interface PoseHookContext {
   head: Object3D;
@@ -211,6 +235,10 @@ export class SkinViewEngine {
   /** Where each cape cosmetic is fastened: carried along with the torso every frame. */
   private _fastened: Object3D[] = [];
   private readonly playerWrapper: Group;
+  /** Holds the player where a paired scene puts it; left at the origin otherwise. */
+  private readonly _mainSpot = new Group();
+  private _partner: PartnerState | null = null;
+  private _partnerTicket = 0;
   private readonly skinCanvas: HTMLCanvasElement;
   private readonly capeCanvas: HTMLCanvasElement;
   private readonly clock: Clock;
@@ -382,7 +410,8 @@ export class SkinViewEngine {
     }
 
     this.playerWrapper = new Group();
-    this.playerWrapper.add(this.playerObject);
+    this._mainSpot.add(this.playerObject);
+    this.playerWrapper.add(this._mainSpot);
     this.scene.add(this.playerWrapper);
     this.scene.add(this._particles.group);
 
@@ -908,6 +937,98 @@ export class SkinViewEngine {
     }
   }
 
+  /**
+   * A second figure for a paired emote. It stands inside the same wrapper as
+   * the player, so framing, the floor and the turn by mouse take in both.
+   * The partner joins at the player's current moment of the clip: its skin
+   * loads later than the player's emote starts, and the halves would drift.
+   */
+  async setPartner(partner: PartnerFigure | null): Promise<void> {
+    const ticket = ++this._partnerTicket;
+    this._dropPartner();
+    if (!partner || this._disposed) return;
+    const resolved = isTextureSource(partner.skin)
+      ? partner.skin
+      : await loadSkinImage(partner.skin as string);
+    if (ticket !== this._partnerTicket || this._disposed) return;
+    const object = new PlayerObject();
+    object.name = "partner";
+    object.cape.visible = false;
+    object.elytra.visible = false;
+    object.ears.visible = false;
+    object.skin.modelType = partner.slim ? "slim" : "default";
+    const canvas = document.createElement("canvas");
+    loadSkinToCanvas(canvas, resolved);
+    sanitizeSkinCanvas(canvas);
+    const texture = new CanvasTexture(canvas);
+    configureSkinCanvasTexture(texture);
+    object.skin.map = texture;
+    applySkinUVInsets(object.skin, {
+      insetTexels: this._uvInsetTexels,
+      outerInsetTexels: this._outerUvInsetTexels,
+    });
+    tuneSkinMaterials(object.skin, this._envMap, texture);
+    normalizeSkinDepthBias(object.skin);
+    enableShadows(object.skin);
+    const spot = new Group();
+    spot.add(object);
+    this.playerWrapper.add(spot);
+    partner.animation.progress = this._animation?.progress ?? 0;
+    this._partner = {
+      object,
+      spot,
+      texture,
+      animation: partner.animation,
+      freeLegs: animationControlsLegs(partner.animation),
+      stage: partner.stage,
+    };
+    this._posePartner(0);
+  }
+
+  get hasPartner(): boolean {
+    return this._partner !== null;
+  }
+
+  private _dropPartner(): void {
+    this._mainSpot.position.set(0, 0, 0);
+    this._mainSpot.rotation.set(0, 0, 0);
+    const partner = this._partner;
+    if (!partner) return;
+    this._partner = null;
+    this.playerWrapper.remove(partner.spot);
+    partner.object.traverse((node) => {
+      const mesh = node as Mesh;
+      if (mesh.geometry) mesh.geometry.dispose();
+      const material = mesh.material as Material | Material[] | undefined;
+      if (Array.isArray(material)) material.forEach((m) => m.dispose());
+      else material?.dispose();
+    });
+    partner.texture.dispose();
+  }
+
+  /**
+   * The mouse turns the pair round its middle: each spot is carried round by
+   * the player's own yaw, and the partner takes the same yaw on top of its spot.
+   */
+  private _posePartner(deltaTime: number): void {
+    const partner = this._partner;
+    if (!partner) return;
+    resetLimbPose(partner.object);
+    partner.animation.update(partner.object, deltaTime);
+    if (!partner.freeLegs) applyStockLegPose(partner.object.skin);
+    const yaw = this.playerObject.rotation.y;
+    const { main, partner: other } = partner.stage();
+    const place = (group: Group, at: StageSpot) => {
+      const cos = Math.cos(yaw);
+      const sin = Math.sin(yaw);
+      group.position.set(at.x * cos + at.z * sin, 0, at.z * cos - at.x * sin);
+      group.rotation.set(0, at.yaw, 0);
+    };
+    place(this._mainSpot, main);
+    place(partner.spot, other);
+    partner.object.rotation.y = yaw;
+  }
+
   /** Поворот модели вокруг Y (рад); π — вид со спины для превью плаща */
   setPlayerYaw(yaw: number): void {
     this.playerObject.rotation.y = yaw;
@@ -1237,6 +1358,8 @@ export class SkinViewEngine {
     this._postFx?.dispose();
     this._postFx = null;
     this._resizeObserver?.disconnect();
+    this._partnerTicket++;
+    this._dropPartner();
     this._outerVoxels.dispose(this.playerObject.skin);
     this._releaseControlsDocumentListeners();
     this.controls.dispose();
@@ -1445,6 +1568,7 @@ export class SkinViewEngine {
     }
     const animDt = this._debugEnabled && this._debugOpts.pauseAnimation ? 0 : deltaTime;
     this._sampleAnimationPose(animDt);
+    this._posePartner(animDt);
     if (!(this._debugEnabled && this._debugOpts.pauseAnimation)) {
       this._applyCursorLook(deltaTime);
       this._runPoseHook(deltaTime);

@@ -30,7 +30,7 @@ import type { Mine3dModule } from '../lib/mine3d'
 import type { SkinAnimation, SkinViewEngine } from '../vendor/mine3d'
 import { textureSource } from '../lib/textureSource'
 import { detectSlim, detectSlimFromUrl, loadImg } from '../lib/skinArms'
-import { contentFingerprint, dedupeCapes, textureHash } from '../lib/capes'
+import { capeById, contentFingerprint, dedupeCapes, textureHash } from '../lib/capes'
 import { SkinBody } from '../components/SkinBody'
 import {
   addToWardrobe,
@@ -116,9 +116,12 @@ import {
   TURN_PER_PIXEL,
   between,
   cosmeticModel,
+  nickSkinUrl,
   releaseEngine,
   tagBox,
 } from '../lib/characterStage'
+import { duoClipName, duoScene } from '../lib/duoEmotes'
+import { DUO_PARTNER_NICK, duoStage, soloSequence } from '../lib/duoStage'
 import '../styles/pixel/character.css'
 import { showReward } from '../components/reward/RewardReveal'
 import { rarityOfPrice } from '../components/shop/rarity'
@@ -388,6 +391,13 @@ const SKIN_CHIPS: { key: 'mine' | ShowcaseKind; name: string }[] = [
 ]
 
 const NICK_RE = /^[A-Za-z0-9_]{3,16}$/
+
+type SkinArms = 'classic' | 'slim'
+
+const SKIN_ARMS: [SkinArms, string][] = [
+  ['classic', 'Классическая'],
+  ['slim', 'Узкая'],
+]
 
 /** Сколько живёт «Отменить» после удаления скина: столько же, сколько тост с действием. */
 const SKIN_UNDO_MS = 7000
@@ -1693,6 +1703,11 @@ export function Skins({ on }: { on: boolean }) {
     if (same) setCape(same.id)
   }, [capes, textures, activeId, capeContent])
 
+  useEffect(() => {
+    const card = capeById(capes, cape)
+    if (card && card.id !== cape) setCape(card.id)
+  }, [capes, cape])
+
   const chooseCape = (id: string) => {
     capeTouched.current = true
     setCape(id)
@@ -1918,6 +1933,8 @@ export function Skins({ on }: { on: boolean }) {
     if (!engine || !engineReady || typeof engine.clearCosmetics !== 'function') return
     let alive = true
     engine.clearCosmetics()
+    const partnerReady = typeof engine.setPartner === 'function'
+    if (partnerReady) void engine.setPartner(null)
     const shown = dressed
       // Эмоции рисовать нечего: у них нет ни картинки, ни кубов - только клип,
       // который двигает самого игрока. Модель им всё равно нужна.
@@ -1938,14 +1955,43 @@ export function Skins({ on }: { on: boolean }) {
         const emoteClips = emote?.file ? readAnimations(emote.file.animations) : {}
         // Вступление, потом петля - как в игре и у Essential: один клип из
         // каталога обрывал эмоцию на вступлении.
-        const sequence = emote?.file ? emoteSequence(emoteClips, emoteClip(emoteClips, emote.item.animation)) : null
-        const playing = sequence ? new CosmeticEmote(sequence, emote?.file?.geometry) : null
+        const chosen = emote?.file ? emoteClip(emoteClips, emote.item.animation) : null
+        // A paired emote plays each half alone and without the model's skeleton,
+        // as the mod does: the other clips in its file belong to other scenes.
+        const duo = duoScene(emote?.item.id)
+        const sequence = duo ? soloSequence(chosen) : emote?.file ? emoteSequence(emoteClips, chosen) : null
+        const playing = sequence ? new CosmeticEmote(sequence, duo ? undefined : emote?.file?.geometry) : null
         if (playing && sequence) {
           engine.setAnimation(playing as unknown as SkinAnimation)
           engine.setCursorFollow(false)
           setEmoting(true)
         } else {
           setEmoting(false)
+        }
+        const partnerSequence = duo && playing ? soloSequence(emoteClips[duoClipName(duo, 'b')] ?? null) : null
+        if (duo && playing && sequence && partnerSequence && partnerReady) {
+          const partner = new CosmeticEmote(partnerSequence)
+          void textureSource(nickSkinUrl(DUO_PARTNER_NICK))
+            .then((src) =>
+              alive
+                ? engine.setPartner({
+                    skin: src,
+                    slim: false,
+                    animation: partner as unknown as SkinAnimation,
+                    stage: () => {
+                      const stage = duoStage(duo, sequence.timeAt(playing.progress))
+                      return { main: stage.a, partner: stage.b }
+                    },
+                  })
+                : undefined,
+            )
+            .then(() => {
+              if (alive) fitViewer()
+            })
+            .catch((e: unknown) => {
+              console.warn('[skins] duo partner', e)
+              if (alive) showToast('Второй участник эмоции не загрузился — видна только твоя половина', 'error')
+            })
         }
         for (const got of loaded) {
           if (!got.file) continue
@@ -1978,13 +2024,14 @@ export function Skins({ on }: { on: boolean }) {
       alive = false
       setFitLoading([])
       engine.clearCosmetics()
+      if (partnerReady) void engine.setPartner(null)
     }
   }, [dressed, variant, variantById, engineReady])
 
   useEffect(() => {
     const engine = viewerRef.current
     if (!engine) return
-    const c = capes.find((x) => x.id === cape)
+    const c = capeById(capes, cape)
     if (!c || capeCovered) {
       engine.clearCape()
       return
@@ -2167,15 +2214,20 @@ export function Skins({ on }: { on: boolean }) {
     if (m && stage) setTagAt(nametagSpot(m.ndc, stage.clientWidth, stage.clientHeight))
   }
 
+  const [uploadOpen, setUploadOpen] = useState(false)
+  const [uploadArms, setUploadArms] = useState<SkinArms>('classic')
+
   // Native dialog: HTML <input type=file> aborts WKWebView on macOS (runOpenPanel).
-  const pickSkin = () => {
+  const pickSkin = (model?: SkinArms) => {
     if (!hasTauri()) {
       showToast('Загрузка скина доступна в приложении', 'error')
       return
     }
     void pickTexture()
       .then(async (p) => {
-        if (p) await acceptSkin(p.name, p.data)
+        if (!p) return
+        setUploadOpen(false)
+        await acceptSkin(p.name, p.data, model)
       })
       .catch((e) => {
         trackFailure('skins', e, { step: 'skin_pick' })
@@ -2190,21 +2242,24 @@ export function Skins({ on }: { on: boolean }) {
 
   /// Общий приём импортированной текстуры: кладём в локальную библиотеку, в
   /// каталог аккаунта и сразу показываем в превью.
-  const acceptSkin = async (name: string, data: string) => {
+  const acceptSkin = async (name: string, data: string, model?: SkinArms) => {
     // Загрузка — тоже выбор: обновление каталога по ходу не должно вернуть на
     // фигуру прежний скин аккаунта.
     startSkinPick()
     const first = !mySkins.length && firstSkinEver()
-    let slim = false
-    try {
-      slim = await detectSlimFromUrl(data)
-    } catch {}
-    const next = await saveTexture('skins', name.replace(/\.png$/i, ''), data, slim)
+    let slim = model === 'slim'
+    if (!model) {
+      try {
+        slim = await detectSlimFromUrl(data)
+      } catch {}
+    }
+    let next = await saveTexture('skins', name.replace(/\.png$/i, ''), data, slim)
+    if (model && next[0]) next = await setTextureSlim('skins', next[0].file, slim, true)
     setMySkins(next)
     setSkinSrc(data)
     setActiveMy(next[0]?.file ?? null)
     setActiveWardrobe(null)
-    chooseVariant(next[0] ? 'm:' + next[0].file : 'n:' + nick, slim ? 'slim' : 'classic', false)
+    chooseVariant(next[0] ? 'm:' + next[0].file : 'n:' + nick, slim ? 'slim' : 'classic', !!model)
     if (hasMillidaAccount()) {
       try {
         await addToWardrobe({ kind: 'skin', name: name.replace(/\.png$/i, ''), pngBase64: await toPngBase64(data), slim })
@@ -2414,7 +2469,7 @@ export function Skins({ on }: { on: boolean }) {
   const [capeInfo, setCapeInfo] = useState<CapeOption | null>(null)
 
   const use3d = svReady && !fallback
-  const currentCape = capes.find((c) => c.id === cape)
+  const currentCape = capeById(capes, cape)
 
   const skinTitle = (): string => {
     const stored = activeWardrobe ? wardrobe.find((i) => i.id === activeWardrobe) : null
@@ -3029,6 +3084,29 @@ export function Skins({ on }: { on: boolean }) {
               </button>
             </div>
           )}
+          {uploadOpen ? (
+            <div className="ch-import">
+              <div className="segs">
+                {SKIN_ARMS.map(([key, label]) => (
+                  <button
+                    key={key}
+                    className={'seg' + (uploadArms === key ? ' on' : '')}
+                    data-track={'skin_upload_arms_' + key}
+                    onClick={() => setUploadArms(key)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <button className="btn sm ghost" onClick={() => setUploadOpen(false)}>
+                Отмена
+              </button>
+              <button className="btn sm primary" data-track="skin_upload_pick" onClick={() => pickSkin(uploadArms)}>
+                <Icon id="i-upload" />
+                Выбрать PNG
+              </button>
+            </div>
+          ) : null}
           <ItemGrid>
             {mySkins.map((sk, i) => (
               <ItemTile
@@ -3090,6 +3168,18 @@ export function Skins({ on }: { on: boolean }) {
                 }}
               />
             ))}
+            <ItemTile
+              action
+              art={
+                <span className="ch-plus-art brush">
+                  <Icon id="i-upload" />
+                </span>
+              }
+              name="Загрузить скин"
+              status="PNG"
+              track="skin_upload_tile"
+              onClick={() => setUploadOpen(true)}
+            />
             <ItemTile
               action
               art={

@@ -3,6 +3,9 @@
 /// Здесь — общие правила «это один и тот же плащ», чтобы список не двоился.
 
 export interface CapeIdentity {
+  id?: string
+  /// Ids of the cards folded into this one: a choice made on any of them still finds it.
+  ids?: string[]
   url: string
   name: string
   onAccount?: boolean
@@ -66,8 +69,16 @@ export function dedupeCapes<T extends CapeIdentity>(list: T[], content?: CapeCon
       wardrobeId: prev.wardrobeId || c.wardrobeId,
       msId: prev.msId || c.msId,
       accId: prev.accId || c.accId,
+      ids: [...(prev.ids ?? [prev.id]), c.id].filter((id): id is string => Boolean(id)),
     }
     for (const k of keys) if (!at.has(k)) at.set(k, seen)
   }
   return out
+}
+
+/// The card a choice points to. Wearing a catalogue cape puts its copy into the
+/// account wardrobe, and that copy, listed first, absorbs the catalogue card: the
+/// card moved up under a new id and the choice pointed at nothing.
+export function capeById<T extends CapeIdentity>(list: T[], id: string): T | undefined {
+  return list.find((c) => c.id === id) ?? list.find((c) => c.ids?.includes(id))
 }

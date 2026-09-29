@@ -5,6 +5,7 @@ import type { AutoUpdateInput, AutoUpdateVerdict } from './packAutoUpdate'
 const NOW = 1_800_000_000_000
 const update = { slug: 'oneblock-metalabs', from: '1.0.8', to: '1.0.9' }
 const idle: AutoUpdateInput = {
+  allowed: true,
   update,
   lastPlayedAt: NOW - 60 * 60 * 1000,
   now: NOW,
@@ -17,6 +18,11 @@ const idle: AutoUpdateInput = {
 // state of the launcher -> what the background does with the build.
 const cases: Array<[string, Partial<AutoUpdateInput>, AutoUpdateVerdict]> = [
   ['вышла новая версия сборки, в которую играют, — лаунчер ставит её сам, не дожидаясь «Играть»', {}, { kind: 'update', update }],
+  [
+    'игрок менял моды или сам выключил автообновление — обновление принесло бы папку mods автора целиком (29.09: пропадали добавленные моды)',
+    { allowed: false },
+    { kind: 'skip', reason: 'off' },
+  ],
   ['стоит опубликованная версия — качать нечего', { update: null }, { kind: 'skip', reason: 'current' }],
   [
     'сборку ни разу не запускали — гигабайты в фоне ради неё не качаем',

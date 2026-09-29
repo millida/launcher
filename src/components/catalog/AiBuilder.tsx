@@ -12,7 +12,9 @@ import {
   aiErrorText,
   aiQuota,
   auditFixItems,
+  auditProblems,
   buildPlan,
+  excludedLines,
   planRequestKey,
 } from '../../lib/aiBuilder'
 import type { AiMod, AiPlan, AiPreset, AiQuota } from '../../lib/aiBuilder'
@@ -53,16 +55,17 @@ interface Step {
   audit?: boolean
 }
 
-const NOTHING_INSTALLED: DepReport = { installed: [], failed: [] }
-
 /**
  * Modrinth pages often omit a library the jar itself requires (YACL, Kotlin,
  * Architectury), and the pack then stops on its first start. The installed jars
  * are the truth, so they are audited once more before the pack is called ready.
  */
 async function installAuditFixes(profile: string): Promise<DepReport> {
-  const items = auditFixItems(await auditDeps(profile))
-  return items.length ? installDepItems(profile, 'mod', items) : NOTHING_INSTALLED
+  const first = await auditDeps(profile)
+  const items = auditFixItems(first)
+  if (!items.length) return { installed: [], failed: auditProblems(first) }
+  const fixed = await installDepItems(profile, 'mod', items)
+  return { installed: fixed.installed, failed: [...fixed.failed, ...auditProblems(await auditDeps(profile))] }
 }
 
 const toItems = (list: AiMod[]): PlanItem[] => list.map((m) => ({ source: 'modrinth', project_id: m.projectId }))
@@ -97,7 +100,7 @@ async function createAiBuild(
   title: string,
   chosen: Chosen,
   onStep: (key: string) => void,
-  onDone: (name: string) => void,
+  onDone: (name: string, failed: string[]) => void,
   onFail: () => void,
 ): Promise<boolean> {
   const name = (title.trim() || plan.title).slice(0, 24)
@@ -105,7 +108,7 @@ async function createAiBuild(
   if (!steps.length) return false
   if (!hasTauri()) {
     if (import.meta.env.DEV && DEMO_USER) {
-      onStep(demoInstall(name, steps.reduce((n, s) => n + s.items.length, 0), onDone))
+      onStep(demoInstall(name, steps.reduce((n, s) => n + s.items.length, 0), (built) => onDone(built, [])))
       return true
     }
     showToast('Сборки создаются в приложении')
@@ -135,7 +138,7 @@ async function createAiBuild(
     void useMods.getState().refreshInstalled()
     void useMods.getState().load()
     if (failed.length) showToast('Не встало: ' + failed.slice(0, 3).join('; '), 'error')
-    onDone(created)
+    onDone(created, failed)
   }
   const runStep = (i: number, failed: string[]): boolean => {
     const step = steps[i]
@@ -327,10 +330,10 @@ export function AiBuilder({ preset }: { preset?: AiPreset | null } = {}) {
   const create = async () => {
     if (!plan || !chosenCount) return
     setPhase('install')
-    const started = await createAiBuild(plan, title, chosen, setKey, (name) => {
+    const started = await createAiBuild(plan, title, chosen, setKey, (name, failed) => {
       setBuilt(name)
       setPhase('done')
-      showToast('Сборка готова', 'ok', 'install', { label: 'Играть', run: () => play(name) })
+      if (!failed.length) showToast('Сборка готова', 'ok', 'install', { label: 'Играть', run: () => play(name) })
     }, () => setPhase('plan'))
     if (!started) setPhase('plan')
   }
@@ -434,6 +437,7 @@ export function AiBuilder({ preset }: { preset?: AiPreset | null } = {}) {
             </span>
           </div>
           {plan.notes ? <p className="aib-note">{plan.notes}</p> : null}
+          {plan.excluded?.length ? <p className="aib-note">Не вошли: {excludedLines(plan.excluded).join('; ')}</p> : null}
           <ul className={'aib-mods' + (phase !== 'plan' ? ' frozen' : '')}>
             {plan.mods.map((m) => (
               <ModLine

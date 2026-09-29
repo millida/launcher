@@ -7,12 +7,14 @@ import { redactSecrets } from './errorReport'
 // пишет пути так), «C:\\Users\\…» из JSON, «\\?\C:\Users\…», «Documents and
 // Settings», короткое имя «VASYA~1», «/Users/…», «/home/…», «/var/home/…»,
 // «~вася/» (домашняя папка другого пользователя).
+// No lookbehind: WebKit before Safari 16.4 (every macOS Catalina Mac) rejects
+// the whole module at parse time and the launcher never opens.
 const USER_PATH =
-  /[A-Z]:(?:\\+|\/+)(?:Users|Documents and Settings)(?:\\+|\/+)[^\\/\r\n"'<>|:*?]+|(?:\/var)?\/(?:Users|home)\/[^/\s"'<>]+|(?<![\w/])~[^\s/\\~"'<>]+(?=[\\/])/gi
+  /[A-Z]:(?:\\+|\/+)(?:Users|Documents and Settings)(?:\\+|\/+)[^\\/\r\n"'<>|:*?]+|(?:\/var)?\/(?:Users|home)\/[^/\s"'<>]+|(^|[^\w/])~[^\s/\\~"'<>]+(?=[\\/])/gi
 
 /// Код ошибки без домашней папки: «C:\Users\Вася\…» → «<user>\…».
 export function scrubPaths(s: string): string {
-  return s.replace(USER_PATH, '<user>')
+  return s.replace(USER_PATH, (_match, lead: string | undefined) => (lead ?? '') + '<user>')
 }
 
 /// Любой текст, уходящий в событие телеметрии: без домашней папки и без

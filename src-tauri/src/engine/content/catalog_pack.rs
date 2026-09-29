@@ -339,6 +339,7 @@ async fn install_catalog_pack_job(
     place_unpacked(&unpacked, &pdir)?;
     let _ = std::fs::remove_file(pdir.join(MANIFEST_NAME));
     record_shipped(&pdir)?;
+    record_shipped_mods(&pdir)?;
     trust_pack_launch(&pname, slug);
     restore_player_files(&pdir, slug);
 
@@ -515,6 +516,7 @@ async fn prepare_update(
         place_unpacked(&unpacked, &to)?;
         let _ = std::fs::remove_file(to.join(MANIFEST_NAME));
         record_shipped(&to)?;
+        record_shipped_mods(&to)?;
         carry_player_files(&from, &to, &slug)?;
         write_json_atomic(&to.join("millida-settings.json"), &settings)
     })

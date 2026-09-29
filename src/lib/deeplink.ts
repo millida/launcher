@@ -20,6 +20,8 @@ import { rememberServerName } from '../state/playStats'
 import { quickJoin } from './joinServer'
 import { realLaunch } from './launch'
 import { restoreLauncher } from './window'
+import { rememberInviteCode } from './referrals'
+import { pickFriendsTab } from '../components/friends/friendsView'
 
 function handle(raw: string) {
   let url: URL
@@ -130,6 +132,12 @@ function handle(raw: string) {
   }
   if (action === 'friends') {
     setScreen('friends')
+    return
+  }
+  if (action === 'invite') {
+    rememberInviteCode(rest || q.get('code') || '')
+    setScreen('friends')
+    pickFriendsTab('invite')
     return
   }
   // The website hands off to the launcher for anything the browser cannot do:

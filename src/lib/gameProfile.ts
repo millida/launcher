@@ -210,7 +210,7 @@ export interface CosmeticItem {
   /// Цвета вещи. У половины каталога их несколько, и первый не всегда тот,
   /// который человек считает основным: у ангельских крыльев это чёрные.
   /// v3.1: служба дописывает к расцветке её код, имя, ранг и цену.
-  variants?: { name: string; color?: string; texture?: string; code?: string; title?: string; rarity?: string; price?: number }[]
+  variants?: { name: string; color?: string; texture?: string; preview?: string; code?: string; title?: string; rarity?: string; price?: number }[]
   /// Ранг вещи (у вещи-расцветки — ранг расцветки).
   rarity?: string
   /// v3.1: код исходной вещи у вещи-расцветки («ANGEL_WINGS» у «ANGEL_WINGS~red»).
@@ -251,8 +251,8 @@ export function expandCatalog(items: CosmeticItem[]): CosmeticItem[] {
         rarity: v.rarity || item.rarity,
         priceRubies: v.price === undefined ? item.priceRubies : v.price > 0 ? v.price : undefined,
         baseId: item.id,
-        // Превью на CDN одно — базовой расцветки; карточка перекрашивает его в свою (variantArt.ts).
-        ...(i > 0 && v.color ? { tint: v.color, tintFrom: list[0]!.color } : {}),
+        // Hue tinting cannot turn a black or multi-coloured base into another palette, so an own render always wins.
+        ...(v.preview ? { preview: v.preview } : i > 0 && v.color ? { tint: v.color, tintFrom: list[0]!.color } : {}),
       })
     })
   }

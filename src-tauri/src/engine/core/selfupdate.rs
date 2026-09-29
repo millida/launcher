@@ -67,6 +67,18 @@ fn platform_key() -> Result<&'static str, String> {
     }
 }
 
+/// Same lookup order as the updater plugin: a deb or rpm install must get its
+/// own package, since the AppImage behind the bare key cannot replace it.
+fn platform_keys() -> Result<Vec<String>, String> {
+    let base = platform_key()?;
+    let package = match tauri::utils::platform::bundle_type() {
+        Some(tauri::utils::config::BundleType::Deb) => Some("deb"),
+        Some(tauri::utils::config::BundleType::Rpm) => Some("rpm"),
+        _ => None,
+    };
+    Ok(package.map(|p| format!("{}-{}", base, p)).into_iter().chain([base.to_string()]).collect())
+}
+
 /// Endpoints come from the updater plugin config; the constant above is only a
 /// safety net for an empty config.
 /// Порядок опроса манифестов. Вынесен из чтения конфига, потому что именно
@@ -155,12 +167,7 @@ pub async fn fallback_latest(app: &AppHandle) -> Result<Option<FallbackUpdate>, 
 }
 
 async fn fetch_manifest(app: &AppHandle, require_newer: bool) -> Result<Option<FallbackUpdate>, String> {
-    // Flatpak updates itself and /app is read-only, so there is nowhere to
-    // install a downloaded artifact.
-    if is_flatpak() {
-        return Ok(None);
-    }
-    let key = platform_key()?;
+    let keys = platform_keys()?;
     let current = app.package_info().version.to_string();
     let mut last = "нет ни одного источника обновления".to_string();
     // Beta sits in front of its own stable sibling, and only that pair is
@@ -181,13 +188,16 @@ async fn fetch_manifest(app: &AppHandle, require_newer: bool) -> Result<Option<F
             last = format!("{}: в манифесте нет версии", url);
             continue;
         }
-        let entry = &doc["platforms"][key];
-        let link = entry["url"].as_str().unwrap_or("").trim().to_string();
-        let signature = entry["signature"].as_str().unwrap_or("").trim().to_string();
-        if link.is_empty() || signature.is_empty() {
-            last = format!("{}: в манифесте нет сборки для {}", url, key);
+        let entry = |key: &str| {
+            let e = &doc["platforms"][key];
+            let link = e["url"].as_str().unwrap_or("").trim().to_string();
+            let signature = e["signature"].as_str().unwrap_or("").trim().to_string();
+            (!link.is_empty() && !signature.is_empty()).then_some((link, signature))
+        };
+        let Some((link, signature)) = keys.iter().find_map(|k| entry(k.as_str())) else {
+            last = format!("{}: в манифесте нет сборки для {}", url, keys.join(" / "));
             continue;
-        }
+        };
         let found = FallbackUpdate {
             file: file_from_url(&link)?,
             version,
@@ -252,9 +262,22 @@ fn sig_path(file: &Path) -> PathBuf {
     file.with_file_name(name)
 }
 
+/// Flatpak mounts /app read-only and updates through its own repository: the
+/// manifest is read only to tell the player a new version exists.
+fn refuse_inside_flatpak() -> Result<(), String> {
+    if is_flatpak() {
+        return Err(FLATPAK_UPDATE_HINT.to_string());
+    }
+    Ok(())
+}
+
+const FLATPAK_UPDATE_HINT: &str =
+    "лаунчер из Flatpak обновляется через магазин приложений или командой flatpak update net.millida.launcher";
+
 /// Downloads ahead of time and stores the signature next to the artifact so the
 /// launch step can re-verify it without network access.
 pub async fn fallback_stage(app: &AppHandle, upd: &FallbackUpdate) -> Result<PathBuf, String> {
+    refuse_inside_flatpak()?;
     let dir = updates_dir();
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let dest = dir.join(safe_file_name(&upd.file)?);
@@ -274,6 +297,7 @@ pub async fn fallback_stage(app: &AppHandle, upd: &FallbackUpdate) -> Result<Pat
 /// Only accepts paths inside the updates directory and re-verifies the signature:
 /// the file could have been swapped between download and launch.
 pub fn fallback_run(app: &AppHandle, path: &str) -> Result<FallbackInstall, String> {
+    refuse_inside_flatpak()?;
     let file = std::path::Path::new(path)
         .canonicalize()
         .map_err(|e| format!("обновление не найдено: {}", e))?;
@@ -334,6 +358,10 @@ pub fn run_installer(file: &Path) -> Result<bool, String> {
     }
     #[cfg(all(unix, not(target_os = "macos")))]
     {
+        if is_system_package(file) {
+            open_path(&file.to_string_lossy());
+            return Ok(false);
+        }
         match install_appimage(file) {
             Ok(true) => Ok(true),
             Ok(false) => {
@@ -462,6 +490,14 @@ pub fn sweep_retired_bundles() {
     }
 }
 
+/// A deb or rpm goes to the system package installer: replacing files under
+/// /usr needs root, which only the package manager is allowed to ask for.
+#[cfg(any(all(unix, not(target_os = "macos")), test))]
+fn is_system_package(file: &Path) -> bool {
+    let ext = file.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+    ext == "deb" || ext == "rpm"
+}
+
 /// Writing into a running AppImage fails with ETXTBSY, but renaming over it is
 /// allowed, so the new file is staged alongside and renamed into place.
 /// `false` = nothing to install (deb/rpm, or the artifact is not an AppImage).
@@ -581,6 +617,20 @@ mod tests {
     fn compares_versions_beyond_semver() {
         assert!(is_newer("1.0.49.2", "1.0.49"));
         assert!(!is_newer("1.0", "1.0.1"));
+    }
+
+    #[test]
+    fn system_packages_go_to_the_package_installer() {
+        let cases: [(&str, bool, &str); 5] = [
+            ("Millida-Launcher_2.0.150_amd64.deb", true, "deb needs root, only the package manager may ask for it"),
+            ("Millida-Launcher-2.0.150-1.x86_64.RPM", true, "extension case must not decide the install path"),
+            ("Millida-Launcher_2.0.150_amd64.AppImage", false, "an AppImage is replaced in place"),
+            ("Millida-Launcher.deb.AppImage", false, "only the final extension names the format"),
+            ("Millida-Launcher", false, "no extension is not a package"),
+        ];
+        for (name, want, why) in cases {
+            assert_eq!(is_system_package(Path::new(name)), want, "{}: {}", name, why);
+        }
     }
 
     #[test]

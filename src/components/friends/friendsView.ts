@@ -9,10 +9,10 @@ import type { Room } from '../../state/rooms'
  * чата, как в Telegram»). Запомненная раньше вкладка «Чаты» читается как
  * «Друзья».
  */
-export type FriendsTab = 'friends' | 'requests'
+export type FriendsTab = 'friends' | 'requests' | 'invite'
 
 const TAB_KEY = 'm-friends-tab'
-const TABS: FriendsTab[] = ['friends', 'requests']
+const TABS: FriendsTab[] = ['friends', 'requests', 'invite']
 
 export function loadTab(): FriendsTab {
   try {

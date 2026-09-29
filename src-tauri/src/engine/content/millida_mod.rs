@@ -5,6 +5,10 @@ use std::path::{Path, PathBuf};
 const MANIFEST_URL: &str = "https://cdn.millida.net/mod/variants.json";
 const FILE_PREFIX: &str = "millida-mod-";
 
+pub(crate) fn is_millida_mod_file(name: &str) -> bool {
+    name.starts_with(FILE_PREFIX) && name.ends_with(".jar")
+}
+
 #[derive(serde::Serialize, Default, Clone)]
 pub struct MillidaModState {
     /// Installed jar in this build, empty when the mod is not there.

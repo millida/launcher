@@ -34,23 +34,11 @@ export function totalBytes(list: Pick<MoveCandidate, 'bytes'>[]): number {
 }
 
 /** Вопрос перед переносом: что уедет и что станет с исходником. */
-export function confirmText(list: MoveCandidate[], removeSource: boolean): string {
+export function confirmText(list: MoveCandidate[]): string {
   const n = list.length + ' ' + plural(list.length, 'сборку', 'сборки', 'сборок')
   const where = launchersText(list)
   const head = 'Перенесём ' + n + ' (' + sizeText(totalBytes(list)) + ') из ' + where + ' в Millida: миры, моды, настройки, скриншоты и серверы.'
-  if (!removeSource) return head + ' В ' + where + ' всё останется как есть.'
-  return (
-    head +
-    ' Сначала сделаем копию и сверим её с оригиналом, и только потом уберём ' +
-    plural(list.length, 'сборку', 'сборки', 'сборки') +
-    ' из ' +
-    where +
-    '. Сам ' +
-    where +
-    ' не удаляется. Закрой ' +
-    where +
-    ' перед переносом.'
-  )
+  return head + ' В ' + where + ' всё останется как есть.'
 }
 
 export type RowResult = { kind: 'ok'; outcome: MoveOutcome } | { kind: 'error'; text: string }
@@ -58,8 +46,6 @@ export type RowResult = { kind: 'ok'; outcome: MoveOutcome } | { kind: 'error'; 
 /** Короткая отметка строки после переноса. */
 export function rowVerdict(r: RowResult): string {
   if (r.kind === 'error') return 'Не перенесли'
-  if (r.outcome.note) return 'В Millida, старая папка осталась'
-  if (r.outcome.source_removed) return 'Перенесли'
   return 'Скопировали'
 }
 

@@ -412,6 +412,416 @@ fn hide_after(text: &str, key: &str) -> String {
     out
 }
 
+/// A mod as a loader names it: `name` is what it quoted (a title on Fabric and
+/// Quilt, the id on Forge and NeoForge), `id` the mod id.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct ModRef {
+    pub name: String,
+    pub id: String,
+}
+
+impl ModRef {
+    fn same(name: &str) -> Self {
+        Self { name: name.to_string(), id: name.to_lowercase() }
+    }
+}
+
+/// What a loader said stopped it, one line at a time. `range` is always in the
+/// predicate syntax of `version_satisfies` (`>=1.2 <2`, `*`), whatever notation
+/// the loader printed.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum LoaderFinding {
+    /// `by` needs `dep` in `range`; `present` is the version found, `None`
+    /// when it is not installed at all.
+    Requires { by: ModRef, dep: ModRef, range: String, present: Option<String> },
+    /// `by` refuses to run next to `other`.
+    Incompatible { by: ModRef, other: ModRef },
+    /// The mixins of `by` did not apply.
+    MixinFailed { by: ModRef },
+    /// A jar in mods/ built for another loader.
+    WrongLoader { file: String, loader: String },
+    /// One mod id in several files.
+    Duplicate { id: String, files: Vec<String> },
+}
+
+/// Requirements that are about the game or the loader rather than a mod: the
+/// jar is built for another version, and no download of a mod satisfies them.
+pub(crate) fn is_platform_id(id: &str) -> bool {
+    matches!(
+        id,
+        "minecraft" | "java" | "fabricloader" | "fabric-loader" | "quilt_loader" | "quilt-loader" | "forge" | "neoforge" | "javafml" | "fml"
+    )
+}
+
+/// Every `'…'` in the text with what follows it: `(id)` right after the quote
+/// makes it a title with an id, as Fabric and Quilt print mods.
+fn quoted_ref(s: &str) -> Option<(ModRef, &str)> {
+    let start = s.find('\'')? + 1;
+    let end = s[start..].find('\'')? + start;
+    let name = s[start..end].trim();
+    if name.is_empty() || name.len() > 80 {
+        return None;
+    }
+    let rest = &s[end + 1..];
+    let trimmed = rest.trim_start();
+    if let Some(inner) = trimmed.strip_prefix('(') {
+        if let Some(close) = inner.find(')') {
+            let id = inner[..close].trim();
+            if !id.is_empty() && id.len() <= 64 && !id.contains(' ') {
+                let consumed = rest.len() - trimmed.len() + close + 2;
+                return Some((ModRef { name: name.to_string(), id: id.to_lowercase() }, &rest[consumed..]));
+            }
+        }
+    }
+    Some((ModRef::same(name), rest))
+}
+
+/// The mod after « of »: `mod 'Sodium' (sodium)`, `'Sodium' (sodium)` or a bare
+/// id as Fabric prints a mod that is not installed (`fabric-api, which…`).
+fn target_ref(s: &str) -> Option<(ModRef, &str)> {
+    let t = s.trim_start();
+    let t = t.strip_prefix("mod ").unwrap_or(t);
+    if t.starts_with('\'') {
+        return quoted_ref(t);
+    }
+    let end = t.find([',', '!', ' ', ';']).unwrap_or(t.len());
+    let id = t[..end].trim();
+    let ok = !id.is_empty() && id.len() <= 64 && id.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'));
+    ok.then(|| (ModRef::same(id), &t[end..]))
+}
+
+fn bump(v: &str) -> String {
+    v.parse::<u64>().map(|n| (n + 1).to_string()).unwrap_or_else(|_| v.to_string())
+}
+
+/// A Maven range as Forge and NeoForge print it (`[5.8.1,)`, `[1.20,1.21)`,
+/// `[1.0]`, a bare `1.0`) in the predicate syntax. A bare version is Maven's
+/// «recommended» — any version passes it, the named one is only preferred.
+pub(crate) fn maven_range(spec: &str) -> String {
+    let s = spec.trim();
+    let first = match s.find("],").or_else(|| s.find("),")) {
+        Some(i) => &s[..=i],
+        None => s,
+    };
+    let (open, close) = (first.chars().next(), first.chars().last());
+    if !matches!(open, Some('[') | Some('(')) || !matches!(close, Some(']') | Some(')')) {
+        return if first.is_empty() { "*".into() } else { format!(">={}", first) };
+    }
+    let inner = &first[1..first.len() - 1];
+    let Some((lo, hi)) = inner.split_once(',') else {
+        return format!("={}", inner.trim());
+    };
+    let mut parts: Vec<String> = vec![];
+    if !lo.trim().is_empty() {
+        parts.push(format!("{}{}", if open == Some('[') { ">=" } else { ">" }, lo.trim()));
+    }
+    if !hi.trim().is_empty() {
+        parts.push(format!("{}{}", if close == Some(']') { "<=" } else { "<" }, hi.trim()));
+    }
+    if parts.is_empty() { "*".into() } else { parts.join(" ") }
+}
+
+/// The version phrase of a Fabric or Quilt requirement in predicate syntax.
+pub(crate) fn phrase_range(phrase: &str) -> String {
+    let p = phrase.trim().trim_end_matches(',');
+    let tok = |s: &str| s.split_whitespace().next().unwrap_or("").to_string();
+    if p.is_empty() || p == "any version" {
+        return "*".into();
+    }
+    if let Some(rest) = p.strip_prefix("any version between ") {
+        let (a, b) = rest.split_once(" and ").unwrap_or((rest, ""));
+        let lo = if a.contains("(exclusive)") { ">" } else { ">=" };
+        let hi = if b.contains("(exclusive)") { "<" } else { "<=" };
+        return format!("{}{} {}{}", lo, tok(a), hi, tok(b));
+    }
+    for (prefix, op) in [
+        ("any version after ", ">"),
+        ("any version above ", ">"),
+        ("any version before ", "<"),
+        ("any version below ", "<"),
+        ("at least version ", ">="),
+        ("a version in the range ", ""),
+    ] {
+        if let Some(rest) = p.strip_prefix(prefix) {
+            return if op.is_empty() { maven_range(rest) } else { format!("{}{}", op, tok(rest)) };
+        }
+    }
+    if let Some(rest) = p.strip_prefix("any ").and_then(|r| r.strip_suffix(" version")) {
+        let nums: Vec<&str> = rest.trim_end_matches(".x").split('.').collect();
+        return match nums.as_slice() {
+            [major] => format!(">={} <{}", major, bump(major)),
+            [major, minor] => format!(">={}.{} <{}.{}", major, minor, major, bump(minor)),
+            _ => "*".into(),
+        };
+    }
+    if let Some(rest) = p.strip_prefix("version ") {
+        let v = tok(rest);
+        if rest.contains("or later") || rest.contains("or any newer") {
+            return format!(">={}", v);
+        }
+        if rest.contains("or earlier") || rest.contains("or any earlier") {
+            return format!("<={}", v);
+        }
+        if v.starts_with(['>', '<', '=', '~', '^']) {
+            return v;
+        }
+        return format!("={}", v);
+    }
+    "*".into()
+}
+
+/// Fabric/Quilt: «Mod 'Iris' (iris) 1.7.0 requires version 0.5.8 or later of
+/// mod 'Sodium' (sodium), but only the wrong version is present: 0.5.3!».
+fn fabric_requirement(line: &str) -> Option<LoaderFinding> {
+    let low = line.to_lowercase();
+    if is_recommendation(&low) {
+        return None;
+    }
+    let (verb, is_break) = [(" is incompatible with ", true), (" breaks with ", true), (" requires ", false)]
+        .into_iter()
+        .find(|(v, _)| line.contains(v))?;
+    let at = line.find(verb)?;
+    let (by, _) = quoted_ref(&line[..at])?;
+    let rest = &line[at + verb.len()..];
+    let of = rest.find(" of ");
+    let (dep, tail) = target_ref(of.map(|i| &rest[i + 4..]).unwrap_or(rest))?;
+    if is_break {
+        return Some(LoaderFinding::Incompatible { by, other: dep });
+    }
+    let of = of?;
+    let phrase = rest[..of].trim_start_matches("transitively ").trim();
+    let present = tail.find("present: ").map(|i| {
+        tail[i + "present: ".len()..].trim().trim_end_matches('!').split(',').next().unwrap_or("").trim().to_string()
+    });
+    Some(LoaderFinding::Requires { by, dep, range: phrase_range(phrase), present })
+}
+
+/// Forge 1.13+ and NeoForge: «Mod ID: 'craftedcore', Requested by: 'walkers',
+/// Expected range: '[5.8.1,)', Actual version: '[MISSING]'».
+fn forge_requirement(line: &str) -> Option<LoaderFinding> {
+    let field = |key: &str| -> Option<String> {
+        let rest = &line[line.find(key)? + key.len()..];
+        let start = rest.find('\'')? + 1;
+        let end = rest[start..].find('\'')? + start;
+        Some(rest[start..end].trim().to_string())
+    };
+    let dep = field("Mod ID:")?;
+    let by = field("Requested by:")?;
+    let range = field("Expected range:").map(|r| maven_range(&r)).unwrap_or_else(|| "*".into());
+    let present = field("Actual version:").filter(|v| !v.eq_ignore_ascii_case("[missing]") && !v.eq_ignore_ascii_case("null"));
+    Some(LoaderFinding::Requires { by: ModRef::same(&by), dep: ModRef::same(&dep), range, present })
+}
+
+/// Forge 1.12: «Mod jeresources (Just Enough Resources) requires [jei@[4.15,)]».
+fn legacy_forge_requirements(line: &str, out: &mut Vec<LoaderFinding>) {
+    let Some(at) = line.find(" requires ") else { return };
+    let Some(open) = line[at..].find('[').map(|i| at + i) else { return };
+    let head = &line[..at];
+    let Some(mod_at) = head.rfind("mod ").max(head.rfind("Mod ")) else { return };
+    let by = line[mod_at + 4..at].split_whitespace().next().unwrap_or("");
+    if by.is_empty() || by.contains('\'') {
+        return;
+    }
+    let Some(close) = line.rfind(']') else { return };
+    if close <= open {
+        return;
+    }
+    let list = &line[open + 1..close];
+    let mut depth = 0i32;
+    let mut item = String::new();
+    let mut items: Vec<String> = vec![];
+    for c in list.chars() {
+        match c {
+            '[' | '(' => depth += 1,
+            ']' | ')' => depth -= 1,
+            ',' if depth == 0 => {
+                items.push(std::mem::take(&mut item));
+                continue;
+            }
+            _ => {}
+        }
+        item.push(c);
+    }
+    items.push(item);
+    for it in items {
+        let it = it.trim();
+        let Some((id, range)) = it.split_once('@') else { continue };
+        let id = id.trim();
+        if id.is_empty() || !id.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.')) {
+            continue;
+        }
+        out.push(LoaderFinding::Requires { by: ModRef::same(by), dep: ModRef::same(id), range: maven_range(range), present: None });
+    }
+}
+
+/// NeoForge: «Mod 'iris' is incompatible with 'embeddium', versions: '[0,)'».
+fn forge_incompatibility(line: &str) -> Option<LoaderFinding> {
+    let t = line.trim_start().trim_start_matches(['-', '\t', ' ']);
+    let rest = t.strip_prefix("Mod '")?;
+    let (by, after) = rest.split_once('\'')?;
+    let after = after.trim_start();
+    let other = after.strip_prefix("is incompatible with '")?.split('\'').next()?;
+    (!by.is_empty() && !other.is_empty()).then(|| LoaderFinding::Incompatible { by: ModRef::same(by), other: ModRef::same(other) })
+}
+
+/// «Mixin apply for mod sodium failed sodium.mixins.json:…», «Mixin apply
+/// failed iris.mixins.json:…», NeoForge «Mixin application of X from Name (id)
+/// has failed» and the «from mod id» Mixin adds to injection errors.
+fn mixin_owner_of(line: &str) -> Option<ModRef> {
+    let low = line.to_lowercase();
+    if !MIXIN_FAILURES.iter().any(|m| low.contains(m)) && !low.contains("mixin application of") && !low.contains("mixin apply for mod ") {
+        return None;
+    }
+    let word_after = |key: &str| -> Option<String> {
+        let rest = &low[low.find(key)? + key.len()..];
+        let id: String = rest.chars().take_while(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.')).collect();
+        (!id.is_empty()).then_some(id)
+    };
+    if let Some(id) = word_after("mixin apply for mod ").or_else(|| word_after(" from mod ")) {
+        return Some(ModRef::same(&id));
+    }
+    if low.contains("mixin application of") {
+        if let Some(open) = low.rfind(" (") {
+            let id: String = low[open + 2..].chars().take_while(|c| *c != ')').collect();
+            if !id.is_empty() && !id.contains(' ') {
+                return Some(ModRef::same(&id));
+            }
+        }
+    }
+    let cfg_at = low.find(".mixins.json").or_else(|| low.find(".mixin.json"))?;
+    let head = &low[..cfg_at];
+    let start = head.rfind(|c: char| !(c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'))).map(|i| i + 1).unwrap_or(0);
+    let cfg = &head[start..];
+    let id = cfg.split(['.', '-']).next().unwrap_or("");
+    (!id.is_empty()).then(|| ModRef::same(id))
+}
+
+/// «File mods/x.jar is a Fabric mod and cannot be loaded» (NeoForge, Forge).
+fn wrong_loader_of(line: &str) -> Option<LoaderFinding> {
+    let at = line.find("File ")?;
+    let rest = &line[at + 5..];
+    let (marker, loader) = [
+        (" is a Fabric mod and cannot be loaded", "fabric"),
+        (" is a Quilt mod and cannot be loaded", "quilt"),
+        (" is for Minecraft Forge", "forge"),
+        (" is for an old version of Minecraft Forge", "forge"),
+        (" is a LiteLoader mod", "liteloader"),
+    ]
+    .into_iter()
+    .find(|(m, _)| rest.contains(m))?;
+    let path = rest[..rest.find(marker)?].trim().trim_matches(['\'', '"']);
+    let file = path.rsplit(['/', '\\']).next().unwrap_or(path).to_string();
+    (!file.is_empty()).then(|| LoaderFinding::WrongLoader { file, loader: loader.into() })
+}
+
+/// Forge «Mod ID: 'jei' from mod files: a.jar, b.jar», NeoForge «Mod jei is
+/// present in multiple files: a.jar, b.jar», Quilt «Duplicate mod: jei».
+fn duplicate_of(line: &str) -> Option<LoaderFinding> {
+    let files = |list: &str| -> Vec<String> {
+        list.split(',')
+            .map(|f| f.trim().trim_matches(['\'', '"', '.']).rsplit(['/', '\\']).next().unwrap_or("").to_string())
+            .filter(|f| !f.is_empty())
+            .collect()
+    };
+    if let Some(i) = line.find(" from mod files: ") {
+        let id = line[..i].rsplit('\'').nth(1).unwrap_or("").to_lowercase();
+        return (!id.is_empty()).then(|| LoaderFinding::Duplicate { id, files: files(&line[i + 17..]) });
+    }
+    if let Some(i) = line.find(" is present in multiple files: ") {
+        let id = line[..i].rsplit(' ').next().unwrap_or("").to_lowercase();
+        return (!id.is_empty()).then(|| LoaderFinding::Duplicate { id, files: files(&line[i + 31..]) });
+    }
+    let low = line.to_lowercase();
+    for key in ["duplicate mod: ", "found a duplicate mod: "] {
+        if let Some(i) = low.find(key) {
+            let id: String = low[i + key.len()..].chars().take_while(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.')).collect();
+            return (!id.is_empty()).then(|| LoaderFinding::Duplicate { id, files: vec![] });
+        }
+    }
+    None
+}
+
+fn push(f: LoaderFinding, out: &mut Vec<LoaderFinding>) {
+    if !out.contains(&f) {
+        out.push(f);
+    }
+}
+
+/// NeoForge colours its messages with Minecraft formatting codes («§e»).
+fn strip_formatting(line: &str) -> String {
+    let mut out = String::with_capacity(line.len());
+    let mut chars = line.chars();
+    while let Some(c) = chars.next() {
+        if c == '§' {
+            chars.next();
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// Every refusal a loader printed, in the order it printed them, without
+/// repeats. A line under WARN/INFO is something the game lived through, so it
+/// never becomes a finding — except the Fabric/Forge requirement listings,
+/// which follow their ERROR header without a level of their own.
+pub(crate) fn loader_findings(text: &str) -> Vec<LoaderFinding> {
+    let mut out: Vec<LoaderFinding> = vec![];
+    let mut optional_block = false;
+    for (raw, benign) in with_levels(text) {
+        let clean = strip_formatting(raw);
+        let line = clean.as_str();
+        if line.contains("optional dependencies:") {
+            optional_block = true;
+        } else if line.contains("mandatory dependencies:") || line.trim_start().starts_with('[') {
+            optional_block = false;
+        }
+        if line.contains("Requested by:") {
+            if optional_block {
+                continue;
+            }
+            if let Some(f) = forge_requirement(line) {
+                push(f, &mut out);
+            }
+            continue;
+        }
+        let low = line.to_lowercase();
+        if benign && line.trim_start().starts_with('[') {
+            continue;
+        }
+        if let Some(f) = duplicate_of(line) {
+            push(f, &mut out);
+            continue;
+        }
+        if let Some(f) = wrong_loader_of(line) {
+            push(f, &mut out);
+            continue;
+        }
+        if let Some(f) = forge_incompatibility(line) {
+            push(f, &mut out);
+            continue;
+        }
+        if low.contains(" requires ") && low.contains('@') && low.contains('[') && !low.contains("mod '") {
+            let mut legacy = vec![];
+            legacy_forge_requirements(line, &mut legacy);
+            for f in legacy {
+                push(f, &mut out);
+            }
+            continue;
+        }
+        if (low.contains(" requires ") || low.contains(" is incompatible with ") || low.contains(" breaks with ")) && low.contains('\'') {
+            if let Some(f) = fabric_requirement(line) {
+                push(f, &mut out);
+                continue;
+            }
+        }
+        if let Some(by) = mixin_owner_of(line) {
+            push(LoaderFinding::MixinFailed { by }, &mut out);
+        }
+    }
+    out
+}
+
 /// Minecraft catches an exception that escapes its game loop, logs it and lets
 /// `main` return, so the process can exit with code 0 after a crash on startup.
 /// These lines are printed only on that path, never on a normal quit.
@@ -567,6 +977,163 @@ mod tests {
             let got = scrub_cause(&crash_cause(text), None, "");
             assert!(got.contains(want), "{why}: ждали {want:?} внутри {got:?}");
             assert!(got.chars().count() <= CAUSE_MAX);
+        }
+    }
+
+    fn r(name: &str, id: &str) -> ModRef {
+        ModRef { name: name.into(), id: id.into() }
+    }
+
+    fn req(by: ModRef, dep: ModRef, range: &str, present: Option<&str>) -> LoaderFinding {
+        LoaderFinding::Requires { by, dep, range: range.into(), present: present.map(String::from) }
+    }
+
+    /// log fragment -> findings. The strings are the loaders' own templates
+    /// (Fabric Messages.properties, Quilt quilt_loader.properties, Forge and
+    /// NeoForge ModSorter), each as it lands in latest.log. A line the parser
+    /// misses leaves «Починить сборку» with nothing to do but re-hash files.
+    #[test]
+    fn loader_refusals_become_findings() {
+        let cases: Vec<(&str, &str, Vec<LoaderFinding>)> = vec![
+            (
+                "Fabric: нет зависимости",
+                "[main/ERROR]: Incompatible mods found!\nnet.fabricmc.loader.impl.FormattedException: Some of your mods are incompatible with the game or each other!\nMore details:\n\t - Mod 'Mod Menu' (modmenu) 7.2.2 requires any version of fabric-api, which is missing!",
+                vec![req(r("Mod Menu", "modmenu"), r("fabric-api", "fabric-api"), "*", None)],
+            ),
+            (
+                "Fabric: зависимость не той версии",
+                "\t - Mod 'Iris' (iris) 1.7.0+mc1.20.1 requires version 0.5.8 or later of mod 'Sodium' (sodium), but only the wrong version is present: 0.5.3!",
+                vec![req(r("Iris", "iris"), r("Sodium", "sodium"), ">=0.5.8", Some("0.5.3"))],
+            ),
+            (
+                "Fabric: мод под другую версию игры",
+                "\t - Mod 'Sodium' (sodium) 0.6.0 requires version 1.21.4 of minecraft, but only the wrong version is present: 1.21.1!",
+                vec![req(r("Sodium", "sodium"), r("minecraft", "minecraft"), "=1.21.4", Some("1.21.1"))],
+            ),
+            (
+                "Fabric: диапазон мажорной версии",
+                "\t - Mod 'Archers' (archers) 1.0.6 requires any 0.12.x version of spell_engine, which is missing!",
+                vec![req(r("Archers", "archers"), r("spell_engine", "spell_engine"), ">=0.12 <0.13", None)],
+            ),
+            (
+                "Fabric: несовместимые моды",
+                "\t - Mod 'Iris' (iris) 1.7.0 is incompatible with any version of mod 'OptiFabric' (optifabric), yet a conflicting version is present: 1.13.0!",
+                vec![LoaderFinding::Incompatible { by: r("Iris", "iris"), other: r("OptiFabric", "optifabric") }],
+            ),
+            (
+                "Fabric: рекомендация не мешает запуску",
+                "[main/WARN]: Warnings were found!\n - Mod 'Debugify' (debugify) 1.20.1+2.0 recommends any 3.x version of yet-another-config-lib, which is missing!",
+                vec![],
+            ),
+            (
+                "Fabric: миксин мода не встал",
+                "[main/ERROR]: Mixin apply for mod entityculling failed entityculling.mixins.json:WorldRendererMixin from mod entityculling -> net.minecraft.class_761: org.spongepowered.asm.mixin.injection.throwables.InvalidInjectionException",
+                vec![LoaderFinding::MixinFailed { by: r("entityculling", "entityculling") }],
+            ),
+            (
+                "Quilt: требование по шаблону quilt_loader",
+                "[main/ERROR]: 'Iris' (iris) requires any version between 0.5.0 (inclusive) and 0.6.0 (exclusive) of 'Sodium' (sodium)",
+                vec![req(r("Iris", "iris"), r("Sodium", "sodium"), ">=0.5.0 <0.6.0", None)],
+            ),
+            (
+                "Quilt: дубль мода",
+                "[main/ERROR]: Duplicate mod: sodium",
+                vec![LoaderFinding::Duplicate { id: "sodium".into(), files: vec![] }],
+            ),
+            (
+                "Forge: нет обязательной зависимости и не та версия игры",
+                "[25сент.2026 13:29:03.409] [main/ERROR] [net.minecraftforge.fml.loading.ModSorter/LOADING]: Missing or unsupported mandatory dependencies:\n\tMod ID: 'minecraft', Requested by: 'walkers', Expected range: '[1.20.4,)', Actual version: '1.20.1'\n\tMod ID: 'craftedcore', Requested by: 'walkers', Expected range: '[5.8.1,)', Actual version: '[MISSING]'",
+                vec![
+                    req(r("walkers", "walkers"), r("minecraft", "minecraft"), ">=1.20.4", Some("1.20.1")),
+                    req(r("walkers", "walkers"), r("craftedcore", "craftedcore"), ">=5.8.1", None),
+                ],
+            ),
+            (
+                "Forge: необязательные зависимости не чинятся",
+                "[main/ERROR] [net.minecraftforge.fml.loading.ModSorter/LOADING]: Unsupported installed optional dependencies:\n\tMod ID: 'jei', Requested by: 'appleskin', Expected range: '[15.0,)', Actual version: '11.6.0'",
+                vec![],
+            ),
+            (
+                "Forge: дубли",
+                "[main/ERROR] [net.minecraftforge.fml.loading.UniqueModListBuilder/LOADING]: Found duplicate mods:\n\tMod ID: 'jei' from mod files: jei-1.20.1-forge-15.2.0.27.jar, jei-1.20.1-forge-15.3.0.4.jar",
+                vec![LoaderFinding::Duplicate {
+                    id: "jei".into(),
+                    files: vec!["jei-1.20.1-forge-15.2.0.27.jar".into(), "jei-1.20.1-forge-15.3.0.4.jar".into()],
+                }],
+            ),
+            (
+                "Forge 1.12: список требований",
+                "[Client thread/ERROR] [FML]: The mod jeresources (Just Enough Resources) requires mods [jei@[4.15.0,)] to be available",
+                vec![req(r("jeresources", "jeresources"), r("jei", "jei"), ">=4.15.0", None)],
+            ),
+            (
+                "NeoForge: зависимость не той версии",
+                "[main/ERROR] [net.neoforged.fml.loading.ModSorter/LOADING]: Missing or unsupported mandatory dependencies:\n\tMod ID: 'curios', Requested by: 'artifacts', Expected range: '[9.0.5,10)', Actual version: '8.0.1'",
+                vec![req(r("artifacts", "artifacts"), r("curios", "curios"), ">=9.0.5 <10", Some("8.0.1"))],
+            ),
+            (
+                "NeoForge: несовместимость",
+                "[main/ERROR] [net.neoforged.fml.loading.ModSorter/LOADING]: Incompatibilities between mods:\n\tMod 'iris' is incompatible with 'embeddium', versions: '[0,)'; Version found: '0.3.31'",
+                vec![LoaderFinding::Incompatible { by: r("iris", "iris"), other: r("embeddium", "embeddium") }],
+            ),
+            (
+                "NeoForge: мод другого загрузчика",
+                "[main/ERROR]: File mods/sodium-fabric-0.5.11+mc1.21.jar is a Fabric mod and cannot be loaded",
+                vec![LoaderFinding::WrongLoader { file: "sodium-fabric-0.5.11+mc1.21.jar".into(), loader: "fabric".into() }],
+            ),
+            (
+                "NeoForge: дубль с кодами цвета",
+                "Mod §ejei§r is present in multiple files: jei-a.jar, jei-b.jar",
+                vec![LoaderFinding::Duplicate { id: "jei".into(), files: vec!["jei-a.jar".into(), "jei-b.jar".into()] }],
+            ),
+            (
+                "NeoForge: миксин по шаблону FML",
+                "[main/ERROR]: Mixin application of create.mixins.json from Create (create) has failed",
+                vec![LoaderFinding::MixinFailed { by: r("create", "create") }],
+            ),
+            (
+                "INFO-строка Angelica не отказ загрузчика",
+                "[main/INFO]: Mod 'angelica' may be incompatible with other incompatible mods (if present)",
+                vec![],
+            ),
+        ];
+        for (why, log, want) in cases {
+            assert_eq!(loader_findings(log), want, "{}: разбор отказа загрузчика неверен — починка сделает не то\n{}", why, log);
+        }
+    }
+
+    /// loader notation -> predicate. Ranges are compared by the catalogue pick,
+    /// so a wrong bound installs a version the loader refuses again.
+    #[test]
+    fn loader_ranges_read_as_predicates() {
+        let cases: [(&str, &str, &str); 10] = [
+            ("[5.8.1,)", ">=5.8.1", "Forge: от версии"),
+            ("[1.20,1.21)", ">=1.20 <1.21", "Forge: полуинтервал"),
+            ("(,2.0]", "<=2.0", "Forge: до версии"),
+            ("[1.0]", "=1.0", "Forge: ровно"),
+            ("1.0", ">=1.0", "Maven: рекомендованная версия"),
+            ("[1,2),[3,4)", ">=1 <2", "объединение: берётся первый интервал"),
+            ("", "*", "пусто — любая"),
+            ("[9.0.5,10)", ">=9.0.5 <10", "NeoForge"),
+            ("(1.0,2.0)", ">1.0 <2.0", "строгие границы"),
+            ("[,)", "*", "без границ"),
+        ];
+        for (spec, want, why) in cases {
+            assert_eq!(maven_range(spec), want, "{}: {}", spec, why);
+        }
+        let phrases: [(&str, &str, &str); 9] = [
+            ("any version", "*", "Fabric: любая"),
+            ("version 0.5.8 or later", ">=0.5.8", "Fabric: от"),
+            ("version 2.0 or earlier", "<=2.0", "Fabric: до"),
+            ("any version after 1.2", ">1.2", "Fabric: строго после"),
+            ("any version before 3", "<3", "Fabric: строго до"),
+            ("any 3.x version", ">=3 <4", "Fabric: мажорная"),
+            ("version 1.21.4", "=1.21.4", "Fabric: ровно"),
+            ("at least version 1.0 or any newer version", ">=1.0", "Quilt: от"),
+            ("a version in the range [1.0,2.0)", ">=1.0 <2.0", "Quilt: интервал Maven"),
+        ];
+        for (phrase, want, why) in phrases {
+            assert_eq!(phrase_range(phrase), want, "{}: {}", phrase, why);
         }
     }
 

@@ -40,6 +40,13 @@ export interface AiMod {
   base: boolean
 }
 
+export interface AiExcluded {
+  slug: string
+  title: string
+  reason: string
+  detail: string
+}
+
 export interface AiPlan {
   title: string
   mcVersion: string
@@ -55,6 +62,8 @@ export interface AiPlan {
   remaining: number
   /** The plan was served from the cache of earlier builds. */
   cached?: boolean
+  /** Mods the server kept out of the plan and why; absent in older plans. */
+  excluded?: AiExcluded[]
 }
 
 export interface AiQuota {
@@ -104,6 +113,31 @@ export function auditFixItems(audit: Pick<DepAudit, 'issues'>): PlanItem[] {
     out.push({ source: fix.source, project_id: fix.project_id, version_id: fix.version_id })
   }
   return out
+}
+
+const EXCLUDED_WHY: Record<string, string> = {
+  quarantine: 'ломает запуск на этой версии',
+  wrong_mc: 'не для этой версии игры',
+  dep_version: 'не уживается с версией своей зависимости',
+  duplicate: 'повтор мода',
+}
+
+/** One line per mod the server left out, so the player sees why a mod they may expect is missing. */
+export function excludedLines(list: AiExcluded[] | undefined): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const e of list ?? []) {
+    const line = e.title + ' — ' + (EXCLUDED_WHY[e.reason] ?? e.detail)
+    if (seen.has(line)) continue
+    seen.add(line)
+    out.push(line)
+  }
+  return out
+}
+
+/** What still keeps the pack from starting after the fixes were installed: a pack with these is not ready. */
+export function auditProblems(audit: Pick<DepAudit, 'issues'>): string[] {
+  return [...new Set(audit.issues.map((i) => i.title + ': ' + i.detail))]
 }
 
 export async function buildPlan(prompt: string, opts: AiPreset = {}, fresh = false): Promise<AiPlan> {

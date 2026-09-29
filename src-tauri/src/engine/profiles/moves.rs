@@ -56,16 +56,13 @@ pub(crate) fn move_source_kind(dir: &Path) -> Option<MoveSource> {
 fn source_game_dir(dir: &Path, kind: MoveSource) -> Option<PathBuf> {
     match kind {
         MoveSource::ModrinthApp => Some(dir.to_path_buf()),
-        MoveSource::Prism | MoveSource::MultiMc => [".minecraft", "minecraft"]
-            .iter()
-            .map(|d| dir.join(d))
-            .find(|p| std::fs::symlink_metadata(p).map(|m| m.is_dir() && !m.file_type().is_symlink()).unwrap_or(false)),
+        MoveSource::Prism | MoveSource::MultiMc => instance_game_dir(dir),
     }
 }
 
 /// Exact loader build the source pinned, so the moved build starts on the
 /// same one instead of the recommended.
-fn loader_version_of(dir: &Path) -> Option<String> {
+pub(crate) fn loader_version_of(dir: &Path) -> Option<String> {
     if let Some(v) = std::fs::read_to_string(dir.join("mmc-pack.json")).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()) {
         for c in v["components"].as_array().into_iter().flatten() {
             let uid = c["uid"].as_str().unwrap_or("");
@@ -186,45 +183,6 @@ fn compare_contents(src_root: &Path, dst_root: &Path, m: &Manifest) -> Result<()
     Ok(())
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) enum Strategy {
-    Rename,
-    Copy,
-}
-
-/// A rename is the whole move in one step and can not half-happen, but it
-/// takes the files away from the source, so it is only for a real move on one
-/// drive. Keeping the source, or another drive, means a verified copy.
-pub(crate) fn pick_strategy(remove_source: bool, same_volume: bool) -> Strategy {
-    if remove_source && same_volume {
-        Strategy::Rename
-    } else {
-        Strategy::Copy
-    }
-}
-
-#[cfg(windows)]
-fn same_volume(a: &Path, b: &Path) -> bool {
-    use std::path::Component;
-    let prefix = |p: &Path| {
-        let c = std::fs::canonicalize(p).ok()?;
-        match c.components().next()? {
-            Component::Prefix(x) => Some(x.as_os_str().to_string_lossy().to_ascii_lowercase()),
-            _ => None,
-        }
-    };
-    matches!((prefix(a), prefix(b)), (Some(x), Some(y)) if x == y)
-}
-
-#[cfg(unix)]
-fn same_volume(a: &Path, b: &Path) -> bool {
-    use std::os::unix::fs::MetadataExt;
-    match (std::fs::metadata(a), std::fs::metadata(b)) {
-        (Ok(x), Ok(y)) => x.dev() == y.dev(),
-        _ => false,
-    }
-}
-
 /// Whether a running process stops the move: the source launcher itself
 /// (it rewrites its instance files on exit) or a game started from this build.
 pub(crate) fn process_blocks(kind: MoveSource, process: &str, cmdline: &str, instance: &str) -> bool {
@@ -267,26 +225,6 @@ fn sibling(dir: &Path, tag: &str) -> PathBuf {
     dir.with_file_name(format!(".{name}.millida-{tag}"))
 }
 
-/// Windows refuses to rename a folder while any file in it is open. Renaming
-/// there and back before anything is copied tells whether the source can be
-/// removed afterwards, so a locked build is never left in both launchers.
-fn probe_unlocked(dir: &Path, kind: MoveSource) -> Result<(), String> {
-    let probe = sibling(dir, "probe");
-    std::fs::rename(dir, &probe).map_err(|e| {
-        format!(
-            "Файлы сборки заняты другой программой ({e}). Закрой {} и игру, потом повтори — сборка не тронута",
-            kind.label()
-        )
-    })?;
-    std::fs::rename(&probe, dir).map_err(|e| {
-        format!(
-            "Сборка осталась в папке {} — переименуй её обратно в «{}» ({e})",
-            mask_home(&probe.to_string_lossy()),
-            dir.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()
-        )
-    })
-}
-
 /// A half-made copy is removed on every way out except success.
 struct Staging {
     path: PathBuf,
@@ -297,22 +235,6 @@ impl Drop for Staging {
     fn drop(&mut self) {
         if !self.keep {
             let _ = std::fs::remove_dir_all(&self.path);
-        }
-    }
-}
-
-/// A renamed game folder goes back where it came from on every way out
-/// except success.
-struct RenameBack {
-    from: PathBuf,
-    to: PathBuf,
-    armed: bool,
-}
-
-impl Drop for RenameBack {
-    fn drop(&mut self) {
-        if self.armed {
-            let _ = std::fs::rename(&self.from, &self.to);
         }
     }
 }
@@ -328,15 +250,11 @@ pub struct MoveCandidate {
     pub files: u64,
     pub worlds: u32,
     pub mods: u32,
-    pub same_drive: bool,
 }
 
 #[derive(Clone, serde::Serialize)]
 pub struct MoveOutcome {
     pub profile: Profile,
-    pub instant: bool,
-    pub source_removed: bool,
-    pub note: Option<String>,
 }
 
 fn count_worlds(game: &Path) -> u32 {
@@ -358,8 +276,6 @@ fn count_mods(game: &Path) -> u32 {
 /// Builds of Prism, MultiMC and Modrinth App that can move into Millida whole,
 /// with what each one weighs: the disk scan plus folders the player pointed at.
 pub fn plan_moves() -> Vec<MoveCandidate> {
-    let profiles = game_root().join("profiles");
-    let _ = std::fs::create_dir_all(&profiles);
     let mut found: Vec<FoundInstance> = scan_imports().into_iter().filter(|f| f.movable).collect();
     for dir in vouched_paths() {
         let path = dir.to_string_lossy().to_string();
@@ -382,7 +298,6 @@ pub fn plan_moves() -> Vec<MoveCandidate> {
                 files: m.files.len() as u64,
                 worlds: count_worlds(&game),
                 mods: count_mods(&game),
-                same_drive: same_volume(&game, &profiles),
                 launcher: kind.label().to_string(),
                 path: f.path,
                 name: f.name,
@@ -403,40 +318,11 @@ fn copy_failed(name: &str, kind: MoveSource, e: &std::io::Error) -> String {
     format!("Не удалось скопировать «{name}» ({e}). В {} сборка не тронута — закрой его и повтори", kind.label())
 }
 
-/// The game folder in its new place, taken back on drop unless committed.
-enum Placed {
-    Renamed(RenameBack),
-    Copied(Staging),
-}
-
-impl Placed {
-    /// Keeps the build where it now is; true when it got there by a rename.
-    fn commit(self) -> bool {
-        match self {
-            Placed::Renamed(mut r) => {
-                r.armed = false;
-                true
-            }
-            Placed::Copied(mut s) => {
-                s.keep = true;
-                false
-            }
-        }
-    }
-}
-
-/// Puts the game folder at `dst` and checks it against `src_manifest`. A
-/// rename that fails (another drive behind a mount point, a busy folder) has
-/// moved nothing, so it falls back to the copy. A copy is built beside `dst`
-/// and takes its name only once it matches the source.
-fn place_game(game: &Path, dst: &Path, strategy: Strategy, src_manifest: &Manifest, name: &str, kind: MoveSource) -> Result<Placed, String> {
-    if strategy == Strategy::Rename && std::fs::rename(game, dst).is_ok() {
-        let back = RenameBack { from: dst.to_path_buf(), to: game.to_path_buf(), armed: true };
-        drop_launcher_service_files(dst, &[]).map_err(|e| format!("Не удалось подготовить сборку ({e}). Сборка возвращена на место"))?;
-        let got = manifest_of(dst).map_err(|e| format!("Не удалось проверить перенос ({e}). Сборка возвращена на место"))?;
-        compare_manifests(src_manifest, &got).map_err(|m| format!("Перенос не сошёлся: {}. Сборка возвращена на место", m.text()))?;
-        return Ok(Placed::Renamed(back));
-    }
+/// Copies the game folder to `dst` and checks the copy against
+/// `src_manifest`. The copy is built beside `dst` and takes its name only once
+/// it matches the source; the returned guard removes it again unless kept.
+/// The source is only ever read.
+fn copy_game(game: &Path, dst: &Path, src_manifest: &Manifest, name: &str, kind: MoveSource) -> Result<Staging, String> {
     let stage = sibling(dst, "moving");
     let _ = std::fs::remove_dir_all(&stage);
     std::fs::create_dir_all(&stage).map_err(|e| copy_failed(name, kind, &e))?;
@@ -447,14 +333,13 @@ fn place_game(game: &Path, dst: &Path, strategy: Strategy, src_manifest: &Manife
         .and_then(|_| compare_contents(game, &stage, src_manifest))
         .map_err(|m| format!("Копия «{name}» не сошлась с оригиналом: {}. Сборка в {} не тронута — повтори перенос", m.text(), kind.label()))?;
     std::fs::rename(&stage, dst).map_err(|e| copy_failed(name, kind, &e))?;
-    Ok(Placed::Copied(Staging { path: dst.to_path_buf(), keep: false }))
+    Ok(Staging { path: dst.to_path_buf(), keep: false })
 }
 
-/// Takes a build of Prism, MultiMC or Modrinth App into Millida. The copy is
-/// made and checked first; the source goes only after that, and only when
-/// `remove_source` asks for it. Any failure before that leaves the source as
-/// it was.
-pub fn move_instance(path: String, remove_source: bool) -> Result<MoveOutcome, String> {
+/// Takes a copy of a Prism, MultiMC or Modrinth App build into Millida. The
+/// build in the other launcher is never renamed, changed or removed: it is
+/// the player's data in a program Millida does not own.
+pub fn move_instance(path: String) -> Result<MoveOutcome, String> {
     let dir = PathBuf::from(&path);
     if !is_vouched(&dir) {
         return Err("Перенести можно только сборку из списка найденных".into());
@@ -468,9 +353,6 @@ pub fn move_instance(path: String, remove_source: bool) -> Result<MoveOutcome, S
     if !blockers.is_empty() {
         return Err(format!("Закрой {} и повтори — пока они открыты, перенос может потерять файлы. Сборка не тронута", blockers.join(" и ")));
     }
-    if remove_source {
-        probe_unlocked(&dir, kind)?;
-    }
 
     let src_manifest = manifest_of(&game).map_err(|e| format!("Не удалось прочитать сборку «{}» ({e}). Сборка не тронута", found.name))?;
     if src_manifest.files.is_empty() {
@@ -483,8 +365,7 @@ pub fn move_instance(path: String, remove_source: bool) -> Result<MoveOutcome, S
     std::fs::create_dir_all(&parent).map_err(|e| format!("Папка сборок недоступна ({e}). Проверь диск в настройках"))?;
 
     let loader_version = loader_version_of(&dir);
-    let strategy = pick_strategy(remove_source, same_volume(&game, &parent));
-    let placed = place_game(&game, &dst, strategy, &src_manifest, &found.name, kind)?;
+    let mut copied = copy_game(&game, &dst, &src_manifest, &found.name, kind)?;
 
     let loader = if found.loader == "vanilla" { loader_from_mods_dir(&dst).unwrap_or(found.loader.clone()) } else { found.loader.clone() };
     let prof = Profile {
@@ -498,38 +379,11 @@ pub fn move_instance(path: String, remove_source: bool) -> Result<MoveOutcome, S
     let mut all = load_profiles();
     all.insert(0, prof.clone());
     save_profiles(&all).map_err(|e| format!("{e}. Сборка в {} не тронута", kind.label()))?;
+    apply_instance_cfg(&dir, &prof.name);
 
-    let instant = placed.commit();
+    copied.keep = true;
     forget_scan();
-
-    let mut source_removed = false;
-    let mut note = None;
-    if remove_source {
-        match remove_source_dir(&dir) {
-            Ok(()) => source_removed = true,
-            Err(left) => {
-                note = Some(format!(
-                    "Сборка уже в Millida. Старую папку в {} убрать не вышло — удали её вручную: {}",
-                    kind.label(),
-                    mask_home(&left.to_string_lossy())
-                ))
-            }
-        }
-    }
-    Ok(MoveOutcome { profile: prof, instant, source_removed, note })
-}
-
-/// The instance folder is renamed aside first, so it leaves the source
-/// launcher's list at once and a failed delete does not leave half a build
-/// behind under its old name. Returns the folder left on disk on failure.
-fn remove_source_dir(dir: &Path) -> Result<(), PathBuf> {
-    if !dir.exists() {
-        return Ok(());
-    }
-    let trash = sibling(dir, "moved");
-    let _ = std::fs::remove_dir_all(&trash);
-    std::fs::rename(dir, &trash).map_err(|_| dir.to_path_buf())?;
-    std::fs::remove_dir_all(&trash).map_err(|_| trash)
+    Ok(MoveOutcome { profile: prof })
 }
 
 #[cfg(test)]
@@ -547,21 +401,6 @@ mod tests {
         let p = root.join(rel);
         std::fs::create_dir_all(p.parent().unwrap()).unwrap();
         std::fs::write(p, body).unwrap();
-    }
-
-    /// remove_source, same drive -> strategy. A rename takes the files away
-    /// from the source, so it may only happen when the player asked to move.
-    #[test]
-    fn rename_only_when_moving_on_one_drive() {
-        let cases = [
-            (true, true, Strategy::Rename, "move on one drive is instant"),
-            (true, false, Strategy::Copy, "another drive can only be copied, then checked"),
-            (false, true, Strategy::Copy, "keeping the source must never take its files"),
-            (false, false, Strategy::Copy, "keeping the source on another drive is a plain copy"),
-        ];
-        for (remove, same, want, why) in cases {
-            assert_eq!(pick_strategy(remove, same), want, "{why}");
-        }
     }
 
     /// source, copy -> verdict. The source is deleted only on Ok, so every
@@ -709,31 +548,29 @@ mod tests {
         game
     }
 
-    /// strategy, commit -> where the build ends up. Without a commit (the
-    /// profile list failed to save) the source must be exactly as before.
+    /// kept -> where the build ends up. The build in the other launcher is
+    /// the player's own: whether the copy is kept or dropped (the profile list
+    /// failed to save), every file of the source stays byte for byte, and the
+    /// instance folder with its launcher files stays where it was.
     #[test]
-    fn a_placed_build_is_taken_back_unless_committed() {
-        for (strategy, commit) in [(Strategy::Rename, false), (Strategy::Rename, true), (Strategy::Copy, false), (Strategy::Copy, true)] {
-            let root = tmp(&format!("place-{strategy:?}-{commit}"));
+    fn a_copy_never_touches_the_source() {
+        for keep in [false, true] {
+            let root = tmp(&format!("copy-{keep}"));
             let game = sample_build(&root);
-            let before = manifest_of(&game).unwrap();
+            let instance = game.parent().unwrap().to_path_buf();
+            put(&instance, "instance.cfg", b"name=Sky");
+            put(&instance, "mmc-pack.json", b"{}");
+            let before = manifest_of(&instance).unwrap();
             let dst = root.join("millida/profiles/Sky");
             std::fs::create_dir_all(dst.parent().unwrap()).unwrap();
-            let placed = place_game(&game, &dst, strategy, &before, "Sky", MoveSource::Prism).unwrap();
-            assert_eq!(manifest_of(&dst).unwrap(), before, "{strategy:?}: every file of the build is in Millida");
-            assert!(!sibling(&dst, "moving").exists(), "{strategy:?}: no half-made copy is left beside the build");
-            if commit {
-                let instant = placed.commit();
-                assert_eq!(instant, strategy == Strategy::Rename, "a rename is reported as instant, a copy is not");
-                assert!(dst.join("saves/w/level.dat").is_file(), "{strategy:?}: a committed build stays in Millida");
-                if strategy == Strategy::Copy {
-                    assert_eq!(manifest_of(&game).unwrap(), before, "a copy never touches the source");
-                }
-            } else {
-                drop(placed);
-                assert!(!dst.exists(), "{strategy:?}: an uncommitted build leaves Millida");
-                assert_eq!(manifest_of(&game).unwrap(), before, "{strategy:?}: an uncommitted move leaves the source exactly as it was");
-            }
+            let mut copied = copy_game(&game, &dst, &manifest_of(&game).unwrap(), "Sky", MoveSource::Prism).unwrap();
+            assert_eq!(manifest_of(&dst).unwrap(), manifest_of(&game).unwrap(), "keep={keep}: every file of the build is in Millida");
+            assert!(!sibling(&dst, "moving").exists(), "keep={keep}: no half-made copy is left beside the build");
+            copied.keep = keep;
+            drop(copied);
+            assert_eq!(dst.join("saves/w/level.dat").is_file(), keep, "keep={keep}: only a kept copy stays in Millida");
+            assert_eq!(manifest_of(&instance).unwrap(), before, "keep={keep}: the source instance must be exactly as before");
+            assert_eq!(std::fs::read(game.join("saves/w/level.dat")).unwrap(), b"world", "keep={keep}: the source world must not change");
         }
     }
 
@@ -745,24 +582,10 @@ mod tests {
         wrong.files.insert("saves/w/region/r.0.0.mca".into(), 4096);
         let dst = root.join("millida/profiles/Sky");
         std::fs::create_dir_all(dst.parent().unwrap()).unwrap();
-        let err = place_game(&game, &dst, Strategy::Copy, &wrong, "Sky", MoveSource::Prism).err().expect("a copy short of a world file must fail");
+        let err = copy_game(&game, &dst, &wrong, "Sky", MoveSource::Prism).err().expect("a copy short of a world file must fail");
         assert!(err.contains("не тронута"), "the error must tell the player the source is safe: {err}");
         assert!(!dst.exists(), "a failed copy must not appear as a build");
         assert!(!sibling(&dst, "moving").exists(), "a failed copy is cleaned up");
         assert!(game.join("saves/w/level.dat").is_file(), "the source keeps its world");
-    }
-
-    #[test]
-    fn removing_the_source_takes_only_that_folder() {
-        let root = tmp("remove");
-        let a = root.join("instances/A");
-        let b = root.join("instances/B");
-        put(&a, ".minecraft/saves/w/level.dat", b"a");
-        put(&b, ".minecraft/saves/w/level.dat", b"b");
-        remove_source_dir(&a).unwrap();
-        assert!(!a.exists(), "the moved instance leaves its launcher");
-        assert!(!sibling(&a, "moved").exists(), "nothing of it is left aside");
-        assert!(b.join(".minecraft/saves/w/level.dat").is_file(), "a neighbour instance must stay untouched");
-        assert!(root.join("instances").is_dir(), "the launcher's own folder stays");
     }
 }

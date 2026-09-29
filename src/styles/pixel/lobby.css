@@ -695,9 +695,6 @@
 
 /* Звук и музыка в верхней полосе: выключено — значок приглушён. */
 .lb-btn.lb-toggle.off svg { opacity: 0.4; }
-/* Hung outside the button box, the counter sat on the pixel frame and got cropped;
-   inside the corner it lines up with the «+50» gift of the bug button. */
-.lb-badge-wrap:has(> .lb-msg) > .lb-badge { top: 3px; right: 3px; min-width: 20px; height: 20px; font-size: 11px; }
 /* Громкость под кнопкой звука и музыки: всплывает при наведении и фокусе.
    Верхний отступ карточки — мостик, чтобы курсор не терял наведение по пути вниз. */
 .lb-vol { position: relative; display: inline-flex; }

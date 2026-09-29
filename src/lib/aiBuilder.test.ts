@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { aiPresetFor, auditFixItems, planRequestKey } from './aiBuilder'
+import { aiPresetFor, auditFixItems, auditProblems, excludedLines, planRequestKey } from './aiBuilder'
 
 const CASES: [loader: string, version: string, expected: object, why: string][] = [
   ['fabric', '1.20.1', { loader: 'fabric', mcVersion: '1.20.1' }, 'обычный релиз переходит как есть'],
@@ -51,4 +51,31 @@ test('auditFixItems: только недостающее с найденным �
 test('planRequestKey: повтор того же запроса с теми же версией и загрузчиком', () => {
   expect(planRequestKey(' Хоррор ', { mcVersion: '1.20.1', loader: 'fabric' })).toBe(planRequestKey('хоррор', { mcVersion: '1.20.1', loader: 'fabric' }))
   expect(planRequestKey('хоррор', { mcVersion: '1.20.1' })).not.toBe(planRequestKey('хоррор', { mcVersion: '1.21.1' }))
+})
+
+test('excludedLines: игрок видит, какой мод не вошёл и почему', () => {
+  const ex = (title: string, reason: string, detail = '') => ({ slug: title.toLowerCase(), title, reason, detail })
+  const cases: Array<[string, Parameters<typeof excludedLines>[0], string[]]> = [
+    ['старый план без поля — пусто', undefined, []],
+    ['нет файла под пару — текст сервера', [ex('Guns', 'no_file', 'нет версии под 1.20.1 · Fabric')], ['Guns — нет версии под 1.20.1 · Fabric']],
+    ['недостающая библиотека названа сервером', [ex('Remnant', 'missing_deps', 'нет «YACL» под 1.20.1 · Fabric')], ['Remnant — нет «YACL» под 1.20.1 · Fabric']],
+    ['служебный код карантина не показывается', [ex('Fog', 'quarantine', 'api_mismatch')], ['Fog — ломает запуск на этой версии']],
+    ['повтор одной причины — одна строка', [ex('A', 'duplicate'), ex('A', 'duplicate')], ['A — повтор мода']],
+  ]
+  for (const [why, list, want] of cases) {
+    expect(excludedLines(list), why).toEqual(want)
+  }
+})
+
+test('auditProblems: сборка с оставшимися проблемами не считается готовой', () => {
+  const issue = (kind: 'missing' | 'conflict' | 'version' | 'loader', title: string, detail: string) => ({ kind, title, detail, file_name: '', fix: null })
+  const cases: Array<[string, Parameters<typeof auditProblems>[0], string[]]> = [
+    ['проблем нет — готово', { issues: [] }, []],
+    ['не нашлась библиотека', { issues: [issue('missing', 'Fog', 'нужен мод «YACL», в сборке его нет')] }, ['Fog: нужен мод «YACL», в сборке его нет']],
+    ['файл не той версии и конфликт — обе', { issues: [issue('version', 'A', 'файл собран под MC 1.21'), issue('conflict', 'B', 'несовместим с «C»')] }, ['A: файл собран под MC 1.21', 'B: несовместим с «C»']],
+    ['одна и та же проблема дважды — одна строка', { issues: [issue('loader', 'A', 'файл для forge'), issue('loader', 'A', 'файл для forge')] }, ['A: файл для forge']],
+  ]
+  for (const [why, audit, want] of cases) {
+    expect(auditProblems(audit), why).toEqual(want)
+  }
 })

@@ -25,6 +25,10 @@ test('домашняя папка в любом написании и токен
     ['C:\\Users\\John Smith\\AppData', '<user>\\AppData'],
     ['~bob/.local/share', '<user>/.local/share'],
     ['нет файла ~/x', 'нет файла ~/x'],
+    ['нет файла ~bob/x', 'нет файла <user>/x'],
+    ['(~bob/x)', '(<user>/x)'],
+    ['a~bob/x', 'a~bob/x'],
+    ['/opt/~bob/x', '/opt/~bob/x'],
   ]
   for (const [raw, want] of cases) expect(scrubPaths(raw)).toBe(want)
   const t = scrubText('Authorization: Bearer abc.def.ghi and accessToken=zzz123 eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c')

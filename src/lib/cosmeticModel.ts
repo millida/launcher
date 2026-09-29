@@ -47,10 +47,27 @@ export function poseJoint(joint: Object3D, rest: [number, number, number], turn:
   joint.quaternion.copy(REST_Q.setFromEuler(REST_TURN)).multiply(POSE_Q.setFromEuler(POSE_TURN))
 }
 
+const ATLAS_SLACK = 0.02
+const ATLAS_MOST = 512
+
+const wholePixels = (value: number) => {
+  const rounded = Math.round(value)
+  return rounded > 0 && Math.abs(value - rounded) < 0.001 ? rounded : 0
+}
+
+const sameScale = (imageWidth: number, textureWidth: number, imageHeight: number, textureHeight: number) => {
+  const width = wholePixels(textureWidth)
+  const height = wholePixels(textureHeight)
+  if (width <= 0 || height <= 0 || imageWidth % width !== 0 || imageHeight % height !== 0) return false
+  const across = imageWidth / width
+  return across >= 2 && across === imageHeight / height
+}
+
 /**
- * Сколько кадров в ленте. Считается по пропорции картинки к пропорции модели:
- * та же вещь бывает нарисована крупнее (64 на 128) и это не лента, а рисунок в
- * двойном разрешении - по одной высоте их не различить.
+ * Mirror of the mod's TextureFrames.of: a frame is exactly as tall as the
+ * unwrap even when the strip is wider than it, so the count comes from the
+ * height first. Counting by aspect ratio gave 18 frames instead of 32 on a
+ * 144x2560 strip and cut every frame through the middle of the next one.
  */
 export function atlasFrames(
   imageWidth: number,
@@ -58,8 +75,32 @@ export function atlasFrames(
   textureWidth: number,
   textureHeight: number,
 ): number {
-  if (!imageWidth || !imageHeight || !textureWidth || !textureHeight) return 1
-  return Math.max(1, Math.round((imageHeight / imageWidth) * (textureWidth / textureHeight)))
+  if (!(imageWidth > 0) || !(imageHeight > 0) || !(textureWidth > 0) || !(textureHeight > 0)) return 1
+  if (sameScale(imageWidth, textureWidth, imageHeight, textureHeight)) return 1
+  const whole = wholePixels(textureHeight)
+  if (whole > 0 && imageHeight % whole === 0) {
+    const count = imageHeight / whole
+    if (count >= 2 && count <= ATLAS_MOST) return count
+    if (count === 1) return 1
+  }
+  const frameHeight = (imageWidth * textureHeight) / textureWidth
+  if (!(frameHeight > 0)) return 1
+  const count = Math.round(imageHeight / frameHeight)
+  if (count < 2 || count > ATLAS_MOST) return 1
+  if (Math.abs(imageHeight / count - frameHeight) > ATLAS_SLACK * frameHeight) return 1
+  return count
+}
+
+/**
+ * Mirror of the mod's TextureFrames.widthShare: a strip wider than the unwrap
+ * by a non-whole factor keeps the unwrap at its left edge in real pixels.
+ */
+export function atlasWidthShare(imageWidth: number, textureWidth: number): number {
+  if (!(imageWidth > 0) || !(textureWidth > 0)) return 1
+  const times = imageWidth / textureWidth
+  if (Math.abs(times - Math.round(times)) < 0.0001) return 1
+  const share = textureWidth / imageWidth
+  return share > 0 && share <= 1 ? share : 1
 }
 
 /**
@@ -147,8 +188,9 @@ export function buildCosmetic(
     // это не лента, а рисунок в двойном разрешении.
     const image = ready.image as { width?: number; height?: number } | undefined
     frames = atlasFrames(image?.width ?? 0, image?.height ?? 0, mesh.textureWidth, mesh.textureHeight)
-    if (frames > 1) {
-      ready.repeat.set(1, 1 / frames)
+    const share = atlasWidthShare(image?.width ?? 0, mesh.textureWidth)
+    if (frames > 1 || share < 1) {
+      ready.repeat.set(share, 1 / frames)
       ready.offset.set(0, 1 - 1 / frames)
       ready.needsUpdate = true
     }

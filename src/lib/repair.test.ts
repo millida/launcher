@@ -5,6 +5,7 @@ type A = { kind: string; arg?: string }
 
 describe('«Починить сборку» в окне вылета', () => {
   const cases: Array<[string, A[], string | null, string]> = [
+    ['план', [{ kind: 'install-dep', arg: 'fabric-api|*' }, { kind: 'fix-plan', arg: '[]' }, { kind: 'repair' }], 'fix-plan', 'план из лога выполняет все шаги, а не первый'],
     ['Indium', [{ kind: 'add-mod', arg: 'indium' }, { kind: 'repair' }, { kind: 'share-log' }], 'add-mod', 'рендерер Fabric ставится, а не перепроверяются хеши'],
     ['зависимости', [{ kind: 'disable-mod', arg: 'a.jar' }, { kind: 'install-deps' }, { kind: 'repair' }], 'install-deps', 'доустановка важнее отключения мода'],
     ['мод под другую версию', [{ kind: 'disable-mod', arg: 'a.jar' }, { kind: 'repair' }], 'disable-mod', 'единственное, что меняет набор модов'],

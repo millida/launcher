@@ -131,7 +131,15 @@ async fn from_cf_manifest(app: &AppHandle, ex: &Path, name_hint: &str) -> Result
 
 /// Plain client folder: version and loader are detected from the game files.
 fn from_plain_dir(dir: &Path, name_hint: &str) -> Result<Profile, String> {
-    let game = ["minecraft", ".minecraft"].iter().map(|d| dir.join(d)).find(|p| p.exists()).unwrap_or(dir.to_path_buf());
+    // a Prism / MultiMC export knows its version and loader from mmc-pack.json
+    // and keeps memory and Java arguments in instance.cfg next to the game
+    if dir.join("mmc-pack.json").is_file() {
+        if let Some(found) = read_instance_dir(dir, "Prism Launcher") {
+            vouch(dir);
+            return import_instance(dir.to_string_lossy().to_string(), unique_name(name_hint), found.version, found.loader);
+        }
+    }
+    let game = instance_game_dir(dir).unwrap_or(dir.to_path_buf());
     let (version, loader) = detect_from_game_dir(&game).unwrap_or_else(|| (String::new(), "vanilla".into()));
     if version.is_empty() {
         return Err("Не удалось определить версию Minecraft — импортируй .mrpack или zip с manifest.json".into());
@@ -172,7 +180,7 @@ pub async fn import_pack_path(app: AppHandle, picked: std::path::PathBuf) -> Res
     let root = {
         let mut r = ex.clone();
         for _ in 0..2 {
-            if r.join("modrinth.index.json").exists() || r.join("manifest.json").exists() { break }
+            if r.join("modrinth.index.json").exists() || r.join("manifest.json").exists() || r.join("mmc-pack.json").exists() { break }
             let mut dirs = std::fs::read_dir(&r).map_err(|e| e.to_string())?
                 .flatten()
                 .filter(|e| e.path().is_dir())

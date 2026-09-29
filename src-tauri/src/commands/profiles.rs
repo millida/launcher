@@ -375,6 +375,16 @@ pub fn protected_builds() -> Vec<String> {
     engine::protected_builds()
 }
 
+#[tauri::command(async)]
+pub fn pack_auto_update(profile: String) -> engine::PackAutoUpdate {
+    engine::pack_auto_update(&profile)
+}
+
+#[tauri::command(async)]
+pub fn set_pack_auto_update(profile: String, on: bool) -> Result<engine::PackAutoUpdate, String> {
+    engine::set_pack_auto_update(&profile, on)
+}
+
 /// Packs whose unreviewed versions this account may install.
 #[tauri::command]
 pub async fn pack_review_queue() -> Result<serde_json::Value, String> {
@@ -418,11 +428,11 @@ pub async fn plan_moves() -> Result<Vec<engine::MoveCandidate>, String> {
     super::blocking(engine::plan_moves).await
 }
 
-/// Moves one build from `plan_moves` into Millida; the source goes only after
-/// the copy is checked, and only when `remove_source` is set.
+/// Copies one build from `plan_moves` into Millida; the build in the other
+/// launcher is left as it was.
 #[tauri::command]
-pub async fn move_instance(path: String, remove_source: bool) -> Result<engine::MoveOutcome, String> {
-    super::blocking(move || engine::move_instance(path, remove_source)).await?
+pub async fn move_instance(path: String) -> Result<engine::MoveOutcome, String> {
+    super::blocking(move || engine::move_instance(path)).await?
 }
 
 #[tauri::command]

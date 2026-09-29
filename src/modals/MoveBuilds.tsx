@@ -11,12 +11,11 @@ import { track } from '../lib/telemetry'
 import { batchSummary, candidateMeta, confirmText, contentText, errorText, launchersText, rowVerdict } from '../lib/moves'
 import type { RowResult } from '../lib/moves'
 
-/** The core copies, checks worlds and mods against the source and only then removes the source build. */
+/** The core copies and checks worlds and mods against the source; the build in the other launcher is never changed. */
 export function MovePanel() {
   const [list, setList] = useState<MoveCandidate[] | null>(null)
   const [failed, setFailed] = useState(false)
   const [picked, setPicked] = useState<Record<string, boolean>>({})
-  const [removeSource, setRemoveSource] = useState(true)
   const [busy, setBusy] = useState('')
   const [results, setResults] = useState<Record<string, RowResult>>({})
 
@@ -42,9 +41,9 @@ export function MovePanel() {
 
   const run = async () => {
     if (!selected.length || busy) return
-    const yes = await uiConfirm(confirmText(selected, removeSource), {
-      title: removeSource ? 'Перенести в Millida' : 'Скопировать в Millida',
-      confirmLabel: removeSource ? 'Перенести' : 'Скопировать',
+    const yes = await uiConfirm(confirmText(selected), {
+      title: 'Скопировать в Millida',
+      confirmLabel: 'Скопировать',
       danger: false,
     })
     if (!yes) return
@@ -53,7 +52,7 @@ export function MovePanel() {
       setBusy(c.path)
       let r: RowResult
       try {
-        const outcome = await moveInstance(c.path, removeSource)
+        const outcome = await moveInstance(c.path)
         r = { kind: 'ok', outcome }
         track('build_import', { source: c.launcher, mc: c.version, loader: c.loader })
         useProfiles.getState().setSelected(outcome.profile.name)
@@ -99,24 +98,11 @@ export function MovePanel() {
                 <b>{c.name}</b>
                 <small>{candidateMeta(c) + ' · ' + contentText(c)}</small>
                 {r?.kind === 'error' ? <small>{r.text}</small> : null}
-                {r?.kind === 'ok' && r.outcome.note ? <small>{r.outcome.note}</small> : null}
               </span>
-              <span className="pill">{busy === c.path ? 'Переносим…' : r ? rowVerdict(r) : removeSource && c.same_drive ? 'Мгновенно' : 'К переносу'}</span>
+              <span className="pill">{busy === c.path ? 'Переносим…' : r ? rowVerdict(r) : 'К переносу'}</span>
             </label>
           )
         })}
-      </div>
-      <div className="set-row">
-        <span className="lab">
-          Убрать из {where} после переноса
-          <small>Только эти сборки и только после проверки копии. Сам {where} останется</small>
-        </span>
-        <span
-          className={'tgl' + (removeSource ? ' on' : '')}
-          role="switch"
-          aria-checked={removeSource}
-          onClick={() => !busy && setRemoveSource((v) => !v)}
-        ></span>
       </div>
       <div className="onb-inline">
         <span className="faint-note">Закрой {where} перед переносом</span>

@@ -68,6 +68,10 @@ pub fn record_shipped(pdir: &Path) -> Result<(), String> {
     std::fs::write(pdir.join(SHIPPED_FILE), body).map_err(|e| format!("Не удалось записать состав сборки: {}", e))
 }
 
+pub(crate) fn shipped_recorded_at(pdir: &Path) -> Option<std::time::SystemTime> {
+    std::fs::metadata(pdir.join(SHIPPED_FILE)).and_then(|m| m.modified()).ok()
+}
+
 fn read_shipped(pdir: &Path) -> Option<HashSet<String>> {
     let raw = std::fs::read(pdir.join(SHIPPED_FILE)).ok()?;
     serde_json::from_slice::<Vec<String>>(&raw).ok().map(|v| v.into_iter().collect())

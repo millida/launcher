@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { capeKey, contentFingerprint, dedupeCapes, textureHash } from './capes'
+import { capeById, capeKey, contentFingerprint, dedupeCapes, textureHash } from './capes'
 
 const MOJANG = 'https://textures.minecraft.net/texture/'
 const HASH_A = 'a'.repeat(64)
@@ -112,4 +112,35 @@ test('ключом плаща каталога Millida служит его ад�
   expect(capeKey({ url: 'https://millida.net/capes/veteran.png', name: 'Ветеран' })).toBe(
     'https://millida.net/capes/veteran.png',
   )
+})
+
+/**
+ * Wearing a catalogue cape puts its copy into the account wardrobe under the
+ * same name. The wardrobe is listed first, so the copy absorbed the catalogue
+ * card: the card jumped up under a new id, the choice pointed at nothing and the
+ * cape came off the figure (tester, 29.09.2026).
+ *
+ * chosen id -> card it has to find, why the case is pinned
+ */
+describe('a choice survives its card being folded into another', () => {
+  const CDN = 'https://cdn.millida.trade/launcher/capes/'
+  const worn = dedupeCapes([
+    { id: 'w:9', url: CDN + 'copy-9.png', name: 'Twitch', wardrobeId: '9' },
+    { id: 'w:7', url: MOJANG + HASH_B, name: 'MineCon 2011', wardrobeId: '7' },
+    { id: 'cat:twitch', url: CDN + 'twitch.png', name: 'Twitch' },
+    { id: 'mojang-minecon', url: MOJANG + HASH_B, name: 'MineCon 2011' },
+    { id: 'cat:other', url: CDN + 'other.png', name: 'Путник' },
+  ])
+  const cases: [string, string | undefined, string][] = [
+    ['cat:twitch', 'w:9', 'a catalogue cape just worn: its wardrobe copy took the card over'],
+    ['mojang-minecon', 'w:7', 'a Mojang design worn from the launcher: the same takeover by texture'],
+    ['w:9', 'w:9', 'the surviving card is still found by its own id'],
+    ['cat:other', 'cat:other', 'a card nobody absorbed keeps its id'],
+    ['cat:gone', undefined, 'an id no card ever had finds nothing instead of a stranger'],
+  ]
+  for (const [chosen, expected, why] of cases) {
+    test(why, () => {
+      expect(capeById(worn, chosen)?.id, `the choice "${chosen}" lands on the wrong card`).toBe(expected)
+    })
+  }
 })

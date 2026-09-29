@@ -8,6 +8,8 @@ import { gridCols, Head, ItemArt, Price, Timer, toneStyle } from './parts'
 import { FreeDaily } from './FreeDaily'
 import { RARITY_ORDER } from './rarity'
 import { FragBar, RarityFx, RarityPlate } from './rarityUi'
+import { isDuoEmote } from '../../lib/duoEmotes'
+import '../../styles/pixel/duo.css'
 
 /** Мастхэвы первыми: легендарные и эпические в начале ряда, порядок службы внутри редкости. */
 export const byRarity = (cards: ShopCard[]): ShopCard[] =>
@@ -112,6 +114,12 @@ export function ItemCard({ card, source, i = 0, ...p }: { card: ShopCard; source
         ) : (
           <RarityPlate rarity={it.rarity} small />
         )}
+        {isDuoEmote(it.code) ? (
+          <span className="sh-duo">
+            <Icon id="i-users" />
+            Вдвоём
+          </span>
+        ) : null}
       </span>
       <span className="sh-card-foot">
         <Price price={card.price} base={card.basePrice} />

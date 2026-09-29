@@ -391,8 +391,8 @@
    после нажатия — тост с «Отменить». */
 .ch-tile-del {
   position: absolute;
-  left: 8px;
-  top: 8px;
+  left: 12px;
+  top: 12px;
   z-index: 3;
   display: grid;
   place-items: center;

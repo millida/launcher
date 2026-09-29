@@ -7,7 +7,9 @@ export {
   ENGINE_VERSION,
   ENGINE_DISPLAY_NAME,
   type CosmeticAnchorName,
+  type PartnerFigure,
   type PoseHookContext,
+  type StageSpot,
 } from "./core/scene-loop";
 export { DEFAULT_LIGHT_SETTINGS, ProductLighting } from "./core/product-visuals";
 export {

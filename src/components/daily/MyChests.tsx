@@ -37,6 +37,8 @@ export function chestSource(c: PendingChest): string {
       return 'Код автора'
     case 'PROMO':
       return 'Промокод'
+    case 'REFERRAL':
+      return 'Приглашённый друг'
     case 'STREAK':
       return 'Серия входов'
     case 'XRAY':

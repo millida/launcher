@@ -45,8 +45,14 @@ pub(crate) fn refuse_protected(profile: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// A build the player already changed shows its contents: the list is theirs
+/// to manage, and hiding it left them with a build whose mods they could not see.
 pub fn protected_builds() -> Vec<String> {
-    load_profiles().into_iter().filter(|p| profile_content_protected(&p.name)).map(|p| p.name).collect()
+    load_profiles()
+        .into_iter()
+        .filter(|p| profile_content_protected(&p.name) && !mods_modified(&profile_dir(&p.name)))
+        .map(|p| p.name)
+        .collect()
 }
 
 fn icon_url_allowed(raw: &str) -> bool {

@@ -45,10 +45,17 @@ function followBody(figure: Figure): void {
   const br = restOf(body as unknown as Placed)
   const cr = restOf(cape as unknown as Placed)
   const restM = new Matrix4().compose(new Vector3(cr[0], cr[1], cr[2]), new Quaternion().setFromEuler(CAPE_REST), new Vector3(1, 1, 1))
-  const delta = new Matrix4()
-    .makeTranslation(body.position.x, body.position.y, body.position.z)
+  // The torso is placed inside the skin group, the cape beside it in the player:
+  // the torso's move is carried over to the cape's frame, or every turn of the
+  // torso threw the cape off the back by the skin's offset.
+  const skin = figure.skin as unknown as Object3D
+  const skinM = new Matrix4().compose(skin.position, skin.quaternion, skin.scale)
+  const delta = skinM
+    .clone()
+    .multiply(new Matrix4().makeTranslation(body.position.x, body.position.y, body.position.z))
     .multiply(new Matrix4().makeRotationFromEuler(body.rotation))
     .multiply(new Matrix4().makeTranslation(-br[0], -br[1], -br[2]))
+    .multiply(skinM.clone().invert())
   delta.multiply(restM).decompose(cape.position, cape.quaternion, new Vector3())
 }
 

@@ -10,6 +10,8 @@ mod millida_mod;
 mod catalog_pack;
 mod pack_delta;
 mod pack_card;
+mod pack_edits;
+mod versions;
 
 pub use deps::*;
 pub use safety::*;
@@ -22,3 +24,5 @@ pub use scan::*;
 pub use millida_mod::*;
 pub use catalog_pack::*;
 pub use pack_card::*;
+pub use pack_edits::*;
+pub use versions::*;

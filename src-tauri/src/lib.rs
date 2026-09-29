@@ -71,8 +71,22 @@ pub fn allow_assets(app: &tauri::AppHandle) {
     }
 }
 
+/// WebKitGTK's DMA-BUF renderer paints nothing on several driver stacks — the
+/// proprietary NVIDIA driver above all, and the AppImage's bundled WebKit on a
+/// newer host Mesa — so the window stays a blank grey rectangle. It has to be
+/// switched off before GTK starts; a value the player set is left alone.
+#[cfg(target_os = "linux")]
+fn avoid_webkit_dmabuf_renderer() {
+    const VAR: &str = "WEBKIT_DISABLE_DMABUF_RENDERER";
+    if std::env::var_os(VAR).is_none() {
+        std::env::set_var(VAR, "1");
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    avoid_webkit_dmabuf_renderer();
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             tray::show_main(app);
@@ -163,6 +177,8 @@ pub fn run() {
             commands::profiles::update_catalog_pack,
             commands::profiles::sync_catalog_pack,
             commands::profiles::protected_builds,
+            commands::profiles::pack_auto_update,
+            commands::profiles::set_pack_auto_update,
             commands::profiles::pack_review_candidate,
             commands::profiles::pack_review_queue,
             commands::profiles::millida_packs,
@@ -248,6 +264,8 @@ pub fn run() {
             commands::profiles::clear_profile_cover,
             commands::content::check_updates,
             commands::content::update_content,
+            commands::content::content_versions,
+            commands::content::set_content_version,
             commands::content::update_all,
             commands::content::add_local_file,
             commands::content::pick_content_files,

@@ -31,7 +31,8 @@ export function CrashModal() {
   // сменить Java), главное действие — её исправление; общая «Починить сборку»
   // тогда вторая. Раньше точный фикс был мелкой серой кнопкой, а зелёной —
   // общая починка, которая эту причину не лечит (аудит 22.09.2026).
-  const fixes = (info.actions ?? []).filter((a) => a.kind !== 'repair')
+  const fixes = (info.actions ?? []).filter((a) => a.kind !== 'repair' && a.kind !== 'fix-plan')
+  const planSteps = (info.actions ?? []).find((a) => a.kind === 'fix-plan')?.steps ?? []
   const hasMainFix = fixes.some((a) => a.kind !== 'share-log' && a.kind !== 'open-folder')
   const mainFixKey = hasMainFix
     ? (() => {
@@ -58,6 +59,16 @@ export function CrashModal() {
           </div>
         </div>
         <p className="crash-reason">{info.reason}</p>
+        {planSteps.length ? (
+          <div className="crash-plan">
+            <span>Починка сделает:</span>
+            <ul>
+              {planSteps.map((s) => (
+                <li key={s}>{s}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
         {info.tail ? (
           <>

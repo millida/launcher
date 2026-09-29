@@ -92,6 +92,7 @@
 .sh-pr.is-off b { color: var(--m-rarity-legendary); }
 .sh-deal .sh-off.big { animation: sj-hop 1.4s steps(1, end) 0.6s infinite; }
 :root:root .sh-deal > .sh-wish { top: 12px; right: 12px; --px-n: 5px; clip-path: var(--px-5); }
+:root:root .sh-deal > .sh-off { top: 12px; left: 12px; --px-n: 5px; clip-path: var(--px-5); }
 .sh-deal > .sh-card-foot { flex-direction: column; align-items: stretch; gap: 8px; }
 
 /* «Можно забрать» — подпрыгивание ступенью (как готовый сундук в лобби). */

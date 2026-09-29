@@ -37,7 +37,7 @@ import { loadCosmeticCatalog } from '../lib/gameProfile'
 import { useAccounts } from '../state/accounts'
 import { showToast } from '../state/ui'
 import { showReward, type RewardEntry } from '../components/reward/RewardReveal'
-import { logoutToLogin } from '../lib/session'
+import { logoutToLogin, refreshMillidaWallet } from '../lib/session'
 import { Guard } from '../components/Guard'
 import { uiConfirm } from '../state/confirm'
 import { Packs, topUpKopecks } from '../components/shop/Packs'
@@ -180,6 +180,14 @@ export function Rubies({ on }: { on: boolean }) {
     loadPackQuests()
       .then((r) => setQuests(questsToShow(r)))
       .catch(() => setQuests([]))
+  }, [on, signedIn])
+
+  useEffect(() => {
+    if (!on || !signedIn) return
+    const refresh = () => void refreshMillidaWallet()
+    refresh()
+    window.addEventListener('focus', refresh)
+    return () => window.removeEventListener('focus', refresh)
   }, [on, signedIn])
 
   useEffect(() => {
@@ -482,10 +490,13 @@ export function Rubies({ on }: { on: boolean }) {
   const doPack = async (pack: ShopPack) => {
     if (!signedIn) return logoutToLogin()
     const result = purchaseFlow('ruby_pack', pack.code, pack.kopecks, 'kopecks')
-    const short = walletKnown ? topUpKopecks(pack.kopecks - walletKopecks) : 0
-    if (short > 0) {
-      result(false, 'insufficient')
-      return doWalletTopUp(short)
+    if (walletKnown && pack.kopecks > walletKopecks) {
+      const fresh = await refreshMillidaWallet()
+      const short = fresh === null ? 0 : topUpKopecks(pack.kopecks - fresh)
+      if (short > 0) {
+        result(false, 'insufficient')
+        return doWalletTopUp(short)
+      }
     }
     const ok = await uiConfirm(pack.rubies.toLocaleString('ru-RU') + ' ' + word(pack.rubies) + ' за ' + rubles(pack.kopecks), {
       title: 'Оплатить ' + pack.title,
@@ -611,7 +622,7 @@ export function Rubies({ on }: { on: boolean }) {
         busy={busy}
         onBuy={(p) => void doPack(p)}
         wallet={walletKnown ? walletKopecks : undefined}
-        onTopUp={(n) => doWalletTopUp(n)}
+        onTopUp={(_, p) => void doPack(p)}
       />
       </Guard>
       <Guard what="PLUS" silent>
