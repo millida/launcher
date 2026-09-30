@@ -7,6 +7,8 @@ import { openServerDetail } from '../state/serverDetail'
 import { licenseRequired } from '../state/servers'
 import { Icon } from './Icon'
 import { joinAddr } from '../lib/ownServer'
+import { blockFor, serverTint } from './catalog/itemView'
+import { blockArt } from './playhub/data'
 
 /// Список версий сервера одной строкой-диапазоном: «1.8–26.3» вместо двадцати
 /// чисел через запятую. Нечисловые метки (если сервер пишет «1.8.x» или
@@ -60,23 +62,27 @@ function Banner({ sv }: { sv: SnapshotServer }) {
   )
 }
 
+/** Логотип сервера; нет его или не загрузился — блок Minecraft на цвете от имени (как в «Ресурсах»). */
 function Logo({ sv }: { sv: SnapshotServer }) {
-  if (sv.logo)
+  const [bad, setBad] = useState(false)
+  const key = sv.slug || sv.name || sv.ip
+  if (sv.logo && !bad)
     return (
       <span className="srv-ava">
         <img
           src={sv.logo}
           alt=""
-          style={{ width: '44px', height: '44px', objectFit: 'cover', borderRadius: '8px' }}
+          style={{ width: '44px', height: '44px', objectFit: 'cover' }}
           loading="lazy"
-          onError={(e) => {
-            const p = e.currentTarget.parentNode as HTMLElement
-            if (p) p.textContent = sv.name[0] || '?'
-          }}
+          onError={() => setBad(true)}
         />
       </span>
     )
-  return <span className="srv-ava">{sv.name[0] || '?'}</span>
+  return (
+    <span className="srv-ava is-art" style={{ backgroundColor: serverTint(key) }}>
+      <img src={blockArt(blockFor(key))} alt="" draggable={false} style={{ width: '28px', height: '28px', objectFit: 'contain' }} />
+    </span>
+  )
 }
 
 export function ServerRow({ sv, hidden, pos }: { sv: SnapshotServer; hidden?: boolean; pos?: number }) {

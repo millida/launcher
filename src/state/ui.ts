@@ -7,6 +7,7 @@ import type { SoundEvent } from '../lib/sound'
 export type ScreenId =
   | 'play'
   | 'premium'
+  | 'plus'
   | 'builds'
   | 'servers'
   | 'mods'

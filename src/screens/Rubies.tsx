@@ -14,6 +14,7 @@ import {
   craftItem,
   loadEconomyProgress,
   loadPackQuests,
+  DEFAULT_PLUS_OFFERS,
   loadPlusEconomy,
   loadRules,
   loadShopDay,
@@ -35,11 +36,11 @@ import {
 } from '../lib/rubies'
 import { loadCosmeticCatalog } from '../lib/gameProfile'
 import { useAccounts } from '../state/accounts'
-import { showToast } from '../state/ui'
+import { showToast, useUi } from '../state/ui'
 import { showReward, type RewardEntry } from '../components/reward/RewardReveal'
 import { logoutToLogin, refreshMillidaWallet } from '../lib/session'
 import { Guard } from '../components/Guard'
-import { uiConfirm } from '../state/confirm'
+import { uiChoice, uiConfirm } from '../state/confirm'
 import { Packs, topUpKopecks } from '../components/shop/Packs'
 import { rarityOfPrice, shardWord, word } from '../components/shop/rarity'
 import { Shard } from '../components/shop/parts'
@@ -50,6 +51,7 @@ import { ParcelBlock, PathBlock, WeeklyPathBlock, WorkshopBlock } from '../compo
 import { boostWeekly, claimWeeklyStep, loadWeeklyAny, type WeeklyPath } from '../components/shop/weekly'
 import { PlusMonth } from '../components/shop/PlusMonth'
 import { useShopGift } from '../components/shop/giftState'
+import { PLUS_PASS } from '../components/daily/chestDrops'
 import { PassBody } from '../components/daily/DailyPassModal'
 import { Wishlist } from '../components/shop/Wishlist'
 import { CreatorCode } from '../components/shop/CreatorCode'
@@ -498,12 +500,19 @@ export function Rubies({ on }: { on: boolean }) {
         return doWalletTopUp(short)
       }
     }
-    const ok = await uiConfirm(pack.rubies.toLocaleString('ru-RU') + ' ' + word(pack.rubies) + ' за ' + rubles(pack.kopecks), {
+    const plusKopecks = (plus?.offers?.find((o) => o.tier === 'PLUS') ?? DEFAULT_PLUS_OFFERS[0]!).priceKopecks
+    const answer = await uiChoice(pack.rubies.toLocaleString('ru-RU') + ' ' + word(pack.rubies) + ' за ' + rubles(pack.kopecks), {
       title: 'Оплатить ' + pack.title,
-      confirmLabel: 'Оплатить',
+      confirmLabel: 'Купить сейчас за ' + rubles(pack.kopecks),
+      ...(plus?.active ? {} : { cancelLabel: 'Оформи PLUS за ' + rubles(plusKopecks) + ' — ' + PLUS_PASS.rubies.toLocaleString('ru-RU') + ' рубинов + ' + Object.values(PLUS_PASS.chests).reduce((a, b) => a + (b || 0), 0) + ' сундуков, осколки ×1,5, Милли 100 в день' }),
       danger: false,
     })
-    if (!ok) return result(false, 'cancel')
+    if (answer === 'no' && !plus?.active) {
+      result(false, 'cancel')
+      useUi.getState().setScreen('plus')
+      return
+    }
+    if (answer !== 'yes') return result(false, 'cancel')
     setBusy(pack.code)
     try {
       const res = await buyPack(pack.code)
@@ -619,6 +628,15 @@ export function Rubies({ on }: { on: boolean }) {
       <Guard what="Рубины" silent>
       <Packs
         packs={day.packs}
+        plusOffer={
+          plus && !plus.active
+            ? {
+                kopecks: (plus.offers?.find((o) => o.tier === 'PLUS') ?? DEFAULT_PLUS_OFFERS[0]!).priceKopecks,
+                rubies: PLUS_PASS.rubies,
+                onOpen: () => useUi.getState().setScreen('plus'),
+              }
+            : undefined
+        }
         busy={busy}
         onBuy={(p) => void doPack(p)}
         wallet={walletKnown ? walletKopecks : undefined}

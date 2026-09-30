@@ -38,18 +38,23 @@ export interface NavGroup {
 
 const tab = (slug: SectionSlug, label: string): NavTab => ({ slug, label })
 
-/** Дословно как на сайте (голосовое владельца 29.09.2026, читы в «Моды» — 30.09.2026). */
+/**
+ * Как на сайте (голосовое владельца 29.09.2026), но без серверных сборок, читов
+ * и голов (владелец 30.09.2026, 21:04: «в лаунчере слишком много всего»).
+ * Серверные сборки остаются во вкладке контента хостинга (SERVER_SECTIONS).
+ */
+export const LAUNCHER_HIDDEN: ReadonlySet<string> = new Set(['server-packs', 'cheats', 'heads'])
 export const CATALOG_GROUPS: NavGroup[] = [
   { key: 'all', label: 'Все', tabs: [tab('all', 'Все')] },
-  { key: 'packs', label: 'Сборки', tabs: [tab('modpacks', 'Сборки модов'), tab('server-packs', 'Серверные сборки')] },
+  { key: 'packs', label: 'Сборки', tabs: [tab('modpacks', 'Сборки модов')] },
   {
     key: 'mods',
     label: 'Моды',
-    tabs: [tab('mods', 'Моды'), tab('plugins', 'Плагины'), tab('data-packs', 'Дата-паки'), tab('addons', 'Аддоны'), tab('cheats', 'Читы')],
+    tabs: [tab('mods', 'Моды'), tab('plugins', 'Плагины'), tab('data-packs', 'Дата-паки'), tab('addons', 'Аддоны')],
   },
   { key: 'graphics', label: 'Графика', tabs: [tab('texture-packs', 'Ресурс-паки'), tab('shaders', 'Шейдеры')] },
   { key: 'worlds', label: 'Карты', tabs: [tab('maps', 'Карты'), tab('seeds', 'Сиды')] },
-  { key: 'looks', label: 'Скины', tabs: [tab('skins', 'Скины'), tab('capes', 'Плащи'), tab('heads', 'Головы')] },
+  { key: 'looks', label: 'Скины', tabs: [tab('skins', 'Скины'), tab('capes', 'Плащи')] },
 ]
 
 export const CATALOG_TABS: NavTab[] = CATALOG_GROUPS.flatMap((g) => g.tabs)
@@ -127,7 +132,7 @@ export interface ListingFilters {
   loader?: string | null
   category?: string | null
   q?: string | null
-  sort?: 'popular' | 'new'
+  sort?: 'recommended' | 'popular' | 'new'
   page?: number
   perPage?: number
   edition?: EditionFilter | null
@@ -145,7 +150,8 @@ export function listingQuery(section: SectionSlug, f: ListingFilters): string {
   if (f.price) sp.set('price', f.price)
   if (f.edition) sp.set('edition', f.edition)
   if (f.use) sp.set('use', f.use)
-  if (f.sort === 'new') sp.set('sort', 'new')
+  // Как на сайте: «Рекомендуемые» — без параметра, «Популярные» и «Новые» — параметром.
+  if (f.sort === 'new' || f.sort === 'popular') sp.set('sort', f.sort)
   if (f.page && f.page > 1) sp.set('page', String(f.page))
   if (f.perPage) sp.set('perPage', String(f.perPage))
   return sp.toString()

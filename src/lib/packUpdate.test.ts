@@ -18,6 +18,43 @@ const cases: Array<[string, Settings, View, Verdict]> = [
   ],
   ['стоит опубликованная версия — предлагать нечего', installed, { slug: 'arcania', version: '2.3.1' }, null],
   [
+    'автор заменил архив версии, не меняя номер — игрок должен получить новые файлы',
+    { ...installed, catalogPackSha512: 'aa'.repeat(64) },
+    { slug: 'arcania', version: '2.3.1', files: [{ side: 'client', version: '2.3.1', size: 1, sha512: 'bb'.repeat(64) }] },
+    { slug: 'arcania', from: '2.3.1', to: '2.3.1' },
+  ],
+  [
+    'тот же архив в другом регистре hex — не обновление',
+    { ...installed, catalogPackSha512: 'AA'.repeat(64) },
+    { slug: 'arcania', version: '2.3.1', files: [{ side: 'client', version: '2.3.1', size: 1, sha512: 'aa'.repeat(64) }] },
+    null,
+  ],
+  [
+    'сменился только серверный архив — клиенту качать нечего',
+    { ...installed, catalogPackSha512: 'aa'.repeat(64) },
+    {
+      slug: 'arcania',
+      version: '2.3.1',
+      files: [
+        { side: 'server', version: '2.3.1', size: 1, sha512: 'cc'.repeat(64) },
+        { side: 'client', version: '2.3.1', size: 1, sha512: 'aa'.repeat(64) },
+      ],
+    },
+    null,
+  ],
+  [
+    'сборка поставлена до того, как лаунчер стал помнить хеш, — сравнивать не с чем, не дёргаем игрока',
+    installed,
+    { slug: 'arcania', version: '2.3.1', files: [{ side: 'client', version: '2.3.1', size: 1, sha512: 'bb'.repeat(64) }] },
+    null,
+  ],
+  [
+    'карточка без хеша (старый кэш) не выдаёт себя за замену',
+    { ...installed, catalogPackSha512: 'aa'.repeat(64) },
+    { slug: 'arcania', version: '2.3.1', files: [{ side: 'client', version: '2.3.1', size: 1 }] },
+    null,
+  ],
+  [
     'пробелы вокруг номера не делают из одной версии две',
     { catalogPackSlug: 'arcania', catalogPackVersion: ' 2.3.1 ' },
     { slug: 'arcania', version: '2.3.1 ' },

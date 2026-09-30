@@ -891,3 +891,4 @@
 .sh-collect { margin-top: 14px; }
 .sh-collect-h { margin: 0 0 10px; font-size: 15px; font-weight: 850; }
 
+.sh-card.sh-pack.is-plus { background: hsl(42 70% 50% / 0.14); }

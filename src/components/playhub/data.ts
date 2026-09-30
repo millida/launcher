@@ -132,6 +132,11 @@ const EXTRA_TITLES: Record<string, string> = {
   TNTRUN: 'TNT Run',
   HUNGER_GAMES: 'Голодные игры',
   TOWNY: 'Towny',
+  COBBLEMON: 'Пиксельмон',
+  MURDER: 'Murder Mystery',
+  EARTH: 'Земля',
+  MANHUNT: 'Манхант',
+  BINGO: 'Бинго',
 }
 const EXTRA_LOOK: [number, string][] = [
   [12, '#1d5e5a'],
@@ -146,9 +151,19 @@ function modeDef(code: string, i: number): ServerModeDef {
   const known = SERVER_MODES.find((d) => d.cat === code)
   if (known) return known
   const [block, color] = EXTRA_LOOK[i % EXTRA_LOOK.length]!
-  const title =
-    EXTRA_TITLES[code] || code.charAt(0) + code.slice(1).toLowerCase().replace(/_/g, ' ')
-  return { cat: code, title, block, color }
+  return { cat: code, title: modeTitle(code), block, color }
+}
+
+/**
+ * Название режима по коду рейтинга — одно на лаунчер и millida.net/katalog
+ * (сайт берёт его из scripts/export-mode-art.mjs вместе с картинками).
+ */
+export function modeTitle(code: string): string {
+  return (
+    SERVER_MODES.find((d) => d.cat === code)?.title ||
+    EXTRA_TITLES[code] ||
+    code.charAt(0) + code.slice(1).toLowerCase().replace(/_/g, ' ')
+  )
 }
 
 interface ModeSummary {

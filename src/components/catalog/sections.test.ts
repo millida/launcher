@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import {
+import { LAUNCHER_HIDDEN,
   CATALOG_GROUPS,
   CATALOG_TABS,
   SECTION_SOURCE,
@@ -23,11 +23,11 @@ import { hasPx } from '../pxArt'
  */
 const SITE_GROUPS: [string, string, [string, string][]][] = [
   ['all', 'Все', [['all', 'Все']]],
-  ['packs', 'Сборки', [['modpacks', 'Сборки модов'], ['server-packs', 'Серверные сборки']]],
-  ['mods', 'Моды', [['mods', 'Моды'], ['plugins', 'Плагины'], ['data-packs', 'Дата-паки'], ['addons', 'Аддоны'], ['cheats', 'Читы']]],
+  ['packs', 'Сборки', [['modpacks', 'Сборки модов']]],
+  ['mods', 'Моды', [['mods', 'Моды'], ['plugins', 'Плагины'], ['data-packs', 'Дата-паки'], ['addons', 'Аддоны']]],
   ['graphics', 'Графика', [['texture-packs', 'Ресурс-паки'], ['shaders', 'Шейдеры']]],
   ['worlds', 'Карты', [['maps', 'Карты'], ['seeds', 'Сиды']]],
-  ['looks', 'Скины', [['skins', 'Скины'], ['capes', 'Плащи'], ['heads', 'Головы']]],
+  ['looks', 'Скины', [['skins', 'Скины'], ['capes', 'Плащи']]],
 ]
 
 describe('группы разделов как на сайте', () => {
@@ -45,7 +45,7 @@ describe('группы разделов как на сайте', () => {
   })
 
   it('каждый раздел описан в модели лаунчера, группа находится по разделу', () => {
-    expect(ALL_SECTIONS.map((s) => s.slug)).toEqual(CATALOG_TABS.map((t) => t.slug))
+    expect(ALL_SECTIONS.map((s) => s.slug).filter((s) => !LAUNCHER_HIDDEN.has(s))).toEqual(CATALOG_TABS.map((t) => t.slug))
     expect(groupOf('shaders').key).toBe('graphics')
     expect(groupOf('capes').key).toBe('looks')
     expect(groupOf('нет-такого').key).toBe('all')
@@ -95,7 +95,7 @@ describe('запрос листинга — те же параметры, что
   })
 
   it('пустые фильтры не попадают в адрес, одна буква поиска — тоже', () => {
-    expect(listingQuery('all', { sort: 'popular', page: 1, q: 'a', version: null })).toBe('section=all')
+    expect(listingQuery('all', { sort: 'recommended', page: 1, q: 'a', version: null })).toBe('section=all')
   })
 
     expect(foreignTailAllowed({})).toBe(true)

@@ -18,7 +18,7 @@ import { hasTauri } from '../../ipc/tauri'
  * строки понимает, что ставит — мод, пак, шейдер или сборку.
  */
 
-export type SiteSort = 'popular' | 'new'
+export type SiteSort = 'recommended' | 'popular' | 'new'
 export type SiteAccess = 'all' | 'premium' | 'free'
 
 export interface SiteState {
@@ -117,7 +117,7 @@ function createSiteStore(linked: boolean): SiteStore {
     loader: null,
     category: null,
     q: '',
-    sort: 'popular',
+    sort: 'recommended',
     access: 'all',
     edition: null,
     use: null,
@@ -214,7 +214,7 @@ function createSiteStore(linked: boolean): SiteStore {
         return
       }
       if (packs && st.access === 'free') got = got.filter((c) => !c.premium)
-      else if (!more && packs && st.sort === 'popular') got = pinArcania(got, premium, st, q)
+      else if (!more && packs && st.sort === 'recommended') got = pinArcania(got, premium, st, q)
       const hidden = packs && st.access === 'free' ? premium.filter((p) => matchesFilters(p, st, q)).length : 0
       // Лента могла сдвинуться между страницами (новый материал сверху) — без дублей.
       const items = more ? get().items.concat(got.filter((i) => !get().items.some((x) => x.slug === i.slug))) : got

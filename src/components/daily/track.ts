@@ -147,13 +147,13 @@ export function seasonCell(n: number): { free: Reward[]; plus: Reward[] } {
   const withRubies = (list: Reward[]) => (FREE_RUBIES[cell] ? [...list, rubies(FREE_RUBIES[cell]!)] : list)
   switch ((i % CYCLE_DAYS) + 1) {
     case 1:
-      return { free: withRubies([shards(15)]), plus: [rubies(100)] }
+      return { free: withRubies([shards(15)]), plus: [rubies(250)] }
     case 2:
       return { free: withRubies([shards(15)]), plus: [frags('RARE', 8)] }
     case 3:
       return { free: withRubies([shards(25)]), plus: [chest(DAY3_PLUS[week] ?? 'RARE')] }
     case 4:
-      return { free: withRubies([chest(DAY4_FREE[week] ?? 'COMMON')]), plus: [rubies(120)] }
+      return { free: withRubies([chest(DAY4_FREE[week] ?? 'COMMON')]), plus: [rubies(275)] }
     case 5:
       return { free: withRubies([shards(20)]), plus: [week % 2 === 0 ? shards(60) : frags('EPIC', 8)] }
     case 6:

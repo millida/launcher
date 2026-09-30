@@ -1,9 +1,15 @@
 import { useTopBar } from '../state/topbar'
 import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import { blockFor, serverTint } from '../components/catalog/itemView'
 import type { CSSProperties, ReactNode } from 'react'
 import { modeBackground, modeLook } from '../components/playhub/modeArt'
 import { modeScene } from '../components/iso/modeScenes'
+import { modeIcon } from '../components/playhub/modeIcon'
 import { Icon } from '../components/Icon'
+import { noteVisitKind, noteVisitSection } from '../lib/recsSignals'
+import { sectionBySlug } from '../components/catalog/site'
+import { openItem } from '../components/catalog/itemStore'
+import { HubFind } from '../components/playhub/HubFind'
 import { fmtN, plural } from '../lib/format'
 import { buildsShelf } from '../lib/buildsShelf'
 import { openModal, setScreen } from '../state/ui'
@@ -37,18 +43,19 @@ import '../styles/pixel/game.css'
 import type { HubSection } from '../components/playhub/hubTab'
 import { useMods } from '../state/mods'
 import { ForYou } from '../components/playhub/ForYou'
+import { PlayTogether } from '../components/playhub/PlayTogether'
 import { CatalogPane } from './Mods'
 import { track } from '../lib/telemetry'
 import { ONEBLOCK_PACK, modeAction, ownServerMode, targetsOwnServer } from '../lib/ownServer'
 import '../styles/pixel/playhub.css'
 
 /**
- * «Во что играем», версия 5 (владелец 24.09.2026, 16:09): одна страница без
- * переключателя вкладок. Сверху вниз: «Мои сборки» обычными карточками с
- * обложкой (нет сборок — полка версий Minecraft) → «Для тебя» (свой сервер,
- * Arcania Labs, OneBlock, карты с друзьями, сборки — один ряд) → «Сборки»
- * (одна строка, «Все» — полный каталог как на millida.net) → «Режимы» →
- * «Зайти на сервер».
+ * «Во что играем», версия 6 (владелец 30.09.2026, 15:06 — те же блоки и
+ * порядок, что у главной millida.net/katalog): «Мои сборки» обычными
+ * карточками с обложкой (нет сборок — полка версий Minecraft) → «Категории»
+ * маленькими кнопками → «Рекомендуем» в четыре ряда (хостинг, эксклюзивы,
+ * OneBlock, лента) → «Режимы» (значки в стиле Blups, баннер OneBlock) →
+ * «Играть вдвоём» → «Другие игры» → «Серверы».
  * «Новая сборка» и «Импорт» — в верхней полосе хаба (PlayhubBar).
  * «Продолжить» здесь нет: продолжение — кнопка «Играть» в лобби.
  */
@@ -70,6 +77,27 @@ function CardSkel({ n }: { n: number }) {
 }
 
 /** Картинка карточки. Не загрузилась (зеркало CDN не ответило) — прячем, а не рисуем «битую» иконку. */
+/**
+ * Картинка сервера с запасом (владелец 30.09.2026: «у серверов нет значков»):
+ * нет логотипа или он не загрузился — блок Minecraft на цвете от имени сервера,
+ * тот же у сервера при каждом заходе. Пустой квадрат больше не показывается.
+ */
+function SrvArt({ src, name, className, tint }: { src?: string | null; name: string; className: string; tint?: string }) {
+  const [bad, setBad] = useState(false)
+  useEffect(() => setBad(false), [src])
+  if (src && !bad)
+    return (
+      <span className={className}>
+        <img src={src} alt="" loading="lazy" draggable={false} onError={() => setBad(true)} />
+      </span>
+    )
+  return (
+    <span className={className + ' is-art'} style={{ backgroundColor: tint || serverTint(name) }}>
+      <img className="ph-srv-block" src={blockArt(blockFor(name))} alt="" draggable={false} />
+    </span>
+  )
+}
+
 const img = (src: string | null | undefined) =>
   src ? (
     <img
@@ -138,10 +166,14 @@ function ModePage({
 }) {
   // Картинка — та же, что у плитки режима: свет в цвете режима и сцена из блоков.
   const art = useMemo(() => {
+    // Набор значков в стиле Blups — тот же, что у плитки; кода нет — сцена из блоков.
+    const set = modeIcon(def.cat)
+    if (set?.rig) return { color: set.color, bg: set.bg, icon: { url: set.rig.url, w: set.rig.w, h: set.rig.h }, k: 230 / set.rig.h, set: true, rig: true }
+    if (set) return { color: set.color, bg: set.bg, icon: { url: set.icon, w: 16, h: 16 }, k: 10, set: true, rig: false }
     const color = modeLook(def.cat).color
     const icon = modeScene(def.cat)
     const k = Math.max(1, Math.floor(Math.min(200 / icon.w, 200 / icon.h) * 2) / 2)
-    return { color, bg: modeBackground(color, 480), icon, k }
+    return { color, bg: modeBackground(color, 480), icon, k, set: false, rig: false }
   }, [def.cat])
   // Поиск по серверам режима: запрос уходит в рейтинг через паузу в наборе.
   const [q, setQ] = useState('')
@@ -165,7 +197,7 @@ function ModePage({
     <div className="ph-mode" data-mode={def.cat} data-section="mode">
       <header className="ph-mode-hero">
         <span className="ph-mode-bg" style={{ '--mode-c': art.color } as CSSProperties}>
-          <span className="ph-mode-art" style={{ backgroundImage: 'url(' + art.bg + ')' }}>
+          <span className={'ph-mode-art' + (art.set ? ' is-set' : '') + (art.rig ? ' is-rig' : '')} style={{ backgroundImage: 'url(' + art.bg + ')' }}>
             <img src={art.icon.url} style={{ width: art.icon.w * art.k, height: art.icon.h * art.k }} alt="" draggable={false} />
           </span>
         </span>
@@ -264,13 +296,8 @@ function ServerRow({
       data-pos={pos}
       data-src={def ? 'mode' : 'hub_card'}
     >
-      <span className="ph-srv-logo">{img(s.logo) || <Icon id="i-server" />}</span>
-      <span
-        className={'ph-srv-ban' + (s.banner ? '' : ' none')}
-        style={s.banner ? undefined : { background: def ? def.color : 'var(--m-surface-2)' }}
-      >
-        {s.banner ? img(s.banner) : <img className="ph-srv-block" src={blockArt(def ? def.block : 10)} alt="" draggable={false} />}
-      </span>
+      <SrvArt className="ph-srv-logo" src={s.logo} name={s.slug || s.name || s.ip} />
+      <SrvArt className="ph-srv-ban" src={s.banner} name={s.slug || s.name || s.ip} tint={def ? def.color : undefined} />
       <span className="ph-srv-body">
         <b>{s.name}</b>
         <span className="ph-srv-meta">
@@ -525,13 +552,15 @@ export function PlayHub({ on }: { on?: boolean }) {
   const freeOurs = catalogPacks
     .filter((p) => p.origin === 'millida')
     .sort((a, b) => (b.downloads || 0) - (a.downloads || 0))
-  const forYouPacks = freeOurs.length ? freeOurs : catalogPacks
+  // Лента «Рекомендуем» в четыре ряда: сначала сборки Millida, дальше Modrinth.
+  const forYouPacks = [...freeOurs, ...catalogPacks.filter((p) => p.origin !== 'millida')]
 
   // «Сборки»: одна строка самых популярных (6 на 1200, 4 на 900 — лишние
   // прячет CSS), «Все» в шапке — полный каталог. Arcania из «Для тебя»
   // второй раз не ставим.
   /** Раздел каталога целиком — страница раздела, как на millida.net. */
   const openSection = (kind: string, mq = '') => {
+    noteVisitKind(kind)
     useMods.getState().set({ modTab: kind, mq, fCats: [], fCat: 'все', fVer: 'любая', fLoader: 'любой', count: '' })
     useHubTab.setState((st) => ({ seq: st.seq + 1 }))
     setAll(true)
@@ -540,7 +569,11 @@ export function PlayHub({ on }: { on?: boolean }) {
   // 7 плиток + «Остальные» (владелец 24.09): с баннером OneBlock на две
   // колонки это ровно два ряда по пять.
   const MODES_SHOWN = 8
-  const shownModes = allModes ? shelfModes : shelfModes.slice(0, MODES_SHOWN)
+  // «Свернуть» не встаёт в ряд одна (владелец 30.09.2026, 21:04): если так
+  // выходит, прячем самый слабый режим (они по онлайну, последний — Бинго и
+  // подобные). Клеток в ряду пять, баннер OneBlock занимает две.
+  const lonely = (2 + (shelfModes.length - 1) + 1) % 5 === 1
+  const shownModes = allModes ? (lonely ? shelfModes.slice(0, -1) : shelfModes) : shelfModes.slice(0, MODES_SHOWN)
 
   // «Режимы»: OneBlock баннером первым, 7 плиток и «Остальные»,
   // раскрывает их на месте. Внутри режима — полная лента его серверов.
@@ -589,9 +622,10 @@ export function PlayHub({ on }: { on?: boolean }) {
 
   // Страница «Все сборки»: полный каталог — поиск, фильтры, моды, карты.
   // Своя сборка каталога (MCSborki, Arcania) — её страница хаба с «Играть».
-  const openPackSlug = (slug: string) => {
+  const openPackSlug = (slug: string): boolean => {
     const p = allPacks.find((x) => x.slug === slug)
     if (p) openPack(p)
+    return !!p
   }
   // Переключатель «Во что играем | Каталог Millida» (владелец 24.09.2026,
   // 16:20): во второй вкладке — весь каталог как на millida.net.
@@ -607,6 +641,10 @@ export function PlayHub({ on }: { on?: boolean }) {
 
   return wrap(
     <div className="hub-pane">
+      {/* Первый экран (владелец 30.09.2026), как на millida.net/katalog: поле,
+          крупная «Найти» и «Собрать с ИИ». Текст поля — запрос каталога или
+          просьба к Милли. */}
+      <HubFind onSearch={(q) => openSection('modpack', q)} />
       {/* 1. Свои сборки обычными карточками с обложкой; нет сборок — полка
           версий Minecraft, как было. */}
       {mine.length
@@ -691,13 +729,14 @@ export function PlayHub({ on }: { on?: boolean }) {
               ))}
             </div>,
           )}
-      {/* 2. Для тебя: свой сервер, Arcania Labs, дальше ротация по дню. */}
+      {/* 3. Рекомендуем: хостинг, эксклюзивы, OneBlock, дальше лента в четыре ряда. */}
       {head(
         'foryou',
-        'Для тебя',
+        'Рекомендуем',
         <ForYou
           on={!!on}
           arcania={arcaniaPack}
+          exclusives={premiumPacks}
           premiumWait={premiumWait}
           packs={forYouPacks}
           oneblockOnline={obOnline}
@@ -705,10 +744,27 @@ export function PlayHub({ on }: { on?: boolean }) {
           onPack={openPack}
           onMode={(cat) => pickMode(cat, 'foryou')}
           onMap={(name) => openSection('world', name)}
+          onMore={() => openSection('all')}
+          onItem={(section, card) => {
+            noteVisitSection(section)
+            openSection(sectionBySlug(section).kind)
+            requestAnimationFrame(() => openItem({ kind: 'card', section, card }))
+          }}
         />,
       )}
       {/* Полка «Сборки» убрана: каталог — во вкладке «Ресурсы» (17:31). */}
       {head('modes', 'Режимы', modesPane)}
+      {/* Играть вдвоём — сборки и карты «С другом» из разных тем, как на сайте. */}
+      {head(
+        'together',
+        'Играть вдвоём',
+        <PlayTogether
+          onPack={(slug, title) => {
+            if (!openPackSlug(slug)) openSection('modpack', title)
+          }}
+          onMap={(title) => openSection('world', title)}
+        />,
+      )}
       {/* Игры Minecraft — такими же карточками, как сборки; клик открывает экран игры (владелец 29.09.2026). */}
       {head(
         'games',

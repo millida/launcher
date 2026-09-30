@@ -22,9 +22,9 @@ import type { LoaderId } from '../lib/loaderSupport'
 import '../styles/pixel/newbuild.css'
 import { showReward } from '../components/reward/RewardReveal'
 import { PxIcon } from '../components/PxIcon'
-import { openHubBuild } from '../components/playhub/hubTab'
 import { aiPresetFor } from '../lib/aiBuilder'
-import { openAiBuilder } from '../state/aiBuilder'
+import { openMilli } from '../state/milli'
+import { openHubBuild } from '../components/playhub/hubTab'
 
 /**
  * «Новая сборка» (правки владельца 23.09.2026, 19:40): иконка сборки как в
@@ -370,12 +370,13 @@ export function NewBuildModal() {
             disabled={busy}
             onClick={() => {
               close()
+              // Милли живёт в каталоге: ведём в «Ресурсы» и открываем её там.
               openHubBuild()
-              openAiBuilder(aiPresetFor(loader, ver))
+              openMilli({ preset: aiPresetFor(loader, ver), src: 'new_build' })
             }}
           >
             <PxIcon name="sparkle" size={18} />
-            ИИ соберёт сборку
+            Собрать с Милли
           </button>
           <button className="btn md secondary" id="nbCancel" data-sound="close" onClick={close}>
             Отмена

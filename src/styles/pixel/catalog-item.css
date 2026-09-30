@@ -1,0 +1,128 @@
+/* ============================================================
+   СТРАНИЦА МАТЕРИАЛА КАТАЛОГА (30.09.2026) — components/catalog/ItemPage.tsx
+   Шапка: обложка полосой, значок, название, автор, факты, цена и кнопки.
+   Ниже — вкладки «Описание | Галерея | Версии» слева и колонка выбора
+   версии, совместимости и меток справа. Пиксельный язык: подложки — .card
+   (срез 10px и ступенчатая рамка из 12-pixel.css), чипы — срез 4px.
+   ============================================================ */
+
+.ci { display: flex; flex-direction: column; gap: 14px; min-width: 0; padding-bottom: 32px; }
+
+.ci-crumbs { display: flex; align-items: center; gap: 12px; }
+.ci-back { gap: 6px; }
+.ci-back svg { width: 12px; height: 12px; }
+.ci-crumb { font-size: 13px; font-weight: 700; color: var(--m-fg-subtle); }
+
+/* ── Шапка ── */
+.card.ci-hero { padding: 0; overflow: hidden; background-color: var(--m-surface); }
+.ci-banner { position: relative; height: 180px; overflow: hidden; background: var(--m-surface-2); }
+.ci-banner > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.ci-banner.is-art .mr-fallback > img { width: 120px; }
+.ci-head { position: relative; display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; gap: 18px; align-items: end; padding: 0 20px 18px; }
+.ci-icon { position: relative; display: block; width: 96px; height: 96px; margin-top: -40px; overflow: hidden; background: var(--m-surface-2); --px-n: 5px; clip-path: var(--px-5); }
+.ci-icon > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.ci-icon .mr-fallback > img { width: 64%; }
+.ci-titles { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding-top: 12px; }
+.ci-h1 { margin: 0; font: 800 26px/1.15 var(--m-font); letter-spacing: -0.02em; color: var(--m-fg); overflow-wrap: anywhere; }
+.ci-by { font-size: 14px; font-weight: 600; color: var(--m-fg-subtle); }
+.ci-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; margin: 4px 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--m-fg-muted); }
+.ci-facts li { display: inline-flex; align-items: center; gap: 5px; }
+.ci-facts b { color: var(--m-fg); font-variant-numeric: tabular-nums; }
+.ci-facts svg { width: 13px; height: 13px; }
+.ci-sec-ic { display: inline-flex; }
+.ci-warn { display: inline-flex; align-items: center; gap: 5px; color: var(--m-warning); font-weight: 700; }
+.ci-cta { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; padding-top: 12px; }
+.ci-cta .mr-actions { margin: 0; flex-wrap: wrap; justify-content: flex-end; }
+.ci-cta .mr-actions .btn { height: 40px; padding: 0 16px; font-size: 14px; }
+.ci-cta .mr-actions .btn svg { width: 14px; height: 14px; }
+.ci-cta .mr-price { font-size: 22px; }
+
+/* ── Тело: вкладки слева, колонка справа ── */
+.ci-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 14px; align-items: start; }
+.ci-main { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.ci-aside { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.segs.ci-tabs { justify-content: flex-start; margin: 0; }
+.ci-n { margin-left: 6px; font-size: 11.5px; font-weight: 800; color: var(--m-fg-subtle); font-variant-numeric: tabular-nums; }
+
+.card.ci-box { padding: 16px 18px; background-color: var(--m-surface); }
+.ci-box-h { margin: 0 0 10px; font: 800 14px/1 var(--m-font); color: var(--m-fg); }
+.ci-desc { font-size: 14px; line-height: 1.6; color: var(--m-fg-muted); }
+.ci-desc h2, .ci-desc h3 { color: var(--m-fg); font-size: 16px; margin: 18px 0 6px; }
+.ci-desc > :first-child { margin-top: 0; }
+.ci-desc img { max-width: 100%; height: auto; }
+.ci-retry { margin-top: 12px; }
+.ci-skel { display: flex; flex-direction: column; gap: 10px; }
+
+/* Галерея: плитки 16:9, по клику — просмотр на весь экран. */
+.ci-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.ci-shot { position: relative; display: block; aspect-ratio: 16 / 9; padding: 0; border: 0; overflow: hidden; background: var(--m-surface-2); cursor: zoom-in; --px-n: 5px; clip-path: var(--px-5); }
+.ci-shot > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform var(--m-t-base) ease; }
+.ci-shot:hover > img { transform: scale(1.04); }
+
+/* Версии: строка на файл. */
+.ci-vers { display: flex; flex-direction: column; gap: 6px; }
+.ci-ver {
+  display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 0.9fr) 64px 110px auto; gap: 12px; align-items: center;
+  min-height: 48px; padding: 6px 8px 6px 14px; font-size: 13px; color: var(--m-fg-muted); background: var(--m-surface);
+  --px-n: 5px; clip-path: var(--px-5);
+}
+.ci-ver-name { color: var(--m-fg); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ci-ver-game, .ci-ver-ld { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ci-ver-size, .ci-ver-date { color: var(--m-fg-subtle); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ci-ver .btn svg { width: 12px; height: 12px; }
+.ci-more { align-self: center; margin-top: 4px; }
+
+/* Выбор версии. */
+.ci-pick { display: flex; flex-direction: column; gap: 10px; }
+.ci-pick .ci-box-h { margin: 0; }
+.ci-pick .m-select { width: 100%; }
+.segs.ci-loaders { gap: 4px; flex-wrap: wrap; }
+.ci-loaders .seg { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; font-size: 13px; font-weight: 700; color: var(--m-fg-muted); background-color: var(--m-surface-2); }
+:root:root .ci-loaders .seg.on { color: var(--px-on-accent); background-color: var(--m-accent); --px-ft: var(--px-btn-t); --px-fb: var(--px-btn-b); }
+.ci-file { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; font-size: 12.5px; background: var(--m-inset); --px-n: 5px; clip-path: var(--px-5); }
+.ci-file.is-none { color: var(--m-fg-subtle); }
+.ci-file-name { min-width: 0; color: var(--m-fg); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ci-file-size { flex: none; color: var(--m-fg-subtle); font-variant-numeric: tabular-nums; }
+.ci-pick-go { width: 100%; justify-content: center; }
+.ci-pick-go svg { width: 13px; height: 13px; }
+
+/* Чипы совместимости и меток. */
+.ci-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ci-chip {
+  display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px;
+  font-size: 12.5px; font-weight: 700; color: var(--mk-tone, var(--m-fg)); background: var(--m-surface-2);
+  --px-n: 4px; clip-path: var(--px-4); white-space: nowrap;
+}
+.ci-chip.is-accent { color: var(--m-accent); }
+.ci-chip.is-soft { color: var(--m-fg-muted); font-weight: 600; }
+.ci-chip svg { width: 12px; height: 12px; }
+.ci-site { align-self: flex-start; gap: 6px; }
+.ci-site svg { width: 12px; height: 12px; }
+
+.ci-similar { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.ci-sim-h { margin: 0; font: 800 18px/1 var(--m-font); color: var(--m-fg); }
+
+/* Скин: рендер во весь рост слева, имя и кнопки справа. */
+.ci-skin { display: grid; grid-template-columns: minmax(220px, 320px) minmax(0, 1fr); gap: 20px; align-items: start; }
+.card.ci-skin-stage { position: relative; aspect-ratio: 3 / 4; padding: 0; overflow: hidden; background-color: var(--m-surface-2); }
+.ci-skin-stage > img { position: absolute; inset: 8%; width: 84%; height: 84%; object-fit: contain; image-rendering: pixelated; }
+.ci-skin-side { display: flex; flex-direction: column; gap: 12px; padding-top: 8px; }
+.ci-skin-side .mr-actions { margin: 4px 0 0; }
+.ci-skin-side .btn { height: 40px; padding: 0 16px; }
+
+@media (max-width: 1100px) {
+  .ci-grid { grid-template-columns: minmax(0, 1fr) 260px; }
+  .ci-ver { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 64px auto; }
+  .ci-ver-ld, .ci-ver-date { display: none; }
+}
+@media (max-width: 860px) {
+  .ci-grid { grid-template-columns: minmax(0, 1fr); }
+  .ci-aside { order: -1; }
+  .ci-head { grid-template-columns: 72px minmax(0, 1fr); }
+  .ci-icon { width: 72px; height: 72px; }
+  .ci-cta { grid-column: 1 / -1; align-items: stretch; }
+  .ci-cta .mr-actions { justify-content: flex-start; }
+  .ci-skin { grid-template-columns: minmax(0, 1fr); }
+}
+.ci-chip.is-link { border: 0; cursor: pointer; font-family: inherit; }
+.ci-chip.is-link:hover { background: var(--m-raised); }

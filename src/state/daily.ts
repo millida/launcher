@@ -15,7 +15,7 @@ import { isPaymentUrl } from '../lib/payHosts'
 import { openPaymentUrl } from '../lib/openPayment'
 import { MILLIDA_USER_KEY } from './accounts'
 import { apiErrorText } from '../lib/apiError'
-import { loadPlus, subscribePlus, type PlusStatus } from '../lib/gameProfile'
+import { loadPlus, subscribePlus, type PlusStatus, type PlusTier } from '../lib/gameProfile'
 import { logoutToLogin } from '../lib/session'
 import { watchPlusPurchase } from './plusWatch'
 import { purchaseFlow } from '../lib/purchaseTrack'
@@ -56,12 +56,12 @@ interface DailyState {
    */
   plusCard: boolean
   /** Ссылка последней неоплаченной подписки: повторное «Оформить» в 15 минут открывает её же. */
-  pay: { url: string; at: number } | null
+  pay: { url: string; at: number; tier?: PlusTier } | null
 
   load: () => Promise<void>
   /** Забрать клетку сезона или всё открытое; без цели — первую открытую. */
   claim: (target?: ClaimTarget) => Promise<void>
-  startPlus: () => Promise<void>
+  startPlus: (tier?: PlusTier) => Promise<void>
   setPlusCard: (open: boolean) => void
   /**
    * Неоткрытые сундуки службы (GET /rubies/chests): за часы игры, промокод,
@@ -140,21 +140,21 @@ const payKey = (): string | null => {
   return uid ? 'm-plus-pay:' + uid : null
 }
 
-function savedPay(): { url: string; at: number } | null {
+function savedPay(): { url: string; at: number; tier?: PlusTier } | null {
   try {
     localStorage.removeItem('m-plus-pay')
     const key = payKey()
     if (!key) return null
-    const v = JSON.parse(localStorage.getItem(key) || 'null') as { url?: unknown; at?: unknown } | null
+    const v = JSON.parse(localStorage.getItem(key) || 'null') as { url?: unknown; at?: unknown; tier?: unknown } | null
     if (v && typeof v.url === 'string' && isPaymentUrl(v.url) && typeof v.at === 'number' && Date.now() - v.at < PAY_TTL)
-      return { url: v.url, at: v.at }
+      return { url: v.url, at: v.at, tier: v.tier === 'DIAMOND' ? 'DIAMOND' : 'PLUS' }
   } catch {
     /* хранилище недоступно — просто без запоминания */
   }
   return null
 }
 
-function keepPay(pay: { url: string; at: number } | null) {
+function keepPay(pay: { url: string; at: number; tier?: PlusTier } | null) {
   try {
     const key = payKey()
     if (!key) return
@@ -244,7 +244,7 @@ export const useDaily = create<DailyState>((set, get) => ({
   },
 
   /** Тот же путь, что у кнопок PLUS в магазине и на «Персонаже». */
-  startPlus: async () => {
+  startPlus: async (tier = 'PLUS') => {
     if (!hasMillidaAccount()) {
       logoutToLogin()
       return
@@ -252,7 +252,7 @@ export const useDaily = create<DailyState>((set, get) => ({
     // Свежая неоплаченная ссылка — та же: новая подписка на каждый клик
     // плодила «ожидает оплаты» (разбор 24.09.2026).
     const fresh = get().pay && savedPay()
-    if (fresh && Date.now() - fresh.at < PAY_TTL) {
+    if (fresh && (fresh.tier ?? 'PLUS') === tier && Date.now() - fresh.at < PAY_TTL) {
       openPaymentUrl(fresh.url)
       return
     }
@@ -260,8 +260,8 @@ export const useDaily = create<DailyState>((set, get) => ({
     // Воронка PLUS: исход — только настоящая оплата (её ловит опрос ниже) или ошибка.
     const result = purchaseFlow('plus', 'plus')
     try {
-      const started = await subscribePlus()
-      const pay = { url: started.paymentUrl, at: Date.now() }
+      const started = await subscribePlus(tier)
+      const pay = { url: started.paymentUrl, at: Date.now(), tier }
       keepPay(pay)
       set({ pay })
       openPaymentUrl(started.paymentUrl)

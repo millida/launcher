@@ -11,7 +11,7 @@ import type { CuratedItem, SkinTile } from './site'
 import { CATALOG_GROUPS, SECTION_VISUAL, curatedTitle, groupOf, groupVisual, siteSectionPath } from './sections'
 import type { NavGroup } from './sections'
 import { PxIcon } from '../PxIcon'
-import { Fallback, MrIcon } from './SiteRow'
+import { Fallback, MrIcon, TagGlyph } from './SiteRow'
 import { installFromCatalog } from '../../lib/catalogInstall'
 import { openExt } from '../../lib/api'
 import { setScreen } from '../../state/ui'
@@ -32,6 +32,9 @@ import { pickBuild } from '../../state/buildPicker'
 import { F_VERS, WORLD_CATS, useMods } from '../../state/mods'
 import { useProfiles } from '../../state/profiles'
 import { track } from '../../lib/telemetry'
+import { ItemPage } from './ItemPage'
+import { closeItem, openItem, useItem } from './itemStore'
+import { CHEATS, cheatName } from './itemView'
 import '../../styles/pixel/catalog2.css'
 
 /*
@@ -371,7 +374,10 @@ function Frame({
       {!narrow ? <aside className="mr-aside" aria-label="Фильтры">{filters}</aside> : null}
       <div className="mr-main">
         <header className="mr-head">
-          <h1 className="mr-h1">{sec.h1}</h1>
+          <h1 className="mr-h1">
+            {sec.h1}
+            {count ? <span className="mr-h1-n">{count}</span> : null}
+          </h1>
           <ForBuild sec={sec} />
         </header>
         <div className="mr-toolbar">
@@ -384,7 +390,7 @@ function Frame({
                 {active ? <span className="mr-fbtn-n">{active}</span> : null}
               </button>
             ) : null}
-            {count ? <span className="mr-count">{count}</span> : <span className="mr-count" />}
+            <span className="mr-count" />
             {sort}
           </div>
         </div>
@@ -395,7 +401,7 @@ function Frame({
   )
 }
 
-function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: boolean; onOpenPack?: (slug: string) => void }) {
+function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: boolean; onOpenPack?: (slug: string) => boolean | void }) {
   const store = useCatalogCtx().store
   const s = store()
   const [open, setOpen] = useState(false)
@@ -404,7 +410,7 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
   const searching = q.length >= 2
   const tail = useMemo(() => mrTail(s.items, s.mr, s.page, s.pages, peekHit, searching), [s.items, s.mr, s.page, s.pages, searching])
   const cfRows = useMemo(() => cfTail(s.items, tail, s.cf, s.page, s.pages, peekHit, searching), [s.items, tail, s.cf, s.page, s.pages, searching])
-  const count = s.page ? (q || s.category ? 'Найдено: ' : '') + materials(s.total + s.mrTotal + cfRows.length) : null
+  const count = s.page ? materials(s.total + s.mrTotal + cfRows.length) : null
   const filters = (
     <SiteFilters
       sec={sec}
@@ -416,6 +422,8 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
       edition={s.edition}
       use={s.use}
       price={s.price}
+      sort={s.sort}
+      onSort={(v) => s.patch({ sort: v })}
       onPatch={(p) => s.patch(p)}
       onReset={() => s.reset()}
     />
@@ -432,11 +440,7 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
       onOpen={() => setOpen((v) => !v)}
       search={<SearchField value={s.q} label={'Поиск по разделу «' + sec.title + '»'} onCommit={(v) => s.patch({ q: v })} />}
       count={count}
-      sort={
-        <>
-          <Sort value={s.sort} onPick={(v) => s.patch({ sort: v })} />
-        </>
-      }
+      sort={null}
     >
       {s.failed ? (
         <CatalogNotice note={{ icon: 'i-alert', title: 'Каталог не ответил', action: { label: 'Повторить', primary: true, icon: 'i-restart', onClick: () => void s.load() } }} />
@@ -516,7 +520,7 @@ function CuratedPane({ narrow }: { narrow: boolean }) {
   const versions = [...new Set(all.flatMap((i) => i.files.flatMap((f) => f.gameVersions)))].sort((a, b) => b.localeCompare(a, undefined, { numeric: true }))
   const needle = q.trim().toLowerCase()
   const shown = all.filter(
-    (i) => (!needle || curatedTitle(i.slug).toLowerCase().includes(needle)) && (!ver || i.files.some((f) => f.gameVersions.includes(ver))),
+    (i) => (!needle || cheatName(i.slug).toLowerCase().includes(needle) || curatedTitle(i.slug).toLowerCase().includes(needle)) && (!ver || i.files.some((f) => f.gameVersions.includes(ver))),
   )
   useSearchTrack('cheats', needle, items ? shown.length : null)
   const filters = (
@@ -559,13 +563,18 @@ function CuratedPane({ narrow }: { narrow: boolean }) {
   )
 }
 
+/**
+ * Плитка чита — та же плитка ленты, что у модов: обложка, значок, название,
+ * вид клиента, строка описания, загрузчик и версии, «В сборку». Картинок у
+ * кураторского раздела нет — вместо них блок Minecraft на цвете раздела.
+ */
 function CheatCard({ it, pos }: { it: CuratedItem; pos: number }) {
-  const title = curatedTitle(it.slug)
-  const f = it.files[0]
+  const title = cheatName(it.slug)
+  const info = CHEATS[it.slug]
   const loaders = [...new Set(it.files.flatMap((x) => x.loaders))].slice(0, 2)
-  const vers = [...new Set(it.files.flatMap((x) => x.gameVersions))]
+  const vers = [...new Set(it.files.flatMap((x) => x.gameVersions))].sort((a, b) => b.localeCompare(a, undefined, { numeric: true }))
   return (
-    <article className="card mr-gal" data-track="row_open" data-kind="cheat" data-id={it.slug} data-pos={pos} onClick={() => openExt('https://millida.net/cheats/' + it.slug)}>
+    <article className="card mr-gal" data-track="row_open" data-kind="cheat" data-id={it.slug} data-pos={pos} onClick={() => openItem({ kind: 'cheat', item: it })}>
       <span className="mr-gal-cover" aria-hidden="true">
         <Fallback slug={it.slug} section="cheats" title={title} />
       </span>
@@ -574,14 +583,14 @@ function CheatCard({ it, pos }: { it: CuratedItem; pos: number }) {
           <Fallback slug={it.slug} section="cheats" title={title} />
         </span>
         <h3 className="mr-gal-title">{title}</h3>
-        <span className="mr-gal-author">{f ? 'версия ' + f.version : ''}</span>
-        <span className="mr-gal-summary">{f ? f.fileName : ''}</span>
+        <span className="mr-gal-author">{info ? info.kind : 'Чит-клиент'}</span>
+        {info ? <span className="mr-gal-summary">{info.features.slice(0, 3).join(' · ')}</span> : null}
         <ul className="mr-tags mr-gal-tags" aria-label="Метки">
           {loaders.map((l) => {
             const src = loaderIconSrc(l)
             return (
               <li key={l} className="mr-tag has-tone" style={{ '--mk-tone': loaderTone(l) || undefined } as React.CSSProperties}>
-                {src ? <MrIcon src={src} size={14} /> : null}
+                {src ? <TagGlyph node={<MrIcon src={src} size={12} />} tone={loaderTone(l)} /> : null}
                 <span>{loaderLabel(l)}</span>
               </li>
             )
@@ -694,7 +703,7 @@ function SkinsPane() {
 function SkinCard({ k, pos }: { k: SkinTile; pos: number }) {
   const name = capFirst(k.title.replace(/^Скин:\s*/i, ''))
   return (
-    <article className="card mr-skin" data-track="row_open" data-kind="skin" data-id={k.id} data-pos={pos} onClick={() => openExt('https://millida.net/skins/katalog/' + k.id)}>
+    <article className="card mr-skin" data-track="row_open" data-kind="skin" data-id={k.id} data-pos={pos} onClick={() => openItem({ kind: 'skin', skin: k })}>
       <span className="mr-skin-art" aria-hidden="true">
         <img src={k.renderUrl} alt="" loading={pos < 8 ? 'eager' : 'lazy'} draggable={false} />
         {k.wearers > 0 ? (
@@ -802,7 +811,11 @@ function GroupNav({
             )
           })}
         </nav>
-      ) : null}
+      ) : (
+        // Ряд подвкладок держит место и там, где их нет (владелец 30.09.2026,
+        // 21:04: «меню скачет»): лента не прыгает при смене раздела.
+        <div className="mr-subtypes-gap" aria-hidden="true" />
+      )}
     </>
   )
 }
@@ -814,6 +827,9 @@ export interface ExtraTab {
   node: ReactNode
   /** Встать перед разделами каталога, а не после. */
   first?: boolean
+  /** Пиксельный значок и его цвет — как у групп каталога. */
+  px?: string
+  tint?: string
 }
 
 /**
@@ -831,7 +847,7 @@ export function SiteCatalog({
   extra,
 }: {
   content?: boolean
-  onOpenPack?: (slug: string) => void
+  onOpenPack?: (slug: string) => boolean | void
   /** Раздел «Серверы» — лента мониторинга (владелец 24.09.2026, 18:29). */
   servers?: ReactNode
   target?: CatalogTarget
@@ -846,11 +862,17 @@ export function SiteCatalog({
   const seq = useHubTab((s) => s.seq)
   const extras: ExtraTab[] = [
     ...(extra || []),
-    ...(servers ? [{ id: 'servers', label: 'Серверы', node: servers }] : []),
+    ...(servers ? [{ id: 'servers', label: 'Серверы', node: servers, px: 'server', tint: 'var(--m-sec-servers)' }] : []),
     // Купленное в каталоге — поставить заново в любую сборку. На сервер платное не ставится.
-    ...(server ? [] : [{ id: 'purchases', label: 'Покупки', node: <PurchasesPane onOpenPack={onOpenPack} /> }]),
+    ...(server ? [] : [{ id: 'purchases', label: 'Покупки', node: <PurchasesPane onOpenPack={onOpenPack} />, px: 'wallet', tint: 'var(--m-sec-purchases)' }]),
   ]
   const ctx = useMemo(() => ({ store, target }), [store, target])
+  const item = useItem((s) => s.cur)
+  // Ушли из каталога или вошли в него снаружи — страница материала закрывается.
+  useEffect(() => () => useItem.setState({ cur: null }), [])
+  useEffect(() => {
+    if (useItem.getState().cur) useItem.setState({ cur: null })
+  }, [seq, section])
 
   // Вход снаружи («Все» у полки, плитка категории, «Добавить» в сборке): раздел
   // и сужение под сборку берутся из `useMods`, как их выставил вход.
@@ -884,12 +906,21 @@ export function SiteCatalog({
       className={'seg' + (own === x.id ? ' on' : '')}
       aria-current={own === x.id ? 'page' : undefined}
       data-track={'cat_' + x.id}
-      onClick={() => setOwn(x.id)}
+      onClick={() => {
+        closeItem()
+        setOwn(x.id)
+      }}
     >
+      {x.px ? (
+        <span className="mr-sec-ic" style={{ color: x.tint }}>
+          <PxIcon name={x.px} size={16} />
+        </span>
+      ) : null}
       {x.label}
     </button>
   )
   const pick = (slug: string) => {
+    closeItem()
     setOwn(null)
     if (slug !== section) store.getState().setSection(slug as SiteSection['slug'])
   }
@@ -944,7 +975,10 @@ export function SiteCatalog({
             {extras.filter((x) => !x.first).map(extraBtn)}
           </nav>
         )}
-        {body}
+        {item ? <ItemPage it={item} /> : null}
+        <div className="mr-cat-body" hidden={!!item}>
+          {body}
+        </div>
       </div>
     </CatalogCtx.Provider>
   )

@@ -549,6 +549,41 @@ const GLYPHS: Record<string, Glyph> = {
     ],
     pal: { r: '#d9443a', R: '#9c2a22', w: '#ecdcae', k: '#4aa3e0', d: '#7a4f28' },
   },
+  // Шар ловца (Cobblemon, «Пиксельмон»): красный верх, пояс, белый низ.
+  ball: {
+    rows: [
+      '...rrrrrr...',
+      '..rLrrrrrr..',
+      '.rLrrrrrrrr.',
+      'rrrrrrrrrrrd',
+      'rrrrkkkkrrrd',
+      'kkkkkwwkkkkk',
+      'kkkkkwwkkkkk',
+      'wwwwkkkkwwwg',
+      'wwwwwwwwwwwg',
+      '.wwwwwwwwwg.',
+      '..wwwwwwgg..',
+      '...wwwwgg...',
+    ],
+    pal: { r: '#e0302a', L: '#ff8a7a', d: '#9c1a16', k: '#2a2226', w: '#f4f1ea', g: '#b9bcc4' },
+  },
+  // Кинжал (Murder Mystery): короткий клинок остриём вверх и рукоять.
+  dagger: {
+    rows: [
+      '....b....',
+      '...aba...',
+      '...aba...',
+      '...aba...',
+      '...aba...',
+      '...aba...',
+      '.ggggggg.',
+      '....h....',
+      '....h....',
+      '....h....',
+      '...ppp...',
+    ],
+    pal: { a: '#9fb3c7', b: '#f2f8ff', g: '#8a8f99', h: '#5a3a1e', p: '#8a8f99' },
+  },
   // Алмаз — запасной значок.
   diamond: {
     rows: [
@@ -601,6 +636,11 @@ const LOOK: Record<string, { color: string; glyph: keyof typeof GLYPHS }> = {
   TNTRUN: { color: '#e24a2a', glyph: 'tnt' },
   HUNGER_GAMES: { color: '#6b8f1f', glyph: 'apple' },
   TOWNY: { color: '#b0673a', glyph: 'house' },
+  COBBLEMON: { color: '#d8403a', glyph: 'ball' },
+  MURDER: { color: '#8e1f2c', glyph: 'dagger' },
+  EARTH: { color: '#2f7fc4', glyph: 'map' },
+  MANHUNT: { color: '#8a3a1f', glyph: 'eye' },
+  BINGO: { color: '#c79a12', glyph: 'blocks' },
 }
 const SPARE: string[] = ['#3b7ea6', '#c0752a', '#6d5acf', '#0f9e6a', '#b0417a']
 

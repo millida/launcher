@@ -65,6 +65,11 @@ const SCENES: Record<string, () => Item[]> = {
   SPLEEF: item('shovel'),
   UHC: item('gapple'),
   TOWNY: block('bookshelf'),
+  COBBLEMON: item('ball'),
+  MURDER: item('dagger'),
+  EARTH: item('map'),
+  MANHUNT: item('eye'),
+  BINGO: item('blocks'),
 }
 
 const cache = new Map<string, { url: string; w: number; h: number }>()

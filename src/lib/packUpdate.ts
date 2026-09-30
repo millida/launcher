@@ -8,7 +8,10 @@ export interface PackUpdate {
   to: string
 }
 
-export type PackSettings = Pick<ProfileSettings, 'catalogPackSlug' | 'catalogPackVersion' | 'catalogPackReviewFile'>
+export type PackSettings = Pick<
+  ProfileSettings,
+  'catalogPackSlug' | 'catalogPackVersion' | 'catalogPackSha512' | 'catalogPackReviewFile'
+>
 
 // Same shape the core accepts: the settings file sits on the player's disk and the slug goes into an API path.
 const SLUG = /^[a-z0-9-]{1,80}$/
@@ -18,15 +21,20 @@ export function catalogPackSlug(s: PackSettings | null | undefined): string | nu
   return SLUG.test(slug) ? slug : null
 }
 
+const normalHash = (value: string | null | undefined) => (value || '').trim().toLowerCase()
+
 /**
  * Any difference from the published version is offered, not only a higher
  * number: a version the catalogue stopped serving (pulled as broken) gives way
- * to the one it serves now. A reviewer's candidate install is left alone, since
- * the published version is the one it is meant to replace.
+ * to the one it serves now. The same number with another archive is offered
+ * too: the author may replace the files of a version without renaming it. A
+ * build installed before its hash was kept has nothing to compare and is left
+ * alone. A reviewer's candidate install is left alone, since the published
+ * version is the one it is meant to replace.
  */
 export function packUpdateFor(
   s: PackSettings | null | undefined,
-  view: Pick<PackView, 'slug' | 'version'> | null | undefined,
+  view: Pick<PackView, 'slug' | 'version' | 'files'> | null | undefined,
 ): PackUpdate | null {
   const slug = catalogPackSlug(s)
   if (!slug || !view) return null
@@ -34,8 +42,11 @@ export function packUpdateFor(
   if (view.slug && view.slug !== slug) return null
   const from = (s?.catalogPackVersion || '').trim()
   const to = (view.version || '').trim()
-  if (!from || !to || from === to) return null
-  return { slug, from, to }
+  if (!from || !to) return null
+  if (from !== to) return { slug, from, to }
+  const had = normalHash(s?.catalogPackSha512)
+  const served = normalHash(view.files?.find((f) => f.side === 'client')?.sha512)
+  return had && served && had !== served ? { slug, from, to } : null
 }
 
 /** A reviewer's candidate install is never checked: the published version is what it is meant to replace. */
@@ -43,7 +54,7 @@ export function packNeedsCheck(s: PackSettings | null | undefined): boolean {
   return !!catalogPackSlug(s) && !(s?.catalogPackReviewFile || '').trim()
 }
 
-export type PackCard = { view: Pick<PackView, 'slug' | 'version'> | null } | { error: unknown }
+export type PackCard = { view: Pick<PackView, 'slug' | 'version' | 'files'> | null } | { error: unknown }
 
 export type PackLaunchStep =
   | { kind: 'launch' }

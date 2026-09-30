@@ -266,8 +266,11 @@
   --px-n: 5px; clip-path: var(--px-5);
 }
 .ph-srv-ban img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.ph-srv-ban.none { display: grid; place-items: center; opacity: 0.55; }
-.ph-srv-ban img.ph-srv-block { position: static; width: 34px; height: 34px; object-fit: contain; }
+.ph-srv-ban.is-art { display: grid; place-items: center; background-image: var(--px-dots); }
+.ph-srv-ban img.ph-srv-block { position: static; width: 38px; height: 38px; object-fit: contain; }
+/* Логотипа нет — блок на цвете от имени сервера, как у заглушек каталога. */
+.ph-srv-logo.is-art { background-image: var(--px-dots); }
+.ph-srv-logo img.ph-srv-block { width: 30px; height: 30px; object-fit: contain; }
 .ph-srv-body { flex: 1 1 auto; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .ph-srv-body b {
   font: 650 15px/1.2 var(--m-font);
@@ -518,6 +521,9 @@
 .pp-cta-wrap { display: flex; }
 .pp-srv { justify-content: center; gap: 8px; }
 .pp-buy .pm-note { font-size: 12px; }
+.pp-buy .pkb-key-row { flex-direction: column; }
+.pp-buy .pkb-key-row .input { flex: none; }
+.pp-buy .pkb-key-row .btn { justify-content: center; }
 .pp-legal { display: flex; gap: 8px; align-items: center; font-size: 11.5px; color: var(--m-fg-muted); }
 .pp-legal b { padding: 2px 5px; font-weight: 700; color: var(--m-fg); background: var(--m-inset); --px-n: 4px; clip-path: var(--px-4); }
 
@@ -1654,3 +1660,187 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
   .ph-card.ph-mt.is-own, .ph-card.ph-mt.is-own::before { animation: none; }
   .ph-card.ph-mt.is-own::before { display: none; }
 }
+
+/* ---------- режимы: набор значков в стиле Blups (владелец 30.09.2026, 15:06) ----------
+   Фон — мозаика 12×12 клеток цвета режима, значок 16×16 с толстым контуром;
+   оба растягиваются без сглаживания. Те же файлы — на millida.net/katalog. */
+.ph-card.ph-mt.is-set { image-rendering: pixelated; }
+.ph-card.ph-mt.is-set .ph-mt-ic { width: 42%; height: auto; transform: translateY(8%); filter: drop-shadow(0 6px 0 rgba(0, 0, 0, 0.25)); }
+.ph-card.ph-mt.is-set:hover .ph-mt-ic { animation: ph-mt-hop-set 420ms steps(4) 1; }
+@keyframes ph-mt-hop-set {
+  0%, 100% { transform: translateY(8%); }
+  50% { transform: translateY(-4%); }
+}
+
+/* OneBlock — баннер на две клетки как первый экран mcru.me: осенний ночной
+   фон, логотип сезона, персонаж справа, «Играть». Рамка акцентом 4px. */
+.ph-card.ph-mt.ph-mt-ob {
+  grid-column: span 2;
+  display: block;
+  aspect-ratio: auto;
+  align-self: stretch;
+  position: relative;
+  background-color: #0d0b18;
+  --px-img-size: cover;
+  --px-img-pos: center;
+  --px-ol: var(--m-accent); --px-ol-w: 4px;
+}
+.ph-card.ph-mt.ph-mt-ob:hover { background-color: #0d0b18; }
+.ph-mt-ob > .ph-ob2-rig,
+.ph-mt-ob > .ph-ob2-logo,
+.ph-mt-ob > .ph-ob2-foot { position: absolute; }
+.ph-ob2-rig { right: 5%; bottom: 4px; height: 92%; width: auto; filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.6)); transition: translate 220ms var(--m-ease-move); pointer-events: none; }
+.ph-ob2-logo { left: 5%; top: 20%; width: 62%; height: auto; filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.6)); transition: scale 220ms var(--m-ease-move); transform-origin: 30% 50%; pointer-events: none; }
+/* Живой баннер: рыскание ригa, плавающий логотип, падающие листья — только transform/opacity. */
+.ph-ob2-rig { transform-origin: 50% 100%; animation: ph-ob-sway 4.2s ease-in-out infinite alternate; }
+.ph-ob2-logo { animation: ph-ob-float 5.5s ease-in-out infinite alternate; }
+.ph-ob2-leaves { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.ph-ob2-leaves i { position: absolute; top: -8%; left: calc(8% + var(--i) * 15%); width: 7px; height: 7px; background: #e0792b; opacity: 0; animation: ph-ob-leaf calc(6s + var(--i) * 0.9s) linear infinite; animation-delay: calc(var(--i) * -1.7s); }
+.ph-ob2-leaves i:nth-child(2n) { background: #c4452a; width: 6px; height: 6px; }
+.ph-ob2-leaves i:nth-child(3n) { background: #e8b130; }
+@keyframes ph-ob-sway { from { transform: translateY(0) rotate(-1.2deg); } to { transform: translateY(-5px) rotate(1.2deg); } }
+@keyframes ph-ob-float { from { transform: translateY(0); } to { transform: translateY(-5px); } }
+@keyframes ph-ob-leaf {
+  0% { transform: translate3d(0, 0, 0) rotate(0); opacity: 0; }
+  10% { opacity: 0.9; }
+  50% { transform: translate3d(22px, 130px, 0) rotate(180deg); }
+  90% { opacity: 0.9; }
+  100% { transform: translate3d(-8px, 280px, 0) rotate(360deg); opacity: 0; }
+}
+.pp-ob-bg { animation: none; }
+.pp-ob-logo { position: absolute; right: 6%; top: 50%; width: min(36%, 380px); height: auto; translate: 0 -50%; filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.55)); pointer-events: none; }
+.ph-ob2-foot { left: 6%; bottom: 13%; display: flex; align-items: center; gap: 14px; }
+.ph-ob2-foot .ph-mt-on { font-size: 13px; }
+.ph-mt-ob .ph-card-tag { z-index: 1; }
+@media (hover: hover) and (pointer: fine) {
+  .ph-mt-ob:hover .ph-ob2-logo { scale: 1.03; }
+  .ph-mt-ob:hover .ph-ob2-rig { translate: 0 -4px; }
+  .ph-mt-ob:hover .ph-mt-play { background: var(--m-accent-hover); }
+}
+.ph-mt-ob:active .ph-mt-play { transform: scale(0.97); }
+@media (max-width: 760px) {
+  .ph-card.ph-mt.ph-mt-ob { grid-column: 1 / -1; aspect-ratio: 16 / 9; }
+  .ph-card.ph-mt.is-set .ph-mt-ic { width: 44%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ph-card.ph-mt.is-set:hover .ph-mt-ic { animation: none; }
+  .ph-mt-ob:hover .ph-ob2-logo { scale: none; }
+  .ph-mt-ob:hover .ph-ob2-rig { translate: none; }
+  .ph-ob2-rig, .ph-ob2-logo { animation: none; }
+  .ph-ob2-leaves { display: none; }
+}
+.ph-mode-art.is-set { image-rendering: pixelated; background-size: cover; }
+
+/* «Рекомендуем» — четыре ряда (владелец 30.09.2026, 15:06); лишние ряды на
+   узком окне прячутся той же нулевой высотой. */
+.hub-grid.fy-grid { grid-template-rows: auto auto auto; }
+/* Карточка нашего OneBlock: фон и логотип баннера «Режимов». */
+.fy-ob { position: absolute; inset: 0; display: grid; place-items: center; background: #0d0b18; }
+.fy-ob img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.fy-ob img.fy-ob-logo { inset: auto; width: 80%; height: auto; object-fit: contain; filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.6)); transition: scale 180ms var(--m-ease-move); }
+.fy-card:hover .fy-ob img.fy-ob-logo { scale: 1.05; }
+
+/* ---------- категории хаба (владелец 30.09.2026) ----------
+   Квадратные плитки в две строки, как на сайте: подложка цвета сцены со
+   срезом 10px и гранями, название и число слева сверху, сцена в углу. */
+.hub-cats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+.hub-ctile {
+  position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0;
+  aspect-ratio: 1; padding: 12px 12px 0; overflow: hidden; border: 0; cursor: pointer; text-align: left; color: var(--m-fg);
+  --hc-f: rgba(0, 0, 0, 0.3);
+  background: color-mix(in srgb, var(--cat-tint, var(--m-accent)) 14%, var(--m-surface));
+  box-shadow: inset 0 0 0 2px var(--hc-f), inset 0 3px 0 rgba(255, 255, 255, 0.1), inset 0 -5px 0 rgba(0, 0, 0, 0.28);
+  clip-path: var(--px-10, polygon(0 10px, 10px 10px, 10px 0, calc(100% - 10px) 0, calc(100% - 10px) 10px, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 10px calc(100% - 10px), 0 calc(100% - 10px)));
+}
+.hub-ctile-name { position: relative; z-index: 1; max-width: 100%; overflow: hidden; font: 800 15px/1.15 var(--m-font); letter-spacing: -0.01em;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.hub-ctile-count { position: relative; z-index: 1; font: 700 12px/1.2 var(--m-font); color: var(--m-fg-muted); font-variant-numeric: tabular-nums; }
+.hub-ctile-art { position: absolute; right: 0; bottom: 0; width: 76%; height: 70%; object-fit: contain; object-position: right bottom; pointer-events: none;
+  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+@media (hover: hover) and (pointer: fine) {
+  .hub-ctile:hover { --hc-f: color-mix(in srgb, var(--cat-tint, var(--m-accent)) 70%, #fff); }
+  .hub-ctile:hover .hub-ctile-art { transform: translate(-3px, -3px); }
+}
+.hub-ctile:focus-visible { outline: none; --hc-f: var(--m-accent); }
+@media (max-width: 760px) { .hub-cats { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; } .hub-ctile { padding: 8px 7px 0; } .hub-ctile-name { font-size: 12px; } }
+
+/* «Играть вдвоём» — два ряда, лишнее прячется, как у сайта. */
+.hub-grid.pt-grid { grid-template-rows: auto auto; grid-auto-rows: 0; row-gap: 10px; overflow: hidden; }
+.hub-grid.pt-grid > * { min-height: 0; }
+.pt-grid .ph-card-meta svg { width: 12px; height: 12px; flex: none; }
+
+/* ---------- режимы: риги вместо значков (владелец 30.09.2026, 15:42) ----------
+   Мозаика цвета режима остаётся, поверх — риг из hero-rigs сайта: крупно
+   выглядывает из правого нижнего угла, не больше трети плитки, обрезан
+   краями, у всех один масштаб (верх до пояса на 52 % высоты). */
+.ph-card.ph-mt.is-rig { position: relative; }
+.ph-mt-rig {
+  position: absolute;
+  right: -4%;
+  bottom: 0;
+  height: 52%;
+  width: auto;
+  max-width: 58%;
+  object-fit: contain;
+  object-position: right bottom;
+  image-rendering: auto;
+  filter: drop-shadow(-4px 6px 0 rgba(0, 0, 0, 0.28));
+  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  pointer-events: none;
+}
+.ph-mt-rig[data-wide='true'] { height: auto; width: 58%; }
+.ph-card.ph-mt.is-rig:hover .ph-mt-rig { transform: translate(-4px, -4px); }
+.ph-card.ph-mt.is-rig .ph-mt-foot { position: relative; z-index: 1; grid-row: 2; align-self: end; }
+.ph-mode-hero .ph-mode-bg .ph-mode-art.is-rig { align-items: end; padding-bottom: 0; }
+.ph-mode-hero .ph-mode-bg .ph-mode-art.is-rig img { image-rendering: auto; animation: none; filter: drop-shadow(0 10px 0 rgba(0, 0, 0, 0.3)); }
+@media (prefers-reduced-motion: reduce) { .ph-card.ph-mt.is-rig:hover .ph-mt-rig { transform: none; } }
+
+/* Первый экран библиотеки: поле, «Найти» и «Собрать с ИИ» одной строкой (владелец 30.09.2026). */
+.hub-find { display: flex; align-items: stretch; gap: 10px; margin: 4px 0 22px; }
+.hub-find .hub-find-field { flex: 1 1 auto; min-width: 0; height: 60px; font-size: 16px; }
+.hub-find .btn { height: 60px; font-size: 18px; flex: none; gap: 10px; }
+.hub-find .hub-find-go { padding-inline: 40px; }
+@media (max-width: 600px) { .hub-find { flex-wrap: wrap; } .hub-find .hub-find-field { flex-basis: 100%; } .hub-find .btn { flex: 1 1 0; height: 54px; font-size: 16px; } }
+
+/* «Рекомендуем»: метка типа — значок и цвет раздела; эксклюзив светится
+   (владелец 30.09.2026). Свечение — статичный слой над карточкой, «дышит»
+   только прозрачность. */
+.ph-card-tag.sec { color: #0d1117; background: var(--tag-c, var(--m-accent)); }
+.ph-card-tag .px-icon { width: 14px; height: 14px; flex: none; }
+.fy-card .ph-card-tag.excl { background: var(--m-exclusive, #9333ea); color: #fff; }
+.fy-card.is-excl { position: relative; }
+.fy-card.is-excl::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 2px var(--m-exclusive, #9333ea), inset 0 0 22px color-mix(in srgb, var(--m-exclusive, #9333ea) 55%, transparent);
+  animation: fy-excl 3.2s ease-in-out infinite alternate;
+}
+.fy-card.is-excl:has(.gold)::after { box-shadow: inset 0 0 0 2px var(--ph-gold), inset 0 0 22px color-mix(in srgb, var(--ph-gold) 50%, transparent); }
+@keyframes fy-excl { from { opacity: 0.65; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .fy-card.is-excl::after { animation: none; } }
+
+/* «Рекомендуем» (владелец 30.09.2026, 21:04): три ряда, OneBlock — наш сервер
+   первой клеткой с зелёной меткой, «Ещё» — последней. Метки типа тёмные,
+   цвет раздела — только у значка: ряд карточек не рябит. */
+.fy-card .ph-card-tag.own { background: var(--m-accent); color: var(--px-on-accent, #06200e); }
+.fy-card.is-own { position: relative; }
+.fy-card.is-own::after {
+  content: ''; position: absolute; inset: 0; z-index: 3; pointer-events: none;
+  box-shadow: inset 0 0 0 2px var(--m-accent), inset 0 0 22px color-mix(in srgb, var(--m-accent) 45%, transparent);
+}
+.fy-card .ph-card-tag.sec { background: color-mix(in srgb, var(--m-bg, #161718) 82%, transparent); color: var(--m-fg); }
+.fy-more { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 100%; text-align: center; }
+.fy-more b { font: 700 16px/1.1 var(--m-font); }
+.fy-more-ic {
+  display: grid; place-items: center; width: 56px; height: 56px; color: var(--m-fg-subtle, rgba(255,255,255,.55)); background: var(--m-inset, rgba(0,0,0,.3));
+  clip-path: polygon(5px 0, calc(100% - 5px) 0, calc(100% - 5px) 5px, 100% 5px, 100% calc(100% - 5px), calc(100% - 5px) calc(100% - 5px), calc(100% - 5px) 100%, 5px 100%, 5px calc(100% - 5px), 0 calc(100% - 5px), 0 5px, 5px 5px);
+}
+.fy-more-ic svg { width: 24px; height: 24px; }
+@media (hover: hover) and (pointer: fine) { .fy-more:hover .fy-more-ic { color: #06200e; background: var(--m-accent); } }
+.hub-ctile-all { background: var(--m-surface); }
+.hub-ctile-allic { position: absolute; right: 12px; bottom: 12px; display: grid; place-items: center; width: 56px; height: 56px; color: var(--m-fg-subtle, rgba(255,255,255,.55)); background: var(--m-inset, rgba(0,0,0,.3));
+  clip-path: polygon(5px 0, calc(100% - 5px) 0, calc(100% - 5px) 5px, 100% 5px, 100% calc(100% - 5px), calc(100% - 5px) calc(100% - 5px), calc(100% - 5px) 100%, 5px 100%, 5px calc(100% - 5px), 0 calc(100% - 5px), 0 5px, 5px 5px); }
+.hub-ctile-allic svg { width: 26px; height: 26px; }

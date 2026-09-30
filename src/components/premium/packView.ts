@@ -43,7 +43,7 @@ export interface PackView {
   /** Где купить доступ — сайт сборки. */
   accessBuyUrl?: string | null
   partner?: PackPartner | null
-  files?: { side: string; version: string; size: number }[]
+  files?: { side: string; version: string; size: number; sha512?: string | null }[]
 }
 
 const packViewKey = (slug: string) => 'pack-view:' + slug

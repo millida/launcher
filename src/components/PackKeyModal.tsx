@@ -45,6 +45,50 @@ interface Fact {
   label: string
 }
 
+export function PackKeyField({ slug, onUnlocked }: { slug: string; onUnlocked: () => void }) {
+  const [code, setCode] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  const submit = () => {
+    if (busy || code.trim().length < 8) return
+    if (!hasTauri()) {
+      setError('Ключ активируется в приложении')
+      return
+    }
+    setBusy(true)
+    setError('')
+    redeemPackKey(slug, code.trim())
+      .then(onUnlocked)
+      .catch((e) => setError(String(e).replace(/^pack-access:\s*/, '')))
+      .finally(() => setBusy(false))
+  }
+
+  return (
+    <>
+      <div className="pkb-key-row">
+        <div className="input">
+          <input
+            value={code}
+            spellCheck={false}
+            placeholder="Ввести ключ"
+            aria-label="Ключ доступа"
+            onChange={(e) => {
+              setCode(e.target.value)
+              if (error) setError('')
+            }}
+            onKeyDown={(e) => e.key === 'Enter' && submit()}
+          />
+        </div>
+        <button className="btn md secondary" disabled={busy || code.trim().length < 8} data-track="pack_key_activate" data-kind="premium" data-id={slug} onClick={submit}>
+          <Icon id="i-key" /> {busy ? 'Проверяем…' : 'Активировать'}
+        </button>
+      </div>
+      {error ? <span className="pkb-err">{error}</span> : null}
+    </>
+  )
+}
+
 /**
  * Нет доступа к платной сборке — баннер сборки вместо сухого окна ключа
  * (правка владельца 24.09.2026, 16:39). Обложка, название, 3–5 фактов крупно,
@@ -56,9 +100,6 @@ interface Fact {
  * затемнение кита позиционируется по ближайшему предку.
  */
 export function PackKeyModal({ slug, title, onClose, onUnlocked }: Props) {
-  const [code, setCode] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
   const [view, setView] = useState<PackView | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [downloads, setDownloads] = useState<number | null>(null)
@@ -88,23 +129,6 @@ export function PackKeyModal({ slug, title, onClose, onUnlocked }: Props) {
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
-
-  const submit = () => {
-    if (busy || code.trim().length < 8) return
-    if (!hasTauri()) {
-      setError('Ключ активируется в приложении')
-      return
-    }
-    setBusy(true)
-    setError('')
-    redeemPackKey(slug, code.trim())
-      .then(() => {
-        onClose()
-        onUnlocked()
-      })
-      .catch((e) => setError(String(e).replace(/^pack-access:\s*/, '')))
-      .finally(() => setBusy(false))
-  }
 
   const name = view?.title || lobbyPack?.title || title
   const cover = view?.banner || view?.cover || lobbyPack?.coverUrl || view?.gallery?.[0] || null
@@ -207,24 +231,13 @@ export function PackKeyModal({ slug, title, onClose, onUnlocked }: Props) {
             <span className="pkb-key-why">
               <Icon id="i-lock" /> На этом аккаунте доступа нет
             </span>
-            <div className="pkb-key-row">
-              <input
-                className="input"
-                value={code}
-                spellCheck={false}
-                placeholder="Ввести ключ"
-                aria-label="Ключ доступа"
-                onChange={(e) => {
-                  setCode(e.target.value)
-                  if (error) setError('')
-                }}
-                onKeyDown={(e) => e.key === 'Enter' && submit()}
-              />
-              <button className="btn md secondary" disabled={busy || code.trim().length < 8} data-track="pack_key_activate" data-kind="premium" data-id={slug} onClick={submit}>
-                <Icon id="i-key" /> {busy ? 'Проверяем…' : 'Активировать'}
-              </button>
-            </div>
-            {error ? <span className="pkb-err">{error}</span> : null}
+            <PackKeyField
+              slug={slug}
+              onUnlocked={() => {
+                onClose()
+                onUnlocked()
+              }}
+            />
           </div>
           ) : null}
         </div>

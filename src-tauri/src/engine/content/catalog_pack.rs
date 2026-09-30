@@ -354,7 +354,7 @@ async fn install_catalog_pack_job(
      */
     let review_file = if review { view["reviewFileId"].as_str().unwrap_or_default() } else { "" };
     let review_sha512 = if review { sha512.as_str() } else { "" };
-    let mut identity = pack_identity(slug, &meta.version, review_file, review_sha512);
+    let mut identity = pack_identity(slug, &meta.version, &sha512, review_file, review_sha512);
     remember_mod_opt_in(&mut identity, &view);
     remember_protected(&mut identity, &view);
     merge_settings(&pname, identity);
@@ -423,10 +423,21 @@ fn put_profile(prof: &Profile) -> Result<(), String> {
 /// What a build remembers about the catalogue pack it came from. The install
 /// and the update write it through here: two spellings of it would drift, and
 /// the launcher would stop recognising its own builds.
-fn pack_identity(slug: &str, version: &str, review_file: &str, review_sha512: &str) -> serde_json::Map<String, Value> {
+///
+/// The archive hash is kept because a version number no longer pins the files:
+/// the author may replace the archive of a published version, and the update
+/// check compares it with the card.
+fn pack_identity(
+    slug: &str,
+    version: &str,
+    archive_sha512: &str,
+    review_file: &str,
+    review_sha512: &str,
+) -> serde_json::Map<String, Value> {
     let mut m = serde_json::Map::new();
     m.insert("catalogPackSlug".into(), Value::String(slug.to_string()));
     m.insert("catalogPackVersion".into(), Value::String(version.to_string()));
+    m.insert("catalogPackSha512".into(), Value::String(archive_sha512.to_ascii_lowercase()));
     m.insert("catalogPackReviewFile".into(), Value::String(review_file.to_string()));
     m.insert("catalogPackReviewSha512".into(), Value::String(review_sha512.to_string()));
     m
@@ -505,10 +516,10 @@ async fn prepare_update(
     if !pdir.is_dir() {
         return Err("Папки сборки нет на диске — установи сборку из каталога заново".into());
     }
-    let Fetched { view, meta, unpacked, _temp, .. } = fetch_pack(app, job, slug, false, Some(pdir)).await?;
+    let Fetched { view, meta, unpacked, sha512, _temp, .. } = fetch_pack(app, job, slug, false, Some(pdir)).await?;
     job.rename(profile);
     job.emit(app, 80.0, "Переносим миры и настройки…");
-    let mut settings = carried_settings(profile, slug, &meta.version);
+    let mut settings = carried_settings(profile, slug, &meta.version, &sha512);
     remember_mod_opt_in(&mut settings, &view);
     remember_protected(&mut settings, &view);
     let (from, to, slug) = (pdir.to_path_buf(), staged.to_path_buf(), slug.to_string());
@@ -528,9 +539,9 @@ async fn prepare_update(
 
 /// The build's own settings (memory, Java, JVM flags, window size) stay with
 /// it; only what names the pack version changes.
-fn carried_settings(profile: &str, slug: &str, version: &str) -> serde_json::Map<String, Value> {
+fn carried_settings(profile: &str, slug: &str, version: &str, archive_sha512: &str) -> serde_json::Map<String, Value> {
     let mut s = profile_settings(profile).as_object().cloned().unwrap_or_default();
-    s.extend(pack_identity(slug, version, "", ""));
+    s.extend(pack_identity(slug, version, archive_sha512, "", ""));
     s
 }
 

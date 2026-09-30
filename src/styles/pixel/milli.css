@@ -1,0 +1,370 @@
+/* ============================================================
+   МИЛЛИ (30.09.2026): маскот, плашка лобби, кнопка, панель чата,
+   карточка сборки. src/components/milli/*.
+   Рамки со срезом — слоями «ступенчатой рамки» из 12-pixel.css
+   (селекторы добавлены в её список), никаких inset-теней и border.
+   Движение — только steps().
+   ============================================================ */
+
+/* ── Маскот ─────────────────────────────────────────────────
+   Персонаж из логотипа Millida (владелец 30.09.2026 16:11): ручки в белых
+   варежках, ножки в белых кедах. Тот же маскот, что на сайте (milli.css в
+   millida-web, `.mk-milli-*`): те же части, те же ключи и тайминги.
+   Движение — только transform/opacity и steps. */
+.milli {
+  position: relative; display: inline-block; flex: none; line-height: 0;
+  --milli-body: #5ec64d; --milli-ink: #1b1f1c; --milli-glyph: #ffffff; --milli-cheek: #f59aa8; --milli-tongue: #e8566b;
+}
+.milli svg { display: block; overflow: visible; }
+.milli-body { fill: var(--milli-body); }
+.milli-hi { fill: var(--milli-glyph); opacity: 0.3; }
+.milli-hi2 { fill: var(--milli-glyph); opacity: 0.1; }
+.milli-sh { fill: var(--milli-ink); opacity: 0.14; }
+.milli-sh2 { fill: var(--milli-ink); opacity: 0.32; }
+.milli-rim { fill: var(--milli-ink); opacity: 0.16; }
+.milli-gsh { fill: var(--milli-ink); opacity: 0.22; }
+.milli-glyph, .milli-glint { fill: var(--milli-glyph); }
+.milli-iris { fill: #1f8f93; }
+.milli-iris-hi { fill: #57e0c4; }
+.milli-leaf { fill: #8be35f; }
+.milli-leaf-dk { fill: #3fae4a; }
+.milli-ink { fill: var(--milli-ink); }
+.milli-cheek { fill: var(--milli-cheek); }
+.milli-tongue { fill: var(--milli-tongue); }
+.milli-dots rect { fill: #fff; opacity: 0.25; }
+/* Ручки — зелёные, как тело, в белых варежках; ножки — в белых кедах с тёмной подошвой. */
+.milli-limb { fill: var(--milli-body); }
+.milli-limb-sh { fill: var(--milli-ink); opacity: 0.22; }
+.milli-glove { fill: var(--milli-glyph); }
+.milli-glove-sh { fill: var(--milli-ink); opacity: 0.18; }
+.milli-boot { fill: var(--milli-ink); }
+/* Контур варежек и кедов: белое читается и на светлом фоне, и на тёмном. */
+.milli-outline { fill: var(--milli-ink); opacity: 0.55; }
+
+.milli-rig, .milli-jump, .milli-eye, .milli-sprout, .milli-look, .milli-arm { transform-box: fill-box; transform-origin: 50% 100%; }
+/* Ручка крутится вокруг плеча: внутренний край группы, по высоте — середина (MILLI_SHOULDER_Y_PCT = 50). */
+.milli-arm.is-l { transform-origin: 100% 50%; transform: rotate(-14deg); }
+.milli-arm.is-r { transform-origin: 0% 50%; transform: rotate(14deg); }
+.milli-eye { transform-origin: 50% 50%; }
+.milli-joy, .milli-open { opacity: 0; }
+
+/* покой: переминается, ручки качаются в такт, моргает и оглядывается */
+.milli-idle .milli-rig, .milli-wave .milli-rig, .milli-think .milli-rig { animation: milli-bob 2.4s steps(1, end) infinite; }
+.milli-idle .milli-arm.is-l { animation: milli-sway-l 2.4s steps(1, end) infinite; }
+.milli-idle .milli-arm.is-r { animation: milli-sway-r 2.4s steps(1, end) infinite; }
+.milli-idle .milli-eye, .milli-wave .milli-eye, .milli-talk .milli-eye, .milli-think .milli-eye { animation: milli-blink 4.2s steps(1, end) infinite; }
+.milli-idle .milli-sprout, .milli-talk .milli-sprout { animation: milli-sprout 2.4s steps(1, end) infinite; }
+.milli-idle .milli-look { animation: milli-look 7s steps(1, end) infinite; }
+/* машет правой ручкой: приветствие и наведение на кнопку Милли */
+.milli-wave .milli-arm.is-r,
+.milli-wave-hover:hover .milli-idle .milli-arm.is-r { animation: milli-wave-arm 0.8s steps(1, end) infinite; }
+/* думает: ручка у затылка чешет, глаза вверх-вбок, точки по очереди */
+.milli-think .milli-look { animation: milli-ponder 2.4s steps(1, end) infinite; }
+.milli-think .milli-arm.is-r { animation: milli-scratch 0.6s steps(1, end) infinite; }
+.milli-dots rect { animation: milli-dot 1.2s steps(1, end) infinite; }
+.milli-dots rect:nth-child(2) { animation-delay: 0.2s; }
+.milli-dots rect:nth-child(3) { animation-delay: 0.4s; }
+/* говорит: подпрыгивает, жестикулирует и открывает рот */
+.milli-talk .milli-rig { animation: milli-hop 0.56s steps(1, end) infinite; }
+.milli-talk .milli-arm.is-l { animation: milli-sway-l 0.56s steps(1, end) infinite; }
+.milli-talk .milli-open { animation: milli-flip 0.28s steps(1, end) infinite; }
+.milli-talk .milli-shut { animation: milli-flop 0.28s steps(1, end) infinite; }
+/* радуется готовой сборке: «^^», рот открыт, ручки вверх, прыжки с приседанием */
+.milli-happy .milli-look, .milli-happy .milli-shut { opacity: 0; }
+.milli-happy .milli-joy, .milli-happy .milli-open { opacity: 1; }
+.milli-happy .milli-jump { animation: milli-jump 0.6s steps(1, end) infinite; }
+.milli-happy .milli-arm.is-l { animation: milli-cheer-l 0.6s steps(1, end) infinite; }
+.milli-happy .milli-arm.is-r { animation: milli-cheer-r 0.6s steps(1, end) infinite; }
+
+@keyframes milli-bob { 0% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+@keyframes milli-sprout {
+  0% { transform: rotate(-5deg); }
+  50% { transform: rotate(5deg); }
+}
+@keyframes milli-blink { 0% { transform: scaleY(1); } 94% { transform: scaleY(0.12); } 97% { transform: scaleY(1); } }
+@keyframes milli-look {
+  0% { transform: translate(0, 0); } 40% { transform: translate(-7px, 0); } 52% { transform: translate(0, 0); }
+  70% { transform: translate(7px, -4px); } 82% { transform: translate(0, 0); }
+}
+@keyframes milli-ponder { 0% { transform: translate(6px, -6px); } 50% { transform: translate(-6px, -6px); } }
+@keyframes milli-hop { 0% { transform: translateY(0); } 50% { transform: translateY(-16px); } }
+@keyframes milli-jump {
+  0% { transform: translateY(0) scale(1.06, 0.94); } 25% { transform: translateY(-30px) scale(0.97, 1.03); }
+  50% { transform: translateY(0) scale(1); } 75% { transform: translateY(-18px); }
+}
+@keyframes milli-sway-l { 0% { transform: rotate(-14deg); } 50% { transform: rotate(-4deg); } }
+@keyframes milli-sway-r { 0% { transform: rotate(14deg); } 50% { transform: rotate(4deg); } }
+@keyframes milli-wave-arm {
+  0% { transform: rotate(-50deg); } 25% { transform: rotate(-80deg); }
+  50% { transform: rotate(-50deg); } 75% { transform: rotate(-80deg); }
+}
+@keyframes milli-scratch { 0% { transform: rotate(-62deg); } 50% { transform: rotate(-72deg); } }
+@keyframes milli-cheer-l { 0% { transform: rotate(55deg); } 50% { transform: rotate(35deg); } }
+@keyframes milli-cheer-r { 0% { transform: rotate(-35deg); } 50% { transform: rotate(-55deg); } }
+@keyframes milli-flip { 0% { opacity: 0; } 50% { opacity: 1; } }
+@keyframes milli-flop { 0% { opacity: 1; } 50% { opacity: 0; } }
+@keyframes milli-dot { 0% { opacity: 0.25; } 33% { opacity: 1; } 66% { opacity: 0.25; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .milli g, .milli rect { animation: none !important; }
+}
+
+/* ── Кнопка-Милли (каталог) и кнопка поддержки (остальные экраны) ── */
+.mlf {
+  position: absolute; z-index: 60; right: 22px; bottom: 22px;
+  display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px 10px 8px;
+  font: 900 14px/1 var(--m-font); color: var(--px-on-accent); cursor: pointer;
+  background-color: var(--m-accent);
+  --px-n: 5px; clip-path: var(--px-5);
+  --px-ol: var(--px-btn-ol); --px-ft: var(--px-btn-t); --px-ft-w: 3px; --px-fb: var(--px-btn-b); --px-fb-w: 5px; --px-fl: var(--px-btn-l); --px-fr: var(--px-btn-r);
+  transition: transform 120ms steps(2, end), background-color var(--m-t-fast);
+}
+.mlf:hover { transform: translateY(-2px); }
+.mlf:active { transform: translateY(2px); }
+.mlf .milli { width: 60px; height: 60px; margin: -6px 0 -8px; }
+.msf {
+  position: absolute; z-index: 60; right: 22px; bottom: 22px;
+  width: 52px; height: 52px; display: grid; place-items: center; cursor: pointer;
+  color: var(--px-on-accent); background-color: var(--m-accent);
+  --px-n: 5px; clip-path: var(--px-5);
+  --px-ol: var(--px-btn-ol); --px-ft: var(--px-btn-t); --px-ft-w: 3px; --px-fb: var(--px-btn-b); --px-fb-w: 5px; --px-fl: var(--px-btn-l); --px-fr: var(--px-btn-r);
+  transition: transform 120ms steps(2, end), background-color var(--m-t-fast);
+}
+.msf:hover { transform: translateY(-2px); }
+.msf:active { transform: translateY(2px); }
+
+/* ── Панель чата ────────────────────────────────────────────── */
+.ml-panel {
+  position: absolute; z-index: 450; top: 52px; right: 12px; bottom: 12px;
+  width: min(460px, calc(100% - 24px));
+  display: none; flex-direction: column; min-height: 0;
+  background-color: var(--m-surface);
+  --px-n: 10px; clip-path: var(--px-10);
+  --px-ol: rgba(0, 0, 0, 0.55); --px-ol-w: 3px;
+  --px-ft: rgba(255, 255, 255, 0.06); --px-ft-w: 3px; --px-fb: rgba(0, 0, 0, 0.3); --px-fb-w: 5px;
+}
+.ml-panel.on { display: flex; animation: ml-in 180ms steps(3, end) both; }
+@keyframes ml-in { 0% { opacity: 0; transform: translateX(20px); } 100% { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .ml-panel.on { animation: none; } }
+
+.ml-head { position: relative; z-index: 2; display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 10px; border-bottom: 2px solid rgba(0, 0, 0, 0.28); }
+.ml-head .ml-plus { flex: none; }
+.ml-count {
+  padding: 4px 7px; font: 800 12px/1 var(--m-font); font-variant-numeric: tabular-nums;
+  color: var(--m-fg); background: var(--m-inset); --px-n: 4px; clip-path: var(--px-4);
+}
+.ml-count.out { color: var(--m-danger); }
+.ml-head-gap { flex: 1 1 auto; }
+.ml-hbtn {
+  width: 30px; height: 30px; display: grid; place-items: center; color: var(--m-fg-muted); cursor: pointer;
+  --px-n: 5px; clip-path: var(--px-5);
+}
+.ml-hbtn:hover { color: var(--m-fg); background: var(--m-surface-2); }
+.ml-menu-wrap { position: relative; }
+.ml-menu {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 5; min-width: 180px; padding: 6px;
+  display: flex; flex-direction: column; gap: 2px;
+  background-color: var(--m-raised);
+  --px-n: 5px; clip-path: var(--px-5);
+  --px-ol: rgba(0, 0, 0, 0.5); --px-ol-w: 2px; --px-fb: rgba(0, 0, 0, 0.3); --px-fb-w: 3px;
+}
+.ml-menu-item {
+  display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px; text-align: left;
+  font: 700 13.5px/1 var(--m-font); color: var(--m-fg); cursor: pointer;
+  --px-n: 5px; clip-path: var(--px-5);
+}
+.ml-menu-item:hover { background: var(--m-surface-2); }
+.ml-menu-item .px-icon { color: var(--m-fg-muted); }
+
+.ml-scroll { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 14px 14px 8px; display: flex; flex-direction: column; gap: 12px; }
+
+.ml-msg { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.ml-msg.me { justify-content: flex-end; }
+.ml-ava { margin-top: 2px; }
+.ml-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; flex: 1 1 auto; align-items: flex-start; }
+.ml-bubble {
+  margin: 0; max-width: 100%; padding: 9px 12px; white-space: pre-wrap; overflow-wrap: anywhere;
+  font: 600 13.5px/1.42 var(--m-font); color: var(--m-fg);
+  background: var(--m-surface-2); border-radius: 4px 12px 12px 12px;
+}
+.ml-msg.me .ml-bubble { max-width: 82%; background: color-mix(in srgb, var(--m-accent) 26%, var(--m-surface-2)); border-radius: 12px 4px 12px 12px; }
+.ml-skel { display: flex; flex-direction: column; gap: 8px; width: 220px; }
+.ml-skel .skel { display: block; height: 11px; background: color-mix(in srgb, var(--m-fg) 14%, transparent); }
+
+.ml-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg.ml-chip { height: 30px; padding: 0 11px 2px; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+
+.ml-hello { margin: auto 0; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 12px 8px 24px; text-align: center; }
+.ml-hello .ml-bubble { border-radius: 12px; }
+.ml-hello .ml-chips { justify-content: center; }
+.ml-state { margin: auto; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 24px 12px; text-align: center; }
+.ml-state b { font: 900 18px/1.2 var(--m-font); color: var(--m-fg); }
+.ml-empty-line { margin: 24px auto; font-size: 13px; color: var(--m-fg-muted); }
+
+.ml-err { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 12px; font-size: 13.5px; font-weight: 700; color: var(--m-fg); background: var(--m-danger-soft); border-radius: 4px 12px 12px 12px; }
+.ml-err > .px-icon { flex: none; color: var(--m-danger); }
+.ml-limit {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px 12px;
+  background-color: var(--m-surface-2); --px-n: 5px; clip-path: var(--px-5);
+  --px-ol: var(--m-danger); --px-ol-w: 2px; --px-fb: rgba(0, 0, 0, 0.26); --px-fb-w: 3px;
+}
+.ml-limit-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.ml-limit-text b { font: 900 15px/1.2 var(--m-font); color: var(--m-fg); }
+.ml-limit-text span { font-size: 12.5px; font-weight: 700; color: var(--m-fg-muted); }
+.ml-limit .ml-plus { flex: none; }
+
+.ml-hist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ml-hist .skel { display: block; }
+.ml-hist-row {
+  width: 100%; display: flex; align-items: center; gap: 10px; padding: 11px 12px 13px; text-align: left; cursor: pointer;
+  background-color: var(--m-inset); --px-n: 5px; clip-path: var(--px-5);
+  --px-fb: rgba(0, 0, 0, 0.26); --px-fb-w: 3px;
+}
+.ml-hist-row:hover { background-color: var(--m-surface-2); }
+.ml-hist-row b { flex: 1 1 auto; min-width: 0; font: 700 13.5px/1.2 var(--m-font); color: var(--m-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ml-hist-row i { flex: none; font-style: normal; font-size: 12px; color: var(--m-fg-subtle); }
+
+/* «Улучшенная сборка» (PLUS) над полем ввода: переключатель у PLUS, замок и PLUS у бесплатного. */
+.ml-enh { display: flex; align-items: center; gap: 8px; padding: 8px 12px 0; border-top: 2px solid rgba(0, 0, 0, 0.28); }
+.ml-enh + .mlc { border-top: 0; padding-top: 8px; }
+.ml-enh-btn {
+  display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 10px;
+  font: 700 13px/1 var(--m-font); color: var(--m-fg-muted); cursor: pointer;
+  --px-n: 5px; clip-path: var(--px-5);
+}
+.ml-enh-btn:hover:not(.locked) { color: var(--m-fg); background: var(--m-surface-2); }
+.ml-enh-btn.on { color: var(--m-accent); }
+.ml-enh-btn.locked { cursor: default; padding-left: 0; color: var(--m-fg-subtle); }
+.ml-enh-sw { position: relative; width: 24px; height: 12px; margin-left: 2px; background: var(--m-inset); }
+.ml-enh-sw::after {
+  content: ''; position: absolute; top: 2px; left: 2px; width: 8px; height: 8px;
+  background: var(--m-fg-subtle); transition: transform 120ms steps(2, end);
+}
+.ml-enh-btn.on .ml-enh-sw::after { transform: translateX(12px); background: var(--m-accent); }
+.btn.sm.ml-plus { gap: 6px; }
+.btn.sm.ml-plus .px-icon { width: 12px; height: 12px; }
+
+/* Поле ввода: в панели и в плашке */
+.mlc { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px 14px; border-top: 2px solid rgba(0, 0, 0, 0.28); }
+.mlc-row { display: flex; align-items: stretch; gap: 8px; min-width: 0; }
+.mlc-input { flex: 1 1 auto; min-width: 0; height: auto; min-height: 44px; padding: 0 12px; }
+.mlc-input textarea {
+  flex: 1; min-width: 0; height: 22px; max-height: 88px; margin: 11px 0; padding: 0; resize: none;
+  border: 0; outline: 0; background: transparent; color: var(--m-fg);
+  font: 600 14px/22px var(--m-font); field-sizing: content;
+}
+.mlc-input textarea::placeholder { color: var(--m-fg-subtle); }
+.btn.mlc-send { flex: none; width: 48px; height: auto; min-height: 44px; padding: 0 0 3px; }
+.btn.mlc-send .px-icon { width: 18px; height: 18px; }
+.mlc-preset { display: flex; align-items: center; gap: 6px; }
+
+/* ── Карточка сборки ────────────────────────────────────────── */
+.mpk {
+  align-self: stretch; display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 12px 12px 14px;
+  background-color: var(--m-bg);
+  --px-n: 10px; clip-path: var(--px-10);
+  --px-ol: color-mix(in srgb, var(--m-accent) 55%, transparent); --px-ol-w: 2px;
+  --px-ft: rgba(255, 255, 255, 0.05); --px-ft-w: 2px; --px-fb: rgba(0, 0, 0, 0.3); --px-fb-w: 4px;
+}
+.mpk-head { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.mpk-title {
+  width: 100%; height: 30px; padding: 0 6px; margin-left: -6px; border: 0; outline: 0; background: transparent;
+  color: var(--m-fg); font: 900 18px/1 var(--m-font);
+  --px-n: 5px; clip-path: var(--px-5);
+}
+.mpk-title:hover:not(:disabled), .mpk-title:focus { background: var(--m-inset); }
+.mpk-plates { display: flex; align-items: center; gap: 6px; }
+.mpk-plate {
+  padding: 4px 8px; font: 800 11.5px/1 var(--m-font); color: var(--m-fg);
+  background: var(--m-surface-2); --px-n: 4px; clip-path: var(--px-4);
+}
+.mpk-review { display: flex; flex-wrap: wrap; gap: 4px; }
+.mpk-review > span {
+  display: inline-flex; align-items: center; height: 22px; padding: 0 7px 1px;
+  font: 700 12px/1 var(--m-font); color: var(--m-fg-muted); background: var(--m-surface-2);
+  --px-n: 4px; clip-path: var(--px-4);
+}
+.mpk-review > span.add { color: var(--m-accent); }
+.mpk-review > span[data-tip] { cursor: help; }
+.mpk-count { margin-left: auto; font-size: 12px; font-weight: 750; color: var(--m-fg-subtle); font-variant-numeric: tabular-nums; }
+.mpk-sec { margin-top: 4px; font: 800 11px/1 var(--m-font); letter-spacing: 0.06em; text-transform: uppercase; color: var(--m-rarity-legendary); }
+
+.mpk-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.mpk-row {
+  width: 100%; display: flex; align-items: center; gap: 10px; min-width: 0; padding: 6px 10px 6px 8px; text-align: left;
+  background-color: var(--m-surface); cursor: pointer;
+  --px-n: 5px; clip-path: var(--px-5);
+  transition: background-color var(--m-t-fast), opacity var(--m-t-fast);
+}
+.mpk-row:hover { background-color: var(--m-surface-2); }
+.mpk-row:focus-visible { outline: 2px solid var(--m-accent); outline-offset: -2px; }
+.mpk-row:not(.on):not(.mpk-link-row) { opacity: 0.5; }
+.mpk-row.locked, .mpk-list.frozen .mpk-row { cursor: default; }
+.mpk-list.frozen .mpk-row:hover, .mpk-row.locked:hover { background-color: var(--m-surface); }
+.mpk-link-row > .px-icon { flex: none; color: var(--m-fg-subtle); }
+.mpk-chk {
+  flex: none; display: grid; place-items: center; width: 18px; height: 18px;
+  background: var(--m-inset); color: var(--px-on-accent);
+  outline: 2px solid var(--m-border-strong); outline-offset: -2px;
+}
+.mpk-row.on .mpk-chk { background: var(--m-accent); outline-color: var(--m-accent); }
+.mpk-row.locked .mpk-chk { background: var(--m-surface-2); outline-color: var(--m-surface-2); color: var(--m-fg-muted); }
+.mpk-ic { flex: none; display: grid; place-items: center; width: 32px; height: 32px; overflow: hidden; background: var(--m-surface-2); color: var(--m-fg-subtle); --px-n: 4px; clip-path: var(--px-4); }
+.mpk-ic img { width: 100%; height: 100%; object-fit: cover; }
+.mpk-body { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
+.mpk-name { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.mpk-name > span:first-child { font: 750 13px/1.25 var(--m-font); color: var(--m-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mpk-tag { flex: none; padding: 2px 5px 3px; font: 800 10px/1 var(--m-font); color: var(--m-fg-muted); background: var(--m-surface-2); --px-n: 4px; clip-path: var(--px-4); }
+.mpk-why { font-size: 11.5px; line-height: 1.3; color: var(--m-fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mpk-links { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg.mpk-chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px 2px; font-size: 12px; font-weight: 700; cursor: pointer; }
+.mpk-note { margin: 0; font-size: 11.5px; line-height: 1.35; color: var(--m-fg-subtle); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* Строка PLUS: золото = PLUS (DESIGN-JUICE §2) */
+.mpk-up {
+  align-self: stretch; display: flex; align-items: center; gap: 10px; padding: 8px 10px 11px 10px; text-align: left; cursor: pointer;
+  color: var(--m-fg); background-color: color-mix(in srgb, var(--m-rarity-legendary) 18%, var(--m-surface));
+  --px-n: 5px; clip-path: var(--px-5);
+  --px-ol: color-mix(in srgb, var(--m-rarity-legendary) 70%, transparent); --px-ol-w: 2px; --px-fb: rgba(0, 0, 0, 0.26); --px-fb-w: 3px;
+}
+.mpk-up:hover { background-color: color-mix(in srgb, var(--m-rarity-legendary) 28%, var(--m-surface)); }
+.mpk-up > .px-icon { flex: none; color: var(--m-rarity-legendary); }
+.mpk-up > span { flex: 1 1 auto; min-width: 0; font: 750 13px/1.25 var(--m-font); }
+.mpk-up > b {
+  flex: none; padding: 5px 9px 7px; font: 900 12px/1 var(--m-font); color: #2a1c00; background: var(--m-rarity-legendary);
+  --px-n: 4px; clip-path: var(--px-4);
+}
+
+.mpk-foot { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 40px; padding-top: 4px; }
+.mpk-foot .btn { gap: 8px; }
+.mpk-foot .btn .px-icon { width: 12px; height: 12px; }
+.mpk-progress { flex: 1 1 auto; min-width: 60px; height: 10px; background: var(--m-inset); overflow: hidden; }
+.mpk-progress i { display: block; height: 100%; background: var(--m-accent); transition: width 240ms steps(4, end); }
+.mpk-pmsg { flex: none; max-width: 50%; font-size: 12px; color: var(--m-fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mpk-code {
+  display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 10px; align-self: flex-start;
+  background: var(--m-inset); --px-n: 5px; clip-path: var(--px-5);
+}
+.mpk-code span { font-size: 12px; font-weight: 700; color: var(--m-fg-muted); }
+.mpk-code b { font: 900 14px/1 var(--m-mono, monospace); letter-spacing: 0.08em; color: var(--m-fg); }
+.mpk-x { width: 26px; height: 26px; display: grid; place-items: center; color: var(--m-fg-muted); cursor: pointer; --px-n: 4px; clip-path: var(--px-4); }
+.mpk-x:hover { color: var(--m-fg); background: var(--m-surface-2); }
+
+.mpk-srv {
+  display: flex; flex-direction: column; gap: 8px; padding: 10px;
+  background-color: var(--m-surface); --px-n: 5px; clip-path: var(--px-5);
+  --px-ol: var(--m-accent); --px-ol-w: 2px;
+}
+.mpk-srv .skel { display: block; }
+.mpk-srv-head { display: flex; align-items: center; justify-content: space-between; }
+.mpk-srv-head b { font: 800 13.5px/1 var(--m-font); color: var(--m-fg); }
+.mpk-srv-done { margin: 0; font-size: 13px; font-weight: 700; color: var(--m-fg); }
+.mpk-srv-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.mpk-srv-row {
+  width: 100%; display: flex; align-items: center; gap: 10px; padding: 6px 8px; text-align: left; cursor: pointer;
+  background-color: var(--m-inset); --px-n: 5px; clip-path: var(--px-5);
+}
+.mpk-srv-row:hover:not(:disabled) { background-color: var(--m-surface-2); }
+.mpk-srv-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mpk-srv-body b { font: 750 13px/1.2 var(--m-font); color: var(--m-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mpk-srv-body i { font-style: normal; font-size: 11.5px; color: var(--m-fg-muted); }

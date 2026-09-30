@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { noteInstallKind } from '../../lib/recsSignals'
 import type { ReactNode } from 'react'
 import { Icon } from '../Icon'
 import { MODRINTH_API, api, mirrorAsset } from '../../lib/api'
@@ -17,7 +18,10 @@ import { track } from '../../lib/telemetry'
 import { actionSource } from '../../lib/uiTrack'
 import { keyCatalogPack, keyMrModpack } from '../../lib/installKeys'
 import type { SnapshotServer } from '../../lib/snapshot'
+import { PackKeyField } from '../PackKeyModal'
 import { Carousel } from './Carousel'
+import { ONEBLOCK_ART } from './modeIcon'
+import { ONEBLOCK_PACK } from '../../lib/ownServer'
 import { Hours } from './Hours'
 import { PackHealthLine } from './PackHealthLine'
 import { HostInstall } from './HostInstall'
@@ -136,7 +140,7 @@ function Desc({ blocks, markdown }: { blocks?: DescBlock[] | null; markdown?: st
 }
 
 /** Шапка: превью ролика до клика, по клику — плеер. Без ролика — обложка. */
-function Media({ video, cover }: { video: string | null; cover: string | null }) {
+function Media({ video, cover, ob }: { video: string | null; cover: string | null; ob?: boolean }) {
   const [playing, setPlaying] = useState(false)
   useEffect(() => setPlaying(false), [video])
   // Встраивание YouTube в webview без клика ненадёжно (плеер отвечает ошибкой
@@ -150,6 +154,14 @@ function Media({ video, cover }: { video: string | null; cover: string | null })
         allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
         allowFullScreen
       />
+    )
+  // Наш OneBlock: осенний арт баннера «Режимов» вместо старой обложки.
+  if (ob)
+    return (
+      <>
+        <img className="pp-cover pp-ob-bg" src={ONEBLOCK_ART.bg} alt="" draggable={false} />
+        <img className="pp-ob-logo" src={ONEBLOCK_ART.logo} alt="" draggable={false} />
+      </>
     )
   const poster = cover || (video ? 'https://i.ytimg.com/vi/' + video + '/hqdefault.jpg' : null)
   return (
@@ -181,6 +193,7 @@ function MrInstallButton({ pack }: { pack: HubPack }) {
       run: () => installModpack(slug),
       onDone: (p) => {
         track('catalog_install', { kind: 'modpack', id: slug, source: actionSource('pack_page').source, section: 'pack_page' })
+        noteInstallKind('modpack')
         useProfiles.getState().setSelected(p.name)
         void useProfiles.getState().refresh()
         showToast('Сборка «' + p.name + '» готова к запуску', 'ok', 'achievement')
@@ -336,6 +349,13 @@ export function PackPage({
   const plan = (full.plans && full.plans[0]) || plans.find((x) => x.id === (sub && sub.planId)) || plans[0] || null
   const author = full.author || view?.author || null
 
+  const reloadDetail = () => {
+    void loadPremiumPack(pack.id)
+      .then((d) => setDetail(d))
+      .catch(() => {})
+  }
+  const keyEntry = !installed && !!slug && !!detail && hasPlanChoice(detail) && !!full.acceptsKeys && !hasAccess(full, sub)
+
   let cta: ReactNode
   if (installed)
     cta = (
@@ -350,11 +370,7 @@ export function PackPage({
         pack={full}
         plans={detail.plans || []}
         wrap="pp-cta-wrap"
-        onOwned={() => {
-          void loadPremiumPack(pack.id)
-            .then((d) => setDetail(d))
-            .catch(() => {})
-        }}
+        onOwned={reloadDetail}
       />
     )
   else
@@ -370,7 +386,7 @@ export function PackPage({
   return (
     <div className="pp" data-section="pack_page" data-kind={pack.premium ? 'premium' : 'pack'} data-id={slug || pack.id}>
       <header className={['pp-head', partnerFrame(view?.partner ?? detail?.partner)].filter(Boolean).join(' ')}>
-        <Media video={video} cover={cover} />
+        <Media video={video} cover={cover} ob={slug === ONEBLOCK_PACK} />
         <button className="btn sm secondary ph-back pp-back" data-track="back" onClick={onBack}>
           <Icon id="i-chev-l" /> Каталог
         </button>
@@ -436,6 +452,17 @@ export function PackPage({
 
         <aside className={'pp-buy' + (pack.premium ? ' gold' : '')}>
           {cta}
+          {keyEntry ? (
+            <div className="pkb-key">
+              <PackKeyField
+                slug={slug}
+                onUnlocked={() => {
+                  showToast('Ключ активирован')
+                  reloadDetail()
+                }}
+              />
+            </div>
+          ) : null}
           {slug ? <PackHealthLine slug={slug} title={full.title} /> : null}
           {hostTarget ? (
             <button className="btn md secondary pp-srv" data-sound="open" data-track="host_install" onClick={() => setHostOpen(true)}>

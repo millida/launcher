@@ -1,4 +1,5 @@
 import { hasTauri } from '../ipc/tauri'
+import { noteInstallKind } from './recsSignals'
 import { cfInstall, depPlan, installContent, installDepItems } from '../ipc/commands'
 import type { ContentInstall, DepReport, PlanItem } from '../ipc/commands'
 import { askDepPlan } from '../state/depPlan'
@@ -31,8 +32,10 @@ const RU: Record<string, string> = {
  */
 export function catalogInstallTracker(kind: string, id: string | number | undefined | null, section?: string) {
   const source = actionSource('catalog').source
-  return () =>
+  return () => {
     track('catalog_install', { kind, id: String(id ?? '').slice(0, 80), source, section: (section || kind).slice(0, 32) })
+    noteInstallKind(kind)
+  }
 }
 
 export async function resolveTargetBuild(kind: string): Promise<string | null> {

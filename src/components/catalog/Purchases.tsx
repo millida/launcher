@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { CatalogNotice } from './CatalogShell'
-import { RowSkeleton, SiteRow } from './SiteRow'
+import { RowSkeleton, SiteGalleryCard } from './SiteRow'
 import { sectionBySlug } from './site'
 import type { SiteCard } from './site'
 import { sectionOfType } from './paid'
@@ -37,7 +37,7 @@ function cardOf(p: Purchase, section: string): SiteCard {
   }
 }
 
-export function PurchasesPane({ onOpenPack }: { onOpenPack?: (slug: string) => void }) {
+export function PurchasesPane({ onOpenPack }: { onOpenPack?: (slug: string) => boolean | void }) {
   const rows = usePaid((s) => s.purchases)
   const failed = usePaid((s) => s.purchasesFailed)
   const signed = hasMillidaAccount()
@@ -56,8 +56,8 @@ export function PurchasesPane({ onOpenPack }: { onOpenPack?: (slug: string) => v
     )
   if (rows === null)
     return (
-      <div className="mr-list">
-        <RowSkeleton n={3} />
+      <div className="mr-galgrid">
+        <RowSkeleton gallery n={3} />
       </div>
     )
   if (!rows.length) return <CatalogNotice note={{ icon: 'i-inbox', title: 'Покупок пока нет' }} />
@@ -66,10 +66,10 @@ export function PurchasesPane({ onOpenPack }: { onOpenPack?: (slug: string) => v
       <header className="mr-head">
         <h1 className="mr-h1">Мои покупки</h1>
       </header>
-      <div className="mr-list">
+      <div className="mr-galgrid">
         {rows.map((p, i) => {
           const section = sectionOfType(p.type)!
-          return <SiteRow key={p.slug} card={cardOf(p, section)} sec={sectionBySlug(section)} pos={i} onOpenPack={onOpenPack} />
+          return <SiteGalleryCard key={p.slug} card={cardOf(p, section)} sec={sectionBySlug(section)} pos={i} onOpenPack={onOpenPack} />
         })}
       </div>
     </div>

@@ -39,6 +39,7 @@ export function Packs<P extends Pack>({
   onBuy,
   wallet,
   onTopUp,
+  plusOffer,
 }: {
   packs: P[] | null
   busy: string
@@ -47,6 +48,8 @@ export function Packs<P extends Pack>({
   wallet?: number
   /** Денег на счёте меньше цены пакета: пополнить счёт на недостающее (копейки, до целого рубля). */
   onTopUp?: (missingKopecks: number, pack: P) => void
+  /** Первая плитка: рубины с PLUS. Нет — плитки нет (PLUS уже оформлен или гость). */
+  plusOffer?: { kopecks: number; rubies: number; onOpen: () => void }
 }) {
   const [artGone, setArtGone] = useState<string[]>([])
   const list = packs ?? []
@@ -60,7 +63,23 @@ export function Packs<P extends Pack>({
       <Head title="Рубины">
         {wallet !== undefined ? <span className="sh-note">На счёте {rubles(wallet)}</span> : null}
       </Head>
-      <div className="sh-grid is-fit" style={gridCols(packs === null ? 5 : list.length)}>
+      <div className="sh-grid is-fit" style={gridCols(packs === null ? 5 : list.length + (plusOffer ? 1 : 0))}>
+        {packs !== null && plusOffer ? (
+          <div className="sh-card sh-pack is-plus" data-kind="plus_offer" data-id="plus" data-pos={-1}>
+            <span className="sh-best">PLUS</span>
+            <span className="sh-pack-art">
+              <Ruby size={56} />
+            </span>
+            <span className="sh-pack-count">
+              <Ruby size={18} />
+              {plusOffer.rubies.toLocaleString('ru-RU')}
+            </span>
+            <span className="sh-pack-bonus">с PLUS</span>
+            <button className="btn sm primary" data-track="plus_tile" onClick={plusOffer.onOpen}>
+              {rubles(plusOffer.kopecks)}
+            </button>
+          </div>
+        ) : null}
         {packs === null
           ? [0, 1, 2, 3, 4].map((n) => <span key={n} className="skel sh-skel sh-cell" />)
           : list.map((pack, i) => {

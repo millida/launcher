@@ -1,0 +1,371 @@
+{
+  "PVP": {
+    "title": "PvP",
+    "color": "#f07a18",
+    "w": 16,
+    "h": 16,
+    "rig": {
+      "src": "hero-46",
+      "w": 373,
+      "h": 400
+    }
+  },
+  "SURVIVAL": {
+    "title": "Выживание",
+    "color": "#3aa83a",
+    "w": 16,
+    "h": 16,
+    "rig": {
+      "src": "hero-26",
+      "w": 440,
+      "h": 317
+    }
+  },
+  "ANARCHY": {
+    "title": "Анархия",
+    "color": "#7a3fd0",
+    "w": 16,
+    "h": 16,
+    "rig": {
+      "src": "hero-7",
+      "w": 388,
+      "h": 400
+    }
+  },
+  "RP": {
+    "title": "RP",
+    "color": "#e8479a",
+    "w": 16,
+    "h": 16,
+    "rig": {
+      "src": "hero-21",
+      "w": 418,
+      "h": 400
+    }
+  },
+  "SKYBLOCK": {
+    "title": "SkyBlock",
+    "color": "#2aa2e6",
+    "w": 16,
+    "h": 16,
+    "rig": {
+      "src": "hero-24",
+      "w": 347,
+      "h": 308
+    }
+  },
+  "LIFESTEAL": {
+    "title": "LifeSteal",
+    "color": "#c81e4f",
+    "w": 16,
+    "h": 16,
+    "rig": {
+      "src": "hero-40",
+      "w": 304,
+      "h": 400
+    }
+  },
+  "BOXPVP": {
+    "title": "BoxPvP",
+    "color": "#2f62d8",
+    "w": 16,
+    "h": 16,
+    "rig": {
+      "src": "hero-34",
+      "w": 433,
+      "h": 400
+    }
+  },
+  "COBBLEMON": {
+    "title": "Пиксельмон",
+    "color": "#d8403a",
+    "w": 16,
+    "h": 16,
+    "rig": {
+      "src": "hero-16",
+      "w": 388,
+      "h": 308
+    }
+  },
+  "MINIGAMES": {
+    "title": "Мини-игры",
+    "color": "#eab308",
+    "w": 16,
+    "h": 16,
+    "rig": {
+      "src": "hero-12",
+      "w": 268,
+      "h": 400
+    }
+  },
+  "CREATIVE": {
+    "title": "Креатив",
+    "color": "#13a98a",
+    "w": 16,
+    "h": 16,
+    "rig": {
+      "src": "hero-44",
+      "w": 440,
+      "h": 281
+    }
+  },
+  "TECHNICAL": {
+    "title": "Техно",
+    "color": "#3b7ea6",
+    "w": 16,
+    "h": 16,
+    "rig": {
+      "src": "hero-42",
+      "w": 440,
+      "h": 385
+    }
+  },
+  "ONEBLOCK": {
+    "title": "OneBlock",
+    "color": "#5fa832",
+    "w": 16,
+    "h": 16
+  },
+  "GRIEF": {
+    "title": "Гриф",
+    "color": "#9a1f2a",
+    "w": 16,
+    "h": 16,
+    "rig": {
+      "src": "hero-48",
+      "w": 435,
+      "h": 400
+    }
+  },
+  "BEDWARS": {
+    "title": "BedWars",
+    "color": "#d8262b",
+    "w": 16,
+    "h": 16,
+    "rig": {
+      "src": "hero-19",
+      "w": 440,
+      "h": 248
+    }
+  },
+  "SKYWARS": {
+    "title": "SkyWars",
+    "color": "#16a9b5",
+    "w": 16,
+    "h": 16,
+    "rig": {
+      "src": "hero-14",
+      "w": 403,
+      "h": 400
+    }
+  },
+  "HUNGER_GAMES": {
+    "title": "Голодные игры",
+    "color": "#6b8f1f",
+    "w": 16,
+    "h": 16,
+    "rig": {
+      "src": "hero-29",
+      "w": 440,
+      "h": 380
+    }
+  },
+  "KITPVP": {
+    "title": "KitPvP",
+    "color": "#b8471c",
+    "w": 16,
+    "h": 16,
+    "rig": {
+      "src": "hero-27",
+      "w": 434,
+      "h": 400
+    }
+  },
+  "FACTIONS": {
+    "title": "Кланы",
+    "color": "#4b4fd6",
+    "w": 16,
+    "h": 16,
+    "rig": {
+      "src": "hero-31",
+      "w": 440,
+      "h": 261
+    }
+  },
+  "PRISON": {
+    "title": "Тюрьма",
+    "color": "#56657a",
+    "w": 16,
+    "h": 16,
+    "rig": {
+      "src": "hero-28",
+      "w": 440,
+      "h": 394
+    }
+  },
+  "TOWNY": {
+    "title": "Towny",
+    "color": "#b0673a",
+    "w": 16,
+    "h": 16,
+    "rig": {
+      "src": "hero-8",
+      "w": 328,
+      "h": 400
+    }
+  },
+  "MMORPG": {
+    "title": "РПГ",
+    "color": "#a53ad0",
+    "w": 16,
+    "h": 16,
+    "rig": {
+      "src": "hero-33",
+      "w": 440,
+      "h": 306
+    }
+  },
+  "BUILD_BATTLE": {
+    "title": "Build Battle",
+    "color": "#d9632e",
+    "w": 16,
+    "h": 16,
+    "rig": {
+      "src": "hero-11",
+      "w": 440,
+      "h": 343
+    }
+  },
+  "PARKOUR": {
+    "title": "Паркур",
+    "color": "#72b81c",
+    "w": 16,
+    "h": 16,
+    "rig": {
+      "src": "hero-32",
+      "w": 295,
+      "h": 400
+    }
+  },
+  "HIDE_SEEK": {
+    "title": "Прятки",
+    "color": "#3f8fd8",
+    "w": 16,
+    "h": 16,
+    "rig": {
+      "src": "hero-50",
+      "w": 314,
+      "h": 400
+    }
+  },
+  "MURDER": {
+    "title": "Murder Mystery",
+    "color": "#8e1f2c",
+    "w": 16,
+    "h": 16,
+    "rig": {
+      "src": "hero-43",
+      "w": 440,
+      "h": 400
+    }
+  },
+  "SPLEEF": {
+    "title": "Spleef",
+    "color": "#5fb3d9",
+    "w": 16,
+    "h": 16,
+    "rig": {
+      "src": "hero-6",
+      "w": 440,
+      "h": 332
+    }
+  },
+  "TNTRUN": {
+    "title": "TNT Run",
+    "color": "#e24a2a",
+    "w": 16,
+    "h": 16,
+    "rig": {
+      "src": "hero-2",
+      "w": 305,
+      "h": 400
+    }
+  },
+  "UHC": {
+    "title": "UHC",
+    "color": "#c28a00",
+    "w": 16,
+    "h": 16,
+    "rig": {
+      "src": "hero-17",
+      "w": 333,
+      "h": 356
+    }
+  },
+  "HARDCORE": {
+    "title": "Хардкор",
+    "color": "#3d2b5c",
+    "w": 16,
+    "h": 16,
+    "rig": {
+      "src": "hero-20",
+      "w": 440,
+      "h": 372
+    }
+  },
+  "EARTH": {
+    "title": "Земля",
+    "color": "#2f7fc4",
+    "w": 16,
+    "h": 16,
+    "rig": {
+      "src": "hero-5",
+      "w": 384,
+      "h": 400
+    }
+  },
+  "MANHUNT": {
+    "title": "Манхант",
+    "color": "#8a3a1f",
+    "w": 16,
+    "h": 16,
+    "rig": {
+      "src": "hero-18",
+      "w": 440,
+      "h": 327
+    }
+  },
+  "BINGO": {
+    "title": "Бинго",
+    "color": "#c79a12",
+    "w": 16,
+    "h": 16,
+    "rig": {
+      "src": "hero-22",
+      "w": 369,
+      "h": 400
+    }
+  },
+  "LUCKY": {
+    "title": "Лаки-блоки",
+    "color": "#d99a00",
+    "w": 16,
+    "h": 16,
+    "rig": {
+      "src": "hero-36",
+      "w": 399,
+      "h": 400
+    }
+  },
+  "VANILLA": {
+    "title": "Ванилла",
+    "color": "#2f9a55",
+    "w": 16,
+    "h": 16,
+    "rig": {
+      "src": "hero-13",
+      "w": 281,
+      "h": 400
+    }
+  }
+}

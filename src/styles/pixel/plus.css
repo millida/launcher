@@ -1,0 +1,183 @@
+/* ============ Экран Millida PLUS (пересборка 30.09.2026) ============
+   То же содержание и порядок, что millida.net/plus, а тот повторяет лендинг
+   /launcher. Пиксельный язык лаунчера: срез 10px у подложек и 5px у кнопок
+   (var(--px-10/5/4)), без скруглений. Цвет PLUS — золото легендарной
+   редкости; знак в табе — глиф мода в §6 (#ffaa00). Движение — только
+   transform/opacity; prefers-reduced-motion выключает всё. */
+
+.lp { --lp-gold: var(--m-rarity-legendary, hsl(42 88% 58%)); --lp-ink: hsl(35 80% 9%); display: flex; flex-direction: column; gap: 14px; padding-bottom: 32px; }
+.lp em { font-style: normal; color: var(--lp-gold); }
+.lp > * + * { margin-top: 14px; }
+
+/* ---------- Первый экран ---------- */
+.lp-hero { position: relative; overflow: hidden; padding: 30px 24px 0; color: #fff; clip-path: var(--px-10);
+  background:
+    radial-gradient(46% 52% at 50% 70%, hsl(42 90% 55% / 0.24), transparent 70%),
+    radial-gradient(120% 70% at 50% 0%, hsl(42 70% 45% / 0.16), transparent 62%),
+    linear-gradient(200deg, hsl(30 22% 10%) 0%, hsl(222 30% 6%) 58%, hsl(222 35% 3%) 100%);
+}
+.lp-hero-grid { position: absolute; inset: 0; pointer-events: none; opacity: 0.05;
+  background-image: linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px); background-size: 32px 32px; }
+.lp-hero-head { position: relative; z-index: 2; text-align: center; }
+.lp-eyebrow { font-size: 12px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--m-accent); }
+.lp-hero h1 { margin: 8px 0 0; font-size: 64px; font-weight: 800; line-height: 0.95; letter-spacing: -0.035em; animation: lp-rise 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.lp-hero p { margin: 12px 0 0; font-size: 16px; font-weight: 600; color: rgba(255, 255, 255, 0.72); }
+.lp-price-skel { display: block; margin: 14px auto 0; width: 220px; height: 20px; }
+.lp-hero-cta { margin-top: 18px; display: flex; justify-content: center; }
+.lp-cta svg.icon { width: 18px; height: 18px; }
+.lp-note { display: block; margin-top: 10px; font-size: 12px; font-weight: 600; color: rgba(255, 255, 255, 0.5); }
+.lp-active { display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; font-weight: 800; color: var(--lp-ink); background: var(--lp-gold); clip-path: var(--px-5); }
+.lp-active svg.icon { width: 16px; height: 16px; }
+@keyframes lp-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+.lp-stage { position: relative; z-index: 2; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: end; gap: 16px; margin-top: 18px; }
+.lp-rig { position: relative; display: flex; justify-content: center; align-items: flex-end; }
+.lp-rig img { position: relative; z-index: 1; display: block; height: 380px; width: auto; }
+.lp-rig-light { position: absolute; left: 50%; top: 4%; width: 160%; aspect-ratio: 1; transform: translateX(-50%); pointer-events: none;
+  background: radial-gradient(closest-side, hsl(44 100% 60% / 0.34), hsl(40 100% 50% / 0.1) 55%, transparent); }
+.lp-chips { display: flex; flex-direction: column; gap: 12px; padding-bottom: 36px; }
+.lp-chips.is-left { align-items: flex-end; }
+.lp-chips.is-right { align-items: flex-start; }
+.lp-chips.is-left .lp-chip:nth-child(2), .lp-chips.is-right .lp-chip:nth-child(2) { margin-inline: 24px; }
+.lp-chip { display: inline-flex; align-items: center; gap: 10px; padding: 9px 16px 9px 10px; background: #fff; color: hsl(206 25% 9%); clip-path: var(--px-5); white-space: nowrap; }
+.lp-chip-art { flex: none; display: grid; place-items: center; width: 34px; height: 34px; }
+.lp-chip-art img { width: 34px; height: 34px; object-fit: contain; }
+.lp-chip-art img.px { image-rendering: pixelated; }
+.lp-chip b { display: block; font-size: 15px; font-weight: 800; }
+.lp-chip i { display: block; font-style: normal; font-size: 12px; font-weight: 600; color: hsl(206 25% 9% / 0.62); }
+
+/* ---------- Главы ---------- */
+.lp-block { padding: 24px 22px 22px; }
+.lp-head { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-bottom: 18px; text-align: center; }
+.lp-head h2 { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -0.02em; }
+.lp-head span { font-size: 12px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--m-fg-faint); }
+.lp-foot { display: flex; justify-content: center; margin-top: 18px; }
+.lp-foot-note { margin-top: 12px; text-align: center; font-size: 12px; font-weight: 600; color: var(--m-fg-faint); }
+
+/* Рубины */
+.lp-ruby-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; max-width: 760px; margin: 0 auto; }
+.lp-ruby-row > div { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 16px 10px; background: var(--m-surface-2); clip-path: var(--px-10); text-align: center; }
+.lp-ruby-row b { font-size: 28px; font-weight: 800; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.lp-ruby-row b.is-gold { color: var(--lp-gold); }
+.lp-ruby-row small { font-size: 12px; font-weight: 700; color: var(--m-fg-faint); }
+.lp-shop { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; margin-top: 14px; }
+.lp-shop-item { display: flex; flex-direction: column; background: var(--m-surface-2); clip-path: var(--px-5); min-width: 0; }
+.lp-shop-item img { width: 100%; aspect-ratio: 1; object-fit: contain; padding: 8px; }
+.lp-shop-name { padding: 0 8px; font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lp-shop-price { display: flex; align-items: center; gap: 4px; padding: 2px 8px 8px; font-size: 12px; font-weight: 800; color: var(--lp-gold); }
+
+/* Милли — плита сборщика в бронзе PLUS */
+.lp-ai-wrap { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; }
+.lp-aib { display: grid; gap: 14px; align-content: center; padding: 22px; color: #fff; background: hsl(34 62% 27%); clip-path: var(--px-10);
+  box-shadow: inset 0 4px 0 rgba(255, 255, 255, 0.18), inset 0 -8px 0 rgba(0, 0, 0, 0.28); }
+.lp-aib-head { display: flex; align-items: center; gap: 14px; }
+.lp-aib-head b { display: block; font-size: 26px; font-weight: 800; }
+.lp-aib-head i { display: block; font-style: normal; font-size: 14px; font-weight: 600; color: rgba(255, 255, 255, 0.78); }
+.lp-aib-field { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 6px 6px 6px 16px; background: hsl(30 60% 8%); font-size: 17px; font-weight: 700; clip-path: var(--px-5); }
+.lp-aib-field > span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lp-aib-go { padding: 9px 14px 11px; font-size: 14px; font-weight: 800; color: #06200e; background: var(--m-accent); clip-path: var(--px-5); }
+.lp-aib-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.lp-aib-chip { padding: 7px 12px 9px; border: 0; font: 700 13px/1.1 inherit; color: #fff; background: hsl(38 60% 38%); clip-path: var(--px-5); cursor: pointer; }
+.lp-aib-chip.on { background: #fff; color: hsl(30 60% 8%); }
+.lp-aiex { display: grid; gap: 10px; align-content: start; }
+.lp-aiex-card { display: grid; gap: 8px; padding: 14px 16px; background: var(--m-surface-2); clip-path: var(--px-10); }
+.lp-aiex-card.is-on { box-shadow: inset 0 0 0 2px var(--lp-gold); }
+.lp-aiex-card > b { font-size: 16px; font-weight: 800; }
+.lp-aiex-card small { font-size: 12px; font-weight: 600; color: var(--m-fg-faint); }
+.lp-aiex-card small strong { color: var(--lp-gold); }
+.lp-bars { display: grid; gap: 5px; }
+.lp-bars span { display: flex; align-items: center; justify-content: space-between; width: var(--w); min-width: 92px; height: 24px; padding: 0 9px; font-size: 12px; font-weight: 700; color: var(--m-fg-muted); background: var(--m-surface-3, rgba(255, 255, 255, 0.08)); clip-path: var(--px-4); }
+.lp-bars span.is-plus { color: var(--lp-ink); background: var(--lp-gold); }
+.lp-bars i { font-style: normal; }
+.lp-bars em { color: inherit; font-weight: 800; }
+.lp-kinds { display: flex; flex-wrap: wrap; gap: 6px; }
+.lp-kinds span { padding: 5px 10px 6px; font-size: 12px; font-weight: 800; color: var(--lp-ink); background: var(--lp-gold); clip-path: var(--px-4); }
+
+/* Сундуки */
+.lp-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.lp-cardx { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px 12px 18px; text-align: center; background: var(--m-surface-2); clip-path: var(--px-10); }
+.lp-cardx-art { display: flex; align-items: flex-end; justify-content: center; gap: 6px; height: 110px; }
+.lp-cardx b { font-size: 17px; font-weight: 800; }
+.lp-cardx small { font-size: 12px; font-weight: 600; color: var(--m-fg-faint); }
+.lp-loot { display: grid; grid-template-columns: repeat(2, 50px); gap: 6px; align-content: center; }
+.lp-loot img { width: 50px; height: 50px; object-fit: contain; background: var(--m-surface-3, rgba(255, 255, 255, 0.06)); clip-path: var(--px-4); }
+.lp-x { align-self: center; font-size: 36px; font-weight: 800; color: var(--lp-gold); }
+
+/* Значок в игре */
+.lp-mc { position: relative; isolation: isolate; overflow: hidden; aspect-ratio: 16 / 9; min-height: 340px; max-width: 860px; margin: 0 auto; clip-path: var(--px-10); background: hsl(20 30% 8%); }
+.lp-mc-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: -2; }
+.lp-mc-shade { position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, hsl(0 0% 0% / 0.55), hsl(0 0% 0% / 0.2) 45%, hsl(0 0% 0% / 0.55)); }
+.lp-mc-tab { position: absolute; top: 4%; left: 50%; transform: translateX(-50%); display: grid; gap: 2px; width: min(80%, 320px); padding: 4px; background: hsl(0 0% 0% / 0.5); }
+.lp-mc-row { display: flex; align-items: center; gap: 6px; height: 21px; padding: 0 4px 0 2px; background: hsl(0 0% 100% / 0.1); font-size: 13px; font-weight: 700; color: #fff; text-shadow: 2px 2px 0 hsl(0 0% 25%); white-space: nowrap; }
+.lp-mc-row.is-you { background: hsl(42 90% 50% / 0.22); box-shadow: inset 0 0 0 1px hsl(42 100% 60% / 0.7); }
+.lp-mc-head { width: 16px; height: 16px; image-rendering: pixelated; }
+.lp-mc-name { display: inline-flex; align-items: center; gap: 5px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.lp-mc-badge { flex: none; image-rendering: pixelated; }
+.lp-mc-ping { display: inline-flex; align-items: flex-end; gap: 1px; height: 11px; }
+.lp-mc-ping i { width: 2px; background: hsl(120 100% 45%); }
+.lp-mc-ping i:nth-child(1) { height: 3px; } .lp-mc-ping i:nth-child(2) { height: 5px; } .lp-mc-ping i:nth-child(3) { height: 7px; } .lp-mc-ping i:nth-child(4) { height: 9px; } .lp-mc-ping i:nth-child(5) { height: 11px; }
+.lp-mc-fig { position: absolute; bottom: 0; display: flex; flex-direction: column; align-items: center; gap: 7px; transform: translateX(-50%); }
+.lp-mc-fig.is-you { left: 50%; z-index: 2; }
+.lp-mc-fig.is-left { left: 26%; }
+.lp-mc-fig.is-right { left: 74%; }
+.lp-mc-fig.is-other { opacity: 0.86; }
+.lp-mc-plate { position: relative; display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px 4px; background: hsl(0 0% 0% / 0.42); font-size: 18px; font-weight: 700; color: #fff; white-space: nowrap; }
+.lp-mc-fig.is-other .lp-mc-plate { font-size: 14px; }
+.lp-mc-body { position: relative; display: block; height: 200px; width: auto; }
+.lp-mc-fig.is-other .lp-mc-body { height: 140px; }
+.lp-mc-light { position: absolute; left: 50%; bottom: 0; width: 260%; aspect-ratio: 1; transform: translate(-50%, 30%); pointer-events: none; background: radial-gradient(closest-side, hsl(44 100% 60% / 0.38), transparent); }
+.lp-mc-note { position: relative; padding: 4px 9px 5px; font-size: 11px; font-weight: 800; color: #fff; background: hsl(0 0% 0% / 0.62); clip-path: var(--px-4); white-space: nowrap; }
+.lp-mc-note.is-gold { color: var(--lp-ink); background: var(--lp-gold); }
+.lp-where { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 14px; }
+.lp-where span { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; font-size: 13px; font-weight: 700; background: var(--m-surface-2); clip-path: var(--px-5); }
+
+/* Как это работает */
+.lp-path { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.lp-path > svg.icon { flex: none; width: 22px; height: 22px; color: var(--lp-gold); }
+.lp-path-card { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 16px 10px; background: var(--m-surface-2); clip-path: var(--px-10); text-align: center; }
+.lp-path-card > span { font-size: 15px; font-weight: 800; color: var(--lp-gold); }
+.lp-path-card b { font-size: 15px; font-weight: 800; }
+.lp-path-card small { font-size: 12px; font-weight: 600; color: var(--m-fg-faint); }
+
+/* Сравнение */
+.lp-cmp { display: grid; gap: 2px; max-width: 680px; margin: 0 auto; }
+.lp-cmp-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); gap: 2px; }
+.lp-cmp-row > span { display: flex; align-items: center; justify-content: center; min-height: 38px; padding: 6px 10px; font-size: 13px; font-weight: 700; background: var(--m-surface-2); text-align: center; }
+.lp-cmp-row > span:first-child { justify-content: flex-start; text-align: left; }
+.lp-cmp-row.is-head > span { background: transparent; }
+.lp-cmp-row .is-no { color: hsl(0 70% 66%); }
+.lp-cmp-row .is-part { color: var(--m-fg-muted); }
+.lp-cmp-row .is-yes { color: var(--lp-gold); background: hsl(42 70% 50% / 0.12); font-weight: 800; }
+.lp-cmp-plus { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px 5px; font-size: 13px; font-weight: 800; letter-spacing: 0.06em; color: var(--lp-ink) !important; background: var(--lp-gold); clip-path: var(--px-4); }
+.lp-cmp-plus svg.icon { width: 14px; height: 14px; }
+
+/* Оформить */
+.lp-buy { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; max-width: 1040px; margin: 0 auto; }
+.lp-buy-card { display: flex; flex-direction: column; justify-content: space-between; gap: 14px; padding: 16px; background: var(--m-surface-2); clip-path: var(--px-10); }
+.lp-buy-card.is-main { background: hsl(42 70% 50% / 0.12); }
+.lp-buy-card.is-diamond { background: hsl(190 70% 50% / 0.12); }
+.lp-buy-price { display: block; margin: 4px 0; font-size: 20px; font-weight: 800; }
+.lp-buy-card b { display: block; font-size: 17px; font-weight: 800; }
+.lp-buy-card small { font-size: 12px; font-weight: 600; color: var(--m-fg-faint); }
+.lp-buy-card .btn { width: 100%; justify-content: center; }
+.lp-buy-card svg.icon { width: 16px; height: 16px; }
+
+/* Вопросы */
+.lp-faq { display: flex; flex-direction: column; gap: 6px; max-width: 760px; margin: 0 auto; }
+.lp-faq-item { background: var(--m-surface-2); clip-path: var(--px-5); }
+.lp-faq-item summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; font-size: 14px; font-weight: 800; cursor: pointer; list-style: none; }
+.lp-faq-item summary::-webkit-details-marker { display: none; }
+.lp-faq-item summary svg.icon { width: 14px; height: 14px; transition: transform 0.15s; }
+.lp-faq-item[open] summary svg.icon { transform: rotate(180deg); }
+.lp-faq-item p { margin: 0; padding: 0 14px 14px; font-size: 13px; font-weight: 600; line-height: 1.5; color: var(--m-fg-muted); }
+
+@media (max-width: 1000px) {
+  .lp-stage { grid-template-columns: 1fr; }
+  .lp-chips { display: none; }
+  .lp-ai-wrap, .lp-cards, .lp-buy { grid-template-columns: 1fr; }
+  .lp-mc-fig.is-other { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp *, .lp *::before { animation: none !important; transition: none !important; }
+}

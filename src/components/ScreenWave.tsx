@@ -24,6 +24,7 @@ const TONE: Record<ScreenId, [string, string]> = {
   mods: ['#155f2a', '#3fbf5c'],
   servers: ['#155f2a', '#3fbf5c'],
   premium: ['#7a4a06', '#f2b23a'],
+  plus: ['#7a4a06', '#f2b23a'],
   rubies: ['#8a1030', '#ff4d6d'],
   skins: ['#1c5a8f', '#4cb8f5'],
   friends: ['#2d2f6b', '#7b82ff'],

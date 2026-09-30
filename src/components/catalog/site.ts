@@ -1,7 +1,7 @@
 import { realDownloads } from '../../lib/realDownloads'
 import { api, openExt } from '../../lib/api'
 import { cachedCatalog, peekCatalog } from '../../lib/catalogCache'
-import { MODRINTH_API } from '../../lib/api'
+import { LAUNCHER_API, MODRINTH_API } from '../../lib/api'
 import { hasTauri } from '../../ipc/tauri'
 import { millidaPacks } from '../../ipc/commands'
 import type { MillidaPack } from '../../ipc/commands'
@@ -120,7 +120,8 @@ export function hostable(sec: SiteSection, card: Pick<SiteCard, 'side' | 'launch
 }
 
 export function sectionByKind(kind: string): SiteSection {
-  return SITE_SECTIONS.find((s) => s.kind === kind) || SITE_SECTIONS[0]!
+  // Любой раздел шапки, не только шесть «своих» (плитки «Категорий» хаба, 30.09.2026).
+  return SITE_SECTIONS.find((s) => s.kind === kind) || ALL_SECTIONS.find((s) => s.kind === kind && s.slug !== 'all') || SITE_SECTIONS[0]!
 }
 
 /* ── Ответы API (типы — из `src/lib/catalog-api.ts` сайта) ── */
@@ -154,6 +155,10 @@ export interface SiteCard {
   priceKopecks?: number | null
   mrHit?: ModHit
   /** Издание игры; нет поля — Java. */
+  /** Сборку собрала Милли (ИИ-сборщик): метка «Милли» на карточке. */
+  aiGenerated?: boolean
+  /** Код сборки лаунчера — установка идёт путём «Сборки по коду». */
+  packCode?: string | null
 }
 
 export interface SiteListing {
@@ -192,7 +197,7 @@ export interface ListingQuery {
   loader?: string | null
   category?: string | null
   q?: string | null
-  sort?: 'popular' | 'new'
+  sort?: 'recommended' | 'popular' | 'new'
   page?: number
   perPage?: number
   edition?: EditionFilter | null
@@ -419,9 +424,58 @@ export interface ItemView {
   pricing?: Pricing
   priceKopecks?: number | null
   files?: CatalogFile[]
+  /* Для страницы материала в лаунчере (`ItemPage`). */
+  title?: string
+  summary?: string
+  description?: { type: string; text?: string; items?: string[] }[] | string | null
+  cover?: string | null
+  icon?: string | null
+  gallery?: string[]
+  tags?: string[]
+  author?: string | null
+  license?: string | null
+  side?: string | null
+  downloads?: number | null
+  updatedAt?: string | null
+  dependencies?: { requires?: { kind: string; slug: string | null; section: string | null; title: string }[] }
+  similar?: { slug: string; section: string | null; title: string; summary: string; cover: string | null; icon: string | null; downloads: number | null }[]
 }
 
 const MR_URL = /modrinth\.com\/(?:mod|modpack|resourcepack|shader|datapack|plugin)\/([^/?#]+)/i
+
+const CF_URL = /curseforge\.com\/minecraft\/(mc-mods|modpacks|texture-packs|shaders|data-packs|worlds)\/([^/?#]+)/i
+
+const CF_CLASS: Record<string, number> = {
+  'mc-mods': 6,
+  modpacks: 4471,
+  'texture-packs': 12,
+  shaders: 6552,
+  'data-packs': 6945,
+  worlds: 17,
+}
+
+export interface CfSourceRef {
+  classId: number
+  slug: string
+}
+
+export function cfSourceRef(sourceUrl: string): CfSourceRef | null {
+  const m = CF_URL.exec(sourceUrl)
+  if (!m) return null
+  const classId = CF_CLASS[m[1]!.toLowerCase()]
+  return classId ? { classId, slug: decodeURIComponent(m[2]!) } : null
+}
+
+async function cfProjectId(ref: CfSourceRef): Promise<number | null> {
+  const q = new URLSearchParams({ gameId: '432', classId: String(ref.classId), slug: ref.slug })
+  const r = await fetch(LAUNCHER_API + '/launcher/cf/v1/mods/search?' + q.toString()).catch(() => null)
+  if (!r || !r.ok) return null
+  const body = (await r.json().catch(() => null)) as { data?: { id?: unknown; slug?: unknown }[] } | null
+  const hit = (body && Array.isArray(body.data) ? body.data : []).find(
+    (p) => p && String(p.slug).toLowerCase() === ref.slug.toLowerCase(),
+  )
+  return hit && typeof hit.id === 'number' && hit.id > 0 ? hit.id : null
+}
 
 function baseHit(card: SiteCard): ModHit {
   return {
@@ -456,8 +510,13 @@ export async function resolveHit(card: SiteCard): Promise<ModHit | null> {
   if (hit !== undefined) return hit
   return cachedCatalog(key, async () => {
     const item = await loadItem(card.slug).catch(() => null)
-    const m = item && item.sourceUrl ? MR_URL.exec(item.sourceUrl) : null
-    if (!m) return null
+    const source = (item && item.sourceUrl) || ''
+    const m = MR_URL.exec(source)
+    if (!m) {
+      const cf = cfSourceRef(source)
+      const cfid = cf ? await cfProjectId(cf) : null
+      return cfid ? { ...baseHit(card), cfid, pid: 'cf:' + cfid } : null
+    }
     const mrSlug = decodeURIComponent(m[1]!)
     const proj = await mrProject(mrSlug)
     return { ...baseHit(card), slug: (proj && proj.slug) || mrSlug, pid: proj && proj.id ? String(proj.id) : undefined }

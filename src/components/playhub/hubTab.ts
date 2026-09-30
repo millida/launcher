@@ -14,7 +14,7 @@ import { useMods } from '../../state/mods'
  */
 export type HubTab = 'catalog' | 'builds'
 /** Раздел, к которому прокрутить при входе снаружи («add» — полный каталог с модами). */
-export type HubSection = 'server' | 'try' | 'builds' | 'foryou' | 'packs' | 'modes' | 'servers' | 'games' | 'add'
+export type HubSection = 'server' | 'try' | 'builds' | 'foryou' | 'packs' | 'modes' | 'servers' | 'games' | 'add' | 'categories' | 'together'
 
 interface HubTabState {
   tab: HubTab

@@ -1,17 +1,15 @@
-import { useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
 import type { CSSProperties, MouseEvent, ReactNode } from 'react'
 import { Icon } from '../Icon'
 import { HostInstall } from '../playhub/HostInstall'
 import type { HostTarget } from '../playhub/HostInstall'
-import { hostingPackFor, isExclusive, loadHostingPacks } from '../playhub/data'
+import { blockArt, hostingPackFor, isExclusive, loadHostingPacks } from '../playhub/data'
 import type { HostingPack } from '../playhub/data'
 import { useCatalogCtx } from './target'
-import type { CatalogTarget } from './target'
 import { openExt } from '../../lib/api'
 import { rowClickOpens } from '../../lib/dismiss'
 import { useModAction } from '../ModRow'
 import { hasTauri } from '../../ipc/tauri'
-import { openCfProject, openProject } from '../../state/project'
 import type { ModHit } from '../../state/mods'
 import { useLobby } from '../../state/lobbyMode'
 import { priceLabel } from '../../lib/premium'
@@ -40,6 +38,15 @@ import type { SiteCard, SiteSection } from './site'
 import { BuyBar, NativeBar, PriceMark, nativeKind, usePaidCard } from './PaidActs'
 import { installMillidaItem } from './millidaInstall'
 import { isPaid } from './paid'
+import { SECTION_VISUAL } from './sections'
+import type { SectionSlug } from './sections'
+import { blockFor } from './itemView'
+import { openItem } from './itemStore'
+import { Milli } from '../milli/Milli'
+import { aiPackCode, installPackCode } from '../../lib/catalogInstall'
+
+/** Плитка ленты: одна главная кнопка, остальное — на странице материала. */
+const CompactCtx = createContext(false)
 
 /*
  * Строка и карточка ленты каталога — раскладка сайта (`mr-row.tsx`,
@@ -56,11 +63,32 @@ export function MrIcon({ src, size = 14 }: { src: string; size?: number }) {
   return <i className="mri" aria-hidden="true" style={{ width: size, height: size, '--mri': `url("${src}")` } as CSSProperties} />
 }
 
-/** Ветка версий (Tabler git-branch) — такого значка в наборе лаунчера нет. */
-function BranchIcon() {
+/*
+ * Значки меток — квадратной плашкой 16×16, как на сайте (`MrTagGlyph`,
+ * владелец 30.09.2026: «всё в квадратном стиле»; у загрузчика в карточке тот
+ * же значок, что в фильтре). Круглых глифов нет: сторона — монитор, стойка,
+ * монитор со стойкой (Tabler), версии — стопка.
+ */
+const GLYPH: Record<string, string> = {
+  client: 'M3 5a1 1 0 0 1 1 -1h16a1 1 0 0 1 1 1v10a1 1 0 0 1 -1 1h-16a1 1 0 0 1 -1 -1v-10z M7 20h10 M9 16v4 M15 16v4',
+  server: 'M3 7a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v2a3 3 0 0 1 -3 3h-12a3 3 0 0 1 -3 -3z M3 15a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v2a3 3 0 0 1 -3 3h-12a3 3 0 0 1 -3 -3z M7 8v.01 M7 16v.01',
+  both: 'M3 5h6v14h-6l0 -14 M12 9h10v7h-10l0 -7 M14 19h6 M17 16v3 M6 13v.01 M6 16v.01',
+  versions: 'M10 7a2 2 0 0 1 2 -2h6a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-6a2 2 0 0 1 -2 -2l0 -10 M7 7l0 10 M4 8l0 8',
+}
+function Glyph({ d }: { d: string }) {
   return (
     <svg className="mr-svg" viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M7 18m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0M7 6m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0M17 6m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0M7 8v8M9 18h6a2 2 0 0 0 2 -2v-5M14 14l3 -3l3 3" />
+      <path d={d} />
+    </svg>
+  )
+}
+const SIDE_GLYPH: Record<string, string> = { CLIENT: GLYPH.client!, SERVER: GLYPH.server!, BOTH: GLYPH.both! }
+
+/** Знак Millida Hosting — две стойки квадратами (`HostingMark` сайта). */
+export function HostingMark() {
+  return (
+    <svg className="mr-host-mark" viewBox="0 0 16 16" aria-hidden="true">
+      <path fillRule="evenodd" d="M1 1h14v6H1zM3 3v2h6V3zM11 3v2h2V3zM1 9h14v6H1zM3 11v2h6v-2zM11 11v2h2v-2z" />
     </svg>
   )
 }
@@ -70,22 +98,42 @@ interface Tag {
   node?: ReactNode
   tone?: string | null
   accent?: boolean
+  /** Значок без квадратной плашки (маскот Милли). */
+  bare?: boolean
 }
+
+/** Сборку собрала Милли (30.09.2026): её маскот первой меткой, как на сайте. */
+const milliTag = (): Tag => ({ label: 'Милли', accent: true, bare: true, node: <Milli size={18} /> })
 
 function sideTag(side: string | null): Tag | null {
   const s = side ? SIDE_LABEL[side] : null
-  if (!s) return null
-  return { label: s.label, accent: true, node: s.icon === 'globe' ? <MrIcon src="/mr-icons/categories/globe.svg" /> : <Icon id={s.icon} /> }
+  if (!s || !side) return null
+  return { label: s.label, accent: true, node: <Glyph d={SIDE_GLYPH[side]!} /> }
 }
 
 function loaderTag(l: string): Tag {
   const src = loaderIconSrc(l)
-  return { label: loaderLabel(l), tone: loaderTone(l), node: src ? <MrIcon src={src} /> : null }
+  return { label: loaderLabel(l), tone: loaderTone(l), node: src ? <MrIcon src={src} size={12} /> : null }
 }
 
 function catTag(c: string): Tag {
   const src = categoryIconSrc(c)
-  return { label: capFirst(c), node: src ? <MrIcon src={src} /> : null }
+  return { label: capFirst(c), node: src ? <MrIcon src={src} size={12} /> : null }
+}
+
+const versionsTag = (label: string): Tag => ({ label, node: <Glyph d={GLYPH.versions!} /> })
+
+/** Квадратная плашка значка: цвет загрузчика, акцент стороны или нейтральная. */
+export function TagGlyph({ node, tone, accent }: { node: ReactNode; tone?: string | null; accent?: boolean }) {
+  return (
+    <i
+      className={'mr-tg' + (accent ? ' is-accent' : tone ? ' is-tone' : '')}
+      aria-hidden="true"
+      style={tone && !accent ? ({ '--mk-tone': tone } as CSSProperties) : undefined}
+    >
+      {node}
+    </i>
+  )
 }
 
 export function Tags({ tags, className }: { tags: Tag[]; className?: string }) {
@@ -95,10 +143,10 @@ export function Tags({ tags, className }: { tags: Tag[]; className?: string }) {
       {tags.map((t, i) => (
         <li
           key={t.label + i}
-          className={'mr-tag' + (t.accent ? ' is-accent' : t.tone ? ' has-tone' : '')}
+          className={'mr-tag' + (t.accent ? ' is-accent' : t.tone ? ' has-tone' : '') + (t.bare ? ' is-bare' : '')}
           style={t.tone ? ({ '--mk-tone': t.tone } as CSSProperties) : undefined}
         >
-          {t.node}
+          {t.node ? t.bare ? t.node : <TagGlyph node={t.node} tone={t.tone} accent={t.accent} /> : null}
           <span>{t.label}</span>
         </li>
       ))}
@@ -106,31 +154,16 @@ export function Tags({ tags, className }: { tags: Tag[]; className?: string }) {
   )
 }
 
-/* ── Заглушка логотипа (CatalogCoverFallback сайта) ─────────── */
-
-const ACCENT: Record<string, string> = { mods: '#2C8F45', shaders: '#8B45D6', maps: '#B07C1E' }
-
-function hash(s: string): number {
-  let h = 2166136261
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i)
-    h = Math.imul(h, 16777619)
-  }
-  return Math.abs(h)
-}
-
-function shade(hex: string, seed: number): string {
-  const n = parseInt(hex.replace('#', ''), 16)
-  const k = 0.9 + ((seed >>> 3) % 21) / 100
-  const ch = (v: number): number => Math.max(0, Math.min(255, Math.round(v * k)))
-  return `#${((ch((n >> 16) & 255) << 16) | (ch((n >> 8) & 255) << 8) | ch(n & 255)).toString(16).padStart(6, '0')}`
-}
+/* ── Заглушка логотипа ─────────────────────────────────────────
+   Не буква на зелёном (владелец 30.09.2026: «читы вообще не оформлены»), а
+   блок Minecraft на цвете раздела: блок выбирается по slug, поэтому у каждой
+   вещи свой и он не меняется между заходами. */
 
 export function Fallback({ slug, section, title }: { slug: string; section: string; title: string }) {
-  const initial = (title.replace(/^[^A-Za-zА-Яа-яЁё0-9]+/, '').charAt(0) || '?').toUpperCase()
+  const vis = SECTION_VISUAL[section as SectionSlug] || SECTION_VISUAL.mods
   return (
-    <span className="mr-fallback" style={{ backgroundColor: shade(ACCENT[section] || '#5ACE66', hash(slug)) }}>
-      <span>{initial}</span>
+    <span className="mr-fallback" data-title={title} style={{ '--mr-fb': vis.tint } as CSSProperties}>
+      <img src={blockArt(blockFor(slug || title))} alt="" draggable={false} loading="lazy" />
     </span>
   )
 }
@@ -154,7 +187,7 @@ const img = (src: string) => (
  * узнаёт источник в фоне (только в приложении — в браузере ставить нечем) или
  * по первому нажатию.
  */
-function useCardHit(card: SiteCard) {
+export function useCardHit(card: SiteCard) {
   const [hit, setHit] = useState<ModHit | null | undefined>(() => peekHit(card))
   useEffect(() => {
     if (hit !== undefined || !hasTauri()) return
@@ -186,7 +219,7 @@ function ActBar({
   newBusy,
   extra,
 }: {
-  /** «На сервер» — первой в ряду кнопок строки. */
+  /** «На хостинг» — после главной кнопки. */
   extra?: ReactNode
   label: string
   plus: boolean
@@ -196,10 +229,10 @@ function ActBar({
   onNew?: () => void
   newBusy?: boolean
 }) {
+  const compact = useContext(CompactCtx)
   return (
     <div className="mr-actions">
-      {extra}
-      {onNew ? (
+      {onNew && !compact ? (
         <button
           className="btn sm secondary"
           data-track="new_build_from"
@@ -224,6 +257,8 @@ function ActBar({
         {plus ? <Icon id="i-plus" /> : null}
         {label}
       </button>
+      {/* «На хостинг» — после главной кнопки, как на сайте. */}
+      {extra}
     </div>
   )
 }
@@ -285,8 +320,8 @@ export function ServerButton({ target, primary }: { target: HostTarget; primary?
           setOpen(true)
         }}
       >
-        <Icon id="i-server" />
-        На сервер
+        <HostingMark />
+        На хостинг
       </button>
       {open ? (
         // Портал всплывает по дереву React — клик в окне не должен открыть строку.
@@ -329,10 +364,9 @@ function useServerButton(card: SiteCard, sec: SiteSection): ReactNode {
   const title = displayName(card.title)
   const primary = target.kind === 'server'
   if (partner) return <ServerButton target={{ kind: 'partner', pack: partner, title }} primary={primary} />
-  // В «Ресурсах» моды на сервер не ставим (владелец: «за исключением модов»);
-  // в панели сервера серверные моды ставятся, как и раньше.
-  const ok = target.kind === 'server' ? hostable(sec, card) : sec.kind !== 'mod' && hostable(sec, card)
-  if (!ok) return null
+  // Реклама хостинга в каждой карточке (владелец 30.09.2026): «На хостинг» у
+  // всего, что хостинг принимает, — и у серверных модов; у клиентских нет.
+  if (!hostable(sec, card)) return null
   if (card.mrHit && card.mrHit.cfid !== undefined)
     return <ServerButton target={{ kind: 'curseforge', projectId: String(card.mrHit.cfid), title }} primary={primary} />
   if (card.mrHit) {
@@ -373,6 +407,22 @@ function Actions({
         onOwned={() => void resolve().then((h) => (h ? setWant('add') : native()))}
       />
     )
+  // Сборка Милли из каталога: файла на зеркале нет, есть код — ставится как «Сборка по коду».
+  const code = sec.kind === 'modpack' ? aiPackCode(card) : null
+  if (code)
+    return (
+      <ActBar
+        label="Установить"
+        plus={false}
+        done={false}
+        busy={busy}
+        onMain={() => {
+          setBusy(true)
+          void installPackCode(code, displayName(card.title), {}, card.slug).finally(() => setBusy(false))
+        }}
+        extra={server}
+      />
+    )
   if (hit) return <Bound h={hit} kind={sec.kind} want={want} onFired={() => setWant(null)} extra={server} />
   if (hit === null && nativeKind(sec)) return <NativeBar card={card} sec={sec} extra={server} />
   const go = (w: Want) => {
@@ -404,8 +454,9 @@ function Actions({
 }
 
 /** Кнопки строки: в «Ресурсах» — в сборку и «На сервер», в панели сервера — только «На сервер». */
-function RowActions(props: { card: SiteCard; sec: SiteSection; hit: ModHit | null | undefined; resolve: () => Promise<ModHit | null> }) {
+export function RowActions(props: { card: SiteCard; sec: SiteSection; hit: ModHit | null | undefined; resolve: () => Promise<ModHit | null> }) {
   const { target } = useCatalogCtx()
+  const compact = useContext(CompactCtx)
   const server = useServerButton(props.card, props.sec)
   if (target.kind === 'server') return <div className="mr-actions">{server}</div>
   // Вместо «Установить», за которым отказ, — «На сервер» и страница на сайте.
@@ -413,7 +464,7 @@ function RowActions(props: { card: SiteCard; sec: SiteSection; hit: ModHit | nul
     return (
       <div className="mr-actions">
         {server}
-        <button
+        {server && compact ? null : <button
           className={'btn sm ' + (server ? 'secondary' : 'primary')}
           data-track="open_site"
           onClick={(e) => {
@@ -423,7 +474,7 @@ function RowActions(props: { card: SiteCard; sec: SiteSection; hit: ModHit | nul
         >
           <Icon id="i-ext" />
           На сайте
-        </button>
+        </button>}
       </div>
     )
   return <Actions {...props} server={server} />
@@ -435,7 +486,7 @@ export interface RowProps {
   card: SiteCard
   sec: SiteSection
   /** Своя сборка (MCSborki, Arcania) — её страница в хабе. */
-  onOpenPack?: (slug: string) => void
+  onOpenPack?: (slug: string) => boolean | void
   /** Место в ленте — для аналитики. */
   pos?: number
   /** Раздел ленты: в «Все» у карточки первой меткой стоит её раздел, как на сайте. */
@@ -445,35 +496,28 @@ export interface RowProps {
 /** Тип карточки для аналитики: платная сборка — premium, карта — map. */
 const trackKind = (card: SiteCard, sec: SiteSection) => (card.premium ? 'premium' : sec.kind === 'world' ? 'map' : sec.kind)
 
-function useOpen({ card, sec, onOpenPack }: RowProps, resolve: () => Promise<ModHit | null>, target: CatalogTarget) {
-  const game = useCatalogCtx().store((s) => s.version)
+/**
+ * Клик по плитке — страница материала в самом лаунчере (владелец 30.09.2026:
+ * «должна быть возможность зайти в любой предмет»). Своя сборка каталога
+ * (MCSborki, Arcania) — её страница хаба с «Играть» и сервером сборки.
+ */
+function useOpen({ card, sec, onOpenPack }: RowProps) {
   return (e: MouseEvent<HTMLElement>) => {
     if (!rowClickOpens(e)) return
-    // В панели сервера окно проекта лаунчера ставит в сборку, а не на сервер —
-    // подробности материала открываем на сайте.
-    if (target.kind === 'server') {
-      openOnSite(sec.slug, card.slug)
-      return
-    }
-    if (card.launcherOnly) {
-      if (onOpenPack) onOpenPack(card.slug)
-      return
-    }
-    void resolve().then((h) => {
-      if (h && h.cfid !== undefined) void openCfProject(h.cfid, sec.kind, h.title)
-      else if (h && h.slug) void openProject(h.slug, sec.kind, sec.kind === 'modpack' ? game : null)
-      else openOnSite(sec.slug, card.slug)
-    })
+    // Нет её в хабе (платные по подписке, новые) — обычная страница материала.
+    if (card.launcherOnly && onOpenPack && onOpenPack(card.slug) !== false) return
+    openItem({ kind: 'card', section: sec.slug, card })
   }
 }
 
 function rowTags(card: SiteCard): Tag[] {
   const tags: Tag[] = []
+  if (card.aiGenerated === true) tags.push(milliTag())
   const side = sideTag(card.side)
   if (side) tags.push(side)
   for (const l of card.loaders.slice(0, 3)) tags.push(loaderTag(l))
   const range = versionRange(card.versions)
-  if (range) tags.push({ label: range, node: <BranchIcon /> })
+  if (range) tags.push(versionsTag(range))
   for (const c of card.categories.slice(0, 3)) tags.push(catTag(c))
   return tags
 }
@@ -487,7 +531,7 @@ function usePrice(card: SiteCard): string {
 export function SiteRow(props: RowProps) {
   const { card, sec } = props
   const { hit, resolve } = useCardHit(card)
-  const open = useOpen(props, resolve, useCatalogCtx().target)
+  const open = useOpen(props)
   const name = displayName(card.title)
   const updated = relativeTime(card.updatedAt || card.publishedAt)
   const dl = ownDownloads(card)
@@ -537,69 +581,82 @@ export function SiteRow(props: RowProps) {
   )
 }
 
+/**
+ * Плитка ленты (владелец 30.09.2026: «карточки слишком большие — минимум три в
+ * ряд в неполном окне»): обложка 16:9, значок, название, автор, одна строка
+ * описания, две метки, скачивания и одна главная кнопка. Всё остальное —
+ * «Новая сборка», «На сервер», версии — на странице материала.
+ */
 export function SiteGalleryCard(props: RowProps) {
   const { card, sec } = props
   const { hit, resolve } = useCardHit(card)
-  const open = useOpen(props, resolve, useCatalogCtx().target)
+  const open = useOpen(props)
   const name = displayName(card.title)
-  const updated = relativeTime(card.updatedAt || card.publishedAt)
-  // Метки — как карточка-галерея сайта: раздел (в «Все»), сторона, два
-  // загрузчика, две темы, версии, если осталось место (catalog-rows.tsx).
   const tags: Tag[] = []
+  if (card.aiGenerated === true) tags.push(milliTag())
   if (props.list === 'all') tags.push({ label: sec.title })
-  const side = sideTag(card.side)
-  if (side) tags.push(side)
-  for (const l of card.loaders.slice(0, 2)) tags.push(loaderTag(l))
-  for (const c of card.categories.slice(0, 2)) tags.push(catTag(c))
+  for (const l of card.loaders.filter((x) => x !== 'minecraft').slice(0, 2)) tags.push(loaderTag(l))
   const range = versionRange(card.versions)
-  if (range && tags.length < 4) tags.push({ label: range, node: <BranchIcon /> })
+  if (range && tags.length < 2) tags.push(versionsTag(range))
+  if (tags.length < 2 && card.categories[0]) tags.push(catTag(card.categories[0]))
+  const dl = ownDownloads(card)
   return (
-    <article
-      className={['card mr-gal', partnerFrame(card.partner)].filter(Boolean).join(' ')}
-      data-track="row_open"
-      data-kind={trackKind(card, sec)}
-      data-id={card.slug}
-      data-pos={props.pos}
-      onClick={open}
-    >
-      <span className="mr-gal-cover" aria-hidden="true">
-        {card.cover ? (
-          img(card.cover)
-        ) : card.icon ? (
-          // Нет скриншота — логотип крупно на своей размытой копии, как на сайте.
-          <span className="mr-gal-iconcover">
-            {img(card.icon)}
-            {img(card.icon)}
-          </span>
-        ) : (
-          <Fallback slug={card.slug} section={sec.slug} title={name} />
-        )}
-        {isExclusive(card.slug) ? <span className="ph-card-tag excl">Эксклюзив</span> : null}
-      </span>
-      <span className="mr-gal-body">
-        <span className="mr-gal-icon" aria-hidden="true">
-          {card.icon ? img(card.icon) : <Fallback slug={card.slug} section={sec.slug} title={name} />}
+    <CompactCtx.Provider value={true}>
+      <article
+        className={['card mr-gal', card.premium ? 'is-premium' : '', partnerFrame(card.partner)].filter(Boolean).join(' ')}
+        data-track="row_open"
+        data-kind={trackKind(card, sec)}
+        data-id={card.slug}
+        data-pos={props.pos}
+        onClick={open}
+      >
+        <span className="mr-gal-cover" aria-hidden="true">
+          {card.cover ? (
+            img(card.cover)
+          ) : card.icon ? (
+            // Нет скриншота — логотип крупно на своей размытой копии, как на сайте.
+            <span className="mr-gal-iconcover">
+              {img(card.icon)}
+              {img(card.icon)}
+            </span>
+          ) : (
+            <Fallback slug={card.slug} section={sec.slug} title={name} />
+          )}
+          {isExclusive(card.slug) ? <span className="ph-card-tag excl">Эксклюзив</span> : card.premium ? <span className="ph-card-tag prem">Премиум</span> : null}
         </span>
-        <h3 className="mr-gal-title">{name}</h3>
-        {card.author || updated ? (
-          <span className="mr-gal-author">{[card.author, updated ? 'обновлён ' + updated : ''].filter(Boolean).join(' · ')}</span>
-        ) : null}
-        <span className="mr-gal-summary">{card.summary}</span>
-        <Tags tags={tags} className="mr-gal-tags" />
-        <span className="mr-gal-foot">
-          <span className="mr-gal-stat">
-            <PriceMark card={card} />
-            {ownDownloads(card) ? (
-              <>
+        <span className="mr-gal-body">
+          <span className="mr-gal-icon" aria-hidden="true">
+            {/* Нет логотипа — центр скриншота (импортированные карты), блок — только без обоих. */}
+            {card.icon || card.cover ? img((card.icon || card.cover)!) : <Fallback slug={card.slug} section={sec.slug} title={name} />}
+          </span>
+          <h3 className="mr-gal-title">{name}</h3>
+          <span className="mr-gal-author">
+            {/* При двух кнопках («В сборку» и «На хостинг») скачивания — здесь, низ отдан кнопкам. */}
+            {dl ? (
+              <span className="mr-gal-stat2">
                 <Icon id="i-download" />
-                <b>{fmtNum(ownDownloads(card)!)}</b>
-              </>
+                <b>{fmtNum(dl)}</b>
+              </span>
             ) : null}
+            {card.author || sec.title}
           </span>
-          <RowActions card={card} sec={sec} hit={hit} resolve={resolve} />
+          {card.summary ? <span className="mr-gal-summary">{card.summary}</span> : null}
+          <Tags tags={tags} className="mr-gal-tags" />
+          <span className="mr-gal-foot">
+            <span className="mr-gal-stat">
+              <PriceMark card={card} />
+              {dl ? (
+                <>
+                  <Icon id="i-download" />
+                  <b>{fmtNum(dl)}</b>
+                </>
+              ) : null}
+            </span>
+            <RowActions card={card} sec={sec} hit={hit} resolve={resolve} />
+          </span>
         </span>
-      </span>
-    </article>
+      </article>
+    </CompactCtx.Provider>
   )
 }
 

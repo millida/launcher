@@ -337,8 +337,13 @@ export function loadPlus(): Promise<PlusStatus> {
   return api<PlusStatus>('/launcher/plus')
 }
 
-export function subscribePlus(): Promise<{ subscriptionId: string; paymentUrl: string }> {
-  return api<{ subscriptionId: string; paymentUrl: string }>('/launcher/plus/subscribe', { method: 'POST' })
+export type PlusTier = 'PLUS' | 'DIAMOND'
+
+export function subscribePlus(tier: PlusTier = 'PLUS'): Promise<{ subscriptionId: string; paymentUrl: string }> {
+  return api<{ subscriptionId: string; paymentUrl: string }>('/launcher/plus/subscribe', {
+    method: 'POST',
+    body: JSON.stringify({ tier }),
+  })
 }
 
 /// Геометрия вещи: отдаётся только вошедшему и под потолок на сутки, поэтому

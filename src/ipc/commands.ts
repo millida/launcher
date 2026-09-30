@@ -120,6 +120,8 @@ export interface ProfileSettings {
   autoTune?: boolean
   catalogPackSlug?: string
   catalogPackVersion?: string
+  /** sha512 of the published archive the build was installed from; empty for builds installed before it was kept. */
+  catalogPackSha512?: string
   /** Non-empty when a review candidate is installed instead of the published version. */
   catalogPackReviewFile?: string
   modpackSlug?: string

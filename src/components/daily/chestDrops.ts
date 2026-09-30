@@ -105,14 +105,14 @@ export const SHARD_DAILY_LIMIT_PLUS = 150
 export const WORKSHOP_COST: Partial<Record<Rarity, number>> = { COMMON: 200, UNCOMMON: 450, RARE: 1000 }
 
 /**
- * PLUS = мощный пропуск (v3): за 28 дней 880 рубинов в клетках, сундуки
+ * PLUS = мощный пропуск (v3): за 28 дней 2100 рубинов в клетках (ровно цена: 299 ₽ × 7), сундуки
  * 3 редких + 5 эпических + легендарный, фрагменты и осколки; вещей PLUS не
- * даёт. Рубинов подписчику за 30 дней — не больше 2 100 (299 ₽ × 7).
+ * даёт. Рубинов подписчику за 30 дней — не больше 3 400 (2 100 от PLUS + бесплатные).
  */
 export const PLUS_PASS = {
   chests: { RARE: 3, EPIC: 5, LEGEND: 1 } as Partial<Record<ChestTier, number>>,
-  rubies: 880,
-  rubiesCap: 2100,
+  rubies: 2100,
+  rubiesCap: 3400,
   shardBoost: 1.5,
 }
 

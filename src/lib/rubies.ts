@@ -538,7 +538,21 @@ export interface PlusEconomy {
   priceKopecks: number
   rubiesOnPay?: number
   shardBoost?: number
+  /** Тарифы: PLUS и PLUS Diamond (тот же пропуск, награды сразу). */
+  offers?: PlusOffer[]
 }
+
+export interface PlusOffer {
+  tier: 'PLUS' | 'DIAMOND'
+  priceKopecks: number
+  days: number
+}
+
+/** Запасные тарифы, если служба не прислала offers. */
+export const DEFAULT_PLUS_OFFERS: PlusOffer[] = [
+  { tier: 'PLUS', priceKopecks: 29900, days: 30 },
+  { tier: 'DIAMOND', priceKopecks: 53900, days: 30 },
+]
 
 const post = (body: unknown): RequestInit => ({ method: 'POST', body: JSON.stringify(body) })
 

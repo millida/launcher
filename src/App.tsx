@@ -7,6 +7,7 @@ import { RewardHost } from './components/reward/RewardReveal'
 import { initChatScreen } from './state/chatScreen'
 import { Login } from './screens/Login'
 import { PixelTip } from './components/PixelTip'
+import { MilliDock } from './components/milli/MilliDock'
 // Screens are mounted only while open, and their chunks are prewarmed after boot
 // so switching tabs stays instant.
 import {
@@ -19,6 +20,7 @@ import {
   Game,
   Play,
   Premium,
+  Plus,
   Rubies,
   Servers,
   Settings,
@@ -727,6 +729,11 @@ export function App() {
                   <Premium on />
                 </Guard>
               )}
+              {screen === 'plus' && (
+                <Guard what="PLUS">
+                  <Plus on />
+                </Guard>
+              )}
               {screen === 'builds' && (
                 <Guard what="Сборки">
                   <Builds on />
@@ -791,6 +798,7 @@ export function App() {
             <InstancePage />
           </Suspense>
         )}
+        <MilliDock />
         <ImportModal />
         <MoveBuildsModal />
         <ProjectModal />

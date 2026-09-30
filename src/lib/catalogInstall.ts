@@ -8,6 +8,7 @@ import {
   installContent,
   installModpack,
   installModpackVersion,
+  installSharedPack,
   installVersion,
 } from '../ipc/commands'
 import type { CatalogInstallReq, Profile } from '../ipc/commands'
@@ -307,8 +308,34 @@ async function confirmPack(title: string, what: string, opts: CatalogInstallOpts
   })
 }
 
+/// Сборка, которую собрала Милли и выложили в каталог (`aiGenerated`): файла
+/// на зеркале нет, есть код сборки лаунчера. Ставит её тот же путь ядра, что и
+/// «Сборка по коду» / millida://pack/<код> — `install_shared_pack`.
+export async function installPackCode(code: string, title: string, opts: CatalogInstallOpts = {}, slug = code): Promise<boolean> {
+  if (!hasTauri()) {
+    showToast('Установка доступна в приложении')
+    return false
+  }
+  if (!(await confirmPack(title, '', opts))) return false
+  const startedAt = performance.now()
+  return runInstall({
+    key: keyMillidaModpack(slug),
+    title,
+    running: 'Скачивание…',
+    run: () => installSharedPack(code),
+    onDone: (p) => packDone(p, title, startedAt, 'millida-code'),
+    onError: (e) => showToast('' + e, 'error'),
+  })
+}
+
+/// Код сборки Милли, если он есть у карточки: только у `aiGenerated`.
+export const aiPackCode = (item: { aiGenerated?: boolean; packCode?: string | null } | null | undefined): string | null =>
+  item && item.aiGenerated && item.packCode ? item.packCode : null
+
 async function installModpackItem(slug: string, opts: CatalogInstallOpts): Promise<boolean> {
   const item = await catalog.item(slug).catch(() => null)
+  const code = aiPackCode(item)
+  if (item && code) return installPackCode(code, item.title, opts, slug)
   // Готовая сборка лаунчера (launcherOnly: FreshCraft, Lost Souls…): файла
   // наружу нет, только подписанная ссылка на аккаунт. Ставит её тот же путь
   // ядра, что и вкладка «Сборки» — install_catalog_pack.
