@@ -5,12 +5,14 @@ import { Cover } from './Cover'
 import { useBuildPicker } from '../state/buildPicker'
 import { useProfiles } from '../state/profiles'
 import { openModal } from '../state/ui'
+import { setNewBuildPreset } from '../state/newBuild'
 import { backdropClose } from '../lib/dismiss'
 import { versionFits } from '../lib/mcVersion'
 
 export function BuildPicker() {
-  const { open, kindLabel, choose, title, sub, wanted } = useBuildPicker()
-  const profiles = useProfiles((s) => s.profiles)
+  const { open, kindLabel, choose, title, sub, wanted, only, preset } = useBuildPicker()
+  const all = useProfiles((s) => s.profiles)
+  const profiles = only ? all.filter((p) => only.includes(p.name)) : all
   const list = wanted.length
     ? [...profiles].sort((a, b) => Number(versionFits(b.version, wanted)) - Number(versionFits(a.version, wanted)))
     : profiles
@@ -55,7 +57,7 @@ export function BuildPicker() {
         ) : (
           <div className="bx-mini-empty">
             <Icon id="i-box2" />
-            <b>Сборок пока нет</b>
+            <b>{only && all.length ? 'Подходящей сборки нет' : 'Сборок пока нет'}</b>
           </div>
         )}
 
@@ -65,6 +67,7 @@ export function BuildPicker() {
             style={{ flex: 1 }}
             onClick={() => {
               choose(null)
+              if (preset) setNewBuildPreset(preset)
               openModal('nbModal')
             }}
           >

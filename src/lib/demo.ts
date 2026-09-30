@@ -554,6 +554,24 @@ const ROUTES: [RegExp, Handler][] = [
     frozenKopecks: 0,
     currency: 'RUB',
   })],
+  // Каталог: одна покупка, у платной сборки доступа нет — видно и «Купить», и «Куплено».
+  [/^\/catalog\/purchases\/me$/, () => [
+    {
+      id: 'demo-p1',
+      item: {
+        slug: 'bsl-shaders-dlya-minecraft',
+        title: 'BSL Shaders',
+        type: 'SHADER',
+        iconUrl: 'https://cdn.millida.trade/forum/dl/90b5702e-dd02-4fd8-ba3b-01e8a23a5812.webp',
+      },
+      kind: 'ONE_TIME',
+      status: 'SETTLED',
+      amountKopecks: 19900,
+      accessUntil: null,
+      createdAt: iso(ago(3 * DAY)),
+    },
+  ]],
+  [/^\/catalog\/items\/[^/]+\/access$/, () => ({ pricing: 'SUBSCRIPTION', priceKopecks: 25900, hasAccess: false, isOwner: false, source: null, expiresAt: null, subscription: null })],
   [/^\/core\/blocks$/, () => ({ items: [] })],
   [/^\/core\/blocks\//, ok],
 

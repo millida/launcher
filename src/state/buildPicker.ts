@@ -5,6 +5,11 @@ export interface PickOpts {
   sub?: string
   /** Версии сервера: подходящие сборки идут первыми, остальные помечены. */
   wanted?: string[]
+  /// Имена подходящих сборок (установка из каталога). Не задано — показываем
+  /// все: без этого мод под 1.21 уходил в сборку на 1.12.
+  only?: string[]
+  /// С чем открыть «Новую сборку», когда своей подходящей нет.
+  preset?: { version?: string; loader?: string; name?: string }
 }
 
 interface State {
@@ -13,6 +18,8 @@ interface State {
   title: string
   sub: string
   wanted: string[]
+  only: string[] | null
+  preset: PickOpts['preset'] | null
   resolve: ((name: string | null) => void) | null
   show: (kindLabel: string, opts?: PickOpts) => Promise<string | null>
   choose: (name: string | null) => void
@@ -24,6 +31,8 @@ export const useBuildPicker = create<State>((set, get) => ({
   title: '',
   sub: '',
   wanted: [],
+  only: null,
+  preset: null,
   resolve: null,
   show: (kindLabel, opts) =>
     new Promise((res) => {
@@ -35,6 +44,8 @@ export const useBuildPicker = create<State>((set, get) => ({
         title: opts?.title || '',
         sub: opts?.sub || '',
         wanted: opts?.wanted || [],
+        only: opts?.only || null,
+        preset: opts?.preset || null,
         resolve: res,
       })
     }),
@@ -45,8 +56,8 @@ export const useBuildPicker = create<State>((set, get) => ({
   },
 }))
 
-export const pickBuild = (kindLabel: string): Promise<string | null> =>
-  useBuildPicker.getState().show(kindLabel)
+export const pickBuild = (kindLabel: string, opts?: PickOpts): Promise<string | null> =>
+  useBuildPicker.getState().show(kindLabel, opts)
 
 export const pickBuildForJoin = (serverName: string, wanted: string[]): Promise<string | null> =>
   useBuildPicker.getState().show('сборку', {

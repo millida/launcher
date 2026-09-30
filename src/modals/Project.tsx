@@ -19,7 +19,8 @@ import {
   resolveTargetBuild,
   runPickedVersionInstall,
 } from '../lib/install'
-import { keyCfModpack, keyContent, keyMrModpack, pickTargetName } from '../lib/installKeys'
+import { keyCatalogPack, keyCfModpack, keyContent, keyMillida, keyMillidaModpack, keyMrModpack, pickTargetName } from '../lib/installKeys'
+import { installFromCatalog } from '../lib/catalogInstall'
 import { runInstall, stopInstall, useInstalls } from '../state/installs'
 import { trackTimed } from '../lib/telemetry'
 import { uiConfirm } from '../state/confirm'
@@ -47,10 +48,16 @@ export function ProjectModal() {
   const selected = useProfiles((s) => s.selected)
   const selectedBuild = pickTargetName(scoped, allProfiles.map((p) => p.name), selected || '')
   const isCf = pj.source === 'curseforge'
+  const isMl = pj.source === 'millida'
   const src = isCf ? 'cf' : 'mr'
   const project: string | number = isCf ? pj.cfid : pj.slug
-  const packKey =
-    pj.kind === 'modpack'
+  const packKey = isMl
+    ? pj.kind === 'modpack'
+      ? pj.launcherOnly
+        ? keyCatalogPack(pj.slug)
+        : keyMillidaModpack(pj.slug)
+      : keyMillida(selectedBuild || '', pj.kind, pj.slug)
+    : pj.kind === 'modpack'
       ? isCf
         ? keyCfModpack(pj.cfid)
         : keyMrModpack(pj.slug)
@@ -179,6 +186,10 @@ export function ProjectModal() {
       showToast('Установка доступна в приложении')
       return
     }
+    if (isMl) {
+      void installFromCatalog(pj.section, pj.slug)
+      return
+    }
     if (pj.kind === 'modpack') {
       installPack(fileId)
       return
@@ -229,6 +240,10 @@ export function ProjectModal() {
     // Ставить другую версию поверх — обычное дело; ту же самую — уже стоит.
     if (doneVersion[packKey] === v.id) {
       showToast('Эта версия уже стоит' + (selectedBuild ? ' в «' + selectedBuild + '»' : ''), 'ok', false)
+      return
+    }
+    if (isMl) {
+      void installFromCatalog(pj.section, pj.slug, { fileId: v.id })
       return
     }
     if (isCf) {
@@ -404,7 +419,7 @@ export function ProjectModal() {
             }}
           >
             <Icon id="i-ext" />
-            {isCf ? 'CurseForge' : 'Modrinth'}
+            {isMl ? 'Millida' : isCf ? 'CurseForge' : 'Modrinth'}
           </button>
           <button className="btn md secondary" id="pjClose" data-sound="close" data-track="close" onClick={close}>
             Закрыть

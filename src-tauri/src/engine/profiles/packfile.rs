@@ -129,8 +129,18 @@ async fn from_cf_manifest(app: &AppHandle, ex: &Path, name_hint: &str) -> Result
     commit(Profile { name: pname, version: mc, fabric, loader: Some(lid), loader_version, icon: None })
 }
 
+/// Что известно о сборке заранее, без её файлов: карточка каталога Millida
+/// называет версию игры и загрузчик. Готовая сборка каталога — это просто папка
+/// игры в zip, и по одним модам версию не всегда видно.
+#[derive(Clone, Default)]
+pub(crate) struct PackHint {
+    pub version: String,
+    pub loader: String,
+    pub loader_version: Option<String>,
+}
+
 /// Plain client folder: version and loader are detected from the game files.
-fn from_plain_dir(dir: &Path, name_hint: &str) -> Result<Profile, String> {
+fn from_plain_dir(dir: &Path, name_hint: &str, hint: Option<&PackHint>) -> Result<Profile, String> {
     // a Prism / MultiMC export knows its version and loader from mmc-pack.json
     // and keeps memory and Java arguments in instance.cfg next to the game
     if dir.join("mmc-pack.json").is_file() {
@@ -140,13 +150,21 @@ fn from_plain_dir(dir: &Path, name_hint: &str) -> Result<Profile, String> {
         }
     }
     let game = instance_game_dir(dir).unwrap_or(dir.to_path_buf());
-    let (version, loader) = detect_from_game_dir(&game).unwrap_or_else(|| (String::new(), "vanilla".into()));
+    let (mut version, mut loader) = detect_from_game_dir(&game).unwrap_or_else(|| (String::new(), "vanilla".into()));
+    // Карточка знает сборку лучше, чем догадка по модам: её версию ставил автор.
+    let known = hint.filter(|h| !h.version.is_empty());
+    if let Some(h) = known {
+        version = h.version.clone();
+        if !h.loader.is_empty() { loader = h.loader.clone(); }
+    }
     if version.is_empty() {
         return Err("Не удалось определить версию Minecraft — импортируй .mrpack или zip с manifest.json".into());
     }
     let pname = unique_name(name_hint);
     vouch(&game);
-    import_instance(game.to_string_lossy().to_string(), pname, version, loader)
+    let prof = import_instance(game.to_string_lossy().to_string(), pname, version, loader)?;
+    let Some(lv) = known.and_then(|h| h.loader_version.clone()).filter(|v| !v.is_empty()) else { return Ok(prof) };
+    commit(Profile { loader_version: Some(lv), ..prof })
 }
 
 fn base_name(p: &Path) -> String {
@@ -169,13 +187,27 @@ pub async fn import_pack_file(app: AppHandle, path: Option<String>) -> Result<Pr
 }
 
 pub async fn import_pack_path(app: AppHandle, picked: std::path::PathBuf) -> Result<Profile, String> {
-    if picked.is_dir() { return from_plain_dir(&picked, &base_name(&picked)); }
+    if picked.is_dir() { return from_plain_dir(&picked, &base_name(&picked), None); }
     if !picked.exists() { return Err("Файл не найден".into()) }
-    emit(&app, "mod", 10.0, "Распаковываем сборку…");
-    let ex = data_dir().join("tmp").join("packfile");
+    let hint = base_name(&picked);
+    import_pack_archive(&app, &picked, &hint, None, "packfile").await
+}
+
+/// Архив сборки, уже лежащий на диске: выбранный в проводнике или скачанный
+/// лаунчером из каталога Millida. `work` — имя папки распаковки: две установки
+/// разных сборок не должны делить одну.
+pub(crate) async fn import_pack_archive(
+    app: &AppHandle,
+    archive: &Path,
+    name_hint: &str,
+    hint: Option<&PackHint>,
+    work: &str,
+) -> Result<Profile, String> {
+    emit(app, "mod", 10.0, "Распаковываем сборку…");
+    let ex = data_dir().join("tmp").join(work);
     let _ = std::fs::remove_dir_all(&ex);
     std::fs::create_dir_all(&ex).map_err(|e| e.to_string())?;
-    unzip_to(&picked, &ex).map_err(|e| format!("Не удалось распаковать: {}", e))?;
+    unzip_to(archive, &ex).map_err(|e| format!("Не удалось распаковать: {}", e))?;
     // the archive may be wrapped in a single top-level folder
     let root = {
         let mut r = ex.clone();
@@ -190,15 +222,14 @@ pub async fn import_pack_path(app: AppHandle, picked: std::path::PathBuf) -> Res
         }
         r
     };
-    let hint = base_name(&picked);
     let res = if root.join("modrinth.index.json").exists() {
-        from_mrpack(&app, &root, &hint).await
+        from_mrpack(app, &root, name_hint).await
     } else if root.join("manifest.json").exists() {
-        from_cf_manifest(&app, &root, &hint).await
+        from_cf_manifest(app, &root, name_hint).await
     } else {
-        from_plain_dir(&root, &hint)
+        from_plain_dir(&root, name_hint, hint)
     };
     let _ = std::fs::remove_dir_all(&ex);
-    if res.is_ok() { emit(&app, "mod", 100.0, "Сборка импортирована") }
+    if res.is_ok() { emit(app, "mod", 100.0, "Сборка импортирована") }
     res
 }

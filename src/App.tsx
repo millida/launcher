@@ -31,14 +31,15 @@ import { MoveBuildsModal } from './modals/MoveBuilds'
 import { ProjectModal } from './modals/Project'
 import { NewBuildModal } from './modals/NewBuild'
 import { AccountAddModal } from './modals/AccountAdd'
+import { BuyModal } from './components/catalog/PaidActs'
 import { ModpackVersionsOverlay, ScreenshotsOverlay } from './modals/Overlays'
 import { MigrateBuildModal } from './modals/MigrateBuild'
 import { ImageLightbox } from './components/ImageLightbox'
 import { UpdateBanner } from './components/UpdateBanner'
 import { ConfirmModal } from './components/ConfirmModal'
 import { BuildPicker } from './components/BuildPicker'
-import { DepPlanModal } from './components/DepPlanModal'
 import { PackKeyHost } from './components/PackKeyHost'
+import { DepPlanModal } from './components/DepPlanModal'
 import { PackCodeHost } from './components/PackCodeHost'
 import { ChatNotify } from './components/ChatNotify'
 import { CallPanel } from './components/CallPanel'
@@ -795,12 +796,13 @@ export function App() {
         <ProjectModal />
         <NewBuildModal />
         <AccountAddModal />
+        <BuyModal />
         <ScreenshotsOverlay />
         <ModpackVersionsOverlay />
         <MigrateBuildModal />
         <BuildPicker />
-        <DepPlanModal />
         <PackKeyHost />
+        <DepPlanModal />
         <PackCodeHost />
         <CrashModal />
         <ServerDetail />

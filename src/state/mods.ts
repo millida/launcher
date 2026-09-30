@@ -20,6 +20,8 @@ export interface ModHit {
   pid?: string
   cfid?: number
   website?: string
+  /** Раздел каталога Millida (mods, texture-packs…): строка из нашего каталога. */
+  section?: string
   /** Адрес нашей сборки в каталоге Millida — ставится не как чужие. */
   packSlug?: string
   /** Платная сборка: ставится по доступу на аккаунте. */

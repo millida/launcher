@@ -10,8 +10,14 @@ export const keyCatalogPack = (slug: string): string => 'catalog-pack:' + slug
 
 export const keyMigrate = (profile: string): string => 'migrate:' + profile
 
-export const keyContent = (source: 'cf' | 'mr', profile: string, kind: string, project: string | number): string =>
+export const keyContent = (source: 'cf' | 'mr' | 'millida', profile: string, kind: string, project: string | number): string =>
   source + '-' + kind + ':' + profile + ':' + project
+
+/// Каталог Millida: ключ по slug карточки (engine/content/millida.rs).
+export const keyMillida = (profile: string, kind: string, slug: string): string =>
+  'millida-' + kind + ':' + profile + ':' + slug
+
+export const keyMillidaModpack = (slug: string): string => 'millida-modpack:' + slug
 
 /// Which build a catalogue row is talking about. The row shows «Установлено»
 /// only if it asks about the same build the install writes into: keyed by one

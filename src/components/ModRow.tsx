@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { CatalogRow } from './catalog/CatalogRow'
 import { PackKeyModal } from './PackKeyModal'
 import { hasTauri } from '../ipc/tauri'
@@ -11,16 +12,16 @@ import {
   installPackCandidate,
 } from '../ipc/commands'
 import { catalogInstallTracker, installContentFlow, resolveTargetBuild } from '../lib/install'
-import { keyCatalogPack, keyCfModpack, keyContent, keyMrModpack, pickTargetName } from '../lib/installKeys'
+import { keyCatalogPack, keyCfModpack, keyContent, keyMillida, keyMillidaModpack, keyMrModpack, pickTargetName } from '../lib/installKeys'
+import { installFromCatalog } from '../lib/catalogInstall'
 import { runInstall, useInstalls } from '../state/installs'
 import { trackTimed } from '../lib/telemetry'
 import { useProfiles } from '../state/profiles'
 import { uiConfirm } from '../state/confirm'
 import { showToast } from '../state/ui'
-import { useState } from 'react'
 import { useMods } from '../state/mods'
 import type { ModHit } from '../state/mods'
-import { openCfProject, openProject } from '../state/project'
+import { openCfProject, openMillidaProject, openProject } from '../state/project'
 import { DEMO_USER } from '../lib/demo'
 import { loadPackView } from './premium/packView'
 import { modpackVersionFor } from '../lib/modpackVersion'
@@ -30,8 +31,11 @@ import { modpackVersionFor } from '../lib/modpackVersion'
  * из нужного источника, открытие карточки и окно ключа платной сборки. Одно на
  * строку и на плитку — иначе они разошлись бы в том, что считать «установлено».
  */
-export function useModAction(h: ModHit, game?: string | null) {
-  const modTab = useMods((s) => s.modTab)
+export function useModAction(h: ModHit, game?: string | null, kind?: string) {
+  // Вид берётся у карточки, когда он известен: в ленте «Все» каталога рядом
+  // стоят мод, шейдер и карта, и общий modTab положил бы шейдер в папку модов.
+  const storeTab = useMods((s) => s.modTab)
+  const modTab = kind || storeTab
   const installedIds = useMods((s) => s.installedIds)
   const installed = !!(h.pid && installedIds.has(h.pid))
   // The same build the install itself will use, so a finished install shows on
@@ -40,9 +44,12 @@ export function useModAction(h: ModHit, game?: string | null) {
   const profiles = useProfiles((s) => s.profiles)
   const selected = useProfiles((s) => s.selected)
   const target = pickTargetName(scoped, profiles.map((p) => p.name), selected || '')
-  const key =
-    h.packSlug
-      ? keyCatalogPack(h.packSlug)
+  const key = h.packSlug
+    ? keyCatalogPack(h.packSlug)
+    : h.section
+      ? modTab === 'modpack'
+        ? keyMillidaModpack(h.slug || '')
+        : keyMillida(target || '', modTab, h.slug || '')
       : h.cfid !== undefined
         ? modTab === 'modpack'
           ? keyCfModpack(h.cfid)
@@ -153,14 +160,19 @@ export function useModAction(h: ModHit, game?: string | null) {
 
   const onInst = () => {
     if (sayInstalled()) return
-    if (h.slug && hasTauri() && ['mod', 'resourcepack', 'datapack', 'shader'].includes(modTab)) {
-      void installContentFlow({ source: 'modrinth', slug: h.slug }, modTab, h.title)
-      return
-    }
     // Своя сборка ставится своим путём: у неё есть право доступа, свой архив и
-    // свой запуск, и ни Modrinth, ни CurseForge про неё ничего не знают.
+    // свой запуск, и ни Modrinth, ни CurseForge про неё ничего не знают. Первой:
+    // во «Покупках» сборка стоит рядом с модами, и вкладка каталога её не опишет.
     if (h.packSlug && hasTauri()) {
       startPackInstall()
+      return
+    }
+    if (h.section && h.slug) {
+      void installFromCatalog(h.section, h.slug)
+      return
+    }
+    if (h.slug && hasTauri() && ['mod', 'resourcepack', 'datapack', 'shader'].includes(modTab)) {
+      void installContentFlow({ source: 'modrinth', slug: h.slug }, modTab, h.title)
       return
     }
     // Демо в браузере (dev, ?preview=user): ставить нечем, поэтому платная
@@ -256,6 +268,10 @@ export function useModAction(h: ModHit, game?: string | null) {
 
   const onRow = (e: React.MouseEvent<HTMLElement>) => {
     if ((e.target as HTMLElement).closest('button')) return
+    if (h.section && h.slug) {
+      void openMillidaProject(h.slug, h.section, modTab, h.title)
+      return
+    }
     if (h.cfid !== undefined) {
       void openCfProject(h.cfid, modTab, h.title)
       return

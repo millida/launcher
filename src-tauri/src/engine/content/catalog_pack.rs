@@ -754,7 +754,7 @@ fn launch_check_body(settings: &Value, ok: bool, detail: &str) -> Value {
 /// Removes the download and the unpacked tree on every path out, including the
 /// early returns and the cancel. Four hand-written deletions in the happy path
 /// leave gigabytes behind exactly when the install failed.
-struct TempPaths(Vec<PathBuf>);
+pub(crate) struct TempPaths(pub(crate) Vec<PathBuf>);
 
 impl Drop for TempPaths {
     fn drop(&mut self) {

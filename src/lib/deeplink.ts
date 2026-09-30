@@ -22,6 +22,8 @@ import { realLaunch } from './launch'
 import { restoreLauncher } from './window'
 import { rememberInviteCode } from './referrals'
 import { pickFriendsTab } from '../components/friends/friendsView'
+import { parseInstallLink } from './millidaCatalog'
+import { installFromCatalog } from './catalogInstall'
 
 function handle(raw: string) {
   let url: URL
@@ -92,6 +94,25 @@ function handle(raw: string) {
     })
     setScreen('builds')
     openModal('nbModal')
+    return
+  }
+  // «Установить» на millida.net: материал каталога Millida по его slug.
+  // millida://modpack/<slug> — прежняя кнопка сборок сайта, тот же каталог.
+  if (action === 'install') {
+    const link = parseInstallLink(action, rest, q)
+    if (!link) {
+      showToast('Ссылка на установку не распознана', 'error')
+      return
+    }
+    if (link.section === 'modpacks') setScreen('builds')
+    else if (link.section !== 'skins' && link.section !== 'capes') setScreen('mods')
+    void installFromCatalog(link.section, link.slug, {
+      versions: link.versions,
+      loaders: link.loaders,
+      fromLink: true,
+      name: link.name,
+      slim: link.slim,
+    }).catch((e) => showToast('' + e, 'error'))
     return
   }
   if (action === 'project') {

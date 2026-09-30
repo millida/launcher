@@ -1556,7 +1556,7 @@ export function InstancePage() {
                   close()
                   setScreen('mods')
                   useMods.getState().scopeTo(profile)
-                  useMods.getState().set({ modTab: 'world', fCats: [], fCat: 'все', fWorldCat: 0 })
+                  useMods.getState().set({ modTab: 'world', fCat: 'все' })
                   void useMods.getState().load()
                 }}
               >

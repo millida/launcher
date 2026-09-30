@@ -6,6 +6,9 @@ import { hasTauri } from '../../ipc/tauri'
 import { millidaPacks } from '../../ipc/commands'
 import type { MillidaPack } from '../../ipc/commands'
 import type { ModHit } from '../../state/mods'
+import { SECTION_SOURCE, listingQuery } from './sections'
+import type { EditionFilter, PriceFilter, SectionSlug, SectionSource } from './sections'
+import type { CatalogFile, Pricing } from './paid'
 
 /*
  * Каталог Millida в лаунчере = каталог millida.net (приказ владельца
@@ -22,29 +25,74 @@ import type { ModHit } from '../../state/mods'
  * серверные сборки) живёт в «Хостинге», а не здесь — как и раньше.
  */
 
-export type SiteSlug = 'mods' | 'modpacks' | 'texture-packs' | 'shaders' | 'data-packs' | 'maps' | 'plugins' | 'server-packs'
+export type SiteSlug = SectionSlug
 
 export interface SiteSection {
   slug: SiteSlug
-  /** Вид материала для установки лаунчером — как `useMods.modTab`. */
-  kind: 'mod' | 'modpack' | 'resourcepack' | 'shader' | 'datapack' | 'world' | 'plugin' | 'serverpack'
+  /**
+   * Вид материала для установки лаунчером — как `useMods.modTab`. У разделов,
+   * которые в сборку не ставятся, свой вид: плагины и серверные сборки — на
+   */
+  kind:
+    | 'all'
+    | 'mod'
+    | 'modpack'
+    | 'resourcepack'
+    | 'shader'
+    | 'datapack'
+    | 'world'
+    | 'plugin'
+    | 'serverpack'
+    | 'addon'
+    | 'cheat'
+    | 'seed'
+    | 'skin'
+    | 'cape'
+    | 'head'
   title: string
   h1: string
   /** Есть ось «Загрузчик» (у ресурс-паков, дата-паков и карт её нет). */
   loaderAxis: boolean
-  /** Лента карточками с обложкой — как на сайте у шейдеров и ресурс-паков. */
+  /** Лента карточками с обложкой — с 29.09.2026 на сайте так все разделы, кроме скинов. */
   gallery: boolean
+  source: SectionSource
 }
 
-/** Порядок — как во вкладках каталога сайта (`CATALOG_TYPE_TABS`). */
-export const SITE_SECTIONS: SiteSection[] = [
-  { slug: 'mods', kind: 'mod', title: 'Моды', h1: 'Моды для Minecraft', loaderAxis: true, gallery: false },
-  { slug: 'modpacks', kind: 'modpack', title: 'Сборки', h1: 'Сборки модов для Minecraft', loaderAxis: true, gallery: false },
-  { slug: 'texture-packs', kind: 'resourcepack', title: 'Ресурс-паки', h1: 'Ресурс-паки и текстуры для Minecraft', loaderAxis: false, gallery: true },
-  { slug: 'shaders', kind: 'shader', title: 'Шейдеры', h1: 'Шейдеры для Minecraft', loaderAxis: true, gallery: true },
-  { slug: 'data-packs', kind: 'datapack', title: 'Дата-паки', h1: 'Дата-паки для Minecraft', loaderAxis: false, gallery: false },
-  { slug: 'maps', kind: 'world', title: 'Карты', h1: 'Карты для Minecraft', loaderAxis: false, gallery: false },
+const sec = (slug: SiteSlug, kind: SiteSection['kind'], title: string, h1: string, loaderAxis: boolean): SiteSection => ({
+  slug,
+  kind,
+  title,
+  h1,
+  loaderAxis,
+  gallery: slug !== 'skins',
+  source: SECTION_SOURCE[slug],
+})
+
+/** Все разделы сайта в порядке групп шапки (`CATALOG_GROUPS`). */
+export const ALL_SECTIONS: SiteSection[] = [
+  sec('all', 'all', 'Все', 'Всё для Minecraft', true),
+  sec('modpacks', 'modpack', 'Сборки модов', 'Сборки модов для Minecraft', true),
+  sec('server-packs', 'serverpack', 'Серверные сборки', 'Серверные сборки для Minecraft', true),
+  sec('mods', 'mod', 'Моды', 'Моды для Minecraft', true),
+  sec('plugins', 'plugin', 'Плагины', 'Плагины для сервера Minecraft', true),
+  sec('data-packs', 'datapack', 'Дата-паки', 'Дата-паки для Minecraft', false),
+  sec('cheats', 'cheat', 'Читы', 'Читы для Minecraft', true),
+  sec('texture-packs', 'resourcepack', 'Ресурс-паки', 'Ресурс-паки и текстуры для Minecraft', false),
+  sec('shaders', 'shader', 'Шейдеры', 'Шейдеры для Minecraft', true),
+  sec('maps', 'world', 'Карты', 'Карты для Minecraft', false),
+  sec('seeds', 'seed', 'Сиды', 'Сиды для Minecraft', false),
+  sec('skins', 'skin', 'Скины', 'Скины для Minecraft', false),
+  sec('capes', 'cape', 'Плащи', 'Плащи для Minecraft', false),
+  sec('heads', 'head', 'Головы', 'Головы для Minecraft', false),
 ]
+
+const bySlug = (slug: SiteSlug): SiteSection => ALL_SECTIONS.find((s) => s.slug === slug)!
+
+/**
+ * Шесть разделов того, что ставится в свою сборку, — плитки «Категорий» и
+ * вход снаружи по `useMods.modTab`.
+ */
+export const SITE_SECTIONS: SiteSection[] = (['mods', 'modpacks', 'texture-packs', 'shaders', 'data-packs', 'maps'] as SiteSlug[]).map(bySlug)
 
 /*
  * Тот же каталог для сервера (приказ владельца 24.09.2026, 18:35: «каталог
@@ -53,22 +101,10 @@ export const SITE_SECTIONS: SiteSection[] = [
  * принять: сборки, серверные сборки, плагины, моды, дата-паки, карты. Ресурс-
  * паки и шейдеры — клиентские, серверу не нужны.
  */
-const SERVER_ONLY: SiteSection[] = [
-  { slug: 'server-packs', kind: 'serverpack', title: 'Серверные сборки', h1: 'Серверные сборки для Minecraft', loaderAxis: true, gallery: false },
-  { slug: 'plugins', kind: 'plugin', title: 'Плагины', h1: 'Плагины для сервера Minecraft', loaderAxis: true, gallery: false },
-]
-
-export const SERVER_SECTIONS: SiteSection[] = [
-  SITE_SECTIONS[1]!,
-  SERVER_ONLY[0]!,
-  SERVER_ONLY[1]!,
-  SITE_SECTIONS[0]!,
-  SITE_SECTIONS[4]!,
-  SITE_SECTIONS[5]!,
-]
+export const SERVER_SECTIONS: SiteSection[] = (['modpacks', 'server-packs', 'plugins', 'mods', 'data-packs', 'maps'] as SiteSlug[]).map(bySlug)
 
 export function sectionBySlug(slug: string): SiteSection {
-  return SITE_SECTIONS.find((s) => s.slug === slug) || SERVER_ONLY.find((s) => s.slug === slug) || SITE_SECTIONS[0]!
+  return ALL_SECTIONS.find((s) => s.slug === slug) || bySlug('mods')
 }
 
 /**
@@ -113,7 +149,11 @@ export interface SiteCard {
   categories: string[]
   publishedAt: string | null
   updatedAt: string | null
+  /** Платность материала (`CatalogCard.pricing` сайта). Нет поля — бесплатно. */
+  pricing?: Pricing
+  priceKopecks?: number | null
   mrHit?: ModHit
+  /** Издание игры; нет поля — Java. */
 }
 
 export interface SiteListing {
@@ -135,6 +175,9 @@ export interface SiteFacets {
   versions: Facet[]
   loaders: Facet[]
   categories: Facet[]
+  editions?: Facet[]
+  /** «Для чего» (`?use=`) — задачи раздела; у сайта это карты и сборки. */
+  uses?: { value: string; label: string; count: number }[]
 }
 
 export interface SiteSectionStat {
@@ -152,6 +195,9 @@ export interface ListingQuery {
   sort?: 'popular' | 'new'
   page?: number
   perPage?: number
+  edition?: EditionFilter | null
+  use?: string | null
+  price?: PriceFilter | null
 }
 
 export const PER_PAGE = 20
@@ -163,24 +209,51 @@ function qs(p: Record<string, string | number | null | undefined>): string {
 }
 
 export function loadListing(p: ListingQuery): Promise<SiteListing> {
-  const path =
-    '/catalog/listing?' +
-    qs({
-      section: p.section,
-      version: p.version,
-      loader: p.loader,
-      category: p.category,
-      q: p.q,
-      sort: p.sort === 'new' ? 'new' : null,
-      page: p.page && p.page > 1 ? p.page : null,
-      perPage: p.perPage || PER_PAGE,
-    })
+  const path = '/catalog/listing?' + listingQuery(p.section, { ...p, perPage: p.perPage || PER_PAGE })
   return cachedCatalog('site:' + path, () => api<SiteListing>(path))
 }
 
-export function loadFacets(section: SiteSlug, version?: string | null, loader?: string | null): Promise<SiteFacets> {
-  const path = '/catalog/facets?' + qs({ section, version, loader })
+export function loadFacets(section: SiteSlug, version?: string | null, loader?: string | null, edition?: EditionFilter | null): Promise<SiteFacets> {
+  const path = '/catalog/facets?' + qs({ section, edition, version, loader })
   return cachedCatalog('site:' + path, () => api<SiteFacets>(path))
+}
+
+/** Читы и другое кураторское: файлы на нашем хранилище, `/catalog/curated/<раздел>`. */
+export interface CuratedItem {
+  slug: string
+  downloads: number
+  files: { id: string; version: string; fileName: string; size: number; gameVersions: string[]; loaders: string[]; releasedAt: string | null }[]
+}
+export function loadCurated(section: 'cheats'): Promise<CuratedItem[]> {
+  return cachedCatalog('site:curated:' + section, () =>
+    api<{ items?: CuratedItem[] }>('/catalog/curated/' + section).then((d) => (Array.isArray(d.items) ? d.items : [])),
+  )
+}
+
+/** Скин сетки каталога (`/v2/skins`, `SkinCard` сайта). */
+export interface SkinTile {
+  id: string
+  model: 'classic' | 'slim'
+  title: string
+  wearers: number
+  renderUrl: string
+}
+export interface SkinPage {
+  items: SkinTile[]
+  total: number
+  page: number
+  pages: number
+}
+export function loadSkins(p: { q?: string | null; sort?: 'popular' | 'new'; page?: number }): Promise<SkinPage> {
+  const path = '/skins?' + qs({ q: p.q && p.q.trim().length >= 2 ? p.q.trim() : null, sort: p.sort === 'new' ? 'new' : null, page: p.page && p.page > 1 ? p.page : null, limit: 24 })
+  return cachedCatalog('site:' + path, () =>
+    api<{ items?: SkinTile[]; total?: number; page?: number; pages?: number }>(path).then((d) => ({
+      items: (Array.isArray(d.items) ? d.items : []).filter((x) => x && /^[0-9a-fu]{16}$/.test(String(x.id))),
+      total: Number(d.total) || 0,
+      page: Number(d.page) || 1,
+      pages: Number(d.pages) || 0,
+    })),
+  )
 }
 
 export function loadSections(): Promise<SiteSectionStat[]> {
@@ -339,8 +412,13 @@ export const SIDE_LABEL: Record<string, { label: string; icon: string }> = {
 /** Страница материала на сайте — запасной путь, если лаунчер его не ставит. */
 export const siteUrl = (section: string, slug: string): string => `https://millida.net/${section}/${slug}`
 
-interface ItemView {
+/** Карточка материала (`/catalog/items/:slug`) — только поля, которые читает лаунчер. */
+export interface ItemView {
   sourceUrl: string | null
+  launcherOnly?: boolean
+  pricing?: Pricing
+  priceKopecks?: number | null
+  files?: CatalogFile[]
 }
 
 const MR_URL = /modrinth\.com\/(?:mod|modpack|resourcepack|shader|datapack|plugin)\/([^/?#]+)/i
@@ -377,7 +455,7 @@ export async function resolveHit(card: SiteCard): Promise<ModHit | null> {
   const hit = peekCatalog<ModHit | null>(key)
   if (hit !== undefined) return hit
   return cachedCatalog(key, async () => {
-    const item = await itemQueued(card.slug)
+    const item = await loadItem(card.slug).catch(() => null)
     const m = item && item.sourceUrl ? MR_URL.exec(item.sourceUrl) : null
     if (!m) return null
     const mrSlug = decodeURIComponent(m[1]!)
@@ -386,16 +464,25 @@ export async function resolveHit(card: SiteCard): Promise<ModHit | null> {
   })
 }
 
-/** Не больше трёх карточек материала разом: лента — двадцать строк. */
+/**
+ * Карточка материала — одна на строку ленты и на установку: источник, файлы и
+ * платность. `fresh` — мимо кэша: после покупки сервер может отдать файлы,
+ * которых до неё не показывал.
+ */
+export function loadItem(slug: string, fresh = false): Promise<ItemView> {
+  const key = 'site:item:' + slug
+  return fresh ? itemQueued(slug) : cachedCatalog(key, () => itemQueued(slug))
+}
+
+/** Не больше трёх карточек материала разом: лента — двадцать строк. Сбой не кэшируется. */
 let itemsActive = 0
 const itemsWaiting: (() => void)[] = []
-function itemQueued(slug: string): Promise<ItemView | null> {
-  return new Promise((resolve) => {
+function itemQueued(slug: string): Promise<ItemView> {
+  return new Promise((resolve, reject) => {
     const run = () => {
       itemsActive++
       api<ItemView>('/catalog/items/' + encodeURIComponent(slug))
-        .catch(() => null)
-        .then(resolve)
+        .then(resolve, reject)
         .finally(() => {
           itemsActive--
           itemsWaiting.shift()?.()

@@ -373,6 +373,29 @@
 .mr-prem svg { width: 12px; height: 12px; }
 .mr-prem.excl { color: var(--m-accent-fg); background: var(--m-rarity-epic); }
 .mr-price { font: 800 18px/1 var(--m-font); color: var(--m-warning); font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* Куплено: плотная плашка акцента с тёмным текстом вместо цены. */
+.mr-owned {
+  display: inline-flex; align-items: center; height: 22px; padding: 0 8px;
+  font: 800 12px/1 var(--m-font); color: var(--m-accent-fg); background: var(--m-accent);
+  --px-n: 4px; clip-path: var(--px-4); white-space: nowrap;
+}
+.mr-gal-stat .mr-price { font-size: 14px; }
+.mr-gal-stat .mr-owned { height: 20px; font-size: 11px; }
+.mr-buy[aria-busy='true'] { opacity: .7; }
+
+/* Окно покупки материала: цена крупно, баланс в колодце, две кнопки. */
+.cat-buy-bg { position: fixed; z-index: 900; }
+.cat-buy h3 { overflow-wrap: anywhere; }
+.cat-buy-price { margin-top: 10px; font: 800 28px/1 var(--m-font); color: var(--m-warning); font-variant-numeric: tabular-nums; }
+.cat-buy-line { margin: 6px 0 0; }
+.cat-buy-line.is-warn { color: var(--m-warning); }
+.cat-buy-wallet {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 16px; padding: 10px 12px;
+  font-size: 13px; color: var(--m-fg-muted); background: var(--m-inset); --px-n: 5px; clip-path: var(--px-5);
+}
+.cat-buy-wallet b { color: var(--m-fg); font-variant-numeric: tabular-nums; }
+.cat-buy[data-step='funds'] .cat-buy-wallet b { color: var(--m-danger); }
+.cat-buy-btns { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
 .mr-side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; min-width: 128px; text-align: right; }
 .mr-stat { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--m-fg-muted); }
 .mr-stat svg { width: 16px; height: 16px; }
@@ -596,3 +619,43 @@
 .cat2-legacy { margin-top: 16px; }
 .mr-cat.is-server .mr-types { margin-bottom: 4px; }
 .mr-host-portal { display: contents; }
+
+/* ── Разделы как на сайте (30.09.2026) ─────────────────────────────
+   Группы шапки каталога сайта и их разделы: цветной пиксельный значок,
+   нейтральный текст пункта. Цвета — токены --m-sec-* сайта (millida-kit.css),
+   та же шкала читаемости ≥4,5:1 на тёмном фоне. */
+.mr-cat, .hub-cat {
+  --m-sec-all: #b8c2cc; --m-sec-mods: #8fce74; --m-sec-modpacks: #c99af5; --m-sec-server-packs: #86a8f0;
+  --m-sec-plugins: #6fc6de; --m-sec-data-packs: #e8c05a; --m-sec-addons: #5fd4c0; --m-sec-cheats: #f09474;
+  --m-sec-texture-packs: #f3a06f; --m-sec-shaders: #f5c542; --m-sec-maps: #7fb2f0; --m-sec-seeds: #9ed8a4;
+  --m-sec-skins: #e3a8cf; --m-sec-capes: #b49af0; --m-sec-heads: #f09a9a;
+}
+.mr-sec-ic { display: inline-flex; flex: none; margin-right: 6px; }
+.mr-types .seg { display: inline-flex; align-items: center; }
+/* На плотном акценте цветной значок сливается — значок цветом текста кнопки. */
+:root:root .mr-types .seg.on .mr-sec-ic, :root:root .mr-subtypes .seg.on .mr-sec-ic { color: inherit !important; }
+.segs.mr-groups { margin-bottom: 8px; }
+.segs.mr-subtypes { gap: 4px; margin-bottom: 16px; }
+.mr-subtypes .seg { display: inline-flex; align-items: center; height: 32px; padding: 0 10px; font-size: 13px; font-weight: 700; color: var(--m-fg-muted); background-color: transparent; }
+.mr-subtypes .seg:hover { color: var(--m-fg); background-color: var(--m-surface-2); }
+:root:root .mr-subtypes .seg.on { color: var(--m-fg); background-color: var(--m-surface-2); }
+
+/* Логотип без скриншота — крупно на своей размытой копии (mk-galcard-iconcover). */
+.mr-gal-iconcover { position: absolute; inset: 0; display: grid; place-items: center; overflow: hidden; }
+.mr-gal-iconcover > img:first-child { position: absolute; inset: -20%; width: 140%; height: 140%; object-fit: cover; filter: blur(24px) saturate(1.2); opacity: .55; }
+.mr-gal-iconcover > img:last-child { position: relative; width: 38%; aspect-ratio: 1; object-fit: contain; }
+
+/* Скины — сетка /skins/katalog сайта: рендер во весь рост, имя, кнопка. */
+.mr-skingrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 12px; }
+.card.mr-skin { display: flex; flex-direction: column; gap: 8px; padding: 10px; cursor: pointer; }
+.mr-skin-art { position: relative; display: block; aspect-ratio: 3 / 4; background: var(--m-surface-2); overflow: hidden; }
+.mr-skin-art > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+.mr-skin-wear { position: absolute; left: 6px; top: 6px; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; color: var(--m-fg-muted); }
+.mr-skin-wear .icon { width: 13px; height: 13px; }
+.mr-skin-name { font-size: 14px; font-weight: 600; color: var(--m-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card.mr-skin .btn { width: 100%; justify-content: center; }
+
+/* Сиды, головы, плащи — ленты нет, значок раздела и путь дальше. */
+.card.mr-sitecard { display: flex; align-items: center; gap: 20px; padding: 24px; }
+.mr-sitecard-ic { display: inline-flex; }
+.mr-sitecard-acts { display: flex; flex-wrap: wrap; gap: 10px; }

@@ -252,6 +252,7 @@ export const EXPECTED_BY_COMMAND: Record<string, { why: string; when?: RegExp }>
   update_modpack: { why: JOB_REPORTED },
   cf_install: { why: JOB_REPORTED },
   cf_install_world: { why: JOB_REPORTED },
+  install_catalog_file: { why: JOB_REPORTED },
   cf_install_modpack: { why: JOB_REPORTED },
   install_dep_items: { why: JOB_REPORTED },
   millida_mod_install: { why: JOB_REPORTED },

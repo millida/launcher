@@ -1,11 +1,13 @@
 import { create } from 'zustand'
 import type { StoreApi, UseBoundStore } from 'zustand'
 import { MR_PAGE, loadCf, loadMr, mrSearchUrl, mrToHit, useMods } from '../../state/mods'
-import { PER_PAGE, loadFacets, loadListing, loadPremiumPacks, premiumCard, sectionByKind, sectionBySlug } from './site'
+import { PER_PAGE, SITE_SECTIONS, loadFacets, loadListing, loadPremiumPacks, premiumCard, sectionByKind, sectionBySlug } from './site'
 import type { SiteCard, SiteFacets, SiteSlug } from './site'
 import { appendMr, cardFromMrHit, cfKind, mrHasMore, mrTarget, nextLoad } from './mrTail'
 import type { MrTarget } from './mrTail'
 import type { MillidaPack } from '../../ipc/commands'
+import { foreignTailAllowed } from './sections'
+import type { EditionFilter, PriceFilter } from './sections'
 import { inTime } from '../../lib/deadline'
 import { hasTauri } from '../../ipc/tauri'
 
@@ -27,6 +29,10 @@ export interface SiteState {
   q: string
   sort: SiteSort
   access: SiteAccess
+  /** Издание, «Для чего» и цена — колонки фильтров сайта (30.09.2026). */
+  edition: EditionFilter | null
+  use: string | null
+  price: PriceFilter | null
   items: SiteCard[]
   total: number
   page: number
@@ -40,7 +46,7 @@ export interface SiteState {
   busy: boolean
   failed: boolean
   setSection: (s: SiteSlug) => void
-  patch: (p: Partial<Pick<SiteState, 'version' | 'loader' | 'category' | 'q' | 'sort' | 'access'>>) => void
+  patch: (p: Partial<Pick<SiteState, 'version' | 'loader' | 'category' | 'q' | 'sort' | 'access' | 'edition' | 'use' | 'price'>>) => void
   reset: () => void
   load: (more?: boolean) => Promise<void>
 }
@@ -113,6 +119,9 @@ function createSiteStore(linked: boolean): SiteStore {
     q: '',
     sort: 'popular',
     access: 'all',
+    edition: null,
+    use: null,
+    price: null,
     items: [],
     total: 0,
     page: 0,
@@ -123,11 +132,13 @@ function createSiteStore(linked: boolean): SiteStore {
     failed: false,
     setSection: (s) => {
       const sec = sectionBySlug(s)
-      if (linked) {
+      // Вид установки «Ресурсов» — только у разделов, которые ставятся в сборку:
+      // «Все», читы, скины и прочее ставятся своим путём и modTab не трогают.
+      if (linked && SITE_SECTIONS.includes(sec)) {
         useMods.getState().set({ modTab: sec.kind, fCats: [], fCat: 'все', count: '' })
         void useMods.getState().refreshInstalled()
       }
-      set({ section: s, version: null, loader: null, category: null, q: '', access: 'all', items: [], total: 0, page: 0, facets: null, ...MR_EMPTY })
+      set({ section: s, version: null, loader: null, category: null, q: '', access: 'all', edition: null, use: null, price: null, items: [], total: 0, page: 0, facets: null, ...MR_EMPTY })
       void get().load()
     },
     patch: (p) => {
@@ -135,16 +146,17 @@ function createSiteStore(linked: boolean): SiteStore {
       void get().load()
     },
     reset: () => {
-      set({ version: null, loader: null, category: null, q: '', access: 'all' })
+      set({ version: null, loader: null, category: null, q: '', access: 'all', edition: null, use: null, price: null })
       void get().load()
     },
     load: async (more) => {
       const my = ++seq
       const st = get()
-      if (sectionBySlug(st.section).kind === 'world') return
+      if (sectionBySlug(st.section).source !== 'listing') return
       const q = st.q.trim()
-      const mrq = linked ? mrTarget(st.section, st.category) : null
-      const cfq = linked && hasTauri() ? cfKind(st.section, st.category, q) : null
+      const tail = linked && foreignTailAllowed(st)
+      const mrq = tail ? mrTarget(st.section, st.category) : null
+      const cfq = tail && hasTauri() ? cfKind(st.section, st.category, q) : null
       if (more && nextLoad(st) !== 'millida') {
         if (!mrq || nextLoad(st) !== 'modrinth') return
         set({ busy: true })
@@ -177,8 +189,11 @@ function createSiteStore(linked: boolean): SiteStore {
           sort: st.sort,
           page,
           perPage: PER_PAGE,
+          edition: st.edition,
+          use: st.use,
+          price: st.price,
         })).catch(() => null),
-        more ? Promise.resolve(get().facets) : inTime(loadFacets(st.section, st.version, st.loader)).catch(() => null),
+        more ? Promise.resolve(get().facets) : inTime(loadFacets(st.section, st.version, st.loader, st.edition)).catch(() => null),
         packs ? inTime(loadPremiumPacks()).catch(() => [] as MillidaPack[]) : Promise.resolve([] as MillidaPack[]),
         !more && mrq ? inTime(loadMrPage(mrq, st, q.length >= 2 ? q : '', 0)).catch(() => null) : Promise.resolve(null),
         !more && cfq ? inTime(loadCfPage(cfq, st, q)).catch(() => [] as SiteCard[]) : Promise.resolve([] as SiteCard[]),
@@ -221,7 +236,7 @@ export const useServerSite = createSiteStore(false)
 const ARCANIA = 'arcania'
 
 /** Подходит ли платная сборка под выбранные версию, загрузчик и поиск: категорий у неё нет. */
-function matchesFilters(p: MillidaPack, st: Pick<SiteState, 'version' | 'loader' | 'category'>, q: string): boolean {
+function matchesFilters(p: MillidaPack, st: Pick<SiteState, 'version' | 'loader' | 'category'> & Partial<Pick<SiteState, 'edition' | 'use' | 'price'>>, q: string): boolean {
   const needle = q.length >= 2 ? q.toLowerCase() : ''
   return (
     !st.category &&
@@ -236,7 +251,7 @@ function matchesFilters(p: MillidaPack, st: Pick<SiteState, 'version' | 'loader'
  * вперемешку с бесплатными (владелец, 26.09.2026). Нет её на первой странице —
  * встаёт строкой из каталога сборок, если подходит под фильтры.
  */
-function pinArcania(page: SiteCard[], premium: MillidaPack[], st: Pick<SiteState, 'version' | 'loader' | 'category'>, q: string): SiteCard[] {
+function pinArcania(page: SiteCard[], premium: MillidaPack[], st: Pick<SiteState, 'version' | 'loader' | 'category'> & Partial<Pick<SiteState, 'edition' | 'use' | 'price'>>, q: string): SiteCard[] {
   const hit = page.find((c) => c.slug === ARCANIA)
   const pack = premium.find((p) => p.slug === ARCANIA)
   const top = hit || (pack && matchesFilters(pack, st, q) ? premiumCard(pack) : null)
@@ -244,11 +259,19 @@ function pinArcania(page: SiteCard[], premium: MillidaPack[], st: Pick<SiteState
 }
 
 /** Фильтр «Премиум»: только платные сборки, Arcania первой. */
-function premiumOnly(premium: MillidaPack[], st: Pick<SiteState, 'version' | 'loader' | 'category'>, q: string): SiteCard[] {
+function premiumOnly(premium: MillidaPack[], st: Pick<SiteState, 'version' | 'loader' | 'category'> & Partial<Pick<SiteState, 'edition' | 'use' | 'price'>>, q: string): SiteCard[] {
   const cards = premium.filter((p) => matchesFilters(p, st, q)).map(premiumCard)
   return [...cards.filter((c) => c.slug === ARCANIA), ...cards.filter((c) => c.slug !== ARCANIA)]
 }
 
 /** Сколько фильтров выбрано — число на кнопке «Фильтры» в узком окне. */
-export const activeFilters = (s: Pick<SiteState, 'version' | 'loader' | 'category'> & { access?: SiteAccess }): number =>
-  (s.version ? 1 : 0) + (s.loader ? 1 : 0) + (s.category ? 1 : 0) + (s.access && s.access !== 'all' ? 1 : 0)
+export const activeFilters = (
+  s: Pick<SiteState, 'version' | 'loader' | 'category'> & { access?: SiteAccess; edition?: string | null; use?: string | null; price?: string | null },
+): number =>
+  (s.version ? 1 : 0) +
+  (s.loader ? 1 : 0) +
+  (s.category ? 1 : 0) +
+  (s.access && s.access !== 'all' ? 1 : 0) +
+  (s.edition ? 1 : 0) +
+  (s.use ? 1 : 0) +
+  (s.price ? 1 : 0)

@@ -277,7 +277,7 @@ export interface ContentInstall {
 /// One project the resolver decided about. `problem` is filled only for
 /// dependencies nothing compatible was found for.
 export interface DepNode {
-  source: 'modrinth' | 'curseforge'
+  source: 'modrinth' | 'curseforge' | 'millida'
   project_id: string
   version_id: string
   title: string
@@ -406,6 +406,20 @@ export const cfFiles = (modId: number, gameVersion = '') =>
 export const cfInstallWorld = (modId: number, profile: string, force = false) =>
   invoke<WorldInstall>('cf_install_world', { modId, profile, force })
 
+/**
+ * Файл каталога Millida (мод, пак, шейдер, дата-пак, карта) в сборку. Ссылку —
+ * подписанную для платного — ядро берёт само: webview называет только сборку,
+ * материал и id файла.
+ */
+export const installCatalogFile = (
+  profile: string,
+  kind: string,
+  slug: string,
+  fileId: string,
+  title: string,
+  sha1?: string | null,
+) => invoke<ContentInstall>('install_catalog_file', { profile, kind, slug, fileId, title, sha1: sha1 || null })
+
 export const cfSearch = (
   query: string,
   kind: string,
@@ -527,6 +541,53 @@ export const importInstance = (path: string, name: string, version: string, load
 export const importPackFile = (path?: string) => invoke<Profile>('import_pack_file', { path: path || null })
 
 export const importDroppedPack = (id: number) => invoke<Profile>('import_dropped_pack', { id })
+/// Установка из каталога Millida. Вебвью называет материал и файл, адрес файла
+/// ядро узнаёт у API само (engine/content/millida.rs).
+export interface CatalogInstallReq {
+  slug: string
+  title: string
+  icon?: string
+  via: 'file' | 'curated'
+  article?: string
+  section?: string
+  fileId: string
+  profile?: string
+  kind: string
+  versionLabel?: string
+  sha1?: string
+  sha256?: string
+  size?: number
+  game?: string
+  loader?: string
+  loaderVersion?: string
+}
+
+export interface CatalogInstall {
+  file: string
+  profile: Profile | null
+}
+
+export const catalogInstall = (req: CatalogInstallReq) => invoke<CatalogInstall>('catalog_install', { req })
+
+/// Материал каталога с зависимостями по плану API (engine/content/millida_plan.rs).
+export interface CatalogPlanReq {
+  slug: string
+  title: string
+  icon?: string
+  profile: string
+  kind: string
+  /// Необязательные зависимости, отмеченные человеком (slug каталога).
+  optional?: string[]
+}
+
+export interface CatalogPlanDone {
+  file: string
+  installed: string[]
+  skipped: string[]
+  missing: string[]
+}
+
+export const catalogInstallPlan = (req: CatalogPlanReq) => invoke<CatalogPlanDone>('catalog_install_plan', { req })
 
 export const installContent = (
   project: string,

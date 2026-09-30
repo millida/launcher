@@ -3,6 +3,7 @@ import { cfFiles, cfProject } from '../ipc/commands'
 import { hasTauri } from '../ipc/tauri'
 import { fmt } from '../lib/format'
 import { MODRINTH_API, mirrorAsset } from '../lib/api'
+import { blocksToMarkdown, catalog, cleanTitle, sitePage } from '../lib/millidaCatalog'
 import { openModal } from './ui'
 import { useMods } from './mods'
 
@@ -34,6 +35,10 @@ interface ProjectState {
   gallery: ProjectGallery[]
   versions: ProjectVersion[]
   source: string
+  /// Раздел каталога Millida, когда source === 'millida'.
+  section: string
+  /// Готовая сборка лаунчера: ставится install_catalog_pack, ключ задачи свой.
+  launcherOnly: boolean
   cfid: number
   website: string
   loading: boolean
@@ -53,6 +58,8 @@ export const useProject = create<ProjectState>((set) => ({
   gallery: [],
   versions: [],
   source: 'modrinth',
+  section: '',
+  launcherOnly: false,
   cfid: 0,
   website: '',
   loading: false,
@@ -167,4 +174,71 @@ export async function openProject(slug: string, kind?: string, game?: string | n
   } catch {
     useProject.getState().set({ title: 'Не удалось загрузить', loading: false })
   }
+}
+
+/// Карточка каталога Millida в том же окне материала. Готовой сборки каталога в
+/// общей карточке может не быть (её текст ещё не вышел) — тогда берём витрину сборки.
+export async function openMillidaProject(slug: string, section: string, kind?: string, fallbackTitle?: string) {
+  useProject.getState().set({
+    slug,
+    section,
+    launcherOnly: false,
+    source: 'millida',
+    cfid: 0,
+    kind: kind || useMods.getState().modTab,
+    tab: 'desc',
+    title: fallbackTitle || '',
+    icon: '',
+    sub: '',
+    body: '',
+    gallery: [],
+    versions: [],
+    tags: [],
+    website: sitePage(section, slug),
+    loading: true,
+  })
+  openModal('pjModal')
+  try {
+    const p = await catalog.item(slug)
+    useProject.getState().set({
+      icon: p.icon || p.cover || '',
+      title: cleanTitle(p.title),
+      launcherOnly: !!p.launcherOnly,
+      sub:
+        fmt(Math.max(p.downloads || 0, p.sourceDownloads || 0)) +
+        ' скачиваний' +
+        (p.author ? ' · ' + p.author : '') +
+        (p.license ? ' · ' + p.license : ''),
+      tags: (p.tags || []).slice(0, 6),
+      body: blocksToMarkdown(p.description) || p.summary || '',
+      gallery: (p.gallery || []).map((url) => ({ url })),
+      versions: (p.files || []).slice(0, 40).map((f) => ({
+        id: f.id,
+        name: f.version,
+        game_versions: f.gameVersions,
+        loaders: f.loaders,
+        size: f.size,
+      })),
+      loading: false,
+    })
+    return
+  } catch {}
+  if (section === 'modpacks') {
+    try {
+      const pk = await catalog.pack(slug)
+      useProject.getState().set({
+        icon: pk.cover || '',
+        title: pk.title,
+        launcherOnly: true,
+        sub: [pk.game, pk.loader].filter(Boolean).join(' · '),
+        body: pk.summary || '',
+        versions: pk.files
+          .filter((f) => f.side === 'client')
+          .map((f) => ({ id: f.id, name: f.version, game_versions: [pk.game], loaders: [pk.loader], size: f.size })),
+        loading: false,
+      })
+      return
+    } catch {}
+  }
+  useProject.getState().set({ loading: false, title: fallbackTitle || 'Не удалось загрузить', sub: '' })
 }

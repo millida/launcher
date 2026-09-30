@@ -6,11 +6,21 @@ import { CatalogNotice } from './CatalogShell'
 import { FilterGroup, SiteFilters } from './SiteFilters'
 import { HitRow, MapRow, RowSkeleton, SiteGalleryCard, SiteRow } from './SiteRow'
 import type { MapHit } from './SiteRow'
-import { SERVER_SECTIONS, SITE_SECTIONS, materials, peekHit, sectionBySlug, sectionByKind } from './site'
+import { SERVER_SECTIONS, SITE_SECTIONS, fmtNum, loadCurated, loadSkins, materials, peekHit, sectionBySlug, sectionByKind } from './site'
+import type { CuratedItem, SkinTile } from './site'
+import { CATALOG_GROUPS, SECTION_VISUAL, curatedTitle, groupOf, groupVisual, siteSectionPath } from './sections'
+import type { NavGroup } from './sections'
+import { PxIcon } from '../PxIcon'
+import { Fallback, MrIcon } from './SiteRow'
+import { installFromCatalog } from '../../lib/catalogInstall'
+import { openExt } from '../../lib/api'
+import { setScreen } from '../../state/ui'
+import { capFirst, loaderIconSrc, loaderLabel, loaderTone, plural } from './site'
 import type { SiteSection } from './site'
 import { activeFilters, useServerSite, useSite } from './siteStore'
 import { cfTail, mrTail, nextLoad } from './mrTail'
 import { CatalogCtx, useCatalogCtx } from './target'
+import { PurchasesPane } from './Purchases'
 import type { CatalogTarget } from './target'
 import { host } from '../../screens/hosting/api'
 import { useHubTab } from '../playhub/hubTab'
@@ -403,6 +413,9 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
       loader={s.loader}
       category={s.category}
       access={sec.slug === 'modpacks' && store === useSite ? s.access : undefined}
+      edition={s.edition}
+      use={s.use}
+      price={s.price}
       onPatch={(p) => s.patch(p)}
       onReset={() => s.reset()}
     />
@@ -434,7 +447,7 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
       ) : !s.items.length && !tail.length && !cfRows.length ? (
         <CatalogNotice
           note={
-            q || s.category || s.version || s.loader
+            q || activeFilters(s)
               ? { icon: 'i-search', title: 'Ничего не нашлось', action: { label: 'Показать весь раздел', onClick: () => s.reset() } }
               : { icon: 'i-inbox', title: 'Здесь пока пусто' }
           }
@@ -444,7 +457,8 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
           {s.items.length ? (
             <div className={(sec.gallery ? 'mr-galgrid' : 'mr-list') + (s.busy && s.page === 1 ? ' cat-dim' : '')}>
               {s.items.map((c, i) => (
-                <Card key={c.slug} card={c} sec={sec} pos={i} onOpenPack={onOpenPack} />
+                // В «Все» строка ставится и открывается в своём настоящем разделе.
+                <Card key={c.slug} card={c} sec={sec.slug === 'all' && c.section ? sectionBySlug(c.section) : sec} list={sec.slug} pos={i} onOpenPack={onOpenPack} />
               ))}
             </div>
           ) : null}
@@ -476,6 +490,320 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
         </>
       )}
     </Frame>
+  )
+}
+
+/*
+ * Читы — кураторский раздел сайта: файлы лежат на нашем хранилище, список —
+ * `/catalog/curated/cheats`. Карточка того же вида, что у каталога; «В сборку»
+ * ставит тот же файл, что «Скачать в лаунчере» на сайте (millida://install/cheats/…).
+ */
+function CuratedPane({ narrow }: { narrow: boolean }) {
+  const sec = sectionBySlug('cheats')
+  const [items, setItems] = useState<CuratedItem[] | null>(null)
+  const [failed, setFailed] = useState(false)
+  const [q, setQ] = useState('')
+  const [ver, setVer] = useState<string | null>(null)
+  const [open, setOpen] = useState(false)
+  const load = () => {
+    setFailed(false)
+    loadCurated('cheats')
+      .then((l) => setItems(l))
+      .catch(() => (setFailed(true), setItems([])))
+  }
+  useEffect(load, [])
+  const all = items || []
+  const versions = [...new Set(all.flatMap((i) => i.files.flatMap((f) => f.gameVersions)))].sort((a, b) => b.localeCompare(a, undefined, { numeric: true }))
+  const needle = q.trim().toLowerCase()
+  const shown = all.filter(
+    (i) => (!needle || curatedTitle(i.slug).toLowerCase().includes(needle)) && (!ver || i.files.some((f) => f.gameVersions.includes(ver))),
+  )
+  useSearchTrack('cheats', needle, items ? shown.length : null)
+  const filters = (
+    <div className="mr-filters">
+      <FilterGroup
+        title="Версия игры"
+        name="version"
+        opts={versions.map((v) => ({ key: v, label: v, active: ver === v, onPick: () => setVer(ver === v ? null : v) }))}
+      />
+    </div>
+  )
+  return (
+    <Frame
+      sec={sec}
+      narrow={narrow}
+      filters={filters}
+      active={ver ? 1 : 0}
+      open={open}
+      onOpen={() => setOpen((v) => !v)}
+      search={<SearchField value={q} label={'Поиск по разделу «' + sec.title + '»'} onCommit={setQ} />}
+      count={items ? materials(shown.length) : null}
+      sort={null}
+    >
+      {failed ? (
+        <CatalogNotice note={{ icon: 'i-alert', title: 'Каталог не ответил', action: { label: 'Повторить', primary: true, icon: 'i-restart', onClick: load } }} />
+      ) : items === null ? (
+        <div className="mr-galgrid">
+          <RowSkeleton gallery />
+        </div>
+      ) : !shown.length ? (
+        <CatalogNotice note={{ icon: 'i-search', title: 'Ничего не нашлось' }} />
+      ) : (
+        <div className="mr-galgrid">
+          {shown.map((it, i) => (
+            <CheatCard key={it.slug} it={it} pos={i} />
+          ))}
+        </div>
+      )}
+    </Frame>
+  )
+}
+
+function CheatCard({ it, pos }: { it: CuratedItem; pos: number }) {
+  const title = curatedTitle(it.slug)
+  const f = it.files[0]
+  const loaders = [...new Set(it.files.flatMap((x) => x.loaders))].slice(0, 2)
+  const vers = [...new Set(it.files.flatMap((x) => x.gameVersions))]
+  return (
+    <article className="card mr-gal" data-track="row_open" data-kind="cheat" data-id={it.slug} data-pos={pos} onClick={() => openExt('https://millida.net/cheats/' + it.slug)}>
+      <span className="mr-gal-cover" aria-hidden="true">
+        <Fallback slug={it.slug} section="cheats" title={title} />
+      </span>
+      <span className="mr-gal-body">
+        <span className="mr-gal-icon" aria-hidden="true">
+          <Fallback slug={it.slug} section="cheats" title={title} />
+        </span>
+        <h3 className="mr-gal-title">{title}</h3>
+        <span className="mr-gal-author">{f ? 'версия ' + f.version : ''}</span>
+        <span className="mr-gal-summary">{f ? f.fileName : ''}</span>
+        <ul className="mr-tags mr-gal-tags" aria-label="Метки">
+          {loaders.map((l) => {
+            const src = loaderIconSrc(l)
+            return (
+              <li key={l} className="mr-tag has-tone" style={{ '--mk-tone': loaderTone(l) || undefined } as React.CSSProperties}>
+                {src ? <MrIcon src={src} size={14} /> : null}
+                <span>{loaderLabel(l)}</span>
+              </li>
+            )
+          })}
+          {vers.length ? (
+            <li className="mr-tag">
+              <span>{vers.length > 1 ? vers[vers.length - 1] + ' — ' + vers[0] : vers[0]}</span>
+            </li>
+          ) : null}
+        </ul>
+        <span className="mr-gal-foot">
+          <span className="mr-gal-stat">
+            {it.downloads > 0 ? (
+              <>
+                <Icon id="i-download" />
+                <b>{fmtNum(it.downloads)}</b>
+              </>
+            ) : null}
+          </span>
+          <div className="mr-actions">
+            <button
+              className="btn sm primary"
+              data-track="add_to_build"
+              onClick={(e) => {
+                e.stopPropagation()
+                void installFromCatalog('cheats', it.slug)
+              }}
+            >
+              <Icon id="i-plus" />В сборку
+            </button>
+          </div>
+        </span>
+      </span>
+    </article>
+  )
+}
+
+/*
+ * Скины — сетка `/skins/katalog` сайта (`/v2/skins`): рендер во весь рост, имя,
+ * сколько носят. «В гардероб» — то же, что «Скачать в лаунчере» на сайте
+ * (millida://install/skins/<id>): скин ложится в гардероб аккаунта и надевается.
+ */
+function SkinsPane() {
+  const sec = sectionBySlug('skins')
+  const [q, setQ] = useState('')
+  const [sort, setSort] = useState<'popular' | 'new'>('popular')
+  const [items, setItems] = useState<SkinTile[] | null>(null)
+  const [page, setPage] = useState(1)
+  const [pages, setPages] = useState(0)
+  const [total, setTotal] = useState(0)
+  const [busy, setBusy] = useState(false)
+  const [failed, setFailed] = useState(false)
+  const seq = useRef(0)
+  const load = (p = 1) => {
+    const my = ++seq.current
+    setBusy(true)
+    setFailed(false)
+    if (p === 1) setItems(null)
+    loadSkins({ q, sort, page: p })
+      .then((r) => {
+        if (my !== seq.current) return
+        setItems((old) => (p > 1 ? [...(old || []), ...r.items.filter((x) => !(old || []).some((o) => o.id === x.id))] : r.items))
+        setPage(r.page)
+        setPages(r.pages)
+        setTotal(r.total)
+      })
+      .catch(() => my === seq.current && (setFailed(true), setItems((i) => i || [])))
+      .finally(() => my === seq.current && setBusy(false))
+  }
+  useEffect(() => load(1), [q, sort])
+  useSearchTrack('skins', q.trim(), items ? total : null)
+  return (
+    <div className="mr-main mr-skins">
+      <header className="mr-head">
+        <h1 className="mr-h1">{sec.h1}</h1>
+      </header>
+      <div className="mr-toolbar">
+        <SearchField value={q} label="Поиск скинов" onCommit={setQ} />
+        <div className="mr-toolbar-row">
+          <span className="mr-count">{items ? total.toLocaleString('ru-RU') + ' ' + plural(total, 'скин', 'скина', 'скинов') : ''}</span>
+          <Sort value={sort} onPick={setSort} />
+        </div>
+      </div>
+      {failed && !(items && items.length) ? (
+        <CatalogNotice note={{ icon: 'i-alert', title: 'Каталог скинов не ответил', action: { label: 'Повторить', primary: true, icon: 'i-restart', onClick: () => load(1) } }} />
+      ) : items === null ? (
+        <div className="mr-skingrid">
+          {Array.from({ length: 12 }, (_, i) => (
+            <div key={i} className="card mr-skin cat-skel" aria-hidden="true">
+              <span className="mr-skin-art skel"></span>
+            </div>
+          ))}
+        </div>
+      ) : !items.length ? (
+        <CatalogNotice note={{ icon: 'i-search', title: 'Ничего не нашлось' }} />
+      ) : (
+        <>
+          <div className={'mr-skingrid' + (busy && page === 1 ? ' cat-dim' : '')}>
+            {items.map((k, i) => (
+              <SkinCard key={k.id} k={k} pos={i} />
+            ))}
+          </div>
+          {page < pages ? <AutoMore busy={busy} onMore={() => !busy && load(page + 1)} /> : null}
+        </>
+      )}
+    </div>
+  )
+}
+
+function SkinCard({ k, pos }: { k: SkinTile; pos: number }) {
+  const name = capFirst(k.title.replace(/^Скин:\s*/i, ''))
+  return (
+    <article className="card mr-skin" data-track="row_open" data-kind="skin" data-id={k.id} data-pos={pos} onClick={() => openExt('https://millida.net/skins/katalog/' + k.id)}>
+      <span className="mr-skin-art" aria-hidden="true">
+        <img src={k.renderUrl} alt="" loading={pos < 8 ? 'eager' : 'lazy'} draggable={false} />
+        {k.wearers > 0 ? (
+          <span className="mr-skin-wear">
+            <Icon id="i-users" />
+            {fmtNum(k.wearers)}
+          </span>
+        ) : null}
+      </span>
+      <span className="mr-skin-name">{name}</span>
+      <button
+        className="btn sm primary"
+        data-track="skin_wear"
+        onClick={(e) => {
+          e.stopPropagation()
+          void installFromCatalog('skins', k.id, { name, slim: k.model === 'slim' })
+        }}
+      >
+        В гардероб
+      </button>
+    </article>
+  )
+}
+
+/*
+ * Сиды, головы, плащи — разделы сайта без файла для папки игры: сид — строка
+ * для поля «Сид», голова — команда /give, плащи Mojang и OptiFine выдаёт не
+ * лаунчер. Лента у них на сайте; плащ Millida надевается в гардеробе.
+ */
+function SitePane({ slug }: { slug: 'seeds' | 'heads' | 'capes' }) {
+  const sec = sectionBySlug(slug)
+  const vis = SECTION_VISUAL[slug]
+  return (
+    <div className="mr-main mr-sitepane">
+      <header className="mr-head">
+        <h1 className="mr-h1">{sec.h1}</h1>
+      </header>
+      <div className="card mr-sitecard">
+        <span className="mr-sitecard-ic" style={{ color: vis.tint }}>
+          <PxIcon name={vis.px} size={40} />
+        </span>
+        <div className="mr-sitecard-acts">
+          {slug === 'capes' ? (
+            <button className="btn md primary" data-track="capes_wardrobe" onClick={() => setScreen('skins')}>
+              <PxIcon name="cape" size={16} /> Гардероб
+            </button>
+          ) : null}
+          <button className={'btn md ' + (slug === 'capes' ? 'secondary' : 'primary')} data-track={'site_' + slug} onClick={() => openExt('https://millida.net' + siteSectionPath(slug))}>
+            <Icon id="i-ext" /> На сайте
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Ряд групп разделов — шапка каталога сайта: значок и цвет раздела, группа открывает свой первый раздел. */
+function GroupNav({
+  section,
+  own,
+  onPick,
+  extras,
+}: {
+  section: string
+  own: boolean
+  onPick: (slug: string) => void
+  extras: ReactNode
+}) {
+  const current = groupOf(section)
+  return (
+    <>
+      <nav className="segs mr-types mr-groups" aria-label="Разделы каталога">
+        {CATALOG_GROUPS.map((g: NavGroup) => {
+          const on = !own && g.key === current.key
+          const vis = groupVisual(g)
+          return (
+            <button
+              key={g.key}
+              className={'seg' + (on ? ' on' : '')}
+              aria-current={on ? 'page' : undefined}
+              data-track={'cat_group_' + g.key}
+              onClick={() => onPick(on ? section : g.tabs[0]!.slug)}
+            >
+              <span className="mr-sec-ic" style={{ color: vis.tint }}>
+                <PxIcon name={vis.px} size={16} />
+              </span>
+              {g.label}
+            </button>
+          )
+        })}
+        {extras}
+      </nav>
+      {!own && current.tabs.length > 1 ? (
+        <nav className="segs mr-subtypes" aria-label={'Разделы группы «' + current.label + '»'}>
+          {current.tabs.map((t) => {
+            const on = t.slug === section
+            const vis = SECTION_VISUAL[t.slug]
+            return (
+              <button key={t.slug} className={'seg' + (on ? ' on' : '')} aria-current={on ? 'page' : undefined} data-track={'cat_' + t.slug} onClick={() => onPick(t.slug)}>
+                <span className="mr-sec-ic" style={{ color: vis.tint }}>
+                  <PxIcon name={vis.px} size={14} />
+                </span>
+                {t.label}
+              </button>
+            )
+          })}
+        </nav>
+      ) : null}
+    </>
   )
 }
 
@@ -516,7 +844,12 @@ export function SiteCatalog({
   const narrow = useNarrow()
   const tabs = server ? SERVER_SECTIONS : content ? SITE_SECTIONS.filter((x) => x.kind !== 'modpack') : SITE_SECTIONS
   const seq = useHubTab((s) => s.seq)
-  const extras: ExtraTab[] = [...(extra || []), ...(servers ? [{ id: 'servers', label: 'Серверы', node: servers }] : [])]
+  const extras: ExtraTab[] = [
+    ...(extra || []),
+    ...(servers ? [{ id: 'servers', label: 'Серверы', node: servers }] : []),
+    // Купленное в каталоге — поставить заново в любую сборку. На сервер платное не ставится.
+    ...(server ? [] : [{ id: 'purchases', label: 'Покупки', node: <PurchasesPane onOpenPack={onOpenPack} /> }]),
+  ]
   const ctx = useMemo(() => ({ store, target }), [store, target])
 
   // Вход снаружи («Все» у полки, плитка категории, «Добавить» в сборке): раздел
@@ -556,38 +889,62 @@ export function SiteCatalog({
       {x.label}
     </button>
   )
+  const pick = (slug: string) => {
+    setOwn(null)
+    if (slug !== section) store.getState().setSection(slug as SiteSection['slug'])
+  }
+  // Карт в каталоге Millida может не быть (раздел наполняется) — тогда, как и
+  // раньше, лента CurseForge. Любой фильтр или поиск — уже ответ каталога.
+  const mapsEmpty = store((s) => s.section === 'maps' && s.page > 0 && !s.items.length && !s.q.trim() && !activeFilters(s))
+  const grouped = !server && !content
+  const body = ownTab ? (
+    ownTab.node
+  ) : sec.kind === 'world' && (server || !hasTauri()) ? (
+    <HostMapsPane narrow={narrow} />
+  ) : sec.kind === 'world' && mapsEmpty ? (
+    <MapsPane narrow={narrow} />
+  ) : sec.source === 'curated' ? (
+    <CuratedPane narrow={narrow} />
+  ) : sec.source === 'skins' ? (
+    <SkinsPane />
+  ) : sec.source === 'site' ? (
+    <SitePane slug={sec.slug as 'seeds' | 'heads' | 'capes'} />
+  ) : (
+    <SectionPane key={sec.slug} sec={sec} narrow={narrow} onOpenPack={onOpenPack} />
+  )
   return (
     <CatalogCtx.Provider value={ctx}>
       <div className={'mr-cat' + (server ? ' is-server' : '')} id={server ? undefined : 's-mods'} data-section={section} data-src={server ? 'hosting_catalog' : 'catalog'}>
-        <nav className="segs mr-types" aria-label="Разделы каталога">
-          {extras.filter((x) => x.first).map(extraBtn)}
-          {tabs.map((t) => (
-            <button
-              key={t.slug}
-              className={'seg' + (!own && t.slug === section ? ' on' : '')}
-              aria-current={!own && t.slug === section ? 'page' : undefined}
-              data-track={'cat_' + t.slug}
-              onClick={() => {
-                setOwn(null)
-                if (t.slug !== section) store.getState().setSection(t.slug)
-              }}
-            >
-              {t.title}
-            </button>
-          ))}
-          {extras.filter((x) => !x.first).map(extraBtn)}
-        </nav>
-        {ownTab ? (
-          ownTab.node
-        ) : sec.kind === 'world' ? (
-          server || !hasTauri() ? (
-            <HostMapsPane narrow={narrow} />
-          ) : (
-            <MapsPane narrow={narrow} />
-          )
+        {grouped ? (
+          <GroupNav
+            section={section}
+            own={!!own}
+            onPick={pick}
+            extras={
+              <>
+                {extras.filter((x) => x.first).map(extraBtn)}
+                {extras.filter((x) => !x.first).map(extraBtn)}
+              </>
+            }
+          />
         ) : (
-          <SectionPane key={sec.slug} sec={sec} narrow={narrow} onOpenPack={onOpenPack} />
+          <nav className="segs mr-types" aria-label="Разделы каталога">
+            {extras.filter((x) => x.first).map(extraBtn)}
+            {tabs.map((t) => (
+              <button
+                key={t.slug}
+                className={'seg' + (!own && t.slug === section ? ' on' : '')}
+                aria-current={!own && t.slug === section ? 'page' : undefined}
+                data-track={'cat_' + t.slug}
+                onClick={() => pick(t.slug)}
+              >
+                {t.title}
+              </button>
+            ))}
+            {extras.filter((x) => !x.first).map(extraBtn)}
+          </nav>
         )}
+        {body}
       </div>
     </CatalogCtx.Provider>
   )

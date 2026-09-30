@@ -15,7 +15,7 @@ function DepRow({
   checked?: boolean
   onToggle?: () => void
 }) {
-  const facts = [node.version_number, fmtBytes(node.size), node.source === 'curseforge' ? 'CurseForge' : 'Modrinth']
+  const facts = [node.version_number, fmtBytes(node.size), node.source === 'curseforge' ? 'CurseForge' : node.source === 'millida' ? 'Millida' : 'Modrinth']
     .filter(Boolean)
     .join(' · ')
   return (

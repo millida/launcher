@@ -37,6 +37,9 @@ import {
   versionRange,
 } from './site'
 import type { SiteCard, SiteSection } from './site'
+import { BuyBar, NativeBar, PriceMark, nativeKind, usePaidCard } from './PaidActs'
+import { installMillidaItem } from './millidaInstall'
+import { isPaid } from './paid'
 
 /*
  * Строка и карточка ленты каталога — раскладка сайта (`mr-row.tsx`,
@@ -226,10 +229,11 @@ function ActBar({
 }
 
 const CONTENT = new Set(['mod', 'resourcepack', 'shader', 'datapack'])
+const SITE_ONLY_KINDS = new Set(['plugin', 'serverpack', 'addon'])
 
 function Bound({ h, kind, want, onFired, extra }: { h: ModHit; kind: string; want: Want | null; onFired: () => void; extra?: ReactNode }) {
   const game = useCatalogCtx().store((s) => s.version)
-  const a = useModAction(h, kind === 'modpack' ? game : null)
+  const a = useModAction(h, kind === 'modpack' ? game : null, kind)
   const [making, setMaking] = useState(false)
   const content = CONTENT.has(kind)
   const canNew = content && !!planFor(h, kind)
@@ -353,18 +357,34 @@ function Actions({
 }) {
   const [want, setWant] = useState<Want | null>(null)
   const [busy, setBusy] = useState(false)
+  const paid = usePaidCard(card)
   const content = CONTENT.has(sec.kind)
+  // Вещь Millida без источника на Modrinth ставится своим файлом каталога.
+  const native = () =>
+    nativeKind(sec)
+      ? void installMillidaItem({ slug: card.slug, title: displayName(card.title), kind: sec.kind, paid: isPaid(card.pricing, card.priceKopecks) })
+      : openOnSite(sec.slug, card.slug)
+  // Платное без доступа: сначала покупка, после неё — та же установка.
+  if (paid.locked)
+    return (
+      <BuyBar
+        card={card}
+        extra={server}
+        onOwned={() => void resolve().then((h) => (h ? setWant('add') : native()))}
+      />
+    )
   if (hit) return <Bound h={hit} kind={sec.kind} want={want} onFired={() => setWant(null)} extra={server} />
+  if (hit === null && nativeKind(sec)) return <NativeBar card={card} sec={sec} extra={server} />
   const go = (w: Want) => {
     if (hit === null) {
-      openOnSite(sec.slug, card.slug)
+      native()
       return
     }
     setBusy(true)
     void resolve().then((h) => {
       setBusy(false)
       if (h) setWant(w)
-      else openOnSite(sec.slug, card.slug)
+      else native()
     })
   }
   // До ответа источника «Новая сборка» видна там, где из вещи её можно собрать.
@@ -388,6 +408,24 @@ function RowActions(props: { card: SiteCard; sec: SiteSection; hit: ModHit | nul
   const { target } = useCatalogCtx()
   const server = useServerButton(props.card, props.sec)
   if (target.kind === 'server') return <div className="mr-actions">{server}</div>
+  // Вместо «Установить», за которым отказ, — «На сервер» и страница на сайте.
+  if (SITE_ONLY_KINDS.has(props.sec.kind))
+    return (
+      <div className="mr-actions">
+        {server}
+        <button
+          className={'btn sm ' + (server ? 'secondary' : 'primary')}
+          data-track="open_site"
+          onClick={(e) => {
+            e.stopPropagation()
+            openOnSite(props.sec.slug, props.card.slug)
+          }}
+        >
+          <Icon id="i-ext" />
+          На сайте
+        </button>
+      </div>
+    )
   return <Actions {...props} server={server} />
 }
 
@@ -400,6 +438,8 @@ export interface RowProps {
   onOpenPack?: (slug: string) => void
   /** Место в ленте — для аналитики. */
   pos?: number
+  /** Раздел ленты: в «Все» у карточки первой меткой стоит её раздел, как на сайте. */
+  list?: string
 }
 
 /** Тип карточки для аналитики: платная сборка — premium, карта — map. */
@@ -482,7 +522,7 @@ export function SiteRow(props: RowProps) {
         <Tags tags={rowTags(card)} />
       </div>
       <div className="mr-side">
-        {price ? <span className="mr-price">{price}</span> : null}
+        <PriceMark card={card} fallback={price} />
         {dl ? (
           <span className="mr-stat">
             <Icon id="i-download" />
@@ -503,7 +543,12 @@ export function SiteGalleryCard(props: RowProps) {
   const open = useOpen(props, resolve, useCatalogCtx().target)
   const name = displayName(card.title)
   const updated = relativeTime(card.updatedAt || card.publishedAt)
+  // Метки — как карточка-галерея сайта: раздел (в «Все»), сторона, два
+  // загрузчика, две темы, версии, если осталось место (catalog-rows.tsx).
   const tags: Tag[] = []
+  if (props.list === 'all') tags.push({ label: sec.title })
+  const side = sideTag(card.side)
+  if (side) tags.push(side)
   for (const l of card.loaders.slice(0, 2)) tags.push(loaderTag(l))
   for (const c of card.categories.slice(0, 2)) tags.push(catTag(c))
   const range = versionRange(card.versions)
@@ -518,7 +563,17 @@ export function SiteGalleryCard(props: RowProps) {
       onClick={open}
     >
       <span className="mr-gal-cover" aria-hidden="true">
-        {card.cover ? img(card.cover) : <Fallback slug={card.slug} section={sec.slug} title={name} />}
+        {card.cover ? (
+          img(card.cover)
+        ) : card.icon ? (
+          // Нет скриншота — логотип крупно на своей размытой копии, как на сайте.
+          <span className="mr-gal-iconcover">
+            {img(card.icon)}
+            {img(card.icon)}
+          </span>
+        ) : (
+          <Fallback slug={card.slug} section={sec.slug} title={name} />
+        )}
         {isExclusive(card.slug) ? <span className="ph-card-tag excl">Эксклюзив</span> : null}
       </span>
       <span className="mr-gal-body">
@@ -533,6 +588,7 @@ export function SiteGalleryCard(props: RowProps) {
         <Tags tags={tags} className="mr-gal-tags" />
         <span className="mr-gal-foot">
           <span className="mr-gal-stat">
+            <PriceMark card={card} />
             {ownDownloads(card) ? (
               <>
                 <Icon id="i-download" />

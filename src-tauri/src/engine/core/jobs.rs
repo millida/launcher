@@ -172,6 +172,11 @@ pub(crate) fn job_key_modpack_mr(slug: &str, target: Option<&str>) -> String {
     }
 }
 
+/// Готовая сборка из каталога Millida: slug карточки, а не id Modrinth.
+pub(crate) fn job_key_modpack_millida(slug: &str) -> String {
+    format!("millida-modpack:{}", slug)
+}
+
 pub(crate) fn job_key_content(source: &str, profile: &str, kind: &str, project: &str) -> String {
     format!("{}-{}:{}:{}", source, kind, profile, project)
 }

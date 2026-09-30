@@ -5,6 +5,7 @@ import { MrIcon } from './SiteRow'
 import { capFirst, categoryIconSrc, fmtNum, loaderIconSrc, loaderLabel, loaderTone } from './site'
 import type { SiteFacets, SiteSection } from './site'
 import type { SiteAccess } from './siteStore'
+import type { EditionFilter, PriceFilter } from './sections'
 
 /*
  * Колонка фильтров — как на сайте (`mr-filters.tsx`): группы «Версия игры»,
@@ -94,6 +95,15 @@ function Opt({ o, name }: { o: FilterOpt; name?: string }) {
   )
 }
 
+const EDITIONS: [EditionFilter, string][] = [
+  ['JAVA', 'Java'],
+]
+
+const PRICES: [PriceFilter, string][] = [
+  ['free', 'Бесплатно'],
+  ['paid', 'Платно'],
+]
+
 const ACCESS: [Exclude<SiteAccess, 'all'>, string][] = [
   ['premium', 'Премиум'],
   ['free', 'Обычные'],
@@ -106,6 +116,9 @@ export function SiteFilters({
   loader,
   category,
   access,
+  edition = null,
+  use = null,
+  price = null,
   onPatch,
   onReset,
 }: {
@@ -116,7 +129,19 @@ export function SiteFilters({
   category: string | null
   /** Только у сборок: премиум-сборки Millida или обычные. Фильтр, а не полоса над карточками (владелец 29.09.2026). */
   access?: SiteAccess
-  onPatch: (p: { version?: string | null; loader?: string | null; category?: string | null; access?: SiteAccess }) => void
+  /** Издание, «Для чего», цена — колонки фильтров сайта (30.09.2026). */
+  edition?: EditionFilter | null
+  use?: string | null
+  price?: PriceFilter | null
+  onPatch: (p: {
+    version?: string | null
+    loader?: string | null
+    category?: string | null
+    access?: SiteAccess
+    edition?: EditionFilter | null
+    use?: string | null
+    price?: PriceFilter | null
+  }) => void
   onReset: () => void
 }) {
   if (!facets) return <FiltersSkeleton />
@@ -161,17 +186,44 @@ export function SiteFilters({
         onPick: () => onPatch({ access: access === id ? 'all' : id }),
       }))
     : []
+  // Издание — как на сайте: группа есть, когда в разделе встречаются оба (или
+  const edCount = (v: string) => (facets.editions || []).find((e) => e.value.toLowerCase() === v)?.count ?? 0
+  const editions: FilterOpt[] =
+      ? EDITIONS.map(([id, label]) => ({
+          key: id,
+          label,
+          count: edCount(id.toLowerCase()),
+          active: edition === id,
+          onPick: () => onPatch({ edition: edition === id ? null : id }),
+        }))
+      : []
+  const uses: FilterOpt[] = (facets.uses || []).map((u) => ({
+    key: u.value,
+    label: u.label,
+    count: u.count,
+    active: use === u.value,
+    onPick: () => onPatch({ use: use === u.value ? null : u.value }),
+  }))
+  const prices: FilterOpt[] = PRICES.map(([id, label]) => ({
+    key: id,
+    label,
+    active: price === id,
+    onPick: () => onPatch({ price: price === id ? null : id }),
+  }))
   return (
     <div className="mr-filters">
-      {version || loader || category || (access && access !== 'all') ? (
+      {version || loader || category || edition || use || price || (access && access !== 'all') ? (
         <button type="button" className="mr-reset" data-track="filter_reset" onClick={onReset}>
           Сбросить фильтры
         </button>
       ) : null}
+      <FilterGroup title="Издание" name="edition" opts={editions} />
+      <FilterGroup title="Для чего" name="use" opts={uses} />
       <FilterGroup title="Доступ" name="access" opts={accessOpts} />
       <FilterGroup title="Версия игры" name="version" opts={versions} lead={(o) => filled.has(o.key)} />
       <FilterGroup title="Загрузчик" name="loader" opts={loaders} />
       <FilterGroup title="Категории" name="category" opts={cats} />
+      {access ? null : <FilterGroup title="Цена" name="price" opts={prices} />}
     </div>
   )
 }

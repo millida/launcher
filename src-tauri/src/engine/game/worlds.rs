@@ -82,7 +82,7 @@ pub fn pin_server_dat(profile: &str, name: &str, ip: &str) -> Result<(), String>
         .iter()
         .position(|s| s.ip == ip || (!name.is_empty() && s.name == name))
         .map(|idx| list.remove(idx));
-    list.retain(|s| s.ip != ip && !(!name.is_empty() && s.name == name));
+    list.retain(|s| s.ip != ip && (name.is_empty() || s.name != name));
     let pinned = prev
         .map(|prev| ServerRecord { name: name.to_string(), ip: ip.to_string(), ..prev })
         .unwrap_or_else(|| ServerRecord::new(name, ip));
