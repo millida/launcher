@@ -67,7 +67,6 @@ import { QuestsBlock } from '../components/shop/Quests'
 import { questsToShow } from '../components/shop/packQuests'
 
 /** Пакеты для гостя — те же пять, что в магазине дня (модель экономики 23.09.2026). */
-const GUEST_PACKS = ['handful', 'pouch', 'casket', 'hoard', 'trove']
 
 const ERR = 'Магазин не ответил, попробуй позже'
 
@@ -575,7 +574,7 @@ export function Rubies({ on }: { on: boolean }) {
     onBuy: (c, s) => void doBuy(c, s),
     onWish: (c, n) => void doWish(c, n),
   }
-  const guestPacks = (rules?.packs.items ?? []).filter((p) => GUEST_PACKS.includes(p.code))
+  const guestPacks = rules?.packs.items ?? []
 
   /**
    * Одна лента (правка владельца 21:58: «вкладки — дерьмо, никто их не
@@ -633,6 +632,7 @@ export function Rubies({ on }: { on: boolean }) {
             ? {
                 kopecks: (plus.offers?.find((o) => o.tier === 'PLUS') ?? DEFAULT_PLUS_OFFERS[0]!).priceKopecks,
                 rubies: PLUS_PASS.rubies,
+                chests: Object.values(PLUS_PASS.chests).reduce((a, b) => a + (b || 0), 0),
                 onOpen: () => useUi.getState().setScreen('plus'),
               }
             : undefined

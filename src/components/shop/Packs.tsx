@@ -11,27 +11,18 @@ type Pack = ShopPack & { bonus?: number }
 export const topUpKopecks = (short: number): number => (short > 0 ? Math.ceil(short / 100) * 100 : 0)
 
 /**
- * Свой рисунок на каждый размер пакета: горсть, мешочек, сундучок, клад.
- * Картинка есть не у всех: у новых пакетов её нет, и вместо неё рисуется рубин.
+ * Рисунки пакетов от малого к большому. Кодов у сервера теперь девять и они
+ * меняются, поэтому рисунок берётся по месту пакета в ряду, а не по коду.
  */
-const PACK_ART: Record<string, string> = {
-  handful: '/packs/handful.png',
-  pouch: '/packs/pouch.png',
-  purse: '/packs/purse.png',
-  casket: '/packs/casket.png',
-  hoard: '/packs/hoard.png',
-  trove: '/packs/trove.png',
-  treasury: '/packs/treasury.png',
-  vault: '/packs/vault.png',
-}
+const ART_ORDER = ['handful', 'pouch', 'purse', 'casket', 'hoard', 'trove', 'treasury', 'vault']
+const artAt = (i: number, n: number): string => '/packs/' + ART_ORDER[n < 2 ? 0 : Math.round((i * (ART_ORDER.length - 1)) / (n - 1))] + '.png'
 
 /**
  * Пакеты рубинов.
  *
  * «Выгодно» стоит на пакете, у которого рубин дешевле всех по ответу сервера,
  * а не на том, который нам хочется продать: это считается из живых цен.
- * Пакетов пять, а не восемь (модель экономики 23.09.2026): для школьника
- * восемь цен — это не выбор, а таблица.
+ * Рисуем всё, что вернул сервер (сейчас девять), первой плиткой — PLUS.
  */
 export function Packs<P extends Pack>({
   packs,
@@ -49,10 +40,10 @@ export function Packs<P extends Pack>({
   /** Денег на счёте меньше цены пакета: пополнить счёт на недостающее (копейки, до целого рубля). */
   onTopUp?: (missingKopecks: number, pack: P) => void
   /** Первая плитка: рубины с PLUS. Нет — плитки нет (PLUS уже оформлен или гость). */
-  plusOffer?: { kopecks: number; rubies: number; onOpen: () => void }
+  plusOffer?: { kopecks: number; rubies: number; chests: number; onOpen: () => void }
 }) {
   const [artGone, setArtGone] = useState<string[]>([])
-  const list = packs ?? []
+  const list = [...(packs ?? [])].sort((x, y) => x.kopecks - y.kopecks)
   const best = list.reduce(
     (win, pack) => (pack.kopecks > 0 && pack.rubies / pack.kopecks > win.rate ? { code: pack.code, rate: pack.rubies / pack.kopecks } : win),
     { code: '', rate: 0 },
@@ -66,7 +57,8 @@ export function Packs<P extends Pack>({
       <div className="sh-grid is-fit" style={gridCols(packs === null ? 5 : list.length + (plusOffer ? 1 : 0))}>
         {packs !== null && plusOffer ? (
           <div className="sh-card sh-pack is-plus" data-kind="plus_offer" data-id="plus" data-pos={-1}>
-            <span className="sh-best">PLUS</span>
+            <span className="sh-best is-big">Выгоднее всего</span>
+            <b className="sh-plus-name">PLUS</b>
             <span className="sh-pack-art">
               <Ruby size={56} />
             </span>
@@ -74,9 +66,10 @@ export function Packs<P extends Pack>({
               <Ruby size={18} />
               {plusOffer.rubies.toLocaleString('ru-RU')}
             </span>
-            <span className="sh-pack-bonus">с PLUS</span>
+            <span className="sh-pack-bonus">+ {plusOffer.chests} сундуков, осколки x1,5</span>
+            <span className="sh-pack-bonus is-dim">Милли 100 в день, значок</span>
             <button className="btn sm primary" data-track="plus_tile" onClick={plusOffer.onOpen}>
-              {rubles(plusOffer.kopecks)}
+              {rubles(plusOffer.kopecks)} / 28 дней
             </button>
           </div>
         ) : null}
@@ -88,11 +81,11 @@ export function Packs<P extends Pack>({
               const bonus = pack.bonus ?? Math.max(0, Math.round(pack.rubies - pack.kopecks / RUBY_KOPECKS))
               return (
                 <div key={pack.code} className="sh-card sh-pack" data-kind="ruby_pack" data-id={pack.code} data-pos={i}>
-                  {pack.code === best ? <span className="sh-best">Выгодно</span> : null}
+                  {pack.code === best && !plusOffer ? <span className="sh-best">Выгодно</span> : null}
                   <span className="sh-pack-art">
-                    {PACK_ART[pack.code] && !artGone.includes(pack.code) ? (
+                    {!artGone.includes(pack.code) ? (
                       <img
-                        src={PACK_ART[pack.code]}
+                        src={artAt(i, list.length)}
                         alt=""
                         draggable={false}
                         onError={() => setArtGone((was) => (was.includes(pack.code) ? was : [...was, pack.code]))}

@@ -892,3 +892,23 @@
 .sh-collect-h { margin: 0 0 10px; font-size: 15px; font-weight: 850; }
 
 .sh-card.sh-pack.is-plus { background: hsl(42 70% 50% / 0.14); }
+
+/* ---------- Магазин v2 (01.10.2026): плитка PLUS первой, сундуки покрупнее ---------- */
+.sh-card.sh-pack.is-plus { background: color-mix(in srgb, var(--m-rarity-legendary) 14%, var(--m-surface-2)); --px-ft: var(--m-rarity-legendary); --px-ft-w: 3px; gap: 4px; }
+.sh-best.is-big { left: 0; right: 0; top: 0; text-align: center; padding: 4px 6px; background: var(--m-rarity-legendary); color: #1b1300; }
+:root:root .sh-best.is-big { clip-path: none; }
+.sh-plus-name { margin-top: 16px; font-size: 18px; font-weight: 900; letter-spacing: 0.04em; }
+.sh-pack-bonus.is-dim { color: var(--m-fg-muted); font-weight: 700; }
+.sh-pack.is-plus .sh-pack-bonus { text-align: center; min-height: 0; }
+
+.sh-card.sh-perk-card[class*='tier-'] { --tier: var(--m-rarity-rare); background: color-mix(in srgb, var(--tier) 14%, var(--m-surface-2)); --px-ft: var(--tier); --px-ft-w: 3px; padding-block: 18px; }
+.sh-card.sh-perk-card.tier-epic.tier-epic { --tier: var(--m-rarity-epic); }
+.sh-card.sh-perk-card.tier-legend.tier-legend { --tier: var(--m-rarity-legendary); }
+.sh-perk-card[class*='tier-'] .sh-perk-art { position: relative; width: 100%; }
+.sh-perk-card[class*='tier-'] .sh-perk-art::before {
+  content: ''; position: absolute; left: 50%; top: 50%; width: 128px; height: 128px; translate: -50% -50%;
+  background: color-mix(in srgb, var(--tier) 24%, transparent); --px-n: 10px; clip-path: var(--px-10);
+}
+.sh-perk-card[class*='tier-'] .dc-bob { animation: sh-chest-bob 2.4s steps(4, end) infinite; }
+@keyframes sh-chest-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@media (prefers-reduced-motion: reduce) { .sh-perk-card[class*='tier-'] .dc-bob { animation: none; } }

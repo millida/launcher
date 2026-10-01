@@ -55,7 +55,7 @@ export function WorkshopBlock({
   const items = data.workshop.items
   return (
     <div className="card sh-block sh-work" id="shop-work" data-section="workshop">
-      <Head title="Обмен осколков">
+      <Head title="Осколки">
         <Timer to={data.workshop.rotatesAt} label="Новые через" />
       </Head>
       <div className="sh-work-how">
@@ -453,7 +453,7 @@ export function PathBlock({ data }: { data: EconomyProgress }) {
   return (
     <>
       <div className="card sh-block sh-path" id="shop-hours" data-section="hours_path">
-        <Head title="Плащи за часы">
+        <Head title="Плащи">
           <span className="sh-tag">
             <Icon id="i-clock" />
             Половина — за часы

@@ -381,21 +381,24 @@ async function shopItems(slot?: string): Promise<{ items: unknown[] }> {
 /**
  * Экономика вещей (контракт 23.09.2026): магазин дня, рентген, осколки,
  * посылка, путь, PLUS. Состояние — src/components/shop/demoShop.ts.
- * Пять пакетов рубинов модели v3: 700 / 1 900 / 4 200 / 7 000 / 14 000.
+ * Девять пакетов рубинов (бэкенд 01.10.2026).
  */
-const ECONOMY_PACKS = ['handful', 'pouch', 'casket', 'hoard', 'trove']
 const V3_PACKS = [
   { code: 'handful', title: 'Горсть', rubies: 700, kopecks: 10000 },
-  { code: 'pouch', title: 'Мешочек', rubies: 1900, kopecks: 25000 },
+  { code: 'pouch', title: 'Мешочек', rubies: 1300, kopecks: 18000 },
+  { code: 'purse', title: 'Кошель', rubies: 1900, kopecks: 25000 },
   { code: 'casket', title: 'Сундучок', rubies: 4200, kopecks: 50000 },
-  { code: 'hoard', title: 'Клад', rubies: 7000, kopecks: 80000 },
-  { code: 'trove', title: 'Сокровищница', rubies: 14000, kopecks: 150000 },
+  { code: 'hoard', title: 'Клад', rubies: 5600, kopecks: 65000 },
+  { code: 'trove', title: 'Россыпь', rubies: 7000, kopecks: 80000 },
+  { code: 'treasury', title: 'Казна', rubies: 10000, kopecks: 110000 },
+  { code: 'vault', title: 'Сокровищница', rubies: 14000, kopecks: 150000 },
+  { code: 'dragon', title: 'Драконий клад', rubies: 30000, kopecks: 300000 },
 ]
 const economy = demoEconomy({
   catalog: catalogItems,
   wallet: RUBY_BALANCE,
   // Модель v3: 7 рубинов за рубль — прод ещё на старом курсе, демо показывает новый.
-  packs: async () => V3_PACKS.filter((x) => ECONOMY_PACKS.includes(x.code)),
+  packs: async () => V3_PACKS,
 })
 
 async function inventory() {

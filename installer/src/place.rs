@@ -13,6 +13,37 @@ const DESKTOP_FILE: &str = "millida-launcher.desktop";
 #[cfg(target_os = "linux")]
 const SCHEME: &str = "x-scheme-handler/millida";
 
+/// An AppImage mounts itself through libfuse 2. Arch, Ubuntu 22.04+ and Fedora
+/// ship only fuse3, and there the launcher died a second after start while the
+/// stub had already printed «Готово» (1.10.2026: Linux kept 20–25 % of visitors
+/// against 80 % on Windows). Without the library the runtime is told to unpack
+/// itself instead; NO_CLEANUP keeps the unpacked copy, so only the first start
+/// after a reboot pays for it, and APPIMAGE stays set for the updater.
+#[cfg(target_os = "linux")]
+const EXTRACT_ENV: [(&str, &str); 2] = [("APPIMAGE_EXTRACT_AND_RUN", "1"), ("NO_CLEANUP", "1")];
+
+#[cfg(target_os = "linux")]
+const FUSE2_PATHS: [&str; 6] = [
+    "/usr/lib/libfuse.so.2",
+    "/usr/lib64/libfuse.so.2",
+    "/usr/lib/x86_64-linux-gnu/libfuse.so.2",
+    "/lib/x86_64-linux-gnu/libfuse.so.2",
+    "/lib64/libfuse.so.2",
+    "/usr/local/lib/libfuse.so.2",
+];
+
+#[cfg(target_os = "linux")]
+fn has_fuse2() -> bool {
+    has_fuse2_in(&FUSE2_PATHS.map(Path::new), Path::new("/dev/fuse"))
+}
+
+/// Both halves are needed: the library to mount, the device to mount through.
+/// Containers and some sandboxes have the library but no /dev/fuse.
+#[cfg(target_os = "linux")]
+fn has_fuse2_in(libraries: &[&Path], device: &Path) -> bool {
+    device.exists() && libraries.iter().any(|lib| lib.exists())
+}
+
 #[cfg(target_os = "linux")]
 pub fn place(payload: &Path, workspace: &Path) -> Result<PathBuf, String> {
     use std::os::unix::fs::PermissionsExt;
@@ -35,7 +66,7 @@ pub fn place(payload: &Path, workspace: &Path) -> Result<PathBuf, String> {
     })?;
 
     let icon = extract_icon(&target, workspace, &dir);
-    write_desktop_entry(&home, &target, icon.as_deref())?;
+    write_desktop_entry(&home, &target, icon.as_deref(), !has_fuse2())?;
     register_scheme(&home);
     Ok(target)
 }
@@ -83,11 +114,11 @@ fn extract(appimage: &Path, stage: &Path, pattern: &str) -> Option<()> {
 }
 
 #[cfg(target_os = "linux")]
-fn write_desktop_entry(home: &Path, target: &Path, icon: Option<&Path>) -> Result<(), String> {
+fn write_desktop_entry(home: &Path, target: &Path, icon: Option<&Path>, extract: bool) -> Result<(), String> {
     let dir = home.join(".local").join("share").join("applications");
     std::fs::create_dir_all(&dir).map_err(|e| format!("не создать папку {}: {}", dir.display(), e))?;
     let staged = dir.join(format!("{}.new", DESKTOP_FILE));
-    std::fs::write(&staged, desktop_entry(target, icon)).map_err(|e| format!("не записать ярлык: {}", e))?;
+    std::fs::write(&staged, desktop_entry(target, icon, extract)).map_err(|e| format!("не записать ярлык: {}", e))?;
     std::fs::rename(&staged, dir.join(DESKTOP_FILE)).map_err(|e| {
         let _ = std::fs::remove_file(&staged);
         format!("не записать ярлык: {}", e)
@@ -95,7 +126,7 @@ fn write_desktop_entry(home: &Path, target: &Path, icon: Option<&Path>) -> Resul
 }
 
 #[cfg(target_os = "linux")]
-pub fn desktop_entry(target: &Path, icon: Option<&Path>) -> String {
+pub fn desktop_entry(target: &Path, icon: Option<&Path>, extract: bool) -> String {
     let icon = icon
         .map(|path| path.to_string_lossy().to_string())
         .unwrap_or_else(|| "millida-launcher".to_string());
@@ -104,7 +135,15 @@ pub fn desktop_entry(target: &Path, icon: Option<&Path>) -> String {
     entry.push_str("Version=1.0\n");
     entry.push_str("Name=Millida Launcher\n");
     entry.push_str("Comment=Лаунчер Minecraft от Millida\n");
-    entry.push_str(&format!("Exec={} %u\n", quote_exec(target)));
+    // The menu starts the launcher without the stub, so the fallback has to live
+    // in the entry itself: `env` is the portable way to set variables in Exec.
+    let prefix = if extract {
+        let vars: Vec<String> = EXTRACT_ENV.iter().map(|(k, v)| format!("{}={}", k, v)).collect();
+        format!("env {} ", vars.join(" "))
+    } else {
+        String::new()
+    };
+    entry.push_str(&format!("Exec={}{} %u\n", prefix, quote_exec(target)));
     entry.push_str(&format!("Icon={}\n", icon));
     entry.push_str("Terminal=false\n");
     entry.push_str("Categories=Game;\n");
@@ -268,15 +307,41 @@ pub fn launch(target: &Path) -> Result<(), String> {
         open
     };
     #[cfg(target_os = "linux")]
-    let mut command = Command::new(target);
+    let mut command = {
+        let mut run = Command::new(target);
+        if !has_fuse2() {
+            run.envs(EXTRACT_ENV);
+        }
+        run
+    };
 
-    command
+    let child = command
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-        .map(|_| ())
-        .map_err(|e| format!("не запустить лаунчер: {}", e))
+        .map_err(|e| format!("не запустить лаунчер: {}", e))?;
+
+    // A spawned process is not a started launcher: an AppImage that cannot
+    // mount exits within a second, and «Готово» over a dead process is the
+    // silent failure this check exists for. The launcher itself never exits
+    // this fast; `open` on macOS does, with status 0.
+    #[cfg(target_os = "macos")]
+    drop(child);
+    #[cfg(target_os = "linux")]
+    {
+        let mut child = child;
+        std::thread::sleep(std::time::Duration::from_secs(3));
+        if let Ok(Some(status)) = child.try_wait() {
+            if !status.success() {
+                return Err(format!(
+                    "лаунчер закрылся сразу после запуска ({}). На Arch поставьте fuse2: sudo pacman -S fuse2, на Ubuntu — libfuse2",
+                    status
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 #[cfg(all(test, target_os = "linux"))]
@@ -285,7 +350,7 @@ mod tests {
 
     #[test]
     fn desktop_entry_quotes_paths_and_registers_links() {
-        let entry = desktop_entry(Path::new("/home/игрок с пробелом/app.AppImage"), None);
+        let entry = desktop_entry(Path::new("/home/игрок с пробелом/app.AppImage"), None, false);
         let cases: &[(&str, &str)] = &[
             (
                 "Exec=\"/home/игрок с пробелом/app.AppImage\" %u",
@@ -305,11 +370,37 @@ mod tests {
 
     #[test]
     fn desktop_entry_takes_extracted_icon() {
-        let entry = desktop_entry(Path::new("/opt/app.AppImage"), Some(Path::new("/opt/icon.png")));
+        let entry = desktop_entry(Path::new("/opt/app.AppImage"), Some(Path::new("/opt/icon.png")), false);
         assert!(
             entry.contains("Icon=/opt/icon.png"),
             "распакованная иконка обязана попадать в ярлык, иначе меню показывает заглушку"
         );
+    }
+
+    #[test]
+    fn desktop_entry_unpacks_without_fuse2() {
+        let entry = desktop_entry(Path::new("/opt/app.AppImage"), None, true);
+        assert!(
+            entry.contains("Exec=env APPIMAGE_EXTRACT_AND_RUN=1 NO_CLEANUP=1 \"/opt/app.AppImage\" %u"),
+            "без libfuse.so.2 ярлык обязан запускать AppImage с распаковкой, иначе он молча не стартует: {}",
+            entry
+        );
+        let plain = desktop_entry(Path::new("/opt/app.AppImage"), None, false);
+        assert!(plain.contains("Exec=\"/opt/app.AppImage\" %u"), "с FUSE ярлык прежний: {}", plain);
+    }
+
+    #[test]
+    fn fuse2_needs_library_and_device() {
+        let dir = std::env::temp_dir().join(format!("millida-fuse-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let lib = dir.join("libfuse.so.2");
+        let dev = dir.join("fuse");
+        assert!(!has_fuse2_in(&[lib.as_path()], &dev), "ничего нет — FUSE нет");
+        std::fs::write(&lib, b"").unwrap();
+        assert!(!has_fuse2_in(&[lib.as_path()], &dev), "библиотека без /dev/fuse не монтирует");
+        std::fs::write(&dev, b"").unwrap();
+        assert!(has_fuse2_in(&[lib.as_path()], &dev), "библиотека и устройство — FUSE есть");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
