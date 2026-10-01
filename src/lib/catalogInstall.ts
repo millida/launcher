@@ -3,6 +3,8 @@ import {
   PACK_ACCESS_PREFIX,
   catalogInstall,
   catalogInstallPlan,
+  cfInstall,
+  cfInstallModpack,
   fetchTexture,
   installCatalogPack,
   installContent,
@@ -11,11 +13,14 @@ import {
   installSharedPack,
   installVersion,
 } from '../ipc/commands'
-import type { CatalogInstallReq, Profile } from '../ipc/commands'
+import type { CatalogInstallReq, ContentInstall, Profile } from '../ipc/commands'
 import { MODRINTH_API, hasMillidaAccount, openExt } from './api'
 import {
   KIND_OF_SECTION,
   catalog,
+  cfFileIdOf,
+  cfProjectId,
+  cfSourceRef,
   compatibleBuilds,
   knownVersions,
   loaderMatters,
@@ -29,7 +34,7 @@ import {
 } from './millidaCatalog'
 import type { CatalogFile, CatalogItem } from './millidaCatalog'
 import { askPlanForVersion, installExtras } from './install'
-import { keyCatalogPack, keyContent, keyMillida, keyMillidaModpack, keyMrModpack } from './installKeys'
+import { keyCatalogPack, keyCfModpack, keyContent, keyMillida, keyMillidaModpack, keyMrModpack } from './installKeys'
 import { LOADER_NAME, loaderId } from './format'
 import { trackTimed } from './telemetry'
 import { addToWardrobe, applyCatalogCape, applyWardrobeItem, loadCapeCatalog } from './gameProfile'
@@ -169,6 +174,29 @@ async function viaModrinth(prof: string, kind: string, mr: string, file: Catalog
   })
 }
 
+async function curseforgeIdOf(sourceUrl: string | null): Promise<number | null> {
+  const ref = sourceUrl ? cfSourceRef(sourceUrl) : null
+  return ref ? cfProjectId(ref) : null
+}
+
+/// The same project through the launcher's CurseForge path, for cards imported from CurseForge
+/// whose files are not mirrored. The catalog file already passed the version check above.
+function viaCurseforge(prof: string, kind: string, cfid: number, file: CatalogFile, title: string): boolean {
+  const pr = buildOf(prof)
+  const startedAt = performance.now()
+  return runInstall<ContentInstall>({
+    key: keyContent('cf', prof, kind, cfid),
+    title,
+    running: 'Скачивание…',
+    run: () => cfInstall(cfid, (pr && pr.version) || '', prof, kind, cfFileIdOf(file.origin) ?? undefined, true),
+    onDone: (r) => {
+      trackTimed('content_install', startedAt, { name: title, kind, mc: (pr && pr.version) || '', source: 'millida-cf' })
+      done(prof, kind, r.file, r.warning)
+    },
+    onError: (e) => showToast('' + e, 'error'),
+  })
+}
+
 /// Файл с нашего зеркала. Обязательные зависимости карточки ставятся следом в
 /// ту же сборку — у материалов не с Modrinth их больше никто не поставит.
 function viaMirror(prof: string, kind: string, item: CatalogItem, file: CatalogFile, opts: CatalogInstallOpts): boolean {
@@ -287,6 +315,8 @@ async function installContentItem(section: string, slug: string, kind: string, o
   if (kind === 'mod' && mr) return viaModrinth(prof, kind, mr, file, item.title)
   if (file.mirrored && item.articleSlug) return viaMirror(prof, kind, item, file, opts)
   if (mr) return viaModrinth(prof, kind, mr, file, item.title)
+  const cfid = kind === 'world' ? null : await curseforgeIdOf(item.sourceUrl)
+  if (cfid) return viaCurseforge(prof, kind, cfid, file, item.title)
   toSite(section, slug, 'Файла «' + item.title + '» нет на зеркале Millida — он у автора')
   return false
 }
@@ -398,6 +428,19 @@ async function installModpackItem(slug: string, opts: CatalogInstallOpts): Promi
       versionId: vid || undefined,
       run: () => (vid ? installModpackVersion(mr, vid) : installModpack(mr)),
       onDone: (p) => packDone(p, item.title, startedAt, 'millida-mr'),
+      onError: (e) => showToast('' + e, 'error'),
+    })
+  }
+  const cfid = await curseforgeIdOf(item.sourceUrl)
+  if (cfid) {
+    if (!(await confirmPack(item.title, what, opts))) return false
+    const cfFile = file ? cfFileIdOf(file.origin) : null
+    return runInstall({
+      key: keyCfModpack(cfid),
+      title: item.title,
+      running: 'Скачивание…',
+      run: () => cfInstallModpack(cfid, cfFile ?? undefined),
+      onDone: (p) => packDone(p, item.title, startedAt, 'millida-cf'),
       onError: (e) => showToast('' + e, 'error'),
     })
   }

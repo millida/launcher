@@ -297,3 +297,18 @@ describe('skinTextureUrl', () => {
     expect(m.isCatalogSkinId('8F55E8D219558973')).toBe(false)
   })
 })
+
+describe('cfFileIdOf', () => {
+  const cases: { why: string; origin: string | null; want: number | null }[] = [
+    { why: 'version picked on the site must reach CurseForge as the same file', origin: 'https://edge.forgecdn.net/files/8448/903/DeceasedCraft_Beta_DH_Edition-5.10.17.zip', want: 8448903 },
+    { why: 'leading zeros of the second part are part of the id', origin: 'https://mediafilez.forgecdn.net/files/5123/7/pack.zip', want: 5123007 },
+    { why: 'a non-forgecdn host must not pin a file', origin: 'https://evil.example/files/8448/903/x.zip', want: null },
+    { why: 'plain http is not a CurseForge download', origin: 'http://edge.forgecdn.net/files/8448/903/x.zip', want: null },
+    { why: 'no origin means latest file', origin: null, want: null },
+  ]
+  for (const c of cases) {
+    test(c.why, () => {
+      expect(m.cfFileIdOf(c.origin), `${c.origin} parsed wrong: ${c.why}`).toBe(c.want)
+    })
+  }
+})

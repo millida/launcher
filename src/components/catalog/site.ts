@@ -1,11 +1,12 @@
 import { realDownloads } from '../../lib/realDownloads'
 import { api, openExt } from '../../lib/api'
 import { cachedCatalog, peekCatalog } from '../../lib/catalogCache'
-import { LAUNCHER_API, MODRINTH_API } from '../../lib/api'
+import { MODRINTH_API } from '../../lib/api'
 import { hasTauri } from '../../ipc/tauri'
 import { millidaPacks } from '../../ipc/commands'
 import type { MillidaPack } from '../../ipc/commands'
 import type { ModHit } from '../../state/mods'
+import { cfProjectId, cfSourceRef } from '../../lib/millidaCatalog'
 import { SECTION_SOURCE, listingQuery } from './sections'
 import type { EditionFilter, PriceFilter, SectionSlug, SectionSource } from './sections'
 import type { CatalogFile, Pricing } from './paid'
@@ -442,40 +443,6 @@ export interface ItemView {
 }
 
 const MR_URL = /modrinth\.com\/(?:mod|modpack|resourcepack|shader|datapack|plugin)\/([^/?#]+)/i
-
-const CF_URL = /curseforge\.com\/minecraft\/(mc-mods|modpacks|texture-packs|shaders|data-packs|worlds)\/([^/?#]+)/i
-
-const CF_CLASS: Record<string, number> = {
-  'mc-mods': 6,
-  modpacks: 4471,
-  'texture-packs': 12,
-  shaders: 6552,
-  'data-packs': 6945,
-  worlds: 17,
-}
-
-export interface CfSourceRef {
-  classId: number
-  slug: string
-}
-
-export function cfSourceRef(sourceUrl: string): CfSourceRef | null {
-  const m = CF_URL.exec(sourceUrl)
-  if (!m) return null
-  const classId = CF_CLASS[m[1]!.toLowerCase()]
-  return classId ? { classId, slug: decodeURIComponent(m[2]!) } : null
-}
-
-async function cfProjectId(ref: CfSourceRef): Promise<number | null> {
-  const q = new URLSearchParams({ gameId: '432', classId: String(ref.classId), slug: ref.slug })
-  const r = await fetch(LAUNCHER_API + '/launcher/cf/v1/mods/search?' + q.toString()).catch(() => null)
-  if (!r || !r.ok) return null
-  const body = (await r.json().catch(() => null)) as { data?: { id?: unknown; slug?: unknown }[] } | null
-  const hit = (body && Array.isArray(body.data) ? body.data : []).find(
-    (p) => p && String(p.slug).toLowerCase() === ref.slug.toLowerCase(),
-  )
-  return hit && typeof hit.id === 'number' && hit.id > 0 ? hit.id : null
-}
 
 function baseHit(card: SiteCard): ModHit {
   return {

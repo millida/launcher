@@ -355,6 +355,48 @@ export function modrinthSlugOf(sourceUrl: string | null | undefined): string | n
   }
 }
 
+const CF_URL = /curseforge\.com\/minecraft\/(mc-mods|modpacks|texture-packs|shaders|data-packs|worlds)\/([^/?#]+)/i
+
+const CF_CLASS: Record<string, number> = {
+  'mc-mods': 6,
+  modpacks: 4471,
+  'texture-packs': 12,
+  shaders: 6552,
+  'data-packs': 6945,
+  worlds: 17,
+}
+
+export interface CfSourceRef {
+  classId: number
+  slug: string
+}
+
+export function cfSourceRef(sourceUrl: string): CfSourceRef | null {
+  const m = CF_URL.exec(sourceUrl)
+  if (!m) return null
+  const classId = CF_CLASS[m[1]!.toLowerCase()]
+  return classId ? { classId, slug: decodeURIComponent(m[2]!) } : null
+}
+
+const FORGECDN_FILE = /^https:\/\/(?:edge|mediafilez)\.forgecdn\.net\/files\/(\d{1,6})\/(\d{1,3})\//i
+
+/// CurseForge file id from a forgecdn download URL: `files/8448/903/x.zip` is file 8448903.
+export function cfFileIdOf(origin: string | null | undefined): number | null {
+  const m = origin ? FORGECDN_FILE.exec(origin) : null
+  return m ? Number(m[1]) * 1000 + Number(m[2]) : null
+}
+
+export async function cfProjectId(ref: CfSourceRef): Promise<number | null> {
+  const q = new URLSearchParams({ gameId: '432', classId: String(ref.classId), slug: ref.slug })
+  const r = await fetch(LAUNCHER_API + '/launcher/cf/v1/mods/search?' + q.toString()).catch(() => null)
+  if (!r || !r.ok) return null
+  const body = (await r.json().catch(() => null)) as { data?: { id?: unknown; slug?: unknown }[] } | null
+  const hit = (body && Array.isArray(body.data) ? body.data : []).find(
+    (p) => p && String(p.slug).toLowerCase() === ref.slug.toLowerCase(),
+  )
+  return hit && typeof hit.id === 'number' && hit.id > 0 ? hit.id : null
+}
+
 /// Загрузчик имеет смысл только у модов и модпаков: у ресурспака на Modrinth
 /// «загрузчик» — это minecraft, у шейдера — iris/optifine.
 export const loaderMatters = (kind: string) => kind === 'mod' || kind === 'modpack'

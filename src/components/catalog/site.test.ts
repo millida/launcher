@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { cfSourceRef } from './site'
+import { cfSourceRef } from '../../lib/millidaCatalog'
 
 describe('cfSourceRef', () => {
   const cases: { why: string; url: string; want: ReturnType<typeof cfSourceRef> }[] = [
