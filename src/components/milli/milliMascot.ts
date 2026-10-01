@@ -85,25 +85,28 @@ const BELOW = milliCell(2, 3)
  * большой блик слева сверху, маленький справа снизу, реснички у внешнего
  * верхнего угла.
  */
-export const MILLI_EYE_SIZE = { w: 70, h: 91 } as const
-export const MILLI_EYE_DY = 10
+export const MILLI_EYE_SIZE = { w: 100, h: 124 } as const
+export const MILLI_EYE_DY = 0
 /**
- * Большие глаза (владелец 30.09.2026, 21:22: «большие глаза, как я говорю 300
- * раз»): 70×91 — в полтора раза выше клетки знака, наружные края ложатся на
- * белую скобку, внутренние упираются в нос, не заходя на него.
+ * Глаза на макушке (владелец 01.10.2026: «внятнее, в полтора-два раза больше,
+ * кверху и по центру — половина выглядывает над телом, половина внутри»):
+ * 100×124, по центру знака с зазором 14, середина глаза — на верхней кромке.
+ * Логотип под ними не закрыт: скобка начинается ниже.
  */
+const EYE_GAP = 14
+const EYE_CX = MILLI_VIEW / 2
 export const MILLI_EYES: readonly MilliBox[] = [
-  { ...centered(LEFT, MILLI_EYE_SIZE.w, MILLI_EYE_SIZE.h, MILLI_EYE_DY), x: MILLI_NOSE.x - MILLI_EYE_SIZE.w - 0.5 },
-  { ...centered(RIGHT, MILLI_EYE_SIZE.w, MILLI_EYE_SIZE.h, MILLI_EYE_DY), x: MILLI_NOSE.x + MILLI_NOSE.w + 0.5 },
+  { x: EYE_CX - EYE_GAP / 2 - MILLI_EYE_SIZE.w, y: -MILLI_EYE_SIZE.h / 2, w: MILLI_EYE_SIZE.w, h: MILLI_EYE_SIZE.h },
+  { x: EYE_CX + EYE_GAP / 2, y: -MILLI_EYE_SIZE.h / 2, w: MILLI_EYE_SIZE.w, h: MILLI_EYE_SIZE.h },
 ]
 /** Большой блик — у верхнего левого края радужки. */
-export const MILLI_GLINT = { dx: 12, dy: 17, size: 22 } as const
+export const MILLI_GLINT = { dx: 17, dy: 24, size: 31 } as const
 /** Второй, маленький блик — внизу справа. */
-export const MILLI_GLINT2 = { dx: 46, dy: 58, size: 11 } as const
-/** Радужка: от 23 до 82 по высоте глаза, с отступом 11 по бокам; верхняя половина светлее. */
-export const MILLI_IRIS = { inset: 11, top: 23, bottom: 82 } as const
+export const MILLI_GLINT2 = { dx: 66, dy: 83, size: 16 } as const
+/** Радужка: от 33 до 117 по высоте глаза, с отступом 16 по бокам; верхняя половина светлее. */
+export const MILLI_IRIS = { inset: 16, top: 33, bottom: 117 } as const
 /** Зрачок — тёмный блок в середине радужки. */
-export const MILLI_PUPIL = { dx: 24, dy: 36, w: 22, h: 34 } as const
+export const MILLI_PUPIL = { dx: 34, dy: 51, w: 32, h: 48 } as const
 /**
  * Реснички: два пикселя у верхнего внешнего угла, торчат за край глаза на
  * белую клетку (ink на белом читается). side: -1 — левый глаз (наружу влево), 1 — правый.
@@ -118,17 +121,17 @@ export function milliLashes(eye: MilliBox, side: -1 | 1): MilliBox[] {
   ]
 }
 export const MILLI_CHEEKS: readonly MilliBox[] = [
-  { x: LEFT.x + (LEFT.w - 26) / 2 - 8, y: BELOW.y + 34, w: 26, h: 9 },
-  { x: RIGHT.x + (RIGHT.w - 26) / 2 + 8, y: BELOW.y + 34, w: 26, h: 9 },
+  { x: LEFT.x + (LEFT.w - 26) / 2, y: BELOW.y + 4, w: 26, h: 9 },
+  { x: RIGHT.x + (RIGHT.w - 26) / 2, y: BELOW.y + 4, w: 26, h: 9 },
 ]
 /**
  * Росток на макушке (запоминающаяся деталь): стебель растёт из-под тела, два
  * листика ступеньками — правый выше. Рисуется ДО тела, корень спрятан.
  */
 export const MILLI_SPROUT = {
-  stem: { x: 184, y: -30, w: 8, h: 40 } as MilliBox,
-  leafR: { x: 192, y: -46, w: 28, h: 20 } as MilliBox,
-  leafL: { x: 156, y: -34, w: 28, h: 20 } as MilliBox,
+  stem: { x: 340, y: -10, w: 8, h: 26 } as MilliBox,
+  leafR: { x: 348, y: -26, w: 24, h: 16 } as MilliBox,
+  leafL: { x: 318, y: -16, w: 22, h: 14 } as MilliBox,
 } as const
 export const MILLI_MOUTH_SHUT: MilliBox = centered(BELOW, 24, 8, -8)
 export const MILLI_MOUTH_OPEN: MilliBox = centered(BELOW, 30, 24, -2)

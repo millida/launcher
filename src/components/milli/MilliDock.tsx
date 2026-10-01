@@ -27,9 +27,9 @@ import { isMilliScreen } from '../../lib/milliScreens'
 import '../../styles/pixel/milli.css'
 
 /*
- * Милли в лаунчере (30.09.2026): на всех основных экранах — кнопка-Милли в
- * правом нижнем углу, чат панелью справа. Поддержка — наушники в шапке панели
- * и в её меню.
+ * Милли в лаунчере (30.09.2026): только в каталоге — кнопка-Милли в правом
+ * нижнем углу, чат панелью справа. На остальных экранах в том же углу кнопка
+ * поддержки. Поддержка есть и в меню панели Милли.
  */
 
 const EXAMPLES = ['Хоррор с зомби', 'Техно и заводы', 'Уютная ферма', 'Магия и данжи']
@@ -373,9 +373,6 @@ function Panel() {
             <PxIcon name="chev-l" size={12} />
           </button>
         ) : null}
-        <button type="button" className="ml-hbtn" aria-label="Поддержка" data-tip="Поддержка" data-track="support_open" onClick={() => openExt(SUPPORT_URL)}>
-          <PxIcon name="headset" size={12} />
-        </button>
         <span className="ml-menu-wrap">
           <button type="button" className="ml-hbtn" aria-label="Меню" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu((v) => !v)}>
             <PxIcon name="dots" size={12} />
@@ -403,9 +400,26 @@ function Fab() {
   )
 }
 
+/** Вне каталога угол — обычная поддержка: чат поддержки Millida в браузере. */
+function SupportFab() {
+  return (
+    <button
+      type="button"
+      className="msf"
+      data-sound="open"
+      data-track="support_fab"
+      aria-label="Поддержка"
+      data-tip="Поддержка"
+      onClick={() => openExt(SUPPORT_URL)}
+    >
+      <PxIcon name="headset" size={22} />
+    </button>
+  )
+}
+
 /**
- * Угол лаунчера: Милли и её панель на всех основных экранах (кроме настроек и
- * игры); поддержка — кнопка-наушники в шапке панели.
+ * Угол лаунчера: в каталоге («Ресурсы», карточки материалов) — Милли и её
+ * панель, на остальных экранах — кнопка поддержки (владелец 30.09.2026).
  */
 export function MilliDock() {
   const logged = useUi((s) => s.logged)
@@ -423,7 +437,7 @@ export function MilliDock() {
     else void refreshMilliPlans()
   }, [here])
   if (!logged) return null
-  if (!here) return null
+  if (!here) return <SupportFab />
   return (
     <>
       {open ? null : <Fab />}
