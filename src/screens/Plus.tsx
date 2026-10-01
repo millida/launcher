@@ -3,7 +3,7 @@ import '../styles/pixel/plus.css'
 import { Icon } from '../components/Icon'
 import { Ruby } from '../components/Ruby'
 import { Shard } from '../components/shop/parts'
-import { ChestArt } from '../components/daily/ChestArt'
+import { ChestLive } from '../components/daily/ChestLive'
 import { Milli } from '../components/milli/Milli'
 import { seasonCell, TRACK_DAYS } from '../components/daily/track'
 import { api, hasMillidaAccount } from '../lib/api'
@@ -230,7 +230,7 @@ export function Plus({ on }: { on: boolean }) {
 
   const chips: { art: ReactNode; title: string; sub: string }[] = [
     { art: <Ruby size={34} />, title: n(PLUS.rubies) + ' рубинов', sub: 'За 28 дней входа' },
-    { art: <ChestArt ready={false} tier="LEGEND" size={34} />, title: PLUS.chests + ' ' + pl(PLUS.chests, 'сундук', 'сундука', 'сундуков'), sub: 'Легендарный — в конце' },
+    { art: <ChestLive ready={false} tier="LEGEND" size={34} />, title: PLUS.chests + ' ' + pl(PLUS.chests, 'сундук', 'сундука', 'сундуков'), sub: 'Легендарный — в конце' },
     ...(milli ? [{ art: <Milli size={34} />, title: 'Милли: ' + milli.plus.day + ' в день', sub: 'Вместо ' + milli.free.day }] : []),
     { art: <Shard size={30} />, title: 'Осколки ×' + SHARD_BOOST, sub: SHARD_LIMIT_PLUS + ' в день вместо ' + SHARD_LIMIT },
     ...(whole && loot[0] ? [{ art: <img src={loot[0].preview} alt="" draggable={false} />, title: 'Целая вещь', sub: whole + ' из сундука' }] : []),
@@ -435,9 +435,9 @@ export function Plus({ on }: { on: boolean }) {
         <div className="lp-cards">
           <div className="lp-cardx">
             <div className="lp-cardx-art">
-              <ChestArt ready={false} tier="RARE" size={64} />
-              <ChestArt ready={false} tier="LEGEND" size={100} />
-              <ChestArt ready={false} tier="EPIC" size={64} />
+              <ChestLive ready={false} tier="RARE" size={64} />
+              <ChestLive ready={false} tier="LEGEND" size={100} />
+              <ChestLive ready={false} tier="EPIC" size={64} />
             </div>
             <b>
               {PLUS.chests} {pl(PLUS.chests, 'сундук', 'сундука', 'сундуков')}

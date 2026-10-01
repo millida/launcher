@@ -15,12 +15,14 @@ export function Chest3D({
   mode,
   framing = 'hero',
   className,
+  flatSize = 96,
   onOpened,
 }: {
   tier: ChestTier
   mode: ChestMode
   framing?: 'hero' | 'reveal'
   className?: string
+  flatSize?: number
   onOpened?: () => void
 }) {
   const wrap = useRef<HTMLDivElement>(null)
@@ -106,7 +108,7 @@ export function Chest3D({
       <canvas ref={canvas} className={state === 'ready' ? 'on' : ''} />
       {state !== 'ready' ? (
         <span className={'c3d-flat' + (mode === 'shake' ? ' shake' : '')}>
-          <ChestArt ready={mode === 'ready'} opening={mode === 'shake' || mode === 'open'} tier={tier} size={96} />
+          <ChestArt ready={mode === 'ready'} opening={mode === 'shake' || mode === 'open'} tier={tier} size={flatSize} />
         </span>
       ) : null}
     </div>

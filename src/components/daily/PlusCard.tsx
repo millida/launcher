@@ -5,7 +5,7 @@ import { backdropClose } from '../../lib/dismiss'
 import { rubles, type ChestTier } from '../../lib/rubies'
 import { useDaily } from '../../state/daily'
 import { Shard } from '../shop/parts'
-import { ChestArt } from './ChestArt'
+import { ChestLive } from './ChestLive'
 import { CHEST_NAME } from './rewards'
 import { rowTotals, type TrackCol } from './track'
 
@@ -72,7 +72,7 @@ export function PlusCard({ cols }: { cols: TrackCol[] }) {
         <div className="pc-gifts" aria-label="Что даёт PLUS за сезон">
           {TIERS.filter((tier) => t.chests[tier] > 0).map((tier) => (
             <span key={tier} className={'pc-gift tier-' + tier.toLowerCase()} title={CHEST_NAME[tier] + ' сундук'}>
-              <ChestArt ready={false} tier={tier} size={56} />
+              <ChestLive ready={false} tier={tier} size={56} />
               <b>×{t.chests[tier]}</b>
               <small>{CHEST_NAME[tier]}</small>
             </span>

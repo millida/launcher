@@ -9,7 +9,7 @@ import { useUi } from '../../state/ui'
 import { daysWord, nextResetAt, timerText } from './track'
 import { useCountdown } from './useCountdown'
 import { DailyPassModal } from './DailyPassModal'
-import { ChestArt } from './ChestArt'
+import { ChestLive } from './ChestLive'
 import { HubTile } from '../lobby/HubTile'
 import { WeekItem } from './WeekItem'
 import { dayChestTier } from './rewards'
@@ -117,7 +117,7 @@ export function DailyChest({
   if (!signedIn) {
     return (
       <div className={cls + ' guest'}>
-        <ChestArt ready={false} size={size} />
+        <ChestLive ready={false} size={size} />
         <span className="dc-body">
           <b className="dc-title">{hero ? 'Награды каждый день' : 'Сундук каждый день'}</b>
         </span>
@@ -162,7 +162,7 @@ export function DailyChest({
         onClick={open}
         onKeyDown={onKey}
       >
-        <ChestArt ready={ready} size={size} tier={tier} />
+        <ChestLive ready={ready} size={size} tier={tier} />
         <span className="dc-body">
           <b className="dc-title">{ready ? (hero ? 'Награда на сегодня' : 'Сундук готов') : 'Через ' + timerText(left)}</b>
           {!hero && status.weekItem && !status.weekItem.owned ? (

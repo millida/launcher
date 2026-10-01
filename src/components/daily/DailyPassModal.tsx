@@ -30,7 +30,7 @@ import { Chest3D } from './Chest3D'
 import { grantedOf, Reveal } from './Reveal'
 import { WeekItem } from './WeekItem'
 import { LegacyTrack } from './LegacyTrack'
-import { ChestArt } from './ChestArt'
+import { ChestLive } from './ChestLive'
 import { MyChests } from './MyChests'
 import { ChestOpenHost } from './ChestOpen'
 import { PlusCard } from './PlusCard'
@@ -249,7 +249,7 @@ function announce(granted: GrantedReward[]) {
       items: chests.map((c) => ({
         name: CHEST_NAME[c.tier] + ' сундук',
         rarity: c.tier,
-        art: <ChestArt ready tier={c.tier} size={size} />,
+        art: <ChestLive ready tier={c.tier} size={size} />,
       })),
       kicker,
       title: chests.length > 1 ? 'Сундуки: ' + chests.length : undefined,

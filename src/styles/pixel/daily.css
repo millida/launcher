@@ -704,3 +704,7 @@
 .pc-go { width: 100%; }
 .pc-wait { display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--m-fg-muted); }
 .pc-wait > svg.icon { width: 14px; height: 14px; }
+
+/* Живой 3D-сундук малого размера (ChestLive): холст шире ячейки, чтобы крышка и свет не резались. */
+.cl { position: relative; display: inline-grid; place-items: center; width: var(--cl-size); height: var(--cl-size); }
+.cl-3d.c3d { position: absolute; left: 50%; top: 50%; width: var(--cl-k); height: var(--cl-k); transform: translate(-50%, -50%); overflow: visible; pointer-events: none; }

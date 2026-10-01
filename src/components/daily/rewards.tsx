@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react'
 import { Ruby } from '../Ruby'
 import { useVariantPreview } from '../../lib/variantArt'
 import { Shard } from '../shop/parts'
-import { ChestArt } from './ChestArt'
+import { ChestLive } from './ChestLive'
 import { RARITY_NAME_SHORT, RARITY_TONE } from '../shop/rarity'
 import type { ChestTier, Rarity, Reward } from '../../lib/rubies'
 import type { TrackReward } from './track'
@@ -89,7 +89,7 @@ export function RewardArt({ reward, size }: { reward: TrackReward; size: number 
   if (reward.kind === 'CHEST') {
     return (
       <span className="ra ra-chest" style={style}>
-        <ChestArt ready={false} tier={reward.tier} size={Math.round(size * 0.8)} />
+        <ChestLive ready={false} tier={reward.tier} size={Math.round(size * 0.8)} />
       </span>
     )
   }

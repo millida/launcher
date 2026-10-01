@@ -1,7 +1,7 @@
 import { Icon } from '../Icon'
 import { Ruby } from '../Ruby'
 import { rubles, type PlusEconomy } from '../../lib/rubies'
-import { ChestArt } from '../daily/ChestArt'
+import { ChestLive } from '../daily/ChestLive'
 import { PLUS_PASS } from '../daily/chestDrops'
 import { gridCols } from './parts'
 import { setScreen } from '../../state/ui'
@@ -50,7 +50,7 @@ export function PlusMonth({ plus, busy, onSubscribe }: { plus: PlusEconomy | nul
         {tiers.map((tier) => (
           <div key={tier} className={'sh-card sh-perk-card tier-' + tier.toLowerCase()}>
             <span className="sh-perk-art">
-              <ChestArt ready={false} tier={tier} size={116} />
+              <ChestLive ready={false} tier={tier} size={116} />
             </span>
             <b className="sh-perk-n">×{PLUS_PASS.chests[tier]}</b>
             <span className="sh-note">{CHEST_WORD[tier]}</span>
