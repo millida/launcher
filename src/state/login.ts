@@ -12,6 +12,8 @@ import { api } from '../lib/api'
 import { flushTelemetry, track, trackFailure } from '../lib/telemetry'
 import { markMillidaEver, millidaEver } from './onboarding'
 import { apiErrorText, isTransientApiError } from '../lib/apiError'
+import { loginPollDelayMs, pokeGate, readLoginChannel } from '../lib/realtimePace'
+import { watchLoginChannel, type LoginWatch } from '../lib/loginRealtime'
 
 interface LauncherInit {
   deviceCode: string
@@ -56,6 +58,8 @@ const openUrlAnywhere = (url: string) => {
 }
 
 let pollTimer: ReturnType<typeof setTimeout> | null = null
+let loginWatch: LoginWatch | null = null
+let loginFlow = 0
 
 /// A code lives 15 minutes on the server, and the server caps how many it hands
 /// out to one address. Every press of the button used to spend a fresh one, so a
@@ -79,6 +83,9 @@ function resetLogin(hint?: string, dropCode = false) {
   if (dropCode) issued = null
   if (pollTimer) clearTimeout(pollTimer)
   pollTimer = null
+  loginFlow += 1
+  loginWatch?.stop()
+  loginWatch = null
   useLogin.getState().set({
     webBusy: false,
     webLabel: IDLE_LABEL,
@@ -178,6 +185,21 @@ export async function startWebLogin(reopen = false) {
 
   const deadline = issued ? issued.deadline : Date.now() + Math.max(60, init.expiresInSec) * 1000
   const intervalMs = Math.max(2, init.intervalSec || 3) * 1000
+  const flow = loginFlow
+  let polling = false
+  const schedule = () => {
+    if (pollTimer) clearTimeout(pollTimer)
+    pollTimer = setTimeout(() => void poll(), loginPollDelayMs(!!loginWatch?.subscribed(), intervalMs))
+  }
+  // The approval push only says "ask now"; the tokens still come from the poll itself.
+  const gate = pokeGate(
+    () => polling,
+    () => {
+      if (flow !== loginFlow) return
+      if (pollTimer) clearTimeout(pollTimer)
+      void poll()
+    },
+  )
 
   const poll = async () => {
     if (Date.now() > deadline) {
@@ -185,9 +207,11 @@ export async function startWebLogin(reopen = false) {
       return
     }
     let r
+    polling = true
     try {
       r = await millidaLoginPoll(init.deviceCode)
     } catch (e) {
+      polling = false
       if (isTransientApiError(e)) {
         pollTimer = setTimeout(() => void poll(), intervalMs)
         return
@@ -220,7 +244,18 @@ export async function startWebLogin(reopen = false) {
       resetLogin('Код устарел — нажми «Войти» ещё раз.', true)
       return
     }
-    pollTimer = setTimeout(() => void poll(), intervalMs)
+    polling = false
+    if (flow !== loginFlow) return
+    const channel = readLoginChannel(r.channel)
+    if (channel && !loginWatch)
+      loginWatch = watchLoginChannel(channel, gate.poke, () => {
+        if (flow === loginFlow && !polling) schedule()
+      })
+    if (gate.take()) {
+      void poll()
+      return
+    }
+    schedule()
   }
 
   pollTimer = setTimeout(() => void poll(), intervalMs)

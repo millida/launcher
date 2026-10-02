@@ -1,12 +1,14 @@
 import { Icon } from './Icon'
 import { stopInstall, useInstalls } from '../state/installs'
+import { useUi } from '../state/ui'
 
-export function Installs() {
+export function Installs({ inLobby = false }: { inLobby?: boolean }) {
   const tasks = useInstalls((s) => s.tasks)
+  const lobbyShown = useUi((s) => s.screen === 'play')
   const list = Object.values(tasks)
-  if (!list.length) return null
+  if (!list.length || lobbyShown !== inLobby) return null
   return (
-    <div className="inst-dock">
+    <div className={inLobby ? 'inst-dock in-lobby' : 'inst-dock'}>
       {list.map((t) => (
         <div key={t.key} className={'inst-card ' + t.state}>
           <Icon id={t.state === 'error' ? 'i-alert' : t.state === 'done' ? 'i-check' : 'i-download'} />

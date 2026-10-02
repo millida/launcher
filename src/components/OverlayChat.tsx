@@ -7,8 +7,10 @@ import { dayKey, dayLabel, isGrouped, isRead } from '../lib/chatGroup'
 import { apiErrorText } from '../lib/apiError'
 import { chatItems, chatKey, chatWhen, unreadOf, type OverlayChatItem } from '../lib/overlayChats'
 import { initSecrets } from '../lib/secure'
-import { isRealtimeLive, onRealtime, retainRealtime } from '../lib/realtime'
+import { isRealtimeLive, onRealtime, onRealtimeData } from '../lib/realtime'
 import { refreshDue } from '../lib/realtimePace'
+import { retainOverlayRealtime } from '../lib/realtimeRelay'
+import { readPresencePush, withPresence } from '../lib/friendsPush'
 import { isOwnMediaUrl } from '../lib/ownMedia'
 import { overlayState } from '../ipc/commands'
 import {
@@ -136,17 +138,13 @@ export function OverlayChat({
     if (openId) void renderChat()
   }, [signal, openId])
 
-  useEffect(() => retainRealtime(), [])
+  useEffect(() => retainOverlayRealtime(), [])
 
   useEffect(() => {
     if (!openId) return
-    let last = 0
-    const refresh = () => {
-      last = Date.now()
-      void renderChat()
-    }
+    const refresh = () => void renderChat()
     const t = setInterval(() => {
-      if (refreshDue(isRealtimeLive(), last, Date.now())) refresh()
+      if (refreshDue(isRealtimeLive())) refresh()
     }, THREAD_POLL_MS)
     const off = onRealtime('friends', refresh)
     return () => {
@@ -156,21 +154,27 @@ export function OverlayChat({
   }, [openId])
 
   useEffect(() => {
-    let last = 0
     const refresh = () => {
-      last = Date.now()
       void loadFriends()
       void loadRooms()
     }
     const t = setInterval(() => {
-      if (refreshDue(isRealtimeLive(), last, Date.now())) refresh()
+      if (refreshDue(isRealtimeLive())) refresh()
     }, LIST_POLL_MS)
     const offFriends = onRealtime('friends', refresh)
     const offPresence = onRealtime('presence', refresh)
+    const offPresenceData = onRealtimeData('presence', (data) => {
+      const u = readPresencePush(data)
+      if (!u) return
+      const next = withPresence(useFriends.getState().friends, u)
+      if (next) useFriends.getState().set({ friends: next })
+      else void loadFriends()
+    })
     return () => {
       clearInterval(t)
       offFriends()
       offPresence()
+      offPresenceData()
     }
   }, [])
 

@@ -6,6 +6,7 @@ import { warmHeads } from '../lib/heads'
 import { trackFailure } from '../lib/telemetry'
 import { getMillidaAccount } from './accounts'
 import { clearRoomUnread } from './rooms'
+import { typingHoldMs, type TypingPush } from '../lib/friendsPush'
 
 export interface Friend {
   userId: string
@@ -506,6 +507,20 @@ export function pingTyping() {
     ? '/friends/rooms/' + encodeURIComponent(s.chatRoom) + '/typing'
     : '/friends/chat/' + encodeURIComponent(s.chatWith) + '/typing'
   void api(url, { method: 'POST' }).catch(() => {})
+}
+
+let typingShownTimer: ReturnType<typeof setTimeout> | undefined
+
+/** "Typing" pushed by the server for the open direct chat; it clears itself when the server's flag would. */
+export function applyTypingPush(t: TypingPush) {
+  const s = useFriends.getState()
+  if (s.chatRoom || s.chatWith !== t.from) return
+  clearTimeout(typingShownTimer)
+  s.set({ chatTyping: true })
+  typingShownTimer = setTimeout(() => {
+    const cur = useFriends.getState()
+    if (!cur.chatRoom && cur.chatWith === t.from) cur.set({ chatTyping: false })
+  }, typingHoldMs(t.until, Date.now()))
 }
 
 export async function openFriendProfile(uid: string, nick: string) {

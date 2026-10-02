@@ -6,7 +6,7 @@ interface Options {
   hiddenMs?: number
   enabled?: boolean
   immediate?: boolean
-  /** A server poke of this topic refreshes at once, and the timer becomes a slow safety net while it is live. */
+  /** A server poke of this topic refreshes at once, and while the socket is live the timer stops. */
   realtime?: RealtimeTopic
 }
 
@@ -17,40 +17,44 @@ export function usePolling(fn: () => void, ms: number, opts: Options = {}) {
 
   useEffect(() => {
     if (!enabled) return
-    let timer: ReturnType<typeof setTimeout>
+    let timer: ReturnType<typeof setTimeout> | undefined
     let stopped = false
 
     const pace = () => realtimePaceMs(!!realtime && isRealtimeLive(), ms)
-    const delay = () => (document.hidden ? hiddenMs : pace())
+    const delay = () => {
+      const p = pace()
+      return p === null ? null : document.hidden ? hiddenMs : p
+    }
+    const arm = (wait: number | null) => {
+      clearTimeout(timer)
+      timer = wait === null ? undefined : setTimeout(tick, wait)
+    }
 
     const tick = () => {
       if (stopped) return
       if (!document.hidden || hiddenMs > 0) saved.current()
-      timer = setTimeout(tick, delay())
+      arm(delay())
     }
 
     const onVisible = () => {
-      if (stopped || document.hidden) return
-      clearTimeout(timer)
+      if (stopped || document.hidden || pace() === null) return
       saved.current()
-      timer = setTimeout(tick, pace())
+      arm(pace())
     }
 
     const rearm = () => {
       if (stopped) return
-      clearTimeout(timer)
-      timer = setTimeout(tick, delay())
+      arm(delay())
     }
 
     const onPoke = () => {
       if (stopped) return
-      clearTimeout(timer)
       saved.current()
-      timer = setTimeout(tick, delay())
+      arm(delay())
     }
 
     if (immediate) saved.current()
-    timer = setTimeout(tick, delay())
+    arm(delay())
     document.addEventListener('visibilitychange', onVisible)
     const offPoke = realtime ? onRealtime(realtime, onPoke) : () => {}
     const offLive = realtime ? onRealtimeLiveChange(rearm) : () => {}

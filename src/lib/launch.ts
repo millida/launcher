@@ -6,7 +6,8 @@ import type { UnlistenFn } from '../ipc/tauri'
 import type { LaunchAuth } from '../ipc/commands'
 import { api, hasMillidaAccount } from './api'
 import { joinPageUrl } from './invite'
-import { beatStatus } from './presence'
+import { beatKey, beatStatus, presenceBeatDue } from './presence'
+import { isPresenceTracked } from './realtime'
 import { effectiveNick, getAccount, launchAuthKind, profileSlug } from '../state/accounts'
 import { ensureMsAuth, startMsLogin } from '../state/msLogin'
 import { uiChoice, uiConfirm } from '../state/confirm'
@@ -118,6 +119,9 @@ function gameNick(): string {
   return acc && acc.nick ? effectiveNick() : ''
 }
 
+let sentBeat: string | null = null
+let sendingBeat: string | null = null
+
 export function heartbeat(status?: string, server?: string | null) {
   const beat = beatStatus(status, !!session, hasTauri())
   if (beat === 'playing' && session && (!status || status === 'lobby'))
@@ -150,23 +154,37 @@ export function heartbeat(status?: string, server?: string | null) {
   // the presence one instead of going out as a second request.
   void Promise.all([presence, liveMeta, catalogPack])
     .then(async ([discordUserId, meta, catalogSlug]) => {
-      const telemetry = await liveBeatPayload(liveStatus, meta).catch(() => null)
-      return api('/friends/presence/heartbeat', {
-        method: 'POST',
-        body: JSON.stringify({
-          status: beat,
-          server: (playing && (server || (session && (session.serverName || session.server)))) || null,
-          serverIp: (playing && session && session.server) || null,
-          build: (playing && session && session.profile) || null,
-          gameNick: (playing && gameNick()) || null,
-          catalogPack: (playing && catalogSlug) || null,
-          discordUserId: discordUserId || null,
-          ...(telemetry ? { telemetry } : {}),
-        }),
-      })
+      const state = {
+        status: beat,
+        server: (playing && (server || (session && (session.serverName || session.server)))) || null,
+        serverIp: (playing && session && session.server) || null,
+        build: (playing && session && session.profile) || null,
+        gameNick: (playing && gameNick()) || null,
+        catalogPack: (playing && catalogSlug) || null,
+        discordUserId: discordUserId || null,
+      }
+      const key = beatKey(state)
+      if (!presenceBeatDue(isPresenceTracked(), key, sentBeat, sendingBeat)) return
+      sendingBeat = key
+      try {
+        const telemetry = await liveBeatPayload(liveStatus, meta).catch(() => null)
+        const r = await api('/friends/presence/heartbeat', {
+          method: 'POST',
+          body: JSON.stringify({ ...state, ...(telemetry ? { telemetry } : {}) }),
+        })
+        sentBeat = key
+        setVerifiedSeconds((r as { verifiedSeconds?: number | null })?.verifiedSeconds ?? null)
+      } finally {
+        if (sendingBeat === key) sendingBeat = null
+      }
     })
-    .then((r: unknown) => setVerifiedSeconds((r as { verifiedSeconds?: number | null })?.verifiedSeconds ?? null))
     .catch(() => {})
+}
+
+/** A fresh socket has to hear the current state once, even when nothing changed since the last beat. */
+export function beatAfterReconnect() {
+  sentBeat = null
+  heartbeat('lobby')
 }
 
 export function ramMbFor(profile: string): number {

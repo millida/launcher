@@ -165,3 +165,9 @@ export function listenGameCrash(handler: (info: CrashInfo) => void): Promise<Unl
   if (!T) return Promise.resolve(null)
   return T.event.listen<CrashInfo>('game-crash', (e) => handler(e.payload)).catch(() => null)
 }
+
+export function listenRealtimeRelay(handler: (payload: unknown) => void): Promise<UnlistenFn | null> {
+  const T = tauri()
+  if (!T) return Promise.resolve(null)
+  return T.event.listen<unknown>('realtime-relay', (e) => handler(e.payload)).catch(() => null)
+}

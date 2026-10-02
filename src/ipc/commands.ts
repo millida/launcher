@@ -799,6 +799,7 @@ export const millidaApi = <T = unknown>(path: string, method: string, body?: unk
 export interface MillidaLoginPoll {
   status: 'pending' | 'ok' | 'denied' | 'expired'
   user?: { id: string; email: string; nickname: string | null } | null
+  channel?: string
 }
 
 // The issued tokens stay in the core vault; only the signed-in user comes back.
@@ -1212,6 +1213,12 @@ export const overlayReady = () => invoke<void>('overlay_ready')
 export const overlayHitAreas = (rects: number[][]) => invoke<void>('overlay_hit_areas', { rects })
 export const overlayOpen = (payload: OverlayCard, toLauncher = false) =>
   invoke<void>('overlay_open', { payload, toLauncher })
+export interface RealtimeRelayState {
+  relay: boolean
+  live: boolean
+}
+export const realtimeRelay = (payload: unknown) => invoke<void>('realtime_relay', { payload })
+export const realtimeRelayState = () => invoke<RealtimeRelayState>('realtime_relay_state')
 
 
 // ---- Shared file store across builds ----

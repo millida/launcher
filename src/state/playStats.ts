@@ -6,6 +6,7 @@ import { api, hasMillidaAccount } from '../lib/api'
 import { useServers } from './servers'
 import { canonAddr } from '../lib/serverAddr'
 import { privacySettings, usePrivacy } from '../lib/privacy'
+import { statsSyncDue } from '../lib/presence'
 
 const EMPTY: PlayStats = {
   total_seconds: 0,
@@ -40,14 +41,15 @@ interface State {
   /** Секунды, которые подтвердил сервер; null — ещё не спрашивали. */
   verifiedSeconds: number | null
   loaded: boolean
-  refresh: () => Promise<void>
+  /** 'due' re-reads the local counter but sends the snapshot only when the in-game period has passed. */
+  refresh: (sync?: 'always' | 'due') => Promise<void>
 }
 
 export const usePlayStats = create<State>((set) => ({
   stats: EMPTY,
   verifiedSeconds: null,
   loaded: false,
-  refresh: async () => {
+  refresh: async (sync = 'always') => {
     if (!hasTauri()) {
       set({ stats: EMPTY, loaded: true })
       return
@@ -55,7 +57,7 @@ export const usePlayStats = create<State>((set) => ({
     try {
       const stats = await getPlayStats()
       set({ stats, loaded: true })
-      void syncPlayStats(stats)
+      if (sync === 'always' || statsSyncDue(syncedAt, Date.now())) void syncPlayStats(stats)
     } catch {
       set({ loaded: true })
     }
@@ -82,7 +84,7 @@ export function watchPlaytimeWhileRunning(running: () => boolean): void {
   if (ticking) return
   ticking = setInterval(() => {
     if (!running()) return
-    void refreshPlayStats()
+    void usePlayStats.getState().refresh('due')
   }, WHILE_PLAYING)
 }
 
@@ -118,6 +120,8 @@ export function rememberServerName(addr: string, name: string) {
 
 const cut = (v: string | null | undefined) => (v ? v.slice(0, 64) : undefined)
 
+let syncedAt = 0
+
 async function syncPlayStats(stats: PlayStats) {
   if (!hasMillidaAccount() || !statsShared() || !stats.total_seconds) return
   try {
@@ -144,5 +148,6 @@ async function syncPlayStats(stats: PlayStats) {
         })),
       }),
     })
+    syncedAt = Date.now()
   } catch {}
 }

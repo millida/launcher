@@ -351,6 +351,8 @@ pub fn run() {
             commands::overlay::overlay_ready,
             commands::overlay::overlay_hit_areas,
             commands::overlay::overlay_open,
+            commands::overlay::realtime_relay,
+            commands::overlay::realtime_relay_state,
             commands::system::dedupe_scan,
             commands::system::dedupe_run,
             commands::system::dedupe_gc,

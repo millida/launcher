@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { BuildIcon } from '../components/playhub/BuildIcon'
+import { Installs } from '../components/Installs'
 import { LobbyCharacter } from '../components/lobby/LobbyCharacter'
 import { EmoteBubble } from '../components/lobby/EmoteBubble'
 import { Recommend } from '../components/lobby/Recommend'
@@ -224,6 +225,9 @@ export function Play({ on }: { on: boolean }) {
       </div>
 
       <div className="lobby-side">
+        {/* Downloads sit above the play card: in the window corner they covered
+            the card on narrow screens. */}
+        <Installs inLobby />
         {/* Над рядом — подпись и мелкие действия сборки; сам ряд — плашка
             режима и «Играть» одной высоты, как в Brawl Stars. */}
         <div className="lobby-side-top">

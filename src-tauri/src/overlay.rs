@@ -379,6 +379,48 @@ pub fn toggle(app: &AppHandle) {
     }
 }
 
+
+/// Socket publications the main window passes to the overlay, so the overlay
+/// does not hold a second realtime connection for the same account.
+pub const RELAY_EVENT: &str = "realtime-relay";
+const RELAY_MAX_BYTES: usize = 32 * 1024;
+static RELAY_ON: AtomicBool = AtomicBool::new(false);
+static RELAY_LIVE: AtomicBool = AtomicBool::new(false);
+
+/// Only friend publications and the socket state may cross windows: call
+/// envelopes and account data stay in the main window.
+fn relay_payload_ok(payload: &serde_json::Value) -> bool {
+    let shape = match payload.get("kind").and_then(|k| k.as_str()) {
+        Some("live") => payload.get("live").is_some_and(|v| v.is_boolean()),
+        Some("catchup") => true,
+        Some("pub") => {
+            matches!(payload.get("topic").and_then(|t| t.as_str()), Some("friends" | "presence"))
+                && payload.get("data").is_some_and(|d| d.is_object())
+        }
+        _ => false,
+    };
+    shape && serde_json::to_vec(payload).is_ok_and(|b| b.len() <= RELAY_MAX_BYTES)
+}
+
+pub fn relay_realtime(app: &AppHandle, payload: serde_json::Value) {
+    if !relay_payload_ok(&payload) {
+        return;
+    }
+    RELAY_ON.store(true, Ordering::SeqCst);
+    if let Some(live) = payload.get("live").and_then(|v| v.as_bool()) {
+        RELAY_LIVE.store(live, Ordering::SeqCst);
+    }
+    if app.get_webview_window(LABEL).is_some() {
+        // A closed overlay has nobody to tell; it asks for the state when it comes back.
+        let _ = app.emit_to(LABEL, RELAY_EVENT, payload);
+    }
+}
+
+/// (the main window relays, its socket is live)
+pub fn relay_state(app: &AppHandle) -> (bool, bool) {
+    let relay = RELAY_ON.load(Ordering::SeqCst) && app.get_webview_window("main").is_some();
+    (relay, RELAY_LIVE.load(Ordering::SeqCst))
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -443,6 +485,47 @@ mod tests {
         ];
         for (given, want, why) in cases {
             assert_eq!(clamp_card_ms(given), want, "clamp_card_ms({given}) must be {want}: {why}");
+        }
+    }
+
+    #[test]
+    fn only_friend_publications_and_socket_state_cross_to_the_overlay() {
+        let big = "x".repeat(RELAY_MAX_BYTES);
+        let cases = [
+            (serde_json::json!({"kind": "live", "live": true}), true, "socket state drives the overlay timers"),
+            (serde_json::json!({"kind": "live", "live": "yes"}), false, "a non-boolean state would be read as live"),
+            (serde_json::json!({"kind": "catchup"}), true, "a reconnect catch-up refreshes the overlay lists once"),
+            (
+                serde_json::json!({"kind": "pub", "topic": "presence", "data": {"t": "presence"}}),
+                true,
+                "friend status is what the overlay rail shows",
+            ),
+            (
+                serde_json::json!({"kind": "pub", "topic": "friends", "data": {"t": "friends"}}),
+                true,
+                "messages and typing refresh the open thread",
+            ),
+            (
+                serde_json::json!({"kind": "pub", "topic": "calls", "data": {"t": "calls"}}),
+                false,
+                "call envelopes carry SDP and must stay in the main window",
+            ),
+            (
+                serde_json::json!({"kind": "pub", "topic": "account", "data": {"t": "account"}}),
+                false,
+                "account pokes have no consumer in the overlay",
+            ),
+            (serde_json::json!({"kind": "pub", "topic": "friends", "data": "x"}), false, "data must be an object"),
+            (
+                serde_json::json!({"kind": "pub", "topic": "friends", "data": {"pad": big}}),
+                false,
+                "an oversized payload is dropped instead of flooding the overlay webview",
+            ),
+            (serde_json::json!({"kind": "eval"}), false, "unknown kinds are refused"),
+            (serde_json::json!("live"), false, "a bare string is not a message"),
+        ];
+        for (payload, want, why) in cases {
+            assert_eq!(relay_payload_ok(&payload), want, "relay_payload_ok({payload}) must be {want}: {why}");
         }
     }
 }

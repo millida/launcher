@@ -15,3 +15,34 @@ export function beatStatus(
   if (asked === 'playing') return 'playing'
   return hasSession && (!asked || asked === 'lobby') ? 'playing' : 'lobby'
 }
+
+export interface BeatState {
+  status: string
+  server: string | null
+  serverIp: string | null
+  build: string | null
+  gameNick: string | null
+  catalogPack: string | null
+  discordUserId: string | null
+}
+
+export function beatKey(s: BeatState): string {
+  return JSON.stringify([s.status, s.server, s.serverIp, s.build, s.gameNick, s.catalogPack, s.discordUserId])
+}
+
+/**
+ * While the socket keeps this launcher in the server's presence, a beat only
+ * carries a change of state; without the socket every beat goes out as before,
+ * because then the beat itself is what keeps the player online and counts hours.
+ */
+export function presenceBeatDue(tracked: boolean, key: string, sent: string | null, sending: string | null): boolean {
+  if (!tracked) return true
+  return key !== sent && key !== sending
+}
+
+/** The play stats snapshot is only a cross-check, so in game it is sent this rarely. */
+export const STATS_SYNC_EVERY_MS = 10 * 60_000
+
+export function statsSyncDue(lastAt: number, now: number): boolean {
+  return now - lastAt >= STATS_SYNC_EVERY_MS
+}

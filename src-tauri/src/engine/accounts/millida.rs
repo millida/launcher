@@ -448,6 +448,22 @@ pub async fn millida_refresh(refresh_token: &str) -> Result<(String, String), St
     Ok((access, next))
 }
 
+/// The socket channel that announces the approval. Only a well-formed name is
+/// passed on: the webview subscribes to it anonymously.
+fn login_channel(value: Option<&Value>) -> Option<String> {
+    let name = value?.as_str()?;
+    let hash = name.strip_prefix("login:")?;
+    let ok = hash.len() == 32 && hash.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'));
+    ok.then(|| name.to_string())
+}
+
+fn login_poll_answer(status: &str, channel: Option<&Value>) -> Value {
+    match login_channel(channel) {
+        Some(channel) if status == "pending" => serde_json::json!({ "status": status, "channel": channel }),
+        _ => serde_json::json!({ "status": status }),
+    }
+}
+
 /// Device-code login. The issued pair goes straight into the vault, so the
 /// webview only ever learns who signed in.
 pub async fn millida_login_poll(device_code: String) -> Result<Value, String> {
@@ -455,7 +471,7 @@ pub async fn millida_login_poll(device_code: String) -> Result<Value, String> {
     let r = millida_api("/auth/launcher/poll".into(), "POST".into(), Some(body), None).await?;
     let status = r["status"].as_str().unwrap_or_default().to_string();
     if status != "ok" {
-        return Ok(serde_json::json!({ "status": status }));
+        return Ok(login_poll_answer(&status, r.get("channel")));
     }
     let access = r["accessToken"].as_str().unwrap_or_default();
     if access.is_empty() {
@@ -472,7 +488,7 @@ pub async fn millida_login_poll(device_code: String) -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        api_url, etag_key, refresh_on_cooldown, remember_in, webview_path_allowed, set_refresh_cooldown, verdict_for,
+        api_url, etag_key, login_poll_answer, refresh_on_cooldown, remember_in, webview_path_allowed, set_refresh_cooldown, verdict_for,
         RefreshVerdict, Tagged, ETAG_CACHE_BUDGET, MILLIDA_API,
     };
     use std::collections::BTreeMap;
@@ -515,6 +531,27 @@ mod tests {
             !cache.contains_key("budget-huge"),
             "an answer larger than a quarter of the budget would evict everything else and is not kept"
         );
+    }
+
+    #[test]
+    fn login_poll_passes_only_a_well_formed_channel() {
+        let hash = "0123456789abcdef0123456789abcdef";
+        let good = format!("login:{hash}");
+        // (status, channel from the server, channel the webview gets, why this case is pinned)
+        let cases: Vec<(&str, serde_json::Value, Option<&str>, &str)> = vec![
+            ("pending", serde_json::json!(good), Some(good.as_str()), "a pending answer names the channel to wait on"),
+            ("pending", serde_json::Value::Null, None, "an older server sends no channel and the launcher keeps polling"),
+            ("denied", serde_json::json!(good), None, "a finished login has nothing left to wait for"),
+            ("pending", serde_json::json!(format!("personal:#{hash}")), None, "only login channels may be joined anonymously"),
+            ("pending", serde_json::json!(format!("login:{}", hash.to_uppercase())), None, "the hash is lower-case hex"),
+            ("pending", serde_json::json!("login:abc"), None, "a short hash is not ours"),
+            ("pending", serde_json::json!(42), None, "a number is not a channel"),
+        ];
+        for (status, channel, want, why) in cases {
+            let answer = login_poll_answer(status, Some(&channel));
+            assert_eq!(answer["status"], status, "the status must pass through unchanged");
+            assert_eq!(answer["channel"].as_str(), want, "channel {channel} with status {status}: {why}");
+        }
     }
 
     #[test]

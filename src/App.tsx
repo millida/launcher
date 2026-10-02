@@ -72,7 +72,7 @@ import { useUi, closeModal, setScreen as gotoScreen, showToast } from './state/u
 import { modalToClose, openLayers } from './lib/escClose'
 import { useWallpaper } from './state/wallpaper'
 import { loadLiveRating } from './state/servers'
-import { appendChatMessage, applyChatMessage, loadFriends, openRoomChat, useFriends } from './state/friends'
+import { appendChatMessage, applyChatMessage, applyTypingPush, loadFriends, openRoomChat, useFriends } from './state/friends'
 import { bumpRoom, loadRooms, nickInRooms, roomById, useRooms, type VoiceMember } from './state/rooms'
 import type {
   ChatAttachment,
@@ -209,10 +209,21 @@ import { autoUpdate, bootUpdate, installUpdateOnExit, updateReady } from './lib/
 import { BootUpdate } from './components/BootUpdate'
 import { Welcome } from './components/Welcome'
 import { ScreenWave } from './components/ScreenWave'
-import { gameSession, heartbeat, ramMbFor, reconcileGameSession, setGameSession, updateSessionServer } from './lib/launch'
+import { beatAfterReconnect, gameSession, heartbeat, ramMbFor, reconcileGameSession, setGameSession, updateSessionServer } from './lib/launch'
 import { POLL_BASE_MS, pollIntervalFrom } from './lib/pollPace'
 import { friendsPollDelayMs, friendsPollWait, pokeGate, refreshDue } from './lib/realtimePace'
-import { isRealtimeLive, onRealtime, onRealtimeLiveChange, retainRealtime } from './lib/realtime'
+import {
+  isPresenceTracked,
+  isRealtimeLive,
+  onRealtime,
+  onRealtimeData,
+  onRealtimeLiveChange,
+  onPresenceModeChange,
+  onRealtimeSettled,
+  retainRealtime,
+} from './lib/realtime'
+import { initRealtimeRelay } from './lib/realtimeRelay'
+import { readPresencePush, readTypingPush, withPresence } from './lib/friendsPush'
 import { hideLauncherToTray, initTray, restoreLauncher, restoreOnGameExit, trayCloseEnabled } from './lib/window'
 import { SESSION_EXPIRED_EVENT, api, hasMillidaAccount } from './lib/api'
 import { hasTauri, tauri } from './ipc/tauri'
@@ -298,6 +309,7 @@ export function App() {
     initInstalls()
     const stopPackAutoUpdate = initPackAutoUpdate()
     const releaseRealtime = retainRealtime()
+    const stopRelay = initRealtimeRelay()
     initCalls()
     void bootUpdate().then((leaving) => {
       if (leaving) return
@@ -354,6 +366,7 @@ export function App() {
     })
     return () => {
       stopPackAutoUpdate()
+      stopRelay()
       releaseRealtime()
       clearInterval(updPoll)
       clearInterval(msPoll)
@@ -430,15 +443,13 @@ export function App() {
   }, [])
 
   useEffect(() => {
-    let last = 0
     const refresh = () => {
       if (document.hidden || useUi.getState().screen !== 'friends') return
-      last = Date.now()
       void loadFriends()
       void loadRooms()
     }
     const t = setInterval(() => {
-      if (refreshDue(isRealtimeLive(), last, Date.now())) refresh()
+      if (refreshDue(isRealtimeLive())) refresh()
     }, 30000)
     const offFriends = onRealtime('friends', refresh)
     const offPresence = onRealtime('presence', refresh)
@@ -460,6 +471,30 @@ export function App() {
       void reconcileGameSession().then(() => heartbeat('lobby'))
     }, 15000)
     const t0 = setTimeout(() => heartbeat('lobby'), 1500)
+    const offSettled = onRealtimeSettled(() => {
+      if (isPresenceTracked()) beatAfterReconnect()
+    })
+    // A rollback or a grant without socket presence hands the beat back to HTTP right away.
+    const offPresenceMode = onPresenceModeChange((tracked) => {
+      if (tracked) {
+        beatAfterReconnect()
+        return
+      }
+      lastBeat = Date.now()
+      void reconcileGameSession().then(() => heartbeat('lobby'))
+    })
+    // Once the socket is gone the server keeps the player online only until the last
+    // presence mark is a minute old, so the HTTP beat has to take over well before that.
+    let dropTimer: ReturnType<typeof setTimeout> | undefined
+    const offLive = onRealtimeLiveChange((live) => {
+      clearTimeout(dropTimer)
+      if (live) return
+      dropTimer = setTimeout(() => {
+        if (isPresenceTracked()) return
+        lastBeat = Date.now()
+        void reconcileGameSession().then(() => heartbeat('lobby'))
+      }, 10_000)
+    })
     syncRunningGame()
     let unlisten: (() => void) | null = null
     const onGameStarted = () => {
@@ -532,6 +567,10 @@ export function App() {
       window.removeEventListener('millida-game-started', onGameStarted)
       clearInterval(t)
       clearTimeout(t0)
+      clearTimeout(dropTimer)
+      offSettled()
+      offPresenceMode()
+      offLive()
       if (unlisten) unlisten()
       if (unServer) unServer()
       if (unCrash) unCrash()
@@ -643,10 +682,8 @@ export function App() {
         }
       }
       inFlight = false
-      timer = setTimeout(
-        loop,
-        friendsPollDelayMs(isRealtimeLive(), serverPollMs, failures, document.hidden, Math.random, waited),
-      )
+      const wait = friendsPollDelayMs(isRealtimeLive(), serverPollMs, failures, document.hidden, Math.random, waited)
+      if (wait !== null) timer = setTimeout(loop, wait)
       if (gate.take()) fire()
     }
     const fire = () => {
@@ -657,11 +694,27 @@ export function App() {
     const gate = pokeGate(() => inFlight, fire)
     const offPoke = onRealtime('friends', gate.poke)
     const offPresencePoke = onRealtime('presence', gate.poke)
+    const offPresenceData = onRealtimeData('presence', (data) => {
+      const u = readPresencePush(data)
+      if (!u) return
+      const before = useFriends.getState().friends
+      const next = withPresence(before, u)
+      if (!next) {
+        gate.poke()
+        return
+      }
+      useFriends.getState().set({ friends: next })
+      notifyPresence(before, next)
+    })
+    const offTyping = onRealtimeData('friends', (data) => {
+      const typing = readTypingPush(data)
+      if (typing) applyTypingPush(typing)
+    })
     const offLive = onRealtimeLiveChange((live) => {
       if (!live) gate.poke()
     })
     const wake = () => {
-      if (document.hidden || inFlight) return
+      if (document.hidden || inFlight || isRealtimeLive()) return
       clearTimeout(timer)
       timer = setTimeout(loop, 200)
     }
@@ -672,6 +725,8 @@ export function App() {
       clearTimeout(timer)
       offPoke()
       offPresencePoke()
+      offPresenceData()
+      offTyping()
       offLive()
       document.removeEventListener('visibilitychange', wake)
     }

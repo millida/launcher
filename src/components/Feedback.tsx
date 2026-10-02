@@ -6,6 +6,8 @@ import { apiErrorText } from '../lib/apiError'
 import { showToast } from '../state/ui'
 import { showReward } from './reward/rewardBus'
 import { track } from '../lib/telemetry'
+import { FEEDBACK_WEEK_MS, rewardOpensAt, rewardReady } from '../lib/feedbackReward'
+import { getMillidaAccount } from '../state/accounts'
 import '../styles/pixel/feedback.css'
 
 /**
@@ -33,15 +35,16 @@ const STAR_WORDS = ['', 'Плохо', 'Так себе', 'Нормально', '
 /** Награда за отзыв — раз в неделю, чтобы отзывы не писали ради осколков. */
 export const FEEDBACK_SHARDS = 50
 const LAST_KEY = 'm-feedback-at'
-const WEEK = 7 * 86400_000
-const STATUS_TTL = 5 * 60_000
+const WEEK = FEEDBACK_WEEK_MS
+const RETRY_AFTER_FAILURE = 5 * 60_000
 
 type FeedbackStatus = { ready: boolean; nextAt?: string }
 type FeedbackAnswer = { granted: boolean; shards: number; nextAt?: string }
 
-/** Ответ сервера о награде; null — ручки ещё нет, решает localStorage. */
-let serverReady: boolean | null = null
-let askedAt = 0
+/** Когда награда снова доступна по ответу сервера; null — ручки ещё нет, решает localStorage. */
+let serverOpensAt: number | null = null
+let askedFor = ''
+let failedAt = 0
 let inflight: Promise<void> | null = null
 
 /** Ручка ещё не выкачена: «http 404» из браузера или «Cannot GET …» от Nest через Tauri. */
@@ -66,7 +69,7 @@ function markFeedback(at = Date.now()) {
 
 /** Сервер знает правду — подтягиваем под неё и localStorage-фолбэк. */
 function applyStatus(ready: boolean, nextAt?: string) {
-  serverReady = ready
+  serverOpensAt = rewardOpensAt(ready, nextAt, Date.now())
   if (ready) {
     try {
       localStorage.removeItem(LAST_KEY)
@@ -77,15 +80,24 @@ function applyStatus(ready: boolean, nextAt?: string) {
   }
 }
 
+/// The answer names when the reward opens, so after the first answer for an
+/// account readiness is a clock comparison, not another request per render.
 function loadStatus(force = false): Promise<void> {
   if (!hasMillidaAccount()) return Promise.resolve()
   if (inflight) return inflight
-  if (!force && Date.now() - askedAt < STATUS_TTL) return Promise.resolve()
-  askedAt = Date.now()
+  const who = getMillidaAccount()?.id || 'millida'
+  const known = askedFor === who && (!failedAt || Date.now() - failedAt < RETRY_AFTER_FAILURE)
+  if (!force && known) return Promise.resolve()
+  if (askedFor !== who) serverOpensAt = null
+  askedFor = who
   inflight = api<FeedbackStatus>('/launcher/feedback')
-    .then((s) => applyStatus(!!s?.ready, s?.nextAt))
+    .then((s) => {
+      failedAt = 0
+      applyStatus(!!s?.ready, s?.nextAt)
+    })
     .catch((e) => {
-      if (isMissing(e)) serverReady = null
+      failedAt = Date.now()
+      if (isMissing(e)) serverOpensAt = null
     })
     .finally(() => {
       inflight = null
@@ -97,7 +109,7 @@ function loadStatus(force = false): Promise<void> {
 export function feedbackRewardReady(): boolean {
   if (!hasMillidaAccount()) return false
   void loadStatus()
-  return serverReady ?? localReady()
+  return serverOpensAt === null ? localReady() : rewardReady(serverOpensAt, Date.now())
 }
 
 function useRewardReady(): boolean {

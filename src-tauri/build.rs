@@ -15,6 +15,7 @@ const OVERLAY_COMMANDS: &[&str] = &[
     "head_avatar",
     "open_url",
     "ui_prefs",
+    "realtime_relay_state",
 ];
 
 /// Те же правила разбора, что и в тесте registered_commands (src/lib.rs):

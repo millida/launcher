@@ -210,6 +210,8 @@ permissions = [
   "allow-overlay-ready",
   "allow-overlay-hit-areas",
   "allow-overlay-open",
+  "allow-realtime-relay",
+  "allow-realtime-relay-state",
   "allow-dedupe-scan",
   "allow-dedupe-run",
   "allow-dedupe-gc",
@@ -254,5 +256,6 @@ permissions = [
   "allow-millida-api",
   "allow-head-avatar",
   "allow-open-url",
-  "allow-ui-prefs"
+  "allow-ui-prefs",
+  "allow-realtime-relay-state"
 ]

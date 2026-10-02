@@ -3,14 +3,25 @@ import { hasTauri } from '../ipc/tauri'
 import { getMillidaAccount, useAccounts } from '../state/accounts'
 import { api, hasMillidaAccount } from './api'
 import { SECRETS_CHANGED_EVENT } from './secure'
+import { realtimeClientInfo } from './telemetry'
 import {
+  REALTIME_CLIENT_NAME,
   REALTIME_ERROR_RETRY_MS,
   REALTIME_OFF_RETRY_MS,
-  REALTIME_TOPICS,
+  RELAY_TOPICS,
+  carriesData,
+  catchUpListeners,
+  needsCatchUp,
   pokeTopic,
+  presenceModeAfter,
+  presenceRollback,
   readRealtimeGrant,
+  realtimeTokenPath,
   type RealtimeGrant,
   type RealtimeTopic,
+  type RelayMessage,
+  socketPresence,
+  type ServerSub,
 } from './realtimePace'
 
 export type { RealtimeTopic } from './realtimePace'
@@ -18,19 +29,25 @@ export type { RealtimeTopic } from './realtimePace'
 type Handler = () => void
 type DataHandler = (data: unknown) => void
 type LiveHandler = (live: boolean) => void
+type RelaySink = (message: RelayMessage) => void
 
 const handlers = new Map<RealtimeTopic, Set<Handler>>()
 const dataHandlers = new Map<RealtimeTopic, Set<DataHandler>>()
 const liveHandlers = new Set<LiveHandler>()
+const settledHandlers = new Set<Handler>()
+const presenceHandlers = new Set<LiveHandler>()
 
 let client: Centrifuge | null = null
 let owner = ''
 let live = false
+let presenceMode = false
+let subs: ServerSub[] = []
 let holders = 0
 let generation = 0
 let opening = false
 let retryTimer: ReturnType<typeof setTimeout> | undefined
 let watching = false
+let relay: RelaySink | null = null
 
 function safely(run: () => void) {
   try {
@@ -41,13 +58,26 @@ function safely(run: () => void) {
 }
 
 function setLive(next: boolean) {
+  if (!next) subs = []
   if (live === next) return
   live = next
+  relay?.({ kind: 'live', live: next })
   liveHandlers.forEach((h) => safely(() => h(next)))
 }
 
 function emit(topic: RealtimeTopic) {
   handlers.get(topic)?.forEach((h) => safely(h))
+}
+
+function deliver(topic: RealtimeTopic, data: unknown) {
+  if (relay && RELAY_TOPICS.includes(topic)) relay({ kind: 'pub', topic, data })
+  dataHandlers.get(topic)?.forEach((h) => safely(() => h(data)))
+  if (!carriesData(topic, data)) emit(topic)
+}
+
+function catchUp() {
+  relay?.({ kind: 'catchup' })
+  catchUpListeners<Handler>(handlers.values()).forEach((h) => safely(h))
 }
 
 export function onRealtime(topic: RealtimeTopic, handler: Handler): () => void {
@@ -75,9 +105,50 @@ export function isRealtimeLive(): boolean {
   return live
 }
 
+/** The server counts this launcher as online from the socket itself, so periodic beats are not needed. */
+export function isPresenceTracked(): boolean {
+  return socketPresence(live, presenceMode)
+}
+
+/** Fires when the HTTP beat timer has to start or may stop while the socket stays as it is. */
+export function onPresenceModeChange(handler: LiveHandler): () => void {
+  presenceHandlers.add(handler)
+  return () => void presenceHandlers.delete(handler)
+}
+
+function setPresenceMode(next: boolean) {
+  const before = isPresenceTracked()
+  presenceMode = next
+  const after = isPresenceTracked()
+  if (before !== after) presenceHandlers.forEach((h) => safely(() => h(after)))
+}
+
+function applyGrant(grant: RealtimeGrant) {
+  setPresenceMode(presenceModeAfter({ kind: 'grant', presence: grant.enabled && grant.presence }))
+}
+
 export function onRealtimeLiveChange(handler: LiveHandler): () => void {
   liveHandlers.add(handler)
   return () => void liveHandlers.delete(handler)
+}
+
+/** Fires after every (re)connect, once the server-side subscriptions are known. */
+export function onRealtimeSettled(handler: Handler): () => void {
+  settledHandlers.add(handler)
+  return () => void settledHandlers.delete(handler)
+}
+
+/** The main window hands friend publications to the overlay so it needs no socket of its own. */
+export function setRealtimeRelay(sink: RelaySink | null) {
+  relay = sink
+  sink?.({ kind: 'live', live })
+}
+
+/** Overlay side of the relay: a relayed message behaves as if it came from a local socket. */
+export function injectRealtime(message: RelayMessage) {
+  if (message.kind === 'live') setLive(message.live)
+  else if (message.kind === 'catchup') catchUp()
+  else deliver(message.topic, message.data)
 }
 
 function wantedOwner(): string {
@@ -86,7 +157,8 @@ function wantedOwner(): string {
 }
 
 async function fetchGrant(): Promise<RealtimeGrant> {
-  return readRealtimeGrant(await api('/realtime/token'))
+  const info = await realtimeClientInfo().catch(() => ({}))
+  return readRealtimeGrant(await api(realtimeTokenPath(info)))
 }
 
 function teardown() {
@@ -102,6 +174,7 @@ function teardown() {
     c.disconnect()
   }
   setLive(false)
+  presenceMode = false
 }
 
 function retryLater(ms: number) {
@@ -110,6 +183,12 @@ function retryLater(ms: number) {
     retryTimer = undefined
     sync()
   }, ms)
+}
+
+function settle(c: Centrifuge) {
+  if (client !== c || !live) return
+  if (needsCatchUp(subs)) catchUp()
+  settledHandlers.forEach((h) => safely(h))
 }
 
 async function open(who: string) {
@@ -128,6 +207,7 @@ async function open(who: string) {
   }
   if (mine !== generation) return
   opening = false
+  applyGrant(grant)
   if (wantedOwner() !== who) {
     sync()
     return
@@ -138,8 +218,11 @@ async function open(who: string) {
   }
   const c = new Centrifuge(grant.url, {
     token: grant.token,
+    name: REALTIME_CLIENT_NAME,
     getToken: async () => {
       const next = await fetchGrant()
+      // The rollout share can change between tokens, so every refresh re-decides socket presence.
+      if (client === c) applyGrant(next)
       if (!next.enabled) throw new UnauthorizedError('realtime disabled')
       return next.token
     },
@@ -149,9 +232,16 @@ async function open(who: string) {
   })
   c.on('connected', () => {
     setLive(true)
-    REALTIME_TOPICS.forEach(emit)
+    // Server-side subscriptions are reported right after 'connected' in the same call.
+    queueMicrotask(() => settle(c))
   })
   c.on('connecting', () => setLive(false))
+  c.on('subscribed', (ctx) => {
+    subs = subs.filter((s) => s.channel !== ctx.channel).concat({ channel: ctx.channel, recovered: ctx.recovered })
+  })
+  c.on('unsubscribed', (ctx) => {
+    subs = subs.filter((s) => s.channel !== ctx.channel)
+  })
   c.on('disconnected', (ctx) => {
     if (client !== c) return
     client = null
@@ -161,10 +251,12 @@ async function open(who: string) {
     retryLater(REALTIME_OFF_RETRY_MS)
   })
   c.on('publication', (ctx) => {
+    if (presenceRollback(ctx.channel, ctx.data)) {
+      setPresenceMode(presenceModeAfter({ kind: 'rollback' }))
+      return
+    }
     const topic = pokeTopic(ctx.channel, ctx.data)
-    if (!topic) return
-    emit(topic)
-    dataHandlers.get(topic)?.forEach((h) => safely(() => h(ctx.data)))
+    if (topic) deliver(topic, ctx.data)
   })
   client = c
   c.connect()

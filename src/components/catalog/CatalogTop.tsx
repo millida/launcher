@@ -38,8 +38,16 @@ export function CatalogFor({
         <Icon id="i-chev-r" />
       </button>
       {build ? (
-        <button type="button" className="facet-reset" data-track={scoped ? 'for_build_all' : 'for_build_fit'} onClick={onToggle}>
-          {scoped ? 'Показать всё' : 'Только подходящее'}
+        <button
+          type="button"
+          className="mk-pill"
+          role="switch"
+          aria-checked={scoped}
+          data-track={scoped ? 'for_build_all' : 'for_build_fit'}
+          onClick={onToggle}
+        >
+          <span className={'tgl sm' + (scoped ? ' on' : '')} aria-hidden="true" />
+          Только подходящее
         </button>
       ) : null}
     </div>

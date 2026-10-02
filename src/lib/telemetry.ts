@@ -318,6 +318,12 @@ export async function liveBeatPayload(
   }
 }
 
+/** What the socket token names this launcher by; the install id stays home when telemetry is off. */
+export async function realtimeClientInfo(): Promise<{ installId: string | null; version: string; os: string }> {
+  const dev = await initDevice()
+  return { installId: telemetryEnabled() ? dev.installId : null, version: dev.appVersion, os: dev.os }
+}
+
 export async function liveBeat(
   status: 'idle' | 'playing',
   meta?: { build?: string | null; mc?: string | null; server?: string | null },

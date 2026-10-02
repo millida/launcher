@@ -1,6 +1,6 @@
 import { loadPlus, type PlusStatus } from '../lib/gameProfile'
 import { isRealtimeLive, onRealtime } from '../lib/realtime'
-import { pokeGate, realtimePaceMs } from '../lib/realtimePace'
+import { pokeGate, purchaseWaitMs } from '../lib/realtimePace'
 
 const EVERY = 5_000
 const GIVE_UP = 15 * 60_000
@@ -38,7 +38,7 @@ export function watchPlusPurchase(onActive: (status: PlusStatus) => void): () =>
       void tick()
       return
     }
-    if (Date.now() - started < GIVE_UP) timer = window.setTimeout(() => void tick(), realtimePaceMs(isRealtimeLive(), EVERY))
+    if (Date.now() - started < GIVE_UP) timer = window.setTimeout(() => void tick(), purchaseWaitMs(isRealtimeLive(), EVERY))
     else stop()
   }
 

@@ -7,6 +7,8 @@ import { purchaseFlow } from '../../lib/purchaseTrack'
 import { getMillidaAccount } from '../../state/accounts'
 import { uiConfirm } from '../../state/confirm'
 import { openModal, showToast } from '../../state/ui'
+import { isRealtimeLive, onRealtime } from '../../lib/realtime'
+import { pokeGate, purchaseWaitMs } from '../../lib/realtimePace'
 import { accessState, livePriceKopecks, newIdempotencyKey, paidVerdict, purchasesFrom, shortfallKopecks, verdictText } from './paid'
 import type { AccessState, Pricing, Purchase } from './paid'
 
@@ -262,26 +264,42 @@ function watchPayment(): void {
   if (watching) return
   watching = true
   let tries = 0
+  let busy = false
   let timer: ReturnType<typeof setTimeout> | undefined
   const tick = async () => {
+    clearTimeout(timer)
     const slugs = Object.keys(usePaid.getState().waiting).filter((k) => usePaid.getState().waiting[k])
     if (!slugs.length) return stop()
-    for (const slug of slugs) {
-      if ((await loadAccess(slug, true)) !== 'open') continue
-      usePaid.setState((s) => ({ waiting: { ...s.waiting, [slug]: false } }))
-      const done = afterOwnedBySlug.get(slug)
-      afterOwnedBySlug.delete(slug)
-      showToast('Подписка оформлена', 'ok', 'achievement')
-      void loadPurchases()
-      if (done) done()
+    busy = true
+    try {
+      for (const slug of slugs) {
+        if ((await loadAccess(slug, true)) !== 'open') continue
+        usePaid.setState((s) => ({ waiting: { ...s.waiting, [slug]: false } }))
+        const done = afterOwnedBySlug.get(slug)
+        afterOwnedBySlug.delete(slug)
+        showToast('Подписка оформлена', 'ok', 'achievement')
+        void loadPurchases()
+        if (done) done()
+      }
+    } finally {
+      busy = false
     }
+    if (gate.take()) return void tick()
     tries += 1
     if (tries >= PAYMENT_WAIT.tries) {
       tries = 0
       return
     }
-    timer = setTimeout(() => void tick(), PAYMENT_WAIT.everyMs)
+    timer = setTimeout(() => void tick(), purchaseWaitMs(isRealtimeLive(), PAYMENT_WAIT.everyMs))
   }
+  const gate = pokeGate(
+    () => busy,
+    () => {
+      tries = 0
+      void tick()
+    },
+  )
+  const offPoke = onRealtime('account', gate.poke)
   const onFocus = () => {
     clearTimeout(timer)
     tries = 0
@@ -290,6 +308,7 @@ function watchPayment(): void {
   const stop = () => {
     clearTimeout(timer)
     window.removeEventListener('focus', onFocus)
+    offPoke()
     watching = false
   }
   window.addEventListener('focus', onFocus)

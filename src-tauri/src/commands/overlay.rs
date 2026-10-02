@@ -108,3 +108,22 @@ pub fn overlay_open(
 pub fn overlay_ready(app: tauri::AppHandle) {
     overlay::drain_pending(&app);
 }
+
+/// The main window passes friend publications on to the overlay.
+#[tauri::command]
+pub fn realtime_relay(app: tauri::AppHandle, payload: serde_json::Value) {
+    overlay::relay_realtime(&app, payload);
+}
+
+#[derive(serde::Serialize)]
+pub struct RealtimeRelayState {
+    pub relay: bool,
+    pub live: bool,
+}
+
+/// The overlay asks whether the main window relays, before opening a socket of its own.
+#[tauri::command]
+pub fn realtime_relay_state(app: tauri::AppHandle) -> RealtimeRelayState {
+    let (relay, live) = overlay::relay_state(&app);
+    RealtimeRelayState { relay, live }
+}
