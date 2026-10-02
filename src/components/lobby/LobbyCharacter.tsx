@@ -47,7 +47,7 @@ interface Look {
   slim: boolean
   cape: string | null
   /** Надетые вещи с уже выбранной текстурой варианта. */
-  items: { item: CosmeticItem; texture: string | undefined }[]
+  items: { item: CosmeticItem; texture: string | undefined; glow?: string }[]
   /** Эмоции для автопоказа в лобби — из каталога, по списку LOBBY_EMOTES. */
   show: CosmeticItem[]
 }
@@ -150,7 +150,7 @@ async function loadLook(nick: string, signedIn: boolean): Promise<Look> {
     if (!item || !item.model) continue
     const list = item.variants ?? []
     const variant = list.find((v) => v.name === w.variant) ?? (list.length ? defaultVariant(list) : null)
-    look.items.push({ item, texture: variant?.texture ?? item.texture })
+    look.items.push({ item, texture: variant?.texture ?? item.texture, glow: variant?.emissive ?? item.emissive })
   }
   return look
 }
@@ -466,6 +466,7 @@ export function LobbyCharacter({ on }: { on: boolean }) {
               got.item.animation,
               got === emote && playing && sequence ? { sequence, clock: () => playing.progress } : undefined,
               pieceCover(outfit, got.item),
+              got.glow,
             )) {
               engine.attachCosmetic(piece.anchor, piece.object)
             }
@@ -561,7 +562,8 @@ export function LobbyCharacter({ on }: { on: boolean }) {
       const playing = pinned(new CosmeticEmote(sequence, file.geometry))
       e.setAnimation(playing as unknown as SkinAnimation)
       const list = item.variants ?? []
-      const texture = (list.length ? defaultVariant(list)?.texture : undefined) ?? item.texture
+      const base = list.length ? defaultVariant(list) : undefined
+      const texture = base?.texture ?? item.texture
       if (texture) {
         try {
           for (const piece of buildCosmetic(
@@ -572,6 +574,7 @@ export function LobbyCharacter({ on }: { on: boolean }) {
             item.animation,
             { sequence, clock: () => playing.progress },
             pieceCover([...(look?.items ?? []).map((x) => x.item), item], item),
+            base?.emissive ?? item.emissive,
           )) {
             e.attachCosmetic(piece.anchor, piece.object)
             props.push(piece)

@@ -46,22 +46,22 @@ export interface DemoCatalogItem {
   access?: string
   staffOnly?: boolean
   /** Расцветки каталога (v3: каждая — отдельная вещь). */
-  variants?: { name: string; color?: string; emissive?: string }[]
+  variants?: { name: string; color?: string; emissive?: string; preview?: string }[]
 }
 
 /** Ранги по порядку: ранг расцветки = ранг вещи + сдвиг стиля (зеркало variants.catalog.ts службы). */
 const RANKS: Rarity[] = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY', 'MYTHIC', 'RELIC']
 const PRISM = /rainbow|prism|galaxy|holo|cosmic|chroma|aurora|void/
 const ELEMENT = /gold|diamond|emerald|amethyst|netherite|obsidian|fire|flame|magma|lava|soul|aether|blood|acid|(^|_)ice($|_)|wither|(^|_)ender|portal|neon|glow|lightning|frost/
-const variantRank = (base: Rarity, name: string, i: number): Rarity => {
+export const variantRank = (base: Rarity, name: string, i: number): Rarity => {
   if (i === 0) return base
   const by = PRISM.test(name) ? 2 : ELEMENT.test(name) ? 1 : 0
   return RANKS[Math.min(RANKS.indexOf('MYTHIC'), Math.max(RANKS.indexOf(base), RANKS.indexOf(base) + by))] || base
 }
 /** Цена ранга v3.1 в рубинах: 150 / 350 / 700 / 1 400 / 2 800 / 5 600; невозможная не продаётся. */
-const RANK_PRICE: Record<Rarity, number> = { COMMON: 150, UNCOMMON: 350, RARE: 700, EPIC: 1400, LEGENDARY: 2800, MYTHIC: 5600, RELIC: 0 }
+export const RANK_PRICE: Record<Rarity, number> = { COMMON: 150, UNCOMMON: 350, RARE: 700, EPIC: 1400, LEGENDARY: 2800, MYTHIC: 5600, RELIC: 0 }
 /** Прод ещё на курсе 5 ₽/рубин: цена вещи в демо — × 7/5. */
-const v3Price = (p: number) => Math.round((p * 7) / 5 / 10) * 10
+export const v3Price = (p: number) => Math.round((p * 7) / 5 / 10) * 10
 
 const HOUR = 3_600_000
 const DAY = 24 * HOUR
@@ -202,7 +202,8 @@ async function build(catalog: DemoCatalogItem[], wallet: { balance: number }, pa
         rarity,
         variant: v.name,
         color: (v.color || '').replace('#', ''),
-        ...(i > 0 && list[0]!.color ? { tintFrom: list[0]!.color.replace('#', '') } : {}),
+        // Своё превью расцветки точнее любой перекраски (как ruby-items.service службы).
+        ...(v.preview ? { preview: v.preview } : i > 0 && list[0]!.color ? { tintFrom: list[0]!.color.replace('#', '') } : {}),
       }
       base = RANK_PRICE[rarity] || base
     }

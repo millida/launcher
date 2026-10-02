@@ -116,7 +116,7 @@ function HubTopTabs() {
         <PxIcon name="chest" size={30} /> Библиотека
       </button>
       <button role="tab" aria-selected={all} className={'btn md tb-tab ' + (all ? 'primary on' : 'secondary')} data-sound="nav" data-track="hub_tab_resources" onClick={() => go(true)}>
-        <PxIcon name="book" size={30} /> Ресурсы
+        <PxIcon name="book" size={30} /> Каталог
       </button>
     </div>
   )

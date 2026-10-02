@@ -7,7 +7,13 @@ import { onRealtime } from '../lib/realtime'
 import { apiErrorText } from '../lib/apiError'
 import {
   buyPack,
+  buySet,
   buyShopCard,
+  loadCases,
+  loadSets,
+  type CaseView,
+  type SetColorwayView,
+  type SetView,
   buyXray,
   claimPackQuest,
   claimWeekly,
@@ -65,6 +71,9 @@ import { topUpFragments } from '../components/shop/topUp'
 import { fragmentWord } from '../components/shop/rarity'
 import { QuestsBlock } from '../components/shop/Quests'
 import { questsToShow } from '../components/shop/packQuests'
+import { SetHero, SetsTab } from '../components/shop/Sets'
+import { CaseOpening, CasesTab, caseTitle } from '../components/shop/Cases'
+import '../styles/pixel/sets.css'
 
 /** Пакеты для гостя — те же пять, что в магазине дня (модель экономики 23.09.2026). */
 
@@ -82,6 +91,24 @@ function insufficientKopecks(e: unknown): number | null {
   return m ? Number(m[1]) : 0
 }
 
+
+/** Страницы магазина: вкладка помнится между заходами. */
+type ShopPage = 'today' | 'sets' | 'cases' | 'tasks' | 'rubies'
+const PAGES: { key: ShopPage; name: string }[] = [
+  { key: 'today', name: 'Сегодня' },
+  { key: 'sets', name: 'Наборы' },
+  { key: 'cases', name: 'Ящики' },
+  { key: 'tasks', name: 'Задания' },
+  { key: 'rubies', name: 'Рубины' },
+]
+const TAB_KEY = 'm-shop-tab'
+function readTab(): ShopPage {
+  try {
+    const v = localStorage.getItem(TAB_KEY)
+    if (PAGES.some((p) => p.key === v)) return v as ShopPage
+  } catch {}
+  return 'today'
+}
 
 /** Вещь каталога — плашка мига награды. */
 const entry = (it: ItemRef): RewardEntry => ({ name: it.name, preview: it.preview, rarity: it.rarity })
@@ -121,6 +148,18 @@ export function Rubies({ on }: { on: boolean }) {
   const [catalog, setCatalog] = useState<Map<string, ItemRef>>(new Map())
   const [wishes, setWishes] = useState<WishList | null>(null)
   const [busy, setBusy] = useState('')
+  const [tab, setTabState] = useState<ShopPage>(readTab)
+  const [sets, setSets] = useState<SetView[] | null>(null)
+  const [setsAt, setSetsAt] = useState('')
+  const [cases, setCases] = useState<CaseView[] | null>(null)
+  const [opening, setOpening] = useState<CaseView | null>(null)
+  const caseResult = useRef<ReturnType<typeof purchaseFlow> | null>(null)
+  const setTab = (next: ShopPage) => {
+    setTabState(next)
+    try {
+      localStorage.setItem(TAB_KEY, next)
+    } catch {}
+  }
   const [error, setError] = useState('')
   const [xray, setXray] = useState<{ tier: XrayOffer['tier']; item: ItemRef | null } | null>(null)
   /** Счётчик в шапке «подпрыгивает», когда в него прилетела награда бонуса. */
@@ -140,6 +179,24 @@ export function Rubies({ on }: { on: boolean }) {
         trackFailure('shop', e, { step: 'load' })
         setError(apiErrorText(e, ERR))
         return null
+      })
+
+  const reloadSets = () =>
+    loadSets()
+      .then((r) => {
+        setSets(r.sets)
+        setSetsAt(r.refreshAt)
+      })
+      .catch((e) => {
+        trackFailure('shop', e, { step: 'sets' })
+        setSets((was) => was ?? [])
+      })
+  const reloadCases = () =>
+    loadCases()
+      .then((r) => setCases(r.cases))
+      .catch((e) => {
+        trackFailure('shop', e, { step: 'cases' })
+        setCases((was) => was ?? [])
       })
 
   const reloadWorkshop = () => void loadWorkshop().then(setWorkshop).catch(() => undefined)
@@ -164,6 +221,8 @@ export function Rubies({ on }: { on: boolean }) {
     void reloadShop().then((d) => {
       if (d) useShopGift.getState().seeWishes(d)
     })
+    void reloadSets()
+    void reloadCases()
     loadWorkshop().then(setWorkshop).catch(() => setWorkshop(null))
     loadWeeklyAny()
       .then((w) => {
@@ -225,13 +284,18 @@ export function Rubies({ on }: { on: boolean }) {
   const balance = day?.balance ?? 0
   const shards = workshop?.shards ?? day?.shards ?? 0
 
-  const toPacks = () => document.getElementById('shopPacks')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  const scrollTo = (id: string) => window.setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80)
+  const toPacks = () => {
+    setTab('rubies')
+    scrollTo('shopPacks')
+  }
 
-  // Прокрутка по просьбе снаружи — один раз, потом якорь сбрасывается.
+  // Прокрутка по просьбе снаружи («Хочу», «Пополнить») — один раз, потом якорь сбрасывается.
   useEffect(() => {
     if (!on || !day || anchor === 'today') return
-    const id = anchor === 'wish' ? 'shop-wish' : anchor === 'rubies' ? 'shopPacks' : 'shop-today'
-    window.setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60)
+    const page: ShopPage = anchor === 'progress' ? 'tasks' : anchor === 'wish' || anchor === 'rubies' ? 'rubies' : 'today'
+    setTab(page)
+    scrollTo(anchor === 'wish' ? 'shop-wish' : anchor === 'rubies' ? 'shopPacks' : 'shop-today')
     useShopGift.getState().setTab('today')
   }, [on, anchor, !!day, !!wishes])
 
@@ -292,6 +356,66 @@ export function Rubies({ on }: { on: boolean }) {
     }
   }
 
+
+  /** Набор целиком: платишь за недостающее, `expect` — цена, которую видел игрок. */
+  const doBuySet = async (set: SetView, way: SetColorwayView) => {
+    if (!signedIn) return logoutToLogin()
+    const result = purchaseFlow('bundle', set.id + (way.name ? '~' + way.name : ''), way.price, 'rubies')
+    if (way.price > balance) {
+      result(false, 'insufficient')
+      showToast('Не хватает ' + (way.price - balance) + ' ' + word(way.price - balance), 'error')
+      return toPacks()
+    }
+    const ok = await uiConfirm('«' + set.title + '» за ' + way.price.toLocaleString('ru-RU') + ' ' + word(way.price), {
+      title: 'Купить набор',
+      confirmLabel: 'Купить',
+      danger: false,
+    })
+    if (!ok) return result(false, 'cancel')
+    setBusy(set.id)
+    try {
+      const res = await buySet(set.id, way.name, way.price)
+      result(true)
+      setDay((d) => (d ? { ...d, balance: res.balance } : d))
+      void reloadSets()
+      void reloadShop()
+      const all = way.items.map((x) => x.item)
+      showReward({ items: res.granted.map(entry), kicker: set.title, onWear: () => wearItems(all) })
+    } catch (e) {
+      result(false, 'error', e)
+      showToast(apiErrorText(e, ERR), 'error')
+      void reloadSets()
+    } finally {
+      setBusy('')
+    }
+  }
+
+  /** Примерить набор: гардероб открывается с ним на фигуре. */
+  const doTrySet = (set: SetView, way: SetColorwayView) =>
+    wearNow(
+      way.items.map((x) => ({ code: x.item.code, variant: x.item.variant })),
+      { fit: true, offer: way.price > 0 ? { setId: set.id, colorway: way.name, title: set.title, price: way.price } : undefined },
+    )
+  const doWearSet = (_set: SetView, way: SetColorwayView) => wearItems(way.items.map((x) => x.item))
+
+  /** Ящик: подтверждение с ценой, потом оверлей сам шлёт запрос в начале анимации. */
+  const doOpenCase = async (c: CaseView) => {
+    if (!signedIn) return logoutToLogin()
+    const result = purchaseFlow('case', c.id, c.price, 'rubies')
+    if (c.price > balance) {
+      result(false, 'insufficient')
+      showToast('Не хватает ' + (c.price - balance) + ' ' + word(c.price - balance), 'error')
+      return toPacks()
+    }
+    const ok = await uiConfirm(caseTitle(c) + ' за ' + c.price.toLocaleString('ru-RU') + ' ' + word(c.price), {
+      title: 'Открыть ящик',
+      confirmLabel: 'Открыть',
+      danger: false,
+    })
+    if (!ok) return result(false, 'cancel')
+    caseResult.current = result
+    setOpening(c)
+  }
 
   const doWish = async (code: string, next: boolean) => {
     // Сердце откликается сразу, ответ службы его только подтверждает.
@@ -405,8 +529,9 @@ export function Rubies({ on }: { on: boolean }) {
       const res = await claimPackQuest(quest.code)
       setQuests((list) => list.map((q) => (q.code === res.quest.code ? res.quest : q)))
       reloadWorkshop()
-      const got = res.granted
-      showToast(got ? '+' + got.amount + ' ' + fragmentWord(got.amount) + ': ' + res.quest.item.name + ' ' + got.have + '/' + got.need : 'Задание выполнено', 'ok')
+      const got = res.item
+      if (got) showReward({ items: [entry(got)], onWear: () => wearItems([got]) })
+      else showToast('Задание выполнено', 'ok')
     } catch (e) {
       trackFailure('shop', e, { step: 'action' })
       showToast(apiErrorText(e, ERR), 'error')
@@ -584,14 +709,14 @@ export function Rubies({ on }: { on: boolean }) {
    * рубины → PLUS → «Хочу» (в самый низ, правка 24.09.2026) → баннер «Код
    * автора» (CreatorCode). Достижений нет (24.09.2026).
    */
-  const feed = day ? (
-    <div className="sh-flow sh-feed">
-      <Guard what="Бонус за вход" silent>
-      <div className="card sh-block sh-pass dp2" id="shop-today" data-section="pass">
-        {on ? <PassBody active={on} inline /> : <span className="skel sh-skel" style={{ height: '420px' }} />}
-      </div>
-      </Guard>
+  const setActs = { balance, busy, onBuy: (st: SetView, w: SetColorwayView) => void doBuySet(st, w), onTry: doTrySet, onWear: doWearSet }
+  const dayList = sets ?? []
+  const daySet = dayList.find((x) => x.ofDay) ?? null
+
+  const todayTab = day ? (
+    <>
       <Guard what="Витрина" silent>
+      <div id="shop-today" data-section="today">
       <Showcase
         featured={day.day.featured}
         deal={day.day.deal}
@@ -601,8 +726,11 @@ export function Rubies({ on }: { on: boolean }) {
         onEnd={reload}
         {...buy}
       />
+      </div>
       </Guard>
-      {/* Наборов нет (решение владельца 24.09.2026, 19:37): каждая вещь — отдельно. */}
+      <Guard what="Набор дня" silent>
+        {daySet ? <SetHero set={daySet} refreshAt={setsAt} onOpen={() => setTab('sets')} onEnd={() => void reloadSets()} {...setActs} /> : null}
+      </Guard>
       <Guard what="Для тебя" silent>
       {day.xray || day.day.forYou.length ? (
         <ForYou
@@ -614,6 +742,16 @@ export function Rubies({ on }: { on: boolean }) {
       ) : null}
       </Guard>
       <Guard what="Ночной рынок" silent>{day.nightMarket ? <NightMarket endsAt={day.nightMarket.endsAt} cards={day.nightMarket.cards} onEnd={reload} {...buy} /> : null}</Guard>
+    </>
+  ) : null
+
+  const tasksTab = (
+    <>
+      <Guard what="Бонус за вход" silent>
+      <div className="card sh-block sh-pass dp2" id="shop-pass" data-section="pass">
+        {on ? <PassBody active={on} inline /> : <span className="skel sh-skel" style={{ height: '420px' }} />}
+      </div>
+      </Guard>
       <Guard what="Задания недели" silent>
       {weekly ? (
         <WeeklyPathBlock data={weekly} busy={busy} onClaim={(at) => void doWeekly(at)} onBoost={(n) => void doWeeklyBoost(n)} />
@@ -624,6 +762,11 @@ export function Rubies({ on }: { on: boolean }) {
       <Guard what="Задания сборок" silent><QuestsBlock quests={quests} busy={busy} onClaim={(q) => void doPackQuest(q)} /></Guard>
       <Guard what="Мастерская" silent>{workshop ? <WorkshopBlock data={workshop} busy={busy} weekly={!!weekly} onCraft={(w) => void doCraft(w)} onTopUp={(f) => void doFragmentsTopUp(f)} /> : null}</Guard>
       <Guard what="Путь" silent>{progress ? <PathBlock data={progress} /> : null}</Guard>
+    </>
+  )
+
+  const rubiesTab = day ? (
+    <>
       <Guard what="Рубины" silent>
       <Packs
         packs={day.packs}
@@ -655,7 +798,7 @@ export function Rubies({ on }: { on: boolean }) {
             wallet={walletKopecks}
             onTopUp={(n) => void doTopUp(n)}
             onCraft={(w: WishEntry) => void doCraft({ item: w.item, cost: w.cost ?? 0 })}
-            onBrowse={() => document.getElementById('shop-today')?.scrollIntoView({ behavior: 'smooth' })}
+            onBrowse={() => setTab('today')}
             {...buy}
           />
         </div>
@@ -664,7 +807,39 @@ export function Rubies({ on }: { on: boolean }) {
       <Guard what="Код автора" silent>
         <CreatorCode />
       </Guard>
-    </div>
+    </>
+  ) : null
+
+  /**
+   * Вкладки (владелец 02.10.2026: «одна лента из двенадцати блоков — ребёнку
+   * непонятно»): Сегодня · Наборы · Ящики · Задания · Рубины. Блоки прежние,
+   * переставлены по смыслу; открытая вкладка помнится.
+   */
+  const feed = day ? (
+    <>
+      <div className="segs sh-tabs" role="tablist" aria-label="Разделы магазина">
+        {PAGES.map((pg) => (
+          <button key={pg.key} role="tab" aria-selected={tab === pg.key} className={'seg' + (tab === pg.key ? ' on' : '')} data-track={'shop_tab_' + pg.key} onClick={() => setTab(pg.key)}>
+            {pg.name}
+          </button>
+        ))}
+      </div>
+      <div className="sh-flow sh-feed" data-tab={tab}>
+        {tab === 'today' ? todayTab : null}
+        {tab === 'sets' ? (
+          <Guard what="Наборы" silent>
+            <SetsTab sets={sets} refreshAt={setsAt} onEnd={() => void reloadSets()} {...setActs} />
+          </Guard>
+        ) : null}
+        {tab === 'cases' ? (
+          <Guard what="Ящики" silent>
+            <CasesTab cases={cases} balance={balance} busy={!!opening} onOpen={(c) => void doOpenCase(c)} />
+          </Guard>
+        ) : null}
+        {tab === 'tasks' ? tasksTab : null}
+        {tab === 'rubies' ? rubiesTab : null}
+      </div>
+    </>
   ) : (
     <div className="sh-flow" aria-hidden="true">
       <span className="skel sh-skel" style={{ height: '420px' }} />
@@ -719,6 +894,37 @@ export function Rubies({ on }: { on: boolean }) {
       ) : (
         feed
       )}
+
+      {opening ? (
+        <CaseOpening
+          view={opening}
+          balance={balance}
+          onBalance={(n) => {
+            setDay((d) => (d ? { ...d, balance: n } : d))
+            caseResult.current?.(true)
+            caseResult.current = null
+          }}
+          onFail={(e) => {
+            setOpening(null)
+            if (e === 'insufficient') {
+              showToast('Не хватает рубинов', 'error')
+              return toPacks()
+            }
+            caseResult.current?.(false, 'error', e)
+            caseResult.current = null
+            showToast(apiErrorText(e, ERR), 'error')
+          }}
+          onDone={() => {
+            void reloadCases()
+            void reloadSets()
+          }}
+          onClose={() => setOpening(null)}
+          onWear={(item) => {
+            setOpening(null)
+            wearItems([item])
+          }}
+        />
+      ) : null}
 
       {xray ? (
         <XrayOpening

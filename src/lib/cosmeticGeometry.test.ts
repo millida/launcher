@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { BODY_HEIGHT, faceRect, readCosmeticMesh } from './cosmeticGeometry'
+import { BODY_HEIGHT, faceOutside, faceRect, readCosmeticMesh } from './cosmeticGeometry'
 
 const cube = (over: Record<string, unknown> = {}) => ({
   format_version: '1.12.0',
@@ -110,5 +110,18 @@ describe('модель косметики', () => {
     expect(empty!.bones[0]!.quads).toHaveLength(0)
     expect(readCosmeticMesh({})).toBeNull()
     expect(readCosmeticMesh(null)).toBeNull()
+  })
+
+  it('грань с развёрткой целиком за краем текстуры не рисуется, частично за краем - рисуется', () => {
+    // Куб 2x2x2 с углом развёртки у правого края 64x64: west/north внутри, east/south
+    // наполовину, а up/down и всё, что правее 64, - целиком за краем.
+    expect(faceOutside([64, 0, 66, 2], 64, 64)).toBe(true)
+    expect(faceOutside([62, 0, 66, 2], 64, 64)).toBe(false)
+    expect(faceOutside([0, 64, 4, 70], 64, 64)).toBe(true)
+    expect(faceOutside([4, 0, 0, 4], 64, 64)).toBe(false)
+    const mesh = readCosmeticMesh(cube({ uv: [0, 62] }))!
+    // При uv [0,62] верх и низ (v 62..64) внутри, бока (v 64..66) целиком под краем.
+    expect(mesh.bones[0]!.quads).toHaveLength(2)
+    expect(readCosmeticMesh(cube())!.bones[0]!.quads).toHaveLength(6)
   })
 })

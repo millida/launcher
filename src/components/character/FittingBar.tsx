@@ -44,6 +44,7 @@ export function FittingBar({
   onTopUp,
   onWear,
   onPlus,
+  offer,
 }: {
   pieces: SetPiece[]
   /** Сумма за вещи, которые продаются за рубины. */
@@ -64,6 +65,8 @@ export function FittingBar({
   onWear: () => void
   /** В сете есть вещи PLUS, а подписки нет. */
   onPlus?: () => void
+  /** Примеряется набор магазина: «Докупить набор» со скидкой набора. */
+  offer?: { price: number; onBuy: () => void }
 }) {
   if (!pieces.length) return null
   const short = Math.max(0, total - rubies)
@@ -112,6 +115,13 @@ export function FittingBar({
         ))}
       </div>
       <div className="ch-fit-buy">
+        {offer && !needLogin ? (
+          <button className="btn md primary" disabled={busy} data-track="set_buy_fitting" onClick={offer.onBuy}>
+            Докупить набор
+            <Ruby size={14} />
+            {offer.price}
+          </button>
+        ) : null}
         {total > 0 ? (
           needLogin ? (
             <button className="btn md primary" disabled={busy} data-track="login" onClick={onBuy}>
@@ -125,7 +135,7 @@ export function FittingBar({
               {short}
             </button>
           ) : (
-            <button className="btn md primary" disabled={busy} data-track="fitting_buy" onClick={onBuy}>
+            <button className={'btn md ' + (offer ? 'secondary' : 'primary')} disabled={busy} data-track="fitting_buy" onClick={onBuy}>
               {busy ? (
                 'Покупаем…'
               ) : (

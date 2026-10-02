@@ -79,19 +79,20 @@ import { defaultVariant } from '../lib/cosmeticVariants'
 import { starredFirst, starredIds, toggleStar } from '../state/cosmeticStars'
 import { readAnimations } from '../lib/cosmeticAnimation'
 import { loadShowcase, showcaseSkinUrl, type ShowcaseCard, type ShowcaseKind } from '../lib/skinShowcase'
-import { buyCosmetic, loadBalance } from '../lib/rubies'
+import { buyCosmetic, buySet, loadBalance, loadSets, type SetColorwayView, type SetView } from '../lib/rubies'
 import { onRealtime } from '../lib/realtime'
 import { useVariantPreview } from '../lib/variantArt'
 import { uiConfirm } from '../state/confirm'
 import { watchPlusPurchase } from '../state/plusWatch'
 import { PlusCelebration } from '../components/PlusCelebration'
-import { useWearIntent } from '../state/wearIntent'
+import { useWearIntent, type SetOffer } from '../state/wearIntent'
 import { ChipRow, SectionBar } from '../components/character/Sections'
 import type { Section } from '../components/character/Sections'
 import { ItemGrid, ItemTile } from '../components/character/ItemTile'
 import { FittingBar } from '../components/character/FittingBar'
 import { nametagSpot } from '../components/character/Nametag'
 import { Outfits } from '../components/character/Outfits'
+import { SetLooks } from '../components/character/SetLooks'
 import {
   addOutfit,
   loadOutfits,
@@ -146,6 +147,7 @@ const EARNED_BY: Record<string, string> = {
   SEASON: 'Сезон',
   PLUS_MONTH: 'PLUS',
   WELCOME: 'Подарок',
+  LEGACY: 'Снято с продажи',
 }
 
 const onSale = (c: CosmeticItem) => c.access === 'PURCHASE' && (c.priceRubies ?? 0) > 0
@@ -795,6 +797,10 @@ export function Skins({ on }: { on: boolean }) {
    * сама по себе, и решение принимают по всему набору.
    */
   const [fitting, setFitting] = useState<CosmeticItem[]>([])
+  /** Наборы магазина (раздел «Образы → Наборы») и набор, который сейчас примеряется. */
+  const [setList, setSetList] = useState<SetView[]>([])
+  const [setOffer, setSetOffer] = useState<SetOffer | null>(null)
+  const [setBusy, setSetBusy] = useState('')
   const [fitLoading, setFitLoading] = useState<string[]>([])
   const [variantById, setVariantById] = useState<Record<string, string>>({})
   const [emoting, setEmoting] = useState(false)
@@ -947,6 +953,7 @@ export function Skins({ on }: { on: boolean }) {
   // гардероб открывается на разделе вещи.
   useEffect(() => {
     if (!wearRefs || !cosReady || !cosmetics.length) return
+    const { fit, offer } = useWearIntent.getState()
     useWearIntent.getState().set(null)
     const items = wearRefs.flatMap((r) => {
       const same = cosmetics.filter((c) => c.id === r.code || c.baseId === r.code)
@@ -964,8 +971,10 @@ export function Skins({ on }: { on: boolean }) {
         pickSection(sec.key)
       }
     }
-    const mine = items.filter((c) => !cosmeticLocked(c))
-    const other = items.filter((c) => cosmeticLocked(c))
+    // «Примерить набор»: на фигуру встаёт всё, даже своё, и рядом «Докупить набор».
+    const mine = fit ? [] : items.filter((c) => !cosmeticLocked(c))
+    const other = fit ? items : items.filter((c) => cosmeticLocked(c))
+    if (fit) setSetOffer(offer)
     if (other.length) setFitting((now) => now.filter((c) => !other.some((o) => o.slot === c.slot)).concat(other))
     if (!mine.length) return
     const next = worn
@@ -1010,6 +1019,7 @@ export function Skins({ on }: { on: boolean }) {
   }
 
   const textureOf = (item: CosmeticItem) => variantOf(item)?.texture ?? item.texture
+  const glowOf = (item: CosmeticItem) => variantOf(item)?.emissive ?? item.emissive
 
   // Примеряемое вытесняет надетое на том же месте: на голове не может быть
   // двух шляп, и показывать обе - врать о том, как это будет выглядеть.
@@ -1056,7 +1066,8 @@ export function Skins({ on }: { on: boolean }) {
       const item = cosmetics.find((c) => c.id === id)
       if (item && item.access !== 'FREE' && !cosmeticOwned.includes(item.id)) bySlot.set(item.slot, item)
     }
-    setFitting(Array.from(bySlot.values()))
+    // Примерка, пришедшая снаружи (набор, «Примерить»), уже на фигуре — её не затираем.
+    setFitting((now) => (now.length ? now : Array.from(bySlot.values())))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cosmetics, fitKey])
   useEffect(() => {
@@ -2007,6 +2018,7 @@ export function Skins({ on }: { on: boolean }) {
               got.item.animation,
               got === emote && playing && sequence ? { sequence, clock: () => playing.progress } : undefined,
               pieceCover(dressed, got.item),
+              glowOf(got.item),
             )) {
               engine.attachCosmetic(piece.anchor, piece.object)
             }
@@ -2738,6 +2750,105 @@ export function Skins({ on }: { on: boolean }) {
     })
   }
 
+  const reloadSets = () => loadSets().then((r) => setSetList(r.sets)).catch(() => setSetList([]))
+  useEffect(() => {
+    if (section === 'looks' && hasMillidaAccount()) void reloadSets()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [section, cosReady])
+  // Примерка кончилась — «Докупить набор» тоже.
+  useEffect(() => {
+    if (!fitting.length) setSetOffer(null)
+  }, [fitting.length])
+
+  /**
+   * Набор из магазина одним нажатием: все свои вещи расцветки встают на игрока
+   * (вытесняя вещи в тех же слотах), одним applyCosmetics, как образ. Чего не
+   * хватает — примеркой на фигуре с кнопкой «Докупить набор».
+   */
+  const wearSet = async (set: SetView, way: SetColorwayView) => {
+    if (cosmeticBusy || setBusy) return
+    const find = (list: SetColorwayView['items']) =>
+      list.map((x) => cosmetics.find((c) => c.id === x.item.code)).filter((c): c is CosmeticItem => !!c)
+    const mine = find(way.items.filter((x) => x.owned))
+    const missing = find(way.items.filter((x) => !x.owned))
+    if (!mine.length) return
+    const next = worn
+      .filter((w) => !mine.some((c) => c.slot === w.slot))
+      .concat(mine.map((c) => ({ id: c.id, slot: c.slot, variant: variantOf(c)?.name })))
+    setSetBusy(set.id)
+    try {
+      await applyCosmetics(next)
+      setWorn(next)
+      setFitting((now) => now.filter((c) => !mine.some((m) => m.slot === c.slot) && !missing.some((m) => m.slot === c.slot)).concat(missing))
+      setSetOffer(missing.length && way.price > 0 ? { setId: set.id, colorway: way.name, title: set.title, price: way.price } : null)
+      if (missing.length) showToast('«' + set.title + '» надет: ' + mine.length + ' из ' + way.items.length, 'ok')
+      else showReward({ level: 'small', items: [{ name: set.title, icon: 'looks' }], title: '«' + set.title + '» надет' })
+    } catch (e) {
+      trackFailure('skins', e, { step: 'set_wear' })
+      showToast(apiErrorText(e, 'Набор надет не целиком'), 'error')
+    } finally {
+      setSetBusy('')
+    }
+  }
+
+  /** «Докупить набор»: платишь за недостающее, потом весь набор сразу на игроке. */
+  const buySetOffer = async () => {
+    const offer = setOffer
+    if (!offer || cosmeticBusy) return
+    const set = setList.find((x) => x.id === offer.setId)
+    const way = set?.colorways.find((c) => c.name === offer.colorway)
+    const price = way?.price ?? offer.price
+    if (price <= 0) return
+    const result = purchaseFlow('bundle', offer.setId + (offer.colorway ? '~' + offer.colorway : ''), price, 'rubies')
+    if (price > rubies) {
+      result(false, 'insufficient')
+      showToast('Не хватает ' + (price - rubies) + ' ' + rubyWord(price - rubies), 'error')
+      return setScreen('rubies')
+    }
+    const ok = await uiConfirm('«' + offer.title + '» за ' + price + ' ' + rubyWord(price) + '. Купить и надеть?', {
+      title: 'Докупить набор',
+      confirmLabel: 'Купить',
+      cancelLabel: 'Не сейчас',
+      danger: false,
+    })
+    if (!ok) return result(false, 'cancel')
+    setCosmeticBusy('fitting')
+    try {
+      const res = await buySet(offer.setId, offer.colorway, price)
+      result(true)
+      const got = res.granted.map((g) => g.code)
+      setCosmeticOwned((now) => Array.from(new Set(now.concat(got))))
+      const owned = await loadCosmeticOwned().catch(() => null)
+      if (owned) setCosmeticOwned(Array.from(new Set(owned.items.concat(got))))
+      setRubies(res.balance)
+      const all = (way?.items ?? [])
+        .map((x) => cosmetics.find((c) => c.id === x.item.code))
+        .filter((c): c is CosmeticItem => !!c)
+      const next = worn
+        .filter((w) => !all.some((c) => c.slot === w.slot))
+        .concat(all.map((c) => ({ id: c.id, slot: c.slot, variant: variantOf(c)?.name })))
+      try {
+        await applyCosmetics(next)
+        setWorn(next)
+        setFitting([])
+      } catch (e) {
+        showToast(apiErrorText(e, 'Куплено, но не наделось — нажми на набор'), 'error')
+      }
+      setSetOffer(null)
+      void reloadSets()
+      showReward({
+        items: res.granted.map((g) => ({ name: g.name, preview: g.preview, rarity: g.rarity })),
+        kicker: offer.title,
+      })
+    } catch (e) {
+      result(false, 'error', e)
+      showToast(apiErrorText(e, 'Не удалось купить набор'), 'error')
+      void reloadSets()
+    } finally {
+      setCosmeticBusy('')
+    }
+  }
+
   /**
    * Надеть образ. Порядок важен: сначала скин — applyToMillida заново ставит
    * на аккаунт плащ, выбранный до нажатия, и плащ образа должен лечь после
@@ -3365,6 +3476,14 @@ export function Skins({ on }: { on: boolean }) {
             onBuy={() => (!hasMillidaAccount() ? logoutToLogin() : void buyFitting())}
             onTopUp={() => setScreen('rubies')}
             onWear={() => void wearFitting()}
+            offer={
+              setOffer
+                ? {
+                    price: setList.find((x) => x.id === setOffer.setId)?.colorways.find((c) => c.name === setOffer.colorway)?.price ?? setOffer.price,
+                    onBuy: () => (!hasMillidaAccount() ? logoutToLogin() : void buySetOffer()),
+                  }
+                : undefined
+            }
             onPlus={
               !plus?.active && fitting.some((c) => c.access === 'PLUS' && cosmeticLocked(c))
                 ? () => void startPlus()
@@ -3442,6 +3561,9 @@ export function Skins({ on }: { on: boolean }) {
           {section === 'skin' ? (
             skinPanel
           ) : section === 'looks' ? (
+            <>
+            <SetLooks sets={setList} busy={setBusy} onWear={(st, w) => void wearSet(st, w)} />
+            {setList.some((x) => x.colorways.some((c) => c.have > 0)) ? <h3 className="ch-bar-title ch-sub">Мои</h3> : null}
             <Outfits
               list={outfits}
               activeId={activeOutfit}
@@ -3453,6 +3575,7 @@ export function Skins({ on }: { on: boolean }) {
               onRename={(id, name) => keepOutfits(renameOutfit(outfits, id, name))}
               onRemove={dropOutfit}
             />
+            </>
           ) : section === 'cape' ? (
             capePanel
           ) : (

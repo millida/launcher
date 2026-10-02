@@ -6,6 +6,7 @@ import {
   Group,
   Mesh,
   MeshLambertMaterial,
+  type Texture,
   NearestFilter,
   Object3D,
   Quaternion,
@@ -169,6 +170,12 @@ export interface EmoteTimeline {
   clock(): number
 }
 
+function pixelated(texture: Texture) {
+  texture.magFilter = NearestFilter
+  texture.minFilter = NearestFilter
+  texture.colorSpace = SRGBColorSpace
+}
+
 export function buildCosmetic(
   model: unknown,
   textureUrl: string,
@@ -177,6 +184,7 @@ export function buildCosmetic(
   clipName?: string,
   timeline?: EmoteTimeline,
   cover?: PieceCover,
+  glowUrl?: string,
 ): CosmeticPiece[] {
   const mesh = readCosmeticMesh(model, cosmeticInflate(slot))
   if (!mesh) return []
@@ -195,14 +203,24 @@ export function buildCosmetic(
       ready.needsUpdate = true
     }
   })
-  texture.magFilter = NearestFilter
-  texture.minFilter = NearestFilter
-  texture.colorSpace = SRGBColorSpace
+  pixelated(texture)
+  // Неоновые вещи держат цвет в карте свечения, а основная картинка у них
+  // почти чёрная: без неё на фигуре они выходят тёмными пятнами. Лента
+  // кадров у свечения та же, что у основной картинки, — двигаем их вместе.
+  const glow = glowUrl
+    ? new TextureLoader().load(glowUrl, (ready) => {
+        ready.repeat.copy(texture.repeat)
+        ready.offset.copy(texture.offset)
+        ready.needsUpdate = true
+      })
+    : null
+  if (glow) pixelated(glow)
   const material = new MeshLambertMaterial({
     map: texture,
     transparent: true,
     alphaTest: 0.05,
     side: DoubleSide,
+    ...(glow ? { emissive: 0xffffff, emissiveMap: glow } : {}),
   })
 
   const rig = buildRig(mesh)
@@ -259,6 +277,10 @@ export function buildCosmetic(
         if (texture.offset.y !== offset) {
           texture.offset.y = offset
           texture.needsUpdate = true
+          if (glow) {
+            glow.offset.y = offset
+            glow.needsUpdate = true
+          }
         }
       }
       const at = timeline ? timeline.clock() : seconds

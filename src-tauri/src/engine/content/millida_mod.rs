@@ -292,6 +292,24 @@ pub fn millida_mod_enabled() -> bool {
     enabled_at(&disabled_file())
 }
 
+/// Игрок выключил статистику в лаунчере: мод в игре тоже молчит. Флаг живёт
+/// файлом, потому что игру запускает Rust, а выключатель - в интерфейсе.
+fn telemetry_off_file() -> PathBuf {
+    data_dir().join("telemetry-off")
+}
+
+pub fn game_telemetry_enabled() -> bool {
+    enabled_at(&telemetry_off_file())
+}
+
+pub fn set_game_telemetry_enabled(on: bool) -> Result<(), String> {
+    if on {
+        turn_on_at(&telemetry_off_file())
+    } else {
+        turn_off_at(&telemetry_off_file())
+    }
+}
+
 /// Отсутствие файла - это «включено»: у тех, кто не трогал настройку, файла нет,
 /// и мод обязан ставиться сам.
 fn enabled_at(file: &Path) -> bool {

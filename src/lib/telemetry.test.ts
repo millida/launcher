@@ -34,6 +34,7 @@ let manual = false
 mock.module('../ipc/tauri', () => ({ hasTauri: () => true }))
 mock.module('../ipc/commands', () => ({
   appVersion: async () => '2.0.1',
+  setGameTelemetry: async () => {},
   deviceSpecs: async () => ({ os: 'windows', os_version: '11', arch: 'x86_64' }),
   millidaApi: (path: string, _m: string, body: Batch) => {
     if (path !== '/launcher/telemetry') return Promise.resolve({})

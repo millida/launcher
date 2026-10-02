@@ -1543,6 +1543,9 @@ pub async fn install_and_launch_in(
         if let Some(token) = &mod_token {
             cmd.env("MILLIDA_TOKEN", token);
         }
+        if !game_telemetry_enabled() {
+            cmd.env("MILLIDA_TELEMETRY", "0");
+        }
         cmd
     };
     // Одна повторная попытка: занятый антивирусом java.exe — через паузу,

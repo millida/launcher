@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Icon } from './Icon'
 import { hasTauri } from '../ipc/tauri'
-import { applyCrashFix, openProfileFolder, openUrl } from '../ipc/commands'
+import { applyCrashFix, listContent, listProfiles, openProfileFolder, openUrl } from '../ipc/commands'
+import type { CrashInfo } from '../ipc/events'
 import { copyText } from '../lib/clipboard'
 import { showToast } from '../state/ui'
 import { NOTHING_TO_REPAIR, modFixOf, repairChangedFiles, runRepair } from '../lib/repair'
@@ -9,6 +10,10 @@ import { useCrash } from '../state/crash'
 import { backdropClose } from '../lib/dismiss'
 import { buildCrashReport, shareCrashLog } from '../lib/crashSupport'
 import { SUPPORT_URL } from '../lib/api'
+import { crashAskBody, crashDisableOffers } from '../lib/crashAi'
+import { milliCrash } from '../lib/milli'
+import { useHasMillida } from '../state/auth'
+import { Milli } from './milli/Milli'
 
 const SUPPORT_ACT = 'support'
 
@@ -132,6 +137,8 @@ export function CrashModal() {
           </div>
         ) : null}
 
+        <CrashAi info={info} />
+
         {/* Both ways out are full-width and equally loud. Support used to be no
             way out at all: the dialog offered a repair and a folder, and a
             player who could not fix it himself simply closed the window — he
@@ -208,5 +215,87 @@ export function CrashModal() {
         </div>
       </div>
     </div>
+  )
+}
+
+type CrashAiState =
+  | { step: 'idle' }
+  | { step: 'asking' }
+  | { step: 'done'; explain: string; steps: string[]; offers: { file: string; title: string }[] }
+
+/**
+ * «Спросить ИИ»: Милли читает лог и список модов сборки, объясняет вылет
+ * простыми словами и предлагает отключить виновный мод одной кнопкой. Нужен
+ * аккаунт Millida — у Милли свой суточный лимит на игрока.
+ */
+function CrashAi({ info }: { info: CrashInfo }) {
+  const hasMillida = useHasMillida()
+  const [state, setState] = useState<CrashAiState>({ step: 'idle' })
+  const [disabling, setDisabling] = useState('')
+
+  useEffect(() => setState({ step: 'idle' }), [info])
+
+  if (!hasMillida || !hasTauri()) return null
+
+  const ask = async () => {
+    setState({ step: 'asking' })
+    try {
+      const [mods, profiles] = await Promise.all([listContent(info.profile, 'mod'), listProfiles().catch(() => [])])
+      const profile = profiles.find((p) => p.name === info.profile) ?? null
+      const answer = await milliCrash(crashAskBody(info, mods, profile))
+      setState({ step: 'done', explain: answer.explain, steps: answer.steps, offers: crashDisableOffers(answer, mods) })
+    } catch (e) {
+      showToast('Милли не смогла разобрать вылет: ' + e, 'error')
+      setState({ step: 'idle' })
+    }
+  }
+
+  if (state.step !== 'done') {
+    return (
+      <div className="crash-fixes">
+        <button className="btn md secondary" data-track="crash_ai" disabled={state.step === 'asking'} onClick={() => void ask()}>
+          <Milli size={20} mode={state.step === 'asking' ? 'think' : 'idle'} /> {state.step === 'asking' ? 'Милли читает лог…' : 'Спросить ИИ'}
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <div className="crash-plan" aria-live="polite">
+        <span>Милли: {state.explain}</span>
+        {state.steps.length ? (
+          <ul>
+            {state.steps.map((s) => (
+              <li key={s}>{s}</li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+      {state.offers.length ? (
+        <div className="crash-fixes">
+          {state.offers.map((o) => (
+            <button
+              key={o.file}
+              className="btn sm secondary"
+              data-track="crash_ai_disable"
+              disabled={disabling !== ''}
+              onClick={() => {
+                setDisabling(o.file)
+                applyCrashFix(info.profile, 'disable-mod', o.file)
+                  .then((msg) => {
+                    showToast(msg, 'ok')
+                    setState({ ...state, offers: state.offers.filter((x) => x.file !== o.file) })
+                  })
+                  .catch((e) => showToast('' + e, 'error'))
+                  .finally(() => setDisabling(''))
+              }}
+            >
+              {disabling === o.file ? 'Отключаем…' : `Отключить «${o.title}»`}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </>
   )
 }

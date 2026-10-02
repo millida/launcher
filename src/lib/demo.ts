@@ -19,7 +19,8 @@
 import { demoClaim, demoStatus, liveItems } from '../components/daily/demoTrack'
 import { demoOpen, isTier } from '../components/daily/chestDrops'
 import type { DailyClaim } from './rubies'
-import { demoEconomy } from '../components/shop/demoShop'
+import { demoEconomy, type DemoCatalogItem } from '../components/shop/demoShop'
+import { demoSets } from '../components/shop/demoSets'
 
 const demoParam = (): boolean => {
   try {
@@ -401,6 +402,28 @@ const economy = demoEconomy({
   packs: async () => V3_PACKS,
 })
 
+/** Наборы и кейсы (02.10.2026): тот же кошелёк, покупки видны в /cosmetics/owned. */
+const setsDemo = demoSets({
+  catalog: async () => (await catalogItems()) as DemoCatalogItem[],
+  wallet: RUBY_BALANCE,
+  ownedBases: ownedCodes,
+})
+
+/** Права демо-игрока: прежние вещи во всех расцветках + купленное наборами и кейсами. */
+async function ownedWithVariants() {
+  await setsDemo.ready()
+  const base = await ownedCodes()
+  const cat = (await catalogItems()) as DemoCatalogItem[]
+  const variants: Record<string, string[]> = {}
+  for (const code of base) {
+    const names = (cat.find((x) => x.id === code)?.variants || []).map((v) => v.name).filter(Boolean)
+    if (names.length) variants[code] = names
+  }
+  const extra = setsDemo.boughtVariants()
+  for (const code of Object.keys(extra)) variants[code] = Array.from(new Set([...(variants[code] || []), ...extra[code]!]))
+  return { items: Array.from(new Set([...base, ...setsDemo.boughtBases()])), variants }
+}
+
 async function inventory() {
   const owned = await ownedCodes()
   const items = await catalogItems()
@@ -630,6 +653,11 @@ const ROUTES: [RegExp, Handler][] = [
   [/^\/rubies\/daily\/claim$/, async (_p, _m, body) =>
     dailyCredit(demoClaim(await daily(), RUBY_BALANCE.balance, body && body.day ? { day: Number(body.day), row: body.row === 'plus' ? 'plus' : 'free' } : null))],
   [/^\/rubies\/daily\/claim-all$/, async () => dailyCredit(demoClaim(await daily(), RUBY_BALANCE.balance, 'all'))],
+  [/^\/rubies\/sets$/, () => setsDemo.sets()],
+  [/^\/rubies\/sets\/buy$/, (_p, _m, body) => setsDemo.buy(body || {})],
+  [/^\/rubies\/cases$/, () => setsDemo.cases()],
+  [/^\/rubies\/cases\/open$/, (_p, _m, body) => setsDemo.open(body || {})],
+  [/^\/rubies\/cases\/[^/]+$/, (p) => setsDemo.contents(decodeURIComponent(bare(p).split('/').pop() || ''))],
   [/^\/rubies\/wishlist$/, () => economy.wishlist()],
   [/^\/rubies\/topup$/, (_p, _m, body) => economy.topup(body || {})],
   // Сундуки не копятся: открытые исчезают. Бонус сундуков больше не даёт.
@@ -675,7 +703,7 @@ const ROUTES: [RegExp, Handler][] = [
   [/^\/rubies\/progress\/[^/]+\/claim$/, () => ({ code: 'h25', title: 'Двадцать пять часов', hours: 25, hoursDone: 25, chest: 'RARE', rubies: 150, done: true, claimed: true })],
 
   // Косметика
-  [/^\/cosmetics\/owned$/, async () => ({ items: await ownedCodes() })],
+  [/^\/cosmetics\/owned$/, () => ownedWithVariants()],
   // Надетое помнится до закрытия вкладки: лобби показывает то, что надели в
   // гардеробе, как у вошедшего игрока.
   [/^\/cosmetics\/equipped$/, () => ({ players: { [DEMO_UUID]: demoWorn() } })],

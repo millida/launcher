@@ -13,6 +13,8 @@
  *   съезжают на противоположные стороны вместе со своими кусками развёртки.
  */
 
+import { cubeInflate } from './cosmeticSlots'
+
 export const BODY_HEIGHT = 24
 
 export type CubeFace = 'north' | 'south' | 'east' | 'west' | 'up' | 'down'
@@ -130,6 +132,24 @@ function fileFace(face: CubeFace): CubeFace {
   return face
 }
 
+/**
+ * Кусок развёртки грани целиком за краем текстуры. Такая грань берёт из
+ * картинки только крайний пиксель (а у ленты кадров - соседний кадр) и тянет
+ * его на всю грань: у 27 вещей каталога на гранях выходили полосы. Это обрезки
+ * модели, которые художник не раскрашивал - нижняя грань плоского меча, торец
+ * рога, - и их не рисуем. Так же делают мод (MeshBuilder.faceUv) и рендер превью.
+ */
+export function faceOutside(rect: readonly number[], texW: number, texH: number): boolean {
+  const [u1 = 0, v1 = 0, u2 = 0, v2 = 0] = rect
+  const edge = 1e-4
+  return (
+    Math.max(u1, u2) / texW <= edge ||
+    Math.min(u1, u2) / texW >= 1 - edge ||
+    Math.max(v1, v2) / texH <= edge ||
+    Math.min(v1, v2) / texH >= 1 - edge
+  )
+}
+
 /** Прямоугольник грани в пикселях картинки или null, если грань не описана. */
 export function faceRect(cube: RawCube, face: CubeFace): number[] | null {
   const uv = cube.uv
@@ -160,7 +180,7 @@ function cubeQuads(
 ): MeshQuad[] {
   const origin = cube.origin ?? [0, 0, 0]
   const size = cube.size ?? [0, 0, 0]
-  const inflate = (cube.inflate ?? 0) + extraInflate
+  const inflate = cubeInflate(cube.inflate ?? 0, extraInflate)
   const perFace = Boolean(cube.uv && !Array.isArray(cube.uv))
   const mirror = Boolean(cube.mirror || bone.mirror) && !perFace
 
@@ -209,7 +229,7 @@ function cubeQuads(
   const quads: MeshQuad[] = []
   for (const { face, corners: order } of FACES) {
     const rect = faceRect(cube, face)
-    if (!rect) continue
+    if (!rect || faceOutside(rect, texW, texH)) continue
     const [u1, v1, u2, v2] = rect as [number, number, number, number]
     const uv = [
       [u2 / texW, v1 / texH],

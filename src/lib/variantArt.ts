@@ -1,17 +1,23 @@
 import { useEffect, useState } from 'react'
 
 /**
- * Превью вещи-расцветки (модель v3.1). У вещи на CDN одно превью — базовой
- * расцветки; у каждой расцветки есть своя текстура и цвет. Карточке нужна
- * картинка СВОЕЙ расцветки: перекрашиваем превью на холсте — пиксели цвета
- * базовой расцветки (по тону) получают тон расцветки, светлота сохраняется.
- * Без цвета базовой — перекрашиваются все насыщенные пиксели. Результат
- * кэшируется: одна перекраска на пару «превью + цвет».
+ * Превью вещи-расцветки (модель v3.1). У вещи на CDN одно превью — той
+ * расцветки, которую выбирает render_previews.py мода (белая, обычная, светлая…,
+ * см. defaultVariant); у части расцветок есть своё превью. Расцветке без своего
+ * перекрашиваем общее превью на холсте: из цвета показанной расцветки в свой.
+ * Результат кэшируется: одна перекраска на пару «превью + цвет».
+ *
+ * Аудит всех вещей 02.10.2026: прежняя перекраска трогала только насыщенные
+ * пиксели (s ≥ 0.18). У чёрной, белой и серой базы таких нет — карточки
+ * «красных», «синих» и «белых» расцветок выходили копией чёрной базы. Теперь
+ * у бесцветной базы перекрашиваются пиксели её светлоты: в серую цель — по
+ * светлоте, в цветную — с подтяжкой к цвету. Точно расцветку повторит только
+ * своё превью: перекраска — запасной путь, пока его нет.
  */
 
 const cache = new Map<string, Promise<string>>()
 
-const hex = (c?: string | null) => {
+export const hexColor = (c?: string | null) => {
   const s = (c || '').replace('#', '')
   if (!/^[0-9a-f]{6}$/i.test(s)) return null
   return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)] as const
@@ -43,16 +49,85 @@ const hueGap = (a: number, b: number) => {
   return d > 180 ? 360 - d : d
 }
 
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
+
+/** Порог «цветного» пикселя: ниже — серый, чёрный или белый. */
+const GREY = 0.18
+/** Бесцветная база: у чёрной, белой и серой расцветки тон ничего не значит. */
+const GREY_BASE = 0.15
+/** Насколько светлота пикселя может уйти от бесцветной базы и ещё быть её цветом. */
+const GREY_BAND = 0.3
+/**
+ * Чёрная база в цветную расцветку: насколько подтянуть светлоту к цвету
+ * расцветки. Не до конца — у «красных» демонических крыльев красные только
+ * перепонки, а кости остаются чёрными; полная заливка ошибалась сильнее, чем
+ * никакая. Подобрано по 199 расцветкам, у которых есть своё превью: средняя
+ * ошибка цвета 41 → 20 (из 255).
+ */
+const GREY_TO_COLOR = 0.4
+const GREY_TO_COLOR_SAT = 0.7
+
+/**
+ * Перекраска RGBA-пикселей превью из цвета базовой расцветки `from` в `to`.
+ * Чистая функция над массивом: её же гоняет аудит каталога на настоящих
+ * превью. Возвращает число перекрашенных пикселей — ноль значит, что карточка
+ * расцветки выйдет копией базы.
+ */
+export function recolorPixels(d: Uint8ClampedArray | number[], from: string | null | undefined, to: string): number {
+  const target = hexColor(to)
+  if (!target) return 0
+  const [th, ts, tl] = rgb2hsl(target[0], target[1], target[2])
+  const base = hexColor(from)
+  const bh = base ? rgb2hsl(base[0], base[1], base[2]) : null
+  const greyBase = !!bh && bh[1] <= GREY_BASE
+  // Светлота расцветки против базовой: чёрная расцветка темнит, белая светлит.
+  const lk = bh ? (tl + 0.05) / (bh[2] + 0.05) : 1
+  // Серая цель из серой базы: пиксели уходят к светлоте цели, тень и блик
+  // остаются сдвигом. Чистые чёрный и белый на превью не бывают — у «чёрной»
+  // ткани тени и блики, поэтому цель ставится внутрь.
+  const goal = clamp(tl, 0.2, 0.8)
+  let changed = 0
+  for (let i = 0; i < d.length; i += 4) {
+    if ((d[i + 3] as number) < 16) continue
+    const [h, s, l] = rgb2hsl(d[i] as number, d[i + 1] as number, d[i + 2] as number)
+    let ns: number
+    let nl: number
+    if (greyBase) {
+      // Бесцветная база: свои пиксели узнаются по светлоте, а не по тону.
+      if (s >= GREY || Math.abs(l - bh![2]) > GREY_BAND) continue
+      if (ts <= GREY_BASE) {
+        const shift = (l - bh![2]) * 0.8
+        nl = goal + shift
+        // Тень белой вещи на чёрной уходит в минус — отражаем её в блик.
+        if (nl < 0.04 || nl > 0.96) nl = goal - shift
+        ns = ts
+      } else {
+        nl = l + (tl - l) * GREY_TO_COLOR
+        ns = Math.min(1, ts * GREY_TO_COLOR_SAT)
+      }
+    } else {
+      // Цветная база: прежнее правило — оно точнее любого другого на 263
+      // расцветках со своим превью (средняя ошибка 41 → 26).
+      if (s < GREY) continue
+      if (bh && bh[1] > GREY_BASE && hueGap(h, bh[0]) > 38) continue
+      ns = ts < 0.08 ? ts : Math.min(1, s * (ts / Math.max(0.2, bh ? bh[1] : s)))
+      nl = l * lk
+    }
+    const [r, g, b] = hsl2rgb(th, ns, clamp(nl, 0.03, 0.97))
+    d[i] = r
+    d[i + 1] = g
+    d[i + 2] = b
+    changed++
+  }
+  return changed
+}
+
 function tint(src: string, from: string | null | undefined, to: string): Promise<string> {
   const key = src + '|' + (from || '') + '|' + to
   const known = cache.get(key)
   if (known) return known
   const job = new Promise<string>((resolve, reject) => {
-    const target = hex(to)
-    if (!target) return reject(new Error('цвет'))
-    const [th, ts, tl] = rgb2hsl(target[0], target[1], target[2])
-    const base = hex(from)
-    const bh = base ? rgb2hsl(base[0], base[1], base[2]) : null
+    if (!hexColor(to)) return reject(new Error('цвет'))
     const img = new Image()
     img.crossOrigin = 'anonymous'
     img.onload = () => {
@@ -64,21 +139,7 @@ function tint(src: string, from: string | null | undefined, to: string): Promise
         if (!g) return reject(new Error('холст'))
         g.drawImage(img, 0, 0)
         const data = g.getImageData(0, 0, c.width, c.height)
-        const d = data.data
-        // Светлота расцветки против базовой: чёрная расцветка темнит, белая светлит.
-        const lk = bh ? (tl + 0.05) / (bh[2] + 0.05) : 1
-        for (let i = 0; i < d.length; i += 4) {
-          if ((d[i + 3] as number) < 16) continue
-          const [h, s, l] = rgb2hsl(d[i] as number, d[i + 1] as number, d[i + 2] as number)
-          if (s < 0.18) continue
-          if (bh && bh[1] > 0.15 && hueGap(h, bh[0]) > 38) continue
-          const ns = ts < 0.08 ? ts : Math.min(1, s * (ts / Math.max(0.2, bh ? bh[1] : s)))
-          const nl = Math.min(0.97, Math.max(0.03, l * lk))
-          const [r, gg, b] = hsl2rgb(th, ns, nl)
-          d[i] = r
-          d[i + 1] = gg
-          d[i + 2] = b
-        }
+        recolorPixels(data.data, from, to)
         g.putImageData(data, 0, 0)
         resolve(c.toDataURL('image/png'))
       } catch (e) {
@@ -98,7 +159,7 @@ function tint(src: string, from: string | null | undefined, to: string): Promise
  * превью. Пока перекраска не готова (или не удалась) — тоже превью.
  */
 export function useVariantPreview(src: string | null | undefined, from?: string | null, color?: string | null): string | null | undefined {
-  const need = !!src && !!color && hex(color) !== null && (from || '').toLowerCase().replace('#', '') !== color.toLowerCase().replace('#', '')
+  const need = !!src && !!color && hexColor(color) !== null && (from || '').toLowerCase().replace('#', '') !== color.toLowerCase().replace('#', '')
   const [out, setOut] = useState<string | null | undefined>(need ? null : src)
   useEffect(() => {
     if (!need || !src || !color) {

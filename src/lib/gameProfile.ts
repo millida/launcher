@@ -198,6 +198,9 @@ export interface CosmeticItem {
   model?: string
   /// Адрес картинки вещи — той самой, что рисует мод.
   texture?: string
+  /// Карта свечения: неоновые вещи рисуют цвет ею, а не основной картинкой —
+  /// без неё на фигуре они выходят чёрными.
+  emissive?: string
   access: string
   channel?: string
   /// Вещь на обкатке: её видно только команде.
@@ -210,7 +213,7 @@ export interface CosmeticItem {
   /// Цвета вещи. У половины каталога их несколько, и первый не всегда тот,
   /// который человек считает основным: у ангельских крыльев это чёрные.
   /// v3.1: служба дописывает к расцветке её код, имя, ранг и цену.
-  variants?: { name: string; color?: string; texture?: string; preview?: string; code?: string; title?: string; rarity?: string; price?: number }[]
+  variants?: { name: string; color?: string; texture?: string; emissive?: string; preview?: string; code?: string; title?: string; rarity?: string; price?: number }[]
   /// Ранг вещи (у вещи-расцветки — ранг расцветки).
   rarity?: string
   /// v3.1: код исходной вещи у вещи-расцветки («ANGEL_WINGS» у «ANGEL_WINGS~red»).

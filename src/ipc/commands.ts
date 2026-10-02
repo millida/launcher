@@ -225,6 +225,7 @@ export const cancelInstall = (key: string) => invoke<boolean>('cancel_install', 
 
 
 
+
 export interface StoreGameState {
   slug: string
   steam: boolean
@@ -1436,3 +1437,4 @@ export const millidaModState = (profile: string) => invoke<MillidaModState>('mil
 export const millidaModInstall = (profile: string) => invoke<MillidaModState>('millida_mod_install', { profile })
 export const millidaModEnabled = () => invoke<boolean>('millida_mod_enabled')
 export const setMillidaModEnabled = (on: boolean) => invoke<void>('set_millida_mod_enabled', { on })
+export const setGameTelemetry = (on: boolean) => invoke<void>('set_game_telemetry', { on })

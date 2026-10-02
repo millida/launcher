@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Icon } from '../Icon'
 import { Milli } from '../milli/Milli'
 import { openMilli } from '../../state/milli'
+import { useHubTab } from './hubTab'
 
 /**
  * Первый экран библиотеки (владелец 30.09.2026), как на millida.net/katalog:
@@ -32,7 +33,11 @@ export function HubFind({ onSearch }: { onSearch: (q: string) => void }) {
         className="btn lg secondary hub-find-ai"
         data-sound="open"
         data-track="ai_builder_open"
-        onClick={() => openMilli(q.trim() ? { text: q.trim(), src: 'hub' } : { src: 'hub' })}
+        onClick={() => {
+          // Milli lives in the catalog («Ресурсы»); on the library tab the dock hides her and the request sat unseen.
+          useHubTab.getState().setAll(true)
+          openMilli(q.trim() ? { text: q.trim(), src: 'hub' } : { src: 'hub' })
+        }}
       >
         <Milli size={24} mode="idle" /> Собрать с ИИ
       </button>

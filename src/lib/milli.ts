@@ -325,6 +325,25 @@ export function withPreset(text: string, preset: { mcVersion?: string; loader?: 
 /** Адрес сайта для путей из ответа (`/maps/x`) и готовых ссылок. */
 export const siteUrl = (path: string) => (/^https?:\/\//.test(path) ? path : 'https://millida.net' + (path.startsWith('/') ? '' : '/') + path)
 
+/** «Спросить ИИ» в окне вылета: что знает ядро и моды сборки (файл и название). */
+export interface CrashAskBody {
+  reason: string
+  cause?: string
+  kind?: string
+  tail?: string
+  mcVersion?: string
+  loader?: string
+  mods: { file: string; title?: string }[]
+}
+
+export interface CrashAiAnswer {
+  explain: string
+  steps: string[]
+  /** Только файлы из присланного списка: сервер чужих имён не возвращает. */
+  disable: { file: string; title?: string }[]
+  remaining: number
+}
+
 // ─── Запросы ─────────────────────────────────────────────────────────────
 
 /**
@@ -361,6 +380,7 @@ export const milliInstall = (buildId: string, body: ReturnType<typeof milliInsta
   request<MilliInstallAnswer>('/catalog/milli/packs/' + encodeURIComponent(buildId) + '/install', post(body))
 export const milliToServer = (buildId: string, serverId: string, projectIds: string[]) =>
   request<MilliServerAnswer>('/catalog/milli/packs/' + encodeURIComponent(buildId) + '/server', post({ serverId, projectIds }))
+export const milliCrash = (body: CrashAskBody) => request<CrashAiAnswer>('/catalog/milli/crash', post(body))
 
 // ─── Демо (?preview=user, только dev) ────────────────────────────────────
 // Бэкенда Милли на проде ещё нет: демо отвечает сам. `&milli=live` выключает

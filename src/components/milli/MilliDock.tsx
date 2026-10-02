@@ -216,13 +216,33 @@ function ErrorCard({ e }: { e: MilliError }) {
   )
 }
 
+/**
+ * A build takes 15-40 s: the steps follow the server pipeline in its real
+ * order, so the player sees work instead of a frozen placeholder. The server
+ * reports no progress, hence the timing marks the usual moment of each step.
+ */
+const THINK_STEPS: readonly (readonly [number, string])[] = [
+  [0, 'Читаю, что ты хочешь…'],
+  [4_000, 'Ищу моды на Modrinth…'],
+  [11_000, 'Выбираю лучшие под твой запрос…'],
+  [20_000, 'Проверяю версии и зависимости…'],
+  [32_000, 'Сверяю файлы модов, почти готово…'],
+]
+
 function Thinking() {
+  const [elapsed, setElapsed] = useState(0)
+  useEffect(() => {
+    const started = Date.now()
+    const id = window.setInterval(() => setElapsed(Date.now() - started), 1_000)
+    return () => window.clearInterval(id)
+  }, [])
+  const step = [...THINK_STEPS].reverse().find(([at]) => elapsed >= at)?.[1] ?? THINK_STEPS[0]![1]
   return (
     <div className="ml-msg" aria-busy="true" aria-label="Милли думает">
       <Milli size={40} mode="think" className="ml-ava" />
       <div className="ml-col">
         <div className="ml-bubble ml-skel">
-          <span className="skel" style={{ width: '70%' }} />
+          <span aria-live="polite">{step}</span>
           <span className="skel" style={{ width: '45%' }} />
         </div>
       </div>

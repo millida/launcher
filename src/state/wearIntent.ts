@@ -12,17 +12,30 @@ export interface WearRef {
   variant?: string
 }
 
+/** Набор, который примеряют: гардероб покажет «Докупить набор» с этой ценой. */
+export interface SetOffer {
+  setId: string
+  colorway: string
+  title: string
+  price: number
+}
+
 interface WearIntent {
   refs: WearRef[] | null
-  set: (refs: WearRef[] | null) => void
+  /** Примерить всё, даже своё: на фигуре весь набор, а не только чужие вещи. */
+  fit: boolean
+  offer: SetOffer | null
+  set: (refs: WearRef[] | null, opts?: { fit?: boolean; offer?: SetOffer }) => void
 }
 
 export const useWearIntent = create<WearIntent>((set) => ({
   refs: null,
-  set: (refs) => set({ refs }),
+  fit: false,
+  offer: null,
+  set: (refs, opts) => set({ refs, fit: !!opts?.fit, offer: opts?.offer ?? null }),
 }))
 
-export function wearNow(refs: WearRef[]) {
-  useWearIntent.getState().set(refs.length ? refs : null)
+export function wearNow(refs: WearRef[], opts?: { fit?: boolean; offer?: SetOffer }) {
+  useWearIntent.getState().set(refs.length ? refs : null, opts)
   useUi.getState().setScreen('skins')
 }

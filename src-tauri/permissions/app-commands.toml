@@ -21,6 +21,7 @@ permissions = [
   "allow-millida-mod-install",
   "allow-millida-mod-enabled",
   "allow-set-millida-mod-enabled",
+  "allow-set-game-telemetry",
   "allow-list-versions",
   "allow-list-versions-typed",
   "allow-list-loader-versions",

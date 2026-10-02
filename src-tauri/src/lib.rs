@@ -162,6 +162,7 @@ pub fn run() {
             commands::content::millida_mod_install,
             commands::content::millida_mod_enabled,
             commands::content::set_millida_mod_enabled,
+            commands::content::set_game_telemetry,
             commands::content::list_versions,
             commands::content::list_versions_typed,
             commands::content::list_loader_versions,

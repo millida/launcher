@@ -276,6 +276,11 @@ pub fn millida_mod_enabled() -> bool {
 }
 
 #[tauri::command(async)]
+pub fn set_game_telemetry(on: bool) -> Result<(), String> {
+    engine::set_game_telemetry_enabled(on)
+}
+
+#[tauri::command(async)]
 pub fn set_millida_mod_enabled(on: bool) -> Result<(), String> {
     engine::set_millida_mod_enabled(on)
 }

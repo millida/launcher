@@ -405,7 +405,7 @@ export interface ItemRef {
   tintFrom?: string
 }
 
-export type Channel = 'FREE' | 'QUEST' | 'ACHIEVEMENT' | 'HOURS' | 'SEASON' | 'SHOP' | 'PLUS_MONTH'
+export type Channel = 'FREE' | 'QUEST' | 'ACHIEVEMENT' | 'HOURS' | 'SEASON' | 'SHOP' | 'PLUS_MONTH' | 'WELCOME' | 'LEGACY'
 
 export interface ShopCard {
   item: ItemRef
@@ -592,7 +592,7 @@ export interface PackQuest {
 }
 export const loadPackQuests = () => api<{ quests: PackQuest[] }>('/rubies/quests')
 export const claimPackQuest = (code: string) =>
-  api<{ quest: PackQuest; granted: (FragmentProgress & { amount: number }) | null }>(
+  api<{ quest: PackQuest; item: ItemRef | null }>(
     '/rubies/quests/' + encodeURIComponent(code) + '/claim',
     { method: 'POST' },
   )
@@ -609,3 +609,85 @@ export interface WelcomeGift {
   fragments?: FragmentProgress | null
 }
 export const claimWelcome = () => api<WelcomeGift>('/rubies/welcome/claim', { method: 'POST' })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Наборы и кейсы (02.10.2026, бэкенд: trade-api/launcher/rubies/sets.catalog.ts).
+// Набор — образ из вещей одной темы со скидкой; кейс — случайная вещь темы,
+// которой у игрока ещё нет, шансы открыты, раз в `pity` открытий — эпическая+.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type SetTheme = 'flame' | 'dark' | 'future' | 'cozy'
+
+export interface SetColorwayView {
+  /** '' — у набора одна расцветка. */
+  name: string
+  /** RRGGBB для кружка-переключателя. */
+  color: string | null
+  items: { item: ItemRef; price: number; owned: boolean }[]
+  fullPrice: number
+  /** К оплате: 0 — весь набор уже свой. */
+  price: number
+  discountPct: number
+  /** Сколько вещей уже есть. */
+  have: number
+}
+
+export interface SetView {
+  id: string
+  title: string
+  theme: SetTheme
+  ofDay: boolean
+  colorways: SetColorwayView[]
+}
+
+export interface CaseOddsView {
+  rarity: Rarity
+  /** Проценты ×10 (1000 = 100%). */
+  weight: number
+  left: number
+  total: number
+}
+
+export interface CaseView {
+  id: string
+  title: string
+  price: number
+  odds: CaseOddsView[]
+  /** Открытий до гарантированной эпической+ (1 — следующее). */
+  pityLeft: number
+  pity: number
+  /** Сколько вещей темы ещё нет / всего. */
+  left: number
+  total: number
+  /** Три самые дорогие вещи темы. */
+  cover: ItemRef[]
+  /** Названия наборов темы. */
+  sets: string[]
+}
+
+export interface CaseContents {
+  id: string
+  items: { item: ItemRef; owned: boolean; chance: number }[]
+}
+
+export interface CaseOpened {
+  balance: number
+  item: ItemRef
+  rarityName: string
+  top: boolean
+  pityLeft: number
+}
+
+export const loadSets = () => api<{ sets: SetView[]; refreshAt: string }>('/rubies/sets')
+/** `expect` — цена, которую видел игрок: изменилась — служба откажет, и магазин обновится. */
+export const buySet = (setId: string, colorway: string, expect: number) =>
+  api<{ balance: number; price: number; granted: ItemRef[] }>('/rubies/sets/buy', post({ setId, colorway, expect }))
+export const loadCases = () => api<{ cases: CaseView[] }>('/rubies/cases')
+export const loadCaseContents = (id: string) => api<CaseContents>('/rubies/cases/' + encodeURIComponent(id))
+/** `requestId` — новый на каждое открытие: повтор запроса не спишет рубины дважды. */
+export const openCase = (caseId: string, requestId: string) =>
+  api<CaseOpened>('/rubies/cases/open', post({ caseId, requestId }))
+export const newRequestId = (): string => {
+  const c = typeof crypto !== 'undefined' ? crypto : undefined
+  return c && 'randomUUID' in c ? c.randomUUID().replace(/-/g, '') : Math.random().toString(16).slice(2) + Date.now().toString(16)
+}

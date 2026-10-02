@@ -1,5 +1,5 @@
 import { hasTauri } from '../ipc/tauri'
-import { appVersion, deviceSpecs, millidaApi } from '../ipc/commands'
+import { appVersion, deviceSpecs, millidaApi, setGameTelemetry } from '../ipc/commands'
 import { LAUNCHER_API, apiHeaders } from './api'
 import { detectGpu } from './gpu'
 import { errorCode, scrubText } from './telemetryPrivacy'
@@ -141,10 +141,19 @@ export function telemetryEnabled(): boolean {
   }
 }
 
+/** Мод в игре читает выключатель из файла, который пишет лаунчер: держим их вместе. */
+function syncGame(on: boolean) {
+  if (!hasTauri()) return
+  try {
+    void Promise.resolve(setGameTelemetry(on)).catch(() => {})
+  } catch {}
+}
+
 export function setTelemetryEnabled(on: boolean) {
   try {
     localStorage.setItem(OPT_OUT_KEY, on ? '0' : '1')
   } catch {}
+  syncGame(on)
   if (!on) {
     queue = []
     unstamped = []
@@ -465,6 +474,7 @@ export function __resetTelemetryForTests() {
 }
 
 export async function initTelemetry(bootMs: number): Promise<void> {
+  if (!isOverlayWindow()) syncGame(telemetryEnabled())
   if (!telemetryEnabled() || inited || isOverlayWindow()) return
   // Один раз на страницу: повторный вызов вешал бы ещё один слушатель выхода.
   inited = true

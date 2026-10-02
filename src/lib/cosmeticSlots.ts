@@ -103,3 +103,20 @@ export function cosmeticInflate(slot: string): number {
       return 0.01
   }
 }
+
+/**
+ * Надслои скина в игре раздуты ровно на четверть пикселя (рукава, куртка,
+ * штанины) и на половину (шляпа). Куб вещи, чья толщина вместе с прибавкой
+ * места выходит ровно туда же, кладёт грани в плоскость надслоя: наплечники
+ * (inflate 0.2 + 0.05 места) рябили с рукавом. Такой куб отодвигается на сотую -
+ * шаг лестницы мест, - и вещь ложится поверх надслоя. Остальных кубов правило
+ * не касается: у каталога таких четыре вещи (наплечники, лапки на руках и ногах).
+ * Та же поправка в моде - MeshBuilder.cubeInflate.
+ */
+const SKIN_LAYERS = [0.25, 0.5]
+const SKIN_LAYER_CLEARANCE = 0.01
+
+export function cubeInflate(own: number, extra: number): number {
+  const total = own + extra
+  return SKIN_LAYERS.some((layer) => Math.abs(total - layer) < 0.005) ? total + SKIN_LAYER_CLEARANCE : total
+}

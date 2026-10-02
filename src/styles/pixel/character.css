@@ -89,7 +89,7 @@
 .ch-fit-tones { display: inline-flex; gap: 4px }
 .ch-tone { width: 16px; height: 16px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35) }
 .ch-tone.on { box-shadow: 0 0 0 2px var(--m-accent) }
-.ch-fit-buy { display: flex; align-items: center; gap: 8px }
+.ch-fit-buy { display: flex; flex-wrap: wrap; align-items: center; gap: 8px }
 .ch-fit-buy .btn { flex: 1 }
 .ch-fit-have {
   display: inline-flex;

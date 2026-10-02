@@ -11,7 +11,7 @@ export function QuestsBlock({ quests, busy, onClaim }: { quests: PackQuest[]; bu
       <Head title="Задания сборок">
         <span className="sh-tag">
           <Icon id="i-clock" />
-          Половина фрагментов — за игру
+          Вещь целиком — за игру
         </span>
       </Head>
       <div className="sh-ach-prizes">
@@ -50,7 +50,7 @@ function QuestRow({ quest, busy, onClaim }: { quest: PackQuest; busy: boolean; o
           data-id={quest.item.code}
           onClick={() => onClaim(quest)}
         >
-          Забрать фрагменты
+          Забрать
         </button>
       ) : state.kind === 'play' ? (
         <span className="sh-meter-cap">
