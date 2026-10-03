@@ -1258,6 +1258,7 @@ pub async fn install_and_launch_in(
             let cp = pack_classpath(&profile, spec)?;
             let natives = game_dir.join(&spec.natives_dir);
             let mut extra_jvm = token;
+            extra_jvm.extend(module_path_args(&pack_module_path(&profile, spec)?));
             if let Some(arg) = lwjgl_library_path_arg(&nested_native_dirs(&natives)) {
                 extra_jvm.push(arg);
             }

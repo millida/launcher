@@ -109,6 +109,13 @@ pub fn overlay_ready(app: tauri::AppHandle) {
     overlay::drain_pending(&app);
 }
 
+/// The overlay webview has painted an empty frame for hide number `seq`, so the
+/// window can go down without leaving that frame behind for the next show.
+#[tauri::command]
+pub fn overlay_cleared(seq: u64) {
+    overlay::cleared(seq);
+}
+
 /// The main window passes friend publications on to the overlay.
 #[tauri::command]
 pub fn realtime_relay(app: tauri::AppHandle, payload: serde_json::Value) {

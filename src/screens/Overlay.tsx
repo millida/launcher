@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { Icon } from '../components/Icon'
 import { SvgSprite } from '../components/SvgSprite'
 import { tauri } from '../ipc/tauri'
-import { overlayHide, overlayHitAreas, overlayOpen, overlayReady, overlayState } from '../ipc/commands'
+import { overlayCleared, overlayHide, overlayHitAreas, overlayOpen, overlayReady, overlayState } from '../ipc/commands'
 import { CARD_TTL_MS, clampCardTtl, freshCards, holdCards } from '../lib/overlayCards'
 import { Head } from '../components/Head'
 import { OverlayChat, type OverlayTarget } from '../components/OverlayChat'
@@ -37,6 +37,9 @@ export function Overlay() {
   const [hover, setHover] = useState(false)
   const [tick, setTick] = useState(0)
   const [to, setTo] = useState<OverlayMessage | null>(null)
+  /// Set while the core waits to hide the window: a hidden window keeps its last
+  /// frame and shows it again on the next show, so that frame has to be empty.
+  const [clearSeq, setClearSeq] = useState<number | null>(null)
   const cardsRef = useRef<HTMLDivElement>(null)
   const heldSince = useRef(0)
   const sentHit = useRef('')
@@ -60,6 +63,7 @@ export function Overlay() {
     void T.event
       .listen<boolean>('overlay-mode', (e) => {
         setInteractive(e.payload)
+        setClearSeq(null)
         // The core drops the hit areas whenever the window goes down, so an
         // unchanged stack after a re-show would be drawn over dead rectangles.
         sentHit.current = ''
@@ -72,6 +76,10 @@ export function Overlay() {
         setMsgs((prev) => prev.concat([m]).slice(-HISTORY))
         if (!m.kind || m.kind === 'msg') setTo((cur) => cur || m)
       })
+      .then((un) => offs.push(un))
+      .catch(() => {})
+    void T.event
+      .listen<number>('overlay-clear', (e) => setClearSeq(e.payload))
       .then((un) => offs.push(un))
       .catch(() => {})
     void T.event
@@ -152,6 +160,20 @@ export function Overlay() {
     void overlayHitAreas(rects).catch(() => {})
   }, [interactive, fresh.length, msgs, tick])
 
+  // The second frame is the first one painted after the empty render reached
+  // the DOM; answering earlier would let the window hide on the old frame.
+  useLayoutEffect(() => {
+    if (clearSeq === null) return
+    let second = 0
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => void overlayCleared(clearSeq).catch(() => {}))
+    })
+    return () => {
+      cancelAnimationFrame(first)
+      cancelAnimationFrame(second)
+    }
+  }, [clearSeq])
+
   const dismiss = useCallback((card: Card) => {
     setMsgs((prev) => {
       const left = prev.filter((m) => !(m.uid === card.uid && m.ts === card.ts))
@@ -187,6 +209,8 @@ export function Overlay() {
   const chatTarget: OverlayTarget | null = to
     ? { id: to.uid, room: to.open === 'room', title: to.nick }
     : null
+
+  if (clearSeq !== null) return <div className="ov ov-passive" />
 
   if (!interactive) {
     return (

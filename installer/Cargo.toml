@@ -18,6 +18,9 @@ url = "2"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls-webpki-roots", "rustls-tls-native-roots"] }
 
 [target.'cfg(windows)'.dependencies]
+# VPN clients in "system proxy" mode only set the WinINet proxy; without this
+# the stub went straight past it into the resets the VPN was turned on to avoid.
+reqwest = { version = "0.12", default-features = false, features = ["system-proxy"] }
 windows-sys = { version = "0.61", features = [
   "Win32_Foundation",
   "Win32_Graphics_Gdi",

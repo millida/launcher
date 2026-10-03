@@ -884,8 +884,10 @@ pub fn list_java_runtimes() -> Vec<JavaRuntime> {
 }
 
 pub fn remove_java_runtime(major: u32) -> Result<u64, String> {
-    if required_majors().contains(&major) {
-        return Err("Эта Java нужна одной из сборок".into());
+    // A runtime needed by installed packs may go: launch reinstalls it. A running
+    // game holds its files, and a half-deleted runtime would be picked next time.
+    if !super::launch::running_games().is_empty() {
+        return Err("Сначала закрой игру — она сейчас работает на этой Java".into());
     }
     let dirs: Vec<PathBuf> = runtime_dirs(&major.to_string()).into_iter().filter(|d| d.is_dir()).collect();
     if dirs.is_empty() {

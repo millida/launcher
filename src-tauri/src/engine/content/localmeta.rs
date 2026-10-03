@@ -17,7 +17,7 @@ const NESTED_DEPTH: u32 = 3;
 /// Bumped whenever the parser starts extracting a new field: cache entries are
 /// keyed by (size, mtime), so without it an old cache would keep answering with
 /// fields the previous version never filled in.
-const META_REV: u32 = 6;
+const META_REV: u32 = 7;
 
 /// A `breaks` entry as the mod author wrote it: which mod, and under what
 /// version range. `"breaks": {"fabric-api": "<0.144.3+26.1"}` means "needs a
@@ -28,6 +28,16 @@ const META_REV: u32 = 6;
 pub struct BreakRule {
     pub id: String,
     pub range: String,
+}
+
+/// Relations as one loader's manifest states them. A multi-loader jar carries a
+/// manifest per loader, and each loader reads only its own: Explorify's
+/// fabric.mod.json asks for Fabric API, its neoforge.mods.toml asks for nothing.
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct LoaderRelations {
+    pub loader: String,
+    pub requires: Vec<String>,
+    pub breaks: Vec<BreakRule>,
 }
 
 /// Metadata read from the content file itself (fabric.mod.json, mods.toml,
@@ -55,6 +65,7 @@ pub struct LocalMeta {
     #[serde(default)] pub provides: Vec<String>,
     #[serde(default)] pub requires: Vec<String>,
     #[serde(default)] pub breaks: Vec<BreakRule>,
+    #[serde(default)] pub relations: Vec<LoaderRelations>,
     #[serde(default)] pub meta_rev: u32,
 }
 
@@ -374,9 +385,11 @@ fn toml_values(text: &str) -> HashMap<String, String> {
 fn toml_sections(text: &str) -> Vec<(String, HashMap<String, String>)> {
     let mut chunks: Vec<(String, Vec<&str>)> = vec![(String::new(), vec![])];
     for line in text.lines() {
-        let t = line.trim();
-        if t.starts_with('[') && t.ends_with(']') {
-            chunks.push((t.trim_matches(|c| c == '[' || c == ']').to_string(), vec![]));
+        // Manifests generated from the MDK template keep its notes on header
+        // lines ("[[mods]] #mandatory"), and TOML allows a comment there.
+        let head = line.split('#').next().unwrap_or("").trim();
+        if head.starts_with('[') && head.ends_with(']') {
+            chunks.push((head.trim_matches(|c| c == '[' || c == ']').to_string(), vec![]));
         } else if let Some(last) = chunks.last_mut() {
             last.1.push(line);
         }
@@ -413,6 +426,40 @@ fn forge_relations(text: &str) -> (String, Vec<String>, Vec<String>) {
         }
     }
     (own, requires, breaks)
+}
+
+/// Forge's versionRange uses Maven interval syntax, which the launcher does
+/// not parse — kept as an unconditional break rather than guessed at.
+fn forge_breaks(ids: Vec<String>) -> Vec<BreakRule> {
+    ids.into_iter().map(|id| BreakRule { id, range: "*".into() }).collect()
+}
+
+fn fabric_rules(v: &Value, quilt: bool) -> (Vec<String>, Vec<BreakRule>) {
+    let root = if quilt { &v["quilt_loader"] } else { v };
+    (id_list(&root["depends"], true), break_list(&root["breaks"]))
+}
+
+/// Relations of every manifest in the jar, keyed by the loader that reads it.
+/// Same loader naming as `declared_loaders`, and neoforge.mods.toml wins over a
+/// shared mods.toml exactly as in `from_forge`.
+fn loader_relations(jar: &mut Jar) -> Vec<LoaderRelations> {
+    let mut out: Vec<LoaderRelations> = vec![];
+    for (file, quilt) in [("fabric.mod.json", false), ("quilt.mod.json", true)] {
+        let Some(v) = entry_text(jar, file).and_then(|t| lenient_json(&t)) else { continue };
+        let (requires, breaks) = fabric_rules(&v, quilt);
+        out.push(LoaderRelations { loader: (if quilt { "quilt" } else { "fabric" }).into(), requires, breaks });
+    }
+    for file in ["META-INF/neoforge.mods.toml", "META-INF/mods.toml"] {
+        let Some(text) = entry_text(jar, file) else { continue };
+        let neo = file == "META-INF/neoforge.mods.toml" || text.to_lowercase().contains("neoforge");
+        let loader = if neo { "neoforge" } else { "forge" };
+        if out.iter().any(|r| r.loader == loader) {
+            continue;
+        }
+        let (_, requires, breaks) = forge_relations(&text);
+        out.push(LoaderRelations { loader: loader.into(), requires, breaks: forge_breaks(breaks) });
+    }
+    out
 }
 
 /// Old Forge lists dependencies as "jei@[1.0,)"; only the id part is an id.
@@ -502,14 +549,8 @@ fn from_fabric(jar: &mut Jar, meta: &mut LocalMeta, quilt: bool) -> bool {
         60,
     );
     meta.mod_id = id.clone();
-    let (depends, breaks, provides) = if quilt {
-        (&v["quilt_loader"]["depends"], &v["quilt_loader"]["breaks"], &v["quilt_loader"]["provides"])
-    } else {
-        (&v["depends"], &v["breaks"], &v["provides"])
-    };
-    meta.requires = id_list(depends, true);
-    meta.breaks = break_list(breaks);
-    meta.provides = id_list(provides, false);
+    (meta.requires, meta.breaks) = fabric_rules(&v, quilt);
+    meta.provides = id_list(if quilt { &v["quilt_loader"]["provides"] } else { &v["provides"] }, false);
     nested_ids(jar, NESTED_DEPTH, &mut meta.provides);
     let mut icons = vec![icon_of(&root["icon"])];
     if !id.is_empty() {
@@ -532,9 +573,7 @@ fn from_forge(jar: &mut Jar, meta: &mut LocalMeta) -> bool {
     let (own, requires, breaks) = forge_relations(&text);
     meta.mod_id = own;
     meta.requires = requires;
-    // Forge's versionRange uses Maven interval syntax, which the launcher does
-    // not parse — kept as an unconditional break rather than guessed at.
-    meta.breaks = breaks.into_iter().map(|id| BreakRule { id, range: "*".into() }).collect();
+    meta.breaks = forge_breaks(breaks);
     let mut icons: Vec<String> = vec![];
     if let Some(logo) = kv.get("logoFile") {
         icons.push(logo.clone());
@@ -651,6 +690,7 @@ pub fn read_file_meta(path: &Path, kind: &str, file_name: &str) -> LocalMeta {
                 from_shader(&mut jar, &mut meta);
             }
             meta.loaders = declared_loaders(&mut jar);
+            meta.relations = loader_relations(&mut jar);
         }
     }
     if meta.title.is_empty() {
@@ -878,6 +918,84 @@ viewing mod.
             m.loaders.iter().any(|l| l == "neoforge") && m.loaders.iter().any(|l| l == "fabric"),
             "every declared loader must survive the parse, got {:?}",
             m.loaders
+        );
+    }
+
+    /// Explorify 1.6.5 as published: one jar, three manifests, and only the
+    /// Fabric one asks for Fabric API. Each loader's relations must stay apart,
+    /// or a NeoForge build is told to install Fabric API.
+    #[test]
+    fn each_manifest_keeps_its_own_relations() {
+        let jar = tmp("explorify.jar");
+        let toml = b"modLoader=\"lowcodefml\"\n[[mods]]\n  modId=\"explorify\"\n  [[dependencies.explorify]]\n    modId=\"minecraft\"\n    mandatory=true\n";
+        make_jar(
+            &jar,
+            &[
+                ("META-INF/mods.toml", toml.as_ref()),
+                ("META-INF/neoforge.mods.toml", toml.as_ref()),
+                ("fabric.mod.json", br#"{"id":"explorify","name":"Explorify","depends":{"fabric-api":"*","minecraft":">=1.20"}}"#),
+            ],
+        );
+        let m = read_file_meta(&jar, "mod", "explorify.jar");
+        let of = |loader: &str| m.relations.iter().find(|r| r.loader == loader).map(|r| r.requires.clone());
+        let cases: [(&str, Option<Vec<String>>, &str); 4] = [
+            ("fabric", Some(vec!["fabric-api".into()]), "the Fabric half really needs Fabric API"),
+            ("neoforge", Some(vec![]), "neoforge.mods.toml asks only for minecraft, which the loader answers"),
+            ("forge", Some(vec![]), "lowcodefml mods.toml without a NeoForge mention is the Forge manifest"),
+            ("quilt", None, "no quilt.mod.json, no Quilt relations"),
+        ];
+        for (loader, want, why) in cases {
+            assert_eq!(of(loader), want, "{}: {}", loader, why);
+        }
+    }
+
+    /// input -> header verdict. The MDK template leaves "#mandatory" after
+    /// "[[mods]]", and Xaero's Minimap ships exactly that: the header was not
+    /// recognised, the bundled XaeroLib in META-INF/jarjar registered no id and
+    /// the audit reported «нужен мод «xaerolib»» for a jar that carries it.
+    #[test]
+    fn toml_headers_with_trailing_comments_still_open_a_section() {
+        let cases: [(&str, &str, &str); 4] = [
+            ("[[mods]]\nmodId=\"a\"\n", "mods", "plain header"),
+            ("[[mods]] #mandatory\nmodId=\"a\"\n", "mods", "Xaero's Minimap: MDK note after the header"),
+            ("  [[mods]]   # note\nmodId=\"a\"\n", "mods", "indented header with spaced comment"),
+            ("# [[mods]]\nmodId=\"a\"\n", "", "a commented-out header opens nothing"),
+        ];
+        for (text, want, why) in cases {
+            let header = toml_sections(text)
+                .into_iter()
+                .find(|(_, kv)| kv.get("modId").is_some_and(|v| v == "a"))
+                .map(|(h, _)| h)
+                .unwrap_or_default();
+            assert_eq!(header, want, "{:?}: {}", text, why);
+        }
+    }
+
+    #[test]
+    fn xaero_minimap_bundled_xaerolib_counts_as_installed() {
+        let inner = tmp("xaerolib-neoforge-1.21.1-1.7.3.jar");
+        make_jar(
+            &inner,
+            &[("META-INF/neoforge.mods.toml", b"modLoader = \"javafml\" #mandatory\n[[mods]] #mandatory\nmodId = \"xaerolib\" #mandatory\n")],
+        );
+        let body = std::fs::read(&inner).unwrap();
+        let outer = tmp("xaerominimap-neoforge-1.21.1-26.5.0.jar");
+        make_jar(
+            &outer,
+            &[
+                (
+                    "META-INF/neoforge.mods.toml",
+                    b"modLoader = \"javafml\" #mandatory\n[[mods]] #mandatory\nmodId = \"xaerominimap\" #mandatory\ndisplayName = \"Xaero's Minimap\" #mandatory\n[[dependencies.xaerominimap]] #optional\nmodId = \"neoforge\" #mandatory\ntype=\"required\" #mandatory\n[[dependencies.xaerobetterpvp]]\nmodId = \"xaerolib\"\ntype=\"required\"\n".as_ref(),
+                ),
+                ("META-INF/jarjar/xaerolib-neoforge-1.21.1-1.7.3.jar", body.as_slice()),
+            ],
+        );
+        let m = read_file_meta(&outer, "mod", "xaerominimap-neoforge-1.21.1-26.5.0.jar");
+        assert_eq!(m.mod_id, "xaerominimap", "the commented [[mods]] header must still name the jar");
+        assert!(
+            m.provides.contains(&"xaerolib".to_string()),
+            "XaeroLib ships inside the jar; without it the build is told to fetch a mod that has no 1.21.1 NeoForge release, got {:?}",
+            m.provides
         );
     }
 

@@ -471,8 +471,12 @@ fn file_matches(path: &Path, sum: Option<Sum<'_>>, size: Option<u64>) -> bool {
     if !sum.is_usable() {
         return true;
     }
+    hash_matches(path, &sum)
+}
+
+fn hash_matches(path: &Path, sum: &Sum<'_>) -> bool {
     let Ok(mut file) = std::fs::File::open(path) else { return false };
-    let mut h = Hasher::for_sum(&sum);
+    let mut h = Hasher::for_sum(sum);
     let mut buf = vec![0u8; 128 * 1024];
     loop {
         match std::io::Read::read(&mut file, &mut buf) {
@@ -545,10 +549,12 @@ async fn fetch_cancellable(
     let _cleanup = PartGuard(part.clone());
     let mut last = String::new();
     let mut resume_from: u64 = 0;
-    for route in super::mirror::routes(url).await {
+    let routes = super::mirror::routes(url).await;
+    for (ri, route) in routes.iter().enumerate() {
+        let has_next = ri + 1 < routes.len();
         for attempt in 1..=TRIES {
             let target = if attempt > 1 && is_stale_cdn_miss(&last) {
-                bypass_cdn_cache(&route)
+                bypass_cdn_cache(route)
             } else {
                 route.clone()
             };
@@ -577,12 +583,26 @@ async fn fetch_cancellable(
             if cancelled(cancel) {
                 return Err(CANCELLED.into());
             }
+            if has_next && super::mirror::abandon_direct(route, &last) {
+                break;
+            }
             if attempt < TRIES {
-                tokio::time::sleep(Duration::from_millis(400 * attempt as u64)).await;
+                tokio::time::sleep(retry_pause(attempt, &last)).await;
             }
         }
     }
     Err(last)
+}
+
+/// Our mirror answers 429 when a parallel pack install outruns its per-address
+/// limit; the window is a minute, so the short pause meant for a dropped
+/// connection only burned the remaining attempts inside the same window.
+fn retry_pause(attempt: u32, err: &str) -> Duration {
+    if err.ends_with(&format!(" {}", reqwest::StatusCode::TOO_MANY_REQUESTS)) {
+        Duration::from_secs(5 * attempt as u64)
+    } else {
+        Duration::from_millis(400 * attempt as u64)
+    }
 }
 
 fn cancelled(cancel: Option<&AtomicBool>) -> bool {
@@ -685,7 +705,7 @@ async fn fetch_once(
     };
     let mut stream = resp.bytes_stream();
     while let Some(chunk) = or_cancel(stream.next(), cancel).await? {
-        let chunk = chunk.map_err(|e| format!("{}: обрыв загрузки ({})", url, e))?;
+        let chunk = chunk.map_err(|e| format!("{}: обрыв загрузки ({})", url, net_err(&e)))?;
         if let Some(h) = hasher.as_mut() {
             h.update(&chunk);
         }
@@ -768,28 +788,38 @@ pub(crate) async fn download_checked_cancellable(
     cancel: Option<&AtomicBool>,
 ) -> Result<(), String> {
     if dest.exists() {
-        let owned: Option<(u8, String)> = sum.map(|s| match s {
-            Sum::Sha1(v) => (1u8, v.to_string()),
-            Sum::Sha256(v) => (2, v.to_string()),
-            Sum::Sha512(v) => (3, v.to_string()),
-        });
+        let owned = sum.map(OwnedSum::of);
         let path = dest.to_path_buf();
-        let ok = tokio::task::spawn_blocking(move || {
-            let sum = owned.as_ref().map(|(k, v)| match k {
-                1 => Sum::Sha1(v.as_str()),
-                2 => Sum::Sha256(v.as_str()),
-                _ => Sum::Sha512(v.as_str()),
-            });
-            file_matches(&path, sum, size)
-        })
-        .await
-        .unwrap_or(false);
+        let ok = tokio::task::spawn_blocking(move || file_matches(&path, owned.as_ref().map(OwnedSum::sum), size))
+            .await
+            .unwrap_or(false);
         if ok {
             return Ok(());
         }
         let _ = std::fs::remove_file(dest);
     }
     fetch_cancellable(url, dest, sum, size, cancel, None).await
+}
+
+/// A digest that can cross into `spawn_blocking`.
+struct OwnedSum(u8, String);
+
+impl OwnedSum {
+    fn of(sum: Sum<'_>) -> Self {
+        match sum {
+            Sum::Sha1(v) => OwnedSum(1, v.to_string()),
+            Sum::Sha256(v) => OwnedSum(2, v.to_string()),
+            Sum::Sha512(v) => OwnedSum(3, v.to_string()),
+        }
+    }
+
+    fn sum(&self) -> Sum<'_> {
+        match self.0 {
+            1 => Sum::Sha1(&self.1),
+            2 => Sum::Sha256(&self.1),
+            _ => Sum::Sha512(&self.1),
+        }
+    }
 }
 
 /// То же скачивание, но с отчётом о ходе. Архив сборки весит гигабайты, и без
@@ -806,7 +836,143 @@ pub(crate) async fn download_checked_progress(
     if dest.exists() {
         let _ = std::fs::remove_file(dest);
     }
+    if let (Some(s), Some(total)) = (sum.filter(|s| s.is_usable()), size) {
+        if total >= SEGMENTED_MIN_BYTES && super::mirror::routes(url).await.len() == 1 {
+            if let Segmented::Done = fetch_segmented(url, dest, s, total, cancel, on).await? {
+                return Ok(());
+            }
+        }
+    }
     fetch_cancellable(url, dest, sum, size, cancel, Some(on)).await
+}
+
+/// From this size an archive is fetched over several connections at once.
+/// Pack archives run to gigabytes, and on long routes a single TCP stream
+/// tops out far below the line: one player in ten got a 1.4 GB pack at about
+/// 1.3 MB/s, which is the half-hour install.
+const SEGMENTED_MIN_BYTES: u64 = 256 * 1024 * 1024;
+const SEGMENTS: u64 = 4;
+
+enum Segmented {
+    Done,
+    /// The server ignores ranges or the declared size was wrong: the caller
+    /// falls back to one plain stream, which settles both.
+    Unsupported,
+}
+
+enum SpanErr {
+    Unsupported,
+    Failed(String),
+}
+
+async fn fetch_segmented(
+    url: &str,
+    dest: &Path,
+    sum: Sum<'_>,
+    size: u64,
+    cancel: Option<&AtomicBool>,
+    on: &Progress<'_>,
+) -> Result<Segmented, String> {
+    if let Some(p) = dest.parent() {
+        std::fs::create_dir_all(p).map_err(|e| format!("{}: {}", p.display(), e))?;
+    }
+    let part = part_path(dest);
+    let _cleanup = PartGuard(part.clone());
+    std::fs::File::create(&part)
+        .and_then(|f| f.set_len(size))
+        .map_err(|e| format!("{}: {}", part.display(), e))?;
+    let got = std::sync::atomic::AtomicU64::new(0);
+    let span = size.div_ceil(SEGMENTS);
+    let spans = (0..SEGMENTS)
+        .map(|i| (i * span, ((i + 1) * span).min(size)))
+        .filter(|(a, b)| a < b)
+        .map(|(a, b)| fetch_span(url, &part, a, b, cancel, &got, size, on));
+    match futures::future::try_join_all(spans).await {
+        Ok(_) => {}
+        Err(SpanErr::Unsupported) => return Ok(Segmented::Unsupported),
+        Err(SpanErr::Failed(e)) => return Err(e),
+    }
+    let owned = OwnedSum::of(sum);
+    let path = part.clone();
+    let intact = tokio::task::spawn_blocking(move || hash_matches(&path, &owned.sum()))
+        .await
+        .unwrap_or(false);
+    if !intact {
+        return Ok(Segmented::Unsupported);
+    }
+    publish(&part, dest, Some(sum), Some(size))?;
+    Ok(Segmented::Done)
+}
+
+/// One byte range `[start, end)` written in place; a cut connection resumes
+/// from the last byte that landed.
+#[allow(clippy::too_many_arguments)]
+async fn fetch_span(
+    url: &str,
+    part: &Path,
+    start: u64,
+    end: u64,
+    cancel: Option<&AtomicBool>,
+    got: &std::sync::atomic::AtomicU64,
+    total: u64,
+    on: &Progress<'_>,
+) -> Result<(), SpanErr> {
+    use std::io::{Seek, SeekFrom};
+    let io = |e: std::io::Error| SpanErr::Failed(format!("{}: {}", part.display(), e));
+    let mut at = start;
+    let mut last = String::new();
+    for attempt in 1..=TRIES {
+        let req = client().get(url).header("Range", format!("bytes={}-{}", at, end - 1));
+        match or_cancel(req.send(), cancel).await.map_err(SpanErr::Failed)? {
+            Ok(resp) if resp.status() == reqwest::StatusCode::PARTIAL_CONTENT && range_starts_at(&resp, at) => {
+                let mut file = std::fs::OpenOptions::new().write(true).open(part).map_err(io)?;
+                file.seek(SeekFrom::Start(at)).map_err(io)?;
+                let mut stream = resp.bytes_stream();
+                while at < end {
+                    match or_cancel(stream.next(), cancel).await.map_err(SpanErr::Failed)? {
+                        None => break,
+                        Some(Ok(chunk)) => {
+                            let take = chunk.len().min((end - at) as usize);
+                            file.write_all(&chunk[..take]).map_err(io)?;
+                            at += take as u64;
+                            let now = got.fetch_add(take as u64, Ordering::Relaxed) + take as u64;
+                            on(now, Some(total));
+                        }
+                        Some(Err(e)) => {
+                            last = format!("{}: обрыв загрузки ({})", url, net_err(&e));
+                            break;
+                        }
+                    }
+                }
+                file.flush().map_err(io)?;
+            }
+            Ok(resp) if resp.status().is_success() || resp.status() == reqwest::StatusCode::RANGE_NOT_SATISFIABLE => {
+                return Err(SpanErr::Unsupported);
+            }
+            Ok(resp) => last = format!("{} → {}", url, resp.status()),
+            Err(e) => last = format!("{}: {}", url, net_err(&e)),
+        }
+        if at >= end {
+            return Ok(());
+        }
+        if cancelled(cancel) {
+            return Err(SpanErr::Failed(CANCELLED.into()));
+        }
+        if attempt < TRIES {
+            tokio::time::sleep(retry_pause(attempt, &last)).await;
+        }
+    }
+    Err(SpanErr::Failed(if last.is_empty() { format!("{}: ответ оборвался", url) } else { last }))
+}
+
+fn range_starts_at(resp: &reqwest::Response, at: u64) -> bool {
+    resp.headers()
+        .get(reqwest::header::CONTENT_RANGE)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("bytes "))
+        .and_then(|v| v.split('-').next())
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        == Some(at)
 }
 
 /// Same contract as `download_checked`, plus the shared store: a file another
@@ -1153,5 +1319,110 @@ PK"),
         let wrong = "0000000000000000000000000000000000000000";
         let r = download_checked(DEAD, &f, Some(Sum::Sha1(wrong)), Some(12)).await;
         assert!(r.is_err(), "не сошлись ни размер, ни хеш — файл чужой");
+    }
+
+    #[derive(Clone, Copy)]
+    enum RangeMode {
+        Honest,
+        IgnoresRange,
+        CutsEveryAnswerAfter(usize),
+    }
+
+    async fn serve_ranges(body: Vec<u8>, mode: RangeMode) -> String {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/pack.zip", listener.local_addr().unwrap());
+        let body = std::sync::Arc::new(body);
+        tokio::spawn(async move {
+            loop {
+                let Ok((mut sock, _)) = listener.accept().await else { return };
+                let body = body.clone();
+                tokio::spawn(async move {
+                    let mut buf = [0u8; 2048];
+                    let n = sock.read(&mut buf).await.unwrap_or(0);
+                    let req = String::from_utf8_lossy(&buf[..n]).to_ascii_lowercase();
+                    let range = req
+                        .lines()
+                        .find_map(|l| l.strip_prefix("range: bytes="))
+                        .and_then(|r| r.trim().split_once('-'))
+                        .and_then(|(a, b)| Some((a.parse::<usize>().ok()?, b.parse::<usize>().ok()?)));
+                    let (head, slice) = match (mode, range) {
+                        (RangeMode::IgnoresRange, _) | (_, None) => (
+                            format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len()),
+                            body[..].to_vec(),
+                        ),
+                        (_, Some((a, b))) => (
+                            format!(
+                                "HTTP/1.1 206 Partial Content\r\nContent-Range: bytes {}-{}/{}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                                a, b, body.len(), b + 1 - a
+                            ),
+                            body[a..=b].to_vec(),
+                        ),
+                    };
+                    let slice = match mode {
+                        RangeMode::CutsEveryAnswerAfter(cut) => slice[..slice.len().min(cut)].to_vec(),
+                        _ => slice,
+                    };
+                    let _ = sock.write_all(head.as_bytes()).await;
+                    let _ = sock.write_all(&slice).await;
+                    let _ = sock.shutdown().await;
+                });
+            }
+        });
+        url
+    }
+
+    /// вход (как сервер отвечает на Range) -> вердикт. Архив сборки идёт в
+    /// несколько соединений; без поддержки диапазонов — откат на один поток,
+    /// оборванные куски докачиваются со своего места, итог сверяется по хешу.
+    #[tokio::test]
+    async fn a_big_archive_downloads_in_ranges_or_falls_back() {
+        let body: Vec<u8> = (0..1_000_003u32).map(|i| (i % 251) as u8).collect();
+        let sha1 = {
+            use sha1::Digest as _;
+            sha1::Sha1::digest(&body).iter().map(|b| format!("{:02x}", b)).collect::<String>()
+        };
+        let cases: [(RangeMode, bool, &str); 3] = [
+            (RangeMode::Honest, true, "сервер отдаёт диапазоны — архив собирается из кусков"),
+            (RangeMode::IgnoresRange, false, "сервер без диапазонов — вызывающий качает одним потоком"),
+            (RangeMode::CutsEveryAnswerAfter(150_000), true, "обрывы докачиваются с последнего байта"),
+        ];
+        let noop = |_: u64, _: Option<u64>| {};
+        for (i, (mode, segmented, why)) in cases.into_iter().enumerate() {
+            let url = serve_ranges(body.clone(), mode).await;
+            let dest = tmp(&format!("segmented-{}", i)).join("pack.zip");
+            let r = fetch_segmented(&url, &dest, Sum::Sha1(&sha1), body.len() as u64, None, &noop)
+                .await
+                .unwrap_or_else(|e| panic!("{}: {}", why, e));
+            assert_eq!(matches!(r, Segmented::Done), segmented, "{}", why);
+            if segmented {
+                assert_eq!(std::fs::read(&dest).unwrap(), body, "{}: собранный файл отличается от исходного", why);
+            } else {
+                assert!(!dest.exists(), "{}: при откате на диске не должно остаться полуфайла", why);
+            }
+        }
+    }
+
+    /// Неверная сумма у собранного из кусков файла не публикуется: откат на
+    /// обычную закачку, которая и выдаст ошибку сверки.
+    #[tokio::test]
+    async fn a_segmented_archive_with_a_wrong_hash_is_not_published() {
+        let body: Vec<u8> = vec![7u8; 4096];
+        let url = serve_ranges(body.clone(), RangeMode::Honest).await;
+        let dest = tmp("segmented-wrong-hash").join("pack.zip");
+        let noop = |_: u64, _: Option<u64>| {};
+        let wrong = "0000000000000000000000000000000000000000";
+        let r = fetch_segmented(&url, &dest, Sum::Sha1(wrong), body.len() as u64, None, &noop).await;
+        assert!(matches!(r, Ok(Segmented::Unsupported)), "несошедшийся хеш обязан вернуть откат, а не готовый файл");
+        assert!(!dest.exists(), "файл с чужим содержимым не должен лечь на место");
+    }
+
+    /// вход -> пауза перед повтором. 429 от нашего зеркала значит «подожди
+    /// минутное окно»: короткая пауза сжигала попытки внутри того же окна.
+    #[test]
+    fn rate_limit_waits_longer_than_a_dropped_connection() {
+        let throttled = format!("https://api.millida.net/v2/launcher/dl → {}", reqwest::StatusCode::TOO_MANY_REQUESTS);
+        assert!(retry_pause(1, &throttled) >= Duration::from_secs(5), "429 должен ждать окно лимита");
+        assert_eq!(retry_pause(1, "x: обрыв загрузки (нет связи (reset))"), Duration::from_millis(400), "обрыв повторяется сразу");
     }
 }

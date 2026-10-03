@@ -809,11 +809,13 @@ export function Settings({ on }: { on: boolean }) {
           >
             <button
               className="btn sm ghost"
-              disabled={j.in_use}
               aria-label={'Удалить Java ' + j.major}
               onClick={async () => {
+                const question = j.in_use
+                  ? 'Удалить Java ' + j.major + '? Она нужна установленным сборкам — лаунчер скачает её заново при их запуске.'
+                  : 'Удалить Java ' + j.major + '? Если понадобится, лаунчер скачает её сам.'
                 if (
-                  !(await uiConfirm('Удалить Java ' + j.major + '? Если понадобится, лаунчер скачает её сам.', {
+                  !(await uiConfirm(question, {
                     confirmLabel: 'Удалить',
                     danger: true,
                   }))
@@ -826,7 +828,7 @@ export function Settings({ on }: { on: boolean }) {
                   })
                   .catch((e) => {
                     console.error('[settings] java remove', e)
-                    showToast('Не удалось удалить', 'error')
+                    showToast(apiErrorText(e, 'Не удалось удалить'), 'error')
                   })
               }}
             >

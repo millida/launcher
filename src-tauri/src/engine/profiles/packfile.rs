@@ -15,8 +15,41 @@ fn commit(prof: Profile) -> Result<Profile, String> {
     Ok(prof)
 }
 
+/// Where an import reports. A catalogue install runs as a job: its card shows
+/// only the job's own progress and its «Отменить» sets only the job's flag, so
+/// an import reporting elsewhere looked frozen for the whole mod download and
+/// could not be stopped.
+pub(crate) struct ImportJob<'a> {
+    pub job: &'a Job,
+    pub from: f32,
+    pub to: f32,
+}
+
+#[derive(Clone, Copy)]
+struct Progress<'a> {
+    app: &'a AppHandle,
+    job: Option<&'a ImportJob<'a>>,
+}
+
+impl Progress<'_> {
+    fn step(&self, pct: f32, msg: &str) {
+        match self.job {
+            Some(j) => j.job.emit(self.app, j.from + (j.to - j.from) * pct.clamp(0.0, 100.0) / 100.0, msg),
+            None => emit(self.app, "mod", pct, msg),
+        }
+    }
+
+    fn check(&self) -> Result<(), String> {
+        self.job.map_or(Ok(()), |j| j.job.check())
+    }
+
+    fn cancel_flag(&self) -> Option<&std::sync::atomic::AtomicBool> {
+        self.job.map(|j| j.job.cancel_flag())
+    }
+}
+
 /// mrpack: download every index entry from its mirrors, then apply overrides/.
-async fn from_mrpack(app: &AppHandle, ex: &Path, name_hint: &str) -> Result<Profile, String> {
+async fn from_mrpack(progress: Progress<'_>, ex: &Path, name_hint: &str) -> Result<Profile, String> {
     let idx: Value = serde_json::from_slice(&std::fs::read(ex.join("modrinth.index.json")).map_err(|e| e.to_string())?)
         .map_err(|e| e.to_string())?;
     let deps = &idx["dependencies"];
@@ -35,44 +68,16 @@ async fn from_mrpack(app: &AppHandle, ex: &Path, name_hint: &str) -> Result<Prof
     let pdir = profile_dir(&pname);
     std::fs::create_dir_all(pdir.join("mods")).map_err(|e| e.to_string())?;
     let files = idx["files"].as_array().cloned().unwrap_or_default();
-    let total = files.len().max(1);
-    for (i, f) in files.iter().enumerate() {
-        if f["env"]["client"].as_str() == Some("unsupported") { continue }
-        let Some(path) = f["path"].as_str() else { continue };
-        let dest = match safe_join(&pdir, path) {
-            Ok(d) => d,
-            Err(e) => {
-                let _ = std::fs::remove_dir_all(&pdir);
-                return Err(format!("Сборка содержит небезопасный путь: {}", e));
-            }
-        };
-        let (sha1, size) = match pack_file_check(f) {
-            Ok(v) => v,
-            Err(e) => {
-                let _ = std::fs::remove_dir_all(&pdir);
-                return Err(format!("Сборка отклонена — {}: {}", path, e));
-            }
-        };
-        let mut done = false;
-        let mut why = String::from("нет разрешённой ссылки на файл");
-        if let Some(urls) = f["downloads"].as_array() {
-            for u in urls {
-                if let Some(u) = u.as_str().filter(|u| pack_download_allowed(u)) {
-                    match download_verify(u, &dest, Some(&sha1), size).await {
-                        Ok(()) => {
-                            done = true;
-                            break;
-                        }
-                        Err(e) => why = e,
-                    }
-                }
-            }
-        }
-        if !done {
-            let _ = std::fs::remove_dir_all(&pdir);
-            return Err(format!("Не удалось скачать файл сборки: {} ({})", path, why));
-        }
-        emit(app, "mod", 20.0 + 60.0 * (i as f32 / total as f32), &format!("Файлы сборки {}/{}", i + 1, total));
+    let fetched = match pack_entries(&files, &pdir) {
+        Ok(entries) => download_pack_entries(entries, progress.cancel_flag(), &|n, total| {
+            progress.step(20.0 + 60.0 * (n as f32 / total.max(1) as f32), &format!("Файлы сборки {}/{}", n, total));
+        })
+        .await,
+        Err(e) => Err(e),
+    };
+    if let Err(e) = fetched.and_then(|()| progress.check()) {
+        let _ = std::fs::remove_dir_all(&pdir);
+        return Err(e);
     }
     for ov in ["overrides", "client-overrides"] {
         let src = ex.join(ov);
@@ -82,7 +87,7 @@ async fn from_mrpack(app: &AppHandle, ex: &Path, name_hint: &str) -> Result<Prof
 }
 
 /// CurseForge manifest: mods resolved by projectID/fileID through the CF API.
-async fn from_cf_manifest(app: &AppHandle, ex: &Path, name_hint: &str) -> Result<Profile, String> {
+async fn from_cf_manifest(progress: Progress<'_>, ex: &Path, name_hint: &str) -> Result<Profile, String> {
     let man: Value = serde_json::from_slice(&std::fs::read(ex.join("manifest.json")).map_err(|e| e.to_string())?)
         .map_err(|e| e.to_string())?;
     let mc = man["minecraft"]["version"].as_str().ok_or("В manifest.json нет версии Minecraft")?.to_string();
@@ -98,28 +103,16 @@ async fn from_cf_manifest(app: &AppHandle, ex: &Path, name_hint: &str) -> Result
     let pdir = profile_dir(&pname);
     std::fs::create_dir_all(pdir.join("mods")).map_err(|e| e.to_string())?;
     let list = man["files"].as_array().cloned().unwrap_or_default();
-    let total = list.len().max(1);
-    let mut failed: Vec<String> = vec![];
-    for (i, f) in list.iter().enumerate() {
-        let (pid, fid) = (f["projectID"].as_u64().unwrap_or(0), f["fileID"].as_u64().unwrap_or(0));
-        if pid == 0 || fid == 0 { continue }
-        let required = f["required"].as_bool().unwrap_or(true);
-        if let Ok(j) = cf_get(&format!("v1/mods/{}/files/{}", pid, fid), &[]).await {
-            let d = &j["data"];
-            if let Ok(fname) = safe_file_name(d["fileName"].as_str().unwrap_or("")) {
-                let dest = safe_child(&pdir.join("mods"), &fname)?;
-                if let Err(e) = cf_download(d, &fname, &dest).await {
-                    if required { failed.push(format!("{} ({})", fname, e)) }
-                }
-            }
-        } else if required {
-            failed.push(format!("файл #{} (CurseForge не ответил)", fid));
-        }
-        emit(app, "mod", 20.0 + 60.0 * (i as f32 / total as f32), &format!("Моды {}/{}", i + 1, total));
-    }
-    if !failed.is_empty() {
+    let fetched = cf_fetch_manifest_files(&list, &pdir.join("mods"), progress.cancel_flag(), &|n, total| {
+        progress.step(20.0 + 60.0 * (n as f32 / total.max(1) as f32), &format!("Моды {}/{}", n, total));
+    })
+    .await;
+    let verdict = progress.check().and(fetched.map(|_| ()).map_err(|e| {
+        if e == CANCELLED { e } else { format!("Не скачались файлы сборки: {}", e) }
+    }));
+    if let Err(e) = verdict {
         let _ = std::fs::remove_dir_all(&pdir);
-        return Err(format!("Не скачались файлы сборки: {}", failed.join("; ")));
+        return Err(e);
     }
     for name in [man["overrides"].as_str().filter(|s| !s.is_empty()).unwrap_or("overrides"), "client-overrides"] {
         let ov = safe_join(ex, name)?;
@@ -190,7 +183,7 @@ pub async fn import_pack_path(app: AppHandle, picked: std::path::PathBuf) -> Res
     if picked.is_dir() { return from_plain_dir(&picked, &base_name(&picked), None); }
     if !picked.exists() { return Err("Файл не найден".into()) }
     let hint = base_name(&picked);
-    import_pack_archive(&app, &picked, &hint, None, "packfile").await
+    import_pack_archive(&app, None, &picked, &hint, None, "packfile").await
 }
 
 /// Архив сборки, уже лежащий на диске: выбранный в проводнике или скачанный
@@ -198,12 +191,14 @@ pub async fn import_pack_path(app: AppHandle, picked: std::path::PathBuf) -> Res
 /// разных сборок не должны делить одну.
 pub(crate) async fn import_pack_archive(
     app: &AppHandle,
+    job: Option<&ImportJob<'_>>,
     archive: &Path,
     name_hint: &str,
     hint: Option<&PackHint>,
     work: &str,
 ) -> Result<Profile, String> {
-    emit(app, "mod", 10.0, "Распаковываем сборку…");
+    let progress = Progress { app, job };
+    progress.step(10.0, "Распаковываем сборку…");
     let ex = data_dir().join("tmp").join(work);
     let _ = std::fs::remove_dir_all(&ex);
     std::fs::create_dir_all(&ex).map_err(|e| e.to_string())?;
@@ -223,13 +218,13 @@ pub(crate) async fn import_pack_archive(
         r
     };
     let res = if root.join("modrinth.index.json").exists() {
-        from_mrpack(app, &root, name_hint).await
+        from_mrpack(progress, &root, name_hint).await
     } else if root.join("manifest.json").exists() {
-        from_cf_manifest(app, &root, name_hint).await
+        from_cf_manifest(progress, &root, name_hint).await
     } else {
         from_plain_dir(&root, name_hint, hint)
     };
     let _ = std::fs::remove_dir_all(&ex);
-    if res.is_ok() { emit(app, "mod", 100.0, "Сборка импортирована") }
+    if res.is_ok() { progress.step(100.0, "Сборка импортирована") }
     res
 }

@@ -8,6 +8,7 @@ const OVERLAY_COMMANDS: &[&str] = &[
     "overlay_state",
     "overlay_hide",
     "overlay_ready",
+    "overlay_cleared",
     "overlay_hit_areas",
     "overlay_open",
     "session_status",

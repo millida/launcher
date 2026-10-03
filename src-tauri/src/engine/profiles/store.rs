@@ -363,33 +363,16 @@ async fn install_modpack_job(app: &AppHandle, job: &Job, slug: String, version_i
     forget_skin_mod_install(&pname);
     std::fs::create_dir_all(pdir.join("mods")).map_err(|e| e.to_string())?;
     let files = idx["files"].as_array().cloned().unwrap_or_default();
-    let total = files.len().max(1);
-    for (i, f) in files.iter().enumerate() {
-        if job.cancelled() {
+    let entries = pack_entries(&files, &pdir)?;
+    let fetched = download_pack_entries(entries, Some(job.cancel_flag()), &|n, total| {
+        job.emit(app, 20.0 + 60.0 * (n as f32 / total.max(1) as f32), &format!("Файлы сборки {}/{}", n, total));
+    })
+    .await;
+    if let Err(e) = fetched {
+        if e == CANCELLED {
             let _ = std::fs::remove_dir_all(&ex);
-            return Err(CANCELLED.into());
         }
-        // server-only files must not reach the client
-        if f["env"]["client"].as_str() == Some("unsupported") { continue; }
-        let Some(path) = f["path"].as_str() else { continue };
-        // paths come from the pack index and are untrusted
-        let dest = safe_join(&pdir, path)
-            .map_err(|e| format!("Сборка содержит небезопасный путь: {}", e))?;
-        let (sha1, size) = pack_file_check(f).map_err(|e| format!("{}: {}", path, e))?;
-        let mut done = false;
-        let mut why = String::from("нет разрешённой ссылки на файл");
-        if let Some(urls) = f["downloads"].as_array() {
-            for u in urls {
-                if let Some(u) = u.as_str().filter(|u| pack_download_allowed(u)) {
-                    match download_verify(u, &dest, Some(&sha1), size).await {
-                        Ok(()) => { done = true; break; }
-                        Err(e) => why = e,
-                    }
-                }
-            }
-        }
-        if !done { return Err(format!("Не удалось скачать файл сборки: {} ({})", path, why)); }
-        job.emit(app, 20.0 + 60.0*(i as f32/total as f32), &format!("Файлы сборки {}/{}", i+1, total));
+        return Err(e);
     }
     for ov in ["overrides", "client-overrides"] {
         let src = ex.join(ov);
@@ -473,6 +456,67 @@ pub(crate) fn pack_file_check(f: &Value) -> Result<(String, Option<u64>), String
         return Err("повреждённая контрольная сумма".into());
     }
     Ok((sha1, f["fileSize"].as_u64()))
+}
+
+/// Files of a big pack fetched at once. One at a time a 300-mod pack spent
+/// most of its install waiting on round trips, not on bytes; past this the
+/// gain flattens and our mirror's per-address limit starts answering 429.
+pub(crate) const PACK_PARALLEL: usize = 8;
+
+pub(crate) struct PackEntry {
+    path: String,
+    dest: PathBuf,
+    sha1: String,
+    size: Option<u64>,
+    urls: Vec<String>,
+}
+
+/// The whole index is checked before the first byte is fetched: a bad entry
+/// at the end used to fail the pack only after every file before it had been
+/// downloaded.
+pub(crate) fn pack_entries(files: &[Value], pdir: &std::path::Path) -> Result<Vec<PackEntry>, String> {
+    let mut out = Vec::with_capacity(files.len());
+    for f in files {
+        if f["env"]["client"].as_str() == Some("unsupported") { continue; }
+        let Some(path) = f["path"].as_str() else { continue };
+        let dest = safe_join(pdir, path).map_err(|e| format!("Сборка содержит небезопасный путь: {}", e))?;
+        let (sha1, size) = pack_file_check(f).map_err(|e| format!("Сборка отклонена — {}: {}", path, e))?;
+        let urls = f["downloads"].as_array().map(|a| {
+            a.iter().filter_map(|u| u.as_str()).filter(|u| pack_download_allowed(u)).map(String::from).collect()
+        }).unwrap_or_default();
+        out.push(PackEntry { path: path.to_string(), dest, sha1, size, urls });
+    }
+    Ok(out)
+}
+
+/// Downloads every entry, `PACK_PARALLEL` at a time, each checked against its
+/// sha1. The first failure or a cancel stops the rest: dropping the in-flight
+/// transfers removes their temporary files.
+pub(crate) async fn download_pack_entries(
+    entries: Vec<PackEntry>,
+    cancel: Option<&std::sync::atomic::AtomicBool>,
+    on_file: &(dyn Fn(usize, usize) + Sync),
+) -> Result<(), String> {
+    use futures::TryStreamExt;
+    let total = entries.len();
+    let done = std::sync::atomic::AtomicUsize::new(0);
+    let done = &done;
+    futures::stream::iter(entries.into_iter().map(Ok::<PackEntry, String>))
+        .try_for_each_concurrent(PACK_PARALLEL, |e| async move {
+            let mut why = String::from("нет разрешённой ссылки на файл");
+            for u in &e.urls {
+                match or_cancel(download_verify(u, &e.dest, Some(&e.sha1), e.size), cancel).await? {
+                    Ok(()) => {
+                        let n = done.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                        on_file(n, total);
+                        return Ok(());
+                    }
+                    Err(err) => why = err,
+                }
+            }
+            Err(format!("Не удалось скачать файл сборки: {} ({})", e.path, why))
+        })
+        .await
 }
 
 #[cfg(test)]
@@ -614,5 +658,28 @@ mod tests {
         assert_eq!(profile_dir("Fabulously Optimized 1.21"), profile_dir("Fabulously Optimized 121"));
         assert_eq!(profile_dir("Моя сборка"), profile_dir("Моясборка"));
         assert_ne!(profile_dir("Sky Factory 4"), profile_dir("Sky Factory 4 (2)"));
+    }
+
+    /// вход (запись индекса) -> вердикт. Индекс проверяется целиком до первой
+    /// закачки: при параллельной загрузке плохая запись в конце не должна
+    /// оставлять за собой сотни уже скачанных файлов.
+    #[test]
+    fn a_pack_index_is_checked_before_anything_is_fetched() {
+        let pdir = std::env::temp_dir().join("millida-pack-entries");
+        let sha1 = "a".repeat(40);
+        let good = serde_json::json!({ "path": "mods/a.jar", "hashes": { "sha1": sha1 }, "fileSize": 3,
+            "downloads": ["https://cdn.modrinth.com/a.jar", "https://evil.example/a.jar"] });
+        let server_only = serde_json::json!({ "path": "mods/s.jar", "env": { "client": "unsupported" } });
+        let escape = serde_json::json!({ "path": "../../evil.jar", "hashes": { "sha1": sha1 } });
+        let unhashed = serde_json::json!({ "path": "mods/b.jar", "downloads": ["https://cdn.modrinth.com/b.jar"] });
+
+        let ok = pack_entries(&[good.clone(), server_only], &pdir).expect("годный индекс");
+        assert_eq!(ok.len(), 1, "серверный файл в клиент не попадает");
+        assert_eq!(ok[0].urls, vec!["https://cdn.modrinth.com/a.jar".to_string()], "чужой хост отброшен ещё до закачки");
+
+        let cases: [(Value, &str); 2] = [(escape, "путь из индекса выходит за папку сборки"), (unhashed, "файл без sha1 не качается вслепую")];
+        for (bad, why) in cases {
+            assert!(pack_entries(&[good.clone(), bad], &pdir).is_err(), "{}", why);
+        }
     }
 }

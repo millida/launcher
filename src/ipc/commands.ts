@@ -225,7 +225,6 @@ export const cancelInstall = (key: string) => invoke<boolean>('cancel_install', 
 
 
 
-
 export interface StoreGameState {
   slug: string
   steam: boolean
@@ -238,23 +237,6 @@ export const storeGamesState = () => invoke<StoreGameState[]>('store_games_state
 export const storeGameOpen = (slug: string, via: 'steam' | 'steam-install' | 'store-page' | 'store') =>
   invoke<void>('store_game_open', { slug, via })
 export const storeGameInstall = (slug: string) => invoke<void>('store_game_install', { slug })
-export const gameOwnership = (accountId: string, slug: string) =>
-    reportEntitlements(r.items)
-    return r.status
-  })
-
-let entitlementsReported = false
-/**
- * Названия покупок Microsoft (product_*, game_*) — один раз за запуск, в
- * без Windows нельзя (29.09.2026). Только названия продуктов, без ников и токенов.
- */
-function reportEntitlements(items?: string[]) {
-  if (entitlementsReported || !items || !items.length) return
-  entitlementsReported = true
-  const data: Record<string, string | number> = { kind: 'entitlements', n: items.length }
-  items.slice(0, 14).forEach((name, i) => (data['e' + (i + 1)] = name))
-  void import('../lib/telemetry').then((t) => t.track('account_link', data)).catch(() => {})
-}
 
 export const addLocalFile = (profile: string, kind: string, path: string) =>
   invoke<string>('add_local_file', { profile, kind, path })
@@ -1211,6 +1193,7 @@ export const overlaySetCardMs = (ms: number) => invoke<void>('overlay_set_card_m
 export const overlayToast = (payload: OverlayCard) => invoke<void>('overlay_toast', { payload })
 export const overlayHide = () => invoke<void>('overlay_hide')
 export const overlayReady = () => invoke<void>('overlay_ready')
+export const overlayCleared = (seq: number) => invoke<void>('overlay_cleared', { seq })
 export const overlayHitAreas = (rects: number[][]) => invoke<void>('overlay_hit_areas', { rects })
 export const overlayOpen = (payload: OverlayCard, toLauncher = false) =>
   invoke<void>('overlay_open', { payload, toLauncher })

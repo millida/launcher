@@ -4,10 +4,15 @@ import { join } from 'node:path'
 // The core reinstalls the launcher until the frontend calls `frontend_ready`,
 // so a build missing that call would reinstall itself on every start.
 const MARKER = 'frontend_ready'
-// A regex lookbehind is a parse error in WebKit before Safari 16.4 (macOS
-// Catalina and older): the chunk never runs, `frontend_ready` never fires.
-const OLD_WEBKIT_BREAKERS = ['(?<=', '(?<!']
-const dir = join(process.cwd(), 'dist', 'assets')
+// The x64 bundle starts on macOS 10.13, where WKWebView can be Safari 13: a regex
+// lookbehind (Safari 16.4) or a logical assignment (Safari 14) is a parse error
+// there, the chunk never runs and `frontend_ready` never fires.
+const OLD_WEBKIT_BREAKERS = ['(?<=', '(?<!', '??=', '||=', '&&=']
+// The splash lives in index.html, which the CSS pipeline does not lower: `inset`
+// (Safari 14.1) is dropped there and the logo sticks to the top-left corner.
+const OLD_WEBKIT_HTML_BREAKERS = ['inset:']
+const root = join(process.cwd(), 'dist')
+const dir = join(root, 'assets')
 
 const chunks = readdirSync(dir).filter((name) => name.endsWith('.js'))
 if (chunks.length === 0) throw new Error(`в ${dir} нет js-чанков — фронтенд собран неправильно`)
@@ -22,13 +27,25 @@ if (hits.length === 0) {
   )
 }
 
-const broken = sources.filter((c) => OLD_WEBKIT_BREAKERS.some((p) => c.text.includes(p))).map((c) => c.name)
+const broken = sources
+  .map((c) => ({ name: c.name, found: OLD_WEBKIT_BREAKERS.filter((p) => c.text.includes(p)) }))
+  .filter((c) => c.found.length > 0)
 if (broken.length > 0) {
   throw new Error(
-    `в чанках ${broken.join(', ')} есть regex lookbehind (?<= / (?<! — WebKit до Safari 16.4 ` +
-      '(macOS Catalina и старше) не разбирает такой модуль, и лаунчер там не открывается. ' +
-      'Перепиши выражение без lookbehind: захват предыдущего символа группой',
+    `в чанках ${broken.map((c) => `${c.name} (${c.found.join(' ')})`).join(', ')} синтаксис, который WebKit ` +
+      'Safari 13 (macOS 10.13–10.15 без обновлений) не разбирает, и лаунчер там не открывается. ' +
+      'Lookbehind перепиши захватом предыдущего символа группой; ??= / ||= / &&= означают, ' +
+      'что build.target в vite.config.ts подняли выше safari13',
   )
 }
 
-console.log(`Отметка ${MARKER} на месте: ${hits.join(', ')}; lookbehind в чанках нет`)
+const html = readFileSync(join(root, 'index.html'), 'utf8')
+const htmlBroken = OLD_WEBKIT_HTML_BREAKERS.filter((p) => html.includes(p))
+if (htmlBroken.length > 0) {
+  throw new Error(
+    `в dist/index.html есть ${htmlBroken.join(', ')} — WebKit Safari 13 его не знает, и сплэш ` +
+      'рисуется в углу поверх пустого окна. Пиши top/right/bottom/left',
+  )
+}
+
+console.log(`Отметка ${MARKER} на месте: ${hits.join(', ')}; синтаксиса новее Safari 13 в чанках нет`)

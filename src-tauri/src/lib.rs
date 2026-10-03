@@ -350,6 +350,7 @@ pub fn run() {
             commands::overlay::overlay_toast,
             commands::overlay::overlay_hide,
             commands::overlay::overlay_ready,
+            commands::overlay::overlay_cleared,
             commands::overlay::overlay_hit_areas,
             commands::overlay::overlay_open,
             commands::overlay::realtime_relay,

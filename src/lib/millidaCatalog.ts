@@ -127,6 +127,8 @@ export interface CatalogItem {
   author: string | null
   license: string | null
   sourceUrl: string | null
+  /// CurseForge project id the catalog already knows; absent on an older backend.
+  curseforgeId?: number | null
   downloads: number
   sourceDownloads: number
   updatedAt: string | null
@@ -395,6 +397,14 @@ export async function cfProjectId(ref: CfSourceRef): Promise<number | null> {
     (p) => p && String(p.slug).toLowerCase() === ref.slug.toLowerCase(),
   )
   return hit && typeof hit.id === 'number' && hit.id > 0 ? hit.id : null
+}
+
+/// The id stored by the catalog first: searching CurseForge by slug for every card used up the
+/// shared CurseForge budget of the backend for all players.
+export async function cfProjectOf(item: { curseforgeId?: number | null; sourceUrl: string | null }): Promise<number | null> {
+  if (item.curseforgeId && item.curseforgeId > 0) return item.curseforgeId
+  const ref = item.sourceUrl ? cfSourceRef(item.sourceUrl) : null
+  return ref ? cfProjectId(ref) : null
 }
 
 /// Загрузчик имеет смысл только у модов и модпаков: у ресурспака на Modrinth

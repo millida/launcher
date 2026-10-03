@@ -23,6 +23,9 @@ const MAX_ENTRIES: usize = 4000;
 const MAX_GAME_ARGS: usize = 64;
 const MAX_ARG_LEN: usize = 512;
 const NATIVE_EXTENSIONS: &[&str] = &["dll", "so", "dylib", "jnilib"];
+/// Module flags whose value is the next token. Their values only widen access
+/// between modules already loaded; the module path itself is never one of them.
+const PACK_MODULE_FLAGS: &[&str] = &["--add-modules", "--add-opens", "--add-exports", "--add-reads"];
 
 pub struct PackLaunch {
     /// Catalogue address — the pack asks the API for its launch token by it.
@@ -35,6 +38,11 @@ pub struct PackLaunch {
     pub natives_dir: String,
     /// Folders and jars, in the order they must appear on the classpath.
     pub class_path: Vec<String>,
+    /// Folders and jars for `-p`. NeoForge 1.20.2+ starts through
+    /// BootstrapLauncher, which needs its own jars as named modules; the
+    /// player-facing filter refuses a module path, so the pack names it here
+    /// and every entry is held inside the pack folder like the classpath.
+    pub module_path: Vec<String>,
     pub jvm_args: Vec<String>,
     /// Arguments after the main class. Empty means the modern set; a pack on
     /// an old version brings its own (1.7.10 wants `--userProperties` and a
@@ -67,6 +75,26 @@ fn list(v: &Value, key: &str) -> Vec<String> {
         .as_array()
         .map(|a| a.iter().filter_map(|x| x.as_str()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect())
         .unwrap_or_default()
+}
+
+/// The pack's JVM flags through the player filter, except that a module flag
+/// keeps the value written after it as a separate token, the way NeoForge's
+/// own version json spells them. A value that looks like a flag or an
+/// argument file drops the pair.
+fn pack_jvm_args(raw: Vec<String>) -> Vec<String> {
+    let mut out = Vec::with_capacity(raw.len());
+    let mut it = raw.into_iter().peekable();
+    while let Some(a) = it.next() {
+        if PACK_MODULE_FLAGS.contains(&a.to_ascii_lowercase().as_str()) {
+            if let Some(value) = it.next_if(|v| !v.is_empty() && !v.starts_with('-') && !v.starts_with('@')) {
+                out.push(a);
+                out.push(value);
+            }
+        } else if jvm_arg_allowed(&a) || PACK_JVM_EXACT.contains(&a.as_str()) {
+            out.push(a);
+        }
+    }
+    out
 }
 
 /// Reads the description a pack shipped with. Absent file = ordinary build.
@@ -153,17 +181,14 @@ pub fn parse_pack_launch(v: &Value) -> Option<PackLaunch> {
         assets_dir,
         natives_dir,
         class_path,
+        module_path: list(v, "modulePath"),
         /*
          * The pack's own flags go through the same filter as a player's: the
          * archive is prepared by someone else, and `-javaagent` in it would be
          * code execution on every start. Everything the pack actually needs
          * (`-D…`, `-XX:…`) passes that filter.
          */
-        jvm_args: list(v, "jvmArgs")
-            .into_iter()
-            .chain(platform_jvm)
-            .filter(|a| jvm_arg_allowed(a) || PACK_JVM_EXACT.contains(&a.as_str()))
-            .collect(),
+        jvm_args: pack_jvm_args(list(v, "jvmArgs").into_iter().chain(platform_jvm).collect()),
         game_args,
         vanilla_assets,
         java_major,
@@ -179,10 +204,32 @@ pub fn parse_pack_launch(v: &Value) -> Option<PackLaunch> {
 /// the same order: with two jars defining the same class, the order decides
 /// which one wins, and a pack that works here must work there.
 pub fn pack_classpath(profile: &str, spec: &PackLaunch) -> Result<Vec<PathBuf>, String> {
-    let root = profile_dir(profile);
+    let out = expand_pack_entries(&profile_dir(profile), &spec.class_path)?;
+    if out.is_empty() {
+        return Err("Сборка не назвала ни одной библиотеки для запуска".into());
+    }
+    Ok(out)
+}
+
+/// The module path a pack declared, expanded the same way as its classpath.
+/// Empty for a pack that starts without one.
+pub fn pack_module_path(profile: &str, spec: &PackLaunch) -> Result<Vec<PathBuf>, String> {
+    expand_pack_entries(&profile_dir(profile), &spec.module_path)
+}
+
+pub fn module_path_args(modules: &[PathBuf]) -> Vec<String> {
+    if modules.is_empty() {
+        return Vec::new();
+    }
+    let sep = if cfg!(target_os = "windows") { ";" } else { ":" };
+    let joined = modules.iter().map(|p| p.to_string_lossy().to_string()).collect::<Vec<_>>().join(sep);
+    vec!["-p".into(), joined]
+}
+
+fn expand_pack_entries(root: &Path, entries: &[String]) -> Result<Vec<PathBuf>, String> {
     let mut out: Vec<PathBuf> = Vec::new();
-    for entry in &spec.class_path {
-        let path = safe_join(&root, entry).map_err(|e| format!("Сборка указала путь вне своей папки: {}", e))?;
+    for entry in entries {
+        let path = safe_join(root, entry).map_err(|e| format!("Сборка указала путь вне своей папки: {}", e))?;
         if path.is_dir() {
             let mut found: Vec<PathBuf> = Vec::new();
             collect_jars(&path, &mut found);
@@ -196,9 +243,6 @@ pub fn pack_classpath(profile: &str, spec: &PackLaunch) -> Result<Vec<PathBuf>, 
         if out.len() > MAX_ENTRIES {
             return Err("В сборке слишком много библиотек — она собрана неверно".into());
         }
-    }
-    if out.is_empty() {
-        return Err("Сборка не назвала ни одной библиотеки для запуска".into());
     }
     Ok(out)
 }
@@ -1070,6 +1114,69 @@ mod tests {
             let at = args.iter().position(|a| a == need).unwrap_or_else(|| panic!("в команде нет «{}»", need));
             assert!(at < main_at, "«{}» — флаг JVM и обязан стоять до главного класса", need);
         }
+    }
+
+    /// NeoForge 21.1 starts through BootstrapLauncher: without its jars on `-p`
+    /// and the module flags with their values the JVM stops before the
+    /// window. The module path comes only from `modulePath`, held inside the
+    /// pack folder; a `-p` smuggled through `jvmArgs` must still be dropped.
+    #[test]
+    fn a_neoforge_pack_gets_its_module_path_and_module_flags() {
+        let root = std::env::temp_dir().join("millida-neoforge-pack-test");
+        let _ = std::fs::remove_dir_all(&root);
+        let bsl = root.join("libraries").join("cpw").join("mods").join("bootstraplauncher");
+        std::fs::create_dir_all(&bsl).unwrap();
+        std::fs::write(bsl.join("bootstraplauncher-2.0.2.jar"), b"x").unwrap();
+        std::fs::write(root.join("libraries").join("securejarhandler-3.0.8.jar"), b"x").unwrap();
+        std::fs::write(root.join("minecraft.jar"), b"x").unwrap();
+
+        let spec = parse_pack_launch(&json!({
+            "slug": "arcania-2",
+            "mainClass": "cpw.mods.bootstraplauncher.BootstrapLauncher",
+            "classPath": ["libraries", "minecraft.jar"],
+            "modulePath": ["libraries/cpw/mods/bootstraplauncher", "libraries/securejarhandler-3.0.8.jar"],
+            "jvmArgs": [
+                "-DlibraryDirectory=${library_directory}",
+                "--add-modules", "ALL-MODULE-PATH",
+                "--add-opens", "java.base/java.util.jar=cpw.mods.securejarhandler",
+                "--add-exports=java.base/sun.security.util=cpw.mods.securejarhandler",
+                "-p", "C:/Windows/evil.jar",
+                "--add-opens", "-javaagent:x.jar",
+                "--module-path=C:/Windows/evil.jar"
+            ],
+            "javaMajor": 21,
+            "needsToken": true
+        }))
+        .expect("описание NeoForge разобрано");
+
+        let modules = expand_pack_entries(&root, &spec.module_path).expect("модули внутри сборки");
+        assert_eq!(modules.len(), 2, "папка раскрыта в jar, файл взят как есть");
+        let mut extra = vec!["-Dlauncher.signature=SIG".to_string()];
+        extra.extend(module_path_args(&modules));
+        let cp = expand_pack_entries(&root, &spec.class_path).unwrap();
+        let v = pack_version_json(&spec, &extra);
+        let args = crate::engine::build_args(
+            &v, &spec.main_class, &cp, "Steve", &root, &root.join("assets"), &root.join("natives"), &root.join("libraries"), &Auth::default(),
+        );
+        let main_at = args.iter().position(|a| a == &spec.main_class).expect("главный класс в команде");
+        let p_at = args.iter().position(|a| a == "-p").expect("BootstrapLauncher без -p не стартует");
+        assert!(p_at < main_at, "-p — флаг JVM, стоит до главного класса");
+        assert!(args[p_at + 1].contains("bootstraplauncher-2.0.2.jar") && args[p_at + 1].contains("securejarhandler"), "в -p оба модуля");
+        assert_eq!(args.iter().filter(|a| *a == "-p").count(), 1, "-p из jvmArgs сборки не проходит, только из modulePath");
+        assert!(!args.iter().any(|a| a.contains("evil")), "путь вне сборки не попадает в команду");
+        assert!(!args.iter().any(|a| a.contains("javaagent")), "флаг вместо значения не становится значением");
+        for (flag, value) in [("--add-modules", "ALL-MODULE-PATH"), ("--add-opens", "java.base/java.util.jar=cpw.mods.securejarhandler")] {
+            let at = args.iter().position(|a| a == flag).unwrap_or_else(|| panic!("нет {}", flag));
+            assert_eq!(args[at + 1], value, "значение {} идёт следующим токеном, как в version json NeoForge", flag);
+        }
+        assert!(args.contains(&"--add-exports=java.base/sun.security.util=cpw.mods.securejarhandler".to_string()));
+        assert!(args.iter().any(|a| a.starts_with("-DlibraryDirectory=") && !a.contains("${")), "плейсхолдер раскрыт");
+
+        let outside = parse_pack_launch(&json!({ "mainClass": "a.B", "classPath": ["minecraft.jar"], "modulePath": ["../escape"] })).unwrap();
+        assert!(expand_pack_entries(&root, &outside.module_path).is_err(), "модуль вне папки сборки отклоняется");
+        let plain = parse_pack_launch(&spec_json()).unwrap();
+        assert!(module_path_args(&expand_pack_entries(&root, &plain.module_path).unwrap()).is_empty(), "Arcania 1.x без modulePath — команда прежняя");
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     /// LWJGL 3 natives laid out like its jars: one folder per module. Only the

@@ -6,7 +6,7 @@ import { hasTauri } from '../../ipc/tauri'
 import { millidaPacks } from '../../ipc/commands'
 import type { MillidaPack } from '../../ipc/commands'
 import type { ModHit } from '../../state/mods'
-import { cfProjectId, cfSourceRef } from '../../lib/millidaCatalog'
+import { cfProjectOf } from '../../lib/millidaCatalog'
 import { SECTION_SOURCE, listingQuery } from './sections'
 import type { EditionFilter, PriceFilter, SectionSlug, SectionSource } from './sections'
 import type { CatalogFile, Pricing } from './paid'
@@ -421,6 +421,7 @@ export const siteUrl = (section: string, slug: string): string => `https://milli
 /** Карточка материала (`/catalog/items/:slug`) — только поля, которые читает лаунчер. */
 export interface ItemView {
   sourceUrl: string | null
+  curseforgeId?: number | null
   launcherOnly?: boolean
   pricing?: Pricing
   priceKopecks?: number | null
@@ -480,8 +481,7 @@ export async function resolveHit(card: SiteCard): Promise<ModHit | null> {
     const source = (item && item.sourceUrl) || ''
     const m = MR_URL.exec(source)
     if (!m) {
-      const cf = cfSourceRef(source)
-      const cfid = cf ? await cfProjectId(cf) : null
+      const cfid = item ? await cfProjectOf(item) : null
       return cfid ? { ...baseHit(card), cfid, pid: 'cf:' + cfid } : null
     }
     const mrSlug = decodeURIComponent(m[1]!)

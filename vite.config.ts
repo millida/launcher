@@ -43,5 +43,7 @@ export default defineConfig({
       },
     },
   },
-  build: { target: 'es2021' },
+  // The x64 bundle starts on macOS 10.13, whose WKWebView can be as old as Safari 13:
+  // newer syntax there is a parse error and the window stays blank.
+  build: { target: ['es2020', 'safari13'] },
 })

@@ -192,6 +192,34 @@ pub fn client() -> Result<Client, String> {
         .map_err(|e| format!("не поднять сетевой клиент: {}", e))
 }
 
+/// reqwest's Display stops at "error sending request"; the reason that tells a
+/// certificate swap from a reset or a DNS failure lives further down source().
+fn network_error(e: &(dyn std::error::Error + 'static)) -> String {
+    let mut parts = vec![e.to_string()];
+    let mut cause = e.source();
+    while let Some(next) = cause {
+        let text = next.to_string();
+        if !parts.iter().any(|seen| seen.contains(&text)) {
+            parts.push(text);
+        }
+        cause = next.source();
+    }
+    let detail = parts.join(": ");
+    let low = detail.to_lowercase();
+    let hint = if low.contains("certificate") || low.contains("tls") || low.contains("handshake") {
+        " — соединение подменяет антивирус или прокси: отключите проверку HTTPS/SSL или добавьте установщик в исключения"
+    } else if low.contains("dns") || low.contains("lookup") || low.contains("resolve") {
+        " — адрес сервера не определился: проверьте DNS, VPN и антивирус"
+    } else if low.contains("timed out") || low.contains("timeout") {
+        " — сервер не ответил вовремя: проверьте интернет и VPN"
+    } else if low.contains("connect") || low.contains("reset") || low.contains("refused") {
+        " — соединение не установилось: проверьте брандмауэр, VPN и антивирус"
+    } else {
+        ""
+    };
+    format!("{}{}", detail, hint)
+}
+
 /// Redirects are followed by hand so that every hop, not just the first, is
 /// checked against the host list.
 fn fetch(client: &Client, url: &str, limit: u64, fresh: bool) -> Result<Response, String> {
@@ -219,7 +247,7 @@ fn fetch_range(
         }
         let response = request
             .send()
-            .map_err(|e| format!("не достучаться до {}: {}", current, e))?;
+            .map_err(|e| format!("не достучаться до {}: {}", current, network_error(&e.without_url())))?;
         let status = response.status();
         if status.is_redirection() {
             let target = response
@@ -283,7 +311,7 @@ pub fn fetch_build(client: &Client) -> Result<Build, String> {
             response
                 .take(MAX_MANIFEST_BYTES)
                 .read_to_string(&mut body)
-                .map_err(|e| format!("не прочитать ответ {}: {}", url, e))?;
+                .map_err(|e| format!("не прочитать ответ {}: {}", url, network_error(&e)))?;
             manifest::parse(&body)
         });
         match attempt {
@@ -417,7 +445,7 @@ fn fetch_part(
     let mut buffer = vec![0u8; PART_BUFFER];
     let mut offset = from;
     loop {
-        let read = response.read(&mut buffer).map_err(|e| format!("загрузка оборвалась: {}", e))?;
+        let read = response.read(&mut buffer).map_err(|e| format!("загрузка оборвалась: {}", network_error(&e)))?;
         if read == 0 {
             break;
         }
@@ -451,7 +479,7 @@ fn download_once(
     loop {
         let read = response
             .read(&mut buffer)
-            .map_err(|e| format!("загрузка оборвалась: {}", e))?;
+            .map_err(|e| format!("загрузка оборвалась: {}", network_error(&e)))?;
         if read == 0 {
             break;
         }
@@ -553,6 +581,46 @@ mod tests {
                 "перенаправление на {} должно было быть {}: проверяется каждый шаг цепочки, а не только первый адрес",
                 location,
                 if *expected { "принято" } else { "отклонено" }
+            );
+        }
+    }
+
+    #[derive(Debug)]
+    struct Layer(&'static str, Option<Box<Layer>>);
+
+    impl std::fmt::Display for Layer {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str(self.0)
+        }
+    }
+
+    impl std::error::Error for Layer {
+        fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+            self.1.as_deref().map(|inner| inner as &(dyn std::error::Error + 'static))
+        }
+    }
+
+    fn chain(texts: &[&'static str]) -> Layer {
+        texts.iter().rev().fold(None, |inner, text| Some(Layer(text, inner.map(Box::new)))).expect("цепочка")
+    }
+
+    /// Sabotage check: drop the source() walk and every case loses its cause.
+    #[test]
+    fn network_error_keeps_the_cause() {
+        let cases: &[(&[&'static str], &str, &str)] = &[
+            (&["error sending request", "client error (Connect)", "invalid peer certificate: UnknownIssuer"], "UnknownIssuer", "антивирус"),
+            (&["error sending request", "client error (Connect)", "dns error", "No such host is known. (os error 11001)"], "11001", "DNS"),
+            (&["error sending request", "client error (Connect)", "tcp connect error", "An existing connection was forcibly closed by the remote host. (os error 10054)"], "10054", "брандмауэр"),
+            (&["error decoding response body", "operation timed out"], "timed out", "не ответил"),
+        ];
+        for (layers, cause, hint) in cases {
+            let text = network_error(&chain(layers));
+            assert!(
+                text.contains(cause) && text.contains(hint),
+                "в тексте ошибки «{}» нет причины «{}» или подсказки «{}»: без них пользователь видит только «error sending request» и не знает, что чинить",
+                text,
+                cause,
+                hint
             );
         }
     }

@@ -285,7 +285,7 @@ export const EXPECTED_ANYWHERE: Array<[RegExp, string]> = [
   ],
   [/Такого кода не бывает|Некорректный код сборки/, 'a share code the player typed'],
   [/Мод выключен в настройках лаунчера/, "the player's own setting"],
-  [/Эта Java нужна одной из сборок/, 'refusing to remove a runtime in use is by design'],
+  [/Сначала закрой игру — она сейчас работает на этой Java/, 'refusing to remove a runtime under a running game is by design'],
   [
     /Нужен сам файл java|По этому пути файла java нет|Это одиночный файл java|Эту Java лаунчер ещё не проверял/,
     'a Java path the player typed',

@@ -1,5 +1,6 @@
 use super::http::{client, urlencode};
 use crate::engine::MILLIDA_API;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 /// Modrinth и CurseForge заблокированы в России: без VPN прямой запрос упирается
@@ -37,6 +38,41 @@ enum Source {
 static MODRINTH_DIRECT: tokio::sync::OnceCell<bool> = tokio::sync::OnceCell::const_new();
 static FORGE_DIRECT: tokio::sync::OnceCell<bool> = tokio::sync::OnceCell::const_new();
 static LOADER_DIRECT: tokio::sync::OnceCell<bool> = tokio::sync::OnceCell::const_new();
+
+/// The startup probe is a HEAD to one host; a filter that lets it through can
+/// still stall file bodies on the CDN. One stalled direct transfer moves the
+/// whole source behind our mirror for the session, so a pack of hundreds of
+/// files pays the timeout once instead of once per file.
+static MODRINTH_DEMOTED: AtomicBool = AtomicBool::new(false);
+static FORGE_DEMOTED: AtomicBool = AtomicBool::new(false);
+static LOADER_DEMOTED: AtomicBool = AtomicBool::new(false);
+
+fn demoted(source: Source) -> &'static AtomicBool {
+    match source {
+        Source::Modrinth => &MODRINTH_DEMOTED,
+        Source::Forge => &FORGE_DEMOTED,
+        Source::Loader => &LOADER_DEMOTED,
+    }
+}
+
+/// True when `route` is a direct address that has a mirror and the failure
+/// looks like a network block rather than an answer from the server; the
+/// source is then demoted and the caller should move to the next route
+/// instead of spending its remaining attempts on the same wall.
+pub(crate) fn abandon_direct(route: &str, err: &str) -> bool {
+    if !err.contains(NO_LINK) {
+        return false;
+    }
+    let Some(source) = source_of(route) else { return false };
+    if proxy_url(route).is_none() {
+        return false;
+    }
+    demoted(source).store(true, Ordering::Relaxed);
+    true
+}
+
+/// Marker `net_err` puts on transport failures (no connection, timeout, reset).
+pub(crate) const NO_LINK: &str = "нет связи";
 
 fn host_of(url: &str) -> Option<String> {
     url::Url::parse(url).ok()?.host_str().map(|h| h.to_ascii_lowercase())
@@ -110,7 +146,7 @@ pub(crate) async fn routes(url: &str) -> Vec<String> {
     let Some(proxied) = proxy_url(url) else {
         return vec![url.to_string()];
     };
-    if direct_available(source).await {
+    if !demoted(source).load(Ordering::Relaxed) && direct_available(source).await {
         vec![url.to_string(), proxied]
     } else {
         vec![proxied, url.to_string()]
@@ -195,6 +231,25 @@ mod tests {
                 why
             );
         }
+    }
+
+    /// вход (адрес попытки, ошибка) -> бросать ли прямой путь. Сетевой отказ на
+    /// прямом адресе источника переводит весь источник на зеркало, чтобы пак из
+    /// сотен файлов не ждал таймаут на каждом; ответ сервера статусом — нет.
+    #[test]
+    fn only_a_network_wall_on_a_direct_route_moves_to_the_mirror() {
+        let jar = "https://cdn.modrinth.com/data/AAA/versions/1/mod.jar";
+        let cases: [(&str, &str, bool, &str); 5] = [
+            (jar, "x: нет связи (operation timed out)", true, "прямой Modrinth не отвечает"),
+            (jar, "x: обрыв загрузки (нет связи (connection reset))", true, "тело встало посреди файла"),
+            (jar, "x → 404 Not Found", false, "сервер ответил — сеть ни при чём"),
+            ("https://api.millida.net/v2/launcher/dl?url=x", "x: нет связи (reset)", false, "это уже зеркало"),
+            ("https://garage.millida.net/a.zip", "x: нет связи (reset)", false, "у адреса нет зеркала"),
+        ];
+        for (route, err, want, why) in cases {
+            assert_eq!(abandon_direct(route, err), want, "{}", why);
+        }
+        assert!(MODRINTH_DEMOTED.swap(false, Ordering::Relaxed), "отказ прямого пути обязан пометить источник");
     }
 
     #[test]

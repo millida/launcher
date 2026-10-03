@@ -52,6 +52,21 @@ const HOLD_MAX_MS: u64 = 45_000;
 const IDLE_CLOSE_MS: u64 = 120_000;
 static IDLE_SEQ: AtomicU64 = AtomicU64::new(0);
 
+/// Whether the current webview has its listeners up. A window shown before that
+/// is a full-screen layer with no page in it yet, and it flashes black over the
+/// game; it is only revealed once the page says it is ready.
+static READY: AtomicBool = AtomicBool::new(false);
+/// The mode a not-yet-ready window is to be revealed in, once it is ready.
+static REVEAL: Mutex<Option<bool>> = Mutex::new(None);
+
+/// A hidden window keeps its last frame, and the next `show` puts that frame on
+/// screen before the webview repaints: the dimmed chat backdrop flashed over the
+/// game for every card that followed a chat. So the webview first clears itself
+/// to a transparent frame, and only then is the window hidden.
+const CLEAR_WAIT_MS: u64 = 250;
+static HIDE_SEQ: AtomicU64 = AtomicU64::new(0);
+static CLEAR_WAIT: Mutex<Option<(u64, tokio::sync::oneshot::Sender<()>)>> = Mutex::new(None);
+
 fn close_when_idle(app: &AppHandle) {
     let seq = IDLE_SEQ.fetch_add(1, Ordering::SeqCst) + 1;
     let handle = app.clone();
@@ -69,6 +84,7 @@ fn close_when_idle(app: &AppHandle) {
         if win.is_visible().unwrap_or(true) || IDLE_SEQ.load(Ordering::SeqCst) != seq {
             return;
         }
+        READY.store(false, Ordering::SeqCst);
         let _ = win.destroy();
     });
 }
@@ -196,16 +212,15 @@ pub fn hotkey() -> String {
         .unwrap_or_else(|| DEFAULT_HOTKEY.to_string())
 }
 
-/// The bool says whether the window had to be created: a webview that only just
-/// started has no listener yet, so the first event has to wait for it.
-fn build(app: &AppHandle) -> Result<(tauri::WebviewWindow, bool), String> {
+fn build(app: &AppHandle) -> Result<tauri::WebviewWindow, String> {
     // Окно, создаваемое на выходе, роняет tao на Windows (subclass_result).
     if crate::exiting() {
         return Err("Лаунчер закрывается".into());
     }
     if let Some(w) = app.get_webview_window(LABEL) {
-        return Ok((w, false));
+        return Ok(w);
     }
+    READY.store(false, Ordering::SeqCst);
     let win = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("index.html#overlay".into()))
         .title("Millida Overlay")
         .decorations(false)
@@ -234,34 +249,49 @@ fn build(app: &AppHandle) -> Result<(tauri::WebviewWindow, bool), String> {
             }
         }
     });
-    Ok((win, true))
+    Ok(win)
 }
 
 /// `interactive` decides whether the window takes the pointer and the keyboard.
 /// Notifications arrive passive; the hotkey is what makes it a chat.
+/// The bool says whether the webview is listening: events sent before that are lost.
 pub fn show(app: &AppHandle, interactive: bool) -> Result<bool, String> {
     IDLE_SEQ.fetch_add(1, Ordering::SeqCst);
-    let (win, fresh) = build(app)?;
+    HIDE_SEQ.fetch_add(1, Ordering::SeqCst);
+    let win = build(app)?;
     INTERACTIVE.store(interactive, Ordering::SeqCst);
     if interactive {
         stop_hit_watch(app);
     }
-    let hover = !interactive && HOVER.load(Ordering::SeqCst);
-    set_passthrough(&win, passthrough(interactive, hover));
-    win.show().map_err(|e| e.to_string())?;
-    #[cfg(target_os = "linux")]
-    set_passthrough(&win, passthrough(interactive, hover));
-    let _ = win.set_always_on_top(true);
-    if interactive {
-        let _ = win.set_focus();
+    if !READY.load(Ordering::SeqCst) {
+        *REVEAL.lock().unwrap_or_else(|e| e.into_inner()) = Some(interactive);
+        return Ok(false);
     }
+    reveal(app, &win, interactive)?;
+    Ok(true)
+}
+
+/// The webview learns its mode before the window appears, so the first frame on
+/// screen is already the right one.
+fn reveal(app: &AppHandle, win: &tauri::WebviewWindow, interactive: bool) -> Result<(), String> {
+    let hover = !interactive && HOVER.load(Ordering::SeqCst);
+    set_passthrough(win, passthrough(interactive, hover));
     let _ = app.emit_to(LABEL, "overlay-mode", interactive);
     // A webview kept across hide and show remembers the last hover it was told
     // about, and a stale `true` there freezes the clock of every card to come.
     if !interactive {
         let _ = app.emit_to(LABEL, "overlay-hover", hover);
     }
-    Ok(fresh)
+    win.show().map_err(|e| e.to_string())?;
+    #[cfg(target_os = "linux")]
+    set_passthrough(win, passthrough(interactive, hover));
+    let _ = win.set_always_on_top(true);
+    if interactive {
+        let _ = win.set_focus();
+    } else {
+        arm_hit_watch(app);
+    }
+    Ok(())
 }
 
 pub fn hide(app: &AppHandle) {
@@ -271,19 +301,53 @@ pub fn hide(app: &AppHandle) {
     }
     stop_hit_watch(app);
     PENDING.lock().unwrap_or_else(|e| e.into_inner()).clear();
-    if let Some(w) = app.get_webview_window(LABEL) {
-        let _ = w.hide();
+    REVEAL.lock().unwrap_or_else(|e| e.into_inner()).take();
+    let seq = HIDE_SEQ.fetch_add(1, Ordering::SeqCst) + 1;
+    let Some(win) = app.get_webview_window(LABEL) else { return };
+    if !READY.load(Ordering::SeqCst) || !win.is_visible().unwrap_or(false) {
+        let _ = win.hide();
         close_when_idle(app);
+        return;
+    }
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    *CLEAR_WAIT.lock().unwrap_or_else(|e| e.into_inner()) = Some((seq, tx));
+    let _ = app.emit_to(LABEL, "overlay-clear", seq);
+    let handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        // A dead webview never answers; the window goes down anyway.
+        let _ = tokio::time::timeout(std::time::Duration::from_millis(CLEAR_WAIT_MS), rx).await;
+        if HIDE_SEQ.load(Ordering::SeqCst) != seq || crate::exiting() {
+            return;
+        }
+        if let Some(w) = handle.get_webview_window(LABEL) {
+            let _ = w.hide();
+            close_when_idle(&handle);
+        }
+    });
+}
+
+/// The webview has put a transparent frame on screen for hide number `seq`.
+pub fn cleared(seq: u64) {
+    let mut wait = CLEAR_WAIT.lock().unwrap_or_else(|e| e.into_inner());
+    if wait.as_ref().is_some_and(|(s, _)| *s == seq) {
+        if let Some((_, tx)) = wait.take() {
+            let _ = tx.send(());
+        }
     }
 }
 
 /// The webview reports itself ready, and everything queued while it was booting
 /// is delivered in order.
 pub fn drain_pending(app: &AppHandle) {
+    READY.store(true, Ordering::SeqCst);
     let queued: Vec<serde_json::Value> =
         std::mem::take(&mut *PENDING.lock().unwrap_or_else(|e| e.into_inner()));
     for payload in queued {
         let _ = app.emit_to(LABEL, "overlay-message", payload);
+    }
+    let Some(interactive) = REVEAL.lock().unwrap_or_else(|e| e.into_inner()).take() else { return };
+    if let Some(win) = app.get_webview_window(LABEL) {
+        let _ = reveal(app, &win, interactive);
     }
 }
 
@@ -310,10 +374,9 @@ fn arm_watchdog(app: &AppHandle) {
 }
 
 pub async fn notify(app: &AppHandle, payload: serde_json::Value) -> Result<(), String> {
-    let fresh = show(app, false)?;
+    let listening = show(app, false)?;
     arm_watchdog(app);
-    arm_hit_watch(app);
-    if fresh {
+    if !listening {
         PENDING.lock().unwrap_or_else(|e| e.into_inner()).push(payload);
         return Ok(());
     }
@@ -440,6 +503,24 @@ mod tests {
                 "passthrough({interactive}, {hover}) must be {want}: {why}"
             );
         }
+    }
+
+    /// An answer to an older hide must not take the window down under a newer
+    /// one: the frame it vouches for may already have been replaced by a card.
+    #[test]
+    fn clear_answer_releases_only_its_own_hide() {
+        let cases = [
+            (7, 6, false, "an answer to the previous hide is stale"),
+            (7, 8, false, "a sequence the core never issued is ignored"),
+            (7, 7, true, "the answer to this hide lets the window go down"),
+        ];
+        for (waiting, answered, want, why) in cases {
+            let (tx, mut rx) = tokio::sync::oneshot::channel();
+            *CLEAR_WAIT.lock().unwrap_or_else(|e| e.into_inner()) = Some((waiting, tx));
+            cleared(answered);
+            assert_eq!(rx.try_recv().is_ok(), want, "cleared({answered}) while waiting for {waiting}: {why}");
+        }
+        CLEAR_WAIT.lock().unwrap_or_else(|e| e.into_inner()).take();
     }
 
     #[test]

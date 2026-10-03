@@ -775,6 +775,47 @@ pub(crate) fn loaders_mismatch(declared: &[String], runs: &[String]) -> bool {
     declared.iter().all(|d| runs.iter().all(|build| loader_mismatch(d, build)))
 }
 
+fn loader_title(id: &str) -> &str {
+    match id {
+        "fabric" => "Fabric",
+        "forge" => "Forge",
+        "neoforge" => "NeoForge",
+        "quilt" => "Quilt",
+        other => other,
+    }
+}
+
+pub(crate) fn wrong_loader_text(declared: &[String], build: &str) -> String {
+    let made_for = declared.iter().map(|l| loader_title(l)).collect::<Vec<_>>().join("/");
+    let build = loader_title(build);
+    format!("мод для {}, а сборка на {} — поставь версию для {}", made_for, build, build)
+}
+
+/// The relations that apply to this jar on this build, or None when the build
+/// cannot load the jar at all.
+///
+/// A multi-loader jar is read through the manifest of the loader that runs it:
+/// Explorify asks for Fabric API only in its fabric.mod.json, and judging a
+/// NeoForge build by that file told players their pack needs Fabric API. A jar
+/// no loader of the build reads gets a loader verdict and nothing else — its
+/// dependencies describe another game, so demanding them is noise.
+pub(crate) fn relations_on<'a>(m: &'a LocalMeta, runs: &[String]) -> Option<(&'a [String], &'a [BreakRule])> {
+    let declared: &[String] = if m.loaders.is_empty() { std::slice::from_ref(&m.loader) } else { &m.loaders };
+    if loaders_mismatch(declared, runs) {
+        return None;
+    }
+    let pick = runs.iter().find_map(|build| {
+        m.relations
+            .iter()
+            .find(|r| &r.loader == build)
+            .or_else(|| m.relations.iter().find(|r| !loader_mismatch(&r.loader, build)))
+    });
+    Some(match pick {
+        Some(r) => (&r.requires, &r.breaks),
+        None => (&m.requires, &m.breaks),
+    })
+}
+
 /// Checks a build as it stands: hard dependencies nobody satisfies, mods that
 /// declare each other incompatible, and files built for another version or
 /// loader. Everything that can be fixed comes back with the fix attached.
@@ -818,19 +859,20 @@ pub async fn audit_deps(profile: String) -> Result<DepAudit, String> {
                 dep: String::new(),
             });
         }
-        let declared: &[String] =
-            if m.loaders.is_empty() { std::slice::from_ref(&m.loader) } else { &m.loaders };
-        if loaders_mismatch(declared, &runs) {
+        let Some((requires, breaks)) = relations_on(m, &runs) else {
+            let declared: &[String] =
+                if m.loaders.is_empty() { std::slice::from_ref(&m.loader) } else { &m.loaders };
             audit.issues.push(AuditIssue {
                 kind: "loader".into(),
                 title: m.title.clone(),
-                detail: format!("файл для {}, а сборка на {}", declared.join("/"), ctx.loader_id),
+                detail: wrong_loader_text(declared, &ctx.loader_id),
                 file_name: m.file_name.clone(),
                 fix: None,
                 dep: String::new(),
             });
-        }
-        for b in &m.breaks {
+            continue;
+        };
+        for b in breaks {
             if installed.mod_ids.contains(&b.id) {
                 let other_version = version_of.get(b.id.as_str()).copied().unwrap_or("");
                 if !version_satisfies(other_version, &b.range) {
@@ -851,7 +893,7 @@ pub async fn audit_deps(profile: String) -> Result<DepAudit, String> {
                 });
             }
         }
-        for r in &m.requires {
+        for r in requires {
             if installed.mod_ids.contains(r) || loader_provides(&ctx.loader_id, loader_version.as_deref(), r) {
                 continue;
             }
@@ -1136,6 +1178,69 @@ mod tests {
         assert!(!loaders_mismatch(&all, &fabric));
         assert!(loaders_mismatch(&fabric, &neoforge), "a Fabric-only file is still foreign");
         assert!(!loaders_mismatch(&[], &neoforge), "a file we could not read judges nothing");
+    }
+
+    fn jar(loaders: &[&str], relations: &[(&str, &[&str])]) -> LocalMeta {
+        let owned = |ids: &[&str]| ids.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        LocalMeta {
+            loader: loaders.first().copied().unwrap_or("").into(),
+            loaders: owned(loaders),
+            requires: relations.first().map(|(_, r)| owned(r)).unwrap_or_default(),
+            relations: relations
+                .iter()
+                .map(|(l, r)| LoaderRelations { loader: l.to_string(), requires: owned(r), breaks: vec![] })
+                .collect(),
+            ..Default::default()
+        }
+    }
+
+    /// input -> verdict: (jar, loaders the build runs) -> the dependencies to
+    /// demand, or None for a wrong-loader file that gets no demands at all.
+    /// Report 03.10.2026: a NeoForge 1.21.1 build was told Explorify needs
+    /// «fabric-api», though its jar carries a neoforge.mods.toml with none.
+    #[test]
+    fn dependencies_are_read_from_the_manifest_of_the_loader_that_runs_the_jar() {
+        let explorify = jar(
+            &["fabric", "neoforge", "forge"],
+            &[("fabric", &["fabric-api"]), ("neoforge", &[]), ("forge", &[])],
+        );
+        let fabric_only = jar(&["fabric"], &[("fabric", &["fabric-api"])]);
+        let fabric_and_quilt = jar(&["fabric", "quilt"], &[("fabric", &["fabric-api"]), ("quilt", &["qsl"])]);
+        let old_cache = LocalMeta { loader: "neoforge".into(), requires: vec!["curios".into()], ..Default::default() };
+        let neo = ["neoforge".to_string()];
+        let fab = ["fabric".to_string()];
+        let quilt = ["quilt".to_string()];
+        let bridged = ["neoforge".to_string(), "fabric".to_string()];
+        let none: &[&str] = &[];
+        let cases: [(&LocalMeta, &[String], Option<&[&str]>, &str); 8] = [
+            (&explorify, &neo, Some(none), "сама жалоба: NeoForge читает neoforge.mods.toml, Fabric API ему не нужен"),
+            (&explorify, &fab, Some(&["fabric-api"]), "тот же jar на Fabric по-прежнему требует Fabric API"),
+            (&explorify, &bridged, Some(none), "с Connector свой загрузчик сборки важнее моста"),
+            (&fabric_only, &neo, None, "Fabric-сборка мода на NeoForge: вердикт «другой загрузчик», а не «нужен fabric-api»"),
+            (&fabric_only, &bridged, Some(&["fabric-api"]), "через Connector Fabric-мод грузится, и его зависимости настоящие"),
+            (&fabric_only, &quilt, Some(&["fabric-api"]), "Quilt грузит Fabric-моды"),
+            (&fabric_and_quilt, &quilt, Some(&["qsl"]), "на Quilt свой quilt.mod.json важнее fabric.mod.json"),
+            (&old_cache, &neo, Some(&["curios"]), "кэш без разбора по загрузчикам судится как раньше"),
+        ];
+        for (m, runs, want, why) in cases {
+            let got = relations_on(m, runs).map(|(r, _)| r.to_vec());
+            let want = want.map(|w| w.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+            assert_eq!(got, want, "{:?} на {:?}: {}", m.loaders, runs, why);
+        }
+    }
+
+    /// The loader verdict has to say what to do, in the loaders' own spelling.
+    #[test]
+    fn wrong_loader_verdict_names_the_build_to_fetch() {
+        let cases: [(&[&str], &str, &str, &str); 3] = [
+            (&["fabric"], "neoforge", "мод для Fabric, а сборка на NeoForge — поставь версию для NeoForge", "сама жалоба"),
+            (&["fabric", "quilt"], "forge", "мод для Fabric/Quilt, а сборка на Forge — поставь версию для Forge", "все объявленные загрузчики названы"),
+            (&["forge"], "fabric", "мод для Forge, а сборка на Fabric — поставь версию для Fabric", "обратное направление"),
+        ];
+        for (declared, build, want, why) in cases {
+            let declared: Vec<String> = declared.iter().map(|s| s.to_string()).collect();
+            assert_eq!(wrong_loader_text(&declared, build), want, "{}", why);
+        }
     }
 
     /// Report 30.08.2026: a Forge build with Sinytra Connector and Fabric mods

@@ -191,7 +191,9 @@ async fn install_content_job(app: &AppHandle, job: &Job, req: &CatalogInstallReq
         }
         let tag = tmp_tag(&req.slug);
         let tmp = data_dir().join("tmp").join(format!("millida-world-{}.zip", tag));
-        download_checked(&r.url, &tmp, r.sum(), size).await.map_err(|e| format!("Не скачалась карта: {}", e))?;
+        download_checked_cancellable(&r.url, &tmp, r.sum(), size, Some(job.cancel_flag()))
+            .await
+            .map_err(|e| if e == CANCELLED { e } else { format!("Не скачалась карта: {}", e) })?;
         job.check()?;
         job.emit(app, 80.0, "Переносим мир…");
         let saves = profile_dir(&req.profile).join("saves");
@@ -206,7 +208,7 @@ async fn install_content_job(app: &AppHandle, job: &Job, req: &CatalogInstallReq
     let dir = profile_dir(&req.profile).join(content_dir(&req.kind));
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let dest = safe_child(&dir, &fname)?;
-    download_checked(&r.url, &dest, r.sum(), size).await?;
+    download_checked_cancellable(&r.url, &dest, r.sum(), size, Some(job.cancel_flag())).await?;
     if !r.sha1.is_empty() {
         adopt_to_store(&dest, &r.sha1);
     }
@@ -248,9 +250,9 @@ async fn install_pack_job(app: &AppHandle, job: &Job, req: &CatalogInstallReq) -
     let tmp = data_dir().join("tmp").join(format!("millida-pack-{}-{}", tag, fname));
     job.check()?;
     job.emit(app, 10.0, &format!("Скачиваем {}…", fname));
-    download_checked(&r.url, &tmp, r.sum(), Some(r.size).filter(|s| *s > 0))
+    download_checked_cancellable(&r.url, &tmp, r.sum(), Some(r.size).filter(|s| *s > 0), Some(job.cancel_flag()))
         .await
-        .map_err(|e| format!("Не скачалась сборка: {}", e))?;
+        .map_err(|e| if e == CANCELLED { e } else { format!("Не скачалась сборка: {}", e) })?;
     job.check()?;
     job.emit(app, 60.0, "Собираем сборку…");
     let hint = PackHint {
@@ -258,7 +260,8 @@ async fn install_pack_job(app: &AppHandle, job: &Job, req: &CatalogInstallReq) -
         loader: req.loader.clone(),
         loader_version: Some(req.loader_version.clone()).filter(|v| !v.is_empty()),
     };
-    let res = import_pack_archive(app, &tmp, &req.title, Some(&hint), &format!("millida-pack-{}", tag)).await;
+    let import = ImportJob { job, from: 60.0, to: 95.0 };
+    let res = import_pack_archive(app, Some(&import), &tmp, &req.title, Some(&hint), &format!("millida-pack-{}", tag)).await;
     let _ = std::fs::remove_file(&tmp);
     let prof = res?;
     job.emit(app, 100.0, "Сборка готова");

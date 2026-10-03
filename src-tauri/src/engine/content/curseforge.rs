@@ -122,6 +122,110 @@ pub(crate) async fn cf_download_cancellable(
     Err(if last.is_empty() { "у файла нет ни одной ссылки на загрузку".into() } else { last })
 }
 
+/// What the bulk endpoint takes in one request; matches the backend DTO cap.
+const CF_BULK_MAX: usize = 500;
+
+/// File metadata for a whole manifest in a few requests. One GET per file
+/// meant hundreds of round trips through our proxy, and its per-address limit
+/// (120 a minute) turned a big pack into 429s and minutes of waiting. Ids
+/// missing from the answer are left to the per-file path.
+async fn cf_files_bulk(ids: &[u64]) -> std::collections::HashMap<u64, Value> {
+    let mut out = std::collections::HashMap::new();
+    for chunk in ids.chunks(CF_BULK_MAX) {
+        let body = serde_json::json!({ "fileIds": chunk });
+        for url in [format!("{}/files", cf_base()), format!("{}/v1/mods/files", CF_MIRROR)] {
+            let Ok(res) = client().post(&url).json(&body).send().await else { continue };
+            if !res.status().is_success() {
+                continue;
+            }
+            let Ok(j) = res.json::<Value>().await else { continue };
+            let Some(files) = j["data"].as_array() else { continue };
+            for f in files {
+                if let Some(id) = f["id"].as_u64().filter(|id| chunk.contains(id)) {
+                    out.insert(id, f.clone());
+                }
+            }
+            break;
+        }
+    }
+    out
+}
+
+/// Manifest entry resolved to the file CurseForge will serve.
+struct CfPlanned {
+    file: Value,
+    name: String,
+    dest: PathBuf,
+    required: bool,
+}
+
+/// Files a CurseForge manifest skipped as optional and failed to fetch.
+pub(crate) struct CfFetched {
+    pub skipped: Vec<String>,
+}
+
+/// Every mod of a CurseForge manifest into `mods`: metadata in bulk, then the
+/// downloads `PACK_PARALLEL` at a time. The first required file that cannot be
+/// had fails the pack at once; going on through hundreds of mods only kept the
+/// card frozen for minutes before the same verdict.
+pub(crate) async fn cf_fetch_manifest_files(
+    list: &[Value],
+    mods: &Path,
+    cancel: Option<&std::sync::atomic::AtomicBool>,
+    on_file: &(dyn Fn(usize, usize) + Sync),
+) -> Result<CfFetched, String> {
+    use futures::TryStreamExt;
+    let wanted: Vec<(u64, u64, bool)> = list
+        .iter()
+        .map(|f| (f["projectID"].as_u64().unwrap_or(0), f["fileID"].as_u64().unwrap_or(0), f["required"].as_bool().unwrap_or(true)))
+        .filter(|(pid, fid, _)| *pid != 0 && *fid != 0)
+        .collect();
+    let ids: Vec<u64> = wanted.iter().map(|(_, fid, _)| *fid).collect();
+    let mut known = or_cancel(cf_files_bulk(&ids), cancel).await?;
+    let mut planned = Vec::with_capacity(wanted.len());
+    let mut skipped = vec![];
+    for (pid, fid, required) in wanted {
+        let file = match known.remove(&fid) {
+            Some(f) => f,
+            None => match or_cancel(cf_get(&format!("v1/mods/{}/files/{}", pid, fid), &[]), cancel).await? {
+                Ok(j) => j["data"].clone(),
+                Err(e) if required => return Err(format!("файл #{} ({})", fid, e)),
+                Err(_) => {
+                    skipped.push(format!("#{}", fid));
+                    continue;
+                }
+            },
+        };
+        let name = match safe_file_name(file["fileName"].as_str().unwrap_or("")) {
+            Ok(n) => n,
+            Err(e) if required => return Err(format!("файл #{} ({})", fid, e)),
+            Err(_) => continue,
+        };
+        let dest = safe_child(mods, &name)?;
+        planned.push(CfPlanned { file, name, dest, required });
+    }
+    let total = planned.len();
+    let done = std::sync::atomic::AtomicUsize::new(0);
+    let done = &done;
+    let optional_failed = std::sync::Mutex::new(Vec::<String>::new());
+    let optional_failed = &optional_failed;
+    futures::stream::iter(planned.into_iter().map(Ok::<CfPlanned, String>))
+        .try_for_each_concurrent(PACK_PARALLEL, |p| async move {
+            match cf_download_cancellable(&p.file, &p.name, &p.dest, cancel).await {
+                Ok(_) => {}
+                Err(e) if e == CANCELLED => return Err(e),
+                Err(e) if p.required => return Err(format!("{} ({})", p.name, e)),
+                Err(_) => optional_failed.lock().unwrap_or_else(|e| e.into_inner()).push(p.name),
+            }
+            let n = done.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+            on_file(n, total);
+            Ok(())
+        })
+        .await?;
+    skipped.extend(optional_failed.lock().unwrap_or_else(|e| e.into_inner()).drain(..));
+    Ok(CfFetched { skipped })
+}
+
 #[derive(serde::Serialize)]
 pub struct CfHit { pub id: u32, pub name: String, pub summary: String, pub logo: String, pub downloads: u64, pub slug: String, pub website: String }
 
@@ -615,38 +719,18 @@ async fn cf_install_modpack_job(app: &AppHandle, job: &Job, mod_id: u32, file_id
     forget_skin_mod_install(&pname);
     std::fs::create_dir_all(pdir.join("mods")).map_err(|e| e.to_string())?;
     let list = man["files"].as_array().cloned().unwrap_or_default();
-    let total = list.len().max(1);
-    let mut failed: Vec<String> = vec![];
-    let mut skipped: Vec<String> = vec![];
-    for (i, f) in list.iter().enumerate() {
-        if job.cancelled() {
+    job.emit(app, 20.0, &format!("Моды 0/{}", list.len()));
+    let fetched = cf_fetch_manifest_files(&list, &pdir.join("mods"), Some(job.cancel_flag()), &|n, total| {
+        job.emit(app, 20.0 + 55.0 * (n as f32 / total.max(1) as f32), &format!("Моды {}/{}", n, total));
+    })
+    .await;
+    let skipped = match fetched {
+        Ok(f) => f.skipped,
+        Err(e) => {
             let _ = std::fs::remove_dir_all(&ex);
-            return Err(CANCELLED.into());
+            return Err(if e == CANCELLED { e } else { format!("Не скачались файлы сборки: {}", e) });
         }
-        let (pid, fid2) = (f["projectID"].as_u64().unwrap_or(0), f["fileID"].as_u64().unwrap_or(0));
-        if pid == 0 || fid2 == 0 { continue }
-        let required = f["required"].as_bool().unwrap_or(true);
-        match cf_get(&format!("v1/mods/{}/files/{}", pid, fid2), &[]).await {
-            Ok(j) => {
-                let d = &j["data"];
-                match safe_file_name(d["fileName"].as_str().unwrap_or("")) {
-                    Ok(fn2) => {
-                        let dest = safe_child(&pdir.join("mods"), &fn2)?;
-                        if let Err(e) = cf_download_cancellable(d, &fn2, &dest, Some(job.cancel_flag())).await {
-                            if required { failed.push(format!("{} ({})", fn2, e)) } else { skipped.push(fn2) }
-                        }
-                    }
-                    Err(e) => if required { failed.push(format!("файл #{} ({})", fid2, e)) },
-                }
-            }
-            Err(e) => if required { failed.push(format!("файл #{} ({})", fid2, e)) } else { skipped.push(format!("#{}", fid2)) },
-        }
-        job.emit(app, 20.0 + 55.0 * (i as f32 / total as f32), &format!("Моды {}/{}", i + 1, total));
-    }
-    if !failed.is_empty() {
-        let _ = std::fs::remove_dir_all(&ex);
-        return Err(format!("Не скачались файлы сборки: {}", failed.join("; ")));
-    }
+    };
     // the overrides folder name comes from the archive manifest, hence the path check
     job.emit(app, 80.0, "Конфиги и ресурсы сборки…");
     for name in [man["overrides"].as_str().filter(|s| !s.is_empty()).unwrap_or("overrides"), "client-overrides"] {

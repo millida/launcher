@@ -19,8 +19,7 @@ import {
   KIND_OF_SECTION,
   catalog,
   cfFileIdOf,
-  cfProjectId,
-  cfSourceRef,
+  cfProjectOf,
   compatibleBuilds,
   knownVersions,
   loaderMatters,
@@ -174,11 +173,6 @@ async function viaModrinth(prof: string, kind: string, mr: string, file: Catalog
   })
 }
 
-async function curseforgeIdOf(sourceUrl: string | null): Promise<number | null> {
-  const ref = sourceUrl ? cfSourceRef(sourceUrl) : null
-  return ref ? cfProjectId(ref) : null
-}
-
 /// The same project through the launcher's CurseForge path, for cards imported from CurseForge
 /// whose files are not mirrored. The catalog file already passed the version check above.
 function viaCurseforge(prof: string, kind: string, cfid: number, file: CatalogFile, title: string): boolean {
@@ -315,7 +309,7 @@ async function installContentItem(section: string, slug: string, kind: string, o
   if (kind === 'mod' && mr) return viaModrinth(prof, kind, mr, file, item.title)
   if (file.mirrored && item.articleSlug) return viaMirror(prof, kind, item, file, opts)
   if (mr) return viaModrinth(prof, kind, mr, file, item.title)
-  const cfid = kind === 'world' ? null : await curseforgeIdOf(item.sourceUrl)
+  const cfid = kind === 'world' ? null : await cfProjectOf(item)
   if (cfid) return viaCurseforge(prof, kind, cfid, file, item.title)
   toSite(section, slug, 'Файла «' + item.title + '» нет на зеркале Millida — он у автора')
   return false
@@ -431,7 +425,7 @@ async function installModpackItem(slug: string, opts: CatalogInstallOpts): Promi
       onError: (e) => showToast('' + e, 'error'),
     })
   }
-  const cfid = await curseforgeIdOf(item.sourceUrl)
+  const cfid = await cfProjectOf(item)
   if (cfid) {
     if (!(await confirmPack(item.title, what, opts))) return false
     const cfFile = file ? cfFileIdOf(file.origin) : null
