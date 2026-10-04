@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { DEFAULT_PROMO, readPromo } from './promo'
+import { DEFAULT_PROMO, readPromo, type ListedServer } from './promo'
 
 describe('readPromo', () => {
   const cases: Array<[string, unknown, Partial<ReturnType<typeof readPromo>>]> = [
@@ -16,5 +16,18 @@ describe('readPromo', () => {
   for (const [why, raw, want] of cases)
     test(why, () => {
       expect(readPromo(raw), why).toEqual({ ...DEFAULT_PROMO, ...want })
+    })
+})
+
+describe('readPromo serverList', () => {
+  const cases: Array<[string, unknown, ListedServer[]]> = [
+    ['no list keeps the lever off', {}, []],
+    ['a listed server reaches the builds', { serverList: [{ name: 'Анархия MCRU', addr: 'MCRU.me', minVersion: '1.21' }] }, [{ name: 'Анархия MCRU', addr: 'mcru.me', minVersion: '1.21' }]],
+    ['a node IP never lands in a player list', { serverList: [{ name: 'X', addr: '149.50.110.80' }] }, []],
+    ['a broken minimum is dropped, the server stays', { serverList: [{ name: 'A', addr: 'mcru.me', minVersion: 'new' }] }, [{ name: 'A', addr: 'mcru.me' }]],
+  ]
+  for (const [why, raw, want] of cases)
+    test(why, () => {
+      expect(readPromo(raw).serverList, why).toEqual(want)
     })
 })

@@ -60,7 +60,7 @@ describe('searchTerm', () => {
 describe('targetsAnarchy', () => {
   const cases: Array<[LobbyMode | null, boolean, string]> = [
     [anarchyMode(), true, 'the anarchy tile and the lobby card start the anarchy path with its exact version'],
-    [server('x', 'MCRU.millida.host.:25565'), true, 'a typed address of the anarchy is the same server'],
+    [server('x', 'MCRU.me.:25565'), true, 'a typed address of the anarchy is the same server'],
     [server('mcru', 'play.mcru.me'), false, 'the old MCRU rating card is another server'],
     [server('oneblock-7', ''), false, 'OneBlock keeps its own client'],
     [null, false, 'nothing picked is not the anarchy'],
@@ -76,7 +76,7 @@ describe('targetsAnarchy', () => {
   test('the anarchy mode joins by address with the server version, no license', () => {
     const m = anarchyMode()
     expect(m.kind === 'server' && [m.ip, m.versions, m.licensed], 'the proxy signs in with the Millida account on 1.21.11').toEqual([
-      'mcru.millida.host',
+      'mcru.me',
       ['1.21.11'],
       false,
     ])

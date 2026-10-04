@@ -49,7 +49,7 @@ export const ANARCHY = {
   slug: 'mcru-anarchy',
   name: 'Анархия',
   fullName: 'Анархия MCRU',
-  addr: 'mcru.millida.host',
+  addr: 'mcru.me',
   version: '1.21.11',
   tagline: 'Выживание без правил',
 } as const
