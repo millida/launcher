@@ -49,7 +49,8 @@ import { track } from '../lib/telemetry'
 import { ANARCHY, ONEBLOCK_PACK, anarchyMode, modeAction, ownServerMode, targetsAnarchy, targetsOwnServer } from '../lib/ownServer'
 import { loadAnarchyOnline } from '../lib/anarchy'
 import { AnarchyTile } from '../components/playhub/AnarchyTile'
-import { MODES_SHOWN, shelfOrder, shownCount } from '../components/playhub/placement'
+import { modesShown, shelfOrder, shownCount } from '../components/playhub/placement'
+import { usePromo } from '../state/promo'
 import '../styles/pixel/playhub.css'
 
 /**
@@ -328,6 +329,8 @@ export function PlayHub({ on }: { on?: boolean }) {
   const [modes, setModes] = useState<LiveMode[] | null>(null)
   const [ownOnline, setOwnOnline] = useState<number | null>(null)
   const [anarchyOnline, setAnarchyOnline] = useState<number | null>(null)
+  const anarchyLead = usePromo((s) => s.promo.modesLead === ANARCHY.mode)
+  const foldedCount = modesShown(anarchyLead)
   const [packs, setPacks] = useState<MillidaPack[] | null>(null)
   const [mrPacks, setMrPacks] = useState<HubPack[] | null>(null)
   /** Режимы: 7 плиток, «Остальные» раскрывает остальные на месте. */
@@ -572,7 +575,7 @@ export function PlayHub({ on }: { on?: boolean }) {
     setAll(true)
     top0()
   }
-  const shownModes = shelfModes.slice(0, shownCount(shelfModes.length, allModes))
+  const shownModes = shelfModes.slice(0, shownCount(shelfModes.length, allModes, anarchyLead))
 
   const modesPane = (
     <div className="ph-row ph-mts" data-section="modes">
@@ -580,14 +583,16 @@ export function PlayHub({ on }: { on?: boolean }) {
         <CardSkel n={10} />
       ) : modes.length ? (
         <>
-          <AnarchyTile
-            index={0}
-            online={anarchyOnline}
-            on={targetsAnarchy(current)}
-            onClick={() => pickMode(ANARCHY.mode)}
-          />
+          {anarchyLead ? (
+            <AnarchyTile
+              index={0}
+              online={anarchyOnline}
+              on={targetsAnarchy(current)}
+              onClick={() => pickMode(ANARCHY.mode)}
+            />
+          ) : null}
           {shownModes.map(modeTile)}
-          {shelfModes.length > MODES_SHOWN ? (
+          {shelfModes.length > foldedCount ? (
             <button
               className="ph-card ph-mt ph-mt-all"
               data-sound="nav"
@@ -600,7 +605,7 @@ export function PlayHub({ on }: { on?: boolean }) {
               </span>
               <span className="ph-mt-foot">
                 <b>{allModes ? 'Свернуть' : 'Остальные'}</b>
-                {allModes ? null : <span className="ph-mt-on">{shelfModes.length - MODES_SHOWN + ' ' + plural(shelfModes.length - MODES_SHOWN, 'режим', 'режима', 'режимов')}</span>}
+                {allModes ? null : <span className="ph-mt-on">{shelfModes.length - foldedCount + ' ' + plural(shelfModes.length - foldedCount, 'режим', 'режима', 'режимов')}</span>}
               </span>
             </button>
           ) : null}
