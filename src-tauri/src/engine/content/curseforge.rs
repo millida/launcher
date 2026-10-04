@@ -1,3 +1,4 @@
+use super::cf_memo::{cf_memo, cf_memo_key, proxy_verdict, ProxyVerdict};
 use crate::engine::*;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -12,16 +13,31 @@ pub(crate) fn cf_base() -> String {
 pub(crate) const CF_MIRROR: &str = "https://api.curse.tools";
 
 pub(crate) async fn cf_get(path: &str, q: &[(String, String)]) -> Result<Value, String> {
-    let via_proxy = client()
-        .get(format!("{}/{}", cf_base(), path))
-        .query(q)
-        .send()
-        .await;
-    if let Ok(r) = via_proxy {
-        if r.status().is_success() {
-            if let Ok(j) = r.json::<Value>().await {
-                if j.get("data").is_some() {
-                    return Ok(j);
+    let key = cf_memo_key(path, q);
+    if let Some(hit) = cf_memo(|m, now| m.answer(&key, now)) {
+        return Ok(hit);
+    }
+    if !cf_memo(|m, now| m.proxy_skipped(&key, now)) {
+        let via_proxy = client()
+            .get(format!("{}/{}", cf_base(), path))
+            .query(q)
+            .send()
+            .await;
+        let verdict = match &via_proxy {
+            Ok(r) => proxy_verdict(
+                Some(r.status().as_u16()),
+                r.headers().get(reqwest::header::RETRY_AFTER).and_then(|v| v.to_str().ok()),
+            ),
+            Err(_) => proxy_verdict(None, None),
+        };
+        cf_memo(|m, now| m.note(&key, verdict, now));
+        if let Ok(r) = via_proxy {
+            if r.status().is_success() {
+                if let Ok(j) = r.json::<Value>().await {
+                    if j.get("data").is_some() {
+                        cf_memo(|m, now| m.remember_answer(&key, &j, now));
+                        return Ok(j);
+                    }
                 }
             }
         }
@@ -35,7 +51,38 @@ pub(crate) async fn cf_get(path: &str, q: &[(String, String)]) -> Result<Value, 
     if !r.status().is_success() {
         return Err(format!("CurseForge ответил {}", r.status()));
     }
-    r.json::<Value>().await.map_err(|e| e.to_string())
+    let j = r.json::<Value>().await.map_err(|e| e.to_string())?;
+    if j.get("data").is_some() {
+        cf_memo(|m, now| m.remember_answer(&key, &j, now));
+    }
+    Ok(j)
+}
+
+/// The POST endpoints share the outage window only: their bodies differ per call
+/// and are not worth a key of their own.
+fn cf_post_urls(proxy_path: &str, mirror_path: &str) -> Vec<String> {
+    let mirror = format!("{}/{}", CF_MIRROR, mirror_path);
+    if cf_memo(|m, now| m.proxy_skipped("", now)) {
+        vec![mirror]
+    } else {
+        vec![format!("{}/{}", cf_base(), proxy_path), mirror]
+    }
+}
+
+fn cf_note_post(url: &str, res: &Result<reqwest::Response, reqwest::Error>) {
+    if !url.starts_with(&cf_base()) {
+        return;
+    }
+    let verdict = match res {
+        Ok(r) => proxy_verdict(
+            Some(r.status().as_u16()),
+            r.headers().get(reqwest::header::RETRY_AFTER).and_then(|v| v.to_str().ok()),
+        ),
+        Err(_) => proxy_verdict(None, None),
+    };
+    if let ProxyVerdict::Outage(_) = verdict {
+        cf_memo(|m, now| m.note("", verdict, now));
+    }
 }
 
 /// Что показать, когда не ответили ОБА пути к CurseForge.
@@ -133,8 +180,10 @@ async fn cf_files_bulk(ids: &[u64]) -> std::collections::HashMap<u64, Value> {
     let mut out = std::collections::HashMap::new();
     for chunk in ids.chunks(CF_BULK_MAX) {
         let body = serde_json::json!({ "fileIds": chunk });
-        for url in [format!("{}/files", cf_base()), format!("{}/v1/mods/files", CF_MIRROR)] {
-            let Ok(res) = client().post(&url).json(&body).send().await else { continue };
+        for url in cf_post_urls("files", "v1/mods/files") {
+            let res = client().post(&url).json(&body).send().await;
+            cf_note_post(&url, &res);
+            let Ok(res) = res else { continue };
             if !res.status().is_success() {
                 continue;
             }
@@ -777,8 +826,10 @@ pub(crate) async fn cf_by_fingerprint(prints: &[u32]) -> Vec<Value> {
     }
     let body = serde_json::json!({ "fingerprints": prints });
     let mut out = vec![];
-    for url in [format!("{}/fingerprints", cf_base()), format!("{}/v1/fingerprints", CF_MIRROR)] {
-        let Ok(res) = client().post(&url).json(&body).send().await else { continue };
+    for url in cf_post_urls("fingerprints", "v1/fingerprints") {
+        let res = client().post(&url).json(&body).send().await;
+        cf_note_post(&url, &res);
+        let Ok(res) = res else { continue };
         if !res.status().is_success() {
             continue;
         }

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test'
 import { cfProjectOf, cfSourceRef } from '../../lib/millidaCatalog'
+import { resolveHit, sourceOf, type SiteCard } from './site'
 
 describe('cfSourceRef', () => {
   const cases: { why: string; url: string; want: ReturnType<typeof cfSourceRef> }[] = [
@@ -68,4 +69,67 @@ describe('cfProjectOf', () => {
       expect(searches, `CurseForge searched ${searches} times: ${c.why}`).toBe(c.searches)
     })
   }
+})
+
+const card = (extra: Partial<SiteCard>): SiteCard => ({
+  slug: 'sodium',
+  section: 'mods',
+  title: 'Sodium',
+  summary: '',
+  cover: null,
+  icon: null,
+  side: null,
+  author: null,
+  downloads: null,
+  versions: [],
+  loaders: [],
+  categories: [],
+  publishedAt: null,
+  updatedAt: null,
+  ...extra,
+})
+
+describe('sourceOf', () => {
+  const cases: { why: string; extra: Partial<SiteCard>; want: ReturnType<typeof sourceOf> }[] = [
+    { why: 'an older backend without the field still loads the full item', extra: {}, want: null },
+    {
+      why: 'a listing with the source spares the per-row item request',
+      extra: { sourceUrl: 'https://modrinth.com/mod/sodium' },
+      want: { sourceUrl: 'https://modrinth.com/mod/sodium', curseforgeId: null },
+    },
+    {
+      why: 'a listed null source is an answer too: the item would say the same',
+      extra: { sourceUrl: null, curseforgeId: null },
+      want: { sourceUrl: null, curseforgeId: null },
+    },
+    {
+      why: 'the stored CurseForge id travels with the source',
+      extra: { sourceUrl: 'https://www.curseforge.com/minecraft/mc-mods/jei', curseforgeId: 238222 },
+      want: { sourceUrl: 'https://www.curseforge.com/minecraft/mc-mods/jei', curseforgeId: 238222 },
+    },
+  ]
+  for (const c of cases) {
+    it(c.why, () => {
+      expect(sourceOf(card(c.extra)), c.why).toEqual(c.want)
+    })
+  }
+})
+
+describe('resolveHit', () => {
+  const realFetch = globalThis.fetch
+  afterEach(() => {
+    globalThis.fetch = realFetch
+  })
+
+  it('does not ask /catalog/items when the listing carries the source', async () => {
+    const asked: string[] = []
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input)
+      asked.push(url)
+      return new Response(JSON.stringify([{ id: 'AANobbMI', slug: 'sodium' }]))
+    }) as unknown as typeof fetch
+    const hit = await resolveHit(card({ slug: 'sodium-listed', sourceUrl: 'https://modrinth.com/mod/sodium' }))
+    expect(hit?.pid, 'the Modrinth project must still resolve from the listed source').toBe('AANobbMI')
+    expect(asked.filter((u) => u.includes('/catalog/items/')), 'per-row item requests were 13% of all launcher API calls').toEqual([])
+  })
 })
