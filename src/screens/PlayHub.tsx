@@ -49,7 +49,7 @@ import { track } from '../lib/telemetry'
 import { ANARCHY, ONEBLOCK_PACK, anarchyMode, modeAction, ownServerMode, targetsAnarchy, targetsOwnServer } from '../lib/ownServer'
 import { loadAnarchyOnline } from '../lib/anarchy'
 import { AnarchyTile } from '../components/playhub/AnarchyTile'
-import { ANARCHY_SHOWN, MODES_SHOWN, shelfOrder, shownCount } from '../components/playhub/placement'
+import { MODES_SHOWN, shelfOrder, shownCount } from '../components/playhub/placement'
 import '../styles/pixel/playhub.css'
 
 /**
@@ -580,14 +580,13 @@ export function PlayHub({ on }: { on?: boolean }) {
         <CardSkel n={10} />
       ) : modes.length ? (
         <>
-          {shownModes.slice(0, 1).map(modeTile)}
-          {ANARCHY_SHOWN ? <AnarchyTile
-            index={1}
+          <AnarchyTile
+            index={0}
             online={anarchyOnline}
             on={targetsAnarchy(current)}
             onClick={() => pickMode(ANARCHY.mode)}
-          /> : null}
-          {shownModes.slice(1).map(modeTile)}
+          />
+          {shownModes.map(modeTile)}
           {shelfModes.length > MODES_SHOWN ? (
             <button
               className="ph-card ph-mt ph-mt-all"
