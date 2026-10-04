@@ -1,13 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { ANARCHY_CELLS, FY_HEAD, ONEBLOCK_CELLS, FY_HEAD_CELLS, MODES_SHOWN, ROW, shelfOrder, shownCount } from './placement'
+import { ANARCHY_CELLS, ANARCHY_SHOWN, FY_HEAD, ONEBLOCK_CELLS, FY_HEAD_CELLS, MODES_SHOWN, ROW, shelfOrder, shownCount } from './placement'
 
 describe('«Рекомендуем» head', () => {
-  test('hosting, then OneBlock, then the anarchy', () => {
-    expect([...FY_HEAD], 'the owner put the anarchy as the second card right after OneBlock').toEqual([
-      'hosting',
-      'ONEBLOCK',
-      'MCRU_ANARCHY',
-    ])
+  test('hosting, then OneBlock, then the anarchy when it is shown', () => {
+    expect([...FY_HEAD], 'the owner put the anarchy as the second card right after OneBlock; hidden, it leaves no hole').toEqual(
+      ANARCHY_SHOWN ? ['hosting', 'ONEBLOCK', 'MCRU_ANARCHY'] : ['hosting', 'ONEBLOCK'],
+    )
   })
   test('the hosting banner is the only wide card of the head', () => {
     expect(FY_HEAD_CELLS, 'the anarchy and OneBlock are ordinary cards; a wide one pushed the feed out of the rows').toEqual({
@@ -25,7 +23,7 @@ describe('«Режимы» shelf', () => {
     expect(ONEBLOCK_CELLS - 1 + ANARCHY_CELLS + MODES_SHOWN + 1, 'OneBlock on two cells, the anarchy, the tiles and «Остальные» must close both rows without a hole').toBe(2 * ROW)
   })
   test('OneBlock is the wide tile, the anarchy a single one after it', () => {
-    expect([ONEBLOCK_CELLS, ANARCHY_CELLS], 'the owner kept OneBlock wide and asked for a small anarchy tile second').toEqual([2, 1])
+    expect([ONEBLOCK_CELLS, ANARCHY_CELLS], 'the owner kept OneBlock wide and asked for a small anarchy tile second').toEqual([2, ANARCHY_SHOWN ? 1 : 0])
   })
 
   const order: Array<[string[], string[], string]> = [
@@ -41,8 +39,8 @@ describe('«Режимы» shelf', () => {
   const counts: Array<[number, boolean, number, string]> = [
     [20, false, MODES_SHOWN, 'folded shows the fixed number of tiles'],
     [4, false, 4, 'a short list shows what there is'],
-    [20, true, 20, '2 + 1 + 19 + 1 = 23 cells: «Свернуть» shares the last row'],
-    [18, true, 17, '2 + 1 + 17 + 1 = 21 cells left «Свернуть» alone, the weakest mode gives way'],
+    [20, true, 20, 'unfolded 20: «Свернуть» shares the last row'],
+    [ANARCHY_SHOWN ? 18 : 19, true, ANARCHY_SHOWN ? 17 : 18, 'unfolded: «Свернуть» alone in the last row, the weakest mode gives way'],
   ]
   for (const [total, all, want, why] of counts)
     test(why, () => {
