@@ -13,6 +13,12 @@ export interface ServerPromo {
   version?: string
 }
 
+export interface ListedServer {
+  name: string
+  addr: string
+  minVersion?: string
+}
+
 /**
  * Placements the API can change without a launcher release. The built-in
  * defaults are what the last release shipped, so an offline launcher or an
@@ -23,6 +29,8 @@ export interface Promo {
   lobby: typeof ANARCHY_ID | null
   forYou: readonly ForYouCard[]
   modesLead: typeof ANARCHY_ID | null
+  /** Servers added once to the list of every matching build; empty keeps the lever off. */
+  serverList: readonly ListedServer[]
 }
 
 export const DEFAULT_PROMO: Promo = {
@@ -30,11 +38,14 @@ export const DEFAULT_PROMO: Promo = {
   lobby: ANARCHY_ID,
   forYou: ['hosting', ANARCHY_ID, 'ONEBLOCK'],
   modesLead: ANARCHY_ID,
+  serverList: [],
 }
 
 const HOST = /^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?(?::\d{1,5})?$/
 const IP_LITERAL = /^\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?$/
 const VERSION = /^\d{1,2}\.\d{1,3}(?:\.\d{1,3})?$/
+
+const isDomain = (addr: string): boolean => addr.includes('.') && HOST.test(addr) && !IP_LITERAL.test(addr)
 
 const text = (v: unknown, max: number): string | undefined =>
   typeof v === 'string' && v.trim() && v.trim().length <= max ? v.trim() : undefined
@@ -51,7 +62,7 @@ function readServer(raw: unknown): ServerPromo {
   if (name) out.name = name
   if (fullName) out.fullName = fullName
   if (tagline) out.tagline = tagline
-  if (addr.includes('.') && HOST.test(addr) && !IP_LITERAL.test(addr)) out.addr = addr
+  if (isDomain(addr)) out.addr = addr
   if (VERSION.test(version)) out.version = version
   return out
 }
@@ -62,6 +73,21 @@ function readForYou(v: unknown): readonly ForYouCard[] {
   if (!Array.isArray(v)) return DEFAULT_PROMO.forYou
   const cards = FOR_YOU_CARDS.filter((c) => v.includes(c))
   return [...cards].sort((a, b) => v.indexOf(a) - v.indexOf(b))
+}
+
+function readServerList(v: unknown): readonly ListedServer[] {
+  if (!Array.isArray(v)) return []
+  const out: ListedServer[] = []
+  for (const item of v.slice(0, 3)) {
+    if (!item || typeof item !== 'object') continue
+    const e = item as Record<string, unknown>
+    const name = text(e.name, 40)
+    const addr = typeof e.addr === 'string' ? e.addr.trim().toLowerCase() : ''
+    if (!name || !isDomain(addr) || out.some((s) => s.addr === addr)) continue
+    const minVersion = typeof e.minVersion === 'string' && VERSION.test(e.minVersion.trim()) ? e.minVersion.trim() : undefined
+    out.push(minVersion ? { name, addr, minVersion } : { name, addr })
+  }
+  return out
 }
 
 /**
@@ -76,6 +102,7 @@ export function readPromo(raw: unknown): Promo {
     lobby: 'lobby' in v ? readSlot(v.lobby, DEFAULT_PROMO.lobby) : DEFAULT_PROMO.lobby,
     forYou: 'forYou' in v ? readForYou(v.forYou) : DEFAULT_PROMO.forYou,
     modesLead: 'modesLead' in v ? readSlot(v.modesLead, DEFAULT_PROMO.modesLead) : DEFAULT_PROMO.modesLead,
+    serverList: readServerList(v.serverList),
   }
 }
 
