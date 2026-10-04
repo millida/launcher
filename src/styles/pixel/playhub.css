@@ -1726,15 +1726,14 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
   .ph-ob2-rig, .ph-ob2-logo { animation: none; }
   .ph-ob2-leaves { display: none; }
 }
-/* Anarchy — our server, first in «Режимы» on two cells. Obsidian wall, a lava
-   edge that flows in steps, embers rising off it and the server's loot over
-   the wall. Only transform and opacity move; no gradients. */
+/* Anarchy — our server, first in «Режимы» on two cells. The palette of the
+   lobby banner: obsidian, lava and white with a player render; only the lava
+   moves, so the tile does not read as an ad. */
 .ph-card.ph-mt.ph-mt-an {
   --an-night: #150a10;
-  --an-lava: #ff5c24;
-  --an-ember: #ffb21e;
-  --an-hot: #ffd27a;
-  --an-ink: #b0161a;
+  --an-lava: #ff6a24;
+  --an-lava-hover: #ff8240;
+  --an-ink: #1a0a08;
   grid-column: span 2;
   display: block;
   aspect-ratio: auto;
@@ -1746,111 +1745,55 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
   --px-img-size: 48px 48px;
   --px-img-pos: 0 0;
   --px-img-repeat: repeat;
-  --px-ol: var(--m-rarity-legendary); --px-ol-w: 4px;
-  animation: an-frame 1.4s steps(1, end) infinite;
 }
 .ph-card.ph-mt.ph-mt-an:hover { background-color: var(--an-night); }
 .ph-card.ph-mt.ph-mt-an.on { --px-ol: var(--m-accent); }
-.ph-card.ph-mt.ph-mt-an::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -30%;
-  z-index: 3;
-  width: 14%;
-  background: rgba(255, 230, 200, 0.16);
-  transform: skewX(-18deg);
-  pointer-events: none;
-  animation: ph-own-glint 4.2s steps(14, end) infinite;
-}
-@keyframes an-frame {
-  0%, 100% { --px-ol: var(--m-rarity-legendary); }
-  50% { --px-ol: var(--m-danger); }
-}
-.ph-mt-an > span { position: absolute; }
-.an-glow { left: 0; right: 0; bottom: 0; height: 52%; z-index: 0; pointer-events: none; animation: an-heat 1.8s steps(3, end) infinite alternate; }
-.an-glow i { position: absolute; left: 0; right: 0; bottom: 0; background: var(--an-lava); }
-.an-glow i:nth-child(1) { height: 100%; opacity: 0.07; }
-.an-glow i:nth-child(2) { height: 64%; opacity: 0.09; }
-.an-glow i:nth-child(3) { height: 34%; opacity: 0.14; }
-@keyframes an-heat { from { opacity: 0.75; } to { opacity: 1; } }
-.an-loot { inset: 0; z-index: 1; pointer-events: none; }
-.an-loot img {
-  position: absolute;
-  width: auto;
-  image-rendering: pixelated;
-  filter: drop-shadow(0 6px 0 rgba(0, 0, 0, 0.4));
-  transition: translate 220ms var(--m-ease-move);
-  animation: an-float 3.4s ease-in-out infinite alternate;
-}
-.an-loot .a1 { right: 19%; top: 14%; height: 50%; animation-duration: 4.2s; }
-.an-loot .a2 { right: 4%; top: 50%; height: 26%; animation-delay: -1.2s; }
-.an-loot .a3 { right: 5%; top: 9%; height: 25%; animation-delay: -0.6s; filter: drop-shadow(0 0 10px rgba(255, 201, 58, 0.65)); }
-.an-loot .a4 { right: 41%; top: 62%; height: 9%; animation-delay: -2.1s; }
-.an-loot .a5 { right: 43%; top: 12%; height: 17%; animation-delay: -1.6s; }
-.an-loot .a6 { right: 33%; top: 58%; height: 20%; animation-delay: -2.7s; }
-@keyframes an-float {
-  from { transform: translateY(0) rotate(-3deg); }
-  to { transform: translateY(-9px) rotate(3deg); }
-}
-.an-embers { inset: 0; z-index: 2; overflow: hidden; pointer-events: none; }
-.an-embers i {
-  position: absolute;
-  bottom: 14px;
-  left: calc(3% + var(--i) * 8%);
-  width: 4px;
-  height: 4px;
-  background: var(--an-ember);
-  opacity: 0;
-  animation: an-ember calc(2.4s + var(--i) * 0.21s) steps(16, end) infinite;
-  animation-delay: calc(var(--i) * -0.57s);
-}
-.an-embers i:nth-child(2n) { width: 3px; height: 3px; background: var(--an-lava); }
-.an-embers i:nth-child(3n) { background: var(--an-hot); }
-@keyframes an-ember {
-  0% { transform: translate(0, 0); opacity: 0; }
-  12% { opacity: 1; }
-  55% { transform: translate(7px, -90px); }
-  100% { transform: translate(-5px, -180px); opacity: 0; }
-}
-.an-lava { left: 0; right: 0; bottom: 0; height: 16px; z-index: 2; overflow: hidden; pointer-events: none; }
+.ph-mt-an > span, .ph-mt-an > img { position: absolute; }
+.an-hero { right: 6%; top: 6%; z-index: 1; height: 150%; width: auto; pointer-events: none; image-rendering: auto; transition: translate 220ms var(--m-ease-move); }
+.an-lava { left: 0; right: 0; bottom: 0; height: 24px; z-index: 2; overflow: hidden; pointer-events: none; }
 .an-lava i {
   position: absolute;
   inset: 0 auto 0 0;
-  width: calc(100% + 128px);
-  background: var(--lava) 0 0 / 128px 16px repeat-x;
+  width: calc(100% + 192px);
+  background: var(--lava) 0 0 / 192px 24px repeat-x;
   image-rendering: pixelated;
-  animation: an-flow 7s steps(32, end) infinite;
+  animation: an-flow 12s steps(32, end) infinite;
 }
-@keyframes an-flow { from { transform: translateX(0); } to { transform: translateX(-128px); } }
-.ph-mt-an .ph-card-tag { z-index: 4; }
-.an-head { left: 6%; top: 18%; z-index: 4; display: flex; flex-direction: column; gap: 6px; max-width: 52%; pointer-events: none; }
-.an-title { font: 900 40px/1 var(--m-font); letter-spacing: -0.01em; color: #fff; text-shadow: 0 3px 0 var(--an-ink), 0 6px 0 rgba(0, 0, 0, 0.5); }
-.an-sub { font: 800 13px/1.2 var(--m-font); color: var(--an-hot); text-shadow: 0 2px 0 rgba(0, 0, 0, 0.6); }
-.an-foot { left: 6%; bottom: calc(16px + 11%); z-index: 4; display: flex; align-items: center; gap: 14px; }
-.an-foot .ph-mt-on { font-size: 13px; }
+@keyframes an-flow { from { transform: translateX(0); } to { transform: translateX(-192px); } }
+.an-head { left: 6%; top: 14%; z-index: 4; display: flex; flex-direction: column; gap: 8px; max-width: 60%; pointer-events: none; }
+.an-co { font: 800 12px/1 var(--m-font); letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255, 255, 255, 0.6); }
+.an-title { font: 900 38px/1 var(--m-font); text-transform: uppercase; color: #fff; text-shadow: 0 3px 0 rgba(0, 0, 0, 0.5); }
+.an-title em { font-style: normal; color: var(--an-lava); }
+.an-foot { left: 6%; bottom: calc(24px + 10%); z-index: 4; display: flex; align-items: center; gap: 14px; }
+.an-play {
+  display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px 14px;
+  font: 900 17px/1 var(--m-font); text-transform: uppercase; color: var(--an-ink); background: var(--an-lava);
+  clip-path: var(--px-5); box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.22);
+  transition: transform 120ms var(--m-ease-move), background-color 120ms var(--m-ease-move);
+}
+.an-play svg { width: 15px; height: 15px; }
+.an-on { display: inline-flex; align-items: center; gap: 5px; font: 700 13px/1 var(--m-font); color: rgba(255, 255, 255, 0.6); }
 .ph-mt-an .ph-card-on { z-index: 4; }
 @media (hover: hover) and (pointer: fine) {
-  .ph-mt-an:hover .an-loot img { translate: 0 -5px; }
-  .ph-mt-an:hover .ph-mt-play { background: var(--m-accent-hover); }
+  .ph-mt-an:hover .an-hero { translate: 0 -4px; }
+  .ph-mt-an:hover .an-play { background: var(--an-lava-hover); }
 }
-.ph-mt-an:active .ph-mt-play { transform: scale(0.97); }
+.ph-mt-an:active .an-play { transform: scale(0.97); }
 @media (max-width: 760px) {
   .ph-card.ph-mt.ph-mt-an { grid-column: 1 / -1; aspect-ratio: 16 / 9; }
 }
 @media (max-width: 1040px) {
-  .an-title { font-size: 32px; }
-  .an-loot .a4, .an-loot .a6 { display: none; }
+  .an-title { font-size: 30px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ph-card.ph-mt.ph-mt-an, .an-glow, .an-loot img, .an-lava i { animation: none; }
-  .ph-card.ph-mt.ph-mt-an::before, .an-embers { display: none; }
-  .ph-mt-an:hover .an-loot img { translate: none; }
+  .an-lava i { animation: none; }
+  .ph-mt-an:hover .an-hero { translate: none; }
 }
-/* Still anarchy art inside cards: «Рекомендуем» and the lobby. */
+/* Still anarchy art inside cards: «Рекомендуем» and the lobby plaque. */
 .an-art { position: absolute; inset: 0; display: block; overflow: hidden; background: #150a10; }
 .an-art img { width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; transition: scale 180ms var(--m-ease-move); }
+.an-art .an-art-hero { position: absolute; left: 62%; top: 20%; width: auto; height: 130%; translate: -50% 0; object-fit: contain; image-rendering: auto; }
+.an-art-lava { position: absolute; left: 0; right: 0; bottom: 0; height: 18%; background: var(--lava) 0 0 / auto 100% repeat-x; image-rendering: pixelated; }
 @media (hover: hover) and (pointer: fine) { .fy-card:hover .an-art img { scale: 1.04; } }
 @media (prefers-reduced-motion: reduce) { .fy-card:hover .an-art img { scale: none; } }
 .ph-mode-art.is-set { image-rendering: pixelated; background-size: cover; }
