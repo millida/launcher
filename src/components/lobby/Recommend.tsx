@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { Icon } from '../Icon'
-import { AnarchyArt, anarchyOnlineShown } from '../playhub/AnarchyTile'
+import { anarchyOnlineShown } from '../playhub/AnarchyTile'
+import { ANARCHY_HERO, LAVA_STRIP, OBSIDIAN_TILE } from '../playhub/anarchyArt'
 import { ANARCHY, anarchyMode } from '../../lib/ownServer'
 import { loadAnarchyOnline, useAnarchy } from '../../lib/anarchy'
 import { usePromo } from '../../state/promo'
@@ -9,10 +10,12 @@ import { useLobby } from '../../state/lobbyMode'
 import { useProfiles } from '../../state/profiles'
 import { fmtN } from '../../lib/format'
 import { trackImpression } from '../../lib/uiTrack'
+import '../../styles/pixel/playhub.css'
 
 /**
- * The lobby card on the right shows only our anarchy, and pressing it starts
- * the game right away. The API can take it off the lobby without a release.
+ * The lobby banner of our anarchy in one palette: obsidian, lava and white.
+ * Pressing it starts the game right away; the API can take it off the lobby
+ * without a release.
  */
 export function Recommend({ on }: { on: boolean }) {
   const [online, setOnline] = useState<number | null>(null)
@@ -29,17 +32,17 @@ export function Recommend({ on }: { on: boolean }) {
     }
   }, [on, shown, an.addr])
 
+  if (!shown) return null
+
   const play = () => {
     const m = anarchyMode()
     useLobby.getState().pick(m)
     void playMode(m, useProfiles.getState().profiles)
   }
 
-  if (!shown) return null
-
   return (
     <button
-      className="lobby-rec lobby-rec-an"
+      className="lobby-rec lobby-an"
       data-sound="open"
       data-track="recommend"
       data-section="recommend"
@@ -47,28 +50,30 @@ export function Recommend({ on }: { on: boolean }) {
       data-kind="own_server"
       data-id={ANARCHY.mode}
       data-pos={0}
+      aria-label={'Играть: ' + an.fullName}
+      style={{ '--px-img': 'url("' + OBSIDIAN_TILE + '")' } as CSSProperties}
       onClick={play}
     >
-      <span className="lrec-art">
-        <AnarchyArt />
-        <span className="ph-card-tag excl">Эксклюзив</span>
+      <img className="lan-hero" src={ANARCHY_HERO} alt="" draggable={false} />
+      <span className="an-lava" aria-hidden="true" style={{ '--lava': 'url("' + LAVA_STRIP + '")' } as CSSProperties}>
+        <i />
       </span>
-      <span className="lrec-body">
-        <span className="lrec-lab">Наш сервер</span>
-        <b>{an.name}</b>
-        <i>
-          {anarchyOnlineShown(online) ? (
-            <>
-              <span className="ph-dot" aria-hidden="true"></span>
-              {fmtN(online)} играют
-            </>
-          ) : (
-            an.tagline + ' · ' + an.version
-          )}
-        </i>
+      <span className="lan-co">MCRU.ME × Millida</span>
+      <span className="lan-title">
+        Полная
+        <br />
+        <em>анархия</em>
       </span>
-      <span className="lrec-go">
-        <Icon id="i-play" /> Играть
+      <span className="lan-foot">
+        <span className="lan-go">
+          <Icon id="i-play" /> Играть
+        </span>
+        {anarchyOnlineShown(online) ? (
+          <span className="lan-on">
+            <span className="ph-dot" aria-hidden="true"></span>
+            {fmtN(online)} играют
+          </span>
+        ) : null}
       </span>
     </button>
   )

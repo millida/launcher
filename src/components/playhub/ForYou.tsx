@@ -453,7 +453,7 @@ export function ForYou({
             {fmtN(anarchyOnline)} играют
           </>
         ) : (
-          an.tagline + ' · ' + an.version
+          an.tagline
         )
       }
       onClick={() => onMode(ANARCHY.mode)}

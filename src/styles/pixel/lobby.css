@@ -639,11 +639,40 @@
   clip-path: var(--px-5); box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.25);
 }
 .lrec-go svg { width: 12px; height: 12px; }
-.lobby-rec.lobby-rec-an { background: rgba(28, 10, 16, 0.84); }
-.lobby-rec.lobby-rec-an:hover { background: rgba(44, 14, 22, 0.92); }
-.lobby-rec-an .lrec-lab { color: var(--m-rarity-legendary); }
+/* The anarchy banner in one palette: obsidian, lava and white. Only the lava
+   moves, so the card reads as part of the lobby rather than an ad. */
+.lobby-rec.lobby-an {
+  --an-night: #150a10; --an-lava: #ff6a24; --an-lava-hover: #ff8240; --an-ink: #1a0a08;
+  display: block; width: 340px; height: 186px; padding: 0; isolation: isolate; overflow: hidden;
+  background: var(--an-night) var(--px-img) 0 0 / 48px 48px repeat; image-rendering: pixelated;
+}
+.lobby-rec.lobby-an:hover { background-color: var(--an-night); }
+.lobby-an > span, .lobby-an > img { position: absolute; }
+.lan-hero { right: 18px; top: 14px; z-index: 1; height: 240px; width: auto; pointer-events: none; image-rendering: auto; transition: translate 220ms var(--m-ease-move); }
+.lan-co { left: 16px; top: 16px; z-index: 2; font: 800 11px/1 var(--m-font); letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255, 255, 255, 0.6); }
+.lan-title {
+  left: 16px; top: 38px; z-index: 2; font: 900 30px/1 var(--m-font); text-transform: uppercase; color: #fff;
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.5); pointer-events: none;
+}
+.lan-title em { font-style: normal; color: var(--an-lava); }
+.lan-foot { left: 16px; right: 16px; bottom: 34px; z-index: 2; display: flex; align-items: center; gap: 12px; }
+.lan-go {
+  display: inline-flex; align-items: center; gap: 8px; padding: 12px 26px 14px;
+  font: 900 17px/1 var(--m-font); text-transform: uppercase; color: var(--an-ink); background: var(--an-lava);
+  clip-path: var(--px-5); box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.22);
+  transition: transform 120ms var(--m-ease-move), background-color 120ms var(--m-ease-move);
+}
+.lan-go svg { width: 15px; height: 15px; }
+.lan-on { display: inline-flex; align-items: center; gap: 5px; font: 700 12px/1 var(--m-font); color: rgba(255, 255, 255, 0.6); }
+@media (hover: hover) and (pointer: fine) {
+  .lobby-an:hover .lan-go { background: var(--an-lava-hover); }
+  .lobby-an:hover .lan-hero { translate: 0 -4px; }
+}
+.lobby-an:active .lan-go { transform: scale(0.97); }
 @media (max-height: 640px) { .lobby-rec { display: none; } }
-@media (prefers-reduced-motion: reduce) { .lobby-rec, .lrec-scene img { animation: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .lobby-rec, .lrec-scene img, .lobby-an .an-lava i { animation: none; }
+}
 
 /* «Сегодня играем» + «Играть» — по центру под персонажем и в 1,5 раза
    крупнее (владелец 24.09.2026, 13:30). */
