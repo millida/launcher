@@ -1672,13 +1672,11 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
   50% { transform: translateY(-4%); }
 }
 
-/* OneBlock — баннер на две клетки как первый экран mcru.me: осенний ночной
-   фон, логотип сезона, персонаж справа, «Играть». Рамка акцентом 4px. */
+/* OneBlock — one cell next to the other modes, after the anarchy: night
+   autumn background, season logo, the character on the right, «Играть». */
 .ph-card.ph-mt.ph-mt-ob {
-  grid-column: span 2;
   display: block;
-  aspect-ratio: auto;
-  align-self: stretch;
+  aspect-ratio: 1;
   position: relative;
   background-color: #0d0b18;
   --px-img-size: cover;
@@ -1689,8 +1687,8 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
 .ph-mt-ob > .ph-ob2-rig,
 .ph-mt-ob > .ph-ob2-logo,
 .ph-mt-ob > .ph-ob2-foot { position: absolute; }
-.ph-ob2-rig { right: 5%; bottom: 4px; height: 92%; width: auto; filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.6)); transition: translate 220ms var(--m-ease-move); pointer-events: none; }
-.ph-ob2-logo { left: 5%; top: 20%; width: 62%; height: auto; filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.6)); transition: scale 220ms var(--m-ease-move); transform-origin: 30% 50%; pointer-events: none; }
+.ph-ob2-rig { right: -6%; bottom: 4px; height: 64%; width: auto; filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.6)); transition: translate 220ms var(--m-ease-move); pointer-events: none; }
+.ph-ob2-logo { left: 9%; top: 17%; width: 76%; height: auto; filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.6)); transition: scale 220ms var(--m-ease-move); transform-origin: 30% 50%; pointer-events: none; }
 /* Живой баннер: рыскание ригa, плавающий логотип, падающие листья — только transform/opacity. */
 .ph-ob2-rig { transform-origin: 50% 100%; animation: ph-ob-sway 4.2s ease-in-out infinite alternate; }
 .ph-ob2-logo { animation: ph-ob-float 5.5s ease-in-out infinite alternate; }
@@ -1709,7 +1707,7 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
 }
 .pp-ob-bg { animation: none; }
 .pp-ob-logo { position: absolute; right: 6%; top: 50%; width: min(36%, 380px); height: auto; translate: 0 -50%; filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.55)); pointer-events: none; }
-.ph-ob2-foot { left: 6%; bottom: 13%; display: flex; align-items: center; gap: 14px; }
+.ph-ob2-foot { left: 8%; bottom: 8%; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .ph-ob2-foot .ph-mt-on { font-size: 13px; }
 .ph-mt-ob .ph-card-tag { z-index: 1; }
 @media (hover: hover) and (pointer: fine) {
@@ -1719,7 +1717,6 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
 }
 .ph-mt-ob:active .ph-mt-play { transform: scale(0.97); }
 @media (max-width: 760px) {
-  .ph-card.ph-mt.ph-mt-ob { grid-column: 1 / -1; aspect-ratio: 16 / 9; }
   .ph-card.ph-mt.is-set .ph-mt-ic { width: 44%; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1729,7 +1726,7 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
   .ph-ob2-rig, .ph-ob2-logo { animation: none; }
   .ph-ob2-leaves { display: none; }
 }
-/* Anarchy — our server, second in «Режимы» on one cell after OneBlock. Obsidian wall, a lava
+/* Anarchy — our server, first in «Режимы» on two cells. Obsidian wall, a lava
    edge that flows in steps, embers rising off it and the server's loot over
    the wall. Only transform and opacity move; no gradients. */
 .ph-card.ph-mt.ph-mt-an {
@@ -1738,8 +1735,10 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
   --an-ember: #ffb21e;
   --an-hot: #ffd27a;
   --an-ink: #b0161a;
+  grid-column: span 2;
   display: block;
-  aspect-ratio: 1;
+  aspect-ratio: auto;
+  align-self: stretch;
   position: relative;
   isolation: isolate;
   background-color: var(--an-night);
@@ -1785,9 +1784,12 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
   transition: translate 220ms var(--m-ease-move);
   animation: an-float 3.4s ease-in-out infinite alternate;
 }
-.an-loot .a1 { right: 7%; top: 30%; height: 38%; animation-duration: 4.2s; }
-.an-loot .a3 { right: 8%; top: 12%; height: 16%; animation-delay: -0.6s; filter: drop-shadow(0 0 10px rgba(255, 201, 58, 0.65)); }
-.an-loot .a2, .an-loot .a4, .an-loot .a5, .an-loot .a6 { display: none; }
+.an-loot .a1 { right: 19%; top: 14%; height: 50%; animation-duration: 4.2s; }
+.an-loot .a2 { right: 4%; top: 50%; height: 26%; animation-delay: -1.2s; }
+.an-loot .a3 { right: 5%; top: 9%; height: 25%; animation-delay: -0.6s; filter: drop-shadow(0 0 10px rgba(255, 201, 58, 0.65)); }
+.an-loot .a4 { right: 41%; top: 62%; height: 9%; animation-delay: -2.1s; }
+.an-loot .a5 { right: 43%; top: 12%; height: 17%; animation-delay: -1.6s; }
+.an-loot .a6 { right: 33%; top: 58%; height: 20%; animation-delay: -2.7s; }
 @keyframes an-float {
   from { transform: translateY(0) rotate(-3deg); }
   to { transform: translateY(-9px) rotate(3deg); }
@@ -1823,10 +1825,10 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
 }
 @keyframes an-flow { from { transform: translateX(0); } to { transform: translateX(-128px); } }
 .ph-mt-an .ph-card-tag { z-index: 4; }
-.an-head { left: 8%; top: 22%; z-index: 4; display: flex; flex-direction: column; gap: 4px; max-width: 60%; pointer-events: none; }
-.an-title { font: 900 26px/1 var(--m-font); letter-spacing: -0.01em; color: #fff; text-shadow: 0 3px 0 var(--an-ink), 0 6px 0 rgba(0, 0, 0, 0.5); }
-.an-sub { font: 800 11px/1.2 var(--m-font); color: var(--an-hot); text-shadow: 0 2px 0 rgba(0, 0, 0, 0.6); }
-.an-foot { left: 8%; bottom: calc(16px + 7%); z-index: 4; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.an-head { left: 6%; top: 18%; z-index: 4; display: flex; flex-direction: column; gap: 6px; max-width: 52%; pointer-events: none; }
+.an-title { font: 900 40px/1 var(--m-font); letter-spacing: -0.01em; color: #fff; text-shadow: 0 3px 0 var(--an-ink), 0 6px 0 rgba(0, 0, 0, 0.5); }
+.an-sub { font: 800 13px/1.2 var(--m-font); color: var(--an-hot); text-shadow: 0 2px 0 rgba(0, 0, 0, 0.6); }
+.an-foot { left: 6%; bottom: calc(16px + 11%); z-index: 4; display: flex; align-items: center; gap: 14px; }
 .an-foot .ph-mt-on { font-size: 13px; }
 .ph-mt-an .ph-card-on { z-index: 4; }
 @media (hover: hover) and (pointer: fine) {
@@ -1834,6 +1836,13 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
   .ph-mt-an:hover .ph-mt-play { background: var(--m-accent-hover); }
 }
 .ph-mt-an:active .ph-mt-play { transform: scale(0.97); }
+@media (max-width: 760px) {
+  .ph-card.ph-mt.ph-mt-an { grid-column: 1 / -1; aspect-ratio: 16 / 9; }
+}
+@media (max-width: 1040px) {
+  .an-title { font-size: 32px; }
+  .an-loot .a4, .an-loot .a6 { display: none; }
+}
 @media (prefers-reduced-motion: reduce) {
   .ph-card.ph-mt.ph-mt-an, .an-glow, .an-loot img, .an-lava i { animation: none; }
   .ph-card.ph-mt.ph-mt-an::before, .an-embers { display: none; }
