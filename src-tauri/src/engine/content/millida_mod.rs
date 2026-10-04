@@ -204,6 +204,9 @@ async fn install_job(app: &AppHandle, job: &Job, profile: String) -> Result<Mill
 
     let stuck = keep_only(&profile, &state.available);
     if !stuck.is_empty() {
+        // Two versions side by side stop the loader, so the build stays on the
+        // one it cannot let go of and takes the new one next launch.
+        let _ = std::fs::remove_file(&dest);
         return Err(format!(
             "Старую версию мода не удалось убрать: {}. Закрой игру и антивирус, затем удали файл из папки mods сборки - иначе игра не запустится с двумя версиями сразу",
             stuck.join(", ")

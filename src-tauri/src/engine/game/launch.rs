@@ -253,6 +253,52 @@ fn refuse_second_instance(running: &[String], profile: &str) -> Result<(), Strin
     }
 }
 
+/// RUNNING lives in memory, so a game started before the launcher restarted is
+/// missing from it while it still holds the jars of its build open. The system
+/// process list remembers it: the launcher starts every game inside its build
+/// folder, and the folder is also passed as --gameDir.
+fn build_open_elsewhere(game_dir: &Path) -> bool {
+    use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
+    let mut sys = System::new();
+    sys.refresh_processes_specifics(
+        ProcessesToUpdate::All,
+        true,
+        ProcessRefreshKind::nothing()
+            .with_cmd(UpdateKind::Always)
+            .with_cwd(UpdateKind::Always),
+    );
+    sys.processes().values().any(|p| {
+        let name = p.name().to_string_lossy().to_ascii_lowercase();
+        if !name.starts_with("java") {
+            return false;
+        }
+        let args: Vec<String> = p.cmd().iter().map(|a| a.to_string_lossy().into_owned()).collect();
+        runs_in(game_dir, p.cwd(), &args)
+    })
+}
+
+fn runs_in(game_dir: &Path, cwd: Option<&Path>, args: &[String]) -> bool {
+    let named = args
+        .iter()
+        .position(|a| a == "--gameDir")
+        .and_then(|i| args.get(i + 1))
+        .is_some_and(|dir| same_dir(Path::new(dir), game_dir));
+    named || cwd.is_some_and(|dir| same_dir(dir, game_dir))
+}
+
+fn same_dir(a: &Path, b: &Path) -> bool {
+    let norm = |p: &Path| {
+        let text = p.to_string_lossy().replace('\\', "/");
+        let text = text.trim_end_matches('/').to_string();
+        if cfg!(windows) {
+            text.to_lowercase()
+        } else {
+            text
+        }
+    };
+    norm(a) == norm(b)
+}
+
 const LOG_DRAIN_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
 
 /// The crash stack is the last thing the JVM prints: the readers get a moment
@@ -1179,6 +1225,9 @@ pub async fn install_and_launch_in(
     check_cancel()?;
     let _slot = claim_profile_start(&profile, || emit(&app, "files", 2.0, "Останавливаем прошлый запуск этой сборки…")).await?;
     refuse_second_instance(&running_games(), &profile)?;
+    if build_open_elsewhere(&profile_dir(&profile)) {
+        return Err(ALREADY_RUNNING.into());
+    }
     // the nick lands on the command line and in an argfile
     let nick = launch_nick(&nick);
     let prof = load_profiles().into_iter().find(|p| p.name == profile);
@@ -2309,6 +2358,31 @@ mod tests {
             if refused {
                 assert_eq!(got.unwrap_err(), ALREADY_RUNNING, "the player must be told the game is already open");
             }
+        }
+    }
+
+    /// (game dir of the build, process cwd, process args -> same build, why pinned)
+    #[test]
+    fn a_build_open_from_an_earlier_launcher_is_recognised() {
+        let build = if cfg!(windows) { r"C:\Games\profiles\FO" } else { "/games/profiles/FO" };
+        let other = if cfg!(windows) { r"C:\Games\profiles\FO2" } else { "/games/profiles/FO2" };
+        let args = |dir: &str| vec!["-Xmx4G".to_string(), "--gameDir".to_string(), dir.to_string()];
+        let cases: [(Option<&str>, Vec<String>, bool, &str); 6] = [
+            (None, args(build), true, "--gameDir names the build: its jars are held open"),
+            (Some(build), vec![], true, "an argfile launch hides the args, the working folder still tells"),
+            (None, args(&format!("{build}/")), true, "a trailing separator is the same folder"),
+            (Some(other), args(other), false, "a build whose name only starts the same is another build"),
+            (None, vec!["--gameDir".to_string()], false, "a flag without a value names nothing"),
+            (None, vec![], false, "a java process with nothing of the build is someone else's"),
+        ];
+        for (cwd, list, same, why) in cases {
+            assert_eq!(runs_in(Path::new(build), cwd.map(Path::new), &list), same, "{cwd:?} {list:?}: {why}");
+        }
+        if cfg!(windows) {
+            assert!(
+                runs_in(Path::new(build), Some(Path::new(&build.to_uppercase())), &[]),
+                "Windows paths ignore case: a game started with another spelling still holds the jars"
+            );
         }
     }
 
