@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { OWN_SERVER_ADDR, joinAddr, modeAction, targetsOwnServer } from './ownServer'
+import { ANARCHY, OWN_SERVER_ADDR, anarchyMode, joinAddr, modeAction, targetsAnarchy, targetsOwnServer } from './ownServer'
 import { searchTerm } from '../components/playhub/data'
 import type { LobbyMode } from '../state/lobbyMode'
 
@@ -55,4 +55,33 @@ describe('searchTerm', () => {
     test(input, () => {
       expect(searchTerm(input), why).toBe(want)
     })
+})
+
+describe('targetsAnarchy', () => {
+  const cases: Array<[LobbyMode | null, boolean, string]> = [
+    [anarchyMode(), true, 'the anarchy tile and the lobby card start the anarchy path with its exact version'],
+    [server('x', 'MCRU.millida.host.:25565'), true, 'a typed address of the anarchy is the same server'],
+    [server('mcru', 'play.mcru.me'), false, 'the old MCRU rating card is another server'],
+    [server('oneblock-7', ''), false, 'OneBlock keeps its own client'],
+    [null, false, 'nothing picked is not the anarchy'],
+  ]
+  for (const [mode, want, why] of cases)
+    test(why, () => {
+      expect(targetsAnarchy(mode), why).toBe(want)
+    })
+
+  test('the anarchy never takes the OneBlock path', () => {
+    expect(targetsOwnServer(anarchyMode()), 'the anarchy would start the 1.7.10 OneBlock client').toBe(false)
+  })
+  test('the anarchy mode joins by address with the server version, no license', () => {
+    const m = anarchyMode()
+    expect(m.kind === 'server' && [m.ip, m.versions, m.licensed], 'the proxy signs in with the Millida account on 1.21.11').toEqual([
+      'mcru.millida.host',
+      ['1.21.11'],
+      false,
+    ])
+  })
+  test('the anarchy tile does not fall into the OneBlock launch', () => {
+    expect(modeAction(ANARCHY.mode), 'modeAction launches only OneBlock; the anarchy has its own branch').toBe('open')
+  })
 })

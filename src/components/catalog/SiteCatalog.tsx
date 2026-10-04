@@ -12,7 +12,7 @@ import { CATALOG_GROUPS, SECTION_VISUAL, curatedTitle, groupOf, groupVisual, sit
 import type { NavGroup } from './sections'
 import { PxIcon } from '../PxIcon'
 import { Fallback, MrIcon, TagGlyph } from './SiteRow'
-import { installFromCatalog } from '../../lib/catalogInstall'
+import { CHEAT_SOURCE_NOTE, installFromCatalog } from '../../lib/catalogInstall'
 import { openExt } from '../../lib/api'
 import { setScreen } from '../../state/ui'
 import { capFirst, loaderIconSrc, loaderLabel, loaderTone, plural } from './site'
@@ -544,6 +544,10 @@ function CuratedPane({ narrow }: { narrow: boolean }) {
       count={items ? materials(shown.length) : null}
       sort={null}
     >
+      <p role="note" className="mr-cheat-note">
+        <Icon id="i-alert" />
+        {CHEAT_SOURCE_NOTE}
+      </p>
       {failed ? (
         <CatalogNotice note={{ icon: 'i-alert', title: 'Каталог не ответил', action: { label: 'Повторить', primary: true, icon: 'i-restart', onClick: load } }} />
       ) : items === null ? (

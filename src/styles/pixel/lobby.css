@@ -639,6 +639,9 @@
   clip-path: var(--px-5); box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.25);
 }
 .lrec-go svg { width: 12px; height: 12px; }
+.lobby-rec.lobby-rec-an { background: rgba(28, 10, 16, 0.84); }
+.lobby-rec.lobby-rec-an:hover { background: rgba(44, 14, 22, 0.92); }
+.lobby-rec-an .lrec-lab { color: var(--m-rarity-legendary); }
 @media (max-height: 640px) { .lobby-rec { display: none; } }
 @media (prefers-reduced-motion: reduce) { .lobby-rec, .lrec-scene img { animation: none; } }
 

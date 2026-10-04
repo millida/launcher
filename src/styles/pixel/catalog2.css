@@ -472,6 +472,8 @@
 .mr-galgrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 @media (max-width: 1199px) { .mr-galgrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 520px) { .mr-galgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } }
+.mr-cheat-note { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 12px; font-size: 13px; line-height: 1.5; color: var(--m-fg-muted); }
+.mr-cheat-note .icon { flex-shrink: 0; margin-top: 2px; color: var(--m-warning); }
 .card.mr-gal { position: relative; display: flex; flex-direction: column; min-width: 0; padding: 0; overflow: hidden; background-color: var(--m-surface); cursor: pointer; transition: background-color var(--m-t-fast) ease; }
 .card.mr-gal:hover { background-color: var(--m-surface-2); }
 .card.mr-gal.cat-skel { cursor: default; }

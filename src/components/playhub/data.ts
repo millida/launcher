@@ -7,7 +7,7 @@ import type { MillidaPack } from '../../ipc/commands'
 import { toCard } from '../../state/servers'
 import type { RatingServer } from '../../state/servers'
 import type { SnapshotServer } from '../../lib/snapshot'
-import { ONEBLOCK_PACK, OWN_SERVER_ADDR, OWN_SERVER_MODE, OWN_SERVER_SLUG } from '../../lib/ownServer'
+import { ANARCHY, ONEBLOCK_PACK, OWN_SERVER_ADDR, OWN_SERVER_MODE, OWN_SERVER_SLUG } from '../../lib/ownServer'
 
 /**
  * Каталог режимов «Во что играем». Серверный режим — не сервер, а занятие:
@@ -404,7 +404,7 @@ export const OWN_SERVER: {
 export { ONEBLOCK_PACK }
 export const ONEBLOCK_BANNER = 'https://cdn.millida.trade/catalog/launcher-packs/oneblock-metalabs/2026-09-27/oneblock-banner.jpg'
 
-const EXCLUSIVE = new Set([ONEBLOCK_PACK, OWN_SERVER.mode])
+const EXCLUSIVE = new Set<string>([ONEBLOCK_PACK, OWN_SERVER.mode, ANARCHY.mode])
 export const isExclusive = (key: string | null | undefined): boolean => !!key && EXCLUSIVE.has(key)
 
 /**

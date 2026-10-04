@@ -36,3 +36,36 @@ export const ownServerMode = (cover: string | null = null): LobbyMode => ({
   cover,
   meta: '',
 })
+
+/**
+ * Our own survival anarchy. The proxy signs players in with the Millida
+ * account, so a clean build of the server's exact version joins it directly.
+ * The mode key differs from the rating category ANARCHY, which lists foreign
+ * servers.
+ */
+export const ANARCHY = {
+  mode: 'MCRU_ANARCHY',
+  slug: 'mcru-anarchy',
+  name: 'Анархия',
+  fullName: 'Анархия MCRU',
+  addr: 'mcru.millida.host',
+  version: '1.21.11',
+  tagline: 'Выживание без правил',
+} as const
+
+export const anarchyMode = (): LobbyMode => ({
+  kind: 'server',
+  slug: ANARCHY.slug,
+  name: ANARCHY.fullName,
+  ip: ANARCHY.addr,
+  logo: null,
+  banner: null,
+  versions: [ANARCHY.version],
+  licensed: false,
+})
+
+export const isAnarchyAddr = (addr: string | null | undefined): boolean =>
+  !!addr && !!addr.trim() && canonAddr(addr) === canonAddr(ANARCHY.addr)
+
+export const targetsAnarchy = (m: LobbyMode | null | undefined): boolean =>
+  !!m && m.kind === 'server' && (m.slug === ANARCHY.slug || isAnarchyAddr(m.ip))
