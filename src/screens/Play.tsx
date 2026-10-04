@@ -5,6 +5,8 @@ import { Installs } from '../components/Installs'
 import { LobbyCharacter } from '../components/lobby/LobbyCharacter'
 import { EmoteBubble } from '../components/lobby/EmoteBubble'
 import { Recommend } from '../components/lobby/Recommend'
+import { AnarchyArt } from '../components/playhub/AnarchyTile'
+import { targetsAnarchy } from '../lib/ownServer'
 import { PixelField } from '../components/lobby/PixelField'
 import { HubTile } from '../components/lobby/HubTile'
 import { useHeroWallpaper } from '../components/HeroWallpaper'
@@ -139,7 +141,9 @@ export function Play({ on }: { on: boolean }) {
     ) : mode?.kind === 'premium' ? (
       mode.cover ? <img src={mode.cover} alt="" /> : null
     ) : mode?.kind === 'server' ? (
-      mode.banner || mode.logo ? <img src={(mode.banner || mode.logo) as string} alt="" /> : null
+      targetsAnarchy(mode) ? (
+        <AnarchyArt />
+      ) : mode.banner || mode.logo ? <img src={(mode.banner || mode.logo) as string} alt="" /> : null
     ) : (
       <ModeReel />
     )

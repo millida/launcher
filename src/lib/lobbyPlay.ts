@@ -11,7 +11,8 @@ import { useProfiles } from '../state/profiles'
 import { runInstall } from '../state/installs'
 import { keyCatalogPack } from './installKeys'
 import { catalogInstallTracker } from './install'
-import { ONEBLOCK_PACK, targetsOwnServer } from './ownServer'
+import { ONEBLOCK_PACK, targetsAnarchy, targetsOwnServer } from './ownServer'
+import { playAnarchy } from './anarchy'
 
 const launch = (name: string) => (hasTauri() ? realLaunch(name) : startPrelaunch(name))
 
@@ -42,6 +43,7 @@ export async function playMode(m: LobbyMode, profiles: Profile[]): Promise<void>
     return
   }
   if (targetsOwnServer(m)) return playOwnServer(profiles)
+  if (targetsAnarchy(m)) return playAnarchy()
   if (m.kind === 'build') return launch(m.name)
   if (m.kind === 'version') {
     // Сборка под версию — общая с каталогом режимов: Fabric, FPS-моды по

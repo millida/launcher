@@ -13,6 +13,9 @@ import type { HostServer } from '../../screens/Hosting'
 import { HostPlanPicker } from '../HostPlanPicker'
 import { ONEBLOCK_ART } from './modeIcon'
 import { ONEBLOCK_PACK, isExclusive } from './data'
+import { ANARCHY, OWN_SERVER_MODE } from '../../lib/ownServer'
+import { AnarchyArt, anarchyOnlineShown } from './AnarchyTile'
+import { FY_HEAD, FY_HEAD_CELLS } from './placement'
 import type { HubPack } from './data'
 import { trackImpression } from '../../lib/uiTrack'
 import { track } from '../../lib/telemetry'
@@ -53,6 +56,7 @@ import { readSignals } from '../../lib/recsSignals'
  * лента. Узкое окно прячет лишние ряды само (fy-grid).
  */
 const SHOWN = 15
+const HEAD_CELLS = FY_HEAD.reduce((n, k) => n + FY_HEAD_CELLS[k], 0)
 /** Эксклюзивов в голове: Arcania и ещё один, второй меняется по дням (владелец 30.09.2026, 15:42). */
 const EXCL = 2
 /**
@@ -188,6 +192,7 @@ export function ForYou({
   premiumWait,
   packs,
   oneblockOnline,
+  anarchyOnline,
   onPack,
   onMode,
   onItem,
@@ -204,6 +209,7 @@ export function ForYou({
   /** Бесплатные сборки Millida от самых популярных. */
   packs: HubPack[]
   oneblockOnline: number | null
+  anarchyOnline: number | null
   /** Запуск своего сервера — сейчас баннер ведёт в хостинг, оставлено для совместимости. */
   onPlay?: (m: LobbyMode) => void
   onPack: (p: HubPack) => void
@@ -300,7 +306,7 @@ export function ForYou({
           key={'excl:' + p.id}
           kind="premium"
           id={p.slug || p.id}
-          pos={2 + i}
+          pos={FY_HEAD.length + i}
           tag="Arcania Labs"
           gold
           excl
@@ -342,7 +348,7 @@ export function ForYou({
           ok: !!(c.cover || c.icon) && Math.max(c.downloads || 0, c.sourceDownloads || 0) >= MIN_DOWNLOADS,
           data: { kind: 'card', section: sec, card: c },
         }))
-    const n = SHOWN - 2 - EXCL - 1 - 1 - previews.length
+    const n = SHOWN - HEAD_CELLS - EXCL - 1 - previews.length
     const feed = mixFeed<FeedData>({
       sections,
       personal: [],
@@ -397,16 +403,16 @@ export function ForYou({
   }, [ab, cards, packs, headKey, onPack, onItem])
 
   // Хостинг занимает две клетки, OneBlock и «Ещё» — по одной.
-  const rest = SHOWN - 2 - 1 - 1 - labs.length
+  const rest = SHOWN - HEAD_CELLS - 1 - labs.length
   const shown = rotated.slice(0, rest)
-  const off = 2 + labs.length
+  const off = FY_HEAD.length + labs.length
 
   // OneBlock — наш сервер, первым в ряду (владелец 30.09.2026, 21:04): он не
   // эксклюзив-сборка, у него своя зелёная метка.
   const obNode = (
         <Card
           key="oneblock"
-          pos={1}
+          pos={FY_HEAD.indexOf(OWN_SERVER_MODE)}
           kind="mode"
           id="ONEBLOCK"
           tag="Наш сервер"
@@ -426,6 +432,31 @@ export function ForYou({
           onClick={() => onMode('ONEBLOCK')}
         />
       )
+
+  const anNode = (
+    <Card
+      key="anarchy"
+      pos={FY_HEAD.indexOf(ANARCHY.mode)}
+      kind="own_server"
+      id={ANARCHY.mode}
+      tag="Наш сервер"
+      own
+      art={<AnarchyArt />}
+      title={ANARCHY.name}
+      meta={
+        anarchyOnlineShown(anarchyOnline) ? (
+          <>
+            <span className="ph-dot" aria-hidden="true"></span>
+            {fmtN(anarchyOnline)} играют
+          </>
+        ) : (
+          ANARCHY.tagline + ' · ' + ANARCHY.version
+        )
+      }
+      onClick={() => onMode(ANARCHY.mode)}
+    />
+  )
+  const headNodes: Record<(typeof FY_HEAD)[number], ReactNode> = { hosting: own, [ANARCHY.mode]: anNode, [OWN_SERVER_MODE]: obNode }
 
   // Показ блока для CTR: один раз на набор карточек, когда ряд собран. Тот же
   // показ пишет журнал новизны (не повторять завтра) и группу A/B.
@@ -457,8 +488,7 @@ export function ForYou({
   return (
     <>
       <div className="hub-grid fy-grid" data-section="foryou" onClickCapture={onClickCapture}>
-        {own}
-        {obNode}
+        {FY_HEAD.map((k) => headNodes[k])}
         {labs}
         {shown.map((x, i) => cloneElement(x.node, { pos: off + i }))}
         {onMore ? (

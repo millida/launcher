@@ -1729,6 +1729,121 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
   .ph-ob2-rig, .ph-ob2-logo { animation: none; }
   .ph-ob2-leaves { display: none; }
 }
+/* Anarchy — our server, second in «Режимы» on one cell after OneBlock. Obsidian wall, a lava
+   edge that flows in steps, embers rising off it and the server's loot over
+   the wall. Only transform and opacity move; no gradients. */
+.ph-card.ph-mt.ph-mt-an {
+  --an-night: #150a10;
+  --an-lava: #ff5c24;
+  --an-ember: #ffb21e;
+  --an-hot: #ffd27a;
+  --an-ink: #b0161a;
+  display: block;
+  aspect-ratio: 1;
+  position: relative;
+  isolation: isolate;
+  background-color: var(--an-night);
+  image-rendering: pixelated;
+  --px-img-size: 48px 48px;
+  --px-img-pos: 0 0;
+  --px-img-repeat: repeat;
+  --px-ol: var(--m-rarity-legendary); --px-ol-w: 4px;
+  animation: an-frame 1.4s steps(1, end) infinite;
+}
+.ph-card.ph-mt.ph-mt-an:hover { background-color: var(--an-night); }
+.ph-card.ph-mt.ph-mt-an.on { --px-ol: var(--m-accent); }
+.ph-card.ph-mt.ph-mt-an::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -30%;
+  z-index: 3;
+  width: 14%;
+  background: rgba(255, 230, 200, 0.16);
+  transform: skewX(-18deg);
+  pointer-events: none;
+  animation: ph-own-glint 4.2s steps(14, end) infinite;
+}
+@keyframes an-frame {
+  0%, 100% { --px-ol: var(--m-rarity-legendary); }
+  50% { --px-ol: var(--m-danger); }
+}
+.ph-mt-an > span { position: absolute; }
+.an-glow { left: 0; right: 0; bottom: 0; height: 52%; z-index: 0; pointer-events: none; animation: an-heat 1.8s steps(3, end) infinite alternate; }
+.an-glow i { position: absolute; left: 0; right: 0; bottom: 0; background: var(--an-lava); }
+.an-glow i:nth-child(1) { height: 100%; opacity: 0.07; }
+.an-glow i:nth-child(2) { height: 64%; opacity: 0.09; }
+.an-glow i:nth-child(3) { height: 34%; opacity: 0.14; }
+@keyframes an-heat { from { opacity: 0.75; } to { opacity: 1; } }
+.an-loot { inset: 0; z-index: 1; pointer-events: none; }
+.an-loot img {
+  position: absolute;
+  width: auto;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 6px 0 rgba(0, 0, 0, 0.4));
+  transition: translate 220ms var(--m-ease-move);
+  animation: an-float 3.4s ease-in-out infinite alternate;
+}
+.an-loot .a1 { right: 7%; top: 30%; height: 38%; animation-duration: 4.2s; }
+.an-loot .a3 { right: 8%; top: 12%; height: 16%; animation-delay: -0.6s; filter: drop-shadow(0 0 10px rgba(255, 201, 58, 0.65)); }
+.an-loot .a2, .an-loot .a4, .an-loot .a5, .an-loot .a6 { display: none; }
+@keyframes an-float {
+  from { transform: translateY(0) rotate(-3deg); }
+  to { transform: translateY(-9px) rotate(3deg); }
+}
+.an-embers { inset: 0; z-index: 2; overflow: hidden; pointer-events: none; }
+.an-embers i {
+  position: absolute;
+  bottom: 14px;
+  left: calc(3% + var(--i) * 8%);
+  width: 4px;
+  height: 4px;
+  background: var(--an-ember);
+  opacity: 0;
+  animation: an-ember calc(2.4s + var(--i) * 0.21s) steps(16, end) infinite;
+  animation-delay: calc(var(--i) * -0.57s);
+}
+.an-embers i:nth-child(2n) { width: 3px; height: 3px; background: var(--an-lava); }
+.an-embers i:nth-child(3n) { background: var(--an-hot); }
+@keyframes an-ember {
+  0% { transform: translate(0, 0); opacity: 0; }
+  12% { opacity: 1; }
+  55% { transform: translate(7px, -90px); }
+  100% { transform: translate(-5px, -180px); opacity: 0; }
+}
+.an-lava { left: 0; right: 0; bottom: 0; height: 16px; z-index: 2; overflow: hidden; pointer-events: none; }
+.an-lava i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(100% + 128px);
+  background: var(--lava) 0 0 / 128px 16px repeat-x;
+  image-rendering: pixelated;
+  animation: an-flow 7s steps(32, end) infinite;
+}
+@keyframes an-flow { from { transform: translateX(0); } to { transform: translateX(-128px); } }
+.ph-mt-an .ph-card-tag { z-index: 4; }
+.an-head { left: 8%; top: 22%; z-index: 4; display: flex; flex-direction: column; gap: 4px; max-width: 60%; pointer-events: none; }
+.an-title { font: 900 26px/1 var(--m-font); letter-spacing: -0.01em; color: #fff; text-shadow: 0 3px 0 var(--an-ink), 0 6px 0 rgba(0, 0, 0, 0.5); }
+.an-sub { font: 800 11px/1.2 var(--m-font); color: var(--an-hot); text-shadow: 0 2px 0 rgba(0, 0, 0, 0.6); }
+.an-foot { left: 8%; bottom: calc(16px + 7%); z-index: 4; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.an-foot .ph-mt-on { font-size: 13px; }
+.ph-mt-an .ph-card-on { z-index: 4; }
+@media (hover: hover) and (pointer: fine) {
+  .ph-mt-an:hover .an-loot img { translate: 0 -5px; }
+  .ph-mt-an:hover .ph-mt-play { background: var(--m-accent-hover); }
+}
+.ph-mt-an:active .ph-mt-play { transform: scale(0.97); }
+@media (prefers-reduced-motion: reduce) {
+  .ph-card.ph-mt.ph-mt-an, .an-glow, .an-loot img, .an-lava i { animation: none; }
+  .ph-card.ph-mt.ph-mt-an::before, .an-embers { display: none; }
+  .ph-mt-an:hover .an-loot img { translate: none; }
+}
+/* Still anarchy art inside cards: «Рекомендуем» and the lobby. */
+.an-art { position: absolute; inset: 0; display: block; overflow: hidden; background: #150a10; }
+.an-art img { width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; transition: scale 180ms var(--m-ease-move); }
+@media (hover: hover) and (pointer: fine) { .fy-card:hover .an-art img { scale: 1.04; } }
+@media (prefers-reduced-motion: reduce) { .fy-card:hover .an-art img { scale: none; } }
 .ph-mode-art.is-set { image-rendering: pixelated; background-size: cover; }
 
 /* «Рекомендуем» — четыре ряда (владелец 30.09.2026, 15:06); лишние ряды на

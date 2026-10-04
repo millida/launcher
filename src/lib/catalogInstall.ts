@@ -442,6 +442,10 @@ async function installModpackItem(slug: string, opts: CatalogInstallOpts): Promi
   return false
 }
 
+export const CHEAT_SOURCE_NOTE =
+  'Читы — сторонние программы: файлы взяты у их авторов. Мы дополнительно проверяем их антивирусом, но не гарантируем безопасность и не отвечаем за последствия установки.'
+export const CHEAT_RULES_NOTE = 'Играйте с читами только на серверах, где это разрешено правилами — за нарушение банят.'
+
 /// Читы: файлы лежат на нашем хранилище после антивируса (/catalog/curated/cheats).
 async function installCheat(slug: string, opts: CatalogInstallOpts): Promise<boolean> {
   let list: CatalogFile[] = []
@@ -471,6 +475,12 @@ async function installCheat(slug: string, opts: CatalogInstallOpts): Promise<boo
     toSite('cheats', slug, 'Для этого клиента нет файла, который ставится в сборку')
     return false
   }
+  const agreed = await uiConfirm(CHEAT_RULES_NOTE + ' ' + CHEAT_SOURCE_NOTE, {
+    title: 'Перед установкой чита',
+    confirmLabel: 'Понятно, установить',
+    danger: false,
+  })
+  if (!agreed) return false
   const prof = await chooseBuild(slug, 'mod', list, opts)
   if (!prof) return false
   const pr = buildOf(prof)

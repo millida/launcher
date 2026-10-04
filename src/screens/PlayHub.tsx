@@ -46,7 +46,10 @@ import { ForYou } from '../components/playhub/ForYou'
 import { PlayTogether } from '../components/playhub/PlayTogether'
 import { CatalogPane } from './Mods'
 import { track } from '../lib/telemetry'
-import { ONEBLOCK_PACK, modeAction, ownServerMode, targetsOwnServer } from '../lib/ownServer'
+import { ANARCHY, ONEBLOCK_PACK, anarchyMode, modeAction, ownServerMode, targetsAnarchy, targetsOwnServer } from '../lib/ownServer'
+import { loadAnarchyOnline } from '../lib/anarchy'
+import { AnarchyTile } from '../components/playhub/AnarchyTile'
+import { MODES_SHOWN, shelfOrder, shownCount } from '../components/playhub/placement'
 import '../styles/pixel/playhub.css'
 
 /**
@@ -324,6 +327,7 @@ export function PlayHub({ on }: { on?: boolean }) {
 
   const [modes, setModes] = useState<LiveMode[] | null>(null)
   const [ownOnline, setOwnOnline] = useState<number | null>(null)
+  const [anarchyOnline, setAnarchyOnline] = useState<number | null>(null)
   const [packs, setPacks] = useState<MillidaPack[] | null>(null)
   const [mrPacks, setMrPacks] = useState<HubPack[] | null>(null)
   /** Режимы: 7 плиток, «Остальные» раскрывает остальные на месте. */
@@ -360,6 +364,7 @@ export function PlayHub({ on }: { on?: boolean }) {
     void loadModrinthPacks().then((l) => alive && setMrPacks(l))
     void loadLiveModes().then((l) => alive && setModes(l))
     void loadOwnOnline().then((n) => alive && setOwnOnline(n))
+    void loadAnarchyOnline().then((n) => alive && setAnarchyOnline(n))
     return () => {
       alive = false
     }
@@ -449,10 +454,7 @@ export function PlayHub({ on }: { on?: boolean }) {
   }, [page && page.id])
 
   const own = OWN_SERVER
-  const shelfModes = useMemo(
-    () => [...(modes || [])].sort((a, b) => Number(b.def.cat === OWN_SERVER.mode) - Number(a.def.cat === OWN_SERVER.mode)),
-    [modes],
-  )
+  const shelfModes = useMemo(() => shelfOrder(modes || []), [modes])
   const wrap = (child: ReactNode) => (
     <section className={'screen playhub' + (on ? ' on' : '')} id="s-playhub">
       {child}
@@ -517,6 +519,10 @@ export function PlayHub({ on }: { on?: boolean }) {
   }
   const pickMode = (cat: string, source: 'hub' | 'search' | 'foryou' = 'hub') => {
     track('mode_open', { mode: cat, source })
+    if (cat === ANARCHY.mode) {
+      launch(anarchyMode())
+      return
+    }
     if (modeAction(cat) === 'launch') {
       launch(ownMode)
       return
@@ -566,24 +572,22 @@ export function PlayHub({ on }: { on?: boolean }) {
     setAll(true)
     top0()
   }
-  // 7 плиток + «Остальные» (владелец 24.09): с баннером OneBlock на две
-  // колонки это ровно два ряда по пять.
-  const MODES_SHOWN = 8
-  // «Свернуть» не встаёт в ряд одна (владелец 30.09.2026, 21:04): если так
-  // выходит, прячем самый слабый режим (они по онлайну, последний — Бинго и
-  // подобные). Клеток в ряду пять, баннер OneBlock занимает две.
-  const lonely = (2 + (shelfModes.length - 1) + 1) % 5 === 1
-  const shownModes = allModes ? (lonely ? shelfModes.slice(0, -1) : shelfModes) : shelfModes.slice(0, MODES_SHOWN)
+  const shownModes = shelfModes.slice(0, shownCount(shelfModes.length, allModes))
 
-  // «Режимы»: OneBlock баннером первым, 7 плиток и «Остальные»,
-  // раскрывает их на месте. Внутри режима — полная лента его серверов.
   const modesPane = (
     <div className="ph-row ph-mts" data-section="modes">
       {modes === null ? (
         <CardSkel n={10} />
       ) : modes.length ? (
         <>
-          {shownModes.map(modeTile)}
+          {shownModes.slice(0, 1).map(modeTile)}
+          <AnarchyTile
+            index={1}
+            online={anarchyOnline}
+            on={targetsAnarchy(current)}
+            onClick={() => pickMode(ANARCHY.mode)}
+          />
+          {shownModes.slice(1).map(modeTile)}
           {shelfModes.length > MODES_SHOWN ? (
             <button
               className="ph-card ph-mt ph-mt-all"
@@ -740,6 +744,7 @@ export function PlayHub({ on }: { on?: boolean }) {
           premiumWait={premiumWait}
           packs={forYouPacks}
           oneblockOnline={obOnline}
+          anarchyOnline={anarchyOnline}
           onPlay={launch}
           onPack={openPack}
           onMode={(cat) => pickMode(cat, 'foryou')}
