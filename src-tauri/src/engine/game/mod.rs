@@ -1,5 +1,6 @@
 mod mcmeta;
 mod java;
+mod mic_sign;
 mod install;
 mod loaders;
 mod loader_sums;
@@ -21,10 +22,12 @@ mod fpsboost;
 mod tuning;
 mod repair;
 mod gpu;
+mod display;
 mod legacy_dups;
 
 pub(crate) use mcmeta::*;
 pub use java::*;
+pub(crate) use mic_sign::grant_java_microphone;
 pub use install::*;
 pub use loaders::*;
 pub(crate) use loader_sums::*;
@@ -44,4 +47,5 @@ pub use fpsboost::*;
 pub use tuning::*;
 pub use repair::*;
 pub use gpu::*;
+pub(crate) use display::apply_display_backend;
 pub use legacy_dups::*;

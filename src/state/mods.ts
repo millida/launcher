@@ -45,21 +45,31 @@ export interface ModHit {
 let reviewQueue: Record<string, { fileId: string; version: string }> = {}
 
 let reviewQueueAt = 0
+let reviewQueueLoad: Promise<void> = Promise.resolve()
 const REVIEW_QUEUE_TTL = 60_000
 
-export async function refreshReviewQueue(): Promise<void> {
+export function refreshReviewQueue(): Promise<void> {
   // Поиск перебирает буквы, и без потолка частоты это запрос на каждую.
-  if (Date.now() - reviewQueueAt < REVIEW_QUEUE_TTL) return
+  // A caller arriving mid-request waits for it instead of reading the still-empty queue.
+  if (Date.now() - reviewQueueAt < REVIEW_QUEUE_TTL) return reviewQueueLoad
   reviewQueueAt = Date.now()
-  try {
-    const rows = (await packReviewQueue()) || []
-    reviewQueue = Object.fromEntries(rows.map((r) => [r.slug, { fileId: r.fileId, version: r.version }]))
-  } catch {
-    reviewQueue = {}
-  }
+  reviewQueueLoad = (async () => {
+    try {
+      const rows = (await packReviewQueue()) || []
+      reviewQueue = Object.fromEntries(rows.map((r) => [r.slug, { fileId: r.fileId, version: r.version }]))
+    } catch {
+      reviewQueue = {}
+    }
+  })()
+  return reviewQueueLoad
 }
 
-const LOADER_TAGS = ['fabric', 'forge', 'neoforge', 'quilt']
+export async function reviewCandidateFor(slug: string): Promise<{ fileId: string; version: string } | null> {
+  await refreshReviewQueue()
+  return reviewQueue[slug] ?? null
+}
+
+const LOADER_TAGS =['fabric', 'forge', 'neoforge', 'quilt']
 
 /** Наша сборка в виде строки списка — та же форма, что у чужих источников. */
 function packToHit(p: MillidaPack): ModHit {

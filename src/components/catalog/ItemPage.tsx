@@ -39,6 +39,7 @@ import {
 import type { CuratedItem, ItemView, SiteCard, SiteSection, SkinTile } from './site'
 import { CHEATS, cheatBody, cheatName, defaultPick, filesFor, loaderOptions, sizeLabel, spanOf, versionOptions } from './itemView'
 import type { VerFile } from './itemView'
+import { weaveMarkdown } from './weave'
 import '../../styles/pixel/catalog-item.css'
 
 /*
@@ -198,10 +199,10 @@ function useTargetBuild(): { name: string; version: string; loader: string } | n
 
 /* ── Каркас страницы ─────────────────────────────────────────── */
 
-function Back({ label }: { label: string }) {
+export function Back({ label, onBack = closeItem }: { label: string; onBack?: () => void }) {
   return (
     <nav className="ci-crumbs" aria-label="Навигация">
-      <button className="btn sm secondary ci-back" data-track="item_back" data-sound="close" onClick={closeItem}>
+      <button className="btn sm secondary ci-back" data-track="item_back" data-sound="close" onClick={onBack}>
         <Icon id="i-chev-l" />
         Назад
       </button>
@@ -210,7 +211,7 @@ function Back({ label }: { label: string }) {
   )
 }
 
-function Hero({
+export function Hero({
   cover,
   icon,
   art,
@@ -218,6 +219,9 @@ function Hero({
   by,
   facts,
   cta,
+  className,
+  badge,
+  line,
 }: {
   cover: ReactNode
   icon: ReactNode
@@ -226,14 +230,21 @@ function Hero({
   by: string | null
   facts: ReactNode[]
   cta: ReactNode
+  className?: string
+  badge?: ReactNode
+  line?: string | null
 }) {
   return (
-    <header className="card ci-hero">
-      <div className={'ci-banner' + (art ? ' is-art' : '')}>{cover}</div>
+    <header className={['card ci-hero', className].filter(Boolean).join(' ')}>
+      <div className={'ci-banner' + (art ? ' is-art' : '')}>
+        {cover}
+        {badge}
+      </div>
       <div className="ci-head">
         <span className="ci-icon">{icon}</span>
         <div className="ci-titles">
           <h1 className="ci-h1">{title}</h1>
+          {line ? <span className="ci-line">{line}</span> : null}
           {by ? <span className="ci-by">{by}</span> : null}
           {facts.length ? <ul className="ci-facts">{facts.map((f, i) => <li key={i}>{f}</li>)}</ul> : null}
         </div>
@@ -253,9 +264,9 @@ function LoaderChip({ l }: { l: string }) {
   )
 }
 
-type Tab = 'desc' | 'gallery' | 'versions'
+export type Tab = 'desc' | 'gallery' | 'versions'
 
-function Tabs({ tab, onTab, gallery, versions }: { tab: Tab; onTab: (t: Tab) => void; gallery: number; versions: number }) {
+export function Tabs({ tab, onTab, gallery, versions }: { tab: Tab; onTab: (t: Tab) => void; gallery: number; versions: number }) {
   const list: [Tab, string, number | null][] = [
     ['desc', 'Описание', null],
     ['gallery', 'Галерея', gallery],
@@ -275,7 +286,7 @@ function Tabs({ tab, onTab, gallery, versions }: { tab: Tab; onTab: (t: Tab) => 
   )
 }
 
-function Gallery({ urls }: { urls: string[] }) {
+export function Gallery({ urls }: { urls: string[] }) {
   return (
     <div className="ci-gallery">
       {urls.map((u, i) => (
@@ -399,7 +410,7 @@ function Versions({ files, onInstall, locked }: { files: VerFile[]; onInstall?: 
   )
 }
 
-function Compat({ versions, loaders, side, extra }: { versions: string[]; loaders: string[]; side: string | null; extra?: ReactNode }) {
+export function Compat({ versions, loaders, side, extra }: { versions: string[]; loaders: string[]; side: string | null; extra?: ReactNode }) {
   const span = spanOf(versions)
   const s = side ? SIDE_LABEL[side] : null
   if (!span && !loaders.length && !s && !extra) return null
@@ -485,7 +496,7 @@ function CardPage({ card, sec }: { card: SiteCard; sec: SiteSection }) {
           <Tabs tab={tab} onTab={setTab} gallery={shots.length} versions={files.length} />
           {tab === 'desc' ? (
             <article className="card ci-box ci-desc pj-body">
-              {data === null ? DescSkel() : data.body ? renderMarkdown(data.body) : <p className="faint-note">{card.summary || 'Без описания'}</p>}
+              {data === null ? DescSkel() : data.body ? renderMarkdown(weaveMarkdown(data.body, shots)) : <p className="faint-note">{card.summary || 'Без описания'}</p>}
               {failed ? (
                 <button className="btn sm secondary ci-retry" onClick={retry}>
                   <Icon id="i-restart" />

@@ -1527,6 +1527,7 @@ pub async fn install_and_launch_in(
         // CREATE_NO_WINDOW on Windows, otherwise every launch pops a console window.
         quiet(&mut cmd);
         apply_gpu_pref(&mut cmd, exe, gpu);
+        apply_display_backend(&mut cmd);
         match &argfile {
             Some(path) => {
                 cmd.arg(format!("@{}", path.to_string_lossy()));
@@ -1554,6 +1555,7 @@ pub async fn install_and_launch_in(
     let mut java = java;
     let mut retried = false;
     let (mut child, start, start_wall, server_now, readers) = loop {
+        grant_java_microphone(&java).await;
         let log_file = std::fs::File::create(&log_path).map_err(|e| io_fail("Лог запуска", &log_path, &e))?;
         let start = std::time::Instant::now();
         // Wall clock too: crash evidence is filtered by file mtime, and Instant has

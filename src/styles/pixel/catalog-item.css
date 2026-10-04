@@ -25,6 +25,10 @@
 .ci-titles { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding-top: 12px; }
 .ci-h1 { margin: 0; font: 800 26px/1.15 var(--m-font); letter-spacing: -0.02em; color: var(--m-fg); overflow-wrap: anywhere; }
 .ci-by { font-size: 14px; font-weight: 600; color: var(--m-fg-subtle); }
+.ci-line { font-size: 14px; color: var(--m-fg-muted); }
+.ci-banner > .ph-card-tag { z-index: 2; top: 12px; left: 12px; }
+
+.ci-hero.is-premium .ci-banner { height: clamp(220px, 36vh, 360px); }
 .ci-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; margin: 4px 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--m-fg-muted); }
 .ci-facts li { display: inline-flex; align-items: center; gap: 5px; }
 .ci-facts b { color: var(--m-fg); font-variant-numeric: tabular-nums; }

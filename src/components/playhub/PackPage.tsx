@@ -19,7 +19,6 @@ import { actionSource } from '../../lib/uiTrack'
 import { keyCatalogPack, keyMrModpack } from '../../lib/installKeys'
 import type { SnapshotServer } from '../../lib/snapshot'
 import { PackKeyField } from '../PackKeyModal'
-import { Carousel } from './Carousel'
 import { ONEBLOCK_ART } from './modeIcon'
 import { ONEBLOCK_PACK } from '../../lib/ownServer'
 import { Hours } from './Hours'
@@ -30,6 +29,13 @@ import { hostingPackFor, loadHostingPacks } from './data'
 import type { HubPack } from './data'
 import { LOADER, gb, modsFromText, partnerFrame } from '../premium/packView'
 import type { DescBlock, PackView } from '../premium/packView'
+import { Back, Compat, Gallery, Hero, Tabs } from '../catalog/ItemPage'
+import type { Tab } from '../catalog/ItemPage'
+import { fmtNum, plural, relativeTime } from '../catalog/site'
+import { weave, weaveMarkdown } from '../catalog/weave'
+import type { WeaveKind } from '../catalog/weave'
+import { installReviewCandidate } from '../ModRow'
+import { reviewCandidateFor } from '../../state/mods'
 
 /**
  * Страница сборки — одна для всех: премиум, бесплатные нашего каталога и
@@ -97,11 +103,10 @@ export function youtubeId(url: string | null | undefined): string | null {
   return m ? m[1]! : null
 }
 
-function Desc({ blocks, markdown }: { blocks?: DescBlock[] | null; markdown?: string }) {
-  const [full, setFull] = useState(false)
+function Desc({ blocks, markdown, shots }: { blocks?: DescBlock[] | null; markdown?: string; shots: string[] }) {
   let body: ReactNode = null
   if (blocks && blocks.length)
-    body = blocks.map((b, i) =>
+    body = weave<DescBlock>(blocks, shots, descKind, (src) => ({ type: 'image', src })).map((b, i) =>
       b.type === 'heading' ? (
         <h3 key={i}>{b.text}</h3>
       ) : b.type === 'list' ? (
@@ -124,20 +129,16 @@ function Desc({ blocks, markdown }: { blocks?: DescBlock[] | null; markdown?: st
         <p key={i}>{b.text}</p>
       ) : null,
     )
-  else if (markdown) body = <div className="md">{renderMarkdown(markdown)}</div>
+  else if (markdown) body = <div className="md">{renderMarkdown(weaveMarkdown(markdown, shots))}</div>
   if (!body) return null
   return (
-    <section className="pp-block">
-      <h2>О сборке</h2>
-      <div className={'pp-desc' + (full ? ' full' : '')}>{body}</div>
-      {!full ? (
-        <button className="btn sm secondary pp-more" data-track="desc_more" onClick={() => setFull(true)}>
-          Читать полностью <Icon id="i-chev-d" />
-        </button>
-      ) : null}
-    </section>
+    <article className="card ci-box ci-desc">
+      <div className="pp-desc full">{body}</div>
+    </article>
   )
 }
+
+const descKind = (b: DescBlock): WeaveKind => (b.type === 'image' ? 'media' : b.type === 'heading' ? 'head' : 'text')
 
 /** Шапка: превью ролика до клика, по клику — плеер. Без ролика — обложка. */
 function Media({ video, cover, ob }: { video: string | null; cover: string | null; ob?: boolean }) {
@@ -240,8 +241,21 @@ export function PackPage({
   const [installed, setInstalled] = useState<string | null>(null)
   const [hostTarget, setHostTarget] = useState<HostTarget | null>(null)
   const [hostOpen, setHostOpen] = useState(false)
+  const [tab, setTab] = useState<Tab>('desc')
+  const [candidate, setCandidate] = useState<string | null>(null)
   const doneKey = mr ? keyMrModpack(slug) : keyCatalogPack(slug)
   const justInstalled = useInstalls((s) => !!slug && !!s.done[doneKey])
+  const packTask = useInstalls((s) => (mr ? undefined : s.tasks[keyCatalogPack(slug)]))
+  const packRunning = !!packTask && packTask.state === 'run'
+
+  useEffect(() => {
+    let alive = true
+    setCandidate(null)
+    if (!mr && slug) void reviewCandidateFor(slug).then((c) => alive && setCandidate(c ? c.version : null))
+    return () => {
+      alive = false
+    }
+  }, [pack.id])
 
   useEffect(() => {
     let alive = true
@@ -251,6 +265,7 @@ export function PackPage({
     setProject(null)
     setVersions([])
     setHostTarget(null)
+    setTab('desc')
     if (mr) {
       const base = MODRINTH_API + '/v2/project/' + encodeURIComponent(slug)
       void once('mr:' + slug, () => getJson<MrProject>(base)).then((p) => alive && setProject(p))
@@ -314,6 +329,9 @@ export function PackPage({
 
   const mcVersion = full.mcVersion || view?.game || null
   const loader = full.loader || (view?.loader ? LOADER[view.loader] || view.loader : null)
+  const loaderIds = view?.loader ? [view.loader] : project?.loaders?.length ? project.loaders : full.loader ? [full.loader.toLowerCase()] : []
+  const gameVersions = mcVersion ? [mcVersion] : project?.game_versions || []
+  const updated = relativeTime(item?.updatedAt || project?.updated || null)
   const mods = typeof full.modsCount === 'number' && full.modsCount > 0 ? full.modsCount : modsFromText(view?.description)
   const downloads = project?.downloads ?? item?.downloads ?? full.downloads ?? null
   const client = (view?.files || []).find((f) => f.side === 'client')
@@ -343,7 +361,6 @@ export function PackPage({
         date: v.date_published,
         text: (v.name || v.version_number) + (v.game_versions && v.game_versions.length ? ' · ' + v.game_versions[v.game_versions.length - 1] : ''),
       })
-  const shown = updates.slice(0, 3)
 
   const includes = full.includes && full.includes.length ? full.includes : []
   const plan = (full.plans && full.plans[0]) || plans.find((x) => x.id === (sub && sub.planId)) || plans[0] || null
@@ -383,28 +400,63 @@ export function PackPage({
       </>
     )
 
+  const inline: ReactNode[] = []
+  if (!pack.premium && mods) inline.push(<><b>{fmtNum(mods)}</b> {plural(mods, 'мод', 'мода', 'модов')}</>)
+  if (downloads)
+    inline.push(
+      <>
+        <Icon id="i-download" />
+        <b>{fmtNum(downloads)}</b> {plural(downloads, 'скачивание', 'скачивания', 'скачиваний')}
+      </>,
+    )
+  if (updated) inline.push(<>Обновлён {updated}</>)
+  const icon = view?.cover || full.coverUrl || mrHead || cover
+
   return (
-    <div className="pp" data-section="pack_page" data-kind={pack.premium ? 'premium' : 'pack'} data-id={slug || pack.id}>
-      <header className={['pp-head', partnerFrame(view?.partner ?? detail?.partner)].filter(Boolean).join(' ')}>
-        <Media video={video} cover={cover} ob={slug === ONEBLOCK_PACK} />
-        <button className="btn sm secondary ph-back pp-back" data-track="back" onClick={onBack}>
-          <Icon id="i-chev-l" /> Каталог
-        </button>
-        <div className="pp-title">
-          {pack.premium ? (
+    <div className="ci" data-section="pack_page" data-kind={pack.premium ? 'premium' : 'pack'} data-id={slug || pack.id}>
+      <Back label="Сборки" onBack={onBack} />
+      <Hero
+        className={[pack.premium ? 'is-premium' : '', partnerFrame(view?.partner ?? detail?.partner)].filter(Boolean).join(' ')}
+        cover={<Media video={video} cover={cover} ob={slug === ONEBLOCK_PACK} />}
+        badge={
+          pack.premium ? (
             <span className="ph-card-tag gold">
               <Icon id="i-crown" /> Премиум
             </span>
           ) : (
             <span className="ph-card-tag">{mr ? 'Modrinth' : 'Бесплатно'}</span>
-          )}
-          <h1>{full.title}</h1>
-          {full.tagline ? <span className="pp-line">{full.tagline}</span> : null}
-          {author ? <span className="pp-author">Собрал {author}</span> : null}
-        </div>
-      </header>
+          )
+        }
+        icon={icon ? <img src={icon} alt="" draggable={false} /> : null}
+        title={full.title}
+        line={full.tagline}
+        by={author ? 'Собрал ' + author : null}
+        facts={inline}
+        cta={
+          hostTarget || server ? (
+            <div className="mr-actions">
+              {hostTarget ? (
+                <button className="btn md secondary" data-sound="open" data-track="host_install" onClick={() => setHostOpen(true)}>
+                  <Icon id="i-server-cog" /> Поставить на хостинг
+                </button>
+              ) : null}
+              {server ? (
+                <button className="btn md secondary" data-track="pack_server" data-src="pack_page" onClick={() => onServer(server)}>
+                  <Icon id="i-server" /> Сервер сборки
+                  {server.isOnline ? (
+                    <span className="ph-hero-srv-n">
+                      <span className="ph-dot" aria-hidden="true"></span>
+                      {fmtN(server.online)}
+                    </span>
+                  ) : null}
+                </button>
+              ) : null}
+            </div>
+          ) : null
+        }
+      />
 
-      {facts.length ? (
+      {pack.premium && facts.length ? (
         <div className="pp-facts">
           {facts.slice(0, 5).map((f) => (
             <div className="pp-fact" key={f.label}>
@@ -415,31 +467,32 @@ export function PackPage({
         </div>
       ) : null}
 
-      <div className="pp-cols">
-        <div className="pp-main">
-          <Carousel shots={shots} />
-
-          {includes.length ? (
-            <section className="pp-block">
-              <h2>Что входит</h2>
-              <ul className="pp-inc">
-                {includes.map((x) => (
-                  <li key={x}>
-                    <Icon id="i-check" />
-                    {x}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
-          <Desc blocks={view?.description} markdown={project?.body} />
-
-          {shown.length ? (
-            <section className="pp-block">
-              <h2>Обновления</h2>
+      <div className="ci-grid">
+        <main className="ci-main">
+          <Tabs tab={tab} onTab={setTab} gallery={shots.length} versions={updates.length} />
+          {tab === 'desc' ? (
+            <>
+              {includes.length ? (
+                <section className="pp-block">
+                  <h2>Что входит</h2>
+                  <ul className="pp-inc">
+                    {includes.map((x) => (
+                      <li key={x}>
+                        <Icon id="i-check" />
+                        {x}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+              <Desc blocks={view?.description} markdown={project?.body} shots={shots} />
+            </>
+          ) : tab === 'gallery' ? (
+            <Gallery urls={shots} />
+          ) : (
+            <section className="card ci-box">
               <ul className="pp-patches">
-                {shown.map((x, k) => (
+                {updates.map((x, k) => (
                   <li key={k}>
                     {x.date && untilText(x.date) ? <span>{untilText(x.date)}</span> : null}
                     {x.text}
@@ -447,45 +500,43 @@ export function PackPage({
                 ))}
               </ul>
             </section>
-          ) : null}
-        </div>
+          )}
+        </main>
 
-        <aside className={'pp-buy' + (pack.premium ? ' gold' : '')}>
-          {cta}
-          {keyEntry ? (
-            <div className="pkb-key">
-              <PackKeyField
-                slug={slug}
-                onUnlocked={() => {
-                  showToast('Ключ активирован')
-                  reloadDetail()
-                }}
-              />
-            </div>
-          ) : null}
-          {slug ? <PackHealthLine slug={slug} title={full.title} /> : null}
-          {hostTarget ? (
-            <button className="btn md secondary pp-srv" data-sound="open" data-track="host_install" onClick={() => setHostOpen(true)}>
-              <Icon id="i-server-cog" /> Поставить на хостинг
-            </button>
-          ) : null}
-          {server ? (
-            <button className="btn md secondary pp-srv" data-track="pack_server" data-src="pack_page" onClick={() => onServer(server)}>
-              <Icon id="i-server" /> Сервер сборки
-              {server.isOnline ? (
-                <span className="ph-hero-srv-n">
-                  <span className="ph-dot" aria-hidden="true"></span>
-                  {fmtN(server.online)}
-                </span>
-              ) : null}
-            </button>
-          ) : null}
-          <Hours build={installed} />
-          {pack.premium ? <CancelLine sub={liveSubscription(detail) ?? sub} /> : null}
-          <span className="pp-legal">
-            {full.ageRating ? <b>{full.ageRating}</b> : null}
-            Не продукт Mojang
-          </span>
+        <aside className="ci-aside">
+          <div className={'pp-buy' + (pack.premium ? ' gold' : '')}>
+            {cta}
+            {candidate ? (
+              <button
+                className="btn md secondary"
+                data-track="review_candidate"
+                data-src="pack_page"
+                disabled={packRunning}
+                onClick={() => installReviewCandidate(slug, full.title, candidate)}
+              >
+                Проверить {candidate}
+              </button>
+            ) : null}
+            {keyEntry ? (
+              <div className="pkb-key">
+                <PackKeyField
+                  slug={slug}
+                  onUnlocked={() => {
+                    showToast('Ключ активирован')
+                    reloadDetail()
+                  }}
+                />
+              </div>
+            ) : null}
+            {slug ? <PackHealthLine slug={slug} title={full.title} /> : null}
+            <Hours build={installed} />
+            {pack.premium ? <CancelLine sub={liveSubscription(detail) ?? sub} /> : null}
+            <span className="pp-legal">
+              {full.ageRating ? <b>{full.ageRating}</b> : null}
+              Не продукт Mojang
+            </span>
+          </div>
+          <Compat versions={gameVersions} loaders={loaderIds} side={null} />
         </aside>
       </div>
 

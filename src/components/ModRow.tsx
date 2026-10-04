@@ -26,6 +26,24 @@ import { DEMO_USER } from '../lib/demo'
 import { loadPackView } from './premium/packView'
 import { modpackVersionFor } from '../lib/modpackVersion'
 
+/** Версия сборки на проверке — одна установка для строки каталога и страницы сборки. */
+export function installReviewCandidate(slug: string, title: string, version: string) {
+  runInstall({
+    // Ключ тот же, что у обычной установки: события прогресса ядро шлёт
+    // по адресу сборки, и свой ключ оставил бы полоску неподвижной.
+    key: keyCatalogPack(slug),
+    title: title + ' ' + version,
+    running: 'Скачивание…',
+    run: () => installPackCandidate(slug),
+    onError: (e) => showToast(String(e), 'error'),
+    onDone: (p) => {
+      useProfiles.getState().setSelected(p.name)
+      void useProfiles.getState().refresh()
+      showToast('Версия на проверке установлена — запусти её, и мы запишем результат', 'ok')
+    },
+  })
+}
+
 /**
  * Всё, что делает вещь каталога: подпись и состояние главной кнопки, установка
  * из нужного источника, открытие карточки и окно ключа платной сборки. Одно на
@@ -250,20 +268,7 @@ export function useModAction(h: ModHit, game?: string | null, kind?: string) {
 
   const startCandidateInstall = () => {
     if (!h.packSlug || !h.packCandidate) return
-    runInstall({
-      // Ключ тот же, что у обычной установки: события прогресса ядро шлёт
-      // по адресу сборки, и свой ключ оставил бы полоску неподвижной.
-      key: keyCatalogPack(h.packSlug),
-      title: (h.title || h.packSlug) + ' ' + h.packCandidate.version,
-      running: 'Скачивание…',
-      run: () => installPackCandidate(h.packSlug!),
-      onError: (e) => showToast(String(e), 'error'),
-      onDone: (p) => {
-        useProfiles.getState().setSelected(p.name)
-        void useProfiles.getState().refresh()
-        showToast('Версия на проверке установлена — запусти её, и мы запишем результат', 'ok')
-      },
-    })
+    installReviewCandidate(h.packSlug, h.title || h.packSlug, h.packCandidate.version)
   }
 
   const onRow = (e: React.MouseEvent<HTMLElement>) => {

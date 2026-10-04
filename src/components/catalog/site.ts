@@ -157,6 +157,9 @@ export interface SiteCard {
   pricing?: Pricing
   priceKopecks?: number | null
   mrHit?: ModHit
+  /** Source of the card when the listing carries it; absent on an older backend. */
+  sourceUrl?: string | null
+  curseforgeId?: number | null
   /** Издание игры; нет поля — Java. */
   edition?: 'JAVA' | 'BEDROCK' | 'BOTH'
   /** Сборку собрала Милли (ИИ-сборщик): метка «Милли» на карточке. */
@@ -483,7 +486,7 @@ export async function resolveHit(card: SiteCard): Promise<ModHit | null> {
   const hit = peekCatalog<ModHit | null>(key)
   if (hit !== undefined) return hit
   return cachedCatalog(key, async () => {
-    const item = await loadItem(card.slug).catch(() => null)
+    const item = sourceOf(card) ?? (await loadItem(card.slug).catch(() => null))
     const source = (item && item.sourceUrl) || ''
     const m = MR_URL.exec(source)
     if (!m) {
@@ -494,6 +497,12 @@ export async function resolveHit(card: SiteCard): Promise<ModHit | null> {
     const proj = await mrProject(mrSlug)
     return { ...baseHit(card), slug: (proj && proj.slug) || mrSlug, pid: proj && proj.id ? String(proj.id) : undefined }
   })
+}
+
+/// A listing that already names the source spares a full item request per feed row.
+export function sourceOf(card: SiteCard): Pick<ItemView, 'sourceUrl' | 'curseforgeId'> | null {
+  if (card.sourceUrl === undefined) return null
+  return { sourceUrl: card.sourceUrl, curseforgeId: card.curseforgeId ?? null }
 }
 
 /**

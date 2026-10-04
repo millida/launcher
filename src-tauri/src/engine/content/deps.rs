@@ -1212,7 +1212,8 @@ mod tests {
         let quilt = ["quilt".to_string()];
         let bridged = ["neoforge".to_string(), "fabric".to_string()];
         let none: &[&str] = &[];
-        let cases: [(&LocalMeta, &[String], Option<&[&str]>, &str); 8] = [
+        type Case<'a> = (&'a LocalMeta, &'a [String], Option<&'a [&'a str]>, &'a str);
+        let cases: [Case; 8] = [
             (&explorify, &neo, Some(none), "сама жалоба: NeoForge читает neoforge.mods.toml, Fabric API ему не нужен"),
             (&explorify, &fab, Some(&["fabric-api"]), "тот же jar на Fabric по-прежнему требует Fabric API"),
             (&explorify, &bridged, Some(none), "с Connector свой загрузчик сборки важнее моста"),

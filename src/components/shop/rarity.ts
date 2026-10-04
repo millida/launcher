@@ -49,6 +49,16 @@ export const RARITY_NAME_SHORT: Record<Rarity, string> = {
   RELIC: 'Невозможная',
 }
 
+export const RARITY_NAME_PLURAL: Record<Rarity, string> = {
+  COMMON: 'обычные',
+  UNCOMMON: 'необычные',
+  RARE: 'редкие',
+  EPIC: 'эпические',
+  LEGENDARY: 'легендарные',
+  MYTHIC: 'мифические',
+  RELIC: 'невозможные',
+}
+
 /** Строка каталога → редкость. Незнакомое слово — undefined: выдуманная редкость хуже никакой. */
 export function normRarity(value?: string | null): Rarity | undefined {
   const r = (value || '').trim().toUpperCase()

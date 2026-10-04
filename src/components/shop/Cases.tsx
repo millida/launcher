@@ -9,17 +9,16 @@ import { playSound } from '../../lib/sound'
 import { ItemArt, Price, toneStyle } from './parts'
 import { PxThumb, THEME_TONE } from './Sets'
 import { RarityFx, RarityPlate } from './rarityUi'
-import { RARITY_NAME_SHORT, RARITY_TONE } from './rarity'
+import { RARITY_NAME_PLURAL, RARITY_TONE } from './rarity'
 
 /**
  * Ящики (02.10.2026; в коде case*, в интерфейсе «Ящик» — слово владельца): тема из нескольких наборов, выпадает случайная вещь темы,
- * которой у игрока ещё нет. Шансы открыты и точные, раз в `pity` открытий —
- * эпическая или выше. Открытие — сундук трясётся, лента вещей едет и встаёт на
+ * которой у игрока ещё нет. Раз в `pity` открытий — эпическая или выше. Проценты
+ * игроку не показываются: только редкость, что выпадает чаще всего. Открытие — сундук трясётся, лента вещей едет и встаёт на
  * вещи из ответа службы. Анимация — только transform и opacity.
  */
 
 const CHEST: Record<SetTheme, ChestTier> = { flame: 'LEGEND', dark: 'EPIC', future: 'RARE', cozy: 'COMMON' }
-const pct = (weight: number) => (weight / 10).toLocaleString('ru-RU', { maximumFractionDigits: 1 }) + '%'
 const reduced = () => !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
 export const caseTitle = (c: CaseView) => 'Ящик «' + c.title + '»'
@@ -32,7 +31,7 @@ function Chest({ theme, open, className = '' }: { theme: SetTheme; open?: boolea
 function CaseCard({ view, balance, busy, onContents, onOpen }: { view: CaseView; balance: number; busy: boolean; onContents: () => void; onOpen: () => void }) {
   const theme = view.id as SetTheme
   const done = view.left <= 0
-  const live = view.odds.filter((o) => o.weight > 0)
+  const often = view.odds.reduce<CaseView['odds'][number] | null>((top, o) => (o.weight > 0 && (!top || o.weight > top.weight) ? o : top), null)
   return (
     <div className="sh-card cs-card" style={{ ['--sh-tone' as string]: THEME_TONE[theme] }} data-kind="case" data-id={view.id}>
       <div className="cs-cover">
@@ -46,22 +45,7 @@ function CaseCard({ view, balance, busy, onContents, onOpen }: { view: CaseView;
         <Chest theme={theme} className="cs-cover-chest" />
       </div>
       <b className="cs-name">{caseTitle(view)}</b>
-      <span className="cs-odds" role="img" aria-label="Шансы по редкостям">
-        {live.map((o) => (
-          <i key={o.rarity} style={{ flexGrow: o.weight, background: RARITY_TONE[o.rarity] }} />
-        ))}
-      </span>
-      <span className="cs-legend">
-        {live.map((o) => (
-          <span key={o.rarity} className="cs-leg">
-            <i style={{ background: RARITY_TONE[o.rarity] }} />
-            {RARITY_NAME_SHORT[o.rarity]} <b>{pct(o.weight)}</b>
-          </span>
-        ))}
-      </span>
-      <span className="cs-pity">
-        Эпическая или лучше — {view.pityLeft <= 1 ? 'в следующем' : 'через ' + view.pityLeft + ' ' + openWord(view.pityLeft)}
-      </span>
+      {often ? <span className="cs-often">Чаще всего — {RARITY_NAME_PLURAL[often.rarity]}</span> : null}
       <span className="cs-got">
         Собрано {view.total - view.left} из {view.total}
       </span>
@@ -76,14 +60,6 @@ function CaseCard({ view, balance, busy, onContents, onOpen }: { view: CaseView;
       </span>
     </div>
   )
-}
-
-const openWord = (n: number) => {
-  const d = n % 10
-  const dd = n % 100
-  if (d === 1 && dd !== 11) return 'открытие'
-  if (d >= 2 && d <= 4 && (dd < 12 || dd > 14)) return 'открытия'
-  return 'открытий'
 }
 
 /** Вкладка «Кейсы»: четыре карточки и строка про честность внизу. */
@@ -104,7 +80,7 @@ export function CasesTab({ cases, balance, busy, onOpen }: { cases: CaseView[] |
           <CaseCard key={c.id} view={c} balance={balance} busy={busy} onContents={() => setLook(c)} onOpen={() => onOpen(c)} />
         ))}
       </div>
-      <p className="cs-fine">Выпадает только то, чего у тебя нет. Шансы точные.</p>
+      <p className="cs-fine">Выпадает только то, чего у тебя нет.</p>
       {look ? <ContentsModal view={look} onClose={() => setLook(null)} /> : null}
     </div>
   )
@@ -158,9 +134,7 @@ function ContentsModal({ view, onClose }: { view: CaseView; onClose: () => void 
                       <Icon id="i-check" />
                       Есть
                     </span>
-                  ) : (
-                    <span className="cs-chance">{x.chance.toLocaleString('ru-RU', { maximumFractionDigits: 2 })}%</span>
-                  )}
+                  ) : null}
                 </span>
               </div>
             ))}

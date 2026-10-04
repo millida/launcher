@@ -798,17 +798,17 @@ fn download_pct(got: u64, total: Option<u64>) -> Option<u32> {
     Some((got.min(total) * 100 / total) as u32)
 }
 
+pub(crate) fn branded_alias(java: &Path) -> Option<PathBuf> {
+    let name = if cfg!(target_os = "windows") { "MillidaLauncher.exe" } else { "MillidaLauncher" };
+    java.parent().map(|d| d.join(name))
+}
+
 /// Discord detects games by process name and labels any java.exe as Minecraft,
 /// overriding our Rich Presence. Launching a renamed copy avoids that; the copy
 /// must sit in the same bin/ because the JVM locates its home relative to the
 /// executable. Falls back to the original when copying is not permitted.
 pub(crate) fn branded_java(java: &Path) -> PathBuf {
-    let name = if cfg!(target_os = "windows") { "MillidaLauncher.exe" } else { "MillidaLauncher" };
-    let dir = match java.parent() {
-        Some(d) => d,
-        None => return java.to_path_buf(),
-    };
-    let alias = dir.join(name);
+    let Some(alias) = branded_alias(java) else { return java.to_path_buf() };
     let src_len = std::fs::metadata(java).map(|m| m.len()).unwrap_or(0);
     if src_len == 0 {
         return java.to_path_buf();

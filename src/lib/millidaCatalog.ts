@@ -2,6 +2,8 @@ import { LAUNCHER_API } from './api'
 import type { ModHit } from '../state/mods'
 import type { DepNode, DepPlan, Profile } from '../ipc/commands'
 import { loaderId } from './format'
+import { cachedCatalog } from './catalogCache'
+import { cfProxyBackoff, proxyVerdict } from './proxyBackoff'
 
 /// Каталог Millida — библиотека лаунчера (приказ владельца 21.09.2026): то же,
 /// что на millida.net/mods, /texture-packs, /modpacks, с тем же поиском и теми же
@@ -389,15 +391,26 @@ export function cfFileIdOf(origin: string | null | undefined): number | null {
   return m ? Number(m[1]) * 1000 + Number(m[2]) : null
 }
 
+class CfProxyFailed extends Error {}
+
+/// A failed lookup is remembered by `cfProxyBackoff` and never lands in the answer cache:
+/// the same popular pack was asked through a failing proxy by every client in a row.
 export async function cfProjectId(ref: CfSourceRef): Promise<number | null> {
   const q = new URLSearchParams({ gameId: '432', classId: String(ref.classId), slug: ref.slug })
-  const r = await fetch(LAUNCHER_API + '/launcher/cf/v1/mods/search?' + q.toString()).catch(() => null)
-  if (!r || !r.ok) return null
-  const body = (await r.json().catch(() => null)) as { data?: { id?: unknown; slug?: unknown }[] } | null
-  const hit = (body && Array.isArray(body.data) ? body.data : []).find(
-    (p) => p && String(p.slug).toLowerCase() === ref.slug.toLowerCase(),
-  )
-  return hit && typeof hit.id === 'number' && hit.id > 0 ? hit.id : null
+  const path = 'v1/mods/search?' + q.toString()
+  if (cfProxyBackoff.skipped(path)) return null
+  return cachedCatalog('cf:' + path, async () => {
+    const r = await fetch(LAUNCHER_API + '/launcher/cf/' + path).catch(() => null)
+    cfProxyBackoff.note(path, proxyVerdict(r ? r.status : null, r ? r.headers.get('retry-after') : null))
+    if (!r || !r.ok) throw new CfProxyFailed(String(r ? r.status : 'network'))
+    const body = (await r.json().catch(() => null)) as { data?: { id?: unknown; slug?: unknown }[] } | null
+    if (!body || !Array.isArray(body.data)) throw new CfProxyFailed('body')
+    const hit = body.data.find((p) => p && String(p.slug).toLowerCase() === ref.slug.toLowerCase())
+    return hit && typeof hit.id === 'number' && hit.id > 0 ? hit.id : null
+  }).catch((e: unknown) => {
+    if (e instanceof CfProxyFailed) return null
+    throw e
+  })
 }
 
 /// The id stored by the catalog first: searching CurseForge by slug for every card used up the

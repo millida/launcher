@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use super::jobs::CANCELLED;
 
-const UA: &str = "MillidaLauncher/1.0 (+https://millida.net)";
+const UA: &str = concat!("MillidaLauncher/", env!("CARGO_PKG_VERSION"), " (+https://millida.net)");
 const JSON_TIMEOUT: Duration = Duration::from_secs(30);
 const TRIES: u32 = 3;
 
@@ -1424,5 +1424,14 @@ PK"),
         let throttled = format!("https://api.millida.net/v2/launcher/dl → {}", reqwest::StatusCode::TOO_MANY_REQUESTS);
         assert!(retry_pause(1, &throttled) >= Duration::from_secs(5), "429 должен ждать окно лимита");
         assert_eq!(retry_pause(1, "x: обрыв загрузки (нет связи (reset))"), Duration::from_millis(400), "обрыв повторяется сразу");
+    }
+
+    /// The backend tells launcher releases apart by this header in its logs; a fixed
+    /// "1.0" made every build look the same.
+    #[test]
+    fn user_agent_carries_the_real_app_version() {
+        let expected = format!("MillidaLauncher/{} (+https://millida.net)", env!("CARGO_PKG_VERSION"));
+        assert_eq!(UA, expected, "User-Agent обязан нести версию из Cargo.toml, которую CI ставит при выпуске");
+        assert_ne!(env!("CARGO_PKG_VERSION"), "", "пустая версия дала бы «MillidaLauncher/» без номера");
     }
 }
