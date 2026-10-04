@@ -15,7 +15,9 @@ import { ONEBLOCK_ART } from './modeIcon'
 import { ONEBLOCK_PACK, isExclusive } from './data'
 import { ANARCHY, OWN_SERVER_MODE } from '../../lib/ownServer'
 import { AnarchyArt, anarchyOnlineShown } from './AnarchyTile'
-import { FY_HEAD, FY_HEAD_CELLS } from './placement'
+import { headCells } from './placement'
+import { useAnarchy } from '../../lib/anarchy'
+import { usePromo, type ForYouCard } from '../../state/promo'
 import type { HubPack } from './data'
 import { trackImpression } from '../../lib/uiTrack'
 import { track } from '../../lib/telemetry'
@@ -56,7 +58,6 @@ import { readSignals } from '../../lib/recsSignals'
  * лента. Узкое окно прячет лишние ряды само (fy-grid).
  */
 const SHOWN = 15
-const HEAD_CELLS = FY_HEAD.reduce((n, k) => n + FY_HEAD_CELLS[k], 0)
 /** Эксклюзивов в голове: Arcania и ещё один, второй меняется по дням (владелец 30.09.2026, 15:42). */
 const EXCL = 2
 /**
@@ -218,6 +219,8 @@ export function ForYou({
   /** Материал каталога из ленты — его страница в каталоге Millida. */
   onItem: (section: string, card: SiteCard) => void
 }) {
+  const fyHead = usePromo((s) => s.promo.forYou)
+  const an = useAnarchy()
   const [list, setList] = useState<HostServer[] | 'none' | null>(null)
   const [picker, setPicker] = useState(false)
   const [cards, setCards] = useState<Record<string, SiteCard[]>>({})
@@ -306,7 +309,7 @@ export function ForYou({
           key={'excl:' + p.id}
           kind="premium"
           id={p.slug || p.id}
-          pos={FY_HEAD.length + i}
+          pos={fyHead.length + i}
           tag="Arcania Labs"
           gold
           excl
@@ -348,7 +351,7 @@ export function ForYou({
           ok: !!(c.cover || c.icon) && Math.max(c.downloads || 0, c.sourceDownloads || 0) >= MIN_DOWNLOADS,
           data: { kind: 'card', section: sec, card: c },
         }))
-    const n = SHOWN - HEAD_CELLS - EXCL - 1 - previews.length
+    const n = SHOWN - headCells(fyHead) - EXCL - 1 - previews.length
     const feed = mixFeed<FeedData>({
       sections,
       personal: [],
@@ -400,19 +403,19 @@ export function ForYou({
       ...feed.map((f) => (f.item.data.kind === 'pack' ? packCard(f.item.data.pack, f.why) : siteCard(f.item.data.section, f.item.data.card, f.item.key, f.why))),
     ]
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ab, cards, packs, headKey, onPack, onItem])
+  }, [ab, cards, packs, headKey, onPack, onItem, fyHead])
 
   // Хостинг занимает две клетки, OneBlock и «Ещё» — по одной.
-  const rest = SHOWN - HEAD_CELLS - 1 - labs.length
+  const rest = SHOWN - headCells(fyHead) - 1 - labs.length
   const shown = rotated.slice(0, rest)
-  const off = FY_HEAD.length + labs.length
+  const off = fyHead.length + labs.length
 
   // OneBlock — наш сервер, первым в ряду (владелец 30.09.2026, 21:04): он не
   // эксклюзив-сборка, у него своя зелёная метка.
   const obNode = (
         <Card
           key="oneblock"
-          pos={FY_HEAD.indexOf(OWN_SERVER_MODE)}
+          pos={fyHead.indexOf(OWN_SERVER_MODE)}
           kind="mode"
           id="ONEBLOCK"
           tag="Наш сервер"
@@ -436,13 +439,13 @@ export function ForYou({
   const anNode = (
     <Card
       key="anarchy"
-      pos={FY_HEAD.indexOf(ANARCHY.mode)}
+      pos={fyHead.indexOf(ANARCHY.mode)}
       kind="own_server"
       id={ANARCHY.mode}
       tag="Наш сервер"
       own
       art={<AnarchyArt />}
-      title={ANARCHY.name}
+      title={an.name}
       meta={
         anarchyOnlineShown(anarchyOnline) ? (
           <>
@@ -450,13 +453,13 @@ export function ForYou({
             {fmtN(anarchyOnline)} играют
           </>
         ) : (
-          ANARCHY.tagline + ' · ' + ANARCHY.version
+          an.tagline + ' · ' + an.version
         )
       }
       onClick={() => onMode(ANARCHY.mode)}
     />
   )
-  const headNodes: Record<(typeof FY_HEAD)[number], ReactNode> = { hosting: own, [ANARCHY.mode]: anNode, [OWN_SERVER_MODE]: obNode }
+  const headNodes: Record<ForYouCard, ReactNode> = { hosting: own, [ANARCHY.mode]: anNode, [OWN_SERVER_MODE]: obNode }
 
   // Показ блока для CTR: один раз на набор карточек, когда ряд собран. Тот же
   // показ пишет журнал новизны (не повторять завтра) и группу A/B.
@@ -488,7 +491,7 @@ export function ForYou({
   return (
     <>
       <div className="hub-grid fy-grid" data-section="foryou" onClickCapture={onClickCapture}>
-        {FY_HEAD.map((k) => headNodes[k])}
+        {fyHead.map((k) => headNodes[k])}
         {labs}
         {shown.map((x, i) => cloneElement(x.node, { pos: off + i }))}
         {onMore ? (

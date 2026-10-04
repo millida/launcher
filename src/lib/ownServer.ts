@@ -1,5 +1,6 @@
 import { canonAddr } from './serverAddr'
 import type { LobbyMode } from '../state/lobbyMode'
+import { usePromo } from '../state/promo'
 
 export const ONEBLOCK_PACK = 'oneblock-metalabs'
 
@@ -53,19 +54,29 @@ export const ANARCHY = {
   tagline: 'Выживание без правил',
 } as const
 
-export const anarchyMode = (): LobbyMode => ({
-  kind: 'server',
-  slug: ANARCHY.slug,
-  name: ANARCHY.fullName,
-  ip: ANARCHY.addr,
-  logo: null,
-  banner: null,
-  versions: [ANARCHY.version],
-  licensed: false,
-})
+export type AnarchyServer = { mode: string; slug: string; name: string; fullName: string; addr: string; version: string; tagline: string }
+
+/** The built-in anarchy with what the API changed since the release laid over it. */
+export const withAnarchyPromo = (promo: Partial<AnarchyServer>): AnarchyServer => ({ ...ANARCHY, ...promo })
+
+export const anarchyServer = (): AnarchyServer => withAnarchyPromo(usePromo.getState().promo.anarchy)
+
+export const anarchyMode = (): LobbyMode => {
+  const an = anarchyServer()
+  return {
+    kind: 'server',
+    slug: an.slug,
+    name: an.fullName,
+    ip: an.addr,
+    logo: null,
+    banner: null,
+    versions: [an.version],
+    licensed: false,
+  }
+}
 
 export const isAnarchyAddr = (addr: string | null | undefined): boolean =>
-  !!addr && !!addr.trim() && canonAddr(addr) === canonAddr(ANARCHY.addr)
+  !!addr && !!addr.trim() && canonAddr(addr) === canonAddr(anarchyServer().addr)
 
 export const targetsAnarchy = (m: LobbyMode | null | undefined): boolean =>
   !!m && m.kind === 'server' && (m.slug === ANARCHY.slug || isAnarchyAddr(m.ip))

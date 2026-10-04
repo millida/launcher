@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react'
 import { Icon } from '../Icon'
 import { fmtN } from '../../lib/format'
 import { ANARCHY } from '../../lib/ownServer'
+import { useAnarchy } from '../../lib/anarchy'
 import { ANARCHY_BANNER, ANARCHY_SPRITES, LAVA_STRIP, OBSIDIAN_TILE } from './anarchyArt'
 import type { AnarchySprite } from './anarchyArt'
 
@@ -34,6 +35,7 @@ export function AnarchyArt({ className }: { className?: string }) {
  * floating over the wall. Pressing it starts the game.
  */
 export function AnarchyTile({ online, on, index, onClick }: { online: number | null; on?: boolean; index: number; onClick: () => void }) {
+  const an = useAnarchy()
   return (
     <button
       className={'ph-card ph-mt ph-mt-an' + (on ? ' on' : '')}
@@ -43,7 +45,7 @@ export function AnarchyTile({ online, on, index, onClick }: { online: number | n
       data-pos={index}
       data-src="mode"
       aria-pressed={on}
-      aria-label={'Играть в ' + ANARCHY.name}
+      aria-label={'Играть в ' + an.name}
       style={{ '--px-img': 'url("' + OBSIDIAN_TILE + '")' } as CSSProperties}
       onClick={onClick}
     >
@@ -67,8 +69,8 @@ export function AnarchyTile({ online, on, index, onClick }: { online: number | n
       </span>
       <span className="ph-card-tag excl">Эксклюзив</span>
       <span className="an-head">
-        <b className="an-title">{ANARCHY.name}</b>
-        <span className="an-sub">{ANARCHY.tagline + ' · ' + ANARCHY.version}</span>
+        <b className="an-title">{an.name}</b>
+        <span className="an-sub">{an.tagline + ' · ' + an.version}</span>
       </span>
       <span className="an-foot">
         <span className="btn lg primary ph-mt-play" aria-hidden="true">

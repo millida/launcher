@@ -196,6 +196,7 @@ import { initSecrets } from './lib/secure'
 import { listenGameCrash, listenGameExit, listenGameServer, listenLaunchWarning, listenPackAccessLost, listenTrayExit } from './ipc/events'
 import { useCrash } from './state/crash'
 import { syncRunningGame, useGame } from './state/game'
+import { watchPromo } from './state/promo'
 import { CrashModal } from './components/CrashModal'
 import { hideBoot } from './lib/boot'
 import { frontendReady } from './ipc/commands'
@@ -311,6 +312,7 @@ export function App() {
     const releaseRealtime = retainRealtime()
     const stopRelay = initRealtimeRelay()
     initCalls()
+    const stopPromo = watchPromo()
     void bootUpdate().then((leaving) => {
       if (leaving) return
       preloadScreens()
@@ -367,6 +369,7 @@ export function App() {
     return () => {
       stopPackAutoUpdate()
       stopRelay()
+      stopPromo()
       releaseRealtime()
       clearInterval(updPoll)
       clearInterval(msPoll)
