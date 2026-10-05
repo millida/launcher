@@ -283,16 +283,19 @@ fn unpack_gzip(src: &Path, dest: &Path, size: u64, sha256: &str) -> Result<(), S
     res
 }
 
-async fn fetch_one(j: &FileJob, cancel: &std::sync::atomic::AtomicBool) -> Result<(), String> {
+/// Goes through the segmented downloader: the main .ucas of Dungeons II alone is
+/// 8.8 GB, and as one stream it both capped the speed and froze the bar until
+/// its last byte.
+async fn fetch_one(j: &FileJob, cancel: &std::sync::atomic::AtomicBool, on: &crate::engine::core::Progress<'_>) -> Result<(), String> {
     if let Some(parent) = j.path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("{}: {}", parent.display(), e))?;
     }
     if !j.gzip {
-        return download_checked_cancellable(&j.url, &j.path, Some(Sum::Sha256(&j.sha256)), Some(j.size), Some(cancel)).await;
+        return download_checked_progress(&j.url, &j.path, Some(Sum::Sha256(&j.sha256)), Some(j.size), Some(cancel), on).await;
     }
     let name = j.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let packed = j.path.with_file_name(format!("{}.millida-gz", name));
-    download_checked_cancellable(&j.url, &packed, Some(Sum::Sha256(&j.wire_sha256)), Some(j.wire), Some(cancel)).await?;
+    download_checked_progress(&j.url, &packed, Some(Sum::Sha256(&j.wire_sha256)), Some(j.wire), Some(cancel), on).await?;
     let (dest, size, sha) = (j.path.clone(), j.size, j.sha256.clone());
     tokio::task::spawn_blocking(move || unpack_gzip(&packed, &dest, size, &sha))
         .await
@@ -358,13 +361,31 @@ async fn install_inner(app: &AppHandle, job: &Job, g: &MirrorGame) -> Result<Str
 
     let total: u64 = jobs.iter().map(|j| j.wire).sum::<u64>().max(1);
     let done = Arc::new(AtomicU64::new(0));
+    let step = AtomicU64::new(u64::MAX);
     let gb = |b: u64| b as f64 / 1_073_741_824.0;
+    let report = |d: u64| {
+        let pct = 3.0 + 95.0 * (d.min(total) as f32 / total as f32);
+        let s = (pct * 4.0) as u64;
+        if step.swap(s, Ordering::Relaxed) != s {
+            job.emit(app, pct, &format!("{:.2} / {:.2} ГБ", gb(d.min(total)), gb(total)));
+        }
+    };
+    let report = &report;
     let results: Vec<(String, Result<(), String>)> = futures::stream::iter(jobs.into_iter().map(|j| {
         let done = done.clone();
         async move {
-            let r = fetch_one(&j, job.cancel_flag()).await;
-            let d = done.fetch_add(j.wire, Ordering::Relaxed) + j.wire;
-            job.emit(app, 3.0 + 95.0 * (d as f32 / total as f32), &format!("{:.2} / {:.2} ГБ", gb(d), gb(total)));
+            // A retried stream reports from zero again; counting only growth past
+            // the best mark keeps the total from running ahead of real bytes.
+            let seen = AtomicU64::new(0);
+            let on = |got: u64, _: Option<u64>| {
+                let grown = got.min(j.wire).saturating_sub(seen.fetch_max(got.min(j.wire), Ordering::Relaxed));
+                if grown > 0 {
+                    report(done.fetch_add(grown, Ordering::Relaxed) + grown);
+                }
+            };
+            let r = fetch_one(&j, job.cancel_flag(), &on).await;
+            let rest = j.wire.saturating_sub(seen.load(Ordering::Relaxed));
+            report(done.fetch_add(rest, Ordering::Relaxed) + rest);
             (j.rel.clone(), r)
         }
     }))

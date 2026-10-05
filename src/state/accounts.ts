@@ -167,7 +167,10 @@ export type LaunchAuthKind = 'offline' | 'microsoft' | 'millida'
 
 /// An offline account is an explicit choice of nick: issuing a Millida session for it would
 /// replace that nick with the one bound to the site login, so only a Millida account gets one.
-export function launchAuthKind(acc: Account | null, millidaSession: boolean): LaunchAuthKind {
+/// A server that checks sessions only against our Yggdrasil turns away a licence
+/// and an offline nick alike, so its build always starts on the Millida session.
+export function launchAuthKind(acc: Account | null, millidaSession: boolean, millidaOnly = false): LaunchAuthKind {
+  if (millidaOnly) return millidaSession ? 'millida' : 'offline'
   if (acc && acc.kind === 'microsoft') return 'microsoft'
   if (acc && !isMillidaKind(acc.kind)) return 'offline'
   return millidaSession ? 'millida' : 'offline'
