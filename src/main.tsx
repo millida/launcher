@@ -31,6 +31,7 @@ import { Overlay } from './screens/Overlay'
 import { openExt } from './lib/api'
 import { initRenderGate } from './lib/renderGate'
 import { webviewFailure } from './lib/webviewHealth'
+import { installAspectRatioFallback } from './lib/aspectRatioFallback'
 
 if (!import.meta.env.DEV) {
   document.addEventListener('contextmenu', (e) => {
@@ -66,5 +67,7 @@ if (isOverlay) {
   // Прошлое окно убил сбой видеокарты — WebGL выключаем до первого кадра лобби.
   void webviewFailure()
 }
+
+installAspectRatioFallback()
 
 createRoot(document.getElementById('root')!).render(isOverlay ? <Overlay /> : <App />)

@@ -44,6 +44,38 @@ describe('launchAuthKind', () => {
     })
 })
 
+describe('launchAuthKind on a Millida-only server', () => {
+  const cases: Array<{ name: string; account: ReturnType<typeof acc> | null; millida: boolean; expect: string; why: string }> = [
+    {
+      name: 'microsoft account',
+      account: acc('microsoft'),
+      millida: true,
+      expect: 'millida',
+      why: 'OneBlock checks hasJoined on our Yggdrasil: a licence session is never found there and the player is kicked',
+    },
+    {
+      name: 'offline account',
+      account: acc('offline'),
+      millida: true,
+      expect: 'millida',
+      why: 'an offline nick has no session at all, the gate turns it away too',
+    },
+    { name: 'millida account', account: acc('millida'), millida: true, expect: 'millida', why: 'already the right session' },
+    {
+      name: 'microsoft account without a Millida session',
+      account: acc('microsoft'),
+      millida: false,
+      expect: 'offline',
+      why: 'not millida, so the launch stops and asks to sign in instead of starting a game that cannot join',
+    },
+  ]
+
+  for (const c of cases)
+    test(c.name, () => {
+      expect(launchAuthKind(c.account, c.millida, true), c.why).toBe(c.expect as never)
+    })
+})
+
 describe('single Millida row', () => {
   const reset = (list: unknown[], active = '') => {
     store.set('m-accounts', JSON.stringify(list))

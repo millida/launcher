@@ -4,6 +4,9 @@ import { usePromo } from '../state/promo'
 
 export const ONEBLOCK_PACK = 'oneblock-metalabs'
 
+/** The OneBlock gate asks our session server whether the player joined, never Mojang's. */
+export const requiresMillidaAuth = (packSlug: string | null | undefined): boolean => packSlug === ONEBLOCK_PACK
+
 /**
  * OneBlock runs on 1.7.10 through its own client: joining its address with a
  * plain Minecraft build never gets in. The rating hides the address of a

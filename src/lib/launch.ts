@@ -8,7 +8,7 @@ import { api, hasMillidaAccount } from './api'
 import { joinPageUrl } from './invite'
 import { beatKey, beatStatus, presenceBeatDue } from './presence'
 import { isPresenceTracked } from './realtime'
-import { effectiveNick, getAccount, launchAuthKind, profileSlug } from '../state/accounts'
+import { effectiveNick, getAccount, isMillidaKind, launchAuthKind, profileSlug } from '../state/accounts'
 import { ensureMsAuth, startMsLogin } from '../state/msLogin'
 import { uiChoice, uiConfirm } from '../state/confirm'
 import { useProfiles } from '../state/profiles'
@@ -23,6 +23,7 @@ import { buildTag } from './telemetryPrivacy'
 import { launchFailure } from './launchFailure'
 import { packStepForLaunch, runPackUpdateForLaunch } from './packLaunch'
 import { afterPackUpdate } from './packUpdate'
+import { requiresMillidaAuth } from './ownServer'
 import { stopInstall } from '../state/installs'
 
 export { PL_STAGES, REPAIR_STAGES } from './launchView'
@@ -195,10 +196,17 @@ export function ramMbFor(profile: string): number {
 /// Online servers verify the session either with Mojang (Microsoft licence) or with our
 /// Yggdrasil server via authlib-injector; without either the game runs offline.
 /// Only the account is named here — the core turns it into credentials.
-async function resolveAuth(): Promise<{ nick: string; auth: LaunchAuth }> {
+async function resolveAuth(profile: string | null): Promise<{ nick: string; auth: LaunchAuth }> {
   const acc = getAccount()
   const offline: { nick: string; auth: LaunchAuth } = { nick: effectiveNick(), auth: { kind: 'offline' } }
-  const kind = launchAuthKind(acc, hasMillidaAccount())
+  const millidaOnly = await profileNeedsMillidaAuth(profile)
+  const kind = launchAuthKind(acc, hasMillidaAccount(), millidaOnly)
+  if (millidaOnly) {
+    if (kind !== 'millida')
+      throw new Error('OneBlock пускает только с аккаунтом Millida: войди в Millida и нажми «Играть» ещё раз')
+    if (acc && !isMillidaKind(acc.kind)) showToast('OneBlock: заходим с аккаунтом Millida')
+    return { nick: offline.nick, auth: { kind: 'millida' } }
+  }
   // A live token is required, not just a stored one: Minecraft session tokens expire after a day.
   if (acc && kind === 'microsoft') {
     const ms = await ensureMsAuth(acc)
@@ -222,6 +230,12 @@ async function resolveAuth(): Promise<{ nick: string; auth: LaunchAuth }> {
   }
   if (kind !== 'millida') return offline
   return { nick: offline.nick, auth: { kind: 'millida' } }
+}
+
+async function profileNeedsMillidaAuth(profile: string | null): Promise<boolean> {
+  if (!profile || !hasTauri()) return false
+  const st = await loadProfileSettings(profile).catch(() => null)
+  return !!st && (requiresMillidaAuth(st.catalogPackSlug) || requiresMillidaAuth(st.modpackSlug))
 }
 
 export function showLaunchError(e: unknown) {
@@ -348,7 +362,7 @@ function doJoin(profile: string, world: string | null, server: string | null, se
   }
   const epoch = cancelEpoch
   return freshenPack(profile, epoch, true)
-    .then(() => resolveAuth())
+    .then(() => resolveAuth(profile))
     .then((a) => {
       if (epoch !== cancelEpoch) throw new Error(CANCELLED_TEXT)
       return quickPlay(profile, a.nick, ramMbFor(profile), world, server, a.auth)
@@ -459,7 +473,7 @@ function doLaunch(name: string) {
   const prof = name || useProfiles.getState().selected
   const epoch = cancelEpoch
   const inv = (prof ? freshenPack(prof, epoch, false) : Promise.resolve())
-    .then(() => resolveAuth())
+    .then(() => resolveAuth(prof || null))
     .then((a) => {
       if (epoch !== cancelEpoch) throw new Error(CANCELLED_TEXT)
       return prof

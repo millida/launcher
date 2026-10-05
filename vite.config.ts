@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { oldWebKitCss } from './scripts/old-webkit-css.mjs'
 
 // A checkout without the media files must still build: these flags let the frontend
 // drop what is missing instead of hitting 404s.
@@ -10,7 +11,7 @@ const bundledVideos = ['bg1', 'bg2', 'bg3', 'bg4'].filter((id) => existsSync(pub
 const hasBundledMusic = existsSync(publicFile('music/01-starlight-city.mp3'))
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), oldWebKitCss()],
   clearScreen: false,
   define: {
     __BUNDLED_VIDEOS__: JSON.stringify(bundledVideos),
