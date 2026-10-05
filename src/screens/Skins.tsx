@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react'
 import { Icon } from '../components/Icon'
 import { PixelField } from '../components/lobby/PixelField'
 import { SKINS_IMPORT_EVENT, SKINS_UPLOAD_EVENT } from '../state/topbar'
-import { getAccount, useAccounts } from '../state/accounts'
+import { HEAD_FROM_CPU, getAccount, useAccounts } from '../state/accounts'
 import type { Account } from '../state/accounts'
 import { noteCosmeticsSeen } from '../state/newHint'
 import { setScreen, showToast } from '../state/ui'
@@ -127,7 +127,7 @@ import '../styles/pixel/character.css'
 import { showReward } from '../components/reward/RewardReveal'
 import { rarityOfPrice } from '../components/shop/rarity'
 import { openPaymentUrl } from '../lib/openPayment'
-import { drawFront } from '../lib/skinFlat'
+import { drawFront, skinCanvas } from '../lib/skinFlat'
 import { noteContextCreated, noteContextLost } from '../lib/gpuLite'
 import { artFit } from '../lib/artFit'
 
@@ -529,7 +529,7 @@ function SkinThumb({ url, size: askedSize = 128, slim }: { url: string; size?: n
         if (!alive) return
         const cv = ref.current
         if (!cv) return
-        const g = cv.getContext('2d')
+        const g = skinCanvas(cv)
         if (!g) return
         cv.width = 16
         cv.height = 32
@@ -599,7 +599,7 @@ async function headDataUrl(url: string, size = 64): Promise<string> {
   const c = document.createElement('canvas')
   c.width = size
   c.height = size
-  const g = c.getContext('2d')
+  const g = skinCanvas(c)
   if (!g) throw new Error('canvas недоступен')
   g.imageSmoothingEnabled = false
   g.drawImage(img, 8 * s, 8 * s, 8 * s, 8 * s, 0, 0, size, size)
@@ -609,6 +609,9 @@ async function headDataUrl(url: string, size = 64): Promise<string> {
 
 /// Remote textures are CORS-restricted, so re-encode through canvas.
 const PNG_DATA_PREFIX = 'data:image/png;base64,'
+
+const localSkinHash = (file: string) => /-([0-9a-f]{8})\.png$/i.exec(file)?.[1]?.toLowerCase() ?? null
+const wardrobeSkinHash = (url: string) => /-([0-9a-f]{32})\.png(?:[?#].*)?$/i.exec(url)?.[1]?.slice(0, 8).toLowerCase() ?? null
 
 async function toPngBase64(url: string): Promise<string> {
   if (url.startsWith('data:')) return url.replace(/^data:image\/png;base64,/, '')
@@ -659,7 +662,7 @@ function CapePreview({ url, h: askedH = 64 }: { url: string; h?: number }) {
       .then((img) => {
         const cv = ref.current
         if (!alive || !cv) return
-        const g = cv.getContext('2d')
+        const g = skinCanvas(cv)
         if (!g) return
         const s = img.width / 64
         cv.width = 10
@@ -765,6 +768,12 @@ export function Skins({ on }: { on: boolean }) {
   // перечитать текстуры аккаунтов после того, как кеш уже заполнен этой правдой.
   const [texEpoch] = useState(0)
   const [wardrobe, setWardrobe] = useState<WardrobeItem[]>([])
+  const wardrobeSkinHashes = new Set(
+    wardrobe.flatMap((w) => {
+      const h = w.kind === 'skin' ? wardrobeSkinHash(w.url) : null
+      return h ? [h] : []
+    }),
+  )
   const [millidaTex, setMillidaTex] = useState<AccTexture | null>(null)
   const [rewards, setRewards] = useState<RewardItem[]>([])
   const [claiming, setClaiming] = useState('')
@@ -823,6 +832,7 @@ export function Skins({ on }: { on: boolean }) {
   const activeMyRef = useRef<string | null>(null)
   activeMyRef.current = activeMy
   const mySkinOf = (file: string | null) => (file ? mySkins.find((s) => s.file === file) : undefined)
+  const activeMyHash = activeMy ? localSkinHash(activeMy) : null
   const capeTouched = useRef(false)
   const wardrobeVariantRef = useRef(false)
   // Request sequence: a late autodetect answer must not override a newer choice.
@@ -2497,7 +2507,7 @@ export function Skins({ on }: { on: boolean }) {
     try {
       const head = await headDataUrl(texture)
       const st = useAccounts.getState()
-      st.save(st.list.map((x) => (x.id === cur.id ? { ...x, avatar: head, avatarFrom: texture } : x)))
+      st.save(st.list.map((x) => (x.id === cur.id ? { ...x, avatar: head, avatarFrom: HEAD_FROM_CPU + texture } : x)))
     } catch {}
   }
 
@@ -2513,7 +2523,7 @@ export function Skins({ on }: { on: boolean }) {
   const syncHead = (skinUrl: string | null) => {
     const cur = getAccount()
     if (!cur || !skinUrl) return
-    if (cur.avatar && cur.avatarFrom === skinUrl) return
+    if (cur.avatar && cur.avatarFrom === HEAD_FROM_CPU + skinUrl) return
     void refreshHead(skinUrl)
   }
 
@@ -3219,7 +3229,10 @@ export function Skins({ on }: { on: boolean }) {
             </div>
           ) : null}
           <ItemGrid>
-            {mySkins.map((sk, i) => (
+            {mySkins.map((sk, i) => {
+              const h = localSkinHash(sk.file)
+              if (h && wardrobeSkinHashes.has(h)) return null
+              return (
               <ItemTile
                 key={'my:' + sk.file}
                 art={<SkinCardThumb url={sk.data} slim={sk.slim} />}
@@ -3235,7 +3248,8 @@ export function Skins({ on }: { on: boolean }) {
                 }}
                 onRemove={() => removeMySkin(i)}
               />
-            ))}
+              )
+            })}
             {wardrobe
               .filter((i) => i.kind === 'skin')
               .map((item) => (
@@ -3244,7 +3258,10 @@ export function Skins({ on }: { on: boolean }) {
                   art={<SkinCardThumb url={item.url} slim={item.model === 'slim'} />}
                   name={item.name}
                   note={item.model === 'slim' ? 'Тонкие руки' : 'Классические руки'}
-                  on={activeWardrobe === item.id}
+                  on={
+                    activeWardrobe === item.id ||
+                    (!!activeMyHash && activeMyHash === wardrobeSkinHash(item.url))
+                  }
                   onClick={() => void useWardrobeSkin(item)}
                   onRemove={() => removeWardrobeSkin(item)}
                 />

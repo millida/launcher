@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from '../Icon'
 import { Ruby } from '../Ruby'
-import { chestSprite } from '../daily/chestSprite'
+import { Chest3D } from '../daily/Chest3D'
+import { ChestLive } from '../daily/ChestLive'
 import type { ChestTier } from '../../lib/rubies'
 import { loadCaseContents, newRequestId, openCase, type CaseContents, type CaseOpened, type CaseView, type ItemRef, type SetTheme } from '../../lib/rubies'
 import { playSound } from '../../lib/sound'
@@ -23,9 +24,12 @@ const reduced = () => !!window.matchMedia?.('(prefers-reduced-motion: reduce)').
 
 export const caseTitle = (c: CaseView) => 'Ящик «' + c.title + '»'
 
-function Chest({ theme, open, className = '' }: { theme: SetTheme; open?: boolean; className?: string }) {
-  const src = useMemo(() => chestSprite(CHEST[theme] ?? 'COMMON', { open }), [theme, open])
-  return src ? <img className={'cs-chest ' + className} src={src} alt="" draggable={false} /> : null
+function Chest({ theme }: { theme: SetTheme }) {
+  return (
+    <span className="cs-cover-chest">
+      <ChestLive ready={false} tier={CHEST[theme] ?? 'COMMON'} size={112} look="model" />
+    </span>
+  )
 }
 
 function CaseCard({ view, balance, busy, onContents, onOpen }: { view: CaseView; balance: number; busy: boolean; onContents: () => void; onOpen: () => void }) {
@@ -42,7 +46,7 @@ function CaseCard({ view, balance, busy, onContents, onOpen }: { view: CaseView;
             </span>
           ))}
         </span>
-        <Chest theme={theme} className="cs-cover-chest" />
+        <Chest theme={theme} />
       </div>
       <b className="cs-name">{caseTitle(view)}</b>
       {often ? <span className="cs-often">Чаще всего — {RARITY_NAME_PLURAL[often.rarity]}</span> : null}
@@ -293,7 +297,7 @@ export function CaseOpening({
       )}
       {phase === 'shake' ? (
         <div className="cs-stage">
-          <Chest theme={theme} className="cs-shake" />
+          <Chest3D tier={CHEST[theme] ?? 'COMMON'} mode="open" framing="reveal" look="model" flatSize={240} />
         </div>
       ) : null}
       {reel ? (

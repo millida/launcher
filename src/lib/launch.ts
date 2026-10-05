@@ -24,6 +24,7 @@ import { launchFailure } from './launchFailure'
 import { packStepForLaunch, runPackUpdateForLaunch } from './packLaunch'
 import { afterPackUpdate } from './packUpdate'
 import { requiresMillidaAuth } from './ownServer'
+import { NATIVE_NEEDS_MILLIDA, isNativeGame } from './nativeGame'
 import { stopInstall } from '../state/installs'
 
 export { PL_STAGES, REPAIR_STAGES } from './launchView'
@@ -199,12 +200,13 @@ export function ramMbFor(profile: string): number {
 async function resolveAuth(profile: string | null): Promise<{ nick: string; auth: LaunchAuth }> {
   const acc = getAccount()
   const offline: { nick: string; auth: LaunchAuth } = { nick: effectiveNick(), auth: { kind: 'offline' } }
-  const millidaOnly = await profileNeedsMillidaAuth(profile)
+  const native = isNativeGame(useProfiles.getState().profiles.find((p) => p.name === profile))
+  const millidaOnly = native || (await profileNeedsMillidaAuth(profile))
   const kind = launchAuthKind(acc, hasMillidaAccount(), millidaOnly)
   if (millidaOnly) {
     if (kind !== 'millida')
-      throw new Error('OneBlock пускает только с аккаунтом Millida: войди в Millida и нажми «Играть» ещё раз')
-    if (acc && !isMillidaKind(acc.kind)) showToast('OneBlock: заходим с аккаунтом Millida')
+      throw new Error(native ? NATIVE_NEEDS_MILLIDA : 'OneBlock пускает только с аккаунтом Millida: войди в Millida и нажми «Играть» ещё раз')
+    if (!native && acc && !isMillidaKind(acc.kind)) showToast('OneBlock: заходим с аккаунтом Millida')
     return { nick: offline.nick, auth: { kind: 'millida' } }
   }
   // A live token is required, not just a stored one: Minecraft session tokens expire after a day.
@@ -343,7 +345,7 @@ function doJoin(profile: string, world: string | null, server: string | null, se
   if (!hasTauri()) return Promise.resolve(JOIN_SKIPPED)
   launching = true
   setGameSession(profile, server, serverName)
-  pinHostServer(profile)
+  pinJoinedServer(profile, world ? null : server, serverName)
   heartbeat('playing', serverName || server)
   let stage = 'prepare'
   let unlisten: UnlistenFn | null = null
@@ -401,8 +403,24 @@ function doJoin(profile: string, world: string | null, server: string | null, se
     })
 }
 
+/**
+ * A quick join leaves no trace in the in-game list, so a player who drops out
+ * has no way back. Both pins rewrite servers.dat, so they run one after
+ * another: concurrent writes would lose one of the entries.
+ */
+function pinJoinedServer(profile: string, server: string | null, serverName?: string | null) {
+  if (!server || !hasTauri()) {
+    pinHostServer(profile)
+    return
+  }
+  void pinServerDat(profile, serverName || server, server)
+    .catch((e) => console.warn('[join] servers.dat', e))
+    .finally(() => pinHostServer(profile))
+}
+
 export function pinHostServer(profile: string) {
   if (!hasTauri() || !profile) return
+  if (isNativeGame(useProfiles.getState().profiles.find((p) => p.name === profile))) return
   try {
     const raw = localStorage.getItem('m-host-pin')
     if (!raw) return
@@ -434,8 +452,8 @@ function doLaunch(name: string) {
   launching = true
   const setPrelaunch = useUi.getState().setPrelaunch
   const pack = useProfiles.getState().profiles.find((p) => p.name === name)
-  const ver = pack ? (pack.version === 'latest' ? 'Minecraft последней версии' : 'Minecraft ' + pack.version) : 'Minecraft последней версии'
-  setPrelaunch({ open: true, sub: name + ' · ' + ver, stage: 0, pct: 2, msg: 'Готовимся…', mode: 'launch' })
+  const ver = isNativeGame(pack) ? '' : pack ? (pack.version === 'latest' ? 'Minecraft последней версии' : 'Minecraft ' + pack.version) : 'Minecraft последней версии'
+  setPrelaunch({ open: true, sub: ver ? name + ' · ' + ver : name, stage: 0, pct: 2, msg: 'Готовимся…', mode: 'launch' })
   try {
     localStorage.setItem('m-last-' + name, String(Date.now()))
   } catch {}

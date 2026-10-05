@@ -18,7 +18,12 @@ export interface Account {
 
 type AccountInput = Partial<Account> & { nick: string; kind: string }
 
-const isHeadAvatar = (v?: string): boolean => !!v && v.startsWith('data:image/')
+/// Faces drawn before 05.10.2026 came off a GPU canvas, which after a GPU crash
+/// returns white pixels; only faces carrying this mark were drawn on the CPU.
+export const HEAD_FROM_CPU = 'cpu:'
+
+const isHeadAvatar = (v?: string, from?: string): boolean =>
+  !!v && v.startsWith('data:image/') && !!from && from.startsWith(HEAD_FROM_CPU)
 
 export const isMillidaKind = (kind: string) => kind === 'millida' || kind === 'tg'
 
@@ -28,7 +33,7 @@ function readAccounts(): Account[] {
     return Array.isArray(list)
       ? list.map((a: Account & { token?: string }) => {
           const { token: _drop, avatar, avatarFrom, ...rest } = a
-          return (isHeadAvatar(avatar) ? { ...rest, avatar, avatarFrom } : rest) as Account
+          return (isHeadAvatar(avatar, avatarFrom) ? { ...rest, avatar, avatarFrom } : rest) as Account
         })
       : []
   } catch {
@@ -37,7 +42,7 @@ function readAccounts(): Account[] {
 }
 
 function persist(list: Account[]) {
-  const clean = list.map((a) => (isHeadAvatar(a.avatar) ? a : { ...a, avatar: undefined, avatarFrom: undefined }))
+  const clean = list.map((a) => (isHeadAvatar(a.avatar, a.avatarFrom) ? a : { ...a, avatar: undefined, avatarFrom: undefined }))
   localStorage.setItem('m-accounts', JSON.stringify(clean))
 }
 

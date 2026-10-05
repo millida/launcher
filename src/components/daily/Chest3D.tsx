@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ChestTier } from '../../lib/rubies'
-import type { ChestMode, ChestScene } from './chestScene'
+import type { ChestLook, ChestMode, ChestScene } from './chestScene'
 import { ChestArt } from './ChestArt'
 import { gpuLite, noteContextLost } from '../../lib/gpuLite'
 
@@ -16,6 +16,7 @@ export function Chest3D({
   framing = 'hero',
   className,
   flatSize = 96,
+  look = 'voxel',
   onOpened,
 }: {
   tier: ChestTier
@@ -23,6 +24,7 @@ export function Chest3D({
   framing?: 'hero' | 'reveal'
   className?: string
   flatSize?: number
+  look?: ChestLook
   onOpened?: () => void
 }) {
   const wrap = useRef<HTMLDivElement>(null)
@@ -53,6 +55,7 @@ export function Chest3D({
           mode: modeRef.current,
           reduced: reducedMotion(),
           framing,
+          look,
           onOpened: () => openedRef.current?.(),
         })
         if (!scene) {

@@ -11,6 +11,7 @@ import { BugPx, FEEDBACK_SHARDS, FeedbackModal, feedbackRewardReady } from './Fe
 import { playSound, setSoundMode, soundMode, soundVolume } from '../lib/sound'
 import { writePref } from '../lib/prefs'
 import { Slider } from './Slider'
+import { MusicCard } from './radio'
 import { roomsUnreadTotal, useRooms } from '../state/rooms'
 import { openMessages } from '../state/chatScreen'
 import { PlayhubBar } from './playhub/MyBuilds'
@@ -45,8 +46,7 @@ function VolumePop({ label, value, onChange }: { label: string; value: number; o
 function LobbySoundBtns() {
   const music = useMusic((s) => radioOn(s))
   const toggleMusic = useMusic((s) => s.toggleRadio)
-  const musicLevel = useMusic((s) => s.level)
-  const setMusicLevel = useMusic((s) => s.setVolume)
+  const refreshOwnMusic = useMusic((s) => s.refreshOwn)
   const [sfxLevel, setSfxLevel] = useState(soundVolume)
   const [ui, setUi] = useState(() => soundMode() === 'all')
   useEffect(() => {
@@ -83,7 +83,7 @@ function LobbySoundBtns() {
         }}
       />
       </span>
-      <span className="lb-vol">
+      <span className="lb-vol" onMouseEnter={() => void refreshOwnMusic()}>
       <button
         className={'lb-btn lb-toggle' + (music ? '' : ' off')}
         aria-pressed={music}
@@ -94,7 +94,9 @@ function LobbySoundBtns() {
       >
         <Icon id={music ? 'i-music' : 'i-music-off'} />
       </button>
-      <VolumePop label="Громкость музыки" value={musicLevel} onChange={setMusicLevel} />
+      <span className="lb-vol-pop" role="group" aria-label="Музыка">
+        <MusicCard />
+      </span>
       </span>
     </>
   )

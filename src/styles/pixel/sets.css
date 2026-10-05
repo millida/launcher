@@ -100,7 +100,6 @@
 }
 :root:root .cs-cover { clip-path: var(--px-10); }
 .cs-cover-chest { position: absolute; z-index: 0; left: 50%; bottom: 4px; width: 112px; height: auto; transform: translateX(-50%); }
-.cs-chest { image-rendering: pixelated; display: block; }
 .cs-cover-items { position: absolute; z-index: 1; left: 0; right: 0; top: 12px; display: flex; align-items: flex-start; justify-content: center; gap: 6px; }
 .cs-cover-i { display: grid; place-items: center; width: 74px; height: 84px; background: color-mix(in srgb, var(--sh-tone) 30%, var(--m-inset)); }
 .cs-cover-i:nth-child(2) { width: 88px; height: 102px; margin-top: -2px; }
@@ -119,11 +118,7 @@
 }
 .cs-skip { position: absolute; top: 56px; right: 16px; z-index: 5; }
 .cs-stage { display: grid; place-items: center; }
-.cs-shake { width: 240px; height: auto; animation: cs-shake 0.34s steps(1, end) infinite; }
-@keyframes cs-shake {
-  0% { transform: translate3d(-6px, 0, 0); } 25% { transform: translate3d(6px, -4px, 0); }
-  50% { transform: translate3d(-4px, 2px, 0); } 75% { transform: translate3d(5px, 0, 0); }
-}
+.cs-stage > .c3d { width: 260px; height: 260px; }
 .cs-reel {
   position: relative; width: min(1000px, 94vw); height: 158px; overflow: hidden; display: flex; align-items: center;
   background: color-mix(in srgb, var(--sh-tone) 10%, var(--m-inset));
@@ -148,7 +143,7 @@
 .cs-res-acts { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 6px; }
 
 @media (prefers-reduced-motion: reduce) {
-  .cs-shake, .cs-flash, .cs-res, .cs-o { animation: none; }
+  .cs-flash, .cs-res, .cs-o { animation: none; }
   .cs-strip { transition: none; }
 }
 

@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import { listenWindowVisibility } from '../ipc/events'
 import { showToast, useUi } from './ui'
 import { hydratePrefs, readPref, writePref } from '../lib/prefs'
+import { hasTauri } from '../ipc/tauri'
+import { convertFileSrc, musicAdd, musicRemove, musicTracks, openMusicFolder } from '../ipc/commands'
 
 const DEFAULT_LEVEL = 5
 
@@ -14,6 +16,8 @@ const storedMuted = () => readPref('m-mus-muted', '0') === '1'
 
 const storedPlaying = () => readPref('m-mus-play', '1') !== '0'
 
+const storedRadio = () => readPref('m-mus-radio', '1') !== '0'
+
 export interface Track {
   src: string
   title: string
@@ -21,6 +25,8 @@ export interface Track {
   /** Лицензия и страница трека — для экрана «Авторы музыки» (CC BY требует указать автора). */
   license?: 'CC0 1.0' | 'CC BY 4.0'
   url?: string
+  /** Имя файла в папке music — есть только у своих треков игрока. */
+  file?: string
 }
 
 const SKIFF = 'https://ericskiff.com/music/'
@@ -48,18 +54,27 @@ export const RADIO: Track[] = [
 const BUNDLED: Track[] = __HAS_BUNDLED_MUSIC__ ? RADIO : []
 
 /**
- * Плейлист радио — только встроенный чиптюн. Музыку Minecraft (C418, Lena Raine)
- * радио больше не подмешивает: она спокойная и растворяла энергию лобби
- * (docs/MUSIC.md, 24.09.2026). Команда ядра download_mc_music осталась, но не вызывается.
+ * Свои треки игрока из папки music. Музыку Minecraft (C418, Lena Raine) радио
+ * само не подмешивает: она спокойная и растворяла энергию лобби (docs/MUSIC.md,
+ * 24.09.2026); команда ядра download_mc_music осталась, но не вызывается.
  */
-async function loadPlaylist(): Promise<Track[]> {
-  return [...BUNDLED]
+async function loadOwn(): Promise<Track[]> {
+  if (!hasTauri()) return []
+  const list = await musicTracks()
+  return list.map((t) => ({ src: convertFileSrc(t.path), title: t.title, author: 'Своя музыка', file: t.file }))
 }
+
+const playlist = (radio: boolean, own: Track[]) => [...(radio ? BUNDLED : []), ...own]
 
 interface MusicState {
   level: number
   muted: boolean
   tracks: Track[]
+  /** Встроенное радио Millida в плейлисте. Выключено — играют только свои треки. */
+  radio: boolean
+  own: Track[]
+  /** Плейлист собран хотя бы раз: пустой список до этого — «загружается», после — «нет треков». */
+  loaded: boolean
   index: number
   playing: boolean
   /** Остался для совместимости: Play.tsx закрывает им старый поповер. Радио поповера не имеет. */
@@ -71,6 +86,13 @@ interface MusicState {
   /** Радио: один тумблер. Включает с того места, где плейлист остановился. */
   toggleRadio: () => void
   next: () => void
+  prev: () => void
+  play: (index: number) => void
+  setRadio: (on: boolean) => void
+  refreshOwn: () => Promise<void>
+  addOwn: () => Promise<void>
+  removeOwn: (file: string) => Promise<void>
+  openFolder: () => void
 }
 
 // The player lives outside the React tree so navigation cannot unmount audio.
@@ -174,6 +196,21 @@ function setPlaying(playing: boolean, fadeMs: number) {
   apply(fadeMs)
 }
 
+// The current track keeps playing when the list changes around it; a track
+// that left the list hands over to the start of the new one.
+function rebuild(radio: boolean, own: Track[]) {
+  const s = useMusic.getState()
+  const cur = s.tracks[s.index]
+  const tracks = playlist(radio, own)
+  const at = cur ? tracks.findIndex((t) => t.src === cur.src) : -1
+  useMusic.setState({ radio, own, tracks, index: Math.max(0, at), loaded: true })
+  if (!tracks.length) useMusic.setState({ playing: false })
+  apply(FADE_MS)
+}
+
+const emptyHint = () =>
+  useMusic.getState().loaded ? 'Нет треков: включи радио Millida или добавь свою музыку' : 'Радио ещё загружается'
+
 function autoPause(fadeMs: number) {
   if (!useMusic.getState().playing) return
   autoPaused = true
@@ -192,6 +229,9 @@ export const useMusic = create<MusicState>((set, get) => ({
   level: storedLevel(),
   muted: storedMuted(),
   tracks: [],
+  radio: storedRadio(),
+  own: [],
+  loaded: false,
   index: 0,
   playing: false,
   open: false,
@@ -212,7 +252,7 @@ export const useMusic = create<MusicState>((set, get) => ({
   },
   togglePlay: () => {
     if (!get().tracks.length) {
-      showToast('Радио ещё загружается', 'error')
+      showToast(emptyHint(), 'error')
       return
     }
     writePref('m-mus-muted', '0')
@@ -226,7 +266,7 @@ export const useMusic = create<MusicState>((set, get) => ({
       return
     }
     if (!s.tracks.length) {
-      showToast('Радио ещё загружается', 'error')
+      showToast(emptyHint(), 'error')
       return
     }
     // Выключенный звук или нулевая громкость — это тоже «радио выключено»:
@@ -245,7 +285,60 @@ export const useMusic = create<MusicState>((set, get) => ({
     set({ index: tracks.length ? (index + 1) % tracks.length : 0 })
     apply(FADE_MS)
   },
+  prev: () => {
+    const { tracks, index } = get()
+    set({ index: tracks.length ? (index - 1 + tracks.length) % tracks.length : 0 })
+    apply(FADE_MS)
+  },
+  play: (index) => {
+    const s = get()
+    if (!s.tracks[index]) return
+    set({ index })
+    if (s.level === 0) {
+      writePref('m-mus-vol', String(DEFAULT_LEVEL))
+      set({ level: DEFAULT_LEVEL })
+    }
+    writePref('m-mus-muted', '0')
+    set({ muted: false })
+    setPlaying(true, FADE_MS)
+  },
+  setRadio: (on) => {
+    writePref('m-mus-radio', on ? '1' : '0')
+    rebuild(on, get().own)
+  },
+  refreshOwn: async () => {
+    if (!hasTauri()) return
+    try {
+      rebuild(get().radio, await loadOwn())
+    } catch (e) {
+      showToast('Не удалось прочитать папку с музыкой: ' + errText(e), 'error')
+    }
+  },
+  addOwn: async () => {
+    try {
+      const res = await musicAdd()
+      if (res.too_big.length) showToast('Больше 100 МБ, не добавлено: ' + res.too_big.join(', '), 'error')
+      if (!res.added) return
+      rebuild(get().radio, await loadOwn())
+      showToast(res.added === 1 ? 'Трек добавлен' : 'Добавлено треков: ' + res.added)
+    } catch (e) {
+      showToast('Музыку не добавили: ' + errText(e), 'error')
+    }
+  },
+  removeOwn: async (file) => {
+    try {
+      await musicRemove(file)
+      rebuild(get().radio, await loadOwn())
+    } catch (e) {
+      showToast('Трек не удалён: ' + errText(e), 'error')
+    }
+  },
+  openFolder: () => {
+    openMusicFolder().catch((e: unknown) => showToast('Папка не открылась: ' + errText(e), 'error'))
+  },
 }))
+
+const errText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 // Каждый запуск открывается одной и той же темой (как меню Brawl Stars):
 // повтор первых секунд и делает её «звуком Millida». Дальше — по кругу.
@@ -306,11 +399,18 @@ export function stopMusicNow() {
 }
 
 function boot() {
-  return loadPlaylist().then((list) => {
-    useMusic.setState({ tracks: list })
-    pickStart(list)
-    autostart()
-  })
+  return loadOwn()
+    .catch((e: unknown) => {
+      showToast('Своя музыка не загрузилась: ' + errText(e), 'error')
+      return [] as Track[]
+    })
+    .then((own) => {
+      const radio = storedRadio()
+      const list = playlist(radio, own)
+      useMusic.setState({ radio, own, tracks: list, loaded: true })
+      pickStart(list)
+      autostart()
+    })
 }
 
 function autostart() {

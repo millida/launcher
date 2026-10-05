@@ -9,6 +9,7 @@ import { refreshSessionState } from '../lib/secure'
 import { copyText } from '../lib/clipboard'
 import { copyLink } from '../lib/links'
 import { api } from '../lib/api'
+import { claimWelcome } from '../lib/rubies'
 import { flushTelemetry, track, trackFailure } from '../lib/telemetry'
 import { markMillidaEver, millidaEver } from './onboarding'
 import { apiErrorText, isTransientApiError } from '../lib/apiError'
@@ -232,6 +233,7 @@ export async function startWebLogin(reopen = false) {
       enterApp()
       track('account_link', { kind: 'millida' })
       void flushTelemetry()
+      void claimWelcome().catch((e) => trackFailure('welcome_claim', e, { provider: 'millida' }))
       showToast('Вход выполнен: ' + nick)
       return
     }

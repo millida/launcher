@@ -74,10 +74,13 @@ fn meta_from(api: &Value, local: Option<&Value>) -> Result<PackMeta, String> {
             .to_string()
     };
     let loader = pick("loader").to_lowercase();
-    if !LOADERS.contains(&loader.as_str()) {
+    let game = pick("game");
+    // a native game is not Minecraft: it pairs its own version and loader, and
+    // its launch is decided by the description it ships
+    let native = loader == NATIVE_LOADER && game == NATIVE_GAME_VERSION;
+    if !native && !LOADERS.contains(&loader.as_str()) {
         return Err(format!("Неизвестный загрузчик сборки: {}", loader));
     }
-    let game = pick("game");
     if game.is_empty() {
         return Err("Сборка не сказала, под какую версию Minecraft она собрана".into());
     }
@@ -701,13 +704,17 @@ pub fn move_pack_launch_trust(old: &str, new: &str) {
 /// The pack's own launch description, only for a build installed from the
 /// catalogue. The slug comes from the registry, not from the file.
 pub fn trusted_pack_launch_spec(profile: &str) -> Option<PackLaunch> {
-    let slug = read_trust().get(&folder_key(profile))?.as_str()?.to_string();
-    if !catalog_slug_ok(&slug) {
-        return None;
-    }
+    let slug = trusted_pack_slug(profile)?;
     let mut spec = pack_launch_spec(profile)?;
     spec.slug = slug;
     Some(spec)
+}
+
+/// Catalogue slug of a build this core installed, from the registry: the one
+/// condition under which its launch description is honoured.
+pub fn trusted_pack_slug(profile: &str) -> Option<String> {
+    let slug = read_trust().get(&folder_key(profile))?.as_str()?.to_string();
+    catalog_slug_ok(&slug).then_some(slug)
 }
 
 /// Отчёт о живом запуске проверочной версии.
@@ -925,6 +932,20 @@ mod tests {
         assert!(meta_from(&broken, None).is_err(), "чужой загрузчик обязан остановить установку");
         let no_game = serde_json::json!({ "title": "X", "version": "1", "loader": "forge" });
         assert!(meta_from(&no_game, None).is_err(), "без версии игры профиль собрать не из чего");
+    }
+
+    /// api -> verdict. «custom» is a native game's loader and nothing else: on
+    /// a Minecraft version it would build a profile no loader installs.
+    #[test]
+    fn a_native_game_installs_only_as_a_native_pair() {
+        let cases: [(&str, &str, bool, &str); 2] = [
+            ("native", "custom", true, "родная игра партнёра ставится"),
+            ("1.20.1", "custom", false, "custom на версии Minecraft — не загрузчик"),
+        ];
+        for (game, loader, ok, why) in cases {
+            let api = serde_json::json!({ "title": "PrisonRPG", "version": "1.0.0", "game": game, "loader": loader });
+            assert_eq!(meta_from(&api, None).is_ok(), ok, "{why}");
+        }
     }
 
     /// files -> verdict. A server-only pack must say so instead of installing

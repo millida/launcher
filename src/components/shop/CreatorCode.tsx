@@ -115,7 +115,7 @@ export function CreatorCode() {
           kicker: 'Ты поддерживаешь ' + res.name,
           title: CHEST_NAME[tier] + ' сундук',
           sub: 'Подарок за первый код автора',
-          items: [{ name: CHEST_NAME[tier] + ' сундук', rarity: tier, art: <ChestLive ready tier={tier} size={150} /> }],
+          items: [{ name: CHEST_NAME[tier] + ' сундук', rarity: tier, art: <ChestLive ready tier={tier} size={150} look="model" /> }],
           doneLabel: 'В сундуки',
           onDone: () => document.querySelector('#s-rubies .mc')?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
         })

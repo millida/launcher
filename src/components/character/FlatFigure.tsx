@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { textureSource } from '../../lib/textureSource'
-import { detectSlim, drawFront } from '../../lib/skinFlat'
+import { detectSlim, drawFront, skinCanvas } from '../../lib/skinFlat'
 
 function loadSkin(url: string): Promise<HTMLImageElement> {
   return textureSource(url).then(
@@ -41,7 +41,7 @@ export function FlatFigure({
     loadSkin(url)
       .then((img) => {
         const cv = ref.current
-        const g = cv?.getContext('2d')
+        const g = cv ? skinCanvas(cv) : null
         if (!alive || !cv || !g) return
         cv.width = 16
         cv.height = 32

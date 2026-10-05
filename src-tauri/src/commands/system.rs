@@ -59,6 +59,21 @@ pub fn music_tracks() -> Vec<engine::MusicTrack> { engine::music_tracks() }
 #[tauri::command]
 pub fn open_music_folder() { engine::open_music_folder(); }
 
+/// The file picker is the only way in: the webview never names a source path.
+#[tauri::command]
+pub async fn music_add() -> Result<engine::MusicAdded, String> {
+    let d = engine::dialog().set_title("Своя музыка").add_filter("Музыка", &engine::MUSIC_EXTS);
+    let Some(paths) = engine::pick_files(d).await else {
+        return Ok(engine::MusicAdded { added: 0, too_big: vec![] });
+    };
+    super::blocking(move || engine::add_music_files(paths)).await?
+}
+
+#[tauri::command]
+pub async fn music_remove(file: String) -> Result<(), String> {
+    super::blocking(move || engine::remove_music_track(&file)).await?
+}
+
 #[tauri::command]
 pub async fn download_mc_music() -> Result<u32, String> { engine::download_mc_music().await }
 

@@ -97,7 +97,7 @@ pub fn boost_mods(loader: &str, game_version: &str) -> &'static [Slot] {
 /// resource packs listed in options.txt). The mode has nothing to add there and
 /// only overwrites what the author tuned.
 pub fn fps_boost_applicable(profile: &str) -> bool {
-    trusted_pack_launch_spec(profile).is_none()
+    trusted_pack_launch_spec(profile).is_none() && !trusted_native_pack(profile)
 }
 
 /// Стоит ли мод режима уже в сборке. Манифест хранит канонический id проекта,

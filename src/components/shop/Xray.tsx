@@ -36,7 +36,7 @@ export function XrayCard({
       data-id={offer.id}
     >
       <div className="sh-xray-stage">
-        <Chest3D tier={offer.tier} mode={waiting ? 'closed' : 'ready'} framing="hero" />
+        <Chest3D tier={offer.tier} mode={waiting ? 'closed' : 'ready'} framing="hero" look="model" />
       </div>
       {waiting ? (
         <div className="sh-xray-body">
@@ -109,6 +109,7 @@ export function XrayOpening({
           tier={tier}
           mode={mode}
           framing="reveal"
+          look="model"
           onOpened={() => {
             if (!item) return
             timer.current = window.setTimeout(() => opened.current(item), LIGHT_MS)
