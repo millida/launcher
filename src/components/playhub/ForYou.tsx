@@ -12,7 +12,7 @@ import type { LobbyMode } from '../../state/lobbyMode'
 import type { HostServer } from '../../screens/Hosting'
 import { HostPlanPicker } from '../HostPlanPicker'
 import { ONEBLOCK_ART } from './modeIcon'
-import { ONEBLOCK_PACK, isExclusive } from './data'
+import { ONEBLOCK_PACK, isExclusive, isOwnServerPack } from './data'
 import { ANARCHY, OWN_SERVER_MODE } from '../../lib/ownServer'
 import { AnarchyArt, anarchyOnlineShown } from './AnarchyTile'
 import { headCells } from './placement'
@@ -371,7 +371,8 @@ export function ForYou({
           key={'pack:' + p.id}
           kind={p.premium ? 'premium' : 'pack'}
           id={p.slug || p.id}
-          tag={isExclusive(p.slug) ? 'Arcania Labs' : 'Сборка'}
+          tag={isOwnServerPack(p.slug) ? 'Наш сервер' : isExclusive(p.slug) ? 'Arcania Labs' : 'Сборка'}
+          own={isOwnServerPack(p.slug)}
           excl={isExclusive(p.slug)}
           section="modpacks"
           art={img(p.coverUrl)}

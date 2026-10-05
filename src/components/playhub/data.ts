@@ -407,6 +407,10 @@ export const ONEBLOCK_BANNER = 'https://cdn.millida.trade/catalog/launcher-packs
 const EXCLUSIVE = new Set<string>([ONEBLOCK_PACK, OWN_SERVER.mode, ANARCHY.mode])
 export const isExclusive = (key: string | null | undefined): boolean => !!key && EXCLUSIVE.has(key)
 
+/** Catalogue packs that are a server we run with a partner: the feed tags them like OneBlock. */
+const OWN_SERVER_PACKS = new Set<string>(['prisonrpg'])
+export const isOwnServerPack = (slug: string | null | undefined): boolean => !!slug && OWN_SERVER_PACKS.has(slug)
+
 /**
  * Players on our OneBlock right now, from its own rating card: the ONEBLOCK
  * category sums 79 foreign servers and is not the event's audience.

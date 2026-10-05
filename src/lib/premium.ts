@@ -124,8 +124,8 @@ function loadCatalogPacks(): Promise<MillidaPack[]> {
   return hasTauri() ? millidaPacks() : api<MillidaPack[]>('/catalog/packs')
 }
 
-/// Платная сборка каталога в виде карточки витрины. Ни цены, ни подписки, ни
-/// онлайна в каталоге нет — эти поля остаются пустыми и на экран не выходят.
+/// Сборка каталога в виде карточки витрины. Ни цены, ни подписки в каталоге
+/// нет — эти поля остаются пустыми; онлайн есть только у сборок с счётчиком партнёра.
 export function packFromCatalog(p: MillidaPack): PremiumPack {
   return {
     id: p.slug,
@@ -136,6 +136,7 @@ export function packFromCatalog(p: MillidaPack): PremiumPack {
     mcVersion: p.game || null,
     loader: p.loader ? RU_LOADER(p.loader) : null,
     downloads: typeof p.downloads === 'number' ? p.downloads : null,
+    online: typeof p.online === 'number' ? p.online : null,
     hasServer: !!p.hasServer,
     author: p.author || null,
     source: 'catalog',

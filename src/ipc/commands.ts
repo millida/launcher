@@ -671,6 +671,8 @@ export interface MillidaPack {
   /** Draft shown only to this account's reviewers. */
   preview?: boolean
   partner?: { slug: string; name: string } | null
+  /** Players right now, polled by the server from the partner's own counter. */
+  online?: number | null
 }
 
 /** Наши сборки для списка «Контент» — рядом с Modrinth и CurseForge. */

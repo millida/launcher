@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { ONEBLOCK_PACK, isExclusive } from './data'
+import { ONEBLOCK_PACK, isExclusive, isOwnServerPack } from './data'
 
 const cases: Array<[string | null | undefined, boolean, string]> = [
   [ONEBLOCK_PACK, true, 'the OneBlock catalog pack wears the purple badge in For You, catalog rows and the lobby card'],
@@ -17,5 +17,21 @@ describe('isExclusive', () => {
   for (const [key, want, why] of cases)
     test(String(key), () => {
       expect(isExclusive(key), why).toBe(want)
+    })
+})
+
+const ownCases: Array<[string | null | undefined, boolean, string]> = [
+  ['prisonrpg', true, 'PrisonRPG is our server with MetaLabs: the feed card says «Наш сервер», not «Сборка»'],
+  ['PrisonRPG', false, 'catalogue slugs are lower case; another spelling is some other pack'],
+  [ONEBLOCK_PACK, false, 'OneBlock has its own tile with the badge; its pack card must not get a second one'],
+  ['arcania', false, 'a partner premium pack is not a server we run'],
+  ['', false, 'an empty slug from a broken card must not light the badge'],
+  [null, false, 'a card without slug must not light the badge'],
+]
+
+describe('isOwnServerPack', () => {
+  for (const [slug, want, why] of ownCases)
+    test(String(slug), () => {
+      expect(isOwnServerPack(slug), why).toBe(want)
     })
 })
