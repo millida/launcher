@@ -12,7 +12,7 @@ import type { LobbyMode } from '../../state/lobbyMode'
 import type { HostServer } from '../../screens/Hosting'
 import { HostPlanPicker } from '../HostPlanPicker'
 import { ONEBLOCK_ART } from './modeIcon'
-import { ONEBLOCK_PACK, isExclusive, isOwnServerPack } from './data'
+import { ONEBLOCK_PACK, isExclusive, isOwnServerPack, ownServerTagline } from './data'
 import { ANARCHY, OWN_SERVER_MODE } from '../../lib/ownServer'
 import { AnarchyArt, anarchyOnlineShown } from './AnarchyTile'
 import { headCells } from './placement'
@@ -377,7 +377,7 @@ export function ForYou({
           section="modpacks"
           art={img(p.coverUrl)}
           title={p.title}
-          meta={[p.loader, p.mcVersion].filter(Boolean).join(' · ') || p.tagline}
+          meta={ownServerTagline(p.slug) || [p.loader, p.mcVersion].filter(Boolean).join(' · ') || p.tagline}
           onClick={() => onPack(p)}
         />
       ),
