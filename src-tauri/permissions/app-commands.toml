@@ -66,6 +66,8 @@ permissions = [
   "allow-save-picture-as",
   "allow-music-tracks",
   "allow-open-music-folder",
+  "allow-music-add",
+  "allow-music-remove",
   "allow-download-mc-music",
   "allow-ui-sounds",
   "allow-download-ui-sounds",

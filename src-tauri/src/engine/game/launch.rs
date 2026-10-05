@@ -14,12 +14,12 @@ const PLAYTIME_FLUSH: std::time::Duration = std::time::Duration::from_secs(60);
 /// Сколько секунд сессии считается доказательством, что сборка открылась.
 /// Полторы минуты — это дальше загрузки модов и окна входа; всё, что короче,
 /// одинаково похоже и на запуск, и на вылет на середине загрузки.
-const LAUNCH_CHECK_ALIVE: u64 = 90;
+pub(super) const LAUNCH_CHECK_ALIVE: u64 = 90;
 
 /// Pids killed on user request: a non-zero exit code for them is not a crash.
 static STOPPED: Mutex<Vec<u32>> = Mutex::new(Vec::new());
 
-fn was_stopped(pid: u32) -> bool {
+pub(super) fn was_stopped(pid: u32) -> bool {
     if let Ok(mut v) = STOPPED.lock() {
         if let Some(i) = v.iter().position(|id| *id == pid) {
             v.remove(i);
@@ -98,7 +98,7 @@ pub(crate) fn decode_log_bytes(raw: &[u8]) -> String {
     }
 }
 
-fn read_log_file(path: &Path) -> Option<String> {
+pub(super) fn read_log_file(path: &Path) -> Option<String> {
     std::fs::read(path).ok().map(|b| decode_log_bytes(&b))
 }
 
@@ -148,7 +148,7 @@ pub(crate) fn crash_text(game_dir: &Path, since: std::time::SystemTime) -> Strin
     evidence_text(&crash_evidence(game_dir, since))
 }
 
-const LAUNCH_CAPTURE: &str = "logs/launcher-latest.log";
+pub(super) const LAUNCH_CAPTURE: &str = "logs/launcher-latest.log";
 
 type Evidence = Vec<(&'static str, String)>;
 
@@ -299,11 +299,11 @@ fn same_dir(a: &Path, b: &Path) -> bool {
     norm(a) == norm(b)
 }
 
-const LOG_DRAIN_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
+pub(super) const LOG_DRAIN_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
 
 /// The crash stack is the last thing the JVM prints: the readers get a moment
 /// to write it out, bounded because a child process may still hold the pipe.
-fn wait_log_readers(readers: &[Arc<std::sync::atomic::AtomicBool>], limit: std::time::Duration) {
+pub(super) fn wait_log_readers(readers: &[Arc<std::sync::atomic::AtomicBool>], limit: std::time::Duration) {
     let deadline = std::time::Instant::now() + limit;
     while !readers.iter().all(|d| d.load(std::sync::atomic::Ordering::Relaxed)) && std::time::Instant::now() < deadline {
         std::thread::sleep(std::time::Duration::from_millis(50));
@@ -637,7 +637,7 @@ pub(crate) fn crash_verdict(text: &str) -> CrashVerdict {
 
 const TAIL_LINES: usize = 18;
 
-fn crash_tail(text: &str) -> String {
+pub(super) fn crash_tail(text: &str) -> String {
     let lines: Vec<&str> = text.lines().collect();
     lines[lines.len().saturating_sub(TAIL_LINES)..].join("\n")
 }
@@ -735,7 +735,7 @@ impl Log4jFilter {
     }
 }
 
-fn spawn_log_reader(
+pub(super) fn spawn_log_reader(
     reader: Box<dyn std::io::Read + Send>,
     file: Arc<Mutex<std::fs::File>>,
     app: AppHandle,
@@ -1082,6 +1082,12 @@ pub(crate) fn filter_loader_jvm_args(list: Vec<String>) -> Vec<String> {
     out
 }
 
+/// The uuid the game is started with: the session's own when there is one,
+/// otherwise the offline uuid derived from the nick.
+pub(super) fn session_uuid(auth: &Auth, nick: &str) -> String {
+    if !auth.token.is_empty() && !auth.uuid.is_empty() { auth.uuid.clone() } else { offline_uuid(nick) }
+}
+
 /// Builds jvm+game arguments from the version json, expanding `${...}` placeholders.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn build_args(
@@ -1105,7 +1111,7 @@ pub(crate) fn build_args(
     // Online session needs user_type=msa; offline mode expects a name-derived
     // uuid, token "0" and user_type=legacy.
     let online = !auth.token.is_empty();
-    let uuid = if online && !auth.uuid.is_empty() { auth.uuid.clone() } else { offline_uuid(nick) };
+    let uuid = session_uuid(auth, nick);
     let token = if online { auth.token.clone() } else { "0".to_string() };
     let user_type = if online { "msa" } else { "legacy" };
     let xuid = if auth.xuid.is_empty() { "0".to_string() } else { auth.xuid.clone() };
@@ -1201,6 +1207,62 @@ pub(crate) fn build_args(
     args
 }
 
+/// Waits for a started game to exit, crediting playtime while it runs, then
+/// closes the session: the build stops counting as running, the window hears
+/// `game-exit` and the launcher comes back from the tray. `before_release`
+/// runs while the build still counts as running: a relaunch is refused until
+/// then, so it cannot overwrite this launch's logs mid-read.
+pub(super) fn watch_session<T>(
+    child: &mut std::process::Child,
+    start: std::time::Instant,
+    pid: u32,
+    pname: &str,
+    server_now: &ServerSlot,
+    app: &AppHandle,
+    before_release: impl FnOnce(&std::io::Result<std::process::ExitStatus>) -> T,
+) -> (std::io::Result<std::process::ExitStatus>, T, u64) {
+    let mut written = 0u64;
+    let mut new_session = true;
+    // Hours belong to the server the player was on while they were ticking,
+    // so a hop flushes what is owed before the address changes.
+    let mut here = current_server(server_now);
+    let mut server_session = here.is_some();
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(s)) => break Ok(s),
+            Err(e) => break Err(e),
+            Ok(None) => {}
+        }
+        std::thread::sleep(EXIT_POLL);
+        let elapsed = start.elapsed().as_secs();
+        let now_here = current_server(server_now);
+        let hopped = now_here != here;
+        if elapsed - written >= PLAYTIME_FLUSH.as_secs() || (hopped && elapsed > written) {
+            record_playtime(pname, elapsed - written, here.as_deref(), new_session, server_session);
+            written = elapsed;
+            new_session = false;
+            server_session = false;
+        }
+        if hopped {
+            server_session = now_here.is_some();
+            here = now_here;
+        }
+    };
+    let held = before_release(&status);
+    forget_running(pid);
+    let elapsed = start.elapsed().as_secs();
+    if elapsed > written || new_session || server_session {
+        record_playtime(pname, elapsed - written, here.as_deref(), new_session, server_session);
+    }
+    let _ = app.emit("game-exit", pname.to_string());
+    let waker = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(1500));
+        crate::tray::restore_after_game(&waker);
+    });
+    (status, held, elapsed)
+}
+
 /// `ram_mb` of 0 means auto.
 pub async fn install_and_launch(
     app: AppHandle,
@@ -1246,6 +1308,11 @@ pub async fn install_and_launch_in(
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or(Value::Null);
+    // Ahead of the Java pick: a pinned Java would otherwise be downloaded for
+    // a game that never runs on it.
+    if let Some(native) = trusted_native_launch(&profile) {
+        return launch_native(app, profile, nick, auth, &settings, native?).await;
+    }
     let java_pick = resolve_profile_java(&app, &profile).await?;
     let game_dir = profile_dir(&profile);
     /*
@@ -1692,51 +1759,13 @@ pub async fn install_and_launch_in(
         tauri::async_runtime::spawn(watch_pack_access(app.clone(), profile.clone(), spec.slug.clone(), pid));
     }
     std::thread::spawn(move || {
-        let mut written = 0u64;
-        let mut new_session = true;
-        // Hours belong to the server the player was on while they were ticking,
-        // so a hop flushes what is owed before the address changes.
-        let mut here = current_server(&server_now);
-        let mut server_session = here.is_some();
-        let status = loop {
-            match child.try_wait() {
-                Ok(Some(s)) => break Ok(s),
-                Err(e) => break Err(e),
-                Ok(None) => {}
+        let (status, evidence, elapsed) = watch_session(&mut child, start, pid, &pname, &server_now, &app2, |status| {
+            if status.is_ok() {
+                wait_log_readers(&readers, LOG_DRAIN_WAIT);
+                crash_evidence(&gdir, start_wall)
+            } else {
+                Evidence::new()
             }
-            std::thread::sleep(EXIT_POLL);
-            let elapsed = start.elapsed().as_secs();
-            let now_here = current_server(&server_now);
-            let hopped = now_here != here;
-            if elapsed - written >= PLAYTIME_FLUSH.as_secs() || (hopped && elapsed > written) {
-                record_playtime(&pname, elapsed - written, here.as_deref(), new_session, server_session);
-                written = elapsed;
-                new_session = false;
-                server_session = false;
-            }
-            if hopped {
-                server_session = now_here.is_some();
-                here = now_here;
-            }
-        };
-        // Read while the build still counts as running: a relaunch is refused
-        // until then, so it cannot overwrite this launch's logs mid-read.
-        let evidence = if status.is_ok() {
-            wait_log_readers(&readers, LOG_DRAIN_WAIT);
-            crash_evidence(&gdir, start_wall)
-        } else {
-            Evidence::new()
-        };
-        forget_running(pid);
-        let elapsed = start.elapsed().as_secs();
-        if elapsed > written || new_session || server_session {
-            record_playtime(&pname, elapsed - written, here.as_deref(), new_session, server_session);
-        }
-        let _ = app2.emit("game-exit", pname.clone());
-        let waker = app2.clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_millis(1500));
-            crate::tray::restore_after_game(&waker);
         });
         /*
          * Итог для проверочной версии. Успехом считается либо чистый выход,

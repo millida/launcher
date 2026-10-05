@@ -60,6 +60,13 @@ export function detectSlim(img: HTMLImageElement): boolean {
   }
 }
 
+/**
+ * Skin pictures are drawn on the CPU. After a GPU process crash the accelerated
+ * canvas hands back white pixels from drawImage, and the lite graphics that show
+ * these flat figures are on precisely after such a crash.
+ */
+export const skinCanvas = (cv: HTMLCanvasElement) => cv.getContext('2d', { willReadFrequently: true })
+
 /// Front projection of a skin texture; legacy 64x32 has no second layer and mirrors limbs.
 export function drawFront(g: CanvasRenderingContext2D, img: HTMLImageElement, slim: boolean) {
   const s = img.width / 64

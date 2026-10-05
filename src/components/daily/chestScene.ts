@@ -30,6 +30,8 @@ import { noteContextCreated } from '../../lib/gpuLite'
 import type { ChestTier } from '../../lib/rubies'
 import { onRenderGate, renderLive } from '../../lib/renderGate'
 import { CHEST_PALETTE, faceCanvas, type FaceKind } from './chestPaint'
+import { buildBbRig, type BbRig } from './bbModel'
+import { chestModel, type ChestModel } from './chestModels'
 
 /**
  * Воксельный сундук Minecraft на three.js (23.09.2026, «сундуки выглядят
@@ -48,6 +50,7 @@ import { CHEST_PALETTE, faceCanvas, type FaceKind } from './chestPaint'
  * - `open`   — крышка откинута, столб света цвета редкости, искры, лучи.
  */
 export type ChestMode = 'closed' | 'ready' | 'shake' | 'open'
+export type ChestLook = 'voxel' | 'model'
 
 export interface ChestScene {
   setMode(mode: ChestMode): void
@@ -64,6 +67,7 @@ export interface ChestSceneOptions {
   reduced: boolean
   /** Крупный план (окно награды) или витрина (шапка окна трека). */
   framing?: 'hero' | 'reveal'
+  look?: ChestLook
   /** Крышка распахнулась — сигнал для звука и карточек. */
   onOpened?: () => void
 }
@@ -153,6 +157,8 @@ function beamTexture(): Texture {
 }
 
 const SPARKS = 56
+const MODEL_SCALE = 15 / 16
+const SHAKE_IDLE_SPEED = 1.8
 const easeOutBack = (t: number) => {
   const c1 = 2.2
   const c3 = c1 + 1
@@ -173,8 +179,12 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
   const scene = new Scene()
   const reveal = opts.framing === 'reveal'
   const camera = new PerspectiveCamera(reveal ? 32 : 30, 1, 1, 400)
-  camera.position.set(0, reveal ? 20 : 17, reveal ? 70 : 48)
-  camera.lookAt(0, reveal ? 12 : 8.5, 0)
+  // Designer models carry decorations above the lid and jump while opening, so they need a taller frame.
+  const aim = (tall: boolean) => {
+    if (tall) camera.position.set(0, reveal ? 26 : 22, reveal ? 84 : 62)
+    else camera.position.set(0, reveal ? 20 : 17, reveal ? 70 : 48)
+    camera.lookAt(0, tall ? (reveal ? 15 : 12) : reveal ? 12 : 8.5, 0)
+  }
 
   scene.add(new AmbientLight(0xffffff, 1.35))
   const sun = new DirectionalLight(0xffffff, 2.1)
@@ -210,6 +220,8 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
   let body: Mesh | null = null
   let lidPivot: Group | null = null
   let owned: Material[] = []
+  let rig: BbRig | null = null
+  let rigModel: ChestModel | null = null
 
   // Столб света и искры.
   const beamMat = new MeshBasicMaterial({
@@ -250,11 +262,31 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
   function build() {
     if (body) hop.remove(body)
     if (lidPivot) hop.remove(lidPivot)
+    body = null
+    lidPivot = null
     owned.forEach((m) => {
       ;(m as MeshLambertMaterial).map?.dispose()
       m.dispose()
     })
     owned = []
+    if (rig) {
+      hop.remove(rig.root)
+      rig.dispose()
+      rig = null
+    }
+    rigModel = opts.look === 'model' ? chestModel(tier) : null
+    aim(!!rigModel)
+    if (rigModel) {
+      rig = buildBbRig(rigModel.model)
+      // Model front faces -z (north); the scene shows +z to the camera.
+      rig.root.rotation.y = Math.PI
+      rig.root.scale.setScalar(MODEL_SCALE)
+      hop.add(rig.root)
+    } else buildVoxel()
+    paint()
+  }
+
+  function buildVoxel() {
     const bodyMats = boxMaterials(tier, 14, 10, 14, ['bodySide', 'bodySide', 'inside', 'bottom', 'bodyFront', 'bodyBack'], 11)
     body = new Mesh(new BoxGeometry(14, 10, 14), bodyMats)
     body.position.set(0, 5, 0)
@@ -272,7 +304,9 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
     lidPivot.add(latch)
     hop.add(lidPivot)
     owned = [...bodyMats, ...lidMats, ...latchMats]
+  }
 
+  function paint() {
     const p = CHEST_PALETTE[tier]
     const glowColor = new Color(p.glow)
     glowMat.color.copy(glowColor)
@@ -353,7 +387,7 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
       glowK = 0.55 + 0.25 * Math.sin(t * 3.2)
       raysK = 0.18
       if (!reduced) {
-        hopY = Math.abs(Math.sin(t * 2.4)) * 1.4
+        hopY = rigModel ? 0 : Math.abs(Math.sin(t * 2.4)) * 1.4
         // Раз в пару секунд крышка подпрыгивает — сундук просится открыть.
         const k = (t % 2.6) / 2.6
         if (k > 0.82) lidTarget = -Math.sin(((k - 0.82) / 0.18) * Math.PI) * 0.22
@@ -376,6 +410,10 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
           trickle -= 1
         }
       }
+    } else if (rigModel && !reduced && since < rigModel.lidAt) {
+      glowK = 1.4
+      raysK = 0.6
+      innerK = 3
     } else {
       // open
       if (!opened) {
@@ -383,16 +421,19 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
         if (!reduced) emit(40, 1)
         opts.onOpened?.()
       }
-      const k = reduced ? 1 : Math.min(1, since / 0.42)
+      const lit = since - (rigModel && !reduced ? rigModel.lidAt : 0)
+      const k = reduced ? 1 : Math.min(1, lit / 0.42)
       lidTarget = -1.95 * (reduced ? 1 : easeOutBack(k))
-      const flash = reduced ? 0 : Math.max(0, 1 - since / 0.5)
+      const flash = reduced ? 0 : Math.max(0, 1 - lit / 0.5)
       glowK = 1.3 + flash * 2.2 + 0.15 * Math.sin(t * 2)
-      raysK = Math.min(1, since / 0.5) * 0.85
-      beamK = Math.min(1, since / 0.35)
+      raysK = Math.min(1, lit / 0.5) * 0.85
+      beamK = Math.min(1, lit / 0.35)
       innerK = 3.2
       if (!reduced) {
-        hopY = since < 0.3 ? Math.sin((since / 0.3) * Math.PI) * 3 : 0
-        squash = since < 0.12 ? 1 - (since / 0.12) * 0.12 : since < 0.3 ? 0.88 + ((since - 0.12) / 0.18) * 0.12 : 1
+        if (!rigModel) {
+          hopY = lit < 0.3 ? Math.sin((lit / 0.3) * Math.PI) * 3 : 0
+          squash = lit < 0.12 ? 1 - (lit / 0.12) * 0.12 : lit < 0.3 ? 0.88 + ((lit - 0.12) / 0.18) * 0.12 : 1
+        }
         chest.rotation.y = -0.5 + Math.sin(t * 0.7) * 0.08
         trickle += dt * 10
         while (trickle > 1) {
@@ -405,6 +446,11 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
     // Крышка догоняет цель пружиной (при открытии — сразу своей кривой).
     lidAngle = mode === 'open' ? lidTarget : lidAngle + (lidTarget - lidAngle) * Math.min(1, dt * 22)
     if (lidPivot) lidPivot.rotation.x = lidAngle
+    if (rig && rigModel) {
+      if (mode === 'open') rig.pose(rigModel.open, reduced ? Infinity : since)
+      else if (reduced || mode === 'closed') rig.pose(null, 0)
+      else rig.pose(rigModel.idle, mode === 'shake' ? since * SHAKE_IDLE_SPEED : t)
+    }
     hop.position.set(shakeX, hopY, 0)
     hop.rotation.z = shakeZ
     hop.scale.set(1 + (1 - squash) * 0.6, squash, 1 + (1 - squash) * 0.6)
@@ -455,6 +501,15 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
   }
   const offGate = onRenderGate(wake)
 
+  function fitRays() {
+    // Лучи — круг, вписанный в кадр: квадратный край плоскости не виден.
+    const dist = camera.position.distanceTo(rays.position)
+    const visH = 2 * dist * Math.tan((camera.fov * Math.PI) / 360)
+    const size = Math.min(visH, visH * camera.aspect) * 1.0
+    rays.scale.set(size, size, 1)
+    frameSize = size
+  }
+
   return {
     setVisible(v) {
       inView = v
@@ -471,18 +526,14 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
       if (next === tier) return
       tier = next
       build()
+      fitRays()
     },
     resize(w, h) {
       if (w < 1 || h < 1) return
       renderer.setSize(w, h, false)
       camera.aspect = w / h
       camera.updateProjectionMatrix()
-      // Лучи — круг, вписанный в кадр: квадратный край плоскости не виден.
-      const dist = camera.position.distanceTo(rays.position)
-      const visH = 2 * dist * Math.tan((camera.fov * Math.PI) / 360)
-      const size = Math.min(visH, visH * camera.aspect) * 1.0
-      rays.scale.set(size, size, 1)
-      frameSize = size
+      fitRays()
     },
     dispose() {
       dead = true
@@ -492,6 +543,7 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
         const m = o as Mesh
         m.geometry?.dispose?.()
       })
+      rig?.dispose()
       ;[...owned, glowMat, raysMat, beamMat, coreMat, sparkMat].forEach((m) => {
         ;(m as MeshBasicMaterial).map?.dispose()
         m.dispose()

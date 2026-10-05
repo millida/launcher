@@ -750,3 +750,28 @@
 /* Иконка своей сборки в «Сегодня играем» — по центру, на всю плитку. */
 .lobby-mode-cover.lobby-mode-bi { display: grid; place-items: center; width: 100%; height: 100%; }
 .lobby-mode-cover.lobby-mode-bi .bi { width: 100%; height: 100%; }
+/* Поповер музыки: громкость, радио Millida и своя музыка игрока. */
+.lb-vol-card.lb-mus-card { flex-direction: column; align-items: stretch; gap: 10px; width: 300px; padding: 14px; }
+.lb-mus-vol { display: flex; align-items: center; gap: 12px; }
+.lb-mus-vol > span { flex: 1; }
+.lb-mus-vol b { min-width: 40px; font: 800 13px/1 var(--m-font); color: var(--m-fg); text-align: right; font-variant-numeric: tabular-nums; }
+.lb-mus-now, .lb-mus-row { display: flex; align-items: center; gap: 10px; }
+.lb-mus-now { padding: 8px 10px; background: var(--m-inset); }
+.lb-mus-now-txt, .lb-mus-row-txt { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.lb-mus-now-txt b, .lb-mus-row-txt b { min-width: 0; text-align: left; font: 800 13px/1.2 var(--m-font); color: var(--m-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lb-mus-now-txt i, .lb-mus-row-txt i { font: 600 11px/1.2 var(--m-font); font-style: normal; color: var(--m-fg-muted); }
+.lb-mus-head { display: flex; align-items: center; gap: 6px; padding-top: 10px; border-top: 2px solid var(--m-border); font: 800 12px/1 var(--m-font); color: var(--m-fg-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.lb-mus-head i { font-style: normal; color: var(--m-fg-subtle); }
+.lb-mus-list { display: flex; flex-direction: column; gap: 2px; max-height: 180px; overflow-y: auto; }
+.lb-mus-item { display: flex; align-items: center; gap: 4px; }
+.lb-mus-item.on .lb-mus-play { color: var(--m-accent); }
+.lb-mus-play { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; padding: 6px 8px; background: none; border: 0; color: var(--m-fg); font: 700 13px/1.2 var(--m-font); text-align: left; cursor: pointer; }
+.lb-mus-play span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lb-mus-play svg { width: 14px; height: 14px; flex-shrink: 0; }
+.lb-mus-play:hover, .lb-mus-ico:hover:not(:disabled) { background: var(--m-inset); }
+.lb-mus-ico { display: grid; place-items: center; width: 28px; height: 28px; flex-shrink: 0; background: none; border: 0; color: var(--m-fg-muted); cursor: pointer; }
+.lb-mus-ico svg { width: 14px; height: 14px; }
+.lb-mus-ico:disabled { opacity: 0.4; cursor: default; }
+.lb-mus-empty { font: 600 12px/1.4 var(--m-font); color: var(--m-fg-muted); }
+.lb-mus-actions { display: flex; gap: 8px; }
+.lb-mus-actions .btn.primary { flex: 1; }

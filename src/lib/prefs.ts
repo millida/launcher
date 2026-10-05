@@ -10,6 +10,7 @@ const DURABLE = [
   'm-mus-muted',
   'm-mus-auto',
   'm-mus-play',
+  'm-mus-radio',
   'm-sound-vol',
   'm-sound-mode',
   'm-accent',

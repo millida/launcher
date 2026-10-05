@@ -50,7 +50,7 @@ export function PlusMonth({ plus, busy, onSubscribe }: { plus: PlusEconomy | nul
         {tiers.map((tier) => (
           <div key={tier} className={'sh-card sh-perk-card tier-' + tier.toLowerCase()}>
             <span className="sh-perk-art">
-              <ChestLive ready={false} tier={tier} size={116} />
+              <ChestLive ready={false} tier={tier} size={116} look="model" />
             </span>
             <b className="sh-perk-n">×{PLUS_PASS.chests[tier]}</b>
             <span className="sh-note">{CHEST_WORD[tier]}</span>

@@ -9,14 +9,20 @@ import { useSyncExternalStore } from 'react'
  * перезагружалось — и снова создавало тот же WebGL: один игрок ловил по
  * 8–11 падений подряд.
  *
- * После сбоя видеокарты (или двух потерь контекста WebGL подряд) лаунчер на
- * неделю переходит на плоские картинки: персонаж лобби — 2D-фигурка скина,
- * сундуки — рисунок, фон — один статичный кадр. Через неделю пробуем 3D снова
- * (драйвер могли обновить).
+ * После двух сбоев видеокарты (или двух потерь контекста WebGL) за минуты
+ * лаунчер на неделю переходит на плоские картинки: персонаж лобби — 2D-фигурка
+ * скина, сундуки — рисунок, фон — один статичный кадр. Через неделю пробуем 3D
+ * снова (драйвер могли обновить).
+ *
+ * Одиночный сбой процесса видеокарты лёгкую графику не включает (05.10.2026):
+ * за неделю он был у ~1050 установок, у 858 — единственный, треть — на запуске
+ * или выходе из игры, когда драйвер сбрасывает и окно лаунчера. Такие игроки
+ * неделю видели плоский скин, и обновление лаунчера его не возвращало.
  */
 
-const KEY = 'm-gpu-lite-at'
-const LEGACY_KEY = 'm-gpu-lite'
+const KEY = 'm-gpu-lite-since'
+const GPU_EXIT_KEY = 'm-gpu-exit-at'
+const LEGACY_KEYS = ['m-gpu-lite', 'm-gpu-lite-at']
 const TTL_MS = 7 * 24 * 3600 * 1000
 
 /** A browser holds a few WebGL contexts per page and drops the oldest when a new one is made. */
@@ -34,7 +40,7 @@ function stored(): number {
   try {
     if (!legacyDropped) {
       legacyDropped = true
-      localStorage.removeItem(LEGACY_KEY)
+      for (const k of LEGACY_KEYS) localStorage.removeItem(k)
     }
     return Number(localStorage.getItem(KEY) || 0) || 0
   } catch {
@@ -49,14 +55,33 @@ export function gpuLite(): boolean {
   return forced || liteFrom(stored(), Date.now())
 }
 
-/** Сбой видеокарты: с этого момента и на неделю — без WebGL. */
-export function noteGpuCrash(): void {
+function enterLite(now: number): void {
   try {
-    localStorage.setItem(KEY, String(Date.now()))
+    localStorage.setItem(KEY, String(now))
   } catch {}
   if (forced) return
   forced = true
   subs.forEach((f) => f())
+}
+
+export const gpuExitRepeats = (previousAt: number, now: number) =>
+  previousAt > 0 && now >= previousAt && now - previousAt < REPEAT_MS
+
+/**
+ * Процесс видеокарты окна умер. Страница при этом перезагружается, поэтому
+ * время прошлого сбоя хранится на диске. Без WebGL — только если сбой повторился
+ * в течение минут: так падает видеокарта, которую добивает сам WebGL.
+ * Возвращает, включилась ли лёгкая графика.
+ */
+export function noteGpuProcessExit(now = Date.now()): boolean {
+  let previousAt = 0
+  try {
+    previousAt = Number(localStorage.getItem(GPU_EXIT_KEY) || 0) || 0
+    localStorage.setItem(GPU_EXIT_KEY, String(now))
+  } catch {}
+  if (!gpuExitRepeats(previousAt, now)) return false
+  enterLite(now)
+  return true
 }
 
 export function onGpuLite(cb: () => void): () => void {
@@ -96,7 +121,7 @@ export function noteContextLost(now = Date.now()): void {
   const verdict = lossVerdict(now, history)
   if (verdict === 'evicted' || verdict === 'same-incident') return
   history.incidentAt = now
-  if (verdict === 'repeat') noteGpuCrash()
+  if (verdict === 'repeat') enterLite(now)
 }
 
 /** Только для тестов. */

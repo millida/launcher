@@ -59,6 +59,9 @@ mock.module('../ipc/commands', () => ({
   convertFileSrc: (p: string) => p,
   downloadMcMusic: () => Promise.resolve(),
   musicTracks: () => Promise.resolve([]),
+  musicAdd: () => Promise.resolve({ added: 0, too_big: [] }),
+  musicRemove: () => Promise.resolve(),
+  openMusicFolder: () => Promise.resolve(),
 }))
 mock.module('../ipc/events', () => ({ listenWindowVisibility: () => Promise.resolve(null) }))
 mock.module('./ui', () => ({ showToast() {}, useUi: { getState: () => ({ logged: true }) } }))
@@ -195,3 +198,44 @@ test('пауза переживает перезапуск: автостарт �
   await wait(1100)
   expect(el().paused, 'после ручного запуска автостарт снова разрешён').toBe(false)
 }, 20000)
+
+// Радио Millida и своя музыка: вход (радио, свои треки, что играло) → какой
+// плейлист и что звучит. Закреплено за просьбой владельца 05.10.2026: дефолт
+// можно выключить и крутить только своё.
+test('радио выключено — в плейлисте только свои треки, играющий свой трек не сбивается', async () => {
+  mus.stopMusicNow()
+  const own = [
+    { src: 'asset://own/a.mp3', title: 'a', file: 'a.mp3' },
+    { src: 'asset://own/b.mp3', title: 'b', file: 'b.mp3' },
+  ]
+  useMusic.setState({ radio: true, own, tracks: [...mus.RADIO, ...own], index: mus.RADIO.length + 1, level: 50, muted: false, playing: true, loaded: true })
+
+  useMusic.getState().setRadio(false)
+  const s = useMusic.getState()
+  expect(prefs['m-mus-radio'], 'выбор должен пережить перезапуск').toBe('0')
+  expect(s.tracks.map((t) => t.src), 'встроенные треки должны уйти из плейлиста').toEqual(['asset://own/a.mp3', 'asset://own/b.mp3'])
+  expect(s.tracks[s.index]?.src, 'смена плейлиста не должна перебивать трек, который сейчас слушают').toBe('asset://own/b.mp3')
+  expect(s.playing).toBe(true)
+})
+
+test('радио выключено и своих треков нет — музыка честно выключена', async () => {
+  mus.stopMusicNow()
+  useMusic.setState({ radio: true, own: [], tracks: [...mus.RADIO], index: 2, level: 50, muted: false, playing: true, loaded: true })
+
+  useMusic.getState().setRadio(false)
+  expect(useMusic.getState().tracks).toEqual([])
+  expect(mus.radioOn(useMusic.getState()), 'кнопка музыки не должна гореть, когда играть нечего').toBe(false)
+
+  useMusic.getState().setRadio(true)
+  expect(useMusic.getState().tracks.length, 'включение радио возвращает встроенный плейлист').toBe(mus.RADIO.length)
+  expect(prefs['m-mus-radio']).toBe('1')
+})
+
+test('«предыдущий» с первого трека уходит на последний, а не в пустоту', () => {
+  mus.stopMusicNow()
+  useMusic.setState({ tracks: [...mus.RADIO], index: 0, level: 50, muted: false, playing: false, loaded: true })
+  useMusic.getState().prev()
+  expect(useMusic.getState().index, 'плейлист идёт по кругу в обе стороны').toBe(mus.RADIO.length - 1)
+  useMusic.getState().prev()
+  expect(useMusic.getState().index).toBe(mus.RADIO.length - 2)
+})

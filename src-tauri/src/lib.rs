@@ -83,10 +83,37 @@ fn avoid_webkit_dmabuf_renderer() {
     }
 }
 
+/// The AppImage carries WebKitGTK and libwayland from Ubuntu 22.04. Under a
+/// native Wayland session on a newer host Mesa (Arch, CachyOS, Hyprland) its
+/// accelerated compositing presents nothing and the window stays black even
+/// with DMA-BUF off. deb/rpm and X11 use the host stack and keep WebGL.
+#[cfg(any(target_os = "linux", test))]
+fn needs_software_compositing(appimage: bool, wayland_display: Option<&str>, gdk_backend: Option<&str>) -> bool {
+    let wayland = wayland_display.is_some_and(|d| !d.is_empty());
+    let forced_x11 = gdk_backend.is_some_and(|b| b.trim_start().starts_with("x11"));
+    appimage && wayland && !forced_x11
+}
+
+#[cfg(target_os = "linux")]
+fn avoid_webkit_compositing_on_appimage_wayland() {
+    const VAR: &str = "WEBKIT_DISABLE_COMPOSITING_MODE";
+    if std::env::var_os(VAR).is_some() {
+        return;
+    }
+    let wayland = std::env::var("WAYLAND_DISPLAY").ok();
+    let backend = std::env::var("GDK_BACKEND").ok();
+    if needs_software_compositing(std::env::var_os("APPIMAGE").is_some(), wayland.as_deref(), backend.as_deref()) {
+        std::env::set_var(VAR, "1");
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(target_os = "linux")]
-    avoid_webkit_dmabuf_renderer();
+    {
+        avoid_webkit_dmabuf_renderer();
+        avoid_webkit_compositing_on_appimage_wayland();
+    }
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             tray::show_main(app);
@@ -211,6 +238,8 @@ pub fn run() {
             commands::system::save_picture_as,
             commands::system::music_tracks,
             commands::system::open_music_folder,
+            commands::system::music_add,
+            commands::system::music_remove,
             commands::system::download_mc_music,
             commands::system::ui_sounds,
             commands::system::download_ui_sounds,
@@ -662,6 +691,29 @@ mod tests {
              media directories only; a wildcard such as $HOME/** would let an XSS read the whole \
              home directory.",
         );
+    }
+
+    type CompositingCase<'a> = (bool, Option<&'a str>, Option<&'a str>, bool, &'a str);
+
+    #[test]
+    fn software_compositing_only_for_appimage_on_native_wayland() {
+        let cases: &[CompositingCase] = &[
+            (true, Some("wayland-1"), None, true, "AppImage on Hyprland: the black-window case"),
+            (true, Some("wayland-0"), Some("wayland,x11"), true, "Wayland preferred by the user still renders through Wayland"),
+            (true, Some("wayland-1"), Some("x11"), false, "XWayland renders fine and keeps WebGL"),
+            (true, None, None, false, "X11 session keeps WebGL"),
+            (true, Some(""), None, false, "an empty WAYLAND_DISPLAY is not a Wayland session"),
+            (false, Some("wayland-1"), None, false, "deb/rpm use the host WebKit and keep WebGL"),
+        ];
+        for &(appimage, wayland, backend, expected, why) in cases {
+            assert_eq!(
+                crate::needs_software_compositing(appimage, wayland, backend),
+                expected,
+                "appimage={appimage} WAYLAND_DISPLAY={wayland:?} GDK_BACKEND={backend:?}: {why}. \
+                 Turning compositing off where it is not needed kills WebGL (3D chests, skins); \
+                 leaving it on for the AppImage under Wayland shows a black window.",
+            );
+        }
     }
 
     /// directory -> verdict. The vault lives directly under data_dir() and

@@ -887,12 +887,22 @@ export const openGameFolder = () => invoke<void>('open_game_folder')
 
 export interface MusicTrackFile {
   path: string
+  file: string
   title: string
+}
+
+export interface MusicAdded {
+  added: number
+  too_big: string[]
 }
 
 export const musicTracks = () => invoke<MusicTrackFile[]>('music_tracks')
 
 export const openMusicFolder = () => invoke<void>('open_music_folder')
+
+export const musicAdd = () => invoke<MusicAdded>('music_add')
+
+export const musicRemove = (file: string) => invoke<void>('music_remove', { file })
 
 export const downloadMcMusic = () => invoke<number>('download_mc_music')
 

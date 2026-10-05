@@ -104,8 +104,8 @@ pub fn pack_launch_spec(profile: &str) -> Option<PackLaunch> {
     parse_pack_launch(&v)
 }
 
-/// Key of the running system in the pack's per-platform tables.
-fn platform_keys() -> [String; 2] {
+/// The running system as the pack's per-platform tables spell it.
+pub(super) fn platform_os_arch() -> (&'static str, &'static str) {
     let key = if cfg!(target_os = "windows") {
         "windows"
     } else if cfg!(target_os = "macos") {
@@ -114,6 +114,12 @@ fn platform_keys() -> [String; 2] {
         "linux"
     };
     let arch = if cfg!(target_arch = "aarch64") { "arm64" } else { "x86_64" };
+    (key, arch)
+}
+
+/// Key of the running system in the pack's per-platform tables.
+fn platform_keys() -> [String; 2] {
+    let (key, arch) = platform_os_arch();
     [format!("{}-{}", key, arch), key.to_string()]
 }
 
@@ -129,7 +135,7 @@ fn class_name_ok(name: &str) -> bool {
 /// game's own option parser after the main class: they cannot change what the
 /// JVM loads. Still, a broken list means a broken launch, so it is refused
 /// whole rather than trimmed into a different command.
-fn game_args(v: &Value) -> Option<Vec<String>> {
+pub(super) fn game_args(v: &Value) -> Option<Vec<String>> {
     let Some(raw) = v["gameArgs"].as_array() else { return Some(Vec::new()) };
     if raw.len() > MAX_GAME_ARGS {
         return None;
@@ -143,6 +149,10 @@ fn game_args(v: &Value) -> Option<Vec<String>> {
 }
 
 pub fn parse_pack_launch(v: &Value) -> Option<PackLaunch> {
+    // a native game has a launch of its own and never runs through the JVM
+    if is_native_manifest(v) {
+        return None;
+    }
     let main_class = text(v, "mainClass");
     if !class_name_ok(&main_class) {
         return None;
