@@ -1,0 +1,32 @@
+# Published to millida/launcher as release.yml. The sync deploy key cannot
+# create or change workflow files, so edits here must be pushed to the public
+# repository once by an account that can.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: GitHub release
+    if: github.repository == 'millida/launcher'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create release from the tag message
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -eu
+          sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq .object.sha)
+          gh api "repos/$GITHUB_REPOSITORY/git/tags/$sha" --jq .message > notes.md
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file notes.md
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --latest \
+              --title "Millida Launcher ${TAG#v}" --notes-file notes.md
+          fi
