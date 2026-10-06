@@ -1911,3 +1911,33 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
 .hub-ctile-allic { position: absolute; right: 12px; bottom: 12px; display: grid; place-items: center; width: 56px; height: 56px; color: var(--m-fg-subtle, rgba(255,255,255,.55)); background: var(--m-inset, rgba(0,0,0,.3));
   clip-path: polygon(5px 0, calc(100% - 5px) 0, calc(100% - 5px) 5px, 100% 5px, 100% calc(100% - 5px), calc(100% - 5px) calc(100% - 5px), calc(100% - 5px) 100%, 5px 100%, 5px calc(100% - 5px), 0 calc(100% - 5px), 0 5px, 5px 5px); }
 .hub-ctile-allic svg { width: 26px; height: 26px; }
+
+/* ── Рамки «Рекомендуем» и карточек каталога (06.10.2026, владелец выбрал П2 и К10) ──
+   П2: премиум, эксклюзив и наш сервер — кольцо по срезу, по нему бежит светлый отрезок.
+   К10: обычные карточки — объём кнопки лаунчера (светлый верх, тёмная подошва), картинка не приближается. */
+@property --fy-run { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+.fy-card.is-excl::after, .fy-card.is-own::after {
+  content: ''; position: absolute; inset: 0; z-index: 3; pointer-events: none;
+  box-shadow: none; opacity: 1; clip-path: var(--px-ring-10);
+  --fy-c: var(--m-exclusive, #9333ea);
+  background: conic-gradient(from var(--fy-run), color-mix(in srgb, var(--fy-c) 45%, #1a1b1c) 0 70%, var(--fy-c) 80%, #fff8dc 84%, var(--fy-c) 88%, color-mix(in srgb, var(--fy-c) 45%, #1a1b1c) 98%);
+  animation: fy-run 3.6s steps(48, end) infinite;
+}
+.fy-card.is-excl:has(.gold)::after { --fy-c: var(--ph-gold); box-shadow: none; }
+.fy-card.is-own::after { --fy-c: var(--m-accent); }
+.fy-card.is-own::after { animation-delay: -1.2s; }
+@keyframes fy-run { to { --fy-run: 360deg; } }
+
+
+.fy-card:not(.is-excl):not(.is-own) { transition: transform 120ms steps(2, end), background-color var(--m-t-fast) ease; }
+.fy-card:not(.is-excl):not(.is-own)::before {
+  content: ''; position: absolute; z-index: 2; left: 0; right: 0; bottom: 0; height: 5px; pointer-events: none; background: rgba(0, 0, 0, 0.35);
+}
+.fy-card:not(.is-excl):not(.is-own) .ph-card-body { padding-bottom: 17px; }
+.fy-card:not(.is-excl):not(.is-own) .ph-card-art > img, .card.mr-gal .mr-gal-cover > img { transform: none !important; }
+@media (hover: hover) and (pointer: fine) {
+  .fy-card:not(.is-excl):not(.is-own):hover { transform: translateY(-2px); }
+}
+.fy-card:not(.is-excl):not(.is-own):active { transform: translateY(2px); }
+.fy-card:not(.is-excl):not(.is-own):active::before { height: 2px; }
+@media (prefers-reduced-motion: reduce) { .fy-card.is-excl::after, .fy-card.is-own::after { animation: none; } }

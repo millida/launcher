@@ -106,7 +106,7 @@ const img = (src: string | null | undefined) =>
     <img
       src={src}
       alt=""
-      loading="lazy"
+      decoding="async"
       draggable={false}
       onError={(e) => {
         e.currentTarget.style.visibility = 'hidden'

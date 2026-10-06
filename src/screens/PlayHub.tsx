@@ -772,6 +772,13 @@ export function PlayHub({ on }: { on?: boolean }) {
             if (!openPackSlug(slug)) openSection('modpack', title)
           }}
           onMap={(title) => openSection('world', title)}
+          // Клик — страница самой вещи, как в «Рекомендуем»; наша сборка — её страница хаба.
+          onItem={(section, card) => {
+            if (section === 'modpacks' && openPackSlug(card.slug)) return
+            noteVisitSection(section)
+            openSection(sectionBySlug(section).kind)
+            requestAnimationFrame(() => openItem({ kind: 'card', section, card }))
+          }}
         />,
       )}
       {/* Игры Minecraft — такими же карточками, как сборки; клик открывает экран игры (владелец 29.09.2026). */}
