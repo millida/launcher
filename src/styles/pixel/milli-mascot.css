@@ -1,0 +1,531 @@
+/* ============================================================
+   МИЛЛИ — покадровая анимация маскота (04.10.2026).
+   src/components/milli/Milli.tsx + milliMascot.ts.
+   Язык — спрайт Minecraft: только transform/opacity, только steps(1, end) —
+   каждая ключевая точка = отдельный кадр, без твинов. Частицы — как в игре:
+   пыль при приземлении, искры тотема, сердечки, ноты, «Zzz».
+   Классы: корень .milli.mm-s-<состояние>; на <svg> режиссёр вешает
+   .mm-blink-* (моргание) и .is-paused (не видно — стоит).
+   Группы-«шарниры» (Pivot) уже сдвинуты в свою ось — transform-origin: 0 0.
+   Совместимо со старым WebKit (Safari 13): без var() в ключах, без inset/:is().
+   ============================================================ */
+
+.milli {
+  position: relative; display: inline-block; flex: none; line-height: 0;
+  --milli-body: #5ec64d; --milli-ink: #1b1f1c; --milli-glyph: #ffffff; --milli-cheek: #f59aa8; --milli-tongue: #e8566b;
+}
+.milli svg { display: block; overflow: visible; }
+.milli svg g { transform-origin: 0 0; }
+
+/* ── Палитра ── */
+.mm-body, .mm-limb { fill: #5ec64d; fill: var(--milli-body); }
+.mm-hi { fill: #fff; opacity: 0.3; }
+.mm-hi2 { fill: #fff; opacity: 0.1; }
+.mm-sh { fill: #1b1f1c; opacity: 0.14; }
+.mm-sh2 { fill: #1b1f1c; opacity: 0.32; }
+.mm-rim { fill: #1b1f1c; opacity: 0.16; }
+.mm-gsh { fill: #1b1f1c; opacity: 0.22; }
+.mm-glyph, .mm-glint, .mm-glove { fill: #fff; fill: var(--milli-glyph); }
+.mm-iris-hi { fill: #57e0c4; }
+.mm-iris-lo { fill: #1f8f93; }
+.mm-leaf { fill: #8be35f; }
+.mm-leaf-dk { fill: #3fae4a; }
+.mm-ink, .mm-boot { fill: #1b1f1c; fill: var(--milli-ink); }
+.mm-cheek { fill: #f59aa8; fill: var(--milli-cheek); }
+.mm-tongue { fill: #e8566b; fill: var(--milli-tongue); }
+.mm-limb-sh { fill: #1b1f1c; opacity: 0.22; }
+.mm-glove-sh { fill: #1b1f1c; opacity: 0.18; }
+.mm-outline { fill: #1b1f1c; opacity: 0.55; }
+.mm-shadow path { fill: #000; opacity: 0.28; }
+.mm-dot { fill: #fff; opacity: 0.25; }
+/* частицы */
+.mm-c-R { fill: #ff3b4e; } .mm-c-W { fill: #fff; } .mm-c-D { fill: #b0172e; }
+.mm-c-N { fill: #5bea5b; } .mm-note.is-b .mm-c-N { fill: #4fd8ff; } .mm-note.is-c .mm-c-N { fill: #ff62d8; }
+.mm-c-Z { fill: #e6f0ff; }
+.mm-c-X { fill: #ffe14d; }
+.mm-c-G { fill: #6dff4a; }
+.mm-c-L { fill: #f1f1ea; } .mm-dust .mm-c-D { fill: #b4b4aa; }
+.mm-totem rect { fill: #ffd83b; } .mm-totem.is-b rect { fill: #8ef05a; } .mm-totem.is-c rect { fill: #fff6a8; }
+
+/* ── Базовая поза и кадры по умолчанию ── */
+.mm-arm-l { transform: rotate(-14deg); }
+.mm-arm-r { transform: rotate(14deg); }
+.mm-e-shut, .mm-e-joy, .mm-e-sleep, .mm-e-squeeze,
+.mm-m-hmm, .mm-m-o, .mm-m-open, .mm-m-grin, .mm-pupil-s, .mm-p { opacity: 0; }
+
+/* Ручки спереди: поднятая рука не уходит за тело. */
+.mm-front { opacity: 0; }
+.mm-s-wave .mm-front-r, .mm-s-think .mm-front-r, .milli-wave-hover:hover .mm-s-idle .mm-front-r,
+.mm-s-happy .mm-front, .mm-s-spin .mm-front, .mm-s-hop .mm-front, .mm-s-wake .mm-front,
+.mm-s-poke1 .mm-front, .mm-s-poke2 .mm-front, .mm-s-poke3 .mm-front, .mm-s-wow .mm-front { opacity: 1; }
+/* машет и чешет голову — ладошка у головы, а не у пояса (задняя копия прячется) */
+.mm-s-wave .mm-front-r, .milli-wave-hover:hover .mm-s-idle .mm-front-r { transform: translate(-8px, -88px); }
+.mm-s-think .mm-front-r { transform: translate(-24px, -150px); }
+.mm-s-wave .mm-back-r, .mm-s-think .mm-back-r, .milli-wave-hover:hover .mm-s-idle .mm-back-r { opacity: 0; }
+
+/* ── Статичные лица состояний (они же — вид при reduced-motion) ── */
+.mm-s-wave .mm-m-smile, .mm-s-hop .mm-m-smile, .mm-s-happy .mm-m-smile, .mm-s-spin .mm-m-smile,
+.mm-s-think .mm-m-smile, .mm-s-sleep .mm-m-smile, .mm-s-wake .mm-m-smile, .mm-s-wow .mm-m-smile,
+.mm-s-poke1 .mm-m-smile, .mm-s-poke2 .mm-m-smile, .mm-s-poke3 .mm-m-smile { opacity: 0; }
+.mm-s-wave .mm-m-open, .mm-s-hop .mm-m-open, .mm-s-poke2 .mm-m-open, .mm-s-poke3 .mm-m-open { opacity: 1; }
+.mm-s-happy .mm-m-grin, .mm-s-spin .mm-m-grin, .mm-s-poke1 .mm-m-grin { opacity: 1; }
+.mm-s-think .mm-m-hmm { opacity: 1; }
+.mm-s-sleep .mm-m-o, .mm-s-wake .mm-m-o, .mm-s-wow .mm-m-o { opacity: 1; }
+.mm-s-happy .mm-e-open, .mm-s-sleep .mm-e-open, .mm-s-poke1 .mm-e-open, .mm-s-poke2 .mm-e-open, .mm-s-poke3 .mm-e-open { opacity: 0; }
+.mm-s-happy .mm-e-joy, .mm-s-poke1 .mm-e-joy, .mm-s-poke2 .mm-e-joy, .mm-s-poke3 .mm-e-joy { opacity: 1; }
+.mm-s-sleep .mm-e-sleep { opacity: 1; }
+.mm-s-wake .mm-pupil-n, .mm-s-wow .mm-pupil-n { opacity: 0; }
+.mm-s-wake .mm-pupil-s, .mm-s-wow .mm-pupil-s { opacity: 1; }
+/* Взгляд в «думает» и «спит» — поверх режиссёра (CSS transform сильнее атрибута). */
+.mm-s-think .mm-pupil { transform: translate(8px, -16px); }
+.mm-s-think .mm-iris { transform: translate(0, -8px); }
+.mm-s-think .mm-face { transform: translate(8px, -8px); }
+.mm-s-sleep .mm-face { transform: translate(0, 8px); }
+.mm-s-wake .mm-pupil, .mm-s-wake .mm-iris, .mm-s-wake .mm-face { transform: none; }
+.mm-s-happy .mm-arm-l, .mm-s-spin .mm-arm-l { transform: rotate(46deg); }
+.mm-s-happy .mm-arm-r, .mm-s-spin .mm-arm-r { transform: rotate(-46deg); }
+.mm-s-wave .mm-arm-r { transform: rotate(-76deg); }
+.mm-s-think .mm-arm-r { transform: rotate(-64deg); }
+.mm-s-sleep .mm-arm-l { transform: rotate(-26deg); }
+.mm-s-sleep .mm-arm-r { transform: rotate(26deg); }
+.mm-s-sleep .mm-sprout { transform: rotate(28deg); }
+.mm-s-sleep .mm-rig { transform: translateY(8px); }
+
+/* ── ПОКОЙ: дышит (тело на пиксель вниз-вверх), ручки и росток догоняют с
+   запаздыванием, изредка притопывает. Моргает и смотрит — режиссёр. ── */
+.mm-s-idle .mm-rig, .mm-s-wave .mm-rig, .mm-s-think .mm-rig { animation: mm-breathe 3.2s steps(1, end) infinite; }
+.mm-s-idle .mm-arm-l, .mm-s-wave .mm-arm-l { animation: mm-arm-idle-l 3.2s steps(1, end) 0.24s infinite; }
+.mm-s-idle .mm-arm-r { animation: mm-arm-idle-r 3.2s steps(1, end) 0.24s infinite; }
+.mm-s-idle .mm-sprout, .mm-s-wave .mm-sprout, .mm-s-think .mm-sprout { animation: mm-sprout-idle 3.2s steps(1, end) 0.4s infinite; }
+.mm-s-idle .mm-leg-r { animation: mm-tap 9.6s steps(1, end) 3s infinite; }
+@keyframes mm-breathe {
+  0% { transform: translateY(0); } 30% { transform: translateY(4px); }
+  50% { transform: translateY(8px); } 80% { transform: translateY(4px); }
+}
+@keyframes mm-arm-idle-l {
+  0% { transform: rotate(-14deg); } 30% { transform: rotate(-11deg); }
+  50% { transform: rotate(-7deg); } 80% { transform: rotate(-11deg); }
+}
+@keyframes mm-arm-idle-r {
+  0% { transform: rotate(14deg); } 30% { transform: rotate(11deg); }
+  50% { transform: rotate(7deg); } 80% { transform: rotate(11deg); }
+}
+@keyframes mm-sprout-idle {
+  0% { transform: rotate(0); } 30% { transform: rotate(-6deg); }
+  50% { transform: rotate(-10deg); } 80% { transform: rotate(-4deg); }
+}
+@keyframes mm-tap {
+  0% { transform: translateY(0); } 84% { transform: translateY(-12px); } 86% { transform: translateY(0); }
+  88% { transform: translateY(-12px); } 90% { transform: translateY(0); }
+}
+
+/* ── МОРГАНИЕ: полуприкрыт → закрыт (кадр-черта) → полуприкрыт → открыт.
+   Две копии ключей (-a/-b), чтобы режиссёр перезапускал без reflow. ── */
+.mm-s-idle .mm-blink-a .mm-eye, .mm-s-wave .mm-blink-a .mm-eye, .mm-s-talk .mm-blink-a .mm-eye,
+.mm-s-think .mm-blink-a .mm-eye, .mm-s-hop .mm-blink-a .mm-eye { animation: mm-blink-a 0.2s steps(1, end); }
+.mm-s-idle .mm-blink-b .mm-eye, .mm-s-wave .mm-blink-b .mm-eye, .mm-s-talk .mm-blink-b .mm-eye,
+.mm-s-think .mm-blink-b .mm-eye, .mm-s-hop .mm-blink-b .mm-eye { animation: mm-blink-b 0.2s steps(1, end); }
+.mm-s-idle .mm-blink-a .mm-e-shut, .mm-s-wave .mm-blink-a .mm-e-shut, .mm-s-talk .mm-blink-a .mm-e-shut,
+.mm-s-think .mm-blink-a .mm-e-shut, .mm-s-hop .mm-blink-a .mm-e-shut { animation: mm-lid-a 0.2s steps(1, end); }
+.mm-s-idle .mm-blink-b .mm-e-shut, .mm-s-wave .mm-blink-b .mm-e-shut, .mm-s-talk .mm-blink-b .mm-e-shut,
+.mm-s-think .mm-blink-b .mm-e-shut, .mm-s-hop .mm-blink-b .mm-e-shut { animation: mm-lid-b 0.2s steps(1, end); }
+.mm-s-idle .mm-blink2-a .mm-eye, .mm-s-wave .mm-blink2-a .mm-eye, .mm-s-talk .mm-blink2-a .mm-eye,
+.mm-s-think .mm-blink2-a .mm-eye, .mm-s-hop .mm-blink2-a .mm-eye { animation: mm-blink2-a 0.48s steps(1, end); }
+.mm-s-idle .mm-blink2-b .mm-eye, .mm-s-wave .mm-blink2-b .mm-eye, .mm-s-talk .mm-blink2-b .mm-eye,
+.mm-s-think .mm-blink2-b .mm-eye, .mm-s-hop .mm-blink2-b .mm-eye { animation: mm-blink2-b 0.48s steps(1, end); }
+.mm-s-idle .mm-blink2-a .mm-e-shut, .mm-s-wave .mm-blink2-a .mm-e-shut, .mm-s-talk .mm-blink2-a .mm-e-shut,
+.mm-s-think .mm-blink2-a .mm-e-shut, .mm-s-hop .mm-blink2-a .mm-e-shut { animation: mm-lid2-a 0.48s steps(1, end); }
+.mm-s-idle .mm-blink2-b .mm-e-shut, .mm-s-wave .mm-blink2-b .mm-e-shut, .mm-s-talk .mm-blink2-b .mm-e-shut,
+.mm-s-think .mm-blink2-b .mm-e-shut, .mm-s-hop .mm-blink2-b .mm-e-shut { animation: mm-lid2-b 0.48s steps(1, end); }
+@keyframes mm-blink-a { 0% { transform: scaleY(0.5); } 20% { transform: scaleY(0); } 60% { transform: scaleY(0.5); } 80% { transform: scaleY(1); } }
+@keyframes mm-blink-b { 0% { transform: scaleY(0.5); } 20% { transform: scaleY(0); } 60% { transform: scaleY(0.5); } 80% { transform: scaleY(1); } }
+@keyframes mm-lid-a { 0% { opacity: 0; } 20% { opacity: 1; } 60% { opacity: 0; } }
+@keyframes mm-lid-b { 0% { opacity: 0; } 20% { opacity: 1; } 60% { opacity: 0; } }
+@keyframes mm-blink2-a {
+  0% { transform: scaleY(0.5); } 8% { transform: scaleY(0); } 25% { transform: scaleY(0.5); } 33% { transform: scaleY(1); }
+  50% { transform: scaleY(0.5); } 58% { transform: scaleY(0); } 75% { transform: scaleY(0.5); } 83% { transform: scaleY(1); }
+}
+@keyframes mm-blink2-b {
+  0% { transform: scaleY(0.5); } 8% { transform: scaleY(0); } 25% { transform: scaleY(0.5); } 33% { transform: scaleY(1); }
+  50% { transform: scaleY(0.5); } 58% { transform: scaleY(0); } 75% { transform: scaleY(0.5); } 83% { transform: scaleY(1); }
+}
+@keyframes mm-lid2-a { 0% { opacity: 0; } 8% { opacity: 1; } 25% { opacity: 0; } 58% { opacity: 1; } 75% { opacity: 0; } }
+@keyframes mm-lid2-b { 0% { opacity: 0; } 8% { opacity: 1; } 25% { opacity: 0; } 58% { opacity: 1; } 75% { opacity: 0; } }
+
+/* ── МАШЕТ: рука в 4 кадра над головой, рот открыт. Наведение на кнопку — то же. ── */
+.mm-s-wave .mm-arm-r,
+.milli-wave-hover:hover .mm-s-idle .mm-arm-r { animation: mm-wave-r 0.72s steps(1, end) infinite; }
+.milli-wave-hover:hover .mm-s-idle .mm-m-smile { opacity: 0; }
+.milli-wave-hover:hover .mm-s-idle .mm-m-open { opacity: 1; }
+@keyframes mm-wave-r {
+  0% { transform: rotate(-56deg); } 25% { transform: rotate(-78deg); }
+  50% { transform: rotate(-98deg); } 75% { transform: rotate(-78deg); }
+}
+
+/* ── ДУМАЕТ: глаза вверх-вбок, «хм», чешет голову, покачивает головой, точки. ── */
+.mm-s-think .mm-arm-r { animation: mm-scratch 0.5s steps(1, end) infinite; }
+.mm-s-think .mm-turn { animation: mm-ponder 2.4s steps(1, end) infinite; }
+.mm-dot { animation: mm-dot 1.2s steps(1, end) infinite; }
+.mm-dot:nth-child(2) { animation-delay: 0.2s; }
+.mm-dot:nth-child(3) { animation-delay: 0.4s; }
+@keyframes mm-scratch { 0% { transform: rotate(-62deg); } 50% { transform: rotate(-74deg); } }
+@keyframes mm-ponder { 0% { transform: rotate(0); } 50% { transform: rotate(-3deg); } }
+@keyframes mm-dot {
+  0% { opacity: 0.25; transform: translateY(0); } 33% { opacity: 1; transform: translateY(-8px); }
+  66% { opacity: 0.25; transform: translateY(0); }
+}
+
+/* ── ГОВОРИТ: 8 кадров рта (закрыт / «о» / открыт / улыбка), тело
+   подпрыгивает на открытых слогах, ручки жестикулируют вразнобой. ── */
+.mm-s-talk .mm-rig { animation: mm-talk-bob 1.2s steps(1, end) infinite; }
+.mm-s-talk .mm-m-smile { animation: mm-talk-shut 1.2s steps(1, end) infinite; }
+.mm-s-talk .mm-m-o { animation: mm-talk-o 1.2s steps(1, end) infinite; }
+.mm-s-talk .mm-m-open { animation: mm-talk-open 1.2s steps(1, end) infinite; }
+.mm-s-talk .mm-m-grin { animation: mm-talk-grin 1.2s steps(1, end) infinite; }
+.mm-s-talk .mm-arm-l { animation: mm-talk-l 2.4s steps(1, end) infinite; }
+.mm-s-talk .mm-arm-r { animation: mm-talk-r 2.4s steps(1, end) 0.3s infinite; }
+.mm-s-talk .mm-sprout { animation: mm-sprout-idle 1.2s steps(1, end) 0.15s infinite; }
+@keyframes mm-talk-bob {
+  0% { transform: translateY(-8px); } 12.5% { transform: translateY(-4px); } 25% { transform: translateY(0); }
+  37.5% { transform: translateY(-8px); } 50% { transform: translateY(-4px); } 62.5% { transform: translateY(-8px); }
+  75% { transform: translateY(0); } 87.5% { transform: translateY(-4px); }
+}
+@keyframes mm-talk-shut { 0% { opacity: 0; } 25% { opacity: 1; } 37.5% { opacity: 0; } 75% { opacity: 1; } 87.5% { opacity: 0; } }
+@keyframes mm-talk-o { 0% { opacity: 0; } 12.5% { opacity: 1; } 25% { opacity: 0; } 50% { opacity: 1; } 62.5% { opacity: 0; } 87.5% { opacity: 1; } }
+@keyframes mm-talk-open { 0% { opacity: 1; } 12.5% { opacity: 0; } 62.5% { opacity: 1; } 75% { opacity: 0; } }
+@keyframes mm-talk-grin { 0% { opacity: 0; } 37.5% { opacity: 1; } 50% { opacity: 0; } }
+@keyframes mm-talk-l {
+  0% { transform: rotate(-14deg); } 25% { transform: rotate(8deg); } 50% { transform: rotate(24deg); } 75% { transform: rotate(8deg); }
+}
+@keyframes mm-talk-r {
+  0% { transform: rotate(14deg); } 25% { transform: rotate(2deg); } 50% { transform: rotate(14deg); } 75% { transform: rotate(-16deg); }
+}
+
+/* ── ПРЫЖОК: присед → вытянулась → зависла → падает вытянутой → сплющилась
+   при посадке (пыль) → отскок. Ножки поджимаются в воздухе. ── */
+.mm-s-happy .mm-jump { animation: mm-bounce 0.8s steps(1, end) infinite; }
+.mm-s-happy .mm-legs { animation: mm-tuck 0.8s steps(1, end) infinite; }
+.mm-s-happy .mm-arm-l { animation: mm-cheer-l 0.4s steps(1, end) infinite; }
+.mm-s-happy .mm-arm-r { animation: mm-cheer-r 0.4s steps(1, end) infinite; }
+.mm-s-happy .mm-sprout { animation: mm-sprout-bounce 0.8s steps(1, end) infinite; }
+.mm-s-happy .mm-dust { animation: mm-puff-a 0.8s steps(1, end) 0.48s infinite; }
+.mm-s-happy .mm-dust.is-b { animation-name: mm-puff-b; }
+.mm-s-happy .mm-dust.is-c { animation-name: mm-puff-c; }
+.mm-s-happy .mm-shadow { animation: mm-shadow-bounce 0.8s steps(1, end) infinite; }
+.mm-spark { animation: mm-twinkle 1.2s steps(1, end) infinite; }
+.mm-spark.is-b { animation-delay: -0.4s; }
+.mm-spark.is-c { animation-delay: -0.8s; }
+@keyframes mm-bounce {
+  0% { transform: translateY(0) scale(1.12, 0.88); }
+  12% { transform: translateY(-24px) scale(0.92, 1.1); }
+  24% { transform: translateY(-48px) scale(1, 1); }
+  40% { transform: translateY(-40px) scale(0.98, 1.03); }
+  50% { transform: translateY(-16px) scale(0.94, 1.08); }
+  60% { transform: translateY(0) scale(1.14, 0.86); }
+  72% { transform: translateY(0) scale(0.96, 1.05); }
+  84% { transform: translateY(0) scale(1.02, 0.98); }
+}
+@keyframes mm-tuck {
+  0% { transform: translateY(0); } 12% { transform: translateY(-8px); } 24% { transform: translateY(-16px); }
+  50% { transform: translateY(-8px); } 60% { transform: translateY(0); }
+}
+@keyframes mm-shadow-bounce {
+  0% { transform: scale(1.1, 1); opacity: 1; } 12% { transform: scale(0.85, 1); opacity: 0.8; } 24% { transform: scale(0.7, 1); opacity: 0.6; }
+  50% { transform: scale(0.85, 1); opacity: 0.8; } 60% { transform: scale(1.15, 1); opacity: 1; } 72% { transform: scale(1, 1); }
+}
+@keyframes mm-cheer-l { 0% { transform: rotate(56deg); } 50% { transform: rotate(32deg); } }
+@keyframes mm-cheer-r { 0% { transform: rotate(-32deg); } 50% { transform: rotate(-56deg); } }
+@keyframes mm-sprout-bounce {
+  0% { transform: rotate(-12deg); } 12% { transform: rotate(10deg); } 24% { transform: rotate(16deg); }
+  50% { transform: rotate(-6deg); } 60% { transform: rotate(-18deg); } 72% { transform: rotate(6deg); } 84% { transform: rotate(-4deg); }
+}
+/* Пыль: облачко появляется у подошвы и за 4 кадра уходит в сторону, тая.
+   Вся работа — в первых 40% длительности; задержка ставит её на посадку. */
+@keyframes mm-puff-a {
+  0% { opacity: 1; transform: translate(0, 0) scale(1); } 10% { opacity: 1; transform: translate(14px, -6px) scale(1); }
+  20% { opacity: 1; transform: translate(26px, -12px) scale(0.75); } 30% { opacity: 1; transform: translate(36px, -16px) scale(0.5); }
+  40% { opacity: 0; transform: translate(36px, -16px) scale(0.5); }
+}
+@keyframes mm-puff-b {
+  0% { opacity: 1; transform: translate(0, 0) scale(1); } 10% { opacity: 1; transform: translate(10px, -12px) scale(1); }
+  20% { opacity: 1; transform: translate(18px, -22px) scale(0.75); } 30% { opacity: 1; transform: translate(24px, -28px) scale(0.5); }
+  40% { opacity: 0; transform: translate(24px, -28px) scale(0.5); }
+}
+@keyframes mm-puff-c {
+  0% { opacity: 1; transform: translate(0, 0) scale(1); } 10% { opacity: 1; transform: translate(20px, -2px) scale(1); }
+  20% { opacity: 1; transform: translate(38px, -4px) scale(0.75); } 30% { opacity: 1; transform: translate(52px, -8px) scale(0.5); }
+  40% { opacity: 0; transform: translate(52px, -8px) scale(0.5); }
+}
+@keyframes mm-twinkle {
+  0% { opacity: 0; transform: translateY(0) scale(0.5); } 15% { opacity: 1; transform: translateY(-4px) scale(1); }
+  30% { opacity: 1; transform: translateY(-8px) scale(0.5); } 45% { opacity: 0; transform: translateY(-8px) scale(0.5); }
+}
+
+/* hop: тот же прыжок, но с передышкой между прыжками и открытыми глазами */
+.mm-s-hop .mm-jump { animation: mm-hop 1.3s steps(1, end) infinite; }
+.mm-s-hop .mm-legs { animation: mm-hop-tuck 1.3s steps(1, end) infinite; }
+.mm-s-hop .mm-sprout { animation: mm-sprout-hop 1.3s steps(1, end) infinite; }
+.mm-s-hop .mm-arm-l { animation: mm-hop-l 1.3s steps(1, end) infinite; }
+.mm-s-hop .mm-arm-r { animation: mm-hop-r 1.3s steps(1, end) infinite; }
+.mm-s-hop .mm-dust { animation: mm-puff-a 1.3s steps(1, end) 0.624s infinite; }
+.mm-s-hop .mm-dust.is-b { animation-name: mm-puff-b; }
+.mm-s-hop .mm-dust.is-c { animation-name: mm-puff-c; }
+.mm-s-hop .mm-shadow { animation: mm-shadow-hop 1.3s steps(1, end) infinite; }
+@keyframes mm-hop {
+  0% { transform: translateY(0) scale(1, 1); }
+  8% { transform: translateY(0) scale(1.12, 0.88); }
+  16% { transform: translateY(-24px) scale(0.92, 1.1); }
+  24% { transform: translateY(-48px) scale(1, 1); }
+  36% { transform: translateY(-40px) scale(0.98, 1.03); }
+  42% { transform: translateY(-16px) scale(0.94, 1.08); }
+  48% { transform: translateY(0) scale(1.14, 0.86); }
+  56% { transform: translateY(0) scale(0.96, 1.05); }
+  64% { transform: translateY(0) scale(1.02, 0.98); }
+  72% { transform: translateY(0) scale(1, 1); }
+}
+@keyframes mm-hop-tuck { 0% { transform: translateY(0); } 16% { transform: translateY(-8px); } 24% { transform: translateY(-16px); } 42% { transform: translateY(-8px); } 48% { transform: translateY(0); } }
+@keyframes mm-sprout-hop {
+  0% { transform: rotate(0); } 8% { transform: rotate(-10deg); } 16% { transform: rotate(10deg); } 24% { transform: rotate(16deg); }
+  42% { transform: rotate(-6deg); } 48% { transform: rotate(-18deg); } 56% { transform: rotate(8deg); } 64% { transform: rotate(-4deg); } 72% { transform: rotate(0); }
+}
+@keyframes mm-hop-l { 0% { transform: rotate(-14deg); } 8% { transform: rotate(-24deg); } 16% { transform: rotate(40deg); } 42% { transform: rotate(20deg); } 48% { transform: rotate(-30deg); } 56% { transform: rotate(-14deg); } }
+@keyframes mm-hop-r { 0% { transform: rotate(14deg); } 8% { transform: rotate(24deg); } 16% { transform: rotate(-40deg); } 42% { transform: rotate(-20deg); } 48% { transform: rotate(30deg); } 56% { transform: rotate(14deg); } }
+@keyframes mm-shadow-hop {
+  0% { transform: scale(1, 1); opacity: 1; } 8% { transform: scale(1.1, 1); } 16% { transform: scale(0.85, 1); opacity: 0.8; }
+  24% { transform: scale(0.7, 1); opacity: 0.6; } 42% { transform: scale(0.85, 1); opacity: 0.8; } 48% { transform: scale(1.15, 1); opacity: 1; } 56% { transform: scale(1, 1); }
+}
+
+/* ── ОБОРОТ (сборка готова): подпрыгнула, повернулась кругом (сжатие по X —
+   кадры поворота; со спины лица не видно), приземлилась в пыль, «та-да» —
+   руки вверх, «^^». На посадке — кольцо искр тотема. ── */
+.mm-s-spin .mm-jump { animation: mm-spin-jump 1.6s steps(1, end) both; }
+.mm-s-spin .mm-turn { animation: mm-spin-turn 1.6s steps(1, end) both; }
+.mm-s-spin .mm-face { animation: mm-spin-face 1.6s steps(1, end) both; }
+.mm-s-spin .mm-e-open { animation: mm-spin-open 1.6s steps(1, end) both; }
+.mm-s-spin .mm-e-joy { animation: mm-spin-joy 1.6s steps(1, end) both; }
+.mm-s-spin .mm-m-smile { animation: mm-spin-open 1.6s steps(1, end) both; }
+.mm-s-spin .mm-m-grin { animation: mm-spin-joy 1.6s steps(1, end) both; }
+.mm-s-spin .mm-arm-l { animation: mm-spin-l 1.6s steps(1, end) both; }
+.mm-s-spin .mm-arm-r { animation: mm-spin-r 1.6s steps(1, end) both; }
+.mm-s-spin .mm-legs { animation: mm-spin-tuck 1.6s steps(1, end) both; }
+.mm-s-spin .mm-sprout { animation: mm-sprout-bounce 0.8s steps(1, end) 2; }
+.mm-s-spin .mm-dust { animation: mm-puff-a 1.6s steps(1, end) 0.864s; }
+.mm-s-spin .mm-dust.is-b { animation-name: mm-puff-b; }
+.mm-s-spin .mm-dust.is-c { animation-name: mm-puff-c; }
+.mm-s-spin .mm-totem { animation: mm-totem-a 1.6s steps(1, end) 0.8s; }
+.mm-s-spin .mm-totem.is-b { animation-name: mm-totem-b; animation-delay: 0.85s; }
+.mm-s-spin .mm-totem.is-c { animation-name: mm-totem-c; animation-delay: 0.9s; }
+.mm-s-spin .mm-shadow { animation: mm-shadow-spin 1.6s steps(1, end) both; }
+/* режимом (mode="spin") — по кругу */
+.milli-spin.mm-s-spin .mm-jump, .milli-spin.mm-s-spin .mm-turn, .milli-spin.mm-s-spin .mm-face,
+.milli-spin.mm-s-spin .mm-e-open, .milli-spin.mm-s-spin .mm-e-joy, .milli-spin.mm-s-spin .mm-m-smile,
+.milli-spin.mm-s-spin .mm-m-grin, .milli-spin.mm-s-spin .mm-arm-l, .milli-spin.mm-s-spin .mm-arm-r,
+.milli-spin.mm-s-spin .mm-legs, .milli-spin.mm-s-spin .mm-sprout, .milli-spin.mm-s-spin .mm-dust,
+.milli-spin.mm-s-spin .mm-totem, .milli-spin.mm-s-spin .mm-shadow { animation-iteration-count: infinite; }
+@keyframes mm-spin-jump {
+  0% { transform: translateY(0) scale(1.12, 0.88); }
+  6% { transform: translateY(-24px) scale(0.92, 1.1); }
+  12% { transform: translateY(-56px) scale(1, 1); }
+  44% { transform: translateY(-48px) scale(1, 1); }
+  50% { transform: translateY(-16px) scale(0.94, 1.08); }
+  54% { transform: translateY(0) scale(1.16, 0.84); }
+  62% { transform: translateY(0) scale(0.96, 1.05); }
+  70% { transform: translateY(0) scale(1, 1); }
+}
+@keyframes mm-spin-turn {
+  0% { transform: scale(1, 1); } 12% { transform: scale(0.66, 1); } 16% { transform: scale(0.33, 1); }
+  20% { transform: scale(-0.33, 1); } 24% { transform: scale(-0.66, 1); } 28% { transform: scale(-1, 1); }
+  32% { transform: scale(-0.66, 1); } 36% { transform: scale(-0.33, 1); } 40% { transform: scale(0.33, 1); }
+  44% { transform: scale(0.66, 1); } 48% { transform: scale(1, 1); }
+}
+@keyframes mm-spin-face { 0% { opacity: 1; } 18% { opacity: 0; } 38% { opacity: 1; } }
+@keyframes mm-spin-open { 0% { opacity: 1; } 54% { opacity: 0; } }
+@keyframes mm-spin-joy { 0% { opacity: 0; } 54% { opacity: 1; } }
+@keyframes mm-spin-l { 0% { transform: rotate(-24deg); } 6% { transform: rotate(40deg); } 54% { transform: rotate(70deg); } 62% { transform: rotate(56deg); } 70% { transform: rotate(64deg); } }
+@keyframes mm-spin-r { 0% { transform: rotate(24deg); } 6% { transform: rotate(-40deg); } 54% { transform: rotate(-70deg); } 62% { transform: rotate(-56deg); } 70% { transform: rotate(-64deg); } }
+@keyframes mm-spin-tuck { 0% { transform: translateY(0); } 6% { transform: translateY(-8px); } 12% { transform: translateY(-16px); } 50% { transform: translateY(-8px); } 54% { transform: translateY(0); } }
+@keyframes mm-shadow-spin {
+  0% { transform: scale(1.1, 1); } 6% { transform: scale(0.85, 1); opacity: 0.8; } 12% { transform: scale(0.65, 1); opacity: 0.55; }
+  50% { transform: scale(0.85, 1); opacity: 0.8; } 54% { transform: scale(1.15, 1); opacity: 1; } 62% { transform: scale(1, 1); }
+}
+/* Искра тотема: в своей повёрнутой системе летит по X наружу, мельчает, гаснет. */
+@keyframes mm-totem-a {
+  0% { opacity: 1; transform: translate(150px, 0) scale(1); } 8% { transform: translate(200px, 0) scale(1); opacity: 1; }
+  16% { transform: translate(236px, 0) scale(0.75); opacity: 1; } 26% { transform: translate(262px, 0) scale(0.5); opacity: 1; }
+  36% { transform: translate(278px, 0) scale(0.5); opacity: 0.6; } 46% { opacity: 0; transform: translate(278px, 0) scale(0.5); }
+}
+@keyframes mm-totem-b {
+  0% { opacity: 1; transform: translate(130px, 0) scale(1); } 8% { transform: translate(168px, 0) scale(1); opacity: 1; }
+  16% { transform: translate(196px, 0) scale(0.75); opacity: 1; } 26% { transform: translate(214px, 0) scale(0.5); opacity: 1; }
+  36% { opacity: 0; transform: translate(214px, 0) scale(0.5); }
+}
+@keyframes mm-totem-c {
+  0% { opacity: 1; transform: translate(160px, 0) scale(0.75); } 10% { transform: translate(222px, 0) scale(0.75); opacity: 1; }
+  20% { transform: translate(266px, 0) scale(0.5); opacity: 1; } 30% { transform: translate(296px, 0) scale(0.5); opacity: 0.6; }
+  40% { opacity: 0; transform: translate(296px, 0) scale(0.5); }
+}
+
+/* ── СПИТ: глаза «‿‿», рот «о» в такт дыханию, росток поник, «Zzz». ── */
+.mm-s-sleep .mm-rig { animation: mm-sleep-breathe 4s steps(1, end) infinite; }
+.mm-s-sleep .mm-sprout { animation: mm-sprout-sleep 4s steps(1, end) 0.3s infinite; }
+.mm-s-sleep .mm-m-o { animation: mm-snore-o 4s steps(1, end) infinite; }
+.mm-s-sleep .mm-m-smile { animation: mm-snore-shut 4s steps(1, end) infinite; }
+.mm-z { animation: mm-z 3s steps(1, end) infinite; }
+.mm-z.is-b { animation-delay: -1s; }
+.mm-z.is-c { animation-delay: -2s; }
+@keyframes mm-sleep-breathe { 0% { transform: translateY(8px); } 35% { transform: translateY(12px); } 50% { transform: translateY(16px); } 85% { transform: translateY(12px); } }
+@keyframes mm-sprout-sleep { 0% { transform: rotate(26deg); } 50% { transform: rotate(32deg); } }
+@keyframes mm-snore-o { 0% { opacity: 1; } 50% { opacity: 0; } }
+@keyframes mm-snore-shut { 0% { opacity: 0; } 50% { opacity: 1; } }
+@keyframes mm-z {
+  0% { opacity: 0; transform: translate(0, 0); } 8% { opacity: 1; transform: translate(0, 0); }
+  25% { opacity: 1; transform: translate(14px, -22px); } 42% { opacity: 1; transform: translate(26px, -44px); }
+  58% { opacity: 1; transform: translate(34px, -66px); } 75% { opacity: 0.6; transform: translate(46px, -88px); }
+  88% { opacity: 0; transform: translate(46px, -88px); }
+}
+
+/* ── ПРОСНУЛАСЬ: «!», маленькие зрачки, подскок, росток пружинит. ── */
+.mm-s-wake .mm-jump { animation: mm-wake 0.8s steps(1, end) both; }
+.mm-s-wake .mm-sprout { animation: mm-sprout-wake 0.8s steps(1, end) both; }
+.mm-s-wake .mm-arm-l { animation: mm-wake-l 0.8s steps(1, end) both; }
+.mm-s-wake .mm-arm-r { animation: mm-wake-r 0.8s steps(1, end) both; }
+.mm-s-wake .mm-bang { animation: mm-bang 0.8s steps(1, end) both; }
+.mm-s-wake .mm-dust { animation: mm-puff-b 0.8s steps(1, end) 0.36s; }
+@keyframes mm-wake {
+  0% { transform: translateY(0) scale(1.1, 0.9); } 10% { transform: translateY(-32px) scale(0.92, 1.1); }
+  30% { transform: translateY(-32px) scale(1, 1); } 45% { transform: translateY(0) scale(1.1, 0.9); } 60% { transform: translateY(0) scale(1, 1); }
+}
+@keyframes mm-sprout-wake { 0% { transform: rotate(-24deg); } 15% { transform: rotate(16deg); } 30% { transform: rotate(-8deg); } 45% { transform: rotate(4deg); } 60% { transform: rotate(0); } }
+@keyframes mm-wake-l { 0% { transform: rotate(40deg); } 30% { transform: rotate(20deg); } 45% { transform: rotate(-14deg); } }
+@keyframes mm-wake-r { 0% { transform: rotate(-40deg); } 30% { transform: rotate(-20deg); } 45% { transform: rotate(14deg); } }
+@keyframes mm-bang {
+  0% { opacity: 1; transform: translateY(0) scale(1.3); } 10% { opacity: 1; transform: translateY(-8px) scale(1); }
+  70% { opacity: 1; transform: translateY(-8px) scale(1); } 85% { opacity: 0; transform: translateY(-8px) scale(1); }
+}
+
+/* ── «УХ ТЫ!» (что-то пролетело): зрачки-точки, «!», подскок, ручки вверх;
+   глаза и наклон продолжают следить за пролетающим (ведёт MilliEvents). ── */
+.mm-s-wow .mm-jump { animation: mm-wow 0.9s steps(1, end) both; }
+.mm-s-wow .mm-sprout { animation: mm-sprout-wake 0.9s steps(1, end) both; }
+.mm-s-wow .mm-arm-l { animation: mm-wow-l 0.9s steps(1, end) both; }
+.mm-s-wow .mm-arm-r { animation: mm-wow-r 0.9s steps(1, end) both; }
+.mm-s-wow .mm-bang { animation: mm-bang 0.9s steps(1, end) both; }
+@keyframes mm-wow {
+  0% { transform: translateY(0) scale(1.08, 0.92); } 10% { transform: translateY(-24px) scale(0.94, 1.08); }
+  25% { transform: translateY(-28px) scale(1, 1); } 40% { transform: translateY(0) scale(1.08, 0.92); } 52% { transform: translateY(0) scale(1, 1); }
+}
+@keyframes mm-wow-l { 0% { transform: rotate(20deg); } 10% { transform: rotate(56deg); } 40% { transform: rotate(40deg); } 70% { transform: rotate(-14deg); } }
+@keyframes mm-wow-r { 0% { transform: rotate(-20deg); } 10% { transform: rotate(-56deg); } 40% { transform: rotate(-40deg); } 70% { transform: rotate(14deg); } }
+
+/* ── ТЫК 1 «буп»: сплющилась как от нажатия, зажмурилась «><», отпружинила,
+   «^^», сердечки как у животных в Minecraft. ── */
+.mm-s-poke1 .mm-jump { animation: mm-boop 1s steps(1, end) both; }
+.mm-s-poke1 .mm-e-squeeze { animation: mm-show-early 1s steps(1, end) both; }
+.mm-s-poke1 .mm-e-joy { animation: mm-hide-early 1s steps(1, end) both; }
+.mm-s-poke1 .mm-arm-l { animation: mm-boop-l 1s steps(1, end) both; }
+.mm-s-poke1 .mm-arm-r { animation: mm-boop-r 1s steps(1, end) both; }
+.mm-s-poke1 .mm-sprout { animation: mm-sprout-boing 1s steps(1, end) both; }
+.mm-s-poke1 .mm-heart { animation: mm-heart 1s steps(1, end) 0.05s both; }
+.mm-s-poke1 .mm-heart.is-b { animation-delay: 0.18s; }
+.mm-s-poke1 .mm-heart.is-c { animation-delay: 0.3s; }
+@keyframes mm-boop {
+  0% { transform: translateY(0) scale(1.2, 0.76); } 10% { transform: translateY(-8px) scale(0.88, 1.14); }
+  20% { transform: translateY(0) scale(1.08, 0.92); } 30% { transform: translateY(0) scale(0.97, 1.03); } 40% { transform: translateY(0) scale(1, 1); }
+}
+@keyframes mm-show-early { 0% { opacity: 1; } 40% { opacity: 0; } }
+@keyframes mm-hide-early { 0% { opacity: 0; } 40% { opacity: 1; } }
+@keyframes mm-boop-l { 0% { transform: rotate(30deg); } 10% { transform: rotate(64deg); } 20% { transform: rotate(40deg); } 40% { transform: rotate(-14deg); } }
+@keyframes mm-boop-r { 0% { transform: rotate(-30deg); } 10% { transform: rotate(-64deg); } 20% { transform: rotate(-40deg); } 40% { transform: rotate(14deg); } }
+@keyframes mm-sprout-boing {
+  0% { transform: rotate(-22deg); } 10% { transform: rotate(18deg); } 20% { transform: rotate(-10deg); } 30% { transform: rotate(6deg); } 40% { transform: rotate(0); }
+}
+@keyframes mm-heart {
+  0% { opacity: 1; transform: translate(0, 0) scale(0.6); } 8% { opacity: 1; transform: translate(0, -12px) scale(1); }
+  24% { opacity: 1; transform: translate(4px, -28px) scale(1); } 40% { opacity: 1; transform: translate(-2px, -44px) scale(1); }
+  56% { opacity: 1; transform: translate(2px, -60px) scale(1); } 72% { opacity: 0.6; transform: translate(0, -72px) scale(0.8); }
+  84% { opacity: 0; transform: translate(0, -72px) scale(0.8); }
+}
+
+/* ── ТЫК 2 «песенка»: два подскока с притопом, качается, ручки по очереди,
+   рот поёт, ноты нотного блока. ── */
+.mm-s-poke2 .mm-jump { animation: mm-jig 1.1s steps(1, end) both; }
+.mm-s-poke2 .mm-turn { animation: mm-jig-turn 1.1s steps(1, end) both; }
+.mm-s-poke2 .mm-arm-l { animation: mm-jig-l 1.1s steps(1, end) both; }
+.mm-s-poke2 .mm-arm-r { animation: mm-jig-r 1.1s steps(1, end) both; }
+.mm-s-poke2 .mm-m-open { animation: mm-sing-a 1.1s steps(1, end) both; }
+.mm-s-poke2 .mm-m-o { animation: mm-sing-b 1.1s steps(1, end) both; }
+.mm-s-poke2 .mm-sprout { animation: mm-sprout-bounce 0.55s steps(1, end) 2; }
+.mm-s-poke2 .mm-note { animation: mm-note 1.1s steps(1, end) both; }
+.mm-s-poke2 .mm-note.is-b { animation-delay: 0.2s; }
+.mm-s-poke2 .mm-note.is-c { animation-delay: 0.4s; }
+.mm-s-poke2 .mm-dust { animation: mm-puff-b 1.1s steps(1, end) 0.33s; }
+@keyframes mm-jig {
+  0% { transform: translateY(0) scale(1.08, 0.92); } 10% { transform: translateY(-20px) scale(0.95, 1.06); }
+  20% { transform: translateY(-24px) scale(1, 1); } 30% { transform: translateY(0) scale(1.1, 0.9); } 40% { transform: translateY(0) scale(1, 1); }
+  50% { transform: translateY(-16px) scale(0.97, 1.04); } 60% { transform: translateY(0) scale(1.06, 0.94); } 70% { transform: translateY(0) scale(1, 1); }
+}
+@keyframes mm-jig-turn { 0% { transform: rotate(-4deg); } 20% { transform: rotate(4deg); } 40% { transform: rotate(-4deg); } 60% { transform: rotate(4deg); } 80% { transform: rotate(0); } }
+@keyframes mm-jig-l { 0% { transform: rotate(50deg); } 20% { transform: rotate(16deg); } 40% { transform: rotate(50deg); } 60% { transform: rotate(16deg); } 80% { transform: rotate(-14deg); } }
+@keyframes mm-jig-r { 0% { transform: rotate(-16deg); } 20% { transform: rotate(-50deg); } 40% { transform: rotate(-16deg); } 60% { transform: rotate(-50deg); } 80% { transform: rotate(14deg); } }
+@keyframes mm-sing-a { 0% { opacity: 1; } 20% { opacity: 0; } 40% { opacity: 1; } 60% { opacity: 0; } 80% { opacity: 1; } }
+@keyframes mm-sing-b { 0% { opacity: 0; } 20% { opacity: 1; } 40% { opacity: 0; } 60% { opacity: 1; } 80% { opacity: 0; } }
+@keyframes mm-note {
+  0% { opacity: 1; transform: translate(0, 0) scale(0.7); } 10% { opacity: 1; transform: translate(-6px, -16px) scale(1); }
+  25% { opacity: 1; transform: translate(6px, -32px) scale(1); } 40% { opacity: 1; transform: translate(-6px, -48px) scale(1); }
+  55% { opacity: 0.6; transform: translate(6px, -64px) scale(0.9); } 66% { opacity: 0; transform: translate(6px, -64px) scale(0.9); }
+}
+
+/* ── ТЫК 3 «сальто»: прыжок и поворот на 90° за кадр (пиксель не мылится),
+   зажмурилась в полёте, посадка в пыль, «^^» и руки вверх. ── */
+.mm-s-poke3 .mm-jump { animation: mm-flip-jump 1.2s steps(1, end) both; }
+.mm-s-poke3 .mm-turn { animation: mm-flip 1.2s steps(1, end) both; }
+.mm-s-poke3 .mm-e-squeeze { animation: mm-flip-sq 1.2s steps(1, end) both; }
+.mm-s-poke3 .mm-e-joy { animation: mm-flip-joy 1.2s steps(1, end) both; }
+.mm-s-poke3 .mm-m-open { animation: mm-flip-sq 1.2s steps(1, end) both; }
+.mm-s-poke3 .mm-m-grin { animation: mm-flip-joy 1.2s steps(1, end) both; }
+.mm-s-poke3 .mm-arm-l { animation: mm-flip-l 1.2s steps(1, end) both; }
+.mm-s-poke3 .mm-arm-r { animation: mm-flip-r 1.2s steps(1, end) both; }
+.mm-s-poke3 .mm-legs { animation: mm-spin-tuck 1.2s steps(1, end) both; }
+.mm-s-poke3 .mm-dust { animation: mm-puff-c 1.2s steps(1, end) 0.648s; }
+.mm-s-poke3 .mm-dust.is-b { animation-name: mm-puff-a; }
+@keyframes mm-flip-jump {
+  0% { transform: translateY(0) scale(1.14, 0.86); } 8% { transform: translateY(-24px) scale(0.9, 1.12); }
+  16% { transform: translateY(-64px) scale(1, 1); } 40% { transform: translateY(-64px) scale(1, 1); }
+  48% { transform: translateY(-24px) scale(0.94, 1.06); } 54% { transform: translateY(0) scale(1.16, 0.84); }
+  62% { transform: translateY(0) scale(0.96, 1.05); } 72% { transform: translateY(0) scale(1, 1); }
+}
+@keyframes mm-flip { 0% { transform: rotate(0); } 16% { transform: rotate(-90deg); } 24% { transform: rotate(-180deg); } 32% { transform: rotate(-270deg); } 40% { transform: rotate(0); } }
+@keyframes mm-flip-sq { 0% { opacity: 1; } 54% { opacity: 0; } }
+@keyframes mm-flip-joy { 0% { opacity: 0; } 54% { opacity: 1; } }
+@keyframes mm-flip-l { 0% { transform: rotate(-30deg); } 8% { transform: rotate(60deg); } 16% { transform: rotate(20deg); } 54% { transform: rotate(70deg); } 62% { transform: rotate(56deg); } }
+@keyframes mm-flip-r { 0% { transform: rotate(30deg); } 8% { transform: rotate(-60deg); } 16% { transform: rotate(-20deg); } 54% { transform: rotate(-70deg); } 62% { transform: rotate(-56deg); } }
+
+/* hop-реакцией (milliCue('hop')) — один прыжок из mm-hop */
+.mm-s-hop:not(.milli-hop) .mm-jump, .mm-s-hop:not(.milli-hop) .mm-legs, .mm-s-hop:not(.milli-hop) .mm-sprout,
+.mm-s-hop:not(.milli-hop) .mm-arm-l, .mm-s-hop:not(.milli-hop) .mm-arm-r, .mm-s-hop:not(.milli-hop) .mm-shadow {
+  animation-duration: 1s; animation-iteration-count: 1; animation-fill-mode: both;
+}
+.mm-s-hop:not(.milli-hop) .mm-dust { animation-duration: 1s; animation-delay: 0.48s; animation-iteration-count: 1; }
+
+/* ── Пауза вне экрана и в свёрнутом окне; reduced-motion — статичные позы. ── */
+.milli svg.is-paused, .milli svg.is-paused * { animation-play-state: paused !important; }
+@media (prefers-reduced-motion: reduce) {
+  .milli svg *, .milli-wave-hover:hover .milli svg * { animation: none !important; }
+}
+
+/* Корона Милли — часть персонажа (PLUS — золото, Diamond — алмаз) */
+.mm-crown-ol { fill: #1b1206; }
+.mm-crown.is-gold .mm-crown-base { fill: #f5b82a; }
+.mm-crown.is-gold .mm-crown-hi { fill: #ffe589; }
+.mm-crown.is-gold .mm-crown-sh { fill: #b97a0c; }
+.mm-crown.is-gold .mm-crown-gem { fill: #ff3b4e; }
+.mm-crown.is-gold .mm-crown-gem.is-side { fill: #3fd7ff; }
+.mm-crown.is-diamond .mm-crown-ol { fill: #06222a; }
+.mm-crown.is-diamond .mm-crown-base { fill: #4fe3ee; }
+.mm-crown.is-diamond .mm-crown-hi { fill: #d4fdff; }
+.mm-crown.is-diamond .mm-crown-sh { fill: #1795a8; }
+.mm-crown.is-diamond .mm-crown-gem { fill: #ffffff; }
+.mm-crown.is-diamond .mm-crown-gem.is-side { fill: #9af6ff; }
+.mm-crown-spark { fill: #fff; opacity: 0.85; animation: mm-crown-spark 2.4s steps(1, end) infinite; }
+@keyframes mm-crown-spark { 0%, 70% { opacity: 0.85; } 72%, 86% { opacity: 0; } 88%, 100% { opacity: 0.85; } }
+@media (prefers-reduced-motion: reduce) { .mm-crown-spark { animation: none; } }

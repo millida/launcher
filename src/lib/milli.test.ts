@@ -145,11 +145,12 @@ describe('milliPlans — живые тарифы из /catalog/milli/limits', ()
     expect(milliPlans({ free: { day: 7, month: 40 }, plus: { day: 150, month: 800 }, period: 'utc', plusExtras: [] })).toEqual({
       free: { day: 7, month: 40 },
       plus: { day: 150, month: 800 },
+      diamond: { day: 200, month: 1500 },
     })
   })
 
-  it('чего нет или мусор — из сетки 5/30 и 100/500', () => {
-    expect(milliPlans({ plus: { day: 120 } })).toEqual({ free: { day: 5, month: 30 }, plus: { day: 120, month: 500 } })
+  it('чего нет или мусор — из сетки 10/40, 100/600, 200/1500', () => {
+    expect(milliPlans({ plus: { day: 120 } })).toEqual({ free: { day: 10, month: 40 }, plus: { day: 120, month: 600 }, diamond: { day: 200, month: 1500 } })
     expect(milliPlans(null)).toEqual(MILLI_PLANS)
   })
 })

@@ -1,0 +1,288 @@
+/* Милли — микро-анимации карточки сборки и событий ленты (моушн, MOTION.md).
+   Классы-хуки — из DESIGN.md §6 (статичные состояния там), свои — с префиксом mlm-.
+   Правила: только transform/opacity (исключения: высота тела — useHeightAnim,
+   печать строки — clip-path на ≤6 строках); геометрия плавно (ease-move),
+   появления/иконки/вспышки — steps(); анимируем только видимое (≤60 строк
+   виртуального списка и только в окне события). Селекторы под .ml-panel —
+   чтобы порядок загрузки CSS-чанков не перебивал. prefers-reduced-motion — в конце. */
+
+:root {
+  --mlm-snap: 80ms; --mlm-fast: 140ms; --mlm-base: 200ms; --mlm-slow: 260ms;
+  --mlm-ease: var(--m-ease-move, cubic-bezier(.32, .72, 0, 1));
+  --mlm-out: var(--m-ease-out, cubic-bezier(.16, 1, .3, 1));
+  --mlm-add: var(--m-success, #5EC64D);
+  --mlm-rm: var(--m-danger, #FF6B5E);
+  --mlm-chg: var(--m-warning, #F5AA38);
+  --mlm-hi: var(--m-accent, #5EC64D);
+  --mlm-press-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.35);
+}
+
+/* ════ 1. Карточка ════════════════════════════════════════════════════ */
+
+/* вход карточки в ленту */
+.ml-panel .mpc { animation: mlm-card-in 320ms steps(4, end) backwards; }
+@keyframes mlm-card-in { 0% { opacity: 0; transform: translateY(12px); } 60% { opacity: 1; transform: translateY(-2px); } 100% { transform: none; } }
+
+/* тело: высоту ведёт useHeightAnim (data-mlm-fold на обёртке), содержимое проявляется */
+.ml-panel [data-mlm-fold='opening'] > * { animation: mlm-fold-in 160ms var(--mlm-out) 60ms backwards; }
+.ml-panel [data-mlm-fold='closing'] > * { animation: mlm-fold-out 100ms linear forwards; }
+@keyframes mlm-fold-in { 0% { opacity: 0; transform: translateY(-4px); } }
+@keyframes mlm-fold-out { 100% { opacity: 0; } }
+
+/* смена вкладки: новая панель въезжает на 6px со стороны своей вкладки (старую не анимируем) */
+.ml-panel .mpc-pane.on { animation: mlm-pane-r 160ms var(--mlm-out) backwards; }
+.ml-panel [data-mlm-slide='l'] .mpc-pane.on, .ml-panel .mpc-pane.on[data-mlm-slide='l'] { animation-name: mlm-pane-l; }
+@keyframes mlm-pane-r { 0% { opacity: 0; transform: translateX(6px); } }
+@keyframes mlm-pane-l { 0% { opacity: 0; transform: translateX(-6px); } }
+
+/* индикатор сегмента: скользит под вкладками (useSegIndicator ставит переменные) */
+.ml-panel .mpc-tabs, .mlm-segs { position: relative; isolation: isolate; }
+.mlm-seg-ind {
+  position: absolute; z-index: 0; left: 0; top: 0; pointer-events: none; opacity: 0;
+  width: var(--mlm-w, 0); height: var(--mlm-h, 100%);
+  transform: translate(var(--mlm-x, 0), var(--mlm-y, 0));
+  background: var(--mlm-ind-bg, color-mix(in srgb, var(--m-fg) 12%, transparent));
+  box-shadow: var(--mlm-ind-shadow, inset 0 1px 0 rgba(255, 255, 255, 0.08));
+  border-radius: var(--mlm-ind-r, var(--m-r-pill));
+}
+.mpc-tabs > .mlm-seg-ind {
+  --mlm-ind-bg: var(--m-surface-2); --mlm-ind-r: 0;
+  --mlm-ind-shadow: inset 0 -2px 0 var(--m-accent), inset 0 2px 0 rgba(255, 255, 255, 0.05);
+  --px-n: 4px; clip-path: var(--px-4);
+}
+[data-mlm-ind] > .mlm-seg-ind { opacity: 1; }
+[data-mlm-ind='1'] > .mlm-seg-ind { transition: transform 220ms var(--mlm-ease), width 220ms var(--mlm-ease); }
+[data-mlm-ind] > :not(.mlm-seg-ind) { position: relative; z-index: 1; }
+.ml-panel [data-mlm-ind] > .mpc-tab.on, .ml-panel [data-mlm-ind] > .seg.on { background-color: transparent; box-shadow: none; }
+
+/* точка диффа на вкладке: pop + два мигания */
+.ml-panel .mpc-tab-dot { animation: mlm-dot 200ms steps(2, end) backwards, mlm-blink2 600ms steps(1, end) 200ms 2; }
+@keyframes mlm-dot { 0% { transform: scale(0); } 50% { transform: scale(1.5); } 100% { transform: none; } }
+@keyframes mlm-blink2 { 50% { opacity: 0.25; } }
+
+/* счётчик изменился: подпрыгнул (data-mlm-bump={useBump(n)}) */
+[data-mlm-bump] { display: inline-block; }
+[data-mlm-bump='0'] { animation: mlm-bump-a 160ms steps(2, end); }
+[data-mlm-bump='1'] { animation: mlm-bump-b 160ms steps(2, end); }
+@keyframes mlm-bump-a { 0% { transform: translateY(-3px); opacity: 0.6; } }
+@keyframes mlm-bump-b { 0% { transform: translateY(-3px); opacity: 0.6; } }
+
+/* op/revert в полёте: блок 30% бежит ступенями */
+.ml-panel .mpc-busy::before { animation: mlm-busy 1.1s steps(11, end) infinite; }
+@keyframes mlm-busy { 0% { transform: translateX(-100%); } 100% { transform: translateX(333%); } }
+
+/* скелет-строки */
+.ml-panel .mpc-skel-row i { animation: mlm-skel 0.9s steps(1, end) infinite; }
+.ml-panel .mpc-skel-row:nth-child(2n) i { animation-delay: 0.3s; }
+.ml-panel .mpc-skel-row:nth-child(3n) i { animation-delay: 0.6s; }
+@keyframes mlm-skel { 50% { opacity: 0.45; } }
+
+/* ── список модов (только смонтированные строки, только в окне события) ── */
+.ml-panel .mbl-row.fly, .ml-panel .mbl-group.fly { animation: mlm-row-in 160ms steps(2, end) backwards; }
+@keyframes mlm-row-in { 0% { opacity: 0; transform: translateX(10px); } }
+
+/* «Показать»: вспышка поверх строки цветом диффа, 2 импульса */
+.ml-panel .mbl-row.flash, .ml-panel .mbl-row[data-mlm-flash] { animation: none; }
+.ml-panel .mbl-row.flash::after, .ml-panel .mbl-row[data-mlm-flash]::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  background: color-mix(in srgb, var(--mlm-flash, var(--mlm-hi)) 22%, transparent);
+  box-shadow: inset 0 0 0 2px var(--mlm-flash, var(--mlm-hi));
+  animation: mlm-flash 900ms steps(1, end) 2;
+}
+.ml-panel .mbl-row.m-add { --mlm-flash: var(--mlm-add); }
+.ml-panel .mbl-row.m-chg { --mlm-flash: var(--mlm-chg); }
+.ml-panel .mbl-row.k-ghost { --mlm-flash: var(--mlm-rm); }
+.ml-panel .mbl-row[data-mlm-diff='back'] { --mlm-flash: var(--m-fg); }
+@keyframes mlm-flash { 0% { opacity: 1; } 50% { opacity: 0; } }
+/* − призрак: зачёркивание прочерчивается слева направо */
+.ml-panel .mbl-row.k-ghost.flash .mbl-t, .ml-panel .mbl-row.k-ghost[data-mlm-flash] .mbl-t { position: relative; text-decoration-color: transparent; }
+.ml-panel .mbl-row.k-ghost.flash .mbl-t::after, .ml-panel .mbl-row.k-ghost[data-mlm-flash] .mbl-t::after {
+  content: ''; position: absolute; left: 0; right: 0; top: 55%; height: 1px; background: currentColor;
+  transform-origin: 0 50%; animation: mlm-strike 260ms steps(4, end) both;
+}
+/* вернулось после «Отменить»: зачёркивание уходит вправо */
+.ml-panel .mbl-row[data-mlm-diff='back'][data-mlm-flash] .mbl-t { position: relative; }
+.ml-panel .mbl-row[data-mlm-diff='back'][data-mlm-flash] .mbl-t::after {
+  content: ''; position: absolute; left: 0; right: 0; top: 55%; height: 1px; background: currentColor;
+  transform-origin: 100% 50%; animation: mlm-unstrike 260ms steps(4, end) both;
+}
+@keyframes mlm-strike { 0% { transform: scaleX(0); } 100% { transform: scaleX(1); } }
+@keyframes mlm-unstrike { 0% { transform: scaleX(1); } 100% { transform: scaleX(0); } }
+
+/* переключатели и галочки в карточке: отклик нажатия */
+.ml-panel .mpc .tgl, .ml-panel .mpc .chk, .mlm-press { transition-property: background-color, border-color, transform; }
+.ml-panel .mpc .tgl:active, .ml-panel .mpc .chk:active { transform: scale(0.92); }
+
+/* ════ 2. Дифф-событие .mlx ═══════════════════════════════════════════ */
+.ml-panel .mlx, .mlm-pop { animation: mlm-pop 200ms steps(2, end) calc(var(--i, 0) * 50ms) backwards; transform-origin: 0 50%; }
+@keyframes mlm-pop { 0% { opacity: 0; transform: scale(0.88); } 50% { opacity: 1; transform: scale(1.04); } 100% { transform: none; } }
+.ml-panel .mlx-n > b { display: inline-block; animation: mlm-pop 200ms steps(2, end) backwards; }
+.ml-panel .mlx-n > b:nth-child(1) { animation-delay: 120ms; }
+.ml-panel .mlx-n > b:nth-child(2) { animation-delay: 170ms; }
+.ml-panel .mlx-n > b:nth-child(3) { animation-delay: 220ms; }
+/* «Отменить»: счётчики сдуваются в обратном порядке, заголовок тускнеет; «Вернуть» — снова pop */
+.ml-panel .mlx.is-undone .mlx-n > b { animation: mlm-unpop 200ms steps(3, end) both; }
+.ml-panel .mlx.is-undone .mlx-n > b:nth-child(1) { animation-delay: 100ms; }
+.ml-panel .mlx.is-undone .mlx-n > b:nth-child(2) { animation-delay: 50ms; }
+.ml-panel .mlx.is-undone .mlx-n > b:nth-child(3) { animation-delay: 0ms; }
+.ml-panel .mlx.is-undone .mlx-t { animation: mlm-dim 220ms steps(3, end) backwards; }
+@keyframes mlm-unpop { 0% { transform: scale(1.15); } 100% { opacity: 0.45; transform: scale(0.9); } }
+@keyframes mlm-dim { 0% { opacity: 1; } 100% { opacity: 0.6; } }
+
+/* ════ 3. Пузырь «думаю» .mlp ═════════════════════════════════════════ */
+.ml-panel .mlp-step { animation: mlm-step-in 160ms steps(2, end) backwards; }
+@keyframes mlm-step-in { 0% { opacity: 0; transform: translateY(4px); } }
+.ml-panel .mlp-mark { display: inline-block; }
+.ml-panel .mlp-step.is-now .mlp-mark { animation: mlm-now 800ms steps(1, end) infinite; }
+.ml-panel .mlp-step.is-done .mlp-mark { animation: mlm-check 180ms steps(3, end) backwards; }
+@keyframes mlm-now { 50% { opacity: 0.2; } }
+@keyframes mlm-check { 0% { transform: scale(0); } 66% { transform: scale(1.4); } 100% { transform: none; } }
+/* лампа редстоуна вместо «▸»: два слоя px (off/on), мигает верхний */
+.mlm-lamp { display: inline-grid; place-items: center; }
+.mlm-lamp > * { grid-area: 1 / 1; }
+.mlm-lamp > :last-child { opacity: 0; }
+.ml-panel .mlp-step.is-now .mlp-mark.mlm-lamp { animation: none; }
+.ml-panel .mlp-step.is-now .mlm-lamp > :last-child { animation: mlm-lamp 800ms steps(1, end) infinite; }
+@keyframes mlm-lamp { 0% { opacity: 1; } 50% { opacity: 0; } }
+.mlm-num, .ml-panel .mlp-n b { font-variant-numeric: tabular-nums; }
+
+/* полоса: 10 клеток. i — сплошная заливка scaleX(--p) ступенями; клетки рисует сетка поверх (.mlp-bar::after) */
+.ml-panel .mlp-bar { position: relative; overflow: hidden; }
+.ml-panel .mlp-bar > i {
+  display: block; width: 100%; transform-origin: 0 50%; transform: scaleX(var(--p, 0));
+  transition: transform 260ms steps(3, end);
+}
+@supports (transform: scaleX(round(down, 0.55, 0.1))) {
+  .ml-panel .mlp-bar > i { transform: scaleX(round(down, var(--p, 0), 0.1)); }
+}
+.ml-panel .mlp-bar.is-done, .ml-panel .mlp-bar[data-mlm-done] { animation: mlm-lvl 700ms steps(2, end) 1; }
+@keyframes mlm-lvl { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+/* бегущие названия: .mlp-tick > .mlp-tick-in (style --n) > span×n + те же span×n (aria-hidden) */
+.ml-panel .mlp-tick { overflow: hidden; white-space: nowrap;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12px, #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 12px, #000 calc(100% - 24px), transparent); }
+.ml-panel .mlp-tick-in, .mlm-lane-track {
+  display: inline-flex; width: max-content; will-change: transform;
+  animation: mlm-lane calc(var(--n, 5) * 2.4s) linear infinite;
+}
+.ml-panel .mlp-tick-in > span { flex: none; }
+.ml-panel .mlp-tick-in > span::after { content: '·'; margin: 0 6px; color: var(--m-fg-faint); }
+.ml-panel .mlp-tick:hover .mlp-tick-in, .mlm-lane:hover .mlm-lane-track { animation-play-state: paused; }
+@keyframes mlm-lane { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+.mlm-lane { overflow: hidden; white-space: nowrap; }
+
+/* ════ 4. Выбор размера .msz ══════════════════════════════════════════ */
+.ml-panel .msz-chips > .msz-chip { animation: mlm-pop 160ms steps(2, end) backwards; transform-origin: 50% 50%; }
+.ml-panel .msz-chips > .msz-chip:nth-child(2) { animation-delay: 40ms; }
+.ml-panel .msz-chips > .msz-chip:nth-child(3) { animation-delay: 80ms; }
+.ml-panel .msz-chips > .msz-chip:nth-child(4) { animation-delay: 120ms; }
+.ml-panel .msz-chips > .msz-chip:nth-child(5) { animation-delay: 160ms; }
+.ml-panel .msz-chip, .mlm-press { transition: transform 80ms steps(2, end), box-shadow 80ms steps(2, end), background-color var(--m-t-fast, 120ms), color var(--m-t-fast, 120ms); }
+.ml-panel .msz-chip:hover:not(.on):not(:disabled), .mlm-press:hover:not(.on):not([aria-pressed='true']):not(:disabled) { transform: translateY(-1px); }
+.ml-panel .msz-chip:active:not(:disabled), .mlm-press:active:not(:disabled) { transform: translateY(1px); }
+/* выбранный — вдавлен */
+.ml-panel .msz-chip.on, .mlm-press.on, .mlm-press[aria-pressed='true'] { transform: translateY(2px); box-shadow: var(--mlm-press-shadow); }
+.ml-panel .msz-chip.on .px-art, .ml-panel .msz-chip.on .mci { animation: mlm-check 180ms steps(3, end) backwards; }
+/* мини-слайдер */
+.ml-panel .msz .m-slider::-webkit-slider-thumb, .mlm-range::-webkit-slider-thumb { transition: transform 80ms steps(2, end); }
+.ml-panel .msz .m-slider:active::-webkit-slider-thumb, .mlm-range:active::-webkit-slider-thumb { transform: scale(1.15); }
+.ml-panel .msz .m-slider::-moz-range-thumb, .mlm-range::-moz-range-thumb { transition: transform 80ms steps(2, end); }
+.ml-panel .msz .m-slider:active::-moz-range-thumb, .mlm-range:active::-moz-range-thumb { transform: scale(1.15); }
+
+/* ════ 5. «Настраиваю графику под твой ПК…» .mset ═════════════════════ */
+/* строки рендерятся сразу (высота не прыгает), .on — печатается: clip справа→0 ступенями по «буквам» */
+.ml-panel .mset-line.on { animation: mlm-type 380ms steps(14, end) backwards; }
+@keyframes mlm-type { 0% { clip-path: inset(0 100% 0 0); } 100% { clip-path: inset(0 0 0 0); } }
+/* каретка на последней напечатанной строке, пока не .done */
+.ml-panel .mset:not(.done) .mset-line.on:not(:has(~ .mset-line.on))::after {
+  content: '▌'; margin-left: 2px; color: var(--m-accent); animation: mlm-now 700ms steps(1, end) infinite;
+}
+/* пиксель-маркер строки: pop + два мигания, как подсветка в Minecraft */
+.ml-panel .mset-line.on .mset-line-px, .mlm-glint {
+  display: inline-block; animation: mlm-check 180ms steps(3, end) 300ms backwards, mlm-blink2 600ms steps(1, end) 480ms 2;
+}
+.ml-panel .mset.done .mset-head .px-art, .ml-panel .mset.done .mset-head .mci { animation: mlm-check 180ms steps(3, end) backwards; }
+
+/* ════ 6. Тосты и плашки в ленте ══════════════════════════════════════ */
+.mlm-toast { animation: mlm-toast-in 180ms steps(3, end) backwards; }
+.mlm-toast[data-mlm-leave='1'] { animation: mlm-toast-out 140ms steps(2, end) forwards; pointer-events: none; }
+@keyframes mlm-toast-in { 0% { opacity: 0; transform: translateY(6px); } }
+@keyframes mlm-toast-out { 100% { opacity: 0; transform: translateY(4px); } }
+.mlm-timer { display: block; height: 2px; background: currentColor; opacity: 0.5; transform-origin: 0 50%;
+  animation: mlm-timer var(--d, 5000ms) linear forwards; }
+@keyframes mlm-timer { 0% { transform: scaleX(1); } 100% { transform: scaleX(0); } }
+
+/* ════ 7. Бейдж совместимости в шапке карточки ═══════════════════════ */
+/* «✓ Совместимо»: pop + блик по плашке; искра — отдельный i.mlm-spark рядом (плашка обрезана clip-path) */
+.ml-panel .mpc-plate.ok, .ml-panel .mpc-compat.ok, .mlm-badge {
+  position: relative; overflow: hidden;
+  animation: mlm-badge 260ms steps(3, end) backwards;
+}
+@keyframes mlm-badge { 0% { opacity: 0; transform: scale(0.6); } 66% { opacity: 1; transform: scale(1.15); } 100% { transform: none; } }
+.ml-panel .mpc-plate.ok::after, .ml-panel .mpc-compat.ok::after, .mlm-badge::after {
+  content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 40%; pointer-events: none;
+  background: linear-gradient(100deg, transparent 0 30%, rgba(255, 255, 255, 0.55) 30% 55%, transparent 55%);
+  transform: translateX(-120%); animation: mlm-shine 420ms steps(6, end) 220ms both;
+}
+@keyframes mlm-shine { 0% { transform: translateX(-120%); } 100% { transform: translateX(260%); } }
+/* искра: пиксель 2×2 + 4 луча box-shadow, разлетаются и гаснут */
+.mlm-spark-host { position: relative; display: inline-flex; }
+.mlm-spark {
+  position: absolute; z-index: 2; top: -1px; right: -1px; width: 2px; height: 2px; pointer-events: none;
+  background: #fff; color: var(--mlm-hi);
+  box-shadow: 0 -4px currentColor, 0 4px currentColor, -4px 0 currentColor, 4px 0 currentColor, -3px -3px #fff, 3px 3px #fff;
+  animation: mlm-spark 480ms steps(4, end) 160ms both;
+}
+@keyframes mlm-spark { 0% { opacity: 0; transform: scale(0.3); } 25% { opacity: 1; } 75% { opacity: 1; transform: scale(1.6) rotate(45deg); } 100% { opacity: 0; transform: scale(2) rotate(45deg); } }
+/* список проверок: пункты выпадают лесенкой */
+.ml-panel .mpc-checks > li, .mlm-stagger > * { animation: mlm-item 180ms steps(3, end) backwards; animation-delay: calc(var(--i, 0) * 45ms); }
+.ml-panel .mpc-checks > li:nth-child(2) { --i: 1; } .ml-panel .mpc-checks > li:nth-child(3) { --i: 2; }
+.ml-panel .mpc-checks > li:nth-child(4) { --i: 3; } .ml-panel .mpc-checks > li:nth-child(5) { --i: 4; }
+.ml-panel .mpc-checks > li:nth-child(6) { --i: 5; } .ml-panel .mpc-checks > li:nth-child(7) { --i: 6; }
+.ml-panel .mpc-checks > li:nth-child(n+8) { --i: 7; }
+@keyframes mlm-item { 0% { opacity: 0; transform: translateY(-4px); } }
+/* галочка пункта — pop после самого пункта */
+.ml-panel .mpc-checks > li > .px-icon:first-child, .ml-panel .mpc-checks > li > .mci:first-child {
+  animation: mlm-check 180ms steps(3, end) backwards; animation-delay: calc(var(--i, 0) * 45ms + 120ms);
+}
+
+/* ════ 8. Настройки: смена пресета — значения «перещёлкиваются» ═══════ */
+/* <span class="mcf-val" data-mlm-flip={useBump(value)} style={{'--i': rowIndex}}> — без перемонтирования */
+[data-mlm-flip] { display: inline-block; transform-origin: 50% 100%; }
+[data-mlm-flip='0'] { animation: mlm-flip-a 240ms steps(3, end) calc(var(--i, 0) * 40ms) backwards; }
+[data-mlm-flip='1'] { animation: mlm-flip-b 240ms steps(3, end) calc(var(--i, 0) * 40ms) backwards; }
+@keyframes mlm-flip-a { 0% { opacity: 0; transform: translateY(-8px) scaleY(0.4); } 66% { opacity: 1; transform: translateY(1px) scaleY(1.15); } 100% { transform: none; } }
+@keyframes mlm-flip-b { 0% { opacity: 0; transform: translateY(-8px) scaleY(0.4); } 66% { opacity: 1; transform: translateY(1px) scaleY(1.15); } 100% { transform: none; } }
+/* строка с перещёлкнутым значением мигает подсветкой (≤10 строк — :has дёшев) */
+.ml-panel .mcf-row { position: relative; }
+.ml-panel .mcf-row:has([data-mlm-flip='0'])::before, .ml-panel .mcf-row:has([data-mlm-flip='1'])::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  background: color-mix(in srgb, var(--mlm-hi) 14%, transparent);
+}
+.ml-panel .mcf-row:has([data-mlm-flip='0'])::before { animation: mlm-row-a 420ms steps(2, end) calc(var(--i, 0) * 40ms); }
+.ml-panel .mcf-row:has([data-mlm-flip='1'])::before { animation: mlm-row-b 420ms steps(2, end) calc(var(--i, 0) * 40ms); }
+@keyframes mlm-row-a { 0% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes mlm-row-b { 0% { opacity: 1; } 100% { opacity: 0; } }
+/* выбранный пресет: иконка подпрыгивает */
+.ml-panel .mcf-preset.on .mcf-preset-px { animation: mlm-check 200ms steps(3, end) backwards; }
+
+/* ════ reduced motion: всё стоит, финальные состояния видны ═══════════ */
+@media (prefers-reduced-motion: reduce) {
+  .ml-panel .mpc, .ml-panel .mpc *, .ml-panel .mpc *::before, .ml-panel .mpc *::after,
+  .ml-panel .mlx, .ml-panel .mlx *, .ml-panel .mlp, .ml-panel .mlp *, .ml-panel .mlp *::before, .ml-panel .mlp *::after,
+  .ml-panel .msz, .ml-panel .msz *, .ml-panel .mset, .ml-panel .mset *, .ml-panel .mset *::after,
+  [data-mlm-fold], [data-mlm-fold] > *, [data-mlm-bump], .mlm-pop, .mlm-press, .mlm-toast, .mlm-glint,
+  .mlm-lane-track, .mlm-seg-ind, .mlm-range::-webkit-slider-thumb {
+    animation: none !important; transition: none !important;
+  }
+  .ml-panel .mbl-row.flash::after, .ml-panel .mbl-row[data-mlm-flash]::after { opacity: 1; }
+  .ml-panel .mbl-row.k-ghost .mbl-t { text-decoration-color: inherit; }
+  .ml-panel .mbl-row .mbl-t::after { content: none; }
+  .ml-panel .mset-line::after { content: none; }
+  .ml-panel .mlx.is-undone .mlx-n > b { opacity: 0.45; }
+  .mlm-timer { display: none; }
+  .ml-panel .mpc-plate, .ml-panel .mpc-compat, .mlm-badge, .mlm-spark, .mlm-stagger > *, .ml-panel .mpc-checks *, [data-mlm-flip], .ml-panel .mcf *, .ml-panel .mcf *::before { animation: none !important; }
+  .ml-panel .mpc-plate::after, .ml-panel .mpc-compat::after, .mlm-badge::after, .mlm-spark { content: none; display: none; }
+  .ml-panel .mlp-step.is-now .mlm-lamp > :last-child { opacity: 1; }
+}

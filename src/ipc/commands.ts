@@ -942,6 +942,20 @@ export const saveProfileSettings = (
   javaPath: string,
 ) => invoke<void>('save_profile_settings', { profile, jvmArgs, width, height, javaPath })
 
+export interface MilliOptionsReport {
+  written: string[]
+  kept: string[]
+  rejected: string[]
+  shader: boolean
+}
+
+/** Настройки сборки Милли: options.txt (белый список) и включённый шейдер. Ядро без команды — ошибка «not found». */
+export const applyMilliOptions = (
+  profile: string,
+  options: Record<string, string>,
+  shader: { loader: 'iris' | 'oculus'; file: string } | null,
+) => invoke<MilliOptionsReport>('apply_milli_options', { profile, options, shader })
+
 export const setProfileGpu = (profile: string, pref: GpuPref) =>
   invoke<GpuPref>('set_profile_gpu', { profile, pref })
 
