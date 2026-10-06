@@ -359,11 +359,15 @@ export function SiteFilters({
     onPick: () => onPatch({ version: version === v.value ? null : v.value }),
   }))
   const loaders: FilterOpt[] = sec.loaderAxis
-    ? facets.loaders.slice(0, 14).map((l) => {
+    ? facets.loaders
+        // Хвост из единиц («canvas 2», «Fabric 1» у шейдеров) — шум: прячем, пока не выбран.
+        .filter((l) => l.count >= 10 || loader === l.value)
+        .slice(0, 14)
+        .map((l) => {
         const src = loaderIconSrc(l.value)
         return {
           key: l.value,
-          label: loaderLabel(l.value),
+          label: capFirst(loaderLabel(l.value)),
           count: l.count,
           tone: loaderTone(l.value),
           icon: src ? <TagGlyph node={<MrIcon src={src} size={12} />} tone={loaderTone(l.value)} /> : null,

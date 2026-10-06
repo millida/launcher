@@ -30,7 +30,8 @@ export function CatalogFor({
         <span className="cat3-for-lab">Для:</span>
         {build ? (
           <b>
-            {build.name} · {build.version} · {LOADER_NAME(build)}
+            {/* «Minecraft 1.21.11 · 1.21.11» — версию не повторяем, если она уже в имени. */}
+            {[build.name, build.name.includes(build.version) ? null : build.version, LOADER_NAME(build)].filter(Boolean).join(' · ')}
           </b>
         ) : (
           <b>выбери сборку</b>

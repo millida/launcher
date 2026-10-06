@@ -476,6 +476,7 @@ export function PackPage({
           )
         }
         icon={icon ? <img src={icon} alt="" draggable={false} /> : null}
+        glow={icon}
         title={full.title}
         line={full.tagline}
         by={author ? 'Собрал ' + author : null}
