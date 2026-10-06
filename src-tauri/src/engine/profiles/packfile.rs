@@ -43,7 +43,7 @@ impl Progress<'_> {
         self.job.map_or(Ok(()), |j| j.job.check())
     }
 
-    fn cancel_flag(&self) -> Option<&std::sync::atomic::AtomicBool> {
+    fn cancel_flag(&self) -> Option<&Halt> {
         self.job.map(|j| j.job.cancel_flag())
     }
 }

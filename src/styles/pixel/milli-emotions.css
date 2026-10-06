@@ -1,0 +1,423 @@
+/* ============================================================
+   МИЛЛИ — эмоции и взаимодействия (04.10.2026).
+   Milli.tsx + milliEmotions.ts. Те же правила, что milli-mascot.css:
+   только transform/opacity, только steps(1, end), без var() в ключах.
+   Статичные правила каждого состояния — его главный кадр (он же вид при
+   reduced-motion); анимации — поверх. Длины циклов = MILLI_EMOTE[].cycle.
+   ============================================================ */
+
+/* ── Палитра картинок ── */
+.mm-c-K { fill: #1b1f1c; }
+.mm-c-Y { fill: #ffd83b; } .mm-c-y { fill: #e0a020; } .mm-c-A { fill: #f2c13a; }
+.mm-c-B { fill: #7fd4ff; } .mm-c-b { fill: #3a8fd8; } .mm-c-C { fill: #c8f4ff; }
+.mm-c-P { fill: #ff7eb0; } .mm-c-O { fill: #ff9a3a; } .mm-c-V { fill: #b45cff; }
+.mm-c-S { fill: #d4dbe2; } .mm-c-s { fill: #7d8792; }
+.mm-c-M { fill: #a8662e; } .mm-c-m { fill: #6a3a18; }
+.mm-blush-r { fill: #ff7e9a; opacity: 0.55; }
+.mm-blush .mm-c-P { fill: #e0506e; }
+.mm-flash { fill: #fff; opacity: 0; }
+.mm-shockl rect { fill: #fff; }
+.mm-disco .mm-c-R, .mm-dab .mm-c-R { fill: #ff4d6a; }
+.mm-disco.is-b .mm-c-R, .mm-dab.is-b .mm-c-R { fill: #ffd83b; }
+.mm-disco.is-c .mm-c-R, .mm-dab.is-c .mm-c-R { fill: #4fd8ff; }
+.mm-p.mm-star, .mm-p.mm-ha, .mm-p.mm-steam, .mm-p.mm-hit, .mm-p.mm-disco, .mm-p.mm-dab { opacity: 0; }
+
+/* ── Какие части лица скрыть: новые глаза/рты заменяют обычные ── */
+.mm-s-starry .mm-e-open, .mm-s-love .mm-e-open, .mm-s-shock .mm-e-open, .mm-s-dizzy .mm-e-open,
+.mm-s-joy .mm-e-open, .mm-s-laugh .mm-e-open, .mm-s-disco .mm-e-open, .mm-s-five .mm-e-open,
+.mm-s-purr .mm-e-open, .mm-s-flip .mm-e-open, .mm-s-stretch .mm-e-open { opacity: 0; }
+.mm-s-joy .mm-e-joy, .mm-s-disco .mm-e-joy, .mm-s-five .mm-e-joy, .mm-s-purr .mm-e-joy, .mm-s-flip .mm-e-joy { opacity: 1; }
+.mm-s-laugh .mm-e-squeeze { opacity: 1; }
+.mm-s-stretch .mm-e-shut { opacity: 1; }
+
+.mm-s-joy .mm-m-smile, .mm-s-starry .mm-m-smile, .mm-s-laugh .mm-m-smile, .mm-s-proud .mm-m-smile, .mm-s-surprise .mm-m-smile,
+.mm-s-shock .mm-m-smile, .mm-s-ponder .mm-m-smile, .mm-s-idea .mm-m-smile, .mm-s-shy .mm-m-smile, .mm-s-sad .mm-m-smile,
+.mm-s-worry .mm-m-smile, .mm-s-grumpy .mm-m-smile, .mm-s-yawn .mm-m-smile, .mm-s-love .mm-m-smile, .mm-s-fix .mm-m-smile,
+.mm-s-search .mm-m-smile, .mm-s-rewind .mm-m-smile, .mm-s-paint .mm-m-smile, .mm-s-disco .mm-m-smile, .mm-s-five .mm-m-smile,
+.mm-s-purr .mm-m-smile, .mm-s-dizzy .mm-m-smile, .mm-s-drag .mm-m-smile, .mm-s-wobble .mm-m-smile, .mm-s-flip .mm-m-smile,
+.mm-s-hi .mm-m-smile, .mm-s-stretch .mm-m-smile { opacity: 0; }
+.mm-s-joy .mm-m-grin, .mm-s-love .mm-m-grin, .mm-s-disco .mm-m-grin, .mm-s-five .mm-m-grin, .mm-s-flip .mm-m-grin { opacity: 1; }
+.mm-s-starry .mm-m-open, .mm-s-idea .mm-m-open, .mm-s-hi .mm-m-open { opacity: 1; }
+.mm-s-surprise .mm-m-o, .mm-s-search .mm-m-o, .mm-s-rewind .mm-m-o, .mm-s-stretch .mm-m-o { opacity: 1; }
+.mm-s-surprise .mm-pupil-n, .mm-s-worry .mm-pupil-n, .mm-s-drag .mm-pupil-n, .mm-s-idea .mm-pupil-n { opacity: 0; }
+.mm-s-surprise .mm-pupil-s, .mm-s-worry .mm-pupil-s, .mm-s-drag .mm-pupil-s, .mm-s-idea .mm-pupil-s { opacity: 1; }
+.mm-s-drag .mm-m-o { opacity: 1; }
+
+/* Взгляд по смыслу (CSS сильнее атрибута режиссёра). */
+.mm-s-search .mm-pupil { transform: translate(16px, 0); }
+.mm-s-save .mm-pupil { transform: translate(16px, 16px); }
+.mm-s-rewind .mm-pupil, .mm-s-ponder .mm-pupil { transform: translate(-16px, -16px); }
+.mm-s-sad .mm-pupil { transform: translate(0, 8px); }
+.mm-s-shy .mm-pupil { transform: translate(-16px, 16px); }
+.mm-s-fix .mm-pupil, .mm-s-paint .mm-pupil { transform: translate(16px, 8px); }
+.mm-s-sad .mm-face, .mm-s-shy .mm-face { transform: translate(0, 8px); }
+
+/* ── Ручки спереди в позах «рука перед телом» ── */
+.mm-s-joy .mm-front, .mm-s-starry .mm-front, .mm-s-laugh .mm-front, .mm-s-surprise .mm-front, .mm-s-shock .mm-front,
+.mm-s-idea .mm-front-r, .mm-s-five .mm-front-r, .mm-s-disco .mm-front, .mm-s-fix .mm-front-r, .mm-s-search .mm-front-r,
+.mm-s-paint .mm-front-r, .mm-s-save .mm-front-r, .mm-s-dizzy .mm-front, .mm-s-drag .mm-front, .mm-s-wobble .mm-front,
+.mm-s-flip .mm-front, .mm-s-hi .mm-front-r, .mm-s-stretch .mm-front, .mm-s-love .mm-front, .mm-s-worry .mm-front,
+.mm-s-ponder .mm-front-r, .mm-s-yawn .mm-front { opacity: 1; }
+.mm-s-ponder .mm-back-r, .mm-s-hi .mm-back-r { opacity: 0; }
+
+/* ── Статичные позы рук (главный кадр) ── */
+.mm-s-joy .mm-arm-l, .mm-s-disco .mm-arm-l, .mm-s-stretch .mm-arm-l, .mm-s-drag .mm-arm-l { transform: rotate(50deg); }
+.mm-s-joy .mm-arm-r, .mm-s-disco .mm-arm-r, .mm-s-stretch .mm-arm-r, .mm-s-drag .mm-arm-r { transform: rotate(-50deg); }
+.mm-s-starry .mm-arm-l, .mm-s-love .mm-arm-l { transform: rotate(30deg); }
+.mm-s-starry .mm-arm-r, .mm-s-love .mm-arm-r { transform: rotate(-30deg); }
+.mm-s-proud .mm-arm-l, .mm-s-grumpy .mm-arm-l, .mm-s-sad .mm-arm-l { transform: rotate(-40deg); }
+.mm-s-proud .mm-arm-r, .mm-s-grumpy .mm-arm-r, .mm-s-sad .mm-arm-r { transform: rotate(40deg); }
+.mm-s-idea .mm-arm-r, .mm-s-five .mm-arm-r { transform: rotate(-96deg); }
+.mm-s-fix .mm-arm-r { transform: rotate(-56deg); }
+.mm-s-search .mm-arm-r { transform: rotate(-10deg); }
+.mm-s-paint .mm-arm-r { transform: rotate(-36deg); }
+.mm-s-save .mm-arm-r { transform: rotate(30deg); }
+.mm-s-worry .mm-arm-l, .mm-s-shock .mm-arm-l, .mm-s-surprise .mm-arm-l { transform: rotate(64deg); }
+.mm-s-worry .mm-arm-r, .mm-s-shock .mm-arm-r, .mm-s-surprise .mm-arm-r { transform: rotate(-64deg); }
+.mm-s-ponder .mm-front-r { transform: translate(-176px, 24px); }
+.mm-s-ponder .mm-arm-r { transform: rotate(-24deg); }
+.mm-s-hi .mm-front-r { transform: translate(-8px, -88px); }
+.mm-s-hi .mm-arm-r { transform: rotate(-76deg); }
+.mm-s-sad .mm-sprout, .mm-s-yawn .mm-sprout { transform: rotate(28deg); }
+.mm-s-sad .mm-rig { transform: translateY(8px); }
+.mm-s-proud .mm-rig { transform: translateY(-8px) scale(1.03, 1.03); }
+.mm-flipped .mm-wob { transform: scale(-1, 1); }
+
+/* ── РАДОСТЬ: прыжки из стороны в сторону, руки вверх по очереди, искры ── */
+.mm-s-joy .mm-jump { animation: mme-joy 0.8s steps(1, end) infinite; }
+.mm-s-joy .mm-arm-l { animation: mm-cheer-l 0.4s steps(1, end) infinite; }
+.mm-s-joy .mm-arm-r { animation: mm-cheer-r 0.4s steps(1, end) infinite; }
+.mm-s-joy .mm-sprout { animation: mm-sprout-bounce 0.8s steps(1, end) infinite; }
+.mm-s-joy .mm-dust { animation: mm-puff-a 0.8s steps(1, end) 0.4s infinite; }
+@keyframes mme-joy {
+  0% { transform: translate(0, 0) scale(1.1, 0.9); } 15% { transform: translate(-8px, -32px) scale(0.94, 1.06); }
+  30% { transform: translate(-8px, -40px); } 45% { transform: translate(0, 0) scale(1.1, 0.9); }
+  60% { transform: translate(8px, -32px) scale(0.94, 1.06); } 75% { transform: translate(8px, -40px); } 90% { transform: translate(0, 0) scale(1.06, 0.94); }
+}
+
+/* ── ВОСТОРГ: звёзды в глазах мерцают, трясётся от счастья, звёздочки ── */
+.mm-s-starry .mm-jump { animation: mme-tremble 0.6s steps(1, end) infinite; }
+.mm-s-starry .mm-xe { animation: mme-pulse 0.6s steps(1, end) infinite; }
+.mm-s-starry .mm-sprout { animation: mm-sprout-bounce 0.6s steps(1, end) infinite; }
+.mm-star { animation: mm-twinkle 1.2s steps(1, end) infinite; }
+.mm-star.is-b { animation-delay: -0.4s; } .mm-star.is-c { animation-delay: -0.8s; }
+@keyframes mme-tremble {
+  0% { transform: translate(0, -8px); } 25% { transform: translate(-4px, -16px); } 50% { transform: translate(0, -8px); } 75% { transform: translate(4px, -16px); }
+}
+@keyframes mme-pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } }
+
+/* ── СМЕХ: трясётся, откинулась назад, рот «ха-ха», слёзы, «ХА» ── */
+.mm-s-laugh .mm-jump { animation: mme-laugh 0.4s steps(1, end) infinite; }
+.mm-s-laugh .mm-turn { transform: rotate(-4deg); }
+.mm-s-laugh .mm-arm-l { animation: mme-belly-l 0.4s steps(1, end) infinite; }
+.mm-s-laugh .mm-arm-r { animation: mme-belly-r 0.4s steps(1, end) infinite; }
+.mm-s-laugh .mm-xm-laugh { animation: mme-blink2 0.4s steps(1, end) infinite; }
+.mm-s-laugh .mm-m-grin { animation: mme-blink2r 0.4s steps(1, end) infinite; }
+.mm-ha { animation: mme-rise 1.6s steps(1, end) infinite; }
+.mm-ha.is-b { animation-delay: -0.8s; }
+.mm-tear { animation: mme-blink2 0.8s steps(1, end) infinite; }
+@keyframes mme-laugh { 0% { transform: translateY(0) scale(1.04, 0.96); } 50% { transform: translateY(-8px) scale(0.98, 1.02); } }
+@keyframes mme-belly-l { 0% { transform: rotate(-60deg); } 50% { transform: rotate(-48deg); } }
+@keyframes mme-belly-r { 0% { transform: rotate(60deg); } 50% { transform: rotate(48deg); } }
+@keyframes mme-blink2 { 0% { opacity: 1; } 50% { opacity: 0; } }
+@keyframes mme-blink2r { 0% { opacity: 0; } 50% { opacity: 1; } }
+@keyframes mme-rise {
+  0% { opacity: 1; transform: translate(0, 0) scale(0.6); } 10% { opacity: 1; transform: translate(0, -8px) scale(1); }
+  30% { opacity: 1; transform: translate(6px, -24px); } 50% { opacity: 1; transform: translate(-4px, -40px); }
+  70% { opacity: 0.5; transform: translate(4px, -52px); } 80% { opacity: 0; }
+}
+
+/* ── ГОРДОСТЬ: выпятила грудь, руки в боки, нос кверху, «дзинь» ── */
+.mm-s-proud .mm-rig { animation: mme-proud 1.6s steps(1, end) both; }
+.mm-s-proud .mm-sprout { animation: mm-sprout-wake 1.6s steps(1, end) both; }
+.mm-s-proud .mm-ting { animation: mme-ting 1.6s steps(1, end) both; }
+@keyframes mme-proud {
+  0% { transform: translateY(0) scale(1, 1); } 15% { transform: translateY(-4px) scale(1.02, 1.02); }
+  30% { transform: translateY(-8px) scale(1.03, 1.03); } 85% { transform: translateY(-8px) scale(1.03, 1.03); }
+}
+@keyframes mme-ting {
+  0% { opacity: 0; transform: scale(0.5); } 30% { opacity: 1; transform: scale(1.3); } 40% { opacity: 1; transform: scale(0.8) rotate(45deg); }
+  50% { opacity: 1; transform: scale(1.1); } 70% { opacity: 0; transform: scale(0.6); }
+}
+
+/* ── УДИВЛЕНИЕ: отпрянула назад, «!», зрачки-точки ── */
+.mm-s-surprise .mm-jump { animation: mme-surprise 0.9s steps(1, end) both; }
+.mm-s-surprise .mm-sprout { animation: mm-sprout-wake 0.9s steps(1, end) both; }
+.mm-s-surprise .mm-bang { animation: mm-bang 0.9s steps(1, end) both; }
+@keyframes mme-surprise {
+  0% { transform: translate(0, 0) scale(1.08, 0.92); } 12% { transform: translate(-8px, -16px) scale(0.94, 1.08); }
+  30% { transform: translate(-8px, -8px); } 50% { transform: translate(-4px, 0); } 70% { transform: translate(0, 0); }
+}
+
+/* ── ШОК: белые глаза, побелела (вспышки), вытянулась, дрожит ── */
+.mm-s-shock .mm-jump { animation: mme-shock 1.2s steps(1, end) both; }
+.mm-s-shock .mm-flash { animation: mme-flash 1.2s steps(1, end) both; }
+.mm-s-shock .mm-xeyes { animation: mme-jitter 0.2s steps(1, end) infinite; }
+.mm-s-shock .mm-shockl { animation: mme-blink2 0.3s steps(1, end) infinite; }
+.mm-s-shock .mm-bang { animation: mm-bang 1.2s steps(1, end) both; }
+.mm-s-shock .mm-dust { animation: mm-puff-b 1.2s steps(1, end) 0.36s; }
+.mm-s-shock .mm-sprout { transform: rotate(-20deg); }
+@keyframes mme-shock {
+  0% { transform: translateY(0) scale(1.1, 0.9); } 8% { transform: translateY(-40px) scale(0.86, 1.16); }
+  25% { transform: translateY(-40px) scale(0.9, 1.12); } 35% { transform: translateY(0) scale(1.12, 0.88); }
+  45% { transform: translate(-4px, 0); } 55% { transform: translate(4px, 0); } 65% { transform: translate(-4px, 0); } 75% { transform: translate(0, 0); }
+}
+@keyframes mme-flash { 0% { opacity: 0.6; } 10% { opacity: 0; } 20% { opacity: 0.45; } 30% { opacity: 0; } }
+@keyframes mme-jitter { 0% { transform: translate(0, 0); } 50% { transform: translate(4px, 0); } }
+
+/* ── ЗАДУМЧИВОСТЬ: рука у подбородка, глаза вверх, «?» покачивается ── */
+.mm-s-ponder .mm-turn { animation: mm-ponder 2.4s steps(1, end) infinite; }
+.mm-s-ponder .mm-rig { animation: mm-breathe 2.4s steps(1, end) infinite; }
+.mm-s-ponder .mm-ask { animation: mme-ask 2.4s steps(1, end) infinite; }
+@keyframes mme-ask { 0% { transform: translateY(0); opacity: 1; } 25% { transform: translateY(-8px); } 50% { transform: translateY(0) rotate(-8deg); } 75% { transform: translateY(-8px) rotate(8deg); } }
+
+/* ── «АГА!»: лампочка выскакивает и вспыхивает, палец вверх ── */
+.mm-s-idea .mm-jump { animation: mme-idea 1.4s steps(1, end) both; }
+.mm-s-idea .mm-bulb-b { animation: mme-pop 1.4s steps(1, end) both; }
+.mm-s-idea .mm-rays { animation: mme-rays 1.4s steps(1, end) both; }
+.mm-s-idea .mm-sprout { animation: mm-sprout-wake 1.4s steps(1, end) both; }
+@keyframes mme-idea { 0% { transform: translateY(0); } 20% { transform: translateY(-24px) scale(0.94, 1.08); } 35% { transform: translateY(0) scale(1.08, 0.92); } 45% { transform: none; } }
+@keyframes mme-pop { 0% { transform: scale(0); } 15% { transform: scale(0.6); } 25% { transform: scale(1.25); } 35% { transform: scale(1); } }
+@keyframes mme-rays { 0% { opacity: 0; } 30% { opacity: 1; } 45% { opacity: 0; } 55% { opacity: 1; } 70% { opacity: 0; } 80% { opacity: 1; } }
+
+/* ── СМУЩЕНИЕ: румянец «///», глаза в сторону-вниз, переминается ── */
+.mm-s-shy .mm-turn { animation: mme-sway 1.6s steps(1, end) infinite; }
+.mm-s-shy .mm-arm-l { animation: mme-twiddle-l 0.8s steps(1, end) infinite; }
+.mm-s-shy .mm-arm-r { animation: mme-twiddle-r 0.8s steps(1, end) infinite; }
+.mm-s-shy .mm-blush-l, .mm-s-purr .mm-blush-l, .mm-s-love .mm-blush-l { animation: mme-blink2 0.8s steps(1, end) infinite; }
+.mm-s-shy .mm-sprout { transform: rotate(16deg); }
+@keyframes mme-sway { 0% { transform: rotate(-3deg); } 50% { transform: rotate(3deg); } }
+@keyframes mme-twiddle-l { 0% { transform: rotate(-40deg); } 50% { transform: rotate(-30deg); } }
+@keyframes mme-twiddle-r { 0% { transform: rotate(30deg); } 50% { transform: rotate(40deg); } }
+
+/* ── ГРУСТЬ / СОЧУВСТВИЕ: веки домиком, слёзы капают, поникла ── */
+.mm-s-sad .mm-rig { animation: mm-sleep-breathe 2s steps(1, end) infinite; }
+.mm-s-sad .mm-drop { animation: mme-drop 2s steps(1, end) infinite; }
+.mm-s-sad .mm-drop.is-b { animation-delay: -1s; }
+@keyframes mme-drop {
+  0% { opacity: 0; transform: translateY(0); } 10% { opacity: 1; transform: translateY(0); } 30% { opacity: 1; transform: translateY(16px); }
+  45% { opacity: 1; transform: translateY(40px); } 60% { opacity: 1; transform: translateY(72px); } 70% { opacity: 0; transform: translateY(80px); }
+}
+
+/* ── ТРЕВОГА «ой-ой»: дрожит, ладошки у лица, капля пота ── */
+.mm-s-worry .mm-jump { animation: mme-worry 0.6s steps(1, end) infinite; }
+.mm-s-worry .mm-sweat { animation: mme-sweat 1.2s steps(1, end) infinite; }
+.mm-s-worry .mm-xm-wobble { animation: mme-jitter 0.3s steps(1, end) infinite; }
+@keyframes mme-worry { 0% { transform: translateX(-4px); } 25% { transform: translateX(4px); } 50% { transform: translateX(-4px) translateY(-4px); } 75% { transform: translateX(4px); } }
+@keyframes mme-sweat { 0% { opacity: 1; transform: translateY(0); } 40% { transform: translateY(8px); } 70% { transform: translateY(16px); opacity: 1; } 85% { opacity: 0; } }
+
+/* ── ШУТЛИВАЯ ЗЛОСТЬ: надулась, топает, жилка пульсирует, пар ── */
+.mm-s-grumpy .mm-rig { animation: mme-puff 0.8s steps(1, end) infinite; }
+.mm-s-grumpy .mm-vein { animation: mme-pulse 0.4s steps(1, end) infinite; }
+.mm-s-grumpy .mm-leg-r { animation: mme-stomp 0.4s steps(1, end) infinite; }
+.mm-s-grumpy .mm-arm-l { animation: mme-fist-l 0.4s steps(1, end) infinite; }
+.mm-s-grumpy .mm-arm-r { animation: mme-fist-r 0.4s steps(1, end) infinite; }
+.mm-steam { animation: mme-rise 0.8s steps(1, end) infinite; }
+.mm-steam.is-b { animation-delay: -0.4s; }
+@keyframes mme-puff { 0% { transform: scale(1, 1); } 50% { transform: translateY(-4px) scale(1.04, 1); } }
+@keyframes mme-stomp { 0% { transform: translateY(-16px); } 50% { transform: translateY(0); } }
+@keyframes mme-fist-l { 0% { transform: rotate(-40deg); } 50% { transform: rotate(-24deg); } }
+@keyframes mme-fist-r { 0% { transform: rotate(40deg); } 50% { transform: rotate(24deg); } }
+
+/* ── ЗЕВОК: потянулась вверх, рот широко, слезинка, обмякла ── */
+.mm-s-yawn .mm-jump { animation: mme-yawn 2.2s steps(1, end) both; }
+.mm-s-yawn .mm-arm-l { animation: mme-yawn-l 2.2s steps(1, end) both; }
+.mm-s-yawn .mm-arm-r { animation: mme-yawn-r 2.2s steps(1, end) both; }
+.mm-s-yawn .mm-xm-yawn { animation: mme-yawn-m 2.2s steps(1, end) both; }
+.mm-s-yawn .mm-m-o { animation: mme-yawn-o 2.2s steps(1, end) both; }
+.mm-s-yawn .mm-z { animation: mm-z 2.2s steps(1, end) 0.8s; }
+.mm-s-yawn .mm-z.is-b, .mm-s-yawn .mm-z.is-c { display: none; }
+@keyframes mme-yawn {
+  0% { transform: scale(1, 1); } 15% { transform: translateY(-8px) scale(0.96, 1.06); } 30% { transform: translateY(-16px) scale(0.94, 1.1); }
+  60% { transform: translateY(-16px) scale(0.94, 1.1); } 70% { transform: translateY(0) scale(1.06, 0.94); } 80% { transform: translateY(4px) scale(1.04, 0.96); }
+}
+@keyframes mme-yawn-l { 0% { transform: rotate(-14deg); } 15% { transform: rotate(40deg); } 30% { transform: rotate(80deg); } 65% { transform: rotate(40deg); } 75% { transform: rotate(-26deg); } }
+@keyframes mme-yawn-r { 0% { transform: rotate(14deg); } 15% { transform: rotate(-40deg); } 30% { transform: rotate(-80deg); } 65% { transform: rotate(-40deg); } 75% { transform: rotate(26deg); } }
+@keyframes mme-yawn-m { 0% { opacity: 0; } 15% { opacity: 1; } 65% { opacity: 0; } }
+@keyframes mme-yawn-o { 0% { opacity: 1; } 15% { opacity: 0; } 65% { opacity: 1; } }
+
+/* ── ЛЮБОВЬ: глаза-сердца бьются, покачивается, сердечки ── */
+.mm-s-love .mm-xe { animation: mme-pulse 0.5s steps(1, end) infinite; }
+.mm-s-love .mm-turn { animation: mme-sway 1s steps(1, end) infinite; }
+.mm-s-love .mm-heart { animation: mm-heart 1s steps(1, end) infinite; }
+.mm-s-love .mm-heart.is-b { animation-delay: -0.33s; } .mm-s-love .mm-heart.is-c { animation-delay: -0.66s; }
+
+/* ── РАБОТАЮ: стучит молотком, искры на ударе, шестерёнка крутится ── */
+.mm-s-fix .mm-arm-r { animation: mme-hammer 0.8s steps(1, end) infinite; }
+.mm-s-fix .mm-jump { animation: mme-hit 0.8s steps(1, end) infinite; }
+.mm-s-fix .mm-gear { animation: mme-gear 0.8s steps(1, end) infinite; }
+.mm-s-fix .mm-hit { animation: mme-spark 0.8s steps(1, end) 0.3s infinite; }
+.mm-s-fix .mm-hit.is-b { animation-delay: 0.35s; }
+@keyframes mme-hammer { 0% { transform: rotate(-56deg); } 20% { transform: rotate(-76deg); } 35% { transform: rotate(-30deg); } 40% { transform: rotate(20deg); } 60% { transform: rotate(12deg); } 75% { transform: rotate(-20deg); } }
+@keyframes mme-hit { 0% { transform: none; } 40% { transform: translateY(4px) scale(1.03, 0.97); } 55% { transform: none; } }
+@keyframes mme-gear { 0% { transform: rotate(0); } 25% { transform: rotate(45deg); } 50% { transform: rotate(90deg); } 75% { transform: rotate(135deg); } }
+@keyframes mme-spark {
+  0% { opacity: 1; transform: translate(0, 0) scale(1); } 10% { opacity: 1; transform: translate(10px, -12px) scale(1); }
+  20% { opacity: 1; transform: translate(18px, -20px) scale(0.6); } 30% { opacity: 0; }
+}
+
+/* ── ИЩУ: водит лупой, наклоняется следом, моргает в стекле блик ── */
+.mm-s-search .mm-arm-r { animation: mme-scan 1.6s steps(1, end) infinite; }
+.mm-s-search .mm-turn { animation: mme-scan-turn 1.6s steps(1, end) infinite; }
+.mm-s-search .mm-m-o { animation: mme-blink2 1.6s steps(1, end) infinite; }
+.mm-s-search .mm-m-hmm { animation: mme-blink2r 1.6s steps(1, end) infinite; }
+@keyframes mme-scan { 0% { transform: rotate(-10deg); } 25% { transform: rotate(-24deg); } 50% { transform: rotate(-36deg); } 75% { transform: rotate(-24deg); } }
+@keyframes mme-scan-turn { 0% { transform: rotate(3deg); } 25% { transform: rotate(0); } 50% { transform: rotate(-3deg); } 75% { transform: rotate(0); } }
+
+/* ── СОХРАНЯЮ: сундук открывается, изумруд падает внутрь, крышка, замок блестит ── */
+.mm-s-save .mm-chest { animation: mme-chest-in 1.6s steps(1, end) both; }
+.mm-s-save .mm-lid-shut { animation: mme-lid-shut 1.6s steps(1, end) both; }
+.mm-s-save .mm-lid-open, .mm-s-save .mm-chest-in { animation: mme-lid-open 1.6s steps(1, end) both; }
+.mm-s-save .mm-gem { animation: mme-gem 1.6s steps(1, end) both; }
+.mm-s-save .mm-lock { animation: mme-lock 1.6s steps(1, end) both; }
+.mm-s-save .mm-jump { animation: mme-nod 1.6s steps(1, end) both; }
+.milli-save.mm-s-save .mm-chest, .milli-save.mm-s-save .mm-lid-shut, .milli-save.mm-s-save .mm-lid-open,
+.milli-save.mm-s-save .mm-chest-in, .milli-save.mm-s-save .mm-gem, .milli-save.mm-s-save .mm-lock,
+.milli-save.mm-s-save .mm-jump { animation-iteration-count: infinite; }
+@keyframes mme-chest-in { 0% { transform: translateY(16px); opacity: 0; } 6% { transform: translateY(8px); opacity: 1; } 12% { transform: translateY(0); } }
+@keyframes mme-lid-shut { 0% { opacity: 1; } 18% { opacity: 0; } 62% { opacity: 1; } }
+@keyframes mme-lid-open { 0% { opacity: 0; } 18% { opacity: 1; } 62% { opacity: 0; } }
+@keyframes mme-gem {
+  0% { opacity: 0; transform: translateY(0); } 24% { opacity: 1; transform: translateY(0); } 32% { transform: translateY(24px); }
+  40% { transform: translateY(56px); } 48% { transform: translateY(80px); } 52% { opacity: 0; transform: translateY(88px); }
+}
+@keyframes mme-lock { 0% { opacity: 0; } 66% { opacity: 1; transform: scale(1.4); } 74% { transform: scale(0.8); } 82% { opacity: 1; transform: scale(1); } 92% { opacity: 0; } }
+@keyframes mme-nod { 0% { transform: none; } 66% { transform: translateY(8px) scale(1.04, 0.96); } 74% { transform: none; } }
+
+/* ── ОТКАТЫВАЮ: стрелка часов бежит назад, сама пятится шажками ── */
+.mm-s-rewind .mm-clock-h { animation: mme-ccw 1.6s steps(1, end) infinite; }
+.mm-s-rewind .mm-arrow { animation: mme-blink2 0.4s steps(1, end) infinite; }
+.mm-s-rewind .mm-jump { animation: mme-back 1.6s steps(1, end) infinite; }
+@keyframes mme-ccw {
+  0% { transform: rotate(0); } 12.5% { transform: rotate(-45deg); } 25% { transform: rotate(-90deg); } 37.5% { transform: rotate(-135deg); }
+  50% { transform: rotate(-180deg); } 62.5% { transform: rotate(-225deg); } 75% { transform: rotate(-270deg); } 87.5% { transform: rotate(-315deg); }
+}
+@keyframes mme-back {
+  0% { transform: translateX(0); } 12% { transform: translateX(-4px) translateY(-8px); } 25% { transform: translateX(-8px); }
+  37% { transform: translateX(-12px) translateY(-8px); } 50% { transform: translateX(-16px); } 75% { transform: translateX(-8px); }
+}
+
+/* ── НАСТРАИВАЮ ГРАФИКУ: кисточка мажет радугу, солнце крутится ── */
+.mm-s-paint .mm-arm-r { animation: mme-brush 1.2s steps(1, end) infinite; }
+.mm-s-paint .mm-sun { animation: mme-gear 1.2s steps(1, end) infinite; }
+.mm-s-paint .mm-dab { animation: mme-dab 1.2s steps(1, end) infinite; }
+.mm-s-paint .mm-dab.is-b { animation-delay: 0.15s; }
+.mm-s-paint .mm-dab.is-c { animation-delay: 0.3s; }
+@keyframes mme-brush { 0% { transform: rotate(-36deg); } 25% { transform: rotate(-60deg); } 50% { transform: rotate(-84deg); } 75% { transform: rotate(-60deg); } }
+@keyframes mme-dab { 0% { opacity: 0; transform: scale(0.5); } 10% { opacity: 1; transform: scale(1.2); } 20% { opacity: 1; transform: scale(1); } 70% { opacity: 1; } 80% { opacity: 0; } }
+
+/* ── ТАНЕЦ (сборка готова): шаг-шаг, руки «диско» по очереди, бёдра, ноты ── */
+.mm-s-disco .mm-jump { animation: mme-disco 1.6s steps(1, end) infinite; }
+.mm-s-disco .mm-turn { animation: mme-hips 0.8s steps(1, end) infinite; }
+.mm-s-disco .mm-arm-l { animation: mme-point-l 1.6s steps(1, end) infinite; }
+.mm-s-disco .mm-arm-r { animation: mme-point-r 1.6s steps(1, end) infinite; }
+.mm-s-disco .mm-leg-l { animation: mme-kick 0.8s steps(1, end) infinite; }
+.mm-s-disco .mm-leg-r { animation: mme-kick 0.8s steps(1, end) -0.4s infinite; }
+.mm-s-disco .mm-sprout { animation: mm-sprout-bounce 0.8s steps(1, end) infinite; }
+.mm-s-disco .mm-note { animation: mm-note 1.6s steps(1, end) infinite; }
+.mm-s-disco .mm-note.is-b { animation-delay: -0.5s; } .mm-s-disco .mm-note.is-c { animation-delay: -1s; }
+.mm-s-disco .mm-disco { animation: mme-disco-c 0.4s steps(1, end) infinite; }
+.mm-s-disco .mm-disco.is-b { animation-delay: -0.13s; } .mm-s-disco .mm-disco.is-c { animation-delay: -0.26s; }
+.mm-s-disco .mm-dust { animation: mm-puff-a 0.8s steps(1, end) infinite; }
+@keyframes mme-disco {
+  0% { transform: translate(0, 0); } 12.5% { transform: translate(-8px, -16px); } 25% { transform: translate(-16px, 0) scale(1.06, 0.94); }
+  37.5% { transform: translate(-8px, -8px); } 50% { transform: translate(0, 0); } 62.5% { transform: translate(8px, -16px); }
+  75% { transform: translate(16px, 0) scale(1.06, 0.94); } 87.5% { transform: translate(8px, -8px); }
+}
+@keyframes mme-hips { 0% { transform: rotate(-6deg); } 50% { transform: rotate(6deg); } }
+@keyframes mme-point-l { 0% { transform: rotate(80deg); } 25% { transform: rotate(-30deg); } 50% { transform: rotate(-40deg); } 75% { transform: rotate(-30deg); } }
+@keyframes mme-point-r { 0% { transform: rotate(30deg); } 25% { transform: rotate(40deg); } 50% { transform: rotate(-80deg); } 75% { transform: rotate(30deg); } }
+@keyframes mme-kick { 0% { transform: translateY(0); } 25% { transform: translate(0, -16px); } 50% { transform: translateY(0); } }
+@keyframes mme-disco-c { 0% { opacity: 1; transform: scale(1); } 33% { opacity: 0.4; transform: scale(0.6); } 66% { opacity: 1; transform: scale(1.2); } }
+
+/* ── «ПЯТЬ!»: ладошка вверх, замах, хлопок со вспышкой, «^^» ── */
+.mm-s-five .mm-arm-r { animation: mme-five 1s steps(1, end) both; }
+.mm-s-five .mm-jump { animation: mme-five-j 1s steps(1, end) both; }
+.mm-s-five .mm-burst { animation: mme-burst 1s steps(1, end) both; }
+.mm-s-five .mm-dust { animation: mm-puff-c 1s steps(1, end) 0.3s; }
+@keyframes mme-five { 0% { transform: rotate(-70deg); } 15% { transform: rotate(-110deg); } 30% { transform: rotate(-90deg); } 40% { transform: rotate(-96deg); } }
+@keyframes mme-five-j { 0% { transform: translateY(0); } 15% { transform: translateY(-16px) scale(0.96, 1.04); } 30% { transform: translateY(0) scale(1.1, 0.9); } 45% { transform: none; } }
+@keyframes mme-burst { 0% { opacity: 0; transform: scale(0.4); } 28% { opacity: 1; transform: scale(1.4); } 38% { opacity: 1; transform: scale(1); } 55% { opacity: 1; transform: scale(0.8); } 70% { opacity: 0; } }
+
+/* ── ВЗАИМОДЕЙСТВИЯ ── */
+/* погладили: мурчит — «ω», «^^», румянец, тянется за рукой, сердечки */
+.mm-s-purr .mm-turn { animation: mme-sway 1.2s steps(1, end) infinite; }
+.mm-s-purr .mm-rig { animation: mme-laugh 0.6s steps(1, end) infinite; }
+.mm-s-purr .mm-heart { animation: mm-heart 1.2s steps(1, end) infinite; }
+.mm-s-purr .mm-heart.is-c { animation-delay: -0.6s; }
+.mm-s-purr .mm-arm-l { transform: rotate(-30deg); } .mm-s-purr .mm-arm-r { transform: rotate(30deg); }
+
+/* тыкали без остановки: глаза-спирали крутятся, звёзды вокруг головы, шатается */
+.mm-s-dizzy .mm-xe { animation: mme-gear 0.5s steps(1, end) infinite; }
+.mm-s-dizzy .mm-turn { animation: mme-dizzy 1s steps(1, end) infinite; }
+.mm-s-dizzy .mm-orb { animation: mme-orbit 1s steps(1, end) infinite; }
+.mm-s-dizzy .mm-orb.is-b { animation-delay: -0.33s; } .mm-s-dizzy .mm-orb.is-c { animation-delay: -0.66s; }
+.mm-s-dizzy .mm-arm-l { transform: rotate(10deg); } .mm-s-dizzy .mm-arm-r { transform: rotate(-30deg); }
+@keyframes mme-dizzy { 0% { transform: rotate(-6deg); } 25% { transform: rotate(0) translateY(-4px); } 50% { transform: rotate(6deg); } 75% { transform: rotate(0); } }
+@keyframes mme-orbit {
+  0% { transform: translate(-120px, 0); } 12.5% { transform: translate(-84px, -24px); } 25% { transform: translate(0, -34px); } 37.5% { transform: translate(84px, -24px); }
+  50% { transform: translate(120px, 0); } 62.5% { transform: translate(84px, 22px); } 75% { transform: translate(0, 30px); } 87.5% { transform: translate(-84px, 22px); }
+}
+
+/* тащат: болтает ножками, руки вверх, «о» */
+.mm-s-drag .mm-legs { animation: mme-dangle 0.6s steps(1, end) infinite; }
+.mm-s-drag .mm-turn { animation: mme-sway 0.6s steps(1, end) infinite; }
+@keyframes mme-dangle { 0% { transform: translate(-4px, 4px); } 50% { transform: translate(4px, 8px); } }
+
+/* отпустили: пружинит обратно и качается, затухая */
+.mm-s-wobble .mm-turn { animation: mme-wobble 0.9s steps(1, end) both; }
+.mm-s-wobble .mm-jump { animation: mme-wobble-j 0.9s steps(1, end) both; }
+.mm-s-wobble .mm-dust { animation: mm-puff-a 0.9s steps(1, end); }
+@keyframes mme-wobble {
+  0% { transform: rotate(-10deg); } 12% { transform: rotate(8deg); } 24% { transform: rotate(-6deg); } 36% { transform: rotate(4deg); }
+  48% { transform: rotate(-3deg); } 60% { transform: rotate(2deg); } 72% { transform: rotate(0); }
+}
+@keyframes mme-wobble-j { 0% { transform: scale(1.14, 0.86); } 12% { transform: scale(0.92, 1.08); } 24% { transform: scale(1.06, 0.94); } 36% { transform: scale(0.98, 1.02); } 48% { transform: none; } }
+
+/* двойной клик: развернулась кругом в прыжке (смотрит в другую сторону) */
+.mm-s-flip .mm-turn { animation: mme-flip 0.7s steps(1, end) both; }
+.mm-s-flip .mm-jump { animation: mme-flip-j 0.7s steps(1, end) both; }
+.mm-s-flip .mm-dust { animation: mm-puff-b 0.7s steps(1, end) 0.4s; }
+@keyframes mme-flip { 0% { transform: scale(0.66, 1); } 12% { transform: scale(0.33, 1); } 24% { transform: scale(-0.33, 1); } 36% { transform: scale(-0.66, 1); } 48% { transform: scale(-1, 1); } 49% { transform: none; } }
+@keyframes mme-flip-j { 0% { transform: translateY(-16px); } 24% { transform: translateY(-32px); } 48% { transform: translateY(0) scale(1.1, 0.9); } 60% { transform: none; } }
+
+/* долго держат мышь рядом: смотрит и машет */
+.mm-s-hi .mm-arm-r { animation: mm-wave-r 0.72s steps(1, end) infinite; }
+.mm-s-hi .mm-rig { animation: mm-breathe 1.44s steps(1, end) infinite; }
+
+/* мелочи в покое */
+.mm-s-look .mm-pupil { animation: mme-look 2.4s steps(1, end) both; }
+.mm-s-look .mm-face { animation: mme-look-f 2.4s steps(1, end) both; }
+.mm-s-look .mm-turn { animation: mme-look-t 2.4s steps(1, end) both; }
+@keyframes mme-look { 0% { transform: translate(-16px, 0); } 35% { transform: translate(0, 0); } 45% { transform: translate(16px, 0); } 80% { transform: translate(0, -8px); } 90% { transform: none; } }
+@keyframes mme-look-f { 0% { transform: translate(-8px, 0); } 35% { transform: none; } 45% { transform: translate(8px, 0); } 80% { transform: none; } }
+@keyframes mme-look-t { 0% { transform: rotate(-3deg); } 35% { transform: none; } 45% { transform: rotate(3deg); } 80% { transform: none; } }
+.mm-s-stretch .mm-jump { animation: mme-yawn 1.6s steps(1, end) both; }
+.mm-s-stretch .mm-arm-l { animation: mme-yawn-l 1.6s steps(1, end) both; }
+.mm-s-stretch .mm-arm-r { animation: mme-yawn-r 1.6s steps(1, end) both; }
+.mm-s-tap .mm-leg-r { animation: mme-stomp 0.4s steps(1, end) 4; }
+.mm-s-tap .mm-sprout { animation: mm-sprout-bounce 0.8s steps(1, end) 2; }
+.mm-s-tap .mm-m-smile { animation: mme-blink2 0.4s steps(1, end) 4; }
+.mm-s-tap .mm-m-o { animation: mme-blink2r 0.4s steps(1, end) 4; }
+.mm-s-tap .mm-note { animation: mm-note 1.6s steps(1, end) both; }
+
+/* скорость печати: спокойно — кивает в такт; быстро — глаза горят, подпрыгивает */
+.mm-s-idle .mm-type-1 .mm-face, .mm-s-think .mm-type-1 .mm-face { animation: mme-nodf 0.5s steps(1, end) infinite; }
+.mm-s-idle .mm-type-2 .mm-rig, .mm-s-think .mm-type-2 .mm-rig { animation: mme-laugh 0.3s steps(1, end) infinite; }
+.mm-s-idle .mm-type-2 .mm-pupil-n, .mm-s-think .mm-type-2 .mm-pupil-n { opacity: 0; }
+.mm-s-idle .mm-type-2 .mm-pupil-s, .mm-s-think .mm-type-2 .mm-pupil-s { opacity: 1; }
+.mm-s-idle .mm-type-2 .mm-sprout { animation: mm-sprout-bounce 0.4s steps(1, end) infinite; }
+@keyframes mme-nodf { 0% { transform: translateY(0); } 50% { transform: translateY(8px); } }
+
+/* моргание в «рабочих» состояниях */
+.mm-s-fix .mm-blink-a .mm-eye, .mm-s-search .mm-blink-a .mm-eye, .mm-s-save .mm-blink-a .mm-eye, .mm-s-rewind .mm-blink-a .mm-eye,
+.mm-s-paint .mm-blink-a .mm-eye, .mm-s-ponder .mm-blink-a .mm-eye, .mm-s-hi .mm-blink-a .mm-eye { animation: mm-blink-a 0.2s steps(1, end); }
+.mm-s-fix .mm-blink-b .mm-eye, .mm-s-search .mm-blink-b .mm-eye, .mm-s-save .mm-blink-b .mm-eye, .mm-s-rewind .mm-blink-b .mm-eye,
+.mm-s-paint .mm-blink-b .mm-eye, .mm-s-ponder .mm-blink-b .mm-eye, .mm-s-hi .mm-blink-b .mm-eye { animation: mm-blink-b 0.2s steps(1, end); }
+
+/* перетаскивание: возврат — переходом steps(4) из Milli.tsx */
+.milli { touch-action: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mm-p.mm-star, .mm-p.mm-ha, .mm-p.mm-disco, .mm-p.mm-dab { opacity: 1; }
+}

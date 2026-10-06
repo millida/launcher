@@ -169,6 +169,7 @@ pub async fn store_game_install(app: AppHandle, slug: String) -> Result<(), Stri
 }
 
 async fn install_via_winget(app: &AppHandle, job: &Job, g: &StoreGame) -> Result<(), String> {
+    job.not_pausable();
     let id = g.ms_product.ok_or("Этой игры нет в Microsoft Store")?.to_string();
     job.emit(app, 5.0, "Ставим через Microsoft Store");
     let out = tauri::async_runtime::spawn_blocking(move || {

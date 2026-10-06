@@ -494,7 +494,7 @@ pub(crate) fn pack_entries(files: &[Value], pdir: &std::path::Path) -> Result<Ve
 /// transfers removes their temporary files.
 pub(crate) async fn download_pack_entries(
     entries: Vec<PackEntry>,
-    cancel: Option<&std::sync::atomic::AtomicBool>,
+    cancel: Option<&Halt>,
     on_file: &(dyn Fn(usize, usize) + Sync),
 ) -> Result<(), String> {
     use futures::TryStreamExt;

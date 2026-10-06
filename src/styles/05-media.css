@@ -2160,3 +2160,7 @@ html.overlay-root,html.overlay-root body,html.overlay-root #root{background:tran
   color: var(--m-accent);
 }
 
+/* Кнопки просмотра картинки — ниже полосы заголовка окна: она лежит поверх всего (z 10100)
+   и перетаскивает окно, поэтому верхняя половина кнопок раньше не нажималась (06.10.2026). */
+.lightbox-top{top:calc(44px + 12px)}
+:root[data-density="compact"] .lightbox-top{top:calc(38px + 12px)}

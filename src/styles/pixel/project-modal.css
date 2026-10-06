@@ -1,0 +1,891 @@
+/* ============================================================
+   ОКНО МАТЕРИАЛА (src/modals/Project.tsx) — редизайн 04.10.2026
+   ------------------------------------------------------------
+   Владелец: «полный мусор, размеры сломаны». Окно теперь:
+   - всегда влезает в окно лаунчера (1200×760, минимум 980×640): размер от
+     подложки, шапка стоит, прокручивается только вкладка;
+   - шапка: иконка в ячейке инвентаря, автор, цифры, главное действие;
+   - картинки описания ограничены по высоте и открываются на весь экран;
+   - галерея — просмотрщик с лентой, версии — таблица «подходит сборке».
+   Всё под #pjModal: общие правила кита (.modal, .seg, .pj-body) не трогаются.
+   ============================================================ */
+
+/* ---------- Ступенчатая рамка для своих плашек (копия слоёв 12-pixel) ---------- */
+:root:root #pjModal :is(.pjx-x, .pjx-plate, .pjx-stage, .pjx-thumb, .pjx-nav, .pjx-chip, .pjx-table, .pjx-empty, .pjx-link) {
+  box-shadow: none !important;
+  background-image:
+    linear-gradient(var(--px-ol) 0 0),
+    linear-gradient(90deg, var(--px-ol) 0 calc(var(--px-n) + var(--px-ol-w)), #0000 0 calc(100% - var(--px-n) - var(--px-ol-w)), var(--px-ol) 0),
+    linear-gradient(90deg, var(--px-ol) 0 var(--px-ol-w), #0000 0 calc(100% - var(--px-ol-w)), var(--px-ol) 0),
+    linear-gradient(90deg, var(--px-ol) 0 calc(var(--px-n) + var(--px-ol-w)), #0000 0 calc(100% - var(--px-n) - var(--px-ol-w)), var(--px-ol) 0),
+    linear-gradient(var(--px-ol) 0 0),
+    linear-gradient(var(--px-ft) 0 0),
+    linear-gradient(90deg, var(--px-ft) 0 calc(var(--px-n) + var(--px-ft-w)), #0000 0 calc(100% - var(--px-n) - var(--px-ft-w)), var(--px-ft) 0),
+    linear-gradient(90deg, var(--px-fl) 0 var(--px-fl-w), #0000 0 calc(100% - var(--px-fr-w)), var(--px-fr) 0),
+    linear-gradient(90deg, var(--px-fb) 0 calc(var(--px-n) + var(--px-fb-w)), #0000 0 calc(100% - var(--px-n) - var(--px-fb-w)), var(--px-fb) 0),
+    linear-gradient(var(--px-fb) 0 0) !important;
+  background-size:
+    100% var(--px-ol-w),
+    100% var(--px-n),
+    100% calc(100% - 2 * var(--px-n) - 2 * var(--px-ol-w)),
+    100% var(--px-n),
+    100% var(--px-ol-w),
+    100% var(--px-ft-w),
+    100% var(--px-n),
+    100% calc(100% - 2 * var(--px-n) - var(--px-ft-w) - var(--px-fb-w)),
+    100% var(--px-n),
+    100% var(--px-fb-w) !important;
+  background-position:
+    0 0,
+    0 var(--px-ol-w),
+    0 calc(var(--px-n) + var(--px-ol-w)),
+    left 0 bottom var(--px-ol-w),
+    0 100%,
+    0 0,
+    0 var(--px-ft-w),
+    0 calc(var(--px-n) + var(--px-ft-w)),
+    left 0 bottom var(--px-fb-w),
+    0 100% !important;
+  background-repeat: no-repeat !important;
+  background-origin: border-box !important;
+  background-clip: border-box !important;
+}
+
+/* ---------- Окно: размер от подложки, а не от содержимого ---------- */
+#pjModal .modal.pjx {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(1280px, calc(100% - 32px));
+  max-width: none;
+  height: min(900px, calc(100% - 24px));
+  max-height: none;
+  padding: 0;
+  overflow: hidden;
+  background-color: var(--m-raised);
+}
+
+/* ---------- Шапка ---------- */
+#pjModal .pjx-head {
+  position: relative;
+  flex: none;
+  padding: 20px 22px 0;
+  isolation: isolate;
+  border-bottom: 2px solid rgba(0, 0, 0, 0.28);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.12) 100%);
+}
+/* Подсветка шапки — главная картинка мода, размытая в цвет. Без картинок —
+   фирменный цвет проекта. Тихо: только настроение, не картинка. */
+#pjModal .pjx-glow {
+  position: absolute;
+  z-index: -1;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  overflow: hidden;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.55) 55%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.55) 55%, transparent 100%);
+}
+#pjModal .pjx-glow > * {
+  position: absolute;
+  top: -40px;
+  left: -40px;
+  width: calc(100% + 80px);
+  height: calc(100% + 80px);
+  object-fit: cover;
+  filter: blur(36px) saturate(1.25);
+  opacity: 0.3;
+}
+#pjModal .pjx-glow > i { opacity: 0.22; }
+
+#pjModal .pjx-x {
+  position: absolute;
+  z-index: 2;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  color: var(--m-fg-subtle);
+  background-color: color-mix(in srgb, var(--m-fg) 6%, transparent);
+  --px-n: 4px;
+  clip-path: var(--px-4);
+  --px-fb: rgba(0, 0, 0, 0.3);
+  transition: background-color var(--m-t-fast), color var(--m-t-fast);
+}
+#pjModal .pjx-x:hover { color: var(--m-fg); background-color: color-mix(in srgb, var(--m-fg) 12%, transparent); }
+#pjModal .pjx-x:active { transform: translateY(1px); }
+
+#pjModal .pjx-id {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+  min-width: 0;
+  padding-right: 40px;
+}
+
+/* Иконка — в ячейке инвентаря: вдавленная фаска, прямые углы, как слот в игре. */
+#pjModal .pjx-icon {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  color: var(--m-fg-faint);
+  background: #18191b;
+  box-shadow: inset 3px 3px 0 #0b0b0c, inset -3px -3px 0 #3a3b40;
+}
+#pjModal .pjx-icon img {
+  width: 68px;
+  height: 68px;
+  object-fit: cover;
+  background: var(--m-inset);
+}
+#pjModal .pjx-icon-skel { width: 68px; height: 68px; border-radius: 0; }
+
+#pjModal .pjx-titles {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 1px;
+}
+#pjModal .pjx-kicker {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-height: 18px;
+  font: 800 10.5px/1 var(--m-font);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--m-fg-faint);
+}
+#pjModal .pjx-dot { width: 3px; height: 3px; background: currentColor; opacity: 0.7; }
+
+/* «В сборке Милли» — плашка как всплывающее описание предмета: тёмно-фиолетовая
+   с фиолетовой гранью (подсказка мода в карточке сборки — та же гамма). */
+#pjModal .pjx-milli-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 18px;
+  margin-left: 4px;
+  padding: 0 7px 0 6px;
+  font: 800 10.5px/1 var(--m-font);
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: #55ff55;
+  text-shadow: 1px 1px 0 #153f15;
+  background: rgba(16, 0, 16, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(110, 40, 255, 0.75), inset 0 -2px 0 rgba(52, 0, 150, 0.6);
+  clip-path: var(--px-4);
+}
+#pjModal .pjx-milli-tag.out { color: #a8a8a8; text-shadow: none; }
+
+#pjModal .pjx-title {
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font: 850 24px/1.15 var(--m-font);
+  letter-spacing: -0.02em;
+  color: var(--m-fg);
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.35);
+  overflow-wrap: anywhere;
+}
+#pjModal .pjx-title-skel { display: block; width: 46%; height: 22px; border-radius: 0; }
+
+#pjModal .pjx-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  font: 650 13px/1.3 var(--m-font);
+  color: var(--m-fg-subtle);
+  font-variant-numeric: tabular-nums;
+}
+#pjModal .pjx-by { color: var(--m-fg-faint); }
+/* Автор — бирюзой, как имя в подсказке мода: моддер на виду, ссылка на его страницу. */
+#pjModal .pjx-by a,
+#pjModal .pjx-by b {
+  color: #55ffff;
+  font-weight: 750;
+  text-decoration: none;
+  text-shadow: 1px 1px 0 rgba(21, 63, 63, 0.9);
+}
+#pjModal .pjx-by a:hover { text-decoration: underline; text-underline-offset: 3px; }
+#pjModal .pjx-stat { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+#pjModal .pjx-stat .px-icon { flex: none; }
+#pjModal .pjx-stat.dl .px-icon { color: var(--m-accent); }
+#pjModal .pjx-stat.fl .px-icon { color: #ff6b8a; }
+#pjModal .pjx-stat.up .px-icon { color: var(--m-fg-faint); }
+
+#pjModal .pjx-summary {
+  margin: 1px 0 0;
+  max-width: 640px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font: 500 13.5px/1.4 var(--m-font);
+  color: var(--m-fg-muted);
+}
+
+/* Главное действие — справа, на всю высоту шапки, подпись куда ставим. */
+#pjModal .pjx-cta {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: 216px;
+  padding-top: 22px;
+}
+#pjModal .pjx-cta-row { display: flex; gap: 6px; }
+#pjModal .pjx-cta .btn.md { flex: 1 1 auto; justify-content: center; gap: 8px; height: 42px; font-size: 14px; white-space: nowrap; }
+#pjModal .pjx-cta .btn.md.pjx-cancel { flex: none; width: 42px; padding: 0; }
+#pjModal .pjx-cta .btn.pjx-done { color: var(--m-accent); }
+#pjModal .pjx-cta .btn.pjx-rm:hover { color: #ffd0cc; background-color: #3a1614; }
+#pjModal .pjx-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font: 650 11.5px/1.2 var(--m-font);
+  color: var(--m-fg-faint);
+  text-align: center;
+}
+#pjModal span.pjx-note { flex-direction: column; gap: 3px; }
+#pjModal .pjx-note-t { display: flex; align-items: center; justify-content: center; gap: 6px; max-width: 100%; }
+#pjModal .pjx-note-t > span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#pjModal .pjx-note-s { font-weight: 750; color: var(--m-fg-subtle); }
+#pjModal .pjx-note.warn { color: var(--m-warning); }
+#pjModal .pjx-note .px-icon { flex: none; }
+#pjModal .pjx-back { padding: 2px 0; background: none; border: 0; cursor: pointer; color: #b9a7ff; }
+#pjModal .pjx-back:hover { color: #d9c8ff; text-decoration: underline; text-underline-offset: 3px; }
+#pjModal .pjx-locked {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 42px;
+  font: 750 13px/1 var(--m-font);
+  color: #a8a8a8;
+  background: rgba(16, 0, 16, 0.6);
+  box-shadow: inset 0 0 0 1px rgba(110, 40, 255, 0.5);
+  clip-path: var(--px-5);
+}
+
+/* Значки: загрузчики, версии игры, категории. */
+#pjModal .pjx-badges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 14px 0 0 102px;
+  max-height: 58px;
+  overflow: hidden;
+}
+#pjModal .pjx-sep { width: 2px; height: 16px; margin: 0 4px; background: color-mix(in srgb, var(--m-fg) 12%, transparent); }
+#pjModal .pjx-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 9px 0 8px;
+  font: 750 12px/1 var(--m-font);
+  white-space: nowrap;
+  color: var(--m-fg-muted);
+  background-color: color-mix(in srgb, var(--m-fg) 7%, transparent);
+  --px-n: 4px;
+  clip-path: var(--px-4);
+  --px-fb: rgba(0, 0, 0, 0.22);
+  --px-fb-w: 2px;
+}
+#pjModal .pjx-chip[data-ld] { color: var(--m-fg); }
+#pjModal .pjx-chip.ver { color: #9d9dff; background-color: rgba(85, 85, 255, 0.14); }
+#pjModal .pjx-chip.soft { color: var(--m-fg-subtle); background-color: color-mix(in srgb, var(--m-fg) 4%, transparent); }
+#pjModal .pjx-mi {
+  flex: none;
+  display: block;
+  width: 13px;
+  height: 13px;
+  background: currentColor;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  opacity: 0.85;
+}
+
+/* Вкладки + ссылка на сайт источника. */
+#pjModal .pjx-tabs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding-bottom: 12px;
+}
+#pjModal .pjx-tabs .segs { flex-wrap: nowrap; }
+#pjModal .pjx-tabs .seg { height: 34px; padding: 0 14px; }
+#pjModal .pjx-n {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 5px;
+  font: 800 11px/1 var(--m-font);
+  font-variant-numeric: tabular-nums;
+  color: var(--m-fg-subtle);
+  background: rgba(0, 0, 0, 0.26);
+  clip-path: var(--px-4);
+}
+#pjModal .seg.on .pjx-n { color: var(--m-fg); background: rgba(0, 0, 0, 0.34); }
+#pjModal .pjx-site { gap: 7px; color: var(--m-fg-subtle); }
+#pjModal .pjx-site:hover:not(:disabled) { color: var(--m-fg); }
+
+/* ---------- Тело: прокручивается только оно ---------- */
+#pjModal .pjx-body {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 18px 22px 24px;
+  background: rgba(0, 0, 0, 0.1);
+}
+#pjModal .pjx-pane[hidden] { display: none !important; }
+
+/* ---------- Описание: текст + сведения сбоку ---------- */
+#pjModal .pjx-desc {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 22px;
+  align-items: start;
+}
+#pjModal .pjx-aside {
+  position: -webkit-sticky;
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+#pjModal .pjx-art { min-width: 0; max-width: 780px; }
+#pjModal .pjx-art-h {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 12px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid color-mix(in srgb, var(--m-fg) 6%, transparent);
+  font: 800 10.5px/1 var(--m-font);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--m-fg-faint);
+}
+#pjModal .pjx-art-h .px-icon { color: var(--m-fg-subtle); }
+/* Перенос сразу после блока (заголовка, таблицы, картинки-абзаца) — пустая
+   строка: отрисовщик описаний делает <br> из каждой новой строки. */
+#pjModal .pjx-md > br:first-child,
+#pjModal .pjx-md :is(h3, h4, hr, details, table, center, div) + br { display: none; }
+#pjModal .pjx-md {
+  min-width: 0;
+  font: 450 14px/1.68 var(--m-font);
+  color: var(--m-fg-muted);
+  overflow-wrap: break-word;
+}
+#pjModal .pjx-md b,
+#pjModal .pjx-md strong { color: var(--m-fg); font-weight: 700; }
+#pjModal .pjx-md h3,
+#pjModal .pjx-md h4 {
+  margin: 20px 0 6px !important;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  color: var(--m-fg) !important;
+}
+#pjModal .pjx-md h3 { font-size: 17px; }
+#pjModal .pjx-md h4 { font-size: 15px; }
+#pjModal .pjx-md > :first-child,
+#pjModal .pjx-md > div:first-child > :first-child { margin-top: 0 !important; }
+#pjModal .pjx-md a { color: #6fdede !important; text-decoration: none; }
+#pjModal .pjx-md a:hover { text-decoration: underline; text-underline-offset: 3px; }
+/* Картинки описания: не шире текста и не выше 380px — баннер больше не
+   занимает весь экран. Клик открывает на весь экран (Project.tsx). */
+#pjModal .pjx-md img {
+  display: inline-block;
+  max-width: 100% !important;
+  max-height: min(320px, 42vh);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  vertical-align: middle;
+  border-radius: 0 !important;
+  margin: 6px 0 !important;
+  cursor: zoom-in;
+}
+/* Значки-ссылки (shields, Discord, Ko-fi) — строкой, мелко, без зума. */
+#pjModal .pjx-md a img { max-height: 40px; margin: 2px 4px 2px 0 !important; cursor: pointer; }
+#pjModal .pjx-md code {
+  padding: 1px 5px;
+  font-family: var(--m-mono) !important;
+  font-size: 12.5px;
+  color: var(--m-fg);
+  background: rgba(0, 0, 0, 0.3);
+}
+#pjModal .pjx-md details {
+  border-radius: 0 !important;
+  clip-path: var(--px-5);
+  background: rgba(0, 0, 0, 0.22) !important;
+}
+#pjModal .pjx-md table { display: block; max-width: 100%; overflow-x: auto; }
+#pjModal .pjx-md th,
+#pjModal .pjx-md td { border-color: color-mix(in srgb, var(--m-fg) 10%, transparent) !important; }
+#pjModal .pjx-md hr { border-top-color: color-mix(in srgb, var(--m-fg) 10%, transparent) !important; margin: 18px 0 !important; }
+#pjModal .pjx-md .faint-note { color: var(--m-fg-faint); }
+
+/* Плашки сбоку — тёмный «слот», грань снизу. */
+#pjModal .pjx-plate {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px 14px;
+  background-color: color-mix(in srgb, var(--m-fg) 4%, transparent);
+  --px-n: 5px;
+  clip-path: var(--px-5);
+  --px-ft: var(--px-plate-t);
+  --px-fb: var(--px-plate-b);
+}
+#pjModal .pjx-plate-h {
+  margin: 0 0 2px;
+  font: 800 10.5px/1 var(--m-font);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--m-fg-faint);
+}
+#pjModal .pjx-fact {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font: 600 12.5px/1.35 var(--m-font);
+}
+#pjModal .pjx-fact-k { flex: none; color: var(--m-fg-faint); }
+#pjModal .pjx-fact-v {
+  min-width: 0;
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 2px 6px;
+  text-align: right;
+  color: var(--m-fg);
+  font-variant-numeric: tabular-nums;
+}
+#pjModal .pjx-fact-v a { color: var(--m-fg); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--m-fg) 30%, transparent); text-underline-offset: 3px; }
+#pjModal .pjx-fact-v a:hover { color: #6fdede; }
+#pjModal .pjx-open { font-style: normal; font-size: 11px; font-weight: 750; color: var(--m-accent); }
+#pjModal .pjx-fit {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  font: 650 12.5px/1.35 var(--m-font);
+  clip-path: var(--px-4);
+}
+#pjModal .pjx-fit .px-icon { flex: none; margin-top: 3px; }
+#pjModal .pjx-fit.ok { color: var(--m-accent); background: var(--m-accent-soft); }
+#pjModal .pjx-fit.no { color: var(--m-warning); background: var(--m-warning-soft); }
+#pjModal .pjx-fit b { color: var(--m-fg); font-weight: 750; }
+
+#pjModal .pjx-links { display: flex; flex-direction: column; gap: 4px; }
+#pjModal .pjx-link {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  font: 650 12.5px/1 var(--m-font);
+  text-align: left;
+  color: var(--m-fg-muted);
+  background-color: color-mix(in srgb, var(--m-fg) 4%, transparent);
+  --px-n: 4px;
+  clip-path: var(--px-4);
+  --px-fb: rgba(0, 0, 0, 0.2);
+  --px-fb-w: 2px;
+  transition: background-color var(--m-t-fast), color var(--m-t-fast);
+}
+#pjModal .pjx-link span { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#pjModal .pjx-link:hover { color: var(--m-fg); background-color: color-mix(in srgb, var(--m-fg) 9%, transparent); }
+#pjModal .pjx-link .px-icon { flex: none; }
+#pjModal .pjx-link .pjx-link-ext { opacity: 0.45; }
+#pjModal .pjx-link.donate .px-icon:first-child { color: #ff6b8a; }
+#pjModal .pjx-link.discord .px-icon:first-child { color: #8b9bff; }
+#pjModal .pjx-link.source .px-icon:first-child { color: var(--m-accent); }
+
+/* Сборка Милли: подсказка предмета — фиолетовая грань, «почему» зелёным. */
+#pjModal .pjx-plate.pjx-milli {
+  background-color: rgba(16, 0, 16, 0.78);
+  --px-ol: rgba(110, 40, 255, 0.7);
+  --px-ol-w: 2px;
+  --px-ft: transparent;
+  --px-fb: rgba(52, 0, 150, 0.5);
+}
+#pjModal .pjx-milli .pjx-plate-h { color: #b9a7ff; }
+#pjModal .pjx-why {
+  margin: 0;
+  display: flex;
+  gap: 8px;
+  font: 700 12.5px/1.4 var(--m-font);
+  color: #55ff55;
+  text-shadow: 1px 1px 0 #153f15;
+}
+#pjModal .pjx-why .px-icon { flex: none; margin-top: 3px; }
+#pjModal .pjx-need { margin: 0; font: 600 12px/1.4 var(--m-font); color: #a8a8a8; }
+#pjModal .pjx-need b { color: #fff; font-weight: 700; }
+
+/* ---------- Галерея: просмотрщик + лента ---------- */
+#pjModal .pjx-body[data-tab='gallery'] { display: flex; flex-direction: column; }
+#pjModal .pjx-gal:not([hidden]) {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+#pjModal .pjx-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 200px;
+  overflow: hidden;
+  background-color: #0e0f10;
+  --px-n: 5px;
+  clip-path: var(--px-5);
+  --px-ol: rgba(0, 0, 0, 0.5);
+  --px-ol-w: 2px;
+}
+/* Под картинкой — она же, размытая: поля по бокам не чёрные дыры. */
+#pjModal .pjx-stage-bg {
+  position: absolute;
+  top: -30px;
+  left: -30px;
+  width: calc(100% + 60px);
+  height: calc(100% + 60px);
+  object-fit: cover;
+  filter: blur(26px) brightness(0.45) saturate(1.15);
+  pointer-events: none;
+}
+#pjModal .pjx-stage-img {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  bottom: 10px;
+  left: 10px;
+  display: block;
+  padding: 0;
+  cursor: zoom-in;
+  background: none;
+}
+#pjModal .pjx-stage-img img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  animation: pjxShotIn 160ms steps(3, end);
+}
+@keyframes pjxShotIn { from { opacity: 0; } }
+#pjModal .pjx-count,
+#pjModal .pjx-zoom {
+  position: absolute;
+  z-index: 2;
+  top: 12px;
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  font: 800 11.5px/1 var(--m-font);
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.6);
+  clip-path: var(--px-4);
+  pointer-events: none;
+}
+#pjModal .pjx-count { left: 12px; }
+#pjModal .pjx-zoom { right: 12px; opacity: 0; transition: opacity var(--m-t-fast); }
+#pjModal .pjx-stage:hover .pjx-zoom { opacity: 1; }
+#pjModal .pjx-nav {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 46px;
+  margin-top: -23px;
+  color: #fff;
+  background-color: rgba(0, 0, 0, 0.55);
+  --px-n: 4px;
+  clip-path: var(--px-4);
+  --px-ft: rgba(255, 255, 255, 0.12);
+  --px-fb: rgba(0, 0, 0, 0.4);
+  opacity: 0.75;
+  transition: opacity var(--m-t-fast), background-color var(--m-t-fast);
+}
+#pjModal .pjx-nav.prev { left: 12px; }
+#pjModal .pjx-nav.next { right: 12px; }
+#pjModal .pjx-stage:hover .pjx-nav { opacity: 1; }
+#pjModal .pjx-nav:hover { background-color: rgba(0, 0, 0, 0.78); }
+#pjModal .pjx-nav:active { transform: translateY(1px); }
+#pjModal .pjx-cap {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  font: 500 13px/1.4 var(--m-font);
+  color: var(--m-fg-subtle);
+}
+#pjModal .pjx-cap b { flex: none; max-width: 45%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 750; color: var(--m-fg); }
+#pjModal .pjx-cap span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#pjModal .pjx-strip {
+  flex: none;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 2px 6px;
+  scrollbar-width: thin;
+}
+#pjModal .pjx-thumb {
+  position: relative;
+  flex: none;
+  width: 112px;
+  height: 64px;
+  padding: 4px;
+  background-color: #18191b;
+  --px-n: 4px;
+  clip-path: var(--px-4);
+  --px-ol: rgba(255, 255, 255, 0.06);
+  --px-ol-w: 2px;
+  cursor: pointer;
+}
+#pjModal .pjx-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.6;
+  transition: opacity var(--m-t-fast);
+}
+#pjModal .pjx-thumb:hover img { opacity: 0.9; }
+#pjModal .pjx-thumb.on { --px-ol: var(--m-accent); --px-ol-w: 3px; background-color: var(--m-accent); }
+#pjModal .pjx-thumb.on img { opacity: 1; }
+
+/* ---------- Версии: таблица ---------- */
+#pjModal .pjx-vbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+#pjModal .pjx-vbar .seg { height: 32px; padding: 0 12px; max-width: 360px; }
+#pjModal .pjx-vbar-t { font: 700 13px/1 var(--m-font); color: var(--m-fg-subtle); }
+#pjModal .pjx-vbar-build {
+  font: 700 12px/1 var(--m-font);
+  color: var(--m-fg-faint);
+  white-space: nowrap;
+}
+#pjModal .pjx-fitdot { width: 8px; height: 8px; background: var(--m-accent); }
+
+#pjModal .pjx-table {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0 6px;
+  background-color: color-mix(in srgb, var(--m-fg) 3%, transparent);
+  --px-n: 5px;
+  clip-path: var(--px-5);
+  --px-ft: var(--px-plate-t);
+  --px-fb: var(--px-plate-b);
+}
+#pjModal .pjx-tr {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 128px 132px 112px 70px 128px;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 6px 14px;
+  border-top: 1px solid color-mix(in srgb, var(--m-fg) 6%, transparent);
+  font: 600 12.5px/1.3 var(--m-font);
+  color: var(--m-fg-subtle);
+  font-variant-numeric: tabular-nums;
+}
+#pjModal .pjx-table.has-cm .pjx-tr { grid-template-columns: 18px minmax(0, 1fr) 128px 132px 112px 70px 128px; }
+#pjModal .pjx-tr:hover:not(.pjx-th) { background: color-mix(in srgb, var(--m-fg) 4%, transparent); }
+#pjModal .pjx-th {
+  min-height: 32px;
+  border-top: 0;
+  font: 800 10.5px/1 var(--m-font);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--m-fg-faint);
+}
+#pjModal .pjx-tr > * { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#pjModal .pjx-tr .r { text-align: right; }
+#pjModal .pjx-tr.miss .pjx-vname b { color: var(--m-fg-subtle); }
+#pjModal .pjx-cm { display: grid; place-items: center; width: 18px; height: 18px; clip-path: var(--px-4); }
+#pjModal .pjx-cm.ok { color: #06200e; background: var(--m-accent); }
+#pjModal .pjx-cm.no { color: var(--m-warning); background: var(--m-warning-soft); }
+#pjModal .pjx-vname { display: flex; flex-direction: column; gap: 3px; }
+#pjModal .pjx-vname b { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13.5px; font-weight: 750; color: var(--m-fg); }
+#pjModal .pjx-vname > span { display: flex; align-items: center; gap: 6px; min-height: 0; overflow: hidden; }
+#pjModal .pjx-vname > span:empty { display: none; }
+#pjModal .pjx-vnum { overflow: hidden; text-overflow: ellipsis; font: 600 11.5px/1 var(--m-mono); color: var(--m-fg-faint); }
+#pjModal .pjx-type {
+  flex: none;
+  padding: 3px 5px;
+  font: 800 10px/1 var(--m-font);
+  font-style: normal;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  clip-path: var(--px-4);
+}
+#pjModal .pjx-type.beta { color: var(--m-warning); background: var(--m-warning-soft); }
+#pjModal .pjx-type.alpha { color: var(--m-danger); background: var(--m-danger-soft); }
+#pjModal .pjx-vgame { color: var(--m-fg); }
+#pjModal .pjx-vact { display: flex; justify-content: flex-end; gap: 4px; }
+#pjModal .pjx-vact .btn.sm { gap: 6px; min-width: 96px; justify-content: center; }
+#pjModal .pjx-vact .btn.pjx-done { color: var(--m-accent); }
+#pjModal .pjx-more { align-self: center; margin: 10px 0 4px; }
+
+/* ---------- Пусто / ошибка ---------- */
+#pjModal .pjx-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 220px;
+  padding: 28px 20px;
+  text-align: center;
+  font: 500 13px/1.45 var(--m-font);
+  color: var(--m-fg-subtle);
+  background-color: color-mix(in srgb, var(--m-fg) 3%, transparent);
+  --px-n: 5px;
+  clip-path: var(--px-5);
+}
+#pjModal .pjx-empty > .px-icon { color: var(--m-fg-faint); margin-bottom: 4px; }
+#pjModal .pjx-empty b { font-size: 15px; font-weight: 800; color: var(--m-fg); }
+#pjModal .pjx-empty .btn { margin-top: 8px; gap: 8px; }
+#pjModal .pjx-gal .pjx-empty { flex: 1 1 auto; }
+
+/* ---------- Окно поменьше (980×640 и около) ---------- */
+@media (max-width: 1120px) {
+  #pjModal .pjx-desc { grid-template-columns: minmax(0, 1fr) 236px; gap: 18px; }
+  #pjModal .pjx-tr,
+  #pjModal .pjx-table.has-cm .pjx-tr { gap: 10px; }
+  #pjModal .pjx-table .pjx-tr { grid-template-columns: minmax(0, 1fr) 112px 104px 96px 64px 118px; }
+  #pjModal .pjx-table.has-cm .pjx-tr { grid-template-columns: 18px minmax(0, 1fr) 112px 104px 96px 64px 118px; }
+  #pjModal .pjx-cta { width: 200px; }
+}
+@media (max-height: 720px) {
+  #pjModal .pjx-head { padding-top: 16px; }
+  #pjModal .pjx-icon { width: 72px; height: 72px; }
+  #pjModal .pjx-icon img,
+  #pjModal .pjx-icon-skel { width: 58px; height: 58px; }
+  #pjModal .pjx-badges { margin-left: 90px; margin-top: 10px; max-height: 24px; }
+  #pjModal .pjx-title { font-size: 21px; -webkit-line-clamp: 1; }
+  #pjModal .pjx-cta { padding-top: 14px; }
+  #pjModal .pjx-tabs { margin-top: 10px; padding-bottom: 10px; }
+  #pjModal .pjx-body { padding-top: 14px; }
+}
+@media (max-width: 860px) {
+  #pjModal .pjx-desc { grid-template-columns: minmax(0, 1fr); }
+  #pjModal .pjx-aside { position: static; order: -1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #pjModal .pjx-stage-img img { animation: none; }
+}
+
+/* ---------- Перевод описания ---------- */
+#pjModal .pjx-art-h .pjx-art-t { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#pjModal .pjx-lang { flex: none; display: flex; align-items: center; gap: 4px; margin: -6px 0; text-transform: none; letter-spacing: 0; }
+#pjModal .pjx-lang-b {
+  height: 26px;
+  padding: 0 10px 1px;
+  font: 750 12px/1 var(--m-font);
+  color: var(--m-fg-subtle);
+  background: color-mix(in srgb, var(--m-fg) 5%, transparent);
+  clip-path: var(--px-4);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.25);
+  transition: background-color var(--m-t-fast), color var(--m-t-fast);
+}
+#pjModal .pjx-lang-b:hover { color: var(--m-fg); background: color-mix(in srgb, var(--m-fg) 10%, transparent); }
+#pjModal .pjx-lang-b.on { color: var(--m-fg); background: color-mix(in srgb, var(--m-fg) 14%, transparent); box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.08), inset 0 -2px 0 rgba(0, 0, 0, 0.3); }
+/* RU — зачарованная кнопка: фиолетовая подсказка предмета. */
+#pjModal .pjx-lang-b.ru { color: #d9c8ff; background: rgba(60, 20, 120, 0.35); }
+#pjModal .pjx-lang-b.ru.on { color: #fff; background: rgba(110, 40, 255, 0.55); box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.18), inset 0 -2px 0 rgba(30, 0, 90, 0.6); }
+#pjModal .pjx-tr-err {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  font: 650 12.5px/1.3 var(--m-font);
+  color: var(--m-warning);
+  background: var(--m-warning-soft);
+  clip-path: var(--px-4);
+}
+#pjModal .pjx-tr-err span { flex: 1 1 auto; }
+#pjModal .pjx-tr-retry { flex: none; padding: 0; font: 750 12.5px/1 var(--m-font); color: var(--m-fg); text-decoration: underline; text-underline-offset: 3px; background: none; }
+
+/* ---------- Зависимости ---------- */
+#pjModal .pjx-deps-v { margin-top: -4px; font: 600 11px/1.2 var(--m-mono); color: var(--m-fg-faint); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#pjModal .pjx-dg { display: flex; flex-direction: column; gap: 6px; }
+#pjModal .pjx-dg-h { font: 750 11.5px/1 var(--m-font); color: var(--m-fg-subtle); }
+#pjModal .pjx-dg.required .pjx-dg-h { color: var(--m-accent); }
+#pjModal .pjx-dg.incompatible .pjx-dg-h { color: var(--m-danger); }
+#pjModal .pjx-dg.needed .pjx-dg-h { color: #b9a7ff; }
+#pjModal .pjx-dg-list { display: flex; flex-wrap: wrap; gap: 4px; }
+#pjModal .pjx-dep {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  height: 28px;
+  padding: 0 9px 0 4px;
+  font: 700 12px/1 var(--m-font);
+  color: var(--m-fg);
+  background: color-mix(in srgb, var(--m-fg) 6%, transparent);
+  clip-path: var(--px-4);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.25);
+  transition: background-color var(--m-t-fast);
+}
+#pjModal button.pjx-dep:hover:not(:disabled) { background: color-mix(in srgb, var(--m-fg) 12%, transparent); }
+#pjModal button.pjx-dep:active:not(:disabled) { transform: translateY(1px); }
+#pjModal .pjx-dep > span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#pjModal .pjx-dep img,
+#pjModal .pjx-dep-ph { flex: none; display: block; width: 20px; height: 20px; object-fit: cover; background: #18191b; box-shadow: inset 1px 1px 0 #0b0b0c, inset -1px -1px 0 #3a3b40; }
+#pjModal .pjx-dg.incompatible .pjx-dep { color: #ffd0cc; background: rgba(255, 107, 94, 0.12); }
+#pjModal .pjx-dg.needed .pjx-dep { color: #d9c8ff; background: rgba(60, 20, 120, 0.3); }
+#pjModal .pjx-dg-more { align-self: center; font: 700 11.5px/1 var(--m-font); color: var(--m-fg-faint); }
+#pjModal .pjx-deps-none { display: flex; align-items: center; gap: 7px; font: 650 12.5px/1.3 var(--m-font); color: var(--m-fg-subtle); }
+#pjModal .pjx-deps-none .px-icon { color: var(--m-accent); }

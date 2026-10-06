@@ -30,6 +30,7 @@ import {
   ownPackHit,
   peekHit,
   plural,
+  realUpdated,
   relativeTime,
   resolveHit,
   versionRange,
@@ -534,7 +535,7 @@ export function SiteRow(props: RowProps) {
   const { hit, resolve } = useCardHit(card)
   const open = useOpen(props)
   const name = displayName(card.title)
-  const updated = relativeTime(card.updatedAt || card.publishedAt)
+  const updated = relativeTime(realUpdated(card))
   const dl = ownDownloads(card)
   const price = usePrice(card)
   // У наших сборок логотипа нет, есть обложка — она и встаёт в квадрат 96×96
@@ -588,71 +589,99 @@ export function SiteRow(props: RowProps) {
  * описания, две метки, скачивания и одна главная кнопка. Всё остальное —
  * «Новая сборка», «На сервер», версии — на странице материала.
  */
+/**
+ * Плитка ленты (06.10.2026, владелец: «как человеку понять, что мне скачивать — на Modrinth лучше»):
+ * три в ряд; сверху — скриншот, только если он настоящий (не растянутый логотип); ниже значок,
+ * название и автор, описание в две строки — что это за вещь, метки (категория и загрузчики),
+ * скачивания и тихая «В сборку».
+ */
+const VISUAL_KINDS = new Set<string>(['modpack', 'resourcepack', 'shader', 'world', 'seed'])
+
 export function SiteGalleryCard(props: RowProps) {
   const { card, sec } = props
   const { hit, resolve } = useCardHit(card)
   const open = useOpen(props)
   const name = displayName(card.title)
+  // Обложка = логотип или крошечная картинка — растянутые пиксели; такую не показываем.
+  const [tiny, setTiny] = useState(false)
+  // Моды, плагины, дата-паки выбирают по описанию — там плитки одинаковые, без картинки сверху
+  // (смесь «с картинкой / без» рвала ряды). Картинка — где смотрят глазами: шейдеры, текстуры, сборки, карты.
+  const visual = VISUAL_KINDS.has(sec.kind)
+  const shot = visual && card.cover && card.cover !== card.icon && !tiny ? card.cover : null
   const tags: Tag[] = []
   if (card.aiGenerated === true) tags.push(milliTag())
   if (props.list === 'all') tags.push({ label: sec.title })
   if (card.edition === 'BEDROCK') tags.push({ label: 'Bedrock' })
+  if (card.categories[0]) tags.push(catTag(card.categories[0]))
   for (const l of card.loaders.filter((x) => x !== 'minecraft').slice(0, 2)) tags.push(loaderTag(l))
   const range = versionRange(card.versions)
   if (range && tags.length < 2) tags.push(versionsTag(range))
-  if (tags.length < 2 && card.categories[0]) tags.push(catTag(card.categories[0]))
-  const dl = ownDownloads(card)
+  // Скачивания — у всех (владелец 06.10.2026): наши, а если их мало — первоисточника.
+  const dl = Math.max(ownDownloads(card) || 0, card.sourceDownloads || 0, card.mrHit?.dl || 0) || null
+  const logo = card.icon || card.cover
+  const badge = isExclusive(card.slug) ? <span className="ph-card-tag excl">Эксклюзив</span> : card.premium ? <span className="ph-card-tag prem">Премиум</span> : null
   return (
     <CompactCtx.Provider value={true}>
       <article
-        className={['card mr-gal', card.premium ? 'is-premium' : '', partnerFrame(card.partner)].filter(Boolean).join(' ')}
+        className={['card mr-gal', shot ? 'has-shot' : 'no-shot', card.premium ? 'is-premium' : '', partnerFrame(card.partner)].filter(Boolean).join(' ')}
         data-track="row_open"
         data-kind={trackKind(card, sec)}
         data-id={card.slug}
         data-pos={props.pos}
         onClick={open}
       >
-        <span className="mr-gal-cover" aria-hidden="true">
-          {card.cover ? (
-            img(card.cover)
-          ) : card.icon ? (
-            // Нет скриншота — логотип крупно на своей размытой копии, как на сайте.
+        {/* В «визуальных» разделах полоса картинки есть у всех — иначе ряды разной высоты:
+            нет скриншота — логотип на своей размытой копии. */}
+        {!shot && visual && logo ? (
+          <span className="mr-gal-cover" aria-hidden="true">
             <span className="mr-gal-iconcover">
-              {img(card.icon)}
-              {img(card.icon)}
+              {img(logo)}
+              {img(logo)}
             </span>
-          ) : (
-            <Fallback slug={card.slug} section={sec.slug} title={name} />
-          )}
-          {isExclusive(card.slug) ? <span className="ph-card-tag excl">Эксклюзив</span> : card.premium ? <span className="ph-card-tag prem">Премиум</span> : null}
-        </span>
-        <span className="mr-gal-body">
-          <span className="mr-gal-icon" aria-hidden="true">
-            {/* Нет логотипа — центр скриншота (импортированные карты), блок — только без обоих. */}
-            {card.icon || card.cover ? img((card.icon || card.cover)!) : <Fallback slug={card.slug} section={sec.slug} title={name} />}
+            {badge}
           </span>
-          <h3 className="mr-gal-title">{name}</h3>
-          <span className="mr-gal-author">
-            {/* При двух кнопках («В сборку» и «На хостинг») скачивания — здесь, низ отдан кнопкам. */}
-            {dl ? (
-              <span className="mr-gal-stat2">
-                <Icon id="i-download" />
-                <b>{fmtNum(dl)}</b>
+        ) : null}
+        {shot ? (
+          <span className="mr-gal-cover" aria-hidden="true">
+            <img
+              src={shot}
+              alt=""
+              loading="lazy"
+              draggable={false}
+              onLoad={(e) => {
+                const { naturalWidth: w, naturalHeight: h } = e.currentTarget
+                // Крошечная или квадратная (логотип, растянутый в обложку) — не скриншот.
+                if (w < 360 || (h > 0 && Math.abs(w / h - 1) < 0.2)) setTiny(true)
+              }}
+              onError={() => setTiny(true)}
+            />
+            {badge}
+          </span>
+        ) : null}
+        <span className="mr-gal-body">
+          <span className="mr-gal-head">
+            <span className="mr-gal-icon" aria-hidden="true">
+              {logo ? img(logo) : <Fallback slug={card.slug} section={sec.slug} title={name} />}
+            </span>
+            <span className="mr-gal-names">
+              <h3 className="mr-gal-title">{name}</h3>
+              <span className="mr-gal-author">
+                <span className="mr-gal-by">{card.author ? 'от ' + card.author : sec.title}</span>
+                {dl ? (
+                  <span className="mr-gal-dl" title="Скачиваний">
+                    <Icon id="i-download" />
+                    {fmtNum(dl)}
+                  </span>
+                ) : null}
               </span>
-            ) : null}
-            {card.author || sec.title}
+            </span>
+            {shot || (visual && logo) ? null : badge}
           </span>
           {card.summary ? <span className="mr-gal-summary">{card.summary}</span> : null}
-          <Tags tags={tags} className="mr-gal-tags" />
+          <Tags tags={tags.slice(0, 3)} className="mr-gal-tags" />
           <span className="mr-gal-foot">
             <span className="mr-gal-stat">
               <PriceMark card={card} />
-              {dl ? (
-                <>
-                  <Icon id="i-download" />
-                  <b>{fmtNum(dl)}</b>
-                </>
-              ) : null}
             </span>
             <RowActions card={card} sec={sec} hit={hit} resolve={resolve} />
           </span>

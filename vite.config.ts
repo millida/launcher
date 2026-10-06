@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { oldWebKitCss } from './scripts/old-webkit-css.mjs'
 
@@ -10,7 +10,10 @@ const publicFile = (p: string) => fileURLToPath(new URL('public/' + p, import.me
 const bundledVideos = ['bg1', 'bg2', 'bg3', 'bg4'].filter((id) => existsSync(publicFile('bg/' + id + '.mp4')))
 const hasBundledMusic = existsSync(publicFile('music/01-starlight-city.mp3'))
 
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  // Тестовая Милли (milli-server): адрес и токен только из .env.local, в сборку не попадают.
+  const env = loadEnv(mode, process.cwd(), 'MILLI_TEST_')
+  return {
   plugins: [react(), oldWebKitCss()],
   clearScreen: false,
   define: {
@@ -28,6 +31,16 @@ export default defineConfig({
     // Телеметрию и heartbeat глушим — локальный запуск не должен попадать
     // в онлайн лаунчера в админке. Подробно — docs/LOCAL-DEV.md.
     proxy: {
+      ...(env.MILLI_TEST_URL
+        ? {
+            '/milli-test': {
+              target: env.MILLI_TEST_URL,
+              changeOrigin: true,
+              rewrite: (p: string) => p.replace(/^\/milli-test/, ''),
+              headers: { 'X-Milli-Token': env.MILLI_TEST_TOKEN ?? '' },
+            },
+          }
+        : {}),
       '/papi': {
         target: 'https://api.millida.net',
         changeOrigin: true,
@@ -47,4 +60,5 @@ export default defineConfig({
   // The x64 bundle starts on macOS 10.13, whose WKWebView can be as old as Safari 13:
   // newer syntax there is a parse error and the window stays blank.
   build: { target: ['es2020', 'safari13'] },
+  }
 })

@@ -19,6 +19,8 @@ import type { SectionSlug } from './sections'
 import { Fallback, MrIcon, RowActions, SiteGalleryCard, useCardHit } from './SiteRow'
 import { PriceMark, usePaidCard } from './PaidActs'
 import { useCatalogCtx } from './target'
+import { MediaStrip } from './MediaStrip'
+import { similarFor } from './similar'
 import { closeItem, openItem, useItem } from './itemStore'
 import type { OpenItem } from './itemStore'
 import {
@@ -32,11 +34,12 @@ import {
   loaderTone,
   ownDownloads,
   plural,
+  realUpdated,
   relativeTime,
   sectionBySlug,
   siteUrl,
 } from './site'
-import type { CuratedItem, ItemView, SiteCard, SiteSection, SkinTile } from './site'
+import type { CuratedItem, ItemView, SiteCard, SiteSection, SiteSlug, SkinTile } from './site'
 import { CHEATS, cheatBody, cheatName, defaultPick, filesFor, loaderOptions, sizeLabel, spanOf, versionOptions } from './itemView'
 import type { VerFile } from './itemView'
 import { weaveMarkdown } from './weave'
@@ -101,7 +104,7 @@ async function loadMillida(card: SiteCard, sec: SiteSection): Promise<ItemData> 
     files: (it.files || []).map((f) => ({ id: f.id, name: f.version, gameVersions: f.gameVersions || [], loaders: f.loaders || [], size: f.size, date: f.releasedAt })),
     tags: (it.tags || []).slice(0, 8),
     license: it.license || null,
-    updated: it.updatedAt || card.updatedAt || null,
+    updated: realUpdated(card, it.files || []),
     side: it.side || card.side,
     website: siteUrl(sec.slug, card.slug),
     // У сборок сервер отдаёт безымянные «Зависимость» без slug — это не подсказка игроку.
@@ -211,10 +214,12 @@ export function Back({ label, onBack = closeItem }: { label: string; onBack?: ()
   )
 }
 
+const SHOW_BANNER = false
+
 export function Hero({
   cover,
   icon,
-  art,
+  glow,
   title,
   by,
   facts,
@@ -223,23 +228,32 @@ export function Hero({
   badge,
   line,
 }: {
-  cover: ReactNode
+  /** Рамка партнёра и т.п. — к шапке. */
+  className?: string | null
+  /** Обложка полосой; нет обложки — нет полосы (владелец 06.10.2026: «не надо заглушку»). */
+  cover: ReactNode | null
   icon: ReactNode
-  art?: boolean
+  /** Картинка значка — мягкое цветное свечение в шапке без обложки. */
+  glow?: string | null
   title: string
-  by: string | null
+  by: ReactNode
   facts: ReactNode[]
   cta: ReactNode
-  className?: string
   badge?: ReactNode
   line?: string | null
 }) {
   return (
-    <header className={['card ci-hero', className].filter(Boolean).join(' ')}>
-      <div className={'ci-banner' + (art ? ' is-art' : '')}>
-        {cover}
-        {badge}
-      </div>
+    // Полосу-обложку сверху пробуем убрать у всех страниц (владелец 06.10.2026): кадры и так
+    // в мини-плеере ниже. Вернуть — SHOW_BANNER = true.
+    <header className={'card ci-hero' + (cover && SHOW_BANNER ? '' : ' is-flat') + (className ? ' ' + className : '')}>
+      {cover && SHOW_BANNER ? (
+        <div className="ci-banner">
+          {cover}
+          {badge}
+        </div>
+      ) : glow ? (
+        <span className="ci-glow" aria-hidden="true" style={{ backgroundImage: 'url("' + glow + '")' }} />
+      ) : null}
       <div className="ci-head">
         <span className="ci-icon">{icon}</span>
         <div className="ci-titles">
@@ -266,11 +280,11 @@ function LoaderChip({ l }: { l: string }) {
 
 export type Tab = 'desc' | 'gallery' | 'versions'
 
-export function Tabs({ tab, onTab, gallery, versions }: { tab: Tab; onTab: (t: Tab) => void; gallery: number; versions: number }) {
+export function Tabs({ tab, onTab, gallery, versions, versionsLabel = 'Версии' }: { tab: Tab; onTab: (t: Tab) => void; gallery: number; versions: number; versionsLabel?: string }) {
   const list: [Tab, string, number | null][] = [
     ['desc', 'Описание', null],
     ['gallery', 'Галерея', gallery],
-    ['versions', 'Версии', versions],
+    ['versions', versionsLabel, versions],
   ]
   return (
     <div className="segs mr-subtypes ci-tabs" role="tablist">
@@ -447,9 +461,23 @@ function CardPage({ card, sec }: { card: SiteCard; sec: SiteSection }) {
   const [pick, setPick] = useState<{ version: string | null; loader: string | null }>({ version: null, loader: null })
   useEffect(() => setPick(defaultPick(files, build)), [data])
   useEffect(() => setTab('desc'), [card.slug])
+  // «Похожие» по смыслу (similar.ts); не нашлись — запасной список сайта.
+  const [like, setLike] = useState<SiteCard[] | null>(null)
+  useEffect(() => {
+    let alive = true
+    setLike(null)
+    void resolve()
+      .then((h) => (h ? similarFor(h, sec.slug as SiteSlug) : []))
+      .then((l) => alive && setLike(l))
+      .catch(() => alive && setLike([]))
+    return () => {
+      alive = false
+    }
+  }, [card.slug])
+  const similar = like && like.length >= 3 ? like : data ? data.similar : []
   const name = displayName(card.title)
   const dl = ownDownloads(card)
-  const updated = relativeTime((data && data.updated) || card.updatedAt || card.publishedAt)
+  const updated = relativeTime((data && data.updated) || realUpdated(card))
   // Файл по выбору ставится только своим путём каталога и только в сборку.
   const canPick = !!data && data.pickable && target.kind === 'build' && sec.source === 'listing' && sec.kind !== 'plugin' && sec.kind !== 'serverpack' && sec.kind !== 'addon'
   const installFile = canPick ? (f: VerFile) => void installFromCatalog(sec.slug, card.slug, { fileId: f.id }) : undefined
@@ -478,8 +506,8 @@ function CardPage({ card, sec }: { card: SiteCard; sec: SiteSection }) {
     <div className="ci" data-section="item" data-kind={sec.kind} data-id={card.slug}>
       <Back label={sec.title} />
       <Hero
-        cover={cover ? <img src={cover} alt="" draggable={false} /> : <Fallback slug={card.slug} section={sec.slug} title={name} />}
-        art={!cover}
+        cover={cover ? <img src={cover} alt="" draggable={false} /> : null}
+        glow={card.icon || null}
         icon={card.icon || card.cover ? <img src={card.icon || card.cover!} alt="" draggable={false} /> : <Fallback slug={card.slug} section={sec.slug} title={name} />}
         title={name}
         by={card.author ? 'от ' + card.author : null}
@@ -494,6 +522,7 @@ function CardPage({ card, sec }: { card: SiteCard; sec: SiteSection }) {
       <div className="ci-grid">
         <main className="ci-main">
           <Tabs tab={tab} onTab={setTab} gallery={shots.length} versions={files.length} />
+          {tab === 'desc' && shots.length ? <MediaStrip urls={shots} onAll={() => setTab('gallery')} /> : null}
           {tab === 'desc' ? (
             <article className="card ci-box ci-desc pj-body">
               {data === null ? DescSkel() : data.body ? renderMarkdown(weaveMarkdown(data.body, shots)) : <p className="faint-note">{card.summary || 'Без описания'}</p>}
@@ -562,11 +591,11 @@ function CardPage({ card, sec }: { card: SiteCard; sec: SiteSection }) {
           ) : null}
         </aside>
       </div>
-      {data && data.similar.length ? (
+      {similar.length ? (
         <section className="ci-similar" aria-label="Похожие">
           <h2 className="ci-sim-h">Похожие</h2>
           <div className="mr-galgrid">
-            {data.similar.map((c, i) => (
+            {similar.map((c, i) => (
               <SiteGalleryCard key={c.slug} card={c} sec={c.section ? sectionBySlug(c.section) : sec} pos={i} />
             ))}
           </div>
@@ -609,8 +638,7 @@ function CheatPage({ it }: { it: CuratedItem }) {
     <div className="ci" data-section="item" data-kind="cheat" data-id={it.slug}>
       <Back label={sec.title} />
       <Hero
-        cover={art}
-        art
+        cover={null}
         icon={art}
         title={name}
         by={info ? info.kind : null}

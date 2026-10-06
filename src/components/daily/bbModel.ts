@@ -266,6 +266,8 @@ const DEG = Math.PI / 180
 
 export interface BbRig {
   root: Group
+  /** Крышка модели (кость chest_up): к ней добавляют приоткрытие поверх клипа. */
+  lid: Group | null
   pose(clip: BbClip | null, t: number): void
   dispose(): void
 }
@@ -283,6 +285,7 @@ export function buildBbRig(model: BbModel): BbRig {
   const materials: Material[] = maps.map((map) => new MeshLambertMaterial({ map, alphaTest: 0.5 }))
   const geometries: BufferGeometry[] = []
   const rest = new Map<string, { obj: Group; position: Vec3; rotation: Vec3 }>()
+  let lid: Group | null = null
 
   const place = (n: BbBone | BbCube, parentOrigin: Vec3): Group => {
     const obj = new Group()
@@ -292,6 +295,7 @@ export function buildBbRig(model: BbModel): BbRig {
     obj.rotation.set(n.rotation[0] * DEG, n.rotation[1] * DEG, n.rotation[2] * DEG)
     if (isBone(n)) {
       rest.set(n.uuid, { obj, position, rotation: n.rotation })
+      if (n.name === 'chest_up') lid = obj
       for (const c of n.children) obj.add(place(c, n.origin))
     } else {
       const geo = cubeGeometry(n, model.textures)
@@ -308,6 +312,7 @@ export function buildBbRig(model: BbModel): BbRig {
 
   return {
     root,
+    lid,
     pose(clip, t) {
       for (const { obj, position, rotation } of rest.values()) {
         obj.position.set(...position)

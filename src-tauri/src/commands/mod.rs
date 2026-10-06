@@ -6,6 +6,7 @@ pub mod hosting;
 pub mod system;
 pub mod overlay;
 pub mod dungeons;
+pub mod milli;
 
 /// Disk sweeps, archive work and process spawns must not run on the event loop
 /// thread: a synchronous command there freezes the window until it returns.

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { ANARCHY_CELLS, FY_HEAD_CELLS, ROW, headCells, modesShown, shelfOrder, shownCount } from './placement'
+import { ANARCHY_CELLS, FY_HEAD_CELLS, ROW, headCells, modesShown, shelfOrder, shownCount, withPrison } from './placement'
 import { ANARCHY } from '../../lib/ownServer'
 import { ANARCHY_ID, DEFAULT_PROMO } from '../../state/promo'
 
@@ -58,5 +58,19 @@ describe('«Режимы» shelf', () => {
   for (const [total, all, lead, want, why] of counts)
     test(why, () => {
       expect(shownCount(total, all, lead), why).toBe(want)
+    })
+})
+
+describe('PrisonRPG on the «Режимы» shelf', () => {
+  const PRISON = { def: { cat: 'prisonrpg' } }
+  const cases: Array<[string[], boolean, string[], string]> = [
+    [['ONEBLOCK', 'SURVIVAL', 'BEDWARS'], true, ['ONEBLOCK', 'prisonrpg', 'BEDWARS', 'SURVIVAL'], 'the owner put PrisonRPG in the Survival cell, Survival goes behind «Остальные»'],
+    [['ONEBLOCK', 'BEDWARS', 'SKYWARS'], true, ['ONEBLOCK', 'prisonrpg', 'BEDWARS', 'SKYWARS'], 'without Survival PrisonRPG still stands right after OneBlock'],
+    [[], true, ['prisonrpg'], 'an empty rating still shows PrisonRPG'],
+    [['ONEBLOCK', 'SURVIVAL'], false, ['ONEBLOCK', 'SURVIVAL'], 'without the catalogue card Survival keeps its cell'],
+  ]
+  for (const [input, ready, want, why] of cases)
+    test(why, () => {
+      expect(withPrison(input.map(mode), ready ? PRISON : null).map((m) => m.def.cat), why).toEqual(want)
     })
 })

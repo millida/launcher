@@ -20,6 +20,7 @@ import {
 } from '../../lib/creator'
 import { useDaily } from '../../state/daily'
 import { showToast } from '../../state/ui'
+import { useShopGift } from './giftState'
 
 const sinceText = (iso: string) => {
   const d = new Date(iso)
@@ -117,7 +118,7 @@ export function CreatorCode() {
           sub: 'Подарок за первый код автора',
           items: [{ name: CHEST_NAME[tier] + ' сундук', rarity: tier, art: <ChestLive ready tier={tier} size={150} look="model" /> }],
           doneLabel: 'В сундуки',
-          onDone: () => document.querySelector('#s-rubies .mc')?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
+          onDone: () => useShopGift.getState().setTab('chests'),
         })
       } else {
         showReward({

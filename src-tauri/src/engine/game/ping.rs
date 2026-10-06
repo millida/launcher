@@ -86,6 +86,40 @@ fn split_host_port(addr: &str) -> (String, u16) {
     }
 }
 
+const SRV_WAIT: Duration = Duration::from_secs(3);
+
+fn srv_name(addr: &str) -> Option<String> {
+    let (host, port) = split_host_port(addr);
+    let explicit_port = port != 25565 || addr.ends_with(":25565");
+    if explicit_port || host.is_empty() || host.parse::<std::net::IpAddr>().is_ok() {
+        return None;
+    }
+    Some(format!("_minecraft._tcp.{}", host.trim_end_matches('.')))
+}
+
+/// The address the game itself would connect to: a name without a port is
+/// looked up as `_minecraft._tcp.<name>` first, because its A record often
+/// points at the website instead of the game server. Any lookup failure keeps
+/// the address as given, as the game does.
+pub async fn resolve_srv(addr: &str) -> String {
+    use hickory_resolver::TokioResolver;
+    static RESOLVER: std::sync::OnceLock<Option<TokioResolver>> = std::sync::OnceLock::new();
+    let Some(name) = srv_name(addr) else { return addr.to_string() };
+    let resolver = RESOLVER.get_or_init(|| TokioResolver::builder_tokio().map(|b| b.build()).ok());
+    let Some(resolver) = resolver else { return addr.to_string() };
+    let found = match tokio::time::timeout(SRV_WAIT, resolver.srv_lookup(name)).await {
+        Ok(Ok(found)) => found,
+        _ => return addr.to_string(),
+    };
+    found
+        .iter()
+        .min_by_key(|r| r.priority())
+        .map(|r| (r.target().to_utf8().trim_end_matches('.').to_string(), r.port()))
+        .filter(|(target, port)| !target.is_empty() && *port != 0)
+        .map(|(target, port)| format!("{target}:{port}"))
+        .unwrap_or_else(|| addr.to_string())
+}
+
 pub fn ping(addr: &str) -> Result<PingResult, String> {
     let (host, port) = split_host_port(addr);
     // The webview picks the address, so without this the command is a probe for
@@ -158,6 +192,21 @@ mod tests {
 
     /// address -> verdict. The webview reaches this command directly, so a ping
     /// must never turn into a port scan of the user's machine or LAN.
+    #[test]
+    fn srv_is_looked_up_only_for_a_bare_name() {
+        let cases = [
+            ("mcru.me", Some("_minecraft._tcp.mcru.me"), "a bare name is how players type a server that lives behind SRV"),
+            ("Play.Example.org.", Some("_minecraft._tcp.Play.Example.org"), "a trailing root dot must not double into the query"),
+            ("mcru.me:25565", None, "an explicit port means the player already chose the endpoint"),
+            ("mcru.me:25577", None, "a non-default port bypasses SRV in the game too"),
+            ("37.230.228.225", None, "an IP literal has no SRV record to look up"),
+            ("[2001:db8::1]:25565", None, "an IPv6 literal must not be turned into a DNS name"),
+        ];
+        for (addr, want, why) in cases {
+            assert_eq!(srv_name(addr).as_deref(), want, "{addr}: {why}");
+        }
+    }
+
     #[test]
     fn local_targets_are_refused_before_any_connect() {
         let cases = [

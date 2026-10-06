@@ -49,7 +49,9 @@ import { track } from '../lib/telemetry'
 import { ANARCHY, ONEBLOCK_PACK, anarchyMode, modeAction, ownServerMode, targetsAnarchy, targetsOwnServer } from '../lib/ownServer'
 import { loadAnarchyOnline } from '../lib/anarchy'
 import { AnarchyTile } from '../components/playhub/AnarchyTile'
-import { modesShown, shelfOrder, shownCount } from '../components/playhub/placement'
+import { PrisonTile } from '../components/playhub/PrisonTile'
+import { PRISON_SLUG, featuredSpot } from '../components/playhub/featured'
+import { modesShown, shelfOrder, shownCount, withPrison } from '../components/playhub/placement'
 import { usePromo } from '../state/promo'
 import '../styles/pixel/playhub.css'
 
@@ -428,6 +430,9 @@ export function PlayHub({ on }: { on?: boolean }) {
     return [...ours, ...(mrPacks || [])]
   }, [packs, mrPacks])
 
+  const prisonPack = packs === null ? undefined : catalogPacks.find((p) => p.slug === PRISON_SLUG) || null
+  const featured = featuredSpot(prisonPack)
+
   const obPack = catalogPacks.find((p) => p.slug === ONEBLOCK_PACK) || premiumPacks.find((p) => p.slug === ONEBLOCK_PACK) || null
   const ownMode = obPack ? premiumMode(obPack) : ownServerMode()
 
@@ -457,7 +462,10 @@ export function PlayHub({ on }: { on?: boolean }) {
   }, [page && page.id])
 
   const own = OWN_SERVER
-  const shelfModes = useMemo(() => shelfOrder(modes || []), [modes])
+  const shelfModes = useMemo(
+    () => withPrison(shelfOrder(modes || []), prisonPack ? { def: { cat: PRISON_SLUG }, pack: prisonPack } : null),
+    [modes, prisonPack],
+  )
   const wrap = (child: ReactNode) => (
     <section className={'screen playhub' + (on ? ' on' : '')} id="s-playhub">
       {child}
@@ -579,9 +587,9 @@ export function PlayHub({ on }: { on?: boolean }) {
 
   const modesPane = (
     <div className="ph-row ph-mts" data-section="modes">
-      {modes === null ? (
+      {modes === null || prisonPack === undefined ? (
         <CardSkel n={10} />
-      ) : modes.length ? (
+      ) : shelfModes.length ? (
         <>
           {anarchyLead ? (
             <AnarchyTile
@@ -591,7 +599,9 @@ export function PlayHub({ on }: { on?: boolean }) {
               onClick={() => pickMode(ANARCHY.mode)}
             />
           ) : null}
-          {shownModes.map(modeTile)}
+          {shownModes.map((m, i) =>
+            'pack' in m ? <PrisonTile key={PRISON_SLUG} cell index={i} pack={m.pack} onClick={() => openPack(m.pack)} /> : modeTile(m, i),
+          )}
           {shelfModes.length > foldedCount ? (
             <button
               className="ph-card ph-mt ph-mt-all"
@@ -749,6 +759,7 @@ export function PlayHub({ on }: { on?: boolean }) {
           packs={forYouPacks}
           oneblockOnline={obOnline}
           anarchyOnline={anarchyOnline}
+          featured={featured}
           onPlay={launch}
           onPack={openPack}
           onMode={(cat) => pickMode(cat, 'foryou')}
@@ -772,6 +783,13 @@ export function PlayHub({ on }: { on?: boolean }) {
             if (!openPackSlug(slug)) openSection('modpack', title)
           }}
           onMap={(title) => openSection('world', title)}
+          // Клик — страница самой вещи, как в «Рекомендуем»; наша сборка — её страница хаба.
+          onItem={(section, card) => {
+            if (section === 'modpacks' && openPackSlug(card.slug)) return
+            noteVisitSection(section)
+            openSection(sectionBySlug(section).kind)
+            requestAnimationFrame(() => openItem({ kind: 'card', section, card }))
+          }}
         />,
       )}
       {/* Игры Minecraft — такими же карточками, как сборки; клик открывает экран игры (владелец 29.09.2026). */}

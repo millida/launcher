@@ -16,10 +16,12 @@ import {
   type SetView,
   buyXray,
   claimPackQuest,
+  claimTelegramReward,
   claimWeekly,
   craftItem,
   loadEconomyProgress,
   loadPackQuests,
+  loadTelegramReward,
   DEFAULT_PLUS_OFFERS,
   loadPlusEconomy,
   loadRules,
@@ -29,6 +31,7 @@ import {
   wishItem,
   type EconomyProgress,
   type PackQuest,
+  type TelegramReward,
   type ItemRef,
   type PlusEconomy,
   type Rules,
@@ -70,6 +73,7 @@ import { wearNow } from '../state/wearIntent'
 import { topUpFragments } from '../components/shop/topUp'
 import { fragmentWord } from '../components/shop/rarity'
 import { QuestsBlock } from '../components/shop/Quests'
+import { TelegramRewardBlock } from '../components/shop/TelegramReward'
 import { questsToShow } from '../components/shop/packQuests'
 import { SetHero, SetsTab } from '../components/shop/Sets'
 import { CaseOpening, CasesTab, caseTitle } from '../components/shop/Cases'
@@ -143,6 +147,7 @@ export function Rubies({ on }: { on: boolean }) {
   const [parcel, setParcel] = useState<WeeklyParcel | null>(null)
   const [progress, setProgress] = useState<EconomyProgress | null>(null)
   const [quests, setQuests] = useState<PackQuest[]>([])
+  const [telegram, setTelegram] = useState<TelegramReward | null>(null)
   const [plus, setPlus] = useState<PlusEconomy | null>(null)
   const [rules, setRules] = useState<Rules | null>(null)
   const [catalog, setCatalog] = useState<Map<string, ItemRef>>(new Map())
@@ -252,6 +257,16 @@ export function Rubies({ on }: { on: boolean }) {
 
   useEffect(() => {
     if (!on || !signedIn) return
+    const reload = () => {
+      loadTelegramReward().then(setTelegram).catch(() => setTelegram(null))
+    }
+    reload()
+    window.addEventListener('focus', reload)
+    return () => window.removeEventListener('focus', reload)
+  }, [on, signedIn])
+
+  useEffect(() => {
+    if (!on || !signedIn) return
     return onRealtime('account', () => void loadPlusEconomy().then(setPlus).catch(() => undefined))
   }, [on, signedIn])
 
@@ -293,9 +308,9 @@ export function Rubies({ on }: { on: boolean }) {
   // Прокрутка по просьбе снаружи («Хочу», «Пополнить») — один раз, потом якорь сбрасывается.
   useEffect(() => {
     if (!on || !day || anchor === 'today') return
-    const page: ShopPage = anchor === 'progress' ? 'tasks' : anchor === 'wish' || anchor === 'rubies' ? 'rubies' : 'today'
+    const page: ShopPage = anchor === 'progress' || anchor === 'chests' ? 'tasks' : anchor === 'wish' || anchor === 'rubies' ? 'rubies' : 'today'
     setTab(page)
-    scrollTo(anchor === 'wish' ? 'shop-wish' : anchor === 'rubies' ? 'shopPacks' : 'shop-today')
+    scrollTo(anchor === 'wish' ? 'shop-wish' : anchor === 'rubies' ? 'shopPacks' : anchor === 'chests' ? 'shop-pass' : 'shop-today')
     useShopGift.getState().setTab('today')
   }, [on, anchor, !!day, !!wishes])
 
@@ -540,6 +555,32 @@ export function Rubies({ on }: { on: boolean }) {
     }
   }
 
+  const doTelegram = async () => {
+    setBusy('telegram')
+    try {
+      const res = await claimTelegramReward()
+      setTelegram(res)
+      if (res.balance !== null) {
+        const balance = res.balance
+        setDay((d) => (d ? { ...d, balance } : d))
+      }
+      if (res.granted) {
+        showReward({
+          level: 'mid',
+          items: [{ name: 'Рубины', rubies: res.amount }],
+          title: 'Начислено',
+          sub: res.amount.toLocaleString('ru-RU') + ' ' + word(res.amount),
+        })
+      } else showToast('Награда за подписку уже забрана', 'ok')
+    } catch (e) {
+      trackFailure('shop', e, { step: 'action' })
+      showToast(apiErrorText(e, ERR), 'error')
+      loadTelegramReward().then(setTelegram).catch(() => setTelegram(null))
+    } finally {
+      setBusy('')
+    }
+  }
+
   /** Посылка недели: фрагменты одной вещи из трёх, остаток докупается. */
   const doParcel = async (item: ItemRef) => {
     setBusy('weekly')
@@ -759,6 +800,7 @@ export function Rubies({ on }: { on: boolean }) {
         <ParcelBlock data={parcel} busy={busy} onClaim={(it) => void doParcel(it)} />
       ) : null}
       </Guard>
+      <Guard what="Telegram-канал" silent><TelegramRewardBlock view={telegram} busy={busy === 'telegram'} onClaim={() => void doTelegram()} /></Guard>
       <Guard what="Задания сборок" silent><QuestsBlock quests={quests} busy={busy} onClaim={(q) => void doPackQuest(q)} /></Guard>
       <Guard what="Мастерская" silent>{workshop ? <WorkshopBlock data={workshop} busy={busy} weekly={!!weekly} onCraft={(w) => void doCraft(w)} onTopUp={(f) => void doFragmentsTopUp(f)} /> : null}</Guard>
       <Guard what="Путь" silent>{progress ? <PathBlock data={progress} /> : null}</Guard>

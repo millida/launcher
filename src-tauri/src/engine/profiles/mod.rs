@@ -12,6 +12,7 @@ mod export;
 mod share;
 mod covers;
 mod migrate;
+mod milli_local;
 
 pub use store::*;
 pub use mods::*;
@@ -27,3 +28,4 @@ pub use export::*;
 pub use share::*;
 pub use covers::*;
 pub use migrate::*;
+pub use milli_local::*;

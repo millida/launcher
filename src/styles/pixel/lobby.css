@@ -669,6 +669,18 @@
   .lobby-an:hover .lan-hero { translate: 0 -4px; }
 }
 .lobby-an:active .lan-go { transform: scale(0.97); }
+/* PrisonRPG in the same spot on its turn: the partner's full banner with the
+   anarchy CTA in the gold of its logo. */
+.lobby-rec.lobby-an.lobby-pr { --an-night: #15111d; --an-lava: #ffc531; --an-lava-hover: #ffd35c; --an-ink: #1c1405; }
+.lpr-art { inset: 0; z-index: 1; width: 100%; height: 100%; object-fit: cover; object-position: 50% 40%; image-rendering: auto; pointer-events: none; transition: scale 220ms var(--m-ease-move); }
+.lobby-pr .lan-foot { left: 12px; bottom: 12px; }
+.lobby-pr .lan-on { padding: 6px 8px 7px; color: rgba(255, 255, 255, 0.86); background: rgba(21, 17, 29, 0.82); clip-path: var(--px-5); }
+@media (hover: hover) and (pointer: fine) {
+  .lobby-pr:hover .lpr-art { scale: 1.03; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lobby-pr:hover .lpr-art { scale: none; }
+}
 @media (max-height: 640px) { .lobby-rec { display: none; } }
 @media (prefers-reduced-motion: reduce) {
   .lobby-rec, .lrec-scene img, .lobby-an .an-lava i { animation: none; }

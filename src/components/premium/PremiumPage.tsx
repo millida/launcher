@@ -3,7 +3,7 @@ import { Icon } from '../Icon'
 import { openImage } from '../ImageLightbox'
 import { openExt } from '../../lib/api'
 import { PremiumHero } from './PremiumHero'
-import { BuyBlock, CancelLine } from './PremiumBuy'
+import { BuyBlock, CancelLine, orderPlans, planBadge } from './PremiumBuy'
 import {
   loadPremiumPack,
   planPrice,
@@ -129,24 +129,28 @@ export function PremiumPage({ pack, plan, sub, onBack }: Props) {
         <div className="pm-block">
           <h3>Подписка</h3>
           <div className="pm-plans">
-            {plans.map((p) => (
-              <div className="pm-plan-card" key={p.id}>
-                <div className="pm-row">
-                  <b>{p.title}</b>
-                  <span className="pm-plan-price">{planPrice(p)}</span>
+            {orderPlans(plans).map((p, _, list) => {
+              const badge = planBadge(p, list)
+              return (
+                <div className={'pm-plan-card pab-planbox' + (badge ? ' best' : '')} key={p.id}>
+                  {badge ? <span className="pab-plan-badge">{badge}</span> : null}
+                  <div className="pm-row">
+                    <b>{p.title}</b>
+                    <span className="pm-plan-price">{planPrice(p)}</span>
+                  </div>
+                  {p.items && p.items.length ? (
+                    <ul className="pm-list">
+                      {p.items.map((i) => (
+                        <li key={i}>
+                          <Icon id="i-check" />
+                          {i}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
                 </div>
-                {p.items && p.items.length ? (
-                  <ul className="pm-list">
-                    {p.items.map((i) => (
-                      <li key={i}>
-                        <Icon id="i-check" />
-                        {i}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       ) : null}

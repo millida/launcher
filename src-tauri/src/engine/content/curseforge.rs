@@ -146,7 +146,7 @@ pub(crate) async fn cf_download_cancellable(
     file: &Value,
     fname: &str,
     dest: &Path,
-    cancel: Option<&std::sync::atomic::AtomicBool>,
+    cancel: Option<&Halt>,
 ) -> Result<String, String> {
     let sha1 = cf_sha1(file);
     let sum = if sha1.is_empty() { None } else { Some(Sum::Sha1(sha1.as_str())) };
@@ -220,7 +220,7 @@ pub(crate) struct CfFetched {
 pub(crate) async fn cf_fetch_manifest_files(
     list: &[Value],
     mods: &Path,
-    cancel: Option<&std::sync::atomic::AtomicBool>,
+    cancel: Option<&Halt>,
     on_file: &(dyn Fn(usize, usize) + Sync),
 ) -> Result<CfFetched, String> {
     use futures::TryStreamExt;

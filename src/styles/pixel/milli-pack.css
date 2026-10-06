@@ -1,0 +1,648 @@
+/* ============================================================
+   КАРТОЧКА СБОРКИ МИЛЛИ и ПОДСКАЗКА МОДА (04.10.2026).
+   src/components/milli/MilliPack.tsx, MilliModTip.tsx.
+   Язык лаунчера: токены --m-*, срез углов и «ступенчатая рамка» из
+   12-pixel.css, кнопки .btn. Minecraft — акцентами: ячейки инвентаря под
+   иконками, рисунки предметов, полоса опыта при установке.
+   Свои классы (.mpc-*, .mtip-*): старые .mpk-… и .mtt… в milli.css не нужны.
+   ============================================================ */
+
+/* Слои ступенчатой рамки — те же, что в 12-pixel.css (там список
+   селекторов чужой, поэтому повторяем правило для своих). */
+:root:root :is(.mpc, .mpl, .mpl-chip, .mtip, .mpc-fix, .mpc-review, .mpc-excl, .mpc-srv, .mpc-up, .mpc-orphan, .mpc-plate, .mpc-code) {
+  box-shadow: none;
+  background-image:
+    linear-gradient(var(--px-ol) 0 0),
+    linear-gradient(90deg, var(--px-ol) 0 calc(var(--px-n) + var(--px-ol-w)), #0000 0 calc(100% - var(--px-n) - var(--px-ol-w)), var(--px-ol) 0),
+    linear-gradient(90deg, var(--px-ol) 0 var(--px-ol-w), #0000 0 calc(100% - var(--px-ol-w)), var(--px-ol) 0),
+    linear-gradient(90deg, var(--px-ol) 0 calc(var(--px-n) + var(--px-ol-w)), #0000 0 calc(100% - var(--px-n) - var(--px-ol-w)), var(--px-ol) 0),
+    linear-gradient(var(--px-ol) 0 0),
+    linear-gradient(var(--px-ft) 0 0),
+    linear-gradient(90deg, var(--px-ft) 0 calc(var(--px-n) + var(--px-ft-w)), #0000 0 calc(100% - var(--px-n) - var(--px-ft-w)), var(--px-ft) 0),
+    linear-gradient(90deg, var(--px-fl) 0 var(--px-fl-w), #0000 0 calc(100% - var(--px-fr-w)), var(--px-fr) 0),
+    linear-gradient(90deg, var(--px-fb) 0 calc(var(--px-n) + var(--px-fb-w)), #0000 0 calc(100% - var(--px-n) - var(--px-fb-w)), var(--px-fb) 0),
+    linear-gradient(var(--px-fb) 0 0),
+    var(--px-img, none);
+  background-size:
+    100% var(--px-ol-w), 100% var(--px-n), 100% calc(100% - 2 * var(--px-n) - 2 * var(--px-ol-w)), 100% var(--px-n), 100% var(--px-ol-w),
+    100% var(--px-ft-w), 100% var(--px-n), 100% calc(100% - 2 * var(--px-n) - var(--px-ft-w) - var(--px-fb-w)), 100% var(--px-n), 100% var(--px-fb-w),
+    var(--px-img-size, auto);
+  background-position:
+    0 0, 0 var(--px-ol-w), 0 calc(var(--px-n) + var(--px-ol-w)), left 0 bottom var(--px-ol-w), 0 100%,
+    0 0, 0 var(--px-ft-w), 0 calc(var(--px-n) + var(--px-ft-w)), left 0 bottom var(--px-fb-w), 0 100%,
+    var(--px-img-pos, 0 0);
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, var(--px-img-repeat, repeat);
+  background-origin: border-box, border-box, border-box, border-box, border-box, border-box, border-box, border-box, border-box, border-box, var(--px-img-origin, padding-box);
+  background-clip: border-box;
+}
+
+/* ── карточка ─────────────────────────────────────────────── */
+.mpc {
+  position: relative; align-self: stretch; min-width: 0;
+  display: flex; flex-direction: column; gap: 10px; padding: 12px 12px 13px;
+  container: mpc / inline-size;
+  --mpc-body-h: clamp(260px, calc(100vh - 500px), 360px);
+  color: var(--m-fg); font-family: var(--m-font);
+  background-color: var(--m-bg);
+  --px-n: 10px; clip-path: var(--px-10);
+  --px-ol: color-mix(in srgb, var(--m-accent) 50%, transparent); --px-ol-w: 2px;
+  --px-ft: rgba(255, 255, 255, 0.05); --px-ft-w: 2px; --px-fb: rgba(0, 0, 0, 0.3); --px-fb-w: 4px;
+}
+
+/* ячейка инвентаря — единственная «игровая» деталь у каждой иконки */
+.mpc-slot, .mtip-ic, .mpc-badge {
+  position: relative; flex: none; display: grid; place-items: center; width: 36px; height: 36px;
+  background: #18191b;
+  box-shadow: inset 2px 2px 0 #0b0b0c, inset -2px -2px 0 #3a3b40;
+}
+.mpc-slot img { width: 28px; height: 28px; object-fit: cover; display: block; }
+.mpc-slot > svg, .mpc-badge > svg, .mtip-ic > svg { display: block; image-rendering: pixelated; }
+.mpc-slot::after {
+  content: ''; position: absolute; inset: 2px; pointer-events: none; opacity: 0; background: #fff;
+  transition: opacity 60ms steps(1, end);
+}
+.mpc-lock {
+  position: absolute; z-index: 1; right: -3px; bottom: -3px; width: 14px; height: 14px; display: grid; place-items: center;
+  color: #2a1c00; background: var(--m-rarity-legendary); box-shadow: 0 0 0 1px var(--m-bg);
+}
+.mpc-lock .px-icon { width: 8px; height: 8px; }
+
+/* ── шапка ────────────────────────────────────────────────── */
+.mpc-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.mpc-badge { width: 40px; height: 40px; }
+.mpc-head-id { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.mpc-title {
+  width: 100%; min-width: 0; height: 26px; margin: 0 0 0 -5px; padding: 0 5px; border: 0; outline: 0; background: transparent;
+  color: var(--m-fg); font: 900 16px/1 var(--m-font); text-overflow: ellipsis;
+  --px-n: 4px; clip-path: var(--px-4);
+}
+.mpc-title:hover:not(:disabled), .mpc-title:focus { background: var(--m-inset); }
+.mpc-title:disabled { color: var(--m-fg); opacity: 1; }
+.mpc-plates { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.mpc-plate {
+  display: inline-flex; align-items: center; gap: 4px; padding: 4px 7px 5px; font: 800 11px/1 var(--m-font); color: var(--m-fg);
+  background-color: var(--m-surface-2); --px-n: 3px; clip-path: var(--px-4);
+}
+.mpc-plate .px-icon { width: 8px; height: 8px; }
+.mpc-plate.ok { color: var(--m-accent); background-color: var(--m-accent-soft); }
+.mpc-plate.bad { color: var(--m-danger); background-color: var(--m-danger-soft); }
+.mpc-plate.mid { color: var(--m-warning); background-color: var(--m-warning-soft); }
+.mpc-plate.wait { color: var(--m-fg-muted); }
+.mpc-plate .spin { width: 9px; height: 9px; }
+
+/* Милли починила сборку после пробного запуска */
+.mpc-fix {
+  display: flex; align-items: center; gap: 10px; padding: 8px 8px 9px 12px;
+  background-color: var(--m-accent-soft); --px-n: 5px; clip-path: var(--px-5);
+  --px-fl: var(--m-accent); --px-fl-w: 3px;
+}
+.mpc-fix-t { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mpc-fix-t b { font: 800 12.5px/1.25 var(--m-font); color: var(--m-accent); }
+.mpc-fix-t span { font: 600 12px/1.35 var(--m-font); color: var(--m-fg-muted); }
+.mpc-fix .btn { flex: none; gap: 7px; }
+.mpc-count { flex: none; align-self: flex-start; display: flex; align-items: baseline; gap: 1px; padding-top: 3px; font-variant-numeric: tabular-nums; }
+.mpc-count b { font: 900 19px/1 var(--m-font); color: var(--m-fg); }
+.mpc-count i { font: 750 12px/1 var(--m-font); font-style: normal; color: var(--m-fg-subtle); }
+
+/* ── «Милли перепроверила» ───────────────────────────────── */
+.mpc-review {
+  display: flex; flex-direction: column; gap: 6px; padding: 8px 10px 9px;
+  background-color: var(--m-surface); --px-n: 5px; clip-path: var(--px-5);
+  --px-fl: var(--m-rarity-legendary); --px-fl-w: 3px;
+}
+.mpc-review-h { display: flex; align-items: center; gap: 6px; font: 800 11px/1 var(--m-font); letter-spacing: 0.04em; text-transform: uppercase; color: var(--m-rarity-legendary); }
+.mpc-review-l { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.mpc-review-l > span { font: 750 12.5px/1.3 var(--m-font); }
+.mpc-review-l > .add { color: var(--m-accent); }
+.mpc-review-l > .rm { color: var(--m-danger); cursor: help; text-decoration: underline dotted color-mix(in srgb, var(--m-danger) 60%, transparent); text-underline-offset: 3px; }
+
+/* ── раздел ───────────────────────────────────────────────── */
+.mpc-sec { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.mpc-sec-h {
+  display: flex; align-items: center; gap: 7px; margin: 0 0 2px; padding: 0 2px;
+  font: 800 11px/1 var(--m-font); letter-spacing: 0.06em; text-transform: uppercase; color: var(--m-fg-subtle);
+}
+.mpc-sec-h > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mpc-sec-h > i { margin-left: auto; font-style: normal; font-variant-numeric: tabular-nums; color: var(--m-fg-faint); letter-spacing: 0; }
+.mpc-sec-h > svg { flex: none; }
+
+/* ── строки ───────────────────────────────────────────────── */
+.mpc-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mpc-row {
+  position: relative; width: 100%; min-width: 0; min-height: 46px; display: flex; align-items: center; gap: 10px;
+  padding: 4px 10px 4px 4px; text-align: left; color: inherit; background-color: transparent; cursor: pointer; outline: 0;
+  --px-n: 4px; clip-path: var(--px-4);
+  transition: background-color var(--m-t-fast);
+}
+.mpc-row:hover, .mpc-row.tip { background-color: var(--m-surface); }
+.mpc-row:hover .mpc-slot::after, .mpc-row.tip .mpc-slot::after { opacity: 0.14; }
+.mpc-row:focus-visible { background-color: var(--m-surface); outline: 2px solid var(--m-accent); outline-offset: -2px; }
+.mpc-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.mpc-name {
+  font: 750 13.5px/1.2 var(--m-font); color: var(--m-fg);
+  overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.mpc-sub { display: flex; align-items: center; gap: 10px; min-width: 0; font: 650 11.5px/1.2 var(--m-font); color: var(--m-fg-subtle); white-space: nowrap; overflow: hidden; }
+.mpc-by { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--m-info); }
+.mpc-dl { flex: none; display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
+.mpc-dl .px-icon { width: 8px; height: 8px; }
+.mpc-why { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.mpc-risk { display: inline-grid; place-items: center; width: 14px; height: 14px; margin-left: 6px; vertical-align: 1px; color: #2a1c00; background: var(--m-warning); }
+.mpc-risk .px-icon { width: 8px; height: 8px; }
+.mpc-skel { display: block; width: 120px; max-width: 70%; height: 8px; background: var(--m-surface-2); }
+
+/* галочка — тихая: тёмный квадрат, отмечено — зелёный */
+.mpc-box {
+  flex: none; width: 18px; height: 18px; display: grid; place-items: center; color: var(--px-on-accent, #06200e);
+  background: var(--m-inset); outline: 2px solid var(--m-border-strong); outline-offset: -2px;
+  transition: background-color var(--m-t-fast), outline-color var(--m-t-fast);
+}
+.mpc-box .px-icon { width: 10px; height: 10px; }
+.mpc-row.on .mpc-box { background: var(--m-accent); outline-color: var(--m-accent); }
+.mpc-row:hover .mpc-box, .mpc-row.tip .mpc-box { outline-color: var(--m-fg-subtle); }
+.mpc-row.on:hover .mpc-box, .mpc-row.on.tip .mpc-box { outline-color: var(--m-accent-hover); background: var(--m-accent-hover); }
+.mpc-need { flex: none; font: 750 10.5px/1 var(--m-font); color: var(--m-rarity-legendary); }
+
+/* убрано: иконка серая, название зачёркнуто */
+.mpc-row:not(.on) .mpc-slot img { filter: grayscale(1); opacity: 0.45; }
+.mpc-row:not(.on) .mpc-name { color: var(--m-fg-faint); text-decoration: line-through; text-decoration-color: rgba(255, 255, 255, 0.35); }
+.mpc-row:not(.on) .mpc-sub { opacity: 0.7; }
+
+/* «Можно добавить»: не отмечено — не «убрано», без зачёркивания */
+.mpc-row.opt:not(.on) .mpc-name { color: var(--m-fg-muted); text-decoration: none; }
+.mpc-row.opt:not(.on) .mpc-slot img { filter: none; opacity: 0.75; }
+.mpc-row.locked, .frozen .mpc-row { cursor: default; }
+.frozen .mpc-box { opacity: 0.5; }
+
+/* библиотека под своим модом: пиксельная ветка └ */
+.mpc-row.dep { min-height: 34px; padding-left: 28px; gap: 8px; }
+.mpc-row.dep::before {
+  content: ''; position: absolute; left: 20px; top: 0; width: 8px; height: 50%; pointer-events: none;
+  border-left: 2px solid var(--m-border-strong); border-bottom: 2px solid var(--m-border-strong);
+}
+.mpc-list > .mpc-row.dep + .mpc-row.dep::before { top: -2px; height: calc(50% + 2px); }
+.mpc-row.dep .mpc-slot, .mpc-row.sm .mpc-slot { width: 28px; height: 28px; }
+.mpc-row.dep .mpc-slot img, .mpc-row.sm .mpc-slot img { width: 20px; height: 20px; }
+.mpc-row.dep .mpc-name, .mpc-row.sm .mpc-name { font-size: 12.5px; -webkit-line-clamp: 1; }
+.mpc-row.dep .mpc-sub, .mpc-row.sm .mpc-sub { font-size: 11px; gap: 6px; }
+.mpc-row.dep .mpc-box, .mpc-row.sm .mpc-box { width: 16px; height: 16px; }
+.mpc-row.sm { min-height: 38px; gap: 8px; }
+.mpc-lib { flex: none; color: var(--m-rarity-legendary); }
+.mpc-row.warn .mpc-sub, .mpc-row.warn .mpc-why { color: var(--m-danger); opacity: 1; }
+
+/* мод убран — его библиотеки больше никому не нужны */
+.mpc-orphan {
+  display: flex; align-items: center; gap: 8px; margin: 2px 0 4px 28px; padding: 6px 6px 6px 10px;
+  font: 650 12px/1.3 var(--m-font); color: var(--m-fg-muted);
+  background-color: var(--m-warning-soft); --px-n: 4px; clip-path: var(--px-4);
+  --px-fl: var(--m-warning); --px-fl-w: 2px;
+}
+.mpc-orphan > span { flex: 1 1 auto; min-width: 0; }
+.mpc-orphan b { color: var(--m-fg); font-weight: 750; }
+:root .mpc-orphan .btn.sm { flex: none; height: 28px; min-height: 0; padding: 0 10px 3px; font-size: 12px; }
+
+/* ── карта, ссылки ────────────────────────────────────────── */
+.mpc-link { border: 0; }
+.mpc-go { flex: none; display: grid; place-items: center; width: 18px; height: 18px; color: var(--m-fg-subtle); }
+.mpc-link:hover .mpc-go { color: var(--m-fg); }
+.mpc-links { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg.mpc-chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px 2px; font-size: 12px; font-weight: 700; cursor: pointer; }
+
+/* ── не вошли: мод, причина, виновник ────────────────────── */
+.mpc-excl {
+  display: flex; flex-direction: column; gap: 2px; padding: 9px 10px 8px;
+  background-color: var(--m-surface); --px-n: 5px; clip-path: var(--px-5);
+  --px-fl: var(--m-danger); --px-fl-w: 3px;
+}
+.mpc-excl-h { display: flex; align-items: center; gap: 6px; margin: 0 0 5px; font: 800 11px/1 var(--m-font); letter-spacing: 0.05em; text-transform: uppercase; color: var(--m-danger); }
+.mpc-excl-h i { margin-left: auto; font-style: normal; color: var(--m-fg-faint); letter-spacing: 0; }
+.mpc-excl ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.mpc-excl li { display: flex; align-items: flex-start; gap: 9px; min-width: 0; }
+.mpc-excl .mpc-slot { width: 28px; height: 28px; }
+.mpc-excl-t { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding-top: 1px; }
+.mpc-excl-t b { font: 750 12.5px/1.25 var(--m-font); color: var(--m-fg); overflow-wrap: anywhere; }
+.mpc-excl-t span { font: 700 11.5px/1.35 var(--m-font); color: color-mix(in srgb, var(--m-danger) 85%, var(--m-fg)); }
+.mpc-excl-t i { font: 600 11.5px/1.35 var(--m-font); font-style: normal; color: var(--m-fg-subtle); }
+
+/* ── PLUS: три пустые ячейки под шейдеры, карты, паки ───── */
+.mpc-up {
+  display: flex; align-items: center; gap: 10px; padding: 8px 8px 10px 8px; text-align: left; cursor: pointer; color: var(--m-fg);
+  background-color: color-mix(in srgb, var(--m-rarity-legendary) 14%, var(--m-surface));
+  --px-n: 5px; clip-path: var(--px-5);
+  --px-ol: color-mix(in srgb, var(--m-rarity-legendary) 65%, transparent); --px-ol-w: 2px; --px-fb: rgba(0, 0, 0, 0.26); --px-fb-w: 3px;
+}
+.mpc-up:hover { background-color: color-mix(in srgb, var(--m-rarity-legendary) 24%, var(--m-surface)); }
+.mpc-up-slots { display: flex; gap: 2px; flex: none; }
+.mpc-up-slots .mpc-slot { width: 28px; height: 28px; }
+.mpc-up-slots .px-icon { color: var(--m-fg-subtle); }
+.mpc-up-t { flex: 1 1 auto; min-width: 0; font: 750 12.5px/1.25 var(--m-font); }
+.mpc-up > b {
+  flex: none; display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px 6px; font: 900 11.5px/1 var(--m-font); color: #2a1c00;
+  background: var(--m-rarity-legendary); --px-n: 3px; clip-path: var(--px-4);
+}
+.mpc-up > b .px-icon { width: 10px; height: 10px; }
+
+/* ── сервер ───────────────────────────────────────────────── */
+.mpc-srv {
+  display: flex; flex-direction: column; gap: 8px; padding: 10px;
+  background-color: var(--m-surface); --px-n: 5px; clip-path: var(--px-5); --px-ol: var(--m-accent); --px-ol-w: 2px;
+}
+.mpc-srv .skel { display: block; }
+.mpc-srv-head { display: flex; align-items: center; justify-content: space-between; }
+.mpc-srv-head b { font: 800 13px/1 var(--m-font); color: var(--m-fg); }
+.mpc-srv-done { margin: 0; font: 700 12.5px/1.3 var(--m-font); color: var(--m-fg); }
+.mpc-srv-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.mpc-srv-row {
+  width: 100%; display: flex; align-items: center; gap: 10px; padding: 6px 8px; text-align: left; cursor: pointer; color: inherit;
+  background-color: var(--m-inset); --px-n: 4px; clip-path: var(--px-4);
+}
+.mpc-srv-row:hover:not(:disabled) { background-color: var(--m-surface-2); }
+.mpc-srv-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mpc-srv-body b { font: 750 13px/1.2 var(--m-font); color: var(--m-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mpc-srv-body i { font-style: normal; font-size: 11.5px; color: var(--m-fg-muted); }
+.mpc-x { flex: none; width: 26px; height: 26px; display: grid; place-items: center; color: var(--m-fg-muted); cursor: pointer; --px-n: 4px; clip-path: var(--px-4); }
+.mpc-x:hover { color: var(--m-fg); background: var(--m-surface-2); }
+
+/* ── низ: кнопки, полоса опыта, «Играть» ──────────────────── */
+.mpc-foot { display: flex; align-items: flex-end; gap: 8px; min-width: 0; min-height: 40px; padding-top: 2px; }
+.mpc-foot .btn { gap: 8px; }
+.mpc-foot .btn .px-icon { width: 12px; height: 12px; }
+.mpc-xp { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 6px; padding-bottom: 4px; }
+.mpc-xp-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; min-width: 0; }
+.mpc-xp-msg { min-width: 0; font: 650 12px/1.2 var(--m-font); color: var(--m-fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mpc-xp-lvl {
+  flex: none; font: 900 15px/1 var(--m-font); color: #80ff20; font-variant-numeric: tabular-nums;
+  text-shadow: 2px 0 0 #000, -2px 0 0 #000, 0 2px 0 #000, 0 -2px 0 #000, 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000;
+}
+.mpc-xp-lvl { display: inline-flex; align-items: center; gap: 4px; }
+.mpc-orb { display: block; image-rendering: pixelated; }
+.mpc-xp-bar { position: relative; height: 10px; margin: 0 2px; background: #101011; box-shadow: 0 0 0 2px #000; overflow: hidden; }
+.mpc-xp-bar i {
+  display: block; height: 100%;
+  background: linear-gradient(#c8ff7a 0 2px, #80ff20 2px 6px, #4c9e12 6px);
+  transition: width 260ms steps(4, end);
+}
+.mpc-xp-bar::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(90deg, transparent 0 calc(100% / 18 - 2px), rgba(0, 0, 0, 0.85) calc(100% / 18 - 2px) calc(100% / 18));
+}
+.mpc-xp.done .mpc-xp-msg { color: var(--m-accent); }
+.mpc-xp.done .mpc-xp-lvl { animation: mpc-lvl 0.9s steps(1, end) 2; }
+@keyframes mpc-lvl { 50% { color: #ffff55; } }
+
+.mpc-code {
+  align-self: flex-start; display: flex; align-items: center; gap: 10px; padding: 4px 4px 4px 10px;
+  background-color: var(--m-inset); --px-n: 5px; clip-path: var(--px-5);
+}
+.mpc-code span { font: 700 12px/1 var(--m-font); color: var(--m-fg-muted); }
+.mpc-code b { font: 900 14px/1 var(--m-mono); letter-spacing: 0.08em; color: var(--m-fg); }
+
+/* ============================================================
+   ПОДСКАЗКА МОДА — плашка лаунчера (как .px-tip, только больше):
+   приподнятая поверхность, срез углов, тонкая рамка. Висит в body,
+   слева от панели Милли, список не закрывает.
+   ============================================================ */
+.mtip {
+  position: fixed; z-index: 2000; top: 0; left: 0; width: 316px; max-width: calc(100vw - 16px);
+  display: flex; flex-direction: column; gap: 8px; padding: 11px 12px 10px; visibility: hidden;
+  color: var(--m-fg); font-family: var(--m-font);
+  background-color: var(--m-raised);
+  --px-n: 6px; clip-path: var(--px-5);
+  --px-ol: var(--m-border-strong); --px-ol-w: 2px; --px-ft: rgba(255, 255, 255, 0.05); --px-ft-w: 2px; --px-fb: rgba(0, 0, 0, 0.32); --px-fb-w: 4px;
+}
+.mtip > * { position: relative; }
+.mtip.on { visibility: visible; animation: mtip-in 120ms steps(3, end) backwards; }
+@keyframes mtip-in { 0% { opacity: 0; transform: translateX(6px); } }
+.mtip.is-u.on, .mtip.is-d.on { animation-name: mtip-in-v; }
+@keyframes mtip-in-v { 0% { opacity: 0; transform: translateY(4px); } }
+
+.mtip-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.mtip-ic { width: 44px; height: 44px; }
+.mtip-ic img { width: 36px; height: 36px; object-fit: cover; display: block; }
+.mtip-id { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.mtip-title { max-width: 100%; font: 850 14.5px/1.2 var(--m-font); color: var(--m-fg); overflow-wrap: anywhere; }
+.mtip-author {
+  max-width: 100%; display: inline-flex; align-items: center; gap: 5px; padding: 0; cursor: pointer; color: var(--m-info);
+  font: 750 12px/1.1 var(--m-font);
+}
+.mtip-author > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mtip-author:hover > span, .mtip-author:focus-visible > span { text-decoration: underline; text-underline-offset: 3px; }
+.mtip-author:focus-visible { outline: 2px solid var(--m-accent); outline-offset: 2px; }
+.mtip-author .px-icon { width: 10px; height: 10px; }
+.mtip-kind { font: 700 10.5px/1 var(--m-font); font-style: normal; letter-spacing: 0.05em; text-transform: uppercase; color: var(--m-fg-faint); }
+
+.mtip-lore { margin: 0; font: 650 12.5px/1.4 var(--m-font); color: var(--m-fg-muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.mtip-lore-skel { display: flex; flex-direction: column; gap: 5px; }
+.mtip-skel { display: block; width: 100%; height: 8px; background: var(--m-surface-2); }
+.mtip-orig {
+  margin: 0; padding: 6px 8px; font: 550 11.5px/1.4 var(--m-font); color: var(--m-fg-subtle); font-style: italic;
+  background: var(--m-inset); --px-n: 3px; clip-path: var(--px-4);
+}
+
+.mtip-rel { margin: 0; display: flex; flex-direction: column; gap: 3px; font: 700 12px/1.35 var(--m-font); color: var(--m-fg); }
+.mtip-rel > span > i { font-style: normal; font-weight: 650; color: var(--m-fg-subtle); }
+.mtip-rel > span.lib > i { color: var(--m-rarity-legendary); }
+.mtip-rel > span.warn { color: var(--m-danger); }
+
+.mtip-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.mtip-tags:empty { display: none; }
+.mtip-dl { display: inline-flex; align-items: center; gap: 5px; margin-right: 2px; font: 800 12px/1 var(--m-font); font-variant-numeric: tabular-nums; color: var(--m-fg-muted); }
+.mtip-dl .px-icon { width: 10px; height: 10px; }
+.mtip-tag {
+  padding: 3px 6px 4px; font: 800 10.5px/1 var(--m-font); font-style: normal; color: var(--m-fg-muted);
+  background: var(--m-surface-2); --px-n: 3px; clip-path: var(--px-4);
+}
+.mtip-tag.v { color: var(--m-accent); background: var(--m-accent-soft); }
+.mtip-tag.dim { color: var(--m-fg-faint); }
+.mtip-tag.ok { color: var(--m-accent); background: var(--m-accent-soft); }
+.mtip-risk {
+  margin: 0; display: flex; align-items: flex-start; gap: 7px; padding: 6px 8px;
+  font: 700 12px/1.35 var(--m-font); color: var(--m-warning);
+  background: var(--m-warning-soft); --px-n: 3px; clip-path: var(--px-4);
+}
+.mtip-risk .px-icon { flex: none; width: 10px; height: 10px; margin-top: 3px; }
+
+.mtip-why {
+  margin: 0; display: flex; align-items: flex-start; gap: 8px; padding: 7px 8px;
+  font: 700 12px/1.35 var(--m-font); color: var(--m-fg);
+  background: var(--m-accent-soft); --px-n: 4px; clip-path: var(--px-4);
+}
+.mtip-why .milli { flex: none; margin-top: -2px; }
+
+.mtip-acts { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 6px; }
+:root .mtip .mtip-acts .btn.sm { gap: 7px; height: 32px; min-height: 0; padding: 0 10px 3px; font-size: 12.5px; white-space: nowrap; }
+.mtip-acts .btn:only-child { justify-self: start; }
+.mtip-acts .btn .px-icon { width: 10px; height: 10px; }
+.mtip-btn.rm:hover { color: var(--m-danger); }
+.mtip-base { display: inline-flex; align-items: center; gap: 5px; font: 700 11.5px/1.2 var(--m-font); color: var(--m-rarity-legendary); }
+.mtip-base .px-icon { width: 10px; height: 10px; }
+
+.mtip-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.mtip-idl {
+  min-width: 0; padding: 0; cursor: copy; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font: 500 10.5px/1.2 var(--m-mono); color: var(--m-fg-faint);
+}
+.mtip-idl:hover { color: var(--m-fg-subtle); }
+.mtip-orig-btn { flex: none; padding: 0; cursor: pointer; font: 700 11px/1.2 var(--m-font); color: var(--m-fg-subtle); text-decoration: underline dotted; text-underline-offset: 3px; }
+.mtip-orig-btn:hover, .mtip-orig-btn[aria-pressed='true'] { color: var(--m-fg); }
+
+/* версия ревизии в мини-шапке */
+.mpr-rev { flex: none; padding: 4px 6px 5px; font: 750 11px/1 var(--m-font); color: var(--m-fg-subtle); background: var(--m-surface); --px-n: 3px; clip-path: var(--px-4); }
+
+/* ============================================================
+   КАРТОЧКА-ВЕРСТАК В ЧАТЕ (фаза C, DESIGN.md §2–3).
+   Шапка · сегмент-вкладки · раскрываемое тело · футер — всё внутри
+   карточки ~432px. Анимации — milli-motion.css (моушн); здесь статика.
+   ============================================================ */
+
+/* шапка: имя + плашки + размер, справа крошечный «Для моддеров» */
+.mpc-head { position: relative; align-items: flex-start; }
+.mpc-head-id { gap: 6px; padding-top: 1px; }
+/* плашки и «70 модов · изменить» — одной строкой; справа под ними место для «Для моддеров» */
+.mpc-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.mpc.is-live .mpc-meta { padding-right: 112px; }
+.mpc-meta > .mpc-plates { display: contents; }
+.mpc-meta > .msz-inline-btn { margin-left: 2px; }
+/* «Для моддеров» — в строке плашек справа, название карточки получает всю ширину */
+.mpc-modder {
+  position: absolute; right: -4px; top: 30px;
+  flex: none; display: inline-flex; align-items: center; gap: 7px; height: 26px; margin: 0; padding: 0 4px 0 7px;
+  font: 700 11px/1 var(--m-font); color: var(--m-fg-subtle); cursor: pointer; user-select: none; white-space: nowrap;
+  --px-n: 4px; clip-path: var(--px-4); transition: color var(--m-t-fast), background-color var(--m-t-fast);
+}
+.mpc-modder:hover { color: var(--m-fg); background-color: var(--m-surface); }
+.mpc-modder:has(.tgl.on) { color: var(--m-fg-muted); }
+:root:root .mpc .mpc-modder .tgl { width: 26px; height: 14px; pointer-events: none; }
+:root:root .mpc .mpc-modder .tgl::after { top: 3px; left: 3px; width: 8px; height: 8px; }
+:root:root .mpc .mpc-modder .tgl.on::after { left: 15px; }
+.mpc-modder input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.mpc-modder:has(input:focus-visible) { outline: 2px solid var(--m-accent); outline-offset: -2px; }
+
+/* инлайн-выбор размера под шапкой (MilliSizePick.compact) */
+.mpc > .msz.compact { margin: -2px 0 0; }
+
+/* ── сегмент-вкладки ─────────────────────────────────────────── */
+.mpc-tabs {
+  display: flex; gap: 2px; padding: 3px; min-width: 0;
+  background-color: var(--m-inset); box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.35);
+  --px-n: 5px; clip-path: var(--px-5);
+}
+.mpc-tab {
+  position: relative; flex: 1 1 auto; min-width: 0; height: 30px; display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  padding: 0 7px 2px; border: 0; background: transparent; cursor: pointer; white-space: nowrap;
+  font: 700 12px/1 var(--m-font); color: var(--m-fg-subtle);
+  --px-n: 4px; clip-path: var(--px-4);
+  transition: color var(--m-t-fast), background-color var(--m-t-fast);
+}
+.mpc-tab:hover { color: var(--m-fg); background-color: var(--m-surface); }
+.mpc-tab:focus-visible { outline: 2px solid var(--m-accent); outline-offset: -2px; }
+.mpc-tab.on {
+  color: var(--m-fg); background-color: var(--m-surface-2);
+  box-shadow: inset 0 -2px 0 var(--m-accent), inset 0 2px 0 rgba(255, 255, 255, 0.05);
+}
+.mpc-tab .mci { flex: none; display: none; image-rendering: pixelated; }
+/* пиксельная иконка — только у открытой вкладки («предмет в руке»): так все четыре подписи влезают целиком */
+.mpc-tab.on .mci { display: block; }
+.mpc-tab-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.mpc-tab-n {
+  flex: none; font: 700 11px/1 'Monocraft', var(--m-mono); font-variant-numeric: tabular-nums; color: var(--m-fg-faint);
+}
+.mpc-tab.on .mpc-tab-n { color: var(--m-accent); }
+.mpc-tab-dot {
+  position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; background: var(--m-warning);
+  box-shadow: 0 0 0 1px var(--m-inset);
+}
+.mpc-tab:disabled { cursor: progress; opacity: 0.6; }
+/* узкая карточка: без иконок, короткие подписи из data-short */
+@container mpc (max-width: 360px) {
+  .mpc-tab { gap: 5px; padding: 0 6px 2px; }
+  .mpc-tab.on .mci { display: none; }
+  .mpc-tab-t[data-short] { font-size: 0; }
+  .mpc-tab-t[data-short]::after { content: attr(data-short); font-size: 12px; }
+}
+
+/* ── тело вкладки: раскрывается внутри карточки, своя прокрутка ── */
+.mpc-body {
+  position: relative; min-width: 0; overflow: hidden;
+  background-color: color-mix(in srgb, var(--m-inset) 70%, var(--m-bg));
+  box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.3);
+  --px-n: 5px; clip-path: var(--px-5);
+}
+/* Неактивные вкладки не display:none (WebKit теряет scrollTop) — лежат
+   поверх невидимыми; высоту тела задаёт активная. */
+.mpc-pane {
+  display: flex; flex-direction: column; min-width: 0; min-height: 0; max-height: var(--mpc-body-h);
+  overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; padding: 8px;
+}
+.mpc-pane:not(.on) { position: absolute; top: 0; left: 0; right: 0; visibility: hidden; pointer-events: none; }
+/* моды: высота фиксированная — виртуальный список меряет clientHeight */
+.mpc-pane[data-tab='mods'] { height: var(--mpc-body-h); overflow: hidden; padding: 8px 6px 6px 8px; }
+.mpc-pane > .bt, .mpc-pane > .mbl { flex: 1 1 auto; min-height: 0; }
+.mpc .mpc-pane, .mpc .vl, .mpc .bt { scrollbar-width: thin; scrollbar-color: var(--m-border-strong) transparent; }
+.mpc .mpc-pane::-webkit-scrollbar, .mpc .vl::-webkit-scrollbar { width: 6px; }
+.mpc .mpc-pane::-webkit-scrollbar-thumb, .mpc .vl::-webkit-scrollbar-thumb { background: var(--m-border-strong); border-radius: 0; }
+.mpc .mpc-pane::-webkit-scrollbar-thumb:hover, .mpc .vl::-webkit-scrollbar-thumb:hover { background: var(--m-fg-faint); }
+.mpc .mpc-pane::-webkit-scrollbar-track, .mpc .vl::-webkit-scrollbar-track { background: transparent; }
+
+/* op/revert в полёте */
+.mpc.is-busy .mpc-body { cursor: progress; }
+.mpc.is-busy .mpc-pane.on { opacity: 0.7; }
+.mpc-busy {
+  position: absolute; z-index: 3; top: 0; left: 0; right: 0; height: 2px; pointer-events: none; overflow: hidden;
+  background: color-mix(in srgb, var(--m-accent) 25%, transparent);
+}
+.mpc-busy::before { content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 30%; background: var(--m-accent); }
+
+/* загрузка: скелет-строки (i.skel слот + i.skel полоса) */
+.mpc-skel-row { flex: none; display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 8px 0 4px; }
+:root:root .mpc-skel-row > i { display: block; flex: none; border-radius: 0; }
+:root:root .mpc-skel-row > i:first-child { width: 34px; height: 34px; }
+:root:root .mpc-skel-row > i + i { height: 10px; max-width: 70%; }
+
+/* ошибка и пусто */
+.mpc-err {
+  display: flex; align-items: center; gap: 10px; margin: 8px; padding: 8px 8px 9px 12px;
+  font: 700 12.5px/1.3 var(--m-font); color: var(--m-fg);
+  background-color: var(--m-danger-soft); box-shadow: inset 3px 0 0 var(--m-danger);
+  --px-n: 4px; clip-path: var(--px-4);
+}
+.mpc-err > span { flex: 1 1 auto; min-width: 0; }
+.mpc-err > .px-icon, .mpc-err > svg { flex: none; color: var(--m-danger); }
+.mpc-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  min-height: 140px; padding: 20px 16px; text-align: center; font: 700 13px/1.35 var(--m-font); color: var(--m-fg-muted);
+}
+.mpc-empty > svg, .mpc-empty .mci { image-rendering: pixelated; }
+.mpc-empty p { margin: 0; }
+
+/* старая ревизия / квитанция из истории */
+.mpc.is-stub, .mpc.is-old { --px-ol: color-mix(in srgb, var(--m-fg) 18%, transparent); }
+.mpc.is-stub .mpc-badge, .mpc.is-old .mpc-badge { filter: saturate(0.55); }
+.mpc-note {
+  display: flex; align-items: center; gap: 8px; margin: -2px 0 0; padding: 6px 6px 6px 10px;
+  font: 650 12px/1.3 var(--m-font); color: var(--m-fg-muted);
+  background-color: var(--m-surface); box-shadow: inset 3px 0 0 var(--m-fg-faint);
+  --px-n: 4px; clip-path: var(--px-4);
+}
+.mpc-note > span { flex: 1 1 auto; min-width: 0; }
+.mpc-note-btn {
+  flex: none; margin-left: auto; height: 24px; padding: 0 8px 1px; border: 0; background: none; cursor: pointer;
+  font: 750 12px/1 var(--m-font); color: var(--m-accent); --px-n: 3px; clip-path: var(--px-4);
+}
+.mpc-note-btn:hover:not(:disabled) { color: var(--m-fg); background-color: var(--m-surface-2); }
+.mpc-note-btn:disabled { opacity: 0.5; cursor: progress; }
+
+/* мини-карточка (stub из истории / старая ревизия): без тела, тише */
+.mpc.is-mini { gap: 9px; padding-bottom: 12px; }
+.mpc.is-mini .mpc-title { display: block; height: auto; margin: 0; padding: 0; overflow: hidden; white-space: nowrap; line-height: 1.2; }
+.mpc.is-mini .mpc-tab-dot { display: none; }
+.mpc.is-load .mpc-tabs { opacity: 0.6; pointer-events: none; }
+.mpc .mpr-rev { margin-left: 2px; }
+
+/* тело живёт в .mpc-fold (высоту анимирует моушн); пустой fold не даёт лишний зазор */
+.mpc-fold { min-width: 0; margin-top: -10px; }
+.mpc-fold > .mpc-body { margin-top: 10px; }
+
+/* «Можно добавить»: подпись + чипы в строку */
+.mpc-opt { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.mpc-opt-h { margin-right: 4px; font: 800 10.5px/1 var(--m-font); letter-spacing: 0.06em; text-transform: uppercase; color: var(--m-fg-subtle); }
+:root:root .mpc-opt .seg.mpc-chip { height: 26px; max-width: 100%; padding: 0 9px 1px; gap: 5px; font-size: 12px; }
+.mpc-opt .mpc-chip .px-icon { flex: none; width: 8px; height: 8px; color: var(--m-accent); }
+.mpc-maps { gap: 2px; }
+
+/* «Не вошли» — свёрнутая строка <details> */
+details.mpc-excl { gap: 0; padding: 0; }
+details.mpc-excl > summary {
+  list-style: none; cursor: pointer; margin: 0; padding: 9px 10px 8px; user-select: none;
+}
+details.mpc-excl > summary::-webkit-details-marker { display: none; }
+details.mpc-excl > summary::before { content: '▸'; font-size: 10px; color: var(--m-fg-faint); }
+details.mpc-excl[open] > summary::before { content: '▾'; }
+details.mpc-excl { --px-fl: color-mix(in srgb, var(--m-danger) 70%, transparent); --px-fl-w: 2px; }
+details.mpc-excl > summary { color: var(--m-fg-subtle); font-size: 10.5px; }
+details.mpc-excl > summary:hover, details.mpc-excl[open] > summary { color: var(--m-fg); }
+details.mpc-excl > summary > i { color: var(--m-danger); font: 700 10.5px/1 'Monocraft', var(--m-mono); }
+details.mpc-excl > ul { padding: 0 10px 10px; max-height: 220px; overflow-y: auto; scrollbar-width: thin; }
+
+/* ── футер: итог + «Установить ▾» ─────────────────────────────── */
+.mpc-foot { align-items: center; min-height: 34px; padding-top: 0; }
+:root:root .mpc .btn.sm { height: 34px; min-height: 0; padding: 0 14px 3px; font-size: 13px; gap: 7px; }
+:root:root .mpc .btn.sm .px-icon { width: 10px; height: 10px; }
+.mpc-sum {
+  flex: 1 1 auto; min-width: 0; display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 6px;
+  font: 650 12px/1.35 var(--m-font); color: var(--m-fg-subtle); font-variant-numeric: tabular-nums;
+}
+.mpc-sum b { font-weight: 900; font-size: 13px; color: var(--m-fg); }
+.mpc-sum > span { white-space: nowrap; }
+.mpc-sum > span::before { content: '·'; margin-right: 6px; color: var(--m-fg-faint); }
+.mpc-inst { position: relative; flex: none; display: inline-flex; gap: 2px; }
+:root:root .mpc .mpc-inst-more { width: 30px; padding: 0 0 3px; }
+.mpc-inst-more .px-icon, .mpc-inst-more svg { width: 10px; height: 10px; }
+.mpc-menu { top: auto; bottom: calc(100% + 6px); min-width: 216px; transform-origin: 100% 100%; }
+/* Меню «Установить ▾» поверх тела карточки (у списка свой слой). */
+.mpc-foot { position: relative; z-index: 6; }
+.mpc-menu { z-index: 50; animation-name: ml-menu-up; }
+@keyframes ml-menu-up { 0% { opacity: 0; transform: scale(0.9) translateY(6px); } }
+.mpc-foot > .mpc-xp { padding-bottom: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mpc, .mpc *, .mtip, .mtip * { animation: none !important; transition: none !important; }
+}
+
+
+/* ── P3: ничего не режется по глифам — фейд снизу у прокручиваемых тел, запас под фейд ── */
+.mpc-pane:not([data-tab='mods']) { padding-bottom: 22px; -webkit-mask: linear-gradient(#000 calc(100% - 22px), transparent); mask: linear-gradient(#000 calc(100% - 22px), transparent); }
+.mpc-pane[data-tab='mods'] .vl { -webkit-mask: linear-gradient(#000 calc(100% - 24px), transparent); mask: linear-gradient(#000 calc(100% - 24px), transparent); }
+.mpc-pane[data-tab='mods'] .vl-in { padding-bottom: 24px; box-sizing: content-box; }
+.mpc .mpc-pane, .mpc .vl { scrollbar-gutter: stable; }
+
+/* бейдж совместимости и всплывающий список проверок */
+.mpc-check-wrap { position: relative; display: inline-flex; }
+.mpc-plate.mpc-compat { cursor: pointer; border: 0; }
+.mpc-checks-fold { position: absolute; z-index: 30; left: 0; top: calc(100% + 6px); }
+.mpc-checks {
+  list-style: none; margin: 0; padding: 8px 10px; width: 260px; display: flex; flex-direction: column; gap: 5px;
+  font: 650 12px/1.3 var(--m-font); color: var(--m-fg);
+  background-color: var(--m-raised); box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.5);
+  --px-n: 4px; clip-path: var(--px-4);
+}
+.mpc-checks > li { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.mpc-checks > li.ok > .px-icon { color: var(--m-accent); }
+.mpc-checks > li.bad > .px-icon { color: var(--m-danger); }
+.mpc-checks > li i { margin-left: auto; font-style: normal; font-size: 11px; color: var(--m-fg-subtle); white-space: nowrap; }
+/* карточка режет clip-path'ом: всплывашке нужно место — пока открыта, срез снимаем */
+.mpc:has(.mpc-checks-fold .mpc-checks) { clip-path: none; }
+
+/* «Установить ▾» не вылезает за правый край карточки на панели 460px; меню — порталом в .ml-panel. */
+.mpc-foot > .mpc-sum { overflow: hidden; }
+.mpc-inst { flex: 0 1 auto; min-width: 0; }
+.mpc-inst-main { min-width: 0; }
+@container mpc (max-width: 330px) { .mpc-inst-main .px-icon { display: none; } }
+.mpc-menu.is-portal { top: auto; left: auto; }
+
+/* ── вкладки как кнопки: видно, что их можно открыть ───────────── */
+.mpc-tab {
+  color: var(--m-fg-muted);
+  background-color: var(--m-surface);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.35), inset 0 2px 0 rgba(255, 255, 255, 0.04);
+  transition: color var(--m-t-fast), background-color var(--m-t-fast), transform 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.mpc-tab:hover { color: var(--m-fg); background-color: var(--m-surface-2); transform: translateY(-1px); }
+.mpc-tab:active { transform: translateY(1px); }
+/* свёрнутая карточка: стрелка «раскрыть» и мягкий зов на первой вкладке */
+.mpc:not(.is-open) .mpc-tab::after {
+  content: ''; flex: none; width: 6px; height: 6px; margin-left: 2px; margin-bottom: 3px;
+  border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); opacity: 0.7;
+}
+.mpc:not(.is-open) .mpc-tab:first-of-type { color: var(--m-fg); animation: mpc-call 1.6s ease-in-out 3; }
+@keyframes mpc-call {
+  0%, 100% { box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.35); }
+  50% { box-shadow: inset 0 -2px 0 var(--m-accent), 0 0 0 2px rgba(var(--m-accent-rgb), 0.35); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mpc:not(.is-open) .mpc-tab:first-of-type { animation: none; }
+}
+/* иконки у всех вкладок — как предметы в хотбаре */
+.mpc-tab .mci { display: block; opacity: 0.7; }
+.mpc-tab.on .mci, .mpc-tab:hover .mci { opacity: 1; }
+@container mpc (max-width: 430px) { .mpc-tab-t { font-size: 11px; } .mpc-tab { gap: 4px; padding: 0 5px 2px; } }

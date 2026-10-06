@@ -20,7 +20,8 @@ import {
 import { api } from '../lib/api'
 import { hasTauri } from '../ipc/tauri'
 import { GAMES, gameBuyUrl, gameHero, gamePoster, gameSite, useGame, type GameInfo } from '../lib/games'
-import { runInstall, stopInstall, useInstalls } from '../state/installs'
+import { runInstall, runningMsg, stopInstall, useInstalls } from '../state/installs'
+import { PauseInstall } from '../components/PauseInstall'
 import { showToast } from '../state/ui'
 import { BedrockServers } from '../components/playhub/BedrockServers'
 import '../styles/pixel/game.css'
@@ -165,7 +166,8 @@ export function Actions({ game, st, onChanged }: { game: GameInfo; st: StoreGame
           <div className="gm-bar">
             <span className={task.pct <= 5 ? 'gm-bar-wait' : undefined} style={{ width: Math.max(8, Math.round(task.pct)) + '%' }} />
           </div>
-          <span className="gm-tag">{task.msg || task.label}</span>
+          <span className="gm-tag">{runningMsg(task, task.msg || task.label)}</span>
+          <PauseInstall task={task} className="btn md ghost" withText />
           <button className="btn md ghost" onClick={() => stopInstall(key)}>
             Отменить
           </button>
@@ -261,7 +263,8 @@ function DungeonsActions({ game, st: store, onChanged }: { game: GameInfo; st: S
         <div className="gm-bar">
           <span style={{ width: Math.round(task.pct) + '%' }} />
         </div>
-        <span className="gm-tag">{task.msg || task.label}</span>
+        <span className="gm-tag">{runningMsg(task, task.msg || task.label)}</span>
+        <PauseInstall task={task} className="btn md ghost" withText />
         <button className="btn md ghost" onClick={() => stopInstall(slug)}>
           Отменить
         </button>

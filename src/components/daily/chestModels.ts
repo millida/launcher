@@ -2,9 +2,10 @@ import type { ChestTier } from '../../lib/rubies'
 import { parseBbModel, sampleTrack, type BbClip, type BbModel } from './bbModel'
 import copper from './chests/copper.bbmodel?raw'
 import diamond from './chests/diamond.bbmodel?raw'
+import netherite from './chests/netherite.bbmodel?raw'
 import obsidian from './chests/obsidian.bbmodel?raw'
 
-const SOURCES: Partial<Record<ChestTier, string>> = { COMMON: copper, RARE: diamond, EPIC: obsidian }
+const SOURCES: Partial<Record<ChestTier, string>> = { COMMON: copper, RARE: diamond, EPIC: obsidian, LEGEND: netherite }
 
 export interface ChestModel {
   model: BbModel

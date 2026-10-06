@@ -10,6 +10,10 @@ import { useLobby } from '../../state/lobbyMode'
 import { useProfiles } from '../../state/profiles'
 import { fmtN } from '../../lib/format'
 import { trackImpression } from '../../lib/uiTrack'
+import { setScreen } from '../../state/ui'
+import { loadCatalogPacks } from '../playhub/data'
+import { PRISON_SLUG, featuredSpot } from '../playhub/featured'
+import { PRISON_BANNER, PRISON_CO, type PrisonFace } from '../playhub/PrisonTile'
 import '../../styles/pixel/playhub.css'
 
 /**
@@ -21,18 +25,38 @@ export function Recommend({ on }: { on: boolean }) {
   const [online, setOnline] = useState<number | null>(null)
   const shown = usePromo((s) => s.promo.lobby === ANARCHY.mode)
   const an = useAnarchy()
+  const [prison, setPrison] = useState<PrisonFace | null | undefined>(undefined)
+  const spot = featuredSpot(prison)
 
   useEffect(() => {
-    if (!on || !shown) return
+    if (!shown) return
+    let alive = true
+    void loadCatalogPacks().then((list) => {
+      const p = list.find((x) => x.slug === PRISON_SLUG)
+      if (alive) setPrison(p ? { title: p.title, coverUrl: p.cover, online: typeof p.online === 'number' ? p.online : null } : null)
+    })
+    return () => {
+      alive = false
+    }
+  }, [shown])
+
+  useEffect(() => {
+    if (!on || !shown || spot.kind !== 'prisonrpg') return
+    trackImpression('recommend', ['pack:' + PRISON_SLUG], 'play')
+  }, [on, shown, spot.kind])
+
+  useEffect(() => {
+    if (!on || !shown || spot.kind !== 'anarchy') return
     let alive = true
     void loadAnarchyOnline().then((n) => alive && setOnline(n))
     trackImpression('recommend', ['own_server:' + ANARCHY.mode], 'play')
     return () => {
       alive = false
     }
-  }, [on, shown, an.addr])
+  }, [on, shown, an.addr, spot.kind])
 
-  if (!shown) return null
+  if (!shown || spot.kind === 'wait') return null
+  if (spot.kind === 'prisonrpg') return <PrisonRecommend pack={spot.pack} />
 
   const play = () => {
     const m = anarchyMode()
@@ -72,6 +96,46 @@ export function Recommend({ on }: { on: boolean }) {
           <span className="lan-on">
             <span className="ph-dot" aria-hidden="true"></span>
             {fmtN(online)} играют
+          </span>
+        ) : null}
+      </span>
+    </button>
+  )
+}
+
+/**
+ * PrisonRPG in the anarchy's lobby spot on its turn: the same CTA over the
+ * partner's full banner. It is a native game, so pressing it opens its
+ * pack page in «Во что играем» instead of joining a server.
+ */
+function PrisonRecommend({ pack }: { pack: PrisonFace }) {
+  const open = () => {
+    useLobby.setState({ hubTarget: { pack: PRISON_SLUG } })
+    setScreen('playhub')
+  }
+  return (
+    <button
+      className="lobby-rec lobby-an lobby-pr"
+      data-sound="open"
+      data-track="recommend"
+      data-section="recommend"
+      data-src="recommend"
+      data-kind="pack"
+      data-id={PRISON_SLUG}
+      data-pos={0}
+      aria-label={'Открыть: ' + pack.title}
+      onClick={open}
+    >
+      <img className="lpr-art" src={pack.coverUrl || PRISON_BANNER} alt="" draggable={false} />
+      <span className="pr-co">{PRISON_CO}</span>
+      <span className="lan-foot">
+        <span className="lan-go">
+          <Icon id="i-play" /> Играть
+        </span>
+        {anarchyOnlineShown(pack.online) ? (
+          <span className="lan-on">
+            <span className="ph-dot" aria-hidden="true"></span>
+            {fmtN(pack.online)} играют
           </span>
         ) : null}
       </span>

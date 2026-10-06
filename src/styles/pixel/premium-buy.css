@@ -1,0 +1,481 @@
+/* ============================================================
+   ПОКУПКА И ДОСТУП ПРЕМИУМ-СБОРКИ (04.10.2026)
+   ------------------------------------------------------------
+   Компоненты: src/components/premium/PremiumBuy.tsx.
+   - .pab-prem    — главная кнопка премиума: .btn.primary кита в золоте.
+   - .pab         — карточка доступа (правая колонка), 260–520px.
+   - .pab-hero-act — главная кнопка героя страницы.
+   Золото — только акценты карточки (заголовок, метки, отметка, рамка).
+   ============================================================ */
+
+:root {
+  --pab-gold: #f5c451;
+  --pab-gold-hi: #ffe08a;
+  --pab-gold-lo: #b8862b;
+  --pab-ink: #2a1a00;
+  --pab-gold-soft: rgba(245, 196, 81, 0.12);
+  --pab-gold-line: rgba(245, 196, 81, 0.55);
+}
+
+/* ============ Премиум-кнопка ============
+   Владелец 04.10.2026: на премиум-страницах главная кнопка золотая. Это
+   ровно .btn.primary кита (срез 5px, фактура точек, грани, подошва,
+   нажатие, шрифт, значок) — меняется только цвет: золотая заливка, тёмный
+   текст (контраст ≈ 10:1), подошва — тёмное золото. Без обводок и блика. */
+:root:root .btn.primary.pab-prem,
+:root:root .pab-prem-wrap > .btn.primary {
+  background-color: var(--pab-gold);
+  color: var(--pab-ink);
+  --px-fb: rgba(110, 62, 0, 0.62);
+}
+:root:root .btn.primary.pab-prem svg,
+:root:root .pab-prem-wrap > .btn.primary svg { color: var(--pab-ink); }
+/* «Ждём оплату»: не нажимается, но не выцветает. */
+:root:root .btn.primary.pab-wait { opacity: 1; filter: saturate(0.6) brightness(0.9); }
+
+/* Пиксельная вертушка: квадрат с одним вырезанным углом, поворот шагами. */
+.pab-spin {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  background: currentColor;
+  clip-path: polygon(0 0, 50% 0, 50% 50%, 100% 50%, 100% 100%, 0 100%);
+  animation: pab-spin 800ms steps(4) infinite;
+}
+@keyframes pab-spin { to { transform: rotate(360deg); } }
+
+/* ============ Ступенчатая рамка своих элементов ============
+   Копия «Слоёв рамки» из 12-pixel.css для селекторов этого файла: общий
+   список там не трогаем. Переменные --px-* те же. */
+:root:root :is(.pab-plan, .pab-trust, .pab-seal, .pab-chip, .pab-plan-badge, .pab-prog-track, .pab-paynote, .pab-key) {
+  box-shadow: none !important;
+  background-image:
+    linear-gradient(var(--px-ol) 0 0),
+    linear-gradient(90deg, var(--px-ol) 0 calc(var(--px-n) + var(--px-ol-w)), #0000 0 calc(100% - var(--px-n) - var(--px-ol-w)), var(--px-ol) 0),
+    linear-gradient(90deg, var(--px-ol) 0 var(--px-ol-w), #0000 0 calc(100% - var(--px-ol-w)), var(--px-ol) 0),
+    linear-gradient(90deg, var(--px-ol) 0 calc(var(--px-n) + var(--px-ol-w)), #0000 0 calc(100% - var(--px-n) - var(--px-ol-w)), var(--px-ol) 0),
+    linear-gradient(var(--px-ol) 0 0),
+    linear-gradient(var(--px-ft) 0 0),
+    linear-gradient(90deg, var(--px-ft) 0 calc(var(--px-n) + var(--px-ft-w)), #0000 0 calc(100% - var(--px-n) - var(--px-ft-w)), var(--px-ft) 0),
+    linear-gradient(90deg, var(--px-fl) 0 var(--px-fl-w), #0000 0 calc(100% - var(--px-fr-w)), var(--px-fr) 0),
+    linear-gradient(90deg, var(--px-fb) 0 calc(var(--px-n) + var(--px-fb-w)), #0000 0 calc(100% - var(--px-n) - var(--px-fb-w)), var(--px-fb) 0),
+    linear-gradient(var(--px-fb) 0 0),
+    var(--px-img, none) !important;
+  background-size:
+    100% var(--px-ol-w),
+    100% var(--px-n),
+    100% calc(100% - 2 * var(--px-n) - 2 * var(--px-ol-w)),
+    100% var(--px-n),
+    100% var(--px-ol-w),
+    100% var(--px-ft-w),
+    100% var(--px-n),
+    100% calc(100% - 2 * var(--px-n) - var(--px-ft-w) - var(--px-fb-w)),
+    100% var(--px-n),
+    100% var(--px-fb-w),
+    var(--px-img-size, auto) !important;
+  background-position:
+    0 0,
+    0 var(--px-ol-w),
+    0 calc(var(--px-n) + var(--px-ol-w)),
+    left 0 bottom var(--px-ol-w),
+    0 100%,
+    0 0,
+    0 var(--px-ft-w),
+    0 calc(var(--px-n) + var(--px-ft-w)),
+    left 0 bottom var(--px-fb-w),
+    0 100%,
+    var(--px-img-pos, 0 0) !important;
+  background-repeat:
+    no-repeat, no-repeat, no-repeat, no-repeat, no-repeat,
+    no-repeat, no-repeat, no-repeat, no-repeat, no-repeat,
+    var(--px-img-repeat, repeat) !important;
+  background-origin:
+    border-box, border-box, border-box, border-box, border-box,
+    border-box, border-box, border-box, border-box, border-box,
+    var(--px-img-origin, padding-box) !important;
+  background-clip: border-box !important;
+}
+
+/* ============ Карточка доступа ============ */
+
+.pab {
+  position: relative;
+  isolation: isolate;
+  container-type: inline-size;
+  min-width: 0;
+  width: 100%;
+}
+/* Тёплое свечение над карточкой: тень у среза обрезается, поэтому — слой. */
+.pab::before {
+  content: '';
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  top: -14px;
+  height: 120px;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(60% 70% at 50% 30%, rgba(245, 196, 81, 0.2), transparent 72%);
+  filter: blur(6px);
+  transition: opacity var(--m-t-slow);
+}
+.pab.is-open::before { opacity: 0.55; }
+
+/* Кайма 1px по всему силуэту: рамка — это зазор между двумя срезами. */
+.pab-frame {
+  padding: 1px;
+  --px-n: 10px; clip-path: var(--px-10);
+  background: linear-gradient(180deg, var(--pab-gold-line) 0%, rgba(245, 196, 81, 0.2) 34%, rgba(255, 255, 255, 0.07) 72%, rgba(255, 255, 255, 0.05) 100%);
+}
+.pab.is-open .pab-frame {
+  background: linear-gradient(180deg, rgba(245, 196, 81, 0.38) 0%, rgba(245, 196, 81, 0.1) 30%, rgba(255, 255, 255, 0.06) 100%);
+}
+.pab-in {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 16px 14px;
+  clip-path: var(--px-10);
+  background:
+    radial-gradient(120% 140px at 50% 0%, rgba(245, 196, 81, 0.1), transparent 100%),
+    linear-gradient(180deg, #232220 0%, var(--m-surface) 160px);
+}
+.pab.is-open .pab-in {
+  background:
+    radial-gradient(120% 110px at 50% 0%, rgba(245, 196, 81, 0.06), transparent 100%),
+    var(--m-surface);
+}
+
+.pab-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 18px; }
+.pab-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 800 11px/1 var(--m-font);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--pab-gold);
+}
+.pab-eyebrow svg { width: 13px; height: 13px; color: var(--pab-gold); }
+.pab-age {
+  padding: 3px 6px;
+  font: 700 11px/1 var(--m-font);
+  color: var(--m-fg-subtle);
+  background: var(--m-inset);
+  --px-n: 4px; clip-path: var(--px-4);
+}
+
+/* ---------- Шапка состояния ---------- */
+.pab-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.pab-head-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.pab-head-text > b { font: 800 21px/1.1 var(--m-font); letter-spacing: -0.015em; color: var(--m-fg); }
+.pab-head-text > span { font-size: 12.5px; color: var(--m-fg-subtle); }
+.pab-head.offer { flex-direction: column; align-items: flex-start; gap: 6px; }
+
+.pab-seal {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  color: var(--pab-gold);
+  background-color: var(--m-inset);
+  --px-n: 5px; clip-path: var(--px-5);
+  --px-img: radial-gradient(circle at 50% 35%, rgba(245, 196, 81, 0.18), transparent 70%);
+  --px-img-repeat: no-repeat;
+  --px-ol: var(--pab-gold); --px-ol-w: 2px;
+  --px-ft: rgba(0, 0, 0, 0.3); --px-ft-w: 3px;
+  animation: pab-pop 420ms steps(5) both;
+}
+.pab-seal svg { width: 20px; height: 20px; color: var(--pab-gold); }
+@keyframes pab-pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  60% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+.pab-head-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 12.5px; color: var(--m-fg-subtle); }
+.pab-chip {
+  flex: none;
+  padding: 4px 6px 5px;
+  font: 800 11px/1 var(--m-font);
+  white-space: nowrap;
+  --px-n: 4px; clip-path: var(--px-4);
+  background-color: var(--m-warning-soft);
+  color: var(--m-warning);
+  --px-ol: rgba(245, 170, 56, 0.45); --px-ol-w: 1px;
+}
+
+.pab-price { display: inline-flex; align-items: baseline; gap: 3px; }
+.pab-price b {
+  font: 800 34px/1 var(--m-font);
+  letter-spacing: -0.025em;
+  color: var(--m-fg);
+  font-variant-numeric: tabular-nums;
+}
+.pab-price i { font: 700 15px/1 var(--m-font); font-style: normal; color: var(--m-fg-subtle); }
+.pab-sub { font-size: 12.5px; color: var(--m-fg-subtle); }
+
+/* ---------- Выбор плана ---------- */
+.pab-plans { display: grid; gap: 8px; }
+.pab-plan {
+  position: relative;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  grid-template-areas: 'radio badge cost' 'radio name cost';
+  align-items: center;
+  column-gap: 10px;
+  width: 100%;
+  padding: 11px 12px 12px;
+  text-align: left;
+  color: var(--m-fg);
+  cursor: pointer;
+  background-color: var(--m-surface-2);
+  --px-n: 5px; clip-path: var(--px-5);
+  --px-ol: rgba(255, 255, 255, 0.06); --px-ol-w: 1px;
+  --px-ft: rgba(255, 255, 255, 0.05); --px-ft-w: 2px;
+  --px-fb: rgba(0, 0, 0, 0.28); --px-fb-w: 3px;
+  transition: background-color var(--m-t-fast), transform var(--m-t-fast) linear;
+}
+.pab-plan:hover:not(:disabled) { background-color: var(--m-raised); }
+.pab-plan:active:not(:disabled) { transform: translateY(1px); }
+.pab-plan:focus-visible { outline: 2px solid var(--pab-gold-hi); outline-offset: 2px; }
+.pab-plan:disabled { cursor: default; opacity: 0.6; }
+.pab-plan.on {
+  background-color: #2c2719;
+  --px-ol: var(--pab-gold); --px-ol-w: 2px;
+  --px-ft: rgba(255, 224, 138, 0.12);
+  --px-img: radial-gradient(140% 100% at 0% 0%, rgba(245, 196, 81, 0.16), transparent 70%);
+  --px-img-repeat: no-repeat;
+}
+.pab-plan-radio {
+  grid-area: radio;
+  width: 14px;
+  height: 14px;
+  background: var(--m-inset);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.16);
+}
+.pab-plan.on .pab-plan-radio {
+  background: var(--pab-gold);
+  box-shadow: inset 0 0 0 2px var(--pab-gold), inset 0 0 0 4px var(--m-inset);
+}
+.pab-plan-name { grid-area: name; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pab-plan-name b { font: 800 14px/1.15 var(--m-font); }
+.pab-plan-name span {
+  font-size: 11.5px;
+  color: var(--m-fg-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pab-plan-cost {
+  grid-area: cost;
+  display: grid;
+  justify-items: end;
+  grid-template-columns: auto auto;
+  align-items: baseline;
+  column-gap: 1px;
+  font-variant-numeric: tabular-nums;
+}
+.pab-plan-cost b { font: 800 16px/1 var(--m-font); }
+.pab-plan-cost i { font: 700 11.5px/1 var(--m-font); font-style: normal; color: var(--m-fg-subtle); }
+.pab-plan-cost em { grid-column: 1 / -1; margin-top: 3px; font: 600 11px/1 var(--m-font); font-style: normal; color: var(--m-fg-faint); }
+.pab-plan.on .pab-plan-cost b { color: var(--pab-gold-hi); }
+.pab-plan-badge {
+  grid-area: badge;
+  justify-self: start;
+  margin-bottom: 5px;
+  padding: 3px 6px 4px;
+  font: 800 10px/1 var(--m-font);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--pab-ink);
+  background-color: var(--pab-gold);
+  --px-n: 3px; clip-path: polygon(3px 0, calc(100% - 3px) 0, calc(100% - 3px) 3px, 100% 3px, 100% calc(100% - 3px), calc(100% - 3px) calc(100% - 3px), calc(100% - 3px) 100%, 3px 100%, 3px calc(100% - 3px), 0 calc(100% - 3px), 0 3px, 3px 3px);
+  --px-fb: rgba(120, 70, 0, 0.45); --px-fb-w: 2px;
+}
+.pab-plan:not(.on) .pab-plan-badge { background-color: rgba(245, 196, 81, 0.85); }
+
+/* ---------- Что входит ---------- */
+.pab-checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.pab-checks li { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.3; color: var(--m-fg-muted); }
+.pab-checks svg { width: 14px; height: 14px; margin-top: 1px; flex: none; color: var(--pab-gold); }
+
+/* ---------- Главное действие ---------- */
+.pab-act { display: flex; flex-direction: column; gap: 8px; }
+.pab-act > .btn,
+.pab-cta-wrap,
+.pab-prem-wrap,
+.pab-cta-wrap .btn.primary { display: flex; width: 100%; }
+.pab-act .btn.primary { width: 100%; justify-content: center; }
+/* Размер — как у главной кнопки обычной страницы сборки (.pp-buy .pp-cta). */
+.pab-act .btn.primary,
+.pab-hero-act .btn.primary { height: 52px; font-size: 16px; }
+/* Значок — как у .btn.lg: «Установить» каталога приходит без lg. */
+.pab-act .btn.primary svg,
+.pab-hero-act .btn.primary svg { width: 18px; height: 18px; }
+.pab-aux { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 22px; }
+.pab-aux.two { justify-content: space-between; }
+.pab-fine { text-align: center; font-size: 11.5px; color: var(--m-fg-faint); }
+
+.pab-prog { display: flex; flex-direction: column; gap: 5px; }
+.pab-prog-track {
+  position: relative;
+  display: block;
+  height: 10px;
+  background-color: var(--m-inset);
+  --px-n: 2px; clip-path: polygon(2px 0, calc(100% - 2px) 0, 100% 2px, 100% calc(100% - 2px), calc(100% - 2px) 100%, 2px 100%, 0 calc(100% - 2px), 0 2px);
+  --px-ft: rgba(0, 0, 0, 0.35); --px-ft-w: 2px;
+}
+.pab-prog-fill {
+  position: absolute;
+  inset: 2px auto 2px 2px;
+  max-width: calc(100% - 4px);
+  background: repeating-linear-gradient(90deg, var(--pab-gold) 0 8px, var(--pab-gold-lo) 8px 10px);
+  transition: width 400ms steps(8);
+}
+.pab-prog-text { display: flex; justify-content: center; gap: 8px; font-size: 11.5px; color: var(--m-fg-faint); text-align: center; }
+
+.pab-paynote {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--m-fg-muted);
+  background-color: var(--pab-gold-soft);
+  --px-n: 5px; clip-path: var(--px-5);
+  --px-ol: rgba(245, 196, 81, 0.3); --px-ol-w: 1px;
+}
+.pab-paynote-act { display: flex; gap: 4px; margin-left: -8px; }
+.pab-paynote-act .btn.sm { height: 30px; padding: 0 8px; font-size: 12px; }
+.pab-paynote.err { background-color: var(--m-danger-soft); color: var(--m-fg); --px-ol: rgba(255, 107, 94, 0.4); flex-wrap: nowrap; align-items: flex-start; }
+.pab-paynote.err svg { width: 15px; height: 15px; flex: none; color: var(--m-danger); margin-top: 1px; }
+
+/* ---------- Ключ ---------- */
+.pab-keylink.btn.sm { height: 26px; margin-right: -6px; padding: 0 6px; gap: 6px; font-size: 12px; color: var(--m-fg-subtle); }
+.pab-keylink svg { width: 14px; height: 14px; }
+.pab-key { padding: 10px; background-color: var(--m-inset); --px-n: 5px; clip-path: var(--px-5); }
+.pab-key .pkb-key-row { flex-direction: column; }
+.pab-key .pkb-key-row .input { flex: none; }
+.pab-key .pkb-key-row .btn { justify-content: center; }
+
+/* ---------- Доверие: здоровье сборки ---------- */
+.pab-trust {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 11px 12px 12px;
+  font-size: 12.5px;
+  line-height: 1.3;
+  color: var(--m-fg-subtle);
+  background-color: var(--m-inset);
+  --px-n: 5px; clip-path: var(--px-5);
+  --px-ol: var(--px-well-ol); --px-ol-w: 1px;
+  --px-ft: var(--px-well-t); --px-ft-w: 3px;
+  --pab-ok: var(--m-success);
+}
+.pab-trust.warn { --pab-ok: var(--m-warning); }
+.pab-trust-row { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 7px; }
+.pab-trust-row b { font-weight: 800; color: var(--m-fg); }
+.pab-trust.warn .pab-trust-row b { color: var(--m-warning); }
+.pab-trust-when::before { content: '·'; margin-right: 7px; color: var(--m-fg-faint); }
+.pab-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  background: var(--pab-ok);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--pab-ok) 22%, transparent);
+  animation: pab-blink 2.4s steps(2) infinite;
+}
+@keyframes pab-blink { 50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--pab-ok) 12%, transparent); } }
+.pab-trust-pct { display: flex; flex-direction: column; gap: 6px; }
+.pab-trust-pct b { font-weight: 800; color: var(--m-fg); font-variant-numeric: tabular-nums; }
+.pab-meter { display: grid; grid-template-columns: repeat(10, 1fr); gap: 2px; }
+.pab-meter i { height: 6px; background: rgba(255, 255, 255, 0.08); }
+.pab-meter i.on { background: var(--pab-ok); box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.22), inset 0 -2px 0 rgba(0, 0, 0, 0.18); }
+.pab-trust-report.btn.sm { width: 100%; height: 32px; justify-content: center; }
+
+/* ---------- Вторичное: хостинг, сервер ---------- */
+.pab-more { display: grid; gap: 8px; }
+.pab-more.two { grid-template-columns: 1fr 1fr; }
+.pab-more > .btn { width: 100%; min-width: 0; height: 38px; padding: 0 10px; font-size: 13px; justify-content: center; gap: 7px; }
+.pab-more > .btn svg { width: 15px; height: 15px; flex: none; }
+
+/* ---------- Подписка и право ---------- */
+.pab .pab-manage { padding: 0 2px; font-size: 12px; line-height: 1.3; gap: 7px; }
+.pab .pab-manage > span { flex: 1; min-width: 0; }
+.pab-manage .btn.sm { height: 28px; padding: 0 8px; margin-left: auto; flex: none; font-size: 12px; }
+.pab-manage.warn { color: var(--m-warning); }
+.pab-manage.warn svg { color: var(--m-warning); }
+.pab-legal { font-size: 11px; line-height: 1.35; color: var(--m-fg-faint); }
+
+/* Узкая колонка (≤ 290px): цены строк плана — компактнее. */
+@container (max-width: 290px) {
+  .pab-in { padding: 14px 13px 12px; gap: 12px; }
+  .pab-price b { font-size: 30px; }
+  .pab-plan { padding: 10px 10px 11px; column-gap: 8px; }
+  .pab-plan-cost b { font-size: 15px; }
+  .pab-more > .btn { padding: 0 6px; font-size: 12.5px; }
+  .pab-more.two > .btn svg { display: none; }
+  .pab-trust-when { flex-basis: 100%; padding-left: 15px; }
+  .pab-trust-when::before { content: none; }
+}
+/* Широкая (карточка под героем на узком окне): планы рядом. */
+@container (min-width: 440px) {
+  .pab-in { padding: 18px 20px 16px; }
+  .pab-plans { grid-template-columns: 1fr 1fr; }
+  .pab-plan { grid-template-columns: 16px minmax(0, 1fr); grid-template-areas: 'radio badge' 'radio name' 'radio cost'; row-gap: 0; }
+  .pab-plan-cost { justify-items: start; margin-top: 8px; }
+}
+
+/* Низкое окно (980×640): карточка короче — меньше воздуха, состав плана в две строки. */
+@media (max-height: 700px) {
+  .pab-in { gap: 10px; padding-top: 13px; padding-bottom: 12px; }
+  .pab-checks li:nth-child(n + 3) { display: none; }
+  .pab-head-text > b { font-size: 19px; }
+  .pab-price b { font-size: 30px; }
+  .pab-plan { padding-top: 9px; padding-bottom: 10px; }
+  .pab-trust { gap: 6px; padding-top: 9px; padding-bottom: 10px; }
+}
+
+/* ============ Главная кнопка героя ============ */
+.pab-hero-act {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 240px;
+}
+.pab-hero-act .btn.primary,
+.pab-hero-act .pab-cta-wrap,
+.pab-hero-act .pab-prem-wrap { display: flex; width: 100%; justify-content: center; }
+.pab-hero-act .pab-prog-text { color: rgba(255, 255, 255, 0.82); }
+
+/* ============ Нижний блок цены (PremiumPage) ============ */
+.pm-buy.pab-wide {
+  padding: 18px 20px;
+  background-color: #23211c;
+  --px-ol: rgba(245, 196, 81, 0.4); --px-ol-w: 1px;
+  --px-img: radial-gradient(80% 120% at 0% 0%, rgba(245, 196, 81, 0.12), transparent 70%);
+  --px-img-repeat: no-repeat;
+}
+.pm-buy.pab-wide.is-open { --px-ol: rgba(245, 196, 81, 0.22); }
+.pm-buy.pab-wide .pm-buy-left { gap: 6px; }
+.pm-buy.pab-wide .pm-buy-left > b { font-size: 17px; font-weight: 800; }
+.pm-buy.pab-wide .pm-price b { font-size: 22px; font-weight: 800; }
+
+/* Планы на PremiumPage: тот же язык меток, что в карточке. */
+.pm-plan-card.pab-planbox { position: relative; }
+.pm-plan-card.pab-planbox.best { --px-ol: var(--pab-gold); --px-ol-w: 2px; background-color: #26231b; }
+.pm-plan-card.pab-planbox .pab-plan-badge { align-self: flex-start; margin: 0; }
+.pm-plan-card.pab-planbox .pm-list svg { color: var(--pab-gold); }
+.pm-plan-card.pab-planbox .pm-plan-price { color: var(--m-fg); }
+.pm-plan-card.pab-planbox.best .pm-plan-price { color: var(--pab-gold-hi); }
+.pm-page .pab-manage { padding: 10px 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pab-spin, .pab-dot, .pab-seal { animation: none; }
+  .pab-prog-fill { transition: none; }
+}

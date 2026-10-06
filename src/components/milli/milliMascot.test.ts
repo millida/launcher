@@ -1,5 +1,22 @@
 import { describe, expect, it } from 'bun:test'
+import { readFileSync } from 'node:fs'
 import {
+  MILLI_CUE_MS,
+  MILLI_EYE_ART_TOP,
+  MILLI_MOUTHS,
+  milliBlinkPlan,
+  milliEyeArt,
+  milliGaze,
+  milliGazeOffsets,
+  milliLeanAngle,
+  milliLeanStep,
+  milliMirror,
+  milliMouthBox,
+  milliPixels,
+  milliPoke,
+  milliState,
+  type MilliCue,
+  type MilliMouth,
   MILLI_ARMS,
   MILLI_CHEEKS,
   MILLI_FRAME_BOX,
@@ -11,7 +28,9 @@ import {
   MILLI_GLYPH_CELLS,
   MILLI_MOUTH_OPEN,
   MILLI_MOUTH_SHUT,
+  MILLI_IRIS,
   MILLI_NOSE,
+  MILLI_PUPIL,
   MILLI_TONGUE,
   milliCell,
   type MilliBox,
@@ -77,5 +96,128 @@ describe('Милли — персонаж: ручки и ножки', () => {
 
   it('плечо — середина группы ручки (CSS transform-origin 50%)', () => {
     expect(MILLI_SHOULDER_Y_PCT).toBe(50)
+  })
+})
+
+describe('Милли — кадры лица', () => {
+  it('все рты лежат в пустой клетке под носом и не задевают белые клетки', () => {
+    for (const k of Object.keys(MILLI_MOUTHS) as MilliMouth[]) {
+      const b = milliMouthBox(k)
+      expect(inside(b, milliCell(2, 3)), k).toBe(true)
+      for (const cell of whiteCells) expect(overlaps(b, cell), k).toBe(false)
+    }
+  })
+
+  it('закрытые глаза рисуются на теле (ниже кромки), а не на фоне над ним', () => {
+    for (const k of Object.keys(MILLI_EYE_ART_TOP) as (keyof typeof MILLI_EYE_ART_TOP)[]) {
+      for (const [i, e] of MILLI_EYES.entries()) {
+        const d = milliEyeArt(k, e, i ? 1 : -1)
+        expect(d.length).toBeGreaterThan(0)
+        const ys = [...d.matchAll(/M[-\d.]+ ([-\d.]+)/g)].map((m) => Number(m[1]))
+        expect(Math.min(...ys)).toBeGreaterThanOrEqual(0)
+      }
+    }
+  })
+
+  it('«><» правого глаза — зеркало левого относительно центра', () => {
+    const [l, r] = MILLI_EYES as [MilliBox, MilliBox]
+    const runs = (d: string) => [...d.matchAll(/M([-\d.]+) [-\d.]+h([\d.]+)/g)].map((m) => [Number(m[1]), Number(m[1]) + Number(m[2])] as const)
+    const c = MILLI_VIEW / 2
+    const lx = Math.min(...runs(milliEyeArt('squeeze', l, -1)).map((r) => r[0]))
+    const rx = Math.max(...runs(milliEyeArt('squeeze', r, 1)).map((r) => r[1]))
+    expect(Math.abs(c - lx - (rx - c))).toBeLessThan(0.5)
+  })
+})
+
+describe('Милли — пиксельные картинки', () => {
+  it('соседние клетки строки сливаются, цвета — отдельные path', () => {
+    const p = milliPixels(['XX.Y', '.XXX'], 10, 5, 0)
+    expect(p.X).toBe('M5 0h20v10h-20zM15 10h30v10h-30z')
+    expect(p.Y).toBe('M35 0h10v10h-10z')
+  })
+
+  it('зеркало выравнивает строки по ширине', () => {
+    expect(milliMirror(['AB', 'C'])).toEqual(['BA', '.C'])
+  })
+})
+
+describe('Милли — поведение', () => {
+  it('тыки идут по кругу из трёх реакций', () => {
+    expect([0, 1, 2, 3, 4, -1].map(milliPoke)).toEqual(['poke1', 'poke2', 'poke3', 'poke1', 'poke2', 'poke3'])
+  })
+
+  it('реакция важнее режима; засыпает только в покое; dance = happy', () => {
+    expect(milliState('talk', 'spin', false)).toBe('spin')
+    expect(milliState('idle', null, true)).toBe('sleep')
+    expect(milliState('think', null, true)).toBe('think')
+    expect(milliState('dance', null, false)).toBe('happy')
+  })
+
+  it('взгляд: рядом — прямо, далеко — до упора, шаг не больше 2 пикселей', () => {
+    expect(milliGaze(5, 5, 100)).toEqual({ x: 0, y: 0 })
+    expect(milliGaze(100, 0, 100)).toEqual({ x: 1, y: 0 })
+    expect(milliGaze(1000, 0, 100)).toEqual({ x: 2, y: 0 })
+    expect(milliGaze(-1000, -1000, 100)).toEqual({ x: -1, y: -1 })
+    expect(milliGaze(0, 900, 60)).toEqual({ x: 0, y: 2 })
+    expect(milliGaze(NaN, 1, 60)).toEqual({ x: 0, y: 0 })
+    for (const dx of [-5000, -300, 0, 300, 5000]) {
+      for (const dy of [-5000, -40, 0, 40, 5000]) {
+        const g = milliGaze(dx, dy, 80)
+        expect(Math.abs(g.x)).toBeLessThanOrEqual(2)
+        expect(Math.abs(g.y)).toBeLessThanOrEqual(2)
+      }
+    }
+  })
+
+  it('зрачок двигается на пиксель за шаг и не выходит из радужки; лицо — только при шаге 2', () => {
+    const o = milliGazeOffsets({ x: 2, y: -1 })
+    expect(o.pupil).toEqual({ x: 16, y: -8 })
+    expect(o.face).toEqual({ x: 8, y: 0 })
+    expect(MILLI_PUPIL.dx - MILLI_IRIS.inset).toBeGreaterThanOrEqual(16)
+  })
+
+  it('наклон к элементу: 0 / 3 / 6 градусов и шагами по 3', () => {
+    expect(milliLeanAngle(10, 100)).toBe(0)
+    expect(milliLeanAngle(120, 100)).toBe(3)
+    expect(milliLeanAngle(-900, 100)).toBe(-6)
+    expect(milliLeanStep(0, 6)).toBe(3)
+    expect(milliLeanStep(3, 6)).toBe(6)
+    expect(milliLeanStep(6, -6)).toBe(3)
+    expect(milliLeanStep(3, 3)).toBe(3)
+  })
+
+  it('моргание: 2,4–6,8 с, двойное — иногда', () => {
+    expect(milliBlinkPlan(0, 0.5)).toEqual({ wait: 2400, double: false })
+    expect(milliBlinkPlan(1, 0.1)).toEqual({ wait: 6800, double: true })
+  })
+})
+
+describe('Милли — CSS-кадры', () => {
+  const css = readFileSync(new URL('../../styles/pixel/milli-mascot.css', import.meta.url), 'utf8')
+
+  it('длина каждой реакции в JS совпадает с длиной её ключей в CSS', () => {
+    const main: Record<MilliCue, string> = {
+      hop: '.mm-s-hop:not(.milli-hop) .mm-jump',
+      spin: '.mm-s-spin .mm-jump',
+      poke1: '.mm-s-poke1 .mm-jump',
+      poke2: '.mm-s-poke2 .mm-jump',
+      poke3: '.mm-s-poke3 .mm-jump',
+      wake: '.mm-s-wake .mm-jump',
+      wow: '.mm-s-wow .mm-jump',
+    }
+    for (const [cue, sel] of Object.entries(main) as [MilliCue, string][]) {
+      const at = css.indexOf(sel)
+      expect(at, sel).toBeGreaterThan(-1)
+      const rule = css.slice(at, css.indexOf('}', at))
+      const sec = Number(/(?:animation:\s*[\w-]+|animation-duration:)\s*([\d.]+)s/.exec(rule)?.[1])
+      expect(Math.round(sec * 1000), cue).toBe(MILLI_CUE_MS[cue])
+    }
+  })
+
+  it('все используемые ключи определены, движение — только steps()', () => {
+    const defined = new Set([...css.matchAll(/@keyframes ([\w-]+)/g)].map((m) => m[1]))
+    const used = [...css.matchAll(/animation(?:-name)?:\s*([a-z][\w-]*)/g)].map((m) => m[1]).filter((n) => n !== 'none')
+    for (const n of used) expect(defined.has(n), n).toBe(true)
+    for (const m of css.matchAll(/animation:\s*[\w-]+\s+[\d.]+m?s\s+([\w-]+)/g)) expect(m[1]).toBe('steps')
   })
 })

@@ -168,6 +168,17 @@ export interface SiteCard {
   packCode?: string | null
 }
 
+/**
+ * Когда материал на самом деле обновлялся. `updatedAt` карточек сайта — время
+ * синхронизации каталога (у всех «3 часа назад», жалоба владельца 06.10.2026), поэтому
+ * верим только дате выхода файла; у Modrinth `updatedAt` — настоящая дата автора.
+ */
+export function realUpdated(card: Pick<SiteCard, 'updatedAt' | 'mrHit'>, files?: { releasedAt?: string | null; date?: string | null }[]): string | null {
+  const dates = (files || []).map((f) => f.releasedAt || f.date || '').filter((d) => Number.isFinite(Date.parse(d)))
+  if (dates.length) return dates.reduce((a, b) => (Date.parse(a) > Date.parse(b) ? a : b))
+  return card.mrHit ? card.updatedAt : null
+}
+
 export interface SiteListing {
   section: string
   total: number

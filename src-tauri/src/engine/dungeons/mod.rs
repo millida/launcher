@@ -286,7 +286,7 @@ fn unpack_gzip(src: &Path, dest: &Path, size: u64, sha256: &str) -> Result<(), S
 /// Goes through the segmented downloader: the main .ucas of Dungeons II alone is
 /// 8.8 GB, and as one stream it both capped the speed and froze the bar until
 /// its last byte.
-async fn fetch_one(j: &FileJob, cancel: &std::sync::atomic::AtomicBool, on: &crate::engine::core::Progress<'_>) -> Result<(), String> {
+async fn fetch_one(j: &FileJob, cancel: &Halt, on: &crate::engine::core::Progress<'_>) -> Result<(), String> {
     if let Some(parent) = j.path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("{}: {}", parent.display(), e))?;
     }

@@ -1,0 +1,225 @@
+/* Вкладка «Моды» в карточке сборки (BenchMods + VirtualList). Игрок 12–14 лет:
+   иконка, название (до 2 строк), одна короткая строка, тумблер; техничка — .is-modder.
+   Геометрия строки связана с BenchMods (TEXT_SIDE = 108) и benchRows (52/+16/+16, lib 40, group 34). */
+
+.mbl.mmd {
+  position: relative; display: flex; flex-direction: column; gap: 8px; flex: 1 1 auto; min-height: 0; height: 100%; min-width: 0;
+  color: var(--m-fg); font-family: var(--m-font);
+}
+
+/* ── панель: поиск + фильтры-иконки в одну строку ───────────────────── */
+.mmd .mbl-bar { flex: none; display: flex; align-items: center; gap: 6px; min-width: 0; }
+.mmd .mbl-search { position: relative; flex: 1 1 auto; min-width: 0; display: flex; align-items: center; }
+.mmd .mbl-search > .px-icon { position: absolute; z-index: 1; left: 9px; width: 12px; height: 12px; color: var(--m-fg-subtle); pointer-events: none; }
+:root:root .mmd .mbl-search input.input {
+  width: 100%; height: 30px; padding: 0 8px 0 28px; font: 600 12.5px/1 var(--m-font); color: var(--m-fg);
+  background-color: var(--m-bg); --px-n: 4px; clip-path: var(--px-4);
+}
+.mmd .mbl-search input::placeholder { color: var(--m-fg-faint); }
+.mmd .mbl-filters { flex: none; display: flex; gap: 3px; }
+.mmd .mbl-fc {
+  height: 30px; min-width: 30px; padding: 0 7px; display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  border: 0; cursor: pointer; color: var(--m-fg-subtle); background: var(--m-bg);
+  --px-n: 3px; clip-path: var(--px-4);
+  transition: background-color var(--m-t-fast), color var(--m-t-fast);
+  animation: mmd-pop 180ms steps(2, end) backwards;
+}
+.mmd .mbl-fc .px-icon { width: 12px; height: 12px; flex: none; }
+.mmd .mbl-fc i { font: 700 10.5px/1 'Monocraft', var(--m-mono); font-style: normal; font-variant-numeric: tabular-nums; }
+.mmd .mbl-fc:hover { color: var(--m-fg); background: var(--m-surface); }
+.mmd .mbl-fc.on { color: var(--m-fg); background: var(--m-accent-soft); box-shadow: inset 0 -2px 0 var(--m-accent); }
+.mmd .mbl-fc.on i { color: var(--m-accent); }
+.mmd .mbl-fc.f-changed { color: var(--m-warning); }
+.mmd .mbl-fc.f-off { color: var(--m-fg-muted); }
+.mmd .mbl-fc.f-warn { color: var(--m-warning); }
+.mmd .mbl-fc.f-warn.on { background: var(--m-warning-soft); box-shadow: inset 0 -2px 0 var(--m-warning); }
+.mmd .mbl-fc.f-warn.on i { color: var(--m-warning); }
+
+/* ── скроллер ───────────────────────────────────────────────────────── */
+.mmd .vl { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; contain: size layout paint; }
+.mmd .vl-in { position: relative; width: 100%; }
+.mmd .vl-row { position: absolute; left: 0; right: 0; top: 0; contain: layout paint; outline: 0; will-change: transform; }
+.mmd .vl-row:focus-visible > * { outline: 2px solid var(--m-accent); outline-offset: -2px; }
+.mmd .vl-exit { pointer-events: none; z-index: 0; animation: mmd-out 160ms ease-in forwards; }
+.mmd .vl-tail { display: flex; flex-direction: column; gap: 10px; padding: 12px 2px 8px; }
+
+/* ── заголовок группы (34) ──────────────────────────────────────────── */
+.mmd .mbl-group { height: 100%; display: flex; align-items: flex-end; gap: 6px; padding: 0 4px 4px; }
+.mmd .mbl-gbtn {
+  flex: 1 1 auto; min-width: 0; height: 26px; display: flex; align-items: center; gap: 7px; padding: 0 6px 0 4px;
+  background: none; border: 0; color: var(--m-fg-muted); font: 800 12px/1 var(--m-font); cursor: pointer; text-align: left;
+  box-shadow: inset 0 -1px 0 var(--m-border);
+}
+.mmd .mbl-gbtn:hover { color: var(--m-fg); background: var(--m-surface); }
+.mmd .mbl-gic { flex: none; width: 16px; height: 16px; image-rendering: pixelated; }
+.mmd .mbl-gbtn b { min-width: 0; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mmd .mbl-gbtn i {
+  flex: none; padding: 2px 5px; font: 700 10.5px/1 'Monocraft', var(--m-mono); font-style: normal; color: var(--m-fg-subtle);
+  background: var(--m-surface-2); font-variant-numeric: tabular-nums;
+}
+.mmd .mbl-chev { margin-left: auto; width: 10px; height: 10px; flex: none; color: var(--m-fg-faint); transition: transform 180ms var(--m-ease-move, ease); }
+.mmd .mbl-group.shut .mbl-chev { transform: rotate(-90deg); }
+.mmd .mbl-group.shut .mbl-gbtn { color: var(--m-fg-subtle); }
+.mmd .mbl-group.shut .mbl-gic { opacity: 0.6; }
+:root:root .mmd .mbl-gsel { width: 14px; height: 14px; margin-bottom: 6px; }
+
+/* ── строка мода (52 / 68; моддеру +16) ─────────────────────────────── */
+.mmd .mbl-row {
+  position: relative; height: 100%; display: flex; align-items: center; gap: 10px; padding: 0 4px 0 8px;
+  cursor: pointer; user-select: none; --px-n: 3px; clip-path: var(--px-4);
+  transition: background-color var(--m-t-fast);
+}
+.mmd .mbl-row:hover, .mmd .mbl-row.sel { background: var(--m-surface); }
+.mmd .mbl-row.sel { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--m-accent) 40%, transparent); }
+.mmd .mbl-ic { width: 36px; height: 36px; flex: none; transition: filter 200ms, opacity 200ms; }
+.mmd .mbl-ic img { width: 28px; height: 28px; }
+.mmd .mbl-row:hover .mpc-slot::after { opacity: 0.14; }
+.mmd .mbl-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.mmd .mbl-name {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+  font: 650 13px/16px var(--m-font); color: var(--m-fg); overflow-wrap: break-word;
+}
+.mmd .mbl-sub { display: flex; min-width: 0; font: 500 11.5px/15px var(--m-font); color: var(--m-fg-subtle); }
+.mmd .mbl-why { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mmd .mbl-why.warn { color: var(--m-warning); display: inline-flex; align-items: center; gap: 4px; }
+.mmd .mbl-why.warn .px-icon { flex: none; width: 10px; height: 10px; }
+
+/* RU и метки диффа — внутри названия, текут за последним словом */
+.mmd .mbl-ru, .mmd .mbl-mk {
+  display: inline-grid; place-items: center; vertical-align: 1px; margin-left: 5px; height: 15px; font-style: normal;
+}
+.mmd .mbl-ru { padding: 0 4px; font: 800 10px/1 var(--m-font); letter-spacing: 0.03em; color: var(--m-info); background: var(--m-info-soft); }
+.mmd .mbl-mk { width: 15px; }
+.mmd .mbl-mk .px-icon { width: 8px; height: 8px; }
+.mmd .mbl-mk.add { color: var(--m-success); background: color-mix(in srgb, var(--m-success) 18%, transparent); }
+.mmd .mbl-mk.chg { color: var(--m-warning); background: color-mix(in srgb, var(--m-warning) 18%, transparent); }
+.mmd .mbl-mk.back { color: var(--m-fg-muted); background: color-mix(in srgb, var(--m-fg) 12%, transparent); }
+
+/* тумблер: большая зона нажатия 44×40, сам .tgl лаунчера чуть меньше */
+.mmd .mbl-sw {
+  flex: none; width: 44px; height: 40px; display: grid; place-items: center; padding: 0; border: 0; background: none; cursor: pointer;
+}
+:root:root .mmd .mbl-sw .tgl { width: 32px; height: 18px; pointer-events: none; }
+:root:root .mmd .mbl-sw .tgl::after { top: 3px; left: 3px; width: 12px; height: 12px; }
+:root:root .mmd .mbl-sw .tgl.on::after { left: 17px; }
+.mmd .mbl-sw:active .tgl { transform: scale(0.92); }
+.mmd .mbl-locked { flex: none; width: 44px; display: grid; place-items: center; color: var(--m-fg-faint); }
+.mmd .mbl-locked .px-icon { width: 12px; height: 12px; }
+
+/* выключен: на месте, серый; дифф — планка слева */
+.mmd .mbl-row.k-ghost .mbl-ic { filter: grayscale(1); opacity: 0.45; }
+.mmd .mbl-row.k-ghost .mbl-name { color: var(--m-fg-subtle); }
+.mmd .mbl-row.k-ghost .mbl-sub { color: var(--m-fg-faint); }
+.mmd .mbl-row.m-add::before, .mmd .mbl-row.m-chg::before, .mmd .mbl-row.m-back::before {
+  content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px; background: var(--m-success);
+}
+.mmd .mbl-row.m-add { background: color-mix(in srgb, var(--m-success) 7%, transparent); }
+.mmd .mbl-row.m-chg::before { background: var(--m-warning); }
+.mmd .mbl-row.m-back::before { background: var(--m-fg-faint); }
+
+/* ── моддер: строка техники, библиотеки веткой ─────────────────────── */
+.mmd .mbl-meta {
+  display: flex; align-items: center; gap: 0; min-width: 0; overflow: hidden; white-space: nowrap;
+  font: 500 10.5px/13px var(--m-mono); color: var(--m-fg-faint);
+}
+.mmd .mbl-meta > * + *::before { content: '·'; margin: 0 5px; color: var(--m-fg-faint); }
+.mmd .mbl-ver { flex: none; max-width: 38%; overflow: hidden; text-overflow: ellipsis; color: var(--m-fg-muted); }
+.mmd .mbl-slug { min-width: 0; overflow: hidden; text-overflow: ellipsis; padding: 0; border: 0; background: none; font: inherit; color: var(--m-fg-subtle); cursor: copy; }
+.mmd .mbl-slug:hover { color: var(--m-accent); }
+.mmd .mbl-side, .mmd .mbl-by { flex: none; }
+.mmd .mbl-en { flex: none; padding: 0 4px; border: 0; height: 13px; font: 800 10px/1 var(--m-font); color: var(--m-fg-muted); background: var(--m-surface-2); cursor: pointer; }
+.mmd .mbl-en.on, .mmd .mbl-en:hover { color: var(--m-fg); background: color-mix(in srgb, var(--m-fg) 16%, transparent); }
+.mmd .mbl-meta > .mbl-en::before { content: none; }
+.mmd .mbl-meta > .mbl-en { margin-left: 6px; }
+
+.mmd .mbl-row.k-lib { gap: 8px; }
+.mmd .mbl-row.k-lib .mbl-ic { width: 26px; height: 26px; box-shadow: inset 2px 2px 0 #0b0b0c, inset -2px -2px 0 #34353a; }
+.mmd .mbl-row.k-lib .mbl-ic img { width: 18px; height: 18px; }
+.mmd .mbl-row.k-lib .mbl-name { -webkit-line-clamp: 1; line-clamp: 1; font-size: 12px; font-weight: 600; color: var(--m-fg-muted); }
+.mmd .mbl-row.k-lib .mbl-sub { font-size: 10.5px; line-height: 13px; }
+.mmd .mbl-row.branch { padding-left: 30px; }
+.mmd .mbl-branch {
+  position: absolute; left: 24px; top: -2px; width: 8px; height: calc(50% + 2px);
+  border-left: 2px solid var(--m-border-strong); border-bottom: 2px solid var(--m-border-strong);
+}
+
+/* выбор (моддер): чекбокс поверх слота, только в режиме выбора или по наведению на сам слот */
+:root:root .mmd .mbl-sel {
+  position: absolute; z-index: 2; left: -3px; top: -3px; width: 14px; height: 14px; opacity: 0;
+  transition: opacity var(--m-t-fast); box-shadow: 0 0 0 2px var(--m-bg);
+}
+.mmd .mbl-ic:hover .mbl-sel, .mmd.is-selecting .mbl-sel, .mmd .mbl-sel.on { opacity: 1; }
+
+/* ── плашка лишних библиотек ────────────────────────────────────────── */
+.mmd .mbl-orphans {
+  height: calc(100% - 6px); margin-top: 3px; display: flex; align-items: center; gap: 8px; padding: 0 4px 0 10px;
+  background: var(--m-warning-soft); box-shadow: inset 3px 0 0 var(--m-warning); font: 700 12px/1.15 var(--m-font);
+  --px-n: 4px; clip-path: var(--px-4);
+}
+.mmd .mbl-orphans > svg { flex: none; }
+.mmd .mbl-orphans > span { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; white-space: nowrap; overflow: hidden; }
+.mmd .mbl-orphans > span i { font: 500 10.5px/1.2 var(--m-font); font-style: normal; color: var(--m-fg-subtle); overflow: hidden; text-overflow: ellipsis; }
+:root:root .mmd .mbl-orphans .btn.sm { flex: none; height: 28px; padding: 0 10px 2px; font-size: 12px; }
+.mmd .mbl-orphans .mpc-x { width: 26px; height: 26px; }
+
+/* ── хвост: «Можно добавить», «Не вошли» ────────────────────────────── */
+.mmd .mbl-tail-h { margin: 0 0 6px; display: flex; align-items: center; gap: 6px; font: 800 12px/1 var(--m-font); color: var(--m-fg-muted); }
+.mmd .mbl-tail-h .px-icon { width: 10px; height: 10px; color: var(--m-accent); }
+.mmd .mbl-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.mmd .mbl-chip {
+  max-width: 100%; height: 32px; display: inline-flex; align-items: center; gap: 7px; padding: 0 9px 0 4px; border: 0; cursor: pointer;
+  color: var(--m-fg); background: var(--m-surface); font: 700 12px/1 var(--m-font);
+  --px-n: 3px; clip-path: var(--px-4);
+  transition: background-color var(--m-t-fast), transform var(--m-t-fast);
+  animation: mmd-pop 200ms steps(2, end) backwards; animation-delay: calc(var(--i, 0) * 40ms);
+}
+.mmd .mbl-chip:hover { background: var(--m-accent-soft); transform: translateY(-1px); }
+.mmd .mbl-chip:active { transform: translateY(1px); }
+.mmd .mbl-chip-ic { width: 24px; height: 24px; flex: none; display: grid; place-items: center; background: var(--m-inset); }
+.mmd .mbl-chip-ic img { width: 16px; height: 16px; display: block; }
+.mmd .mbl-chip-t { min-width: 0; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mmd .mbl-chip-plus { width: 10px; height: 10px; flex: none; color: var(--m-accent); }
+.mmd .mbl-chip.more { padding: 0 10px; color: var(--m-fg-subtle); background: transparent; box-shadow: inset 0 0 0 1px var(--m-border-strong); clip-path: none; }
+.mmd .mbl-chip.more:hover { color: var(--m-fg); background: var(--m-surface); }
+
+.mmd .mbl-excl { border-top: 1px solid var(--m-border); padding-top: 8px; }
+.mmd .mbl-excl > summary {
+  list-style: none; height: 26px; display: flex; align-items: center; gap: 6px; cursor: pointer;
+  font: 800 12px/1 var(--m-font); color: var(--m-fg-subtle);
+}
+.mmd .mbl-excl > summary::-webkit-details-marker { display: none; }
+.mmd .mbl-excl > summary:hover { color: var(--m-fg); }
+.mmd .mbl-excl > summary .mbl-chev { margin: 0; transform: none; }
+.mmd .mbl-excl[open] > summary .mbl-chev { transform: rotate(90deg); }
+.mmd .mbl-excl > summary i { padding: 2px 5px; font: 700 10.5px/1 'Monocraft', var(--m-mono); font-style: normal; color: var(--m-danger); background: var(--m-danger-soft); }
+.mmd .mbl-excl ul { margin: 4px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.mmd .mbl-excl li {
+  display: grid; grid-template-columns: 14px auto 1fr; align-items: center; gap: 8px; height: 26px; padding: 0 6px;
+  font: 500 11.5px/1 var(--m-font); color: var(--m-fg-subtle); animation: mmd-in 180ms ease-out backwards;
+}
+.mmd .mbl-excl li b { font-weight: 700; color: var(--m-fg-muted); white-space: nowrap; }
+.mmd .mbl-excl li span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── пусто, массовые действия ───────────────────────────────────────── */
+.mmd .mbl-empty {
+  flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  min-height: 140px; padding: 16px; text-align: center; color: var(--m-fg-muted); font: 700 13px/1.35 var(--m-font);
+  animation: mmd-in 200ms ease-out backwards;
+}
+:root:root .mmd .mbl-empty .btn.sm { height: 30px; padding: 0 12px 3px; font-size: 12.5px; }
+:root:root .mmd .mbl-bulk {
+  position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); width: max-content; max-width: calc(100% - 12px);
+  height: auto; padding: 4px 4px 4px 10px; gap: 4px; display: flex; align-items: center;
+}
+.mmd .mbl-bulk b { font: 800 12px/1 'Monocraft', var(--m-mono); margin-right: 2px; }
+:root:root .mmd .mbl-bulk .btn.sm { height: 28px; padding: 0 9px 2px; font-size: 12px; }
+
+@keyframes mmd-pop { 0% { opacity: 0; transform: scale(0.85); } 50% { opacity: 1; transform: scale(1.05); } }
+@keyframes mmd-in { 0% { opacity: 0; transform: translateY(-4px); } }
+@keyframes mmd-out { to { opacity: 0; transform: var(--vl-t, none) scaleY(0.6); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .mmd .mbl-fc, .mmd .mbl-chip, .mmd .mbl-excl li, .mmd .mbl-empty, .mmd .vl-exit { animation: none; }
+  .mmd .mbl-chev, .mmd .mbl-row, .mmd .mbl-ic, .mmd .mbl-chip, .mmd .mbl-sel { transition: none; }
+  .mmd .vl-exit { display: none; }
+}

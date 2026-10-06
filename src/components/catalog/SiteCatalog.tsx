@@ -4,6 +4,7 @@ import { Icon } from '../Icon'
 import { CatalogFor } from './CatalogTop'
 import { CatalogNotice } from './CatalogShell'
 import { FilterGroup, SiteFilters } from './SiteFilters'
+import { librariesLast } from './similar'
 import { HitRow, MapRow, RowSkeleton, SiteGalleryCard, SiteRow } from './SiteRow'
 import type { MapHit } from './SiteRow'
 import { SERVER_SECTIONS, SITE_SECTIONS, fmtNum, loadCurated, loadSkins, materials, peekHit, sectionBySlug, sectionByKind } from './site'
@@ -106,7 +107,8 @@ function SearchField({ value, label, onCommit }: { value: string; label: string;
       }}
     >
       <Icon id="i-search" />
-      <input type="search" value={v} placeholder={label} aria-label={label} onChange={(e) => setV(e.target.value)} />
+      {/* Без автозамены macOS: она подсовывала пузырь «Back ×» поверх поля. */}
+      <input type="search" value={v} placeholder={label} aria-label={label} autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false} onChange={(e) => setV(e.target.value)} />
       {v ? (
         <button
           type="button"
@@ -369,19 +371,42 @@ function Frame({
   sort: React.ReactNode
   children: React.ReactNode
 }) {
+  // Колонка фильтров не длиннее видимой области прокрутки: высоту шапки над ней
+  // меряем, а не угадываем (было 100vh − 124px — низ «Категорий» и «Цена» уходили
+  // за край окна и не долистывались, 06.10.2026).
+  const aside = useRef<HTMLElement>(null)
+  useEffect(() => {
+    const el = aside.current
+    if (!el) return
+    let box: HTMLElement | null = el.parentElement
+    while (box && !/(auto|scroll)/.test(getComputedStyle(box).overflowY)) box = box.parentElement
+    if (!box) return
+    const sc = box
+    // До прилипания колонка начинается ниже (под разделами) — её низ уходил за окно, а
+    // overscroll-behavior: contain не давал долистать страницу. Высота = от её верха до низа окна.
+    const fit = () => {
+      const bottom = sc.getBoundingClientRect().bottom
+      const top = Math.max(el.getBoundingClientRect().top, sc.getBoundingClientRect().top + 12)
+      el.style.setProperty('max-height', Math.max(240, bottom - top - 12) + 'px')
+    }
+    fit()
+    const ro = new ResizeObserver(fit)
+    ro.observe(sc)
+    sc.addEventListener('scroll', fit, { passive: true })
+    return () => {
+      ro.disconnect()
+      sc.removeEventListener('scroll', fit)
+    }
+  }, [narrow])
   return (
     <div className="mr-layout">
-      {!narrow ? <aside className="mr-aside" aria-label="Фильтры">{filters}</aside> : null}
+      {!narrow ? <aside className="mr-aside" aria-label="Фильтры" ref={aside}>{filters}</aside> : null}
       <div className="mr-main">
-        <header className="mr-head">
-          <h1 className="mr-h1">
-            {sec.h1}
-            {count ? <span className="mr-h1-n">{count}</span> : null}
-          </h1>
-          <ForBuild sec={sec} />
-        </header>
-        <div className="mr-toolbar">
+        {/* Одна строка вместо трёх (владелец 06.10.2026: «до карточек полэкрана»): поиск, «Для: сборка»,
+            а заголовок раздела — мелкой подписью с числом. */}
+        <div className="mr-toolbar mr-toolbar-one">
           {search}
+          <ForBuild sec={sec} />
           <div className="mr-toolbar-row">
             {narrow ? (
               <button className={'btn sm secondary mr-fbtn' + (open ? ' on' : '')} aria-expanded={open} data-track="filters" onClick={onOpen}>
@@ -395,6 +420,10 @@ function Frame({
           </div>
         </div>
         {narrow && open ? <div className="mr-sheet">{filters}</div> : null}
+        <h1 className="mr-h1 mr-h1-sm">
+          {sec.h1}
+          {count ? <span className="mr-h1-n">{count}</span> : null}
+        </h1>
         {children}
       </div>
     </div>
@@ -411,6 +440,10 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
   const tail = useMemo(() => mrTail(s.items, s.mr, s.page, s.pages, peekHit, searching), [s.items, s.mr, s.page, s.pages, searching])
   const cfRows = useMemo(() => cfTail(s.items, tail, s.cf, s.page, s.pages, peekHit, searching), [s.items, tail, s.cf, s.page, s.pages, searching])
   const count = s.page ? materials(s.total + s.mrTotal + cfRows.length) : null
+  const items = useMemo(
+    () => (sec.kind === 'mod' && (s.sort ?? 'recommended') === 'recommended' && !searching ? librariesLast(s.items) : s.items),
+    [s.items, s.sort, sec.kind, searching],
+  )
   const filters = (
     <SiteFilters
       sec={sec}
@@ -460,7 +493,7 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
         <>
           {s.items.length ? (
             <div className={(sec.gallery ? 'mr-galgrid' : 'mr-list') + (s.busy && s.page === 1 ? ' cat-dim' : '')}>
-              {s.items.map((c, i) => (
+              {items.map((c, i) => (
                 // В «Все» строка ставится и открывается в своём настоящем разделе.
                 <Card key={c.slug} card={c} sec={sec.slug === 'all' && c.section ? sectionBySlug(c.section) : sec} list={sec.slug} pos={i} onOpenPack={onOpenPack} />
               ))}

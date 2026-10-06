@@ -31,9 +31,11 @@ export interface GameInfo {
   meta: string
   steam: boolean
   store: boolean
+  /** Скрыта из библиотеки; файлы и установка у игроков остаются. */
+  hidden?: boolean
 }
 
-export const GAMES: GameInfo[] = [
+const ALL_GAMES: GameInfo[] = [
   {
     // Bedrock — отдельной игрой в «Других играх» (владелец 29.09.2026, вместо
     // переключателя Java | Bedrock). С 2022 года Java и Bedrock продаются
@@ -71,6 +73,7 @@ export const GAMES: GameInfo[] = [
     mods: 'Моды .pak',
     steam: true,
     store: true,
+    hidden: true,
   },
   {
     slug: 'legends',
@@ -95,6 +98,8 @@ export const GAMES: GameInfo[] = [
     store: true,
   },
 ]
+
+export const GAMES: GameInfo[] = ALL_GAMES.filter((g) => !g.hidden)
 
 export const gamePoster = (slug: GameSlug) => '/games/' + slug + '/poster.jpg'
 export const gameHero = (slug: GameSlug) => '/games/' + slug + '/hero.jpg'

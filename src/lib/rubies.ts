@@ -590,6 +590,18 @@ export interface PackQuest {
   owned: boolean
   fragments: FragmentProgress | null
 }
+export interface TelegramReward {
+  available: boolean
+  amount: number
+  claimed: boolean
+  linked: boolean
+  botUrl: string
+  channelUrl: string
+}
+export const loadTelegramReward = () => api<TelegramReward>('/rubies/telegram')
+export const claimTelegramReward = () =>
+  api<TelegramReward & { granted: boolean; balance: number | null }>('/rubies/telegram/claim', { method: 'POST' })
+
 export const loadPackQuests = () => api<{ quests: PackQuest[] }>('/rubies/quests')
 export const claimPackQuest = (code: string) =>
   api<{ quest: PackQuest; item: ItemRef | null }>(
