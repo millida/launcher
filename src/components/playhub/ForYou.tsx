@@ -331,9 +331,11 @@ export function ForYou({
     const taken = new Set(head.map(packKey))
     // Черновики для тестировщика — всегда в начале: иначе ротация прятала проверяемую сборку.
     const previews = packs.filter((p) => p.preview && !taken.has(packKey(p)))
+    // Our partner servers stand right after them: a pack without downloads yet would sink below the fold.
+    const servers = packs.filter((p) => !p.preview && isOwnServerPack(p.slug) && !taken.has(packKey(p)))
     const sections: Record<string, FeedItem<FeedData>[]> = {
       modpacks: packs
-        .filter((p) => !p.preview && p.slug !== ONEBLOCK_PACK && !/one\s?-?block/i.test(p.slug || p.title))
+        .filter((p) => !p.preview && !isOwnServerPack(p.slug) && p.slug !== ONEBLOCK_PACK && !/one\s?-?block/i.test(p.slug || p.title))
         .slice(0, 40)
         .map((p) => ({
           key: packKey(p),
@@ -351,7 +353,7 @@ export function ForYou({
           ok: !!(c.cover || c.icon) && Math.max(c.downloads || 0, c.sourceDownloads || 0) >= MIN_DOWNLOADS,
           data: { kind: 'card', section: sec, card: c },
         }))
-    const n = SHOWN - headCells(fyHead) - EXCL - 1 - previews.length
+    const n = SHOWN - headCells(fyHead) - EXCL - 1 - previews.length - servers.length
     const feed = mixFeed<FeedData>({
       sections,
       personal: [],
@@ -363,7 +365,7 @@ export function ForYou({
       recent: ab.recent,
       taken,
     })
-    const packCard = (p: HubPack, why: FeedWhy | 'preview'): Pick => ({
+    const packCard = (p: HubPack, why: FeedWhy | 'preview' | 'server'): Pick => ({
       key: packKey(p),
       why,
       node: (
@@ -401,6 +403,7 @@ export function ForYou({
     })
     return [
       ...previews.map((p) => packCard(p, 'preview')),
+      ...servers.map((p) => packCard(p, 'server')),
       ...feed.map((f) => (f.item.data.kind === 'pack' ? packCard(f.item.data.pack, f.why) : siteCard(f.item.data.section, f.item.data.card, f.item.key, f.why))),
     ]
     // eslint-disable-next-line react-hooks/exhaustive-deps
