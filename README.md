@@ -3,9 +3,9 @@
 </p>
 
 <p align="center">
-  <a href="https://millida.net/launcher/dl/windows"><img src=".github/readme/dl-windows.png" width="32%" alt="Скачать для Windows"></a>
-  <a href="https://millida.net/launcher/dl/macos"><img src=".github/readme/dl-macos.png" width="32%" alt="Скачать для macOS"></a>
-  <a href="https://millida.net/launcher/dl/linux"><img src=".github/readme/dl-linux.png" width="32%" alt="Скачать для Linux"></a>
+  <a href="https://millida.net/launcher/dl/windows"><img src=".github/readme/download-windows.png" width="32%" alt="Скачать для Windows"></a>
+  <a href="https://millida.net/launcher/dl/macos"><img src=".github/readme/download-macos.png" width="32%" alt="Скачать для macOS"></a>
+  <a href="https://millida.net/launcher/dl/linux"><img src=".github/readme/download-linux.png" width="32%" alt="Скачать для Linux"></a>
 </p>
 
 <p align="center">
