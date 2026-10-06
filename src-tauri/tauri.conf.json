@@ -21,7 +21,8 @@
         "minHeight": 640,
         "decorations": false,
         "transparent": false,
-        "center": true
+        "center": true,
+        "acceptFirstMouse": true
       }
     ],
     "security": {
