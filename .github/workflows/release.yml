@@ -30,3 +30,26 @@ jobs:
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --latest \
               --title "Millida Launcher ${TAG#v}" --notes-file notes.md
           fi
+
+      # The same bytes the CDN serves, checked against the hashes taken at build time.
+      - name: Attach installers from the CDN
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          CDN_BASE: https://launcher-storage.millida.net
+        run: |
+          set -eu
+          version="${TAG#v}"
+          mkdir assets
+          curl -fsSL --retry 5 --retry-all-errors "$CDN_BASE/$version/files.json" -o files.json
+          jq -r '.files[] | [.name, .url, .sha256] | @tsv' files.json > list.tsv
+          if [ ! -s list.tsv ]; then
+            echo "::error::в files.json версии $version нет ни одного установщика"
+            exit 1
+          fi
+          while IFS=$'\t' read -r name url sha; do
+            curl -fsSL --retry 5 --retry-all-errors "$url" -o "assets/$name"
+            echo "$sha  $name" >> assets/SHA256SUMS
+          done < list.tsv
+          (cd assets && sha256sum -c SHA256SUMS)
+          gh release upload "$TAG" assets/* --repo "$GITHUB_REPOSITORY" --clobber
