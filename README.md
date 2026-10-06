@@ -116,7 +116,7 @@ Windows — «Параметры» → «Приложения»; macOS — в к
 
 Rust-ядро (Tauri 2) и интерфейс на React, лицензия [GPL-3.0-only](LICENSE).
 
-[Устройство](ARCHITECTURE.md) · [Как прислать правку](CONTRIBUTING.md) · [Уязвимости](SECURITY.md) · [Название и логотип](TRADEMARK.md)
+[Как собрать самому](BUILDING.md) · [Устройство](ARCHITECTURE.md) · [Как прислать правку](CONTRIBUTING.md) · [Уязвимости](SECURITY.md) · [Название и логотип](TRADEMARK.md)
 
 <details>
 <summary><b>Зачем открыт код</b></summary>
