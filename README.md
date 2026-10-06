@@ -1,214 +1,134 @@
-# Millida Launcher
+<p align="center">
+  <img src=".github/readme/banner.png" alt="Millida Launcher — лаунчер Minecraft с модами, скинами и друзьями">
+</p>
 
-Лаунчер Minecraft для Windows, macOS и Linux. Любая версия игры, моды и модпаки
-в один клик, свои сборки, скины, друзья и серверы — в одном окне. Бесплатно,
-без рекламы, Java ставить отдельно не нужно.
+<p align="center">
+  <a href="https://millida.net/launcher/dl/windows"><img src=".github/readme/dl-windows.png" width="300" alt="Скачать для Windows"></a>
+  <a href="https://millida.net/launcher/dl/macos"><img src=".github/readme/dl-macos.png" width="300" alt="Скачать для macOS"></a>
+  <a href="https://millida.net/launcher/dl/linux"><img src=".github/readme/dl-linux.png" width="300" alt="Скачать для Linux"></a>
+</p>
 
-![Главный экран лаунчера](screenshots/play.png)
+<p align="center">
+  <a href="https://github.com/millida/launcher/releases/latest"><img src="https://img.shields.io/github/v/release/millida/launcher?label=%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F&color=9B6BFF" alt="Последняя версия"></a>
+  <a href="https://millida.net/launcher/antivirus"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Flauncher-storage.millida.net%2Fsetup%2Fscan.json&query=%24.files%5B0%5D.malicious&label=VirusTotal&suffix=%20%D1%83%D0%B3%D1%80%D0%BE%D0%B7&color=2ea043" alt="Проверка VirusTotal"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/%D0%BB%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D1%8F-GPL--3.0-555" alt="Лицензия GPL-3.0"></a>
+</p>
 
-## Скачать
+<p align="center">
+  <a href="https://millida.net/launcher/antivirus"><img src=".github/readme/trust-virus.png" width="49%" alt="Без вирусов: каждый установщик проверен VirusTotal"></a>
+  <img src=".github/readme/trust-account.png" width="49%" alt="Аккаунт в безопасности: пароль вводится только на сайте Microsoft">
+  <img src=".github/readme/trust-signed.png" width="49%" alt="Есть цифровая подпись: EV-сертификат GlobalSign">
+  <a href="ARCHITECTURE.md"><img src=".github/readme/trust-open.png" width="49%" alt="Код открыт: любую строку можно проверить здесь"></a>
+</p>
 
-Страница загрузки со всеми файлами: **[millida.net/launcher](https://millida.net/launcher)**
+<p align="center">
+  <img src="screenshots/lobby.png" alt="Лобби лаунчера">
+</p>
 
-| Система | Прямая ссылка | Что скачается |
-| --- | --- | --- |
-| Windows 10 / 11 (64 бита) | [Скачать для Windows](https://millida.net/launcher/dl/windows) | Установщик `.exe` (есть и `.msi`) |
-| macOS (Apple Silicon и Intel) | [Скачать для macOS](https://millida.net/launcher/dl/macos) | Образ `.dmg` под свой процессор |
-| Linux x86-64 | [Скачать для Linux](https://millida.net/launcher/dl/linux) | Flatpak (есть `.AppImage`, `.deb`, `.rpm`) |
+| Сборки | Каталог |
+| :---: | :---: |
+| <img src="screenshots/library.png" alt="Мои сборки"> | <img src="screenshots/catalog.png" alt="Каталог модов и сборок Modrinth и CurseForge"> |
+| **Гардероб** | **Свой сервер** |
+| <img src="screenshots/wardrobe.png" alt="Скины, плащи и косметика"> | <img src="screenshots/server.png" alt="Панель своего сервера"> |
 
-### Windows
+## Установка
 
-1. Скачай установщик и запусти его.
-2. Если появится синее окно «Windows защитила ваш компьютер» — нажми
-   **«Подробнее»** → **«Выполнить в любом случае»**. Так Windows встречает
-   программы без купленного сертификата издателя; сертификат мы оформляем,
-   а каждая сборка до публикации проверяется антивирусом — отчёт лежит в
-   разделе [«Безопасность»](https://millida.net/launcher#safety) на сайте.
-3. Дальше «Далее» — и лаунчер откроется сам. Ярлык появится в меню «Пуск».
+<details>
+<summary><b>Windows</b> — установщик <code>.exe</code></summary>
 
-Обновления лаунчер ставит сам: скачивает в фоне и применяет при закрытии окна.
+1. Скачай и запусти установщик — лаунчер откроется сам.
+2. Если появилось синее окно «Windows защитила ваш компьютер»: **«Подробнее»** → **«Выполнить в любом случае»**.
 
-### macOS
+Обновления лаунчер ставит сам.
+</details>
 
-1. Открой скачанный `.dmg` и перетащи **Millida Launcher** в папку
-   **«Программы»**.
-2. Если система пишет, что приложение «повреждено» — с файлом всё в порядке,
-   так macOS сообщает, что подпись Apple Developer ещё не оформлена. Выполни
-   один раз в Терминале:
+<details>
+<summary><b>macOS</b> — образ <code>.dmg</code> или одна команда</summary>
 
-   ```bash
-   chmod -R u+w "/Applications/Millida Launcher.app" && xattr -cr "/Applications/Millida Launcher.app"
-   ```
+Перетащи **Millida Launcher** в «Программы». Пишет «повреждено» — выполни в Терминале:
 
-   Либо: «Системные настройки» → «Конфиденциальность и безопасность» →
-   **«Всё равно открыть»** после первой попытки запуска.
-3. Запусти лаунчер из «Программ».
+```bash
+chmod -R u+w "/Applications/Millida Launcher.app" && xattr -cr "/Applications/Millida Launcher.app"
+```
 
-Для Apple Silicon (M1–M4) и Intel — отдельные сборки, ссылка выше выбирает
-нужную сама.
-
-Второй способ — одна команда в Терминале. Она скачает свежую версию, проверит
-подпись, положит лаунчер в «Программы» и запустит его; шаг с «повреждено» при
-этом не понадобится:
+Или поставь одной командой, без этого шага:
 
 ```bash
 curl -fsSL https://launcher-storage.millida.net/setup/install.sh | sh
 ```
+</details>
 
-### Linux
-
-Основной способ — Flatpak: ставится и обновляется одинаково на Ubuntu, Fedora,
-Arch, Silverblue, Bazzite и SteamOS.
+<details>
+<summary><b>Linux</b> — Flatpak или одна команда</summary>
 
 ```bash
 flatpak install --user https://launcher-flatpak.millida.net/millida-launcher.flatpakref
 ```
 
-Скачанный `.flatpakref` можно просто открыть двойным кликом — GNOME Software и
-Discover поставят приложение сами. Нужны `.AppImage`, `.deb` или `.rpm` — они
-под кнопкой «Другие варианты» на [странице загрузки](https://millida.net/launcher#download).
-
-Без Flatpak — одна команда: она поставит AppImage в домашнюю папку, добавит
-ярлык в меню приложений и откроет лаунчер.
+Без Flatpak (AppImage с ярлыком в меню):
 
 ```bash
 curl -fsSL https://launcher-storage.millida.net/setup/install.sh | sh
 ```
 
-### Что нужно для игры
+`.deb` и `.rpm` — на [странице загрузки](https://millida.net/launcher#download).
+</details>
 
-- 64-битная система: Windows 10/11, macOS 11+, Linux x86-64.
-- Интернет для первой установки версии игры.
-- Java ставить не нужно — лаунчер сам скачает подходящую.
-- Аккаунт Minecraft необязателен: можно играть по нику. Есть лицензия — вход
-  по обычной кнопке Microsoft, пароль лаунчер не спрашивает.
+## Вопросы
 
-## Что внутри
+<details>
+<summary><b>Это бесплатно?</b></summary>
 
-**Играть сразу.** Выбираешь версию — от свежего релиза до старых и снапшотов —
-и жмёшь «Играть». Игра, библиотеки и Java скачиваются сами.
+Да. Без рекламы и постороннего софта в установщике.
+</details>
 
-**Моды и модпаки без архиватора.** Встроенный каталог Modrinth и CurseForge:
-модпаки, моды, шейдеры, ресурспаки, карты и датапаки. Кнопка «Установить» кладёт
-файл в нужную сборку и подтягивает зависимости, а обновления показываются
-списком — можно обновить всё разом или откатиться назад.
+<details>
+<summary><b>Нужен купленный Minecraft?</b></summary>
 
-![Каталог модов и модпаков](screenshots/content.png)
+Нет: можно играть по нику. С лицензией — вход через официальное окно Microsoft, пароль лаунчер не видит.
+</details>
 
-**Свои сборки.** Каждая сборка — отдельная папка игры со своими модами,
-настройками и памятью. Сборки можно дублировать, объединять в группы, ставить
-обложки и чинить, если что-то сломалось.
+<details>
+<summary><b>Java ставить нужно?</b></summary>
 
-**Скины и плащи.** Библиотека скинов, каталог, предпросмотр в 3D и смена скина
-прямо из лаунчера — на лицензии и на серверах Millida.
+Нет, лаунчер скачает подходящую сам.
+</details>
 
-![Скины и плащи](screenshots/skins.png)
+<details>
+<summary><b>Антивирус ругается</b></summary>
 
-**Серверы.** Каталог серверов с рейтингом, онлайном и версией: нашёл подходящий
-и зашёл кнопкой, не копируя адрес руками. Свои адреса тоже добавляются.
+Отчёт VirusTotal по каждому установщику — на [millida.net/launcher/antivirus](https://millida.net/launcher/antivirus). Качай только с millida.net или со страницы [релизов](https://github.com/millida/launcher/releases) — всё остальное не наше.
+</details>
 
-![Каталог серверов](screenshots/servers.png)
+<details>
+<summary><b>Что-то не работает</b></summary>
 
-**Друзья.** Видно, кто сейчас в лаунчере и на каком сервере играет. Друзья
-находят тебя по нику Millida — лицензия для этого не нужна.
+Напиши в [Discord](https://discord.gg/mcru) или заведи issue. К отчёту приложи `logs/launcher-latest.log` из папки сборки.
+</details>
 
-![Друзья](screenshots/friends.png)
+<details>
+<summary><b>Как удалить?</b></summary>
 
-**Свой сервер.** Если арендуешь сервер у Millida, он управляется прямо из
-лаунчера: консоль в реальном времени, файлы, мир, игроки, доступы и бэкапы —
-отдельная панель в браузере не нужна.
-
-![Панель своего сервера](screenshots/my-server.png)
-
-**Переезд с другого лаунчера.** Сборки из Prism, MultiMC, ATLauncher,
-GDLauncher, CurseForge, Modrinth App и обычной `.minecraft` (включая TLauncher)
-подхватываются автоматически, папки руками копировать не нужно. Файлы `.mrpack`
-и архивы CurseForge тоже открываются.
-
-**Темы оформления.** Кроме тёмной и светлой со своим акцентом лаунчер умеет
-целые темы: в комплекте «Минимал», «Блоки», «Ночь», «Бумага», «Марио»,
-«Windows 98» и «Терминал». У каждой свои настройки прямо в лаунчере — мир
-(обычный, нижний, Край, снежный) у «Блоков», настоящий чёрный для OLED и
-приглушение картинок у «Ночи», оттенок листа и засечки у «Бумаги», цвет
-заголовка и объёмные рамки у «Windows 98». Рядом — плотность интерфейса: в режиме «Плотно» на
-экран помещается заметно больше, в «Свободно» всё крупнее.
-
-Тему можно написать самому — это папка с манифестом и одним CSS-файлом, которая
-ставится из архива кнопкой в настройках.
-
-**Мелочи, которые заметны.** Живые обои и музыка в окне, значок в трее,
-статистика наигранного времени, статус в Discord, бэкап миров в zip и понятный
-отчёт, если игра упала.
-
-## Частые вопросы
-
-**Это бесплатно?** Да, полностью. Рекламы, платных функций и постороннего софта
-в установщике нет.
-
-**Антивирус ругается — почему?** Установщик пока без сертификата издателя,
-поэтому у файла нет репутации. Каждая сборка перед публикацией проверяется в
-Kaspersky, ссылка на отчёт по конкретному файлу — на
-[странице лаунчера](https://millida.net/launcher#safety). Исходный код открыт:
-всё, что делает лаунчер, можно прочитать в этом репозитории.
-
-**Нужен ли купленный Minecraft?** Нет. Можно играть по нику, а можно войти
-по лицензии Microsoft — тогда доступны официальные серверы, скины и плащи.
-
-**Где лежат файлы игры?** В папке данных лаунчера, у каждой сборки своя
-подпапка. Открыть её можно кнопкой из настроек сборки.
-
-**Как удалить?** Windows — «Параметры» → «Приложения»; macOS — перетащить
-приложение в корзину; Flatpak — `flatpak uninstall net.millida.launcher`.
-Скачанные версии игры и миры остаются в папке данных, её удаляют отдельно.
-
-**Что-то не работает.** Напиши в [Discord](https://discord.gg/mcru) или заведи
-issue здесь. К отчёту о падении приложи лог запуска — он лежит в папке сборки,
-`logs/launcher-latest.log`.
-
-## Зачем открыт код
-
-Исходники выложены ради проверяемости, а не как заготовка для чужих лаунчеров.
-Лаунчер держит в руках вход в аккаунт Microsoft, файлы игры и сетевые запросы, а
-установщик пока идёт без сертификата издателя — единственный честный ответ на
-вопрос «что эта программа делает с моим аккаунтом» — дать прочитать код целиком.
-
-Отсюда и рамка проекта:
-
-- Официальные сборки выходят только с [millida.net/launcher](https://millida.net/launcher).
-  Всё, что собрано кем-то другим, официальной сборкой не является, даже если код
-  внутри наш.
-- Мы не поддерживаем сторонние сборки: помощь, разбор поломок и гарантии — только
-  для официальных. Собрать код для себя это не мешает.
-- Силы уходят в один продукт, а не в ответвления: правки принимаем сюда, в общий
-  репозиторий — так они достаются всем игрокам сразу.
-- Лицензия [GPL-3.0-only](LICENSE) право на форк даёт, и отнимать его мы не
-  собираемся. Но бренд, ключи и наши сервисы под неё не подпадают — условия в
-  [TRADEMARK.md](TRADEMARK.md).
-
-Почему это не придирки: с января по июнь 2026 года кампания поддельных клиентов
-Minecraft [заразила больше ста тысяч машин](https://thehackernews.com/2026/08/weedhack-malware-spreads-via-fake.html)
-и крала ровно то, что лаунчер держит в памяти, — токен входа Microsoft. Чем
-меньше похожих друг на друга сборок «того же лаунчера», тем проще игроку понять,
-какая настоящая.
+Windows — «Параметры» → «Приложения»; macOS — в корзину; Flatpak — `flatpak uninstall net.millida.launcher`.
+</details>
 
 ## Разработчикам
 
-Лаунчер открыт под [GPL-3.0-only](LICENSE): Rust-ядро (Tauri 2) плюс интерфейс
-на React. Сборка из исходников, устройство кода и правила участия:
+Rust-ядро (Tauri 2) и интерфейс на React, лицензия [GPL-3.0-only](LICENSE).
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) — слои, IPC-команды, как всё устроено
-- [CONTRIBUTING.md](CONTRIBUTING.md) — как собрать, проверить и прислать правку
-- [SECURITY.md](SECURITY.md) — куда сообщать об уязвимостях (не в issues)
-- [TRADEMARK.md](TRADEMARK.md) — что можно делать с названием и логотипом
+[Устройство](ARCHITECTURE.md) · [Как прислать правку](CONTRIBUTING.md) · [Уязвимости](SECURITY.md) · [Название и логотип](TRADEMARK.md)
 
-Форку нужны своё имя, свои иконки и своя регистрация приложения в Azure
-(`MILLIDA_MS_CLIENT_ID`) — иначе вход по лицензии Microsoft делит лимиты и
-репутацию с оригиналом. Установка игры, загрузчики, Java и Modrinth работают
-без наших серверов; вход Millida, друзья, скины Millida, рейтинг, панель
-хостинга и прокси к CurseForge ходят в `api.millida.net`.
+<details>
+<summary><b>Зачем открыт код</b></summary>
 
-Millida Launcher не связан с Mojang AB и Microsoft. Minecraft — товарный знак
-Mojang AB.
+Лаунчер держит вход в аккаунт Microsoft, файлы игры и сетевые запросы — честный ответ на вопрос «что он делает с моим аккаунтом» — дать прочитать код целиком. С января по июнь 2026 года поддельные клиенты Minecraft [заразили больше ста тысяч машин](https://thehackernews.com/2026/08/weedhack-malware-spreads-via-fake.html) и крали именно токен входа Microsoft.
 
+- Официальные сборки — только с [millida.net/launcher](https://millida.net/launcher) и из [релизов](https://github.com/millida/launcher/releases) этого репозитория.
+- Сторонние сборки мы не поддерживаем. Собрать код для себя это не мешает.
+- Правки принимаем сюда — так они достаются всем игрокам сразу.
+- GPL-3.0 даёт право на форк, но бренд, ключи и наши сервисы под неё не подпадают — см. [TRADEMARK.md](TRADEMARK.md).
 
-<!-- Security scan triggered at 2026-09-05 07:24:48 -->
+Форку нужны своё имя, свои иконки и своя регистрация приложения в Azure (`MILLIDA_MS_CLIENT_ID`). Установка игры, загрузчики, Java и Modrinth работают без наших серверов; вход Millida, друзья, скины, рейтинг, панель хостинга и прокси к CurseForge ходят в `api.millida.net`.
+</details>
+
+<sub>Millida Launcher не связан с Mojang AB и Microsoft. Minecraft — товарный знак Mojang AB.</sub>
