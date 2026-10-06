@@ -45,7 +45,7 @@ describe('releaseNotes', () => {
     const body = releaseNotes({ version: '2.0.1' })
     for (const os of ['windows', 'macos', 'linux']) {
       expect(body, `${os} button must lead to the always-fresh installer`).toContain(`https://millida.net/launcher/dl/${os}`)
-      expect(body, `${os} image must not change after the release`).toContain(`/v2.0.1/.github/readme/dl-${os}.png`)
+      expect(body, `${os} image must not change after the release`).toContain(`/v2.0.1/.github/readme/download-${os}.png`)
     }
   })
 

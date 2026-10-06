@@ -38,7 +38,7 @@ const fileName = (url) => decodeURIComponent(new URL(url).pathname.split('/').po
 export function releaseNotes({ version, changes = [], platforms = {} }) {
   const buttons = DOWNLOADS.map(
     ({ os, label }) =>
-      `<a href="${SITE}/dl/${os}"><img src="${PUBLIC_REPO_RAW}/v${version}/.github/readme/dl-${os}.png" width="260" alt="Скачать для ${label}"></a>`,
+      `<a href="${SITE}/dl/${os}"><img src="${PUBLIC_REPO_RAW}/v${version}/.github/readme/download-${os}.png" width="260" alt="Скачать для ${label}"></a>`,
   ).join('\n')
 
   const parts = [`<p>\n${buttons}\n</p>`, `Установщик всегда ставит свежую версию. Проверка антивирусами — [millida.net/launcher/antivirus](${SITE}/antivirus).`]
