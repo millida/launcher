@@ -24,6 +24,8 @@ import { useHasMillida } from '../state/auth'
 import { usePlus } from '../state/plus'
 import { onRealtime } from '../lib/realtime'
 import { preloadScreen } from '../screens/registry'
+import { hasTauri } from '../ipc/tauri'
+import { openUrl } from '../ipc/commands'
 
 /* Навигация как в Brawl Stars: у каждого раздела ровно один вход (владелец
    23.09.2026: «всё дублируется»). В лобби вкладок нет — разделы живут на сцене,
@@ -32,6 +34,10 @@ import { preloadScreen } from '../screens/registry'
    трогать раскладку App.tsx. */
 /** Две квадратные кнопки лобби: звуки интерфейса и музыка (по умолчанию играет). */
 /** Громкость под кнопкой — всплывает при наведении (правка 27.09.2026): крутить её в настройках долго. */
+const GITHUB_REPO_URL = 'https://github.com/millida/launcher'
+
+const openGithub = () => (hasTauri() ? openUrl(GITHUB_REPO_URL) : window.open(GITHUB_REPO_URL, '_blank'))
+
 function VolumePop({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
   return (
     <span className="lb-vol-pop" role="group" aria-label={label}>
@@ -266,6 +272,15 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
             {fbReward ? <span className="lb-fb-gift">+{FEEDBACK_SHARDS}</span> : null}
           </button>
           {fbOpen ? <FeedbackModal onClose={() => setFbOpen(false)} /> : null}
+          <button
+            className="lb-btn lb-gh"
+            data-track="nav_github"
+            aria-label="Поставить звезду на GitHub"
+            title="Поставить звезду на GitHub"
+            onClick={openGithub}
+          >
+            <PxIcon name="star" size={24} />
+          </button>
           <button
             className="lb-btn"
             aria-label="Настройки"
