@@ -133,7 +133,11 @@
 .msf:hover { transform: translateY(-2px); }
 .msf:active { transform: translateY(2px); }
 
-/* ── Панель чата ────────────────────────────────────────────── */
+/* ── Панель чата ────────────────────────────────────────────────
+   Живая панель (04.10.2026, владелец: «плоско и скучно»): глубина и свет —
+   пиксельные. Свечение — ступенчатые диски и полосы с жёсткими стопами,
+   без размытия. Всё движение — transform/opacity и steps(); панель закрыта —
+   display: none, ключи стоят. */
 .ml-panel {
   position: absolute; z-index: 450; top: 52px; right: 12px; bottom: 12px;
   width: min(460px, calc(100% - 24px));
@@ -145,10 +149,86 @@
 }
 .ml-panel.on { display: flex; animation: ml-in 180ms steps(3, end) both; }
 @keyframes ml-in { 0% { opacity: 0; transform: translateX(20px); } 100% { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .ml-panel.on { animation: none; } }
 
-.ml-head { position: relative; z-index: 2; display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 10px; border-bottom: 2px solid rgba(0, 0, 0, 0.28); }
+/* Рамка со срезом для своих деталей панели — те же слои, что «ступенчатая
+   рамка» в 12-pixel.css (переменные --px-* оттуда), без !important. */
+.ml-bubble, .ml-ex, .ml-hb, .ml-err {
+  background-image:
+    linear-gradient(var(--px-ol) 0 0),
+    linear-gradient(90deg, var(--px-ol) 0 calc(var(--px-n) + var(--px-ol-w)), #0000 0 calc(100% - var(--px-n) - var(--px-ol-w)), var(--px-ol) 0),
+    linear-gradient(90deg, var(--px-ol) 0 var(--px-ol-w), #0000 0 calc(100% - var(--px-ol-w)), var(--px-ol) 0),
+    linear-gradient(90deg, var(--px-ol) 0 calc(var(--px-n) + var(--px-ol-w)), #0000 0 calc(100% - var(--px-n) - var(--px-ol-w)), var(--px-ol) 0),
+    linear-gradient(var(--px-ol) 0 0),
+    linear-gradient(var(--px-ft) 0 0),
+    linear-gradient(90deg, var(--px-ft) 0 calc(var(--px-n) + var(--px-ft-w)), #0000 0 calc(100% - var(--px-n) - var(--px-ft-w)), var(--px-ft) 0),
+    linear-gradient(90deg, var(--px-fl) 0 var(--px-fl-w), #0000 0 calc(100% - var(--px-fr-w)), var(--px-fr) 0),
+    linear-gradient(90deg, var(--px-fb) 0 calc(var(--px-n) + var(--px-fb-w)), #0000 0 calc(100% - var(--px-n) - var(--px-fb-w)), var(--px-fb) 0),
+    linear-gradient(var(--px-fb) 0 0);
+  background-size:
+    100% var(--px-ol-w), 100% var(--px-n), 100% calc(100% - 2 * var(--px-n) - 2 * var(--px-ol-w)), 100% var(--px-n), 100% var(--px-ol-w),
+    100% var(--px-ft-w), 100% var(--px-n), 100% calc(100% - 2 * var(--px-n) - var(--px-ft-w) - var(--px-fb-w)), 100% var(--px-n), 100% var(--px-fb-w);
+  background-position:
+    0 0, 0 var(--px-ol-w), 0 calc(var(--px-n) + var(--px-ol-w)), left 0 bottom var(--px-ol-w), 0 100%,
+    0 0, 0 var(--px-ft-w), 0 calc(var(--px-n) + var(--px-ft-w)), left 0 bottom var(--px-fb-w), 0 100%;
+  background-repeat: no-repeat;
+}
+
+/* Фон панели: свет сверху полосами, редкая пиксельная сетка, тень снизу
+   ступенями и пылинки, что поднимаются вверх. */
+.ml-bg { position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.ml-bg {
+  background:
+    linear-gradient(180deg, transparent 0 72%, rgba(0, 0, 0, 0.07) 72% 82%, rgba(0, 0, 0, 0.13) 82% 91%, rgba(0, 0, 0, 0.2) 91%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Crect x='11' y='11' width='2' height='2' fill='%23fff' fill-opacity='.045'/%3E%3C/svg%3E");
+}
+.ml-bg::before, .ml-bg::after { content: ''; position: absolute; left: -10%; right: -10%; top: -40px; height: 380px; }
+.ml-bg::before {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025) 0 40%, rgba(255, 255, 255, 0.012) 40% 70%, transparent 70%);
+}
+.ml-bg::after {
+  opacity: 0;
+  background: linear-gradient(180deg, rgba(var(--m-accent-rgb), 0.08) 0 30%, rgba(var(--m-accent-rgb), 0.03) 30% 60%, transparent 60%);
+}
+.ml-panel.is-busy .ml-bg::before { animation: ml-glow 1.2s steps(2, end) infinite; }
+.ml-panel.is-happy .ml-bg::after { animation: ml-flash 1.4s steps(5, end) both; }
+@keyframes ml-glow { 0% { opacity: 0.55; } 50% { opacity: 1; } }
+@keyframes ml-flash { 0% { opacity: 0; } 15% { opacity: 1; } 100% { opacity: 0; } }
+.ml-bg i {
+  position: absolute; bottom: -8px; width: 4px; height: 4px; opacity: 0;
+  background: rgba(233, 247, 200, 0.35);
+  animation: ml-dust 18s steps(144, end) infinite;
+}
+.ml-bg i:nth-child(1) { left: 12%; animation-delay: 0s; }
+.ml-bg i:nth-child(2) { left: 31%; width: 2px; height: 2px; animation-delay: -4s; animation-duration: 14s; }
+.ml-bg i:nth-child(3) { left: 52%; animation-delay: -8s; }
+.ml-bg i:nth-child(4) { left: 68%; width: 2px; height: 2px; animation-delay: -2s; animation-duration: 13s; }
+.ml-bg i:nth-child(5) { left: 84%; animation-delay: -6s; animation-duration: 12s; }
+.ml-bg i:nth-child(6) { left: 92%; width: 2px; height: 2px; animation-delay: -10s; }
+@keyframes ml-dust {
+  0% { opacity: 0; transform: translate(0, 0); }
+  10% { opacity: 1; }
+  50% { transform: translate(10px, -360px); }
+  85% { opacity: 0.6; }
+  100% { opacity: 0; transform: translate(-6px, -720px); }
+}
+.ml-panel > .ml-scroll, .ml-panel > .ml-enh, .ml-panel > .mlc { position: relative; z-index: 1; }
+.ml-panel > .ml-head { position: relative; }
+
+/* Шапка */
+.ml-head {
+  z-index: 2; display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 10px;
+  border-bottom: 2px solid rgba(0, 0, 0, 0.28); box-shadow: 0 2px 0 rgba(255, 255, 255, 0.03);
+}
+.ml-panel > .ml-head { z-index: 3; }
 .ml-head .ml-plus { flex: none; }
+
+/* Милли в шапке: тык */
+.mlh { position: relative; flex: none; width: 44px; height: 44px; cursor: pointer; }
+.mlh .milli { position: relative; z-index: 1; transition: transform 90ms steps(2, end); }
+.mlh:hover .milli { transform: translateY(-2px); }
+.mlh:active .milli { transform: translateY(1px) scale(1.08, 0.9); }
+
+/* Счётчик «осталось N» — маленькая плашка, как было */
 .ml-count {
   padding: 4px 7px; font: 800 12px/1 var(--m-font); font-variant-numeric: tabular-nums;
   color: var(--m-fg); background: var(--m-inset); --px-n: 4px; clip-path: var(--px-4);
@@ -158,8 +238,10 @@
 .ml-hbtn {
   width: 30px; height: 30px; display: grid; place-items: center; color: var(--m-fg-muted); cursor: pointer;
   --px-n: 5px; clip-path: var(--px-5);
+  transition: transform 80ms steps(2, end);
 }
 .ml-hbtn:hover { color: var(--m-fg); background: var(--m-surface-2); }
+.ml-hbtn:active { transform: translateY(2px); }
 .ml-menu-wrap { position: relative; }
 .ml-menu {
   position: absolute; right: 0; top: calc(100% + 6px); z-index: 5; min-width: 180px; padding: 6px;
@@ -167,86 +249,240 @@
   background-color: var(--m-raised);
   --px-n: 5px; clip-path: var(--px-5);
   --px-ol: rgba(0, 0, 0, 0.5); --px-ol-w: 2px; --px-fb: rgba(0, 0, 0, 0.3); --px-fb-w: 3px;
+  transform-origin: 100% 0; animation: ml-menu-in 140ms steps(3, end) backwards;
 }
+@keyframes ml-menu-in { 0% { opacity: 0; transform: scale(0.9) translateY(-6px); } }
 .ml-menu-item {
   display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px; text-align: left;
   font: 700 13.5px/1 var(--m-font); color: var(--m-fg); cursor: pointer;
   --px-n: 5px; clip-path: var(--px-5);
+  transition: transform 80ms steps(2, end);
 }
-.ml-menu-item:hover { background: var(--m-surface-2); }
-.ml-menu-item .px-icon { color: var(--m-fg-muted); }
+.ml-menu-item:hover { background: var(--m-surface-2); transform: translateX(2px); }
+.ml-menu-item:active { transform: translateX(2px) translateY(1px); }
+.ml-menu-item .mci { flex: none; transition: transform 80ms steps(2, end); }
+.ml-menu-item:hover .mci { transform: translateY(-1px) scale(1.12); }
 
-.ml-scroll { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 14px 14px 8px; display: flex; flex-direction: column; gap: 12px; }
+.ml-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 14px 14px 8px; display: flex; flex-direction: column; gap: 12px; }
 
-.ml-msg { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
-.ml-msg.me { justify-content: flex-end; }
-.ml-ava { margin-top: 2px; }
+/* Сообщения */
+.ml-msg { display: flex; align-items: flex-start; gap: 10px; min-width: 0; animation: ml-msg-in 260ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+.ml-msg.me { justify-content: flex-end; animation-name: ml-msg-me; }
+@keyframes ml-msg-in { 0% { opacity: 0; transform: translate(-8px, 6px); } }
+@keyframes ml-msg-me { 0% { opacity: 0; transform: translate(8px, 6px); } }
+.ml-ava { margin-top: 0; }
 .ml-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; flex: 1 1 auto; align-items: flex-start; }
 .ml-bubble {
-  margin: 0; max-width: 100%; padding: 9px 12px; white-space: pre-wrap; overflow-wrap: anywhere;
+  margin: 0; max-width: 100%; padding: 9px 12px 11px; white-space: pre-wrap; overflow-wrap: anywhere;
   font: 600 13.5px/1.42 var(--m-font); color: var(--m-fg);
-  background: var(--m-surface-2); border-radius: 4px 12px 12px 12px;
+  background-color: var(--m-surface-2);
+  --px-n: 5px; clip-path: var(--px-5);
+  --px-ft: rgba(255, 255, 255, 0.06); --px-ft-w: 2px; --px-fb: rgba(0, 0, 0, 0.28); --px-fb-w: 3px;
+  --px-fl: rgba(var(--m-accent-rgb), 0.55); --px-fl-w: 3px;
 }
-.ml-msg.me .ml-bubble { max-width: 82%; background: color-mix(in srgb, var(--m-accent) 26%, var(--m-surface-2)); border-radius: 12px 4px 12px 12px; }
-.ml-skel { display: flex; flex-direction: column; gap: 8px; width: 220px; }
-.ml-skel .skel { display: block; height: 11px; background: color-mix(in srgb, var(--m-fg) 14%, transparent); }
+.ml-msg.me .ml-bubble {
+  max-width: 82%;
+  background-color: color-mix(in srgb, var(--m-accent) 24%, var(--m-surface-2));
+  --px-fl: transparent; --px-fr: rgba(var(--m-accent-rgb), 0.7); --px-fr-w: 3px;
+  --px-ft: rgba(255, 255, 255, 0.08);
+}
 
+/* Аватарка Милли в ленте; думает — слетаются глифы, готово — частицы */
+.mla { position: relative; flex: none; width: 40px; height: 40px; margin-top: 2px; }
+.mla > .milli { position: relative; z-index: 1; }
+
+/* Частицы, как у сломанного блока: вбок (внешний слой), вверх и вниз под тяжестью (внутренний), гаснут ступенями */
+.mlb { position: absolute; z-index: 3; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; }
+.mlb i { position: absolute; left: -2px; top: -2px; animation: ml-px-x 760ms steps(10, end) both; }
+.mlb b { display: block; width: 100%; height: 100%; background: #5ec64d; box-shadow: inset -1px -1px 0 rgba(0, 0, 0, 0.3); animation: ml-px-y 760ms steps(10, end) both; }
+.mlb i:nth-child(3n) b { background: #8be35f; }
+.mlb i:nth-child(4n) b { background: #ffffff; }
+.mlb i:nth-child(5n) b { background: #3fae4a; }
+@keyframes ml-px-x { 0% { transform: translateX(0); } 100% { transform: translateX(var(--dx)); } }
+@keyframes ml-px-y {
+  0% { transform: translateY(0); opacity: 1; animation-timing-function: steps(4, end); }
+  35% { transform: translateY(var(--up)); opacity: 1; animation-timing-function: steps(6, end); }
+  80% { opacity: 1; }
+  100% { transform: translateY(var(--fall)); opacity: 0; }
+}
+
+/* Подсказки после ответа: нажимаются */
 .ml-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.seg.ml-chip { height: 30px; padding: 0 11px 2px; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+.ml-panel .seg.ml-chip {
+  height: 30px; padding: 0 11px 2px; font-size: 12.5px; font-weight: 700; cursor: pointer;
+  --px-fb: rgba(0, 0, 0, 0.3); --px-fb-w: 3px;
+  transition: transform 80ms steps(2, end), background-color var(--m-t-fast), color var(--m-t-fast);
+}
+.ml-panel .seg.ml-chip:hover:not(:disabled) { transform: translateY(-2px); color: var(--m-fg); --px-ol: rgba(var(--m-accent-rgb), 0.55); --px-ol-w: 2px; }
+.ml-panel .seg.ml-chip:active:not(:disabled) { transform: translateY(2px); --px-fb-w: 1px; }
 
-.ml-hello { margin: auto 0; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 12px 8px 24px; text-align: center; }
-.ml-hello .ml-bubble { border-radius: 12px; }
-.ml-hello .ml-chips { justify-content: center; }
+/* ── Пустой чат: Милли и мягкая пиксельная тень ──
+   Покачивание, моргание и реакции на тык — у самого маскота (milli-mascot.css).
+   Мышь сдвигает слои по-разному — глубина без 3D. */
+.ml-hello { margin: auto 0; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0 4px 14px; text-align: center; }
+.mls { position: relative; flex: none; width: 100%; max-width: 420px; height: 176px; --mx: 0; --my: 0; }
+.mls-l { position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none; transition: transform 420ms ease-out; }
+.mls-l-mid { transform: translate(calc(var(--mx) * 4px), calc(var(--my) * 3px)); }
+.mls-l-near { transform: translate(calc(var(--mx) * 12px), calc(var(--my) * 7px)); }
+
+.mls-shadow { position: absolute; left: 50%; top: 142px; margin-left: -48px; }
+.mls-shadow-0 { fill: rgba(0, 0, 0, 0.16); }
+.mls-shadow-1 { fill: rgba(0, 0, 0, 0.2); }
+.mls-shadow-2 { fill: rgba(0, 0, 0, 0.26); }
+
+.mls-float { position: absolute; left: 50%; top: 40px; width: 112px; height: 112px; margin-left: -56px; }
+.mls-hero { position: absolute; left: 0; top: 0; width: 112px; height: 112px; pointer-events: auto; cursor: pointer; }
+.mls-hero .milli { display: block; }
+.mls-float > .mlb { left: 50%; top: 56px; }
+
+
+/* частицы в воздухе: редкие, медленно опускаются, мерцают ступенями */
+.mls-mote { position: absolute; width: 3px; height: 3px; background: #e9f7c8; opacity: 0; animation: ml-mote 10s steps(40, end) infinite; }
+.mls-mote:nth-child(2n) { background: #fff3c0; width: 2px; height: 2px; }
+@keyframes ml-mote {
+  0% { opacity: 0; transform: translate(0, 0); }
+  15% { opacity: 0.55; }
+  60% { opacity: 0.35; }
+  100% { opacity: 0; transform: translate(10px, 46px); }
+}
+
+/* Приветствие: пиксельный пузырь с хвостиком к Милли */
+.ml-say { position: relative; margin-top: 2px; padding-top: 7px; animation: ml-say-in 320ms steps(4, end) 120ms backwards; }
+.ml-say::before, .ml-say::after { content: ''; position: absolute; left: 50%; }
+.ml-say::before {
+  top: 0; width: 18px; height: 9px; margin-left: -9px; background: rgba(var(--m-accent-rgb), 0.5);
+  clip-path: polygon(6px 0, 12px 0, 12px 3px, 15px 3px, 15px 6px, 18px 6px, 18px 9px, 0 9px, 0 6px, 3px 6px, 3px 3px, 6px 3px);
+}
+.ml-say::after {
+  top: 3px; width: 12px; height: 6px; margin-left: -6px; background: var(--m-raised);
+  clip-path: polygon(3px 0, 9px 0, 9px 3px, 12px 3px, 12px 6px, 0 6px, 0 3px, 3px 3px);
+}
+.ml-say .ml-bubble {
+  padding: 10px 16px 12px; font: 800 15px/1.3 var(--m-font);
+  background-color: var(--m-raised);
+  --px-ol: rgba(var(--m-accent-rgb), 0.5); --px-ol-w: 2px; --px-fl: transparent;
+  --px-ft: rgba(255, 255, 255, 0.07); --px-fb: rgba(0, 0, 0, 0.32); --px-fb-w: 4px;
+}
+@keyframes ml-say-in { 0% { opacity: 0; transform: translateY(6px) scale(0.92); } }
+
+/* Примеры: плотные карточки со значком; наведение — приподнимается, нажатие — вдавливается */
+.ml-chips.ml-exs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; max-width: 392px; margin-top: 12px; }
+.ml-ex {
+  --tone: var(--m-accent);
+  display: flex; align-items: center; gap: 10px; min-width: 0; height: 54px; padding: 0 10px 4px 8px; text-align: left; cursor: pointer;
+  font: 750 13.5px/1.2 var(--m-font); color: var(--m-fg);
+  background-color: var(--m-surface-2);
+  --px-n: 5px; clip-path: var(--px-5);
+  --px-ol: rgba(0, 0, 0, 0.35); --px-ol-w: 2px;
+  --px-ft: rgba(255, 255, 255, 0.07); --px-ft-w: 2px; --px-fb: rgba(0, 0, 0, 0.42); --px-fb-w: 4px;
+  transition: transform 80ms steps(2, end), background-color var(--m-t-fast);
+  animation: ml-rise 300ms steps(4, end) backwards;
+}
+.ml-ex.is-mythic { --tone: var(--m-rarity-mythic); }
+.ml-ex.is-rare { --tone: var(--m-rarity-rare); }
+.ml-ex.is-legendary { --tone: var(--m-rarity-legendary); }
+.ml-ex.is-epic { --tone: var(--m-rarity-epic); }
+.ml-ex-t { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ml-ex .mcs { width: 40px; height: 40px; }
+/* Наведение: предмет «берётся» из ячейки — приподнимается, под ним тень;
+   нажатие — щелчок по ячейке: белая подсветка, как в инвентаре. */
+.ml-ex:hover:not(:disabled) {
+  background-color: var(--m-raised);
+  --px-ol: color-mix(in srgb, var(--tone) 70%, transparent);
+}
+.ml-ex:hover:not(:disabled) .mcs .mci { transform: translateY(-4px) scale(1.12); }
+.ml-ex:hover:not(:disabled) .mcs::before { opacity: 1; }
+.ml-ex:active:not(:disabled) { transform: translateY(2px); --px-fb-w: 2px; }
+.ml-ex:active:not(:disabled) .mcs::after { opacity: 0.32; }
+.ml-ex:active:not(:disabled) .mcs .mci { transform: translateY(0) scale(0.94); }
+.ml-ex:focus-visible { outline: 2px solid var(--tone); outline-offset: -2px; }
+.ml-ex:disabled { cursor: default; opacity: 0.5; }
+@keyframes ml-rise { 0% { opacity: 0; transform: translateY(10px); } }
+@keyframes ml-wiggle { 0% { transform: rotate(0); } 25% { transform: rotate(-10deg); } 50% { transform: rotate(0); } 75% { transform: rotate(10deg); } }
+
 .ml-state { margin: auto; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 24px 12px; text-align: center; }
 .ml-state b { font: 900 18px/1.2 var(--m-font); color: var(--m-fg); }
 .ml-empty-line { margin: 24px auto; font-size: 13px; color: var(--m-fg-muted); }
 
-.ml-err { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 12px; font-size: 13.5px; font-weight: 700; color: var(--m-fg); background: var(--m-danger-soft); border-radius: 4px 12px 12px 12px; }
+/* Думает: кольцо вокруг аватарки, шаг въезжает, полоска из клеток по шагам */
+.ml-skel { display: flex; flex-direction: column; gap: 9px; width: 248px; }
+.ml-think .ml-bubble { --px-fl: var(--m-accent); animation: ml-edge 1.2s steps(2, end) infinite; }
+@keyframes ml-edge { 0% { --px-fl: rgba(var(--m-accent-rgb), 0.35); } 50% { --px-fl: var(--m-accent); } }
+.ml-step { display: inline-block; animation: ml-step-in 280ms steps(4, end) backwards; }
+@keyframes ml-step-in { 0% { opacity: 0; transform: translateY(6px); } }
+.ml-steps { display: flex; gap: 3px; }
+.ml-steps i { flex: 1 1 0; height: 6px; background: rgba(255, 255, 255, 0.08); }
+.ml-steps i.done { background: var(--m-accent); box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.3); }
+.ml-steps i.now { background: var(--m-accent); animation: ml-blink 0.6s steps(1, end) infinite; }
+@keyframes ml-blink { 0% { opacity: 1; } 50% { opacity: 0.25; } }
+
+.ml-err {
+  display: flex; align-items: center; gap: 10px; padding: 8px 8px 10px 12px; font-size: 13.5px; font-weight: 700; color: var(--m-fg);
+  background-color: var(--m-danger-soft);
+  --px-n: 5px; clip-path: var(--px-5);
+  --px-fl: var(--m-danger); --px-fl-w: 3px; --px-fb: rgba(0, 0, 0, 0.26); --px-fb-w: 3px;
+}
 .ml-err > .px-icon { flex: none; color: var(--m-danger); }
 .ml-limit {
   display: flex; align-items: center; gap: 12px; padding: 10px 12px 12px;
   background-color: var(--m-surface-2); --px-n: 5px; clip-path: var(--px-5);
   --px-ol: var(--m-danger); --px-ol-w: 2px; --px-fb: rgba(0, 0, 0, 0.26); --px-fb-w: 3px;
+  animation: ml-msg-in 260ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
 }
 .ml-limit-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .ml-limit-text b { font: 900 15px/1.2 var(--m-font); color: var(--m-fg); }
 .ml-limit-text span { font-size: 12.5px; font-weight: 700; color: var(--m-fg-muted); }
 .ml-limit .ml-plus { flex: none; }
 
+/* История: строки со значком, въезжают по очереди */
 .ml-hist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .ml-hist .skel { display: block; }
+.ml-hist > li { animation: ml-rise 260ms steps(3, end) backwards; }
+.ml-hist > li:nth-child(2) { animation-delay: 50ms; } .ml-hist > li:nth-child(3) { animation-delay: 100ms; }
+.ml-hist > li:nth-child(4) { animation-delay: 150ms; } .ml-hist > li:nth-child(5) { animation-delay: 200ms; }
+.ml-hist > li:nth-child(n + 6) { animation-delay: 250ms; }
 .ml-hist-row {
-  width: 100%; display: flex; align-items: center; gap: 10px; padding: 11px 12px 13px; text-align: left; cursor: pointer;
-  background-color: var(--m-inset); --px-n: 5px; clip-path: var(--px-5);
-  --px-fb: rgba(0, 0, 0, 0.26); --px-fb-w: 3px;
+  width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px 10px 11px 8px; text-align: left; cursor: pointer;
+  background-color: var(--m-surface-2); --px-n: 5px; clip-path: var(--px-5);
+  --px-ft: rgba(255, 255, 255, 0.05); --px-ft-w: 2px; --px-fb: rgba(0, 0, 0, 0.32); --px-fb-w: 3px;
+  transition: transform 80ms steps(2, end), background-color var(--m-t-fast);
 }
-.ml-hist-row:hover { background-color: var(--m-surface-2); }
+.ml-hist-row:hover { background-color: var(--m-raised); transform: translateX(3px); --px-fl: var(--m-accent); --px-fl-w: 3px; }
+.ml-hist-row:active { transform: translate(3px, 2px); --px-fb-w: 1px; }
+.ml-hist-ic.mcs { width: 28px; height: 28px; }
+.ml-hist-row:hover .mcs .mci { transform: translateY(-2px) scale(1.1); }
 .ml-hist-row b { flex: 1 1 auto; min-width: 0; font: 700 13.5px/1.2 var(--m-font); color: var(--m-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ml-hist-row i { flex: none; font-style: normal; font-size: 12px; color: var(--m-fg-subtle); }
+.ml-hist-row i {
+  flex: none; padding: 4px 7px; font-style: normal; font-size: 11.5px; font-weight: 700; color: var(--m-fg-subtle);
+  background: var(--m-inset); --px-n: 4px; clip-path: var(--px-4);
+}
 
-/* «Улучшенная сборка» (PLUS) над полем ввода: переключатель у PLUS, замок и PLUS у бесплатного. */
+/* «Улучшенная сборка» (PLUS) над полем ввода: настоящий пиксельный
+   переключатель; у бесплатного — серый с замком и PLUS рядом. */
 .ml-enh { display: flex; align-items: center; gap: 8px; padding: 8px 12px 0; border-top: 2px solid rgba(0, 0, 0, 0.28); }
 .ml-enh + .mlc { border-top: 0; padding-top: 8px; }
 .ml-enh-btn {
-  display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 10px;
+  display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 6px 0 8px;
   font: 700 13px/1 var(--m-font); color: var(--m-fg-muted); cursor: pointer;
   --px-n: 5px; clip-path: var(--px-5);
+  transition: color var(--m-t-fast), background-color var(--m-t-fast);
 }
-.ml-enh-btn:hover:not(.locked) { color: var(--m-fg); background: var(--m-surface-2); }
-.ml-enh-btn.on { color: var(--m-accent); }
+.ml-enh-btn:hover:not(.locked) { color: var(--m-fg); background-color: rgba(255, 255, 255, 0.04); }
+.ml-enh-btn.on { color: var(--m-fg); }
+.ml-enh-btn > .mci { flex: none; filter: grayscale(1) brightness(0.7); transition: filter 120ms steps(2, end); }
+.ml-enh-btn:hover:not(.locked) > .mci { filter: grayscale(0.4); }
+.ml-enh-btn.on > .mci { filter: none; animation: ml-twirl 1.6s steps(1, end) infinite; }
 .ml-enh-btn.locked { cursor: default; padding-left: 0; color: var(--m-fg-subtle); }
-.ml-enh-sw { position: relative; width: 24px; height: 12px; margin-left: 2px; background: var(--m-inset); }
-.ml-enh-sw::after {
-  content: ''; position: absolute; top: 2px; left: 2px; width: 8px; height: 8px;
-  background: var(--m-fg-subtle); transition: transform 120ms steps(2, end);
-}
-.ml-enh-btn.on .ml-enh-sw::after { transform: translateX(12px); background: var(--m-accent); }
+.ml-enh-btn.on { color: #fff; }
+/* Переключатель — тумблер лаунчера (.tgl из кита), у бесплатного — бледный под замком */
+.ml-enh-btn .tgl { margin-left: 4px; pointer-events: none; }
+.ml-enh-btn.locked .tgl { opacity: 0.45; }
 .btn.sm.ml-plus { gap: 6px; }
 .btn.sm.ml-plus .px-icon { width: 12px; height: 12px; }
 
-/* Поле ввода: в панели и в плашке */
+/* Поле ввода — как было (тёмное поле кита, зелёная рамка в фокусе); кнопка «отправить» вдавливается */
 .mlc { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px 14px; border-top: 2px solid rgba(0, 0, 0, 0.28); }
-.mlc-row { display: flex; align-items: stretch; gap: 8px; min-width: 0; }
+.mlc-row { position: relative; display: flex; align-items: stretch; gap: 8px; min-width: 0; }
 .mlc-input { flex: 1 1 auto; min-width: 0; height: auto; min-height: 44px; padding: 0 12px; }
 .mlc-input textarea {
   flex: 1; min-width: 0; height: 22px; max-height: 88px; margin: 11px 0; padding: 0; resize: none;
@@ -255,116 +491,380 @@
 }
 .mlc-input textarea::placeholder { color: var(--m-fg-subtle); }
 .btn.mlc-send { flex: none; width: 48px; height: auto; min-height: 44px; padding: 0 0 3px; }
-.btn.mlc-send .px-icon { width: 18px; height: 18px; }
+.btn.mlc-send .px-icon { width: 18px; height: 18px; transition: transform 90ms steps(2, end); }
+.btn.mlc-send:not(:disabled):hover .px-icon { animation: ml-nudge 0.6s steps(1, end) infinite; }
+.btn.mlc-send:not(:disabled):active { transform: translateY(3px); }
+.btn.mlc-send:not(:disabled):active .px-icon { animation: none; transform: translate(4px, -4px) scale(0.85); }
+.btn.mlc-send:disabled { opacity: 0.55; }
+@keyframes ml-nudge { 0% { transform: translate(0, 0); } 50% { transform: translate(2px, -2px); } }
 .mlc-preset { display: flex; align-items: center; gap: 6px; }
 
-/* ── Карточка сборки ────────────────────────────────────────── */
-.mpk {
-  align-self: stretch; display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 12px 12px 14px;
-  background-color: var(--m-bg);
-  --px-n: 10px; clip-path: var(--px-10);
-  --px-ol: color-mix(in srgb, var(--m-accent) 55%, transparent); --px-ol-w: 2px;
-  --px-ft: rgba(255, 255, 255, 0.05); --px-ft-w: 2px; --px-fb: rgba(0, 0, 0, 0.3); --px-fb-w: 4px;
-}
-.mpk-head { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.mpk-title {
-  width: 100%; height: 30px; padding: 0 6px; margin-left: -6px; border: 0; outline: 0; background: transparent;
-  color: var(--m-fg); font: 900 18px/1 var(--m-font);
-  --px-n: 5px; clip-path: var(--px-5);
-}
-.mpk-title:hover:not(:disabled), .mpk-title:focus { background: var(--m-inset); }
-.mpk-plates { display: flex; align-items: center; gap: 6px; }
+/* Плашки версии и загрузчика и крестик — у выбранной версии над полем ввода */
 .mpk-plate {
   padding: 4px 8px; font: 800 11.5px/1 var(--m-font); color: var(--m-fg);
   background: var(--m-surface-2); --px-n: 4px; clip-path: var(--px-4);
 }
-.mpk-review { display: flex; flex-wrap: wrap; gap: 4px; }
-.mpk-review > span {
-  display: inline-flex; align-items: center; height: 22px; padding: 0 7px 1px;
-  font: 700 12px/1 var(--m-font); color: var(--m-fg-muted); background: var(--m-surface-2);
-  --px-n: 4px; clip-path: var(--px-4);
-}
-.mpk-review > span.add { color: var(--m-accent); }
-.mpk-review > span[data-tip] { cursor: help; }
-.mpk-count { margin-left: auto; font-size: 12px; font-weight: 750; color: var(--m-fg-subtle); font-variant-numeric: tabular-nums; }
-.mpk-sec { margin-top: 4px; font: 800 11px/1 var(--m-font); letter-spacing: 0.06em; text-transform: uppercase; color: var(--m-rarity-legendary); }
-
-.mpk-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.mpk-row {
-  width: 100%; display: flex; align-items: center; gap: 10px; min-width: 0; padding: 6px 10px 6px 8px; text-align: left;
-  background-color: var(--m-surface); cursor: pointer;
-  --px-n: 5px; clip-path: var(--px-5);
-  transition: background-color var(--m-t-fast), opacity var(--m-t-fast);
-}
-.mpk-row:hover { background-color: var(--m-surface-2); }
-.mpk-row:focus-visible { outline: 2px solid var(--m-accent); outline-offset: -2px; }
-.mpk-row:not(.on):not(.mpk-link-row) { opacity: 0.5; }
-.mpk-row.locked, .mpk-list.frozen .mpk-row { cursor: default; }
-.mpk-list.frozen .mpk-row:hover, .mpk-row.locked:hover { background-color: var(--m-surface); }
-.mpk-link-row > .px-icon { flex: none; color: var(--m-fg-subtle); }
-.mpk-chk {
-  flex: none; display: grid; place-items: center; width: 18px; height: 18px;
-  background: var(--m-inset); color: var(--px-on-accent);
-  outline: 2px solid var(--m-border-strong); outline-offset: -2px;
-}
-.mpk-row.on .mpk-chk { background: var(--m-accent); outline-color: var(--m-accent); }
-.mpk-row.locked .mpk-chk { background: var(--m-surface-2); outline-color: var(--m-surface-2); color: var(--m-fg-muted); }
-.mpk-ic { flex: none; display: grid; place-items: center; width: 32px; height: 32px; overflow: hidden; background: var(--m-surface-2); color: var(--m-fg-subtle); --px-n: 4px; clip-path: var(--px-4); }
-.mpk-ic img { width: 100%; height: 100%; object-fit: cover; }
-.mpk-body { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
-.mpk-name { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.mpk-name > span:first-child { font: 750 13px/1.25 var(--m-font); color: var(--m-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mpk-tag { flex: none; padding: 2px 5px 3px; font: 800 10px/1 var(--m-font); color: var(--m-fg-muted); background: var(--m-surface-2); --px-n: 4px; clip-path: var(--px-4); }
-.mpk-why { font-size: 11.5px; line-height: 1.3; color: var(--m-fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mpk-links { display: flex; flex-wrap: wrap; gap: 6px; }
-.seg.mpk-chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px 2px; font-size: 12px; font-weight: 700; cursor: pointer; }
-.mpk-note { margin: 0; font-size: 11.5px; line-height: 1.35; color: var(--m-fg-subtle); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-
-/* Строка PLUS: золото = PLUS (DESIGN-JUICE §2) */
-.mpk-up {
-  align-self: stretch; display: flex; align-items: center; gap: 10px; padding: 8px 10px 11px 10px; text-align: left; cursor: pointer;
-  color: var(--m-fg); background-color: color-mix(in srgb, var(--m-rarity-legendary) 18%, var(--m-surface));
-  --px-n: 5px; clip-path: var(--px-5);
-  --px-ol: color-mix(in srgb, var(--m-rarity-legendary) 70%, transparent); --px-ol-w: 2px; --px-fb: rgba(0, 0, 0, 0.26); --px-fb-w: 3px;
-}
-.mpk-up:hover { background-color: color-mix(in srgb, var(--m-rarity-legendary) 28%, var(--m-surface)); }
-.mpk-up > .px-icon { flex: none; color: var(--m-rarity-legendary); }
-.mpk-up > span { flex: 1 1 auto; min-width: 0; font: 750 13px/1.25 var(--m-font); }
-.mpk-up > b {
-  flex: none; padding: 5px 9px 7px; font: 900 12px/1 var(--m-font); color: #2a1c00; background: var(--m-rarity-legendary);
-  --px-n: 4px; clip-path: var(--px-4);
-}
-
-.mpk-foot { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 40px; padding-top: 4px; }
-.mpk-foot .btn { gap: 8px; }
-.mpk-foot .btn .px-icon { width: 12px; height: 12px; }
-.mpk-progress { flex: 1 1 auto; min-width: 60px; height: 10px; background: var(--m-inset); overflow: hidden; }
-.mpk-progress i { display: block; height: 100%; background: var(--m-accent); transition: width 240ms steps(4, end); }
-.mpk-pmsg { flex: none; max-width: 50%; font-size: 12px; color: var(--m-fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mpk-code {
-  display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 10px; align-self: flex-start;
-  background: var(--m-inset); --px-n: 5px; clip-path: var(--px-5);
-}
-.mpk-code span { font-size: 12px; font-weight: 700; color: var(--m-fg-muted); }
-.mpk-code b { font: 900 14px/1 var(--m-mono, monospace); letter-spacing: 0.08em; color: var(--m-fg); }
 .mpk-x { width: 26px; height: 26px; display: grid; place-items: center; color: var(--m-fg-muted); cursor: pointer; --px-n: 4px; clip-path: var(--px-4); }
 .mpk-x:hover { color: var(--m-fg); background: var(--m-surface-2); }
 
-.mpk-srv {
-  display: flex; flex-direction: column; gap: 8px; padding: 10px;
-  background-color: var(--m-surface); --px-n: 5px; clip-path: var(--px-5);
-  --px-ol: var(--m-accent); --px-ol-w: 2px;
+/* Кнопка-Милли: звёздочка мигает в углу */
+.mlf::after {
+  content: ''; position: absolute; top: 6px; right: 7px; width: 8px; height: 8px; color: #fff; opacity: 0; pointer-events: none;
+  background:
+    linear-gradient(currentColor, currentColor) center / 2px 100% no-repeat,
+    linear-gradient(currentColor, currentColor) center / 100% 2px no-repeat;
+  animation: ml-twinkle 3.6s steps(1, end) 1s infinite;
 }
-.mpk-srv .skel { display: block; }
-.mpk-srv-head { display: flex; align-items: center; justify-content: space-between; }
-.mpk-srv-head b { font: 800 13.5px/1 var(--m-font); color: var(--m-fg); }
-.mpk-srv-done { margin: 0; font-size: 13px; font-weight: 700; color: var(--m-fg); }
-.mpk-srv-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.mpk-srv-row {
-  width: 100%; display: flex; align-items: center; gap: 10px; padding: 6px 8px; text-align: left; cursor: pointer;
-  background-color: var(--m-inset); --px-n: 5px; clip-path: var(--px-5);
+@keyframes ml-twinkle {
+  0% { opacity: 0; transform: scale(0.4); }
+  6% { opacity: 1; transform: scale(0.7); }
+  12% { opacity: 1; transform: scale(1); }
+  20% { opacity: 0.8; transform: scale(0.7); }
+  28% { opacity: 0; transform: scale(0.4); }
 }
-.mpk-srv-row:hover:not(:disabled) { background-color: var(--m-surface-2); }
-.mpk-srv-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.mpk-srv-body b { font: 750 13px/1.2 var(--m-font); color: var(--m-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mpk-srv-body i { font-style: normal; font-size: 11.5px; color: var(--m-fg-muted); }
+
+/* Без движения — всё стоит: сцена, фон, искры, вход сообщений. */
+@media (prefers-reduced-motion: reduce) {
+  .ml-panel.on, .ml-panel *, .ml-panel *::before, .ml-panel *::after, .ml-bg::before, .ml-bg::after, .mlf::after {
+    animation: none !important; transition: none !important;
+  }
+  .ml-bg i, .mlb { display: none; }
+}
+
+
+/* ── Ячейка инвентаря и предметы (04.10.2026) ──────────────────
+   Ячейка — квадрат с вдавленной фаской, как слот в игре (без среза угла:
+   у слотов Minecraft углы прямые). Предмет — 16×16, масштаб целый. */
+.mcs {
+  position: relative; flex: none; display: grid; place-items: center; width: 36px; height: 36px;
+  background: #18191b;
+  box-shadow: inset 2px 2px 0 #0b0b0c, inset -2px -2px 0 #3a3b40;
+}
+.mcs .mci { position: relative; z-index: 1; display: block; image-rendering: pixelated; transition: transform 90ms steps(2, end); }
+.mcs::before {
+  content: ''; position: absolute; z-index: 0; left: 25%; right: 25%; bottom: 5px; height: 3px; opacity: 0;
+  background: rgba(0, 0, 0, 0.55); transition: opacity 90ms steps(2, end);
+}
+.mcs::after {
+  content: ''; position: absolute; z-index: 2; top: 2px; right: 2px; bottom: 2px; left: 2px; opacity: 0; pointer-events: none;
+  background: #fff; transition: opacity 60ms steps(1, end);
+}
+/* Огонёк факела мерцает, блеск зачарования бежит полосами. */
+.mci-glow { animation: ml-flicker 1.1s steps(1, end) infinite; }
+@keyframes ml-flicker { 0% { opacity: 1; } 30% { opacity: 0.35; } 55% { opacity: 0.9; } 80% { opacity: 0.15; } }
+.mci-glint rect { fill: #b46bff; opacity: 0; animation: ml-glint 1.8s steps(1, end) infinite; }
+.mci-glint .mci-g1 { animation-delay: 0.3s; }
+.mci-glint .mci-g2 { animation-delay: 0.6s; }
+@keyframes ml-glint { 0% { opacity: 0.42; } 16% { opacity: 0.22; } 33% { opacity: 0; } 83% { opacity: 0; } }
+
+/* Глифы зачарования: слетаются к Милли и гаснут */
+.mlg { position: absolute; z-index: 2; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; }
+.mlg i { position: absolute; left: -5px; top: -5px; opacity: 0; animation: ml-glyph 2.16s steps(9, end) infinite; }
+.mlg svg { display: block; fill: #d9c8ff; }
+.mlg i:nth-child(2n) svg { fill: #ffffff; }
+.mlg i:nth-child(3n) svg { fill: #9f7bff; }
+@keyframes ml-glyph {
+  0% { opacity: 0; transform: rotate(var(--a)) translateY(-46px) rotate(calc(var(--a) * -1)); }
+  15% { opacity: 1; }
+  70% { opacity: 0.9; }
+  100% { opacity: 0; transform: rotate(var(--a)) translateY(-10px) rotate(calc(var(--a) * -1)) scale(0.5); }
+}
+.ml-think .mla { width: 48px; height: 48px; display: grid; place-items: center; }
+
+/* Панель открывается «постройкой»: поверх лежат два неподвижных слоя —
+   сплошная заливка и шахматка из блоков; анимируется только их opacity, без
+   заливки по окончании: если ключи не сработают, слои просто невидимы. */
+.ml-build { position: absolute; z-index: 6; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none; }
+.ml-build::before, .ml-build::after { content: ''; position: absolute; top: 0; right: 0; bottom: 0; left: 0; opacity: 0; }
+.ml-build::before { background: var(--m-surface); }
+.ml-build::after {
+  background:
+    linear-gradient(90deg, var(--m-surface) 50%, transparent 50%) 0 0 / 80px 40px,
+    linear-gradient(90deg, transparent 50%, var(--m-surface) 50%) 0 40px / 80px 40px;
+  background-repeat: repeat-x, repeat-x;
+}
+.ml-build::after {
+  background: repeating-linear-gradient(90deg, var(--m-surface) 0 40px, transparent 40px 80px);
+  -webkit-mask: repeating-linear-gradient(180deg, #000 0 40px, transparent 40px 80px);
+  mask: repeating-linear-gradient(180deg, #000 0 40px, transparent 40px 80px);
+}
+.ml-panel.on:not(.is-closing) > .ml-build::before { animation: ml-build-a 260ms steps(1, end) backwards; }
+.ml-panel.on:not(.is-closing) > .ml-build::after { animation: ml-build-b 260ms steps(1, end) backwards; }
+@keyframes ml-build-a { 0% { opacity: 1; } 34% { opacity: 0; } 100% { opacity: 0; } }
+@keyframes ml-build-b { 0% { opacity: 0; } 34% { opacity: 1; } 67% { opacity: 0.5; } 100% { opacity: 0; } }
+.ml-panel.on > .ml-head { animation: ml-rise 240ms steps(3, end) 60ms backwards; }
+.ml-panel.on > .ml-scroll { animation: ml-rise 260ms steps(3, end) 120ms backwards; }
+.ml-panel.on > .ml-enh, .ml-panel.on > .mlc { animation: ml-rise 260ms steps(3, end) 180ms backwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ml-build { display: none; }
+  .mci-glow, .mci-glint rect, .mlg i { animation: none !important; }
+  .mlg { display: none; }
+}
+
+
+/* ── Закрытие: панель разбирается на блоки и уходит вправо ── */
+.ml-panel.on.is-closing { pointer-events: none; animation: ml-out 200ms steps(4, end) both; }
+.ml-panel.on.is-closing > .ml-build::after { animation: ml-unbuild 200ms steps(1, end) backwards; }
+@keyframes ml-unbuild { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .ml-panel.on.is-closing { animation: none; }
+}
+
+
+/* ── Примеры — хотбар: восемь ячеек, рамка выбора переезжает по ним,
+   над хотбаром — имя выбранного (как в игре). Цвета и срезы — лаунчера. ── */
+.ml-hb-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; margin-top: 14px; }
+.ml-hb-name {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 30px; padding: 0 12px 2px;
+  background-color: var(--m-raised); --px-n: 4px; clip-path: var(--px-4);
+  animation: ml-name-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+.ml-hb-name b { font: 800 13.5px/1 var(--m-font); color: var(--m-fg); white-space: nowrap; }
+.ml-hb-name i { font: 700 12.5px/1 var(--m-font); font-style: normal; color: var(--m-fg-subtle); white-space: nowrap; }
+.ml-hb-name i::before { content: '· '; }
+/* Значок ниши в ячейке */
+.ml-hb-ic { display: grid; place-items: center; width: 32px; height: 32px; transition: transform 140ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+.ml-hb-ic svg { display: block; image-rendering: pixelated; }
+.ml-hb-slot:hover:not(:disabled) .ml-hb-ic { transform: translateY(-3px) scale(1.1); }
+.ml-hb-slot.on .ml-hb-ic { animation: ml-held 1.6s ease-in-out infinite; }
+.ml-hb-slot:active:not(:disabled) .ml-hb-ic, .ml-hb-slot.used .ml-hb-ic { animation: none; transform: scale(0.86); }
+@keyframes ml-name-in { 0% { opacity: 0; transform: translateY(4px); } }
+.ml-chips.ml-hb {
+  position: relative; display: grid; grid-template-columns: repeat(8, 46px); gap: 0; padding: 4px 4px 6px;
+  background-color: var(--m-inset);
+  --px-n: 5px; clip-path: var(--px-5);
+  --px-ol: rgba(0, 0, 0, 0.45); --px-ol-w: 2px; --px-ft: rgba(0, 0, 0, 0.35); --px-ft-w: 2px; --px-fb: rgba(255, 255, 255, 0.04); --px-fb-w: 2px;
+  animation: ml-rise 300ms steps(4, end) 160ms backwards;
+}
+.ml-hb-slot {
+  position: relative; z-index: 1; width: 46px; height: 46px; display: grid; place-items: center; cursor: pointer;
+  box-shadow: inset 2px 2px 0 rgba(0, 0, 0, 0.35), inset -2px -2px 0 rgba(255, 255, 255, 0.05);
+}
+.ml-hb-slot .mci { transition: transform 140ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+.ml-hb-slot:hover:not(:disabled) .mci { transform: translateY(-3px) scale(1.1); }
+.ml-hb-slot.on .mci { animation: ml-held 1.6s ease-in-out infinite; }
+.ml-hb-slot:active:not(:disabled) .mci, .ml-hb-slot.used .mci { animation: none; transform: scale(0.86); }
+.ml-hb-slot:disabled { cursor: default; opacity: 0.5; }
+.ml-hb-slot:focus-visible { outline: none; }
+.ml-hb-t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@keyframes ml-held { 0%, 100% { transform: translateY(-2px); } 50% { transform: translateY(-4px); } }
+.ml-hb-sel {
+  position: absolute; z-index: 2; left: 2px; top: 2px; width: 50px; height: 50px; pointer-events: none;
+  background:
+    linear-gradient(var(--m-accent) 0 0) 0 0 / 100% 3px no-repeat,
+    linear-gradient(var(--m-accent) 0 0) 0 100% / 100% 3px no-repeat,
+    linear-gradient(var(--m-accent) 0 0) 0 0 / 3px 100% no-repeat,
+    linear-gradient(var(--m-accent) 0 0) 100% 0 / 3px 100% no-repeat,
+    rgba(var(--m-accent-rgb), 0.1);
+  clip-path: var(--px-4);
+  transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: transform;
+}
+/* Ячейки шириной 46, рамка 50 — шаг рамки = 46px: translateX в процентах от 50 — поправка. */
+.ml-hb-sel { --step: 46px; }
+.ml-hb:focus-within .ml-hb-sel { background-color: rgba(var(--m-accent-rgb), 0.18); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ml-hb-slot.on .mci { animation: none; }
+  .ml-hb-sel { transition: none; }
+}
+
+
+/* Думает: «генерация мира» в пузыре (MilliWorldLoading из MilliGlobe.tsx) */
+.ml-bubble.ml-world { width: min(300px, 100%); }
+
+/* ============================================================
+   ЛЕНТА: карточка сборки и события (дизайнер, DESIGN.md §1, §4).
+   Карточка — на всю ширину ленты (под аватарку), события — в колонке.
+   Анимации — milli-motion.css; здесь статика.
+   ============================================================ */
+
+/* Перф ленты (FE-shell/QA): старые сообщения не раскладываются заново */
+.ml-msg { contain: layout style; }
+/* content-visibility здесь сбрасывал прокрутку ленты при возврате из окна мода — оставлен только contain. */
+
+/* Карточка сборки шире колонки сообщения: заезжает под аватарку (40 + 10). */
+.ml-col > .mpc { align-self: stretch; width: calc(100% + 50px); max-width: none; margin-left: -50px; }
+/* Карточка первой в колонке: не наезжать на аватарку — опускаем под неё. */
+.ml-col > .mpc:first-child { margin-top: 48px; }
+/* события изменений под карточкой — той же ширины, что карточка */
+.ml-col > .mpc ~ .mlx-wrap { width: calc(100% + 50px); margin-left: -50px; }
+
+/* ── событие изменений «Шейдеры полегче · +2 −1 ~2 · Показать · Отменить» ── */
+.mlx-wrap { display: flex; flex-direction: column; gap: 4px; width: 100%; min-width: 0; }
+.mlx {
+  display: flex; align-items: center; gap: 8px; min-width: 0; width: 100%; height: 32px; padding: 0 4px 1px 10px;
+  font: 700 12.5px/1 var(--m-font); color: var(--m-fg-muted);
+  background-color: var(--m-surface-2);
+  box-shadow: inset 3px 0 0 var(--m-accent), inset 0 -2px 0 rgba(0, 0, 0, 0.22);
+  --px-n: 4px; clip-path: var(--px-4);
+}
+.mlx.is-user { box-shadow: inset 3px 0 0 var(--m-fg-faint), inset 0 -2px 0 rgba(0, 0, 0, 0.22); }
+.mlx .mci { flex: none; display: block; image-rendering: pixelated; }
+.mlx-t {
+  flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: 0; border: 0; background: none; font: 800 12.5px/1.2 var(--m-font); color: var(--m-fg); text-align: left;
+}
+button.mlx-t { cursor: pointer; }
+button.mlx-t::after { content: '▾'; margin-left: 5px; font-size: 10px; color: var(--m-fg-faint); }
+button.mlx-t[aria-expanded='true']::after { content: '▴'; }
+button.mlx-t:hover { color: var(--m-accent); }
+.mlx-n { flex: none; display: inline-flex; gap: 5px; font: 700 11px/1 'Monocraft', var(--m-mono); font-variant-numeric: tabular-nums; }
+.mlx-n:empty { display: none; }
+.mlx-add { color: var(--m-success); }
+.mlx-rm { color: var(--m-danger); }
+.mlx-ch { color: var(--m-warning); }
+.mlx-acts { flex: none; display: inline-flex; align-items: center; gap: 0; margin-left: auto; }
+.mlx-btn {
+  flex: none; height: 24px; padding: 0 7px 1px; border: 0; background: none; cursor: pointer;
+  font: 750 12px/1 var(--m-font); color: var(--m-accent);
+  --px-n: 3px; clip-path: var(--px-4);
+  transition: background-color var(--m-t-fast), color var(--m-t-fast);
+}
+.mlx-btn:hover:not(:disabled) { color: var(--m-fg); background-color: var(--m-surface); }
+.mlx-btn:focus-visible { outline: 2px solid var(--m-accent); outline-offset: -2px; }
+.mlx-btn.mlx-undo { color: var(--m-fg-muted); }
+.mlx-btn.mlx-undo:hover:not(:disabled) { color: var(--m-fg); }
+.mlx-btn:disabled { opacity: 0.45; cursor: progress; }
+.mlx.is-undone { background-color: color-mix(in srgb, var(--m-surface-2) 55%, transparent); box-shadow: inset 3px 0 0 var(--m-fg-faint); }
+.mlx.is-undone .mlx-t { color: var(--m-fg-faint); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--m-fg) 35%, transparent); }
+.mlx.is-undone .mlx-n { opacity: 0.5; }
+.mlx.is-undone .mlx-undo { color: var(--m-accent); }
+.mlx-list {
+  list-style: none; margin: -2px 0 2px; padding: 6px 10px 7px 13px; display: flex; flex-direction: column; gap: 3px;
+  max-height: 160px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+  font: 600 12px/1.3 var(--m-font); color: var(--m-fg-muted);
+  background-color: var(--m-inset); --px-n: 4px; clip-path: var(--px-4);
+}
+.mlx-list > li { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── пузырь прогресса: реальные этапы, счётчики, бегущие названия ── */
+.ml-bubble.ml-think:has(.mlp) { width: 100%; white-space: normal; padding: 10px 12px 12px; }
+.mlp { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.mlp-head { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 26px; }
+.mlp-head > b { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 800 13.5px/1.2 var(--m-font); color: var(--m-fg); }
+:root:root .mlp .mlp-stop { flex: none; height: 26px; padding: 0 10px 2px; font-size: 12px; gap: 6px; color: var(--m-fg-muted); }
+:root:root .mlp .mlp-stop:hover { color: var(--m-danger); background: var(--m-danger-soft); }
+.mlp-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.mlp-step { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 16px; font: 650 12.5px/1.2 var(--m-font); color: var(--m-fg-muted); }
+.mlp-t { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mlp-n {
+  flex: none; margin-left: auto; font: 600 11.5px/1 var(--m-font); color: var(--m-fg-subtle); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.mlp-n b { font-weight: 800; color: var(--m-fg); }
+.mlp-step.is-now { color: var(--m-fg); font-weight: 750; }
+.mlp-step.is-wait { color: var(--m-fg-faint); }
+.mlp-step.is-wait .mlp-n { display: none; }
+/* марки — пиксельные: ✓ галочка, ▸ флажок, · точка */
+.mlp-mark {
+  flex: none; width: 10px; height: 10px; display: block; background: var(--m-fg-faint);
+  -webkit-mask: var(--mlp-m) center / 100% 100% no-repeat; mask: var(--mlp-m) center / 100% 100% no-repeat;
+  --mlp-m: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Cpath d='M3 3h2v2h-2z'/%3E%3C/svg%3E");
+}
+.mlp-step.is-done .mlp-mark {
+  background: var(--m-accent);
+  --mlp-m: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Cpath d='M0 3h1v2h-1zM1 4h1v2h-1zM2 5h2v2h-2zM4 4h1v2h-1zM5 3h1v2h-1zM6 2h1v2h-1zM7 1h1v2h-1z'/%3E%3C/svg%3E");
+}
+.mlp-step.is-now .mlp-mark {
+  background: var(--m-accent);
+  --mlp-m: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Cpath d='M2 1h1v6h-1zM3 2h1v4h-1zM4 3h1v2h-1zM5 3h1v2h-1z'/%3E%3C/svg%3E");
+}
+/* полоса из 10 клеток */
+.mlp-bar { position: relative; height: 8px; margin: 2px 1px 0; background: #101011; box-shadow: 0 0 0 2px #000; overflow: hidden; }
+.mlp-bar > i {
+  display: block; height: 100%; transform-origin: 0 50%;
+  background: linear-gradient(#a6ec8f 0 2px, var(--m-accent) 2px 6px, #3f8f33 6px);
+}
+.mlp-bar::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(90deg, transparent 0 calc(10% - 2px), #000 calc(10% - 2px) 10%);
+}
+/* бегущие названия: одна строка, гаснет к правому краю */
+.mlp-tick {
+  position: relative; display: flex; gap: 0; min-width: 0; height: 15px; overflow: hidden; white-space: nowrap;
+  font: 600 11.5px/15px var(--m-font); color: var(--m-fg-subtle);
+  -webkit-mask: linear-gradient(90deg, #000 0 80%, transparent); mask: linear-gradient(90deg, #000 0 80%, transparent);
+}
+.mlp-tick > span { flex: none; }
+.mlp-tick > span + span::before { content: '·'; margin: 0 6px; color: var(--m-fg-faint); }
+
+/* ── «Сколько модов взять?» (MilliSizePick): ≈25 · ≈70 · ≈150 · ≈250 · Своё ── */
+.msz { display: flex; flex-direction: column; gap: 6px; width: 100%; min-width: 0; }
+.msz-q { margin: 0; font: 800 13px/1.3 var(--m-font); color: var(--m-fg); }
+.msz-chips { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+:root:root .msz-chip {
+  height: auto; min-height: 76px; min-width: 0; padding: 8px 2px 9px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  color: var(--m-fg-muted); background-color: var(--m-surface-2); white-space: nowrap;
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.28);
+  --px-n: 4px; clip-path: var(--px-4);
+}
+:root:root .msz-chip:hover { color: var(--m-fg); background-color: var(--m-raised); }
+:root:root .msz-chip.on {
+  color: var(--m-fg); background-color: color-mix(in srgb, var(--m-accent) 18%, var(--m-surface-2));
+  box-shadow: inset 0 -3px 0 var(--m-accent), inset 0 0 0 1px color-mix(in srgb, var(--m-accent) 45%, transparent);
+}
+.msz-chip svg { flex: none; display: block; image-rendering: pixelated; }
+/* сундуки крупно (16-клеточный спрайт ×2 — пиксели ровные) */
+.msz:not(.compact) .msz-chip svg { width: 32px; height: 32px; margin-bottom: 2px; }
+.msz-n, .msz-own-n { font: 900 19px/1 var(--m-font); font-variant-numeric: tabular-nums; color: inherit; }
+.msz-l { font: 600 10.5px/1 var(--m-font); color: var(--m-fg-faint); }
+.msz-chip.on .msz-l { color: var(--m-fg-subtle); }
+.msz-chip.own .msz-n { font-size: 15px; }
+.msz-own-n { flex: none; min-width: 40px; text-align: center; color: var(--m-fg); font-variant-numeric: tabular-nums; }
+.msz-chips { -webkit-mask: none; }
+.msz-own { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 6px 4px 6px 10px; background-color: var(--m-inset); --px-n: 4px; clip-path: var(--px-4); }
+.msz-own > .m-slider { flex: 1 1 auto; min-width: 0; height: 18px; }
+:root:root .msz-own .input.sm { flex: none; width: 58px; height: 28px; padding: 0 8px; gap: 0; background-color: var(--m-bg); }
+.msz-own .input input { width: 100%; text-align: center; font: 800 13px/1 var(--m-font); font-variant-numeric: tabular-nums; }
+:root:root .msz-own .btn.sm { flex: none; height: 28px; padding: 0 10px 2px; font-size: 12px; }
+/* inline под шапкой карточки: чипы в строку, без подписей */
+.msz.compact { gap: 4px; }
+:root:root .msz.compact .msz-chip { min-height: 0; height: 30px; flex-direction: row; gap: 5px; padding: 0 4px 2px; }
+.msz.compact .msz-n { font-size: 12.5px; font-weight: 800; }
+/* текстовая кнопка «70 модов · изменить» в шапке карточки */
+.msz-inline-btn {
+  display: inline-block; height: 22px; padding: 5px 6px 0; border: 0; background: none; cursor: pointer;
+  font: 600 11.5px/1 var(--m-font); color: var(--m-fg-subtle); white-space: nowrap;
+  --px-n: 3px; clip-path: var(--px-4);
+}
+.msz-inline-btn b { font-weight: 800; color: var(--m-fg); }
+.msz-inline-btn:hover:not(:disabled) { color: var(--m-accent); background-color: var(--m-surface); }
+.msz-inline-btn[aria-expanded='true'] { color: var(--m-accent); background-color: var(--m-surface); }
+.msz-inline-btn:disabled { cursor: default; }
+
+/* ── «Настраиваю графику под твой ПК…» (MilliSetup) ── */
+.mset {
+  display: flex; flex-direction: column; gap: 8px; width: 100%; min-width: 0; padding: 9px 14px 10px 12px;
+  background-color: var(--m-surface-2);
+  box-shadow: inset 3px 0 0 var(--m-info), inset 0 -2px 0 rgba(0, 0, 0, 0.22);
+  --px-n: 5px; clip-path: var(--px-5);
+}
+.mset.done { box-shadow: inset 3px 0 0 var(--m-accent), inset 0 -2px 0 rgba(0, 0, 0, 0.22); }
+.mset-head { display: flex; align-items: center; gap: 8px; min-width: 0; font: 800 13px/1.25 var(--m-font); color: var(--m-fg); }
+.mset-head > svg { flex: none; image-rendering: pixelated; }
+.mset-head > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mset-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.mset-line { display: flex; align-items: center; gap: 8px; min-width: 0; font: 600 12.5px/1.25 var(--m-font); color: var(--m-fg-muted); }
+.mset-line:not(.on) { visibility: hidden; }
+.mset-line-px { flex: none; display: block; width: 14px; height: 14px; image-rendering: pixelated; }
+.mset-line-k { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mset-line-v {
+  flex: 0 0 auto; max-width: 58%; margin-left: auto; padding: 3px 8px 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 800 12px/1 var(--m-font); color: var(--m-fg); font-variant-numeric: tabular-nums;
+  background-color: var(--m-inset); --px-n: 3px; clip-path: var(--px-4);
+}
+.mset-foot { display: flex; justify-content: flex-end; margin: -2px -4px -4px 0; }
+:root:root .mset-foot .btn.sm { height: 26px; padding: 0 10px 2px; font-size: 12px; color: var(--m-accent); }
+:root:root .mset-foot .btn.sm:hover:not(:disabled) { color: var(--m-fg); }
+
+/* Тосты не ложатся на поле ввода Милли: пока панель открыта — слева от неё. */
+:root[data-milli-open] #toast { right: calc(min(460px, 100% - 24px) + 24px); }
+
+/* «Милли печатает» — обычный ответ без сборки */
+.ml-typing { display: inline-flex; align-items: center; gap: 5px; height: 18px; padding: 0 2px; }
+.ml-typing i { width: 6px; height: 6px; background: var(--m-fg-subtle); animation: ml-typing 1.1s ease-in-out infinite; }
+.ml-typing i:nth-child(2) { animation-delay: 0.15s; }
+.ml-typing i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes ml-typing { 0%, 60%, 100% { transform: translateY(0); opacity: 0.45; } 30% { transform: translateY(-4px); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .ml-typing i { animation: none; opacity: 0.7; } }

@@ -16,6 +16,7 @@ import { ONEBLOCK_PACK, isExclusive, isOwnServerPack, ownServerTagline } from '.
 import { ANARCHY, OWN_SERVER_MODE } from '../../lib/ownServer'
 import { AnarchyArt, anarchyOnlineShown } from './AnarchyTile'
 import { headCells } from './placement'
+import type { FeaturedSpot } from './featured'
 import { useAnarchy } from '../../lib/anarchy'
 import { usePromo, type ForYouCard } from '../../state/promo'
 import type { HubPack } from './data'
@@ -106,7 +107,7 @@ const img = (src: string | null | undefined) =>
     <img
       src={src}
       alt=""
-      loading="lazy"
+      decoding="async"
       draggable={false}
       onError={(e) => {
         e.currentTarget.style.visibility = 'hidden'
@@ -194,6 +195,7 @@ export function ForYou({
   packs,
   oneblockOnline,
   anarchyOnline,
+  featured = { kind: 'anarchy' },
   onPack,
   onMode,
   onItem,
@@ -211,6 +213,8 @@ export function ForYou({
   packs: HubPack[]
   oneblockOnline: number | null
   anarchyOnline: number | null
+  /** Whose turn the anarchy card is: on PrisonRPG's turn its pack takes the cell. */
+  featured?: FeaturedSpot<HubPack>
   /** Запуск своего сервера — сейчас баннер ведёт в хостинг, оставлено для совместимости. */
   onPlay?: (m: LobbyMode) => void
   onPack: (p: HubPack) => void
@@ -329,6 +333,7 @@ export function ForYou({
   const rotated = useMemo<Pick[]>(() => {
     const packKey = (p: HubPack) => 'modpacks/' + (p.slug || p.id)
     const taken = new Set(head.map(packKey))
+    if (featured.kind === 'prisonrpg' && fyHead.includes(ANARCHY.mode)) taken.add(packKey(featured.pack))
     // Черновики для тестировщика — всегда в начале: иначе ротация прятала проверяемую сборку.
     const previews = packs.filter((p) => p.preview && !taken.has(packKey(p)))
     // Our partner servers stand right after them: a pack without downloads yet would sink below the fold.
@@ -407,7 +412,7 @@ export function ForYou({
       ...feed.map((f) => (f.item.data.kind === 'pack' ? packCard(f.item.data.pack, f.why) : siteCard(f.item.data.section, f.item.data.card, f.item.key, f.why))),
     ]
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ab, cards, packs, headKey, onPack, onItem, fyHead])
+  }, [ab, cards, packs, headKey, onPack, onItem, fyHead, featured.kind])
 
   // Хостинг занимает две клетки, OneBlock и «Ещё» — по одной.
   const rest = SHOWN - headCells(fyHead) - 1 - labs.length
@@ -440,7 +445,33 @@ export function ForYou({
         />
       )
 
-  const anNode = (
+  const anNode =
+    featured.kind === 'prisonrpg' ? (
+      <Card
+        key="prisonrpg"
+        pos={fyHead.indexOf(ANARCHY.mode)}
+        kind="pack"
+        id={featured.pack.slug || featured.pack.id}
+        tag="Наш сервер"
+        own
+        section="modpacks"
+        art={img(featured.pack.coverUrl)}
+        title={featured.pack.title}
+        meta={
+          anarchyOnlineShown(featured.pack.online) ? (
+            <>
+              <span className="ph-dot" aria-hidden="true"></span>
+              {fmtN(featured.pack.online)} играют
+            </>
+          ) : (
+            ownServerTagline(featured.pack.slug) || featured.pack.tagline
+          )
+        }
+        onClick={() => onPack(featured.pack)}
+      />
+    ) : featured.kind === 'wait' ? (
+      <Skel key="anarchy" />
+    ) : (
     <Card
       key="anarchy"
       pos={fyHead.indexOf(ANARCHY.mode)}
@@ -462,7 +493,7 @@ export function ForYou({
       }
       onClick={() => onMode(ANARCHY.mode)}
     />
-  )
+    )
   const headNodes: Record<ForYouCard, ReactNode> = { hosting: own, [ANARCHY.mode]: anNode, [OWN_SERVER_MODE]: obNode }
 
   // Показ блока для CTR: один раз на набор карточек, когда ряд собран. Тот же

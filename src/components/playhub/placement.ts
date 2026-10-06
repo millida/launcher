@@ -19,6 +19,23 @@ export function shelfOrder<T extends { def: { cat: string } }>(modes: readonly T
   return [...modes].sort((a, b) => Number(b.def.cat === OWN_SERVER_MODE) - Number(a.def.cat === OWN_SERVER_MODE))
 }
 
+/** The mode whose cell PrisonRPG takes on the shelf. */
+export const PRISON_REPLACES = 'SURVIVAL'
+
+/**
+ * PrisonRPG in the cell of Survival, which moves to the end of the shelf behind
+ * «Остальные»; without Survival in the list it goes right after OneBlock.
+ */
+export function withPrison<T extends { def: { cat: string } }, P>(modes: readonly T[], prison: P | null): (T | P)[] {
+  if (!prison) return [...modes]
+  const at = modes.findIndex((m) => m.def.cat === PRISON_REPLACES)
+  if (at < 0) {
+    const after = Math.min(1, modes.length)
+    return [...modes.slice(0, after), prison, ...modes.slice(after)]
+  }
+  return [...modes.slice(0, at), prison, ...modes.slice(at + 1), modes[at] as T]
+}
+
 /**
  * How many shelf tiles to show. Unfolded, «Свернуть» must not sit alone in the
  * last row, so the weakest mode gives up its cell.

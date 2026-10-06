@@ -1,0 +1,86 @@
+/* «План сборки» — компактная карточка в чате (MilliPlan.tsx). Токены и рамка — как у .mpc. */
+.mpl {
+  position: relative; align-self: stretch; min-width: 0;
+  display: flex; flex-direction: column; gap: 10px; padding: 10px 12px 12px;
+  container: mpl / inline-size;
+  color: var(--m-fg); font-family: var(--m-font);
+  background-color: var(--m-bg);
+  --px-n: 10px; clip-path: var(--px-10);
+  --px-ol: color-mix(in srgb, var(--m-accent) 50%, transparent); --px-ol-w: 2px;
+  --px-ft: rgba(255, 255, 255, 0.05); --px-ft-w: 2px; --px-fb: rgba(0, 0, 0, 0.3); --px-fb-w: 4px;
+  animation: mpl-in 320ms steps(4, end) backwards;
+}
+@keyframes mpl-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes mpl-pop {
+  0% { opacity: 0; transform: translateY(6px) scale(0.6); }
+  70% { opacity: 1; transform: translateY(-2px) scale(1.08); }
+  100% { opacity: 1; transform: none; }
+}
+
+.mpl-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.mpl-head .mpc-badge { width: 36px; height: 36px; flex: none; }
+.mpl-id { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.mpl-kicker { font: 800 10.5px/1 var(--m-font); letter-spacing: 0.06em; text-transform: uppercase; color: var(--m-accent); }
+/* До 2 строк; переносы только по словам (обрезка по слову — в shortTitle). */
+.mpl-title {
+  min-width: 0; font: 900 16px/1.2 var(--m-font);
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+  overflow-wrap: normal; word-break: normal; hyphens: none; text-wrap: balance;
+}
+
+/* Ряд иконок главных модов + «+64». */
+.mpl-mods { display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: nowrap; }
+.mpl-mod, .mpl-more { animation: mpl-pop 300ms steps(4, end) backwards; animation-delay: calc(120ms + var(--i, 0) * 55ms); }
+.mpl-mod { position: relative; flex: 0 1 44px; min-width: 0; display: flex; justify-content: center; cursor: default; }
+.mpl-mod .mpc-slot { width: 44px; height: 44px; max-width: 100%; transition: transform 120ms steps(2, end); }
+.mpl-mod .mpc-slot img { width: 32px; height: 32px; image-rendering: auto; }
+.mpl-mod:hover .mpc-slot { transform: translateY(-2px); }
+/* Имя мода по наведению — тултип в стиле Minecraft. */
+.mpl-mod::after {
+  content: attr(data-name); position: absolute; z-index: 3; left: 50%; bottom: calc(100% + 6px);
+  transform: translateX(-50%); max-width: 180px; padding: 4px 7px 5px;
+  font: 750 11.5px/1.15 var(--m-font); color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background: #100010f0; box-shadow: 0 0 0 2px #2a0a5e, 0 0 0 3px #100010f0;
+  opacity: 0; pointer-events: none; transition: opacity 100ms steps(2, end);
+}
+.mpl-mod:first-child::after { left: 0; transform: none; }
+.mpl-mod:hover::after { opacity: 1; }
+.mpl-more {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  min-width: 44px; height: 44px; padding: 0 8px;
+  font: 900 15px/1 var(--m-font); font-variant-numeric: tabular-nums;
+  color: var(--m-accent); background-color: var(--m-accent-soft);
+  --px-n: 4px; clip-path: var(--px-4);
+}
+
+.mpl-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
+.mpl-chip {
+  display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px 1px; max-width: 100%;
+  font: 750 12px/1 var(--m-font); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--m-accent); background-color: var(--m-accent-soft);
+  --px-n: 3px; clip-path: var(--px-4);
+}
+.mpl-chip.no { color: var(--m-danger); background-color: var(--m-danger-soft); }
+.mpl-chip.no::before { content: '✕'; font-size: 9px; }
+.mpl-chip.meta { color: var(--m-fg); background-color: var(--m-surface-2); font-weight: 800; }
+.mpl-chip .mpc-art, .mpl-chip .px-icon { flex: none; width: 12px; height: 12px; }
+
+/* «Принять» — главная, крупная; «Дополнить / Изменить» — вторичные рядом. */
+.mpl-act { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; min-width: 0; padding-top: 2px; }
+.mpl-act .btn { min-width: 0; gap: 6px; padding-left: 6px; padding-right: 6px; white-space: nowrap; justify-content: center; }
+.mpl-act .mpl-go { grid-column: 1 / -1; height: 40px; font-size: 15px; font-weight: 900; letter-spacing: 0.01em; }
+.mpl-act .mpl-go .px-icon { width: 12px; height: 12px; }
+.mpl-act .btn.sm .px-icon { width: 10px; height: 10px; }
+.ml-col > .mpl { align-self: stretch; width: 100%; }
+
+@container mpl (max-width: 300px) {
+  .mpl-mod .mpc-slot { width: 36px; height: 36px; }
+  .mpl-mod .mpc-slot img { width: 26px; height: 26px; }
+  .mpl-more { min-width: 36px; height: 36px; font-size: 13px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mpl, .mpl * { animation: none !important; transition: none !important; }
+}

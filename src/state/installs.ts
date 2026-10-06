@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { activeInstalls, cancelInstall } from '../ipc/commands'
+import { activeInstalls, cancelInstall, pauseInstall } from '../ipc/commands'
 import { listenInstallProgress } from '../ipc/events'
 import { hasTauri } from '../ipc/tauri'
 import { reportInstallFailure } from '../lib/crash'
@@ -46,6 +46,8 @@ export interface InstallTask {
   pct: number
   state: InstallState
   versionId?: string
+  paused?: boolean
+  pausable?: boolean
 }
 
 interface InstallsState {
@@ -73,6 +75,8 @@ export const useInstalls = create<InstallsState>((set, get) => ({
       pct: t.pct !== undefined ? t.pct : (prev && prev.pct) || 0,
       state: t.state || (prev && prev.state) || 'run',
       versionId: t.versionId !== undefined ? t.versionId : prev && prev.versionId,
+      paused: t.paused !== undefined ? t.paused : prev && prev.paused,
+      pausable: t.pausable !== undefined ? t.pausable : prev && prev.pausable,
     }
     set({ tasks: { ...get().tasks, [key]: next } })
   },
@@ -140,6 +144,8 @@ export function runInstall<T>(o: RunOptions<T>): boolean {
     pct: 0,
     state: 'run',
     versionId: o.versionId,
+    paused: false,
+    pausable: false,
   })
   o.run()
     .then((r) => {
@@ -183,6 +189,23 @@ export function stopInstall(key: string): void {
     .catch((e) => showToast('Не удалось отменить: ' + e, 'error'))
 }
 
+/// Пауза держит уже скачанное: ядро рвёт соединение и после «Продолжить»
+/// докачивает с того же байта (engine/core/jobs.rs, Halt).
+export function togglePause(key: string): void {
+  const t = useInstalls.getState().tasks[key]
+  if (!t || t.state !== 'run' || !t.pausable) return
+  const paused = !t.paused
+  void pauseInstall(key, paused)
+    .then((ok) => {
+      if (ok) useInstalls.getState().patch(key, { paused })
+      else useInstalls.getState().patch(key, { pausable: false, paused: false })
+    })
+    .catch((e) => showToast((paused ? 'Не удалось поставить на паузу: ' : 'Не удалось продолжить: ') + e, 'error'))
+}
+
+export const runningMsg = (t: InstallTask, text: string): string =>
+  t.paused ? 'На паузе' + (text ? ' · ' + text : '') : text
+
 export function initInstalls(): void {
   if (!hasTauri()) return
   void listenInstallProgress((p) => {
@@ -213,16 +236,23 @@ export function initInstalls(): void {
       return
     }
     if (!known) {
-      useInstalls.getState().patch(p.key, { title: p.title, label: 'Ставим…', pct: p.pct, msg: p.msg })
+      useInstalls.getState().patch(p.key, { title: p.title, label: 'Ставим…', pct: p.pct, msg: p.msg, pausable: p.pausable })
       return
     }
-    useInstalls.getState().patch(p.key, { title: p.title || known.title, pct: p.pct, msg: p.msg })
+    useInstalls.getState().patch(p.key, { title: p.title || known.title, pct: p.pct, msg: p.msg, pausable: p.pausable })
   })
   void activeInstalls()
     .then((list) => {
       for (const j of list || []) {
         if (useInstalls.getState().tasks[j.key]) continue
-        useInstalls.getState().patch(j.key, { title: j.title, label: 'Ставим…', pct: j.pct, msg: j.msg })
+        useInstalls.getState().patch(j.key, {
+          title: j.title,
+          label: 'Ставим…',
+          pct: j.pct,
+          msg: j.msg,
+          paused: j.paused,
+          pausable: j.pausable,
+        })
       }
     })
     .catch(() => {})

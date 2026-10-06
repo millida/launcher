@@ -90,7 +90,7 @@ export function mixTogether(pools: Pick[][], n = SHOWN, opts?: TogetherOpts): Pi
 
 const LOADER: Record<string, string> = { fabric: 'Fabric', forge: 'Forge', neoforge: 'NeoForge', quilt: 'Quilt' }
 
-export function PlayTogether({ onPack, onMap }: { onPack: (slug: string, title: string) => void; onMap: (title: string) => void }) {
+export function PlayTogether({ onPack, onMap, onItem }: { onPack: (slug: string, title: string) => void; onMap: (title: string) => void; onItem?: (section: string, card: SiteCard) => void }) {
   const [list, setList] = useState<Pick[] | null>(null)
   useEffect(() => {
     let alive = true
@@ -136,7 +136,7 @@ export function PlayTogether({ onPack, onMap }: { onPack: (slug: string, title: 
                 data-kind={p.section === 'maps' ? 'map' : 'pack'}
                 data-id={p.card.slug}
                 data-pos={i}
-                onClick={() => (p.section === 'maps' ? onMap(p.card.title) : onPack(p.card.slug, p.card.title))}
+                onClick={() => (onItem ? onItem(p.section, p.card) : p.section === 'maps' ? onMap(p.card.title) : onPack(p.card.slug, p.card.title))}
               >
                 <span className="ph-card-art">
                   {p.card.cover || p.card.icon ? (

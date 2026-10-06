@@ -17,8 +17,14 @@
  * Тот же файл лежит в лаунчере (`src/components/milli/milliMascot.ts`): маскот
  * один на сайте и в приложении.
  */
-/** `dance` — прежнее имя `happy`, оставлено для старых вызовов. */
-export type MilliMode = 'idle' | 'talk' | 'think' | 'happy' | 'wave' | 'dance'
+import type { MilliEmotion } from './milliEmotions'
+
+/**
+ * Режимы (держатся, пока стоит проп): `dance` — прежнее имя `happy`, оставлено
+ * для старых вызовов. `hop` — прыжки с пылью, `spin` — праздничный оборот,
+ * `sleep` — спит (в покое засыпает и сама, см. `MILLI_SLEEP_AFTER`).
+ */
+export type MilliMode = 'idle' | 'talk' | 'think' | 'happy' | 'wave' | 'dance' | 'hop' | 'spin' | 'sleep' | MilliEmotion
 
 export interface MilliBox {
   x: number
@@ -248,3 +254,282 @@ export function milliExtent(): MilliBox {
   const y2 = Math.max(...parts.map((p) => p.y + p.h))
   return { x, y, w: x2 - x, h: y2 - y }
 }
+
+/* ── Анимация (04.10.2026): кадры, реакции, взгляд ─────────────────────────
+ * Всё ниже — чистые функции и готовая геометрия: что рисовать в каждом кадре
+ * и куда смотреть. Само движение — CSS-ключи со steps() в
+ * styles/pixel/milli-mascot.css; таймеры и указатель — общий «режиссёр» в
+ * Milli.tsx (один на все маскоты на странице).
+ */
+
+/** Пиксель движения: всё, что сдвигается, сдвигается шагами по 8 единиц (≈2 px при size 136). */
+export const MILLI_PX = 8
+
+/**
+ * Разовые реакции поверх режима: `poke1…3` — тык мышкой (по кругу), `wake` —
+ * проснулась, `hop` — прыжок с пылью, `spin` — праздничный оборот (сборка готова),
+ * `wow` — «ух ты!» (что-то пролетело): глаза-точки, «!», подскок, взгляд следит.
+ */
+export type MilliCue = 'hop' | 'spin' | 'poke1' | 'poke2' | 'poke3' | 'wake' | 'wow'
+/** То, что сейчас играет: режим или реакция. */
+export type MilliState = Exclude<MilliMode, 'dance'> | MilliCue
+
+/** Длина реакции — ровно длина её CSS-ключей. */
+export const MILLI_CUE_MS: Readonly<Record<MilliCue, number>> = {
+  hop: 1000,
+  spin: 1600,
+  poke1: 1000,
+  poke2: 1100,
+  poke3: 1200,
+  wake: 800,
+  wow: 900,
+}
+
+const POKES: readonly MilliCue[] = ['poke1', 'poke2', 'poke3']
+/** n-й тык → одна из трёх реакций по кругу. */
+export function milliPoke(n: number): MilliCue {
+  return POKES[((Math.trunc(n) % 3) + 3) % 3] as MilliCue
+}
+
+/** Сколько покоя (без мыши и клавиатуры), пока Милли не задремлет. */
+export const MILLI_SLEEP_AFTER = 45_000
+
+/** Что играть: реакция важнее режима; спит только в покое. `dance` — это `happy`. */
+export function milliState(mode: MilliMode, cue: MilliCue | null, asleep: boolean): MilliState {
+  if (cue) return cue
+  const m = mode === 'dance' ? 'happy' : mode
+  return asleep && m === 'idle' ? 'sleep' : m
+}
+
+/** В каких состояниях глаза открыты и живут: моргают, следят за курсором. */
+export function milliEyesLive(s: MilliState): boolean {
+  return s === 'idle' || s === 'wave' || s === 'talk' || s === 'hop'
+}
+
+export interface MilliStep {
+  x: number
+  y: number
+}
+
+/**
+ * Куда смотреть: вектор от глаз до цели (экранные px) → шаг зрачка −2…2 по
+ * каждой оси. Рядом с Милли (ближе трети её размера) — прямо; дальше полутора
+ * размеров — до упора. Квантуется, как в спрайте: зрачок прыгает по пикселям.
+ */
+export function milliGaze(dx: number, dy: number, size: number): MilliStep {
+  const len = Math.hypot(dx, dy)
+  if (!Number.isFinite(len) || len < Math.max(8, size * 0.3)) return { x: 0, y: 0 }
+  const reach = len < size * 1.5 ? 1 : 2
+  const clamp = (v: number) => Math.max(-2, Math.min(2, Math.round(v))) || 0
+  return { x: clamp((dx / len) * reach), y: clamp((dy / len) * reach) }
+}
+
+/**
+ * Сдвиги частей лица для шага взгляда (в единицах спрайта): зрачок — на пиксель
+ * за шаг, радужка и всё лицо — на пиксель только при шаге 2 (параллакс: голова
+ * чуть поворачивается за взглядом).
+ */
+export function milliGazeOffsets(g: MilliStep): { pupil: MilliStep; iris: MilliStep; face: MilliStep } {
+  const half = (v: number) => Math.trunc(v / 2) * MILLI_PX || 0
+  return {
+    pupil: { x: g.x * MILLI_PX || 0, y: g.y * MILLI_PX || 0 },
+    iris: { x: half(g.x), y: half(g.y) },
+    face: { x: half(g.x), y: half(g.y) },
+  }
+}
+
+/** Наклон к элементу под курсором: по горизонтальному смещению цели, 0/±3/±6°. */
+export function milliLeanAngle(dx: number, size: number): number {
+  const a = Math.abs(dx)
+  if (!Number.isFinite(a) || a < Math.max(24, size * 0.4)) return 0
+  return Math.sign(dx) * (a < size * 2.2 ? 3 : 6)
+}
+
+/** Следующий шаг наклона: по 3° за кадр, чтобы наклон шёл кадрами, а не рывком. */
+export function milliLeanStep(cur: number, target: number): number {
+  if (cur === target) return cur
+  return cur + Math.sign(target - cur) * Math.min(3, Math.abs(target - cur))
+}
+
+/**
+ * Когда моргнуть: через 2,4–6,8 с, каждый пятый раз — дважды подряд. `r1`, `r2`
+ * — случайные 0…1 (Math.random в режиссёре, фиксированные в тестах).
+ */
+export function milliBlinkPlan(r1: number, r2: number): { wait: number; double: boolean } {
+  return { wait: Math.round(2400 + r1 * 4400), double: r2 < 0.2 }
+}
+
+/**
+ * Пиксельная картинка из строк: каждый символ, кроме `.`, — клетка `px`×`px`
+ * своего цвета. Возвращает path на каждый символ; соседние клетки в строке
+ * сливаются в один прямоугольник.
+ */
+export function milliPixels(rows: readonly string[], px: number, ox = 0, oy = 0): Record<string, string> {
+  const out: Record<string, string> = {}
+  rows.forEach((row, r) => {
+    let c = 0
+    while (c < row.length) {
+      const ch = row[c] as string
+      if (ch === '.' || ch === ' ') {
+        c++
+        continue
+      }
+      let e = c
+      while (e < row.length && row[e] === ch) e++
+      out[ch] = (out[ch] ?? '') + `M${ox + c * px} ${oy + r * px}h${(e - c) * px}v${px}h${-(e - c) * px}z`
+      c = e
+    }
+  })
+  return out
+}
+
+/** Зеркало пиксельной картинки по горизонтали (правый глаз — отражение левого). */
+export function milliMirror(rows: readonly string[]): string[] {
+  const w = Math.max(...rows.map((r) => r.length))
+  return rows.map((r) => r.padEnd(w, '.').split('').reverse().join(''))
+}
+
+/** Размеры пиксельной картинки в клетках. */
+export function milliPixelSize(rows: readonly string[]): { w: number; h: number } {
+  return { w: Math.max(0, ...rows.map((r) => r.length)), h: rows.length }
+}
+
+/* Глаза-оверлеи (клетка 10, глаз 100 шириной): поверх скрытого обычного глаза. */
+const EYE_PX = 10
+/** «^^» — радость: дуга. */
+export const MILLI_EYE_JOY = ['..XXXXXX..', '.XXXXXXXX.', 'XXX....XXX', 'XX......XX']
+/** «‿‿» — сон: дуга вниз. */
+export const MILLI_EYE_SLEEP = ['XX......XX', '.XXX..XXX.', '..XXXXXX..']
+/** Закрытый глаз — средний кадр моргания. */
+export const MILLI_EYE_SHUT = ['.XXXXXXXX.', 'XX......XX']
+/** «><» — зажмурилась (тык). Левый глаз; правый — зеркало. */
+export const MILLI_EYE_SQUEEZE = ['XX......', 'XXXX....', '..XXXX..', '....XXXX', '..XXXX..', 'XXXX....', 'XX......']
+
+export type MilliEyeArt = 'joy' | 'sleep' | 'shut' | 'squeeze'
+/** На сколько ниже кромки тела начинается оверлей глаза. */
+export const MILLI_EYE_ART_TOP: Readonly<Record<MilliEyeArt, number>> = { joy: 16, sleep: 26, shut: 26, squeeze: 6 }
+const EYE_ART: Record<MilliEyeArt, readonly string[]> = {
+  joy: MILLI_EYE_JOY,
+  sleep: MILLI_EYE_SLEEP,
+  shut: MILLI_EYE_SHUT,
+  squeeze: MILLI_EYE_SQUEEZE,
+}
+
+/** Оверлей глаза: path цвета ink, по центру глаза (side −1 — левый, 1 — правый). */
+export function milliEyeArt(kind: MilliEyeArt, eye: MilliBox, side: -1 | 1): string {
+  const rows = side > 0 && kind === 'squeeze' ? milliMirror(EYE_ART[kind]) : EYE_ART[kind]
+  const { w } = milliPixelSize(rows)
+  const ox = eye.x + (eye.w - w * EYE_PX) / 2
+  // Верх глаза торчит над телом, на фоне ink не виден: закрытые глаза
+  // рисуются на зелёном — ниже кромки тела (середины глаза).
+  const oy = eye.y + eye.h / 2 + MILLI_EYE_ART_TOP[kind]
+  return milliPixels(rows, EYE_PX, ox, oy).X ?? ''
+}
+
+/** Маленький зрачок — «удивилась» (проснулась). */
+export const MILLI_PUPIL_SMALL = { dx: 40, dy: 63, w: 20, h: 24 } as const
+
+/* Рты (клетка 7) в пустой клетке под носом: X — ink, T — язык. */
+const MOUTH_PX = 7
+export const MILLI_MOUTHS = {
+  smile: ['X....X', '.XXXX.'],
+  /** «хм» — кривая черта, когда думает. */
+  hmm: ['XXX...', '..XXXX'],
+  o: ['.XX.', 'XXXX', 'XTTX', '.XX.'],
+  open: ['XXXXX', 'XXXXX', 'XTTTX', '.XXX.'],
+  grin: ['XXXXXX', 'XXXXXX', 'XTTTTX', '.XTTX.'],
+} as const
+export type MilliMouth = keyof typeof MILLI_MOUTHS
+
+/** Где лежит рот: по центру клетки под носом, на 2 ниже её верха. */
+export function milliMouthBox(kind: MilliMouth): MilliBox {
+  const { w, h } = milliPixelSize(MILLI_MOUTHS[kind])
+  return { x: BELOW.x + (BELOW.w - w * MOUTH_PX) / 2, y: BELOW.y + 4, w: w * MOUTH_PX, h: h * MOUTH_PX }
+}
+export function milliMouth(kind: MilliMouth): Record<string, string> {
+  const b = milliMouthBox(kind)
+  return milliPixels(MILLI_MOUTHS[kind], MOUTH_PX, b.x, b.y)
+}
+
+/* ── Частицы — язык Minecraft ── */
+/** Сердечко (как при кормлении животных): R — красный, W — блик, D — тень. */
+export const MILLI_HEART = ['.RR.RR.', 'RWRRRRR', 'RRRRRRD', '.RRRRD.', '..RRD..', '...D...']
+/** Нотка нотного блока. */
+export const MILLI_NOTE = ['...NNN', '...N.N', '...N.N', '...N..', '.NNN..', 'NNNN..', '.NN...']
+/** Буква сна. */
+export const MILLI_Z = ['ZZZZZ', '...Z.', '..Z..', '.Z...', 'ZZZZZ']
+/** Восклицание при пробуждении. */
+export const MILLI_BANG = ['XX', 'XX', 'XX', 'XX', '..', 'XX']
+/** Искра «довольного жителя» (зелёный плюсик). */
+export const MILLI_SPARK = ['.G.', 'GWG', '.G.']
+/** Облачко пыли при приземлении: L — светлое, D — тень. */
+export const MILLI_PUFF = ['.LL', 'LLD', 'LDD']
+
+/** Ноги стоят на y = 442 (низ подошвы); пыль — на уровне подошв. */
+export const MILLI_GROUND = 442
+/** Центр по горизонтали — ось прыжка и оборота. */
+export const MILLI_CX = MILLI_VIEW / 2
+
+export interface MilliParticle {
+  x: number
+  y: number
+  /** Зеркало по горизонтали: частица летит влево. */
+  flip?: boolean
+  /** Вариант траектории/задержки — класс `is-<v>`. */
+  v: 'a' | 'b' | 'c'
+  s?: number
+  r?: number
+}
+
+/** Пыль: по три облачка у каждой ноги, разлетаются в стороны. */
+export const MILLI_DUST: readonly MilliParticle[] = [
+  { x: 84, y: MILLI_GROUND - 22, flip: true, v: 'a' },
+  { x: 110, y: MILLI_GROUND - 12, flip: true, v: 'b', s: 0.75 },
+  { x: 70, y: MILLI_GROUND - 34, flip: true, v: 'c', s: 0.6 },
+  { x: 292, y: MILLI_GROUND - 22, v: 'a' },
+  { x: 266, y: MILLI_GROUND - 12, v: 'b', s: 0.75 },
+  { x: 306, y: MILLI_GROUND - 34, v: 'c', s: 0.6 },
+]
+
+/** Искры тотема: кольцо из 16 искр вокруг центра тела, через одну дальше. */
+export const MILLI_TOTEM: readonly MilliParticle[] = Array.from({ length: 16 }, (_, i) => ({
+  x: MILLI_CX,
+  y: 170,
+  r: i * 22.5 + (i % 2 ? 9 : 0),
+  v: (['a', 'b', 'c'] as const)[i % 3] as 'a' | 'b' | 'c',
+  s: i % 4 === 0 ? 1.25 : 1,
+}))
+
+/** Зелёные искры радости вокруг. */
+export const MILLI_SPARKS: readonly MilliParticle[] = [
+  { x: -56, y: 60, v: 'a' },
+  { x: 420, y: 100, v: 'b' },
+  { x: -40, y: 300, v: 'c', s: 0.75 },
+  { x: 410, y: 330, v: 'a', s: 0.75 },
+  { x: 40, y: -60, v: 'b', s: 0.75 },
+]
+
+export const MILLI_HEARTS: readonly MilliParticle[] = [
+  { x: 40, y: -50, v: 'a' },
+  { x: 300, y: -70, v: 'b', s: 0.8 },
+  { x: 380, y: 40, v: 'c', s: 0.65 },
+]
+
+export const MILLI_NOTES: readonly MilliParticle[] = [
+  { x: -50, y: 100, v: 'a' },
+  { x: 404, y: 70, v: 'b' },
+  { x: 380, y: -40, v: 'c', s: 0.75 },
+]
+
+/** Буквы сна: снизу вверх-вправо, каждая следующая крупнее. */
+export const MILLI_ZZZ: readonly MilliParticle[] = [
+  { x: 330, y: -20, v: 'a', s: 0.7 },
+  { x: 330, y: -20, v: 'b', s: 0.9 },
+  { x: 330, y: -20, v: 'c', s: 1.1 },
+]
+
+/** Тень под ногами (ступенчатая плашка). */
+export const MILLI_SHADOW = `M${MILLI_CX - 80} ${MILLI_GROUND + 2}h160v8h-160zM${MILLI_CX - 64} ${MILLI_GROUND + 10}h128v6h-128z`
+
+/** Шаг слежения: «как давно» считается свежим курсор или ввод. */
+export const MILLI_GAZE_FRESH = 6000

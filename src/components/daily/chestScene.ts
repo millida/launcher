@@ -156,7 +156,45 @@ function beamTexture(): Texture {
   return t
 }
 
+/** Луч из щели: мягкие края по ширине, плавное таяние кверху. */
+function fanTexture(): Texture {
+  const w = 64
+  const h = 256
+  const c = document.createElement('canvas')
+  c.width = w
+  c.height = h
+  const ctx = c.getContext('2d')!
+  const img = ctx.createImageData(w, h)
+  for (let y = 0; y < h; y++) {
+    const v = y / (h - 1) // 0 — верх, 1 — основание
+    const fade = Math.pow(v, 1.7)
+    for (let x = 0; x < w; x++) {
+      const u = (x / (w - 1)) * 2 - 1
+      const edge = Math.pow(Math.max(0, 1 - u * u), 2.2)
+      const a = Math.round(255 * fade * edge)
+      const i = (y * w + x) * 4
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = 255
+      img.data[i + 3] = a
+    }
+  }
+  ctx.putImageData(img, 0, 0)
+  const t = new CanvasTexture(c)
+  t.colorSpace = SRGBColorSpace
+  return t
+}
+
 const SPARKS = 56
+/** Приоткрытие крышки: ~17°, дыхание ±3°. */
+const AJAR = 0.3
+const BREATH = 0.052
+const FAN = [
+  { a: -0.62, w: 5, h: 17, o: 0.5, sp: 0.9, ph: 0.3, core: false },
+  { a: -0.36, w: 6, h: 22, o: 0.75, sp: 1.3, ph: 2.1, core: false },
+  { a: -0.14, w: 4, h: 26, o: 0.9, sp: 1.1, ph: 4.0, core: true },
+  { a: 0.1, w: 7, h: 25, o: 0.85, sp: 0.8, ph: 1.2, core: false },
+  { a: 0.34, w: 5, h: 21, o: 0.7, sp: 1.5, ph: 3.3, core: true },
+  { a: 0.6, w: 5, h: 16, o: 0.5, sp: 1.0, ph: 5.2, core: false },
+]
 const MODEL_SCALE = 15 / 16
 const SHAKE_IDLE_SPEED = 1.8
 const easeOutBack = (t: number) => {
@@ -249,8 +287,35 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
   sparks.instanceMatrix.setUsage(DynamicDrawUsage)
   sparks.frustumCulled = false
   hop.add(sparks)
-  const sp = Array.from({ length: SPARKS }, () => ({ x: 0, y: -999, z: 0, vx: 0, vy: 0, vz: 0, life: 0, max: 1, s: 1 }))
+  const sp = Array.from({ length: SPARKS }, () => ({ x: 0, y: -999, z: 0, vx: 0, vy: 0, vz: 0, life: 0, max: 1, s: 1, g: 42 }))
   const dummy = new Object3D()
+
+  // Свет из щели: веер лучей + пятно света на открытом верху корпуса.
+  const fanTex = fanTexture()
+  const fan = new Group()
+  hop.add(fan)
+  const fanGeo = new PlaneGeometry(1, 1)
+  fanGeo.translate(0, 0.5, 0)
+  const fanBeams = FAN.map((f) => {
+    const mat = new MeshBasicMaterial({ map: fanTex, blending: AdditiveBlending, depthWrite: false, transparent: true, opacity: 0, side: DoubleSide })
+    const m = new Mesh(fanGeo, mat)
+    m.scale.set(f.w, f.h, 1)
+    m.rotation.z = f.a
+    m.renderOrder = 3
+    fan.add(m)
+    return { m, mat, f }
+  })
+  const gapTex = glowTexture()
+  const gapMat = new SpriteMaterial({ map: gapTex, blending: AdditiveBlending, depthWrite: false, transparent: true, opacity: 0 })
+  const gapGlow = new Sprite(gapMat)
+  gapGlow.renderOrder = 4
+  hop.add(gapGlow)
+  const poolMat = new MeshBasicMaterial({ map: gapTex, blending: AdditiveBlending, depthWrite: false, transparent: true, opacity: 0 })
+  const pool = new Mesh(new PlaneGeometry(12.6, 12.6), poolMat)
+  pool.rotation.x = -Math.PI / 2
+  hop.add(pool)
+  let fanK = 0
+  let gapY = 10
 
   let tier = opts.tier
   let mode: ChestMode = opts.mode
@@ -276,6 +341,10 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
     }
     rigModel = opts.look === 'model' ? chestModel(tier) : null
     aim(!!rigModel)
+    gapY = rigModel ? 7.6 : 10
+    fan.position.set(0, gapY + 0.2, 8.5)
+    gapGlow.position.set(0, gapY + 1.2, 8)
+    pool.position.set(0, gapY + 0.08, 0)
     if (rigModel) {
       rig = buildBbRig(rigModel.model)
       // Model front faces -z (north); the scene shows +z to the camera.
@@ -313,6 +382,9 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
     raysMat.color.copy(glowColor)
     beamMat.color.copy(glowColor)
     coreMat.color.set(p.spark)
+    gapMat.color.copy(glowColor)
+    poolMat.color.copy(glowColor)
+    for (const b of fanBeams) b.mat.color.set(b.f.core ? p.spark : p.glow)
     inner.color.copy(glowColor)
     const c1 = new Color(p.glow)
     const c2 = new Color(p.spark)
@@ -325,6 +397,25 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
   // Вид три четверти: видно перед и правый бок, как у предмета в инвентаре.
   chest.rotation.y = -0.5
   chest.position.y = reveal ? 2 : 0
+
+  /** Лёгкие искры, плывущие вверх из щели. */
+  function emitGap(n: number) {
+    let left = n
+    for (const s of sp) {
+      if (left <= 0) break
+      if (s.life > 0) continue
+      s.x = (Math.random() - 0.5) * 11
+      s.z = 3 + Math.random() * 4.5
+      s.y = gapY + 0.6
+      s.vx = (Math.random() - 0.5) * 2.4
+      s.vz = (Math.random() - 0.2) * 1.4
+      s.vy = 6 + Math.random() * 7
+      s.g = 1.2 + Math.random() * 1.6
+      s.max = s.life = 1.7 + Math.random() * 1.2
+      s.s = 0.28 + Math.random() * 0.4
+      left--
+    }
+  }
 
   function emit(n: number, power: number) {
     let left = n
@@ -342,6 +433,7 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
       s.vy = (26 + Math.random() * 30) * power
       s.max = s.life = 0.9 + Math.random() * 0.9
       s.s = 0.6 + Math.random() * 0.9
+      s.g = 42
       left--
     }
   }
@@ -350,6 +442,7 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
   let last = performance.now()
   let dead = false
   let trickle = 0
+  let ambient = 0
 
   function frame(now: number) {
     if (dead) return
@@ -361,9 +454,6 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
       return
     }
     raf = requestAnimationFrame(frame)
-    // Покой и «можно забрать» — 30 кадров хватает (пиксельные ступени), тряска
-    // и открытие — каждый кадр монитора.
-    if (idle && now - last < 32) return
     const dt = Math.min(0.05, (now - last) / 1000)
     last = now
     const t = now / 1000
@@ -443,6 +533,11 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
       }
     }
 
+    // Крышка всегда чуть приоткрыта и «дышит»; в open её ведёт своя кривая.
+    const ajar = mode === 'open' ? 0 : AJAR + (reduced ? 0 : Math.sin(t * 1.4) * BREATH)
+    if (!rigModel) lidTarget -= ajar
+    const fanTarget = mode === 'open' ? 0.3 : mode === 'shake' ? 1.25 : mode === 'ready' ? 1 : 0.62
+    fanK = reduced ? fanTarget : fanK + (fanTarget - fanK) * Math.min(1, dt * 5)
     // Крышка догоняет цель пружиной (при открытии — сразу своей кривой).
     lidAngle = mode === 'open' ? lidTarget : lidAngle + (lidTarget - lidAngle) * Math.min(1, dt * 22)
     if (lidPivot) lidPivot.rotation.x = lidAngle
@@ -450,11 +545,14 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
       if (mode === 'open') rig.pose(rigModel.open, reduced ? Infinity : since)
       else if (reduced || mode === 'closed') rig.pose(null, 0)
       else rig.pose(rigModel.idle, mode === 'shake' ? since * SHAKE_IDLE_SPEED : t)
+      if (rig.lid && mode !== 'open') rig.lid.rotation.x += ajar
     }
     hop.position.set(shakeX, hopY, 0)
     hop.rotation.z = shakeZ
     hop.scale.set(1 + (1 - squash) * 0.6, squash, 1 + (1 - squash) * 0.6)
 
+    const bloom = mode === 'open' ? 0 : fanK * 0.5 * (1 + 0.15 * (reduced ? 0 : Math.sin(t * 1.8)))
+    glowK += bloom
     const gs = Math.min(frameSize * 0.95, 30 + glowK * 12)
     glow.scale.set(gs, gs, 1)
     glowMat.opacity = Math.min(1, glowK * 0.55)
@@ -466,13 +564,34 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
     beam.position.y = core.position.y = 10 + (BEAM_H / 2) * beamK
     inner.intensity = innerK * 900
 
+    // Веер света и пятно в щели; лучи всегда смотрят в камеру.
+    fan.rotation.y = -chest.rotation.y
+    const pulse = reduced ? 0 : Math.sin(t * 1.8)
+    for (const b of fanBeams) {
+      const w = reduced ? 0 : Math.sin(t * b.f.sp + b.f.ph)
+      b.mat.opacity = Math.min(1, fanK * b.f.o * 0.85 * (0.7 + 0.3 * w))
+      b.m.scale.set(b.f.w * (1 + 0.1 * w), b.f.h * (1 + 0.07 * w + 0.03 * pulse), 1)
+      b.m.rotation.z = b.f.a + w * 0.035
+    }
+    const gk = fanK * (0.85 + 0.15 * pulse)
+    gapMat.opacity = Math.min(1, gk * 0.8)
+    gapGlow.scale.set(15 + 3 * gk, 11 + 2 * gk, 1)
+    poolMat.opacity = Math.min(1, gk * 0.9)
+    if (!reduced && mode !== 'open') {
+      ambient += dt * (mode === 'closed' ? 3.5 : mode === 'shake' ? 9 : 6)
+      while (ambient > 1) {
+        emitGap(1)
+        ambient -= 1
+      }
+    }
+
     let alive = false
     for (let i = 0; i < SPARKS; i++) {
       const s = sp[i]!
       if (s.life > 0) {
         alive = true
         s.life -= dt
-        s.vy -= 42 * dt
+        s.vy -= s.g * dt
         s.x += s.vx * dt
         s.y += s.vy * dt
         s.z += s.vz * dt
@@ -544,7 +663,9 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
         m.geometry?.dispose?.()
       })
       rig?.dispose()
-      ;[...owned, glowMat, raysMat, beamMat, coreMat, sparkMat].forEach((m) => {
+      fanTex.dispose()
+      gapTex.dispose()
+      ;[...owned, glowMat, raysMat, beamMat, coreMat, sparkMat, gapMat, poolMat, ...fanBeams.map((b) => b.mat)].forEach((m) => {
         ;(m as MeshBasicMaterial).map?.dispose()
         m.dispose()
       })

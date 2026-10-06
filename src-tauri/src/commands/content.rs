@@ -161,6 +161,9 @@ pub fn active_installs() -> Vec<engine::JobInfo> { engine::active_jobs() }
 pub fn cancel_install(key: String) -> bool { engine::cancel_job(&key) }
 
 #[tauri::command]
+pub fn pause_install(key: String, paused: bool) -> bool { engine::pause_job(&key, paused) }
+
+#[tauri::command]
 pub async fn list_versions() -> Result<Vec<String>, String> {
     engine::list_versions().await
 }

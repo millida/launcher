@@ -26,6 +26,7 @@ export interface InstallProgress {
   msg: string
   done: boolean
   error: string
+  pausable: boolean
 }
 
 export function listenInstallProgress(handler: (p: InstallProgress) => void): Promise<UnlistenFn | null> {

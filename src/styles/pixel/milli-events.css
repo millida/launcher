@@ -1,0 +1,114 @@
+/* ============================================================
+   СОБЫТИЯ СЦЕНЫ МИЛЛИ (04.10.2026): мимо пролетает фантом, пчела,
+   игрок на элитрах с фейерверком, жемчуг Края, попугай, звезда; из-за края
+   выглядывает крипер, падает курица; редко — дракон Края.
+   src/components/milli/MilliEvents.tsx, данные — milliEvents.ts.
+   Траектория = два слоя на всю сцену: .mev-x едет по X, .mev-y — по Y
+   (проценты translate = доли сцены), спрайт сидит в их углу. Только
+   transform/opacity; движение шагами (steps), кадры крыльев — steps(1).
+   ============================================================ */
+
+.mev { position: absolute; top: 0; right: 0; bottom: 0; left: 0; overflow: hidden; pointer-events: none; }
+.mev-ev, .mev-x, .mev-y { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+.mev-x { animation-fill-mode: both; }
+.mev-y { animation-fill-mode: both; }
+.mev-s { position: absolute; top: 0; left: 0; }
+.mev-s svg { position: absolute; top: 0; left: 0; display: block; }
+.mev-f2 { opacity: 0; }
+.mev-flap .mev-f1 { animation: mev-f1 0.3s steps(1, end) infinite; }
+.mev-flap .mev-f2 { animation: mev-f2 0.3s steps(1, end) infinite; }
+@keyframes mev-f1 { 0% { opacity: 1; } 50% { opacity: 0; } }
+@keyframes mev-f2 { 0% { opacity: 0; } 50% { opacity: 1; } }
+.mev i { position: absolute; display: block; width: 3px; height: 3px; opacity: 0; }
+
+/* фантом: слева направо, планирует волной */
+.mev-phantom .mev-x { animation: mev-ltr 4.2s steps(84, end); }
+.mev-phantom .mev-y { animation: mev-phantom-y 4.2s steps(12, end); }
+.mev-phantom .mev-f1, .mev-phantom .mev-f2 { animation-duration: 0.5s; }
+@keyframes mev-ltr { 0% { transform: translateX(-12%); } 100% { transform: translateX(112%); } }
+@keyframes mev-rtl { 0% { transform: translateX(112%); } 100% { transform: translateX(-12%); } }
+@keyframes mev-phantom-y { 0% { transform: translateY(16%); } 35% { transform: translateY(26%); } 70% { transform: translateY(12%); } 100% { transform: translateY(20%); } }
+
+/* пчела: справа налево, жужжит зигзагом */
+.mev-bee .mev-x { animation: mev-rtl 3.6s steps(72, end); }
+.mev-bee .mev-y { animation: mev-bee-y 3.6s steps(4, end); }
+.mev-bee .mev-f1, .mev-bee .mev-f2 { animation-duration: 0.1s; }
+@keyframes mev-bee-y {
+  0% { transform: translateY(36%); } 12% { transform: translateY(30%); } 25% { transform: translateY(38%); } 37% { transform: translateY(31%); }
+  50% { transform: translateY(40%); } 62% { transform: translateY(33%); } 75% { transform: translateY(26%); } 87% { transform: translateY(32%); } 100% { transform: translateY(24%); }
+}
+
+/* элитры: снизу-слева вверх-вправо, за ним — искры фейерверка */
+.mev-elytra .mev-x { animation: mev-elytra-x 2.6s steps(52, end); }
+.mev-elytra .mev-y { animation: mev-elytra-y 2.6s steps(52, end); }
+.mev-elytra .mev-f1, .mev-elytra .mev-f2 { animation-duration: 0.24s; }
+@keyframes mev-elytra-x { 0% { transform: translateX(-15%); } 100% { transform: translateX(115%); } }
+@keyframes mev-elytra-y { 0% { transform: translateY(72%); } 100% { transform: translateY(4%); } }
+.mev-elytra i { animation: mev-spark 0.36s steps(1, end) infinite; }
+.mev-elytra i:nth-child(3n) { background: #ffd94a; }
+.mev-elytra i:nth-child(3n + 1) { background: #ffffff; }
+.mev-elytra i:nth-child(3n + 2) { background: #ff6a3a; }
+@keyframes mev-spark { 0% { opacity: 1; } 34% { opacity: 0.2; } 67% { opacity: 0.8; } }
+
+/* жемчуг Края: дуга, в конце — фиолетовая вспышка телепорта */
+.mev-pearl .mev-x { animation: mev-pearl-x 2.2s steps(40, end); }
+.mev-pearl .mev-y { animation: mev-pearl-y 2.2s steps(4, end); }
+.mev-pearl .mev-f1 { animation: mev-pearl-a 2.2s steps(1, end) both; }
+.mev-pearl .mev-f2 { animation: mev-pearl-b 2.2s steps(1, end) both; }
+@keyframes mev-pearl-x { 0% { transform: translateX(10%); } 85% { transform: translateX(80%); } 100% { transform: translateX(80%); } }
+@keyframes mev-pearl-y {
+  0% { transform: translateY(72%); } 10% { transform: translateY(46%); } 20% { transform: translateY(28%); } 30% { transform: translateY(17%); }
+  42% { transform: translateY(12%); } 55% { transform: translateY(17%); } 65% { transform: translateY(28%); } 75% { transform: translateY(46%); } 85% { transform: translateY(68%); } 100% { transform: translateY(68%); }
+}
+@keyframes mev-pearl-a { 0% { opacity: 1; } 85% { opacity: 0; } }
+@keyframes mev-pearl-b { 0% { opacity: 0; } 85% { opacity: 1; } 92% { opacity: 0.5; } 98% { opacity: 0; } }
+
+/* попугай: слева направо, взмахами вверх-вниз */
+.mev-parrot .mev-x { animation: mev-ltr 3.8s steps(76, end); }
+.mev-parrot .mev-y { animation: mev-parrot-y 3.8s steps(10, end); }
+.mev-parrot .mev-f1, .mev-parrot .mev-f2 { animation-duration: 0.26s; }
+@keyframes mev-parrot-y { 0% { transform: translateY(22%); } 25% { transform: translateY(32%); } 50% { transform: translateY(20%); } 75% { transform: translateY(30%); } 100% { transform: translateY(24%); } }
+
+/* падающая звезда: наискосок, быстро, гаснет */
+.mev-star .mev-x { animation: mev-star-x 1.5s steps(30, end); }
+.mev-star .mev-y { animation: mev-star-y 1.5s steps(30, end); }
+.mev-star .mev-s { transform: rotate(22deg); }
+.mev-star .mev-f1 { animation: mev-star-a 1.5s steps(1, end) both; }
+@keyframes mev-star-x { 0% { transform: translateX(-8%); } 100% { transform: translateX(78%); } }
+@keyframes mev-star-y { 0% { transform: translateY(2%); } 100% { transform: translateY(44%); } }
+@keyframes mev-star-a { 0% { opacity: 1; } 80% { opacity: 0.6; } 90% { opacity: 0.3; } 97% { opacity: 0; } }
+
+/* крипер: выглядывает снизу справа, шипит (мигает белым) и прячется */
+.mev-creeper .mev-x { transform: translateX(86%); }
+.mev-creeper .mev-y { animation: mev-creeper-y 4.4s steps(1, end) both; }
+.mev-creeper .mev-f1 { animation: mev-creeper-a 4.4s steps(1, end) both; }
+.mev-creeper .mev-f2 { animation: mev-creeper-b 4.4s steps(1, end) both; }
+@keyframes mev-creeper-y {
+  0% { transform: translateY(120%); } 4% { transform: translateY(104%); } 8% { transform: translateY(92%); } 12% { transform: translateY(82%); } 16% { transform: translateY(78%); }
+  60% { transform: translateY(78%); } 64% { transform: translateY(84%); } 68% { transform: translateY(96%); } 72% { transform: translateY(120%); }
+}
+@keyframes mev-creeper-a { 0% { opacity: 1; } 40% { opacity: 0; } 43% { opacity: 1; } 46% { opacity: 0; } 49% { opacity: 1; } 52% { opacity: 0; } 55% { opacity: 1; } }
+@keyframes mev-creeper-b { 0% { opacity: 0; } 40% { opacity: 1; } 43% { opacity: 0; } 46% { opacity: 1; } 49% { opacity: 0; } 52% { opacity: 1; } 55% { opacity: 0; } }
+
+/* курица: падает, хлопая крыльями и теряя перья, приземляется и уходит */
+.mev-chicken .mev-x { animation: mev-chicken-x 3.8s steps(30, end); }
+.mev-chicken .mev-y { animation: mev-chicken-y 3.8s steps(24, end); }
+.mev-chicken .mev-f1, .mev-chicken .mev-f2 { animation-duration: 0.18s; }
+.mev-chicken i { background: #f4f4f0; animation: mev-feather 3.8s steps(1, end) both; }
+.mev-chicken i:nth-child(2n) { animation-name: mev-feather2; }
+@keyframes mev-chicken-x { 0% { transform: translateX(26%); } 55% { transform: translateX(26%); } 100% { transform: translateX(-12%); } }
+@keyframes mev-chicken-y { 0% { transform: translateY(-14%); } 55% { transform: translateY(76%); } 100% { transform: translateY(76%); } }
+@keyframes mev-feather { 0% { opacity: 1; transform: translate(0, 0); } 20% { opacity: 1; transform: translate(-3px, -6px); } 40% { opacity: 0.6; transform: translate(3px, -12px); } 55% { opacity: 1; transform: translate(-9px, 0); } 70% { opacity: 0; } }
+@keyframes mev-feather2 { 0% { opacity: 0; } 15% { opacity: 1; transform: translate(0, 0); } 35% { opacity: 1; transform: translate(4px, -8px); } 55% { opacity: 1; transform: translate(9px, 0); } 70% { opacity: 0; } }
+
+/* редкое: дракон Края далеко в небе, медленно, с фиолетовыми искрами */
+.mev-dragon .mev-x { animation: mev-dragon-x 5.6s steps(112, end); }
+.mev-dragon .mev-y { animation: mev-dragon-y 5.6s steps(14, end); }
+.mev-dragon .mev-f1, .mev-dragon .mev-f2 { animation-duration: 0.6s; }
+.mev-dragon .mev-s { opacity: 0.9; }
+.mev-dragon i { background: #c25cff; animation: mev-spark 0.5s steps(1, end) infinite; }
+@keyframes mev-dragon-x { 0% { transform: translateX(-24%); } 100% { transform: translateX(124%); } }
+@keyframes mev-dragon-y { 0% { transform: translateY(12%); } 50% { transform: translateY(6%); } 100% { transform: translateY(14%); } }
+
+.mev.is-paused *, .mev.is-paused { animation-play-state: paused !important; }
+@media (prefers-reduced-motion: reduce) { .mev { display: none; } }

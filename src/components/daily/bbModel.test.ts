@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { clipTime, parseBbModel, sampleTrack, type BbClip, type BbKeyframe } from './bbModel'
 
-const CHESTS = ['copper', 'diamond', 'obsidian']
+const CHESTS = ['copper', 'diamond', 'obsidian', 'netherite']
 const read = (name: string) => Bun.file(new URL('./chests/' + name + '.bbmodel', import.meta.url)).text()
 
 const key = (time: number, x: number, interpolation: BbKeyframe['interpolation'] = 'linear'): BbKeyframe => ({ time, value: [x, 0, 0], interpolation })

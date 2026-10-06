@@ -1,0 +1,181 @@
+/* Вкладка «Моды» в карточке сборки (FE-list, DESIGN.md §2.4): виртуальный
+   список в теле карточки ~408px. Высоты строк фиксированы (группа 32 /
+   мод 44 / библиотека 36 / сироты 44) — длинное обрезается «…», полное — в
+   подсказке. Анимации — milli-motion.css; здесь только статика (+ старые
+   fly/flash до переезда к моушну). */
+
+.mbl {
+  position: relative; display: flex; flex-direction: column; gap: 6px; flex: 1 1 auto; min-height: 0; height: 100%; min-width: 0;
+  color: var(--m-fg); font-family: var(--m-font);
+}
+
+/* ── панель: поиск + группировка, ниже чипы-фильтры ─────────────────── */
+.mbl-bar { flex: none; display: flex; align-items: center; gap: 6px; min-width: 0; padding-right: 2px; }
+.mbl-search { position: relative; flex: 1 1 auto; min-width: 0; display: flex; align-items: center; }
+.mbl-search > .px-icon { position: absolute; z-index: 1; left: 9px; width: 12px; height: 12px; color: var(--m-fg-subtle); pointer-events: none; }
+:root:root .mbl-search .input, :root:root .mbl-search input.input {
+  width: 100%; height: 28px; padding: 0 8px 0 28px; gap: 6px; font: 600 12.5px/1 var(--m-font); color: var(--m-fg);
+  background-color: var(--m-bg); --px-n: 4px; clip-path: var(--px-4);
+}
+.mbl-search input::placeholder { color: var(--m-fg-faint); }
+.mbl-search input::-webkit-search-cancel-button { cursor: pointer; }
+
+.segs.mbl-groups { flex: none; flex-wrap: nowrap; gap: 0; padding: 2px; background-color: var(--m-bg); --px-n: 4px; clip-path: var(--px-4); }
+:root:root .mbl-groups .seg {
+  height: 24px; padding: 0 8px 1px; font-size: 11.5px; font-weight: 700; background: transparent;
+  --px-n: 3px; clip-path: var(--px-4);
+}
+:root:root .mbl-groups .seg:hover { background: var(--m-surface); }
+:root:root .mbl-groups .seg.on { color: var(--m-fg); background: var(--m-surface-2); box-shadow: inset 0 -2px 0 var(--m-accent); }
+
+.segs.mbl-filters {
+  flex: none; flex-wrap: nowrap; gap: 4px; min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; padding-right: 2px;
+}
+.segs.mbl-filters::-webkit-scrollbar { display: none; }
+.segs.mbl-filters { -webkit-mask: linear-gradient(90deg, #000 calc(100% - 18px), transparent); mask: linear-gradient(90deg, #000 calc(100% - 18px), transparent); padding-right: 18px; }
+:root:root .mbl-filters .seg {
+  flex: none; height: 24px; padding: 0 8px 1px; gap: 5px; font-size: 11.5px; font-weight: 700;
+  --px-n: 3px; clip-path: var(--px-4);
+}
+:root:root .mbl-filters .seg.on { color: var(--m-fg); background: var(--m-accent-soft); box-shadow: inset 0 -2px 0 var(--m-accent); }
+.mbl-chip i { font: 700 10.5px/1 'Monocraft', var(--m-mono); font-style: normal; color: var(--m-fg-faint); font-variant-numeric: tabular-nums; }
+.mbl-chip.on i { color: var(--m-accent); }
+.mbl-chip.warn { color: var(--m-warning); }
+.mbl-chip.warn i { color: var(--m-warning); }
+.mbl-chip:disabled { opacity: 0.4; cursor: default; }
+
+/* ── скроллер ───────────────────────────────────────────────────────── */
+.vl { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; contain: strict; }
+.vl-in { position: relative; width: 100%; }
+.vl-row { position: absolute; left: 0; right: 0; top: 0; contain: layout paint; outline: 0; }
+.vl-row:focus-visible > * { outline: 2px solid var(--m-accent); outline-offset: -2px; }
+
+/* ── заголовок группы (32) ───────────────────────────────────────────── */
+.mbl-group {
+  height: 100%; display: flex; align-items: flex-end; gap: 6px; padding: 0 6px 6px;
+  box-shadow: inset 0 -1px 0 var(--m-border);
+}
+.mbl-gbtn {
+  flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px;
+  background: none; border: 0; padding: 0; color: var(--m-fg-subtle); font: 800 10.5px/1 var(--m-font);
+  letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; text-align: left;
+}
+.mbl-gbtn:hover { color: var(--m-fg); }
+.mbl-gbtn .px-icon { width: 8px; height: 8px; flex: none; color: var(--m-fg-faint); }
+.mbl-gbtn b { min-width: 0; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mbl-gbtn i { flex: none; font: 700 10.5px/1 'Monocraft', var(--m-mono); font-style: normal; letter-spacing: 0; color: var(--m-fg-faint); font-variant-numeric: tabular-nums; }
+.mbl-group.shut .mbl-gbtn { color: var(--m-fg-faint); }
+:root:root .mbl-gsel { width: 14px; height: 14px; }
+
+/* ── строка мода (44) / библиотеки (36) / призрака (44) ──────────────── */
+.mbl-row {
+  position: relative; height: 100%; display: flex; align-items: center; gap: 9px; padding: 0 8px 0 4px;
+  cursor: pointer; user-select: none;
+  --px-n: 3px; clip-path: var(--px-4);
+}
+.mbl-row:hover, .mbl-row.sel { background: var(--m-surface); }
+.mbl-row.sel { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--m-accent) 40%, transparent); }
+.mbl-row:hover .mpc-slot::after { opacity: 0.14; }
+.mbl-row .mpc-slot { width: 34px; height: 34px; }
+.mbl-row .mpc-slot img { width: 26px; height: 26px; }
+.mbl-row.k-lib .mpc-slot { width: 26px; height: 26px; box-shadow: inset 2px 2px 0 #0b0b0c, inset -2px -2px 0 #34353a; }
+.mbl-row.k-lib .mpc-slot img { width: 18px; height: 18px; }
+.mbl-row.branch { padding-left: 24px; }
+.mbl-branch {
+  position: absolute; left: 13px; top: 0; width: 8px; height: 50%;
+  border-left: 2px solid var(--m-border-strong); border-bottom: 2px solid var(--m-border-strong);
+}
+
+/* выбор: чекбокс поверх слота — появляется по наведению и пока что-то выбрано, строка не сдвигается */
+:root:root .mbl-sel {
+  position: absolute; z-index: 2; left: 1px; top: 3px; width: 14px; height: 14px; flex: none;
+  opacity: 0; transition: opacity var(--m-t-fast);
+  box-shadow: 0 0 0 2px var(--m-bg);
+}
+:root:root .mpc-slot > .mbl-sel { left: -3px; top: -3px; }
+.mbl-row:hover .mbl-sel, .mbl.is-selecting .mbl-sel, .mbl-sel.on { opacity: 1; }
+.mbl-row.branch .mbl-sel, .mbl-row.k-ghost .mbl-sel { display: none; }
+
+.mbl-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.mbl-name { display: flex; align-items: center; gap: 5px; min-width: 0; font: 650 13px/1.1 var(--m-font); }
+.mbl-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mbl-row.k-lib .mbl-name { font-size: 12px; font-weight: 600; color: var(--m-fg-muted); }
+.mbl-sub { display: flex; align-items: center; gap: 6px; min-width: 0; font: 500 11.5px/1.1 var(--m-font); color: var(--m-fg-subtle); white-space: nowrap; overflow: hidden; }
+.mbl-row.k-lib .mbl-sub { font-size: 10.5px; }
+.mbl-why { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mbl-why.warn { color: var(--m-warning); }
+.mbl-ver, .mbl-slug, .mbl-side { font-size: 10.5px; }
+.mbl-ver { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; font-family: var(--m-mono); color: var(--m-fg-muted); }
+.mbl-slug {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0; border: 0; background: none;
+  font-family: var(--m-mono); color: var(--m-fg-subtle); cursor: copy;
+}
+.mbl-slug:hover { color: var(--m-accent); }
+.mbl-side { flex: none; color: var(--m-fg-faint); }
+
+.mbl-tag {
+  flex: none; height: 14px; padding: 0 4px 1px; display: inline-grid; place-items: center;
+  font: 800 9px/1 var(--m-font); font-style: normal; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--m-fg-muted); background: var(--m-surface-2); border: 0;
+}
+.mbl-tag.add { color: var(--m-success); background: color-mix(in srgb, var(--m-success) 15%, transparent); }
+.mbl-tag.chg { color: var(--m-warning); background: color-mix(in srgb, var(--m-warning) 15%, transparent); }
+.mbl-tag.ru { color: var(--m-info); background: var(--m-info-soft); }
+.mbl-tag.en { cursor: pointer; }
+.mbl-tag.en.on, .mbl-tag.en:hover { color: var(--m-fg); background: color-mix(in srgb, var(--m-fg) 14%, transparent); }
+
+.mbl-row .mpc-box { width: 16px; height: 16px; }
+.mbl-box { cursor: pointer; background: var(--m-accent); outline-color: var(--m-accent); }
+.mbl-box:hover { background: var(--m-accent-hover); outline-color: var(--m-accent-hover); }
+.mbl-row .mpc-need { margin-right: 1px; font-size: 10px; }
+
+/* ── дифф: + зелёная планка, ~ жёлтая, − призрак ────────────────────── */
+.mbl-row.m-add::before, .mbl-row.m-chg::before, .mbl-row.k-ghost::before {
+  content: ''; position: absolute; left: 0; top: 5px; bottom: 5px; width: 3px; background: var(--m-success);
+}
+.mbl-row.m-add { background: color-mix(in srgb, var(--m-success) 7%, transparent); }
+.mbl-row.m-add:hover { background: color-mix(in srgb, var(--m-success) 12%, var(--m-surface)); }
+.mbl-row.m-chg::before { background: var(--m-warning); }
+/* вернулся после «Отменить/Вернуть» — нейтрально, не «новый» */
+.mbl-row.m-back::before { content: ''; position: absolute; left: 0; top: 5px; bottom: 5px; width: 3px; background: var(--m-fg-faint); }
+.mbl-tag.back { color: var(--m-fg-muted); background: color-mix(in srgb, var(--m-fg) 10%, transparent); }
+.mbl-row.k-ghost::before { background: var(--m-danger); }
+.mbl-row.k-ghost { cursor: default; }
+.mbl-row.k-ghost .mbl-t { color: var(--m-fg-faint); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--m-fg) 35%, transparent); }
+.mbl-row.k-ghost .mbl-sub { color: color-mix(in srgb, var(--m-danger) 70%, var(--m-fg-subtle)); }
+.mbl-row.k-ghost .mpc-slot img, .mbl-row.k-ghost .mpc-slot svg { filter: grayscale(1); opacity: 0.45; }
+:root:root .mbl .mbl-back { flex: none; height: 24px; padding: 0 9px 2px; font-size: 11.5px; gap: 5px; }
+
+/* «Показать» (.flash) и влёт строк (.fly) — milli-motion.css (моушн). ::after строки занят вспышкой. */
+
+/* ── плашка сирот (44): «2 библиотеки больше не нужны [Убрать] ×» ───── */
+.mbl-orphans {
+  height: calc(100% - 4px); margin-top: 2px; display: flex; align-items: center; gap: 8px; padding: 0 4px 0 10px;
+  background: var(--m-warning-soft); box-shadow: inset 3px 0 0 var(--m-warning); color: var(--m-fg);
+  font: 700 12px/1.15 var(--m-font);
+  --px-n: 4px; clip-path: var(--px-4);
+}
+.mbl-orphans > .px-icon { flex: none; width: 12px; height: 12px; color: var(--m-warning); }
+.mbl-orphans > span { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mbl-orphans > span i { font-style: normal; font-weight: 500; font-size: 10.5px; color: var(--m-fg-subtle); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+:root:root .mbl-orphans .btn.sm { flex: none; height: 26px; padding: 0 10px 2px; font-size: 12px; }
+.mbl-orphans .mpc-x { width: 24px; height: 24px; }
+
+/* ── пусто ──────────────────────────────────────────────────────────── */
+.mbl-empty {
+  flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  min-height: 140px; padding: 16px; text-align: center; color: var(--m-fg-muted); font: 700 13px/1.35 var(--m-font);
+}
+:root:root .mbl-empty .btn.sm { height: 30px; padding: 0 12px 3px; font-size: 12.5px; }
+
+/* ── массовые действия: поверх списка, внизу тела карточки ──────────── */
+:root:root .mbl .mbl-bulk {
+  position: absolute; left: 50%; bottom: 6px; min-width: 0; width: max-content; max-width: calc(100% - 12px);
+  height: auto; padding: 4px 4px 4px 10px; gap: 4px;
+}
+.mbl .mbl-bulk b { font: 700 12px/1 var(--m-font); margin-right: 2px; white-space: nowrap; }
+:root:root .mbl .mbl-bulk .btn.sm { height: 28px; padding: 0 9px 2px; font-size: 12px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mbl-sel { transition: none; }
+}

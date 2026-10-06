@@ -8,6 +8,9 @@ import { showReward } from './reward/rewardBus'
 import { track } from '../lib/telemetry'
 import { FEEDBACK_WEEK_MS, rewardOpensAt, rewardReady } from '../lib/feedbackReward'
 import { getMillidaAccount } from '../state/accounts'
+import { hasTauri } from '../ipc/tauri'
+import { openUrl } from '../ipc/commands'
+import { PxIcon } from './PxIcon'
 import '../styles/pixel/feedback.css'
 
 /**
@@ -20,6 +23,10 @@ import '../styles/pixel/feedback.css'
  */
 
 type Mode = 'pick' | 'rate' | 'bug'
+
+const GITHUB_REPO_URL = 'https://github.com/millida/launcher'
+
+const openGithub = () => (hasTauri() ? openUrl(GITHUB_REPO_URL) : window.open(GITHUB_REPO_URL, '_blank'))
 
 const BUG_KINDS: [string, string][] = [
   ['crash', 'Вылет'],
@@ -209,6 +216,10 @@ export function FeedbackModal({ onClose, about, kind: startKind }: { onClose: ()
               <button className="fb-opt bug" data-sound="open" data-track="feedback_bug" onClick={() => setMode('bug')}>
                 <BugPx size={40} />
                 <b>Нашёл баг</b>
+              </button>
+              <button className="fb-opt gh" data-track="feedback_github" onClick={openGithub}>
+                <PxIcon name="star" size={40} />
+                <b>Звезда на GitHub</b>
               </button>
             </div>
           </>

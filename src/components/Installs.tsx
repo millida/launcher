@@ -1,5 +1,6 @@
 import { Icon } from './Icon'
-import { stopInstall, useInstalls } from '../state/installs'
+import { PauseInstall } from './PauseInstall'
+import { runningMsg, stopInstall, useInstalls } from '../state/installs'
 import { useUi } from '../state/ui'
 
 export function Installs({ inLobby = false }: { inLobby?: boolean }) {
@@ -15,7 +16,7 @@ export function Installs({ inLobby = false }: { inLobby?: boolean }) {
           <div className="inst-body">
             <div className="inst-name">{t.title || 'Установка'}</div>
             <div className="inst-msg">
-              {t.state === 'error' ? t.msg : t.state === 'done' ? 'Готово' : t.msg || 'Готовим…'}
+              {t.state === 'error' ? t.msg : t.state === 'done' ? 'Готово' : runningMsg(t, t.msg || 'Готовим…')}
             </div>
             {t.state === 'run' ? (
               <div className="inst-bar">
@@ -23,6 +24,7 @@ export function Installs({ inLobby = false }: { inLobby?: boolean }) {
               </div>
             ) : null}
           </div>
+          <PauseInstall task={t} className="inst-stop" />
           {t.state === 'run' ? (
             <button className="inst-stop" aria-label="Отменить установку" onClick={() => stopInstall(t.key)}>
               <Icon id="i-x" />

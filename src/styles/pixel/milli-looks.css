@@ -1,0 +1,249 @@
+/* Вкладки «Шейдеры» и «Ресурс-паки» в карточке сборки — витрина картинками.
+   Игроку 12–14: картинки, огоньки, цвет, подписи в 1–2 слова; техника — только
+   с «Для моддеров». Контролы — токены лаунчера (--m-*), Minecraft — в иконках,
+   пиксельном срезе углов и steps-анимациях. Движение — только transform/opacity. */
+
+.lk { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+
+/* ── картинка-превью ───────────────────────────────────────── */
+.lk-pic {
+  position: relative; display: block; overflow: hidden; flex: none;
+  background: linear-gradient(160deg, #2b3a2a, #17201a 60%, #101412);
+}
+.lk-pic > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.lk-pic > img.lk-pic-main { opacity: 0; transform: scale(1.04); transition: opacity 220ms var(--m-ease-out), transform 360ms var(--m-ease-out); }
+.lk-pic > img.lk-pic-main.is-in { opacity: 1; transform: none; }
+.lk-pic-blur { filter: blur(14px) saturate(1.3) brightness(0.7); transform: scale(1.4); }
+.lk-pic > img.lk-pic-ico { inset: 50% auto auto 50%; width: auto; height: 62%; aspect-ratio: 1; transform: translate(-50%, -50%); object-fit: contain; image-rendering: pixelated; box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35); }
+.lk-pic-px { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); image-rendering: pixelated; opacity: 0.8; }
+
+/* ── FPS-индикатор ─────────────────────────────────────────── */
+.lk-fps {
+  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 7px 0 6px;
+  font: 800 10.5px/1 'Monocraft', var(--m-mono); letter-spacing: 0.02em; color: #fff;
+  background: rgba(10, 11, 12, 0.72); --px-n: 3px; clip-path: var(--px-4);
+}
+.lk-fps-bars { display: inline-flex; align-items: flex-end; gap: 2px; height: 11px; }
+.lk-fps-bars i { width: 3px; background: rgba(255, 255, 255, 0.22); }
+.lk-fps-bars i:nth-child(1) { height: 5px; }
+.lk-fps-bars i:nth-child(2) { height: 8px; }
+.lk-fps-bars i:nth-child(3) { height: 11px; }
+.lk-fps.fit-good { --fit: var(--m-success); }
+.lk-fps.fit-mid { --fit: var(--m-warning); }
+.lk-fps.fit-bad { --fit: var(--m-danger); }
+.lk-fps .lk-fps-bars i.on { background: var(--fit); }
+.lk-fps b { color: var(--fit); font-weight: 800; }
+
+/* ── шейдеры: уровни-огоньки ──────────────────────────────── */
+.lk-levels { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+.lk-level {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  height: 54px; padding: 0 2px 3px; border: 0; cursor: pointer; color: var(--m-fg-muted);
+  font: 750 12px/1 var(--m-font); background: var(--m-surface); --px-n: 4px; clip-path: var(--px-4);
+}
+.lk-level:hover { background: var(--m-surface-2); color: var(--m-fg); }
+.lk-level:focus-visible { outline: 2px solid var(--m-accent); outline-offset: -2px; }
+.lk-level.on { color: var(--m-fg); background: color-mix(in srgb, var(--m-accent) 16%, var(--m-surface)); }
+.lk-level-ic { display: inline-flex; align-items: flex-end; gap: 1px; height: 16px; }
+.lk-level-ic svg { image-rendering: pixelated; }
+.lk-level:not(.on) .lk-flame { filter: saturate(0.35) brightness(0.8); }
+.lk-level-t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+/* полоска «потянет ли ПК» */
+.lk-level-fit { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--fit); opacity: 0.55; }
+.lk-level.fit-good { --fit: var(--m-success); }
+.lk-level.fit-mid { --fit: var(--m-warning); }
+.lk-level.fit-bad { --fit: var(--m-danger); }
+.lk-level.lv-off .lk-level-fit { opacity: 0; }
+.lk-level.on .lk-level-fit { opacity: 1; }
+.lk-level.on .lk-flame { animation: lk-flick 900ms steps(2, end) infinite; transform-origin: 50% 100%; }
+.lk-level.on .lk-flame:nth-child(2) { animation-delay: -300ms; }
+.lk-level.on .lk-flame:nth-child(3) { animation-delay: -600ms; }
+@keyframes lk-flick { 0%, 100% { transform: none; } 50% { transform: scaleY(0.86) translateY(1px); } }
+
+/* ── шейдеры: большая картинка ────────────────────────────── */
+.lk-hero {
+  position: relative; display: block; aspect-ratio: 2 / 1; min-height: 150px; overflow: hidden;
+  background: var(--m-inset); --px-n: 6px; clip-path: var(--px-4);
+  animation: lk-in 220ms var(--m-ease-out) backwards;
+}
+.lk-hero-pic { position: absolute; inset: 0; }
+.lk-hero::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.35) 0%, transparent 26%, transparent 52%, rgba(0, 0, 0, 0.78) 100%);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.06);
+}
+.lk-hero-top { position: absolute; z-index: 1; top: 8px; left: 8px; right: 8px; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.lk-hero-top > :only-child { margin-left: auto; }
+.lk-chip {
+  display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px 0 4px;
+  font: 800 11px/1 var(--m-font); color: #fff; background: rgba(10, 11, 12, 0.72); cursor: help;
+  --px-n: 3px; clip-path: var(--px-4);
+}
+.lk-chip svg { width: 14px; height: 14px; image-rendering: pixelated; }
+.lk-hero-foot { position: absolute; z-index: 1; left: 10px; right: 10px; bottom: 8px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.lk-hero-t {
+  font: 900 17px/1.15 var(--m-font); color: #fff; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.6);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.lk-hero-mod { display: flex; flex-wrap: wrap; gap: 4px; }
+.lk-hero-mod .bt-badge.mono { color: rgba(255, 255, 255, 0.75); background: rgba(10, 11, 12, 0.7); }
+.lk-hero.is-off { background: radial-gradient(120% 90% at 50% 110%, #2a1d14 0%, #121314 60%); }
+.lk-hero.is-off::after { background: none; }
+.lk-hero-off { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--m-fg-muted); font: 850 15px/1 var(--m-font); }
+.lk-hero-off svg { image-rendering: pixelated; }
+@keyframes lk-in { from { opacity: 0; transform: scale(0.985); } to { opacity: 1; transform: none; } }
+
+/* ── шейдеры: быстрая замена ──────────────────────────────── */
+.lk-swap { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+.lk-swap-it {
+  position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 3px 3px 5px;
+  border: 0; cursor: pointer; color: var(--m-fg-muted); background: var(--m-surface); text-align: left;
+  --px-n: 4px; clip-path: var(--px-4);
+}
+.lk-swap-it:hover { background: var(--m-surface-2); color: var(--m-fg); }
+.lk-swap-it:focus-visible { outline: 2px solid var(--m-accent); outline-offset: -2px; }
+.lk-swap-pic { width: 100%; aspect-ratio: 16 / 10; --px-n: 3px; clip-path: var(--px-4); }
+.lk-swap-t { padding: 0 2px; font: 750 11px/1.15 var(--m-font); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lk-swap-it.on { color: var(--m-fg); background: var(--m-accent); box-shadow: none; }
+.lk-swap-it.on .lk-swap-t { color: var(--m-accent-fg); font-weight: 850; }
+.lk-swap-it.on .lk-swap-pic { animation: lk-pop 200ms steps(3, end); }
+@keyframes lk-pop { 0% { transform: scale(0.92); } 60% { transform: scale(1.03); } 100% { transform: none; } }
+
+/* ── ресурс-паки: стили-картинки ──────────────────────────── */
+.lk-styles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; min-width: 0; }
+.lk-style {
+  position: relative; min-width: 0; height: 64px; padding: 0; border: 0; cursor: pointer; overflow: hidden;
+  background: var(--m-surface); scroll-snap-align: start; --px-n: 4px; clip-path: var(--px-4);
+}
+.lk-style-pic { position: absolute; inset: 0; }
+.lk-style::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 35%, rgba(0, 0, 0, 0.8) 100%); pointer-events: none; }
+.lk-style-t {
+  position: absolute; z-index: 1; left: 0; right: 0; bottom: 5px; text-align: center;
+  font: 850 11.5px/1 var(--m-font); color: #fff; text-shadow: 0 1px 0 rgba(0, 0, 0, 0.7); white-space: nowrap;
+}
+.lk-style:hover .lk-style-pic > img.is-in { transform: scale(1.06); }
+.lk-style:focus-visible { outline: 2px solid var(--m-accent); outline-offset: -2px; }
+.lk-style.on { box-shadow: inset 0 0 0 3px var(--m-accent); }
+.lk-style.on::after { background: linear-gradient(180deg, transparent 30%, color-mix(in srgb, var(--m-accent) 55%, #000) 100%); }
+.lk-style.on .lk-style-t { color: #fff; }
+.lk-style:not(.on) .lk-style-pic { filter: saturate(0.85); }
+
+:root:root .lk .lk-mode { align-self: flex-start; }
+
+/* ── ресурс-паки: список с порядком ───────────────────────── */
+.lk-cap { display: flex; align-items: center; justify-content: space-between; margin-top: 2px; font: 800 10.5px/1 var(--m-font); letter-spacing: 0.06em; text-transform: uppercase; color: var(--m-fg-subtle); }
+.lk-cap-tip { display: inline-flex; align-items: center; gap: 4px; text-transform: none; letter-spacing: 0; font-weight: 700; font-size: 11px; color: var(--m-fg-faint); cursor: help; }
+.lk-cap-tip i { font-style: normal; font-size: 8px; color: var(--m-accent); }
+
+.lk-list { position: relative; display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.lk-row {
+  position: relative; display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 4px 0 6px; min-width: 0;
+  background: var(--m-surface); --px-n: 4px; clip-path: var(--px-4);
+  transition: transform 160ms var(--m-ease-move), background-color var(--m-t-fast);
+  animation: mlm-pop 200ms steps(2, end) backwards;
+}
+.lk-row:hover { background: var(--m-surface-2); }
+.lk-row.is-top { box-shadow: inset 3px 0 0 var(--m-accent); }
+.lk-list.is-drag .lk-row { transition: transform 160ms var(--m-ease-move); }
+.lk-list.is-drag .lk-row.is-held { transition: none; background: var(--m-surface-2); box-shadow: inset 0 0 0 2px var(--m-accent), 0 6px 0 rgba(0, 0, 0, 0.35); }
+.lk-grip { display: flex; align-items: center; gap: 6px; flex: none; touch-action: none; }
+.lk-grip.can { cursor: grab; }
+.lk-list.is-drag .lk-grip.can { cursor: grabbing; }
+.lk-n {
+  flex: none; min-width: 18px; height: 18px; display: grid; place-items: center;
+  font: 800 11px/1 'Monocraft', var(--m-mono); color: var(--m-fg-muted); background: var(--m-inset);
+}
+.lk-row.is-top .lk-n { color: var(--m-accent-fg); background: var(--m-accent); }
+.lk-row-pic { width: 72px; height: 44px; --px-n: 3px; clip-path: var(--px-4); }
+.lk-row-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.lk-row-t { font: 750 13px/1.2 var(--m-font); color: var(--m-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lk-row-b { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.lk-row-b:empty { display: none; }
+.lk-res {
+  display: inline-flex; align-items: center; gap: 3px; height: 16px; padding: 0 5px;
+  font: 800 10px/1 'Monocraft', var(--m-mono); color: var(--m-fg-muted); background: var(--m-inset); cursor: help;
+  --px-n: 2px; clip-path: var(--px-4);
+}
+.lk-res.fit-mid { color: var(--m-warning); background: var(--m-warning-soft); }
+.lk-res.fit-bad { color: var(--m-danger); background: var(--m-danger-soft); }
+.lk-res-warn { display: grid; place-items: center; width: 10px; height: 10px; font: 900 9px/1 var(--m-font); font-style: normal; color: #1a0d0b; background: var(--m-danger); }
+
+.lk-arrows { display: flex; flex-direction: column; gap: 2px; flex: none; }
+.lk-arrow {
+  width: 26px; height: 22px; padding: 0; border: 0; cursor: pointer; display: grid; place-items: center;
+  font-size: 9px; color: var(--m-fg-muted); background: var(--m-inset); --px-n: 2px; clip-path: var(--px-4);
+}
+.lk-arrow:hover:not(:disabled) { color: var(--m-fg); background: var(--m-surface-2); }
+.lk-arrow:disabled { opacity: 0.3; cursor: default; }
+.lk-x {
+  position: relative; flex: none; width: 30px; height: 30px; padding: 0; border: 0; cursor: pointer;
+  background: transparent; --px-n: 3px; clip-path: var(--px-4);
+}
+.lk-x:hover { background: var(--m-danger-soft); }
+.lk-x i, .lk-x i::after { position: absolute; left: 50%; top: 50%; width: 12px; height: 2px; background: var(--m-fg-subtle); }
+.lk-x i { transform: translate(-50%, -50%) rotate(45deg); }
+.lk-x i::after { content: ''; left: 0; top: 0; transform: rotate(90deg); }
+.lk-x:hover i, .lk-x:hover i::after { background: var(--m-danger); }
+
+.lk-gone { display: flex; flex-direction: column; gap: 4px; }
+.lk-ghost {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 36px; padding: 0 4px 0 10px;
+  box-shadow: inset 0 0 0 1px var(--m-border); --px-n: 3px; clip-path: var(--px-4);
+}
+.lk-ghost-t { min-width: 0; font: 700 12.5px/1 var(--m-font); color: var(--m-fg-faint); text-decoration: line-through; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+:root:root .lk .lk-ghost .btn.sm { height: 26px; padding: 0 10px 2px; font-size: 11.5px; }
+
+.lk-none { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 14px 8px 8px; color: var(--m-fg-muted); font: 800 13px/1 var(--m-font); }
+.lk-none svg { image-rendering: pixelated; animation: lk-bob 1.4s steps(2, end) infinite; }
+:root:root .lk .lk-none .btn.sm { height: 34px; padding: 0 16px 3px; font-size: 13px; }
+
+:root:root .lk .lk-off { align-self: center; height: 30px; gap: 6px; padding: 0 12px 2px; font-size: 12px; color: var(--m-fg-subtle); }
+:root:root .lk .lk-off:hover { color: var(--m-fg); }
+.lk-off svg { image-rendering: pixelated; width: 14px; height: 14px; }
+
+/* узкая карточка */
+@container mpc (max-width: 360px) {
+  .lk-level { font-size: 11px; }
+  .lk-row-pic { width: 56px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lk, .lk * { animation: none !important; transition: none !important; }
+  .lk-pic > img.lk-pic-main { opacity: 1 !important; transform: none !important; }
+}
+
+/* ── общие .bt-* этих двух вкладок (переехали из milli-bench-tabs.css) ── */
+.bt-shaders.bt, .bt-resourcepacks.bt { min-height: 0; min-width: 0; display: flex; flex-direction: column; gap: 10px; padding: 2px; color: var(--m-fg); font: 600 13px/1.3 var(--m-font); }
+.lk .bt-badge {
+  display: inline-flex; align-items: center; gap: 4px; height: 16px; padding: 0 5px 1px; max-width: 100%;
+  font: 750 10px/1 var(--m-font); color: var(--m-fg-muted); background: var(--m-inset); white-space: nowrap;
+  --px-n: 2px; clip-path: var(--px-4);
+}
+.lk .bt-badge.dh { color: var(--m-info); background: var(--m-info-soft); }
+.lk .bt-badge.need { color: var(--m-accent); background: var(--m-accent-soft); }
+.lk .bt-badge.mono { font: 500 10px/1 var(--m-mono); color: var(--m-fg-faint); overflow: hidden; text-overflow: ellipsis; }
+:root:root .lk .segs.bt-mode {
+  display: inline-grid; grid-auto-flow: column; gap: 2px; padding: 2px;
+  background-color: var(--m-bg); box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.3); --px-n: 4px; clip-path: var(--px-4);
+}
+:root:root .lk .bt-mode .seg { min-width: 0; height: 26px; padding: 0 8px 1px; font-size: 12px; font-weight: 700; background: transparent; --px-n: 3px; clip-path: var(--px-4); }
+:root:root .lk .bt-mode .seg:hover { background: var(--m-surface); }
+:root:root .lk .bt-mode .seg.on { color: var(--m-fg); background: var(--m-surface-2); box-shadow: inset 0 -2px 0 var(--m-accent); }
+.lk .bt-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 24px 12px; text-align: center; color: var(--m-fg-muted); }
+.lk .bt-empty p { margin: 0; font: 700 13px/1.35 var(--m-font); }
+.lk .bt-empty-px { image-rendering: pixelated; animation: lk-bob 1.4s steps(2, end) infinite; }
+:root:root .lk .bt-empty .btn.sm { height: 34px; padding: 0 16px 3px; font-size: 13px; }
+@keyframes lk-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+.lk-none-t { font: 800 14px/1.2 var(--m-font); color: var(--m-fg); }
+.lk-cap-alt { margin-top: 6px; }
+/* стиль = свой пиксельный значок на цветной «плитке» */
+.lk-style-art { position: absolute; inset: 0; display: grid; place-items: center; padding-bottom: 14px; }
+.lk-style-art svg { image-rendering: pixelated; transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1); filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.45)); }
+.lk-style:hover .lk-style-art svg { transform: translateY(-2px) scale(1.08); }
+.lk-style-art[data-style='faithful'] { background: linear-gradient(180deg, #3f6f3a, #24391f); }
+.lk-style-art[data-style='fantasy'] { background: linear-gradient(180deg, #4b3478, #241a3a); }
+.lk-style-art[data-style='realistic'] { background: linear-gradient(180deg, #7a5a2a, #3a2a14); }
+.lk-style-art[data-style='cartoon'] { background: linear-gradient(180deg, #2f6f8a, #18364a); }
+.lk-style-art[data-style='pvp'] { background: linear-gradient(180deg, #7a2a2a, #3a1414); }
+.lk-style-art[data-style='medieval'] { background: linear-gradient(180deg, #5a4630, #2a2016); }
+.lk-style-art[data-style='dark'] { background: linear-gradient(180deg, #2a2a33, #111116); }

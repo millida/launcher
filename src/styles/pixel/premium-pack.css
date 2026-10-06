@@ -1,0 +1,895 @@
+/* ============================================================
+   СТРАНИЦА ПРЕМИУМ-СБОРКИ (PremiumPackPage.tsx), 04.10.2026
+   ------------------------------------------------------------
+   Кинематографичный герой, золото — только тонкими линиями, метками и
+   значками: единственная золотая масса на экране — главная кнопка агента
+   покупки (.pab, premium-buy.css), те же оттенки --pab-gold*.
+   Базовые контролы — кит лаунчера (.btn, .input), срез углов — пиксельный
+   язык (12-pixel.css). Ширины считаются от контейнера .ppx (cqi), а не
+   окна: страница одна и в 1200×760, и в 980×640.
+   ============================================================ */
+
+.ppx {
+  --ppx-gold: #f5c451;
+  --ppx-gold-hi: #ffe08a;
+  --ppx-gold-lo: #b8862b;
+  --ppx-ink: #2a1a00;
+  --ppx-hair: color-mix(in srgb, var(--ppx-gold) 30%, transparent);
+  --ppx-glass: rgba(12, 11, 10, 0.52);
+  container-type: inline-size;
+  container-name: ppx;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Ступенчатая рамка (тот же рисунок, что в 12-pixel.css) для своих плиток. */
+:root:root :is(.ppx-req, .ppx-ch.flat, .ppx-spec > div, .ppx-play),
+:root:root .ppx-sm-card::after,
+:root:root .ppx-thumb::after,
+:root:root .ppx-stage::after,
+:root:root .ppx-ch-art::after,
+:root:root .ppx-studio-chip {
+  box-shadow: none !important;
+  background-image:
+    linear-gradient(var(--px-ol) 0 0),
+    linear-gradient(90deg, var(--px-ol) 0 calc(var(--px-n) + var(--px-ol-w)), #0000 0 calc(100% - var(--px-n) - var(--px-ol-w)), var(--px-ol) 0),
+    linear-gradient(90deg, var(--px-ol) 0 var(--px-ol-w), #0000 0 calc(100% - var(--px-ol-w)), var(--px-ol) 0),
+    linear-gradient(90deg, var(--px-ol) 0 calc(var(--px-n) + var(--px-ol-w)), #0000 0 calc(100% - var(--px-n) - var(--px-ol-w)), var(--px-ol) 0),
+    linear-gradient(var(--px-ol) 0 0),
+    linear-gradient(var(--px-ft) 0 0),
+    linear-gradient(90deg, var(--px-ft) 0 calc(var(--px-n) + var(--px-ft-w)), #0000 0 calc(100% - var(--px-n) - var(--px-ft-w)), var(--px-ft) 0),
+    linear-gradient(90deg, var(--px-fl) 0 var(--px-fl-w), #0000 0 calc(100% - var(--px-fr-w)), var(--px-fr) 0),
+    linear-gradient(90deg, var(--px-fb) 0 calc(var(--px-n) + var(--px-fb-w)), #0000 0 calc(100% - var(--px-n) - var(--px-fb-w)), var(--px-fb) 0),
+    linear-gradient(var(--px-fb) 0 0),
+    var(--px-img, none) !important;
+  background-size:
+    100% var(--px-ol-w),
+    100% var(--px-n),
+    100% calc(100% - 2 * var(--px-n) - 2 * var(--px-ol-w)),
+    100% var(--px-n),
+    100% var(--px-ol-w),
+    100% var(--px-ft-w),
+    100% var(--px-n),
+    100% calc(100% - 2 * var(--px-n) - var(--px-ft-w) - var(--px-fb-w)),
+    100% var(--px-n),
+    100% var(--px-fb-w),
+    var(--px-img-size, auto) !important;
+  background-position:
+    0 0,
+    0 var(--px-ol-w),
+    0 calc(var(--px-n) + var(--px-ol-w)),
+    left 0 bottom var(--px-ol-w),
+    0 100%,
+    0 0,
+    0 var(--px-ft-w),
+    0 calc(var(--px-n) + var(--px-ft-w)),
+    left 0 bottom var(--px-fb-w),
+    0 100%,
+    var(--px-img-pos, 0 0) !important;
+  background-repeat:
+    no-repeat, no-repeat, no-repeat, no-repeat, no-repeat,
+    no-repeat, no-repeat, no-repeat, no-repeat, no-repeat,
+    var(--px-img-repeat, repeat) !important;
+  background-origin:
+    border-box, border-box, border-box, border-box, border-box,
+    border-box, border-box, border-box, border-box, border-box,
+    var(--px-img-origin, padding-box) !important;
+  background-clip: border-box !important;
+}
+
+/* ---------- герой ---------- */
+.ppx-hero {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 18px 28px;
+  min-height: clamp(360px, 60vh, 500px);
+  padding: 32px 34px 30px;
+  overflow: hidden;
+  background: #0b0a09;
+  --px-n: 10px; clip-path: var(--px-10);
+}
+.ppx-hero-art {
+  position: absolute;
+  inset: -22px;
+  z-index: -3;
+  transform: translate3d(calc(var(--ppx-mx, 0) * -16px), calc(var(--ppx-my, 0) * -10px), 0);
+  transition: transform 900ms var(--m-ease-out);
+}
+.ppx-hero-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform-origin: 62% 38%;
+  animation: ppx-kb 30s ease-in-out infinite alternate;
+}
+.ppx-hero-none { display: block; width: 100%; height: 100%; background: radial-gradient(80% 90% at 70% 20%, #3a2a12, #0b0a09 70%); }
+@keyframes ppx-kb {
+  from { transform: scale(1.03); }
+  to { transform: scale(1.12) translate3d(-1.6%, -1%, 0); }
+}
+/* Тень: снизу в фон экрана, слева под текст, сверху лёгкая виньетка. */
+.ppx-hero-shade {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background:
+    linear-gradient(to top, var(--m-bg) 0%, color-mix(in srgb, var(--m-bg) 80%, transparent) 16%, color-mix(in srgb, var(--m-bg) 26%, transparent) 44%, transparent 68%),
+    linear-gradient(90deg, rgba(6, 6, 8, 0.8) 0%, rgba(6, 6, 8, 0.5) 36%, rgba(6, 6, 8, 0) 64%),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.35), transparent 26%);
+}
+/* Золотая нить по низу героя — граница сцены и страницы. */
+.ppx-hero::after {
+  content: '';
+  position: absolute;
+  left: 34px;
+  right: 34px;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--ppx-gold-lo) 18%, var(--ppx-gold-hi) 50%, var(--ppx-gold-lo) 82%, transparent);
+  opacity: 0.6;
+}
+
+/* Частицы: редкие золотые пиксели поднимаются, как опыт в Minecraft. */
+.ppx-motes { position: absolute; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+.ppx-motes i {
+  position: absolute;
+  bottom: -6px;
+  left: calc(8% + var(--i) * 10.4%);
+  width: 3px;
+  height: 3px;
+  background: var(--ppx-gold-hi);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--ppx-gold) 80%, transparent);
+  opacity: 0;
+  animation: ppx-mote 11s linear infinite;
+  animation-delay: calc(var(--i) * -1.37s);
+}
+.ppx-motes i:nth-child(3n) { width: 2px; height: 2px; animation-duration: 14s; }
+.ppx-motes i:nth-child(4n + 1) { animation-duration: 9s; }
+@keyframes ppx-mote {
+  0% { opacity: 0; transform: translate3d(0, 0, 0); }
+  12% { opacity: 0.75; }
+  70% { opacity: 0.35; }
+  100% { opacity: 0; transform: translate3d(18px, -300px, 0); }
+}
+
+.ppx-hero-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  max-width: 640px;
+  min-width: 0;
+  animation: ppx-rise 600ms var(--m-ease-out) both;
+}
+@keyframes ppx-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+.ppx-eyebrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ppx-badge-wrap {
+  position: relative;
+  display: inline-flex;
+  animation: ppx-stamp 260ms 120ms cubic-bezier(0.2, 1.3, 0.4, 1) both;
+}
+@keyframes ppx-stamp {
+  from { opacity: 0; transform: scale(1.18); }
+  to { opacity: 1; transform: none; }
+}
+.ppx-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: stretch;
+  height: 26px;
+  overflow: hidden;
+  font: 800 11px/1 var(--m-font);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: rgba(14, 12, 8, 0.74);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  isolation: isolate;
+  --px-n: 4px; clip-path: var(--px-4);
+}
+/* Золотая часть — тот же цвет и подошва, что у золотой главной кнопки (.pab-prem). */
+.ppx-badge-gold {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px 2px 9px;
+  color: #2a1a00;
+  background: #f5c451;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.35), inset 0 -2px 0 rgba(110, 62, 0, 0.62);
+}
+.ppx-badge-gold svg { width: 13px; height: 13px; color: #2a1a00; }
+.ppx-badge-dark {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 11px 0 10px;
+  color: var(--ppx-gold-hi);
+  letter-spacing: 0.08em;
+  box-shadow: inset 1px 0 0 rgba(110, 62, 0, 0.9), inset 0 -2px 0 rgba(0, 0, 0, 0.35);
+}
+.ppx-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 9px;
+  font: 700 11.5px/1 var(--m-font);
+  color: rgba(255, 255, 255, 0.88);
+  background: rgba(255, 255, 255, 0.1);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  font-variant-numeric: tabular-nums;
+  --px-n: 4px; clip-path: var(--px-4);
+}
+.ppx-chip.gold { color: var(--ppx-gold-hi); background: color-mix(in srgb, var(--ppx-gold) 15%, transparent); }
+
+.ppx-titlerow { display: flex; align-items: center; gap: 16px; min-width: 0; }
+/* Логотип сборки — чистый, без рамки и подложки, как на обычной странице (владелец 04.10.2026). */
+.ppx-appicon { flex: none; width: 60px; height: 60px; }
+.ppx-appicon img { display: block; width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.55)); }
+.ppx-hero h1 {
+  min-width: 0;
+  font: 800 clamp(34px, 5.4cqi, 58px)/0.98 var(--m-font);
+  letter-spacing: -0.035em;
+  color: #fff;
+  text-wrap: balance;
+  text-shadow: 0 2px 28px rgba(0, 0, 0, 0.5);
+}
+.ppx-pitch {
+  max-width: 52ch;
+  font-size: 15.5px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.84);
+  text-wrap: pretty;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.5);
+}
+.ppx-studio { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; line-height: 1; }
+.ppx-studio-by { color: rgba(255, 255, 255, 0.6); }
+.ppx-studio b { font-weight: 750; color: #fff; }
+/* Знак проверенной студии — залитая золотая пиксельная печать, как отметка в TikTok. */
+.ppx-verified {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: #1a1408;
+  background: var(--ppx-gold);
+  clip-path: polygon(5px 0, 11px 0, 16px 5px, 16px 11px, 11px 16px, 5px 16px, 0 11px, 0 5px);
+}
+.ppx-verified svg.icon { width: 10px; height: 10px; stroke-width: 3.6; color: #1a1408; }
+
+.ppx-hero-cta { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px; margin-top: 8px; }
+/* Плитка фактов — стекло в правом нижнем углу героя. */
+.ppx-facts {
+  display: flex;
+  align-self: end;
+  padding: 14px 4px;
+  background: var(--ppx-glass);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.2);
+  animation: ppx-rise 700ms 120ms var(--m-ease-out) both;
+  --px-n: 10px; clip-path: var(--px-10);
+}
+.ppx-facts > div { display: flex; flex-direction: column-reverse; gap: 5px; padding: 0 18px; min-width: 0; }
+.ppx-facts > div + div { box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.12); }
+.ppx-facts dt { font: 700 10.5px/1 var(--m-font); letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255, 255, 255, 0.58); white-space: nowrap; }
+.ppx-facts dd { font: 800 22px/1 var(--m-font); letter-spacing: -0.02em; color: #fff; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ---------- бейдж: блик, искра, пылинки (цикл 5 с) ---------- */
+.ppx-badge-shine {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  left: 0;
+  z-index: 2;
+  width: 22%;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent 0%, rgba(255, 250, 225, 0) 25%, rgba(255, 250, 225, 0.8) 50%, rgba(255, 250, 225, 0) 75%, transparent 100%);
+  transform: translateX(-200%) skewX(-20deg);
+  animation: ppx-shine 5s 1.2s linear infinite;
+}
+/* Проход за 1 с (20 % цикла), дальше покой. Середина полосы над короной — на ~5,5 %. */
+@keyframes ppx-shine {
+  0% { transform: translateX(-200%) skewX(-20deg); }
+  20% { transform: translateX(480%) skewX(-20deg); }
+  100% { transform: translateX(480%) skewX(-20deg); }
+}
+/* Искра на правом верхнем углу короны — в момент, когда над ней блик. */
+.ppx-badge-spark {
+  position: absolute;
+  left: 17px;
+  top: -4px;
+  z-index: 3;
+  width: 9px;
+  height: 9px;
+  pointer-events: none;
+  background:
+    linear-gradient(#fff, #fff) center / 3px 3px no-repeat,
+    linear-gradient(#fff2b0, #fff2b0) center / 2px 9px no-repeat,
+    linear-gradient(#fff2b0, #fff2b0) center / 9px 2px no-repeat;
+  transform: scale(0);
+  animation: ppx-spark 5s 1.2s linear infinite;
+}
+@keyframes ppx-spark {
+  0%, 3.4% { transform: scale(0) rotate(0deg); }
+  5.6% { transform: scale(1) rotate(22deg); }
+  7.8%, 100% { transform: scale(0) rotate(45deg); }
+}
+.ppx-badge-dust { position: absolute; inset: 0; pointer-events: none; }
+.ppx-badge-dust i {
+  position: absolute;
+  bottom: 60%;
+  width: 2px;
+  height: 2px;
+  background: var(--ppx-gold-hi);
+  opacity: 0;
+  animation: ppx-dust 5s linear infinite;
+}
+.ppx-badge-dust i:nth-child(1) { left: 22%; animation-delay: 1.5s; }
+.ppx-badge-dust i:nth-child(2) { left: 48%; animation-delay: 2.3s; }
+.ppx-badge-dust i:nth-child(3) { left: 76%; animation-delay: 3.1s; }
+@keyframes ppx-dust {
+  0% { opacity: 0; transform: translateY(0); }
+  10% { opacity: 0.8; }
+  32% { opacity: 0; transform: translateY(-14px); }
+  100% { opacity: 0; transform: translateY(-14px); }
+}
+
+/* ---------- чип студии: как ник автора ---------- */
+.ppx-studio { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; line-height: 1; }
+.ppx-studio-by { color: rgba(255, 255, 255, 0.6); }
+.ppx-studio b { font-weight: 750; color: #fff; }
+.ppx-studio-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 10px 0 11px;
+  font: 650 13px/1 var(--m-font);
+  color: rgba(255, 255, 255, 0.72);
+  background-color: rgba(0, 0, 0, 0.45);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  cursor: pointer;
+  --px-n: 5px; clip-path: var(--px-5);
+  --px-ol: rgba(255, 255, 255, 0.32); --px-ol-w: 1px;
+  transition: transform var(--m-t-fast) var(--m-ease-out), background-color var(--m-t-fast);
+}
+.ppx-studio-chip b { font-weight: 750; color: #fff; }
+.ppx-studio-n { color: rgba(255, 255, 255, 0.78); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ppx-studio-go {
+  width: 15px !important;
+  height: 15px !important;
+  margin-left: 1px;
+  color: var(--ppx-gold);
+  transition: transform var(--m-t-base) var(--m-ease-out);
+  /* Один «кивок» при входе — после штампа бейджа, без повтора. */
+  animation: ppx-nod 600ms 900ms ease-in-out;
+}
+@keyframes ppx-nod {
+  0%, 50%, 100% { transform: none; }
+  25%, 75% { transform: translateX(4px); }
+}
+.ppx-studio-chip:hover { transform: translateY(-1px); background-color: rgba(20, 15, 6, 0.6); --px-ol: var(--ppx-gold); }
+.ppx-studio-chip:hover .ppx-studio-go { transform: translateX(3px); }
+.ppx-studio-chip:active { transform: none; background-color: rgba(0, 0, 0, 0.65); }
+.ppx-studio-chip:focus-visible { outline: 2px solid var(--ppx-gold); outline-offset: 2px; }
+
+/* ---------- вкладки ---------- */
+.ppx-tabs {
+  position: sticky;
+  /* .content прокручивается с отступом 14px сверху: вкладки встают к самому краю. */
+  top: -14px;
+  z-index: 6;
+  display: flex;
+  gap: 2px;
+  margin: -14px 0 6px;
+  padding: 14px 0 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: var(--m-bg);
+  box-shadow: inset 0 -1px 0 var(--m-border);
+}
+.ppx-tabs::-webkit-scrollbar { display: none; }
+.ppx-tab {
+  flex: none;
+  height: 38px;
+  padding: 0 14px;
+  font: 700 13px/1 var(--m-font);
+  color: var(--m-fg-subtle);
+  transition: color var(--m-t-fast), box-shadow var(--m-t-base);
+}
+.ppx-tab:hover { color: var(--m-fg); }
+.ppx-tab.on { color: var(--m-fg); box-shadow: inset 0 -2px 0 var(--ppx-gold); }
+.ppx-tab:focus-visible { outline: 2px solid var(--ppx-gold); outline-offset: -2px; }
+
+/* ---------- колонки ---------- */
+.ppx-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(280px, 29cqi, 316px);
+  gap: 28px;
+  align-items: start;
+  margin-top: 20px;
+}
+.ppx-main { display: flex; flex-direction: column; gap: 44px; min-width: 0; }
+.ppx-side { position: sticky; top: 14px; min-width: 0; }
+.ppx-sec { display: flex; flex-direction: column; gap: 16px; min-width: 0; scroll-margin-top: 60px; }
+#ppx-access { scroll-margin-top: 14px; }
+.ppx-sec-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.ppx-kicker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+  font: 800 11px/1 var(--m-font);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ppx-gold);
+}
+.ppx-kicker::before { content: ''; flex: none; width: 6px; height: 6px; background: currentColor; box-shadow: 2px 2px 0 var(--ppx-gold-lo); }
+.ppx-sec-head h2 { font: 800 24px/1.1 var(--m-font); letter-spacing: -0.02em; color: var(--m-fg); }
+
+.ppx-inc { display: flex; flex-wrap: wrap; gap: 8px 18px; list-style: none; }
+.ppx-inc li { display: inline-flex; align-items: center; gap: 7px; font-size: 13.5px; color: var(--m-fg-muted); }
+.ppx-inc svg { width: 15px; height: 15px; color: var(--ppx-gold); }
+
+/* ---------- галерея ---------- */
+.ppx-gal { display: flex; flex-direction: column; gap: 10px; outline: none; }
+.ppx-stage {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  max-height: 470px;
+  width: 100%;
+  overflow: hidden;
+  background: #000;
+  --px-n: 10px; clip-path: var(--px-10);
+}
+.ppx-stage::after { content: ''; position: absolute; inset: 0; z-index: 3; pointer-events: none; --px-n: 10px; --px-ol: rgba(255, 255, 255, 0.08); --px-ol-w: 1px; }
+.ppx-gal:focus-visible .ppx-stage::after { --px-ol: var(--ppx-gold); --px-ol-w: 2px; }
+.ppx-frame {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  visibility: hidden;
+  cursor: zoom-in;
+  transition: opacity 500ms var(--m-ease-out), visibility 0s 500ms;
+}
+.ppx-frame.on { z-index: 1; opacity: 1; visibility: visible; transition: opacity 500ms var(--m-ease-out); }
+.ppx-frame > img { width: 100%; height: 100%; object-fit: cover; transition: transform 1200ms var(--m-ease-out); }
+.ppx-frame.on:hover > img { transform: scale(1.025); }
+div.ppx-frame { cursor: default; }
+.ppx-video { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.ppx-play {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 78px;
+  height: 78px;
+  /* Главная кнопка премиума — кит .btn.primary в золоте (как .pab-prem агента покупки). */
+  color: #2a1a00;
+  background-color: #f5c451;
+  transform: translate(-50%, -50%);
+  transition: transform var(--m-t-base) var(--m-ease-out), filter var(--m-t-fast);
+  --px-n: 10px; clip-path: var(--px-10);
+  --px-img: var(--px-dots); --px-img-size: var(--px-dots-size); --px-img-pos: var(--px-dots-pos); --px-img-repeat: var(--px-dots-repeat); --px-img-origin: var(--px-dots-origin);
+  --px-ol: var(--px-btn-ol); --px-ol-w: 2px; --px-ft: var(--px-btn-t); --px-ft-w: 3px; --px-fb: rgba(110, 62, 0, 0.62); --px-fb-w: 5px; --px-fl: var(--px-btn-l); --px-fr: var(--px-btn-r);
+}
+.ppx-play svg.icon { width: 30px; height: 30px; color: #2a1a00; fill: currentColor; }
+.ppx-play:active { transform: translate(-50%, calc(-50% + 2px)); filter: brightness(0.96); }
+.ppx-play:hover { transform: translate(-50%, -50%) translateY(-1px); filter: brightness(1.07); }
+.ppx-arr {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  color: #fff;
+  background: rgba(10, 10, 12, 0.55);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  transform: translateY(-50%);
+  transition: opacity var(--m-t-base), background-color var(--m-t-fast);
+  --px-n: 5px; clip-path: var(--px-5);
+}
+.ppx-arr.l { left: 12px; }
+.ppx-arr.r { right: 12px; }
+.ppx-arr svg.icon { width: 20px; height: 20px; }
+.ppx-arr:hover { background: rgba(10, 10, 12, 0.8); color: var(--ppx-gold-hi); }
+.ppx-gal:hover .ppx-arr, .ppx-arr:focus-visible { opacity: 1; }
+.ppx-count, .ppx-zoom {
+  position: absolute;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 9px;
+  font: 700 12px/1 var(--m-mono);
+  color: #fff;
+  background: rgba(10, 10, 12, 0.6);
+  pointer-events: none;
+  --px-n: 4px; clip-path: var(--px-4);
+}
+.ppx-count { left: 12px; bottom: 12px; font-variant-numeric: tabular-nums; }
+.ppx-count i { font-style: normal; color: rgba(255, 255, 255, 0.5); }
+.ppx-zoom { right: 12px; bottom: 12px; opacity: 0; transition: opacity var(--m-t-base); }
+.ppx-zoom svg.icon { width: 14px; height: 14px; }
+.ppx-gal:hover .ppx-zoom { opacity: 1; }
+.ppx-strip { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 4px; scrollbar-width: thin; }
+.ppx-thumb {
+  position: relative;
+  flex: 0 0 auto;
+  width: 116px;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  opacity: 0.5;
+  filter: saturate(0.7);
+  transition: opacity var(--m-t-base), filter var(--m-t-base);
+  --px-n: 5px; clip-path: var(--px-5);
+}
+.ppx-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.ppx-thumb::after { content: ''; position: absolute; inset: 0; pointer-events: none; --px-n: 5px; --px-ol: transparent; }
+.ppx-thumb:hover { opacity: 0.85; filter: none; }
+.ppx-thumb.on { opacity: 1; filter: none; }
+.ppx-thumb.on::after { --px-ol: var(--ppx-gold); --px-ol-w: 2px; }
+.ppx-thumb.vid > svg.icon { position: absolute; left: 50%; top: 50%; width: 20px; height: 20px; color: #fff; fill: #fff; transform: translate(-50%, -50%); filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.7)); }
+
+/* ---------- история ---------- */
+.ppx-lead { display: flex; flex-direction: column; gap: 10px; max-width: 72ch; }
+.ppx-lead p { font-size: 16px; line-height: 1.62; color: var(--m-fg); text-wrap: pretty; }
+.ppx-lead p:first-child::first-letter {
+  float: left;
+  margin: 5px 10px 0 0;
+  font: 800 3.2em/0.82 var(--m-font);
+  color: var(--ppx-gold);
+}
+.ppx-chs { position: relative; display: flex; flex-direction: column; gap: 26px; }
+
+.ppx-ch { scroll-margin-top: 60px; }
+.ppx-ch.img { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 24px; align-items: center; }
+.ppx-ch.img:nth-child(even) .ppx-ch-art { order: 2; }
+.ppx-ch.flat { padding: 20px 22px; background-color: var(--m-surface); --px-n: 10px; clip-path: var(--px-10); --px-ft: var(--px-plate-t); --px-fb: var(--px-plate-b); }
+.ppx-ch-art {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  background: var(--m-inset);
+  cursor: zoom-in;
+  --px-n: 10px; clip-path: var(--px-10);
+}
+.ppx-ch-art::after { content: ''; position: absolute; inset: 0; pointer-events: none; --px-n: 10px; --px-ol: rgba(255, 255, 255, 0.07); --px-ol-w: 1px; }
+.ppx-ch-art img { width: 100%; height: 100%; object-fit: cover; transition: transform 1200ms var(--m-ease-out); }
+.ppx-ch-art:hover img { transform: scale(1.04); }
+.ppx-ch-art > span { position: absolute; left: 10px; bottom: 10px; padding: 5px 8px; font-size: 12px; color: #fff; background: rgba(0, 0, 0, 0.6); --px-n: 4px; clip-path: var(--px-4); }
+.ppx-ch-body { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; min-width: 0; }
+.ppx-ch-n { display: inline-flex; align-items: center; gap: 8px; font: 700 12px/1 var(--m-mono); letter-spacing: 0.08em; color: var(--ppx-gold); }
+.ppx-ch-n svg.icon { width: 16px; height: 16px; }
+.ppx-ch h3 { font: 800 21px/1.2 var(--m-font); letter-spacing: -0.015em; color: var(--m-fg); }
+.ppx-ch p { font-size: 14.5px; line-height: 1.62; color: var(--m-fg-muted); text-wrap: pretty; }
+.ppx-ch ul { display: flex; flex-direction: column; gap: 8px; list-style: none; }
+.ppx-ch li { display: flex; gap: 9px; align-items: flex-start; font-size: 14px; line-height: 1.5; color: var(--m-fg-muted); }
+.ppx-ch li > svg.icon { flex: none; width: 15px; height: 15px; margin-top: 3px; color: var(--ppx-gold); }
+.ppx-more { align-self: flex-start; }
+
+
+/* ---------- окно «Все сборки студии» ---------- */
+.ppx-studio-bg { z-index: 420; }
+.modal.ppx-studio-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 880px;
+  max-width: calc(100% - 48px);
+  max-height: 84%;
+  padding: 22px 22px 18px;
+  overflow: hidden;
+  border-radius: 0;
+  background: var(--m-raised);
+  --px-n: 10px; clip-path: var(--px-10);
+}
+.ppx-sm-head { display: flex; align-items: center; gap: 14px; }
+.ppx-sm-head > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ppx-sm-seal { display: grid; place-items: center; width: 46px; height: 46px; color: var(--ppx-gold-hi); background: rgba(14, 12, 8, 0.7); box-shadow: inset 0 0 0 1px var(--ppx-gold); }
+.ppx-sm-seal svg.icon { width: 22px; height: 22px; }
+.ppx-sm-kicker { display: inline-flex; align-items: center; gap: 5px; font: 800 10.5px/1 var(--m-font); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ppx-gold); }
+.ppx-sm-kicker svg.icon { width: 11px; height: 11px; stroke-width: 3; }
+.ppx-sm-head h3 { font: 800 22px/1.1 var(--m-font); letter-spacing: -0.02em; color: var(--m-fg); }
+.ppx-sm-sub { font-size: 12.5px; color: var(--m-fg-subtle); }
+.ppx-sm-x { display: grid; place-items: center; width: 36px; height: 36px; color: var(--m-fg-subtle); background: var(--m-surface-2); --px-n: 5px; clip-path: var(--px-5); }
+.ppx-sm-x:hover { color: var(--m-fg); background: var(--m-surface); }
+.ppx-sm-tools { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.ppx-sm-chips-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex: 1 1 auto; min-width: 0; }
+.ppx-sm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  font: 700 12.5px/1 var(--m-font);
+  color: var(--m-fg-subtle);
+  background: var(--m-surface);
+  --px-n: 4px; clip-path: var(--px-4);
+  transition: background-color var(--m-t-fast), color var(--m-t-fast);
+}
+.ppx-sm-chip i { font-style: normal; font-weight: 650; color: var(--m-fg-faint); font-variant-numeric: tabular-nums; }
+.ppx-sm-chip svg.icon { width: 13px; height: 13px; }
+.ppx-sm-chip:hover { color: var(--m-fg); background: var(--m-surface-2); }
+.ppx-sm-chip.on { color: #2a1a00; background: #f5c451; }
+.ppx-sm-chip.on i, .ppx-sm-chip.on svg.icon { color: #2a1a00; }
+.ppx-sm-chip:focus-visible { outline: 2px solid var(--ppx-gold); outline-offset: 2px; }
+.ppx-sm-search { flex: 0 1 220px; min-width: 150px; height: 34px; margin-left: auto; }
+.ppx-sm-head { flex: none; }
+.ppx-sm-search input { flex: 1; min-width: 0; background: none; border: 0; outline: none; }
+.ppx-sm-scroll { min-height: 0; margin-right: -8px; padding: 2px 8px 4px 0; overflow-y: auto; }
+/* Сетка не зажата по высоте: строки по содержимому, карточки не сплющиваются. */
+.ppx-sm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)); grid-auto-rows: 1fr; align-items: stretch; align-content: start; gap: 12px; }
+.ppx-sm-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  text-align: left;
+  background: var(--m-surface);
+  --px-n: 5px; clip-path: var(--px-5);
+  transition: transform var(--m-t-base) var(--m-ease-out), background-color var(--m-t-fast);
+}
+.ppx-sm-card::after { content: ''; position: absolute; inset: 0; pointer-events: none; --px-n: 5px; --px-ol: transparent; --px-ol-w: 1px; }
+.ppx-sm-card:hover { transform: translateY(-2px); background: var(--m-surface-2); }
+.ppx-sm-card:hover::after, .ppx-sm-card:focus-visible::after { --px-ol: color-mix(in srgb, var(--ppx-gold) 70%, transparent); }
+.ppx-sm-card.on::after { --px-ol: var(--ppx-gold); --px-ol-w: 2px; }
+.ppx-sm-card:focus-visible { outline: none; }
+.ppx-sm-art { position: relative; flex: none; aspect-ratio: 16 / 9; overflow: hidden; background: var(--m-inset); }
+.ppx-sm-art img { width: 100%; height: 100%; object-fit: cover; transition: transform 900ms var(--m-ease-out); }
+.ppx-sm-card:hover .ppx-sm-art img { transform: scale(1.05); }
+.ppx-sm-tag { position: absolute; left: 8px; top: 8px; display: inline-flex; align-items: center; gap: 4px; padding: 4px 7px; font: 800 10.5px/1 var(--m-font); color: #fff; background: rgba(10, 10, 12, 0.72); --px-n: 4px; clip-path: var(--px-4); }
+.ppx-sm-tag.gold { color: var(--ppx-gold-hi); }
+.ppx-sm-tag.here { color: #2a1a00; background: #f5c451; }
+.ppx-sm-tag.have { left: auto; right: 8px; color: #fff; background: color-mix(in srgb, var(--m-accent) 82%, #000); }
+/* Топ-3 по скачиваниям: золотая цифра в углу обложки, без плашки. */
+.ppx-sm-rank {
+  position: absolute;
+  left: 9px;
+  bottom: 4px;
+  font: 800 30px/1 var(--m-font);
+  letter-spacing: -0.04em;
+  color: var(--ppx-gold-hi);
+  text-shadow: 0 2px 0 rgba(110, 62, 0, 0.9), 0 0 18px rgba(0, 0, 0, 0.85), 0 0 4px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+}
+.ppx-sm-rank i { margin-right: 1px; font-size: 18px; font-style: normal; vertical-align: 6px; color: var(--ppx-gold); }
+.ppx-sm-card.top .ppx-sm-art::before { content: ''; position: absolute; inset: auto 0 0 0; height: 46%; background: linear-gradient(transparent, rgba(0, 0, 0, 0.55)); pointer-events: none; }
+.ppx-sm-tag svg.icon { width: 11px; height: 11px; }
+.ppx-sm-body { display: flex; flex: 1; flex-direction: column; gap: 6px; padding: 11px 12px 12px; min-width: 0; }
+/* Название до двух строк, суть до двух: высота строки задана, глиф не режется. */
+.ppx-sm-body b {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  font: 800 15px/1.25 var(--m-font);
+  color: var(--m-fg);
+  overflow-wrap: anywhere;
+}
+.ppx-sm-body > span.ppx-sm-pitch {
+  display: -webkit-box;
+  min-height: calc(2 * 1.45em);
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--m-fg-subtle);
+}
+.ppx-sm-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: auto; padding-top: 6px; }
+.ppx-sm-meta span { padding: 3px 6px; font: 700 11px/1.2 var(--m-font); color: var(--m-fg-muted); background: var(--m-inset); clip-path: polygon(3px 0, calc(100% - 3px) 0, 100% 3px, 100% calc(100% - 3px), calc(100% - 3px) 100%, 3px 100%, 0 calc(100% - 3px), 0 3px); }
+.ppx-sm-meta em { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; font: 700 11.5px/1.2 var(--m-font); font-style: normal; color: var(--m-fg-subtle); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ppx-sm-meta em svg.icon { width: 12px; height: 12px; color: var(--m-fg-faint); }
+.ppx-sm-card.prem .ppx-sm-body b { color: var(--m-fg); }
+.ppx-sm-card.prem .ppx-sm-art::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: linear-gradient(90deg, var(--ppx-gold), color-mix(in srgb, var(--ppx-gold) 0%, transparent)); }
+.ppx-sm-skel { height: 230px; }
+.ppx-sm-empty { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 30px 0; font-size: 13.5px; color: var(--m-fg-subtle); }
+
+/* ---------- требования ---------- */
+.ppx-reqs { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.ppx-req {
+  padding: 16px 18px 12px;
+  background-color: var(--m-surface);
+  --px-n: 10px; clip-path: var(--px-10);
+  --px-ft: var(--px-plate-t); --px-fb: var(--px-plate-b);
+}
+.ppx-req .ppx-kicker { color: var(--m-fg-subtle); }
+.ppx-req .ppx-kicker::before { background: var(--m-fg-faint); box-shadow: none; }
+.ppx-req.rec {
+  background-color: color-mix(in srgb, var(--ppx-gold) 6%, var(--m-surface));
+  --px-ol: color-mix(in srgb, var(--ppx-gold) 32%, transparent); --px-ol-w: 1px;
+}
+.ppx-req.rec .ppx-kicker { color: var(--ppx-gold); }
+.ppx-req.rec .ppx-kicker::before { background: var(--ppx-gold); box-shadow: 2px 2px 0 var(--ppx-gold-lo); }
+.ppx-req dl > div { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; box-shadow: inset 0 1px 0 var(--m-border); }
+.ppx-req dl > div:first-child { box-shadow: none; }
+.ppx-req dt { font-size: 13px; color: var(--m-fg-subtle); }
+.ppx-req dd { font-size: 13.5px; font-weight: 750; color: var(--m-fg); text-align: right; }
+.ppx-reqs-text { max-width: 72ch; font-size: 14px; line-height: 1.6; color: var(--m-fg-muted); }
+.ppx-spec { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 8px; }
+.ppx-spec > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  background-color: var(--m-inset);
+  --px-n: 5px; clip-path: var(--px-5);
+  --px-ol: var(--px-well-ol); --px-ol-w: 1px;
+}
+.ppx-spec dt { font: 700 10.5px/1 var(--m-font); letter-spacing: 0.08em; text-transform: uppercase; color: var(--m-fg-faint); }
+.ppx-spec dd { font: 800 15px/1.15 var(--m-font); color: var(--m-fg); font-variant-numeric: tabular-nums; }
+
+/* ---------- узко: 980×640 и меньше ---------- */
+@container ppx (max-width: 1000px) {
+  .ppx-hero { grid-template-columns: minmax(0, 1fr); padding: 26px 26px 24px; }
+  .ppx-facts { justify-self: start; }
+  .ppx-ch.img { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .ppx-ch.img:nth-child(even) .ppx-ch-art { order: 0; }
+  .ppx-ch-art { aspect-ratio: 21 / 9; }
+}
+@container ppx (max-width: 820px) {
+  .ppx-cols { grid-template-columns: minmax(0, 1fr); }
+  .ppx-side { position: static; order: -1; max-width: 520px; }
+  .ppx-tabs { order: 0; }
+}
+@container ppx (max-width: 560px) {
+  .ppx-hero { padding: 20px 18px; min-height: 340px; }
+  .ppx-facts { flex-wrap: wrap; row-gap: 12px; }
+  .ppx-appicon { width: 48px; height: 48px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ppx-hero-art { transform: none; transition: none; }
+  .ppx-hero-art img, .ppx-motes i, .ppx-hero-body, .ppx-facts { animation: none; }
+  .ppx-motes { display: none; }
+  .ppx-badge-wrap, .ppx-badge-shine, .ppx-badge-spark, .ppx-badge-dust i { animation: none !important; }
+  .ppx-studio-chip, .ppx-studio-go { transition: none; }
+  .ppx-studio-go { animation: none; }
+  .ppx-badge-spark, .ppx-badge-dust { display: none; }
+  .ppx-frame, .ppx-frame > img, .ppx-ch-art img { transition: none; }
+}
+
+/* ---------- 05.10.2026: герой показывает игру, одна главная кнопка, меньше золота ---------- */
+/* Фон — живой кадр: светлее и чётче, тень только под текстом слева и снизу. */
+.ppx-hero-art img { filter: saturate(1.08) contrast(1.04); }
+.ppx-hero-shade {
+  background:
+    linear-gradient(to top, var(--m-bg) 0%, color-mix(in srgb, var(--m-bg) 70%, transparent) 14%, transparent 42%),
+    linear-gradient(90deg, rgba(6, 6, 8, 0.86) 0%, rgba(6, 6, 8, 0.55) 34%, rgba(6, 6, 8, 0) 58%);
+}
+/* Граница сцены — нейтральная, золото только у «Премиум» и главной кнопки. */
+.ppx-hero::after { background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1) 20%, rgba(255, 255, 255, 0.16) 50%, rgba(255, 255, 255, 0.1) 80%, transparent); opacity: 1; }
+.ppx-hero .ppx-name { margin: 2px 0 0; }
+
+/* Что внутри — плашки под описанием, клик ведёт к главе */
+.ppx-feats { display: flex; flex-wrap: wrap; gap: 8px; }
+.ppx-feat {
+  display: inline-flex; align-items: center; gap: 7px; padding: 7px 11px 8px; cursor: pointer; border: 0;
+  font: 750 13px/1 var(--m-font); color: #fff; background: rgba(10, 9, 8, 0.62);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  --px-n: 4px; clip-path: var(--px-4); transition: background-color var(--m-t-fast), transform var(--m-t-fast);
+  animation: ppx-rise 520ms var(--m-ease-out) both; animation-delay: 160ms;
+}
+.ppx-feat svg.icon { width: 14px; height: 14px; color: var(--ppx-gold); }
+.ppx-feat:hover { background-color: rgba(30, 24, 12, 0.78); transform: translateY(-1px); }
+
+/* Цифры и студия — одной строкой под кнопкой, рядом с названием, а не в пустом углу */
+.ppx-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-top: 2px; }
+.ppx-hero .ppx-meta .ppx-facts {
+  display: flex; align-self: auto; padding: 0; background: none; -webkit-backdrop-filter: none; backdrop-filter: none;
+  clip-path: none; animation: none; gap: 0;
+}
+.ppx-hero .ppx-meta .ppx-facts > div { flex-direction: row; align-items: baseline; gap: 6px; padding: 0 12px; }
+.ppx-hero .ppx-meta .ppx-facts > div:first-child { padding-left: 0; }
+.ppx-hero .ppx-meta .ppx-facts dd { font-size: 15px; }
+.ppx-hero .ppx-meta .ppx-facts dt { font-size: 12px; letter-spacing: 0; text-transform: none; color: rgba(255, 255, 255, 0.62); }
+
+
+/* Карточка доступа без дублирующей кнопки — блок действий схлопывается */
+.pab-act.is-quiet:empty { display: none; }
+
+@media (prefers-reduced-motion: reduce) { .ppx-feat { animation: none; } }
+/* Ключевой арт: без мыла — меньше «наезд» камеры, чуть ярче */
+.ppx-hero-art img { filter: brightness(1.12) saturate(1.1) contrast(1.05); }
+@keyframes ppx-kb { from { transform: scale(1.02); } to { transform: scale(1.06) translate3d(-0.8%, -0.6%, 0); } }
+/* Текст героя на пёстром арте: тень слева плотнее до середины */
+.ppx-hero-shade {
+  background:
+    linear-gradient(to top, var(--m-bg) 0%, color-mix(in srgb, var(--m-bg) 70%, transparent) 14%, transparent 42%),
+    linear-gradient(90deg, rgba(6, 6, 8, 0.9) 0%, rgba(6, 6, 8, 0.72) 32%, rgba(6, 6, 8, 0.25) 52%, rgba(6, 6, 8, 0) 64%);
+}
+/* Кнопка поддержки уступает место карточке доступа (PremiumPackPage tuck) */
+.msf, .mlf { transition: transform 120ms steps(2, end), opacity 160ms steps(3, end), background-color var(--m-t-fast); }
+.msf.is-tucked, .mlf.is-tucked { opacity: 0; transform: translateY(12px); pointer-events: none; }
+
+/* Вкладки «Описание | Галерея | Требования» и мини-плеер — как у страниц каталога (06.10.2026) */
+.ppx .segs.ci-tabs { justify-content: flex-start; margin: 0; }
+.ppx .ci-tabs .seg.on { box-shadow: inset 0 -2px 0 var(--ppx-gold); }
+.ppx .ci-media-thumb.on { box-shadow: inset 0 0 0 3px var(--ppx-gold); }
+.ppx .ci-media-frame.is-video:hover .ci-media-play { background: var(--ppx-gold); color: #1a1405; }
+
+/* ── Премиум на каркасе страницы каталога (06.10.2026): та же разметка, что у Immortal, в золоте ── */
+.ppx-ci .ci-icon > svg { width: 44px; height: 44px; margin: 26px; color: var(--ppx-gold); }
+.ppx-ci-studio { display: inline-flex; align-items: center; gap: 5px; align-self: flex-start; padding: 0; border: 0; background: none; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--m-fg-subtle); }
+.ppx-ci-studio b { color: var(--m-fg); }
+.ppx-ci-studio:hover b { color: var(--ppx-gold); }
+.ppx-ci-studio .ppx-verified { display: inline-grid; place-items: center; width: 16px; height: 16px; color: var(--ppx-ink); background: var(--ppx-gold); --px-n: 4px; clip-path: var(--px-4); }
+.ppx-ci-studio .ppx-verified svg { width: 10px; height: 10px; }
+.ppx-ci-studio .ppx-studio-go { width: 12px; height: 12px; color: var(--ppx-gold); }
+.ppx-ci .ppx-feats { display: flex; flex-wrap: wrap; gap: 6px; }
+.ppx-ci .ppx-feat { background: var(--m-surface); }
+.ppx-ci .ppx-ci-story { padding: 20px 22px; }
+.ppx-ci .ppx-ci-story > .ppx-sec { gap: 14px; }
+.ppx-ci .ci-aside.ppx-side { position: sticky; }
+
+/* Шапка премиума = шапка бесплатной сборки (ItemPage) один в один; золото — метка, кнопка, карточка доступа. */
+.ppx-ci-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ppx-gold); }
+.ppx-ci-badge svg { width: 13px; height: 13px; color: var(--ppx-gold); }
+
+/* ── «Эксклюзив Millida» под шапкой (06.10.2026) ── */
+.ppx-excl {
+  position: relative; display: flex; flex-direction: column; gap: 12px; margin: 14px 0 4px; padding: 14px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--ppx-gold) 10%, var(--m-surface)), var(--m-surface));
+  --px-n: 10px; clip-path: var(--px-10);
+}
+.ppx-excl::before { content: ''; position: absolute; inset: 0; pointer-events: none; clip-path: var(--px-ring-10); background: color-mix(in srgb, var(--ppx-gold) 55%, transparent); }
+.ppx-excl-h { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.ppx-excl-badge { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; font: 900 12.5px/1 var(--m-font); letter-spacing: 0.05em; text-transform: uppercase; color: var(--ppx-ink); background: var(--ppx-gold); --px-n: 4px; clip-path: var(--px-4); }
+.ppx-excl-badge svg { width: 13px; height: 13px; color: var(--ppx-ink); }
+.ppx-excl-sub { font-size: 14px; font-weight: 700; color: var(--m-fg); }
+.ppx-excl-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.ppx-excl-tile {
+  position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-height: 120px; padding: 12px; overflow: hidden;
+  text-align: left; color: var(--m-fg); border: 0; cursor: pointer; background: rgba(0, 0, 0, 0.32);
+  --px-n: 5px; clip-path: var(--px-5); transition: transform 120ms steps(2, end), background-color 120ms;
+}
+.ppx-excl-tile:hover { transform: translateY(-2px); background: rgba(0, 0, 0, 0.45); }
+.ppx-excl-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.22; }
+.ppx-excl-tile > :not(img) { position: relative; }
+.ppx-excl-ic { display: grid; place-items: center; width: 32px; height: 32px; color: var(--ppx-ink); background: var(--ppx-gold); --px-n: 4px; clip-path: var(--px-4); }
+.ppx-excl-ic svg { width: 17px; height: 17px; color: var(--ppx-ink); }
+.ppx-excl-tile b { font: 900 16px/1.15 var(--m-font); }
+.ppx-excl-tile small { font-size: 12.5px; line-height: 1.35; color: var(--m-fg-muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* ── «Ещё популярные премиум-сборки» внизу ── */
+.ppx-more { display: flex; flex-direction: column; gap: 12px; margin-top: 28px; }
+.ppx-more-h { display: flex; align-items: center; gap: 8px; margin: 0; font: 800 20px/1.2 var(--m-font); }
+.ppx-more-h svg { width: 18px; height: 18px; color: var(--ppx-gold); }
+.ppx-more-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 899px) { .ppx-more-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ppx-more-card {
+  position: relative; display: flex; flex-direction: column; padding: 0; overflow: hidden; text-align: left; color: var(--m-fg); border: 0; cursor: pointer;
+  background: var(--m-surface); --px-n: 10px; clip-path: var(--px-10); transition: transform 120ms steps(2, end);
+}
+.ppx-more-card::after { content: ''; position: absolute; inset: 0; pointer-events: none; clip-path: var(--px-ring-10); background: color-mix(in srgb, var(--ppx-gold) 45%, #1a1b1c); }
+.ppx-more-card:hover { transform: translateY(-2px); }
+.ppx-more-card:hover::after { background: var(--ppx-gold); }
+.ppx-more-art { position: relative; aspect-ratio: 16 / 9; overflow: hidden; background: var(--m-inset); }
+.ppx-more-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.ppx-more-ru { position: absolute; left: 10px; bottom: 10px; display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; font: 800 12px/1 var(--m-font); color: #06200e; background: var(--m-accent); --px-n: 4px; clip-path: var(--px-4); }
+.ppx-more-ru svg { width: 12px; height: 12px; color: #06200e; }
+.ppx-more-body { display: flex; flex-direction: column; gap: 3px; padding: 12px 14px 14px; }
+.ppx-more-body b { font: 800 16px/1.2 var(--m-font); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ppx-more-body small { font-size: 12.5px; color: var(--m-fg-muted); }
+.ppx-more-body em { margin-top: 4px; font: 900 15px/1 var(--m-font); font-style: normal; color: var(--ppx-gold); }
+/* Плитки эксклюзива без текста (владелец: «меньше текста»): значок и слово в строку */
+.ppx-excl-tile { flex-direction: row; align-items: center; gap: 10px; min-height: 0; padding: 10px 12px; }
+.ppx-excl-row { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }

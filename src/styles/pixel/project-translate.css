@@ -1,0 +1,231 @@
+/* Описание мода по-русски (ProjectRuBody.tsx): сводка, заглушки по форме
+   оригинала, плавное проявление абзацев, правки игроков. Базовые цвета и
+   кнопки — из дизайн-системы (--m-*, .btn), Minecraft — в подсказках-рамках. */
+
+#pjModal .pjt { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+/* ---------- Сводка ---------- */
+#pjModal .pjt-sum {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 11px 13px 12px;
+  background: color-mix(in srgb, var(--m-fg) 4%, transparent);
+  box-shadow: inset 3px 0 0 rgba(150, 100, 255, 0.55);
+  clip-path: var(--px-4);
+}
+#pjModal .pjt-sum-t { margin: 0; font: 550 14px/1.55 var(--m-font); color: var(--m-fg); }
+#pjModal .pjt-sum.live .pjt-sum-t { animation: pjtIn 360ms var(--m-ease-out, ease-out) both; }
+#pjModal .pjt-sum-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+#pjModal .pjt-chip {
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  font: 700 11.5px/1 var(--m-font);
+  color: var(--m-fg-subtle);
+  background: color-mix(in srgb, var(--m-fg) 7%, transparent);
+  clip-path: var(--px-4);
+}
+#pjModal .pjt-chip.ld { color: var(--m-fg); }
+#pjModal .pjt-adds { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 5px; }
+#pjModal .pjt-adds-k { margin-right: 2px; font: 750 11.5px/1 var(--m-font); color: var(--m-fg-subtle); }
+/* Название предмета — как подсказка в инвентаре: тёмная плашка, фиолетовая кайма. */
+#pjModal .pjt-item {
+  padding: 3px 7px 4px;
+  font: 700 12px/1.2 var(--m-font);
+  color: #fff;
+  background: rgba(16, 0, 16, 0.92);
+  box-shadow: inset 0 0 0 1px #2a0d5e, inset 0 0 0 2px rgba(80, 0, 255, 0.35);
+}
+
+/* ---------- Заглушки по форме оригинала ---------- */
+#pjModal .pjt-sk { display: flex; flex-direction: column; animation: pjtSk 300ms ease-out both; }
+#pjModal .pjt-sk .skel { display: block; }
+/* Общий .skel (surface-2) почти сливается с фоном окна мода — здесь заметнее. */
+#pjModal .pjt-sk .skel,
+#pjModal .pjt-line .skel { background: color-mix(in srgb, var(--m-fg) 9%, transparent); }
+#pjModal .pjt-sk-dot { background: color-mix(in srgb, var(--m-fg) 14%, transparent) !important; }
+#pjModal .pjt-sk-row { display: flex; align-items: center; gap: 8px; height: 23.5px; }
+#pjModal .pjt-sk-row .skel { height: 11px; }
+#pjModal .pjt-sk.li .pjt-sk-row { padding-left: 4px; }
+#pjModal .pjt-sk-dot { flex: none; width: 5px; height: 5px; background: var(--m-surface-2); }
+#pjModal .pjt-sk.tbl .pjt-sk-row .skel { height: 16px; }
+#pjModal .pjt-sk.h { padding-top: 10px; }
+#pjModal .pjt-sk.h .skel { height: 17px; }
+#pjModal .pjt-sk.img .skel {
+  display: grid;
+  place-items: center;
+  width: min(100%, 520px);
+  aspect-ratio: 16 / 9;
+  max-height: min(320px, 42vh);
+  color: var(--m-fg-faint);
+}
+#pjModal .pjt-sk.code .skel { height: 100%; background: color-mix(in srgb, var(--m-surface-2) 70%, #000); }
+#pjModal .pjt-sk-hr { height: 0; margin: 4px 0; border: 0; border-top: 2px solid var(--m-surface-2); }
+@keyframes pjtSk { from { opacity: 0; } }
+
+/* Перевод ещё не пришёл после ответа сервера: та же форма, тише, с подписью. */
+#pjModal .pjt-hold { position: relative; }
+#pjModal .pjt-hold.late .pjt-sk { opacity: 0.55; }
+#pjModal .pjt-hold-t {
+  position: absolute;
+  top: 2px;
+  right: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  font: 650 11px/1.3 var(--m-font);
+  color: var(--m-fg-faint);
+  background: var(--m-surface);
+  clip-path: var(--px-4);
+}
+
+/* Строчная заглушка: описание под названием, подпись картинки, имя версии. */
+.pjt-line { display: inline-flex; flex-direction: column; gap: 6px; vertical-align: middle; max-width: 100%; }
+.pjt-line .skel { display: inline-block; height: 0.8em; max-width: 100%; }
+.pjt-line.block { display: flex; width: 100%; }
+
+/* ---------- Переведённые абзацы ---------- */
+#pjModal .pjt-b { position: relative; min-width: 0; animation: pjtIn 420ms var(--m-ease-out, ease-out) both; }
+#pjModal .pjt-b > :is(h3, h4):first-child { margin-top: 8px !important; }
+@keyframes pjtIn {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: none; }
+}
+#pjModal .pjt-b:hover:not(.editing) { background: color-mix(in srgb, var(--m-fg) 3%, transparent); box-shadow: -8px 0 0 color-mix(in srgb, var(--m-fg) 3%, transparent), 8px 0 0 color-mix(in srgb, var(--m-fg) 3%, transparent); }
+#pjModal .pjt-b.draft { box-shadow: -10px 0 0 -8px color-mix(in srgb, var(--m-fg) 10%, transparent); }
+#pjModal .pjt-b.editing { padding: 8px 10px 10px; margin: 0 -10px; background: color-mix(in srgb, var(--m-fg) 4%, transparent); }
+
+/* Кнопка правки — над правым краем абзаца, наполовину в просвете между блоками:
+   текст под ней почти не закрыт, а принадлежность абзацу видна по подсветке. */
+#pjModal .pjt-edit {
+  position: absolute;
+  top: -15px;
+  right: -6px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 9px 1px;
+  font: 700 11.5px/1 var(--m-font);
+  color: #d9c8ff;
+  background: rgba(40, 14, 84, 0.92);
+  clip-path: var(--px-4);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  transform: translateY(2px);
+  pointer-events: none;
+  transition: opacity var(--m-t-fast), transform var(--m-t-fast), background-color var(--m-t-fast);
+}
+#pjModal .pjt-b:hover > .pjt-edit,
+#pjModal .pjt-edit:focus-visible { opacity: 1; transform: none; pointer-events: auto; }
+#pjModal .pjt-edit:hover { color: #fff; background: rgba(90, 40, 200, 0.95); }
+@media (hover: none) {
+  #pjModal .pjt-edit { position: static; margin-top: 4px; opacity: 0.8; transform: none; pointer-events: auto; }
+}
+
+/* ---------- Правка ---------- */
+#pjModal .pjt-box { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+#pjModal .pjt-ta {
+  width: 100%;
+  min-height: 72px;
+  max-height: 320px;
+  padding: 9px 11px;
+  resize: vertical;
+  font: 500 14px/1.55 var(--m-font);
+  color: var(--m-fg);
+  background: var(--m-bg);
+  border: 2px solid color-mix(in srgb, var(--m-fg) 14%, transparent);
+  border-radius: 0;
+  outline: none;
+}
+#pjModal .pjt-ta:focus { border-color: rgba(150, 100, 255, 0.7); }
+#pjModal .pjt-orig summary { width: max-content; cursor: pointer; font: 650 11.5px/1.4 var(--m-font); color: var(--m-fg-faint); }
+#pjModal .pjt-orig summary:hover { color: var(--m-fg-subtle); }
+#pjModal .pjt-orig-t {
+  margin-top: 4px;
+  padding: 6px 9px;
+  max-height: 140px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font: 500 12.5px/1.45 var(--m-mono);
+  color: var(--m-fg-subtle);
+  background: color-mix(in srgb, var(--m-fg) 4%, transparent);
+}
+#pjModal .pjt-sugs { display: flex; flex-direction: column; gap: 4px; }
+#pjModal .pjt-sugs-h { font: 750 11.5px/1.2 var(--m-font); color: var(--m-fg-subtle); }
+#pjModal .pjt-sug {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 6px 8px;
+  background: color-mix(in srgb, var(--m-fg) 5%, transparent);
+  clip-path: var(--px-4);
+}
+#pjModal .pjt-sug-t { flex: 1 1 auto; min-width: 0; font: 500 13px/1.45 var(--m-font); color: var(--m-fg-muted); white-space: pre-wrap; overflow-wrap: break-word; }
+#pjModal .pjt-vote { flex: none; display: inline-flex; align-items: center; gap: 4px; }
+#pjModal .pjt-vote b { min-width: 22px; text-align: center; font: 750 12px/1 var(--m-font); color: var(--m-fg-subtle); font-variant-numeric: tabular-nums; }
+#pjModal .pjt-vote b.pos { color: var(--m-accent); }
+#pjModal .pjt-vote b.neg { color: var(--m-danger); }
+#pjModal .pjt-vb {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  color: var(--m-fg-subtle);
+  background: color-mix(in srgb, var(--m-fg) 7%, transparent);
+  clip-path: var(--px-4);
+}
+#pjModal .pjt-vb.up .px-icon { transform: rotate(-90deg); }
+#pjModal .pjt-vb.down .px-icon { transform: rotate(90deg); }
+#pjModal .pjt-vb:hover:not(:disabled) { color: var(--m-fg); background: color-mix(in srgb, var(--m-fg) 14%, transparent); }
+#pjModal .pjt-vb:disabled { opacity: 0.45; cursor: default; }
+#pjModal .pjt-box-row { display: flex; align-items: center; gap: 6px; }
+#pjModal .pjt-box-row .btn.sm { height: 30px; padding: 0 12px; font-size: 12.5px; }
+#pjModal .pjt-box-hint,
+#pjModal .pjt-box-msg { flex: 1 1 auto; min-width: 0; font: 600 12px/1.3 var(--m-font); color: var(--m-fg-faint); }
+#pjModal .pjt-box-msg.ok { color: var(--m-accent); }
+#pjModal .pjt-box-msg.bad { color: var(--m-warning); }
+
+/* ---------- Прочее ---------- */
+#pjModal .pjt-err { margin: 0; }
+#pjModal .pjt-trunc { margin: 4px 0 0; font: 600 12.5px/1.4 var(--m-font); color: var(--m-fg-faint); }
+#pjModal .pjt-peek-b {
+  padding: 0;
+  font: 700 12.5px/1 var(--m-font);
+  color: var(--m-fg-subtle);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  background: none;
+}
+#pjModal .pjt-peek-b:hover { color: var(--m-fg); }
+
+/* ---------- Знак «Перевод Millida» у переключателя ---------- */
+#pjModal .pjt-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  margin-right: 6px;
+  font: 700 11.5px/1 var(--m-font);
+  color: #b9a7ff;
+  white-space: nowrap;
+  cursor: default;
+}
+#pjModal .pjt-mark-n { font-variant-numeric: tabular-nums; color: var(--m-fg-subtle); }
+#pjModal .pjt-mark-c { font-style: normal; color: var(--m-accent); }
+@media (max-width: 720px) {
+  #pjModal .pjt-mark-t { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #pjModal .pjt-b,
+  #pjModal .pjt-sk,
+  #pjModal .pjt-sum.live .pjt-sum-t { animation: none; }
+}
+
+/* Абзац без перевода (лимит переводчика) — текст автора, приглушён. */
+.pjt-b.pjt-en { opacity: 0.72; }

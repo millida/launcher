@@ -2,10 +2,14 @@ use futures::StreamExt;
 use serde_json::Value;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use super::jobs::CANCELLED;
+use super::jobs::{Halt, CANCELLED};
+
+/// Never leaves this layer: a paused stream ends with it, the caller waits at
+/// `Halt::gate` and asks for the rest of the file.
+pub(crate) const PAUSED: &str = "Загрузка на паузе";
 
 const UA: &str = concat!("MillidaLauncher/", env!("CARGO_PKG_VERSION"), " (+https://millida.net)");
 const JSON_TIMEOUT: Duration = Duration::from_secs(30);
@@ -536,7 +540,7 @@ async fn fetch_cancellable(
     dest: &Path,
     sum: Option<Sum<'_>>,
     size: Option<u64>,
-    cancel: Option<&AtomicBool>,
+    cancel: Option<&Halt>,
     on: Option<&Progress<'_>>,
 ) -> Result<(), String> {
     if url.trim().is_empty() {
@@ -552,7 +556,8 @@ async fn fetch_cancellable(
     let routes = super::mirror::routes(url).await;
     for (ri, route) in routes.iter().enumerate() {
         let has_next = ri + 1 < routes.len();
-        for attempt in 1..=TRIES {
+        let mut attempt = 1;
+        while attempt <= TRIES {
             let target = if attempt > 1 && is_stale_cdn_miss(&last) {
                 bypass_cdn_cache(route)
             } else {
@@ -560,6 +565,15 @@ async fn fetch_cancellable(
             };
             match fetch_once(&target, &part, sum, size, cancel, resume_from, on).await {
                 Ok(()) => return publish(&part, dest, sum, size),
+                // A pause is not a failed attempt: everything that landed stays,
+                // whatever its size, and the same attempt picks up from there.
+                Err(e) if e == PAUSED => {
+                    resume_from = std::fs::metadata(&part).map(|m| m.len()).unwrap_or(0);
+                    if let Some(halt) = cancel {
+                        halt.gate().await?;
+                    }
+                    continue;
+                }
                 Err(e) => {
                     /*
                      * Оборванную закачку большого файла оставляем на диске и
@@ -589,6 +603,7 @@ async fn fetch_cancellable(
             if attempt < TRIES {
                 tokio::time::sleep(retry_pause(attempt, &last)).await;
             }
+            attempt += 1;
         }
     }
     Err(last)
@@ -605,8 +620,8 @@ fn retry_pause(attempt: u32, err: &str) -> Duration {
     }
 }
 
-fn cancelled(cancel: Option<&AtomicBool>) -> bool {
-    cancel.is_some_and(|c| c.load(Ordering::Relaxed))
+fn cancelled(cancel: Option<&Halt>) -> bool {
+    cancel.is_some_and(Halt::cancelled)
 }
 
 const CANCEL_POLL: Duration = Duration::from_millis(200);
@@ -614,19 +629,34 @@ const CANCEL_POLL: Duration = Duration::from_millis(200);
 /// A stalled connection delivers nothing until the read timeout, so a flag
 /// checked only between chunks kept a cancelled download alive for a minute,
 /// long enough for the next launch to start next to it.
-pub(crate) async fn or_cancel<F: std::future::Future>(fut: F, cancel: Option<&AtomicBool>) -> Result<F::Output, String> {
-    let Some(flag) = cancel else { return Ok(fut.await) };
-    if flag.load(Ordering::Relaxed) {
-        return Err(CANCELLED.into());
-    }
+///
+/// A pause holds the work before it starts; work already under way finishes.
+pub(crate) async fn or_cancel<F: std::future::Future>(fut: F, cancel: Option<&Halt>) -> Result<F::Output, String> {
+    let Some(halt) = cancel else { return Ok(fut.await) };
+    halt.gate().await?;
+    watch(fut, halt, false).await
+}
+
+/// For reads of a download body: a pause ends the wait with `PAUSED` instead
+/// of leaving the connection idle. A stream held open through a long pause is
+/// cut by the server, and every such cut used to cost a retry.
+pub(crate) async fn or_pause<F: std::future::Future>(fut: F, cancel: Option<&Halt>) -> Result<F::Output, String> {
+    let Some(halt) = cancel else { return Ok(fut.await) };
+    watch(fut, halt, true).await
+}
+
+async fn watch<F: std::future::Future>(fut: F, halt: &Halt, stop_on_pause: bool) -> Result<F::Output, String> {
     tokio::pin!(fut);
     let mut tick = tokio::time::interval(CANCEL_POLL);
     loop {
         tokio::select! {
             out = &mut fut => return Ok(out),
             _ = tick.tick() => {
-                if flag.load(Ordering::Relaxed) {
+                if halt.cancelled() {
                     return Err(CANCELLED.into());
+                }
+                if stop_on_pause && halt.paused() {
+                    return Err(PAUSED.into());
                 }
             }
         }
@@ -656,7 +686,7 @@ async fn fetch_once(
     part: &Path,
     sum: Option<Sum<'_>>,
     size: Option<u64>,
-    cancel: Option<&AtomicBool>,
+    cancel: Option<&Halt>,
     resume_from: u64,
     on: Option<&Progress<'_>>,
 ) -> Result<(), String> {
@@ -667,7 +697,7 @@ async fn fetch_once(
     if resume_from > 0 {
         req = req.header("Range", format!("bytes={}-", resume_from));
     }
-    let resp = or_cancel(req.send(), cancel).await?.map_err(|e| format!("{}: {}", url, net_err(&e)))?;
+    let resp = or_pause(req.send(), cancel).await?.map_err(|e| format!("{}: {}", url, net_err(&e)))?;
     if !resp.status().is_success() {
         return Err(format!("{} → {}", url, resp.status()));
     }
@@ -704,7 +734,7 @@ async fn fetch_once(
         std::fs::File::create(part).map_err(|e| format!("{}: {}", part.display(), e))?
     };
     let mut stream = resp.bytes_stream();
-    while let Some(chunk) = or_cancel(stream.next(), cancel).await? {
+    while let Some(chunk) = or_pause(stream.next(), cancel).await? {
         let chunk = chunk.map_err(|e| format!("{}: обрыв загрузки ({})", url, net_err(&e)))?;
         if let Some(h) = hasher.as_mut() {
             h.update(&chunk);
@@ -712,7 +742,7 @@ async fn fetch_once(
         written += chunk.len() as u64;
         file.write_all(&chunk).map_err(|e| e.to_string())?;
         if let Some(report) = on {
-            report(if resumed { resume_from + written } else { written }, size);
+            report(written, size);
         }
     }
     file.flush().map_err(|e| e.to_string())?;
@@ -764,7 +794,7 @@ pub(crate) async fn download_fresh(url: &str, dest: &Path) -> Result<(), String>
 pub(crate) async fn download_fresh_cancellable(
     url: &str,
     dest: &Path,
-    cancel: &AtomicBool,
+    cancel: &Halt,
 ) -> Result<(), String> {
     fetch_cancellable(url, dest, None, None, Some(cancel), None).await
 }
@@ -785,7 +815,7 @@ pub(crate) async fn download_checked_cancellable(
     dest: &Path,
     sum: Option<Sum<'_>>,
     size: Option<u64>,
-    cancel: Option<&AtomicBool>,
+    cancel: Option<&Halt>,
 ) -> Result<(), String> {
     if dest.exists() {
         let owned = sum.map(OwnedSum::of);
@@ -830,7 +860,7 @@ pub(crate) async fn download_checked_progress(
     dest: &Path,
     sum: Option<Sum<'_>>,
     size: Option<u64>,
-    cancel: Option<&AtomicBool>,
+    cancel: Option<&Halt>,
     on: &Progress<'_>,
 ) -> Result<(), String> {
     if dest.exists() {
@@ -870,7 +900,7 @@ async fn fetch_segmented(
     dest: &Path,
     sum: Sum<'_>,
     size: u64,
-    cancel: Option<&AtomicBool>,
+    cancel: Option<&Halt>,
     on: &Progress<'_>,
 ) -> Result<Segmented, String> {
     if let Some(p) = dest.parent() {
@@ -912,7 +942,7 @@ async fn fetch_span(
     part: &Path,
     start: u64,
     end: u64,
-    cancel: Option<&AtomicBool>,
+    cancel: Option<&Halt>,
     got: &std::sync::atomic::AtomicU64,
     total: u64,
     on: &Progress<'_>,
@@ -921,24 +951,33 @@ async fn fetch_span(
     let io = |e: std::io::Error| SpanErr::Failed(format!("{}: {}", part.display(), e));
     let mut at = start;
     let mut last = String::new();
-    for attempt in 1..=TRIES {
+    let mut attempt = 1;
+    while attempt <= TRIES {
         let req = client().get(url).header("Range", format!("bytes={}-{}", at, end - 1));
-        match or_cancel(req.send(), cancel).await.map_err(SpanErr::Failed)? {
-            Ok(resp) if resp.status() == reqwest::StatusCode::PARTIAL_CONTENT && range_starts_at(&resp, at) => {
+        let mut paused = false;
+        match or_pause(req.send(), cancel).await {
+            Err(e) if e == PAUSED => paused = true,
+            Err(e) => return Err(SpanErr::Failed(e)),
+            Ok(Ok(resp)) if resp.status() == reqwest::StatusCode::PARTIAL_CONTENT && range_starts_at(&resp, at) => {
                 let mut file = std::fs::OpenOptions::new().write(true).open(part).map_err(io)?;
                 file.seek(SeekFrom::Start(at)).map_err(io)?;
                 let mut stream = resp.bytes_stream();
                 while at < end {
-                    match or_cancel(stream.next(), cancel).await.map_err(SpanErr::Failed)? {
-                        None => break,
-                        Some(Ok(chunk)) => {
+                    match or_pause(stream.next(), cancel).await {
+                        Err(e) if e == PAUSED => {
+                            paused = true;
+                            break;
+                        }
+                        Err(e) => return Err(SpanErr::Failed(e)),
+                        Ok(None) => break,
+                        Ok(Some(Ok(chunk))) => {
                             let take = chunk.len().min((end - at) as usize);
                             file.write_all(&chunk[..take]).map_err(io)?;
                             at += take as u64;
                             let now = got.fetch_add(take as u64, Ordering::Relaxed) + take as u64;
                             on(now, Some(total));
                         }
-                        Some(Err(e)) => {
+                        Ok(Some(Err(e))) => {
                             last = format!("{}: обрыв загрузки ({})", url, net_err(&e));
                             break;
                         }
@@ -946,14 +985,20 @@ async fn fetch_span(
                 }
                 file.flush().map_err(io)?;
             }
-            Ok(resp) if resp.status().is_success() || resp.status() == reqwest::StatusCode::RANGE_NOT_SATISFIABLE => {
+            Ok(Ok(resp)) if resp.status().is_success() || resp.status() == reqwest::StatusCode::RANGE_NOT_SATISFIABLE => {
                 return Err(SpanErr::Unsupported);
             }
-            Ok(resp) => last = format!("{} → {}", url, resp.status()),
-            Err(e) => last = format!("{}: {}", url, net_err(&e)),
+            Ok(Ok(resp)) => last = format!("{} → {}", url, resp.status()),
+            Ok(Err(e)) => last = format!("{}: {}", url, net_err(&e)),
         }
         if at >= end {
             return Ok(());
+        }
+        if paused {
+            if let Some(halt) = cancel {
+                halt.gate().await.map_err(SpanErr::Failed)?;
+            }
+            continue;
         }
         if cancelled(cancel) {
             return Err(SpanErr::Failed(CANCELLED.into()));
@@ -961,6 +1006,7 @@ async fn fetch_span(
         if attempt < TRIES {
             tokio::time::sleep(retry_pause(attempt, &last)).await;
         }
+        attempt += 1;
     }
     Err(SpanErr::Failed(if last.is_empty() { format!("{}: ответ оборвался", url) } else { last }))
 }
@@ -1077,7 +1123,8 @@ mod tests {
     #[tokio::test]
     async fn a_cancelled_download_gives_up_at_once() {
         let dest = tmp("cancel").join("pack.mrpack");
-        let flag = AtomicBool::new(true);
+        let flag = Halt::default();
+        flag.cancel();
         let err = download_fresh_cancellable(DEAD, &dest, &flag).await.unwrap_err();
         assert_eq!(err, CANCELLED, "отменённая загрузка обязана вернуть именно отмену");
         assert!(!dest.exists(), "после отмены целевой файл не создаётся");
@@ -1111,11 +1158,11 @@ PK"),
                 tokio::time::sleep(Duration::from_secs(120)).await;
             });
             let dest = tmp("stall").join(format!("{}.zip", name.len()));
-            let flag = std::sync::Arc::new(AtomicBool::new(false));
+            let flag = std::sync::Arc::new(Halt::default());
             let setter = flag.clone();
             tokio::spawn(async move {
                 tokio::time::sleep(Duration::from_millis(300)).await;
-                setter.store(true, Ordering::SeqCst);
+                setter.cancel();
             });
             let noop = |_: u64, _: Option<u64>| {};
             let res = tokio::time::timeout(
@@ -1415,6 +1462,60 @@ PK"),
         let r = fetch_segmented(&url, &dest, Sum::Sha1(wrong), body.len() as u64, None, &noop).await;
         assert!(matches!(r, Ok(Segmented::Unsupported)), "несошедшийся хеш обязан вернуть откат, а не готовый файл");
         assert!(!dest.exists(), "файл с чужим содержимым не должен лечь на место");
+    }
+
+    /// (path, what ends the pause) -> outcome. Nothing downloads while paused,
+    /// a resume finishes the file intact, and a cancel during a pause still
+    /// ends the install as a cancel, on both the plain and the ranged path.
+    #[tokio::test]
+    async fn a_paused_download_waits_resumes_and_still_cancels() {
+        let body: Vec<u8> = (0..1_000_003u32).map(|i| (i % 251) as u8).collect();
+        let sha1 = {
+            use sha1::Digest as _;
+            sha1::Sha1::digest(&body).iter().map(|b| format!("{:02x}", b)).collect::<String>()
+        };
+        let cases: [(bool, bool, &str); 4] = [
+            (false, false, "plain stream, resumed"),
+            (false, true, "plain stream, cancelled while paused"),
+            (true, false, "ranged download, resumed"),
+            (true, true, "ranged download, cancelled while paused"),
+        ];
+        let noop = |_: u64, _: Option<u64>| {};
+        let hold = Duration::from_millis(400);
+        for (i, (ranged, cancel_it, why)) in cases.into_iter().enumerate() {
+            let url = serve_ranges(body.clone(), RangeMode::Honest).await;
+            let dest = tmp(&format!("pause-{}", i)).join("pack.zip");
+            let halt = std::sync::Arc::new(Halt::default());
+            halt.set_paused(true);
+            let h = halt.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(hold).await;
+                if cancel_it {
+                    h.cancel();
+                } else {
+                    h.set_paused(false);
+                }
+            });
+            let started = std::time::Instant::now();
+            let size = body.len() as u64;
+            let r = tokio::time::timeout(Duration::from_secs(10), async {
+                if ranged {
+                    fetch_segmented(&url, &dest, Sum::Sha1(&sha1), size, Some(&halt), &noop).await.map(|_| ())
+                } else {
+                    download_checked_progress(&url, &dest, Some(Sum::Sha1(&sha1)), Some(size), Some(&halt), &noop).await
+                }
+            })
+            .await
+            .unwrap_or_else(|_| panic!("{}: the download never came back from the pause", why));
+            assert!(started.elapsed() >= hold - Duration::from_millis(50), "{}: bytes moved while paused", why);
+            if cancel_it {
+                assert_eq!(r.unwrap_err(), CANCELLED, "{}: a cancel during a pause must end as a cancel", why);
+                assert!(!dest.exists(), "{}: a cancelled download must not leave a file in place", why);
+            } else {
+                r.unwrap_or_else(|e| panic!("{}: {}", why, e));
+                assert_eq!(std::fs::read(&dest).unwrap(), body, "{}: the resumed file differs from the source", why);
+            }
+        }
     }
 
     /// вход -> пауза перед повтором. 429 от нашего зеркала значит «подожди

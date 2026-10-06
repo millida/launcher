@@ -355,7 +355,7 @@ pub(crate) fn content_range_ok(header: Option<&str>, from: u64, to_exclusive: u6
 async fn fetch_span_once(url: &str, group: &Group, total: u64, dest: &Path, job: &Job, on: &(dyn Fn(u64) + Send + Sync)) -> Result<(), String> {
     let cancel = Some(job.cancel_flag());
     let req = client().get(url).header(reqwest::header::RANGE, format!("bytes={}-{}", group.from, group.to - 1));
-    let resp = or_cancel(req.send(), cancel).await?.map_err(|e| net_err(&e))?;
+    let resp = or_pause(req.send(), cancel).await?.map_err(|e| net_err(&e))?;
     if !super::catalog_pack::pack_url_allowed(resp.url().as_str()) {
         return Err("хранилище перенаправило на чужой адрес".into());
     }
@@ -370,7 +370,7 @@ async fn fetch_span_once(url: &str, group: &Group, total: u64, dest: &Path, job:
     let mut file = std::fs::File::create(dest).map_err(|e| io_fail("Обновление", dest, &e))?;
     let mut got = 0u64;
     let mut resp = resp;
-    while let Some(chunk) = or_cancel(resp.chunk(), cancel).await?.map_err(|e| format!("обрыв загрузки ({})", net_err(&e)))? {
+    while let Some(chunk) = or_pause(resp.chunk(), cancel).await?.map_err(|e| format!("обрыв загрузки ({})", net_err(&e)))? {
         got += chunk.len() as u64;
         if got > want {
             return Err("хранилище прислало больше, чем просили".into());
@@ -387,16 +387,35 @@ async fn fetch_span_once(url: &str, group: &Group, total: u64, dest: &Path, job:
 
 async fn fetch_span(url: &str, group: &Group, total: u64, dest: &Path, job: &Job, on: &(dyn Fn(u64) + Send + Sync)) -> Result<(), String> {
     let mut last = String::new();
-    for attempt in 1..=RANGE_TRIES {
-        match fetch_span_once(url, group, total, dest, job, on).await {
+    let mut attempt = 1;
+    let best = std::sync::atomic::AtomicU64::new(0);
+    while attempt <= RANGE_TRIES {
+        // Each try rewrites the group from its start: only bytes past the best
+        // mark are new, or a resumed group would push the bar past real bytes.
+        let mine = std::sync::atomic::AtomicU64::new(0);
+        let counted = |n: u64| {
+            let now = mine.fetch_add(n, Ordering::Relaxed) + n;
+            let grown = now.saturating_sub(best.fetch_max(now, Ordering::Relaxed));
+            if grown > 0 {
+                on(grown);
+            }
+        };
+        match fetch_span_once(url, group, total, dest, job, &counted).await {
             Ok(()) => return Ok(()),
-            Err(e) if e == CANCELLED || job.cancel_flag().load(Ordering::Relaxed) => return Err(CANCELLED.into()),
+            Err(e) if e == CANCELLED || job.cancelled() => return Err(CANCELLED.into()),
+            // A group is rewritten from its start, so a pause costs at most one
+            // group and never an attempt.
+            Err(e) if e == PAUSED => {
+                job.cancel_flag().gate().await?;
+                continue;
+            }
             Err(e) if e.contains("вместо куска") || e.contains("не тот кусок") || e.contains("чужой адрес") => return Err(e),
             Err(e) => last = e,
         }
         if attempt < RANGE_TRIES {
             tokio::time::sleep(std::time::Duration::from_millis(500 * attempt as u64)).await;
         }
+        attempt += 1;
     }
     Err(last)
 }

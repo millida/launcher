@@ -12,6 +12,99 @@ import type { PlanItem } from '../ipc/commands'
 
 export type MilliLoader = 'fabric' | 'forge' | 'neoforge' | 'quilt'
 
+// ─── Верстак: контракт SPEC §1 (синхронно с milli-server/src/types.ts) ────
+
+export type MilliTab = 'mods' | 'resourcepacks' | 'shaders' | 'config'
+export type MilliCat = 'perf' | 'ui' | 'world' | 'mobs' | 'tech' | 'magic' | 'adventure' | 'build' | 'look' | 'misc' | 'lib'
+export type MilliBy = 'milli' | 'user' | 'auto' | 'base'
+export type MilliLevel = 'off' | 'light' | 'medium' | 'heavy'
+export type MilliProfile = 'low' | 'balanced' | 'high'
+export type MilliRpStyle = 'fantasy' | 'medieval' | 'faithful' | 'cartoon' | 'realistic' | 'dark' | 'pvp'
+/** Имена как в milli-server/src/types.ts. */
+export type ShaderLevel = MilliLevel
+export type PcProfile = MilliProfile
+export type RpStyle = MilliRpStyle
+export type ProgressKey = MilliProgressKey
+/** В списках url не приходит: строим сами. */
+export const milliItemUrl = (m: Pick<MilliItem, 'slug' | 'url'>, tab: MilliTab = 'mods') =>
+  m.url || 'https://modrinth.com/' + (tab === 'shaders' ? 'shader' : tab === 'resourcepacks' ? 'resourcepack' : 'mod') + '/' + m.slug
+
+export const MILLI_TABS: readonly MilliTab[] = ['mods', 'resourcepacks', 'shaders', 'config']
+export const MILLI_TAB_RU: Record<MilliTab, string> = { mods: 'Моды', resourcepacks: 'Ресурс-паки', shaders: 'Шейдеры', config: 'Настройки' }
+export const MILLI_CAT_RU: Record<MilliCat, string> = {
+  perf: 'Оптимизация',
+  ui: 'Интерфейс и удобство',
+  world: 'Мир и генерация',
+  mobs: 'Мобы и существа',
+  tech: 'Техника',
+  magic: 'Магия',
+  adventure: 'Приключения и бой',
+  build: 'Строительство и декор',
+  look: 'Графика и звук',
+  misc: 'Разное',
+  lib: 'Библиотеки',
+}
+
+export interface MilliConfig {
+  profile: MilliProfile
+  ramMb: number
+  jvm: 'g1' | 'zgc'
+  /** Только белый список ванильных ключей options.txt. */
+  options: Record<string, string>
+  shaderPack: string | null
+}
+
+export interface MilliChangeRef {
+  projectId: string
+  title: string
+  tab: MilliTab
+  by: MilliBy
+}
+
+export interface MilliChangeset {
+  titleRu: string
+  by: 'milli' | 'user'
+  added: MilliChangeRef[]
+  removed: MilliChangeRef[]
+  changed: { projectId: string; title: string; field: string; from: string; to: string }[]
+  config?: { key: string; from: string; to: string }[]
+  skipped?: { what: string; reasonRu: string }[]
+}
+
+export type MilliOp =
+  | { op: 'add'; tab: MilliTab; ref: string }
+  | { op: 'remove'; tab: MilliTab; ref: string }
+  | { op: 'restore'; tab: MilliTab; ref: string }
+  | { op: 'replace'; tab: MilliTab; ref: string; to: string }
+  | { op: 'pin'; ref: string; on: boolean }
+  | { op: 'shader_level'; level: MilliLevel }
+  | { op: 'rp_style'; style: MilliRpStyle; mode: 'add' | 'replace' }
+  | { op: 'profile'; profile: MilliProfile }
+  | { op: 'config'; key: string; value: string }
+  | { op: 'size'; target: number }
+  /** Порядок ресурс-паков: первый перекрывает остальные. */
+  | { op: 'order'; tab: 'resourcepacks'; refs: string[] }
+  | { op: 'theme'; id: string; delta: number }
+
+export type MilliProgressKey = 'plan' | 'candidates' | 'select' | 'resolve' | 'deps' | 'conflicts' | 'extras' | 'enrich' | 'done'
+
+export interface MilliProgressEvent {
+  seq: number
+  key: MilliProgressKey
+  labelRu: string
+  done: number
+  total: number
+  sample?: string[]
+  /** Сколько кандидатов найдено / версий проверено к этому моменту. */
+  found?: number
+  checked?: number
+}
+
+export interface MilliProgress {
+  running: boolean
+  events: MilliProgressEvent[]
+}
+
 export interface MilliCounter {
   used: number
   limit: number
@@ -24,6 +117,8 @@ export interface MilliStatus {
   enabled: boolean
   blocked: boolean
   plus: boolean
+  /** Тариф целиком (стенд присылает; прод — пока только plus). */
+  tier?: 'free' | 'plus' | 'diamond' | 'qa'
   day: MilliCounter
   month: MilliCounter
   /** `enhanced` — «Улучшенная сборка» (PLUS): второй проход проверки. Старый API поля не присылает. */
@@ -38,6 +133,45 @@ export interface MilliItem {
   why: string
   base: boolean
   source: 'modrinth'
+  /** Для карточки при наведении. Прод может не прислать — читать осторожно. */
+  author?: string
+  /** Описание проекта Modrinth, до 140 символов. */
+  description?: string
+  downloads?: number
+  /** https://modrinth.com/<type>/<slug> */
+  url?: string
+  /** Короткое описание по-русски (≤90 символов). */
+  descriptionRu?: string
+  /** projectId из этой сборки, которые нужны этому предмету. */
+  requires?: string[]
+  /** projectId из этой сборки, которым нужен этот предмет. */
+  requiredBy?: string[]
+  /** Точная версия Modrinth: ставится она, а не последняя (проверенная или починенная). */
+  versionId?: string
+  /** Имя файла (активный шейдер — для iris.properties). */
+  fileName?: string
+  /** Номер версии для моддеров: «0.5.13+mc1.20.1». */
+  version?: string
+  /** proven — эта версия уже доходила до меню; risky — есть известная проблема (см. riskNote). */
+  risk?: 'proven' | 'risky'
+  /** По-русски: «Версия 1.5.0 вылетает вместе с Sodium — взяли 1.4.2». */
+  riskNote?: string
+  cat?: MilliCat
+  side?: 'client' | 'server' | 'both' | 'single'
+  /** Кто положил в сборку: Милли, игрок, автоматически (зависимость), база загрузчика. */
+  by?: MilliBy
+  pinned?: boolean
+  heavy?: boolean
+  ruInGame?: boolean
+  /** Шейдеры: уровень нагрузки и флаг Distant Horizons. */
+  level?: 'light' | 'medium' | 'heavy'
+  dh?: boolean
+  /** Версию не удалось проверить (сеть) — не «нет версии». */
+  unchecked?: boolean
+  /** Картинка-превью (ресурс-паки, шейдеры). */
+  preview?: string
+  /** Разрешение ресурс-пака: «16x», «32x». */
+  res?: string
 }
 
 export interface MilliCatalogItem {
@@ -59,6 +193,7 @@ export interface MilliExcluded {
   slug: string
   title: string
   reason: string
+  /** Простыми словами: какая версия или зависимость помешала. */
   detail: string
 }
 
@@ -78,11 +213,72 @@ export interface MilliPack {
   locked: { extras: boolean }
   /** Сборка прошла «Улучшенную» проверку: что Милли добавила и убрала. */
   review?: MilliReview | null
+  /** true — сборка с этим составом дошла до главного меню («Проверено запуском»), false — упала. Нет поля — не проверялась. */
+  verified?: boolean
+  /** Необязательные зависимости выбранных модов: предложить, по умолчанию не ставить. */
+  optional?: MilliItem[]
+  /** Оценка по графу совместимости (сколько версий уже запускались, есть ли известные проблемы). */
+  compat?: { proven: number; unknown: number; risky: number; risk: 'low' | 'medium' | 'high'; queued: boolean }
+  /** Сборка упала при проверке, Милли собрала исправленную: её buildId и что сделано. */
+  repair?: { buildId: string; note: string }
+  /** Ревизии: buildId первой ревизии, номер, родитель. */
+  chain?: string
+  rev?: number
+  parent?: string | null
+  /** Целевой размер сборки. */
+  size?: number
+  shaderLevel?: MilliLevel
+  config?: MilliConfig
+  /** Дифф к родительской ревизии. */
+  changes?: MilliChangeset | null
+  /** projectId, убранные игроком: агент не возвращает без прямой просьбы. */
+  userRemoved?: string[]
+  themes?: { id: string; ru: string; w: number }[]
+  /** Курируемая лестница шейдеров под эту версию (≤12). */
+  shaderChoices?: MilliItem[]
+  rpStyles?: { id: string; ru: string }[]
+  /** В истории: только шапка и counts; полный — GET /packs/:buildId. */
+  stub?: boolean
+  counts?: { mods: number; resourcepacks: number; shaders: number }
+  /** Графика под ПК игрока — строками («Дальность прорисовки — 12»). */
+  setup?: MilliSetup
+  /** Проверка сборки по пунктам (версии, зависимости, конфликты…). */
+  check?: MilliCheck
 }
+
+export interface MilliCheck {
+  ok: boolean
+  issues: number
+  items: { key: string; ru: string; ok: boolean; note?: string }[]
+}
+
+export interface MilliSetup {
+  profile: MilliProfile
+  lines: { key: string; ru: string; value: string }[]
+}
+
+/** Железо игрока (POST /messages pc). */
+export interface MilliPc {
+  ramMb: number
+  cores?: number
+  gpu?: string
+}
+
+/** Вопрос сервера о размере новой сборки (без модели, попытка не списана). */
+export const MILLI_SIZE_ASK = 'Сколько модов взять?'
+export const isMilliSizeAsk = (m: Pick<MilliMessage, 'role' | 'text' | 'pack' | 'ask'>) =>
+  m.role === 'assistant' && !m.pack && (m.ask === 'size' || m.text.startsWith(MILLI_SIZE_ASK))
 
 export interface MilliReview {
   added: { title: string }[]
   removed: { title: string; reason: string }[]
+}
+
+export interface MilliLooks {
+  kind: 'rp' | 'shader'
+  key: string
+  label: string
+  items: MilliItem[]
 }
 
 export interface MilliMessage {
@@ -92,6 +288,37 @@ export interface MilliMessage {
   createdAt: string
   pack: MilliPack | null
   suggestions: string[]
+  /** 'size' — Милли спрашивает, сколько модов взять (без модели, попытка не списана). */
+  ask?: 'size'
+  /** План сборки до сборки: «Принять / Дополнить / Изменить» (council/CHAT-AGENT.md). */
+  plan?: MilliPlanCard
+  /** Действие на ПК игрока: карточка «было → станет» (lib/milliActions.ts, parseAction). */
+  action?: unknown
+  /** Варианты ресурс-паков / шейдеров на выбор (жмёшь — встают в сборку). */
+  looks?: MilliLooks
+}
+
+export interface MilliPlanCard {
+  title: string
+  /** RU-ярлыки тем, ≤5. */
+  themes: string[]
+  /** RU: чего не будет. */
+  avoid: string[]
+  size: number
+  /** null — сервер выберет («авто»). */
+  mc: string | null
+  loader: string | null
+  /** Ключевые моды, ≤6: якоря игрока + флагманы тем. */
+  mods: { title: string; icon: string | null; projectId?: string; slug?: string }[]
+  shaders?: string | null
+  rp?: string | null
+  /** Версия и загрузчик, которые возьмёт сборщик (когда mc/loader — null). */
+  mcPick?: string | null
+  loaderPick?: string | null
+  /** Сколько чего будет по вкладкам. */
+  counts?: { mods: number; rp: number; shaders: number }
+  /** Непрозрачно для клиента: сервер собирает по нему. */
+  spec?: unknown
 }
 
 export interface MilliSessionHead {
@@ -102,6 +329,36 @@ export interface MilliSessionHead {
 
 export interface MilliSession extends MilliSessionHead {
   messages: MilliMessage[]
+  /** buildId текущей ревизии сборки этого чата. */
+  head?: string
+}
+
+/** Кнопка приветствия: `text` уходит Милли, `sessionId` — сначала открыть этот разговор. */
+export interface MilliGreetingChip {
+  label: string
+  text?: string
+  sessionId?: string
+}
+
+/** GET /catalog/milli/greeting — первая реплика пустого чата по памяти игрока (без модели, без списания). */
+export interface MilliGreeting {
+  text: string
+  suggestions: string[]
+  chips?: MilliGreetingChip[]
+  known?: boolean
+}
+
+/** Ответ сервера → приветствие или null (старый сервер, демо, битый ответ). */
+export function milliGreetingOf(raw: unknown): MilliGreeting | null {
+  const r = raw as Partial<MilliGreeting> | null
+  if (!r || typeof r.text !== 'string' || !r.text.trim()) return null
+  const str = (x: unknown): x is string => typeof x === 'string' && !!x.trim()
+  const suggestions = (Array.isArray(r.suggestions) ? r.suggestions.filter(str) : []).slice(0, 4)
+  const chips = (Array.isArray(r.chips) ? r.chips : [])
+    .filter((c): c is MilliGreetingChip => !!c && str((c as MilliGreetingChip).label))
+    .map((c) => ({ label: c.label, ...(str(c.text) ? { text: c.text } : {}), ...(str(c.sessionId) ? { sessionId: c.sessionId } : {}) }))
+    .slice(0, 4)
+  return { text: r.text.trim().slice(0, 200), suggestions, ...(chips.length ? { chips } : {}), ...(typeof r.known === 'boolean' ? { known: r.known } : {}) }
 }
 
 export interface MilliReply {
@@ -136,10 +393,14 @@ export interface MilliPlanLimits {
 export interface MilliPlans {
   free: MilliPlanLimits
   plus: MilliPlanLimits
+  diamond: MilliPlanLimits
 }
 
-/** Тарифная сетка на 30.09.2026 — пока не пришёл ответ `/catalog/milli/limits` или если он упал. */
-export const MILLI_PLANS: MilliPlans = { free: { day: 5, month: 30 }, plus: { day: 100, month: 500 } }
+/**
+ * Тарифная сетка (владелец 05.10.2026) — пока не пришёл ответ `/catalog/milli/limits` или если он упал.
+ * Считаются сообщения, где Милли думает; кнопки, «Принять», «Взять» — бесплатно.
+ */
+export const MILLI_PLANS: MilliPlans = { free: { day: 10, month: 40 }, plus: { day: 100, month: 600 }, diamond: { day: 200, month: 1500 } }
 
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null)
 const obj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' ? (v as Record<string, unknown>) : {})
@@ -156,7 +417,7 @@ function plan(raw: unknown, fallback: MilliPlanLimits): MilliPlanLimits {
  */
 export function milliPlans(raw: unknown): MilliPlans {
   const r = obj(raw)
-  return { free: plan(r.free, MILLI_PLANS.free), plus: plan(r.plus, MILLI_PLANS.plus) }
+  return { free: plan(r.free, MILLI_PLANS.free), plus: plan(r.plus, MILLI_PLANS.plus), diamond: plan(r.diamond, MILLI_PLANS.diamond) }
 }
 
 export const LOADER_LABEL: Record<string, string> = { fabric: 'Fabric', forge: 'Forge', neoforge: 'NeoForge', quilt: 'Quilt' }
@@ -236,6 +497,22 @@ export function refineMilliError(e: MilliError, s: MilliStatus | null): MilliErr
 
 // ─── Счётчик и время ─────────────────────────────────────────────────────
 
+/** Оформление чата по тарифу: без PLUS — зелёное, PLUS — золото, Diamond — алмаз. */
+export type MilliLook = 'free' | 'plus' | 'diamond'
+export function milliLook(s: Pick<MilliStatus, 'plus' | 'tier'> | null): MilliLook {
+  if (!s) return 'free'
+  if (s.tier === 'diamond') return 'diamond'
+  return s.plus ? 'plus' : 'free'
+}
+
+/** Цифры для «×10 с PLUS»: из /limits, но без бреда вроде «×1000» от старого ответа сервера. */
+export function milliPlanNumbers(p: MilliPlans): { free: number; plus: number; diamond: number; x: number } {
+  const sane = p.free.day > 0 && p.plus.day > p.free.day && p.plus.day / p.free.day <= 50
+  const q = sane ? p : MILLI_PLANS
+  const diamond = q.diamond && q.diamond.day >= q.plus.day ? q.diamond.day : MILLI_PLANS.diamond.day
+  return { free: q.free.day, plus: q.plus.day, diamond, x: Math.round(q.plus.day / q.free.day) }
+}
+
 /** Сколько запросов осталось прямо сейчас: упирается в меньший из суточного и месячного. */
 export function milliLeft(s: Pick<MilliStatus, 'day' | 'month'> | null): number | null {
   if (!s) return null
@@ -300,7 +577,9 @@ export function milliChosen(pack: MilliPack, off: ReadonlySet<string>): MilliCho
   return { mods, resourcepacks: keep(pack.resourcepacks), shaders }
 }
 
-export const milliItems = (list: MilliItem[]): PlanItem[] => list.map((m) => ({ source: 'modrinth', project_id: m.projectId }))
+/** Точная версия, если сервер её выбрал (проверенная запуском или починенная), иначе ядро берёт последнюю. */
+export const milliItems = (list: MilliItem[]): PlanItem[] =>
+  list.map((m) => ({ source: 'modrinth', project_id: m.projectId, ...(m.versionId ? { version_id: m.versionId } : {}) }))
 
 /** Тело `POST /packs/:buildId/install`: код сборки для «Поделиться». */
 export function milliInstallBody(pack: MilliPack, chosen: MilliChosen, name: string) {
@@ -351,9 +630,41 @@ export interface CrashAiAnswer {
  * свой fetch, чтобы `code` и `scope` из тела ошибки дошли до разбора.
  */
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // Тестовая Милли (milli-server) через прокси Vite: только dev и только с VITE_MILLI_TEST=1 в .env.local.
+  if (import.meta.env.DEV && import.meta.env.VITE_MILLI_TEST === '1') {
+    const tier = milliPreviewTier()
+    return devFetch<T>('/milli-test' + path, init, { 'Content-Type': 'application/json', ...(tier ? { 'x-milli-tier': tier } : {}) })
+  }
   if (import.meta.env.DEV && DEMO_USER && demoOn()) return demoRequest<T>(path, init)
   if (hasTauri() || !import.meta.env.DEV) return api<T>(path, init)
-  const r = await fetch(LAUNCHER_API + path, { ...init, headers: apiHeaders() })
+  return devFetch<T>(LAUNCHER_API + path, init, apiHeaders())
+}
+
+/**
+ * Стенд: «смотреть как без PLUS / PLUS / Diamond» (меню Милли, только dev с тестовым сервером).
+ * Сервер берёт тариф из заголовка x-milli-tier и ведёт для него свой счётчик.
+ */
+export type MilliPreviewTier = 'free' | 'plus' | 'diamond'
+const PREVIEW_KEY = 'milli-preview-tier'
+export function milliPreviewTier(): MilliPreviewTier | null {
+  try {
+    const v = localStorage.getItem(PREVIEW_KEY)
+    return v === 'free' || v === 'plus' || v === 'diamond' ? v : null
+  } catch {
+    return null
+  }
+}
+export function setMilliPreviewTier(t: MilliPreviewTier | null) {
+  try {
+    if (t) localStorage.setItem(PREVIEW_KEY, t)
+    else localStorage.removeItem(PREVIEW_KEY)
+  } catch {}
+}
+export const milliPreviewOn = () => import.meta.env.DEV && import.meta.env.VITE_MILLI_TEST === '1'
+
+/** fetch в dev с разбором `code` и `scope` из тела ошибки — как ждёт milliError(). */
+async function devFetch<T>(url: string, init: RequestInit | undefined, headers: HeadersInit): Promise<T> {
+  const r = await fetch(url, { ...init, headers })
   if (!r.ok) {
     let tail = ''
     try {
@@ -368,19 +679,91 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 const post = (body: unknown): RequestInit => ({ method: 'POST', body: JSON.stringify(body) })
 
 export const milliStatus = () => request<MilliStatus>('/catalog/milli/status')
+/** Приветствие пустого чата; null — показать запасное «Привет! Какую сборку соберём?». */
+export const milliGreeting = async (playerId?: string | null): Promise<MilliGreeting | null> =>
+  milliGreetingOf(await request<unknown>('/catalog/milli/greeting' + (playerId ? '?playerId=' + encodeURIComponent(playerId) : '')))
 export const milliLimits = async (): Promise<MilliPlans> => milliPlans(await request<unknown>('/catalog/milli/limits'))
 export const milliSessions = () => request<{ items: MilliSessionHead[] }>('/catalog/milli/sessions')
 export const milliSession = (id: string) => request<MilliSession>('/catalog/milli/sessions/' + encodeURIComponent(id))
-export const milliSend = (text: string, sessionId?: string | null, enhanced = false) =>
+export interface MilliSendExtra {
+  /** Ревизия, которую видит игрок (после кликов и отмены она новее пакета последнего сообщения). */
+  buildId?: string | null
+  /** Размер сборки: выбор игрока (чип или запомненный). */
+  size?: number | null
+  /** size взят из запомненного выбора, а не из чипа этого хода. */
+  sizeSaved?: boolean
+  /** Железо игрока — только в приложении. */
+  pc?: MilliPc | null
+  /** Факты о выбранной сборке на ПК (milliLocal.gatherFacts) — графика, бэкапы, доктор. */
+  local?: unknown
+}
+
+export const milliSend = (text: string, sessionId?: string | null, enhanced = false, extra: MilliSendExtra = {}) =>
   request<MilliReply>(
     '/catalog/milli/messages',
-    post({ ...(sessionId ? { sessionId } : {}), text: text.slice(0, MILLI_TEXT_MAX), client: 'launcher', ...(enhanced ? { enhanced: true } : {}) }),
+    post({
+      ...(sessionId ? { sessionId } : {}),
+      text: text.slice(0, MILLI_TEXT_MAX),
+      client: 'launcher',
+      ...(enhanced ? { enhanced: true } : {}),
+      ...(extra.buildId ? { buildId: extra.buildId } : {}),
+      ...(extra.size && extra.size > 0 ? { size: Math.round(extra.size), ...(extra.sizeSaved ? { sizeSaved: true } : {}) } : {}),
+      ...(extra.pc && extra.pc.ramMb > 0 ? { pc: extra.pc } : {}),
+      ...(extra.local ? { local: extra.local } : {}),
+    }),
   )
+
+let pcCache: Promise<MilliPc | null> | null = null
+
+/** Железо ПК из ядра (один раз за запуск). Без Tauri — null: в браузере не шлём. */
+export function milliPc(): Promise<MilliPc | null> {
+  if (!hasTauri()) return Promise.resolve(null)
+  pcCache ??= Promise.all([import('../ipc/commands'), import('../components/milli/bench/detectGpu')])
+    .then(async ([c, g]) => {
+      const d = await c.deviceSpecs()
+      if (!d || !(d.ram_mb > 0)) return null
+      let gpu = ''
+      try {
+        gpu = g.detectGpu()
+      } catch {}
+      return { ramMb: d.ram_mb, ...(d.cpu_threads || d.cpu_cores ? { cores: d.cpu_threads || d.cpu_cores } : {}), ...(gpu ? { gpu: gpu.slice(0, 160) } : {}) }
+    })
+    .catch(() => {
+      pcCache = null
+      return null
+    })
+  return pcCache
+}
 export const milliInstall = (buildId: string, body: ReturnType<typeof milliInstallBody>) =>
   request<MilliInstallAnswer>('/catalog/milli/packs/' + encodeURIComponent(buildId) + '/install', post(body))
 export const milliToServer = (buildId: string, serverId: string, projectIds: string[]) =>
   request<MilliServerAnswer>('/catalog/milli/packs/' + encodeURIComponent(buildId) + '/server', post({ serverId, projectIds }))
+/** Сборка по buildId — например, исправленная из `pack.repair.buildId`. */
+export const milliPackById = (buildId: string) => request<MilliPack>('/catalog/milli/packs/' + encodeURIComponent(buildId))
+const packPath = (buildId: string) => '/catalog/milli/packs/' + encodeURIComponent(buildId)
+/** Варианты ресурс-паков (по стилю) или шейдеров (по уровню) на выбор — сборка не меняется. */
+export const milliLooks = (buildId: string, kind: 'rp' | 'shader', key: string) =>
+  request<{ kind: string; key: string; items: MilliItem[] }>(packPath(buildId) + '/looks', post({ kind, key }))
+/** Клики верстака: новая ревизия, 0 LLM, попытка не списывается. */
+export const milliOps = (buildId: string, ops: MilliOp[]) => request<MilliPack>(packPath(buildId) + '/ops', post({ ops }))
+/**
+ * «Отменить»: шаг назад по стеку отмены сервера (повтор идёт дальше назад),
+ * новая ревизия. `to` — «Вернуть» (redo): ревизия той же цепочки. Отменять нечего — 409 milli_rev.
+ */
+export const milliRevert = (buildId: string, to?: string) => request<MilliPack>(packPath(buildId) + '/revert', post(to ? { to } : {}))
+/** Этапы идущего хода; long-poll ≤1,5 с. */
+export const milliProgress = (sessionId: string, after = 0) =>
+  request<MilliProgress>('/catalog/milli/progress?sessionId=' + encodeURIComponent(sessionId) + '&after=' + after)
+/** Прямой адрес .mrpack (application/zip). */
+export const milliMrpackUrl = (buildId: string) => {
+  const path = packPath(buildId) + '/mrpack'
+  if (import.meta.env.DEV && import.meta.env.VITE_MILLI_TEST === '1') return '/milli-test' + path
+  return LAUNCHER_API + path
+}
 export const milliCrash = (body: CrashAskBody) => request<CrashAiAnswer>('/catalog/milli/crash', post(body))
+/** «Стоп»: идущий ход не сохранится, только что сохранённый (≤2 мин) удалится, попытка вернётся. Старый API — 404, это не ошибка. */
+export const milliCancel = (sessionId?: string | null) =>
+  request<{ ok: boolean; cancelled: 'running' | 'saved' | null }>('/catalog/milli/messages/cancel', post(sessionId ? { sessionId } : {}))
 
 // ─── Демо (?preview=user, только dev) ────────────────────────────────────
 // Бэкенда Милли на проде ещё нет: демо отвечает сам. `&milli=live` выключает
@@ -397,4 +780,69 @@ function demoOn(): boolean {
 async function demoRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const m = await import('./milliDemo')
   return m.milliDemoAnswer(path, init) as Promise<T>
+}
+
+// ─── Сводка сборки (футер карточки, «Скопировать список», .mrpack) ─────────
+
+const pluralRu = (n: number, one: string, few: string, many: string) => {
+  const m10 = n % 10
+  const m100 = n % 100
+  if (m10 === 1 && m100 !== 11) return one
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few
+  return many
+}
+
+/** «212 модов» */
+export const milliModsLabel = (n: number) => n + ' ' + pluralRu(n, 'мод', 'мода', 'модов')
+
+/** Оценка веса: средние файлы Modrinth (мод ~5 МБ, РП ~25 МБ, шейдер ~2 МБ). */
+export const milliSizeMb = (p: Pick<MilliPack, 'mods' | 'resourcepacks' | 'shaders'>) => p.mods.length * 5 + p.resourcepacks.length * 25 + p.shaders.length * 2
+
+/** «~120 МБ», «~1,5 ГБ» */
+export const milliSizeText = (mb: number) =>
+  mb < 1000 ? '~' + Math.max(10, Math.round(mb / 10) * 10) + ' МБ' : '~' + (mb / 1024).toFixed(1).replace('.', ',') + ' ГБ'
+
+/** «ОЗУ 6 ГБ» */
+export const milliRamText = (mb: number) => 'ОЗУ ' + (Math.round((mb / 1024) * 2) / 2).toString().replace('.', ',') + ' ГБ'
+
+/** «Скопировать список»: игроку — названия, моддеру — с версиями и ссылками. */
+export function milliPackList(p: MilliPack, modder: boolean): string {
+  const tabs: [ 'mods' | 'resourcepacks' | 'shaders', string][] = [
+    ['mods', 'Моды'],
+    ['resourcepacks', 'Ресурс-паки'],
+    ['shaders', 'Шейдеры'],
+  ]
+  const lines = [p.title + ' · ' + p.mcVersion + ' ' + (LOADER_LABEL[p.loader] || p.loader), '']
+  for (const [tab, ru] of tabs) {
+    const list = p[tab] ?? []
+    if (!list.length) continue
+    lines.push(ru + ' (' + list.length + '):')
+    for (const m of list) lines.push(modder ? '- ' + m.title + (m.version ? ' ' + m.version : '') + ' — ' + milliItemUrl(m, tab) : '- ' + m.title)
+    lines.push('')
+  }
+  return lines.join('\n').trim() + '\n'
+}
+
+/** «Скачать .mrpack»: адрес без входа; в приложении — внешний браузер, в dev — файл. */
+export async function milliDownloadMrpack(p: Pick<MilliPack, 'buildId' | 'title'>, openExternal: (url: string) => void): Promise<boolean> {
+  const url = milliMrpackUrl(p.buildId)
+  if (hasTauri()) {
+    openExternal(url)
+    return true
+  }
+  try {
+    const r = await fetch(url)
+    if (!r.ok) throw new Error('http ' + r.status)
+    const blob = await r.blob()
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = (p.title || 'milli').replace(/[\\/:*?"<>|]+/g, ' ').trim() + '.mrpack'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(a.href), 4_000)
+    return true
+  } catch {
+    return false
+  }
 }

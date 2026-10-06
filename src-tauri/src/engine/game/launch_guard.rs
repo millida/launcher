@@ -1,6 +1,6 @@
 use std::future::Future;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
+use crate::engine::Halt;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
@@ -14,26 +14,26 @@ const UNWIND_WAIT: Duration = Duration::from_secs(20);
 const UNWIND_POLL: Duration = Duration::from_millis(150);
 
 tokio::task_local! {
-    static CURRENT: Arc<AtomicBool>;
+    static CURRENT: Arc<Halt>;
 }
 
 /// Every launch owns its own cancel flag. One shared flag cleared by the next
 /// launch revived a cancelled one still stuck in a download: it went on to
 /// start the game next to the retry.
-static LIVE: Mutex<Vec<Arc<AtomicBool>>> = Mutex::new(Vec::new());
+static LIVE: Mutex<Vec<Arc<Halt>>> = Mutex::new(Vec::new());
 
-static STARTING: Mutex<Vec<(String, Arc<AtomicBool>)>> = Mutex::new(Vec::new());
+static STARTING: Mutex<Vec<(String, Arc<Halt>)>> = Mutex::new(Vec::new());
 
 fn locked<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 pub struct LaunchTicket {
-    flag: Arc<AtomicBool>,
+    flag: Arc<Halt>,
 }
 
 pub fn begin_launch() -> LaunchTicket {
-    let flag = Arc::new(AtomicBool::new(false));
+    let flag = Arc::new(Halt::default());
     locked(&LIVE).push(flag.clone());
     LaunchTicket { flag }
 }
@@ -52,16 +52,16 @@ impl Drop for LaunchTicket {
 
 pub fn cancel_launch() {
     for flag in locked(&LIVE).iter() {
-        flag.store(true, Ordering::SeqCst);
+        flag.cancel();
     }
 }
 
-pub(crate) fn launch_cancel_flag() -> Option<Arc<AtomicBool>> {
+pub(crate) fn launch_cancel_flag() -> Option<Arc<Halt>> {
     CURRENT.try_with(|f| f.clone()).ok()
 }
 
 pub(crate) fn cancelled() -> bool {
-    CURRENT.try_with(|f| f.load(Ordering::SeqCst)).unwrap_or(false)
+    CURRENT.try_with(|f| f.cancelled()).unwrap_or(false)
 }
 
 pub(crate) fn check_cancel() -> Result<(), String> {
@@ -88,7 +88,7 @@ fn slot_of(starting: &[(String, bool)], profile: &str) -> Slot {
 
 pub(crate) struct StartSlot {
     profile: String,
-    flag: Arc<AtomicBool>,
+    flag: Arc<Halt>,
 }
 
 impl Drop for StartSlot {
@@ -102,7 +102,7 @@ impl Drop for StartSlot {
 /// game jars". A launch the player already cancelled is waited out, not
 /// refused: it only needs a moment to notice.
 pub(crate) async fn claim_profile_start(profile: &str, on_wait: impl Fn()) -> Result<StartSlot, String> {
-    let flag = launch_cancel_flag().unwrap_or_else(|| Arc::new(AtomicBool::new(false)));
+    let flag = launch_cancel_flag().unwrap_or_else(|| Arc::new(Halt::default()));
     let deadline = tokio::time::Instant::now() + UNWIND_WAIT;
     let mut told = false;
     loop {
@@ -110,7 +110,7 @@ pub(crate) async fn claim_profile_start(profile: &str, on_wait: impl Fn()) -> Re
         {
             let mut starting = locked(&STARTING);
             let view: Vec<(String, bool)> =
-                starting.iter().map(|(p, f)| (p.clone(), f.load(Ordering::SeqCst))).collect();
+                starting.iter().map(|(p, f)| (p.clone(), f.cancelled())).collect();
             match slot_of(&view, profile) {
                 Slot::Free => {
                     starting.push((profile.to_string(), flag.clone()));

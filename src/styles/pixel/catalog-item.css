@@ -45,7 +45,7 @@
 .ci-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 14px; align-items: start; }
 .ci-main { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .ci-aside { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-.segs.ci-tabs { justify-content: flex-start; margin: 0; }
+.ci .segs.ci-tabs { justify-content: flex-start; margin: 0; }
 .ci-n { margin-left: 6px; font-size: 11.5px; font-weight: 800; color: var(--m-fg-subtle); font-variant-numeric: tabular-nums; }
 
 .card.ci-box { padding: 16px 18px; background-color: var(--m-surface); }
@@ -130,3 +130,71 @@
 }
 .ci-chip.is-link { border: 0; cursor: pointer; font-family: inherit; }
 .ci-chip.is-link:hover { background: var(--m-raised); }
+
+/* ── Бесплатная сборка Millida в виде страницы материала (PackPage, 05.10.2026) ── */
+.pp-ci .ci-banner { height: 220px; }
+.pp-ci .ci-banner .pp-play { width: 64px; height: 64px; }
+.pp-ci .ci-desc.pp-desc { max-height: none; overflow: visible; }
+.pp-ci .ci-desc.pp-desc::after { display: none; }
+.pp-ci-lead { font-size: 15px; font-weight: 600; color: var(--m-fg); }
+.pp-ci-side, .pp-ci-buy { display: flex; flex-direction: column; gap: 10px; }
+.pp-ci-buy .pp-cta-wrap, .pp-ci-buy .pp-cta { width: 100%; }
+.pp-ci .pp-legal { padding: 0 4px; }
+
+/* ── Мини-плеер над описанием (MediaStrip, 05.10.2026): кадр 16:9 и миниатюры ── */
+.card.ci-media { display: flex; flex-direction: column; gap: 8px; padding: 8px; background-color: var(--m-surface); }
+.ci-media-stage { position: relative; aspect-ratio: 16 / 9; max-height: 380px; overflow: hidden; background: #000; --px-n: 5px; clip-path: var(--px-5); }
+.ci-media-frame { position: absolute; inset: 0; display: block; padding: 0; border: 0; cursor: zoom-in; background: #000; }
+.ci-media-frame.is-video { cursor: pointer; }
+.ci-media-frame > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; animation: ci-media-in 360ms steps(4, end) both; }
+@keyframes ci-media-in { from { opacity: 0; transform: scale(1.03); } to { opacity: 1; transform: none; } }
+.ci-media-video { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.ci-media-play {
+  position: absolute; left: 50%; top: 50%; width: 72px; height: 72px; translate: -50% -50%; display: grid; place-items: center;
+  color: #fff; background: rgba(0, 0, 0, 0.6); --px-n: 5px; clip-path: var(--px-5); transition: transform 120ms steps(2, end), background-color 120ms;
+}
+.ci-media-play svg { width: 30px; height: 30px; }
+.ci-media-frame.is-video:hover .ci-media-play { transform: scale(1.08); background: var(--m-accent); color: var(--px-on-accent); }
+.ci-media-nav {
+  position: absolute; top: 50%; translate: 0 -50%; z-index: 1; width: 40px; height: 40px; display: grid; place-items: center; border: 0; cursor: pointer;
+  color: #fff; background: rgba(0, 0, 0, 0.55); --px-n: 4px; clip-path: var(--px-4); opacity: 0; transition: opacity 120ms steps(2, end), background-color 120ms;
+}
+.ci-media-nav svg { width: 16px; height: 16px; }
+.ci-media-nav.is-prev { left: 10px; }
+.ci-media-nav.is-next { right: 10px; }
+.ci-media-stage:hover .ci-media-nav, .ci-media-nav:focus-visible { opacity: 1; }
+.ci-media-nav:hover { background: rgba(0, 0, 0, 0.8); }
+.ci-media-n { position: absolute; right: 10px; bottom: 10px; padding: 4px 8px; font: 800 11.5px/1 var(--m-font); color: #fff; background: rgba(0, 0, 0, 0.55); --px-n: 4px; clip-path: var(--px-4); font-variant-numeric: tabular-nums; pointer-events: none; }
+.ci-media-thumbs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.ci-media-thumb {
+  position: relative; aspect-ratio: 16 / 9; padding: 0; border: 0; overflow: hidden; cursor: pointer; background: var(--m-surface-2);
+  --px-n: 4px; clip-path: var(--px-4); opacity: 0.6; transition: opacity 120ms steps(2, end);
+}
+.ci-media-thumb > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.ci-media-thumb:hover { opacity: 0.9; }
+.ci-media-thumb.on { opacity: 1; box-shadow: inset 0 0 0 3px var(--m-accent); }
+.ci-media-thumb.on > img { inset: 3px; width: calc(100% - 6px); height: calc(100% - 6px); }
+.ci-media-tplay, .ci-media-more { position: absolute; inset: 0; display: grid; place-items: center; color: #fff; background: rgba(0, 0, 0, 0.45); font: 800 16px/1 var(--m-font); }
+.ci-media-tplay svg { width: 18px; height: 18px; }
+.ci-media-more { background: rgba(0, 0, 0, 0.6); }
+@media (prefers-reduced-motion: reduce) { .ci-media-frame > img { animation: none; } }
+/* Плеер всегда во всю ширину: высота от ширины (16:9), но не выше 400 px; кадр целиком по центру */
+.card.ci-media { container-type: inline-size; }
+.ci-media-stage { aspect-ratio: auto; width: 100%; max-height: none; height: min(400px, calc((100cqi - 16px) * 9 / 16)); }
+.ci-media-frame > img.ci-media-img { object-fit: contain; }
+.ci-media-frame > img.ci-media-bg { object-fit: cover; filter: blur(18px) brightness(0.45) saturate(1.2); transform: scale(1.1); animation: none; }
+
+/* Шапка без обложки (06.10.2026): полосы нет, значок стоит в строке, за ним — мягкое свечение его же цветов */
+.ci-hero.is-flat { position: relative; isolation: isolate; }
+.ci-hero.is-flat .ci-head { align-items: center; padding-top: 20px; padding-bottom: 20px; }
+.ci-hero.is-flat .ci-icon { margin-top: 0; }
+.ci-hero.is-flat .ci-titles, .ci-hero.is-flat .ci-cta { padding-top: 0; }
+.ci-glow {
+  position: absolute; z-index: -1; left: -6%; top: -60%; width: 60%; height: 220%; pointer-events: none;
+  background-size: cover; background-position: center; filter: blur(48px) saturate(1.4); opacity: 0.32;
+  -webkit-mask: radial-gradient(closest-side, #000, transparent); mask: radial-gradient(closest-side, #000, transparent);
+}
+/* Размытие большого кадра в WebKit рисуется долго (кадры «не прорисовывались»): фон — тот же кадр
+   без фильтра, приглушён прозрачностью на чёрном. Пока кадр грузится — ровный тёмный фон, не дыра. */
+.ci-media-frame > img.ci-media-bg { filter: none; transform: scale(1.15); opacity: 0.22; }
+.ci-banner { background: var(--m-surface-2); }

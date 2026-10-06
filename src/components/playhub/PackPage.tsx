@@ -6,7 +6,7 @@ import { MODRINTH_API, api, mirrorAsset } from '../../lib/api'
 import { fmtN } from '../../lib/format'
 import { renderMarkdown } from '../../lib/markdown'
 import { installedPack } from '../../lib/lobbyPlay'
-import { hasPlanChoice, liveSubscription, loadPremium, loadPremiumPack, untilText } from '../../lib/premium'
+import { hasPlanChoice, liveSubscription, loadPremium, loadPremiumPack, untilText, viaCatalog } from '../../lib/premium'
 import type { PremiumPackDetail, PremiumPlan, PremiumSubscription } from '../../lib/premium'
 import { BuyButton, CancelLine, PlanButtons, PriceLine, hasAccess } from '../premium/PremiumBuy'
 import { installModpack } from '../../ipc/commands'
@@ -29,6 +29,10 @@ import { hostingPackFor, loadHostingPacks } from './data'
 import type { HubPack } from './data'
 import { LOADER, gb, modsFromText, partnerFrame } from '../premium/packView'
 import type { DescBlock, PackView } from '../premium/packView'
+import { PremiumPackPage } from '../premium/PremiumPackPage'
+import { PackInstallButton } from '../premium/PackInstall'
+import { Guard } from '../Guard'
+import { MediaStrip } from '../catalog/MediaStrip'
 import { Back, Compat, Gallery, Hero, Tabs } from '../catalog/ItemPage'
 import type { Tab } from '../catalog/ItemPage'
 import { fmtNum, plural, relativeTime } from '../catalog/site'
@@ -333,7 +337,9 @@ export function PackPage({
   const gameVersions = mcVersion ? [mcVersion] : project?.game_versions || []
   const updated = relativeTime(item?.updatedAt || project?.updated || null)
   const mods = typeof full.modsCount === 'number' && full.modsCount > 0 ? full.modsCount : modsFromText(view?.description)
-  const downloads = project?.downloads ?? item?.downloads ?? full.downloads ?? null
+  // Счётчик сайта (/catalog/items) у сборок с лаунчера сильно меньше настоящего: у Arcania 1 395
+  // против 13 920 на карточке. Берём наибольший из источников — тот же, что видно в каталоге.
+  const downloads = Math.max(project?.downloads ?? 0, item?.downloads ?? 0, full.downloads ?? 0, pack.downloads ?? 0) || null
   const client = (view?.files || []).find((f) => f.side === 'client')
 
   const facts: Fact[] = []
@@ -390,6 +396,13 @@ export function PackPage({
         onOwned={reloadDetail}
       />
     )
+  // Бесплатная сборка каталога — обычная зелёная «Установить», без золота премиума.
+  else if (!pack.premium && (viaCatalog(full) || hasAccess(full, sub)) && full.slug)
+    cta = (
+      <span className="pp-cta-wrap">
+        <PackInstallButton pack={full} />
+      </span>
+    )
   else
     cta = (
       <>
@@ -398,6 +411,41 @@ export function PackPage({
           <BuyButton pack={full} plan={plan} sub={sub} />
         </span>
       </>
+    )
+
+  // Премиум — своя страница (PremiumPackPage): данные и действия те же, подача своя.
+  if (pack.premium)
+    return (
+      <Guard what="Блок сборки">
+        <PremiumPackPage
+          pack={pack}
+          full={full}
+          view={view}
+          detail={detail}
+          plans={plans}
+          plan={plan}
+          sub={sub}
+          facts={facts}
+          shots={shots}
+          video={video}
+          cover={cover}
+          mcVersion={mcVersion}
+          loader={loader}
+          size={client && client.size > 0 ? client.size : null}
+          updates={updates}
+          includes={includes}
+          author={author}
+          installed={installed}
+          onPlay={onPlay}
+          onOwned={reloadDetail}
+          server={server}
+          onServer={onServer}
+          onHost={hostTarget ? () => setHostOpen(true) : undefined}
+          onBack={onBack}
+        >
+          {hostOpen && hostTarget ? <HostInstall target={hostTarget} onClose={() => setHostOpen(false)} /> : null}
+        </PremiumPackPage>
+      </Guard>
     )
 
   const inline: ReactNode[] = []
@@ -428,6 +476,7 @@ export function PackPage({
           )
         }
         icon={icon ? <img src={icon} alt="" draggable={false} /> : null}
+        glow={icon}
         title={full.title}
         line={full.tagline}
         by={author ? 'Собрал ' + author : null}
@@ -470,6 +519,7 @@ export function PackPage({
       <div className="ci-grid">
         <main className="ci-main">
           <Tabs tab={tab} onTab={setTab} gallery={shots.length} versions={updates.length} />
+          {tab === 'desc' && (shots.length || video) ? <MediaStrip urls={shots} video={video} onAll={() => setTab('gallery')} /> : null}
           {tab === 'desc' ? (
             <>
               {includes.length ? (

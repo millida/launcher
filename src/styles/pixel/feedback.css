@@ -21,7 +21,7 @@
   animation: fb-glow 1.4s steps(2, end) infinite;
 }
 @keyframes fb-glow { 50% { background: #bae6fd; } }
-.fb-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; }
+.fb-pick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; }
 .fb-opt {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
   min-height: 132px; padding: 16px; color: #fff; background: #262b27; clip-path: var(--px-10);

@@ -35,6 +35,12 @@
     100% calc(100% - 10px), calc(100% - 10px) calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%,
     10px calc(100% - 10px), 0 calc(100% - 10px), 0 10px, 10px 10px
   );
+  /* Кольцо 3px по силуэту среза 10px (evenodd: внешний контур, затем внутренний) —
+     рамка поверх картинки со ступенчатыми углами. */
+  --px-ring-10: polygon(evenodd,
+    10px 0, calc(100% - 10px) 0, calc(100% - 10px) 10px, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 10px calc(100% - 10px), 0 calc(100% - 10px), 0 10px, 10px 10px, 10px 0,
+    13px 3px, 13px 13px, 3px 13px, 3px calc(100% - 13px), 13px calc(100% - 13px), 13px calc(100% - 3px), calc(100% - 13px) calc(100% - 3px), calc(100% - 13px) calc(100% - 13px), calc(100% - 3px) calc(100% - 13px), calc(100% - 3px) 13px, calc(100% - 13px) 13px, calc(100% - 13px) 3px, 13px 3px
+  );
   /* Тёмный текст на акценте: белый на этом зелёном даёт 2,6:1. */
   --px-on-accent: #06200e;
   /* Цвета граней для ступенчатой рамки (см. «Ступенчатая рамка»). */
@@ -513,25 +519,25 @@ img[src*='/block-icons/'] {
 img[src$='/millida-logo.svg'] { border-radius: 0 !important; }
 
 .px-excl { position: relative; }
+/* Рамка партнёра — «Бегущий свет» (владелец 06.10.2026 выбрал П2 из вариантов):
+   тусклое кольцо, по нему ступенями бежит светлый отрезок. */
+@property --px-run { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
 .px-excl::after {
   content: '';
   position: absolute;
   inset: 0;
   z-index: 3;
   pointer-events: none;
-  --px-n: 10px;
-  --px-ol: var(--m-warning); --px-ol-w: 2px;
-  --px-ft-w: 5px; --px-fb-w: 5px; --px-fl-w: 5px; --px-fr-w: 5px;
-  --px-excl-lit: color-mix(in srgb, var(--m-warning) 35%, var(--m-fg));
-  --px-excl-dim: color-mix(in srgb, var(--m-warning) 25%, transparent);
-  animation: px-excl-run 1.6s steps(1, end) infinite;
+  --px-c: var(--m-warning);
+  clip-path: var(--px-ring-10);
+  animation: px-excl-run 3.6s steps(48, end) infinite;
 }
-@keyframes px-excl-run {
-  0%, 100% { --px-ft: var(--px-excl-lit); --px-fr: var(--px-excl-dim); --px-fb: var(--px-excl-dim); --px-fl: var(--px-excl-dim); }
-  25% { --px-ft: var(--px-excl-dim); --px-fr: var(--px-excl-lit); --px-fb: var(--px-excl-dim); --px-fl: var(--px-excl-dim); }
-  50% { --px-ft: var(--px-excl-dim); --px-fr: var(--px-excl-dim); --px-fb: var(--px-excl-lit); --px-fl: var(--px-excl-dim); }
-  75% { --px-ft: var(--px-excl-dim); --px-fr: var(--px-excl-dim); --px-fb: var(--px-excl-dim); --px-fl: var(--px-excl-lit); }
+:root:root:root .px-excl::after {
+  background: conic-gradient(from var(--px-run), color-mix(in srgb, var(--px-c) 45%, #1a1b1c) 0 70%, var(--px-c) 80%, #fff8dc 84%, var(--px-c) 88%, color-mix(in srgb, var(--px-c) 45%, #1a1b1c) 98%) !important;
+  background-size: 100% 100% !important;
+  background-repeat: no-repeat !important;
 }
+@keyframes px-excl-run { to { --px-run: 360deg; } }
 @media (prefers-reduced-motion: reduce) {
-  .px-excl::after { animation: none; --px-ft: var(--px-excl-dim); --px-fr: var(--px-excl-dim); --px-fb: var(--px-excl-dim); --px-fl: var(--px-excl-dim); }
+  .px-excl::after { animation: none; }
 }

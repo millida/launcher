@@ -1,0 +1,31 @@
+/* Карточка действия Милли (графика, конфиги, бэкапы, откат, импорт, доктор):
+   было → станет, одна главная кнопка, «Отменить». Токены лаунчера --m-*. */
+.mact { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 10px; color: var(--m-fg);
+  font: 600 13px/1.3 var(--m-font); background-color: var(--m-surface); --px-n: 4px; clip-path: var(--px-4);
+  animation: mact-in 220ms var(--m-ease-move) backwards; }
+@keyframes mact-in { from { opacity: 0; transform: translateY(4px); } }
+.mact-head { display: flex; align-items: center; gap: 8px; font: 800 13px/1 var(--m-font); }
+.mact-head .mact-tag { margin-left: auto; font: 700 10.5px/1 var(--m-font); color: var(--m-fg-subtle); }
+.mact-rows { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.mact-row { display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 4px 8px; background-color: var(--m-inset);
+  --px-n: 3px; clip-path: var(--px-4); animation: mact-in 200ms var(--m-ease-move) calc(var(--i, 0) * 40ms) backwards; }
+.mact-row.off { opacity: 0.5; }
+.mact-row.red { box-shadow: inset 3px 0 0 var(--m-danger); }
+.mact-row.yellow { box-shadow: inset 3px 0 0 var(--m-warning); }
+.mact-row img { width: 16px; height: 16px; image-rendering: pixelated; }
+.mact-k { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mact-v { display: flex; align-items: center; gap: 4px; font: 750 12px/1 var(--m-font); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.mact-v s { color: var(--m-fg-subtle); text-decoration: none; }
+.mact-v b { color: var(--m-accent); }
+.mact-ok { width: 16px; text-align: center; font: 900 13px/1 var(--m-font); }
+.mact-ok.y { color: var(--m-success); }
+.mact-ok.n { color: var(--m-danger); }
+.mact-chk { width: 16px; height: 16px; margin: 0; accent-color: var(--m-accent); cursor: pointer; }
+.mact-note { margin: -2px 0 0 32px; font: 600 11.5px/1.3 var(--m-font); color: var(--m-fg-muted); }
+.mact-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mact-foot .btn { min-height: 34px; }
+.mact-msg { font: 700 12px/1.2 var(--m-font); color: var(--m-fg-muted); }
+.mact-msg.bad { color: var(--m-danger); }
+.mact-more { padding: 0; border: 0; background: none; color: var(--m-fg-subtle); font: 700 11.5px/1 var(--m-font); cursor: pointer; }
+.mact-more:hover { color: var(--m-fg); }
+@media (prefers-reduced-motion: reduce) { .mact, .mact-row { animation: none; } }

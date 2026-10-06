@@ -607,3 +607,71 @@
 .mr-gal-foot:has(.mr-actions > :nth-child(2)) .mr-actions { flex: 1 1 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; min-width: 0; }
 .mr-gal-foot:has(.mr-actions > :nth-child(2)) .mr-actions .btn { min-width: 0; padding: 0 6px; justify-content: center; }
 .mr-subtypes-gap { height: 48px; }
+
+/* ── Вкладка раздела проще (06.10.2026, владелец: «что-то не нравится») ──
+   Поиск и «Для: сборка» — одной строкой; заголовок — мелкой подписью; карточка без
+   описания, название в две строки; «В сборку» тихая, зелёная — только на наведении. */
+.mr-toolbar.mr-toolbar-one { flex-direction: row; align-items: center; flex-wrap: nowrap; margin-bottom: 14px; }
+.mr-toolbar-one .mr-search { height: 44px; }
+.mr-toolbar-one .cat3-for { flex: none; flex-wrap: nowrap; max-width: 50%; }
+.mr-toolbar-one .cat3-for-btn b { max-width: 220px; }
+.mr-toolbar-one .mr-toolbar-row:not(:has(*:not(.mr-count))) { display: none; }
+@media (max-width: 900px) { .mr-toolbar.mr-toolbar-one { flex-wrap: wrap; } .mr-toolbar-one .cat3-for { max-width: 100%; } }
+.mr-h1.mr-h1-sm { margin: 0 0 12px; font: 800 15px/1.2 var(--m-font); letter-spacing: 0; color: var(--m-fg-muted); }
+.mr-h1-sm .mr-h1-n { margin-left: 8px; font-size: 13px; }
+
+.card.mr-gal .mr-gal-cover > img { transform: none !important; }
+.mr-gal-foot .mr-actions .btn { height: 30px; }
+@media (hover: hover) and (pointer: fine) {
+  :root:root .card.mr-gal:not(:hover) .mr-gal-foot .btn.primary:not(:disabled) {
+    color: var(--m-accent); background-color: var(--m-surface-2);
+    --px-img: none; --px-ol: rgba(0, 0, 0, 0.45); --px-ft: rgba(255, 255, 255, 0.06); --px-fb: rgba(0, 0, 0, 0.3); --px-fl: transparent; --px-fr: transparent;
+  }
+  :root:root .card.mr-gal:not(:hover) .mr-gal-foot .btn.primary:not(:disabled) svg { color: var(--m-accent); }
+}
+
+/* ── Плитка ленты, 3 в ряд (06.10.2026): значок с названием, описание в две строки, метки, низ ── */
+.mr-galgrid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 899px) { .mr-galgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .mr-galgrid { grid-template-columns: minmax(0, 1fr); } }
+.card.mr-gal .mr-gal-cover > .ph-card-tag { top: 8px; left: 8px; }
+.card.mr-gal .mr-gal-body { gap: 10px; padding: 14px; }
+.mr-gal-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.card.mr-gal .mr-gal-icon { position: relative; left: auto; top: auto; flex: none; width: 52px; height: 52px; --px-n: 5px; clip-path: var(--px-5); }
+.card.mr-gal.has-shot .mr-gal-icon { width: 44px; height: 44px; }
+.mr-gal-names { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.card.mr-gal .mr-gal-title { font: 800 16px/1.2 var(--m-font); white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.card.mr-gal .mr-gal-author { font-size: 13px; line-height: 16px; }
+.mr-gal-head > .ph-card-tag { position: static; flex: none; align-self: flex-start; }
+.card.mr-gal .mr-gal-summary {
+  margin: 0; font-size: 13.5px; line-height: 19px; color: var(--m-fg-muted);
+  white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 38px;
+}
+.card.mr-gal .mr-tags.mr-gal-tags { margin: 0; height: auto; max-height: 26px; overflow: hidden; gap: 4px 12px; }
+.card.mr-gal .mr-gal-foot { margin: auto 0 0; padding-top: 2px; }
+.card.mr-gal .mr-gal-stat { font-size: 13px; }
+.card.mr-gal .mr-gal-foot .mr-actions .btn { height: 32px; padding: 0 12px; font-size: 13px; }
+.mr-gal-stat2 { display: none !important; }
+
+/* ── Фильтры списком (как на Modrinth, в нашем стиле): строка на весь ряд, число справа ── */
+.mr-fbox .mr-keys { flex-direction: column; flex-wrap: nowrap; gap: 2px; }
+.mr-fbox .mr-keys > .seg.mr-key { width: 100%; height: 32px; justify-content: flex-start; background-color: transparent; }
+.mr-fbox .mr-keys > .seg.mr-key:hover { background-color: var(--m-surface-2); }
+.mr-fbox .mr-keys > .seg.mr-key .mr-key-n { margin-left: auto; }
+:root:root .mr-fbox .mr-keys > .seg.mr-key.on { background-color: var(--m-accent); }
+.mr-fbox .mr-keys > .seg.mr-key.mr-more { color: var(--m-accent); }
+.mr-fbox .mr-keys > .seg.mr-key.mr-more .mr-key-n { margin-left: 2px; }
+/* «Для: …» и «Только подходящее» не вылезают за край: сжимается имя сборки, переключатель целиком */
+.mr-toolbar-one .mr-search { flex: 1 1 240px; min-width: 200px; }
+.mr-toolbar-one .cat3-for { flex: 0 1 auto; min-width: 0; max-width: none; }
+.mr-toolbar-one .cat3-for-btn { flex: 0 1 auto; min-width: 0; }
+.mr-toolbar-one .cat3-for-btn b { max-width: none; min-width: 0; }
+.mr-toolbar-one .cat3-for > .mk-pill:not(.cat3-for-btn) { flex: none; }
+.mr-toolbar-one .cat3-for { margin: 0; }
+/* Скачивания мелко рядом с автором — у каждой карточки одинаково */
+.card.mr-gal .mr-gal-author { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mr-gal-by { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mr-gal-dl { display: inline-flex; align-items: center; gap: 3px; flex: none; font-size: 12px; font-weight: 700; color: var(--m-fg-subtle); font-variant-numeric: tabular-nums; }
+.mr-gal-dl svg { width: 11px; height: 11px; }
+.mr-gal-foot:has(.mr-actions > :nth-child(2)) .mr-gal-stat { display: inline-flex; }
+.mr-gal-stat:empty { display: none; }

@@ -1,0 +1,216 @@
+/* PLUS в чате Милли (владелец 05.10.2026): золотая плашка, «прокачай Милли» и облик чата по тарифу. */
+.ml-panel { --mp-gold: hsl(42 92% 56%); --mp-gold-2: hsl(48 98% 66%); --mp-ink: hsl(35 80% 9%); --mp-dia: hsl(183 85% 58%); --mp-dia-2: hsl(190 95% 74%); }
+
+/* ── Облик чата по тарифу: акцент панели целиком (кнопки, края реплик, «Принять») ── */
+.ml-panel.tier-plus {
+  --m-accent: var(--mp-gold); --m-accent-rgb: 245, 186, 40; --px-on-accent: var(--mp-ink);
+  --px-ol: hsl(42 80% 40%);
+}
+.ml-panel.tier-diamond {
+  --m-accent: var(--mp-dia); --m-accent-rgb: 70, 226, 236; --px-on-accent: hsl(195 70% 10%);
+  --px-ol: hsl(185 70% 38%);
+}
+.ml-panel.tier-plus { background-color: color-mix(in srgb, var(--mp-gold) 5%, var(--m-surface)); }
+.ml-panel.tier-diamond { background-color: color-mix(in srgb, var(--mp-dia) 5%, var(--m-surface)); }
+.ml-panel.tier-plus .ml-head { border-bottom-color: hsl(42 70% 35% / 0.6); }
+.ml-panel.tier-diamond .ml-head { border-bottom-color: hsl(186 70% 35% / 0.6); }
+.ml-panel.tier-plus .ml-bg i { background: hsl(46 95% 62% / 0.55); }
+.ml-panel.tier-diamond .ml-bg i { background: hsl(186 95% 72% / 0.6); }
+.ml-panel.tier-plus .ml-bg::before { background: linear-gradient(180deg, hsl(42 90% 55% / 0.06) 0 40%, hsl(42 90% 55% / 0.025) 40% 70%, transparent 70%); }
+.ml-panel.tier-diamond .ml-bg::before { background: linear-gradient(180deg, hsl(186 90% 60% / 0.07) 0 40%, hsl(186 90% 60% / 0.03) 40% 70%, transparent 70%); }
+
+/* Шапка PLUS/Diamond: блик пробегает по золоту/алмазу (фоном — без overflow, меню шапки не срезается) */
+.ml-panel.tier-plus .ml-head {
+  background: linear-gradient(100deg, transparent 40%, hsl(48 100% 80% / 0.16) 50%, transparent 60%) no-repeat, linear-gradient(180deg, hsl(42 65% 20%), hsl(42 40% 12% / 0.4));
+  background-size: 300% 100%, 100% 100%; animation: ml-shine 7s steps(35, end) infinite;
+}
+.ml-panel.tier-diamond .ml-head {
+  background: linear-gradient(100deg, transparent 40%, hsl(186 100% 85% / 0.18) 50%, transparent 60%) no-repeat, linear-gradient(180deg, hsl(188 60% 19%), hsl(188 40% 11% / 0.4));
+  background-size: 300% 100%, 100% 100%; animation: ml-shine 7s steps(35, end) infinite;
+}
+@keyframes ml-shine { 0%, 55% { background-position: 150% 0, 0 0; } 100% { background-position: -50% 0, 0 0; } }
+/* Пыль крупнее и ярче: золото / алмазные искры */
+.ml-panel.tier-plus .ml-bg i, .ml-panel.tier-diamond .ml-bg i { width: 4px; height: 4px; box-shadow: 0 0 0 2px hsl(46 95% 62% / 0.15); }
+.ml-panel.tier-diamond .ml-bg i { box-shadow: 0 0 0 2px hsl(186 95% 72% / 0.18); }
+/* Реплики Милли: тонкий свет по верхнему краю в цвет тарифа */
+.ml-panel.tier-plus .ml-msg:not(.me) .ml-bubble { --px-ft: hsl(46 90% 60% / 0.22); }
+.ml-panel.tier-diamond .ml-msg:not(.me) .ml-bubble { --px-ft: hsl(186 90% 70% / 0.24); }
+
+/* Плашка тарифа у тех, кто с PLUS/Diamond */
+.ml-tierchip {
+  display: inline-flex; align-items: center; gap: 5px; flex: none; padding: 3px 4px 3px 7px;
+  font: 900 11px/1 var(--m-font); letter-spacing: 0.04em; color: var(--mp-ink); background: linear-gradient(180deg, var(--mp-gold-2), var(--mp-gold));
+  --px-n: 4px; clip-path: var(--px-4); box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.2);
+}
+.ml-tierchip.is-diamond { color: hsl(195 70% 10%); background: linear-gradient(180deg, var(--mp-dia-2), var(--mp-dia)); }
+.ml-tierchip .px-icon { width: 12px; height: 12px; }
+.ml-tierchip-n { min-width: 20px; padding: 3px 5px; text-align: center; font-variant-numeric: tabular-nums; letter-spacing: 0; color: var(--m-fg); background: rgba(0, 0, 0, 0.55); --px-n: 4px; clip-path: var(--px-4); }
+.ml-tierchip.out .ml-tierchip-n { color: var(--m-danger); }
+
+/* ── Без PLUS: «осталось» и выгода одной золотой плашкой ── */
+.ml-up {
+  display: inline-flex; align-items: center; gap: 6px; flex: none; cursor: pointer; border: 0;
+  padding: 4px 9px 4px 4px; font: 900 12px/1 var(--m-font); color: var(--mp-ink);
+  background: linear-gradient(180deg, var(--mp-gold-2), var(--mp-gold)); --px-n: 4px; clip-path: var(--px-4);
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.22);
+  animation: ml-up-glint 4.5s steps(1, end) infinite;
+}
+.ml-up:hover { filter: brightness(1.08); }
+.ml-up .ml-up-n { min-width: 22px; padding: 3px 5px; text-align: center; font-variant-numeric: tabular-nums; color: var(--m-fg); background: rgba(0, 0, 0, 0.55); --px-n: 4px; clip-path: var(--px-4); }
+.ml-up.out .ml-up-n { color: var(--m-danger); }
+.ml-up .px-icon { width: 12px; height: 12px; }
+@keyframes ml-up-glint { 0%, 92% { filter: none; } 94% { filter: brightness(1.3); } 96% { filter: none; } }
+
+/* Милли «примеряет» корону на приветствии: подпись появляется вместе с короной */
+.ml-hello { position: relative; }
+.ml-tryon {
+  position: absolute; z-index: 2; left: 50%; top: 4px; transform: translate(-50%, 6px); opacity: 0; pointer-events: none;
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border: 0; cursor: pointer;
+  font: 900 12px/1 var(--m-font); color: var(--mp-ink); background: linear-gradient(180deg, var(--mp-gold-2), var(--mp-gold));
+  --px-n: 4px; clip-path: var(--px-4); box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.2);
+  transition: opacity 160ms steps(2, end), transform 160ms steps(2, end);
+}
+.ml-tryon.on { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+.ml-tryon .px-icon { width: 12px; height: 12px; }
+
+/* «Осталось 3» под ответом и золотая карточка у шейдеров/паков/карт */
+.ml-low {
+  display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; padding: 5px 9px; cursor: pointer; border: 0;
+  font: 700 12px/1.2 var(--m-font); color: var(--m-fg-muted); background: var(--m-inset); --px-n: 4px; clip-path: var(--px-4);
+}
+.ml-low b { color: var(--mp-gold); }
+.ml-low:hover { color: var(--m-fg); }
+.ml-gate {
+  display: flex; align-items: center; gap: 10px; margin-top: 8px; padding: 10px 12px; cursor: pointer; width: 100%; text-align: left; border: 0;
+  color: var(--m-fg); background: linear-gradient(90deg, hsl(42 60% 18%), var(--m-raised) 70%);
+  --px-n: 5px; clip-path: var(--px-5); box-shadow: inset 3px 0 0 var(--mp-gold);
+}
+.ml-gate .mci { flex: none; }
+.ml-gate span { display: flex; flex-direction: column; gap: 2px; font: 800 13px/1.2 var(--m-font); }
+.ml-gate small { font: 600 12px/1.2 var(--m-font); color: var(--m-fg-muted); }
+.ml-gate em { margin-left: auto; flex: none; font-style: normal; padding: 6px 9px; font: 900 12px/1 var(--m-font); color: var(--mp-ink); background: var(--mp-gold); --px-n: 4px; clip-path: var(--px-4); }
+
+/* ── Карточка PLUS в чате: детали экрана PLUS (lp-*) и магазина (sh-perk-card), без своего стиля ── */
+.mps.lp {
+  position: absolute; z-index: 20; top: 60px; left: 10px; right: 10px; max-height: calc(100% - 70px); overflow-y: auto;
+  display: flex; flex-direction: column; gap: 10px; padding: 12px; padding-bottom: 12px;
+  background-color: var(--m-surface); --px-n: 10px; clip-path: var(--px-10);
+  --px-ol: rgba(0, 0, 0, 0.55); --px-ol-w: 3px; --px-ft: var(--lp-gold); --px-ft-w: 4px; --px-fb: rgba(0, 0, 0, 0.3); --px-fb-w: 5px;
+  animation: mps-in 160ms steps(3, end) both;
+}
+@keyframes mps-in { from { transform: translateY(-8px); opacity: 0; } to { transform: none; opacity: 1; } }
+.mps-x { position: absolute; z-index: 3; top: 8px; right: 8px; width: 30px; height: 30px; display: grid; place-items: center; color: var(--m-fg-muted); cursor: pointer; background: transparent; border: 0; }
+.mps-x:hover { color: var(--m-fg); }
+.mps-hero { position: relative; display: grid; place-items: center; height: 112px; margin-top: 2px; }
+.mps-hero .milli { position: relative; z-index: 1; }
+.mps-rays {
+  position: absolute; inset: -6px 18%;
+  background: repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--lp-gold) 26%, transparent) 0deg 10deg, transparent 10deg 24deg);
+  -webkit-mask: radial-gradient(circle, #000 25%, transparent 68%); mask: radial-gradient(circle, #000 25%, transparent 68%);
+  animation: mps-spin 24s steps(96, end) infinite;
+}
+.mps.is-diamond .mps-rays { background: repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--mp-dia) 28%, transparent) 0deg 10deg, transparent 10deg 24deg); }
+@keyframes mps-spin { to { transform: rotate(360deg); } }
+.mps-title { margin: -2px 0 0; text-align: center; font-size: 22px; font-weight: 900; line-height: 1.1; }
+.mps-all { display: flex; align-items: center; gap: 10px; padding: 10px 12px; color: hsl(195 70% 10%); background: var(--mp-dia); --px-n: 5px; clip-path: var(--px-5); }
+.mps-all span { display: flex; flex-direction: column; gap: 2px; }
+.mps-all b { font-size: 14px; font-weight: 900; }
+.mps-all small { font-size: 12px; font-weight: 700; opacity: 0.8; }
+.mps-segs { width: 100%; }
+.mps-segs .seg { flex: 1 1 0; justify-content: center; }
+.mps-perks { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.mps-perks .sh-perk-card { min-height: 104px; padding-block: 10px; }
+.mps-perks .sh-perk-n { font-size: 22px; }
+.mps-perks .sh-perk-art .icon { width: 34px; height: 34px; color: var(--lp-gold); }
+.mps-buy { width: 100%; justify-content: center; }
+.mps-more { width: 100%; justify-content: center; }
+.mps.is-diamond .lp-aiex-card.is-on { box-shadow: inset 0 0 0 2px var(--mp-dia); }
+.mps.is-diamond .lp-bars span.is-plus, .mps.is-diamond .lp-kinds span { background: var(--mp-dia); color: hsl(195 70% 10%); }
+.mps.is-diamond .mps-title em { color: var(--mp-dia); }
+
+@media (prefers-reduced-motion: reduce) { .ml-up, .mps, .mps-rays { animation: none; } .ml-panel.tier-plus .ml-head, .ml-panel.tier-diamond .ml-head { animation: none; } }
+
+/* Косметика — главное в карточке PLUS: витрина вещей с парением и редкостным свечением */
+.mps-cos { display: flex; flex-direction: column; gap: 10px; padding: 12px; background: color-mix(in srgb, var(--m-rarity-legendary) 8%, var(--m-surface-2)); --px-n: 10px; clip-path: var(--px-10); --px-ft: var(--m-rarity-legendary); --px-ft-w: 4px; }
+.mps.is-diamond .mps-cos { background: color-mix(in srgb, var(--mp-dia) 8%, var(--m-surface-2)); --px-ft: var(--mp-dia); }
+.mps-cos-head { display: flex; flex-direction: column; gap: 3px; }
+.mps-cos-head b { font-size: 16px; font-weight: 900; }
+.mps-cos-head span { font-size: 12.5px; font-weight: 600; color: var(--m-fg-muted); }
+.mps-cos-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.mps-cos-item {
+  position: relative; aspect-ratio: 1; display: grid; place-items: center;
+  background: radial-gradient(circle at 50% 60%, color-mix(in srgb, var(--m-rarity-legendary) 30%, transparent), rgba(0, 0, 0, 0.25) 70%);
+  --px-n: 5px; clip-path: var(--px-5);
+}
+.mps-cos-item img { width: 82%; height: 82%; object-fit: contain; image-rendering: pixelated; filter: drop-shadow(0 4px 0 rgba(0, 0, 0, 0.45)); animation: mps-float 2.6s steps(8, end) infinite alternate; animation-delay: calc(var(--k) * -0.65s); }
+.mps-cos-item::after { content: ''; position: absolute; right: 8%; top: 10%; width: 4px; height: 4px; background: #fff; opacity: 0; animation: mps-twinkle 2.2s steps(1, end) infinite; animation-delay: calc(var(--k) * 0.55s); }
+.mps-cos-item.is-empty { background: rgba(255, 255, 255, 0.05); }
+@keyframes mps-float { from { transform: translateY(2px); } to { transform: translateY(-4px); } }
+@keyframes mps-twinkle { 0%, 80% { opacity: 0; } 82%, 92% { opacity: 1; } 94%, 100% { opacity: 0; } }
+.mps-cos-facts { display: flex; flex-wrap: wrap; gap: 6px; }
+.mps-cos-facts span { display: inline-flex; align-items: center; gap: 6px; padding: 6px 9px; font-size: 12.5px; font-weight: 700; color: var(--m-fg-muted); background: rgba(0, 0, 0, 0.25); --px-n: 4px; clip-path: var(--px-4); }
+.mps-cos-facts b { color: var(--m-fg); font-weight: 900; }
+.mps-shake { animation: mps-shake 3.2s steps(1, end) infinite; }
+@keyframes mps-shake { 0%, 84% { transform: none; } 86% { transform: rotate(-8deg); } 88% { transform: rotate(8deg); } 90% { transform: rotate(-5deg); } 92%, 100% { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .mps-cos-item img, .mps-cos-item::after, .mps-shake { animation: none; } }
+/* Карточка длиннее панели: блоки не сжимаются, листается целиком; факты — ровной строкой */
+.mps.lp > * { flex-shrink: 0; }
+.mps-cos-facts { display: grid; grid-template-columns: repeat(3, auto); justify-content: start; }
+.mps-cos-facts span { white-space: nowrap; }
+.mps-cos-facts { grid-template-columns: repeat(3, 1fr); gap: 5px; }
+.mps-cos-facts span { justify-content: center; gap: 5px; padding: 6px 4px; font-size: 12px; }
+.mps-hero { height: 100px; }
+/* Факты — три плитки: иконка, крупное число, подпись */
+.mps-cos-facts span { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 8px; row-gap: 0; align-items: center; justify-content: stretch; padding: 7px 9px; white-space: normal; }
+.mps-cos-facts span > :first-child { grid-row: 1 / 3; }
+.mps-cos-facts b { font-size: 15px; line-height: 1.1; }
+.mps-cos-facts small { font-size: 11px; font-weight: 700; line-height: 1.15; color: var(--m-fg-muted); }
+
+/* ── Сообщения Милли (05.10.2026, вместо lp-aiex-card): та же панель, что у косметики ── */
+.mps-ai {
+  --mps-c: var(--m-rarity-legendary); --mps-ink: var(--lp-ink, hsl(40 60% 10%));
+  display: flex; flex-direction: column; gap: 12px; padding: 12px;
+  background: color-mix(in srgb, var(--mps-c) 6%, var(--m-surface-2));
+  --px-n: 10px; clip-path: var(--px-10); --px-ft: var(--mps-c); --px-ft-w: 4px;
+}
+.mps.is-diamond .mps-ai, .mps.is-diamond .mps-cos { --mps-c: var(--mp-dia); --mps-ink: hsl(195 70% 10%); }
+.mps-ai-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.mps-ai-head b { font-size: 16px; font-weight: 900; }
+.mps-ai-x {
+  padding: 4px 8px 5px; font: 900 15px/1 var(--m-font); color: var(--mps-ink); background: var(--mps-c);
+  --px-n: 4px; clip-path: var(--px-4); animation: mps-x-pop 2.4s steps(1, end) infinite;
+}
+@keyframes mps-x-pop { 0%, 86% { transform: none; } 88%, 94% { transform: translateY(-2px) scale(1.08); } }
+.mps-ai-cmp { display: grid; gap: 7px; }
+.mps-ai-row { display: grid; grid-template-columns: 74px 1fr 44px; align-items: center; gap: 10px; }
+.mps-ai-row > span { font-size: 12.5px; font-weight: 800; color: var(--m-fg-muted); }
+.mps-ai-row > i { position: relative; height: 14px; background: rgba(0, 0, 0, 0.35); --px-n: 4px; clip-path: var(--px-4); }
+.mps-ai-row > i > s {
+  position: absolute; inset: 0 auto 0 0; width: var(--w); background: var(--m-fg-faint);
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.18), inset 0 -3px 0 rgba(0, 0, 0, 0.22);
+  animation: mps-fill 900ms steps(9, end) both;
+}
+.mps-ai-row > em { font: 900 15px/1 var(--m-font); font-style: normal; color: var(--m-fg-muted); text-align: right; font-variant-numeric: tabular-nums; }
+.mps-ai-row > em small { font-size: 11px; font-weight: 700; }
+.mps-ai-row.is-on > span { color: var(--mps-c); }
+.mps-ai-row.is-on > i > s { background: var(--mps-c); animation-delay: 200ms; }
+.mps-ai-row.is-on > em { font-size: 18px; color: var(--m-fg); }
+@keyframes mps-fill { from { width: 0; } to { width: var(--w); } }
+.mps-ai-kinds { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.mps-ai-kinds span {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px; font-size: 12.5px; font-weight: 800; color: var(--m-fg);
+  background: rgba(0, 0, 0, 0.25); --px-n: 4px; clip-path: var(--px-4);
+}
+.mps-ai-kinds .px-icon { flex: none; color: var(--mps-c); }
+
+/* Витрина косметики: смена вещи — пиксельный «поп», свечение по редкости */
+.mps-cos-item { --mps-r: var(--m-rarity-legendary); background: radial-gradient(circle at 50% 60%, color-mix(in srgb, var(--mps-r) 30%, transparent), rgba(0, 0, 0, 0.25) 70%); transition: background 400ms steps(4, end); }
+.mps-cos-item[data-r='epic'] { --mps-r: var(--m-rarity-epic); }
+.mps-cos-item[data-r='rare'] { --mps-r: var(--m-rarity-rare); }
+.mps-cos-item[data-r='uncommon'] { --mps-r: var(--m-rarity-uncommon); }
+.mps-cos-item[data-r='common'] { --mps-r: var(--m-rarity-common); }
+.mps-cos-item img { animation: mps-pop 420ms steps(5, end) both, mps-float 2.6s steps(8, end) 420ms infinite alternate; }
+@keyframes mps-pop { 0% { transform: scale(0.2); opacity: 0; } 60% { transform: scale(1.15); opacity: 1; } 100% { transform: scale(1); } }
+.mps-cos { --px-ft: var(--mps-c, var(--m-rarity-legendary)); }
+
+@media (prefers-reduced-motion: reduce) { .mps-ai-x, .mps-ai-row > i > s, .mps-cos-item img { animation: none; } }

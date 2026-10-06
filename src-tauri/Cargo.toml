@@ -37,6 +37,8 @@ encoding_rs = "0.8"
 # the server's outbound bill. Pure Rust (flate2), unlike zstd, which needs a C build.
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "multipart", "rustls-tls-webpki-roots", "rustls-tls-native-roots", "charset", "http2", "gzip"] }
 futures = "0.3"
+# Minecraft clients find a server through its _minecraft._tcp SRV record; std resolves only A/AAAA.
+hickory-resolver = "0.25"
 dirs = "6"
 md-5 = "0.10"
 rfd = "0.15"

@@ -1,0 +1,193 @@
+/* ============================================================
+   Милли: кнопка «отправить / стоп» и загрузка мира (04.10.2026)
+   ------------------------------------------------------------
+   Кнопка — кит лаунчера (.btn primary / .btn stop), Minecraft —
+   в рисунке и движении: пиксельная стрелка (наведение — подскок,
+   отправка — улетает со следом, снизу въезжает новая), красный блок
+   «стоп» с бегущим кольцом, осколки при отмене.
+   Загрузка мира — сетка чанков, как экран генерации мира в игре.
+   Совместимость со старым WebKit (Safari 13): без gap у flex, без
+   inset/aspect-ratio/:is/color-mix.
+   ============================================================ */
+
+/* ── Кнопка ──────────────────────────────────────────────── */
+:root:root .btn.md.mgl {
+  position: relative; flex: none; width: 48px; height: auto; min-height: 44px; padding: 0;
+  overflow: hidden; cursor: pointer;
+  transition: transform 120ms steps(2, end), background-color 160ms steps(3, end), filter 120ms steps(2, end);
+}
+:root:root .btn.md.mgl:disabled { cursor: default; }
+
+/* Слои по центру лицевой грани (над подошвой 5px). */
+.mgl-send, .mgl-stop, .mgl-shards { position: absolute; left: 50%; top: 50%; pointer-events: none; }
+
+/* Стрелка 9×10 в масштабе 2: 18×20, пиксель к пикселю. */
+.mgl-send {
+  width: 18px; height: 20px; margin: -12px 0 0 -9px;
+  color: var(--px-on-accent);
+  transition: transform 200ms steps(4, end), opacity 200ms steps(4, end);
+}
+.btn.mgl svg.mgl-arrow { position: absolute; left: 0; top: 0; width: 18px; height: 20px; color: inherit; }
+/* След: три пиксельные черты под стрелкой, видны только при вылете. */
+.mgl-trail { position: absolute; left: 0; top: 20px; width: 18px; height: 0; }
+.mgl-trail i { position: absolute; top: 0; width: 2px; height: 6px; background: currentColor; opacity: 0; }
+.mgl-trail i:nth-child(1) { left: 2px; height: 4px; }
+.mgl-trail i:nth-child(2) { left: 8px; height: 8px; }
+.mgl-trail i:nth-child(3) { left: 14px; height: 4px; }
+
+@media (hover: hover) and (pointer: fine) {
+  .mgl:hover:not(:disabled):not(.is-stop) .mgl-arrow { animation: mgl-nudge 0.6s steps(1, end) infinite; }
+}
+@keyframes mgl-nudge { 0% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+.mgl:active:not(:disabled):not(.is-stop) .mgl-arrow { animation: none; transform: translateY(2px); }
+
+/* Отправка: замах → вылет вверх со следом → новая въезжает снизу. */
+.mgl.is-windup .mgl-arrow { animation: mgl-windup 90ms steps(2, end) both; }
+@keyframes mgl-windup { 100% { transform: translateY(4px) scale(1.12, 0.8); } }
+.mgl.is-gone .mgl-arrow { animation: mgl-out 200ms steps(4, end) both; }
+@keyframes mgl-out {
+  0% { transform: translateY(4px); opacity: 1; }
+  100% { transform: translateY(-34px); opacity: 1; }
+}
+.mgl.is-gone .mgl-trail i { animation: mgl-dash 200ms steps(4, end) both; }
+.mgl.is-gone .mgl-trail i:nth-child(2) { animation-delay: 30ms; }
+@keyframes mgl-dash {
+  0% { opacity: 0.9; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-26px); }
+}
+.mgl.is-pop .mgl-arrow { animation: mgl-in 240ms steps(4, end) both; }
+@keyframes mgl-in {
+  0% { transform: translateY(26px); }
+  70% { transform: translateY(-2px); }
+  100% { transform: none; }
+}
+
+/* ── «Стоп»: красный блок с бегущим кольцом ─────────────── */
+.mgl-stop {
+  width: 48px; height: 48px; margin: -26px 0 0 -24px;
+  opacity: 0; transform: scale(0.2);
+  transition: transform 200ms steps(4, end), opacity 200ms steps(4, end);
+}
+.btn.mgl svg.mgl-orbit { position: absolute; left: 0; top: 0; width: 48px; height: 48px; }
+.mgl-od { fill: #fff; opacity: 0.22; }
+.mgl.is-stop .mgl-od { animation: mgl-od 1.2s steps(1, end) infinite; }
+.mgl-od-1 { animation-delay: 0.1s !important; } .mgl-od-2 { animation-delay: 0.2s !important; }
+.mgl-od-3 { animation-delay: 0.3s !important; } .mgl-od-4 { animation-delay: 0.4s !important; }
+.mgl-od-5 { animation-delay: 0.5s !important; } .mgl-od-6 { animation-delay: 0.6s !important; }
+.mgl-od-7 { animation-delay: 0.7s !important; } .mgl-od-8 { animation-delay: 0.8s !important; }
+.mgl-od-9 { animation-delay: 0.9s !important; } .mgl-od-10 { animation-delay: 1s !important; }
+.mgl-od-11 { animation-delay: 1.1s !important; }
+@keyframes mgl-od { 0% { opacity: 1; } 9% { opacity: 0.7; } 17% { opacity: 0.45; } 25% { opacity: 0.22; } }
+.btn.mgl svg.mgl-block {
+  position: absolute; left: 12px; top: 12px; width: 24px; height: 24px;
+  -webkit-filter: drop-shadow(0 2px 0 rgba(60, 4, 2, 0.45)); filter: drop-shadow(0 2px 0 rgba(60, 4, 2, 0.45));
+}
+.mgl.is-stop .mgl-block { animation: mgl-pulse 1.2s steps(1, end) infinite; }
+@keyframes mgl-pulse { 0% { transform: scale(1); } 50% { transform: scale(0.9); } }
+
+/* Морф: стрелка уходит вверх и сжимается, блок раскрывается из центра. */
+.mgl.is-stop .mgl-send { opacity: 0; transform: translateY(-10px) scale(0.3); }
+.mgl.is-stop .mgl-stop { opacity: 1; transform: none; }
+@media (hover: hover) and (pointer: fine) {
+  .mgl.is-stop:hover .mgl-block { animation: none; transform: scale(1.12); }
+  .mgl.is-stop:hover .mgl-od { opacity: 1; animation-duration: 0.6s; }
+}
+.mgl.is-stop:active .mgl-block { animation: none; transform: scale(0.84); }
+
+/* Отмена: блок разбивается на красные осколки, как при добыче. */
+.mgl-shards { width: 0; height: 0; margin-top: -2px; }
+.mgl-shards i { position: absolute; left: -2px; top: -2px; width: 4px; height: 4px; background: #e2392c; opacity: 0; }
+.mgl-shards i:nth-child(2n) { background: #ff8a7a; width: 2px; height: 2px; }
+.mgl-shards i:nth-child(3n) { background: #fff3ef; }
+.mgl.is-break .mgl-shards i { animation: mgl-shard 420ms steps(6, end) both; }
+.mgl.is-break .mgl-arrow { animation: mgl-in 240ms steps(4, end) 120ms both; }
+@keyframes mgl-shard {
+  0% { opacity: 1; transform: translate(0, 0); }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)); }
+}
+
+/* Фокус с клавиатуры. */
+.mgl:focus-visible { outline: 2px solid #fff; outline-offset: -4px; }
+
+/* ── Загрузка мира ───────────────────────────────────────── */
+.mwl { display: flex; align-items: center; width: 100%; min-width: 0; }
+.mwl-map {
+  position: relative; flex: none; display: grid;
+  grid-template-columns: repeat(13, 6px); grid-template-rows: repeat(13, 6px);
+  width: 78px; height: 78px; padding: 3px;
+  background-color: rgba(0, 0, 0, 0.22);
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: 6px 6px; background-position: 3px 3px;
+  /* Фаска как у слота инвентаря: без среза угла, линия цельная. */
+  box-shadow: inset 2px 2px 0 rgba(0, 0, 0, 0.45), inset -2px -2px 0 rgba(255, 255, 255, 0.07);
+  box-sizing: content-box;
+}
+.mwl-c { position: relative; display: block; width: 6px; height: 6px; opacity: 0; }
+.mwl-c.a { animation: mwl-show 900ms steps(1, end) both; animation-delay: var(--d); }
+.mwl-c.a::after {
+  content: ''; position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+  animation: mwl-gen 900ms steps(1, end) both; animation-delay: var(--d);
+}
+@keyframes mwl-show { 0% { opacity: 0; } 2% { opacity: 1; } 100% { opacity: 1; } }
+/* Стадии чанка: заготовка → камень → земля → вспышка → рельеф. */
+@keyframes mwl-gen {
+  0% { background-color: #3a3b40; }
+  28% { background-color: #6d6e74; }
+  54% { background-color: #8d5c3b; }
+  80% { background-color: rgba(255, 255, 255, 0.85); }
+  100% { background-color: rgba(255, 255, 255, 0); }
+}
+.mwl.is-paused .mwl-c, .mwl.is-paused .mwl-c::after { animation-play-state: paused; }
+
+.mwl-c.t-W { background: #2b58ad; }
+.mwl-c.t-w { background: #3f7be0; box-shadow: inset 2px 0 0 rgba(255, 255, 255, 0.08); }
+.mwl-c.t-s { background: #dfcd8c; box-shadow: inset -2px -2px 0 rgba(0, 0, 0, 0.08); }
+.mwl-c.t-g { background: #6cbf45; box-shadow: inset 2px 2px 0 rgba(255, 255, 255, 0.1); }
+.mwl-c.t-G { background: #5aa83a; }
+.mwl-c.t-t { background: #2f7b22; box-shadow: inset 2px 2px 0 #4f9f33, inset -2px -2px 0 #215c19; }
+.mwl-c.t-p { background: #a7845a; box-shadow: inset -2px -2px 0 rgba(0, 0, 0, 0.12); }
+.mwl-c.t-r { background: #878787; box-shadow: inset 2px 2px 0 rgba(255, 255, 255, 0.18); }
+
+.mwl-side { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; margin-left: 12px; }
+.mwl-head { display: flex; align-items: baseline; justify-content: space-between; }
+.mwl-title {
+  font: 800 11px/1 var(--m-font); letter-spacing: 0.06em; text-transform: uppercase; color: var(--m-fg-subtle);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 8px;
+}
+/* Процент — как уровень опыта в игре: лаймовый с тёмной обводкой. */
+.mwl-pct {
+  flex: none; font: 700 16px/1 'Monocraft', var(--m-mono); font-variant-numeric: tabular-nums; color: #80ff20;
+  text-shadow: 1px 0 0 #0b1a03, -1px 0 0 #0b1a03, 0 1px 0 #0b1a03, 0 -1px 0 #0b1a03, 2px 2px 0 #0b1a03;
+}
+.mwl-live { display: block; min-height: 36px; margin: 7px 0 8px; font: 700 13.5px/18px var(--m-font); color: var(--m-fg); }
+.mwl-step { display: inline-block; animation: mwl-step-in 280ms steps(4, end) backwards; }
+.mwl-pct small { margin-left: 1px; font: 900 13px/1 var(--m-font); }
+@keyframes mwl-step-in { 0% { opacity: 0; transform: translateY(6px); } }
+
+/* Полоска опыта: тёмная дорожка с насечками, лаймовая заливка с бликом. */
+.mwl-bar {
+  position: relative; display: block; height: 8px; overflow: hidden;
+  background: #1b1c1f; box-shadow: inset 0 0 0 1px #000;
+}
+.mwl-bar i {
+  display: block; height: 100%;
+  background: linear-gradient(#c6ff8a 0, #c6ff8a 2px, #80ff20 2px, #80ff20 5px, #4c9e12 5px);
+  transition: width 1s steps(8, end);
+}
+.mwl-bar::after {
+  content: ''; position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+  background: repeating-linear-gradient(90deg, transparent 0, transparent 9px, rgba(0, 0, 0, 0.55) 9px, rgba(0, 0, 0, 0.55) 10px);
+  box-shadow: inset 0 0 0 1px #000;
+}
+
+/* ── Без движения ────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .mgl-arrow, .mgl-trail i, .mgl-od, .mgl-block, .mgl-shards i { animation: none !important; }
+  .mgl-send, .mgl-stop, :root:root .btn.md.mgl { transition: none !important; }
+  .mgl-od { opacity: 0.6; }
+  .mwl-c.a, .mwl-c.a::after, .mwl-step { animation: none !important; }
+  .mwl-c.on { opacity: 1; }
+  .mwl-bar i { transition: none; }
+}

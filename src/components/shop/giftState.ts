@@ -18,7 +18,7 @@ import { freshWishes, markWishSeen, wishedInShop } from './wish'
  * открывали, хук сам один раз спросит /rubies/shop и ещё раз — в смену дня.
  */
 /** Вкладки магазина (правка владельца 21:45: «слипся весь — на разделы»). */
-export type ShopTab = 'today' | 'you' | 'progress' | 'rubies' | 'wish'
+export type ShopTab = 'today' | 'you' | 'progress' | 'rubies' | 'wish' | 'chests'
 
 interface GiftState {
   /** Открытая вкладка магазина: её можно переключить снаружи (тост «Хочу»). */

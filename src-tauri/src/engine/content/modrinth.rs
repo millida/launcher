@@ -282,7 +282,7 @@ pub(crate) async fn install_project_version(
 }
 
 async fn install_project_version_cancellable(
-    profile: &str, kind: &str, project: &str, version: &Value, cancel: Option<&std::sync::atomic::AtomicBool>,
+    profile: &str, kind: &str, project: &str, version: &Value, cancel: Option<&Halt>,
 ) -> Result<String, String> {
     let file = version["files"].as_array()
         .and_then(|fs| fs.iter().find(|f| f["primary"] == true).or_else(|| fs.first()))

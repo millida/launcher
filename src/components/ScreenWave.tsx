@@ -14,6 +14,9 @@ import { tabTransitionMs } from '../state/viewPrefs'
  */
 
 const CELL = 36
+
+/** Событие «сыграй волну»: detail { tone, flash } (по умолчанию — золото премиума). */
+const WAVE_EVENT = 'millida:wave'
 const FLASH_MS = 60
 
 /** Цвет экрана: плотный тон и вспышка фронта. */
@@ -105,6 +108,17 @@ export function ScreenWave() {
     const base = accentBase()
     run(green ? shade(base, -0.55) : own[0], green ? shade(base, -0.1) : own[1])
   }, [screen])
+
+  // Волна по запросу (премиум-сборка открылась — золотой переход, владелец 04.10.2026).
+  useEffect(() => {
+    const on = (e: Event) => {
+      const d = (e as CustomEvent<{ tone?: string; flash?: string } | undefined>).detail
+      const [tone, flash] = TONE.premium
+      run(d?.tone || tone, d?.flash || flash)
+    }
+    window.addEventListener(WAVE_EVENT, on)
+    return () => window.removeEventListener(WAVE_EVENT, on)
+  }, [])
 
   // Сменили цвет кнопок — волна в новый цвет (правка владельца 23.09.2026).
   useEffect(() => {

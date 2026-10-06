@@ -1,0 +1,53 @@
+/* Общие классы вкладок карточки сборки (дизайнер, DESIGN.md §2.5).
+   Стили самих вкладок переехали: «Настройки» — milli-config.css (.mcf-*),
+   «Шейдеры/Ресурс-паки» — milli-looks.css (.lk-*). Здесь только то, что
+   разметка ещё использует напрямую: корень .bt, ячейка, бейджи, пусто,
+   мини-трек «Добавить/Заменить». */
+
+.bt {
+  min-height: 0; min-width: 0; display: flex; flex-direction: column; gap: 10px; padding: 2px;
+  color: var(--m-fg); font: 600 13px/1.3 var(--m-font);
+}
+
+/* ячейка инвентаря (как .mpc-slot) */
+.bt-slot {
+  position: relative; flex: none; display: grid; place-items: center; width: 34px; height: 34px;
+  background: #18191b; box-shadow: inset 2px 2px 0 #0b0b0c, inset -2px -2px 0 #3a3b40;
+}
+.bt-slot img { display: block; width: calc(100% - 8px); height: calc(100% - 8px); object-fit: cover; }
+.bt-slot > svg { display: block; image-rendering: pixelated; }
+
+/* мини-трек «Добавить/Заменить» */
+:root:root .bt .segs.bt-mode {
+  display: inline-grid; grid-auto-flow: column; gap: 2px; padding: 2px;
+  background-color: var(--m-bg); box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.3);
+  --px-n: 4px; clip-path: var(--px-4);
+}
+:root:root .bt .bt-mode .seg {
+  min-width: 0; height: 26px; padding: 0 8px 1px; font-size: 12px; font-weight: 700; white-space: nowrap;
+  background: transparent; --px-n: 3px; clip-path: var(--px-4);
+}
+:root:root .bt .bt-mode .seg:hover { background: var(--m-surface); }
+:root:root .bt .bt-mode .seg.on { color: var(--m-fg); background: var(--m-surface-2); box-shadow: inset 0 -2px 0 var(--m-accent); }
+
+/* бейджи */
+.bt-badge {
+  display: inline-flex; align-items: center; gap: 4px; height: 16px; padding: 0 5px 1px; max-width: 100%;
+  font: 750 10px/1 var(--m-font); color: var(--m-fg-muted); background: var(--m-inset); white-space: nowrap;
+  --px-n: 2px; clip-path: var(--px-4);
+}
+.bt-badge svg { width: 10px; height: 10px; image-rendering: pixelated; }
+.bt-badge.dh { color: var(--m-info); background: var(--m-info-soft); }
+.bt-badge.need { color: var(--m-accent); background: var(--m-accent-soft); }
+.bt-badge.mono { font: 500 10px/1 var(--m-mono); color: var(--m-fg-faint); overflow: hidden; text-overflow: ellipsis; }
+
+/* пусто */
+.bt-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 24px 12px; text-align: center; color: var(--m-fg-muted); }
+.bt-empty p { margin: 0; font: 700 13px/1.35 var(--m-font); }
+.bt-empty-px { image-rendering: pixelated; animation: bt-bob 1.4s steps(2, end) infinite; }
+:root:root .bt-empty .btn.sm { height: 30px; padding: 0 12px 3px; font-size: 12.5px; }
+@keyframes bt-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .bt, .bt * { animation: none !important; transition: none !important; }
+}
