@@ -31,6 +31,12 @@
 | **Гардероб** | **Свой сервер** |
 | <img src="screenshots/wardrobe.png" alt="Скины, плащи и косметика"> | <img src="screenshots/server.png" alt="Панель своего сервера"> |
 
+<p align="center">
+  <a href="BUILDING.md"><img src=".github/readme/build-guide.gif" alt="Собери лаунчер сам из открытого кода — три команды"></a>
+  <br>
+  <a href="BUILDING.md"><b>Собери лаунчер сам из этого кода</b></a>
+</p>
+
 ## Установка
 
 <details>
