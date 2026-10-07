@@ -7,18 +7,24 @@
  * крест-накрест - это уже проверено на живых вещах в игре.
  */
 
+import { compileMolang, type Molang, type MolangClock } from './molang'
+
 export type Interpolation = 'linear' | 'catmullrom'
+
+/** A number, or a Molang expression read at the moment of the clip. */
+export type Component = number | Molang
+export type Vector = [Component, Component, Component]
 
 export interface Keyframe {
   time: number
   /** The value the curve leaves this keyframe with. */
-  value: [number, number, number]
+  value: Vector
   /**
    * The value it arrives at, when the file switches here - `{"pre": 1, "post": 0}`
    * is an instant change. The cat of "Cat cuddle" blinks that way; read as one
    * value, its head shrank for two seconds and slid off its ears.
    */
-  before?: [number, number, number]
+  before?: Vector
   interpolation: Interpolation
 }
 
@@ -47,18 +53,30 @@ export interface BonePose {
   scale: [number, number, number]
 }
 
-const numbers = (value: unknown, fallback: number): [number, number, number] => {
-  if (typeof value === 'number') return [value, value, value]
-  if (Array.isArray(value)) {
-    const at = (i: number) => (typeof value[i] === 'number' ? (value[i] as number) : fallback)
-    return [at(0), at(1), at(2)]
+const component = (value: unknown, fallback: number): Component => {
+  if (typeof value === 'number') return value
+  if (typeof value === 'string') return compileMolang(value) ?? fallback
+  return fallback
+}
+
+const numbers = (value: unknown, fallback: number): Vector => {
+  if (typeof value === 'number' || typeof value === 'string') {
+    const one = component(value, fallback)
+    return [one, one, one]
   }
+  if (Array.isArray(value)) return [component(value[0], fallback), component(value[1], fallback), component(value[2], fallback)]
   return [fallback, fallback, fallback]
 }
 
+const negated = (value: Component): Component =>
+  typeof value === 'number' ? -value : (clock: MolangClock) => -value(clock)
+
+const resolved = (value: Vector, clock: MolangClock): [number, number, number] =>
+  value.map((part) => (typeof part === 'number' ? part : part(clock))) as [number, number, number]
+
 function frames(source: unknown, fallback: number): Keyframe[] {
   if (source === null || source === undefined) return []
-  if (typeof source === 'number' || Array.isArray(source)) {
+  if (typeof source === 'number' || typeof source === 'string' || Array.isArray(source)) {
     return [{ time: 0, value: numbers(source, fallback), interpolation: 'linear' }]
   }
   if (typeof source !== 'object') return []
@@ -97,10 +115,8 @@ function frames(source: unknown, fallback: number): Keyframe[] {
 const turned = (list: Keyframe[]): Keyframe[] =>
   list.map((frame) => ({
     ...frame,
-    value: [-frame.value[0], frame.value[1], -frame.value[2]] as [number, number, number],
-    ...(frame.before
-      ? { before: [-frame.before[0], frame.before[1], -frame.before[2]] as [number, number, number] }
-      : {}),
+    value: [negated(frame.value[0]), frame.value[1], negated(frame.value[2])] as Vector,
+    ...(frame.before ? { before: [negated(frame.before[0]), frame.before[1], negated(frame.before[2])] as Vector } : {}),
   }))
 
 const lastTime = (list: Keyframe[]) => (list.length ? (list[list.length - 1] as Keyframe).time : 0)
@@ -138,13 +154,14 @@ export function readAnimations(source: unknown): Record<string, AnimationClip> {
   return clips
 }
 
-function at(list: Keyframe[], time: number, fallback: number): [number, number, number] {
+function at(list: Keyframe[], clock: MolangClock, fallback: number): [number, number, number] {
   if (!list.length) return [fallback, fallback, fallback]
+  const time = clock.animTime
   const first = list[0] as Keyframe
-  if (time < first.time) return first.before ?? first.value
-  if (time === first.time || list.length === 1) return first.value
+  if (time < first.time) return resolved(first.before ?? first.value, clock)
+  if (time === first.time || list.length === 1) return resolved(first.value, clock)
   const last = list[list.length - 1] as Keyframe
-  if (time >= last.time) return last.value
+  if (time >= last.time) return resolved(last.value, clock)
   for (let i = 0; i < list.length - 1; i += 1) {
     const from = list[i] as Keyframe
     const to = list[i + 1] as Keyframe
@@ -153,14 +170,15 @@ function at(list: Keyframe[], time: number, fallback: number): [number, number, 
     const k = span <= 0 ? 0 : (time - from.time) / span
     // The key the curve leaves sets its easing: the game eases a segment by its opening key.
     const t = from.interpolation === 'catmullrom' ? k * k * (3 - 2 * k) : k
-    const target = to.before ?? to.value
+    const start = resolved(from.value, clock)
+    const target = resolved(to.before ?? to.value, clock)
     return [
-      from.value[0] + (target[0] - from.value[0]) * t,
-      from.value[1] + (target[1] - from.value[1]) * t,
-      from.value[2] + (target[2] - from.value[2]) * t,
+      start[0] + (target[0] - start[0]) * t,
+      start[1] + (target[1] - start[1]) * t,
+      start[2] + (target[2] - start[2]) * t,
     ]
   }
-  return last.value
+  return resolved(last.value, clock)
 }
 
 /** Поза одной кости в этот момент клипа, уже в знаках игры. */
@@ -168,9 +186,10 @@ export function poseOf(clip: AnimationClip, bone: string, seconds: number): Bone
   const body = clip.bones[bone]
   if (!body) return null
   const time = clip.length > 0 ? (clip.loop ? seconds % clip.length : Math.min(seconds, clip.length)) : 0
-  const rotation = at(body.rotation, time, 0)
-  const position = at(body.position, time, 0)
-  const scale = at(body.scale, time, 1)
+  const clock: MolangClock = { animTime: time, lifeTime: seconds }
+  const rotation = at(body.rotation, clock, 0)
+  const position = at(body.position, clock, 0)
+  const scale = at(body.scale, clock, 1)
   return {
     rotation: [-rotation[0], rotation[1], -rotation[2]],
     position: [position[0], -position[1], position[2]],

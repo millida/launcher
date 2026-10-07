@@ -11,7 +11,9 @@ import { textureSource } from './textureSource'
 import { loadCosmeticCatalog, type CosmeticItem } from './gameProfile'
 import { gpuLite } from './gpuLite'
 import { pickJob, shotRank } from './shotQueue'
+import { textured } from './shotTextures'
 import { withSnapshotGl, type GlHolder } from './glPool'
+import { screenSettled } from './screenSettle'
 
 /**
  * Снимки «ты в наборе» для карточек магазина (ТЗ v3, 06.10.2026). Живая 3D-сцена
@@ -76,7 +78,7 @@ export const focusOf = (slot: string): ShotFocus => SLOT_FOCUS[slot] ?? 'body'
  * растёт, когда меняется кадр, — старые снимки тогда не берутся.
  */
 // v5: петли кадров и без тени-пятна под ногами (06.10.2026).
-const SHOT_VER = 'v6'
+const SHOT_VER = 'v7'
 const DB = 'm-outfit-shots'
 let dbAsk: Promise<IDBDatabase | null> | null = null
 function db(): Promise<IDBDatabase | null> {
@@ -93,14 +95,21 @@ function db(): Promise<IDBDatabase | null> {
   })
   return dbAsk
 }
-function idbGet(key: string): Promise<string | null> {
+type StoredShot = { blob: Blob; dressed: number; frames?: number; seconds?: number }
+type Shot = StoredShot & { partial: boolean }
+function idbGet(key: string): Promise<string | StoredShot | null> {
   return db().then(
     (d) =>
       new Promise((ok) => {
         if (!d) return ok(null)
         try {
           const q = d.transaction('shots').objectStore('shots').get(SHOT_VER + '|' + key)
-          q.onsuccess = () => ok(typeof q.result === 'string' ? q.result : null)
+          q.onsuccess = () => {
+            const v = q.result as unknown
+            if (typeof v === 'string') return ok(v)
+            const rec = v as StoredShot | undefined
+            ok(rec && rec.blob instanceof Blob ? rec : null)
+          }
           q.onerror = () => ok(null)
         } catch {
           ok(null)
@@ -108,11 +117,21 @@ function idbGet(key: string): Promise<string | null> {
       }),
   )
 }
-function idbSet(key: string, url: string): Promise<void> {
+function idbSet(key: string, value: StoredShot): Promise<void> {
   return db().then((d) => {
     try {
-      d?.transaction('shots', 'readwrite').objectStore('shots').put(url, SHOT_VER + '|' + key)
+      d?.transaction('shots', 'readwrite').objectStore('shots').put(value, SHOT_VER + '|' + key)
     } catch {}
+  })
+}
+
+function canvasBlob(canvas: HTMLCanvasElement, type: string, quality?: number): Promise<Blob | null> {
+  return new Promise((ok) => {
+    try {
+      canvas.toBlob((b) => ok(b), type, quality)
+    } catch {
+      ok(null)
+    }
   })
 }
 
@@ -137,14 +156,15 @@ let asked = 0
 function pump() {
   if (busy || !jobs.length) return
   busy = true
-  const i = pickJob(jobs.map((j) => ({ at: j.at, rank: shotRank(j.el) })))
-  const job = jobs.splice(i, 1)[0]!
-  void job
-    .run()
+  void screenSettled()
+    .then(() => {
+      const i = pickJob(jobs.map((j) => ({ at: j.at, rank: shotRank(j.el) })))
+      return jobs.splice(i, 1)[0]!.run()
+    })
     .catch(() => null)
     .then(() => {
       busy = false
-      // Кадр отдыха между снимками: toDataURL и сборка модели держат поток.
+      // Кадр отдыха между снимками: сборка модели держит поток.
       if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => setTimeout(pump, 0))
       else setTimeout(pump, 0)
     })
@@ -158,8 +178,9 @@ function enqueue<T>(el: Element | null | undefined, run: () => Promise<T>): Prom
 }
 let engine: SkinViewEngine | null = null
 let idle = 0
-/** Без новых снимков 20 секунд — движок отдаёт контекст WebGL. */
-const IDLE_MS = 20_000
+/** Без новых снимков минуту — движок отдаёт контекст WebGL. Короче нельзя:
+ *  новый контекст заново компилирует шейдеры, и возврат в магазин подвисал. */
+const IDLE_MS = 60_000
 /** Сколько ждать картинки вещей перед кадром: пришедшие грузятся за 0,1–0,3 с,
  *  а битая не придёт и за 4 — дольше ждать значит держать очередь наборов. */
 const TEXTURE_WAIT_MS = 1500
@@ -189,12 +210,16 @@ export function outfitShot(
     // Тогда сам снимок — только работа видеокарты (~0,3 с вместо 1,5).
     void prefetch(skin, codes)
     return enqueue(el, () => withSnapshotGl(holder, () => shoot(skin, slim, codes, focus, aspect))).then((r) => {
-      if (r && r.dressed > 0) void idbSet(key, r.frames && r.frames > 1 ? JSON.stringify(r) : r.url)
-      return r
+      if (!r) return null
+      const { partial, ...stored } = r
+      // Missing pictures may arrive next time: keep the shot neither on disk nor in memory.
+      if (partial) cache.delete(key)
+      else if (stored.dressed > 0) void idbSet(key, stored)
+      return fromStored(stored)
     })
   }
   const run: Promise<OutfitShot | null> = idbGet(key)
-    .then((url): Promise<OutfitShot | null> | OutfitShot => (url ? fromDisk(url) : render()))
+    .then((saved): Promise<OutfitShot | null> | OutfitShot => (typeof saved === 'string' ? fromDisk(saved) : saved ? fromStored(saved) : render()))
     .catch((e) => {
       console.warn('[shop] снимок набора', e)
       return null
@@ -206,6 +231,15 @@ export function outfitShot(
   })
   cache.set(key, kept)
   return kept
+}
+
+function fromStored(s: StoredShot): OutfitShot {
+  const shot: OutfitShot = { url: URL.createObjectURL(s.blob), dressed: s.dressed }
+  if (s.frames && s.frames > 1) {
+    shot.frames = s.frames
+    shot.seconds = s.seconds
+  }
+  return shot
 }
 
 /** Запись с диска: строка картинки (один кадр) или JSON петли. */
@@ -237,6 +271,7 @@ export function warmOutfitShots(): void {
     withSnapshotGl(holder, async () => {
       const e = await getEngine()
       try {
+        await e?.compileAsync()
         e?.renderFrame()
       } finally {
         sleepLater()
@@ -333,21 +368,12 @@ function sleepLater() {
  */
 const SHOWCASE_T = 7.4
 
-type Mapped = { map?: { image?: unknown } | null; emissiveMap?: { image?: unknown } | null }
-
 /** Картинки вещей грузятся сами (TextureLoader): кадр снимаем, когда пришли все. */
 async function texturesReady(e: SkinViewEngine): Promise<void> {
   const until = performance.now() + TEXTURE_WAIT_MS
   const scene = (e as unknown as { scene?: import('three').Object3D }).scene
   while (scene && performance.now() < until) {
-    let waiting = false
-    scene.traverse((node) => {
-      const mats = (node as { material?: Mapped | Mapped[] }).material
-      for (const m of Array.isArray(mats) ? mats : mats ? [mats] : []) {
-        if ((m.map && !m.map.image) || (m.emissiveMap && !m.emissiveMap.image)) waiting = true
-      }
-    })
-    if (!waiting) return
+    if (textured(scene)) return
     await new Promise((r) => setTimeout(r, 60))
   }
 }
@@ -373,7 +399,7 @@ const LOOP_FRAME_H = 480
 
 type Pinned = { position?: { x: number; z: number } }
 
-async function shoot(skin: string, slim: boolean, codes: readonly string[], focus: ShotFocus, aspect: number): Promise<OutfitShot | null> {
+async function shoot(skin: string, slim: boolean, codes: readonly string[], focus: ShotFocus, aspect: number): Promise<Shot | null> {
   const [e, catalog] = await Promise.all([getEngine(), catalogItems()])
   if (!e) return null
   try {
@@ -399,7 +425,7 @@ async function shoot(skin: string, slim: boolean, codes: readonly string[], focu
     const playing = sequence ? new CosmeticEmote(sequence, emoteFile?.geometry) : null
     if (playing) playing.paused = true
 
-    let dressed = 0
+    const worn: import('three').Object3D[][] = []
     let clipSeconds = 0
     all.forEach((r, i) => {
       const file = files[i]
@@ -422,13 +448,17 @@ async function shoot(skin: string, slim: boolean, codes: readonly string[], focu
           r.variant?.emissive ?? r.item.emissive,
         )
         for (const piece of pieces) e.attachCosmetic(piece.anchor, piece.object)
-        if (pieces.length) dressed += 1
+        if (pieces.length) worn.push(pieces.map((p) => p.object))
       } catch {
         // Кривая модель не роняет снимок: вещь просто не встанет.
       }
     })
-    if (playing) dressed = Math.max(dressed, 1)
     await texturesReady(e)
+    // An item whose picture never arrived renders invisible: counting it as worn
+    // would cache a bare figure on disk for good.
+    let dressed = worn.filter((objects) => objects.every(textured)).length
+    if (playing) dressed = Math.max(dressed, 1)
+    const partial = dressed < worn.length
     // Высота кадра постоянная, ширина — по пропорции плитки.
     e.setSize(Math.round(SHOT_H * aspect), SHOT_H)
     // Эмоция — всё тело крупнее, чем «полный рост» наборов: сидя и в приседе фигура иначе терялась внизу.
@@ -452,6 +482,7 @@ async function shoot(skin: string, slim: boolean, codes: readonly string[], focu
       pose.progress = SHOWCASE_T
     }
     e.setPlayerYaw(frame.yaw)
+    await e.compileAsync()
 
     // Сколько длится петля: у эмоции — её повторяемая часть, у вещи — клип или
     // лента кадров текстуры.
@@ -469,8 +500,8 @@ async function shoot(skin: string, slim: boolean, codes: readonly string[], focu
         at(0)
         e.fitPlayerToFrame({ fillY: frame.fillY, offsetY: frame.offsetY })
         e.renderFrame()
-        const url = e.canvas.toDataURL('image/png')
-        return { url, dressed }
+        // No await inside try: cosmeticClock is global and must be reset before yielding.
+        return canvasBlob(e.canvas, 'image/png').then((blob) => (blob ? { blob, dressed, partial } : null))
       }
       const n = loopFrames(seconds)
       // Кадр подгоняется по первому кадру и не меняется: иначе фигура
@@ -493,8 +524,7 @@ async function shoot(skin: string, slim: boolean, codes: readonly string[], focu
         ctx.drawImage(e.canvas, 0, 0, fw0, fh0, k * fw, 0, fw, fh)
       }
       // WebP, где умеет (Chromium/WebView2), — лента в разы легче; иначе PNG.
-      const url = strip.toDataURL('image/webp', 0.9)
-      return { url, dressed, frames: n, seconds }
+      return canvasBlob(strip, 'image/webp', 0.9).then((blob) => (blob ? { blob, dressed, frames: n, seconds, partial } : null))
     } finally {
       cosmeticClock.now = null
       e.clearCosmetics()

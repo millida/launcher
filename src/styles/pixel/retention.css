@@ -110,6 +110,8 @@
 .tb-row.pinned { position: sticky; bottom: 0; z-index: 3; margin-top: 10px; }
 .tb-rank { font: 900 20px/1 var(--m-font); color: var(--m-fg-faint); text-align: center; font-variant-numeric: tabular-nums; }
 .tb-row.me .tb-rank { color: var(--m-accent); }
+/* A digit of this face is ~0.65em: long places shrink to stay inside the 44px column instead of covering the head. */
+.tb-row .tb-rank { font-size: min(20px, calc(66px / var(--digits, 1))); white-space: nowrap; }
 .tb-head { display: block; width: 56px; height: 56px; image-rendering: pixelated; clip-path: var(--px-5); }
 .tb-row .fr-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .tb-row .fr-nick { font: 800 18px/1.1 var(--m-font); }
@@ -135,7 +137,7 @@
 .top-skel-line { display: block; width: 40%; height: 14px; }
 
 /* 3D-пьедестал: сцена на всю ширину, таблички над головами. */
-.tb-scene { position: relative; height: 470px; margin: 4px 0 14px; overflow: hidden; }
+.tb-scene { position: relative; height: clamp(240px, calc(100vh - 460px), 470px); margin: 4px 0 14px; overflow: hidden; }
 .tb-scene.skel { display: block; }
 .tb-scene-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; opacity: 0; transition: opacity 240ms steps(4, end); }
 .tb-scene.ready .tb-scene-canvas { opacity: 1; }
@@ -153,6 +155,21 @@
 .tb-tag.p3 .tb-tag-place { color: hsl(25 70% 64%); }
 .tb-tag-val { display: inline-flex; align-items: center; gap: 4px; font: 800 13px/1 var(--m-font); color: rgba(255, 255, 255, 0.82); }
 .tb-tag-val svg { width: 13px; height: 13px; }
+
+.tb-more {
+  position: relative; z-index: 2; align-self: center; display: inline-flex; align-items: center; gap: 8px;
+  margin: 0 0 8px; padding: 9px 16px; font: 800 14px/1 var(--m-font); color: var(--tb-c, var(--m-accent));
+  background-color: var(--m-surface-2); cursor: pointer;
+  --px-n: 5px; clip-path: var(--px-5);
+  transition: opacity 200ms steps(4, end), background-color var(--m-t-fast);
+}
+.tb-scene + .tb-more { margin-top: -46px; }
+.tb-more svg { width: 16px; height: 16px; animation: tb-more-nudge 1.4s steps(2, end) infinite; }
+@media (hover: hover) and (pointer: fine) { .tb-more:hover { background-color: var(--m-inset); } }
+.tb-more.away { opacity: 0; pointer-events: none; }
+.tb-rest-anchor { height: 0; scroll-margin-top: 12px; }
+@keyframes tb-more-nudge { 50% { transform: translateY(3px); } }
+@media (prefers-reduced-motion: reduce) { .tb-more svg { animation: none; } }
 
 /* Плоский пьедестал — без WebGL. */
 .tb-podium { display: grid; grid-template-columns: repeat(3, minmax(0, 200px)); justify-content: center; align-items: end; gap: 12px; padding: 8px 0 14px; }
@@ -218,3 +235,6 @@
 #s-top .tb-row.me { background-color: color-mix(in srgb, var(--tb-c) 16%, var(--m-surface)); --px-fl: var(--tb-c); }
 #s-top .tb-row.me .fr-nick, #s-top .tb-row.me .tb-rank { color: var(--tb-c); }
 #s-top .tb-tag-val { color: var(--tb-c2); }
+#s-top .tb-kinds { margin-bottom: 8px; }
+#s-top .tb-kinds .seg { height: 40px; padding: 0 16px; font-size: 15px; gap: 8px; }
+#s-top .tb-kinds .seg svg { width: 18px; height: 18px; }

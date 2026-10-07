@@ -13,7 +13,8 @@
 @keyframes rv2-in { from { opacity: 0; } to { opacity: 1; } }
 .rv2 .rv2-rays { --rw-tone: var(--box); }
 .rv2.rv2-ph-card .rv2-rays, .rv2.rv2-ph-sum .rv2-rays { --rw-tone: var(--flash); }
-.rv2-skip { position: absolute; top: 56px; right: 18px; z-index: 6; }
+/* Внизу справа: сверху кнопка закрывала строки наград (07.10.2026). */
+.rv2-skip { position: absolute; bottom: 22px; right: 22px; z-index: 6; }
 
 /* ---------- Сундук ---------- */
 .rv2-stage { position: relative; display: grid; place-items: center; width: min(56vh, 92vw); aspect-ratio: 1; cursor: pointer; }

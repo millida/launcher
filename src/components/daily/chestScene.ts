@@ -25,7 +25,7 @@ import {
   type Material,
   type Texture,
 } from 'three'
-import { acquireChestGl } from './chestGl'
+import { acquireChestGl, onChestFrame } from './chestGl'
 import type { ChestTier } from '../../lib/rubies'
 import { onRenderGate, renderLive } from '../../lib/renderGate'
 import { CHEST_PALETTE, faceCanvas, type FaceKind } from './chestPaint'
@@ -191,6 +191,13 @@ function fanTexture(): Texture {
   return t
 }
 
+/** Effect textures are white and tinted by material colour, so every chest shares one set; they are never disposed. */
+let effectTextures: { glow: Texture; rays: Texture; beam: Texture; fan: Texture } | null = null
+const effects = () => (effectTextures ??= { glow: glowTexture(), rays: raysTexture(), beam: beamTexture(), fan: fanTexture() })
+
+/** Idle chests (closed / ready) only sway, so they redraw at ~30 fps; shake and open stay at full rate. */
+const IDLE_FRAME_MS = 30
+
 const SPARKS = 56
 /** Приоткрытие крышки: ~17°, дыхание ±3°. */
 const AJAR = 0.3
@@ -204,6 +211,7 @@ const FAN = [
   { a: 0.6, w: 5, h: 16, o: 0.5, sp: 1.0, ph: 5.2, core: false },
 ]
 const MODEL_SCALE = 15 / 16
+const GAP_Z = 4
 const SHAKE_IDLE_SPEED = 1.8
 const easeOutBack = (t: number) => {
   const c1 = 2.2
@@ -239,13 +247,14 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
   scene.add(inner)
 
   // Ореол и лучи — за сундуком.
-  const glowMat = new SpriteMaterial({ map: glowTexture(), blending: AdditiveBlending, depthWrite: false, transparent: true })
+  const fx = effects()
+  const glowMat = new SpriteMaterial({ map: fx.glow, blending: AdditiveBlending, depthWrite: false, transparent: true })
   const glow = new Sprite(glowMat)
   glow.position.set(0, 8, -12)
   scene.add(glow)
 
   const raysMat = new MeshBasicMaterial({
-    map: raysTexture(),
+    map: fx.rays,
     blending: AdditiveBlending,
     depthWrite: false,
     transparent: true,
@@ -269,7 +278,7 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
 
   // Столб света и искры.
   const beamMat = new MeshBasicMaterial({
-    map: beamTexture(),
+    map: fx.beam,
     blending: AdditiveBlending,
     depthWrite: false,
     transparent: true,
@@ -297,7 +306,7 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
   const dummy = new Object3D()
 
   // Свет из щели: веер лучей + пятно света на открытом верху корпуса.
-  const fanTex = fanTexture()
+  const fanTex = fx.fan
   const fan = new Group()
   hop.add(fan)
   const fanGeo = new PlaneGeometry(1, 1)
@@ -311,7 +320,7 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
     fan.add(m)
     return { m, mat, f }
   })
-  const gapTex = glowTexture()
+  const gapTex = fx.glow
   const gapMat = new SpriteMaterial({ map: gapTex, blending: AdditiveBlending, depthWrite: false, transparent: true, opacity: 0 })
   const gapGlow = new Sprite(gapMat)
   gapGlow.renderOrder = 4
@@ -348,8 +357,9 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
     rigModel = opts.look === 'model' ? chestModel(tier) : null
     aim(!!rigModel)
     gapY = rigModel ? 7.6 : 10
-    fan.position.set(0, gapY + 0.2, 8.5)
-    gapGlow.position.set(0, gapY + 1.2, 8)
+    // Inside the body, behind the front wall (z ~ 7): in front of it the additive glow lands on the latch.
+    fan.position.set(0, gapY + 0.2, GAP_Z)
+    gapGlow.position.set(0, gapY + 1.2, GAP_Z)
     pool.position.set(0, gapY + 0.08, 0)
     if (rigModel) {
       rig = buildBbRig(rigModel.model, opts.tint ?? tintOf(tier))
@@ -445,7 +455,7 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
     }
   }
 
-  let raf = 0
+  let stopTick: (() => void) | null = null
   let last = performance.now()
   let dead = false
   let trickle = 0
@@ -457,10 +467,11 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
     // снова заведёт гейт или setVisible.
     const idle = mode === 'closed' || mode === 'ready'
     if (!renderLive() || (!inView && idle)) {
-      raf = 0
+      stopTick?.()
+      stopTick = null
       return
     }
-    raf = requestAnimationFrame(frame)
+    if (idle && now - last < IDLE_FRAME_MS) return
     const dt = Math.min(0.05, (now - last) / 1000)
     last = now
     const t = now / 1000
@@ -618,22 +629,26 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
 
     gl.draw(scene, camera, ctx2d, canvas.width, canvas.height)
   }
-  raf = requestAnimationFrame(frame)
+  stopTick = onChestFrame(frame)
   let inView = true
   const wake = () => {
-    if (dead || raf || !renderLive()) return
+    if (dead || stopTick || !renderLive()) return
     last = performance.now()
-    raf = requestAnimationFrame(frame)
+    stopTick = onChestFrame(frame)
   }
   const offGate = onRenderGate(wake)
 
+  const frameAt = (at: Object3D) => {
+    const visH = 2 * camera.position.distanceTo(at.position) * Math.tan((camera.fov * Math.PI) / 360)
+    return Math.min(visH, visH * camera.aspect)
+  }
+
   function fitRays() {
     // Лучи — круг, вписанный в кадр: квадратный край плоскости не виден.
-    const dist = camera.position.distanceTo(rays.position)
-    const visH = 2 * dist * Math.tan((camera.fov * Math.PI) / 360)
-    const size = Math.min(visH, visH * camera.aspect) * 1.0
+    const size = frameAt(rays)
     rays.scale.set(size, size, 1)
-    frameSize = size
+    // The glow sits closer to the camera than the rays, so it must fit the frame at its own depth.
+    frameSize = frameAt(glow)
   }
 
   return {
@@ -666,18 +681,18 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
     dispose() {
       dead = true
       offGate()
-      cancelAnimationFrame(raf)
+      stopTick?.()
+      stopTick = null
       scene.traverse((o) => {
         const m = o as Mesh
         m.geometry?.dispose?.()
       })
       rig?.dispose()
-      fanTex.dispose()
-      gapTex.dispose()
-      ;[...owned, glowMat, raysMat, beamMat, coreMat, sparkMat, gapMat, poolMat, ...fanBeams.map((b) => b.mat)].forEach((m) => {
-        ;(m as MeshBasicMaterial).map?.dispose()
+      owned.forEach((m) => {
+        ;(m as MeshLambertMaterial).map?.dispose()
         m.dispose()
       })
+      ;[glowMat, raysMat, beamMat, coreMat, sparkMat, gapMat, poolMat, ...fanBeams.map((b) => b.mat)].forEach((m) => m.dispose())
       gl.release()
     },
   }

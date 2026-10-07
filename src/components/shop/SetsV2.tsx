@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Icon } from '../Icon'
 import { Ruby } from '../Ruby'
 import type { SetColorwayView, SetView } from '../../lib/rubies'
-import { Dots, THEME_TONE, defaultWay } from './Sets'
+import { Dots, PxThumb, THEME_TONE, defaultWay } from './Sets'
 import { SetShot, ShopStage } from './ShopStage'
 import { warmOutfitShots } from '../../lib/outfitSnapshot'
 import { Countdown, Head } from './parts'
@@ -147,56 +148,97 @@ function SetCard({ set, way, picked, onPick, acts }: { set: SetView; way: SetCol
       <button className="sv-card-pick" aria-pressed={picked} aria-label={set.title} data-track="set_open" onClick={onPick}>
         <SetShot items={items(way)} />
         <span className="sv-corner">{!full(way) ? <OffBadge pct={way.discountPct} /> : null}</span>
+        <span className="sv-card-look">
+          <Icon id="i-eye" />
+        </span>
       </button>
       <b className="sv-card-name">{set.title}</b>
+      {/* Что даёт набор — вещи значками (07.10.2026: «сразу видно, что в нём»). */}
+      <span className="sv-card-items" aria-label={'Вещей: ' + way.items.length}>
+        {way.items.slice(0, 5).map((x) => (
+          <span key={x.item.code} className={'sv-ci' + (x.owned ? ' own' : '')} title={x.item.name}>
+            <PxThumb item={x.item} />
+          </span>
+        ))}
+      </span>
       <PriceBtn set={set} way={way} acts={acts} />
     </div>
   )
 }
 
-/** Раздел «Наборы»: стенд слева, лента снимков справа. */
+/**
+ * Раздел «Наборы» (07.10.2026): лента карточек — фигура в наборе, вещи значками,
+ * цена. Клик — окно примерки: живая 3D-фигура на тебе, расцветки, цена. Стенда
+ * рядом с лентой больше нет: он повторял выбранную карточку («дракон дважды»).
+ */
 export function SetsSection({ sets, refreshAt, onEnd, on, acts }: { sets: SetView[] | null; refreshAt: string; onEnd?: () => void; on: boolean; acts: SetActs }) {
-  const [pickId, setPickId] = useState<string | null>(null)
+  const [openId, setOpenId] = useState<string | null>(null)
   const [pick, setPick] = useState<Record<string, string>>({})
   const rail = useRef<HTMLDivElement>(null)
   const wayOf = (set: SetView) => set.colorways.find((c) => c.name === pick[set.id]) ?? defaultWay(set)
-  const chosen = sets?.find((s) => s.id === pickId) ?? sets?.find((s) => s.ofDay) ?? sets?.[0] ?? null
+  const open = sets?.find((s) => s.id === openId) ?? null
   const scroll = (dir: 1 | -1) => rail.current?.scrollBy({ left: dir * (rail.current.clientWidth - 120), behavior: 'smooth' })
   const edge = useRailEdges(rail, sets?.length)
   // Снимки «ты в наборе»: 3D-модуль и каталог — заранее, пока игрок листает верх.
   useEffect(() => {
     if (on) warmOutfitShots()
   }, [on])
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && (e.stopImmediatePropagation(), setOpenId(null))
+    document.addEventListener('keydown', onKey, true)
+    return () => document.removeEventListener('keydown', onKey, true)
+  }, [open])
   return (
     <section id="shop-sets" className="sv-sec" data-section="sets">
       <Head title="Наборы" />
       {!sets ? (
         <div className="sv-sets" aria-hidden="true">
-          <span className="skel sv-skel-stage" />
           <span className="skel sv-skel-rail" />
         </div>
-      ) : !chosen ? null : (
-        <div className="sv-sets">
-          <Stand set={chosen} way={wayOf(chosen)} onPick={(name) => setPick((p) => ({ ...p, [chosen.id]: name }))} refreshAt={refreshAt} onEnd={onEnd} on={on} acts={acts} />
-          <div className="sv-rail-wrap">
-            <div className="sv-rail" ref={rail} role="list" aria-label="Наборы">
-              {sets.map((set) => (
-                <SetCard key={set.id} set={set} way={wayOf(set)} picked={set.id === chosen.id} onPick={() => setPickId(set.id)} acts={acts} />
-              ))}
-            </div>
-            {edge.l ? (
-              <button className="sv-rail-btn is-l" aria-label="Назад" data-track="sets_prev" onClick={() => scroll(-1)}>
-                <Icon id="i-arrow-l" />
-              </button>
-            ) : null}
-            {edge.r ? (
-              <button className="sv-rail-btn is-r" aria-label="Дальше" data-track="sets_next" onClick={() => scroll(1)}>
-                <Icon id="i-arrow-r" />
-              </button>
-            ) : null}
+      ) : (
+        <div className="sv-rail-wrap sv-rail-only">
+          <div className="sv-rail" ref={rail} role="list" aria-label="Наборы">
+            {sets.map((set) => (
+              <SetCard key={set.id} set={set} way={wayOf(set)} picked={set.id === openId} onPick={() => setOpenId(set.id)} acts={acts} />
+            ))}
           </div>
+          {edge.l ? (
+            <button className="sv-rail-btn is-l" aria-label="Назад" data-track="sets_prev" onClick={() => scroll(-1)}>
+              <Icon id="i-arrow-l" />
+            </button>
+          ) : null}
+          {edge.r ? (
+            <button className="sv-rail-btn is-r" aria-label="Дальше" data-track="sets_next" onClick={() => scroll(1)}>
+              <Icon id="i-arrow-r" />
+            </button>
+          ) : null}
         </div>
       )}
+      {open
+        ? createPortal(
+            <div className="modal-bg open vis sv-try-bg" onMouseDown={(e) => e.target === e.currentTarget && setOpenId(null)}>
+              <div className="sv-try" role="dialog" aria-label={open.title}>
+                <button className="sv-try-x" aria-label="Закрыть" onClick={() => setOpenId(null)}>
+                  <Icon id="i-x" />
+                </button>
+                <Stand set={open} way={wayOf(open)} onPick={(name) => setPick((p) => ({ ...p, [open.id]: name }))} refreshAt={refreshAt} onEnd={onEnd} on={on} acts={acts} />
+                <ul className="sv-try-items">
+                  {wayOf(open).items.map((x) => (
+                    <li key={x.item.code} className={x.owned ? 'own' : ''}>
+                      <span className="sv-ci">
+                        <PxThumb item={x.item} />
+                      </span>
+                      <b>{x.item.name}</b>
+                      {x.owned ? <Icon id="i-check" /> : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </section>
   )
 }

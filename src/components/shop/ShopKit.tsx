@@ -91,6 +91,23 @@ const wearItems = (list: ItemRef[]) => wearNow(list.map((it) => ({ code: it.code
 import { ShardsSection } from './Shards'
 import { craftItem, loadWorkshop, type Workshop } from '../../lib/rubies'
 import { fragmentWord } from './rarity'
+
+/**
+ * Last loaded shop per account: a return visit draws the feed at once and
+ * refreshes it in place, instead of swapping a skeleton for the whole feed in
+ * the middle of the entry animation.
+ */
+type ShopMemo = {
+  who: string
+  day: ShopDay
+  sets: SetView[] | null
+  setsAt: string
+  cases: CaseView[] | null
+  drops: CaseDrop[]
+  casesAt: string
+  ofDayPct: number
+}
+let shopMemo: ShopMemo | null = null
 /**
  * Магазин как набор общих блоков (06.10.2026, «один в один»): одно состояние и
  * одни покупки на магазин и на экран персонажа. useShop грузит витрину, наборы,
@@ -105,19 +122,21 @@ export function useShop(on: boolean) {
   const walletKnown = typeof walletBal === 'number'
   // Куда прокрутить ленту (тост «Пополнить» → к пакетам).
   const anchor = useShopGift((st) => st.tab)
-  const [day, setDay] = useState<ShopDay | null>(null)
+  const who = useAccounts((st) => st.list.find((a) => a.kind === 'millida' || a.kind === 'tg')?.id ?? '')
+  const [memo] = useState(() => (signedIn && shopMemo?.who === who ? shopMemo : null))
+  const [day, setDay] = useState<ShopDay | null>(memo?.day ?? null)
   const [weekly, setWeekly] = useState<WeeklyPath | null>(null)
   const [quests, setQuests] = useState<PackQuest[]>([])
   const [telegram, setTelegram] = useState<TelegramReward | null>(null)
   const [plus, setPlus] = useState<PlusEconomy | null>(null)
   const [rules, setRules] = useState<Rules | null>(null)
   const [busy, setBusy] = useState('')
-  const [sets, setSets] = useState<SetView[] | null>(null)
-  const [setsAt, setSetsAt] = useState('')
-  const [cases, setCases] = useState<CaseView[] | null>(null)
-  const [drops, setDrops] = useState<CaseDrop[]>([])
-  const [casesAt, setCasesAt] = useState('')
-  const [ofDayPct, setOfDayPct] = useState(30)
+  const [sets, setSets] = useState<SetView[] | null>(memo?.sets ?? null)
+  const [setsAt, setSetsAt] = useState(memo?.setsAt ?? '')
+  const [cases, setCases] = useState<CaseView[] | null>(memo?.cases ?? null)
+  const [drops, setDrops] = useState<CaseDrop[]>(memo?.drops ?? [])
+  const [casesAt, setCasesAt] = useState(memo?.casesAt ?? '')
+  const [ofDayPct, setOfDayPct] = useState(memo?.ofDayPct ?? 30)
   const [opening, setOpening] = useState<CaseRun | null>(null)
   const caseResult = useRef<ReturnType<typeof purchaseFlow> | null>(null)
   const [error, setError] = useState('')
@@ -206,6 +225,10 @@ export function useShop(on: boolean) {
   }, [on, signedIn])
 
   useEffect(() => () => window.clearTimeout(bumpTimer.current), [])
+
+  useEffect(() => {
+    if (signedIn && day) shopMemo = { who, day, sets, setsAt, cases, drops, casesAt, ofDayPct }
+  }, [signedIn, who, day, sets, setsAt, cases, drops, casesAt, ofDayPct])
 
   const balance = day?.balance ?? 0
   /** Уровень подписки: из магазина, иначе из экрана подписки. */

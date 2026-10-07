@@ -363,7 +363,8 @@ export function PodiumScene({ board, items, onOpen, onFail }: { board: Board; it
 
   return (
     <div className={'tb-scene' + (ready ? ' ready' : '')} ref={wrapRef}>
-      <canvas ref={canvasRef} className="tb-scene-canvas" />
+      {/* Новый холст на каждую доску: у старого после release контекст потерян, и сцена падала в плоские фигуры (07.10.2026). */}
+      <canvas key={key} ref={canvasRef} className="tb-scene-canvas" />
       {items.slice(0, 3).map((e, i) => (
         <button
           key={e.rank}

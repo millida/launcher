@@ -38,6 +38,7 @@ import {
   listLogs,
   listServers,
   loadProfileSettings,
+  migratePlan,
   fpsBoostState,
   gpuSwitchSupported,
   setProfileGpu,
@@ -87,6 +88,7 @@ import { isBlockIcon } from '../lib/blockColor'
 import { RAM_MAX_GB, maxRamGb } from '../lib/ram'
 import { BUILD_NAME_MAX, GROUP_NAME_MAX, LOADER_NAME, fmtPlaytime, fmtSize, loaderId, whenText } from '../lib/format'
 import { AUTO_LOADER_VERSION, hasLoaderVersions, useLoaderBuilds } from '../lib/loaderBuilds'
+import { loaderPinFollowsGame, useCoreUpdate } from '../lib/coreUpdate'
 import { incompatibleWith } from '../lib/compat'
 import { fixItems, issueInstall } from '../lib/deps'
 import { installExtras } from '../lib/install'
@@ -272,6 +274,13 @@ export function InstancePage() {
   const verOpts = useMemo(
     () => versionOptions(mcList, showSnapshots, newVersion),
     [mcList, showSnapshots, newVersion],
+  )
+  const coreUpd = useCoreUpdate(
+    pr ? pr.version : '',
+    pr ? loaderId(pr) : 'vanilla',
+    pr ? pr.loader_version : null,
+    mcList,
+    modal.open && tab === 'opts' && !guarded,
   )
   const [note, setNote] = useState('')
   const logBodyRef = useRef<HTMLPreElement>(null)
@@ -661,6 +670,60 @@ export function InstancePage() {
         }
       })
       .catch((e) => showToast('Не удалось сменить: ' + e, 'error'))
+      .finally(() => setCoreBusy(false))
+  }
+
+  const applyGameUpdate = async (target: string) => {
+    if (!profile || !pr) return
+    const loader = loaderId(pr)
+    const lver = loaderPinFollowsGame(loader) ? pr.loader_version || null : null
+    setCoreBusy(true)
+    try {
+      const mods = await listContent(profile, 'mod')
+      const plan = mods.length ? await migratePlan(profile, target, loader) : null
+      const installed = new Map(mods.map((m) => [m.name.replace(/\.disabled$/, ''), m.version_number || '']))
+      const refit = plan ? plan.items.filter((i) => i.ok && installed.get(i.file_name) !== i.version_number) : []
+      const blocked = plan ? plan.items.filter((i) => !i.ok).map((i) => i.title) : []
+      const unchecked = plan ? plan.unlinked : []
+      const listed = (names: string[]) => names.slice(0, 5).join(', ') + (names.length > 5 ? ' и ещё ' + (names.length - 5) : '')
+      const text =
+        'Обновить Minecraft ' + pr.version + ' → ' + target + '?' +
+        (refit.length ? ' Моды под новую версию обновятся сами: ' + refit.length + ' шт.' : '') +
+        (blocked.length ? ' Нет сборки под ' + target + ': ' + listed(blocked) + ' — останутся как есть и могут не запуститься.' : '') +
+        (unchecked.length ? ' Не проверить, добавлены вручную: ' + listed(unchecked) + '.' : '')
+      if (!(await uiConfirm(text, { confirmLabel: 'Обновить' }))) return
+      await setProfileLoader(profile, target, loader, lver)
+      const failed: string[] = []
+      for (const i of refit) {
+        await updateContent(profile, 'mod', i.file_name).catch(() => failed.push(i.title))
+      }
+      void useProfiles.getState().refresh()
+      loadMods()
+      if (failed.length) {
+        showToast('Minecraft обновлён до ' + target + ', но не обновились моды: ' + listed(failed) + '. Обнови их на вкладке модов.', 'error')
+      } else {
+        showToast('Minecraft обновлён до ' + target + '. Доустановим при запуске.')
+      }
+    } catch (e) {
+      showToast('Не удалось обновить Minecraft: ' + e, 'error')
+    } finally {
+      setCoreBusy(false)
+    }
+  }
+
+  const applyLoaderUpdate = async (target: string) => {
+    if (!profile || !pr) return
+    const loader = loaderId(pr)
+    const label = LOADER_NAME(pr)
+    if (!(await uiConfirm('Обновить ' + label + ' ' + pr.loader_version + ' → ' + target + '?', { confirmLabel: 'Обновить' })))
+      return
+    setCoreBusy(true)
+    setProfileLoader(profile, pr.version, loader, target)
+      .then(() => {
+        void useProfiles.getState().refresh()
+        showToast(label + ' обновлён до ' + target + '. Доустановим при запуске.')
+      })
+      .catch((e) => showToast('Не удалось обновить загрузчик: ' + e, 'error'))
       .finally(() => setCoreBusy(false))
   }
 
@@ -1787,6 +1850,28 @@ export function InstancePage() {
                   >
                     {coreBusy ? 'Меняем…' : 'Сменить'}
                   </button>
+                  {pr && (coreUpd.mc || coreUpd.loader) ? (
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      {coreUpd.mc ? (
+                        <button
+                          className="btn sm secondary"
+                          disabled={coreBusy || thisRunning}
+                          onClick={() => coreUpd.mc && void applyGameUpdate(coreUpd.mc)}
+                        >
+                          Обновить Minecraft до {coreUpd.mc}
+                        </button>
+                      ) : null}
+                      {coreUpd.loader ? (
+                        <button
+                          className="btn sm secondary"
+                          disabled={coreBusy || thisRunning}
+                          onClick={() => coreUpd.loader && void applyLoaderUpdate(coreUpd.loader)}
+                        >
+                          Обновить {LOADER_NAME(pr)} до {coreUpd.loader}
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               </div>
               <div className="set-row" style={{ alignItems: 'flex-start' }}>
