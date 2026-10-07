@@ -94,7 +94,7 @@ fn extract_entries(
             written.dir(p).map_err(|e| super::io_fail("Распаковка", p, &e))?;
         }
         let _ = std::fs::remove_file(&out);
-        let mut o = std::fs::File::create(&out).map_err(|e| super::io_fail("Распаковка", &out, &e))?;
+        let mut o = super::retry_locked(|| std::fs::File::create(&out)).map_err(|e| super::io_fail("Распаковка", &out, &e))?;
         written.files.push(out.clone());
         let limit = file.size().min(budget);
         match copy_at_most(&mut file, &mut o, limit).map_err(|e| super::io_fail("Распаковка", &out, &e))? {
@@ -147,7 +147,7 @@ impl Written {
         // Recorded before creating: a create that fails halfway still leaves
         // folders this extraction made.
         self.dirs.extend(missing.into_iter().rev());
-        std::fs::create_dir_all(dir)
+        super::retry_locked(|| std::fs::create_dir_all(dir))
     }
 
     /// Files first, then folders deepest first: a folder goes only once it is

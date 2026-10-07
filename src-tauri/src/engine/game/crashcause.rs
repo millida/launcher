@@ -22,6 +22,9 @@ fn sets_benign(line: &str) -> Option<bool> {
     {
         return Some(false);
     }
+    if is_thread_dump_entry(t) {
+        return Some(true);
+    }
     if !t.starts_with('[') {
         return None;
     }
@@ -35,6 +38,17 @@ fn sets_benign(line: &str) -> Option<bool> {
         return Some(false);
     }
     None
+}
+
+/// Header of one thread in a watchdog "Thread Dump" (`ThreadInfo.toString`):
+/// `"millida-realtime" daemon prio=5 Id=51 RUNNABLE`. The dump lists every live
+/// thread, so a frame under it is a bystander, not the code that failed.
+fn is_thread_dump_entry(line: &str) -> bool {
+    let t = line.strip_prefix("Threads: ").unwrap_or(line);
+    let Some(rest) = t.strip_prefix('"') else {
+        return false;
+    };
+    rest.contains("\" ") && (rest.contains(" Id=") || rest.contains(" prio="))
 }
 
 /// Строки вместе с признаком «это только предупреждение».
@@ -924,6 +938,42 @@ mod tests {
                 "[main/INFO]: Loading 92 mods:\n\t- millida 0.1.11\n[main/WARN]: Error loading class: net/millida/compat/IrisCompat (java.lang.ClassNotFoundException: net/millida/compat/IrisCompat)",
                 false,
                 "WARN миксина про необязательную совместимость — игра это переживает",
+            ),
+            (
+                "---- Minecraft Crash Report ----\n\
+                 // Why did you do that?\n\n\
+                 Description: Client shutdown from post-main\n\n\
+                 java.lang.Error: Watchdog\n\n\n\
+                 -- Thread Dump --\n\
+                 Details:\n\
+                 \tThreads: \"Reference Handler\" daemon prio=10 Id=9 RUNNABLE\n\
+                 \tat java.base@21.0.7/java.lang.ref.Reference.waitForReferencePendingList(Native Method)\n\n\n\
+                 \"millida-realtime-reader\" daemon prio=5 Id=58 RUNNABLE (in native)\n\
+                 \tat java.base@21.0.7/sun.nio.ch.SocketDispatcher.read0(Native Method)\n\
+                 \tat java.base@21.0.7/sun.nio.ch.NioSocketImpl.read(NioSocketImpl.java:309)\n\
+                 \tat net.millida.core.realtime.WebSocketClient$1.run(WebSocketClient.java:270)\n\
+                 \t-  locked java.lang.Object@1b2c3d\n\
+                 \tat java.base@21.0.7/java.lang.Thread.run(Thread.java:1583)\n\n\
+                 \"millida-voice-udp\" daemon prio=5 Id=61 RUNNABLE\n\
+                 \tat java.base@21.0.7/sun.nio.ch.DatagramChannelImpl.receive0(Native Method)\n\
+                 \tat net.millida.core.voice.net.VoiceConnection.run(VoiceConnection.java:120)\n\n\
+                 -- System Details --\n\
+                 Details:\n\
+                 \tMinecraft Version: 26.2",
+                false,
+                "сторож выхода (07.10.2026, Sw1ftCore) печатает стеки ВСЕХ живых потоков — наш поток в дампе свидетель, а не виновник; раньше это отключало косметику ~60 игрокам в день",
+            ),
+            (
+                "-- Thread Dump --\n\
+                 Details:\n\
+                 \tThreads: \"millida-net-1\" daemon prio=5 Id=40 WAITING\n\
+                 \tat net.millida.core.platform.ThreadPoolScheduler$1.run(ThreadPoolScheduler.java:25)\n\n\
+                 -- System Details --\n\
+                 [12:05:00] [Render thread/ERROR]: Reported exception thrown!\n\
+                 java.lang.IllegalStateException: boom\n\
+                 \tat net.millida.mod.cosmetics.CosmeticRenderer.render(CosmeticRenderer.java:88)",
+                true,
+                "после дампа потоков настоящий стек ошибки с нашим кадром наверху по-прежнему улика",
             ),
         ];
         for (text, want, why) in cases {

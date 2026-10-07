@@ -50,6 +50,22 @@ pub(crate) fn io_fail(stage: &str, path: &Path, e: &std::io::Error) -> String {
 /// доли секунды, индексатор — за пару секунд.
 const RETRY_PAUSES_MS: [u64; 4] = [150, 400, 1000, 2000];
 
+/// Blocking counterpart of the retrying helpers below, for code that already
+/// runs synchronously (archive extraction). Only Windows lock errors are
+/// retried: elsewhere a permission error does not clear by waiting.
+pub(crate) fn retry_locked<T>(mut op: impl FnMut() -> std::io::Result<T>) -> std::io::Result<T> {
+    let mut pauses = RETRY_PAUSES_MS.iter();
+    loop {
+        match op() {
+            Err(e) if cfg!(target_os = "windows") && is_locked_error(&e) => match pauses.next() {
+                Some(&ms) => std::thread::sleep(Duration::from_millis(ms)),
+                None => return Err(e),
+            },
+            other => return other,
+        }
+    }
+}
+
 /// Удаляет папку целиком, повторяя, пока её держат. `true` — папки больше нет.
 pub(crate) async fn remove_dir_retrying(dir: &Path) -> bool {
     for pause in std::iter::once(0).chain(RETRY_PAUSES_MS) {
@@ -132,5 +148,33 @@ mod tests {
         assert!(remove_dir_retrying(&to).await);
         assert!(remove_dir_retrying(&to).await, "отсутствующая папка — это успех");
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// failures before success -> calls made and verdict. Java unpacking died on
+    /// one «Отказано в доступе» from an antivirus still checking a fresh file,
+    /// while the same unpack minutes later went through.
+    #[test]
+    fn locked_file_operation_is_retried_on_windows_only() {
+        use std::io::ErrorKind::{NotFound, PermissionDenied};
+        let windows = cfg!(target_os = "windows");
+        let attempts = RETRY_PAUSES_MS.len() + 1;
+        let cases = [
+            (vec![PermissionDenied, PermissionDenied], if windows { 3 } else { 1 }, windows, "антивирус отпустил файл со второй-третьей попытки — распаковка идёт дальше"),
+            (vec![PermissionDenied; attempts], if windows { attempts } else { 1 }, false, "файл держат дольше всех пауз — ошибка уходит наверх, а не виснет навсегда"),
+            (vec![NotFound], 1, false, "ошибка не про блокировку не повторяется"),
+            (vec![], 1, true, "успех с первого раза — без пауз"),
+        ];
+        for (fails, want_calls, want_ok, why) in cases {
+            let mut calls = 0usize;
+            let res = retry_locked(|| {
+                calls += 1;
+                match fails.get(calls - 1) {
+                    Some(kind) => Err(std::io::Error::from(*kind)),
+                    None => Ok(()),
+                }
+            });
+            assert_eq!(calls, want_calls, "{why}");
+            assert_eq!(res.is_ok(), want_ok, "{why}");
+        }
     }
 }

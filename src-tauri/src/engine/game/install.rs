@@ -377,6 +377,37 @@ fn install_outputs(profile: &Value) -> Vec<String> {
     out
 }
 
+/// A library the installer would download itself, as `(path, url, sha1, size)`.
+type InstallerDownload = (String, String, String, Option<u64>);
+
+/// Libraries of the install profile and of the version json it carries that
+/// have a public address and a published sha1. The installer fetches them
+/// straight from maven and Mojang with no way around a blocked host, but keeps
+/// any file already on disk whose sha1 matches, so fetching them first through
+/// the launcher's routes leaves it nothing to download.
+fn installer_downloads(profile: &Value, version: Option<&Value>) -> Vec<InstallerDownload> {
+    let mut out: Vec<InstallerDownload> = vec![];
+    for lib in [Some(profile), version].into_iter().flatten().flat_map(|j| j["libraries"].as_array().into_iter().flatten()) {
+        let art = &lib["downloads"]["artifact"];
+        let (Some(rel), Some(url), Some(sha1)) = (art["path"].as_str(), art["url"].as_str(), art["sha1"].as_str()) else {
+            continue;
+        };
+        if rel.is_empty() || url.is_empty() || sha1.len() != 40 || out.iter().any(|(r, ..)| r == rel) {
+            continue;
+        }
+        out.push((rel.to_string(), url.to_string(), sha1.to_ascii_lowercase(), art["size"].as_u64()));
+    }
+    out
+}
+
+fn read_installer_version_json(installer: &Path, profile: &Value) -> Option<Value> {
+    let name = profile["json"].as_str()?.trim_start_matches('/');
+    let f = std::fs::File::open(installer).ok()?;
+    let mut zip = zip::ZipArchive::new(std::io::BufReader::new(f)).ok()?;
+    let entry = zip.by_name(name).ok()?;
+    serde_json::from_reader(entry).ok()
+}
+
 fn missing_outputs(libs: &Path, outputs: &[String]) -> Result<Vec<String>, String> {
     let mut missing = vec![];
     for rel in outputs {
@@ -983,22 +1014,26 @@ pub async fn install_loader_with_java(
                     let (ip, vd, lb) = (inst.clone(), vdir.clone(), libs_root.clone());
                     let laid = tokio::task::spawn_blocking(move || {
                         let legacy = install_legacy_forge(&ip, &vd, &lb)?;
-                        let outputs = match legacy {
-                            Some(_) => vec![],
-                            None => install_outputs(&read_install_profile(&ip)?),
+                        let (outputs, downloads) = match legacy {
+                            Some(_) => (vec![], vec![]),
+                            None => {
+                                let profile = read_install_profile(&ip)?;
+                                let version = read_installer_version_json(&ip, &profile);
+                                (install_outputs(&profile), installer_downloads(&profile, version.as_ref()))
+                            }
                         };
-                        Ok::<_, String>((legacy, outputs))
+                        Ok::<_, String>((legacy, outputs, downloads))
                     })
                     .await
                     .map_err(|e| e.to_string())?;
-                    let outputs = match laid {
-                        Ok((Some(dir), outputs)) => {
+                    let (outputs, downloads) = match laid {
+                        Ok((Some(dir), outputs, _)) => {
                             let _ = std::fs::remove_file(&inst);
                             record_outputs(&dir, &outputs)?;
                             found = Some(dir);
                             break;
                         }
-                        Ok((None, outputs)) => outputs,
+                        Ok((None, outputs, downloads)) => (outputs, downloads),
                         Err(e) => {
                             let _ = std::fs::remove_file(&inst);
                             last_err = format!("{}: {}", name, e);
@@ -1013,6 +1048,16 @@ pub async fn install_loader_with_java(
                         found = Some(laid_out);
                         break;
                     }
+                    let prefetch: Vec<LibJob> = downloads
+                        .into_iter()
+                        .filter_map(|(rel, url, sha1, size)| {
+                            Some(LibJob { path: lib_path(&rel).ok()?, rel, url, sha1: Some(sha1), size })
+                        })
+                        .collect();
+                    // Best effort: whatever did not arrive here the installer
+                    // still tries itself and names in its own failure.
+                    let _ = fetch_libs(&prefetch, app, 60.0, 60.0, "Библиотеки загрузчика…").await;
+                    emit(app, "files", 60.0, "Ставим загрузчик (может занять минуту)…");
                     let (jp, ip, rp) = (java_pre.clone(), inst.clone(), root.clone());
                     // The installer's own output is the only account of why it
                     // gave up - it exits 1 for a blocked maven, a read-only
@@ -1580,6 +1625,36 @@ e";
             assert!(outputs.iter().any(|o| o == rel), "{} должен проверяться: {}", rel, why);
         }
         assert_eq!(outputs.len(), outputs.iter().collect::<std::collections::HashSet<_>>().len(), "каждый файл проверяется один раз");
+    }
+
+    /// A Forge 1.16.5 installer that cannot reach maven dies on
+    /// "org.ow2.asm:asm:9.3 / trove:trove:1.0.2". Every library with an address
+    /// and a sha1 is fetched before it runs; the rest is left to it.
+    #[test]
+    fn installer_libraries_are_fetched_ahead_only_with_a_hash() {
+        let sha = "0123456789abcdef0123456789abcdef01234567";
+        let profile = serde_json::json!({ "libraries": [
+            { "downloads": { "artifact": { "path": "org/ow2/asm/asm/9.3/asm-9.3.jar", "url": "https://maven.minecraftforge.net/org/ow2/asm/asm/9.3/asm-9.3.jar", "sha1": sha, "size": 10 } } },
+            { "downloads": { "artifact": { "path": "net/minecraftforge/forge/1.16.5-36.2.42/forge-1.16.5-36.2.42.jar", "url": "", "sha1": sha } } },
+            { "downloads": { "artifact": { "path": "a/b/1/b-1.jar", "url": "https://maven.minecraftforge.net/a/b/1/b-1.jar" } } },
+            { "name": "x:y:1" },
+        ]});
+        let version = serde_json::json!({ "libraries": [
+            { "downloads": { "artifact": { "path": "trove/trove/1.0.2/trove-1.0.2.jar", "url": "https://maven.minecraftforge.net/trove/trove/1.0.2/trove-1.0.2.jar", "sha1": sha } } },
+            { "downloads": { "artifact": { "path": "org/ow2/asm/asm/9.3/asm-9.3.jar", "url": "https://maven.minecraftforge.net/org/ow2/asm/asm/9.3/asm-9.3.jar", "sha1": sha } } },
+        ]});
+        let got: Vec<String> = installer_downloads(&profile, Some(&version)).into_iter().map(|(rel, ..)| rel).collect();
+        let cases: [(&str, bool, &str); 5] = [
+            ("org/ow2/asm/asm/9.3/asm-9.3.jar", true, "библиотека профиля инсталлера с адресом и суммой"),
+            ("trove/trove/1.0.2/trove-1.0.2.jar", true, "библиотека из version.json внутри инсталлера"),
+            ("net/minecraftforge/forge/1.16.5-36.2.42/forge-1.16.5-36.2.42.jar", false, "без адреса — инсталлер берёт её из себя"),
+            ("a/b/1/b-1.jar", false, "без суммы инсталлер не узнает файл и скачает заново"),
+            ("x/y/1/y-1.jar", false, "без downloads качать не по чему"),
+        ];
+        for (rel, want, why) in cases {
+            assert_eq!(got.iter().any(|r| r == rel), want, "{}: {}", rel, why);
+        }
+        assert_eq!(got.len(), 2, "библиотека из обоих списков качается один раз: {:?}", got);
     }
 
     #[test]
