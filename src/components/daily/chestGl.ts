@@ -9,8 +9,33 @@ import { noteContextCreated, noteContextLost } from '../../lib/gpuLite'
  *
  * Теперь сундуки рисуются по очереди в один невидимый холст и копируются в
  * свои 2D-холсты (drawImage сразу после кадра). Контекст живёт, пока есть
- * хотя бы один сундук, и отдаётся через 3 с после последнего.
+ * хотя бы один сундук, и отдаётся через минуту после последнего.
  */
+
+/** A fresh context recompiles every chest shader, so an emptied shelf keeps it for a minute. */
+const IDLE_DROP_MS = 60_000
+
+const tickers = new Set<(now: number) => void>()
+let loopRaf = 0
+
+function loop(now: number) {
+  loopRaf = 0
+  for (const tick of [...tickers]) tick(now)
+  if (tickers.size && !loopRaf) loopRaf = requestAnimationFrame(loop)
+}
+
+/** One animation loop for every chest on screen instead of one per chest. */
+export function onChestFrame(tick: (now: number) => void): () => void {
+  tickers.add(tick)
+  if (!loopRaf) loopRaf = requestAnimationFrame(loop)
+  return () => {
+    tickers.delete(tick)
+    if (!tickers.size && loopRaf) {
+      cancelAnimationFrame(loopRaf)
+      loopRaf = 0
+    }
+  }
+}
 
 type Shared = { r: WebGLRenderer; canvas: HTMLCanvasElement; w: number; h: number; onLost: (e: Event) => void }
 let shared: Shared | null = null
@@ -91,7 +116,7 @@ export function acquireChestGl(onLost: () => void): ChestGl | null {
       users = Math.max(0, users - 1)
       if (!users) {
         window.clearTimeout(idle)
-        idle = window.setTimeout(() => !users && drop(), 3000)
+        idle = window.setTimeout(() => !users && drop(), IDLE_DROP_MS)
       }
     },
   }

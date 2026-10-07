@@ -122,7 +122,7 @@ pub fn autostart_set(app: tauri::AppHandle, on: bool) -> Result<bool, String> {
 }
 
 /// Hardware and OS facts only, nothing identifying the user.
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Clone)]
 pub struct DeviceSpecs {
     pub os: String,
     pub os_version: String,
@@ -134,11 +134,22 @@ pub struct DeviceSpecs {
     pub ram_mb: u32,
 }
 
+/// The facts never change while the process lives, and collecting them opens
+/// OS performance counters, so they are read once on the blocking pool.
 #[tauri::command]
-pub fn device_specs() -> DeviceSpecs {
+pub async fn device_specs() -> Result<DeviceSpecs, String> {
+    static SPECS: std::sync::OnceLock<DeviceSpecs> = std::sync::OnceLock::new();
+    if let Some(known) = SPECS.get() {
+        return Ok(known.clone());
+    }
+    let specs = super::blocking(collect_device_specs).await?;
+    Ok(SPECS.get_or_init(|| specs).clone())
+}
+
+fn collect_device_specs() -> DeviceSpecs {
     let mut sys = sysinfo::System::new();
     sys.refresh_memory();
-    sys.refresh_cpu_list(sysinfo::CpuRefreshKind::everything());
+    sys.refresh_cpu_list(sysinfo::CpuRefreshKind::nothing());
 
     let os = match std::env::consts::OS {
         "windows" => "windows",
@@ -179,10 +190,14 @@ pub fn set_restore_on_exit(on: bool) { crate::tray::set_restore_on_exit(on); }
 /// Web storage is committed lazily and a tray quit tears the process down
 /// before it lands, so settings the user must not lose are mirrored to disk.
 #[tauri::command]
-pub fn ui_prefs() -> engine::UiPrefs { engine::ui_prefs() }
+pub async fn ui_prefs() -> Result<engine::UiPrefs, String> { super::blocking(engine::ui_prefs).await }
 
+/// File writes retry with sleeps while an antivirus holds the file, so they
+/// must not run on the UI thread.
 #[tauri::command]
-pub fn set_ui_pref(key: String, value: String) -> Result<(), String> { engine::set_ui_pref(key, value) }
+pub async fn set_ui_pref(key: String, value: String) -> Result<(), String> {
+    super::blocking(move || engine::set_ui_pref(key, value)).await?
+}
 
 /// Flatpak builds are updated by flatpak itself, so the in-app update channel
 /// must be hidden there.
@@ -223,13 +238,13 @@ pub fn frontend_ready() {
 }
 
 #[tauri::command]
-pub fn read_crashes() -> Vec<engine::CrashEntry> {
-    engine::read_crashes()
+pub async fn read_crashes() -> Result<Vec<engine::CrashEntry>, String> {
+    super::blocking(engine::read_crashes).await
 }
 
 #[tauri::command]
-pub fn clear_crashes() {
-    engine::clear_crashes();
+pub async fn clear_crashes() -> Result<(), String> {
+    super::blocking(engine::clear_crashes).await
 }
 
 #[tauri::command]

@@ -9,14 +9,16 @@ pub struct OverlayState {
     pub card_ms: u64,
 }
 
+/// Every field is a read of the settings file: off the UI thread.
 #[tauri::command]
-pub fn overlay_state() -> OverlayState {
-    OverlayState {
+pub async fn overlay_state() -> Result<OverlayState, String> {
+    super::blocking(|| OverlayState {
         enabled: overlay::enabled(),
         toasts: overlay::toasts_enabled(),
         hotkey: overlay::hotkey(),
         card_ms: overlay::card_ms(),
-    }
+    })
+    .await
 }
 
 #[tauri::command]
@@ -43,8 +45,8 @@ pub fn overlay_set_hotkey(app: tauri::AppHandle, hotkey: String) -> Result<(), S
 /// back into the usable range rather than rejected: the card is the only way the
 /// message reaches a player in game, so it must never end up unreadably short.
 #[tauri::command]
-pub fn overlay_set_card_ms(ms: u64) -> Result<(), String> {
-    overlay::set_card_ms(ms)
+pub async fn overlay_set_card_ms(ms: u64) -> Result<(), String> {
+    super::blocking(move || overlay::set_card_ms(ms)).await?
 }
 
 /// Called by the main window when a message arrives while a game is running:

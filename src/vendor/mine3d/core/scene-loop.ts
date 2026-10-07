@@ -1445,6 +1445,12 @@ export class SkinViewEngine {
     this._fpsSamples.length = 0;
   }
 
+  /** Compiles the scene's shaders without blocking the main thread (KHR_parallel_shader_compile where available). */
+  async compileAsync(): Promise<void> {
+    if (this._disposed) return;
+    await this.renderer.compileAsync(this.scene, this.camera);
+  }
+
   /** Один кадр без запуска loop — для статичных мини-превью */
   renderFrame(): void {
     if (this._disposed) return;

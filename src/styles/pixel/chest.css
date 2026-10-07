@@ -83,8 +83,10 @@
 /* Крупный сундук на всю картинку: вещи вылетают над ним, по две в полёте. */
 .cs3-stage .cpop-item { width: 50%; }
 .cs3-hero-stage .cpop-item { width: 78%; }
-/* Сундук ниже: у его рендера пустое поле снизу, а сверху нужен воздух для вылета. */
-.cs3-stage .cs3-art { margin-bottom: -40px; }
+/* The stage centres its grid item, so a positive bottom margin lifts the chest:
+   the model sits below the middle of its own render. The item starts lower to stay inside the stage. */
+.cs3-stage .cs3-art { margin-bottom: 30px; }
+.cs3-stage .cpop-item { bottom: calc(100% - 29px); }
 
 /* ---------- Утешительный приз ящика: холодная вспышка, «+40 осколков» ---------- */
 .cs-res.is-miss { position: relative; overflow: visible; }
@@ -151,3 +153,7 @@
   display: inline-flex; align-items: center; height: 30px; padding: 0 12px; font-size: 15px; font-weight: 900;
   background: var(--m-rarity-legendary); color: #1d1402; --px-n: 5px; clip-path: var(--px-5);
 }
+
+/* 07.10.2026: гарантия — не поверх сундука, а под ним по центру; цены ×10 на узких карточках — второй строкой. */
+.cs3-guar { position: relative; top: auto; left: auto; align-self: center; margin: -4px auto 2px; max-width: calc(100% - 16px); }
+@media (max-width: 1240px) { .cs3-foot { grid-template-columns: minmax(0, 1fr); } }

@@ -709,10 +709,14 @@ async fn install_java_arch(app: &AppHandle, major: u64, jdir: &Path, arch: Optio
     // запускается, ошибка на скачивании Java» приходила именно оттуда. Падение
     // загрузки — повод взять следующего, а не повод сдаться.
     let mut fetched = false;
-    'vendors: for (vendor, found) in [
-        ("Adoptium", adoptium_source(major, &t).await),
-        ("Azul", azul_source(major, &t).await),
-    ] {
+    // A vendor is asked only after the previous one failed: an unreachable Azul
+    // directory kept the player at 0% even when Adoptium had already answered.
+    'vendors: for vendor in ["Adoptium", "Azul"] {
+        let found = if vendor == "Adoptium" {
+            adoptium_source(major, &t).await
+        } else {
+            azul_source(major, &t).await
+        };
         let pkg = match found {
             Err(e) => {
                 reasons.push(format!("{}: {}", vendor, short_reason(&e)));

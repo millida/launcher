@@ -211,7 +211,7 @@
 .cs3-stage:disabled { cursor: default; }
 .cs3-stage:focus-visible { outline: 2px solid var(--m-accent); outline-offset: -2px; }
 /* Тень пола — прямо под дном сундука (QA 06.10.2026: висела ~30 px ниже), не отдельной полосой. */
-.cs3-stage::after { content: ''; position: absolute; left: 27%; right: 27%; bottom: 40px; height: 8px; background: color-mix(in srgb, var(--cs) 40%, #000); opacity: 0.6; }
+.cs3-stage::after { content: ''; position: absolute; left: 27%; right: 27%; bottom: 75px; height: 8px; background: color-mix(in srgb, var(--cs) 40%, #000); opacity: 0.6; }
 .cs3-art { position: relative; z-index: 1; display: grid; place-items: center; }
 .cs3-art .cl, .cs3-art .dc-art { margin: 0 auto; }
 .cs3-info {
@@ -681,3 +681,21 @@
    и inset-тень .sh-art рисовали серую полосу со ступеньками под вещью
    (владелец 06.10.2026, «Обнимашки с котом»). Сцена сама даёт фон. */
 :root:root .sv-shot .sh-art { --px-fb: transparent; --px-ol: transparent; box-shadow: none; background: none; }
+
+/* Наборы без стенда (07.10.2026): лента карточек + окно примерки. */
+.sv-card-look { position: absolute; right: 8px; bottom: 8px; z-index: 3; display: grid; place-items: center; width: 32px; height: 32px; color: #fff; background: rgba(0, 0, 0, .55); --px-n: 4px; clip-path: var(--px-4); opacity: 0; transition: opacity .15s; }
+.sv-card-pick:hover .sv-card-look { opacity: 1; }
+.sv-card-look svg { width: 16px; height: 16px; }
+.sv-card-items { display: flex; gap: 4px; min-height: 34px; }
+.sv-ci { width: 34px; height: 34px; flex: none; display: grid; place-items: center; background: var(--m-inset); --px-n: 4px; clip-path: var(--px-4); overflow: hidden; }
+.sv-ci img, .sv-ci canvas, .sv-ci > * { max-width: 28px; max-height: 28px; }
+.sv-ci.own { opacity: .45; }
+.sv-try-bg { display: grid; place-items: center; z-index: 950; }
+.sv-try { position: relative; width: min(860px, calc(100vw - 40px)); height: min(560px, calc(100vh - 60px)); display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 0; background: var(--m-surface); --px-n: 10px; clip-path: var(--px-10); }
+.sv-try > .sv-stand { height: 100%; }
+.sv-try-x { position: absolute; z-index: 6; top: 10px; right: 10px; width: 34px; height: 34px; display: grid; place-items: center; color: var(--m-fg); background: var(--m-surface-2); --px-n: 4px; clip-path: var(--px-4); }
+.sv-try-items { list-style: none; margin: 0; padding: 54px 14px 14px; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
+.sv-try-items li { display: flex; align-items: center; gap: 10px; font: 700 13px/1.2 var(--m-font); }
+.sv-try-items li.own { opacity: .6; }
+.sv-try-items li > svg { width: 14px; height: 14px; color: var(--m-accent); margin-left: auto; }
+@media (max-width: 760px) { .sv-try { grid-template-columns: 1fr; } .sv-try-items { display: none; } }

@@ -26,6 +26,14 @@ const LOADER_HOSTS: [&str; 7] = [
     "maven.neoforged.net",
 ];
 
+/// Java runtime directories and Azul's CDN. From some networks neither vendor
+/// answers, and without another route a fresh install cannot get Java at all.
+const JAVA_HOSTS: [&str; 3] = ["api.adoptium.net", "api.azul.com", "cdn.azul.com"];
+
+/// Adoptium keeps its archives in GitHub releases. Only this owner is mirrored:
+/// the rest of GitHub is not ours to relay.
+const JAVA_GITHUB_OWNER: &str = "/adoptium/";
+
 const PROBE_TIMEOUT: Duration = Duration::from_secs(6);
 
 #[derive(Clone, Copy, PartialEq)]
@@ -33,11 +41,13 @@ enum Source {
     Modrinth,
     Forge,
     Loader,
+    Java,
 }
 
 static MODRINTH_DIRECT: tokio::sync::OnceCell<bool> = tokio::sync::OnceCell::const_new();
 static FORGE_DIRECT: tokio::sync::OnceCell<bool> = tokio::sync::OnceCell::const_new();
 static LOADER_DIRECT: tokio::sync::OnceCell<bool> = tokio::sync::OnceCell::const_new();
+static JAVA_DIRECT: tokio::sync::OnceCell<bool> = tokio::sync::OnceCell::const_new();
 
 /// The startup probe is a HEAD to one host; a filter that lets it through can
 /// still stall file bodies on the CDN. One stalled direct transfer moves the
@@ -46,12 +56,14 @@ static LOADER_DIRECT: tokio::sync::OnceCell<bool> = tokio::sync::OnceCell::const
 static MODRINTH_DEMOTED: AtomicBool = AtomicBool::new(false);
 static FORGE_DEMOTED: AtomicBool = AtomicBool::new(false);
 static LOADER_DEMOTED: AtomicBool = AtomicBool::new(false);
+static JAVA_DEMOTED: AtomicBool = AtomicBool::new(false);
 
 fn demoted(source: Source) -> &'static AtomicBool {
     match source {
         Source::Modrinth => &MODRINTH_DEMOTED,
         Source::Forge => &FORGE_DEMOTED,
         Source::Loader => &LOADER_DEMOTED,
+        Source::Java => &JAVA_DEMOTED,
     }
 }
 
@@ -78,6 +90,20 @@ fn host_of(url: &str) -> Option<String> {
     url::Url::parse(url).ok()?.host_str().map(|h| h.to_ascii_lowercase())
 }
 
+/// The path is taken from the parsed address, so `/adoptium/../other/` does
+/// not pass for Adoptium's.
+fn adoptium_release(url: &str) -> bool {
+    url::Url::parse(url).is_ok_and(|u| {
+        u.scheme() == "https"
+            && u.host_str().is_some_and(|h| h.eq_ignore_ascii_case("github.com"))
+            && u.path().starts_with(JAVA_GITHUB_OWNER)
+    })
+}
+
+fn java_source(url: &str, host: &str) -> bool {
+    JAVA_HOSTS.contains(&host) || adoptium_release(url)
+}
+
 fn source_of(url: &str) -> Option<Source> {
     if url.starts_with(MODRINTH_API) {
         return Some(Source::Modrinth);
@@ -92,6 +118,9 @@ fn source_of(url: &str) -> Option<Source> {
     if LOADER_HOSTS.contains(&host.as_str()) {
         return Some(Source::Loader);
     }
+    if java_source(url, &host) {
+        return Some(Source::Java);
+    }
     None
 }
 
@@ -104,6 +133,7 @@ pub(crate) fn proxy_url(url: &str) -> Option<String> {
     if host == MODRINTH_FILE_HOST
         || FORGE_FILE_HOSTS.contains(&host.as_str())
         || LOADER_HOSTS.contains(&host.as_str())
+        || java_source(url, &host)
     {
         return Some(format!("{}/launcher/dl?url={}", MILLIDA_API, urlencode(url)));
     }
@@ -131,6 +161,11 @@ async fn direct_available(source: Source) -> bool {
         Source::Loader => {
             *LOADER_DIRECT
                 .get_or_init(|| direct_works("https://meta.fabricmc.net/v2/versions/loader"))
+                .await
+        }
+        Source::Java => {
+            *JAVA_DIRECT
+                .get_or_init(|| direct_works("https://api.adoptium.net/v3/info/available_releases"))
                 .await
         }
     }
@@ -179,7 +214,22 @@ mod tests {
     /// CurseForge — и адрес, который зеркалить нельзя.
     #[test]
     fn mirrors_only_blocked_sources() {
-        let cases: [(&str, Option<&str>, &str); 9] = [
+        let cases: [(&str, Option<&str>, &str); 12] = [
+            (
+                "https://api.adoptium.net/v3/assets/latest/21/hotspot?architecture=x64",
+                Some("https://api.millida.net/v2/launcher/dl?url=https%3A%2F%2Fapi.adoptium.net%2Fv3%2Fassets%2Flatest%2F21%2Fhotspot%3Farchitecture%3Dx64"),
+                "справочник Java — без него Java не ставится",
+            ),
+            (
+                "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21/jre.zip",
+                Some("https://api.millida.net/v2/launcher/dl?url=https%3A%2F%2Fgithub.com%2Fadoptium%2Ftemurin21-binaries%2Freleases%2Fdownload%2Fjdk-21%2Fjre.zip"),
+                "архив Java Adoptium в релизах GitHub",
+            ),
+            (
+                "https://cdn.azul.com/zulu/bin/zulu21-jre-win_x64.zip",
+                Some("https://api.millida.net/v2/launcher/dl?url=https%3A%2F%2Fcdn.azul.com%2Fzulu%2Fbin%2Fzulu21-jre-win_x64.zip"),
+                "архив Java Azul",
+            ),
             (
                 "https://api.modrinth.com/v2/search?limit=20",
                 Some("https://api.millida.net/v2/launcher/mr/v2/search?limit=20"),
@@ -274,6 +324,10 @@ mod tests {
             "https://api.modrinth.com.evil.example/v2/search",
             "https://meta.fabricmc.net.evil.example/v2/versions/loader",
             "https://evil.example/maven.neoforged.net/x.jar",
+            "https://github.com/someone/tool/releases/download/v1/tool.exe",
+            "https://github.com/adoptium.evil/x.zip",
+            "https://github.com/adoptium/../someone/x.zip",
+            "https://api.adoptium.net.evil.example/v3/assets",
         ] {
             assert_eq!(proxy_url(url), None, "{}: похожий хост не должен считаться своим", url);
         }

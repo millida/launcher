@@ -3,6 +3,7 @@ import type { ChestTier } from '../../lib/rubies'
 import { ChestArt } from './ChestArt'
 import { Chest3D } from './Chest3D'
 import { gpuLite } from '../../lib/gpuLite'
+import { useScreenSettled } from '../../lib/screenSettle'
 import type { ChestLook } from './chestScene'
 
 /** Сколько 3D-сундуков живёт одновременно; остальные — плоский рисунок. */
@@ -41,6 +42,7 @@ export function ChestLive({
   const [seen, setSeen] = useState(false)
   const [, bump] = useState(0)
   const [on, setOn] = useState(false)
+  const settled = useScreenSettled()
 
   useEffect(() => {
     const el = box.current
@@ -56,7 +58,7 @@ export function ChestLive({
       setOn(seen && live.has(id))
       bump((n) => n + 1)
     }
-    if (!seen) {
+    if (!seen || !settled) {
       release(id)
       setOn(false)
       return
@@ -67,7 +69,7 @@ export function ChestLive({
       waiting.delete(tryTake)
       release(id)
     }
-  }, [seen, id])
+  }, [seen, settled, id])
 
   const k = Math.round(size * 1.5)
   return (

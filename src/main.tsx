@@ -33,6 +33,7 @@ import './styles/classic.css'
 import { Overlay } from './screens/Overlay'
 import { openExt } from './lib/api'
 import { initRenderGate } from './lib/renderGate'
+import { initJankWatch } from './lib/jank'
 import { webviewFailure } from './lib/webviewHealth'
 import { installAspectRatioFallback } from './lib/aspectRatioFallback'
 
@@ -69,6 +70,7 @@ if (isOverlay) {
   initPremiumTheme()
   // Окно лаунчера замирает, пока не видно или поверх идёт игра.
   initRenderGate()
+  initJankWatch()
   // Прошлое окно убил сбой видеокарты — WebGL выключаем до первого кадра лобби.
   void webviewFailure()
 }

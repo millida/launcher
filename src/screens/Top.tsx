@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { Icon } from '../components/Icon'
 import { Head } from '../components/Head'
 import { StreakFire } from '../components/friends/StreakFire'
@@ -79,7 +79,9 @@ function Row({ board, e, mine, pinned, onOpen }: { board: Board; e: BoardEntry; 
       onClick={onOpen}
       onKeyDown={(ev) => (ev.key === 'Enter' ? onOpen() : undefined)}
     >
-      <span className="tb-rank">{e.rank}</span>
+      <span className="tb-rank" style={{ '--digits': String(e.rank).length } as CSSProperties}>
+        {e.rank}
+      </span>
       <Head nick={e.nick} size={56} className="tb-head" src={avatarUrl(e.nick)} />
       <span className="fr-body">
         <span className="fr-nick">
@@ -134,6 +136,37 @@ function Card({ board, e, mine, onClose }: { board: Board; e: BoardEntry; mine: 
   )
 }
 
+function MoreCue({ count }: { count: number }) {
+  const anchor = useRef<HTMLDivElement>(null)
+  const [away, setAway] = useState(false)
+
+  useEffect(() => {
+    const el = anchor.current
+    if (!el) return
+    const io = new IntersectionObserver(([en]) => setAway(!!en && (en.isIntersecting || en.boundingClientRect.top < 0)), {
+      rootMargin: '0px 0px -50% 0px',
+    })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
+
+  return (
+    <>
+      <button
+        className={'tb-more' + (away ? ' away' : '')}
+        data-track="top_more"
+        tabIndex={away ? -1 : 0}
+        aria-hidden={away}
+        onClick={() => anchor.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+      >
+        {'Ещё ' + count + ' ' + plural(count, 'место', 'места', 'мест')}
+        <Icon id="i-chev-d" />
+      </button>
+      <div className="tb-rest-anchor" ref={anchor} />
+    </>
+  )
+}
+
 const Skeleton = () => (
   <>
     <div className="tb-scene skel" aria-hidden="true" />
@@ -160,6 +193,10 @@ export function Top({ on }: { on: boolean }) {
   const failed = useBoards((s) => !!s.failed[board])
   const [open, setOpen] = useState<BoardEntry | null>(null)
   const [flat, setFlat] = useState(false)
+  // Сцена могла упасть в плоские фигуры на одной доске — на другой пробуем 3D заново.
+  useEffect(() => setFlat(false), [board])
+  const lastHours = useRef<Board>('week')
+  if (board !== 'streak') lastHours.current = board
   useFriends((s) => s.friends.length)
 
   useEffect(() => {
@@ -178,23 +215,35 @@ export function Top({ on }: { on: boolean }) {
         <span className="tb-theme-ic" aria-hidden="true">
           <Icon id={board === 'streak' ? 'i-flame' : 'i-clock'} />
         </span>
-        <h1>{board === 'streak' ? 'Огоньки' : 'Часы в игре'}</h1>
+        <h1>Топ</h1>
       </div>
-      <div className="segs tb-boards" role="tablist">
-        {BOARDS.map((b) => (
-          <button
-            key={b.key}
-            role="tab"
-            aria-selected={board === b.key}
-            className={'seg' + (board === b.key ? ' on' : '')}
-            data-track={'top_board_' + b.key}
-            onClick={() => useBoards.getState().setBoard(b.key)}
-          >
-            {b.key === 'streak' ? <Icon id="i-flame" /> : null}
-            {b.name}
-          </button>
-        ))}
+      {/* Два разных топа (07.10.2026): часы в игре — с периодом, огоньки — серия дней, без периода. */}
+      <div className="segs tb-kinds" role="tablist" aria-label="Топ">
+        <button role="tab" aria-selected={board !== 'streak'} className={'seg' + (board !== 'streak' ? ' on' : '')} data-track="top_kind_hours" onClick={() => board === 'streak' && useBoards.getState().setBoard(lastHours.current)}>
+          <Icon id="i-clock" />
+          Часы в игре
+        </button>
+        <button role="tab" aria-selected={board === 'streak'} className={'seg' + (board === 'streak' ? ' on' : '')} data-track="top_kind_streak" onClick={() => useBoards.getState().setBoard('streak')}>
+          <Icon id="i-flame" />
+          Огоньки
+        </button>
       </div>
+      {board !== 'streak' ? (
+        <div className="segs tb-boards" role="tablist" aria-label="Период">
+          {BOARDS.filter((b) => b.key !== 'streak').map((b) => (
+            <button
+              key={b.key}
+              role="tab"
+              aria-selected={board === b.key}
+              className={'seg' + (board === b.key ? ' on' : '')}
+              data-track={'top_board_' + b.key}
+              onClick={() => useBoards.getState().setBoard(b.key)}
+            >
+              {b.name}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       <div className="stack tb-list">
         {!view ? (
@@ -225,6 +274,7 @@ export function Top({ on }: { on: boolean }) {
                 <b>Пока пусто</b>
               </div>
             )}
+            {rest.length ? <MoreCue key={board} count={rest.length} /> : null}
             {rest.map((e) => (
               <Row key={e.rank} board={board} e={e} mine={mine(e)} onOpen={() => setOpen(e)} />
             ))}

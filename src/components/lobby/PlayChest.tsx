@@ -16,7 +16,6 @@ export function PlayPips({ n = 3, filled }: { n?: number; filled: number }) {
       {Array.from({ length: n }, (_, i) => (
         <i key={i} className={i < filled ? 'on' : ''} />
       ))}
-      <small>{n} в день</small>
     </span>
   )
 }
@@ -37,16 +36,22 @@ function PlayChestLine({ on }: { on: boolean }) {
   }
   const left = view.nextInS === null ? null : Math.max(0, view.nextInS - Math.floor((Date.now() - at) / 1000))
   return (
-    <button className={'play-chest' + (view.ready ? ' go' : '')} id="playChest" data-track="lobby_play_chest" onClick={toShop}>
+    <button
+      className={'play-chest' + (view.ready ? ' go' : '')}
+      id="playChest"
+      data-track="lobby_play_chest"
+      // Готов — открываем прямо здесь (07.10.2026: игрок жал «Забрать» и попадал в магазин); нет — в «Бонусы».
+      onClick={() => (view.ready ? void usePlayChests.getState().claim() : toShop())}
+    >
       <Icon id="i-chest" />
       {view.ready ? (
-        <>Забрать сундук{view.ready > 1 ? ' (' + view.ready + ')' : ''}</>
+        <>Открыть сундук{view.ready > 1 ? ' ×' + view.ready : ''}</>
       ) : left !== null ? (
         <>
-          Сундук за игру через <b>{playLeftText(left)}</b>
+          Сундук через <b>{playLeftText(left)}</b>
         </>
       ) : (
-        <>Сундуки за игру — завтра</>
+        <>Сундуки — завтра</>
       )}
       <PlayPips n={view.limit} filled={view.earned} />
     </button>
