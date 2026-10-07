@@ -1823,7 +1823,9 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
   .ph-card.ph-mt.ph-mt-pr { grid-column: 1 / -1; aspect-ratio: 16 / 9; }
 }
 .ph-card.ph-mt.ph-mt-pr.is-cell { grid-column: auto; aspect-ratio: auto; }
-.ph-mt-pr.is-cell .pr-art { bottom: auto; height: auto; aspect-ratio: 16 / 9; }
+/* The logo spans 61% of the banner: at 150% of a square cell it still fits whole,
+   while the art reaches under the CTA instead of ending above an empty band. */
+.ph-mt-pr.is-cell .pr-art { inset: 0 auto auto -25%; width: 150%; height: auto; aspect-ratio: 16 / 9; }
 .ph-mt-pr.is-cell .pr-co { left: 8px; top: 8px; padding: 4px 6px 5px; font-size: 9px; }
 .ph-mt-pr.is-cell .an-foot { left: 12px; right: 12px; bottom: 12px; flex-direction: column; align-items: stretch; gap: 8px; }
 .ph-mt-pr.is-cell .an-play { justify-content: center; padding: 10px 16px 12px; font-size: 15px; }
