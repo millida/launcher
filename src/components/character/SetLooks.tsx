@@ -1,4 +1,5 @@
 import type { SetColorwayView, SetView } from '../../lib/rubies'
+import { RarityChip } from '../shop/rarityUi'
 import { PxThumb, defaultWay } from '../shop/Sets'
 import { toneStyle } from '../shop/parts'
 import { ItemGrid, ItemTile } from './ItemTile'
@@ -39,6 +40,7 @@ export function SetLooks({
                   {shown.map((x) => (
                     <span key={x.item.code} className={'sl-cell' + (x.owned ? '' : ' is-miss')} style={toneStyle(x.item)}>
                       <PxThumb item={x.item} />
+                      <RarityChip rarity={x.item.rarity} />
                     </span>
                   ))}
                 </span>

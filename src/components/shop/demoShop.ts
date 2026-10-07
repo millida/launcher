@@ -15,7 +15,8 @@
  *   &weekly=path|wait|done — недельный путь (пока служба его не отдаёт);
  *   &gift=rubies|shards|item|claimed — старый подарок дня (по умолчанию его нет:
  *                      с 23.09.2026, 21:43 вместо него ежедневный бонус);
- *   &wish=0            — пустой «Хочу».
+ *   &wish=0            — пустой «Хочу»;
+ *   &plus=none|plus|diamond — уровень подписки (по умолчанию none): цены, шапка и баннер PLUS.
  */
 import type {
   Achievement,
@@ -24,6 +25,7 @@ import type {
   ItemRef,
   PlusEconomy,
   ShopCard,
+  ShopTier,
   ShopDay,
   ShopGift,
   ShopPack,
@@ -31,7 +33,7 @@ import type {
   XrayOffer,
 } from '../../lib/rubies'
 import { rarityOfPrice } from './rarity'
-import type { Rarity } from '../../lib/rubies'
+import { plusOf, tierPct, type Rarity } from '../../lib/rubies'
 import { variantCode, variantTitles } from '../../lib/variantNames'
 import { FLAGSHIP_SLOTS, FRAGMENTS_NEED, SHARD_CAP, SHARD_DAILY_LIMIT, WORKSHOP_COST, fragmentCap, fragmentOff, fragmentTopUp } from '../daily/chestDrops'
 import type { WeeklyPath, WeeklyReward } from './weekly'
@@ -63,7 +65,28 @@ export const RANK_PRICE: Record<Rarity, number> = { COMMON: 150, UNCOMMON: 350, 
 /** Прод ещё на курсе 5 ₽/рубин: цена вещи в демо — × 7/5. */
 export const v3Price = (p: number) => Math.round((p * 7) / 5 / 10) * 10
 
+/** Уровень подписки демо-игрока: `&plus=plus|diamond`, иначе подписки нет. */
+export function demoTier(): ShopTier {
+  try {
+    const v = new URLSearchParams(location.search).get('plus')
+    return v === 'diamond' ? 'DIAMOND' : v === 'plus' ? 'PLUS' : null
+  } catch {
+    return null
+  }
+}
+
 const HOUR = 3_600_000
+
+/** Зеркало economy-plan службы: шаги скидки дня и скидка предмета дня. */
+const DAY_DISCOUNT_STEPS = [10, 15, 20, 25, 30]
+const FEATURED_DISCOUNT_PCT = 20
+const hashStr = (t: string) => {
+  let h = 2166136261
+  for (let i = 0; i < t.length; i++) h = Math.imul(h ^ t.charCodeAt(i), 16777619) >>> 0
+  return h
+}
+const dayKey = Math.floor(Date.now() / 86_400_000)
+const dayDiscount = (key: number, code: string) => DAY_DISCOUNT_STEPS[hashStr('day-off:' + key + ':' + code) % DAY_DISCOUNT_STEPS.length]!
 const DAY = 24 * HOUR
 
 /** Демо: вещи, которые показываем мифическими (по цене мифическую не угадать). */
@@ -151,10 +174,13 @@ async function build(catalog: DemoCatalogItem[], wallet: { balance: number }, pa
   const p = q()
   if (p.has('rubies')) wallet.balance = Math.max(0, Number(p.get('rubies')) || 0)
   const now = Date.now()
-  const refresh = nextMskMidnight(now)
+  // &reset=N — смена витрины через N секунд (проверка живого обновления ленты);
+  // каждая следующая смена — другой набор вещей.
+  const resetIn = Number(p.get('reset')) || 0
+  const refresh = resetIn > 0 ? now + resetIn * 1000 : nextMskMidnight(now)
   const shop = catalog.filter((x) => x.access === 'PURCHASE' && (x.priceRubies || 0) > 0)
   const used = new Set<string>()
-  const random = rng(Math.floor((refresh - 21 * HOUR) / DAY) * 7919)
+  const random = rng(resetIn > 0 ? Math.floor(now / 1000) : Math.floor((refresh - 21 * HOUR) / DAY) * 7919)
   const take = (list: DemoCatalogItem[], test: (x: DemoCatalogItem) => boolean): DemoCatalogItem => {
     const ok = list.filter((x) => !used.has(x.id) && test(x))
     const pick = ok[Math.floor(random() * ok.length)] || list.find((x) => !used.has(x.id)) || list[0]!
@@ -337,10 +363,11 @@ async function build(catalog: DemoCatalogItem[], wallet: { balance: number }, pa
       shards: 640,
       plus: false,
       day: {
-        featured: card(featured, refresh),
+        // Скидки дня (служба 2036ecc8d): предмет дня −20%, у остальных своя 10–30% от дня и кода.
+        featured: card(featured, refresh, FEATURED_DISCOUNT_PCT),
         deal: card(deal, refresh, 25),
-        items: items.map((x) => card(x, refresh)),
-        forYou: forYou.map((x) => card(x, refresh)),
+        items: items.map((x) => card(x, refresh, dayDiscount(dayKey, x.id))),
+        forYou: forYou.map((x) => card(x, refresh, dayDiscount(dayKey, x.id))),
         refreshAt: new Date(refresh).toISOString(),
       },
       bundle: {
@@ -353,7 +380,20 @@ async function build(catalog: DemoCatalogItem[], wallet: { balance: number }, pa
       },
       nightMarket: nightOn ? { endsAt: new Date(refresh + 7 * DAY).toISOString(), cards: night } : null,
       xray,
-      packs: packsLive,
+      // Стартовый набор (служба, 06.10.2026): разовый пакет первым, пока нет оплат. &starter=0 — уже куплен.
+      packs:
+        p.get('starter') === '0' || packsLive.some((x) => x.oneTime)
+          ? packsLive
+          : [{ code: 'starter', title: 'Стартовый', rubies: 1490, kopecks: 9900, oneTime: true }, ...packsLive],
+      // Предложение месяца (служба 7e81279a7): до 1-го числа следующего месяца МСК. &month=0 — уже куплено.
+      monthOffer:
+        p.get('month') === '0'
+          ? null
+          : (() => {
+              const n = new Date(Date.now() + 3 * 3600_000)
+              const end = Date.UTC(n.getUTCFullYear(), n.getUTCMonth() + 1, 1) - 3 * 3600_000
+              return { code: 'month-' + (n.getUTCFullYear() * 12 + n.getUTCMonth()), title: 'Предложение месяца', rubies: 3200, kopecks: 29900, oneTime: true, endsAt: new Date(end).toISOString() }
+            })(),
       gift,
       // «Хочу» на все статусы: вещь с витрины (тост «на витрине»), из
       // мастерской, две вернутся, одна — только за часы в игре.
@@ -486,12 +526,16 @@ export function demoEconomy(deps: {
 }) {
   let state: Promise<State> | null = null
   const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v))
+  let builtFor = 0
   const get = () => {
+    // Витрина дня кончилась (&reset) — собираем новую, как служба после полуночи.
+    if (state && builtFor && Date.now() >= builtFor) state = null
     if (!state)
       state = (async () => {
         const [cat, packs] = await Promise.all([deps.catalog(), deps.packs()])
         const s = await build(cat, deps.wallet, packs)
         syncOwned(s)
+        builtFor = q().has('reset') ? new Date(s.shop.day.refreshAt).getTime() : 0
         return s
       })()
     state.catch(() => (state = null))
@@ -503,7 +547,17 @@ export function demoEconomy(deps: {
     s.shop.balance = deps.wallet.balance
     s.shop.shards = s.workshop.shards
     syncOwned(s)
-    return JSON.parse(JSON.stringify(s.shop)) as ShopDay
+    const out = JSON.parse(JSON.stringify(s.shop)) as ShopDay
+    // Скидка подписки: у подписчика цена уже со скидкой (старая зачёркнута), у остальных — полная цена (plusPrice в ответе, на экран не выводится).
+    const tier = demoTier()
+    const pct = tierPct(tier)
+    const all: ShopCard[] = [out.day.featured, out.day.deal, ...out.day.items, ...out.day.forYou, ...(out.nightMarket?.cards || []), ...(out.bundle?.items || [])].filter((c): c is ShopCard => !!c)
+    for (const c of all) {
+      if (c.owned) continue
+      if (pct) c.price = Math.max(10, Math.round((c.price * (100 - pct)) / 100 / 10) * 10)
+      else c.plusPrice = plusOf(c.price)
+    }
+    return { ...out, plus: !!tier, plusTier: tier, plusPct: pct }
   }
 
   const buy = async (body: { code?: string; source?: string; bundleId?: string }) => {

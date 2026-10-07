@@ -43,6 +43,8 @@ import { inviteViaNewServer, loadMyServers, serverTitle, usePlayInvite } from '.
 import type { InviteTarget } from '../state/playInvite'
 import { statusText } from './friends/FriendRow'
 import { Ticks } from './Ticks'
+import { StreakFire } from './friends/StreakFire'
+import { useFriendStreaks } from '../state/friendStreaks'
 import { timeHM } from '../lib/format'
 
 function InviteCard({ addr, name, version, me }: { addr: string; name: string; version?: string; me?: boolean }) {
@@ -816,13 +818,17 @@ const JUMP_FRAMES = 12
 
 /// Одна строка о собеседнике в шапке: где он сейчас.
 function PeerHead({ uid, nick }: { uid: string; nick: string }) {
+  const streak = useFriendStreaks((s) => (uid ? s.byId[uid] : undefined))
   const f = useFriends((s) => s.friends.find((x) => x.userId === uid))
   const sub = f ? statusText(f) : ''
   return (
     <>
       <Head id="chatAva" nick={nick || 'MHF_Steve'} size={36} />
       <span className="chat-head-body">
-        <b id="chatNick">{nick || '—'}</b>
+        <b id="chatNick">
+          {nick || '—'}
+          <StreakFire n={streak} />
+        </b>
         {sub ? (
           <span className={'chat-head-sub' + (f?.online ? ' on' : '')}>
             {f?.online ? <span className="dot"></span> : null}
@@ -858,6 +864,10 @@ export function ChatThread() {
     chatTypers,
   } = useFriends()
   const room = useRooms((s) => s.rooms.find((r) => r.id === chatRoom))
+  const peerStreak = useFriendStreaks((s) => (chatWith ? s.byId[chatWith] : undefined))
+  useEffect(() => {
+    if (chatOpen) void useFriendStreaks.getState().load()
+  }, [chatOpen])
   const bodyRef = useRef<HTMLDivElement>(null)
   const [atBottom, setAtBottom] = useState(true)
   const atBottomRef = useRef(true)
@@ -986,7 +996,10 @@ export function ChatThread() {
                 onError={(e) => onAvatarError(e, 128, chatHeader.nick)}
               />
               <span className="chat-prof-txt">
-                <b>{chatHeader.nick}</b>
+                <b>
+                  {chatHeader.nick}
+                  <StreakFire n={peerStreak} />
+                </b>
                 {chatHeader.text ? <span>{chatHeader.text}</span> : null}
               </span>
               <FriendStats p={chatHeader} />

@@ -3,12 +3,18 @@ import type { OverlayCard } from '../ipc/commands'
 import { setScreen } from '../state/ui'
 import { openChat, openRoomChat } from '../state/friends'
 import { restoreLauncher } from './window'
+import { useDaily } from '../state/daily'
 
 /// A click on an overlay card that the core decided the launcher should answer:
 /// the window is already coming up natively, the webview only has to land on
 /// the conversation the card was about.
 function handle(card: OverlayCard) {
   restoreLauncher()
+  if (card.open === 'daily') {
+    setScreen('play')
+    useDaily.getState().setModal(true)
+    return
+  }
   setScreen('friends')
   if (card.open === 'room' && card.uid) {
     void openRoomChat(card.uid, card.nick || 'Группа').catch(() => {})

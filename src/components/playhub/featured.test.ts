@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { featuredSpot, featuredTurn, type Featured, type FeaturedSpot } from './featured'
+import { featuredSpot, featuredTurn, rotatedTurn, type Featured, type FeaturedSpot } from './featured'
 
 describe('featured turn: the anarchy and PrisonRPG take turns', () => {
   const cases: { day: number; salt: number; ready: boolean; want: Featured; why: string }[] = [
@@ -38,5 +38,21 @@ describe('featured spot: what the banner draws', () => {
   for (const c of cases)
     test(`pack ${String(c.pack)} -> ${c.want}`, () => {
       expect(featuredSpot(c.pack, c.turn).kind, c.why).toBe(c.want)
+    })
+})
+
+describe('lobby rotation: the banner swaps faces every few minutes', () => {
+  const cases: { first: Featured; step: number; ready: boolean; want: Featured; why: string }[] = [
+    { first: 'anarchy', step: 0, ready: true, want: 'anarchy', why: 'the lobby opens with the day turn' },
+    { first: 'anarchy', step: 1, ready: true, want: 'prisonrpg', why: 'the first swap hands the banner to PrisonRPG' },
+    { first: 'anarchy', step: 2, ready: true, want: 'anarchy', why: 'and the next one gives it back' },
+    { first: 'prisonrpg', step: 0, ready: true, want: 'prisonrpg', why: 'a PrisonRPG day opens with PrisonRPG' },
+    { first: 'prisonrpg', step: 1, ready: true, want: 'anarchy', why: 'then the anarchy gets its minutes too' },
+    { first: 'prisonrpg', step: 3, ready: false, want: 'anarchy', why: 'no PrisonRPG card: nothing to rotate, the anarchy stays' },
+    { first: 'anarchy', step: Number.NaN, ready: true, want: 'anarchy', why: 'a broken counter keeps the day turn' },
+  ]
+  for (const c of cases)
+    test(`${c.first}, step ${c.step}, ready ${c.ready} -> ${c.want}`, () => {
+      expect(rotatedTurn(c.first, c.step, c.ready), c.why).toBe(c.want)
     })
 })

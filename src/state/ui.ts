@@ -14,6 +14,7 @@ export type ScreenId =
   | 'skins'
   | 'rubies'
   | 'friends'
+  | 'top'
   | 'chat'
   | 'hosting'
   | 'playhub'

@@ -25,6 +25,7 @@ export type SoundEvent =
   | 'chest_rare'
   | 'chest_epic'
   | 'chest_gold'
+  | 'case_burst'
 
 const GAIN: Record<SoundEvent, number> = {
   click: 0.5,
@@ -48,6 +49,7 @@ const GAIN: Record<SoundEvent, number> = {
   chest_rare: 0.6,
   chest_epic: 0.6,
   chest_gold: 0.6,
+  case_burst: 0.7,
 }
 
 const UI_EVENTS: SoundEvent[] = ['click', 'nav', 'toggle', 'open', 'close']

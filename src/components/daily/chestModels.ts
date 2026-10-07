@@ -5,6 +5,7 @@ import diamond from './chests/diamond.bbmodel?raw'
 import netherite from './chests/netherite.bbmodel?raw'
 import obsidian from './chests/obsidian.bbmodel?raw'
 
+// Легендарный — своя модель незеритового сундука (06.10.2026), без перекраски алмазного.
 const SOURCES: Partial<Record<ChestTier, string>> = { COMMON: copper, RARE: diamond, EPIC: obsidian, LEGEND: netherite }
 
 export interface ChestModel {

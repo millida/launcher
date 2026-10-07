@@ -8,7 +8,7 @@ import { api, hasMillidaAccount } from './api'
 import { joinPageUrl } from './invite'
 import { beatKey, beatStatus, presenceBeatDue } from './presence'
 import { isPresenceTracked } from './realtime'
-import { effectiveNick, getAccount, isMillidaKind, launchAuthKind, profileSlug } from '../state/accounts'
+import { effectiveNick, getAccount, hasLicenseSession, isMillidaKind, launchAuthKind, profileSlug } from '../state/accounts'
 import { ensureMsAuth, startMsLogin } from '../state/msLogin'
 import { uiChoice, uiConfirm } from '../state/confirm'
 import { useProfiles } from '../state/profiles'
@@ -228,6 +228,11 @@ async function resolveAuth(profile: string | null): Promise<{ nick: string; auth
     }
     if (relogin === 'dismiss') throw new Error('Запуск отменён')
     showToast('Играем офлайн: онлайн-серверы ответят «Вы не вошли в свой аккаунт Minecraft»')
+    return offline
+  }
+  if (acc && kind === 'elyby') {
+    if (hasLicenseSession(acc)) return { nick: acc.nick, auth: { kind: 'elyby', accountId: acc.id, uuid: acc.uuid } }
+    showToast('Вход Ely.by не найден — добавь аккаунт заново. Сейчас играем офлайн', 'error')
     return offline
   }
   if (kind !== 'millida') return offline

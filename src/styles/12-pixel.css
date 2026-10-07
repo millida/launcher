@@ -154,6 +154,8 @@
   .cat-empty-ic, .mods-filters .mk-pill.is-active,
   /* character.css */
   .ch-look-input, .ch-tile.on, .ch-tile.trying, .ch-looks, .ch-stage, .ch-fit, .ch-tile, .ch-slot.on,
+  /* pass.css */
+  .bp-card, .bp-day, .bp-arrow,
   /* daily.css */
   .dc, .dp-cell, .dp-cell.now, .ra-frame, .wi, .wi-art, .dp2-hero, .dp2-arrow, .dp2-cell, .rv-card-in, .rv-missed, .rv-week, .rv-unlock-art, .dc.hero, .mc-cell,
   /* friends.css */
@@ -164,6 +166,8 @@
   :is(.hs-pitch, .hs-state), .hs-fact, .hs-banner,
   /* lobby.css */
   .lobby-mode-card, .lobby-who .btn.lobby-wardrobe, .lobby-mate, .lobby-mate-act, .lobby-invite, .ht-gift, .lg2-card, .lb-btn, .lobby-row, .lb-me, .lobby-promo, .lobby-rec,
+  /* retention.css */
+  .lchip, .play-chest.go, .tb-block, .tb-none, .tb-row,
   /* lobby-bubble.css */
   .eb-body,
   /* milli.css */
@@ -541,3 +545,37 @@ img[src$='/millida-logo.svg'] { border-radius: 0 !important; }
 @media (prefers-reduced-motion: reduce) {
   .px-excl::after { animation: none; }
 }
+
+/* Окно «Как это работает» под входом Microsoft: тот же текст, что на сайте
+   /launcher/bezopasnost (src/lib/securityContent.ts — копия файла сайта). */
+.sec-info { display: flex; flex-direction: column; min-height: 0; }
+.sec-info-scroll { overflow-y: auto; max-height: min(50vh, 460px); padding-right: 6px; display: grid; gap: 22px; }
+.sec-info-sec h4 { margin: 0 0 10px; font-size: 17px; font-weight: 800; color: var(--m-fg); }
+.sec-info-sec h5 { margin: 14px 0 8px; font-size: 13.5px; font-weight: 800; color: var(--m-fg); }
+.sec-info-say { margin: 0 0 6px; padding: 10px 12px; background: var(--m-surface-2); box-shadow: inset 3px 0 0 var(--m-accent); font-size: 13.5px; font-weight: 700; line-height: 1.45; color: var(--m-fg); }
+.sec-info-sec ol { margin: 0; padding: 0; list-style: none; counter-reset: sec; display: grid; gap: 8px; }
+.sec-info-sec li { counter-increment: sec; position: relative; padding: 10px 12px 10px 44px; background: var(--m-surface-2); }
+.sec-info-sec li::before { content: counter(sec); position: absolute; left: 10px; top: 10px; display: grid; place-items: center; width: 24px; height: 24px; background: var(--m-accent); color: var(--m-on-accent); font-weight: 800; font-size: 13px; }
+.sec-info-sec li b { display: block; font-size: 13px; font-weight: 800; color: var(--m-fg); }
+.sec-info-sec li p { margin: 4px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--m-fg-subtle); }
+.sec-info-honest { margin-top: 10px; padding: 10px 12px; display: grid; gap: 6px; background: color-mix(in srgb, var(--m-warning, #f5a524) 10%, var(--m-surface-2)); box-shadow: inset 3px 0 0 var(--m-warning, #f5a524); }
+.sec-info-honest b { font-size: 12.5px; font-weight: 800; color: var(--m-warning, #f5a524); }
+.sec-info-honest p { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--m-fg-muted); }
+.sec-info-sec ol.sec-info-short li { padding-block: 8px; }
+.sec-info-sec ol.sec-info-short li b { font-size: 13px; }
+.sec-info-sec ol.sec-info-short li::before { top: 7px; }
+.sec-info-more { margin-top: 10px; }
+.sec-info-more > summary { cursor: pointer; font-size: 12.5px; font-weight: 800; color: var(--m-fg-muted); padding: 6px 0; }
+.sec-info-more[open] > ol { margin-top: 8px; }
+.sec-trust { background: #fff; color: #10161b; }
+.sec-trust-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #e3e8ec; }
+.sec-trust-head b { flex: 1; font-size: 13px; font-weight: 800; }
+.sec-trust-lock { display: grid; place-items: center; width: 26px; height: 26px; background: #1f9d3a; color: #fff; }
+.sec-trust-tag { padding: 2px 6px; font-size: 10px; font-weight: 800; letter-spacing: .08em; color: #1f7a34; background: #e6f6ea; }
+.sec-trust ul { list-style: none; margin: 0; padding: 0; }
+.sec-trust li { display: flex; align-items: center; gap: 10px; padding: 9px 12px; }
+.sec-trust li + li { border-top: 1px solid #eceff2; }
+.sec-trust-ok { color: #1f9d3a; flex: none; }
+.sec-trust-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; font-size: 12.5px; font-weight: 700; line-height: 1.3; }
+.sec-trust-txt small { font-size: 11px; font-weight: 500; color: #7a858f; }
+.sec-trust-logo { flex: none; }

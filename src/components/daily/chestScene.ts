@@ -22,11 +22,10 @@ import {
   SRGBColorSpace,
   Sprite,
   SpriteMaterial,
-  WebGLRenderer,
   type Material,
   type Texture,
 } from 'three'
-import { noteContextCreated } from '../../lib/gpuLite'
+import { acquireChestGl } from './chestGl'
 import type { ChestTier } from '../../lib/rubies'
 import { onRenderGate, renderLive } from '../../lib/renderGate'
 import { CHEST_PALETTE, faceCanvas, type FaceKind } from './chestPaint'
@@ -49,6 +48,9 @@ import { chestModel, type ChestModel } from './chestModels'
  * - `shake`  — открывается: тряска нарастает, из щели бьёт свет;
  * - `open`   — крышка откинута, столб света цвета редкости, искры, лучи.
  */
+/** Свой цвет модели по силе сундука: легендарный — золото на модели алмазного. */
+const tintOf = (_tier: ChestTier): string | undefined => undefined
+
 export type ChestMode = 'closed' | 'ready' | 'shake' | 'open'
 export type ChestLook = 'voxel' | 'model'
 
@@ -68,8 +70,14 @@ export interface ChestSceneOptions {
   /** Крупный план (окно награды) или витрина (шапка окна трека). */
   framing?: 'hero' | 'reveal'
   look?: ChestLook
+  /** Свой цвет сундука (ящики магазина): текстура модели и свет перекрашены. */
+  tint?: string
+  /** Кадр читается с холста (снимки сундуков в PNG, scripts/chest-shots.mjs). */
+  preserve?: boolean
   /** Крышка распахнулась — сигнал для звука и карточек. */
   onOpened?: () => void
+  /** Общий контекст WebGL отобрали — дальше плоский рисунок. */
+  onLost?: () => void
 }
 
 const tex = (canvas: HTMLCanvasElement): Texture => {
@@ -204,15 +212,13 @@ const easeOutBack = (t: number) => {
 }
 
 export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOptions): ChestScene | null {
-  let renderer: WebGLRenderer
-  try {
-    noteContextCreated()
-    renderer = new WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'low-power' })
-  } catch {
-    return null
-  }
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
-  renderer.setClearColor(0x000000, 0)
+  // Свой холст — 2D: кадр рисует общий контекст сундуков (chestGl).
+  const ctx2dOrNull = canvas.getContext('2d')
+  if (!ctx2dOrNull) return null
+  const glOrNull = acquireChestGl(() => opts.onLost?.())
+  if (!glOrNull) return null
+  const ctx2d: CanvasRenderingContext2D = ctx2dOrNull
+  const gl = glOrNull
 
   const scene = new Scene()
   const reveal = opts.framing === 'reveal'
@@ -346,7 +352,7 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
     gapGlow.position.set(0, gapY + 1.2, 8)
     pool.position.set(0, gapY + 0.08, 0)
     if (rigModel) {
-      rig = buildBbRig(rigModel.model)
+      rig = buildBbRig(rigModel.model, opts.tint ?? tintOf(tier))
       // Model front faces -z (north); the scene shows +z to the camera.
       rig.root.rotation.y = Math.PI
       rig.root.scale.setScalar(MODEL_SCALE)
@@ -376,7 +382,8 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
   }
 
   function paint() {
-    const p = CHEST_PALETTE[tier]
+    const t = opts.tint ?? tintOf(tier)
+    const p = t ? { glow: t, spark: '#ffffff' } : CHEST_PALETTE[tier]
     const glowColor = new Color(p.glow)
     glowMat.color.copy(glowColor)
     raysMat.color.copy(glowColor)
@@ -609,7 +616,7 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
     sparks.visible = alive
     sparks.instanceMatrix.needsUpdate = true
 
-    renderer.render(scene, camera)
+    gl.draw(scene, camera, ctx2d, canvas.width, canvas.height)
   }
   raf = requestAnimationFrame(frame)
   let inView = true
@@ -649,7 +656,9 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
     },
     resize(w, h) {
       if (w < 1 || h < 1) return
-      renderer.setSize(w, h, false)
+      const dpr = Math.min(window.devicePixelRatio || 1, 2)
+      canvas.width = Math.round(w * dpr)
+      canvas.height = Math.round(h * dpr)
       camera.aspect = w / h
       camera.updateProjectionMatrix()
       fitRays()
@@ -669,8 +678,7 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
         ;(m as MeshBasicMaterial).map?.dispose()
         m.dispose()
       })
-      renderer.dispose()
-      renderer.forceContextLoss()
+      gl.release()
     },
   }
 }

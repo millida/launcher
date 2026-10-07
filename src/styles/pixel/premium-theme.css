@@ -1,0 +1,64 @@
+/* ============================================================
+   ТЕМА ЛАУНЧЕРА PLUS / DIAMOND (владелец 06.10.2026, lib/premiumTheme.ts)
+   ------------------------------------------------------------
+   Спокойно: стандартный лаунчер + золотой (синий) акцент, тонкие золотые
+   линии, знак PLUS у ника и очень мягкий неподвижный свет сверху.
+   Без частиц и анимации. Градиент здесь — только свет фона, не кнопки.
+   html[data-ptheme] — включена тема; html[data-sub] — есть подписка.
+   ============================================================ */
+
+html[data-sub='plus'], html[data-ptheme='plus'] {
+  --m-prem: #f5bd2c; --m-prem-rgb: 245, 189, 44; --m-prem-hi: #ffe58a; --m-prem-lo: #8a5a0c;
+}
+html[data-sub='diamond'], html[data-ptheme='diamond'] {
+  --m-prem: #4fb8ff; --m-prem-rgb: 79, 184, 255; --m-prem-hi: #d2f1ff; --m-prem-lo: #1d4f94;
+}
+
+/* Мягкий неподвижный свет от верхнего края — во всём окне при теме,
+   в магазине — у любого подписчика. */
+html[data-ptheme] #win,
+html[data-sub] .content:has(> #s-rubies.on) {
+  background-image: radial-gradient(ellipse 75% 220px at 50% 0, rgba(var(--m-prem-rgb), .10), transparent 100%);
+  background-repeat: no-repeat;
+}
+html[data-ptheme] #win { background-color: var(--m-bg); }
+
+/* Тонкие золотые линии: шапка и рамки подложек. */
+html[data-ptheme] .topbar:not(.is-lobby) { box-shadow: inset 0 -1px 0 rgba(var(--m-prem-rgb), .35); }
+:root:root[data-ptheme] :is(.card, .modal) { --px-ol: rgba(var(--m-prem-rgb), .28); --px-ol-w: 1px; }
+
+/* ---------- Магазин подписчика: акцент только на 3 местах ---------- */
+html[data-sub] #s-rubies .sh-head h2 { color: var(--m-prem-hi); text-shadow: 0 2px 0 var(--m-prem-lo); }
+
+/* Чип подписки в шапке: знак и срок. */
+:root:root .sh-crown.has-mark {
+  width: auto; gap: 8px; padding: 0 12px; grid-auto-flow: column;
+  background: color-mix(in srgb, var(--m-prem, #f5bd2c) 16%, var(--m-surface-2));
+  box-shadow: inset 0 0 0 1px rgba(var(--m-prem-rgb, 245, 189, 44), .45);
+}
+.sh-crown-until { font-size: 13px; font-weight: 800; color: var(--m-prem-hi, #ffe58a); white-space: nowrap; }
+
+/* Плитка подписки у Diamond — синяя (знак DIAMOND, −15 %, «сразу всё»). */
+.pb.is-diamond {
+  background: color-mix(in srgb, var(--m-rarity-rare) 26%, #071226);
+  --px-ol: var(--m-rarity-rare);
+}
+.pb.is-diamond::after { background: rgba(200, 240, 255, .16); }
+.pb.is-diamond .pb-ribbon { background: var(--m-rarity-rare); color: #04122a; }
+.pb-now { display: inline-flex; align-items: flex-end; gap: 2px; }
+
+/* Знак у ника в шапке лобби. */
+.lb-acc-txt .lb-pmark-badge { margin-top: 3px; }
+
+/* ---------- Настройки → «Тема лаунчера» ---------- */
+.pt-row { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 0; }
+.pt-opt {
+  display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px; border: 0; cursor: pointer;
+  font: inherit; font-size: 14px; font-weight: 800; color: var(--m-fg-muted); background: var(--m-surface-2);
+  --px-n: 5px; clip-path: var(--px-5);
+}
+@media (hover: hover) and (pointer: fine) { .pt-opt:hover { background: var(--m-raised); color: var(--m-fg); } }
+.pt-opt:active { transform: scale(.97); }
+.pt-opt.on { color: var(--m-fg); box-shadow: inset 0 0 0 2px var(--m-accent); background: var(--m-accent-soft); }
+.pt-opt svg.icon { width: 14px; height: 14px; color: var(--m-fg-faint); }
+.pt-std { width: 14px; height: 14px; background: #5ec64d; box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .25); }

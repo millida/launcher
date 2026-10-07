@@ -35,6 +35,13 @@ describe('launchAuthKind', () => {
       why: 'no token to issue a session with',
     },
     { name: 'microsoft account', account: acc('microsoft'), millida: true, expect: 'microsoft', why: 'the licence wins over our session' },
+    {
+      name: 'ely.by account while signed into Millida',
+      account: acc('elyby'),
+      millida: true,
+      expect: 'elyby',
+      why: 'the chosen Ely.by account must reach the game; falling to offline drops its session and its skin',
+    },
     { name: 'no account at all', account: null, millida: true, expect: 'millida', why: 'nothing chose a nick, so the session may name one' },
   ]
 
@@ -61,6 +68,13 @@ describe('launchAuthKind on a Millida-only server', () => {
       why: 'an offline nick has no session at all, the gate turns it away too',
     },
     { name: 'millida account', account: acc('millida'), millida: true, expect: 'millida', why: 'already the right session' },
+    {
+      name: 'ely.by account',
+      account: acc('elyby'),
+      millida: true,
+      expect: 'millida',
+      why: 'OneBlock checks hasJoined on our Yggdrasil only, an Ely.by session is never found there',
+    },
     {
       name: 'microsoft account without a Millida session',
       account: acc('microsoft'),

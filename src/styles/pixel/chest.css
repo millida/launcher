@@ -1,0 +1,153 @@
+/* ============================================================
+   Общий вид сундуков лаунчера (06.10.2026): ChestPop — из сундука по
+   очереди выскакивает вещь пула (ящики магазина, сундук первого часа).
+   ============================================================ */
+/* ---------- Сундук показывает, что выпадает (ChestPop) ---------- */
+.cpop { position: relative; display: inline-grid; place-items: center; }
+/* Сундук выше вылетающей вещи по слоям: вещь рождается за крышкой и
+   никогда не закрывает сундук (владелец 06.10.2026). */
+.cpop-chest { position: relative; z-index: 2; display: grid; place-items: center; }
+.cpop-item {
+  position: absolute; z-index: 1; left: 50%; bottom: calc(100% + 6px); width: 70%; aspect-ratio: 1; display: grid; place-items: center; pointer-events: none;
+  animation: cpop-fly 1.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+/* Валюта: значок и сумма крупно. */
+.cpop-coin { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; padding: 6% 4% 10%; }
+.cpop-coin > .cur-ic { width: 60%; height: auto; flex: none; image-rendering: pixelated; }
+.cpop-sum { font-size: 26px; font-weight: 900; line-height: 1; color: #fff; font-variant-numeric: tabular-nums; text-shadow: 0 2px 0 #000; }
+.cpop-word { font-size: 11px; font-weight: 900; line-height: 1.1; color: #fff; text-shadow: 0 1px 0 #000; }
+/* Плашка цвета редкости под вещью, со словом редкости. */
+.cpop-plate {
+  position: relative; z-index: 1; display: grid; place-items: center; width: 100%; height: 100%; padding: 8%; overflow: hidden;
+  background: color-mix(in srgb, var(--sh-tone) 55%, #101211); --px-n: 5px; clip-path: var(--px-5);
+}
+.cpop-plate::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 5px; background: color-mix(in srgb, var(--sh-tone) 70%, #000); }
+.cpop-plate .px-thumb, .cpop-plate .px-thumb img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+.cpop-plate .rar-chip { left: 3px; bottom: 6px; height: 15px; font-size: 9px; padding: 0 4px; }
+.cpop-glow {
+  position: absolute; inset: -45%; z-index: 0;
+  background: radial-gradient(circle, color-mix(in srgb, var(--sh-tone) 80%, #fff) 0, color-mix(in srgb, var(--sh-tone) 50%, transparent) 30%, transparent 62%);
+  animation: cpop-glow 1.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.cpop-spark { position: absolute; z-index: 2; left: 50%; top: 50%; width: 7px; height: 7px; background: color-mix(in srgb, var(--sh-tone) 40%, #fff); animation: cpop-spark 0.9s steps(6, end) both 0.15s; }
+.cpop-spark.s1 { --sx: -70px; --sy: -50px; }
+.cpop-spark.s2 { --sx: 72px; --sy: -40px; }
+.cpop-spark.s3 { --sx: -54px; --sy: 46px; }
+.cpop-spark.s4 { --sx: 60px; --sy: 52px; }
+.cpop-item.is-shadow .cpop-plate { background: none; }
+.cpop-item.is-shadow .cpop-plate::after { display: none; }
+.cpop-item.is-shadow .px-thumb img { filter: brightness(0) opacity(0.85); }
+/* Взлёт из-за крышки с лёгкой дугой, зависание ~0,6 с, растворение вверх —
+   обратно в сундук вещь не падает (падение перекрывало сундук). */
+@keyframes cpop-fly {
+  0% { transform: translate(-50%, 40%) scale(0.3); opacity: 0; }
+  10% { opacity: 1; }
+  22% { transform: translate(calc(-50% + var(--side, 1) * 10%), -14%) scale(1.06) rotate(calc(var(--side, 1) * 5deg)); opacity: 1; }
+  34% { transform: translate(calc(-50% + var(--side, 1) * 6%), -6%) scale(1) rotate(0deg); opacity: 1; }
+  74% { transform: translate(calc(-50% + var(--side, 1) * 6%), -10%) scale(1) rotate(0deg); opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--side, 1) * 8%), -36%) scale(0.92) rotate(0deg); opacity: 0; }
+}
+@keyframes cpop-glow { 0% { opacity: 0; transform: scale(0.4); } 16% { opacity: 1; transform: scale(1.15); } 60% { opacity: 0.6; transform: scale(1); } 100% { opacity: 0; transform: scale(0.8); } }
+@keyframes cpop-spark { 0% { transform: translate(-50%, -50%) scale(1); opacity: 1; } 100% { transform: translate(calc(-50% + var(--sx)), calc(-50% + var(--sy))) scale(0.4); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .cpop-item { display: none; } }
+.cs3-art .cpop, .cs3-hero-stage .cpop { overflow: visible; }
+/* Сундук первого часа в строке под «Играть». */
+.fh-chest { width: 34px; height: 30px; margin: -6px 0; }
+.fh-chest .cpop-item { width: 120%; bottom: 70%; }
+
+/* ---------- Один вид сундуков и наград (06.10.2026) ---------- */
+/* Открытие дневного сундука: тот же 3D-сундук, что в ящиках магазина. */
+.co-chest3d { display: block; width: min(340px, 70vw); aspect-ratio: 1; }
+.co-chest3d .c3d { width: 100%; height: 100%; }
+.co-chest3d.is-gray { filter: grayscale(1) brightness(0.7); }
+/* Слово редкости внизу слева картинки — во всех наградах и составах. */
+.co-art, .rv-card-art, .rw-card-art, .sl-cell { position: relative; }
+.co-card.sm .rar-chip, .sl-cell .rar-chip { left: 2px; bottom: 2px; height: 15px; font-size: 9px; padding: 0 4px; }
+.rw-card-art .rar-chip { left: 8px; bottom: 8px; height: 24px; font-size: 13px; padding: 0 9px; }
+/* Итог открытия — плитки как «Что внутри» ящика: полоса цвета редкости внизу. */
+.co-card .co-card-plate { position: relative; }
+.co-card[data-rar] .co-card-plate::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 5px; background: var(--rar, var(--co-it)); }
+
+/* ---------- Слово редкости: чип внизу слева картинки ---------- */
+.rar-chip {
+  position: absolute; z-index: 5; left: 6px; bottom: 6px; display: inline-flex; align-items: center; height: 20px; padding: 0 7px;
+  font-size: 11px; font-weight: 900; letter-spacing: 0.01em; white-space: nowrap; pointer-events: none;
+  background: var(--rar); color: #0b0d0c; --px-n: 4px; clip-path: var(--px-4);
+}
+.rar-chip[data-rar='EPIC'], .rar-chip[data-rar='MYTHIC'], .rar-chip[data-rar='RELIC'] { color: #fff; }
+.ch-tile-art { position: relative; }
+.mc-art { display: grid; place-items: center; }
+
+/* В карточке ящика сундук стоит у нижнего края сцены: вещам есть куда взлетать. */
+.cs3-stage { align-items: end; padding-bottom: 0; height: 330px !important; }
+/* Крупный сундук на всю картинку: вещи вылетают над ним, по две в полёте. */
+.cs3-stage .cpop-item { width: 50%; }
+.cs3-hero-stage .cpop-item { width: 78%; }
+/* Сундук ниже: у его рендера пустое поле снизу, а сверху нужен воздух для вылета. */
+.cs3-stage .cs3-art { margin-bottom: -40px; }
+
+/* ---------- Утешительный приз ящика: холодная вспышка, «+40 осколков» ---------- */
+.cs-res.is-miss { position: relative; overflow: visible; }
+.cs-miss-burst {
+  position: absolute; left: 50%; top: 34%; z-index: 0; width: 520px; aspect-ratio: 1; transform: translate(-50%, -50%); pointer-events: none;
+  background: repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--sh-tone) 34%, transparent) 0deg 8deg, transparent 8deg 22deg);
+  -webkit-mask: radial-gradient(circle, #000 0, transparent 66%); mask: radial-gradient(circle, #000 0, transparent 66%);
+  animation: cs-miss-spin 14s linear infinite;
+}
+.cs-miss-art { position: relative; z-index: 1; display: grid; place-items: center; width: 180px; height: 180px; animation: cs-miss-pop 0.5s cubic-bezier(0.2, 1.6, 0.4, 1) both; }
+.cs-miss-sum { position: relative; z-index: 1; font-size: 40px !important; font-variant-numeric: tabular-nums; }
+@keyframes cs-miss-spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+@keyframes cs-miss-pop { from { transform: scale(0.4); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .cs-miss-burst, .cs-miss-art { animation: none; } }
+
+/* Карточка ящика: цена и ×10 — две кнопки одной высоты; ×10 шире (там две цены). */
+.cs3-foot { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: 8px; }
+.cs3-foot.is-one { grid-template-columns: minmax(0, 1fr); }
+.cs3-foot > .btn { width: 100%; gap: 6px; padding: 0 8px; }
+.cs3-x10-n { margin-right: 2px; font-weight: 900; }
+.cs3-x10 .sv-was { white-space: nowrap; }
+
+/* Гарантия в каждом ящике: чип цвета редкости на сцене сундука, внизу слева. */
+.cs3-guar {
+  position: absolute; z-index: 4; top: 150px; left: 16px; max-width: calc(100% - 32px); padding: 4px 8px;
+  font-size: 12px; font-weight: 900; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #111;
+  background: var(--g); box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.25); --px-n: 4px; clip-path: var(--px-4); pointer-events: none;
+}
+.cs3-guar[data-rar='COMMON'] { background: color-mix(in srgb, var(--m-fg) 82%, transparent); }
+
+/* Счётчик гарантии: подпись с числами и полоса по делениям (одно деление — одно открытие). */
+.cs3-pity2 { display: flex; flex-direction: column; gap: 5px; margin: -2px 4px 0; }
+.cs3-pity2-t { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 12px; font-weight: 800; color: var(--m-fg-muted); }
+.cs3-pity2-t > i { font-style: normal; font-weight: 900; font-variant-numeric: tabular-nums; color: var(--m-fg); }
+.cs3-segs { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 2px; height: 6px; }
+.cs3-segs > i { background: var(--m-inset); }
+.cs3-segs > i.on { background: var(--pt); }
+.cs3-pity2.is-now .cs3-pity2-t > b { color: var(--pt); }
+.cs3-pity2.is-now .cs3-segs > i { animation: cs3-now 1s steps(2, end) infinite; }
+@keyframes cs3-now { 50% { opacity: 0.55; } }
+
+/* Бесплатный первый ящик: кнопка светится пиксельной каймой, сцена в цвет акцента. */
+.cs3.is-free .cs3-stage { background: color-mix(in srgb, var(--m-accent) 26%, var(--m-inset)); }
+.cs3-free { position: relative; isolation: isolate; display: block; }
+.cs3-free > .btn { width: 100%; gap: 8px; }
+.cs3-free::before {
+  content: ''; position: absolute; inset: -4px; z-index: -1; background: var(--m-accent); opacity: 0.35;
+  --px-n: 6px; clip-path: var(--px-5); animation: cs3-free 1.2s steps(3, end) infinite alternate;
+}
+@keyframes cs3-free { to { opacity: 0.9; } }
+.cs3-free svg.icon { width: 18px; height: 18px; }
+@media (prefers-reduced-motion: reduce) { .cs3-free::before, .cs3-pity2.is-now .cs3-segs > i { animation: none; } }
+.cs3-look > svg.icon { width: 16px; height: 16px; }
+
+/* Сундуки за игру: «●●○ 3 в день» в строке под «Играть». */
+.pc-pips { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; }
+.pc-pips > i { width: 8px; height: 8px; background: rgba(255, 255, 255, 0.22); }
+.pc-pips > i.on { background: var(--m-rarity-legendary); }
+.play-chest.go .pc-pips > i.on { background: #1d1402; }
+.pc-pips > small { margin-left: 4px; font-size: 11px; font-weight: 800; opacity: 0.75; }
+
+/* «Набор дня» / «Ящик дня» — подпись на картинке героя. */
+.sv-daytag {
+  display: inline-flex; align-items: center; height: 30px; padding: 0 12px; font-size: 15px; font-weight: 900;
+  background: var(--m-rarity-legendary); color: #1d1402; --px-n: 5px; clip-path: var(--px-5);
+}

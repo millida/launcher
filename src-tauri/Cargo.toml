@@ -20,6 +20,7 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["protocol-asset", "tray-icon", "macos-private-api"] }
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
+tauri-plugin-autostart = "~2.5.1"
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 tauri-plugin-deep-link = "2"
 # opens links and folders without a shell, so URL metacharacters cannot be
@@ -72,7 +73,8 @@ windows-sys = { version = "0.61", features = ["Win32_Security_Cryptography", "Wi
 # user in its settings, so the request is answered for our window instead of
 # being bounced back at them on every recording.
 webview2-com = "0.38"
-windows = { version = "0.61", features = ["Win32_Foundation"] }
+# Ярлыки «Рабочий стол»/«Пуск» с выбранной иконкой (IShellLinkW), см. src/app_icon.rs
+windows = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Com", "Win32_UI_Shell", "Win32_Storage_FileSystem"] }
 # VPN clients in "system proxy" mode (v2rayN, Hiddify, Clash) only set the
 # WinINet proxy. Without this feature the core went straight past it into the
 # resets the player turned the VPN on to avoid, while the browser worked.
@@ -82,6 +84,11 @@ windows-registry = "0.5"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 libc = "0.2"
+# Dock icon switching (NSApplication.setApplicationIconImage) and the bundle's own icon
+# (NSWorkspace.setIcon:forFile:), see src/app_icon.rs
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSImage", "NSResponder", "NSWorkspace"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSData", "NSBundle", "NSString"] }
 
 [profile.release]
 strip = true

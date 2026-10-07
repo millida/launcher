@@ -35,6 +35,9 @@ const UI_SOUNDS: &[(&str, &[&str])] = &[
     ("chest_rare", &["block/amethyst/break1.ogg", "random/orb.ogg"]),
     ("chest_epic", &["ui/toast/challenge_complete.ogg", "random/levelup.ogg"]),
     ("chest_gold", &["item/armor/equip_gold1.ogg", "random/orb.ogg"]),
+    // Открытие ящика (06.10.2026): щелчок ленты и взрыв крышки.
+    ("case_tick", &["note/hat.ogg", "random/click.ogg"]),
+    ("case_burst", &["fireworks/blast1.ogg", "random/explode1.ogg"]),
 ];
 
 const PREFIX: &str = "minecraft/sounds/";

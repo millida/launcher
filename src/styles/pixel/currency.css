@@ -1,0 +1,4 @@
+/* Значки валют и пакеты рубинов — 3D-рендеры (scripts/voxel-art): сглаженное
+   уменьшение, а не «пиксельное» — иначе рёбра граней рвутся лесенкой. */
+.cur-ic { display: block; flex: none; object-fit: contain; image-rendering: auto; }
+:root .pk-art img { image-rendering: auto; }

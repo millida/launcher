@@ -1,0 +1,178 @@
+/* Плитка Millida PLUS в «Пополнить рубины» — components/shop/Packs.tsx (PlusBundle). */
+
+/* ---------- Шапка: знак, тариф, когда приходит, табличка ника — одна строка ---------- */
+.pb2 .pb-ribbon { padding: 5px 16px; font-size: 14px; }
+.pb2 .pb-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 10px 16px 0; }
+.pb2 .pb-head { flex-direction: row; }
+.pb2 .pb-when { flex: 1 1 auto; }
+
+.pb-seg { display: inline-flex; gap: 4px; padding: 4px; background: rgba(0, 0, 0, .35); --px-n: 5px; clip-path: var(--px-5); }
+.pb-seg-btn {
+  display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 12px;
+  border: 0; cursor: pointer; font: inherit; font-size: 14px; color: var(--m-fg-muted);
+  background-color: transparent; --px-n: 5px; clip-path: var(--px-5); transition: background-color .15s, color .15s;
+}
+.pb-seg-btn b { font-weight: 900; }
+.pb-seg-btn span { font-weight: 800; opacity: .85; }
+.pb-seg-btn:hover { color: var(--m-fg); background-color: rgba(255, 255, 255, .06); }
+.pb-seg-btn.is-plus.is-on { background-color: var(--m-rarity-legendary); color: #1d1402; }
+.pb-seg-btn.is-diamond.is-on { background-color: #36b3ff; color: #031327; }
+.pb-seg-btn .icon { width: 18px; height: 18px; }
+
+.pb-when { display: inline-flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 800; color: var(--m-fg-muted); white-space: nowrap; }
+.pb-when b { color: var(--m-fg); font-weight: 900; }
+.pb-when.is-now { color: #bfe8ff; font-size: 16px; }
+.pb-when.is-now b { color: #fff; }
+
+/* Табличка ника: одна, знак меняется зелёный ↔ золотой (шаговая смена, как кадры игры). */
+.nf { display: inline-grid; align-items: center; justify-items: end; }
+.nf-face { grid-area: 1 / 1; display: inline-flex; align-items: center; gap: 8px; animation: nf-a 4s steps(1, end) infinite; }
+.nf-face.is-plus { animation-name: nf-b; }
+@keyframes nf-a { 0% { visibility: visible; } 50% { visibility: hidden; } }
+@keyframes nf-b { 0% { visibility: hidden; } 50% { visibility: visible; } }
+.nf-face > small { font-size: 12px; font-weight: 900; color: #55ff55; white-space: nowrap; }
+.nf-face.is-plus > small { color: #ffcf5a; }
+:root:root .nf-tag { position: static; transform: none; display: inline-flex; align-items: center; gap: 5px; font-size: 14px; padding: 2px 6px 3px; }
+.nf-face.is-plus .nf-tag { color: #ffd76a; text-shadow: 0 0 8px rgba(255, 170, 0, .9), 2px 2px 0 #3f2a00; }
+.nf-face.is-plus .mc-badge { filter: drop-shadow(0 0 4px rgba(255, 170, 0, .95)); }
+@media (prefers-reduced-motion: reduce) {
+  .nf { display: inline-flex; gap: 10px; }
+  .nf-face { animation: none; }
+}
+
+/* ---------- Плитки ---------- */
+.pb2 .pb-body { grid-template-columns: minmax(0, 1fr) auto; gap: 14px; padding: 10px 16px 14px; }
+.pb2 .pb-parts { grid-template-columns: 1fr 2fr 1.2fr 1fr 1fr; gap: 8px; overflow: visible; }
+.pb2 .pb-part { position: relative; min-height: 132px; justify-content: flex-end; gap: 2px; padding: 8px 6px 9px; }
+.pb2 .pb-part-art { height: 70px; overflow: visible; }
+.pb2 .pb-part-art > img { width: 84px; height: 84px; }
+.pb2 .pb-part-art .shard, .pb2 .pb-part-art > svg { max-height: 60px; }
+.pb2 .pb-part-n { display: inline-flex; align-items: center; gap: 4px; font-size: 19px; }
+.pb-part-cap { font-size: 12px; font-weight: 800; color: var(--m-fg-muted); }
+.pb2 .pb-buy { min-width: 180px; }
+:root:root .pb2 .pb-btn { height: 54px; font-size: 19px; }
+.pb-stamp {
+  position: absolute; top: 5px; right: 5px; display: inline-flex; align-items: center; gap: 3px; padding: 2px 5px;
+  font-style: normal; font-size: 10px; font-weight: 900; text-transform: uppercase; background: #36b3ff; color: #031327;
+  --px-n: 4px; clip-path: var(--px-4);
+}
+
+/* Сундуки пропуска по уровням: три 3D-снимка с числом под каждым. */
+.pb2 .pb-part.is-wide .pb-part-art { height: 80px; align-items: end; }
+.pb-chests { display: flex; align-items: flex-end; justify-content: center; gap: 14px; }
+.pb2 .pb-chest img { width: var(--dc-size); height: auto; }
+.pb-chest { position: relative; display: flex; flex-direction: column; align-items: center; }
+.pb-chest > b {
+  position: absolute; right: -8px; bottom: -4px; z-index: 3; padding: 1px 6px; font-size: 17px; font-weight: 900;
+  background: #0d0a14; text-shadow: 0 2px 0 #000; --px-n: 4px; clip-path: var(--px-4);
+}
+.pb-chest.tier-rare > b { color: var(--m-rarity-rare); }
+.pb-chest.tier-epic > b { color: var(--m-rarity-epic); }
+.pb-chest.tier-legend > b { color: var(--m-rarity-legendary); }
+
+.pb-inside { position: relative; }
+.pb-inside-btn {
+  padding: 3px 9px; border: 0; cursor: pointer; font: inherit; font-size: 12px; font-weight: 800; color: var(--m-fg);
+  background-color: rgba(0, 0, 0, .4); --px-n: 4px; clip-path: var(--px-4); transition: background-color .15s;
+}
+.pb-inside-btn:hover, .pb-inside.is-open .pb-inside-btn { background-color: var(--m-rarity-epic); color: #160426; }
+.pb-in {
+  position: absolute; left: 50%; bottom: calc(100% + 8px); z-index: 6; display: none; flex-direction: column; gap: 6px;
+  width: max-content; padding: 10px 12px; transform: translateX(-50%);
+  background: #120d1c; --px-n: 10px; clip-path: var(--px-10);
+}
+.pb-inside:hover .pb-in, .pb-inside:focus-within .pb-in, .pb-inside.is-open .pb-in { display: flex; }
+.pb-in-row { display: grid; grid-template-columns: 34px 30px 62px 62px auto; align-items: center; gap: 6px; font-size: 13px; }
+.pb-in-name { font-weight: 900; white-space: nowrap; }
+.pb-in-got { display: inline-flex; align-items: center; gap: 4px; font-weight: 800; white-space: nowrap; }
+.pb-in-got small { color: var(--m-fg-subtle); font-size: 11px; }
+/* Окно «что внутри» не должно резаться срезом карточки: тайл и ряд — без обрезки. */
+.pb2, .pb2 .pb-body { overflow: visible; }
+:root:root .pb2 .pb-part.is-wide { clip-path: none; }
+.pb2 .pb-part.is-wide { background: none; }
+.pb2 .pb-part.is-wide::before {
+  content: ''; position: absolute; inset: 0; z-index: -1;
+  background: color-mix(in srgb, var(--pb-tone, #fff) 18%, #15130b); --px-n: 5px; clip-path: var(--px-5);
+}
+.pb2 .pb-part.is-wide { isolation: isolate; }
+
+/* Скидка: −10% крупно и пример цены. */
+.pb-sale { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.pb2 .pb-off { font-size: 34px; line-height: 1; }
+.pb-was { display: inline-flex; align-items: center; gap: 4px; font-size: 15px; font-weight: 900; }
+.pb2 .pb-was img { width: 16px; height: 16px; }
+.pb-was s { color: var(--m-fg-subtle); text-decoration-thickness: 2px; text-decoration-color: #ff5a5a; }
+
+/* Diamond: те же плитки, синие. */
+.pb2.is-diamond .pb-seg { background: rgba(0, 10, 30, .45); }
+
+/* Узкий контейнер (гардероб, окно 1280): плитка — компактный ряд, кнопка под плитками. */
+@container shop (max-width: 1180px) {
+  .pb2 .pb-body { grid-template-columns: 1fr; justify-items: stretch; }
+  .pb2 .pb-buy { width: auto; min-width: 0; }
+  :root:root .pb2 .pb-btn { height: 46px; font-size: 17px; }
+  .pb2 .pb-head .pm, .pb2 .pb-head svg, .pb2 .pb-head img { max-height: 34px; width: auto; }
+  .pb2 .pb-part { min-height: 104px; padding: 6px 4px 7px; }
+  .pb2 .pb-part-art { height: 52px; }
+  .pb2 .pb-part-art > img { width: 64px; height: 64px; }
+  .pb2 .pb-part-n { font-size: 16px; }
+  .pb2 .pb-off { font-size: 26px; }
+  .pb-chests { gap: 8px; }
+  .pb-chest .dc-art { --dc-size: 50px !important; }
+  .pb2 .pb-part.is-wide .pb-part-art { height: 60px; }
+  .pb-chest > b { font-size: 13px; }
+  .pb-was { font-size: 12px; }
+}
+@container shop (max-width: 620px) {
+  .pb2 .pb-parts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pb2 .pb-part.is-wide { grid-column: 1 / -1; }
+}
+
+/* ---------- Пакеты рубинов: два ровных ряда по 5 (10 = 5+5; 9 = 5+4 по центру) ---------- */
+:root .pk-wrap .pk-grid { display: flex !important; flex-wrap: wrap; justify-content: center; gap: 12px; }
+.pk-wrap .pk-grid > * { flex: 0 0 calc((100% - 4 * 12px) / 5); min-width: 0; }
+.pk-wrap .pk-grid .pk-pick { height: 150px; }
+.pk-wrap .pk-grid .pk-art img { width: 132px; height: 132px; }
+.pk-wrap .pk-grid .pk-topup { height: 54px; }
+.pk-wrap .pk-grid .pk-topup b { font-size: 21px; }
+.pk-wrap .pk-grid .pk-topup small { font-size: 14px; }
+
+/* Стартовый набор — та же плитка, лента акции сверху и зачёркнутая цена. */
+.pk.is-promo { position: relative; background: color-mix(in srgb, var(--m-accent) 20%, var(--m-surface-2)); }
+.pk-promo {
+  position: absolute; top: 8px; left: 50%; z-index: 3; transform: translateX(-50%); padding: 3px 9px; white-space: nowrap;
+  font-size: 12px; font-weight: 900; text-transform: uppercase; background: #ff4d5e; color: #fff; text-shadow: 0 1px 0 #6a0010;
+  --px-n: 4px; clip-path: var(--px-4);
+}
+.pk.is-promo .pk-pick { background: color-mix(in srgb, var(--m-accent) 14%, var(--m-inset)); }
+.pk-topup small s { opacity: .65; text-decoration-thickness: 2px; margin-right: 2px; }
+
+/* ---------- Предложение месяца: перед «Скидками дня» ---------- */
+.mo {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 22px; padding: 12px 22px 12px 12px;
+  background: color-mix(in srgb, #e8364f 26%, var(--m-surface-2)); --px-n: 10px; clip-path: var(--px-10);
+}
+.mo-art { display: grid; place-items: center; width: 168px; height: 132px; padding: 0; border: 0; cursor: pointer; background: rgba(0, 0, 0, .3); --px-n: 5px; clip-path: var(--px-5); }
+.mo-art img { width: 150px; height: 150px; object-fit: contain; }
+.mo-art:hover:not(:disabled) { filter: brightness(1.12); }
+.mo-mid { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.mo-tags { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.mo-once {
+  padding: 3px 9px; font-size: 13px; font-weight: 900; text-transform: uppercase; background: #ff4d5e; color: #fff;
+  --px-n: 4px; clip-path: var(--px-4);
+}
+.mo-n { display: inline-flex; align-items: center; gap: 8px; font-size: 52px; line-height: 1; font-weight: 900; text-shadow: 0 3px 0 #000; }
+.mo-title { font-size: 15px; font-weight: 800; color: var(--m-fg-muted); }
+:root:root .mo-btn { min-width: 200px; height: 62px; font-size: 24px; gap: 10px; }
+.mo-btn s { font-size: 16px; font-weight: 800; opacity: .6; text-decoration-thickness: 2px; }
+@container shop (max-width: 960px) {
+  .mo { gap: 14px; padding: 8px 14px 8px 8px; }
+  .mo-art { width: 110px; height: 92px; }
+  .mo-art img { width: 100px; height: 100px; }
+  .mo-n { font-size: 36px; }
+  :root:root .mo-btn { min-width: 150px; height: 50px; font-size: 19px; }
+}
+@container shop (max-width: 620px) {
+  .mo { grid-template-columns: auto 1fr; }
+  .mo-btn { grid-column: 1 / -1; }
+}

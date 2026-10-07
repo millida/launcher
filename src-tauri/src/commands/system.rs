@@ -93,6 +93,34 @@ pub fn app_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
+/// Флаг, с которым система запускает лаунчер при входе пользователя.
+pub const AUTOSTART_ARG: &str = "--autostart";
+
+pub fn started_by_os() -> bool {
+    std::env::args().any(|a| a == AUTOSTART_ARG)
+}
+
+/// Включён ли запуск вместе с системой.
+#[tauri::command]
+pub fn autostart_state(app: tauri::AppHandle) -> Result<bool, String> {
+    use tauri_plugin_autostart::ManagerExt;
+    app.autolaunch().is_enabled().map_err(|e| e.to_string())
+}
+
+/// Включить или выключить запуск вместе с системой; ответ — что вышло на деле.
+#[tauri::command]
+pub fn autostart_set(app: tauri::AppHandle, on: bool) -> Result<bool, String> {
+    use tauri_plugin_autostart::ManagerExt;
+    let launch = app.autolaunch();
+    let now = launch.is_enabled().unwrap_or(false);
+    if on && !now {
+        launch.enable().map_err(|e| e.to_string())?;
+    } else if !on && now {
+        launch.disable().map_err(|e| e.to_string())?;
+    }
+    launch.is_enabled().map_err(|e| e.to_string())
+}
+
 /// Hardware and OS facts only, nothing identifying the user.
 #[derive(serde::Serialize)]
 pub struct DeviceSpecs {

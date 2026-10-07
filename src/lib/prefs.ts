@@ -30,6 +30,11 @@ const DURABLE = [
   'm-anim-bg',
   'm-tab-ms',
   'm-perf-mode',
+  'm-ptheme',
+  'm-layout',
+  'm-ptheme-prev',
+  'm-ptheme-auto',
+  'm-app-icon',
 ] as const
 
 export type PrefKey = (typeof DURABLE)[number]

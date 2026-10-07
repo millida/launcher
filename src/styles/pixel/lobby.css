@@ -643,26 +643,26 @@
    moves, so the card reads as part of the lobby rather than an ad. */
 .lobby-rec.lobby-an {
   --an-night: #150a10; --an-lava: #ff6a24; --an-lava-hover: #ff8240; --an-ink: #1a0a08;
-  display: block; width: 340px; height: 186px; padding: 0; isolation: isolate; overflow: hidden;
+  display: block; width: 300px; height: 164px; padding: 0; isolation: isolate; overflow: hidden;
   background: var(--an-night) var(--px-img) 0 0 / 48px 48px repeat; image-rendering: pixelated;
 }
 .lobby-rec.lobby-an:hover { background-color: var(--an-night); }
 .lobby-an > span, .lobby-an > img { position: absolute; }
-.lan-hero { right: 18px; top: 14px; z-index: 1; height: 240px; width: auto; pointer-events: none; image-rendering: auto; transition: translate 220ms var(--m-ease-move); }
-.lan-co { left: 16px; top: 16px; z-index: 2; font: 800 11px/1 var(--m-font); letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255, 255, 255, 0.6); }
+.lan-hero { right: 16px; top: 12px; z-index: 1; height: 212px; width: auto; pointer-events: none; image-rendering: auto; transition: translate 220ms var(--m-ease-move); }
+.lan-co { left: 14px; top: 14px; z-index: 2; font: 800 11px/1 var(--m-font); letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255, 255, 255, 0.6); }
 .lan-title {
-  left: 16px; top: 38px; z-index: 2; font: 900 30px/1 var(--m-font); text-transform: uppercase; color: #fff;
+  left: 14px; top: 34px; z-index: 2; font: 900 26px/1 var(--m-font); text-transform: uppercase; color: #fff;
   text-shadow: 0 3px 0 rgba(0, 0, 0, 0.5); pointer-events: none;
 }
 .lan-title em { font-style: normal; color: var(--an-lava); }
-.lan-foot { left: 16px; right: 16px; bottom: 34px; z-index: 2; display: flex; align-items: center; gap: 12px; }
+.lan-foot { left: 14px; right: 14px; bottom: 30px; z-index: 2; display: flex; align-items: center; gap: 12px; }
 .lan-go {
-  display: inline-flex; align-items: center; gap: 8px; padding: 12px 26px 14px;
-  font: 900 17px/1 var(--m-font); text-transform: uppercase; color: var(--an-ink); background: var(--an-lava);
+  display: inline-flex; align-items: center; gap: 7px; padding: 10px 22px 12px;
+  font: 900 15px/1 var(--m-font); text-transform: uppercase; color: var(--an-ink); background: var(--an-lava);
   clip-path: var(--px-5); box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.22);
   transition: transform 120ms var(--m-ease-move), background-color 120ms var(--m-ease-move);
 }
-.lan-go svg { width: 15px; height: 15px; }
+.lan-go svg { width: 13px; height: 13px; }
 .lan-on { display: inline-flex; align-items: center; gap: 5px; font: 700 12px/1 var(--m-font); color: rgba(255, 255, 255, 0.6); }
 @media (hover: hover) and (pointer: fine) {
   .lobby-an:hover .lan-go { background: var(--an-lava-hover); }
@@ -673,7 +673,7 @@
    anarchy CTA in the gold of its logo. */
 .lobby-rec.lobby-an.lobby-pr { --an-night: #15111d; --an-lava: #ffc531; --an-lava-hover: #ffd35c; --an-ink: #1c1405; }
 .lpr-art { inset: 0; z-index: 1; width: 100%; height: 100%; object-fit: cover; object-position: 50% 40%; image-rendering: auto; pointer-events: none; transition: scale 220ms var(--m-ease-move); }
-.lobby-pr .lan-foot { left: 12px; bottom: 12px; }
+.lobby-pr .lan-foot { left: 10px; bottom: 10px; }
 .lobby-pr .lan-on { padding: 6px 8px 7px; color: rgba(255, 255, 255, 0.86); background: rgba(21, 17, 29, 0.82); clip-path: var(--px-5); }
 @media (hover: hover) and (pointer: fine) {
   .lobby-pr:hover .lpr-art { scale: 1.03; }

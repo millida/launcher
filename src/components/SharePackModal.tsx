@@ -5,7 +5,7 @@ import { hasTauri } from '../ipc/tauri'
 import { copyText } from '../lib/clipboard'
 import { backdropClose } from '../lib/dismiss'
 import { showToast } from '../state/ui'
-import { myPacks, shareProfile, unshareProfile, type SharedPack } from '../ipc/commands'
+import { shareProfile, unshareProfile, type SharedPack } from '../ipc/commands'
 import { apiErrorText } from '../lib/apiError'
 
 interface Props {
@@ -27,29 +27,9 @@ export function SharePackModal({ profile, onClose }: Props) {
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  // A build has one code and it lives until revoked: if it was already issued,
-  // show it right away instead of republishing for the same value.
-  useEffect(() => {
-    if (!hasTauri()) return
-    let cancelled = false
-    void myPacks()
-      .then((list) => {
-        const mine = list.find((x) => x.name === profile)
-        if (!mine || cancelled) return
-        setPack({
-          code: mine.code,
-          url: 'https://millida.net/p/' + mine.code,
-          files: mine.files,
-          skipped: [],
-          sizeBytes: 0,
-        })
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [profile])
-
+  // Always sends the build as it is now. The server keeps one code per build and
+  // replaces what is behind it, so a link already sent to friends stays valid and
+  // shows the current mods; showing the stored code without publishing did not.
   const publish = () => {
     if (!hasTauri()) return
     setBusy(true)

@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from '../Icon'
+import { PxIcon } from '../PxIcon'
 import { PlusCelebration } from '../PlusCelebration'
 import { backdropClose } from '../../lib/dismiss'
 import { openExt, PLUS_MANAGE_URL } from '../../lib/api'
@@ -11,7 +12,6 @@ import { usePlus } from '../../state/plus'
 import { showReward, type RewardEntry } from '../reward/RewardReveal'
 import { shardWord, word as rubyWord } from '../shop/rarity'
 import {
-  CYCLE_DAYS,
   nextResetAt,
   passCols,
   readyCells,
@@ -19,13 +19,10 @@ import {
   seasonOf,
   targetRewards,
   timerText,
-  type CellState,
-  type PassCol,
   type Row,
   type TrackReward,
 } from './track'
 import { useCountdown } from './useCountdown'
-import { useRail } from './useRail'
 import { Chest3D } from './Chest3D'
 import { grantedOf, Reveal } from './Reveal'
 import { WeekItem } from './WeekItem'
@@ -34,186 +31,12 @@ import { ChestLive } from './ChestLive'
 import { MyChests } from './MyChests'
 import { ChestOpenHost } from './ChestOpen'
 import { PlusCard } from './PlusCard'
-import { CHEST_NAME, dayChestTier, rarityTone, rewardLabel, rewardTitle, RewardArt } from './rewards'
+import { SeasonPass } from './SeasonPass'
+import { CHEST_NAME, dayChestTier } from './rewards'
 import '../../styles/pixel/daily.css'
 import { wearNow } from '../../state/wearIntent'
 
 const real = (list: TrackReward[]) => list.filter((r): r is Reward => r.kind !== 'MYSTERY')
-
-/**
- * Клетка пасса — осколки или сундук (вещей в бонусе нет, решение владельца
- * 24.09.2026) со своим состоянием:
- * claimed — серая с галочкой; ready — яркая, пульсирует, «Забрать»;
- * locked — строка PLUS без подписки: награда во всей красе и замок, клик
- * открывает «Оформить PLUS»; future — ждёт своего дня входа, у ближайшей
- * бесплатной — таймер до открытия.
- */
-function Cell({
-  col,
-  row,
-  state,
-  soon,
-  onClaim,
-  onLocked,
-}: {
-  col: PassCol
-  row: Row
-  state: CellState
-  /** Таймер до открытия (только ближайшая бесплатная клетка). */
-  soon: string | null
-  onClaim: () => void
-  onLocked: () => void
-}) {
-  const rewards = row === 'free' ? col.free : col.plus
-  const first = rewards[0]
-  const wk = col.cycleDay === 1 && col.cycle > 0
-  const cls = 'dp2-cell ' + row + ' ' + state + (wk ? ' wk' : '')
-  const style = first ? ({ '--ra-tone': rarityTone(first) } as CSSProperties) : undefined
-  const size = state === 'ready' ? 60 : rewards.length > 1 ? 40 : 52
-  const title = rewards.map(rewardTitle).join(', ')
-  const inner = (
-    <>
-      <span className="dp2-arts">
-        {rewards.map((r, i) => (
-          <RewardArt key={i} reward={r} size={size} />
-        ))}
-      </span>
-      {state === 'ready' ? (
-        <b className="dp2-take">Забрать</b>
-      ) : soon ? (
-        <b className="dp2-soon">
-          <Icon id="i-clock" />
-          {'через ' + soon}
-        </b>
-      ) : (
-        <b className="dp2-label">{rewards.map(rewardLabel).join(' + ') || '—'}</b>
-      )}
-      {state === 'locked' ? (
-        <span className="dp2-mark lock">
-          <Icon id="i-lock" />
-        </span>
-      ) : state === 'claimed' ? (
-        <span className="dp2-mark got">
-          <Icon id="i-check" />
-        </span>
-      ) : null}
-    </>
-  )
-  const label = (row === 'plus' ? 'PLUS, ' : '') + 'день ' + col.n + ': ' + title
-  if (state === 'ready' || state === 'locked') {
-    return (
-      <button
-        type="button"
-        className={cls}
-        style={style}
-        title={title}
-        aria-label={(state === 'ready' ? 'Забрать — ' : 'Только с PLUS — ') + label}
-        data-track={state === 'ready' ? 'daily_claim_cell' : 'daily_locked_cell'}
-        data-kind="pass_cell"
-        data-id={row + ':' + col.n}
-        onClick={state === 'ready' ? onClaim : onLocked}
-      >
-        {inner}
-      </button>
-    )
-  }
-  return (
-    <div className={cls} style={style} title={title} aria-label={label}>
-      {inner}
-    </div>
-  )
-}
-
-/** Ширина клетки ленты (px). */
-const COL = 118
-
-/**
- * Пасс сезона: 28 клеток в две строки — сверху «Без подписки», снизу «С PLUS»
- * (золото). Подписи строк закреплены слева. Лента листается вбок; первая
- * открытая клетка — по центру.
- */
-function Track({
-  cols,
-  left,
-  focus,
-  busy,
-  onClaim,
-  onLocked,
-}: {
-  cols: PassCol[]
-  /** Сколько мс до открытия следующей клетки. */
-  left: number
-  focus: unknown
-  /** Идёт забор или оформление — клетки не жмутся повторно. */
-  busy: boolean
-  onClaim: (day: number, row: Row) => void
-  /** Клик по закрытой клетке PLUS — оформление подписки. */
-  onLocked: () => void
-}) {
-  const { ref, edge, page } = useRail(focus, (COL + 6) * CYCLE_DAYS, '.dp2-head.focus')
-  const grid = cols.map(() => COL + 'px').join(' ')
-  const nextN = cols.find((c) => c.freeState === 'future')?.n ?? 0
-  const focusN = (cols.find((c) => c.freeState === 'ready' || c.plusState === 'ready') ?? cols.find((c) => c.n === nextN) ?? cols[cols.length - 1])?.n
-  const own = cols.some((c) => c.plusState !== 'locked')
-  return (
-    <div className="dp2-rail">
-      <div className={'dp2-side' + (own ? ' own' : '')}>
-        <span className="dp2-side-free">Обычные награды</span>
-        <span className="dp2-side-plus">
-          <PlusBadge />
-          <i>Награды PLUS</i>
-        </span>
-      </div>
-      <div className="dp2-view">
-        <div className="dp2-scroll" ref={ref}>
-          <div className="dp2-track" style={{ gridTemplateColumns: grid }}>
-            {cols.map((c) => {
-              const st = c.freeState
-              const wk = c.cycleDay === 1 && c.cycle > 0
-              return (
-                <span
-                  key={'h' + c.n}
-                  className={'dp2-head ' + st + (c.n === focusN ? ' focus' : '') + (wk ? ' wk' : '')}
-                >
-                  {st === 'claimed' ? <Icon id="i-check" /> : null}
-                  {'День ' + c.n}
-                </span>
-              )
-            })}
-            {cols.map((c) => (
-              <Cell
-                key={'f' + c.n}
-                col={c}
-                row="free"
-                state={c.freeState}
-                soon={c.n === nextN && left > 0 ? timerText(left) : null}
-                onClaim={() => !busy && onClaim(c.n, 'free')}
-                onLocked={onLocked}
-              />
-            ))}
-            {cols.map((c) => (
-              <Cell
-                key={'p' + c.n}
-                col={c}
-                row="plus"
-                state={c.plusState}
-                soon={null}
-                onClaim={() => !busy && onClaim(c.n, 'plus')}
-                onLocked={onLocked}
-              />
-            ))}
-          </div>
-        </div>
-        <button type="button" className="dp2-arrow l" aria-label="Раньше" disabled={!edge.l} onClick={() => page(-1)}>
-          <Icon id="i-chev-l" />
-        </button>
-        <button type="button" className="dp2-arrow r" aria-label="Дальше" disabled={!edge.r} onClick={() => page(1)}>
-          <Icon id="i-chev-r" />
-        </button>
-      </div>
-    </div>
-  )
-}
 
 const endDate = (iso: string) => {
   const d = new Date(iso)
@@ -288,7 +111,27 @@ function announce(granted: GrantedReward[]) {
  * исчез — человек должен заходить ради battle pass»): окно `DailyPassModal`
  * и первый блок магазина (`inline`) — крупно, во всю ширину.
  */
-export function PassBody({ active, inline, onClose }: { active: boolean; inline?: boolean; onClose?: () => void }) {
+export function PassBody({
+  active,
+  inline,
+  compact,
+  onClose,
+  mini,
+  onPlus,
+  extra,
+}: {
+  active: boolean
+  inline?: boolean
+  /** Магазин v2: короткий заголовок и «Открыть PLUS» на закрытой строке. */
+  compact?: boolean
+  onClose?: () => void
+  /** Магазин v3: одна кнопка-подарок «Забрать» и ряд клеток значками. */
+  mini?: boolean
+  /** Своё окно PLUS вместо карточки пропуска. */
+  onPlus?: () => void
+  /** Забрать есть что-то ещё (неделя, задания), когда клетки пропуска пусты. */
+  extra?: { busy: boolean; onClaim: () => void } | null
+}) {
   const status = useDaily((s) => s.status)
   const busy = useDaily((s) => s.busy)
   const reveal = useDaily((s) => s.reveal)
@@ -349,17 +192,110 @@ export function PassBody({ active, inline, onClose }: { active: boolean; inline?
   const got = real(shot.got)
   const price = !own && plusInfo && plusInfo.priceKopecks > 0 ? plusInfo.priceKopecks : 0
   // Закрытая клетка PLUS и «Оформить PLUS» — карточка с ценой, не сразу оплата.
-  const plus = () => useDaily.getState().setPlusCard(true)
+  const plus = () => (onPlus ? onPlus() : useDaily.getState().setPlusCard(true))
   const claim = (day: number, row: Row) => void useDaily.getState().claim({ day, row })
   const endReveal = () => {
     setRevealing(false)
     useDaily.getState().clearReveal()
   }
 
+  if (mini) {
+    const can = ready.length > 0 || !!extra
+    return (
+      <>
+        {!status ? (
+          <span className="skel dp-skel bp-skel" aria-hidden="true" />
+        ) : track ? (
+          <SeasonPass
+            compact
+            cols={cols}
+            own={own}
+            left={left}
+            busy={!!busy}
+            focus={claiming}
+            endsAt={season && !legacy ? season.endsAt : null}
+            streak={status.streak}
+            price={price}
+            extra={extra}
+            onClaim={claim}
+            onClaimAll={() => void useDaily.getState().claim(legacy ? ready[0] : 'all')}
+            onPlus={plus}
+          />
+        ) : (
+          <div className="tk3">
+            <button
+              className={'tk3-gift' + (can ? ' is-ready' : '')}
+              disabled={!can || !!busy || !!extra?.busy}
+              data-track="daily_claim"
+              onClick={() => (ready.length ? void useDaily.getState().claim(legacy ? ready[0] : 'all') : extra?.onClaim())}
+            >
+              <PxIcon name="gift" size={84} />
+              {can ? (
+                <b className="tk3-take">Забрать</b>
+              ) : (
+                <b className="tk3-timer">
+                  <Icon id="i-clock" />
+                  {timerText(left)}
+                </b>
+              )}
+            </button>
+          </div>
+        )}
+        {status && (status.chests || pending) ? <MyChests /> : null}
+        {revealing && !track ? (
+          <Reveal
+            res={reveal}
+            busy={busy === 'claim'}
+            own={own}
+            missed={own ? [] : real(shot.missed)}
+            priceKopecks={price}
+            onPlus={plus}
+            onDone={endReveal}
+            tier={got.length ? dayChestTier(got) : undefined}
+          />
+        ) : null}
+        {plusJoy != null && mine ? <PlusCelebration items={plusJoy} onDone={() => useDaily.getState().endPlusJoy()} /> : null}
+        {mine ? <PlusCard cols={cols} /> : null}
+        <ChestOpenHost />
+      </>
+    )
+  }
+
+  if (track && status) {
+    return (
+      <>
+        <SeasonPass
+          compact={inline}
+          cols={cols}
+          own={own}
+          left={left}
+          busy={!!busy}
+          focus={claiming}
+          endsAt={season && !legacy ? season.endsAt : null}
+          streak={status.streak}
+          price={price}
+          onClaim={claim}
+          onClaimAll={() => void useDaily.getState().claim(legacy ? undefined : 'all')}
+          onPlus={plus}
+          onClose={onClose}
+          below={status.weekItem || status.chests || pending ? (
+            <div className="bp-below">
+              {status.weekItem ? <WeekItem item={status.weekItem} /> : null}
+              {status.chests || pending ? <MyChests /> : null}
+            </div>
+          ) : null}
+        />
+        {plusJoy != null && mine ? <PlusCelebration items={plusJoy} onDone={() => useDaily.getState().endPlusJoy()} /> : null}
+        {mine ? <PlusCard cols={cols} /> : null}
+        <ChestOpenHost />
+      </>
+    )
+  }
+
   return (
     <>
       <div className="dp-head">
-        {inline ? <h2>Бонус за вход</h2> : <h3>Бонус за вход</h3>}
+        {inline ? <h2>{compact ? 'Пропуск' : 'Бонус за вход'}</h2> : <h3>Бонус за вход</h3>}
         {status && status.streak > 0 ? (
           <span className="dp-streak">
             <Icon id="i-flame" />
@@ -419,29 +355,6 @@ export function PassBody({ active, inline, onClose }: { active: boolean; inline?
             </div>
           ) : null}
 
-          {track ? (
-            <div className={'dp2-pass' + (own ? ' own' : '')}>
-              {!own ? (
-                <div className="dp2-plusbar">
-                  <span className="dp2-plusbar-tag">
-                    <PlusBadge />
-                  </span>
-                  {price ? (
-                    <span className="dp-price">
-                      <b>{rubles(price)}</b>
-                      <small>в месяц</small>
-                    </span>
-                  ) : null}
-                  <button className="btn md secondary dp-plus" disabled={busy === 'plus'} data-track="plus_subscribe" onClick={plus}>
-                    <Icon id="i-crown" />
-                    Оформить PLUS
-                  </button>
-                </div>
-              ) : null}
-              <Track cols={cols} left={left} focus={claiming} busy={!!busy} onClaim={claim} onLocked={plus} />
-              {status.chests || pending ? <MyChests /> : null}
-            </div>
-          ) : null}
           {!track ? <LegacyTrack status={status} own={own} onPlus={plus} /> : null}
           {/* Старая служба: трека нет, но сундуки за часы игры ждут открытия. */}
           {!track && pending ? <MyChests /> : null}

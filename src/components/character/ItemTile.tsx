@@ -3,7 +3,7 @@ import { Icon } from '../Icon'
 import { Ruby } from '../Ruby'
 import { loadWorkshop } from '../../lib/rubies'
 import { normRarity, rarityOfPrice, RARITY_TONE } from '../shop/rarity'
-import { FragBar, RarityFx } from '../shop/rarityUi'
+import { FragBar, RarityChip, RarityFx } from '../shop/rarityUi'
 import { isDuoEmote } from '../../lib/duoEmotes'
 import '../../styles/pixel/duo.css'
 
@@ -53,6 +53,8 @@ export interface ItemTileProps {
   /** Вещь закрыта: в статусе цена, PLUS или условие. */
   locked?: boolean
   priceRubies?: number
+  /** Цена без скидки подписки: у подписчика зачёркнута. */
+  priceWas?: number
   /** Вещь открывает подписка, а не рубины. */
   plus?: boolean
   /** Надето на игроке. */
@@ -95,6 +97,7 @@ function statusOf(p: ItemTileProps): { text: ReactNode; tone: string } | null {
         <>
           <Ruby size={12} />
           {p.priceRubies}
+          {p.priceWas && p.priceWas > p.priceRubies ? <s className="it-was">{p.priceWas}</s> : null}
         </>
       ),
       tone: 'price',
@@ -130,6 +133,7 @@ export function ItemTile(p: ItemTileProps) {
       <button className="ch-tile-hit" data-track={p.track || (p.action ? 'tile_action' : 'tile')} onClick={p.onClick}>
         <span className="ch-tile-art">
           {p.art}
+          <RarityChip rarity={rarity} />
           {p.loading ? <span className="ch-tile-load" aria-label="Надеваем"></span> : null}
           {p.locked ? (
             <span className="ch-tile-lock" aria-hidden="true">

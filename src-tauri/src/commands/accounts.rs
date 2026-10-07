@@ -68,6 +68,20 @@ pub fn ms_session_forget(account_id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub async fn ely_device_start() -> Result<serde_json::Value, String> { engine::ely_device_start().await }
+
+#[tauri::command]
+pub async fn ely_device_poll(device_code: String) -> Result<serde_json::Value, String> {
+    engine::ely_login_poll(device_code).await
+}
+
+/// Binds the finished Ely.by login to the account row the frontend created.
+#[tauri::command(async)]
+pub fn ely_session_commit(device_code: String, account_id: String) -> Result<(), String> {
+    engine::ely_login_commit(&device_code, &account_id)
+}
+
+#[tauri::command]
 pub async fn mc_textures(query: String) -> Result<serde_json::Value, String> { engine::mc_textures(query).await }
 
 fn licensed_token(account_id: &str) -> Result<String, String> {

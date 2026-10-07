@@ -12,6 +12,7 @@ const loaders = {
   skins: () => import('./Skins'),
   rubies: () => import('./Rubies'),
   friends: () => import('./Friends'),
+  top: () => import('./Top'),
   chat: () => import('./Messages'),
   hosting: () => import('./Hosting'),
   playhub: () => import('./PlayHub'),
@@ -28,6 +29,7 @@ export const Mods = lazy(() => loaders.mods().then((m) => ({ default: m.Mods }))
 export const Skins = lazy(() => loaders.skins().then((m) => ({ default: m.Skins })))
 export const Rubies = lazy(() => loaders.rubies().then((m) => ({ default: m.Rubies })))
 export const Friends = lazy(() => loaders.friends().then((m) => ({ default: m.Friends })))
+export const Top = lazy(() => loaders.top().then((m) => ({ default: m.Top })))
 export const Messages = lazy(() => loaders.chat().then((m) => ({ default: m.Messages })))
 export const Hosting = lazy(() => loaders.hosting().then((m) => ({ default: m.Hosting })))
 export const PlayHub = lazy(() => loaders.playhub().then((m) => ({ default: m.PlayHub })))

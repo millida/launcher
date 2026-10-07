@@ -905,6 +905,8 @@ html.overlay-root,html.overlay-root body,html.overlay-root #root{background:tran
 .ov-card.ov-kind-play{--ov-accent:#f0b23c}
 .ov-card img{width:44px;height:44px;border-radius:11px;image-rendering:pixelated;flex:none}
 .ov-card-heads{display:flex;flex:none}
+.ov-card-ic{display:grid;place-items:center;width:44px;height:44px;color:var(--m-warning);background:rgba(0,0,0,.35);clip-path:var(--px-5)}
+.ov-card-ic svg{width:30px;height:30px}
 .ov-card-heads img+img{margin-left:-16px;box-shadow:0 0 0 2px rgba(18,18,22,.9)}
 .ov-card-body{min-width:0;flex:1;display:flex;flex-direction:column;gap:3px}
 .ov-card-body b{font-size:15px;font-weight:650}

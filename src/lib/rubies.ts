@@ -21,6 +21,13 @@ export interface DailyStatus {
   todayRubies: number
   todayChest: ChestTier | null
   graceLeft: number
+  /** Щиты серии на эту неделю: пропуск дня прощается (1, PLUS — 2). Старая служба полей не шлёт. */
+  shields?: number
+  shieldsMax?: number
+  /** Сегодняшний вход спасён щитом. */
+  shieldSaved?: boolean
+  /** День серии сегодня (МСК) уже засчитан: окно открывали или играли. Трей не считается. */
+  activeToday?: boolean
   /** Вход идёт по подписке: те же дни, но щедрее. Старая служба поля не шлёт. */
   plus?: boolean
   plusMultiplier?: number
@@ -307,6 +314,10 @@ export interface ProgressItem {
   rubies: number
   done: boolean
   claimed: boolean
+  /** Служба (d722de3c9): за задание будет вещь навсегда. */
+  item?: boolean
+  /** Какая вещь выпала — только в ответе на забор. */
+  granted?: ItemRef
 }
 
 export const RARITY_NAMES: Record<Rarity, string> = {
@@ -321,7 +332,12 @@ export const RARITY_NAMES: Record<Rarity, string> = {
 
 export const loadRules = () => api<Rules>('/rubies/rules')
 export const loadBalance = () => api<RubyBalance>('/rubies/balance')
-export const loadDaily = () => api<DailyStatus>('/rubies/daily')
+/**
+ * `streak=2`: новая служба не засчитывает этим запросом день серии (его шлёт и
+ * лаунчер в трее) — день засчитывает POST /rubies/daily/active. Без метки
+ * старые лаунчеры получают прежнее поведение.
+ */
+export const loadDaily = () => api<DailyStatus>('/rubies/daily?streak=2')
 /**
  * «Забрать». С клеткой — сезонная схема: `{ day, row }` (row plus без
  * подписки → 403). Без аргумента — старая ручка «забрать сегодня».
@@ -334,6 +350,23 @@ export const loadChests = () => api<{ pending: PendingChest[]; opened: OpenedChe
 export const loadShop = (slot?: string) =>
   api<{ items: ShopItem[] }>('/rubies/shop' + (slot ? '?slot=' + encodeURIComponent(slot) : ''))
 export const loadInventory = () => api<Inventory>('/rubies/inventory')
+/**
+ * Сундуки за игру (служба 47ea1c7d8): каждый час игры за сутки — обычный
+ * сундук, не больше `limit` (3) в сутки. Забранный сундук открывается
+ * обычным путём сундуков (chestId).
+ */
+export interface PlayChests {
+  earned: number
+  claimed: number
+  ready: number
+  limit: number
+  /** Через сколько секунд игры следующий; null — на сегодня всё. */
+  nextInS: number | null
+  chest: string
+}
+export const loadPlayChests = () => api<PlayChests>('/rubies/play-chests')
+export const claimPlayChest = () => api<PlayChests & { chestId: string }>('/rubies/play-chests/claim', { method: 'POST' })
+
 export const loadProgress = () => api<{ items: ProgressItem[]; hours: number }>('/rubies/progress')
 
 /**
@@ -417,6 +450,8 @@ export interface ShopCard {
   leavesAt: string
   /** Начатая вещь: «7/20» и сколько рубинов фрагменты уже сняли с цены (не больше половины). */
   fragments?: { have: number; need: number; off: number }
+  /** Цена с PLUS: служба шлёт её только тем, у кого подписки нет. */
+  plusPrice?: number
 }
 
 export type ShopSource = 'day' | 'deal' | 'featured' | 'forYou' | 'night' | 'bundle' | 'wardrobe'
@@ -442,11 +477,22 @@ export interface XrayOffer {
   nextAt: string | null
 }
 
+export interface MonthOffer {
+  code: string
+  title: string
+  rubies: number
+  kopecks: number
+  oneTime?: boolean
+  endsAt: string
+}
+
 export interface ShopPack {
   code: string
   title: string
   rubies: number
   kopecks: number
+  /** Разовый пакет («Стартовый набор», code 'starter'): служба отдаёт его первым, пока не было оплат. */
+  oneTime?: boolean
 }
 
 /**
@@ -471,10 +517,25 @@ export interface ShopDay {
   nightMarket: { endsAt: string; cards: ShopCard[] } | null
   xray: XrayOffer | null
   packs: ShopPack[]
+  /** Предложение месяца (служба 7e81279a7): разовый пакет до конца месяца МСК; null — куплено или нет. */
+  monthOffer?: MonthOffer | null
   wishlist: string[]
   /** Старая служба поля не шлёт — плитки подарка тогда нет. */
   gift?: ShopGift | null
+  /** Уровень подписки (магазин v2, 06.10.2026) и её скидка на всё за рубины. */
+  plusTier?: ShopTier
+  plusPct?: number
 }
+
+/** Уровень подписки: нет / PLUS / Diamond. */
+export type ShopTier = 'PLUS' | 'DIAMOND' | null
+
+/** Скидка подписки на вещи, наборы и ящики: зеркало PLUS_ITEM_DISCOUNT_PCT службы. */
+export const PLUS_ITEM_PCT = 10
+export const DIAMOND_ITEM_PCT = 15
+export const tierPct = (tier: ShopTier | undefined): number => (tier === 'DIAMOND' ? DIAMOND_ITEM_PCT : tier === 'PLUS' ? PLUS_ITEM_PCT : 0)
+/** «С PLUS»: цена без подписки минус скидка PLUS, до десятка рубинов (как у службы). */
+export const plusOf = (price: number): number => Math.max(10, Math.round((price * (100 - PLUS_ITEM_PCT)) / 100 / 10) * 10)
 
 /** Прогресс вещи фрагментами и цена докупки остатка в рубинах. Старая служба topUp не шлёт. */
 export interface FragmentProgress {
@@ -538,6 +599,8 @@ export interface PlusEconomy {
   priceKopecks: number
   rubiesOnPay?: number
   shardBoost?: number
+  /** Уровень оплаченной подписки (магазин v2). */
+  tier?: ShopTier
   /** Тарифы: PLUS и PLUS Diamond (тот же пропуск, награды сразу). */
   offers?: PlusOffer[]
 }
@@ -642,6 +705,8 @@ export interface SetColorwayView {
   discountPct: number
   /** Сколько вещей уже есть. */
   have: number
+  /** Цена с PLUS — только тому, у кого подписки нет. */
+  plusPrice?: number
 }
 
 export interface SetView {
@@ -661,44 +726,157 @@ export interface CaseOddsView {
 }
 
 export interface CaseView {
+  /** flame, dark, future, cozy, wings, pets, emotes, mythic. */
   id: string
   title: string
+  /** К оплате этим игроком: скидки дня и подписки уже внутри. */
   price: number
+  /** Цена без скидок: зачёркнута, если price меньше. */
+  basePrice: number
+  /** Цена с PLUS — только тому, у кого подписки нет. */
+  plusPrice?: number
+  /** Ящик дня: −30% до 00:00 МСК. */
+  ofDay: boolean
+  /** Цвет сундука и обложки, RRGGBB. */
+  color: string
   odds: CaseOddsView[]
-  /** Открытий до гарантированной эпической+ (1 — следующее). */
+  /** Открытий до гарантии (1 — следующее). */
   pityLeft: number
   pity: number
+  /** С какой редкости гарантия: эпическая у обычных, легендарная у мифического. */
+  pityFrom: Rarity
   /** Сколько вещей темы ещё нет / всего. */
   left: number
   total: number
-  /** Три самые дорогие вещи темы. */
+  /** Три самые дорогие вещи ящика. */
   cover: ItemRef[]
+  /** Шанс «вместо вещи — утешительный приз» сейчас, %: 0 на гарантии, 100 когда вещей не осталось. Старая служба не шлёт. */
+  missPct?: number
+  /** Промах всё равно приносит дешёвую вещь. */
+  cheapItem?: boolean
+  /** Бонус каждого открытия сверх награды: вид, от и до. */
+  bonus?: { kind: 'shards' | 'rubies'; min: number; max: number }[]
+  /** Чем платят: рубины (по умолчанию) или осколки («Осколочный»). */
+  currency?: 'rubies' | 'shards'
+  /** Какие утешительные призы бывают. */
+  consolation?: CaseConsolation[]
   /** Названия наборов темы. */
   sets: string[]
+  /** Что выпадает в каждом ящике как минимум (служба 90dde4154): «Редкая+ в каждом ящике». */
+  guarantee?: { minRarity: Rarity; label: string }
+  /** ×10: одно списание за `price` (9 цен), в десятке точно `floor` и выше. null — ×10 у ящика нет. */
+  multi?: { count: number; price: number; basePrice: number; floor: Rarity } | null
+  /** Бесплатный первый ящик ещё не взят, и этот ящик подходит. */
+  freeAvailable?: boolean
+}
+
+/** Недавний редкий выпад: бегущая лента под сеткой ящиков. Только ник и вещь. */
+export interface CaseDrop {
+  nick: string
+  item: ItemRef
+  caseId: string
+  at: string
+}
+
+/** Утешительный приз ящика (служба 5edc63884): вид, от и до, шанс от всех открытий, %. */
+export interface CaseConsolation {
+  kind: 'shards' | 'rubies'
+  min: number
+  max: number
+  chancePct: number
 }
 
 export interface CaseContents {
   id: string
   items: { item: ItemRef; owned: boolean; chance: number }[]
+  missPct?: number
+  consolation?: CaseConsolation[]
+}
+
+/**
+ * Награда открытия (контракт службы, ветка коллеги): ящик отдаёт несколько
+ * наград по очереди — вещь, дешёвая вещь (`cheap`, вместо промаха: вещь и
+ * сумма), рубины, осколки. Старая служба шлёт одну — собираем из kind/item.
+ */
+export interface CaseReward {
+  /** fragments — только сундуки бонуса: фрагменты вещи. */
+  kind: 'item' | 'cheap' | 'rubies' | 'shards' | 'fragments'
+  item?: ItemRef
+  amount?: number
+  /** Фрагменты: сколько собрано из скольких. */
+  frag?: { have: number; need: number }
+  /** Вещь уже была — пришла осколками/рубинами. */
+  dup?: boolean
+  rarityName?: string
 }
 
 export interface CaseOpened {
   balance: number
-  item: ItemRef
-  rarityName: string
+  /** Сколько списано (скидки дня и подписки внутри). */
+  price?: number
+  /** item — вещь; shards и rubies — утешительный приз; cheap — дешёвая вещь вместо промаха. */
+  kind?: 'item' | 'cheap' | 'shards' | 'rubies'
+  /** Все награды открытия по порядку (первая — главная). */
+  rewards?: CaseReward[]
+  /** Для shards и rubies: сколько выдано. */
+  amount?: number
+  /** Для shards: сколько осколков теперь на счёте. */
+  shards?: number
+  /** Для shards: упёрлись в потолок — остаток выдан рубинами. */
+  rubies?: number
+  /** Вещь — только при kind 'item'. */
+  item?: ItemRef
+  rarityName?: string
   top: boolean
   pityLeft: number
+  /** Сколько ящиков открыто этим запросом: 1 или 10. */
+  count?: number
+  /** Каждый ящик отдельно: у ×10 десять, у одиночного один. Старая служба не шлёт. */
+  opens?: CaseOpenView[]
+  /** Лучшая редкость среди выпавших вещей. */
+  best?: Rarity
+  /** ×10: последняя карта поднята до гарантии десятки. */
+  multiFloorUsed?: boolean
 }
 
-export const loadSets = () => api<{ sets: SetView[]; refreshAt: string }>('/rubies/sets')
+/** Один ящик из ответа открытия: награды по порядку, главная редкость, сбросил ли счётчик гарантии. */
+export interface CaseOpenView {
+  rewards: CaseReward[]
+  kind: 'item' | 'cheap' | 'rubies' | 'shards'
+  rarity?: Rarity
+  top: boolean
+}
+
+export const loadSets = () => api<{ sets: SetView[]; refreshAt: string; plusTier?: ShopTier }>('/rubies/sets')
 /** `expect` — цена, которую видел игрок: изменилась — служба откажет, и магазин обновится. */
 export const buySet = (setId: string, colorway: string, expect: number) =>
   api<{ balance: number; price: number; granted: ItemRef[] }>('/rubies/sets/buy', post({ setId, colorway, expect }))
-export const loadCases = () => api<{ cases: CaseView[] }>('/rubies/cases')
+export const loadCases = () => api<{ cases: CaseView[]; drops?: CaseDrop[]; refreshAt?: string; ofDayPct?: number }>('/rubies/cases')
 export const loadCaseContents = (id: string) => api<CaseContents>('/rubies/cases/' + encodeURIComponent(id))
-/** `requestId` — новый на каждое открытие: повтор запроса не спишет рубины дважды. */
-export const openCase = (caseId: string, requestId: string) =>
-  api<CaseOpened>('/rubies/cases/open', post({ caseId, requestId }))
+/**
+ * `requestId` — новый на каждое открытие: повтор запроса не спишет рубины дважды.
+ * `count: 10` — десять ящиков одним списанием; `free` — бесплатный первый ящик.
+ */
+export const openCase = (caseId: string, requestId: string, opt: { count?: 1 | 10; free?: boolean } = {}) =>
+  api<CaseOpened>(
+    '/rubies/cases/open',
+    post({ caseId, requestId, ...(opt.count === 10 ? { count: 10 } : {}), ...(opt.free ? { free: true } : {}) }),
+  )
+/** Ящики ответа по одному: из `opens`, иначе один ящик из старых плоских полей. */
+export function opensOf(res: CaseOpened): CaseOpenView[] {
+  if (res.opens && res.opens.length) return res.opens
+  const rewards = rewardsOf(res)
+  const main = rewards[0]
+  return [{ rewards, kind: (res.kind ?? 'item') as CaseOpenView['kind'], rarity: main?.item?.rarity, top: res.top }]
+}
+/** Награды открытия: из `rewards`, иначе из одного ответа старой службы. */
+export function rewardsOf(res: CaseOpened): CaseReward[] {
+  if (res.rewards && res.rewards.length) return res.rewards
+  const kind = res.kind ?? 'item'
+  if (kind === 'item' || kind === 'cheap') return res.item ? [{ kind, item: res.item, amount: res.amount }] : []
+  return [{ kind, amount: res.amount ?? 0 }]
+}
+
 export const newRequestId = (): string => {
   const c = typeof crypto !== 'undefined' ? crypto : undefined
   return c && 'randomUUID' in c ? c.randomUUID().replace(/-/g, '') : Math.random().toString(16).slice(2) + Date.now().toString(16)

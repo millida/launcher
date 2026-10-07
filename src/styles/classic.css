@@ -1,0 +1,41 @@
+/* Раскладка «Классика» (07.10.2026): боковая панель разделов, как до 22.09, но
+   всё — в пиксельном языке второй версии (владелец: «чтобы не было разношёрстности»).
+   Включается классом lay-classic на <html> (state/layout.ts). */
+:root.lay-classic .app { flex-direction: row; padding: 0 12px 12px; gap: 12px; }
+:root.lay-classic .sidebar { height: auto; align-self: stretch; }
+:root.lay-classic .content { flex: 1; min-width: 0; padding: 14px 4px 0 0; overflow-y: auto; }
+:root.lay-classic .nav-item { padding: 10px 12px; }
+
+/* Уголок «свернуть»: невидим, пока курсор не на панели. */
+:root.lay-classic .sidebar { position: relative; padding-top: 14px; }
+:root.lay-classic .cl-fold {
+  position: absolute; top: 10px; right: 10px; z-index: 2;
+  width: 26px; height: 26px; border-radius: 0; clip-path: var(--px-4); display: grid; place-items: center;
+  color: var(--m-fg-subtle); background: transparent; opacity: 0;
+  transition: opacity .15s ease, background-color .15s ease, color .15s ease;
+}
+:root.lay-classic .cl-fold svg { width: 14px; height: 14px; }
+:root.lay-classic .sidebar:hover .cl-fold, :root.lay-classic .cl-fold:focus-visible { opacity: 1; }
+:root.lay-classic .cl-fold:hover { background: var(--m-surface-2); color: var(--m-fg); }
+:root.lay-classic .sidebar.collapsed .cl-fold { position: static; margin: 0 auto 6px; opacity: 1; }
+
+/* Главная «Классики»: лобби на всё место справа от панели. */
+:root.lay-classic .content:has(#s-home.on) { padding: 14px 0 0 0; overflow: hidden; }
+:root.lay-classic #s-home .ch-stage {
+  position: relative; height: calc(100vh - 72px); min-height: 440px;
+  border-radius: 0; clip-path: var(--px-10); overflow: hidden; background: var(--m-inset);
+  isolation: isolate;
+}
+:root.lay-classic #s-home .ch-stage > .screen.lobby { position: absolute; inset: 0; height: 100%; }
+:root.lay-classic #s-home .lobby-left { display: none; }
+
+:root.lay-classic #s-home .lobby-side { bottom: 30px; }
+
+/* Вкладки «Мои сборки / Каталог» и действия библиотеки над экраном. */
+:root.lay-classic .cl-hubbar { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; }
+:root.lay-classic .cl-hubbar .tb-tabs { display: flex; gap: 8px; }
+:root.lay-classic .cl-hubbar-act { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+/* Каталог: колонки по ширине самой сетки, а не окна — панель слева съедает 250px,
+   и при трёх колонках кнопки карточки не влезали. */
+:root.lay-classic .mr-galgrid { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }

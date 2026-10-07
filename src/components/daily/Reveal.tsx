@@ -9,7 +9,8 @@ import { useUi } from '../../state/ui'
 import { Chest3D } from './Chest3D'
 import type { ChestMode } from './chestScene'
 import { FragmentCells } from './WeekItem'
-import { dayChestTier, rarityTone, rewardLabel, rewardTitle, RewardArt } from './rewards'
+import { dayChestTier, rarityTone, rewardLabel, rewardRarity, rewardTitle, RewardArt } from './rewards'
+import { RarityChip } from '../shop/rarityUi'
 
 /** Минимум тряски, даже если служба ответила мгновенно: иначе нет «момента». */
 const SHAKE_MS = 1500
@@ -75,6 +76,7 @@ function Card({ reward, plus, index }: { reward: Reward; plus?: boolean; index: 
         ) : null}
         <span className="rv-card-art">
           <RewardArt reward={reward} size={84} />
+          {reward.kind === 'ITEM' || reward.kind === 'FRAGMENTS' ? <RarityChip rarity={rewardRarity(reward)} /> : null}
         </span>
         <b className="rv-card-label">
           {reward.kind === 'RUBIES' ? (

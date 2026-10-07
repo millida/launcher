@@ -18,7 +18,7 @@ mock.module('../lib/prefs', () => ({
 }))
 mock.module('./ui', () => ({ setScreen: (s: string) => void screens.push(s) }))
 
-const { finishOnboarding, markMillidaEver, maybeStartOnboarding, millidaEver, useOnboarding } = await import(
+const { finishOnboarding, markMillidaEver, maybeStartOnboarding, millidaEver, onboardingBack, onboardingNext, useOnboarding } = await import(
   './onboarding'
 )
 const { TOUR_STEPS, startTour, stopTour, tourDone, tourNext, tourPrev, useTour } = await import('./tour')
@@ -104,4 +104,14 @@ test('every step points at a selector and carries text', () => {
     ).toBeGreaterThan(0)
     expect(s.title.length && s.text.length, 'step ' + i + ' is missing title or text').toBeTruthy()
   })
+})
+
+test('the inviter step is passed over for a player without a Millida account, both ways', () => {
+  useOnboarding.setState({ open: true, step: 0 })
+  onboardingNext(true)
+  expect(useOnboarding.getState().step).toBe(2)
+  onboardingBack(true)
+  expect(useOnboarding.getState().step).toBe(0)
+  onboardingNext(false)
+  expect(useOnboarding.getState().step).toBe(1)
 })

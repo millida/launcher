@@ -21,3 +21,14 @@ export function playTier(seconds: number): PlayTier {
   const from = reached ? PLAY_TIERS_H[reached - 1] : 0
   return { reached, next, progress: next ? Math.min(1, (h - from) / (next - from)) : 1 }
 }
+
+/**
+ * Часы на кнопке «Играть» — видны с нуля (владелец 06.10.2026): «0 ч», после
+ * первых минут «12 мин», дальше целые часы.
+ */
+export function playHoursLabel(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds || 0))
+  if (s < 60) return '0 ч'
+  if (s < 3600) return Math.floor(s / 60) + ' мин'
+  return Math.floor(s / 3600) + ' ч'
+}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useLayout, type Layout } from '../state/layout'
 import type { ReactNode } from 'react'
 import { showToast, useUi } from '../state/ui'
 import type { SettingsTab } from '../state/ui'
@@ -33,6 +34,7 @@ import { CloudSync } from '../components/CloudSync'
 import { SharedStore } from '../components/SharedStore'
 import { uiConfirm } from '../state/confirm'
 import { ColorPicker } from '../components/ColorPicker'
+import { AppIconPicker } from '../components/AppIconPicker'
 import { AudioSettings } from '../components/AudioSettings'
 import { RadioCredits, RadioVolume } from '../components/radio'
 import { betaChannel, checkForUpdate, pendingUpdate } from '../lib/updater'
@@ -43,6 +45,8 @@ import { fetchSounds, playSound, setSoundMode, soundMode, soundVolume } from '..
 import type { SoundMode } from '../lib/sound'
 import { notifyLevel, setNotifyLevel } from '../state/notifyPrefs'
 import { setDesktopToasts } from '../lib/desktopToast'
+import { setStreakRemind, streakRemindOn } from '../lib/streakReminder'
+import { autostartOn, setAutostart } from '../lib/autostart'
 import type { NotifyKind, NotifyLevel } from '../state/notifyPrefs'
 import { Slider } from '../components/Slider'
 import { Select } from '../components/Select'
@@ -75,6 +79,7 @@ import {
 import type { LaunchWindowMode } from '../lib/window'
 import type { SkinSource } from '../lib/gameProfile'
 import { logoutToLogin } from '../lib/session'
+import { PremiumSwatches, ThemeRow } from '../components/premium/ThemeRow'
 import { accentFromHex, computeAccent, paintAccent, saveAccent, withColorFade } from '../lib/accent'
 import type { Accent } from '../lib/accent'
 import { TAB_MS_DEFAULT, useViewPrefs } from '../state/viewPrefs'
@@ -221,6 +226,8 @@ export function Settings({ on }: { on: boolean }) {
   const [telemetryOn, setTelemetryOn] = useState(telemetryEnabled)
   const [backAfterGame, setBackAfterGame] = useState(restoreOnGameExit)
   const [tray, setTray] = useState(hasTray)
+  const [autostart, setAutostartOn] = useState(true)
+  const [streakRemind, setStreakRemindOn] = useState(streakRemindOn)
   const [discord, setDiscord] = useState(() => localStorage.getItem('m-discord') !== '0')
   const [musicAuto, setMusicAuto] = useState(() => localStorage.getItem('m-mus-auto') !== '0')
   const [soundMd, setSoundMd] = useState<SoundMode>(soundMode)
@@ -251,6 +258,7 @@ export function Settings({ on }: { on: boolean }) {
   const bgAnim = useViewPrefs((s) => s.bgAnim)
   const tabMs = useViewPrefs((s) => s.tabMs)
   const perf = useViewPrefs((s) => s.perf)
+  const layout = useLayout((s) => s.layout)
   useAccounts()
   const acc = getAccount()
   const millidaAcc = getMillidaAccount()
@@ -259,6 +267,7 @@ export function Settings({ on }: { on: boolean }) {
     if (!on || !hasTauri()) return
     setTray(hasTray())
     setTrayCloseOn(trayCloseEnabled())
+    void autostartOn().then(setAutostartOn)
     if (!ver) void appVersion().then(setVer).catch(() => {})
     if (cacheMb === null)
       void cacheSize()
@@ -352,7 +361,7 @@ export function Settings({ on }: { on: boolean }) {
 
   const look = (
     <>
-      <Block keys="цвет кнопок акцент цвет выделения палитра">
+      <Block keys="цвет кнопок акцент цвет выделения палитра тема лаунчера plus diamond премиум">
         <Group title="Цвет кнопок">
           <div className="s2-swatches" id="accentSwatches" role="radiogroup" aria-label="Цвет кнопок">
             {ACCENTS.map((a) => (
@@ -370,6 +379,7 @@ export function Settings({ on }: { on: boolean }) {
                 }}
               ></button>
             ))}
+            <PremiumSwatches current={accent} onPick={setAccent} />
             <span className="s2-sw-wrap">
               <button
                 aria-label="Свой цвет"
@@ -392,6 +402,16 @@ export function Settings({ on }: { on: boolean }) {
               ) : null}
             </span>
           </div>
+        </Group>
+        <Group title="Тема лаунчера">
+          <ThemeRow />
+        </Group>
+      </Block>
+
+
+      <Block keys="иконка приложения значок ярлык док панель задач искра пламя аметист легенда золото алмаз">
+        <Group title="Иконка приложения">
+          <AppIconPicker />
         </Group>
       </Block>
 
@@ -424,6 +444,22 @@ export function Settings({ on }: { on: boolean }) {
                 [640, 'Медленно'],
               ]}
               onPick={(v) => useViewPrefs.getState().setTabMs(v)}
+            />
+          </Row>
+        </Group>
+      </Block>
+
+      {/* В самом конце «Вида» (владелец 07.10.2026: «чтобы мало кто видел»). */}
+      <Block keys="старый вид старая версия новая версия раскладка меню боковая панель классика лобби интерфейс">
+        <Group title="Версия интерфейса">
+          <Row title="Вид лаунчера" hint="Старый — разделы в панели слева" keys="старый вид новая версия раскладка боковая панель классика лобби">
+            <Segs<Layout>
+              value={layout}
+              options={[
+                ['lobby', 'Новый'],
+                ['classic', 'Старый'],
+              ]}
+              onPick={(v) => useLayout.getState().set(v)}
             />
           </Row>
         </Group>
@@ -561,6 +597,17 @@ export function Settings({ on }: { on: boolean }) {
                 setOverlay({ ...overlay, toasts: !next })
                 showToast('Не получилось — попробуй ещё раз', 'error', false)
               })
+            }}
+          />
+        </Row>
+        <Row title="Напоминать о серии" hint="Вечером, если сундук не забран" keys="серия сундук бонус напоминание уведомления">
+          <Toggle
+            label="Напоминать о серии"
+            on={streakRemind}
+            onChange={() => {
+              const next = !streakRemind
+              setStreakRemindOn(next)
+              setStreakRemind(next)
             }}
           />
         </Row>
@@ -1000,6 +1047,24 @@ export function Settings({ on }: { on: boolean }) {
               const next = !beta
               setBeta(next)
               writePref('m-beta', next ? '1' : '0')
+            }}
+          />
+        </Row>
+        <Row title="Запускать вместе с системой" hint="Сразу в трей" keys="автозапуск автозагрузка система windows трей включение">
+          <Toggle
+            label="Запускать вместе с системой"
+            on={autostart}
+            onChange={() => {
+              const next = !autostart
+              setAutostartOn(next)
+              if (!hasTauri()) return
+              setAutostart(next)
+                .then(setAutostartOn)
+                .catch((err) => {
+                  console.error('[settings] autostart', err)
+                  setAutostartOn(!next)
+                  showToast('Система не дала — попробуй ещё раз', 'error', false)
+                })
             }}
           />
         </Row>

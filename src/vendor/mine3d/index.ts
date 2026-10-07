@@ -8,6 +8,7 @@ export {
   ENGINE_DISPLAY_NAME,
   type CosmeticAnchorName,
   type PartnerFigure,
+  type ExtraFigure,
   type PoseHookContext,
   type StageSpot,
 } from "./core/scene-loop";

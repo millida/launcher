@@ -14,10 +14,12 @@ import {
   normalizeInviteCode,
   takeInviteCode,
   tierProgress,
+  tierRewardParts,
   tierRewardText,
 } from '../../lib/referrals'
-import type { InviteOverview } from '../../lib/referrals'
+import type { InviteOverview, InvitePerk } from '../../lib/referrals'
 import { FRIENDS_TAB_EVENT } from './friendsView'
+import { INVITEE_GIFTS } from '../../lib/inviteGifts'
 import '../../styles/pixel/invite.css'
 
 function Skeleton() {
@@ -73,6 +75,38 @@ function ApplyCode({ initial, onApplied }: { initial: string; onApplied: (next: 
           <Icon id="i-check" />
           Ввести
         </button>
+      </div>
+    </div>
+  )
+}
+
+function clock(seconds: number) {
+  const m = Math.floor(Math.max(0, seconds) / 60)
+  return Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0')
+}
+
+/// Что получил ты сам, когда тебя позвали: три плитки, каждая — сделано или в пути.
+function InviteeGifts({ gifts }: { gifts: NonNullable<InviteOverview['invitee']> }) {
+  const chest = gifts.chest
+  const state = {
+    rubies: { done: !!gifts.badge, note: '' },
+    chest: { done: chest.granted, note: chest.granted ? '' : clock(chest.playSeconds) + ' / ' + clock(chest.needSeconds) },
+    plus: { done: gifts.plus.granted, note: gifts.plus.granted ? '' : 'после 2 ч' },
+  }
+  return (
+    <div className="card inv-card">
+      <div className="inv-title">
+        <Icon id="i-gift" />
+        Твои подарки
+      </div>
+      <div className="inv-gifts">
+        {INVITEE_GIFTS.map((g) => (
+          <div key={g.id} className={'inv-gift' + (state[g.id].done ? ' on' : '')}>
+            <Icon id={g.icon} />
+            <b>{g.title}</b>
+            <small>{state[g.id].done ? 'Получено' : state[g.id].note}</small>
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -151,6 +185,7 @@ export function InviteTab({ on }: { on: boolean }) {
           Тебя пригласил <b>{data.invitedBy.nickname || 'друг'}</b>
         </p>
       ) : null}
+      {data.invitee ? <InviteeGifts gifts={data.invitee} /> : null}
 
       <div className="card inv-card">
         <div className="inv-title">
@@ -171,7 +206,7 @@ export function InviteTab({ on }: { on: boolean }) {
           </button>
         </div>
         <p className="faint-note inv-rule">
-          {'+' + daysText(data.perFriendPlusDays) + ' PLUS за друга, который наиграет ' + hours + ' ч'}
+          {'+' + daysText(data.perFriendPlusDays) + ' PLUS за друга · ' + hours + ' ч за ' + data.rules.playDays + ' дня'}
         </p>
       </div>
 
@@ -193,11 +228,23 @@ export function InviteTab({ on }: { on: boolean }) {
         ) : null}
         <ol className="inv-ladder">
           {data.tiers.map((t) => (
+            // Клетка лестницы (QA 06.10.2026: «Иконка «Аметист» + Эпический сундук» в 3–4 строки):
+            // число друзей сверху, каждая награда — своя строка со своим значком, одна строка на награду.
             <li key={t.friends} className={'inv-step' + (t.reached ? ' on' : '')}>
-              <span className="inv-step-n">{t.friends}</span>
-              <Icon id={t.chest ? 'i-chest' : 'i-crown'} />
-              <span className="inv-step-r">{tierRewardText(t)}</span>
-              {t.granted ? <Icon id="i-check" className="icon inv-step-ok" /> : null}
+              <span className="inv-step-top">
+                <span className="inv-step-n">{t.friends}</span>
+                {t.granted ? (
+                  <Icon id="i-check" className="icon inv-step-ok" />
+                ) : t.reached && t.delayed ? (
+                  <Icon id="i-clock" className="icon inv-step-wait" />
+                ) : null}
+              </span>
+              {stepLines(t).map((line) => (
+                <span key={line.text} className="inv-step-r">
+                  <Icon id={line.icon} />
+                  <span>{line.text}</span>
+                </span>
+              ))}
             </li>
           ))}
         </ol>
@@ -231,4 +278,14 @@ export function InviteTab({ on }: { on: boolean }) {
       )}
     </>
   )
+}
+
+/** Строки клетки лестницы: первая особая награда, сундук, дни PLUS — не больше двух. */
+function stepLines(t: { perks: { kind: string; name: string }[]; chest?: string | null; chestName?: string | null; plusDays: number }): { icon: string; text: string }[] {
+  const out: { icon: string; text: string }[] = []
+  const perk = t.perks[0]
+  if (perk) out.push({ icon: perk.kind === 'icon' ? 'i-image' : 'i-crown', text: tierRewardParts({ plusDays: 0, chestName: null, perks: [perk] as InvitePerk[] })[0]! })
+  if (t.chestName) out.push({ icon: 'i-chest', text: t.chestName })
+  if (t.plusDays > 0) out.push({ icon: 'i-crown', text: daysText(t.plusDays) + ' PLUS' })
+  return out.slice(0, 2)
 }

@@ -18,7 +18,7 @@ const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ b
 const SOURCES: { icon: string; label: string; to: string }[] = [
   { icon: 'i-clock', label: 'За игру', to: 'shop-weekly' },
   { icon: 'i-star', label: 'Задания недели', to: 'shop-weekly' },
-  { icon: 'i-gift', label: 'Бонус дня', to: 'shop-today' },
+  { icon: 'i-gift', label: 'Бонус дня', to: 'shop-pass' },
 ]
 
 /**

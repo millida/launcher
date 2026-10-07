@@ -21,7 +21,7 @@ import type { EmoteSequence } from './emoteSequence'
 import { hiddenJoints, type PieceCover } from './cosmeticCover'
 
 /** Столько кадров ленты в секунду показывает игра. */
-const ATLAS_FPS = 20
+export const ATLAS_FPS = 20
 
 const radians = (degrees: number) => (degrees * Math.PI) / 180
 
@@ -165,6 +165,13 @@ function boneGeometry(bone: RigBone): BufferGeometry | null {
  * sequence at its own progress; props on a separate clock drifted off the hands
  * and kept moving while the emote was paused.
  */
+/**
+ * Часы вещей для покадровой съёмки (outfitSnapshot, петли карточек магазина):
+ * пока задано, движение вещей и лента кадров текстуры берут время отсюда, а не
+ * из performance.now() — так кадр N петли снимается ровно в свой момент.
+ */
+export const cosmeticClock: { now: (() => number) | null } = { now: null }
+
 export interface EmoteTimeline {
   sequence: EmoteSequence
   clock(): number
@@ -270,7 +277,7 @@ export function buildCosmetic(
   if (ticker) {
     const started = performance.now()
     ticker.onBeforeRender = () => {
-      const seconds = (performance.now() - started) / 1000
+      const seconds = cosmeticClock.now ? cosmeticClock.now() : (performance.now() - started) / 1000
       if (frames > 1) {
         const at = Math.floor(seconds * ATLAS_FPS) % frames
         const offset = 1 - (at + 1) / frames

@@ -1,0 +1,199 @@
+/* ============================================================
+   Открытие сундука (CaseReveal, 06.10.2026): огромный 3D-сундук по центру,
+   лучи цвета ящика, удары со стоп-кадром, искрами и трещинами, вспышка,
+   награды выходят из сундука по одной (как в Brawl Stars), итог. Ленты нет. Только transform/opacity в анимациях.
+   ============================================================ */
+
+.rv2 {
+  position: fixed; inset: 0; z-index: 980; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
+  padding: 16px; overflow: hidden; color: var(--m-fg); user-select: none;
+  background: radial-gradient(circle at 50% 46%, color-mix(in srgb, var(--box) 26%, #050807) 0, #030504 62%);
+  animation: rv2-in 0.22s linear both;
+}
+@keyframes rv2-in { from { opacity: 0; } to { opacity: 1; } }
+.rv2 .rv2-rays { --rw-tone: var(--box); }
+.rv2.rv2-ph-card .rv2-rays, .rv2.rv2-ph-sum .rv2-rays { --rw-tone: var(--flash); }
+.rv2-skip { position: absolute; top: 56px; right: 18px; z-index: 6; }
+
+/* ---------- Сундук ---------- */
+.rv2-stage { position: relative; display: grid; place-items: center; width: min(56vh, 92vw); aspect-ratio: 1; cursor: pointer; }
+.rv2-halo {
+  position: absolute; inset: 6%; z-index: 0; pointer-events: none;
+  background: radial-gradient(circle, color-mix(in srgb, var(--box) 70%, #fff) 0, color-mix(in srgb, var(--box) 45%, transparent) 32%, transparent 64%);
+  opacity: calc(0.45 + var(--glow, 0) * 0.55); animation: rv2-breathe-glow 1.6s ease-in-out infinite;
+}
+.rv2-chest { position: relative; z-index: 2; display: block; width: 100%; height: 100%; animation: rv2-breathe 1.6s ease-in-out infinite; }
+.rv2-hitbox { display: block; width: 100%; height: 100%; transform-origin: 50% 80%; }
+.rv2-hitbox > .c3d { width: 100%; height: 100%; }
+/* Удар — WAAPI на .rv2-hitbox (CaseReveal.hit); дыхание — на обёртке, они не спорят. */
+.rv2-chest.pop { animation: rv2-pop 0.62s cubic-bezier(0.22, 1, 0.36, 1) both; }
+/* Свет из щелей — сильнее с каждым ударом. */
+.rv2-leak {
+  position: absolute; left: 22%; right: 22%; top: 44%; height: 10%; z-index: 3; pointer-events: none;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--box) 40%, #fff), transparent);
+  opacity: calc(var(--glow, 0) * 0.85); transition: opacity 0.2s ease-out;
+}
+@keyframes rv2-breathe { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-10px) scale(1.02); } }
+@keyframes rv2-breathe-glow { 0%, 100% { transform: scale(0.94); } 50% { transform: scale(1.06); } }
+/* Крышка: вытянуться, раздуться и осесть — сундук остаётся, из него выходят награды. */
+@keyframes rv2-pop { 0% { transform: scale(0.92, 1.08); } 45% { transform: scale(1.16); } 100% { transform: scale(1); } }
+.rv2-pips { display: flex; gap: 10px; }
+.rv2-pips > i { width: 18px; height: 18px; background: rgba(255, 255, 255, 0.2); --px-n: 4px; clip-path: var(--px-4); }
+.rv2-pips > i.on { background: var(--box); }
+.rv2-tap {
+  position: relative; z-index: 3; font-size: 44px; font-weight: 900; letter-spacing: -0.02em;
+  text-shadow: 0 4px 0 #000; animation: rv2-tap 0.9s ease-in-out infinite;
+}
+.rv2-tap.is-small { font-size: 22px; opacity: 0.7; }
+@keyframes rv2-tap { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+.rv2-stage .rv2-pips { position: absolute; bottom: -8%; }
+.rv2-stage .rv2-tap { position: absolute; bottom: -24%; }
+/* Вспышка — на весь экран, круглым светом от центра (квадратная плашка резала сцену). */
+.rv2-flash {
+  position: fixed; inset: 0; z-index: 5; pointer-events: none;
+  background: radial-gradient(circle at 50% 46%, color-mix(in srgb, var(--flash, #fff) 55%, #fff) 0, color-mix(in srgb, var(--flash, #fff) 60%, transparent) 28%, transparent 70%);
+  animation: rv2-flash 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.rv2-one > .rv2-flash { z-index: 0; }
+@keyframes rv2-flash { from { opacity: 0.95; } to { opacity: 0; } }
+.rv2-stage .rw-burst, .rv2-one .rw-burst { z-index: 4; }
+
+.rv2-rays > i { will-change: transform; }
+
+/* ---------- Награда по одной ---------- */
+.rv2-one { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 16px; cursor: pointer; }
+.rv2-slam { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 10px; animation: rv2-slam 0.42s cubic-bezier(0.2, 1.5, 0.4, 1) both; }
+@keyframes rv2-slam { 0% { transform: scale(1.8) translateY(-30px); opacity: 0; } 60% { transform: scale(0.94); opacity: 1; } 100% { transform: none; } }
+.rv2-rar { font-size: 18px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; color: var(--flash); text-shadow: 0 2px 0 #000; }
+
+/* ---------- Карточка награды ---------- */
+.rv2-card {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; width: 150px; padding: 10px 10px 14px;
+  background: color-mix(in srgb, var(--sh-tone) 30%, #15181a); --px-n: 10px; clip-path: var(--px-10);
+}
+.rv2-card::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 6px; background: var(--sh-tone); }
+.rv2-card.is-big { width: min(320px, 80vw); padding: 16px 16px 22px; box-shadow: 0 0 0 0 transparent; }
+.rv2-pic { position: relative; display: grid; place-items: center; width: 100%; aspect-ratio: 1; background: rgba(0, 0, 0, 0.28); --px-n: 5px; clip-path: var(--px-5); }
+.rv2-pic img { width: 86%; height: 86%; max-width: none; max-height: none; object-fit: contain; image-rendering: pixelated; }
+.rv2-pic .rar-chip { left: 6px; bottom: 6px; }
+.rv2-card.is-big .rv2-pic .rar-chip { height: 24px; font-size: 13px; padding: 0 9px; }
+.rv2-name { font-size: 14px; font-weight: 900; text-align: center; line-height: 1.2; }
+.rv2-card.is-big .rv2-name { font-size: 22px; }
+.rv2-plus, .rv2-dup { font-size: 13px; font-weight: 850; color: var(--m-fg-muted); }
+.rv2-frag { width: 100%; }
+
+/* ---------- Итог ---------- */
+.rv2-sum { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 18px; max-width: min(980px, 96vw); }
+.rv2-sum-title { font-size: 26px; font-weight: 900; }
+.rv2-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+.rv2-sum-cell { display: flex; flex-direction: column; align-items: center; gap: 8px; animation: rv2-slam 0.4s cubic-bezier(0.2, 1.5, 0.4, 1) both; animation-delay: calc(var(--i, 0) * 90ms); }
+.rv2-acts { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+:root:root .rv2-acts .btn.lg { min-width: 180px; gap: 8px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rv2, .rv2-chest, .rv2-halo, .rv2-tap, .rv2-slam, .rv2-sum-cell, .rv2-flash, .rv2-cash { animation: none !important; }
+  .rv2-flash { display: none; }
+  .rv2-stage { transition: none; }
+}
+
+/* ---------- Трещины света (удары) ---------- */
+.rv2-cracks { position: absolute; inset: 14% 10% 20%; z-index: 3; width: 80%; height: 66%; pointer-events: none; overflow: visible; mix-blend-mode: screen; }
+.rv2-cracks polyline {
+  fill: none; stroke: color-mix(in srgb, var(--box) 35%, #fff); stroke-width: 1.6; stroke-linecap: square; stroke-linejoin: miter;
+  stroke-dasharray: 60; stroke-dashoffset: 60; opacity: 0; filter: drop-shadow(0 0 2px var(--box));
+}
+.rv2-cracks polyline.on { opacity: 1; animation: rv2-crack 0.16s steps(4, end) both; }
+@keyframes rv2-crack { to { stroke-dashoffset: 0; } }
+
+/* ---------- Сундук внизу, награды выходят из него ---------- */
+.rv2-stage { transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1); }
+.rv2-stage.is-low { position: absolute; left: 50%; bottom: 0; margin-left: calc(min(56vh, 92vw) / -2); transform: translateY(26%) scale(0.46); cursor: pointer; }
+.rv2-stage.is-low .rv2-chest { animation: none; }
+.rv2-stage.is-low .rv2-leak { opacity: 1; }
+/* Сколько наград ещё в сундуке: крупная цифра на плашке со срезом. */
+.rv2-left {
+  position: absolute; z-index: 4; top: 8%; right: 10%; display: grid; place-items: center; min-width: 96px; height: 96px; padding: 0 18px;
+  font-size: 64px; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; color: #111;
+  background: var(--box); box-shadow: inset 0 -10px 0 rgba(0, 0, 0, 0.28); --px-n: 10px; clip-path: var(--px-10);
+}
+.rv2-ph-card .rv2-one { margin-bottom: 22vh; }
+.rv2-ph-card .rv2-slam { animation-name: rv2-out; animation-duration: 0.5s; }
+/* Награда вылетает из сундука снизу, перелетает и садится. */
+@keyframes rv2-out {
+  0% { transform: translateY(34vh) scale(0.15); opacity: 0; }
+  55% { transform: translateY(-18px) scale(1.08); opacity: 1; }
+  100% { transform: none; }
+}
+.rv2-one .rv2-rar { font-size: 34px; letter-spacing: 0.1em; }
+
+/* ---------- Валюта: большая сумма ---------- */
+.rv2-cash { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.rv2-cash-pic { display: grid; place-items: center; width: 180px; height: 180px; filter: drop-shadow(0 0 24px var(--sh-tone)); }
+.rv2-cash-pic img, .rv2-cash-pic svg { image-rendering: pixelated; }
+.rv2-cash-n { font-size: 96px; font-weight: 900; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; color: #fff; text-shadow: 0 6px 0 #000, 0 0 30px var(--sh-tone); }
+.rv2-cash-w { font-size: 22px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; color: var(--sh-tone); text-shadow: 0 2px 0 #000; }
+
+/* Итог: карточки ряда одной высоты — полоса редкости внизу на одной линии, даже если имя вещи в две строки (QA 06.10.2026). */
+.rv2-grid { align-items: stretch; }
+.rv2-sum-cell > .rv2-card { flex: 1; }
+
+/* ---------- Рост редкости на ударах (как Starr Drops) ---------- */
+/* Свечение, щели, трещины, лучи и метки ударов — цвета текущей ступени редкости (--lvl). */
+.rv2.has-lvl.rv2-ph-hit .rv2-rays, .rv2.has-lvl.rv2-ph-burst .rv2-rays { --rw-tone: var(--lvl); }
+.rv2.has-lvl .rv2-halo { background: radial-gradient(circle, color-mix(in srgb, var(--lvl) 70%, #fff) 0, color-mix(in srgb, var(--lvl) 50%, transparent) 32%, transparent 64%); transition: background 0.2s steps(2, end); }
+.rv2.has-lvl .rv2-leak { background: radial-gradient(closest-side, color-mix(in srgb, var(--lvl) 40%, #fff), transparent); }
+.rv2.has-lvl .rv2-cracks polyline { stroke: color-mix(in srgb, var(--lvl) 35%, #fff); filter: drop-shadow(0 0 2px var(--lvl)); }
+.rv2.has-lvl .rv2-pips > i.on { background: var(--lvl); }
+.rv2-lvl {
+  position: absolute; top: 2%; left: 50%; z-index: 5; translate: -50% 0; padding: 4px 14px;
+  font-size: 22px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; white-space: nowrap; color: #111;
+  background: var(--lvl); box-shadow: inset 0 -5px 0 rgba(0, 0, 0, 0.28); --px-n: 5px; clip-path: var(--px-5);
+}
+.rv2-lvl.is-up { font-size: 30px; animation: rv2-lvl-up 0.46s cubic-bezier(0.2, 1.5, 0.4, 1) both; }
+@keyframes rv2-lvl-up { 0% { transform: scale(2); opacity: 0; } 60% { transform: scale(0.92); opacity: 1; } 100% { transform: none; } }
+.rv2-up-flash { animation-duration: 0.7s; }
+
+/* ---------- ×10: сундук крупнее ---------- */
+.rv2.is-multi .rv2-stage { width: min(66vh, 94vw); }
+.rv2.is-multi .rv2-chest { animation-duration: 1.1s; }
+
+/* ---------- ×10: десять карт рубашкой вверх ---------- */
+.rv3-deal { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 14px; width: min(900px, 96vw); cursor: pointer; }
+.rv3-deal.is-done { cursor: default; }
+.rv3-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 150px)); justify-content: center; align-items: stretch; gap: 14px 12px; width: 100%; }
+.rv3-cell { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0; animation: rv3-deal 0.46s cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: calc(var(--i, 0) * 60ms); }
+/* Карты вылетают из места, где был сундук, и раскладываются по сетке. */
+@keyframes rv3-deal { 0% { transform: translateY(30vh) scale(0.2); opacity: 0; } 70% { opacity: 1; } 100% { transform: none; } }
+.rv3-flip { position: relative; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); flex: 1 1 auto; width: 100%; perspective: 900px; }
+.rv3-back, .rv3-face { grid-area: 1 / 1; backface-visibility: hidden; transition: transform 0.42s cubic-bezier(0.2, 1.3, 0.4, 1); }
+.rv3-face { display: flex; transform: rotateY(-180deg); }
+.rv3-face > .rv2-card { width: 100%; height: 100%; }
+.rv3-back {
+  position: relative; display: grid; place-items: center; min-height: 100%;
+  background: color-mix(in srgb, var(--box) 55%, #15181a); box-shadow: inset 0 -8px 0 rgba(0, 0, 0, 0.3); --px-n: 10px; clip-path: var(--px-10);
+}
+.rv3-back > svg.icon { width: 46%; height: auto; color: color-mix(in srgb, var(--box) 25%, #fff); opacity: 0.85; }
+/* Эпическая и выше: рубашка чуть светится цветом редкости — честный намёк, как вспышка у Genshin. */
+.rv3-cell.is-hot:not(.on) .rv3-back { background: color-mix(in srgb, var(--sh-tone) 45%, #15181a); }
+.rv3-cell.is-hot:not(.on) .rv3-back::after { content: ''; position: absolute; inset: 0; background: var(--sh-tone); opacity: 0.25; animation: rv3-hot 1.2s steps(3, end) infinite alternate; }
+@keyframes rv3-hot { to { opacity: 0.05; } }
+.rv3-cell.on .rv3-back { transform: rotateY(180deg); }
+.rv3-cell.on .rv3-face { transform: none; }
+/* Лучшая: крупнее, лучи и вспышка её цвета. */
+/* Лучи лучшей — под соседними картами, а не поверх их «Надеть». */
+.rv3-cell.is-best { z-index: 1; }
+.rv3-cell.is-best .rv3-flip { animation: rv3-best 0.6s cubic-bezier(0.2, 1.5, 0.4, 1) both; }
+.rv3-cell.is-best .rv2-card { outline: 4px solid var(--sh-tone); outline-offset: -4px; }
+@keyframes rv3-best { 0% { transform: scale(1); } 45% { transform: scale(1.22); } 100% { transform: scale(1.08); } }
+.rv3-best-rays { position: absolute; left: 50%; top: 40%; width: 420px; height: 420px; margin: -210px 0 0 -210px; z-index: -1; --rw-tone: var(--sh-tone); pointer-events: none; }
+.rv3-wear { width: 100%; }
+.rv3-cash { display: inline-flex; align-items: center; gap: 18px; font-size: 20px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.rv3-cash > span { display: inline-flex; align-items: center; gap: 6px; }
+@media (max-width: 720px) {
+  .rv3-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+  .rv3-deal .rv2-card { padding: 6px 6px 10px; }
+  .rv3-deal .rv2-name { font-size: 11px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rv3-cell, .rv3-back, .rv3-face, .rv3-cell.is-best .rv3-flip, .rv2-lvl.is-up, .rv3-cell.is-hot .rv3-back::after { animation: none !important; transition: none !important; }
+}

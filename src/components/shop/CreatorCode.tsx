@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Head } from '../Head'
+import { Icon } from '../Icon'
 import { PxIcon } from '../PxIcon'
 import { ChestLive } from '../daily/ChestLive'
 import { CHEST_NAME } from '../daily/rewards'
@@ -22,43 +23,12 @@ import { useDaily } from '../../state/daily'
 import { showToast } from '../../state/ui'
 import { useShopGift } from './giftState'
 
-const sinceText = (iso: string) => {
-  const d = new Date(iso)
-  return isNaN(+d) ? '' : 'с ' + d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', timeZone: 'Europe/Moscow' })
-}
-
-/** Лучи и рассыпанные значки фона: плоские цвета, без градиентов. */
-function CcArt() {
-  const rays = Array.from({ length: 12 }, (_, i) => {
-    const a = (i * 30 * Math.PI) / 180
-    const b = ((i * 30 + 13) * Math.PI) / 180
-    return `M100 100 L${100 + 160 * Math.cos(a)} ${100 + 160 * Math.sin(a)} L${100 + 160 * Math.cos(b)} ${100 + 160 * Math.sin(b)} Z`
-  })
-  return (
-    <span className="sh-cc-art" aria-hidden="true">
-      <svg className="sh-cc-rays" viewBox="0 0 200 200" shapeRendering="crispEdges">
-        {rays.map((d, i) => (
-          <path key={i} d={d} />
-        ))}
-      </svg>
-      <PxIcon name="heart" size={24} className="sh-cc-bit b1" />
-      <PxIcon name="star" size={18} className="sh-cc-bit b2" />
-      <PxIcon name="heart" size={12} className="sh-cc-bit b3" />
-      <PxIcon name="gem" size={18} className="sh-cc-bit b4" />
-      <PxIcon name="heart" size={18} className="sh-cc-bit b5" />
-      <PxIcon name="sparkle" size={12} className="sh-cc-bit b6" />
-      <span className="sh-cc-heart">
-        <PxIcon name="heart" size={96} />
-      </span>
-    </span>
-  )
-}
-
 /**
- * «Код автора» внизу магазина — как Support-a-Creator в Fortnite
- * (задача владельца 24.09.2026). Код живёт на службе; пока адресов нет на
- * проде (404 на GET), баннер всё равно виден, а ввод честно отвечает
- * «скоро заработают» — успехом не притворяемся.
+ * «Код автора» (Support-a-Creator, задача владельца 24.09.2026): с магазина v2
+ * (06.10.2026) это одна компактная строка в самом низу: поле и «Применить»;
+ * если код стоит — чип «Поддерживаешь: ник» с крестиком. Код живёт на службе;
+ * пока адресов нет на проде (404 на GET), строка всё равно видна, а ввод
+ * честно отвечает «скоро заработают» — успехом не притворяемся.
  */
 export function CreatorCode() {
   /** undefined — ещё грузим; null — никого не поддерживает. */
@@ -151,56 +121,42 @@ export function CreatorCode() {
     }
   }
 
-  const become = (
-    // Отдельная кнопка в углу баннера, не в ряду формы (владелец 24.09, 17:05).
-    <button type="button" className="sh-cc-become" data-sound="open" data-track="creator_become" onClick={() => openExt(CREATORS_URL)}>
-      <PxIcon name="star" size={16} /> Стать автором
-    </button>
-  )
-
-  if (cur === undefined) return <span className="skel sh-skel sh-cc-skel" aria-hidden="true" />
+  if (cur === undefined) return <span className="skel sv-banner-skel" aria-hidden="true" />
 
   const on = !!cur && !editing
   return (
-    <section className={'card sh-block sh-cc' + (on ? ' is-on' : '')} aria-label="Код автора" data-section="creator_code" data-private>
-      {become}
-      <div className="sh-cc-in">
-      <CcArt />
-      {on && cur ? (
-        <div className="sh-cc-body">
-          <div className="sh-cc-who">
-            <span className="sh-cc-face">
-              <Head nick={cur.name} src={cur.avatarUrl} size={72} alt={cur.name} />
+    <section className="card sv-banner is-support" aria-label="Поддержи автора" data-section="creator_code" data-private>
+      <span className="sv-banner-art" aria-hidden="true">
+        {on && cur ? (
+          <Head nick={cur.name} src={cur.avatarUrl} size={128} className="sv-banner-face" />
+        ) : (
+          <>
+            <PxIcon name="heart" size={110} className="a1" />
+            <PxIcon name="user" size={56} className="a2" />
+            <PxIcon name="sparkle" size={36} className="a3" />
+          </>
+        )}
+      </span>
+      <span className="sv-banner-body">
+        <h2 className="sv-banner-title">{on && cur ? cur.name : 'Поддержи автора'}</h2>
+        <span className="sv-banner-line">Автор получит деньги с твоих покупок</span>
+        {on && cur ? (
+          <span className="sv-banner-row">
+            <span className="sv-banner-on">
+              <Icon id="i-heart" />
             </span>
-            <span className="sh-cc-who-t">
-              <small>Ты поддерживаешь</small>
-              <b>{cur.name}</b>
-              <small>
-                {cur.code}
-                {sinceText(cur.since) ? ' · ' + sinceText(cur.since) : ''}
-              </small>
-            </span>
-          </div>
-          <div className="sh-cc-row">
-            <button type="button" className="btn md secondary" disabled={busy} data-track="creator_change" onClick={() => setEditing(true)}>
-              Сменить
+            <button type="button" className="btn md secondary" aria-label="Убрать код" disabled={busy} data-track="creator_remove" onClick={() => void remove()}>
+              <Icon id="i-x" />
             </button>
-            <button type="button" className="btn md ghost" disabled={busy} data-track="creator_remove" onClick={() => void remove()}>
-              Убрать
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="sh-cc-body">
-          <h2>Поддержи любимого автора</h2>
-          <p className="sh-cc-lead">Автор получает часть с твоих покупок — тебе ничего не стоит</p>
-          <form className="sh-cc-row" onSubmit={(e) => void submit(e)}>
-            <span className={'input sh-cc-input' + (err ? ' is-err' : '')}>
+          </span>
+        ) : (
+          <form className="sv-banner-row" onSubmit={(e) => void submit(e)}>
+            <span className={'input sv-code-input' + (err ? ' is-err' : '')}>
               <input
                 value={code}
                 maxLength={32}
                 autoFocus={editing}
-                placeholder="Код автора"
+                placeholder="КОД"
                 aria-label="Код автора"
                 aria-invalid={!!err}
                 spellCheck={false}
@@ -213,23 +169,39 @@ export function CreatorCode() {
                 }}
               />
             </span>
-            <button type="submit" className="btn md primary" disabled={!code.trim() || busy} data-track="creator_apply">
-              Поддержать
+            <button type="submit" className="btn lg primary" disabled={!code.trim() || busy} data-track="creator_apply">
+              Ок
             </button>
-            {editing ? (
-              <button type="button" className="btn md ghost" data-track="creator_cancel" onClick={() => setEditing(false)}>
-                Отмена
-              </button>
-            ) : null}
           </form>
-          {err ? (
-            <p className="sh-cc-err" role="alert">
-              {err}
-            </p>
-          ) : null}
-        </div>
-      )}
-      </div>
+        )}
+        {err ? (
+          <span className="sv-code-err" role="alert">
+            {err}
+          </span>
+        ) : null}
+      </span>
+    </section>
+  )
+}
+
+/** «Стань автором»: баннер в пару к «Поддержи автора» — арт, два слова, «Хочу». Ведёт на сайт авторов. */
+export function CreatorBanner() {
+  return (
+    <section className="card sv-banner is-become" aria-label="Стать автором" data-section="creator_become">
+      <span className="sv-banner-art" aria-hidden="true">
+        <PxIcon name="star" size={110} className="a1" />
+        <PxIcon name="cam" size={52} className="a2" />
+        <PxIcon name="gem" size={40} className="a3" />
+      </span>
+      <span className="sv-banner-body">
+        <h2 className="sv-banner-title">Стань автором</h2>
+        <span className="sv-banner-line">Получай 50% с покупок по твоему коду</span>
+        <span className="sv-banner-row">
+          <button type="button" className="btn lg primary" data-sound="open" data-track="creator_become" onClick={() => openExt(CREATORS_URL)}>
+            Хочу
+          </button>
+        </span>
+      </span>
     </section>
   )
 }

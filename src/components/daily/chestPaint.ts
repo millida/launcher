@@ -65,7 +65,7 @@ export const CHEST_PALETTE: Record<ChestTier, ChestPalette> = {
     glow: '#c07bff',
     spark: '#ffe685',
   },
-  // Золото с алыми ремнями — тот же материал, что у 2D-рисунка (chestSprite.ts).
+  // Золото с алыми ремнями — тот же материал у всех сундуков.
   LEGEND: {
     out: '#351c02',
     dark: '#a4680a',

@@ -79,7 +79,11 @@ import { defaultVariant } from '../lib/cosmeticVariants'
 import { starredFirst, starredIds, toggleStar } from '../state/cosmeticStars'
 import { readAnimations } from '../lib/cosmeticAnimation'
 import { loadShowcase, showcaseSkinUrl, type ShowcaseCard, type ShowcaseKind } from '../lib/skinShowcase'
-import { buyCosmetic, buySet, loadBalance, loadSets, type SetColorwayView, type SetView } from '../lib/rubies'
+import { ShopFeed, ShopOverlays, useShop } from '../components/shop/ShopKit'
+import '../styles/pixel/shop2.css'
+import '../styles/pixel/sets.css'
+import { buyCosmetic, buySet, loadBalance, loadSets, tierPct, type SetColorwayView, type SetView } from '../lib/rubies'
+import { usePlus } from '../state/plus'
 import { onRealtime } from '../lib/realtime'
 import { useVariantPreview } from '../lib/variantArt'
 import { uiConfirm } from '../state/confirm'
@@ -749,6 +753,8 @@ export function Skins({ on }: { on: boolean }) {
   // в «Голову» — снова на тех же шляпах.
   // Гардероб открывается с первого раздела — «Образы» (владелец 24.09.2026).
   const [section, setSection] = useState('looks')
+  /** Блоки магазина в разделе «Магазин» — то же состояние и покупки, что у экрана магазина. */
+  const shop = useShop(on && section === 'shop')
   const [chipBy, setChipBy] = useState<Record<string, string>>({})
   const [own, setOwn] = useState('all')
   const [catQuery, setCatQuery] = useState('')
@@ -795,6 +801,7 @@ export function Skins({ on }: { on: boolean }) {
   const [cosmeticsFailed, setCosmeticsFailed] = useState(false)
   const [wardrobeFailed, setWardrobeFailed] = useState(false)
   const [plus, setPlus] = useState<PlusStatus | null>(null)
+  const shopTier = usePlus((st) => st.tier)
   const [plusBusy, setPlusBusy] = useState(false)
   const [plusJoy, setPlusJoy] = useState(false)
   const stopPlusWatch = useRef<(() => void) | null>(null)
@@ -2147,19 +2154,15 @@ export function Skins({ on }: { on: boolean }) {
       else engine.start()
       setViewerAwake(!v)
     }
-    const onVis = () => setPaused(document.hidden || !on || !renderLive())
-    const onBlur = () => setPaused(true)
-    const onFocus = () => setPaused(!on || !renderLive())
-    document.addEventListener('visibilitychange', onVis)
-    window.addEventListener('blur', onBlur)
-    window.addEventListener('focus', onFocus)
-    // Игра поверх или окно в трее — 3D стоит (lib/renderGate).
-    const offGate = onRenderGate(() => setPaused(document.hidden || !on || !renderLive() || !document.hasFocus()))
-    setPaused(document.hidden || !document.hasFocus() || !on || !renderLive())
+    // Игра поверх или окно в трее — 3D стоит (lib/renderGate). Окно без фокуса
+    // — живёт: человек смотрит на гардероб, а курсор в другой программе
+    // (владелец 06.10.2026: «персонажи должны двигаться сами»).
+    const sync = () => setPaused(document.hidden || !on || !renderLive())
+    document.addEventListener('visibilitychange', sync)
+    const offGate = onRenderGate(sync)
+    sync()
     return () => {
-      document.removeEventListener('visibilitychange', onVis)
-      window.removeEventListener('blur', onBlur)
-      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', sync)
       offGate()
     }
   }, [engineReady, on])
@@ -2999,6 +3002,8 @@ export function Skins({ on }: { on: boolean }) {
      кнопках раздела сливались в пёструю полосу. */
   const sectionList: Section[] = [
     { key: 'looks', name: 'Образы', icon: 'ws-looks' },
+    // Магазин рядом с вещами (06.10.2026, «один в один»): те же блоки, что в магазине.
+    ...(hasMillidaAccount() ? [{ key: 'shop', name: 'Магазин', icon: 'ws-shop' }] : []),
     { key: 'skin', name: 'Скины', icon: 'ws-skin' },
     { key: 'cape', name: 'Плащи', icon: 'ws-cape', alert: readyRewards > 0 },
     ...sections.map((sec) => ({ key: sec.key, name: sec.name, icon: 'ws-' + sec.key })),
@@ -3054,6 +3059,10 @@ export function Skins({ on }: { on: boolean }) {
 
   const cosmeticTile = (c: CosmeticItem) => {
     const locked = cosmeticLocked(c)
+    // Магазин v2: подписчику — цена со скидкой и старая зачёркнутая, остальным — полная цена (строка «С PLUS N» снята).
+    const base = locked && onSale(c) ? c.priceRubies! : undefined
+    const pct = tierPct(shopTier)
+    const shown = base && pct ? Math.max(10, Math.round((base * (100 - pct)) / 100 / 10) * 10) : base
     return (
       <ItemTile
         key={c.id}
@@ -3062,7 +3071,8 @@ export function Skins({ on }: { on: boolean }) {
         rarity={(c as CosmeticItem & { rarity?: string }).rarity}
         locked={locked}
         plus={locked && c.access === 'PLUS'}
-        priceRubies={locked && onSale(c) ? c.priceRubies : undefined}
+        priceRubies={shown}
+        priceWas={pct ? base : undefined}
         note={locked ? earnedNote(c) : undefined}
         on={worn.some((w) => w.id === c.id)}
         trying={fitting.some((f) => f.id === c.id)}
@@ -3405,7 +3415,7 @@ export function Skins({ on }: { on: boolean }) {
 
   return (
     <section className={'screen' + (on ? ' on' : '')} id="s-skins">
-      <div className="ch-grid">
+      <div className={'ch-grid' + (section === 'shop' ? ' is-shop' : '')}>
         <div className="ch-center">
           {/* Фон сцены — та же цветная сцена, что в лобби (правка 22:35): за
               сценой, а не внутри, чтобы не мешать 3D-холсту. */}
@@ -3525,6 +3535,7 @@ export function Skins({ on }: { on: boolean }) {
             </div>
           ) : null}
 
+          {section === 'shop' ? null : (
           <div className="ch-bar">
             {chipList.length > 1 ? (
               <ChipRow chips={chipList} active={chipKey} onPick={pickChip} />
@@ -3563,6 +3574,7 @@ export function Skins({ on }: { on: boolean }) {
               )
             })()}
           </div>
+          )}
 
           {section === 'skin' && chipKey !== 'mine' ? (
             <div className="ch-bar">
@@ -3593,6 +3605,10 @@ export function Skins({ on }: { on: boolean }) {
               onRemove={dropOutfit}
             />
             </>
+          ) : section === 'shop' ? (
+            <div className="ch-shop">
+              <ShopFeed s={shop} chip />
+            </div>
           ) : section === 'cape' ? (
             capePanel
           ) : (
@@ -3600,6 +3616,8 @@ export function Skins({ on }: { on: boolean }) {
           )}
         </div>
       </div>
+
+      <ShopOverlays s={shop} />
 
       {capeInfo ? (
         <div className="modal-bg open vis" onClick={() => setCapeInfo(null)}>

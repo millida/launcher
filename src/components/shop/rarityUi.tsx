@@ -1,7 +1,9 @@
+import { CurrencyIcon, type CurrencyArt } from '../CurrencyIcon'
 import type { CSSProperties } from 'react'
 import type { Rarity } from '../../lib/rubies'
-import { RARITY_SHORT, RARITY_TONE, normRarity } from './rarity'
+import { RARITY_NAME_SHORT, RARITY_SHORT, RARITY_TONE, normRarity } from './rarity'
 import '../../styles/pixel/rarity.css'
+import '../../styles/pixel/chest.css'
 
 /*
  * Кирпичики единой системы редкости (модель предметов v2, 24.09.2026):
@@ -40,67 +42,9 @@ export function RarityPlate({ rarity, small }: { rarity?: string | null; small?:
  * одной вещи, осколок — кошельку. Сетка 12×12, тёмный контур в клетку
  * достраивается сам (как в pxArt), блик — белым.
  */
-const FRAG_ART = [
-  '....##......',
-  '...####.....',
-  '.########...',
-  '.#hhh####...',
-  '.#h#######..',
-  '..########..',
-  '..#########.',
-  '.#########..',
-  '.########...',
-  '.#######dd..',
-  '.dddddddd...',
-  '............',
-]
-const cells = (ch: string) => {
-  const out: [number, number][] = []
-  FRAG_ART.forEach((row, y) => [...row].forEach((c, x) => ch.includes(c) && out.push([x, y])))
-  return out
-}
-const FILL = cells('#hd')
-const FILLED = new Set(FILL.map(([x, y]) => x + ':' + y))
-const OUTLINE = (() => {
-  const seen = new Set<string>()
-  const out: [number, number][] = []
-  for (const [x, y] of FILL)
-    for (const [dx, dy] of [
-      [1, 0],
-      [-1, 0],
-      [0, 1],
-      [0, -1],
-    ] as const) {
-      const k = x + dx + ':' + (y + dy)
-      if (!FILLED.has(k) && !seen.has(k)) {
-        seen.add(k)
-        out.push([x + dx, y + dy])
-      }
-    }
-  return out
-})()
-const HI = cells('h')
-const SH = cells('d')
-
 export function FragmentIcon({ rarity, size = 16 }: { rarity?: Rarity | string | null; size?: number }) {
-  const r = normRarity(rarity as string)
-  const tone = r ? RARITY_TONE[r] : 'var(--m-rarity-rare)'
-  return (
-    <svg className="rar-frag" width={size} height={size} viewBox="-1 -1 14 14" aria-hidden="true" shapeRendering="crispEdges">
-      {OUTLINE.map(([x, y]) => (
-        <rect key={'o' + x + ':' + y} x={x} y={y} width={1} height={1} fill="#101418" />
-      ))}
-      {FILL.map(([x, y]) => (
-        <rect key={'f' + x + ':' + y} x={x} y={y} width={1} height={1} fill={tone} />
-      ))}
-      {SH.map(([x, y]) => (
-        <rect key={'s' + x + ':' + y} x={x} y={y} width={1} height={1} fill="rgba(0,0,0,.32)" />
-      ))}
-      {HI.map(([x, y]) => (
-        <rect key={'h' + x + ':' + y} x={x} y={y} width={1} height={1} fill="rgba(255,255,255,.7)" />
-      ))}
-    </svg>
-  )
+  const r = normRarity(rarity as string) ?? 'RARE'
+  return <CurrencyIcon art={('fragment-' + r.toLowerCase()) as CurrencyArt} size={size} className="rar-frag" />
 }
 
 /**
@@ -134,6 +78,21 @@ export function FragBar({ have, need, rarity, gain = 0 }: { have: number; need: 
           <u key={k} style={{ left: ((k + 1) * 100) / (ticks + 1) + '%' }} />
         ))}
       </span>
+    </span>
+  )
+}
+
+/**
+ * Слово редкости чипом цвета редкости (владелец 06.10.2026): везде, где есть
+ * картинка вещи, в одном месте — внизу слева картинки. Названия — как у службы
+ * (RARITY_NAMES): Обычная … Невозможная.
+ */
+export function RarityChip({ rarity }: { rarity?: string | null }) {
+  const r = normRarity(rarity)
+  if (!r) return null
+  return (
+    <span className="rar-chip" data-rar={r} style={{ ['--rar' as string]: RARITY_TONE[r] } as CSSProperties}>
+      {RARITY_NAME_SHORT[r]}
     </span>
   )
 }

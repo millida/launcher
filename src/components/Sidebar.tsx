@@ -22,6 +22,7 @@ import { useUi } from '../state/ui'
 import type { ScreenId } from '../state/ui'
 import { useHasMillida } from '../state/auth'
 import { usePlus } from '../state/plus'
+import { PlusMark } from './premium/PlusMark'
 import { onRealtime } from '../lib/realtime'
 import { preloadScreen } from '../screens/registry'
 
@@ -103,7 +104,8 @@ function LobbySoundBtns() {
 }
 
 /** Вкладки хаба в верхней полосе: библиотека (во что играть) и ресурсы (каталог). */
-function HubTopTabs() {
+/** libLabel — «Мои сборки» в раскладке «Классика», где так же назван пункт панели. */
+export function HubTopTabs({ libLabel = 'Библиотека' }: { libLabel?: string }) {
   const all = useHubTab((s) => s.all)
   const setAll = useHubTab((s) => s.setAll)
   const go = (v: boolean) => {
@@ -115,7 +117,7 @@ function HubTopTabs() {
   return (
     <div className="tb-tabs" role="tablist" aria-label="Во что играем">
       <button role="tab" aria-selected={!all} className={'btn md tb-tab ' + (!all ? 'primary on' : 'secondary')} data-sound="nav" data-track="hub_tab_library" onClick={() => go(false)}>
-        <PxIcon name="chest" size={30} /> Библиотека
+        <PxIcon name="chest" size={30} /> {libLabel}
       </button>
       <button role="tab" aria-selected={all} className={'btn md tb-tab ' + (all ? 'primary on' : 'secondary')} data-sound="nav" data-track="hub_tab_resources" onClick={() => go(true)}>
         <PxIcon name="book" size={30} /> Каталог
@@ -153,6 +155,7 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
   const rooms = useRooms((s) => s.rooms)
   const millida = useHasMillida()
   const plusActive = usePlus((s) => s.active)
+  const plusTier = usePlus((s) => s.tier)
   useAccounts()
   const acc = getAccount()
   const gameName = useGameNick((s) => s.name)
@@ -235,7 +238,11 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
             </span>
             <span className="lb-acc-txt">
               <span className="acc-nick">{inGameNick || 'Гость'}</span>
-              <i className={plusActive ? 'plus' : ''}>{plusActive ? 'PLUS' : acc ? accKindLabel(acc.kind) : 'Войти'}</i>
+              {plusActive ? (
+                <PlusMark tier={plusTier === 'DIAMOND' ? 'DIAMOND' : 'PLUS'} height={14} className="lb-pmark-badge" />
+              ) : (
+                <i>{acc ? accKindLabel(acc.kind) : 'Войти'}</i>
+              )}
             </span>
             <Icon id="i-chev-d" />
           </div>

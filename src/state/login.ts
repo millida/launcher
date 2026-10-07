@@ -15,6 +15,7 @@ import { markMillidaEver, millidaEver } from './onboarding'
 import { apiErrorText, isTransientApiError } from '../lib/apiError'
 import { loginPollDelayMs, pokeGate, readLoginChannel } from '../lib/realtimePace'
 import { watchLoginChannel, type LoginWatch } from '../lib/loginRealtime'
+import { withInviteRef } from '../lib/referrals'
 
 interface LauncherInit {
   deviceCode: string
@@ -178,7 +179,7 @@ export async function startWebLogin(reopen = false) {
     hintShown: true,
     hintText: MANUAL_HINT,
   })
-  openUrlAnywhere(init.verifyUrl)
+  openUrlAnywhere(withInviteRef(init.verifyUrl))
   void copyText(init.userCode).then((copied) => {
     if (!copied || useLogin.getState().userCode !== init.userCode) return
     useLogin.getState().set({ hintText: 'Код скопирован. ' + MANUAL_HINT })

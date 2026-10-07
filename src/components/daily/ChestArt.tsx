@@ -1,26 +1,28 @@
-import { useMemo, type CSSProperties } from 'react'
+import type { CSSProperties } from 'react'
 import type { ChestTier } from '../../lib/rubies'
-import { chestSprite } from './chestSprite'
+
+/** Снимок 3D-сундука (scripts/chest-shots.mjs → public/chests): уровень и свой цвет ящика. */
+export const chestShot = (tier: ChestTier, tint?: string) =>
+  '/chests/' + tier.toLowerCase() + (tint ? '-' + tint.replace('#', '').toLowerCase() : '') + '.png'
 
 /**
- * 2D-сундук: клетки трека, плашка лобби и запасной вид, если WebGL недоступен.
- * Рисунок — пиксель-арт уровня (chestSprite.ts, 40×46 клеток без
- * сглаживания): тот же, что в «Моих сундуках» и в окне открытия, чтобы
- * сундук из клетки узнавался в витрине. Готовый сундук подпрыгивает
- * ступенями, за ним мигает плитка цвета редкости и загораются искры.
+ * Сундук без живого холста — тот же 3D-сундук снимком (06.10.2026: плоский
+ * «картонный» рисунок убран отовсюду). Клетки пропуска, плитки, запасной вид
+ * без WebGL и пока 3D грузится. Готовый — подпрыгивает, за ним свет и искры.
  */
 export function ChestArt({
   ready,
   size,
   opening,
   tier = 'COMMON',
+  tint,
 }: {
   ready: boolean
   size: number
   opening?: boolean
   tier?: ChestTier
+  tint?: string
 }) {
-  const src = useMemo(() => chestSprite(tier), [tier])
   return (
     <span
       className={'dc-art tier-' + tier.toLowerCase() + (ready ? ' ready' : '') + (opening ? ' opening' : '')}
@@ -37,7 +39,7 @@ export function ChestArt({
         </>
       ) : null}
       <span className="dc-bob">
-        {src ? <img src={src} alt="" draggable={false} /> : null}
+        <img src={chestShot(tier, tint)} alt="" draggable={false} />
       </span>
     </span>
   )

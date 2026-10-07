@@ -56,6 +56,10 @@ if (import.meta.env.DEV && !('__TAURI_INTERNALS__' in window) && new URLSearchPa
     else document.addEventListener('DOMContentLoaded', mark, { once: true })
   }
 
+  // `&open=rubies` — сразу открыть экран (скриншоты магазина без кликов).
+  const open = new URLSearchParams(location.search).get('open')
+  if (open) setTimeout(() => void import('./state/ui').then((m) => m.useUi.getState().setScreen(open as never)), 600)
+
   // `&launch=installing|running` и `&screen=…` — состояния запуска (src/lib/demoLaunch.ts).
   const launchDemo = new URLSearchParams(location.search).get('launch')
   if (launchDemo) {

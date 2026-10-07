@@ -1,7 +1,12 @@
 import { Suspense, lazy, useEffect } from 'react'
 import { SvgSprite } from './components/SvgSprite'
 import { Titlebar } from './components/Titlebar'
-import { Sidebar } from './components/Sidebar'
+import { HubTopTabs, Sidebar } from './components/Sidebar'
+import { PlayhubBar } from './components/playhub/MyBuilds'
+import { ClassicSidebar } from './components/ClassicSidebar'
+import { ClassicHome } from './screens/ClassicHome'
+import { useLayout } from './state/layout'
+import type { ScreenId } from './state/ui'
 import { LaunchToast, Toast } from './components/Toast'
 import { RewardHost } from './components/reward/RewardReveal'
 import { initChatScreen } from './state/chatScreen'
@@ -13,6 +18,7 @@ import { MilliDock } from './components/milli/MilliDock'
 import {
   Builds,
   Friends,
+  Top,
   Hosting,
   Messages,
   Mods,
@@ -189,6 +195,9 @@ import { initSounds, playSound } from './lib/sound'
 import { initUiTracking } from './lib/uiTrack'
 import { initDeepLinks } from './lib/deeplink'
 import { initOverlayLink } from './lib/overlayLink'
+import { initStreakReminder } from './lib/streakReminder'
+import { initAutostart } from './lib/autostart'
+import { initStreakActivity } from './lib/streakActivity'
 import { useMods } from './state/mods'
 import { refreshMsAccounts } from './state/msLogin'
 import { enterApp, logoutToLogin } from './lib/session'
@@ -279,6 +288,7 @@ function notifyPresence(before: Friend[], now: Friend[]) {
 }
 
 export function App() {
+  const classic = useLayout((st) => st.layout === 'classic')
   // Subscribe field by field: subscribing to the whole store re-rendered the active
   // screen on every toast, animation frame and install progress event.
   const logged = useUi((s) => s.logged)
@@ -306,6 +316,7 @@ export function App() {
       (cb) => useUi.subscribe((st, prev) => void (st.screen !== prev.screen && cb(st.screen))),
     )
     void initDesktopToasts()
+    void initAutostart()
     initDeepLinks()
     initOverlayLink()
     initInstalls()
@@ -314,6 +325,8 @@ export function App() {
     const stopRelay = initRealtimeRelay()
     initCalls()
     const stopPromo = watchPromo()
+    const stopStreakReminder = initStreakReminder()
+    const stopStreakActivity = initStreakActivity()
     const stopPromoServers = watchPromoServers()
     void bootUpdate().then((leaving) => {
       if (leaving) return
@@ -372,6 +385,8 @@ export function App() {
       stopPackAutoUpdate()
       stopRelay()
       stopPromo()
+      stopStreakReminder()
+      stopStreakActivity()
       stopPromoServers()
       releaseRealtime()
       clearInterval(updPoll)
@@ -766,23 +781,33 @@ export function App() {
         <Login on={!logged} />
 
         <div className="app" id="scr-app" style={{ display: logged ? 'flex' : 'none' }}>
-          <Sidebar
-            onNav={(s) => {
+          {(() => {
+            const onNav = (s: ScreenId) => {
               if (s === 'hosting') track('hosting_open', {})
               if (s === 'servers') track('rating_open', {})
               if (s === 'mods') useMods.getState().scopeTo(null)
               setScreen(s)
               const c = document.querySelector('.content')
               if (c) c.scrollTop = 0
-            }}
-          />
+            }
+            return classic ? <ClassicSidebar onNav={onNav} /> : <Sidebar onNav={onNav} />
+          })()}
           <main className="content">
+            {/* Классика: шапки с вкладками нет — переключатель «Мои сборки / Каталог» над экраном. */}
+            {classic && screen === 'playhub' ? (
+              <div className="cl-hubbar">
+                <HubTopTabs libLabel="Мои сборки" />
+                <span className="cl-hubbar-act">
+                  <PlayhubBar />
+                </span>
+              </div>
+            ) : null}
             {/* Navigation runs in a transition, so the fallback only ever shows on
                 the very first render. */}
             <Suspense fallback={null}>
               {screen === 'play' && (
                 <Guard what="Лобби">
-                  <Play on />
+                  {classic ? <ClassicHome on /> : <Play on />}
                 </Guard>
               )}
               {screen === 'premium' && (
@@ -823,6 +848,11 @@ export function App() {
               {screen === 'friends' && (
                 <Guard what="Друзья">
                   <Friends on />
+                </Guard>
+              )}
+              {screen === 'top' && (
+                <Guard what="Топ">
+                  <Top on />
                 </Guard>
               )}
               {screen === 'chat' && (

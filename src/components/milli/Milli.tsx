@@ -11,6 +11,7 @@ import {
   MILLI_DOTS,
   MILLI_DUST,
   MILLI_EYES,
+  MILLI_CROWN_DY,
   MILLI_FRAME,
   MILLI_FRAME_BOX,
   MILLI_GAZE_FRESH,
@@ -301,14 +302,14 @@ const BLUSH = (
 )
 const TEARS_CORNER = (
   <g className="mm-tears-c">
-    <Art rows={ART_TEAR} px={8} x={MILLI_EYE_L.x - 14} y={40} className="mm-tear is-a" />
-    <Art rows={ART_TEAR} px={8} x={MILLI_EYE_R.x + MILLI_EYE_R.w - 10} y={40} className="mm-tear is-b" />
+    <Art rows={ART_TEAR} px={8} x={MILLI_EYE_L.x - 14} y={MILLI_EYE_L.y + 102} className="mm-tear is-a" />
+    <Art rows={ART_TEAR} px={8} x={MILLI_EYE_R.x + MILLI_EYE_R.w - 10} y={MILLI_EYE_R.y + 102} className="mm-tear is-b" />
   </g>
 )
 const TEARS_FALL = (
   <g className="mm-tears-f">
-    <Art rows={ART_TEAR} px={8} x={MILLI_EYE_L.x + 62} y={58} className="mm-drop is-a" />
-    <Art rows={ART_TEAR} px={8} x={MILLI_EYE_R.x + 14} y={58} className="mm-drop is-b" />
+    <Art rows={ART_TEAR} px={8} x={MILLI_EYE_L.x + 62} y={MILLI_EYE_L.y + 120} className="mm-drop is-a" />
+    <Art rows={ART_TEAR} px={8} x={MILLI_EYE_R.x + 14} y={MILLI_EYE_R.y + 120} className="mm-drop is-b" />
   </g>
 )
 const SWEAT = <Art rows={ART_SWEAT} px={8} x={360} y={20} className="mm-sweat" />
@@ -432,7 +433,7 @@ const CROWN_TIPS: MilliBox[] = [
 function Crown({ kind }: { kind: 'gold' | 'diamond' }) {
   const all = [...CROWN_PARTS, ...CROWN_TIPS]
   return (
-    <g className={'mm-crown is-' + kind}>
+    <g className={'mm-crown is-' + kind} transform={'translate(0 ' + MILLI_CROWN_DY + ')'}>
       {all.map((b, i) => (
         <Box key={'o' + i} b={milliGrow(b, 6)} className="mm-crown-ol" />
       ))}
