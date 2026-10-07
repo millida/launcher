@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { hasTauri } from '../ipc/tauri'
 import { importInstance, importPackFile, scanImports } from '../ipc/commands'
 import type { FoundInstance } from '../ipc/commands'
 import { useProfiles } from '../state/profiles'
 import { showToast } from '../state/ui'
-import { ONBOARDING_STEPS, finishOnboarding, onboardingBack, onboardingNext, useOnboarding } from '../state/onboarding'
+import { INVITER_STEP, ONBOARDING_STEPS, finishOnboarding, onboardingBack, onboardingNext, useOnboarding } from '../state/onboarding'
 import { TOUR_STEPS } from '../state/tour'
 import { getAccount, useAccounts } from '../state/accounts'
 import { foundKey } from '../lib/imports'
@@ -14,6 +14,12 @@ import { setMusicAutostart } from '../state/music'
 import { track } from '../lib/telemetry'
 import { trackImportFailure } from '../lib/importTrack'
 import { MovePanel } from './MoveBuilds'
+import { autostartOn, setAutostart } from '../lib/autostart'
+import { hasMillidaAccount } from '../lib/api'
+import { apiErrorText } from '../lib/apiError'
+import { Head } from '../components/Head'
+import { dropInviteCode, lookupInviter, onboardingInvite, peekInviteCode } from '../lib/referrals'
+import { INVITEE_GIFTS } from '../lib/inviteGifts'
 
 function Welcome({ nick }: { nick: string }) {
   return (
@@ -47,6 +53,93 @@ function Welcome({ nick }: { nick: string }) {
           </span>
         </div>
       </div>
+    </>
+  )
+}
+
+/// «Кто тебя позвал?»: ник или код друга, можно пропустить. Подарки показаны
+/// плитками — по ним видно, зачем вводить.
+function InviterStep() {
+  const [query, setQuery] = useState(() => peekInviteCode())
+  const [found, setFound] = useState<{ nickname: string | null } | null>(null)
+  const [miss, setMiss] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const seq = useRef(0)
+
+  useEffect(() => {
+    const text = query.trim()
+    setFound(null)
+    setMiss(false)
+    if (text.length < 3) return
+    const mine = ++seq.current
+    const t = setTimeout(() => {
+      lookupInviter(text)
+        .then((r) => {
+          if (mine !== seq.current) return
+          if (r.found) setFound({ nickname: r.nickname })
+          else setMiss(true)
+        })
+        .catch(() => {})
+    }, 350)
+    return () => clearTimeout(t)
+  }, [query])
+
+  const confirm = () => {
+    if (!found || busy) return
+    setBusy(true)
+    onboardingInvite(query.trim())
+      .then(() => {
+        dropInviteCode()
+        showToast('Друг найден — подарок твой', 'ok', 'achievement')
+        onboardingNext(!hasMillidaAccount())
+      })
+      .catch((e) => showToast(apiErrorText(e, 'Не удалось применить'), 'error'))
+      .finally(() => setBusy(false))
+  }
+
+  return (
+    <>
+      <h3>Кто тебя позвал?</h3>
+      <div className="onb-ref-gifts">
+        {INVITEE_GIFTS.map((g) => (
+          <div className="onb-ref-gift" key={g.id}>
+            <Icon id={g.icon} />
+            <b>{g.title}</b>
+          </div>
+        ))}
+      </div>
+      <div className="onb-ref-row">
+        <label className="input onb-ref-input">
+          <Icon id="i-user" />
+          <input
+            autoFocus
+            placeholder="Ник или код друга"
+            value={query}
+            maxLength={32}
+            spellCheck={false}
+            autoComplete="off"
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') confirm()
+            }}
+          />
+        </label>
+      </div>
+      {found ? (
+        <div className="onb-ref-found">
+          <Head nick={found.nickname || undefined} size={40} />
+          <b>{found.nickname || 'Игрок'}</b>
+          <button className="btn md primary" data-track="onb_ref_confirm" disabled={busy} onClick={confirm}>
+            <Icon id="i-check" />
+            Это он
+          </button>
+        </div>
+      ) : miss ? (
+        <div className="onb-ref-miss">
+          <Icon id="i-search" />
+          Не нашли
+        </div>
+      ) : null}
     </>
   )
 }
@@ -214,9 +307,28 @@ function LookStep() {
 }
 
 function ReadyStep() {
+  const [autostart, setAuto] = useState(true)
+  useEffect(() => {
+    if (hasTauri()) void autostartOn().then(setAuto)
+  }, [])
+
   return (
     <>
       <h3>Готово</h3>
+      <div className="set-row">
+        <span className="lab">Запускать вместе с системой</span>
+        <span
+          className={'tgl' + (autostart ? ' on' : '')}
+          role="switch"
+          aria-checked={autostart}
+          id="onbAutostart"
+          onClick={() => {
+            const next = !autostart
+            setAuto(next)
+            if (hasTauri()) void setAutostart(next).then(setAuto).catch(() => setAuto(!next))
+          }}
+        ></span>
+      </div>
       <div className="onb-list">
         <div className="onb-point">
           <Icon id="i-play" />
@@ -260,13 +372,14 @@ export function OnboardingModal() {
         </div>
 
         {step === 0 ? <Welcome nick={acc ? acc.nick : ''} /> : null}
-        {step === 1 ? <ImportStep /> : null}
-        {step === 2 ? <LookStep /> : null}
-        {step === 3 ? <ReadyStep /> : null}
+        {step === INVITER_STEP ? <InviterStep /> : null}
+        {step === 2 ? <ImportStep /> : null}
+        {step === 3 ? <LookStep /> : null}
+        {step === 4 ? <ReadyStep /> : null}
 
         <div className="onb-actions">
           {step > 0 ? (
-            <button className="btn md secondary" onClick={onboardingBack}>
+            <button className="btn md secondary" onClick={() => onboardingBack(!hasMillidaAccount())}>
               Назад
             </button>
           ) : (
@@ -285,8 +398,12 @@ export function OnboardingModal() {
               </button>
             </>
           ) : (
-            <button className="btn md primary" onClick={onboardingNext}>
-              {step === 0 ? 'Поехали' : 'Далее'}
+            <button
+              className={'btn md ' + (step === INVITER_STEP ? 'secondary' : 'primary')}
+              data-track={step === INVITER_STEP ? 'onb_ref_skip' : undefined}
+              onClick={() => onboardingNext(!hasMillidaAccount())}
+            >
+              {step === 0 ? 'Поехали' : step === INVITER_STEP ? 'Пропустить' : 'Далее'}
             </button>
           )}
         </div>

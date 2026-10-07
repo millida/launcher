@@ -9,6 +9,8 @@ import { openChat, openFriendProfile } from '../../state/friends'
 import { callFriend, callSupported } from '../../state/call'
 import { invitePlay } from '../../state/playInvite'
 import type { Friend } from '../../state/friends'
+import { useFriendStreaks } from '../../state/friendStreaks'
+import { StreakFire } from './StreakFire'
 
 /** Адрес сервера друга: поле называется по-разному в разных ответах сервера. */
 export const friendServer = (f: Friend): string | undefined =>
@@ -75,6 +77,7 @@ export function FriendRow({
   const addr = friendServer(f)
   const canJoin = !!(f.playing && addr)
   const nick = f.nickname || ''
+  const streak = useFriendStreaks((s) => s.byId[f.userId])
   const moreRef = useRef<HTMLButtonElement>(null)
   const [at, setAt] = useState<{ right: number; top?: number; bottom?: number } | null>(null)
   useLayoutEffect(() => {
@@ -130,6 +133,7 @@ export function FriendRow({
       <span className="fr-body">
         <span className="fr-nick">
           {nick}
+          <StreakFire n={streak} />
           {f.gameNick ? <span className="fr-gamenick">{' · ' + f.gameNick}</span> : null}
         </span>
         <span className={'fr-status' + (f.online ? ' on' : '') + (f.place === 'web' ? ' web' : '')}>

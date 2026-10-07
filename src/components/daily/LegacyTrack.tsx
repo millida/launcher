@@ -1,5 +1,5 @@
 import { Icon } from '../Icon'
-import { Chest } from '../Chest'
+import { ChestArt } from './ChestArt'
 import { Ruby } from '../Ruby'
 import { dayState, rubiesText, trackDays, type DailyView, type TrackDay } from './track'
 
@@ -33,7 +33,7 @@ function Cell({
       {kind === 'free' ? (
         <span className="dp-day">{state === 'got' ? <Icon id="i-check" /> : label}</span>
       ) : null}
-      {chest ? <Chest size={34} /> : <Ruby size={kind === 'plus' ? 26 : 24} />}
+      {chest ? <ChestArt ready={false} size={34} /> : <Ruby size={kind === 'plus' ? 26 : 24} />}
       <b>{chest ? 'Сундук' : text || '—'}</b>
       {locked ? (
         <span className="dp-mark lock">

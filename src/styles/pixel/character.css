@@ -546,3 +546,12 @@
 .ch-tile.has-frag .ch-tile-status { margin-top: 2px; }
 .ch-tile.has-frag .ch-tile-frag { margin-top: 0; }
 .ch-tile-frag .rar-fbar { font-size: 10px; gap: 4px; }
+
+/* Магазин в гардеробе — на всю ширину (владелец 07.10.2026: персонаж слева мешал
+   листать); вещь на себе видна в окне покупки. */
+.ch-grid.is-shop { grid-template-columns: minmax(0, 1fr) !important; }
+.ch-grid.is-shop .ch-center { display: none; }
+/* Там же — компактнее: пакеты ниже, пропуск мельче, чтобы лента листалась быстрее. */
+.ch-shop .pk-wrap .pk-grid .pk-pick { height: 112px; }
+.ch-shop .pk-wrap .pk-grid .pk-art img { width: 96px; height: 96px; }
+.ch-shop .tk3-card { zoom: 0.8; }

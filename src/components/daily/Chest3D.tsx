@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ChestTier } from '../../lib/rubies'
 import type { ChestLook, ChestMode, ChestScene } from './chestScene'
 import { ChestArt } from './ChestArt'
-import { gpuLite, noteContextLost } from '../../lib/gpuLite'
+import { gpuLite } from '../../lib/gpuLite'
 
 const reducedMotion = () => !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
@@ -16,8 +16,11 @@ export function Chest3D({
   framing = 'hero',
   className,
   flatSize = 96,
-  look = 'voxel',
+  // Один вид сундуков во всём лаунчере (06.10.2026): модель, а не кубик.
+  look = 'model',
+  tint,
   onOpened,
+  noFlat,
 }: {
   tier: ChestTier
   mode: ChestMode
@@ -25,7 +28,11 @@ export function Chest3D({
   className?: string
   flatSize?: number
   look?: ChestLook
+  /** Свой цвет сундука: модель перекрашивается (ящики магазина). */
+  tint?: string
   onOpened?: () => void
+  /** Пока грузится 3D — пусто, а не плоский рисунок (иначе в открытии мелькал чужой сундук). */
+  noFlat?: boolean
 }) {
   const wrap = useRef<HTMLDivElement>(null)
   const canvas = useRef<HTMLCanvasElement>(null)
@@ -39,8 +46,6 @@ export function Chest3D({
   useEffect(() => {
     let alive = true
     let ro: ResizeObserver | null = null
-    let onLost: ((ev: Event) => void) | null = null
-    const cvAtMount = canvas.current
     // Лёгкая графика после сбоя видеокарты — сразу 2D-рисунок, без WebGL.
     if (gpuLite()) {
       setState('failed')
@@ -56,24 +61,22 @@ export function Chest3D({
           reduced: reducedMotion(),
           framing,
           look,
+          tint,
           onOpened: () => openedRef.current?.(),
+          onLost: () => {
+            if (!alive) return
+            sceneRef.current?.dispose()
+            sceneRef.current = null
+            setState('failed')
+          },
         })
         if (!scene) {
           setState('failed')
           return
         }
         sceneRef.current = scene
-        // Видеокарта отобрала контекст — дальше рисунок; второй раз за сеанс
-        // включает лёгкую графику (lib/gpuLite).
-        const cv = canvas.current
-        onLost = (ev: Event) => {
-          ev.preventDefault()
-          noteContextLost()
-          sceneRef.current?.dispose()
-          sceneRef.current = null
-          setState('failed')
-        }
-        cv.addEventListener('webglcontextlost', onLost)
+        // Потерю общего контекста сундуков ловит chestGl (onLost выше):
+        // дальше рисунок, второй раз за сеанс — лёгкая графика (lib/gpuLite).
         const el = wrap.current
         scene.resize(el.clientWidth, el.clientHeight)
         ro = new ResizeObserver(() => scene.resize(el.clientWidth, el.clientHeight))
@@ -87,7 +90,6 @@ export function Chest3D({
     return () => {
       alive = false
       ro?.disconnect()
-      if (onLost) cvAtMount?.removeEventListener('webglcontextlost', onLost)
       io?.disconnect()
       sceneRef.current?.dispose()
       sceneRef.current = null
@@ -109,9 +111,9 @@ export function Chest3D({
   return (
     <div ref={wrap} className={'c3d' + (className ? ' ' + className : '')} aria-hidden="true">
       <canvas ref={canvas} className={state === 'ready' ? 'on' : ''} />
-      {state !== 'ready' ? (
+      {state === 'failed' || (state !== 'ready' && !noFlat) ? (
         <span className={'c3d-flat' + (mode === 'shake' ? ' shake' : '')}>
-          <ChestArt ready={mode === 'ready'} opening={mode === 'shake' || mode === 'open'} tier={tier} size={flatSize} />
+          <ChestArt ready={mode === 'ready'} opening={mode === 'shake' || mode === 'open'} tier={tier} tint={tint} size={flatSize} />
         </span>
       ) : null}
     </div>

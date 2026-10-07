@@ -27,6 +27,9 @@ import './styles/pixel/social.css'
 import { App } from './App'
 import { dropBootSplash } from './lib/boot'
 import { initAccent } from './lib/accent'
+import { initPremiumTheme } from './lib/premiumTheme'
+import './styles/pixel/premium-theme.css'
+import './styles/classic.css'
 import { Overlay } from './screens/Overlay'
 import { openExt } from './lib/api'
 import { initRenderGate } from './lib/renderGate'
@@ -62,6 +65,8 @@ if (isOverlay) {
   // user's accent.
   void initAccent()
 } else {
+  // Премиум-темы PLUS / Diamond: сохранённая рисуется сразу, дальше — по подписке.
+  initPremiumTheme()
   // Окно лаунчера замирает, пока не видно или поверх идёт игра.
   initRenderGate()
   // Прошлое окно убил сбой видеокарты — WebGL выключаем до первого кадра лобби.

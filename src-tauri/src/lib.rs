@@ -1,6 +1,7 @@
 use tauri::Manager;
 
 pub mod engine;
+mod app_icon;
 mod discord;
 mod secrets;
 mod commands;
@@ -124,7 +125,15 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        // Запуск вместе с системой (06.10.2026): лаунчер живёт в трее, и
+        // напоминания о сундуке и серии есть кому показать.
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec![commands::system::AUTOSTART_ARG]),
+        ))
         .setup(|app| {
+            #[cfg(debug_assertions)]
+            app_icon::apply_from_env(app.handle());
             // Portable builds never run an installer, so the deep link scheme is
             // registered at startup as well.
             #[cfg(any(target_os = "windows", target_os = "linux"))]
@@ -135,6 +144,10 @@ pub fn run() {
             engine::install_panic_hook(env!("CARGO_PKG_VERSION").to_string());
             allow_assets(app.handle());
             tray::init(app.handle());
+            // Запущен системой при входе: сразу в трей, окно не выскакивает.
+            if commands::system::started_by_os() && tray::available() {
+                tray::hide_main(app.handle());
+            }
             engine::arm_selfheal(app.handle());
             engine::arm_dialogs(app.handle());
             if let Some(w) = app.get_webview_window("main") {
@@ -178,6 +191,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::content::core_version,
             commands::system::app_version,
+            commands::system::autostart_state,
+            commands::system::autostart_set,
+            app_icon::set_app_icon,
             commands::system::device_specs,
             webview_health::take_webview_failure,
             webview_health::set_webview_low_memory,
@@ -301,6 +317,9 @@ pub fn run() {
             commands::accounts::ms_session_refresh,
             commands::accounts::ms_session_validate,
             commands::accounts::ms_session_forget,
+            commands::accounts::ely_device_start,
+            commands::accounts::ely_device_poll,
+            commands::accounts::ely_session_commit,
             commands::accounts::mc_textures,
             commands::accounts::ms_profile,
             commands::accounts::ms_set_cape,
@@ -428,7 +447,6 @@ pub fn run() {
             commands::profiles::save_screenshot_as,
             commands::profiles::share_screenshot,
             commands::profiles::share_profile,
-            commands::profiles::my_packs,
             commands::profiles::unshare_profile,
             commands::profiles::pack_preview,
             commands::profiles::install_shared_pack,

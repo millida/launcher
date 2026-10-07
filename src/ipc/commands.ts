@@ -734,7 +734,7 @@ export const installVersion = (
 
 // Names the account to play as; the core resolves the credentials itself.
 export interface LaunchAuth {
-  kind: 'offline' | 'microsoft' | 'millida'
+  kind: 'offline' | 'microsoft' | 'millida' | 'elyby'
   accountId?: string
   uuid?: string
   xuid?: string
@@ -834,6 +834,13 @@ export const msSessionRefresh = (accountId: string) => invoke<MsSessionResult>('
 export const msSessionValidate = (accountId: string) => invoke<MsSessionResult>('ms_session_validate', { accountId })
 
 export const msSessionForget = (accountId: string) => invoke<void>('ms_session_forget', { accountId })
+
+export const elyDeviceStart = () => invoke<DeviceStart>('ely_device_start')
+
+export const elyDevicePoll = (deviceCode: string) => invoke<DevicePoll>('ely_device_poll', { deviceCode })
+
+export const elySessionCommit = (deviceCode: string, accountId: string) =>
+  invoke<void>('ely_session_commit', { deviceCode, accountId })
 
 export interface MsCape {
   id: string
@@ -1040,6 +1047,11 @@ export interface CrashEntry {
 }
 
 export const appVersion = () => invoke<string>('app_version')
+/** Запуск вместе с системой: включён ли и включить/выключить (ответ — итог). */
+export const autostartState = () => invoke<boolean>('autostart_state')
+/** Иконка окна/панели задач/Dock: default | spark | gold | diamond. */
+export const setAppIcon = (id: string) => invoke<void>('set_app_icon', { id })
+export const autostartSet = (on: boolean) => invoke<boolean>('autostart_set', { on })
 
 export interface DeviceSpecs {
   os: string
@@ -1221,10 +1233,10 @@ export interface OverlayCard {
   nick: string
   text: string
   ts: number
-  kind?: 'msg' | 'online' | 'play'
+  kind?: 'msg' | 'online' | 'play' | 'streak'
   nicks?: string[]
   // Where a click on the card should land; without it the card is just a notice.
-  open?: 'chat' | 'room' | 'friends' | 'call'
+  open?: 'chat' | 'room' | 'friends' | 'call' | 'daily'
 }
 export const overlayState = () => invoke<OverlayState>('overlay_state')
 export const overlaySetEnabled = (on: boolean) => invoke<void>('overlay_set_enabled', { on })
@@ -1403,18 +1415,6 @@ export interface PackPreview {
 
 export const shareProfile = (profile: string, summary?: string) =>
   invoke<SharedPack>('share_profile', { profile, summary })
-export interface MyPack {
-  code: string
-  name: string
-  files: number
-  installs: number
-  updatedAt: string
-}
-
-// Codes already issued: the share window shows the existing one instead of
-// printing a new one on every open.
-export const myPacks = () => invoke<MyPack[]>('my_packs')
-
 export const unshareProfile = (code: string) => invoke<void>('unshare_profile', { code })
 export const packPreview = (code: string) => invoke<PackPreview>('pack_preview', { code })
 export const installSharedPack = (code: string) => invoke<Profile>('install_shared_pack', { code })

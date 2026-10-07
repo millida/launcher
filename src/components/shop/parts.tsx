@@ -3,6 +3,7 @@ import { artFit } from '../../lib/artFit'
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Icon } from '../Icon'
 import { Ruby } from '../Ruby'
+import { CurrencyIcon } from '../CurrencyIcon'
 import { cosmeticSlotIcon } from '../../lib/cosmeticSlots'
 import type { ItemRef } from '../../lib/rubies'
 import { RARITY_TONE } from './rarity'
@@ -16,24 +17,8 @@ import { RARITY_TONE } from './rarity'
  * клетку в четыре стороны, под кристаллом, плюс жёсткая тень на клетку ниже.
  * Читается на зелёном, фиолетовом и тёмном фоне одинаково.
  */
-const SHARD_PATH = 'M8 0h2v2h2v4h2v4h-2v4h-2v2H8v-2H6v-4H4V6h2V2h2z'
 export function Shard({ size = 18 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="-1 -1 18 19" className="sh-shard" aria-hidden="true" shapeRendering="crispEdges">
-      <path d={SHARD_PATH} fill="#071322" transform="translate(0 2)" opacity="0.55" />
-      {[
-        [-1, 0],
-        [1, 0],
-        [0, -1],
-        [0, 1],
-      ].map(([x, y]) => (
-        <path key={x + ':' + y} d={SHARD_PATH} fill="#071322" transform={'translate(' + x + ' ' + y + ')'} />
-      ))}
-      <path d={SHARD_PATH} fill="var(--m-rarity-rare)" />
-      <path d="M8 2h2v4h2v4h-2V6H8z" fill="#bfe6ff" />
-      <path d="M6 10h2v4H6z" fill="rgba(0,0,0,.28)" />
-    </svg>
-  )
+  return <CurrencyIcon art="shard" size={size} className="sh-shard" />
 }
 
 /** «до 24 сентября» по Москве: смена дня магазина — 00:00 МСК. */
@@ -85,15 +70,27 @@ export function leftLabel(ms: number): string {
 
 /** Живой отсчёт до `to`. Дошёл до нуля — один раз зовёт `onEnd` (обновить витрину). */
 export function Countdown({ to, onEnd }: { to: string; onEnd?: () => void }) {
-  const now = useNow()
+  const ticked = useNow()
+  const now = Math.max(ticked, Date.now())
   const left = new Date(to).getTime() - now
   const fired = useRef(false)
+  const [, wake] = useState(0)
+  // Часы тикают раз в 20 с — к нулю будим точно в срок, чтобы витрина
+  // сменилась сразу, а не через 20 секунд.
+  useEffect(() => {
+    if (left <= 0) return
+    const t = window.setTimeout(() => wake((n) => n + 1), Math.min(left + 50, 2_147_000_000))
+    return () => window.clearTimeout(t)
+  }, [to])
   useEffect(() => {
     if (left <= 0 && !fired.current) {
       fired.current = true
       onEnd?.()
     }
   }, [left <= 0])
+  useEffect(() => {
+    fired.current = false
+  }, [to])
   return <>{leftLabel(Math.max(0, left))}</>
 }
 

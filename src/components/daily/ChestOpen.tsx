@@ -1,20 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { create } from 'zustand'
 import { Icon } from '../Icon'
-import { Burst, Confetti, Rays } from '../reward/RewardReveal'
-import { Shard } from '../shop/parts'
 import { Ruby } from '../Ruby'
-import { useVariantPreview } from '../../lib/variantArt'
-import { fragmentWord, RARITY_TONE, rarityProps, shardWord, word } from '../shop/rarity'
-import { FragBar, FragmentIcon, RarityFx, RarityPlate } from '../shop/rarityUi'
-import { type ChestDrop, type ChestTier, type PendingChest, type Rarity } from '../../lib/rubies'
+import { RARITY_TONE } from '../shop/rarity'
+import type { CaseReward, ChestDrop, ChestTier, ItemRef, PendingChest } from '../../lib/rubies'
 import { playSound } from '../../lib/sound'
 import { useDaily, type ChestOpenAnswer } from '../../state/daily'
-import { CHEST_DROPS, hasRarity, RARITY_NAME, RARITY_ORDER, TIER_ORDER, viewOf, type OpenedView } from './chestDrops'
-import { burstSound, cardSound, hitSound, teaseSound } from './chestSound'
-import { chestSprite, CRACK_STEPS, SPRITE_H, SPRITE_W } from './chestSprite'
+import { showToast } from '../../state/ui'
+import { CHEST_DROPS, TIER_ORDER, viewOf } from './chestDrops'
 import { CHEST_NAME } from './rewards'
+import { CaseReveal } from '../chest/CaseReveal'
 import '../../styles/pixel/chestopen.css'
 import { topUpFragments } from '../shop/topUp'
 import { wearNow } from '../../state/wearIntent'
@@ -37,7 +33,6 @@ import { wearNow } from '../../state/wearIntent'
  * уже есть.
  */
 
-type Stage = 'hit' | 'burst' | 'card' | 'sum' | 'error'
 
 interface Flow {
   queue: PendingChest[]
@@ -75,9 +70,30 @@ function openOnce(id: string): Promise<ChestOpenAnswer> {
   return p
 }
 
-const reducedMotion = () => !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-const rank = (r: Rarity) => RARITY_ORDER.indexOf(r)
-const tone = (r: Rarity) => RARITY_TONE[r]
+/** Выпадение сундука → награда общего открытия (CaseReveal). */
+export function dropReward(d: ChestDrop): CaseReward {
+  if (d.kind === 'SHARDS') return { kind: 'shards', amount: d.amount }
+  if (d.kind === 'RUBIES') return { kind: 'rubies', amount: d.amount }
+  const v = d.variant
+  const item: ItemRef | undefined = d.item
+    ? {
+        code: d.item.code + (v?.name ? '~' + v.name : ''),
+        name: d.item.name,
+        slot: d.item.slot,
+        rarity: d.rarity,
+        preview: d.item.previewUrl,
+        ...(v?.from ? { tintFrom: v.from.replace('#', ''), color: v.color.replace('#', ''), variant: v.name } : v ? { variant: v.name } : {}),
+      }
+    : undefined
+  if (d.kind === 'FRAGMENTS') {
+    // Все вещи редкости уже есть — фрагменты ушли осколками.
+    if (!item) return { kind: 'shards', amount: d.shards }
+    return { kind: 'fragments', item, amount: d.amount, frag: { have: d.have, need: d.need } }
+  }
+  if (!item) return { kind: 'shards', amount: d.shards }
+  return d.duplicate ? { kind: 'item', item, dup: true, amount: d.rubies || d.shards } : { kind: 'item', item }
+}
+
 /** Цвет сундука до ударов — его уровень. */
 const TIER_TONE: Record<ChestTier, string> = {
   COMMON: '#ffcf52',
@@ -86,205 +102,25 @@ const TIER_TONE: Record<ChestTier, string> = {
   LEGEND: RARITY_TONE.LEGENDARY,
 }
 
-/** Карточка награды. `tease` — рубашка цвета редкости до раскрытия. */
-function DropCard({ d, tease, small, tier = 'COMMON' }: { d: ChestDrop; tease?: boolean; small?: boolean; tier?: ChestTier }) {
-  const [broken, setBroken] = useState(false)
-  // Вещь-расцветка (v3.1): превью в свою расцветку.
-  const v = hasRarity(d) ? d.variant : null
-  const tinted = useVariantPreview(hasRarity(d) ? d.item?.previewUrl : null, v?.from, v?.from ? v.color : null)
-  const size = small ? 64 : 148
-  let art
-  let title: string
-  let sub: string | null = null
-  let foot = null
-  if (d.kind === 'SHARDS') {
-    art = <Shard size={small ? 44 : 96} />
-    title = '+' + d.amount.toLocaleString('ru-RU')
-    sub = shardWord(d.amount)
-  } else if (d.kind === 'RUBIES') {
-    art = <Ruby size={small ? 40 : 88} />
-    title = '+' + d.amount.toLocaleString('ru-RU')
-    sub = word(d.amount)
-  } else {
-    const src = tinted
-    const pic =
-      src && !broken ? (
-        <img src={src} alt="" width={size} height={size} draggable={false} onError={() => setBroken(true)} />
-      ) : (
-        <Icon id="i-gift" style={{ width: small ? 36 : 72, height: small ? 36 : 72 }} />
-      )
-    if (d.kind === 'FRAGMENTS') {
-      // Фрагменты вещи (модель v2): картинка вещи, в углу — кусочек пазла и «+6».
-      art = (
-        <>
-          {d.item ? pic : <Shard size={small ? 44 : 96} />}
-          {d.item ? (
-            <span className="co-frag-gain">
-              <FragmentIcon rarity={d.rarity} size={small ? 14 : 22} />+{d.amount}
-            </span>
-          ) : null}
-        </>
-      )
-      title = d.item?.name || RARITY_NAME[d.rarity] + ' вещь'
-      if (!d.item) {
-        // Все вещи редкости уже есть — фрагменты ушли осколками.
-        title = '+' + d.shards + ' ' + shardWord(d.shards)
-        sub = d.amount + ' ' + fragmentWord(d.amount) + ' → осколки'
-      } else if (d.completed) {
-        sub = 'Собрано!'
-      } else {
-        foot = <FragBar have={d.have} need={d.need} rarity={d.rarity} gain={d.amount} />
-      }
-    } else {
-      art = pic
-      title = d.item?.name || RARITY_NAME[d.rarity] + ' вещь'
-      sub = d.duplicate
-        ? d.rubies
-          ? 'Повтор: +' + d.rubies + ' ' + word(d.rubies)
-          : 'Повтор: +' + d.shards + ' ' + shardWord(d.shards)
-        : RARITY_NAME[d.rarity]
-    }
-  }
-  const rp = !hasRarity(d)
-    ? { style: { ['--co-it' as string]: d.kind === 'RUBIES' ? RARITY_TONE.MYTHIC : RARITY_TONE.RARE } as CSSProperties }
-    : rarityProps(d.rarity)
-  const dup = (d.kind === 'ITEM' && d.duplicate) || (d.kind === 'FRAGMENTS' && !d.item)
-  const done = d.kind === 'FRAGMENTS' && d.completed
-  return (
-    <span
-      className={'co-card' + (small ? ' sm' : '') + (tease ? ' tease' : '') + (dup ? ' dup' : '') + (done ? ' done' : '')}
-      {...rp}
-    >
-      <span className="co-card-plate">
-        <i className="co-edge-t" />
-        <i className="co-edge-b" />
-        {tease ? (
-          <span className="co-back" aria-hidden="true">
-            <img src={chestSprite(tier, { open: true })} alt="" width={SPRITE_W * 3} height={SPRITE_H * 3} />
-          </span>
-        ) : (
-          <>
-            <span className="co-art">{art}</span>
-            {hasRarity(d) && !small ? <RarityPlate rarity={d.rarity} small /> : null}
-            <b className="co-name">{title}</b>
-            {sub ? <span className="co-sub">{sub}</span> : null}
-            {foot ? <span className="co-foot">{foot}</span> : null}
-          </>
-        )}
-      </span>
-      {!tease && hasRarity(d) ? <RarityFx /> : null}
-    </span>
-  )
-}
-
-/** Одно открытие: удары → взрыв → карточки → итог. */
+/**
+ * Одно открытие сундука бонуса, пропуска, за игру и т.п. — тем же общим
+ * открытием, что ящики магазина (CaseReveal): огромный 3D-сундук, удары,
+ * взрыв, награды по одной, итог. Фрагменты в итоге можно докупить.
+ */
 function Opening({ chest, left, onDone, onNext }: { chest: PendingChest; left: number; onDone: () => void; onNext: () => void }) {
-  const reduced = useMemo(reducedMotion, [])
   const tier = chest.tier
-  const [view, setView] = useState<OpenedView | null>(null)
-  const [error, setError] = useState<{ text: string; outdated?: boolean } | null>(null)
-  const [stage, setStage] = useState<Stage>('hit')
-  const [hits, setHits] = useState(0)
-  const [kick, setKick] = useState(0)
-  const [card, setCard] = useState(0)
-  const [teasing, setTeasing] = useState(false)
+  const [drops, setDrops] = useState<ChestDrop[]>([])
   const [bought, setBought] = useState<Set<number>>(() => new Set())
   const [buying, setBuying] = useState(-1)
-  const waitRef = useRef(false)
-  const timers = useRef<number[]>([])
-  const later = (fn: () => void, ms: number) => timers.current.push(window.setTimeout(fn, ms))
-  useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), [])
-
-  // Запрос — сразу: к последнему удару ответ уже на руках.
-  useEffect(() => {
-    let alive = true
-    void openOnce(chest.id).then((a) => {
-        if (!alive) return
-        if ('ok' in a) setView(viewOf(a.ok))
-        else {
-          setError({ text: a.error, outdated: a.outdated })
-          setStage('error')
-          playSound('error')
-        }
-      })
-    return () => {
-      alive = false
-    }
-  }, [chest.id])
-
-  const need = view?.hits ?? CHEST_DROPS[tier].hits
-  const drops = view?.drops ?? []
-  const top = view?.top ?? 'COMMON'
-
-  /* Свет в щелях: от цвета уровня к цвету лучшей вещи, ступенями по ударам. */
-  // Эскалация ранга как у Starr Drop: каждый удар может поднять цвет на ступень вверх, до лучшей вещи.
-  const climb = useMemo<Rarity | null>(() => {
-    if (!hits || !view) return null
-    const steps = RARITY_ORDER.slice(0, rank(top) + 1)
-    const k = Math.min(steps.length - 1, Math.floor((hits / need) * (steps.length - 1) + 0.0001))
-    return steps[Math.max(0, k)]!
-  }, [hits, need, top, view])
-  const glow = climb ? tone(climb) : TIER_TONE[tier]
-
-  const burst = useCallback(() => {
-    setStage('burst')
-    burstSound()
-    playSound('success')
-    later(() => {
-      setStage('card')
-      setCard(0)
-    }, reduced ? 200 : 900)
-  }, [reduced])
-
-  // Последний удар пришёлся раньше ответа службы: раскрываемся, как только он придёт.
-  useEffect(() => {
-    if (waitRef.current && view && stage === 'hit' && hits >= need) {
-      waitRef.current = false
-      burst()
-    }
-  }, [view, stage, hits, need, burst])
-
-  const hit = () => {
-    if (stage !== 'hit' || hits >= need) return
-    const n = hits + 1
-    setHits(n)
-    setKick((k) => k + 1)
-    hitSound(n - 1)
-    if (n >= need) {
-      if (view) later(burst, reduced ? 0 : 260)
-      else waitRef.current = true
-    }
-  }
-
-  const cur = drops[card]
-  // Эпическая и выше — пауза-тизер; собранная вещь — тоже большой момент.
-  const isBig = !!cur && hasRarity(cur) && (rank(cur.rarity) >= rank('EPIC') || (cur.kind === 'FRAGMENTS' && cur.completed))
-
-  // Каждая карточка: звук, а эпическая и выше — пауза-тизер рубашкой.
-  useEffect(() => {
-    if (stage !== 'card' || !cur) return
-    if (isBig && !reduced) {
-      setTeasing(true)
-      teaseSound()
-      later(() => {
-        setTeasing(false)
-        cardSound(rank((cur as { rarity: Rarity }).rarity))
-        playSound('achievement')
-      }, 1100)
-    } else {
-      setTeasing(false)
-      cardSound(hasRarity(cur) ? rank(cur.rarity) : 1)
-    }
-  }, [stage, card])
-
-  const advance = () => {
-    if (stage === 'hit') return hit()
-    if (stage !== 'card' || teasing) return
-    if (card + 1 < drops.length) setCard(card + 1)
-    else setStage('sum')
-  }
-
-  const fresh = drops.some((d) => (d.kind === 'ITEM' && !d.duplicate && d.item) || (d.kind === 'FRAGMENTS' && d.completed))
+  const [need, setNeed] = useState(CHEST_DROPS[tier].hits)
+  const request = () =>
+    openOnce(chest.id).then((a) => {
+      if (!('ok' in a)) throw new Error(a.error)
+      const view = viewOf(a.ok)
+      setDrops(view.drops)
+      setNeed(view.hits)
+      return view.drops.map(dropReward)
+    })
   const wear = () => {
     onDone()
     useDaily.getState().setModal(false)
@@ -296,163 +132,48 @@ function Opening({ chest, left, onDone, onNext }: { chest: PendingChest; left: n
       ),
     )
   }
-
-  // Клавиатура: пробел/Enter — удар и «Дальше», Esc — закрыть после итога.
-  useEffect(() => {
-    const on = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && (stage === 'sum' || stage === 'error')) onDone()
-      else if ((e.key === ' ' || e.key === 'Enter') && (stage === 'hit' || stage === 'card')) {
-        e.preventDefault()
-        advance()
-      }
-    }
-    window.addEventListener('keydown', on)
-    return () => window.removeEventListener('keydown', on)
-  })
-
-  const crack = Math.min(CRACK_STEPS, Math.round((hits / need) * CRACK_STEPS))
-  const sprite = chestSprite(tier, stage === 'burst' || stage === 'card' || stage === 'sum' ? { open: true } : { crack, gray: stage === 'error' })
-  const sceneTone = stage === 'card' && cur && hasRarity(cur) ? tone(cur.rarity) : glow
-  const k = hits / need
-
   return (
-    <div
-      className={'co stage-' + stage + (teasing ? ' teasing' : '') + (isBig && stage === 'card' ? ' big' : '')}
-      style={{ '--rw-tone': sceneTone, '--co-glow': glow, '--co-k': String(k) } as CSSProperties}
-      onClick={advance}
-      role="dialog"
-      aria-modal="true"
-      aria-label={CHEST_NAME[tier] + ' сундук'}
-    >
-      <div className="co-head" onClick={(e) => e.stopPropagation()}>
-        <b className="co-title">{CHEST_NAME[tier]} сундук</b>
-        {left > 0 ? <span className="co-left">ещё {left}</span> : null}
-        {stage === 'sum' || stage === 'error' ? (
-          <button type="button" className="co-x" aria-label="Закрыть" onClick={onDone}>
-            <Icon id="i-x" />
-          </button>
-        ) : null}
-      </div>
-
-      {stage === 'hit' || stage === 'burst' || stage === 'error' ? (
-        <div className="co-stage">
-          <Rays className={'co-rays' + (hits || stage === 'burst' ? ' on' : '')} />
-          <span className="co-halo" aria-hidden="true" />
-          <span key={kick} className={'co-chest tier-' + tier.toLowerCase() + (kick ? ' kick' : '') + (stage === 'burst' ? ' pop' : '')}>
-            <img src={sprite} alt="" width={SPRITE_W * 7} height={SPRITE_H * 7} draggable={false} />
+    <CaseReveal
+      title={CHEST_NAME[tier] + ' сундук'}
+      tier={tier}
+      color={TIER_TONE[tier]}
+      hits={need}
+      request={request}
+      onFail={(e) => {
+        playSound('error')
+        showToast(e instanceof Error ? e.message : 'Сундук не открылся, попробуй позже', 'error')
+        onDone()
+      }}
+      onDone={() => undefined}
+      onClose={onDone}
+      onWear={() => wear()}
+      again={left > 0 ? { primary: true, onClick: onNext, node: <>Следующий · ещё {left}</> } : undefined}
+      extra={(_r, i) => {
+        const d = drops[i]
+        const topUp = d && d.kind === 'FRAGMENTS' && d.item && !d.completed && d.topUp ? d.topUp : 0
+        if (!d || d.kind !== 'FRAGMENTS' || !topUp) return null
+        return bought.has(i) ? (
+          <span className="co-topup-done">
+            <Icon id="i-check" /> Твоя
           </span>
-          {kick && stage === 'hit' ? <Burst key={'b' + kick} n={10 + hits * 4} spread={120 + hits * 30} seed={kick} /> : null}
-          {stage === 'burst' ? (
-            <>
-              <span className="co-flash" aria-hidden="true" />
-              <Burst n={40} spread={420} seed={99} />
-            </>
-          ) : null}
-          {stage === 'hit' ? (
-            <div className="co-pips" aria-label={'Ударов: ' + hits + ' из ' + need}>
-              {Array.from({ length: need }, (_, i) => (
-                <i key={i} className={i < hits ? 'on' : ''} />
-              ))}
-            </div>
-          ) : null}
-          {stage === 'hit' ? <b className="co-tap">{hits ? 'Ещё!' : 'Жми'}</b> : null}
-          {stage === 'error' && error ? (
-            <div className="co-err" onClick={(e) => e.stopPropagation()}>
-              <b>{error.text}</b>
-              <button type="button" className="btn md secondary" onClick={onDone}>
-                Закрыть
-              </button>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-
-      {stage === 'hit' && climb ? (
-        <b key={climb} className="co-climb" data-rar={climb} style={{ '--co-it': tone(climb) } as CSSProperties}>
-          {RARITY_NAME[climb]}
-        </b>
-      ) : null}
-
-      {stage === 'card' && cur ? (
-        <div className="co-stage">
-          <Rays className="co-rays on" />
-          {!teasing ? <Burst key={'c' + card} n={isBig ? 44 : 22} spread={isBig ? 380 : 240} seed={card + 3} /> : null}
-          {isBig && !teasing ? <Confetti key={'f' + card} n={cur.kind === 'FRAGMENTS' && cur.completed ? 70 : 46} seed={card} /> : null}
-          <span key={card + (teasing ? 't' : 'r')} className={'co-fly' + (teasing ? ' tease' : '')}>
-            <DropCard d={cur} tease={teasing} tier={tier} />
-          </span>
-          <div className="co-count">
-            {card + 1} / {drops.length}
-          </div>
+        ) : (
           <button
             type="button"
-            className="btn lg primary co-next"
-            disabled={teasing}
-            data-track="chest_next_drop"
-            onClick={(e) => {
-              e.stopPropagation()
-              advance()
+            className="btn sm secondary co-topup"
+            disabled={buying === i}
+            data-track="chest_topup"
+            onClick={async () => {
+              setBuying(i)
+              const res = await topUpFragments(dropReward(d).item!, topUp)
+              setBuying(-1)
+              if (res) setBought((was) => new Set(was).add(i))
             }}
           >
-            Дальше
+            Докупить <Ruby size={14} /> {topUp.toLocaleString('ru-RU')}
           </button>
-        </div>
-      ) : null}
-
-      {stage === 'sum' ? (
-        <div className="co-sum" onClick={(e) => e.stopPropagation()}>
-          <div className="co-grid">
-            {drops.map((d, i) => {
-              const topUp = d.kind === 'FRAGMENTS' && d.item && !d.completed && d.topUp ? d.topUp : 0
-              const item = d.kind === 'FRAGMENTS' ? d.item : null
-              return (
-                <span key={i} className={'co-sum-cell' + (topUp ? ' has-topup' : '')} style={{ '--i': i } as CSSProperties}>
-                  <DropCard d={d} small />
-                  {topUp && item ? (
-                    bought.has(i) ? (
-                      <span className="co-topup-done">
-                        <Icon id="i-check" /> Твоя
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        className="btn sm secondary co-topup"
-                        disabled={buying === i}
-                        data-track="chest_topup"
-                        onClick={async () => {
-                          setBuying(i)
-                          const res = await topUpFragments(item, topUp)
-                          setBuying(-1)
-                          if (res) setBought((was) => new Set(was).add(i))
-                        }}
-                      >
-                        Докупить <Ruby size={14} /> {topUp.toLocaleString('ru-RU')}
-                      </button>
-                    )
-                  ) : null}
-                </span>
-              )
-            })}
-          </div>
-          <div className="co-acts">
-            {fresh ? (
-              <button type="button" className="btn lg secondary" data-track="chest_wear" onClick={wear}>
-                Надеть
-              </button>
-            ) : null}
-            {left > 0 ? (
-              <button type="button" className="btn lg primary" data-track="chest_next" onClick={onNext}>
-                Следующий
-              </button>
-            ) : (
-              <button type="button" className="btn lg primary" data-track="chest_done" onClick={onDone}>
-                Готово
-              </button>
-            )}
-          </div>
-        </div>
-      ) : null}
-    </div>
+        )
+      }}
+    />
   )
 }
 

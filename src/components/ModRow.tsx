@@ -20,6 +20,7 @@ import { useProfiles } from '../state/profiles'
 import { uiConfirm } from '../state/confirm'
 import { showToast } from '../state/ui'
 import { useMods } from '../state/mods'
+import { isInstalledInBuild } from '../lib/catalogInstalled'
 import type { ModHit } from '../state/mods'
 import { openCfProject, openMillidaProject, openProject } from '../state/project'
 import { DEMO_USER } from '../lib/demo'
@@ -55,7 +56,7 @@ export function useModAction(h: ModHit, game?: string | null, kind?: string) {
   const storeTab = useMods((s) => s.modTab)
   const modTab = kind || storeTab
   const installedIds = useMods((s) => s.installedIds)
-  const installed = !!(h.pid && installedIds.has(h.pid))
+  const installed = isInstalledInBuild(h, installedIds)
   // The same build the install itself will use, so a finished install shows on
   // this very row instead of under a key nobody reads.
   const scoped = useMods((s) => s.targetBuild)

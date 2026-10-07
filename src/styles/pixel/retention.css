@@ -1,0 +1,220 @@
+/* ============================================================
+   Возврат в лаунчер (06.10.2026): часы и ступень на «Играть»,
+   строка сундука под ней, чипы серии и топа недели над доком,
+   первый день, вкладка «Топ» у друзей. Рамки — общий слой
+   «Слои рамки» в 12-pixel.css (селекторы добавлены туда).
+   ============================================================ */
+
+/* ---------- Чипы над доком ---------- */
+/* Пустая строка над доком (.lobby-side-top) перекрывала чипы и съедала клик. */
+:root .lobby-who { z-index: 5; pointer-events: none; }
+.lobby-chips { pointer-events: auto; }
+.lobby-chips { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.lchip {
+  display: inline-flex; align-items: center; gap: 7px; height: 40px; padding: 0 14px 2px;
+  font: 700 15px/1 var(--m-font); color: var(--m-fg); white-space: nowrap; cursor: pointer;
+  background-color: rgba(4, 20, 10, 0.72);
+  --px-n: 5px; clip-path: var(--px-5);
+  --px-ol: rgba(0, 0, 0, 0.45); --px-ol-w: 2px;
+  --px-ft: rgba(255, 255, 255, 0.1); --px-ft-w: 2px; --px-fb: rgba(0, 0, 0, 0.35); --px-fb-w: 3px;
+  transition: background-color var(--m-t-fast), transform 90ms steps(2, end);
+}
+.lchip b { font-weight: 900; font-size: 17px; }
+.lchip svg { width: 18px; height: 18px; flex: none; }
+.lchip-streak svg { color: var(--m-warning); }
+/* Сегодня день ещё не засчитан: огонь погашен, пока окно не открыто 10 с. */
+.lchip-streak.pending svg { filter: grayscale(1); opacity: 0.55; }
+.lchip-streak.pending b { color: var(--m-fg-muted); }
+.lchip-top { color: var(--m-fg-muted); }
+.lchip-top b { color: var(--m-fg); }
+.lchip-top svg { color: var(--m-rarity-legendary); }
+.lchip-shield { display: inline-flex; align-items: center; gap: 2px; margin-left: 2px; color: var(--m-info); }
+.lchip-shield i { font: 900 12px/1 var(--m-font); font-style: normal; }
+.lchip-skel { width: 104px; cursor: default; }
+@media (hover: hover) and (pointer: fine) { .lchip:hover { background-color: rgba(8, 34, 18, 0.88); } }
+.lchip:active { transform: translateY(1px); }
+
+/* ---------- «Играть»: колонка кнопки и строки сундука ---------- */
+:root .lobby-row .play-col { flex: 0 0 290px; width: 290px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+:root .lobby-row .play-col #playBtn { flex: 1 1 auto; width: 100%; min-width: 0; min-height: 0; }
+@media (max-width: 1100px) { :root .lobby-row .play-col { flex-basis: 230px; width: 230px; } }
+
+/* Наиграно по всем сборкам: ступень, часы и путь до следующей. */
+.lobby-row #playBtn:not(.loading):not(.running) #playLbl { gap: 7px; }
+:root .lobby-row #playBtn .play-hours {
+  display: inline-flex; align-items: center; gap: 7px;
+  font: 800 19px/1 var(--m-font); letter-spacing: 0; color: rgba(6, 32, 14, 0.85);
+}
+:root .lobby-row #playBtn .play-hours b { font-weight: 900; }
+.play-tier {
+  display: inline-flex; align-items: center; gap: 3px; height: 24px; padding: 0 7px 1px 5px;
+  font: 900 14px/1 var(--m-font); color: #fff4c2; background: rgba(6, 32, 14, 0.78);
+  --px-n: 4px; clip-path: var(--px-4);
+}
+:root .lobby-row #playBtn .play-tier svg { width: 16px; height: 16px; color: var(--m-rarity-legendary); }
+.play-hours-bar { display: inline-block; width: 46px; height: 6px; background: rgba(6, 32, 14, 0.3); }
+.play-hours-bar > span { display: block; height: 100%; background: rgba(6, 32, 14, 0.8); }
+
+/* Строка сундука под кнопкой. */
+.play-chest {
+  display: flex; align-items: center; justify-content: center; gap: 7px; height: 34px; padding: 0 10px 2px;
+  font: 700 14px/1 var(--m-font); color: var(--m-fg-muted); white-space: nowrap;
+  background-color: rgba(0, 0, 0, 0.32);
+  --px-n: 5px; clip-path: var(--px-5);
+}
+.play-chest b { font-weight: 900; color: var(--m-fg); font-variant-numeric: tabular-nums; }
+.play-chest svg { width: 18px; height: 18px; flex: none; }
+.play-chest.go {
+  width: 100%; cursor: pointer; color: #2b1a00; font-weight: 900; font-size: 15px;
+  background-color: var(--m-rarity-legendary);
+  --px-ft: rgba(255, 255, 255, 0.45); --px-ft-w: 2px; --px-fb: rgba(0, 0, 0, 0.28); --px-fb-w: 3px;
+  transition: background-color var(--m-t-fast), transform 90ms steps(2, end);
+  animation: play-chest-hop 1.6s steps(2, end) infinite;
+}
+@media (hover: hover) and (pointer: fine) { .play-chest.go:hover { background-color: hsl(42 92% 64%); } }
+.play-chest.go:active { transform: translateY(2px); }
+@keyframes play-chest-hop { 50% { transform: translateY(-2px); } }
+.play-chest.promise { color: var(--m-fg); background-color: rgba(0, 0, 0, 0.42); }
+.play-chest.promise svg { color: var(--m-rarity-legendary); }
+.play-chest-skel { display: block; width: 70%; height: 12px; }
+
+/* Первый день: плашка режима — «Начни отсюда», кнопка ещё громче. */
+.lobby-side.day0 .lobby-mode-lab { color: var(--m-rarity-legendary); }
+.lobby-side.day0 #playBtn { animation: play-day0 2.4s steps(3, end) infinite; }
+@keyframes play-day0 { 0%, 80%, 100% { filter: none; } 40% { filter: brightness(1.12); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .play-chest.go, .lobby-side.day0 #playBtn { animation: none; }
+}
+
+/* ---------- Экран «Топ»: доски (редизайн 06.10.2026) ---------- */
+#s-top { max-width: 920px; margin: 0 auto; }
+#s-top .page-head { margin-bottom: 14px; }
+.tb-boards { margin-bottom: 18px; }
+.tb-boards .seg svg { width: 14px; height: 14px; }
+.tb-list { display: flex; flex-direction: column; gap: 6px; }
+
+/* Строка: место · голова · ник · значение. Много воздуха, без рамок. */
+.tb-row {
+  display: grid; grid-template-columns: 44px 56px minmax(0, 1fr) auto auto; align-items: center; gap: 16px;
+  min-height: 76px; padding: 10px 18px; cursor: pointer;
+  background-color: var(--m-surface);
+  --px-n: 10px; clip-path: var(--px-10);
+  transition: background-color var(--m-t-fast);
+}
+@media (hover: hover) and (pointer: fine) { .tb-row:hover { background-color: var(--m-surface-2); } }
+.tb-row.friend { --px-fl: #8a90ff; --px-fl-w: 4px; }
+.tb-row.friend .fr-nick { color: #c3c6ff; }
+.tb-row.me { background-color: hsl(110 30% 16%); --px-fl: var(--m-accent); --px-fl-w: 4px; }
+.tb-row.me .fr-nick { color: var(--m-accent); }
+.tb-row.pinned { position: sticky; bottom: 0; z-index: 3; margin-top: 10px; }
+.tb-rank { font: 900 20px/1 var(--m-font); color: var(--m-fg-faint); text-align: center; font-variant-numeric: tabular-nums; }
+.tb-row.me .tb-rank { color: var(--m-accent); }
+.tb-head { display: block; width: 56px; height: 56px; image-rendering: pixelated; clip-path: var(--px-5); }
+.tb-row .fr-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.tb-row .fr-nick { font: 800 18px/1.1 var(--m-font); }
+.tb-shield { display: inline-flex; align-items: center; gap: 5px; font: 600 12px/1 var(--m-font); color: var(--m-fg-subtle); }
+.tb-shield svg { width: 12px; height: 12px; color: var(--m-info); }
+.tb-val { display: inline-flex; align-items: center; gap: 6px; font: 900 20px/1 var(--m-font); color: var(--m-fg); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tb-val svg { width: 18px; height: 18px; }
+.tb-acts { display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px; min-width: 112px; }
+.tb-act {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 34px; min-width: 34px; padding: 0 9px;
+  font: 800 13px/1 var(--m-font); color: var(--m-fg-subtle); background-color: transparent; font-variant-numeric: tabular-nums;
+  --px-n: 5px; clip-path: var(--px-5);
+  transition: background-color var(--m-t-fast), color var(--m-t-fast);
+}
+.tb-act svg { width: 16px; height: 16px; }
+@media (hover: hover) and (pointer: fine) { .tb-act:hover:not(:disabled) { color: var(--m-fg); background-color: var(--m-inset); } }
+.tb-like svg { color: var(--m-ruby); }
+.tb-like.on { color: var(--m-ruby-hi); }
+.tb-add { color: var(--m-accent); }
+.tb-act:disabled { opacity: 0.5; cursor: default; }
+.tb-none { padding: 14px 18px; font: 700 14px/1.2 var(--m-font); color: var(--m-fg-muted); background-color: var(--m-surface); --px-n: 10px; clip-path: var(--px-10); }
+.top-skel-rank { display: block; width: 28px; height: 18px; justify-self: center; }
+.top-skel-line { display: block; width: 40%; height: 14px; }
+
+/* 3D-пьедестал: сцена на всю ширину, таблички над головами. */
+.tb-scene { position: relative; height: 470px; margin: 4px 0 14px; overflow: hidden; }
+.tb-scene.skel { display: block; }
+.tb-scene-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; opacity: 0; transition: opacity 240ms steps(4, end); }
+.tb-scene.ready .tb-scene-canvas { opacity: 1; }
+.tb-tag {
+  position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 10px 7px;
+  color: #fff; white-space: nowrap; cursor: pointer; background-color: rgba(10, 14, 12, 0.72);
+  --px-n: 5px; clip-path: var(--px-5);
+  opacity: 0; transition: opacity 240ms steps(4, end);
+}
+.tb-scene.ready .tb-tag { opacity: 1; }
+.tb-tag b { font: 900 15px/1 var(--m-font); }
+.tb-tag.friend b { color: #c3c6ff; }
+.tb-tag-place { font: 900 11px/1 var(--m-font); letter-spacing: 0.06em; color: var(--m-rarity-legendary); }
+.tb-tag.p2 .tb-tag-place { color: hsl(200 8% 82%); }
+.tb-tag.p3 .tb-tag-place { color: hsl(25 70% 64%); }
+.tb-tag-val { display: inline-flex; align-items: center; gap: 4px; font: 800 13px/1 var(--m-font); color: rgba(255, 255, 255, 0.82); }
+.tb-tag-val svg { width: 13px; height: 13px; }
+
+/* Плоский пьедестал — без WebGL. */
+.tb-podium { display: grid; grid-template-columns: repeat(3, minmax(0, 200px)); justify-content: center; align-items: end; gap: 12px; padding: 8px 0 14px; }
+.tb-step { display: flex; flex-direction: column; align-items: center; min-width: 0; padding: 0; color: var(--m-fg); background: none; cursor: pointer; }
+.tb-rig { width: 96px; height: 156px; object-fit: contain; image-rendering: pixelated; margin-bottom: -2px; }
+.tb-step.p1 .tb-rig { width: 116px; height: 188px; }
+.tb-block {
+  display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; padding: 12px 8px 14px;
+  background-color: var(--m-surface-2);
+  --px-n: 10px; clip-path: var(--px-10);
+  --px-ft: rgba(255, 255, 255, 0.12); --px-ft-w: 3px; --px-fb: rgba(0, 0, 0, 0.35); --px-fb-w: 5px;
+}
+.tb-step.p1 .tb-block { padding-top: 22px; padding-bottom: 26px; background-color: hsl(42 60% 30%); }
+.tb-step.p2 .tb-block { background-color: hsl(200 8% 30%); }
+.tb-step.p3 .tb-block { background-color: hsl(25 40% 28%); }
+.tb-place { display: inline-flex; align-items: center; gap: 4px; font: 900 18px/1 var(--m-font); }
+.tb-place svg { width: 18px; height: 18px; color: var(--m-rarity-legendary); }
+.tb-nick { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 800 15px/1.1 var(--m-font); }
+
+/* Карточка игрока с доски. */
+.tb-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; width: 320px; padding: 22px 20px 20px; }
+.tb-card-rig { width: 120px; height: 196px; object-fit: contain; image-rendering: pixelated; }
+.tb-card-nick { font: 900 22px/1.1 var(--m-font); }
+.tb-card-stat { display: inline-flex; align-items: center; gap: 10px; }
+.tb-card .tb-acts { min-width: 0; margin-top: 4px; }
+.tb-card .tb-act { height: 40px; padding: 0 14px; font-size: 15px; background-color: var(--m-inset); }
+.tb-card-x { position: absolute; top: 12px; right: 12px; display: grid; place-items: center; width: 28px; height: 28px; color: var(--m-fg-muted); background: none; }
+.tb-card-x svg { width: 14px; height: 14px; }
+.tb-card-x:hover { color: var(--m-fg); }
+
+/* ---------- Огоньки серий (как в Snapchat, 06.10.2026) ---------- */
+.fire {
+  display: inline-flex; align-items: center; gap: 2px; margin-left: 8px; vertical-align: -2px;
+  font: 900 13px/1 var(--m-font); color: var(--m-warning); font-variant-numeric: tabular-nums;
+}
+.fire svg { width: 14px; height: 14px; }
+.chat-prof-txt b .fire { font-size: 15px; }
+.chat-prof-txt b .fire svg { width: 18px; height: 18px; }
+
+/* Своя серия в лобби: сегодня засчитан — огонь крупнее и горит. */
+.lchip-streak.lit { gap: 6px; padding-left: 10px; }
+.lchip-streak.lit svg { width: 26px; height: 26px; transform-origin: 50% 90%; animation: fire-lit 1.2s steps(3, end) infinite; }
+.lchip-streak.lit b { font-size: 19px; color: #ffd27a; }
+@keyframes fire-lit {
+  0%, 100% { transform: scale(1, 1); }
+  33% { transform: scale(1.08, 1.14) translateY(-1px); }
+  66% { transform: scale(0.96, 1.04); }
+}
+@media (prefers-reduced-motion: reduce) { .lchip-streak.lit svg { animation: none; } }
+
+/* ---------- Темы досок: огоньки — тёплая, часы — прохладная (06.10.2026) ---------- */
+#s-top.theme-fire { --tb-c: #ff7a2f; --tb-c2: #ffd23f; --tb-glow: rgba(255, 96, 32, 0.22); --tb-soft: rgba(255, 110, 40, 0.1); }
+#s-top.theme-time { --tb-c: #3fd0c9; --tb-c2: #7cc7ff; --tb-glow: rgba(56, 196, 220, 0.18); --tb-soft: rgba(60, 200, 220, 0.08); }
+.tb-head-line { display: flex; align-items: center; gap: 12px; }
+.tb-theme-ic { display: grid; place-items: center; width: 48px; height: 48px; background-color: var(--tb-soft); --px-n: 5px; clip-path: var(--px-5); }
+.tb-theme-ic svg { width: 36px; height: 36px; }
+/* Свет только в сцене: мягкое свечение темы за пьедесталом. */
+#s-top .tb-scene { background: radial-gradient(ellipse 60% 70% at 50% 72%, var(--tb-glow), transparent 70%); }
+#s-top .tb-boards .seg.on { color: var(--tb-c); }
+#s-top .tb-val { color: var(--tb-c2); }
+#s-top.theme-fire .tb-val { color: #ffb066; }
+/* Плотный фон: прозрачная плашка своего места просвечивала чужие строки при прокрутке. */
+#s-top .tb-row.me { background-color: color-mix(in srgb, var(--tb-c) 16%, var(--m-surface)); --px-fl: var(--tb-c); }
+#s-top .tb-row.me .fr-nick, #s-top .tb-row.me .tb-rank { color: var(--tb-c); }
+#s-top .tb-tag-val { color: var(--tb-c2); }

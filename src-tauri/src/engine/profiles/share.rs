@@ -223,11 +223,6 @@ pub async fn share_profile(profile: String, summary: Option<String>) -> Result<S
     })
 }
 
-/// Codes this player has already handed out, so the share window can show the
-/// existing one instead of issuing a fresh code on every click.
-pub async fn my_packs() -> Result<Value, String> {
-    millida_api_auth(format!("{}/mine", PACKS_PATH), "GET".into(), None).await
-}
 
 pub async fn unshare_profile(code: String) -> Result<(), String> {
     let code = normalize_code(&code);

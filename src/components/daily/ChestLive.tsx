@@ -6,7 +6,7 @@ import { gpuLite } from '../../lib/gpuLite'
 import type { ChestLook } from './chestScene'
 
 /** Сколько 3D-сундуков живёт одновременно; остальные — плоский рисунок. */
-const MAX_LIVE = 6
+const MAX_LIVE = 9
 const live = new Set<symbol>()
 const waiting = new Set<() => void>()
 
@@ -25,13 +25,16 @@ export function ChestLive({
   size,
   opening,
   tier = 'COMMON',
-  look,
+  look = 'model',
+  tint,
 }: {
   ready: boolean
   size: number
   opening?: boolean
   tier?: ChestTier
   look?: ChestLook
+  /** Свой цвет модели сундука (ящики магазина). */
+  tint?: string
 }) {
   const box = useRef<HTMLSpanElement>(null)
   const id = useRef(Symbol('chest')).current
@@ -70,9 +73,9 @@ export function ChestLive({
   return (
     <span ref={box} className="cl" style={{ '--cl-size': size + 'px', '--cl-k': k + 'px' } as CSSProperties} aria-hidden="true">
       {on ? (
-        <Chest3D className="cl-3d" tier={tier} mode={ready || opening ? 'ready' : 'closed'} flatSize={size} look={look} />
+        <Chest3D className="cl-3d" tier={tier} mode={ready || opening ? 'ready' : 'closed'} flatSize={size} look={look} tint={tint} />
       ) : (
-        <ChestArt ready={ready} opening={opening} tier={tier} size={size} />
+        <ChestArt ready={ready} opening={opening} tier={tier} tint={tint} size={size} />
       )}
     </span>
   )

@@ -35,6 +35,18 @@ export const featuredNow = (prisonReady: boolean): Featured => {
   return featuredTurn(s.day, s.salt, prisonReady)
 }
 
+export const LOBBY_ROTATE_MS = 3 * 60_000
+
+/**
+ * The lobby banner swaps faces every few minutes: it opens with the day's turn
+ * and alternates from there, so a player who sits in the lobby sees both.
+ */
+export function rotatedTurn(first: Featured, step: number, prisonReady: boolean): Featured {
+  if (!prisonReady) return 'anarchy'
+  if (!Number.isFinite(step) || parity(step) === 0) return first
+  return first === 'anarchy' ? 'prisonrpg' : 'anarchy'
+}
+
 /**
  * What a featured spot draws: the pack is still loading when it would be
  * PrisonRPG's turn, so the spot waits instead of flashing the anarchy first.

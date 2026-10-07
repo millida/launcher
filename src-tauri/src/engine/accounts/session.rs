@@ -73,12 +73,10 @@ fn take(device_code: &str) -> Option<PendingLogin> {
     map.remove(device_code)
 }
 
-/// One polling step of the Microsoft device flow, with the tokens stripped from
-/// the answer and kept in the core.
-pub async fn ms_login_poll(device_code: String) -> Result<Value, String> {
-    let mut j = ms_device_poll(device_code.clone()).await?;
+/// Strips the tokens from a finished device-flow answer and keeps them in the core.
+fn keep_tokens(device_code: String, mut j: Value) -> Value {
     if j["status"].as_str() != Some("ok") {
-        return Ok(j);
+        return j;
     }
     let token = j["token"].as_str().unwrap_or_default().to_string();
     let refresh = j["refresh_token"].as_str().unwrap_or_default().to_string();
@@ -87,12 +85,32 @@ pub async fn ms_login_poll(device_code: String) -> Result<Value, String> {
         obj.remove("refresh_token");
     }
     stash(device_code, token, refresh);
-    Ok(j)
+    j
+}
+
+/// One polling step of the Microsoft device flow.
+pub async fn ms_login_poll(device_code: String) -> Result<Value, String> {
+    let j = ms_device_poll(device_code.clone()).await?;
+    Ok(keep_tokens(device_code, j))
+}
+
+/// One polling step of the Ely.by device flow.
+pub async fn ely_login_poll(device_code: String) -> Result<Value, String> {
+    let j = ely_device_poll(&device_code).await?;
+    Ok(keep_tokens(device_code, j))
 }
 
 pub fn ms_login_commit(device_code: &str, account_id: &str) -> Result<(), String> {
+    commit_login(device_code, account_id, "вход Microsoft не найден — начни заново")
+}
+
+pub fn ely_login_commit(device_code: &str, account_id: &str) -> Result<(), String> {
+    commit_login(device_code, account_id, "вход Ely.by не найден — начни заново")
+}
+
+fn commit_login(device_code: &str, account_id: &str, missing: &str) -> Result<(), String> {
     let id = self::account_id(account_id)?;
-    let p = take(device_code).ok_or("вход Microsoft не найден — начни заново")?;
+    let p = take(device_code).ok_or(missing)?;
     let mut pairs = vec![(mc_token_key(id), p.token)];
     if !p.refresh.is_empty() {
         pairs.push((ms_refresh_key(id), p.refresh));
@@ -201,9 +219,25 @@ pub async fn resolve_launch_auth(app: &AppHandle, args: Option<AuthArgs>) -> Res
                 nick: None,
             }
         }
+        "elyby" => {
+            let Some(token) = args.account_id.as_deref().and_then(mc_token) else { return offline };
+            ResolvedAuth {
+                auth: Auth {
+                    token,
+                    uuid: args.uuid.unwrap_or_default(),
+                    xuid: String::new(),
+                    yggdrasil: ELY_YGGDRASIL.into(),
+                },
+                nick: None,
+            }
+        }
         "millida" => millida_launch_auth(app).await,
         _ => offline,
     }
+}
+
+pub fn millida_yggdrasil() -> String {
+    format!("{}/yggdrasil", MILLIDA_API)
 }
 
 /// Longest a launch waits for the game session before starting offline, as it
@@ -243,7 +277,7 @@ async fn issue_game_session() -> Result<ResolvedAuth, String> {
                             token,
                             uuid: v["uuid"].as_str().unwrap_or_default().to_string(),
                             xuid: String::new(),
-                            yggdrasil: format!("{}/yggdrasil", MILLIDA_API),
+                            yggdrasil: millida_yggdrasil(),
                         },
                         nick: v["name"].as_str().filter(|s| !s.is_empty()).map(|s| s.to_string()),
                     });

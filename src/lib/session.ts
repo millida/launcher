@@ -12,6 +12,7 @@ import { millidaLogout } from '../ipc/commands'
 import { refreshSessionState } from './secure'
 import { playSound } from './sound'
 import { maybeStartOnboarding } from '../state/onboarding'
+import { syncAppIcon } from './appIcon'
 import { noteAppRun } from '../state/navHint'
 import { loadPrivacy, usePrivacy } from './privacy'
 
@@ -70,6 +71,7 @@ export function enterApp() {
   void refreshPlayStats()
   void refreshGameNick()
   void maybeStartOnboarding()
+  void syncAppIcon()
   noteAppRun()
   // Приватность живёт на сервере и общая с сайтом: тянем её сразу после входа,
   // чтобы настройка пережила переустановку лаунчера и правку на millida.net.

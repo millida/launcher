@@ -1,0 +1,93 @@
+/* «Скачать моды» в духе Prism Launcher (components/build/ModDownloader.tsx, 07.10.2026). */
+
+.mdl-back { position: fixed; inset: 0; z-index: 900; display: grid; place-items: center; background: rgba(6, 8, 7, .72); }
+.mdl {
+  position: relative; width: min(1240px, calc(100vw - 48px)); height: min(820px, calc(100vh - 48px));
+  display: flex; flex-direction: column; padding: 0; background-color: var(--m-surface); overflow: hidden;
+}
+.mdl-top { display: flex; align-items: center; gap: 12px; padding: 14px 16px 12px; border-bottom: 2px solid var(--m-inset); }
+.mdl-title { font: 900 18px/1.1 var(--m-font); }
+.mdl-title span { color: var(--m-fg-subtle); font-weight: 700; }
+.mdl-for { font: 700 12px/1 var(--m-font); color: var(--m-accent); padding: 6px 8px; background: var(--m-accent-soft); --px-n: 4px; clip-path: var(--px-4); }
+.mdl-x { margin-left: auto; width: 34px; padding: 0; justify-content: center; }
+
+.mdl-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: 132px minmax(0, 1fr) minmax(300px, 400px); }
+
+.mdl-src { display: flex; flex-direction: column; gap: 6px; padding: 12px 8px; background: var(--m-inset); }
+.mdl-src-btn { display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 12px 6px; font: 800 12px/1 var(--m-font); color: var(--m-fg-subtle); --px-n: 5px; clip-path: var(--px-5); }
+.mdl-src-btn img { width: 34px; height: 34px; image-rendering: auto; }
+.mdl-src-btn:hover { background: var(--m-surface-2); color: var(--m-fg); }
+.mdl-src-btn.on { background: var(--m-accent-soft); color: var(--m-accent); }
+
+.mdl-mid { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-right: 2px solid var(--m-inset); }
+.mdl-bar { display: flex; gap: 8px; padding: 12px; align-items: center; }
+.mdl-search { flex: 1; min-width: 0; height: 36px; }
+.mdl-sort { height: 36px; width: 170px; flex: none; }
+.mdl-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 12px 12px; display: flex; flex-direction: column; gap: 4px; scrollbar-width: thin; }
+.mdl-skel { display: block; height: 62px; flex: none; }
+.mdl-note { color: var(--m-fg-subtle); font: 700 13px/1.3 var(--m-font); padding: 24px 4px; text-align: center; }
+
+.mdl-row { display: flex; align-items: center; gap: 12px; padding: 8px 10px; text-align: left; width: 100%; background: transparent; --px-n: 5px; clip-path: var(--px-5); }
+.mdl-row:hover { background: var(--m-surface-2); }
+.mdl-row.cur { background: var(--m-surface-2); box-shadow: inset 3px 0 0 var(--m-fg-subtle); }
+.mdl-row.queued { background: var(--m-accent-soft); box-shadow: inset 3px 0 0 var(--m-accent); }
+.mdl-row.have { opacity: .55; }
+.mdl-ic { width: 44px; height: 44px; flex: none; display: grid; place-items: center; overflow: hidden; background: var(--m-inset); }
+.mdl-ic.lg { width: 56px; height: 56px; }
+.mdl-ic img { width: 100%; height: 100%; object-fit: cover; }
+.mdl-txt { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+.mdl-txt b { font: 800 14px/1.15 var(--m-font); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mdl-txt b i { font-style: normal; font-weight: 600; font-size: 12px; color: var(--m-fg-subtle); margin-left: 8px; }
+.mdl-txt > span { font: 500 12.5px/1.3 var(--m-font); color: var(--m-fg-subtle); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.mdl-dl { font: 700 11px/1 var(--m-font); color: var(--m-fg-subtle); flex: none; }
+.mdl-tag { font: 800 11px/1 var(--m-font); color: var(--m-fg-subtle); padding: 5px 7px; background: var(--m-inset); flex: none; }
+.mdl-qmark { width: 18px; height: 18px; color: var(--m-accent); flex: none; }
+
+.mdl-info { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 14px; gap: 12px; }
+.mdl-info-head { display: flex; gap: 12px; align-items: center; }
+.mdl-info-head .mdl-txt b { font-size: 17px; white-space: normal; }
+.mdl-body { flex: 1; min-height: 0; overflow-y: auto; font-size: 13px; line-height: 1.5; padding-right: 4px; scrollbar-width: thin; }
+.mdl-body img { max-width: 100%; height: auto; }
+.mdl-pick { display: flex; flex-direction: column; gap: 8px; }
+.mdl-ver { height: 38px; width: 100%; }
+.mdl-pick .btn { width: 100%; justify-content: center; }
+.mdl-info-empty { flex: 1; display: grid; place-items: center; opacity: .35; }
+
+.mdl-foot { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-top: 2px solid var(--m-inset); }
+.mdl-queue { flex: 1; min-width: 0; display: flex; gap: 6px; overflow: hidden; }
+.mdl-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 4px; font: 700 12px/1 var(--m-font); background: var(--m-accent-soft); color: var(--m-fg); white-space: nowrap; max-width: 180px; overflow: hidden; text-overflow: ellipsis; flex: none; --px-n: 4px; clip-path: var(--px-4); }
+.mdl-chip img { width: 20px; height: 20px; }
+
+.mdl-review-back { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; background: rgba(6, 8, 7, .6); }
+.mdl-review { width: min(560px, 92%); max-height: 80%; display: flex; flex-direction: column; gap: 12px; padding: 16px; background-color: var(--m-surface); }
+.mdl-rv-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; min-height: 0; }
+.mdl-rv-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px; background: var(--m-surface-2); --px-n: 4px; clip-path: var(--px-4); }
+.mdl-rv-row .mdl-ic { width: 32px; height: 32px; }
+.mdl-rv-row.dep { background: color-mix(in srgb, #7cc7ff 8%, var(--m-surface-2)); }
+.mdl-rv-row.dep .mdl-txt > span { color: #7cc7ff; }
+.mdl-rv-row.none { opacity: .6; }
+.mdl-rv-row .chk { flex: none; cursor: pointer; }
+.mdl-rv-foot { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* Вкладка «Контент» сборки: список слева, действия столбцом справа — как Prism. */
+.pr-split { display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 14px; align-items: start; }
+.pr-main { grid-column: 1; grid-row: 1; min-width: 0; }
+.pr-acts.act-row { grid-column: 2; grid-row: 1; position: sticky; top: 8px; display: flex; flex-direction: column; flex-wrap: nowrap; gap: 6px; margin: 0; }
+.pr-acts.act-row .act-row-btn { width: 100%; justify-content: flex-start; padding: 0 12px; }
+.pr-acts.act-row .act-row-btn.md { height: 42px; justify-content: center; font-size: 14px; }
+.pr-acts .nav-count { margin-left: auto; }
+.pr-sep { height: 2px; background: var(--m-inset); margin: 4px 0; }
+.pr-main #bsMods { max-height: none !important; }
+.mdl-search.input.sm { width: auto; flex: 1 1 auto; }
+.mdl-search input { width: 100%; min-width: 0; }
+.mdl-cf { width: 34px; height: 34px; display: grid; place-items: center; background: #f16436; --px-n: 4px; clip-path: var(--px-4); }
+.pr-thead { display: flex; align-items: center; gap: 10px; padding: 0 41px 0 0; }
+.pr-th { font: 800 11px/1 var(--m-font); letter-spacing: .05em; text-transform: uppercase; color: var(--m-fg-subtle); }
+.pr-th-src { margin-left: auto; width: 86px; }
+.pr-th-on { width: 52px; text-align: center; }
+.pr-main .mod-src { width: 86px; flex: none; font: 700 12px/1 var(--m-font); color: var(--m-fg-subtle); }
+.pr-main .mod-card-row { user-select: none; }
+.mdl-filters { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 0 12px 12px; }
+.mdl-fl { display: inline-flex; align-items: center; gap: 8px; font: 700 13px/1 var(--m-font); cursor: pointer; }
+.mdl-bar .nav-count { margin-left: 4px; }
+.mdl-rv-deps { margin-right: auto; }

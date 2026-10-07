@@ -95,6 +95,8 @@ interface ProjectState {
   /// Готовая сборка лаунчера: ставится install_catalog_pack, ключ задачи свой.
   launcherOnly: boolean
   cfid: number
+  /// Modrinth project id: an installed mod is recorded under it, not under the slug.
+  projectId: string
   website: string
   loading: boolean
   game: string | null
@@ -124,6 +126,7 @@ interface ProjectState {
 /// Поля, которые каждое открытие окна обязано сбросить: иначе у нового мода
 /// оставались автор, лицензия и контекст Милли от предыдущего.
 const FRESH = (): Partial<ProjectState> => ({
+  projectId: '',
   failed: false,
   summary: '',
   author: '',
@@ -157,6 +160,7 @@ export const useProject = create<ProjectState>((set) => ({
   section: '',
   launcherOnly: false,
   cfid: 0,
+  projectId: '',
   website: '',
   loading: false,
   game: null,
@@ -340,6 +344,7 @@ export async function openProject(slug: string, kind?: string, game?: string | n
     if (!still()) return
     if (!p || !p.id) throw new Error('no project')
     useProject.getState().set({
+      projectId: p.id,
       icon: mirrorAsset(p.icon_url) || '',
       title: p.title,
       sub:

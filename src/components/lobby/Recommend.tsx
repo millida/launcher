@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type ComponentProps, type CSSProperties } from 'react'
 import { Icon } from '../Icon'
 import { anarchyOnlineShown } from '../playhub/AnarchyTile'
 import { ANARCHY_HERO, LAVA_STRIP, OBSIDIAN_TILE } from '../playhub/anarchyArt'
@@ -12,7 +12,7 @@ import { fmtN } from '../../lib/format'
 import { trackImpression } from '../../lib/uiTrack'
 import { setScreen } from '../../state/ui'
 import { loadCatalogPacks } from '../playhub/data'
-import { PRISON_SLUG, featuredSpot } from '../playhub/featured'
+import { LOBBY_ROTATE_MS, PRISON_SLUG, featuredNow, featuredSpot, rotatedTurn } from '../playhub/featured'
 import { PRISON_BANNER, PRISON_CO, type PrisonFace } from '../playhub/PrisonTile'
 import '../../styles/pixel/playhub.css'
 
@@ -26,7 +26,27 @@ export function Recommend({ on }: { on: boolean }) {
   const shown = usePromo((s) => s.promo.lobby === ANARCHY.mode)
   const an = useAnarchy()
   const [prison, setPrison] = useState<PrisonFace | null | undefined>(undefined)
-  const spot = featuredSpot(prison)
+  const [step, setStep] = useState(0)
+  const hovered = useRef(false)
+  const spot = featuredSpot(prison, (ready) => rotatedTurn(featuredNow(ready), step, ready))
+  const rotates = on && shown && !!prison
+
+  useEffect(() => {
+    if (!rotates) return
+    const id = window.setInterval(() => {
+      if (!hovered.current) setStep((s) => s + 1)
+    }, LOBBY_ROTATE_MS)
+    return () => window.clearInterval(id)
+  }, [rotates])
+
+  const hover = {
+    onPointerEnter: () => {
+      hovered.current = true
+    },
+    onPointerLeave: () => {
+      hovered.current = false
+    },
+  }
 
   useEffect(() => {
     if (!shown) return
@@ -56,7 +76,7 @@ export function Recommend({ on }: { on: boolean }) {
   }, [on, shown, an.addr, spot.kind])
 
   if (!shown || spot.kind === 'wait') return null
-  if (spot.kind === 'prisonrpg') return <PrisonRecommend pack={spot.pack} />
+  if (spot.kind === 'prisonrpg') return <PrisonRecommend pack={spot.pack} hover={hover} />
 
   const play = () => {
     const m = anarchyMode()
@@ -77,6 +97,7 @@ export function Recommend({ on }: { on: boolean }) {
       aria-label={'Играть: ' + an.fullName}
       style={{ '--px-img': 'url("' + OBSIDIAN_TILE + '")' } as CSSProperties}
       onClick={play}
+      {...hover}
     >
       <img className="lan-hero" src={ANARCHY_HERO} alt="" draggable={false} />
       <span className="an-lava" aria-hidden="true" style={{ '--lava': 'url("' + LAVA_STRIP + '")' } as CSSProperties}>
@@ -108,7 +129,7 @@ export function Recommend({ on }: { on: boolean }) {
  * partner's full banner. It is a native game, so pressing it opens its
  * pack page in «Во что играем» instead of joining a server.
  */
-function PrisonRecommend({ pack }: { pack: PrisonFace }) {
+function PrisonRecommend({ pack, hover }: { pack: PrisonFace; hover: Pick<ComponentProps<'button'>, 'onPointerEnter' | 'onPointerLeave'> }) {
   const open = () => {
     useLobby.setState({ hubTarget: { pack: PRISON_SLUG } })
     setScreen('playhub')
@@ -125,6 +146,7 @@ function PrisonRecommend({ pack }: { pack: PrisonFace }) {
       data-pos={0}
       aria-label={'Открыть: ' + pack.title}
       onClick={open}
+      {...hover}
     >
       <img className="lpr-art" src={pack.coverUrl || PRISON_BANNER} alt="" draggable={false} />
       <span className="pr-co">{PRISON_CO}</span>

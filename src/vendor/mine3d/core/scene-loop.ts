@@ -196,6 +196,25 @@ interface PartnerState {
 }
 
 /** Что получает поправка позы каждый кадр. */
+/**
+ * Ещё одна фигура на сцене (пьедестал топа, 06.10.2026): свой скин, своя
+ * анимация, своё место. Стоит в той же обёртке, что и игрок, — кадр, свет,
+ * тени и материалы у всех одни, контекст WebGL один.
+ */
+export interface ExtraFigure {
+  skin: SkinSource;
+  slim: boolean;
+  animation: SkinAnimation;
+  at: { x: number; y: number; z: number; yaw: number };
+}
+
+interface ExtraState {
+  object: PlayerObject;
+  spot: Group;
+  texture: CanvasTexture;
+  animation: SkinAnimation;
+}
+
 export interface PoseHookContext {
   head: Object3D;
   camera: PerspectiveCamera;
@@ -238,6 +257,9 @@ export class SkinViewEngine {
   /** Holds the player where a paired scene puts it; left at the origin otherwise. */
   private readonly _mainSpot = new Group();
   private _partner: PartnerState | null = null;
+  private _extras: ExtraState[] = [];
+  private _extrasTicket = 0;
+  private readonly _props: Object3D[] = [];
   private _partnerTicket = 0;
   private readonly skinCanvas: HTMLCanvasElement;
   private readonly capeCanvas: HTMLCanvasElement;
@@ -1029,6 +1051,116 @@ export class SkinViewEngine {
     partner.object.rotation.y = yaw;
   }
 
+  /** Место главной фигуры в обёртке: высота блока, сдвиг, поворот. */
+  setMainSpot(at: { x: number; y: number; z: number; yaw: number }): void {
+    this._mainSpot.position.set(at.x, at.y, at.z);
+    this._mainSpot.rotation.set(0, at.yaw, 0);
+  }
+
+  /** Поворот всей сцены (игрок, фигуры, реквизит) — лёгкий параллакс за мышью. */
+  setStageYaw(yaw: number): void {
+    this.playerWrapper.rotation.y = yaw;
+  }
+
+  /** Реквизит сцены (блоки пьедестала): в кадре и под светом вместе с фигурами. */
+  addStageProp(object: Object3D): void {
+    enableShadows(object);
+    this._props.push(object);
+    this.playerWrapper.add(object);
+  }
+
+  /** Дополнительные фигуры: пайплайн материалов тот же, что у игрока. */
+  async setExtras(figures: ExtraFigure[]): Promise<void> {
+    const ticket = ++this._extrasTicket;
+    this._dropExtras();
+    for (const figure of figures) {
+      const resolved = isTextureSource(figure.skin)
+        ? figure.skin
+        : await loadSkinImage(figure.skin as string).catch(() => null);
+      if (ticket !== this._extrasTicket || this._disposed) return;
+      if (!resolved) continue;
+      const object = new PlayerObject();
+      object.cape.visible = false;
+      object.elytra.visible = false;
+      object.ears.visible = false;
+      object.skin.modelType = figure.slim ? "slim" : "default";
+      const canvas = document.createElement("canvas");
+      loadSkinToCanvas(canvas, resolved);
+      sanitizeSkinCanvas(canvas);
+      const texture = new CanvasTexture(canvas);
+      configureSkinCanvasTexture(texture);
+      object.skin.map = texture;
+      applySkinUVInsets(object.skin, {
+        insetTexels: this._uvInsetTexels,
+        outerInsetTexels: this._outerUvInsetTexels,
+      });
+      tuneSkinMaterials(object.skin, this._envMap, texture);
+      normalizeSkinDepthBias(object.skin);
+      enableShadows(object.skin);
+      const spot = new Group();
+      spot.add(object);
+      spot.position.set(figure.at.x, figure.at.y, figure.at.z);
+      spot.rotation.set(0, figure.at.yaw, 0);
+      this.playerWrapper.add(spot);
+      this._extras.push({ object, spot, texture, animation: figure.animation });
+      this._poseExtra(this._extras[this._extras.length - 1]!, 0);
+    }
+  }
+
+  /** Сменить движение фигуры (эмоция ↔ покой). */
+  setExtraAnimation(index: number, animation: SkinAnimation): void {
+    const extra = this._extras[index];
+    if (extra) extra.animation = animation;
+  }
+
+  /** Кость головы фигуры: для таблички над ней и взгляда. 0 — игрок. */
+  figureHead(index: number): Object3D | null {
+    if (index === 0) return this.playerObject.skin.head;
+    return this._extras[index - 1]?.object.skin.head ?? null;
+  }
+
+  get stageCamera(): PerspectiveCamera {
+    return this.camera;
+  }
+
+  private _poseExtra(extra: ExtraState, deltaTime: number): void {
+    resetLimbPose(extra.object);
+    extra.animation.update(extra.object, deltaTime);
+    if (!animationControlsLegs(extra.animation)) applyStockLegPose(extra.object.skin);
+  }
+
+  private _dropExtras(): void {
+    for (const extra of this._extras) {
+      this.playerWrapper.remove(extra.spot);
+      extra.object.traverse((node) => {
+        const mesh = node as Mesh;
+        if (mesh.geometry) mesh.geometry.dispose();
+        const material = mesh.material as Material | Material[] | undefined;
+        if (Array.isArray(material)) material.forEach((m) => m.dispose());
+        else material?.dispose();
+      });
+      extra.texture.dispose();
+    }
+    this._extras = [];
+  }
+
+  private _dropProps(): void {
+    for (const prop of this._props) {
+      this.playerWrapper.remove(prop);
+      prop.traverse((node) => {
+        const mesh = node as Mesh;
+        if (mesh.geometry) mesh.geometry.dispose();
+        const material = mesh.material as (Material & { map?: Texture | null }) | Material[] | undefined;
+        if (Array.isArray(material)) material.forEach((m) => m.dispose());
+        else {
+          material?.map?.dispose();
+          material?.dispose();
+        }
+      });
+    }
+    this._props.length = 0;
+  }
+
   /** Поворот модели вокруг Y (рад); π — вид со спины для превью плаща */
   setPlayerYaw(yaw: number): void {
     this.playerObject.rotation.y = yaw;
@@ -1360,6 +1492,9 @@ export class SkinViewEngine {
     this._resizeObserver?.disconnect();
     this._partnerTicket++;
     this._dropPartner();
+    this._extrasTicket++;
+    this._dropExtras();
+    this._dropProps();
     this._outerVoxels.dispose(this.playerObject.skin);
     this._releaseControlsDocumentListeners();
     this.controls.dispose();
@@ -1569,6 +1704,7 @@ export class SkinViewEngine {
     const animDt = this._debugEnabled && this._debugOpts.pauseAnimation ? 0 : deltaTime;
     this._sampleAnimationPose(animDt);
     this._posePartner(animDt);
+    for (const extra of this._extras) this._poseExtra(extra, animDt);
     if (!(this._debugEnabled && this._debugOpts.pauseAnimation)) {
       this._applyCursorLook(deltaTime);
       this._runPoseHook(deltaTime);

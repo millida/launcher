@@ -12,9 +12,9 @@ interface OverlayMessage {
   nick: string
   text: string
   ts: number
-  kind?: 'msg' | 'online' | 'play'
+  kind?: 'msg' | 'online' | 'play' | 'streak'
   nicks?: string[]
-  open?: 'chat' | 'room' | 'friends' | 'call'
+  open?: 'chat' | 'room' | 'friends' | 'call' | 'daily'
 }
 
 interface Card extends OverlayMessage {
@@ -193,7 +193,8 @@ export function Overlay() {
   })
 
   const openCard = useCallback((card: Card) => {
-    void overlayOpen(payloadOf(card)).catch(() => {})
+    // Серия и сундук живут в окне лаунчера, а не в чате поверх игры.
+    void overlayOpen(payloadOf(card), card.open === 'daily').catch(() => {})
   }, [])
 
   const openInLauncher = useCallback((target: OverlayTarget | null) => {
@@ -226,13 +227,17 @@ export function Overlay() {
               key={m.uid + m.ts}
               role="button"
               tabIndex={-1}
-              title={m.open === 'call' || m.open === 'friends' ? 'Открыть лаунчер' : 'Открыть чат'}
+              title={m.open === 'call' || m.open === 'friends' || m.open === 'daily' ? 'Открыть лаунчер' : 'Открыть чат'}
               onClick={() => openCard(m)}
             >
               <div className="ov-card-heads">
-                {(m.nicks?.length ? m.nicks : [m.nick]).slice(0, 3).map((n, i) => (
-                  <Head key={n + i} nick={n} size={44} />
-                ))}
+                {m.kind === 'streak' ? (
+                  <span className="ov-card-ic">
+                    <Icon id="i-flame" />
+                  </span>
+                ) : (
+                  (m.nicks?.length ? m.nicks : [m.nick]).slice(0, 3).map((n, i) => <Head key={n + i} nick={n} size={44} />)
+                )}
               </div>
               <div className="ov-card-body">
                 <b>{m.nick}</b>

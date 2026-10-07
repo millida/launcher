@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { loadMine3d } from '../../lib/mine3d'
 import { headLook } from '../../lib/headLook'
 import type { Mine3dModule } from '../../lib/mine3d'
@@ -11,6 +11,7 @@ import type { CosmeticItem } from '../../lib/gameProfile'
 import { useHasMillida } from '../../state/auth'
 import { getAccount, useAccounts } from '../../state/accounts'
 import { buildCosmetic } from '../../lib/cosmeticModel'
+import { SHOP_YAW } from '../../lib/outfitSnapshot'
 import { hidesRegularCape, maskUrls, pieceCover } from '../../lib/cosmeticCover'
 import { maskedSkin } from '../../lib/maskedSkin'
 import { CosmeticEmote, emoteClip } from '../../lib/cosmeticEmote'
@@ -26,6 +27,8 @@ import { setScreen } from '../../state/ui'
 import { onRenderGate, renderLive } from '../../lib/renderGate'
 import {
   IDLE_SHOW,
+  SHOP_LIGHT,
+  SHOP_SHOW,
   IDLE_SHOW_FIRST_MAX,
   IDLE_SHOW_FIRST_MIN,
   IDLE_SHOW_GAP_MAX,
@@ -40,6 +43,7 @@ import {
   lobbyHitBox,
   tagBox,
 } from '../../lib/characterStage'
+import { releaseSnapshotGl } from '../../lib/glPool'
 
 /** Во что одет игрок: то же, что видят другие на сервере. */
 interface Look {
@@ -50,6 +54,8 @@ interface Look {
   items: { item: CosmeticItem; texture: string | undefined; glow?: string }[]
   /** Эмоции для автопоказа в лобби — из каталога, по списку LOBBY_EMOTES. */
   show: CosmeticItem[]
+  /** Витрина: для какого состава вещей собран образ. */
+  dressKey?: string
 }
 
 /**
@@ -177,7 +183,22 @@ function emoteMood(name: string): EmoteMood {
   return 'happy'
 }
 
-export function LobbyCharacter({ on }: { on: boolean }) {
+export function LobbyCharacter({
+  on,
+  dress,
+  shop,
+  onDressed,
+}: {
+  on: boolean
+  /**
+   * Витрина магазина (v2, 06.10.2026): вместо надетого на игроке стоят эти вещи
+   * поверх его скина и плаща. Без ника, эмоций и перехода в гардероб.
+   */
+  dress?: { code: string }[]
+  shop?: boolean
+  /** Витрина: сколько вещей из `dress` встало на фигуру (0 — 3D не вышло, покажи превью). */
+  onDressed?: (n: number) => void
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<SkinViewEngine | null>(null)
@@ -193,7 +214,37 @@ export function LobbyCharacter({ on }: { on: boolean }) {
   // старая сцена гасит его, новая зажигает в том же кадре, React видел то же
   // true — и скин с вещами на новую сцену не надевались.
   const [ready, setReady] = useState(0)
-  const [look, setLook] = useState<Look | null>(lastLook)
+  const [baseLook, setLook] = useState<Look | null>(lastLook)
+  const [dressItems, setDressItems] = useState<{ key: string; items: Look['items'] }>({ key: '', items: [] })
+  const dressKey = (dress ?? []).map((d) => d.code).join(',')
+  useEffect(() => {
+    if (!dressKey) return setDressItems({ key: '', items: [] })
+    let alive = true
+    void loadCosmeticCatalog()
+      .then((cat) => {
+        if (!alive) return
+        const out: Look['items'] = []
+        for (const code of dressKey.split(',')) {
+          const item = (cat.items || []).find((c) => c.id === code)
+          if (!item || !item.model) continue
+          const variant = item.variants?.[0]
+          out.push({ item, texture: variant?.texture ?? item.texture, glow: variant?.emissive ?? item.emissive })
+        }
+        setDressItems({ key: dressKey, items: out })
+      })
+      .catch(() => alive && setDressItems({ key: dressKey, items: [] }))
+    return () => {
+      alive = false
+    }
+  }, [dressKey])
+  const onDressedRef = useRef(onDressed)
+  onDressedRef.current = onDressed
+  const dressKeyRef = useRef(dressKey)
+  dressKeyRef.current = dressKey
+  const look = useMemo<Look | null>(
+    () => (baseLook && shop ? { ...baseLook, items: dressItems.items, show: [], dressKey: dressItems.key } : baseLook),
+    [baseLook, dressItems, shop],
+  )
   // Показываем только одетого персонажа с окончательным кадром: иначе он
   // появлялся голым, а потом кадр перескакивал под плащ и вещи.
   const [skinFor, setSkinFor] = useState('')
@@ -215,6 +266,10 @@ export function LobbyCharacter({ on }: { on: boolean }) {
   // Контекст WebGL всё-таки отобрали — сцену собираем заново на новом холсте:
   // на старом новый движок получил бы тот же потерянный контекст.
   const [glEpoch, setGlEpoch] = useState(0)
+  /** Сколько раз подряд браузер не дал контекст WebGL (все заняты): пока 0 —
+   *  3D, иначе плоская фигурка и новая попытка через паузу (06.10.2026). */
+  const [glFail, setGlFail] = useState(0)
+  const [glTry, setGlTry] = useState(false)
   const nick = (getAccount() || { nick: '' }).nick || 'MHF_Steve'
   // Переоделись в гардеробе — образ перечитываем со свежей картинкой.
   const [lookVer, setLookVer] = useState(lookVersion)
@@ -304,7 +359,7 @@ export function LobbyCharacter({ on }: { on: boolean }) {
       // Кадр — по одному телу: крылья, питомец и плащ его не двигают. Ник —
       // над самой высокой вещью в нейтральной стойке, по центру тела.
       const scene = (stage.offsetParent as HTMLElement | null)?.clientHeight || h
-      const frame = lobbyFrame(h, stage.offsetTop, scene)
+      const frame = shop ? { fillY: 0.6, offsetY: 1 - 2 * 0.86 + 0.6 } : lobbyFrame(h, stage.offsetTop, scene)
       // Размер фигуры всегда один, при любых вещах (владелец 22:35).
       const r = engine.fitPlayerToFrame(frame)
       if (r) {
@@ -354,11 +409,17 @@ export function LobbyCharacter({ on }: { on: boolean }) {
         enableControls: false,
       })
     } catch (e) {
-      console.error('[lobby] engine', e)
+      console.warn('[lobby] engine: нет контекста WebGL, пока плоская фигурка', e)
       canvas.removeEventListener('webglcontextlost', onLost)
+      // Освободить контексты снимков магазина и превью — следующая попытка их получит.
+      releaseSnapshotGl()
+      setGlTry(false)
+      setGlFail((n) => n + 1)
       return
     }
-    engine.applyLightSettings(MILLIDA_LIGHT)
+    setGlFail(0)
+    setGlTry(false)
+    engine.applyLightSettings(shop ? SHOP_LIGHT : MILLIDA_LIGHT)
     engine.setContactShadowVisible(true)
     // За курсором не следит: корпус поворачивался за мышью, пока человек
     // тянулся к кнопкам, — «персонаж скачет» (владелец 23.09.2026).
@@ -366,6 +427,8 @@ export function LobbyCharacter({ on }: { on: boolean }) {
     // Зато голова следит за мышкой в покое — корпус стоит (владелец 24.09.2026).
     engine.setPoseHook(headLook(() => busyRef.current))
     engine.setPresentationMode('full')
+    // Витрина: три четверти, как на снимках карточек (lib/outfitSnapshot).
+    if (shop) engine.setPlayerYaw(SHOP_YAW)
     viewerRef.current = engine
     // Только в разработке: замер «персонаж не сдвигается» (scripts/лобби) читает
     // движок отсюда. В сборку не попадает.
@@ -454,9 +517,11 @@ export function LobbyCharacter({ on }: { on: boolean }) {
         const playing = sequence ? new CosmeticEmote(sequence, emote?.file?.geometry) : null
         if (playing) engine.setAnimation(pinned(playing) as unknown as SkinAnimation)
         setEmoting(!!playing)
+        let dressedCount = 0
         for (const got of loaded) {
           if (!got.file || !got.texture) continue
           const geometry = look.slim && got.file.geometrySlim ? got.file.geometrySlim : got.file.geometry
+          let worn = false
           try {
             for (const piece of buildCosmetic(
               geometry,
@@ -469,7 +534,9 @@ export function LobbyCharacter({ on }: { on: boolean }) {
               got.glow,
             )) {
               engine.attachCosmetic(piece.anchor, piece.object)
+              worn = true
             }
+            if (worn) dressedCount += 1
           } catch {
             // Кривая модель не гасит главную: вещь просто не покажется.
           }
@@ -477,6 +544,7 @@ export function LobbyCharacter({ on }: { on: boolean }) {
         // Кадр от вещей не зависит, но ник встаёт над новой шляпой.
         fit()
         setDressedFor(lookKey(look))
+        if (shop && look.dressKey === dressKeyRef.current) onDressedRef.current?.(dressedCount)
       },
     )
     return () => {
@@ -497,6 +565,32 @@ export function LobbyCharacter({ on }: { on: boolean }) {
     }
     rest()
     if (!awake) return
+    // «Настройки → Вид»: без периодических движений — только спокойная стойка.
+    if (!charAnim) return
+    if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    // Витрина: стоит и дышит, изредка оглядывается или машет — без эмоций
+    // из каталога и облачков (владелец 06.10.2026: «персонажи должны двигаться сами»).
+    if (shop) {
+      let live = true
+      let wait: ReturnType<typeof setTimeout> | undefined
+      let k = Math.floor(Math.random() * SHOP_SHOW.length)
+      const play = () => {
+        const e = viewerRef.current
+        if (!e || !live) return
+        const clip = SHOP_SHOW[k++ % SHOP_SHOW.length]
+        e.setAnimation(m3d.createSkinAnimation(clip.id))
+        wait = setTimeout(() => {
+          if (!live) return
+          rest()
+          wait = setTimeout(play, between(IDLE_SHOW_GAP_MIN * 1.6, IDLE_SHOW_GAP_MAX * 1.6))
+        }, clip.ms)
+      }
+      wait = setTimeout(play, between(IDLE_SHOW_FIRST_MAX, IDLE_SHOW_GAP_MAX))
+      return () => {
+        live = false
+        clearTimeout(wait)
+      }
+    }
     // Персонаж перестаёт танцевать по выбору в «Настройки → Вид»: остаётся
     // спокойная стойка без периодических эмоций (владелец 25.09.2026).
     if (!charAnim) return
@@ -615,30 +709,40 @@ export function LobbyCharacter({ on }: { on: boolean }) {
       else engine.start()
       setAwake(!v)
     }
-    const onVis = () => setPaused(document.hidden || !on || !renderLive())
-    const onBlur = () => setPaused(true)
-    const onFocus = () => setPaused(!on || !renderLive())
-    document.addEventListener('visibilitychange', onVis)
-    window.addEventListener('blur', onBlur)
-    window.addEventListener('focus', onFocus)
-    const offGate = onRenderGate(() => setPaused(document.hidden || !on || !renderLive() || !document.hasFocus()))
-    setPaused(document.hidden || !on || !renderLive())
+    // Окно без фокуса (человек смотрит, а курсор в другой программе) — персонаж
+    // живёт дальше: стоп только когда окна не видно или поверх игра
+    // (владелец 06.10.2026: «персонажи стоят как статуи»).
+    const sync = () => setPaused(document.hidden || !on || !renderLive())
+    document.addEventListener('visibilitychange', sync)
+    const offGate = onRenderGate(sync)
+    sync()
     return () => {
-      document.removeEventListener('visibilitychange', onVis)
-      window.removeEventListener('blur', onBlur)
-      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', sync)
       offGate()
     }
   }, [ready, on])
 
+  // Нет контекста — снова через 1,5 / 3 / 4,5… с, не дольше 10 попыток.
+  useEffect(() => {
+    if (!glFail || glFail > 10 || lite) return
+    const t = window.setTimeout(() => {
+      setGlTry(true)
+      setGlEpoch((n) => n + 1)
+    }, 1500 * Math.min(glFail, 4))
+    return () => window.clearTimeout(t)
+  }, [glFail, lite])
+
   const drag = useRef<{ x: number; yaw: number } | null>(null)
 
-  if (lite) {
+  if (lite || (glFail > 0 && !glTry)) {
+    if (shop) queueMicrotask(() => onDressedRef.current?.(0))
     return (
-      <div className={'lobby-char lobby-char-flat' + (flatShown ? ' shown' : '')} onClick={() => setScreen('skins')}>
-        <span className="lobby-flat-tag">
-          <Nametag nick={nick} at={{ x: 0, y: 0 }} />
-        </span>
+      <div className={'lobby-char lobby-char-flat' + (shop ? ' shop-stage' : '') + (flatShown ? ' shown' : '')} onClick={() => (shop ? undefined : setScreen('skins'))}>
+        {shop ? null : (
+          <span className="lobby-flat-tag">
+            <Nametag nick={nick} at={{ x: 0, y: 0 }} />
+          </span>
+        )}
         {look ? <FlatFigure url={look.skin} slim={look.slim} onReady={() => setFlatShown(true)} /> : null}
       </div>
     )
@@ -647,7 +751,7 @@ export function LobbyCharacter({ on }: { on: boolean }) {
   return (
     <div
       ref={stageRef}
-      className={'lobby-char' + (shown ? ' shown' : '')}
+      className={'lobby-char' + (shop ? ' shop-stage' : '') + (shown ? ' shown' : '')}
       onPointerDown={(e) => {
         const engine = viewerRef.current
         if (!engine || e.button !== 0) return
@@ -694,7 +798,7 @@ export function LobbyCharacter({ on }: { on: boolean }) {
         const box = lobbyHitBox(ndc, rect.width, rect.height)
         const x = e.clientX - rect.left
         const y = e.clientY - rect.top
-        if (x >= box.left && x <= box.left + box.width && y >= box.top && y <= box.top + box.height) setScreen('skins')
+        if (!shop && x >= box.left && x <= box.left + box.width && y >= box.top && y <= box.top + box.height) setScreen('skins')
       }}
       onPointerCancel={() => {
         drag.current = null
@@ -702,7 +806,7 @@ export function LobbyCharacter({ on }: { on: boolean }) {
     >
       <canvas key={glEpoch} ref={canvasRef} aria-label={'Персонаж ' + nick} />
       <span ref={tagWrap} className="lobby-tag-follow">
-        <Nametag nick={nick} at={shown ? tag : null} />
+        {shop ? null : <Nametag nick={nick} at={shown ? tag : null} />}
       </span>
     </div>
   )

@@ -259,7 +259,6 @@ export const EXPECTED_BY_COMMAND: Record<string, { why: string; when?: RegExp }>
   migrate_profile: { why: JOB_REPORTED },
   millida_packs: { why: API_ANSWER },
   pack_buy_url: { why: API_ANSWER },
-  my_packs: { why: API_ANSWER },
   unshare_profile: { why: API_ANSWER },
   cloud_status: { why: API_ANSWER },
   cloud_forget: { why: API_ANSWER },

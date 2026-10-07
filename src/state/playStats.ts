@@ -7,6 +7,7 @@ import { useServers } from './servers'
 import { canonAddr } from '../lib/serverAddr'
 import { privacySettings, usePrivacy } from '../lib/privacy'
 import { statsSyncDue } from '../lib/presence'
+import { DEMO_USER } from '../lib/demo'
 
 const EMPTY: PlayStats = {
   total_seconds: 0,
@@ -51,7 +52,8 @@ export const usePlayStats = create<State>((set) => ({
   loaded: false,
   refresh: async (sync = 'always') => {
     if (!hasTauri()) {
-      set({ stats: EMPTY, loaded: true })
+      // &day0 в демо — первый день без запусков (экран новичка, сундук первого часа).
+      set({ stats: import.meta.env.DEV && DEMO_USER && !location.search.includes('day0') ? demoStats() : EMPTY, loaded: true })
       return
     }
     try {
@@ -63,6 +65,12 @@ export const usePlayStats = create<State>((set) => ({
     }
   },
 }))
+
+/** Демо-вход (только dev): `&play-hours=47` — сколько наиграно; без параметра — первый день. */
+function demoStats(): PlayStats {
+  const h = Number(new URLSearchParams(location.search).get('play-hours')) || 0
+  return h > 0 ? { ...EMPTY, total_seconds: Math.round(h * 3600), sessions: 12 } : EMPTY
+}
 
 export const refreshPlayStats = () => usePlayStats.getState().refresh()
 

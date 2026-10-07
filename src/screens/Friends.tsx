@@ -22,6 +22,9 @@ import { unreadText } from '../components/friends/ChatRow'
 import { PlayTogether } from '../components/friends/PlayTogether'
 import { RequestsTab } from '../components/friends/RequestsTab'
 import { InviteTab } from '../components/friends/InviteTab'
+import { useFriendStreaks } from '../state/friendStreaks'
+import '../styles/pixel/retention.css'
+import { openTop } from '../state/boards'
 import {
   addCandidate,
   loadTab,
@@ -76,6 +79,10 @@ export function Friends({ on }: { on: boolean }) {
   const hoursMap = useFriendHours((s) => s.sec)
   const callBusy = useCall((s) => s.status) !== 'idle'
   const findRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (on) void useFriendStreaks.getState().load()
+  }, [on])
 
   const setTab = (t: FriendsTab) => {
     setTabState(t)
@@ -378,6 +385,10 @@ export function Friends({ on }: { on: boolean }) {
                 <Icon id="i-gift" />
                 Пригласить
               </button>
+              <button className="seg" data-track="friends_tab_top" onClick={() => openTop('week')}>
+                <Icon id="i-trophy" />
+                Топ
+              </button>
             </div>
             <div className="fr-tabbar-tool">
               {tab === 'friends' && friends.length > 1 ? (
@@ -407,6 +418,7 @@ export function Friends({ on }: { on: boolean }) {
               friendsTab()
             ) : tab === 'invite' ? (
               <InviteTab on={on} />
+
             ) : (
               <RequestsTab incoming={inShown} outgoing={outShown} />
             )}

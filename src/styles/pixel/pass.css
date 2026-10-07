@@ -1,0 +1,252 @@
+/* Пропуск сезона v4 (06.10.2026): сцена сезона на весь блок, герой в своей
+   колонне справа, лента: бесплатная строка скромная, PLUS — в полтора раза
+   крупнее, золото, блик. Компонент — src/components/daily/SeasonPass.tsx.
+   Рамки карточек — общий слой «Слои рамки» из 12-pixel.css (.bp-card, .bp-day,
+   .bp-arrow). */
+
+.bp {
+  --bp-w: 148px; --bp-free-h: 128px; --bp-plus-h: 196px; --bp-gold: var(--m-rarity-legendary);
+  position: relative; display: grid; gap: 14px; min-width: 0;
+}
+.bp.compact { --bp-w: 140px; --bp-free-h: 120px; --bp-plus-h: 184px; }
+
+/* ---------- Сцена на весь блок ---------- */
+.bp-stage {
+  --mx: 0; --my: 0;
+  position: relative; isolation: isolate; display: grid; grid-template-columns: minmax(0, 1fr) var(--bp-side, 240px);
+  min-width: 0; padding: 20px 0 16px 20px;
+}
+.bp.compact .bp-stage { --bp-side: 220px; }
+.bp-scene { position: absolute; inset: 0; z-index: -1; overflow: hidden; background: #140b2e; clip-path: var(--px-10); pointer-events: none; }
+.bp-l { position: absolute; left: -2%; width: 104%; image-rendering: pixelated; transition: transform 400ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+.bp-l.sky { top: -2%; height: 104%; object-fit: cover; object-position: 50% 100%; transform: translate(calc(var(--mx) * -4px), calc(var(--my) * -2px)); }
+.bp-l.far, .bp-l.mid, .bp-l.near { bottom: -2px; height: auto; }
+.bp-l.far { transform: translate(calc(var(--mx) * -8px), 0); }
+.bp-l.mid { transform: translate(calc(var(--mx) * -14px), 0); }
+.bp-l.near { transform: translate(calc(var(--mx) * -22px), 0); }
+/* Под карточками — сплошное затемнение полосами, сцена видна в зазорах. */
+.bp-scene::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(90deg, rgba(10, 5, 20, 0.42) 0 62%, rgba(10, 5, 20, 0.22) 62% 74%, transparent 74%);
+}
+.bp-embers { position: absolute; inset: 0; transform: translate(calc(var(--mx) * -16px), 0); }
+.bp-embers > i { position: absolute; background: #ffc66b; box-shadow: 0 0 6px #ff9a3c; animation: bp-ember 6s steps(24, end) infinite; }
+.bp-embers > i:nth-child(3n) { background: #fff1c4; }
+.bp-embers > i:nth-child(4n) { background: #ff7a3c; }
+@keyframes bp-ember {
+  0% { transform: translate(0, 20px); opacity: 0; }
+  15% { opacity: 1; }
+  100% { transform: translate(18px, -90px); opacity: 0; }
+}
+
+/* Герой сезона: колонна справа, стоит на земле, не двигается. */
+.bp-side { position: relative; grid-column: 2; grid-row: 1; pointer-events: none; }
+.bp-rig {
+  position: absolute; left: 10px; right: 6px; top: 10px; bottom: 0; width: calc(100% - 16px); height: calc(100% - 10px);
+  object-fit: contain; object-position: 50% 100%;
+  filter: drop-shadow(0 8px 0 rgba(0, 0, 0, 0.4)) drop-shadow(0 0 22px rgba(255, 176, 72, 0.4));
+}
+.bp-main { grid-column: 1; grid-row: 1; display: grid; gap: 14px; min-width: 0; }
+
+/* ---------- Шапка сезона ---------- */
+.bp-hero { display: flex; align-items: center; gap: 20px; padding: 2px 4px 0 6px; }
+.bp-hero-main { display: grid; gap: 8px; min-width: 0; flex: 1 1 auto; max-width: 560px; }
+.bp-kicker {
+  display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  font-size: 12px; font-weight: 900; letter-spacing: 0.12em; text-transform: uppercase; color: var(--bp-gold);
+}
+.bp-kicker > i { font-style: normal; letter-spacing: 0.02em; text-transform: none; font-weight: 800; color: rgba(255, 255, 255, 0.72); }
+.bp-streak { display: inline-flex; align-items: center; gap: 4px; color: #ff9f43 !important; }
+.bp-streak > svg.icon { width: 14px; height: 14px; }
+.bp-title { margin: 0; font-size: 34px; line-height: 1; font-weight: 900; letter-spacing: -0.01em; color: #fff; text-shadow: 0 3px 0 rgba(0, 0, 0, 0.5); }
+.bp.compact .bp-title { font-size: 30px; }
+.bp-progress { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
+.bp-progress-n { font-size: 26px; font-weight: 900; line-height: 1; color: #fff; font-variant-numeric: tabular-nums; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.45); }
+.bp-progress-n small { font-size: 15px; color: rgba(255, 255, 255, 0.55); }
+.bp-bar {
+  display: grid; grid-template-columns: repeat(var(--n, 28), minmax(0, 1fr)); gap: 2px; flex: 1 1 auto;
+  height: 14px; padding: 3px; background: rgba(0, 0, 0, 0.6); clip-path: var(--px-4);
+}
+.bp-bar > i { background: rgba(255, 255, 255, 0.12); }
+.bp-bar > i.ms { background: color-mix(in srgb, var(--bp-gold) 40%, transparent); }
+.bp-bar > i.got { background: var(--m-accent); }
+.bp-bar > i.now { background: #fff; animation: bp-blink 1s steps(1, end) infinite; }
+@keyframes bp-blink { 50% { background: var(--m-accent); } }
+
+.bp-hero-cta { display: flex; gap: 10px; align-items: stretch; margin-left: auto; }
+.bp-claim { min-width: 190px; height: 58px; font-size: 22px; gap: 10px; }
+.bp-claim .px-icon { animation: bp-hop 1.4s steps(1, end) infinite; }
+.bp-count { display: grid; place-items: center; min-width: 26px; height: 26px; padding: 0 6px; background: #06200e; color: var(--m-accent); font-size: 15px; clip-path: var(--px-4); }
+.bp-timer {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 58px; padding: 0 18px;
+  background: rgba(0, 0, 0, 0.62); color: #fff; font-size: 22px; font-weight: 900; font-variant-numeric: tabular-nums; clip-path: var(--px-5);
+}
+.bp-timer > svg.icon { width: 20px; height: 20px; }
+/* Золотая кнопка PLUS: плотное золото, светлая грань сверху и «подошва» снизу. */
+.bp-plus {
+  display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 8px; align-items: center; align-content: center;
+  height: 58px; padding: 6px 16px 9px; border: 0; cursor: pointer; text-align: left; font: inherit;
+  background: #ffc933; color: #3a2400; clip-path: var(--px-5);
+  box-shadow: inset 0 -4px 0 #c98a00, inset 0 3px 0 #ffe79a;
+}
+.bp-plus > svg.icon { grid-row: 1 / 3; width: 24px; height: 24px; }
+.bp-plus > span { font-size: 16px; font-weight: 900; line-height: 1.1; white-space: nowrap; }
+.bp-plus > small { font-size: 12px; font-weight: 800; opacity: 0.75; }
+.bp-plus:hover { background: #ffd65a; }
+.bp-plus:active { transform: translateY(2px); }
+.bp-x { position: absolute; z-index: 3; top: 10px; right: 10px; }
+
+/* ---------- Лента ---------- */
+.bp-rail { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 8px; min-width: 0; }
+.bp-legend { display: grid; grid-template-rows: var(--bp-free-h) 40px var(--bp-plus-h); gap: 8px; padding: 10px 0; }
+.bp-legend > span { display: grid; place-items: center; align-content: center; gap: 6px; clip-path: var(--px-5); }
+.bp-legend > .free { grid-row: 1; background: rgba(20, 16, 30, 0.82); }
+.bp-legend > .plus { grid-row: 3; background: #ffc933; color: #3a2400; box-shadow: inset 0 -4px 0 #c98a00, inset 0 3px 0 #ffe79a; }
+.bp-legend > .plus > svg.icon { width: 26px; height: 26px; }
+.bp-legend > .plus > b { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 14px; font-weight: 900; letter-spacing: 0.14em; }
+
+.bp-view { position: relative; min-width: 0; }
+.bp-scroll {
+  overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scroll-snap-type: x proximity;
+  scrollbar-width: none; cursor: grab; user-select: none; padding: 10px 0; scroll-padding-inline: 40px;
+}
+.bp-scroll::-webkit-scrollbar { display: none; }
+.bp-scroll.drag { cursor: grabbing; scroll-snap-type: none; }
+.bp-scroll img { -webkit-user-drag: none; }
+.bp-track { display: flex; gap: 8px; width: max-content; padding: 0 20px 0 2px; }
+.bp-col { display: grid; grid-template-rows: var(--bp-free-h) 40px var(--bp-plus-h); gap: 8px; width: var(--bp-w); scroll-snap-align: center; }
+
+/* Слот — обёртка карточки: на ней свечение (drop-shadow на элементе со срезом обрезается). */
+.bp-slot { display: grid; min-width: 0; min-height: 0; }
+.bp-slot.ready { animation: bp-glow 1.6s steps(4, end) infinite alternate; }
+.bp-slot.plus:not(.claimed) { filter: drop-shadow(0 0 8px rgba(255, 190, 60, 0.35)); }
+.bp-slot.plus.ready { animation-name: bp-glow-gold; }
+@keyframes bp-glow { from { filter: drop-shadow(0 0 3px var(--m-accent)); } to { filter: drop-shadow(0 0 16px var(--m-accent)); } }
+@keyframes bp-glow-gold { from { filter: drop-shadow(0 0 4px #ffc933); } to { filter: drop-shadow(0 0 20px #ffc933); } }
+
+.bp-card {
+  position: relative; overflow: hidden; display: grid; grid-template-rows: minmax(0, 1fr) auto; justify-items: center; align-items: end;
+  min-width: 0; padding: 10px 8px 10px; border: 0; font: inherit; color: var(--m-fg); text-align: center;
+  --px-n: 10px; clip-path: var(--px-10);
+  --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: rgba(0, 0, 0, 0.32); --px-fb-w: 5px; --px-fl: transparent; --px-fr: transparent;
+  transition: background-color 120ms steps(2, end), transform 120ms steps(2, end);
+}
+/* Бесплатная строка — плоские тёмные карточки. */
+.bp-card.free { background-color: rgba(22, 18, 32, 0.9); --px-ft: rgba(255, 255, 255, 0.05); --px-fb: rgba(0, 0, 0, 0.4); }
+.bp-card.free .bp-art { opacity: 0.92; }
+.bp-card.free.ms { --px-ol: color-mix(in srgb, var(--bp-gold) 60%, transparent); --px-ol-w: 2px; }
+/* PLUS — золото: рамка, тёплая подложка, светлая грань сверху. */
+.bp-card.plus {
+  background-color: #5a3e12; padding-top: 14px;
+  --px-ol: #ffc933; --px-ol-w: 3px; --px-ft: #ffe79a; --px-ft-w: 3px; --px-fb: #8a5a06; --px-fb-w: 6px;
+}
+.bp-card.plus.ms { background-color: #7a5410; --px-ol: #fff1b0; }
+.bp-card.claimed { background-color: rgba(16, 14, 22, 0.88); --px-ol: transparent; --px-ft: transparent; }
+.bp-card.claimed .bp-art { opacity: 0.38; filter: grayscale(0.7); }
+.bp-card.claimed .bp-tag { opacity: 0.5; }
+.bp-card.ready { cursor: pointer; background-color: color-mix(in srgb, var(--m-accent) 34%, #16121f); --px-ol: var(--m-accent); --px-ol-w: 3px; }
+.bp-card.plus.ready { background-color: #6a5a14; --px-ol: var(--m-accent); }
+.bp-card.ready:hover { background-color: color-mix(in srgb, var(--m-accent) 46%, #16121f); transform: translateY(-3px); }
+.bp-card.ready:active { transform: translateY(2px); }
+.bp-card.ready .bp-art { animation: bp-hop 1.4s steps(1, end) infinite; }
+.bp-card.locked { cursor: pointer; }
+.bp-card.locked:hover { background-color: #6e4c14; transform: translateY(-3px); }
+@keyframes bp-hop { 0%, 70%, 100% { transform: translateY(0); } 78% { transform: translateY(-4px); } 86% { transform: translateY(-7px); } 94% { transform: translateY(-3px); } }
+
+/* Блик: светлая полоса проходит по золотой карточке раз в несколько секунд. */
+.bp-shine {
+  position: absolute; z-index: 0; top: -20%; bottom: -20%; left: -40%; width: 22%;
+  background: rgba(255, 244, 200, 0.22); transform: skewX(-18deg); pointer-events: none;
+  animation: bp-shine 4.2s steps(14, end) infinite;
+}
+.bp-col:nth-child(3n + 1) .bp-shine { animation-delay: -1.4s; }
+.bp-col:nth-child(3n + 2) .bp-shine { animation-delay: -2.8s; }
+@keyframes bp-shine { 0%, 70% { left: -40%; } 100% { left: 130%; } }
+
+.bp-art { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: 2px; align-self: center; min-height: 0; }
+.bp-art.many { flex-wrap: wrap; }
+.bp-card.plus .bp-art { filter: drop-shadow(0 4px 0 rgba(0, 0, 0, 0.35)) drop-shadow(0 0 10px rgba(255, 210, 110, 0.45)); }
+.bp-tag {
+  position: relative; z-index: 1; max-width: 100%; padding: 4px 10px 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  background: rgba(0, 0, 0, 0.5); color: #fff; font-size: 14px; font-weight: 900; line-height: 1.1;
+  font-variant-numeric: tabular-nums; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.38); clip-path: var(--px-4);
+}
+.bp-card.plus .bp-tag { font-size: 16px; padding: 5px 12px 6px; }
+/* Две награды в клетке («480 + Легендарный») — мельче, чтобы подпись влезла целиком. */
+.bp-tag.many, .bp-card.plus .bp-tag.many { font-size: 12px; padding: 4px 7px 5px; white-space: normal; text-align: center; text-wrap: balance; }
+.bp-tag.soon { display: inline-flex; align-items: center; gap: 5px; color: var(--m-fg-muted); font-size: 13px; }
+.bp-tag.soon > svg.icon { width: 13px; height: 13px; }
+.bp-take { position: relative; z-index: 1; padding: 6px 14px 8px; background: var(--m-accent); color: var(--px-on-accent); font-size: 15px; font-weight: 900; line-height: 1; clip-path: var(--px-4); box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.25); }
+.bp-mark { position: absolute; z-index: 2; top: 8px; right: 8px; display: grid; place-items: center; width: 26px; height: 26px; clip-path: var(--px-4); }
+.bp-mark > svg.icon { width: 16px; height: 16px; }
+.bp-mark.lock { width: 32px; height: 32px; background: #ffc933; color: #3a2400; box-shadow: inset 0 -3px 0 #c98a00, inset 0 2px 0 #ffe79a; }
+.bp-mark.lock > svg.icon { width: 20px; height: 20px; }
+.bp-mark.got { background: var(--m-accent); color: var(--px-on-accent); }
+
+/* Линия прогресса: отрезки столбцов сливаются в одну дорожку, номер дня — на ней. */
+.bp-node { position: relative; display: grid; place-items: center; }
+.bp-node::before { content: ''; position: absolute; left: -4px; right: -4px; top: 50%; height: 8px; margin-top: -4px; background: rgba(0, 0, 0, 0.6); }
+.bp-node.done::before { background: var(--m-accent); }
+.bp-col.today .bp-node::before { right: 50%; }
+.bp-col.today .bp-node::after { content: ''; position: absolute; left: 50%; right: -4px; top: 50%; height: 8px; margin-top: -4px; background: rgba(0, 0, 0, 0.6); }
+.bp-day {
+  position: relative; z-index: 1; display: grid; place-items: center; min-width: 34px; height: 30px; padding: 0 6px;
+  background-color: #1a1626; color: var(--m-fg-muted); font-size: 15px; font-weight: 900; font-variant-numeric: tabular-nums;
+  --px-n: 4px; clip-path: var(--px-4);
+  --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: rgba(0, 0, 0, 0.35); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+}
+.bp-node.done .bp-day { background-color: #24452a; color: #fff; }
+.bp-col.ms .bp-day { background-color: #ffc933; color: #3a2400; --px-fb: #c98a00; }
+.bp-col.today .bp-day { min-width: 44px; height: 38px; font-size: 20px; background-color: var(--m-accent); color: var(--px-on-accent); --px-fb: rgba(0, 0, 0, 0.3); }
+.bp-col.today .bp-node { filter: drop-shadow(0 0 10px color-mix(in srgb, var(--m-accent) 70%, transparent)); }
+
+/* Стрелки — поверх краёв ленты. */
+.bp-arrow {
+  position: absolute; top: 50%; z-index: 2; display: grid; place-items: center; width: 40px; height: 64px; margin-top: -32px;
+  border: 0; padding: 0; cursor: pointer; color: var(--m-fg); background-color: #1a1626;
+  --px-n: 5px; clip-path: var(--px-5);
+  --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
+  transition: opacity 120ms steps(2, end);
+}
+.bp-arrow > svg.icon { width: 20px; height: 20px; }
+.bp-arrow.l { left: -4px; }
+.bp-arrow.r { right: 4px; }
+.bp-arrow:hover:not(:disabled) { background-color: var(--m-accent); color: var(--px-on-accent); }
+.bp-arrow:disabled { opacity: 0; pointer-events: none; }
+
+/* ---------- Полёт награды в баланс ---------- */
+.bp-flights { position: fixed; inset: 0; z-index: 9999; pointer-events: none; }
+.bp-fly { position: absolute; display: grid; place-items: center; width: 0; height: 0; animation: bp-fly 680ms cubic-bezier(0.5, 0, 0.75, 0.4) both; }
+.bp-fly > * { flex: none; filter: drop-shadow(0 4px 0 rgba(0, 0, 0, 0.4)); }
+@keyframes bp-fly {
+  0% { transform: translate(0, 0) scale(1); opacity: 1; }
+  18% { transform: translate(calc(var(--dx) * 0.04), -40px) scale(1.25); }
+  100% { transform: translate(var(--dx), var(--dy)) scale(0.35); opacity: 0.9; }
+}
+[data-cur].bp-hit { animation: bp-hit 420ms steps(4, end); }
+@keyframes bp-hit { 0% { transform: scale(1); } 40% { transform: scale(1.18); } 100% { transform: scale(1); } }
+
+.bp-below { display: grid; gap: 12px; }
+.bp-skel { display: block; height: 560px; }
+.modal.dp2:has(> .bp) { width: 1100px; padding: 0; overflow: visible; background: transparent; }
+
+/* ---------- Узко ---------- */
+@container shop (max-width: 900px) {
+  .bp-stage { grid-template-columns: minmax(0, 1fr); padding-right: 20px; }
+  .bp-side { display: none; }
+  .bp-hero { flex-wrap: wrap; }
+  .bp-hero-cta { margin-left: 0; width: 100%; }
+  .bp-hero-cta > * { flex: 1 1 0; }
+}
+@media (max-width: 860px) {
+  .bp-stage { grid-template-columns: minmax(0, 1fr); padding-right: 20px; }
+  .bp-side { display: none; }
+  .bp-hero { flex-wrap: wrap; }
+  .bp-hero-cta { margin-left: 0; width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bp-l, .bp-embers { transform: none !important; }
+  .bp-embers > i, .bp-shine, .bp-claim .px-icon, .bp-card.ready .bp-art, .bp-slot.ready, .bp-bar > i.now { animation: none; }
+  .bp-shine { display: none; }
+}

@@ -38,7 +38,7 @@ export const MILLI_VIEW = 376
  * Поле персонажа: знак 376×376 плюс поля под ручки, ботинки и точки «думает».
  * Квадрат, чтобы `size` по-прежнему задавал и ширину, и высоту.
  */
-export const MILLI_FRAME_BOX = { x: -84, y: -76, size: 544 } as const
+export const MILLI_FRAME_BOX = { x: -96, y: -96, size: 568 } as const
 
 /** Клетка сетки скобки: столбец и строка 0…4 → прямоугольник в координатах знака. */
 export const MILLI_GRID = { x0: 76.38, step: 44.568 } as const
@@ -101,10 +101,14 @@ export const MILLI_EYE_DY = 0
  */
 const EYE_GAP = 14
 const EYE_CX = MILLI_VIEW / 2
+/** Верх глаза (07.10.2026, владелец: «глаза слишком высоко, задевают корону»): глаза целиком на теле, у верхней кромки. */
+const EYE_TOP = 6
 export const MILLI_EYES: readonly MilliBox[] = [
-  { x: EYE_CX - EYE_GAP / 2 - MILLI_EYE_SIZE.w, y: -MILLI_EYE_SIZE.h / 2, w: MILLI_EYE_SIZE.w, h: MILLI_EYE_SIZE.h },
-  { x: EYE_CX + EYE_GAP / 2, y: -MILLI_EYE_SIZE.h / 2, w: MILLI_EYE_SIZE.w, h: MILLI_EYE_SIZE.h },
+  { x: EYE_CX - EYE_GAP / 2 - MILLI_EYE_SIZE.w, y: EYE_TOP, w: MILLI_EYE_SIZE.w, h: MILLI_EYE_SIZE.h },
+  { x: EYE_CX + EYE_GAP / 2, y: EYE_TOP, w: MILLI_EYE_SIZE.w, h: MILLI_EYE_SIZE.h },
 ]
+/** Корона стоит над глазами: низ обода — на их верхней кромке. */
+export const MILLI_CROWN_DY = EYE_TOP - 22
 /** Большой блик — у верхнего левого края радужки. */
 export const MILLI_GLINT = { dx: 17, dy: 24, size: 31 } as const
 /** Второй, маленький блик — внизу справа. */

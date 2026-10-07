@@ -5,7 +5,9 @@ import { startTour } from './tour'
 const DONE = 'm-onb-done'
 const EVER = 'm-mil-ever'
 
-export const ONBOARDING_STEPS = 4
+export const ONBOARDING_STEPS = 5
+/** Шаг «Кто тебя позвал?» — без аккаунта Millida спрашивать некого. */
+export const INVITER_STEP = 1
 
 interface OnboardingState {
   open: boolean
@@ -36,10 +38,19 @@ export async function maybeStartOnboarding() {
   useOnboarding.setState({ open: true, step: 0 })
 }
 
-export const onboardingNext = () =>
-  useOnboarding.setState((s) => ({ step: Math.min(ONBOARDING_STEPS - 1, s.step + 1) }))
+export const onboardingNext = (skipInviter = false) =>
+  useOnboarding.setState((s) => {
+    let next = s.step + 1
+    if (skipInviter && next === INVITER_STEP) next += 1
+    return { step: Math.min(ONBOARDING_STEPS - 1, next) }
+  })
 
-export const onboardingBack = () => useOnboarding.setState((s) => ({ step: Math.max(0, s.step - 1) }))
+export const onboardingBack = (skipInviter = false) =>
+  useOnboarding.setState((s) => {
+    let prev = s.step - 1
+    if (skipInviter && prev === INVITER_STEP) prev -= 1
+    return { step: Math.max(0, prev) }
+  })
 
 export function finishOnboarding(withTour: boolean) {
   writePref(DONE, '1')

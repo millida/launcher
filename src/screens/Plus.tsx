@@ -43,6 +43,7 @@ const REFERRAL = [
   { friends: 5, days: 14 },
   { friends: 10, days: 30 },
 ]
+const REFERRAL_NOTE = REFERRAL.map((r) => r.friends + ' — ' + r.days + ' дн.').join(' · ')
 const EXTRA_LABEL: Record<string, string> = {
   shaders: 'Шейдеры',
   resourcepacks: 'Ресурспаки',
@@ -623,7 +624,7 @@ export function Plus({ on }: { on: boolean }) {
           <div className="lp-buy-card">
             <div>
               <b>За друзей</b>
-              <small>{REFERRAL.map((r, i) => r.friends + (i === 0 ? ' друг' : '') + ' — ' + r.days + ' ' + pl(r.days, 'день', 'дня', 'дней')).join(' · ')}</small>
+              <small>{REFERRAL_NOTE}</small>
             </div>
             <button className="btn lg" data-track="plus_invite" onClick={() => useUi.getState().setScreen('friends')}>
               <Icon id="i-users" />

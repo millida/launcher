@@ -31,6 +31,8 @@ export function watchPlusPurchase(onActive: (status: PlusStatus) => void): () =>
     if (stopped) return
     if (status?.active) {
       stop()
+      // Премиум-тема включается сама один раз после оплаты (lib/premiumTheme).
+      window.dispatchEvent(new CustomEvent('m-plus-bought', { detail: status.tier ?? 'PLUS' }))
       onActive(status)
       return
     }

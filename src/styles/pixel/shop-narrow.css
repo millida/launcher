@@ -1,0 +1,29 @@
+/*
+ * Лента магазина в узком контейнере (раздел «Магазин» в гардеробе, окно
+ * 1280–1440: контейнер shop ~760–920px). Владелец 06.10.2026: «занимает
+ * слишком много места» — меньше карточки, ниже картинки, плотнее ряды.
+ */
+@container shop (max-width: 960px) {
+  .sv-flow { gap: 22px; }
+  .sv-sec .sh-head h2, .sv-flow .sh-head h2 { font-size: 20px; }
+
+  /* Пакеты рубинов: те же 5 в ряд, низкие. */
+  :root .pk-wrap .pk-grid { gap: 8px; }
+  .pk-wrap .pk-grid > * { flex-basis: calc((100% - 4 * 8px) / 5); }
+  .pk-wrap .pk-grid .sh-card.pk { gap: 6px; padding: 6px; }
+  .pk-wrap .pk-grid .pk-pick { height: 64px; }
+  .pk-wrap .pk-grid .pk-art img { width: 56px; height: 56px; }
+  .pk-wrap .pk-grid .pk-topup { height: 44px; }
+  .pk-wrap .pk-grid .pk-topup b { font-size: 15px; }
+  .pk-wrap .pk-grid .pk-topup small { font-size: 12px; }
+  .pk-promo { top: 4px; font-size: 10px; padding: 2px 6px; }
+
+  /* Ленты вещей (скидки дня, ночной рынок, наборы): узкие карточки, квадратная картинка. */
+  .sv-rail, .td-rail .sv-rail { grid-auto-columns: 158px; gap: 10px; }
+  .sv-card { gap: 6px; padding: 6px 6px 8px; }
+  .sv-card-pick { aspect-ratio: 1 / 1; }
+  .sv-card-name { font-size: 13px; }
+  .sv-card > .btn { height: 38px; font-size: 14px; }
+  .sv-hero > * { height: 340px; }
+  .sv-sets > .sv-stand { height: 300px; }
+}

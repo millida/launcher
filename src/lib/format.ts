@@ -116,7 +116,9 @@ export const cap = (s: string): string => (s ? s[0].toUpperCase() + s.slice(1) :
 export const accKindLabel = (k?: string): string =>
   k === 'microsoft'
     ? 'Лицензия Microsoft'
-    : k === 'tg' || k === 'millida'
+    : k === 'elyby'
+      ? 'Аккаунт Ely.by'
+      : k === 'tg' || k === 'millida'
       ? 'Аккаунт Millida'
       : k === 'offline'
         ? 'Офлайн-ник'

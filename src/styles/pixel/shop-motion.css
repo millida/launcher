@@ -1,0 +1,44 @@
+/* ============================================================
+   Движение магазина (06.10.2026, «анимации кривые»): одна кривая на всё —
+   выход cubic-bezier(0.22, 1, 0.36, 1), длительности 0,2–0,45 с для
+   появлений, только transform/opacity, за экраном всё стоит.
+   ============================================================ */
+
+/* Блок за экраном — бесконечные анимации на паузе (useOffscreenPause). */
+[data-off] *, [data-off] *::before, [data-off] *::after { animation-play-state: paused !important; }
+
+/* Скидки дня: карточки въезжают по очереди одной кривой. */
+:root .td-card { animation: td-rise 0.42s cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: calc(min(var(--i, 0), 6) * 60ms); }
+@keyframes td-rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+/* Вещь парит без наклона: поворот пиксельной картинки рвал пиксели («кривые»). */
+:root .td-rail.is-live .td-card .sv-shot > img, 
+:root .td-rail.is-live .td-card .sv-shot .sh-art { animation: td-hover 3.6s ease-in-out infinite; animation-delay: calc(var(--i, 0) * -0.7s); will-change: transform; }
+@keyframes td-hover { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+/* Снимок на игроке приходит позже плоской картинки — проявляется, а не щёлкает. */
+:root .td-shot > img { animation: td-shot-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both; }
+:root .td-rail.is-live .td-card .td-shot > img {
+  animation: td-shot-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both, td-hover 3.6s ease-in-out infinite;
+  animation-delay: 0s, calc(var(--i, 0) * -0.7s);
+}
+@keyframes td-shot-in { from { opacity: 0; } to { opacity: 1; } }
+/* Блик: узкая полоса, одна скорость, без «вспыхивания» на краях. */
+:root .td-rail.is-live .td-card .sv-card-pick::after { animation: td-glint 6s cubic-bezier(0.45, 0, 0.25, 1) infinite; animation-delay: calc(var(--i, 0) * 0.5s); }
+@keyframes td-glint {
+  0%, 70% { transform: translateX(-160%) skewX(-18deg); opacity: 0; }
+  71% { opacity: 1; }
+  92% { transform: translateX(520%) skewX(-18deg); opacity: 1; }
+  93%, 100% { transform: translateX(520%) skewX(-18deg); opacity: 0; }
+}
+
+/* Бонус «Забрать»: мягкий пульс масштабом вместо мигания яркостью (filter перерисовывал кнопку каждый кадр). */
+:root .bn-claim { animation: bn-pulse 1.6s ease-in-out infinite; }
+@keyframes bn-pulse { 0%, 100% { transform: none; } 50% { transform: scale(1.04); } }
+
+/* Бандл PLUS: блик реже и одной кривой. */
+:root .pb::after { animation: pb-glint 5s cubic-bezier(0.45, 0, 0.25, 1) infinite; }
+@keyframes pb-glint { 0%, 64% { transform: translateX(-200%) skewX(-18deg); } 92%, 100% { transform: translateX(700%) skewX(-18deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+:root .td-card, :root .td-shot > img, :root .td-rail.is-live .td-card .sv-shot > img, :root .td-rail.is-live .td-card .sv-shot .sh-art, 
+:root .td-rail.is-live .td-card .sv-card-pick::after, :root .bn-claim, :root .pb::after { animation: none !important; }
+}

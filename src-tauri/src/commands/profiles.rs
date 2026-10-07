@@ -451,10 +451,6 @@ pub async fn share_profile(profile: String, summary: Option<String>) -> Result<e
     engine::share_profile(profile, summary).await
 }
 
-#[tauri::command]
-pub async fn my_packs() -> Result<serde_json::Value, String> {
-    engine::my_packs().await
-}
 
 #[tauri::command]
 pub async fn unshare_profile(code: String) -> Result<(), String> {

@@ -5,9 +5,11 @@ import { openExt } from '../lib/api'
 import { useAccounts } from '../state/accounts'
 import { cancelWebLogin, copyUserCode, copyVerifyLink, startWebLogin, useLogin } from '../state/login'
 import { cancelMsLogin, copyMsCode, copyMsVerifyLink, openMsVerifyPage, startMsLogin, useMsLogin } from '../state/msLogin'
+import { cancelElyLogin, copyElyCode, copyElyVerifyLink, openElyVerifyPage, startElyLogin, useElyLogin } from '../state/elyLogin'
 import { backdropClose } from '../lib/dismiss'
+import { SecurityInfo } from './SecurityInfo'
 
-type Kind = 'millida' | 'microsoft' | 'offline'
+type Kind = 'millida' | 'microsoft' | 'elyby' | 'offline'
 
 const KINDS: { id: Kind; ic: string; title: string; sub: string }[] = [
   {
@@ -23,6 +25,12 @@ const KINDS: { id: Kind; ic: string; title: string; sub: string }[] = [
     sub: 'Лицензионные серверы, свой скин',
   },
   {
+    id: 'elyby',
+    ic: 'i-mo-key',
+    title: 'Аккаунт Ely.by',
+    sub: 'Серверы Ely.by, скин из Ely.by',
+  },
+  {
     id: 'offline',
     ic: 'i-mo-user',
     title: 'Офлайн-аккаунт',
@@ -30,9 +38,10 @@ const KINDS: { id: Kind; ic: string; title: string; sub: string }[] = [
   },
 ]
 
-function KindPanel({ kind, onBack, onDone }: { kind: Kind; onBack: () => void; onDone: () => void }) {
+function KindPanel({ kind, onBack, onDone, onSafety }: { kind: Kind; onBack: () => void; onDone: () => void; onSafety: () => void }) {
   const login = useLogin()
   const ms = useMsLogin()
+  const ely = useElyLogin()
   const [nick, setNick] = useState('')
   const count = useAccounts((s) => s.list.length)
   const startCount = useRef(count)
@@ -58,9 +67,9 @@ function KindPanel({ kind, onBack, onDone }: { kind: Kind; onBack: () => void; o
   }
 
   const meta = KINDS.find((k) => k.id === kind)!
-  const busy = kind === 'millida' ? login.webBusy : kind === 'microsoft' ? ms.busy : false
-  const code = kind === 'millida' ? login.userCode : ms.userCode
-  const hint = kind === 'millida' ? login.hintText : ms.hint
+  const busy = kind === 'millida' ? login.webBusy : kind === 'microsoft' ? ms.busy : kind === 'elyby' ? ely.busy : false
+  const code = kind === 'millida' ? login.userCode : kind === 'elyby' ? ely.userCode : ms.userCode
+  const hint = kind === 'millida' ? login.hintText : kind === 'elyby' ? ely.hint : ms.hint
 
   return (
     <>
@@ -70,6 +79,7 @@ function KindPanel({ kind, onBack, onDone }: { kind: Kind; onBack: () => void; o
         onClick={() => {
           if (kind === 'millida') cancelWebLogin()
           if (kind === 'microsoft') cancelMsLogin()
+          if (kind === 'elyby') cancelElyLogin()
           onBack()
         }}
       >
@@ -114,7 +124,7 @@ function KindPanel({ kind, onBack, onDone }: { kind: Kind; onBack: () => void; o
               <button
                 className="acc-code"
                 aria-label="Скопировать код"
-                onClick={() => void (kind === 'millida' ? copyUserCode() : copyMsCode())}
+                onClick={() => void (kind === 'millida' ? copyUserCode() : kind === 'elyby' ? copyElyCode() : copyMsCode())}
               >
                 <span>{code}</span>
                 <Icon id="i-copy" />
@@ -123,19 +133,19 @@ function KindPanel({ kind, onBack, onDone }: { kind: Kind; onBack: () => void; o
                 <button
                   className="btn sm secondary"
                   style={{ flex: 1 }}
-                  onClick={() => (kind === 'millida' ? void startWebLogin(true) : openMsVerifyPage())}
+                  onClick={() => (kind === 'millida' ? void startWebLogin(true) : kind === 'elyby' ? openElyVerifyPage() : openMsVerifyPage())}
                 >
                   Открыть страницу
                 </button>
                 <button
                   className="btn sm ghost"
-                  onClick={() => (kind === 'millida' ? copyVerifyLink() : copyMsVerifyLink())}
+                  onClick={() => (kind === 'millida' ? copyVerifyLink() : kind === 'elyby' ? copyElyVerifyLink() : copyMsVerifyLink())}
                 >
                   Копировать ссылку
                 </button>
                 <button
                   className="btn sm ghost"
-                  onClick={() => (kind === 'millida' ? cancelWebLogin() : cancelMsLogin())}
+                  onClick={() => (kind === 'millida' ? cancelWebLogin() : kind === 'elyby' ? cancelElyLogin() : cancelMsLogin())}
                 >
                   Отмена
                 </button>
@@ -146,12 +156,35 @@ function KindPanel({ kind, onBack, onDone }: { kind: Kind; onBack: () => void; o
               className="btn md primary"
               style={{ width: '100%' }}
               disabled={busy}
-              onClick={() => void (kind === 'millida' ? startWebLogin() : startMsLogin())}
+              onClick={() => void (kind === 'millida' ? startWebLogin() : kind === 'elyby' ? startElyLogin() : startMsLogin())}
             >
               <Icon id={meta.ic} />
-              {busy ? 'Ждём подтверждения…' : kind === 'millida' ? 'Войти через Millida' : 'Войти через Microsoft'}
+              {busy
+                ? 'Ждём подтверждения…'
+                : kind === 'millida'
+                  ? 'Войти через Millida'
+                  : kind === 'elyby'
+                    ? 'Войти через Ely.by'
+                    : 'Войти через Microsoft'}
             </button>
           )}
+          {/* Строка доверия под входом Microsoft (06.10.2026): ведёт на разбор
+              безопасности на сайте. Текст короткий, факты — на странице. */}
+          {kind === 'microsoft' ? (
+            <div className="faint-note" style={{ marginTop: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <Icon id="i-shield" />
+              <span>Полностью безопасно. Убедись сам:</span>
+              <a
+                href="https://millida.net/launcher/bezopasnost"
+                onClick={(e) => {
+                  e.preventDefault()
+                  onSafety()
+                }}
+              >
+                Как это работает?
+              </a>
+            </div>
+          ) : null}
           {/* Пояснение по умолчанию снято: кнопка «Войти через …» и код говорят сами.
               Живую подсказку процесса входа (hint) оставляем — это статус, а не абзац. */}
           {hint ? (
@@ -168,9 +201,13 @@ function KindPanel({ kind, onBack, onDone }: { kind: Kind; onBack: () => void; o
 export function AccountAddModal() {
   const modal = useUi((s) => s.modals.accModal)
   const [kind, setKind] = useState<Kind | null>(null)
+  const [safety, setSafety] = useState(false)
 
   useEffect(() => {
-    if (!modal.open) setKind(null)
+    if (!modal.open) {
+      setKind(null)
+      setSafety(false)
+    }
   }, [modal.open])
 
   useEffect(() => {
@@ -191,12 +228,14 @@ export function AccountAddModal() {
       id="accModal"
       {...backdropClose(close)}
     >
-      <div className="modal mw-sm" style={{ display: 'flex', flexDirection: 'column' }}>
-        <h3>Добавить аккаунт</h3>
+      <div className={'modal ' + (safety ? 'mw-md' : 'mw-sm')} style={{ display: 'flex', flexDirection: 'column' }}>
+        <h3>{safety ? 'Как это работает' : 'Добавить аккаунт'}</h3>
 
         <div style={{ marginTop: '18px', display: 'flex', flexDirection: 'column' }}>
-          {kind ? (
-            <KindPanel kind={kind} onBack={() => setKind(null)} onDone={close} />
+          {safety ? (
+            <SecurityInfo onBack={() => setSafety(false)} />
+          ) : kind ? (
+            <KindPanel kind={kind} onBack={() => setKind(null)} onDone={close} onSafety={() => setSafety(true)} />
           ) : (
             <div style={{ display: 'grid', gap: '10px' }}>
               {KINDS.map((k) => (

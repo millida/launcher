@@ -282,9 +282,31 @@ export interface WornCosmetic {
   variant?: string
 }
 
-export async function loadCosmeticCatalog(): Promise<{ items: CosmeticItem[] }> {
-  const r = await api<{ items: CosmeticItem[] }>('/cosmetics/catalog')
+/**
+ * Каталог — 1,5 МБ и 3–12 секунд ответа. Его просили лобби, обе сцены
+ * магазина, снимки наборов и гардероб — каждый своим запросом, впятером
+ * одновременно; прокси разработки и прод на этом отвечали 502, и экраны
+ * оставались пустыми («ничего не грузится», 06.10.2026). Теперь запрос один
+ * на всех, ответ живёт 10 минут, неудача не запоминается и повторяется один раз.
+ */
+const CATALOG_TTL = 10 * 60_000
+let catalogAsk: { at: number; p: Promise<{ items: CosmeticItem[] }> } | null = null
+
+async function fetchCatalog(): Promise<{ items: CosmeticItem[] }> {
+  const once = () => api<{ items: CosmeticItem[] }>('/cosmetics/catalog')
+  const r = await once().catch(() => new Promise<void>((ok) => setTimeout(ok, 1500)).then(once))
   return { ...r, items: expandCatalog(r.items || []) }
+}
+
+export function loadCosmeticCatalog(): Promise<{ items: CosmeticItem[] }> {
+  if (catalogAsk && Date.now() - catalogAsk.at < CATALOG_TTL) return catalogAsk.p
+  const p = fetchCatalog()
+  const mine = { at: Date.now(), p }
+  catalogAsk = mine
+  p.catch(() => {
+    if (catalogAsk === mine) catalogAsk = null
+  })
+  return p
 }
 
 /// На что у игрока есть право. Бесплатное сюда не попадает — оно и так у всех.
@@ -334,6 +356,8 @@ export interface PlusStatus {
   canceled: boolean
   priceKopecks: number
   items: number
+  /** Уровень оплаченной подписки (магазин v2). */
+  tier?: 'PLUS' | 'DIAMOND' | null
 }
 
 export function loadPlus(): Promise<PlusStatus> {

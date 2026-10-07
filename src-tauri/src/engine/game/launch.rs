@@ -1453,7 +1453,9 @@ pub async fn install_and_launch_in(
     }
     // CustomSkinLoader is a client mod, so it can only be installed on modded
     // profiles; vanilla has no way to load custom skins without Yggdrasil.
-    let root = if agent.is_some() && !auth.yggdrasil.is_empty() {
+    // Only our server has the CustomSkinAPI next to Yggdrasil; Ely.by serves
+    // skins through the session itself.
+    let root = if agent.is_some() && auth.yggdrasil == millida_yggdrasil() {
         Some(format!("{}/csl/", auth.yggdrasil.trim_end_matches('/')))
     } else { None };
     let want_skin = want_in_game_skins(root.as_deref());

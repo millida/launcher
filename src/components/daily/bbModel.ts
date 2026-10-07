@@ -272,10 +272,73 @@ export interface BbRig {
   dispose(): void
 }
 
-export function buildBbRig(model: BbModel): BbRig {
+/**
+ * Перекраска текстуры модели под цвет (ящики магазина, 06.10.2026): у каждого
+ * пикселя оттенок становится оттенком `tint`, светлота остаётся своей,
+ * насыщенность — пропорционально насыщенности цвета. Так из трёх моделей
+ * сундука получаются восемь своих, а не фильтр поверх готовой картинки.
+ */
+export function tintPixels(data: Uint8ClampedArray, tint: string): void {
+  const n = parseInt(tint.replace('#', ''), 16)
+  const [th, ts] = rgbToHsl((n >> 16) & 255, (n >> 8) & 255, n & 255)
+  const k = Math.min(1.4, ts / 0.7)
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 3]! === 0) continue
+    const [, s, l] = rgbToHsl(data[i]!, data[i + 1]!, data[i + 2]!)
+    const [r, g, b] = hslToRgb(th, Math.min(1, s * k + (ts > 0.3 ? 0.08 : 0)), l)
+    data[i] = r
+    data[i + 1] = g
+    data[i + 2] = b
+  }
+}
+
+function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
+  r /= 255
+  g /= 255
+  b /= 255
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const l = (max + min) / 2
+  if (max === min) return [0, 0, l]
+  const d = max - min
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+  const h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4
+  return [h / 6, s, l]
+}
+
+function hslToRgb(h: number, s: number, l: number): [number, number, number] {
+  if (s === 0) return [Math.round(l * 255), Math.round(l * 255), Math.round(l * 255)]
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s
+  const p = 2 * l - q
+  const f = (t: number) => {
+    if (t < 0) t += 1
+    if (t > 1) t -= 1
+    if (t < 1 / 6) return p + (q - p) * 6 * t
+    if (t < 1 / 2) return q
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6
+    return p
+  }
+  return [Math.round(f(h + 1 / 3) * 255), Math.round(f(h) * 255), Math.round(f(h - 1 / 3) * 255)]
+}
+
+export function buildBbRig(model: BbModel, tint?: string): BbRig {
   const loader = new TextureLoader()
   const maps: Texture[] = model.textures.map((t) => {
-    const map = loader.load(t.source)
+    const map = loader.load(t.source, (ready) => {
+      if (!tint) return
+      const img = ready.image as HTMLImageElement
+      const c = document.createElement('canvas')
+      c.width = img.width
+      c.height = img.height
+      const g = c.getContext('2d')
+      if (!g) return
+      g.drawImage(img, 0, 0)
+      const px = g.getImageData(0, 0, c.width, c.height)
+      tintPixels(px.data, tint)
+      g.putImageData(px, 0, 0)
+      ;(ready as unknown as { image: unknown }).image = c
+      ready.needsUpdate = true
+    })
     map.magFilter = NearestFilter
     map.minFilter = NearestFilter
     map.generateMipmaps = false

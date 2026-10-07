@@ -31,6 +31,8 @@ import { uiConfirm } from '../state/confirm'
 import { useProfiles } from '../state/profiles'
 import { openCfProject, openMillidaProject, openProject, useProject } from '../state/project'
 import { catalogTargetBuild, useMods } from '../state/mods'
+import { isInstalledInBuild } from '../lib/catalogInstalled'
+import { millidaPid } from '../components/catalog/millidaInstall'
 import type { ProjectLink, ProjectVersion } from '../state/project'
 import { closeModal, showToast, useUi } from '../state/ui'
 import { benchOp, useBench } from '../state/milliBench'
@@ -146,16 +148,25 @@ export function ProjectModal() {
         ? keyCfModpack(pj.cfid)
         : keyMrModpack(pj.slug)
       : keyContent(src, selectedBuild || '', pj.kind, project)
+  const installedIds = useMods((s) => s.installedIds)
+  const inBuild =
+    pj.kind !== 'modpack' &&
+    pj.kind !== 'world' &&
+    isInstalledInBuild(
+      isMl ? { pid: millidaPid(pj.slug) } : isCf ? { cfid: pj.cfid } : { pid: pj.projectId, slug: pj.slug },
+      installedIds,
+    )
+  const isDone = (key: string): boolean => !!doneKeys[key] || (key === packKey && inBuild)
   const label = (key: string, idle: string): string => {
     const t = tasks[key]
     if (t && t.state === 'run') return t.pct > 0 ? t.label + ' ' + Math.round(t.pct) + '%' : t.label
-    return doneKeys[key] ? 'Установлено' : idle
+    return isDone(key) ? 'Установлено' : idle
   }
   /// «Установлено» — это состояние, а не кнопка: повторное нажатие качало тот же
   /// файл заново и ничего не меняло на экране. Сменить версию можно во вкладке
   /// «Версии», об этом и говорим.
   const alreadyDone = (key: string): boolean => {
-    if (!doneKeys[key]) return false
+    if (!isDone(key)) return false
     showToast(
       pj.kind === 'modpack'
         ? 'Сборка уже установлена — во вкладке «Версии» можно поставить другую версию'

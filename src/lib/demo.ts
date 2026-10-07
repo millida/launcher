@@ -19,7 +19,7 @@
 import { demoClaim, demoStatus, liveItems } from '../components/daily/demoTrack'
 import { demoOpen, isTier } from '../components/daily/chestDrops'
 import type { DailyClaim } from './rubies'
-import { demoEconomy, type DemoCatalogItem } from '../components/shop/demoShop'
+import { demoEconomy, demoTier, type DemoCatalogItem } from '../components/shop/demoShop'
 import { demoSets } from '../components/shop/demoSets'
 
 const demoParam = (): boolean => {
@@ -81,15 +81,13 @@ export const DEMO_UUID_DASHED = '8f3c1a0e-2b7d-4e6a-9c05-d31f7a2b8e44'
 /** Копейки: 1 489 ₽ на счету. */
 export const DEMO_BALANCE_KOPECKS = 148_900
 
-/** Скин демо-игрока: настоящая текстура из живой витрины millida.net. */
-let skinUrl: string | null = null
+/**
+ * Скин демо-игрока: чистый стандартный (MHF_Steve через ручку голов). Раньше
+ * брался первый из живой витрины — у того верхний слой рук и ног был в
+ * зелёно-лиловых пятнах, и они лезли на каждый снимок магазина.
+ */
 async function demoSkinUrl(): Promise<string | null> {
-  if (skinUrl) return skinUrl
-  const list = await live<{ name: string; textureId: string | null }[]>('/players/showcase/list?kind=top&limit=8')
-  const card = Array.isArray(list) ? list.find((x) => x && x.textureId) : null
-  if (!card || !card.textureId) return null
-  skinUrl = apiBase() + '/heads/texture/' + encodeURIComponent(card.textureId) + '?kind=skin'
-  return skinUrl
+  return apiBase() + '/heads/skin/MHF_Steve'
 }
 
 const DAY = 86_400_000
@@ -314,7 +312,9 @@ function demoWorn(): unknown[] {
 // ── Рубины: «моё» состояние поверх живых правил и цен ───────────────────────
 
 // Витрина экономики в dev: миллион рубинов, чтобы владелец мог всё купить и потрогать (23.09.2026).
-const RUBY_BALANCE = { balance: ECONOMY_SHOWCASE && !DEMO_USER ? 1_000_000 : 2_340, earned: 5_120, spent: 2_780 }
+/** `&rubies=20000` — другой баланс демо-игрока (кадры ×10 без пополнения). */
+const DEMO_RUBIES = typeof location !== 'undefined' ? Number(new URLSearchParams(location.search).get('rubies')) || 0 : 0
+const RUBY_BALANCE = { balance: ECONOMY_SHOWCASE && !DEMO_USER ? 1_000_000 : DEMO_RUBIES || 2_340, earned: 5_120, spent: 2_780 }
 
 /** Пять ступеней редкости по цене вещи — подпись для витрины, не цена. */
 function rarityByPrice(price: number): [string, string] {
@@ -468,6 +468,19 @@ async function inventory() {
 async function daily() {
   const q = new URLSearchParams(location.search)
   const cat = await live<{ items?: { id: string; name: string; preview?: string | null }[] }>('/cosmetics/catalog')
+  // `&daily-shields=0..2` — щиты серии на неделю (по умолчанию 1).
+  const shields = q.has('daily-shields') ? Number(q.get('daily-shields')) : 1
+  // `&daily-active=0` — сегодня день серии ещё не засчитан.
+  return {
+    ...demoStatusOf(q, cat),
+    shields,
+    shieldsMax: q.get('daily-plus') === '1' ? 2 : 1,
+    shieldSaved: false,
+    activeToday: q.get('daily-active') !== '0',
+  }
+}
+
+function demoStatusOf(q: URLSearchParams, cat: { items?: { id: string; name: string; preview?: string | null }[] } | null) {
   return demoStatus({
     items: liveItems(cat && cat.items),
     day: Number(q.get('daily-day')) || undefined,
@@ -475,11 +488,57 @@ async function daily() {
     have: q.has('daily-have') ? Number(q.get('daily-have')) : undefined,
     // `&daily-chests=N` — сколько сундуков уже ждёт в «Моих сундуках» (скриншоты открытия).
     chests: q.has('daily-chests') ? Number(q.get('daily-chests')) : undefined,
+    // `&daily-claimed=1` — всё открытое уже забрано: виден таймер до следующего.
+    claimed: q.get('daily-claimed') === '1',
   })
 }
 
+/**
+ * Доски (GET /launcher/top?board=…). `&top-rank=N` — своё место (по умолчанию
+ * 127), `&top-rank=0` — не на доске.
+ */
+function boardTop(pathname: string) {
+  const q = new URLSearchParams(location.search)
+  const board = new URLSearchParams(pathname.split('?')[1] || '').get('board') || 'week'
+  const myRank = q.has('top-rank') ? Number(q.get('top-rank')) : 127
+  const NICKS = ['markizkit', 'Samoner', 'LapisCrit', 'JLalka', 'Artem_nik', 'holy_67', 'BlenderxXx', 'Razner', 'purty7', 'mlem', 'PinPointed', 'kotok_vozduh']
+  const top = board === 'streak' ? 22 : board === 'month' ? 180 : board === 'all' ? 2400 : 42
+  const valueAt = (rank: number) =>
+    board === 'streak' ? Math.max(1, top - Math.floor((rank - 1) / 9)) : Math.max(0.5, Math.round(top * (1 - (rank - 1) * 0.0045) * 10) / 10)
+  const FRIENDS_AT: Record<number, string> = { 4: 'Kirpich', 9: 'Grom228' }
+  const entry = (rank: number, nick: string, isFriend = false) => ({
+    rank, nick, slug: nick.toLowerCase(), head: null, value: valueAt(rank), likes: Math.max(0, 140 - rank * 3) + (rank % 7), isFriend,
+  })
+  const items = Array.from({ length: 100 }, (_, i) => {
+    const rank = i + 1
+    if (myRank === rank) return entry(rank, DEMO_NICK)
+    if (FRIENDS_AT[rank]) return entry(rank, FRIENDS_AT[rank]!, true)
+    return entry(rank, NICKS[i % NICKS.length] + (i >= NICKS.length ? '_' + i : ''))
+  })
+  return {
+    board,
+    from: board === 'week' || board === 'month' ? new Date(Date.now() - (board === 'week' ? 6 : 29) * DAY).toISOString().slice(0, 10) : null,
+    to: board === 'week' || board === 'month' ? new Date().toISOString().slice(0, 10) : null,
+    updatedAt: new Date().toISOString(),
+    items,
+    // На доске огоньков своё значение — серия демо-бонуса (4 дня).
+    me: myRank > 0 ? { ...entry(myRank, DEMO_NICK), ...(board === 'streak' ? { value: 4 } : {}) } : null,
+    friends: [entry(4, 'Kirpich', true), entry(9, 'Grom228', true), { ...entry(2140, 'Nastya_Lis', true), value: board === 'streak' ? 2 : 3.5 }],
+  }
+}
+
 /** Неоткрытые сундуки демо: магазин открывает их сам, одним раскрытием. */
-const DEMO_CHESTS: { id: string; tier: string; source: string; title: string; createdAt: string }[] = []
+const PLAY = { seconds: 2 * 3600 + 26 * 60, claimed: 1 }
+function playChests() {
+  const earned = Math.min(3, Math.floor(PLAY.seconds / 3600))
+  return { earned, claimed: PLAY.claimed, ready: Math.max(0, earned - PLAY.claimed), limit: 3, nextInS: earned >= 3 ? null : 3600 * (earned + 1) - PLAY.seconds, chest: 'Обычный сундук' }
+}
+
+const DEMO_CHESTS: { id: string; tier: string; source: string; title: string; createdAt: string }[] =
+  // &chests — в «Моих сундуках» три сундука (скриншоты открытия).
+  typeof location !== 'undefined' && location.search.includes('chests')
+    ? ['EPIC', 'RARE', 'COMMON'].map((tier, i) => ({ id: 'demo-ch-' + i, tier, source: 'playtime:hours10', title: 'За часы игры', createdAt: new Date().toISOString() }))
+    : []
 
 /** Забранный бонус меняет кошелёк демо: рубины и осколки видны в шапке магазина. */
 async function dailyCredit(res: DailyClaim): Promise<DailyClaim> {
@@ -635,9 +694,11 @@ const ROUTES: [RegExp, Handler][] = [
   [/^\/launcher\/plus$/, async () => {
     const rules = await live<{ packs?: { plus?: { priceKopecks?: number; items?: number } } }>('/rubies/rules')
     const plus = (rules && rules.packs && rules.packs.plus) || null
+    const tier = demoTier()
     return {
-      active: false,
-      paidUntil: null,
+      active: !!tier,
+      tier,
+      paidUntil: tier ? new Date(Date.now() + 19 * 86_400_000).toISOString() : null,
       canceled: false,
       priceKopecks: (plus && plus.priceKopecks) || 0,
       items: (plus && plus.items) || 0,
@@ -719,7 +780,65 @@ const ROUTES: [RegExp, Handler][] = [
     return DEMO_MODELS[id]
   }],
 
+  // Приглашения: две засчитанных, тебя тоже позвали (плитки подарков)
+  [/^\/launcher\/referrals\/me$/, () => {
+    const t = (friends: number, plusDays: number, chest: string | null, chestName: string | null, perks: { id: string; kind: string; name: string }[], delayed: boolean) => ({
+      friends, plusDays, chest, chestName, perks, delayed, reached: friends <= 2, granted: friends <= 1,
+    })
+    return {
+      code: 'K7M2QX9R',
+      link: 'https://millida.net/?ref=K7M2QX9R',
+      deepLink: 'millida://invite/K7M2QX9R',
+      qualified: 2,
+      pending: 1,
+      perFriendPlusDays: 1,
+      rules: { playSeconds: 7200, playDays: 2, dailyLimit: 3, accountCap: 30 },
+      earned: { plusDays: 5, chests: 0 },
+      perks: [{ id: 'badge-leader', kind: 'badge', name: 'Вожак' }],
+      invitee: {
+        badge: { id: 'badge-newcomer', kind: 'badge', name: 'Новичок команды' },
+        rubies: 50,
+        chest: { tier: 'COMMON', granted: false, playSeconds: 1500, needSeconds: 3600 },
+        plus: { days: 2, granted: false },
+      },
+      tiers: [
+        t(1, 3, null, null, [{ id: 'badge-leader', kind: 'badge', name: 'Вожак' }], false),
+        t(3, 0, 'COMMON', 'Обычный сундук', [{ id: 'frame-team', kind: 'frame', name: 'Команда' }], false),
+        t(5, 14, null, null, [{ id: 'icon-spark', kind: 'icon', name: 'Искра' }], true),
+        t(10, 30, 'RARE', 'Редкий сундук', [{ id: 'title-pack', kind: 'title', name: 'Лидер стаи' }, { id: 'icon-flame', kind: 'icon', name: 'Пламя' }], true),
+        t(25, 0, 'EPIC', 'Эпический сундук', [{ id: 'icon-amethyst', kind: 'icon', name: 'Аметист' }, { id: 'badge-animated', kind: 'badge', name: 'Живой вожак' }], true),
+        t(50, 0, null, null, [{ id: 'icon-legend', kind: 'icon', name: 'Легенда' }, { id: 'badge-legend', kind: 'badge', name: 'Легенда' }], true),
+      ],
+      next: { friends: 3, left: 1 },
+      friends: [
+        { nickname: 'Kirill_7', status: 'qualified', wait: null, playSeconds: 7200, invitedAt: iso(ago(6 * DAY)), qualifiedAt: iso(ago(4 * DAY)) },
+        { nickname: 'MiaCraft', status: 'qualified', wait: null, playSeconds: 7200, invitedAt: iso(ago(3 * DAY)), qualifiedAt: iso(ago(1 * DAY)) },
+        { nickname: 'Fedya', status: 'pending', wait: 'play', playSeconds: 3000, invitedAt: iso(ago(1 * DAY)), qualifiedAt: null },
+      ],
+      invitedBy: { nickname: 'Daniil', status: 'pending' },
+      canApply: false,
+    }
+  }],
+  [/^\/launcher\/referrals\/lookup$/, () => ({ found: true, nickname: 'Daniil' })],
+  [/^\/launcher\/referrals\/onboarding$/, ok],
   [/^\/launcher\/plus\/subscribe$/, () => ({ subscriptionId: 'demo', paymentUrl: 'https://millida.net/profile#plus' })],
+
+  [/^\/launcher\/top$/, (p) => boardTop(p)],
+  // Лайк на доске топа: в демо не уходит на прод (там 401/429 по IP владельца).
+  [/^\/users\/[^/]+\/like$/, () => ({ liked: true })],
+  [/^\/rubies\/daily\/active$/, daily],
+  [/^\/friends\/streaks$/, () => ({ streaks: { 'u-kirpich': 23, 'u-grom': 6, 'u-nastya': 2, 'u-mihail': 41 } })],
+  // Сундуки за игру: сегодня наиграно 2 часа, один сундук забран, третий — через 34 минуты.
+  [/^\/rubies\/play-chests$/, () => playChests()],
+  [/^\/rubies\/play-chests\/claim$/, () => {
+    const st = playChests()
+    if (st.ready <= 0) return Promise.reject(new Error('http 409'))
+    PLAY.claimed += 1
+    const chestId = 'demo-play-' + PLAY.claimed
+    DEMO_CHESTS.push({ id: chestId, tier: 'COMMON', source: 'play', title: 'За игру', createdAt: new Date().toISOString() })
+    return { ...playChests(), chestId }
+  }],
+  [/^\/rubies\/progress\/hours1\/claim$/, () => ({ code: 'hours1', title: 'Первый час', hours: 1, hoursDone: 1, chest: 'Обычный сундук', rubies: 0, done: true, claimed: true })],
 
   // Друзья, заявки, группы, переписка
   [/^\/friends$/, () => ({ friends: FRIENDS })],

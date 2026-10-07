@@ -1,0 +1,37 @@
+/* Знак подписки — пиксельное слово PLUS / DIAMOND (components/premium/PlusMark).
+   Цвета — слоями: подошва, обводка, тело, светлая грань, тень. */
+.pmark {
+  display: inline-block;
+  flex: none;
+  vertical-align: middle;
+  overflow: visible;
+  --pm-sole: #1c1003;
+  --pm-line: #3a2306;
+  --pm-body: #f5bd2c;
+  --pm-hi: #ffe58a;
+  --pm-lo: #c4840f;
+}
+.pmark.is-diamond {
+  --pm-sole: #06142b;
+  --pm-line: #0b2346;
+  --pm-body: #4fb8ff;
+  --pm-hi: #d2f1ff;
+  --pm-lo: #2a73d0;
+}
+.pm-sole { fill: var(--pm-sole); }
+.pm-line { fill: var(--pm-line); }
+.pm-body { fill: var(--pm-body); }
+.pm-hi { fill: var(--pm-hi); }
+.pm-lo { fill: var(--pm-lo); }
+.pm-shine {
+  fill: #fff;
+  opacity: 0.55;
+  animation: pm-sweep 3.6s cubic-bezier(.45, 0, .25, 1) infinite;
+}
+@keyframes pm-sweep {
+  0%, 55% { transform: translateX(0) skewX(-20deg); }
+  100% { transform: translateX(80px) skewX(-20deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pm-shine { animation: none; opacity: 0; }
+}

@@ -3,7 +3,7 @@ import { Icon } from '../Icon'
 import type { ChestTier, PendingChest } from '../../lib/rubies'
 import { chestList, useDaily } from '../../state/daily'
 import { openChestFlow, useChestOpen } from './ChestOpen'
-import { chestSprite, SPRITE_H, SPRITE_W } from './chestSprite'
+import { ChestLive } from './ChestLive'
 import { CHEST_NAME } from './rewards'
 import { useRail } from './useRail'
 
@@ -72,7 +72,10 @@ function Cell({ chest, i, busy }: { chest: PendingChest; i: number; busy: boolea
           <i />
         </span>
       ) : null}
-      <img className="mc-art" src={chestSprite(tier)} alt="" width={SPRITE_W * 2} height={SPRITE_H * 2} draggable={false} />
+      {/* Тот же 3D-сундук, что в ящиках и при открытии (один вид, 06.10.2026). */}
+      <span className="mc-art">
+        <ChestLive ready tier={tier} size={64} />
+      </span>
       <b className="mc-name">{name}</b>
       <span className="mc-src">{chestSource(chest)}</span>
     </button>

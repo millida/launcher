@@ -23,6 +23,22 @@ export const MILLIDA_LIGHT = {
 /// 190x270 (position.y -1.5 и наклон -0.72), sad читается как ошибка, а run
 /// раскачивает всю фигуру по x — выглядело как «персонаж уезжает вбок»
 /// (владелец 23.09.2026).
+/**
+ * Свет витрины (снимки карточек и сцены наборов в магазине). Тени от
+ * карты теней выключены: вещи из каталога (питомцы, реквизит эмоций) теней
+ * не отбрасывают и не принимают, а тело отбрасывает — рядом с вороном или
+ * поднятой для поцелуя рукой на фигуре появлялись тёмные пятна слева, без
+ * видимой причины (владелец 06.10.2026: «рандомные тени»). Объём держат
+ * заполняющий свет и мягкая тень-пятно под ногами — одинаково для всего.
+ */
+export const SHOP_LIGHT = { ...MILLIDA_LIGHT, castShadows: false, ambientIntensity: 0.4, fillIntensity: 0.62 }
+
+/** Витрина, лёгкие движения: оглядеться и помахать — без танцев и облачков. */
+export const SHOP_SHOW: { id: SkinAnimId; ms: number }[] = [
+  { id: 'look', ms: 7390 },
+  { id: 'wave', ms: 3770 },
+]
+
 export const IDLE_SHOW: { id: SkinAnimId; ms: number }[] = [
   { id: 'wave', ms: 3770 },
   { id: 'look', ms: 7390 },
@@ -64,7 +80,7 @@ export function cosmeticModel(modelId: string): Promise<CosmeticModelFile | null
   if (ready) return ready
   // Неудачу не держим: сорванный запрос иначе запоминал бы вещь как пустую до
   // перезапуска, и примерка у неё не работала бы весь вечер.
-  const asked = loadCosmeticModel(modelId).catch(() => {
+  const asked = (import.meta.env.DEV && devModels() ? devModel(modelId).then((m) => m ?? loadCosmeticModel(modelId)) : loadCosmeticModel(modelId)).catch(() => {
     MODEL_CACHE.delete(modelId)
     return null
   })
@@ -72,8 +88,33 @@ export function cosmeticModel(modelId: string): Promise<CosmeticModelFile | null
   return asked
 }
 
+/**
+ * Только dev: в ?preview (и в витрине экономики) модели берутся из репозитория
+ * мода через dev-сервер Vite (scripts/dev-cosmetic-models.mjs) — прод отдаёт их
+ * лишь вошедшему, и демо-персонаж стоял голым. В сборке ветки нет.
+ */
+function devModels(): boolean {
+  try {
+    return (
+      !('__TAURI_INTERNALS__' in window) &&
+      (new URLSearchParams(location.search).has('preview') || import.meta.env.VITE_ECONOMY_SHOWCASE === '1')
+    )
+  } catch {
+    return false
+  }
+}
+
+function devModel(modelId: string): Promise<CosmeticModelFile | null> {
+  return fetch('/__dev/cosmetic-models/' + encodeURIComponent(modelId))
+    .then((r) => (r.ok ? (r.json() as Promise<CosmeticModelFile>) : null))
+    .then((m) => (m && m.geometry ? m : null))
+    .catch(() => null)
+}
+
 /** Скин по нику — тот же адрес, что у гардероба. */
 export const nickSkinUrl = (nick: string) => LAUNCHER_API + '/heads/skin/' + encodeURIComponent(nick)
+/** Скин для публичных мест (топ): сервер подменяет непроверенный и недопустимый стандартным. */
+export const safeSkinUrl = (nick: string) => nickSkinUrl(nick) + '?safe=1'
 
 /**
  * Снести сцену и отдать её графический контекст сразу. mine3d.dispose() зовёт

@@ -2,6 +2,7 @@ import { loadMine3d } from './mine3d'
 import { textureSource } from './textureSource'
 import { gpuLite, noteContextCreated } from './gpuLite'
 import { releaseEngine } from './characterStage'
+import { withSnapshotGl, type GlHolder } from './glPool'
 
 export const BODY_W = 300
 export const BODY_H = 480
@@ -23,6 +24,16 @@ const BODY_CACHE_MAX = 48
 /** The shared renderer holds a WebGL context and its buffers; pictures are rendered in bursts, so it is freed between them. */
 const ENGINE_IDLE_MS = 20_000
 let idleTimer: ReturnType<typeof setTimeout> | null = null
+
+/** Общий контекст снимков (glPool): отдать движок, когда снимает другой. */
+const holder: GlHolder = {
+  release() {
+    if (!engine) return
+    const e = engine
+    engine = null
+    releaseEngine(e)
+  },
+}
 
 function releaseWhenIdle() {
   if (idleTimer) clearTimeout(idleTimer)
@@ -105,7 +116,7 @@ const AVATAR_DISTANCE = 40
 const AVATAR_YAW = -0.4
 
 export function renderAvatar(url: string, model: BodyModel): Promise<string> {
-  const task = queue.then(async () => {
+  const task = queue.then(() => withSnapshotGl(holder, async () => {
     const e = await ensureEngine()
     const m3d = await loadMine3d()
     const img = await loadTexture(url)
@@ -135,7 +146,7 @@ export function renderAvatar(url: string, model: BodyModel): Promise<string> {
       e.resetCamera()
       e.setSize(BODY_W, BODY_H)
     }
-  })
+  }))
   enqueue(task)
   return task
 }
@@ -187,7 +198,7 @@ export function renderSkinBody(url: string, model: BodyModel = 'auto-detect', ya
   const running = inflight.get(key)
   if (running) return running
   const task = loadTexture(url).then((img) => {
-    const gpu = queue.then(async () => {
+    const gpu = queue.then(() => withSnapshotGl(holder, async () => {
       const e = await ensureEngine()
       const m3d = await loadMine3d()
       await e.setSkin(img)
@@ -204,7 +215,7 @@ export function renderSkinBody(url: string, model: BodyModel = 'auto-detect', ya
       const data = e.canvas.toDataURL('image/png')
       remember(key, data)
       return data
-    })
+    }))
     enqueue(gpu)
     return gpu
   })

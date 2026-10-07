@@ -10,7 +10,7 @@ import { targetsAnarchy } from '../lib/ownServer'
 import { PixelField } from '../components/lobby/PixelField'
 import { HubTile } from '../components/lobby/HubTile'
 import { useHeroWallpaper } from '../components/HeroWallpaper'
-import { LOADER_NAME, fmtN, fmtPlaytime, plural } from '../lib/format'
+import { LOADER_NAME, fmtN, fmtPlaytime } from '../lib/format'
 import { VIDEOS } from '../lib/wallpaper'
 import { hasTauri } from '../ipc/tauri'
 import { useProfiles } from '../state/profiles'
@@ -24,7 +24,16 @@ import { setScreen, showToast, useUi } from '../state/ui'
 import { cancelPrelaunch } from '../lib/launch'
 import { playButtonState } from '../lib/launchView'
 import { renderLive } from '../lib/renderGate'
-import { playTier } from '../lib/playTiers'
+import { playHoursLabel, playTier } from '../lib/playTiers'
+import { isDayZero } from '../lib/retention'
+import { LobbyChips } from '../components/lobby/LobbyChips'
+import { PlayChest } from '../components/lobby/PlayChest'
+import { DailyPassModal } from '../components/daily/DailyPassModal'
+import { useDailyModalHost } from '../components/daily/DailyChest'
+import { useDaily } from '../state/daily'
+import { usePromo } from '../state/promo'
+import { ANARCHY, anarchyMode } from '../lib/ownServer'
+import { useFirstHourChest } from '../lib/firstHourChest'
 import { useModUpdates } from '../state/modUpdates'
 import { usePlayStats } from '../state/playStats'
 import { stopRunningGame, useGame } from '../state/game'
@@ -32,6 +41,7 @@ import { stopRunningGame, useGame } from '../state/game'
 // импорт стоит здесь — иначе полки стоят без своих правил.
 import '../styles/pixel/play.css'
 import '../styles/pixel/lobby.css'
+import '../styles/pixel/retention.css'
 
 /* Разделы на лобби, как в Brawl Stars: у каждого ровно один вход (владелец
    23.09.2026: «всё дублируется»). Режимы и каталог открывает плашка «Что
@@ -73,6 +83,10 @@ export function Play({ on }: { on: boolean }) {
   const hero = useHeroWallpaper(false)
   const updates = useModUpdates()
   const playStats = usePlayStats((s) => s.stats)
+  const statsLoaded = usePlayStats((s) => s.loaded)
+  const passOpen = useDaily((s) => s.modal)
+  const modalHost = useDailyModalHost()
+  const anarchyPromo = usePromo((s) => s.promo.lobby === ANARCHY.mode)
   const running = useGame((s) => s.list)
   const gameStopping = useGame((s) => s.stopping)
   // Ход подготовки к запуску — прямо на кнопке: скачиваем → запускаем → в игре.
@@ -109,8 +123,15 @@ export function Play({ on }: { on: boolean }) {
   // режимов или запуском). Ничего не подставляем: «Играть» без выбора ведёт
   // в каталог, а не молча запускает сборку дня (владелец 23.09.2026).
   const tier = playTier(playStats.total_seconds)
-  const mode: LobbyMode | null =
+  // Первый день (игра ни разу не запускалась): одна сборка и одна «Играть»
+  // вместо каталога — сразу наш сервер или свежая ванилла (ресёрч 06.10.2026:
+  // половина ушедших в день установки так и не запустила игру).
+  const dayZero = isDayZero({ ...playStats, loaded: statsLoaded }, running.length > 0 || prelaunch.open)
+  const chosen: LobbyMode | null =
     picked && (picked.kind !== 'build' || profiles.some((p) => p.name === picked.name)) ? picked : null
+  const mode: LobbyMode | null =
+    chosen ?? (dayZero ? (anarchyPromo ? anarchyMode() : { kind: 'version', version: '1.21.11' }) : null)
+  useFirstHourChest(on, playStats.total_seconds)
   const sel = mode && mode.kind === 'build' ? profiles.find((p) => p.name === mode.name) || null : null
   const packUpdate = usePackUpdateHint(mode, profiles, on)
   const btn = playButtonState({ modeKind: mode ? mode.kind : null, selected: sel ? sel.name : null, running, prelaunch })
@@ -199,7 +220,7 @@ export function Play({ on }: { on: boolean }) {
       </div>
       <LobbyCharacter on={on} />
       <EmoteBubble />
-      <Recommend on={on} />
+      {dayZero ? null : <Recommend on={on} />}
       {/* Левый край — как в Brawl Stars: крупный сундук и под ним разделы.
           Боковой полосы на главной нет (владелец 23.09.2026). */}
       {/* Ежедневный бонус живёт в магазине (правка владельца 21:43): плитки
@@ -212,23 +233,10 @@ export function Play({ on }: { on: boolean }) {
         </nav>
       </div>
       <div className="lobby-who">
-        {playStats.total_seconds >= 3600 ? (
-          <span
-            className="lobby-hours"
-            title={tier.next ? 'Наиграно · следующая ступень ' + tier.next + ' ч' : 'Наиграно'}
-          >
-            <Icon id="i-trophy" />
-            {fmtPlaytime(playStats.total_seconds)}
-            {tier.next ? (
-              <span className="lobby-hours-bar" aria-hidden="true">
-                <span style={{ width: Math.round(tier.progress * 100) + '%' }} />
-              </span>
-            ) : null}
-          </span>
-        ) : null}
+        <LobbyChips on={on} />
       </div>
 
-      <div className="lobby-side">
+      <div className={'lobby-side' + (dayZero ? ' day0' : '')}>
         {/* Downloads sit above the play card: in the window corner they covered
             the card on narrow screens. */}
         <Installs inLobby />
@@ -263,7 +271,7 @@ export function Play({ on }: { on: boolean }) {
                 {modeTag ? <span className="mode-tile-tag">{modeTag}</span> : null}
               </span>
               <span className="lobby-mode-body">
-                <span className="lobby-mode-lab">Сегодня играем</span>
+                <span className="lobby-mode-lab">{dayZero && !chosen ? 'Начни отсюда' : 'Сегодня играем'}</span>
                 <b>{modeTitle}</b>
                 {modeMeta ? <span className="meta">{modeMeta}</span> : null}
                 {packUpdate ? (
@@ -279,6 +287,7 @@ export function Play({ on }: { on: boolean }) {
           </button>
           {/* Кнопка запуска стоит на постоянном месте и видна на первом кадре:
               наведение её не вызывает и не прячет (антипаттерн Modrinth). */}
+          <div className="play-col">
           {btn.kind === 'stop' ? (
             <button
               className="btn lg stop"
@@ -316,6 +325,7 @@ export function Play({ on }: { on: boolean }) {
                   setScreen('playhub')
                   return
                 }
+                if (!chosen) useLobby.getState().pick(mode)
                 void playMode(mode, profiles)
               }}
             >
@@ -334,22 +344,30 @@ export function Play({ on }: { on: boolean }) {
                   ) : (
                     <>
                       Играть
-                      {/* Сколько наиграно через лаунчер — видно при каждом заходе
-                          (владелец 24.09.2026, 13:31). */}
-                      {playStats.total_seconds >= 3600 ? (
-                        <span className="play-hours">
-                          {(() => {
-                            const h = Math.floor(playStats.total_seconds / 3600)
-                            return h + ' ' + plural(h, 'час', 'часа', 'часов') + ' в игре'
-                          })()}
-                        </span>
-                      ) : null}
+                      {/* Наиграно по всем сборкам — всегда, с нуля, со ступенью
+                          (владелец 06.10.2026: часы — повод похвастаться). */}
+                      <span className="play-hours">
+                        {tier.reached > 0 ? (
+                          <span className="play-tier" aria-label={'Ступень ' + tier.reached}>
+                            <Icon id="i-trophy" />
+                            {tier.reached}
+                          </span>
+                        ) : null}
+                        <b>{playHoursLabel(playStats.total_seconds)}</b>
+                        {tier.next ? (
+                          <span className="play-hours-bar" aria-hidden="true">
+                            <span style={{ width: Math.round(tier.progress * 100) + '%' }} />
+                          </span>
+                        ) : null}
+                      </span>
                     </>
                   )}
                 </span>
               </span>
             </button>
           )}
+          <PlayChest on={on} dayZero={dayZero} />
+          </div>
           {btn.kind === 'installing' ? (
             <button className="play-cancel" aria-label="Отменить запуск" data-track="cancel_launch" onClick={cancelPrelaunch}>
               <Icon id="i-x" />
@@ -455,6 +473,7 @@ export function Play({ on }: { on: boolean }) {
         </div>
       </div>
 
+      {modalHost ? <DailyPassModal open={passOpen} onClose={() => useDaily.getState().setModal(false)} /> : null}
     </section>
   )
 }

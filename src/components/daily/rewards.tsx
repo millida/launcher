@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
 import { Ruby } from '../Ruby'
+import { CurrencyIcon, type CurrencyArt } from '../CurrencyIcon'
 import { useVariantPreview } from '../../lib/variantArt'
 import { Shard } from '../shop/parts'
 import { ChestLive } from './ChestLive'
@@ -90,6 +91,14 @@ export function RewardArt({ reward, size }: { reward: TrackReward; size: number 
     return (
       <span className="ra ra-chest" style={style}>
         <ChestLive ready={false} tier={reward.tier} size={Math.round(size * 0.8)} />
+      </span>
+    )
+  }
+  if (reward.kind === 'FRAGMENTS' && !preview) {
+    return (
+      <span className="ra ra-frag" style={style}>
+        <CurrencyIcon art={('fragment-' + rewardRarity(reward).toLowerCase()) as CurrencyArt} size={Math.round(size * 0.9)} />
+        <b className="ra-count">×{reward.amount}</b>
       </span>
     )
   }

@@ -1,3 +1,6 @@
+import { ModDownloader } from '../components/build/ModDownloader'
+import { DEMO_MODS } from '../lib/demoMods'
+import { DEMO_USER } from '../lib/demo'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { BuildIcon } from '../components/playhub/BuildIcon'
@@ -91,7 +94,7 @@ import { ensureMcVersionList, useMcVersionList, versionOptions } from '../state/
 import { useGuarded, useProfiles } from '../state/profiles'
 import { catalogPackSlug } from '../lib/packUpdate'
 import { useInstance } from '../state/instance'
-import { closeModal, setScreen, showToast, useUi } from '../state/ui'
+import { closeModal, setScreen, showToast, useUi, openModal } from '../state/ui'
 import { runRepair } from '../lib/repair'
 import { joinWithAuth, realLaunch, showLaunchError, startPrelaunch } from '../lib/launch'
 import { useMods } from '../state/mods'
@@ -171,6 +174,9 @@ const CORE_OPTS: [string, string][] = [
   ['neoforge', 'NeoForge'],
 ]
 
+
+/** Главная кнопка вкладки «Контент»: что именно добавляем (владелец 07.10.2026: «Скачать» непонятно). */
+const ADD_LABEL: Record<string, string> = { mod: 'Добавить моды', resourcepack: 'Добавить ресурс-паки', shader: 'Добавить шейдеры', datapack: 'Добавить дата-паки' }
 export function InstancePage() {
   const modal = useUi((s) => s.modals.bsModal)
   const profile = useInstance((s) => s.profile)
@@ -188,6 +194,7 @@ export function InstancePage() {
   const [items, setItems] = useState<ModFile[]>([])
   const [contentQuery, setContentQuery] = useState('')
   const [sel, setSel] = useState<Set<string>>(new Set())
+  const [dlOpen, setDlOpen] = useState(false)
   const [upd, setUpd] = useState<Record<string, string>>({})
   const [itemLabels, setItemLabels] = useState<Record<string, string>>({})
   const [emptyList, setEmptyList] = useState(false)
@@ -251,7 +258,6 @@ export function InstancePage() {
   const liveRef = useRef<HTMLPreElement>(null)
   const [shareLabel, setShareLabel] = useState('Поделиться')
   const [updateAllLabel, setUpdateAllLabel] = useState('Обновить всё')
-  const [bulkUpdLabel, setBulkUpdLabel] = useState('Обновить')
   const [renameVal, setRenameVal] = useState('')
   const [renameBusy, setRenameBusy] = useState(false)
   const [newLoader, setNewLoader] = useState('vanilla')
@@ -297,8 +303,10 @@ export function InstancePage() {
         return
       }
       if (!hasTauri()) {
-        setItems([])
-        setNoticeList('Список появится в приложении')
+        // Демо (?preview): список модов как в настоящей сборке, чтобы видеть экран целиком.
+        const demo = DEMO_USER && kk === 'mod' ? DEMO_MODS : []
+        setItems(demo)
+        setNoticeList(demo.length ? '' : 'Список появится в приложении')
         setEmptyList(false)
         return
       }
@@ -474,7 +482,6 @@ export function InstancePage() {
     setWsIp('')
     setShareLabel('Поделиться')
     setUpdateAllLabel('Обновить всё')
-    setBulkUpdLabel('Обновить')
     setRenameVal(profile)
     try {
       setNote(localStorage.getItem('m-note-' + profile) || '')
@@ -957,11 +964,41 @@ export function InstancePage() {
           <div className="inst-content">
             {modal.open && profile ? <PackUpdateRow profile={profile} onUpdated={() => loadMods()} /> : null}
             <div id="bsTabContent" style={{ display: tab === 'content' ? '' : 'none' }}>
+              {dlOpen && pr ? (
+                <ModDownloader
+                  build={pr}
+                  kind={kind}
+                  installed={items}
+                  onClose={() => setDlOpen(false)}
+                  onDone={(demo) => (demo ? setItems((l) => [...demo, ...l.filter((m) => !demo.some((d) => d.name === m.name))]) : loadMods())}
+                  onRemove={async (file) => {
+                    if (!hasTauri()) {
+                      setItems((l) => l.filter((m) => m.name !== file))
+                      showToast('Удалено из сборки', 'ok')
+                      return
+                    }
+                    await deleteContent(profile!, kind, file)
+                      .then(() => (loadMods(), showToast('Удалено из сборки', 'ok')))
+                      .catch((e) => showToast(apiErrorText(e, 'Не удалось удалить'), 'error'))
+                  }}
+                />
+              ) : null}
               {guarded ? (
-                <div className="bx-mini-empty" id="bsGuarded">
-                  <Icon id="i-shield" />
-                  <b>Содержимое сборки защищено автором</b>
-                  <span>Играть, обновлять сборку, смотреть миры, скриншоты и логи можно как обычно</span>
+                <div className="bx-mini-empty pr-locked" id="bsGuarded">
+                  <Icon id="i-lock" />
+                  <b>Эту сборку менять нельзя</b>
+                  <span>Моды в ней ставит сервер — так она всегда совпадает с ним</span>
+                  <button
+                    type="button"
+                    className="btn md primary"
+                    data-track="guarded_new_build"
+                    onClick={() => {
+                      close()
+                      openModal('nbModal')
+                    }}
+                  >
+                    <Icon id="i-plus" /> Своя сборка с модами
+                  </button>
                 </div>
               ) : (
               <>
@@ -989,78 +1026,11 @@ export function InstancePage() {
                   </div>
                 ) : null}
               </div>
-              <div id="bsBulkBar" className="bulk-float" style={{ display: sel.size ? 'flex' : 'none' }}>
-                <span
-                  className={
-                    'chk' + (sel.size > 0 && sel.size === shownItems.length ? ' on' : sel.size ? ' part' : '')
-                  }
-                  id="bsSelAll"
-                  role="checkbox"
-                  aria-checked={sel.size > 0 && sel.size === shownItems.length}
-                  style={{ flex: 'none' }}
-                  onClick={() => {
-                    if (sel.size === shownItems.length) setSel(new Set())
-                    else setSel(new Set(shownItems.map((i) => i.name)))
-                  }}
-                ></span>
-                <span className="set-val" id="bsSelCount" style={{ color: 'var(--m-accent)' }}>
-                  {sel.size + ' выбрано'}
-                </span>
-                <span style={{ flex: 1 }}></span>
-                <button
-                  className="btn sm secondary"
-                  data-bulk="enable"
-                  onClick={() => void bulk([...sel], (n) => toggleContent(profile!, kind, n, true))}
-                >
-                  Вкл
-                </button>
-                <button
-                  className="btn sm secondary"
-                  data-bulk="disable"
-                  onClick={() => void bulk([...sel], (n) => toggleContent(profile!, kind, n, false))}
-                >
-                  Выкл
-                </button>
-                <button
-                  className="btn sm secondary"
-                  data-bulk="update"
-                  onClick={() => {
-                    setBulkUpdLabel('…')
-                    void bulk(
-                      [...sel],
-                      (n) => updateContent(profile!, kind, n).catch(() => {}),
-                      () => showToast('Обновлено'),
-                    )
-                  }}
-                >
-                  {bulkUpdLabel}
-                </button>
-                <button
-                  className="btn sm danger"
-                  data-bulk="delete"
-                  onClick={async () => {
-                    const names = [...sel]
-                    if (await uiConfirm('Удалить выбранное (' + names.length + ')?', { confirmLabel: 'Удалить' }))
-                      void bulk(names, (n) => deleteContent(profile!, kind, n))
-                  }}
-                >
-                  Удалить
-                </button>
-              </div>
-              <div className="act-row">
-                <button
-                  className="btn sm primary act-row-btn"
-                  id="bsAddContent"
-                  onClick={() => {
-                    useProfiles.getState().setSelected(profile)
-                    close()
-                    setScreen('mods')
-                    useMods.getState().scopeTo(profile)
-                    useMods.getState().set({ modTab: 'mod' })
-                    void useMods.getState().load()
-                  }}
-                >
-                  <Icon id="i-plus" /> Добавить
+              <div className="pr-split">
+              {/* Действия сборки столбцом справа, как в Prism Launcher (владелец 07.10.2026). */}
+              <div className="act-row pr-acts">
+                <button className="btn md primary act-row-btn" id="bsAddContent" data-track="build_download" onClick={() => setDlOpen(true)}>
+                  <Icon id="i-plus" /> {ADD_LABEL[kind] || 'Добавить'}
                 </button>
                 <button
                   className="btn sm secondary act-row-btn"
@@ -1078,34 +1048,63 @@ export function InstancePage() {
                       .catch((e) => showToast('Не удалось открыть выбор файлов: ' + e, 'error'))
                   }}
                 >
-                  <Icon id="i-upload" /> {dropBusy ? 'Добавляем…' : 'С диска'}
+                  <Icon id="i-upload" /> {dropBusy ? 'Добавляем…' : 'Из файла'}
                 </button>
-                {Object.keys(upd).length ? (
-                  <button
-                    className="btn sm secondary act-row-btn"
-                    id="bsUpdateAll"
-                    onClick={() => {
-                      if (!hasTauri()) return
-                      setUpdateAllLabel('Обновляем…')
-                      updateAll(profile!, kind)
-                        .then((n) => {
-                          setUpdateAllLabel('Обновить всё')
-                          loadMods()
-                          showToast(n ? 'Обновлено: ' + n : 'Всё актуально')
-                        })
-                        .catch((e) => {
-                          setUpdateAllLabel('Обновить всё')
-                          showToast('' + e)
-                        })
-                    }}
-                  >
-                    <Icon id="i-restart" /> {updateAllLabel}
-                    <span className="nav-count" style={{ marginLeft: '4px' }}>
-                      {Object.keys(upd).length}
-                    </span>
-                  </button>
-                ) : null}
-                <span style={{ flex: 1 }}></span>
+                <span className="pr-sep" />
+                <button
+                  className="btn sm secondary act-row-btn"
+                  data-bulk="enable"
+                  disabled={!sel.size}
+                  onClick={() => void bulk([...sel], (n) => toggleContent(profile!, kind, n, true))}
+                >
+                  <Icon id="i-check" /> Включить
+                </button>
+                <button
+                  className="btn sm secondary act-row-btn"
+                  data-bulk="disable"
+                  disabled={!sel.size}
+                  onClick={() => void bulk([...sel], (n) => toggleContent(profile!, kind, n, false))}
+                >
+                  <Icon id="i-ban" /> Выключить
+                </button>
+                <button
+                  className="btn sm danger act-row-btn"
+                  data-bulk="delete"
+                  disabled={!sel.size}
+                  onClick={async () => {
+                    const names = [...sel]
+                    if (await uiConfirm('Удалить выбранное (' + names.length + ')?', { confirmLabel: 'Удалить' }))
+                      void bulk(names, (n) => deleteContent(profile!, kind, n))
+                  }}
+                >
+                  <Icon id="i-trash" /> Удалить
+                </button>
+                <span className="pr-sep" />
+                <button
+                  className="btn sm secondary act-row-btn"
+                  id="bsUpdateAll"
+                  disabled={!Object.keys(upd).length}
+                  onClick={() => {
+                    if (!hasTauri()) return
+                    setUpdateAllLabel('Обновляем…')
+                    updateAll(profile!, kind)
+                      .then((n) => {
+                        setUpdateAllLabel('Обновить всё')
+                        loadMods()
+                        showToast(n ? 'Обновлено: ' + n : 'Всё актуально')
+                      })
+                      .catch((e) => {
+                        setUpdateAllLabel('Обновить всё')
+                        showToast('' + e)
+                      })
+                  }}
+                >
+                  <Icon id="i-restart" /> {updateAllLabel}
+                  {Object.keys(upd).length ? <span className="nav-count">{Object.keys(upd).length}</span> : null}
+                </button>
+                <button className="btn sm secondary act-row-btn" onClick={() => (hasTauri() ? void openProfileFolder(profile!) : showToast('Доступно в приложении'))}>
+                  <Icon id="i-folder" /> Открыть папку
+                </button>
                 <button
                   className="btn sm ghost act-row-btn"
                   id="bsMore"
@@ -1136,6 +1135,7 @@ export function InstancePage() {
                   />
                 ) : null}
               </div>
+              <div className="pr-main">
               {kind === 'mod' ? (
                 <div className={'bx-audit' + (audit && audit.issues.length ? ' bad' : audit ? ' ok' : '')}>
                   <div className="bx-audit-row">
@@ -1223,10 +1223,16 @@ export function InstancePage() {
                   )}
                 </div>
               ) : null}
-              <div className="mod-list-head">
+              <div className="mod-list-head pr-thead">
                 <span className="set-val" id="bsModCount">
                   {noticeList ? '' : shownItems.length ? shownItems.length + ' шт.' : ''}
                 </span>
+                {shownItems.length ? (
+                  <>
+                    <span className="pr-th pr-th-src">Источник</span>
+                    <span className="pr-th pr-th-on">Вкл</span>
+                  </>
+                ) : null}
               </div>
               <div className="mod-list-wrap">
                 {dropActive ? (
@@ -1263,7 +1269,16 @@ export function InstancePage() {
                     ].filter(Boolean)
                     return (
                       <div className={'mod-card' + (md.enabled ? '' : ' off') + (info ? ' open' : '')} key={md.name}>
-                        <div className="mod-card-row">
+                        {/* Двойной клик по строке — включить/выключить, как в Prism. */}
+                        <div
+                          className="mod-card-row"
+                          onDoubleClick={(e) => {
+                            if ((e.target as HTMLElement).closest('button, .tgl, .chk')) return
+                            toggleContent(profile!, kind, md.name, !md.enabled)
+                              .then(() => loadMods())
+                              .catch((er) => showToast(apiErrorText(er, 'Не удалось выполнить действие'), 'error'))
+                          }}
+                        >
                           <span
                             className={'chk mod-sel' + (sel.has(md.name) ? ' on' : '')}
                             data-sel={md.name}
@@ -1319,6 +1334,7 @@ export function InstancePage() {
                               )}
                             </button>
                           ) : null}
+                          <span className="mod-src">{modrinth ? 'Modrinth' : curse ? 'CurseForge' : 'Файл'}</span>
                           <button
                             className={'icon-btn mod-info' + (info ? ' on' : '')}
                             aria-label="Подробнее"
@@ -1407,6 +1423,8 @@ export function InstancePage() {
                     )
                   })
                 )}
+              </div>
+              </div>
               </div>
               </div>
               </>

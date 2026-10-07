@@ -74,3 +74,16 @@ describe('parseBbModel rejects untrusted input', () => {
       expect(() => parseBbModel(JSON.stringify(mutate(base()))), why).toThrow()
     })
 })
+
+describe('tintPixels — свой цвет сундука ящика', () => {
+  test('оттенок становится оттенком цвета, светлота и прозрачность свои', () => {
+    const { tintPixels } = require('./bbModel') as typeof import('./bbModel')
+    // Медно-оранжевый пиксель и прозрачный.
+    const px = new Uint8ClampedArray([200, 110, 60, 255, 10, 20, 30, 0])
+    tintPixels(px, '#8b3dff')
+    const [r, g, b] = [px[0]!, px[1]!, px[2]!]
+    expect(b).toBeGreaterThan(g)
+    expect(r).toBeGreaterThan(g)
+    expect(Array.from(px.slice(4))).toEqual([10, 20, 30, 0])
+  })
+})
