@@ -28,8 +28,8 @@
   font: 800 16px/1.1 var(--m-font);
 }
 .fb-opt:hover { background: #2f3530; transform: translateY(-2px); }
-.fb-opt.rate { background: var(--m-accent); color: var(--px-on-accent, #06200e); }
-.fb-opt.rate:hover { filter: brightness(1.08); }
+.fb-opt.rate, .fb-opt.gh { background: var(--m-accent); color: var(--px-on-accent, #06200e); }
+.fb-opt.rate:hover, .fb-opt.gh:hover { filter: brightness(1.08); }
 .fb-stars-ic { font-size: 22px; letter-spacing: 2px; color: #ffd23f; text-shadow: 0 2px 0 rgba(0,0,0,0.35); }
 .fb-stars { display: flex; gap: 6px; }
 .fb-star { font-size: 36px; line-height: 1; color: rgba(255,255,255,0.18); transition: transform 80ms steps(2); }

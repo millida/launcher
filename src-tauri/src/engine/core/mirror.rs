@@ -34,6 +34,18 @@ const JAVA_HOSTS: [&str; 3] = ["api.adoptium.net", "api.azul.com", "cdn.azul.com
 /// the rest of GitHub is not ours to relay.
 const JAVA_GITHUB_OWNER: &str = "/adoptium/";
 
+/// Mojang's version manifest, version descriptors, client jars, libraries and
+/// asset objects. From part of Russian networks these hosts time out or do not
+/// resolve at all, and without them no version can be installed.
+const MOJANG_HOSTS: [&str; 6] = [
+    "launchermeta.mojang.com",
+    "piston-meta.mojang.com",
+    "piston-data.mojang.com",
+    "launcher.mojang.com",
+    "libraries.minecraft.net",
+    "resources.download.minecraft.net",
+];
+
 const PROBE_TIMEOUT: Duration = Duration::from_secs(6);
 
 #[derive(Clone, Copy, PartialEq)]
@@ -42,12 +54,14 @@ enum Source {
     Forge,
     Loader,
     Java,
+    Mojang,
 }
 
 static MODRINTH_DIRECT: tokio::sync::OnceCell<bool> = tokio::sync::OnceCell::const_new();
 static FORGE_DIRECT: tokio::sync::OnceCell<bool> = tokio::sync::OnceCell::const_new();
 static LOADER_DIRECT: tokio::sync::OnceCell<bool> = tokio::sync::OnceCell::const_new();
 static JAVA_DIRECT: tokio::sync::OnceCell<bool> = tokio::sync::OnceCell::const_new();
+static MOJANG_DIRECT: tokio::sync::OnceCell<bool> = tokio::sync::OnceCell::const_new();
 
 /// The startup probe is a HEAD to one host; a filter that lets it through can
 /// still stall file bodies on the CDN. One stalled direct transfer moves the
@@ -57,6 +71,7 @@ static MODRINTH_DEMOTED: AtomicBool = AtomicBool::new(false);
 static FORGE_DEMOTED: AtomicBool = AtomicBool::new(false);
 static LOADER_DEMOTED: AtomicBool = AtomicBool::new(false);
 static JAVA_DEMOTED: AtomicBool = AtomicBool::new(false);
+static MOJANG_DEMOTED: AtomicBool = AtomicBool::new(false);
 
 fn demoted(source: Source) -> &'static AtomicBool {
     match source {
@@ -64,6 +79,7 @@ fn demoted(source: Source) -> &'static AtomicBool {
         Source::Forge => &FORGE_DEMOTED,
         Source::Loader => &LOADER_DEMOTED,
         Source::Java => &JAVA_DEMOTED,
+        Source::Mojang => &MOJANG_DEMOTED,
     }
 }
 
@@ -121,6 +137,9 @@ fn source_of(url: &str) -> Option<Source> {
     if java_source(url, &host) {
         return Some(Source::Java);
     }
+    if MOJANG_HOSTS.contains(&host.as_str()) {
+        return Some(Source::Mojang);
+    }
     None
 }
 
@@ -134,6 +153,7 @@ pub(crate) fn proxy_url(url: &str) -> Option<String> {
         || FORGE_FILE_HOSTS.contains(&host.as_str())
         || LOADER_HOSTS.contains(&host.as_str())
         || java_source(url, &host)
+        || MOJANG_HOSTS.contains(&host.as_str())
     {
         return Some(format!("{}/launcher/dl?url={}", MILLIDA_API, urlencode(url)));
     }
@@ -166,6 +186,11 @@ async fn direct_available(source: Source) -> bool {
         Source::Java => {
             *JAVA_DIRECT
                 .get_or_init(|| direct_works("https://api.adoptium.net/v3/info/available_releases"))
+                .await
+        }
+        Source::Mojang => {
+            *MOJANG_DIRECT
+                .get_or_init(|| direct_works("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"))
                 .await
         }
     }
@@ -214,7 +239,7 @@ mod tests {
     /// CurseForge — и адрес, который зеркалить нельзя.
     #[test]
     fn mirrors_only_blocked_sources() {
-        let cases: [(&str, Option<&str>, &str); 12] = [
+        let cases: [(&str, Option<&str>, &str); 15] = [
             (
                 "https://api.adoptium.net/v3/assets/latest/21/hotspot?architecture=x64",
                 Some("https://api.millida.net/v2/launcher/dl?url=https%3A%2F%2Fapi.adoptium.net%2Fv3%2Fassets%2Flatest%2F21%2Fhotspot%3Farchitecture%3Dx64"),
@@ -268,8 +293,23 @@ mod tests {
             ("https://api.millida.net/v2/launcher/packs", None, "свой API уже доступен"),
             (
                 "https://launchermeta.mojang.com/mc/game/version_manifest_v2.json",
+                Some("https://api.millida.net/v2/launcher/dl?url=https%3A%2F%2Flaunchermeta.mojang.com%2Fmc%2Fgame%2Fversion_manifest_v2.json"),
+                "манифест версий — без него не ставится ни одна версия",
+            ),
+            (
+                "https://piston-data.mojang.com/v1/objects/abc/client.jar",
+                Some("https://api.millida.net/v2/launcher/dl?url=https%3A%2F%2Fpiston-data.mojang.com%2Fv1%2Fobjects%2Fabc%2Fclient.jar"),
+                "клиент игры",
+            ),
+            (
+                "https://libraries.minecraft.net/com/mojang/brigadier/1.0.18/brigadier-1.0.18.jar",
+                Some("https://api.millida.net/v2/launcher/dl?url=https%3A%2F%2Flibraries.minecraft.net%2Fcom%2Fmojang%2Fbrigadier%2F1.0.18%2Fbrigadier-1.0.18.jar"),
+                "библиотека игры",
+            ),
+            (
+                "https://sessionserver.mojang.com/session/minecraft/profile/x",
                 None,
-                "Mojang не блокируется и через нас не гоняется",
+                "сессии и скины Mojang — не файлы, через нас не идут",
             ),
         ];
         for (url, want, why) in cases {
@@ -310,7 +350,7 @@ mod tests {
             vec![two[0].clone(), two[1].clone(), two[0].clone()],
             "прямой → зеркало → снова прямой"
         );
-        let one = vec!["https://launchermeta.mojang.com/x.json".to_string()];
+        let one = vec!["https://garage.millida.net/x.json".to_string()];
         assert_eq!(with_return(one.clone()), one, "без зеркала повторять нечего");
     }
 
@@ -328,6 +368,8 @@ mod tests {
             "https://github.com/adoptium.evil/x.zip",
             "https://github.com/adoptium/../someone/x.zip",
             "https://api.adoptium.net.evil.example/v3/assets",
+            "https://piston-data.mojang.com.evil.example/v1/objects/abc/client.jar",
+            "https://evil.example/libraries.minecraft.net/x.jar",
         ] {
             assert_eq!(proxy_url(url), None, "{}: похожий хост не должен считаться своим", url);
         }

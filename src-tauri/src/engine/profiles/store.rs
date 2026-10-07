@@ -489,6 +489,41 @@ pub(crate) fn pack_entries(files: &[Value], pdir: &std::path::Path) -> Result<Ve
     Ok(out)
 }
 
+/// The Modrinth version id of a `cdn.modrinth.com/data/<project>/versions/<id>/<file>`
+/// address. Ids are base62, so nothing else may reach the API path.
+fn modrinth_version_of(raw: &str) -> Option<String> {
+    let u = url::Url::parse(raw).ok()?;
+    if u.scheme() != "https" || u.host_str()? != "cdn.modrinth.com" {
+        return None;
+    }
+    let seg: Vec<&str> = u.path_segments()?.collect();
+    match seg.as_slice() {
+        ["data", _, "versions", id, file]
+            if !file.is_empty() && !id.is_empty() && id.len() <= 16 && id.chars().all(|c| c.is_ascii_alphanumeric()) =>
+        {
+            Some(id.to_string())
+        }
+        _ => None,
+    }
+}
+
+/// The sha1 Modrinth publishes for the file at this address. Some packs carry a
+/// hash that matches nothing Modrinth serves: the file can then never pass the
+/// pack's check, while Modrinth's own record still vouches for exactly what its
+/// CDN sends.
+async fn modrinth_published_sha1(raw: &str) -> Option<String> {
+    let id = modrinth_version_of(raw)?;
+    let want = url::Url::parse(raw).ok()?;
+    let version = get_json(&format!("https://api.modrinth.com/v2/version/{}", id)).await.ok()?;
+    version["files"]
+        .as_array()?
+        .iter()
+        .find(|f| f["url"].as_str().and_then(|u| url::Url::parse(u).ok()).is_some_and(|u| u == want))
+        .and_then(|f| f["hashes"]["sha1"].as_str())
+        .map(str::to_ascii_lowercase)
+        .filter(|s| s.len() == 40 && s.chars().all(|c| c.is_ascii_hexdigit()))
+}
+
 /// Downloads every entry, `PACK_PARALLEL` at a time, each checked against its
 /// sha1. The first failure or a cancel stops the rest: dropping the in-flight
 /// transfers removes their temporary files.
@@ -512,6 +547,19 @@ pub(crate) async fn download_pack_entries(
                         return Ok(());
                     }
                     Err(err) => why = err,
+                }
+            }
+            if why.contains(SUM_MISMATCH) {
+                for u in &e.urls {
+                    let Some(sum) = modrinth_published_sha1(u).await.filter(|s| *s != e.sha1) else { continue };
+                    match or_cancel(download_verify(u, &e.dest, Some(&sum), None), cancel).await? {
+                        Ok(()) => {
+                            let n = done.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                            on_file(n, total);
+                            return Ok(());
+                        }
+                        Err(err) => why = err,
+                    }
                 }
             }
             Err(format!("Не удалось скачать файл сборки: {} ({})", e.path, why))
@@ -587,6 +635,23 @@ mod tests {
         );
         assert_eq!(all[2].version, "1.20.1");
         assert!(!mend_loader_version_ids(&mut all), "второй проход ничего не меняет");
+    }
+
+    /// вход -> версия Modrinth, у которой спрашиваем настоящий sha1. Только
+    /// файл версии на CDN Modrinth: иконка, чужой хост или мусор в id в API не идут.
+    #[test]
+    fn only_a_modrinth_version_file_is_rechecked_against_modrinth() {
+        let cases: [(&str, Option<&str>, &str); 6] = [
+            ("https://cdn.modrinth.com/data/40FYwb4z/versions/mRry0DgY/caelus-forge-3.2.0%2B1.20.1.jar", Some("mRry0DgY"), "файл версии мода"),
+            ("https://cdn.modrinth.com/data/40FYwb4z/ae837cab4b8a4d17989b2462bfcd62e8c0451a0f.png", None, "иконка — не файл версии"),
+            ("https://github.com/a/b/releases/download/1/x.jar", None, "не Modrinth"),
+            ("https://cdn.modrinth.com.evil.example/data/a/versions/b/x.jar", None, "похожий хост"),
+            ("https://cdn.modrinth.com/data/a/versions/..%2Fproject/x.jar", None, "id с чужими символами не попадает в путь API"),
+            ("http://cdn.modrinth.com/data/a/versions/b/x.jar", None, "только https"),
+        ];
+        for (raw, want, why) in cases {
+            assert_eq!(modrinth_version_of(raw).as_deref(), want, "{}: {}", raw, why);
+        }
     }
 
     #[test]

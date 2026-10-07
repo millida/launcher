@@ -323,6 +323,9 @@ async fn read_json(url: &str, resp: reqwest::Response) -> Result<Value, Attempt>
         .map_err(|e| Attempt::Retry(format!("неожиданный ответ: {} — {}", e, url)))
 }
 
+/// Marker of a download whose bytes arrived whole but hash to something else.
+pub(crate) const SUM_MISMATCH: &str = "контрольная сумма не сошлась";
+
 /// Percent-encoding for path segments and query values; also used when a URL is
 /// carried as a query parameter to the mirror.
 pub(crate) fn urlencode(s: &str) -> String {
@@ -754,7 +757,7 @@ async fn fetch_once(
     if let (Some(h), Some(s)) = (hasher, sum) {
         let got = h.hex();
         if !s.matches(&got) {
-            return Err(format!("{}: контрольная сумма не сошлась", url));
+            return Err(format!("{}: {}", url, SUM_MISMATCH));
         }
         return Ok(());
     }
@@ -1009,6 +1012,117 @@ async fn fetch_span(
         attempt += 1;
     }
     Err(SpanErr::Failed(if last.is_empty() { format!("{}: ответ оборвался", url) } else { last }))
+}
+
+pub(crate) const RESUMABLE_PART_SUFFIX: &str = ".millida-part";
+
+/// Named after the content, so bytes of an older build are never continued
+/// into a newer one.
+pub(crate) fn resumable_part(dest: &Path, sha256: &str) -> PathBuf {
+    let mut name = dest.file_name().map(|n| n.to_os_string()).unwrap_or_default();
+    name.push(format!(".{}{}", sha256.get(..16).unwrap_or(sha256), RESUMABLE_PART_SUFFIX));
+    dest.with_file_name(name)
+}
+
+/// For multi-gigabyte files served from our storage through the shield. The
+/// shield answers every ranged request by pulling the object from that offset
+/// to its end, so parallel ranges cost the origin the file several times over,
+/// and an install that failed and threw its bytes away cost it all again on
+/// every retry. One stream into a part file that outlives the attempt and the
+/// install keeps it at one copy per player.
+pub(crate) async fn download_resumable(
+    url: &str,
+    dest: &Path,
+    sha256: &str,
+    size: u64,
+    cancel: &Halt,
+    on: &Progress<'_>,
+) -> Result<(), String> {
+    if let Some(p) = dest.parent() {
+        std::fs::create_dir_all(p).map_err(|e| format!("{}: {}", p.display(), e))?;
+    }
+    let part = resumable_part(dest, sha256);
+    let len = |p: &Path| std::fs::metadata(p).map(|m| m.len()).unwrap_or(0);
+    let mut stalled = 0;
+    loop {
+        if cancel.cancelled() {
+            return Err(CANCELLED.into());
+        }
+        let have = len(&part);
+        if have > size {
+            let _ = std::fs::remove_file(&part);
+            continue;
+        }
+        if have == size {
+            break;
+        }
+        let err = match resume_once(url, &part, have, size, cancel, on).await {
+            Ok(()) => continue,
+            Err(e) if e == PAUSED => {
+                cancel.gate().await?;
+                continue;
+            }
+            Err(e) => e,
+        };
+        if cancel.cancelled() {
+            return Err(CANCELLED.into());
+        }
+        stalled = if len(&part) > have { 0 } else { stalled + 1 };
+        if stalled >= TRIES {
+            return Err(err);
+        }
+        tokio::time::sleep(retry_pause(stalled.max(1), &err)).await;
+    }
+    let owned = OwnedSum::of(Sum::Sha256(sha256));
+    let path = part.clone();
+    let intact = tokio::task::spawn_blocking(move || hash_matches(&path, &owned.sum())).await.unwrap_or(false);
+    if !intact {
+        let _ = std::fs::remove_file(&part);
+        return Err(format!("{}: контрольная сумма не сошлась, файл скачается заново", url));
+    }
+    if dest.exists() {
+        let _ = std::fs::remove_file(dest);
+    }
+    publish(&part, dest, Some(Sum::Sha256(sha256)), Some(size))
+}
+
+async fn resume_once(url: &str, part: &Path, have: u64, size: u64, cancel: &Halt, on: &Progress<'_>) -> Result<(), String> {
+    let mut req = client().get(url);
+    if have > 0 {
+        req = req.header("Range", format!("bytes={}-", have));
+    }
+    let resp = or_pause(req.send(), Some(cancel)).await?.map_err(|e| format!("{}: {}", url, net_err(&e)))?;
+    let status = resp.status();
+    let mut at = if status == reqwest::StatusCode::OK {
+        0
+    } else if have > 0 && status == reqwest::StatusCode::PARTIAL_CONTENT && range_starts_at(&resp, have) {
+        have
+    } else {
+        if status == reqwest::StatusCode::PARTIAL_CONTENT || status == reqwest::StatusCode::RANGE_NOT_SATISFIABLE {
+            let _ = std::fs::remove_file(part);
+        }
+        return Err(format!("{} → {}", url, status));
+    };
+    let opened = if at == 0 { std::fs::File::create(part) } else { std::fs::OpenOptions::new().append(true).open(part) };
+    let mut file = opened.map_err(|e| format!("{}: {}", part.display(), e))?;
+    on(at, Some(size));
+    let mut stream = resp.bytes_stream();
+    while let Some(chunk) = or_pause(stream.next(), Some(cancel)).await? {
+        let chunk = chunk.map_err(|e| format!("{}: обрыв загрузки ({})", url, net_err(&e)))?;
+        if at + chunk.len() as u64 > size {
+            drop(file);
+            let _ = std::fs::remove_file(part);
+            return Err(format!("{}: файл больше ожидаемого", url));
+        }
+        file.write_all(&chunk).map_err(|e| format!("{}: {}", part.display(), e))?;
+        at += chunk.len() as u64;
+        on(at, Some(size));
+    }
+    file.flush().map_err(|e| e.to_string())?;
+    if at < size {
+        return Err(format!("{}: ответ оборвался", url));
+    }
+    Ok(())
 }
 
 fn range_starts_at(resp: &reqwest::Response, at: u64) -> bool {
@@ -1392,7 +1506,10 @@ PK"),
                         .lines()
                         .find_map(|l| l.strip_prefix("range: bytes="))
                         .and_then(|r| r.trim().split_once('-'))
-                        .and_then(|(a, b)| Some((a.parse::<usize>().ok()?, b.parse::<usize>().ok()?)));
+                        .and_then(|(a, b)| {
+                            let end = if b.is_empty() { body.len() - 1 } else { b.parse::<usize>().ok()? };
+                            Some((a.parse::<usize>().ok()?, end))
+                        });
                     let (head, slice) = match (mode, range) {
                         (RangeMode::IgnoresRange, _) | (_, None) => (
                             format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len()),
@@ -1462,6 +1579,57 @@ PK"),
         let r = fetch_segmented(&url, &dest, Sum::Sha1(wrong), body.len() as u64, None, &noop).await;
         assert!(matches!(r, Ok(Segmented::Unsupported)), "несошедшийся хеш обязан вернуть откат, а не готовый файл");
         assert!(!dest.exists(), "файл с чужим содержимым не должен лечь на место");
+    }
+
+    /// (server, bytes left by an earlier install, hash) -> outcome. A game file
+    /// is gigabytes: whatever already landed must be continued, not fetched
+    /// again, and must survive a failed install; only a wrong hash discards it.
+    #[tokio::test]
+    async fn a_game_file_continues_from_what_already_landed() {
+        let body: Vec<u8> = (0..1_000_003u32).map(|i| (i % 251) as u8).collect();
+        let good = sha256_hex(&body);
+        let wrong = "0".repeat(64);
+        type Case<'a> = (Option<RangeMode>, usize, &'a str, bool, bool, &'a str);
+        let cases: [Case; 5] = [
+            (Some(RangeMode::CutsEveryAnswerAfter(150_000)), 0, good.as_str(), true, false, "a cut that still moved bytes is not a failed try"),
+            (Some(RangeMode::Honest), 600_000, good.as_str(), true, false, "the part of a failed install is continued"),
+            (Some(RangeMode::IgnoresRange), 600_000, good.as_str(), true, false, "a server without ranges starts the file over"),
+            (Some(RangeMode::Honest), 0, wrong.as_str(), false, false, "a wrong hash discards the bytes"),
+            (None, 600_000, good.as_str(), false, true, "an unreachable server keeps the part for the next install"),
+        ];
+        for (i, (mode, seeded, sha, ok, part_kept, why)) in cases.into_iter().enumerate() {
+            let url = match mode {
+                Some(m) => serve_ranges(body.clone(), m).await,
+                None => DEAD.to_string(),
+            };
+            let dest = tmp(&format!("resumable-{}", i)).join("game.pak");
+            let part = resumable_part(&dest, sha);
+            std::fs::create_dir_all(dest.parent().unwrap()).unwrap();
+            if seeded > 0 {
+                std::fs::write(&part, &body[..seeded]).unwrap();
+            }
+            let first = std::sync::Mutex::new(None);
+            let on = |got: u64, _: Option<u64>| {
+                let mut f = first.lock().unwrap_or_else(|e| e.into_inner());
+                if f.is_none() {
+                    *f = Some(got);
+                }
+            };
+            let halt = Halt::default();
+            let r = tokio::time::timeout(Duration::from_secs(20), download_resumable(&url, &dest, sha, body.len() as u64, &halt, &on))
+                .await
+                .unwrap_or_else(|_| panic!("{}: the download never finished", why));
+            assert_eq!(r.is_ok(), ok, "{}: {:?}", why, r);
+            if ok {
+                assert_eq!(std::fs::read(&dest).unwrap(), body, "{}: the file differs from the source", why);
+                if matches!(mode, Some(RangeMode::Honest)) && seeded > 0 {
+                    assert_eq!(*first.lock().unwrap(), Some(seeded as u64), "{}: progress must start from the bytes on disk", why);
+                }
+            } else {
+                assert!(!dest.exists(), "{}: a failed download must not land in place", why);
+            }
+            assert_eq!(part.exists(), part_kept, "{}: part file", why);
+        }
     }
 
     /// (path, what ends the pause) -> outcome. Nothing downloads while paused,

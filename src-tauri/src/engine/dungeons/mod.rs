@@ -283,19 +283,45 @@ fn unpack_gzip(src: &Path, dest: &Path, size: u64, sha256: &str) -> Result<(), S
     res
 }
 
-/// Goes through the segmented downloader: the main .ucas of Dungeons II alone is
-/// 8.8 GB, and as one stream it both capped the speed and froze the bar until
-/// its last byte.
+fn packed_path(j: &FileJob) -> PathBuf {
+    let name = j.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    j.path.with_file_name(format!("{}.millida-gz", name))
+}
+
+fn part_of(j: &FileJob) -> PathBuf {
+    if j.gzip {
+        resumable_part(&packed_path(j), &j.wire_sha256)
+    } else {
+        resumable_part(&j.path, &j.sha256)
+    }
+}
+
+/// Part files of a build the manifest no longer lists would otherwise lie
+/// next to the game for good, gigabytes each.
+fn remove_foreign_parts(jobs: &[FileJob]) {
+    let wanted: HashSet<PathBuf> = jobs.iter().map(part_of).collect();
+    let dirs: HashSet<PathBuf> = jobs.iter().filter_map(|j| j.path.parent().map(Path::to_path_buf)).collect();
+    for dir in dirs {
+        let Ok(rd) = std::fs::read_dir(&dir) else { continue };
+        for e in rd.flatten() {
+            let p = e.path();
+            let ours = p.file_name().is_some_and(|n| n.to_string_lossy().ends_with(RESUMABLE_PART_SUFFIX));
+            if ours && !wanted.contains(&p) && p.is_file() {
+                let _ = std::fs::remove_file(&p);
+            }
+        }
+    }
+}
+
 async fn fetch_one(j: &FileJob, cancel: &Halt, on: &crate::engine::core::Progress<'_>) -> Result<(), String> {
     if let Some(parent) = j.path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("{}: {}", parent.display(), e))?;
     }
     if !j.gzip {
-        return download_checked_progress(&j.url, &j.path, Some(Sum::Sha256(&j.sha256)), Some(j.size), Some(cancel), on).await;
+        return download_resumable(&j.url, &j.path, &j.sha256, j.size, cancel, on).await;
     }
-    let name = j.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    let packed = j.path.with_file_name(format!("{}.millida-gz", name));
-    download_checked_progress(&j.url, &packed, Some(Sum::Sha256(&j.wire_sha256)), Some(j.wire), Some(cancel), on).await?;
+    let packed = packed_path(j);
+    download_resumable(&j.url, &packed, &j.wire_sha256, j.wire, cancel, on).await?;
     let (dest, size, sha) = (j.path.clone(), j.size, j.sha256.clone());
     tokio::task::spawn_blocking(move || unpack_gzip(&packed, &dest, size, &sha))
         .await
@@ -351,6 +377,7 @@ async fn install_inner(app: &AppHandle, job: &Job, g: &MirrorGame) -> Result<Str
     let keep: HashSet<String> = all.iter().map(|j| j.rel.to_ascii_lowercase()).collect();
     let mut record: HashMap<String, String> = all.iter().map(|j| (j.rel.clone(), j.sha256.clone())).collect();
     let jobs: Vec<FileJob> = all.into_iter().zip(todo).filter(|(_, t)| *t).map(|(j, _)| j).collect();
+    remove_foreign_parts(&jobs);
 
     if !jobs.is_empty() {
         // The build on disk stops being whole from the first replaced file on,

@@ -72,27 +72,54 @@ pub fn allow_assets(app: &tauri::AppHandle) {
     }
 }
 
-/// WebKitGTK's DMA-BUF renderer paints nothing on several driver stacks — the
-/// proprietary NVIDIA driver above all, and the AppImage's bundled WebKit on a
-/// newer host Mesa — so the window stays a blank grey rectangle. It has to be
-/// switched off before GTK starts; a value the player set is left alone.
+/// WebKitGTK's DMA-BUF renderer paints nothing on the proprietary NVIDIA driver
+/// and in the AppImage's bundled WebKit on a newer host Mesa, so the window
+/// stays a blank grey rectangle. Everywhere else it is the fast path: the
+/// fallback copies every frame through shared memory and the whole UI lags.
+#[cfg(any(target_os = "linux", test))]
+fn needs_dmabuf_off(appimage: bool, nvidia_driver: bool) -> bool {
+    appimage || nvidia_driver
+}
+
+#[cfg(target_os = "linux")]
+fn nvidia_driver_loaded() -> bool {
+    std::path::Path::new("/sys/module/nvidia").exists() || std::path::Path::new("/proc/driver/nvidia/version").exists()
+}
+
 #[cfg(target_os = "linux")]
 fn avoid_webkit_dmabuf_renderer() {
     const VAR: &str = "WEBKIT_DISABLE_DMABUF_RENDERER";
-    if std::env::var_os(VAR).is_none() {
+    if std::env::var_os(VAR).is_none() && needs_dmabuf_off(std::env::var_os("APPIMAGE").is_some(), nvidia_driver_loaded()) {
         std::env::set_var(VAR, "1");
     }
+}
+
+#[cfg(any(target_os = "linux", test))]
+#[derive(Debug, PartialEq, Eq)]
+enum AppImageWaylandFix {
+    None,
+    XWayland,
+    SoftwareCompositing,
 }
 
 /// The AppImage carries WebKitGTK and libwayland from Ubuntu 22.04. Under a
 /// native Wayland session on a newer host Mesa (Arch, CachyOS, Hyprland) its
 /// accelerated compositing presents nothing and the window stays black even
-/// with DMA-BUF off. deb/rpm and X11 use the host stack and keep WebGL.
+/// with DMA-BUF off. XWayland renders it with GPU compositing intact, so the
+/// window moves there whenever an X server is reachable; software compositing
+/// renders every frame on the CPU and lags, so it is only the last resort.
 #[cfg(any(target_os = "linux", test))]
-fn needs_software_compositing(appimage: bool, wayland_display: Option<&str>, gdk_backend: Option<&str>) -> bool {
+fn appimage_wayland_fix(appimage: bool, wayland_display: Option<&str>, x_display: Option<&str>, gdk_backend: Option<&str>) -> AppImageWaylandFix {
     let wayland = wayland_display.is_some_and(|d| !d.is_empty());
-    let forced_x11 = gdk_backend.is_some_and(|b| b.trim_start().starts_with("x11"));
-    appimage && wayland && !forced_x11
+    let has_x = x_display.is_some_and(|d| !d.trim().is_empty());
+    let backend = gdk_backend.map(str::trim).filter(|b| !b.is_empty());
+    if !appimage || !wayland || backend.is_some_and(|b| b.starts_with("x11")) {
+        return AppImageWaylandFix::None;
+    }
+    if backend.is_none() && has_x {
+        return AppImageWaylandFix::XWayland;
+    }
+    AppImageWaylandFix::SoftwareCompositing
 }
 
 #[cfg(target_os = "linux")]
@@ -102,9 +129,12 @@ fn avoid_webkit_compositing_on_appimage_wayland() {
         return;
     }
     let wayland = std::env::var("WAYLAND_DISPLAY").ok();
+    let x_display = std::env::var("DISPLAY").ok();
     let backend = std::env::var("GDK_BACKEND").ok();
-    if needs_software_compositing(std::env::var_os("APPIMAGE").is_some(), wayland.as_deref(), backend.as_deref()) {
-        std::env::set_var(VAR, "1");
+    match appimage_wayland_fix(std::env::var_os("APPIMAGE").is_some(), wayland.as_deref(), x_display.as_deref(), backend.as_deref()) {
+        AppImageWaylandFix::None => {}
+        AppImageWaylandFix::XWayland => std::env::set_var("GDK_BACKEND", "x11"),
+        AppImageWaylandFix::SoftwareCompositing => std::env::set_var(VAR, "1"),
     }
 }
 
@@ -723,26 +753,42 @@ mod tests {
         );
     }
 
-    type CompositingCase<'a> = (bool, Option<&'a str>, Option<&'a str>, bool, &'a str);
+    type CompositingCase<'a> = (bool, Option<&'a str>, Option<&'a str>, Option<&'a str>, crate::AppImageWaylandFix, &'a str);
 
     #[test]
-    fn software_compositing_only_for_appimage_on_native_wayland() {
+    fn appimage_on_wayland_prefers_xwayland_over_software_compositing() {
+        use crate::AppImageWaylandFix::{None as Keep, SoftwareCompositing, XWayland};
         let cases: &[CompositingCase] = &[
-            (true, Some("wayland-1"), None, true, "AppImage on Hyprland: the black-window case"),
-            (true, Some("wayland-0"), Some("wayland,x11"), true, "Wayland preferred by the user still renders through Wayland"),
-            (true, Some("wayland-1"), Some("x11"), false, "XWayland renders fine and keeps WebGL"),
-            (true, None, None, false, "X11 session keeps WebGL"),
-            (true, Some(""), None, false, "an empty WAYLAND_DISPLAY is not a Wayland session"),
-            (false, Some("wayland-1"), None, false, "deb/rpm use the host WebKit and keep WebGL"),
+            (true, Some("wayland-1"), Some(":0"), None, XWayland, "AppImage on KDE/Hyprland/CachyOS with XWayland: no black window and GPU compositing kept"),
+            (true, Some("wayland-1"), None, None, SoftwareCompositing, "no XWayland: software compositing is the only way to get a picture"),
+            (true, Some("wayland-1"), Some(" "), None, SoftwareCompositing, "a blank DISPLAY is no X server"),
+            (true, Some("wayland-0"), Some(":0"), Some("wayland,x11"), SoftwareCompositing, "Wayland preferred by the user still renders through Wayland"),
+            (true, Some("wayland-1"), Some(":0"), Some("x11"), Keep, "XWayland chosen by the user already renders fine and keeps WebGL"),
+            (true, None, Some(":0"), None, Keep, "X11 session keeps WebGL"),
+            (true, Some(""), Some(":0"), None, Keep, "an empty WAYLAND_DISPLAY is not a Wayland session"),
+            (false, Some("wayland-1"), Some(":0"), None, Keep, "deb/rpm use the host WebKit and keep native Wayland"),
         ];
-        for &(appimage, wayland, backend, expected, why) in cases {
+        for (appimage, wayland, display, backend, expected, why) in cases {
             assert_eq!(
-                crate::needs_software_compositing(appimage, wayland, backend),
-                expected,
-                "appimage={appimage} WAYLAND_DISPLAY={wayland:?} GDK_BACKEND={backend:?}: {why}. \
-                 Turning compositing off where it is not needed kills WebGL (3D chests, skins); \
-                 leaving it on for the AppImage under Wayland shows a black window.",
+                crate::appimage_wayland_fix(*appimage, *wayland, *display, *backend),
+                *expected,
+                "appimage={appimage} WAYLAND_DISPLAY={wayland:?} DISPLAY={display:?} GDK_BACKEND={backend:?}: {why}. \
+                 Software compositing renders the whole UI on the CPU and lags; leaving the AppImage \
+                 on native Wayland with GPU compositing shows a black window.",
             );
+        }
+    }
+
+    #[test]
+    fn dmabuf_renderer_is_disabled_only_where_it_paints_nothing() {
+        let cases: &[(bool, bool, bool, &str)] = &[
+            (true, false, true, "AppImage WebKit on a newer host Mesa: the grey-window case"),
+            (false, true, true, "proprietary NVIDIA driver: the grey-window case"),
+            (true, true, true, "AppImage on NVIDIA"),
+            (false, false, false, "deb/rpm/Flatpak on Mesa keep the fast path; the shared-memory fallback lags"),
+        ];
+        for &(appimage, nvidia, expected, why) in cases {
+            assert_eq!(crate::needs_dmabuf_off(appimage, nvidia), expected, "appimage={appimage} nvidia={nvidia}: {why}");
         }
     }
 
