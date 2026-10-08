@@ -184,7 +184,7 @@ function remember(r: DoctorReport) {
 }
 
 /** Собрать факты и спросить сервер. target для переноса: «1.21.1|fabric». */
-export async function runDoctor(profile: string, mode: DocMode, target?: { mc: string; loader: string }): Promise<DoctorReport> {
+export async function runDoctor(profile: string, mode: DocMode, target?: { mc: string; loader: string }, opts: { quiet?: boolean } = {}): Promise<DoctorReport> {
   const p = await profileOf(profile)
   const list = await modsOf(profile)
   const [updates, audit, pc, settings, plan] = await Promise.all([
@@ -219,6 +219,7 @@ export async function runDoctor(profile: string, mode: DocMode, target?: { mc: s
           },
         }
       : {}),
+    ...(opts.quiet ? { quiet: true } : {}),
   }
   const r = await post<DoctorReport>('/catalog/milli/doctor', body)
   remember(r)
@@ -355,9 +356,11 @@ export async function proactiveDoctor(profile: string | null, opts: { busy: () =
   try {
     localStorage.setItem(SEEN_KEY, JSON.stringify(seen))
   } catch {}
-  const r = await runDoctor(profile, 'scan')
-  const important = r.counts.red > 0 || r.rows.some((x) => x.kind === 'outdated' && x.steps.length >= 3) || r.counts.yellow >= 2
+  const quick = await runDoctor(profile, 'scan', undefined, { quiet: true })
+  const important = quick.counts.red > 0 || quick.rows.some((x) => x.kind === 'outdated' && x.steps.length >= 3) || quick.counts.yellow >= 2
   if (!important || opts.busy()) return false
+  const r = await runDoctor(profile, 'scan')
+  if (opts.busy()) return false
   await pushMilliAction(r.say, reportAction(r), ['Что не так?', 'Не сейчас'])
   return true
 }
