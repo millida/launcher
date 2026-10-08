@@ -15,7 +15,7 @@
 .pc.is-off:hover { background-color: var(--m-raised); }
 .pc.is-off .pmark { --pm-sole: #111; --pm-line: #222; --pm-body: #8b8f93; --pm-hi: #b9bdc1; --pm-lo: #63676b; }
 .pc.is-off:hover .pmark { --pm-body: #f5bd2c; --pm-hi: #ffe58a; --pm-lo: #c4840f; --pm-line: #3a2306; --pm-sole: #1c1003; }
-.pc-add { flex: none; fill: #f5bd2c; filter: drop-shadow(0 0 3px rgba(255, 190, 40, .9)); animation: pc-glow 2.2s steps(2, end) infinite; }
+.pc-add { flex: none; fill: #f5bd2c; filter: drop-shadow(0 0 3px rgba(255, 190, 40, .9)); animation: pc-glow 2.2s var(--m-ease-smooth) infinite; }
 @keyframes pc-glow { 50% { filter: drop-shadow(0 0 1px rgba(255, 190, 40, .4)); } }
 @media (prefers-reduced-motion: reduce) { .pc-add { animation: none; } }
 .pk-head .pc { margin-left: auto; margin-right: 8px; }

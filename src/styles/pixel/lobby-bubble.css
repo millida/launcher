@@ -13,10 +13,10 @@
   transform-origin: 18px calc(100% + 4 * var(--eb-u));
   pointer-events: none;
   user-select: none;
-  animation: eb-in 260ms steps(4, end) both;
+  animation: eb-in 260ms var(--m-ease-smooth) both;
 }
 .emote-bubble.out {
-  animation: eb-out 180ms steps(3, end) both;
+  animation: eb-out 180ms var(--m-ease-smooth) both;
 }
 
 .eb-body {

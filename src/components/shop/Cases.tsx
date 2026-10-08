@@ -158,7 +158,8 @@ function PityBar({ view }: { view: CaseView }) {
 /** Гарантия в каждом ящике чипом цвета редкости: «Редкая+ в каждом». Старая служба не шлёт — чипа нет. */
 function GuaranteeChip({ view }: { view: CaseView }) {
   const g = view.guarantee
-  if (!g) return null
+  // Только настоящая гарантия «… в каждом»: название ящика чипом не дублируем.
+  if (!g || !/в каждом/i.test(g.label)) return null
   return (
     <span className="cs3-guar" data-rar={g.minRarity} style={{ ['--g' as string]: RARITY_TONE[g.minRarity] }}>
       {g.label.replace(/ ящике$/, '')}

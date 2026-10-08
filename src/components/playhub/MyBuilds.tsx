@@ -160,6 +160,7 @@ export function MyBuildCard({
   on,
   pos,
   onPick,
+  onPlay,
 }: {
   p: Profile
   on: boolean
@@ -203,6 +204,17 @@ export function MyBuildCard({
           <Icon id={menu ? 'i-x' : 'i-dots'} />
         </button>
         <BuildIcon icon={p.icon} size={112} />
+        {onPlay ? (
+          // Библиотека (08.10.2026): при наведении — «Играть» и «Изменить», клик по карточке — изменить.
+          <span className="ph-mine-acts">
+            <button type="button" className="btn sm primary" data-track="build_play" onClick={(e) => (e.stopPropagation(), onPlay())}>
+              <Icon id="i-play" /> Играть
+            </button>
+            <button type="button" className="btn sm secondary ph-mine-ed" aria-label="Изменить сборку" title="Изменить" data-track="build_edit" onClick={(e) => (e.stopPropagation(), openBuildSettings(p.name, 'content'))}>
+              <Icon id="i-edit" />
+            </button>
+          </span>
+        ) : null}
         {/* Наведение — «Редактировать»: страница сборки (владелец 24.09.2026, 19:08). */}
         <button
           type="button"

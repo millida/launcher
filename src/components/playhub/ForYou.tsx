@@ -65,7 +65,8 @@ const EXCL = 2
  * Разделы ленты — как на millida.net/katalog: сборки, карты, ресурс-паки,
  * шейдеры, моды, датапаки. Серверов в ленте нет — только наш OneBlock в голове.
  */
-const FEED_SECTIONS: SiteSlug[] = ['maps', 'texture-packs', 'shaders', 'mods', 'data-packs']
+// Только сборки (07.10.2026): карты, моды, паки и шейдеры живут в каталоге — в библиотеке они мешали выбору и не продают.
+const FEED_SECTIONS: SiteSlug[] = []
 const SECTION_TAG: Record<string, string> = {
   modpacks: 'Сборка',
   maps: 'Карта',
@@ -156,6 +157,8 @@ function Card({ art, tag, gold, excl, own, section, title, meta, onClick, wide, 
           {own ? <Icon id="i-play" /> : gold || excl ? <Icon id="i-crown" /> : vis ? <PxIcon name={vis.px} size={14} className="px-icon" /> : null}
           {tag}
         </span>
+        {/* Наши сборки переведены (08.10.2026): «На русском» на каждой Arcania Labs. */}
+        {gold || excl ? <span className="ph-card-ru">На русском</span> : null}
       </span>
       <span className="ph-card-body">
         <b>{title}</b>
@@ -188,6 +191,7 @@ function ObArt() {
 type Pick = { key: string; why: FeedWhy | 'preview' | 'server'; node: ReactElement<CardProps> }
 
 export function ForYou({
+  bare,
   on,
   arcania,
   exclusives = [],
@@ -201,6 +205,8 @@ export function ForYou({
   onItem,
   onMore,
 }: {
+  /** Без головы ряда (хостинг, анархия, OneBlock) — они в баннере библиотеки (HubHero). */
+  bare?: boolean
   /** «Ещё» — последняя клетка ряда: весь каталог во вкладке «Ресурсы». */
   onMore?: () => void
   on: boolean
@@ -415,9 +421,35 @@ export function ForYou({
   }, [ab, cards, packs, headKey, onPack, onItem, fyHead, featured.kind])
 
   // Хостинг занимает две клетки, OneBlock и «Ещё» — по одной.
-  const rest = SHOWN - headCells(fyHead) - 1 - labs.length
-  const shown = rotated.slice(0, rest)
-  const off = fyHead.length + labs.length
+  // Без головы — ровно два ряда по шесть: премиум, лента и «Ещё».
+  const rest = (bare ? 12 : SHOWN - headCells(fyHead)) - 1 - labs.length
+  // Без головы (библиотека): наши сборки по популярности подряд, без смесителя разделов — он резал ряд до двух.
+  const plain = useMemo<Pick[]>(() => {
+    if (!bare) return []
+    const taken = new Set(head.map((p) => p.id))
+    return packs
+      .filter((p) => !taken.has(p.id) && !p.preview && !isOwnServerPack(p.slug) && p.slug !== ONEBLOCK_PACK && !!p.coverUrl)
+      .map((p) => ({
+        key: 'modpacks/' + (p.slug || p.id),
+        why: 'popular' as FeedWhy,
+        node: (
+          <Card
+            key={'mp:' + p.id}
+            kind="pack"
+            id={p.slug || p.id}
+            tag="Сборка"
+            section="modpacks"
+            art={img(p.coverUrl)}
+            title={p.title}
+            meta={[p.loader, p.mcVersion].filter(Boolean).join(' · ') || p.tagline}
+            onClick={() => onPack(p)}
+          />
+        ),
+      }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bare, packs, headKey])
+  const shown = (bare ? plain : rotated).slice(0, rest)
+  const off = (bare ? 0 : fyHead.length) + labs.length
 
   // OneBlock — наш сервер, первым в ряду (владелец 30.09.2026, 21:04): он не
   // эксклюзив-сборка, у него своя зелёная метка.
@@ -526,7 +558,7 @@ export function ForYou({
   return (
     <>
       <div className="hub-grid fy-grid" data-section="foryou" onClickCapture={onClickCapture}>
-        {fyHead.map((k) => headNodes[k])}
+        {bare ? null : fyHead.map((k) => headNodes[k])}
         {labs}
         {shown.map((x, i) => cloneElement(x.node, { pos: off + i }))}
         {onMore ? (

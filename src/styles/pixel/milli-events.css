@@ -31,7 +31,7 @@
 
 /* пчела: справа налево, жужжит зигзагом */
 .mev-bee .mev-x { animation: mev-rtl 3.6s steps(72, end); }
-.mev-bee .mev-y { animation: mev-bee-y 3.6s steps(4, end); }
+.mev-bee .mev-y { animation: mev-bee-y 3.6s var(--m-ease-smooth); }
 .mev-bee .mev-f1, .mev-bee .mev-f2 { animation-duration: 0.1s; }
 @keyframes mev-bee-y {
   0% { transform: translateY(36%); } 12% { transform: translateY(30%); } 25% { transform: translateY(38%); } 37% { transform: translateY(31%); }
@@ -52,7 +52,7 @@
 
 /* жемчуг Края: дуга, в конце — фиолетовая вспышка телепорта */
 .mev-pearl .mev-x { animation: mev-pearl-x 2.2s steps(40, end); }
-.mev-pearl .mev-y { animation: mev-pearl-y 2.2s steps(4, end); }
+.mev-pearl .mev-y { animation: mev-pearl-y 2.2s var(--m-ease-smooth); }
 .mev-pearl .mev-f1 { animation: mev-pearl-a 2.2s steps(1, end) both; }
 .mev-pearl .mev-f2 { animation: mev-pearl-b 2.2s steps(1, end) both; }
 @keyframes mev-pearl-x { 0% { transform: translateX(10%); } 85% { transform: translateX(80%); } 100% { transform: translateX(80%); } }

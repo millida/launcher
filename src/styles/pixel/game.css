@@ -101,7 +101,7 @@
   display: grid; place-items: center; width: 34px; height: 34px;
   color: var(--m-accent-fg, #06200e); background: var(--m-accent);
   clip-path: var(--px-5);
-  opacity: 0; transition: opacity 120ms steps(2);
+  opacity: 0; transition: opacity 120ms var(--m-ease-smooth);
 }
 .ph-card:hover .gm-bd-play, .ph-card:focus-visible .gm-bd-play { opacity: 1; }
 
@@ -109,7 +109,7 @@
 .gm-new-card { position: absolute; left: 10px; bottom: 10px; z-index: 1; }
 
 /* Store не сообщает ход установки: полоса «ходит» ступенями, пока ждём. */
-.gm-bar-wait { animation: gm-wait 1.2s steps(6) infinite; }
+.gm-bar-wait { animation: gm-wait 1.2s var(--m-ease-smooth) infinite; }
 @keyframes gm-wait { from { margin-left: 0; } to { margin-left: 92%; } }
 
 @media (prefers-reduced-motion: reduce) {

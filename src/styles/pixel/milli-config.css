@@ -33,10 +33,10 @@
 .mcf-preset:focus-visible { outline: 2px solid var(--m-accent); outline-offset: -2px; }
 .mcf-preset b { font: 800 14px/1 var(--m-font); letter-spacing: 0.01em; }
 .mcf-preset-px { display: grid; place-items: center; width: 40px; height: 40px; background: #18191b; box-shadow: inset 2px 2px 0 #0b0b0c, inset -2px -2px 0 #3a3b40; }
-.mcf-preset-px svg { display: block; image-rendering: pixelated; transition: transform 200ms steps(3, end); }
+.mcf-preset-px svg { display: block; image-rendering: pixelated; transition: transform 200ms var(--m-ease-smooth); }
 .mcf-preset.on { color: var(--m-fg); background-color: color-mix(in srgb, var(--m-accent) 14%, var(--m-surface)); box-shadow: inset 0 -3px 0 var(--m-accent); }
-.mcf-preset.on .mcf-preset-px svg { animation: mcf-hop 360ms steps(3, end); }
-.mcf-preset.pf-high.on .mcf-preset-px svg { animation: mcf-hop 360ms steps(3, end), mcf-glow 1.6s steps(2, end) 360ms infinite; }
+.mcf-preset.on .mcf-preset-px svg { animation: mcf-hop 360ms var(--m-ease-smooth); }
+.mcf-preset.pf-high.on .mcf-preset-px svg { animation: mcf-hop 360ms var(--m-ease-smooth), mcf-glow 1.6s var(--m-ease-smooth) 360ms infinite; }
 .mcf-preset:hover:not(.on) .mcf-preset-px svg { transform: translateY(-2px); }
 .mcf-mine {
   position: absolute; top: 4px; left: 50%; transform: translateX(-50%); padding: 2px 6px 3px;
@@ -53,7 +53,7 @@
 }
 .mcf-fps.mid { --tone: var(--m-warning); }
 .mcf-fps.bad { --tone: var(--m-danger); }
-.mcf-fps-px { flex: none; image-rendering: pixelated; animation: mcf-flicker 1.2s steps(2, end) infinite; }
+.mcf-fps-px { flex: none; image-rendering: pixelated; animation: mcf-flicker 1.2s var(--m-ease-smooth) infinite; }
 .mcf-fps-n { font: 800 28px/1 var(--m-font-brand, var(--m-font)); letter-spacing: -0.02em; color: var(--tone); font-variant-numeric: tabular-nums; transition: color var(--m-t-base); }
 .mcf-fps-u { align-self: flex-end; padding-bottom: 3px; font: 800 13px/1 var(--m-font); color: var(--m-fg-muted); }
 .mcf-fps-tag { margin-left: auto; font: 700 11px/1 var(--m-font); color: var(--m-fg-subtle); white-space: nowrap; }
@@ -71,7 +71,7 @@
 .mcf-fine-btn:focus-visible { outline: 2px solid var(--m-accent); outline-offset: -2px; }
 .mcf-fine-btn svg:first-child { flex: none; image-rendering: pixelated; }
 .mcf-fine-btn > span { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mcf-dot { flex: none; width: 7px; height: 7px; background: var(--m-warning); box-shadow: 0 0 0 2px color-mix(in srgb, var(--m-warning) 25%, transparent); animation: mcf-in 200ms steps(2, end) backwards; }
+.mcf-dot { flex: none; width: 7px; height: 7px; background: var(--m-warning); box-shadow: 0 0 0 2px color-mix(in srgb, var(--m-warning) 25%, transparent); animation: mcf-in 200ms var(--m-ease-smooth) backwards; }
 .mcf-chev { flex: none; color: var(--m-fg-subtle); transition: transform 200ms var(--m-ease-move); }
 .mcf-fine.open .mcf-chev { transform: rotate(180deg); }
 :root:root .mcf-reset { flex: none; height: 36px; padding: 0 10px; gap: 6px; color: var(--m-warning); }

@@ -136,13 +136,13 @@
   --px-ft: rgba(255, 255, 255, 0.16); --px-ft-w: 3px;
   --px-fb: rgba(0, 0, 0, 0.38); --px-fb-w: 5px;
   --px-ol: rgba(0, 0, 0, 0.45); --px-ol-w: 2px;
-  transition: transform 90ms steps(2, end), background-color 90ms steps(2, end);
+  transition: transform 90ms var(--m-ease-smooth), background-color 90ms var(--m-ease-smooth);
 }
 .ip-block::before {
   content: ''; position: absolute; left: 22%; right: 22%; bottom: 18%; height: 12%;
   background: rgba(0, 0, 0, 0.28); pointer-events: none;
 }
-.ip-block img { position: relative; width: 50px; height: 50px; filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.35)); transition: transform 90ms steps(2, end); }
+.ip-block img { position: relative; width: 50px; height: 50px; filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.35)); transition: transform 90ms var(--m-ease-smooth); }
 @media (hover: hover) and (pointer: fine) {
   .ip-block:hover { transform: translateY(-2px); background-color: color-mix(in srgb, var(--c) 75%, #3a423c); }
   .ip-block:hover img { transform: translateY(-3px) scale(1.06); }

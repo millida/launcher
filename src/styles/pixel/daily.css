@@ -291,7 +291,7 @@
   background: var(--wi-tone);
   box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.34), inset 0 -3px 0 rgba(0, 0, 0, 0.26);
 }
-.wi-cells i.fresh { animation: wi-fill 0.36s steps(3, end) both; animation-delay: calc(var(--wi-d, 0ms) + 200ms); }
+.wi-cells i.fresh { animation: wi-fill 0.36s var(--m-ease-smooth) both; animation-delay: calc(var(--wi-d, 0ms) + 200ms); }
 @keyframes wi-fill {
   0% { background: color-mix(in srgb, var(--m-fg) 12%, transparent); transform: scale(1); }
   50% { background: #fff; transform: scale(1.3); }
@@ -419,7 +419,7 @@
 .dp2-take {
   padding: 3px 10px 4px; background: var(--m-accent); color: var(--px-on-accent);
   font-size: 12px; font-weight: 900; line-height: 1.15;
-  animation: dc-breathe 1.2s steps(2, end) infinite;
+  animation: dc-breathe 1.2s var(--m-ease-smooth) infinite;
 }
 .dp2-cell.plus .dp2-take { background: var(--m-rarity-legendary); }
 :root:root .dp2-take { --px-n: 4px; clip-path: var(--px-4); }
@@ -495,7 +495,7 @@
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums;
 }
 .rv-card.k-item .rv-card-label { font-size: 13px; white-space: normal; }
-.rv-flash { position: absolute; inset: 0; background: var(--rv-tone); opacity: 0; animation: rv-flash 0.5s steps(4, end) both; }
+.rv-flash { position: absolute; inset: 0; background: var(--rv-tone); opacity: 0; animation: rv-flash 0.5s var(--m-ease-smooth) both; }
 .rv-card-crown {
   position: absolute; z-index: 2; top: 0; left: 50%; transform: translateX(-50%);
   display: grid; place-items: center; width: 28px; height: 20px;
@@ -532,7 +532,7 @@
 .rv-missed {
   display: flex; align-items: center; gap: 18px; padding: 12px 14px 12px 18px;
   background: var(--m-surface); box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--m-rarity-legendary) 70%, transparent), var(--px-plate); --px-ol: color-mix(in srgb, var(--m-rarity-legendary) 70%, transparent); --px-ol-w: 2px; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
-  animation: rv-rise 0.3s steps(3, end) both;
+  animation: rv-rise 0.3s var(--m-ease-smooth) both;
 }
 :root:root .rv-missed { --px-n: 10px; clip-path: var(--px-10); }
 .rv-missed-head { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 800; color: var(--m-rarity-legendary); white-space: nowrap; }
@@ -549,14 +549,14 @@
 
 .rv-week {
   display: flex; align-items: center; gap: 12px; padding: 8px 16px 8px 8px;
-  background: var(--m-surface-2); box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent; animation: rv-rise 0.3s steps(3, end) both;
+  background: var(--m-surface-2); box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent; animation: rv-rise 0.3s var(--m-ease-smooth) both;
 }
 :root:root .rv-week { --px-n: 10px; clip-path: var(--px-10); }
 .rv-week > img { width: 52px; height: 52px; object-fit: contain; }
 .rv-week-body { display: flex; flex-direction: column; gap: 6px; }
 .rv-week-body > b { font-size: 13px; font-weight: 800; }
 .rv-week-n { font-size: 18px; font-weight: 900; font-variant-numeric: tabular-nums; }
-.rv-acts { display: flex; gap: 10px; margin-top: 4px; animation: rv-rise 0.3s steps(3, end) both; }
+.rv-acts { display: flex; gap: 10px; margin-top: 4px; animation: rv-rise 0.3s var(--m-ease-smooth) both; }
 
 /* Вещь собрана — отдельный праздничный кадр поверх раскрытия. */
 .rv-unlock {
@@ -642,7 +642,7 @@
   display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 6px 10px;
   background-color: color-mix(in srgb, var(--mc-tone) 16%, var(--m-surface-2)); color: inherit; border: 0; cursor: pointer;
   --px-ol: transparent; --px-ft: var(--mc-tone); --px-ft-w: 4px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
-  animation: mc-in 0.32s steps(4, end) calc(var(--i, 0) * 0.05s) both;
+  animation: mc-in 0.32s var(--m-ease-smooth) calc(var(--i, 0) * 0.05s) both;
 }
 :root:root .mc-cell { --px-n: 10px; clip-path: var(--px-10); }
 .mc-cell:hover:not(:disabled) { background-color: color-mix(in srgb, var(--mc-tone) 28%, var(--m-surface-2)); }
@@ -708,3 +708,4 @@
 /* Живой 3D-сундук малого размера (ChestLive): холст шире ячейки, чтобы крышка и свет не резались. */
 .cl { position: relative; display: inline-grid; place-items: center; width: var(--cl-size); height: var(--cl-size); }
 .cl-3d.c3d { position: absolute; left: 50%; top: 50%; width: var(--cl-k); height: var(--cl-k); transform: translate(-50%, -50%); overflow: visible; pointer-events: none; }
+.dp-bg { overscroll-behavior: contain; } .modal.dp2 { overscroll-behavior: contain; }

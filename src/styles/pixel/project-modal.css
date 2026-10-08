@@ -608,7 +608,7 @@
   width: 100%;
   height: 100%;
   object-fit: contain;
-  animation: pjxShotIn 160ms steps(3, end);
+  animation: pjxShotIn 160ms var(--m-ease-smooth);
 }
 @keyframes pjxShotIn { from { opacity: 0; } }
 #pjModal .pjx-count,

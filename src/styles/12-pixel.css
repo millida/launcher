@@ -579,3 +579,41 @@ img[src$='/millida-logo.svg'] { border-radius: 0 !important; }
 .sec-trust-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; font-size: 12.5px; font-weight: 700; line-height: 1.3; }
 .sec-trust-txt small { font-size: 11px; font-weight: 500; color: #7a858f; }
 .sec-trust-logo { flex: none; }
+
+/* Скользящая подложка переключателей (lib/slidingSegs.ts, 07.10.2026). Выбранная
+   кнопка прозрачна — её фон рисует подложка, которая едет между вкладками. */
+.ms-box { position: relative; isolation: isolate; }
+.ms-box > .ms-ind {
+  position: absolute; left: 0; top: 0; z-index: 0; pointer-events: none;
+  background: var(--m-surface-2); --px-n: 5px; clip-path: var(--px-5);
+  box-shadow: inset 0 -3px 0 var(--m-accent);
+  transition: transform 240ms var(--m-ease-move), width 240ms var(--m-ease-move), height 240ms var(--m-ease-move), opacity 120ms linear;
+}
+.ms-box > :not(.ms-ind) { position: relative; z-index: 1; }
+:root:root .ms-box > .seg.on { background-color: transparent; background-image: none; box-shadow: none; }
+
+/* «Лаунчер летает» (07.10.2026): при открытии экрана карточки влетают лесенкой
+   за ~0,3 с — только transform/opacity, один раз на вход в экран. */
+.screen.on :is(.ph-card, .sh-card, .hs-tile, .tb-row, .mdl-row, .cs3, .sv-card) {
+  animation: fly-in 260ms var(--m-ease-smooth) both;
+}
+.screen.on :is(.hub-grid, .hub-rail, .hs-row, .ph-row, .sv-rail, .stack, .pk-grid) > :nth-child(2) { animation-delay: 30ms; }
+.screen.on :is(.hub-grid, .hub-rail, .hs-row, .ph-row, .sv-rail, .stack, .pk-grid) > :nth-child(3) { animation-delay: 60ms; }
+.screen.on :is(.hub-grid, .hub-rail, .hs-row, .ph-row, .sv-rail, .stack, .pk-grid) > :nth-child(4) { animation-delay: 90ms; }
+.screen.on :is(.hub-grid, .hub-rail, .hs-row, .ph-row, .sv-rail, .stack, .pk-grid) > :nth-child(n+5) { animation-delay: 120ms; }
+@keyframes fly-in { from { opacity: 0; transform: translateY(14px); } }
+@media (prefers-reduced-motion: reduce) { .screen.on :is(.ph-card, .sh-card, .hs-tile, .tb-row, .mdl-row, .cs3, .sv-card) { animation: none; } }
+
+/* Загрузка в лобби (08.10.2026: «как кнопка Играть»): пиксельная плашка с полосой-заливкой, без скруглений. */
+:root:root .inst-dock.in-lobby .inst-card {
+  border: 0; border-radius: 0; box-shadow: none; padding: 8px 12px; gap: 12px;
+  background-color: var(--m-surface); --px-n: 5px; clip-path: var(--px-5);
+}
+:root:root .inst-dock.in-lobby .inst-name { font: 800 14px/1.1 var(--m-font); }
+:root:root .inst-dock.in-lobby .inst-msg { font: 700 12px/1.2 var(--m-font); color: var(--m-fg-subtle); }
+:root:root .inst-dock.in-lobby .inst-bar { height: 10px; border-radius: 0; margin-top: 6px; background: var(--m-inset); --px-n: 3px; clip-path: var(--px-4); }
+:root:root .inst-dock.in-lobby .inst-bar > i {
+  border-radius: 0; background-color: var(--m-accent);
+  background-image: repeating-linear-gradient(90deg, rgba(255, 255, 255, .18) 0 6px, transparent 6px 12px);
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .22), inset 0 2px 0 rgba(255, 255, 255, .25);
+}

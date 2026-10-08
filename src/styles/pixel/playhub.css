@@ -186,7 +186,7 @@
 .ph-pile .b1 { left: 0; bottom: 0; }
 .ph-pile .b2 { right: 0; bottom: 0; }
 .ph-pile .b3 { left: 27px; top: 0; z-index: 1; }
-.ph-card:hover .ph-pile .b3 { animation: ph-hop 420ms steps(4) 1; }
+.ph-card:hover .ph-pile .b3 { animation: ph-hop 420ms var(--m-ease-smooth) 1; }
 @keyframes ph-hop {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-10px); }
@@ -612,7 +612,7 @@
 .ph-ob-drops .d1 { right: 30%; top: 16%; width: 40px; height: 40px; }
 .ph-ob-drops .d2 { right: 6%; top: 10%; }
 .ph-ob-drops .d3 { right: 9%; bottom: 14%; width: 36px; height: 36px; }
-.ph-ob:hover .ph-ob-drops .d1 { animation: ph-hop 420ms steps(4) 1; }
+.ph-ob:hover .ph-ob-drops .d1 { animation: ph-hop 420ms var(--m-ease-smooth) 1; }
 .ph-ob-body {
   position: relative;
   display: flex;
@@ -941,7 +941,7 @@
   pointer-events: none;
 }
 /* Покачивание — только при наведении: 28 вечных анимаций тормозили экран. */
-.ph-mt:hover .ph-mt-ic { animation: ph-mt-hop 420ms steps(4) 1; }
+.ph-mt:hover .ph-mt-ic { animation: ph-mt-hop 420ms var(--m-ease-smooth) 1; }
 @keyframes ph-mt-hop {
   0%, 100% { transform: translateY(6px); }
   50% { transform: translateY(-6px); }
@@ -1118,7 +1118,7 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
   padding: 0;
   pointer-events: none;
   transform: translateX(0);
-  transition: transform 200ms steps(4, end);
+  transition: transform 200ms var(--m-ease-smooth);
 }
 :root:root .hub-sw.at-1 .hub-sw-thumb { transform: translateX(100%); }
 :root:root .hub-sw.at-2 .hub-sw-thumb { transform: translateX(200%); }
@@ -1152,7 +1152,7 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
 .hub-sw-btn:focus-visible { outline: none; text-decoration: underline; text-underline-offset: 4px; }
 .hub-sw-ic { flex: none; width: 24px; height: 24px; }
 .hub-sw-btn:not(.on) .hub-sw-ic { opacity: 0.7; }
-.hub-sw-btn.on .hub-sw-ic { animation: hub-hop 360ms steps(3, end) 150ms 1 both; }
+.hub-sw-btn.on .hub-sw-ic { animation: hub-hop 360ms var(--m-ease-smooth) 150ms 1 both; }
 @keyframes hub-hop {
   0%, 100% { transform: translateY(0); }
   45% { transform: translateY(-6px); }
@@ -1161,7 +1161,7 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
 /* Панель вкладки въезжает шагами снизу. */
 .hub-pane { display: flex; flex-direction: column; gap: 26px; min-width: 0; }
 .hub-pane[hidden] { display: none; }
-.hub-pane:not([hidden]) { animation: hub-in 240ms steps(4, end) 1; }
+.hub-pane:not([hidden]) { animation: hub-in 240ms var(--m-ease-smooth) 1; }
 @keyframes hub-in {
   from { transform: translateY(12px); opacity: 0.4; }
   to { transform: none; opacity: 1; }
@@ -1177,7 +1177,7 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
   image-rendering: pixelated;
   filter: drop-shadow(0 6px 0 rgba(0, 0, 0, 0.28));
 }
-.ph-card:hover .td-art > img.td-mode-ic { transform: none; animation: ph-mt-hop 420ms steps(4) 1; }
+.ph-card:hover .td-art > img.td-mode-ic { transform: none; animation: ph-mt-hop 420ms var(--m-ease-smooth) 1; }
 /* Иконка мода: без обложки — крупно по центру, с обложкой — плашкой в углу. */
 .td-art > img.td-mod-ic {
   position: absolute;
@@ -1250,7 +1250,7 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
 .bd-art .bi img { width: 84px; height: 84px; image-rendering: pixelated; }
 .bd-art .bi.photo img { width: 100%; height: 100%; }
 .bd-art .bi-edit-lab { clip-path: none; }
-.ph-card:hover .bd-art .bi img { animation: ph-mt-hop 420ms steps(4) 1; }
+.ph-card:hover .bd-art .bi img { animation: ph-mt-hop 420ms var(--m-ease-smooth) 1; }
 .bd-main { display: flex; flex-direction: column; justify-content: center; gap: 7px; flex: 1; min-width: 0; padding: 14px 16px; }
 .bd-name { font: 800 17px/1.15 var(--m-font); letter-spacing: -0.01em; color: var(--m-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 30px; }
 .bd-card.on .bd-name { color: var(--m-accent); }
@@ -1568,7 +1568,7 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
   left: 0; right: 0; aspect-ratio: auto; background-size: cover; background-position: center;
   justify-items: end; padding-right: 9%;
 }
-.ph-mode-hero .ph-mode-bg .ph-mode-art img { filter: drop-shadow(0 10px 0 rgba(0, 0, 0, 0.3)); animation: ph-mode-bob 3s steps(6) infinite; }
+.ph-mode-hero .ph-mode-bg .ph-mode-art img { filter: drop-shadow(0 10px 0 rgba(0, 0, 0, 0.3)); animation: ph-mode-bob 3s var(--m-ease-smooth) infinite; }
 @keyframes ph-mode-bob { 0%, 100% { transform: translateY(4px); } 50% { transform: translateY(-4px); } }
 .ph-mode-hero .ph-mode-title h1 { font: 900 44px/1 var(--m-font); color: #fff; text-shadow: 0 4px 0 rgba(0, 0, 0, 0.45); }
 .ph-mode-hero .ph-mode-meta { font: 800 15px/1 var(--m-font); color: #fff; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.45); }
@@ -1587,7 +1587,7 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
   position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%);
   display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px 8px;
   font: 800 12px/1 var(--m-font); color: #fff; background: rgba(12, 16, 13, 0.88);
-  clip-path: var(--px-4); opacity: 0; transition: opacity 90ms steps(2, end);
+  clip-path: var(--px-4); opacity: 0; transition: opacity 90ms var(--m-ease-smooth);
 }
 .ph-mine-edit svg { width: 13px; height: 13px; }
 .ph-card:hover .ph-mine-edit, .ph-mine-edit:focus-visible { opacity: 1; }
@@ -1666,7 +1666,7 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
    оба растягиваются без сглаживания. Те же файлы — на millida.net/katalog. */
 .ph-card.ph-mt.is-set { image-rendering: pixelated; }
 .ph-card.ph-mt.is-set .ph-mt-ic { width: 42%; height: auto; transform: translateY(8%); filter: drop-shadow(0 6px 0 rgba(0, 0, 0, 0.25)); }
-.ph-card.ph-mt.is-set:hover .ph-mt-ic { animation: ph-mt-hop-set 420ms steps(4) 1; }
+.ph-card.ph-mt.is-set:hover .ph-mt-ic { animation: ph-mt-hop-set 420ms var(--m-ease-smooth) 1; }
 @keyframes ph-mt-hop-set {
   0%, 100% { transform: translateY(8%); }
   50% { transform: translateY(-4%); }
@@ -1979,7 +1979,7 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
 @keyframes fy-run { to { --fy-run: 360deg; } }
 
 
-.fy-card:not(.is-excl):not(.is-own) { transition: transform 120ms steps(2, end), background-color var(--m-t-fast) ease; }
+.fy-card:not(.is-excl):not(.is-own) { transition: transform 120ms var(--m-ease-smooth), background-color var(--m-t-fast) ease; }
 .fy-card:not(.is-excl):not(.is-own)::before {
   content: ''; position: absolute; z-index: 2; left: 0; right: 0; bottom: 0; height: 5px; pointer-events: none; background: rgba(0, 0, 0, 0.35);
 }

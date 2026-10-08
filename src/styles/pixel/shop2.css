@@ -258,7 +258,7 @@
 }
 .tk3-gift > .px-icon { filter: grayscale(0.85) brightness(0.7); }
 .tk3-gift.is-ready { cursor: pointer; background: var(--m-accent); color: var(--px-on-accent); }
-.tk3-gift.is-ready > .px-icon { filter: none; animation: tk3-hop 1.4s steps(4, end) infinite; }
+.tk3-gift.is-ready > .px-icon { filter: none; animation: tk3-hop 1.4s var(--m-ease-smooth) infinite; }
 .tk3-gift.is-ready:hover { filter: brightness(1.06); }
 .tk3-gift.is-ready:active { transform: translateY(2px); }
 .tk3-take { font-size: 24px; font-weight: 900; letter-spacing: -0.01em; }
@@ -348,13 +348,13 @@
 .bs.is-done .bs-acts { grid-template-columns: 1fr; }
 .bs-acts .btn { width: 100%; gap: 6px; justify-content: center; font-variant-numeric: tabular-nums; }
 :root:root .bs-acts .btn.lg { height: 56px; font-size: 19px; }
-.bs-spin { width: 20px; height: 20px; background: currentColor; animation: bs-spin 0.8s steps(4, end) infinite; --px-n: 4px; clip-path: var(--px-4); }
+.bs-spin { width: 20px; height: 20px; background: currentColor; animation: bs-spin 0.8s var(--m-ease-smooth) infinite; --px-n: 4px; clip-path: var(--px-4); }
 @keyframes bs-spin { to { transform: rotate(360deg); } }
 .bs-flash { position: absolute; inset: 0; z-index: 3; background: #fff; pointer-events: none; animation: bs-flash 0.6s ease-out forwards; }
 @keyframes bs-flash { from { opacity: 0.85; } to { opacity: 0; } }
 .bs-ok {
   position: absolute; z-index: 4; top: 14px; right: 14px; display: grid; place-items: center; width: 40px; height: 40px;
-  background: var(--m-accent); color: var(--px-on-accent); --px-n: 5px; clip-path: var(--px-5); animation: bs-pop 0.3s steps(3, end) both;
+  background: var(--m-accent); color: var(--px-on-accent); --px-n: 5px; clip-path: var(--px-5); animation: bs-pop 0.3s var(--m-ease-smooth) both;
 }
 .bs-ok > svg.icon { width: 22px; height: 22px; }
 @keyframes bs-pop { from { transform: scale(0.4); } to { transform: scale(1); } }

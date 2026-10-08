@@ -817,7 +817,7 @@ div.ppx-frame { cursor: default; }
     linear-gradient(90deg, rgba(6, 6, 8, 0.9) 0%, rgba(6, 6, 8, 0.72) 32%, rgba(6, 6, 8, 0.25) 52%, rgba(6, 6, 8, 0) 64%);
 }
 /* Кнопка поддержки уступает место карточке доступа (PremiumPackPage tuck) */
-.msf, .mlf { transition: transform 120ms steps(2, end), opacity 160ms steps(3, end), background-color var(--m-t-fast); }
+.msf, .mlf { transition: transform 120ms var(--m-ease-smooth), opacity 160ms var(--m-ease-smooth), background-color var(--m-t-fast); }
 .msf.is-tucked, .mlf.is-tucked { opacity: 0; transform: translateY(12px); pointer-events: none; }
 
 /* Вкладки «Описание | Галерея | Требования» и мини-плеер — как у страниц каталога (06.10.2026) */
@@ -859,7 +859,7 @@ div.ppx-frame { cursor: default; }
 .ppx-excl-tile {
   position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-height: 120px; padding: 12px; overflow: hidden;
   text-align: left; color: var(--m-fg); border: 0; cursor: pointer; background: rgba(0, 0, 0, 0.32);
-  --px-n: 5px; clip-path: var(--px-5); transition: transform 120ms steps(2, end), background-color 120ms;
+  --px-n: 5px; clip-path: var(--px-5); transition: transform 120ms var(--m-ease-smooth), background-color 120ms;
 }
 .ppx-excl-tile:hover { transform: translateY(-2px); background: rgba(0, 0, 0, 0.45); }
 .ppx-excl-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.22; }
@@ -877,7 +877,7 @@ div.ppx-frame { cursor: default; }
 @media (max-width: 899px) { .ppx-more-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .ppx-more-card {
   position: relative; display: flex; flex-direction: column; padding: 0; overflow: hidden; text-align: left; color: var(--m-fg); border: 0; cursor: pointer;
-  background: var(--m-surface); --px-n: 10px; clip-path: var(--px-10); transition: transform 120ms steps(2, end);
+  background: var(--m-surface); --px-n: 10px; clip-path: var(--px-10); transition: transform 120ms var(--m-ease-smooth);
 }
 .ppx-more-card::after { content: ''; position: absolute; inset: 0; pointer-events: none; clip-path: var(--px-ring-10); background: color-mix(in srgb, var(--ppx-gold) 45%, #1a1b1c); }
 .ppx-more-card:hover { transform: translateY(-2px); }

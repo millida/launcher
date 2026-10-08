@@ -72,7 +72,7 @@
 .co-rays {
   opacity: 0.35;
   transform: scale(0.45);
-  transition: transform 0.35s steps(4, end), opacity 0.35s steps(4, end);
+  transition: transform 0.35s var(--m-ease-smooth), opacity 0.35s var(--m-ease-smooth);
 }
 .co-rays.on { opacity: calc(0.45 + var(--co-k) * 0.55); transform: scale(calc(0.55 + var(--co-k) * 0.5)); }
 .stage-burst .co-rays,
@@ -89,7 +89,7 @@
   pointer-events: none;
   background: radial-gradient(circle, color-mix(in srgb, var(--co-glow) 55%, transparent) 0, transparent 60%);
   opacity: calc(0.25 + var(--co-k) * 0.75);
-  transition: opacity 0.2s steps(2, end);
+  transition: opacity 0.2s var(--m-ease-smooth);
 }
 
 .co-chest {
@@ -134,7 +134,7 @@
   z-index: 5;
   background: #fff;
   pointer-events: none;
-  animation: co-flash 0.45s steps(3, end) both;
+  animation: co-flash 0.45s var(--m-ease-smooth) both;
 }
 @keyframes co-flash { from { opacity: 0.9; } to { opacity: 0; } }
 
@@ -293,10 +293,10 @@
   padding: 6px 14px 8px; background: var(--co-it); color: #14110a;
   font-size: 15px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase;
   box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.35); --px-n: 5px; clip-path: var(--px-4);
-  animation: co-climb-in 0.28s steps(3, end) both;
+  animation: co-climb-in 0.28s var(--m-ease-smooth) both;
 }
 .co-climb[data-rar='RELIC'] { background: #060608; color: var(--m-rarity-relic); }
-.co-climb[data-rar='MYTHIC'], .co-climb[data-rar='RELIC'] { animation: co-climb-in 0.28s steps(3, end) both, co-climb-pulse 0.6s steps(1, end) infinite 0.3s; }
+.co-climb[data-rar='MYTHIC'], .co-climb[data-rar='RELIC'] { animation: co-climb-in 0.28s var(--m-ease-smooth) both, co-climb-pulse 0.6s steps(1, end) infinite 0.3s; }
 @keyframes co-climb-in { 0% { transform: translateX(-50%) scale(0.6); opacity: 0; } 100% { transform: translateX(-50%) scale(1); opacity: 1; } }
 @keyframes co-climb-pulse { 50% { filter: brightness(1.35); } }
 

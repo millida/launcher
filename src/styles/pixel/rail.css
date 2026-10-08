@@ -155,7 +155,7 @@ span.tb-rubies { cursor: default; }
   --px-n: 5px; clip-path: var(--px-5);
   --px-ol: rgba(0, 0, 0, 0.4); --px-ol-w: 2px;
   --px-ft: var(--px-btn-t); --px-ft-w: 2px; --px-fb: var(--px-btn-b); --px-fb-w: 4px;
-  transition: transform 90ms steps(2, end);
+  transition: transform 90ms var(--m-ease-smooth);
 }
 :is(.topbar.is-lobby, .lb-me) .lb-btn:hover { background-color: var(--m-surface-2); transform: translateY(-2px); }
 :is(.topbar.is-lobby, .lb-me) .lb-btn:active { transform: translateY(1px); }

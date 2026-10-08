@@ -151,7 +151,7 @@
   animation: rw-in 0.2s linear both;
 }
 .rw.out {
-  animation: rw-out 0.16s steps(2, end) both;
+  animation: rw-out 0.16s var(--m-ease-smooth) both;
 }
 @keyframes rw-in {
   from {
@@ -179,7 +179,7 @@
   height: clamp(220px, 34vh, 280px);
 }
 .rw.hit .rw-stage {
-  animation: rw-thud 0.28s steps(4, end) both;
+  animation: rw-thud 0.28s var(--m-ease-smooth) both;
 }
 @keyframes rw-thud {
   0% {
@@ -205,7 +205,7 @@
   z-index: 5;
   pointer-events: none;
   background: color-mix(in srgb, var(--rw-tone) 35%, #fff);
-  animation: rw-flash 0.45s steps(4, end) both;
+  animation: rw-flash 0.45s var(--m-ease-smooth) both;
 }
 @keyframes rw-flash {
   from {
@@ -336,7 +336,7 @@
   pointer-events: none;
   background: #fff;
   opacity: 0;
-  animation: rw-cflash 0.5s steps(4, end) 0.28s both;
+  animation: rw-cflash 0.5s var(--m-ease-smooth) 0.28s both;
 }
 @keyframes rw-cflash {
   from {
@@ -377,7 +377,7 @@
     0 33%,
     33% 33%
   );
-  animation: rw-tw 1.8s steps(3, end) infinite;
+  animation: rw-tw 1.8s var(--m-ease-smooth) infinite;
 }
 .rw-tws > i.t1 {
   left: 0;
@@ -473,7 +473,7 @@
   width: var(--w);
   height: var(--h);
   background: var(--c);
-  animation: rw-flip var(--f) steps(2, end) infinite;
+  animation: rw-flip var(--f) var(--m-ease-smooth) infinite;
 }
 @keyframes rw-fall {
   0% {
@@ -509,7 +509,7 @@
   gap: 6px;
   max-width: min(640px, 92vw);
   text-align: center;
-  animation: rw-rise 0.3s steps(3, end) both;
+  animation: rw-rise 0.3s var(--m-ease-smooth) both;
 }
 .rw-kicker {
   font-size: 13px;
@@ -537,7 +537,7 @@
   display: flex;
   gap: 10px;
   margin-top: 4px;
-  animation: rw-rise 0.3s steps(3, end) 0.12s both;
+  animation: rw-rise 0.3s var(--m-ease-smooth) 0.12s both;
 }
 @keyframes rw-rise {
   from {
@@ -562,7 +562,7 @@
   animation: rw-mid-in 0.46s cubic-bezier(0.2, 1.5, 0.4, 1) both;
 }
 .rw-mid.out {
-  animation: rw-mid-out 0.16s steps(2, end) both;
+  animation: rw-mid-out 0.16s var(--m-ease-smooth) both;
 }
 @keyframes rw-mid-in {
   0% {
@@ -674,7 +674,7 @@
   animation: rw-small-in 0.4s cubic-bezier(0.2, 1.5, 0.4, 1) both;
 }
 .rw-small.out {
-  animation: rw-small-out 0.16s steps(2, end) both;
+  animation: rw-small-out 0.16s var(--m-ease-smooth) both;
 }
 @keyframes rw-small-in {
   0% {

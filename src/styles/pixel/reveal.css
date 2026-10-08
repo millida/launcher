@@ -103,7 +103,7 @@
   fill: none; stroke: color-mix(in srgb, var(--box) 35%, #fff); stroke-width: 1.6; stroke-linecap: square; stroke-linejoin: miter;
   stroke-dasharray: 60; stroke-dashoffset: 60; opacity: 0; filter: drop-shadow(0 0 2px var(--box));
 }
-.rv2-cracks polyline.on { opacity: 1; animation: rv2-crack 0.16s steps(4, end) both; }
+.rv2-cracks polyline.on { opacity: 1; animation: rv2-crack 0.16s var(--m-ease-smooth) both; }
 @keyframes rv2-crack { to { stroke-dashoffset: 0; } }
 
 /* ---------- Сундук внизу, награды выходят из него ---------- */
@@ -141,7 +141,7 @@
 /* ---------- Рост редкости на ударах (как Starr Drops) ---------- */
 /* Свечение, щели, трещины, лучи и метки ударов — цвета текущей ступени редкости (--lvl). */
 .rv2.has-lvl.rv2-ph-hit .rv2-rays, .rv2.has-lvl.rv2-ph-burst .rv2-rays { --rw-tone: var(--lvl); }
-.rv2.has-lvl .rv2-halo { background: radial-gradient(circle, color-mix(in srgb, var(--lvl) 70%, #fff) 0, color-mix(in srgb, var(--lvl) 50%, transparent) 32%, transparent 64%); transition: background 0.2s steps(2, end); }
+.rv2.has-lvl .rv2-halo { background: radial-gradient(circle, color-mix(in srgb, var(--lvl) 70%, #fff) 0, color-mix(in srgb, var(--lvl) 50%, transparent) 32%, transparent 64%); transition: background 0.2s var(--m-ease-smooth); }
 .rv2.has-lvl .rv2-leak { background: radial-gradient(closest-side, color-mix(in srgb, var(--lvl) 40%, #fff), transparent); }
 .rv2.has-lvl .rv2-cracks polyline { stroke: color-mix(in srgb, var(--lvl) 35%, #fff); filter: drop-shadow(0 0 2px var(--lvl)); }
 .rv2.has-lvl .rv2-pips > i.on { background: var(--lvl); }
@@ -176,7 +176,7 @@
 .rv3-back > svg.icon { width: 46%; height: auto; color: color-mix(in srgb, var(--box) 25%, #fff); opacity: 0.85; }
 /* Эпическая и выше: рубашка чуть светится цветом редкости — честный намёк, как вспышка у Genshin. */
 .rv3-cell.is-hot:not(.on) .rv3-back { background: color-mix(in srgb, var(--sh-tone) 45%, #15181a); }
-.rv3-cell.is-hot:not(.on) .rv3-back::after { content: ''; position: absolute; inset: 0; background: var(--sh-tone); opacity: 0.25; animation: rv3-hot 1.2s steps(3, end) infinite alternate; }
+.rv3-cell.is-hot:not(.on) .rv3-back::after { content: ''; position: absolute; inset: 0; background: var(--sh-tone); opacity: 0.25; animation: rv3-hot 1.2s var(--m-ease-smooth) infinite alternate; }
 @keyframes rv3-hot { to { opacity: 0.05; } }
 .rv3-cell.on .rv3-back { transform: rotateY(180deg); }
 .rv3-cell.on .rv3-face { transform: none; }

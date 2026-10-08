@@ -21,7 +21,7 @@
   margin: var(--ht-over, 0px) 0 0;
   border: 0; background: none; color: #fff; font: inherit; text-align: left; cursor: pointer;
   filter: drop-shadow(0 5px 0 rgba(0, 0, 0, 0.45));
-  transition: transform 90ms steps(2, end), filter 90ms steps(2, end);
+  transition: transform 90ms var(--m-ease-smooth), filter 90ms var(--m-ease-smooth);
 }
 .ht:active { transform: translateY(3px); filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.45)); }
 /* Фокус с клавиатуры — пиксельное кольцо снаружи плитки тем же срезом 10px:
@@ -40,7 +40,7 @@
 .ht-plate {
   position: absolute; inset: 3px; overflow: hidden;
   background: var(--ht-bg); clip-path: var(--ht-7);
-  transition: background-color 90ms steps(2, end);
+  transition: background-color 90ms var(--m-ease-smooth);
 }
 .ht:hover .ht-plate { background-color: var(--ht-bg-hi); }
 .ht-edge-t { position: absolute; z-index: 2; left: 0; right: 0; top: 0; height: 4px; background: rgba(255, 255, 255, 0.3); }
@@ -66,7 +66,7 @@
   position: absolute; bottom: 0; left: 50%; display: block; max-width: none;
   height: var(--ht-art-h); width: auto; transform: translateX(var(--ht-art-x, -50%));
   user-select: none;
-  transition: transform 120ms steps(2, end);
+  transition: transform 120ms var(--m-ease-smooth);
 }
 .ht:hover .ht-art { transform: translateX(var(--ht-art-x, -50%)) translateY(-4px); }
 

@@ -8,7 +8,7 @@
   --px-n: 10px; clip-path: var(--px-10);
   --px-ol: color-mix(in srgb, var(--m-accent) 50%, transparent); --px-ol-w: 2px;
   --px-ft: rgba(255, 255, 255, 0.05); --px-ft-w: 2px; --px-fb: rgba(0, 0, 0, 0.3); --px-fb-w: 4px;
-  animation: mpl-in 320ms steps(4, end) backwards;
+  animation: mpl-in 320ms var(--m-ease-smooth) backwards;
 }
 @keyframes mpl-in {
   from { opacity: 0; transform: translateY(8px) scale(0.97); }
@@ -33,9 +33,9 @@
 
 /* Ряд иконок главных модов + «+64». */
 .mpl-mods { display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: nowrap; }
-.mpl-mod, .mpl-more { animation: mpl-pop 300ms steps(4, end) backwards; animation-delay: calc(120ms + var(--i, 0) * 55ms); }
+.mpl-mod, .mpl-more { animation: mpl-pop 300ms var(--m-ease-smooth) backwards; animation-delay: calc(120ms + var(--i, 0) * 55ms); }
 .mpl-mod { position: relative; flex: 0 1 44px; min-width: 0; display: flex; justify-content: center; cursor: default; }
-.mpl-mod .mpc-slot { width: 44px; height: 44px; max-width: 100%; transition: transform 120ms steps(2, end); }
+.mpl-mod .mpc-slot { width: 44px; height: 44px; max-width: 100%; transition: transform 120ms var(--m-ease-smooth); }
 .mpl-mod .mpc-slot img { width: 32px; height: 32px; image-rendering: auto; }
 .mpl-mod:hover .mpc-slot { transform: translateY(-2px); }
 /* Имя мода по наведению — тултип в стиле Minecraft. */
@@ -44,7 +44,7 @@
   transform: translateX(-50%); max-width: 180px; padding: 4px 7px 5px;
   font: 750 11.5px/1.15 var(--m-font); color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   background: #100010f0; box-shadow: 0 0 0 2px #2a0a5e, 0 0 0 3px #100010f0;
-  opacity: 0; pointer-events: none; transition: opacity 100ms steps(2, end);
+  opacity: 0; pointer-events: none; transition: opacity 100ms var(--m-ease-smooth);
 }
 .mpl-mod:first-child::after { left: 0; transform: none; }
 .mpl-mod:hover::after { opacity: 1; }

@@ -55,7 +55,6 @@ import { RoomModals } from './components/RoomManage'
 import { Installs } from './components/Installs'
 import { PackDrop } from './components/PackDrop'
 import { initInstalls } from './state/installs'
-import { initPackAutoUpdate } from './lib/packAutoUpdate'
 import { initCalls } from './state/call'
 import { loadProfileSettings, overlayNotify } from './ipc/commands'
 import { ServerDetail } from './components/ServerDetail'
@@ -219,7 +218,7 @@ import { flushNativeCrashes, installErrorHandlers, reportGameCrash } from './lib
 import { autoUpdate, bootUpdate, installUpdateOnExit, updateReady } from './lib/updater'
 import { BootUpdate } from './components/BootUpdate'
 import { Welcome } from './components/Welcome'
-import { ScreenWave } from './components/ScreenWave'
+import { useSlidingSegs } from './lib/slidingSegs'
 import { beatAfterReconnect, gameSession, heartbeat, ramMbFor, reconcileGameSession, setGameSession, updateSessionServer } from './lib/launch'
 import { POLL_BASE_MS, pollIntervalFrom } from './lib/pollPace'
 import { friendsPollDelayMs, friendsPollWait, pokeGate, refreshDue } from './lib/realtimePace'
@@ -288,6 +287,7 @@ function notifyPresence(before: Friend[], now: Friend[]) {
 }
 
 export function App() {
+  useSlidingSegs()
   const classic = useLayout((st) => st.layout === 'classic')
   // Subscribe field by field: subscribing to the whole store re-rendered the active
   // screen on every toast, animation frame and install progress event.
@@ -320,7 +320,7 @@ export function App() {
     initDeepLinks()
     initOverlayLink()
     initInstalls()
-    const stopPackAutoUpdate = initPackAutoUpdate()
+    // Сборки обновляются только при «Играть» (владелец 08.10.2026: фоновая докачка мешала) — initPackAutoUpdate не запускаем.
     const releaseRealtime = retainRealtime()
     const stopRelay = initRealtimeRelay()
     initCalls()
@@ -382,8 +382,7 @@ export function App() {
       watchHeap()
     })
     return () => {
-      stopPackAutoUpdate()
-      stopRelay()
+            stopRelay()
       stopPromo()
       stopStreakReminder()
       stopStreakActivity()
@@ -773,7 +772,6 @@ export function App() {
       <SvgSprite />
       <BootUpdate />
       <Welcome />
-      <ScreenWave />
       <div className="window" id="win">
         <Titlebar />
         <UpdateBanner />

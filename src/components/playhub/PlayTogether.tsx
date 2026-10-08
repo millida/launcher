@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 import { Icon } from '../Icon'
 import { loadListing } from '../catalog/site'
@@ -28,6 +29,8 @@ const POOLS: { section: 'modpacks' | 'maps'; category: string; perPage: number }
 ]
 /** Два ряда по пять. */
 const SHOWN = 10
+/** Библиотека: два ряда по шесть — двойная «Свой сервер», девять карточек и «Ещё». */
+const SHOWN_LEAD = 9
 const ONEBLOCK = /one\s?-?block|ванблок/i
 
 /**
@@ -90,7 +93,7 @@ export function mixTogether(pools: Pick[][], n = SHOWN, opts?: TogetherOpts): Pi
 
 const LOADER: Record<string, string> = { fabric: 'Fabric', forge: 'Forge', neoforge: 'NeoForge', quilt: 'Quilt' }
 
-export function PlayTogether({ onPack, onMap, onItem }: { onPack: (slug: string, title: string) => void; onMap: (title: string) => void; onItem?: (section: string, card: SiteCard) => void }) {
+export function PlayTogether({ onPack, onMap, onItem, lead, onMore }: { onPack: (slug: string, title: string) => void; onMap: (title: string) => void; onItem?: (section: string, card: SiteCard) => void; /** Первая двойная клетка ряда — «Свой сервер» (хостинг). */ lead?: ReactNode; /** «Ещё» — весь каталог «С другом». */ onMore?: () => void }) {
   const [list, setList] = useState<Pick[] | null>(null)
   useEffect(() => {
     let alive = true
@@ -105,7 +108,7 @@ export function PlayTogether({ onPack, onMap, onItem }: { onPack: (slug: string,
       // Интерес к разделу — журнал посещений и установок этого компьютера.
       const sig = readSignals()
       const pull = (sec: string) => 1 + Math.log1p((sig.visits?.[sec] || 0) + 2 * (sig.installs?.[sec] || 0))
-      setList(mixTogether(pools, SHOWN, { seed: hashStr('together') ^ dayIndex(), affinity: POOLS.map((p) => pull(p.section)) }))
+      setList(mixTogether(pools, lead ? SHOWN_LEAD : SHOWN, { seed: hashStr('together') ^ dayIndex(), affinity: POOLS.map((p) => pull(p.section)) }))
     })
     return () => {
       alive = false
@@ -115,8 +118,9 @@ export function PlayTogether({ onPack, onMap, onItem }: { onPack: (slug: string,
   if (list && !list.length) return null
   return (
     <div className="hub-grid pt-grid" data-section="play_together" data-src="hub_card">
+      {lead}
       {list === null
-        ? Array.from({ length: SHOWN }, (_, i) => (
+        ? Array.from({ length: lead ? SHOWN_LEAD : SHOWN }, (_, i) => (
             <span key={i} className="ph-card skel-card" aria-hidden="true">
               <span className="ph-card-art skel"></span>
               <span className="ph-card-body">
@@ -165,6 +169,15 @@ export function PlayTogether({ onPack, onMap, onItem }: { onPack: (slug: string,
               </button>
             )
           })}
+      {onMore && list ? (
+        <button className="ph-card fy-more" data-sound="nav" data-track="together_more" onClick={onMore}>
+          <span className="fy-more-ic">
+            <Icon id="i-chev-r" />
+          </span>
+          <b>Ещё</b>
+          <span className="ph-card-meta">Всё «С другом»</span>
+        </button>
+      ) : null}
     </div>
   )
 }
