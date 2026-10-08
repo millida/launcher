@@ -216,3 +216,6 @@
 .ph-mine-acts .ph-mine-ed { width: 32px; padding: 0; justify-content: center; }
 .hub-pane .ph-mine-acts ~ .ph-mine-more, .hub-pane .ph-mine:hover .ph-mine-more { top: 6px; right: 6px; z-index: 5; }
 .hub-pane .ph-mine .ph-card-art :is(.ph-mine-acts, .ph-mine-more) svg { transform: none; max-height: none; width: 15px; height: 15px; }
+/* Сборка со своей картинкой (PrisonRPG, OneBlock): картинка на всю обложку, без сдвига и обрезки по высоте. */
+.hub-pane .ph-mine .ph-card-art .bi.photo { position: absolute; inset: 0; width: 100%; height: 100%; clip-path: none; background: none; }
+.hub-pane .ph-mine .ph-card-art .bi.photo img { width: 100%; height: 100%; max-height: none; transform: none; object-fit: cover; }
