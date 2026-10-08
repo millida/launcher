@@ -16,7 +16,10 @@ export function ServerFeed({
   sort = 'rating',
   render,
   onFirstPage,
+  limit,
 }: {
+  /** Только первые N (полка библиотеки): без догрузки при прокрутке. */
+  limit?: number
   category?: string
   /** Имя или адрес: лента того же режима, суженная поиском рейтинга. */
   search?: string
@@ -66,7 +69,7 @@ export function ServerFeed({
     more(0)
   }, [category, search, sort])
 
-  const done = total !== null && offset >= total
+  const done = (total !== null && offset >= total) || (!!limit && list.length >= limit)
 
   useEffect(() => {
     const el = tail.current
@@ -78,11 +81,11 @@ export function ServerFeed({
 
   return (
     <div className="ph-list">
-      {list.map((s, i) => (
+      {(limit ? list.slice(0, limit) : list).map((s, i) => (
         <Fragment key={s.slug || s.name}>{render(s, i)}</Fragment>
       ))}
       {busy
-        ? Array.from({ length: list.length ? 3 : 6 }, (_, i) => (
+        ? Array.from({ length: limit ? Math.max(0, Math.min(limit, 6) - list.length) : list.length ? 3 : 6 }, (_, i) => (
             <span key={'sk' + i} className="ph-srv skel" style={{ height: 76 }}></span>
           ))
         : null}

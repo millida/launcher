@@ -1191,7 +1191,7 @@ export const Milli = memo(function Milli({ mode = 'idle', size = 60, className =
     r.down = null
     const root = rootRef.current
     if (!r.dragged || !root) return
-    root.style.transition = 'transform 0.32s steps(4, end)'
+    root.style.transition = 'transform 0.32s cubic-bezier(.22,1,.36,1)'
     root.style.transform = ''
     play('wobble')
   }

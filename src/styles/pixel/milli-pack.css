@@ -280,7 +280,7 @@
 .mpc-xp-bar i {
   display: block; height: 100%;
   background: linear-gradient(#c8ff7a 0 2px, #80ff20 2px 6px, #4c9e12 6px);
-  transition: width 260ms steps(4, end);
+  transition: width 260ms var(--m-ease-smooth);
 }
 .mpc-xp-bar::after {
   content: ''; position: absolute; inset: 0; pointer-events: none;
@@ -311,7 +311,7 @@
   --px-ol: var(--m-border-strong); --px-ol-w: 2px; --px-ft: rgba(255, 255, 255, 0.05); --px-ft-w: 2px; --px-fb: rgba(0, 0, 0, 0.32); --px-fb-w: 4px;
 }
 .mtip > * { position: relative; }
-.mtip.on { visibility: visible; animation: mtip-in 120ms steps(3, end) backwards; }
+.mtip.on { visibility: visible; animation: mtip-in 120ms var(--m-ease-smooth) backwards; }
 @keyframes mtip-in { 0% { opacity: 0; transform: translateX(6px); } }
 .mtip.is-u.on, .mtip.is-d.on { animation-name: mtip-in-v; }
 @keyframes mtip-in-v { 0% { opacity: 0; transform: translateY(4px); } }

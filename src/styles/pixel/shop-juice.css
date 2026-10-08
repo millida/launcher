@@ -13,7 +13,7 @@
 .sh-row2 { margin-top: var(--sh-gap); }
 
 /* Кошелёк: награда долетела — число подпрыгивает. */
-.sh-bal.bump { animation: sj-bump 0.5s steps(3, end); }
+.sh-bal.bump { animation: sj-bump 0.5s var(--m-ease-smooth); }
 .sh-bal.bump b { color: var(--m-accent); }
 @keyframes sj-bump { 0% { transform: none; } 34% { transform: translateY(-4px) scale(1.08); } 67% { transform: translateY(1px); } 100% { transform: none; } }
 
@@ -56,7 +56,7 @@
   content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 260%; z-index: 3; pointer-events: none;
   background: linear-gradient(105deg, #0000 0 38%, rgba(255, 255, 255, 0.2) 38% 45%, #0000 45% 50%, rgba(255, 255, 255, 0.11) 50% 53%, #0000 53%);
   transform: translateX(-92.31%);
-  animation: sj-shine 0.9s steps(9, end) calc(0.25s + var(--i, 0) * 0.08s) both;
+  animation: sj-shine 0.9s var(--m-ease-smooth) calc(0.25s + var(--i, 0) * 0.08s) both;
 }
 /* Блик едет сдвигом (transform), а не background-position: фон пересчитывал
    стили всего магазина каждый кадр (замер 25.09.2026). Полоса 260 % ширины;
@@ -86,7 +86,7 @@
 .sh-pr.is-off s { position: relative; text-decoration: none; }
 .sh-pr.is-off s::after {
   content: ''; position: absolute; left: -2px; right: -2px; top: 50%; height: 2px; margin-top: -1px;
-  background: var(--m-rarity-legendary); transform-origin: left; animation: sj-strike 0.36s steps(4, end) 0.1s both;
+  background: var(--m-rarity-legendary); transform-origin: left; animation: sj-strike 0.36s var(--m-ease-smooth) 0.1s both;
 }
 @keyframes sj-strike { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 .sh-pr.is-off b { color: var(--m-rarity-legendary); }

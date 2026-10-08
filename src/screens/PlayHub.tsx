@@ -11,8 +11,7 @@ import { sectionBySlug } from '../components/catalog/site'
 import { openItem } from '../components/catalog/itemStore'
 import { HubFind } from '../components/playhub/HubFind'
 import { fmtN, plural } from '../lib/format'
-import { buildsShelf } from '../lib/buildsShelf'
-import { openModal, setScreen } from '../state/ui'
+import { setScreen } from '../state/ui'
 import { useProfiles } from '../state/profiles'
 import { premiumMode, sameMode, serverMode, useLobby } from '../state/lobbyMode'
 import type { LobbyMode } from '../state/lobbyMode'
@@ -46,14 +45,16 @@ import { ForYou } from '../components/playhub/ForYou'
 import { PlayTogether } from '../components/playhub/PlayTogether'
 import { CatalogPane } from './Mods'
 import { track } from '../lib/telemetry'
-import { ANARCHY, ONEBLOCK_PACK, anarchyMode, modeAction, ownServerMode, targetsAnarchy, targetsOwnServer } from '../lib/ownServer'
+import { ANARCHY, ONEBLOCK_PACK, anarchyMode, modeAction, ownServerMode, targetsOwnServer } from '../lib/ownServer'
 import { loadAnarchyOnline } from '../lib/anarchy'
-import { AnarchyTile } from '../components/playhub/AnarchyTile'
 import { PrisonTile } from '../components/playhub/PrisonTile'
 import { PRISON_SLUG, featuredSpot } from '../components/playhub/featured'
-import { modesShown, shelfOrder, shownCount, withPrison } from '../components/playhub/placement'
-import { usePromo } from '../state/promo'
+import { shelfOrder, withPrison } from '../components/playhub/placement'
 import '../styles/pixel/playhub.css'
+import { HostTile, OwnModeTile, heroSlides } from '../components/playhub/HubHero'
+import { useSite } from '../components/catalog/siteStore'
+import { useAnarchy } from '../lib/anarchy'
+import { openBuildSettings } from '../state/instance'
 
 /**
  * «Во что играем», версия 6 (владелец 30.09.2026, 15:06 — те же блоки и
@@ -323,6 +324,7 @@ const isArcania = (p: HubPack) => /arcania/i.test(p.slug || p.title)
 
 export function PlayHub({ on }: { on?: boolean }) {
   const current = useLobby((s) => s.picked)
+  const anarchy = useAnarchy()
   const pick = useLobby((s) => s.pick)
   const premium = useLobby((s) => s.premium)
   const loadLobby = useLobby((s) => s.load)
@@ -331,8 +333,6 @@ export function PlayHub({ on }: { on?: boolean }) {
   const [modes, setModes] = useState<LiveMode[] | null>(null)
   const [ownOnline, setOwnOnline] = useState<number | null>(null)
   const [anarchyOnline, setAnarchyOnline] = useState<number | null>(null)
-  const anarchyLead = usePromo((s) => s.promo.modesLead === ANARCHY.mode)
-  const foldedCount = modesShown(anarchyLead)
   const [packs, setPacks] = useState<MillidaPack[] | null>(null)
   const [mrPacks, setMrPacks] = useState<HubPack[] | null>(null)
   /** Режимы: 7 плиток, «Остальные» раскрывает остальные на месте. */
@@ -352,7 +352,6 @@ export function PlayHub({ on }: { on?: boolean }) {
   // выставить вкладку, — обычный useEffect затирал бы её.
   useLayoutEffect(() => () => useHubTab.getState().reset(), [])
   const mine = useMyBuilds(profiles)
-  const shelf = buildsShelf(mine, current && current.kind === 'build' ? current.name : null, allBuilds)
   /** «Повторить» у блока, которому прод не ответил. */
   const [tick, setTick] = useState(0)
   const retry = () => {
@@ -431,6 +430,7 @@ export function PlayHub({ on }: { on?: boolean }) {
   }, [packs, mrPacks])
 
   const prisonPack = packs === null ? undefined : catalogPacks.find((p) => p.slug === PRISON_SLUG) || null
+  const pixelmonPack = catalogPacks.find((p) => p.slug === 'pixelmon') || premiumPacks.find((p) => p.slug === 'pixelmon') || null
   const featured = featuredSpot(prisonPack)
 
   const obPack = catalogPacks.find((p) => p.slug === ONEBLOCK_PACK) || premiumPacks.find((p) => p.slug === ONEBLOCK_PACK) || null
@@ -565,6 +565,10 @@ export function PlayHub({ on }: { on?: boolean }) {
   // «Для тебя»: Arcania — вторая карточка, бесплатные сборки Millida от
   // самых популярных — в ротацию.
   const arcaniaPack = premiumPacks.find(isArcania) || premiumPacks[0] || null
+  const lastBuild = (current && current.kind === 'build' ? mine.find((p) => p.name === current.name) : null) || mine[0] || null
+  const myOrder = lastBuild ? [lastBuild, ...mine.filter((p) => p !== lastBuild)] : mine
+  // Два ряда по шесть; больше — «Ещё N».
+  const MY_FOLD = mine.length > 12 ? 11 : 12
   const premiumWait = !lobbyLoaded || packs === null
   const freeOurs = catalogPacks
     .filter((p) => p.origin === 'millida')
@@ -583,7 +587,24 @@ export function PlayHub({ on }: { on?: boolean }) {
     setAll(true)
     top0()
   }
-  const shownModes = shelfModes.slice(0, shownCount(shelfModes.length, allModes, anarchyLead))
+  // Свои серверы — такими же плитками, как жанры, и вместо своего жанра (08.10.2026):
+  // есть наша Анархия — плитки «Анархия» нет; OneBlock, Тюрьма (PrisonRPG) — так же.
+  const ownSlides = heroSlides({
+    prison: prisonPack || null,
+    pixelmon: pixelmonPack,
+    anarchyOnline,
+    oneblockOnline: obOnline,
+    anarchyName: anarchy.name,
+    anarchyLine: anarchy.tagline,
+    onAnarchy: () => pickMode(ANARCHY.mode, 'hub'),
+    onOneBlock: () => pickMode(own.mode, 'hub'),
+    onPack: openPack,
+  })
+  const replaced = new Set([ANARCHY.mode, own.mode, 'ANARCHY', 'ONEBLOCK', ...(prisonPack ? ['PRISON'] : [])])
+  const gridModes = shelfModes.filter((m) => !('pack' in m) && !replaced.has(m.def.cat))
+  // Два ряда по шесть: 11 жанров и «Остальные».
+  const MODES_FOLD = 11 - ownSlides.length
+  const shownModes = allModes ? gridModes : gridModes.slice(0, MODES_FOLD)
 
   const modesPane = (
     <div className="ph-row ph-mts" data-section="modes">
@@ -591,18 +612,13 @@ export function PlayHub({ on }: { on?: boolean }) {
         <CardSkel n={10} />
       ) : shelfModes.length ? (
         <>
-          {anarchyLead ? (
-            <AnarchyTile
-              index={0}
-              online={anarchyOnline}
-              on={targetsAnarchy(current)}
-              onClick={() => pickMode(ANARCHY.mode)}
-            />
-          ) : null}
+          {ownSlides.map((sl, i) => (
+            <OwnModeTile key={sl.key} slide={sl} index={i} />
+          ))}
           {shownModes.map((m, i) =>
             'pack' in m ? <PrisonTile key={PRISON_SLUG} cell index={i} pack={m.pack} onClick={() => openPack(m.pack)} /> : modeTile(m, i),
           )}
-          {shelfModes.length > foldedCount ? (
+          {gridModes.length > MODES_FOLD ? (
             <button
               className="ph-card ph-mt ph-mt-all"
               data-sound="nav"
@@ -615,7 +631,7 @@ export function PlayHub({ on }: { on?: boolean }) {
               </span>
               <span className="ph-mt-foot">
                 <b>{allModes ? 'Свернуть' : 'Остальные'}</b>
-                {allModes ? null : <span className="ph-mt-on">{shelfModes.length - foldedCount + ' ' + plural(shelfModes.length - foldedCount, 'режим', 'режима', 'режимов')}</span>}
+                {allModes ? null : <span className="ph-mt-on">{gridModes.length - MODES_FOLD + ' ' + plural(gridModes.length - MODES_FOLD, 'режим', 'режима', 'режимов')}</span>}
               </span>
             </button>
           ) : null}
@@ -662,7 +678,6 @@ export function PlayHub({ on }: { on?: boolean }) {
       {/* Первый экран (владелец 30.09.2026), как на millida.net/katalog: поле,
           крупная «Найти» и «Собрать с ИИ». Текст поля — запрос каталога или
           просьба к Милли. */}
-      <HubFind onSearch={(q) => openSection('modpack', q)} />
       {/* 1. Свои сборки обычными карточками с обложкой; нет сборок — полка
           версий Minecraft, как было. */}
       {mine.length
@@ -670,50 +685,24 @@ export function PlayHub({ on }: { on?: boolean }) {
             'builds',
             'Мои сборки',
             <div className="hub-grid" data-section="my_builds" data-src="hub_card" data-private>
-              {shelf.shown.map((p, i) => (
+              {/* Как ряд «Сборки» (08.10.2026): обложка с названием; клик — страница сборки
+                  (изменить), при наведении — «Играть» и «Изменить». Последняя — первой. */}
+              {myOrder.slice(0, allBuilds ? myOrder.length : MY_FOLD).map((p, i) => (
                 <MyBuildCard
                   key={p.name}
                   p={p}
                   pos={i}
                   on={!!current && current.kind === 'build' && current.name === p.name}
-                  onPick={() => {
-                    // Клик — выбрать и в лобби к «Играть»; редактирование —
-                    // карандаш при наведении (владелец 24.09.2026, 19:08).
-                    pick({ kind: 'build', name: p.name })
-                    setScreen('play')
-                  }}
+                  onPick={() => openBuildSettings(p.name, 'content')}
+                  onPlay={() => launch({ kind: 'build', name: p.name })}
                 />
               ))}
-              {/* «Все версии» — новая сборка с выбором версии Minecraft (17:31). */}
-              <button className="ph-card ph-allver" data-sound="open" data-track="all_versions" onClick={() => openModal('nbModal')}>
-                <span className="ph-card-art ph-allver-art">
-                  <Icon id="i-plus" />
-                </span>
-                <span className="ph-card-body">
-                  <b>Все версии</b>
-                  <span className="ph-card-meta">Новая сборка</span>
-                </span>
-              </button>
-              {/* Same skeleton as the shelf's action tiles, so the toggle is exactly as tall as a build card. */}
-              {shelf.toggle ? (
-                <button
-                  className="ph-card act"
-                  data-sound="nav"
-                  data-track={allBuilds ? 'builds_less' : 'builds_more'}
-                  aria-expanded={allBuilds}
-                  onClick={() => setAllBuilds((v) => !v)}
-                >
-                  <span className="ph-card-art ph-mine-art">
-                    <span className="ph-act-ic">
-                      <Icon id={allBuilds ? 'i-chev-u' : 'i-grid'} />
-                    </span>
+              {myOrder.length > MY_FOLD ? (
+                <button className="ph-card fy-more" data-sound="nav" data-track={allBuilds ? 'builds_less' : 'builds_more'} aria-expanded={allBuilds} onClick={() => setAllBuilds((v) => !v)}>
+                  <span className="fy-more-ic">
+                    <Icon id={allBuilds ? 'i-chev-u' : 'i-chev-d'} />
                   </span>
-                  <span className="ph-card-body">
-                    <b>{allBuilds ? 'Свернуть' : 'Показать ещё'}</b>
-                    <span className="ph-card-meta">
-                      {(allBuilds ? mine.length : shelf.hidden) + ' ' + plural(allBuilds ? mine.length : shelf.hidden, 'сборка', 'сборки', 'сборок')}
-                    </span>
-                  </span>
+                  <b>{allBuilds ? 'Свернуть' : 'Ещё ' + (myOrder.length - MY_FOLD)}</b>
                 </button>
               ) : null}
             </div>,
@@ -747,11 +736,13 @@ export function PlayHub({ on }: { on?: boolean }) {
               ))}
             </div>,
           )}
+      <HubFind onSearch={(q) => openSection('modpack', q)} />
       {/* 3. Рекомендуем: хостинг, эксклюзивы, OneBlock, дальше лента в четыре ряда. */}
       {head(
         'foryou',
-        'Рекомендуем',
+        'Сборки',
         <ForYou
+          bare
           on={!!on}
           arcania={arcaniaPack}
           exclusives={premiumPacks}
@@ -772,13 +763,25 @@ export function PlayHub({ on }: { on?: boolean }) {
           }}
         />,
       )}
+      {/* Во что играть: свои серверы первым рядом, потом режимы — после сборок (08.10.2026: сначала сборки, потом серверы). */}
+      {head(
+        'modes',
+        'Режимы',
+        <>
+          {modesPane}
+        </>,
+      )}
       {/* Полка «Сборки» убрана: каталог — во вкладке «Ресурсы» (17:31). */}
-      {head('modes', 'Режимы', modesPane)}
       {/* Играть вдвоём — сборки и карты «С другом» из разных тем, как на сайте. */}
       {head(
         'together',
         'Играть вдвоём',
         <PlayTogether
+          lead={<HostTile />}
+          onMore={() => {
+            openSection('modpack')
+            requestAnimationFrame(() => useSite.getState().patch({ use: 'friends' }))
+          }}
           onPack={(slug, title) => {
             if (!openPackSlug(slug)) openSection('modpack', title)
           }}
@@ -791,6 +794,17 @@ export function PlayHub({ on }: { on?: boolean }) {
             requestAnimationFrame(() => openItem({ kind: 'card', section, card }))
           }}
         />,
+      )}
+      {/* Под режимами — вся лента серверов Millida (владелец 24.09.2026, 18:29). */}
+      {head(
+        'servers',
+        'Серверы',
+        <>
+          <ServerFeed limit={6} render={(s, i) => <ServerRow s={s} pos={i} current={current} onPlay={(x) => launch(serverMode(x))} />} />
+          <button className="btn md secondary hub-srv-more" data-sound="nav" data-track="hub_all_servers" onClick={() => setScreen('servers')}>
+            Все серверы <Icon id="i-chev-r" />
+          </button>
+        </>,
       )}
       {/* Игры Minecraft — такими же карточками, как сборки; клик открывает экран игры (владелец 29.09.2026). */}
       {head(
@@ -822,8 +836,6 @@ export function PlayHub({ on }: { on?: boolean }) {
           ))}
         </div>,
       )}
-      {/* Под режимами — вся лента серверов Millida (владелец 24.09.2026, 18:29). */}
-      {head('servers', 'Серверы', <AllServers current={current} onPick={(x) => launch(serverMode(x))} />)}
       {/* «Зайти на сервер» и «Недавние» убраны из библиотеки (17:50). */}
     </div>,
   )

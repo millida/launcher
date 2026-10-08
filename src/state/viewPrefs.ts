@@ -43,6 +43,16 @@ interface ViewPrefsState {
 
 const notify = () => window.dispatchEvent(new Event(VIEW_PREFS_EVENT))
 
+/**
+ * Переход между экранами (07.10.2026): вместо пиксельного растворения — плавный
+ * въезд экрана, как переключатель в чате Милли. Длительность — из настройки.
+ */
+function applyTabMs(ms: number) {
+  if (typeof document === 'undefined') return
+  document.documentElement.style.setProperty('--m-tab-ms', Math.round(ms * 0.42) + 'ms')
+}
+applyTabMs(tabTransitionMs())
+
 export const useViewPrefs = create<ViewPrefsState>((set) => ({
   charAnim: charAnimOn(),
   bgAnim: bgAnimOn(),
@@ -61,6 +71,7 @@ export const useViewPrefs = create<ViewPrefsState>((set) => ({
   setTabMs: (v) => {
     const ms = Math.max(TAB_MS_MIN, Math.min(TAB_MS_MAX, Math.round(v)))
     writePref('m-tab-ms', String(ms))
+    applyTabMs(ms)
     set({ tabMs: ms })
     notify()
   },

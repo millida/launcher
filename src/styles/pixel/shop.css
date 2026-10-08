@@ -680,9 +680,9 @@
 /* ---------- «Бесплатно»: подарок дня покачивается и светится шагами ---------- */
 .sh-hero > .gf-skel { grid-column: span 2; min-height: 240px; }
 .sh-free-rays { transform: scale(0.34); }
-.sh-free.is-ready .sh-free-prize { animation: sh-sway 1.8s steps(6) infinite; }
-.sh-free.is-ready .gf-stage { animation: sh-glow 1.6s steps(4) infinite alternate; }
-.sh-free.is-ready .gf-btn { animation: sh-nudge 2.4s steps(3) infinite; }
+.sh-free.is-ready .sh-free-prize { animation: sh-sway 1.8s var(--m-ease-smooth) infinite; }
+.sh-free.is-ready .gf-stage { animation: sh-glow 1.6s var(--m-ease-smooth) infinite alternate; }
+.sh-free.is-ready .gf-btn { animation: sh-nudge 2.4s var(--m-ease-smooth) infinite; }
 @keyframes sh-sway {
   0%, 100% { transform: rotate(0) translateY(0); }
   25% { transform: rotate(-6deg) translateY(-4px); }
@@ -706,7 +706,7 @@
 }
 :root:root .sh-work-how { --px-n: 10px; clip-path: var(--px-10); }
 .sh-work-eq { display: inline-flex; align-items: center; gap: 10px; flex: none; }
-.sh-work-eq > svg.icon { width: 22px; height: 22px; color: var(--m-accent); animation: sh-arrow 1.2s steps(3) infinite; }
+.sh-work-eq > svg.icon { width: 22px; height: 22px; color: var(--m-accent); animation: sh-arrow 1.2s var(--m-ease-smooth) infinite; }
 .sh-work-coin { display: grid; place-items: center; width: 56px; height: 56px; background: color-mix(in srgb, var(--m-rarity-rare) 16%, var(--m-inset)); }
 :root:root .sh-work-coin { clip-path: var(--px-5); }
 .sh-work-bal { display: flex; flex-direction: column; gap: 6px; flex: 1 1 220px; min-width: 180px; max-width: 420px; }
@@ -738,11 +738,11 @@
 .sh-wp-stage {
   position: relative; display: grid; place-items: center; width: 240px; height: 220px; overflow: hidden;
   background: color-mix(in srgb, var(--sh-tone) 12%, var(--m-inset));
-  animation: sh-wp-glow 1.8s steps(4) infinite alternate;
+  animation: sh-wp-glow 1.8s var(--m-ease-smooth) infinite alternate;
 }
 :root:root .sh-wp-stage { clip-path: var(--px-10); }
 .sh-wp-rays { transform: scale(0.5); }
-.sh-wp-float { position: relative; z-index: 1; animation: sh-sway 2.4s steps(6) infinite; }
+.sh-wp-float { position: relative; z-index: 1; animation: sh-sway 2.4s var(--m-ease-smooth) infinite; }
 .sh-wp-float .sh-art.lg { width: 200px; height: 200px; background: transparent; }
 .sh-wp-float .sh-art.lg img { width: 180px; height: 180px; }
 .sh-wp-hero.is-owned .sh-wp-stage, .sh-wp-hero.is-owned .sh-wp-float { animation: none; }
@@ -909,6 +909,6 @@
   content: ''; position: absolute; left: 50%; top: 50%; width: 128px; height: 128px; translate: -50% -50%;
   background: color-mix(in srgb, var(--tier) 24%, transparent); --px-n: 10px; clip-path: var(--px-10);
 }
-.sh-perk-card[class*='tier-'] .dc-bob { animation: sh-chest-bob 2.4s steps(4, end) infinite; }
+.sh-perk-card[class*='tier-'] .dc-bob { animation: sh-chest-bob 2.4s var(--m-ease-smooth) infinite; }
 @keyframes sh-chest-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
 @media (prefers-reduced-motion: reduce) { .sh-perk-card[class*='tier-'] .dc-bob { animation: none; } }

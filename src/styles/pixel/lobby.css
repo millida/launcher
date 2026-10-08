@@ -369,7 +369,7 @@
   color: var(--m-fg-muted); background: var(--m-surface);
   --px-n: 5px; clip-path: var(--px-5);
   --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px;
-  transition: color var(--m-t-fast), background-color var(--m-t-fast), transform 90ms steps(2, end);
+  transition: color var(--m-t-fast), background-color var(--m-t-fast), transform 90ms var(--m-ease-smooth);
 }
 .play-cancel svg { width: 14px; height: 14px; }
 @media (hover: hover) and (pointer: fine) {
@@ -573,7 +573,7 @@
   position: relative; display: block; padding: 0; overflow: hidden;
   text-align: left; color: #fff; cursor: pointer; background: #4fa8e8;
   --px-ol: rgba(0, 0, 0, 0.45); --px-ol-w: 3px;
-  transition: transform 120ms steps(2, end);
+  transition: transform 120ms var(--m-ease-smooth);
 }
 :root .lobby-row .lobby-promo:hover { transform: translateY(-2px); }
 :root .lobby-row .lobby-promo.on { --px-ol: #ffd23f; --px-ol-w: 4px; transform: translateY(-3px); }
@@ -616,7 +616,7 @@
   --px-n: 10px; clip-path: var(--px-10);
   --px-ol: rgba(0, 0, 0, 0.5); --px-ol-w: 3px;
   --px-ft: rgba(255, 255, 255, 0.12); --px-ft-w: 3px; --px-fb: rgba(0, 0, 0, 0.35); --px-fb-w: 5px;
-  animation: lrec-in 320ms steps(4, end) both;
+  animation: lrec-in 320ms var(--m-ease-smooth) both;
 }
 .lobby-rec:hover { background: rgba(14, 42, 22, 0.88); }
 @keyframes lrec-in { 0% { opacity: 0; transform: translate(24px, -58%); } 100% { opacity: 1; transform: translate(0, -58%); } }
@@ -626,7 +626,7 @@
 .lrec-art > .ph-card-tag { top: 4px; left: 4px; height: 20px; padding: 0 6px; font-size: 10.5px; }
 .lrec-scene { display: grid; place-items: center; width: 100%; height: 100%; background-size: cover; background-position: center; }
 .lrec-scene.sky { background: #5ab4f0; }
-.lrec-scene img { image-rendering: pixelated; filter: drop-shadow(0 4px 0 rgba(0, 0, 0, 0.3)); animation: lrec-bob 2.4s steps(6) infinite; }
+.lrec-scene img { image-rendering: pixelated; filter: drop-shadow(0 4px 0 rgba(0, 0, 0, 0.3)); animation: lrec-bob 2.4s var(--m-ease-smooth) infinite; }
 @keyframes lrec-bob { 0%, 100% { transform: translateY(3px); } 50% { transform: translateY(-3px); } }
 .lrec-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .lrec-lab { font: 800 11px/1 var(--m-font); letter-spacing: 0.06em; text-transform: uppercase; color: #ffd23f; }

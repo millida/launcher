@@ -68,7 +68,7 @@
   display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border: 0; cursor: pointer;
   font: 900 12px/1 var(--m-font); color: var(--mp-ink); background: linear-gradient(180deg, var(--mp-gold-2), var(--mp-gold));
   --px-n: 4px; clip-path: var(--px-4); box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.2);
-  transition: opacity 160ms steps(2, end), transform 160ms steps(2, end);
+  transition: opacity 160ms var(--m-ease-smooth), transform 160ms var(--m-ease-smooth);
 }
 .ml-tryon.on { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
 .ml-tryon .px-icon { width: 12px; height: 12px; }
@@ -96,7 +96,7 @@
   display: flex; flex-direction: column; gap: 10px; padding: 12px; padding-bottom: 12px;
   background-color: var(--m-surface); --px-n: 10px; clip-path: var(--px-10);
   --px-ol: rgba(0, 0, 0, 0.55); --px-ol-w: 3px; --px-ft: var(--lp-gold); --px-ft-w: 4px; --px-fb: rgba(0, 0, 0, 0.3); --px-fb-w: 5px;
-  animation: mps-in 160ms steps(3, end) both;
+  animation: mps-in 160ms var(--m-ease-smooth) both;
 }
 @keyframes mps-in { from { transform: translateY(-8px); opacity: 0; } to { transform: none; opacity: 1; } }
 .mps-x { position: absolute; z-index: 3; top: 8px; right: 8px; width: 30px; height: 30px; display: grid; place-items: center; color: var(--m-fg-muted); cursor: pointer; background: transparent; border: 0; }
@@ -142,7 +142,7 @@
   background: radial-gradient(circle at 50% 60%, color-mix(in srgb, var(--m-rarity-legendary) 30%, transparent), rgba(0, 0, 0, 0.25) 70%);
   --px-n: 5px; clip-path: var(--px-5);
 }
-.mps-cos-item img { width: 82%; height: 82%; object-fit: contain; image-rendering: pixelated; filter: drop-shadow(0 4px 0 rgba(0, 0, 0, 0.45)); animation: mps-float 2.6s steps(8, end) infinite alternate; animation-delay: calc(var(--k) * -0.65s); }
+.mps-cos-item img { width: 82%; height: 82%; object-fit: contain; image-rendering: pixelated; filter: drop-shadow(0 4px 0 rgba(0, 0, 0, 0.45)); animation: mps-float 2.6s var(--m-ease-smooth) infinite alternate; animation-delay: calc(var(--k) * -0.65s); }
 .mps-cos-item::after { content: ''; position: absolute; right: 8%; top: 10%; width: 4px; height: 4px; background: #fff; opacity: 0; animation: mps-twinkle 2.2s steps(1, end) infinite; animation-delay: calc(var(--k) * 0.55s); }
 .mps-cos-item.is-empty { background: rgba(255, 255, 255, 0.05); }
 @keyframes mps-float { from { transform: translateY(2px); } to { transform: translateY(-4px); } }
@@ -188,7 +188,7 @@
 .mps-ai-row > i > s {
   position: absolute; inset: 0 auto 0 0; width: var(--w); background: var(--m-fg-faint);
   box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.18), inset 0 -3px 0 rgba(0, 0, 0, 0.22);
-  animation: mps-fill 900ms steps(9, end) both;
+  animation: mps-fill 900ms var(--m-ease-smooth) both;
 }
 .mps-ai-row > em { font: 900 15px/1 var(--m-font); font-style: normal; color: var(--m-fg-muted); text-align: right; font-variant-numeric: tabular-nums; }
 .mps-ai-row > em small { font-size: 11px; font-weight: 700; }
@@ -204,12 +204,12 @@
 .mps-ai-kinds .px-icon { flex: none; color: var(--mps-c); }
 
 /* Витрина косметики: смена вещи — пиксельный «поп», свечение по редкости */
-.mps-cos-item { --mps-r: var(--m-rarity-legendary); background: radial-gradient(circle at 50% 60%, color-mix(in srgb, var(--mps-r) 30%, transparent), rgba(0, 0, 0, 0.25) 70%); transition: background 400ms steps(4, end); }
+.mps-cos-item { --mps-r: var(--m-rarity-legendary); background: radial-gradient(circle at 50% 60%, color-mix(in srgb, var(--mps-r) 30%, transparent), rgba(0, 0, 0, 0.25) 70%); transition: background 400ms var(--m-ease-smooth); }
 .mps-cos-item[data-r='epic'] { --mps-r: var(--m-rarity-epic); }
 .mps-cos-item[data-r='rare'] { --mps-r: var(--m-rarity-rare); }
 .mps-cos-item[data-r='uncommon'] { --mps-r: var(--m-rarity-uncommon); }
 .mps-cos-item[data-r='common'] { --mps-r: var(--m-rarity-common); }
-.mps-cos-item img { animation: mps-pop 420ms steps(5, end) both, mps-float 2.6s steps(8, end) 420ms infinite alternate; }
+.mps-cos-item img { animation: mps-pop 420ms var(--m-ease-smooth) both, mps-float 2.6s var(--m-ease-smooth) 420ms infinite alternate; }
 @keyframes mps-pop { 0% { transform: scale(0.2); opacity: 0; } 60% { transform: scale(1.15); opacity: 1; } 100% { transform: scale(1); } }
 .mps-cos { --px-ft: var(--mps-c, var(--m-rarity-legendary)); }
 

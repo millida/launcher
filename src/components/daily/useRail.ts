@@ -27,13 +27,9 @@ export function useRail(focus: unknown, step: number, focusSel?: string) {
   useEffect(() => {
     const el = ref.current
     if (!el) return
-    const onWheel = (e: WheelEvent) => {
-      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return
-      const max = el.scrollWidth - el.clientWidth
-      if ((e.deltaY < 0 && el.scrollLeft <= 0) || (e.deltaY > 0 && el.scrollLeft >= max)) return
-      e.preventDefault()
-      el.scrollLeft += e.deltaY
-    }
+    // Вертикальное колесо больше не листает трек вбок (08.10.2026: открыл пропуск — экран «поехал»);
+    // вбок — тачпадом, перетаскиванием и стрелками.
+    const onWheel = (_e: WheelEvent) => {}
     let x0 = 0
     let s0 = 0
     let id = -1

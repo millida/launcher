@@ -118,7 +118,7 @@
 
 /* Слот — обёртка карточки: на ней свечение (drop-shadow на элементе со срезом обрезается). */
 .bp-slot { display: grid; min-width: 0; min-height: 0; }
-.bp-slot.ready { animation: bp-glow 1.6s steps(4, end) infinite alternate; }
+.bp-slot.ready { animation: bp-glow 1.6s var(--m-ease-smooth) infinite alternate; }
 .bp-slot.plus:not(.claimed) { filter: drop-shadow(0 0 8px rgba(255, 190, 60, 0.35)); }
 .bp-slot.plus.ready { animation-name: bp-glow-gold; }
 @keyframes bp-glow { from { filter: drop-shadow(0 0 3px var(--m-accent)); } to { filter: drop-shadow(0 0 16px var(--m-accent)); } }
@@ -129,7 +129,7 @@
   min-width: 0; padding: 10px 8px 10px; border: 0; font: inherit; color: var(--m-fg); text-align: center;
   --px-n: 10px; clip-path: var(--px-10);
   --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: rgba(0, 0, 0, 0.32); --px-fb-w: 5px; --px-fl: transparent; --px-fr: transparent;
-  transition: background-color 120ms steps(2, end), transform 120ms steps(2, end);
+  transition: background-color 120ms var(--m-ease-smooth), transform 120ms var(--m-ease-smooth);
 }
 /* Бесплатная строка — плоские тёмные карточки. */
 .bp-card.free { background-color: rgba(22, 18, 32, 0.9); --px-ft: rgba(255, 255, 255, 0.05); --px-fb: rgba(0, 0, 0, 0.4); }
@@ -206,7 +206,7 @@
   border: 0; padding: 0; cursor: pointer; color: var(--m-fg); background-color: #1a1626;
   --px-n: 5px; clip-path: var(--px-5);
   --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
-  transition: opacity 120ms steps(2, end);
+  transition: opacity 120ms var(--m-ease-smooth);
 }
 .bp-arrow > svg.icon { width: 20px; height: 20px; }
 .bp-arrow.l { left: -4px; }
@@ -223,7 +223,7 @@
   18% { transform: translate(calc(var(--dx) * 0.04), -40px) scale(1.25); }
   100% { transform: translate(var(--dx), var(--dy)) scale(0.35); opacity: 0.9; }
 }
-[data-cur].bp-hit { animation: bp-hit 420ms steps(4, end); }
+[data-cur].bp-hit { animation: bp-hit 420ms var(--m-ease-smooth); }
 @keyframes bp-hit { 0% { transform: scale(1); } 40% { transform: scale(1.18); } 100% { transform: scale(1); } }
 
 .bp-below { display: grid; gap: 12px; }

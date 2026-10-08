@@ -22,6 +22,8 @@
   --m-t-fast:120ms; --m-t-base:200ms; --m-t-slow:300ms;
   --m-side-t:320ms;
   --m-ease-out:cubic-bezier(.16,1,.3,1); --m-ease-move:cubic-bezier(.32,.72,0,1);
+  /* Плавная кривая вместо пиксельных steps() (07.10.2026: переходы «как будто лагает»). */
+  --m-ease-smooth:cubic-bezier(.22,1,.36,1);
   --m-font:'Geist',system-ui,-apple-system,sans-serif;
   --m-font-brand:'Unbounded','Geist',sans-serif;
   --m-mono:ui-monospace,'SF Mono',Menlo,monospace;
@@ -450,9 +452,9 @@ svg.msg-tick.read{color:var(--m-tick-read,#4C9FFE);opacity:1}
 
 /* ============ Content area ============ */
 .content{flex:1;min-width:0;overflow-y:auto;padding:14px 8px 8px 4px;scrollbar-gutter:stable}
-.screen{display:none;animation:screenIn var(--m-t-base) var(--m-ease-out)}
+.screen{display:none;animation:screenIn var(--m-tab-ms,160ms) var(--m-ease-smooth)}
 .screen.on{display:block}
-@keyframes screenIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@keyframes screenIn{from{opacity:0;transform:translateY(10px) scale(.995)}to{opacity:1;transform:none}}
 @keyframes screenFade{from{opacity:0}to{opacity:1}}
 #s-play{animation-name:screenFade}
 .page-head{display:flex;align-items:center;gap:14px;margin-bottom:18px}

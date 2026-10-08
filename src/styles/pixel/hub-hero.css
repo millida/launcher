@@ -1,0 +1,218 @@
+/* Первый экран библиотеки «как Fortnite» (components/playhub/HubHero.tsx, 07.10.2026). */
+
+.hh { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 14px; margin: 4px 0 26px; }
+@media (max-width: 1100px) { .hh { grid-template-columns: minmax(0, 1fr); } .hh-side { grid-template-columns: 1fr 1fr; display: grid; } }
+
+.hh-main {
+  position: relative; min-height: 400px; aspect-ratio: 21 / 9; overflow: hidden;
+  background: #0d1110; --px-n: 10px; clip-path: var(--px-10);
+}
+.hh-slide { position: absolute; inset: 0; opacity: 0; transition: opacity .5s var(--m-ease-smooth); }
+.hh-slide.on { opacity: 1; }
+.hh-art, .hh-art > img, .hh-art > span { position: absolute; inset: 0; width: 100%; height: 100%; }
+.hh-art img { width: 100%; height: 100%; object-fit: cover; }
+.hh-slide.on .hh-art { animation: hh-zoom 7s linear both; }
+@keyframes hh-zoom { from { transform: scale(1.06); } to { transform: scale(1); } }
+/* Затемнение слева — под текст. */
+.hh-main::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(90deg, rgba(5, 8, 7, .88) 0%, rgba(5, 8, 7, .55) 38%, rgba(5, 8, 7, 0) 70%), linear-gradient(0deg, rgba(5, 8, 7, .8) 0%, rgba(5, 8, 7, 0) 32%); }
+.hh-an.an-art { display: block; }
+.hh-ob { display: block; }
+.hh-ob img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.hh-ob .hh-ob-logo { inset: 12% 8% auto auto; width: 46%; height: auto; object-fit: contain; }
+
+.hh-copy { position: absolute; z-index: 2; left: 32px; bottom: 112px; max-width: 54%; display: flex; flex-direction: column; gap: 10px; animation: hh-in .35s var(--m-ease-smooth); }
+@keyframes hh-in { from { transform: translateY(10px); opacity: 0; } to { transform: none; opacity: 1; } }
+.hh-tag { align-self: flex-start; font: 800 12px/1 var(--m-font); letter-spacing: .06em; text-transform: uppercase; color: #06200e; background: var(--m-accent); padding: 6px 8px; --px-n: 4px; clip-path: var(--px-4); }
+.hh-tag.gold { background: #f2b733; color: #2a1a02; }
+.hh-title { font: 900 52px/0.95 var(--m-font-display, var(--m-font)); color: #fff; text-shadow: 0 4px 0 rgba(0, 0, 0, .45); }
+.hh-line { font: 700 16px/1.25 var(--m-font); color: rgba(255, 255, 255, .82); }
+.hh-row { display: flex; align-items: center; gap: 16px; margin-top: 6px; }
+.hh-cta { min-width: 180px; height: 58px; font-size: 20px; justify-content: center; }
+.hh-cta.is-gold { --px-btn-t: #ffe28a; background-color: #f2b733; color: #2a1a02; }
+.hh-online { display: inline-flex; align-items: center; gap: 8px; font: 700 15px/1 var(--m-font); color: rgba(255, 255, 255, .85); padding: 10px 12px; background: rgba(0, 0, 0, .45); --px-n: 5px; clip-path: var(--px-5); }
+.hh-online b { font-weight: 900; color: #fff; font-size: 18px; }
+
+.hh-thumbs { position: absolute; z-index: 2; left: 24px; right: 24px; bottom: 18px; display: flex; gap: 10px; }
+.hh-thumb { position: relative; flex: 0 1 190px; height: 74px; overflow: hidden; text-align: left; background: #000; opacity: .62; --px-n: 5px; clip-path: var(--px-5); transition: opacity .15s, transform .15s; }
+.hh-thumb:hover { opacity: .9; }
+.hh-thumb.on { opacity: 1; transform: translateY(-3px); box-shadow: inset 0 0 0 3px #fff; }
+.hh-thumb-art, .hh-thumb-art > img, .hh-thumb-art > span { position: absolute; inset: 0; width: 100%; height: 100%; }
+.hh-thumb-art img { width: 100%; height: 100%; object-fit: cover; }
+.hh-thumb-art .hh-ob-logo, .hh-thumb-art .an-art-hero { display: none; }
+.hh-thumb::after { content: ''; position: absolute; inset: 0; background: linear-gradient(0deg, rgba(0, 0, 0, .8), rgba(0, 0, 0, 0) 70%); }
+.hh-thumb-t { position: absolute; z-index: 1; left: 10px; bottom: 8px; right: 8px; font: 800 13px/1.1 var(--m-font); color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hh-thumb-bar { position: absolute; z-index: 2; left: 0; bottom: 0; height: 4px; background: var(--m-accent); animation: hh-bar linear both; }
+@keyframes hh-bar { from { width: 0; } to { width: 100%; } }
+
+.hh-side { display: flex; flex-direction: column; gap: 14px; }
+.hh-cont { flex: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 16px; text-align: left; background-color: var(--m-surface); }
+.hh-cont-cap { font: 800 12px/1 var(--m-font); letter-spacing: .06em; text-transform: uppercase; color: var(--m-accent); }
+.hh-cont-ic { margin: 8px 0 4px; }
+.hh-cont-t { font: 900 20px/1.1 var(--m-font); }
+.hh-cont-m { font: 600 13px/1.2 var(--m-font); color: var(--m-fg-subtle); }
+.hh-cont-play { margin-top: auto; width: 100%; justify-content: center; }
+.hh-cont:hover { background-color: var(--m-surface-2); }
+
+.hh-friend { position: relative; min-height: 150px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: 4px; padding: 14px; text-align: left; background-color: #173a21; }
+.hh-friend img { position: absolute; right: -12px; bottom: 0; height: 120%; width: auto; image-rendering: pixelated; }
+.hh-friend::before { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(10, 30, 16, .95) 30%, rgba(10, 30, 16, 0) 85%); z-index: 1; }
+.hh-friend-t, .hh-friend-m { position: relative; z-index: 2; }
+.hh-friend-t { display: flex; align-items: center; gap: 8px; }
+.hh-friend-t b { font: 900 18px/1.1 var(--m-font); }
+.hh-friend-m { font: 600 13px/1.2 var(--m-font); color: rgba(255, 255, 255, .75); }
+.hh-friend:hover { background-color: #1d4628; }
+
+/* Полка «Мои сборки» — один ряд с прокруткой вбок, карточки компактнее. */
+.hub-rail { display: grid; grid-auto-flow: column; grid-auto-columns: 210px; gap: 12px; overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x proximity; scrollbar-width: thin; }
+.hub-rail > * { scroll-snap-align: start; }
+.hub-rail .ph-mine .ph-card-art { height: 130px; }
+.hub-rail .ph-mine .ph-card-art svg, .hub-rail .ph-mine .ph-card-art img { max-height: 84px; }
+
+/* Серверы в библиотеке — первые шесть и «Все серверы». */
+.hub-srv-more { margin-top: 10px; width: 100%; justify-content: center; }
+/* Анархия на баннере: игрок справа целиком, не по пояс. */
+.hh-main .hh-an .an-art-hero { left: 70%; top: 6%; height: 104%; }
+.hh-main .hh-an .an-art-lava { height: 14%; }
+
+/* ---- Второй заход: полка вместо баннера ---- */
+.hs-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.hs-tile { position: relative; height: 200px; overflow: hidden; text-align: left; background: #0d1110; --px-n: 10px; clip-path: var(--px-10); display: block; }
+.hs-tile.gold { box-shadow: inset 0 0 0 3px #f2b733; }
+.hs-art, .hs-art > img, .hs-art > span { position: absolute; inset: 0; width: 100%; height: 100%; }
+.hs-art img { width: 100%; height: 100%; object-fit: cover; transition: transform .25s var(--m-ease-smooth); }
+.hs-tile:hover .hs-art img { transform: scale(1.05); }
+.hs-art .hh-ob-logo { inset: 8% 6% auto auto; width: 58%; height: auto; object-fit: contain; }
+.hs-art .an-art .an-art-hero { left: 74%; top: 10%; height: 100%; }
+.hs-tile::after { content: ''; position: absolute; inset: 0; background: linear-gradient(0deg, rgba(5, 8, 7, .92) 0%, rgba(5, 8, 7, .35) 48%, rgba(5, 8, 7, 0) 70%); pointer-events: none; }
+.hs-tag { position: absolute; z-index: 2; left: 10px; top: 10px; }
+.hs-copy { position: absolute; z-index: 2; left: 12px; right: 96px; bottom: 12px; display: flex; flex-direction: column; gap: 4px; }
+.hs-t { font: 900 20px/1.05 var(--m-font); color: #fff; text-shadow: 0 2px 0 rgba(0, 0, 0, .5); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hs-m { display: inline-flex; align-items: center; gap: 6px; font: 700 12.5px/1.1 var(--m-font); color: rgba(255, 255, 255, .85); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hs-play { position: absolute; z-index: 2; right: 12px; bottom: 12px; }
+.hs-play.is-gold { background-color: #f2b733; color: #2a1a02; }
+.hs-host { background: #173a21; }
+.hs-host-img { position: absolute; right: -14px; bottom: -6px; height: 112%; width: auto; image-rendering: pixelated; }
+
+.hh-cont2 { display: flex; align-items: stretch; gap: 0; text-align: left; }
+.hub-rail .hh-cont2 { grid-column: span 2; }
+.hh-cont2-ic { flex: none; width: 150px; display: grid; place-items: center; background: color-mix(in srgb, var(--m-accent) 16%, var(--m-inset)); }
+.hh-cont2-body { display: flex; flex-direction: column; gap: 5px; padding: 14px; flex: 1; min-width: 0; }
+.hh-cont2 .hh-cont-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hh-cont2 .hh-cont-play { margin-top: auto; }
+.hub-rail .hh-cont2 { flex-direction: row; }
+.hh-cont2-ic { align-self: stretch; }
+.hs-copy { right: 132px; }
+/* В «Режимах» свои серверы — первым рядом, сетка режимов ниже. */
+#hub-sec-modes .hs-row { margin-bottom: 12px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.pt-grid .hs-host { height: auto; min-height: 100%; }
+.pt-grid .hs-host .hs-copy { right: 12px; bottom: 54px; }
+.pt-grid .hs-host .hs-play { left: 12px; right: 12px; justify-content: center; }
+#hub-sec-modes .hs-tile { height: 190px; }
+.hs-new { position: absolute; z-index: 2; right: 10px; top: 10px; font: 900 12px/1 var(--m-font); letter-spacing: .05em; text-transform: uppercase; color: #fff; background: #e8364f; padding: 6px 8px; --px-n: 4px; clip-path: var(--px-4); }
+#hub-sec-modes .hs-row { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+/* Плитки режимов в библиотеке — ниже квадрата: два ряда режимов не должны занимать экран. */
+#hub-sec-modes .ph-row.ph-mts > .ph-mt { aspect-ratio: 16 / 10; }
+#hub-sec-modes .ph-row.ph-mts { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 1240px) { #hub-sec-modes .ph-row.ph-mts { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+
+/* ===== Карточки библиотеки: только обложка (08.10.2026) =====
+   Серой подложки под картинкой нет: название крупно поверх низа обложки,
+   под ним одна короткая строка. Компактно — больше карточек в ряду. */
+.hub-pane .ph-card:not(.skel-card):not(.ph-mt):not(.fy-more):not(.hh-cont2) {
+  display: block; aspect-ratio: 16 / 10; overflow: hidden; background: var(--m-inset);
+}
+.hub-pane .ph-card:not(.skel-card):not(.ph-mt):not(.fy-more):not(.hh-cont2) > .ph-card-art { position: absolute; inset: 0; aspect-ratio: auto; height: 100%; }
+.hub-pane .ph-card:not(.skel-card):not(.ph-mt):not(.fy-more):not(.hh-cont2) > .ph-card-art::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 1;
+  background: linear-gradient(0deg, rgba(4, 6, 5, .97) 0%, rgba(4, 6, 5, .93) 34%, rgba(4, 6, 5, .6) 52%, rgba(4, 6, 5, 0) 74%);
+}
+.hub-pane .ph-card:not(.skel-card):not(.ph-mt):not(.fy-more):not(.hh-cont2) > .ph-card-body {
+  position: absolute; z-index: 2; left: 0; right: 0; bottom: 0; padding: 0 12px 10px; gap: 3px; background: none;
+}
+.hub-pane .ph-card:not(.skel-card):not(.ph-mt):not(.fy-more):not(.hh-cont2) > .ph-card-body b {
+  font: 900 17px/1.08 var(--m-font); letter-spacing: -.01em; color: #fff; text-shadow: 0 2px 0 rgba(0, 0, 0, .55);
+}
+.hub-pane .ph-card:not(.skel-card):not(.ph-mt):not(.fy-more):not(.hh-cont2) .ph-card-meta { font: 700 12px/1.1 var(--m-font); color: rgba(255, 255, 255, .78); }
+.hub-pane .ph-card:not(.skel-card):not(.ph-mt):not(.fy-more):not(.hh-cont2):hover { background: var(--m-inset); }
+.hub-pane .ph-card:not(.skel-card):not(.ph-mt):not(.fy-more):not(.hh-cont2) .ph-card-tag { z-index: 2; top: 8px; left: 8px; height: 20px; padding: 0 6px; font-size: 10.5px; }
+.hub-pane .hub-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 1240px) { .hub-pane .hub-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+@media (max-width: 1040px) { .hub-pane .hub-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+/* Мои сборки: обложка — цвет сборки и её значок, название поверх. */
+.hub-pane .hub-rail { grid-auto-columns: 196px; gap: 10px; }
+.hub-pane .ph-mine .ph-card-art { display: grid; place-items: center; background: var(--mine-bg, var(--m-inset)); }
+.hub-pane .ph-mine .ph-card-art svg, .hub-pane .ph-mine .ph-card-art img { max-height: 64px; transform: translateY(-14px); }
+.hub-pane .ph-card.act .ph-card-art { display: grid; place-items: center; }
+.hub-pane .ph-card.act .ph-card-art .ph-act-ic, .hub-pane .ph-allver-art > svg { transform: translateY(-14px); }
+.hub-pane .ph-mine-edit { z-index: 3; }
+.hub-pane .ph-mine-more { z-index: 3; }
+
+/* «Продолжить» — шире, значок слева, название крупно, «Играть». */
+.hub-pane .hub-rail { align-items: start; }
+.hub-pane .hh-cont2 { grid-column: span 2; aspect-ratio: auto; height: 123px; display: flex; flex-direction: row; overflow: hidden; background: var(--m-surface); }
+.hub-pane .hh-cont2::after { display: none; }
+.hub-pane .hh-cont2-ic { width: 123px; flex: none; }
+.hub-pane .hh-cont2 .hh-cont-cap { display: none; }
+.hub-pane .hh-cont2-body { padding: 12px 14px; gap: 3px; justify-content: center; }
+.hub-pane .hh-cont2 .hh-cont-t { font: 900 18px/1.08 var(--m-font); }
+.hub-pane .hh-cont2 .hh-cont-play { height: 38px; }
+
+/* Свои серверы и «Свой сервер»: без меток и кнопок — название и онлайн на картинке. */
+.hub-pane .hs-tile { height: auto; aspect-ratio: 21 / 9; }
+#hub-sec-modes .hs-tile { height: auto; aspect-ratio: 3 / 1; }
+.hub-pane .hs-copy { right: 12px; bottom: 10px; }
+.hub-pane .hs-t { font-size: 22px; }
+.pt-grid .hs-host { aspect-ratio: 16 / 10; min-height: 0; }
+.pt-grid .hs-host .hs-copy { bottom: 10px; }
+
+.hub-pane .fy-more { aspect-ratio: 16 / 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+/* Метка «Сборка» в ряду, где все — сборки, лишняя: остаются только Arcania Labs и наш сервер. */
+.hub-pane .ph-card-tag.sec { display: none; }
+
+/* Мои сборки (08.10.2026): без «Редактировать» поверх названия — правка через «…» в углу,
+   «…» видна только при наведении, без тёмной плашки; значки действий — без серых квадратов. */
+.hub-pane .ph-mine-edit { display: none; }
+.hub-pane .ph-mine-more { top: 6px; right: 6px; width: 28px; height: 28px; background: rgba(0, 0, 0, .45); opacity: 0; transition: opacity .15s; }
+.hub-pane .ph-mine:hover .ph-mine-more, .hub-pane .ph-mine.menu-open .ph-mine-more, .hub-pane .ph-mine-more:focus-visible { opacity: 1; }
+.hub-pane .ph-card.act .ph-act-ic { background: none; box-shadow: none; clip-path: none; color: var(--m-accent); }
+.hub-pane .ph-card.act .ph-act-ic svg, .hub-pane .ph-allver-art > svg { width: 30px; height: 30px; }
+.hub-pane .ph-card.act, .hub-pane .ph-allver { background: var(--m-surface); }
+.hub-pane .ph-card.act::after, .hub-pane .ph-allver::after { display: none; }
+/* Затемнение — на самой обложке: у премиум-карточек ::after карточки занят рамкой. */
+.hub-pane .ph-card:not(.skel-card):not(.ph-mt):not(.fy-more):not(.hh-cont2) > .ph-card-art > img { z-index: 0; }
+.hub-pane .pt-grid .ph-card-tag { display: none; }
+
+/* ===== 08.10.2026, второй заход ===== */
+/* Arcania Labs: «На русском» справа сверху. */
+.ph-card-ru { position: absolute; z-index: 2; top: 8px; right: 8px; height: 20px; display: inline-flex; align-items: center; padding: 0 6px; font: 800 10.5px/1 var(--m-font); color: #fff; background: #1d5fd1; box-shadow: inset 0 -2px 0 rgba(0,0,0,.25); --px-n: 4px; clip-path: var(--px-4); }
+
+/* Мои сборки — сеткой, как «Сборки»: значок по центру обложки, название внизу. */
+.hub-pane .ph-mine .ph-card-art svg, .hub-pane .ph-mine .ph-card-art img { max-height: 58px; transform: translateY(-16px); }
+.ph-mine-acts { position: absolute; z-index: 4; inset: 0; display: flex; align-items: center; justify-content: center; gap: 6px; padding-bottom: 30px; background: rgba(4, 6, 5, .55); opacity: 0; transition: opacity .14s var(--m-ease-smooth); }
+.ph-mine:hover .ph-mine-acts, .ph-mine:focus-within .ph-mine-acts { opacity: 1; }
+.ph-mine-acts .btn { height: 32px; padding: 0 10px; font-size: 13px; }
+@media (hover: none) { .ph-mine-acts { opacity: 1; background: none; align-items: flex-start; justify-content: flex-end; padding: 6px; } .ph-mine-acts .btn.secondary { display: none; } }
+
+/* Свои серверы в «Режимах» — как жанры. */
+.ph-mt.ph-mt-own { position: relative; overflow: hidden; background: #0d1110; }
+.ph-mt-own .hs-art img { width: 100%; height: 100%; object-fit: cover; }
+.ph-mt-own .hs-art .hh-ob-logo { inset: 10% 8% auto auto; width: 70%; height: auto; object-fit: contain; }
+.ph-mt-own .hs-art .an-art .an-art-hero { left: 72%; top: 6%; height: 96%; }
+.ph-mt-own::after { content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(0deg, rgba(4,6,5,.92) 0%, rgba(4,6,5,.6) 30%, rgba(4,6,5,0) 60%); }
+.ph-mt-own .ph-mt-foot { position: absolute; z-index: 2; left: 12px; right: 12px; bottom: 10px; }
+.ph-mt-own .ph-mt-foot b { color: #fff; }
+
+/* Свой сервер — двойная яркая карточка. */
+.hs-host2 { position: relative; grid-column: span 2; overflow: hidden; text-align: left; background: linear-gradient(120deg, #1f8a3c, #116a2c); --px-n: 10px; clip-path: var(--px-10); box-shadow: inset 0 -5px 0 rgba(0,0,0,.25), inset 0 3px 0 rgba(255,255,255,.18); transition: transform .14s var(--m-ease-smooth), filter .14s; }
+.hs-host2:hover { transform: translateY(-2px); filter: brightness(1.08); }
+.hs-host2-img { position: absolute; right: -10px; bottom: -8px; height: 118%; width: auto; image-rendering: pixelated; }
+.hs-host2-copy { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 14px 16px; max-width: 62%; height: 100%; justify-content: center; }
+.hs-host2-copy b { font: 900 24px/1.02 var(--m-font); color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.35); }
+.hs-host2-copy > span:not(.btn) { font: 700 13px/1.2 var(--m-font); color: rgba(255,255,255,.88); }
+.hs-host2-btn { margin-top: 4px; background-color: #ffd23f; color: #2a1a02; }
+/* У своих сборок значок не затемняем: тень только под названием. */
+.hub-pane .ph-mine > .ph-card-art::after { background: linear-gradient(0deg, rgba(4,6,5,.9) 0%, rgba(4,6,5,.5) 30%, rgba(4,6,5,0) 48%) !important; }
+.ph-mine-acts .ph-mine-ed { width: 32px; padding: 0; justify-content: center; }
+.hub-pane .ph-mine-acts ~ .ph-mine-more, .hub-pane .ph-mine:hover .ph-mine-more { top: 6px; right: 6px; z-index: 5; }
+.hub-pane .ph-mine .ph-card-art :is(.ph-mine-acts, .ph-mine-more) svg { transform: none; max-height: none; width: 15px; height: 15px; }

@@ -44,7 +44,7 @@
 /* пусто */
 .bt-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 24px 12px; text-align: center; color: var(--m-fg-muted); }
 .bt-empty p { margin: 0; font: 700 13px/1.35 var(--m-font); }
-.bt-empty-px { image-rendering: pixelated; animation: bt-bob 1.4s steps(2, end) infinite; }
+.bt-empty-px { image-rendering: pixelated; animation: bt-bob 1.4s var(--m-ease-smooth) infinite; }
 :root:root .bt-empty .btn.sm { height: 30px; padding: 0 12px 3px; font-size: 12.5px; }
 @keyframes bt-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
 

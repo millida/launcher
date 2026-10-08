@@ -380,7 +380,7 @@
   position: absolute;
   inset: 0;
   background: color-mix(in srgb, var(--m-bg) 55%, transparent);
-  animation: chLoadPulse 0.9s steps(2) infinite;
+  animation: chLoadPulse 0.9s var(--m-ease-smooth) infinite;
 }
 @keyframes chLoadPulse { 50% { opacity: 0.4 } }
 @media (prefers-reduced-motion: reduce) { .ch-tile-load { animation: none } }

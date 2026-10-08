@@ -22,7 +22,7 @@
   border: 0; cursor: pointer; color: var(--m-fg-subtle); background: var(--m-bg);
   --px-n: 3px; clip-path: var(--px-4);
   transition: background-color var(--m-t-fast), color var(--m-t-fast);
-  animation: mmd-pop 180ms steps(2, end) backwards;
+  animation: mmd-pop 180ms var(--m-ease-smooth) backwards;
 }
 .mmd .mbl-fc .px-icon { width: 12px; height: 12px; flex: none; }
 .mmd .mbl-fc i { font: 700 10.5px/1 'Monocraft', var(--m-mono); font-style: normal; font-variant-numeric: tabular-nums; }
@@ -171,7 +171,7 @@
   color: var(--m-fg); background: var(--m-surface); font: 700 12px/1 var(--m-font);
   --px-n: 3px; clip-path: var(--px-4);
   transition: background-color var(--m-t-fast), transform var(--m-t-fast);
-  animation: mmd-pop 200ms steps(2, end) backwards; animation-delay: calc(var(--i, 0) * 40ms);
+  animation: mmd-pop 200ms var(--m-ease-smooth) backwards; animation-delay: calc(var(--i, 0) * 40ms);
 }
 .mmd .mbl-chip:hover { background: var(--m-accent-soft); transform: translateY(-1px); }
 .mmd .mbl-chip:active { transform: translateY(1px); }

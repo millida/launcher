@@ -29,7 +29,7 @@
   background: radial-gradient(circle, color-mix(in srgb, var(--sh-tone) 80%, #fff) 0, color-mix(in srgb, var(--sh-tone) 50%, transparent) 30%, transparent 62%);
   animation: cpop-glow 1.25s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
-.cpop-spark { position: absolute; z-index: 2; left: 50%; top: 50%; width: 7px; height: 7px; background: color-mix(in srgb, var(--sh-tone) 40%, #fff); animation: cpop-spark 0.9s steps(6, end) both 0.15s; }
+.cpop-spark { position: absolute; z-index: 2; left: 50%; top: 50%; width: 7px; height: 7px; background: color-mix(in srgb, var(--sh-tone) 40%, #fff); animation: cpop-spark 0.9s var(--m-ease-smooth) both 0.15s; }
 .cpop-spark.s1 { --sx: -70px; --sy: -50px; }
 .cpop-spark.s2 { --sx: 72px; --sy: -40px; }
 .cpop-spark.s3 { --sx: -54px; --sy: 46px; }
@@ -125,7 +125,7 @@
 .cs3-segs > i { background: var(--m-inset); }
 .cs3-segs > i.on { background: var(--pt); }
 .cs3-pity2.is-now .cs3-pity2-t > b { color: var(--pt); }
-.cs3-pity2.is-now .cs3-segs > i { animation: cs3-now 1s steps(2, end) infinite; }
+.cs3-pity2.is-now .cs3-segs > i { animation: cs3-now 1s var(--m-ease-smooth) infinite; }
 @keyframes cs3-now { 50% { opacity: 0.55; } }
 
 /* Бесплатный первый ящик: кнопка светится пиксельной каймой, сцена в цвет акцента. */
@@ -134,7 +134,7 @@
 .cs3-free > .btn { width: 100%; gap: 8px; }
 .cs3-free::before {
   content: ''; position: absolute; inset: -4px; z-index: -1; background: var(--m-accent); opacity: 0.35;
-  --px-n: 6px; clip-path: var(--px-5); animation: cs3-free 1.2s steps(3, end) infinite alternate;
+  --px-n: 6px; clip-path: var(--px-5); animation: cs3-free 1.2s var(--m-ease-smooth) infinite alternate;
 }
 @keyframes cs3-free { to { opacity: 0.9; } }
 .cs3-free svg.icon { width: 18px; height: 18px; }

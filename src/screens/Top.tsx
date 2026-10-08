@@ -228,6 +228,19 @@ export function Top({ on }: { on: boolean }) {
           Огоньки
         </button>
       </div>
+      {/* Своё место — компактной плашкой справа от переключателей, не строкой поверх списка (07.10.2026). */}
+      {me ? (
+        <button className="tb-mine" data-track="top_me" onClick={() => setOpen(me)}>
+          <span className="tb-mine-cap">Ты</span>
+          <b className="tb-mine-rank">{'#' + me.rank}</b>
+          <Value board={board} v={me.value} />
+        </button>
+      ) : null}
+      {board === 'streak' && me ? (
+        <div className="tb-shield-line">
+          <ShieldLine />
+        </div>
+      ) : null}
       {board !== 'streak' ? (
         <div className="segs tb-boards" role="tablist" aria-label="Период">
           {BOARDS.filter((b) => b.key !== 'streak').map((b) => (
@@ -278,9 +291,7 @@ export function Top({ on }: { on: boolean }) {
             {rest.map((e) => (
               <Row key={e.rank} board={board} e={e} mine={mine(e)} onOpen={() => setOpen(e)} />
             ))}
-            {/* Своё место — снизу, как в Brawl Stars (владелец 07.10.2026: сверху некрасиво);
-                если оно и так в списке — не дублируем. */}
-            {me && !view.items.some(mine) ? <Row board={board} e={me} mine pinned onOpen={() => setOpen(me)} /> : null}
+
           </>
         )}
       </div>

@@ -16,17 +16,17 @@
   position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px;
   text-align: center; color: #fff;
 }
-.welcome.is-out .welcome-body { opacity: 0; transition: opacity 120ms steps(2, end); }
-.welcome-logo { width: 72px; height: 72px; margin-bottom: 8px; animation: welcome-pop 420ms steps(4, end) both; }
+.welcome.is-out .welcome-body { opacity: 0; transition: opacity 120ms var(--m-ease-smooth); }
+.welcome-logo { width: 72px; height: 72px; margin-bottom: 8px; animation: welcome-pop 420ms var(--m-ease-smooth) both; }
 .welcome-hi {
   font: 800 26px/1.1 var(--m-font); color: rgba(255, 255, 255, 0.88);
   text-shadow: 0 3px 0 rgba(0, 0, 0, 0.3);
-  animation: welcome-up 360ms steps(3, end) 180ms both;
+  animation: welcome-up 360ms var(--m-ease-smooth) 180ms both;
 }
 .welcome-nick {
   font: 900 64px/1 var(--m-font); letter-spacing: -0.02em; color: #fff;
   text-shadow: 0 5px 0 #0b3a18;
-  animation: welcome-up 360ms steps(3, end) 360ms both;
+  animation: welcome-up 360ms var(--m-ease-smooth) 360ms both;
 }
 @keyframes welcome-pop {
   0% { transform: scale(0.4); opacity: 0; }
@@ -42,7 +42,7 @@
 }
 
 /* Подарок новичку (модель предметов v2): карточка вещи падает под приветствием. */
-.welcome-gift { width: 260px; margin-top: 18px; align-items: center; text-align: center; animation: welcome-gift 520ms steps(5, end) 260ms both; }
+.welcome-gift { width: 260px; margin-top: 18px; align-items: center; text-align: center; animation: welcome-gift 520ms var(--m-ease-smooth) 260ms both; }
 .welcome-gift .sh-art.lg { width: 100%; height: 190px; }
 .welcome-gift .sh-art.lg img { width: 160px; height: 160px; }
 .welcome-gift-tag { align-self: center; padding: 3px 10px; background: var(--m-accent); color: var(--px-on-accent, #06200e); font-size: 12px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; clip-path: var(--px-4); }

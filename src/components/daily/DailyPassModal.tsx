@@ -418,9 +418,14 @@ export function DailyPassModal({ open, onClose }: { open: boolean; onClose: () =
       if (e.key === 'Escape') onClose()
     }
     document.addEventListener('keydown', onKey)
+    // Пока окно открыто, экран под ним не прокручивается.
+    const content = document.querySelector<HTMLElement>('.content')
+    const prev = content?.style.overflow ?? ''
+    if (content) content.style.overflow = 'hidden'
     return () => {
       cancelAnimationFrame(raf)
       document.removeEventListener('keydown', onKey)
+      if (content) content.style.overflow = prev
     }
   }, [open])
 
