@@ -384,3 +384,5 @@ export function startMilliDoctor() {
     setTimeout(() => void proactiveDoctor(profiles.useProfiles.getState().selected, { busy }).catch(() => {}), 25_000)
   })
 }
+
+export { pushMilliAction }
