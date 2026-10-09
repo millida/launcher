@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { openShopAt } from '../../lib/openShopAt'
 import { Icon } from '../Icon'
 import { hasMillidaAccount } from '../../lib/api'
 import { logoutToLogin } from '../../lib/session'
@@ -92,7 +93,7 @@ export function DailyChest({
   // Лобби: плитка «Ежедневный бонус» того же вида, что «Магазин» (правка
   // владельца 23.09.2026 — без «Battle Pass», по-доброму, для Minecraft).
   if (hero) {
-    const open = () => (signedIn ? useDaily.getState().setModal(true) : logoutToLogin())
+    const open = () => (signedIn ? openShopAt() : logoutToLogin())
     const guest = !signedIn
     const wait = !guest && (loading || !status)
     return (
@@ -140,7 +141,7 @@ export function DailyChest({
     )
   }
 
-  const open = () => useDaily.getState().setModal(true)
+  const open = () => openShopAt()
   const own = !!status.plus || usePlus.getState().active
   const today = status.track?.find((d) => d.day === status.cycleDay)
   const tier = dayChestTier([...(today?.free || []), ...(own ? today?.plus || [] : [])])

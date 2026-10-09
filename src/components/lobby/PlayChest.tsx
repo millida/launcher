@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { openShopAt } from '../../lib/openShopAt'
 import { Icon } from '../Icon'
 import { usePlayChests, playLeftText } from '../../state/playChests'
 import { useShopGift } from '../shop/giftState'
@@ -83,7 +84,7 @@ export function PlayChest({ on, dayZero }: { on: boolean; dayZero: boolean }) {
   }
   if (ready) {
     return (
-      <button className="play-chest go" id="playChest" data-track="lobby_chest_claim" onClick={() => useDaily.getState().setModal(true)}>
+      <button className="play-chest go" id="playChest" data-track="lobby_chest_claim" onClick={() => openShopAt()}>
         <Icon id="i-chest" />
         Забрать сундук
       </button>
