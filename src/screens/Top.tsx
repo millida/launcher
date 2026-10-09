@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { Icon } from '../components/Icon'
 import { Head } from '../components/Head'
@@ -295,7 +296,8 @@ export function Top({ on }: { on: boolean }) {
           </>
         )}
       </div>
-      {open ? <Card board={board} e={open} mine={mine(open)} onClose={() => setOpen(null)} /> : null}
+      {/* В body: внутри экрана окно уезжало вниз страницы, а оставался только тёмный фон (09.10.2026). */}
+      {open ? createPortal(<Card board={board} e={open} mine={mine(open)} onClose={() => setOpen(null)} />, document.body) : null}
     </section>
   )
 }
