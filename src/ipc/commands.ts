@@ -879,6 +879,10 @@ export const stopGame = (profile?: string | null) => invoke<void>('stop_game', {
 
 export const runningGames = () => invoke<string[]>('running_games')
 
+export const setGameInvite = (slug: string, code: string) => invoke<boolean>('set_game_invite', { slug, code })
+
+export const claimGameInvites = () => invoke<string[]>('claim_game_invites')
+
 export const gameDir = () => invoke<string>('game_dir')
 
 export const setGameDir = (path: string, moveData: boolean) => invoke<string>('set_game_dir', { path, moveData })

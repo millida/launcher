@@ -122,6 +122,16 @@ fn substitute_args(args: &[String], nick: &str, uuid: &str, token: &str) -> Vec<
         .collect()
 }
 
+/// The invite goes after the manifest's own arguments, and only in the format
+/// of this very game: a code meant for another one never reaches it.
+fn append_invite(slug: &str, mut args: Vec<String>, invite: Option<&str>) -> Vec<String> {
+    if let Some(code) = invite.and_then(|c| normalize_invite(slug, c)) {
+        args.push("--invite".into());
+        args.push(code);
+    }
+    args
+}
+
 fn platform_name(os: &str, arch: &str) -> String {
     let os = match os {
         "windows" => "Windows",
@@ -245,7 +255,12 @@ pub(crate) async fn launch_native(
     check_cancel()?;
     emit(&app, "launch", 92.0, "Запускаем игру…");
     make_runnable(&spec.executable)?;
-    let args = substitute_args(&spec.game_args, &nick, &session_uuid(&auth, &nick), &auth.token);
+    let invite = game_invite(&spec.slug);
+    let args = append_invite(
+        &spec.slug,
+        substitute_args(&spec.game_args, &nick, &session_uuid(&auth, &nick), &auth.token),
+        invite.as_deref(),
+    );
     let game_dir = profile_dir(&profile);
     let log_path = game_dir.join(LAUNCH_CAPTURE);
     if let Some(logs) = log_path.parent() {
@@ -334,6 +349,13 @@ pub(crate) async fn launch_native(
             });
         }
     });
+    // The game has taken the invite; a failed start above keeps it for the
+    // next attempt.
+    if invite.is_some() {
+        if let Err(e) = clear_game_invite(&spec.slug) {
+            eprintln!("[native] инвайт {} не очищен: {}", spec.slug, e);
+        }
+    }
     emit(&app, "launch", 100.0, "Игра запущена");
     Ok("started".into())
 }
@@ -480,6 +502,24 @@ mod tests {
         ];
         for (arg, nick, want, why) in cases {
             assert_eq!(substitute_args(&[arg.to_string()], nick, "U", " T"), vec![want.to_string()], "{why}");
+        }
+    }
+
+    /// (slug, stored invite) -> command line. The invite only ever trails the
+    /// partner's own arguments, and only for the game it was issued for.
+    #[test]
+    fn invite_is_appended_only_for_its_own_game() {
+        let base: Vec<String> = ["--username", "Steve", "--uuid", "U", "--accessToken", "T"].map(String::from).to_vec();
+        let with = |tail: &[&str]| base.iter().cloned().chain(tail.iter().map(|s| s.to_string())).collect::<Vec<_>>();
+        let cases: [(&str, Option<&str>, Vec<String>, &str); 5] = [
+            ("prisonrpg", Some("PRISON-22G6C"), with(&["--invite", "PRISON-22G6C"]), "код уходит в игру после аргументов манифеста"),
+            ("prisonrpg", None, base.clone(), "без кода командная строка как в контракте партнёра"),
+            ("prisonrpg", Some("PRISON-22G6C --x"), base.clone(), "испорченный файл настроек не добавляет ключей"),
+            ("prisonrpg", Some("prison-22g6c"), with(&["--invite", "PRISON-22G6C"]), "код из старой версии выравнивается"),
+            ("otherpack", Some("PRISON-22G6C"), base.clone(), "чужая игра код PrisonRPG не получает"),
+        ];
+        for (slug, invite, want, why) in cases {
+            assert_eq!(append_invite(slug, base.clone(), invite), want, "{why}");
         }
     }
 

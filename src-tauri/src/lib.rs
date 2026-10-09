@@ -274,6 +274,8 @@ pub fn run() {
             commands::launch::cancel_launch,
             commands::launch::stop_game,
             commands::launch::running_games,
+            commands::launch::set_game_invite,
+            commands::launch::claim_game_invites,
             commands::system::game_dir,
             commands::system::set_game_dir,
             commands::system::pick_game_dir,

@@ -24,6 +24,7 @@ import { rememberInviteCode } from './referrals'
 import { pickFriendsTab } from '../components/friends/friendsView'
 import { parseInstallLink } from './millidaCatalog'
 import { installFromCatalog } from './catalogInstall'
+import { openGameFromLink } from './gameInvite'
 
 function handle(raw: string) {
   let url: URL
@@ -145,6 +146,13 @@ function handle(raw: string) {
     }).then((ok) => {
       if (ok) installPackFromLink(slug, title)
     })
+    return
+  }
+  // millida.net/play/<slug> hands off here; the core alone decides whether the invite is valid.
+  if (action === 'game') {
+    const slug = rest.split('/')[0] || q.get('slug') || ''
+    if (!slug) return
+    openGameFromLink(slug, q.get('invite') || '')
     return
   }
   if (action === 'skins') {

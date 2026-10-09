@@ -208,3 +208,13 @@ pub async fn tune_profile(profile: String) -> Result<engine::Tuning, String> {
 
 #[tauri::command]
 pub fn set_auto_tune(profile: String, on: bool) { engine::set_auto_tune(&profile, on); }
+
+/// The webview names a game and passes the code from a link as is; the core
+/// alone knows which games take invites and in what format.
+#[tauri::command]
+pub async fn set_game_invite(slug: String, code: String) -> Result<bool, String> {
+    super::blocking(move || engine::set_game_invite(&slug, &code)).await?
+}
+
+#[tauri::command]
+pub async fn claim_game_invites() -> Vec<String> { engine::claim_game_invites().await }
