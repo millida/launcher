@@ -295,6 +295,18 @@ export function LobbyCharacter({
     }
   }, [on, nick, activeId, signedIn, lookVer])
 
+  // Сторож (09.10.2026: «персонаж иногда пропадает»): если сцена готова, а одетый
+  // кадр так и не пришёл (скин или вещь зависли в загрузке), через 5 с показываем как есть.
+  useEffect(() => {
+    if (!ready || !look || shown) return
+    const key = lookKey(look)
+    const t = window.setTimeout(() => {
+      setSkinFor(key)
+      setDressedFor(key)
+    }, 5000)
+    return () => window.clearTimeout(t)
+  }, [ready, look, shown])
+
   // Лёгкая графика после сбоя видеокарты: без WebGL, плоская фигурка.
   const lite = useGpuLite()
   const [flatShown, setFlatShown] = useState(false)
@@ -457,6 +469,8 @@ export function LobbyCharacter({
     const outfit = look.items.map((x) => x.item)
     const masks = maskUrls(outfit, look.slim, outfit.find((item) => item.slot === 'EMOTE'))
     void textureSource(look.skin)
+      // Картинка скина не прочиталась — дальше со скином по нику, а не с невидимым персонажем.
+      .catch(() => nickSkinUrl(nick))
       .then((src) =>
         maskedSkin(src, masks, look.slim).catch((e: unknown) => {
           console.warn('[lobby] skin under the outfit was not cut', e)

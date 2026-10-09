@@ -249,10 +249,22 @@ export function PodiumScene({ board, items, onOpen, onFail }: { board: Board; it
         }
       }
 
-      const slims = await Promise.all(top3.map((it) => detectSlimFromUrl(nickSkinUrl(it.nick)).catch(() => false)))
+      // Скин, который не загрузился (таймаут, 5xx), — Стив, а не пустое место на пьедестале (09.10.2026).
+      const skins = await Promise.all(
+        top3.map(async (it) => {
+          const url = nickSkinUrl(it.nick)
+          try {
+            const r = await fetch(url, { signal: AbortSignal.timeout(8000) })
+            if (r.ok) return url
+          } catch {}
+          return nickSkinUrl('Steve')
+        }),
+      )
+      if (!alive) return
+      const slims = await Promise.all(skins.map((u) => detectSlimFromUrl(u).catch(() => false)))
       if (!alive) return
       e.setModelType(slims[0] ? m3d.SkinModelType.Slim : m3d.SkinModelType.Classic)
-      await e.setSkin(nickSkinUrl(top3[0]!.nick)).catch(() => e.setSkin(nickSkinUrl('Steve')))
+      await e.setSkin(skins[0]!).catch(() => e.setSkin(nickSkinUrl('Steve')))
       e.setMainSpot({ x: SPOTS[1].x, y: SPOTS[1].h, z: 0, yaw: 0 })
       const idles: Record<1 | 2 | 3, SkinAnimation> = {
         1: m3d.createSkinAnimation('idle'),
@@ -260,17 +272,27 @@ export function PodiumScene({ board, items, onOpen, onFail }: { board: Board; it
         3: lookingIdle(m3d.createSkinAnimation('idle'), 1.9),
       }
       e.setAnimation(idles[1])
-      await e.setExtras(
-        top3.slice(1).map((it, i) => {
+      await e
+        .setExtras(
+          top3.slice(1).map((_it, i) => {
           const rank = (i + 2) as 2 | 3
           return {
-            skin: nickSkinUrl(it.nick),
+            skin: skins[i + 1]!,
             slim: slims[i + 1] ?? false,
             animation: idles[rank],
             at: { x: SPOTS[rank].x, y: SPOTS[rank].h, z: 0, yaw: SPOTS[rank].yaw },
           }
         }),
       )
+        .catch(() =>
+          e.setExtras(
+            top3.slice(1).map((_, i) => {
+              const rank = (i + 2) as 2 | 3
+              return { skin: nickSkinUrl('Steve'), slim: false, animation: idles[rank], at: { x: SPOTS[rank].x, y: SPOTS[rank].h, z: 0, yaw: SPOTS[rank].yaw } }
+            }),
+          ),
+        )
+        .catch(() => {})
       if (!alive) return
 
       e.setStageYaw(FACE_CAMERA)
