@@ -51,6 +51,8 @@ permissions = [
   "allow-cancel-launch",
   "allow-stop-game",
   "allow-running-games",
+  "allow-set-game-invite",
+  "allow-claim-game-invites",
   "allow-game-dir",
   "allow-set-game-dir",
   "allow-pick-game-dir",

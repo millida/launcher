@@ -193,6 +193,7 @@ import { initMusic, startMusicAfterLogin, stopMusicNow } from './state/music'
 import { initSounds, playSound } from './lib/sound'
 import { initUiTracking } from './lib/uiTrack'
 import { initDeepLinks } from './lib/deeplink'
+import { initGameInvites } from './lib/gameInvite'
 import { initOverlayLink } from './lib/overlayLink'
 import { initStreakReminder } from './lib/streakReminder'
 import { initAutostart } from './lib/autostart'
@@ -318,6 +319,7 @@ export function App() {
     void initDesktopToasts()
     void initAutostart()
     initDeepLinks()
+    initGameInvites()
     initOverlayLink()
     initInstalls()
     // Сборки обновляются только при «Играть» (владелец 08.10.2026: фоновая докачка мешала) — initPackAutoUpdate не запускаем.
