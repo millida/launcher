@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { openMilli } from '../state/milli'
 import { Icon } from './Icon'
 import { hasTauri } from '../ipc/tauri'
 import { applyCrashFix, listContent, listProfiles, openProfileFolder, openUrl } from '../ipc/commands'
@@ -173,6 +174,22 @@ export function CrashModal() {
             }}
           >
             <Icon id="i-restart" /> {repairing ? 'Чиним…' : 'Починить сборку'}
+          </button>
+          {/* Автопочинка через Милли (09.10.2026): она объясняет причину и сама применяет исправления ядра. */}
+          <button
+            className="btn lg primary"
+            data-track="crash_milli"
+            onClick={() => {
+              void import('../lib/milliDoctor').then((d) => {
+                d.startMilliDoctor()
+                const { text, action } = d.crashAction(info)
+                openMilli({ src: 'crash' })
+                void d.pushMilliAction(text, action, ['Почему так?', 'Осмотри сборку'])
+                close()
+              })
+            }}
+          >
+            <Icon id="i-sparkle" /> Починить с Милли
           </button>
           <button
             className="btn lg secondary"
