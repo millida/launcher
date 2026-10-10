@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Icon } from '../Icon'
 import { BuildIcon } from './BuildIcon'
-import { parseIcon } from '../../lib/buildIcon'
+import { buildIconOf, parseIcon } from '../../lib/buildIcon'
 import { fmtN, LOADER_NAME } from '../../lib/format'
 import type { Profile } from '../../ipc/commands'
 import { usePlayStats } from '../../state/playStats'
@@ -128,8 +128,8 @@ export function ContinueCard({ p, onPlay }: { p: Profile; onPlay: () => void }) 
   const seconds = usePlayStats((s) => s.stats.builds.find((b) => b.key === p.name)?.seconds || 0)
   return (
     <button className="ph-card hh-cont2" data-sound="open" data-track="hub_continue" data-private onClick={onPlay}>
-      <span className="hh-cont2-ic" style={{ background: parseIcon(p.icon).bg }}>
-        <BuildIcon icon={p.icon} size={88} />
+      <span className="hh-cont2-ic" style={{ background: parseIcon(buildIconOf(p)).bg }}>
+        <BuildIcon icon={p.icon} name={p.name} size={88} />
       </span>
       <span className="hh-cont2-body">
         <span className="hh-cont-cap">Продолжить</span>

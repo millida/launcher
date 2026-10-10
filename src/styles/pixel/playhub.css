@@ -1991,3 +1991,73 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
 .fy-card:not(.is-excl):not(.is-own):active { transform: translateY(2px); }
 .fy-card:not(.is-excl):not(.is-own):active::before { height: 2px; }
 @media (prefers-reduced-motion: reduce) { .fy-card.is-excl::after, .fy-card.is-own::after { animation: none; } }
+
+/* ══ Серверы в каталоге — витрина (10.10.2026, владелец: «покрасивее сделай эту вкладку») ══ */
+.srv2-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 16px; margin: 0 0 12px; }
+.srv2-head .ph-allsrv-h { margin: 0; }
+.srv2-live { display: inline-flex; align-items: center; gap: 7px; font: 600 14px/1 var(--m-font); color: var(--m-fg-subtle); }
+.srv2-live b { color: var(--m-fg); font-variant-numeric: tabular-nums; }
+.srv2-tools { display: flex; align-items: center; gap: 12px; margin: 0 0 12px; }
+.srv2-tools .srv2-find { flex: 1 1 auto; min-width: 0; margin: 0; }
+.srv2-sort { flex: none; }
+.srv2-modes { display: flex; gap: 8px; margin: 0 0 16px; padding: 0 0 6px; overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--m-surface-2) transparent; }
+.srv2-mode {
+  flex: none; display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px 0 6px;
+  font: 700 13px/1 var(--m-font); color: var(--m-fg-muted); background: var(--m-surface); border: 0; cursor: pointer;
+  --px-n: 4px; clip-path: var(--px-4); transition: background-color var(--m-t-fast), color var(--m-t-fast);
+}
+.srv2-mode:hover { color: var(--m-fg); background: var(--m-surface-2); }
+.srv2-mode.on { color: #fff; background: color-mix(in srgb, var(--mode-c, var(--m-accent)) 34%, var(--m-surface)); box-shadow: inset 0 -3px 0 var(--mode-c, var(--m-accent)); }
+.srv2-mode.skel { width: 112px; cursor: default; }
+.srv2-mode-ic { display: grid; place-items: center; width: 28px; height: 28px; background: color-mix(in srgb, var(--mode-c, #556) 42%, #000); --px-n: 3px; clip-path: var(--px-4); }
+.srv2-mode-ic img { width: 22px; height: 22px; object-fit: contain; image-rendering: pixelated; }
+.srv2-mode-ic.is-all { background: var(--m-surface-2); }
+.srv2-mode-ic.is-all svg { width: 15px; height: 15px; }
+.srv2-mode-n { font-size: 12px; font-weight: 700; color: var(--m-fg-subtle); font-variant-numeric: tabular-nums; }
+.srv2-mode.on .srv2-mode-n { color: rgba(255, 255, 255, 0.75); }
+
+.ph-list.srv2-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; }
+.srv2-card { position: relative; display: flex; flex-direction: column; min-width: 0; overflow: hidden; background: var(--m-surface); --px-n: 5px; clip-path: var(--px-5); }
+.srv2-card.skel { height: 258px; }
+.srv2-card.on { box-shadow: inset 0 0 0 2px var(--m-accent); }
+.srv2-card.off { opacity: 0.66; }
+.srv2-ban { position: relative; display: block; height: 84px; overflow: hidden; background: var(--m-surface-2); }
+.srv2-ban > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform 320ms var(--m-ease-out, ease); }
+.srv2-card:hover .srv2-ban > img:not(.ph-srv-block) { transform: scale(1.03); }
+.srv2-ban.is-art { display: grid; place-items: center; background-image: var(--px-dots); }
+.srv2-ban.is-art > img.ph-srv-block { position: static; width: 44px; height: 44px; object-fit: contain; }
+.srv2-body { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 10px 14px 14px; }
+.srv2-logo { position: absolute; left: 12px; top: -30px; width: 58px; height: 58px; padding: 3px; overflow: hidden; background: var(--m-surface); --px-n: 5px; clip-path: var(--px-5); }
+.srv2-logo > img { display: block; width: 100%; height: 100%; object-fit: cover; --px-n: 4px; clip-path: var(--px-4); }
+.srv2-logo.is-art > img.ph-srv-block { width: 70%; height: 70%; margin: 15%; object-fit: contain; clip-path: none; }
+.srv2-top { display: flex; align-items: center; gap: 10px; min-height: 26px; padding-left: 64px; }
+.srv2-name { flex: 1 1 auto; min-width: 0; margin: 0; font: 800 16px/1.2 var(--m-font); color: var(--m-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.srv2-online { display: inline-flex; align-items: center; gap: 6px; flex: none; font: 800 14px/1 var(--m-font); color: var(--m-fg); font-variant-numeric: tabular-nums; }
+.srv2-online.is-off { font-weight: 600; font-size: 12.5px; color: var(--m-fg-subtle); }
+.srv2-about { margin: 0; min-height: 36px; font-size: 13px; line-height: 18px; color: var(--m-fg-muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.srv2-about.is-empty { color: var(--m-fg-subtle); }
+.srv2-tags { display: flex; flex-wrap: wrap; gap: 6px; min-height: 22px; }
+.srv2-tag { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; font: 700 11.5px/1 var(--m-font); color: var(--m-fg-muted); background: var(--m-surface-2); }
+.srv2-tag.is-cat { color: var(--m-fg); }
+.srv2-tag.is-free { color: var(--m-accent); }
+.srv2-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 2px; }
+.srv2-ip { display: inline-flex; align-items: center; gap: 7px; min-width: 0; height: 32px; padding: 0 10px; border: 0; cursor: pointer; font: 600 12.5px/1 var(--m-font); color: var(--m-fg-muted); background: rgba(0, 0, 0, 0.22); }
+.srv2-ip > span { max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.srv2-ip svg { width: 13px; height: 13px; flex: none; }
+.srv2-ip:hover { color: var(--m-fg); background: var(--m-surface-2); }
+.srv2-play { flex: none; }
+@media (max-width: 640px) { .srv2-tools { flex-direction: column; align-items: stretch; } }
+
+/* «⋯» сборки — окошко у кнопки поверх всего (10.10.2026): своего размера, пункты не сжимаются,
+   кнопка при открытии остаётся на месте. */
+.ph-mine-menu.is-pop {
+  position: fixed; inset: auto; z-index: 1200; width: 216px; padding: 6px;
+  display: flex; flex-direction: column; justify-content: flex-start; gap: 2px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
+  animation: ph-pop-in 120ms var(--m-ease-out, ease) both;
+}
+.ph-mine-menu.is-pop button { flex: none; height: 34px; min-height: 0; max-height: none; }
+@keyframes ph-pop-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .ph-mine-menu.is-pop { animation: none; } }
+:root .ph-mine.menu-open .ph-mine-more { top: 8px; right: 8px; z-index: 6; opacity: 1; background: rgba(0, 0, 0, 0.7); }
+:root .hub-pane .ph-mine.menu-open .ph-mine-more { top: 6px; right: 6px; }

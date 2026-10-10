@@ -783,6 +783,12 @@ function Panel() {
             <span className="ml-tierchip-n">{milliLeft(status)}</span>
           </span>
         ) : null}
+        {/* С PLUS — следующая ступень: Diamond (вдвое больше сообщений и все награды пропуска сразу). */}
+        {signed && status && status.plus && milliLook(status) !== 'diamond' && !off && !blocked ? (
+          <button type="button" className="ml-up is-dia" data-track="milli_plus_upsell" data-src="head_diamond" aria-label="Больше с Diamond" onClick={() => openPlusSheet('head_diamond')}>
+            <PxArt name="diamond" size={14} className="mci" />×{Math.max(2, Math.round(milliPlanNumbers(plans).diamond / Math.max(1, milliPlanNumbers(plans).plus)))} с Diamond
+          </button>
+        ) : null}
         {/* Без PLUS: «осталось» и выгода одной золотой плашкой — видно сразу, клик открывает «Милли на максималках». */}
         {signed && status && !status.plus && !off && !blocked ? (
           <button type="button" className={'ml-up' + (milliLeft(status) === 0 ? ' out' : '')} data-track="milli_plus_upsell" data-src="head" aria-label={'Осталось ' + milliLeft(status) + '. Больше с PLUS'} onClick={() => openPlusSheet('head')}>

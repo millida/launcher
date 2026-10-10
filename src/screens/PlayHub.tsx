@@ -32,7 +32,11 @@ import {
 } from '../components/playhub/data'
 import type { FeedSort, HubPack, LiveMode, ModeStats, ServerModeDef } from '../components/playhub/data'
 import { HeroSkel } from '../components/playhub/HubTop'
-import { PackPage } from '../components/playhub/PackPage'
+import { PackPage, prefetchPackPage } from '../components/playhub/PackPage'
+import { diskGet, diskSet } from '../lib/diskCache'
+import { copyText } from '../lib/clipboard'
+import { backfillPackIcons } from '../lib/packIcons'
+import { setPackPrefetcher } from '../components/catalog/packPrefetch'
 import { MyBuildCard, useMyBuilds } from '../components/playhub/MyBuilds'
 import { ServerFeed } from '../components/playhub/ServerFeed'
 import { ModeTile } from '../components/playhub/ModeTile'
@@ -254,30 +258,145 @@ function ModePage({
 }
 
 /**
- * «Серверы» во вкладке «Ресурсы» — лента мониторинга Millida целиком, с
- * поиском по имени или адресу (владелец 24.09.2026, 18:29).
+ * «Серверы» в каталоге — мониторинг Millida целиком (владелец 24.09.2026, 18:29), с 10.10.2026
+ * витриной, а не таблицей («покрасивее сделай»): сверху — сколько людей играют и режимы
+ * чипами (выживание, анархия, мини-игры…), сортировка; ниже — карточки серверов: баннер,
+ * значок, название, онлайн, одна строка о сервере, версии, лицензия, адрес с копированием
+ * и «Играть».
  */
 function AllServers({ current, onPick }: { current: LobbyMode | null; onPick: (s: SnapshotServer) => void }) {
   const [q, setQ] = useState('')
   const [search, setSearch] = useState('')
+  const [sort, setSort] = useState<FeedSort>('rating')
+  const [cat, setCat] = useState<string | null>(null)
+  const [modes, setModes] = useState<LiveMode[] | null>(null)
   useEffect(() => {
     const t = window.setTimeout(() => setSearch(q.trim().length >= 2 ? q.trim() : ''), 300)
     return () => window.clearTimeout(t)
   }, [q])
+  useEffect(() => {
+    let alive = true
+    void loadLiveModes().then((l) => alive && setModes(l))
+    return () => {
+      alive = false
+    }
+  }, [])
+  const chips = (modes || []).slice(0, 14)
   return (
-    <div className="ph-mode ph-allsrv" data-section="servers">
-      <h1 className="ph-allsrv-h">Серверы Minecraft</h1>
-      <label className="input hs-field ph-mode-find">
-        <Icon id="i-search" />
-        <input value={q} placeholder="Имя или адрес сервера" maxLength={60} onChange={(e) => setQ(e.target.value)} />
-        {q ? (
-          <button type="button" className="hs-clear" aria-label="Очистить" onClick={() => setQ('')}>
-            <Icon id="i-x" />
-          </button>
-        ) : null}
-      </label>
-      <ServerFeed search={search} render={(s, i) => <ServerRow s={s} pos={i} current={current} onPlay={onPick} />} />
+    <div className="ph-mode ph-allsrv srv2" data-section="servers">
+      <header className="srv2-head">
+        <h1 className="ph-allsrv-h">Серверы Minecraft</h1>
+        {/* Сумма по режимам считала сервер в каждом его режиме — число было раздутым; вместо него — как играть. */}
+        <span className="srv2-live">«Играть» — и лаунчер сам подберёт версию и зайдёт на сервер</span>
+      </header>
+      <div className="srv2-tools">
+        <label className="input hs-field ph-mode-find srv2-find">
+          <Icon id="i-search" />
+          <input value={q} placeholder="Имя или адрес сервера" maxLength={60} onChange={(e) => setQ(e.target.value)} />
+          {q ? (
+            <button type="button" className="hs-clear" aria-label="Очистить" onClick={() => setQ('')}>
+              <Icon id="i-x" />
+            </button>
+          ) : null}
+        </label>
+        <div className="segs mr-sort srv2-sort" role="group" aria-label="Сортировка серверов">
+          {FEED_SORTS.filter(([id]) => id !== 'votes').map(([id, label]) => (
+            <button key={id} type="button" className={'seg' + (sort === id ? ' on' : '')} aria-pressed={sort === id} data-track={'servers_sort_' + id} onClick={() => setSort(id)}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <nav className="srv2-modes" aria-label="Режимы">
+        <button type="button" className={'srv2-mode' + (cat === null ? ' on' : '')} data-track="servers_mode_all" onClick={() => setCat(null)}>
+          <span className="srv2-mode-ic is-all">
+            <Icon id="i-grid" />
+          </span>
+          <span className="srv2-mode-t">Все</span>
+        </button>
+        {modes === null
+          ? Array.from({ length: 8 }, (_, i) => <span key={i} className="srv2-mode skel" aria-hidden="true" />)
+          : chips.map((m) => {
+              const art = modeIcon(m.def.cat)
+              return (
+                <button
+                  key={m.def.cat}
+                  type="button"
+                  className={'srv2-mode' + (cat === m.def.cat ? ' on' : '')}
+                  style={{ '--mode-c': art?.color || m.def.color } as CSSProperties}
+                  data-track="servers_mode"
+                  data-id={m.def.cat}
+                  onClick={() => setCat(cat === m.def.cat ? null : m.def.cat)}
+                >
+                  <span className="srv2-mode-ic">
+                    <img src={art ? art.icon : blockArt(m.def.block)} alt="" draggable={false} />
+                  </span>
+                  <span className="srv2-mode-t">{m.def.title}</span>
+                  {m.stats.online ? <span className="srv2-mode-n">{fmtN(m.stats.online)}</span> : null}
+                </button>
+              )
+            })}
+      </nav>
+      <ServerFeed
+        category={cat || undefined}
+        search={search}
+        sort={sort}
+        className="srv2-grid"
+        skeleton={() => <span className="srv2-card skel" aria-hidden="true" />}
+        render={(s, i) => <ServerCard s={s} pos={i} current={current} onPlay={onPick} />}
+      />
     </div>
+  )
+}
+
+/** Карточка сервера витрины: баннер, значок, онлайн, строка о сервере, адрес, «Играть». */
+function ServerCard({ s, pos, current, onPlay }: { s: SnapshotServer; pos?: number; current: LobbyMode | null; onPlay: (s: SnapshotServer) => void }) {
+  const on = sameMode(current, serverMode(s))
+  const [copied, setCopied] = useState(false)
+  const span = versionSpan(s.versions)
+  const about = s.desc || s.motd
+  return (
+    <article className={'srv2-card' + (on ? ' on' : '') + (s.isOnline ? '' : ' off')} data-kind="server" data-id={s.slug || s.ip} data-pos={pos} data-src="catalog_servers">
+      <SrvArt className="srv2-ban" src={s.banner} name={s.slug || s.name || s.ip} />
+      <div className="srv2-body">
+        <SrvArt className="srv2-logo" src={s.logo} name={s.slug || s.name || s.ip} />
+        <div className="srv2-top">
+          <h3 className="srv2-name">{s.name}</h3>
+          <span className={'srv2-online' + (s.isOnline ? '' : ' is-off')}>{s.isOnline ? <Players n={s.online} approx={s.onlineApprox} /> : 'офлайн'}</span>
+        </div>
+        {about ? <p className="srv2-about">{about}</p> : <p className="srv2-about is-empty">Сервер без описания</p>}
+        <div className="srv2-tags">
+          {s.cat ? <span className="srv2-tag is-cat">{s.cat}</span> : null}
+          {span ? <span className="srv2-tag">{span}</span> : null}
+          {s.lic === 'CRACKED' ? <span className="srv2-tag is-free">Без лицензии</span> : s.lic === 'LICENSE' ? <span className="srv2-tag">Лицензия</span> : null}
+        </div>
+        <div className="srv2-foot">
+          {s.ip ? (
+            <button
+              type="button"
+              className="srv2-ip"
+              title="Скопировать адрес"
+              data-track="server_copy_ip"
+              onClick={() => {
+                void copyText(s.ip).then((ok) => {
+                  if (!ok) return
+                  setCopied(true)
+                  window.setTimeout(() => setCopied(false), 1400)
+                })
+              }}
+            >
+              <Icon id={copied ? 'i-check' : 'i-copy'} />
+              <span>{copied ? 'Скопировано' : s.ip}</span>
+            </button>
+          ) : (
+            <span />
+          )}
+          <button className="btn sm primary srv2-play" data-track="play" onClick={() => onPlay(s)}>
+            <Icon id="i-play" /> Играть
+          </button>
+        </div>
+      </div>
+    </article>
   )
 }
 
@@ -361,12 +480,26 @@ export function PlayHub({ on }: { on?: boolean }) {
     setTick((t) => t + 1)
   }
 
+  // Сборкам из каталога без значка — их родной значок (один раз, в саму сборку).
+  useEffect(() => {
+    if (profiles.length) void backfillPackIcons(profiles)
+  }, [profiles])
+
   useEffect(() => {
     void loadLobby()
     let alive = true
-    void loadCatalogPacks().then((l) => alive && setPacks(l))
-    void loadModrinthPacks().then((l) => alive && setMrPacks(l))
-    void loadLiveModes().then((l) => alive && setModes(l))
+    // Прошлый ответ с диска — сразу (полки не стоят скелетонами, пока сеть думает),
+    // свежий — как придёт. Пустой ответ (сбой) диск не перетирает.
+    const swr = <T,>(key: string, load: Promise<T[] | null>, put: (f: (old: T[] | null) => T[] | null) => void) => {
+      void diskGet<T[]>('hub:' + key).then((r) => alive && r && r.value.length && put((old) => old ?? r.value))
+      void load.then((l) => {
+        if (l && l.length) diskSet('hub:' + key, l)
+        if (alive) put((old) => (l && l.length) || !old ? l : old)
+      })
+    }
+    swr<MillidaPack>('packs', loadCatalogPacks(), setPacks)
+    swr<HubPack>('mr-packs', loadModrinthPacks(), setMrPacks)
+    swr<LiveMode>('modes', loadLiveModes(), setModes)
     void loadOwnOnline().then((n) => alive && setOwnOnline(n))
     void loadAnarchyOnline().then((n) => alive && setAnarchyOnline(n))
     return () => {
@@ -656,6 +789,13 @@ export function PlayHub({ on }: { on?: boolean }) {
 
   // Страница «Все сборки»: полный каталог — поиск, фильтры, моды, карты.
   // Своя сборка каталога (MCSborki, Arcania) — её страница хаба с «Играть».
+  // Карточка своей сборки в каталоге греет её страницу (packPrefetch) — открытие без «прыжка».
+  setPackPrefetcher((slug) => {
+    const p = allPacks.find((x) => x.slug === slug)
+    if (!p) return false
+    if (p.origin === 'millida') prefetchPackPage(p.slug || slug, p.source === 'premium' ? p.id : null)
+    return true
+  })
   const openPackSlug = (slug: string): boolean => {
     const p = allPacks.find((x) => x.slug === slug)
     if (p) openPack(p)

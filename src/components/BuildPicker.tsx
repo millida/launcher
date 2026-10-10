@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { Icon } from './Icon'
 import { LOADER_NAME } from '../lib/format'
-import { Cover } from './Cover'
+import { BuildIcon } from './playhub/BuildIcon'
 import { useBuildPicker } from '../state/buildPicker'
 import { useProfiles } from '../state/profiles'
 import { openModal } from '../state/ui'
@@ -43,7 +43,7 @@ export function BuildPicker() {
               return (
                 <button key={p.name} className="bp-item" onClick={() => choose(p.name)}>
                   <span className="bp-cover">
-                    <Cover url={p.icon} />
+                    <BuildIcon icon={p.icon} name={p.name} size={44} />
                   </span>
                   <span className="bp-meta">
                     <b>{p.name}</b>

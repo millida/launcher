@@ -12,7 +12,6 @@ import { SharePackModal } from '../components/SharePackModal'
 import { PackUpdateRow } from '../components/PackUpdateRow'
 import { PackAutoUpdateRow } from '../components/PackAutoUpdateRow'
 import { TunePanel } from '../components/TunePanel'
-import { IconGrid } from '../components/IconGrid'
 import { IconEditor } from '../components/IconEditor'
 import { recallIconRecipe, rememberIconRecipe } from '../lib/iconArt'
 import { uiConfirm } from '../state/confirm'
@@ -24,7 +23,6 @@ import {
   addServer,
   auditDeps,
   checkUpdates,
-  clearProfileCover,
   countScreenshots,
   deleteContent,
   deleteProfile,
@@ -34,6 +32,7 @@ import {
   exportMrpack,
   getPlayStats,
   getProfileGroups,
+  importWorld,
   listContent,
   listLogs,
   listServers,
@@ -49,7 +48,6 @@ import {
   openUrl,
   pickContentFiles,
   pickJavaPath,
-  pickProfileCover,
   pingServer,
   readLog,
   removeServer,
@@ -84,9 +82,11 @@ import { Select } from '../components/Select'
 import { ModVersionPick } from '../components/ModVersionPick'
 import { ContextMenu, type ContextItem } from '../components/ContextMenu'
 import { Slider } from '../components/Slider'
-import { isBlockIcon } from '../lib/blockColor'
 import { RAM_MAX_GB, maxRamGb } from '../lib/ram'
-import { BUILD_NAME_MAX, GROUP_NAME_MAX, LOADER_NAME, fmtPlaytime, fmtSize, loaderId, whenText } from '../lib/format'
+import { randomIcon } from '../lib/buildIcon'
+import { BUILD_NAME_MAX, GROUP_NAME_MAX, LOADER_NAME, fmtPlaytime, fmtSize, loaderId, plural, whenText } from '../lib/format'
+import { isLibraryMod } from '../lib/modRole'
+import '../styles/pixel/build-page.css'
 import { AUTO_LOADER_VERSION, hasLoaderVersions, useLoaderBuilds } from '../lib/loaderBuilds'
 import { loaderPinFollowsGame, useCoreUpdate } from '../lib/coreUpdate'
 import { incompatibleWith } from '../lib/compat'
@@ -177,6 +177,44 @@ const CORE_OPTS: [string, string][] = [
 ]
 
 
+const KIND_ONE: Record<string, string> = { mod: 'мод', resourcepack: 'ресурс-пак', datapack: 'дата-пак', shader: 'шейдер' }
+const KIND_FEW: Record<string, string> = { mod: 'мода', resourcepack: 'ресурс-пака', datapack: 'дата-пака', shader: 'шейдера' }
+const KIND_MANY: Record<string, string> = { mod: 'модов', resourcepack: 'ресурс-паков', datapack: 'дата-паков', shader: 'шейдеров' }
+const EMPTY_TITLE: Record<string, string> = { mod: 'Модов пока нет', resourcepack: 'Ресурс-паков пока нет', datapack: 'Дата-паков пока нет', shader: 'Шейдеров пока нет' }
+
+type ContentSort = 'name' | 'new' | 'old'
+const SORT_LABEL: Record<ContentSort, string> = { name: 'По названию', new: 'Сначала новые', old: 'Сначала старые' }
+const SORT_KEY = 'm-content-sort'
+const readSort = (): ContentSort => {
+  try {
+    const v = localStorage.getItem(SORT_KEY)
+    return v === 'new' || v === 'old' ? v : 'name'
+  } catch {
+    return 'name'
+  }
+}
+/** «Новый» — файл появился в сборке за последние три часа: видно, что только что добавил. */
+const FRESH_SEC = 3 * 3600
+
+/** Имя неопознанного файла по-человечески: «dungeons-and-taverns-3.0.3.f.jar» → «Dungeons and taverns». */
+function prettyFile(name: string): string {
+  const bare = name.replace(/\.(jar|zip|litemod)$/i, '')
+  const base = bare.replace(/[-_+ ]v?(mc)?\d+(\.\d+)+.*$/i, '') || bare
+  const words = base.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim()
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : name
+}
+
+/** Значок мода: картинка, а нет её или она битая — значок раздела. Не оба сразу (прозрачные значки просвечивали). */
+function ModArt({ src, icon, sm }: { src?: string; icon: string; sm?: boolean }) {
+  const [bad, setBad] = useState(false)
+  useEffect(() => setBad(false), [src])
+  return (
+    <span className={'bpg-art' + (sm ? ' sm' : '')}>
+      {src && !bad ? <img src={mirrorAsset(src)} alt="" loading="lazy" onError={() => setBad(true)} /> : <Icon id={icon} />}
+    </span>
+  )
+}
+
 /** Главная кнопка вкладки «Контент»: что именно добавляем (владелец 07.10.2026: «Скачать» непонятно). */
 const ADD_LABEL: Record<string, string> = { mod: 'Добавить моды', resourcepack: 'Добавить ресурс-паки', shader: 'Добавить шейдеры', datapack: 'Добавить дата-паки' }
 export function InstancePage() {
@@ -185,7 +223,6 @@ export function InstancePage() {
   const profiles = useProfiles((s) => s.profiles)
   const pr = profiles.find((x) => x.name === profile) || null
   const guarded = useGuarded(profile)
-  const customCover = pr && pr.icon && !isBlockIcon(pr.icon) ? pr.icon : null
 
   const [iconEditor, setIconEditor] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
@@ -249,6 +286,10 @@ export function InstancePage() {
   const [wsName, setWsName] = useState('')
   const [wsIp, setWsIp] = useState('')
   const [worldsNotice, setWorldsNotice] = useState('')
+  const [worldCount, setWorldCount] = useState(0)
+  const [worldsReload, setWorldsReload] = useState(0)
+  const [serverForm, setServerForm] = useState(false)
+  const [addMenu, setAddMenu] = useState<{ x: number; y: number } | null>(null)
   const [logFiles, setLogFiles] = useState<string[]>([])
   const [logFile, setLogFile] = useState('')
   const [logBody, setLogBody] = useState('')
@@ -266,6 +307,7 @@ export function InstancePage() {
   const [newLoaderVer, setNewLoaderVer] = useState(AUTO_LOADER_VERSION)
   const [newVersion, setNewVersion] = useState('')
   const [coreBusy, setCoreBusy] = useState(false)
+  const [coreEdit, setCoreEdit] = useState(false)
   const lb = useLoaderBuilds(newLoader, newVersion, modal.open)
   const mcList = useMcVersionList((s) => s.list)
   const showSnapshots = useMcVersionList((s) => s.show)
@@ -297,6 +339,66 @@ export function InstancePage() {
   const [moreMenu, setMoreMenu] = useState<{ x: number; y: number } | null>(null)
   // Java, аргументы JVM и размер окна — для опытных, по умолчанию свёрнуты.
   const [advanced, setAdvanced] = useState(false)
+  // Страница сборки как в Modrinth App (владелец 10.10.2026: «неприятно собирать сборку»):
+  // сортировка, фильтры, библиотеки отдельно, действия над выбранным — снизу.
+  const [sort, setSort] = useState<ContentSort>(readSort)
+  const [sortMenu, setSortMenu] = useState<{ x: number; y: number } | null>(null)
+  const [filter, setFilter] = useState<'' | 'updates' | 'off'>('')
+  const [libsOpen, setLibsOpen] = useState(false)
+  const [counts, setCounts] = useState<Record<string, number>>({})
+  const visibleRef = useRef<string[]>([])
+  const selRef = useRef(sel)
+  selRef.current = sel
+  const pickSort = (v: ContentSort) => {
+    setSort(v)
+    try {
+      localStorage.setItem(SORT_KEY, v)
+    } catch {
+      /* не запомнится — не страшно */
+    }
+  }
+
+  // Сколько чего в сборке — на вкладках «Моды 10 · Ресурспаки 2» и в шапке.
+  useEffect(() => {
+    if (!modal.open || !profile) return
+    if (!hasTauri()) {
+      setCounts({ mod: DEMO_USER ? DEMO_MODS.length : 0 })
+      return
+    }
+    let alive = true
+    void Promise.all(KINDS.map(([k]) => listContent(profile, k).then((l) => [k, l.length] as const, () => [k, 0] as const))).then(
+      (rows) => alive && setCounts(Object.fromEntries(rows)),
+    )
+    return () => {
+      alive = false
+    }
+  }, [modal.open, profile])
+  useEffect(() => {
+    if (!noticeList) setCounts((c) => (c[kind] === items.length ? c : { ...c, [kind]: items.length }))
+  }, [items, kind, noticeList])
+
+  // «/» — в поиск, Ctrl/⌘+A — выбрать всё видимое, Esc — снять выбор (а не закрыть сборку).
+  useEffect(() => {
+    if (!modal.open || tab !== 'content') return
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null
+      const typing = !!t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)
+      if (document.querySelector('.mdl-back, .ip-bg, .modal-bg.open:not(#bsModal)')) return
+      if (e.key === '/' && !typing) {
+        e.preventDefault()
+        document.getElementById('bsSearch')?.focus()
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a' && !typing) {
+        e.preventDefault()
+        setSel(new Set(visibleRef.current))
+      } else if (e.key === 'Escape' && selRef.current.size) {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        setSel(new Set())
+      }
+    }
+    document.addEventListener('keydown', onKey, true)
+    return () => document.removeEventListener('keydown', onKey, true)
+  }, [modal.open, tab])
 
   const loadMods = useCallback(
     (k?: string) => {
@@ -487,6 +589,8 @@ export function InstancePage() {
     setMpSlug('')
     setMpVersion('')
     setWFilter('all')
+    setCoreEdit(false)
+    setServerForm(false)
     setWsName('')
     setWsIp('')
     setShareLabel('Поделиться')
@@ -660,6 +764,7 @@ export function InstancePage() {
     } catch {}
     setProfileLoader(profile, ver, newLoader, lver || null)
       .then(() => {
+        setCoreEdit(false)
         void useProfiles.getState().refresh()
         if (modCount > 0 && newLoader !== loaderId(pr)) {
           showToast(
@@ -883,6 +988,28 @@ export function InstancePage() {
 
   const close = () => closeModal('bsModal')
 
+  /** Каталог на разделе «Карты», ставить — в эту сборку. */
+  const openMapsCatalog = () => {
+    useProfiles.getState().setSelected(profile)
+    close()
+    setScreen('mods')
+    useMods.getState().scopeTo(profile)
+    useMods.getState().set({ modTab: 'world', fCat: 'все' })
+    void useMods.getState().load()
+  }
+  const importWorldArchive = () => {
+    if (!hasTauri() || !profile) {
+      showToast('Доступно в приложении')
+      return
+    }
+    importWorld(profile)
+      .then((w) => {
+        if (w) showToast('Мир внесён в сборку', 'ok')
+        setWorldsReload((n) => n + 1)
+      })
+      .catch((e) => showToast('' + e, 'error'))
+  }
+
   const bulk = (names: string[], fn: (n: string) => Promise<unknown>, after?: () => void) =>
     Promise.all(names.map(fn))
       .then(() => {
@@ -892,11 +1019,189 @@ export function InstancePage() {
       })
       .catch((e) => showToast(apiErrorText(e, 'Не удалось выполнить действие'), 'error'))
 
-  const filteredServers = wFilter !== 'single' ? servers : []
-  const serversEmpty = !worldsNotice && !filteredServers.length
 
   const cq = contentQuery.trim().toLowerCase()
-  const shownItems = cq ? items.filter((i) => (i.title || i.name).toLowerCase().includes(cq)) : items
+  const updCount = items.filter((i) => upd[i.name]).length
+  const offCount = items.filter((i) => !i.enabled).length
+  const titleOf = (i: ModFile) => i.title || prettyFile(i.name)
+  const shownItems = items
+    .filter((i) => !cq || (titleOf(i) + ' ' + (i.author || '') + ' ' + i.name).toLowerCase().includes(cq))
+    .filter((i) => (filter === 'updates' ? !!upd[i.name] : filter === 'off' ? !i.enabled : true))
+    .slice()
+    .sort((a, b) =>
+      sort === 'name'
+        ? titleOf(a).localeCompare(titleOf(b), 'ru', { sensitivity: 'base' })
+        : sort === 'new'
+          ? (b.added || 0) - (a.added || 0) || titleOf(a).localeCompare(titleOf(b))
+          : (a.added || 0) - (b.added || 0) || titleOf(a).localeCompare(titleOf(b)),
+    )
+  // Свои моды — сверху, библиотеки (Fabric API, Cloth Config…) — свёрнутой строкой: их
+  // ставят ради других модов, и в списке они только мешали искать своё.
+  const grouped = kind === 'mod' && !cq && !filter
+  const libs = grouped ? shownItems.filter((i) => isLibraryMod(i)) : []
+  const mains = grouped ? shownItems.filter((i) => !isLibraryMod(i)) : shownItems
+  visibleRef.current = (libsOpen ? [...mains, ...libs] : mains).map((i) => i.name)
+  const allSel = shownItems.length > 0 && shownItems.every((i) => sel.has(i.name))
+  const nowSec = Date.now() / 1000
+  // «Новый» — только когда новое выделяется: сборку целиком поставили только что — меток нет
+  // (владелец 10.10.2026: «Новый» висел на каждом моде).
+  const freshAll = items.filter((i) => !!i.added && nowSec - i.added < FRESH_SEC)
+  const freshNames = new Set(freshAll.length && freshAll.length <= Math.max(3, items.length * 0.25) ? freshAll.map((i) => i.name) : [])
+
+  const toggleOne = (md: ModFile) =>
+    toggleContent(profile!, kind, md.name, !md.enabled)
+      .then(() => loadMods())
+      .catch((e) => showToast(apiErrorText(e, 'Не удалось выполнить действие'), 'error'))
+
+  const row = (md: ModFile) => {
+    const up = upd[md.name]
+    const title = titleOf(md)
+    const info = openInfo === md.name
+    const picked = sel.has(md.name)
+    const modrinth = md.project_id && !md.project_id.startsWith('cf:') && !md.project_id.startsWith('millida:') ? md.project_id : ''
+    const curse = md.project_id && md.project_id.startsWith('cf:') ? md.project_id.slice(3) : ''
+    const src = modrinth ? 'Modrinth' : curse ? 'CurseForge' : md.project_id && md.project_id.startsWith('millida:') ? 'Millida' : 'Файл'
+    const fresh = freshNames.has(md.name)
+    const facts = [
+      md.version_number ? 'версия ' + md.version_number : '',
+      md.mc ? 'MC ' + md.mc : '',
+      md.author ? 'автор: ' + md.author : '',
+      md.loaders?.length ? md.loaders.join(' · ') : md.loader || '',
+      fmtSize(md.size),
+    ].filter(Boolean)
+    return (
+      <div className={'bpg-row' + (md.enabled ? '' : ' off') + (info ? ' open' : '') + (picked ? ' sel' : '')} key={md.name}>
+        <div
+          className="bpg-row-main"
+          onClick={(e) => {
+            if ((e.target as HTMLElement).closest('button, .tgl, .chk')) return
+            setOpenInfo(info ? '' : md.name)
+          }}
+          onDoubleClick={(e) => {
+            if ((e.target as HTMLElement).closest('button, .tgl, .chk')) return
+            void toggleOne(md)
+          }}
+        >
+          <span
+            className={'chk bpg-chk' + (picked ? ' on' : '')}
+            data-sel={md.name}
+            role="checkbox"
+            aria-checked={picked}
+            aria-label={'Выбрать ' + title}
+            onClick={() =>
+              setSel((cur) => {
+                const next = new Set(cur)
+                if (next.has(md.name)) next.delete(md.name)
+                else next.add(md.name)
+                return next
+              })
+            }
+          />
+          <ModArt src={md.icon_url} icon={KIND_ICON[kind]!} />
+          <span className="bpg-body">
+            <span className="bpg-title">
+              <b>{title}</b>
+              {fresh ? <span className="bpg-tag new">Новый</span> : null}
+              {incompatibleWith(md.mc, pr ? pr.version : '') ? <span className="bpg-tag bad">для {md.mc}</span> : null}
+              {!md.enabled ? <span className="bpg-tag">выключен</span> : null}
+            </span>
+            <span className="bpg-sub">{md.author ? 'от ' + md.author : md.title ? md.description || md.name : 'Файл · ' + md.name}</span>
+          </span>
+          <span className="bpg-ver">
+            <b title={md.version_number || md.name}>{md.version_number || '—'}</b>
+            {up ? (
+              // Обновление — тихой зелёной строкой под версией, а не кнопкой посреди ряда.
+              <button
+                className="bpg-verup"
+                data-upd={md.name}
+                title={'Обновить ' + title + ' до ' + up}
+                onClick={() => {
+                  setItemLabels((l) => ({ ...l, [md.name]: 'Обновляем…' }))
+                  updateContent(profile!, kind, md.name)
+                    .then(() => {
+                      loadMods()
+                      showToast('Обновлено: ' + title)
+                    })
+                    .catch((er) => {
+                      loadMods()
+                      showToast('' + er)
+                    })
+                }}
+              >
+                {itemLabels[md.name] || (
+                  <>
+                    <Icon id="i-arrow-up" />
+                    <span>до {up}</span>
+                  </>
+                )}
+              </button>
+            ) : (
+              <small>{src}</small>
+            )}
+          </span>
+          <span className="bpg-acts">
+            <span
+              className={'tgl' + (md.enabled ? ' on' : '')}
+              data-tg={md.name}
+              role="switch"
+              aria-checked={md.enabled}
+              aria-label={(md.enabled ? 'Выключить ' : 'Включить ') + title}
+              onClick={() => void toggleOne(md)}
+            />
+            <button
+              className="icon-btn del bpg-del"
+              data-del={md.name}
+              aria-label="Удалить"
+              title="Удалить (Shift — без вопроса)"
+              onClick={async (e) => {
+                if (!e.shiftKey && !(await uiConfirm('Удалить «' + title + '» из сборки?', { confirmLabel: 'Удалить' }))) return
+                deleteContent(profile!, kind, md.name)
+                  .then(() => loadMods())
+                  .catch((er) => showToast(apiErrorText(er, 'Не удалось выполнить действие'), 'error'))
+              }}
+            >
+              <Icon id="i-trash" />
+            </button>
+          </span>
+        </div>
+        {info ? (
+          <div className="mod-card-info bpg-info">
+            {md.description ? <p className="mod-card-desc">{md.description}</p> : null}
+            {facts.length ? (
+              <div className="mod-card-facts">
+                {facts.map((f) => (
+                  <span className="pill" key={f}>
+                    {f}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+            <div className="mod-card-file">{md.name}</div>
+            <div className="mod-card-acts">
+              {md.project_id ? (
+                <ModVersionPick profile={profile!} kind={kind} file={md.name} current={md.version_number || ''} onChanged={() => loadMods()} />
+              ) : null}
+              {modrinth ? (
+                <button className="btn sm secondary" onClick={() => openProject(modrinth, kind)}>
+                  <Icon id="i-ext" /> Страница мода
+                </button>
+              ) : null}
+              {curse ? (
+                <button className="btn sm secondary" onClick={() => openUrl('https://www.curseforge.com/projects/' + curse)}>
+                  <Icon id="i-ext" /> CurseForge
+                </button>
+              ) : null}
+              {!md.project_id ? (
+                <button className="btn sm secondary" disabled={scanLabel !== 'Сканировать'} onClick={runScan}>
+                  <Icon id="i-search" /> {scanLabel === 'Сканировать' ? 'Найти в каталогах' : scanLabel}
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    )
+  }
 
   return (
     <div
@@ -913,17 +1218,19 @@ export function InstancePage() {
           </button>
           <div className="inst-hero">
             <div className="inst-icon" id="bsIconBig">
-              <BuildIcon icon={pr ? pr.icon : null} size={70} />
+              <BuildIcon icon={pr ? pr.icon : null} name={profile || ''} size={70} />
             </div>
             <div className="inst-titles">
               <h1 id="bsTitle">{profile}</h1>
               <div className="inst-sub" id="bsSub">
-                {(pr ? LOADER_NAME(pr) + ' · ' + pr.version : '—') + playtime}
+                {(pr ? LOADER_NAME(pr) + ' · ' + pr.version : '—') +
+                  (counts.mod ? ' · ' + counts.mod + ' ' + plural(counts.mod, 'мод', 'мода', 'модов') : '') +
+                  playtime}
               </div>
             </div>
             <div className="inst-actions">
               <button
-                className="btn lg secondary"
+                className="btn md secondary inst-share"
                 onClick={() => {
                   if (!hasTauri()) {
                     showToast('Доступно в приложении')
@@ -1065,38 +1372,35 @@ export function InstancePage() {
                 </div>
               ) : (
               <>
-              <div className="segs" style={{ marginBottom: '12px' }}>
-                {KINDS.map(([k, label]) => (
-                  <button
-                    key={k}
-                    className={'seg' + (kind === k ? ' on' : '')}
-                    data-bskind={k}
-                    style={{ height: '32px', fontSize: '12.5px' }}
-                    onClick={() => {
-                      setKind(k)
-                      setAudit(null)
-                      loadMods(k)
-                    }}
-                  >
-                    {label}
-                  </button>
-                ))}
-                <span style={{ flex: 1 }}></span>
-                {items.length > 4 ? (
-                  <div className="input sm" style={{ width: '150px', height: '32px' }}>
-                    <Icon id="i-search" />
-                    <input placeholder="Поиск…" value={contentQuery} onChange={(e) => setContentQuery(e.target.value)} />
-                  </div>
-                ) : null}
-              </div>
-              <div className="pr-split">
-              {/* Действия сборки столбцом справа, как в Prism Launcher (владелец 07.10.2026). */}
-              <div className="act-row pr-acts">
-                <button className="btn md primary act-row-btn" id="bsAddContent" data-track="build_download" onClick={() => setDlOpen(true)}>
-                  <Icon id="i-plus" /> {ADD_LABEL[kind] || 'Добавить'}
-                </button>
+              {/* Ряд 1: что редактируем (вкладки со счётчиками) и как добавить — как в Modrinth App. */}
+              <div className="bpg-bar">
+                <div className="bpg-kinds" role="tablist" aria-label="Что в сборке">
+                  {KINDS.map(([k, label]) => (
+                    <button
+                      key={k}
+                      type="button"
+                      role="tab"
+                      aria-selected={kind === k}
+                      className={'bpg-kind' + (kind === k ? ' on' : '')}
+                      data-bskind={k}
+                      onClick={() => {
+                        if (k === kind) return
+                        setKind(k)
+                        setFilter('')
+                        setContentQuery('')
+                        setLibsOpen(false)
+                        loadMods(k)
+                      }}
+                    >
+                      <Icon id={KIND_ICON[k]} />
+                      {label}
+                      {counts[k] ? <span className="bpg-kind-n">{counts[k]}</span> : null}
+                    </button>
+                  ))}
+                </div>
+                <span className="bpg-grow" />
                 <button
-                  className="btn sm secondary act-row-btn"
+                  className="btn md secondary"
                   id="bsDrop"
                   disabled={dropBusy}
                   onClick={() => {
@@ -1113,104 +1417,18 @@ export function InstancePage() {
                 >
                   <Icon id="i-upload" /> {dropBusy ? 'Добавляем…' : 'Из файла'}
                 </button>
-                <span className="pr-sep" />
-                <button
-                  className="btn sm secondary act-row-btn"
-                  data-bulk="enable"
-                  disabled={!sel.size}
-                  onClick={() => void bulk([...sel], (n) => toggleContent(profile!, kind, n, true))}
-                >
-                  <Icon id="i-check" /> Включить
+                <button className="btn md primary" id="bsAddContent" data-track="build_download" onClick={() => setDlOpen(true)}>
+                  <Icon id="i-plus" /> {ADD_LABEL[kind] || 'Добавить'}
                 </button>
-                <button
-                  className="btn sm secondary act-row-btn"
-                  data-bulk="disable"
-                  disabled={!sel.size}
-                  onClick={() => void bulk([...sel], (n) => toggleContent(profile!, kind, n, false))}
-                >
-                  <Icon id="i-ban" /> Выключить
-                </button>
-                <button
-                  className="btn sm danger act-row-btn"
-                  data-bulk="delete"
-                  disabled={!sel.size}
-                  onClick={async () => {
-                    const names = [...sel]
-                    if (await uiConfirm('Удалить выбранное (' + names.length + ')?', { confirmLabel: 'Удалить' }))
-                      void bulk(names, (n) => deleteContent(profile!, kind, n))
-                  }}
-                >
-                  <Icon id="i-trash" /> Удалить
-                </button>
-                <span className="pr-sep" />
-                <button
-                  className="btn sm secondary act-row-btn"
-                  id="bsUpdateAll"
-                  disabled={!Object.keys(upd).length}
-                  onClick={() => {
-                    if (!hasTauri()) return
-                    setUpdateAllLabel('Обновляем…')
-                    updateAll(profile!, kind)
-                      .then((n) => {
-                        setUpdateAllLabel('Обновить всё')
-                        loadMods()
-                        showToast(n ? 'Обновлено: ' + n : 'Всё актуально')
-                      })
-                      .catch((e) => {
-                        setUpdateAllLabel('Обновить всё')
-                        showToast('' + e)
-                      })
-                  }}
-                >
-                  <Icon id="i-restart" /> {updateAllLabel}
-                  {Object.keys(upd).length ? <span className="nav-count">{Object.keys(upd).length}</span> : null}
-                </button>
-                <button className="btn sm secondary act-row-btn" onClick={() => (hasTauri() ? void openProfileFolder(profile!) : showToast('Доступно в приложении'))}>
-                  <Icon id="i-folder" /> Открыть папку
-                </button>
-                <button
-                  className="btn sm ghost act-row-btn"
-                  id="bsMore"
-                  aria-label="Ещё"
-                  onClick={(e) => {
-                    const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
-                    setMoreMenu({ x: r.left, y: r.bottom + 4 })
-                  }}
-                >
-                  <Icon id="i-dots" /> Ещё
-                </button>
-                {moreMenu ? (
-                  <ContextMenu
-                    x={moreMenu.x}
-                    y={moreMenu.y}
-                    onClose={() => setMoreMenu(null)}
-                    items={
-                      [
-                        items.length && scanLabel === 'Сканировать'
-                          ? { id: 'scan', label: 'Опознать файлы', icon: 'i-search', onPick: runScan }
-                          : null,
-                        kind === 'mod' && items.length
-                          ? { id: 'safety', label: 'Проверить безопасность', icon: 'i-shield', onPick: () => setSafetyOpen(true) }
-                          : null,
-                        { id: 'export', label: 'Экспорт в .mrpack', icon: 'i-download', onPick: runExport },
-                      ].filter(Boolean) as ContextItem[]
-                    }
-                  />
-                ) : null}
               </div>
-              <div className="pr-main">
-              {kind === 'mod' ? (
-                <div className={'bx-audit' + (audit && audit.issues.length ? ' bad' : audit ? ' ok' : '')}>
+
+              {/* Проблемы совместимости — только когда они есть, с починкой в один клик. */}
+              {kind === 'mod' && audit && audit.issues.length ? (
+                <div className="bx-audit bad bpg-problems">
                   <div className="bx-audit-row">
-                    <Icon id={audit && audit.issues.length ? 'i-alert' : 'i-shield'} />
+                    <Icon id="i-alert" />
                     <span className="bx-audit-text">
-                      {auditBusy
-                        ? 'Проверяем совместимость…'
-                        : !audit
-                          ? 'Совместимость'
-                          : !audit.issues.length
-                            ? 'Всё совместимо · ' + audit.checked + ' файлов'
-                            : 'Проблем: ' + audit.issues.length}
+                      {'Проблем: ' + audit.issues.length + ' — сборка может не запуститься'}
                     </span>
                     <span style={{ flex: 1 }}></span>
                     {fixItems(audit).length ? (
@@ -1226,78 +1444,176 @@ export function InstancePage() {
                         Доустановить ({fixItems(audit).length})
                       </button>
                     ) : null}
-                    <button
-                      className="btn sm ghost"
-                      disabled={auditBusy}
-                      onClick={() => {
-                        if (!hasTauri()) {
-                          showToast('Доступно в приложении')
-                          return
-                        }
-                        autoRound.current = 0
-                        runAudit(false, true)
-                      }}
-                    >
-                      <Icon id="i-restart" /> {auditBusy ? 'Проверяем…' : 'Проверить'}
-                    </button>
                   </div>
-                  {!audit || !audit.issues.length ? null : (
-                    <div style={{ marginTop: '8px', maxHeight: '260px', overflowY: 'auto' }}>
-                      {audit.issues.map((it: AuditIssue, i) => (
-                        <div className="mod-card" key={it.kind + it.title + it.detail + i} style={{ marginBottom: '6px' }}>
-                          <div className="mod-card-row">
-                            <span className="mod-art">
-                              <Icon id={it.kind === 'missing' ? 'i-download' : 'i-alert'} />
-                            </span>
-                            <span className="mod-card-body">
-                              <span className="mod-card-title">
-                                {it.title}
-                                <span
-                                  className="mod-upd"
-                                  style={
-                                    it.kind === 'missing'
-                                      ? undefined
-                                      : { background: 'var(--m-danger-soft)', color: 'var(--m-danger)' }
-                                  }
-                                >
-                                  {AUDIT_LABEL[it.kind]}
-                                </span>
-                              </span>
-                              <span className="mod-card-sub">{it.detail}</span>
-                            </span>
-                            {issueInstall(it) ? (
-                              <button
-                                className="btn sm secondary"
-                                style={{ height: '26px' }}
-                                onClick={() =>
-                                  installExtras(profile!, 'mod', [issueInstall(it)!], () => {
-                                    loadMods('mod')
-                                    runAuditRef.current(false)
-                                  })
-                                }
-                              >
-                                Поставить
-                              </button>
-                            ) : null}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <div className="bpg-problems-list">
+                    {audit.issues.map((it: AuditIssue, i) => (
+                      <div className="bpg-problem" key={it.kind + it.title + it.detail + i}>
+                        <Icon id={it.kind === 'missing' ? 'i-download' : 'i-alert'} />
+                        <span className="bpg-problem-t">
+                          <b>{it.title}</b>
+                          <span className={'bpg-tag' + (it.kind === 'missing' ? '' : ' bad')}>{AUDIT_LABEL[it.kind]}</span>
+                          <small>{it.detail}</small>
+                        </span>
+                        {issueInstall(it) ? (
+                          <button
+                            className="btn sm secondary"
+                            onClick={() =>
+                              installExtras(profile!, 'mod', [issueInstall(it)!], () => {
+                                loadMods('mod')
+                                runAuditRef.current(false)
+                              })
+                            }
+                          >
+                            Поставить
+                          </button>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ) : null}
-              <div className="mod-list-head pr-thead">
-                <span className="set-val" id="bsModCount">
-                  {noticeList ? '' : shownItems.length ? shownItems.length + ' шт.' : ''}
-                </span>
-                {shownItems.length ? (
-                  <>
-                    <span className="pr-th pr-th-src">Источник</span>
-                    <span className="pr-th pr-th-on">Вкл</span>
-                  </>
-                ) : null}
-              </div>
-              <div className="mod-list-wrap">
+
+              {items.length || contentQuery ? (
+                <>
+                  {/* Ряд 2: поиск во всю ширину. «/» — сразу в поле. */}
+                  <label className="input bpg-search">
+                    <Icon id="i-search" />
+                    <input
+                      id="bsSearch"
+                      placeholder={'Искать среди ' + items.length + ' ' + plural(items.length, KIND_ONE[kind] || 'файла', KIND_FEW[kind] || 'файлов', KIND_MANY[kind] || 'файлов')}
+                      value={contentQuery}
+                      autoComplete="off"
+                      spellCheck={false}
+                      onChange={(e) => setContentQuery(e.target.value)}
+                    />
+                    {contentQuery ? (
+                      <button type="button" className="bpg-search-x" aria-label="Очистить" onClick={() => setContentQuery('')}>
+                        <Icon id="i-x" />
+                      </button>
+                    ) : (
+                      <kbd className="bpg-kbd">/</kbd>
+                    )}
+                  </label>
+
+                  {/* Ряд 3: сортировка и фильтры слева, проверка и «обновить всё» справа. */}
+                  <div className="bpg-tools">
+                    <button
+                      type="button"
+                      className="bpg-sort"
+                      data-track="content_sort"
+                      onClick={(e) => {
+                        const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                        setSortMenu({ x: r.left, y: r.bottom + 4 })
+                      }}
+                    >
+                      <Icon id="i-list" />
+                      {SORT_LABEL[sort]}
+                      <Icon id="i-chev-d" />
+                    </button>
+                    <span className="bpg-vsep" />
+                    <div className="bpg-chips" role="group" aria-label="Фильтр">
+                      <button type="button" className={'bpg-chip' + (!filter ? ' on' : '')} onClick={() => setFilter('')}>
+                        Все <span>{items.length}</span>
+                      </button>
+                      {updCount ? (
+                        <button type="button" className={'bpg-chip is-upd' + (filter === 'updates' ? ' on' : '')} onClick={() => setFilter(filter === 'updates' ? '' : 'updates')}>
+                          Есть обновления <span>{updCount}</span>
+                        </button>
+                      ) : null}
+                      {offCount ? (
+                        <button type="button" className={'bpg-chip' + (filter === 'off' ? ' on' : '')} onClick={() => setFilter(filter === 'off' ? '' : 'off')}>
+                          Выключенные <span>{offCount}</span>
+                        </button>
+                      ) : null}
+                    </div>
+                    <span className="bpg-grow" />
+                    {kind === 'mod' ? (
+                      <button
+                        type="button"
+                        className={'bpg-status' + (auditBusy ? ' busy' : audit && audit.issues.length ? ' bad' : audit ? ' ok' : '')}
+                        disabled={auditBusy}
+                        data-tip="Проверить совместимость ещё раз"
+                        onClick={() => {
+                          if (!hasTauri()) {
+                            showToast('Доступно в приложении')
+                            return
+                          }
+                          autoRound.current = 0
+                          runAudit(false, true)
+                        }}
+                      >
+                        {auditBusy ? <span className="mr-spin" aria-hidden="true" /> : <Icon id={audit && audit.issues.length ? 'i-alert' : 'i-shield'} />}
+                        {auditBusy ? 'Проверяем…' : !audit ? 'Проверить совместимость' : audit.issues.length ? 'Проблем: ' + audit.issues.length : 'Всё совместимо'}
+                      </button>
+                    ) : null}
+                    {updCount ? (
+                      <button
+                        type="button"
+                        className="btn sm primary bpg-updall"
+                        id="bsUpdateAll"
+                        onClick={() => {
+                          if (!hasTauri()) return
+                          setUpdateAllLabel('Обновляем…')
+                          updateAll(profile!, kind)
+                            .then((n) => {
+                              setUpdateAllLabel('Обновить всё')
+                              loadMods()
+                              showToast(n ? 'Обновлено: ' + n : 'Всё актуально')
+                            })
+                            .catch((e) => {
+                              setUpdateAllLabel('Обновить всё')
+                              showToast('' + e)
+                            })
+                        }}
+                      >
+                        <Icon id="i-arrow-up" /> {updateAllLabel === 'Обновить всё' ? 'Обновить всё · ' + updCount : updateAllLabel}
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="btn sm ghost bpg-more"
+                      id="bsMore"
+                      aria-label="Ещё"
+                      onClick={(e) => {
+                        const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                        setMoreMenu({ x: r.right - 220, y: r.bottom + 4 })
+                      }}
+                    >
+                      <Icon id="i-dots" />
+                    </button>
+                  </div>
+                </>
+              ) : null}
+              {sortMenu ? (
+                <ContextMenu
+                  x={sortMenu.x}
+                  y={sortMenu.y}
+                  onClose={() => setSortMenu(null)}
+                  items={(['name', 'new', 'old'] as const).map((id) => ({
+                    id,
+                    label: (sort === id ? '✓ ' : '') + SORT_LABEL[id],
+                    icon: id === 'name' ? 'i-list' : 'i-clock',
+                    onPick: () => pickSort(id),
+                  }))}
+                />
+              ) : null}
+              {moreMenu ? (
+                <ContextMenu
+                  x={moreMenu.x}
+                  y={moreMenu.y}
+                  onClose={() => setMoreMenu(null)}
+                  items={
+                    [
+                      items.length && scanLabel === 'Сканировать' ? { id: 'scan', label: 'Опознать файлы', icon: 'i-search', onPick: runScan } : null,
+                      kind === 'mod' && items.length ? { id: 'safety', label: 'Проверить безопасность', icon: 'i-shield', onPick: () => setSafetyOpen(true) } : null,
+                      { id: 'export', label: 'Экспорт в .mrpack', icon: 'i-download', onPick: runExport },
+                      { id: 'folder', label: 'Открыть папку сборки', icon: 'i-folder', onPick: () => (hasTauri() ? void openProfileFolder(profile!) : showToast('Доступно в приложении')) },
+                    ].filter(Boolean) as ContextItem[]
+                  }
+                />
+              ) : null}
+
+              <div className="bpg-list mod-list-wrap" id="bsMods">
                 {dropActive ? (
                   <div className="mod-drop">
                     <Icon id="i-upload" />
@@ -1305,344 +1621,320 @@ export function InstancePage() {
                     <span>{extsOf(kind).map((e) => '.' + e).join(' / ')}</span>
                   </div>
                 ) : null}
-              <div id="bsMods" style={{ maxHeight: '340px', overflowY: 'auto' }}>
                 {noticeList ? (
                   <p className="faint-note">{noticeList}</p>
-                ) : emptyList ? (
-                  <div className="bx-mini-empty">
-                    <Icon id={KIND_ICON[kind]} />
-                    <b>Пока пусто</b>
-                    <span>Перетащи {extsOf(kind).map((e) => '.' + e).join(' / ')} сюда</span>
+                ) : emptyList || !items.length ? (
+                  <div className="bpg-empty">
+                    <span className="bpg-empty-ic">
+                      <Icon id={KIND_ICON[kind]} />
+                    </span>
+                    <b>{EMPTY_TITLE[kind] || 'Пока пусто'}</b>
+                    <span>Найди в каталоге — всё нужное для работы поставится само. Или перетащи {extsOf(kind).map((e) => '.' + e).join(' / ')} сюда.</span>
+                    <button className="btn md primary" onClick={() => setDlOpen(true)}>
+                      <Icon id="i-plus" /> {ADD_LABEL[kind] || 'Добавить'}
+                    </button>
                   </div>
                 ) : !shownItems.length ? (
-                  <p className="faint-note">Ничего по «{contentQuery.trim()}»</p>
+                  <div className="bpg-none">
+                    <span>{contentQuery.trim() ? 'Ничего по «' + contentQuery.trim() + '»' : 'Здесь пусто'}</span>
+                    <button
+                      type="button"
+                      className="btn sm secondary"
+                      onClick={() => {
+                        setContentQuery('')
+                        setFilter('')
+                      }}
+                    >
+                      Показать всё
+                    </button>
+                  </div>
                 ) : (
-                  shownItems.map((md) => {
-                    const up = upd[md.name]
-                    const title = md.title || md.name.replace(/\.(jar|zip)$/, '')
-                    const info = openInfo === md.name
-                    const modrinth = md.project_id && !md.project_id.startsWith('cf:') ? md.project_id : ''
-                    const curse = md.project_id && md.project_id.startsWith('cf:') ? md.project_id.slice(3) : ''
-                    const facts = [
-                      md.version_number ? 'версия ' + md.version_number : '',
-                      md.mc ? 'MC ' + md.mc : '',
-                      md.author ? 'автор: ' + md.author : '',
-                      md.loaders?.length ? md.loaders.join(' · ') : md.loader || '',
-                      fmtSize(md.size),
-                    ].filter(Boolean)
-                    return (
-                      <div className={'mod-card' + (md.enabled ? '' : ' off') + (info ? ' open' : '')} key={md.name}>
-                        {/* Двойной клик по строке — включить/выключить, как в Prism. */}
-                        <div
-                          className="mod-card-row"
-                          onDoubleClick={(e) => {
-                            if ((e.target as HTMLElement).closest('button, .tgl, .chk')) return
-                            toggleContent(profile!, kind, md.name, !md.enabled)
-                              .then(() => loadMods())
-                              .catch((er) => showToast(apiErrorText(er, 'Не удалось выполнить действие'), 'error'))
-                          }}
-                        >
-                          <span
-                            className={'chk mod-sel' + (sel.has(md.name) ? ' on' : '')}
-                            data-sel={md.name}
-                            role="checkbox"
-                            aria-checked={sel.has(md.name)}
-                            onClick={() => {
-                              const next = new Set(sel)
-                              if (next.has(md.name)) next.delete(md.name)
-                              else next.add(md.name)
-                              setSel(next)
-                            }}
-                          ></span>
-                          <span className="mod-art">
-                            {md.icon_url ? <img src={mirrorAsset(md.icon_url)} alt="" loading="lazy" /> : <Icon id={KIND_ICON[kind]} />}
+                  <>
+                    <div className="bpg-head">
+                      <span
+                        className={'chk bpg-chk' + (allSel ? ' on' : sel.size ? ' part' : '')}
+                        role="checkbox"
+                        aria-checked={allSel}
+                        aria-label="Выбрать все"
+                        onClick={() => setSel(allSel ? new Set() : new Set(shownItems.map((x) => x.name)))}
+                      />
+                      <span className="bpg-head-t">
+                        {grouped ? mains.length + ' ' + plural(mains.length, KIND_ONE[kind] || 'файл', KIND_FEW[kind] || 'файла', KIND_MANY[kind] || 'файлов') + (libs.length ? ' · ' + libs.length + ' ' + plural(libs.length, 'библиотека', 'библиотеки', 'библиотек') : '') : shownItems.length + ' ' + plural(shownItems.length, KIND_ONE[kind] || 'файл', KIND_FEW[kind] || 'файла', KIND_MANY[kind] || 'файлов')}
+                      </span>
+                      <span className="bpg-head-ver">Версия</span>
+                      <span className="bpg-head-acts">Вкл</span>
+                    </div>
+                    {mains.map(row)}
+                    {libs.length ? (
+                      <div className={'bpg-libs' + (libsOpen ? ' open' : '')}>
+                        <button type="button" className="bpg-libs-head" aria-expanded={libsOpen} onClick={() => setLibsOpen((v) => !v)}>
+                          <span className="bpg-libs-arts" aria-hidden="true">
+                            {libs.slice(0, 4).map((l) => (
+                              <ModArt key={l.name} src={l.icon_url} icon={KIND_ICON[kind]!} sm />
+                            ))}
                           </span>
-                          <span className="mod-card-body">
-                            <span className="mod-card-title">
-                              {title}
-                              {md.version_number ? <span className="mod-ver">{md.version_number}</span> : null}
-                              {incompatibleWith(md.mc, pr ? pr.version : '') ? (
-                                <span
-                                  className="mod-upd"
-                                  style={{ background: 'var(--m-danger-soft)', color: 'var(--m-danger)' }}
-                                >
-                                  для {md.mc}
-                                </span>
-                              ) : null}
-                            </span>
-                            <span className="mod-card-sub">{md.description || md.name}</span>
+                          <span className="bpg-libs-t">
+                            <b>
+                              Библиотеки · {libs.length}
+                              {libs.some((l) => upd[l.name]) ? <span className="bpg-tag upd">есть обновления</span> : null}
+                            </b>
+                            <small>Нужны другим модам — лаунчер ставит их сам, трогать не обязательно</small>
                           </span>
-                          {up ? (
-                            <button
-                              className="btn sm primary"
-                              data-upd={md.name}
-                              style={{ height: '26px' }}
-                              onClick={() => {
-                                setItemLabels((l) => ({ ...l, [md.name]: '…' }))
-                                updateContent(profile!, kind, md.name)
-                                  .then(() => {
-                                    loadMods()
-                                    showToast('Обновлено')
-                                  })
-                                  .catch((er) => {
-                                    loadMods()
-                                    showToast('' + er)
-                                  })
-                              }}
-                            >
-                              {itemLabels[md.name] || (
-                                <>
-                                  <Icon id="i-arrow-up" /> Обновить
-                                </>
-                              )}
-                            </button>
-                          ) : null}
-                          <span className="mod-src">{modrinth ? 'Modrinth' : curse ? 'CurseForge' : 'Файл'}</span>
-                          <button
-                            className={'icon-btn mod-info' + (info ? ' on' : '')}
-                            aria-label="Подробнее"
-                            onClick={() => setOpenInfo(info ? '' : md.name)}
-                          >
-                            <Icon id="i-info" />
-                          </button>
-                          <span
-                            className={'tgl' + (md.enabled ? ' on' : '')}
-                            data-tg={md.name}
-                            role="switch"
-                            aria-checked={md.enabled}
-                            onClick={() => {
-                              // Отказ ядра обязан доехать до игрока: пока `.then`
-                              // стоял без пары, переключение мода при запущенной
-                              // игре молча роняло промис, тумблер оставался как
-                              // был, а причину видели только мы в журнале ошибок.
-                              toggleContent(profile!, kind, md.name, !md.enabled)
-                                .then(() => loadMods())
-                                .catch((e) => showToast(apiErrorText(e, 'Не удалось выполнить действие'), 'error'))
-                            }}
-                          ></span>
-                          <button
-                            className="icon-btn del"
-                            data-del={md.name}
-                            aria-label="Удалить"
-                            onClick={async () => {
-                              if (await uiConfirm('Удалить ' + md.name + '?', { confirmLabel: 'Удалить' }))
-                                deleteContent(profile!, kind, md.name)
-                                  .then(() => loadMods())
-                                  .catch((e) => showToast(apiErrorText(e, 'Не удалось выполнить действие'), 'error'))
-                            }}
-                          >
-                            <Icon id="i-trash" />
-                          </button>
-                        </div>
-                        {info ? (
-                          <div className="mod-card-info">
-                            {md.description ? <p className="mod-card-desc">{md.description}</p> : null}
-                            {facts.length ? (
-                              <div className="mod-card-facts">
-                                {facts.map((f) => (
-                                  <span className="pill" key={f}>
-                                    {f}
-                                  </span>
-                                ))}
-                              </div>
-                            ) : null}
-                            <div className="mod-card-file">{md.name}</div>
-                            <div className="mod-card-acts">
-                              {md.project_id ? (
-                                <ModVersionPick
-                                  profile={profile!}
-                                  kind={kind}
-                                  file={md.name}
-                                  current={md.version_number || ''}
-                                  onChanged={() => loadMods()}
-                                />
-                              ) : null}
-                              {modrinth ? (
-                                <button className="btn sm secondary" onClick={() => openProject(modrinth, kind)}>
-                                  <Icon id="i-ext" /> Modrinth
-                                </button>
-                              ) : null}
-                              {curse ? (
-                                <button
-                                  className="btn sm secondary"
-                                  onClick={() => openUrl('https://www.curseforge.com/projects/' + curse)}
-                                >
-                                  <Icon id="i-ext" /> CurseForge
-                                </button>
-                              ) : null}
-                              {!md.project_id ? (
-                                <button
-                                  className="btn sm secondary"
-                                  disabled={scanLabel !== 'Сканировать'}
-                                  onClick={runScan}
-                                >
-                                  <Icon id="i-search" /> {scanLabel === 'Сканировать' ? 'Найти в каталогах' : scanLabel}
-                                </button>
-                              ) : null}
-                            </div>
-                          </div>
-                        ) : null}
+                          <Icon id="i-chev-d" />
+                        </button>
+                        {libsOpen ? libs.map(row) : null}
                       </div>
-                    )
-                  })
+                    ) : null}
+                  </>
                 )}
               </div>
-              </div>
-              </div>
-              </div>
+
+              {/* Выбрали несколько — действия прилипают снизу, а не висят серыми всё время. */}
+              {sel.size ? (
+                <div className="bpg-selbar" role="toolbar" aria-label="Действия с выбранным">
+                  <b>Выбрано: {sel.size}</b>
+                  <span className="bpg-grow" />
+                  <button className="btn sm secondary" data-bulk="enable" onClick={() => void bulk([...sel], (n) => toggleContent(profile!, kind, n, true))}>
+                    <Icon id="i-check" /> Включить
+                  </button>
+                  <button className="btn sm secondary" data-bulk="disable" onClick={() => void bulk([...sel], (n) => toggleContent(profile!, kind, n, false))}>
+                    <Icon id="i-ban" /> Выключить
+                  </button>
+                  {[...sel].some((n) => upd[n]) ? (
+                    <button
+                      className="btn sm primary"
+                      data-bulk="update"
+                      onClick={() => void bulk([...sel].filter((n) => upd[n]), (n) => updateContent(profile!, kind, n), () => showToast('Обновлено'))}
+                    >
+                      <Icon id="i-arrow-up" /> Обновить · {[...sel].filter((n) => upd[n]).length}
+                    </button>
+                  ) : null}
+                  <button
+                    className="btn sm danger"
+                    data-bulk="delete"
+                    onClick={async () => {
+                      const names = [...sel]
+                      if (await uiConfirm('Удалить из сборки: ' + names.length + '?', { confirmLabel: 'Удалить' }))
+                        void bulk(names, (n) => deleteContent(profile!, kind, n))
+                    }}
+                  >
+                    <Icon id="i-trash" /> Удалить
+                  </button>
+                  <button className="btn sm ghost" aria-label="Снять выбор" data-tip="Esc" onClick={() => setSel(new Set())}>
+                    <Icon id="i-x" />
+                  </button>
+                </div>
+              ) : null}
               </>
               )}
             </div>
 
             <div id="bsTabWorlds" style={{ display: tab === 'worlds' ? '' : 'none' }}>
-              <div className="segs" style={{ marginBottom: '12px' }}>
-                {[
-                  ['all', 'Все'],
-                  ['single', 'Одиночные'],
-                  ['server', 'Серверы'],
-                ].map(([k, label]) => (
-                  <button
-                    key={k}
-                    className={'seg' + (wFilter === k ? ' on' : '')}
-                    data-wfilter={k}
-                    style={{ height: '32px', fontSize: '12.5px' }}
-                    onClick={() => {
-                      setWFilter(k)
-                      loadWorlds()
-                    }}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              {wFilter !== 'server' ? (
-                <WorldManager
-                  profile={profile!}
-                  onPlay={(folder, name) => {
-                    close()
-                    showToast('Заходим в мир «' + name + '»…')
-                    joinWithAuth(profile!, folder, null).catch((e) => showLaunchError(e))
-                  }}
-                />
-              ) : null}
-              <div id="bsWorlds" style={{ maxHeight: '250px', overflowY: 'auto' }}>
-                {worldsNotice ? (
-                  <p className="faint-note">{worldsNotice}</p>
-                ) : serversEmpty ? (
-                  wFilter === 'server' ? <p className="faint-note">Серверов пока нет</p> : null
-                ) : (
-                  <>
-                    {filteredServers.map((s2) => {
-                      const pg = pings[s2.ip]
-                      const online = pg && pg.online >= 0 && (pg.max > 0 || pg.online > 0 || pg.version)
-                      return (
-                      <div className="mod-line srv-line" key={'s' + s2.ip}>
-                        <span className="mod-mini">
-                          <Icon id="i-server" />
-                        </span>
-                        <span className="srv-line-body">
-                          <b>
-                            {s2.name}
-                            {pg === undefined ? (
-                              <span className="srv-ping-dot loading"></span>
-                            ) : online ? (
-                              <span className="srv-ping-dot on"></span>
-                            ) : (
-                              <span className="srv-ping-dot off"></span>
-                            )}
-                          </b>
-                          <span className="srv-line-meta">
-                            {online ? (
-                              <>
-                                {pg!.online}/{pg!.max} онлайн{pg!.version ? ' · ' + pg!.version : ''}
-                                {pg!.motd ? ' · ' + pg!.motd.slice(0, 40) : ''}
-                              </>
-                            ) : pg === undefined ? (
-                              'проверяем…'
-                            ) : (
-                              s2.ip + ' · офлайн'
-                            )}
-                          </span>
-                        </span>
-                        <button
-                          className="btn sm primary w-join"
-                          data-ip={s2.ip}
-                          style={{ marginLeft: '8px' }}
-                          onClick={() => {
-                            close()
-                            showToast('Подключаемся к ' + s2.ip + '…')
-                            joinWithAuth(profile!, null, s2.ip, s2.name).catch((e) => showLaunchError(e))
-                          }}
-                        >
-                          <Icon id="i-play" /> Играть
-                        </button>
-                        <button
-                          className="icon-btn del w-del"
-                          aria-label="Удалить сервер"
-                          data-ip={s2.ip}
-                          onClick={() => removeServer(profile!, s2.ip).then(() => loadWorlds())}
-                        >
-                          <Icon id="i-trash" />
-                        </button>
-                      </div>
-                      )
-                    })}
-                  </>
-                )}
-              </div>
-              <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-                <div className="input sm" style={{ flex: 1 }}>
-                  <input
-                    id="wsName"
-                    placeholder="Название"
-                    value={wsName}
-                    onChange={(e) => setWsName(e.target.value)}
-                  />
+              {/* Миры и серверы (владелец 10.10.2026: «как тут человек поймёт? слишком много кнопок»):
+                  сверху фильтр и одна кнопка «Добавить», ниже — два понятных раздела. Пусто —
+                  объясняем, откуда берутся миры, и даём два действия; форма сервера — только по кнопке. */}
+              <div className="bpg-bar">
+                <div className="bpg-kinds" role="tablist" aria-label="Что показать">
+                  {(
+                    [
+                      ['all', 'Всё', 'i-blocks'],
+                      ['single', 'Миры', 'i-map'],
+                      ['server', 'Серверы', 'i-server'],
+                    ] as const
+                  ).map(([k, label, ic]) => (
+                    <button
+                      key={k}
+                      type="button"
+                      role="tab"
+                      aria-selected={wFilter === k}
+                      className={'bpg-kind' + (wFilter === k ? ' on' : '')}
+                      data-wfilter={k}
+                      onClick={() => {
+                        setWFilter(k)
+                        loadWorlds()
+                      }}
+                    >
+                      <Icon id={ic} />
+                      {label}
+                      {k === 'single' && worldCount ? <span className="bpg-kind-n">{worldCount}</span> : null}
+                      {k === 'server' && servers.length ? <span className="bpg-kind-n">{servers.length}</span> : null}
+                    </button>
+                  ))}
                 </div>
-                <div className="input sm" style={{ flex: 1 }}>
-                  <input
-                    id="wsIp"
-                    placeholder="mc.example.net"
-                    value={wsIp}
-                    onChange={(e) => setWsIp(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') (document.getElementById('wsAdd') as HTMLButtonElement | null)?.click()
-                    }}
-                  />
-                </div>
+                <span className="bpg-grow" />
                 <button
-                  className="btn sm secondary"
-                  id="wsAdd"
-                  onClick={() => {
-                    const n = wsName.trim() || wsIp.trim()
-                    const ip = wsIp.trim()
-                    if (!ip) return
-                    addServer(profile!, n, ip).then(() => {
-                      setWsName('')
-                      setWsIp('')
-                      loadWorlds()
-                      showToast('Сервер добавлен')
-                    })
+                  type="button"
+                  className="btn md primary"
+                  id="bsAddWorldMenu"
+                  onClick={(e) => {
+                    const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                    setAddMenu({ x: r.right - 240, y: r.bottom + 4 })
                   }}
                 >
-                  <Icon id="i-plus" /> Сервер
+                  <Icon id="i-plus" /> Добавить
                 </button>
+                {addMenu ? (
+                  <ContextMenu
+                    x={addMenu.x}
+                    y={addMenu.y}
+                    onClose={() => setAddMenu(null)}
+                    items={[
+                      { id: 'maps', label: 'Карту из каталога', icon: 'i-map', onPick: openMapsCatalog },
+                      { id: 'archive', label: 'Мир из архива (.zip)', icon: 'i-upload', onPick: importWorldArchive },
+                      {
+                        id: 'server',
+                        label: 'Сервер по адресу',
+                        icon: 'i-server',
+                        onPick: () => {
+                          setServerForm(true)
+                          requestAnimationFrame(() => document.getElementById('wsIp')?.focus())
+                        },
+                      },
+                    ]}
+                  />
+                ) : null}
               </div>
-              <button
-                className="btn sm secondary"
-                id="bsAddWorld"
-                style={{ width: '100%', marginTop: '8px' }}
-                onClick={() => {
-                  useProfiles.getState().setSelected(profile)
-                  close()
-                  setScreen('mods')
-                  useMods.getState().scopeTo(profile)
-                  useMods.getState().set({ modTab: 'world', fCat: 'все' })
-                  void useMods.getState().load()
-                }}
-              >
-                <Icon id="i-map" /> Карты из каталога
-              </button>
+
+              {wFilter !== 'server' ? (
+                <section className="bpg-sec">
+                  {wFilter === 'all' ? <h3 className="bpg-sec-h">Миры{worldCount ? <span>{worldCount}</span> : null}</h3> : null}
+                  <WorldManager
+                    profile={profile!}
+                    reloadKey={worldsReload}
+                    hideImport
+                    onCount={setWorldCount}
+                    empty={
+                      <div className="bpg-empty sm">
+                        <span className="bpg-empty-ic">
+                          <Icon id="i-map" />
+                        </span>
+                        <b>Миров пока нет</b>
+                        <span>Мир появится здесь, когда создашь его в игре. Или поставь готовую карту — паркур, хоррор, выживание на острове.</span>
+                        <div className="bpg-empty-acts">
+                          <button className="btn md primary" onClick={openMapsCatalog}>
+                            <Icon id="i-map" /> Карты из каталога
+                          </button>
+                          <button className="btn md secondary" onClick={importWorldArchive}>
+                            <Icon id="i-upload" /> Мир из архива
+                          </button>
+                        </div>
+                      </div>
+                    }
+                    onPlay={(folder, name) => {
+                      close()
+                      showToast('Заходим в мир «' + name + '»…')
+                      joinWithAuth(profile!, folder, null).catch((e) => showLaunchError(e))
+                    }}
+                  />
+                </section>
+              ) : null}
+
+              {wFilter !== 'single' ? (
+                <section className="bpg-sec">
+                  {wFilter === 'all' ? <h3 className="bpg-sec-h">Серверы{servers.length ? <span>{servers.length}</span> : null}</h3> : null}
+                  {worldsNotice ? (
+                    <p className="faint-note">{worldsNotice}</p>
+                  ) : servers.length ? (
+                    <div id="bsWorlds" className="bpg-srv-list">
+                      {servers.map((s2) => {
+                        const pg = pings[s2.ip]
+                        const online = pg && pg.online >= 0 && (pg.max > 0 || pg.online > 0 || pg.version)
+                        return (
+                          <div className="mod-line srv-line bpg-srv" key={'s' + s2.ip}>
+                            <span className="mod-mini">
+                              <Icon id="i-server" />
+                            </span>
+                            <span className="srv-line-body">
+                              <b>
+                                {s2.name}
+                                {pg === undefined ? (
+                                  <span className="srv-ping-dot loading"></span>
+                                ) : online ? (
+                                  <span className="srv-ping-dot on"></span>
+                                ) : (
+                                  <span className="srv-ping-dot off"></span>
+                                )}
+                              </b>
+                              <span className="srv-line-meta">
+                                {online ? (
+                                  <>
+                                    {pg!.online}/{pg!.max} онлайн{pg!.version ? ' · ' + pg!.version : ''}
+                                    {pg!.motd ? ' · ' + pg!.motd.slice(0, 40) : ''}
+                                  </>
+                                ) : pg === undefined ? (
+                                  'проверяем…'
+                                ) : (
+                                  s2.ip + ' · не отвечает'
+                                )}
+                              </span>
+                            </span>
+                            <button
+                              className="btn sm primary w-join"
+                              data-ip={s2.ip}
+                              onClick={() => {
+                                close()
+                                showToast('Подключаемся к ' + s2.ip + '…')
+                                joinWithAuth(profile!, null, s2.ip, s2.name).catch((e) => showLaunchError(e))
+                              }}
+                            >
+                              <Icon id="i-play" /> Играть
+                            </button>
+                            <button
+                              className="icon-btn del w-del"
+                              aria-label="Убрать сервер"
+                              data-ip={s2.ip}
+                              onClick={() => removeServer(profile!, s2.ip).then(() => loadWorlds())}
+                            >
+                              <Icon id="i-trash" />
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : !serverForm ? (
+                    <div className="bpg-none left">
+                      <span>Серверов в этой сборке нет — добавь адрес, и он появится в списке серверов в игре.</span>
+                      <button type="button" className="btn sm secondary" onClick={() => setServerForm(true)}>
+                        <Icon id="i-plus" /> Добавить сервер
+                      </button>
+                    </div>
+                  ) : null}
+                  {serverForm ? (
+                    <form
+                      className="bpg-srv-form"
+                      onSubmit={(e) => {
+                        e.preventDefault()
+                        const ip = wsIp.trim()
+                        if (!ip) return
+                        if (!hasTauri()) {
+                          showToast('Доступно в приложении')
+                          return
+                        }
+                        addServer(profile!, wsName.trim() || ip, ip).then(() => {
+                          setWsName('')
+                          setWsIp('')
+                          setServerForm(false)
+                          loadWorlds()
+                          showToast('Сервер добавлен')
+                        })
+                      }}
+                    >
+                      <div className="input sm">
+                        <input id="wsIp" placeholder="Адрес сервера, например mc.example.net" value={wsIp} onChange={(e) => setWsIp(e.target.value)} />
+                      </div>
+                      <div className="input sm bpg-srv-name">
+                        <input id="wsName" placeholder="Название (не обязательно)" value={wsName} onChange={(e) => setWsName(e.target.value)} />
+                      </div>
+                      <button type="submit" className="btn sm primary" id="wsAdd" disabled={!wsIp.trim()}>
+                        Добавить
+                      </button>
+                      <button type="button" className="btn sm ghost" onClick={() => setServerForm(false)}>
+                        Отмена
+                      </button>
+                    </form>
+                  ) : null}
+                </section>
+              ) : null}
             </div>
 
             {tab === 'shots' ? (
@@ -1794,19 +2086,33 @@ export function InstancePage() {
                     }}
                   />
                 </div>
-                <button
-                  className="btn sm secondary"
-                  disabled={renameBusy || !renameVal.trim() || renameVal.trim() === profile}
-                  onClick={doRename}
-                >
-                  {renameBusy ? 'Переименовываем…' : 'Переименовать'}
-                </button>
+                {/* Кнопка — только когда имя правда меняют: серой «Переименовать» на виду не стоит. */}
+                {renameVal.trim() && renameVal.trim() !== profile ? (
+                  <button className="btn sm primary" disabled={renameBusy} onClick={doRename}>
+                    {renameBusy ? 'Сохраняем…' : 'Сохранить'}
+                  </button>
+                ) : null}
               </div>
-              <div className="set-row" style={{ alignItems: 'flex-start' }}>
+              <div className="set-row" style={{ alignItems: coreEdit ? 'flex-start' : 'center' }}>
                 <span className="lab">
                   Версия и загрузчик
                 </span>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '300px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '300px', alignItems: 'flex-end' }}>
+                  {/* Сводкой: «Forge 47.4.10 · Minecraft 1.20.1». Три выпадающих списка — только по «Изменить». */}
+                  {!coreEdit ? (
+                    <div className="bpg-core">
+                      <span className="bpg-core-v">
+                        <b>{pr ? LOADER_NAME(pr) : '—'}</b>
+                        {pr && pr.loader_version ? <small>{pr.loader_version}</small> : null}
+                        <span className="bpg-core-dot">·</span>
+                        <b>Minecraft {pr ? pr.version : ''}</b>
+                      </span>
+                      <button type="button" className="btn sm secondary" onClick={() => setCoreEdit(true)}>
+                        Изменить
+                      </button>
+                    </div>
+                  ) : (
+                  <>
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <Select
                       width={148}
@@ -1850,6 +2156,11 @@ export function InstancePage() {
                   >
                     {coreBusy ? 'Меняем…' : 'Сменить'}
                   </button>
+                  <button type="button" className="btn sm ghost" style={{ alignSelf: 'flex-start' }} onClick={() => setCoreEdit(false)}>
+                    Отмена
+                  </button>
+                  </>
+                  )}
                   {pr && (coreUpd.mc || coreUpd.loader) ? (
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                       {coreUpd.mc ? (
@@ -1874,78 +2185,46 @@ export function InstancePage() {
                   ) : null}
                 </div>
               </div>
-              <div className="set-row" style={{ alignItems: 'flex-start' }}>
+              <div className="set-row" style={{ alignItems: 'center' }}>
                 <span className="lab">
                   Иконка
                 </span>
-                <div style={{ width: '340px' }}>
-                  <IconGrid
-                    id="bsIcons"
-                    current={pr ? pr.icon : null}
-                    style={{ width: '100%', gridTemplateColumns: 'repeat(7,1fr)', maxHeight: '140px' }}
-                    onPick={(v) => {
-                      if (hasTauri() && profile)
-                        setProfileIcon(profile, v).then(() => {
-                          void useProfiles.getState().refresh()
-                          showToast('Иконка обновлена')
-                        })
-                    }}
-                  />
-                  <div style={{ display: 'flex', gap: '6px', marginTop: '8px', alignItems: 'center' }}>
-                    {customCover ? (
-                      <img
-                        src={customCover}
-                        alt=""
-                        width={32}
-                        height={32}
-                        style={{ borderRadius: '8px', objectFit: 'cover', flex: '0 0 auto' }}
-                      />
-                    ) : null}
-                    <button
-                      className="btn sm secondary"
-                      id="bsIconBuild"
-                      style={{ flex: 1 }}
-                      data-sound="open"
-                      onClick={() => setIconEditor(true)}
-                    >
-                      <Icon id="i-brush" /> Собрать
+                <div className="bpg-iconset">
+                  {/* Иконка — набором Modrinth App (10.10.2026: «тут старое, надо новые»): окно выбора,
+                      «Случайная» и своя картинка. Старые блоки и «Собрать» убраны. */}
+                  <button type="button" className="bi-edit" aria-label="Сменить иконку" data-sound="open" onClick={() => setPickIcon(true)}>
+                    <BuildIcon icon={pr ? pr.icon : null} name={profile || ''} size={72} />
+                    <span className="bi-edit-lab" aria-hidden="true">
+                      <Icon id="i-edit" />
+                      Сменить
+                    </span>
+                  </button>
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    {/* Одна кнопка «Сменить» (там и набор Modrinth, и своя картинка) и «Случайная». */}
+                    <button className="btn sm secondary" id="bsIconPick" data-sound="open" onClick={() => setPickIcon(true)}>
+                      Сменить
                     </button>
                     <button
                       className="btn sm secondary"
-                      id="bsCoverPick"
-                      style={{ flex: 1 }}
+                      id="bsIconRandom"
+                      data-track="icon_random"
                       onClick={() => {
+                        if (!profile) return
+                        const next = randomIcon()
                         if (!hasTauri()) {
-                          showToast('Доступно в приложении')
+                          useProfiles.setState((st) => ({ profiles: st.profiles.map((x) => (x.name === profile ? { ...x, icon: next } : x)) }))
                           return
                         }
-                        if (!profile) return
-                        pickProfileCover(profile)
-                          .then((all) => {
-                            if (!all) return
-                            void useProfiles.getState().refresh()
-                            showToast('Обложка обновлена')
+                        setProfileIcon(profile, next)
+                          .then((list) => {
+                            if (Array.isArray(list)) useProfiles.setState({ profiles: list })
+                            else void useProfiles.getState().refresh()
                           })
-                          .catch((e) => showToast('' + e, 'error'))
+                          .catch((e) => showToast('Иконка не сохранилась: ' + e, 'error'))
                       }}
                     >
-                      <Icon id="i-image" /> Картинка
+                      <span aria-hidden="true">🎲</span> Случайная
                     </button>
-                    {customCover ? (
-                      <button
-                        className="btn sm secondary"
-                        id="bsCoverClear"
-                        onClick={() => {
-                          if (!hasTauri() || !profile) return
-                          clearProfileCover(profile).then(() => {
-                            void useProfiles.getState().refresh()
-                            showToast('Вернули блок Millida')
-                          })
-                        }}
-                      >
-                        Убрать
-                      </button>
-                    ) : null}
                   </div>
                 </div>
               </div>

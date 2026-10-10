@@ -199,7 +199,9 @@
 :root:root .sh-bar::after,
 :root:root .sidebar.collapsed [data-tip]::after,
 :root:root .s2-wp-tile.on::before,
-:root:root .px-excl::after {
+:root:root .px-excl::after,
+:root:root .ph-mt.ph-mt-own::before,
+:root:root .hs-host2::before {
   box-shadow: none !important;
   background-image:
     linear-gradient(var(--px-ol) 0 0),

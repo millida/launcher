@@ -5,20 +5,24 @@ import { CatalogFor } from './CatalogTop'
 import { CatalogNotice } from './CatalogShell'
 import { FilterGroup, SiteFilters } from './SiteFilters'
 import { librariesLast } from './similar'
+import { smartQuery, type SmartResult } from './smartQuery'
 import { HitRow, MapRow, RowSkeleton, SiteGalleryCard, SiteRow } from './SiteRow'
 import type { MapHit } from './SiteRow'
-import { SERVER_SECTIONS, SITE_SECTIONS, fmtNum, loadCurated, loadSkins, materials, peekHit, sectionBySlug, sectionByKind } from './site'
+import { SERVER_SECTIONS, SITE_SECTIONS, fmtNum, loadCurated, loadSkinTags, loadSkins, materials, peekHit, sectionBySlug, sectionByKind } from './site'
+import { useSkinTag } from './skinTag'
+import { skinName } from './SkinPage'
 import type { CuratedItem, SkinTile } from './site'
 import { CATALOG_GROUPS, SECTION_VISUAL, curatedTitle, groupOf, groupVisual, siteSectionPath } from './sections'
 import type { NavGroup } from './sections'
 import { PxIcon } from '../PxIcon'
+import { PxArt } from '../milli/px'
 import { Fallback, MrIcon, TagGlyph } from './SiteRow'
 import { CHEAT_SOURCE_NOTE, installFromCatalog } from '../../lib/catalogInstall'
 import { openExt } from '../../lib/api'
-import { setScreen } from '../../state/ui'
+import { openModal, setScreen } from '../../state/ui'
 import { capFirst, loaderIconSrc, loaderLabel, loaderTone, plural } from './site'
 import type { SiteSection } from './site'
-import { activeFilters, useServerSite, useSite } from './siteStore'
+import { activeFilters, setSectionScope, useServerSite, useSite } from './siteStore'
 import { cfTail, mrTail, nextLoad } from './mrTail'
 import { CatalogCtx, useCatalogCtx } from './target'
 import { PurchasesPane } from './Purchases'
@@ -27,14 +31,15 @@ import { host } from '../../screens/hosting/api'
 import { useHubTab } from '../playhub/hubTab'
 import { hasTauri } from '../../ipc/tauri'
 import { listVersions } from '../../ipc/commands'
+import type { Profile } from '../../ipc/commands'
 import { loaderId } from '../../lib/format'
 import { pickTargetName } from '../../lib/installKeys'
-import { pickBuild } from '../../state/buildPicker'
+import { setNewBuildPreset } from '../../state/newBuild'
 import { F_VERS, WORLD_CATS, useMods } from '../../state/mods'
 import { useProfiles } from '../../state/profiles'
 import { track } from '../../lib/telemetry'
 import { ItemPage } from './ItemPage'
-import { closeItem, openItem, useItem } from './itemStore'
+import { dropItem, openItem, scroller, useItem } from './itemStore'
 import { CHEATS, cheatName } from './itemView'
 import '../../styles/pixel/catalog2.css'
 
@@ -142,21 +147,44 @@ function Sort({ value, onPick }: { value: 'popular' | 'new'; onPick: (v: 'popula
 }
 
 /** Подгрузка следующей страницы при прокрутке — как `MrAutoMore` сайта. */
-function AutoMore({ onMore, busy }: { onMore: () => void; busy: boolean }) {
+function AutoMore({ onMore, busy, n }: { onMore: () => void; busy: boolean; /** Сколько уже в ленте — сам догружаем, только если прошлый раз что-то пришло. */ n?: number }) {
   const ref = useRef<HTMLDivElement>(null)
   const fn = useRef(onMore)
   fn.current = onMore
   useEffect(() => {
     const el = ref.current
     if (!el) return
-    const io = new IntersectionObserver((es) => es.some((e) => e.isIntersecting) && fn.current(), { rootMargin: '600px 0px' })
+    const io = new IntersectionObserver((es) => es.some((e) => e.isIntersecting) && fn.current(), { rootMargin: '1400px 0px' })
     io.observe(el)
     return () => io.disconnect()
   }, [])
+  // Догрузили, а низ ленты всё ещё на виду (карточек мало для экрана) — грузим дальше сами:
+  // наблюдатель второй раз не срабатывает, и лента «застревала» на «Показать ещё».
+  const lastN = useRef(-1)
+  useEffect(() => {
+    if (busy) return
+    const el = ref.current
+    if (!el) return
+    // Ничего не пришло (сбой сети) — не долбим сервер в цикле: дальше по кнопке.
+    if (n !== undefined && n === lastN.current) return
+    lastN.current = n ?? -1
+    const t = window.setTimeout(() => {
+      const r = el.getBoundingClientRect()
+      if (r.top < window.innerHeight + 1400) fn.current()
+    }, 150)
+    return () => window.clearTimeout(t)
+  }, [busy, n])
   return (
     <div ref={ref} className="mr-more">
       <button className={'btn md secondary' + (busy ? ' cat-busy' : '')} disabled={busy} data-track="load_more" onClick={onMore}>
-        Показать ещё
+        {busy ? (
+          <>
+            <span className="mr-spin" aria-hidden="true" />
+            Загружаю…
+          </>
+        ) : (
+          'Показать ещё'
+        )}
       </button>
     </div>
   )
@@ -169,35 +197,74 @@ function ForBuild({ sec }: { sec: SiteSection }) {
   return <ForBuildInner sec={sec} />
 }
 
+const FIT_PREF = 'catalog-fit'
+const fitPref = (): boolean => {
+  try {
+    return localStorage.getItem(FIT_PREF) !== 'all'
+  } catch {
+    return true
+  }
+}
+
 function ForBuildInner({ sec }: { sec: SiteSection }) {
   const profiles = useProfiles((s) => s.profiles)
   const selected = useProfiles((s) => s.selected)
   const targetBuild = useMods((s) => s.targetBuild)
   const version = useSite((s) => s.version)
   const loader = useSite((s) => s.loader)
-  if (!profiles.length || sec.kind === 'modpack' || sec.kind === 'world') return null
+  const page = useSite((s) => s.page)
+  const total = useSite((s) => s.total)
+  const hidden = !profiles.length || sec.kind === 'modpack' || sec.kind === 'world'
   const name = pickTargetName(targetBuild, profiles.map((p) => p.name), selected || '')
   const target = profiles.find((p) => p.name === name) || null
   const withLoader = sec.kind === 'mod'
+  const scope = (p: Profile) => ({ version: p.version, loader: withLoader ? loaderId(p) : null })
   const scoped = !!target && version === target.version && (!withLoader || loader === loaderId(target))
-  const toggle = () => {
-    if (!target) return
-    if (scoped) useSite.getState().patch({ version: null, loader: null })
-    else useSite.getState().patch({ version: target.version, loader: withLoader ? loaderId(target) : null })
-  }
+
+  // По умолчанию — только то, что запустится в сборке (как Modrinth App, когда выбран
+  // профиль). Версия и ядро ставятся до первого запроса раздела (setSectionScope) — один
+  // запрос вместо двух; здесь — только если раздел уже открыт без них.
+  useEffect(() => {
+    if (hidden || !target) return
+    const t = target
+    setSectionScope((slug) => {
+      const kind = sectionBySlug(slug).kind
+      if (!fitPref() || kind === 'modpack' || kind === 'world') return null
+      return { version: t.version, loader: kind === 'mod' ? loaderId(t) : null }
+    })
+    const st = useSite.getState()
+    if (fitPref() && !st.version && !st.loader) st.patch(scope(t))
+    return () => setSectionScope(null)
+  }, [hidden, target?.name])
+
+  if (hidden) return null
+  const current = page ? total : null
   return (
     <CatalogFor
       build={target}
+      builds={profiles}
       scoped={scoped}
-      onPick={() =>
-        void pickBuild('контент').then((n) => {
-          if (!n) return
-          useMods.getState().scopeTo(n)
-          const p = useProfiles.getState().profiles.find((x) => x.name === n)
-          if (p) useSite.getState().patch({ version: p.version, loader: withLoader ? loaderId(p) : null })
-        })
-      }
-      onToggle={toggle}
+      custom={!scoped && (!!version || !!loader)}
+      fitCount={scoped ? current : null}
+      allCount={scoped ? null : current}
+      onScope={(on) => {
+        if (!target) return
+        try {
+          localStorage.setItem(FIT_PREF, on ? 'fit' : 'all')
+        } catch {
+          /* не запомнится */
+        }
+        useSite.getState().patch(on ? scope(target) : { version: null, loader: null })
+      }}
+      onSelect={(n) => {
+        useMods.getState().scopeTo(n)
+        const p = useProfiles.getState().profiles.find((x) => x.name === n)
+        if (p && (scoped || fitPref())) useSite.getState().patch(scope(p))
+      }}
+      onNew={() => {
+        if (target) setNewBuildPreset({ version: target.version, loader: loaderId(target) })
+        openModal('nbModal')
+      }}
     />
   )
 }
@@ -358,6 +425,8 @@ function Frame({
   search,
   count,
   sort,
+  refreshing = false,
+  note = null,
   children,
 }: {
   sec: SiteSection
@@ -369,6 +438,10 @@ function Frame({
   search: React.ReactNode
   count: string | null
   sort: React.ReactNode
+  /** Лента обновляется: тонкая полоса сверху, старые карточки остаются на месте. */
+  refreshing?: boolean
+  /** Вместо числа в заголовке, пока ждём долгий ответ (место то же — лента не сдвигается). */
+  note?: string | null
   children: React.ReactNode
 }) {
   // Колонка фильтров не длиннее видимой области прокрутки: высоту шапки над ней
@@ -384,29 +457,50 @@ function Frame({
     const sc = box
     // До прилипания колонка начинается ниже (под разделами) — её низ уходил за окно, а
     // overscroll-behavior: contain не давал долистать страницу. Высота = от её верха до низа окна.
+    // Раз в кадр и только при настоящей разнице: запись стиля на каждое событие прокрутки
+    // дёргала раскладку всей страницы — шапка «подлагивала» при листании (10.10.2026).
+    let frame = 0
+    let last = -1
     const fit = () => {
+      frame = 0
       const bottom = sc.getBoundingClientRect().bottom
       const top = Math.max(el.getBoundingClientRect().top, sc.getBoundingClientRect().top + 12)
-      el.style.setProperty('max-height', Math.max(240, bottom - top - 12) + 'px')
+      // Каталог уменьшен (zoom 0.88): экранные пиксели → пиксели CSS колонки. Без этого
+      // колонка была на 12% короче окна и снизу торчал пустой фон (владелец 10.10.2026).
+      const zoom = el.offsetHeight > 0 ? el.getBoundingClientRect().height / el.offsetHeight : 1
+      const h = Math.max(240, Math.round((bottom - top - 16) / (zoom || 1)))
+      if (Math.abs(h - last) < 2) return
+      last = h
+      el.style.setProperty('max-height', h + 'px')
+    }
+    const soon = () => {
+      if (!frame) frame = requestAnimationFrame(fit)
     }
     fit()
-    const ro = new ResizeObserver(fit)
+    const ro = new ResizeObserver(soon)
     ro.observe(sc)
-    sc.addEventListener('scroll', fit, { passive: true })
+    sc.addEventListener('scroll', soon, { passive: true })
     return () => {
       ro.disconnect()
-      sc.removeEventListener('scroll', fit)
+      cancelAnimationFrame(frame)
+      sc.removeEventListener('scroll', soon)
     }
   }, [narrow])
   return (
     <div className="mr-layout">
-      {!narrow ? <aside className="mr-aside" aria-label="Фильтры" ref={aside}>{filters}</aside> : null}
+      {/* Сборка — первым блоком колонки фильтров (как профиль в Modrinth App): это главный фильтр. */}
+      {!narrow ? (
+        <aside className="mr-aside" aria-label="Фильтры" ref={aside}>
+          <ForBuild sec={sec} />
+          {filters}
+        </aside>
+      ) : null}
       <div className="mr-main">
         {/* Одна строка вместо трёх (владелец 06.10.2026: «до карточек полэкрана»): поиск, «Для: сборка»,
             а заголовок раздела — мелкой подписью с числом. */}
         <div className="mr-toolbar mr-toolbar-one">
           {search}
-          <ForBuild sec={sec} />
+          {narrow ? <ForBuild sec={sec} /> : null}
           <div className="mr-toolbar-row">
             {narrow ? (
               <button className={'btn sm secondary mr-fbtn' + (open ? ' on' : '')} aria-expanded={open} data-track="filters" onClick={onOpen}>
@@ -420,12 +514,75 @@ function Frame({
           </div>
         </div>
         {narrow && open ? <div className="mr-sheet">{filters}</div> : null}
+        <div className={'mr-loadbar' + (refreshing ? ' on' : '')} aria-hidden="true" />
         <h1 className="mr-h1 mr-h1-sm">
           {sec.h1}
-          {count ? <span className="mr-h1-n">{count}</span> : null}
+          {count ? (
+            <span className="mr-h1-n">{count}</span>
+          ) : note ? (
+            <span className="mr-h1-n mr-slow" role="status">
+              <span className="mr-spin" aria-hidden="true" />
+              {note}
+            </span>
+          ) : null}
         </h1>
         {children}
       </div>
+    </div>
+  )
+}
+
+/** Разделы — предметами Minecraft, как вкладки творческого инвентаря (владелец 10.10.2026: «иконки ни о чём»). */
+const GROUP_ART: Record<string, string> = {
+  all: 'nether_star',
+  packs: 'chest',
+  mods: 'crafting_table',
+  graphics: 'painting',
+  worlds: 'compass',
+  looks: 'steve_glow',
+  servers: 'redstone_lamp_on',
+  purchases: 'diamond',
+}
+
+type FeedView = 'list' | 'gallery'
+
+/** Вид ленты на раздел (как у Modrinth: список или карточки с картинкой), запоминается. */
+function useFeedView(sec: SiteSection): [FeedView, (v: FeedView) => void] {
+  const key = 'catalog-view:' + sec.slug
+  const read = (): FeedView => {
+    try {
+      const v = localStorage.getItem(key)
+      if (v === 'list' || v === 'gallery') return v
+    } catch {
+      /* без хранилища — вид по умолчанию */
+    }
+    // По умолчанию — карточки с картинкой, как у Modrinth (владелец 10.10.2026: «со старта должно быть вот так»).
+    return 'gallery'
+  }
+  const [view, setView] = useState<FeedView>(read)
+  useEffect(() => setView(read()), [sec.slug])
+  return [
+    view,
+    (v) => {
+      setView(v)
+      try {
+        localStorage.setItem(key, v)
+      } catch {
+        /* не запомнится — не страшно */
+      }
+    },
+  ]
+}
+
+function ViewToggle({ view, onPick }: { view: FeedView; onPick: (v: FeedView) => void }) {
+  return (
+    <div className="segs mr-view" role="group" aria-label="Вид ленты">
+      <button className={'seg' + (view === 'list' ? ' on' : '')} aria-pressed={view === 'list'} aria-label="Списком" data-tip="Списком" data-track="feed_view_list" onClick={() => onPick('list')}>
+        <Icon id="i-list" />
+      </button>
+      <button className={'seg' + (view === 'gallery' ? ' on' : '')} aria-pressed={view === 'gallery'} aria-label="Карточками" data-tip="Карточками" data-track="feed_view_gallery" onClick={() => onPick('gallery')}>
+        <Icon id="i-grid" />
+      </button>
     </div>
   )
 }
@@ -439,7 +596,8 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
   const searching = q.length >= 2
   const tail = useMemo(() => mrTail(s.items, s.mr, s.page, s.pages, peekHit, searching), [s.items, s.mr, s.page, s.pages, searching])
   const cfRows = useMemo(() => cfTail(s.items, tail, s.cf, s.page, s.pages, peekHit, searching), [s.items, tail, s.cf, s.page, s.pages, searching])
-  const count = s.page ? materials(s.total + s.mrTotal + cfRows.length) : null
+  // Одно число — материалы Millida под фильтры (хвост Modrinth в заголовок не идёт: «86 036» сбивал).
+  const count = s.page ? materials(s.total) : null
   const items = useMemo(
     () => (sec.kind === 'mod' && (s.sort ?? 'recommended') === 'recommended' && !searching ? librariesLast(s.items) : s.items),
     [s.items, s.sort, sec.kind, searching],
@@ -456,13 +614,67 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
       use={s.use}
       price={s.price}
       sort={s.sort}
+      searching={searching}
+      serverSorts={s.serverSorts}
       onSort={(v) => s.patch({ sort: v })}
       onPatch={(p) => s.patch(p)}
       onReset={() => s.reset()}
     />
   )
   const loading = !s.page && !s.failed
-  const Card = sec.gallery ? SiteGalleryCard : SiteRow
+  // Умный поиск (smartQuery.ts): разбираем «хоррор хуйня» в фильтры, раздел, версию и ядро.
+  const [smart, setSmart] = useState<(SmartResult & { raw: string }) | null>(null)
+  useEffect(() => setSmart(null), [sec.slug])
+  // Что выставил прошлый умный запрос — новый запрос это заменяет, а не складывает
+  // (было: «хоррор», потом «приключения» — искало хоррор И приключения, 10.10.2026).
+  const smartKeys = useRef<('category' | 'use' | 'version' | 'loader')[]>([])
+  const commitSmart = (raw: string) => {
+    const text = raw.trim()
+    const clear: Parameters<typeof s.patch>[0] = {}
+    for (const k of smartKeys.current) clear[k] = null
+    smartKeys.current = []
+    if (!text) {
+      setSmart(null)
+      s.patch({ ...clear, q: '' })
+      return
+    }
+    const f = s.facets
+    const r = smartQuery(text, sec.slug, f ? { categories: f.categories.map((c) => c.value), uses: (f.uses || []).map((u) => ({ value: u.value, label: u.label })) } : null)
+    const patch: Parameters<typeof s.patch>[0] = { ...clear, q: r.q }
+    // Тема из запроса — единственная тема: прошлые «Для чего» и категория снимаются.
+    if (r.category || r.use) {
+      patch.category = r.category
+      patch.use = r.use
+    }
+    if (r.version) patch.version = r.version
+    if (r.loader && sec.loaderAxis) patch.loader = r.loader
+    smartKeys.current = (['category', 'use', 'version', 'loader'] as const).filter((k) => patch[k] != null)
+    if (r.section && r.section !== sec.slug && sectionBySlug(r.section).source === 'listing') {
+      const st = store.getState()
+      st.setSection(r.section as SiteSection['slug'])
+      // У нового раздела свои категории: повторяем разбор, когда придут его фильтры.
+      const again = () => {
+        const nf = store.getState().facets
+        const r2 = smartQuery(text, r.section!, nf ? { categories: nf.categories.map((c) => c.value), uses: (nf.uses || []).map((u) => ({ value: u.value, label: u.label })) } : null)
+        const p2: Parameters<typeof s.patch>[0] = { q: r2.q }
+        if (r2.category) p2.category = r2.category
+        if (r2.use) p2.use = r2.use
+        if (r2.version) p2.version = r2.version
+        if (r2.loader && sectionBySlug(r.section!).loaderAxis) p2.loader = r2.loader
+        store.getState().patch(p2)
+      }
+      let tries = 0
+      const wait = () => (store.getState().facets || ++tries > 30 ? again() : window.setTimeout(wait, 100))
+      window.setTimeout(wait, 100)
+      return
+    }
+    setSmart(r.chips.length ? { ...r, raw: text } : null)
+    s.patch(patch)
+  }
+  const [view, setView] = useFeedView(sec)
+  const gallery = view === 'gallery'
+  const Card = gallery ? SiteGalleryCard : SiteRow
+  const feedClass = gallery ? 'mr-galgrid' + (sec.gallery ? '' : ' is-big') : 'mr-list'
   return (
     <Frame
       sec={sec}
@@ -471,15 +683,46 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
       active={activeFilters(s)}
       open={open}
       onOpen={() => setOpen((v) => !v)}
-      search={<SearchField value={s.q} label={'Поиск по разделу «' + sec.title + '»'} onCommit={(v) => s.patch({ q: v })} />}
+      search={
+        <div className="mr-smart">
+          <SearchField value={s.q} label="Что ищешь? Например: страшное с другом" onCommit={commitSmart} />
+          {smart && smart.chips.length ? (
+            <div className="mr-smart-chips" aria-live="polite">
+              <span className="mr-smart-h">Понял так:</span>
+              {smart.chips.map((c) => (
+                <span key={c} className="mr-smart-chip">
+                  {c}
+                </span>
+              ))}
+              {smart.q ? <span className="mr-smart-chip is-q">«{smart.q}»</span> : null}
+              <button
+                className="mr-smart-x"
+                aria-label="Искать как написал"
+                data-track="smart_search_raw"
+                onClick={() => {
+                  setSmart(null)
+                  const undo: Parameters<typeof s.patch>[0] = {}
+                  for (const k of smartKeys.current) undo[k] = null
+                  smartKeys.current = []
+                  s.patch({ ...undo, q: smart.raw })
+                }}
+              >
+                Искать как написал
+              </button>
+            </div>
+          ) : null}
+        </div>
+      }
       count={count}
-      sort={null}
+      note={loading && s.slow ? 'сервер отвечает дольше обычного…' : null}
+      sort={<ViewToggle view={view} onPick={setView} />}
+      refreshing={s.busy && s.page > 0}
     >
       {s.failed ? (
         <CatalogNotice note={{ icon: 'i-alert', title: 'Каталог не ответил', action: { label: 'Повторить', primary: true, icon: 'i-restart', onClick: () => void s.load() } }} />
       ) : loading ? (
-        <div className={sec.gallery ? 'mr-galgrid' : 'mr-list'}>
-          <RowSkeleton gallery={sec.gallery} />
+        <div className={feedClass}>
+          <RowSkeleton gallery={gallery} actions={sec.kind !== 'plugin' && sec.kind !== 'serverpack' && sec.kind !== 'addon'} />
         </div>
       ) : !s.items.length && !tail.length && !cfRows.length ? (
         <CatalogNotice
@@ -492,7 +735,7 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
       ) : (
         <>
           {s.items.length ? (
-            <div className={(sec.gallery ? 'mr-galgrid' : 'mr-list') + (s.busy && s.page === 1 ? ' cat-dim' : '')}>
+            <div className={feedClass + (s.busy && s.page === 1 ? ' is-refreshing' : '')}>
               {items.map((c, i) => (
                 // В «Все» строка ставится и открывается в своём настоящем разделе.
                 <Card key={c.slug} card={c} sec={sec.slug === 'all' && c.section ? sectionBySlug(c.section) : sec} list={sec.slug} pos={i} onOpenPack={onOpenPack} />
@@ -504,7 +747,7 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
               <div className="mr-src-divider" role="separator">
                 <span>Ещё с Modrinth</span>
               </div>
-              <div className={(sec.gallery ? 'mr-galgrid' : 'mr-list') + (s.busy && s.page === 1 ? ' cat-dim' : '')}>
+              <div className={feedClass + (s.busy && s.page === 1 ? ' is-refreshing' : '')}>
                 {tail.map((c, i) => (
                   <Card key={'mr:' + c.slug} card={c} sec={sec} pos={s.items.length + i} onOpenPack={onOpenPack} />
                 ))}
@@ -516,14 +759,14 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
               <div className="mr-src-divider" role="separator">
                 <span>Ещё с CurseForge</span>
               </div>
-              <div className={(sec.gallery ? 'mr-galgrid' : 'mr-list') + (s.busy && s.page === 1 ? ' cat-dim' : '')}>
+              <div className={feedClass + (s.busy && s.page === 1 ? ' is-refreshing' : '')}>
                 {cfRows.map((c, i) => (
                   <Card key={'cf:' + c.slug} card={c} sec={sec} pos={s.items.length + tail.length + i} onOpenPack={onOpenPack} />
                 ))}
               </div>
             </>
           ) : null}
-          {nextLoad(s) ? <AutoMore busy={s.busy} onMore={() => !s.busy && void s.load(true)} /> : null}
+          {nextLoad(s) ? <AutoMore busy={s.busy} n={s.items.length + s.mr.length} onMore={() => !s.busy && void s.load(true)} /> : null}
         </>
       )}
     </Frame>
@@ -674,19 +917,32 @@ function SkinsPane() {
   const sec = sectionBySlug('skins')
   const [q, setQ] = useState('')
   const [sort, setSort] = useState<'popular' | 'new'>('popular')
+  const tag = useSkinTag((st) => st.tag)
+  const [tags, setTags] = useState<{ slug: string; label: string }[]>([])
   const [items, setItems] = useState<SkinTile[] | null>(null)
   const [page, setPage] = useState(1)
   const [pages, setPages] = useState(0)
   const [total, setTotal] = useState(0)
   const [busy, setBusy] = useState(false)
+  const [first, setFirst] = useState(false)
   const [failed, setFailed] = useState(false)
   const seq = useRef(0)
+  useEffect(() => {
+    let alive = true
+    void loadSkinTags()
+      .then((l) => alive && setTags(l))
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [])
   const load = (p = 1) => {
     const my = ++seq.current
     setBusy(true)
+    setFirst(p === 1)
     setFailed(false)
-    if (p === 1) setItems(null)
-    loadSkins({ q, sort, page: p })
+    // Новая выдача не стирает старую до ответа: сетка не мигает пустотой (обновление — полосой).
+    loadSkins({ q, sort, page: p, tag: tag ? tag.slug : null })
       .then((r) => {
         if (my !== seq.current) return
         setItems((old) => (p > 1 ? [...(old || []), ...r.items.filter((x) => !(old || []).some((o) => o.id === x.id))] : r.items))
@@ -697,40 +953,69 @@ function SkinsPane() {
       .catch(() => my === seq.current && (setFailed(true), setItems((i) => i || [])))
       .finally(() => my === seq.current && setBusy(false))
   }
-  useEffect(() => load(1), [q, sort])
+  useEffect(() => load(1), [q, sort, tag?.slug])
   useSearchTrack('skins', q.trim(), items ? total : null)
+  // Популярные метки первыми — те, что ищут дети чаще всего; выбранная — всегда видна.
+  const shownTags = tags.slice(0, 18)
+  if (tag && !shownTags.some((t) => t.slug === tag.slug)) shownTags.unshift(tag)
   return (
     <div className="mr-main mr-skins">
       <header className="mr-head">
-        <h1 className="mr-h1">{sec.h1}</h1>
+        <h1 className="mr-h1">
+          {sec.h1}
+          {items ? <span className="mr-h1-n">{total.toLocaleString('ru-RU') + ' ' + plural(total, 'скин', 'скина', 'скинов')}</span> : null}
+        </h1>
       </header>
       <div className="mr-toolbar">
-        <SearchField value={q} label="Поиск скинов" onCommit={setQ} />
+        <SearchField value={q} label="Поиск скинов: аниме, в худи, девочка…" onCommit={setQ} />
         <div className="mr-toolbar-row">
-          <span className="mr-count">{items ? total.toLocaleString('ru-RU') + ' ' + plural(total, 'скин', 'скина', 'скинов') : ''}</span>
           <Sort value={sort} onPick={setSort} />
         </div>
       </div>
+      {shownTags.length ? (
+        <nav className="sk-chips" aria-label="Метки скинов">
+          <button type="button" className={'sk-chip' + (!tag ? ' on' : '')} data-track="skin_tag_all" onClick={() => useSkinTag.getState().set(null)}>
+            Все
+          </button>
+          {shownTags.map((t) => (
+            <button
+              key={t.slug}
+              type="button"
+              className={'sk-chip' + (tag && tag.slug === t.slug ? ' on' : '')}
+              data-track="skin_tag"
+              data-id={t.slug}
+              onClick={() => useSkinTag.getState().set(tag && tag.slug === t.slug ? null : t)}
+            >
+              {capFirst(t.label)}
+            </button>
+          ))}
+        </nav>
+      ) : null}
+      <div className={'mr-loadbar' + (busy && first && items && items.length ? ' on' : '')} aria-hidden="true" />
       {failed && !(items && items.length) ? (
         <CatalogNotice note={{ icon: 'i-alert', title: 'Каталог скинов не ответил', action: { label: 'Повторить', primary: true, icon: 'i-restart', onClick: () => load(1) } }} />
       ) : items === null ? (
         <div className="mr-skingrid">
-          {Array.from({ length: 12 }, (_, i) => (
+          {Array.from({ length: 14 }, (_, i) => (
             <div key={i} className="card mr-skin cat-skel" aria-hidden="true">
               <span className="mr-skin-art skel"></span>
+              <span className="mr-skin-name">
+                <span className="skel-text" style={{ width: ['70%', '55%', '80%'][i % 3] }} />
+              </span>
+              <span className="btn sm secondary skel-btn"></span>
             </div>
           ))}
         </div>
       ) : !items.length ? (
-        <CatalogNotice note={{ icon: 'i-search', title: 'Ничего не нашлось' }} />
+        <CatalogNotice note={{ icon: 'i-search', title: 'Ничего не нашлось', action: tag || q ? { label: 'Все скины', onClick: () => (useSkinTag.getState().set(null), setQ('')) } : undefined }} />
       ) : (
         <>
-          <div className={'mr-skingrid' + (busy && page === 1 ? ' cat-dim' : '')}>
+          <div className="mr-skingrid">
             {items.map((k, i) => (
               <SkinCard key={k.id} k={k} pos={i} />
             ))}
           </div>
-          {page < pages ? <AutoMore busy={busy} onMore={() => !busy && load(page + 1)} /> : null}
+          {page < pages ? <AutoMore busy={busy} n={items.length} onMore={() => !busy && load(page + 1)} /> : null}
         </>
       )}
     </div>
@@ -738,7 +1023,7 @@ function SkinsPane() {
 }
 
 function SkinCard({ k, pos }: { k: SkinTile; pos: number }) {
-  const name = capFirst(k.title.replace(/^Скин:\s*/i, ''))
+  const name = skinName(k.title)
   return (
     <article className="card mr-skin" data-track="row_open" data-kind="skin" data-id={k.id} data-pos={pos} onClick={() => openItem({ kind: 'skin', skin: k })}>
       <span className="mr-skin-art" aria-hidden="true">
@@ -759,7 +1044,7 @@ function SkinCard({ k, pos }: { k: SkinTile; pos: number }) {
           void installFromCatalog('skins', k.id, { name, slim: k.model === 'slim' })
         }}
       >
-        В гардероб
+        Надеть
       </button>
     </article>
   )
@@ -824,10 +1109,17 @@ function GroupNav({
               data-track={'cat_group_' + g.key}
               onClick={() => onPick(on ? section : g.tabs[0]!.slug)}
             >
-              <span className="mr-sec-ic" style={{ color: vis.tint }}>
-                <PxIcon name={vis.px} size={16} />
+              <span className="mr-tab-art" aria-hidden="true">
+                {g.key === 'packs' ? (
+                  // Сборки — книжная полка Millida вместо сундука (владелец 10.10.2026).
+                  <img className="mr-tab-block" src="/block-icons/Block52Millida.png" alt="" draggable={false} />
+                ) : GROUP_ART[g.key] ? (
+                  <PxArt name={GROUP_ART[g.key]!} size={32} glint={false} />
+                ) : (
+                  <PxIcon name={vis.px} size={20} />
+                )}
               </span>
-              {g.label}
+              <span className="mr-tab-label">{g.label}</span>
             </button>
           )
         })}
@@ -901,7 +1193,7 @@ export function SiteCatalog({
     ...(extra || []),
     ...(servers ? [{ id: 'servers', label: 'Серверы', node: servers, px: 'server', tint: 'var(--m-sec-servers)' }] : []),
     // Купленное в каталоге — поставить заново в любую сборку. На сервер платное не ставится.
-    ...(server ? [] : [{ id: 'purchases', label: 'Покупки', node: <PurchasesPane onOpenPack={onOpenPack} />, px: 'wallet', tint: 'var(--m-sec-purchases)' }]),
+    ...(server ? [] : [{ id: 'purchases', label: 'Покупки', node: <PurchasesPane onOpenPack={(slug) => openPack?.(slug)} />, px: 'wallet', tint: 'var(--m-sec-purchases)' }]),
   ]
   const ctx = useMemo(() => ({ store, target }), [store, target])
   const item = useItem((s) => s.cur)
@@ -912,7 +1204,10 @@ export function SiteCatalog({
   }, [seq, section])
 
   // Вход снаружи («Все» у полки, плитка категории, «Добавить» в сборке): раздел
-  // и сужение под сборку берутся из `useMods`, как их выставил вход.
+  // и сужение под сборку берутся из `useMods`, как их выставил вход. Только при
+  // новом входе (seq): возврат со страницы сборки (Arcania) — лента как была, с
+  // прокруткой; раньше сюда подмешивалась версия и ядро выбранной сборки (владелец
+  // 10.10.2026: вышел из Arcania — а там «1.21.11 · Fabric»). Первый заход — «Сборки».
   useEffect(() => {
     if (server) {
       const st = useServerSite.getState()
@@ -920,22 +1215,55 @@ export function SiteCatalog({
       else if (!st.page) void st.load()
       return
     }
+    const fresh = appliedSeq !== seq
+    if (!fresh && appliedContent === !!content) {
+      const st = useSite.getState()
+      if (!st.page && !st.busy) void st.load()
+      const y = backTop
+      backTop = null
+      if (y !== null)
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            const sc = scroller(document.querySelector('.mr-cat'))
+            if (sc) sc.scrollTop = y
+          }),
+        )
+      return
+    }
+    const firstVisit = appliedSeq < 0 && seq === 0
+    appliedSeq = seq
+    appliedContent = !!content
+    backTop = null
     const m = useMods.getState()
-    let sec = sectionByKind(m.modTab)
+    let sec = firstVisit ? sectionBySlug('modpacks') : sectionByKind(m.modTab)
     if (content && sec.kind === 'modpack') sec = sectionBySlug('mods')
     const st = useSite.getState()
-    const scope = {
-      version: m.fVer !== 'любая' && m.fVer ? m.fVer : null,
-      loader: sec.loaderAxis && sec.kind !== 'shader' && m.fLoader !== 'любой' && m.fLoader ? m.fLoader : null,
-    }
-    if (st.section !== sec.slug || !st.page) {
+    const scope = firstVisit
+      ? { version: null, loader: null }
+      : {
+          version: m.fVer !== 'любая' && m.fVer ? m.fVer : null,
+          loader: sec.loaderAxis && sec.kind !== 'shader' && m.fLoader !== 'любой' && m.fLoader ? m.fLoader : null,
+        }
+    const clean = !st.category && !st.q && !st.use && !st.edition && !st.price && st.access === 'all' && st.sort === 'recommended'
+    if (st.section !== sec.slug || !st.page || !clean || (sec.kind === 'modpack' && (st.version || st.loader))) {
       st.setSection(sec.slug)
       if (scope.version || scope.loader) useSite.getState().patch(scope)
-    } else if (scope.version || scope.loader) st.patch(scope)
-    else void st.load()
+    } else if ((scope.version || scope.loader) && (scope.version !== st.version || scope.loader !== st.loader)) st.patch(scope)
+    else if (!st.busy) void st.load()
   }, [seq, content, server])
 
   const sec = sectionBySlug(section)
+  // Своя сборка (Arcania) открывается страницей хаба — каталог при этом снимается.
+  // Запоминаем прокрутку, чтобы «Назад» вернул ленту на то же место.
+  const openPack = onOpenPack
+    ? (slug: string) => {
+        const sc = scroller(document.querySelector('.mr-cat'))
+        const top = sc ? sc.scrollTop : 0
+        const ok = onOpenPack(slug)
+        if (ok !== false) backTop = top
+        return ok
+      }
+    : undefined
   const ownTab = own ? extras.find((x) => x.id === own) || null : null
   const extraBtn = (x: ExtraTab) => (
     <button
@@ -944,22 +1272,33 @@ export function SiteCatalog({
       aria-current={own === x.id ? 'page' : undefined}
       data-track={'cat_' + x.id}
       onClick={() => {
-        closeItem()
+        dropItem()
         setOwn(x.id)
+        toTop()
       }}
     >
-      {x.px ? (
-        <span className="mr-sec-ic" style={{ color: x.tint }}>
-          <PxIcon name={x.px} size={16} />
-        </span>
-      ) : null}
-      {x.label}
+      <span className="mr-tab-art" aria-hidden="true">
+        {GROUP_ART[x.id] ? <PxArt name={GROUP_ART[x.id]!} size={32} glint={false} /> : x.px ? <PxIcon name={x.px} size={20} /> : null}
+      </span>
+      <span className="mr-tab-label">{x.label}</span>
     </button>
   )
+  // Новая вкладка — с самого верха (владелец 10.10.2026: «перекидывает туда, где я был,
+  // а верхнюю часть не видно»).
+  // Все прокручиваемые предки — наверх, и ещё раз после отрисовки новой вкладки.
+  const toTop = () => {
+    const run = () => {
+      for (let n: HTMLElement | null = document.querySelector('.mr-cat'); n; n = n.parentElement)
+        if (/(auto|scroll)/.test(getComputedStyle(n).overflowY)) n.scrollTop = 0
+    }
+    run()
+    requestAnimationFrame(() => requestAnimationFrame(run))
+  }
   const pick = (slug: string) => {
-    closeItem()
+    dropItem()
     setOwn(null)
     if (slug !== section) store.getState().setSection(slug as SiteSection['slug'])
+    toTop()
   }
   // Карт в каталоге Millida может не быть (раздел наполняется) — тогда, как и
   // раньше, лента CurseForge. Любой фильтр или поиск — уже ответ каталога.
@@ -978,7 +1317,7 @@ export function SiteCatalog({
   ) : sec.source === 'site' ? (
     <SitePane slug={sec.slug as 'seeds' | 'heads' | 'capes'} />
   ) : (
-    <SectionPane key={sec.slug} sec={sec} narrow={narrow} onOpenPack={onOpenPack} />
+    <SectionPane key={sec.slug} sec={sec} narrow={narrow} onOpenPack={openPack} />
   )
   return (
     <CatalogCtx.Provider value={ctx}>
@@ -1022,3 +1361,9 @@ export function SiteCatalog({
 }
 
 const BUILD: CatalogTarget = { kind: 'build' }
+
+/** Какой вход в каталог уже применён (useHubTab.seq); -1 — каталог ещё не открывали. */
+let appliedSeq = -1
+let appliedContent = false
+/** Прокрутка ленты перед уходом на страницу сборки хаба — вернуть по «Назад». */
+let backTop: number | null = null

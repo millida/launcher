@@ -484,7 +484,6 @@
 .mr-gal-cover > .ph-card-tag.prem { color: #241600; background: var(--m-warning); }
 .mr-gal-cover > .ph-card-tag.excl { color: var(--m-accent-fg); background: var(--m-rarity-epic); }
 .mr-gal-body { position: relative; display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; padding: 8px 10px 10px 60px; }
-.cat-skel .mr-gal-body { padding-left: 10px; gap: 8px; }
 .mr-gal-icon { position: absolute; left: 10px; top: -18px; z-index: 2; width: 42px; height: 42px; overflow: hidden; background: var(--m-surface-2); --px-n: 4px; clip-path: var(--px-4); }
 .mr-gal-icon > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .mr-gal-title { margin: 0; font: 700 14px/19px var(--m-font); color: var(--m-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -675,3 +674,273 @@
 .mr-gal-dl svg { width: 11px; height: 11px; }
 .mr-gal-foot:has(.mr-actions > :nth-child(2)) .mr-gal-stat { display: inline-flex; }
 .mr-gal-stat:empty { display: none; }
+
+/* ══ Каталог плотнее (10.10.2026, владелец: «всё большое, сделай поменьше, чтобы видно было») ══
+   Сборки и моды — строкой как у Modrinth: значок 64, «название · автор · скачивания» одной строкой,
+   описание в одну строку, метки, справа одна кнопка. «На хостинг» в ленте не показываем —
+   он на странице материала. Галерея (шейдеры, текстуры, карты) — по 4 в ряд. */
+.mr-list { gap: 6px; }
+.card.mr-row { grid-template-columns: 64px minmax(0, 1fr) auto; gap: 14px; padding: 10px 14px 10px 10px; align-items: center; }
+.mr-icon { width: 64px; height: 64px; }
+.mr-body { gap: 2px; }
+.mr-titleline { height: 22px; align-items: center; }
+.mr-title { font: 800 16px/22px var(--m-font); }
+.mr-by { font-size: 13px; }
+.mr-dl { display: inline-flex; align-items: center; gap: 3px; flex: none; font-size: 12.5px; font-weight: 700; color: var(--m-fg-subtle); font-variant-numeric: tabular-nums; }
+.mr-dl svg { width: 12px; height: 12px; }
+.mr-desc { height: 20px; -webkit-line-clamp: 1; font-size: 13.5px; }
+.mr-tags { height: 22px; margin-top: 2px; gap: 2px 14px; }
+.mr-tag { height: 22px; font-size: 12.5px; }
+.mr-side { flex-direction: row; align-items: center; gap: 12px; min-width: 0; }
+.mr-side .mr-upd { font-size: 12px; }
+.mr-side .mr-actions { margin: 0; }
+.card.mr-row .mr-actions .btn { height: 32px; padding: 0 14px; font-size: 13px; }
+.mr-list .btn.secondary.mr-host, .mr-galgrid .btn.secondary.mr-host { display: none; }
+@media (max-width: 639px) { .card.mr-row { grid-template-columns: 48px minmax(0, 1fr); } .mr-icon { width: 48px; height: 48px; } }
+
+.mr-galgrid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 1279px) { .mr-galgrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 899px) { .mr-galgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.card.mr-gal .mr-gal-body { gap: 8px; padding: 10px 12px 12px; }
+.card.mr-gal .mr-gal-icon, .card.mr-gal.has-shot .mr-gal-icon { width: 36px; height: 36px; }
+.card.mr-gal .mr-gal-title { font-size: 14.5px; -webkit-line-clamp: 1; }
+.card.mr-gal .mr-gal-summary { font-size: 12.5px; line-height: 17px; min-height: 34px; }
+.card.mr-gal .mr-gal-foot .mr-actions .btn { height: 28px; font-size: 12.5px; }
+
+/* Переключатель вида ленты: список / карточки (как у Modrinth) */
+.mr-view { flex: none; gap: 2px; }
+.mr-view .seg { width: 40px; height: 40px; padding: 0; justify-content: center; }
+.mr-view .seg svg { width: 16px; height: 16px; }
+.mr-toolbar-one .mr-toolbar-row { display: flex !important; }
+
+/* Карточки для сборок и модов — крупно, по 3 (по 2 в узком окне), картинка 16:9 */
+.mr-galgrid.is-big { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 1279px) { .mr-galgrid.is-big { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .mr-galgrid.is-big { grid-template-columns: minmax(0, 1fr); } }
+.mr-galgrid.is-big .card.mr-gal .mr-gal-body { gap: 8px; padding: 12px 14px 14px; }
+.mr-galgrid.is-big .card.mr-gal .mr-gal-icon { width: 48px; height: 48px; }
+.mr-galgrid.is-big .card.mr-gal .mr-gal-title { font-size: 16px; -webkit-line-clamp: 2; }
+.mr-galgrid.is-big .card.mr-gal .mr-gal-summary { font-size: 13.5px; line-height: 19px; min-height: 38px; }
+.mr-galgrid.is-big .card.mr-gal .mr-gal-foot .mr-actions .btn { height: 32px; font-size: 13px; }
+
+/* Карточки сборок и модов — как галерея Modrinth: по 2 в ряд (3 на широком), картинка сверху,
+   значок слева от «названия · автора» и описания, метки, внизу скачивания и кнопка. */
+.mr-galgrid.is-big { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (min-width: 1700px) { .mr-galgrid.is-big { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .mr-galgrid.is-big { grid-template-columns: minmax(0, 1fr); } }
+.mr-galgrid.is-big .card.mr-gal .mr-gal-cover { aspect-ratio: 2 / 1; }
+.mr-galgrid.is-big .card.mr-gal .mr-gal-body {
+  display: grid; grid-template-columns: 64px minmax(0, 1fr); grid-template-areas: 'icon names' 'icon desc' 'tags tags' 'foot foot';
+  column-gap: 14px; row-gap: 6px; padding: 14px 16px 16px; align-items: start;
+}
+.mr-galgrid.is-big .card.mr-gal .mr-gal-head { display: contents; }
+.mr-galgrid.is-big .card.mr-gal .mr-gal-icon { grid-area: icon; width: 64px; height: 64px; }
+.mr-galgrid.is-big .card.mr-gal .mr-gal-names { grid-area: names; flex-direction: row; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; }
+.mr-galgrid.is-big .card.mr-gal .mr-gal-head > .ph-card-tag { display: none; }
+.mr-galgrid.is-big .card.mr-gal .mr-gal-title { font-size: 17px; -webkit-line-clamp: 1; }
+.mr-galgrid.is-big .card.mr-gal .mr-gal-summary { grid-area: desc; min-height: 0; font-size: 14px; line-height: 20px; }
+.mr-galgrid.is-big .card.mr-gal .mr-gal-tags { grid-area: tags; margin-top: 4px; }
+.mr-galgrid.is-big .card.mr-gal .mr-gal-foot { grid-area: foot; padding-top: 6px; }
+
+/* ══ Мельче всё (10.10.2026, владелец: «всё слишком большое и не помещается») ══ */
+@media (min-width: 1024px) { .mr-layout { grid-template-columns: 220px minmax(0, 1fr); gap: 16px; } }
+.mr-main { container-type: inline-size; container-name: feed; }
+.card.mr-fbox { gap: 10px; padding: 10px; }
+.mr-fsec { gap: 4px; }
+.mr-fsec-t { font-size: 11.5px; }
+.seg.mr-pick-btn { height: 32px; padding: 0 10px; font-size: 13px; }
+.mr-quick > .seg.mr-key { height: 26px; font-size: 11.5px; }
+.mr-fbox .mr-keys > .seg.mr-key { height: 28px; padding: 0 8px; font-size: 12.5px; }
+.mr-fbox .mr-key-n { font-size: 11px; }
+.mr-toolbar-one { margin-bottom: 10px; }
+.mr-toolbar-one .mr-search { height: 38px; }
+.mr-view .seg { width: 36px; height: 36px; }
+.mr-h1.mr-h1-sm { margin-bottom: 8px; font-size: 14px; }
+
+/* Карточки: 3 в ряд, когда лента шире 820 px, иначе 2; картинка ниже, текст мельче */
+.mr-galgrid.is-big { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@container feed (min-width: 820px) { .mr-galgrid.is-big { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@container feed (min-width: 1300px) { .mr-galgrid.is-big { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@container feed (max-width: 520px) { .mr-galgrid.is-big { grid-template-columns: minmax(0, 1fr); } }
+.mr-galgrid.is-big .card.mr-gal .mr-gal-cover { aspect-ratio: 16 / 8; }
+.mr-galgrid.is-big .card.mr-gal .mr-gal-body { grid-template-columns: 40px minmax(0, 1fr); column-gap: 10px; row-gap: 4px; padding: 10px 12px 12px; }
+.mr-galgrid.is-big .card.mr-gal .mr-gal-icon { width: 40px; height: 40px; }
+.mr-galgrid.is-big .card.mr-gal .mr-gal-names { flex-direction: column; gap: 0; }
+.mr-galgrid.is-big .card.mr-gal .mr-gal-title { font-size: 14px; line-height: 18px; }
+.mr-galgrid.is-big .card.mr-gal .mr-gal-author { font-size: 12px; line-height: 15px; }
+.mr-galgrid.is-big .card.mr-gal .mr-gal-summary { grid-column: 1 / -1; grid-area: auto; grid-row: 2; font-size: 12.5px; line-height: 17px; -webkit-line-clamp: 2; }
+.mr-galgrid.is-big .card.mr-gal .mr-gal-body { grid-template-areas: 'icon names' 'desc desc' 'tags tags' 'foot foot'; }
+.mr-galgrid.is-big .card.mr-gal .mr-gal-summary { grid-area: desc; }
+.mr-galgrid.is-big .card.mr-gal .mr-tags.mr-gal-tags { max-height: 22px; }
+.mr-galgrid.is-big .card.mr-gal .mr-gal-tags .mr-tag { height: 22px; font-size: 11.5px; }
+.mr-galgrid.is-big .card.mr-gal .mr-gal-foot { padding-top: 2px; }
+.mr-galgrid.is-big .card.mr-gal .mr-gal-foot .mr-actions .btn { height: 28px; padding: 0 10px; font-size: 12px; }
+.card.mr-gal .mr-gal-cover > .ph-card-tag { height: 18px; font-size: 10px; }
+.card.mr-gal .mr-owned { height: 18px; font-size: 10.5px; }
+
+/* Мелкие плитки (шейдеры, текстуры, карты) — так же компактно */
+.mr-galgrid:not(.is-big) { gap: 10px; }
+@container feed (min-width: 1100px) { .mr-galgrid:not(.is-big) { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+
+/* ══ Разделы каталога — вкладки, а не кнопки (10.10.2026) ══
+   Это навигация, не действие: одна тёмная капсула слева, внутри плоские пункты; выбранный —
+   плоская заливка акцента без «кирпичного» объёма (объём — только у кнопок действий).
+   Подразделы — ниже, тише: выбранный подчёркнут, без заливки. */
+.segs.mr-groups, .segs.mr-subtypes { justify-content: flex-start; }
+.segs.mr-types.mr-groups {
+  display: inline-flex; width: auto; max-width: 100%; flex-wrap: wrap; gap: 2px; margin: 0 0 8px; padding: 4px;
+  background-color: var(--m-surface); --px-n: 5px; clip-path: var(--px-5);
+}
+.mr-groups .seg { height: 32px; padding: 0 12px; font-size: 13.5px; font-weight: 700; }
+.mr-groups .mr-sec-ic { margin-right: 7px; }
+.mr-groups .mr-sec-ic .px-icon, .mr-groups .mr-sec-ic svg { width: 14px; height: 14px; }
+:root:root .mr-groups .seg.on {
+  color: var(--px-on-accent); background-color: var(--m-accent);
+  --px-img: none; --px-ol: transparent; --px-ft: transparent; --px-fb: transparent; --px-fl: transparent; --px-fr: transparent;
+}
+.mr-groups .seg:not(.on):hover { background-color: var(--m-surface-2); }
+
+.segs.mr-subtypes { gap: 2px; margin: 0 0 12px; }
+.mr-subtypes .seg { height: 28px; padding: 0 10px; font-size: 12.5px; }
+.mr-subtypes .mr-sec-ic { margin-right: 6px; }
+:root:root .mr-subtypes .seg.on { color: var(--m-fg); background-color: transparent; box-shadow: inset 0 -2px 0 var(--m-accent); --px-img: none; --px-ft: transparent; --px-fb: transparent; --px-ol: transparent; }
+.mr-subtypes-gap { height: 40px; }
+
+/* Умный поиск: под полем — что поняли из запроса */
+.mr-smart { display: flex; flex-direction: column; gap: 6px; flex: 1 1 240px; min-width: 200px; }
+.mr-smart .mr-search { width: 100%; }
+.mr-smart-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: 12px; }
+.mr-smart-h { color: var(--m-fg-subtle); font-weight: 700; }
+.mr-smart-chip { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; font-weight: 800; color: var(--px-on-accent); background: var(--m-accent); --px-n: 4px; clip-path: var(--px-4); }
+.mr-smart-chip.is-q { color: var(--m-fg); background: var(--m-surface-2); }
+.mr-smart-x { margin-left: 4px; padding: 0; border: 0; background: none; cursor: pointer; font: 700 12px var(--m-font); color: var(--m-fg-subtle); text-decoration: underline; }
+.mr-smart-x:hover { color: var(--m-fg); }
+.mr-toolbar-one { align-items: flex-start; }
+/* Поле внутри колонки «умного поиска» не растягивается по высоте */
+.mr-toolbar-one .mr-smart .mr-search { flex: none; height: 38px; min-width: 0; }
+
+/* Карточка без картинки: строки не растягиваются на всю высоту ряда — без дыр между
+   названием, описанием и метками; кнопка прижата вниз (10.10.2026). */
+.mr-galgrid.is-big .card.mr-gal .mr-gal-body { grid-template-rows: auto auto auto 1fr; align-content: start; }
+.mr-galgrid.is-big .card.mr-gal .mr-gal-foot { align-self: end; }
+.card.mr-gal .mr-gal-iconcover { background: color-mix(in srgb, var(--m-surface-2) 70%, #000); }
+.card.mr-gal .mr-gal-iconcover > img:last-child { width: 30%; max-width: 96px; filter: drop-shadow(0 6px 0 rgba(0, 0, 0, 0.35)); }
+
+/* Разделы — по центру над лентой */
+.segs.mr-groups, .segs.mr-subtypes { justify-content: center; }
+.segs.mr-types.mr-groups { display: flex; width: fit-content; margin-left: auto; margin-right: auto; }
+.segs.mr-subtypes { width: fit-content; margin-left: auto; margin-right: auto; }
+/* Автор и скачивания в одну строку: автор ужимается, цифра всегда видна */
+.card.mr-gal .mr-gal-names { min-width: 0; }
+.card.mr-gal .mr-gal-author { flex-wrap: nowrap; overflow: hidden; }
+.card.mr-gal .mr-gal-by { flex: 0 1 auto; }
+
+/* ══ Сборка — первый блок колонки фильтров (10.10.2026, 2-я версия) ══
+   Тихая карточка в стиле фильтров: значок, имя, версия · ядро, обычная кнопка «Сменить
+   сборку» (видно, что нажимается), под ней переключатель «Только подходящее» с числами. */
+.cfor-wrap { position: relative; margin-bottom: 10px; }
+.card.cfor { display: flex; flex-direction: column; gap: 10px; padding: 12px; background-color: var(--m-surface); }
+.cfor-h { font: 600 11.5px/14px var(--m-font); color: var(--m-fg-subtle); }
+.cfor-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.cfor-cover { position: relative; display: block; flex: none; width: 40px; height: 40px; overflow: hidden; --px-n: 4px; clip-path: var(--px-4); }
+.cfor-cover.sm { width: 34px; height: 34px; }
+.cfor-cover > * { width: 100%; height: 100%; }
+.cfor-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cfor-text b { font-size: 14px; font-weight: 800; color: var(--m-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cfor-text small { font-size: 12px; font-weight: 600; color: var(--m-fg-subtle); }
+.btn.cfor-change { width: 100%; justify-content: center; gap: 6px; }
+.btn.cfor-change .icon { width: 11px; height: 11px; }
+.cfor-fit { display: flex; align-items: center; gap: 10px; width: 100%; padding: 0; border: 0; background: none; cursor: pointer; text-align: left; color: var(--m-fg); }
+.cfor-fit .tgl { flex: none; pointer-events: none; }
+.cfor-fit-t { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.cfor-fit-t b { font-size: 13px; font-weight: 700; }
+.cfor-fit-t small { font-size: 11.5px; color: var(--m-fg-subtle); font-variant-numeric: tabular-nums; }
+.cfor-pop {
+  position: absolute; z-index: 60; top: calc(100% + 4px); left: 0; right: 0; padding: 6px;
+  background: var(--m-surface-2); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5); --px-n: 5px; clip-path: var(--px-5);
+}
+.cfor-pop-h { padding: 4px 6px 6px; font: 600 11.5px/14px var(--m-font); color: var(--m-fg-subtle); }
+.cfor-list { display: flex; flex-direction: column; gap: 2px; max-height: 300px; overflow-y: auto; }
+.cfor-item { display: flex; align-items: center; gap: 10px; padding: 6px; border: 0; cursor: pointer; text-align: left; color: var(--m-fg); background: transparent; --px-n: 4px; clip-path: var(--px-4); }
+.cfor-item:hover { background: rgba(255, 255, 255, 0.05); }
+.cfor-item.on { background: rgba(255, 255, 255, 0.07); }
+.cfor-item > .icon { width: 13px; height: 13px; margin-left: auto; flex: none; color: var(--m-accent); }
+.cfor-item-t { display: flex; flex-direction: column; min-width: 0; }
+.cfor-item-t b { font-size: 13px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cfor-item-t small { font-size: 11.5px; color: var(--m-fg-subtle); }
+.cfor-new { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; height: 32px; margin-top: 4px; border: 0; cursor: pointer; font: 700 12.5px var(--m-font); color: var(--m-fg-muted); background: transparent; }
+.cfor-new:hover { color: var(--m-fg); }
+.cfor-new .icon { width: 11px; height: 11px; }
+
+/* ── Обновление ленты без затемнения (10.10.2026, владелец: «весь экран сереет и я жду») ──
+   Старые карточки остаются и кликаются; над лентой — тонкая бегущая полоса. Скелетоны —
+   только при самом первом входе в раздел. */
+.mr-loadbar { position: relative; height: 3px; margin: -3px 0 0; overflow: hidden; opacity: 0; transition: opacity 120ms; }
+.mr-loadbar.on { opacity: 1; }
+.mr-loadbar.on::after { content: ''; position: absolute; top: 0; bottom: 0; left: -30%; width: 30%; background: var(--m-accent); animation: mr-loadbar 900ms steps(12, end) infinite; }
+@keyframes mr-loadbar { to { left: 100%; } }
+.is-refreshing { transition: opacity 200ms 250ms; opacity: 0.85; }
+/* Карточки ниже экрана не рисуются, пока до них не долистали */
+.mr-galgrid > .card.mr-gal, .mr-list > .card.mr-row { content-visibility: auto; contain-intrinsic-size: auto 300px; }
+.mr-list > .card.mr-row { contain-intrinsic-size: auto 90px; }
+@media (prefers-reduced-motion: reduce) { .mr-loadbar.on::after { animation: none; left: 0; width: 100%; opacity: 0.5; } }
+
+/* Только каталог мельче (владелец 10.10.2026: «меньше — только каталог, библиотеку оставить»):
+   масштаб корня каталога, остальной лаунчер в прежнем размере. */
+.mr-cat:not(.is-server) { zoom: 0.88; }
+
+/* Пиксельный круг загрузки на «Показать ещё»: 8 квадратиков, бежит яркий */
+.mr-spin { position: relative; display: inline-block; width: 16px; height: 16px; margin-right: 8px; vertical-align: -3px; }
+.mr-spin::before {
+  content: ''; position: absolute; inset: 0;
+  background:
+    linear-gradient(var(--m-accent) 0 0) 6px 0 / 4px 4px,
+    linear-gradient(color-mix(in srgb, var(--m-accent) 80%, transparent) 0 0) 11px 2px / 4px 4px,
+    linear-gradient(color-mix(in srgb, var(--m-accent) 65%, transparent) 0 0) 12px 6px / 4px 4px,
+    linear-gradient(color-mix(in srgb, var(--m-accent) 50%, transparent) 0 0) 11px 10px / 4px 4px,
+    linear-gradient(color-mix(in srgb, var(--m-accent) 40%, transparent) 0 0) 6px 12px / 4px 4px,
+    linear-gradient(color-mix(in srgb, var(--m-accent) 30%, transparent) 0 0) 1px 10px / 4px 4px,
+    linear-gradient(color-mix(in srgb, var(--m-accent) 22%, transparent) 0 0) 0 6px / 4px 4px,
+    linear-gradient(color-mix(in srgb, var(--m-accent) 15%, transparent) 0 0) 1px 2px / 4px 4px;
+  background-repeat: no-repeat;
+  animation: mr-spin 800ms steps(8, end) infinite;
+}
+@keyframes mr-spin { to { transform: rotate(360deg); } }
+.mr-more .btn { gap: 0; }
+@media (prefers-reduced-motion: reduce) { .mr-spin::before { animation-duration: 2.4s; } }
+
+/* ── Заглушки = настоящие карточки (10.10.2026): полоса внутри строки текста, высоту даёт
+   сам шрифт; кнопка — той же высоты, что настоящая. Ничего не прыгает, когда приходят данные. */
+.skel-text {
+  display: inline-block; height: 0.72em; vertical-align: middle; max-width: 100%;
+  background: color-mix(in srgb, var(--m-fg) 9%, var(--m-surface-2));
+  animation: skel-pulse 1.4s ease-in-out infinite;
+}
+.cat-skel .skel-text + br + .skel-text { margin-top: 0; }
+.cat-skel .mr-gal-summary { display: block; }
+.btn.skel-btn { display: inline-block; width: 104px; pointer-events: none; color: transparent; animation: skel-pulse 1.4s ease-in-out infinite; }
+.mr-gal-foot .mr-actions .btn.skel-btn, .mr-side .btn.skel-btn { min-width: 104px; }
+.cat-skel .mr-tag { color: transparent; }
+@keyframes skel-pulse { 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) { .skel-text, .btn.skel-btn { animation: none; } }
+/* Карточки ниже экрана не рисуются — но их оценка высоты близка к настоящей,
+   иначе при листании лента «доезжает» (было 360px на все виды). */
+.mr-galgrid.is-big > .card.mr-gal { contain-intrinsic-size: auto 330px; }
+.mr-h1-n.mr-slow { display: inline-flex; align-items: center; font-size: 13px; }
+.mr-h1-n.mr-slow .mr-spin { width: 12px; height: 12px; transform: scale(0.75); margin-right: 4px; }
+.mr-tab-art .mr-tab-block { display: block; width: 15px; height: 15px; object-fit: contain; }
+
+/* Колонка фильтров при листании не обрезается посередине (владелец 10.10.2026: «баг в дизайне»):
+   листается сама карточка фильтров, а не колонка — рамка карточки целиком всегда видна,
+   «Ставлю в сборку» стоит на месте, а его выпадающий список не обрезается краем колонки. */
+@media (min-width: 1024px) {
+  .mr-aside { display: flex; flex-direction: column; overflow: visible; }
+  .mr-aside > .cfor-wrap { flex: none; }
+  .mr-aside > .card.mr-fbox {
+    flex: 0 1 auto; min-height: 120px; overflow-y: auto; overscroll-behavior: contain;
+    scrollbar-width: thin; scrollbar-color: var(--m-surface-2) transparent;
+  }
+  .mr-aside > .card.mr-fbox::-webkit-scrollbar { width: 6px; }
+  .mr-aside > .card.mr-fbox::-webkit-scrollbar-thumb { background: var(--m-surface-2); }
+  .mr-aside > .card.mr-fbox > * { flex: none; }
+}

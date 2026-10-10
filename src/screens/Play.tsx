@@ -155,7 +155,7 @@ export function Play({ on }: { on: boolean }) {
       // Иконка сборки крупно по центру — как на карточке «Моих сборок»
       // (владелец 24.09.2026: мелкий сундук в углу).
       <span className="lobby-mode-cover lobby-mode-bi">
-        <BuildIcon icon={sel?.icon} size={104} />
+        <BuildIcon icon={sel?.icon} name={sel?.name || mode.name} size={104} />
       </span>
     ) : mode?.kind === 'version' ? (
       <img src={'/versions/' + mode.version + '.webp'} alt="" onError={(e) => (e.currentTarget.style.display = 'none')} />

@@ -7,7 +7,7 @@ import { createProfile, setFpsBoost } from '../ipc/commands'
 import type { McVersion } from '../ipc/commands'
 import { track, trackFailure } from '../lib/telemetry'
 import { BUILD_NAME_MAX } from '../lib/format'
-import { DEFAULT_ICON } from '../lib/buildIcon'
+import { randomIcon } from '../lib/buildIcon'
 import { useProfiles } from '../state/profiles'
 import { autoBuildName, takeNewBuildPreset } from '../state/newBuild'
 import { ensureMcVersionList, useMcVersionList } from '../state/mcVersionList'
@@ -54,7 +54,8 @@ export function NewBuildModal() {
   const [ver, setVer] = useState('')
   const [loader, setLoader] = useState<LoaderId>(DEFAULT_LOADER)
   const [loaderVer, setLoaderVer] = useState(AUTO_LOADER_VERSION)
-  const [icon, setIcon] = useState<string>(DEFAULT_ICON)
+  // Новая сборка — сразу со своей случайной иконкой, как в Modrinth App (владелец 10.10.2026).
+  const [icon, setIcon] = useState<string>(randomIcon)
   const [pickIcon, setPickIcon] = useState(false)
   const [fps, setFps] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -114,7 +115,7 @@ export function NewBuildModal() {
     setNameTouched(!!pre?.name)
     setLoader(asLoader(pre?.loader))
     setJoin(pre?.join || null)
-    setIcon(DEFAULT_ICON)
+    setIcon(randomIcon())
     setPickIcon(false)
     setFps(true)
     setBusy(false)

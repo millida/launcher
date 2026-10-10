@@ -8,7 +8,7 @@ import type { MillidaPack } from '../../ipc/commands'
 import type { ModHit } from '../../state/mods'
 import { cfProjectOf } from '../../lib/millidaCatalog'
 import { SECTION_SOURCE, listingQuery } from './sections'
-import type { EditionFilter, PriceFilter, SectionSlug, SectionSource } from './sections'
+import type { CatalogSortId, EditionFilter, PriceFilter, SectionSlug, SectionSource } from './sections'
 import type { CatalogFile, Pricing } from './paid'
 
 /*
@@ -60,13 +60,17 @@ export interface SiteSection {
   source: SectionSource
 }
 
+const GALLERY_SLUGS = new Set<string>(['texture-packs', 'shaders', 'maps', 'seeds', 'capes', 'heads'])
+
 const sec = (slug: SiteSlug, kind: SiteSection['kind'], title: string, h1: string, loaderAxis: boolean): SiteSection => ({
   slug,
   kind,
   title,
   h1,
   loaderAxis,
-  gallery: slug !== 'skins',
+  // Картинкой выбирают только то, что смотрят глазами (как Modrinth: галерея по умолчанию у шейдеров и
+  // ресурс-паков); сборки и моды — плотным списком (владелец 10.10.2026: «всё большое»).
+  gallery: GALLERY_SLUGS.has(slug),
   source: SECTION_SOURCE[slug],
 })
 
@@ -181,6 +185,8 @@ export function realUpdated(card: Pick<SiteCard, 'updatedAt' | 'mrHit'>, files?:
 
 export interface SiteListing {
   section: string
+  /** Какие сортировки знает сервер (новый бэкенд); нет поля — только базовые три. */
+  sorts?: string[]
   total: number
   page: number
   perPage: number
@@ -216,7 +222,7 @@ export interface ListingQuery {
   loader?: string | null
   category?: string | null
   q?: string | null
-  sort?: 'recommended' | 'popular' | 'new'
+  sort?: CatalogSortId
   page?: number
   perPage?: number
   edition?: EditionFilter | null
@@ -232,14 +238,21 @@ function qs(p: Record<string, string | number | null | undefined>): string {
   return sp.toString()
 }
 
+/** Ключ кэша выдачи — по нему же берётся сохранённая на диске копия (staleCatalog). */
+export const listingKey = (p: ListingQuery): string => 'site:/catalog/listing?' + listingQuery(p.section, { ...p, perPage: p.perPage || PER_PAGE })
+
 export function loadListing(p: ListingQuery): Promise<SiteListing> {
-  const path = '/catalog/listing?' + listingQuery(p.section, { ...p, perPage: p.perPage || PER_PAGE })
-  return cachedCatalog('site:' + path, () => api<SiteListing>(path))
+  const key = listingKey(p)
+  // На диск — только первые страницы: их показываем сразу при входе, остальное догружается.
+  return cachedCatalog(key, () => api<SiteListing>(key.slice(5)), { persist: !p.page || p.page <= 1 })
 }
 
+export const facetsKey = (section: SiteSlug, version?: string | null, loader?: string | null, edition?: EditionFilter | null): string =>
+  'site:/catalog/facets?' + qs({ section, edition, version, loader })
+
 export function loadFacets(section: SiteSlug, version?: string | null, loader?: string | null, edition?: EditionFilter | null): Promise<SiteFacets> {
-  const path = '/catalog/facets?' + qs({ section, edition, version, loader })
-  return cachedCatalog('site:' + path, () => api<SiteFacets>(path))
+  const key = facetsKey(section, version, loader, edition)
+  return cachedCatalog(key, () => api<SiteFacets>(key.slice(5)), { persist: true })
 }
 
 /** Читы и другое кураторское: файлы на нашем хранилище, `/catalog/curated/<раздел>`. */
@@ -261,6 +274,9 @@ export interface SkinTile {
   title: string
   wearers: number
   renderUrl: string
+  /** Текстура 64×64 — для фигуры в 3D на странице скина. */
+  textureUrl?: string
+  tags?: { slug: string; label: string }[]
 }
 export interface SkinPage {
   items: SkinTile[]
@@ -268,30 +284,44 @@ export interface SkinPage {
   page: number
   pages: number
 }
-export function loadSkins(p: { q?: string | null; sort?: 'popular' | 'new'; page?: number }): Promise<SkinPage> {
-  const path = '/skins?' + qs({ q: p.q && p.q.trim().length >= 2 ? p.q.trim() : null, sort: p.sort === 'new' ? 'new' : null, page: p.page && p.page > 1 ? p.page : null, limit: 24 })
-  return cachedCatalog('site:' + path, () =>
-    api<{ items?: SkinTile[]; total?: number; page?: number; pages?: number }>(path).then((d) => ({
-      items: (Array.isArray(d.items) ? d.items : []).filter((x) => x && /^[0-9a-fu]{16}$/.test(String(x.id))),
-      total: Number(d.total) || 0,
-      page: Number(d.page) || 1,
-      pages: Number(d.pages) || 0,
-    })),
+export function loadSkins(p: { q?: string | null; sort?: 'popular' | 'new'; page?: number; tag?: string | null }): Promise<SkinPage> {
+  const path = '/skins?' + qs({ q: p.q && p.q.trim().length >= 2 ? p.q.trim() : null, tag: p.tag || null, sort: p.sort === 'new' ? 'new' : null, page: p.page && p.page > 1 ? p.page : null, limit: 24 })
+  return cachedCatalog(
+    'site:' + path,
+    () =>
+      api<{ items?: SkinTile[]; total?: number; page?: number; pages?: number }>(path).then((d) => ({
+        items: (Array.isArray(d.items) ? d.items : []).filter((x) => x && /^[0-9a-fu]{16}$/.test(String(x.id))),
+        total: Number(d.total) || 0,
+        page: Number(d.page) || 1,
+        pages: Number(d.pages) || 0,
+      })),
+    { persist: !p.page || p.page <= 1 },
+  )
+}
+
+/** Метки скинов (`/skins/tags`): «для девочек», «аниме», «в худи»… */
+export function loadSkinTags(): Promise<{ slug: string; label: string }[]> {
+  return cachedCatalog(
+    'site:/skins/tags',
+    () => api<{ slug: string; label: string }[]>('/skins/tags').then((l) => (Array.isArray(l) ? l.filter((t) => t && t.slug && t.label) : [])),
+    { persist: true },
   )
 }
 
 export function loadSections(): Promise<SiteSectionStat[]> {
-  return cachedCatalog('site:/catalog/sections', () => api<SiteSectionStat[]>('/catalog/sections'))
+  return cachedCatalog('site:/catalog/sections', () => api<SiteSectionStat[]>('/catalog/sections'), { persist: true })
 }
 
 /* ── Платные сборки (Arcania и все с accessRequired) ── */
 
 /** Наш каталог сборок: в приложении — командой ядра, в браузере — адресом. */
+export const PREMIUM_KEY = 'site:premium-packs'
+
 export function loadPremiumPacks(): Promise<MillidaPack[]> {
-  return cachedCatalog('site:premium-packs', () =>
-    (hasTauri() ? millidaPacks() : api<MillidaPack[]>('/catalog/packs')).then((l) =>
-      (Array.isArray(l) ? l : []).filter((p) => p && p.accessRequired),
-    ),
+  return cachedCatalog(
+    PREMIUM_KEY,
+    () => (hasTauri() ? millidaPacks() : api<MillidaPack[]>('/catalog/packs')).then((l) => (Array.isArray(l) ? l : []).filter((p) => p && p.accessRequired)),
+    { persist: true },
   )
 }
 
@@ -521,15 +551,15 @@ export function sourceOf(card: SiteCard): Pick<ItemView, 'sourceUrl' | 'cursefor
  * платность. `fresh` — мимо кэша: после покупки сервер может отдать файлы,
  * которых до неё не показывал.
  */
-export function loadItem(slug: string, fresh = false): Promise<ItemView> {
+export function loadItem(slug: string, fresh = false, urgent = false): Promise<ItemView> {
   const key = 'site:item:' + slug
-  return fresh ? itemQueued(slug) : cachedCatalog(key, () => itemQueued(slug))
+  return fresh ? itemQueued(slug, urgent) : cachedCatalog(key, () => itemQueued(slug, urgent))
 }
 
 /** Не больше трёх карточек материала разом: лента — двадцать строк. Сбой не кэшируется. */
 let itemsActive = 0
 const itemsWaiting: (() => void)[] = []
-function itemQueued(slug: string): Promise<ItemView> {
+function itemQueued(slug: string, urgent = false): Promise<ItemView> {
   return new Promise((resolve, reject) => {
     const run = () => {
       itemsActive++
@@ -540,7 +570,8 @@ function itemQueued(slug: string): Promise<ItemView> {
           itemsWaiting.shift()?.()
         })
     }
-    if (itemsActive < 3) run()
+    // Открытая страница не ждёт двадцать строк ленты.
+    if (urgent || itemsActive < 3) run()
     else itemsWaiting.push(run)
   })
 }

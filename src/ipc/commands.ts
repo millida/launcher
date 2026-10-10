@@ -35,6 +35,8 @@ export interface ModFile {
   loaders?: string[]
   size: number
   scanned: boolean
+  /** Когда файл появился в сборке, секунды Unix (новое ядро). */
+  added?: number
 }
 
 export interface ScanResult {
