@@ -198,3 +198,63 @@
    без фильтра, приглушён прозрачностью на чёрном. Пока кадр грузится — ровный тёмный фон, не дыра. */
 .ci-media-frame > img.ci-media-bg { filter: none; transform: scale(1.15); opacity: 0.22; }
 .ci-banner { background: var(--m-surface-2); }
+.ci-ru-lead { font-size: 15px; line-height: 1.55; color: var(--m-fg); margin-bottom: 12px; }
+.ci-orig-h { margin: 6px 0 8px; padding-top: 12px; border-top: 1px solid var(--m-border); font-size: 12px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--m-fg-subtle); }
+/* Описание по-русски: переключатель языка, ожидание перевода, картинки по ширине */
+.ci-lang { float: right; margin: 0 0 8px 12px; padding: 4px 10px; border: 0; cursor: pointer; font: 700 12px var(--m-font); color: var(--m-fg-muted); background: var(--m-surface-2); --px-n: 4px; clip-path: var(--px-4); }
+.ci-lang:hover { color: var(--m-fg); }
+.ci-tr-wait { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+.ci-desc img { display: block; max-width: 100%; height: auto; margin: 12px auto; }
+
+/* ── Каркас страницы сборки (PackPageSkeleton): та же раскладка, что у страницы ── */
+.pp-skel-fill { display: block; width: 100%; height: 100%; }
+.pp-skel-by { display: inline-block; width: 140px; height: 12px; }
+.pp-skel-fact { display: inline-block; width: 90px; height: 12px; }
+.pp-skel-cta { display: block; width: 190px; height: 40px; }
+.pp-skel-tab { display: inline-block; width: 84px; height: 14px; margin: 9px 10px; }
+.pp-skel-media { height: min(400px, calc((100cqi - 16px) * 9 / 16)); min-height: 220px; margin-bottom: 12px; padding: 0; }
+.pp-skel-side { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
+.pp-skel-plan { display: block; height: 58px; }
+
+/* ══ Скины: сетка с метками и страница скина в 3D (10.10.2026) ══ */
+.sk-chips { display: flex; gap: 6px; margin: 0 0 14px; padding: 0 0 6px; overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--m-surface-2) transparent; }
+.sk-chip { flex: none; height: 32px; padding: 0 12px; border: 0; cursor: pointer; font: 700 13px/1 var(--m-font); color: var(--m-fg-muted); background: var(--m-surface); --px-n: 4px; clip-path: var(--px-4); transition: background-color var(--m-t-fast), color var(--m-t-fast); }
+.sk-chip:hover { color: var(--m-fg); background: var(--m-surface-2); }
+:root .sk-chip.on { color: var(--px-on-accent, #06200e); background: var(--m-accent); }
+/* Кнопка карточки — тихая, пока курсор не на карточке: без стены зелёных кнопок */
+:root .card.mr-skin:not(:hover) .btn.primary { color: var(--m-accent); background: var(--m-surface-2); --px-img: none; --px-ft: transparent; --px-fb: transparent; }
+.card.mr-skin .mr-skin-art > img { transition: transform 260ms var(--m-ease-out, ease); }
+.card.mr-skin:hover .mr-skin-art > img { transform: translateY(-4px) scale(1.04); }
+.card.mr-skin.cat-skel { cursor: default; }
+
+.sk-grid { display: grid; grid-template-columns: minmax(260px, 420px) minmax(0, 1fr); gap: 22px; align-items: start; margin-bottom: 26px; }
+@media (max-width: 860px) { .sk-grid { grid-template-columns: minmax(0, 1fr); } }
+.card.sk-stage {
+  position: relative; aspect-ratio: 4 / 5; padding: 0; overflow: hidden;
+  background: radial-gradient(120% 90% at 50% 20%, color-mix(in srgb, var(--m-accent) 14%, var(--m-surface-2)) 0%, var(--m-surface-2) 55%, color-mix(in srgb, var(--m-surface-2) 70%, #000) 100%);
+}
+.sk-flat { position: absolute; inset: 8%; width: 84%; height: 84%; object-fit: contain; image-rendering: pixelated; transition: opacity 200ms; }
+.sk-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; opacity: 0; transition: opacity 260ms; }
+.sk-canvas:active { cursor: grabbing; }
+.sk-stage.is-3d .sk-canvas { opacity: 1; }
+.sk-stage.is-3d .sk-flat { opacity: 0; }
+.sk-hint { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; font: 600 12px/1 var(--m-font); color: var(--m-fg-muted); background: rgba(0, 0, 0, 0.45); white-space: nowrap; pointer-events: none; }
+.sk-hint svg { width: 12px; height: 12px; }
+.sk-side { display: flex; flex-direction: column; gap: 14px; padding-top: 4px; min-width: 0; }
+.sk-title { margin: 0; }
+.sk-facts { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 14px; color: var(--m-fg-muted); }
+.sk-fact { display: inline-flex; align-items: center; gap: 6px; }
+.sk-fact b { color: var(--m-fg); font-variant-numeric: tabular-nums; }
+.sk-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.sk-tag { height: 30px; padding: 0 11px; border: 0; cursor: pointer; font: 700 13px/1 var(--m-font); color: var(--m-fg); background: var(--m-surface-2); --px-n: 4px; clip-path: var(--px-4); }
+.sk-tag:hover { color: var(--px-on-accent, #06200e); background: var(--m-accent); }
+.sk-tag.skel-text { display: inline-block; height: 30px; cursor: default; }
+.sk-acts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 2px; }
+.sk-note { margin: 0; font-size: 13px; line-height: 18px; color: var(--m-fg-subtle); max-width: 520px; }
+.sk-h2 { margin: 0 0 10px; font: 800 17px/1.2 var(--m-font); color: var(--m-fg); }
+.sk-servers { margin-top: 4px; }
+.sk-srv-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.sk-srv { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; background: var(--m-surface); --px-n: 4px; clip-path: var(--px-4); }
+.sk-srv b { font-size: 13px; color: var(--m-fg); max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sk-srv small { font-size: 12px; font-weight: 700; color: var(--m-fg-subtle); font-variant-numeric: tabular-nums; }
+.sk-related .mr-skingrid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }

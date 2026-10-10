@@ -2,8 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { CSSProperties } from 'react'
 import { Icon } from '../Icon'
-import { BLOCK_ICONS } from '../../lib/icons'
-import { DEFAULT_BLOCK, GRASS_BLOCK, ICON_BGS, fileToCover, makeIcon, parseIcon } from '../../lib/buildIcon'
+import { GRASS_BLOCK, ICON_BGS, MR_BGS, MR_SYMBOLS, buildIconOf, fileToCover, makeIcon, mrSymbol, parseIcon, randomIcon } from '../../lib/buildIcon'
 import { hasTauri } from '../../ipc/tauri'
 import { pickCoverImage } from '../../ipc/commands'
 import { showToast } from '../../state/ui'
@@ -15,11 +14,11 @@ import '../../styles/pixel/buildicon.css'
  * цвета, блок по центру около 48 px (правка владельца 20:00). Рендер набора
  * 96 px показывается уменьшенным, не растянутым; теней и свечения нет.
  */
-export function BuildIcon({ icon, size = 72 }: { icon?: string | null; size?: number }) {
-  const s = parseIcon(icon)
+export function BuildIcon({ icon, size = 72, name }: { icon?: string | null; size?: number; /** Имя сборки: без выбранной иконки — её постоянная случайная. */ name?: string }) {
+  const s = parseIcon(name !== undefined ? buildIconOf({ name, icon }) : icon)
   return (
     <span
-      className={'bi' + (s.kind === 'photo' ? ' photo' : '') + (s.big ? ' big' : '')}
+      className={'bi' + (s.kind === 'photo' ? ' photo' : '') + (s.big ? ' big' : '') + (s.mr ? ' mr' : '')}
       style={{ '--bi-bg': s.bg, '--bi-size': size + 'px' } as CSSProperties}
     >
       <img src={s.src} alt="" draggable={false} loading="lazy" />
@@ -27,7 +26,14 @@ export function BuildIcon({ icon, size = 72 }: { icon?: string | null; size?: nu
   )
 }
 
-const BLOCKS = [DEFAULT_BLOCK, GRASS_BLOCK, ...BLOCK_ICONS.filter((b) => b !== DEFAULT_BLOCK)]
+/** Только объёмные значки Modrinth App: старые блоки Millida убраны (владелец 10.10.2026: «тут старое»). */
+const BLOCKS = MR_SYMBOLS.map(mrSymbol)
+/** Яркие градиенты Modrinth, потом глубокие цвета Millida. */
+const BGS: { id: string; css: string }[] = [
+  ...MR_BGS.map((g) => ({ id: g.id, css: 'linear-gradient(180deg, ' + g.top + ', ' + g.bottom + ')' })),
+  // Сплошной цвет — тоже «картинкой»: фон плиток рисует слой --px-img пиксельной рамки.
+  ...ICON_BGS.map((c) => ({ id: c, css: 'linear-gradient(' + c + ', ' + c + ')' })),
+]
 
 /**
  * «Изменить» иконку: блок из набора, цвет подложки или своя картинка.
@@ -43,8 +49,10 @@ export function IconPicker({
   onClose: () => void
 }) {
   const cur = parseIcon(icon)
-  const [bg, setBg] = useState(cur.bg)
-  const [src, setSrc] = useState(cur.kind === 'block' ? cur.src : DEFAULT_BLOCK)
+  const curBg = (icon.split('#bg=')[1] || '').trim()
+  const [bg, setBg] = useState(BGS.some((b) => b.id === curBg) ? curBg : BGS.some((b) => b.id === '#' + curBg.toLowerCase()) ? '#' + curBg.toLowerCase() : cur.bg)
+  const [src, setSrc] = useState(cur.kind === 'block' ? cur.src : mrSymbol('grass-block'))
+  const bgCss = (BGS.find((b) => b.id === bg) || { css: 'linear-gradient(' + bg + ', ' + bg + ')' }).css
   const file = useRef<HTMLInputElement>(null)
   const photo = cur.kind === 'photo' ? cur.src : null
 
@@ -61,6 +69,14 @@ export function IconPicker({
   const color = (c: string) => {
     setBg(c)
     onPick(makeIcon(src, c))
+  }
+  // «Кубик»: случайный значок на подходящем фоне (как новая сборка в Modrinth App).
+  const roll = () => {
+    const next = randomIcon()
+    const [s2, b2] = next.split('#bg=')
+    setSrc(s2!)
+    setBg(b2!)
+    onPick(next)
   }
   const upload = () => {
     if (hasTauri()) {
@@ -82,21 +98,24 @@ export function IconPicker({
         <div className="ip-head">
           <BuildIcon icon={photo ? icon : makeIcon(src, bg)} size={72} />
           <b>Иконка</b>
+          <button type="button" className="btn sm secondary ip-roll" data-track="icon_random" onClick={roll}>
+            <span aria-hidden="true">🎲</span> Случайная
+          </button>
           <button className="btn sm ghost ip-x" aria-label="Закрыть" data-sound="close" onClick={onClose}>
             <Icon id="i-x" />
           </button>
         </div>
 
         <div className="ip-colors" role="radiogroup" aria-label="Фон">
-          {ICON_BGS.map((c) => (
+          {BGS.map((c) => (
             <button
-              key={c}
+              key={c.id}
               type="button"
-              className={'ip-color' + (!photo && bg === c ? ' on' : '')}
-              style={{ '--c': c } as CSSProperties}
-              aria-label={'Фон ' + c}
-              aria-pressed={!photo && bg === c}
-              onClick={() => color(c)}
+              className={'ip-color' + (!photo && bg === c.id ? ' on' : '')}
+              style={{ '--c': c.css } as CSSProperties}
+              aria-label={'Фон ' + c.id}
+              aria-pressed={!photo && bg === c.id}
+              onClick={() => color(c.id)}
             />
           ))}
         </div>
@@ -107,7 +126,7 @@ export function IconPicker({
               key={b}
               type="button"
               className={'ip-block' + (b === GRASS_BLOCK ? ' big' : '') + (!photo && src === b ? ' on' : '')}
-              style={{ '--c': bg } as CSSProperties}
+              style={{ '--c': bgCss } as CSSProperties}
               aria-pressed={!photo && src === b}
               onClick={() => block(b)}
             >

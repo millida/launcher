@@ -134,7 +134,7 @@ export interface ListingFilters {
   loader?: string | null
   category?: string | null
   q?: string | null
-  sort?: 'recommended' | 'popular' | 'new'
+  sort?: CatalogSortId
   page?: number
   perPage?: number
   edition?: EditionFilter | null
@@ -143,6 +143,13 @@ export interface ListingFilters {
 }
 
 /** Строка запроса листинга — те же имена и правила, что у `catalogApi.listing` сайта. */
+/**
+ * Сортировки как у Modrinth (владелец 10.10.2026): релевантность — при поиске, скачивания,
+ * подписчики, новые, обновлённые. «Рекомендуемые» — наша (скачивания × свежесть × медиа).
+ * Подписчиков и «обновлённых» старый сервер не знает: их показываем, только когда сервер
+ * перечислил их в ответе (`sorts`).
+ */
+export type CatalogSortId = 'relevance' | 'recommended' | 'popular' | 'follows' | 'new' | 'updated'
 export function listingQuery(section: SectionSlug, f: ListingFilters): string {
   const sp = new URLSearchParams({ section })
   if (f.version) sp.set('version', f.version)
@@ -153,7 +160,10 @@ export function listingQuery(section: SectionSlug, f: ListingFilters): string {
   if (f.edition) sp.set('edition', f.edition)
   if (f.use) sp.set('use', f.use)
   // Как на сайте: «Рекомендуемые» — без параметра, «Популярные» и «Новые» — параметром.
-  if (f.sort === 'new' || f.sort === 'popular') sp.set('sort', f.sort)
+  // «По релевантности» у сервера — это популярное среди найденного (сервер ищет по вхождению),
+  // ближе всего к Modrinth; точные совпадения названия лаунчер поднимает сам (siteStore).
+  if (f.sort === 'relevance') sp.set('sort', 'popular')
+  else if (f.sort && f.sort !== 'recommended') sp.set('sort', f.sort)
   if (f.page && f.page > 1) sp.set('page', String(f.page))
   if (f.perPage) sp.set('perPage', String(f.perPage))
   return sp.toString()

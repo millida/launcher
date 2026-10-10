@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react'
+import { prefetchPack } from './packPrefetch'
 import type { CSSProperties, MouseEvent, ReactNode } from 'react'
 import { Icon } from '../Icon'
 import { HostInstall } from '../playhub/HostInstall'
@@ -30,8 +31,6 @@ import {
   ownPackHit,
   peekHit,
   plural,
-  realUpdated,
-  relativeTime,
   resolveHit,
   versionRange,
 } from './site'
@@ -504,6 +503,12 @@ const trackKind = (card: SiteCard, sec: SiteSection) => (card.premium ? 'premium
  * (MCSborki, Arcania) — её страница хаба с «Играть» и сервером сборки.
  */
 function useOpen({ card, sec, onOpenPack }: RowProps) {
+  // Своя сборка (Arcania): её страницу греем, пока карточка на экране, — открывается сразу.
+  useEffect(() => {
+    if (!card.launcherOnly || !onOpenPack) return
+    const t = window.setTimeout(() => prefetchPack(card.slug), 400)
+    return () => window.clearTimeout(t)
+  }, [card.slug])
   return (e: MouseEvent<HTMLElement>) => {
     if (!rowClickOpens(e)) return
     // Нет её в хабе (платные по подписке, новые) — обычная страница материала.
@@ -530,13 +535,19 @@ function usePrice(card: SiteCard): string {
   return pack ? priceLabel(pack) : ''
 }
 
+/** «Brotatsun64, DoctorWafflePhD, 321retro» → «Brotatsun64 и ещё 2»: длинный список авторов ломал строку. */
+export function shortAuthor(a: string): string {
+  const names = a.split(/\s*[,;&]\s*|\s+and\s+|\s+и\s+/).map((x) => x.trim()).filter(Boolean)
+  if (names.length <= 1) return a.length > 28 ? a.slice(0, 26) + '…' : a
+  return names[0] + ' и ещё ' + (names.length - 1)
+}
+
 export function SiteRow(props: RowProps) {
   const { card, sec } = props
   const { hit, resolve } = useCardHit(card)
   const open = useOpen(props)
   const name = displayName(card.title)
-  const updated = relativeTime(realUpdated(card))
-  const dl = ownDownloads(card)
+  const dl = Math.max(ownDownloads(card) || 0, card.sourceDownloads || 0, card.mrHit?.dl || 0) || null
   const price = usePrice(card)
   // У наших сборок логотипа нет, есть обложка — она и встаёт в квадрат 96×96
   // (правка владельца 24.09.2026: «вместо букв I, L, C — обложка сборки»).
@@ -562,21 +573,19 @@ export function SiteRow(props: RowProps) {
             </span>
           ) : null}
           {isExclusive(card.slug) ? <span className="mr-prem excl">Эксклюзив</span> : null}
-          {card.author ? <span className="mr-by">от {card.author}</span> : null}
+          {card.author ? <span className="mr-by" title={card.author}>от {shortAuthor(card.author)}</span> : null}
+          {dl ? (
+            <span className="mr-dl" title={fmtNum(dl) + ' ' + plural(dl, 'скачивание', 'скачивания', 'скачиваний')}>
+              <Icon id="i-download" />
+              {fmtNum(dl)}
+            </span>
+          ) : null}
         </div>
         {card.summary ? <p className="mr-desc">{card.summary}</p> : null}
         <Tags tags={rowTags(card)} />
       </div>
       <div className="mr-side">
         <PriceMark card={card} fallback={price} />
-        {dl ? (
-          <span className="mr-stat">
-            <Icon id="i-download" />
-            <b>{fmtNum(dl)}</b>
-            <span className="mr-stat-unit">{plural(dl, 'скачивание', 'скачивания', 'скачиваний')}</span>
-          </span>
-        ) : null}
-        {updated ? <span className="mr-upd">Обновлён {updated}</span> : null}
         <RowActions card={card} sec={sec} hit={hit} resolve={resolve} />
       </div>
     </article>
@@ -595,8 +604,6 @@ export function SiteRow(props: RowProps) {
  * название и автор, описание в две строки — что это за вещь, метки (категория и загрузчики),
  * скачивания и тихая «В сборку».
  */
-const VISUAL_KINDS = new Set<string>(['modpack', 'resourcepack', 'shader', 'world', 'seed'])
-
 export function SiteGalleryCard(props: RowProps) {
   const { card, sec } = props
   const { hit, resolve } = useCardHit(card)
@@ -606,7 +613,8 @@ export function SiteGalleryCard(props: RowProps) {
   const [tiny, setTiny] = useState(false)
   // Моды, плагины, дата-паки выбирают по описанию — там плитки одинаковые, без картинки сверху
   // (смесь «с картинкой / без» рвала ряды). Картинка — где смотрят глазами: шейдеры, текстуры, сборки, карты.
-  const visual = VISUAL_KINDS.has(sec.kind)
+  // Карточки — вид «с картинкой» (переключатель над лентой): картинка у всех, нет скриншота — значок на размытом фоне.
+  const visual = true
   const shot = visual && card.cover && card.cover !== card.icon && !tiny ? card.cover : null
   const tags: Tag[] = []
   if (card.aiGenerated === true) tags.push(milliTag())
@@ -666,7 +674,7 @@ export function SiteGalleryCard(props: RowProps) {
             <span className="mr-gal-names">
               <h3 className="mr-gal-title">{name}</h3>
               <span className="mr-gal-author">
-                <span className="mr-gal-by">{card.author ? 'от ' + card.author : sec.title}</span>
+                <span className="mr-gal-by" title={card.author || undefined}>{card.author ? 'от ' + shortAuthor(card.author) : sec.title}</span>
                 {dl ? (
                   <span className="mr-gal-dl" title="Скачиваний">
                     <Icon id="i-download" />
@@ -693,29 +701,64 @@ export function SiteGalleryCard(props: RowProps) {
 
 /* ── Заглушки на время запроса ──────────────────────────────── */
 
-export function RowSkeleton({ gallery, n = 6 }: { gallery?: boolean; n?: number }) {
+/**
+ * Заглушки той же разметки и тех же классов, что настоящие карточки: высота строк
+ * задаётся шрифтом, как у текста, — когда приходят данные, ничего не сдвигается
+ * (владелец 10.10.2026: «после скелетона всё как будто двигается»).
+ */
+export function RowSkeleton({ gallery, n = 6, actions = true }: { gallery?: boolean; n?: number; actions?: boolean }) {
+  const bar = (w: number | string, k?: number) => <span key={k} className="skel-text" style={{ width: typeof w === 'number' ? w + 'px' : w }} />
   return (
     <>
       {Array.from({ length: n }, (_, i) =>
         gallery ? (
-          <div key={i} className="card mr-gal cat-skel" aria-hidden="true">
+          <div key={i} className="card mr-gal has-shot cat-skel" aria-hidden="true">
             <span className="mr-gal-cover skel"></span>
             <span className="mr-gal-body">
-              <span className="skel skel-line" style={{ width: '60%' }}></span>
-              <span className="skel skel-line" style={{ width: '40%', height: 10 }}></span>
+              <span className="mr-gal-head">
+                <span className="mr-gal-icon skel"></span>
+                <span className="mr-gal-names">
+                  <span className="mr-gal-title">{bar(['62%', '48%', '70%'][i % 3]!)}</span>
+                  <span className="mr-gal-author">{bar(['38%', '30%', '44%'][i % 3]!)}</span>
+                </span>
+              </span>
+              <span className="mr-gal-summary">
+                {bar('96%')}
+                <br />
+                {bar(['70%', '54%', '80%'][i % 3]!)}
+              </span>
+              <ul className="mr-tags mr-gal-tags">
+                <li className="mr-tag">{bar(84)}</li>
+                <li className="mr-tag">{bar(56)}</li>
+              </ul>
+              <span className="mr-gal-foot">
+                <span className="mr-gal-stat"></span>
+                {actions ? (
+                  <span className="mr-actions">
+                    <span className="btn sm secondary skel-btn"></span>
+                  </span>
+                ) : null}
+              </span>
             </span>
           </div>
         ) : (
           <div key={i} className="card mr-row cat-skel" aria-hidden="true">
             <span className="mr-icon skel"></span>
-            <span className="mr-body">
-              <span className="skel skel-line" style={{ width: 180 + ((i * 47) % 140) + 'px', height: 16 }}></span>
-              <span className="skel skel-line" style={{ width: '80%', marginTop: 8 }}></span>
-              <span className="skel skel-line" style={{ width: '50%', marginTop: 12, height: 10 }}></span>
-            </span>
-            <span className="mr-side">
-              <span className="skel skel-line" style={{ width: 110 }}></span>
-            </span>
+            <div className="mr-body">
+              <div className="mr-titleline">
+                <span className="mr-title">{bar(160 + ((i * 47) % 120))}</span>
+              </div>
+              <p className="mr-desc">{bar('78%')}</p>
+              <ul className="mr-tags">
+                <li className="mr-tag">{bar(70)}</li>
+                <li className="mr-tag">{bar(54)}</li>
+              </ul>
+            </div>
+            <div className="mr-side">
+              <span className="mr-actions">
+                <span className="btn sm secondary skel-btn"></span>
+              </span>
+            </div>
           </div>
         ),
       )}

@@ -46,7 +46,13 @@ pub fn save_content_manifest(profile: &str, v: &[ContentEntry]) {
     write_json_quiet(&content_manifest_path(profile), v);
 }
 
+/// Запись манифеста — чтение, правка, запись. Установки теперь идут по нескольку разом
+/// (50 модов ставились по одному полминуты, 10.10.2026): без замка две параллельные
+/// записи теряли друг друга.
+static MANIFEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 pub(crate) fn manifest_upsert(profile: &str, entry: ContentEntry) {
+    let _guard = MANIFEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let mut all = load_content_manifest(profile);
     all.retain(|e| !(e.kind == entry.kind && e.file_name == entry.file_name));
     all.push(entry);
@@ -54,6 +60,7 @@ pub(crate) fn manifest_upsert(profile: &str, entry: ContentEntry) {
 }
 
 pub(crate) fn manifest_remove(profile: &str, kind: &str, file_name: &str) {
+    let _guard = MANIFEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let mut all = load_content_manifest(profile);
     all.retain(|e| !(e.kind == kind && e.file_name == file_name));
     save_content_manifest(profile, &all);

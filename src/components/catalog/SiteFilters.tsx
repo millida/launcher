@@ -103,10 +103,16 @@ const CATS_VISIBLE_TIGHT = 6
 const USES_VISIBLE = 6
 
 const SORTS: [SiteSort, string][] = [
+  ['relevance', 'По релевантности'],
   ['recommended', 'Рекомендуемые'],
-  ['popular', 'Популярные'],
+  ['popular', 'По скачиваниям'],
+  ['follows', 'По подписчикам'],
   ['new', 'Новые'],
+  ['updated', 'Обновлённые'],
 ]
+/** Без поиска релевантности нет; подписчиков и «обновлённых» — только если сервер их знает. */
+const sortsFor = (searching: boolean, server: string[]) =>
+  SORTS.filter(([id]) => (id === 'relevance' ? searching : id === 'follows' || id === 'updated' ? server.includes(id) : true))
 
 function Key({ o, name, plain }: { o: FilterOpt; name?: string; plain?: boolean }) {
   const tone = o.tone ? ({ color: o.tone } as CSSProperties) : undefined
@@ -162,10 +168,11 @@ function PickBtn({ open, onClick, children, label }: { open: boolean; onClick: (
   )
 }
 
-function SortPicker({ value, onPick }: { value: SiteSort; onPick: (v: SiteSort) => void }) {
+function SortPicker({ value, onPick, searching, server }: { value: SiteSort; onPick: (v: SiteSort) => void; searching: boolean; server: string[] }) {
   const [open, setOpen] = useState(false)
   const ref = useDismiss(open, () => setOpen(false))
-  const cur = SORTS.find(([id]) => id === value) ?? SORTS[0]!
+  const list = sortsFor(searching, server)
+  const cur = SORTS.find(([id]) => id === value) ?? list[0]!
   return (
     <div className="mr-pick" ref={ref}>
       <PickBtn open={open} onClick={() => setOpen((v) => !v)} label="Сортировка">
@@ -175,7 +182,7 @@ function SortPicker({ value, onPick }: { value: SiteSort; onPick: (v: SiteSort) 
       </PickBtn>
       {open ? (
         <div className="mr-pick-pop">
-          {SORTS.map(([id, label]) => (
+          {list.map(([id, label]) => (
             <button
               key={id}
               type="button"
@@ -321,6 +328,8 @@ export function SiteFilters({
   price = null,
   sort,
   onSort,
+  searching,
+  serverSorts,
   onPatch,
   onReset,
 }: {
@@ -338,6 +347,10 @@ export function SiteFilters({
   /** Сортировка — выпадающий список вверху панели, как на сайте. */
   sort?: SiteSort
   onSort?: (v: SiteSort) => void
+  /** Идёт поиск — в сортировке появляется «По релевантности». */
+  searching?: boolean
+  /** Сортировки, которые знает сервер. */
+  serverSorts?: string[]
   onPatch: (p: {
     version?: string | null
     loader?: string | null
@@ -362,6 +375,9 @@ export function SiteFilters({
     ? facets.loaders
         // Хвост из единиц («canvas 2», «Fabric 1» у шейдеров) — шум: прячем, пока не выбран.
         .filter((l) => l.count >= 10 || loader === l.value)
+        // Только загрузчики этого раздела: у модов — Fabric, Forge, NeoForge, Quilt, без
+        // «Дата-пак», «Paper» и «Ванильная игра» (владелец 10.10.2026: «фильтры продумай»).
+        .filter((l) => loader === l.value || loaderFitsSection(sec, l.value))
         .slice(0, 14)
         .map((l) => {
         const src = loaderIconSrc(l.value)
@@ -421,9 +437,11 @@ export function SiteFilters({
     active: price === id,
     onPick: () => onPatch({ price: price === id ? null : id }),
   }))
-  // Быстрые ключи под списком — четыре самые наполненные версии.
+  // Быстрые ключи под списком — четыре самые наполненные версии Java. Bedrock нумерует так же
+  // («26.10», «26.30») — в ключах Java-раздела они путали (владелец: «26.10, 26.30 — что это»).
+  const bedrockLike = (v: string) => /^2\d\.(\d+)0(\.\d+)?$/.test(v) && Number(v.split('.')[1]) >= 10
   const quick = versions
-    .filter((o) => filled.has(o.key))
+    .filter((o) => filled.has(o.key) && (edition === 'BEDROCK' || !bedrockLike(o.key)))
     .slice()
     .sort((x, y) => (y.count ?? 0) - (x.count ?? 0))
     .slice(0, 4)
@@ -431,7 +449,7 @@ export function SiteFilters({
   const tight = uses.length > 0
   return (
     <div className="card mr-filters mr-fbox">
-      {sort && onSort ? <SortPicker value={sort} onPick={onSort} /> : null}
+      {sort && onSort ? <SortPicker value={sort} onPick={onSort} searching={!!searching} server={serverSorts || []} /> : null}
       {anyActive ? (
         <button type="button" className="mr-reset" data-track="filter_reset" onClick={onReset}>
           Сбросить
@@ -454,16 +472,42 @@ export function SiteFilters({
   )
 }
 
+const MOD_LOADERS = new Set(['fabric', 'forge', 'neoforge', 'quilt', 'legacy-fabric', 'ornithe', 'babric', 'liteloader', 'rift'])
+const PLUGIN_LOADERS = new Set(['paper', 'spigot', 'bukkit', 'purpur', 'folia', 'sponge', 'velocity', 'bungeecord', 'waterfall', 'geyser'])
+const SHADER_LOADERS = new Set(['iris', 'optifine', 'canvas', 'vanilla'])
+
+/** Загрузчик к месту в этом разделе: в «Все» — как у модов (главный вопрос — «под Fabric?»). */
+function loaderFitsSection(sec: Pick<SiteSection, 'kind' | 'slug'>, value: string): boolean {
+  if (sec.kind === 'plugin' || sec.kind === 'serverpack') return PLUGIN_LOADERS.has(value)
+  if (sec.kind === 'shader') return SHADER_LOADERS.has(value)
+  if (sec.kind === 'mod' || sec.kind === 'modpack' || sec.slug === 'all') return MOD_LOADERS.has(value)
+  return true
+}
+
+/** Пока фильтры в пути — та же колонка с настоящими заголовками и полосками вместо строк. */
 function FiltersSkeleton() {
+  const row = (w: number, k: number) => (
+    <span key={k} className="seg mr-key">
+      <span className="skel-text" style={{ width: w + '%' }} />
+    </span>
+  )
   return (
-    <div className="mr-filters" aria-hidden="true">
-      {[8, 4].map((n, g) => (
-        <div key={g} className="card mr-group cat-skel">
-          <span className="skel skel-line" style={{ width: '50%', margin: '14px 8px' }}></span>
-          {Array.from({ length: n }, (_, i) => (
-            <span key={i} className="skel skel-line" style={{ width: 60 + ((i * 29) % 30) + '%', margin: '12px 8px' }}></span>
-          ))}
-        </div>
+    <div className="card mr-filters mr-fbox cat-skel" aria-hidden="true">
+      <section className="mr-fsec">
+        <div className="mr-fsec-t">Версия</div>
+        <span className="seg mr-key">
+          <span className="skel-text" style={{ width: '45%' }} />
+        </span>
+      </section>
+      {[
+        ['Загрузчик', [52, 44, 60, 38]],
+        ['Для чего', [56, 40, 64, 48, 36]],
+        ['Категории', [62, 50, 70, 44, 58, 40]],
+      ].map(([title, rows]) => (
+        <section key={title as string} className="mr-fsec">
+          <div className="mr-fsec-t">{title as string}</div>
+          <div className="segs mr-keys">{(rows as number[]).map(row)}</div>
+        </section>
       ))}
     </div>
   )

@@ -111,6 +111,10 @@ pub(crate) async fn read_capped(mut resp: reqwest::Response, max: usize) -> Resu
     Ok(out)
 }
 
+/// Соединение, которое молча умерло (VPN переключился, NAT забыл сокет), раньше
+/// держало все запросы к API до read_timeout — минуту: HTTP/2 гонит их по одному
+/// сокету, и каталог «не отвечал», хотя сервер отвечает за 0,3 с (10.10.2026).
+/// PING раз в 15 с и TCP keepalive находят мёртвый сокет за секунды.
 fn build_client(native_roots: bool) -> Result<reqwest::Client, reqwest::Error> {
     reqwest::Client::builder()
         .user_agent(UA)
@@ -118,6 +122,10 @@ fn build_client(native_roots: bool) -> Result<reqwest::Client, reqwest::Error> {
         .connect_timeout(Duration::from_secs(15))
         .read_timeout(Duration::from_secs(60))
         .pool_idle_timeout(Duration::from_secs(90))
+        .tcp_keepalive(Duration::from_secs(20))
+        .http2_keep_alive_interval(Duration::from_secs(15))
+        .http2_keep_alive_timeout(Duration::from_secs(6))
+        .http2_keep_alive_while_idle(true)
         .tls_built_in_webpki_certs(true)
         .tls_built_in_native_certs(native_roots)
         .build()
@@ -145,7 +153,19 @@ fn system_proxy() -> String {
 }
 
 pub(crate) fn client() -> reqwest::Client {
-    let mut slot = CLIENT.lock().unwrap_or_else(|e| e.into_inner());
+    shared_client(&CLIENT)
+}
+
+/// Второй пул соединений — для дублирующего запроса (hedged request, «The Tail at
+/// Scale»): повтор по тому же пулу ушёл бы в тот же зависший сокет HTTP/2.
+static SPARE: std::sync::Mutex<Option<Shared>> = std::sync::Mutex::new(None);
+
+pub(crate) fn spare_client() -> reqwest::Client {
+    shared_client(&SPARE)
+}
+
+fn shared_client(cell: &std::sync::Mutex<Option<Shared>>) -> reqwest::Client {
+    let mut slot = cell.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(shared) = slot.as_ref().filter(|s| s.checked.elapsed() < PROXY_RECHECK) {
         return shared.client.clone();
     }

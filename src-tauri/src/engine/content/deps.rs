@@ -2,6 +2,7 @@ use crate::engine::*;
 use serde_json::Value;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
+use futures::StreamExt;
 use tauri::AppHandle;
 
 /// Dotted-numeric precedence, ignoring `+build.metadata` — enough to tell
@@ -72,6 +73,8 @@ fn clause_satisfies(version: &str, clause: &str) -> bool {
 /// A pack of 300 mods would otherwise walk the whole catalog graph on every
 /// install; the resolver stops early and says so instead of hanging.
 const MAX_NODES: usize = 80;
+/// Сколько загрузок разом: быстрее в разы, а Modrinth и CDN не душим.
+const PARALLEL: usize = 6;
 
 /// One project the resolver decided about: what would be installed, from where,
 /// and why it came up. `problem` is non-empty when nothing fits the build.
@@ -627,39 +630,78 @@ fn local_conflicts(profile: &str, incoming: &DepNode) -> Vec<DepConflict> {
 /// Installs every hard dependency the given relations pull in, transitively.
 /// Returns the ones nothing could be found for, so the caller can say so instead
 /// of leaving a build that will not start.
+async fn pick_dep(ctx: &Ctx, dep: RawDep) -> (RawDep, Result<Pick, String>) {
+    let p = pick_any(ctx, &dep.source, &dep.project_id, &dep.version_id).await;
+    (dep, p)
+}
+
+async fn install_one(ctx: &Ctx, p: Pick) -> (Pick, Result<String, String>) {
+    let r = install_pick(ctx, &p).await;
+    (p, r)
+}
+
+/// Один выбранный материал: найти версию и поставить. Ok — файл и его зависимости.
+async fn install_item(app: &AppHandle, job: &Job, ctx: &Ctx, it: &PlanItem, ready: &std::sync::atomic::AtomicUsize, total: usize) -> Result<(String, Vec<RawDep>), String> {
+    if job.check().is_err() {
+        return Err(format!("{}: отменено", it.project_id));
+    }
+    let out = match pick_any(ctx, &it.source, &it.project_id, &it.version_id).await {
+        Ok(p) => match install_pick(ctx, &p).await {
+            Ok(file) => Ok((file, p.deps)),
+            Err(e) => Err(format!("{}: {}", p.node.title, e)),
+        },
+        Err(e) => Err(format!("{}: {}", it.project_id, e)),
+    };
+    let n = ready.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+    job.emit(app, 5.0 + 80.0 * (n as f32 / total as f32), &format!("Ставим {}/{}…", n, total));
+    out
+}
+
 pub(crate) async fn install_required(ctx: &Ctx, deps: Vec<RawDep>) -> Vec<String> {
     let mut installed = installed_index(&ctx.profile);
     let mut seen: HashSet<String> = HashSet::new();
+    let mut seen_pick: HashSet<String> = HashSet::new();
     let mut missed: Vec<String> = vec![];
-    let mut queue: Vec<RawDep> = deps;
+    let mut level: Vec<RawDep> = deps;
     let mut count = 0;
-    while let Some(dep) = queue.pop() {
-        count += 1;
-        if count > MAX_NODES {
-            break;
-        }
-        if dep.relation != "required" || !seen.insert(dep.project_id.clone()) {
-            continue;
-        }
-        match pick_any(ctx, &dep.source, &dep.project_id, &dep.version_id).await {
-            Ok(p) => {
-                if installed.has(&p.node.project_id, &p.node.title) {
-                    continue;
-                }
-                match install_pick(ctx, &p).await {
-                    Ok(_) => {
-                        installed.ids.insert(p.node.project_id.clone());
-                        installed.titles.insert(norm_title(&p.node.title));
-                        for d in p.deps {
-                            queue.push(d);
-                        }
+    // Волнами: зависимости одного уровня — разом (по PARALLEL), их зависимости — следующей
+    // волной. Уже стоящее в сборке по id проекта — без запроса к Modrinth: раньше на каждую
+    // зависимость каждого мода (Fabric API у пятидесяти модов) шёл свой запрос, по очереди.
+    while !level.is_empty() && count <= MAX_NODES {
+        let wave: Vec<RawDep> = std::mem::take(&mut level)
+            .into_iter()
+            .filter(|d| d.relation == "required" && !installed.ids.contains(&d.project_id) && seen.insert(d.project_id.clone()))
+            .collect();
+        count += wave.len();
+        // Будущие — заранее списком, а не замыканием в map: иначе rustc не докажет Send
+        // для запуска игры, где это тоже вызывается («Send is not general enough»).
+        let picks: Vec<_> = wave.into_iter().map(|dep| pick_dep(ctx, dep)).collect();
+        let picked: Vec<(RawDep, Result<Pick, String>)> = futures::stream::iter(picks).buffer_unordered(PARALLEL).collect().await;
+        let mut to_install: Vec<Pick> = vec![];
+        for (dep, p) in picked {
+            match p {
+                Ok(p) => {
+                    if installed.has(&p.node.project_id, &p.node.title) || !seen_pick.insert(p.node.project_id.clone()) {
+                        continue;
                     }
-                    Err(e) => missed.push(format!("{} ({})", p.node.title, e)),
+                    to_install.push(p);
+                }
+                Err(_) => {
+                    let title = fetch_project_meta(&dep.project_id).await.1;
+                    missed.push(if title.is_empty() { dep.project_id.clone() } else { title });
                 }
             }
-            Err(_) => {
-                let title = fetch_project_meta(&dep.project_id).await.1;
-                missed.push(if title.is_empty() { dep.project_id.clone() } else { title });
+        }
+        let installs: Vec<_> = to_install.into_iter().map(|p| install_one(ctx, p)).collect();
+        let done: Vec<(Pick, Result<String, String>)> = futures::stream::iter(installs).buffer_unordered(PARALLEL).collect().await;
+        for (p, r) in done {
+            match r {
+                Ok(_) => {
+                    installed.ids.insert(p.node.project_id.clone());
+                    installed.titles.insert(norm_title(&p.node.title));
+                    level.extend(p.deps);
+                }
+                Err(e) => missed.push(format!("{} ({})", p.node.title, e)),
             }
         }
     }
@@ -690,20 +732,27 @@ async fn install_dep_items_job(
     let ctx = ctx_of(&profile, &kind);
     let mut report = DepReport::default();
     let total = items.len().max(1);
-    for (i, it) in items.iter().enumerate() {
-        job.check()?;
-        job.emit(app, 5.0 + 90.0 * (i as f32 / total as f32), &format!("Ставим {}/{}…", i + 1, total));
-        match pick_any(&ctx, &it.source, &it.project_id, &it.version_id).await {
-            Ok(p) => match install_pick(&ctx, &p).await {
-                Ok(file) => {
-                    report.installed.push(file);
-                    let missed = install_required(&ctx, p.deps).await;
-                    report.failed.extend(missed);
-                }
-                Err(e) => report.failed.push(format!("{}: {}", p.node.title, e)),
-            },
-            Err(e) => report.failed.push(format!("{}: {}", it.project_id, e)),
+    job.check()?;
+    job.emit(app, 5.0, &format!("Ставим 0/{}…", total));
+    // Выбранное — по PARALLEL разом (было строго по одному: 50 модов — полминуты ожидания,
+    // владелец 10.10.2026). Зависимости всех — одним проходом после, без повторов.
+    let ready = std::sync::atomic::AtomicUsize::new(0);
+    let jobs: Vec<_> = items.iter().map(|it| install_item(app, job, &ctx, it, &ready, total)).collect();
+    let results: Vec<Result<(String, Vec<RawDep>), String>> = futures::stream::iter(jobs).buffer_unordered(PARALLEL).collect().await;
+    job.check()?;
+    let mut deps: Vec<RawDep> = vec![];
+    for r in results {
+        match r {
+            Ok((file, d)) => {
+                report.installed.push(file);
+                deps.extend(d);
+            }
+            Err(e) => report.failed.push(e),
         }
+    }
+    if !deps.is_empty() {
+        job.emit(app, 88.0, "Зависимости…");
+        report.failed.extend(install_required(&ctx, deps).await);
     }
     job.emit(app, 100.0, "Готово");
     Ok(report)

@@ -14,7 +14,7 @@ import { BuildIcon } from '../components/playhub/BuildIcon'
 import { trackImportFailure } from '../lib/importTrack'
 
 const imported = (p: { name: string; icon?: string | null }) =>
-  showReward({ level: 'mid', items: [{ name: p.name, art: <BuildIcon icon={p.icon} size={60} /> }], title: 'Сборка импортирована', sub: p.name })
+  showReward({ level: 'mid', items: [{ name: p.name, art: <BuildIcon icon={p.icon} name={p.name} size={60} /> }], title: 'Сборка импортирована', sub: p.name })
 
 /// Где ищем сборки — показываем значками вместо абзаца со списком.
 const SOURCES = ['Prism', 'MultiMC', 'CurseForge', 'GDLauncher', 'ATLauncher', 'Modrinth App', 'TLauncher']
