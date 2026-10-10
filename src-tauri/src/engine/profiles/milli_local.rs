@@ -92,7 +92,7 @@ fn mtime_secs(md: &std::fs::Metadata) -> u64 {
     md.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs()).unwrap_or(0)
 }
 
-fn sha1_hex(bytes: &[u8]) -> String {
+pub(super) fn sha1_hex(bytes: &[u8]) -> String {
     use sha1::Digest as _;
     sha1::Sha1::digest(bytes).iter().map(|b| format!("{:02x}", b)).collect()
 }

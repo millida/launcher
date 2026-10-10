@@ -1,4 +1,5 @@
 import { splitVariantCode, variantCode, variantTitles } from './variantNames'
+import { idbGet, idbSet } from './idbCache'
 import { api, hasMillidaAccount } from './api'
 import { getAccount } from '../state/accounts'
 
@@ -292,10 +293,33 @@ export interface WornCosmetic {
 const CATALOG_TTL = 10 * 60_000
 let catalogAsk: { at: number; p: Promise<{ items: CosmeticItem[] }> } | null = null
 
-async function fetchCatalog(): Promise<{ items: CosmeticItem[] }> {
+const CATALOG_KEY = 'cosmetics-catalog-v1'
+
+async function fetchCatalogRaw(): Promise<{ items: CosmeticItem[] }> {
   const once = () => api<{ items: CosmeticItem[] }>('/cosmetics/catalog')
   const r = await once().catch(() => new Promise<void>((ok) => setTimeout(ok, 1500)).then(once))
-  return { ...r, items: expandCatalog(r.items || []) }
+  if (r && Array.isArray(r.items) && r.items.length) void idbSet(CATALOG_KEY, r)
+  return r
+}
+
+const expanded = (r: { items: CosmeticItem[] }) => ({ ...r, items: expandCatalog(r.items || []) })
+
+/**
+ * Каталог с прошлого запуска отдаётся сразу из IndexedDB, а свежий догоняет
+ * в фоне и подменяет ответ для следующих запросов: вещи надеваются без
+ * 3-12 секунд ожидания 1,5 МБ.
+ */
+async function fetchCatalog(): Promise<{ items: CosmeticItem[] }> {
+  const cached = await idbGet<{ items: CosmeticItem[] }>(CATALOG_KEY)
+  if (cached && Array.isArray(cached.value.items) && cached.value.items.length) {
+    void fetchCatalogRaw()
+      .then((r) => {
+        catalogAsk = { at: Date.now(), p: Promise.resolve(expanded(r)) }
+      })
+      .catch(() => {})
+    return expanded(cached.value)
+  }
+  return expanded(await fetchCatalogRaw())
 }
 
 export function loadCosmeticCatalog(): Promise<{ items: CosmeticItem[] }> {

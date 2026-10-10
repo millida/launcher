@@ -520,47 +520,69 @@ export function LobbyCharacter({
     if (!engine || !ready || !look || typeof engine.clearCosmetics !== 'function') return
     let alive = true
     engine.clearCosmetics()
+    setEmoting(false)
     const outfit = look.items.map((x) => x.item)
     const worn = look.items.filter((x) => x.texture || x.item.slot === 'EMOTE')
-    void Promise.all(worn.map((x) => cosmeticModel(x.item.model as string).then((file) => ({ ...x, file })))).then(
-      (loaded) => {
-        if (!alive) return
-        const emote = loaded.find((got) => got.item.slot === 'EMOTE' && got.file?.animations)
-        const clips = emote?.file ? readAnimations(emote.file.animations) : {}
-        const sequence = emote?.file ? emoteSequence(clips, emoteClip(clips, emote.item.animation)) : null
-        const playing = sequence ? new CosmeticEmote(sequence, emote?.file?.geometry) : null
+    // Вещи надеваются по мере загрузки моделей, а не пачкой: персонаж появляется
+    // с первой готовой вещью, остальные подтягиваются следом (жалоба 10.10.2026:
+    // «медленно надевается»). Кадр от вещей не зависит.
+    let dressedCount = 0
+    let settled = 0
+    let revealed = false
+    const reveal = () => {
+      if (revealed) return
+      revealed = true
+      fit()
+      setDressedFor(lookKey(look))
+    }
+    const dressOne = (got: (typeof worn)[number] & { file: Awaited<ReturnType<typeof cosmeticModel>> }) => {
+      let emote: { sequence: ReturnType<typeof emoteSequence>; playing: CosmeticEmote | null } | null = null
+      if (got.item.slot === 'EMOTE' && got.file?.animations) {
+        const clips = readAnimations(got.file.animations)
+        const sequence = emoteSequence(clips, emoteClip(clips, got.item.animation))
+        const playing = sequence ? new CosmeticEmote(sequence, got.file.geometry) : null
         if (playing) engine.setAnimation(pinned(playing) as unknown as SkinAnimation)
         setEmoting(!!playing)
-        let dressedCount = 0
-        for (const got of loaded) {
-          if (!got.file || !got.texture) continue
-          const geometry = look.slim && got.file.geometrySlim ? got.file.geometrySlim : got.file.geometry
-          let worn = false
-          try {
-            for (const piece of buildCosmetic(
-              geometry,
-              got.texture,
-              got.item.slot,
-              got.file.animations,
-              got.item.animation,
-              got === emote && playing && sequence ? { sequence, clock: () => playing.progress } : undefined,
-              pieceCover(outfit, got.item),
-              got.glow,
-            )) {
-              engine.attachCosmetic(piece.anchor, piece.object)
-              worn = true
-            }
-            if (worn) dressedCount += 1
-          } catch {
-            // Кривая модель не гасит главную: вещь просто не покажется.
-          }
+        emote = { sequence, playing }
+      }
+      if (!got.file || !got.texture) return
+      const geometry = look.slim && got.file.geometrySlim ? got.file.geometrySlim : got.file.geometry
+      let dressed = false
+      try {
+        for (const piece of buildCosmetic(
+          geometry,
+          got.texture,
+          got.item.slot,
+          got.file.animations,
+          got.item.animation,
+          emote?.playing && emote.sequence ? { sequence: emote.sequence, clock: () => emote!.playing!.progress } : undefined,
+          pieceCover(outfit, got.item),
+          got.glow,
+        )) {
+          engine.attachCosmetic(piece.anchor, piece.object)
+          dressed = true
         }
-        // Кадр от вещей не зависит, но ник встаёт над новой шляпой.
-        fit()
-        setDressedFor(lookKey(look))
-        if (shop && look.dressKey === dressKeyRef.current) onDressedRef.current?.(dressedCount)
-      },
-    )
+        if (dressed) dressedCount += 1
+      } catch {
+        // Кривая модель не гасит главную: вещь просто не покажется.
+      }
+    }
+    if (!worn.length) {
+      reveal()
+      if (shop && look.dressKey === dressKeyRef.current) onDressedRef.current?.(0)
+    }
+    for (const x of worn) {
+      void cosmeticModel(x.item.model as string).then((file) => {
+        if (!alive) return
+        dressOne({ ...x, file })
+        reveal()
+        settled += 1
+        if (settled === worn.length) {
+          fit()
+          if (shop && look.dressKey === dressKeyRef.current) onDressedRef.current?.(dressedCount)
+        }
+      })
+    }
     return () => {
       alive = false
       engine.clearCosmetics()

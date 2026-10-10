@@ -78,7 +78,7 @@ pub fn build_snapshot() -> Result<Snapshot, String> {
     for p in load_profiles().into_iter().take(MAX_PROFILES) {
         // A build whose manifest cannot be built (folder gone, no catalogue
         // files) is skipped rather than failing the whole sync.
-        let Ok((manifest, _)) = build_manifest(&p.name) else { continue };
+        let Ok((manifest, _)) = build_manifest(&p.name, false) else { continue };
         profiles.push(CloudProfile { group: group_of(&groups, &p.name), name: p.name, manifest });
     }
     let prefs = serde_json::to_value(ui_prefs()).unwrap_or(Value::Null);

@@ -8,15 +8,36 @@ import { newCallId, sendSignal, startSignalPump, type CallEvent } from '../lib/c
 import { startRing, stopRing } from '../lib/call/ringtone'
 import { canShareScreen, screenErrorText, shareScreen, storedScreenQuality, type ScreenShare } from '../lib/call/screen'
 import { canUseCamera, cameraErrorText, openCamera, storedCamera, storedCameraQuality, type CameraShare } from '../lib/call/camera'
-import { micErrorText, storedMicProcessing, type MicProcessing } from '../lib/audioDevices'
+import {
+  isSystemAlias,
+  listAudioDevices,
+  micErrorText,
+  storedMic,
+  storedMicProcessing,
+  storedOutput,
+  type MicProcessing,
+} from '../lib/audioDevices'
 import { storedMicGain, storedNoiseMode, type NoiseMode } from '../lib/call/mic-worklet'
 import { openSettings, showToast } from './ui'
 import { useGame } from './game'
-import { overlayNotify } from '../ipc/commands'
+import {
+  overlayNotify,
+  partyVoiceAudio,
+  partyVoiceBind,
+  partyVoiceDeafen,
+  partyVoiceJoin,
+  partyVoiceLeave,
+  partyVoiceMembers,
+  partyVoiceTransmit,
+  type PartyVoiceAudio,
+} from '../ipc/commands'
+import { listenPartyVoiceLevels, listenPartyVoiceState, type PartyVoiceLevels, type PartyVoiceState } from '../ipc/events'
+import { tauri } from '../ipc/tauri'
 import { restoreLauncher } from '../lib/window'
 import { useFriends } from './friends'
 import { api } from '../lib/api'
 import { nickInRooms, useRooms, type VoiceMember } from './rooms'
+import { usePartyStore } from './party'
 import { apiErrorText } from '../lib/apiError'
 import { trackFailure } from '../lib/telemetry'
 
@@ -37,6 +58,10 @@ interface CallState {
   /** Группа, в голосе которой сидим; у личного звонка пусто. */
   roomId: string
   roomTitle: string
+  /** Where the voice of this room lives: a group or the party share one signalling path. */
+  voicePath: string
+  /** Push-to-talk: the mic stays closed until the key is held. */
+  ptt: boolean
   peerId: string
   peerNick: string
   answeredAt: number
@@ -68,6 +93,7 @@ const IDLE = {
   callId: '',
   roomId: '',
   roomTitle: '',
+  voicePath: '',
   peerId: '',
   peerNick: '',
   answeredAt: 0,
@@ -85,8 +111,19 @@ const IDLE = {
   screenOf: '',
 }
 
+const PTT_KEY = 'm-voice-ptt'
+
+function storedPtt(): boolean {
+  try {
+    return localStorage.getItem(PTT_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
 export const useCall = create<CallState>((set) => ({
   ...IDLE,
+  ptt: storedPtt(),
   volume: storedCallVolume(),
   noise: storedNoiseMode(),
   micGain: storedMicGain(),
@@ -121,6 +158,13 @@ let amCaller = false
 /// Свой id в соц-графе: локальная учётка лаунчера — это запись о входе, а не
 /// идентификатор, поэтому его сообщает сервер при входе в голос.
 let myId = ''
+/// Party audio goes through the Millida voice relay in the core instead of the
+/// WebRTC mesh: the same room the game joins, so the talk survives the launch.
+let relay = false
+let relayUnlisten: Array<() => void> = []
+/// The party whose voice the game took over; it comes back here when the game closes.
+let handedOff = ''
+const SPEAKING_LEVEL = 0.02
 
 const st = () => useCall.getState()
 
@@ -152,7 +196,8 @@ function blankPart(userId: string, nick: string): CallParticipant {
 
 function nickOf(uid: string): string {
   const friend = useFriends.getState().friends.find((f) => f.userId === uid)?.nickname
-  return friend || nickInRooms(uid) || 'Друг'
+  const mate = usePartyStore.getState().party?.members.find((m) => m.userId === uid)?.nickname
+  return friend || nickInRooms(uid) || mate || 'Друг'
 }
 
 function clearTimers() {
@@ -177,6 +222,12 @@ function teardown() {
   if (mic) mic.close()
   mic = null
   retries.clear()
+  if (relay) {
+    relay = false
+    void partyVoiceLeave().catch((e: unknown) => console.error('[call] party voice leave', e))
+  }
+  for (const off of relayUnlisten) off()
+  relayUnlisten = []
 }
 
 function reset() {
@@ -305,6 +356,10 @@ function politeFor(peerId: string): boolean {
  * микрофон отобразился бы у собеседника включённым.
  */
 function shareFlags(flags: PeerFlags) {
+  if (relay) {
+    relayFlags(flags)
+    return
+  }
   const cur = st()
   const missed = session ? session.sendFlags(flags) : cur.parts.map((p) => p.userId)
   for (const peerId of missed) {
@@ -395,6 +450,32 @@ export async function acceptCall() {
 export const declineCall = () => finish('decline')
 
 export const hangUp = () => finish('end')
+
+function applyMuted(muted: boolean) {
+  const cur = st()
+  if (cur.muted === muted) return
+  cur.set({ muted, speaking: muted ? false : cur.speaking })
+  if (mic) mic.setMuted(muted)
+  shareFlags({ muted })
+}
+
+export function setPushToTalk(on: boolean) {
+  try {
+    if (on) localStorage.setItem(PTT_KEY, '1')
+    else localStorage.removeItem(PTT_KEY)
+  } catch (e) {
+    console.error('[call] ptt pref', e)
+  }
+  st().set({ ptt: on })
+  if (st().status !== 'idle' && !st().deafened) applyMuted(on)
+}
+
+/** Held key in push-to-talk opens the mic; deafened stays silent whatever is held. */
+export function holdToTalk(down: boolean) {
+  const cur = st()
+  if (!cur.ptt || cur.deafened || cur.status === 'idle') return
+  applyMuted(!down)
+}
 
 export function toggleMute() {
   const cur = st()
@@ -527,6 +608,7 @@ export function setCallVolume(pct: number) {
 /// наш слой, а микрофон продолжал бы приседать на речи.
 export function setCallNoise(mode: NoiseMode) {
   st().set({ noise: mode })
+  if (relay) void pushRelayAudio()
   if (!mic) return
   mic.setMode(mode)
   void mic.setProcessing(storedMicProcessing(), mode)
@@ -534,12 +616,17 @@ export function setCallNoise(mode: NoiseMode) {
 
 export function setCallMicGain(pct: number) {
   st().set({ micGain: pct })
+  if (relay) void pushRelayAudio()
   if (mic) mic.setGain(pct)
 }
 
 /// Обработку меняют посреди разговора — если движок не принял её на живой
 /// дорожке, человек должен узнать об этом, а не гадать, почему ничего не изменилось.
 export async function setCallProcessing(p: MicProcessing) {
+  if (relay) {
+    await pushRelayAudio(p)
+    return
+  }
   if (!mic) return
   const applied = await mic.setProcessing(p, st().noise)
   if (!applied) showToast('Настройка микрофона встанет со следующего звонка — эта уже идёт', 'ok')
@@ -555,7 +642,186 @@ interface VoiceReply {
  * в неё сам и видит, кто уже внутри. Позвать остальных можно отдельно —
  * звонить впятером «в трубку» значит держать четверых в ожидании ради одного.
  */
-export async function joinRoomVoice(roomId: string, title: string) {
+export function joinRoomVoice(roomId: string, title: string) {
+  return joinVoice(roomId, title, '/friends/rooms/' + encodeURIComponent(roomId))
+}
+
+/**
+ * The party talks through the Millida voice relay, the room the game joins later. The WebRTC
+ * mesh stays as the fallback when the relay cannot be reached, and the reason is shown.
+ */
+export async function joinPartyVoice(partyId: string) {
+  const cur = st()
+  if (cur.status !== 'idle') {
+    if (cur.mode === 'room' && cur.roomId === partyId) return
+    showToast('Сначала заверши текущий разговор', 'error')
+    return
+  }
+  handedOff = ''
+  const reason = await joinRelayVoice(partyId)
+  if (reason === null) return
+  trackFailure('call', new Error(reason), { step: 'party_relay' })
+  showToast('Голос через сервер Millida недоступен: ' + reason + '. Включаю запасной режим', 'error')
+  return joinVoice(partyId, 'Пати', '/party')
+}
+
+function relayFlags(flags: PeerFlags) {
+  const cur = st()
+  if (flags.deafened !== undefined) {
+    void partyVoiceDeafen(flags.deafened).catch((e: unknown) => console.error('[call] party voice deafen', e))
+  }
+  if (flags.muted !== undefined) {
+    const open = !flags.muted && !cur.deafened
+    void partyVoiceTransmit(open).catch((e: unknown) => console.error('[call] party voice transmit', e))
+  }
+}
+
+/** The sound settings for the core: stored webview device ids become their labels. */
+async function relayAudio(processing: MicProcessing = storedMicProcessing()): Promise<PartyVoiceAudio> {
+  const cur = st()
+  let input: string | null = null
+  let output: string | null = null
+  const micId = storedMic()
+  const outId = storedOutput()
+  if ((micId && !isSystemAlias(micId)) || (outId && !isSystemAlias(outId))) {
+    const { inputs, outputs } = await listAudioDevices().catch(() => ({ inputs: [], outputs: [], named: false }))
+    input = inputs.find((d) => d.id === micId)?.label ?? null
+    output = outputs.find((d) => d.id === outId)?.label ?? null
+  }
+  return { input, output, noise: cur.noise, agc: processing.agc, micGain: cur.micGain }
+}
+
+async function pushRelayAudio(processing?: MicProcessing) {
+  try {
+    await partyVoiceAudio(await relayAudio(processing))
+  } catch (e) {
+    showToast('Настройка звука не применилась к голосу пати: ' + relayErrorText(e), 'error')
+  }
+}
+
+function relayErrorText(e: unknown): string {
+  if (typeof e === 'string' && e.trim()) return e.trim()
+  if (e instanceof Error && e.message) return e.message
+  return 'сервер не ответил'
+}
+
+/** null when the relay carries the party now (or the join was cancelled); otherwise why it could not. */
+async function joinRelayVoice(partyId: string): Promise<string | null> {
+  if (!tauri()) return 'нужно приложение лаунчера'
+  const cur = st()
+  cur.set({
+    ...IDLE,
+    mode: 'room',
+    status: 'connecting',
+    callId: partyId,
+    roomId: partyId,
+    roomTitle: 'Пати',
+    voicePath: '/party',
+    muted: cur.ptt,
+  })
+  const offs = await Promise.all([listenPartyVoiceState(onRelayState), listenPartyVoiceLevels(onRelayLevels)])
+  relayUnlisten = offs.filter((off): off is () => void => !!off)
+  const members = usePartyStore.getState().party?.members.map((m) => m.userId) ?? []
+  try {
+    await partyVoiceJoin(partyId, members, await relayAudio())
+  } catch (e) {
+    if (st().roomId === partyId) reset()
+    return relayErrorText(e)
+  }
+  relay = true
+  if (st().roomId !== partyId) {
+    teardown()
+    return null
+  }
+  let reply: VoiceReply
+  try {
+    reply = await api<VoiceReply>('/party/voice/join', { method: 'POST' })
+  } catch (e) {
+    trackFailure('call', e, { step: 'room_join' })
+    reset()
+    showToast(apiErrorText(e, 'Не удалось войти в разговор'), 'error')
+    return null
+  }
+  if (st().roomId !== partyId) return null
+  myId = reply.me || myId
+  st().set({ status: 'active', answeredAt: Date.now() })
+  relayFlags({ muted: st().muted, deafened: st().deafened })
+  beatTimer = setInterval(() => void beatVoice(), VOICE_BEAT_MS)
+  await applyRoster(partyId, reply.members || [])
+  return null
+}
+
+function onRelayState(e: PartyVoiceState) {
+  const cur = st()
+  if (!relay || cur.roomId !== e.party) return
+  if (e.state === 'device_fallback') {
+    showToast(e.reason || 'Выбранное звуковое устройство не найдено, взято системное', 'error')
+    return
+  }
+  if (e.state === 'mic_failed') {
+    showToast('Микрофон не открылся: ' + (e.reason || 'нет доступа') + '. Ты слышишь остальных, но тебя не слышно', 'error')
+    return
+  }
+  if (e.state !== 'lost') return
+  const party = e.party
+  void leaveRoomVoice()
+  if (useGame.getState().list.length) {
+    handedOff = party
+    showToast('Голос пати перешёл в игру', 'ok')
+    return
+  }
+  showToast('Связь с сервером голоса пропала — подключаюсь заново', 'error')
+  void joinPartyVoice(party)
+}
+
+function onRelayLevels(l: PartyVoiceLevels) {
+  const cur = st()
+  if (!relay || cur.status !== 'active') return
+  const loud = new Map(l.speakers.map((s) => [s.userId, s.level]))
+  const speaking = !cur.muted && l.me >= SPEAKING_LEVEL
+  const changed = cur.parts.some((p) => p.speaking !== (loud.get(p.userId) ?? 0) >= SPEAKING_LEVEL)
+  if (!changed && speaking === cur.speaking) return
+  cur.set({
+    level: l.me,
+    speaking,
+    parts: cur.parts.map((p) => {
+      const level = loud.get(p.userId) ?? 0
+      return { ...p, level, speaking: level >= SPEAKING_LEVEL }
+    }),
+  })
+}
+
+/**
+ * The launcher hands the party id to the next game launch and keeps the core's member list
+ * fresh so speakers resolve to people. When the game that took the voice over closes, the
+ * lobby picks the talk back up.
+ */
+function watchPartyForRelay() {
+  let lastParty = ''
+  let lastMembers = ''
+  usePartyStore.subscribe((s) => {
+    const id = s.party?.id ?? ''
+    if (id !== lastParty) {
+      lastParty = id
+      void partyVoiceBind(id || null).catch((e: unknown) => console.error('[call] party voice bind', e))
+    }
+    const members = (s.party?.members ?? []).map((m) => m.userId).join(',')
+    if (relay && members !== lastMembers) {
+      lastMembers = members
+      void partyVoiceMembers(members ? members.split(',') : []).catch((e: unknown) =>
+        console.error('[call] party voice members', e),
+      )
+    }
+  })
+  useGame.subscribe((g) => {
+    if (g.list.length || !handedOff) return
+    const party = handedOff
+    handedOff = ''
+    if (usePartyStore.getState().party?.id === party && st().status === 'idle') void joinPartyVoice(party)
+  })
+}
+
+async function joinVoice(roomId: string, title: string, voicePath: string) {
   const cur = st()
   if (cur.status !== 'idle') {
     if (cur.mode === 'room' && cur.roomId === roomId) return
@@ -566,7 +832,7 @@ export async function joinRoomVoice(roomId: string, title: string) {
     showToast('Звонки недоступны в этой сборке', 'error')
     return
   }
-  cur.set({ ...IDLE, mode: 'room', status: 'connecting', callId: roomId, roomId, roomTitle: title })
+  cur.set({ ...IDLE, mode: 'room', status: 'connecting', callId: roomId, roomId, roomTitle: title, voicePath, muted: cur.ptt })
   const chain = await openMicOrFail()
   if (!chain) {
     if (st().callId === roomId) reset()
@@ -576,7 +842,7 @@ export async function joinRoomVoice(roomId: string, title: string) {
   mic = chain
   let reply: VoiceReply
   try {
-    reply = await api<VoiceReply>('/friends/rooms/' + encodeURIComponent(roomId) + '/voice/join', {
+    reply = await api<VoiceReply>(voicePath + '/voice/join', {
       method: 'POST',
     })
   } catch (e) {
@@ -599,7 +865,7 @@ async function beatVoice() {
   const cur = st()
   if (cur.mode !== 'room' || !cur.roomId) return
   try {
-    const r = await api<VoiceReply>('/friends/rooms/' + encodeURIComponent(cur.roomId) + '/voice/beat', {
+    const r = await api<VoiceReply>(cur.voicePath + '/voice/beat', {
       method: 'POST',
       body: JSON.stringify({ muted: cur.muted, deafened: cur.deafened, screen: cur.sharing }),
     })
@@ -612,12 +878,11 @@ async function beatVoice() {
 export async function leaveRoomVoice() {
   const cur = st()
   const roomId = cur.roomId
+  const voicePath = cur.voicePath
   if (cur.mode !== 'room' || !roomId) return
   reset()
   startRing('ended')
-  await api('/friends/rooms/' + encodeURIComponent(roomId) + '/voice/leave', { method: 'POST' }).catch(
-    () => {},
-  )
+  await api(voicePath + '/voice/leave', { method: 'POST' }).catch(() => {})
 }
 
 /** Позвать остальных участников группы в уже идущий разговор. */
@@ -639,7 +904,7 @@ export async function ringRoom(roomId: string) {
  */
 async function applyRoster(roomId: string, members: VoiceMember[]) {
   const cur = st()
-  if (cur.mode !== 'room' || cur.roomId !== roomId || !session) return
+  if (cur.mode !== 'room' || cur.roomId !== roomId || (!session && !relay)) return
   const others = members.filter((m) => m.userId !== myId)
   const before = cur.parts
   const known = new Map(before.map((p) => [p.userId, p]))
@@ -651,6 +916,7 @@ async function applyRoster(roomId: string, members: VoiceMember[]) {
         : { ...blankPart(m.userId, nickOf(m.userId)), muted: m.muted }
     }),
   })
+  if (!session) return
   for (const p of before) {
     if (!others.some((m) => m.userId === p.userId)) session.drop(p.userId)
   }
@@ -804,6 +1070,7 @@ let pump: { stop: () => void } | null = null
 /** Приём звонков включается один раз на запуск лаунчера. */
 export function initCalls() {
   if (pump || !callSupported()) return
+  watchPartyForRelay()
   pump = startSignalPump((e) => {
     void onEvent(e).catch(() => {})
   })

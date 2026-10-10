@@ -776,15 +776,33 @@ async fn install_java_arch(app: &AppHandle, major: u64, jdir: &Path, arch: Optio
     }
     emit(app, "java", 60.0, "Распаковываем Java…");
     std::fs::create_dir_all(jdir).map_err(|e| io_fail("Установка Java", jdir, &e))?;
-    let unpacked = if t.ext == "zip" {
-        unzip_strip1(&archive, jdir).map_err(|e| format!("Распаковка Java: {}", e))
-    } else {
-        quiet(&mut Command::new("tar"))
-            .args(["-xzf"]).arg(&archive).arg("-C").arg(jdir).arg("--strip-components=1")
-            .status()
-            .map_err(|e| io_fail("Распаковка Java", &archive, &e))
-            .and_then(|s| if s.success() { Ok(()) } else { Err("Не удалось распаковать Java".into()) })
-    };
+    /*
+     * «Отказано в доступе (os error 5)» при распаковке — почти всегда антивирус
+     * или индексатор держит свежий файл (≈230 устройств в сутки, 10.10.2026).
+     * Через пару секунд он отпускает: повторяем с чистой папкой, а не просим
+     * человека запускать заново.
+     */
+    let mut unpacked = Ok(());
+    for attempt in 0..3u64 {
+        if attempt > 0 {
+            tokio::time::sleep(std::time::Duration::from_secs(2 * attempt)).await;
+            let _ = std::fs::remove_dir_all(jdir);
+            std::fs::create_dir_all(jdir).map_err(|e| io_fail("Установка Java", jdir, &e))?;
+        }
+        unpacked = if t.ext == "zip" {
+            unzip_strip1(&archive, jdir).map_err(|e| format!("Распаковка Java: {}", e))
+        } else {
+            quiet(&mut Command::new("tar"))
+                .args(["-xzf"]).arg(&archive).arg("-C").arg(jdir).arg("--strip-components=1")
+                .status()
+                .map_err(|e| io_fail("Распаковка Java", &archive, &e))
+                .and_then(|s| if s.success() { Ok(()) } else { Err("Не удалось распаковать Java".into()) })
+        };
+        match &unpacked {
+            Err(e) if e.contains("os error 5") || e.contains("os error 32") || e.contains("Отказано в доступе") => continue,
+            _ => break,
+        }
+    }
     let _ = std::fs::remove_file(&archive);
     unpacked?;
     unwrap_single_dir(jdir)?;

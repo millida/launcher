@@ -49,6 +49,7 @@ pub mod media;
 pub mod cloud;
 pub mod dungeons;
 pub mod games;
+pub mod party_voice;
 
 pub use core::*;
 pub use game::*;
