@@ -172,26 +172,3 @@ export function listenRealtimeRelay(handler: (payload: unknown) => void): Promis
   if (!T) return Promise.resolve(null)
   return T.event.listen<unknown>('realtime-relay', (e) => handler(e.payload)).catch(() => null)
 }
-
-export interface PartyVoiceState {
-  party: string
-  state: 'connected' | 'lost' | 'mic_failed' | 'device_fallback'
-  reason: string | null
-}
-
-export interface PartyVoiceLevels {
-  me: number
-  speakers: { userId: string; level: number }[]
-}
-
-export function listenPartyVoiceState(handler: (s: PartyVoiceState) => void): Promise<UnlistenFn | null> {
-  const T = tauri()
-  if (!T) return Promise.resolve(null)
-  return T.event.listen<PartyVoiceState>('party-voice://state', (e) => handler(e.payload)).catch(() => null)
-}
-
-export function listenPartyVoiceLevels(handler: (l: PartyVoiceLevels) => void): Promise<UnlistenFn | null> {
-  const T = tauri()
-  if (!T) return Promise.resolve(null)
-  return T.event.listen<PartyVoiceLevels>('party-voice://levels', (e) => handler(e.payload)).catch(() => null)
-}

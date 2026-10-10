@@ -4,10 +4,6 @@ import { BuildIcon } from '../components/playhub/BuildIcon'
 import { Installs } from '../components/Installs'
 import { LobbyCharacter } from '../components/lobby/LobbyCharacter'
 import { EmoteBubble } from '../components/lobby/EmoteBubble'
-import { LobbySlots } from '../components/lobby/LobbySlots'
-import { PartyBar } from '../components/lobby/PartyBar'
-import { isLeader, partyWithOthers, usePartyStore } from '../state/party'
-import { partyPlayPressed } from '../lib/partyPlay'
 import { Recommend } from '../components/lobby/Recommend'
 import { AnarchyArt } from '../components/playhub/AnarchyTile'
 import { targetsAnarchy } from '../lib/ownServer'
@@ -46,7 +42,6 @@ import { stopRunningGame, useGame } from '../state/game'
 import '../styles/pixel/play.css'
 import '../styles/pixel/lobby.css'
 import '../styles/pixel/retention.css'
-import '../styles/pixel/party.css'
 
 /* Разделы на лобби, как в Brawl Stars: у каждого ровно один вход (владелец
    23.09.2026: «всё дублируется»). Режимы и каталог открывает плашка «Что
@@ -96,11 +91,6 @@ export function Play({ on }: { on: boolean }) {
   const gameStopping = useGame((s) => s.stopping)
   // Ход подготовки к запуску — прямо на кнопке: скачиваем → запускаем → в игре.
   const prelaunch = useUi((s) => s.prelaunch)
-  const party = usePartyStore((s) => s.party)
-  const partyMe = usePartyStore((s) => s.me)
-  const inParty = partyWithOthers(party)
-  const partyMember = inParty && !isLeader(party, partyMe)
-  const partyReady = partyMember && !!party?.members.find((m) => m.userId === partyMe)?.ready
   const hoursOf = (name: string) => playStats.builds.find((b) => b.key === name) || null
 
   useEffect(() => {
@@ -229,8 +219,6 @@ export function Play({ on }: { on: boolean }) {
 
       </div>
       <LobbyCharacter on={on} />
-      <LobbySlots on={on} />
-      <PartyBar on={on} />
       <EmoteBubble />
       {dayZero ? null : <Recommend on={on} />}
       {/* Левый край — как в Brawl Stars: крупный сундук и под ним разделы.
@@ -333,10 +321,6 @@ export function Play({ on }: { on: boolean }) {
                   cancelPrelaunch()
                   return
                 }
-                if (inParty) {
-                  void partyPlayPressed(mode)
-                  return
-                }
                 if (!mode) {
                   setScreen('playhub')
                   return
@@ -357,8 +341,6 @@ export function Play({ on }: { on: boolean }) {
                         {btn.pct + '%'}
                       </span>
                     </>
-                  ) : partyMember ? (
-                    partyReady ? 'Не готов' : 'Готов'
                   ) : (
                     <>
                       Играть

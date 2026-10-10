@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { ONEBLOCK_PACK, isExclusive, isOwnServerPack, ownServerTagline, pinnedPacks } from './data'
+import { ONEBLOCK_PACK, isExclusive, isOwnServerPack, ownServerTagline } from './data'
 
 const cases: Array<[string | null | undefined, boolean, string]> = [
   [ONEBLOCK_PACK, true, 'the OneBlock catalog pack wears the purple badge in For You, catalog rows and the lobby card'],
@@ -45,18 +45,5 @@ describe('ownServerTagline', () => {
   for (const [slug, want, why] of cases)
     test(String(slug), () => {
       expect(ownServerTagline(slug), why).toBe(want)
-    })
-})
-
-describe('pinnedPacks', () => {
-  const cases: Array<[Array<{ slug: string }>, string[], string]> = [
-    [[{ slug: 'immortal' }, { slug: 'chaoszproject' }], ['chaoszproject'], 'ChaosZProject stands right after Arcania in «Сборки» whatever its downloads (owner 09.10.2026)'],
-    [[{ slug: 'immortal' }], [], 'an unpublished pinned pack leaves the row as it was instead of an empty cell'],
-    [[{ slug: 'chaoszproject' }, { slug: 'chaoszproject' }], ['chaoszproject'], 'a pack listed twice still takes one cell'],
-    [[{ slug: 'chaoszproject-a-modern-zombie-apocalypse-vr-for-wip-v-3-0-0' }], [], 'the raw CurseForge mirror is not our checked pack'],
-  ]
-  for (const [packs, want, why] of cases)
-    test(why, () => {
-      expect(pinnedPacks(packs).map((p) => p.slug), why).toEqual(want)
     })
 })

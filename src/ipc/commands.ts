@@ -1415,16 +1415,6 @@ export interface PackPreview {
   installs: number
   updatedAt: string
   sizeBytes: number
-  mods?: PackPreviewFile[]
-  overrides?: string[]
-  dropped?: string[]
-}
-
-export interface PackPreviewFile {
-  name: string
-  kind: string
-  source: 'modrinth' | 'curseforge' | 'millida' | 'unknown'
-  size: number
 }
 
 export const shareProfile = (profile: string, summary?: string) =>
@@ -1477,24 +1467,3 @@ export const millidaModInstall = (profile: string) => invoke<MillidaModState>('m
 export const millidaModEnabled = () => invoke<boolean>('millida_mod_enabled')
 export const setMillidaModEnabled = (on: boolean) => invoke<void>('set_millida_mod_enabled', { on })
 export const setGameTelemetry = (on: boolean) => invoke<void>('set_game_telemetry', { on })
-export const pvpHudDefault = () => invoke<boolean>('pvp_hud_default')
-export const setPvpHudDefault = (on: boolean) => invoke<void>('set_pvp_hud_default', { on })
-
-/// Party voice over the Millida relay. Only the party and member ids cross the
-/// bridge; the ticket, secret and relay address stay in the core.
-/** Device labels, not webview ids: the core finds devices by name. */
-export interface PartyVoiceAudio {
-  input: string | null
-  output: string | null
-  noise: 'off' | 'standard' | 'strong'
-  agc: boolean
-  micGain: number
-}
-export const partyVoiceJoin = (partyId: string, members: string[], audio: PartyVoiceAudio) =>
-  invoke<void>('party_voice_join', { partyId, members, audio })
-export const partyVoiceAudio = (audio: PartyVoiceAudio) => invoke<void>('party_voice_audio', { audio })
-export const partyVoiceLeave = () => invoke<void>('party_voice_leave', {})
-export const partyVoiceTransmit = (open: boolean) => invoke<void>('party_voice_transmit', { open })
-export const partyVoiceDeafen = (on: boolean) => invoke<void>('party_voice_deafen', { on })
-export const partyVoiceMembers = (members: string[]) => invoke<void>('party_voice_members', { members })
-export const partyVoiceBind = (partyId: string | null) => invoke<void>('party_voice_bind', { partyId })

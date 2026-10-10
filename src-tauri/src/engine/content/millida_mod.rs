@@ -252,34 +252,7 @@ fn write_settings(dir: &Path, licensed: bool) -> Result<(), String> {
             }
         }
     }
-    seed_hud(&mut cfg, pvp_hud_default());
     write_json_atomic(&path, &Value::Object(cfg))
-}
-
-/// The launcher only picks the starting state of the PvP modules. Once the
-/// file carries a "hud" object the player has seen the modules in game, and
-/// the Right Shift menu owns the switch from then on.
-fn seed_hud(cfg: &mut serde_json::Map<String, Value>, on: bool) {
-    if on || cfg.contains_key("hud") {
-        return;
-    }
-    cfg.insert("hud".into(), serde_json::json!({ "enabled": false }));
-}
-
-fn pvp_hud_off_file() -> PathBuf {
-    data_dir().join("pvp-hud-off")
-}
-
-pub fn pvp_hud_default() -> bool {
-    enabled_at(&pvp_hud_off_file())
-}
-
-pub fn set_pvp_hud_default(on: bool) -> Result<(), String> {
-    if on {
-        turn_on_at(&pvp_hud_off_file())
-    } else {
-        turn_off_at(&pvp_hud_off_file())
-    }
 }
 
 /// Раскладка, которую читает мод: `millida/local/{skins,capes}/<ник>.png`. Та же
@@ -843,34 +816,6 @@ pub async fn ensure_millida_mod(
 mod tests {
     use super::*;
     use serde_json::json;
-
-    /// The launcher must never overwrite a choice the player made in the
-    /// Right Shift menu: it only fills in a missing "hud" object, and only
-    /// when the player asked for the modules to start switched off.
-    #[test]
-    fn hud_seed_touches_only_a_missing_hud_object() {
-        let cases: [(Value, bool, Value, &str); 4] = [
-            (json!({}), true, json!({}), "default on keeps the mod's own default"),
-            (json!({}), false, json!({ "hud": { "enabled": false } }), "default off seeds the switch"),
-            (
-                json!({ "hud": { "enabled": true, "theme": "x" } }),
-                false,
-                json!({ "hud": { "enabled": true, "theme": "x" } }),
-                "the player's in-game choice wins over the launcher default",
-            ),
-            (
-                json!({ "hud": { "enabled": false } }),
-                true,
-                json!({ "hud": { "enabled": false } }),
-                "turning the default back on does not flip existing builds",
-            ),
-        ];
-        for (before, on, after, why) in cases {
-            let mut cfg = before.as_object().cloned().unwrap_or_default();
-            seed_hud(&mut cfg, on);
-            assert_eq!(Value::Object(cfg), after, "{}", why);
-        }
-    }
 
     /// Мод ставится принудительно, поэтому отказ обязан пережить перезапуск
     /// лаунчера и читаться до открытия окна. Свойство закреплено на файле:

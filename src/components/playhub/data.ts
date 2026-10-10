@@ -407,12 +407,6 @@ export const ONEBLOCK_BANNER = 'https://cdn.millida.trade/catalog/launcher-packs
 const EXCLUSIVE = new Set<string>([ONEBLOCK_PACK, OWN_SERVER.mode, ANARCHY.mode])
 export const isExclusive = (key: string | null | undefined): boolean => !!key && EXCLUSIVE.has(key)
 
-/** Free packs the editors pin in «Сборки» right after Arcania, in this order. */
-const PINNED_PACKS = ['chaoszproject']
-export const isPinnedPack = (slug: string | null | undefined): boolean => !!slug && PINNED_PACKS.includes(slug)
-export const pinnedPacks = <T extends { slug?: string | null }>(packs: T[]): T[] =>
-  PINNED_PACKS.flatMap((slug) => packs.filter((p) => p.slug === slug).slice(0, 1))
-
 /**
  * Catalogue packs that are a server we run with a partner: the feed tags them
  * like OneBlock and shows a short line instead of the loader and version.

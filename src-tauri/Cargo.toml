@@ -6,10 +6,6 @@ authors = ["Millida"]
 edition = "2021"
 license = "GPL-3.0-only"
 
-[workspace]
-members = [".", "voice"]
-default-members = [".", "voice"]
-
 [lib]
 name = "millida_launcher_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
@@ -67,7 +63,6 @@ url = "2"
 lewton = "0.10"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 tauri-plugin-global-shortcut = "2.3.2"
-millida-voice = { path = "voice" }
 
 [target.'cfg(windows)'.dependencies]
 # DPAPI for vault.key: the file is useless outside the Windows account.
@@ -79,18 +74,13 @@ windows-sys = { version = "0.61", features = ["Win32_Security_Cryptography", "Wi
 # being bounced back at them on every recording.
 webview2-com = "0.38"
 # Ярлыки «Рабочий стол»/«Пуск» с выбранной иконкой (IShellLinkW), см. src/app_icon.rs
-windows = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Com", "Win32_UI_Shell", "Win32_Storage_FileSystem", "Foundation", "Media_Control", "Storage_Streams"] }
+windows = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Com", "Win32_UI_Shell", "Win32_Storage_FileSystem"] }
 # VPN clients in "system proxy" mode (v2rayN, Hiddify, Clash) only set the
 # WinINet proxy. Without this feature the core went straight past it into the
 # resets the player turned the VPN on to avoid, while the browser worked.
 reqwest = { version = "0.12", default-features = false, features = ["system-proxy"] }
 # Same registry values hyper-util reads, so the client is rebuilt when they change.
 windows-registry = "0.5"
-
-[target.'cfg(target_os = "linux")'.dependencies]
-# MPRIS for the in-game now-playing island; already in the tree through the
-# deep-link and single-instance plugins
-zbus = "5"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 libc = "0.2"
