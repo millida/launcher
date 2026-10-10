@@ -51,6 +51,16 @@ export function openHubBuild(modTab?: string) {
   setScreen('playhub')
 }
 
+/**
+ * Вход в каталог «с порога» — вкладкой «Каталог» или первым заходом: всегда «Сборки»
+ * без фильтров, первой — Arcania (владелец 10.10.2026: «так специально продумано»).
+ * Возврат со страницы сборки сюда не ведёт — там лента остаётся как была.
+ */
+export function openCatalogHome() {
+  useMods.getState().set({ modTab: 'modpack', mq: '', fCats: [], fCat: 'все', fVer: 'любая', fLoader: 'любой', count: '' })
+  useHubTab.setState((s) => ({ tab: 'catalog', all: true, section: null, seq: s.seq + 1 }))
+}
+
 /** Открыть хаб снаружи на нужном разделе страницы. */
 export function openHubTab(t: HubTab | HubSection) {
   if (t === 'add') {

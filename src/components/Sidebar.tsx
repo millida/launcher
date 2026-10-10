@@ -16,7 +16,7 @@ import { roomsUnreadTotal, useRooms } from '../state/rooms'
 import { openMessages } from '../state/chatScreen'
 import { PlayhubBar } from './playhub/MyBuilds'
 import { PxIcon } from './PxIcon'
-import { useHubTab } from './playhub/hubTab'
+import { openCatalogHome, useHubTab } from './playhub/hubTab'
 import { SKINS_IMPORT_EVENT, SKINS_UPLOAD_EVENT, useTopBar } from '../state/topbar'
 import { useUi } from '../state/ui'
 import type { ScreenId } from '../state/ui'
@@ -110,14 +110,16 @@ export function HubTopTabs({ libLabel = 'Библиотека' }: { libLabel?: s
   const setAll = useHubTab((s) => s.setAll)
   const go = (v: boolean) => {
     if (v === all) return
-    setAll(v)
+    if (v) openCatalogHome()
+    else setAll(v)
     const c = document.querySelector('.content')
     if (c) c.scrollTop = 0
   }
   return (
     <div className="tb-tabs" role="tablist" aria-label="Во что играем">
       <button role="tab" aria-selected={!all} className={'btn md tb-tab ' + (!all ? 'primary on' : 'secondary')} data-sound="nav" data-track="hub_tab_library" onClick={() => go(false)}>
-        <PxIcon name="chest" size={30} /> {libLabel}
+        {/* Библиотека — книжная полка, не сундук (владелец 10.10.2026). */}
+        <img className="tb-tab-block" src="/block-icons/Block52Millida.png" alt="" width={26} height={26} draggable={false} /> {libLabel}
       </button>
       <button role="tab" aria-selected={all} className={'btn md tb-tab ' + (all ? 'primary on' : 'secondary')} data-sound="nav" data-track="hub_tab_resources" onClick={() => go(true)}>
         <PxIcon name="book" size={30} /> Каталог

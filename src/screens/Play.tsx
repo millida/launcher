@@ -4,6 +4,8 @@ import { BuildIcon } from '../components/playhub/BuildIcon'
 import { Installs } from '../components/Installs'
 import { LobbyCharacter } from '../components/lobby/LobbyCharacter'
 import { EmoteBubble } from '../components/lobby/EmoteBubble'
+import { isLeader, partyWithOthers, usePartyStore } from '../state/party'
+import { partyPlayPressed } from '../lib/partyPlay'
 import { Recommend } from '../components/lobby/Recommend'
 import { AnarchyArt } from '../components/playhub/AnarchyTile'
 import { targetsAnarchy } from '../lib/ownServer'
@@ -42,6 +44,7 @@ import { stopRunningGame, useGame } from '../state/game'
 import '../styles/pixel/play.css'
 import '../styles/pixel/lobby.css'
 import '../styles/pixel/retention.css'
+import '../styles/pixel/party.css'
 
 /* Разделы на лобби, как в Brawl Stars: у каждого ровно один вход (владелец
    23.09.2026: «всё дублируется»). Режимы и каталог открывает плашка «Что
@@ -91,6 +94,11 @@ export function Play({ on }: { on: boolean }) {
   const gameStopping = useGame((s) => s.stopping)
   // Ход подготовки к запуску — прямо на кнопке: скачиваем → запускаем → в игре.
   const prelaunch = useUi((s) => s.prelaunch)
+  const party = usePartyStore((s) => s.party)
+  const partyMe = usePartyStore((s) => s.me)
+  const inParty = partyWithOthers(party)
+  const partyMember = inParty && !isLeader(party, partyMe)
+  const partyReady = partyMember && !!party?.members.find((m) => m.userId === partyMe)?.ready
   const hoursOf = (name: string) => playStats.builds.find((b) => b.key === name) || null
 
   useEffect(() => {
@@ -155,7 +163,7 @@ export function Play({ on }: { on: boolean }) {
       // Иконка сборки крупно по центру — как на карточке «Моих сборок»
       // (владелец 24.09.2026: мелкий сундук в углу).
       <span className="lobby-mode-cover lobby-mode-bi">
-        <BuildIcon icon={sel?.icon} size={104} />
+        <BuildIcon icon={sel?.icon} name={sel?.name || mode.name} size={104} />
       </span>
     ) : mode?.kind === 'version' ? (
       <img src={'/versions/' + mode.version + '.webp'} alt="" onError={(e) => (e.currentTarget.style.display = 'none')} />
@@ -321,6 +329,10 @@ export function Play({ on }: { on: boolean }) {
                   cancelPrelaunch()
                   return
                 }
+                if (inParty) {
+                  void partyPlayPressed(mode)
+                  return
+                }
                 if (!mode) {
                   setScreen('playhub')
                   return
@@ -341,6 +353,8 @@ export function Play({ on }: { on: boolean }) {
                         {btn.pct + '%'}
                       </span>
                     </>
+                  ) : partyMember ? (
+                    partyReady ? 'Не готов' : 'Готов'
                   ) : (
                     <>
                       Играть

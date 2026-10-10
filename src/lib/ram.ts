@@ -6,8 +6,9 @@ export const RAM_RESERVE_RATIO = 0.25
 /// Floor of that share: on a small machine a quarter is not enough for Windows.
 export const RAM_RESERVE_MIN_GB = 2
 
-/// Above this a larger heap stops helping, even on the biggest packs.
-export const RAM_MAX_GB = 16
+/// Above this a larger heap stops helping, even on the biggest packs. Owners of
+/// 32 GB machines running heavy packs asked for 20 and were stopped at 16.
+export const RAM_MAX_GB = 32
 
 /**
  * Ceiling of the memory slider for this machine. A slider that reaches 16 GB on

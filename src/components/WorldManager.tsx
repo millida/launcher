@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import type * as React from 'react'
 import { Icon } from './Icon'
 import { agoText, fmtSize } from '../lib/format'
 import { hasTauri } from '../ipc/tauri'
@@ -36,9 +37,17 @@ const DIFFICULTY_NAMES: Record<string, string> = {
 interface Props {
   profile: string
   onPlay: (folder: string, name: string) => void
+  /** Меняется — список перечитывается (мир внесли кнопкой вне списка). */
+  reloadKey?: number
+  /** Пусто — что показать вместо строки «Миров пока нет». */
+  empty?: React.ReactNode
+  /** Кнопку «Мир из архива» рисует страница сама. */
+  hideImport?: boolean
+  /** Сколько миров — для заголовка раздела на странице. */
+  onCount?: (n: number) => void
 }
 
-export function WorldManager({ profile, onPlay }: Props) {
+export function WorldManager({ profile, onPlay, reloadKey = 0, empty, hideImport, onCount }: Props) {
   const [worlds, setWorlds] = useState<WorldInfo[]>([])
   const [backups, setBackups] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
@@ -61,7 +70,10 @@ export function WorldManager({ profile, onPlay }: Props) {
       .finally(() => setLoading(false))
   }, [profile])
 
-  useEffect(load, [load])
+  useEffect(load, [load, reloadKey])
+  useEffect(() => {
+    if (!loading) onCount?.(worlds.length)
+  }, [loading, worlds.length])
 
   // The button that started the work stays disabled until it finishes, so a
   // second click cannot start a copy of a copy.
@@ -88,9 +100,7 @@ export function WorldManager({ profile, onPlay }: Props) {
 
   return (
     <>
-      {worlds.length === 0 ? (
-        <p className="faint-note">Миров пока нет</p>
-      ) : null}
+      {worlds.length === 0 ? empty ?? <p className="faint-note">Миров пока нет</p> : null}
       <div className="wm-list">
         {worlds.map((w) => {
           const mine = backupsOf(w.folder)
@@ -247,14 +257,16 @@ export function WorldManager({ profile, onPlay }: Props) {
           )
         })}
       </div>
-      <button
-        className="btn sm secondary"
-        style={{ width: '100%', marginTop: '8px' }}
-        disabled={busy === 'import'}
-        onClick={() => run('import', importWorld(profile), 'Мир внесён в сборку')}
-      >
-        <Icon id="i-upload" /> Мир из архива
-      </button>
+      {hideImport ? null : (
+        <button
+          className="btn sm secondary"
+          style={{ width: '100%', marginTop: '8px' }}
+          disabled={busy === 'import'}
+          onClick={() => run('import', importWorld(profile), 'Мир внесён в сборку')}
+        >
+          <Icon id="i-upload" /> Мир из архива
+        </button>
+      )}
     </>
   )
 }

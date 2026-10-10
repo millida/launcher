@@ -23,6 +23,7 @@ export type TelemetryEventType =
   | 'skin_diag'
   | 'account_link'
   | 'hosting_open'
+  | 'pvp_client_open'
   | 'hosting_action'
   | 'rating_open'
   | 'store_open'

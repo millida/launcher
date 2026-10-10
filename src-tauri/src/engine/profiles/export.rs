@@ -57,8 +57,21 @@ pub fn export_file_stem(name: &str, profile: &str) -> String {
     [clean(name), clean(profile)].into_iter().find(|s| !s.is_empty()).unwrap_or_else(|| "modpack".into())
 }
 
+/// The exact loader build the pack runs on. Modrinth App and Prism refuse an
+/// index whose loader is "*", so an unpinned build exports the recommended
+/// build it is launched with.
+pub async fn export_loader_build(profile: &str) -> Option<String> {
+    let prof = load_profiles().into_iter().find(|p| p.name == profile)?;
+    if let Some(v) = prof.loader_version.clone().filter(|v| !v.trim().is_empty()) {
+        return Some(v);
+    }
+    let builds = list_loader_versions(&prof.loader_id(), &prof.version).await.ok()?;
+    builds.iter().find(|b| b.recommended).or(builds.first()).map(|b| b.version.clone())
+}
+
 pub fn export_mrpack(
     profile: String, out_path: String, name: String, version: String, description: String,
+    loader_build: Option<String>,
 ) -> Result<String, String> {
     use std::io::Write;
     refuse_protected(&profile)?;
@@ -84,12 +97,11 @@ pub fn export_mrpack(
     }
     let mut deps = serde_json::Map::new();
     deps.insert("minecraft".into(), Value::String(gv));
-    match loader_id.as_str() {
-        "fabric" => { deps.insert("fabric-loader".into(), Value::String("*".into())); }
-        "quilt" => { deps.insert("quilt-loader".into(), Value::String("*".into())); }
-        "forge" => { deps.insert("forge".into(), Value::String("*".into())); }
-        "neoforge" => { deps.insert("neoforge".into(), Value::String("*".into())); }
-        _ => {}
+    if let Some(key) = mrpack_loader_key(&loader_id) {
+        let build = loader_build.filter(|v| !v.trim().is_empty()).ok_or_else(|| {
+            "Не удалось узнать версию загрузчика сборки — запусти её один раз и повтори выгрузку".to_string()
+        })?;
+        deps.insert(key.into(), Value::String(build));
     }
     let index = serde_json::json!({
         "formatVersion": 1, "game": "minecraft",
@@ -109,6 +121,16 @@ pub fn export_mrpack(
     zip_add_overrides(&mut zip, &pdir, &["config", "mods", "resourcepacks", "shaderpacks", "datapacks"], &known, opts)?;
     zip.finish().map_err(|e| e.to_string())?;
     Ok(out_path)
+}
+
+fn mrpack_loader_key(loader_id: &str) -> Option<&'static str> {
+    match loader_id {
+        "fabric" => Some("fabric-loader"),
+        "quilt" => Some("quilt-loader"),
+        "forge" => Some("forge"),
+        "neoforge" => Some("neoforge"),
+        _ => None,
+    }
 }
 
 #[cfg(test)]

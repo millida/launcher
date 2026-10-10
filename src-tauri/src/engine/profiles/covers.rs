@@ -3,7 +3,9 @@ use base64::Engine as _;
 
 /// Covers are stored in profiles.json as a small square PNG data URL rather than
 /// as a file path, so they survive a game-root change or a profile rename.
-const COVER_PX: u32 = 128;
+/// 256: карточки «Моих сборок» рисуют значок до 132 px, на экране Retina это 264
+/// точки — значок в 128 был мыльным (владелец 10.10.2026: «Immortal размыта»).
+pub(crate) const COVER_PX: u32 = 256;
 /// Guard against decoding huge camera photos into memory.
 const MAX_SOURCE_BYTES: u64 = 12 * 1024 * 1024;
 
@@ -66,7 +68,12 @@ pub(crate) fn pixel_art(img: &image::DynamicImage) -> bool {
     if w != h || w == 0 {
         return false;
     }
-    if COVER_PX.is_multiple_of(w) {
+    // Уже нужного размера — масштабировать нечего.
+    if w == COVER_PX {
+        return false;
+    }
+    // Меньше квадрата и укладывается в него целое число раз — увеличиваем блоками.
+    if w < COVER_PX && COVER_PX.is_multiple_of(w) {
         return true;
     }
     if !w.is_multiple_of(COVER_PX) {

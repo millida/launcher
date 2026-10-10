@@ -1,6 +1,11 @@
 # Published to millida/launcher as release.yml. The sync deploy key cannot
 # create or change workflow files, so edits here must be pushed to the public
 # repository once by an account that can.
+#
+# Every official installer is built here, on GitHub-hosted runners, from the
+# tagged commit. No secrets are involved: updater signatures are added after
+# the fact by the publisher, who first checks these files against their
+# build provenance.
 name: Release
 
 on:
@@ -8,48 +13,298 @@ on:
     tags: ["v*"]
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
 
 jobs:
-  publish:
-    name: GitHub release
+  build:
+    name: ${{ matrix.label }}
+    if: github.repository == 'millida/launcher'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Windows x64
+            platform: windows
+            os: windows-latest
+            container: ""
+            target: x86_64-pc-windows-msvc
+            updater_key: windows-x86_64
+            updater_dir: nsis
+            updater_pattern: "*-setup.exe"
+            updater_extra: ""
+          - label: Linux x64
+            platform: linux
+            os: ubuntu-latest
+            # AppImage bundles GLib, GTK and WebKit from the build machine, so the
+            # oldest supported base decides which systems the launcher starts on.
+            container: ubuntu:22.04
+            target: x86_64-unknown-linux-gnu
+            updater_key: linux-x86_64
+            updater_dir: appimage
+            updater_pattern: "*.AppImage"
+            updater_extra: "deb:*.deb:linux-x86_64-deb rpm:*.rpm:linux-x86_64-rpm"
+    container: ${{ matrix.container }}
+    steps:
+      - name: Install Linux dependencies
+        if: matrix.platform == 'linux'
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y \
+            ca-certificates \
+            curl \
+            git \
+            unzip \
+            xz-utils \
+            pkg-config \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libxdo-dev \
+            libasound2-dev \
+            libssl-dev \
+            build-essential \
+            file \
+            wget \
+            xdg-utils \
+            desktop-file-utils \
+            binutils \
+            libgstreamer1.0-0 \
+            libgstreamer-plugins-base1.0-0 \
+            gstreamer1.0-plugins-base \
+            gstreamer1.0-plugins-good \
+            gstreamer1.0-plugins-bad \
+            gstreamer1.0-libav \
+            gstreamer1.0-gl \
+            gstreamer1.0-pulseaudio \
+            gstreamer1.0-alsa
+
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.0"
+
+      - run: bun install --frozen-lockfile
+
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # A cache saved on a tag is visible only to that same tag, so the next
+      # release can never restore it; saving just evicts reusable entries.
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: src-tauri -> target
+          key: ${{ matrix.target }}-${{ matrix.container }}
+          save-if: false
+
+      - name: Set version from the tag
+        shell: bash
+        run: bash .github/scripts/set-version.sh "${GITHUB_REF_NAME#v}"
+
+      - name: Build and bundle
+        shell: bash
+        env:
+          # linuxdeploy and appimagetool mount themselves through FUSE, which a
+          # container does not have.
+          APPIMAGE_EXTRACT_AND_RUN: 1
+          # Recent toolchains default C code to x86-64-v3; ring's curve25519 then
+          # crashes with SIGILL on every CPU before Haswell.
+          CFLAGS_x86_64_unknown_linux_gnu: -march=x86-64 -mtune=generic
+          CXXFLAGS_x86_64_unknown_linux_gnu: -march=x86-64 -mtune=generic
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS: -C target-cpu=x86-64
+        # Types are checked by CI on the commit this tag is cut from.
+        run: bun run tauri build --target ${{ matrix.target }} --config '{"build":{"beforeBuildCommand":"bun run build:web:release"}}'
+
+      # curve25519.c has no runtime dispatch, so BMI2 or AVX2 in its object file
+      # means the build drifted past baseline x86-64.
+      - name: Verify baseline instruction set
+        if: matrix.platform == 'linux'
+        shell: bash
+        run: |
+          set -eu
+          obj=$(find "src-tauri/target/${{ matrix.target }}/release/build" -name '*-curve25519.o' | head -n1)
+          if [ -z "$obj" ]; then
+            echo "::error::curve25519 object file not found, the instruction set cannot be checked"
+            exit 1
+          fi
+          if objdump -d "$obj" | grep -qE '\b(mulx|shlx|shrx|sarx|rorx|bzhi|pdep|pext)\b|%ymm|%zmm'; then
+            echo "::error::$obj uses instructions above baseline x86-64"
+            exit 1
+          fi
+
+      - name: Collect bundles
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          UPDATER_KEY: ${{ matrix.updater_key }}
+          UPDATER_DIR: ${{ matrix.updater_dir }}
+          UPDATER_PATTERN: ${{ matrix.updater_pattern }}
+          UPDATER_EXTRA: ${{ matrix.updater_extra }}
+        run: bash .github/scripts/collect-bundles.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle-${{ matrix.target }}
+          retention-days: 3
+          if-no-files-found: error
+          path: upload/${{ matrix.target }}
+
+  macos:
+    name: ${{ matrix.label }}
     if: github.repository == 'millida/launcher'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macOS Apple Silicon
+            target: aarch64-apple-darwin
+            updater_key: darwin-aarch64
+          - label: macOS Intel
+            target: x86_64-apple-darwin
+            updater_key: darwin-x86_64
     steps:
-      - name: Create release from the tag message
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      # The toolchain image is built from the Dockerfile in this repository and
+      # only kept in the Actions cache, so anyone can rebuild the exact same one.
+      - name: Build toolchain image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: .github/docker/macos-cross.Dockerfile
+          tags: macos-cross:local
+          load: true
+          cache-from: type=gha,scope=macos-cross
+          cache-to: type=gha,scope=macos-cross,mode=max
+
+      - name: Restore cargo cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .cross-cache/cargo/registry
+            .cross-cache/cargo/git
+            .cross-cache/target
+          key: macos-${{ matrix.target }}-${{ hashFiles('src-tauri/Cargo.lock', '.github/docker/macos-cross.Dockerfile') }}
+          restore-keys: macos-${{ matrix.target }}-
+
+      - name: Set version from the tag
+        run: bash .github/scripts/set-version.sh "${GITHUB_REF_NAME#v}"
+
+      # RUSTUP_TOOLCHAIN overrides rust-toolchain.toml: the image ships a minimal
+      # profile without clippy and rustfmt, and installing them into an image
+      # layer fails on overlayfs.
+      - name: Build and bundle
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -eu
+          cache="$PWD/.cross-cache"
+          mkdir -p "$cache/cargo" "$cache/home" "$cache/target"
+          rm -rf src-tauri/target
+          ln -s "$cache/target" src-tauri/target
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -v "$PWD:$PWD" -w "$PWD" \
+            -e CARGO_HOME="$cache/cargo" \
+            -e HOME="$cache/home" \
+            -e TARGET \
+            -e RUSTUP_TOOLCHAIN=stable \
+            macos-cross:local \
+            bash -euo pipefail -c '
+              rm -rf "src-tauri/target/$TARGET/release/bundle"
+              bun install --frozen-lockfile
+              bun run build:web:release
+              cargo build --release --manifest-path src-tauri/Cargo.toml --target "$TARGET" --features tauri/custom-protocol
+              bun scripts/macos-bundle.mjs --target="$TARGET"
+            '
+
+      - name: Collect bundles
+        env:
+          TARGET: ${{ matrix.target }}
+          UPDATER_KEY: ${{ matrix.updater_key }}
+          UPDATER_DIR: macos
+          UPDATER_PATTERN: "*.app.tar.gz"
+          UPDATER_EXTRA: ""
+        run: bash .github/scripts/collect-bundles.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle-${{ matrix.target }}
+          retention-days: 3
+          if-no-files-found: error
+          path: upload/${{ matrix.target }}
+
+  release:
+    name: GitHub release
+    needs: [build, macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      # This job can mint attestations, so it runs no third-party actions: the
+      # script needs only the Node.js that ships with the runner image.
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: bundle-*
+          path: artifacts
+
+      - name: Lay out release assets
+        env:
+          VERSION: ${{ github.ref_name }}
+          COMMIT: ${{ github.sha }}
+        run: node .github/scripts/release-assets.mjs
+
+      - name: Attest build provenance
+        id: attest
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: assets/*
+
+      # bundles.json goes up last: the publisher waits for it, so its presence
+      # means every other asset is already in place.
+      - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
+          ATTESTATION: ${{ steps.attest.outputs.bundle-path }}
         run: |
           set -eu
           sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq .object.sha)
-          gh api "repos/$GITHUB_REPOSITORY/git/tags/$sha" --jq .message > notes.md
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file notes.md
+          gh api "repos/$GITHUB_REPOSITORY/git/tags/$sha" --jq .message > tag-message.txt
+          channel=stable
+          if grep -qx 'Channel: beta' tag-message.txt; then channel=beta; fi
+          grep -vx 'Channel: beta' tag-message.txt > notes.md || true
+          cp "$ATTESTATION" provenance.sigstore.json
+          if [ "$channel" = "beta" ]; then
+            flags="--prerelease"
           else
-            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --latest \
+            flags="--latest"
+          fi
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file notes.md $flags
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag $flags \
               --title "Millida Launcher ${TAG#v}" --notes-file notes.md
           fi
-
-      # The same bytes the CDN serves, checked against the hashes taken at build time.
-      - name: Attach installers from the CDN
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
-          CDN_BASE: https://launcher-storage.millida.net
-        run: |
-          set -eu
-          version="${TAG#v}"
-          mkdir assets
-          curl -fsSL --retry 5 --retry-all-errors "$CDN_BASE/$version/files.json" -o files.json
-          jq -r '.files[] | [.name, .url, .sha256] | @tsv' files.json > list.tsv
-          if [ ! -s list.tsv ]; then
-            echo "::error::в files.json версии $version нет ни одного установщика"
-            exit 1
-          fi
-          while IFS=$'\t' read -r name url sha; do
-            curl -fsSL --retry 5 --retry-all-errors "$url" -o "assets/$name"
-            echo "$sha  $name" >> assets/SHA256SUMS
-          done < list.tsv
-          (cd assets && sha256sum -c SHA256SUMS)
-          gh release upload "$TAG" assets/* --repo "$GITHUB_REPOSITORY" --clobber
+          find assets -type f ! -name bundles.json -print0 | xargs -0 gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber provenance.sigstore.json
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber assets/bundles.json

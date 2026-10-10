@@ -19,7 +19,8 @@ describe('telegramStep', () => {
     [view({ amount: 0 }), 'hidden', 'zero reward is a misconfiguration, not an offer'],
     [view({ linked: false }), 'link', 'without a linked Telegram the service has no one to check'],
     [view({}), 'subscribe', 'linked player subscribes and presses check'],
-    [view({ claimed: true, available: false }), 'claimed', 'paid players keep seeing the reward as taken even if the check is off'],
+    [view({ claimed: true }), 'hidden', 'a paid reward leaves the shop: the block only took space after the claim'],
+    [view({ claimed: true, available: false }), 'hidden', 'a paid reward stays hidden even with the check off'],
   ]
   for (const [input, verdict, why] of cases) {
     test(why, () => expect(telegramStep(input)).toBe(verdict))

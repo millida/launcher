@@ -465,7 +465,7 @@ export function CaseReveal({
       ) : null}
 
       {phase === 'deal' && opens ? (
-        <Deal opens={opens} order={order} flipped={flipped} done={dealDone} title={title} again={again} onClose={onClose} onWear={onWear} />
+        <Deal opens={opens} order={order} flipped={flipped} done={dealDone} title={title} tier={tier} tint={tint} again={again} onClose={onClose} onWear={onWear} />
       ) : null}
 
       {phase === 'sum' && rewards ? (
@@ -517,6 +517,8 @@ function Deal({
   flipped,
   done,
   title,
+  tier,
+  tint,
   again,
   onClose,
   onWear,
@@ -526,6 +528,8 @@ function Deal({
   flipped: number
   done: boolean
   title: string
+  tier: ChestTier
+  tint?: string
   again?: { node: ReactNode; primary: boolean; onClick: () => void }
   onClose: () => void
   onWear: (item: ItemRef) => void
@@ -565,7 +569,7 @@ function Deal({
               ) : null}
               <div className="rv3-flip">
                 <span className="rv3-back" aria-hidden="true">
-                  <Icon id="i-chest" />
+                  {done ? null : <Chest3D className="rv3-chest" tier={tier} tint={tint} mode={hot ? 'ready' : 'closed'} look="model" noFlat />}
                 </span>
                 <span className="rv3-face">
                   <RewardCard r={r} />

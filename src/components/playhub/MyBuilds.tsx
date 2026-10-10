@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { ReactNode } from 'react'
 import { Icon } from '../Icon'
 import { LOADER_NAME } from '../../lib/format'
@@ -6,6 +7,8 @@ import { deleteProfile, importInstance, importPackFile, openProfileFolder, scanI
 import { uiConfirm } from '../../state/confirm'
 import { openBuildSettings } from '../../state/instance'
 import { parseIcon } from '../../lib/buildIcon'
+import { DEFAULT_ICON, buildIconOf } from '../../lib/buildIcon'
+import { usePackCover } from './packCover'
 import type { CSSProperties } from 'react'
 import type { FoundInstance, Profile } from '../../ipc/commands'
 import { DEMO_USER } from '../../lib/demo'
@@ -17,7 +20,6 @@ import { hasTauri } from '../../ipc/tauri'
 import { usePlayStats } from '../../state/playStats'
 import { useGuarded, useProfiles } from '../../state/profiles'
 import { openModal, showToast } from '../../state/ui'
-import { DEFAULT_ICON } from '../../lib/buildIcon'
 import { BuildIcon, IconPicker } from './BuildIcon'
 import { hoursText } from './Hours'
 import '../../styles/pixel/playhub.css'
@@ -30,6 +32,16 @@ import { trackImportFailure } from '../../lib/importTrack'
  * сборку в лобби, «Играть» — сразу запуск. Первые две карточки полки —
  * «Новая сборка» и «Забрать всё», они есть и без единой сборки.
  */
+
+/**
+ * Иконку выбрал игрок: блок или значок из набора. Пусто, старая полка по умолчанию, адрес
+ * или картинка значка сборки из каталога (её ставит ядро) — не выбор, и тогда у сборки из
+ * каталога видна её обложка.
+ */
+function ownChoice(icon?: string | null): boolean {
+  if (!icon || icon === DEFAULT_ICON || icon.startsWith('/bg/') || icon.startsWith('http')) return false
+  return icon.includes('/build-icons/') || icon.includes('/block-icons/')
+}
 
 /** Иконку сохраняем в данных сборки (поле `icon` профиля). */
 export async function saveIcon(name: string, icon: string): Promise<void> {
@@ -88,6 +100,51 @@ export function useMenuDismiss(open: boolean, close: () => void, keep: string) {
 }
 
 /**
+ * Меню «⋯» карточки — всплывающее окошко у кнопки, а не шторка внутри карточки:
+ * в маленькой карточке пункты сжимались, верхний обрезался, а кнопка при открытии
+ * прыгала (владелец 10.10.2026: «визуальный баг, отстаёт»). Окно — порталом поверх
+ * всего, у края окна разворачивается вверх/влево.
+ */
+export function MenuPop({ anchor, onClose, children }: { anchor: HTMLElement | null; onClose: () => void; children: ReactNode }) {
+  const ref = useRef<HTMLSpanElement>(null)
+  const [at, setAt] = useState<{ top: number; left: number } | null>(null)
+  useLayoutEffect(() => {
+    const place = () => {
+      const a = anchor && anchor.getBoundingClientRect()
+      const m = ref.current
+      if (!a || !m) return
+      const w = m.offsetWidth
+      const h = m.offsetHeight
+      const below = a.bottom + 6 + h <= window.innerHeight - 8
+      const top = below ? a.bottom + 6 : Math.max(8, a.top - 6 - h)
+      const left = Math.min(Math.max(8, a.right - w), window.innerWidth - w - 8)
+      setAt({ top, left })
+    }
+    place()
+    const sc = () => onClose()
+    window.addEventListener('resize', place)
+    // Листнули — меню закрываем: висящее отдельно от кнопки окно сбивает с толку.
+    document.addEventListener('scroll', sc, true)
+    return () => {
+      window.removeEventListener('resize', place)
+      document.removeEventListener('scroll', sc, true)
+    }
+  }, [anchor])
+  return createPortal(
+    <span
+      ref={ref}
+      className="ph-mine-menu is-pop"
+      role="menu"
+      style={at ? { top: at.top, left: at.left } : { visibility: 'hidden', top: 0, left: 0 }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {children}
+    </span>,
+    document.body,
+  )
+}
+
+/**
  * Пункты «⋯» своей сборки — одни на карточке и на странице сборки (правка
  * владельца 24.09.2026, 18:35: клик по карточке ведёт на страницу, изменения —
  * только через «⋯»).
@@ -141,7 +198,7 @@ export function BuildIconPicker({ name, icon, onClose }: { name: string; icon?: 
   return (
     <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
       <IconPicker
-        icon={icon || DEFAULT_ICON}
+        icon={buildIconOf({ name, icon })}
         onClose={onClose}
         onPick={(v) => void saveIcon(name, v).catch((e) => showToast('Иконка не сохранилась: ' + e, 'error'))}
       />
@@ -174,7 +231,11 @@ export function MyBuildCard({
   const [edit, setEdit] = useState(false)
   const [menu, setMenu] = useState(false)
   useMenuDismiss(menu, () => setMenu(false), '.ph-mine-menu, .ph-mine-more')
-  const art = parseIcon(p.icon)
+  const moreRef = useRef<HTMLButtonElement>(null)
+  const art = parseIcon(buildIconOf(p))
+  // Свою иконку игрок выбрал сам — она главнее обложки каталога.
+  const packCover = usePackCover(p)
+  const cover = packCover && !ownChoice(p.icon) ? packCover : null
   return (
     <div
       className={'ph-card ph-mine' + (on ? ' on' : '') + (menu ? ' menu-open' : '')}
@@ -191,6 +252,7 @@ export function MyBuildCard({
     >
       <span className="ph-card-art ph-mine-art" style={{ '--mine-bg': art.bg } as CSSProperties}>
         <button
+          ref={moreRef}
           type="button"
           className="ph-mine-more"
           aria-label="Управление сборкой"
@@ -203,7 +265,19 @@ export function MyBuildCard({
         >
           <Icon id={menu ? 'i-x' : 'i-dots'} />
         </button>
-        <BuildIcon icon={p.icon} size={112} />
+        {cover ? (
+          // Сборка из каталога — её широкая обложка, как в «Сборках» (10.10.2026: «сделай как тут»).
+          <img className="ph-mine-cover" src={cover} alt="" draggable={false} loading="lazy" />
+        ) : art.kind === 'photo' ? (
+          // Своя картинка или значок сборки из каталога — квадратом по центру на размытой копии
+          // себя: обрезать его под широкую карточку значило резать надпись (Immortal, 10.10.2026).
+          <span className="ph-mine-photo" aria-hidden="true">
+            <img className="ph-mine-photo-bg" src={art.src} alt="" draggable={false} loading="lazy" />
+            <img className="ph-mine-photo-fg" src={art.src} alt="" draggable={false} loading="lazy" />
+          </span>
+        ) : (
+          <BuildIcon icon={p.icon} name={p.name} size={112} />
+        )}
         {onPlay ? (
           // Библиотека (08.10.2026): при наведении — «Играть» и «Изменить», клик по карточке — изменить.
           <span className="ph-mine-acts">
@@ -241,10 +315,9 @@ export function MyBuildCard({
         </span>
       </span>
       {menu ? (
-        <span className="ph-mine-menu" role="menu" onClick={(e) => e.stopPropagation()}>
-          <b className="ph-mine-menu-t">{p.name}</b>
+        <MenuPop anchor={moreRef.current} onClose={() => setMenu(false)}>
           <BuildMenuItems name={p.name} onClose={() => setMenu(false)} onIcon={() => setEdit(true)} />
-        </span>
+        </MenuPop>
       ) : null}
       {edit ? <BuildIconPicker name={p.name} icon={p.icon} onClose={() => setEdit(false)} /> : null}
     </div>
@@ -443,7 +516,7 @@ export function PresetCard({
       onKeyDown={(e) => e.target === e.currentTarget && e.key === 'Enter' && onPick()}
     >
       <span className="ph-card-art ph-mine-art">
-        <BuildIcon icon={DEFAULT_ICON} size={72} />
+        <BuildIcon icon={null} name={v.loader + ' ' + v.mc} size={72} />
         <button
           className="btn sm primary ph-mine-play"
           data-sound="open"

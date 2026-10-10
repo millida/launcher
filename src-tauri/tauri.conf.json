@@ -196,6 +196,12 @@
           "gstreamer1.0-plugins-good",
           "gstreamer1.0-libav"
         ]
+      },
+      "rpm": {
+        "compression": {
+          "type": "gzip",
+          "level": 1
+        }
       }
     },
     "macOS": {

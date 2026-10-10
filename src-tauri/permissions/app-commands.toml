@@ -32,6 +32,8 @@ permissions = [
   "allow-millida-mod-enabled",
   "allow-set-millida-mod-enabled",
   "allow-set-game-telemetry",
+  "allow-pvp-hud-default",
+  "allow-set-pvp-hud-default",
   "allow-list-versions",
   "allow-list-versions-typed",
   "allow-list-loader-versions",
@@ -239,6 +241,12 @@ permissions = [
   "allow-overlay-hide",
   "allow-overlay-ready",
   "allow-overlay-cleared",
+  "allow-rewind-state",
+  "allow-rewind-set-settings",
+  "allow-rewind-clips",
+  "allow-rewind-delete-clip",
+  "allow-rewind-open-folder",
+  "allow-rewind-reveal-clip",
   "allow-overlay-hit-areas",
   "allow-overlay-open",
   "allow-realtime-relay",
@@ -270,7 +278,14 @@ permissions = [
   "allow-cloud-status",
   "allow-cloud-push",
   "allow-cloud-pull",
-  "allow-cloud-forget"
+  "allow-cloud-forget",
+  "allow-party-voice-join",
+  "allow-party-voice-leave",
+  "allow-party-voice-transmit",
+  "allow-party-voice-deafen",
+  "allow-party-voice-members",
+  "allow-party-voice-bind",
+  "allow-party-voice-audio"
 ]
 
 [[set]]

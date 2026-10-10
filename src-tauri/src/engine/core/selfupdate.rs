@@ -296,7 +296,7 @@ pub async fn fallback_stage(app: &AppHandle, upd: &FallbackUpdate) -> Result<Pat
 
 /// Only accepts paths inside the updates directory and re-verifies the signature:
 /// the file could have been swapped between download and launch.
-pub fn fallback_run(app: &AppHandle, path: &str) -> Result<FallbackInstall, String> {
+pub fn fallback_run(app: &AppHandle, path: &str, restart: bool) -> Result<FallbackInstall, String> {
     refuse_inside_flatpak()?;
     let file = std::path::Path::new(path)
         .canonicalize()
@@ -307,7 +307,7 @@ pub fn fallback_run(app: &AppHandle, path: &str) -> Result<FallbackInstall, Stri
     }
     let signature = std::fs::read_to_string(sig_path(&file)).map_err(|e| format!("нет подписи обновления: {}", e))?;
     verify(&file, signature.trim(), &pubkey(app)?)?;
-    let started = run_installer(&file)?;
+    let started = run_installer(&file, restart)?;
     Ok(FallbackInstall { version: String::new(), path: file.to_string_lossy().to_string(), started })
 }
 
@@ -321,14 +321,27 @@ pub async fn fallback_stage_latest(app: &AppHandle) -> Result<Option<FallbackIns
 /// defaults to running the old uninstaller with its "delete app data" box,
 /// which wipes the game folder and the saved login.
 #[cfg(any(windows, test))]
-const NSIS_UPDATE_ARGS: [&str; 3] = ["/P", "/R", "/UPDATE"];
+const NSIS_UPDATE_ARGS: [&str; 2] = ["/P", "/UPDATE"];
+
+/// `/R` makes the installer start the launcher again. An install on exit must
+/// not pass it: the player closed the launcher and expects it to stay closed.
+#[cfg(any(windows, test))]
+fn nsis_args(restart: bool) -> Vec<&'static str> {
+    let mut args = NSIS_UPDATE_ARGS.to_vec();
+    if restart {
+        args.push("/R");
+    }
+    args
+}
 
 /// Windows hands off to the installer; macOS and Linux replace the .app bundle
 /// or AppImage in place. When there is nothing to replace (deb/rpm, not launched
 /// from a bundle) the containing folder is opened instead.
 ///
 /// `true` = the caller must terminate this process.
-pub fn run_installer(file: &Path) -> Result<bool, String> {
+pub fn run_installer(file: &Path, restart: bool) -> Result<bool, String> {
+    #[cfg(not(windows))]
+    let _ = restart;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -341,7 +354,7 @@ pub fn run_installer(file: &Path) -> Result<bool, String> {
     #[cfg(windows)]
     {
         let mut cmd = std::process::Command::new(file);
-        cmd.args(NSIS_UPDATE_ARGS);
+        cmd.args(nsis_args(restart));
         super::proc::quiet(&mut cmd);
         cmd.spawn().map_err(|e| format!("установщик не запустился: {}", e))?;
         Ok(true)
@@ -601,6 +614,22 @@ mod tests {
         assert!(
             NSIS_UPDATE_ARGS.contains(&"/P"),
             "без /P установщик открывает полный мастер вместо тихой установки поверх"
+        );
+    }
+
+    #[test]
+    fn install_on_exit_keeps_launcher_closed() {
+        assert!(
+            !nsis_args(false).contains(&"/R"),
+            "/R при установке на выходе снова открывает лаунчер: игрок закрыл его, а он появляется опять"
+        );
+        assert!(
+            nsis_args(true).contains(&"/R"),
+            "«Обновить сейчас» и самовосстановление обязаны поднять лаунчер после установки"
+        );
+        assert!(
+            nsis_args(false).contains(&"/UPDATE") && nsis_args(true).contains(&"/UPDATE"),
+            "без /UPDATE мастер NSIS запускает деинсталлятор с удалением данных"
         );
     }
 

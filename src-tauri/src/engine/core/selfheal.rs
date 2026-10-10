@@ -114,7 +114,7 @@ async fn heal(app: &AppHandle) -> Result<bool, String> {
     if frontend_ready() {
         return Ok(false);
     }
-    run_installer(&file)
+    run_installer(&file, true)
 }
 
 /// Last resort when recovery failed: a native system dialog, since the webview

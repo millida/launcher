@@ -227,8 +227,12 @@ pub async fn update_notes(app: tauri::AppHandle) -> Result<Option<engine::Fallba
 }
 
 #[tauri::command]
-pub fn update_fallback_run(app: tauri::AppHandle, path: String) -> Result<engine::FallbackInstall, String> {
-    engine::fallback_run(&app, &path)
+pub fn update_fallback_run(
+    app: tauri::AppHandle,
+    path: String,
+    restart: Option<bool>,
+) -> Result<engine::FallbackInstall, String> {
+    engine::fallback_run(&app, &path, restart.unwrap_or(true))
 }
 
 /// Liveness ping from the webview; without it the self-heal path kicks in.

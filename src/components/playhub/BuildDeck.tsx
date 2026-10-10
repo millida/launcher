@@ -9,7 +9,7 @@ import { openBuildSettings } from '../../state/instance'
 import { usePlayStats } from '../../state/playStats'
 import { useGuarded, useProfiles } from '../../state/profiles'
 import { showToast } from '../../state/ui'
-import { DEFAULT_ICON, parseIcon } from '../../lib/buildIcon'
+import { buildIconOf, parseIcon } from '../../lib/buildIcon'
 import { BuildIcon, IconPicker } from './BuildIcon'
 import { hoursText } from './Hours'
 
@@ -66,7 +66,7 @@ function DeckCard({
   const mods = useModCount(p.name)
   const guarded = useGuarded(p.name)
   const [edit, setEdit] = useState(false)
-  const art = parseIcon(p.icon)
+  const art = parseIcon(buildIconOf(p))
   return (
     <div
       className={'ph-card bd-card' + (target ? ' on' : '')}
@@ -88,7 +88,7 @@ function DeckCard({
             setEdit(true)
           }}
         >
-          <BuildIcon icon={p.icon} size={88} />
+          <BuildIcon icon={p.icon} name={p.name} size={88} />
           <span className="bi-edit-lab" aria-hidden="true">
             <Icon id="i-edit" />
           </span>
@@ -142,7 +142,7 @@ function DeckCard({
       {edit ? (
         <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
           <IconPicker
-            icon={p.icon || DEFAULT_ICON}
+            icon={buildIconOf(p)}
             onClose={() => setEdit(false)}
             onPick={(icon) => void saveIcon(p.name, icon).catch((e) => showToast('Иконка не сохранилась: ' + e, 'error'))}
           />

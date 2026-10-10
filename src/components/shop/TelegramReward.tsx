@@ -24,25 +24,18 @@ export function TelegramRewardBlock({ view, busy, onClaim }: { view: TelegramRew
         </span>
       </Head>
       <div className="sh-ach-prizes">
-        <div className={'sh-prize sh-quest' + (step === 'claimed' ? ' got' : '')}>
+        <div className="sh-prize sh-quest">
           <Ruby size={40} />
           <span className="sh-prize-body">
             <b>Подпишись на канал Millida</b>
             <span className="sh-meter-cap">
-              {step === 'claimed'
-                ? 'Награда за подписку получена'
-                : step === 'link'
-                  ? 'Сначала привяжи Telegram в боте, потом подпишись на канал'
-                  : 'Подпишись на канал и нажми «Проверить»'}
+              {step === 'link'
+                ? 'Сначала привяжи Telegram в боте, потом подпишись на канал'
+                : 'Подпишись на канал и нажми «Проверить»'}
             </span>
           </span>
           <span className="sh-prize-n">+{view.amount}</span>
-          {step === 'claimed' ? (
-            <span className="sh-owned sm">
-              <Icon id="i-check" />
-              Забрано
-            </span>
-          ) : step === 'link' ? (
+          {step === 'link' ? (
             <button className="btn sm primary" data-track="tg_reward_link" onClick={() => open(telegramLink(view.botUrl))}>
               Привязать Telegram
             </button>

@@ -36,6 +36,7 @@ import { uiConfirm } from '../state/confirm'
 import { ColorPicker } from '../components/ColorPicker'
 import { AppIconPicker } from '../components/AppIconPicker'
 import { AudioSettings } from '../components/AudioSettings'
+import { RewindClips } from '../components/RewindClips'
 import { RadioCredits, RadioVolume } from '../components/radio'
 import { betaChannel, checkForUpdate, pendingUpdate } from '../lib/updater'
 import { useUpdate } from '../state/update'
@@ -148,12 +149,13 @@ function initialAccent(): string {
   return 'green'
 }
 
-type SecId = 'look' | 'sound' | 'game' | 'files' | 'account' | 'about'
+type SecId = 'look' | 'sound' | 'game' | 'clips' | 'files' | 'account' | 'about'
 
 const SECTIONS: { id: SecId; label: string }[] = [
   { id: 'look', label: 'Вид' },
   { id: 'sound', label: 'Звук' },
   { id: 'game', label: 'Игра' },
+  { id: 'clips', label: 'Клипы' },
   { id: 'files', label: 'Файлы' },
   { id: 'account', label: 'Аккаунт' },
   { id: 'about', label: 'Лаунчер' },
@@ -1128,7 +1130,7 @@ export function Settings({ on }: { on: boolean }) {
     </>
   )
 
-  const views: Record<SecId, ReactNode> = { look, sound, game, files, account, about }
+  const views: Record<SecId, ReactNode> = { look, sound, game, clips: <RewindClips />, files, account, about }
   const q = query.trim()
 
   return (

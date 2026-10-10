@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { ONEBLOCK_PACK, isExclusive, isOwnServerPack, ownServerTagline } from './data'
+import { ONEBLOCK_PACK, isExclusive, isOwnServerPack, ownServerTagline, pinnedPacks } from './data'
 
 const cases: Array<[string | null | undefined, boolean, string]> = [
   [ONEBLOCK_PACK, true, 'the OneBlock catalog pack wears the purple badge in For You, catalog rows and the lobby card'],
@@ -22,6 +22,8 @@ describe('isExclusive', () => {
 
 const ownCases: Array<[string | null | undefined, boolean, string]> = [
   ['prisonrpg', true, 'PrisonRPG is our server with MetaLabs: the feed card says «Наш сервер», not «Сборка»'],
+  ['pixelmon-metalabs', true, 'Pixelmon is a partner server we run: it must sit with PrisonRPG under «Наш сервер»'],
+  ['pixelmon', false, 'the plain slug belongs to the Modrinth mod, not to our server'],
   ['PrisonRPG', false, 'catalogue slugs are lower case; another spelling is some other pack'],
   [ONEBLOCK_PACK, false, 'OneBlock has its own tile with the badge; its pack card must not get a second one'],
   ['arcania', false, 'a partner premium pack is not a server we run'],
@@ -39,11 +41,25 @@ describe('isOwnServerPack', () => {
 describe('ownServerTagline', () => {
   const cases: Array<[string | null | undefined, string | undefined, string]> = [
     ['prisonrpg', 'Прокопайся до ранга SSS+', 'the card line replaces «custom · native», which reads as garbage to a player'],
+    ['pixelmon-metalabs', 'Лови покемонов с друзьями', 'our Pixelmon card shows its own line instead of «neoforge 1.21.1»'],
     ['arcania', undefined, 'other packs keep their loader and version line'],
     [null, undefined, 'a card without slug falls back to the usual line'],
   ]
   for (const [slug, want, why] of cases)
     test(String(slug), () => {
       expect(ownServerTagline(slug), why).toBe(want)
+    })
+})
+
+describe('pinnedPacks', () => {
+  const cases: Array<[Array<{ slug: string }>, string[], string]> = [
+    [[{ slug: 'immortal' }, { slug: 'chaoszproject' }], ['chaoszproject'], 'ChaosZProject stands right after Arcania in «Сборки» whatever its downloads (owner 09.10.2026)'],
+    [[{ slug: 'immortal' }], [], 'an unpublished pinned pack leaves the row as it was instead of an empty cell'],
+    [[{ slug: 'chaoszproject' }, { slug: 'chaoszproject' }], ['chaoszproject'], 'a pack listed twice still takes one cell'],
+    [[{ slug: 'chaoszproject-a-modern-zombie-apocalypse-vr-for-wip-v-3-0-0' }], [], 'the raw CurseForge mirror is not our checked pack'],
+  ]
+  for (const [packs, want, why] of cases)
+    test(why, () => {
+      expect(pinnedPacks(packs).map((p) => p.slug), why).toEqual(want)
     })
 })

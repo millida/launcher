@@ -17,7 +17,13 @@ export function ServerFeed({
   render,
   onFirstPage,
   limit,
+  className,
+  skeleton,
 }: {
+  /** Класс контейнера ленты (сетка карточек вместо строк). */
+  className?: string
+  /** Заглушка карточки той же формы, что `render`. */
+  skeleton?: () => ReactNode
   /** Только первые N (полка библиотеки): без догрузки при прокрутке. */
   limit?: number
   category?: string
@@ -80,13 +86,13 @@ export function ServerFeed({
   }, [offset, done, busy, failed])
 
   return (
-    <div className="ph-list">
+    <div className={'ph-list' + (className ? ' ' + className : '')}>
       {(limit ? list.slice(0, limit) : list).map((s, i) => (
         <Fragment key={s.slug || s.name}>{render(s, i)}</Fragment>
       ))}
       {busy
         ? Array.from({ length: limit ? Math.max(0, Math.min(limit, 6) - list.length) : list.length ? 3 : 6 }, (_, i) => (
-            <span key={'sk' + i} className="ph-srv skel" style={{ height: 76 }}></span>
+            skeleton ? <Fragment key={'sk' + i}>{skeleton()}</Fragment> : <span key={'sk' + i} className="ph-srv skel" style={{ height: 76 }}></span>
           ))
         : null}
       {!busy && !failed && search && !list.length ? (

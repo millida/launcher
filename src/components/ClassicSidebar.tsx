@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import { Icon } from './Icon'
-import { useHubTab } from './playhub/hubTab'
+import { openCatalogHome, useHubTab } from './playhub/hubTab'
 import { AccountMenu } from './AccountMenu'
 import { Head } from './Head'
 import { accKindLabel } from '../lib/format'
@@ -143,7 +143,8 @@ export function ClassicSidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
             onFocus={() => preloadScreen(n.id)}
             onClick={() => {
               if (n.id === 'hosting') noteHostingOpen()
-              if (n.hub !== undefined) useHubTab.getState().setAll(n.hub)
+              if (n.hub === true && !useHubTab.getState().all) openCatalogHome()
+              else if (n.hub !== undefined) useHubTab.getState().setAll(n.hub)
               onNav(n.id)
             }}
             onContextMenu={pillOf(n.id, n.pill, hostingHint, cosmeticsSeen) ? dismissHint : undefined}

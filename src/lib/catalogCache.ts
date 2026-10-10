@@ -1,3 +1,5 @@
+import { diskPeek, diskSet } from './diskCache'
+
 /**
  * Кэш ответов каталога контента: Modrinth, CurseForge и наши сборки.
  *
@@ -37,11 +39,20 @@ function evictOldest(): void {
 export function peekCatalog<T>(key: string): T | undefined {
   const row = rows.get(key)
   if (!row) return undefined
-  if (Date.now() - row.at >= TTL_MS) {
-    rows.delete(key)
-    return undefined
-  }
+  // Просроченный не удаляем: он ещё годится, чтобы показать сразу и обновить в фоне.
+  if (Date.now() - row.at >= TTL_MS) return undefined
   return row.value as T
+}
+
+/**
+ * Последний известный ответ, пусть и старый: из памяти, а нет — с диска (если ключ
+ * сохранялся с `persist`). Для мгновенного показа, пока сеть несёт свежий.
+ */
+export async function staleCatalog<T>(key: string, diskWaitMs = 120): Promise<T | undefined> {
+  const row = rows.get(key)
+  if (row) return row.value as T
+  const d = await diskPeek<T>(key, diskWaitMs)
+  return d ? d.value : undefined
 }
 
 /**
@@ -51,7 +62,7 @@ export function peekCatalog<T>(key: string): T | undefined {
  * повторное нажатие легко просят одно и то же в один кадр, и до склейки это
  * были три отдельных соединения к одному адресу.
  */
-export function cachedCatalog<T>(key: string, load: () => Promise<T>): Promise<T> {
+export function cachedCatalog<T>(key: string, load: () => Promise<T>, opts?: { persist?: boolean }): Promise<T> {
   const hit = peekCatalog<T>(key)
   if (hit !== undefined) return Promise.resolve(hit)
 
@@ -63,8 +74,9 @@ export function cachedCatalog<T>(key: string, load: () => Promise<T>): Promise<T
   const started = load()
     .then((value) => {
       if (inflight.get(key) !== started) return value
-      if (rows.size >= LIMIT) evictOldest()
+      if (rows.size >= LIMIT && !rows.has(key)) evictOldest()
       rows.set(key, { at: Date.now(), value })
+      if (opts && opts.persist) diskSet(key, value)
       return value
     })
     .finally(() => {

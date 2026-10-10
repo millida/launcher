@@ -128,21 +128,31 @@ export function siteSectionPath(slug: SectionSlug): string {
 export type PriceFilter = 'free' | 'paid'
 /** Издание в фильтре: `edition=JAVA|BEDROCK` листинга. */
 export type EditionFilter = 'JAVA' | 'BEDROCK'
+/** `side=client`: a mod installed only by the player, not needed on the server. */
+export type SideFilter = 'client'
 
 export interface ListingFilters {
   version?: string | null
   loader?: string | null
   category?: string | null
   q?: string | null
-  sort?: 'recommended' | 'popular' | 'new'
+  sort?: CatalogSortId
   page?: number
   perPage?: number
   edition?: EditionFilter | null
   use?: string | null
   price?: PriceFilter | null
+  side?: SideFilter | null
 }
 
 /** Строка запроса листинга — те же имена и правила, что у `catalogApi.listing` сайта. */
+/**
+ * Сортировки как у Modrinth (владелец 10.10.2026): релевантность — при поиске, скачивания,
+ * подписчики, новые, обновлённые. «Рекомендуемые» — наша (скачивания × свежесть × медиа).
+ * Подписчиков и «обновлённых» старый сервер не знает: их показываем, только когда сервер
+ * перечислил их в ответе (`sorts`).
+ */
+export type CatalogSortId = 'relevance' | 'recommended' | 'popular' | 'follows' | 'new' | 'updated'
 export function listingQuery(section: SectionSlug, f: ListingFilters): string {
   const sp = new URLSearchParams({ section })
   if (f.version) sp.set('version', f.version)
@@ -152,8 +162,12 @@ export function listingQuery(section: SectionSlug, f: ListingFilters): string {
   if (f.price) sp.set('price', f.price)
   if (f.edition) sp.set('edition', f.edition)
   if (f.use) sp.set('use', f.use)
+  if (f.side) sp.set('side', f.side)
   // Как на сайте: «Рекомендуемые» — без параметра, «Популярные» и «Новые» — параметром.
-  if (f.sort === 'new' || f.sort === 'popular') sp.set('sort', f.sort)
+  // «По релевантности» у сервера — это популярное среди найденного (сервер ищет по вхождению),
+  // ближе всего к Modrinth; точные совпадения названия лаунчер поднимает сам (siteStore).
+  if (f.sort === 'relevance') sp.set('sort', 'popular')
+  else if (f.sort && f.sort !== 'recommended') sp.set('sort', f.sort)
   if (f.page && f.page > 1) sp.set('page', String(f.page))
   if (f.perPage) sp.set('perPage', String(f.perPage))
   return sp.toString()
@@ -164,8 +178,8 @@ export function listingQuery(section: SectionSlug, f: ListingFilters): string {
  * источников нет ни Bedrock, ни платного, ни задач «Для чего» — с такими
  * фильтрами хвост показывал бы не то, что выбрано.
  */
-export const foreignTailAllowed = (f: Pick<ListingFilters, 'edition' | 'use' | 'price'>): boolean =>
-  f.edition !== 'BEDROCK' && !f.use && f.price !== 'paid'
+export const foreignTailAllowed = (f: Pick<ListingFilters, 'edition' | 'use' | 'price' | 'side'>): boolean =>
+  f.edition !== 'BEDROCK' && !f.use && f.price !== 'paid' && !f.side
 
 /** Сиды, головы, плащи — лаунчер ведёт на сайт или в гардероб, ленты у них нет. */
 export const hasFeed = (slug: SectionSlug): boolean => SECTION_SOURCE[slug] !== 'site'

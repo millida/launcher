@@ -23,6 +23,7 @@ pub const MAX_CARD_MS: u64 = 30_000;
 /// has no listener, and an event emitted into that gap is lost for good - the
 /// overlay would then stay on screen full-size with nothing to show.
 static PENDING: Mutex<Vec<serde_json::Value>> = Mutex::new(Vec::new());
+static BOUND_HOTKEY: Mutex<Option<String>> = Mutex::new(None);
 static INTERACTIVE: AtomicBool = AtomicBool::new(false);
 static NOTIFY_SEQ: AtomicU64 = AtomicU64::new(0);
 
@@ -388,7 +389,11 @@ pub async fn notify(app: &AppHandle, payload: serde_json::Value) -> Result<(), S
 pub fn rebind_hotkey(app: &AppHandle) {
     use tauri_plugin_global_shortcut::GlobalShortcutExt;
     let gs = app.global_shortcut();
-    let _ = gs.unregister_all();
+    // Only our own combination: the clip hotkey shares the plugin.
+    let mut bound = BOUND_HOTKEY.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(old) = bound.take() {
+        let _ = gs.unregister(old.as_str());
+    }
     if !enabled() {
         return;
     }
@@ -400,15 +405,22 @@ pub fn rebind_hotkey(app: &AppHandle) {
                 toggle(&handle);
             }
         })
-        .is_err()
+        .is_ok()
     {
-        // A combination another program already owns must not silently disable
-        // the feature: fall back to the default one.
-        let _ = gs.on_shortcut(DEFAULT_HOTKEY, move |app, _, event| {
+        *bound = Some(combo);
+        return;
+    }
+    // A combination another program already owns must not silently disable
+    // the feature: fall back to the default one.
+    if gs
+        .on_shortcut(DEFAULT_HOTKEY, move |app, _, event| {
             if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
                 toggle(app);
             }
-        });
+        })
+        .is_ok()
+    {
+        *bound = Some(DEFAULT_HOTKEY.to_string());
     }
 }
 

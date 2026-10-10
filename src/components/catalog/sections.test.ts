@@ -51,8 +51,9 @@ describe('группы разделов как на сайте', () => {
     expect(groupOf('нет-такого').key).toBe('all')
   })
 
-  it('лента карточками везде, кроме скинов — как на сайте с 29.09.2026', () => {
-    for (const s of ALL_SECTIONS) expect(s.gallery).toBe(s.slug !== 'skins')
+  it('мелкие плитки — только у того, что выбирают глазами (10.10.2026)', () => {
+    const small = new Set(['texture-packs', 'shaders', 'maps', 'seeds', 'capes', 'heads'])
+    for (const s of ALL_SECTIONS) expect(s.gallery).toBe(small.has(s.slug))
   })
 
   it('шесть разделов сборки и шесть серверных не сдвинулись', () => {
@@ -106,6 +107,11 @@ describe('запрос листинга — те же параметры, что
     expect(foreignTailAllowed({ edition: 'BEDROCK' })).toBe(false)
     expect(foreignTailAllowed({ price: 'paid' })).toBe(false)
     expect(foreignTailAllowed({ use: 'lowpc' })).toBe(false)
+    expect(foreignTailAllowed({ side: 'client' }), 'у чужих источников нет нашей пометки стороны — хвост показал бы и серверные моды').toBe(false)
+  })
+
+  it('«Только для клиента» уходит параметром side', () => {
+    expect(new URLSearchParams(listingQuery('mods', { side: 'client' })).get('side')).toBe('client')
   })
 })
 

@@ -16,16 +16,18 @@ import { useMods } from '../../state/mods'
 import { useProfiles } from '../../state/profiles'
 import { SECTION_VISUAL } from './sections'
 import type { SectionSlug } from './sections'
-import { Fallback, MrIcon, RowActions, SiteGalleryCard, useCardHit } from './SiteRow'
+import { Fallback, MrIcon, RowActions, SiteGalleryCard, shortAuthor, useCardHit } from './SiteRow'
 import { PriceMark, usePaidCard } from './PaidActs'
 import { useCatalogCtx } from './target'
 import { MediaStrip } from './MediaStrip'
 import { similarFor } from './similar'
+import { RuDesc, stripAds } from './RuDesc'
+import { SkinPage } from './SkinPage'
+import { inTime } from '../../lib/deadline'
 import { closeItem, openItem, useItem } from './itemStore'
 import type { OpenItem } from './itemStore'
 import {
   SIDE_LABEL,
-  capFirst,
   displayName,
   fmtNum,
   loadItem,
@@ -39,10 +41,11 @@ import {
   sectionBySlug,
   siteUrl,
 } from './site'
-import type { CuratedItem, ItemView, SiteCard, SiteSection, SiteSlug, SkinTile } from './site'
+import type { CuratedItem, ItemView, SiteCard, SiteSection, SiteSlug } from './site'
 import { CHEATS, cheatBody, cheatName, defaultPick, filesFor, loaderOptions, sizeLabel, spanOf, versionOptions } from './itemView'
 import type { VerFile } from './itemView'
 import { weaveMarkdown } from './weave'
+import { planMedia, readsRussian, russianText, tagLabels } from './itemBody'
 import '../../styles/pixel/catalog-item.css'
 
 /*
@@ -59,6 +62,10 @@ type Source = 'millida' | 'modrinth' | 'curseforge'
 
 interface ItemData {
   body: string
+  /** Русский текст каталога: ИИ-статья, иначе пересказ, иначе краткое. Пусто — русского нет. */
+  ru: string
+  /** Тело статьи уже написано по-русски (ИИ-статья) — его и показываем, перевод не нужен. */
+  ruArticle: boolean
   gallery: string[]
   files: VerFile[]
   tags: string[]
@@ -72,7 +79,7 @@ interface ItemData {
   pickable: boolean
 }
 
-const EMPTY: ItemData = { body: '', gallery: [], files: [], tags: [], license: null, updated: null, side: null, website: '', requires: [], similar: [], pickable: false }
+const EMPTY: ItemData = { body: '', ru: '', ruArticle: false, gallery: [], files: [], tags: [], license: null, updated: null, side: null, website: '', requires: [], similar: [], pickable: false }
 
 const sourceOf = (card: SiteCard): Source => (card.mrHit ? (card.mrHit.cfid !== undefined ? 'curseforge' : 'modrinth') : 'millida')
 
@@ -96,10 +103,14 @@ function similarCard(x: NonNullable<ItemView['similar']>[number]): SiteCard {
 }
 
 async function loadMillida(card: SiteCard, sec: SiteSection): Promise<ItemData> {
-  const it = await loadItem(card.slug)
+  // Страница открыта — её запрос вперёд очереди строк ленты.
+  const it = await loadItem(card.slug, false, true)
   const gallery = (it.gallery || []).filter(Boolean)
+  const article = blocksToMarkdown((it.description as never) || null)
   return {
-    body: blocksToMarkdown((it.description as never) || null) || it.summary || card.summary || '',
+    body: article || it.summary || card.summary || '',
+    ru: russianText(article, it.seoText, it.summary || card.summary),
+    ruArticle: readsRussian(article),
     gallery,
     files: (it.files || []).map((f) => ({ id: f.id, name: f.version, gameVersions: f.gameVersions || [], loaders: f.loaders || [], size: f.size, date: f.releasedAt })),
     tags: (it.tags || []).slice(0, 8),
@@ -181,7 +192,16 @@ function useItemData(card: SiteCard, sec: SiteSection) {
     setData(null)
     setFailed(false)
     const src = sourceOf(card)
-    const run = src === 'millida' ? loadMillida(card, sec) : src === 'modrinth' ? loadModrinth(card) : loadCurse(card)
+    // CurseForge (через ядро) и холодный сервер отвечают по 10–30 с: через 2,5 с показываем
+    // суть из ленты, полное описание подменит её, когда придёт (владелец 10.10.2026: «описание
+    // не грузится»). Не дольше 20 с — дальше «Повторить», а не вечная заглушка.
+    const interim = window.setTimeout(
+      () => alive && setData((d) => d ?? { ...EMPTY, body: card.summary, website: siteUrl(sec.slug, card.slug) }),
+      2500,
+    )
+    const run = inTime(src === 'millida' ? loadMillida(card, sec) : src === 'modrinth' ? loadModrinth(card) : loadCurse(card), 20_000).finally(() =>
+      window.clearTimeout(interim),
+    )
     run.then((d) => alive && setData(d)).catch(() => alive && (setFailed(true), setData({ ...EMPTY, body: card.summary, website: siteUrl(sec.slug, card.slug) })))
     return () => {
       alive = false
@@ -309,6 +329,39 @@ export function Gallery({ urls }: { urls: string[] }) {
         </button>
       ))}
     </div>
+  )
+}
+
+/**
+ * Описание без перевода Modrinth: русский текст каталога с кадрами по тексту, текст автора —
+ * кнопкой. Русского нет — текст автора под своей пометкой.
+ */
+function DescBody({ body, ru, shots }: { body: string; ru: string; shots: string[] }) {
+  const [en, setEn] = useState(false)
+  if (!ru && !body) return <p className="faint-note">Без описания</p>
+  const foreign = !!body && body !== ru && !readsRussian(body)
+  if (!ru || en)
+    return (
+      <>
+        {en ? (
+          <button className="ci-lang" data-track="item_desc_ru" onClick={() => setEn(false)}>
+            Показать по-русски
+          </button>
+        ) : foreign ? (
+          <div className="ci-orig-h">От автора (на английском)</div>
+        ) : null}
+        {renderMarkdown(weaveMarkdown(body, shots))}
+      </>
+    )
+  return (
+    <>
+      {foreign ? (
+        <button className="ci-lang" data-track="item_desc_en" onClick={() => setEn(true)}>
+          Оригинал на английском
+        </button>
+      ) : null}
+      {renderMarkdown(ru)}
+    </>
   )
 }
 
@@ -453,6 +506,28 @@ export function Compat({ versions, loaders, side, extra }: { versions: string[];
 function CardPage({ card, sec }: { card: SiteCard; sec: SiteSection }) {
   const { target } = useCatalogCtx()
   const { hit, resolve } = useCardHit(card)
+  // У карточек сайта полного описания часто нет (только короткое на английском) — берём
+  // полное у Modrinth по найденному проекту (владелец 10.10.2026: «снаружи описание есть, внутри нет»).
+  const [fullBody, setFullBody] = useState('')
+  const [mrId, setMrId] = useState('')
+  useEffect(() => {
+    setFullBody('')
+    setMrId('')
+    let alive = true
+    void resolve()
+      .then((h) => {
+        if (!h || h.cfid !== undefined || !(h.pid || h.slug)) return null
+        if (alive) setMrId(h.pid || h.slug!)
+        return fetch(MODRINTH_API + '/v2/project/' + encodeURIComponent(h.pid || h.slug!)).then((r) => (r.ok ? r.json() : null))
+      })
+      .then((p: { body?: string } | null) => {
+        if (alive && p && p.body && p.body.length > 200) setFullBody(p.body)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [card.slug])
   const { data, failed, retry } = useItemData(card, sec)
   const paid = usePaidCard(card)
   const build = useTargetBuild()
@@ -476,7 +551,8 @@ function CardPage({ card, sec }: { card: SiteCard; sec: SiteSection }) {
   }, [card.slug])
   const similar = like && like.length >= 3 ? like : data ? data.similar : []
   const name = displayName(card.title)
-  const dl = ownDownloads(card)
+  // Та же цифра, что на плитке ленты: наши скачивания или, если их мало, первоисточника.
+  const dl = Math.max(ownDownloads(card) || 0, card.sourceDownloads || 0, card.mrHit?.dl || 0) || null
   const updated = relativeTime((data && data.updated) || realUpdated(card))
   // Файл по выбору ставится только своим путём каталога и только в сборку.
   const canPick = !!data && data.pickable && target.kind === 'build' && sec.source === 'listing' && sec.kind !== 'plugin' && sec.kind !== 'serverpack' && sec.kind !== 'addon'
@@ -502,6 +578,10 @@ function CardPage({ card, sec }: { card: SiteCard; sec: SiteSection }) {
   )
   const cover = card.cover || (data && data.gallery[0]) || null
   const shots = data ? data.gallery.filter((u) => u !== card.cover || data.gallery.length === 1) : []
+  // Русский текст каталога забирает хвост галереи в себя; перевод Modrinth ставит картинки автора.
+  const ruText = data && (data.ruArticle || !mrId) ? data.ru : ''
+  const media = planMedia(ruText, shots)
+  const tags = data ? tagLabels(data.tags, 8) : []
   return (
     <div className="ci" data-section="item" data-kind={sec.kind} data-id={card.slug}>
       <Back label={sec.title} />
@@ -510,7 +590,7 @@ function CardPage({ card, sec }: { card: SiteCard; sec: SiteSection }) {
         glow={card.icon || null}
         icon={card.icon || card.cover ? <img src={card.icon || card.cover!} alt="" draggable={false} /> : <Fallback slug={card.slug} section={sec.slug} title={name} />}
         title={name}
-        by={card.author ? 'от ' + card.author : null}
+        by={card.author ? 'от ' + shortAuthor(card.author) : null}
         facts={facts}
         cta={
           <>
@@ -522,10 +602,22 @@ function CardPage({ card, sec }: { card: SiteCard; sec: SiteSection }) {
       <div className="ci-grid">
         <main className="ci-main">
           <Tabs tab={tab} onTab={setTab} gallery={shots.length} versions={files.length} />
-          {tab === 'desc' && shots.length ? <MediaStrip urls={shots} onAll={() => setTab('gallery')} /> : null}
+          {tab === 'desc' && media.strip.length ? <MediaStrip urls={media.strip} onAll={() => setTab('gallery')} /> : null}
           {tab === 'desc' ? (
             <article className="card ci-box ci-desc pj-body">
-              {data === null ? DescSkel() : data.body ? renderMarkdown(weaveMarkdown(data.body, shots)) : <p className="faint-note">{card.summary || 'Без описания'}</p>}
+              {/* Перевод не ждёт карточку сайта: как только известен проект Modrinth — сразу он. */}
+              {data && data.ruArticle ? (
+                renderMarkdown(media.body)
+              ) : mrId ? (
+                <RuDesc projectId={mrId} englishBody={fullBody || (data ? data.body : '')} lead={card.summary} shots={shots} />
+              ) : data === null ? (
+                <>
+                  {card.summary && readsRussian(card.summary) ? <p className="ci-ru-lead">{card.summary}</p> : null}
+                  {DescSkel()}
+                </>
+              ) : (
+                <DescBody body={stripAds(fullBody || data.body)} ru={media.body} shots={shots} />
+              )}
               {failed ? (
                 <button className="btn sm secondary ci-retry" onClick={retry}>
                   <Icon id="i-restart" />
@@ -571,12 +663,12 @@ function CardPage({ card, sec }: { card: SiteCard; sec: SiteSection }) {
               </div>
             </section>
           ) : null}
-          {data && (data.tags.length || data.license) ? (
+          {data && (tags.length || data.license) ? (
             <section className="card ci-box" aria-label="Метки">
               <div className="ci-chips">
-                {data.tags.map((t) => (
+                {tags.map((t) => (
                   <span key={t} className="ci-chip is-soft">
-                    {capFirst(t)}
+                    {t}
                   </span>
                 ))}
                 {data.license ? <span className="ci-chip is-soft">{data.license}</span> : null}
@@ -687,41 +779,6 @@ function CheatPage({ it }: { it: CuratedItem }) {
 }
 
 /* ── Скин: рендер во весь рост и «В гардероб» ──────────────────── */
-
-function SkinPage({ k }: { k: SkinTile }) {
-  const name = capFirst(k.title.replace(/^Скин:\s*/i, ''))
-  return (
-    <div className="ci" data-section="item" data-kind="skin" data-id={k.id}>
-      <Back label="Скины" />
-      <div className="ci-skin">
-        <div className="card ci-skin-stage">
-          <img src={k.renderUrl} alt="" draggable={false} />
-        </div>
-        <div className="ci-skin-side">
-          <h1 className="ci-h1">{name}</h1>
-          <ul className="ci-facts">
-            <li>{k.model === 'slim' ? 'Тонкие руки' : 'Классические руки'}</li>
-            {k.wearers > 0 ? (
-              <li>
-                <Icon id="i-users" />
-                <b>{fmtNum(k.wearers)}</b> {plural(k.wearers, 'носит', 'носят', 'носят')}
-              </li>
-            ) : null}
-          </ul>
-          <div className="mr-actions">
-            <button className="btn md primary" data-track="skin_wear" onClick={() => void installFromCatalog('skins', k.id, { name, slim: k.model === 'slim' })}>
-              <PxIcon name="shirt" size={12} />В гардероб
-            </button>
-            <button className="btn md ghost" data-track="item_site" onClick={() => openExt('https://millida.net/skins/katalog/' + k.id)}>
-              <Icon id="i-ext" />
-              На сайте
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 /** Страница открытого материала; Esc — назад к ленте. */
 export function ItemPage({ it }: { it: OpenItem }) {

@@ -176,7 +176,7 @@ const CF_BULK_MAX: usize = 500;
 /// meant hundreds of round trips through our proxy, and its per-address limit
 /// (120 a minute) turned a big pack into 429s and minutes of waiting. Ids
 /// missing from the answer are left to the per-file path.
-async fn cf_files_bulk(ids: &[u64]) -> std::collections::HashMap<u64, Value> {
+pub(crate) async fn cf_files_bulk(ids: &[u64]) -> std::collections::HashMap<u64, Value> {
     let mut out = std::collections::HashMap::new();
     for chunk in ids.chunks(CF_BULK_MAX) {
         let body = serde_json::json!({ "fileIds": chunk });

@@ -35,6 +35,8 @@ export interface ModFile {
   loaders?: string[]
   size: number
   scanned: boolean
+  /** Когда файл появился в сборке, секунды Unix (новое ядро). */
+  added?: number
 }
 
 export interface ScanResult {
@@ -1110,7 +1112,8 @@ export const updateNotes = () => invoke<FallbackUpdate | null>('update_notes')
 
 export const updateFallbackStage = () => invoke<FallbackInstall | null>('update_fallback_stage')
 
-export const updateFallbackRun = (path: string) => invoke<FallbackInstall>('update_fallback_run', { path })
+export const updateFallbackRun = (path: string, restart = true) =>
+  invoke<FallbackInstall>('update_fallback_run', { path, restart })
 
 
 export const uiPrefs = () => invoke<Record<string, string>>('ui_prefs')
@@ -1415,6 +1418,16 @@ export interface PackPreview {
   installs: number
   updatedAt: string
   sizeBytes: number
+  mods?: PackPreviewFile[]
+  overrides?: string[]
+  dropped?: string[]
+}
+
+export interface PackPreviewFile {
+  name: string
+  kind: string
+  source: 'modrinth' | 'curseforge' | 'millida' | 'unknown'
+  size: number
 }
 
 export const shareProfile = (profile: string, summary?: string) =>
@@ -1467,3 +1480,60 @@ export const millidaModInstall = (profile: string) => invoke<MillidaModState>('m
 export const millidaModEnabled = () => invoke<boolean>('millida_mod_enabled')
 export const setMillidaModEnabled = (on: boolean) => invoke<void>('set_millida_mod_enabled', { on })
 export const setGameTelemetry = (on: boolean) => invoke<void>('set_game_telemetry', { on })
+export const pvpHudDefault = () => invoke<boolean>('pvp_hud_default')
+export const setPvpHudDefault = (on: boolean) => invoke<void>('set_pvp_hud_default', { on })
+
+/// Party voice over the Millida relay. Only the party and member ids cross the
+/// bridge; the ticket, secret and relay address stay in the core.
+/** Device labels, not webview ids: the core finds devices by name. */
+export interface PartyVoiceAudio {
+  input: string | null
+  output: string | null
+  noise: 'off' | 'standard' | 'strong'
+  agc: boolean
+  micGain: number
+}
+export const partyVoiceJoin = (partyId: string, members: string[], audio: PartyVoiceAudio) =>
+  invoke<void>('party_voice_join', { partyId, members, audio })
+export const partyVoiceAudio = (audio: PartyVoiceAudio) => invoke<void>('party_voice_audio', { audio })
+export const partyVoiceLeave = () => invoke<void>('party_voice_leave', {})
+export const partyVoiceTransmit = (open: boolean) => invoke<void>('party_voice_transmit', { open })
+export const partyVoiceDeafen = (on: boolean) => invoke<void>('party_voice_deafen', { on })
+export const partyVoiceMembers = (members: string[]) => invoke<void>('party_voice_members', { members })
+export const partyVoiceBind = (partyId: string | null) => invoke<void>('party_voice_bind', { partyId })
+
+export type RewindQuality = '720p' | '1080p' | 'native'
+export interface RewindSettings {
+  enabled: boolean
+  seconds: number
+  quality: RewindQuality
+  fps: number
+  gameAudio: boolean
+  mic: boolean
+  hotkey: string
+}
+export interface RewindStatus {
+  recording: boolean
+  videoProblem: string | null
+  audioProblem: string | null
+  hotkeyProblem: string | null
+}
+export interface RewindState {
+  supported: boolean
+  settings: RewindSettings
+  status: RewindStatus
+  folder: string
+}
+export interface ClipFile {
+  name: string
+  path: string
+  sizeBytes: number
+  createdAt: number
+  durationMs: number
+}
+export const rewindState = () => invoke<RewindState>('rewind_state')
+export const rewindSetSettings = (settings: RewindSettings) => invoke<RewindState>('rewind_set_settings', { settings })
+export const rewindClips = () => invoke<ClipFile[]>('rewind_clips')
+export const rewindDeleteClip = (name: string) => invoke<void>('rewind_delete_clip', { name })
+export const rewindOpenFolder = () => invoke<void>('rewind_open_folder')
+export const rewindRevealClip = (name: string) => invoke<void>('rewind_reveal_clip', { name })

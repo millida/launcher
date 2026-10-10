@@ -77,6 +77,7 @@ jobs:
             librsvg2-dev \
             patchelf \
             libxdo-dev \
+            libasound2-dev \
             libssl-dev \
             build-essential \
             file \

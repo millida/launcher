@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import { Icon } from '../Icon'
 import { LOADER_NAME } from '../../lib/format'
 import { priceLabel } from '../../lib/premium'
-import { parseIcon } from '../../lib/buildIcon'
+import { buildIconOf, parseIcon } from '../../lib/buildIcon'
 import { usePlayStats } from '../../state/playStats'
 import type { LobbyMode } from '../../state/lobbyMode'
 import type { Profile } from '../../ipc/commands'
@@ -54,8 +54,8 @@ export function ContinueCard({
   if (mode.kind === 'build') {
     title = mode.name
     meta = profile ? LOADER_NAME(profile) + ' · ' + profile.version : ''
-    artStyle = { '--mine-bg': parseIcon(profile?.icon).bg } as CSSProperties
-    art = <BuildIcon icon={profile?.icon} size={132} />
+    artStyle = { '--mine-bg': parseIcon(buildIconOf({ name: mode.name, icon: profile?.icon })).bg } as CSSProperties
+    art = <BuildIcon icon={profile?.icon} name={mode.name} size={132} />
   } else if (mode.kind === 'premium') {
     title = mode.title
     meta = mode.meta

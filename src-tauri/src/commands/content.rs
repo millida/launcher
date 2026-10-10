@@ -225,7 +225,8 @@ pub async fn export_mrpack(profile: String, name: String, version: String, descr
     let base = engine::export_file_stem(&name, &profile);
     let out = engine::data_dir().join("exports").join(format!("{}.mrpack", base));
     let dst = out.to_string_lossy().to_string();
-    let res = super::blocking(move || engine::export_mrpack(profile, dst, name, version, description)).await??;
+    let loader_build = engine::export_loader_build(&profile).await;
+    let res = super::blocking(move || engine::export_mrpack(profile, dst, name, version, description, loader_build)).await??;
     if let Some(p) = out.parent() {
         engine::open_path(&p.to_string_lossy());
     }
@@ -286,5 +287,15 @@ pub fn set_game_telemetry(on: bool) -> Result<(), String> {
 #[tauri::command(async)]
 pub fn set_millida_mod_enabled(on: bool) -> Result<(), String> {
     engine::set_millida_mod_enabled(on)
+}
+
+#[tauri::command(async)]
+pub fn pvp_hud_default() -> bool {
+    engine::pvp_hud_default()
+}
+
+#[tauri::command(async)]
+pub fn set_pvp_hud_default(on: bool) -> Result<(), String> {
+    engine::set_pvp_hud_default(on)
 }
 

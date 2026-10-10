@@ -632,7 +632,9 @@ export interface CrashAiAnswer {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   // Тестовая Милли (milli-server) через прокси Vite: только dev и только с VITE_MILLI_TEST=1 в .env.local.
   if (import.meta.env.DEV && import.meta.env.VITE_MILLI_TEST === '1') {
-    const tier = milliPreviewTier()
+    // Тариф: ручной «стенд» из меню Милли, а без него — настоящая подписка аккаунта
+    // (владелец 10.10.2026: «у меня есть PLUS, а показывает ×10 с PLUS»).
+    const tier = milliPreviewTier() ?? accountTier()
     return devFetch<T>('/milli-test' + path, init, { 'Content-Type': 'application/json', ...(tier ? { 'x-milli-tier': tier } : {}) })
   }
   if (import.meta.env.DEV && DEMO_USER && demoOn()) return demoRequest<T>(path, init)
@@ -660,6 +662,16 @@ export function setMilliPreviewTier(t: MilliPreviewTier | null) {
     else localStorage.removeItem(PREVIEW_KEY)
   } catch {}
 }
+/**
+ * Тариф из подписки аккаунта (PLUS / Diamond); подписка ещё не загружена — без заголовка.
+ * Источник подключает state/milli.ts: прямой импорт state/daily тянул аккаунты (localStorage)
+ * при загрузке модуля и ронял тесты Милли.
+ */
+let tierSource: () => MilliPreviewTier | null = () => null
+export function setMilliAccountTierSource(fn: () => MilliPreviewTier | null): void {
+  tierSource = fn
+}
+const accountTier = (): MilliPreviewTier | null => tierSource()
 export const milliPreviewOn = () => import.meta.env.DEV && import.meta.env.VITE_MILLI_TEST === '1'
 
 /** fetch в dev с разбором `code` и `scope` из тела ошибки — как ждёт milliError(). */

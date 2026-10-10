@@ -4,7 +4,7 @@ import { useUi } from '../state/ui'
 import { computeAccent, paintAccent, saveAccent, withColorFade, type AccentVars } from './accent'
 import { readPref, writePref, type PrefKey } from './prefs'
 import type { ShopTier } from './rubies'
-import type { PlusTier } from './gameProfile'
+import { loadPlus, type PlusTier } from './gameProfile'
 
 /**
  * Тема лаунчера (владелец 06.10.2026): «Стандартная» · «PLUS» · «Diamond».
@@ -179,18 +179,35 @@ export function initPremiumTheme() {
   }
 
   let bought = false
+  /** Подписка точно кончилась (проверено запросом) — следующая покупка снова включит тему. */
+  let ended = false
+  let checking = false
+  const confirmEnded = async () => {
+    if (checking) return
+    checking = true
+    const st = await loadPlus().catch(() => null)
+    checking = false
+    if (!st || st.active) return
+    const s = usePremiumTheme.getState()
+    ended = true
+    paintSub(null)
+    usePremiumTheme.setState({ tier: null, known: true })
+    if (s.theme !== 'off') s.setTheme('off')
+    else if (isPremiumAccent(read('m-accent'))) restoreAccent()
+    writePref(AUTO_KEY, '')
+  }
   const onTier = (tier: ShopTier) => {
     const s = usePremiumTheme.getState()
     const before = s.known ? s.tier : undefined
-    paintSub(tier)
-    usePremiumTheme.setState({ tier, known: true })
     if (!tier) {
-      // Подписка кончилась — прежний вид; следующая покупка снова включит тему сама.
-      if (s.theme !== 'off') s.setTheme('off')
-      else if (isPremiumAccent(read('m-accent'))) restoreAccent()
-      writePref(AUTO_KEY, '')
+      // «Нет подписки» приходит и мельком (магазин отдал пустой тариф, ответ ещё не пришёл):
+      // раньше это сбрасывало «уже включали», и следующий же «есть PLUS» снова красил лаунчер
+      // в золото поверх выбранной зелёной темы (владелец 10.10.2026). Верим только проверке.
+      void confirmEnded()
       return
     }
+    paintSub(tier)
+    usePremiumTheme.setState({ tier, known: true })
     const st = usePremiumTheme.getState()
     if (!allowed(st.theme, tier)) st.setTheme(themeFor(tier))
     if (demoPlus !== null && before === undefined) {
@@ -200,7 +217,8 @@ export function initPremiumTheme() {
       return
     }
     // Покупка: событие из опроса оплаты или переход «нет подписки → есть» за сессию.
-    if (bought || before === null || (before === 'PLUS' && tier === 'DIAMOND')) {
+    if (bought || (before === null && ended) || (before === 'PLUS' && tier === 'DIAMOND')) {
+      ended = false
       bought = false
       if (before === 'PLUS' && tier === 'DIAMOND') writePref(AUTO_KEY, '')
       autoApply(tier)
