@@ -3,6 +3,7 @@ import { noteInstallKind } from '../../lib/recsSignals'
 import type { ReactNode } from 'react'
 import { Icon } from '../Icon'
 import { MODRINTH_API, api, mirrorAsset } from '../../lib/api'
+import { diskGet, diskSet } from '../../lib/diskCache'
 import { fmtN } from '../../lib/format'
 import { renderMarkdown } from '../../lib/markdown'
 import { installedPack } from '../../lib/lobbyPlay'
@@ -82,6 +83,63 @@ interface Update {
 }
 
 const cache = new Map<string, Promise<unknown>>()
+
+/** Публичные данные страницы сборки — ещё и на диске: второй заход открывает её сразу. */
+const DISK_KEYS = /^(pv|ci):/
+
+/**
+ * Прогрев страницы сборки, пока игрок смотрит на её карточку (Arcania в «Сборках»):
+ * раньше страница открывалась пустой и через полсекунды «перескакивала» в настоящую
+ * (владелец 10.10.2026: «сначала показывает какую-то другую страницу»).
+ */
+export function prefetchPackPage(slug: string, premiumId?: string | null): void {
+  if (!slug) return
+  void remember('pv:' + slug, once('pv:' + slug, () => api<PackView>('/catalog/packs/' + encodeURIComponent(slug))))
+  void remember('ci:' + slug, once('ci:' + slug, () => api<CatalogItem>('/catalog/items/' + encodeURIComponent(slug))))
+  if (premiumId) void remember('pd:' + premiumId, once('pd:' + premiumId, () => loadPremiumPack(premiumId)))
+}
+
+/** Каркас страницы сборки той же формы, что сама страница: ничего не прыгает, когда она приходит. */
+function PackPageSkeleton({ pack, onBack }: { pack: HubPack; onBack: () => void }) {
+  const icon = pack.coverUrl || null
+  return (
+    <div className={'ci' + (pack.premium ? ' ppx-ci' : '')} data-section="pack_page" aria-busy="true">
+      <Back label="Сборки модов" onBack={onBack} />
+      <Hero
+        className={pack.premium ? 'ppx-ci-hero' : null}
+        cover={null}
+        glow={icon}
+        icon={icon ? <img src={icon} alt="" draggable={false} /> : <span className="skel pp-skel-fill" />}
+        title={pack.title}
+        by={<span className="skel skel-line pp-skel-by" />}
+        facts={[<span key="a" className="skel skel-line pp-skel-fact" />, <span key="b" className="skel skel-line pp-skel-fact" />]}
+        cta={<span className="skel pp-skel-cta" />}
+      />
+      <div className="ci-grid">
+        <main className="ci-main">
+          <div className="segs mr-subtypes ci-tabs" aria-hidden="true">
+            <span className="skel skel-line pp-skel-tab" />
+            <span className="skel skel-line pp-skel-tab" />
+          </div>
+          <div className="card pp-skel-media skel" />
+          <div className="card ci-box ci-skel">
+            {[92, 100, 84, 96, 70].map((w, i) => (
+              <span key={i} className="skel skel-line" style={{ width: w + '%' }} />
+            ))}
+          </div>
+        </main>
+        <aside className="ci-aside">
+          <div className="card pp-skel-side">
+            <span className="skel skel-line" style={{ width: '40%' }} />
+            <span className="skel skel-line" style={{ width: '70%' }} />
+            <span className="skel pp-skel-plan" />
+            <span className="skel pp-skel-plan" />
+          </div>
+        </aside>
+      </div>
+    </div>
+  )
+}
 function once<T>(key: string, load: () => Promise<T>): Promise<T | null> {
   let hit = cache.get(key) as Promise<T | null> | undefined
   if (!hit) {
@@ -89,6 +147,10 @@ function once<T>(key: string, load: () => Promise<T>): Promise<T | null> {
     // дешевле, чем пустая страница сборки.
     hit = load()
       .catch(() => new Promise<T>((ok, fail) => setTimeout(() => load().then(ok, fail), 1200)))
+      .then((v) => {
+        if (DISK_KEYS.test(key) && v) diskSet('pack:' + key, v)
+        return v
+      })
       .catch(() => {
         cache.delete(key)
         return null
@@ -96,6 +158,18 @@ function once<T>(key: string, load: () => Promise<T>): Promise<T | null> {
     cache.set(key, hit)
   }
   return hit
+}
+
+/** Уже пришедший ответ — без ожидания (для первого кадра страницы). */
+const settled = new Map<string, unknown>()
+function onceNow<T>(key: string): T | null {
+  return (settled.get(key) as T | undefined) ?? null
+}
+function remember<T>(key: string, p: Promise<T | null>): Promise<T | null> {
+  return p.then((v) => {
+    if (v) settled.set(key, v)
+    return v
+  })
 }
 
 const getJson = <T,>(url: string) => fetch(url).then((r) => (r.ok ? (r.json() as Promise<T>) : Promise.reject(r.status)))
@@ -235,9 +309,12 @@ export function PackPage({
   const profiles = useProfiles((s) => s.profiles)
   const mr = pack.origin === 'modrinth'
   const slug = pack.slug || ''
-  const [view, setView] = useState<PackView | null>(null)
-  const [item, setItem] = useState<CatalogItem | null>(null)
-  const [detail, setDetail] = useState<PremiumPackDetail | null>(null)
+  const [view, setView] = useState<PackView | null>(() => onceNow<PackView>('pv:' + slug))
+  const [item, setItem] = useState<CatalogItem | null>(() => onceNow<CatalogItem>('ci:' + slug))
+  const [detail, setDetail] = useState<PremiumPackDetail | null>(() => onceNow<PremiumPackDetail>('pd:' + pack.id))
+  // Пока главного нет (описание, а у премиума ещё и доступ) — каркас страницы, а не
+  // половина страницы, которая потом перестраивается. Не дольше 2,5 с.
+  const [waited, setWaited] = useState(false)
   const [project, setProject] = useState<MrProject | null>(null)
   const [versions, setVersions] = useState<MrVersion[]>([])
   const [plans, setPlans] = useState<PremiumPlan[]>([])
@@ -263,13 +340,22 @@ export function PackPage({
 
   useEffect(() => {
     let alive = true
-    setView(null)
-    setItem(null)
-    setDetail(null)
+    setView(onceNow<PackView>('pv:' + slug))
+    setItem(onceNow<CatalogItem>('ci:' + slug))
+    setDetail(onceNow<PremiumPackDetail>('pd:' + pack.id))
     setProject(null)
     setVersions([])
     setHostTarget(null)
     setTab('desc')
+    setWaited(false)
+    const waitTimer = window.setTimeout(() => alive && setWaited(true), 2500)
+    // С диска — прошлый ответ, пока свежий в пути.
+    if (!mr && slug)
+      for (const [k, put] of [
+        ['pv:', (v: unknown) => setView((old) => old ?? (v as PackView))],
+        ['ci:', (v: unknown) => setItem((old) => old ?? (v as CatalogItem))],
+      ] as const)
+        void diskGet('pack:' + k + slug).then((r) => alive && r && put(r.value))
     if (mr) {
       const base = MODRINTH_API + '/v2/project/' + encodeURIComponent(slug)
       void once('mr:' + slug, () => getJson<MrProject>(base)).then((p) => alive && setProject(p))
@@ -278,11 +364,11 @@ export function PackPage({
       )
       if (pack.serverOk !== false) setHostTarget({ kind: 'modrinth', projectId: slug, title: pack.title })
     } else if (slug) {
-      void once('pv:' + slug, () => api<PackView>('/catalog/packs/' + encodeURIComponent(slug))).then(
-        (d) => alive && setView(d),
+      void remember('pv:' + slug, once('pv:' + slug, () => api<PackView>('/catalog/packs/' + encodeURIComponent(slug)))).then(
+        (d) => alive && d && setView(d),
       )
-      void once('ci:' + slug, () => api<CatalogItem>('/catalog/items/' + encodeURIComponent(slug))).then(
-        (d) => alive && setItem(d),
+      void remember('ci:' + slug, once('ci:' + slug, () => api<CatalogItem>('/catalog/items/' + encodeURIComponent(slug)))).then(
+        (d) => alive && d && setItem(d),
       )
       void loadHostingPacks().then((list) => {
         const hp = hostingPackFor(pack, list)
@@ -291,9 +377,7 @@ export function PackPage({
     }
     if (pack.premium) {
       if (pack.source === 'premium')
-        void loadPremiumPack(pack.id)
-          .then((d) => alive && setDetail(d))
-          .catch(() => {})
+        void remember('pd:' + pack.id, once('pd:' + pack.id, () => loadPremiumPack(pack.id))).then((d) => alive && d && setDetail(d))
       void loadPremium()
         .then((s) => {
           if (!alive) return
@@ -304,6 +388,7 @@ export function PackPage({
     }
     return () => {
       alive = false
+      window.clearTimeout(waitTimer)
     }
   }, [pack.id])
 
@@ -374,9 +459,15 @@ export function PackPage({
 
   const reloadDetail = () => {
     void loadPremiumPack(pack.id)
-      .then((d) => setDetail(d))
+      .then((d) => {
+        settled.set('pd:' + pack.id, d)
+        cache.set('pd:' + pack.id, Promise.resolve(d))
+        setDetail(d)
+      })
       .catch(() => {})
   }
+  const ready = mr ? !!project : !!view && (!pack.premium || pack.source !== 'premium' || !!detail)
+  if (!ready && !waited) return <PackPageSkeleton pack={pack} onBack={onBack} />
   const keyEntry = !installed && !!slug && !!detail && hasPlanChoice(detail) && !!full.acceptsKeys && !hasAccess(full, sub)
 
   let cta: ReactNode

@@ -44,6 +44,7 @@ import { pickBuild } from '../state/buildPicker'
 import { askDepPlan } from '../state/depPlan'
 import { usePackKey } from '../state/packKey'
 import { uiConfirm } from '../state/confirm'
+import { detectSlimFromUrl } from './skinArms'
 import { setScreen, showToast } from '../state/ui'
 
 /// «Установить» из каталога Millida — одна точка и для кнопки на сайте
@@ -526,7 +527,9 @@ async function applySkin(slug: string, opts: CatalogInstallOpts): Promise<boolea
   }
   try {
     const png = (await fetchSkinPng(slug)).replace(/^data:image\/png;base64,/, '')
-    const item = await addToWardrobe({ kind: 'skin', name, pngBase64: png, source: 'catalog', ...(opts.slim ? { slim: true } : {}) })
+    // A card without the slim mark is not a Steve skin: the arms are read from the texture.
+    const slim = opts.slim ?? (await detectSlimFromUrl('data:image/png;base64,' + png).catch(() => false))
+    const item = await addToWardrobe({ kind: 'skin', name, pngBase64: png, source: 'catalog', ...(slim ? { slim: true } : {}) })
     await applyWardrobeItem(item.id)
     showToast('Скин надет — виден в игре после перезахода', 'ok', 'install')
     return true

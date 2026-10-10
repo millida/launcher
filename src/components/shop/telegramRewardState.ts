@@ -1,10 +1,9 @@
 import type { TelegramReward } from '../../lib/rubies'
 
-export type TelegramStep = 'hidden' | 'link' | 'subscribe' | 'claimed'
+export type TelegramStep = 'hidden' | 'link' | 'subscribe'
 
 export function telegramStep(view: TelegramReward | null): TelegramStep {
-  if (!view || typeof view !== 'object') return 'hidden'
-  if (view.claimed) return 'claimed'
+  if (!view || typeof view !== 'object' || view.claimed) return 'hidden'
   if (!view.available || !(view.amount > 0)) return 'hidden'
   return view.linked ? 'subscribe' : 'link'
 }

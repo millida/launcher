@@ -448,7 +448,9 @@ export function PathBlock({ data }: { data: EconomyProgress }) {
   const min = steps[0]?.hours ?? 10
   // Шкала от первой ступени: всё, что меньше, — у левого края.
   const pos = (h: number) => Math.max(0, ((at(h, max) - at(min, max)) / (100 - at(min, max))) * 100)
-  const nextHours = steps.find((s) => !s.owned)
+  // A passed step pays half of the fragments and stays unowned, so counting from
+  // the first unowned step sent «До следующего» below zero.
+  const nextHours = steps.find((s) => s.hours > data.hours)
 
   return (
     <>

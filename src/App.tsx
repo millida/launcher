@@ -375,6 +375,8 @@ export function App() {
       void refreshProfiles()
       loadLiveRating()
       warmHeads(useAccounts.getState().list.filter((x) => !x.avatar).map((x) => x.nick))
+      // Каталог — своим куском сборки, не в стартовом: тянем его после загрузки.
+      void import('./components/catalog/siteStore').then((m) => m.warmCatalog()).catch(() => {})
       void loadFriends()
       void refreshGameNick()
       void refreshMsAccounts()

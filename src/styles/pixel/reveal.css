@@ -173,7 +173,7 @@
   position: relative; display: grid; place-items: center; min-height: 100%;
   background: color-mix(in srgb, var(--box) 55%, #15181a); box-shadow: inset 0 -8px 0 rgba(0, 0, 0, 0.3); --px-n: 10px; clip-path: var(--px-10);
 }
-.rv3-back > svg.icon { width: 46%; height: auto; color: color-mix(in srgb, var(--box) 25%, #fff); opacity: 0.85; }
+.rv3-back > .rv3-chest { position: relative; z-index: 1; width: 100%; aspect-ratio: 1; overflow: visible; }
 /* Эпическая и выше: рубашка чуть светится цветом редкости — честный намёк, как вспышка у Genshin. */
 .rv3-cell.is-hot:not(.on) .rv3-back { background: color-mix(in srgb, var(--sh-tone) 45%, #15181a); }
 .rv3-cell.is-hot:not(.on) .rv3-back::after { content: ''; position: absolute; inset: 0; background: var(--sh-tone); opacity: 0.25; animation: rv3-hot 1.2s var(--m-ease-smooth) infinite alternate; }

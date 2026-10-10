@@ -17,6 +17,9 @@ pub struct ModFile {
     #[serde(skip_serializing_if = "Vec::is_empty")] pub loaders: Vec<String>,
     pub size: u64,
     pub scanned: bool,
+    /// Когда файл появился в сборке (секунды Unix, время изменения файла): сортировка
+    /// «Сначала новые» и метка «Новый» на странице сборки.
+    #[serde(skip_serializing_if = "Option::is_none")] pub added: Option<u64>,
 }
 
 pub fn list_content(profile: &str, kind: &str) -> Vec<ModFile> {
@@ -55,6 +58,12 @@ pub fn list_content(profile: &str, kind: &str) -> Vec<ModFile> {
                 loaders: emb.map(|m| m.loaders.clone()).unwrap_or_default(),
                 size: e.metadata().map(|m| m.len()).unwrap_or(0),
                 scanned: emb.is_some(),
+                added: e
+                    .metadata()
+                    .and_then(|m| m.modified())
+                    .ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs()),
             });
         }
     }

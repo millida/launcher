@@ -120,6 +120,20 @@ async function catSearch(q: string, kind: string, build: Profile, fit: Fit, sort
   }
 }
 
+/** `fn` для каждого элемента, не больше `n` разом; порядок результата — как у входа. */
+async function inBatches<T, R>(list: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(list.length)
+  let next = 0
+  const worker = async () => {
+    while (next < list.length) {
+      const i = next++
+      out[i] = await fn(list[i]!)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(n, list.length) }, worker))
+  return out
+}
+
 /** Файлы материала из нашего каталога — версии для выбора; первая — подходящая сборке. */
 async function catVersions(slug: string, kind: string, build: Profile, fit: Fit): Promise<{ body: string; vers: Ver[] }> {
   const it = await loadItem(slug)
@@ -282,11 +296,13 @@ export function ModDownloader({
     const catNeed = new Map<string, { title: string; by: string }>()
     for (const x of queue.values())
       for (const d of x.ver.reqs || []) if (!have.has('millida:' + d.slug) && !haveTitle.has(norm(d.title)) && !inQueue.has(d.slug) && !catNeed.has(d.slug)) catNeed.set(d.slug, { title: d.title, by: x.title })
-    for (const [slug, d] of catNeed) {
-      const r = await catVersions(slug, kind, build, { ver: true, loader: true }).catch(() => null)
-      const it = await loadItem(slug).catch(() => null)
-      deps.push({ source: 'millida', id: slug, title: d.title, icon: it?.icon || null, ver: r?.vers[0] || null, by: d.by, on: !!r?.vers[0] })
-    }
+    // Разом, а не по одному: у пятидесяти модов проверка шла полминуты (10.10.2026).
+    deps.push(
+      ...(await inBatches([...catNeed], 6, async ([slug, d]) => {
+        const [r, it] = await Promise.all([catVersions(slug, kind, build, { ver: true, loader: true }).catch(() => null), loadItem(slug).catch(() => null)])
+        return { source: 'millida' as Source, id: slug, title: d.title, icon: it?.icon || null, ver: r?.vers[0] || null, by: d.by, on: !!r?.vers[0] }
+      })),
+    )
     if (need.size) {
       try {
         const r = await fetch(MR + '/projects?ids=' + encodeURIComponent(JSON.stringify([...need.keys()])))
@@ -344,11 +360,14 @@ export function ModDownloader({
       ]
       const failed: string[] = []
       const cat = [...picks.filter((x) => x.source === 'millida').map((x) => ({ slug: x.id, title: x.title, ver: x.ver })), ...review.filter((d) => d.on && d.ver && d.source === 'millida').map((d) => ({ slug: d.id, title: d.title, ver: d.ver! }))]
-      for (const c of cat) await installCatalogFile(build.name, kind, c.slug, c.ver.id, c.title, c.ver.sha1).catch((e) => failed.push(c.title + ': ' + e))
-      if (mr.length) failed.push(...(await installDepItems(build.name, kind, mr)).failed)
-      for (const x of picks.filter((p) => p.source === 'curseforge')) {
-        await cfInstall(Number(x.id), build.version, build.name, kind, Number(x.ver.id)).catch((e) => failed.push(x.title + ': ' + e))
-      }
+      // Три источника — одновременно, внутри каждого — по нескольку файлов разом
+      // (было строго по одному: пятьдесят модов ставились полминуты, владелец 10.10.2026).
+      const cfPicks = picks.filter((p) => p.source === 'curseforge')
+      await Promise.all([
+        inBatches(cat, 6, (c) => installCatalogFile(build.name, kind, c.slug, c.ver.id, c.title, c.ver.sha1).catch((e) => void failed.push(c.title + ': ' + e))),
+        mr.length ? installDepItems(build.name, kind, mr).then((r) => void failed.push(...r.failed)).catch((e) => void failed.push('' + e)) : null,
+        inBatches(cfPicks, 4, (x) => cfInstall(Number(x.id), build.version, build.name, kind, Number(x.ver.id)).catch((e) => void failed.push(x.title + ': ' + e))),
+      ])
       if (failed.length) showToast('Не встало: ' + failed.join('; '), 'error')
       else showToast('Поставлено: ' + (picks.length + deps.length), 'ok', 'install')
       onDone()

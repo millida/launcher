@@ -35,6 +35,7 @@ fn export_mrpack_roundtrip() {
         "Тестовая сборка".into(),
         "2.0.0".into(),
         "описание".into(),
+        None,
     ).expect("export must succeed");
     assert!(std::path::Path::new(&res).exists(), "mrpack file created");
 

@@ -456,6 +456,10 @@ pub(crate) enum LoaderFinding {
     WrongLoader { file: String, loader: String },
     /// One mod id in several files.
     Duplicate { id: String, files: Vec<String> },
+    /// The crash report names the mod it was in: Forge and NeoForge «Suspected
+    /// Mods», «-- Mod loading issue for: id --». A crash inside someone else's
+    /// mod used to end as "unknown" with no file to act on.
+    Suspected { by: ModRef },
 }
 
 /// Requirements that are about the game or the loader rather than a mod: the
@@ -755,6 +759,27 @@ fn duplicate_of(line: &str) -> Option<LoaderFinding> {
     None
 }
 
+/// «Sodium (sodium), Version: 0.5.8» — one entry of a Suspected Mods list.
+fn suspect_entry(s: &str) -> Option<ModRef> {
+    let s = s.trim();
+    let open = s.find(" (")?;
+    let close = open + 2 + s[open + 2..].find(')')?;
+    let id = s[open + 2..close].trim().to_lowercase();
+    let name = s[..open].trim();
+    if id.is_empty() || id.contains(' ') || name.is_empty() || is_platform_id(&id) {
+        return None;
+    }
+    Some(ModRef { name: name.to_string(), id })
+}
+
+/// «-- Mod loading issue for: create --».
+fn loading_issue_of(line: &str) -> Option<ModRef> {
+    let low = line.to_lowercase();
+    let at = low.find("mod loading issue for:")?;
+    let id: String = low[at + 22..].trim().chars().take_while(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.')).collect();
+    (!id.is_empty() && !is_platform_id(&id)).then(|| ModRef::same(&id))
+}
+
 fn push(f: LoaderFinding, out: &mut Vec<LoaderFinding>) {
     if !out.contains(&f) {
         out.push(f);
@@ -782,9 +807,37 @@ fn strip_formatting(line: &str) -> String {
 pub(crate) fn loader_findings(text: &str) -> Vec<LoaderFinding> {
     let mut out: Vec<LoaderFinding> = vec![];
     let mut optional_block = false;
+    let mut suspects = false;
     for (raw, benign) in with_levels(text) {
         let clean = strip_formatting(raw);
         let line = clean.as_str();
+        if suspects {
+            let indented = line.starts_with([' ', '\t']);
+            if indented && !line.contains("Issue tracker") {
+                if let Some(by) = suspect_entry(line) {
+                    push(LoaderFinding::Suspected { by }, &mut out);
+                }
+                continue;
+            }
+            suspects = indented;
+            if suspects {
+                continue;
+            }
+        }
+        if let Some(at) = line.find("Suspected Mod") {
+            let rest = line[at..].split_once(':').map(|(_, r)| r).unwrap_or("");
+            for entry in rest.split(',').filter(|e| !e.trim_start().starts_with("Version")) {
+                if let Some(by) = suspect_entry(entry) {
+                    push(LoaderFinding::Suspected { by }, &mut out);
+                }
+            }
+            suspects = rest.trim().is_empty();
+            continue;
+        }
+        if let Some(by) = loading_issue_of(line) {
+            push(LoaderFinding::Suspected { by }, &mut out);
+            continue;
+        }
         if line.contains("optional dependencies:") {
             optional_block = true;
         } else if line.contains("mandatory dependencies:") || line.trim_start().starts_with('[') {
@@ -857,6 +910,43 @@ pub(crate) fn reports_crash(text: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Crash report -> the mod it names. Without these the crash of a foreign
+    /// mod ended with no culprit and «Починить» had nothing to switch off.
+    #[test]
+    fn crash_report_names_the_suspected_mod() {
+        let suspects = |t: &str| -> Vec<String> {
+            loader_findings(t)
+                .into_iter()
+                .filter_map(|f| match f {
+                    LoaderFinding::Suspected { by } => Some(by.id),
+                    _ => None,
+                })
+                .collect()
+        };
+        let cases: &[(&str, &[&str], &str)] = &[
+            (
+                "-- Head --\nThread: Render thread\nSuspected Mod: \n\tSodium (sodium), Version: 0.5.8\n\t\tIssue tracker URL: https://github.com/x\nStacktrace:\n\tat a.b",
+                &["sodium"],
+                "Fabric/NeoForge list the suspect on the next indented line",
+            ),
+            (
+                "Suspected Mods: Create (create), Version: 6.0.4\n\tIssue tracker URL: https://x",
+                &["create"],
+                "the suspect on the same line",
+            ),
+            ("Suspected Mods: NONE\nStacktrace:", &[], "no suspect is no finding"),
+            (
+                "Suspected Mods: Minecraft (minecraft), Version: 1.20.1",
+                &[],
+                "the game itself is not a mod to switch off",
+            ),
+            ("-- Mod loading issue for: farmersdelight --\nDetails:", &["farmersdelight"], "a mod that failed to load"),
+        ];
+        for (log, want, why) in cases {
+            assert_eq!(suspects(log), want.iter().map(|s| s.to_string()).collect::<Vec<_>>(), "{}", why);
+        }
+    }
 
     #[test]
     fn a_crash_is_recognised_even_when_the_exit_code_says_success() {

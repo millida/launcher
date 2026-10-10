@@ -25,6 +25,8 @@ export interface UpdateInfo {
 export const DOWNLOAD_PAGE = 'https://millida.net/launcher'
 
 const FAILED_KEY = 'm-upd-failed'
+const BOOT_KEY = 'm-upd-boot'
+const BOOT_TRIES = 2
 const PROBE_EVERY = 1800000
 
 let pending: UpdateInfo | null = null
@@ -125,6 +127,25 @@ async function quit(): Promise<void> {
     const w = T && T.window ? T.window.getCurrentWindow() : null
     if (w && w.destroy) await w.destroy().catch(() => {})
   }
+}
+
+/// An installer that cannot replace the exe (antivirus, foreign install folder) leaves the old
+/// version in place, and every start would install and relaunch again without end.
+function bootTriesSpent(target: string): boolean {
+  try {
+    const raw = JSON.parse(localStorage.getItem(BOOT_KEY) || 'null') as { target?: string; n?: number } | null
+    return !!raw && raw.target === target && (raw.n || 0) >= BOOT_TRIES
+  } catch {
+    return false
+  }
+}
+
+function noteBootTry(target: string) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(BOOT_KEY) || 'null') as { target?: string; n?: number } | null
+    const n = raw && raw.target === target ? (raw.n || 0) + 1 : 1
+    localStorage.setItem(BOOT_KEY, JSON.stringify({ target, n }))
+  } catch {}
 }
 
 function markPluginFailed(version: string) {
@@ -229,10 +250,16 @@ export async function bootUpdate(): Promise<boolean> {
         st.set({ bootPhase: 'idle' })
         return false
       }
+      if (bootTriesSpent('fallback:' + f.version)) {
+        st.set({ bootPhase: 'idle' })
+        useUpdate.getState().set({ failed: true })
+        return false
+      }
       st.set({ bootPhase: 'downloading', version: f.version })
       const file = await stageFallback()
       if (!file) throw new Error('нет файла обновления')
       st.set({ bootPhase: 'installing' })
+      noteBootTry('fallback:' + f.version)
       const res = await updateFallbackRun(file)
       if (!res.started) throw new Error('установщик не запустился')
       await quit()
@@ -245,6 +272,12 @@ export async function bootUpdate(): Promise<boolean> {
       return false
     }
     remember(upd)
+    if (bootTriesSpent(upd.version)) {
+      markPluginFailed(upd.version)
+      st.set({ bootPhase: 'idle' })
+      void autoUpdate()
+      return false
+    }
     st.set({ bootPhase: 'downloading', version: upd.version, bootPct: 0 })
     let total = 0
     let got = 0
@@ -259,6 +292,7 @@ export async function bootUpdate(): Promise<boolean> {
     installing = true
     useUpdate.getState().set({ bootPhase: 'installing', bootPct: 100 })
     trackAppExit()
+    noteBootTry(upd.version)
     await upd.install()
     await relaunch()
     return true
@@ -312,7 +346,7 @@ export async function installUpdateOnExit(): Promise<boolean> {
     useUpdate.getState().set({ busy: true })
     showToast('Ставим обновление ' + (fallback ? fallback.version : '') + '…')
     try {
-      await updateFallbackRun(fallbackFile)
+      await updateFallbackRun(fallbackFile, false)
     } catch (e) {
       updateFailed('updater-fallback', e)
     }
@@ -324,7 +358,7 @@ export async function installUpdateOnExit(): Promise<boolean> {
   useUpdate.getState().set({ busy: true })
   showToast('Ставим обновление ' + (useUpdate.getState().version || '') + '…')
   try {
-    await current.install()
+    await current.install({ restartAfterInstall: false })
   } catch (e) {
     markPluginFailed(current.version)
     updateFailed('updater', e)

@@ -358,12 +358,14 @@ async fn install_modpack_job(app: &AppHandle, job: &Job, slug: String, version_i
     };
     job.rename(&pname);
     let pdir = profile_dir(&pname);
-    // the pack owns mods/: leftovers would duplicate classes and crash the game
-    let _ = std::fs::remove_dir_all(pdir.join("mods"));
-    forget_skin_mod_install(&pname);
-    std::fs::create_dir_all(pdir.join("mods")).map_err(|e| e.to_string())?;
     let files = idx["files"].as_array().cloned().unwrap_or_default();
     let entries = pack_entries(&files, &pdir)?;
+    // The pack owns mods/: leftovers would duplicate classes and crash the game.
+    // Files the pack lists stay, so a repeated install after a cut line does not
+    // download the whole pack again.
+    prune_mods_outside(&pdir, &entries);
+    forget_skin_mod_install(&pname);
+    std::fs::create_dir_all(pdir.join("mods")).map_err(|e| e.to_string())?;
     let fetched = download_pack_entries(entries, Some(job.cancel_flag()), &|n, total| {
         job.emit(app, 20.0 + 60.0 * (n as f32 / total.max(1) as f32), &format!("Файлы сборки {}/{}", n, total));
     })
@@ -474,6 +476,23 @@ pub(crate) struct PackEntry {
 /// The whole index is checked before the first byte is fetched: a bad entry
 /// at the end used to fail the pack only after every file before it had been
 /// downloaded.
+fn prune_mods_outside(pdir: &std::path::Path, entries: &[PackEntry]) {
+    let mods = pdir.join("mods");
+    let keep: std::collections::HashSet<PathBuf> = entries.iter().map(|e| e.dest.clone()).collect();
+    let Ok(rd) = std::fs::read_dir(&mods) else { return };
+    for e in rd.flatten() {
+        let p = e.path();
+        if keep.contains(&p) {
+            continue;
+        }
+        if p.is_dir() {
+            let _ = std::fs::remove_dir_all(&p);
+        } else {
+            let _ = std::fs::remove_file(&p);
+        }
+    }
+}
+
 pub(crate) fn pack_entries(files: &[Value], pdir: &std::path::Path) -> Result<Vec<PackEntry>, String> {
     let mut out = Vec::with_capacity(files.len());
     for f in files {

@@ -17,7 +17,7 @@ const NESTED_DEPTH: u32 = 3;
 /// Bumped whenever the parser starts extracting a new field: cache entries are
 /// keyed by (size, mtime), so without it an old cache would keep answering with
 /// fields the previous version never filled in.
-const META_REV: u32 = 7;
+const META_REV: u32 = 8;
 
 /// A `breaks` entry as the mod author wrote it: which mod, and under what
 /// version range. `"breaks": {"fabric-api": "<0.144.3+26.1"}` means "needs a
@@ -571,6 +571,11 @@ fn from_forge(jar: &mut Jar, meta: &mut LocalMeta) -> bool {
     meta.version = clean_text(kv.get("version").map(String::as_str).unwrap_or(""), 40);
     meta.authors = clean_text(kv.get("authors").map(String::as_str).unwrap_or(""), 120);
     let (own, requires, breaks) = forge_relations(&text);
+    for id in forge_mod_ids(&text) {
+        if id != own {
+            push_id(&mut meta.provides, &id);
+        }
+    }
     meta.mod_id = own;
     meta.requires = requires;
     meta.breaks = forge_breaks(breaks);
@@ -646,12 +651,19 @@ fn from_shader(jar: &mut Jar, meta: &mut LocalMeta) -> bool {
     !meta.icon.is_empty()
 }
 
+/// Build classifiers that follow the version in a file name: without dropping
+/// them `kotlinforforge-4.11.0-all.jar` never reads as "kotlinforforge".
+const FILE_CLASSIFIERS: [&str; 4] = ["-all", "-universal", "-slim", "-shadow"];
+
 fn title_from_file(name: &str) -> String {
-    let base = name
+    let mut base = name
         .trim_end_matches(".disabled")
         .trim_end_matches(".jar")
         .trim_end_matches(".zip")
         .trim_end_matches(".litemod");
+    for c in FILE_CLASSIFIERS {
+        base = base.strip_suffix(c).unwrap_or(base);
+    }
     let cut = base
         .split(['+'])
         .next()
@@ -688,6 +700,9 @@ pub fn read_file_meta(path: &Path, kind: &str, file_name: &str) -> LocalMeta {
                 || from_pack(&mut jar, &mut meta);
             if !parsed {
                 from_shader(&mut jar, &mut meta);
+                // Kotlin for Forge ships no manifest of its own: its mod id lives
+                // only in the jars bundled under META-INF/jarjar.
+                nested_ids(&mut jar, NESTED_DEPTH, &mut meta.provides);
             }
             meta.loaders = declared_loaders(&mut jar);
             meta.relations = loader_relations(&mut jar);
@@ -1208,6 +1223,54 @@ type="incompatible"
             assert_eq!(m.mod_id, own, "{name}: {why}");
             assert_eq!(m.provides, provides.iter().map(|s| s.to_string()).collect::<Vec<_>>(), "{name}: {why}");
         }
+    }
+
+    /// A jar with no manifest of its own still answers for what it bundles:
+    /// Kotlin for Forge was reported missing next to ChatPlus while installed.
+    #[test]
+    fn manifestless_outer_jar_answers_for_its_jarjar_mods() {
+        let inner = tmp("kffmod.jar");
+        make_jar(
+            &inner,
+            &[(
+                "META-INF/mods.toml",
+                b"modLoader=\"kotlinforforge\"
+[[mods]]
+modId=\"kotlinforforge\"
+version=\"4.11.0\"
+",
+            )],
+        );
+        let body = std::fs::read(&inner).unwrap();
+        let outer = tmp("kotlinforforge-4.11.0-all.jar");
+        make_jar(&outer, &[("META-INF/jarjar/kffmod-4.11.0.jar", body.as_slice())]);
+        let m = read_file_meta(&outer, "mod", "kotlinforforge-4.11.0-all.jar");
+        assert!(
+            m.provides.contains(&"kotlinforforge".to_string()),
+            "the bundled mod id is what dependents ask for; without it the audit says the mod is missing",
+        );
+        assert_eq!(m.title, "kotlinforforge", "the -all classifier must not stick to the readable name");
+    }
+
+    #[test]
+    fn every_forge_mods_block_counts_as_installed() {
+        let jar = tmp("twomods.jar");
+        make_jar(
+            &jar,
+            &[(
+                "META-INF/mods.toml",
+                b"modLoader=\"javafml\"
+[[mods]]
+modId=\"first\"
+[[mods]]
+modId=\"second\"
+",
+            )],
+        );
+        let m = read_file_meta(&jar, "mod", "twomods-1.0.jar");
+        assert_eq!(m.mod_id, "first");
+        assert!(m.provides.contains(&"second".to_string()), "a second [[mods]] block is a mod others can require");
+        assert!(!m.provides.contains(&"first".to_string()), "the own id is not repeated as provided");
     }
 
     #[test]

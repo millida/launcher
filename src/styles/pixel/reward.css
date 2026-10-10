@@ -673,6 +673,11 @@
   filter: drop-shadow(0 5px 0 rgba(0, 0, 0, 0.45));
   animation: rw-small-in 0.4s cubic-bezier(0.2, 1.5, 0.4, 1) both;
 }
+/* Inside the season pass window the 132px slot lands on the pass header and its countdown. */
+body:has(.dp-bg) .rw-mid,
+body:has(.dp-bg) .rw-small {
+  top: calc(50vh - 100px);
+}
 .rw-small.out {
   animation: rw-small-out 0.16s var(--m-ease-smooth) both;
 }

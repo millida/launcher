@@ -10,7 +10,7 @@ import type { Reward } from '../../lib/rubies'
 import { useDaily } from '../../state/daily'
 import { closeMilli, useMilli } from '../../state/milli'
 import { useUi } from '../../state/ui'
-import { milliPlanNumbers } from '../../lib/milli'
+import { milliLook, milliPlanNumbers } from '../../lib/milli'
 import { loadCosmeticCatalog, type PlusTier } from '../../lib/gameProfile'
 import '../../styles/pixel/plus.css'
 import '../../styles/pixel/milli-plus.css'
@@ -115,7 +115,11 @@ export function MilliPlusSheet() {
   const src = useMilliPlusSheet((s) => s.src)
   const plans = useMilli((s) => s.plans)
   const busy = useDaily((s) => s.busy === 'plus')
+  // Уже с PLUS — сразу вкладка Diamond: PLUS ему продавать незачем.
   const [dia, setDia] = useState(false)
+  useEffect(() => {
+    if (open) setDia(src === 'head_diamond' || milliLook(useMilli.getState().status) === 'plus')
+  }, [open, src])
   const loot = useLoot()
   const shown = useShowcase(loot)
   if (!open) return null

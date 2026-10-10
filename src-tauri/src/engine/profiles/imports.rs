@@ -64,7 +64,7 @@ pub(crate) fn launcher_roots() -> Vec<(&'static str, PathBuf)> {
     let app = if cfg!(target_os = "macos") { h.join("Library/Application Support") }
               else if cfg!(target_os = "windows") { std::env::var("APPDATA").map(PathBuf::from).unwrap_or(h.join("AppData/Roaming")) }
               else { h.join(".local/share") };
-    vec![
+    let mut roots = vec![
         ("PrismLauncher", app.join("PrismLauncher/instances")),
         ("MultiMC", app.join("MultiMC/instances")),
         ("ATLauncher", app.join("ATLauncher/instances")),
@@ -72,7 +72,27 @@ pub(crate) fn launcher_roots() -> Vec<(&'static str, PathBuf)> {
         ("CurseForge", h.join("curseforge/minecraft/Instances")),
         ("Modrinth App", app.join("com.modrinth.theseus/profiles")),
         ("Modrinth App", app.join("ModrinthApp/profiles")),
-    ]
+    ];
+    for (label, data, cfg) in [("PrismLauncher", "PrismLauncher", "prismlauncher.cfg"), ("MultiMC", "MultiMC", "multimc.cfg")] {
+        let base = app.join(data);
+        let Some(dir) = std::fs::read_to_string(base.join(cfg)).ok().and_then(|t| configured_instance_dir(&t, &base)) else { continue };
+        if !roots.iter().any(|(_, p)| *p == dir) {
+            roots.push((label, dir));
+        }
+    }
+    roots
+}
+
+/// Prism and MultiMC let the player keep instances anywhere: the folder is the
+/// `InstanceDir` key of the launcher config, absolute or relative to its data
+/// folder. Builds moved off the default place were not found at all.
+pub(crate) fn configured_instance_dir(cfg: &str, base: &Path) -> Option<PathBuf> {
+    let raw = cfg.lines().find_map(|l| l.trim().strip_prefix("InstanceDir="))?.trim().trim_matches('"');
+    if raw.is_empty() {
+        return None;
+    }
+    let p = PathBuf::from(raw);
+    Some(if p.is_absolute() { p } else { base.join(p) })
 }
 
 /// Launchers sharing a single .minecraft: each entry in versions/ acts as a profile.
@@ -865,6 +885,26 @@ pub fn import_instance(path: String, name: String, version: String, loader: Stri
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// prismlauncher.cfg -> instances folder. A build kept outside the default
+    /// folder must still be offered for import.
+    #[test]
+    fn instance_dir_comes_from_the_launcher_config() {
+        let base = Path::new("/data/PrismLauncher");
+        assert_eq!(
+            configured_instance_dir("[General]\nInstanceDir=instances\n", base),
+            Some(base.join("instances")),
+            "relative InstanceDir lives inside the launcher data folder",
+        );
+        let abs = if cfg!(windows) { r"D:\Games\Prism" } else { "/games/prism" };
+        assert_eq!(
+            configured_instance_dir(&format!("InstanceDir={}\n", abs), base),
+            Some(PathBuf::from(abs)),
+            "an absolute InstanceDir is used as is",
+        );
+        assert_eq!(configured_instance_dir("Language=ru\n", base), None, "no key means the default folder only");
+        assert_eq!(configured_instance_dir("InstanceDir=\n", base), None, "an empty key is not the data folder itself");
+    }
 
     /// age -> verdict. The disk sweep is expensive enough that reopening the
     /// import dialog must reuse it, but a drive plugged in meanwhile has to show

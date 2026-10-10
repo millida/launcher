@@ -15,6 +15,7 @@ import {
   milliStatus,
   refineMilliError,
   withPreset,
+  setMilliAccountTierSource,
 } from '../lib/milli'
 import type { MilliError, MilliGreeting, MilliGreetingChip, MilliMessage, MilliPack, MilliPlans, MilliProgressEvent, MilliSessionHead, MilliStatus } from '../lib/milli'
 import { benchBuildId, benchSettled, setBenchProgress, useBench } from './milliBench'
@@ -128,6 +129,28 @@ export async function refreshMilliPlans(force = false): Promise<void> {
     plansLoaded = false
   }
 }
+
+// Подписка аккаунта загрузилась или сменилась (купил PLUS / Diamond) — статус Милли заново:
+// иначе в шапке висело «×10 с PLUS» у того, у кого PLUS уже есть.
+// Подписка — из state/daily лениво: статический импорт тянул аккаунты (localStorage) при
+// загрузке модуля, и тесты Милли падали без браузера.
+let plusSeen: unknown = undefined
+if (typeof localStorage !== 'undefined')
+  void import('./daily')
+    .then(({ useDaily }) => {
+      setMilliAccountTierSource(() => {
+        const p = useDaily.getState().plus
+        if (!p) return null
+        if (!p.active) return 'free'
+        return p.tier === 'DIAMOND' ? 'diamond' : 'plus'
+      })
+      useDaily.subscribe((st) => {
+        if (st.plus === plusSeen) return
+        plusSeen = st.plus
+        void refreshMilliStatus()
+      })
+    })
+    .catch(() => {})
 
 export async function refreshMilliStatus(): Promise<MilliStatus | null> {
   if (!hasMillidaAccount()) return null

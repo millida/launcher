@@ -118,6 +118,38 @@ fn remember_in(cache: &mut std::collections::BTreeMap<String, Tagged>, key: Stri
     }
 }
 
+/// Сколько ждать ответа (заголовков) до дубля: каталог отвечает за 0,3–0,6 с,
+/// холодный запрос сервера — до нескольких секунд; дубль — только хвосту.
+const HEDGE_AFTER: std::time::Duration = std::time::Duration::from_millis(2500);
+
+/// Hedged request: первый ответ из двух; ошибка одного — ждём другой.
+async fn hedged<F1, F2, Fut1, Fut2>(first: F1, second: F2) -> Result<reqwest::Response, reqwest::Error>
+where
+    F1: FnOnce() -> Fut1,
+    F2: FnOnce() -> Fut2,
+    Fut1: std::future::Future<Output = Result<reqwest::Response, reqwest::Error>>,
+    Fut2: std::future::Future<Output = Result<reqwest::Response, reqwest::Error>>,
+{
+    let a = first();
+    tokio::pin!(a);
+    tokio::select! {
+        r = &mut a => return r,
+        _ = tokio::time::sleep(HEDGE_AFTER) => {}
+    }
+    let b = second();
+    tokio::pin!(b);
+    tokio::select! {
+        r = &mut a => match r {
+            Ok(res) => Ok(res),
+            Err(e) => b.await.or(Err(e)),
+        },
+        r = &mut b => match r {
+            Ok(res) => Ok(res),
+            Err(e) => a.await.or(Err(e)),
+        },
+    }
+}
+
 pub async fn millida_api(
     path: String,
     method: String,
@@ -133,13 +165,13 @@ pub async fn millida_api(
     let token = token.filter(|t| !t.is_empty());
     let conditional = (m == "GET").then(|| etag_key(token.as_ref(), url));
     let known = conditional.as_deref().and_then(remembered);
-    let build = || {
+    let build_on = |c: reqwest::Client| {
         let mut req = match m.as_str() {
-            "GET" => client().get(url),
-            "POST" => client().post(url),
-            "PATCH" => client().patch(url),
-            "PUT" => client().put(url),
-            _ => client().delete(url),
+            "GET" => c.get(url),
+            "POST" => c.post(url),
+            "PATCH" => c.patch(url),
+            "PUT" => c.put(url),
+            _ => c.delete(url),
         };
         if let Some(t) = token.as_ref() {
             req = req.header("Authorization", format!("Bearer {}", t));
@@ -152,13 +184,18 @@ pub async fn millida_api(
         }
         req
     };
+    let build = || build_on(client());
+    // GET без ответа за HEDGE_AFTER дублируется вторым пулом соединений: зависший
+    // сокет или медленный узел больше не держат каталог десятки секунд. Запись
+    // (POST/PUT…) не дублируем — она не идемпотентна.
+    let sent = if m == "GET" { hedged(|| build().send(), || build_on(spare_client()).send()).await } else { build().send().await };
     // a connect/timeout error means the request never reached the server, so
     // retrying is safe for any method
-    let res = match build().send().await {
+    let res = match sent {
         Ok(r) => r,
         Err(e) if e.is_connect() || e.is_timeout() => {
             tokio::time::sleep(std::time::Duration::from_millis(600)).await;
-            build().send().await.map_err(|e| net_err(&e))?
+            build_on(spare_client()).send().await.map_err(|e| net_err(&e))?
         }
         Err(e) => return Err(net_err(&e)),
     };

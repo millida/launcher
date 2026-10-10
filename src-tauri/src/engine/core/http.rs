@@ -111,6 +111,10 @@ pub(crate) async fn read_capped(mut resp: reqwest::Response, max: usize) -> Resu
     Ok(out)
 }
 
+/// Соединение, которое молча умерло (VPN переключился, NAT забыл сокет), раньше
+/// держало все запросы к API до read_timeout — минуту: HTTP/2 гонит их по одному
+/// сокету, и каталог «не отвечал», хотя сервер отвечает за 0,3 с (10.10.2026).
+/// PING раз в 15 с и TCP keepalive находят мёртвый сокет за секунды.
 fn build_client(native_roots: bool) -> Result<reqwest::Client, reqwest::Error> {
     reqwest::Client::builder()
         .user_agent(UA)
@@ -118,6 +122,10 @@ fn build_client(native_roots: bool) -> Result<reqwest::Client, reqwest::Error> {
         .connect_timeout(Duration::from_secs(15))
         .read_timeout(Duration::from_secs(60))
         .pool_idle_timeout(Duration::from_secs(90))
+        .tcp_keepalive(Duration::from_secs(20))
+        .http2_keep_alive_interval(Duration::from_secs(15))
+        .http2_keep_alive_timeout(Duration::from_secs(6))
+        .http2_keep_alive_while_idle(true)
         .tls_built_in_webpki_certs(true)
         .tls_built_in_native_certs(native_roots)
         .build()
@@ -145,7 +153,19 @@ fn system_proxy() -> String {
 }
 
 pub(crate) fn client() -> reqwest::Client {
-    let mut slot = CLIENT.lock().unwrap_or_else(|e| e.into_inner());
+    shared_client(&CLIENT)
+}
+
+/// Второй пул соединений — для дублирующего запроса (hedged request, «The Tail at
+/// Scale»): повтор по тому же пулу ушёл бы в тот же зависший сокет HTTP/2.
+static SPARE: std::sync::Mutex<Option<Shared>> = std::sync::Mutex::new(None);
+
+pub(crate) fn spare_client() -> reqwest::Client {
+    shared_client(&SPARE)
+}
+
+fn shared_client(cell: &std::sync::Mutex<Option<Shared>>) -> reqwest::Client {
+    let mut slot = cell.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(shared) = slot.as_ref().filter(|s| s.checked.elapsed() < PROXY_RECHECK) {
         return shared.client.clone();
     }
@@ -866,17 +886,58 @@ pub(crate) async fn download_checked_progress(
     cancel: Option<&Halt>,
     on: &Progress<'_>,
 ) -> Result<(), String> {
+    let usable = sum.filter(|s| s.is_usable());
+    if let Some(s) = usable {
+        if already_fetched(dest, s, size).await {
+            return Ok(());
+        }
+    }
     if dest.exists() {
         let _ = std::fs::remove_file(dest);
     }
-    if let (Some(s), Some(total)) = (sum.filter(|s| s.is_usable()), size) {
-        if total >= SEGMENTED_MIN_BYTES && super::mirror::routes(url).await.len() == 1 {
+    if let (Some(s), Some(total)) = (usable, size) {
+        let single_route = super::mirror::routes(url).await.len() == 1;
+        if total >= SEGMENTED_MIN_BYTES && single_route {
             if let Segmented::Done = fetch_segmented(url, dest, s, total, cancel, on).await? {
                 return Ok(());
             }
         }
+        // A part file that outlives the call: an archive cut at 80% by a dropped
+        // line, a cancel or a closed launcher continues from there instead of zero.
+        if total >= RESUME_MIN_BYTES && single_route {
+            drop_stale_parts(dest, &resumable_part(dest, s.expected()));
+            let idle = Halt::default();
+            return download_resumable_sum(url, dest, s, total, cancel.unwrap_or(&idle), on).await;
+        }
     }
     fetch_cancellable(url, dest, sum, size, cancel, Some(on)).await
+}
+
+/// Bytes of an older build of the same file never complete: the pack or Java
+/// moved on, and the part would sit next to it for good.
+fn drop_stale_parts(dest: &Path, keep: &Path) {
+    let (Some(dir), Some(name)) = (dest.parent(), dest.file_name()) else { return };
+    let prefix = format!("{}.", name.to_string_lossy());
+    let Ok(rd) = std::fs::read_dir(dir) else { return };
+    for e in rd.flatten() {
+        let p = e.path();
+        let n = e.file_name().to_string_lossy().to_string();
+        if n.starts_with(&prefix) && n.ends_with(RESUMABLE_PART_SUFFIX) && p != keep && p.is_file() {
+            let _ = std::fs::remove_file(&p);
+        }
+    }
+}
+
+/// A previous install may have finished the download and failed later (unpack,
+/// disk, a crash): the archive on disk is still good and is not fetched again.
+async fn already_fetched(dest: &Path, sum: Sum<'_>, size: Option<u64>) -> bool {
+    let Ok(meta) = std::fs::metadata(dest) else { return false };
+    if size.is_some_and(|want| meta.len() != want) {
+        return false;
+    }
+    let owned = OwnedSum::of(sum);
+    let path = dest.to_path_buf();
+    tokio::task::spawn_blocking(move || hash_matches(&path, &owned.sum())).await.unwrap_or(false)
 }
 
 /// From this size an archive is fetched over several connections at once.
@@ -1038,10 +1099,21 @@ pub(crate) async fn download_resumable(
     cancel: &Halt,
     on: &Progress<'_>,
 ) -> Result<(), String> {
+    download_resumable_sum(url, dest, Sum::Sha256(sha256), size, cancel, on).await
+}
+
+async fn download_resumable_sum(
+    url: &str,
+    dest: &Path,
+    sum: Sum<'_>,
+    size: u64,
+    cancel: &Halt,
+    on: &Progress<'_>,
+) -> Result<(), String> {
     if let Some(p) = dest.parent() {
         std::fs::create_dir_all(p).map_err(|e| format!("{}: {}", p.display(), e))?;
     }
-    let part = resumable_part(dest, sha256);
+    let part = resumable_part(dest, sum.expected());
     let len = |p: &Path| std::fs::metadata(p).map(|m| m.len()).unwrap_or(0);
     let mut stalled = 0;
     loop {
@@ -1073,7 +1145,7 @@ pub(crate) async fn download_resumable(
         }
         tokio::time::sleep(retry_pause(stalled.max(1), &err)).await;
     }
-    let owned = OwnedSum::of(Sum::Sha256(sha256));
+    let owned = OwnedSum::of(sum);
     let path = part.clone();
     let intact = tokio::task::spawn_blocking(move || hash_matches(&path, &owned.sum())).await.unwrap_or(false);
     if !intact {
@@ -1083,7 +1155,7 @@ pub(crate) async fn download_resumable(
     if dest.exists() {
         let _ = std::fs::remove_file(dest);
     }
-    publish(&part, dest, Some(Sum::Sha256(sha256)), Some(size))
+    publish(&part, dest, Some(sum), Some(size))
 }
 
 async fn resume_once(url: &str, part: &Path, have: u64, size: u64, cancel: &Halt, on: &Progress<'_>) -> Result<(), String> {

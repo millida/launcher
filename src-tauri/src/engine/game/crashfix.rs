@@ -329,12 +329,16 @@ fn finding_actions(findings: &[LoaderFinding], file_of: FileOf, has_source: HasS
                     );
                 }
             }
-            LoaderFinding::MixinFailed { by } => {
+            LoaderFinding::MixinFailed { by } | LoaderFinding::Suspected { by } => {
                 if is_own(by) {
                     continue;
                 }
                 let Some(file) = file_of_ref(file_of, by) else { continue };
-                let off = CrashAction::new("disable-mod", format!("Отключить «{}»", by.name), file.clone(), "Мод не подошёл к игре или соседним модам");
+                let why = match f {
+                    LoaderFinding::Suspected { .. } => "Отчёт о вылете указывает на этот мод",
+                    _ => "Мод не подошёл к игре или соседним модам",
+                };
+                let off = CrashAction::new("disable-mod", format!("Отключить «{}»", by.name), file.clone(), why);
                 if has_source(file.as_str()) {
                     add_action(
                         &mut out,

@@ -28,13 +28,26 @@ fn file_sha1(path: &std::path::Path) -> Option<String> {
 pub(crate) async fn versions_by_hash(hashes: &[String]) -> HashMap<String, Value> {
     let mut out = HashMap::new();
     for chunk in hashes.chunks(100) {
+        if let Ok(found) = versions_by_hash_checked(chunk).await {
+            out.extend(found);
+        }
+    }
+    out
+}
+
+/// Same lookup for callers that must tell "Modrinth does not know this file"
+/// from "Modrinth did not answer": a shared pack is refused on the first and
+/// retried on the second.
+pub(crate) async fn versions_by_hash_checked(hashes: &[String]) -> Result<HashMap<String, Value>, String> {
+    let mut out = HashMap::new();
+    for chunk in hashes.chunks(100) {
         let body = serde_json::json!({ "hashes": chunk, "algorithm": "sha1" });
-        let Ok(v) = post_json("https://api.modrinth.com/v2/version_files", &body).await else { continue };
+        let v = post_json("https://api.modrinth.com/v2/version_files", &body).await?;
         for (hash, ver) in v.as_object().cloned().unwrap_or_default() {
             out.insert(hash, ver);
         }
     }
-    out
+    Ok(out)
 }
 
 async fn projects_by_id(ids: &[String]) -> HashMap<String, Value> {

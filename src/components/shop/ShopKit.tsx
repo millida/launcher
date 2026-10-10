@@ -543,7 +543,9 @@ export function useShop(on: boolean) {
     const result = purchaseFlow('craft', w.item.code, w.cost, 'shards')
     openSheet({
       kind: 'craft',
-      name: w.item.name,
+      // The exchange pays half of the fragments, not the item: without saying so
+      // players reported shards taken and nothing given.
+      name: w.item.name + ' — половина фрагментов',
       art: <ItemShot item={w.item} big />,
       confirm: <ShardLabel n={w.cost} />,
       onCancel: () => result(false, 'cancel'),

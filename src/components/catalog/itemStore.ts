@@ -44,6 +44,9 @@ export const useItem = create<ItemState>((set, get) => ({
     })
   },
   close: () => {
+    // Страницы не было — прокрутку не трогаем. Раньше «закрыть» при каждой смене вкладки
+    // возвращало старую прокрутку ленты, и вкладка открывалась где-то внизу (владелец 10.10.2026).
+    if (!get().cur) return
     const y = get().scroll
     set({ cur: null })
     // Лента снова видна со следующего кадра — тогда её высота уже настоящая.
@@ -58,3 +61,5 @@ export const useItem = create<ItemState>((set, get) => ({
 
 export const openItem = (it: OpenItem) => useItem.getState().open(it)
 export const closeItem = () => useItem.getState().close()
+/** Закрыть страницу материала без возврата прокрутки — при переходе на другую вкладку. */
+export const dropItem = () => useItem.setState({ cur: null })

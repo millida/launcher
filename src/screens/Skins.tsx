@@ -1002,7 +1002,7 @@ export function Skins({ on }: { on: boolean }) {
       .then(() => {
         setWorn(next)
         setFitting((now) => now.filter((c) => !mine.some((m) => m.slot === c.slot)))
-        showToast('Надето — видно в игре', 'ok')
+        showToast('Надето — видят игроки с Millida', 'ok')
       })
       .catch((e) => {
         trackFailure('skins', e, { step: 'cosmetic_wear' })
@@ -1201,7 +1201,7 @@ export function Skins({ on }: { on: boolean }) {
       await applyCosmetics(next)
       setWorn(next)
       setFitting((now) => now.filter((c) => !ready.some((r) => r.id === c.id)))
-      showToast('Надето — видно в игре', 'ok')
+      showToast('Надето — видят игроки с Millida', 'ok')
     } catch (e) {
       showToast(apiErrorText(e, 'Не удалось надеть'), 'error')
     } finally {
@@ -1255,7 +1255,7 @@ export function Skins({ on }: { on: boolean }) {
       setWorn(next)
       // Своё надетое вытесняет примерку на том же месте.
       if (!already) setFitting((now) => now.filter((c) => c.slot !== item.slot))
-      showToast(already ? 'Снято' : 'Надето — видно в игре')
+      showToast(already ? 'Снято' : 'Надето — видят игроки с Millida')
     } catch (e) {
       showToast(apiErrorText(e, 'Не удалось изменить косметику'), 'error')
     } finally {

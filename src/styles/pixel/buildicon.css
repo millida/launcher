@@ -164,3 +164,50 @@
 .ip-colors { padding: 2px 4px; }
 .ip-grid { gap: 14px; padding: 6px 10px 6px 4px; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
 .ip-foot { padding-top: 4px; }
+
+/* ══ Значки Modrinth App (10.10.2026): объёмный блок на ярком градиенте ══
+   Фон — градиент (background, не background-color), сверху мягкий блик; значок при
+   наведении на карточку чуть подпрыгивает и наклоняется — живой, но без мигания. */
+.bi { background: var(--bi-bg, #2a2017); }
+.bi.mr::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(120% 75% at 28% 0%, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0) 58%);
+}
+.bi.mr img { width: 84%; height: 84%; transition: transform 260ms var(--m-ease-out, ease); filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.12)); }
+.ph-card:hover .bi.mr img, .bi-edit:hover .bi.mr img, .cfor-row:hover .bi.mr img, .bp-item:hover .bi.mr img { transform: translateY(-3px) rotate(-4deg) scale(1.05); }
+@media (prefers-reduced-motion: reduce) { .bi.mr img { transition: none; } .ph-card:hover .bi.mr img { transform: none; } }
+
+.ip-colors { grid-template-columns: repeat(11, minmax(0, 1fr)); }
+.ip-head .ip-roll { flex: none; gap: 6px; }
+/* Цвет и градиент — слоем --px-img (фон пиксельных плиток задаёт рамка, background-color не виден). */
+.ip-color, .ip-block { --px-img: var(--c); --px-img-size: 100% 100%; --px-img-repeat: no-repeat; --px-img-origin: border-box; }
+.ip-block:not(.on) img { opacity: 0.92; }
+/* Значки Modrinth в карточках библиотеки — крупнее блоков Millida: детальный рендер на градиенте. */
+:root .hub-pane .ph-mine .ph-card-art .bi.mr img { max-height: 86px; width: 86px; height: 86px; transform: translateY(-14px); }
+:root .hub-pane .ph-mine:hover .ph-card-art .bi.mr img { transform: translateY(-17px) rotate(-4deg) scale(1.05); }
+/* Ряды сетки — явной высоты: в WebKit (окно лаунчера) квадрат через aspect-ratio не растягивал
+   ряд, и плитки наезжали друг на друга (владелец 10.10.2026: «очень баговано»). */
+.ip-grid { grid-auto-rows: 76px; align-content: start; }
+:root .ip-block { aspect-ratio: auto; height: 76px; min-height: 0; }
+:root .ip-block img { width: 56px; height: 56px; }
+
+/* Картинка сборки в «Моих сборках»: квадрат по центру над названием, фон — размытая копия */
+.ph-mine-photo { position: absolute; inset: 0; display: block; overflow: hidden; }
+:root .ph-mine .ph-card-art .ph-mine-photo img { max-height: none; transform: none; }
+:root .ph-mine .ph-card-art .ph-mine-photo-bg {
+  position: absolute; inset: -12%; width: 124%; height: 124%; object-fit: cover; filter: blur(16px) saturate(1.25) brightness(0.62);
+}
+:root .ph-mine .ph-card-art .ph-mine-photo-fg {
+  position: absolute; left: 50%; top: 9%; width: auto; height: 62%; aspect-ratio: 1; object-fit: cover; translate: -50% 0;
+  --px-n: 5px; clip-path: var(--px-5); box-shadow: 0 6px 0 rgba(0, 0, 0, 0.3); transition: transform 220ms var(--m-ease-out, ease);
+}
+:root .ph-mine:hover .ph-card-art .ph-mine-photo-fg { transform: translateY(-3px) scale(1.04); }
+@media (prefers-reduced-motion: reduce) { :root .ph-mine:hover .ph-card-art .ph-mine-photo-fg { transform: none; } }
+
+/* Обложка сборки из каталога — во всю карточку, как в «Сборках» */
+:root .ph-mine .ph-card-art img.ph-mine-cover {
+  position: absolute; inset: 0; width: 100%; height: 100%; max-height: none; object-fit: cover; transform: none;
+  transition: transform 260ms var(--m-ease-out, ease);
+}
+:root .ph-mine:hover .ph-card-art img.ph-mine-cover { transform: scale(1.04); }
+@media (prefers-reduced-motion: reduce) { :root .ph-mine:hover .ph-card-art img.ph-mine-cover { transform: none; } }

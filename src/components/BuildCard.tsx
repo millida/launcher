@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Icon } from './Icon'
-import { Cover } from './Cover'
+import { BuildIcon } from './playhub/BuildIcon'
 import { ContextMenu, type ContextItem } from './ContextMenu'
 import { LOADER_NAME, fmtPlaytime, whenText } from '../lib/format'
 import { useGuarded, useProfiles } from '../state/profiles'
@@ -131,7 +131,7 @@ export function BuildCard({
         }}
       >
         <span className="build-cover" data-nosound aria-label={running ? 'Запустить ещё одну копию' : 'Играть'}>
-          <Cover url={p.icon} />
+          <BuildIcon icon={p.icon} name={p.name} size={56} />
           {running ? (
             <span className="build-run">
               <span className="run-dot"></span>

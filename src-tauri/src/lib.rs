@@ -236,6 +236,8 @@ pub fn run() {
             commands::content::millida_mod_enabled,
             commands::content::set_millida_mod_enabled,
             commands::content::set_game_telemetry,
+            commands::content::pvp_hud_default,
+            commands::content::set_pvp_hud_default,
             commands::content::list_versions,
             commands::content::list_versions_typed,
             commands::content::list_loader_versions,
@@ -443,6 +445,12 @@ pub fn run() {
             commands::overlay::overlay_hide,
             commands::overlay::overlay_ready,
             commands::overlay::overlay_cleared,
+            commands::rewind::rewind_state,
+            commands::rewind::rewind_set_settings,
+            commands::rewind::rewind_clips,
+            commands::rewind::rewind_delete_clip,
+            commands::rewind::rewind_open_folder,
+            commands::rewind::rewind_reveal_clip,
             commands::overlay::overlay_hit_areas,
             commands::overlay::overlay_open,
             commands::overlay::realtime_relay,
@@ -474,7 +482,14 @@ pub fn run() {
             commands::profiles::cloud_status,
             commands::profiles::cloud_push,
             commands::profiles::cloud_pull,
-            commands::profiles::cloud_forget
+            commands::profiles::cloud_forget,
+            commands::party_voice::party_voice_join,
+            commands::party_voice::party_voice_leave,
+            commands::party_voice::party_voice_transmit,
+            commands::party_voice::party_voice_deafen,
+            commands::party_voice::party_voice_members,
+            commands::party_voice::party_voice_bind,
+            commands::party_voice::party_voice_audio
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")

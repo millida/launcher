@@ -93,6 +93,7 @@ git checkout v2.0.177
 
 - Скачивай только с [millida.net/launcher](https://millida.net/launcher) или со страницы [релизов](https://github.com/millida/launcher/releases). Всё остальное — не наше.
 - Windows: правый клик по файлу → «Свойства» → «Цифровые подписи» → «Подпись действительна».
+- Что файл из релиза собран здесь, из этого кода: каждый установщик собирает [workflow Release](.github/workflows/release.yml) на серверах GitHub, и GitHub подписывает, из какого коммита он получен. Проверка — `gh attestation verify <файл> -R millida/launcher`, или скачай `provenance.sigstore.json` из релиза и добавь `--bundle provenance.sigstore.json`.
 - Отчёт VirusTotal по каждому установщику — [millida.net/launcher/antivirus](https://millida.net/launcher/antivirus).
 
 ## Если не собирается

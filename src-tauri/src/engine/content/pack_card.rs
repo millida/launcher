@@ -81,7 +81,8 @@ pub fn catalog_icon_step(card_icon: &str, current: Option<&str>, marker: &Value)
     if marker["sum"].as_str() != Some(sha256_hex(icon.as_bytes()).as_str()) {
         return IconStep::Keep;
     }
-    if marker["from"].as_str() == Some(card_icon.trim()) {
+    // Тот же значок, но снятый в старом размере (128) — перерисовываем чётче.
+    if marker["from"].as_str() == Some(card_icon.trim()) && marker["px"].as_u64() == Some(COVER_PX as u64) {
         return IconStep::Keep;
     }
     IconStep::Apply
@@ -128,7 +129,7 @@ pub async fn sync_pack_icon(profile: &str, view: &Value) -> bool {
     // one we may replace, while our icon without its marker would pass for the
     // player's choice for good.
     let mut patch = serde_json::Map::new();
-    patch.insert(PACK_ICON_KEY.into(), serde_json::json!({ "from": card_icon, "sum": sha256_hex(data.as_bytes()) }));
+    patch.insert(PACK_ICON_KEY.into(), serde_json::json!({ "from": card_icon, "sum": sha256_hex(data.as_bytes()), "px": COVER_PX }));
     merge_settings(profile, patch);
     set_profile_cover(profile, Some(data));
     true
@@ -169,9 +170,11 @@ mod tests {
     #[test]
     fn the_catalogue_icon_never_replaces_the_players_choice() {
         let ours = "data:image/png;base64,AAAA";
-        let marked = json!({ "from": ICON, "sum": sha256_hex(ours.as_bytes()) });
-        let older = json!({ "from": "https://cdn.millida.trade/old.png", "sum": sha256_hex(ours.as_bytes()) });
-        let cases: [(&str, Option<&str>, Value, IconStep, &str); 12] = [
+        let marked = json!({ "from": ICON, "sum": sha256_hex(ours.as_bytes()), "px": COVER_PX });
+        let older = json!({ "from": "https://cdn.millida.trade/old.png", "sum": sha256_hex(ours.as_bytes()), "px": COVER_PX });
+        let blurry = json!({ "from": ICON, "sum": sha256_hex(ours.as_bytes()) });
+        let cases: [(&str, Option<&str>, Value, IconStep, &str); 13] = [
+            (ICON, Some(ours), blurry, IconStep::Apply, "our icon taken at the old 128 px is redrawn sharper"),
             (ICON, None, Value::Null, IconStep::Apply, "a build without an icon shows the bookshelf; the pack has its own"),
             (ICON, Some(""), Value::Null, IconStep::Apply, "an empty icon is no choice"),
             (ICON, Some("https://cdn.millida.trade/x/banner.png"), Value::Null, IconStep::Apply, "older launchers put the cover there, the player never did"),

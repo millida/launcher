@@ -26,6 +26,8 @@ mod repair;
 mod gpu;
 mod display;
 mod legacy_dups;
+#[cfg_attr(not(any(windows, target_os = "linux")), allow(dead_code))]
+mod now_playing;
 
 pub(crate) use mcmeta::*;
 pub use java::*;
@@ -53,3 +55,4 @@ pub use repair::*;
 pub use gpu::*;
 pub(crate) use display::apply_display_backend;
 pub use legacy_dups::*;
+pub use now_playing::{MediaLink, Notices};

@@ -166,6 +166,8 @@
   :is(.hs-pitch, .hs-state), .hs-fact, .hs-banner,
   /* lobby.css */
   .lobby-mode-card, .lobby-who .btn.lobby-wardrobe, .lobby-mate, .lobby-mate-act, .lobby-invite, .ht-gift, .lg2-card, .lb-btn, .lobby-row, .lb-me, .lobby-promo, .lobby-rec,
+  /* party.css */
+  .party-slot-empty, .party-plate, .party-invite, .party-card, .party-menu,
   /* retention.css */
   .lchip, .play-chest.go, .tb-block, .tb-none, .tb-row,
   /* lobby-bubble.css */
@@ -199,7 +201,9 @@
 :root:root .sh-bar::after,
 :root:root .sidebar.collapsed [data-tip]::after,
 :root:root .s2-wp-tile.on::before,
-:root:root .px-excl::after {
+:root:root .px-excl::after,
+:root:root .ph-mt.ph-mt-own::before,
+:root:root .hs-host2::before {
   box-shadow: none !important;
   background-image:
     linear-gradient(var(--px-ol) 0 0),
