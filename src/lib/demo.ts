@@ -610,29 +610,6 @@ const hold = <T>(value: T): Promise<T> => new Promise((done) => setTimeout(() =>
 const bare = (p: string) => p.split('?')[0] || ''
 
 const ROUTES: [RegExp, Handler][] = [
-  [/^\/party$/, (_p, method) => method === 'GET' ? {
-    me: DEMO_ID,
-    invites: [],
-    safety: { ageBracket: '13_15', newAccount: false },
-    party: {
-      id: 'demo-party', leaderId: DEMO_ID, capacity: 4, maxCapacity: 8, targetRev: 1, rev: 1, launch: null,
-      target: { kind: 'version', ref: '1.21.4', version: '1.21.4', title: 'Minecraft 1.21.4', game: '1.21.4' },
-      members: [
-        { userId: DEMO_ID, nickname: DEMO_NICK, avatarUrl: null, role: 'leader', ready: true, joinedAt: 1, have: null },
-        { userId: 'demo-mate', nickname: 'Kirpich', avatarUrl: null, role: 'member', ready: true, joinedAt: 2,
-          have: { kind: 'version', ref: '1.21.4', version: '1.21.4' } },
-      ],
-      voice: [{ userId: 'demo-mate', since: 1, muted: false, screen: false }],
-    },
-  } : undefined],
-  [/^\/party\/friends$/, () => ({ parties: [] })],
-  [/^\/party\/lfg\/requests$/, () => ({ requests: [] })],
-  [/^\/party\/lfg$/, (_p, method) => method === 'GET' ? {
-    mine: null,
-    cards: [{ id: 'demo-card', user: { userId: 'demo-x', nickname: 'Steve', avatarUrl: null }, size: 1, capacity: 4,
-      createdAt: Date.now(), expiresAt: Date.now() + 3600_000, requested: false,
-      tags: { mode: 'survival', version: '1.21.4', pack: '', lang: 'ru', region: 'ru_west', voice: true, time: 'now' } }],
-  } : undefined],
   // Код автора
   [/^\/launcher\/creator-code$/, (_p, method, body) => creatorCode(method, body)],
   [/^\/creator-codes\/public\/[^/]+$/, (p) => {
