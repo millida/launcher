@@ -71,23 +71,54 @@ pub(crate) async fn xbox_chain(ms_token: &str) -> Result<Value, String> {
             "Properties": {"SandboxId":"RETAIL","UserTokens":[xbl_token]},
             "RelyingParty":"rp://api.minecraftservices.com/","TokenType":"JWT"}))
         .send().await.map_err(|e| net_err(&e))?.json().await.map_err(|e| e.to_string())?;
-    let xsts_token = xsts["Token"].as_str().ok_or("XSTS отказал (нет Xbox-профиля?)")?.to_string();
+    let xsts_token = match xsts["Token"].as_str() {
+        Some(t) => t.to_string(),
+        None => return Err(xsts_error_text(xsts["XErr"].as_u64())),
+    };
     // the game passes XUID as ${auth_xuid}; 1.19+ clients treat a missing one
     // as an incomplete session
     let xuid = xsts["DisplayClaims"]["xui"][0]["xid"].as_str().unwrap_or("").to_string();
 
-    let mc: Value = client().post("https://api.minecraftservices.com/authentication/login_with_xbox")
-        .json(&serde_json::json!({"identityToken": format!("XBL3.0 x={};{}", uhs, xsts_token)}))
-        .send().await.map_err(|e| net_err(&e))?.json().await.map_err(|e| e.to_string())?;
-    let mc_token = mc["access_token"].as_str().ok_or("Minecraft отказал")?.to_string();
+    let identity = serde_json::json!({"identityToken": format!("XBL3.0 x={};{}", uhs, xsts_token)});
+    let mut mc = Value::Null;
+    let mut mc_status = 0u16;
+    // 429 and 5xx from the Minecraft services are transient: one login attempt
+    // shouldn't die on them
+    for attempt in 0..3u64 {
+        let r = client().post("https://api.minecraftservices.com/authentication/login_with_xbox")
+            .json(&identity).send().await.map_err(|e| net_err(&e))?;
+        mc_status = r.status().as_u16();
+        mc = r.json().await.unwrap_or(Value::Null);
+        if mc["access_token"].as_str().is_some() || !(mc_status == 429 || mc_status >= 500) { break; }
+        tokio::time::sleep(std::time::Duration::from_millis(1500 * (attempt + 1))).await;
+    }
+    let mc_token = match mc["access_token"].as_str() {
+        Some(t) => t.to_string(),
+        None if mc_status == 429 => return Err("Minecraft временно ограничил запросы (HTTP 429) — подожди минуту и повтори".into()),
+        None if mc_status >= 500 => return Err(format!("Серверы Minecraft сейчас недоступны (HTTP {}) — повтори позже", mc_status)),
+        None => return Err(format!("Minecraft отказал во входе (HTTP {})", mc_status)),
+    };
     // surfaced so callers can tell a live token from an expired one before
     // launching the game
     let expires_in = mc["expires_in"].as_i64().unwrap_or(86400);
 
-    let prof: Value = client().get("https://api.minecraftservices.com/minecraft/profile")
-        .bearer_auth(&mc_token).send().await.map_err(|e| net_err(&e))?
-        .json().await.map_err(|e| e.to_string())?;
-    let nick = prof["name"].as_str().ok_or("Нет лицензии Minecraft на этом аккаунте")?.to_string();
+    let mut prof = Value::Null;
+    let mut prof_status = 0u16;
+    for attempt in 0..3u64 {
+        let r = client().get("https://api.minecraftservices.com/minecraft/profile")
+            .bearer_auth(&mc_token).send().await.map_err(|e| net_err(&e))?;
+        prof_status = r.status().as_u16();
+        prof = r.json().await.unwrap_or(Value::Null);
+        if prof["name"].as_str().is_some() || !(prof_status == 429 || prof_status >= 500) { break; }
+        tokio::time::sleep(std::time::Duration::from_millis(1500 * (attempt + 1))).await;
+    }
+    let nick = match prof["name"].as_str() {
+        Some(n) => n.to_string(),
+        None if prof_status == 404 => return Err("Нет лицензии Minecraft Java Edition на этом аккаунте Microsoft. Если она есть (в том числе по Game Pass), войди тем же аккаунтом на minecraft.net и создай профиль игрока".into()),
+        None if prof_status == 429 => return Err("Minecraft временно ограничил запросы (HTTP 429) — подожди минуту и повтори".into()),
+        None if prof_status >= 500 => return Err(format!("Серверы Minecraft сейчас недоступны (HTTP {}) — повтори позже", prof_status)),
+        None => return Err(format!("Профиль Minecraft не получен (HTTP {})", prof_status)),
+    };
     Ok(serde_json::json!({
         "status":"ok", "nick": nick,
         "uuid": prof["id"].as_str().unwrap_or(""),
@@ -135,4 +166,16 @@ pub async fn ms_refresh(refresh_token: String) -> Result<Value, String> {
     let mut out = xbox_chain(&ms_token).await?;
     out["refresh_token"] = Value::String(new_refresh);
     Ok(out)
+}
+
+/// XSTS answers refusals with an XErr code; each has a different fix for the user.
+fn xsts_error_text(code: Option<u64>) -> String {
+    match code {
+        Some(2148916233) => "У этого аккаунта Microsoft нет профиля Xbox. Зайди на minecraft.net этим аккаунтом, создай профиль и повтори".into(),
+        Some(2148916235) => "Xbox недоступен в стране этого аккаунта".into(),
+        Some(2148916236) | Some(2148916237) => "Аккаунту нужна проверка возраста на xbox.com, после неё повтори вход".into(),
+        Some(2148916238) => "Детский аккаунт Microsoft: взрослый должен добавить его в семью на account.microsoft.com/family и разрешить онлайн-игру".into(),
+        Some(c) => format!("XSTS отказал (код {})", c),
+        None => "XSTS отказал (нет Xbox-профиля?)".into(),
+    }
 }

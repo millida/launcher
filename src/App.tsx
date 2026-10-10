@@ -49,6 +49,7 @@ import { BuildPicker } from './components/BuildPicker'
 import { PackKeyHost } from './components/PackKeyHost'
 import { DepPlanModal } from './components/DepPlanModal'
 import { PackCodeHost } from './components/PackCodeHost'
+import { PartyHost } from './components/party/PartyHost'
 import { ChatNotify } from './components/ChatNotify'
 import { CallPanel } from './components/CallPanel'
 import { RoomModals } from './components/RoomManage'
@@ -903,6 +904,7 @@ export function App() {
         <PackKeyHost />
         <DepPlanModal />
         <PackCodeHost />
+        <PartyHost />
         <CrashModal />
         <ServerDetail />
         <ChatNotify />

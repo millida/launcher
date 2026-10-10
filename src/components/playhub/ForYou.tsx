@@ -12,7 +12,7 @@ import type { LobbyMode } from '../../state/lobbyMode'
 import type { HostServer } from '../../screens/Hosting'
 import { HostPlanPicker } from '../HostPlanPicker'
 import { ONEBLOCK_ART } from './modeIcon'
-import { ONEBLOCK_PACK, isExclusive, isOwnServerPack, ownServerTagline } from './data'
+import { ONEBLOCK_PACK, isExclusive, isOwnServerPack, ownServerTagline, pinnedPacks } from './data'
 import { ANARCHY, OWN_SERVER_MODE } from '../../lib/ownServer'
 import { AnarchyArt, anarchyOnlineShown } from './AnarchyTile'
 import { headCells } from './placement'
@@ -309,26 +309,42 @@ export function ForYou({
     </button>
   )
 
-  // б) Эксклюзивы: Arcania Labs первой, за ней ещё две платные сборки.
+  // б) Эксклюзивы: Arcania Labs первой, сразу за ней закреплённые сборки, дальше ещё платные.
+  const pinned = arcania ? pinnedPacks(packs) : []
   const rest0 = exclusives.filter((p) => p !== arcania && p.id !== arcania?.id)
   const rot = rest0.length ? Math.floor(rng(hashStr(ab.seed + ':head'))() * rest0.length) : 0
-  const head = [arcania, ...rest0.slice(rot), ...rest0.slice(0, rot)].filter((p): p is HubPack => !!p).slice(0, EXCL)
+  const head = [arcania, ...pinned, ...rest0.slice(rot), ...rest0.slice(0, rot)].filter((p): p is HubPack => !!p).slice(0, EXCL + pinned.length)
   const labs: ReactNode[] = head.length
-    ? head.map((p, i) => (
-        <Card
-          key={'excl:' + p.id}
-          kind="premium"
-          id={p.slug || p.id}
-          pos={fyHead.length + i}
-          tag="Arcania Labs"
-          gold
-          excl
-          art={img(p.coverUrl)}
-          title={p.title}
-          meta={priceLabel(p) || 'Премиум'}
-          onClick={() => onPack(p)}
-        />
-      ))
+    ? head.map((p, i) =>
+        p.premium ? (
+          <Card
+            key={'excl:' + p.id}
+            kind="premium"
+            id={p.slug || p.id}
+            pos={fyHead.length + i}
+            tag="Arcania Labs"
+            gold
+            excl
+            art={img(p.coverUrl)}
+            title={p.title}
+            meta={priceLabel(p) || 'Премиум'}
+            onClick={() => onPack(p)}
+          />
+        ) : (
+          <Card
+            key={'pin:' + p.id}
+            kind="pack"
+            id={p.slug || p.id}
+            pos={fyHead.length + i}
+            tag="Сборка"
+            section="modpacks"
+            art={img(p.coverUrl)}
+            title={p.title}
+            meta={[p.loader, p.mcVersion].filter(Boolean).join(' · ') || p.tagline}
+            onClick={() => onPack(p)}
+          />
+        ),
+      )
     : premiumWait
       ? [<Skel key="labs" />]
       : []
@@ -534,7 +550,7 @@ export function ForYou({
   const shownKey = shown.map((x) => x.key).join(',')
   useEffect(() => {
     if (!on || !ownKey || !packs.length) return
-    trackImpression('foryou', [ownKey, ...head.map((p) => 'premium:' + (p.slug || p.id)), ...shown.map((x) => x.key)], 'playhub')
+    trackImpression('foryou', [ownKey, ...head.map((p) => (p.premium ? 'premium:' : 'modpacks/') + (p.slug || p.id)), ...shown.map((x) => x.key)], 'playhub')
     writeLog(logSeen(readLog(), shown.filter((x) => x.why !== 'server' && x.why !== 'preview').map((x) => x.key), day))
     track('impression', { section: 'recs_view', exp: RECS_EXPERIMENT, variant: ab.variant, cards: shown.length, surface: 'playhub' })
   }, [on, ownKey, shownKey, head.map((p) => p.id).join(',')])
