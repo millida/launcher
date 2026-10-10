@@ -6,10 +6,10 @@ import { fmtN, LOADER_NAME } from '../../lib/format'
 import type { Profile } from '../../ipc/commands'
 import { usePlayStats } from '../../state/playStats'
 import { setScreen } from '../../state/ui'
-import { AnarchyArt, anarchyOnlineShown } from './AnarchyTile'
+import { AnarchyArt } from './AnarchyTile'
 import { ONEBLOCK_ART } from './modeIcon'
 import { hoursText } from './Hours'
-import type { HubPack } from './data'
+import { ownServerTagline, type HubPack } from './data'
 import '../../styles/pixel/hub-hero.css'
 
 /*
@@ -33,6 +33,10 @@ export type HeroSlide = {
   isNew?: boolean
   onClick: () => void
 }
+
+/** Our own servers show their live count like OneBlock, whatever its size; the line is only a fallback. */
+const ownOnlineKnown = (online: number | null | undefined): online is number =>
+  typeof online === 'number' && Number.isFinite(online) && online >= 0
 
 export function heroSlides(o: {
   prison: HubPack | null
@@ -64,12 +68,12 @@ export function heroSlides(o: {
   })
   if (o.prison) {
     const p = o.prison
-    out.push({ key: 'prison', tag: 'Наш сервер', title: p.title, line: p.tagline || 'Прокопайся до ранга SSS+', online: p.online, art: <img src={p.coverUrl || ''} alt="" draggable={false} />, cta: 'Играть', onClick: () => o.onPack(p) })
+    out.push({ key: 'prison', tag: 'Наш сервер', title: p.title, line: ownServerTagline(p.slug) || 'Прокопайся до ранга SSS+', online: p.online, art: <img src={p.coverUrl || ''} alt="" draggable={false} />, cta: 'Играть', onClick: () => o.onPack(p) })
   }
   if (o.pixelmon) {
     const p = o.pixelmon
     // Pixelmon — новый сервер: «Новое» две недели с запуска (ресёрч 07.10.2026).
-    out.push({ key: 'pixelmon', tag: 'Наш сервер', title: 'Pixelmon', line: p.tagline || 'Покемоны в Minecraft', online: p.online, art: <img src={p.coverUrl || ''} alt="" draggable={false} />, cta: 'Играть', isNew: Date.now() < Date.parse('2026-10-21T00:00:00+03:00'), onClick: () => o.onPack(p) })
+    out.push({ key: 'pixelmon', tag: 'Наш сервер', title: 'Pixelmon', line: ownServerTagline(p.slug) || 'Покемоны в Minecraft', online: p.online, art: <img src={p.coverUrl || ''} alt="" draggable={false} />, cta: 'Играть', isNew: Date.now() < Date.parse('2026-10-21T00:00:00+03:00'), onClick: () => o.onPack(p) })
   }
   return out
 }
@@ -90,7 +94,7 @@ export function HubSpotlight({ slides }: { slides: HeroSlide[] }) {
           <span className="hs-copy">
             <b className="hs-t">{s.title}</b>
             <span className="hs-m">
-              {anarchyOnlineShown(s.online) ? (
+              {ownOnlineKnown(s.online) ? (
                 <>
                   <span className="ph-dot" aria-hidden="true" />
                   {fmtN(s.online) + ' играют'}
@@ -155,7 +159,7 @@ export function OwnModeTile({ slide, index }: { slide: HeroSlide; index: number 
       <span className="ph-mt-foot">
         <b>{slide.title}</b>
         <span className="ph-mt-on">
-          {anarchyOnlineShown(slide.online) ? (
+          {ownOnlineKnown(slide.online) ? (
             <>
               <span className="ph-dot" aria-hidden="true" />
               {fmtN(slide.online) + ' играют'}

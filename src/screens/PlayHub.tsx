@@ -52,7 +52,7 @@ import { track } from '../lib/telemetry'
 import { ANARCHY, ONEBLOCK_PACK, anarchyMode, modeAction, ownServerMode, targetsOwnServer } from '../lib/ownServer'
 import { loadAnarchyOnline } from '../lib/anarchy'
 import { PrisonTile } from '../components/playhub/PrisonTile'
-import { PRISON_SLUG, featuredSpot } from '../components/playhub/featured'
+import { PIXELMON_SLUG, PRISON_SLUG, featuredSpot } from '../components/playhub/featured'
 import { shelfOrder, withPrison } from '../components/playhub/placement'
 import '../styles/pixel/playhub.css'
 import { HostTile, OwnModeTile, heroSlides } from '../components/playhub/HubHero'
@@ -569,7 +569,7 @@ export function PlayHub({ on }: { on?: boolean }) {
   }, [packs, mrPacks])
 
   const prisonPack = packs === null ? undefined : catalogPacks.find((p) => p.slug === PRISON_SLUG) || null
-  const pixelmonPack = catalogPacks.find((p) => p.slug === 'pixelmon') || premiumPacks.find((p) => p.slug === 'pixelmon') || null
+  const pixelmonPack = catalogPacks.find((p) => p.slug === PIXELMON_SLUG) || null
   const featured = featuredSpot(prisonPack)
 
   const obPack = catalogPacks.find((p) => p.slug === ONEBLOCK_PACK) || premiumPacks.find((p) => p.slug === ONEBLOCK_PACK) || null
