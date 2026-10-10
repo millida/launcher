@@ -20,6 +20,7 @@ interface MsLoginState {
 }
 
 const MS_VERIFY_URL = 'https://www.microsoft.com/link'
+const MAX_POLL_NET_FAILS = 6
 
 export const useMsLogin = create<MsLoginState>((set) => ({
   busy: false,
@@ -75,7 +76,13 @@ export async function startMsLogin() {
   s.set({ busy: true, hint: 'Запрашиваем код у Microsoft…' })
   let init
   try {
-    init = await msDeviceStart()
+    try {
+      init = await msDeviceStart()
+    } catch (e) {
+      if (!String(e).startsWith('нет связи')) throw e
+      await new Promise((r) => setTimeout(r, 1500))
+      init = await msDeviceStart()
+    }
   } catch (e) {
     trackFailure('login', e, { provider: 'microsoft', step: 'start' })
     reset(apiErrorText(e, 'Microsoft не ответила — повтори попытку'))
@@ -96,6 +103,7 @@ export async function startMsLogin() {
 
   const intervalMs = Math.max(2, init.interval || 5) * 1000
   const deadline = Date.now() + 15 * 60 * 1000
+  let netFails = 0
 
   const poll = async () => {
     if (Date.now() > deadline) {
@@ -105,7 +113,13 @@ export async function startMsLogin() {
     let r
     try {
       r = await msDevicePoll(init.device_code)
+      netFails = 0
     } catch (e) {
+      // Обрыв соединения посреди ожидания не должен убивать вход: код устройства жив 15 минут.
+      if (String(e).startsWith('нет связи') && ++netFails <= MAX_POLL_NET_FAILS) {
+        pollTimer = setTimeout(() => void poll(), intervalMs)
+        return
+      }
       trackFailure('login', e, { provider: 'microsoft', step: 'poll' })
       reset(String(e))
       showToast('Microsoft: ' + e, 'error')

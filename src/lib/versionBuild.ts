@@ -128,8 +128,7 @@ const loaderOf = (p: Profile) => p.loader || (p.fabric ? 'fabric' : 'vanilla')
  * версию: сначала ищется уже заведённая (в том числе «Minecraft X (2)» —
  * новые копии не плодим), ванильная переводится на загрузчик.
  */
-async function fabricBuild(version: string): Promise<string | null> {
-  const name = versionBuildName(version)
+async function fabricBuild(version: string, name: string): Promise<string | null> {
   const loader = versionLoader(version)
   let profiles = useProfiles.getState().profiles
   if (!profiles.length) {
@@ -176,11 +175,11 @@ async function ensureCosmetics(profile: string): Promise<void> {
  * сборки или null (браузер без ядра, ошибка создания). Моды FPS и косметики —
  * по возможности: их ошибка не мешает играть.
  */
-export async function ensureVersionBuild(version: string, opts: { fps: boolean }): Promise<string | null> {
+export async function ensureVersionBuild(version: string, opts: { fps: boolean; name?: string }): Promise<string | null> {
   if (!hasTauri()) return null
   let name: string | null
   try {
-    name = await fabricBuild(version)
+    name = await fabricBuild(version, opts.name ?? versionBuildName(version))
   } catch (e) {
     console.error('[version-build] create', version, e)
     return null
@@ -190,6 +189,14 @@ export async function ensureVersionBuild(version: string, opts: { fps: boolean }
   await applyFps(name, fps).catch((e) => console.error('[version-build] fps', e))
   await ensureCosmetics(name).catch((e) => console.error('[version-build] cosmetics', e))
   return name
+}
+
+export const pvpBuildName = (version: string) => 'Millida PvP ' + version
+
+export const PVP_VERSIONS = ['1.8.9', '1.12.2', '1.20.1', '1.21.11'] as const
+
+export function ensurePvpBuild(version: string): Promise<string | null> {
+  return ensureVersionBuild(version, { fps: true, name: pvpBuildName(version) })
 }
 
 /**

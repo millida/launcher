@@ -441,7 +441,7 @@ const ERROR_TEXT: Record<MilliErrorKind, string> = {
   limit: 'Лимит на сегодня',
   busy: 'Милли ещё думает над прошлым',
   blocked: 'Милли тебе недоступна',
-  off: 'Милли отдыхает',
+  off: 'Милли отдыхает — скоро вернётся',
   plus: 'Это в PLUS',
   offline: 'Нет связи с Millida',
   failed: 'Милли не ответила',
@@ -451,7 +451,7 @@ const err = (kind: MilliErrorKind, scope?: 'day' | 'month'): MilliError => ({
   kind,
   ...(scope ? { scope } : {}),
   text: kind === 'limit' && scope === 'month' ? 'Лимит на месяц' : ERROR_TEXT[kind],
-  retry: kind === 'failed' || kind === 'offline' || kind === 'busy',
+  retry: kind === 'failed' || kind === 'offline' || kind === 'busy' || kind === 'off',
 })
 
 const OFFLINE_RX = /нет связи|error sending request|failed to fetch|dns error|connection refused|connection reset|timed out|networkerror/i

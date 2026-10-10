@@ -1,4 +1,5 @@
 import { LAUNCHER_API } from './api'
+import { idbGet, idbSet } from './idbCache'
 import type { SkinAnimId } from '../vendor/mine3d'
 import { loadCosmeticModel } from './gameProfile'
 import type { CosmeticModelFile } from './gameProfile'
@@ -75,12 +76,34 @@ export const TURN_PER_PIXEL = 0.012
  */
 export const MODEL_CACHE = new Map<string, Promise<CosmeticModelFile | null>>()
 
+/**
+ * Модель с прошлого запуска берётся из IndexedDB без сети; старше шести часов
+ * - обновляется в фоне. Новая вещь качается как раньше.
+ */
+const MODEL_REFRESH_MS = 6 * 3600_000
+
+async function storedModel(modelId: string): Promise<CosmeticModelFile> {
+  const key = 'cosmetic-model:' + modelId
+  const row = await idbGet<CosmeticModelFile>(key)
+  if (row && row.value && row.value.geometry) {
+    if (Date.now() - row.at > MODEL_REFRESH_MS) {
+      void loadCosmeticModel(modelId)
+        .then((m) => m && m.geometry && idbSet(key, m))
+        .catch(() => {})
+    }
+    return row.value
+  }
+  const fresh = await loadCosmeticModel(modelId)
+  if (fresh && fresh.geometry) void idbSet(key, fresh)
+  return fresh
+}
+
 export function cosmeticModel(modelId: string): Promise<CosmeticModelFile | null> {
   const ready = MODEL_CACHE.get(modelId)
   if (ready) return ready
   // Неудачу не держим: сорванный запрос иначе запоминал бы вещь как пустую до
   // перезапуска, и примерка у неё не работала бы весь вечер.
-  const asked = (import.meta.env.DEV && devModels() ? devModel(modelId).then((m) => m ?? loadCosmeticModel(modelId)) : loadCosmeticModel(modelId)).catch(() => {
+  const asked = (import.meta.env.DEV && devModels() ? devModel(modelId).then((m) => m ?? storedModel(modelId)) : storedModel(modelId)).catch(() => {
     MODEL_CACHE.delete(modelId)
     return null
   })

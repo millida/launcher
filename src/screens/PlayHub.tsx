@@ -11,7 +11,7 @@ import { sectionBySlug } from '../components/catalog/site'
 import { openItem } from '../components/catalog/itemStore'
 import { HubFind } from '../components/playhub/HubFind'
 import { fmtN, plural } from '../lib/format'
-import { setScreen } from '../state/ui'
+import { setScreen, showToast } from '../state/ui'
 import { useProfiles } from '../state/profiles'
 import { premiumMode, sameMode, serverMode, useLobby } from '../state/lobbyMode'
 import type { LobbyMode } from '../state/lobbyMode'
@@ -55,6 +55,9 @@ import { HostTile, OwnModeTile, heroSlides } from '../components/playhub/HubHero
 import { useSite } from '../components/catalog/siteStore'
 import { useAnarchy } from '../lib/anarchy'
 import { openBuildSettings } from '../state/instance'
+import { PvpPage } from '../components/playhub/PvpPage'
+import { ensurePvpBuild, pvpBuildName } from '../lib/versionBuild'
+import { hasTauri } from '../ipc/tauri'
 
 /**
  * «Во что играем», версия 6 (владелец 30.09.2026, 15:06 — те же блоки и
@@ -343,6 +346,8 @@ export function PlayHub({ on }: { on?: boolean }) {
   /** Сборка на своей странице. */
   const [pageId, setPageId] = useState<string | null>(null)
   const [packServer, setPackServer] = useState<SnapshotServer | null>(null)
+  const [pvpOpen, setPvpOpen] = useState(false)
+  const [pvpBusy, setPvpBusy] = useState(false)
   /** Страница «Все сборки» (полный каталог) поверх хаба. */
   const all = useHubTab((s) => s.all)
   const setAll = useHubTab((s) => s.setAll)
@@ -389,16 +394,17 @@ export function PlayHub({ on }: { on?: boolean }) {
   useEffect(() => {
     // «Каталог Millida» — вкладка переключателя, а не подстраница: наверху
     // остаётся «Лобби» (владелец 24.09.2026, 16:52).
-    if (on === false || !(openCat || pageId)) {
+    if (on === false || !(openCat || pageId || pvpOpen)) {
       setBack(null)
       return
     }
     setBack(() => {
       if (openCat) setOpenCat(null)
       else if (pageId) setPageId(null)
+      else if (pvpOpen) setPvpOpen(false)
     })
     return () => setBack(null)
-  }, [on, openCat, pageId])
+  }, [on, openCat, pageId, pvpOpen])
 
   /** «Играть» на этом экране — сразу запуск, как и ждёт человек от этой кнопки. */
   const launch = (m: LobbyMode) => {
@@ -500,6 +506,21 @@ export function PlayHub({ on }: { on?: boolean }) {
     useHubTab.setState({ section: null })
   }, [section, all, openCat, pageId])
 
+  const playPvp = async (version: string) => {
+    if (!hasTauri()) {
+      showToast('Установка сборок — в приложении', 'error')
+      return
+    }
+    setPvpBusy(true)
+    try {
+      const name = await ensurePvpBuild(version)
+      if (name) launch({ kind: 'build', name })
+      else showToast('PvP-сборка не собралась. Нажми «Играть» ещё раз.', 'error')
+    } finally {
+      setPvpBusy(false)
+    }
+  }
+
   // Режим из лобби, а режимы ещё грузятся — заглушка, а не мелькание «Каталога».
   if (openCat && modes === null) return wrap(<HeroSkel />)
   if (openMode)
@@ -523,6 +544,8 @@ export function PlayHub({ on }: { on?: boolean }) {
         onServer={(s) => launch(serverMode(s))}
       />,
     )
+
+  if (pvpOpen) return wrap(<PvpPage busy={pvpBusy} onPlay={(v) => void playPvp(v)} />)
 
   const openPack = (p: HubPack) => {
     setPageId(p.id)
@@ -603,7 +626,7 @@ export function PlayHub({ on }: { on?: boolean }) {
   const replaced = new Set([ANARCHY.mode, own.mode, 'ANARCHY', 'ONEBLOCK', ...(prisonPack ? ['PRISON'] : [])])
   const gridModes = shelfModes.filter((m) => !('pack' in m) && !replaced.has(m.def.cat))
   // Два ряда по шесть: 11 жанров и «Остальные».
-  const MODES_FOLD = 11 - ownSlides.length
+  const MODES_FOLD = 10 - ownSlides.length
   const shownModes = allModes ? gridModes : gridModes.slice(0, MODES_FOLD)
 
   const modesPane = (
@@ -615,6 +638,19 @@ export function PlayHub({ on }: { on?: boolean }) {
           {ownSlides.map((sl, i) => (
             <OwnModeTile key={sl.key} slide={sl} index={i} />
           ))}
+          <ModeTile
+            cat="PVP"
+            kind="pvp_client"
+            title="PvP-клиент"
+            online={0}
+            index={ownSlides.length}
+            on={!!current && current.kind === 'build' && current.name.startsWith(pvpBuildName(''))}
+            onClick={() => {
+              track('pvp_client_open', { source: 'hub' })
+              setPvpOpen(true)
+              top0()
+            }}
+          />
           {shownModes.map((m, i) =>
             'pack' in m ? <PrisonTile key={PRISON_SLUG} cell index={i} pack={m.pack} onClick={() => openPack(m.pack)} /> : modeTile(m, i),
           )}
