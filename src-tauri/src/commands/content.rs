@@ -288,13 +288,3 @@ pub fn set_millida_mod_enabled(on: bool) -> Result<(), String> {
     engine::set_millida_mod_enabled(on)
 }
 
-#[tauri::command(async)]
-pub fn pvp_hud_default() -> bool {
-    engine::pvp_hud_default()
-}
-
-#[tauri::command(async)]
-pub fn set_pvp_hud_default(on: bool) -> Result<(), String> {
-    engine::set_pvp_hud_default(on)
-}
-

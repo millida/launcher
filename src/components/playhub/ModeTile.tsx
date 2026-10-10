@@ -23,7 +23,6 @@ const short = (n: number) =>
  */
 export function ModeTile({
   cat,
-  kind,
   title,
   online,
   index,
@@ -31,7 +30,6 @@ export function ModeTile({
   onClick,
 }: {
   cat: string
-  kind?: string
   title: string
   online: number
   index: number
@@ -95,7 +93,7 @@ export function ModeTile({
       className={'ph-card ph-mt' + (art.k ? '' : ' is-set') + (art.rig ? ' is-rig' : '') + (on ? ' on' : '')}
       data-i={index % 4}
       data-sound="nav"
-      data-kind={kind || 'mode'}
+      data-kind="mode"
       data-id={cat}
       data-pos={index}
       data-src="mode"

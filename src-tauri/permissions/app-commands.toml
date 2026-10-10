@@ -32,8 +32,6 @@ permissions = [
   "allow-millida-mod-enabled",
   "allow-set-millida-mod-enabled",
   "allow-set-game-telemetry",
-  "allow-pvp-hud-default",
-  "allow-set-pvp-hud-default",
   "allow-list-versions",
   "allow-list-versions-typed",
   "allow-list-loader-versions",
@@ -272,14 +270,7 @@ permissions = [
   "allow-cloud-status",
   "allow-cloud-push",
   "allow-cloud-pull",
-  "allow-cloud-forget",
-  "allow-party-voice-join",
-  "allow-party-voice-leave",
-  "allow-party-voice-transmit",
-  "allow-party-voice-deafen",
-  "allow-party-voice-members",
-  "allow-party-voice-bind",
-  "allow-party-voice-audio"
+  "allow-cloud-forget"
 ]
 
 [[set]]

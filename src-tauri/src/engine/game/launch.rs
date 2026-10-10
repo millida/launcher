@@ -1615,7 +1615,8 @@ pub async fn install_and_launch_in(
         if let Some(w) = w { args.push("--quickPlaySingleplayer".into()); args.push(w); }
         if let Some(sv) = sv {
             quick_server = Some(sv.clone());
-            args.extend(server_join_args(prof.as_ref().map(|p| p.version.as_str()).unwrap_or(&version_id), &sv));
+            args.push("--quickPlayMultiplayer".into());
+            args.push(sv);
         }
     }
     // Токен для мода — узкий, из /launcher/mod-session; нет его — мод без входа.
@@ -1639,12 +1640,6 @@ pub async fn install_and_launch_in(
     // ошибке: в нём ключ подписи сборки.
     let _argfile_guard = ArgfileGuard(argfile.clone());
     let gpu = GpuPref::parse(settings["gpu"].as_str().unwrap_or("auto"));
-    // Only our mod has the island that reads it, and the key changes every launch.
-    let media = if own_mod && settings["gameMedia"].as_bool() != Some(false) {
-        super::now_playing::MediaLink::start()
-    } else {
-        None
-    };
     let build = |exe: &Path| -> Command {
         let mut cmd = Command::new(exe);
         // CREATE_NO_WINDOW on Windows, otherwise every launch pops a console window.
@@ -1667,17 +1662,9 @@ pub async fn install_and_launch_in(
         // токен мода, не токен аккаунта.
         if let Some(token) = &mod_token {
             cmd.env("MILLIDA_TOKEN", token);
-            // The mod joins this party's voice room instead of the server's
-            // (VoiceScreen «Канал пати»), so the lobby talk carries on in game.
-            if let Some(party) = crate::engine::party_voice::bound_party() {
-                cmd.env("MILLIDA_PARTY", party);
-            }
         }
         if !game_telemetry_enabled() {
             cmd.env("MILLIDA_TELEMETRY", "0");
-        }
-        if let Some(link) = &media {
-            link.apply(&mut cmd);
         }
         cmd
     };
@@ -1774,7 +1761,6 @@ pub async fn install_and_launch_in(
         tauri::async_runtime::spawn(watch_pack_access(app.clone(), profile.clone(), spec.slug.clone(), pid));
     }
     std::thread::spawn(move || {
-        let _media = media;
         let (status, evidence, elapsed) = watch_session(&mut child, start, pid, &pname, &server_now, &app2, |status| {
             if status.is_ok() {
                 wait_log_readers(&readers, LOG_DRAIN_WAIT);
@@ -1867,85 +1853,9 @@ pub async fn install_and_launch_in(
     Ok("started".into())
 }
 
-/// Quick Play appeared in 23w14a (1.20); older clients ignore the flag and open
-/// the title screen, so they get the pre-1.20 `--server`/`--port` pair instead.
-fn quick_play_supported(mc_version: &str) -> bool {
-    let v = mc_version.trim();
-    let b = v.as_bytes();
-    if b.len() >= 6 && b[..2].iter().all(u8::is_ascii_digit) && b[2] == b'w' && b[3..5].iter().all(u8::is_ascii_digit) {
-        let year: u32 = v[..2].parse().unwrap_or(0);
-        let week: u32 = v[3..5].parse().unwrap_or(0);
-        return (year, week) >= (23, 14);
-    }
-    if !v.starts_with(|c: char| c.is_ascii_digit()) {
-        return false;
-    }
-    let mut nums = v.split(['.', '-', ' ', '_']).map(|p| p.parse::<u32>().ok());
-    match (nums.next().flatten(), nums.next().flatten()) {
-        (Some(1), Some(minor)) => minor >= 20,
-        (Some(major), _) => major >= 2,
-        _ => false,
-    }
-}
-
-/// Splits `host[:port]` and `[ipv6]:port`; a bare IPv6 address has no port.
-fn split_server_addr(addr: &str) -> (String, u16) {
-    const DEFAULT_PORT: u16 = 25565;
-    let a = addr.trim();
-    if let Some(rest) = a.strip_prefix('[') {
-        if let Some((host, tail)) = rest.split_once(']') {
-            let port = tail.strip_prefix(':').and_then(|p| p.parse().ok()).filter(|p| *p > 0).unwrap_or(DEFAULT_PORT);
-            return (host.to_string(), port);
-        }
-    }
-    match a.rsplit_once(':') {
-        Some((host, port)) if !host.contains(':') => {
-            (host.to_string(), port.parse().ok().filter(|p| *p > 0).unwrap_or(DEFAULT_PORT))
-        }
-        _ => (a.to_string(), DEFAULT_PORT),
-    }
-}
-
-fn server_join_args(mc_version: &str, addr: &str) -> Vec<String> {
-    if quick_play_supported(mc_version) {
-        return vec!["--quickPlayMultiplayer".into(), addr.to_string()];
-    }
-    let (host, port) = split_server_addr(addr);
-    vec!["--server".into(), host, "--port".into(), port.to_string()]
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// (game version, address) -> join arguments. Older clients ignore Quick
-    /// Play and drop the player on the title screen instead of the server.
-    #[test]
-    fn server_join_args_match_the_client() {
-        let qp = |a: &str| vec!["--quickPlayMultiplayer".to_string(), a.to_string()];
-        let legacy = |h: &str, p: &str| vec!["--server".to_string(), h.to_string(), "--port".to_string(), p.to_string()];
-        let cases: Vec<(&str, &str, Vec<String>, &str)> = vec![
-            ("1.20", "mc.example.net", qp("mc.example.net"), "1.20 is the first release with Quick Play"),
-            ("1.21.4", "mc.example.net:25570", qp("mc.example.net:25570"), "Quick Play takes the address as is"),
-            ("1.20-pre1", "a.net", qp("a.net"), "1.20 pre-releases already have it"),
-            ("26.1", "a.net", qp("a.net"), "year-based numbering is newer than 1.x"),
-            ("26.1-snapshot-3", "a.net", qp("a.net"), "year-based snapshots"),
-            ("23w14a", "a.net", qp("a.net"), "the snapshot that introduced Quick Play"),
-            ("24w14potato", "a.net", qp("a.net"), "later weekly snapshots"),
-            ("23w13a", "a.net", legacy("a.net", "25565"), "one week before Quick Play"),
-            ("1.19.4", "a.net", legacy("a.net", "25565"), "last release without Quick Play"),
-            ("1.12.2", "a.net:25570", legacy("a.net", "25570"), "port goes to its own flag"),
-            ("1.7.10", "a.net:notaport", legacy("a.net", "25565"), "garbage port falls back to the default"),
-            ("1.16.5", "[2001:db8::1]:25570", legacy("2001:db8::1", "25570"), "bracketed IPv6 with port"),
-            ("1.16.5", "[2001:db8::1]", legacy("2001:db8::1", "25565"), "bracketed IPv6 without port"),
-            ("1.16.5", "2001:db8::1", legacy("2001:db8::1", "25565"), "bare IPv6 has no port to split off"),
-            ("b1.7.3", "a.net", legacy("a.net", "25565"), "beta versions predate Quick Play"),
-            ("rd-132211", "a.net", legacy("a.net", "25565"), "pre-classic versions predate Quick Play"),
-        ];
-        for (version, addr, want, why) in cases {
-            assert_eq!(server_join_args(version, addr), want, "{version} {addr}: {why}");
-        }
-    }
 
     fn legacy_args_of(mc_args: &str, extra: Value) -> Vec<String> {
         let mut v = serde_json::json!({
