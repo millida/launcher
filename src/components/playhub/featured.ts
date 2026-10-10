@@ -1,6 +1,7 @@
 import { RECS_UID_KEY, dayIndex, hashStr } from '../../lib/recsMix'
 
 export const PRISON_SLUG = 'prisonrpg'
+export const PIXELMON_SLUG = 'pixelmon-metalabs'
 
 export type Featured = 'anarchy' | 'prisonrpg'
 
