@@ -15,8 +15,6 @@
 .gm-hero > img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 40%; display: block; }
 /* У Education нет баннера без логотипа: логотип внизу арта — берём верх, героев. */
 .gm-education .gm-hero > img { object-position: 50% 12%; }
-/* У Dungeons II логотип в верхней трети арта — показываем героев под ним. */
-.gm-dungeons-2 .gm-hero > img { object-position: 50% 78%; }
 
 /* Постер «ломает рамку»: наполовину на арте, наполовину на плите. */
 .gm-poster {

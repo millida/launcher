@@ -6,7 +6,7 @@ import { applyCrashFix, listContent, listProfiles, openProfileFolder, openUrl } 
 import type { CrashInfo } from '../ipc/events'
 import { copyText } from '../lib/clipboard'
 import { showToast } from '../state/ui'
-import { NOTHING_TO_REPAIR, modFixOf, repairChangedFiles, runRepair } from '../lib/repair'
+import { NOTHING_TO_REPAIR, markFixApplied, modFixOf, repairChangedFiles, runRepair } from '../lib/repair'
 import { useCrash } from '../state/crash'
 import { backdropClose } from '../lib/dismiss'
 import { buildCrashReport, shareCrashLog } from '../lib/crashSupport'
@@ -155,6 +155,7 @@ export function CrashModal() {
               if (fix) {
                 applyCrashFix(info.profile, fix.kind, fix.arg ?? '')
                   .then((msg) => {
+                    markFixApplied(info.profile, 'crash:' + fix.kind)
                     showToast(msg, 'ok')
                     close()
                   })

@@ -1091,6 +1091,7 @@ pub(crate) fn resumable_part(dest: &Path, sha256: &str) -> PathBuf {
 /// and an install that failed and threw its bytes away cost it all again on
 /// every retry. One stream into a part file that outlives the attempt and the
 /// install keeps it at one copy per player.
+#[cfg(test)]
 pub(crate) async fn download_resumable(
     url: &str,
     dest: &Path,

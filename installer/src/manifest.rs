@@ -7,17 +7,35 @@ pub const PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6ID
 
 /// millida.net is a multi-tenant site where users upload files, so only the
 /// launcher folder counts as ours; the storage domain serves nothing else.
-const ALLOWED: &[(&str, &str)] = &[("launcher-storage.millida.net", "/"), ("millida.net", "/launcher/")];
+///
+/// GitHub counts only for the public release repository, and its asset hosts
+/// only as the places github.com redirects a release download to. Whatever the
+/// host, the file still has to pass the signature check below.
+const ALLOWED: &[(&str, &str)] = &[
+    ("launcher-storage.millida.net", "/"),
+    ("millida.net", "/launcher/"),
+    ("github.com", "/millida/launcher/releases/download/"),
+    ("release-assets.githubusercontent.com", "/github-production-release-asset"),
+    ("objects.githubusercontent.com", "/github-production-release-asset"),
+];
 
 /// install.json is the first-install manifest and can be pinned to an older
 /// build by hand; latest.json is the auto-update one and only serves as a
 /// fallback, so a missing install.json never blocks new installs. Both live
 /// under v2/: the manifests at the root are signed with the leaked key and a
 /// fresh install must never trust them.
+/// v2/gh/latest.json is the same release with files on GitHub and the CDN as
+/// a mirror; it goes first so a fresh install comes straight from the public
+/// release.
+///
+/// The query is there for the edge in front of the CDN: a bare manifest URL it
+/// serves from its own copy, which on 11.10.2026 was a day stale and kept half
+/// of the players on an old version. A URL with a query goes to the origin.
 pub const MANIFEST_URLS: &[&str] = &[
-    "https://launcher-storage.millida.net/v2/install.json",
-    "https://launcher-storage.millida.net/v2/latest.json",
-    "https://millida.net/launcher/v2/install.json",
+    "https://launcher-storage.millida.net/v2/gh/latest.json?from=setup",
+    "https://launcher-storage.millida.net/v2/install.json?from=setup",
+    "https://launcher-storage.millida.net/v2/latest.json?from=setup",
+    "https://millida.net/launcher/v2/install.json?from=setup",
 ];
 
 /// The keys of latest.json, which the release pipeline fills per target. A stub
@@ -43,6 +61,8 @@ pub struct Build {
     pub version: String,
     pub url: String,
     pub signature: String,
+    /// The same bytes elsewhere (our CDN when `url` is on GitHub).
+    pub mirror: Option<String>,
 }
 
 pub fn check_url(raw: &str) -> Result<Url, String> {
@@ -83,7 +103,8 @@ pub fn parse(doc: &str) -> Result<Build, String> {
         return Err(format!("в списке сборок нет сборки под {}", PLATFORM_KEY));
     }
     check_url(&url)?;
-    Ok(Build { version, url, signature })
+    let mirror = entry["mirror"].as_str().map(str::trim).filter(|m| check_url(m).is_ok()).map(str::to_string);
+    Ok(Build { version, url, signature, mirror })
 }
 
 #[cfg(test)]
@@ -153,6 +174,13 @@ mod tests {
             ("https://user:pass@launcher-storage.millida.net/a.exe", false),
             ("https://127.0.0.1/a.exe", false),
             ("https://[::1]/a.exe", false),
+            ("https://github.com/millida/launcher/releases/download/v2.0.203/a-setup.exe", true),
+            ("https://github.com/someone/launcher/releases/download/v1/a-setup.exe", false),
+            ("https://github.com/millida/launcher/raw/main/a.exe", false),
+            ("https://release-assets.githubusercontent.com/github-production-release-asset/1/x?sig=1", true),
+            ("https://objects.githubusercontent.com/github-production-release-asset-2e65be/1/x", true),
+            ("https://objects.githubusercontent.com/other/x.exe", false),
+            ("https://raw.githubusercontent.com/millida/launcher/main/a.exe", false),
             ("file:///C:/a.exe", false),
             ("не адрес", false),
         ];
@@ -173,6 +201,18 @@ mod tests {
             .expect("манифест должен разбираться");
         assert_eq!(b.version, "1.0.9", "версия берётся из манифеста");
         assert_eq!(b.signature, "c2ln", "подпись берётся из манифеста");
+    }
+
+    #[test]
+    fn parse_keeps_cdn_mirror_of_github_build() {
+        let doc = format!(
+            r#"{{"version":"2.0.203","platforms":{{"{}":{{"url":"https://github.com/millida/launcher/releases/download/v2.0.203/a-setup.exe","mirror":"https://launcher-storage.millida.net/2.0.203/x/a-setup.exe","signature":"c2ln"}}}}}}"#,
+            PLATFORM_KEY
+        );
+        let b = parse(&doc).expect("манифест с GitHub должен разбираться");
+        assert_eq!(b.mirror.as_deref(), Some("https://launcher-storage.millida.net/2.0.203/x/a-setup.exe"));
+        let evil = doc.replace("https://launcher-storage.millida.net/2.0.203/x/a-setup.exe", "https://evil.example/a.exe");
+        assert_eq!(parse(&evil).expect("чужое зеркало не ломает основной адрес").mirror, None, "зеркало с чужого хоста отбрасывается");
     }
 
     #[test]

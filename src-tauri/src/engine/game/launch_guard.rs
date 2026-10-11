@@ -9,8 +9,11 @@ use crate::engine::zip_readable;
 pub(crate) const LAUNCH_CANCELLED: &str = "Запуск отменён";
 
 /// How long a new launch waits for a cancelled launch of the same build to
-/// unwind before giving up on it.
-const UNWIND_WAIT: Duration = Duration::from_secs(20);
+/// unwind before taking its place. A launch stuck in a download can sit there
+/// far longer, and refusing after 20 s was the most common failed start on PC
+/// (telemetry 01–10.10.2026: 36% of failed launches). The old launch is already
+/// cancelled, so it stops at its next cancel check and never reaches the JVM.
+const UNWIND_WAIT: Duration = Duration::from_secs(6);
 const UNWIND_POLL: Duration = Duration::from_millis(150);
 
 tokio::task_local! {
@@ -121,7 +124,15 @@ pub(crate) async fn claim_profile_start(profile: &str, on_wait: impl Fn()) -> Re
             }
         }
         if tokio::time::Instant::now() >= deadline {
-            return Err("Прошлый запуск этой сборки ещё останавливается — подожди несколько секунд и запусти снова".into());
+            let mut starting = locked(&STARTING);
+            let view: Vec<(String, bool)> =
+                starting.iter().map(|(p, f)| (p.clone(), f.cancelled())).collect();
+            if slot_of(&view, profile) == Slot::Busy {
+                return Err("Эта сборка уже запускается — дождись окна игры".into());
+            }
+            eprintln!("[launch] отменённый запуск «{}» не остановился за {:?} — запускаем поверх него", profile, UNWIND_WAIT);
+            starting.push((profile.to_string(), flag.clone()));
+            return Ok(StartSlot { profile: profile.to_string(), flag });
         }
         if !told {
             told = true;
@@ -209,12 +220,13 @@ mod tests {
     #[test]
     fn one_launch_per_build() {
         let a = "Minecraft1211";
-        let cases: [SlotCase; 5] = [
+        let cases: [SlotCase; 6] = [
             (&[], Slot::Free, "nothing starting"),
             (&[("Other".into(), false)], Slot::Free, "another build does not block this one"),
             (&[(a.into(), false)], Slot::Busy, "a live launch of the same build owns .fabric/remappedJars"),
             (&[(a.into(), true)], Slot::Unwinding, "a cancelled launch is waited out, not refused"),
             (&[(a.into(), true), (a.into(), false)], Slot::Busy, "any live launch of the build wins over waiting"),
+            (&[(a.into(), true), (a.into(), true)], Slot::Unwinding, "several stuck cancelled launches still only delay the next one"),
         ];
         for (starting, want, why) in cases {
             assert_eq!(slot_of(starting, a), want, "{}", why);

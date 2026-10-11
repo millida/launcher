@@ -218,30 +218,6 @@ export const cancelInstall = (key: string) => invoke<boolean>('cancel_install', 
 
 export const pauseInstall = (key: string, paused: boolean) => invoke<boolean>('pause_install', { key, paused })
 
-export interface DungeonsMod {
-  name: string
-  enabled: boolean
-  size: number
-}
-
-export interface DungeonsStatus {
-  supported: boolean
-  installed: boolean
-  version: string
-  dir: string
-  mods: DungeonsMod[]
-}
-
-export type MirrorGameSlug = 'dungeons' | 'dungeons-2'
-
-export const dungeonsStatus = (slug: MirrorGameSlug) => invoke<DungeonsStatus>('dungeons_status', { slug })
-export const dungeonsInstall = (slug: MirrorGameSlug) => invoke<string>('dungeons_install', { slug })
-export const dungeonsLaunch = (slug: MirrorGameSlug) => invoke<void>('dungeons_launch', { slug })
-export const dungeonsPickMods = () => invoke<number>('dungeons_pick_mods', {})
-export const dungeonsToggleMod = (name: string, enabled: boolean) => invoke<void>('dungeons_toggle_mod', { name, enabled })
-export const dungeonsRemoveMod = (name: string) => invoke<void>('dungeons_remove_mod', { name })
-export const dungeonsOpenFolder = (slug: MirrorGameSlug) => invoke<void>('dungeons_open_folder', { slug })
-
 export interface StoreGameState {
   slug: string
   steam: boolean
@@ -1098,6 +1074,8 @@ export interface FallbackUpdate {
   file: string
   signature: string
   source: string
+  /** CDN-зеркало тех же байтов, когда url ведёт в релиз на GitHub. */
+  mirror?: string
 }
 
 export interface FallbackInstall {

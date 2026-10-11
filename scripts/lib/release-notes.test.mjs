@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { changesFromSubjects, releaseNotes, sourceCommitOf } from './release-notes.mjs'
+import { changesFromSubjects, publicCommitBody, releaseNotes, sourceCommitOf } from './release-notes.mjs'
 
 describe('changesFromSubjects', () => {
   const cases = [
@@ -24,6 +24,8 @@ describe('changesFromSubjects', () => {
 describe('sourceCommitOf', () => {
   const cases = [
     ['Release 2.0.176\n\nСобрано из 95e8ce0.', '95e8ce0', 'sync commit body names its source'],
+    ['Release 2.0.203\n\n- Починка сборок\n\nSource-Commit: 1a2b3c4', '1a2b3c4', 'new body keeps the source as a trailer'],
+    [publicCommitBody({ changes: [], source: 'abcdef1' }), 'abcdef1', 'body without changes still round-trips'],
     ['Initial commit', null, 'foreign commits have no source'],
     [undefined, null, 'missing message is tolerated'],
   ]

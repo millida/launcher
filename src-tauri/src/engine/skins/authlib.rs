@@ -11,6 +11,13 @@ const AUTHLIB_PINNED_URL: &str =
     "https://github.com/yushijinhun/authlib-injector/releases/download/v1.2.8/authlib-injector-1.2.8.jar";
 const AUTHLIB_PINNED_SHA256: &str = "9c7f4343e6c82034958ffb48c14a2cb0c85928be7283103ce17da00c6d5a7b10";
 
+/// The agent runs inside the game as -javaagent, so the feed may point only at
+/// the project's own hosts: its site and its GitHub releases.
+fn authlib_host_ok(url: &str) -> bool {
+    url.starts_with("https://authlib-injector.yushi.moe/")
+        || url.starts_with("https://github.com/yushijinhun/authlib-injector/releases/download/")
+}
+
 pub async fn ensure_authlib_injector() -> Result<PathBuf, String> {
     let dir = data_dir().join("agents");
     std::fs::create_dir_all(&dir).map_err(|e| io_fail("Агент скинов", &dir, &e))?;
@@ -42,7 +49,7 @@ pub async fn ensure_authlib_injector() -> Result<PathBuf, String> {
     // never to an unchecked download.
     let signed = meta["download_url"]
         .as_str()
-        .filter(|u| u.starts_with("https://"))
+        .filter(|u| authlib_host_ok(u))
         .and_then(|u| {
             let sum = meta["checksums"]["sha256"].as_str().unwrap_or("").to_lowercase();
             let hex = sum.len() == 64 && sum.chars().all(|c| c.is_ascii_hexdigit());
@@ -73,6 +80,25 @@ pub async fn ensure_authlib_injector() -> Result<PathBuf, String> {
                 return Ok(jar);
             }
             Err(e)
+        }
+    }
+}
+
+#[cfg(test)]
+mod host_tests {
+    use super::*;
+
+    #[test]
+    fn the_agent_comes_only_from_the_project_hosts() {
+        let cases = [
+            ("https://authlib-injector.yushi.moe/artifact/56/authlib-injector-1.2.8.jar", true),
+            ("https://github.com/yushijinhun/authlib-injector/releases/download/v1.2.8/authlib-injector-1.2.8.jar", true),
+            ("https://evil.example/authlib-injector.jar", false),
+            ("http://authlib-injector.yushi.moe/artifact/56/a.jar", false),
+            ("https://authlib-injector.yushi.moe.evil.example/a.jar", false),
+        ];
+        for (url, want) in cases {
+            assert_eq!(authlib_host_ok(url), want, "{}", url);
         }
     }
 }

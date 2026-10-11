@@ -8,14 +8,13 @@ import { create } from 'zustand'
  * Картинки — официальные постеры и арт из Microsoft Store.
  *
  * Как запускаем:
- * - dungeons, dungeons-2 — ставим сами с нашего хранилища, файлы выдаются после проверки покупки (engine/dungeons); у первой моды .pak;
  * - legends — копия игрока в Steam или Microsoft Store (engine/games);
  * - education — официальный установщик Microsoft (aka.ms/downloadmee-desktopApp).
  * Обычный Minecraft здесь не стоит: это сам лаунчер (владелец 29.09.2026).
  */
-export type GameSlug = 'dungeons-2' | 'dungeons' | 'legends' | 'education' | 'bedrock'
+export type GameSlug = 'legends' | 'education' | 'bedrock'
 
-export type GameRun = 'millida' | 'store'
+export type GameRun = 'store'
 
 export interface GameInfo {
   slug: GameSlug
@@ -50,30 +49,6 @@ const ALL_GAMES: GameInfo[] = [
     mods: 'Аддоны',
     steam: false,
     store: true,
-  },
-  {
-    slug: 'dungeons-2',
-    name: 'Minecraft Dungeons II',
-    tagline: 'Новое приключение в подземельях',
-    released: '29.09.2026',
-    run: 'millida',
-    isNew: true,
-    meta: 'Вышла 29.09.2026',
-    mods: null,
-    steam: true,
-    store: true,
-  },
-  {
-    slug: 'dungeons',
-    name: 'Minecraft Dungeons',
-    tagline: 'Данжен-кроулер во вселенной Minecraft',
-    released: '26.05.2020',
-    run: 'millida',
-    meta: 'Моды .pak · 2,3 ГБ',
-    mods: 'Моды .pak',
-    steam: true,
-    store: true,
-    hidden: true,
   },
   {
     slug: 'legends',
@@ -114,6 +89,6 @@ export const gameBuyUrl = (slug: GameSlug) =>
 export const gameSite = (slug: GameSlug) => 'https://millida.net/games/' + slug + '?utm_source=launcher&utm_medium=game'
 
 export const useGame = create<{ slug: GameSlug; open: (slug: GameSlug) => void }>((set) => ({
-  slug: 'dungeons-2',
+  slug: 'bedrock',
   open: (slug) => set({ slug }),
 }))

@@ -479,22 +479,78 @@ pub async fn redeem_pack_key(slug: &str, code: &str) -> Result<Value, String> {
 /// line, so revoking access on our side takes effect the next time the player
 /// presses «Играть».
 pub async fn pack_launch_token(slug: &str) -> Result<Vec<String>, String> {
-    let res = millida_api_auth(format!("/catalog/packs/{}/launch-token", slug), "POST".into(), None)
-        .await
-        .map_err(|e| match e.as_str() {
-            "unauthorized" => "Войди в аккаунт Millida — эта сборка запускается по доступу".to_string(),
-            other if other.contains("403") => "У этого аккаунта нет доступа к сборке".to_string(),
-            other => other.to_string(),
-        })?;
+    let res = match millida_api_auth(format!("/catalog/packs/{}/launch-token", slug), "POST".into(), None).await {
+        Ok(v) => v,
+        // Сбой сервера или сети — не отказ в доступе. 11.10.2026 база API десять
+        // минут не принимала записи, и платные сборки не запускались ни у кого.
+        // Ключ, выданный этому ПК за последние дни, пускает в игру и сейчас.
+        Err(e) if transient_failure(&e) => return cached_launch_token(slug, now_secs()).ok_or(e),
+        Err(e) => {
+            return Err(match e.as_str() {
+                "unauthorized" => "Войди в аккаунт Millida — эта сборка запускается по доступу".to_string(),
+                other if other.contains("403") => "У этого аккаунта нет доступа к сборке".to_string(),
+                other => other.to_string(),
+            })
+        }
+    };
     let args: Vec<String> = res["jvmArgs"]
         .as_array()
         .map(|a| a.iter().filter_map(|x| x.as_str()).map(str::to_string).collect())
         .unwrap_or_default();
-    let kept: Vec<String> = args.into_iter().filter(|a| jvm_arg_allowed(a) || PACK_JVM_EXACT.contains(&a.as_str())).collect();
+    let kept = allowed_pack_args(args);
     if kept.is_empty() {
         return Err("Сервер не выдал ключ запуска сборки".into());
     }
+    remember_launch_token(slug, &kept, now_secs());
     Ok(kept)
+}
+
+/// How long a launch key issued to this computer stands in for an unreachable
+/// service. Only a plain outage counts: any answer of the service itself
+/// (no access, no pack, signed out) never reaches the cache, and the running
+/// game is still re-checked by `pack_access`.
+const TOKEN_GRACE_SECS: u64 = 7 * 24 * 3600;
+
+fn transient_failure(e: &str) -> bool {
+    let low = e.to_lowercase();
+    low.starts_with("http 5")
+        || low.contains("внутренняя ошибка сервера")
+        || low.contains("internal server error")
+        || low.contains("timed out")
+        || low.contains("error sending request")
+        || low.contains("connection")
+}
+
+fn allowed_pack_args(args: Vec<String>) -> Vec<String> {
+    args.into_iter().filter(|a| jvm_arg_allowed(a) || PACK_JVM_EXACT.contains(&a.as_str())).collect()
+}
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+}
+
+fn token_cache_path(slug: &str) -> Option<PathBuf> {
+    let ok = !slug.is_empty() && slug.len() <= 120 && slug.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-' || b == b'_');
+    ok.then(|| data_dir().join("pack-launch").join(format!("{}.json", slug)))
+}
+
+fn remember_launch_token(slug: &str, args: &[String], now: u64) {
+    let Some(path) = token_cache_path(slug) else { return };
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let _ = std::fs::write(&path, json!({ "at": now, "args": args }).to_string());
+}
+
+fn cached_launch_token(slug: &str, now: u64) -> Option<Vec<String>> {
+    let raw = std::fs::read(token_cache_path(slug)?).ok()?;
+    let v: Value = serde_json::from_slice(&raw).ok()?;
+    let at = v["at"].as_u64()?;
+    if now.saturating_sub(at) > TOKEN_GRACE_SECS || at > now + 3600 {
+        return None;
+    }
+    let args = allowed_pack_args(v["args"].as_array()?.iter().filter_map(|x| x.as_str()).map(str::to_string).collect());
+    (!args.is_empty()).then_some(args)
 }
 
 /// What the service says about a paid pack that is about to run or is running.
@@ -720,6 +776,23 @@ pub fn pack_version_json(spec: &PackLaunch, extra_jvm: &[String]) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_an_outage_falls_back_to_the_cached_launch_key() {
+        let cases = [
+            ("Внутренняя ошибка сервера", true, "сбой сервера 11.10 — играем по выданному ключу"),
+            ("http 502", true, "шлюз упал"),
+            ("error sending request for url (https://api.millida.net/v2/...)", true, "нет сети"),
+            ("operation timed out", true, "сервер не ответил"),
+            ("unauthorized", false, "не вошёл — ключ из кэша не подставляется"),
+            ("Нет доступа к сборке", false, "ответ сервера про доступ — не сбой"),
+            ("http 403", false, "отказ без текста"),
+            ("Сборка не найдена", false, "сборку сняли"),
+        ];
+        for (e, want, why) in cases {
+            assert_eq!(transient_failure(e), want, "{}", why);
+        }
+    }
 
     /// Слаг из файла настроек -> пойдёт ли он в адрес проверки доступа.
     #[test]

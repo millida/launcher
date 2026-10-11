@@ -204,6 +204,8 @@ import { enterApp, logoutToLogin } from './lib/session'
 import { initSecrets } from './lib/secure'
 import { listenGameCrash, listenGameExit, listenGameServer, listenLaunchWarning, listenPackAccessLost, listenTrayExit } from './ipc/events'
 import { useCrash } from './state/crash'
+import { fixMark, forgetCrash, rememberCrash } from './lib/repair'
+import { sendCompatSignal } from './lib/compatSignal'
 import { syncRunningGame, useGame } from './state/game'
 import { watchPromo } from './state/promo'
 import { watchPromoServers } from './lib/promoServers'
@@ -531,7 +533,15 @@ export function App() {
     // запущенной сборкой время не появлялось вовсе.
     watchPlaytimeWhileRunning(() => useGame.getState().list.length > 0)
     void listenGameExit((profile) => {
-      track('game_exit', {}, { durationMs: gameStartedAt ? Date.now() - gameStartedAt : undefined })
+      // Отыграл спокойно 3+ минуты — план вылета, случившегося до этого запуска, больше не нужен,
+      // а починка перед ним засчитывается.
+      const calm = !!gameStartedAt && Date.now() - gameStartedAt > 180_000
+      const fixed = fixMark(profile, calm)
+      track('game_exit', fixed ? { fix: fixed } : {}, { durationMs: gameStartedAt ? Date.now() - gameStartedAt : undefined })
+      if (calm) {
+        forgetCrash(profile, gameStartedAt)
+        void sendCompatSignal(profile, null)
+      }
       useGame.getState().removeRunning(profile)
       // A second copy may still be alive — only the last exit puts the launcher back into lobby.
       if (useGame.getState().list.length) {
@@ -565,11 +575,16 @@ export function App() {
       const crashed = info && info.profile ? info.profile : ''
       const prof = crashed ? findProfile(crashed) : null
       void (crashed ? loadProfileSettings(crashed).catch(() => null) : Promise.resolve(null)).then((s) => {
-        track('game_crash', gameCrashData(info, prof, s, crashed ? [[crashed, '<build>'], [effectiveNick(), '<nick>']] : []), {
+        const fixed = crashed ? fixMark(crashed, true) : undefined
+        track('game_crash', { ...gameCrashData(info, prof, s, crashed ? [[crashed, '<build>'], [effectiveNick(), '<nick>']] : []), ...(fixed ? { fix: fixed } : {}) }, {
           ok: false,
         })
       })
       useCrash.getState().show(info)
+      if (info && info.profile) {
+        rememberCrash(info)
+        void sendCompatSignal(info.profile, info)
+      }
       if (info && info.profile) {
         void reportGameCrash(info, {
           profile: findProfile(info.profile),

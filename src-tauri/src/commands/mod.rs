@@ -5,7 +5,7 @@ pub mod accounts;
 pub mod hosting;
 pub mod system;
 pub mod overlay;
-pub mod dungeons;
+pub mod games;
 pub mod milli;
 pub mod party_voice;
 pub mod rewind;

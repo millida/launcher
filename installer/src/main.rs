@@ -32,12 +32,9 @@ fn main() {
         report.status("Ищем последнюю версию…");
         let build = install::fetch_build(&client)?;
 
-        report.status(format!("Скачиваем Millida Launcher {}…", build.version));
         let payload = workspace.file(install::PAYLOAD_NAME);
-        install::download(&client, &build.url, &payload, |done, total| report.progress(done, total))?;
-
-        report.status("Проверяем подпись…");
-        install::verify(&payload, &build.signature)?;
+        report.status(format!("Скачиваем Millida Launcher {} и проверяем подпись…", build.version));
+        install::download_verified(&client, &build, &payload, |done, total| report.progress(done, total))?;
 
         report.status("Устанавливаем…");
         install::run_installer(&payload, workspace.path())
@@ -73,12 +70,9 @@ fn main() {
         report.status("Ищем последнюю версию…");
         let build = install::fetch_build(&client)?;
 
-        report.status(format!("Скачиваем Millida Launcher {}…", build.version));
         let payload = workspace.file(install::PAYLOAD_NAME);
-        install::download(&client, &build.url, &payload, |done, total| report.progress(done, total))?;
-
-        report.status("Проверяем подпись…");
-        install::verify(&payload, &build.signature)?;
+        report.status(format!("Скачиваем Millida Launcher {} и проверяем подпись…", build.version));
+        install::download_verified(&client, &build, &payload, |done, total| report.progress(done, total))?;
 
         report.status("Устанавливаем…");
         let app = place::place(&payload, workspace.path())?;

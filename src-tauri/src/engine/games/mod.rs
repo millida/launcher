@@ -27,8 +27,6 @@ pub struct StoreGame {
 
 // Ids and package names: Steam API, displaycatalog.mp.microsoft.com (разбор 29.09.2026).
 pub const STORE_GAMES: &[StoreGame] = &[
-    StoreGame { slug: "dungeons", steam_appid: Some(1672970), ms_product: Some("9N8NJ74FZTG9"), appx: Some("Microsoft.LovikaX1") },
-    StoreGame { slug: "dungeons-2", steam_appid: Some(1912410), ms_product: Some("9P5786PJB9RP"), appx: Some("Microsoft.MinecraftDungeons2") },
     StoreGame { slug: "legends", steam_appid: Some(1928870), ms_product: Some("9NF0D13RPX5L"), appx: Some("Microsoft.296897AFE3FDD") },
     StoreGame { slug: "education", steam_appid: None, ms_product: Some("9NBLGGH4R2R6"), appx: None },
     // Bedrock для Windows: с 1.21.120 (осень 2025) — GDK-пакет через Xbox, файлы
@@ -374,10 +372,10 @@ mod tests {
 
     #[test]
     fn appx_lines_are_parsed() {
-        let out = "Microsoft.MinecraftDungeons2|Microsoft.MinecraftDungeons2_8wekyb3d8bbwe|Game\r\n\r\nbroken|line\n";
+        let out = "Microsoft.MinecraftLegends|Microsoft.MinecraftLegends_8wekyb3d8bbwe|Game\r\n\r\nbroken|line\n";
         let apps = parse_appx(out);
         assert_eq!(apps.len(), 1);
-        assert_eq!(apps[0].family, "Microsoft.MinecraftDungeons2_8wekyb3d8bbwe");
+        assert_eq!(apps[0].family, "Microsoft.MinecraftLegends_8wekyb3d8bbwe");
         assert_eq!(apps[0].app_id, "Game");
     }
 }
