@@ -47,8 +47,18 @@ test('карточка оверлея остаётся горизонтальн�
   expect(at, 'правило .ov-card пропало — пин смотрит не туда').toBeGreaterThan(-1)
   const body = css.slice(at, css.indexOf('}', at))
   expect(body, 'карточка перестала быть флекс-строкой: голова уедет над текстом').toContain('display:flex')
-  expect(body, 'карточка потеряла непрозрачный фон: под ней будет видно чужое окно').toContain(
-    'background:rgba(18,18,22,.86)',
-  )
+  expect(body, 'карточка потеряла непрозрачную кайму: под ней будет видно чужое окно').toContain('background:#000')
   expect(css, 'стопка карточек потеряла фиксированную ширину').toContain('.ov-cards{position:absolute')
+})
+
+/// Вид согласован владельцем 11.10.2026 (макет docs/menu-mockup/notify.html в
+/// моде): ступенчатая рамка окна меню вместо скруглённой полупрозрачной плашки.
+test('карточка оверлея — пиксельная плашка меню', () => {
+  const at = css.search(/^\.ov-card\{/m)
+  const body = css.slice(at, css.indexOf('}', at))
+  expect(body, 'карточка снова скруглена: это старый вид, не наш пиксельный').not.toContain('border-radius')
+  expect(body, 'карточка потеряла ступенчатые углы').toContain('clip-path:var(--px-5)')
+  expect(css, 'у плашки нет сплошного тёмного фона под текстом').toMatch(/\.ov-card::before\{[^}]*background:#1b1c1f/)
+  expect(screen, 'полоска времени снова сплошная: сегменты тают по одному').toContain('ov-card-ttl')
+  expect(screen, 'полоска времени снова сплошная: сегменты тают по одному').toContain('TTL_SEGMENTS')
 })

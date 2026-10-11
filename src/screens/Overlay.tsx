@@ -23,6 +23,27 @@ interface Card extends OverlayMessage {
 }
 
 const CARDS_SHOWN = 3
+const TTL_SEGMENTS = 16
+
+const KIND_TAG: Record<NonNullable<OverlayMessage['kind']>, string> = {
+  msg: 'Сообщение',
+  online: 'В сети',
+  play: 'В игре',
+  streak: 'Серия',
+}
+
+const PLAYING = 'Играет · '
+
+/// The server a friend plays on is the part worth reading, so it takes the card's colour.
+function cardText(m: OverlayMessage) {
+  if (m.kind !== 'play' || !m.text.startsWith(PLAYING)) return m.text
+  return (
+    <>
+      {PLAYING}
+      <em>{m.text.slice(PLAYING.length)}</em>
+    </>
+  )
+}
 
 const HISTORY = 24
 /// A window shown for a card that never arrived must not stay: it is
@@ -236,13 +257,21 @@ export function Overlay() {
                     <Icon id="i-flame" />
                   </span>
                 ) : (
-                  (m.nicks?.length ? m.nicks : [m.nick]).slice(0, 3).map((n, i) => <Head key={n + i} nick={n} size={44} />)
+                  <>
+                    {(m.nicks?.length ? m.nicks : [m.nick]).slice(0, 3).map((n, i) => (
+                      <span className="ov-card-hd" key={n + i}>
+                        <Head nick={n} size={40} />
+                      </span>
+                    ))}
+                    <span className="ov-card-dot" />
+                  </>
                 )}
               </div>
               <div className="ov-card-body">
                 <b>{m.nick}</b>
-                <span>{m.text}</span>
+                <span>{cardText(m)}</span>
               </div>
+              <span className="ov-card-tag">{KIND_TAG[m.kind || 'msg']}</span>
               <button
                 className="ov-card-x"
                 title="Скрыть"
@@ -253,7 +282,11 @@ export function Overlay() {
               >
                 <Icon id="i-x" />
               </button>
-              <i className="ov-card-ttl" style={{ animationDuration: ttl + 'ms' }} />
+              <span className="ov-card-ttl">
+                {Array.from({ length: TTL_SEGMENTS }, (_, k) => (
+                  <i key={k} style={{ animationDelay: Math.round((ttl * (TTL_SEGMENTS - k)) / TTL_SEGMENTS) + 'ms' }} />
+                ))}
+              </span>
             </div>
           ))}
         </div>
