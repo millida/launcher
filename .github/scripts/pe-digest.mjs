@@ -5,6 +5,7 @@
 // node pe-digest.mjs file.exe [file2.exe ...]
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
+import { pathToFileURL } from 'node:url'
 
 export function peDigest(buf) {
   if (buf.length < 0x40 || buf.readUInt16LE(0) !== 0x5a4d) throw new Error('не PE: нет MZ')
@@ -27,7 +28,7 @@ export function peDigest(buf) {
   return { digest: h.digest('hex'), signed: certLen > 0 }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   for (const file of process.argv.slice(2)) {
     const { digest, signed } = peDigest(readFileSync(file))
     console.log(`${digest}  ${file}${signed ? '  (подписан)' : ''}`)

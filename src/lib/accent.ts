@@ -61,7 +61,7 @@ export function computeAccent(a: Accent): Accent {
   return {
     ...a,
     fg: lum > 0.5 ? '#141414' : '#ffffff',
-    textC: lum > 0.6 ? shade(a.c, -0.42) : a.c,
+    textC: a.c,
     grad: 'linear-gradient(45deg,' + shade(a.c, -0.16) + ' 0%,' + a.c + ' 100%)',
     rgb: r + ',' + g + ',' + b,
   }
