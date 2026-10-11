@@ -5,7 +5,7 @@ import { Installs } from '../components/Installs'
 import { LobbyCharacter } from '../components/lobby/LobbyCharacter'
 import { EmoteBubble } from '../components/lobby/EmoteBubble'
 import { PartyBar } from '../components/lobby/PartyBar'
-import { isLeader, leaveParty, partyWithOthers, usePartyStore } from '../state/party'
+import { isLeader, leaveParty, loadParty, partyWithOthers, usePartyStore } from '../state/party'
 import { partyPlayPressed } from '../lib/partyPlay'
 import { Recommend } from '../components/lobby/Recommend'
 import { AnarchyArt } from '../components/playhub/AnarchyTile'
@@ -109,6 +109,13 @@ export function Play({ on }: { on: boolean }) {
 
   useEffect(() => {
     if (on) void loadLobby()
+  }, [on])
+
+  // Re-sync the party on every return to the lobby: a realtime «party» push can
+  // be missed while another screen is open, and a stale figure left standing
+  // from a party we were already removed from must not linger.
+  useEffect(() => {
+    if (on) void loadParty().catch(() => {})
   }, [on])
 
   // Часы на «Играть»: статистику лобби грузит само, не ждёт «Во что играем».
@@ -382,16 +389,17 @@ export function Play({ on }: { on: boolean }) {
               </span>
             </button>
           )}
-          <PlayChest on={on} dayZero={dayZero} />
-          {/* Явный выход из пати: без него, когда в лобби зашли незнакомцы и не
-              жмут «Готов», единственный способ уйти — меню на фигурке, которое
-              не находят. Видно только когда в пати есть другие игроки. */}
+          {/* В пати — выход вместо сундука (владелец 11.10.2026): без него, когда
+              зашли незнакомцы и не жмут «Готов», уйти можно было только из меню на
+              фигурке, которое не находят. Соло — на том же месте сундук. */}
           {inParty ? (
             <button className="party-leave" data-sound="nav" onClick={() => void leaveParty()}>
               <Icon id="i-logout" />
               Выйти из пати
             </button>
-          ) : null}
+          ) : (
+            <PlayChest on={on} dayZero={dayZero} />
+          )}
           </div>
           {btn.kind === 'installing' ? (
             <button className="play-cancel" aria-label="Отменить запуск" data-track="cancel_launch" onClick={cancelPrelaunch}>
