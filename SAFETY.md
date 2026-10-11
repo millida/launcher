@@ -76,11 +76,9 @@ Modrinth, CurseForge и часть сайтов Mojang в России откр�
   приходит сюда, и собирается он здесь — не там. Коммит `Release X.Y.Z` содержит весь код этой версии и список изменений.
 - **Подпись обновлений** ставится нашим ключом после сборки. Подпись не меняет файл: байты те же, что собрал GitHub,
   отпечаток совпадает с `SHA256SUMS`.
-- **Маленький установщик с сайта** (`MillidaLauncherSetup.exe`) тоже собирается здесь — релизы `setup-v*`
-  ([setup.yml](.github/workflows/setup.yml)), с тем же свидетельством GitHub. Сайт отдаёт ровно этот файл: SHA-256
-  скачанного совпадает со строкой в `SHA256SUMS` релиза. Если когда-нибудь появится версия с подписью Windows
-  (`MillidaLauncherSetup-signed.exe`), workflow примет её, только если внутри тот же файл:
-  `node .github/scripts/pe-digest.mjs MillidaLauncherSetup.exe MillidaLauncherSetup-signed.exe` — числа совпадут.
+- **Маленький установщик с сайта** (`MillidaLauncherSetup.exe`) собирается отдельно и подписан сертификатом Windows.
+  Лаунчера внутри нет: он скачивает установщик текущей версии с `launcher-storage.millida.net` — это те же байты,
+  что в релизе здесь, SHA-256 совпадает со строкой в `SHA256SUMS`. Код установщика — [installer/](installer/).
 - **Установщик для macOS с сайта** пока собран вне GitHub и подписан сертификатом Apple разработчика лаунчера.
   Сборки для macOS из Releases — с GitHub, их можно ставить напрямую.
 - **Мобильный лаунчер** — отдельный открытый репозиторий [millida/launcher-mobile](https://github.com/millida/launcher-mobile): каждая версия приходит туда коммитом с номером версии.

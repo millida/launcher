@@ -3,17 +3,7 @@ import { Icon } from '../Icon'
 import { Head } from '../Head'
 import { api } from '../../lib/api'
 import { apiErrorText } from '../../lib/apiError'
-import {
-  AGE_BRACKETS,
-  LFG_LANGS,
-  LFG_MODES,
-  LFG_REGIONS,
-  LFG_TIMES,
-  lfgTagLabels,
-  lfgTagsOk,
-  type LfgCard,
-  type LfgTags,
-} from '../../lib/party'
+import { AGE_BRACKETS, lfgTagLabels, type LfgCard, type LfgTags } from '../../lib/party'
 import { showToast } from '../../state/ui'
 import { loadParty, setAgeBracket, usePartyStore } from '../../state/party'
 
@@ -25,24 +15,10 @@ interface LfgRequest {
 
 const DRAFT: LfgTags = { mode: 'survival', version: '', pack: '', lang: 'ru', region: 'ru_west', voice: false, time: 'now' }
 
-function Chips<T extends string>({
-  list,
-  value,
-  onPick,
-}: {
-  list: readonly { id: T; label: string }[]
-  value: T
-  onPick: (v: T) => void
-}) {
-  return (
-    <div className="party-chips">
-      {list.map((x) => (
-        <button key={x.id} className={'party-tag pick' + (x.id === value ? ' on' : '')} onClick={() => onPick(x.id)}>
-          {x.label}
-        </button>
-      ))}
-    </div>
-  )
+/** People closest to my own card come first: same mode, then same language. */
+function closeness(card: LfgCard, mine: LfgTags | null): number {
+  if (!mine) return 0
+  return (card.tags.mode === mine.mode ? 2 : 0) + (card.tags.lang === mine.lang ? 1 : 0)
 }
 
 function AgeGate() {
@@ -80,12 +56,10 @@ export function LfgModal({ close }: { close: () => void }) {
   const [cards, setCards] = useState<LfgCard[]>([])
   const [mine, setMine] = useState<LfgCard | null>(null)
   const [requests, setRequests] = useState<LfgRequest[]>([])
-  const [filter, setFilter] = useState<LfgTags['mode'] | ''>('')
-  const [draft, setDraft] = useState<LfgTags>(DRAFT)
-  const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
   const seq = useRef(0)
+  const [tab, setTab] = useState<'find' | 'host'>('find')
 
   useEffect(() => {
     const esc = (e: KeyboardEvent) => e.key === 'Escape' && close()
@@ -96,9 +70,8 @@ export function LfgModal({ close }: { close: () => void }) {
   const load = async () => {
     const my = ++seq.current
     try {
-      const qs = filter ? '?mode=' + encodeURIComponent(filter) : ''
       const [list, req] = await Promise.all([
-        api<{ cards: LfgCard[]; mine: LfgCard | null }>('/party/lfg' + qs),
+        api<{ cards: LfgCard[]; mine: LfgCard | null }>('/party/lfg'),
         api<{ requests: LfgRequest[] }>('/party/lfg/requests'),
       ])
       if (my !== seq.current) return
@@ -113,7 +86,7 @@ export function LfgModal({ close }: { close: () => void }) {
 
   useEffect(() => {
     if (safety.ageBracket) void load()
-  }, [safety.ageBracket, filter])
+  }, [safety.ageBracket])
 
   const post = async (key: string, path: string, body: unknown, fallback: string): Promise<boolean> => {
     setBusy(key)
@@ -129,14 +102,7 @@ export function LfgModal({ close }: { close: () => void }) {
   }
 
   const publish = async () => {
-    if (!lfgTagsOk(draft)) {
-      showToast('Проверь версию: только цифры, например 1.21.4', 'error')
-      return
-    }
-    if (await post('card', '/party/lfg', { tags: draft }, 'Карточка не опубликовалась')) {
-      setEditing(false)
-      void load()
-    }
+    if (await post('card', '/party/lfg', { tags: DRAFT }, 'Не удалось начать поиск')) void load()
   }
 
   const remove = async () => {
@@ -157,6 +123,8 @@ export function LfgModal({ close }: { close: () => void }) {
     }
   }
 
+  const sorted = [...cards].sort((a, b) => closeness(b, mine?.tags ?? DRAFT) - closeness(a, mine?.tags ?? DRAFT))
+
   const report = (userId: string, nick: string, refId: string) =>
     usePartyStore.getState().set({ reportAsk: { userId, nick, context: 'lfg', refId } })
 
@@ -167,7 +135,7 @@ export function LfgModal({ close }: { close: () => void }) {
           <span className="room-ava">
             <Icon id="i-search" />
           </span>
-          <b>Ищу с кем поиграть</b>
+          <b>Напарники</b>
           <button className="tb-btn" aria-label="Закрыть" onClick={close}>
             <Icon id="i-x" />
           </button>
@@ -177,100 +145,18 @@ export function LfgModal({ close }: { close: () => void }) {
           <AgeGate />
         ) : (
           <>
-            {requests.length ? (
-              <>
-                <div className="side-cap">Просятся к тебе</div>
-                {requests.map((r) => (
-                  <div key={r.id} className="room-pick-row">
-                    <Head nick={r.from.nickname} src={r.from.avatarUrl} size={28} />
-                    <span className="room-pick-nick">{r.from.nickname}</span>
-                    <button className="btn sm primary" disabled={busy === r.id} onClick={() => void answer(r, true)}>
-                      <Icon id="i-check" />
-                      Принять
-                    </button>
-                    <button className="btn sm ghost" aria-label="Отклонить" disabled={busy === r.id} onClick={() => void answer(r, false)}>
-                      <Icon id="i-x" />
-                    </button>
-                    <button className="btn sm ghost" aria-label="Пожаловаться" onClick={() => report(r.from.userId, r.from.nickname, r.id)}>
-                      <Icon id="i-flag" />
-                    </button>
-                  </div>
-                ))}
-              </>
-            ) : null}
-
-            {safety.newAccount ? (
-              <p className="faint-note">Свою карточку можно выставить через неделю после регистрации</p>
-            ) : editing || !mine ? (
-              <>
-                <div className="side-cap">Моя карточка</div>
-                <Chips list={LFG_MODES} value={draft.mode} onPick={(mode) => setDraft({ ...draft, mode })} />
-                <Chips list={LFG_LANGS} value={draft.lang} onPick={(lang) => setDraft({ ...draft, lang })} />
-                <Chips list={LFG_REGIONS} value={draft.region} onPick={(region) => setDraft({ ...draft, region })} />
-                <Chips list={LFG_TIMES} value={draft.time} onPick={(time) => setDraft({ ...draft, time })} />
-                <div className="party-chips">
-                  <button className={'party-tag pick' + (draft.voice ? ' on' : '')} onClick={() => setDraft({ ...draft, voice: !draft.voice })}>
-                    <Icon id="i-mic" />
-                    С голосом
-                  </button>
-                  <div className="input sm party-ver">
-                    <input
-                      placeholder="Версия"
-                      inputMode="decimal"
-                      maxLength={10}
-                      value={draft.version}
-                      onChange={(e) => setDraft({ ...draft, version: e.target.value.replace(/[^\d.]/g, '') })}
-                    />
-                  </div>
-                </div>
-                <div className="room-modal-acts">
-                  {mine ? (
-                    <button className="btn sm ghost" onClick={() => setEditing(false)}>
-                      Отмена
-                    </button>
-                  ) : null}
-                  <button className="btn sm primary" disabled={busy === 'card'} onClick={() => void publish()}>
-                    <Icon id="i-send" />
-                    Выставить
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="side-cap">Моя карточка</div>
-                <div className="party-card mine">
-                  <div className="party-chips">
-                    {lfgTagLabels(mine.tags).map((t) => (
-                      <span key={t} className="party-tag">
-                        {t}
-                      </span>
-                    ))}
-                  </div>
-                  <div className="room-modal-acts">
-                    <button className="btn sm ghost" onClick={() => setEditing(true)}>
-                      <Icon id="i-edit" />
-                      Изменить
-                    </button>
-                    <button className="btn sm secondary" disabled={busy === 'card'} onClick={() => void remove()}>
-                      <Icon id="i-trash" />
-                      Убрать
-                    </button>
-                  </div>
-                </div>
-              </>
-            )}
-
-            <div className="side-cap">Ищут напарников</div>
-            <div className="party-chips">
-              <button className={'party-tag pick' + (filter === '' ? ' on' : '')} onClick={() => setFilter('')}>
-                Все
+            <div className="segs party-tabs" role="tablist">
+              <button role="tab" aria-selected={tab === 'find'} className={'seg' + (tab === 'find' ? ' on' : '')} onClick={() => setTab('find')}>
+                <Icon id="i-search" />
+                Найти пати
               </button>
-              {LFG_MODES.map((m) => (
-                <button key={m.id} className={'party-tag pick' + (filter === m.id ? ' on' : '')} onClick={() => setFilter(m.id)}>
-                  {m.label}
-                </button>
-              ))}
+              <button role="tab" aria-selected={tab === 'host'} className={'seg' + (tab === 'host' ? ' on' : '')} onClick={() => setTab('host')}>
+                <Icon id="i-users" />
+                Собрать пати
+                {requests.length ? <span className="party-badge">{requests.length}</span> : null}
+              </button>
             </div>
+
             {error ? (
               <div className="nb-err">
                 <Icon id="i-alert" />
@@ -280,34 +166,74 @@ export function LfgModal({ close }: { close: () => void }) {
                 </button>
               </div>
             ) : null}
-            {cards.map((c) => (
-              <div key={c.id} className="party-card">
-                <div className="party-card-head">
-                  <Head nick={c.user.nickname} src={c.user.avatarUrl} size={28} />
-                  <b>{c.user.nickname}</b>
-                  <span className="meta">{c.size + '/' + c.capacity}</span>
-                  <button className="btn sm ghost" aria-label="Пожаловаться" onClick={() => report(c.user.userId, c.user.nickname, c.id)}>
-                    <Icon id="i-flag" />
+
+            {tab === 'find' ? (
+              <>
+                {sorted.length ? (
+                  <button className="btn primary party-wide" disabled={!!busy || safety.newAccount || sorted[0]!.requested} onClick={() => void ask(sorted[0]!)}>
+                    <Icon id="i-zap" />
+                    Быстрый вход
                   </button>
-                  <button
-                    className="btn sm secondary"
-                    disabled={c.requested || busy === c.id || safety.newAccount}
-                    onClick={() => void ask(c)}
-                  >
-                    <Icon id={c.requested ? 'i-check' : 'i-send'} />
-                    {c.requested ? 'Попросился' : 'Попроситься'}
-                  </button>
-                </div>
-                <div className="party-chips">
-                  {lfgTagLabels(c.tags).map((t) => (
-                    <span key={t} className="party-tag">
-                      {t}
+                ) : null}
+                {sorted.map((c) => (
+                  <div key={c.id} className="party-row">
+                    <Head nick={c.user.nickname} src={c.user.avatarUrl} size={32} />
+                    <span className="party-row-who">
+                      <b>{c.user.nickname}</b>
+                      <span>{lfgTagLabels(c.tags).slice(0, 2).join(' · ')}</span>
                     </span>
-                  ))}
-                </div>
-              </div>
-            ))}
-            {!cards.length && !error ? <p className="faint-note">Сейчас никого — выставь свою карточку</p> : null}
+                    <span className="party-row-size">
+                      <Icon id="i-users" />
+                      {c.size + '/' + c.capacity}
+                    </span>
+                    <button className="btn sm ghost" aria-label="Пожаловаться" onClick={() => report(c.user.userId, c.user.nickname, c.id)}>
+                      <Icon id="i-flag" />
+                    </button>
+                    <button className="btn sm secondary" disabled={c.requested || busy === c.id || safety.newAccount} onClick={() => void ask(c)}>
+                      <Icon id={c.requested ? 'i-check' : 'i-login'} />
+                      {c.requested ? 'Ждём' : 'Войти'}
+                    </button>
+                  </div>
+                ))}
+                {!sorted.length && !error ? <p className="faint-note">Открытых пати пока нет — собери свою</p> : null}
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="party-open"
+                  role="switch"
+                  aria-checked={!!mine}
+                  disabled={busy === 'card' || safety.newAccount}
+                  onClick={() => void (mine ? remove() : publish())}
+                >
+                  <span className={'tgl' + (mine ? ' on' : '')} aria-hidden="true" />
+                  <span className="party-open-text">
+                    <b>Открыть пати для всех</b>
+                    <span>{safety.newAccount ? 'Доступно через неделю после регистрации' : mine ? 'Тебя видят в поиске' : 'Добирать игроков в пати'}</span>
+                  </span>
+                </button>
+                {requests.map((r) => (
+                  <div key={r.id} className="party-row">
+                    <Head nick={r.from.nickname} src={r.from.avatarUrl} size={32} />
+                    <span className="party-row-who">
+                      <b>{r.from.nickname}</b>
+                      <span>Хочет в пати</span>
+                    </span>
+                    <button className="btn sm ghost" aria-label="Пожаловаться" onClick={() => report(r.from.userId, r.from.nickname, r.id)}>
+                      <Icon id="i-flag" />
+                    </button>
+                    <button className="btn sm ghost" aria-label="Отклонить" disabled={busy === r.id} onClick={() => void answer(r, false)}>
+                      <Icon id="i-x" />
+                    </button>
+                    <button className="btn sm primary" disabled={busy === r.id} onClick={() => void answer(r, true)}>
+                      <Icon id="i-check" />
+                      Принять
+                    </button>
+                  </div>
+                ))}
+              </>
+            )}
           </>
         )}
       </div>

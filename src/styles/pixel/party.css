@@ -1,87 +1,130 @@
-/* Party seats beside the character: a step behind and above the player's feet,
-   so the flanks clear the play dock on the right and the tiles on the left. */
-.party-slots { position: absolute; inset: 0; z-index: 5; pointer-events: none; --slot-h: 168px; --slot-w: 96px; }
-.party-slots.size-md { --slot-h: 136px; --slot-w: 80px; }
-.party-slots.size-sm { --slot-h: 108px; --slot-w: 66px; }
-
-.party-flank {
+/* Party stage: figures live in the lobby's 3D scene, this layer only carries their
+   labels, the «+» seats and the member menus. Every seat is anchored at the point
+   above its head (or chest for a free seat) by a transform set each frame. */
+.party-overlay { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+.party-seat {
   position: absolute;
-  bottom: 190px;
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  --seat-h: 200px;
 }
-.party-flank.right { left: calc(50% + 130px); }
-.party-flank.left { right: calc(50% + 130px); flex-direction: row-reverse; }
+.party-seat > * { pointer-events: auto; }
 
-.party-slot {
-  position: relative;
-  pointer-events: auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  width: var(--slot-w);
-  padding: 0;
-  color: inherit;
-  background: none;
-}
-.party-slot-fig { height: var(--slot-h); padding: 0; background: none; cursor: pointer; }
-.party-slot-fig canvas.flat-figure { height: 100% !important; }
-
-.party-slot-empty {
-  display: grid;
-  place-items: center;
-  width: var(--slot-w);
-  height: calc(var(--slot-h) * 0.82);
-  color: var(--m-fg-subtle);
-  background: var(--m-surface);
-  opacity: 0.82;
-  --px-n: 10px; clip-path: var(--px-10);
-  --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px;
-  transition: background-color var(--m-t-fast), color var(--m-t-fast), transform 90ms var(--m-ease-smooth);
-}
-.party-slot-empty svg { width: 24px; height: 24px; }
-@media (hover: hover) and (pointer: fine) {
-  .party-slot.free:hover .party-slot-empty { color: var(--m-accent); background-color: var(--m-surface-2); }
-}
-.party-slot.free:active .party-slot-empty { transform: scale(0.97); }
-
-.party-plate {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  max-width: calc(var(--slot-w) + 40px);
-  padding: 5px 8px;
-  font: 700 12px/1 var(--m-font);
-  color: var(--m-fg);
-  background: var(--m-surface);
-  --px-n: 5px; clip-path: var(--px-5);
-  --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px;
-}
-.party-plate b { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 700; }
-.party-plate.muted { color: var(--m-fg-muted); }
-.party-plate svg { flex: none; width: 12px; height: 12px; }
-.party-plate .party-crown, .party-plate .party-ready { color: var(--m-accent); }
-.party-plate .party-mic { color: var(--m-fg-subtle); }
-.party-plate .party-mic.on { color: var(--m-accent); }
-.party-slot.speaking .party-plate { --px-ol: var(--m-accent); --px-ol-w: 2px; }
-
-.party-menu {
+.seat-tag {
   position: absolute;
-  z-index: 6;
-  bottom: calc(100% - 24px);
-  left: 50%;
+  bottom: 0;
+  left: 0;
   translate: -50% 0;
   display: flex;
   flex-direction: column;
-  min-width: 180px;
+  align-items: center;
+  gap: 3px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.seat-nick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px 1px;
+  font: 800 15px/1 var(--m-font);
+  letter-spacing: 0.01em;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.5);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.55);
+  --px-n: 4px; clip-path: var(--px-4);
+}
+.seat-nick svg { width: 14px; height: 14px; flex: none; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.55)); }
+.seat-nick .party-crown { color: var(--m-warning); }
+.seat-nick .party-mic { color: var(--m-accent); }
+.seat-nick .party-ready { color: var(--m-accent); }
+.party-seat.speaking .seat-nick { box-shadow: inset 0 -2px 0 var(--m-accent); }
+
+.party-hit {
+  position: absolute;
+  top: 8px;
+  left: 0;
+  translate: -50% 0;
+  width: calc(var(--seat-h) * 0.42);
+  height: var(--seat-h);
+  padding: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.party-add {
+  position: absolute;
+  left: 0;
+  top: 0;
+  translate: -50% -50%;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(0, 0, 0, 0.32);
+  --px-n: 5px; clip-path: var(--px-5);
+  transition: background-color var(--m-t-fast), color var(--m-t-fast), transform 90ms var(--m-ease-smooth);
+}
+.party-add svg { width: 20px; height: 20px; }
+.party-add-label {
+  position: absolute;
+  left: 0;
+  top: 30px;
+  translate: -50% 0;
+  font: 700 12px/1 var(--m-font);
+  color: #fff;
+  white-space: nowrap;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transform: translateY(-3px);
+  transition: opacity var(--m-t-fast), transform var(--m-t-fast);
+  pointer-events: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .party-add:hover { color: var(--m-accent-fg); background-color: var(--m-accent); }
+  .party-add:hover + .party-add-label { opacity: 1; transform: none; }
+}
+.party-add:active { transform: scale(0.96); }
+.party-add.open { color: var(--m-accent-fg); background-color: var(--m-accent); }
+.party-seat.searching .party-add { background-color: rgba(0, 0, 0, 0.45); }
+.party-seat.searching .party-add-label { opacity: 1; transform: none; }
+.party-dots { display: flex; gap: 4px; }
+.party-dots i { width: 5px; height: 5px; background: #fff; animation: party-dot 1.2s steps(2, jump-none) infinite; }
+.party-dots i:nth-child(2) { animation-delay: 0.2s; }
+.party-dots i:nth-child(3) { animation-delay: 0.4s; }
+@keyframes party-dot { 50% { opacity: 0.25; transform: translateY(-2px); } }
+.party-pop.seat { top: 30px; left: 30px; }
+.party-seat.flip .party-pop.seat { left: auto; right: 30px; }
+@media (prefers-reduced-motion: reduce) { .party-dots i { animation: none; } }
+
+.party-pop {
+  position: absolute;
+  z-index: 6;
+  top: calc(var(--seat-h) * 0.22);
+  left: calc(var(--seat-h) * 0.24);
+  display: flex;
+  flex-direction: column;
+  min-width: 208px;
   padding: 6px;
   background: var(--m-raised);
   --px-n: 5px; clip-path: var(--px-5);
   --px-ft: var(--px-plate-t); --px-fb: var(--px-plate-b);
+  animation: party-pop-in var(--m-t-fast) var(--m-ease-out, ease-out);
 }
-.party-menu button {
+.party-seat.flip .party-pop { left: auto; right: calc(var(--seat-h) * 0.24); }
+@keyframes party-pop-in { from { opacity: 0; transform: translateX(-6px) scale(0.98); } }
+.party-seat.flip .party-pop { animation-name: party-pop-in-flip; }
+@keyframes party-pop-in-flip { from { opacity: 0; transform: translateX(6px) scale(0.98); } }
+.party-pop-head { display: flex; align-items: center; gap: 8px; padding: 4px 6px 8px; }
+.party-pop-who { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.party-pop-who b { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 700 14px/1.1 var(--m-font); color: var(--m-fg); }
+.party-pop-who span { font: 600 11px/1 var(--m-font); color: var(--m-fg-subtle); }
+.party-pop-who span.on { color: var(--m-accent); }
+.party-pop button {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -93,51 +136,87 @@
   text-align: left;
   transition: background-color var(--m-t-fast);
 }
-.party-menu button svg { width: 14px; height: 14px; }
-.party-menu button.danger { color: var(--m-danger); }
+.party-pop button svg { width: 14px; height: 14px; color: var(--m-fg-subtle); }
+.party-pop button.danger, .party-pop button.danger svg { color: var(--m-danger); }
 @media (hover: hover) and (pointer: fine) {
-  .party-menu button:hover { background-color: var(--m-surface-2); }
+  .party-pop button:hover { background-color: var(--m-surface-2); }
 }
 
-/* Party controls: top centre, under the top bar and above the character's head. */
-.party-bar {
+/* Incoming invite: a toast under the top bar, centred over the stage. */
+.party-invite {
   position: absolute;
-  z-index: 5;
-  top: 128px;
+  z-index: 7;
+  top: 124px;
   left: 50%;
   translate: -50% 0;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  padding: 8px 8px 8px 10px;
+  color: var(--m-fg);
+  background: var(--m-raised);
+  --px-n: 5px; clip-path: var(--px-5);
+  --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px;
+  animation: party-pop-in var(--m-t-base, 200ms) var(--m-ease-out, ease-out);
 }
-.party-bar-row { display: flex; align-items: center; gap: 6px; }
-.party-chip {
+.party-invite-text { display: flex; flex-direction: column; gap: 3px; margin-right: 6px; }
+.party-invite-text b { font: 700 14px/1 var(--m-font); }
+.party-invite-text span { font: 600 12px/1 var(--m-font); color: var(--m-fg-subtle); }
+.party-invite-go, .party-invite-no {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 32px;
-  padding: 0 10px;
-  font: 700 12px/1 var(--m-font);
-  color: var(--m-fg);
-  background: var(--m-surface);
-  --px-n: 5px; clip-path: var(--px-5);
+  height: 34px;
+  padding: 0 12px;
+  font: 700 13px/1 var(--m-font);
+  --px-n: 4px; clip-path: var(--px-4);
+  transition: background-color var(--m-t-fast), transform 90ms var(--m-ease-smooth);
 }
-.party-chip svg { width: 14px; height: 14px; color: var(--m-accent); }
-.party-chip-target { max-width: 220px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 600; color: var(--m-fg-muted); }
-.party-invite {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 6px 6px 8px;
-  font: 600 13px/1.1 var(--m-font);
-  color: var(--m-fg);
-  background: var(--m-surface);
-  --px-n: 5px; clip-path: var(--px-5);
-  --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px;
+.party-invite-go { color: var(--m-accent-fg); background: var(--m-accent); }
+.party-invite-no { width: 34px; padding: 0; justify-content: center; color: var(--m-fg-muted); background: var(--m-surface-2); }
+.party-invite-go svg, .party-invite-no svg { width: 14px; height: 14px; }
+.party-invite-go:active, .party-invite-no:active { transform: scale(0.97); }
+
+@media (min-width: 1800px) {
+  .seat-tag, .party-add, .party-pop, .party-invite { zoom: 1.3; }
+}
+@media (min-width: 2400px) {
+  .seat-tag, .party-add, .party-pop, .party-invite { zoom: 1.6; }
 }
 
 /* Party windows reuse the group window; only the pieces that are new live here. */
+.party-tabs { display: flex; width: 100%; }
+.party-tabs .seg { flex: 1 1 0; justify-content: center; gap: 6px; }
+.party-tabs .seg svg { width: 14px; height: 14px; }
+.party-badge { min-width: 18px; height: 18px; padding: 0 5px; font: 800 11px/18px var(--m-font); color: var(--m-accent-fg); background: var(--m-accent); }
+.party-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--m-surface); --px-n: 4px; clip-path: var(--px-4); }
+.party-row-who { display: flex; flex: 1 1 auto; flex-direction: column; gap: 3px; min-width: 0; }
+.party-row-who b { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 700 14px/1.1 var(--m-font); color: var(--m-fg); }
+.party-row-who span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 600 12px/1 var(--m-font); color: var(--m-fg-subtle); }
+.party-row-size { display: inline-flex; align-items: center; gap: 4px; font: 700 12px/1 var(--m-font); color: var(--m-fg-muted); }
+.party-row-size svg { width: 12px; height: 12px; }
+.party-open {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  text-align: left;
+  color: var(--m-fg);
+  background: var(--m-surface);
+  --px-n: 4px; clip-path: var(--px-4);
+  transition: background-color var(--m-t-fast);
+}
+@media (hover: hover) and (pointer: fine) {
+  .party-open:hover:not(:disabled) { background-color: var(--m-surface-2); }
+}
+.party-open-text { display: flex; flex-direction: column; gap: 4px; }
+.party-open-text b { font: 700 14px/1.1 var(--m-font); }
+.party-open-text span { font: 600 12px/1 var(--m-font); color: var(--m-fg-subtle); }
+.party-find, .party-wide { width: 100%; min-height: 40px; justify-content: center; }
+.party-code-row { display: flex; gap: 8px; }
+.party-code-row .input { flex: 1 1 auto; }
+.party-my-code b { font: 800 14px/1 var(--m-mono); letter-spacing: 0.06em; }
 .party-modal.lfg { width: min(560px, 100%); }
 .party-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .party-tag {
@@ -183,13 +262,3 @@
 .party-mod-name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 600 12px/1.2 var(--m-mono); color: var(--m-fg); }
 .party-mod.bad .party-mod-name { color: var(--m-danger); text-decoration: line-through; }
 
-@media (min-width: 1800px) {
-  .party-bar { zoom: 1.3; }
-}
-@media (min-width: 2400px) {
-  .party-bar { zoom: 1.6; }
-}
-@media (max-width: 1100px) {
-  .party-flank.right { left: calc(50% + 110px); }
-  .party-flank.left { right: calc(50% + 110px); }
-}

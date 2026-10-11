@@ -175,7 +175,7 @@ export function tagBox(r: { ndc: Ndc; outfit?: Ndc }): { minX: number; maxX: num
  */
 const LOBBY_FEET_AT = 0.77
 // Крупнее (владелец 24.09.2026, 07:44: «персонаж маленький какой-то»).
-const LOBBY_MAX_FILL_Y = 0.62
+const LOBBY_MAX_FILL_Y = 0.5
 /** Над макушкой: ник (~25px) и зазор до края сцены. */
 // Ника над головой больше нет (владелец 24.09.2026, 13:23) — место под рост.
 const LOBBY_HEAD_ROOM_PX = 150

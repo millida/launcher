@@ -515,10 +515,10 @@
 
 /* Колонка разделов слева: бонус, магазин, мой скин, сервер — чуть меньше,
    как кнопки Brawl Stars (правка владельца 23.09.2026, 21:31). */
-.lobby-left { zoom: 0.84; }
-@media (max-height: 700px) { .lobby-left { zoom: 0.74; } }
-@media (min-width: 1800px) { .lobby-left { zoom: 1.1; } }
-@media (min-width: 2400px) { .lobby-left { zoom: 1.35; } }
+.lobby-left { zoom: 0.78; }
+@media (max-height: 700px) { .lobby-left { zoom: 0.68; } }
+@media (min-width: 1800px) { .lobby-left { zoom: 1.02; } }
+@media (min-width: 2400px) { .lobby-left { zoom: 1.25; } }
 
 /* Барабан обложек в пустой плашке режима: смена ступенькой с «подскоком». */
 .lobby-mode-reel { animation: lobby-reel 1400ms steps(1, end) both; }
@@ -735,7 +735,7 @@
 /* Холст персонажа на всю высоту и шире: крылья и руки в танце больше не
    обрезаются краем (владелец 24.09.2026, 13:55). Сам персонаж того же
    размера — место над головой считает lobbyFrame. */
-:root .lobby-char { top: 0; bottom: 0; left: 10%; width: 80%; }
+:root .lobby-char { top: 0; bottom: 0; left: 0; width: 100%; }
 
 /* Звук и музыка в верхней полосе: выключено — значок приглушён. */
 .lb-btn.lb-toggle.off svg { opacity: 0.4; }

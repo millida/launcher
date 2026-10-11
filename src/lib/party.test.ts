@@ -8,6 +8,10 @@ import {
   partyCodeOk,
   sameIdentity,
   slotPlan,
+  slotSpot,
+  pickMate,
+  MATE_TAGS,
+  type LfgCard,
   type LfgTags,
   type Party,
   type PartyMember,
@@ -132,4 +136,52 @@ describe('lfgTagsOk', () => {
       expect(lfgTagsOk({ ...base, ...patch }), why).toBe(ok)
     })
   }
+})
+
+describe('slotSpot', () => {
+  const cases: { index: number; side: 'left' | 'right'; why: string; check: (s: { x: number; z: number; yaw: number }) => boolean }[] = [
+    { index: 0, side: 'right', why: 'first seat stands to the right of me', check: (s) => s.x > 0 },
+    { index: 1, side: 'left', why: 'second seat mirrors the first on the left', check: (s) => s.x < 0 },
+    { index: 0, side: 'right', why: 'seats stand behind me, never in front', check: (s) => s.z < 0 },
+    { index: 0, side: 'right', why: 'a right seat turns toward the centre', check: (s) => s.yaw < 0 },
+    { index: 1, side: 'left', why: 'a left seat turns toward the centre', check: (s) => s.yaw > 0 },
+  ]
+  for (const c of cases) test(c.why, () => expect(c.check(slotSpot(c.index, c.side))).toBe(true))
+
+  test('outer seats step further out and further back, forming an arc', () => {
+    const near = slotSpot(0, 'right')
+    const far = slotSpot(2, 'right')
+    expect(far.x).toBeGreaterThan(near.x)
+    expect(far.z).toBeLessThan(near.z)
+  })
+
+  test('neighbouring seats keep a body width between them so models never overlap', () => {
+    const a = slotSpot(0, 'right')
+    const b = slotSpot(2, 'right')
+    expect(b.x - a.x).toBeGreaterThanOrEqual(12)
+    expect(a.x).toBeGreaterThanOrEqual(16)
+  })
+})
+
+describe('pickMate', () => {
+  const card = (id: string, extra: Partial<LfgCard> = {}, tags: Partial<LfgTags> = {}): LfgCard => ({
+    id,
+    user: { userId: 'u-' + id, nickname: id, avatarUrl: null },
+    tags: { ...MATE_TAGS, ...tags },
+    size: 1,
+    capacity: 3,
+    createdAt: 0,
+    expiresAt: 0,
+    requested: false,
+    ...extra,
+  })
+  const cases: { why: string; cards: LfgCard[]; want: string | null }[] = [
+    { why: 'nobody searching gives no match, so the player opens his own party instead', cards: [], want: null },
+    { why: 'my own card is never picked', cards: [card('me', { user: { userId: 'me', nickname: 'me', avatarUrl: null } })], want: null },
+    { why: 'a full party is skipped, joining it would bounce', cards: [card('full', { size: 3 })], want: null },
+    { why: 'a party already asked is not asked twice', cards: [card('asked', { requested: true })], want: null },
+    { why: 'same mode beats a fuller party in another mode', cards: [card('pvp', { size: 2 }, { mode: 'pvp' }), card('same')], want: 'same' },
+    { why: 'among equal ones the fuller party wins, the match forms sooner', cards: [card('one'), card('two', { size: 2 })], want: 'two' },
+  ]
+  for (const c of cases) test(c.why, () => expect(pickMate(c.cards, 'me', MATE_TAGS)?.id ?? null).toBe(c.want))
 })

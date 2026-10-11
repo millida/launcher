@@ -44,6 +44,7 @@ import {
   tagBox,
 } from '../../lib/characterStage'
 import { releaseSnapshotGl } from '../../lib/glPool'
+import { PartyOverlay, usePartyStage } from './PartyStage'
 
 /** Во что одет игрок: то же, что видят другие на сервере. */
 interface Look {
@@ -439,6 +440,7 @@ export function LobbyCharacter({
     // Зато голова следит за мышкой в покое — корпус стоит (владелец 24.09.2026).
     engine.setPoseHook(headLook(() => busyRef.current))
     engine.setPresentationMode('full')
+    engine.setSoloFrame(true)
     // Витрина: три четверти, как на снимках карточек (lib/outfitSnapshot).
     if (shop) engine.setPlayerYaw(SHOP_YAW)
     viewerRef.current = engine
@@ -769,6 +771,7 @@ export function LobbyCharacter({
   }, [glFail, lite])
 
   const drag = useRef<{ x: number; yaw: number } | null>(null)
+  const stageParty = usePartyStage(ready ? viewerRef.current : null, m3d, ready, !shop && on)
 
   if (lite || (glFail > 0 && !glTry)) {
     if (shop) queueMicrotask(() => onDressedRef.current?.(0))
@@ -844,6 +847,17 @@ export function LobbyCharacter({
       <span ref={tagWrap} className="lobby-tag-follow">
         {shop ? null : <Nametag nick={nick} at={shown ? tag : null} />}
       </span>
+      {shop ? null : (
+        <PartyOverlay
+          engine={ready ? viewerRef.current : null}
+          stage={stageRef}
+          seats={stageParty.seats}
+          pads={stageParty.pads}
+          party={stageParty.party}
+          me={stageParty.me}
+          awake={awake}
+        />
+      )}
     </div>
   )
 }
