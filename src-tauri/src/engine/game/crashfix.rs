@@ -209,11 +209,13 @@ fn renderer_companion(profile: &str) -> Option<&'static Companion> {
 }
 
 /// Files of the build that came from Modrinth or CurseForge: only those can
-/// be switched to another version of the same mod.
+/// be switched to another version of the same mod. A catalogue mod is left out
+/// — the Modrinth endpoint does not know it, so «Обновить» would only 404; the
+/// player still gets «Отключить».
 fn sourced_files(profile: &str) -> Vec<String> {
     load_content_manifest(profile)
         .into_iter()
-        .filter(|e| e.kind == "mod" && !e.project_id.is_empty())
+        .filter(|e| e.kind == "mod" && !e.project_id.is_empty() && !is_catalog_project(&e.project_id))
         .map(|e| e.file_name)
         .collect()
 }

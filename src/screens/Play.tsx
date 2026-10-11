@@ -5,7 +5,7 @@ import { Installs } from '../components/Installs'
 import { LobbyCharacter } from '../components/lobby/LobbyCharacter'
 import { EmoteBubble } from '../components/lobby/EmoteBubble'
 import { PartyBar } from '../components/lobby/PartyBar'
-import { isLeader, partyWithOthers, usePartyStore } from '../state/party'
+import { isLeader, leaveParty, partyWithOthers, usePartyStore } from '../state/party'
 import { partyPlayPressed } from '../lib/partyPlay'
 import { Recommend } from '../components/lobby/Recommend'
 import { AnarchyArt } from '../components/playhub/AnarchyTile'
@@ -383,6 +383,15 @@ export function Play({ on }: { on: boolean }) {
             </button>
           )}
           <PlayChest on={on} dayZero={dayZero} />
+          {/* Явный выход из пати: без него, когда в лобби зашли незнакомцы и не
+              жмут «Готов», единственный способ уйти — меню на фигурке, которое
+              не находят. Видно только когда в пати есть другие игроки. */}
+          {inParty ? (
+            <button className="party-leave" data-sound="nav" onClick={() => void leaveParty()}>
+              <Icon id="i-logout" />
+              Выйти из пати
+            </button>
+          ) : null}
           </div>
           {btn.kind === 'installing' ? (
             <button className="play-cancel" aria-label="Отменить запуск" data-track="cancel_launch" onClick={cancelPrelaunch}>
