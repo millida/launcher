@@ -1775,7 +1775,7 @@ pub async fn install_and_launch_in(
     if let Some(spec) = pack.as_ref().filter(|s| s.needs_token && !s.slug.is_empty()) {
         tauri::async_runtime::spawn(watch_pack_access(app.clone(), profile.clone(), spec.slug.clone(), pid));
     }
-    let rewind = crate::engine::rewind::start(&app, pid, &profile, media.as_ref().map(|m| m.notices()));
+    let rewind = crate::engine::rewind::game(&app, pid, &profile, media.as_ref().map(|m| m.notices()));
     std::thread::spawn(move || {
         let _media = media;
         let _rewind = rewind;

@@ -109,13 +109,10 @@ pub fn save_settings(app: &AppHandle, next: RewindSettings) -> Result<RewindStat
     if !supported() && next.enabled {
         return Err("Клипы пока работают только на Windows".into());
     }
+    let before = settings::load();
     let stored = settings::store(next)?;
-    if !stored.enabled {
-        #[cfg(windows)]
-        for session in active() {
-            session.recorder.lock().unwrap_or_else(|e| e.into_inner()).take();
-            session.status.lock().unwrap_or_else(|e| e.into_inner()).recording = false;
-        }
+    if capture_changed(&before, &stored) {
+        restart_games(app);
     }
     bind_hotkey(app);
     publish(app);
@@ -167,13 +164,77 @@ impl Drop for RewindSession {
     }
 }
 
+/// A game the launcher is running, recorded or not: switching clips on in the
+/// middle of a session has to reach a game that was started with them off.
+struct Game {
+    pid: u32,
+    profile: String,
+    notices: Option<Notices>,
+    session: Option<RewindSession>,
+}
+
+static GAMES: Mutex<Vec<Game>> = Mutex::new(Vec::new());
+
+/// Held by the launch for the whole life of one game; dropping it stops the recording.
+pub struct GameGuard {
+    pid: u32,
+}
+
+impl Drop for GameGuard {
+    fn drop(&mut self) {
+        let gone: Vec<Game> = {
+            let mut games = GAMES.lock().unwrap_or_else(|e| e.into_inner());
+            let (gone, keep) = games.drain(..).partition(|g| g.pid == self.pid);
+            *games = keep;
+            gone
+        };
+        drop(gone);
+    }
+}
+
+pub fn game(app: &AppHandle, pid: u32, profile: &str, notices: Option<Notices>) -> GameGuard {
+    let session = start(app, pid, profile, notices.clone());
+    GAMES.lock().unwrap_or_else(|e| e.into_inner()).push(Game { pid, profile: profile.to_string(), notices, session });
+    GameGuard { pid }
+}
+
+/// Everything a recording was opened with; the hotkey alone is rebound in place.
+fn capture_changed(before: &RewindSettings, after: &RewindSettings) -> bool {
+    before.enabled != after.enabled
+        || before.seconds != after.seconds
+        || before.quality != after.quality
+        || before.fps != after.fps
+        || before.game_audio != after.game_audio
+        || before.mic != after.mic
+}
+
+/// Reopens the recording of every running game with the stored settings. The
+/// sessions are dropped outside the lock: their drop rebinds the hotkey.
+fn restart_games(app: &AppHandle) {
+    let old: Vec<RewindSession> = GAMES.lock().unwrap_or_else(|e| e.into_inner()).iter_mut().filter_map(|g| g.session.take()).collect();
+    drop(old);
+    let running: Vec<(u32, String, Option<Notices>)> =
+        GAMES.lock().unwrap_or_else(|e| e.into_inner()).iter().map(|g| (g.pid, g.profile.clone(), g.notices.clone())).collect();
+    for (pid, profile, notices) in running {
+        let Some(session) = start(app, pid, &profile, notices) else { continue };
+        let mut games = GAMES.lock().unwrap_or_else(|e| e.into_inner());
+        match games.iter_mut().find(|g| g.pid == pid) {
+            Some(game) => game.session = Some(session),
+            None => {
+                drop(games);
+                drop(session);
+            }
+        }
+    }
+}
+
 #[cfg(not(windows))]
-pub fn start(_app: &AppHandle, _pid: u32, _profile: &str, _notices: Option<Notices>) -> Option<RewindSession> {
+fn start(_app: &AppHandle, _pid: u32, _profile: &str, _notices: Option<Notices>) -> Option<RewindSession> {
     None
 }
 
 #[cfg(windows)]
-pub fn start(app: &AppHandle, pid: u32, profile: &str, notices: Option<Notices>) -> Option<RewindSession> {
+fn start(app: &AppHandle, pid: u32, profile: &str, notices: Option<Notices>) -> Option<RewindSession> {
     let current = settings::load();
     if !current.enabled {
         return None;
@@ -297,4 +358,26 @@ pub fn open_folder() -> Result<(), String> {
     std::fs::create_dir_all(&folder).map_err(|e| format!("Не удалось создать папку клипов: {}", e))?;
     crate::engine::open_path(&folder.to_string_lossy());
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn which_changes_reopen_the_recording() {
+        let base = RewindSettings { enabled: true, ..Default::default() };
+        let cases: [(RewindSettings, bool, &str); 5] = [
+            (RewindSettings { hotkey: "Ctrl+7".into(), ..base.clone() }, false, "a new key is rebound in place; reopening would throw away the seconds already kept"),
+            (RewindSettings { enabled: false, ..base.clone() }, true, "switched off: the running recording has to stop"),
+            (RewindSettings { quality: Quality::P720, ..base.clone() }, true, "the picture size is fixed when the encoder opens"),
+            (RewindSettings { fps: 30, ..base.clone() }, true, "the frame rate is fixed when the encoder opens"),
+            (RewindSettings { mic: true, ..base.clone() }, true, "the audio sources are chosen when the recording starts"),
+        ];
+        for (after, want, why) in cases {
+            assert_eq!(capture_changed(&base, &after), want, "{}", why);
+        }
+        let off = RewindSettings { enabled: false, ..Default::default() };
+        assert!(capture_changed(&off, &base), "switching clips on during a game must start recording it, not wait for the next launch");
+    }
 }

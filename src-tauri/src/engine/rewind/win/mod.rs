@@ -20,6 +20,7 @@ pub use window::foreground_pid;
 
 const WINDOW_POLL: Duration = Duration::from_millis(500);
 const WINDOW_WAIT: Duration = Duration::from_secs(600);
+const RESIZE_SETTLE: Duration = Duration::from_millis(700);
 
 /// What the recorder reports to the session: a reason it is not recording,
 /// or the absence of one.
@@ -114,7 +115,22 @@ fn record(window: window::Window, settings: &RewindSettings, ring: &Mutex<Ring>,
     let fail = |e: windows::core::Error| format!("Запись остановилась: {}", e.message().trim());
     let mut due = clock::now();
     let mut last_time: Ticks = 0;
+    let mut resized: Option<((u32, u32), Instant)> = None;
     while !stop.load(Ordering::Relaxed) && window.alive() {
+        // Minecraft opens at 854x480 and grows a moment later; an encoder kept at
+        // the first size shrinks every later frame down to it. A size that holds
+        // for a while gets its own encoder; the ring drops the old picture size.
+        if !window.minimized() {
+            let (cw, ch) = window.client_size();
+            let wanted = settings.output_size(cw, ch);
+            if wanted == (width, height) {
+                resized = None;
+            } else if resized.is_some_and(|(size, since)| size == wanted && since.elapsed() >= RESIZE_SETTLE) {
+                return Ok(());
+            } else if resized.map(|(size, _)| size) != Some(wanted) {
+                resized = Some((wanted, Instant::now()));
+            }
+        }
         let wait = due - clock::now();
         if wait > 0 {
             std::thread::sleep(Duration::from_nanos(wait as u64 * 100));
