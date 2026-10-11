@@ -7,6 +7,10 @@ interface ConfirmOpts {
   danger?: boolean
   rememberKey?: string
   rememberLabel?: string
+  /// The exact text the player must type before the confirm button wakes up. For
+  /// irreversible deletes: a focused «Удалить» plus a global Enter let a double
+  /// click on the menu item or a stray Enter wipe a build with its worlds.
+  typeToConfirm?: string
 }
 
 /// A dismissal is not the cancel button. Where the cancel button carries its own
@@ -24,6 +28,7 @@ interface ConfirmState {
   danger: boolean
   rememberKey: string | null
   rememberLabel: string
+  typeToConfirm: string | null
   resolver: ((v: ConfirmResult) => void) | null
   close: (v: ConfirmResult, remember?: boolean) => void
 }
@@ -45,6 +50,7 @@ export const useConfirm = create<ConfirmState>((set, get) => ({
   danger: true,
   rememberKey: null,
   rememberLabel: 'Больше не спрашивать',
+  typeToConfirm: null,
   resolver: null,
   close: (v, remember) => {
     const { resolver, rememberKey } = get()
@@ -73,6 +79,7 @@ export function uiChoice(message: string, opts: ConfirmOpts = {}): Promise<Confi
       danger: opts.danger ?? true,
       rememberKey: opts.rememberKey || null,
       rememberLabel: opts.rememberLabel || 'Больше не спрашивать',
+      typeToConfirm: opts.typeToConfirm?.trim() || null,
       resolver: resolve,
     })
   })

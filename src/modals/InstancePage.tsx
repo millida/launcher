@@ -2673,8 +2673,8 @@ export function InstancePage() {
                   onClick={async () => {
                     if (
                       !(await uiConfirm(
-                        'Удалить сборку «' + profile + '» со всеми модами, мирами и часами игры? Отменить будет нельзя.',
-                        { confirmLabel: 'Удалить' },
+                        'Удалить сборку «' + profile + '» со всеми модами, мирами и часами игры? Отменить будет нельзя. Введи её название, чтобы удалить.',
+                        { confirmLabel: 'Удалить', typeToConfirm: profile ?? undefined },
                       ))
                     )
                       return

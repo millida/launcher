@@ -3,22 +3,28 @@ import { useConfirm } from '../state/confirm'
 import { backdropClose } from '../lib/dismiss'
 
 export function ConfirmModal() {
-  const { open, title, message, confirmLabel, cancelLabel, danger, rememberKey, rememberLabel, close } = useConfirm()
+  const { open, title, message, confirmLabel, cancelLabel, danger, rememberKey, rememberLabel, typeToConfirm, close } =
+    useConfirm()
   const [remember, setRemember] = useState(false)
+  const [typed, setTyped] = useState('')
+  const armed = !typeToConfirm || typed.trim().toLowerCase() === typeToConfirm.toLowerCase()
 
   useEffect(() => {
-    if (open) setRemember(false)
+    if (open) {
+      setRemember(false)
+      setTyped('')
+    }
   }, [open])
 
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') close('dismiss')
-      if (e.key === 'Enter') close('yes', remember)
+      if (e.key === 'Enter' && armed) close('yes', remember)
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [open, close, remember])
+  }, [open, close, remember, armed])
 
   if (!open) return null
   // Above every window a confirm can be opened from: ordinary modals sit at 400,
@@ -35,6 +41,19 @@ export function ConfirmModal() {
         <div className="sub" style={{ marginTop: '6px' }}>
           {message}
         </div>
+        {typeToConfirm ? (
+          <input
+            className="input confirm-type"
+            autoFocus
+            spellCheck={false}
+            autoComplete="off"
+            placeholder={typeToConfirm}
+            aria-label={'Введи «' + typeToConfirm + '», чтобы подтвердить'}
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            style={{ width: '100%', marginTop: '16px' }}
+          />
+        ) : null}
         {rememberKey ? (
           <label
             style={{
@@ -62,8 +81,9 @@ export function ConfirmModal() {
           <button
             className={'btn md ' + (danger ? 'danger' : 'primary')}
             data-nosound
-            onClick={() => close('yes', remember)}
-            autoFocus
+            disabled={!armed}
+            onClick={() => armed && close('yes', remember)}
+            autoFocus={!typeToConfirm}
           >
             {confirmLabel}
           </button>
