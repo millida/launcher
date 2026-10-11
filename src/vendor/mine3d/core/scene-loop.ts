@@ -343,6 +343,7 @@ export class SkinViewEngine {
   private _nudgePointerY = 0;
   private _nudgeUnbind: (() => void) | null = null;
   private _dressElapsed = -1;
+  private _dressBaseYaw = 0;
   private static readonly DRESS_DURATION = 1.15;
   private _shotPreset: ShotPresetId | null = null;
   /** Частицы / «переоделся» — выкл. на мини-превью */
@@ -2067,6 +2068,9 @@ export class SkinViewEngine {
     if (!this._enableEffects) return;
     if (this._debugEnabled && !this._debugOpts.particles) return;
     this._dressElapsed = 0;
+    // Крутится только сам игрок (_mainSpot), не весь playerWrapper: иначе на
+    // возврате в лобби со скином разворот уносил и фигуры пати, и реквизит.
+    this._dressBaseYaw = this._mainSpot.rotation.y;
     bodyWorldPosition(this.playerObject, this._feetWorld);
     // Одна вспышка при смене скина (без второго mid-burst)
     this._particles.spawnSparkles(this._feetWorld, 24);
@@ -2078,14 +2082,14 @@ export class SkinViewEngine {
     const u = this._dressElapsed / SkinViewEngine.DRESS_DURATION;
     if (u >= 1) {
       this._dressElapsed = -1;
-      this.playerWrapper.rotation.y = 0;
+      this._mainSpot.rotation.y = this._dressBaseYaw;
       this._setSkinEmissive(0);
       this._postFx?.setBloomBoost(0);
       return;
     }
 
     // Плавный оборот + одна emissive-вспышка в начале
-    this.playerWrapper.rotation.y = easeOutCubic(Math.min(1, u / 0.85)) * Math.PI * 2;
+    this._mainSpot.rotation.y = this._dressBaseYaw + easeOutCubic(Math.min(1, u / 0.85)) * Math.PI * 2;
     const flash = u < 0.35 ? Math.sin((u / 0.35) * Math.PI) : 0;
     this._setSkinEmissive(flash * 2.8);
     this._postFx?.setBloomBoost(flash);
