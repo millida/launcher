@@ -184,6 +184,28 @@
   .seat-tag, .party-add, .party-pop, .party-invite { zoom: 1.6; }
 }
 
+/* «Выйти из пати» под кнопкой «Готов/Играть»: тихая, не спорит с главной
+   кнопкой, в ряду действий, где человек и ищет выход. Рендерится только когда
+   в пати есть другие игроки. */
+.lobby-row .play-col .party-leave {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  height: 34px;
+  font: 700 13px/1 var(--m-font);
+  color: var(--m-fg-muted);
+  background: var(--m-surface-2);
+  --px-n: 5px; clip-path: var(--px-5);
+  transition: color var(--m-t-fast), background-color var(--m-t-fast), transform 90ms var(--m-ease-smooth);
+}
+.lobby-row .play-col .party-leave svg { width: 14px; height: 14px; }
+@media (hover: hover) and (pointer: fine) {
+  .lobby-row .play-col .party-leave:hover { color: var(--m-danger); background-color: var(--m-surface); }
+}
+.lobby-row .play-col .party-leave:active { transform: translateY(1px); }
+
 /* Party windows reuse the group window; only the pieces that are new live here. */
 .party-tabs { display: flex; width: 100%; }
 .party-tabs .seg { flex: 1 1 0; justify-content: center; gap: 6px; }

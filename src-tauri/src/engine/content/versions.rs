@@ -24,6 +24,15 @@ fn cf_id(project_id: &str) -> Option<u32> {
     project_id.strip_prefix("cf:").and_then(|s| s.parse().ok())
 }
 
+/// A mod put into the build from the Millida catalogue. Its files are resolved
+/// by our catalogue API, keyed by catalogue file id, not by a Modrinth project:
+/// sending its id to the Modrinth version endpoint is the «millida:cosmetica»
+/// 404 the crash doctor used to show. Such a mod is updated by reinstalling it
+/// from the catalogue, so a version switch here is refused rather than guessed.
+pub(crate) fn is_catalog_project(project_id: &str) -> bool {
+    project_id.starts_with("millida:")
+}
+
 /// Catalogue ids are short alphanumeric tokens (Modrinth) or numbers
 /// (CurseForge). Anything else never reaches a URL.
 fn version_id_ok(id: &str) -> bool {
@@ -48,6 +57,9 @@ fn cf_channel(release_type: u64) -> &'static str {
 
 /// Files of `project_id` the build can load, newest first.
 async fn candidates(ctx: &Ctx, project_id: &str, current: &str) -> Result<Vec<Candidate>, String> {
+    if is_catalog_project(project_id) {
+        return Err("Мод из каталога Millida так не обновить — переустанови его со страницы в каталоге".into());
+    }
     if let Some(mod_id) = cf_id(project_id) {
         let lt = if ctx.kind == "mod" { cf_loader_type(&ctx.loader_id) } else { 0 };
         let files = cf_files_for(mod_id, &ctx.game_version, lt).await?;
@@ -336,6 +348,24 @@ mod tests {
         ];
         for (id, want, why) in cases {
             assert_eq!(version_id_ok(id), want, "{}: {}", id, why);
+        }
+    }
+
+    /// project id -> is it a catalogue mod. A wrong «false» lets a catalogue id
+    /// reach the Modrinth version endpoint as a slug — the «millida:cosmetica»
+    /// 404 on the crash dialog. A wrong «true» would hide a real Modrinth mod
+    /// from the version switch.
+    #[test]
+    fn catalogue_mods_are_not_resolved_through_modrinth() {
+        let cases: [(&str, bool, &str); 5] = [
+            ("millida:cosmetica", true, "мод из каталога Millida — версии резолвит наш API"),
+            ("AANobbMI", false, "id Modrinth"),
+            ("cf:238222", false, "CurseForge резолвится своей веткой, а не как каталог"),
+            ("sodium", false, "slug Modrinth"),
+            ("", false, "пусто — не каталог"),
+        ];
+        for (id, want, why) in cases {
+            assert_eq!(is_catalog_project(id), want, "{}: {}", id, why);
         }
     }
 }
