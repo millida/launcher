@@ -70,6 +70,14 @@
   transition: background-color var(--m-t-fast), color var(--m-t-fast), transform 90ms var(--m-ease-smooth);
 }
 .party-add svg { width: 20px; height: 20px; }
+/* «+» on a figure, not a bare «+»: a lone plus read as nothing in particular. */
+.party-add .party-add-badge {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 12px;
+  height: 12px;
+}
 .party-add-label {
   position: absolute;
   left: 0;
@@ -96,6 +104,9 @@
 .party-add.open { color: var(--m-accent-fg); background-color: var(--m-accent); }
 .party-seat.searching .party-add { background-color: rgba(0, 0, 0, 0.45); }
 .party-seat.searching .party-add-label { opacity: 1; margin-top: 0; }
+/* A bare «+» read as nothing in particular: the single invite seat keeps its
+   label in view instead of revealing it on hover. */
+.party-seat.free .party-add-label { opacity: 1; margin-top: 0; }
 .party-dots { display: flex; gap: 4px; }
 .party-dots i { width: 5px; height: 5px; background: #fff; animation: party-dot 1.2s steps(2, jump-none) infinite; }
 .party-dots i:nth-child(2) { animation-delay: 0.2s; }

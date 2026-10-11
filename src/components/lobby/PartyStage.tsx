@@ -11,7 +11,7 @@ import { isLeader, kickFromParty, promoteInParty, usePartyStore } from '../../st
 import { useCall } from '../../state/call'
 import { openChat } from '../../state/friends'
 import { useHasMillida } from '../../state/auth'
-import { startMateSearch, stopMateSearch, useMateSearch } from '../../state/mateSearch'
+import { stopMateSearch, useMateSearch } from '../../state/mateSearch'
 import { uiConfirm } from '../../state/confirm'
 
 const SHADOW_SIZE = 22
@@ -226,10 +226,10 @@ function MemberMenu({
   )
 }
 
+/** Only while a mate search runs: the seat then has two things to offer — calling a friend or stopping the search. */
 function SeatMenu({ close }: { close: () => void }) {
   const ref = useRef<HTMLDivElement>(null)
   useCloseOutside(ref, close)
-  const searching = useMateSearch((s) => s.searching)
   return (
     <div className="party-pop seat" ref={ref} role="menu">
       <button
@@ -242,30 +242,17 @@ function SeatMenu({ close }: { close: () => void }) {
         <Icon id="i-users" />
         Позвать друга
       </button>
-      {searching ? (
-        <button
-          role="menuitem"
-          className="danger"
-          onClick={() => {
-            close()
-            void stopMateSearch()
-          }}
-        >
-          <Icon id="i-x" />
-          Отменить поиск
-        </button>
-      ) : (
-        <button
-          role="menuitem"
-          onClick={() => {
-            close()
-            void startMateSearch()
-          }}
-        >
-          <Icon id="i-search" />
-          Найти напарника
-        </button>
-      )}
+      <button
+        role="menuitem"
+        className="danger"
+        onClick={() => {
+          close()
+          void stopMateSearch()
+        }}
+      >
+        <Icon id="i-x" />
+        Отменить поиск
+      </button>
     </div>
   )
 }
@@ -356,11 +343,16 @@ export function PartyOverlay({
   const inVoice = !!party && callRoom === party.id
   const searching = useMateSearch((st) => st.searching)
 
+  // One way to call someone, not a «+» on every empty seat (владелец 11.10.2026):
+  // the button stands on the next seat to fill, the rest stay bare.
+  const inviteSeat = seats.find((s) => !s.member)?.key
+
   return (
     <div className="party-overlay" onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}>
       {seats.map((seat) => {
         const m = seat.member
         if (!m) {
+          if (seat.key !== inviteSeat) return null
           return (
             <span
               key={seat.key}
@@ -370,11 +362,22 @@ export function PartyOverlay({
               <button
                 className={'party-add' + (menu === seat.key ? ' open' : '')}
                 data-sound="open"
-                aria-haspopup="menu"
+                data-notip
+                aria-haspopup={searching ? 'menu' : 'dialog'}
                 aria-label={searching ? 'Ищем напарника' : 'Позвать в пати'}
-                onClick={() => setMenu(menu === seat.key ? '' : seat.key)}
+                onClick={() => {
+                  if (searching) setMenu(menu === seat.key ? '' : seat.key)
+                  else usePartyStore.getState().set({ inviteOpen: true })
+                }}
               >
-                {searching ? <span className="party-dots" aria-hidden="true"><i /><i /><i /></span> : <Icon id="i-plus" />}
+                {searching ? (
+                  <span className="party-dots" aria-hidden="true"><i /><i /><i /></span>
+                ) : (
+                  <>
+                    <Icon id="i-user" />
+                    <Icon id="i-plus" className="icon party-add-badge" />
+                  </>
+                )}
               </button>
               <span className="party-add-label">{searching ? 'Ищем напарника' : 'Позвать'}</span>
               {menu === seat.key ? <SeatMenu close={() => setMenu('')} /> : null}

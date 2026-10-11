@@ -12,6 +12,7 @@ import {
   partyInviteCode,
   usePartyStore,
 } from '../../state/party'
+import { startMateSearch, stopMateSearch, useMateSearch } from '../../state/mateSearch'
 
 interface FriendParty {
   userId: string
@@ -23,6 +24,7 @@ interface FriendParty {
 export function PartyInviteModal({ close }: { close: () => void }) {
   const friends = useFriends((s) => s.friends)
   const party = usePartyStore((s) => s.party)
+  const searching = useMateSearch((s) => s.searching)
   const [called, setCalled] = useState<Record<string, boolean>>({})
   const [busy, setBusy] = useState('')
   const [code, setCode] = useState<{ code: string; expiresAt: number } | null>(null)
@@ -171,6 +173,26 @@ export function PartyInviteModal({ close }: { close: () => void }) {
             </button>
           )}
         </div>
+
+        {/* Strangers are the fallback, not the first choice: the search used to sit
+            next to «+» on every seat and pulled unknown players into the lobby. */}
+        {full ? null : searching ? (
+          <button className="btn sm secondary party-find" onClick={() => void stopMateSearch()}>
+            <Icon id="i-x" />
+            Отменить поиск напарника
+          </button>
+        ) : (
+          <button
+            className="btn sm secondary party-find"
+            onClick={() => {
+              close()
+              void startMateSearch()
+            }}
+          >
+            <Icon id="i-search" />
+            Найти напарника
+          </button>
+        )}
       </div>
     </div>
   )
