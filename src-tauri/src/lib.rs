@@ -94,6 +94,23 @@ fn avoid_webkit_dmabuf_renderer() {
     }
 }
 
+/// NVIDIA under native Wayland ends the WebKitGTK window with "Error 71" when
+/// explicit sync is on; turning it off keeps the GPU path, unlike the WebKit
+/// fallbacks below.
+#[cfg(any(target_os = "linux", test))]
+fn needs_nv_explicit_sync_off(nvidia_driver: bool, wayland_display: Option<&str>) -> bool {
+    nvidia_driver && wayland_display.is_some_and(|d| !d.is_empty())
+}
+
+#[cfg(target_os = "linux")]
+fn avoid_nvidia_explicit_sync() {
+    const VAR: &str = "__NV_DISABLE_EXPLICIT_SYNC";
+    let wayland = std::env::var("WAYLAND_DISPLAY").ok();
+    if std::env::var_os(VAR).is_none() && needs_nv_explicit_sync_off(nvidia_driver_loaded(), wayland.as_deref()) {
+        std::env::set_var(VAR, "1");
+    }
+}
+
 #[cfg(any(target_os = "linux", test))]
 #[derive(Debug, PartialEq, Eq)]
 enum AppImageWaylandFix {
@@ -142,6 +159,7 @@ fn avoid_webkit_compositing_on_appimage_wayland() {
 pub fn run() {
     #[cfg(target_os = "linux")]
     {
+        avoid_nvidia_explicit_sync();
         avoid_webkit_dmabuf_renderer();
         avoid_webkit_compositing_on_appimage_wayland();
     }
@@ -786,6 +804,19 @@ mod tests {
                  Software compositing renders the whole UI on the CPU and lags; leaving the AppImage \
                  on native Wayland with GPU compositing shows a black window.",
             );
+        }
+    }
+
+    #[test]
+    fn nvidia_explicit_sync_is_off_only_on_nvidia_wayland() {
+        let cases: &[(bool, Option<&str>, bool, &str)] = &[
+            (true, Some("wayland-1"), true, "NVIDIA on Hyprland: the Error 71 case the Flatpak users fixed by hand"),
+            (true, None, false, "NVIDIA on X11 has no explicit sync to turn off"),
+            (true, Some(""), false, "an empty WAYLAND_DISPLAY is not a Wayland session"),
+            (false, Some("wayland-1"), false, "Mesa drivers ignore the NVIDIA variable; leave the environment alone"),
+        ];
+        for &(nvidia, wayland, expected, why) in cases {
+            assert_eq!(crate::needs_nv_explicit_sync_off(nvidia, wayland), expected, "nvidia={nvidia} wayland={wayland:?}: {why}");
         }
     }
 
