@@ -97,6 +97,19 @@ fn pack_jvm_args(raw: Vec<String>) -> Vec<String> {
     out
 }
 
+const FIRST_THREAD: &str = "-XstartOnFirstThread";
+
+/// GLFW on macOS refuses to open a window unless the JVM runs the game on the
+/// first thread, and a pack author on Windows never sees that crash, so the
+/// flag must not depend on the pack remembering `jvmArgsByPlatform`. Java 17+
+/// means LWJGL 3; an old LWJGL 2 pack on Java 8 does not want the flag.
+fn with_first_thread(mut args: Vec<String>, os: &str, java_major: u64) -> Vec<String> {
+    if os == "macos" && java_major >= 17 && !args.iter().any(|a| a == FIRST_THREAD) {
+        args.push(FIRST_THREAD.to_string());
+    }
+    args
+}
+
 /// Reads the description a pack shipped with. Absent file = ordinary build.
 pub fn pack_launch_spec(profile: &str) -> Option<PackLaunch> {
     let raw = std::fs::read(profile_dir(profile).join(PACK_LAUNCH_FILE)).ok()?;
@@ -198,7 +211,11 @@ pub fn parse_pack_launch(v: &Value) -> Option<PackLaunch> {
          * code execution on every start. Everything the pack actually needs
          * (`-D…`, `-XX:…`) passes that filter.
          */
-        jvm_args: pack_jvm_args(list(v, "jvmArgs").into_iter().chain(platform_jvm).collect()),
+        jvm_args: with_first_thread(
+            pack_jvm_args(list(v, "jvmArgs").into_iter().chain(platform_jvm).collect()),
+            platform_os_arch().0,
+            java_major,
+        ),
         game_args,
         vanilla_assets,
         java_major,
@@ -1144,6 +1161,21 @@ mod tests {
     /// module openings that Java 17+ closes by default, and the FML flags a
     /// patched client jar needs. Every item here was a failed start of the
     /// real OneBlock client before it was added.
+    #[test]
+    fn macos_gets_the_first_thread_flag_even_when_the_pack_forgot_it() {
+        let cases: [(Vec<&str>, &str, u64, usize, &str); 5] = [
+            (vec![], "macos", 21, 1, "Pixelmon shipped without the flag and every Mac start died in GLFW"),
+            (vec![FIRST_THREAD], "macos", 21, 1, "a pack that lists it must not get it twice"),
+            (vec![], "windows", 21, 0, "the JVM on Windows rejects the macOS-only flag"),
+            (vec![], "linux", 25, 0, "the JVM on Linux rejects the macOS-only flag"),
+            (vec![], "macos", 8, 0, "LWJGL 2 packs on Java 8 do not start on the first thread"),
+        ];
+        for (input, os, java, want, why) in cases {
+            let args = with_first_thread(input.into_iter().map(String::from).collect(), os, java);
+            assert_eq!(args.iter().filter(|a| *a == FIRST_THREAD).count(), want, "{}", why);
+        }
+    }
+
     #[test]
     fn a_1_7_10_lwjgl3ify_pack_gets_the_command_line_it_needs() {
         let spec = parse_pack_launch(&lwjgl3ify_spec()).expect("описание OneBlock разобрано");
