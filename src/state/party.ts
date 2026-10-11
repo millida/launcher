@@ -117,7 +117,17 @@ export const partyWithOthers = (p: Party | null): boolean => !!p && p.members.le
 
 export const createParty = () => attempt(() => partyCall(''), 'Не удалось собрать пати')
 
-export const leaveParty = () => attempt(() => partyCall('/leave'), 'Не удалось выйти из пати')
+export async function leaveParty(): Promise<void> {
+  try {
+    await partyCall('/leave')
+  } catch (e) {
+    // The server may have already taken us out — a kick or a disband the lobby
+    // had not caught up to. Resync so the stale figures clear, and stay quiet
+    // when we are in fact already out instead of flashing «Ты не в пати».
+    await loadParty().catch(() => {})
+    if (st().party) showToast(apiErrorText(e, 'Не удалось выйти из пати'), 'error')
+  }
+}
 
 export const kickFromParty = (userId: string) => attempt(() => partyCall('/kick', { userId }), 'Не удалось исключить')
 
