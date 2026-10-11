@@ -2,15 +2,6 @@
   <img src=".github/readme/banner.png" alt="Millida Launcher — лаунчер Minecraft с модами, скинами и друзьями">
 </p>
 
-> [!IMPORTANT]
-> **Лаунчер собирает GitHub из этого кода, а не мы у себя на компьютере.**
->
-> `этот код` → [GitHub Actions](https://github.com/millida/launcher/actions/workflows/release.yml) → [Releases](https://github.com/millida/launcher/releases) → установщик и автообновление
->
-> У каждого файла есть [свидетельство GitHub](https://github.com/millida/launcher/attestations): из какого коммита он собран. Проверить за минуту — [SAFETY.md](SAFETY.md).
->
-> Код мобильного лаунчера для Android — [millida/launcher-mobile](https://github.com/millida/launcher-mobile).
-
 <p align="center">
   <a href="https://millida.net/launcher/dl/windows"><img src=".github/readme/download-windows.png" width="32%" alt="Скачать для Windows"></a>
   <a href="https://millida.net/launcher/dl/macos"><img src=".github/readme/download-macos.png" width="32%" alt="Скачать для macOS"></a>
