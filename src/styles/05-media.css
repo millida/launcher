@@ -830,7 +830,7 @@
 .cpk-hue-thumb{position:absolute;top:50%;width:16px;height:16px;border-radius:50%;background:var(--m-accent-fg);border:2px solid var(--m-surface-2);box-shadow:0 1px 4px rgba(0,0,0,.5);transform:translate(-50%,-50%);pointer-events:none}
 .cpk-foot{display:flex;align-items:center;gap:8px;margin-top:12px}
 .cpk-preview{width:32px;height:32px;flex:none;border-radius:8px;border:1px solid var(--m-border)}
-.cpk-foot .input{text-transform:uppercase}
+.cpk-foot .input{min-width:0;text-transform:uppercase}
 
 /* ---- Live instance log ---- */
 /* The pulse animates transform+opacity on its own circle: animating box-shadow
