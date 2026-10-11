@@ -35,7 +35,7 @@ pub struct CrashAction {
 
 /// Actions that change the mod set of the build — the ones a repair plan is
 /// made of. Anything else (memory, Java, a link) is its own button.
-const PLAN_KINDS: [&str; 5] = ["add-mod", "install-deps", "install-dep", "set-mod-version", "disable-mod"];
+const PLAN_KINDS: [&str; 6] = ["add-mod", "install-deps", "install-dep", "set-mod-version", "update-loader", "disable-mod"];
 
 const PLAN_MAX_STEPS: usize = 16;
 
@@ -227,6 +227,19 @@ pub(crate) fn is_loader_id(id: &str) -> bool {
     is_platform_id(id) && !matches!(id, "minecraft" | "java")
 }
 
+/// The loader a requirement names is the one the build runs: a Fabric mod
+/// asking for Forge is a wrong-loader jar, and no loader update helps it.
+fn loader_serves(loader: &str, dep_id: &str) -> bool {
+    match dep_id {
+        "fabricloader" | "fabric-loader" => loader == "fabric",
+        "quilt_loader" | "quilt-loader" => loader == "quilt",
+        "forge" => loader == "forge",
+        "neoforge" => loader == "neoforge",
+        "fml" | "javafml" => loader == "forge" || loader == "neoforge",
+        _ => false,
+    }
+}
+
 type FileOf<'a> = &'a dyn Fn(&str) -> Option<String>;
 type HasSource<'a> = &'a dyn Fn(&str) -> bool;
 
@@ -272,9 +285,29 @@ fn finding_actions(findings: &[LoaderFinding], file_of: FileOf, has_source: HasS
                                 .alternative(),
                             Some(file),
                         );
+                    } else if is_loader_id(&dep.id) {
+                        // Чаще всего у сборки закреплён старый загрузчик (импорт, старый
+                        // модпак), а мод просит новее: 9 из 15 свежих разборов сборок
+                        // 10.10.2026. Отключать мод — терять его; новый загрузчик той же
+                        // версии игры сборку не ломает.
+                        add_action(
+                            &mut out,
+                            CrashAction::new(
+                                "update-loader",
+                                "Обновить загрузчик".into(),
+                                format!("{}|{}", dep.id, range),
+                                &format!("«{}» нужен загрузчик {}", by.name, range),
+                            ),
+                            Some(file.clone()),
+                        );
+                        add_action(
+                            &mut out,
+                            CrashAction::new("disable-mod", format!("Отключить «{}»", by.name), file.clone(), "Моду нужен загрузчик новее, чем в сборке")
+                                .alternative(),
+                            Some(file),
+                        );
                     } else {
-                        let why = if is_loader_id(&dep.id) { "Моду нужен загрузчик новее, чем в сборке" } else { "Мод собран под другую версию игры" };
-                        add_action(&mut out, CrashAction::new("disable-mod", format!("Отключить «{}»", by.name), file.clone(), why), Some(file));
+                        add_action(&mut out, CrashAction::new("disable-mod", format!("Отключить «{}»", by.name), file.clone(), "Мод собран под другую версию игры"), Some(file));
                     }
                     continue;
                 }
@@ -595,6 +628,22 @@ async fn apply_step(app: tauri::AppHandle, profile: String, kind: String, arg: S
             toggle_content(&profile, "mod", &file, false)?;
             Ok(format!("Мод «{}» отключён", file))
         }
+        "update-loader" => {
+            let (id, _) = dep_arg(&arg)?;
+            let mut all = load_profiles();
+            let p = all.iter_mut().find(|p| p.name == profile).ok_or("Сборка не найдена")?;
+            let loader = p.loader.clone().unwrap_or_default().to_lowercase();
+            if !loader_serves(&loader, &id) {
+                return Err("Мод собран под другой загрузчик — отключи его".into());
+            }
+            // Закреплённая версия снимается: при запуске ядро поставит последнюю
+            // стабильную для этой версии игры (install.rs, без закрепления).
+            let Some(old) = p.loader_version.take().filter(|v| !v.trim().is_empty()) else {
+                return Err("Загрузчик сборки и так последний для этой версии игры — моду нужна другая версия игры".into());
+            };
+            save_profiles(&all)?;
+            Ok(format!("Загрузчик {} обновится при запуске (был {})", loader, old))
+        }
         "set-ram" => {
             let mb: u32 = arg.parse().map_err(|_| "Некорректный объём памяти".to_string())?;
             if !(512..=65536).contains(&mb) {
@@ -812,9 +861,9 @@ mod tests {
                 vec![("set-mod-version", "walkers-1.0.jar|*"), ("install-dep", "craftedcore|>=5.8.1")],
             ),
             (
-                "мод без источника под чужой загрузчик — только отключение",
+                "мод просит загрузчик новее — обновляется загрузчик, а не отключается мод",
                 "\t - Mod 'Iris' (iris) 1.7.0 requires version 0.16.0 or later of fabricloader, but only the wrong version is present: 0.14.21!",
-                vec![("disable-mod", "iris-1.7.0.jar")],
+                vec![("update-loader", "fabricloader|>=0.16.0")],
             ),
             (
                 "Forge: дубль — остаётся файл, который знает сборка",
@@ -847,13 +896,29 @@ mod tests {
         }
     }
 
+    #[test]
+    fn a_loader_update_only_helps_the_loader_the_build_runs() {
+        let cases = [
+            ("fabric", "fabricloader", true, "мод Fabric просит новый Fabric Loader"),
+            ("quilt", "quilt_loader", true, "то же для Quilt"),
+            ("forge", "forge", true, "мод Forge просит Forge новее"),
+            ("neoforge", "javafml", true, "javafml у NeoForge — его же загрузчик"),
+            ("forge", "fabricloader", false, "мод Fabric в сборке Forge — обновление загрузчика не поможет, только отключение"),
+            ("vanilla", "fabricloader", false, "у ванильной сборки загрузчика нет"),
+        ];
+        for (loader, dep, want, why) in cases {
+            assert_eq!(loader_serves(loader, dep), want, "{}", why);
+        }
+    }
+
     /// arg -> accepted. A plan comes back from the webview; only mod-set
     /// changes the core itself would have listed may run from it.
     #[test]
     fn a_plan_from_the_webview_is_checked_step_by_step() {
-        let cases: [(&str, bool, &str); 5] = [
+        let cases: [(&str, bool, &str); 6] = [
             (r#"[["install-dep","fabric-api|*"],["disable-mod","a.jar"]]"#, true, "обычный план"),
             (r#"[["set-ram","65536"]]"#, false, "память — не шаг починки модов"),
+            (r#"[["update-loader","fabricloader|>=0.16.0"]]"#, true, "обновление загрузчика — шаг плана"),
             (r#"[["install-java","8"]]"#, false, "Java — отдельная кнопка"),
             ("[]", false, "пустой план"),
             ("not json", false, "мусор"),

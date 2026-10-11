@@ -80,7 +80,7 @@ RUN curl -fsSL https://sh.rustup.rs -o /tmp/rustup-init.sh \
   && chmod -R a+w "${RUSTUP_HOME}" "${CARGO_HOME}"
 
 ENV BUN_INSTALL=/usr/local/bun
-RUN curl -fsSL https://bun.sh/install | bash
+RUN curl -fsSL https://bun.sh/install | bash -s "bun-v1.4.0"
 
 # rcodesign — замена codesign: подписывает .app с Linux, умеет ad-hoc (как
 # signingIdentity "-" в tauri.conf.json), .p12 и нотаризацию через Apple API.

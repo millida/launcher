@@ -218,19 +218,6 @@ export const cancelInstall = (key: string) => invoke<boolean>('cancel_install', 
 
 export const pauseInstall = (key: string, paused: boolean) => invoke<boolean>('pause_install', { key, paused })
 
-  name: string
-  enabled: boolean
-  size: number
-}
-
-  supported: boolean
-  installed: boolean
-  version: string
-  dir: string
-}
-
-
-
 export interface StoreGameState {
   slug: string
   steam: boolean
@@ -1086,6 +1073,8 @@ export interface FallbackUpdate {
   file: string
   signature: string
   source: string
+  /** CDN-зеркало тех же байтов, когда url ведёт в релиз на GitHub. */
+  mirror?: string
 }
 
 export interface FallbackInstall {

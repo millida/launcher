@@ -11,6 +11,7 @@
  * поменялось, пишется в дневник сборки (milliDiary.ts) с причиной.
  */
 import { create } from 'zustand'
+import { markFixApplied } from './repair'
 import type { MilliMessage } from './milli'
 
 // ─── Контракт (синхронно с milli-server/src/types.ts MilliAction) ───────────
@@ -294,6 +295,8 @@ export async function runAction(id: string): Promise<ActionState | null> {
       diaryId = (await hooks.diary({ profile, action: a, changes, undo, snapId })) ?? undefined
     } catch {}
   }
+  // Итог починки виден в следующем выходе/вылете сборки (repair.ts, fixMark).
+  if (changes.length && (a.kind === 'crashfix' || a.kind === 'doctor')) markFixApplied(profile, 'milli:' + a.kind)
   const failedAll = !okAll && !changes.length && !undo.length
   aset(id, { phase: failedAll ? 'failed' : 'done', rows, undo, diaryId, error: failedAll ? firstDetail(rows) || 'Не вышло' : undefined })
   hooks.mood?.(okAll ? 'proud' : 'oops')

@@ -324,6 +324,28 @@ pub fn fetch_build(client: &Client) -> Result<Build, String> {
     Err(if failures.is_empty() { "нет ни одного источника".into() } else { failures.join("; ") })
 }
 
+/// The build from its main source, then from the mirror. A file counts only
+/// once its signature checks out, so a source that serves other bytes is just a
+/// failed source.
+pub fn download_verified(
+    client: &Client,
+    build: &Build,
+    dest: &Path,
+    mut report: impl FnMut(u64, Option<u64>),
+) -> Result<(), String> {
+    let mut failures: Vec<String> = Vec::new();
+    for url in std::iter::once(&build.url).chain(build.mirror.iter()) {
+        match download(client, url, dest, &mut report).and_then(|()| verify(dest, &build.signature)) {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                let _ = std::fs::remove_file(dest);
+                failures.push(e);
+            }
+        }
+    }
+    Err(failures.join("; "))
+}
+
 pub fn download(
     client: &Client,
     url: &str,

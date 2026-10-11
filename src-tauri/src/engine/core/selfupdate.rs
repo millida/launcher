@@ -29,9 +29,18 @@ pub(crate) fn beta_channel() -> bool {
 /// the same key: the setting picks a file, never a host. A URL the webview could
 /// choose would be an update channel anyone with XSS could point anywhere.
 fn beta_url(url: &str) -> Option<String> {
-    let (head, tail) = url.rsplit_once('/')?;
+    // The query (`?v=…`) stays: without it the edge serves its own stale copy
+    // of the manifest (see `endpoints` in tauri.conf.json).
+    let (path, query) = match url.split_once('?') {
+        Some((p, q)) => (p, Some(q)),
+        None => (url, None),
+    };
+    let (head, tail) = path.rsplit_once('/')?;
     match tail {
-        "latest.json" => Some(format!("{}/beta.json", head)),
+        "latest.json" => Some(match query {
+            Some(q) => format!("{}/beta.json?{}", head, q),
+            None => format!("{}/beta.json", head),
+        }),
         _ => None,
     }
 }
@@ -45,6 +54,11 @@ pub struct FallbackUpdate {
     pub file: String,
     pub signature: String,
     pub source: String,
+    /// The same bytes on our CDN when `url` points at the GitHub release: if
+    /// GitHub is unreachable the file comes from here and must pass the same
+    /// signature check.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mirror: Option<String>,
 }
 
 #[derive(Serialize, Clone)]
@@ -175,7 +189,7 @@ async fn fetch_manifest(app: &AppHandle, require_newer: bool) -> Result<Option<F
     // a manifest signed by another key never competes with this one.
     let mut best: Option<FallbackUpdate> = None;
     for url in endpoints(app) {
-        let beta = url.ends_with("/beta.json");
+        let beta = url.split('?').next().unwrap_or(&url).ends_with("/beta.json");
         let doc = match get_json(&url).await {
             Ok(v) => v,
             Err(e) => {
@@ -192,9 +206,10 @@ async fn fetch_manifest(app: &AppHandle, require_newer: bool) -> Result<Option<F
             let e = &doc["platforms"][key];
             let link = e["url"].as_str().unwrap_or("").trim().to_string();
             let signature = e["signature"].as_str().unwrap_or("").trim().to_string();
-            (!link.is_empty() && !signature.is_empty()).then_some((link, signature))
+            let mirror = e["mirror"].as_str().map(|m| m.trim().to_string()).filter(|m| m.starts_with("https://"));
+            (!link.is_empty() && !signature.is_empty()).then_some((link, signature, mirror))
         };
-        let Some((link, signature)) = keys.iter().find_map(|k| entry(k.as_str())) else {
+        let Some((link, signature, mirror)) = keys.iter().find_map(|k| entry(k.as_str())) else {
             last = format!("{}: в манифесте нет сборки для {}", url, keys.join(" / "));
             continue;
         };
@@ -205,6 +220,7 @@ async fn fetch_manifest(app: &AppHandle, require_newer: bool) -> Result<Option<F
             url: link,
             signature,
             source: url,
+            mirror,
         };
         if best.as_ref().is_none_or(|b| is_newer(&found.version, &b.version)) {
             best = Some(found);
@@ -283,10 +299,28 @@ pub async fn fallback_stage(app: &AppHandle, upd: &FallbackUpdate) -> Result<Pat
     let dest = dir.join(safe_file_name(&upd.file)?);
     let key = pubkey(app)?;
     if !(dest.exists() && verify(&dest, &upd.signature, &key).is_ok()) {
-        download_fresh(&upd.url, &dest).await?;
-        if let Err(e) = verify(&dest, &upd.signature, &key) {
-            let _ = std::fs::remove_file(&dest);
-            return Err(e);
+        // GitHub first, then our CDN mirror: either source must produce the
+        // exact bytes the release key signed.
+        let mut last = String::new();
+        let mut ok = false;
+        for link in std::iter::once(&upd.url).chain(upd.mirror.iter()) {
+            let got = match download_fresh(link, &dest).await {
+                Ok(()) => verify(&dest, &upd.signature, &key),
+                Err(e) => Err(e),
+            };
+            match got {
+                Ok(()) => {
+                    ok = true;
+                    break;
+                }
+                Err(e) => {
+                    let _ = std::fs::remove_file(&dest);
+                    last = e;
+                }
+            }
+        }
+        if !ok {
+            return Err(last);
         }
     }
     std::fs::write(sig_path(&dest), upd.signature.as_bytes()).map_err(|e| e.to_string())?;
@@ -545,10 +579,14 @@ mod tests {
     /// update channel anyone with a webview hole could aim anywhere.
     #[test]
     fn testing_channel_only_swaps_the_manifest_name() {
-        let cases: [(&str, Option<&str>); 5] = [
+        let cases: [(&str, Option<&str>); 6] = [
             (
                 "https://launcher-storage.millida.net/v2/latest.json",
                 Some("https://launcher-storage.millida.net/v2/beta.json"),
+            ),
+            (
+                "https://launcher-storage.millida.net/v2/gh/latest.json?v=2.0.203",
+                Some("https://launcher-storage.millida.net/v2/gh/beta.json?v=2.0.203"),
             ),
             (
                 "https://launcher-storage.millida.net/latest.json",

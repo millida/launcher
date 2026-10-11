@@ -14,6 +14,7 @@ import {
   javaMajors,
   listJavaRuntimes,
   openGameFolder,
+  openUrl,
   overlaySetCardMs,
   overlaySetEnabled,
   overlayState,
@@ -972,7 +973,7 @@ export function Settings({ on }: { on: boolean }) {
             }}
           />
         </Row>
-        <Row title="Анонимная статистика" hint="Без ников и файлов — только цифры" keys="телеметрия данные приватность">
+        <Row title="Анонимная статистика" hint="Версия, железо, вылеты. Без ников, паролей и файлов" keys="телеметрия данные приватность">
           <Toggle
             id="setTelemetry"
             label="Анонимная статистика"
@@ -1041,6 +1042,15 @@ export function Settings({ on }: { on: boolean }) {
       </Block>
 
       <Group>
+        {/* Не верят, что лаунчер собран из открытого кода: ссылка на релиз именно этой версии на GitHub, там файлы, отпечатки и свидетельство сборки. */}
+        <Row title="Собран на GitHub" hint={ver ? 'v' + ver : undefined} keys="github исходный код открытый безопасность вирус проверить сборка">
+          <button
+            className="btn md secondary"
+            onClick={() => void openUrl('https://github.com/millida/launcher/releases' + (ver ? '/tag/v' + ver : '')).catch(() => {})}
+          >
+            Открыть
+          </button>
+        </Row>
         <Row title="Тестовые версии" hint={beta ? 'Раньше всех, бывают поломки' : undefined} keys="бета тестирование обновления раньше">
           <Toggle
             label="Тестовые версии"

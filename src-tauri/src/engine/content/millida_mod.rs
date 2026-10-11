@@ -3,6 +3,14 @@ use serde_json::Value;
 use std::path::{Path, PathBuf};
 
 const MANIFEST_URL: &str = "https://cdn.millida.net/mod/variants.json";
+const MOD_BASE: &str = "https://cdn.millida.net/mod";
+
+/// The jar comes only from our CDN folder: a `baseUrl` in the manifest counts
+/// only inside it, so a swapped manifest cannot point the download elsewhere.
+fn mod_base_allowed(base: &str) -> bool {
+    let b = base.trim_end_matches('/');
+    b == MOD_BASE || (b.starts_with(&format!("{}/", MOD_BASE)) && !b.contains(".."))
+}
 const FILE_PREFIX: &str = "millida-mod-";
 
 pub(crate) fn is_millida_mod_file(name: &str) -> bool {
@@ -70,9 +78,69 @@ fn variant_fits(variant: &Value, game_version: &str, loader: &str) -> bool {
 /// Read before every launch of a modded build. Without a copy on disk, a launch
 /// with no network lost the mod the build already had.
 async fn manifest() -> Result<Value, String> {
-    get_json_revalidated(MANIFEST_URL, &data_dir().join("millida-mod-variants.json"))
+    let m = get_json_revalidated(MANIFEST_URL, &data_dir().join("millida-mod-variants.json"))
         .await
-        .map_err(|e| format!("Каталог версий мода недоступен: {}", e))
+        .map_err(|e| format!("Каталог версий мода недоступен: {}", e))?;
+    let seen = data_dir().join("millida-mod-signed");
+    match manifest_signature(&m, MOD_MANIFEST_PUBKEY) {
+        ManifestSignature::Valid => {
+            if !seen.exists() {
+                let _ = std::fs::write(&seen, b"1");
+            }
+            Ok(m)
+        }
+        // Переход: пока выпуски мода не подписывались, список без подписи
+        // принимается — но только на ПК, который подписанного ещё не видел.
+        ManifestSignature::Missing if !seen.exists() => Ok(m),
+        ManifestSignature::Missing => Err("Список версий мода пришёл без подписи — мод не ставим".into()),
+        ManifestSignature::Invalid => Err("Подпись списка версий мода не сошлась — мод не ставим".into()),
+    }
+}
+
+/// Открытая часть ключа, которым CI мода (millida-mod, scripts/manifest_canonical.py)
+/// подписывает список вариантов: сервер или CDN без закрытой части не может
+/// подсунуть в игру другой jar — его sha256 стоит в подписанной строке.
+const MOD_MANIFEST_PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDBCMjA5MkFGRDhCODAzOEMKUldTTUE3allyNUlnQ3haTTFKZnlLcjExcFIybGRjVlMrSzNvQzZiQjNLbVY2cEJUVW5lUXZNdDAK";
+
+#[derive(Debug, PartialEq, Eq)]
+enum ManifestSignature {
+    Valid,
+    Missing,
+    Invalid,
+}
+
+/// Строка, которую подписывает CI мода: версия и «файл|sha256|размер» каждого
+/// варианта по порядку. Не зависит от пробелов и порядка ключей json.
+fn manifest_canonical(m: &Value) -> Option<String> {
+    let version = m["version"].as_str()?;
+    let mut out = format!("millida-mod-manifest-v1\nversion={}\n", version);
+    for v in m["variants"].as_array()? {
+        let artifact = v["artifact"].as_str()?.replace("{version}", version);
+        let sha = v["sha256"].as_str()?.to_lowercase();
+        out.push_str(&format!("{}|{}|{}\n", artifact, sha, v["size"].as_u64().unwrap_or(0)));
+    }
+    Some(out)
+}
+
+fn manifest_signature(m: &Value, pubkey_b64: &str) -> ManifestSignature {
+    use base64::Engine as _;
+    use minisign_verify::{PublicKey, Signature};
+    let Some(sig_b64) = m["signature"].as_str().filter(|s| !s.trim().is_empty()) else {
+        return ManifestSignature::Missing;
+    };
+    let decode = |b64: &str| {
+        base64::engine::general_purpose::STANDARD
+            .decode(b64.trim())
+            .ok()
+            .and_then(|raw| String::from_utf8(raw).ok())
+    };
+    let ok = (|| {
+        let key = PublicKey::decode(decode(pubkey_b64)?.trim()).ok()?;
+        let sig = Signature::decode(decode(sig_b64)?.trim()).ok()?;
+        let text = manifest_canonical(m)?;
+        key.verify(text.as_bytes(), &sig, true).ok()
+    })();
+    if ok.is_some() { ManifestSignature::Valid } else { ManifestSignature::Invalid }
 }
 
 /// Все наши jar в сборке. Их обязан быть один, но бывает два: при обновлении
@@ -192,7 +260,7 @@ async fn install_job(app: &AppHandle, job: &Job, profile: String) -> Result<Mill
     if sha256.is_empty() {
         return Err("Каталог не дал контрольную сумму файла".into());
     }
-    let base = manifest["baseUrl"].as_str().unwrap_or("https://cdn.millida.net/mod");
+    let base = manifest["baseUrl"].as_str().filter(|b| mod_base_allowed(b)).unwrap_or(MOD_BASE);
     let url = format!("{}/{}", base.trim_end_matches('/'), state.available);
 
     let mods = profile_dir(&profile).join("mods");
@@ -843,6 +911,51 @@ pub async fn ensure_millida_mod(
 mod tests {
     use super::*;
     use serde_json::json;
+
+    /// Подпись настоящим ключом мода (scripts/manifest_canonical.py + tauri signer):
+    /// подменённая сумма jar или чужая подпись не проходят, без подписи — «нет подписи».
+    #[test]
+    fn a_signed_mod_manifest_is_checked_line_by_line() {
+        let signed = json!({
+            "formatVersion": 1,
+            "version": "0.2.11",
+            "baseUrl": "https://cdn.millida.net/mod",
+            "variants": [
+                { "id": "fabric-1.21.1", "artifact": "millida-mod-fabric-1.21.1-0.2.11.jar", "sha256": "AB12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12", "size": 123456 },
+                { "id": "forge-1.20.1", "artifact": "millida-mod-forge-1.20.1-0.2.11.jar", "sha256": "cd34cd34cd34cd34cd34cd34cd34cd34cd34cd34cd34cd34cd34cd34cd34cd34", "size": 654321 }
+            ],
+            "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTTUE3allyNUlnQzBGT3VCTUVFNFFzaXhha1BkZVIybHF6V00zTS81aTFNNy9CTndDbnBGZ0I4OVdocDFZb3RJUUtzZFFzYmc5TWFidWM2bldYb08yNzhwdTV6YkZlUWdVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNzA4Mjk0CWZpbGU6dmFyaWFudHMuY2Fub25pY2FsCndwYjJyazV2elo4M1VzL1Z5MTZrNHU0eStrQ0JzSHhWZ0xZSFVLQnNZc09xVDdmTnZWSmNtNFJjTzdwM083eTQrdmNPNytxak1QR2V0K0paUDFmR0R3PT0K"
+        });
+        assert_eq!(manifest_signature(&signed, MOD_MANIFEST_PUBKEY), ManifestSignature::Valid, "список, подписанный CI мода");
+        let mut swapped = signed.clone();
+        swapped["variants"][0]["sha256"] = json!("ef56ef56ef56ef56ef56ef56ef56ef56ef56ef56ef56ef56ef56ef56ef56ef56");
+        assert_eq!(manifest_signature(&swapped, MOD_MANIFEST_PUBKEY), ManifestSignature::Invalid, "подменённый jar не проходит");
+        let mut extra = signed.clone();
+        extra["variants"].as_array_mut().unwrap().push(json!({ "artifact": "evil.jar", "sha256": "00", "size": 1 }));
+        assert_eq!(manifest_signature(&extra, MOD_MANIFEST_PUBKEY), ManifestSignature::Invalid, "добавленный вариант не проходит");
+        let mut unsigned = signed.clone();
+        unsigned.as_object_mut().unwrap().remove("signature");
+        assert_eq!(manifest_signature(&unsigned, MOD_MANIFEST_PUBKEY), ManifestSignature::Missing);
+        let mut cosmetic = signed.clone();
+        cosmetic["comment"] = json!("пробелы и новые поля подпись не ломают");
+        assert_eq!(manifest_signature(&cosmetic, MOD_MANIFEST_PUBKEY), ManifestSignature::Valid);
+    }
+
+    #[test]
+    fn the_mod_jar_comes_only_from_our_cdn_folder() {
+        let cases = [
+            ("https://cdn.millida.net/mod", true, "обычная база"),
+            ("https://cdn.millida.net/mod/", true, "со слэшем"),
+            ("https://cdn.millida.net/mod/beta", true, "подпапка нашей же папки"),
+            ("https://cdn.millida.net/modx", false, "соседняя папка с похожим именем"),
+            ("https://cdn.millida.net/mod/../other", false, "выход из папки"),
+            ("https://evil.example/mod", false, "чужой хост"),
+            ("http://cdn.millida.net/mod", false, "без https"),
+        ];
+        for (base, want, why) in cases {
+            assert_eq!(mod_base_allowed(base), want, "{}", why);
+        }
+    }
 
     /// The launcher must never overwrite a choice the player made in the
     /// Right Shift menu: it only fills in a missing "hud" object, and only

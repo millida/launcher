@@ -97,7 +97,8 @@ import { useGuarded, useProfiles } from '../state/profiles'
 import { catalogPackSlug } from '../lib/packUpdate'
 import { useInstance } from '../state/instance'
 import { closeModal, setScreen, showToast, useUi, openModal } from '../state/ui'
-import { runRepair } from '../lib/repair'
+import { repairPack } from '../lib/repair'
+import { openMilli } from '../state/milli'
 import { joinWithAuth, realLaunch, showLaunchError, startPrelaunch } from '../lib/launch'
 import { useMods } from '../state/mods'
 import { useModpackVersions } from '../state/modpack'
@@ -106,7 +107,7 @@ import { openProject } from '../state/project'
 import { stopRunningGame, useGame } from '../state/game'
 import { apiErrorText } from '../lib/apiError'
 import { trackFailure } from '../lib/telemetry'
-import { mirrorAsset } from '../lib/api'
+import { hasMillidaAccount, mirrorAsset } from '../lib/api'
 
 /// Имя сборки в тексте ошибки — личное.
 const maskBuild = (e: unknown, name: string | null | undefined) =>
@@ -2403,7 +2404,20 @@ export function InstancePage() {
                   disabled={repairBusy}
                   onClick={() => {
                     setRepairBusy(true)
-                    runRepair(profile!).finally(() => setRepairBusy(false))
+                    const name = profile!
+                    repairPack(name)
+                      .then((r) => {
+                        // Причину вылета ядро не опознало — Милли смотрит лог и сборку целиком.
+                        if (!r?.unresolved || !hasMillidaAccount()) return
+                        const crash = r.unresolved
+                        void import('../lib/milliDoctor').then((d) => {
+                          d.startMilliDoctor()
+                          const { text, action } = d.crashAction({ profile: name, reason: crash.reason, tail: '', culprits: crash.culprits, actions: crash.actions, kind: crash.kind })
+                          openMilli({ src: 'repair' })
+                          void d.pushMilliAction(text, action, ['Почему так?', 'Осмотри сборку'])
+                        })
+                      })
+                      .finally(() => setRepairBusy(false))
                   }}
                 >
                   <Icon id="i-restart" /> {repairBusy ? 'Чиним…' : 'Починить'}
