@@ -4,6 +4,7 @@ import { BuildIcon } from '../components/playhub/BuildIcon'
 import { Installs } from '../components/Installs'
 import { LobbyCharacter } from '../components/lobby/LobbyCharacter'
 import { EmoteBubble } from '../components/lobby/EmoteBubble'
+import { PartyBar } from '../components/lobby/PartyBar'
 import { isLeader, partyWithOthers, usePartyStore } from '../state/party'
 import { partyPlayPressed } from '../lib/partyPlay'
 import { Recommend } from '../components/lobby/Recommend'
@@ -227,6 +228,7 @@ export function Play({ on }: { on: boolean }) {
 
       </div>
       <LobbyCharacter on={on} />
+      <PartyBar on={on} />
       <EmoteBubble />
       {dayZero ? null : <Recommend on={on} />}
       {/* Левый край — как в Brawl Stars: крупный сундук и под ним разделы.

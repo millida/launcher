@@ -62,7 +62,7 @@ export interface PartyInvite {
   expiresAt: number
 }
 
-export const DEFAULT_PARTY_CAPACITY = 4
+export const DEFAULT_PARTY_CAPACITY = 3
 
 export const AGE_BRACKETS: { id: AgeBracket; label: string }[] = [
   { id: 'u13', label: 'До 13' },
@@ -123,6 +123,32 @@ export function slotPlan(capacity: number, members: PartyMember[], me: string): 
   }
   const perSide = Math.ceil(cells.length / 2)
   return { cells, size: perSide <= 2 ? 'lg' : perSide <= 3 ? 'md' : 'sm' }
+}
+
+export interface SlotSpot {
+  x: number
+  z: number
+  yaw: number
+}
+
+const SLOT_GAP_X = 25
+const SLOT_STEP_X = 20
+const SLOT_BACK_Z = 14
+const SLOT_STEP_Z = 12
+const SLOT_TURN = 0.32
+
+/**
+ * Where a seat stands on the lobby stage, in model pixels around my character: each
+ * flank steps outward and back, so the party forms a shallow arc facing the camera.
+ */
+export function slotSpot(index: number, side: SlotSide): SlotSpot {
+  const rank = Math.floor(index / 2)
+  const sign = side === 'right' ? 1 : -1
+  return {
+    x: sign * (SLOT_GAP_X + rank * SLOT_STEP_X),
+    z: -(SLOT_BACK_Z + rank * SLOT_STEP_Z),
+    yaw: -sign * SLOT_TURN,
+  }
 }
 
 /** A launch only starts the game on this machine while it is fresh: a restart must not replay an old one. */
@@ -199,6 +225,29 @@ export interface LfgCard {
   createdAt: number
   expiresAt: number
   requested: boolean
+}
+
+export const partyFull = (p: Party): boolean => p.members.length >= p.capacity
+
+export const MATE_TAGS: LfgTags = { mode: 'survival', version: '', pack: '', lang: 'ru', region: 'ru_west', voice: false, time: 'now' }
+
+/**
+ * Which open party a solo player is sent to by «Найти напарника»: one with a free seat,
+ * not asked yet, not mine, closest by mode and language, and the fullest of those so
+ * a match forms sooner.
+ */
+export function pickMate(cards: LfgCard[], me: string, mine: LfgTags): LfgCard | null {
+  let best: LfgCard | null = null
+  let bestScore = -1
+  for (const card of cards) {
+    if (card.user.userId === me || card.requested || card.size >= card.capacity) continue
+    const score = (card.tags.mode === mine.mode ? 4 : 0) + (card.tags.lang === mine.lang ? 2 : 0) + card.size / card.capacity
+    if (score > bestScore) {
+      best = card
+      bestScore = score
+    }
+  }
+  return best
 }
 
 const labelOf = (list: readonly { id: string; label: string }[], id: string): string =>

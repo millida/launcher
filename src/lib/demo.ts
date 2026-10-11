@@ -609,13 +609,15 @@ const hold = <T>(value: T): Promise<T> => new Promise((done) => setTimeout(() =>
 /** Путь без строки запроса. */
 const bare = (p: string) => p.split('?')[0] || ''
 
+let demoLfgMine: unknown = null
+
 const ROUTES: [RegExp, Handler][] = [
   [/^\/party$/, (_p, method) => method === 'GET' ? {
     me: DEMO_ID,
     invites: [],
     safety: { ageBracket: '13_15', newAccount: false },
     party: {
-      id: 'demo-party', leaderId: DEMO_ID, capacity: 4, maxCapacity: 8, targetRev: 1, rev: 1, launch: null,
+      id: 'demo-party', leaderId: DEMO_ID, capacity: 3, maxCapacity: 8, targetRev: 1, rev: 1, launch: null,
       target: { kind: 'version', ref: '1.21.4', version: '1.21.4', title: 'Minecraft 1.21.4', game: '1.21.4' },
       members: [
         { userId: DEMO_ID, nickname: DEMO_NICK, avatarUrl: null, role: 'leader', ready: true, joinedAt: 1, have: null },
@@ -627,8 +629,17 @@ const ROUTES: [RegExp, Handler][] = [
   } : undefined],
   [/^\/party\/friends$/, () => ({ parties: [] })],
   [/^\/party\/lfg\/requests$/, () => ({ requests: [] })],
-  [/^\/party\/lfg$/, (_p, method) => method === 'GET' ? {
-    mine: null,
+  [/^\/party\/lfg\/remove$/, () => {
+    demoLfgMine = null
+    return {}
+  }],
+  [/^\/party\/lfg$/, (_p, method, body) => method === 'POST' ? (() => {
+    const tags = (typeof body === 'string' ? JSON.parse(body) : body)?.tags
+    demoLfgMine = { id: 'demo-mine', user: { userId: DEMO_ID, nickname: DEMO_NICK, avatarUrl: null }, size: 2, capacity: 3,
+      createdAt: Date.now(), expiresAt: Date.now() + 3600_000, requested: false, tags }
+    return {}
+  })() : method === 'GET' ? {
+    mine: demoLfgMine,
     cards: [{ id: 'demo-card', user: { userId: 'demo-x', nickname: 'Steve', avatarUrl: null }, size: 1, capacity: 4,
       createdAt: Date.now(), expiresAt: Date.now() + 3600_000, requested: false,
       tags: { mode: 'survival', version: '1.21.4', pack: '', lang: 'ru', region: 'ru_west', voice: true, time: 'now' } }],

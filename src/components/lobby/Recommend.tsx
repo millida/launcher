@@ -54,6 +54,8 @@ export function Recommend({ on }: { on: boolean }) {
     void loadCatalogPacks().then((list) => {
       const p = list.find((x) => x.slug === PRISON_SLUG)
       if (alive) setPrison(p ? { title: p.title, coverUrl: p.cover, online: typeof p.online === 'number' ? p.online : null } : null)
+    }).catch(() => {
+      if (alive) setPrison(null)
     })
     return () => {
       alive = false

@@ -259,6 +259,7 @@ export class SkinViewEngine {
   private _partner: PartnerState | null = null;
   private _extras: ExtraState[] = [];
   private _extrasTicket = 0;
+  private _soloFrame = false;
   private readonly _props: Object3D[] = [];
   private _partnerTicket = 0;
   private readonly skinCanvas: HTMLCanvasElement;
@@ -1062,6 +1063,14 @@ export class SkinViewEngine {
     this.playerWrapper.rotation.y = yaw;
   }
 
+  /**
+   * The frame follows the player alone: party figures and props stand around him
+   * without changing his size or moving him off centre.
+   */
+  setSoloFrame(solo: boolean): void {
+    this._soloFrame = solo;
+  }
+
   /** Реквизит сцены (блоки пьедестала): в кадре и под светом вместе с фигурами. */
   addStageProp(object: Object3D): void {
     enableShadows(object);
@@ -1319,6 +1328,10 @@ export class SkinViewEngine {
     hide(this.playerObject.cape);
     hide(this.playerObject.elytra);
     hide(this.playerObject.ears);
+    if (this._soloFrame) {
+      for (const extra of this._extras) hide(extra.spot);
+      for (const prop of this._props) hide(prop);
+    }
     try {
       return measure();
     } finally {

@@ -8,10 +8,8 @@ import { loadFriends, useFriends } from '../../state/friends'
 import { showToast } from '../../state/ui'
 import {
   inviteToParty,
-  isLeader,
   joinPartyByCode,
   partyInviteCode,
-  setPartyCapacity,
   usePartyStore,
 } from '../../state/party'
 
@@ -25,7 +23,6 @@ interface FriendParty {
 export function PartyInviteModal({ close }: { close: () => void }) {
   const friends = useFriends((s) => s.friends)
   const party = usePartyStore((s) => s.party)
-  const me = usePartyStore((s) => s.me)
   const [called, setCalled] = useState<Record<string, boolean>>({})
   const [busy, setBusy] = useState('')
   const [code, setCode] = useState<{ code: string; expiresAt: number } | null>(null)
@@ -96,7 +93,6 @@ export function PartyInviteModal({ close }: { close: () => void }) {
     if (joined) close()
   }
 
-  const leader = isLeader(party, me)
   const minutesLeft = code ? Math.max(1, Math.round((code.expiresAt - Date.now()) / 60_000)) : 0
 
   return (
@@ -148,64 +144,33 @@ export function PartyInviteModal({ close }: { close: () => void }) {
           {!friends.length ? <p className="faint-note">Друзей пока нет — дай код</p> : null}
         </div>
 
-        <div className="side-cap">Код пати</div>
-        {code ? (
-          <div className="party-code">
-            <b>{prettyPartyCode(code.code)}</b>
-            <span className="meta">{minutesLeft + ' мин'}</span>
-            <button className="btn sm secondary" onClick={() => void copy()}>
-              <Icon id="i-copy" />
-              Копировать
-            </button>
-          </div>
-        ) : (
-          <button className="btn sm secondary" disabled={busy === 'code' || full} onClick={() => void makeCode()}>
-            <Icon id="i-link" />
-            Получить код
-          </button>
-        )}
-
-        <div className="side-cap">Войти по коду</div>
-        <div className="wm-row">
-          <div className="input sm" style={{ flex: 1 }}>
+        <div className="party-code-row">
+          <div className="input sm">
             <input
-              placeholder="AB23-CD45"
+              placeholder="Код друга"
               maxLength={64}
               value={entry}
               onChange={(e) => setEntry(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && void join()}
             />
           </div>
-          <button className="btn sm secondary" disabled={busy === 'join' || !entry.trim()} onClick={() => void join()}>
-            <Icon id="i-login" />
-            Войти
-          </button>
+          {entry.trim() ? (
+            <button className="btn sm" disabled={busy === 'join'} onClick={() => void join()}>
+              <Icon id="i-login" />
+              Войти
+            </button>
+          ) : code ? (
+            <button className="btn sm secondary party-my-code" onClick={() => void copy()} title={minutesLeft + ' мин'}>
+              <b>{prettyPartyCode(code.code)}</b>
+              <Icon id="i-copy" />
+            </button>
+          ) : (
+            <button className="btn sm secondary" disabled={busy === 'code' || full} onClick={() => void makeCode()}>
+              <Icon id="i-link" />
+              Мой код
+            </button>
+          )}
         </div>
-
-        {leader && party ? (
-          <>
-            <div className="side-cap">Мест в пати</div>
-            <div className="party-size">
-              <button
-                className="btn sm secondary"
-                aria-label="Меньше мест"
-                disabled={party.capacity <= Math.max(2, party.members.length)}
-                onClick={() => void setPartyCapacity(party.capacity - 1)}
-              >
-                <Icon id="i-minus" />
-              </button>
-              <b>{party.capacity}</b>
-              <button
-                className="btn sm secondary"
-                aria-label="Больше мест"
-                disabled={party.capacity >= party.maxCapacity}
-                onClick={() => void setPartyCapacity(party.capacity + 1)}
-              >
-                <Icon id="i-plus" />
-              </button>
-            </div>
-          </>
-        ) : null}
       </div>
     </div>
   )
