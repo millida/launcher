@@ -74,24 +74,28 @@
   position: absolute;
   left: 0;
   top: 30px;
-  translate: -50% 0;
+  /* Centre with transform and slide on margin-top, so the reveal state never
+     touches transform. The label used `translate: -50%` for centring and
+     `transform: none` to reveal, and on the macOS WebView that combination
+     dropped the centring — the search label sat to the right of the seat. */
+  transform: translateX(-50%);
   font: 700 12px/1 var(--m-font);
   color: #fff;
   white-space: nowrap;
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
   opacity: 0;
-  transform: translateY(-3px);
-  transition: opacity var(--m-t-fast), transform var(--m-t-fast);
+  margin-top: -3px;
+  transition: opacity var(--m-t-fast), margin-top var(--m-t-fast);
   pointer-events: none;
 }
 @media (hover: hover) and (pointer: fine) {
   .party-add:hover { color: var(--m-accent-fg); background-color: var(--m-accent); }
-  .party-add:hover + .party-add-label { opacity: 1; transform: none; }
+  .party-add:hover + .party-add-label { opacity: 1; margin-top: 0; }
 }
 .party-add:active { transform: scale(0.96); }
 .party-add.open { color: var(--m-accent-fg); background-color: var(--m-accent); }
 .party-seat.searching .party-add { background-color: rgba(0, 0, 0, 0.45); }
-.party-seat.searching .party-add-label { opacity: 1; transform: none; }
+.party-seat.searching .party-add-label { opacity: 1; margin-top: 0; }
 .party-dots { display: flex; gap: 4px; }
 .party-dots i { width: 5px; height: 5px; background: #fff; animation: party-dot 1.2s steps(2, jump-none) infinite; }
 .party-dots i:nth-child(2) { animation-delay: 0.2s; }

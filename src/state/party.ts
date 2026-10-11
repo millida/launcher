@@ -122,11 +122,20 @@ export async function leaveParty(): Promise<void> {
     await partyCall('/leave')
   } catch (e) {
     // The server may have already taken us out — a kick or a disband the lobby
-    // had not caught up to. Resync so the stale figures clear, and stay quiet
-    // when we are in fact already out instead of flashing «Ты не в пати».
+    // had not caught up to. Resync, and when we really are still in a party a
+    // genuine failure keeps us there and explains itself.
     await loadParty().catch(() => {})
-    if (st().party) showToast(apiErrorText(e, 'Не удалось выйти из пати'), 'error')
+    if (st().party) {
+      showToast(apiErrorText(e, 'Не удалось выйти из пати'), 'error')
+      return
+    }
   }
+  // We asked to leave and the server removed us. `partyCall` drops its own
+  // update when a 15s poll or a realtime refresh races its seq guard, which left
+  // the figures standing and made the button look dead. Bump the guard so no
+  // in-flight refresh can put the pre-leave party back, and clear it for certain.
+  loadSeq++
+  st().set({ party: null })
 }
 
 export const kickFromParty = (userId: string) => attempt(() => partyCall('/kick', { userId }), 'Не удалось исключить')

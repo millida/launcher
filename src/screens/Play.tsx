@@ -6,6 +6,7 @@ import { LobbyCharacter } from '../components/lobby/LobbyCharacter'
 import { EmoteBubble } from '../components/lobby/EmoteBubble'
 import { PartyBar } from '../components/lobby/PartyBar'
 import { isLeader, leaveParty, loadParty, partyWithOthers, usePartyStore } from '../state/party'
+import { stopMateSearch, useMateSearch } from '../state/mateSearch'
 import { partyPlayPressed } from '../lib/partyPlay'
 import { Recommend } from '../components/lobby/Recommend'
 import { AnarchyArt } from '../components/playhub/AnarchyTile'
@@ -393,7 +394,17 @@ export function Play({ on }: { on: boolean }) {
               зашли незнакомцы и не жмут «Готов», уйти можно было только из меню на
               фигурке, которое не находят. Соло — на том же месте сундук. */}
           {inParty ? (
-            <button className="party-leave" data-sound="nav" onClick={() => void leaveParty()}>
+            <button
+              className="party-leave"
+              data-sound="nav"
+              onClick={() =>
+                void leaveParty().then(() => {
+                  // A running «Найти напарника» would let the next request in and
+                  // rebuild a party around us — leaving ends the search too.
+                  if (!usePartyStore.getState().party && useMateSearch.getState().searching) void stopMateSearch()
+                })
+              }
+            >
               <Icon id="i-logout" />
               Выйти из пати
             </button>
