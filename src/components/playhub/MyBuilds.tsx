@@ -57,9 +57,10 @@ export async function saveIcon(name: string, icon: string): Promise<void> {
 
 /** Удалить свою сборку — с подтверждением; `after` — что сделать после удаления. */
 export function removeBuild(name: string, after?: () => void) {
-  void uiConfirm('Сборка «' + name + '» удалится с модами и мирами. Вернуть нельзя.', {
+  void uiConfirm('Сборка «' + name + '» удалится с модами и мирами. Вернуть нельзя. Введи её название, чтобы удалить.', {
     title: 'Удалить сборку',
     confirmLabel: 'Удалить',
+    typeToConfirm: name,
   }).then((ok) => {
     if (!ok) return
     if (!hasTauri()) {

@@ -37,8 +37,8 @@ export function BuildCard({
 
   const remove = () => {
     void uiConfirm(
-      'Сборка «' + p.name + '» удалится с модами, мирами и часами игры. Вернуть нельзя.',
-      { title: 'Удаление сборки', confirmLabel: 'Удалить' },
+      'Сборка «' + p.name + '» удалится с модами, мирами и часами игры. Вернуть нельзя. Введи её название, чтобы удалить.',
+      { title: 'Удаление сборки', confirmLabel: 'Удалить', typeToConfirm: p.name },
     ).then((ok) => {
       if (!ok) return
       if (!hasTauri()) {
