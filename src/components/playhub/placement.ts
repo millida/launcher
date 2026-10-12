@@ -37,6 +37,15 @@ export function withPrison<T extends { def: { cat: string } }, P>(modes: readonl
 }
 
 /**
+ * The library's «Сборки» row: a tester's draft packs first, then the open ones that have a cover.
+ * A draft has no cover and no downloads yet, and the catalogue search does not know it, so this
+ * row is the only way a tester reaches the pack they were given.
+ */
+export function libraryShelf<T extends { preview?: boolean; coverUrl?: string | null }>(packs: readonly T[]): T[] {
+  return [...packs.filter((p) => p.preview), ...packs.filter((p) => !p.preview && !!p.coverUrl)]
+}
+
+/**
  * How many shelf tiles to show. Unfolded, «Свернуть» must not sit alone in the
  * last row, so the weakest mode gives up its cell.
  */

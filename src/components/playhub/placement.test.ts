@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { ANARCHY_CELLS, FY_HEAD_CELLS, ROW, headCells, modesShown, shelfOrder, shownCount, withPrison } from './placement'
+import { ANARCHY_CELLS, FY_HEAD_CELLS, ROW, headCells, libraryShelf, modesShown, shelfOrder, shownCount, withPrison } from './placement'
 import { ANARCHY } from '../../lib/ownServer'
 import { ANARCHY_ID, DEFAULT_PROMO } from '../../state/promo'
 
@@ -58,6 +58,28 @@ describe('«Режимы» shelf', () => {
   for (const [total, all, lead, want, why] of counts)
     test(why, () => {
       expect(shownCount(total, all, lead), why).toBe(want)
+    })
+})
+
+describe('«Сборки» row of the library', () => {
+  const pack = (slug: string, coverUrl: string | null, preview = false) => ({ slug, coverUrl, ...(preview ? { preview } : {}) })
+  const cases: Array<[ReturnType<typeof pack>[], string[], string]> = [
+    [
+      [pack('popular', 'c.webp'), pack('draft', null, true)],
+      ['draft', 'popular'],
+      'a draft given to a tester has no cover and no downloads: dropped or left at the end, the tester has no way to open it',
+    ],
+    [
+      [pack('popular', 'c.webp'), pack('draft', 'd.webp', true), pack('second', 's.webp')],
+      ['draft', 'popular', 'second'],
+      'the draft stands first, the open packs keep the order they came in',
+    ],
+    [[pack('bare', null), pack('popular', 'c.webp')], ['popular'], 'an open pack without a cover would be an empty tile for every player'],
+    [[pack('popular', 'c.webp'), pack('second', 's.webp')], ['popular', 'second'], 'a player without drafts sees the row unchanged'],
+  ]
+  for (const [input, want, why] of cases)
+    test(why, () => {
+      expect(libraryShelf(input).map((p) => p.slug), why).toEqual(want)
     })
 })
 

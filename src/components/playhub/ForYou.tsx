@@ -15,7 +15,7 @@ import { ONEBLOCK_ART } from './modeIcon'
 import { ONEBLOCK_PACK, isExclusive, isOwnServerPack, ownServerTagline, pinnedPacks } from './data'
 import { ANARCHY, OWN_SERVER_MODE } from '../../lib/ownServer'
 import { AnarchyArt, anarchyOnlineShown } from './AnarchyTile'
-import { headCells } from './placement'
+import { headCells, libraryShelf } from './placement'
 import type { FeaturedSpot } from './featured'
 import { useAnarchy } from '../../lib/anarchy'
 import { usePromo, type ForYouCard } from '../../state/promo'
@@ -443,11 +443,10 @@ export function ForYou({
   const plain = useMemo<Pick[]>(() => {
     if (!bare) return []
     const taken = new Set(head.map((p) => p.id))
-    return packs
-      .filter((p) => !taken.has(p.id) && !p.preview && !isOwnServerPack(p.slug) && p.slug !== ONEBLOCK_PACK && !!p.coverUrl)
-      .map((p) => ({
+    return libraryShelf(packs.filter((p) => !taken.has(p.id) && !isOwnServerPack(p.slug) && p.slug !== ONEBLOCK_PACK))
+      .map((p): Pick => ({
         key: 'modpacks/' + (p.slug || p.id),
-        why: 'popular' as FeedWhy,
+        why: p.preview ? 'preview' : 'popular',
         node: (
           <Card
             key={'mp:' + p.id}
