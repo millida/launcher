@@ -38,7 +38,7 @@ import { ColorPicker } from '../components/ColorPicker'
 import { AppIconPicker } from '../components/AppIconPicker'
 import { AudioSettings } from '../components/AudioSettings'
 import { RewindClips } from '../components/RewindClips'
-import { MusicCard, RadioCredits } from '../components/radio'
+import { MusicPlayer, RadioCredits } from '../components/radio'
 import { betaChannel, checkForUpdate, pendingUpdate } from '../lib/updater'
 import { useUpdate } from '../state/update'
 import { discordPresence } from '../lib/launch'
@@ -490,11 +490,7 @@ export function Settings({ on }: { on: boolean }) {
             }}
           />
         </Row>
-        {/* Плеер переехал сюда из верхней полосы лобби (владелец 12.10.2026):
-            громкость, что играет, радио и своя музыка — одним блоком. */}
-        <Row title="Плеер" keys="музыка радио громкость своя музыка треки плеер">
-          <MusicCard />
-        </Row>
+        <MusicPlayer />
         <RadioCredits />
       </Group>
 
