@@ -154,8 +154,15 @@ where
 /// so a hung socket is answered by the spare pool the same way as for GET.
 const READ_ONLY_POSTS: [&str; 1] = ["/cosmetics/equipped"];
 
+/// POST addresses that write, yet may be asked twice: the second answer is a
+/// spare game session nobody uses and the server expires. Without the repeat a
+/// hung socket holds the request past the launch budget and the game starts
+/// offline while a fresh connection is answered in milliseconds.
+const SPARE_ANSWER_POSTS: [&str; 1] = ["/launcher/game-session"];
+
 fn repeatable(method: &str, path: &str) -> bool {
-    method == "GET" || (method == "POST" && READ_ONLY_POSTS.contains(&path.split('?').next().unwrap_or(path)))
+    let route = path.split('?').next().unwrap_or(path);
+    method == "GET" || (method == "POST" && (READ_ONLY_POSTS.contains(&route) || SPARE_ANSWER_POSTS.contains(&route)))
 }
 
 pub async fn millida_api(
@@ -591,6 +598,20 @@ mod tests {
             ("POST", "/cosmetics/equipped?fresh=1", true, "a query string does not turn the read into a write"),
             ("POST", "/cosmetics/wardrobe", false, "a repeated write would apply the outfit twice"),
             ("DELETE", "/cosmetics/equipped", false, "only the reading method of the address is repeatable"),
+        ];
+        for (method, path, expected, why) in cases {
+            assert_eq!(repeatable(method, path), expected, "{}", why);
+        }
+    }
+
+    #[test]
+    fn a_game_session_is_the_only_write_asked_twice() {
+        // (method, path, repeatable, why this case is pinned)
+        let cases: [(&str, &str, bool, &str); 4] = [
+            ("POST", "/launcher/game-session", true, "a hung socket otherwise outlasts the launch budget and the player starts offline; the spare session is a token nobody uses"),
+            ("POST", "/launcher/game-texture", false, "a repeated upload would write the skin twice"),
+            ("POST", "/auth/refresh", false, "a refresh token spent twice makes the server revoke the whole session"),
+            ("PUT", "/launcher/game-session", false, "only the issuing method of the address is repeatable"),
         ];
         for (method, path, expected, why) in cases {
             assert_eq!(repeatable(method, path), expected, "{}", why);
