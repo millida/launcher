@@ -1,4 +1,5 @@
 import { useEffect, useState, type CSSProperties, type FormEvent } from 'react'
+import { renderLive } from '../../lib/renderGate'
 import { Icon } from '../Icon'
 import { Head } from '../Head'
 import { effectiveNick } from '../../state/accounts'
@@ -94,7 +95,9 @@ export function TierBoard({ on }: { on: boolean }) {
     void t.loadPeriod('week', 'all')
     if (t.kit !== 'all') void t.loadKit(t.kit)
     // Лента тестов живая: раз в минуту, пока вкладка открыта.
-    const id = window.setInterval(() => void useTiers.getState().loadLive(), 60_000)
+    const id = window.setInterval(() => {
+      if (renderLive()) void useTiers.getState().loadLive()
+    }, 60_000)
     return () => window.clearInterval(id)
   }, [on, nick])
 

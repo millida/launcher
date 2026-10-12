@@ -215,6 +215,7 @@ import { hideBoot } from './lib/boot'
 import { frontendReady } from './ipc/commands'
 import { initTelemetry, track, trackAppExit } from './lib/telemetry'
 import { reportWebviewFailure, setLauncherIdleMemory, watchHeap, watchWebviewContext } from './lib/webviewHealth'
+import { onRenderGate, renderLive } from './lib/renderGate'
 import { flushPrefs, hydratePrefs } from './lib/prefs'
 
 let gameStartedAt = 0
@@ -356,6 +357,19 @@ export function App() {
       heartbeat()
     }
     document.addEventListener('visibilitychange', onVisible)
+    // В трее и под игрой окно для WebView2 остаётся видимым, visibilitychange не
+    // приходит: кэши вебвью отдаются игре и тогда, но не на каждый alt-tab.
+    let idleMemory = 0
+    const offIdleMemory = onRenderGate(() => {
+      window.clearTimeout(idleMemory)
+      if (renderLive()) {
+        if (!document.hidden) setLauncherIdleMemory(false)
+        return
+      }
+      idleMemory = window.setTimeout(() => {
+        if (!renderLive()) setLauncherIdleMemory(true)
+      }, 30_000)
+    })
     const onLeave = () => void flushPrefs()
     window.addEventListener('pagehide', onLeave)
     const safety = setTimeout(hideBoot, 4000)
@@ -398,6 +412,8 @@ export function App() {
       clearInterval(updPoll)
       clearInterval(msPoll)
       document.removeEventListener('visibilitychange', onVisible)
+      offIdleMemory()
+      window.clearTimeout(idleMemory)
       window.removeEventListener('pagehide', onLeave)
     }
   }, [])

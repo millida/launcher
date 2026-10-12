@@ -1,4 +1,5 @@
 import { useEffect, useState, type CSSProperties } from 'react'
+import { renderLive } from '../../lib/renderGate'
 import { Icon } from '../Icon'
 import { api } from '../../lib/api'
 import { quickJoin } from '../../lib/joinServer'
@@ -76,7 +77,7 @@ function ArenaStatus({ uuid, launching, modes }: { uuid: string | null; launchin
     if (!uuid) return
     let alive = true
     const tick = () => {
-      if (document.hidden) return
+      if (document.hidden || !renderLive()) return
       api<ArenaState>('/tiers/state/' + encodeURIComponent(uuid))
         .then((r) => alive && setSt(r && typeof r.state === 'string' ? { ...r, since: typeof r.since === 'number' ? Date.now() - r.since : undefined } : null))
         .catch(() => alive && setSt(null))
@@ -88,10 +89,14 @@ function ArenaStatus({ uuid, launching, modes }: { uuid: string | null; launchin
       window.clearInterval(id)
     }
   }, [uuid])
+  const timed = !!st?.since
   useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), 1000)
+    if (!timed) return
+    const id = window.setInterval(() => {
+      if (renderLive()) setNow(Date.now())
+    }, 1000)
     return () => window.clearInterval(id)
-  }, [])
+  }, [timed])
   const kitName = st?.kit ? modeTitle(modes, st.kit) : ''
   const timer = st?.since ? clock(now - st.since) : ''
   let line: { cls: string; t: string; sub?: string } | null = null
@@ -130,7 +135,9 @@ export function PvpArena() {
     const t = useTiers.getState()
     void t.load(nick)
     void t.loadLive()
-    const id = window.setInterval(() => void useTiers.getState().loadLive(), 30_000)
+    const id = window.setInterval(() => {
+      if (renderLive()) void useTiers.getState().loadLive()
+    }, 30_000)
     return () => window.clearInterval(id)
   }, [nick])
 

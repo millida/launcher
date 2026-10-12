@@ -35,6 +35,21 @@ export function gpuClass(gpu: string | undefined): GpuClass {
   return 'unknown'
 }
 
+const GPU_RANK: Record<GpuClass, number> = { high: 4, mid: 3, weak: 2, igpu: 1, unknown: 0 }
+
+/**
+ * Самая сильная из видеокарт. Вебвью рисует на встроенной, а игру лаунчер
+ * отправляет на дискретную: по одной карте вебвью ноутбук с RTX считался слабым.
+ */
+export function strongestGpu(names: Array<string | undefined>): string | undefined {
+  let best: string | undefined
+  for (const name of names) {
+    const g = (name || '').trim()
+    if (g && (best === undefined || GPU_RANK[gpuClass(g)] > GPU_RANK[gpuClass(best)])) best = g
+  }
+  return best
+}
+
 export function perfTier(hw: Hardware): PerfTier {
   const ram = hw.ramMb || 0
   const cores = hw.cores || 0
@@ -99,16 +114,21 @@ export function videoTuning(hw: Hardware): Row[] {
   return Object.entries(v)
 }
 
-/** Железо этого компьютера: память и ядра — у ядра, видеокарта — у вебвью, экран — у окна. */
+/** Железо этого компьютера: память, ядра и список видеокарт — у ядра, карта вебвью — запасной ответ, экран — у окна. */
 export async function thisHardware(): Promise<Hardware> {
   let pc: { ramMb?: number; cores?: number; gpu?: string } | null = null
+  let cards: string[] = []
   try {
     pc = await (await import('./milli')).milliPc()
   } catch {}
+  try {
+    cards = (await (await import('../ipc/commands')).deviceSpecs())?.gpus ?? []
+  } catch {}
+  const gpu = strongestGpu([...cards, pc?.gpu])
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1
   const scr = typeof window !== 'undefined' ? window.screen : null
   return {
-    ...(pc?.gpu ? { gpu: pc.gpu } : {}),
+    ...(gpu ? { gpu } : {}),
     ...(pc?.ramMb ? { ramMb: pc.ramMb } : {}),
     ...(pc?.cores ? { cores: pc.cores } : {}),
     ...(scr ? { screenW: Math.round(scr.width * dpr), screenH: Math.round(scr.height * dpr) } : {}),

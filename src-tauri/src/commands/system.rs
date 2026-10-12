@@ -132,6 +132,8 @@ pub struct DeviceSpecs {
     pub cpu_cores: u32,
     pub cpu_threads: u32,
     pub ram_mb: u32,
+    /// Every hardware video card; empty where the platform has no cheap way to list them.
+    pub gpus: Vec<String>,
 }
 
 /// The facts never change while the process lives, and collecting them opens
@@ -170,6 +172,7 @@ fn collect_device_specs() -> DeviceSpecs {
         cpu_cores: sys.physical_core_count().unwrap_or(0) as u32,
         cpu_threads: sys.cpus().len() as u32,
         ram_mb: (sys.total_memory() / 1024 / 1024) as u32,
+        gpus: engine::adapter_names(),
     }
 }
 

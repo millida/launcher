@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ComponentProps, type CSSProperties, type ReactNode } from 'react'
+import { renderLive } from '../../lib/renderGate'
 import { Icon } from '../Icon'
 import { anarchyOnlineShown } from '../playhub/AnarchyTile'
 import { ANARCHY_HERO, LAVA_STRIP, OBSIDIAN_TILE } from '../playhub/anarchyArt'
@@ -50,7 +51,7 @@ export function Recommend({ on }: { on: boolean }) {
   useEffect(() => {
     if (!on || !shown || !slides) return
     const id = window.setInterval(() => {
-      if (hovered.current) return
+      if (hovered.current || !renderLive()) return
       setDir(1)
       setStep((s) => s + 1)
     }, PROMO_ROTATE_MS)

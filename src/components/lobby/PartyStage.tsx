@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { renderLive } from '../../lib/renderGate'
 import { CanvasTexture, Group, Mesh, MeshBasicMaterial, PlaneGeometry, Vector3, type Material, type Object3D } from 'three'
 import type { SkinViewEngine } from '../../vendor/mine3d'
 import type { Mine3dModule } from '../../lib/mine3d'
@@ -327,7 +328,7 @@ export function PartyOverlay({
     }
     let t = 0
     const loop = () => {
-      place()
+      if (renderLive()) place()
       if (awake) raf = requestAnimationFrame(loop)
       else t = window.setTimeout(loop, 500)
     }
