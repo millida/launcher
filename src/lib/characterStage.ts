@@ -154,6 +154,16 @@ export function releaseEngine(engine: { dispose(): void }): void {
   } catch {}
 }
 
+/**
+ * One frame of a scene whose loop stands still. The loop takes a single turn
+ * and is stopped again: the picture matches a live frame, and the scene does
+ * not go back to rendering over the game.
+ */
+export function paintStill(engine: { start(): void; stop(): void }): void {
+  engine.start()
+  engine.stop()
+}
+
 type Ndc = { minX: number; maxX: number; minY: number; maxY: number }
 
 /**

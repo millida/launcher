@@ -123,7 +123,7 @@ fn remember_in(cache: &mut std::collections::BTreeMap<String, Tagged>, key: Stri
 const HEDGE_AFTER: std::time::Duration = std::time::Duration::from_millis(2500);
 
 /// Hedged request: первый ответ из двух; ошибка одного — ждём другой.
-async fn hedged<F1, F2, Fut1, Fut2>(first: F1, second: F2) -> Result<reqwest::Response, reqwest::Error>
+pub(crate) async fn hedged<F1, F2, Fut1, Fut2>(first: F1, second: F2) -> Result<reqwest::Response, reqwest::Error>
 where
     F1: FnOnce() -> Fut1,
     F2: FnOnce() -> Fut2,
@@ -148,6 +148,14 @@ where
             Err(e) => a.await.or(Err(e)),
         },
     }
+}
+
+/// POST addresses that only read: asking twice changes nothing on the server,
+/// so a hung socket is answered by the spare pool the same way as for GET.
+const READ_ONLY_POSTS: [&str; 1] = ["/cosmetics/equipped"];
+
+fn repeatable(method: &str, path: &str) -> bool {
+    method == "GET" || (method == "POST" && READ_ONLY_POSTS.contains(&path.split('?').next().unwrap_or(path)))
 }
 
 pub async fn millida_api(
@@ -188,7 +196,7 @@ pub async fn millida_api(
     // GET без ответа за HEDGE_AFTER дублируется вторым пулом соединений: зависший
     // сокет или медленный узел больше не держат каталог десятки секунд. Запись
     // (POST/PUT…) не дублируем — она не идемпотентна.
-    let sent = if m == "GET" { hedged(|| build().send(), || build_on(spare_client()).send()).await } else { build().send().await };
+    let sent = if repeatable(&m, &path) { hedged(|| build().send(), || build_on(spare_client()).send()).await } else { build().send().await };
     // a connect/timeout error means the request never reached the server, so
     // retrying is safe for any method
     let res = match sent {
@@ -569,10 +577,25 @@ pub async fn millida_login_poll(device_code: String) -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        api_url, etag_key, login_poll_answer, refresh_on_cooldown, remember_in, webview_path_allowed, set_refresh_cooldown, verdict_for,
-        RefreshVerdict, Tagged, ETAG_CACHE_BUDGET, MILLIDA_API,
+        api_url, etag_key, login_poll_answer, refresh_on_cooldown, remember_in, repeatable, webview_path_allowed, set_refresh_cooldown,
+        verdict_for, RefreshVerdict, Tagged, ETAG_CACHE_BUDGET, MILLIDA_API,
     };
     use std::collections::BTreeMap;
+
+    #[test]
+    fn only_reads_are_asked_twice() {
+        // (method, path, repeatable, why this case is pinned)
+        let cases: [(&str, &str, bool, &str); 5] = [
+            ("GET", "/launcher/wardrobe", true, "a read can be asked twice: the spare pool answers for a hung socket"),
+            ("POST", "/cosmetics/equipped", true, "what the player wears is read by POST: without a repeat the lobby figure waits on a hung socket"),
+            ("POST", "/cosmetics/equipped?fresh=1", true, "a query string does not turn the read into a write"),
+            ("POST", "/cosmetics/wardrobe", false, "a repeated write would apply the outfit twice"),
+            ("DELETE", "/cosmetics/equipped", false, "only the reading method of the address is repeatable"),
+        ];
+        for (method, path, expected, why) in cases {
+            assert_eq!(repeatable(method, path), expected, "{}", why);
+        }
+    }
 
     #[test]
     fn a_remembered_answer_is_replayed_only_to_its_own_account_and_address() {

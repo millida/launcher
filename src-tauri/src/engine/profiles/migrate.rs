@@ -1,21 +1,11 @@
 use crate::engine::*;
 use futures::StreamExt;
 use serde_json::Value;
-use std::path::Path;
 use tauri::AppHandle;
 
-/// Files carried over as they are: worlds, settings and packs do not depend on
-/// the game version the way a mod jar does.
-const CARRY: &[&str] = &[
-    "config",
-    "saves",
-    "resourcepacks",
-    "shaderpacks",
-    "datapacks",
-    "schematics",
-    "options.txt",
-    "servers.dat",
-];
+/// The whole game folder moves with the build except these: mods are looked up
+/// again for the new game version, and backups repeat the worlds already copied.
+const LEFT_BEHIND: &[&str] = &["mods", "backups"];
 
 #[derive(Clone, serde::Serialize)]
 pub struct MigrateItem {
@@ -155,23 +145,6 @@ pub async fn migrate_plan(profile: String, version: String, loader: String) -> R
     Ok(plan_of(&resolved, unlinked, migrated_name(&profile, &version)))
 }
 
-fn copy_carried(from: &Path, to: &Path) -> Result<(), String> {
-    for sub in CARRY {
-        let src = from.join(sub);
-        if !src.exists() {
-            continue;
-        }
-        let dst = to.join(sub);
-        let r = if src.is_dir() {
-            std::fs::create_dir_all(&dst).and_then(|_| copy_dir_all(&src, &dst))
-        } else {
-            std::fs::copy(&src, &dst).map(|_| ())
-        };
-        r.map_err(|e| format!("Не удалось скопировать {}: {}", sub, e))?;
-    }
-    Ok(())
-}
-
 /// The new build gets the old build's non-mod catalogue records so its packs and
 /// shaders keep their update button; mod records are written by the installs.
 fn carry_manifest(from: &str, to: &str) {
@@ -223,7 +196,10 @@ async fn migrate_job(
     let to = profile_dir(&newname);
     job.rename(&newname);
     job.emit(app, 15.0, "Копируем миры и настройки…");
-    if let Err(e) = std::fs::create_dir_all(&to).map_err(|e| e.to_string()).and_then(|_| copy_carried(&from, &to)) {
+    let carried = std::fs::create_dir_all(&to)
+        .map_err(|e| e.to_string())
+        .and_then(|_| copy_game_files(&from, &to, LEFT_BEHIND));
+    if let Err(e) = carried {
         let _ = std::fs::remove_dir_all(&to);
         return Err(e);
     }
@@ -304,6 +280,43 @@ mod tests {
         assert!(plan.items[0].ok, "movable mods come first, otherwise the list reads backwards");
         assert_eq!(plan.items[1].note, "нет файла под 1.20.1", "the refusal reason is shown to the player as it is");
         assert_eq!(plan.unlinked, vec!["ручной.jar".to_string()], "a hand-added jar has no catalogue link and cannot move");
+    }
+
+    /// file in the build -> moves to the new version or not. The carry used to
+    /// be a list of eight names, so anything outside it (OptiFine and shader
+    /// settings, default configs, map data of mods) stayed behind silently.
+    #[test]
+    fn the_whole_game_folder_moves_except_mods_and_backups() {
+        let base = std::env::temp_dir().join(format!("millida-migrate-carry-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let (from, to) = (base.join("from"), base.join("to"));
+        let cases: [(&str, bool, &str); 14] = [
+            ("config/jei.toml", true, "mod configs"),
+            ("defaultconfigs/ftbquests.snbt", true, "configs new worlds start from"),
+            ("resourcepacks/pack.zip", true, "resource packs"),
+            ("shaderpacks/bsl.zip", true, "shaders"),
+            ("saves/World/level.dat", true, "a world can not be made again"),
+            ("options.txt", true, "game settings, the enabled resource packs among them"),
+            ("optionsof.txt", true, "OptiFine settings"),
+            ("optionsshaders.txt", true, "the chosen shader"),
+            ("servers.dat", true, "server list"),
+            ("journeymap/data/waypoints.json", true, "data of mods the launcher knows nothing about"),
+            ("mods/sodium.jar", false, "a jar built for the old game version would crash the new one"),
+            ("backups/World.zip", false, "the worlds are already copied"),
+            ("logs/latest.log", false, "the game writes its own"),
+            ("millida-settings.json", false, "names the old build and its game version"),
+        ];
+        for (rel, _, _) in cases {
+            let p = from.join(rel);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, rel.as_bytes()).unwrap();
+        }
+        std::fs::create_dir_all(&to).unwrap();
+        copy_game_files(&from, &to, LEFT_BEHIND).unwrap();
+        for (rel, want, why) in cases {
+            assert_eq!(to.join(rel).is_file(), want, "{}: {}", rel, why);
+        }
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     /// A migration that lands on the source build's own folder would wipe the

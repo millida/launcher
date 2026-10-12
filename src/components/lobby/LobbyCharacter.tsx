@@ -38,6 +38,7 @@ import {
   between,
   cosmeticModel,
   releaseEngine,
+  paintStill,
   nickSkinUrl,
   lobbyFrame,
   lobbyHitBox,
@@ -264,6 +265,7 @@ export function LobbyCharacter({
   const bodyNdc = useRef<{ minX: number; maxX: number; minY: number; maxY: number } | null>(null)
   /** Идёт эмоция — голова её, за мышкой не следим. */
   const busyRef = useRef(false)
+  const pausedRef = useRef(false)
   // Контекст WebGL всё-таки отобрали — сцену собираем заново на новом холсте:
   // на старом новый движок получил бы тот же потерянный контекст.
   const [glEpoch, setGlEpoch] = useState(0)
@@ -380,6 +382,10 @@ export function LobbyCharacter({
         headRest.current = headScreen()
         bodyNdc.current = r.ndc
       }
+      // A stopped loop draws nothing: a look that lands while the window stands
+      // still (the game has the focus) would leave the stage empty until the
+      // next focus, and a resize would wipe the picture that was there.
+      if (pausedRef.current) paintStill(engine)
     } catch {}
   }
 
@@ -743,6 +749,7 @@ export function LobbyCharacter({
     const setPaused = (v: boolean) => {
       const engine = viewerRef.current
       if (!engine) return
+      pausedRef.current = v
       if (v) engine.stop()
       else engine.start()
       setAwake(!v)

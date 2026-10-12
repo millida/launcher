@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Icon } from '../Icon'
 import { Slider } from '../Slider'
 import { Toggle } from '../SetKit'
@@ -11,8 +12,16 @@ export function MusicCard() {
   const on = useMusic((s) => radioOn(s))
   const radio = useMusic((s) => s.radio)
   const own = useMusic((s) => s.own)
-  const { prev, next, play, setRadio, addOwn, removeOwn, openFolder } = useMusic.getState()
+  const links = useMusic((s) => s.links)
+  const now = useMusic((s) => s.now)
+  const [url, setUrl] = useState('')
+  const { prev, next, play, setRadio, addOwn, removeOwn, addLink, removeLink, openFolder } = useMusic.getState()
   const cur = on ? tracks[index] : undefined
+  const live = cur?.link ? now : null
+  const single = tracks.length < 2 && !cur?.link
+  const submitLink = () => {
+    if (url.trim() && addLink(url)) setUrl('')
+  }
 
   return (
     <span className="lb-vol-card lb-mus-card">
@@ -26,13 +35,13 @@ export function MusicCard() {
       {cur ? (
         <span className="lb-mus-now">
           <span className="lb-mus-now-txt">
-            <b>{cur.title}</b>
-            <i>{cur.author || 'Millida'}</i>
+            <b>{live?.title || cur.title}</b>
+            <i>{live?.author || cur.author || 'Millida'}</i>
           </span>
-          <button className="lb-mus-ico" aria-label="Предыдущий трек" disabled={tracks.length < 2} onClick={prev}>
+          <button className="lb-mus-ico" aria-label="Предыдущий трек" disabled={single} onClick={prev}>
             <Icon id="i-chev-l" />
           </button>
-          <button className="lb-mus-ico" aria-label="Следующий трек" disabled={tracks.length < 2} onClick={next}>
+          <button className="lb-mus-ico" aria-label="Следующий трек" disabled={single} onClick={next}>
             <Icon id="i-chev-r" />
           </button>
         </span>
@@ -78,6 +87,51 @@ export function MusicCard() {
         </button>
         <button className="btn sm secondary" aria-label="Открыть папку с музыкой" data-track="music_folder" onClick={openFolder}>
           <Icon id="i-folder" />
+        </button>
+      </span>
+
+      <span className="lb-mus-head">
+        По ссылке
+        {links.length ? <i>{links.length}</i> : null}
+      </span>
+      {links.length ? (
+        <span className="lb-mus-list" role="list">
+          {links.map((l) => {
+            const playing = cur?.link?.key === l.key
+            return (
+              <span key={l.key} role="listitem" className={'lb-mus-item' + (playing ? ' on' : '')}>
+                <button
+                  className="lb-mus-play"
+                  aria-label={'Играть ' + l.title}
+                  onClick={() => play(tracks.findIndex((t) => t.link?.key === l.key))}
+                >
+                  <Icon id={playing ? 'i-music' : 'i-play'} />
+                  <span>{l.title}</span>
+                </button>
+                <button className="lb-mus-ico" aria-label={'Убрать ' + l.title} onClick={() => removeLink(l.key)}>
+                  <Icon id="i-x" />
+                </button>
+              </span>
+            )
+          })}
+        </span>
+      ) : null}
+      <span className="lb-mus-link">
+        <span className="input sm">
+          <input
+            aria-label="Ссылка на плейлист"
+            placeholder="YouTube или SoundCloud"
+            value={url}
+            maxLength={2048}
+            spellCheck={false}
+            onChange={(e) => setUrl(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') submitLink()
+            }}
+          />
+        </span>
+        <button className="btn sm secondary" aria-label="Добавить плейлист по ссылке" data-track="music_link_add" disabled={!url.trim()} onClick={submitLink}>
+          <Icon id="i-plus" />
         </button>
       </span>
     </span>

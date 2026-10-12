@@ -84,7 +84,8 @@
           "'none'"
         ],
         "frame-src": [
-          "'none'"
+          "https://www.youtube-nocookie.com",
+          "https://w.soundcloud.com"
         ],
         "frame-ancestors": [
           "'none'"
@@ -157,6 +158,10 @@
         ],
         "base-uri": [
           "'self'"
+        ],
+        "frame-src": [
+          "https://www.youtube-nocookie.com",
+          "https://w.soundcloud.com"
         ]
       },
       "assetProtocol": {

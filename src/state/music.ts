@@ -4,6 +4,8 @@ import { showToast, useUi } from './ui'
 import { hydratePrefs, readPref, writePref } from '../lib/prefs'
 import { hasTauri } from '../ipc/tauri'
 import { convertFileSrc, musicAdd, musicRemove, musicTracks, openMusicFolder } from '../ipc/commands'
+import { MAX_LINKS, SERVICE_NAME, parseMusicLink, restoreLinks, type MusicLink } from '../lib/musicLinks'
+import { embedKey, embedPause, embedPlay, embedRestart, embedStep, embedStop, type EmbedHooks, type EmbedNow } from '../lib/musicEmbed'
 
 const DEFAULT_LEVEL = 5
 
@@ -18,6 +20,14 @@ const storedPlaying = () => readPref('m-mus-play', '1') !== '0'
 
 const storedRadio = () => readPref('m-mus-radio', '1') !== '0'
 
+// One address per setting: the core caps a stored value at 256 bytes, a list
+// of addresses in one value would not fit.
+const LINK_SLOTS = ['m-mus-link-0', 'm-mus-link-1', 'm-mus-link-2', 'm-mus-link-3', 'm-mus-link-4', 'm-mus-link-5', 'm-mus-link-6', 'm-mus-link-7'] as const
+
+const storedLinks = () => restoreLinks(LINK_SLOTS.map((k) => readPref(k, '')).filter(Boolean))
+
+const saveLinks = (links: MusicLink[]) => LINK_SLOTS.forEach((k, i) => writePref(k, links[i]?.url || ''))
+
 export interface Track {
   src: string
   title: string
@@ -27,6 +37,8 @@ export interface Track {
   url?: string
   /** Имя файла в папке music — есть только у своих треков игрока. */
   file?: string
+  /** Плейлист по ссылке: играет встроенный плеер сервиса, а не наш audio. */
+  link?: MusicLink
 }
 
 const SKIFF = 'https://ericskiff.com/music/'
@@ -64,7 +76,9 @@ async function loadOwn(): Promise<Track[]> {
   return list.map((t) => ({ src: convertFileSrc(t.path), title: t.title, author: 'Своя музыка', file: t.file }))
 }
 
-const playlist = (radio: boolean, own: Track[]) => [...(radio ? BUNDLED : []), ...own]
+const linkTrack = (link: MusicLink): Track => ({ src: link.url, title: link.title, author: SERVICE_NAME[link.service], link })
+
+const playlist = (radio: boolean, own: Track[], links: MusicLink[]) => [...(radio ? BUNDLED : []), ...own, ...links.map(linkTrack)]
 
 interface MusicState {
   level: number
@@ -73,6 +87,9 @@ interface MusicState {
   /** Встроенное радио Millida в плейлисте. Выключено — играют только свои треки. */
   radio: boolean
   own: Track[]
+  links: MusicLink[]
+  /** Что сейчас играет плейлист по ссылке: название приходит от плеера сервиса. */
+  now: EmbedNow | null
   /** Плейлист собран хотя бы раз: пустой список до этого — «загружается», после — «нет треков». */
   loaded: boolean
   index: number
@@ -92,6 +109,9 @@ interface MusicState {
   refreshOwn: () => Promise<void>
   addOwn: () => Promise<void>
   removeOwn: (file: string) => Promise<void>
+  /** Ложь — ссылку не взяли, причина уже показана. */
+  addLink: (raw: string) => boolean
+  removeLink: (key: string) => void
   openFolder: () => void
 }
 
@@ -140,6 +160,33 @@ function fadeTo(to: number, ms: number, after?: () => void) {
   }, FADE_STEP_MS)
 }
 
+const embedHooks: EmbedHooks = {
+  onNow: (now) => useMusic.setState({ now }),
+  onEnded: () => useMusic.getState().next(),
+  onError: (text) => {
+    showToast(text, 'error')
+    const s = useMusic.getState()
+    if (s.tracks.length > 1) s.next()
+    else setPlaying(false, 0)
+  },
+}
+
+function dropEmbed() {
+  if (embedKey() === null) return
+  embedStop()
+  useMusic.setState({ now: null })
+}
+
+function applyLink(link: MusicLink) {
+  const s = useMusic.getState()
+  const a = getAudio()
+  clearFade()
+  if (!a.paused) a.pause()
+  if (embedKey() !== link.key) useMusic.setState({ now: null })
+  if (s.playing && !s.muted && s.level > 0) embedPlay(link, s.level, embedHooks)
+  else embedPause()
+}
+
 function apply(fadeMs = 0) {
   const s = useMusic.getState()
   const a = getAudio()
@@ -148,8 +195,14 @@ function apply(fadeMs = 0) {
   if (!cur) {
     clearFade()
     a.pause()
+    dropEmbed()
     return
   }
+  if (cur.link) {
+    applyLink(cur.link)
+    return
+  }
+  dropEmbed()
   const changed = a.src !== new URL(cur.src, location.href).href
   if (changed) {
     clearFade()
@@ -198,12 +251,12 @@ function setPlaying(playing: boolean, fadeMs: number) {
 
 // The current track keeps playing when the list changes around it; a track
 // that left the list hands over to the start of the new one.
-function rebuild(radio: boolean, own: Track[]) {
+function rebuild(radio: boolean, own: Track[], links: MusicLink[] = useMusic.getState().links) {
   const s = useMusic.getState()
   const cur = s.tracks[s.index]
-  const tracks = playlist(radio, own)
+  const tracks = playlist(radio, own, links)
   const at = cur ? tracks.findIndex((t) => t.src === cur.src) : -1
-  useMusic.setState({ radio, own, tracks, index: Math.max(0, at), loaded: true })
+  useMusic.setState({ radio, own, links, tracks, index: Math.max(0, at), loaded: true })
   if (!tracks.length) useMusic.setState({ playing: false })
   apply(FADE_MS)
 }
@@ -231,6 +284,8 @@ export const useMusic = create<MusicState>((set, get) => ({
   tracks: [],
   radio: storedRadio(),
   own: [],
+  links: [],
+  now: null,
   loaded: false,
   index: 0,
   playing: false,
@@ -282,11 +337,18 @@ export const useMusic = create<MusicState>((set, get) => ({
   // Плейлист идёт по кругу: после последнего трека снова первый.
   next: () => {
     const { tracks, index } = get()
+    const inLink = Boolean(tracks[index]?.link)
+    if (inLink && embedStep(1)) return
+    if (inLink && tracks.length === 1) {
+      embedRestart()
+      return
+    }
     set({ index: tracks.length ? (index + 1) % tracks.length : 0 })
     apply(FADE_MS)
   },
   prev: () => {
     const { tracks, index } = get()
+    if (tracks[index]?.link && embedStep(-1)) return
     set({ index: tracks.length ? (index - 1 + tracks.length) % tracks.length : 0 })
     apply(FADE_MS)
   },
@@ -332,6 +394,34 @@ export const useMusic = create<MusicState>((set, get) => ({
     } catch (e) {
       showToast('Трек не удалён: ' + errText(e), 'error')
     }
+  },
+  addLink: (raw) => {
+    const v = parseMusicLink(raw)
+    if (!v.ok) {
+      showToast(v.error, 'error')
+      return false
+    }
+    const s = get()
+    const known = s.tracks.findIndex((t) => t.link?.key === v.link.key)
+    if (known >= 0) {
+      s.play(known)
+      return true
+    }
+    if (s.links.length >= MAX_LINKS) {
+      showToast('Плейлистов по ссылке может быть не больше ' + MAX_LINKS + ' — убери лишний', 'error')
+      return false
+    }
+    const links = [...s.links, v.link]
+    saveLinks(links)
+    rebuild(s.radio, s.own, links)
+    get().play(get().tracks.findIndex((t) => t.link?.key === v.link.key))
+    return true
+  },
+  removeLink: (key) => {
+    const s = get()
+    const links = s.links.filter((l) => l.key !== key)
+    saveLinks(links)
+    rebuild(s.radio, s.own, links)
   },
   openFolder: () => {
     openMusicFolder().catch((e: unknown) => showToast('Папка не открылась: ' + errText(e), 'error'))
@@ -393,6 +483,7 @@ export function setMusicAutostart(on: boolean) {
 export function stopMusicNow() {
   autoPaused = false
   clearFade()
+  embedPause()
   if (!audio) return
   audio.pause()
   audio.volume = 0
@@ -406,8 +497,9 @@ function boot() {
     })
     .then((own) => {
       const radio = storedRadio()
-      const list = playlist(radio, own)
-      useMusic.setState({ radio, own, tracks: list, loaded: true })
+      const links = storedLinks()
+      const list = playlist(radio, own, links)
+      useMusic.setState({ radio, own, links, tracks: list, loaded: true })
       pickStart(list)
       autostart()
     })
@@ -427,7 +519,8 @@ function autostart() {
   const once = () => {
     const a = getAudio()
     const cur = useMusic.getState()
-    if (a.paused && cur.playing && !cur.muted && cur.level > 0) apply(FADE_MS)
+    const blocked = a.paused || Boolean(cur.tracks[cur.index]?.link)
+    if (blocked && cur.playing && !cur.muted && cur.level > 0) apply(FADE_MS)
   }
   document.addEventListener('click', once, { once: true })
 }

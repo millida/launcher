@@ -787,6 +787,8 @@
 .lb-mus-empty { font: 600 12px/1.4 var(--m-font); color: var(--m-fg-muted); }
 .lb-mus-actions { display: flex; gap: 8px; }
 .lb-mus-actions .btn.primary { flex: 1; }
+.lb-mus-link { display: flex; gap: 8px; }
+.lb-mus-link .input { flex: 1; min-width: 0; padding: 0 12px; }
 
 /* ---------- Карусель баннера справа (11.10.2026): чаты, Аркания, PvP-тиры ---------- */
 .lobby-rec.lobby-an.lobby-chat { --an-ink: #fff; }

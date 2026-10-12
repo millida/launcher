@@ -755,7 +755,14 @@ mod tests {
             "script-src must stay exactly 'self': 'unsafe-inline' or 'unsafe-eval' would let \
              injected markup run, and a remote origin would let it be loaded from the network.",
         );
-        for key in ["object-src", "frame-src", "frame-ancestors", "form-action"] {
+        assert_eq!(
+            list("frame-src"),
+            vec!["https://www.youtube-nocookie.com".to_string(), "https://w.soundcloud.com".to_string()],
+            "frame-src is exactly the two music and trailer players. A frame from any other origin \
+             is a page the launcher does not control drawn inside its window, and a wildcard would \
+             let injected markup send data out through a frame address.",
+        );
+        for key in ["object-src", "frame-ancestors", "form-action"] {
             assert_eq!(
                 list(key),
                 vec!["'none'".to_string()],
