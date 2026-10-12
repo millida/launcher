@@ -5,7 +5,7 @@ import type { SkinViewEngine } from '../../vendor/mine3d'
 import type { Mine3dModule } from '../../lib/mine3d'
 import { Icon } from '../Icon'
 import { Head } from '../Head'
-import { nickSkinUrl } from '../../lib/characterStage'
+import { nickSkinUrl, paintStill } from '../../lib/characterStage'
 import { detectSlimFromUrl } from '../../lib/skinArms'
 import { DEFAULT_PARTY_CAPACITY, sameIdentity, slotPlan, slotSpot, type Party, type PartyMember } from '../../lib/party'
 import { isLeader, kickFromParty, partyWithOthers, promoteInParty, usePartyStore } from '../../state/party'
@@ -142,7 +142,15 @@ export function usePartyStage(engine: SkinViewEngine | null, m3d: Mine3dModule |
         return { skin: url, slim, animation: m3d.createSkinAnimation('idle'), at: { x: s.spot.x, y: 0, z: s.spot.z, yaw: s.spot.yaw } }
       }),
     ).then((figures) => {
-      if (alive) void engine.setExtras(figures).catch(() => {})
+      if (!alive) return
+      void engine
+        .setExtras(figures)
+        .then(() => {
+          // The lobby loop stands still while the game has the focus: figures that
+          // arrive then get a frame of their own instead of waiting for the next focus.
+          if (alive && !renderLive()) paintStill(engine)
+        })
+        .catch(() => {})
     })
     return () => {
       alive = false
@@ -298,6 +306,7 @@ export function PartyOverlay({
   const [menu, setMenu] = useState('')
   const refs = useRef<Record<string, HTMLElement | null>>({})
   const saying = usePartyFlow((s) => s.say)
+  const searching = useMateSearch((st) => st.searching)
 
   useEffect(() => {
     if (!engine || !seats.length) return
@@ -305,16 +314,18 @@ export function PartyOverlay({
     const v = new Vector3()
     const place = () => {
       const host = stage.current
-      if (!host) return
+      if (!host) return false
+      let all = true
       seats.forEach((seat, i) => {
         const el = refs.current[seat.key]
+        if (!el) return
         const padMesh = pads.current?.[i]
-        if (!el || !padMesh) return
+        if (!padMesh) return void (all = false)
         let top: Point
         let foot: Point
         if (seat.member) {
           const head: Object3D | null = engine.figureHead(seat.figure)
-          if (!head) return
+          if (!head) return void (all = false)
           head.getWorldPosition(v)
           v.y += OVER_HEAD
           top = project(engine, host, v)
@@ -327,10 +338,14 @@ export function PartyOverlay({
         el.style.transform = 'translate(' + Math.round(top.x) + 'px,' + Math.round(top.y) + 'px)'
         el.style.setProperty('--seat-h', Math.max(0, Math.round(foot.y - top.y)) + 'px')
       })
+      return all
     }
     let t = 0
+    // Labels built while the window stands still are put in place once: unplaced
+    // they pile up in the corner of the stage until the next focus.
+    let placed = false
     const loop = () => {
-      if (renderLive()) place()
+      if (renderLive() || !placed) placed = place()
       if (awake) raf = requestAnimationFrame(loop)
       else t = window.setTimeout(loop, 500)
     }
@@ -344,7 +359,6 @@ export function PartyOverlay({
   if (!millida || !seats.length) return null
   const leader = isLeader(party, me)
   const inVoice = !!party && callRoom === party.id
-  const searching = useMateSearch((st) => st.searching)
 
   // One way to call someone, not a «+» on every empty seat (владелец 11.10.2026):
   // the button stands on the next seat to fill, the rest stay bare.
