@@ -277,8 +277,8 @@ function PvpPlay({ on }: { on: boolean }) {
 
 /**
  * Карусель китов — «обложки на кольце» (владелец 12.10.2026: «совмести первый
- * вариант и седьмой… и удиви»). Спереди — веер обложек лицом к центру, дальше
- * карточки уходят по кольцу и видны дальней дугой над веером. Выбранный кит
+ * вариант и седьмой», затем «только седьмой — геометрический круг»). Карточки стоят
+ * по кольцу с равным шагом, дальняя половина видна над ближней. Выбранный кит
  * выезжает вперёд, а его фигура выходит из рамки карточки. «Случайный»
  * раскручивает кольцо, как колесо, и останавливает на случайном ките.
  *
@@ -295,35 +295,6 @@ const TILT_SIN = Math.sin((9 * Math.PI) / 180) // кольцо наклонен�
 const TILT_COS = Math.cos((9 * Math.PI) / 180)
 const FACE_HALF = 94 // половина внутренней ширины рамки карточки, px
 const RIG_H = 214 // высота фигуры в карточке, px
-
-/**
- * Доля полукруга, которую карточка прошла к дальней стороне кольца (0 — центр,
- * 1 — напротив). Спереди шаги мелкие — обложки стоят веером внахлёст; к дальней
- * стороне шаги крупные — задняя дуга читается тремя-четырьмя карточками.
- */
-const RING_P: [number, number][] = [[0, 26], [0.14, 13], [0.36, 12], [0.5, 16], [0.64, 30], [0.79, 42], [1, 50]]
-const ringShare = (() => {
-  const N = 96
-  const density = (t: number) => {
-    for (let j = 1; j < RING_P.length; j++) {
-      const [t0, v0] = RING_P[j - 1]!
-      const [t1, v1] = RING_P[j]!
-      if (t <= t1) return v0 + ((v1 - v0) * (t - t0)) / (t1 - t0)
-    }
-    return 50
-  }
-  const acc = [0]
-  for (let j = 1; j <= N; j++) acc.push(acc[j - 1]! + density((j - 0.5) / N))
-  return (u: number) => {
-    const x = Math.max(0, Math.min(1, u)) * N
-    const j = Math.min(N - 1, Math.floor(x))
-    return (acc[j]! + (acc[j + 1]! - acc[j]!) * (x - j)) / acc[N]!
-  }
-})()
-const smooth = (a: number, b: number, x: number) => {
-  const t = Math.max(0, Math.min(1, (x - a) / (b - a)))
-  return t * t * (3 - 2 * t)
-}
 
 /**
  * Фон сцены — пиксельная мозаика в цвет кита (владелец 12.10.2026: «предметы на фоне —
@@ -473,7 +444,6 @@ function KitCarousel({
     const box = track.current
     if (!el || !box || !n) return
     const R = Math.max(340, Math.min(520, box.clientWidth * 0.42))
-    const H = n / 2
     // Точка схода выше центра кольца: дальняя дуга поднимается над веером.
     const oy = -box.clientHeight * 0.31
     const list = el.children as HTMLCollectionOf<HTMLElement>
@@ -483,11 +453,13 @@ function KitCarousel({
       const ad = Math.abs(d)
       const sg = d < 0 ? -1 : 1
       const near = Math.max(0, 1 - ad)
-      const th = sg * 180 * ringShare(ad / H)
+      // Чистое кольцо (владелец 12.10.2026: «используй только 7 — геометрический круг, сзади
+      // тоже видно»): шаг между карточками равный, спереди карточка смотрит наружу, дальняя
+      // половина развёрнута лицом к зрителю.
+      const th = (d * 360) / n
       const rad = (th * Math.PI) / 180
-      // Спереди — обложки лицом к центру; у дальней стороны карточка доворачивается лицом внутрь кольца.
-      const w = smooth(70, 110, Math.abs(th))
-      const yaw = (1 - w) * -sg * 56 * Math.min(ad, 1) + w * (th - sg * 180)
+      const back = Math.abs(th) > 90
+      const yaw = back ? th - sg * 180 : th
       const zr = R * Math.cos(rad) - R
       // Проекцию считаем сами (наклон кольца, перспектива, порядок по глубине), а не общей 3D-сценой
       // браузера: там, где у вебвью нет ускоренной композиции (часть Linux), 3D-сцена схлопывается и
@@ -503,7 +475,7 @@ function KitCarousel({
       if (card.style.zIndex !== zi) card.style.zIndex = zi
       // Затемнение — прозрачностью тёмных слоёв поверх фона и ленты. Не фильтром и не CSS-переменной
       // на карточке: фильтр дёргает кадры, а переменная заставляет перекрашивать рамку каждый кадр.
-      const dim = Math.min(0.74, 0.16 * Math.min(ad, 1) - zr / 1250).toFixed(3)
+      const dim = (back ? 0.72 : Math.min(0.5, ad * 0.15)).toFixed(3)
       const kids = card.children
       const rig = kids[1] as HTMLElement | undefined
       const shadeA = kids[0]?.lastElementChild as HTMLElement | null
@@ -511,7 +483,7 @@ function KitCarousel({
       const tag = kids[3] as HTMLElement | undefined
       if (shadeA && shadeA.style.opacity !== dim) shadeA.style.opacity = dim
       if (shadeB && shadeB.style.opacity !== dim) shadeB.style.opacity = dim
-      const tg = Math.max(0, Math.min(1, 1.6 - ad * 0.5)).toFixed(2)
+      const tg = back ? '0' : '1'
       if (tag && tag.style.opacity !== tg) tag.style.opacity = tg
       if (!rig) continue
       const c = clips.current[i] || [0, 0]

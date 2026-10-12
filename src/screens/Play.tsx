@@ -252,16 +252,15 @@ export function Play({ on }: { on: boolean }) {
           Боковой полосы на главной нет (владелец 23.09.2026). */}
       {/* Ежедневный бонус живёт в магазине (правка владельца 21:43): плитки
           бонуса нет, у «Магазина» «!», пока бонус не забран. */}
-      {social ? null : (
-        <div className="lobby-left">
-          <nav className="lobby-nav" aria-label="Разделы">
-            <HubTile kind="shop" />
-            <HubTile kind="pvp" />
-            <HubTile kind="wardrobe" />
-            <HubTile kind="server" />
-          </nav>
-        </div>
-      )}
+      {/* Плитки остаются и в пати (владелец 12.10.2026: «не убирай элементы, вместо баннера — виджет пати»). */}
+      <div className="lobby-left">
+        <nav className="lobby-nav" aria-label="Разделы">
+          <HubTile kind="shop" />
+          <HubTile kind="pvp" />
+          <HubTile kind="wardrobe" />
+          <HubTile kind="server" />
+        </nav>
+      </div>
       {/* Кнопки пати стоят над «Играть» всегда: «Найти пати» на том же месте становится «Отменой». */}
       <div className="lobby-who">
         <LobbyChips on={on} />
