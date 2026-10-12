@@ -184,10 +184,9 @@ function PvpPlay({ on }: { on: boolean }) {
       if (me?.uuid) {
         const res = await usePvpQueue.getState().start({ kit: k, ranked: true, uuid: me.uuid })
         if (res === 'queued') return
-        if (res === 'error') {
-          showToast('Очередь не ответила — попробуй ещё раз', 'error')
-          return
-        }
+        // Очередь не ответила или сервер её ещё не умеет — не тупик: идём старым путём,
+        // заявкой и входом на сервер. (Ответ 404 приходил текстом «Cannot POST…», его не
+        // распознавали как «очереди нет», и «Играть» упиралась в «попробуй ещё раз».)
       }
       const intent = api('/tiers/intent', { method: 'POST', body: JSON.stringify({ kit: k, ranked: true }) }).catch(() => {})
       await Promise.race([intent, new Promise((r) => setTimeout(r, 3000))])
