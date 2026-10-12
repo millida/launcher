@@ -227,7 +227,11 @@ fn validate_texture_url(url: &str) -> Result<url::Url, String> {
 /// hosts, and the response is validated as a reasonably sized PNG.
 pub async fn fetch_texture(url: String) -> Result<String, String> {
     let parsed = validate_texture_url(&url)?;
-    let res = client().get(parsed.as_str()).send().await.map_err(|e| e.to_string())?;
+    // Skins and capes ride the same sockets as the API: without the spare pool
+    // a hung one leaves the figure bare until the read timeout.
+    let res = hedged(|| client().get(parsed.as_str()).send(), || spare_client().get(parsed.as_str()).send())
+        .await
+        .map_err(|e| e.to_string())?;
     // The shared client follows redirects, so an allowed host could still bounce
     // the request onto a local address; the body is only handed back when the
     // final URL passes the same check.

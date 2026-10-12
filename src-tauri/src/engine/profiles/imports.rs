@@ -527,7 +527,10 @@ pub fn scan_import_dir(dir: &Path) -> Vec<FoundInstance> {
 
 fn walk_roots(dots: SourceRoots, insts: SourceRoots) -> Vec<FoundInstance> {
     let mut out: Vec<FoundInstance> = vec![];
+    // Legacy Launcher with separate folders keeps every game folder under home/
+    let homes: SourceRoots = dots.iter().map(|(src, root)| (src.clone(), root.join("home"))).collect();
     for (src, root) in dots {
+        official_profile_dirs(&root, &src, &mut out);
         let versions = root.join("versions");
         let Ok(rd) = std::fs::read_dir(&versions) else { continue };
         for e in rd.flatten() {
@@ -546,12 +549,15 @@ fn walk_roots(dots: SourceRoots, insts: SourceRoots) -> Vec<FoundInstance> {
             if loader == "vanilla" {
                 if let Some(l) = loader_from_version_json(&meta) { loader = l }
             }
+            // a version that runs in its own folder keeps its mods, configs and
+            // packs there: the shared root holds another build's files, or none
+            let home = if version_folder_is_game_dir(&dir) { &dir } else { &root };
             // in a shared .minecraft mods/ belongs to every version at once, so only
             // modded versions (those with inheritsFrom) may be judged by it
             if loader == "vanilla" && !inherits.is_empty() {
-                if let Some(l) = loader_from_mods_dir(&root) { loader = l }
+                if let Some(l) = loader_from_mods_dir(home) { loader = l }
             }
-            let path = root.to_string_lossy().to_string();
+            let path = home.to_string_lossy().to_string();
             if out.iter().any(|x: &FoundInstance| x.name == id && x.path == path) { continue }
             out.push(FoundInstance {
                 name: id.clone(),
@@ -563,7 +569,7 @@ fn walk_roots(dots: SourceRoots, insts: SourceRoots) -> Vec<FoundInstance> {
             });
         }
     }
-    for (src, root) in insts {
+    for (src, root) in insts.into_iter().chain(homes) {
         let Ok(rd) = std::fs::read_dir(&root) else { continue };
         for e in rd.flatten() {
             let dir = e.path();
@@ -574,6 +580,51 @@ fn walk_roots(dots: SourceRoots, insts: SourceRoots) -> Vec<FoundInstance> {
         }
     }
     out
+}
+
+fn looks_like_game_dir(dir: &Path) -> bool {
+    std::fs::symlink_metadata(dir).is_ok_and(|m| m.is_dir() && !m.file_type().is_symlink())
+        && ["mods", "config", "saves", "resourcepacks", "options.txt"].iter().any(|n| dir.join(n).exists())
+}
+
+/// Installations of the official launcher with a game directory of their own:
+/// their mods, configs and packs are there, not in the shared .minecraft.
+fn official_profile_dirs(root: &Path, src: &str, out: &mut Vec<FoundInstance>) {
+    for file in ["launcher_profiles.json", "launcher_profiles_microsoft_store.json"] {
+        let Some(doc) = std::fs::read_to_string(root.join(file)).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()) else { continue };
+        let Some(profiles) = doc["profiles"].as_object() else { continue };
+        for p in profiles.values() {
+            let Some(raw) = p["gameDir"].as_str().map(str::trim).filter(|s| !s.is_empty()) else { continue };
+            let dir = PathBuf::from(raw);
+            if !dir.is_absolute() || dir == root || !looks_like_game_dir(&dir) { continue }
+            let path = dir.to_string_lossy().to_string();
+            if out.iter().any(|x| x.path == path) { continue }
+            let id = p["lastVersionId"].as_str().unwrap_or("");
+            let meta = if check_version_id(id).is_ok() {
+                std::fs::read_to_string(root.join("versions").join(id).join(format!("{}.json", id))).ok()
+                    .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+                    .unwrap_or(Value::Null)
+            } else {
+                Value::Null
+            };
+            let mut version = if meta.is_null() { String::new() } else { game_version_of(id, &meta) };
+            let mut loader = loader_from_version_json(&meta).unwrap_or_else(|| loader_from_id(id));
+            if version.is_empty() {
+                if let Some((v, l)) = detect_from_game_dir(&dir) {
+                    version = v;
+                    if loader == "vanilla" { loader = l }
+                }
+            }
+            if loader == "vanilla" {
+                if let Some(l) = loader_from_mods_dir(&dir) { loader = l }
+            }
+            if version.is_empty() { continue }
+            let folder = dir.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            let name: String = p["name"].as_str().map(str::trim).filter(|n| !n.is_empty()).unwrap_or(folder.as_str())
+                .chars().filter(|c| !c.is_control()).take(64).collect();
+            out.push(FoundInstance { name, version, loader, path, source: src.to_string(), movable: false });
+        }
+    }
 }
 
 /// One instance folder of a launcher that keeps each build apart (Prism,
@@ -723,14 +774,26 @@ fn import_entry_kept(name: &str, shared: bool) -> bool {
     }
 }
 
-fn copy_game_files(game: &Path, dst: &Path) -> Result<usize, String> {
-    let shared = is_shared_root(game);
+/// A folder of `versions/` holds the version json under its own name. Some
+/// launchers (TLauncher modpacks, per-version folders) run the game right
+/// there, so the jar, json and natives sit beside the build's own files.
+fn is_version_folder(dir: &Path) -> bool {
+    dir.file_name().is_some_and(|id| dir.join(format!("{}.json", id.to_string_lossy())).is_file())
+}
+
+fn version_folder_is_game_dir(dir: &Path) -> bool {
+    is_version_folder(dir) && ["mods", "config", "saves", "resourcepacks"].iter().any(|d| dir.join(d).is_dir())
+}
+
+/// `except` names top-level entries the caller brings in some other way.
+pub(crate) fn copy_game_files(game: &Path, dst: &Path, except: &[&str]) -> Result<usize, String> {
+    let shared = is_shared_root(game) || is_version_folder(game);
     let rd = std::fs::read_dir(game).map_err(|e| format!("Не удалось прочитать папку сборки: {}", e))?;
     let mut copied = 0;
     for entry in rd {
         let entry = entry.map_err(|e| format!("Не удалось прочитать папку сборки: {}", e))?;
         let Some(name) = entry.file_name().to_str().map(str::to_string) else { continue };
-        if !import_entry_kept(&name, shared) {
+        if !import_entry_kept(&name, shared) || except.iter().any(|x| x.eq_ignore_ascii_case(&name)) {
             continue;
         }
         let src = entry.path();
@@ -857,7 +920,7 @@ pub fn import_instance(path: String, name: String, version: String, loader: Stri
     let nm = unique_profile_name(&name);
     let dst = profile_dir(&nm);
     std::fs::create_dir_all(&dst).map_err(|e| e.to_string())?;
-    match copy_game_files(&game, &dst) {
+    match copy_game_files(&game, &dst, &[]) {
         Ok(0) => {
             let _ = std::fs::remove_dir_all(&dst);
             return Err("В выбранной папке нет файлов игры (mods, config, saves…)".into());
@@ -1093,7 +1156,7 @@ mod tests {
         put(&inst, "minecraft/leftover.txt");
         assert_eq!(instance_game_dir(&inst), Some(game.clone()), "Prism берёт .minecraft, когда рядом лежит и minecraft/");
         let dst = tmp("prism-whole-dst");
-        copy_game_files(&game, &dst).unwrap();
+        copy_game_files(&game, &dst, &[]).unwrap();
         for (rel, want, why) in cases {
             assert_eq!(dst.join(rel).is_file(), want, "{}: {}", rel, why);
         }
@@ -1118,10 +1181,84 @@ mod tests {
             put(&game, rel);
         }
         let dst = tmp("shared-root-dst");
-        copy_game_files(&game, &dst).unwrap();
+        copy_game_files(&game, &dst, &[]).unwrap();
         for (rel, want, why) in cases {
             assert_eq!(dst.join(rel).is_file(), want, "{}: {}", rel, why);
         }
+    }
+
+    /// Сборка TLauncher живёт прямо в versions/<имя>/. Импорт брал общую
+    /// .minecraft, и сборка приезжала без своих конфигов и ресурспаков.
+    #[test]
+    fn a_version_folder_with_its_own_game_files_is_the_build() {
+        let root = tmp("tl-pack");
+        let pack = root.join("versions").join("Pack");
+        let cases: [(&str, bool, &str); 8] = [
+            ("mods/a.jar", true, "моды сборки"),
+            ("config/jei.toml", true, "конфиги сборки"),
+            ("resourcepacks/pack.zip", true, "ресурспаки сборки"),
+            ("saves/W/level.dat", true, "миры сборки"),
+            ("options.txt", true, "настройки игры, в них включённые ресурспаки"),
+            ("Pack.jar", false, "клиент версии скачивается заново"),
+            ("natives/lwjgl.dll", false, "нативные библиотеки чужого лаунчера"),
+            ("TLauncherAdditional.json", false, "служебный файл чужого лаунчера"),
+        ];
+        for (rel, _, _) in cases {
+            put(&pack, rel);
+        }
+        std::fs::write(pack.join("Pack.json"), br#"{"id":"Pack","inheritsFrom":"1.20.1"}"#).unwrap();
+        put(&root, "config/foreign.toml");
+        std::fs::create_dir_all(root.join("versions/1.20.1")).unwrap();
+        std::fs::write(root.join("versions/1.20.1/1.20.1.json"), br#"{"id":"1.20.1"}"#).unwrap();
+
+        let found = walk_roots(vec![("t".to_string(), root.clone())], vec![]);
+        let path_of = |name: &str| found.iter().find(|f| f.name == name).map(|f| PathBuf::from(&f.path));
+        assert_eq!(path_of("Pack"), Some(pack.clone()), "сборка со своими файлами импортируется из своей папки");
+        assert_eq!(path_of("1.20.1"), Some(root.clone()), "версия без своих файлов по-прежнему берёт общую папку");
+
+        let dst = tmp("tl-pack-dst");
+        copy_game_files(&pack, &dst, &[]).unwrap();
+        for (rel, want, why) in cases {
+            assert_eq!(dst.join(rel).is_file(), want, "{}: {}", rel, why);
+        }
+        assert!(!dst.join("Pack.json").exists(), "описание версии чужого лаунчера в сборку не едет");
+        assert!(!dst.join("config/foreign.toml").exists(), "конфиги общей папки принадлежат другой сборке");
+    }
+
+    /// Профиль официального лаунчера со своей папкой игры и папка home/ у
+    /// Legacy Launcher: файлы сборки лежат там, а не в общей .minecraft.
+    #[test]
+    fn builds_kept_outside_the_shared_root_are_found_where_they_live() {
+        let root = tmp("own-dirs");
+        let own = tmp("own-dirs-profile");
+        let empty = tmp("own-dirs-empty");
+        put(&own, "config/jei.toml");
+        put(&own, "resourcepacks/pack.zip");
+        put(&own, "options.txt");
+        std::fs::create_dir_all(root.join("versions/1.20.1-forge-47.2.0")).unwrap();
+        std::fs::write(
+            root.join("versions/1.20.1-forge-47.2.0/1.20.1-forge-47.2.0.json"),
+            br#"{"id":"1.20.1-forge-47.2.0","inheritsFrom":"1.20.1"}"#,
+        )
+        .unwrap();
+        let profiles = serde_json::json!({ "profiles": {
+            "a": { "name": "Моя сборка", "lastVersionId": "1.20.1-forge-47.2.0", "gameDir": own.to_string_lossy() },
+            "b": { "name": "Пустая", "lastVersionId": "1.20.1-forge-47.2.0", "gameDir": empty.to_string_lossy() },
+            "c": { "name": "Обычная", "lastVersionId": "1.20.1-forge-47.2.0" },
+        }});
+        std::fs::write(root.join("launcher_profiles.json"), profiles.to_string()).unwrap();
+        put(&root, "home/Fabric 1.20.1/mods/a.jar");
+        put(&root, "home/Fabric 1.20.1/config/x.toml");
+        std::fs::create_dir_all(root.join("home/Fabric 1.20.1/logs")).unwrap();
+        std::fs::write(root.join("home/Fabric 1.20.1/logs/latest.log"), "[main/INFO]: Loading Minecraft 1.20.1 with Fabric Loader 0.15.11\n").unwrap();
+
+        let found = walk_roots(vec![("t".to_string(), root.clone())], vec![]);
+        let by_path = |p: &Path| found.iter().find(|f| Path::new(&f.path) == p);
+        let prof = by_path(&own).expect("профиль со своей папкой игры предлагается из неё, иначе конфиги и ресурспаки остаются у старого лаунчера");
+        assert_eq!((prof.name.as_str(), prof.version.as_str(), prof.loader.as_str()), ("Моя сборка", "1.20.1", "forge"));
+        assert!(by_path(&empty).is_none(), "папка без файлов игры — не сборка");
+        let home = by_path(&root.join("home/Fabric 1.20.1")).expect("папка из home/ — отдельная сборка со своими модами и конфигами");
+        assert_eq!((home.version.as_str(), home.loader.as_str()), ("1.20.1", "fabric"));
     }
 
     /// Папка игры-ссылка не считается папкой игры: иначе импорт скопировал бы

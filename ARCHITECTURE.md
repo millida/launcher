@@ -262,7 +262,9 @@ macOS его не играет), выбор файла пользователе�
    Ссылки и папки открываются командами ядра, а не оболочкой.
 6. **CSP и область asset-протокола.** В
    [tauri.conf.json](src-tauri/tauri.conf.json) `script-src` — только `'self'`,
-   `object-src` и `frame-src` — `'none'`, список внешних хостов в `connect-src`
+   `object-src` — `'none'`, `frame-src` — ровно два плеера
+   (`www.youtube-nocookie.com` и `w.soundcloud.com`: музыка по ссылке и
+   трейлеры), список внешних хостов в `connect-src`
    закрытый (новый домен нужно добавлять в оба блока: `csp` и `devCsp`).
    Область `asset:` пустая в конфиге и сужается в рантайме до папки данных и
    папки игры (`allow_assets` в [lib.rs](src-tauri/src/lib.rs)).

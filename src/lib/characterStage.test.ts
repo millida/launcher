@@ -3,7 +3,18 @@ import { describe, expect, mock, test } from 'bun:test'
 mock.module('./api', () => ({ LAUNCHER_API: '' }))
 mock.module('./gameProfile', () => ({ loadCosmeticModel: async () => null }))
 
-const { lobbyHitBox } = await import('./characterStage')
+const { lobbyHitBox, paintStill } = await import('./characterStage')
+
+describe('paintStill', () => {
+  test('a still frame is one turn of the loop that leaves it stopped', () => {
+    const calls: string[] = []
+    paintStill({ start: () => void calls.push('start'), stop: () => void calls.push('stop') })
+    expect(
+      calls,
+      'the frame is drawn by the loop itself and the loop is stopped right after: left running, the lobby renders over the game again',
+    ).toEqual(['start', 'stop'])
+  })
+})
 
 describe('lobbyHitBox', () => {
   const stage = { w: 960, h: 716 }
