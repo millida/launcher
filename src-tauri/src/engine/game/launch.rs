@@ -1856,7 +1856,7 @@ pub async fn install_and_launch_in(
                 .ok();
             let _ = app2.emit(
                 "game-crash",
-                diagnose(&pname, &reason, &tail, &log_text).classified(kind, cause).with_log_file(log_file),
+                diagnose(&pname, &reason, &tail, &log_text).classified(kind, cause).with_log_file(log_file).with_mod_jar(&own_mod_jar),
             );
             if !review_ok {
                 let checked = pname.clone();

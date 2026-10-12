@@ -244,3 +244,66 @@
 .tb-mine-cap { font: 800 12px/1 var(--m-font); color: var(--m-fg-subtle); text-transform: uppercase; letter-spacing: .05em; }
 .tb-mine-rank { font: 900 20px/1 var(--m-font); color: var(--tb-c); }
 #s-top .tb-shield-line { margin: 4px 0 6px; font: 700 13px/1 var(--m-font); color: var(--m-fg-subtle); }
+
+/* ---------- PvP-тиры Millida SMP (11.10.2026) ---------- */
+#s-top.theme-pvp { --tb-c: #f07a18; --tb-c2: #ffc24a; --tb-glow: rgba(240, 122, 24, 0.2); --tb-soft: rgba(240, 122, 24, 0.1); }
+/* Значок тира: ступень 1 — золото, 2 — серебро, 3 — бронза, 4–5 — сталь; HT плотнее LT. */
+.tr-badge {
+  display: inline-grid; place-items: center; min-width: 40px; height: 24px; padding: 0 6px 1px;
+  font: 900 13px/1 var(--m-font); letter-spacing: .02em; color: #1a1206;
+  background-color: var(--tr-c, #9aa7b4); --px-n: 4px; clip-path: var(--px-4);
+}
+.tr-badge[data-lv='1'] { --tr-c: #ffcf3f; }
+.tr-badge[data-lv='2'] { --tr-c: #d7e1ea; }
+.tr-badge[data-lv='3'] { --tr-c: #e09a5a; }
+.tr-badge[data-lv='4'] { --tr-c: #8fb3c9; }
+.tr-badge[data-lv='5'] { --tr-c: #7d8b97; }
+.tr-badge[data-h='0'] { background-color: color-mix(in srgb, var(--tr-c, #9aa7b4) 62%, #0b0f14); color: var(--m-fg); }
+.tr-badge.big { min-width: 76px; height: 52px; font-size: 26px; --px-n: 5px; clip-path: var(--px-5); }
+
+.tr-board { display: flex; flex-direction: column; gap: 12px; }
+.tr-mine {
+  display: flex; align-items: center; gap: 14px; padding: 12px 16px;
+  background: color-mix(in srgb, var(--tb-c) 14%, var(--m-surface)); --px-n: 5px; clip-path: var(--px-5);
+}
+.tr-mine-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.tr-mine-body b { font: 900 20px/1 var(--m-font); color: var(--m-fg); }
+.tr-mine-body span { font: 700 13px/1 var(--m-font); color: var(--m-fg-muted); }
+.tr-mine-modes { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px 10px; margin-left: auto; min-width: 0; }
+.tr-mode { display: inline-flex; align-items: center; gap: 6px; }
+.tr-mode i { font: 700 12px/1 var(--m-font); font-style: normal; color: var(--m-fg-subtle); }
+
+.tr-banner {
+  position: relative; display: flex; align-items: center; gap: 16px; min-height: 112px; padding: 0 24px 0 156px; overflow: hidden;
+  background-color: #2a1606; --px-n: 10px; clip-path: var(--px-10);
+}
+.tr-banner-rig { position: absolute; left: 22px; bottom: -22px; height: 134px; width: auto; image-rendering: pixelated; pointer-events: none; }
+.tr-banner-text { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.tr-banner-text b { font: 900 22px/1.05 var(--m-font); color: #fff; }
+.tr-banner-text span { font: 700 14px/1.2 var(--m-font); color: #ffc995; }
+:root .tr-banner .tr-banner-go { margin-left: auto; flex: none; height: 48px; padding: 0 22px; gap: 8px; font-size: 16px; white-space: nowrap; }
+:root .tr-banner .tr-banner-go svg { width: 18px; height: 18px; }
+
+.tr-row .fr-body { display: flex; flex-direction: column; gap: 4px; }
+.tr-title { font: 700 12px/1 var(--m-font); color: var(--m-fg-subtle); }
+.tr-best { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; flex: none; }
+.tr-best i { font: 700 13px/1 var(--m-font); font-style: normal; color: var(--m-fg-muted); width: 88px; }
+#s-top.theme-pvp .tr-row .tb-val { flex: none; min-width: 120px; justify-content: flex-end; text-align: right; }
+
+.lchip-tier { gap: 9px; padding-right: 8px; }
+.lchip-tier svg { color: var(--m-rarity-legendary); }
+.lchip-tier b { font-size: 16px; }
+.lchip-tier .tr-badge { height: 26px; min-width: 40px; font-size: 14px; }
+/* Тира нет — кнопка-приманка: плотный акцент с подошвой, мягкое мерцание. */
+.lchip-go {
+  display: inline-grid; place-items: center; height: 28px; padding: 0 10px 2px;
+  font: 900 13px/1 var(--m-font); color: var(--m-accent-fg); background-color: var(--m-accent);
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.28); --px-n: 4px; clip-path: var(--px-4);
+  animation: lchip-go-pulse 2.4s var(--m-ease-smooth) infinite;
+}
+@keyframes lchip-go-pulse { 0%, 70%, 100% { filter: none; } 80% { filter: brightness(1.25); } }
+@media (prefers-reduced-motion: reduce) { .lchip-go { animation: none; } }
+/* Часы и огоньки — второстепенные вкладки рядом с тир-листом (11.10.2026). */
+#s-top .tb-kinds .seg.minor { height: 32px; padding: 0 10px; font-size: 13px; gap: 6px; color: var(--m-fg-subtle); align-self: center; }
+#s-top .tb-kinds .seg.minor svg { width: 14px; height: 14px; }
+#s-top .tb-kinds .seg.minor.on { color: var(--m-fg); }

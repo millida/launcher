@@ -25,6 +25,7 @@ import { usePlus } from '../state/plus'
 import { PlusMark } from './premium/PlusMark'
 import { onRealtime } from '../lib/realtime'
 import { preloadScreen } from '../screens/registry'
+import { useDaily } from '../state/daily'
 
 /* Навигация как в Brawl Stars: у каждого раздела ровно один вход (владелец
    23.09.2026: «всё дублируется»). В лобби вкладок нет — разделы живут на сцене,
@@ -239,7 +240,10 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
               />
             </span>
             <span className="lb-acc-txt">
-              <span className="acc-nick">{inGameNick || 'Гость'}</span>
+              <span className="acc-nick-row">
+                <span className="acc-nick">{inGameNick || 'Гость'}</span>
+                <NickStreak />
+              </span>
               {plusActive ? (
                 <PlusMark tier={plusTier === 'DIAMOND' ? 'DIAMOND' : 'PLUS'} height={14} className="lb-pmark-badge" />
               ) : (
@@ -337,5 +341,21 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
         <span className="tb-slot" id="tbSlot" />
       </div>
     </header>
+  )
+}
+
+/**
+ * Огоньки серии — у ника в плашке аккаунта (владелец 11.10.2026: «огоньки
+ * около никнейма»). Сегодня день ещё не засчитан — огонь погашен.
+ */
+function NickStreak() {
+  const status = useDaily((s) => s.status)
+  const n = status?.streak ?? 0
+  if (n <= 0) return null
+  return (
+    <span className={'acc-streak' + (status?.activeToday === false ? ' pending' : '')} data-tip={'Серия: ' + n + ' дн.'}>
+      <Icon id="i-flame" />
+      {n}
+    </span>
   )
 }

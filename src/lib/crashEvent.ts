@@ -38,6 +38,8 @@ export function gameCrashData(
     .slice(0, SUSPECTS)
     .join(', ')
   if (suspects) data.suspects = suspects.slice(0, LONG_MAX)
+  const modJar = (info?.modJar || '').trim()
+  if (modJar) data.modJar = modJar.slice(0, 80)
   if (profile?.version) data.mc = profile.version
   const loader = loaderOf(profile)
   if (loader) data.loader = loader

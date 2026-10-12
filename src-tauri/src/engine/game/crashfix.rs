@@ -68,12 +68,20 @@ pub struct CrashDiag {
     pub cause: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub log_file: Option<String>,
+    /// Jar нашего мода, с которым шла игра: по нему рубильник на сервере считает вылеты точно по версии.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub mod_jar: String,
 }
 
 impl CrashDiag {
     pub fn classified(mut self, kind: &str, cause: String) -> Self {
         self.kind = kind.to_string();
         self.cause = cause;
+        self
+    }
+
+    pub fn with_mod_jar(mut self, jar: &str) -> Self {
+        self.mod_jar = jar.to_string();
         self
     }
 
@@ -546,6 +554,7 @@ pub fn diagnose(profile: &str, reason: &str, tail: &str, log_text: &str) -> Cras
         kind: "unknown".into(),
         cause: String::new(),
         log_file: None,
+        mod_jar: String::new(),
     }
 }
 

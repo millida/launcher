@@ -33,8 +33,9 @@ describe('FPS mods of a version build', () => {
       'modernfix',
       'dynamic-fps',
       'moreculling',
+      'fast-ip-ping',
     ])
-    expect(FPS_MODS.forge).toEqual(['embeddium', 'ferrite-core', 'entityculling', 'immediatelyfast', 'modernfix', 'dynamic-fps'])
+    expect(FPS_MODS.forge).toEqual(['embeddium', 'ferrite-core', 'entityculling', 'immediatelyfast', 'modernfix', 'dynamic-fps', 'fast-ip-ping'])
   })
 })
 

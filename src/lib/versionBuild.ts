@@ -8,6 +8,7 @@ import {
   setProfileLoader,
   toggleContent,
 } from '../ipc/commands'
+import { hardwareVideo } from './perfTier'
 import type { Profile } from '../ipc/commands'
 import { useProfiles } from '../state/profiles'
 import { MODRINTH_API, api, mirrorAsset } from './api'
@@ -58,8 +59,8 @@ export const loaderTitle = (version: string) => (versionLoader(version) === 'for
 
 /** Моды режима «Буст FPS» по загрузчику — тот же список, что в ядре (fpsboost.rs). */
 export const FPS_MODS: Record<'fabric' | 'forge', string[]> = {
-  fabric: ['sodium', 'lithium', 'ferrite-core', 'entityculling', 'immediatelyfast', 'modernfix', 'dynamic-fps', 'moreculling'],
-  forge: ['embeddium', 'ferrite-core', 'entityculling', 'immediatelyfast', 'modernfix', 'dynamic-fps'],
+  fabric: ['sodium', 'lithium', 'ferrite-core', 'entityculling', 'immediatelyfast', 'modernfix', 'dynamic-fps', 'moreculling', 'fast-ip-ping'],
+  forge: ['embeddium', 'ferrite-core', 'entityculling', 'immediatelyfast', 'modernfix', 'dynamic-fps', 'fast-ip-ping'],
 }
 
 /** The core installs release files, beta when there is no release, never alpha. */
@@ -156,10 +157,10 @@ async function fabricBuild(version: string, name: string): Promise<string | null
 async function applyFps(profile: string, on: boolean): Promise<void> {
   const st = await fpsBoostState(profile)
   if (on && !st.enabled) {
-    await setFpsBoost(profile, true, true)
+    await setFpsBoost(profile, true, true, await hardwareVideo())
     return
   }
-  if (on && st.stale) await setFpsBoost(profile, true, true)
+  if (on && st.stale) await setFpsBoost(profile, true, true, await hardwareVideo())
   // Режим уже включён: его моды могли быть выключены этим же переключателем.
   for (const file of st.mods) await toggleContent(profile, 'mod', file, on).catch(() => {})
 }

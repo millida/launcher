@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { setScreen } from '../../state/ui'
 import { useMods } from '../../state/mods'
+import { useLobby } from '../../state/lobbyMode'
 
 /**
  * Экран «Во что играем», версия 5 (владелец 24.09.2026, 16:09): одна страница
@@ -69,5 +70,11 @@ export function openHubTab(t: HubTab | HubSection) {
   }
   const section: HubSection | null = t === 'catalog' ? null : t
   useHubTab.setState({ tab: t === 'builds' ? 'builds' : 'catalog', all: false, section })
+  setScreen('playhub')
+}
+
+/** PvP-арена Millida SMP в разделе PvP хаба: из лобби, топа и баннера (11.10.2026). */
+export function openPvpArena() {
+  useLobby.setState({ hubTarget: { pvp: true } })
   setScreen('playhub')
 }

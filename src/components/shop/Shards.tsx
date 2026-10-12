@@ -6,16 +6,29 @@ import { ItemShot } from './Today'
  * «За осколки» (мастерская): вещи недели за осколки — картинка, имя, кнопка
  * с ценой в осколках. Осколки зарабатываются игрой; сколько их — в шапке блока.
  */
-export function ShardsSection({ data, busy, onCraft }: { data: Workshop; busy: string; onCraft: (w: { item: ItemRef; cost: number }) => void }) {
+export function ShardsSection({
+  data,
+  busy,
+  onCraft,
+  showBalance = true,
+}: {
+  data: Workshop
+  busy: string
+  onCraft: (w: { item: ItemRef; cost: number }) => void
+  /** Счётчик в шапке блока — только там, где нет шапки магазина с осколками (гардероб). */
+  showBalance?: boolean
+}) {
   const items = data.workshop.items.filter((w) => !w.owned).slice(0, 6)
   if (!items.length) return null
   return (
     <section id="shop-shards" className="sv-sec" data-section="shards">
       <Head title="За осколки">
-        <span className="sh-bal sd-bal">
-          <Shard size={20} />
-          <b>{data.shards.toLocaleString('ru-RU')}</b>
-        </span>
+        {showBalance ? (
+          <span className="sh-bal sd-bal">
+            <Shard size={20} />
+            <b>{data.shards.toLocaleString('ru-RU')}</b>
+          </span>
+        ) : null}
       </Head>
       <div className="td-grid is-row">
         {items.map((w) => (

@@ -8,6 +8,7 @@ import { showToast } from '../../state/ui'
 import { PVP_VERSIONS, fpsMods, loaderTitle } from '../../lib/versionBuild'
 import type { FpsMod } from '../../lib/versionBuild'
 import { modeIcon } from './modeIcon'
+import { PvpArena } from './PvpArena'
 
 const FEATURES: { icon: string; title: string; line: string }[] = [
   { icon: 'i-grid', title: 'HUD-модули', line: 'FPS, CPS, пинг, броня, эффекты, комбо' },
@@ -64,6 +65,8 @@ export function PvpPage({ busy, onPlay }: { busy: boolean; onPlay: (version: str
 
   return (
     <div className="ph-mode pp" data-section="pvp_page" data-kind="pvp" data-id={version}>
+      {/* Сверху — арена Millida SMP; ниже — PvP-клиент для любых серверов. */}
+      <PvpArena />
       <header className="ph-mode-hero">
         {art ? (
           <span className="ph-mode-bg" style={{ '--mode-c': art.color } as CSSProperties}>
@@ -77,7 +80,7 @@ export function PvpPage({ busy, onPlay }: { busy: boolean; onPlay: (version: str
           </span>
         ) : null}
         <div className="ph-mode-title">
-          <h1>PvP-клиент Millida</h1>
+          <h1>PvP-клиент для любых серверов</h1>
           <span className="ph-mode-meta">{loader + ' · ' + version + (boost ? ' · Boost FPS' : '')}</span>
         </div>
       </header>

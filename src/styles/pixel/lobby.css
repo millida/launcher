@@ -787,3 +787,52 @@
 .lb-mus-empty { font: 600 12px/1.4 var(--m-font); color: var(--m-fg-muted); }
 .lb-mus-actions { display: flex; gap: 8px; }
 .lb-mus-actions .btn.primary { flex: 1; }
+
+/* ---------- Карусель баннера справа (11.10.2026): чаты, Аркания, PvP-тиры ---------- */
+.lobby-rec.lobby-an.lobby-chat { --an-ink: #fff; }
+.lobby-rec.lobby-an.lobby-chat.is-discord { --an-night: #2a2f86; --an-lava: #5865f2; --an-lava-hover: #6d78f5; background: #2a2f86; }
+.lobby-rec.lobby-an.lobby-chat.is-telegram { --an-night: #0b4a6e; --an-lava: #2aabee; --an-lava-hover: #47b9f2; background: #0b4a6e; }
+.lobby-chat .lan-title em { color: #fff; }
+.lobby-chat .lan-title { color: rgba(255, 255, 255, 0.92); }
+.lobby-chat.is-discord .lan-title em { color: #b9c0ff; }
+.lobby-chat.is-telegram .lan-title em { color: #9fdcff; }
+.lch-logo { right: 12px; top: 40px; z-index: 1; width: 84px; height: 84px; pointer-events: none; transition: translate 220ms var(--m-ease-move); }
+.lch-logo .px-icon { width: 100%; height: 100%; display: block; filter: drop-shadow(0 5px 0 rgba(0, 0, 0, 0.3)); }
+.lobby-rec.lobby-an.lobby-smp { --an-night: #2a1606; --an-lava: #f07a18; --an-lava-hover: #ff8f33; --an-ink: #1a0d05; background: #2a1606; }
+.lsmp-rig { right: -14px; top: 30px; height: 142px; image-rendering: pixelated; }
+.lobby-pack .pr-co { max-width: 70%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+@media (hover: hover) and (pointer: fine) {
+  .lobby-chat:hover .lch-logo { translate: 0 -4px; }
+}
+
+/* ---------- Карусель v2 (11.10.2026): 7 с, стрелки, точки, свайп ---------- */
+.lrec-wrap { position: absolute; z-index: 5; right: 20px; top: 50%; transform: translateY(-58%); width: 300px; touch-action: pan-y; user-select: none; }
+.lrec-wrap .lobby-rec { position: relative; right: auto; top: auto; transform: none; animation: none; }
+.lrec-slide { animation: lrec-from-r 260ms var(--m-ease-smooth) both; }
+.lrec-slide.from-l { animation-name: lrec-from-l; }
+@keyframes lrec-from-r { 0% { opacity: 0; transform: translateX(26px); } 100% { opacity: 1; transform: none; } }
+@keyframes lrec-from-l { 0% { opacity: 0; transform: translateX(-26px); } 100% { opacity: 1; transform: none; } }
+.lrec-arrow {
+  position: absolute; top: 50%; z-index: 6; display: grid; place-items: center; width: 30px; height: 44px; margin-top: -30px;
+  color: #fff; background: rgba(8, 10, 12, 0.72); cursor: pointer; opacity: 0; transition: opacity var(--m-t-fast);
+  --px-n: 4px; clip-path: var(--px-4);
+}
+.lrec-arrow svg { width: 16px; height: 16px; }
+.lrec-arrow.l { left: -12px; }
+.lrec-arrow.l svg { transform: scaleX(-1); }
+.lrec-arrow.r { right: -12px; }
+.lrec-wrap:hover .lrec-arrow, .lrec-arrow:focus-visible { opacity: 1; }
+.lrec-dots { display: flex; justify-content: center; gap: 5px; margin-top: 8px; }
+.lrec-dots button { width: 8px; height: 8px; padding: 0; background: rgba(255, 255, 255, 0.35); cursor: pointer; transition: width 160ms var(--m-ease-smooth), background-color 160ms; }
+.lrec-dots button.on { width: 20px; background: #fff; }
+@media (hover: hover) and (pointer: fine) { .lrec-dots button:hover { background: rgba(255, 255, 255, 0.7); } }
+@media (max-height: 640px) { .lrec-wrap { display: none; } }
+@media (prefers-reduced-motion: reduce) { .lrec-slide { animation: none; } }
+/* Награда за Telegram / Discord: груда рубинов и крупное «+300». */
+.lobby-chat.is-reward .lch-logo { right: auto; left: 14px; top: 14px; width: 34px; height: 34px; }
+.lch-pile { right: -18px; top: 6px; z-index: 1; height: 150px; width: auto; pointer-events: none; image-rendering: auto; filter: drop-shadow(0 8px 0 rgba(0, 0, 0, 0.35)); }
+.lobby-chat.is-reward .lan-title.lch-reward { top: 44px; display: flex; flex-direction: column; gap: 3px; text-transform: none; }
+.lobby-chat.is-reward .lch-reward em { font: 900 38px/0.9 var(--m-font); color: #ff6b84; text-shadow: 0 3px 0 rgba(0, 0, 0, 0.45); }
+.lobby-chat.is-reward .lch-reward small { max-width: 170px; font: 800 12px/1.1 var(--m-font); color: #fff; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.4); white-space: nowrap; }
+.lobby-chat.is-reward .lan-go { background: #ff5a74; color: #1a0508; }
+@media (hover: hover) and (pointer: fine) { .lobby-chat.is-reward:hover .lan-go { background: #ff7a90; } }

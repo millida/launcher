@@ -769,8 +769,9 @@ export interface FpsBoostState {
 
 export const fpsBoostState = (profile: string) => invoke<FpsBoostState>('fps_boost_state', { profile })
 
-export const setFpsBoost = (profile: string, on: boolean, keepOptions = false) =>
-  invoke<FpsBoostState>('set_fps_boost', { profile, on, keepOptions })
+/** video — options.txt под железо (lib/perfTier.ts); без него ядро ставит общий набор. */
+export const setFpsBoost = (profile: string, on: boolean, keepOptions = false, video?: [string, string][]) =>
+  invoke<FpsBoostState>('set_fps_boost', { profile, on, keepOptions, video: video ?? null })
 
 export const millidaApi = <T = unknown>(path: string, method: string, body?: unknown) =>
   invoke<T>('millida_api', { path, method, body: body === undefined ? null : body })

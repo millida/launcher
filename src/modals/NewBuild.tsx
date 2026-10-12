@@ -4,6 +4,7 @@ import { Select } from '../components/Select'
 import { BuildIcon, IconPicker } from '../components/playhub/BuildIcon'
 import { hasTauri } from '../ipc/tauri'
 import { createProfile, setFpsBoost } from '../ipc/commands'
+import { hardwareVideo } from '../lib/perfTier'
 import type { McVersion } from '../ipc/commands'
 import { track, trackFailure } from '../lib/telemetry'
 import { BUILD_NAME_MAX } from '../lib/format'
@@ -40,8 +41,8 @@ const LOADERS: { id: LoaderId; label: string; logo: string; sub?: string }[] = [
   { id: 'neoforge', label: 'NeoForge', logo: '/loaders/neoforge.png' },
 ]
 const DEFAULT_LOADER: LoaderId = 'fabric'
-/** Буст FPS ставит ядро (engine/game/fpsboost.rs) — моды есть под Fabric и Forge. */
-const FPS_LOADERS: LoaderId[] = ['fabric', 'forge']
+/** Буст FPS ставит ядро (engine/game/fpsboost.rs) — моды есть под Fabric, Forge, NeoForge и Quilt. */
+const FPS_LOADERS: LoaderId[] = ['fabric', 'forge', 'neoforge', 'quilt']
 
 const asLoader = (v?: string | null): LoaderId =>
   v === 'vanilla' || v === 'fabric' || v === 'quilt' || v === 'forge' || v === 'neoforge' ? v : DEFAULT_LOADER
@@ -161,7 +162,7 @@ export function NewBuildModal() {
     createProfile(nm, ver, loader === 'fabric', loader, icon, loaderVer || null)
       .then(async (p) => {
         track('build_create', { mc: ver, loader, loaderVersion: loaderVer || 'auto', fps: withFps ? 1 : 0 })
-        if (withFps) await setFpsBoost(p.name, true).catch((e) => console.error('[new-build] fps', e))
+        if (withFps) await setFpsBoost(p.name, true, false, await hardwareVideo()).catch((e) => console.error('[new-build] fps', e))
         await useProfiles.getState().refresh()
         showReward({ level: 'mid', items: [{ name: p.name, art: <BuildIcon icon={icon} size={60} /> }], title: 'Сборка создана', sub: p.name })
         close()

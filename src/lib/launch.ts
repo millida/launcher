@@ -23,7 +23,7 @@ import { buildTag } from './telemetryPrivacy'
 import { launchFailure } from './launchFailure'
 import { packStepForLaunch, runPackUpdateForLaunch } from './packLaunch'
 import { afterPackUpdate } from './packUpdate'
-import { requiresMillidaAuth } from './ownServer'
+import { requiresMillidaAuth, serverNeedsMillidaAuth } from './ownServer'
 import { NATIVE_NEEDS_MILLIDA, isNativeGame } from './nativeGame'
 import { stopInstall } from '../state/installs'
 
@@ -197,16 +197,18 @@ export function ramMbFor(profile: string): number {
 /// Online servers verify the session either with Mojang (Microsoft licence) or with our
 /// Yggdrasil server via authlib-injector; without either the game runs offline.
 /// Only the account is named here — the core turns it into credentials.
-async function resolveAuth(profile: string | null): Promise<{ nick: string; auth: LaunchAuth }> {
+async function resolveAuth(profile: string | null, server?: string | null): Promise<{ nick: string; auth: LaunchAuth }> {
   const acc = getAccount()
   const offline: { nick: string; auth: LaunchAuth } = { nick: effectiveNick(), auth: { kind: 'offline' } }
   const native = isNativeGame(useProfiles.getState().profiles.find((p) => p.name === profile))
-  const millidaOnly = native || (await profileNeedsMillidaAuth(profile))
+  const smp = serverNeedsMillidaAuth(server)
+  const millidaOnly = native || smp || (await profileNeedsMillidaAuth(profile))
   const kind = launchAuthKind(acc, hasMillidaAccount(), millidaOnly)
   if (millidaOnly) {
+    const where = smp ? 'Millida SMP' : 'OneBlock'
     if (kind !== 'millida')
-      throw new Error(native ? NATIVE_NEEDS_MILLIDA : 'OneBlock пускает только с аккаунтом Millida: войди в Millida и нажми «Играть» ещё раз')
-    if (!native && acc && !isMillidaKind(acc.kind)) showToast('OneBlock: заходим с аккаунтом Millida')
+      throw new Error(native ? NATIVE_NEEDS_MILLIDA : where + ' пускает только с аккаунтом Millida: войди в Millida и нажми «Играть» ещё раз')
+    if (!native && acc && !isMillidaKind(acc.kind)) showToast(where + ': заходим с аккаунтом Millida')
     return { nick: offline.nick, auth: { kind: 'millida' } }
   }
   // A live token is required, not just a stored one: Minecraft session tokens expire after a day.
@@ -369,7 +371,7 @@ function doJoin(profile: string, world: string | null, server: string | null, se
   }
   const epoch = cancelEpoch
   return freshenPack(profile, epoch, true)
-    .then(() => resolveAuth(profile))
+    .then(() => resolveAuth(profile, server))
     .then((a) => {
       if (epoch !== cancelEpoch) throw new Error(CANCELLED_TEXT)
       return quickPlay(profile, a.nick, ramMbFor(profile), world, server, a.auth)

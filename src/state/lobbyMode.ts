@@ -101,7 +101,7 @@ interface LobbyState {
   /** Премиум-сборка, которую открыть при заходе на «Премиум». */
   premiumTarget: string | null
   /** Что открыть в «Во что играем» при заходе: сборку по slug или режим (баннер «Рекомендуем» в лобби). */
-  hubTarget: { pack?: string; mode?: string } | null
+  hubTarget: { pack?: string; mode?: string; pvp?: boolean } | null
   pick: (m: LobbyMode) => void
   /**
    * Слот OneBlock в лобби: второй вариант рядом с выбранным режимом, а не

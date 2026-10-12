@@ -38,6 +38,9 @@ const FRESH_MS = 5 * 60_000
 
 interface State {
   board: Board
+  /** Вкладка «PvP-тир» поверх досок: свои данные, не /launcher/top (11.10.2026). */
+  tiers: boolean
+  setTiers: (on: boolean) => void
   views: Partial<Record<Board, BoardView>>
   at: Partial<Record<Board, number>>
   loading: Partial<Record<Board, boolean>>
@@ -50,12 +53,15 @@ interface State {
 
 export const useBoards = create<State>((set, get) => ({
   board: 'week',
+  // Тир-лист — главный топ (владелец 11.10.2026), часы и огоньки — фоном.
+  tiers: true,
+  setTiers: (tiers) => set({ tiers }),
   views: {},
   at: {},
   loading: {},
   failed: {},
   setBoard: (board) => {
-    set({ board })
+    set({ board, tiers: false })
     void get().load(board)
   },
   load: async (b, force = false) => {
@@ -80,9 +86,10 @@ export const useBoards = create<State>((set, get) => ({
     }),
 }))
 
-/** Открыть экран досок на нужной (огонь серии → «Огоньки», место недели → «Неделя»). */
-export function openTop(board: Board) {
-  useBoards.getState().setBoard(board)
+/** Открыть экран досок на нужной (огонь серии → «Огоньки», место недели → «Неделя», тир → «PvP-тир»). */
+export function openTop(board: Board | 'tiers') {
+  if (board === 'tiers') useBoards.getState().setTiers(true)
+  else useBoards.getState().setBoard(board)
   setScreen('top')
 }
 
