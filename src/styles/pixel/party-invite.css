@@ -1,0 +1,133 @@
+/* ============================================================
+   «Позвать друга» (12.10.2026): меню над кнопками пати — друзья
+   в сети со строкой «чем занят», одна кнопка у каждого, внизу код.
+   ============================================================ */
+.pim-back { position: fixed; inset: 0; z-index: 940; }
+.pim {
+  position: absolute; left: 50%; bottom: 212px; width: 420px; max-width: calc(100vw - 32px); max-height: min(540px, calc(100vh - 300px));
+  transform: translateX(-50%); display: flex; flex-direction: column; gap: 10px; padding: 14px; color: var(--m-fg);
+  background-color: var(--m-raised);
+  --px-n: 10px; clip-path: var(--px-10);
+  animation: pim-in 180ms var(--m-ease-smooth) both;
+}
+@keyframes pim-in { 0% { opacity: 0; translate: 0 14px; } 100% { opacity: 1; translate: 0 0; } }
+@media (prefers-reduced-motion: reduce) { .pim { animation: none; } }
+.pim-head { display: flex; align-items: center; gap: 8px; }
+.pim-head b { font: 900 19px/1 var(--m-font); }
+.pim-size { font: 800 14px/1 var(--m-font); color: var(--m-fg-muted); }
+.pim-x { margin-left: auto; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; color: var(--m-fg-muted); background-color: var(--m-surface-2); clip-path: var(--px-5); cursor: pointer; }
+.pim-x svg { width: 14px; height: 14px; }
+@media (hover: hover) and (pointer: fine) { .pim-x:hover { color: #fff; } }
+.pim-list { flex: 1; min-height: 80px; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; scrollbar-width: thin; }
+.pim-cap { padding: 6px 2px 2px; font: 800 12px/1 var(--m-font); letter-spacing: 0.04em; text-transform: uppercase; color: var(--m-fg-muted); }
+.pim-toggle { display: flex; align-items: center; justify-content: space-between; width: 100%; background: none; cursor: pointer; }
+.pim-toggle svg { width: 14px; height: 14px; }
+.pim-toggle .up { transform: rotate(180deg); }
+.pim-row { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 6px 8px; background-color: rgba(255, 255, 255, 0.05); clip-path: var(--px-5); }
+.pim-row.off { opacity: 0.6; }
+.pim-ava { position: relative; flex: none; width: 32px; height: 32px; }
+.pim-ava img, .pim-ava canvas { width: 32px; height: 32px; display: block; }
+.pim-dot { position: absolute; right: -4px; bottom: -4px; width: 12px; height: 12px; background: var(--m-accent); outline: 3px solid var(--m-raised); }
+.pim-dot.game { background: #ffd23f; }
+.pim-who { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+.pim-who b { font: 800 15px/1 var(--m-font); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pim-who span { font: 600 12px/1 var(--m-font); color: var(--m-fg-subtle); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+:root .pim-row .pim-call { flex: none; height: 34px; padding: 0 14px 2px; }
+.pim-wait, .pim-in { flex: none; display: inline-flex; align-items: center; gap: 5px; height: 34px; padding: 0 10px; font: 800 13px/1 var(--m-font); color: var(--m-fg-muted); background-color: var(--m-surface-2); clip-path: var(--px-5); font-variant-numeric: tabular-nums; }
+.pim-in { color: var(--m-accent); }
+.pim-in svg { width: 13px; height: 13px; }
+.pim-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 22px 0; color: var(--m-fg-muted); }
+.pim-empty svg { width: 28px; height: 28px; }
+.pim-empty b { font: 800 15px/1 var(--m-font); color: var(--m-fg); }
+.pim-foot { display: flex; align-items: center; gap: 8px; }
+:root .pim-foot .pim-code { flex: none; }
+:root .pim-foot .pim-join { flex: 1; min-width: 0; }
+@media (max-height: 700px) { .pim { bottom: 196px; } }
+@media (min-width: 1800px) { .pim { zoom: 1.25; } }
+
+/* ---------- Комнаты («Найти пати») ---------- */
+.pim.prm { width: 580px; }
+:root .prm-quick { margin-left: auto; height: 34px; padding: 0 14px 2px; gap: 6px; }
+.prm .pim-x { margin-left: 0; }
+.prm-list { min-height: 150px; }
+.prm-row { display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 8px; background-color: rgba(255, 255, 255, 0.05); clip-path: var(--px-5); }
+.prm-row.skel { min-height: 60px; }
+.prm-art { flex: none; display: grid; place-items: center; width: 44px; height: 44px; color: #fff; clip-path: var(--px-5); }
+.prm-art svg { width: 22px; height: 22px; }
+.prm-what { display: flex; flex-direction: column; gap: 5px; min-width: 0; flex: 1; }
+.prm-what b { font: 900 17px/1 var(--m-font); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prm-what span { font: 600 12px/1 var(--m-font); color: var(--m-fg-subtle); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prm-heads { flex: none; display: inline-flex; align-items: center; gap: 3px; }
+.prm-heads img, .prm-heads canvas { width: 24px; height: 24px; display: block; }
+.prm-heads i { margin-left: 5px; font: 800 13px/1 var(--m-font); font-style: normal; color: var(--m-fg-muted); font-variant-numeric: tabular-nums; }
+:root .prm-row .prm-join { flex: none; height: 36px; padding: 0 16px 2px; }
+.prm-new { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.07); }
+.prm-new-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.prm-new-head b { font: 900 15px/1 var(--m-font); }
+:root .prm-open .seg { height: 30px; padding: 0 11px; font-size: 12.5px; gap: 5px; }
+.prm-open .seg svg { width: 12px; height: 12px; }
+.prm-where { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Комнаты: две вкладки — войти в чужую или открыть свою в два шага. */
+.prm-tabs { display: flex; gap: 4px; }
+:root .prm-tabs .seg { height: 36px; padding: 0 14px; font-size: 14px; font-weight: 800; gap: 7px; }
+.prm-n { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; font: 900 12px/1 var(--m-font); color: #06200e; background: var(--m-accent); clip-path: var(--px-4); }
+.prm .pim-x { margin-left: auto; }
+.prm-own { display: flex; flex-direction: column; gap: 10px; }
+.prm-cap { display: flex; align-items: center; gap: 8px; font: 900 15px/1 var(--m-font); }
+.prm-cap i { display: grid; place-items: center; width: 22px; height: 22px; font: 900 13px/1 var(--m-font); font-style: normal; color: #06200e; background: var(--m-accent); clip-path: var(--px-4); }
+.prm-who { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.prm-opt { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 4px 10px; padding: 12px 14px; text-align: left; color: var(--m-fg-muted); cursor: pointer; background-color: rgba(255, 255, 255, 0.06); clip-path: var(--px-5); }
+.prm-opt svg { grid-row: 1 / 3; width: 22px; height: 22px; }
+.prm-opt b { font: 900 16px/1 var(--m-font); color: var(--m-fg); }
+.prm-opt span { font: 600 12px/1 var(--m-font); }
+.prm-opt.on { color: #06200e; background-color: var(--m-accent); }
+.prm-opt.on b { color: #06200e; }
+:root .prm-go { width: 100%; }
+
+/* ---------- Окно комнат: полноценный попап ---------- */
+.prm-back { position: fixed; inset: 0; z-index: 940; display: grid; place-items: center; padding: 24px; background: rgba(0, 0, 0, 0.62); animation: pim-in 160ms var(--m-ease-smooth) both; }
+.prm-win { display: grid; grid-template-columns: 220px minmax(0, 1fr); width: min(1000px, 100%); height: min(660px, 100%); color: var(--m-fg); background-color: var(--m-raised); --px-n: 10px; clip-path: var(--px-10); }
+.prm-side { display: flex; flex-direction: column; gap: 6px; padding: 18px 12px; background-color: var(--m-surface); }
+.prm-title { padding: 0 8px 10px; font: 900 24px/1 var(--m-font); }
+.prm-nav { display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 12px 1px; font: 800 15px/1 var(--m-font); color: var(--m-fg-muted); text-align: left; cursor: pointer; background-color: transparent; clip-path: var(--px-5); transition: background-color var(--m-t-fast); }
+.prm-nav svg { width: 18px; height: 18px; flex: none; }
+.prm-nav .prm-n { margin-left: auto; }
+.prm-nav.on { color: #06200e; background-color: var(--m-accent); }
+.prm-nav.on .prm-n { background: #06200e; color: #fff; }
+@media (hover: hover) and (pointer: fine) { .prm-nav:not(.on):hover { color: #fff; background-color: rgba(255, 255, 255, 0.08); } }
+.prm-main { position: relative; display: flex; flex-direction: column; gap: 12px; min-width: 0; min-height: 0; padding: 18px 18px 16px; }
+.prm-x { position: absolute; right: 14px; top: 14px; margin: 0; }
+.prm-h { margin: 0; font: 900 22px/1.3 var(--m-font); }
+.prm-rooms { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; scrollbar-width: thin; }
+.prm-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.prm-cats { display: flex; gap: 4px; flex-wrap: wrap; }
+:root .prm-cats .seg { height: 36px; padding: 0 12px; gap: 7px; font-size: 13.5px; font-weight: 800; }
+.prm-cats .seg svg { width: 14px; height: 14px; }
+.prm-cn { font: 800 12px/1 var(--m-font); opacity: 0.6; }
+:root .prm-search { flex: 1; min-width: 180px; }
+.prm-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); grid-auto-rows: max-content; gap: 8px; overflow-y: auto; scrollbar-width: thin; padding: 4px; margin: -4px; }
+.prm-tile { display: flex; flex-direction: column; align-items: stretch; gap: 5px; padding: 6px 6px 9px; text-align: left; color: var(--m-fg); cursor: pointer; background-color: rgba(255, 255, 255, 0.05); clip-path: var(--px-5); transition: background-color var(--m-t-fast); }
+.prm-tile-art { display: grid; place-items: center; height: 92px; overflow: hidden; background-color: #0b0d10; clip-path: var(--px-4); color: var(--m-fg-subtle); }
+.prm-tile-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.prm-tile-art svg { width: 30px; height: 30px; }
+.prm-tile b { padding: 0 3px; font: 800 14px/1.15 var(--m-font); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prm-tile > span:last-child { padding: 0 3px; font: 600 12px/1 var(--m-font); color: var(--m-fg-subtle); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prm-tile.on { background-color: var(--m-accent); color: #06200e; }
+.prm-tile.on > span:last-child { color: rgba(6, 32, 14, 0.75); }
+@media (hover: hover) and (pointer: fine) { .prm-tile:not(.on):hover { background-color: rgba(255, 255, 255, 0.11); } }
+.prm-foot { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: stretch; }
+:root .prm-foot .prm-go { width: auto; min-width: 250px; height: auto; }
+.prm-go > span { display: inline-flex; flex-direction: column; gap: 5px; line-height: 1; }
+.prm-go em { font: 800 12px/1 var(--m-font); font-style: normal; opacity: 0.75; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 860px) { .prm-win { grid-template-columns: 1fr; } .prm-side { flex-direction: row; padding: 10px; } .prm-title { display: none; } }
+
+/* Сборке и версии нужен сервер: без него каждый окажется в своём мире. */
+.prm-srv { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 8px 10px; background-color: rgba(255, 210, 63, 0.12); clip-path: var(--px-5); }
+.prm-srv > b { margin-right: 4px; font: 900 14px/1 var(--m-font); color: #ffd23f; }
+:root .prm-srv .prm-addr { width: 200px; height: 32px; }
+.prm-srv .pty-chip svg { width: 13px; height: 13px; }
+
+/* «Позвать друга» внутри общего окна пати. */
+.pim-in-win { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.pim-in-win .pim-dot { outline-color: var(--m-raised); }

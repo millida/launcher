@@ -11,7 +11,6 @@ import { BugPx, FEEDBACK_SHARDS, FeedbackModal, feedbackRewardReady } from './Fe
 import { playSound, setSoundMode, soundMode, soundVolume } from '../lib/sound'
 import { writePref } from '../lib/prefs'
 import { Slider } from './Slider'
-import { MusicCard } from './radio'
 import { roomsUnreadTotal, useRooms } from '../state/rooms'
 import { openMessages } from '../state/chatScreen'
 import { PlayhubBar } from './playhub/MyBuilds'
@@ -33,74 +32,76 @@ import { useDaily } from '../state/daily'
    шапка с «← Лобби» и ходом запуска. Имя компонента осталось Sidebar, чтобы не
    трогать раскладку App.tsx. */
 /** Две квадратные кнопки лобби: звуки интерфейса и музыка (по умолчанию играет). */
-/** Громкость под кнопкой — всплывает при наведении (правка 27.09.2026): крутить её в настройках долго. */
-function VolumePop({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
-  return (
-    <span className="lb-vol-pop" role="group" aria-label={label}>
-      <span className="lb-vol-card">
-        <Slider value={value} min={0} max={100} onChange={onChange} width={140} />
-        <b>{value + '%'}</b>
-      </span>
-    </span>
-  )
-}
-
-function LobbySoundBtns() {
+/**
+ * Быстрый звук под шестерёнкой (владелец 12.10.2026: «музыку и звуки — в
+ * настройки, но чтобы школьник нашёл»). Кнопок звука и музыки в полосе больше
+ * нет: всё живёт в «Настройки → Звук», а навёл на шестерёнку — выключил или
+ * убавил, не заходя.
+ */
+function QuickSound() {
   const music = useMusic((s) => radioOn(s))
+  const musicLevel = useMusic((s) => s.level)
+  const setMusicLevel = useMusic((s) => s.setVolume)
   const toggleMusic = useMusic((s) => s.toggleRadio)
-  const refreshOwnMusic = useMusic((s) => s.refreshOwn)
   const [sfxLevel, setSfxLevel] = useState(soundVolume)
   const [ui, setUi] = useState(() => soundMode() === 'all')
   useEffect(() => {
-    const sync = () => setUi(soundMode() === 'all')
+    const sync = () => {
+      setUi(soundMode() === 'all')
+      setSfxLevel(soundVolume())
+    }
     window.addEventListener('focus', sync)
     return () => window.removeEventListener('focus', sync)
   }, [])
   return (
-    <>
-      <span className="lb-vol">
-      <button
-        className={'lb-btn lb-toggle' + (ui ? '' : ' off')}
-        aria-pressed={ui}
-        aria-label={ui ? 'Выключить звуки' : 'Включить звуки'}
-        data-track={ui ? 'sound_off' : 'sound_on'}
-        data-notip
-        data-nosound
-        onClick={() => {
-          const next = !ui
-          setSoundMode(next ? 'all' : 'notify')
-          setUi(next)
-          if (next) playSound('click')
-        }}
-      >
-        <Icon id={ui ? 'i-volume' : 'i-mute'} />
-      </button>
-      <VolumePop
-        label="Громкость звуков"
-        value={sfxLevel}
-        onChange={(v) => {
-          setSfxLevel(v)
-          writePref('m-sound-vol', String(v))
-          playSound('click')
-        }}
-      />
+    <span className="lb-vol-pop lb-quick-pop" role="group" aria-label="Звук">
+      <span className="lb-vol-card lb-quick-card">
+        <span className="lb-quick-row">
+          <button
+            className={'lb-quick-tg' + (ui ? '' : ' off')}
+            aria-pressed={ui}
+            aria-label={ui ? 'Выключить звуки' : 'Включить звуки'}
+            data-track={ui ? 'sound_off' : 'sound_on'}
+            data-notip
+            data-nosound
+            onClick={() => {
+              const next = !ui
+              setSoundMode(next ? 'all' : 'notify')
+              setUi(next)
+              if (next) playSound('click')
+            }}
+          >
+            <Icon id={ui ? 'i-volume' : 'i-mute'} />
+          </button>
+          <Slider
+            value={sfxLevel}
+            min={0}
+            max={100}
+            width={130}
+            onChange={(v) => {
+              setSfxLevel(v)
+              writePref('m-sound-vol', String(v))
+              playSound('click')
+            }}
+          />
+          <b>{sfxLevel + '%'}</b>
+        </span>
+        <span className="lb-quick-row">
+          <button
+            className={'lb-quick-tg' + (music ? '' : ' off')}
+            aria-pressed={music}
+            aria-label={music ? 'Выключить музыку' : 'Включить музыку'}
+            data-track={music ? 'music_off' : 'music_on'}
+            data-notip
+            onClick={() => toggleMusic()}
+          >
+            <Icon id={music ? 'i-music' : 'i-music-off'} />
+          </button>
+          <Slider value={musicLevel} min={0} max={100} width={130} onChange={setMusicLevel} />
+          <b>{musicLevel + '%'}</b>
+        </span>
       </span>
-      <span className="lb-vol" onMouseEnter={() => void refreshOwnMusic()}>
-      <button
-        className={'lb-btn lb-toggle' + (music ? '' : ' off')}
-        aria-pressed={music}
-        aria-label={music ? 'Выключить музыку' : 'Включить музыку'}
-        data-track={music ? 'music_off' : 'music_on'}
-        data-notip
-        onClick={() => toggleMusic()}
-      >
-        <Icon id={music ? 'i-music' : 'i-music-off'} />
-      </button>
-      <span className="lb-vol-pop" role="group" aria-label="Музыка">
-        <MusicCard />
-      </span>
-      </span>
-    </>
+    </span>
   )
 }
 
@@ -126,26 +127,6 @@ export function HubTopTabs({ libLabel = 'Библиотека' }: { libLabel?: s
         <PxIcon name="book" size={30} /> Каталог
       </button>
     </div>
-  )
-}
-
-/** Облачко сообщения 12×11 — пиксель-арт вместо контурной иконки. */
-function MsgPx() {
-  return (
-    <svg className="lb-px" viewBox="0 0 12 11" aria-hidden="true" shapeRendering="crispEdges">
-      <rect x="1" y="0" width="10" height="1" fill="#1b1f1c" />
-      <rect x="0" y="1" width="12" height="6" fill="#1b1f1c" />
-      <rect x="1" y="7" width="10" height="1" fill="#1b1f1c" />
-      <rect x="2" y="8" width="3" height="1" fill="#1b1f1c" />
-      <rect x="2" y="9" width="1" height="2" fill="#1b1f1c" />
-      <rect x="1" y="1" width="10" height="6" fill="#ffffff" />
-      <rect x="1" y="6" width="10" height="1" fill="#c9d3cc" />
-      <rect x="3" y="7" width="2" height="1" fill="#ffffff" />
-      <rect x="3" y="8" width="1" height="1" fill="#ffffff" />
-      <rect x="3" y="3" width="1" height="2" fill="#2f8f46" />
-      <rect x="5" y="3" width="2" height="2" fill="#2f8f46" />
-      <rect x="8" y="3" width="1" height="2" fill="#2f8f46" />
-    </svg>
   )
 }
 
@@ -198,9 +179,9 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
     const badge = (n: number) => (n ? <span className="lb-badge">{n > 99 ? '99+' : n}</span> : null)
     return (
       /* Лобби (правка владельца 23.09.2026, 21:00): справа вверху — отдельные
-         кнопки, как в Brawl Stars: друзья (сколько в сети), сообщения
-         (непрочитанное), аккаунт (голова и ник — менеджер аккаунтов),
-         настройки. Без общей плашки-блока. */
+         кнопки, как в Brawl Stars. С 12.10.2026 их четыре: друзья (в сети,
+         заявки и непрочитанное одним счётчиком — чат открывается оттуда же),
+         аккаунт, отзыв, настройки (под шестерёнкой — быстрый звук). */
       <>
       <header className="topbar is-lobby">
         <div className="lb-btns">
@@ -208,7 +189,14 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
               аккаунт меняют редко (владелец 24.09.2026, 07:47). Лица тех, кто в сети, внахлёст (как пати в Fortnite):
               живые головы вместо контурной иконки. Никого — серые Стив и Алекс. */}
           <span className="lb-badge-wrap">
-            <button className="lb-btn lb-friends" data-sound="nav" data-track="nav_friends" aria-label={'Друзья, в сети ' + online} onClick={() => onNav('friends')}>
+            <button
+              className="lb-btn lb-friends"
+              data-sound="nav"
+              data-track={unread && !reqIn.length ? 'nav_messages' : 'nav_friends'}
+              aria-label={'Друзья, в сети ' + online + (unread ? ', непрочитанных ' + unread : '')}
+              onMouseEnter={() => preloadScreen(unread ? 'chat' : 'friends')}
+              onClick={() => (unread && !reqIn.length ? openMessages() : onNav('friends'))}
+            >
               <span className={'lb-heads' + (online ? '' : ' off')} aria-hidden="true">
                 {(online ? onlineList.slice(0, 3) : [{ userId: 's', nickname: 'MHF_Steve' }, { userId: 'a', nickname: 'MHF_Alex' }]).map((f) => (
                   <Head key={f.userId} nick={f.nickname || 'MHF_Steve'} src={'avatarUrl' in f ? f.avatarUrl : undefined} size={36} className="lb-head" />
@@ -219,7 +207,7 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
                 <i>в сети</i>
               </span>
             </button>
-            {badge(reqIn.length)}
+            {badge(reqIn.length + unread)}
           </span>
           <div
             className="lb-btn lb-acc account"
@@ -252,21 +240,6 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
             </span>
             <Icon id="i-chev-d" />
           </div>
-          {/* Звук и музыка — квадратами перед чатом (владелец 24.09.2026, 13:57). */}
-          <LobbySoundBtns />
-          <span className="lb-badge-wrap">
-            <button
-              className="lb-btn lb-msg"
-              data-sound="nav"
-              data-track="nav_messages"
-              aria-label={unread ? 'Сообщения, непрочитанных ' + unread : 'Сообщения'}
-              onMouseEnter={() => preloadScreen('chat')}
-              onClick={openMessages}
-            >
-              <MsgPx />
-            </button>
-            {badge(unread)}
-          </span>
           {/* Отзыв и баги — зелёный «жучок» между чатом и настройками (16:41). */}
           <button
             className={'lb-btn lb-fb' + (fbReward ? ' has-gift' : '')}
@@ -279,16 +252,20 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
             {fbReward ? <span className="lb-fb-gift">+{FEEDBACK_SHARDS}</span> : null}
           </button>
           {fbOpen ? <FeedbackModal onClose={() => setFbOpen(false)} /> : null}
-          <button
-            className="lb-btn"
-            aria-label="Настройки"
-            data-track="nav_settings"
-            data-screen="settings"
-            onMouseEnter={() => preloadScreen('settings')}
-            onClick={() => onNav('settings')}
-          >
-            <Icon id="i-settings" />
-          </button>
+          <span className="lb-vol lb-quick">
+            <button
+              className="lb-btn"
+              aria-label="Настройки"
+              data-notip
+              data-track="nav_settings"
+              data-screen="settings"
+              onMouseEnter={() => preloadScreen('settings')}
+              onClick={() => onNav('settings')}
+            >
+              <Icon id="i-settings" />
+            </button>
+            <QuickSound />
+          </span>
         </div>
         <AccountMenu open={menuOpen} onClose={() => setMenuOpen(false)} chipRef={chipRef} />
       </header>

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { api, hasMillidaAccount } from '../lib/api'
+import { setDemoPartyPoke } from '../lib/demo'
 import { apiErrorText } from '../lib/apiError'
 import { warmHeads } from '../lib/heads'
 import { isRealtimeLive, onRealtime } from '../lib/realtime'
@@ -9,6 +10,7 @@ import {
   type Party,
   type PartyHave,
   type PartyInvite,
+  type PartyRoom,
   type PartyTarget,
 } from '../lib/party'
 import { showToast } from './ui'
@@ -48,6 +50,8 @@ interface PartyState {
   safety: PartySafety
   loaded: boolean
   inviteOpen: boolean
+  /** Открыт список комнат («Найти пати»). */
+  roomsOpen: boolean
   lfgOpen: boolean
   packAsk: PackConfirmAsk | null
   reportAsk: ReportAsk | null
@@ -61,6 +65,7 @@ export const usePartyStore = create<PartyState>((set) => ({
   safety: { ageBracket: null, newAccount: false },
   loaded: false,
   inviteOpen: false,
+  roomsOpen: false,
   lfgOpen: false,
   packAsk: null,
   reportAsk: null,
@@ -152,6 +157,29 @@ export const setPartyTarget = (target: PartyTarget) =>
 export const setPartyReady = (ready: boolean, have: PartyHave | null) =>
   attempt(() => partyCall('/ready', have ? { ready, have } : { ready }), 'Не удалось отметить готовность')
 
+export const sendPartyChat = (text: string) => attempt(() => partyCall('/chat', { text }), 'Сообщение не ушло')
+
+export const proposeToParty = (target: PartyTarget) =>
+  attempt(() => partyCall('/propose', { target }), 'Не удалось предложить')
+
+export const answerPartyProposal = (id: string, yes: boolean) =>
+  attempt(() => partyCall('/propose/answer', { id, yes }), 'Не удалось ответить')
+
+/** Открытые комнаты моей возрастной группы; своя в список не входит. */
+export async function loadRooms(): Promise<PartyRoom[]> {
+  const r = await api<{ rooms: PartyRoom[] }>('/party/rooms')
+  return Array.isArray(r?.rooms) ? r.rooms : []
+}
+
+/** Собрать комнату: объявить, куда идём, и открыть её для всех или только для своих. */
+export const openRoom = (target: PartyTarget, open: boolean) =>
+  attempt(() => partyCall('/room', { target, open }), 'Не удалось собрать комнату')
+
+export const closeRoom = () => attempt(() => partyCall('/room/close'), 'Не удалось закрыть комнату')
+
+export const joinRoom = (id: string) =>
+  attempt(() => partyCall('/rooms/' + encodeURIComponent(id) + '/join'), 'Не удалось войти в комнату')
+
 export const startPartyLaunch = (addr: string | null) =>
   attempt(() => partyCall('/launch', addr ? { addr } : {}), 'Не удалось запустить пати')
 
@@ -236,6 +264,7 @@ export function initParty(onChange: () => void): () => void {
       .then(onChange)
       .catch((e) => console.error('[party] load', e))
   refresh()
+  if (import.meta.env.DEV) setDemoPartyPoke(refresh)
   const off = onRealtime('party', refresh)
   let last = Date.now()
   const timer = setInterval(() => {

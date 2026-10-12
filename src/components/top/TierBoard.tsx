@@ -1,11 +1,10 @@
 import { useEffect, useState, type CSSProperties, type FormEvent } from 'react'
-import { renderLive } from '../../lib/renderGate'
 import { Icon } from '../Icon'
 import { Head } from '../Head'
 import { effectiveNick } from '../../state/accounts'
 import { api, hasMillidaAccount } from '../../lib/api'
 import { modeIcon } from '../playhub/modeIcon'
-import { openPvpArena } from '../playhub/hubTab'
+import { openPvp } from '../../state/pvp'
 import { plural } from '../../lib/format'
 import {
 
@@ -29,11 +28,18 @@ const avatarUrl = (nick: string) => 'https://api.millida.net/v2/heads/avatar/' +
 const bodyUrl = (nick: string, size = 160) => 'https://api.millida.net/v2/heads/body/' + encodeURIComponent(nick || 'Steve') + '?size=' + size + '&safe=1'
 
 /** Ник для тир-листа: тир пишется на аккаунт Millida, без него своего тира нет. */
-export const tierNick = (): string => (hasMillidaAccount() ? effectiveNick() : '')
+export const tierNick = (): string => {
+  // Превью (только DEV): ?tiernick=<ник> показывает раздел глазами игрока с тиром.
+  if (import.meta.env.DEV) {
+    const q = new URLSearchParams(location.search).get('tiernick')
+    if (q) return q
+  }
+  return hasMillidaAccount() ? effectiveNick() : ''
+}
 
 export function TierBadge({ tier, big }: { tier: string; big?: boolean }) {
   return (
-    <b className={'tr-badge' + (big ? ' big' : '')} data-lv={tierLevel(tier)} data-h={tier.startsWith('H') ? '1' : '0'}>
+    <b className={'tr-badge' + (big ? ' big' : '')} data-lv={tierLevel(tier)} data-h={tier.startsWith('H') ? '1' : tier.startsWith('M') ? 'm' : '0'}>
       {tier}
     </b>
   )
@@ -53,14 +59,6 @@ function sortedTiers(tiers: Record<string, string>, order: string[]): { mode: st
     .sort((a, b) => tierRank(a.tier)! - tierRank(b.tier)! || order.indexOf(a.mode) - order.indexOf(b.mode))
 }
 
-function ago(ts: number): string {
-  const m = Math.max(0, Math.round((Date.now() - ts) / 60_000))
-  if (m < 1) return 'сейчас'
-  if (m < 60) return m + ' мин'
-  const h = Math.round(m / 60)
-  if (h < 24) return h + ' ч'
-  return Math.round(h / 24) + ' дн'
-}
 
 const winRate = (w: number, l: number) => (w + l > 0 ? Math.round((100 * w) / (w + l)) + '%' : '—')
 
@@ -77,13 +75,8 @@ export function TierBoard({ on }: { on: boolean }) {
   const modes = useTiers((s) => s.modes)
   const failed = useTiers((s) => s.failed)
   const kit = useTiers((s) => s.kit)
-  const period = useTiers((s) => s.period)
   const kitRows = useTiers((s) => (kit === 'all' ? null : s.kitRows[kit] ?? null))
-  const periodRows = useTiers((s) => (period === 'tier' ? undefined : s.periodRows[period + ':' + kit]))
-  const hasSeason = useTiers((s) => !!s.periodRows['season:all'])
-  const hasWeek = useTiers((s) => !!s.periodRows['week:all'])
   const stats = useTiers((s) => s.stats)
-  const recent = useTiers((s) => s.recent)
   const [found, setFound] = useState<TierPlayer | null>(null)
 
   useEffect(() => {
@@ -91,56 +84,63 @@ export function TierBoard({ on }: { on: boolean }) {
     const t = useTiers.getState()
     void t.load(nick)
     void t.loadLive()
-    void t.loadPeriod('season', 'all')
-    void t.loadPeriod('week', 'all')
     if (t.kit !== 'all') void t.loadKit(t.kit)
-    // Лента тестов живая: раз в минуту, пока вкладка открыта.
-    const id = window.setInterval(() => {
-      if (renderLive()) void useTiers.getState().loadLive()
-    }, 60_000)
-    return () => window.clearInterval(id)
   }, [on, nick])
 
   const order = modes.map((m) => m.slug)
-  const myPos = me && top ? top.find((e) => e.name.toLowerCase() === me.name.toLowerCase())?.pos ?? null : null
-  const periods: { key: TierPeriod; name: string }[] = [
-    { key: 'tier', name: 'Тиры' },
-    ...(hasSeason ? [{ key: 'season' as const, name: 'Сезон' }] : []),
-    ...(hasWeek ? [{ key: 'week' as const, name: 'Неделя' }] : []),
-  ]
+  // Одна таблица — тиры (владелец 12.10.2026: «три вида переключения — дерьмо»).
+  // Сверху своя строка, как у всех; ниже список с первого места, без пьедестала.
+  const mine = me ? myLine(me, kit, order) : null
 
   return (
     <div className="tl">
-      <KitRail kit={kit} modes={modes} stats={stats} />
-
       <div className="tl-bar">
-        {periods.length > 1 ? (
-          <div className="segs tl-periods" role="tablist" aria-label="Период">
-            {periods.map((p) => (
-              <button key={p.key} role="tab" aria-selected={period === p.key} className={'seg' + (period === p.key ? ' on' : '')} data-track={'tiers_period_' + p.key} onClick={() => useTiers.getState().setPeriod(p.key)}>
-                {p.name}
-              </button>
-            ))}
-          </div>
-        ) : (
-          <span className="tl-bar-title">{kit === 'all' ? 'Общий тир-лист' : modeTitle(modes, kit)}</span>
-        )}
+        <KitRail kit={kit} modes={modes} stats={stats} />
         <SearchBox onFound={setFound} />
       </div>
 
-      {recent && recent.length ? <RecentStrip rows={recent.slice(0, 8)} /> : null}
-
       {found ? (
         <PlayerCard p={found} modes={modes} onClose={() => setFound(null)} />
-      ) : me ? (
-        <PlayerCard p={me} modes={modes} mine pos={myPos} />
+      ) : mine ? (
+        <div className="tl-mine">
+          <span className="tl-mine-cap">Моё место</span>
+          <Row l={mine.line} modes={modes} mine />
+          {mine.next ? <span className="tl-mine-next">{mine.next}</span> : null}
+        </div>
       ) : (
         <JoinBanner hasTier={false} />
       )}
 
-      <Board kit={kit} period={period} top={top} kitRows={kitRows} periodRows={periodRows} order={order} modes={modes} meName={me?.name ?? nick} failed={failed} />
+      <Board kit={kit} period="tier" top={top} kitRows={kitRows} periodRows={undefined} order={order} modes={modes} meName={me?.name ?? nick} failed={failed} />
     </div>
   )
+}
+
+/** Своя строка: в общем — место и тиры по китам, в ките — тир и ELO; плюс подсказка сервера. */
+function myLine(p: TierPlayer, kit: string, order: string[]): { line: Line; next?: string } | null {
+  if (kit === 'all') {
+    const all = sortedTiers(playerTiers(p), order)
+    if (!all.length && !p.points) return null
+    return {
+      line: {
+        pos: p.rank ?? 0,
+        name: p.name,
+        sub: p.title,
+        badge: p.overallTier && tierRank(p.overallTier) !== null ? p.overallTier.toUpperCase() : undefined,
+        region: p.region,
+        kits: all.slice(0, 6),
+        more: Math.max(0, all.length - 6),
+        value: points(p.points),
+      },
+    }
+  }
+  const m = p.modes?.[kit]
+  if (!m) return null
+  const tier = tierRank(m.tier) !== null ? m.tier.toUpperCase() : undefined
+  return {
+    line: { pos: m.rank ?? 0, name: p.name, badge: tier, region: p.region, value: m.elo + ' ELO', extra: m.wins + m.losses > 0 ? m.wins + '–' + m.losses : undefined },
+    next: m.next,
+  }
 }
 
 function KitRail({ kit, modes, stats }: { kit: string; modes: TierModeInfo[]; stats: Record<string, { players: number; fighting: number; queued: number }> | null }) {
@@ -201,40 +201,18 @@ function SearchBox({ onFound }: { onFound: (p: TierPlayer | null) => void }) {
   )
 }
 
-function RecentStrip({ rows }: { rows: { name: string; kit: string; to: string; source: string; ts: number }[] }) {
-  return (
-    <div className="tl-recent" aria-label="Только что">
-      <span className="tl-recent-cap">
-        <i className="tl-dot" aria-hidden="true" />
-        Только что
-      </span>
-      <div className="tl-recent-row">
-        {rows.map((r, i) => (
-          <span key={r.name + r.ts + i} className="tl-rc" data-tip={r.source === 'exam' ? 'Экзамен' : 'Ранговые дуэли'}>
-            <Head nick={r.name} size={22} src={avatarUrl(r.name)} />
-            <b>{r.name}</b>
-            <KitIcon slug={r.kit} size={16} />
-            <TierBadge tier={r.to} />
-            <em>{ago(r.ts)}</em>
-          </span>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 function JoinBanner({ hasTier }: { hasTier: boolean }) {
   const art = modeIcon('PVP')
   return (
     <div className="tr-banner">
       {art?.rig ? <img className="tr-banner-rig" src={art.rig.url} alt="" draggable={false} /> : null}
       <span className="tr-banner-text">
-        <b>{hasTier ? 'Подними свой тир' : 'Определи свой тир'}</b>
-        <span>Экзамен против ботов — тир сразу</span>
+        <b>{hasTier ? 'Подними свой тир' : 'Тебя ещё нет в тир-листе'}</b>
+        <span>Первый тир — экзамен с ботом, выше LT3 — тесты с игроками</span>
       </span>
-      <button className="btn primary tr-banner-go" data-track="tiers_join_smp" onClick={() => openPvpArena()}>
+      <button className="btn primary tr-banner-go" data-track="tiers_join_smp" onClick={() => openPvp('play')}>
         <Icon id="i-play" />
-        Играть
+        Найти игру
       </button>
     </div>
   )
@@ -255,7 +233,7 @@ function PlayerCard({ p, modes, mine, pos, onClose }: { p: TierPlayer; modes: Ti
           {pos ? ' · #' + pos + ' в общем' : ''}
         </span>
         {mine ? (
-          <button className="btn primary sm tl-card-go" data-track="tiers_join_smp_me" onClick={() => openPvpArena()}>
+          <button className="btn primary sm tl-card-go" data-track="tiers_join_smp_me" onClick={() => openPvp('play')}>
             <Icon id="i-play" />
             {best ? 'Поднять тир' : 'Играть'}
           </button>
@@ -282,30 +260,53 @@ function PlayerCard({ p, modes, mine, pos, onClose }: { p: TierPlayer; modes: Ti
 }
 
 /** Одна строка любого из топов, приведённая к общему виду. */
-interface Line {
+export interface Line {
   pos: number
   name: string
   sub?: string
   badge?: string
+  region?: string
   kits?: { mode: string; tier: string }[]
+  /** Сколько ещё режимов с тиром не влезло: «+N», как у Dawn. */
+  more?: number
   value: string
   extra?: string
 }
 
-function linesOf(kit: string, period: TierPeriod, top: TierTopEntry[] | null, kitRows: TierKitRow[] | null, periodRows: TierPeriodRow[] | null | undefined, order: string[]): Line[] | null {
+export function linesOf(kit: string, period: TierPeriod, top: TierTopEntry[] | null, kitRows: TierKitRow[] | null, periodRows: TierPeriodRow[] | null | undefined, order: string[]): Line[] | null {
   if (period !== 'tier') {
     if (!periodRows) return periodRows === null ? [] : null
+    // Неделя считается по приросту ELO (сервер), сезон — по очкам сезона и дивизиону.
     return periodRows.map((r) => ({
       pos: r.pos,
       name: r.name,
       sub: r.division,
-      value: period === 'week' ? (r.wins ?? 0) + ' ' + plural(r.wins ?? 0, 'победа', 'победы', 'побед') : (r.sr ?? r.score ?? 0) + ' SR',
-      extra: period === 'week' && typeof r.eloDelta === 'number' ? (r.eloDelta >= 0 ? '+' : '') + r.eloDelta + ' ELO' : r.games ? r.games + ' ' + plural(r.games, 'бой', 'боя', 'боёв') : undefined,
+      value: period === 'week' ? ((r.eloDelta ?? 0) >= 0 ? '+' : '') + (r.eloDelta ?? 0) + ' ELO' : (r.sr ?? r.score ?? 0) + ' SR',
+      extra:
+        period === 'week'
+          ? (r.wins ?? 0) + ' из ' + (r.games ?? 0) + ' ' + plural(r.games ?? 0, 'боя', 'боёв', 'боёв')
+          : r.games
+            ? r.games + ' ' + plural(r.games, 'бой', 'боя', 'боёв')
+            : undefined,
     }))
   }
   if (kit === 'all') {
     if (!top) return null
-    return top.map((e) => ({ pos: e.pos, name: e.name, sub: e.title, kits: sortedTiers(e.tiers, order).slice(0, 5), value: points(e.points) }))
+    return top.map((e) => {
+      const all = sortedTiers(e.tiers, order)
+      return {
+        pos: e.pos,
+        name: e.name,
+        sub: e.title,
+        badge: e.overallTier && tierRank(e.overallTier) !== null ? e.overallTier.toUpperCase() : undefined,
+        region: e.region,
+        kits: all.slice(0, 6),
+        more: Math.max(0, all.length - 6),
+        value: points(e.points),
+        // Откуда очки: сколько китов с тиром складываются в общий рейтинг.
+        extra: all.length ? 'за ' + all.length + ' ' + plural(all.length, 'кит', 'кита', 'китов') : undefined,
+      }
+    })
   }
   if (!kitRows) return null
   return kitRows.map((r) => ({
@@ -344,7 +345,6 @@ function Board(props: {
       )
     return (
       <div className="stack tb-list" aria-hidden="true">
-        <div className="tl-podium skel" />
         {Array.from({ length: 5 }, (_, i) => (
           <div key={i} className="tb-row skel" style={{ height: 64 }} />
         ))}
@@ -359,66 +359,27 @@ function Board(props: {
       </div>
     )
   const me = props.meName.toLowerCase()
-  const podium = lines.slice(0, 3)
   return (
     <div className="stack tb-list tl-list">
-      <div className="tl-podium">
-        {[podium[1], podium[0], podium[2]].map((l, i) =>
-          l ? <PodiumCard key={l.name} l={l} place={l.pos} kit={props.kit} mine={l.name.toLowerCase() === me} slot={i} /> : <span key={'gap' + i} />,
-        )}
-      </div>
-      {lines.slice(3).map((l) => (
-        <Row key={l.pos + l.name} l={l} kit={props.kit} modes={props.modes} mine={l.name.toLowerCase() === me} />
+      {lines.map((l) => (
+        <Row key={l.pos + l.name} l={l} modes={props.modes} mine={l.name.toLowerCase() === me} />
       ))}
     </div>
   )
 }
 
-function PodiumCard({ l, place, kit, mine, slot }: { l: Line; place: number; kit: string; mine: boolean; slot: number }) {
+export function Row({ l, modes, mine }: { l: Line; modes: TierModeInfo[]; mine: boolean }) {
   return (
-    <div className={'tl-pod p' + Math.min(place, 3) + (mine ? ' mine' : '')} style={{ '--slot': slot } as CSSProperties}>
-      <img
-        className="tl-pod-body"
-        src={bodyUrl(l.name, 220)}
-        alt=""
-        draggable={false}
-        loading="lazy"
-        // Скин не прошёл фильтр — ставим Стива, а не пустое место на пьедестале.
-        onError={(e) => {
-          const img = e.currentTarget
-          if (!img.dataset.fallback) {
-            img.dataset.fallback = '1'
-            img.src = bodyUrl('Steve', 220)
-          }
-        }}
-      />
-      <span className="tl-pod-plate">
-        <i className="tl-pod-place">{place}</i>
-        <b className="tl-pod-nick">{l.name}</b>
-        <span className="tl-pod-meta">
-          {l.badge ? <TierBadge tier={l.badge} /> : null}
-          {kit === 'all' && l.kits?.[0] ? (
-            <>
-              <KitIcon slug={l.kits[0].mode} size={18} />
-              <TierBadge tier={l.kits[0].tier} />
-            </>
-          ) : null}
-          <em>{l.value}</em>
-        </span>
-      </span>
-    </div>
-  )
-}
-
-function Row({ l, kit, modes, mine }: { l: Line; kit: string; modes: TierModeInfo[]; mine: boolean }) {
-  return (
-    <div className={'tb-row tl-row' + (mine ? ' me' : '')}>
-      <span className="tb-rank" style={{ '--digits': String(l.pos).length } as CSSProperties}>
-        {l.pos}
+    <div className={'tb-row tl-row' + (mine ? ' me' : '') + (l.pos >= 1 && l.pos <= 3 ? ' p' + l.pos : '')}>
+      <span className="tb-rank" style={{ '--digits': String(l.pos || '—').length + 1 } as CSSProperties}>
+        {l.pos ? '#' + l.pos : '—'}
       </span>
       <Head nick={l.name} size={56} className="tb-head" src={avatarUrl(l.name)} />
       <span className="fr-body">
-        <span className="fr-nick">{l.name}</span>
+        <span className="fr-nick">
+          {l.name}
+          {l.region ? <i className="tl-region">{l.region}</i> : null}
+        </span>
         {l.sub ? <span className="tr-title">{l.sub}</span> : null}
       </span>
       {l.kits?.length ? (
@@ -429,9 +390,10 @@ function Row({ l, kit, modes, mine }: { l: Line; kit: string; modes: TierModeInf
               <TierBadge tier={t.tier} />
             </span>
           ))}
+          {l.more ? <span className="tl-more">+{l.more}</span> : null}
         </span>
       ) : null}
-      {l.badge && kit !== 'all' ? <TierBadge tier={l.badge} big /> : null}
+      {l.badge ? <TierBadge tier={l.badge} big /> : null}
       <span className="tl-row-val">
         <b className="tb-val">{l.value}</b>
         {l.extra ? <i>{l.extra}</i> : null}

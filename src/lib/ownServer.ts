@@ -12,8 +12,10 @@ export const requiresMillidaAuth = (packSlug: string | null | undefined): boolea
  * не-Millida аккаунт: тир пишется на аккаунт Millida. Вход туда — только с ним.
  */
 export const MILLIDA_SMP_ADDR = 'mpvp.millida.host'
+/** Тот же сервер под адресом сайта (millida.net/tiers): smp.millida.net. */
+const MILLIDA_SMP_ADDRS = [MILLIDA_SMP_ADDR, 'smp.millida.net'].map((a) => canonAddr(a))
 export const serverNeedsMillidaAuth = (addr: string | null | undefined): boolean =>
-  !!addr && !!addr.trim() && canonAddr(addr) === canonAddr(MILLIDA_SMP_ADDR)
+  !!addr && !!addr.trim() && MILLIDA_SMP_ADDRS.includes(canonAddr(addr))
 
 /**
  * OneBlock runs on 1.7.10 through its own client: joining its address with a

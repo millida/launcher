@@ -24,6 +24,7 @@ import { uiConfirm } from '../state/confirm'
 import {
   isLeader,
   partyWithOthers,
+  proposeToParty,
   setPartyReady,
   setPartyTarget,
   startPartyLaunch,
@@ -221,9 +222,32 @@ export function maybeRunLaunch() {
   void runLaunch(launch)
 }
 
+/**
+ * Где играем сборкой или чистой версией: сама по себе она никого не сводит — без сервера
+ * каждый оказался бы в своём одиночном мире. Хозяин комнаты выбирает сервер заранее,
+ * выбор живёт у него до запуска (цель на сервере пати адреса не хранит).
+ */
+const PLAN_KEY = 'm-party-where'
+const planId = (t: PartyHave | PartyTarget) => t.kind + '|' + t.ref
+export function planServer(target: PartyTarget, addr: string) {
+  try {
+    sessionStorage.setItem(PLAN_KEY, JSON.stringify({ id: planId(target), addr }))
+  } catch {}
+}
+function plannedServer(target: PartyTarget): string | null {
+  try {
+    const p = JSON.parse(sessionStorage.getItem(PLAN_KEY) || 'null') as { id?: string; addr?: string } | null
+    return p && p.id === planId(target) && p.addr ? p.addr : null
+  } catch {
+    return null
+  }
+}
+
 /** The leader's own server, if hosting has one with an address: the party plays there. */
 async function leaderAddr(target: PartyTarget): Promise<string | null> {
   if (target.kind === 'server') return target.ref
+  const planned = plannedServer(target)
+  if (planned) return planned
   const s = inviteServer(await loadMyServers(15_000))
   return s && s.address ? s.address : null
 }
@@ -266,6 +290,26 @@ export async function partyPlayPressed(mode: LobbyMode | null): Promise<void> {
     await toggleReady()
     return
   }
+  // С предложениями цель у пати общая: «Играть» запускает то, о чём договорились,
+  // а не то, что стоит у лидера в «Сегодня играем».
+  if (Array.isArray(party.chat) && partyWithOthers(party)) {
+    if (party.target) {
+      const wait = launchBlock(party)
+      if (wait?.kind === 'not_ready') {
+        showToast('Ждём: ' + wait.nicks.join(', '), 'error')
+        return
+      }
+      await launchPartyTarget()
+      return
+    }
+    if (!mode) {
+      showToast('Сначала выбери, куда идём', 'error')
+      return
+    }
+    const offer = await targetForMode(mode).catch(() => null)
+    if (offer) await proposeToParty(offer)
+    return
+  }
   if (!mode) {
     showToast('Сначала выбери, во что играем', 'error')
     return
@@ -290,6 +334,21 @@ export async function partyPlayPressed(mode: LobbyMode | null): Promise<void> {
   if (!current.target) return
   if (!(await prepareTarget(current.target))) return
   if (await startPartyLaunch(await leaderAddr(current.target))) maybeRunLaunch()
+}
+
+/**
+ * Everybody answered «Идём» to an offer: the target is the party's own now, so the leader
+ * starts it as it stands instead of matching it against his lobby card. False while somebody
+ * is still installing — the caller tries again on the next party update.
+ */
+export async function launchPartyTarget(): Promise<boolean> {
+  const { party, me } = usePartyStore.getState()
+  if (!party || !isLeader(party, me) || !party.target || !partyWithOthers(party)) return false
+  if (launchBlock(party)) return false
+  if (!(await prepareTarget(party.target))) return false
+  if (!(await startPartyLaunch(await leaderAddr(party.target)))) return false
+  maybeRunLaunch()
+  return true
 }
 
 /** The server stores the address as host:port, the lobby keeps it as typed. */

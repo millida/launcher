@@ -268,3 +268,27 @@ span.tb-rubies { cursor: default; }
 .acc-streak svg { width: 16px; height: 16px; color: var(--m-warning); }
 .acc-streak.pending { color: var(--m-fg-muted); }
 .acc-streak.pending svg { filter: grayscale(1); opacity: 0.55; }
+
+/* ---------- Полоса лобби легче (владелец 12.10.2026: «кнопок много — поменьше,
+   чтобы больше воздуха») ---------- Четыре кнопки вместо семи, высота 56 вместо 64. */
+.topbar.is-lobby .lb-btns { gap: 10px; }
+.topbar.is-lobby .lb-btn { height: 56px; min-width: 56px; padding: 0 12px; }
+.topbar.is-lobby .lb-btn > svg { width: 24px; height: 24px; }
+.topbar.is-lobby .lb-heads .lb-head { width: 32px; height: 32px; }
+.topbar.is-lobby .lb-txt b { font-size: 18px; }
+.topbar.is-lobby .lb-btn.lb-acc { padding: 0 12px 0 5px; }
+.topbar.is-lobby .lb-btn.lb-acc .ava { width: 46px; height: 46px; }
+.topbar.is-lobby .lb-acc .acc-nick { font-size: 16px; }
+/* Быстрый звук под шестерёнкой: карточка прижата к правому краю окна. */
+:root .lb-vol .lb-quick-pop { left: auto; right: 0; transform: none; }
+.lb-vol-card.lb-quick-card { flex-direction: column; align-items: stretch; gap: 8px; padding: 10px 12px; }
+.lb-quick-row { display: flex; align-items: center; gap: 10px; }
+.lb-quick-row b { min-width: 40px; }
+.lb-quick-tg {
+  display: grid; place-items: center; width: 32px; height: 32px; padding: 0; flex: none; color: var(--m-fg); cursor: pointer;
+  background-color: var(--m-surface-2); clip-path: var(--px-4);
+  transition: background-color var(--m-t-fast);
+}
+.lb-quick-tg svg { width: 17px; height: 17px; }
+.lb-quick-tg.off { color: var(--m-fg-subtle); }
+@media (hover: hover) and (pointer: fine) { .lb-quick-tg:hover { background-color: var(--m-accent); color: #06200e; } }

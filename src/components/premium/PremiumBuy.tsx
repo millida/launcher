@@ -555,7 +555,7 @@ function MainButton({ p, stage, pick, size }: { p: AccessProps; stage: Stage; pi
 }
 
 /// Ждём оплату / оплата не открылась — короткая строка под кнопкой.
-function PayNote({ packId }: { packId: string }) {
+export function PayNote({ packId }: { packId: string }) {
   const pay = usePay(packId)
   if (pay.kind === 'waiting')
     return (

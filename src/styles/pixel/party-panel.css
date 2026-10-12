@@ -1,0 +1,191 @@
+/* ============================================================
+   Лобби в режиме пати (12.10.2026): панель справа на месте
+   рекламного баннера — поиск, состав, голос, предложение
+   «куда идём», чат. Рамки — общий слой «Слои рамки» в
+   12-pixel.css (селекторы добавлены туда).
+   ============================================================ */
+.pty {
+  position: absolute; z-index: 5; right: 20px; top: 84px; bottom: 196px; width: 340px;
+  display: flex; flex-direction: column; gap: 10px; padding: 12px 12px 14px; color: var(--m-fg);
+  background-color: rgba(8, 22, 13, 0.9);
+  --px-n: 10px; clip-path: var(--px-10);
+  --px-ol: rgba(0, 0, 0, 0.5); --px-ol-w: 3px;
+  --px-ft: rgba(255, 255, 255, 0.12); --px-ft-w: 3px; --px-fb: rgba(0, 0, 0, 0.35); --px-fb-w: 5px;
+  animation: pty-in 220ms var(--m-ease-smooth) both;
+}
+@keyframes pty-in { 0% { opacity: 0; translate: 24px 0; } 100% { opacity: 1; translate: 0 0; } }
+@media (prefers-reduced-motion: reduce) { .pty { animation: none; } }
+
+/* ---------- Поиск ---------- */
+.pty.pty-search {
+  top: 50%; bottom: auto; translate: 0 -58%; align-items: center; gap: 8px; padding: 22px 16px 18px; text-align: center;
+  animation: none;
+}
+.pty-dots { gap: 7px; margin-bottom: 4px; }
+.pty-dots i { width: 10px; height: 10px; background: var(--m-accent); }
+.pty-search-title { font: 900 24px/1 var(--m-font); }
+.pty-search-time { font: 800 18px/1 var(--m-font); color: var(--m-fg-muted); font-variant-numeric: tabular-nums; margin-bottom: 8px; }
+
+/* ---------- Шапка и состав ---------- */
+.pty-head { display: flex; align-items: center; gap: 8px; min-height: 30px; }
+.pty-head > b { font: 900 20px/1 var(--m-font); }
+.pty-count { font: 800 15px/1 var(--m-font); color: var(--m-fg-muted); }
+
+.pty-door { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 9px 1px; font: 800 12px/1 var(--m-font); color: var(--m-fg-muted); cursor: pointer; background-color: var(--m-surface-2); clip-path: var(--px-4); }
+.pty-door svg { width: 13px; height: 13px; }
+.pty-door.on { color: #06200e; background-color: var(--m-accent); }
+.pty-seeking { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; font: 800 12px/1 var(--m-font); color: var(--m-accent); }
+.pty-seeking .party-dots i { background: var(--m-accent); }
+.pty-steps { display: flex; gap: 4px; margin: 0; padding: 0; list-style: none; counter-reset: st; }
+.pty-steps li:nth-child(2) { flex: 1.5; }
+.pty-steps li { flex: 1; counter-increment: st; display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; font: 800 11.5px/1 var(--m-font); color: var(--m-fg-subtle); background-color: rgba(255, 255, 255, 0.06); clip-path: var(--px-4); white-space: nowrap; overflow: hidden; }
+.pty-steps li::before { content: counter(st); display: grid; place-items: center; flex: none; width: 16px; height: 16px; font-size: 10.5px; color: #0b0d10; background: var(--m-fg-subtle); }
+.pty-steps li.done { color: var(--m-fg); }
+.pty-steps li.done::before { background: var(--m-accent); }
+.pty-steps li.now { color: #06200e; background-color: #ffd23f; }
+.pty-steps li.now::before { background: #06200e; color: #ffd23f; }
+.pty-mates { display: flex; flex-direction: column; gap: 4px; }
+.pty-mate {
+  display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 6px 0 5px;
+  background-color: rgba(255, 255, 255, 0.05);
+  clip-path: var(--px-5);
+}
+.pty-mate.speaking { background-color: rgba(89, 217, 107, 0.2); }
+.pty-mate-head { width: 28px; height: 28px; flex: none; display: block; }
+.pty-mate > b { font: 800 15px/1 var(--m-font); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pty-mate svg { width: 15px; height: 15px; flex: none; }
+.pty-crown { color: var(--m-warning); }
+.pty-ready { color: var(--m-accent); }
+.pty-mate-end { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; }
+.pty-mic { color: var(--m-accent); }
+.pty-mic.off { color: var(--m-fg-subtle); }
+.pty-ico {
+  display: grid; place-items: center; width: 28px; height: 28px; padding: 0; color: var(--m-fg-muted); cursor: pointer;
+  background-color: transparent; clip-path: var(--px-4);
+  transition: background-color var(--m-t-fast), color var(--m-t-fast);
+}
+.pty-ico svg { width: 14px; height: 14px; }
+@media (hover: hover) and (pointer: fine) { .pty-ico:hover { color: #fff; background-color: rgba(255, 255, 255, 0.12); } }
+/* Кик и жалоба не шумят, пока на строку не навели. */
+.pty-mate .pty-ico { opacity: 0.45; }
+.pty-mate:hover .pty-ico, .pty-mate .pty-ico:focus-visible { opacity: 1; }
+
+/* ---------- Голос: на своей строке ---------- */
+.pty-mini {
+  display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 9px 1px;
+  font: 800 12px/1 var(--m-font); color: var(--m-fg); cursor: pointer;
+  background-color: var(--m-surface-2); clip-path: var(--px-4);
+  transition: background-color var(--m-t-fast);
+}
+.pty-mini svg { width: 14px; height: 14px; }
+.pty-mini.on { background-color: var(--m-accent); color: #06200e; }
+.pty-mini:disabled { opacity: 0.5; cursor: default; }
+@media (hover: hover) and (pointer: fine) { .pty-mini:not(.on):not(:disabled):hover { background-color: rgba(255, 255, 255, 0.18); } }
+.pty-mate .pty-deaf { opacity: 1; color: var(--m-fg); }
+.pty-mate .pty-deaf.off { color: var(--m-danger); }
+
+/* ---------- Предложение ---------- */
+.pty-offer {
+  position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; align-items: center;
+  padding: 10px 10px 14px; color: #06200e;
+  background-color: var(--m-accent);
+  --px-n: 5px; clip-path: var(--px-5);
+  --px-ol: transparent; --px-ol-w: 0px;
+  --px-ft: var(--px-btn-t); --px-ft-w: 3px; --px-fb: var(--px-btn-b); --px-fb-w: 5px;
+  animation: pty-pop 260ms var(--m-ease-smooth) both;
+}
+@keyframes pty-pop { 0% { scale: 0.94; opacity: 0; } 100% { scale: 1; opacity: 1; } }
+.pty-offer.wait { background-color: var(--m-surface-2); color: var(--m-fg); --px-ft: var(--px-plate-t); --px-fb: var(--px-plate-b); }
+.pty-offer-who { grid-column: 1 / 3; font: 800 12px/1 var(--m-font); letter-spacing: 0.04em; text-transform: uppercase; opacity: 0.75; }
+.pty-offer-title { grid-column: 1 / 3; font: 900 22px/1.05 var(--m-font); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pty-offer-votes { display: inline-flex; gap: 4px; }
+.pty-vote { position: relative; display: block; width: 24px; height: 24px; opacity: 0.45; }
+.pty-vote.yes { opacity: 1; }
+.pty-vote img, .pty-vote canvas { width: 24px; height: 24px; display: block; }
+.pty-vote svg { position: absolute; right: -4px; bottom: -4px; width: 13px; height: 13px; color: #fff; background: #0c3a1a; clip-path: var(--px-4); }
+.pty-offer-acts { display: inline-flex; gap: 6px; }
+:root .pty-offer .btn.sm { height: 34px; padding: 0 14px 2px; }
+:root .pty-offer:not(.wait) .btn.primary { background-color: #06200e; color: #fff; --px-ft: rgba(255, 255, 255, 0.16); --px-fb: rgba(0, 0, 0, 0.5); }
+:root .pty-offer:not(.wait) .btn.secondary { background-color: rgba(6, 32, 14, 0.18); color: #06200e; }
+.pty-offer-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(0, 0, 0, 0.25); }
+.pty-offer-bar span { display: block; height: 100%; background: rgba(255, 255, 255, 0.85); transition: width 1s linear; }
+@media (prefers-reduced-motion: reduce) { .pty-offer { animation: none; } }
+
+.pty-going {
+  display: flex; align-items: baseline; gap: 8px; padding: 8px 10px 9px;
+  background-color: rgba(89, 217, 107, 0.16); clip-path: var(--px-5);
+}
+.pty-going span { font: 800 12px/1 var(--m-font); letter-spacing: 0.04em; text-transform: uppercase; color: var(--m-accent); }
+.pty-going b { font: 900 17px/1.1 var(--m-font); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Все готовы: отсчёт до общего старта и «Отмена». */
+.pty-going.count { align-items: center; background-color: var(--m-accent); color: #06200e; }
+.pty-going.count span { color: #06200e; font-size: 13px; font-variant-numeric: tabular-nums; }
+.pty-going.count .pty-mini { margin-left: auto; background-color: rgba(6, 32, 14, 0.2); color: #06200e; }
+
+/* ---------- Чат ---------- */
+.pty-chat {
+  flex: 1; min-height: 84px; display: flex; flex-direction: column; gap: 6px; padding: 8px 8px 8px 10px; overflow-y: auto;
+  background-color: rgba(0, 0, 0, 0.28); clip-path: var(--px-5);
+  scrollbar-width: thin;
+}
+.pty-chat::before { content: ''; margin-top: auto; }
+.pty-line { font: 600 14px/1.3 var(--m-font); color: var(--m-fg); overflow-wrap: anywhere; }
+.pty-line b { margin-right: 6px; font-weight: 900; color: #7fd4ff; }
+.pty-line.mine b { color: var(--m-accent); }
+.pty-line.sys { font: 700 12px/1.2 var(--m-font); color: var(--m-fg-subtle); }
+/* Быстрые фразы: одна строка, лишние уезжают вправо. */
+.pty-quick { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; flex: none; }
+.pty-quick::-webkit-scrollbar { display: none; }
+.pty-q {
+  flex: none; height: 28px; padding: 0 9px 1px; font: 800 12px/1 var(--m-font); color: var(--m-fg); white-space: nowrap; cursor: pointer;
+  background-color: rgba(255, 255, 255, 0.09); clip-path: var(--px-4);
+  transition: background-color var(--m-t-fast);
+}
+.pty-q:disabled { opacity: 0.5; cursor: default; }
+@media (hover: hover) and (pointer: fine) { .pty-q:not(:disabled):hover { background-color: var(--m-accent); color: #06200e; } }
+.pty-form { display: flex; gap: 6px; }
+.pty-input {
+  flex: 1; min-width: 0; height: 38px; padding: 0 12px; font: 600 14px/1 var(--m-font); color: var(--m-fg);
+  background-color: rgba(0, 0, 0, 0.34); border: 0; clip-path: var(--px-5);
+}
+.pty-input::placeholder { color: var(--m-fg-subtle); }
+.pty-input:focus-visible { outline: none; background-color: rgba(0, 0, 0, 0.5); }
+.pty-send {
+  display: grid; place-items: center; width: 38px; height: 38px; padding: 0; color: #06200e; cursor: pointer;
+  background-color: var(--m-accent);
+  --px-n: 5px; clip-path: var(--px-5);
+  --px-ol: transparent; --px-ol-w: 0px;
+  --px-ft: var(--px-btn-t); --px-ft-w: 2px; --px-fb: var(--px-btn-b); --px-fb-w: 4px;
+}
+.pty-send svg { width: 17px; height: 17px; }
+.pty-send:disabled { background-color: var(--m-surface-2); color: var(--m-fg-subtle); cursor: default; --px-ft: transparent; --px-fb: transparent; }
+
+/* ---------- Куда идём ---------- */
+.pty-where { display: flex; flex-direction: column; gap: 6px; }
+.pty-where-cap { display: flex; align-items: center; justify-content: space-between; font: 800 12px/1 var(--m-font); letter-spacing: 0.04em; text-transform: uppercase; color: var(--m-fg-muted); }
+.pty-other { display: inline-flex; align-items: center; gap: 2px; padding: 2px 0; font: inherit; letter-spacing: inherit; text-transform: inherit; color: var(--m-fg); cursor: pointer; background: none; }
+.pty-other svg { width: 12px; height: 12px; }
+@media (hover: hover) and (pointer: fine) { .pty-other:hover { color: var(--m-accent); } }
+.pty-where-list { display: flex; flex-wrap: wrap; gap: 6px; max-height: 70px; overflow: hidden; }
+.pty-chip {
+  display: inline-flex; align-items: center; gap: 5px; height: 32px; max-width: 100%; padding: 0 11px 2px;
+  font: 800 13px/1 var(--m-font); color: var(--m-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
+  background-color: var(--m-surface-2);
+  --px-n: 5px; clip-path: var(--px-5);
+  --px-ol: transparent; --px-ol-w: 0px;
+  --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px;
+  transition: background-color var(--m-t-fast), transform 90ms var(--m-ease-smooth);
+}
+.pty-chip svg { width: 13px; height: 13px; flex: none; }
+.pty-chip.hot { background-color: var(--m-accent); color: #06200e; --px-ft: var(--px-btn-t); --px-fb: var(--px-btn-b); }
+.pty-chip:disabled { opacity: 0.5; cursor: default; }
+.pty-chip:not(:disabled):active { transform: translateY(1px); }
+@media (hover: hover) and (pointer: fine) {
+  .pty-chip:not(.hot):not(:disabled):hover { background-color: var(--m-surface-3, #2c3a31); color: #fff; }
+  .pty-chip.hot:not(:disabled):hover { filter: brightness(1.08); }
+}
+
+/* Узкое и низкое окно: панель не должна лечь на док и на фигурки. */
+@media (max-width: 1180px) { .pty { width: 300px; } }
+@media (max-height: 760px) { .pty { gap: 8px; } .pty-where-list { max-height: 32px; } }
+@media (min-width: 1800px) { .pty { zoom: 1.25; } }

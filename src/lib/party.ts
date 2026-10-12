@@ -39,6 +39,26 @@ export interface PartyLaunch {
   target: PartyTarget
 }
 
+/** A line of the party chat; `system` lines are the server's own («зашёл», «Идём: …»). */
+export interface PartyChatLine {
+  id: string
+  userId: string
+  nickname: string
+  text: string
+  at: number
+  system?: boolean
+}
+
+/** «Куда идём»: anyone offers a target, everybody answers; all «да» makes it the party target. */
+export interface PartyProposal {
+  id: string
+  byId: string
+  target: PartyTarget
+  at: number
+  expiresAt: number
+  answers: Record<string, boolean>
+}
+
 export interface Party {
   id: string
   leaderId: string
@@ -50,6 +70,22 @@ export interface Party {
   launch: PartyLaunch | null
   voice: PartyVoiceMember[]
   rev: number
+  /** Absent on a server that has no party chat yet: the lobby then keeps the old leader-driven flow. */
+  chat?: PartyChatLine[]
+  proposal?: PartyProposal | null
+  /** Пати-комната: открытая видна в общем списке, и в неё входят одной кнопкой. Нет поля — сервер комнат ещё не знает. */
+  room?: { open: boolean; since: number | null } | null
+}
+
+/** Открытая комната в общем списке: кто собрал, куда идут и сколько мест занято. */
+export interface PartyRoom {
+  id: string
+  host: { userId: string; nickname: string; avatarUrl: string | null }
+  target: PartyTarget
+  size: number
+  capacity: number
+  since: number
+  members: { userId: string; nickname: string; avatarUrl: string | null }[]
 }
 
 export interface PartyInvite {
@@ -248,6 +284,19 @@ export function pickMate(cards: LfgCard[], me: string, mine: LfgTags): LfgCard |
     }
   }
   return best
+}
+
+/**
+ * Two players who start a search in the same second both see an empty list. On the
+ * re-scan only the newer card asks the older one (the server's clock decides, the id
+ * breaks a tie), so exactly one side sends the request and they meet in one party.
+ */
+export function mateToAsk(cards: LfgCard[], mine: LfgCard | null, me: string, tags: LfgTags): LfgCard | null {
+  if (!mine) return null
+  const older = cards.filter(
+    (c) => c.createdAt < mine.createdAt || (c.createdAt === mine.createdAt && c.user.userId < me),
+  )
+  return pickMate(older, me, tags)
 }
 
 const labelOf = (list: readonly { id: string; label: string }[], id: string): string =>

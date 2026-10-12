@@ -1,11 +1,12 @@
 import { useEffect, useRef } from 'react'
 import { initParty, acceptPartyInvite, usePartyStore } from '../../state/party'
 import { maybeRunLaunch } from '../../lib/partyPlay'
+import { initPartyFlow } from '../../state/partyFlow'
 import { holdToTalk, leaveRoomVoice, useCall } from '../../state/call'
 import { useHasMillida } from '../../state/auth'
 import { setScreen, showToast, useUi } from '../../state/ui'
 import { PTT_KEY_CODE } from '../lobby/PartyBar'
-import { PartyInviteModal } from './PartyInviteModal'
+import { PartyRoomsMenu } from './PartyRoomsMenu'
 import { LfgModal } from './LfgModal'
 import { PackConfirmModal } from './PackConfirmModal'
 import { ReportModal } from './ReportModal'
@@ -23,6 +24,7 @@ const typing = (t: EventTarget | null) => {
 export function PartyHost() {
   const millida = useHasMillida()
   const inviteOpen = usePartyStore((s) => s.inviteOpen)
+  const roomsOpen = usePartyStore((s) => s.roomsOpen)
   const lfgOpen = usePartyStore((s) => s.lfgOpen)
   const packAsk = usePartyStore((s) => s.packAsk)
   const reportAsk = usePartyStore((s) => s.reportAsk)
@@ -33,7 +35,12 @@ export function PartyHost() {
 
   useEffect(() => {
     if (!millida) return
-    return initParty(maybeRunLaunch)
+    const offFlow = initPartyFlow()
+    const offParty = initParty(maybeRunLaunch)
+    return () => {
+      offFlow()
+      offParty()
+    }
   }, [millida])
 
   useEffect(() => {
@@ -80,7 +87,7 @@ export function PartyHost() {
   const set = usePartyStore.getState().set
   return (
     <>
-      {inviteOpen ? <PartyInviteModal close={() => set({ inviteOpen: false })} /> : null}
+      {inviteOpen || roomsOpen ? <PartyRoomsMenu key={inviteOpen ? 'f' : 'j'} start={inviteOpen ? 'friends' : 'join'} close={() => set({ inviteOpen: false, roomsOpen: false })} /> : null}
       {lfgOpen ? <LfgModal close={() => set({ lfgOpen: false })} /> : null}
       {packAsk ? (
         <PackConfirmModal

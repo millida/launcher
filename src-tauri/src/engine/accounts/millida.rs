@@ -414,6 +414,50 @@ pub async fn millida_upload(
     serde_json::from_str(&text).map_err(|e| e.to_string())
 }
 
+/// One raw chunk of a file to the same API (`application/octet-stream`): the
+/// bytes are read from disk in the core, the webview never names a file.
+pub async fn millida_post_bytes(path: String, bytes: Vec<u8>, token: Option<String>) -> Result<Value, String> {
+    let resolved = api_url(&path)?;
+    let mut req = client()
+        .post(resolved.as_str())
+        .header("Content-Type", "application/octet-stream")
+        .body(bytes);
+    if let Some(t) = token.as_ref().filter(|t| !t.is_empty()) {
+        req = req.header("Authorization", format!("Bearer {}", t));
+    }
+    let res = req.send().await.map_err(|e| net_err(&e))?;
+    let status = res.status();
+    let text = match read_capped(res, JSON_MAX_BYTES).await {
+        Ok(b) => String::from_utf8_lossy(&b).into_owned(),
+        Err(e) if status.is_success() => return Err(e),
+        Err(_) => String::new(),
+    };
+    if !status.is_success() {
+        if status.as_u16() == 401 {
+            return Err("http 401".into());
+        }
+        return Err(api_error_message(&text).unwrap_or_else(|| format!("http {}", status.as_u16())));
+    }
+    if text.trim().is_empty() {
+        return Ok(Value::Null);
+    }
+    serde_json::from_str(&text).map_err(|e| e.to_string())
+}
+
+pub async fn millida_post_bytes_auth(path: String, bytes: Vec<u8>) -> Result<Value, String> {
+    let token = millida_token();
+    let first = millida_post_bytes(path.clone(), bytes.clone(), token.clone()).await;
+    let Err(e) = first else { return first };
+    if e != "http 401" {
+        return Err(e);
+    }
+    match refresh_session(token).await {
+        Refreshed::Token(fresh) => millida_post_bytes(path, bytes, Some(fresh)).await,
+        Refreshed::Dead => Err(UNAUTHORIZED.into()),
+        Refreshed::Unavailable => Err(e),
+    }
+}
+
 pub async fn millida_upload_auth(
     path: String,
     filename: String,

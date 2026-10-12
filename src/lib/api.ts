@@ -78,7 +78,9 @@ export async function api<T = any>(pathname: string, opts?: RequestInit): Promis
       }
     }
     try {
-      return await millidaApi<T>(pathname, (opts && opts.method) || 'GET', body)
+      const method = ((opts && opts.method) || 'GET').toUpperCase()
+      const run = () => millidaApi<T>(pathname, method, body)
+      return await (method === 'GET' ? hedged(run) : run())
     } catch (e) {
       if (String(e).includes('unauthorized')) window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT))
       throw e
@@ -91,12 +93,56 @@ export async function api<T = any>(pathname: string, opts?: RequestInit): Promis
     const demo = demoAnswer(pathname, opts)
     if (demo) return (await demo) as T
   }
-  const r = await fetch(LAUNCHER_API + pathname, {
-    ...opts,
-    headers: { ...apiHeaders(), ...((opts && (opts.headers as Record<string, string>)) || {}) },
+  const run = async (): Promise<T> => {
+    const r = await fetch(LAUNCHER_API + pathname, {
+      ...opts,
+      headers: { ...apiHeaders(), ...((opts && (opts.headers as Record<string, string>)) || {}) },
+    })
+    if (!r.ok) throw new Error('http ' + r.status)
+    return r.json()
+  }
+  return !opts || !opts.method || opts.method.toUpperCase() === 'GET' ? hedged(run) : run()
+}
+
+/** Через сколько без ответа уходит второй такой же запрос. */
+export const HEDGE_AFTER_MS = 6_000
+
+/**
+ * Запрос на чтение, который не зависает из-за одного зависшего соединения:
+ * нет ответа за 6 с — уходит второй такой же, берём первый успешный. Щит
+ * перед API (12.10.2026) подвешивал примерно каждое 6–10-е соединение на
+ * 1–18 с: списки висели на скелетах, а в «Добавить моды» не появлялись версии
+ * и кнопка «Выбрать» оставалась выключенной. Быстрая ошибка возвращается
+ * сразу, как раньше; повторяются только GET.
+ */
+export function hedged<T>(run: () => Promise<T>, afterMs = HEDGE_AFTER_MS): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let done = false
+    let pending = 0
+    let timer = 0
+    const start = () => {
+      pending++
+      run().then(
+        (v) => {
+          if (done) return
+          done = true
+          clearTimeout(timer)
+          resolve(v)
+        },
+        (e) => {
+          pending--
+          if (done || pending > 0) return
+          done = true
+          clearTimeout(timer)
+          reject(e)
+        },
+      )
+    }
+    timer = setTimeout(() => {
+      if (!done) start()
+    }, afterMs) as unknown as number
+    start()
   })
-  if (!r.ok) throw new Error('http ' + r.status)
-  return r.json()
 }
 
 export function openExt(u: string) {
