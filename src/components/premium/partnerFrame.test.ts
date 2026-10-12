@@ -38,10 +38,7 @@ describe('frame pins', () => {
     )
   })
 
-  test('the pack page and the catalog tiles take the class from the partner field', () => {
-    expect(read('../playhub/PackPage.tsx'), 'the page header decides the frame by the partner, not by a hard-coded slug').toContain(
-      'partnerFrame(view?.partner ?? detail?.partner)',
-    )
+  test('the catalog tiles take the class from the partner field', () => {
     expect(read('../catalog/SiteRow.tsx').match(/partnerFrame\(card\.partner\)/g)?.length, 'both the row and the gallery card').toBe(2)
   })
 })

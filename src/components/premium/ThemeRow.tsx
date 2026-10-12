@@ -1,6 +1,6 @@
 import { Icon } from '../Icon'
 import { PlusMark } from './PlusMark'
-import { allowed, applyPremiumAccent, PREMIUM_ACCENTS, usePremiumTheme, type PremiumTheme } from '../../lib/premiumTheme'
+import { allowed, applyPremiumAccent, chooseTheme, PREMIUM_ACCENTS, usePremiumTheme, type PremiumTheme } from '../../lib/premiumTheme'
 
 /**
  * Настройки → Вид → «Тема лаунчера»: Стандартная · PLUS · Diamond (владелец
@@ -29,7 +29,7 @@ export function ThemeRow() {
             onClick={() =>
               locked
                 ? usePremiumTheme.getState().requestPlus(o.id === 'diamond' ? 'DIAMOND' : 'PLUS')
-                : usePremiumTheme.getState().setTheme(o.id)
+                : chooseTheme(o.id)
             }
           >
             {o.id === 'off' ? <i className="pt-std" /> : <PlusMark tier={o.id === 'diamond' ? 'DIAMOND' : 'PLUS'} height={o.id === 'diamond' ? 14 : 18} />}

@@ -4,6 +4,7 @@ import { dailyReady, useDaily } from '../../state/daily'
 import { api, hasMillidaAccount } from '../../lib/api'
 import { track } from '../../lib/telemetry'
 import { useUi } from '../../state/ui'
+import { openPvp } from '../../state/pvp'
 import '../../styles/pixel/hubtile.css'
 
 /**
@@ -19,13 +20,15 @@ import '../../styles/pixel/hubtile.css'
  * - подпись — на плотной плашке поверх низа арта, одна строка;
  * - в покое ничего не движется, на наведении арт подпрыгивает ступенями.
  */
-export type HubTileKind = 'shop' | 'server' | 'daily' | 'wardrobe'
+export type HubTileKind = 'shop' | 'server' | 'daily' | 'wardrobe' | 'pvp'
 
 const ART: Record<HubTileKind, string> = {
   shop: '/lobby/skins@2x.png',
   server: '/lobby/duo@2x.webp',
   daily: '/lobby/daily@2x.png',
   wardrobe: '/lobby/capes@2x.png',
+  // PvP — свой раздел лаунчера (12.10.2026): герой с мечом из рендеров тир-листа.
+  pvp: '/mode-art/kit-rigs/sword.webp',
 }
 
 /** Свой скин уже открывали — «!» на «Моём скине» гаснет. */
@@ -39,6 +42,10 @@ const skinSeen = () => {
 }
 
 function go(kind: HubTileKind) {
+  if (kind === 'pvp') {
+    openPvp('play')
+    return
+  }
   if (kind === 'wardrobe') {
     try {
       localStorage.setItem(SKIN_SEEN_KEY, '1')
@@ -92,7 +99,8 @@ export function HubTile({ kind, className, daily }: { kind: HubTileKind; classNa
   // скин (правка владельца 23.09.2026, 21:31).
   // Хостинг продаётся через друзей (владелец 24.09.2026, 13:33): плитка зовёт
   // играть вместе, а не «Мои серверы». Друзья в сети — живым числом.
-  const title = daily ? daily.title : skin ? 'Мой скин' : shop ? 'Магазин' : 'Играть с друзьями'
+  const pvp = kind === 'pvp'
+  const title = daily ? daily.title : pvp ? 'Тиры PvP' : skin ? 'Мой скин' : shop ? 'Магазин' : 'Играть с друзьями'
   const sub = daily
     ? daily.sub
     : skin
@@ -106,7 +114,7 @@ export function HubTile({ kind, className, daily }: { kind: HubTileKind; classNa
           ? 'Есть новое'
           : null
       : null
-  const ribbon = daily || skin || shop ? null : servers ? null : 'Бесплатно'
+  const ribbon = pvp ? 'Новое' : daily || skin || shop ? null : servers ? null : 'Бесплатно'
   return (
     <button
       type="button"

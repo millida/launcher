@@ -8,12 +8,13 @@ import { Head } from '../Head'
 import { nickSkinUrl } from '../../lib/characterStage'
 import { detectSlimFromUrl } from '../../lib/skinArms'
 import { DEFAULT_PARTY_CAPACITY, sameIdentity, slotPlan, slotSpot, type Party, type PartyMember } from '../../lib/party'
-import { isLeader, kickFromParty, promoteInParty, usePartyStore } from '../../state/party'
+import { isLeader, kickFromParty, partyWithOthers, promoteInParty, usePartyStore } from '../../state/party'
 import { useCall } from '../../state/call'
 import { openChat } from '../../state/friends'
 import { useHasMillida } from '../../state/auth'
 import { stopMateSearch, useMateSearch } from '../../state/mateSearch'
 import { uiConfirm } from '../../state/confirm'
+import { usePartyFlow } from '../../state/partyFlow'
 
 const SHADOW_SIZE = 22
 const CHEST = 18
@@ -296,6 +297,7 @@ export function PartyOverlay({
   const callRoom = useCall((s) => s.roomId)
   const [menu, setMenu] = useState('')
   const refs = useRef<Record<string, HTMLElement | null>>({})
+  const saying = usePartyFlow((s) => s.say)
 
   useEffect(() => {
     if (!engine || !seats.length) return
@@ -353,7 +355,11 @@ export function PartyOverlay({
       {seats.map((seat) => {
         const m = seat.member
         if (!m) {
-          if (seat.key !== inviteSeat) return null
+          // Идёт поиск или пати собрана — справа стоит панель пати со своими «Позвать»
+          // и «Ещё игрок»: свободное место под неё не лезет.
+          // Кнопки «+ Позвать» у персонажа больше нет (владелец 12.10.2026: «убери позвать в центре
+          // экрана»): позвать друга — только кнопкой над «Играть». Место остаётся лишь для отметки поиска.
+          if (seat.key !== inviteSeat || !searching || partyWithOthers(party)) return null
           return (
             <span
               key={seat.key}
@@ -392,6 +398,8 @@ export function PartyOverlay({
         return (
           <span key={seat.key} className={'party-seat' + (speaking ? ' speaking' : '') + (seat.spot.x > 0 ? ' flip' : '')} ref={(el) => void (refs.current[seat.key] = el)}>
             <span className="seat-tag">
+              {/* Реплика из чата пати — облачком над ником: видно, кто что сказал. */}
+              {saying[m.userId] ? <span className="seat-say" key={saying[m.userId].until}>{saying[m.userId].text}</span> : null}
               <span className="seat-nick">
                 {m.role === 'leader' ? <Icon id="i-crown" className="party-crown" /> : null}
                 {m.nickname || 'Игрок'}

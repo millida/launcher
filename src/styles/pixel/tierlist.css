@@ -110,3 +110,72 @@
 .tl-row-val i { font: 700 12px/1 var(--m-font); font-style: normal; color: var(--m-fg-subtle); }
 #s-top .tl-row .tb-val { justify-content: flex-end; }
 @media (max-width: 1180px) { .tl-row-kits .tl-ck:nth-child(n + 4) { display: none; } }
+
+/* ---------- «Ты» сверху тир-листа (12.10.2026) ---------- */
+.tl-me {
+  position: relative; display: grid; grid-template-columns: 150px minmax(0, 1fr) minmax(0, 380px); align-items: center; gap: 20px;
+  min-height: 210px; padding: 16px 20px 16px 8px; overflow: hidden;
+  background-color: color-mix(in srgb, #f07a18 16%, var(--m-surface)); --px-n: 10px; clip-path: var(--px-10);
+}
+.tl-me-body { align-self: end; justify-self: center; height: 220px; width: auto; margin-bottom: -16px; image-rendering: pixelated; filter: drop-shadow(0 8px 0 rgba(0, 0, 0, 0.3)); }
+.tl-me-main { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.tl-me-cap { font: 800 12px/1 var(--m-font); text-transform: uppercase; letter-spacing: .06em; color: #ffc24a; }
+.tl-me-name { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.tl-me-name b { font: 900 34px/1 var(--m-font); color: var(--m-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-me-name .tr-badge.big { height: 44px; min-width: 66px; font-size: 22px; }
+.tl-me-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font: 700 15px/1 var(--m-font); color: var(--m-fg-muted); }
+.tl-me-pos {
+  height: 30px; padding: 0 12px; border: 0; cursor: pointer; font: 900 16px/1 var(--m-font); color: #1a1206; background: #ffc24a;
+  --px-n: 4px; clip-path: var(--px-4);
+}
+@media (hover: hover) and (pointer: fine) { .tl-me-pos:hover { background: #ffd56e; } }
+.tl-region {
+  display: inline-grid; place-items: center; height: 20px; padding: 0 6px; margin-left: 8px; vertical-align: 2px;
+  font: 800 11px/1 var(--m-font); font-style: normal; letter-spacing: .04em; color: var(--m-fg-muted); background: rgba(255, 255, 255, 0.08);
+  --px-n: 3px; clip-path: var(--px-4);
+}
+.tl-me-line .tl-region { margin-left: 0; }
+.tl-me-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.tl-me-chip {
+  display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px;
+  background-color: color-mix(in srgb, var(--dc, #9aa7b4) 18%, rgba(0, 0, 0, 0.3)); --px-n: 4px; clip-path: var(--px-4);
+}
+.tl-me-chip i { font: 700 12px/1 var(--m-font); font-style: normal; text-transform: uppercase; letter-spacing: .05em; color: var(--m-fg-subtle); }
+.tl-me-chip b { font: 900 15px/1 var(--m-font); color: color-mix(in srgb, var(--dc, #fff) 70%, #fff); }
+.tl-me-last { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font: 800 14px/1 var(--m-font); color: var(--m-fg); }
+.tl-me-last > i { font: 700 12px/1 var(--m-font); font-style: normal; text-transform: uppercase; letter-spacing: .05em; color: var(--m-fg-subtle); }
+.tl-me-last.win > b { color: #5ec64d; }
+.tl-me-last.loss > b { color: #ff6b5e; }
+.tl-me-last em { font: 900 14px/1 var(--m-font); font-style: normal; }
+.tl-me-last em.up { color: #5ec64d; }
+.tl-me-last em.down { color: #ff6b5e; }
+.tl-me-ago { color: var(--m-fg-subtle); font-weight: 700; }
+.tl-me-act { display: flex; gap: 8px; margin-top: 2px; }
+:root .tl-me-go { height: 48px; padding: 0 22px; font-size: 18px; gap: 10px; }
+:root .tl-me-sec { height: 48px; padding: 0 18px; font-size: 16px; }
+.tl-me-kits { display: grid; grid-template-columns: repeat(auto-fill, minmax(74px, 1fr)); gap: 6px; align-content: center; }
+.tl-more {
+  display: inline-grid; place-items: center; height: 26px; min-width: 34px; padding: 0 6px; font: 900 13px/1 var(--m-font); color: var(--m-fg-muted);
+  background: rgba(255, 255, 255, 0.07); --px-n: 3px; clip-path: var(--px-4);
+}
+@media (max-width: 1100px) { .tl-me { grid-template-columns: 120px minmax(0, 1fr); } .tl-me-kits { grid-column: 1 / -1; } }
+
+/* ---------- v3 (12.10.2026): одна таблица, своя строка сверху, без пьедестала ---------- */
+.tl > .tl-bar { display: flex; align-items: center; gap: 12px; }
+.tl > .tl-bar .tl-kits { flex: 1; min-width: 0; }
+.tl > .tl-bar .tl-search { flex: 0 0 220px; }
+.tl-mine { display: flex; flex-direction: column; gap: 6px; }
+/* «Моё место» — отдельной строкой, зелёной (акцент): золото занято первым местом. */
+.tl-mine-cap { padding: 0 4px; font: 800 12px/1 var(--m-font); text-transform: uppercase; letter-spacing: .07em; color: var(--m-accent); }
+.tl-mine-next { padding: 0 6px; font: 800 13px/1.3 var(--m-font); color: var(--m-accent); }
+/* #1 #2 #3 — плашки золота, серебра и бронзы. */
+.tl-row.p1 .tb-rank, .tl-row.p2 .tb-rank, .tl-row.p3 .tb-rank {
+  display: grid; place-items: center; height: 34px; color: #1a1206; --px-n: 4px; clip-path: var(--px-4);
+}
+.tl-row.p1 .tb-rank { background: #ffcf3f; }
+.tl-row.p2 .tb-rank { background: #d7e1ea; }
+.tl-row.p3 .tb-rank { background: #e09a5a; }
+/* Строка тир-листа в одну линию: место · голова · ник · тиры китов · общий тир · очки. */
+.tb-row.tl-row { grid-template-columns: 44px 56px minmax(0, 1fr) auto auto auto; min-height: 72px; }
+.tl-row .tl-row-kits { gap: 6px; }
+.tl-row .tl-row-val { min-width: 96px; }

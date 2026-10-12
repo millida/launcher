@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Icon } from '../Icon'
 import { CatalogFor } from './CatalogTop'
@@ -7,11 +7,12 @@ import { FilterGroup, SiteFilters } from './SiteFilters'
 import { librariesLast } from './similar'
 import { smartQuery, type SmartResult } from './smartQuery'
 import { HitRow, MapRow, RowSkeleton, SiteGalleryCard, SiteRow } from './SiteRow'
+import { CapesPane } from './CapesPane'
 import type { MapHit } from './SiteRow'
 import { SERVER_SECTIONS, SITE_SECTIONS, fmtNum, loadCurated, loadSkinTags, loadSkins, materials, peekHit, sectionBySlug, sectionByKind } from './site'
 import { useSkinTag } from './skinTag'
 import { skinName } from './SkinPage'
-import type { CuratedItem, SkinTile } from './site'
+import type { CuratedItem, SiteCard, SkinTile } from './site'
 import { CATALOG_GROUPS, SECTION_VISUAL, curatedTitle, groupOf, groupVisual, siteSectionPath } from './sections'
 import type { NavGroup } from './sections'
 import { PxIcon } from '../PxIcon'
@@ -587,6 +588,78 @@ function ViewToggle({ view, onPick }: { view: FeedView; onPick: (v: FeedView) =>
   )
 }
 
+/** После скольких карточек ленты встаёт полка «Сборки на русском»: два ряда по три. */
+const SHELF_AT = 6
+
+/**
+ * «Сборки на русском» — своя полка внутри ленты «Рекомендуемых», после первых рядов:
+ * первым идёт эксклюзив студии, переводы заметны, но не громче премиума (владелец
+ * 12.10.2026). Один ряд с прокруткой, как полки
+ * магазина. С фильтром «На русском» — одна строка над лентой с возвратом ко всем сборкам.
+ */
+function RuShelf({
+  cards,
+  total,
+  only,
+  sec,
+  onOpenPack,
+  onToggle,
+}: {
+  cards: SiteCard[]
+  total: number
+  only: boolean
+  sec: SiteSection
+  onOpenPack?: (slug: string) => boolean | void
+  onToggle: () => void
+}) {
+  const row = useRef<HTMLDivElement>(null)
+  const step = (dir: 1 | -1) => {
+    const el = row.current
+    if (el) el.scrollBy({ left: dir * el.clientWidth * 0.9, behavior: 'smooth' })
+  }
+  if (only)
+    return (
+      <div className="mr-ru-only" role="status">
+        <i className="mr-ru-badge" aria-hidden="true">
+          RU
+        </i>
+        <span>Только сборки на русском</span>
+        <button className="mr-ru-link" data-track="ru_only_off" onClick={onToggle}>
+          Показать все сборки
+        </button>
+      </div>
+    )
+  return (
+    <section className="mr-ru" aria-label="Сборки на русском">
+      <header className="mr-ru-head">
+        <h2>
+          <i className="mr-ru-badge" aria-hidden="true">
+            RU
+          </i>
+          Сборки на русском
+        </h2>
+        <span className="mr-ru-nav">
+          <button className="mr-ru-link" data-track="ru_shelf_all" onClick={onToggle}>
+            Все {total}
+            <Icon id="i-chev-r" />
+          </button>
+          <button className="mr-ru-arrow" aria-label="Назад" data-track="ru_shelf_prev" onClick={() => step(-1)}>
+            <Icon id="i-chev-l" />
+          </button>
+          <button className="mr-ru-arrow" aria-label="Дальше" data-track="ru_shelf_next" onClick={() => step(1)}>
+            <Icon id="i-chev-r" />
+          </button>
+        </span>
+      </header>
+      <div className="mr-ru-row" ref={row}>
+        {cards.map((c, i) => (
+          <SiteGalleryCard key={'ru:' + c.slug} card={c} sec={sec} list="ru_shelf" pos={i} onOpenPack={onOpenPack} />
+        ))}
+      </div>
+    </section>
+  )
+}
+
 function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: boolean; onOpenPack?: (slug: string) => boolean | void }) {
   const store = useCatalogCtx().store
   const s = store()
@@ -610,6 +683,7 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
       loader={s.loader}
       category={s.category}
       access={sec.slug === 'modpacks' && store === useSite ? s.access : undefined}
+      ruCount={sec.slug === 'modpacks' && store === useSite ? s.ruTotal : 0}
       edition={s.edition}
       use={s.use}
       price={s.price}
@@ -674,6 +748,14 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
   }
   const [view, setView] = useFeedView(sec)
   const gallery = view === 'gallery'
+  // «Рекомендуемые» сборок: полка переводов на русском — после первых рядов. Эксклюзив студии —
+  // обычной карточкой первым, с плашкой «Эксклюзив» (владелец 12.10.2026: широкая — «хуйня»).
+  const packsFeed = sec.slug === 'modpacks' && store === useSite
+  const showcase = packsFeed && s.sort === 'recommended' && !searching && s.access === 'all'
+  const shelf =
+    showcase && s.ruShelf.length ? (
+      <RuShelf cards={s.ruShelf} total={s.ruTotal} only={false} sec={sec} onOpenPack={onOpenPack} onToggle={() => s.patch({ access: 'ru' })} />
+    ) : null
   const Card = gallery ? SiteGalleryCard : SiteRow
   const feedClass = gallery ? 'mr-galgrid' + (sec.gallery ? '' : ' is-big') : 'mr-list'
   return (
@@ -735,12 +817,19 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
         />
       ) : (
         <>
-          {s.items.length ? (
-            <div className={feedClass + (s.busy && s.page === 1 ? ' is-refreshing' : '')}>
+          {packsFeed && s.access === 'ru' ? (
+            <RuShelf cards={s.items} total={s.ruTotal} only sec={sec} onOpenPack={onOpenPack} onToggle={() => s.patch({ access: 'all' })} />
+          ) : null}
+          {items.length ? (
+            <div className={feedClass + (shelf ? ' has-shelf' : '') + (s.busy && s.page === 1 ? ' is-refreshing' : '')}>
               {items.map((c, i) => (
-                // В «Все» строка ставится и открывается в своём настоящем разделе.
-                <Card key={c.slug} card={c} sec={sec.slug === 'all' && c.section ? sectionBySlug(c.section) : sec} list={sec.slug} pos={i} onOpenPack={onOpenPack} />
+                <Fragment key={c.slug}>
+                  {shelf && i === SHELF_AT ? shelf : null}
+                  {/* В «Все» строка ставится и открывается в своём настоящем разделе. */}
+                  <Card card={c} sec={sec.slug === 'all' && c.section ? sectionBySlug(c.section) : sec} list={sec.slug} pos={i} onOpenPack={onOpenPack} />
+                </Fragment>
               ))}
+              {shelf && items.length <= SHELF_AT ? shelf : null}
             </div>
           ) : null}
           {tail.length ? (
@@ -1235,6 +1324,11 @@ export function SiteCatalog({
     appliedSeq = seq
     appliedContent = !!content
     backTop = null
+    // Вход в каталог снаружи («Каталог» сверху, «Добавить» в сборке) — лента сверху и без
+    // открытой когда-то страницы материала: иначе каталог открывался «где-то с пизды» —
+    // там, докуда долистали другой экран (владелец 12.10.2026).
+    dropItem()
+    toTop()
     const m = useMods.getState()
     let sec = firstVisit ? sectionBySlug('modpacks') : sectionByKind(m.modTab)
     if (content && sec.kind === 'modpack') sec = sectionBySlug('mods')
@@ -1315,6 +1409,8 @@ export function SiteCatalog({
     <CuratedPane narrow={narrow} />
   ) : sec.source === 'skins' ? (
     <SkinsPane />
+  ) : sec.slug === 'capes' ? (
+    <CapesPane />
   ) : sec.source === 'site' ? (
     <SitePane slug={sec.slug as 'seeds' | 'heads' | 'capes'} />
   ) : (

@@ -514,6 +514,58 @@
   --px-n: 10px; clip-path: var(--px-10);
 }
 .pp-buy.gold { box-shadow: inset 0 0 0 2px var(--ph-gold), var(--px-plate); --px-ol: var(--ph-gold); --px-ol-w: 2px; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent; }
+/* Страница сборки одна для всех (владелец 12.10.2026): у платной та же кнопка, что у
+   остальных, — цвет лаунчера, без золота премиума. */
+:root:root:root .pp-buy .btn.primary.pab-prem,
+:root:root:root .pp-buy .pab-prem-wrap > .btn.primary { background-color: var(--m-accent); color: var(--px-on-accent); --px-fb: var(--px-btn-b); }
+:root:root:root .pp-buy .btn.primary.pab-prem svg,
+:root:root:root .pp-buy .pab-prem-wrap > .btn.primary svg { color: var(--px-on-accent); }
+:root:root:root .pp-hero-cta .btn.primary.pab-prem,
+:root:root:root .pp-hero-cta .pab-prem-wrap > .btn.primary,
+:root:root:root .pp-stick-cta .btn.primary.pab-prem,
+:root:root:root .pp-stick-cta .pab-prem-wrap > .btn.primary { background-color: var(--m-accent); color: var(--px-on-accent); --px-fb: var(--px-btn-b); }
+:root:root:root .pp-hero-cta .btn.primary.pab-prem svg,
+:root:root:root .pp-stick-cta .btn.primary.pab-prem svg { color: var(--px-on-accent); }
+
+/* Главная кнопка в шапке страницы сборки (12.10.2026): большая, под ней — хостинг и сервер. */
+.pp-hero-cta { display: flex; flex-direction: column; align-items: stretch; gap: 8px; width: 270px; }
+.pp-hero-cta .pp-cta-wrap, .pp-hero-cta .pp-cta, .pp-hero-cta .pab-prem-wrap { width: 100%; }
+.pp-hero-cta .pm-price { align-self: center; }
+.pp-hero-sub { display: flex; gap: 6px; }
+.pp-hero-sub .btn { flex: 1; justify-content: center; }
+@media (max-width: 899px) { .pp-hero-cta { width: 100%; } }
+
+/* Полоса с кнопкой, когда кнопка шапки ушла за верх окна: вне прокрутки, над её верхом. */
+.pp-stick-slot { height: 0; margin-bottom: -14px; }
+.pp-hero-end { height: 0; margin-top: -14px; }
+.pp-stick {
+  position: absolute; z-index: 30;
+  display: flex; align-items: center; gap: 10px; min-height: 54px; padding: 8px 14px;
+  background: var(--m-bg); box-shadow: inset 0 -2px 0 var(--m-surface-2), 0 10px 20px rgba(0, 0, 0, 0.28);
+  opacity: 0; transform: translateY(-8px); pointer-events: none; transition: opacity 140ms linear, transform 140ms var(--m-ease-out);
+}
+.pp-stick.on { opacity: 1; transform: none; pointer-events: auto; }
+.pp-stick img { width: 32px; height: 32px; flex: none; object-fit: cover; --px-n: 4px; clip-path: var(--px-4); }
+.pp-stick b { min-width: 0; overflow: hidden; font: 800 15px/1.2 var(--m-font); color: var(--m-fg); white-space: nowrap; text-overflow: ellipsis; }
+.pp-stick-sp { flex: 1; }
+.pp-stick-cta { display: flex; flex: none; align-items: center; gap: 8px; }
+.pp-stick-cta .pp-cta-wrap, .pp-stick-cta .pp-cta, .pp-stick-cta .pab-prem-wrap, .pp-stick-cta .pp-cta-wrap > .btn { width: auto; }
+:root:root .pp-stick-cta .btn { height: 38px; padding: 0 18px; font-size: 14px; }
+.pp-stick-cta .pm-price { display: none; }
+
+/* «Что нового» над описанием. */
+.pp-news { padding: 14px 16px; }
+.pp-news-h { display: flex; align-items: baseline; gap: 10px; }
+.pp-news-h b { font: 800 15px/1.2 var(--m-font); color: var(--m-fg); }
+.pp-news-h span { font-size: 13px; color: var(--m-fg-subtle); }
+.pp-news-all { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; font: 700 13px/1 var(--m-font); color: var(--m-fg-muted); }
+.pp-news-all:hover { color: var(--m-fg); }
+.pp-news-all svg.icon { width: 12px; height: 12px; }
+.pp-news p { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 3; -webkit-box-orient: vertical; margin: 6px 0 0; font-size: 14.5px; line-height: 1.5; color: var(--m-fg-muted); }
+
+/* Внизу страницы — ещё сборки студии или похожие, рядом карточек как в каталоге. */
+.pp-more { margin-top: 18px; }
+.pp-more .mr-ru-head h2 { margin: 0; font: 800 18px/1.2 var(--m-font); color: var(--m-fg); }
 .pp-buy .pm-price { display: flex; flex-direction: column; gap: 3px; }
 .pp-buy .pm-price b { font: 800 30px/1 var(--m-font); color: var(--m-fg); }
 .pp-buy .pm-price i { font-style: normal; font-size: 12.5px; color: var(--m-fg-muted); }

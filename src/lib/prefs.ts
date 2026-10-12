@@ -34,6 +34,7 @@ const DURABLE = [
   'm-layout',
   'm-ptheme-prev',
   'm-ptheme-auto',
+  'm-ptheme-user',
   'm-app-icon',
 ] as const
 

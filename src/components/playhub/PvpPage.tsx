@@ -19,7 +19,7 @@ const FEATURES: { icon: string; title: string; line: string }[] = [
   { icon: 'i-shield', title: 'Анимации 1.7', line: 'Блок мечом и старый взмах' },
 ]
 
-export function PvpPage({ busy, onPlay }: { busy: boolean; onPlay: (version: string) => void }) {
+export function PvpPage({ busy, onPlay, arena = true }: { busy: boolean; onPlay: (version: string) => void; arena?: boolean }) {
   const [version, setVersion] = useState<string>(PVP_VERSIONS[0])
   const [mods, setMods] = useState<FpsMod[] | null | undefined>(undefined)
   const [hudOn, setHudOn] = useState(true)
@@ -65,8 +65,9 @@ export function PvpPage({ busy, onPlay }: { busy: boolean; onPlay: (version: str
 
   return (
     <div className="ph-mode pp" data-section="pvp_page" data-kind="pvp" data-id={version}>
-      {/* Сверху — арена Millida SMP; ниже — PvP-клиент для любых серверов. */}
-      <PvpArena />
+      {/* Сверху — арена Millida SMP; ниже — PvP-клиент для любых серверов.
+          В разделе PvP арена — своя вкладка, здесь только сборка. */}
+      {arena ? <PvpArena /> : null}
       <header className="ph-mode-hero">
         {art ? (
           <span className="ph-mode-bg" style={{ '--mode-c': art.color } as CSSProperties}>

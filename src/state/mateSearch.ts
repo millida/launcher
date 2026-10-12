@@ -1,11 +1,15 @@
 import { create } from 'zustand'
 import { api } from '../lib/api'
 import { apiErrorText } from '../lib/apiError'
-import { MATE_TAGS, partyFull, pickMate, type LfgCard } from '../lib/party'
+import { MATE_TAGS, mateToAsk, partyFull, pickMate, type LfgCard } from '../lib/party'
+import { isRealtimeLive } from '../lib/realtime'
 import { loadParty, partyWithOthers, usePartyStore } from './party'
 import { showToast } from './ui'
 
-const POLL_MS = 5000
+/** Двое нажали «Найти пати» — сойтись должны за пару секунд (владелец 12.10.2026: «сразу же подключают»). */
+const POLL_MS = 2000
+/** Список чужих поисков перечитываем реже: он тяжелее заявок. */
+const RESCAN_EVERY = 3
 
 interface LfgRequest {
   id: string
@@ -13,16 +17,20 @@ interface LfgRequest {
 
 interface MateSearch {
   searching: boolean
+  /** Когда начали искать (наши часы) — для счётчика на панели. */
+  since: number
   set: (patch: Partial<MateSearch>) => void
 }
 
 export const useMateSearch = create<MateSearch>((set) => ({
   searching: false,
+  since: 0,
   set: (patch) => set(patch as MateSearch),
 }))
 
 let timer = 0
 let ticking = false
+let ticks = 0
 
 const party = () => usePartyStore.getState()
 
@@ -41,12 +49,30 @@ async function tick(): Promise<void> {
         console.warn('[mates] accept', e),
       )
     }
-    if ((req.requests || []).length) await loadParty().catch((e) => console.warn('[mates] reload', e))
+    ticks++
+    if ((req.requests || []).length) {
+      await loadParty().catch((e) => console.warn('[mates] reload', e))
+      return
+    }
+    if (partyWithOthers(party().party)) return
+    // Нас могли принять в чужую пати: без живого канала узнаём об этом опросом.
+    if (!isRealtimeLive() || ticks % RESCAN_EVERY === 0) await loadParty().catch((e) => console.warn('[mates] reload', e))
+    if (ticks % RESCAN_EVERY === 0 && !partyWithOthers(party().party)) await rescan()
   } catch (e) {
     console.warn('[mates] poll', e)
   } finally {
     ticking = false
   }
+}
+
+/** A search that found nobody at the start looks again: see `mateToAsk` for who asks whom. */
+async function rescan(): Promise<void> {
+  const st = party()
+  const list = await api<{ cards: LfgCard[]; mine?: LfgCard | null }>('/party/lfg')
+  const cards = Array.isArray(list.cards) ? list.cards : []
+  const mine = list.mine || cards.find((c) => c.user.userId === st.me) || null
+  const mate = mateToAsk(cards, mine, st.me, MATE_TAGS)
+  if (mate) await api('/party/lfg/' + encodeURIComponent(mate.id) + '/request', { method: 'POST', body: '{}' })
 }
 
 /**
@@ -64,7 +90,8 @@ export async function startMateSearch(): Promise<void> {
     showToast('Искать напарников можно через неделю после регистрации', 'error')
     return
   }
-  useMateSearch.getState().set({ searching: true })
+  useMateSearch.getState().set({ searching: true, since: Date.now() })
+  ticks = 0
   try {
     if (!partyWithOthers(st.party)) {
       const list = await api<{ cards: LfgCard[] }>('/party/lfg')

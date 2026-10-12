@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Icon } from '../Icon'
-import { api, mirrorAsset } from '../../lib/api'
+import { api, LAUNCHER_API, mirrorAsset } from '../../lib/api'
 import { hasTauri } from '../../ipc/tauri'
 import { loadProfileSettings, millidaPacks } from '../../ipc/commands'
 import type { MillidaPack } from '../../ipc/commands'
@@ -18,10 +18,49 @@ import { useProfiles } from '../../state/profiles'
  * - useStudioCount — сколько премиум-сборок у студии (чип студии в герое).
  */
 
+/** Ядро молчит дольше — параллельно спрашиваем тот же открытый список напрямую. */
+const HEDGE_MS = 2500
+/** Дольше не ждём: окно покажет «Повторить», а не вечные заглушки. */
+const GIVE_UP_MS = 20_000
+
+/** Открытый список без входа: черновиков для проверяющих в нём нет, студии они и не нужны. */
+function packsFromWeb(): Promise<MillidaPack[]> {
+  return fetch(LAUNCHER_API + '/catalog/packs').then((r) => (r.ok ? r.json() : Promise.reject(new Error('http ' + r.status))))
+}
+
+/**
+ * Запрос через ядро иногда висит десятки секунд (сеть «залипает»), и окно студии
+ * стояло на заглушках, пока лаунчер не перезапустят (владелец 12.10.2026). Берём
+ * первый удачный ответ из двух путей, а через GIVE_UP_MS сдаёмся.
+ */
+function firstPacks(): Promise<MillidaPack[]> {
+  if (!hasTauri()) return api<MillidaPack[]>('/catalog/packs')
+  return new Promise((resolve, reject) => {
+    let pending = 1
+    let web = false
+    const failed = (e: unknown) => {
+      if (--pending === 0 && web) reject(e)
+    }
+    const startWeb = () => {
+      if (web) return
+      web = true
+      pending++
+      packsFromWeb().then(resolve, failed)
+    }
+    const hedge = window.setTimeout(startWeb, HEDGE_MS)
+    window.setTimeout(() => reject(new Error('timeout')), GIVE_UP_MS)
+    millidaPacks().then(resolve, (e) => {
+      window.clearTimeout(hedge)
+      startWeb()
+      failed(e)
+    })
+  })
+}
+
 let listCache: Promise<MillidaPack[]> | null = null
 function catalogPacks(): Promise<MillidaPack[]> {
   if (!listCache)
-    listCache = (hasTauri() ? millidaPacks() : api<MillidaPack[]>('/catalog/packs'))
+    listCache = firstPacks()
       .then((l) => (Array.isArray(l) ? l : []))
       .catch((e) => {
         listCache = null
@@ -131,12 +170,14 @@ export function StudioModal({
       })),
     [list],
   )
-  // Место в топе — по скачиваниям среди всех сборок студии, не по фильтру.
+  // Своя сборка студии (Arcania) — всегда первой, дальше по скачиваниям (владелец 12.10.2026).
+  const order = (a: (typeof rows)[number], b: (typeof rows)[number]) => Number(!!b.p.protectedContent) - Number(!!a.p.protectedContent) || b.dl - a.dl
+  // Место в топе — в том же порядке среди всех сборок студии, не по фильтру.
   const rank = useMemo(() => {
     const m = new Map<string, number>()
     rows
       .slice()
-      .sort((a, b) => b.dl - a.dl)
+      .sort(order)
       .slice(0, 3)
       .forEach((r, i) => r.dl > 0 && m.set(r.p.slug, i + 1))
     return m
@@ -146,12 +187,14 @@ export function StudioModal({
       GENRES.map((g) => ({ ...g, n: rows.filter((r) => r.genres.includes(g.id)).length })).filter((g) => g.n >= 2),
     [rows],
   )
-  const prem = rows.filter((r) => r.p.accessRequired).length
+  // Своя сборка студии — «Эксклюзив», остальные — переводы на русский (владелец 12.10.2026).
+  const exclusive = rows.filter((r) => r.p.protectedContent).length
+  const translated = rows.length - exclusive
   const query = q.trim().toLowerCase()
   const shown = rows
     .filter((r) => !genre || r.genres.includes(genre))
     .filter((r) => !query || (r.p.title + ' ' + r.p.summary).toLowerCase().includes(query))
-    .sort((a, b) => b.dl - a.dl)
+    .sort(order)
 
   const open = (p: MillidaPack) => {
     onClose()
@@ -173,7 +216,13 @@ export function StudioModal({
             </span>
             <h3>{studio.name}</h3>
             <span className="ppx-sm-sub">
-              {list ? list.length + ' ' + packWord(list.length) + (prem ? ' · ' + prem + ' премиум' : '') : 'Сборки студии'}
+              {list
+                ? list.length +
+                  ' ' +
+                  packWord(list.length) +
+                  (exclusive ? ' · ' + exclusive + ' эксклюзив' : '') +
+                  (exclusive && translated ? ' · ' + translated + ' на русском' : '')
+                : 'Сборки студии'}
             </span>
           </div>
           <button className="ppx-sm-x" aria-label="Закрыть" data-track="studio_close" onClick={onClose}>
@@ -244,6 +293,10 @@ export function StudioModal({
                       {p.cover ? <img src={mirrorAsset(p.cover)} alt="" loading="lazy" draggable={false} /> : null}
                       {here ? (
                         <span className="ppx-sm-tag here">Вы здесь</span>
+                      ) : p.protectedContent ? (
+                        <span className="ppx-sm-tag gold">
+                          <Icon id="i-crown" /> Эксклюзив
+                        </span>
                       ) : p.accessRequired ? (
                         <span className="ppx-sm-tag gold">
                           <Icon id="i-crown" /> Премиум
@@ -262,6 +315,15 @@ export function StudioModal({
                       ) : null}
                     </span>
                     <span className="ppx-sm-body">
+                      {p.protectedContent ? (
+                        <span className="ppx-sm-kind ex">
+                          <Icon id="i-crown" /> Эксклюзив · сделана студией
+                        </span>
+                      ) : (
+                        <span className="ppx-sm-kind ru">
+                          <i>RU</i> Переведена на русский
+                        </span>
+                      )}
                       <b title={p.title}>{shortTitle(p.title)}</b>
                       {p.summary ? <span className="ppx-sm-pitch">{shortPitch(p.summary)}</span> : null}
                       <span className="ppx-sm-meta">

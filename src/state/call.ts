@@ -650,7 +650,7 @@ export function joinRoomVoice(roomId: string, title: string) {
  * The party talks through the Millida voice relay, the room the game joins later. The WebRTC
  * mesh stays as the fallback when the relay cannot be reached, and the reason is shown.
  */
-export async function joinPartyVoice(partyId: string) {
+export async function joinPartyVoice(partyId: string, startMuted = false) {
   const cur = st()
   if (cur.status !== 'idle') {
     if (cur.mode === 'room' && cur.roomId === partyId) return
@@ -658,7 +658,7 @@ export async function joinPartyVoice(partyId: string) {
     return
   }
   handedOff = ''
-  const reason = await joinRelayVoice(partyId)
+  const reason = await joinRelayVoice(partyId, startMuted)
   if (reason === null) return
   trackFailure('call', new Error(reason), { step: 'party_relay' })
   showToast('Голос через сервер Millida недоступен: ' + reason + '. Включаю запасной режим', 'error')
@@ -706,7 +706,7 @@ function relayErrorText(e: unknown): string {
 }
 
 /** null when the relay carries the party now (or the join was cancelled); otherwise why it could not. */
-async function joinRelayVoice(partyId: string): Promise<string | null> {
+async function joinRelayVoice(partyId: string, startMuted = false): Promise<string | null> {
   if (!tauri()) return 'нужно приложение лаунчера'
   const cur = st()
   cur.set({
@@ -717,7 +717,8 @@ async function joinRelayVoice(partyId: string): Promise<string | null> {
     roomId: partyId,
     roomTitle: 'Пати',
     voicePath: '/party',
-    muted: cur.ptt,
+    // С незнакомцами из поиска голос подключается сам, но микрофон открывает человек.
+    muted: cur.ptt || startMuted,
   })
   const offs = await Promise.all([listenPartyVoiceState(onRelayState), listenPartyVoiceLevels(onRelayLevels)])
   relayUnlisten = offs.filter((off): off is () => void => !!off)

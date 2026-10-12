@@ -699,6 +699,11 @@ div.ppx-frame { cursor: default; }
 .ppx-sm-meta em { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; font: 700 11.5px/1.2 var(--m-font); font-style: normal; color: var(--m-fg-subtle); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ppx-sm-meta em svg.icon { width: 12px; height: 12px; color: var(--m-fg-faint); }
 .ppx-sm-card.prem .ppx-sm-body b { color: var(--m-fg); }
+/* Что это за сборка: своя у студии («Эксклюзив») или перевод на русский. */
+.ppx-sm-kind { display: inline-flex; align-items: center; gap: 6px; font: 800 10.5px/1.2 var(--m-font); letter-spacing: 0.06em; text-transform: uppercase; color: var(--m-fg-subtle); }
+.ppx-sm-kind.ex { color: var(--ppx-gold-hi); }
+.ppx-sm-kind.ex svg.icon { width: 12px; height: 12px; }
+.ppx-sm-kind i { padding: 2px 4px; font: 800 9.5px/1 var(--m-font); font-style: normal; letter-spacing: 0.04em; color: var(--m-fg); background: var(--m-inset); clip-path: polygon(2px 0, calc(100% - 2px) 0, 100% 2px, 100% calc(100% - 2px), calc(100% - 2px) 100%, 2px 100%, 0 calc(100% - 2px), 0 2px); }
 .ppx-sm-card.prem .ppx-sm-art::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: linear-gradient(90deg, var(--ppx-gold), color-mix(in srgb, var(--ppx-gold) 0%, transparent)); }
 .ppx-sm-skel { height: 230px; }
 .ppx-sm-empty { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 30px 0; font-size: 13.5px; color: var(--m-fg-subtle); }

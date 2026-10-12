@@ -413,6 +413,67 @@
 }
 .mr-prem svg { width: 12px; height: 12px; }
 .mr-prem.excl { color: var(--m-accent-fg); background: var(--m-rarity-epic); }
+
+/* ---------- Сборки студии в ленте (владелец 12.10.2026) ----------
+   Порядок заметности — как редкость в Minecraft: эксклюзив студии (Arcania) —
+   легендарный золотой (бегущая рамка, «Эксклюзив», первой в ленте); переводы на
+   русский — редкий синий: тонкая неподвижная рамка и метка «RU · На русском». Не акцент: он у
+   всех кнопок (зелёный, у PLUS — золотой) и слился бы с ними. */
+.mr-ru-badge {
+  display: inline-grid; place-items: center; flex: none; height: 16px; padding: 0 4px;
+  font: 900 10px/1 var(--m-font); font-style: normal; letter-spacing: 0.05em; color: #fff; background: var(--m-rarity-rare);
+  clip-path: polygon(3px 0, calc(100% - 3px) 0, 100% 3px, 100% calc(100% - 3px), calc(100% - 3px) 100%, 3px 100%, 0 calc(100% - 3px), 0 3px);
+}
+.mr-prem.ru { gap: 6px; color: #fff; background: color-mix(in srgb, var(--m-rarity-rare) 85%, #000); }
+.mr-prem.ru .mr-ru-badge, .ph-card-tag.ru .mr-ru-badge { color: color-mix(in srgb, var(--m-rarity-rare) 70%, #000); background: #fff; }
+.mr-gal-cover > .ph-card-tag.ru { gap: 5px; padding-left: 3px; color: #fff; background: color-mix(in srgb, var(--m-rarity-rare) 85%, #000); }
+
+/* Перевод: тонкая неподвижная синяя рамка — тише бегущей золотой у платных. */
+.px-ru { position: relative; }
+.px-ru::after, .mr-ru::after {
+  content: ''; position: absolute; inset: 0; z-index: 3; pointer-events: none;
+  background: color-mix(in srgb, var(--m-rarity-rare) 60%, transparent);
+  clip-path: polygon(evenodd, 10px 0, calc(100% - 10px) 0, calc(100% - 10px) 10px, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 10px calc(100% - 10px), 0 calc(100% - 10px), 0 10px, 10px 10px, 10px 0, 12px 2px, 12px 12px, 2px 12px, 2px calc(100% - 12px), 12px calc(100% - 12px), 12px calc(100% - 2px), calc(100% - 12px) calc(100% - 2px), calc(100% - 12px) calc(100% - 12px), calc(100% - 2px) calc(100% - 12px), calc(100% - 2px) 12px, calc(100% - 12px) 12px, calc(100% - 12px) 2px, 12px 2px);
+}
+
+/* Полка переводов внутри ленты: строка во всю ширину, дыры в рядах до неё заполняются. */
+.mr-galgrid.has-shelf { grid-auto-flow: row dense; }
+.mr-ru {
+  grid-column: 1 / -1; position: relative; margin: 6px 0; padding: 14px 14px 16px;
+  background-color: color-mix(in srgb, var(--m-rarity-rare) 7%, var(--m-surface));
+  --px-n: 10px; clip-path: var(--px-10);
+}
+.mr-ru .px-ru::after { display: none; }
+.mr-ru-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+.mr-ru-head h2 { display: inline-flex; align-items: center; gap: 8px; margin: 0; font: 800 18px/1.2 var(--m-font); color: var(--m-fg); }
+.mr-ru-head h2 .mr-ru-badge { height: 18px; font-size: 11px; }
+.mr-ru-sub { min-width: 0; overflow: hidden; font-size: 13.5px; color: var(--m-fg-subtle); white-space: nowrap; text-overflow: ellipsis; }
+.mr-ru-nav { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; flex: none; align-self: center; }
+.mr-ru-link { display: inline-flex; align-items: center; gap: 4px; padding: 6px 8px; font: 700 13.5px/1 var(--m-font); color: var(--m-fg-muted); }
+.mr-ru-link:hover { color: var(--m-fg); }
+.mr-ru-link svg.icon { width: 13px; height: 13px; }
+.mr-ru-arrow { display: grid; place-items: center; width: 30px; height: 30px; color: var(--m-fg-muted); background: var(--m-surface-2); --px-n: 4px; clip-path: var(--px-4); }
+.mr-ru-arrow:hover { color: var(--m-fg); }
+.mr-ru-arrow svg.icon { width: 14px; height: 14px; }
+.mr-ru-row {
+  display: grid; grid-auto-flow: column; grid-auto-columns: calc((100% - 3 * 12px) / 4); gap: 12px;
+  overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
+}
+.mr-ru-row::-webkit-scrollbar { display: none; }
+.mr-ru-row > .card { scroll-snap-align: start; }
+@media (max-width: 1279px) { .mr-ru-row { grid-auto-columns: calc((100% - 2 * 12px) / 3); } }
+@media (max-width: 899px) { .mr-ru-row { grid-auto-columns: calc((100% - 12px) / 2); } }
+
+/* Фильтр «На русском» включён: одна строка над лентой. */
+.mr-ru-only {
+  display: flex; align-items: center; gap: 10px; margin: 4px 0 14px; padding: 10px 12px;
+  font-size: 14px; color: var(--m-fg-muted); background: color-mix(in srgb, var(--m-rarity-rare) 8%, var(--m-surface)); --px-n: 5px; clip-path: var(--px-5);
+}
+.mr-ru-only .mr-ru-link { margin-left: auto; color: var(--m-fg); }
+
+/* Колонка фильтров: «Язык → На русском» — подсвеченной строкой. */
+.mr-key[data-track='filter_lang']:not(.on) { background-color: color-mix(in srgb, var(--m-rarity-rare) 12%, transparent); }
+.mr-key[data-track='filter_lang'] .mr-key-ic { display: inline-grid; place-items: center; }
 .mr-price { font: 800 18px/1 var(--m-font); color: var(--m-warning); font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* Куплено: плотная плашка акцента с тёмным текстом вместо цены. */
 .mr-owned {
@@ -944,3 +1005,34 @@
   .mr-aside > .card.mr-fbox::-webkit-scrollbar-thumb { background: var(--m-surface-2); }
   .mr-aside > .card.mr-fbox > * { flex: none; }
 }
+
+/* ---------- Раздел «Плащи» (12.10.2026): сами плащи вместо плашки с двумя кнопками ---------- */
+.cp-cap { display: flex; align-items: baseline; gap: 8px; margin: 18px 0 10px; font: 900 18px/1 var(--m-font); color: var(--m-fg); }
+.cp-cap span { font: 800 14px/1 var(--m-font); color: var(--m-fg-faint); }
+.cp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.cp-card { display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 8px 8px 10px; background-color: var(--m-surface); clip-path: var(--px-10); --cp: #4a5560; }
+.cp-card.mojang { --cp: #3a4048; }
+.cp-face {
+  position: relative; display: grid; place-items: center; height: 196px; padding: 0; border: 0; cursor: pointer;
+  background-color: color-mix(in srgb, var(--cp) 62%, #0b0d10); clip-path: var(--px-5);
+  transition: background-color var(--m-t-fast);
+}
+@media (hover: hover) and (pointer: fine) { .cp-face:hover { background-color: color-mix(in srgb, var(--cp) 78%, #0b0d10); } }
+/* Лицевая сторона плаща: (1,1) 10×16 на текстуре 64×32, клетка --k. */
+.cp-art {
+  --k: 10px; width: calc(10 * var(--k)); height: calc(16 * var(--k)); display: block;
+  background-repeat: no-repeat; background-size: calc(64 * var(--k)) calc(32 * var(--k)); background-position: calc(-1 * var(--k)) calc(-1 * var(--k));
+  image-rendering: pixelated;
+}
+.cp-card.locked .cp-art { opacity: 0.5; }
+.cp-lock { position: absolute; right: 8px; top: 8px; display: grid; place-items: center; width: 30px; height: 30px; color: #fff; background: rgba(8, 10, 12, 0.82); clip-path: var(--px-4); }
+.cp-lock svg { width: 15px; height: 15px; }
+.cp-name { font: 800 15px/1.15 var(--m-font); color: var(--m-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-need { font: 600 12px/1.25 var(--m-font); color: var(--m-fg-subtle); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 30px; }
+.cp-card.mojang .cp-need { min-height: 0; }
+.cp-bar { height: 6px; background: var(--m-inset); }
+.cp-bar span { display: block; height: 100%; background: var(--m-accent); }
+:root .cp-card .cp-act { width: 100%; height: 34px; }
+.cp-face.skel { cursor: default; }
+.cp-skel-line { height: 14px; width: 70%; }
+.card.cp-fail { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px; }

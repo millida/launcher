@@ -9,6 +9,7 @@ import {
   sameIdentity,
   slotPlan,
   slotSpot,
+  mateToAsk,
   pickMate,
   MATE_TAGS,
   type LfgCard,
@@ -184,4 +185,27 @@ describe('pickMate', () => {
     { why: 'among equal ones the fuller party wins, the match forms sooner', cards: [card('one'), card('two', { size: 2 })], want: 'two' },
   ]
   for (const c of cases) test(c.why, () => expect(pickMate(c.cards, 'me', MATE_TAGS)?.id ?? null).toBe(c.want))
+})
+
+describe('mateToAsk', () => {
+  const card = (userId: string, createdAt: number, extra: Partial<LfgCard> = {}): LfgCard => ({
+    id: 'c-' + userId,
+    user: { userId, nickname: userId, avatarUrl: null },
+    tags: { ...MATE_TAGS },
+    size: 1,
+    capacity: 3,
+    createdAt,
+    expiresAt: 0,
+    requested: false,
+    ...extra,
+  })
+  const cases: { why: string; cards: LfgCard[]; mine: LfgCard | null; me: string; want: string | null }[] = [
+    { why: 'without my own card nobody is asked: the search has not opened yet', cards: [card('a', 1)], mine: null, me: 'me', want: null },
+    { why: 'the newer card asks the older one', cards: [card('a', 1), card('me', 5)], mine: card('me', 5), me: 'me', want: 'c-a' },
+    { why: 'the older card waits to be asked, or both would end up in different parties', cards: [card('a', 9), card('me', 5)], mine: card('me', 5), me: 'me', want: null },
+    { why: 'the same instant is settled by id, so exactly one side asks', cards: [card('a', 5), card('me', 5)], mine: card('me', 5), me: 'me', want: 'c-a' },
+    { why: 'and the other side of that tie stays put', cards: [card('z', 5), card('me', 5)], mine: card('me', 5), me: 'me', want: null },
+    { why: 'a card already asked is not asked again on the next scan', cards: [card('a', 1, { requested: true })], mine: card('me', 5), me: 'me', want: null },
+  ]
+  for (const c of cases) test(c.why, () => expect(mateToAsk(c.cards, c.mine, c.me, MATE_TAGS)?.id ?? null).toBe(c.want))
 })

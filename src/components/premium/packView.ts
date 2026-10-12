@@ -34,12 +34,16 @@ export interface PackView {
   loader?: string
   loaderVersion?: string
   cover?: string | null
+  /** Квадратный значок сборки — в шапку страницы (обложка туда не лезет: обрезанный баннер). */
+  icon?: string | null
   banner?: string | null
   video?: string | null
   gallery?: string[]
   description?: DescBlock[] | null
   author?: string | null
   accessRequired?: boolean
+  /** Своя сборка студии с закрытыми файлами (Arcania): страница-история вместо обычной. */
+  protectedContent?: boolean
   /** Где купить доступ — сайт сборки. */
   accessBuyUrl?: string | null
   partner?: PackPartner | null

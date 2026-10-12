@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { usePlus } from '../state/plus'
 import { useUi } from '../state/ui'
 import { computeAccent, paintAccent, saveAccent, withColorFade, type AccentVars } from './accent'
-import { readPref, writePref, type PrefKey } from './prefs'
+import { hydratePrefs, readPref, writePref, type PrefKey } from './prefs'
 import type { ShopTier } from './rubies'
 import { loadPlus, type PlusTier } from './gameProfile'
 
@@ -33,6 +33,13 @@ const KEY: PrefKey = 'm-ptheme'
 const PREV_KEY: PrefKey = 'm-ptheme-prev'
 /** Тариф, для которого тема уже включалась сама: второй раз не навязываем. */
 const AUTO_KEY: PrefKey = 'm-ptheme-auto'
+/**
+ * Игрок сам выбрал тему или цвет кнопок: дальше лаунчер их не трогает, пока не
+ * случится новая оплата. Без этой отметки ложное «подписка кончилась» на старте
+ * снимало «уже включали», и следом «есть PLUS» снова красило лаунчер в золото
+ * поверх выбранного зелёного — при каждом запуске (владелец 12.10.2026).
+ */
+const CHOICE_KEY: PrefKey = 'm-ptheme-user'
 export const PLUS_BOUGHT_EVENT = 'm-plus-bought'
 
 /** Можно ли включить тему при этом тарифе. */
@@ -89,10 +96,34 @@ function restoreAccent() {
   writePref(PREV_KEY, '')
 }
 
+/** Выбор игрока руками (тема или цвет кнопок) — лаунчер его больше не перекрашивает. */
+export function markThemeChoice() {
+  writePref(CHOICE_KEY, '1')
+}
+
+/**
+ * Тема PLUS/Diamond — это золотой (синий) цвет кнопок вместе с золотыми линиями рамок и
+ * светом сверху. Выбрал обычный цвет кнопок — значит, хочешь обычный лаунчер: тема
+ * выключается, а выбранный цвет остаётся (владелец 12.10.2026: зелёные кнопки, а рамки
+ * и фон всё равно золотые — «везде золотоватое»). Прежний цвет не возвращаем: его только что выбрали.
+ */
+export function leavePremiumLook() {
+  if (usePremiumTheme.getState().theme === 'off') return
+  writePref(KEY, 'off')
+  usePremiumTheme.setState({ theme: 'off' })
+  paintAttrs('off')
+}
+
+/** Тема премиума при обычном цвете кнопок — остаток выбора до этого правила. */
+function settleLook() {
+  if (usePremiumTheme.getState().theme !== 'off' && !isPremiumAccent(read('m-accent'))) leavePremiumLook()
+}
+
 /** Премиум-цвет акцента без смены темы (палитра «Цвет кнопок»). */
 export function applyPremiumAccent(id: string) {
   const p = PREMIUM_ACCENTS.find((a) => a.id === id)
   if (!p) return
+  markThemeChoice()
   withColorFade(() => {
     rememberAccent()
     const a = computeAccent({ id: p.id, c: p.c, h: p.h, s: p.s })
@@ -144,12 +175,36 @@ export const usePremiumTheme = create<PremiumState>((set, get) => ({
   },
 }))
 
+/** Тема из настроек Стандартная · PLUS · Diamond — выбор игрока. */
+export function chooseTheme(t: PremiumTheme) {
+  markThemeChoice()
+  usePremiumTheme.getState().setTheme(t)
+}
+
 const themeFor = (tier: ShopTier): PremiumTheme => (tier === 'DIAMOND' ? 'diamond' : tier === 'PLUS' ? 'plus' : 'off')
 
-function autoApply(tier: ShopTier) {
-  if (!tier || read(AUTO_KEY) === tier) return
+/**
+ * Сама включает тему тарифа. `paid` — настоящая оплата только что: тогда тема
+ * включается всегда, даже поверх прежнего выбора. Без оплаты выбор игрока важнее.
+ */
+function autoApply(tier: ShopTier, paid = false) {
+  if (!tier) return
+  if (!paid && (read(AUTO_KEY) === tier || read(CHOICE_KEY) === '1')) return
   writePref(AUTO_KEY, tier)
+  writePref(CHOICE_KEY, '')
   usePremiumTheme.getState().setTheme(themeFor(tier))
+}
+
+/**
+ * Выбор, сделанный до отметки CHOICE_KEY: тема подписки включена, а цвет кнопок
+ * обычный, или тему уже включали и игрок её выключил. Оба значат «я выбрал сам».
+ */
+function inferChoice() {
+  if (read(CHOICE_KEY)) return
+  const theme = usePremiumTheme.getState().theme
+  const manualAccent = theme !== 'off' && !isPremiumAccent(read('m-accent'))
+  const turnedOff = theme === 'off' && !!read(AUTO_KEY)
+  if (manualAccent || turnedOff) markThemeChoice()
 }
 
 let started = false
@@ -159,6 +214,16 @@ export function initPremiumTheme() {
   if (started || typeof document === 'undefined') return
   started = true
   paintAttrs(usePremiumTheme.getState().theme)
+  // Тема прочитана до копии с диска: после выхода через трей localStorage мог
+  // откатиться на прежнюю. Копия с диска главнее.
+  void hydratePrefs().then(() => {
+    const v = read(KEY, 'off')
+    if (isTheme(v) && v !== usePremiumTheme.getState().theme) {
+      usePremiumTheme.setState({ theme: v })
+      paintAttrs(v)
+    }
+    settleLook()
+  })
 
   // Демо: ?plus=plus|diamond включает тему тарифа; &ptheme=off|plus|diamond — любую.
   const demoTheme = demoParam('ptheme')
@@ -172,6 +237,7 @@ export function initPremiumTheme() {
       if (demoFirst) {
         sessionStorage.setItem('m-demo-ptheme', demoPlus)
         writePref(AUTO_KEY, '')
+        writePref(CHOICE_KEY, '')
       }
     } catch {
       demoFirst = true
@@ -181,22 +247,58 @@ export function initPremiumTheme() {
   let bought = false
   /** Подписка точно кончилась (проверено запросом) — следующая покупка снова включит тему. */
   let ended = false
+  /**
+   * Что было до «подписка кончилась» в этой сессии, если тогда что-то перекрасили.
+   * Подписка вернулась без оплаты — значит, ответы просто разошлись: возвращаем
+   * ровно как было, а не включаем тему заново.
+   */
+  let undo: { theme: PremiumTheme; accent: string; auto: string } | null = null
   let checking = false
+  const restore = (u: NonNullable<typeof undo>, tier: ShopTier) => {
+    const st = usePremiumTheme.getState()
+    if (!allowed(u.theme, tier)) {
+      autoApply(tier)
+      return
+    }
+    withColorFade(() => {
+      if (u.theme !== 'off') st.setTheme(u.theme)
+      try {
+        const a = JSON.parse(u.accent || 'null') as AccentVars | null
+        if (a && typeof a.c === 'string') {
+          paintAccent(a, true)
+          saveAccent(a)
+        }
+      } catch {}
+    })
+    writePref(AUTO_KEY, u.auto)
+  }
   const confirmEnded = async () => {
     if (checking) return
     checking = true
     const st = await loadPlus().catch(() => null)
     checking = false
     if (!st || st.active) return
+    // Пока ждали ответ, другой источник (магазин, опрос оплаты) сказал «подписка есть»:
+    // это не конец подписки, а разнобой ответов.
+    if (usePlus.getState().tier) return
     const s = usePremiumTheme.getState()
+    const was = { theme: s.theme, accent: read('m-accent'), auto: read(AUTO_KEY) }
     ended = true
     paintSub(null)
     usePremiumTheme.setState({ tier: null, known: true })
+    let changed = true
     if (s.theme !== 'off') s.setTheme('off')
-    else if (isPremiumAccent(read('m-accent'))) restoreAccent()
+    else if (isPremiumAccent(was.accent)) restoreAccent()
+    else changed = false
+    undo = changed ? was : null
     writePref(AUTO_KEY, '')
   }
+  let inferred = false
   const onTier = (tier: ShopTier) => {
+    if (!inferred) {
+      inferred = true
+      inferChoice()
+    }
     const s = usePremiumTheme.getState()
     const before = s.known ? s.tier : undefined
     if (!tier) {
@@ -217,11 +319,15 @@ export function initPremiumTheme() {
       return
     }
     // Покупка: событие из опроса оплаты или переход «нет подписки → есть» за сессию.
-    if (bought || (before === null && ended) || (before === 'PLUS' && tier === 'DIAMOND')) {
+    const upgraded = before === 'PLUS' && tier === 'DIAMOND'
+    if (bought || upgraded || (before === null && ended)) {
+      const paid = bought || upgraded
+      const back = undo
       ended = false
       bought = false
-      if (before === 'PLUS' && tier === 'DIAMOND') writePref(AUTO_KEY, '')
-      autoApply(tier)
+      undo = null
+      if (!paid && back) restore(back, tier)
+      else autoApply(tier, paid)
     }
   }
 

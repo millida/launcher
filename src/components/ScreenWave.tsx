@@ -32,6 +32,7 @@ const TONE: Record<ScreenId, [string, string]> = {
   skins: ['#1c5a8f', '#4cb8f5'],
   friends: ['#2d2f6b', '#7b82ff'],
   top: ['#7a4a06', '#f2b23a'],
+  pvp: ['#7a1f12', '#ff6b3d'],
   chat: ['#2d2f6b', '#7b82ff'],
   hosting: ['#0f5a3a', '#35d49a'],
   game: ['#3b2a5c', '#9b6bff'],
