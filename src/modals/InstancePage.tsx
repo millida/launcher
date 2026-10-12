@@ -296,6 +296,8 @@ export function InstancePage() {
   const [logBody, setLogBody] = useState('')
   const [logView, setLogView] = useState<'live' | 'files'>('live')
   const [liveLines, setLiveLines] = useState<string[]>([])
+  const liveBuffer = useRef<string[]>([])
+  const logsShown = useRef(false)
   const running = useGame((s) => s.list)
   const gameStopping = useGame((s) => s.stopping)
   const thisRunning = !!profile && running.includes(profile)
@@ -535,12 +537,26 @@ export function InstancePage() {
   }, [logBody])
 
   // Rust streams the game stdout/stderr as "game-log"; "game-log-start" clears the buffer.
+  // The console is the only reader: off its tab the lines only pile up, so a game that
+  // writes a batch every 120 ms does not redraw the whole page with its mod list.
   useEffect(() => {
     let uns: Array<(() => void) | null> = []
-    listenGameLogStart(() => setLiveLines([])).then((u) => uns.push(u))
-    listenGameLog((lines) => setLiveLines((l) => [...l, ...lines].slice(-800))).then((u) => uns.push(u))
+    listenGameLogStart(() => {
+      liveBuffer.current = []
+      if (logsShown.current) setLiveLines([])
+    }).then((u) => uns.push(u))
+    listenGameLog((lines) => {
+      liveBuffer.current = [...liveBuffer.current, ...lines].slice(-800)
+      if (logsShown.current) setLiveLines(liveBuffer.current)
+    }).then((u) => uns.push(u))
     return () => uns.forEach((u) => u && u())
   }, [])
+
+  const consoleShown = modal.open && tab === 'logs'
+  useEffect(() => {
+    logsShown.current = consoleShown
+    if (consoleShown) setLiveLines(liveBuffer.current)
+  }, [consoleShown])
 
   useEffect(() => {
     const b = liveRef.current
@@ -1973,7 +1989,10 @@ export function InstancePage() {
                     )}
                   </pre>
                   <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
-                    <button className="btn sm secondary" style={{ flex: 1 }} onClick={() => setLiveLines([])}>
+                    <button className="btn sm secondary" style={{ flex: 1 }} onClick={() => {
+                      liveBuffer.current = []
+                      setLiveLines([])
+                    }}>
                       <Icon id="i-trash" /> Очистить
                     </button>
                     <button

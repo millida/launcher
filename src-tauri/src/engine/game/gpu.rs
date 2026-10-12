@@ -29,6 +29,41 @@ impl GpuPref {
     }
 }
 
+/// Names of the hardware video cards of this machine. The webview reports only
+/// the card it draws on itself, which on a laptop with two is the weak one,
+/// while the game is sent to the strong one.
+#[cfg(windows)]
+pub fn adapter_names() -> Vec<String> {
+    use windows::Win32::Graphics::Dxgi::{CreateDXGIFactory1, IDXGIFactory1, DXGI_ADAPTER_FLAG_SOFTWARE};
+
+    let mut names = Vec::new();
+    let Ok(factory) = (unsafe { CreateDXGIFactory1::<IDXGIFactory1>() }) else {
+        return names;
+    };
+    for index in 0..16 {
+        let Ok(adapter) = (unsafe { factory.EnumAdapters1(index) }) else {
+            break;
+        };
+        let Ok(desc) = (unsafe { adapter.GetDesc1() }) else {
+            continue;
+        };
+        if desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE.0 as u32 != 0 {
+            continue;
+        }
+        let len = desc.Description.iter().position(|&unit| unit == 0).unwrap_or(desc.Description.len());
+        let name = String::from_utf16_lossy(&desc.Description[..len]).trim().to_string();
+        if !name.is_empty() && !names.contains(&name) {
+            names.push(name);
+        }
+    }
+    names
+}
+
+#[cfg(not(windows))]
+pub fn adapter_names() -> Vec<String> {
+    Vec::new()
+}
+
 /// True where the choice actually changes anything. macOS switches cards on its
 /// own and exposes no per-process control, so the UI says so instead of
 /// pretending the setting works.

@@ -359,9 +359,7 @@ export async function proactiveDoctor(profile: string | null, opts: { busy: () =
   const quick = await runDoctor(profile, 'scan', undefined, { quiet: true })
   const important = quick.counts.red > 0 || quick.rows.some((x) => x.kind === 'outdated' && x.steps.length >= 3) || quick.counts.yellow >= 2
   if (!important || opts.busy()) return false
-  const r = await runDoctor(profile, 'scan')
-  if (opts.busy()) return false
-  await pushMilliAction(r.say, reportAction(r), ['Что не так?', 'Не сейчас'])
+  await pushMilliAction(quick.say, reportAction(quick), ['Что не так?', 'Не сейчас'])
   return true
 }
 
