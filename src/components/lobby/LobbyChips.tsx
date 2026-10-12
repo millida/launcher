@@ -60,7 +60,7 @@ export function LobbyChips({ on }: { on: boolean }) {
 
   return (
     <div className="lobby-chips">
-      {together || searching || roomOpen ? null : (
+      {
         <button className={'lchip lchip-tier' + (row ? '' : ' bait')} data-track="lobby_top" onClick={open}>
           <Icon id="i-trophy" />
           <b>Топ недели</b>
@@ -76,7 +76,7 @@ export function LobbyChips({ on }: { on: boolean }) {
             <span className="lchip-go">Войти в топ</span>
           )}
         </button>
-      )}
+      }
       {full ? null : searching ? (
         <button className="lchip lchip-cancel" data-sound="close" data-track="party_search_cancel" onClick={() => void stopMateSearch()}>
           <Icon id="i-x" />

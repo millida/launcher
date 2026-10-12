@@ -306,6 +306,8 @@ export function PartyOverlay({
   const [menu, setMenu] = useState('')
   const refs = useRef<Record<string, HTMLElement | null>>({})
   const saying = usePartyFlow((s) => s.say)
+  // Хук стоит до раннего выхода: после него число хуков менялось между кадрами, и лобби падало
+  // с «Rendered more hooks» (React #310) — 1152 установки за три часа на 2.0.215.
   const searching = useMateSearch((st) => st.searching)
 
   useEffect(() => {
