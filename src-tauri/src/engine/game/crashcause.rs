@@ -64,6 +64,40 @@ fn with_levels(text: &str) -> Vec<(&str, bool)> {
         .collect()
 }
 
+/// Шум нелицензионного входа: игра пишет это под ERROR при каждом запуске без лицензии
+/// и спокойно играет дальше. Причиной вылета такие строки не бывают — а разбор брал
+/// именно их, потому что они первые под ERROR (около 30 установок за полтора часа
+/// 12.10.2026 ушли в телеметрию с «Realms authentication error» вместо настоящей причины).
+fn is_offline_noise(low: &str) -> bool {
+    const NOISE: [&str; 5] = [
+        "realms authentication error",
+        "realmsserviceexception",
+        "could not retrieve profile key pair",
+        "invalidcredentialsexception",
+        "failed to parse into signedjwt",
+    ];
+    NOISE.iter().any(|m| low.contains(m))
+}
+
+/// Для каждой строки — «это шум входа или продолжение его стека»: метка держится до
+/// следующей строки с заголовком лога.
+fn offline_noise_mask(lines: &[&str]) -> Vec<bool> {
+    let mut on = false;
+    lines
+        .iter()
+        .map(|l| {
+            let t = l.trim_start();
+            let low = t.to_lowercase();
+            if t.starts_with('[') {
+                on = is_offline_noise(&low);
+            } else if is_offline_noise(&low) {
+                on = true;
+            }
+            on
+        })
+        .collect()
+}
+
 /// «at pkg.Class.method(File.java:1)» без модульного префикса Forge
 /// («TRANSFORMER/minecraft@1.20.1/…») и Fabric («knot//…»).
 fn frame_method(line: &str) -> Option<String> {
@@ -332,10 +366,16 @@ pub(crate) fn crash_cause(text: &str) -> String {
     }
 
     // Необработанное исключение потока или первое исключение не под WARN/INFO.
+    let noise = offline_noise_mask(&lines);
     let thrown = lines
         .iter()
         .position(|l| l.trim_start().starts_with("Exception in thread"))
-        .or_else(|| levels.iter().position(|(l, benign)| !benign && is_exception_line(l)));
+        .or_else(|| {
+            levels
+                .iter()
+                .enumerate()
+                .position(|(i, (l, benign))| !benign && !noise.get(i).copied().unwrap_or(false) && is_exception_line(l))
+        });
     if let Some(at) = thrown {
         push(&mut pieces, lines[at]);
         if let Some(root) = root_cause(&lines, at) {
@@ -346,7 +386,15 @@ pub(crate) fn crash_cause(text: &str) -> String {
 
     // Загрузчик написал FATAL/ERROR без исключения.
     let loud = |m: &str| lines.iter().find(|l| l.to_lowercase().contains(m));
-    if let Some(l) = loud("/fatal]").or_else(|| lines.iter().rev().find(|l| l.to_lowercase().contains("/error]"))) {
+    let last_error = || {
+        lines
+            .iter()
+            .enumerate()
+            .rev()
+            .find(|(i, l)| !noise.get(*i).copied().unwrap_or(false) && l.to_lowercase().contains("/error]"))
+            .map(|(_, l)| l)
+    };
+    if let Some(l) = loud("/fatal]").or_else(last_error) {
         push(&mut pieces, l);
         return pieces.join(" | ");
     }
@@ -1104,6 +1152,18 @@ mod tests {
                  java.lang.IllegalArgumentException: bad texture\n\tat net.minecraft.client.X.y(X.java:1)",
                 "java.lang.IllegalArgumentException: bad texture",
                 "WARN с исключением — не причина, причина — то, что под ERROR",
+            ),
+            (
+                "[12:00:01] [Render thread/ERROR]: Couldn't connect to realms
+                 com.mojang.realmsclient.exception.RealmsServiceException: Realms authentication error with message 'x'
+                 \tat com.mojang.realmsclient.client.RealmsClient.execute(RealmsClient.java:1)
+                 Caused by: java.lang.RuntimeException: Failed to parse into SignedJWT
+                 [12:00:02] [Render thread/ERROR]: Failed to retrieve profile key pair
+                 java.io.IOException: Could not retrieve profile key pair
+                 [12:00:09] [Render thread/ERROR]: Unreported exception thrown!
+                 java.lang.NullPointerException: boom in mod\n\tat net.foo.Bar.baz(Bar.java:1)",
+                "java.lang.NullPointerException: boom in mod",
+                "шум нелицензионного входа под ERROR — не причина, причина дальше",
             ),
             (
                 "#\n# A fatal error has been detected by the Java Runtime Environment:\n#\n\
