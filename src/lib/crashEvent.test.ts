@@ -66,3 +66,13 @@ test('длинные поля режутся, старое ядро без kind/
   expect(d.kind).toBeUndefined()
   expect(d.mc).toBeUndefined()
 })
+
+test('game_crash несёт jar нашего мода, чтобы рубильник считал по версии', () => {
+  const d = gameCrashData(
+    { profile: 'p', reason: 'r', tail: '', kind: 'own_mod', modJar: 'millida-mod-fabric-1.20.1-0.2.18.jar' },
+    { version: '1.20.1', loader: null, fabric: true },
+    null,
+  )
+  expect(d.modJar).toBe('millida-mod-fabric-1.20.1-0.2.18.jar')
+  expect(gameCrashData({ profile: 'p', reason: 'r', tail: '' }, null, null).modJar).toBeUndefined()
+})

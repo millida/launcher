@@ -12,7 +12,7 @@ pub fn boost_flags() -> Vec<&'static str> {
 
 /// Bumped whenever `boost_mods` changes: builds that enabled the mode under an
 /// older set get the new mods on their next launch instead of never.
-pub const BOOST_SET_REV: u64 = 2;
+pub const BOOST_SET_REV: u64 = 3;
 
 /// Mods a version had no stable file for are asked about again after this long:
 /// performance mods reach a fresh game version weeks after it ships.
@@ -48,6 +48,8 @@ const FABRIC_SET: &[Slot] = &[
     one(&["modernfix"]),
     one(&["dynamic-fps"]),
     clashing(&["moreculling"]),
+    // Быстрее открывается список серверов и вход: без лишних DNS-запросов (ресёрч 11.10.2026).
+    one(&["fast-ip-ping"]),
 ];
 
 const FORGE_SET: &[Slot] = &[
@@ -57,6 +59,16 @@ const FORGE_SET: &[Slot] = &[
     clashing(&["immediatelyfast"]),
     one(&["modernfix"]),
     one(&["dynamic-fps"]),
+    one(&["fast-ip-ping"]),
+];
+
+/// 1.12.2 — по-прежнему одна из самых играемых версий в больших сборках, а
+/// Sodium-семейства на ней нет: VintageFix (загрузка и память) и Nothirium
+/// (рендер чанков, с OptiFine несовместим).
+const FORGE_1122_SET: &[Slot] = &[
+    one(&["vintagefix"]),
+    Slot { install: &["nothirium"], counts: &["nothirium", "vintagium", "celeritas"], optifine_clash: true },
+    one(&["entityculling"]),
 ];
 
 const NEOFORGE_SET: &[Slot] = &[
@@ -66,6 +78,7 @@ const NEOFORGE_SET: &[Slot] = &[
     clashing(&["immediatelyfast"]),
     one(&["modernfix"]),
     one(&["dynamic-fps"]),
+    one(&["fast-ip-ping"]),
 ];
 
 /// Forge before 1.16 has none of the set: Embeddium, FerriteCore and the rest
@@ -87,6 +100,7 @@ pub fn boost_mods(loader: &str, game_version: &str) -> &'static [Slot] {
     match loader {
         "fabric" | "quilt" => FABRIC_SET,
         "forge" if forge_set_exists(game_version) => FORGE_SET,
+        "forge" if game_version == "1.12.2" => FORGE_1122_SET,
         "neoforge" => NEOFORGE_SET,
         _ => &[],
     }
@@ -300,9 +314,9 @@ fn write_options(profile: &str, opts: &Options) -> Result<(), String> {
 
 /// Правит только известные ключи и запоминает их прежние значения: выключение
 /// режима возвращает ровно их, а не затирает всё, что игрок настроил после.
-fn apply_tuning(rows: &mut Vec<(String, String)>) -> serde_json::Map<String, Value> {
+fn apply_tuning(rows: &mut Vec<(String, String)>, table: &[(String, String)]) -> serde_json::Map<String, Value> {
     let mut previous = serde_json::Map::new();
-    for (key, val) in VIDEO_TUNING {
+    for (key, val) in table {
         match rows.iter_mut().find(|(k, _)| k == key) {
             Some(row) => {
                 previous.insert((*key).to_string(), Value::String(row.1.clone()));
@@ -331,9 +345,41 @@ fn undo_tuning(rows: &mut Vec<(String, String)>, previous: &Value) {
     }
 }
 
-fn tune_video(profile: &str) -> Result<serde_json::Map<String, Value>, String> {
+/// Ключи options.txt, которые лаунчер может подобрать под железо игрока, и
+/// форма их значений. Набор приходит из интерфейса (src/lib/perfTier.ts), поэтому
+/// всё вне списка отбрасывается: настройки графики — да, пакеты ресурсов, клавиши
+/// и сервера — нет.
+const VIDEO_KEYS: &[&str] = &[
+    "graphicsMode", "fancyGraphics", "graphicsPreset", "renderDistance", "simulationDistance",
+    "entityDistanceScaling", "entityShadows", "particles", "ao", "mipmapLevels", "biomeBlendRadius",
+    "renderClouds", "cloudRange", "enableVsync", "maxFps", "bobView", "screenEffectScale", "guiScale",
+    "textureFiltering", "maxAnisotropyBit", "cutoutLeaves", "weatherRadius", "improvedTransparency",
+    "prioritizeChunkUpdates",
+];
+
+fn video_value_ok(v: &str) -> bool {
+    let number = !v.is_empty() && v.len() <= 8 && v.trim_start_matches('-').chars().all(|c| c.is_ascii_digit() || c == '.');
+    let word = matches!(v, "true" | "false");
+    let quoted = v.len() >= 3
+        && v.len() <= 18
+        && v.starts_with('"')
+        && v.ends_with('"')
+        && v[1..v.len() - 1].chars().all(|c| c.is_ascii_lowercase() || c == '_');
+    number || word || quoted
+}
+
+/// Набор под железо из интерфейса, если он целиком годится; иначе — общий.
+pub fn video_table(custom: Option<Vec<(String, String)>>) -> Vec<(String, String)> {
+    let fallback = || -> Vec<(String, String)> { VIDEO_TUNING.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect() };
+    match custom {
+        Some(rows) if !rows.is_empty() && rows.len() <= 40 && rows.iter().all(|(k, v)| VIDEO_KEYS.contains(&k.as_str()) && video_value_ok(v)) => rows,
+        _ => fallback(),
+    }
+}
+
+fn tune_video(profile: &str, table: &[(String, String)]) -> Result<serde_json::Map<String, Value>, String> {
     let mut opts = read_options(profile)?;
-    let previous = apply_tuning(&mut opts.rows);
+    let previous = apply_tuning(&mut opts.rows, table);
     write_options(profile, &opts)?;
     Ok(previous)
 }
@@ -355,7 +401,7 @@ fn patch(profile: &str, entries: Vec<(&str, Value)>) {
     merge_settings(profile, m);
 }
 
-pub async fn set_fps_boost(app: AppHandle, profile: String, on: bool, keep_options: bool) -> Result<FpsBoostState, String> {
+pub async fn set_fps_boost(app: AppHandle, profile: String, on: bool, keep_options: bool, video: Option<Vec<(String, String)>>) -> Result<FpsBoostState, String> {
     if !load_profiles().iter().any(|p| p.name == profile) {
         return Err("Сборка не найдена".into());
     }
@@ -363,7 +409,7 @@ pub async fn set_fps_boost(app: AppHandle, profile: String, on: bool, keep_optio
         return Err("Буст FPS этой сборке не нужен: графику, Java и настройки для неё подобрал автор".into());
     }
     if on {
-        enable(&app, &profile, keep_options).await
+        enable(&app, &profile, keep_options, video_table(video)).await
     } else {
         disable(&profile)
     }
@@ -379,7 +425,7 @@ fn slot_filled(slot: &Slot, known: &[String], canon: &std::collections::HashMap<
 
 /// `keep_options`: an automatic caller (version builds, presets) only fills in
 /// an options.txt the game has not written yet; the player's own is theirs.
-async fn enable(app: &AppHandle, profile: &str, keep_options: bool) -> Result<FpsBoostState, String> {
+async fn enable(app: &AppHandle, profile: &str, keep_options: bool, video_rows: Vec<(String, String)>) -> Result<FpsBoostState, String> {
     let loader = profile_loader(profile);
     let version = profile_version(profile);
     let wanted = boost_mods(&loader, &version);
@@ -451,7 +497,7 @@ async fn enable(app: &AppHandle, profile: &str, keep_options: bool) -> Result<Fp
     } else if keep_options && options_path(profile).exists() {
         Value::Null
     } else {
-        Value::Object(tune_video(profile)?)
+        Value::Object(tune_video(profile, &video_rows)?)
     };
     patch(
         profile,
@@ -492,6 +538,20 @@ fn disable(profile: &str) -> Result<FpsBoostState, String> {
 mod tests {
     use super::*;
 
+    /// Набор из интерфейса проходит, только если он целиком из графических
+    /// ключей с простыми значениями; иначе ставится общий.
+    #[test]
+    fn a_hardware_video_set_is_taken_only_whole_and_clean() {
+        let row = |k: &str, v: &str| (k.to_string(), v.to_string());
+        let good = vec![row("renderDistance", "12"), row("graphicsPreset", "\"fancy\""), row("ao", "true"), row("entityDistanceScaling", "0.75")];
+        assert_eq!(video_table(Some(good.clone())), good, "набор под железо");
+        let foreign = vec![row("renderDistance", "12"), row("resourcePacks", "[\"evil.zip\"]")];
+        assert_eq!(video_table(Some(foreign)).len(), VIDEO_TUNING.len(), "пакеты ресурсов и прочее — не графика");
+        let weird = vec![row("renderDistance", "12; rm -rf")];
+        assert_eq!(video_table(Some(weird)).len(), VIDEO_TUNING.len(), "значение не число, не слово и не строка в кавычках");
+        assert_eq!(video_table(None).len(), VIDEO_TUNING.len(), "без набора — общий");
+    }
+
     /// Флаги режима проходят тот же фильтр, что и пользовательские: иначе часть
     /// профиля молча отсеялась бы на запуске.
     #[test]
@@ -517,7 +577,7 @@ mod tests {
         ];
         let before = rows.clone();
 
-        let previous = apply_tuning(&mut rows);
+        let previous = apply_tuning(&mut rows, &video_table(None));
         let get = |rs: &Vec<(String, String)>, k: &str| rs.iter().find(|(a, _)| a == k).map(|(_, v)| v.clone());
         assert_eq!(get(&rows, "renderDistance").as_deref(), Some("8"), "дальность прорисовки не снизилась — буста нет");
         assert_eq!(get(&rows, "particles").as_deref(), Some("2"), "новый ключ не добавился");
@@ -545,7 +605,7 @@ mod tests {
         ];
         for (bytes, why) in cases {
             let mut opts = decode_options(bytes);
-            let previous = apply_tuning(&mut opts.rows);
+            let previous = apply_tuning(&mut opts.rows, &video_table(None));
             let tuned = encode_options(&opts);
             for line in [&b"lang:"[..], &b"key_"[..]] {
                 assert!(tuned.windows(line.len()).any(|w| w == line), "{why}: the player's lines must survive tuning");
@@ -565,7 +625,7 @@ mod tests {
     fn legacy_forge_gets_no_mod_set() {
         let cases: [(&str, &str, bool, &str); 6] = [
             ("forge", "1.7.10", false, "OneBlock's version: no Embeddium or FerriteCore exists, only a list of skipped mods"),
-            ("forge", "1.12.2", false, "the set starts at 1.16.5"),
+            ("forge", "1.12.2", true, "VintageFix and Nothirium: the old big-pack version gets its own set"),
             ("forge", "1.16.5", true, "first version with Embeddium and friends"),
             ("forge", "1.20.1", true, "the common modded version"),
             ("fabric", "1.20.1", true, "Fabric keeps its set"),
@@ -614,18 +674,19 @@ mod tests {
             vec!["modernfix"],
             vec!["dynamic-fps"],
             vec!["moreculling"],
+            vec!["fast-ip-ping"],
         ];
         let cases: [(&str, Vec<Vec<&str>>, &str); 5] = [
             ("fabric", fabric.clone(), "Fabric: Sodium and the Fabulously Optimized core"),
             ("quilt", fabric, "Quilt loads Fabric mods, so it gets the same set"),
             (
                 "forge",
-                vec![vec!["embeddium"], vec!["ferrite-core"], vec!["entityculling"], vec!["immediatelyfast"], vec!["modernfix"], vec!["dynamic-fps"]],
+                vec![vec!["embeddium"], vec!["ferrite-core"], vec!["entityculling"], vec!["immediatelyfast"], vec!["modernfix"], vec!["dynamic-fps"], vec!["fast-ip-ping"]],
                 "Forge: Sodium does not load, Embeddium is the port",
             ),
             (
                 "neoforge",
-                vec![vec!["sodium", "embeddium"], vec!["ferrite-core"], vec!["entityculling"], vec!["immediatelyfast"], vec!["modernfix"], vec!["dynamic-fps"]],
+                vec![vec!["sodium", "embeddium"], vec!["ferrite-core"], vec!["entityculling"], vec!["immediatelyfast"], vec!["modernfix"], vec!["dynamic-fps"], vec!["fast-ip-ping"]],
                 "NeoForge: official Sodium where it exists (1.21.1+), Embeddium before it",
             ),
             ("vanilla", vec![], "vanilla cannot load mods, only JVM flags and options apply"),
@@ -633,7 +694,7 @@ mod tests {
         for (loader, want, why) in cases {
             assert_eq!(installs(loader), want, "boost set for {loader} changed without a pin update: {why}");
         }
-        assert_eq!(BOOST_SET_REV, 2, "the set above is revision 2; a new set needs a new revision");
+        assert_eq!(BOOST_SET_REV, 3, "the set above is revision 3; a new set needs a new revision");
     }
 
     #[test]

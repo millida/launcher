@@ -151,6 +151,8 @@ export interface CrashInfo {
   /// Первая осмысленная строка исключения (≤300), пути и ник уже вычищены ядром.
   cause?: string
   logFile?: string
+  /// Jar нашего мода, с которым шла игра («millida-mod-fabric-1.20.1-0.2.18.jar»).
+  modJar?: string
 }
 export interface PackAccessLost {
   profile: string

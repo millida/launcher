@@ -1,0 +1,112 @@
+/* ============================================================
+   Тир-лист — главный топ лаунчера (11.10.2026). Режимы рядом
+   предметов, пьедестал трёх лучших, лента свежих тестов,
+   карточка игрока. Рамки — общий слой «Слои рамки» (12-pixel.css).
+   ============================================================ */
+
+.tl { display: flex; flex-direction: column; gap: 12px; }
+
+/* ---------- Режимы ---------- */
+.tl-kits { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding: 2px 2px 4px; }
+.tl-kits::-webkit-scrollbar { display: none; }
+.tl-kit {
+  flex: 0 0 auto; width: 57px; display: flex; flex-direction: column; align-items: center; gap: 5px;
+  padding: 0; background: none; color: var(--m-fg-muted); cursor: pointer;
+}
+.tl-kit-art {
+  position: relative; display: grid; place-items: center; width: 48px; height: 48px;
+  background-color: var(--m-surface); --px-n: 5px; clip-path: var(--px-5);
+  transition: background-color var(--m-t-fast), transform 90ms var(--m-ease-smooth);
+}
+.tl-kit-art svg { width: 26px; height: 26px; color: var(--m-rarity-legendary); }
+.tl-kit-ic { image-rendering: pixelated; display: block; flex: none; }
+.tl-kit b { font: 800 11px/1 var(--m-font); white-space: nowrap; max-width: 57px; overflow: hidden; text-overflow: ellipsis; }
+.tl-kit.on { color: var(--m-fg); }
+.tl-kit.on .tl-kit-art { background-color: color-mix(in srgb, var(--tb-c) 34%, var(--m-surface)); box-shadow: inset 0 -4px 0 color-mix(in srgb, var(--tb-c) 70%, #000); }
+@media (hover: hover) and (pointer: fine) { .tl-kit:hover .tl-kit-art { transform: translateY(-2px); } }
+.tl-kit-live { position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; background: #5ec64d; animation: tl-pulse 1.4s steps(2) infinite; }
+@keyframes tl-pulse { 50% { opacity: 0.35; } }
+
+/* ---------- Панель: период и поиск ---------- */
+.tl-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 40px; }
+.tl-bar-title { font: 900 20px/1 var(--m-font); color: var(--m-fg); }
+#s-top .tl-periods .seg { height: 38px; padding: 0 16px; font-size: 14px; }
+#s-top .tl-periods .seg.on { color: var(--tb-c2); }
+.tl-search {
+  display: flex; align-items: center; gap: 8px; width: 230px; height: 38px; padding: 0 12px;
+  background-color: var(--m-surface); --px-n: 5px; clip-path: var(--px-5); color: var(--m-fg-subtle);
+}
+.tl-search svg { width: 16px; height: 16px; flex: none; }
+.tl-search input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: none; font: 700 14px/1 var(--m-font); color: var(--m-fg); }
+.tl-search input::placeholder { color: var(--m-fg-subtle); }
+.tl-search.none input::placeholder { color: var(--m-danger, #ff6b5e); }
+
+/* ---------- Лента «Только что» ---------- */
+.tl-recent { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.tl-recent-cap { flex: none; display: inline-flex; align-items: center; gap: 6px; font: 800 12px/1 var(--m-font); color: var(--m-fg-subtle); text-transform: uppercase; letter-spacing: .05em; }
+.tl-dot { width: 8px; height: 8px; background: #5ec64d; animation: tl-pulse 1.4s steps(2) infinite; }
+.tl-recent-row {
+  display: flex; gap: 6px; min-width: 0; overflow: hidden;
+  mask-image: linear-gradient(90deg, #000 85%, transparent);
+}
+.tl-rc {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 9px 0 5px;
+  background-color: var(--m-surface); --px-n: 4px; clip-path: var(--px-4);
+}
+.tl-rc img:first-child { width: 22px; height: 22px; }
+.tl-rc b { font: 800 13px/1 var(--m-font); color: var(--m-fg); }
+.tl-rc em { font: 700 11px/1 var(--m-font); font-style: normal; color: var(--m-fg-subtle); }
+.tl-rc .tr-badge { height: 20px; min-width: 34px; font-size: 12px; }
+
+/* ---------- Карточка игрока ---------- */
+.tl-card {
+  position: relative; display: grid; grid-template-columns: 110px minmax(0, 1fr) auto; align-items: center; gap: 4px 18px;
+  min-height: 112px; padding: 10px 18px 10px 8px;
+  background-color: color-mix(in srgb, var(--tb-c) 13%, var(--m-surface)); --px-n: 10px; clip-path: var(--px-10);
+}
+.tl-card-body { position: relative; z-index: 1; grid-row: 1 / 3; align-self: end; width: 110px; height: 132px; margin: -20px 0 -10px; object-fit: contain; object-position: bottom; image-rendering: pixelated; filter: drop-shadow(0 6px 0 rgba(0, 0, 0, 0.3)); }
+.tl-card-head { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.tl-card-cap { font: 800 12px/1 var(--m-font); color: var(--tb-c2); text-transform: uppercase; letter-spacing: .06em; }
+.tl-card-nick { font: 900 26px/1 var(--m-font); color: var(--m-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-card-meta { font: 700 13px/1.2 var(--m-font); color: var(--m-fg-muted); }
+.tl-card-go { align-self: flex-start; margin-top: 4px; }
+.tl-card-kits { position: relative; z-index: 1; display: grid; grid-template-columns: repeat(7, auto); gap: 6px 10px; justify-content: end; }
+.tl-ck { display: inline-flex; align-items: center; gap: 4px; }
+.tl-ck.empty { opacity: 0.38; }
+.tl-ck i { width: 34px; text-align: center; font: 900 13px/1 var(--m-font); font-style: normal; color: var(--m-fg-subtle); }
+.tl-ck .tr-badge { height: 22px; min-width: 36px; font-size: 12px; }
+.tl-card-x { position: absolute; top: 8px; right: 8px; display: grid; place-items: center; width: 28px; height: 28px; background: rgba(0, 0, 0, 0.25); color: var(--m-fg-muted); cursor: pointer; --px-n: 4px; clip-path: var(--px-4); }
+.tl-card-x svg { width: 14px; height: 14px; }
+@media (max-width: 1180px) { .tl-card { grid-template-columns: 96px minmax(0, 1fr); } .tl-card-kits { grid-column: 2; justify-content: start; grid-template-columns: repeat(7, auto); } }
+
+/* ---------- Пьедестал ---------- */
+.tl-podium { display: grid; grid-template-columns: 1fr 1.15fr 1fr; align-items: end; gap: 10px; padding-top: 8px; }
+.tl-podium.skel { height: 260px; }
+.tl-pod { --pc: #9aa7b4; position: relative; display: flex; flex-direction: column; align-items: center; min-width: 0; animation: tl-rise 360ms var(--m-ease-smooth) both; animation-delay: calc(var(--slot) * 70ms); }
+.tl-pod.p1 { --pc: #ffcf3f; }
+.tl-pod.p2 { --pc: #d7e1ea; }
+.tl-pod.p3 { --pc: #e09a5a; }
+.tl-pod-body { position: relative; z-index: 1; height: 118px; width: auto; margin-bottom: -10px; image-rendering: pixelated; filter: drop-shadow(0 8px 0 rgba(0, 0, 0, 0.35)); }
+.tl-pod.p1 .tl-pod-body { height: 140px; }
+.tl-pod-plate {
+  align-self: stretch; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 10px 12px;
+  background-color: color-mix(in srgb, var(--pc) 16%, var(--m-surface)); --px-n: 10px; clip-path: var(--px-10);
+  box-shadow: inset 0 4px 0 color-mix(in srgb, var(--pc) 70%, transparent);
+}
+.tl-pod.p1 .tl-pod-plate { padding-top: 18px; padding-bottom: 16px; }
+.tl-pod-place { font: 900 30px/1 var(--m-font); font-style: normal; color: var(--pc); text-shadow: 0 3px 0 rgba(0, 0, 0, 0.4); }
+.tl-pod.p1 .tl-pod-place { font-size: 38px; }
+.tl-pod-nick { max-width: 100%; font: 900 17px/1.1 var(--m-font); color: var(--m-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-pod-meta { display: inline-flex; align-items: center; gap: 6px; }
+.tl-pod-meta em { font: 800 14px/1 var(--m-font); font-style: normal; color: var(--tb-c2); }
+.tl-pod.mine .tl-pod-plate { box-shadow: inset 0 4px 0 var(--tb-c), inset 0 0 0 2px color-mix(in srgb, var(--tb-c) 60%, transparent); }
+@keyframes tl-rise { 0% { opacity: 0; transform: translateY(14px); } 100% { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .tl-pod, .tl-kit-live, .tl-dot { animation: none; } }
+
+/* ---------- Строки ---------- */
+.tl-row-kits { display: flex; gap: 8px; margin-left: auto; }
+.tl-row .tr-badge.big { min-width: 60px; height: 34px; font-size: 18px; margin-left: auto; }
+.tl-row-val { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; min-width: 112px; }
+.tl-row-val i { font: 700 12px/1 var(--m-font); font-style: normal; color: var(--m-fg-subtle); }
+#s-top .tl-row .tb-val { justify-content: flex-end; }
+@media (max-width: 1180px) { .tl-row-kits .tl-ck:nth-child(n + 4) { display: none; } }
