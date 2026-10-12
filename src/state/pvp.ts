@@ -122,7 +122,7 @@ export const usePvpQueue = create<QueueState>((set, get) => ({
       await api('/tiers/queue', { method: 'POST', body })
     } catch (e) {
       // Сервер ещё без очереди из лаунчера — старый путь: заявка и вход в лобби.
-      return /\b(404|405|501)\b/.test(String(e)) ? 'unsupported' : 'error'
+      return /\b(404|405|501)\b|cannot post|not found/i.test(String(e)) ? 'unsupported' : 'error'
     }
     stopTimers()
     set({ phase: 'queued', kit, ranked, since: Date.now(), waiting: null, opponent: null, joinBy: null })
