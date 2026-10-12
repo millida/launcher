@@ -3,6 +3,7 @@ use serde_json::Value;
 use std::path::{Path, PathBuf};
 
 const MANIFEST_URL: &str = "https://cdn.millida.net/mod/variants.json";
+const BLOCKED_URL: &str = "https://api.millida.net/v2/launcher/mod/blocked";
 const MOD_BASE: &str = "https://cdn.millida.net/mod";
 
 /// The jar comes only from our CDN folder: a `baseUrl` in the manifest counts
@@ -32,6 +33,8 @@ pub struct MillidaModState {
     pub enabled: bool,
     /// Контрольная сумма подходящего варианта из каталога.
     pub sha256: String,
+    /// Id варианта из каталога («fabric-1.20.1»): по нему и версии работает рубильник.
+    pub variant: String,
 }
 
 /// Version ranges in the manifest are closed on the left and open on the right,
@@ -218,6 +221,7 @@ pub async fn millida_mod_state(profile: String) -> Result<MillidaModState, Strin
         Some(variant) => {
             state.available = variant["artifact"].as_str().unwrap_or("").replace("{version}", &version);
             state.sha256 = variant["sha256"].as_str().unwrap_or("").to_string();
+            state.variant = variant["id"].as_str().unwrap_or("").to_string();
             state.version = version;
         }
         None => {
@@ -822,6 +826,28 @@ fn keep_installed(profile: &str, dir: &Path, nick: &str, licensed: bool) -> Opti
     Some(jar)
 }
 
+/// Рубильник: сервер собирает блок-лист из всплесков вылетов по вине мода.
+/// Пара (id варианта, версия каталога) в списке - мод в этот запуск не ставим.
+/// Без сети берётся копия на диске, без копии - не блокируем ничего.
+fn blocked_by(list: &Value, variant: &str, version: &str) -> bool {
+    if variant.is_empty() || version.is_empty() || list["version"].as_str() != Some(version) {
+        return false;
+    }
+    list["variants"].as_array().is_some_and(|v| v.iter().any(|x| x.as_str() == Some(variant)))
+}
+
+async fn kill_switch_list() -> Option<Value> {
+    let copy = data_dir().join("millida-mod-blocked.json");
+    let fresh = tokio::time::timeout(std::time::Duration::from_secs(2), get_json(BLOCKED_URL)).await;
+    match fresh {
+        Ok(Ok(v)) if v["variants"].is_array() => {
+            write_json_quiet(&copy, &v);
+            Some(v)
+        }
+        _ => std::fs::read_to_string(&copy).ok().and_then(|t| serde_json::from_str(&t).ok()),
+    }
+}
+
 pub async fn ensure_millida_mod(
     app: &AppHandle,
     profile: &str,
@@ -844,6 +870,15 @@ pub async fn ensure_millida_mod(
         // Под эту связку варианта нет, а jar от прежней версии сборки мог
         // остаться: загрузчик прочтёт его и упадёт.
         remove_mod_from(profile);
+        return Ok(None);
+    }
+    // Рубильник: сломанный выпуск не должен дойти до игры. Файл убираем, но
+    // карантина нет - со следующей версией в каталоге мод поставится сам.
+    if kill_switch_list().await.is_some_and(|l| blocked_by(&l, &state.variant, &state.version)) {
+        remove_mod_from(profile);
+        write_settings(&dir, licensed)?;
+        place_local_skin(&dir, nick);
+        drop_launcher_csl(&mods);
         return Ok(None);
     }
     // Мод - часть сборки, а не дополнение к ней: на нём держатся скины, плащи и
@@ -1242,6 +1277,17 @@ mod tests {
         for (pack, opted, before, enabled, want, why) in cases {
             assert_eq!(own_mod_action(pack, opted, before, enabled), want, "{}", why);
         }
+    }
+
+    #[test]
+    fn kill_switch_blocks_only_the_listed_variant_of_that_version() {
+        let list = json!({"version": "0.2.12", "variants": ["fabric-1.20.1"], "updatedAt": "x"});
+        assert!(blocked_by(&list, "fabric-1.20.1", "0.2.12"));
+        assert!(!blocked_by(&list, "fabric-1.21.1", "0.2.12"), "другой вариант проходит");
+        assert!(!blocked_by(&list, "fabric-1.20.1", "0.2.13"), "новая версия проходит сама");
+        assert!(!blocked_by(&json!({"version": "", "variants": []}), "fabric-1.20.1", "0.2.12"));
+        assert!(!blocked_by(&json!({}), "fabric-1.20.1", "0.2.12"), "пустой ответ не блокирует");
+        assert!(!blocked_by(&list, "", "0.2.12"));
     }
 
     #[test]

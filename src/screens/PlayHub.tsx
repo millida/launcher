@@ -617,6 +617,14 @@ export function PlayHub({ on }: { on?: boolean }) {
   const hubTarget = useLobby((s) => s.hubTarget)
   useEffect(() => {
     if (!hubTarget) return
+    // PvP-арена: из лобби, топа и баннера Millida SMP (11.10.2026).
+    if (hubTarget.pvp) {
+      setAll(false)
+      setPvpOpen(true)
+      track('pvp_client_open', { source: 'target' })
+      useLobby.setState({ hubTarget: null })
+      return
+    }
     if (hubTarget.mode) {
       setAll(false)
       setOpenCat(hubTarget.mode)
@@ -774,7 +782,7 @@ export function PlayHub({ on }: { on?: boolean }) {
           <ModeTile
             cat="PVP"
             kind="pvp_client"
-            title="PvP-клиент"
+            title="PvP-арена"
             online={0}
             index={ownSlides.length}
             on={!!current && current.kind === 'build' && current.name.startsWith(pvpBuildName(''))}

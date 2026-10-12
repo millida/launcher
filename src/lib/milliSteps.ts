@@ -207,7 +207,7 @@ registerStep('fpsboost', {
     const before = await c.fpsBoostState(profile).catch(() => null)
     if (before && before.applicable === false) return { ok: false, detail: 'автор сборки уже настроил' }
     if (before?.enabled === on) return { ok: true, detail: 'уже так' }
-    const st = await c.setFpsBoost(profile, on)
+    const st = await c.setFpsBoost(profile, on, false, on ? await (await import('./perfTier')).hardwareVideo() : undefined)
     return {
       ok: st.enabled === on,
       detail: on ? '+' + st.mods.length + ' модов скорости' : 'выкл',

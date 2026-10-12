@@ -665,6 +665,20 @@ export const loadTelegramReward = () => api<TelegramReward>('/rubies/telegram')
 export const claimTelegramReward = () =>
   api<TelegramReward & { granted: boolean; balance: number | null }>('/rubies/telegram/claim', { method: 'POST' })
 
+/** Задание «Вступи в Discord Millida» (11.10.2026): пара к подписке на Telegram. */
+export interface DiscordReward {
+  available: boolean
+  amount: number
+  claimed: boolean
+  linked: boolean
+  inviteUrl: string
+}
+export const loadDiscordReward = () => api<DiscordReward>('/rubies/discord')
+export const claimDiscordReward = () =>
+  api<DiscordReward & { granted: boolean; balance: number | null }>('/rubies/discord/claim', { method: 'POST' })
+/** Ссылка привязки Discord к аккаунту Millida (OAuth на сайте). */
+export const discordLinkUrl = () => api<{ url: string }>('/users/me/discord/link-url')
+
 export const loadPackQuests = () => api<{ quests: PackQuest[] }>('/rubies/quests')
 export const claimPackQuest = (code: string) =>
   api<{ quest: PackQuest; item: ItemRef | null }>(

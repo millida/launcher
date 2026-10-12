@@ -81,8 +81,9 @@ pub async fn set_fps_boost(
     profile: String,
     on: bool,
     keep_options: Option<bool>,
+    video: Option<Vec<(String, String)>>,
 ) -> Result<engine::FpsBoostState, String> {
-    engine::set_fps_boost(app, profile, on, keep_options.unwrap_or(false)).await
+    engine::set_fps_boost(app, profile, on, keep_options.unwrap_or(false), video).await
 }
 
 #[tauri::command(async)]

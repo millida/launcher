@@ -4,6 +4,7 @@ import { TopbarPortal } from '../components/TopbarPortal'
 import { logoutToLogin } from '../lib/session'
 import { Packs } from '../components/shop/Packs'
 import { PlusChip } from '../components/shop/PlusBanner'
+import { Shard } from '../components/shop/parts'
 import { ShopFeed, ShopOverlays, useShop } from '../components/shop/ShopKit'
 import '../styles/pixel/shop-juice.css'
 import '../styles/pixel/sets.css'
@@ -34,6 +35,11 @@ export function Rubies({ on }: { on: boolean }) {
             <span className={'sh-bal' + (bump ? ' bump' : '')} data-cur="rubies" data-tip="Рубины">
               <Ruby size={20} />
               <b>{day ? balance.toLocaleString('ru-RU') : '—'}</b>
+            </span>
+            {/* Осколки — рядом с рубинами, а не только в блоке «За осколки» (владелец 11.10.2026). */}
+            <span className="sh-bal" data-cur="shards" data-tip="Осколки">
+              <Shard size={20} />
+              <b>{day ? (s.workshop?.shards ?? day.shards ?? 0).toLocaleString('ru-RU') : '—'}</b>
             </span>
             <button className="btn sm primary sh-add" aria-label="Пополнить" data-track="top_up" onClick={toPacks}>
               <Icon id="i-plus" />

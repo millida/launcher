@@ -1,0 +1,101 @@
+/* ============================================================
+   PvP-арена (11.10.2026): карточки китов как в Dawn — в покое
+   серые, выбранная в цвете и приподнята. Свой арт: рендеры
+   героев сайта, цвет кита, лента с предметом и названием.
+   ============================================================ */
+
+.ar { display: flex; flex-direction: column; gap: 14px; margin-bottom: 26px; }
+.ar-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.ar-head-t { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ar-head h1 { margin: 0; font: 900 30px/1 var(--m-font); color: var(--m-fg); }
+.ar-sub { font: 700 13px/1.2 var(--m-font); color: var(--m-fg-muted); }
+
+/* ---------- Карусель карточек ---------- */
+.ar-cards {
+  display: flex; gap: 10px; overflow-x: auto; padding: 12px 4px 10px; margin: -6px -4px 0;
+  scroll-snap-type: x proximity; scrollbar-width: thin;
+}
+.ar-card {
+  position: relative; flex: 0 0 168px; height: 262px; padding: 0; overflow: hidden; cursor: pointer;
+  scroll-snap-align: start; background: none; color: #fff;
+  --px-n: 10px; clip-path: var(--px-10);
+  transition: transform 160ms var(--m-ease-smooth), filter 160ms var(--m-ease-smooth);
+  filter: grayscale(1) brightness(0.72);
+}
+.ar-card-bg {
+  position: absolute; inset: 0;
+  background-color: var(--kc);
+  background-image: url('/mode-art/PVP-bg.png'); background-size: 96px 96px; background-blend-mode: soft-light;
+  image-rendering: pixelated;
+}
+.ar-card-bg::after { content: ''; position: absolute; inset: auto 0 0; height: 46%; background: rgba(0, 0, 0, 0.32); }
+.ar-card-rig {
+  position: absolute; left: 50%; bottom: 40px; height: 196px; width: auto; max-width: 160px; object-fit: contain;
+  transform: translateX(-50%); transform-origin: 50% 100%;
+  filter: drop-shadow(0 8px 0 rgba(0, 0, 0, 0.35));
+}
+.ar-card-ribbon {
+  position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 8px; height: 46px; padding: 0 12px 2px;
+  background: rgba(10, 12, 14, 0.82); box-shadow: inset 0 3px 0 var(--kc);
+}
+.ar-card-ribbon img { image-rendering: pixelated; flex: none; }
+.ar-card-ribbon b { font: 900 16px/1 var(--m-font); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.5); }
+.ar-card-tier { position: absolute; top: 10px; right: 10px; z-index: 2; }
+.ar-card-live {
+  position: absolute; top: 10px; left: 10px; z-index: 2; display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 7px;
+  font: 800 12px/1 var(--m-font); background: rgba(0, 0, 0, 0.55); --px-n: 3px; clip-path: var(--px-4);
+}
+.ar-card-live i { width: 7px; height: 7px; background: #5ec64d; animation: ar-blink 1.4s steps(2) infinite; }
+@media (hover: hover) and (pointer: fine) {
+  .ar-card:hover { filter: none; transform: translateY(-4px); }
+}
+.ar-card.on { filter: none; transform: translateY(-8px); --px-ol: #ffd23f; --px-ol-w: 3px; }
+.ar-card.on .ar-card-rig { animation: ar-bob 2.4s var(--m-ease-smooth) infinite; }
+.ar-card:active { transform: translateY(-6px) scale(0.98); }
+@keyframes ar-bob { 0%, 100% { transform: translateX(-50%) translateY(0); } 50% { transform: translateX(-50%) translateY(-6px); } }
+@keyframes ar-blink { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .ar-card.on .ar-card-rig, .ar-card-live i { animation: none; } }
+
+/* ---------- Панель выбранного кита ---------- */
+.ar-panel {
+  display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto; align-items: center; gap: 18px;
+  padding: 16px 18px; background-color: color-mix(in srgb, var(--kc) 22%, var(--m-surface));
+  --px-n: 10px; clip-path: var(--px-10);
+}
+.ar-me { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.ar-me-cap { font: 800 12px/1 var(--m-font); text-transform: uppercase; letter-spacing: .06em; color: color-mix(in srgb, var(--kc) 40%, #fff); }
+.ar-me-tier { display: inline-flex; align-items: center; gap: 10px; }
+.ar-me-tier i { font: 700 13px/1 var(--m-font); font-style: normal; color: var(--m-fg-muted); }
+.ar-me-none { font: 900 24px/1 var(--m-font); color: var(--m-fg); }
+.ar-me-nums { font: 700 14px/1.3 var(--m-font); color: var(--m-fg-muted); }
+.ar-me-nums b { color: var(--m-fg); }
+.ar-me-live { font: 700 12px/1 var(--m-font); color: var(--m-fg-subtle); }
+.ar-top { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ar-top li { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; background: rgba(0, 0, 0, 0.22); --px-n: 4px; clip-path: var(--px-4); }
+.ar-top li i { width: 16px; font: 900 14px/1 var(--m-font); font-style: normal; color: #ffcf3f; }
+.ar-top li:nth-child(2) i { color: #d7e1ea; }
+.ar-top li:nth-child(3) i { color: #e09a5a; }
+.ar-top-name { flex: 1; min-width: 0; font: 800 14px/1 var(--m-font); color: var(--m-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ar-top .tr-badge { height: 22px; min-width: 36px; font-size: 12px; }
+.ar-top-empty { font: 700 13px/1 var(--m-font); color: var(--m-fg-subtle); }
+:root .ar-panel .ar-go { min-width: 220px; height: 72px; gap: 12px; font-size: 26px; }
+:root .ar-panel .ar-go svg { width: 26px; height: 26px; }
+.ar-go > span { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 4px; line-height: 1; }
+.ar-go em { font: 800 13px/1 var(--m-font); font-style: normal; opacity: 0.85; }
+@media (max-width: 1100px) { .ar-panel { grid-template-columns: minmax(0, 1fr) auto; } .ar-top { display: none; } }
+
+/* ---------- Статус на сервере: очередь, бой, лобби ---------- */
+.ar-status {
+  display: flex; align-items: center; gap: 12px; height: 52px; padding: 0 18px;
+  background-color: var(--m-surface); --px-n: 5px; clip-path: var(--px-5);
+  font: 700 14px/1 var(--m-font); color: var(--m-fg-muted);
+}
+.ar-status b { font: 900 18px/1 var(--m-font); color: var(--m-fg); }
+.ar-status-dot { width: 10px; height: 10px; flex: none; background: var(--m-fg-subtle); }
+.ar-status.q { background-color: color-mix(in srgb, #ffd23f 16%, var(--m-surface)); }
+.ar-status.q .ar-status-dot { background: #ffd23f; animation: ar-blink 0.9s steps(2) infinite; }
+.ar-status.m { background-color: color-mix(in srgb, #ff6b5e 18%, var(--m-surface)); }
+.ar-status.m .ar-status-dot { background: #ff6b5e; animation: ar-blink 1.4s steps(2) infinite; }
+.ar-status.l .ar-status-dot { background: #5ec64d; }
+.ar-go-col { display: flex; flex-direction: column; gap: 8px; }
+:root .ar-panel .ar-duo { height: 40px; gap: 8px; font-size: 15px; }

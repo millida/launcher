@@ -8,6 +8,14 @@ export const ONEBLOCK_PACK = 'oneblock-metalabs'
 export const requiresMillidaAuth = (packSlug: string | null | undefined): boolean => packSlug === ONEBLOCK_PACK
 
 /**
+ * Millida SMP (дуэли по тир-листу) пускает и лицензию, но плагин сразу кикает
+ * не-Millida аккаунт: тир пишется на аккаунт Millida. Вход туда — только с ним.
+ */
+export const MILLIDA_SMP_ADDR = 'mpvp.millida.host'
+export const serverNeedsMillidaAuth = (addr: string | null | undefined): boolean =>
+  !!addr && !!addr.trim() && canonAddr(addr) === canonAddr(MILLIDA_SMP_ADDR)
+
+/**
  * OneBlock runs on 1.7.10 through its own client: joining its address with a
  * plain Minecraft build never gets in. The rating hides the address of a
  * launcher-only server, so its card is recognised by slug, a typed or shared

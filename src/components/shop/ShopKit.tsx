@@ -12,6 +12,9 @@ import {
   claimTelegramReward,
   loadTelegramReward,
   type TelegramReward,
+  claimDiscordReward,
+  loadDiscordReward,
+  type DiscordReward,
   loadPlusEconomy,
   loadRules,
   loadSets,
@@ -52,6 +55,7 @@ import '../../styles/pixel/shop-juice.css'
 import { wearNow } from '../../state/wearIntent'
 import { questsToShow } from './packQuests'
 import { TelegramRewardBlock } from './TelegramReward'
+import { DiscordRewardBlock } from './DiscordReward'
 import { SetsSection, type SetActs } from './SetsV2'
 import { SetShot } from './ShopStage'
 import { CaseArt, CaseOpening, CasesSection, caseHex, casePriceOf, type CaseMode, type CaseRun } from './Cases'
@@ -128,6 +132,7 @@ export function useShop(on: boolean) {
   const [weekly, setWeekly] = useState<WeeklyPath | null>(null)
   const [quests, setQuests] = useState<PackQuest[]>([])
   const [telegram, setTelegram] = useState<TelegramReward | null>(null)
+  const [discord, setDiscord] = useState<DiscordReward | null>(null)
   const [plus, setPlus] = useState<PlusEconomy | null>(null)
   const [rules, setRules] = useState<Rules | null>(null)
   const [busy, setBusy] = useState('')
@@ -205,6 +210,7 @@ export function useShop(on: boolean) {
     if (!on || !signedIn) return
     const reload = () => {
       loadTelegramReward().then(setTelegram).catch(() => setTelegram(null))
+      loadDiscordReward().then(setDiscord).catch(() => setDiscord(null))
     }
     reload()
     window.addEventListener('focus', reload)
@@ -393,6 +399,32 @@ export function useShop(on: boolean) {
     } catch (e) {
       trackFailure('shop', e, { step: 'action' })
       showToast(apiErrorText(e, ERR), 'error')
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const doDiscord = async () => {
+    setBusy('discord')
+    try {
+      const res = await claimDiscordReward()
+      setDiscord(res)
+      if (res.balance !== null) {
+        const balance = res.balance
+        setDay((d) => (d ? { ...d, balance } : d))
+      }
+      if (res.granted) {
+        showReward({
+          level: 'mid',
+          items: [{ name: 'Рубины', rubies: res.amount }],
+          title: 'Начислено',
+          sub: res.amount.toLocaleString('ru-RU') + ' ' + word(res.amount),
+        })
+      } else showToast('Награда за Discord уже забрана', 'ok')
+    } catch (e) {
+      trackFailure('shop', e, { step: 'action' })
+      showToast(apiErrorText(e, ERR), 'error')
+      loadDiscordReward().then(setDiscord).catch(() => setDiscord(null))
     } finally {
       setBusy('')
     }
@@ -599,8 +631,8 @@ export function useShop(on: boolean) {
 
   return {
     on, signedIn, day, setDay, rules, busy, plus, tier, balance, error, bump, sets, setsAt, cases, drops, casesAt, ofDayPct, opening, setOpening, caseResult,
-    weekly, quests, telegram, workshop, habit, order, dayCase, daySet, plusTile, todayActs, setActs, scrollTo, toPacks,
-    reloadShop, reloadSets, reloadCases, doOpenCase, doWeekly, doPackQuest, doTelegram, doPlus, doManage, doPack, doCraft,
+    weekly, quests, telegram, discord, workshop, habit, order, dayCase, daySet, plusTile, todayActs, setActs, scrollTo, toPacks,
+    reloadShop, reloadSets, reloadCases, doOpenCase, doWeekly, doPackQuest, doTelegram, doDiscord, doPlus, doManage, doPack, doCraft,
   }
 }
 
@@ -629,8 +661,8 @@ function ShardLabel({ n }: { n: number }) {
  */
 /** chip — чип подписки в шапке «Пополнить рубины» (гардероб: своей верхней панели магазина там нет). */
 export function ShopFeed({ s, chip = false }: { s: Shop; chip?: boolean }) {
-  const { on, day, plus, busy, tier, balance, sets, setsAt, cases, drops, casesAt, ofDayPct, opening, weekly, quests, telegram, plusTile, todayActs, setActs } = s
-  const { reloadShop, reloadSets, doOpenCase, doWeekly, doPackQuest, doTelegram, doPlus, doManage, doPack } = s
+  const { on, day, plus, busy, tier, balance, sets, setsAt, cases, drops, casesAt, ofDayPct, opening, weekly, quests, telegram, discord, plusTile, todayActs, setActs } = s
+  const { reloadShop, reloadSets, doOpenCase, doWeekly, doPackQuest, doTelegram, doDiscord, doPlus, doManage, doPack } = s
   if (!day)
     return (
       <div className="sh-flow" aria-hidden="true">
@@ -648,10 +680,13 @@ export function ShopFeed({ s, chip = false }: { s: Shop; chip?: boolean }) {
               Пополнить рубины
             </h2>
             {chip ? <PlusChip tier={tier} until={plusUntil(plus)} onClick={tier ? doManage : () => doPlus('PLUS')} /> : null}
-            <span className="sh-bal pk-bal">
-              <Ruby size={18} />
-              <b>{balance.toLocaleString('ru-RU')}</b>
-            </span>
+            {/* Баланс — в шапке магазина; здесь только в гардеробе, где своей шапки магазина нет. */}
+            {chip ? (
+              <span className="sh-bal pk-bal">
+                <Ruby size={18} />
+                <b>{balance.toLocaleString('ru-RU')}</b>
+              </span>
+            ) : null}
           </div>
           <Guard what="Рубины" silent>
             <Packs packs={day.packs} plusTile={plusTile} busy={busy} onBuy={(p, art) => void doPack(p, art)} />
@@ -688,6 +723,10 @@ export function ShopFeed({ s, chip = false }: { s: Shop; chip?: boolean }) {
           <TelegramRewardBlock view={telegram} busy={busy === 'telegram'} onClaim={() => void doTelegram()} />
         </Guard>
 
+        <Guard what="Discord-сервер" silent>
+          <DiscordRewardBlock view={discord} busy={busy === 'discord'} onClaim={() => void doDiscord()} />
+        </Guard>
+
         <Guard what="Наборы" silent>
           <SetsSection sets={sets} refreshAt={setsAt} on={on} onEnd={() => void reloadSets()} acts={setActs} />
         </Guard>
@@ -698,7 +737,7 @@ export function ShopFeed({ s, chip = false }: { s: Shop; chip?: boolean }) {
 
         {s.workshop ? (
           <Guard what="За осколки" silent>
-            <ShardsSection data={s.workshop} busy={busy} onCraft={s.doCraft} />
+            <ShardsSection data={s.workshop} busy={busy} onCraft={s.doCraft} showBalance={chip} />
           </Guard>
         ) : null}
 

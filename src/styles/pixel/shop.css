@@ -912,3 +912,8 @@
 .sh-perk-card[class*='tier-'] .dc-bob { animation: sh-chest-bob 2.4s var(--m-ease-smooth) infinite; }
 @keyframes sh-chest-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
 @media (prefers-reduced-motion: reduce) { .sh-perk-card[class*='tier-'] .dc-bob { animation: none; } }
+
+/* Переход из баннера лобби на задание: блок коротко подсвечивается (11.10.2026). */
+.sh-flash { animation: sh-flash 1.4s var(--m-ease-smooth) 1; }
+@keyframes sh-flash { 0%, 100% { box-shadow: none; } 20%, 60% { box-shadow: 0 0 0 3px #ffd23f; } }
+@media (prefers-reduced-motion: reduce) { .sh-flash { animation: none; } }

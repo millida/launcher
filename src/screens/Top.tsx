@@ -9,6 +9,7 @@ import { useFriends } from '../state/friends'
 import { hasMillidaAccount } from '../lib/api'
 import { addFriend, friendIdOf, likeEntry, writeTo } from '../components/top/topActions'
 import { PodiumScene } from '../components/top/PodiumScene'
+import { TierBoard } from '../components/top/TierBoard'
 import { useDaily } from '../state/daily'
 import { plural } from '../lib/format'
 import '../styles/pixel/retention.css'
@@ -190,6 +191,7 @@ const Skeleton = () => (
  */
 export function Top({ on }: { on: boolean }) {
   const board = useBoards((s) => s.board)
+  const tiers = useBoards((s) => s.tiers)
   const view = useBoards((s) => s.views[board])
   const failed = useBoards((s) => !!s.failed[board])
   const [open, setOpen] = useState<BoardEntry | null>(null)
@@ -201,48 +203,54 @@ export function Top({ on }: { on: boolean }) {
   useFriends((s) => s.friends.length)
 
   useEffect(() => {
-    if (!on) return
+    if (!on || tiers) return
     void useBoards.getState().load(board)
     void useFriendStreaks.getState().load()
-  }, [on, board])
+  }, [on, board, tiers])
 
   const me = view?.me ?? null
   const mine = (e: BoardEntry) => !!me && e.rank === me.rank
   const rest = view ? view.items.slice(3) : []
 
   return (
-    <section className={'screen' + (on ? ' on' : '') + (board === 'streak' ? ' theme-fire' : ' theme-time')} id="s-top">
+    <section className={'screen' + (on ? ' on' : '') + (tiers ? ' theme-pvp' : board === 'streak' ? ' theme-fire' : ' theme-time')} id="s-top">
       <div className="page-head tb-head-line">
         <span className="tb-theme-ic" aria-hidden="true">
-          <Icon id={board === 'streak' ? 'i-flame' : 'i-clock'} />
+          <Icon id={tiers ? 'i-shield' : board === 'streak' ? 'i-flame' : 'i-clock'} />
         </span>
         <h1>Топ</h1>
       </div>
       {/* Два разных топа (07.10.2026): часы в игре — с периодом, огоньки — серия дней, без периода. */}
+      {/* Тир-лист — главный топ; часы и огоньки — мелкими вкладками рядом (владелец 11.10.2026). */}
       <div className="segs tb-kinds" role="tablist" aria-label="Топ">
-        <button role="tab" aria-selected={board !== 'streak'} className={'seg' + (board !== 'streak' ? ' on' : '')} data-track="top_kind_hours" onClick={() => board === 'streak' && useBoards.getState().setBoard(lastHours.current)}>
-          <Icon id="i-clock" />
-          Часы в игре
+        <button role="tab" aria-selected={tiers} className={'seg' + (tiers ? ' on' : '')} data-track="top_kind_tiers" onClick={() => useBoards.getState().setTiers(true)}>
+          <Icon id="i-shield" />
+          Тир-лист
         </button>
-        <button role="tab" aria-selected={board === 'streak'} className={'seg' + (board === 'streak' ? ' on' : '')} data-track="top_kind_streak" onClick={() => useBoards.getState().setBoard('streak')}>
+        <button role="tab" aria-selected={!tiers && board !== 'streak'} className={'seg minor' + (!tiers && board !== 'streak' ? ' on' : '')} data-track="top_kind_hours" onClick={() => useBoards.getState().setBoard(board === 'streak' ? lastHours.current : board)}>
+          <Icon id="i-clock" />
+          Часы
+        </button>
+        <button role="tab" aria-selected={!tiers && board === 'streak'} className={'seg minor' + (!tiers && board === 'streak' ? ' on' : '')} data-track="top_kind_streak" onClick={() => useBoards.getState().setBoard('streak')}>
           <Icon id="i-flame" />
           Огоньки
         </button>
       </div>
+      {tiers ? <TierBoard on={on} /> : null}
       {/* Своё место — компактной плашкой справа от переключателей, не строкой поверх списка (07.10.2026). */}
-      {me ? (
+      {!tiers && me ? (
         <button className="tb-mine" data-track="top_me" onClick={() => setOpen(me)}>
           <span className="tb-mine-cap">Ты</span>
           <b className="tb-mine-rank">{'#' + me.rank}</b>
           <Value board={board} v={me.value} />
         </button>
       ) : null}
-      {board === 'streak' && me ? (
+      {!tiers && board === 'streak' && me ? (
         <div className="tb-shield-line">
           <ShieldLine />
         </div>
       ) : null}
-      {board !== 'streak' ? (
+      {!tiers && board !== 'streak' ? (
         <div className="segs tb-boards" role="tablist" aria-label="Период">
           {BOARDS.filter((b) => b.key !== 'streak').map((b) => (
             <button
@@ -259,7 +267,7 @@ export function Top({ on }: { on: boolean }) {
         </div>
       ) : null}
 
-      <div className="stack tb-list">
+      {tiers ? null : <div className="stack tb-list">
         {!view ? (
           failed ? (
             <div className="fr-blank">
@@ -295,9 +303,9 @@ export function Top({ on }: { on: boolean }) {
 
           </>
         )}
-      </div>
+      </div>}
       {/* В body: внутри экрана окно уезжало вниз страницы, а оставался только тёмный фон (09.10.2026). */}
-      {open ? createPortal(<Card board={board} e={open} mine={mine(open)} onClose={() => setOpen(null)} />, document.body) : null}
+      {open && !tiers ? createPortal(<Card board={board} e={open} mine={mine(open)} onClose={() => setOpen(null)} />, document.body) : null}
     </section>
   )
 }
