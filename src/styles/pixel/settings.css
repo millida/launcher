@@ -192,6 +192,29 @@
 .s2-slider > :first-child { flex: 1; }
 .s2-val { width: 40px; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
 
+.s2-mus-src { display: flex; flex-direction: column; border-bottom: 1px solid var(--m-border); }
+.s2-mus-src > .s2-row { border-bottom: 0; }
+.s2-mus-list {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 16px;
+  max-height: 196px; margin-left: -8px; padding-bottom: 12px; overflow-y: auto;
+}
+.s2-mus-item { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.s2-mus-item.on .s2-mus-play { color: var(--m-accent); }
+.s2-mus-play {
+  display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; padding: 6px 8px;
+  background: none; border: 0; color: var(--m-fg); font: 700 13px/1.2 var(--m-font); text-align: left; cursor: pointer;
+}
+.s2-mus-play span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.s2-mus-x {
+  display: grid; place-items: center; width: 28px; height: 28px; flex-shrink: 0;
+  background: none; border: 0; color: var(--m-fg-muted); cursor: pointer;
+}
+.s2-mus-play svg, .s2-mus-x svg { width: 14px; height: 14px; flex-shrink: 0; }
+@media (hover: hover) and (pointer: fine) {
+  .s2-mus-play:hover, .s2-mus-x:hover { background: var(--m-inset); }
+}
+.s2-mus-url { width: 260px; }
+
 /* ---------- Таблица уведомлений ---------- */
 .s2-matrix { display: flex; flex-direction: column; padding: 4px 0; }
 .s2-mx-head,
