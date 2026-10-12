@@ -105,6 +105,16 @@ interface Tag {
 /** Сборку собрала Милли (30.09.2026): её маскот первой меткой, как на сайте. */
 const milliTag = (): Tag => ({ label: 'Милли', accent: true, bare: true, node: <Milli size={18} /> })
 
+/** Метка перевода: «RU · На русском». Перевела команда студии, а не Millida (владелец 12.10.2026). */
+const RuMark = ({ className, by }: { className: string; by?: string }) => (
+  <span className={className} title={'Перевела команда ' + (by || 'Arcania Labs') + ': квесты, предметы и описания на русском'}>
+    <i className="mr-ru-badge" aria-hidden="true">
+      RU
+    </i>
+    На русском
+  </span>
+)
+
 function sideTag(side: string | null): Tag | null {
   const s = side ? SIDE_LABEL[side] : null
   if (!s || !side) return null
@@ -173,6 +183,7 @@ const img = (src: string) => (
     src={src}
     alt=""
     loading="lazy"
+    decoding="async"
     draggable={false}
     onError={(e) => {
       e.currentTarget.style.visibility = 'hidden'
@@ -494,6 +505,8 @@ export interface RowProps {
   list?: string
 }
 
+const onOpenPackOf = (p: RowProps) => !!p.onOpenPack
+
 /** Тип карточки для аналитики: платная сборка — premium, карта — map. */
 const trackKind = (card: SiteCard, sec: SiteSection) => (card.premium ? 'premium' : sec.kind === 'world' ? 'map' : sec.kind)
 
@@ -503,9 +516,11 @@ const trackKind = (card: SiteCard, sec: SiteSection) => (card.premium ? 'premium
  * (MCSborki, Arcania) — её страница хаба с «Играть» и сервером сборки.
  */
 function useOpen({ card, sec, onOpenPack }: RowProps) {
-  // Своя сборка (Arcania): её страницу греем, пока карточка на экране, — открывается сразу.
+  // Платная своя сборка (Arcania): её страницу греем, пока карточка на экране, — открывается сразу.
+  // Остальные свои (переводы — их на экране десятки) — только под курсором: прогрев каждой видимой
+  // слал по два запроса и запись на диск на карточку, и лента подлагивала (владелец 12.10.2026).
   useEffect(() => {
-    if (!card.launcherOnly || !onOpenPack) return
+    if (!card.launcherOnly || !onOpenPack || !(card.premium || card.exclusive)) return
     const t = window.setTimeout(() => prefetchPack(card.slug), 400)
     return () => window.clearTimeout(t)
   }, [card.slug])
@@ -554,12 +569,13 @@ export function SiteRow(props: RowProps) {
   const logo = card.icon || card.cover
   return (
     <article
-      className={['card mr-row', card.premium ? 'is-premium' : '', partnerFrame(card.partner)].filter(Boolean).join(' ')}
+      className={['card mr-row', card.premium ? 'is-premium' : '', partnerFrame(card.partner) || (card.ru ? 'px-ru' : '')].filter(Boolean).join(' ')}
       data-track="row_open"
       data-kind={trackKind(card, sec)}
       data-id={card.slug}
       data-pos={props.pos}
       onClick={open}
+      onPointerEnter={card.launcherOnly && onOpenPackOf(props) ? () => prefetchPack(card.slug) : undefined}
     >
       <span className="mr-icon" aria-hidden="true">
         {logo ? img(logo) : <Fallback slug={card.slug} section={sec.slug} title={name} />}
@@ -567,12 +583,13 @@ export function SiteRow(props: RowProps) {
       <div className="mr-body">
         <div className="mr-titleline">
           <h3 className="mr-title">{name}</h3>
-          {card.premium ? (
+          {card.premium || card.exclusive ? (
             <span className="mr-prem">
-              <Icon id="i-crown" /> Премиум
+              <Icon id="i-crown" /> {card.exclusive ? 'Эксклюзив' : 'Премиум'}
             </span>
           ) : null}
           {isExclusive(card.slug) ? <span className="mr-prem excl">Эксклюзив</span> : null}
+          {card.ru ? <RuMark className="mr-prem ru" by={card.ruBy} /> : null}
           {card.author ? <span className="mr-by" title={card.author}>от {shortAuthor(card.author)}</span> : null}
           {dl ? (
             <span className="mr-dl" title={fmtNum(dl) + ' ' + plural(dl, 'скачивание', 'скачивания', 'скачиваний')}>
@@ -627,16 +644,26 @@ export function SiteGalleryCard(props: RowProps) {
   // Скачивания — у всех (владелец 06.10.2026): наши, а если их мало — первоисточника.
   const dl = Math.max(ownDownloads(card) || 0, card.sourceDownloads || 0, card.mrHit?.dl || 0) || null
   const logo = card.icon || card.cover
-  const badge = isExclusive(card.slug) ? <span className="ph-card-tag excl">Эксклюзив</span> : card.premium ? <span className="ph-card-tag prem">Премиум</span> : null
+  // Arcania — «Эксклюзив» (своя сборка студии), а не «Премиум» (владелец 12.10.2026).
+  const badge = card.exclusive ? (
+    <span className="ph-card-tag prem">Эксклюзив</span>
+  ) : isExclusive(card.slug) ? (
+    <span className="ph-card-tag excl">Эксклюзив</span>
+  ) : card.premium ? (
+    <span className="ph-card-tag prem">Премиум</span>
+  ) : card.ru ? (
+    <RuMark className="ph-card-tag ru" by={card.ruBy} />
+  ) : null
   return (
     <CompactCtx.Provider value={true}>
       <article
-        className={['card mr-gal', shot ? 'has-shot' : 'no-shot', card.premium ? 'is-premium' : '', partnerFrame(card.partner)].filter(Boolean).join(' ')}
+        className={['card mr-gal', shot ? 'has-shot' : 'no-shot', card.premium ? 'is-premium' : '', partnerFrame(card.partner) || (card.ru ? 'px-ru' : '')].filter(Boolean).join(' ')}
         data-track="row_open"
         data-kind={trackKind(card, sec)}
         data-id={card.slug}
         data-pos={props.pos}
         onClick={open}
+      onPointerEnter={card.launcherOnly && onOpenPackOf(props) ? () => prefetchPack(card.slug) : undefined}
       >
         {/* В «визуальных» разделах полоса картинки есть у всех — иначе ряды разной высоты:
             нет скриншота — логотип на своей размытой копии. */}
@@ -655,6 +682,7 @@ export function SiteGalleryCard(props: RowProps) {
               src={shot}
               alt=""
               loading="lazy"
+              decoding="async"
               draggable={false}
               onLoad={(e) => {
                 const { naturalWidth: w, naturalHeight: h } = e.currentTarget

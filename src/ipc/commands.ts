@@ -647,6 +647,8 @@ export interface MillidaPack {
   loader: string
   /** Платная сборка: ставится по доступу на аккаунте. */
   accessRequired: boolean
+  /** Своя сборка студии, файлы закрыты: «Эксклюзив». Остальные сборки студии — переводы. */
+  protectedContent?: boolean
   hasServer: boolean
   /** Кто собрал. Пусто — подписи нет. */
   author?: string | null
