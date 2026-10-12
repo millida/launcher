@@ -180,7 +180,10 @@ jobs:
 
       - name: Checksums
         working-directory: assets
-        run: sha256sum $(ls | grep -v authenticode.txt | sort) > SHA256SUMS && cat SHA256SUMS
+        run: |
+          set -eu
+          test -s authenticode.txt || { echo "::error::пустой Authenticode-отпечаток"; exit 1; }
+          sha256sum $(ls | grep -v authenticode.txt | sort) > SHA256SUMS && cat SHA256SUMS
 
       - uses: actions/attest-build-provenance@v2
         with:
