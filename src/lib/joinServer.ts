@@ -18,7 +18,7 @@ import { launchAttribution } from './uiTrack'
 import { ensureVersionBuild } from './versionBuild'
 import { pickVersionForServer } from './mcVersion'
 import { ensureMcVersionList, useMcVersionList } from '../state/mcVersionList'
-import { isOwnServerAddr } from './ownServer'
+import { isOwnServerAddr, serverNeedsMillidaAuth } from './ownServer'
 
 const addrKey = (ip: string) =>
   (ip || '')
@@ -176,6 +176,20 @@ export async function buildForServer(join: JoinIntent, wanted: string[]): Promis
   return null
 }
 
+export const MILLIDA_SMP_BUILD = 'Millida SMP'
+
+/** Своя сборка под Millida SMP: Fabric нужной версии, Буст FPS и наш мод — без модов игрока. */
+async function millidaSmpBuild(wanted: string[]): Promise<string | null> {
+  const version = (await newestReleaseFor(wanted)) || wanted[0] || ''
+  if (!version) return null
+  if (!useProfiles.getState().profiles.some((p) => p.name === MILLIDA_SMP_BUILD)) {
+    showToast('Готовим сборку «' + MILLIDA_SMP_BUILD + '»')
+  }
+  const made = await ensureVersionBuild(version, { fps: true, name: MILLIDA_SMP_BUILD })
+  if (made) await useProfiles.getState().refresh()
+  return made
+}
+
 export async function quickJoin(ip: string, name: string, licensed?: boolean, versions?: string[]): Promise<void> {
   if (!hasTauri()) {
     showToast('Подключение к серверу доступно в приложении', 'error')
@@ -192,7 +206,12 @@ export async function quickJoin(ip: string, name: string, licensed?: boolean, ve
   })
   let wanted = versions && versions.length ? serverVersions(versions) : versionsForAddr(ip)
   if (!wanted.length) wanted = await versionsFromPing(ip)
-  const prof = await buildForServer({ ip, name, licensed, versions: wanted }, wanted)
+  // Millida SMP — тир-лист и экзамен: только своя чистая сборка «Millida SMP».
+  // Владелец 12.10.2026: поиск пати зашёл туда его сборкой с Essential и
+  // Meteor — «чистой» она считалась лишь потому, что на Fabric.
+  const prof = serverNeedsMillidaAuth(ip)
+    ? await millidaSmpBuild(wanted)
+    : await buildForServer({ ip, name, licensed, versions: wanted }, wanted)
   if (!prof) return Promise.reject(new Error('no-profile'))
   if (!(await licenseGate(!!licensed))) return
   addServer(prof, name, ip).catch(() => {})

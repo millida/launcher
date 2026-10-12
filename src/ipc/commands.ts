@@ -1044,6 +1044,7 @@ export interface DeviceSpecs {
   cpu_cores: number
   cpu_threads: number
   ram_mb: number
+  gpus?: string[]
 }
 
 export const deviceSpecs = () => invoke<DeviceSpecs>('device_specs')

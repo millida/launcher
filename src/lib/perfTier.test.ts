@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { gpuClass, perfTier, screenClass, videoTuning } from './perfTier'
+import { gpuClass, perfTier, screenClass, strongestGpu, videoTuning } from './perfTier'
 
 describe('Уровень ПК по видеокарте', () => {
   const cases: Array<[string, string]> = [
@@ -21,6 +21,24 @@ describe('Уровень ПК по видеокарте', () => {
   for (const [gpu, want] of cases) {
     test(gpu || 'пусто', () => expect(gpuClass(gpu)).toBe(want as never))
   }
+})
+
+describe('Сильнейшая из видеокарт', () => {
+  const cases: Array<[string, Array<string | undefined>, string | undefined]> = [
+    ['ноутбук с двумя картами: вебвью видит встройку, игра идёт на дискретной', ['Intel(R) UHD Graphics', 'NVIDIA GeForce RTX 4060 Laptop GPU', 'ANGLE (Intel, Intel(R) UHD Graphics Direct3D11)'], 'NVIDIA GeForce RTX 4060 Laptop GPU'],
+    ['порядок адаптеров не важен', ['NVIDIA GeForce GTX 1650', 'Intel(R) UHD Graphics 630'], 'NVIDIA GeForce GTX 1650'],
+    ['одна встройка остаётся встройкой', ['Intel(R) Iris(R) Xe Graphics'], 'Intel(R) Iris(R) Xe Graphics'],
+    ['ядро не ответило — берётся карта вебвью', [undefined, 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11)'], 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11)'],
+    ['неизвестная карта не вытесняет известную', ['Some Capture Adapter', 'AMD Radeon RX 6700 XT'], 'AMD Radeon RX 6700 XT'],
+    ['пустой список — карты нет', ['', undefined], undefined],
+  ]
+  for (const [why, names, want] of cases) {
+    test(why, () => expect(strongestGpu(names)).toBe(want as never))
+  }
+  test('ноутбук с RTX и встройкой больше не «слабый»', () => {
+    const gpu = strongestGpu(['Intel(R) UHD Graphics', 'NVIDIA GeForce RTX 4060 Laptop GPU'])
+    expect(perfTier({ ...(gpu ? { gpu } : {}), ramMb: 16384, cores: 16 })).toBe('high')
+  })
 })
 
 describe('Уровень ПК целиком', () => {
