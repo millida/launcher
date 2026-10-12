@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { noteInstallKind } from '../../lib/recsSignals'
 import type { ReactNode } from 'react'
 import { Icon } from '../Icon'
@@ -28,15 +29,16 @@ import { HostInstall } from './HostInstall'
 import type { HostTarget } from './HostInstall'
 import { hostingPackFor, loadHostingPacks } from './data'
 import type { HubPack } from './data'
-import { LOADER, gb, modsFromText, partnerFrame } from '../premium/packView'
+import { LOADER, gb, modsFromText } from '../premium/packView'
 import type { DescBlock, PackView } from '../premium/packView'
-import { PremiumPackPage } from '../premium/PremiumPackPage'
 import { PackInstallButton } from '../premium/PackInstall'
-import { Guard } from '../Guard'
 import { MediaStrip } from '../catalog/MediaStrip'
 import { Back, Compat, Gallery, Hero, Tabs } from '../catalog/ItemPage'
 import type { Tab } from '../catalog/ItemPage'
-import { fmtNum, plural, relativeTime } from '../catalog/site'
+import { fmtNum, loadOwnPacks, ownPackCard, plural, relativeTime, sectionBySlug } from '../catalog/site'
+import type { MillidaPack } from '../../ipc/commands'
+import { SiteGalleryCard } from '../catalog/SiteRow'
+import { useLobby } from '../../state/lobbyMode'
 import { weave, weaveMarkdown } from '../catalog/weave'
 import type { WeaveKind } from '../catalog/weave'
 import { installReviewCandidate } from '../ModRow'
@@ -103,10 +105,10 @@ export function prefetchPackPage(slug: string, premiumId?: string | null): void 
 function PackPageSkeleton({ pack, onBack }: { pack: HubPack; onBack: () => void }) {
   const icon = pack.coverUrl || null
   return (
-    <div className={'ci' + (pack.premium ? ' ppx-ci' : '')} data-section="pack_page" aria-busy="true">
+    <div className="ci" data-section="pack_page" aria-busy="true">
       <Back label="Сборки модов" onBack={onBack} />
       <Hero
-        className={pack.premium ? 'ppx-ci-hero' : null}
+        className={null}
         cover={null}
         glow={icon}
         icon={icon ? <img src={icon} alt="" draggable={false} /> : <span className="skel pp-skel-fill" />}
@@ -324,6 +326,8 @@ export function PackPage({
   const [hostOpen, setHostOpen] = useState(false)
   const [tab, setTab] = useState<Tab>('desc')
   const [candidate, setCandidate] = useState<string | null>(null)
+  // Низ шапки: ушёл за верх окна — появляется липкая полоса с кнопкой.
+  const heroEnd = useRef<HTMLDivElement>(null)
   const doneKey = mr ? keyMrModpack(slug) : keyCatalogPack(slug)
   const justInstalled = useInstalls((s) => !!slug && !!s.done[doneKey])
   const packTask = useInstalls((s) => (mr ? undefined : s.tasks[keyCatalogPack(slug)]))
@@ -487,8 +491,9 @@ export function PackPage({
         onOwned={reloadDetail}
       />
     )
-  // Бесплатная сборка каталога — обычная зелёная «Установить», без золота премиума.
-  else if (!pack.premium && (viaCatalog(full) || hasAccess(full, sub)) && full.slug)
+  // Сборка каталога или доступ уже есть — та же большая «Установить», что у всех сборок
+  // (у платной раньше шли крупное «Доступ открыт» и маленькая кнопка, владелец 12.10.2026).
+  else if ((viaCatalog(full) || hasAccess(full, sub)) && full.slug)
     cta = (
       <span className="pp-cta-wrap">
         <PackInstallButton pack={full} />
@@ -504,43 +509,10 @@ export function PackPage({
       </>
     )
 
-  // Премиум — своя страница (PremiumPackPage): данные и действия те же, подача своя.
-  if (pack.premium)
-    return (
-      <Guard what="Блок сборки">
-        <PremiumPackPage
-          pack={pack}
-          full={full}
-          view={view}
-          detail={detail}
-          plans={plans}
-          plan={plan}
-          sub={sub}
-          facts={facts}
-          shots={shots}
-          video={video}
-          cover={cover}
-          mcVersion={mcVersion}
-          loader={loader}
-          size={client && client.size > 0 ? client.size : null}
-          updates={updates}
-          includes={includes}
-          author={author}
-          installed={installed}
-          onPlay={onPlay}
-          onOwned={reloadDetail}
-          server={server}
-          onServer={onServer}
-          onHost={hostTarget ? () => setHostOpen(true) : undefined}
-          onBack={onBack}
-        >
-          {hostOpen && hostTarget ? <HostInstall target={hostTarget} onClose={() => setHostOpen(false)} /> : null}
-        </PremiumPackPage>
-      </Guard>
-    )
-
+  // Одна страница для всех сборок, платных тоже: без золота и своей «премиум»-подачи
+  // (владелец 12.10.2026: «поставь дефолтную страницу, как на любой другой сборке»).
   const inline: ReactNode[] = []
-  if (!pack.premium && mods) inline.push(<><b>{fmtNum(mods)}</b> {plural(mods, 'мод', 'мода', 'модов')}</>)
+  if (mods) inline.push(<><b>{fmtNum(mods)}</b> {plural(mods, 'мод', 'мода', 'модов')}</>)
   if (downloads)
     inline.push(
       <>
@@ -549,63 +521,53 @@ export function PackPage({
       </>,
     )
   if (updated) inline.push(<>Обновлён {updated}</>)
-  const icon = view?.cover || full.coverUrl || mrHead || cover
+  // Квадратный значок сборки; обложка в квадрат не лезет — буквы баннера обрезались (владелец 12.10.2026).
+  const icon = view?.icon || view?.cover || full.coverUrl || mrHead || cover
 
   return (
     <div className="ci" data-section="pack_page" data-kind={pack.premium ? 'premium' : 'pack'} data-id={slug || pack.id}>
+      <StickyCta watch={heroEnd} icon={icon} title={full.title}>
+        {cta}
+      </StickyCta>
       <Back label="Сборки" onBack={onBack} />
       <Hero
-        className={[pack.premium ? 'is-premium' : '', partnerFrame(view?.partner ?? detail?.partner)].filter(Boolean).join(' ')}
         cover={<Media video={video} cover={cover} ob={slug === ONEBLOCK_PACK} />}
-        badge={
-          pack.premium ? (
-            <span className="ph-card-tag gold">
-              <Icon id="i-crown" /> Премиум
-            </span>
-          ) : (
-            <span className="ph-card-tag">{mr ? 'Modrinth' : 'Бесплатно'}</span>
-          )
-        }
+        badge={<span className="ph-card-tag">{pack.premium ? (view?.protectedContent ? 'Эксклюзив' : 'Премиум') : mr ? 'Modrinth' : 'Бесплатно'}</span>}
         icon={icon ? <img src={icon} alt="" draggable={false} /> : null}
         glow={icon}
         title={full.title}
         line={full.tagline}
         by={author ? 'Собрал ' + author : null}
         facts={inline}
+        // Главная кнопка — в шапке, рядом с названием; хостинг и сервер — маленькими под ней
+        // (владелец 12.10.2026, улучшение №1: раньше в шапке были только они, а «Установить» — ниже справа).
         cta={
-          hostTarget || server ? (
-            <div className="mr-actions">
-              {hostTarget ? (
-                <button className="btn md secondary" data-sound="open" data-track="host_install" onClick={() => setHostOpen(true)}>
-                  <Icon id="i-server-cog" /> Поставить на хостинг
-                </button>
-              ) : null}
-              {server ? (
-                <button className="btn md secondary" data-track="pack_server" data-src="pack_page" onClick={() => onServer(server)}>
-                  <Icon id="i-server" /> Сервер сборки
-                  {server.isOnline ? (
-                    <span className="ph-hero-srv-n">
-                      <span className="ph-dot" aria-hidden="true"></span>
-                      {fmtN(server.online)}
-                    </span>
-                  ) : null}
-                </button>
-              ) : null}
-            </div>
-          ) : null
+          <div className="pp-hero-cta">
+            {cta}
+            {hostTarget || server ? (
+              <div className="pp-hero-sub">
+                {hostTarget ? (
+                  <button className="btn sm secondary" data-sound="open" data-track="host_install" onClick={() => setHostOpen(true)}>
+                    <Icon id="i-server-cog" /> На хостинг
+                  </button>
+                ) : null}
+                {server ? (
+                  <button className="btn sm secondary" data-track="pack_server" data-src="pack_page" onClick={() => onServer(server)}>
+                    <Icon id="i-server" /> Сервер сборки
+                    {server.isOnline ? (
+                      <span className="ph-hero-srv-n">
+                        <span className="ph-dot" aria-hidden="true"></span>
+                        {fmtN(server.online)}
+                      </span>
+                    ) : null}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         }
       />
-
-      {pack.premium && facts.length ? (
-        <div className="pp-facts">
-          {facts.slice(0, 5).map((f) => (
-            <div className="pp-fact" key={f.label}>
-              <b>{f.value}</b>
-              <span>{f.label}</span>
-            </div>
-          ))}
-        </div>
-      ) : null}
+      <div ref={heroEnd} className="pp-hero-end" aria-hidden="true" />
 
       <div className="ci-grid">
         <main className="ci-main">
@@ -613,6 +575,7 @@ export function PackPage({
           {tab === 'desc' && (shots.length || video) ? <MediaStrip urls={shots} video={video} onAll={() => setTab('gallery')} /> : null}
           {tab === 'desc' ? (
             <>
+              {updates[0] ? <WhatsNew u={updates[0]} more={updates.length > 1} onAll={() => setTab('versions')} /> : null}
               {includes.length ? (
                 <section className="pp-block">
                   <h2>Что входит</h2>
@@ -645,8 +608,7 @@ export function PackPage({
         </main>
 
         <aside className="ci-aside">
-          <div className={'pp-buy' + (pack.premium ? ' gold' : '')}>
-            {cta}
+          <div className="pp-buy">
             {candidate ? (
               <button
                 className="btn md secondary"
@@ -681,7 +643,171 @@ export function PackPage({
         </aside>
       </div>
 
+      {mr ? null : <MorePacks slug={slug} partner={view?.partner ?? detail?.partner ?? null} author={author} />}
+
       {hostOpen && hostTarget ? <HostInstall target={hostTarget} onClose={() => setHostOpen(false)} /> : null}
     </div>
+  )
+}
+
+/** Ближайший предок с прокруткой. */
+function scrollerOf(el: HTMLElement | null): HTMLElement | null {
+  let box = el ? el.parentElement : null
+  while (box && !/(auto|scroll)/.test(getComputedStyle(box).overflowY)) box = box.parentElement
+  return box
+}
+
+/**
+ * Улучшение №9 (владелец 12.10.2026): кнопка шапки ушла за верх окна — сверху тонкая полоса
+ * со значком, названием и той же кнопкой.
+ *
+ * Полоса живёт вне прокручиваемой области (портал в её родителя), а не position: sticky
+ * внутри: окно лаунчера (WebKit) прокручивает область отдельно от страницы, и липкая полоса
+ * на границе подлагивала, пропадала и появлялась снова. Показ — с запасом в обе стороны,
+ * чтобы у самой границы не мигала.
+ */
+function StickyCta({ watch, icon, title, children }: { watch: React.RefObject<HTMLDivElement | null>; icon: string | null; title: string; children: ReactNode }) {
+  const [on, setOn] = useState(false)
+  const [host, setHost] = useState<HTMLElement | null>(null)
+  const [box, setBox] = useState<{ top: number; left: number; width: number } | null>(null)
+  const slot = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const mark = watch.current
+    const anchor = slot.current
+    const page = anchor ? anchor.parentElement : null
+    const sc = scrollerOf(anchor)
+    const parent = sc ? sc.parentElement : null
+    if (!mark || !anchor || !page || !sc || !parent) return
+    setHost(parent)
+    let shown = false
+    let frame = 0
+    const place = () => {
+      const a = parent.getBoundingClientRect()
+      const s = sc.getBoundingClientRect()
+      const c = page.getBoundingClientRect()
+      setBox((b) => {
+        const next = { top: Math.round(s.top - a.top), left: Math.round(c.left - a.left), width: Math.round(c.width) }
+        return b && b.top === next.top && b.left === next.left && b.width === next.width ? b : next
+      })
+    }
+    // Полоса нужна, как только сама кнопка шапки ушла за верх, а не вся шапка.
+    const check = () => {
+      frame = 0
+      const cta = page.querySelector<HTMLElement>('.ci-cta')
+      const edge = cta && cta.offsetHeight ? cta.getBoundingClientRect().bottom : mark.getBoundingClientRect().top
+      const top = sc.getBoundingClientRect().top
+      const next = shown ? edge < top + 24 : edge < top
+      if (next !== shown) {
+        shown = next
+        if (next) place()
+        setOn(next)
+      }
+    }
+    const soon = () => {
+      if (!frame) frame = requestAnimationFrame(check)
+    }
+    place()
+    check()
+    sc.addEventListener('scroll', soon, { passive: true })
+    const ro = new ResizeObserver(() => {
+      place()
+      soon()
+    })
+    ro.observe(sc)
+    return () => {
+      cancelAnimationFrame(frame)
+      sc.removeEventListener('scroll', soon)
+      ro.disconnect()
+    }
+  }, [])
+  const bar =
+    host && box ? (
+      <div
+        className={'pp-stick' + (on ? ' on' : '')}
+        style={{ top: box.top, left: box.left, width: box.width }}
+        aria-hidden={!on}
+        inert={!on || undefined}
+      >
+        {icon ? <img src={icon} alt="" draggable={false} /> : null}
+        <b>{title}</b>
+        <span className="pp-stick-sp" />
+        <div className="pp-stick-cta">{children}</div>
+      </div>
+    ) : null
+  return (
+    <div className="pp-stick-slot" ref={slot}>
+      {bar && host ? createPortal(bar, host) : null}
+    </div>
+  )
+}
+
+/** Улучшение №10: последнее обновление — коротко над описанием, все — во вкладке «Версии». */
+function WhatsNew({ u, more, onAll }: { u: Update; more: boolean; onAll: () => void }) {
+  const when = u.date ? untilText(u.date) : ''
+  return (
+    <section className="card ci-box pp-news">
+      <div className="pp-news-h">
+        <b>Что нового</b>
+        {when ? <span>{when}</span> : null}
+        {more ? (
+          <button className="pp-news-all" data-track="pack_news_all" onClick={onAll}>
+            Все версии <Icon id="i-chev-r" />
+          </button>
+        ) : null}
+      </div>
+      <p>{u.text}</p>
+    </section>
+  )
+}
+
+/**
+ * Улучшение №10: внизу не тупик — ещё сборки той же студии (или автора) карточками, как в
+ * каталоге; своих мало — популярные наши. Клик — их страница здесь же.
+ */
+function MorePacks({ slug, partner, author }: { slug: string; partner: { slug: string; name: string } | null; author: string | null }) {
+  const [list, setList] = useState<MillidaPack[] | null>(null)
+  const row = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    let alive = true
+    loadOwnPacks()
+      .then((l) => alive && setList(l))
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [])
+  if (!list) return null
+  const others = list.filter((p) => p.slug !== slug && !p.preview)
+  const byDl = (a: MillidaPack, b: MillidaPack) => Number(!!b.protectedContent) - Number(!!a.protectedContent) || (b.downloads || 0) - (a.downloads || 0)
+  const same = (partner ? others.filter((p) => p.partner?.slug === partner.slug) : author ? others.filter((p) => p.author === author) : []).sort(byDl)
+  const cards = (same.length >= 2 ? same : others.slice().sort(byDl)).slice(0, 10)
+  if (!cards.length) return null
+  const title = same.length >= 2 ? 'Ещё от ' + (partner?.name || author) : 'Похожие сборки'
+  const sec = sectionBySlug('modpacks')
+  // Страница новой сборки откроется сверху: прокрутку при смене страницы ведёт хаб (PlayHub).
+  const open = (s: string) => {
+    useLobby.setState({ hubTarget: { pack: s, stay: true } })
+    return true
+  }
+  const step = (dir: 1 | -1) => row.current?.scrollBy({ left: dir * row.current.clientWidth * 0.9, behavior: 'smooth' })
+  return (
+    <section className="pp-more" aria-label={title}>
+      <header className="mr-ru-head">
+        <h2>{title}</h2>
+        <span className="mr-ru-nav">
+          <button className="mr-ru-arrow" aria-label="Назад" data-track="pack_more_prev" onClick={() => step(-1)}>
+            <Icon id="i-chev-l" />
+          </button>
+          <button className="mr-ru-arrow" aria-label="Дальше" data-track="pack_more_next" onClick={() => step(1)}>
+            <Icon id="i-chev-r" />
+          </button>
+        </span>
+      </header>
+      <div className="mr-ru-row" ref={row}>
+        {cards.map((p, i) => (
+          <SiteGalleryCard key={p.slug} card={ownPackCard(p)} sec={sec} list="pack_more" pos={i} onOpenPack={open} />
+        ))}
+      </div>
+    </section>
   )
 }
