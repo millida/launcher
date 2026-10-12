@@ -155,6 +155,7 @@ permissions = [
   "allow-add-local-file",
   "allow-pick-content-files",
   "allow-export-mrpack",
+  "allow-hosting-send-build",
   "allow-install-version",
   "allow-cf-search",
   "allow-cf-install",

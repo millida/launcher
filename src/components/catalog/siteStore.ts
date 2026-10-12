@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { StoreApi, UseBoundStore } from 'zustand'
 import { MR_PAGE, loadCf, loadMr, mrSearchUrl, mrToHit, useMods } from '../../state/mods'
-import { PER_PAGE, PREMIUM_KEY, SITE_SECTIONS, displayName, facetsKey, listingKey, loadFacets, loadListing, loadPremiumPacks, premiumCard, sectionByKind, sectionBySlug } from './site'
+import { OWN_PACKS_KEY, PER_PAGE, PREMIUM_KEY, SITE_SECTIONS, displayName, facetsKey, isRuPack, isTranslation, listingKey, loadFacets, loadListing, loadOwnPacks, loadPremiumPacks, premiumCard, ruCard, sectionByKind, sectionBySlug, translationIndex } from './site'
 import type { SiteCard, SiteFacets, SiteListing, SiteSlug } from './site'
 import { peekCatalog, staleCatalog } from '../../lib/catalogCache'
 import { appendMr, cardFromMrHit, cfKind, mrHasMore, mrTarget, nextLoad } from './mrTail'
@@ -20,7 +20,7 @@ import { hasTauri } from '../../ipc/tauri'
  */
 
 export type SiteSort = CatalogSortId
-export type SiteAccess = 'all' | 'premium' | 'free'
+export type SiteAccess = 'all' | 'premium' | 'free' | 'ru'
 
 export interface SiteState {
   section: SiteSlug
@@ -53,6 +53,10 @@ export interface SiteState {
   stale: boolean
   /** Сервер отвечает дольше обычного — подпись под скелетоном. */
   slow: boolean
+  /** Полка «Сборки на русском» над лентой «Рекомендуемых» (без поиска и фильтров). */
+  ruShelf: SiteCard[]
+  /** Сколько всего переводов Millida — число на кнопке и в фильтре. */
+  ruTotal: number
   setSection: (s: SiteSlug) => void
   patch: (p: Partial<Pick<SiteState, 'version' | 'loader' | 'category' | 'q' | 'sort' | 'access' | 'edition' | 'use' | 'price' | 'side'>>) => void
   reset: () => void
@@ -159,6 +163,8 @@ function createSiteStore(linked: boolean): SiteStore {
     failed: false,
     stale: false,
     slow: false,
+    ruShelf: [],
+    ruTotal: 0,
     serverSorts: [],
     setSection: (s) => {
       const sec = sectionBySlug(s)
@@ -169,7 +175,7 @@ function createSiteStore(linked: boolean): SiteStore {
         void useMods.getState().refreshInstalled()
       }
       const scope = (linked && scopeFor && scopeFor(s)) || { version: null, loader: null }
-      set({ section: s, ...scope, category: null, q: '', access: 'all', edition: null, use: null, price: null, side: null, items: [], total: 0, page: 0, facets: null, ...MR_EMPTY })
+      set({ section: s, ...scope, category: null, q: '', access: 'all', edition: null, use: null, price: null, side: null, items: [], total: 0, page: 0, facets: null, ruShelf: [], ...MR_EMPTY })
       void get().load()
     },
     patch: (p) => {
@@ -248,7 +254,16 @@ function createSiteStore(linked: boolean): SiteStore {
       // Платные сборки: сразу — что знаем (память, диск), свежий список — в фоне.
       const premiumNet = packs ? inTime(loadPremiumPacks(), LISTING_DEADLINE_MS).catch(() => null) : Promise.resolve([] as MillidaPack[])
       let premium: MillidaPack[] = packs ? ((await staleCatalog<MillidaPack[]>(PREMIUM_KEY)) ?? []) : []
+      // Все наши сборки — ради переводов на русский: полка, метки и подмена оригиналов.
+      const ownNet = packs ? inTime(loadOwnPacks(), LISTING_DEADLINE_MS).catch(() => null) : Promise.resolve(null)
+      let own: MillidaPack[] = packs ? ((await staleCatalog<MillidaPack[]>(OWN_PACKS_KEY)) ?? []) : []
       if (!current()) return
+      void ownNet.then((l) => {
+        if (!l) return
+        const changed = l.length !== own.length || l.some((p, i) => p.slug !== own[i]?.slug)
+        own = l
+        if (changed && current() && lastShown) show(lastShown, lastStale)
+      })
       let premiumFresh = !packs
       void premiumNet.then((l) => {
         if (!l) return
@@ -275,13 +290,31 @@ function createSiteStore(linked: boolean): SiteStore {
         lastShown = listing
         lastStale = stale
         const paid = new Map(premium.map((p) => [p.slug, p]))
+        const mine = new Map(own.map((p) => [p.slug, p]))
+        const ru = packs ? own.filter(isRuPack) : []
+        // Подмена оригинала переводом — только для переводов студии, не для русских авторов.
+        const translationOf = translationIndex(ru.filter(isTranslation))
         let got = listing.items.map((c) => {
           const pack = paid.get(c.slug)
-          return pack ? { ...c, premium: true, partner: pack.partner ?? null } : c
+          const ours = mine.get(c.slug)
+          const marked: SiteCard = pack ? { ...c, premium: true, partner: pack.partner ?? null } : c
+          if (ours) return { ...marked, ru: isRuPack(ours) || undefined, ruBy: isTranslation(ours) ? ours.partner?.name : undefined, exclusive: ours.protectedContent || undefined }
+          // Оригинал с Modrinth, который мы перевели, — на его месте встаёт перевод (владелец
+          // 12.10.2026: «нахуй мы их тогда переводили», если в выдаче только английские).
+          const tr = ru.length ? translationOf(c) : undefined
+          return tr ? ruCard(tr, c) : marked
         })
+        got = got.filter((c, i) => got.findIndex((x) => x.slug === c.slug) === i)
         if (packs && st.access === 'premium') {
           const only = premiumOnly(premium, st, q)
-          set({ items: only, total: only.length, page: 1, pages: 1, ...MR_EMPTY, busy: stale, stale })
+          set({ items: only, total: only.length, page: 1, pages: 1, ...MR_EMPTY, busy: stale, stale, ruShelf: [], ruTotal: ru.length })
+          return
+        }
+        if (packs && st.access === 'ru') {
+          // Arcania — своя сборка той же студии: и среди «На русском» она первая (владелец 12.10.2026).
+          const lead = own.filter((p) => p.protectedContent && p.partner && ruMatches(p, st, q)).map(premiumCard)
+          const only = [...lead, ...ruOnly(ru, st, q)]
+          set({ items: only, total: only.length, page: 1, pages: 1, ...MR_EMPTY, busy: stale, stale, ruShelf: [], ruTotal: ru.length })
           return
         }
         // Релевантность: сервер ищет по вхождению — точное совпадение названия и начало слова
@@ -289,10 +322,22 @@ function createSiteStore(linked: boolean): SiteStore {
         if (st.sort === 'relevance' && q.length >= 2) got = byRelevance(got, q)
         if (packs && st.access === 'free') got = got.filter((c) => !c.premium)
         else if (!more && packs && st.sort === 'recommended') got = pinArcania(got, premium, st, q)
+        // «Рекомендуемые», первая страница: полка переводов сверху и ещё несколько — в ленте.
+        let ruShelf: SiteCard[] = []
+        if (!more && packs && st.sort === 'recommended' && st.access === 'all' && !searching) {
+          const onPage = new Set(got.map((c) => c.slug))
+          const pool = ru
+            .filter((p) => !onPage.has(p.slug) && ruMatches(p, st, ''))
+            .sort((a, b) => (b.downloads || 0) - (a.downloads || 0))
+          const clean = !st.version && !st.loader && !st.category && !st.use && !st.edition && !st.price && !st.side
+          ruShelf = clean ? pool.slice(0, RU_SHELF).map((p) => ruCard(p)) : []
+          got = weaveRu(got, pool.slice(ruShelf.length, ruShelf.length + RU_WOVEN).map((p) => ruCard(p)))
+        }
         const hidden = packs && st.access === 'free' ? premium.filter((p) => matchesFilters(p, st, q)).length : 0
         // Лента могла сдвинуться между страницами (новый материал сверху) — без дублей.
         const before = get().items
-        const items = more ? before.concat(got.filter((i) => !before.some((x) => x.slug === i.slug))) : got
+        const shelf = get().ruShelf
+        const items = more ? before.concat(got.filter((i) => !before.some((x) => x.slug === i.slug) && !shelf.some((x) => x.slug === i.slug))) : got
         // Лента Millida кончится — Modrinth догрузится первой страницей по «Показать ещё» (mrMore).
         const lazyTail = !more && !searching && !!mrq ? { ...MR_EMPTY, mrMore: true } : MR_EMPTY
         const keepTail = more || (stale === false && get().mr.length && searching)
@@ -303,6 +348,8 @@ function createSiteStore(linked: boolean): SiteStore {
           page: listing.page,
           pages: listing.pages,
           ...(keepTail ? {} : lazyTail),
+          ...(more ? {} : { ruShelf }),
+          ruTotal: ru.length,
           busy: stale,
           stale,
         })
@@ -336,6 +383,7 @@ function createSiteStore(linked: boolean): SiteStore {
       // Платные ещё в пути (первый запуск, диска нет) — ждём их недолго: иначе Arcania
       // встанет первой уже после того, как игрок увидел ленту.
       if (!premiumFresh && !premium.length) await Promise.race([premiumNet, new Promise((r) => setTimeout(r, 1500))])
+      if (packs && !own.length) await Promise.race([ownNet, new Promise((r) => setTimeout(r, 1500))])
       if (!current()) return
       show(listing, false)
       set({ slow: false })
@@ -402,6 +450,39 @@ function pinArcania(page: SiteCard[], premium: MillidaPack[], st: Pick<SiteState
   const pack = premium.find((p) => p.slug === ARCANIA)
   const top = hit || (pack && matchesFilters(pack, st, q) ? premiumCard(pack) : null)
   return top ? [top, ...page.filter((c) => c.slug !== ARCANIA)] : page
+}
+
+/** Сколько переводов на полке над лентой и сколько ещё вплетено в первую страницу. */
+const RU_SHELF = 8
+const RU_WOVEN = 4
+
+/** Подходит ли перевод под фильтры: в отличие от платных, он бывает и «Бесплатно». */
+function ruMatches(p: MillidaPack, st: Pick<SiteState, 'version' | 'loader' | 'category'> & Partial<Pick<SiteState, 'edition' | 'use' | 'price'>>, q: string): boolean {
+  const needle = q.length >= 2 ? q.toLowerCase() : ''
+  if (st.edition === 'BEDROCK' || st.use || st.category) return false
+  if (st.price === 'free' && p.accessRequired) return false
+  if (st.price === 'paid' && !p.accessRequired) return false
+  return (!st.version || p.game === st.version) && (!st.loader || p.loader === st.loader) && (!needle || (p.title + ' ' + p.summary).toLowerCase().includes(needle))
+}
+
+/** Фильтр «На русском»: все переводы Millida, популярные первыми. */
+function ruOnly(ru: MillidaPack[], st: Pick<SiteState, 'version' | 'loader' | 'category'> & Partial<Pick<SiteState, 'edition' | 'use' | 'price'>>, q: string): SiteCard[] {
+  return ru
+    .filter((p) => ruMatches(p, st, q))
+    .sort((a, b) => (b.downloads || 0) - (a.downloads || 0))
+    .map((p) => ruCard(p))
+}
+
+/** Переводы — после каждой второй карточки ленты, начиная с третьего места (первое — у Arcania). */
+function weaveRu(page: SiteCard[], ru: SiteCard[]): SiteCard[] {
+  if (!ru.length) return page
+  const out: SiteCard[] = []
+  let k = 0
+  page.forEach((c, i) => {
+    out.push(c)
+    if (i >= 1 && i % 2 === 1 && k < ru.length) out.push(ru[k++]!)
+  })
+  return out.concat(ru.slice(k))
 }
 
 /** Фильтр «Премиум»: только платные сборки, Arcania первой. */

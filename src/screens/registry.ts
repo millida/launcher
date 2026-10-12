@@ -16,6 +16,7 @@ const loaders = {
   chat: () => import('./Messages'),
   hosting: () => import('./Hosting'),
   playhub: () => import('./PlayHub'),
+  pvp: () => import('./Pvp'),
   game: () => import('./Game'),
   settings: () => import('../modals/Settings'),
 } satisfies Record<ScreenId, () => Promise<unknown>>
@@ -33,6 +34,7 @@ export const Top = lazy(() => loaders.top().then((m) => ({ default: m.Top })))
 export const Messages = lazy(() => loaders.chat().then((m) => ({ default: m.Messages })))
 export const Hosting = lazy(() => loaders.hosting().then((m) => ({ default: m.Hosting })))
 export const PlayHub = lazy(() => loaders.playhub().then((m) => ({ default: m.PlayHub })))
+export const Pvp = lazy(() => loaders.pvp().then((m) => ({ default: m.Pvp })))
 export const Game = lazy(() => loaders.game().then((m) => ({ default: m.Game })))
 export const Settings = lazy(() => loaders.settings().then((m) => ({ default: m.Settings })))
 

@@ -18,6 +18,7 @@ export type ScreenId =
   | 'chat'
   | 'hosting'
   | 'playhub'
+  | 'pvp'
   | 'game'
   | 'settings'
 export type ModalId =

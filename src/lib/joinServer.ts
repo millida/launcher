@@ -15,7 +15,7 @@ import { joinPlan } from './joinPlan'
 import { pickBuildForJoin } from '../state/buildPicker'
 import { track } from './telemetry'
 import { launchAttribution } from './uiTrack'
-import { ensureVersionBuild } from './versionBuild'
+import { ensureVersionBuild, pvpBuildName } from './versionBuild'
 import { pickVersionForServer } from './mcVersion'
 import { ensureMcVersionList, useMcVersionList } from '../state/mcVersionList'
 import { isOwnServerAddr, serverNeedsMillidaAuth } from './ownServer'
@@ -176,16 +176,17 @@ export async function buildForServer(join: JoinIntent, wanted: string[]): Promis
   return null
 }
 
-export const MILLIDA_SMP_BUILD = 'Millida SMP'
-
-/** Своя сборка под Millida SMP: Fabric нужной версии, Буст FPS и наш мод — без модов игрока. */
+/**
+ * Своя сборка под Millida SMP — «Millida PvP 26.2»: ровно та версия, что у
+ * сервера (Paper 26.2, без перевода версий — честная регистрация ударов),
+ * Fabric, Буст FPS и наш мод, без модов игрока. Чего нет — ставит сама.
+ */
 async function millidaSmpBuild(wanted: string[]): Promise<string | null> {
   const version = (await newestReleaseFor(wanted)) || wanted[0] || ''
   if (!version) return null
-  if (!useProfiles.getState().profiles.some((p) => p.name === MILLIDA_SMP_BUILD)) {
-    showToast('Готовим сборку «' + MILLIDA_SMP_BUILD + '»')
-  }
-  const made = await ensureVersionBuild(version, { fps: true, name: MILLIDA_SMP_BUILD })
+  const name = pvpBuildName(version)
+  if (!useProfiles.getState().profiles.some((p) => p.name === name)) showToast('Готовим сборку «' + name + '»')
+  const made = await ensureVersionBuild(version, { fps: true, name })
   if (made) await useProfiles.getState().refresh()
   return made
 }
@@ -206,7 +207,7 @@ export async function quickJoin(ip: string, name: string, licensed?: boolean, ve
   })
   let wanted = versions && versions.length ? serverVersions(versions) : versionsForAddr(ip)
   if (!wanted.length) wanted = await versionsFromPing(ip)
-  // Millida SMP — тир-лист и экзамен: только своя чистая сборка «Millida SMP».
+  // Millida SMP — тир-лист: только своя чистая сборка «Millida PvP 26.2».
   // Владелец 12.10.2026: поиск пати зашёл туда его сборкой с Essential и
   // Meteor — «чистой» она считалась лишь потому, что на Fabric.
   const prof = serverNeedsMillidaAuth(ip)

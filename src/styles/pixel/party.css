@@ -37,6 +37,14 @@
   text-shadow: 0 2px 0 rgba(0, 0, 0, 0.55);
   --px-n: 4px; clip-path: var(--px-4);
 }
+/* Реплика из чата пати над ником: держится несколько секунд и гаснет. */
+.seat-say {
+  max-width: 220px; padding: 6px 10px 7px; white-space: normal; text-align: center; overflow-wrap: anywhere;
+  font: 700 14px/1.2 var(--m-font); color: #10231a; background: #fff; border-radius: 10px;
+  animation: seat-say 6s var(--m-ease-smooth) both;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+@keyframes seat-say { 0% { opacity: 0; translate: 0 6px; } 4%, 90% { opacity: 1; translate: 0 0; } 100% { opacity: 0; } }
 .seat-nick svg { width: 14px; height: 14px; flex: none; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.55)); }
 .seat-nick .party-crown { color: var(--m-warning); }
 .seat-nick .party-mic { color: var(--m-accent); }
@@ -202,22 +210,26 @@
 /* «Выйти из пати» под кнопкой «Готов/Играть»: тихая, не спорит с главной
    кнопкой, в ряду действий, где человек и ищет выход. Рендерится только когда
    в пати есть другие игроки. */
+/* Красная плашка (владелец 12.10.2026: «выйти из пати — чтобы не ошибиться,
+   подсветить»): единственный выход, и из поиска, и из собранной пати. */
 .lobby-row .play-col .party-leave {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 7px;
   width: 100%;
-  height: 34px;
-  font: 700 13px/1 var(--m-font);
-  color: var(--m-fg-muted);
-  background: var(--m-surface-2);
+  height: 38px;
+  padding-bottom: 2px;
+  font: 800 14px/1 var(--m-font);
+  color: #fff;
+  background-color: var(--m-danger);
   --px-n: 5px; clip-path: var(--px-5);
-  transition: color var(--m-t-fast), background-color var(--m-t-fast), transform 90ms var(--m-ease-smooth);
+  --px-ft: rgba(255, 255, 255, 0.22); --px-ft-w: 2px; --px-fb: rgba(0, 0, 0, 0.32); --px-fb-w: 4px;
+  transition: background-color var(--m-t-fast), transform 90ms var(--m-ease-smooth);
 }
-.lobby-row .play-col .party-leave svg { width: 14px; height: 14px; }
+.lobby-row .play-col .party-leave svg { width: 15px; height: 15px; }
 @media (hover: hover) and (pointer: fine) {
-  .lobby-row .play-col .party-leave:hover { color: var(--m-danger); background-color: var(--m-surface); }
+  .lobby-row .play-col .party-leave:hover { filter: brightness(1.12); }
 }
 .lobby-row .play-col .party-leave:active { transform: translateY(1px); }
 
@@ -299,3 +311,14 @@
 .party-mod-name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 600 12px/1.2 var(--m-mono); color: var(--m-fg); }
 .party-mod.bad .party-mod-name { color: var(--m-danger); text-decoration: line-through; }
 
+
+/* В пати «Играть» / «Готов» говорит, что запустит. */
+:root .lobby-row #playBtn .play-what {
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font: 800 15px/1 var(--m-font); letter-spacing: 0; color: rgba(6, 32, 14, 0.85);
+}
+.lchip-party svg, .lchip-invite svg { color: var(--m-accent); }
+/* «Найти пати» на том же месте становится отменой: красная, со счётчиком поиска. */
+:root .lchip.lchip-cancel { color: #fff; background-color: var(--m-danger); --px-ft: rgba(255, 255, 255, 0.22); --px-fb: rgba(0, 0, 0, 0.32); }
+@media (hover: hover) and (pointer: fine) { :root .lchip.lchip-cancel:hover { background-color: var(--m-danger); filter: brightness(1.1); } }
+.lchip-clock { font: 800 15px/1 var(--m-font); font-variant-numeric: tabular-nums; opacity: 0.9; }

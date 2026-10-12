@@ -167,9 +167,11 @@
   /* lobby.css */
   .lobby-mode-card, .lobby-who .btn.lobby-wardrobe, .lobby-mate, .lobby-mate-act, .lobby-invite, .ht-gift, .lg2-card, .lb-btn, .lobby-row, .lb-me, .lobby-promo, .lobby-rec,
   /* party.css */
-  .party-slot-empty, .party-plate, .party-invite, .party-card, .party-menu,
+  .party-slot-empty, .party-plate, .party-invite, .party-card, .party-menu, .pty, .pty-offer, .pty-send, .pty-chip, .lobby-row .play-col .party-leave,
   /* retention.css */
   .lchip, .play-chest.go, .tb-block, .tb-none, .tb-row, .tr-mine, .tr-banner, .tl-kit-art, .tl-card, .tl-pod-plate, .tl-rc, .tl-search, .ar-card, .ar-panel, .ar-status,
+  /* pvp.css */
+  .pv-card-face, .pv-car-arrow, .pv-m, .pv-found, .pv-result, .pv-me-card, .pv-me-none, .pv-me-kit,
   /* lobby-bubble.css */
   .eb-body,
   /* milli.css */

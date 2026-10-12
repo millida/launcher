@@ -487,6 +487,10 @@ export const duplicateProfile = (name: string) => invoke<Profile[]>('duplicate_p
 export const exportMrpack = (profile: string, name: string, version: string, description: string) =>
   invoke<string>('export_mrpack', { profile, name, version, description })
 
+/** Своя сборка → архив `.mrpack` в корень сервера хостинга; возвращает имя архива. */
+export const hostingSendBuild = (profile: string, serverId: string) =>
+  invoke<string>('hosting_send_build', { profile, serverId })
+
 export const getPlaytime = (profile: string) => invoke<number>('get_playtime', { profile })
 
 export interface PlayEntry {
@@ -647,6 +651,8 @@ export interface MillidaPack {
   loader: string
   /** Платная сборка: ставится по доступу на аккаунте. */
   accessRequired: boolean
+  /** Своя сборка студии, файлы закрыты: «Эксклюзив». Остальные сборки студии — переводы. */
+  protectedContent?: boolean
   hasServer: boolean
   /** Кто собрал. Пусто — подписи нет. */
   author?: string | null

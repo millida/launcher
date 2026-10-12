@@ -1,0 +1,209 @@
+/* ============================================================
+   Раздел PvP (12.10.2026) — один экран: слева киты и «Играть»,
+   под ними свои матчи; справа тир-лист с местами #1 #2 #3 и
+   строкой «Моё место». Рамки — слоями из 12-pixel.css.
+   ============================================================ */
+
+.pv { display: flex; flex-direction: column; gap: 22px; padding-bottom: 28px; }
+.pv-cap { margin: 0; font: 900 18px/1 var(--m-font); color: var(--m-fg); }
+
+/* ---------- Играть: карусель китов «обложки на кольце» и одна кнопка ----------
+   Спереди веер обложек, сзади дальняя дуга кольца. Положение, поворот и глубину
+   каждой карточки ставит Pvp.tsx (transform); затемнение — слоем --dim, не фильтром. */
+.pv-play { position: relative; display: flex; flex-direction: column; gap: 6px; }
+.pv-car { position: relative; }
+.pv-car-track {
+  position: relative; height: 472px; overflow: hidden; outline: none; cursor: grab; touch-action: pan-y; user-select: none;
+}
+/* Сцена за кольцом — пиксельная мозаика в цвет кита под указателем (рисует Pvp.tsx на холсте
+   «клетка = пиксель») и ступенчатый подиум. */
+.pv-car-back { position: absolute; inset: 0; overflow: hidden; --kl: #2b63c4; background-color: #0b0d10; --px-n: 10px; clip-path: var(--px-10); }
+.pv-car-mosaic { position: absolute; inset: 0; width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+.pv-car-floor {
+  position: absolute; left: 6%; right: 6%; bottom: 0; height: 60px;
+  background-color: color-mix(in srgb, var(--kl) 64%, #0b0d10);
+  clip-path: polygon(16% 0, 84% 0, 84% 20px, 92% 20px, 92% 40px, 100% 40px, 100% 100%, 0 100%, 0 40px, 8% 40px, 8% 20px, 16% 20px);
+  transition: background-color 0.35s var(--m-ease-smooth);
+}
+.pv-car-track.dragging { cursor: grabbing; }
+.pv-car-track.dragging .pv-kcard { pointer-events: none; }
+/* Точка, вокруг которой стоит кольцо. Наклон, перспективу и порядок по глубине считает Pvp.tsx. */
+.pv-ring { position: absolute; left: 50%; top: 53%; width: 0; height: 0; }
+/* Сама карточка без среза: лента с названием шире рисунка и выходит за его края, как у Dawn.
+   Карточка — один слой: фон в рамке, поверх фигура, лента и тир (отдельные слои на каждую
+   часть умножали работу композитора на четыре). */
+.pv-kcard {
+  position: absolute; left: 0; top: 0; width: 196px; height: 326px; margin: -163px 0 0 -98px; padding: 0; border: 0;
+  cursor: pointer; color: #fff; background: none;
+}
+.pv-card-face {
+  position: absolute; left: 0; right: 0; top: 0; height: 270px; overflow: hidden; background-color: #0b0d10;
+  --px-n: 10px; clip-path: var(--px-10); --px-ol: #0b0d10; --px-ol-w: 3px;
+}
+.pv-kcard.on .pv-card-face { --px-ol: #ffd23f; }
+.pv-card-bg {
+  position: absolute; inset: 0;
+  background-color: var(--kc);
+  background-image: url('/mode-art/PVP-bg.png'); background-size: 96px 96px; background-blend-mode: soft-light;
+  image-rendering: pixelated;
+}
+.pv-card-shade { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; }
+/* Фигура — перед рамкой: обрезку по рамке и выход из неё в центре ставит Pvp.tsx (clip-path, scale). */
+.pv-card-rig {
+  position: absolute; left: 50%; bottom: 82px; height: 214px; width: auto; max-width: none; pointer-events: none;
+  transform: translateX(calc(-1 * var(--fx, 50%)));
+}
+/* Лента: полоса цвета кита с тёмной вставкой, хвосты уходят за рисунок; контур — по всему силуэту. */
+.pv-card-banner {
+  position: absolute; left: -8px; right: -8px; top: 240px; height: 46px; z-index: 2; display: grid; place-items: center;
+  background-color: color-mix(in srgb, var(--kc) 82%, #fff 6%);
+  border-top: 4px solid color-mix(in srgb, var(--kc) 70%, #fff);
+  border-bottom: 5px solid color-mix(in srgb, var(--kc) 62%, #000);
+}
+.pv-card-banner .pv-card-shade { inset: -4px 0 -5px; }
+.pv-card-banner::before, .pv-card-banner::after {
+  content: ''; position: absolute; z-index: -1; top: 6px; width: 20px; height: 40px;
+  background-color: color-mix(in srgb, var(--kc) 55%, #000);
+}
+.pv-card-banner::before { left: -12px; clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 8px 50%); }
+.pv-card-banner::after { right: -12px; clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 50%, 100% 100%, 0 100%); }
+.pv-card-banner-in {
+  display: flex; align-items: center; justify-content: center; gap: 8px; max-width: calc(100% - 20px); height: 28px; padding: 0 10px;
+  background-color: color-mix(in srgb, var(--kc) 48%, #000);
+}
+.pv-card-banner-in img { image-rendering: pixelated; flex: none; }
+.pv-card-banner-in b {
+  font: 400 17px/1 'Monocraft', var(--m-font); text-transform: uppercase; letter-spacing: .02em; color: #fff; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; text-shadow: 2px 2px 0 #000;
+}
+/* Мой тир в ките — жетон под лентой, рисунок не закрывает; тира нет — прочерк. */
+.pv-card-tiertag {
+  position: absolute; left: 50%; top: 292px; z-index: 3; transform: translateX(-50%);
+  display: grid; place-items: center; min-width: 64px; height: 30px; padding: 0 10px 1px;
+  font: 900 17px/1 var(--m-font); letter-spacing: .03em; color: #14100a; background: var(--tr-c, #c8d2dc);
+  --px-n: 4px; clip-path: var(--px-4);
+}
+.pv-card-tiertag[data-lv='1'] { --tr-c: #ffcf3f; }
+.pv-card-tiertag[data-lv='2'] { --tr-c: #e3ebf2; }
+.pv-card-tiertag[data-lv='3'] { --tr-c: #f0a868; }
+.pv-card-tiertag[data-lv='4'] { --tr-c: #9fd0ec; }
+.pv-card-tiertag[data-lv='5'] { --tr-c: #b9c4ce; }
+.pv-card-tiertag.none { min-width: 44px; color: var(--m-fg-subtle); background: rgba(255, 255, 255, 0.08); }
+.pv-car-arrow {
+  position: absolute; top: 50%; z-index: 20; width: 44px; height: 68px; display: grid; place-items: center; border: 0; cursor: pointer;
+  color: #fff; background-color: rgba(8, 10, 12, 0.72); transform: translateY(-50%); --px-n: 5px; clip-path: var(--px-5);
+}
+.pv-car-arrow svg { width: 24px; height: 24px; }
+.pv-car-arrow.l { left: 4px; }
+.pv-car-arrow.r { right: 4px; }
+.pv-car-arrow:disabled { opacity: 0.25; cursor: default; }
+@media (hover: hover) and (pointer: fine) { .pv-car-arrow:not(:disabled):hover { background-color: rgba(8, 10, 12, 0.95); } }
+
+.pv-go-row { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; }
+:root .pv-go { min-width: 340px; height: 84px; gap: 14px; font-size: 32px; }
+:root .pv-go svg { width: 28px; height: 28px; }
+.pv-go > span { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 6px; line-height: 1; }
+.pv-go em { font: 800 14px/1 var(--m-font); font-style: normal; opacity: 0.85; }
+:root .pv-go.is-queue.secondary { font-size: 24px; --btn-bg: #3a3f45; }
+:root .pv-duo { height: 84px; gap: 10px; font-size: 20px; padding: 0 22px; }
+:root .pv-roll { height: 84px; gap: 10px; font-size: 18px; padding: 0 20px; }
+:root .pv-roll svg { width: 22px; height: 22px; }
+/* Искры, когда кит встал на место: квадраты в его цвет разлетаются от карточки и гаснут. */
+.pv-sparks { position: absolute; left: 50%; top: 50%; z-index: 15; width: 0; height: 0; pointer-events: none; }
+.pv-sparks i { position: absolute; left: -4px; top: -4px; width: 8px; height: 8px; background: var(--c); animation: pv-spark 0.56s steps(7) forwards; }
+@keyframes pv-spark { 0% { transform: translate(var(--x0), var(--y0)); opacity: 1; } 100% { transform: translate(var(--x1), var(--y1)); opacity: 0; } }
+.pv-result { display: inline-flex; align-items: center; gap: 10px; height: 84px; padding: 0 18px; font: 800 15px/1 var(--m-font); color: var(--m-fg); background-color: var(--m-surface); --px-n: 10px; clip-path: var(--px-10); }
+.pv-result b { font: 900 22px/1 var(--m-font); }
+.pv-result.win b { color: #5ec64d; }
+.pv-result.loss b { color: #ff6b5e; }
+.pv-result-opp, .pv-result-kit { color: var(--m-fg-muted); }
+.pv-result em, .pv-m em { font: 900 14px/1 var(--m-font); font-style: normal; }
+.pv-result em.up, .pv-m em.up { color: #5ec64d; }
+.pv-result em.down, .pv-m em.down { color: #ff6b5e; }
+
+/* ---------- Мои матчи: строки, как Match Record у Dawn ---------- */
+.pv-matches { display: flex; flex-direction: column; gap: 10px; }
+.pv-m-list { display: flex; flex-direction: column; gap: 6px; }
+.pv-m {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) 110px 130px; align-items: center; gap: 16px;
+  height: 64px; padding: 0 20px 0 18px; background-color: var(--m-surface);
+  --px-n: 5px; clip-path: var(--px-5); --px-fl: var(--res-c); --px-fl-w: 5px;
+}
+.pv-m.win { --res-c: #5ec64d; }
+.pv-m.loss { --res-c: #ff6b5e; }
+.pv-m-kit, .pv-m-opp { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.pv-m-kit img { image-rendering: pixelated; flex: none; }
+.pv-m-kit > span, .pv-m-opp > span { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.pv-m b { font: 900 16px/1 var(--m-font); color: var(--m-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pv-m i { font: 700 12px/1 var(--m-font); font-style: normal; color: var(--m-fg-subtle); }
+.pv-m-elo { text-align: right; white-space: nowrap; }
+.pv-m-res { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+.pv-m-res b { font-size: 20px; }
+.pv-m-res i { color: var(--res-c); font-weight: 800; }
+
+/* ---------- Моё место ---------- */
+.pv-me { display: flex; flex-direction: column; gap: 10px; }
+.pv-me-card {
+  display: flex; flex-direction: column; gap: 14px; padding: 16px 20px;
+  background-color: color-mix(in srgb, var(--m-accent) 10%, var(--m-surface)); --px-n: 10px; clip-path: var(--px-10);
+  --px-fl: var(--m-accent); --px-fl-w: 5px;
+}
+.pv-me-top { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.pv-me-txt { display: flex; flex-direction: column; gap: 6px; min-width: 0; margin-right: auto; }
+.pv-me-txt b { font: 900 26px/1 var(--m-font); color: var(--m-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pv-me-txt i, .pv-me-stat > i { font: 800 12px/1 var(--m-font); font-style: normal; text-transform: uppercase; letter-spacing: .06em; color: var(--m-fg-subtle); }
+.pv-me-stat { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.pv-me-stat > span { display: flex; align-items: center; gap: 12px; }
+.pv-me-num { font: 900 38px/1 var(--m-font); color: var(--m-accent); }
+.pv-me-stat .tr-badge.big { height: 40px; min-width: 62px; font-size: 20px; }
+.pv-me-stat em { font: 800 16px/1 var(--m-font); font-style: normal; color: var(--m-fg-muted); white-space: nowrap; }
+.pv-me-kits { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 6px; }
+.pv-me-kit {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; height: 64px; padding: 0; border: 0; cursor: pointer;
+  color: var(--m-fg-subtle); background-color: rgba(0, 0, 0, 0.26); --px-n: 5px; clip-path: var(--px-5);
+}
+.pv-me-kit img { image-rendering: pixelated; }
+.pv-me-kit .tr-badge { height: 22px; min-width: 38px; font-size: 12px; }
+.pv-me-kit i { font: 900 14px/22px var(--m-font); font-style: normal; }
+.pv-me-kit.none img { opacity: 0.5; }
+.pv-me-kit.on { background-color: color-mix(in srgb, var(--kc) 55%, #0b0d10); --px-ol: #ffd23f; --px-ol-w: 2px; }
+@media (hover: hover) and (pointer: fine) { .pv-me-kit:not(.on):hover { background-color: rgba(255, 255, 255, 0.08); } }
+.pv-me-kitline { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 18px; font: 700 14px/1.2 var(--m-font); color: var(--m-fg-muted); }
+.pv-me-kitline b { font-weight: 900; color: var(--m-fg); }
+.pv-me-kitname { display: inline-flex; align-items: center; gap: 8px; font: 900 16px/1 var(--m-font); color: var(--m-fg); }
+.pv-me-kitname img { image-rendering: pixelated; }
+.pv-me-next { color: #ffd23f; font-weight: 800; }
+/* Тест на следующий тир открыт: строка зовёт в рейтинговый поиск. */
+.pv-me-next.open { color: #06200e; background-color: var(--m-accent); padding: 3px 8px 4px; clip-path: var(--px-4); }
+.pv-me-decay.soon { color: #ff8b7e; }
+.pv-me-none { padding: 14px 18px; font: 700 15px/1.3 var(--m-font); color: var(--m-fg-muted); background-color: var(--m-surface); --px-n: 10px; clip-path: var(--px-10); }
+
+/* ---------- Тир-лист: топ-10 в две колонки ---------- */
+.pv-top { display: flex; flex-direction: column; gap: 10px; }
+.pv-sec-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pv-board-segs .seg { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pv-mine-none { padding: 8px 2px; font: 700 13px/1.3 var(--m-font); color: var(--m-fg-muted); }
+.pv-top-list { gap: 6px; }
+:root .pv-board-all { height: 44px; font-size: 15px; align-self: center; min-width: 260px; }
+.pv-page { display: flex; flex-direction: column; gap: 14px; padding-bottom: 24px; }
+.pv-page-title { margin: 0; font: 900 30px/1 var(--m-font); color: var(--m-fg); }
+
+@media (max-width: 1100px) {
+  .pv-m { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 110px; }
+  .pv-m-elo { display: none; }
+  .pv-me-kits { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+}
+
+/* ---------- «Матч найден» поверх китов ---------- */
+.pv-found {
+  position: absolute; left: 50%; top: 40px; z-index: 5; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 14px; width: min(520px, 90%); padding: 22px 26px 24px;
+  background-color: rgba(8, 10, 12, 0.94); --px-n: 10px; clip-path: var(--px-10); --px-ol: var(--kc); --px-ol-w: 3px;
+  animation: pv-pop 260ms var(--m-ease-smooth) both;
+}
+.pv-found-cap { font: 900 30px/1 var(--m-font); color: #ffd23f; text-transform: uppercase; letter-spacing: .04em; text-shadow: 0 3px 0 rgba(0, 0, 0, 0.5); }
+.pv-found-who { display: flex; align-items: center; gap: 12px; }
+.pv-found-who b { font: 900 24px/1 var(--m-font); color: #fff; }
+.pv-found-sub { font: 700 14px/1 var(--m-font); color: var(--m-fg-muted); }
+@keyframes pv-pop { from { opacity: 0; transform: translateX(-50%) scale(0.92); } to { opacity: 1; transform: translateX(-50%) scale(1); } }
+@media (prefers-reduced-motion: reduce) { .pv-found { animation: none; } }

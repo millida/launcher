@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { setScreen } from '../../state/ui'
 import { useMods } from '../../state/mods'
-import { useLobby } from '../../state/lobbyMode'
+import { openPvp } from '../../state/pvp'
 
 /**
  * Экран «Во что играем», версия 5 (владелец 24.09.2026, 16:09): одна страница
@@ -75,6 +75,6 @@ export function openHubTab(t: HubTab | HubSection) {
 
 /** PvP-арена Millida SMP в разделе PvP хаба: из лобби, топа и баннера (11.10.2026). */
 export function openPvpArena() {
-  useLobby.setState({ hubTarget: { pvp: true } })
-  setScreen('playhub')
+  // PvP — свой раздел, как MCPVP у Dawn (владелец 12.10.2026), а не страница хаба.
+  openPvp('play')
 }

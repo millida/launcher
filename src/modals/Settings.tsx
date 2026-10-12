@@ -38,7 +38,7 @@ import { ColorPicker } from '../components/ColorPicker'
 import { AppIconPicker } from '../components/AppIconPicker'
 import { AudioSettings } from '../components/AudioSettings'
 import { RewindClips } from '../components/RewindClips'
-import { RadioCredits, RadioVolume } from '../components/radio'
+import { MusicCard, RadioCredits } from '../components/radio'
 import { betaChannel, checkForUpdate, pendingUpdate } from '../lib/updater'
 import { useUpdate } from '../state/update'
 import { discordPresence } from '../lib/launch'
@@ -82,6 +82,7 @@ import type { LaunchWindowMode } from '../lib/window'
 import type { SkinSource } from '../lib/gameProfile'
 import { logoutToLogin } from '../lib/session'
 import { PremiumSwatches, ThemeRow } from '../components/premium/ThemeRow'
+import { leavePremiumLook, markThemeChoice } from '../lib/premiumTheme'
 import { accentFromHex, computeAccent, paintAccent, saveAccent, withColorFade } from '../lib/accent'
 import type { Accent } from '../lib/accent'
 import { TAB_MS_DEFAULT, useViewPrefs } from '../state/viewPrefs'
@@ -129,6 +130,8 @@ const ACCENTS: (Accent & { name: string })[] = [
 ]
 
 function applyAccent(raw: Accent, settled = false) {
+  markThemeChoice()
+  leavePremiumLook()
   const a = computeAccent(raw)
   paintAccent(a, settled)
   saveAccent(a)
@@ -487,8 +490,10 @@ export function Settings({ on }: { on: boolean }) {
             }}
           />
         </Row>
-        <Row title="Громкость радио" keys="музыка радио громкость">
-          <RadioVolume />
+        {/* Плеер переехал сюда из верхней полосы лобби (владелец 12.10.2026):
+            громкость, что играет, радио и своя музыка — одним блоком. */}
+        <Row title="Плеер" keys="музыка радио громкость своя музыка треки плеер">
+          <MusicCard />
         </Row>
         <RadioCredits />
       </Group>

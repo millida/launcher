@@ -43,6 +43,13 @@ export const DEMO_USER: boolean = !!import.meta.env.DEV && demoParam()
  * трогая аккаунт. Только dev: в релизе ветка вырезается сборкой.
  */
 export const ECONOMY_SHOWCASE: boolean = !!import.meta.env.DEV && import.meta.env.VITE_ECONOMY_SHOWCASE === '1'
+/**
+ * Витрина пати в dev-приложении (VITE_PARTY_SHOWCASE=1 в .env.local): второго игрока под
+ * рукой нет, поэтому ручки /party отвечают сценарием — нажал «Найти пати», через три
+ * секунды «нашёлся» напарник, пишет в чат и зовёт в PvP. Только dev.
+ */
+export const PARTY_SHOWCASE: boolean = !!import.meta.env.DEV && import.meta.env.VITE_PARTY_SHOWCASE === '1'
+const PARTY_PATHS = /^\/party(\/.*)?$/
 const ECONOMY_PATHS = /^\/(rubies\/(balance|wishlist|topup|shop(\/.*)?|xray\/.*|shards(\/.*)?|weekly(\/.*)?|progress|welcome(\/claim)?)|launcher\/plus|launcher\/creator-code|creator-codes\/public\/[^/]+)$/
 
 function apiBase(): string {
@@ -611,39 +618,322 @@ const bare = (p: string) => p.split('?')[0] || ''
 
 let demoLfgMine: unknown = null
 
+/* Пати в демо и в витрине dev-приложения: второго игрока под рукой нет, поэтому за
+   напарников играют боты. Их можно позвать из «Позвать друга» или найти поиском; они
+   здороваются, отвечают на реплики, голосуют за предложения, сами зовут в PvP и
+   отмечаются готовыми — на них проверяется весь путь пати. */
+interface DemoBot {
+  id: string
+  nick: string
+  /** Через сколько бот отвечает на предложение и отмечается готовым. */
+  voteMs: number
+  readyMs: number
+}
+const DEMO_BOTS: DemoBot[] = [
+  { id: 'u-kirpich', nick: 'Kirpich', voteMs: 1600, readyMs: 2400 },
+  { id: 'u-grom', nick: 'Grom228', voteMs: 3400, readyMs: 4200 },
+]
+/** Боты в меню «Позвать друга» в витрине dev-приложения (в демо они и так есть среди друзей). */
+export const SHOWCASE_FRIENDS: { userId: string; nickname: string; online: boolean; place: 'launcher' | 'game'; playing?: boolean; serverName?: string }[] = import.meta.env.DEV
+  ? [
+      { userId: 'u-kirpich', nickname: 'Kirpich', online: true, place: 'launcher' },
+      { userId: 'u-grom', nickname: 'Grom228', online: true, place: 'game', playing: true, serverName: 'Анархия' },
+    ]
+  : []
+const DEMO_PVP = { kind: 'server', ref: 'mpvp.millida.host', version: '', title: 'PvP-дуэли', game: '26.2' }
+let demoParty: any = null
+let demoSearchAt = 0
+let demoPoke: (() => void) | null = null
+/** Канала с сервером в демо нет: пати перечитывается по этому толчку. */
+export function setDemoPartyPoke(fn: (() => void) | null) {
+  demoPoke = fn
+}
+const demoLine = (userId: string, nickname: string, text: string, system = false) => ({
+  id: 'l' + Math.random().toString(36).slice(2), userId, nickname, text, at: Date.now(), ...(system ? { system: true } : {}),
+})
+const demoSay = (line: unknown) => {
+  if (demoParty) demoParty.chat = [...demoParty.chat, line].slice(-40)
+}
+const demoSys = (text: string) => demoSay(demoLine('', '', text, true))
+const demoLater = (ms: number, run: () => void) =>
+  setTimeout(() => {
+    if (!demoParty) return
+    run()
+    demoParty.rev++
+    demoPoke?.()
+  }, ms)
+const botsIn = (): DemoBot[] => (demoParty ? DEMO_BOTS.filter((b) => demoParty.members.some((m: any) => m.userId === b.id)) : [])
+const botFree = (): DemoBot | undefined => DEMO_BOTS.find((b) => !demoParty || !demoParty.members.some((m: any) => m.userId === b.id))
+const demoFull = () => !!demoParty && demoParty.members.length >= demoParty.capacity
+const demoOffer = (byId: string, target: any) => ({
+  id: 'p' + Math.random().toString(36).slice(2), byId, target, at: Date.now(), expiresAt: Date.now() + 60_000, answers: { [byId]: true },
+})
+function demoAccept() {
+  const target = demoParty.proposal.target
+  demoParty.target = target
+  demoParty.targetRev++
+  demoParty.proposal = null
+  for (const m of demoParty.members) {
+    m.ready = false
+    m.have = null
+  }
+  demoSys('Идём: ' + target.title)
+  const rev = demoParty.targetRev
+  // Боты «ставят сборку» и отмечаются готовыми — каждый в своём темпе.
+  for (const b of botsIn())
+    demoLater(b.readyMs, () => {
+      const m = demoParty.members.find((x: any) => x.userId === b.id)
+      if (m && demoParty.target && demoParty.targetRev === rev) {
+        m.ready = true
+        m.have = { kind: demoParty.target.kind, ref: demoParty.target.ref, version: demoParty.target.version }
+      }
+    })
+}
+/** Все в пати ответили «да» — предложение принято. */
+function demoSettle() {
+  const p = demoParty?.proposal
+  if (p && demoParty.members.every((m: any) => p.answers[m.userId] === true)) demoAccept()
+}
+/** Боты отвечают на открытое предложение: тот, кто предложил, уже «за». */
+function demoBotsVote() {
+  const p = demoParty?.proposal
+  if (!p) return
+  for (const b of botsIn()) {
+    if (p.answers[b.id] === true) continue
+    demoLater(b.voteMs, () => {
+      const cur = demoParty.proposal
+      if (!cur || cur.id !== p.id) return
+      cur.answers = { ...cur.answers, [b.id]: true }
+      demoSettle()
+    })
+  }
+}
+function demoPropose(byId: string, nick: string, target: any) {
+  demoParty.proposal = demoOffer(byId, target)
+  demoSys(nick + ' предлагает: ' + target.title)
+  demoBotsVote()
+}
+function demoPartyNew() {
+  demoParty = {
+    id: 'demo-party', leaderId: DEMO_ID, capacity: 3, maxCapacity: 8, targetRev: 1, rev: 1, launch: null, target: null,
+    members: [{ userId: DEMO_ID, nickname: DEMO_NICK, avatarUrl: null, role: 'leader', ready: false, joinedAt: 1, have: null }],
+    voice: [], chat: [], proposal: null, room: { open: false, since: null },
+  }
+  return demoParty
+}
+/* Комнаты ботов в списке «Найти пати»: у каждой своя цель; пока я не в ней — она «открыта». */
+const DEMO_VANILLA = { kind: 'version', ref: '1.21.11', version: '1.21.11', title: 'Minecraft 1.21.11', game: '1.21.11' }
+const demoRooms = () =>
+  DEMO_BOTS.filter((b) => !demoParty || !demoParty.members.some((m: any) => m.userId === b.id)).map((b, i) => ({
+    id: 'room-' + b.id,
+    host: { userId: b.id, nickname: b.nick, avatarUrl: null },
+    target: i === 0 && b.id === DEMO_BOTS[0]!.id ? DEMO_PVP : DEMO_VANILLA,
+    size: 1,
+    capacity: 3,
+    since: Date.now() - (i + 1) * 47_000,
+    members: [{ userId: b.id, nickname: b.nick, avatarUrl: null }],
+  }))
+/** Вхожу в комнату бота: он лидер, цель уже выбрана, остаётся отметиться готовым. */
+function demoJoinRoom(id: string) {
+  const b = DEMO_BOTS.find((x) => 'room-' + x.id === id)
+  if (!b) return false
+  const target = b.id === DEMO_BOTS[0]!.id ? DEMO_PVP : DEMO_VANILLA
+  demoParty = {
+    id: 'demo-party', leaderId: b.id, capacity: 3, maxCapacity: 8, targetRev: 2, rev: 1, launch: null, target,
+    members: [
+      { userId: b.id, nickname: b.nick, avatarUrl: null, role: 'leader', ready: true, joinedAt: 1, have: null },
+      { userId: DEMO_ID, nickname: DEMO_NICK, avatarUrl: null, role: 'member', ready: false, joinedAt: Date.now(), have: null },
+    ],
+    voice: [{ userId: b.id, since: Date.now(), muted: false, screen: false }],
+    chat: [], proposal: null, room: { open: true, since: Date.now() - 60_000 },
+  }
+  demoSys(DEMO_NICK + ' зашёл')
+  demoLater(1400, () => demoSay(demoLine(b.id, b.nick, 'привет! жми «Готов» — и заходим')))
+  return true
+}
+function demoBotJoins(b: DemoBot) {
+  if (!demoParty) demoPartyNew()
+  if (demoFull() || demoParty.members.some((m: any) => m.userId === b.id)) return
+  const first = botsIn().length === 0
+  demoParty.members.push({ userId: b.id, nickname: b.nick, avatarUrl: null, role: 'member', ready: false, joinedAt: Date.now(), have: null })
+  demoParty.voice = [...demoParty.voice, { userId: b.id, since: Date.now(), muted: false, screen: false }]
+  demoSys(b.nick + ' зашёл')
+  demoLater(1500, () => demoSay(demoLine(b.id, b.nick, demoParty.target ? 'привет, я с вами' : first ? 'привет! го пвп?' : 'ку, я с вами')))
+  // Зашёл в комнату с объявленной целью — сразу ставит её и отмечается готовым.
+  if (demoParty.target) {
+    const rev = demoParty.targetRev
+    demoLater(b.readyMs, () => {
+      const m = demoParty.members.find((x: any) => x.userId === b.id)
+      if (m && demoParty.target && demoParty.targetRev === rev) {
+        m.ready = true
+        m.have = { kind: demoParty.target.kind, ref: demoParty.target.ref, version: demoParty.target.version }
+      }
+    })
+  }
+  // Первый бот сам зовёт играть, если пати ещё никуда не идёт.
+  if (first)
+    demoLater(4400, () => {
+      if (!demoParty.proposal && !demoParty.target && demoParty.members.some((m: any) => m.userId === b.id)) demoPropose(b.id, b.nick, DEMO_PVP)
+    })
+}
+function demoBotLeaves(userId: string) {
+  const b = DEMO_BOTS.find((x) => x.id === userId)
+  demoParty.members = demoParty.members.filter((m: any) => m.userId !== userId)
+  demoParty.voice = demoParty.voice.filter((v: any) => v.userId !== userId)
+  if (demoParty.proposal) {
+    const { [userId]: _gone, ...rest } = demoParty.proposal.answers
+    demoParty.proposal.answers = rest
+    if (demoParty.proposal.byId === userId) demoParty.proposal = null
+  }
+  demoSys((b ? b.nick : 'Игрок') + ' вышел')
+  demoSettle()
+}
+/** Ответ бота на реплику: на «пвп» зовёт в дуэли, на остальное отвечает по смыслу. */
+function demoBotReply(text: string) {
+  const b = botsIn()[0]
+  if (!b) return
+  const t = text.toLowerCase()
+  const answer = /пвп|pvp|дуэл/.test(t)
+    ? 'го, кидаю'
+    : /готов/.test(t)
+      ? 'я тоже готов'
+      : /привет|ку\b|хай|здаров/.test(t)
+        ? 'привет!'
+        : /минут|подожд|ща|сек/.test(t)
+          ? 'ок, жду'
+          : /не могу|потом|ухожу/.test(t)
+            ? 'жаль, давай позже'
+            : /выжив|анарх|сервер|сборк/.test(t)
+              ? 'я за, предлагай кнопкой снизу'
+              : ['го', 'давай', 'я за', 'ок', 'норм'][Math.floor(Math.random() * 5)]!
+  demoLater(1300, () => {
+    demoSay(demoLine(b.id, b.nick, answer))
+    if (/пвп|pvp|дуэл/.test(t) && !demoParty.proposal) demoPropose(b.id, b.nick, DEMO_PVP)
+  })
+}
+const demoPartyReply = () => ({ party: demoParty ? structuredClone(demoParty) : null })
+if (import.meta.env.DEV && typeof location !== 'undefined' && /[?&]party=1\b/.test(location.search)) {
+  demoPartyNew()
+  demoBotJoins(DEMO_BOTS[0]!)
+}
+
 const ROUTES: [RegExp, Handler][] = [
-  [/^\/party$/, (_p, method) => method === 'GET' ? {
-    me: DEMO_ID,
-    invites: [],
-    safety: { ageBracket: '13_15', newAccount: false },
-    party: {
-      id: 'demo-party', leaderId: DEMO_ID, capacity: 3, maxCapacity: 8, targetRev: 1, rev: 1, launch: null,
-      target: { kind: 'version', ref: '1.21.4', version: '1.21.4', title: 'Minecraft 1.21.4', game: '1.21.4' },
-      members: [
-        { userId: DEMO_ID, nickname: DEMO_NICK, avatarUrl: null, role: 'leader', ready: true, joinedAt: 1, have: null },
-        { userId: 'demo-mate', nickname: 'Kirpich', avatarUrl: null, role: 'member', ready: true, joinedAt: 2,
-          have: { kind: 'version', ref: '1.21.4', version: '1.21.4' } },
-      ],
-      voice: [{ userId: 'demo-mate', since: 1, muted: false, screen: false }],
-    },
-  } : undefined],
+  [/^\/party$/, (_p, method) => {
+    if (method === 'POST' && !demoParty) demoPartyNew()
+    return { me: DEMO_ID, invites: [], safety: { ageBracket: '13_15', newAccount: false }, ...demoPartyReply() }
+  }],
+  [/^\/party\/rooms$/, () => ({ rooms: demoRooms() })],
+  [/^\/party\/rooms\/[^/]+\/join$/, (p) => {
+    const id = decodeURIComponent(bare(p).split('/')[3] || '')
+    if (!demoJoinRoom(id)) return Promise.reject(new Error('Комнаты больше нет'))
+    return demoPartyReply()
+  }],
+  [/^\/party\/room$/, (_p, _m, body) => {
+    if (!demoParty) demoPartyNew()
+    if (body?.target) {
+      demoParty.target = body.target
+      demoParty.targetRev++
+    }
+    demoParty.room = { open: !!body?.open, since: body?.open ? Date.now() : null }
+    // В открытую комнату через несколько секунд заходит случайный игрок — бот.
+    if (body?.open)
+      demoLater(4200, () => {
+        const b = botFree()
+        if (b && demoParty.room?.open && !demoFull()) demoBotJoins(b)
+      })
+    return demoPartyReply()
+  }],
+  [/^\/party\/room\/close$/, () => {
+    if (demoParty) demoParty.room = { open: false, since: null }
+    return demoPartyReply()
+  }],
+  [/^\/party\/leave$/, () => {
+    demoParty = null
+    demoSearchAt = 0
+    return { party: null }
+  }],
+  [/^\/party\/kick$/, (_p, _m, body) => {
+    if (demoParty && body?.userId && body.userId !== DEMO_ID) demoBotLeaves(String(body.userId))
+    return demoPartyReply()
+  }],
+  [/^\/party\/invite$/, (_p, _m, body) => {
+    const b = DEMO_BOTS.find((x) => x.id === body?.userId)
+    if (!demoParty) demoPartyNew()
+    // Бот «видит» приглашение и заходит через пару секунд; остальным в показе звать некого.
+    if (b) demoLater(2200, () => demoBotJoins(b))
+    return { ok: true, simulated: !!b }
+  }],
+  [/^\/party\/chat$/, (_p, _m, body) => {
+    if (!demoParty) return demoPartyReply()
+    const text = String(body?.text || '').slice(0, 300)
+    demoSay(demoLine(DEMO_ID, DEMO_NICK, text))
+    demoBotReply(text)
+    return demoPartyReply()
+  }],
+  [/^\/party\/propose$/, (_p, _m, body) => {
+    if (!demoParty || !body?.target) return demoPartyReply()
+    demoPropose(DEMO_ID, DEMO_NICK, body.target)
+    return demoPartyReply()
+  }],
+  [/^\/party\/propose\/answer$/, (_p, _m, body) => {
+    const p = demoParty?.proposal
+    if (!p) return demoPartyReply()
+    if (body?.yes) {
+      p.answers = { ...p.answers, [DEMO_ID]: true }
+      demoSettle()
+    } else {
+      demoSys(DEMO_NICK + ' не хочет: ' + p.target.title)
+      demoParty.proposal = null
+    }
+    return demoPartyReply()
+  }],
+  [/^\/party\/(target|ready|launch|capacity|promote)$/, (p, _m, body) => {
+    if (demoParty && /target$/.test(bare(p)) && body?.target) {
+      demoParty.target = body.target
+      demoParty.targetRev++
+    }
+    if (demoParty && /ready$/.test(bare(p))) {
+      const me = demoParty.members.find((m: any) => m.userId === DEMO_ID)
+      if (me) {
+        me.ready = !!body?.ready
+        me.have = body?.have || null
+      }
+      // В комнате бота лидер — он: все готовы, и он запускает.
+      if (me?.ready && demoParty.leaderId !== DEMO_ID && demoParty.target)
+        demoLater(1800, () => {
+          demoParty.launch = { seq: Date.now(), at: Date.now(), addr: null, target: demoParty.target }
+        })
+    }
+    if (demoParty && /launch$/.test(bare(p)) && demoParty.target) {
+      demoParty.launch = { seq: Date.now(), at: Date.now(), addr: body?.addr ?? null, target: demoParty.target }
+    }
+    return demoPartyReply()
+  }],
+  [/^\/party\/voice\/.*$/, () => Promise.reject(new Error('В показе голоса нет'))],
   [/^\/party\/friends$/, () => ({ parties: [] })],
-  [/^\/party\/lfg\/requests$/, () => ({ requests: [] })],
+  [/^\/party\/lfg\/requests$/, () => ({
+    requests: demoSearchAt && Date.now() - demoSearchAt > 3000 && !demoFull() && botFree() ? [{ id: 'demo-req' }] : [],
+  })],
+  [/^\/party\/lfg\/requests\/[^/]+\/accept$/, () => {
+    const b = botFree()
+    if (b) demoBotJoins(b)
+    // Поиск идёт дальше, пока пати не полная: второй бот найдётся чуть позже.
+    demoSearchAt = demoFull() || !botFree() ? 0 : Date.now() + 5000
+    return {}
+  }],
   [/^\/party\/lfg\/remove$/, () => {
     demoLfgMine = null
+    demoSearchAt = 0
     return {}
   }],
   [/^\/party\/lfg$/, (_p, method, body) => method === 'POST' ? (() => {
     const tags = (typeof body === 'string' ? JSON.parse(body) : body)?.tags
-    demoLfgMine = { id: 'demo-mine', user: { userId: DEMO_ID, nickname: DEMO_NICK, avatarUrl: null }, size: 2, capacity: 3,
+    demoLfgMine = { id: 'demo-mine', user: { userId: DEMO_ID, nickname: DEMO_NICK, avatarUrl: null }, size: 1, capacity: 3,
       createdAt: Date.now(), expiresAt: Date.now() + 3600_000, requested: false, tags }
+    demoSearchAt = Date.now()
+    if (!demoParty) demoPartyNew()
     return {}
-  })() : method === 'GET' ? {
-    mine: demoLfgMine,
-    cards: [{ id: 'demo-card', user: { userId: 'demo-x', nickname: 'Steve', avatarUrl: null }, size: 1, capacity: 4,
-      createdAt: Date.now(), expiresAt: Date.now() + 3600_000, requested: false,
-      tags: { mode: 'survival', version: '1.21.4', pack: '', lang: 'ru', region: 'ru_west', voice: true, time: 'now' } }],
-  } : undefined],
+  })() : method === 'GET' ? { mine: demoLfgMine, cards: [] } : undefined],
   // Код автора
   [/^\/launcher\/creator-code$/, (_p, method, body) => creatorCode(method, body)],
   [/^\/creator-codes\/public\/[^/]+$/, (p) => {
@@ -1028,7 +1318,12 @@ const ROUTES: [RegExp, Handler][] = [
  * живым — публичные данные в демо остаются настоящими.
  */
 export function demoAnswer(pathname: string, opts?: RequestInit): Promise<unknown> | undefined {
-  if (!DEMO_USER && !(ECONOMY_SHOWCASE && ECONOMY_PATHS.test(bare(pathname)))) return undefined
+  if (
+    !DEMO_USER &&
+    !(ECONOMY_SHOWCASE && ECONOMY_PATHS.test(bare(pathname))) &&
+    !(PARTY_SHOWCASE && PARTY_PATHS.test(bare(pathname)))
+  )
+    return undefined
   const path = bare(pathname)
   const method = ((opts && opts.method) || 'GET').toUpperCase()
   let body: any

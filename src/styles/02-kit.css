@@ -471,9 +471,11 @@ svg.msg-tick.read{color:var(--m-tick-read,#4C9FFE);opacity:1}
 /* ============ Buttons (sm 40/r12/13 · md 48/r16/14 · lg 56/r16/15) ============ */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-weight:600;border-radius:var(--m-r-md);transition:all var(--m-t-fast);position:relative;overflow:hidden;white-space:nowrap}
 .btn:active{transform:scale(.98)}
-.btn.sm{height:40px;padding:0 16px;font-size:13px;border-radius:var(--m-r-ctl)}
-.btn.md{height:48px;padding:0 22px;font-size:14px}
-.btn.lg{height:56px;padding:0 30px;font-size:15px}
+/* 12.10.2026 (владелец: «кнопки во всём интерфейсе чуть поменьше, больше воздуха»):
+   каждая ступень на 4px ниже — sm 36 · md 44 · lg 52; поля идут в ногу (.input). */
+.btn.sm{height:36px;padding:0 14px;font-size:13px;border-radius:var(--m-r-ctl)}
+.btn.md{height:44px;padding:0 20px;font-size:14px}
+.btn.lg{height:52px;padding:0 28px;font-size:15px}
 .btn.primary{background:var(--m-grad);color:var(--m-accent-fg)}
 /* No accent glow: a blurred drop shadow spreads downwards only and read as a
    lighting bug rather than as depth. */
@@ -512,12 +514,12 @@ svg.msg-tick.read{color:var(--m-tick-read,#4C9FFE);opacity:1}
 
 /* ============ Inputs ============ */
 .field label{display:block;font-size:13.5px;font-weight:600;margin-bottom:7px}
-.input{display:flex;align-items:center;gap:10px;height:48px;padding:0 16px;border-radius:var(--m-r-md);background:var(--m-inset);transition:box-shadow var(--m-t-fast)}
+.input{display:flex;align-items:center;gap:10px;height:44px;padding:0 16px;border-radius:var(--m-r-md);background:var(--m-inset);transition:box-shadow var(--m-t-fast)}
 .input:focus-within{box-shadow:0 0 0 2px var(--m-accent)}
 .input input{flex:1;background:none;border:0;outline:0;font-size:14px;min-width:0}
 .input input::placeholder{color:var(--m-fg-faint)}
 .input svg{width:16px;height:16px;color:var(--m-fg-subtle)}
-.input.sm{height:40px;border-radius:var(--m-r-ctl);font-size:13px}
+.input.sm{height:36px;border-radius:var(--m-r-ctl);font-size:13px}
 
 /* ============ Pills, badges, segments ============ */
 .pill{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:var(--m-r-pill);font-size:12px;font-weight:600;background:var(--m-surface-2);color:var(--m-fg-muted);flex:none;white-space:nowrap;max-width:100%;overflow:hidden}

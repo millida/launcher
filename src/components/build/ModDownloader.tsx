@@ -247,11 +247,14 @@ export function ModDownloader({
         .then((r) => (r.ok ? r.json() : null))
         .then((p: { body?: string } | null) => live && setBody(p?.body || cur.desc))
         .catch(() => live && setBody(cur.desc))
-      void mrVersions(cur.id, kind, build, fit).then((v) => {
-        if (!live) return
-        setVers(v)
-        setVerId(queue.get(qkey(cur))?.ver.id || v[0]?.id || '')
-      })
+      void mrVersions(cur.id, kind, build, fit)
+        .then((v) => {
+          if (!live) return
+          setVers(v)
+          setVerId(queue.get(qkey(cur))?.ver.id || v[0]?.id || '')
+        })
+        // Modrinth не ответил — «нет версии», а не вечное «Загружаем версии» с выключенной кнопкой.
+        .catch(() => live && setVers([]))
     } else {
       setBody(cur.desc)
       void cfFiles(Number(cur.id), fit.ver ? build.version : '')

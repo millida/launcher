@@ -388,6 +388,7 @@ pub fn run() {
             commands::content::add_local_file,
             commands::content::pick_content_files,
             commands::content::export_mrpack,
+            commands::content::hosting_send_build,
             commands::content::install_version,
             commands::content::cf_search,
             commands::content::cf_install,

@@ -5,6 +5,7 @@ import { Installs } from '../components/Installs'
 import { LobbyCharacter } from '../components/lobby/LobbyCharacter'
 import { EmoteBubble } from '../components/lobby/EmoteBubble'
 import { PartyBar } from '../components/lobby/PartyBar'
+import { PartyPanel } from '../components/lobby/PartyPanel'
 import { isLeader, leaveParty, loadParty, partyWithOthers, usePartyStore } from '../state/party'
 import { stopMateSearch, useMateSearch } from '../state/mateSearch'
 import { partyPlayPressed } from '../lib/partyPlay'
@@ -101,6 +102,12 @@ export function Play({ on }: { on: boolean }) {
   const inParty = partyWithOthers(party)
   const partyMember = inParty && !isLeader(party, partyMe)
   const partyReady = partyMember && !!party?.members.find((m) => m.userId === partyMe)?.ready
+  const searching = useMateSearch((s) => s.searching)
+  // Лобби в режиме пати (владелец 12.10.2026): идёт поиск или пати собрана —
+  // баннер, плитки и сундук уходят, на их месте состав, голос и чат.
+  const social = inParty || searching || !!party?.room?.open
+  // Пати договорилась о другом, чем стоит у меня: плашка показывает общий выбор.
+  const partyGoes = (inParty || party?.room?.open) && party?.target ? party.target.title : null
   const hoursOf = (name: string) => playStats.builds.find((b) => b.key === name) || null
 
   useEffect(() => {
@@ -187,6 +194,7 @@ export function Play({ on }: { on: boolean }) {
     )
   const modeTitle =
     mode?.kind === 'build' ? mode.name : mode?.kind === 'version' ? 'Minecraft ' + mode.version : mode?.kind === 'premium' ? mode.title : mode?.kind === 'server' ? mode.name : 'Ещё не выбрано'
+  const partyOther = !!partyGoes && partyGoes !== modeTitle
   const modeMeta =
     mode?.kind === 'build' && sel ? (
       <>
@@ -223,7 +231,7 @@ export function Play({ on }: { on: boolean }) {
     ) : null
 
   return (
-    <section className={'screen lobby' + (on ? ' on' : '')} id="s-play">
+    <section className={'screen lobby' + (social ? ' lobby-social' : '') + (on ? ' on' : '')} id="s-play">
       <div className="hero-live-wrap lobby-wrap">
       <div
         className="hero-live"
@@ -239,18 +247,22 @@ export function Play({ on }: { on: boolean }) {
       <PartyBar on={on} />
       <EmoteBubble />
       {/* Баннер справа виден всем, и новичкам тоже: реклама на самом видном месте (владелец 11.10.2026). */}
-      <Recommend on={on} />
+      {social ? <PartyPanel on={on} mode={mode} modeTitle={modeTitle} /> : <Recommend on={on} />}
       {/* Левый край — как в Brawl Stars: крупный сундук и под ним разделы.
           Боковой полосы на главной нет (владелец 23.09.2026). */}
       {/* Ежедневный бонус живёт в магазине (правка владельца 21:43): плитки
           бонуса нет, у «Магазина» «!», пока бонус не забран. */}
-      <div className="lobby-left">
-        <nav className="lobby-nav" aria-label="Разделы">
-          <HubTile kind="shop" />
-          <HubTile kind="wardrobe" />
-          <HubTile kind="server" />
-        </nav>
-      </div>
+      {social ? null : (
+        <div className="lobby-left">
+          <nav className="lobby-nav" aria-label="Разделы">
+            <HubTile kind="shop" />
+            <HubTile kind="pvp" />
+            <HubTile kind="wardrobe" />
+            <HubTile kind="server" />
+          </nav>
+        </div>
+      )}
+      {/* Кнопки пати стоят над «Играть» всегда: «Найти пати» на том же месте становится «Отменой». */}
       <div className="lobby-who">
         <LobbyChips on={on} />
       </div>
@@ -283,16 +295,16 @@ export function Play({ on }: { on: boolean }) {
                 меняется раз в пару секунд — «загляни, может найдёшь интереснее». */}
             <span className={'lobby-mode-card' + (mode ? ' kind-' + mode.kind : ' empty')}>
               <span className="lobby-mode-art">
-                {mode ? modeArt : null}
-                <span className={'lobby-mode-reelbox' + (mode ? ' under' : '')}>
+                {mode && !partyOther ? modeArt : null}
+                <span className={'lobby-mode-reelbox' + (mode && !partyOther ? ' under' : '')}>
                   <ModeReel />
                 </span>
-                {modeTag ? <span className="mode-tile-tag">{modeTag}</span> : null}
+                {modeTag && !partyOther ? <span className="mode-tile-tag">{modeTag}</span> : null}
               </span>
               <span className="lobby-mode-body">
-                <span className="lobby-mode-lab">{dayZero && !chosen ? 'Начни отсюда' : 'Сегодня играем'}</span>
-                <b>{modeTitle}</b>
-                {modeMeta ? <span className="meta">{modeMeta}</span> : null}
+                <span className="lobby-mode-lab">{partyGoes ? 'Пати идёт' : dayZero && !chosen ? 'Начни отсюда' : 'Сегодня играем'}</span>
+                <b>{partyGoes || modeTitle}</b>
+                {modeMeta && !partyOther ? <span className="meta">{modeMeta}</span> : null}
                 {packUpdate ? (
                   <span className="meta" id="lobbyPackUpdate">
                     <span className="hero-num">
@@ -364,8 +376,12 @@ export function Play({ on }: { on: boolean }) {
                         {btn.pct + '%'}
                       </span>
                     </>
-                  ) : partyMember ? (
-                    partyReady ? 'Не готов' : 'Готов'
+                  ) : inParty ? (
+                    <>
+                      {partyMember ? (partyReady ? 'Не готов' : 'Готов') : 'Играть'}
+                      {/* В пати кнопка говорит, что запустит (владелец 12.10.2026). */}
+                      <span className="play-what">{party?.target ? party.target.title : mode ? modeTitle : 'Куда идём?'}</span>
+                    </>
                   ) : (
                     <>
                       Играть
@@ -394,10 +410,11 @@ export function Play({ on }: { on: boolean }) {
           {/* В пати — выход вместо сундука (владелец 11.10.2026): без него, когда
               зашли незнакомцы и не жмут «Готов», уйти можно было только из меню на
               фигурке, которое не находят. Соло — на том же месте сундук. */}
-          {inParty ? (
+          {searching && !inParty ? null : inParty ? (
             <button
               className="party-leave"
               data-sound="nav"
+              data-track="party_leave"
               onClick={() =>
                 void leaveParty().then(() => {
                   // A running «Найти напарника» would let the next request in and

@@ -259,6 +259,8 @@
 .tr-badge[data-lv='4'] { --tr-c: #8fb3c9; }
 .tr-badge[data-lv='5'] { --tr-c: #7d8b97; }
 .tr-badge[data-h='0'] { background-color: color-mix(in srgb, var(--tr-c, #9aa7b4) 62%, #0b0f14); color: var(--m-fg); }
+/* MT — средняя ступень (как у MCPVP): между плотным HT и тусклым LT. */
+.tr-badge[data-h='m'] { background-color: color-mix(in srgb, var(--tr-c, #9aa7b4) 82%, #0b0f14); color: #10141a; }
 .tr-badge.big { min-width: 76px; height: 52px; font-size: 26px; --px-n: 5px; clip-path: var(--px-5); }
 
 .tr-board { display: flex; flex-direction: column; gap: 12px; }
@@ -307,3 +309,9 @@
 #s-top .tb-kinds .seg.minor { height: 32px; padding: 0 10px; font-size: 13px; gap: 6px; color: var(--m-fg-subtle); align-self: center; }
 #s-top .tb-kinds .seg.minor svg { width: 14px; height: 14px; }
 #s-top .tb-kinds .seg.minor.on { color: var(--m-fg); }
+/* Место в топе недели и прирост ELO (12.10.2026). */
+.lchip-pos {
+  display: inline-flex; align-items: baseline; gap: 6px; height: 26px; padding: 0 9px; align-items: center;
+  font: 900 15px/1 var(--m-font); color: #1a1206; background: #ffc24a; --px-n: 4px; clip-path: var(--px-4);
+}
+.lchip-pos i { font: 800 12px/1 var(--m-font); font-style: normal; color: #1f6b2a; }

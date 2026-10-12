@@ -272,7 +272,7 @@ export function PvpArena() {
               <span className="ar-me-tier">
                 <b className="ar-me-none">Без тира</b>
               </span>
-              <span className="ar-me-nums">Первый вход — экзамен против ботов, тир сразу</span>
+              <span className="ar-me-nums">Первый тир — экзамен с ботом, выше LT3 — тесты с игроками</span>
             </>
           )}
           {st ? (

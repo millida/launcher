@@ -233,6 +233,88 @@ pub async fn export_mrpack(profile: String, name: String, version: String, descr
     Ok(res)
 }
 
+/// Потолок архива сборки для сервера хостинга (как у бесплатного тарифа на сервере).
+const HOSTING_PACK_MAX_BYTES: usize = 128 * 1024 * 1024;
+/// Кусок заливки: меньше потолка тела у API, чтобы обрыв стоил одного куска.
+const HOSTING_PACK_CHUNK: usize = 4 * 1024 * 1024;
+
+/// Имя архива на сервере: только `[A-Za-z0-9._-]`, с отметкой времени — принятый
+/// установкой архив сервер перезаписать не даёт.
+fn hosting_pack_name(profile: &str, stamp: u64) -> String {
+    let stem: String = profile
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
+        .take(40)
+        .collect();
+    let stem = if stem.is_empty() { "build".to_string() } else { stem };
+    format!("{}-{}.mrpack", stem, stamp)
+}
+
+/// Свою сборку — на сервер хостинга: ядро собирает из неё `.mrpack` и заливает
+/// кусками в корень сервера. Webview называет только сборку и сервер; ни пути
+/// на диске, ни адреса API он не знает. Возвращает имя залитого архива —
+/// установку по нему запускает уже обычный запрос API.
+#[tauri::command]
+pub async fn hosting_send_build(profile: String, server_id: String) -> Result<String, String> {
+    if server_id.is_empty() || server_id.len() > 64 || !server_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        return Err("bad server".into());
+    }
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let name = hosting_pack_name(&profile, stamp);
+    let out = engine::data_dir().join("exports").join("hosting").join(&name);
+    if let Some(dir) = out.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    let dst = out.to_string_lossy().to_string();
+    let loader_build = engine::export_loader_build(&profile).await;
+    let title = profile.clone();
+    super::blocking(move || engine::export_mrpack(profile, dst, title, String::new(), String::new(), loader_build)).await??;
+    let bytes = tokio::fs::read(&out).await.map_err(|e| e.to_string())?;
+    let _ = tokio::fs::remove_file(&out).await;
+    let total = bytes.len();
+    if total == 0 {
+        return Err("Сборка пустая — выгружать нечего".into());
+    }
+    if total > HOSTING_PACK_MAX_BYTES {
+        return Err("Сборка больше 128 МБ — на сервер из лаунчера её не отправить".into());
+    }
+    let mut offset = 0usize;
+    while offset < total {
+        let end = (offset + HOSTING_PACK_CHUNK).min(total);
+        let path = format!(
+            "/hosting/servers/{}/files/upload?path={}&offset={}&total={}&append={}",
+            server_id,
+            name,
+            offset,
+            total,
+            if offset == 0 { 0 } else { 1 }
+        );
+        engine::millida_post_bytes_auth(path, bytes[offset..end].to_vec()).await?;
+        offset = end;
+    }
+    Ok(name)
+}
+
+#[cfg(test)]
+mod hosting_pack_tests {
+    use super::hosting_pack_name;
+
+    #[test]
+    fn name_is_safe_for_the_server_root() {
+        let n = hosting_pack_name("Выживание с друзьями / mods..", 42);
+        assert_eq!(n, "mods-42.mrpack");
+        assert!(n.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_'));
+    }
+
+    #[test]
+    fn empty_stem_still_gives_a_name() {
+        assert_eq!(hosting_pack_name("Сборка", 7), "build-7.mrpack");
+    }
+}
+
 /// Reads every jar in the build and says which files a catalogue vouches for,
 /// which are unknown and which do things a mod has no business doing.
 #[tauri::command]

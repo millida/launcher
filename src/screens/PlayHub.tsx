@@ -1,5 +1,5 @@
 import { useTopBar } from '../state/topbar'
-import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { blockFor, serverTint } from '../components/catalog/itemView'
 import type { CSSProperties, ReactNode } from 'react'
 import { modeBackground, modeLook } from '../components/playhub/modeArt'
@@ -60,6 +60,7 @@ import { useSite } from '../components/catalog/siteStore'
 import { useAnarchy } from '../lib/anarchy'
 import { openBuildSettings } from '../state/instance'
 import { PvpPage } from '../components/playhub/PvpPage'
+import { openPvp } from '../state/pvp'
 import { ensurePvpBuild, pvpBuildName } from '../lib/versionBuild'
 import { hasTauri } from '../ipc/tauri'
 
@@ -514,6 +515,29 @@ export function PlayHub({ on }: { on?: boolean }) {
 
   const top0 = () => document.getElementById('s-playhub')?.scrollIntoView({ block: 'start' })
 
+  /*
+   * Прокрутка при смене страницы сборки (владелец 12.10.2026: «другие сборки открываются
+   * не сверху, а снизу»). Область прокрутки одна на все экраны, и без этого новая страница
+   * наследовала место, докуда долистали прошлую. Открыли сборку (из хаба, каталога,
+   * «Ещё от…») — сверху. Вернулись «Назад» в хаб — туда, где были до неё; в каталог —
+   * сверху, а его лента сама вернёт своё место (backTop в SiteCatalog).
+   */
+  const hubY = useRef(0)
+  const shownPage = useRef<string | null>(null)
+  const rememberHub = () => {
+    if (shownPage.current) return
+    const c = document.querySelector('.content')
+    hubY.current = c ? c.scrollTop : 0
+  }
+  useLayoutEffect(() => {
+    const was = shownPage.current
+    shownPage.current = pageId
+    if (was === pageId) return
+    const c = document.querySelector('.content')
+    if (!c) return
+    c.scrollTop = pageId || all ? 0 : hubY.current
+  }, [pageId])
+
   // Подстраница открыта — верхняя «← Лобби» становится «← Назад» (правка
   // владельца 22:38), своих кнопок «Назад» на подстраницах больше нет.
   const setBack = useTopBar((st) => st.setBack)
@@ -619,10 +643,9 @@ export function PlayHub({ on }: { on?: boolean }) {
     if (!hubTarget) return
     // PvP-арена: из лобби, топа и баннера Millida SMP (11.10.2026).
     if (hubTarget.pvp) {
-      setAll(false)
-      setPvpOpen(true)
       track('pvp_client_open', { source: 'target' })
       useLobby.setState({ hubTarget: null })
+      openPvp('play')
       return
     }
     if (hubTarget.mode) {
@@ -631,9 +654,11 @@ export function PlayHub({ on }: { on?: boolean }) {
       track('mode_open', { mode: hubTarget.mode, source: 'recommend' })
       useLobby.setState({ hubTarget: null })
     } else if (hubTarget.pack) {
-      setAll(false)
+      // Со страницы сборки на другую — «Назад» должен вернуть туда же, откуда пришли (каталог).
+      if (!hubTarget.stay) setAll(false)
       const p = allPacks.find((x) => x.slug === hubTarget.pack)
       if (!p) return
+      rememberHub()
       setPageId(p.id)
       useLobby.setState({ hubTarget: null })
     }
@@ -689,8 +714,8 @@ export function PlayHub({ on }: { on?: boolean }) {
   if (pvpOpen) return wrap(<PvpPage busy={pvpBusy} onPlay={(v) => void playPvp(v)} />)
 
   const openPack = (p: HubPack) => {
+    rememberHub()
     setPageId(p.id)
-    top0()
   }
   const pickMode = (cat: string, source: 'hub' | 'search' | 'foryou' = 'hub') => {
     track('mode_open', { mode: cat, source })
@@ -782,14 +807,14 @@ export function PlayHub({ on }: { on?: boolean }) {
           <ModeTile
             cat="PVP"
             kind="pvp_client"
-            title="PvP-арена"
+            title="PvP"
             online={0}
             index={ownSlides.length}
             on={!!current && current.kind === 'build' && current.name.startsWith(pvpBuildName(''))}
             onClick={() => {
+              // PvP — свой раздел лаунчера (12.10.2026), плитка ведёт туда.
               track('pvp_client_open', { source: 'hub' })
-              setPvpOpen(true)
-              top0()
+              openPvp('play')
             }}
           />
           {shownModes.map((m, i) =>

@@ -23,6 +23,7 @@ import {
   Messages,
   Mods,
   PlayHub,
+  Pvp,
   Game,
   Play,
   Premium,
@@ -902,6 +903,11 @@ export function App() {
               {screen === 'playhub' && (
                 <Guard what="Библиотека">
                   <PlayHub on />
+                </Guard>
+              )}
+              {screen === 'pvp' && (
+                <Guard what="PvP">
+                  <Pvp on />
                 </Guard>
               )}
               {screen === 'game' && (
