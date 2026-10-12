@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 import { parsePlistXml, renderPlist } from './lib/plist.mjs'
+import { identifierRequirement } from './lib/requirement.mjs'
 import { assertVolumeName } from './lib/iso.mjs'
 import { assertUdif, writeSectorCount } from './lib/udif.mjs'
 
@@ -194,6 +195,14 @@ function signApp() {
     writeFileSync(p12Path, Buffer.from(p12, 'base64'))
     args.push('--p12-file', p12Path, '--p12-password', process.env.APPLE_CERTIFICATE_PASSWORD ?? '')
     args.push('--code-signature-flags', 'runtime')
+  } else {
+    // An ad-hoc signature names no certificate, so macOS falls back to the hash
+    // of this exact build as the app's identity: every update is a new app that
+    // has to be granted the microphone again. A requirement on the identifier
+    // keeps the grant across builds.
+    const requirementPath = join(outDir, 'designated-requirement.bin')
+    writeFileSync(requirementPath, identifierRequirement(identifier))
+    args.push('--code-requirements-file', `@main:${requirementPath}`)
   }
 
   args.push(appDir)
@@ -204,6 +213,15 @@ function signApp() {
   const info = execFileSync('rcodesign', ['print-signature-info', join(contents, 'MacOS', binaryName)], { encoding: 'utf8' })
   console.log(info.split('\n').slice(0, 30).join('\n'))
   if (!info.includes('code_directory')) throw new Error('в подписанном бинаре нет code directory — macOS убьёт процесс при запуске')
+
+  const designated = info.split('\n').find((line) => line.includes('designated'))
+  if (!p12 && !designated?.includes(`identifier "${identifier}"`)) {
+    throw new Error(
+      `в подписи нет постоянного требования по идентификатору (${designated?.trim() ?? 'требований нет'}) — ` +
+        'macOS будет заново спрашивать доступ к микрофону после каждого обновления',
+    )
+  }
+  console.log(`Требование подписи: ${designated?.trim() ?? 'выводится из сертификата'}`)
 
   if (!existsSync(join(contents, '_CodeSignature', 'CodeResources'))) {
     throw new Error('rcodesign не создал _CodeSignature/CodeResources — Gatekeeper объявит приложение повреждённым')
