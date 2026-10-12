@@ -323,6 +323,7 @@ export function SiteFilters({
   loader,
   category,
   access,
+  ruCount = 0,
   edition = null,
   use = null,
   price = null,
@@ -341,6 +342,8 @@ export function SiteFilters({
   category: string | null
   /** Только у сборок: премиум-сборки Millida или обычные. Фильтр, а не полоса над карточками (владелец 29.09.2026). */
   access?: SiteAccess
+  /** Переводов Millida на русский: есть — в колонке группа «Язык». */
+  ruCount?: number
   /** Издание, «Для чего», цена — колонки фильтров сайта (30.09.2026). */
   edition?: EditionFilter | null
   use?: string | null
@@ -407,6 +410,18 @@ export function SiteFilters({
       onPick: () => onPatch({ category: category === c.value ? null : c.value }),
     }
   })
+  // Переводы студии на русский — строкой фильтра с подсветкой (владелец 12.10.2026: «слева надо выделить»).
+  const langOpts: FilterOpt[] = [
+    {
+      key: 'ru',
+      label: 'На русском',
+      count: ruCount,
+      icon: <i className="mr-ru-badge">RU</i>,
+      tone: 'var(--m-rarity-rare)',
+      active: access === 'ru',
+      onPick: () => onPatch({ access: access === 'ru' ? 'all' : 'ru' }),
+    },
+  ]
   const accessOpts: FilterOpt[] = access
     ? ACCESS.map(([id, label]) => ({
         key: id,
@@ -470,6 +485,7 @@ export function SiteFilters({
           Сбросить
         </button>
       ) : null}
+      {access && ruCount ? <KeySection title="Язык" name="lang" opts={langOpts} /> : null}
       {versions.length ? (
         <section className="mr-fsec">
           <div className="mr-fsec-t">Версия</div>
@@ -477,7 +493,7 @@ export function SiteFilters({
         </section>
       ) : null}
       {/* «Доступ» — только когда выбран: платных единицы (владелец 30.09.2026, 20:39). */}
-      {access && access !== 'all' ? <KeySection title="Доступ" name="access" opts={accessOpts} plain /> : null}
+      {access === 'premium' || access === 'free' ? <KeySection title="Доступ" name="access" opts={accessOpts} plain /> : null}
       <KeySection title="Издание" name="edition" opts={editions} plain />
       <KeySection title="Загрузчик" name="loader" opts={loaders} split={LOADERS_VISIBLE} />
       <KeySection title="Сторона" name="side" opts={sides} plain />

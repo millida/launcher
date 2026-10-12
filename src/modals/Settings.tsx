@@ -82,6 +82,7 @@ import type { LaunchWindowMode } from '../lib/window'
 import type { SkinSource } from '../lib/gameProfile'
 import { logoutToLogin } from '../lib/session'
 import { PremiumSwatches, ThemeRow } from '../components/premium/ThemeRow'
+import { leavePremiumLook, markThemeChoice } from '../lib/premiumTheme'
 import { accentFromHex, computeAccent, paintAccent, saveAccent, withColorFade } from '../lib/accent'
 import type { Accent } from '../lib/accent'
 import { TAB_MS_DEFAULT, useViewPrefs } from '../state/viewPrefs'
@@ -129,6 +130,8 @@ const ACCENTS: (Accent & { name: string })[] = [
 ]
 
 function applyAccent(raw: Accent, settled = false) {
+  markThemeChoice()
+  leavePremiumLook()
   const a = computeAccent(raw)
   paintAccent(a, settled)
   saveAccent(a)

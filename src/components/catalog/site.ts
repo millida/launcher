@@ -151,6 +151,12 @@ export interface SiteCard {
   sourceDownloads?: number | null
   /** Платная сборка (`/catalog/packs` → `accessRequired`): плашка «Премиум». */
   premium?: boolean
+  /** Своя сборка студии (`protectedContent`): плашка «Эксклюзив» вместо «Премиум». */
+  exclusive?: boolean
+  /** Перевод на русский от студии (сборка студии, не её собственная): метка «На русском». */
+  ru?: boolean
+  /** Кто перевёл — команда студии («Arcania Labs»), не Millida. */
+  ruBy?: string
   partner?: { slug: string; name: string } | null
   versions: string[]
   loaders: string[]
@@ -317,13 +323,78 @@ export function loadSections(): Promise<SiteSectionStat[]> {
 
 /** Наш каталог сборок: в приложении — командой ядра, в браузере — адресом. */
 export const PREMIUM_KEY = 'site:premium-packs'
+/** Все наши сборки (`/catalog/packs`): платные, переводы, сборки MCSborki. */
+export const OWN_PACKS_KEY = 'site:own-packs'
 
-export function loadPremiumPacks(): Promise<MillidaPack[]> {
+export function loadOwnPacks(): Promise<MillidaPack[]> {
   return cachedCatalog(
-    PREMIUM_KEY,
-    () => (hasTauri() ? millidaPacks() : api<MillidaPack[]>('/catalog/packs')).then((l) => (Array.isArray(l) ? l : []).filter((p) => p && p.accessRequired)),
+    OWN_PACKS_KEY,
+    () => (hasTauri() ? millidaPacks() : api<MillidaPack[]>('/catalog/packs')).then((l) => (Array.isArray(l) ? l : []).filter((p) => p && p.slug)),
     { persist: true },
   )
+}
+
+export function loadPremiumPacks(): Promise<MillidaPack[]> {
+  return cachedCatalog(PREMIUM_KEY, () => loadOwnPacks().then((l) => l.filter((p) => p.accessRequired)), { persist: true })
+}
+
+/**
+ * Перевод Millida: сборка студии-партнёра, но не её собственная (та — `protectedContent`,
+ * «Эксклюзив»). Студия переводит на русский чужие популярные сборки (владелец 12.10.2026).
+ */
+export const isRuPack = (p: Pick<MillidaPack, 'partner' | 'protectedContent'>): boolean => !!p.partner?.slug && !p.protectedContent
+
+const workKey = (title: string) => displayName(title).toLowerCase().replace(/[^a-z0-9а-яё]+/g, '')
+
+/**
+ * Перевод того же проекта, что карточка выдачи (оригинал с Modrinth/CurseForge). Только
+ * по названию и только надёжно: то же самое или у оригинала длиннее с тем же началом
+ * («Whispers in the Void - A Horror Adventure & Quests | Horror Mobs»). По слагу нельзя:
+ * «life-in-the-village-2» — это «Life in the village», а переведена «Life in the village 4».
+ */
+export function translationOf(card: Pick<SiteCard, 'slug' | 'title'>, ru: MillidaPack[]): MillidaPack | undefined {
+  return translationIndex(ru)(card)
+}
+
+/** То же, но ключи названий переводов считаются один раз на список, а не на каждую карточку. */
+export function translationIndex(ru: MillidaPack[]): (card: Pick<SiteCard, 'slug' | 'title'>) => MillidaPack | undefined {
+  const keys = ru.map((p) => ({ p, own: workKey(p.title) })).filter((x) => x.own)
+  return (card) => {
+    const key = workKey(card.title)
+    return keys.find((x) => x.p.slug !== card.slug && (x.own === key || (x.own.length >= 12 && key.startsWith(x.own))))?.p
+  }
+}
+
+/**
+ * Перевод строкой ленты. `base` — карточка оригинала, на месте которой он встаёт:
+ * её значок, категории и популярность остаются, название и описание — наши.
+ */
+export function ruCard(p: MillidaPack, base?: SiteCard): SiteCard {
+  const own = premiumCard(p)
+  return {
+    ...(base || own),
+    slug: p.slug,
+    section: 'modpacks',
+    title: p.title,
+    summary: p.summary || base?.summary || '',
+    cover: p.cover || base?.cover || null,
+    launcherOnly: true,
+    author: base?.author || own.author,
+    downloads: own.downloads,
+    sourceDownloads: Math.max(base?.sourceDownloads || 0, base?.downloads || 0) || null,
+    premium: p.accessRequired || undefined,
+    partner: p.accessRequired ? (p.partner ?? null) : null,
+    ru: true,
+    ruBy: p.partner?.name || undefined,
+    versions: p.game ? [p.game] : base?.versions || [],
+    loaders: p.loader ? [p.loader] : base?.loaders || [],
+  }
+}
+
+/** Наша сборка карточкой ленты: перевод — с меткой «На русском», своя студии — «Эксклюзив». */
+export function ownPackCard(p: MillidaPack): SiteCard {
+  if (isRuPack(p)) return ruCard(p)
+  return { ...premiumCard(p), premium: p.accessRequired || undefined, partner: p.accessRequired ? (p.partner ?? null) : null }
 }
 
 /** Сборка каталога в виде строки ленты — когда её нет на текущей странице выдачи. */
@@ -340,6 +411,7 @@ export function premiumCard(p: MillidaPack): SiteCard {
     author: p.author || null,
     downloads: typeof p.downloads === 'number' ? p.downloads : null,
     premium: true,
+    exclusive: p.protectedContent || undefined,
     partner: p.partner ?? null,
     versions: p.game ? [p.game] : [],
     loaders: p.loader ? [p.loader] : [],
