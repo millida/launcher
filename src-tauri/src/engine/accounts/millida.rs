@@ -160,9 +160,25 @@ const READ_ONLY_POSTS: [&str; 1] = ["/cosmetics/equipped"];
 /// offline while a fresh connection is answered in milliseconds.
 const SPARE_ANSWER_POSTS: [&str; 1] = ["/launcher/game-session"];
 
+/// POST addresses that write under an idempotency key carried in the body: the
+/// server answers a repeat with the stored result (the ledger's
+/// `idempotencyKey`), never with a second purchase. Without the repeat a hung
+/// socket froze an opening case on «Жми!» until the read timeout — a minute
+/// (13.10.2026: timeouts on 22 installs in six hours for chests alone).
+const IDEMPOTENT_POSTS: [&str; 1] = ["/rubies/cases/open"];
+
+/// A daily or reward chest is opened by its id. Since 13.10.2026 the server
+/// answers a repeat with the rewards stored on the chest instead of «already
+/// opened» (millida-services #123), so the repeat is as safe as for a case.
+fn idempotent_post(route: &str) -> bool {
+    IDEMPOTENT_POSTS.contains(&route) || (route.starts_with("/rubies/chests/") && route.ends_with("/open"))
+}
+
 fn repeatable(method: &str, path: &str) -> bool {
     let route = path.split('?').next().unwrap_or(path);
-    method == "GET" || (method == "POST" && (READ_ONLY_POSTS.contains(&route) || SPARE_ANSWER_POSTS.contains(&route)))
+    method == "GET"
+        || (method == "POST"
+            && (READ_ONLY_POSTS.contains(&route) || SPARE_ANSWER_POSTS.contains(&route) || idempotent_post(route)))
 }
 
 pub async fn millida_api(
@@ -592,7 +608,10 @@ mod tests {
     #[test]
     fn only_reads_are_asked_twice() {
         // (method, path, repeatable, why this case is pinned)
-        let cases: [(&str, &str, bool, &str); 5] = [
+        let cases: [(&str, &str, bool, &str); 8] = [
+            ("POST", "/rubies/cases/open", true, "the body carries an idempotency key: the server answers a repeat with the stored result"),
+            ("POST", "/rubies/chests/abc/open", true, "the server answers a repeat with the rewards stored on the chest"),
+            ("POST", "/rubies/chests/abc/reroll", false, "only the opening of a chest is answered twice the same way"),
             ("GET", "/launcher/wardrobe", true, "a read can be asked twice: the spare pool answers for a hung socket"),
             ("POST", "/cosmetics/equipped", true, "what the player wears is read by POST: without a repeat the lobby figure waits on a hung socket"),
             ("POST", "/cosmetics/equipped?fresh=1", true, "a query string does not turn the read into a write"),

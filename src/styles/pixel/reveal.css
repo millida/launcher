@@ -41,6 +41,13 @@
 .rv2-pips { display: flex; gap: 10px; }
 .rv2-pips > i { width: 18px; height: 18px; background: rgba(255, 255, 255, 0.2); --px-n: 4px; clip-path: var(--px-4); }
 .rv2-pips > i.on { background: var(--box); }
+/* Удары сделаны, ответ службы в пути: точки бегут по очереди. */
+.rv2-pips.wait > i { animation: rv2-wait 0.9s steps(2, jump-none) infinite; }
+.rv2-pips.wait > i:nth-child(2) { animation-delay: 0.15s; }
+.rv2-pips.wait > i:nth-child(3) { animation-delay: 0.3s; }
+.rv2-pips.wait > i:nth-child(4) { animation-delay: 0.45s; }
+.rv2-pips.wait > i:nth-child(n + 5) { animation-delay: 0.6s; }
+@keyframes rv2-wait { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
 .rv2-tap {
   position: relative; z-index: 3; font-size: 44px; font-weight: 900; letter-spacing: -0.02em;
   text-shadow: 0 4px 0 #000; animation: rv2-tap 0.9s ease-in-out infinite;

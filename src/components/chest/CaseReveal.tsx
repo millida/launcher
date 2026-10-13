@@ -11,6 +11,7 @@ import { FragBar, RarityChip } from '../shop/rarityUi'
 import { PxThumb } from '../shop/Sets'
 import { RARITY_NAME_SHORT, RARITY_TONE, rarityRank, shardWord, word } from '../shop/rarity'
 import { dealOrder, finalRarity, ladderAt, openOfRewards, revealLadder } from './revealLadder'
+import { showToast } from '../../state/ui'
 import '../../styles/pixel/reveal.css'
 
 /**
@@ -43,6 +44,8 @@ const opensOfData = (d: RevealData): CaseOpenView[] => (Array.isArray(d) ? [open
 
 const HITS = 3
 const BURST_MS = 650
+/** Столько ждём ответ молча; дальше — подсказка, что дело в связи. */
+const SLOW_ANSWER_MS = 8000
 
 const reduced = () => !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
@@ -267,6 +270,15 @@ export function CaseReveal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opens, hits, phase])
 
+  // Все удары сделаны, а ответа ещё нет: сундук ждёт службу. На медленной связи
+  // это до минуты — говорим об этом, а не оставляем «Жми!» под мёртвыми нажатиями.
+  const waiting = phase === 'hit' && hits >= need
+  useEffect(() => {
+    if (!waiting || opens) return
+    const t = window.setTimeout(() => alive.current && showToast('Связь медленная — ждём ответ'), SLOW_ANSWER_MS)
+    return () => window.clearTimeout(t)
+  }, [waiting, opens])
+
   const dealDone = deal && !!opens && flipped >= opens.length
   useEffect(() => {
     if (phase === 'sum' || dealDone) {
@@ -430,14 +442,18 @@ export function CaseReveal({
                   {RARITY_NAME_SHORT[lvl] + (step === 0 && hits < need ? '+' : '')}
                 </b>
               ) : null}
-              <span className="rv2-pips" aria-label={'Ударов: ' + hits + ' из ' + need}>
+              <span className={'rv2-pips' + (waiting ? ' wait' : '')} aria-label={waiting ? 'Открываем' : 'Ударов: ' + hits + ' из ' + need}>
                 {Array.from({ length: need }, (_, i) => (
                   <i key={i} className={i < hits ? 'on' : ''} />
                 ))}
               </span>
-              <b key={'t' + kick} className="rv2-tap">
-                Жми!
-              </b>
+              {/* Удары сделаны, ответ службы ещё в пути: «Жми!» убрано — нажимать больше нечего
+                  (владелец 13.10.2026: «кейс завис на этом моменте»). */}
+              {waiting ? null : (
+                <b key={'t' + kick} className="rv2-tap">
+                  Жми!
+                </b>
+              )}
             </>
           ) : phase === 'burst' ? (
             <>

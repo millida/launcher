@@ -111,6 +111,12 @@ curl -fsSL https://launcher-storage.millida.net/setup/install.sh | sh
 </details>
 
 <details>
+<summary><b>Что лаунчер отправляет о себе?</b></summary>
+
+Версию, железо, ошибки, вылеты игры и клики по кнопкам; при входе в аккаунт Millida данные привязываются к нему. Так, например, 13.10.2026 по событиям вылета нашли, что часть сборок на Fabric падает из-за старого Fabric Loader. Пароли, токены, файлы и тексты чатов не уходят, выключается в «Настройки → Аккаунт → Статистика использования». Что именно и зачем: [TELEMETRY.md](TELEMETRY.md).
+</details>
+
+<details>
 <summary><b>Как удалить?</b></summary>
 
 Windows — «Параметры» → «Приложения»; macOS — в корзину; Flatpak — `flatpak uninstall net.millida.launcher`.

@@ -12,8 +12,36 @@ pub struct UpdateInfo {
     pub new_version_number: String,
 }
 
-/// Resolves latest versions in one bulk sha1 request; entries without a stored
-/// hash fall back to per-project lookups.
+/// What Modrinth's two bulk answers say about one installed file. `newest` is
+/// its newest file of any channel, `steady` its newest release.
+#[derive(Debug, PartialEq)]
+enum Step<'a> {
+    Take(&'a Value),
+    /// The two answers disagree and neither is the installed file: which one is
+    /// the update depends on the channel of the installed file.
+    Ask,
+}
+
+fn steady_update<'a>(installed_id: &str, newest: Option<&'a Value>, steady: Option<&'a Value>) -> Option<Step<'a>> {
+    let id = |v: &Value| v["id"].as_str().unwrap_or("").to_string();
+    match (newest, steady) {
+        (None, None) => None,
+        (Some(v), None) | (None, Some(v)) => Some(Step::Take(v)),
+        (Some(n), Some(s)) => Some(if id(n) == id(s) || id(n) == installed_id {
+            Step::Take(n)
+        } else if id(s) == installed_id {
+            // On the newest release: the beta above it is not an update.
+            Step::Take(s)
+        } else {
+            Step::Ask
+        }),
+    }
+}
+
+/// Resolves the update of every file in two bulk sha1 requests; entries without
+/// a stored hash, and the few whose channel decides the answer, fall back to
+/// per-project lookups. An update stays on the channel the file is on, see
+/// `pick_update`: «Обновить всё» used to move a release to the newest beta.
 async fn latest_versions(
     entries: &[ContentEntry],
     game_version: &str,
@@ -27,26 +55,28 @@ async fn latest_versions(
     // loader, so asking for the bridge too turned a Forge mod into its newer
     // Fabric build. Only the build's own loader is asked here; bridged jars it
     // does not answer fall through to the per-project pick, own loader first.
-    let by_hash = bulk_latest_by_hash(&hashes, game_version, loaders).await;
+    let newest = bulk_latest_by_hash(&hashes, game_version, loaders, &[]).await;
+    let steady = bulk_latest_by_hash(&hashes, game_version, loaders, &["release"]).await;
     for e in &hashed {
-        if let Some(v) = by_hash.get(&e.sha1.to_lowercase()) {
+        let key = e.sha1.to_lowercase();
+        if let Some(Step::Take(v)) = steady_update(&e.version_id, newest.get(&key), steady.get(&key)) {
             out.insert(e.file_name.clone(), v.clone());
         }
     }
-    let rest: Vec<(String, String)> = entries
+    let rest: Vec<(String, String, String)> = entries
         .iter()
         .filter(|e| !out.contains_key(&e.file_name))
-        .map(|e| (e.file_name.clone(), e.project_id.clone()))
+        .map(|e| (e.file_name.clone(), e.project_id.clone(), e.version_id.clone()))
         .collect();
     if !rest.is_empty() {
         let gv = game_version.to_string();
         let ld = loaders.to_vec();
         let br = bridge.to_vec();
-        let found: Vec<Option<(String, Value)>> = futures::stream::iter(rest.into_iter().map(|(fname, pid)| {
+        let found: Vec<Option<(String, Value)>> = futures::stream::iter(rest.into_iter().map(|(fname, pid, installed)| {
             let gv = gv.clone();
             let ld = ld.clone();
             let br = br.clone();
-            async move { best_version_bridged(&pid, &gv, &ld, &br).await.ok().map(|v| (fname, v)) }
+            async move { update_version_bridged(&pid, &installed, &gv, &ld, &br).await.ok().map(|v| (fname, v)) }
         }))
         .buffer_unordered(8)
         .collect()
@@ -136,7 +166,7 @@ pub async fn update_content(profile: String, kind: String, file_name: String) ->
     if fabric_api_pinned(&profile, &bridge, &entry.project_id) {
         return Err("Fabric API этой сборки закреплён под неё — обновлять его отдельно нельзя.".into());
     }
-    let ver = best_version_bridged(&entry.project_id, &gv, &loaders, &bridge).await
+    let ver = update_version_bridged(&entry.project_id, &entry.version_id, &gv, &loaders, &bridge).await
         .map_err(|e| format!("{}: {}", if entry.title.is_empty() { file_name.clone() } else { entry.title.clone() }, e))?;
     apply_update(&profile, &kind, &file_name, &ver).await
 }
@@ -270,6 +300,26 @@ pub async fn add_local_file(profile: String, kind: String, src: String) -> Resul
         }
     }
     Ok(fname)
+}
+
+#[cfg(test)]
+mod channel_tests {
+    use super::*;
+    use serde_json::json;
+
+    /// (installed id, newest of any channel, newest release) -> what the bulk answers settle.
+    #[test]
+    fn two_bulk_answers_settle_most_files_without_a_lookup() {
+        let v = |id: &str| json!({ "id": id });
+        let (beta, release, old) = (v("0.8.15-beta.1"), v("0.8.14"), v("0.8.13"));
+        assert_eq!(steady_update("0.8.14", Some(&beta), Some(&release)), Some(Step::Take(&release)), "on the newest release: no move to the beta");
+        assert_eq!(steady_update("0.8.15-beta.1", Some(&beta), Some(&release)), Some(Step::Take(&beta)), "on the newest beta: no move back to the release");
+        assert_eq!(steady_update("0.8.13", Some(&release), Some(&release)), Some(Step::Take(&release)), "one answer: a plain update");
+        assert_eq!(steady_update("0.8.13", Some(&beta), Some(&release)), Some(Step::Ask), "behind both: the channel of the installed file decides");
+        assert_eq!(steady_update("b1", Some(&beta), None), Some(Step::Take(&beta)), "no release for this build: the project ships betas only");
+        assert_eq!(steady_update("x", None, Some(&old)), Some(Step::Take(&old)));
+        assert_eq!(steady_update("x", None, None), None, "Modrinth does not know the file: per-project lookup");
+    }
 }
 
 #[cfg(test)]

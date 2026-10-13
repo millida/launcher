@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { ACCENT_EVENT, accentBase, shade } from '../../lib/accent'
-import { currentDeviceTier, maxCanvasPixelRatio } from '../../lib/deviceTier'
+import { currentDeviceTier, currentSceneFpsCap, maxCanvasPixelRatio } from '../../lib/deviceTier'
 import { onRenderGate, renderLive } from '../../lib/renderGate'
 import { gpuLite } from '../../lib/gpuLite'
 import { VIEW_PREFS_EVENT, bgAnimOn } from '../../state/viewPrefs'
@@ -280,13 +280,16 @@ export function PixelField({ on }: { on: boolean }) {
     }
 
     let lastFrame = 0
+    const slow = currentSceneFpsCap() <= 30
     const tick = (now: number) => {
       raf = requestAnimationFrame(tick)
       if (!scene) return
       // Кадр волны — до 60 в секунду (одобрено владельцем), искрам в
       // промежутке хватает 30: мерцание ступенчатое. На мониторе 144 Гц
       // холст во всё окно больше не перерисовывается 144 раза в секунду.
-      const gap = scene.waves.length || scene.prev.size ? 15 : 32
+      // На слабой машине и встроенной графике холст во всё окно рисуется вдвое реже.
+      const busy = scene.waves.length || scene.prev.size
+      const gap = slow ? (busy ? 32 : 66) : busy ? 15 : 32
       if (now - lastFrame < gap) return
       lastFrame = now
       paint(ctx, scene, now, true)
