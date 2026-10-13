@@ -1,5 +1,5 @@
 /* «Собрать с ИИ»: Милли живёт в тёмном окошке внутри кнопки и выглядывает из него (владелец 04.10.2026) */
-.hub-find .hub-find-ai { padding-left: 92px; }
+.hub-find .btn.hub-find-ai { padding-left: 92px; }
 /* окошко: утопленная ячейка, как слот инвентаря; всё, что ниже его края, спрятано */
 .hub-ai-peek {
   position: absolute; left: 14px; top: 9px; bottom: 11px; width: 64px; overflow: hidden; pointer-events: none;
@@ -12,7 +12,7 @@
   transition: transform 380ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .hub-ai-who > .milli { display: block; }
-.hub-find .hub-ai-who svg { width: 64px; height: 64px; } /* .btn.lg svg жмёт до 18px */
+.hub-find .btn.lg .hub-ai-who svg { width: 64px; height: 64px; } /* .btn.lg svg жмёт до 18px */
 .hub-ai-peek.is-up .hub-ai-who { transform: translateY(24px); animation: hub-ai-up 600ms 150ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
 .hub-find-ai:hover .hub-ai-who { transform: translateY(24px); }
 @keyframes hub-ai-up { 0% { transform: translateY(70px); } 100% { transform: translateY(24px); } }

@@ -197,6 +197,15 @@ export function buildCosmetic(
   if (!mesh) return []
 
   let frames = 1
+  let glow: Texture | null = null
+  // The glow map shares the strip of the base picture and may arrive before it:
+  // whichever lands second has to leave both on the same frame.
+  const alignGlow = () => {
+    if (!glow) return
+    glow.repeat.copy(texture.repeat)
+    glow.offset.copy(texture.offset)
+    glow.needsUpdate = true
+  }
   const texture = new TextureLoader().load(textureUrl, (ready) => {
     // Движущиеся вещи хранятся лентой кадров сверху вниз. Считаем кадры по
     // пропорции, а не по высоте: картинка бывает крупнее модели (64 на 128) и
@@ -209,18 +218,13 @@ export function buildCosmetic(
       ready.offset.set(0, 1 - 1 / frames)
       ready.needsUpdate = true
     }
+    alignGlow()
   })
   pixelated(texture)
   // Неоновые вещи держат цвет в карте свечения, а основная картинка у них
   // почти чёрная: без неё на фигуре они выходят тёмными пятнами. Лента
   // кадров у свечения та же, что у основной картинки, — двигаем их вместе.
-  const glow = glowUrl
-    ? new TextureLoader().load(glowUrl, (ready) => {
-        ready.repeat.copy(texture.repeat)
-        ready.offset.copy(texture.offset)
-        ready.needsUpdate = true
-      })
-    : null
+  glow = glowUrl ? new TextureLoader().load(glowUrl, alignGlow) : null
   if (glow) pixelated(glow)
   const material = new MeshLambertMaterial({
     map: texture,

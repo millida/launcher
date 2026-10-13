@@ -102,7 +102,7 @@ function statusOf(p: ItemTileProps): { text: ReactNode; tone: string } | null {
       ),
       tone: 'price',
     }
-  if (p.note) return { text: p.note, tone: p.locked ? 'lock' : '' }
+  if (p.note) return { text: <span className="ch-tile-note">{p.note}</span>, tone: p.locked ? 'lock' : '' }
   return null
 }
 
