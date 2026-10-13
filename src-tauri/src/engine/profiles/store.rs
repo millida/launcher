@@ -358,14 +358,18 @@ async fn install_modpack_job(app: &AppHandle, job: &Job, slug: String, version_i
     };
     job.rename(&pname);
     let pdir = profile_dir(&pname);
+    let updating = pdir.is_dir();
+    if updating {
+        assert_not_running(&pname, "обнови сборку ещё раз")?;
+    }
     let files = idx["files"].as_array().cloned().unwrap_or_default();
-    let entries = pack_entries(&files, &pdir)?;
-    // The pack owns mods/: leftovers would duplicate classes and crash the game.
-    // Files the pack lists stay, so a repeated install after a cut line does not
-    // download the whole pack again.
-    prune_mods_outside(&pdir, &entries);
-    forget_skin_mod_install(&pname);
-    std::fs::create_dir_all(pdir.join("mods")).map_err(|e| e.to_string())?;
+    // The files are fetched into a folder beside the build: the installed
+    // version keeps every mod until the whole next one has arrived.
+    let stage = pack_stage_dir(&pdir)?;
+    let _ = std::fs::remove_dir_all(&stage);
+    let _staged = TempPaths(vec![stage.clone()]);
+    let entries = pack_entries(&files, &stage)?;
+    let listed: Vec<String> = entries.iter().map(|e| e.path.clone()).collect();
     let fetched = download_pack_entries(entries, Some(job.cancel_flag()), &|n, total| {
         job.emit(app, 20.0 + 60.0 * (n as f32 / total.max(1) as f32), &format!("Файлы сборки {}/{}", n, total));
     })
@@ -376,9 +380,25 @@ async fn install_modpack_job(app: &AppHandle, job: &Job, slug: String, version_i
         }
         return Err(e);
     }
+    if updating {
+        assert_not_running(&pname, "обнови сборку ещё раз")?;
+    }
+    let own_mods: std::collections::HashSet<String> =
+        load_content_manifest(&pname).into_iter().filter(|e| e.kind == "mod").map(|e| e.file_name).collect();
+    std::fs::create_dir_all(pdir.join("mods")).map_err(|e| e.to_string())?;
+    place_pack_files(&listed, &stage, &pdir, &own_mods)?;
+    forget_skin_mod_install(&pname);
     for ov in ["overrides", "client-overrides"] {
         let src = ex.join(ov);
-        if src.exists() { let _ = copy_overrides(&src, &pdir); }
+        if !src.exists() {
+            continue;
+        }
+        if updating {
+            withhold_player_made(&src, &pdir);
+        }
+        copy_overrides(&src, &pdir).map_err(|e| {
+            format!("Моды новой версии на месте, но её настройки не разложились: {}. Освободи место на диске и обнови сборку ещё раз", e)
+        })?;
     }
     let _ = std::fs::remove_file(&tmp);
     let _ = std::fs::remove_dir_all(&ex);
@@ -473,16 +493,61 @@ pub(crate) struct PackEntry {
     urls: Vec<String>,
 }
 
-/// The whole index is checked before the first byte is fetched: a bad entry
-/// at the end used to fail the pack only after every file before it had been
-/// downloaded.
-fn prune_mods_outside(pdir: &std::path::Path, entries: &[PackEntry]) {
+/// Dot-named, so the build list never adopts it; beside the build, so moving a
+/// file out of it is a rename on one disk.
+fn pack_stage_dir(pdir: &std::path::Path) -> Result<PathBuf, String> {
+    let name = pdir.file_name().map(|n| n.to_string_lossy().into_owned()).filter(|n| !n.is_empty());
+    match (name, pdir.parent()) {
+        (Some(name), Some(root)) => Ok(root.join(format!(".millida-pack-stage-{}", name))),
+        _ => Err("Некорректная папка сборки".into()),
+    }
+}
+
+/// Puts the fetched files of a pack into the build and only then drops what
+/// the previous version left in mods/. Nothing is removed before every new
+/// file is in place, so a failure here costs the player no mod they had.
+fn place_pack_files(
+    listed: &[String],
+    stage: &std::path::Path,
+    pdir: &std::path::Path,
+    own_mods: &std::collections::HashSet<String>,
+) -> Result<(), String> {
+    let mut keep: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
+    for rel in listed {
+        let from = safe_join(stage, rel).map_err(|e| format!("Сборка содержит небезопасный путь: {}", e))?;
+        let to = safe_join(pdir, rel).map_err(|e| format!("Сборка содержит небезопасный путь: {}", e))?;
+        let busy = |e: std::io::Error| {
+            format!("Не удалось положить {} в сборку: {}. Закрой игру и папку сборки, затем обнови ещё раз", rel, e)
+        };
+        if let Some(parent) = to.parent() {
+            std::fs::create_dir_all(parent).map_err(busy)?;
+        }
+        if std::fs::rename(&from, &to).is_err() {
+            copy_replacing(&from, &to).map_err(busy)?;
+        }
+        keep.insert(to);
+    }
+    prune_mods_outside(pdir, &keep, own_mods);
+    Ok(())
+}
+
+/// The pack owns mods/: what its previous version left there would duplicate
+/// classes and crash the game. Mods the player added through the launcher are
+/// theirs and stay, enabled or not.
+fn prune_mods_outside(
+    pdir: &std::path::Path,
+    keep: &std::collections::HashSet<PathBuf>,
+    own_mods: &std::collections::HashSet<String>,
+) {
     let mods = pdir.join("mods");
-    let keep: std::collections::HashSet<PathBuf> = entries.iter().map(|e| e.dest.clone()).collect();
     let Ok(rd) = std::fs::read_dir(&mods) else { return };
     for e in rd.flatten() {
         let p = e.path();
         if keep.contains(&p) {
+            continue;
+        }
+        let name = e.file_name().to_string_lossy().into_owned();
+        if own_mods.contains(name.strip_suffix(".disabled").unwrap_or(&name)) {
             continue;
         }
         if p.is_dir() {
@@ -493,11 +558,18 @@ fn prune_mods_outside(pdir: &std::path::Path, entries: &[PackEntry]) {
     }
 }
 
+/// The whole index is checked before the first byte is fetched: a bad entry
+/// at the end used to fail the pack only after every file before it had been
+/// downloaded.
 pub(crate) fn pack_entries(files: &[Value], pdir: &std::path::Path) -> Result<Vec<PackEntry>, String> {
     let mut out = Vec::with_capacity(files.len());
     for f in files {
         if f["env"]["client"].as_str() == Some("unsupported") { continue; }
         let Some(path) = f["path"].as_str() else { continue };
+        // The launcher's own records about a build are never the pack's to write.
+        if path.rsplit(['/', '\\']).next().is_some_and(is_launcher_service_file) {
+            continue;
+        }
         let dest = safe_join(pdir, path).map_err(|e| format!("Сборка содержит небезопасный путь: {}", e))?;
         let (sha1, size) = pack_file_check(f).map_err(|e| format!("Сборка отклонена — {}: {}", path, e))?;
         let urls = f["downloads"].as_array().map(|a| {
@@ -744,6 +816,51 @@ mod tests {
         assert_ne!(profile_dir("Sky Factory 4"), profile_dir("Sky Factory 4 (2)"));
     }
 
+    /// An update of a Modrinth pack used to empty mods/ before the first byte
+    /// of the next version was fetched, the player's own mods included.
+    #[test]
+    fn a_pack_update_drops_old_mods_only_after_the_new_ones_are_in_place() {
+        let base = std::env::temp_dir().join(format!("millida-pack-place-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let (stage, pdir) = (base.join("stage"), base.join("build"));
+        let put = |root: &std::path::Path, rel: &str, body: &str| {
+            let p = root.join(rel);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, body).unwrap();
+        };
+        for (rel, body) in [("mods/old.jar", "old"), ("mods/same.jar", "v1"), ("mods/own.jar", "own"), ("mods/off.jar.disabled", "own")] {
+            put(&pdir, rel, body);
+        }
+        let own: std::collections::HashSet<String> = ["own.jar".to_string(), "off.jar".to_string()].into();
+        let listed = vec!["mods/new.jar".to_string(), "mods/same.jar".to_string()];
+
+        put(&stage, "mods/new.jar", "new");
+        assert!(
+            place_pack_files(&listed, &stage, &pdir, &own).is_err(),
+            "файл новой версии не доехал — раскладка обязана остановиться",
+        );
+        assert_eq!(
+            std::fs::read_to_string(pdir.join("mods/old.jar")).ok().as_deref(),
+            Some("old"),
+            "при сбое моды установленной версии остаются на месте: раньше сборка оставалась без них",
+        );
+
+        put(&stage, "mods/new.jar", "new");
+        put(&stage, "mods/same.jar", "v2");
+        place_pack_files(&listed, &stage, &pdir, &own).expect("полная новая версия раскладывается");
+        let cases: [(&str, Option<&str>, &str); 5] = [
+            ("mods/new.jar", Some("new"), "мод новой версии на месте"),
+            ("mods/same.jar", Some("v2"), "мод с тем же именем заменён новой версией"),
+            ("mods/old.jar", None, "мод прошлой версии убран: два набора классов роняют игру"),
+            ("mods/own.jar", Some("own"), "мод, который игрок поставил сам, переживает обновление сборки"),
+            ("mods/off.jar.disabled", Some("own"), "и выключенный им тоже"),
+        ];
+        for (rel, want, why) in cases {
+            assert_eq!(std::fs::read_to_string(pdir.join(rel)).ok().as_deref(), want, "«{rel}»: {why}");
+        }
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
     /// вход (запись индекса) -> вердикт. Индекс проверяется целиком до первой
     /// закачки: при параллельной загрузке плохая запись в конце не должна
     /// оставлять за собой сотни уже скачанных файлов.
@@ -757,8 +874,18 @@ mod tests {
         let escape = serde_json::json!({ "path": "../../evil.jar", "hashes": { "sha1": sha1 } });
         let unhashed = serde_json::json!({ "path": "mods/b.jar", "downloads": ["https://cdn.modrinth.com/b.jar"] });
 
-        let ok = pack_entries(&[good.clone(), server_only], &pdir).expect("годный индекс");
-        assert_eq!(ok.len(), 1, "серверный файл в клиент не попадает");
+        let service = |path: &str| serde_json::json!({ "path": path, "hashes": { "sha1": sha1 },
+            "downloads": ["https://raw.githubusercontent.com/x/y/main/f.json"] });
+        let ok = pack_entries(
+            &[good.clone(), server_only, service("millida-settings.json"), service("config/millida-content.json")],
+            &pdir,
+        )
+        .expect("годный индекс");
+        assert_eq!(
+            ok.len(),
+            1,
+            "серверный файл в клиент не попадает, а записи лаунчера о сборке (настройки, состав модов) сборка писать не вправе",
+        );
         assert_eq!(ok[0].urls, vec!["https://cdn.modrinth.com/a.jar".to_string()], "чужой хост отброшен ещё до закачки");
 
         let cases: [(Value, &str); 2] = [(escape, "путь из индекса выходит за папку сборки"), (unhashed, "файл без sha1 не качается вслепую")];

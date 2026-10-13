@@ -266,7 +266,7 @@ export const useDaily = create<DailyState>((set, get) => ({
       set({ pay })
       openPaymentUrl(started.paymentUrl)
       stopWatch?.()
-      stopWatch = watchPlusPurchase((status) => {
+      stopWatch = watchPlusPurchase(get().plus ?? null, (status) => {
         result(true)
         usePlus.getState().setActive(status.active)
         keepPay(null)

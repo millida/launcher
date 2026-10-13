@@ -1,4 +1,3 @@
-import { realDownloads } from '../../lib/realDownloads'
 import { MODRINTH_API, api, mirrorAsset } from '../../lib/api'
 import type { PremiumPack } from '../../lib/premium'
 import { hasTauri } from '../../ipc/tauri'
@@ -264,7 +263,7 @@ let packsCache: Promise<MillidaPack[]> | null = null
 export function loadCatalogPacks(): Promise<MillidaPack[]> {
   if (!packsCache)
     packsCache = (hasTauri() ? millidaPacks() : api<MillidaPack[]>('/catalog/packs'))
-      .then((l) => (Array.isArray(l) ? l.map((p) => ({ ...p, downloads: realDownloads(p.slug, p.downloads) ?? p.downloads })) : []))
+      .then((l) => (Array.isArray(l) ? l : []))
       .catch((e) => {
         console.error('[playhub] packs', e)
         packsCache = null

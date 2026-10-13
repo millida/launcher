@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { cfgEntries, cfgGet, cfgSet, checkValue } from './milliCfg'
-import { chosenSteps, parseAction } from './milliActions'
+import { chosenSteps, parseAction, registerStep } from './milliActions'
 
 describe('milliCfg: правка по месту', () => {
   test('options.txt: число в пределах, кавычки сохраняются, новый ключ дописывается', () => {
@@ -61,5 +61,31 @@ describe('milliActions: разбор и выбор шагов', () => {
     expect(a.steps.length).toBe(2)
     expect(a.rows[1].steps).toEqual([1])
     expect(chosenSteps(a, ['r2']).map((x) => x.step.op)).toEqual(['opt'])
+  })
+
+  const hidden: [string, unknown[], number[], string[]][] = [
+    [
+      'шаг без строки ставит мод, которого на карточке нет, — игрок нажал «Применить» только на то, что видел',
+      [{ op: 'opt', key: 'renderDistance', to: '8' }, { op: 'add', kind: 'mod', projectId: 'evil', title: 'x' }],
+      [0],
+      ['opt'],
+    ],
+    [
+      'запись файла без строки на карточке не выполняется, а со строкой остаётся: так работает «Вернуть как было»',
+      [{ op: 'file_put', path: 'options.txt', text: 'a' }, { op: 'file_put', path: 'config/x.toml', text: 'b' }],
+      [1],
+      ['file_put'],
+    ],
+    [
+      'осмотр сборки только читает, строка ему не нужна — иначе авто-проверка после импорта перестанет запускаться',
+      [{ op: 'scan', mode: 'scan' }],
+      [],
+      ['scan'],
+    ],
+  ]
+  test.each(hidden)('выполняется только то, что показано: %s', (_why, steps, shown, ran) => {
+    registerStep('scan', { readOnly: true, run: async () => ({ ok: true }) })
+    const a = parseAction({ id: 'a', kind: 'graphics', title: 'Графика', rows: [{ id: 'r1', label: 'Строка', steps: shown }], steps })!
+    expect(chosenSteps(a, []).map((x): string => x.step.op)).toEqual(ran)
   })
 })

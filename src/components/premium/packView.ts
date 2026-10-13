@@ -1,4 +1,3 @@
-import { realDownloads } from '../../lib/realDownloads'
 import { api } from '../../lib/api'
 import { cachedCatalog, forgetCatalog } from '../../lib/catalogCache'
 
@@ -61,7 +60,7 @@ export const forgetPackView = (slug: string): void => forgetCatalog(packViewKey(
 export const loadPackDownloads = (slug: string): Promise<number | null> =>
   cachedCatalog('pack-dl:' + slug, () =>
     api<{ downloads?: number | null }>('/catalog/items/' + encodeURIComponent(slug)).then((d) =>
-      d && typeof d.downloads === 'number' && d.downloads > 0 ? realDownloads(slug, d.downloads) : null,
+      d && typeof d.downloads === 'number' && d.downloads > 0 ? d.downloads : null,
     ),
   )
 

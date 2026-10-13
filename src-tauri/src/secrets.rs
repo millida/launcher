@@ -200,12 +200,65 @@ fn read_device_key(path: &Path) -> Option<Vec<u8>> {
     std::fs::read(path).ok().as_deref().and_then(unwrap_device_key)
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum KeyFile {
+    Ready(Vec<u8>),
+    Missing,
+    Corrupt,
+    Unreadable,
+}
+
+/// Only a missing file is no key. A file that is there but cannot be read
+/// right now still holds the key every stored session is encrypted with.
+fn read_key_file(path: &Path) -> KeyFile {
+    match std::fs::read(path) {
+        Ok(raw) => unwrap_device_key(&raw).map(KeyFile::Ready).unwrap_or(KeyFile::Corrupt),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => KeyFile::Missing,
+        Err(_) => KeyFile::Unreadable,
+    }
+}
+
+// Antivirus and indexers hold vault.key open for a moment after a write.
+const KEY_READ_RETRY_MS: [u64; 5] = [25, 50, 100, 200, 400];
+
+fn read_key_file_patiently(path: &Path) -> KeyFile {
+    let mut got = read_key_file(path);
+    for pause in KEY_READ_RETRY_MS {
+        if got != KeyFile::Unreadable {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(pause));
+        got = read_key_file(path);
+    }
+    got
+}
+
+/// True while vault.key exists but could not be read: the key in use is a
+/// stand-in, and the vault must be neither rewritten nor moved aside with it.
+static KEY_UNREADABLE: AtomicBool = AtomicBool::new(false);
+
+const KEY_BUSY: &str =
+    "ключ хранилища входа сейчас недоступен (файл vault.key держит другая программа) — закрой лаунчер, подожди немного и открой снова";
+
+fn key_usable() -> Result<(), String> {
+    device_key();
+    if KEY_UNREADABLE.load(Ordering::SeqCst) { Err(KEY_BUSY.into()) } else { Ok(()) }
+}
+
 fn load_device_key() -> Vec<u8> {
     let path = device_key_path();
-    if let Some(k) = read_device_key(&path) {
-        restrict_path(&path);
-        KEY_PERSISTED.store(true, Ordering::SeqCst);
-        return k;
+    match read_key_file_patiently(&path) {
+        KeyFile::Ready(k) => {
+            restrict_path(&path);
+            KEY_PERSISTED.store(true, Ordering::SeqCst);
+            return k;
+        }
+        KeyFile::Unreadable => {
+            eprintln!("[secrets] vault.key есть, но не читается — сохранённые входы не трогаем до перезапуска");
+            KEY_UNREADABLE.store(true, Ordering::SeqCst);
+            return random_bytes(32);
+        }
+        KeyFile::Missing | KeyFile::Corrupt => {}
     }
     let fresh = random_bytes(32);
     let stored = seal_device_key(&fresh);
@@ -492,13 +545,6 @@ fn items() -> Vault {
 const FOREIGN_VAULT: &str =
     "хранилище секретов повреждено или создано другой версией лаунчера — удали secrets.bin, чтобы войти заново";
 
-pub fn set(key: &str, value: &str) -> Result<(), String> {
-    if key.is_empty() {
-        return Err("empty key".into());
-    }
-    set_many(vec![(key.to_string(), value.to_string())])
-}
-
 pub fn get(key: &str) -> Option<String> {
     let _guard = vault_lock();
     decrypt(key, items().items.get(key)?)
@@ -508,6 +554,7 @@ pub fn get(key: &str) -> Option<String> {
 /// without touching the file: failing a sign-out would be worse than a no-op.
 pub fn delete(key: &str) -> Result<(), String> {
     let _guard = vault_lock();
+    key_usable()?;
     let mut vault = items();
     if vault.items.remove(key).is_some() && vault.writable {
         write_items(&vault.items)?;
@@ -539,6 +586,7 @@ fn set_many_at(path: &Path, mask_present: bool, pairs: Vec<(String, String)>) ->
 
 pub fn set_many(pairs: Vec<(String, String)>) -> Result<(), String> {
     let _guard = vault_lock();
+    key_usable()?;
     set_many_at(&vault_path(), legacy_mask_path().exists(), pairs)
 }
 
@@ -571,6 +619,7 @@ fn unix_now() -> u64 {
 
 pub fn store_login(pairs: Vec<(String, String)>) -> Result<(), String> {
     let _guard = vault_lock();
+    key_usable()?;
     let stamp = unix_now();
     if let Err(e) = persist_device_key_for_login(stamp) {
         eprintln!("[secrets] ключ хранилища сохранится только до перезапуска: {e}");
@@ -598,6 +647,29 @@ pub fn present(keys: &[String]) -> HashMap<String, bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// state of vault.key -> verdict. Anything but «missing» or «corrupt» must
+    /// not be answered with a fresh key: a fresh key makes every stored session
+    /// unreadable, and the sign-in that follows moves the real key aside.
+    #[test]
+    fn a_key_file_that_cannot_be_read_is_not_a_missing_key() {
+        let dir = std::env::temp_dir().join(format!("millida-vault-key-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        assert_eq!(read_key_file(&dir.join("absent.key")), KeyFile::Missing, "файла нет — ключ создаётся заново");
+
+        let short = dir.join("short.key");
+        std::fs::write(&short, b"not a key").unwrap();
+        assert_eq!(read_key_file(&short), KeyFile::Corrupt, "мусор в файле — ключ потерян, это не временный сбой");
+
+        assert_eq!(
+            read_key_file(&dir),
+            KeyFile::Unreadable,
+            "файл на месте, но чтение не удалось: это не повод заводить новый ключ и терять сохранённые входы",
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn roundtrip_and_aad_binding() {

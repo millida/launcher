@@ -582,6 +582,7 @@ const RECHECK_MIN_SECS: u64 = 5 * 60;
 const RECHECK_MAX_SECS: u64 = 60 * 60;
 const RECHECK_RETRY_SECS: u64 = 5 * 60;
 const STOP_WAIT_SECS: u64 = 60;
+const KILL_WAIT_SECS: u64 = 15;
 
 /// Only a verdict spelled out by our own API takes the pack away. Anything
 /// else — an unknown word, a missing field, `need-login` — means we do not
@@ -697,18 +698,33 @@ fn pid_running(pid: u32) -> bool {
     RUNNING.lock().map(|v| v.iter().any(|(_, id)| *id == pid)).unwrap_or(false)
 }
 
+async fn game_closed_within(profile: &str, secs: u64) -> bool {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(secs);
+    while running_games().iter().any(|p| p == profile) {
+        if std::time::Instant::now() >= deadline {
+            return false;
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    }
+    true
+}
+
 /// Access is gone: the game is closed and the pack leaves the disk, so the
 /// paid content does not stay behind for anyone to copy or keep playing. The
 /// player's worlds and own files are moved aside first and return with the
 /// next install of the same pack. Returns what the player is told.
 pub async fn forfeit_pack(app: &AppHandle, profile: &str, slug: &str, reason: &str) -> String {
     if running_games().iter().any(|p| p == profile) {
-        if let Err(e) = stop_game(Some(profile)) {
-            eprintln!("[pack] не удалось закрыть игру «{}»: {}", profile, e);
+        // Asked to close first, so the world on screen is saved; killed only if
+        // the game ignores the request.
+        if let Err(e) = ask_game_to_close(profile) {
+            eprintln!("[pack] не удалось попросить игру «{}» закрыться: {}", profile, e);
         }
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(STOP_WAIT_SECS);
-        while running_games().iter().any(|p| p == profile) && std::time::Instant::now() < deadline {
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        if !game_closed_within(profile, STOP_WAIT_SECS).await {
+            if let Err(e) = stop_game(Some(profile)) {
+                eprintln!("[pack] не удалось закрыть игру «{}»: {}", profile, e);
+            }
+            game_closed_within(profile, KILL_WAIT_SECS).await;
         }
     }
     let removed = stash_player_files(profile, slug).and_then(|_| delete_profile(profile).map(|_| ()));

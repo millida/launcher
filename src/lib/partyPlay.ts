@@ -8,7 +8,7 @@ import {
   shareProfile,
 } from '../ipc/commands'
 import type { Profile } from '../ipc/commands'
-import { identityOf, launchBlock, launchToRun, sameIdentity, type PartyHave, type PartyLaunch, type PartyTarget } from './party'
+import { identityOf, launchAgreed, launchBlock, launchToRun, sameIdentity, type PartyHave, type PartyLaunch, type PartyTarget } from './party'
 import type { LobbyMode } from '../state/lobbyMode'
 import { useLobby } from '../state/lobbyMode'
 import { installedPack, openPremiumPack } from './lobbyPlay'
@@ -207,7 +207,7 @@ function readLastSeq(): number {
 let lastSeq = readLastSeq()
 
 export function maybeRunLaunch() {
-  const party = usePartyStore.getState().party
+  const { party, me } = usePartyStore.getState()
   const launch = party ? launchToRun(party.launch, lastSeq, Date.now()) : null
   if (!launch) {
     if (party?.launch) lastSeq = Math.max(lastSeq, party.launch.seq)
@@ -219,6 +219,12 @@ export function maybeRunLaunch() {
   } catch (e) {
     console.error('[party] launch seq', e)
   }
+  if (!party || !launchAgreed(party, launch, me)) {
+    showToast('Лидер запустил игру, но ты не отмечал «Готов» на эту цель — игра не запущена', 'error')
+    return
+  }
+  const where = launch.target.kind === 'server' ? launch.target.ref : launch.addr
+  if (where && !isLeader(party, me)) showToast('Пати заходит на сервер ' + where)
   void runLaunch(launch)
 }
 

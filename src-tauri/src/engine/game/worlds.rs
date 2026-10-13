@@ -114,10 +114,6 @@ pub async fn quick_play(
     if server.as_deref().is_some_and(|s| !cmdline_text_ok(s, 255) || s.starts_with('-')) {
         return Err("Некорректный адрес сервера".into());
     }
-    QUICK.lock().unwrap().replace((world, server));
-    let r = install_and_launch_in(app, p.version.clone(), nick, p.fabric, ram_mb, profile, auth).await;
-    QUICK.lock().unwrap().take();
-    r
+    let quick = QuickTarget { world, server };
+    install_and_launch_into(app, p.version.clone(), nick, p.fabric, ram_mb, profile, auth, quick).await
 }
-
-pub static QUICK: std::sync::Mutex<Option<(Option<String>, Option<String>)>> = std::sync::Mutex::new(None);

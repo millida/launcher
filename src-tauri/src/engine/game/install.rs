@@ -100,22 +100,22 @@ fn loader_lib_intact(path: &Path) -> bool {
 
 async fn fetch_missing(jobs: &[LibJob], strict: bool) -> Result<(), String> {
     let mut seen: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
-    let items: Vec<(String, PathBuf)> = jobs
+    let items: Vec<(String, PathBuf, Option<String>)> = jobs
         .iter()
         .filter(|j| !j.url.is_empty() && !loader_lib_intact(&j.path))
         .filter(|j| seen.insert(j.path.clone()))
-        .map(|j| (j.url.clone(), j.path.clone()))
+        .map(|j| (j.url.clone(), j.path.clone(), j.sha1.clone()))
         .collect();
     // Maven does not always publish a .sha1, and without one an existing file is
     // accepted as is — a jar already judged broken has to go before the refetch.
-    for (_, path) in &items {
+    for (_, path, _) in &items {
         if path.exists() {
             let _ = std::fs::remove_file(path);
         }
     }
-    let results: Vec<Result<(), String>> = futures::stream::iter(items.into_iter().map(|(url, path)| async move {
-        let sha1 = maven_sha1(&url).await.ok();
-        download_checked(&url, &path, sha1.as_deref().map(Sum::Sha1), None).await
+    let results: Vec<Result<(), String>> = futures::stream::iter(items.into_iter().map(|(url, path, declared)| async move {
+        let sha1 = loader_lib_sha1(&url, declared).await?;
+        download_checked(&url, &path, Some(Sum::Sha1(&sha1)), None).await
     }))
     .buffer_unordered(PARALLEL_LIBS)
     .collect()
@@ -262,11 +262,24 @@ async fn maven_sha1_once(sum: &str) -> Result<String, MavenMiss> {
     parse_sha1(&text).ok_or_else(|| MavenMiss::Unreachable("контрольная сумма нечитаема".into()))
 }
 
-/// Сумма библиотеки загрузчика: необязательна, поэтому одна попытка — без неё
-/// файл всё равно качается, а круг с паузами на десятках библиотек растянул бы
-/// установку на плохой сети на минуты.
-async fn maven_sha1(url: &str) -> Result<String, MavenMiss> {
-    maven_sha1_once(&format!("{}.sha1", url)).await
+/// A loader library lands on the classpath, so it is never placed unverified:
+/// the sum comes from the loader's own json or from the maven sibling `.sha1`.
+async fn loader_lib_sha1(url: &str, declared: Option<String>) -> Result<String, String> {
+    if let Some(sum) = declared.as_deref().and_then(parse_sha1) {
+        return Ok(sum);
+    }
+    let name = url.rsplit('/').next().unwrap_or(url);
+    match maven_sha1_via(&routes_round_trip(&format!("{}.sha1", url)).await).await {
+        Ok(sum) => Ok(sum),
+        Err(MavenMiss::Absent) => Err(format!(
+            "У библиотеки загрузчика {} нет контрольной суммы, без неё файл не ставится. Попробуй другую версию загрузчика",
+            name
+        )),
+        Err(MavenMiss::Unreachable(e)) => Err(format!(
+            "Не получили контрольную сумму библиотеки загрузчика {}: {}. Проверь соединение и запусти ещё раз",
+            name, e
+        )),
+    }
 }
 
 fn parse_sha1(text: &str) -> Option<String> {
@@ -970,7 +983,7 @@ pub async fn install_loader_with_java(
                 url: format!("{}{}", base, rel),
                 path: lib_path(&rel)?,
                 rel,
-                sha1: None,
+                sha1: lib["sha1"].as_str().map(String::from),
                 size: None,
             });
         }
@@ -1277,7 +1290,8 @@ pub async fn install_loader_with_java(
                 if rel.is_empty() { continue }
                 let p = lib_path(&rel)?;
                 let url = art["url"].as_str().unwrap_or("").to_string();
-                ljobs.push(LibJob { rel, url, sha1: None, size: None, path: p });
+                let sha1 = art["sha1"].as_str().map(String::from);
+                ljobs.push(LibJob { rel, url, sha1, size: None, path: p });
             } else if let Some(name) = lib["name"].as_str() {
                 let rel = maven_path(name);
                 let p = lib_path(&rel)?;
@@ -2166,6 +2180,27 @@ e";
     async fn installer_sum_all_routes_dead_is_unreachable() {
         let targets = vec![dead_url().await];
         assert!(matches!(maven_sha1_via(&targets).await, Err(MavenMiss::Unreachable(_))));
+    }
+
+    /// A loader library goes straight onto the classpath. It used to be placed
+    /// unverified whenever maven did not hand out the `.sha1`.
+    #[tokio::test]
+    async fn a_loader_library_without_a_sum_is_not_installed() {
+        let sum_url = serve_status("404 Not Found", "").await;
+        let url = sum_url.trim_end_matches(".sha1").to_string();
+        let path = std::env::temp_dir().join(format!("millida-nosum-{}.jar", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let job = LibJob { rel: "x.jar".into(), url, sha1: None, size: None, path: path.clone() };
+        let res = fetch_missing(&[job], true).await;
+        assert!(res.is_err(), "библиотека без контрольной суммы обязана остановить установку загрузчика");
+        assert!(!path.exists(), "файл без контрольной суммы не должен появиться в libraries");
+    }
+
+    #[tokio::test]
+    async fn the_sum_from_the_loader_json_is_used_without_asking_maven() {
+        const SUM: &str = "66bfea9963bfa60d88bab6b2750e74a958392715";
+        let got = loader_lib_sha1(&dead_url().await, Some(SUM.to_uppercase())).await;
+        assert_eq!(got.as_deref(), Ok(SUM), "сумма из профиля загрузчика не должна зависеть от доступности maven");
     }
 
     /// Встроенная таблица срабатывает ровно на тех адресах, которые строит

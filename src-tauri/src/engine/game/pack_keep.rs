@@ -139,12 +139,25 @@ fn free_target(path: PathBuf) -> PathBuf {
 /// the pack is not removed: losing a world is worse than a pack that stays on
 /// disk but can no longer get a launch signature.
 pub fn stash_player_files(profile: &str, slug: &str) -> Result<usize, String> {
-    let pdir = profile_dir(profile);
-    let root = keep_root(slug)?;
-    let entries = player_entries(&pdir);
+    stash_into(&profile_dir(profile), &keep_root(slug)?)
+}
+
+/// A pack that stays must stay whole: what was already moved aside goes back
+/// when a later entry fails, or the build would be left without those worlds.
+fn stash_into(pdir: &Path, root: &Path) -> Result<usize, String> {
+    let entries = player_entries(pdir);
+    let mut moved: Vec<(PathBuf, PathBuf)> = Vec::new();
     for rel in &entries {
-        let target = free_target(root.join(rel));
-        move_path(&pdir.join(rel), &target).map_err(|e| format!("не удалось сохранить «{}»: {}", rel, e))?;
+        let (home, target) = (pdir.join(rel), free_target(root.join(rel)));
+        if let Err(e) = move_path(&home, &target) {
+            for (home, target) in moved.iter().rev() {
+                if let Err(back) = move_path(target, home) {
+                    eprintln!("[pack] «{}» остался в {}: {}", home.display(), target.display(), back);
+                }
+            }
+            return Err(format!("не удалось сохранить «{}»: {}", rel, e));
+        }
+        moved.push((home, target));
     }
     Ok(entries.len())
 }
@@ -184,6 +197,32 @@ pub fn restore_player_files(pdir: &Path, slug: &str) {
 /// next version ships.
 fn player_made(rel: &str) -> bool {
     ALWAYS_KEEP.contains(&rel) && !PER_ENTRY.contains(&rel)
+}
+
+/// Takes out of a pack's unpacked overrides whatever the player already has of
+/// their own in the build, so copying the rest over the build leaves their
+/// settings, server list and worlds as they were.
+pub(crate) fn withhold_player_made(overrides: &Path, pdir: &Path) {
+    for rel in ALWAYS_KEEP.into_iter().filter(|rel| player_made(rel)) {
+        let (shipped, theirs) = (overrides.join(rel), pdir.join(rel));
+        if !shipped.is_dir() {
+            if theirs.exists() {
+                let _ = std::fs::remove_file(&shipped);
+            }
+            continue;
+        }
+        for name in names_in(&shipped) {
+            if !theirs.join(&name).exists() {
+                continue;
+            }
+            let entry = shipped.join(&name);
+            if entry.is_dir() {
+                let _ = std::fs::remove_dir_all(&entry);
+            } else {
+                let _ = std::fs::remove_file(&entry);
+            }
+        }
+    }
 }
 
 /// Copies the player's files from the installed version of a pack into the
@@ -401,6 +440,61 @@ mod tests {
             Some("player"),
             "копия игрока, уступившая новой версии, откладывается, а не выбрасывается"
         );
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// A pack that could not be cleared stays on disk, and it used to stay
+    /// without the worlds that had already been moved aside.
+    #[test]
+    fn a_failed_stash_puts_back_what_it_already_moved() {
+        let base = std::env::temp_dir().join(format!("millida-pack-stash-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let (pdir, keep) = (base.join("build"), base.join("keep"));
+        let mine = ["options.txt", "resourcepacks/Own.zip", "saves/Мир/level.dat"];
+        for f in mine {
+            touch(&pdir.join(f));
+        }
+        // A file where the keep folder needs a directory: the second entry fails
+        // after the first one has already been moved.
+        touch(&keep.join("resourcepacks"));
+
+        assert!(stash_into(&pdir, &keep).is_err(), "перенос, оборвавшийся на середине, обязан сказать об ошибке");
+        for f in mine {
+            assert!(pdir.join(f).exists(), "«{f}» обязан остаться в сборке, раз сборка не удалена");
+        }
+        assert!(!keep.join("options.txt").exists(), "уже перенесённое возвращается, а не остаётся в стороне");
+
+        std::fs::remove_file(keep.join("resourcepacks")).unwrap();
+        assert_eq!(stash_into(&pdir, &keep), Ok(3), "без помехи перенос забирает всё своё");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// A Modrinth pack ships its settings and sometimes a world as overrides,
+    /// and an update copied them over whatever the player had.
+    #[test]
+    fn an_update_does_not_overwrite_what_the_player_made() {
+        let base = std::env::temp_dir().join(format!("millida-pack-withhold-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let (ov, pdir) = (base.join("overrides"), base.join("build"));
+        for f in ["options.txt", "servers.dat", "saves/Island/level.dat", "saves/Tutorial/level.dat", "config/a.toml"] {
+            touch(&ov.join(f));
+        }
+        for f in ["options.txt", "saves/Island/level.dat", "config/a.toml"] {
+            touch(&pdir.join(f));
+        }
+
+        withhold_player_made(&ov, &pdir);
+
+        let cases: &[(&str, bool, &str)] = &[
+            ("options.txt", false, "настройки игры у игрока уже свои"),
+            ("saves/Island", false, "сыгранный мир не заменяется чистой копией из сборки"),
+            ("saves/Tutorial/level.dat", true, "мир, которого у игрока нет, приезжает"),
+            ("servers.dat", true, "списка серверов у игрока ещё не было"),
+            ("config/a.toml", true, "конфиги модов берутся из новой версии"),
+        ];
+        for (rel, stays, why) in cases {
+            assert_eq!(ov.join(rel).exists(), *stays, "«{rel}»: {why}");
+        }
         let _ = std::fs::remove_dir_all(&base);
     }
 
