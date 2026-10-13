@@ -4,7 +4,7 @@ import { headLook } from '../../lib/headLook'
 import type { Mine3dModule } from '../../lib/mine3d'
 import type { SkinAnimation, SkinViewEngine } from '../../vendor/mine3d'
 import { textureSource } from '../../lib/textureSource'
-import { detectSlimFromUrl } from '../../lib/skinArms'
+import { detectSlimFromUrl, loadImg } from '../../lib/skinArms'
 import { useViewPrefs } from '../../state/viewPrefs'
 import { LOOK_EVENT, catalogKnowing, gameProfile, loadCosmeticCatalog, loadWardrobe, loadWornCosmetics, lookVersion } from '../../lib/gameProfile'
 import type { CosmeticItem } from '../../lib/gameProfile'
@@ -95,6 +95,18 @@ const EMOTE_MAX_MS = 8000
 
 /** Последний образ: при возврате на главную персонаж надевается сразу. */
 let lastLook: Look | null = null
+
+/**
+ * The picture the lobby figure wore last. Every visit builds a new scene with a
+ * bare figure, and the skin reaches it only after its textures are asked for
+ * again: one stalled answer left the lobby empty for as long as the request
+ * lived. The new scene wears this picture at once and swaps it when the real
+ * one arrives. The decoded picture is kept, not its address: an address would
+ * wait on the same network.
+ */
+let lastSkin: { nick: string; key: string; src: string; picture: HTMLImageElement } | null = null
+/** Scenes that already wear a skin: only a bare one takes the kept picture. */
+const dressed = new WeakSet<object>()
 
 /** Тот же ли образ: иначе повторное надевание дёргает кадр на ровном месте. */
 const lookKey = (l: Look | null) =>
@@ -478,6 +490,23 @@ export function LobbyCharacter({
     engine.setModelType(look.slim ? m3d.SkinModelType.Slim : m3d.SkinModelType.Classic)
     const outfit = look.items.map((x) => x.item)
     const masks = maskUrls(outfit, look.slim, outfit.find((item) => item.slot === 'EMOTE'))
+    const key = lookKey(look)
+    const reveal = () => {
+      if (!alive) return
+      fit()
+      requestAnimationFrame(() => requestAnimationFrame(() => alive && setSkinFor(key)))
+    }
+    const kept = !shop && !dressed.has(engine) && lastSkin && lastSkin.nick === nick ? lastSkin : null
+    const wearing: Promise<string | null> = kept
+      ? engine.setSkin(kept.picture).then(
+          () => {
+            dressed.add(engine)
+            if (kept.key === key) reveal()
+            return kept.src
+          },
+          () => null,
+        )
+      : Promise.resolve(null)
     void textureSource(look.skin)
       // Картинка скина не прочиталась — дальше со скином по нику, а не с невидимым персонажем.
       .catch(() => nickSkinUrl(nick))
@@ -487,14 +516,30 @@ export function LobbyCharacter({
           return src
         }),
       )
-      .then((src) => {
+      .then((src) => wearing.then((worn) => ({ src, worn })))
+      .then(({ src, worn }) => {
         if (!alive) return
+        const remember = () => {
+          if (shop) return
+          void loadImg(src).then(
+            (picture) => {
+              lastSkin = { nick, key, src, picture }
+            },
+            () => {},
+          )
+        }
+        if (worn === src) {
+          remember()
+          reveal()
+          return
+        }
         return engine
           .setSkin(src)
           .then(() => {
+            dressed.add(engine)
             if (!alive) return
-            fit()
-            requestAnimationFrame(() => requestAnimationFrame(() => alive && setSkinFor(lookKey(look))))
+            remember()
+            reveal()
           })
           // Скин не прочитался — всё равно показываем персонажа (запасной
           // скин по нику), а не оставляем его невидимым навсегда.

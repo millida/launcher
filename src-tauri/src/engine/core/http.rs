@@ -1748,7 +1748,10 @@ PK"),
             })
             .await
             .unwrap_or_else(|_| panic!("{}: the download never came back from the pause", why));
-            assert!(started.elapsed() >= hold - Duration::from_millis(50), "{}: bytes moved while paused", why);
+            // Сколько прошло и с чем вернулось — в тексте отказа: 13.10.2026 этот тест один раз упал на
+            // раннере GitHub именно здесь, и по одной строке «bytes moved» причину было не восстановить.
+            let took = started.elapsed();
+            assert!(took >= hold - Duration::from_millis(50), "{}: bytes moved while paused: came back after {:?} with {:?}", why, took, r);
             if cancel_it {
                 assert_eq!(r.unwrap_err(), CANCELLED, "{}: a cancel during a pause must end as a cancel", why);
                 assert!(!dest.exists(), "{}: a cancelled download must not leave a file in place", why);

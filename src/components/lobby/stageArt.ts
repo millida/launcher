@@ -165,6 +165,69 @@ export const MOTIFS: string[][] = [
   ['########', '#.#.#.##', '########', '#......#', '#..#...#', '#.....##', '#...#..#', '########'],
 ]
 
+const SHADE = '8,10,12'
+
+/**
+ * A picture of the player's choice as the lobby backdrop. The picture alone
+ * would fight the interface: it is dimmed evenly, the corners and the strips
+ * under the top bar and the buttons go darker, and the hero keeps the light
+ * behind and the lit floor the plain scene gives it.
+ */
+function paintPicture(W: number, H: number, dpr: number, picture: HTMLImageElement, stage: boolean) {
+  const c = mk(W, H)
+  const g = ctx2d(c)
+  const scale = Math.max(W / picture.naturalWidth, H / picture.naturalHeight)
+  const w = Math.ceil(picture.naturalWidth * scale)
+  const h = Math.ceil(picture.naturalHeight * scale)
+  g.drawImage(picture, Math.round((W - w) / 2), Math.round((H - h) / 2), w, h)
+  g.fillStyle = 'rgba(' + SHADE + ',0.3)'
+  g.fillRect(0, 0, W, H)
+  ellipseGlow(g, W / 2, H * LIGHT_AT, W * 0.3, H * 0.46, '255,255,255', [
+    [0, 0.2],
+    [0.45, 0.09],
+    [1, 0],
+  ])
+  ellipseGlow(g, W / 2, H * 0.54, W * 0.76, H * 0.86, SHADE, [
+    [0, 0],
+    [0.44, 0],
+    [0.68, 0.3],
+    [0.86, 0.56],
+    [1, 0.74],
+  ])
+  const top = g.createLinearGradient(0, 0, 0, H * 0.18)
+  top.addColorStop(0, 'rgba(' + SHADE + ',0.5)')
+  top.addColorStop(1, 'rgba(' + SHADE + ',0)')
+  g.fillStyle = top
+  g.fillRect(0, 0, W, H * 0.18)
+  if (stage) {
+    ellipseGlow(g, W / 2, H * FEET_AT + 2 * dpr, W * 0.2, H * 0.05, '255,255,255', [
+      [0, 0.18],
+      [0.6, 0.08],
+      [1, 0],
+    ])
+    ellipseGlow(g, W / 2, H * FEET_AT + 4 * dpr, W * 0.085, H * 0.02, SHADE, [
+      [0, 0.5],
+      [0.55, 0.26],
+      [1, 0],
+    ])
+  }
+  const bottom = g.createLinearGradient(0, H * 0.66, 0, H)
+  bottom.addColorStop(0, 'rgba(' + SHADE + ',0)')
+  bottom.addColorStop(1, 'rgba(' + SHADE + ',0.62)')
+  g.fillStyle = bottom
+  g.fillRect(0, H * 0.66, W, H * 0.34)
+  return c
+}
+
+/** Shown while a chosen picture is on its way: the bright plain scene would flash before it on every start. */
+export function paintWaiting(W: number, H: number) {
+  const c = mk(W, H)
+  const g = ctx2d(c)
+  g.fillStyle = 'rgb(' + SHADE + ')'
+  g.fillRect(0, 0, W, H)
+  return c
+}
+
 export function paintScene(
   W: number,
   H: number,
@@ -173,6 +236,7 @@ export function paintScene(
   _world: HTMLImageElement | null,
   _stage: boolean,
 ) {
+  if (_world) return paintPicture(W, H, dpr, _world, _stage)
   // Как лобби Brawl Stars (референс владельца 22:29): гладкий свет от яркого
   // центра за героем к насыщенному цвету по краям, без клеток и прожекторов,
   // плюс едва заметный узор фирменных значков — у нас пиксельные значки

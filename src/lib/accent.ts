@@ -9,6 +9,7 @@ const VARS = [
   '--m-accent-soft',
   '--m-accent-fg',
   '--m-accent-rgb',
+  '--m-accent-base',
   '--m-grad',
 ] as const
 
@@ -53,16 +54,74 @@ function luminance(hex: string) {
   return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
 }
 
+const UI_BACKGROUND = '#161718'
+/// The darkest stock swatch sits at 3.87 against the window background: a colour
+/// of the player's own is held to the same line, so no stock colour moves.
+const MIN_UI_CONTRAST = 3.8
+/// A colour that fails the line is raised to where the middle of the stock
+/// palette sits: the kit prints dark ink on every accent fill, and it needs a
+/// fill that bright to read.
+const RAISED_UI_CONTRAST = 5.5
+
+function contrast(a: string, b: string) {
+  const la = luminance(a)
+  const lb = luminance(b)
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
+}
+
+function toHsl(hex: string) {
+  const { r, g, b } = hexToRgb(hex)
+  const max = Math.max(r, g, b) / 255
+  const min = Math.min(r, g, b) / 255
+  const l = (max + min) / 2
+  const d = max - min
+  if (!d) return { h: 0, s: 0, l }
+  const s = d / (1 - Math.abs(2 * l - 1))
+  const h =
+    max === r / 255 ? ((g - b) / 255 / d + 6) % 6 : max === g / 255 ? (b - r) / 255 / d + 2 : (r - g) / 255 / d + 4
+  return { h: h * 60, s, l }
+}
+
+function fromHsl(h: number, s: number, l: number) {
+  const c = (1 - Math.abs(2 * l - 1)) * s
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
+  const m = l - c / 2
+  const [r, g, b] =
+    h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x]
+  return toHex((r + m) * 255, (g + m) * 255, (b + m) * 255)
+}
+
+export const readsOnUi = (hex: string) => contrast(hex, UI_BACKGROUND) >= MIN_UI_CONTRAST
+
+/// The same hue and saturation, raised until it reads on the dark window:
+/// buttons, links and marks all draw with this one colour.
+export function readableOnUi(hex: string): string {
+  if (readsOnUi(hex)) return hex
+  const { h, s, l } = toHsl(hex)
+  let dark = l
+  let light = 1
+  for (let step = 0; step < 14; step++) {
+    const mid = (dark + light) / 2
+    if (contrast(fromHsl(h, s, mid), UI_BACKGROUND) >= RAISED_UI_CONTRAST) light = mid
+    else dark = mid
+  }
+  return fromHsl(h, s, light)
+}
+
 /// Достраивает акцент по базовому цвету: контрастный текст на заливке, читаемый
-/// цвет самого акцента, градиент и rgb для свечения.
+/// цвет самого акцента, градиент и rgb для свечения. Слишком тёмный цвет остаётся
+/// цветом сцены (`c`), а кнопки и текст берут его читаемый оттенок.
 export function computeAccent(a: Accent): Accent {
-  const lum = luminance(a.c)
-  const { r, g, b } = hexToRgb(a.c)
+  const ui = readableOnUi(a.c)
+  const tone = ui === a.c ? a : accentFromHex(ui)
+  const { r, g, b } = hexToRgb(ui)
   return {
     ...a,
-    fg: lum > 0.5 ? '#141414' : '#ffffff',
-    textC: a.c,
-    grad: 'linear-gradient(45deg,' + shade(a.c, -0.16) + ' 0%,' + a.c + ' 100%)',
+    h: tone.h,
+    s: tone.s,
+    fg: luminance(ui) > 0.5 ? '#141414' : '#ffffff',
+    textC: ui,
+    grad: 'linear-gradient(45deg,' + shade(ui, -0.16) + ' 0%,' + ui + ' 100%)',
     rgb: r + ',' + g + ',' + b,
   }
 }
@@ -106,6 +165,7 @@ function declarations(a: AccentVars): string {
   set('--m-accent-soft', a.s)
   set('--m-accent-fg', a.fg || '#ffffff')
   set('--m-accent-rgb', a.rgb)
+  set('--m-accent-base', a.c)
   set('--m-grad', a.grad)
   return probe.style.cssText
 }
@@ -116,8 +176,10 @@ export const ACCENT_EVENT = 'm-accent-change'
 
 /** Базовый цвет акцента как #rrggbb — от него строятся фон лобби и волна. */
 export function accentBase(): string {
-  const rgb = getComputedStyle(document.documentElement).getPropertyValue('--m-accent-rgb').trim()
-  const m = /^(\d+)\s*,\s*(\d+)\s*,\s*(\d+)$/.exec(rgb)
+  const style = getComputedStyle(document.documentElement)
+  const picked = /^#[0-9a-f]{6}$/i.exec(style.getPropertyValue('--m-accent-base').trim())
+  if (picked) return picked[0].toLowerCase()
+  const m = /^(\d+)\s*,\s*(\d+)\s*,\s*(\d+)$/.exec(style.getPropertyValue('--m-accent-rgb').trim())
   return m ? toHex(+m[1], +m[2], +m[3]) : '#5ec64d'
 }
 
@@ -150,7 +212,10 @@ function paintStored(): boolean {
   try {
     const stored = JSON.parse(readPref(ACCENT_KEY, '') || 'null')
     if (stored && typeof stored === 'object' && typeof stored.c === 'string') {
-      paintAccent(stored as AccentVars)
+      const kept = stored as Accent
+      const accent = readsOnUi(kept.c) ? kept : computeAccent(kept)
+      paintAccent(accent)
+      if (accent.textC !== kept.textC) saveAccent(accent)
       return true
     }
   } catch {}

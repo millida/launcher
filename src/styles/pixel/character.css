@@ -333,6 +333,9 @@
   text-overflow: ellipsis;
   font-variant-numeric: tabular-nums;
 }
+/* The row is a flex box, where an ellipsis never forms on bare text and centring
+   cuts a long line at both ends. The note is its own shrinking box instead. */
+.ch-tile-note { min-width: 0; overflow: hidden; text-overflow: ellipsis }
 .ch-tile-status.on { color: var(--m-accent) }
 .ch-tile-status.try { color: var(--m-rarity-rare) }
 .ch-tile-status.plus { color: var(--m-rarity-legendary) }

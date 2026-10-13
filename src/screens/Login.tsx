@@ -44,9 +44,22 @@ export function Login({ on }: { on: boolean }) {
           </button>
           {login.webBusy ? (
             <div className="login-code-box">
-              <button className="login-code" aria-label="Скопировать код" onClick={() => void copyUserCode()}>
-                <span>{login.userCode}</span>
-                <Icon id="i-copy" />
+              <button
+                className="login-code"
+                aria-label="Скопировать код"
+                aria-busy={!login.userCode}
+                data-notip
+                disabled={!login.userCode}
+                onClick={() => void copyUserCode()}
+              >
+                {login.userCode ? (
+                  <>
+                    <span>{login.userCode}</span>
+                    <Icon id="i-copy" />
+                  </>
+                ) : (
+                  <i className="login-code-wait" aria-hidden="true" />
+                )}
               </button>
               <div className="login-code-actions">
                 <button className="btn sm secondary" onClick={() => void startWebLogin(true)}>

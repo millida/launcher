@@ -1967,9 +1967,9 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
 /* Первый экран библиотеки: поле, «Найти» и «Собрать с ИИ» одной строкой (владелец 30.09.2026). */
 .hub-find { display: flex; align-items: stretch; gap: 10px; margin: 4px 0 22px; }
 .hub-find .hub-find-field { flex: 1 1 auto; min-width: 0; height: 60px; font-size: 16px; }
-.hub-find .btn { height: 60px; font-size: 18px; flex: none; gap: 10px; }
-.hub-find .hub-find-go { padding-inline: 40px; }
-@media (max-width: 600px) { .hub-find { flex-wrap: wrap; } .hub-find .hub-find-field { flex-basis: 100%; } .hub-find .btn { flex: 1 1 0; height: 54px; font-size: 16px; } }
+.hub-find .btn.lg { height: 60px; font-size: 18px; flex: none; gap: 10px; }
+.hub-find .btn.hub-find-go { padding-inline: 40px; }
+@media (max-width: 600px) { .hub-find { flex-wrap: wrap; } .hub-find .hub-find-field { flex-basis: 100%; } .hub-find .btn.lg { flex: 1 1 0; height: 54px; font-size: 16px; } }
 
 /* «Рекомендуем»: метка типа — значок и цвет раздела; эксклюзив светится
    (владелец 30.09.2026). Свечение — статичный слой над карточкой, «дышит»
