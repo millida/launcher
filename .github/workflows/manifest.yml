@@ -1,0 +1,49 @@
+# Published to millida/launcher as manifest.yml. The sync deploy key cannot create
+# or change workflow files, so edits here must be pushed to the public
+# repository once by an account that can.
+#
+# После каждого релиза прикладывает к нему список версий latest.json: по нему
+# установщик с сайта ставит лаунчер. Так список версий, файл и его сумма берутся
+# с GitHub, а хранилище Millida остаётся зеркалом. Список кладётся только после
+# сверки с SHA256SUMS релиза — см. scripts/attach-manifest.mjs.
+name: Manifest
+
+on:
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Релиз лаунчера, например v2.0.223 (пусто — последний)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: manifest
+  cancel-in-progress: true
+
+jobs:
+  attach:
+    name: Attach latest.json to the release
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Wait for the signed manifest, check it against the release, attach
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.tag }}
+        run: |
+          if [ ! -f scripts/attach-manifest.mjs ]; then
+            echo "::notice::scripts/attach-manifest.mjs ещё не опубликован — пропуск"
+            exit 0
+          fi
+          node scripts/attach-manifest.mjs $TAG
