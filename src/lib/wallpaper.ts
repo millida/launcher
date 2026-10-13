@@ -234,6 +234,22 @@ export const VIDEOS: VideoWp[] = [
 
 export const isVideoWp = (id: string) => VIDEOS.some((v) => v.id === id)
 
+export interface StillWp {
+  id: string
+  name: string
+  thumb: string
+  src: string
+}
+
+export const STILLS: StillWp[] = [
+  { id: 'bg5', name: 'Золотой час', thumb: '/bg/bg5.jpg', src: '/lobby/world.webp' },
+  { id: 'bg2', name: 'Уютная пещера', thumb: '/bg/bg2.jpg', src: '/bg/bg2-wide.webp' },
+  { id: 'bg3', name: 'Солнечный город', thumb: '/bg/bg3.jpg', src: '/bg/bg3-wide.webp' },
+  { id: 'bg4', name: 'У камина', thumb: '/bg/bg4.jpg', src: '/bg/bg4-wide.webp' },
+]
+
+export const stillOf = (id: string) => STILLS.find((s) => s.id === id) ?? null
+
 const brokenVideos = new Set<string>()
 
 export const markVideoBroken = (id: string) => brokenVideos.add(id)

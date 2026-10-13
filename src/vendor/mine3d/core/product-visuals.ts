@@ -55,13 +55,17 @@ export const DEFAULT_LIGHT_SETTINGS: LightSettings = {
   castShadows: true,
 };
 
-/** Пластик inner: усиленный envMap, albedo сохраняем */
-const SKIN_ROUGHNESS_INNER = 0.32;
+/**
+ * Пластик inner: усиленный envMap, albedo сохраняем.
+ * Roughness stays high: a head is a flat face, and a glossy one mirrors a light
+ * panel of the room whole — the face went white when the head turned to it.
+ */
+const SKIN_ROUGHNESS_INNER = 0.8;
 const SKIN_METALNESS_INNER = 0.08;
 const SKIN_ENV_MAP_INTENSITY_INNER = 1.05;
 
 /** Outer: только PBR-блик — cutout/DoubleSide/polygonOffset не трогаем */
-const SKIN_ROUGHNESS_OUTER = 0.34;
+const SKIN_ROUGHNESS_OUTER = 0.8;
 const SKIN_METALNESS_OUTER = 0.06;
 const SKIN_ENV_MAP_INTENSITY_OUTER = 0.9;
 /** IBL-сцена — дополняет envMap на материалах */

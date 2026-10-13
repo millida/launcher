@@ -18,6 +18,7 @@ import {
   overlaySetCardMs,
   overlaySetEnabled,
   overlayState,
+  convertFileSrc,
   pickGameDir,
   pickJavaPath,
   removeJavaRuntime,
@@ -85,6 +86,9 @@ import { PremiumSwatches, ThemeRow } from '../components/premium/ThemeRow'
 import { leavePremiumLook, markThemeChoice } from '../lib/premiumTheme'
 import { accentFromHex, computeAccent, paintAccent, saveAccent, withColorFade } from '../lib/accent'
 import type { Accent } from '../lib/accent'
+import { canPickBackdrop, pickBackdrop } from '../lib/pickBackdrop'
+import { STILLS } from '../lib/wallpaper'
+import { useWallpaper } from '../state/wallpaper'
 import { TAB_MS_DEFAULT, useViewPrefs } from '../state/viewPrefs'
 import type { PerfMode } from '../state/viewPrefs'
 
@@ -362,6 +366,28 @@ export function Settings({ on }: { on: boolean }) {
     }
   }
 
+  const wp = useWallpaper()
+  const ownPictures = wp.gallery.filter((c) => c.kind !== 'video')
+
+  const uploadBackdrop = () => {
+    if (!canPickBackdrop()) {
+      onlyApp('Свой фон')
+      return
+    }
+    void pickBackdrop()
+      .then((picked) => {
+        if (!picked) return
+        if (picked.kind === 'video') {
+          showToast('Фоном ставится картинка: PNG, JPG или WebP', 'error')
+          return
+        }
+        wp.addCustom(picked)
+      })
+      .catch((e) => {
+        console.error('[settings] backdrop', e)
+        showToast('Фон не загрузился — попробуй другую картинку', 'error')
+      })
+  }
 
   /* ================= Вкладки ================= */
 
@@ -411,6 +437,66 @@ export function Settings({ on }: { on: boolean }) {
         </Group>
         <Group title="Тема лаунчера">
           <ThemeRow />
+        </Group>
+      </Block>
+
+      <Block keys="фон лобби обои картинка фото свой фон загрузить сцена галерея">
+        <Group title="Фон">
+          <div className="s2-wp">
+            <button
+              aria-label="Сцена"
+              className={'s2-wp-tile' + (wp.wpCur === 'pixels' ? ' on' : '')}
+              onClick={() => wp.pick('pixels', 'Сцена')}
+            >
+              <i className="s2-wp-pixels" aria-hidden="true" />
+              <span>Сцена</span>
+            </button>
+            {STILLS.map((v) => (
+              <button
+                key={v.id}
+                aria-label={v.name}
+                className={'s2-wp-tile' + (wp.wpCur === v.id ? ' on' : '')}
+                onClick={() => wp.pick(v.id, v.name)}
+              >
+                <img src={v.thumb} alt="" />
+                <span>{v.name}</span>
+              </button>
+            ))}
+            {ownPictures.map((c) => (
+              <div
+                key={c.path}
+                role="button"
+                tabIndex={0}
+                aria-label={c.name || 'Свой фон'}
+                className={
+                  's2-wp-tile' + (wp.wpCur === 'custom' && wp.custom && wp.custom.path === c.path ? ' on' : '')
+                }
+                onClick={() => wp.setCustom(c)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') wp.setCustom(c)
+                }}
+              >
+                <img src={convertFileSrc(c.path)} alt="" />
+                <span>{c.name || 'Свой фон'}</span>
+                <button
+                  className="s2-wp-del"
+                  aria-label="Удалить фон"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    wp.removeCustom(c.path)
+                  }}
+                >
+                  <Icon id="i-trash" />
+                </button>
+              </div>
+            ))}
+            <button className="s2-wp-tile add" onClick={uploadBackdrop}>
+              <span className="s2-wp-ph">
+                <Icon id="i-upload" />
+              </span>
+              <span>Свой фон</span>
+            </button>
+          </div>
         </Group>
       </Block>
 

@@ -3,8 +3,10 @@ import { ACCENT_EVENT, accentBase, shade } from '../../lib/accent'
 import { currentDeviceTier, currentSceneFpsCap, maxCanvasPixelRatio } from '../../lib/deviceTier'
 import { onRenderGate, renderLive } from '../../lib/renderGate'
 import { gpuLite } from '../../lib/gpuLite'
+import { showToast } from '../../state/ui'
 import { VIEW_PREFS_EVENT, bgAnimOn } from '../../state/viewPrefs'
-import { WORLD_SRC, makePal, paintScene, paintVignette, stageGrid } from './stageArt'
+import { backdropOf, useWallpaper } from '../../state/wallpaper'
+import { makePal, paintScene, paintVignette, paintWaiting, stageGrid } from './stageArt'
 import type { Pal } from './stageArt'
 
 /**
@@ -45,6 +47,8 @@ interface Scene {
   rows: number
   jitter: Float32Array
   pal: Pal
+  /** Over a picture the wave is a faint light one: a solid flash in the button colour would hide it. */
+  picture: boolean
   base: HTMLCanvasElement
   vignette: HTMLCanvasElement
   waves: Wave[]
@@ -58,24 +62,33 @@ interface Scene {
   prev: Set<number>
 }
 
-const images = new Map<string, HTMLImageElement>()
-/** Картинка из кэша; пока грузится — null, по загрузке зовём onload. */
+/** Only the current backdrop is kept: a decoded frame takes tens of megabytes. */
+let kept: { src: string; im: HTMLImageElement } | null = null
+const reported = new Set<string>()
+/** Картинка из кэша; пока грузится — null, по загрузке зовём onload. A picture that failed is null as well: the scene is drawn. */
 function image(src: string, onload: () => void) {
-  let im = images.get(src)
-  if (!im) {
-    im = new Image()
-    im.decoding = 'async'
-    im.src = src
-    images.set(src, im)
+  if (!kept || kept.src !== src) {
+    const fresh = new Image()
+    fresh.decoding = 'async'
+    fresh.src = src
+    kept = { src, im: fresh }
   }
+  const im = kept.im
   if (!im.complete) {
     im.addEventListener('load', onload, { once: true })
+    im.addEventListener('error', onload, { once: true })
     return null
   }
-  return im
+  if (im.naturalWidth) return im
+  if (!reported.has(src)) {
+    reported.add(src)
+    console.warn('[lobby] backdrop picture did not load', src.slice(0, 120))
+    showToast('Фон не открылся — в лобби стоит сцена. Выбери другой в настройках', 'error')
+  }
+  return null
 }
 
-function build(w: number, h: number, dpr: number, stage: boolean, onImg: () => void): Scene {
+function build(w: number, h: number, dpr: number, stage: boolean, backdrop: string | null, onImg: () => void): Scene {
   const W = Math.round(w * dpr)
   const H = Math.round(h * dpr)
   const grid = stageGrid(W, H, dpr)
@@ -85,6 +98,8 @@ function build(w: number, h: number, dpr: number, stage: boolean, onImg: () => v
   const jitter = new Float32Array(cols * rows)
   for (let i = 0; i < jitter.length; i++) jitter[i] = Math.random() * 3
   const pal = makePal(accentBase(), shade)
+  const picture = backdrop ? image(backdrop, onImg) : null
+  const waiting = !!backdrop && !picture && !reported.has(backdrop)
   return {
     W,
     H,
@@ -93,7 +108,8 @@ function build(w: number, h: number, dpr: number, stage: boolean, onImg: () => v
     rows,
     jitter,
     pal,
-    base: paintScene(W, H, dpr, pal, image(WORLD_SRC, onImg), stage),
+    picture: !!picture || waiting,
+    base: waiting ? paintWaiting(W, H) : paintScene(W, H, dpr, pal, picture, stage),
     vignette: paintVignette(W, H, pal, dpr),
     waves: [],
     nextWave: performance.now() + 1200,
@@ -168,7 +184,9 @@ function paint(ctx: CanvasRenderingContext2D, s: Scene, now: number, animate: bo
       }
       next.add(i)
       const [RX, RY] = restore(i)
-      ctx.fillStyle = 'rgba(' + s.pal.flash + ',' + (0.75 * k).toFixed(3) + ')'
+      ctx.fillStyle = s.picture
+        ? 'rgba(255,255,255,' + (0.16 * k).toFixed(3) + ')'
+        : 'rgba(' + s.pal.flash + ',' + (0.75 * k).toFixed(3) + ')'
       ctx.fillRect(RX, RY, cs, cs)
       ctx.fillStyle = 'rgba(255,255,255,' + (0.25 * k).toFixed(3) + ')'
       ctx.fillRect(RX, RY, cs, top)
@@ -244,6 +262,7 @@ function paintSparks(g: CanvasRenderingContext2D, list: Spark[], now: number, dp
 export function PixelField({ on }: { on: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null)
   const fxRef = useRef<HTMLCanvasElement>(null)
+  const backdrop = useWallpaper(backdropOf)
 
   useEffect(() => {
     const cv = ref.current
@@ -268,7 +287,7 @@ export function PixelField({ on }: { on: boolean }) {
       // Два холста во всё окно: при DPR 2 это ~40 МБ видеопамяти. Пиксель-арт
       // выше 1.5 не выигрывает, в лёгкой графике — 1; слабые устройства режут сильнее.
       const dpr = lite ? 1 : Math.min(window.devicePixelRatio || 1, 1.5, maxCanvasPixelRatio(currentDeviceTier()))
-      scene = build(r.width, r.height, dpr, !!cv.closest('.lobby'), fit)
+      scene = build(r.width, r.height, dpr, !!cv.closest('.lobby'), backdrop, fit)
       cv.width = scene.W
       cv.height = scene.H
       // Искр без движения нет — и буфер под них не нужен.
@@ -346,7 +365,7 @@ export function PixelField({ on }: { on: boolean }) {
       offGate()
       window.removeEventListener(ACCENT_EVENT, onAccent)
     }
-  }, [on])
+  }, [on, backdrop])
 
   return (
     <>

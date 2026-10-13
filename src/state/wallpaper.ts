@@ -1,4 +1,6 @@
 import { create } from 'zustand'
+import { convertFileSrc } from '../ipc/commands'
+import { stillOf } from '../lib/wallpaper'
 import { showToast } from './ui'
 
 const VIDS = ['bg1', 'bg2', 'bg3', 'bg4']
@@ -29,6 +31,15 @@ function readGallery(): CustomWp[] {
 }
 const initGallery = readGallery()
 const initCustom = readCustom() || initGallery[0] || null
+
+// A pick made before the lobby stopped drawing pictures may still sit in storage:
+// it must not come back on screen by itself.
+const PICTURES_BACK = 'm-wp-pictures'
+if (localStorage.getItem(PICTURES_BACK) !== '1') {
+  localStorage.setItem(PICTURES_BACK, '1')
+  localStorage.setItem('m-wp', 'pixels')
+  localStorage.setItem('m-wp-mode', 'fixed')
+}
 
 const firstRun = localStorage.getItem('m-wp-seen') !== '1'
 localStorage.setItem('m-wp-seen', '1')
@@ -74,6 +85,12 @@ interface WallpaperState {
   toggleAnim: () => void
 }
 
+/** The picture the scene is painted over, or null for the plain scene in the button colour. */
+export const backdropOf = (s: Pick<WallpaperState, 'wpCur' | 'custom'>): string | null => {
+  if (s.wpCur !== 'custom') return stillOf(s.wpCur)?.src ?? null
+  return s.custom && s.custom.kind !== 'video' ? convertFileSrc(s.custom.path) : null
+}
+
 export const useWallpaper = create<WallpaperState>((set) => ({
   wpCur: initCur,
   wpMode: initMode,
@@ -116,13 +133,13 @@ export const useWallpaper = create<WallpaperState>((set) => ({
         if (custom) localStorage.setItem('m-wp-custom', JSON.stringify(custom))
         else {
           localStorage.removeItem('m-wp-custom')
-          localStorage.setItem('m-wp', 'bg4')
+          localStorage.setItem('m-wp', PIXELS)
         }
       }
       return {
         gallery,
         custom,
-        wpCur: wasActive && !custom ? 'bg4' : s.wpCur,
+        wpCur: wasActive && !custom ? PIXELS : s.wpCur,
       }
     }),
   setMode: (m) => {
