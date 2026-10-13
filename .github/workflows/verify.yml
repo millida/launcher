@@ -1,0 +1,42 @@
+# Published to millida/launcher as verify.yml. The sync deploy key cannot create
+# or change workflow files, so edits here must be pushed to the public
+# repository once by an account that can.
+#
+# Четыре раза в сутки и по кнопке: всё, что раздаётся игрокам, скачивается
+# заново и сверяется с тем, что собрал GitHub.
+#  - файлы из манифеста обновлений — с SHA256SUMS релиза этой версии;
+#  - установщики с кнопки «Скачать» на millida.net — со списком
+#    installer/site-files.json, у exe проверяется подпись.
+# Расхождение делает прогон красным: подменить файл в хранилище незаметно нельзя.
+name: Verify downloads
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-downloads
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Files match the release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Download everything and compare
+        run: |
+          # Скрипт приезжает сюда вместе с релизом; до первого релиза с ним проверять нечем.
+          if [ ! -f scripts/verify-downloads.mjs ]; then
+            echo "::notice::scripts/verify-downloads.mjs ещё не опубликован — пропуск"
+            exit 0
+          fi
+          node scripts/verify-downloads.mjs
