@@ -35,6 +35,7 @@ import {
   preloadScreens,
 } from './screens/registry'
 const InstancePage = lazy(() => import('./modals/InstancePage').then((m) => ({ default: m.InstancePage })))
+const ChestOpenHost = lazy(() => import('./components/daily/ChestOpen').then((m) => ({ default: m.ChestOpenHost })))
 import { ImportModal } from './modals/Import'
 import { MoveBuildsModal } from './modals/MoveBuilds'
 import { ProjectModal } from './modals/Project'
@@ -965,6 +966,9 @@ export function App() {
         <LaunchToast />
         <Toast />
         <RewardHost />
+        <Suspense fallback={null}>
+          <ChestOpenHost />
+        </Suspense>
         <PixelTip />
       </div>
     </>
