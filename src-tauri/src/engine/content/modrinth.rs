@@ -157,6 +157,7 @@ pub(crate) async fn bulk_latest_by_hash(
     hashes: &[String],
     game_version: &str,
     loaders: &[String],
+    channels: &[&str],
 ) -> std::collections::HashMap<String, Value> {
     let mut out = std::collections::HashMap::new();
     if hashes.is_empty() {
@@ -169,6 +170,9 @@ pub(crate) async fn bulk_latest_by_hash(
         }
         if !game_version.is_empty() {
             body["game_versions"] = serde_json::json!([game_version]);
+        }
+        if !channels.is_empty() {
+            body["version_types"] = serde_json::json!(channels);
         }
         let Ok(v) = post_json("https://api.modrinth.com/v2/version_files/update", &body).await else {
             continue;
@@ -234,22 +238,74 @@ pub(crate) fn known_game_versions(versions: &[Value]) -> String {
     seen.join(", ")
 }
 
-/// Picks the newest file the build can load, preferring its own loader over the
-/// ones a bridge adds: a project shipping both a Forge and a Fabric build must
-/// give a Forge build to a Forge instance, bridge or no bridge.
+/// How rough a channel is: 0 for a release, 1 for a beta, 2 for an alpha. A
+/// file without the field (CurseForge shape, our own catalogue) is a release.
+pub(crate) fn channel_rank(v: &Value) -> u8 {
+    match v["version_type"].as_str() {
+        Some("alpha") => 2,
+        Some("beta") => 1,
+        _ => 0,
+    }
+}
+
+/// The newest file that fits, from the steadiest channel that has one: a
+/// release, then a beta, then an alpha. Modrinth lists versions newest first
+/// whatever their channel, and "newest" used to win: on 13.10.2026 builds were
+/// getting Sodium 0.8.15-beta.1 while Reese's Sodium Options, Voxy and Nvidium
+/// ask for the 0.8.14 release by its exact number, and the game refused to
+/// start (36 installs in half a day). A project that ships only betas still
+/// installs: its beta is then the steadiest file there is.
+fn steadiest(versions: &[Value], fits: impl Fn(&Value) -> bool) -> Option<&Value> {
+    (0..=2u8).find_map(|rank| versions.iter().find(|v| channel_rank(v) == rank && fits(v)))
+}
+
+/// Picks the file to install, preferring the build's own loader over the ones a
+/// bridge adds: a project shipping both a Forge and a Fabric build must give a
+/// Forge build to a Forge instance, bridge or no bridge.
 pub(crate) fn pick_version(
     versions: &[Value],
     game_version: &str,
     loaders: &[String],
     bridge: &[String],
 ) -> Option<Value> {
-    if let Some(v) = versions.iter().find(|v| version_fits(v, game_version, loaders)) {
+    if let Some(v) = steadiest(versions, |v| version_fits(v, game_version, loaders)) {
         return Some(v.clone());
     }
     if bridge.is_empty() {
         return None;
     }
-    versions.iter().find(|v| version_fits(v, game_version, bridge)).cloned()
+    steadiest(versions, |v| version_fits(v, game_version, bridge)).cloned()
+}
+
+/// The file an installed one is updated to: the newest that fits and is not on
+/// a rougher channel than the installed file. A release stays on releases, a
+/// beta may move to a newer beta or to a release. The installed file itself
+/// qualifies, so the answer is never older than what is there. An installed id
+/// the project does not list (a hand-placed file, an old manifest) is treated
+/// as before: the newest file wins.
+pub(crate) fn pick_update(
+    versions: &[Value],
+    installed_id: &str,
+    game_version: &str,
+    loaders: &[String],
+    bridge: &[String],
+) -> Option<Value> {
+    let roughest = versions
+        .iter()
+        .find(|v| !installed_id.is_empty() && v["id"].as_str() == Some(installed_id))
+        .map(channel_rank)
+        .unwrap_or(2);
+    let allowed = |v: &Value, list: &[String]| channel_rank(v) <= roughest && version_fits(v, game_version, list);
+    versions
+        .iter()
+        .find(|v| allowed(v, loaders))
+        .or_else(|| if bridge.is_empty() { None } else { versions.iter().find(|v| allowed(v, bridge)) })
+        .cloned()
+}
+
+fn no_file_text(versions: &[Value], game_version: &str) -> String {
+    let have = known_game_versions(versions);
+    format!("нет файла под {}{}", game_version, if have.is_empty() { String::new() } else { format!(" (есть: {})", have) })
 }
 
 /// Same as `best_version`, with the bridged loaders as a second choice.
@@ -263,17 +319,26 @@ pub(crate) async fn best_version_bridged(
         return best_version(project, game_version, loaders).await;
     }
     let versions = project_versions(project).await?;
-    pick_version(&versions, game_version, loaders, bridge).ok_or_else(|| {
-        let have = known_game_versions(&versions);
-        format!("нет файла под {}{}", game_version, if have.is_empty() { String::new() } else { format!(" (есть: {})", have) })
-    })
+    pick_version(&versions, game_version, loaders, bridge).ok_or_else(|| no_file_text(&versions, game_version))
+}
+
+/// The update for a file already in the build, see `pick_update`.
+pub(crate) async fn update_version_bridged(
+    project: &str,
+    installed_id: &str,
+    game_version: &str,
+    loaders: &[String],
+    bridge: &[String],
+) -> Result<Value, String> {
+    let versions = project_versions(project).await?;
+    pick_update(&versions, installed_id, game_version, loaders, bridge).ok_or_else(|| no_file_text(&versions, game_version))
 }
 
 /// Strict: a version that does not match the profile is never returned. Callers
 /// that want it anyway ask for it explicitly via `latest_version`.
 pub(crate) async fn best_version(project: &str, game_version: &str, loaders: &[String]) -> Result<Value, String> {
     let versions = project_versions(project).await?;
-    versions.iter().find(|v| version_fits(v, game_version, loaders)).cloned()
+    steadiest(&versions, |v| version_fits(v, game_version, loaders)).cloned()
         .ok_or_else(|| format!(
             "нет версии под {}{} (есть под {})",
             if game_version.is_empty() { "эту сборку" } else { game_version },
@@ -466,6 +531,62 @@ mod tests {
 
     fn ver(games: &[&str], loaders: &[&str]) -> Value {
         json!({ "game_versions": games, "loaders": loaders })
+    }
+
+    fn file(id: &str, channel: &str, loader: &str) -> Value {
+        json!({ "id": id, "version_type": channel, "game_versions": ["1.21.11"], "loaders": [loader] })
+    }
+
+    fn picked(v: Option<Value>) -> String {
+        v.and_then(|v| v["id"].as_str().map(String::from)).unwrap_or_default()
+    }
+
+    /// Modrinth's own order, newest first: the Sodium list of 13.10.2026.
+    fn sodium() -> Vec<Value> {
+        vec![file("0.8.15-beta.1", "beta", "fabric"), file("0.8.14", "release", "fabric"), file("0.8.14-beta.2", "beta", "fabric"), file("0.8.13", "release", "fabric")]
+    }
+
+    #[test]
+    fn an_install_takes_the_release_and_not_the_newer_beta() {
+        let fabric = vec!["fabric".to_string()];
+        assert_eq!(picked(pick_version(&sodium(), "1.21.11", &fabric, &[])), "0.8.14", "Reese's Sodium Options asks for this exact release");
+        let only_betas = vec![file("b2", "beta", "fabric"), file("a3", "alpha", "fabric"), file("b1", "beta", "fabric")];
+        assert_eq!(picked(pick_version(&only_betas, "1.21.11", &fabric, &[])), "b2", "a project without releases still installs, newest beta first");
+        let only_alphas = vec![file("a2", "alpha", "fabric"), file("a1", "alpha", "fabric")];
+        assert_eq!(picked(pick_version(&only_alphas, "1.21.11", &fabric, &[])), "a2");
+        let untyped = vec![json!({ "id": "x", "game_versions": ["1.21.11"], "loaders": ["fabric"] })];
+        assert_eq!(picked(pick_version(&untyped, "1.21.11", &fabric, &[])), "x", "a file without a channel is a release");
+        assert_eq!(picked(pick_version(&sodium(), "26.2", &fabric, &[])), "", "another game version is never picked");
+    }
+
+    #[test]
+    fn the_own_loader_wins_over_a_steadier_bridged_file() {
+        let forge = vec!["forge".to_string()];
+        let bridged = vec!["fabric".to_string()];
+        let both = vec![file("fabric-release", "release", "fabric"), file("forge-beta", "beta", "forge")];
+        assert_eq!(picked(pick_version(&both, "1.21.11", &forge, &bridged)), "forge-beta");
+        assert_eq!(picked(pick_version(&both[..1], "1.21.11", &forge, &bridged)), "fabric-release");
+        assert_eq!(picked(pick_version(&both[..1], "1.21.11", &forge, &[])), "");
+    }
+
+    /// (installed id, expected update)
+    #[test]
+    fn an_update_never_steps_onto_a_rougher_channel_and_never_back() {
+        let fabric = vec!["fabric".to_string()];
+        let cases = [
+            ("0.8.14", "0.8.14", "on the newest release: the beta above it is not an update"),
+            ("0.8.13", "0.8.14", "an older release moves to the newest release, past the beta"),
+            ("0.8.14-beta.2", "0.8.15-beta.1", "a beta moves to the newest file a beta may take"),
+            ("0.8.15-beta.1", "0.8.15-beta.1", "on the newest beta: the older release is not an update"),
+            ("", "0.8.15-beta.1", "an unknown file is updated as before"),
+            ("not-listed", "0.8.15-beta.1", "an id the project does not list is updated as before"),
+        ];
+        for (installed, want, why) in cases {
+            assert_eq!(picked(pick_update(&sodium(), installed, "1.21.11", &fabric, &[])), want, "{}", why);
+        }
+        let alpha_on_top = vec![file("a9", "alpha", "fabric"), file("b5", "beta", "fabric"), file("r1", "release", "fabric")];
+        assert_eq!(picked(pick_update(&alpha_on_top, "b5", "1.21.11", &fabric, &[])), "b5", "a beta does not move to an alpha");
+        assert_eq!(picked(pick_update(&alpha_on_top, "a9", "1.21.11", &fabric, &[])), "a9");
     }
 
     /// input -> verdict. A file that targets another game version installs fine
