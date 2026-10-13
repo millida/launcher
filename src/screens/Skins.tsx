@@ -1224,7 +1224,7 @@ export function Skins({ on }: { on: boolean }) {
       openPaymentUrl(started.paymentUrl)
       showToast('Оплата открыта в браузере. Набор откроется сразу после оплаты')
       stopPlusWatch.current?.()
-      stopPlusWatch.current = watchPlusPurchase((status) => {
+      stopPlusWatch.current = watchPlusPurchase(plus ?? null, (status) => {
         result(true)
         setPlus(status)
         setPlusJoy(true)

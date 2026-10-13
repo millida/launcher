@@ -18,7 +18,7 @@ impl ServerRecord {
 }
 
 pub fn read_servers(b: &[u8]) -> Vec<ServerRecord> {
-    let mut r = Reader { b, i: 0 };
+    let mut r = Reader { b, i: 0, depth: 0 };
     let mut out = vec![];
     // Root: TAG_Compound followed by its name.
     if r.u8() != Some(10) { return out; }
@@ -99,7 +99,10 @@ fn put_str_raw(o: &mut Vec<u8>, s: &str) {
     o.extend_from_slice(s.as_bytes());
 }
 
-struct Reader<'a> { b: &'a [u8], i: usize }
+/// The game itself refuses NBT nested deeper than this.
+const MAX_DEPTH: u32 = 512;
+
+struct Reader<'a> { b: &'a [u8], i: usize, depth: u32 }
 
 impl<'a> Reader<'a> {
     fn u8(&mut self) -> Option<u8> { let v = *self.b.get(self.i)?; self.i += 1; Some(v) }
@@ -117,13 +120,19 @@ impl<'a> Reader<'a> {
     }
     /// Skips the payload of a tag of the given NBT type id.
     fn skip(&mut self, id: u8) -> Option<()> {
+        if id != 9 && id != 10 {
+            return self.skip_flat(id);
+        }
+        if self.depth >= MAX_DEPTH {
+            return None;
+        }
+        self.depth += 1;
+        let done = self.skip_nested(id);
+        self.depth -= 1;
+        done
+    }
+    fn skip_nested(&mut self, id: u8) -> Option<()> {
         match id {
-            1 => { self.take(1)?; }
-            2 => { self.take(2)?; }
-            3 | 5 => { self.take(4)?; }
-            4 | 6 => { self.take(8)?; }
-            7 => { let n = self.i32()?.max(0) as usize; self.take(n)?; }
-            8 => { let n = self.u16()? as usize; self.take(n)?; }
             9 => {
                 let et = self.u8()?; let cnt = self.i32()?.max(0);
                 for _ in 0..cnt { self.skip(et)?; }
@@ -136,6 +145,18 @@ impl<'a> Reader<'a> {
                     self.skip(t)?;
                 }
             }
+            _ => return None,
+        }
+        Some(())
+    }
+    fn skip_flat(&mut self, id: u8) -> Option<()> {
+        match id {
+            1 => { self.take(1)?; }
+            2 => { self.take(2)?; }
+            3 | 5 => { self.take(4)?; }
+            4 | 6 => { self.take(8)?; }
+            7 => { let n = self.i32()?.max(0) as usize; self.take(n)?; }
+            8 => { let n = self.u16()? as usize; self.take(n)?; }
             11 => { let n = self.i32()?.max(0) as usize; self.take(n * 4)?; }
             12 => { let n = self.i32()?.max(0) as usize; self.take(n * 8)?; }
             _ => return None,
@@ -223,6 +244,20 @@ mod tests {
             vec![("First", "one.example.net"), ("Second", "two.example.net")],
             "запись с байтовым тегом съела остаток списка — игрок теряет свои серверы"
         );
+    }
+
+    /// servers.dat arrives inside other people's packs and is read on launch.
+    #[test]
+    fn nesting_past_the_game_limit_ends_the_read_instead_of_overflowing_the_stack() {
+        let mut o = vec![10u8];
+        super::put_str_raw(&mut o, "");
+        o.push(9);
+        super::put_str_raw(&mut o, "junk");
+        for _ in 0..200_000 {
+            o.extend_from_slice(&[9, 0, 0, 0, 1]);
+        }
+        o.extend_from_slice(&[1, 0, 0, 0, 0, 0]);
+        assert!(read_servers(&o).is_empty(), "servers.dat из вложенных списков ронял лаунчер при запуске сборки");
     }
 
     #[test]

@@ -1,4 +1,3 @@
-import { realDownloads } from '../../lib/realDownloads'
 import { api, openExt } from '../../lib/api'
 import { cachedCatalog, peekCatalog } from '../../lib/catalogCache'
 import { MODRINTH_API } from '../../lib/api'
@@ -431,7 +430,7 @@ export function premiumCard(p: MillidaPack): SiteCard {
 
 /** Наше число скачиваний или null — если показывать нечего. */
 export const ownDownloads = (card: Pick<SiteCard, 'downloads'> & { slug?: string | null }): number | null => {
-  const n = realDownloads(card.slug, card.downloads)
+  const n = card.downloads
   return typeof n === 'number' && n > 0 ? n : null
 }
 

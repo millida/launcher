@@ -42,6 +42,16 @@ fn forget_running(pid: u32) {
 /// Windows needs taskkill /T to take down the whole JVM process tree; elsewhere
 /// SIGTERM lets the game save the world before exiting.
 pub fn stop_game(profile: Option<&str>) -> Result<(), String> {
+    end_game(profile, true)
+}
+
+/// Closes the game the way the player would: without /F taskkill posts a close
+/// request to the game window, and the game saves the world before it exits.
+pub(crate) fn ask_game_to_close(profile: &str) -> Result<(), String> {
+    end_game(Some(profile), false)
+}
+
+fn end_game(profile: Option<&str>, force: bool) -> Result<(), String> {
     let pids: Vec<u32> = RUNNING
         .lock()
         .map(|v| {
@@ -62,11 +72,15 @@ pub fn stop_game(profile: Option<&str>) -> Result<(), String> {
         {
             let mut cmd = Command::new("taskkill");
             quiet(&mut cmd);
-            cmd.args(["/PID", &pid.to_string(), "/T", "/F"]);
+            cmd.args(["/PID", &pid.to_string(), "/T"]);
+            if force {
+                cmd.arg("/F");
+            }
             cmd.status().map_err(|e| e.to_string())?;
         }
         #[cfg(not(windows))]
         {
+            let _ = force;
             let mut cmd = Command::new("kill");
             cmd.args(["-TERM", &pid.to_string()]);
             cmd.status().map_err(|e| e.to_string())?;
@@ -1284,6 +1298,27 @@ pub async fn install_and_launch_in(
     profile: String,
     auth: Auth,
 ) -> Result<String, String> {
+    install_and_launch_into(app, version_id, nick, with_fabric, ram_mb, profile, auth, QuickTarget::default()).await
+}
+
+/// World and server the game opens straight into (Quick Play).
+#[derive(Default)]
+pub(crate) struct QuickTarget {
+    pub world: Option<String>,
+    pub server: Option<String>,
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn install_and_launch_into(
+    app: AppHandle,
+    version_id: String,
+    nick: String,
+    with_fabric: bool,
+    ram_mb: u32,
+    profile: String,
+    auth: Auth,
+    quick: QuickTarget,
+) -> Result<String, String> {
     check_cancel()?;
     let _slot = claim_profile_start(&profile, || emit(&app, "files", 2.0, "Останавливаем прошлый запуск этой сборки…")).await?;
     refuse_second_instance(&running_games(), &profile)?;
@@ -1611,12 +1646,13 @@ pub async fn install_and_launch_in(
     std::fs::create_dir_all(&logs).ok();
     let log_path = logs.join("launcher-latest.log");
     let mut quick_server: Option<String> = None;
-    if let Some((w, sv)) = QUICK.lock().unwrap().clone() {
-        if let Some(w) = w { args.push("--quickPlaySingleplayer".into()); args.push(w); }
-        if let Some(sv) = sv {
-            quick_server = Some(sv.clone());
-            args.extend(server_join_args(prof.as_ref().map(|p| p.version.as_str()).unwrap_or(&version_id), &sv));
-        }
+    if let Some(w) = quick.world {
+        args.push("--quickPlaySingleplayer".into());
+        args.push(w);
+    }
+    if let Some(sv) = quick.server {
+        quick_server = Some(sv.clone());
+        args.extend(server_join_args(prof.as_ref().map(|p| p.version.as_str()).unwrap_or(&version_id), &sv));
     }
     // Токен для мода — узкий, из /launcher/mod-session; нет его — мод без входа.
     let mod_token = if own_mod { mod_session_token().await } else { None };

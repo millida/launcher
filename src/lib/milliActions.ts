@@ -226,6 +226,8 @@ export function chosenSteps(a: MilliAction, off: readonly string[]): { step: Mil
   a.steps.forEach((step, i) => {
     const rowId = owner.get(i)
     if (rowId && off.includes(rowId)) return
+    // The card shows rows, not steps: a step no row stands for would change the PC without the player seeing it.
+    if (!rowId && !runners.get(step.op)?.readOnly) return
     out.push({ step, rowId })
   })
   return out

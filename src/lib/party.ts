@@ -195,6 +195,17 @@ export function launchToRun(launch: PartyLaunch | null, lastSeq: number, now: nu
   return now - launch.at <= LAUNCH_FRESH_MS ? launch : null
 }
 
+/**
+ * A launch starts the game on this machine only on the player's own word: «Готов» on exactly
+ * what is being launched. The leader started it themselves; for everyone else the launch is
+ * a message from another player.
+ */
+export function launchAgreed(party: Party, launch: PartyLaunch, me: string): boolean {
+  if (party.leaderId === me) return true
+  const mine = party.members.find((m) => m.userId === me)
+  return !!mine && mine.ready && sameIdentity(mine.have, launch.target)
+}
+
 export type LaunchBlock = { kind: 'no_target' } | { kind: 'not_ready'; nicks: string[] } | null
 
 export function launchBlock(party: Party): LaunchBlock {

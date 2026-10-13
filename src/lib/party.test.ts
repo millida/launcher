@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
   LAUNCH_FRESH_MS,
+  launchAgreed,
   launchBlock,
   launchToRun,
   lfgTagsOk,
@@ -121,6 +122,22 @@ describe('launchBlock', () => {
   test('sameIdentity не считает пустое совпадением', () => {
     expect(sameIdentity(null, null)).toBe(false)
   })
+
+  const have = { kind: target.kind, ref: target.ref, version: target.version }
+  const launch = { seq: 2, at: 0, addr: 'play.example.net:25565', target }
+  const AGREED: Array<[string, Partial<PartyMember>, boolean, string]> = [
+    ['a', { ready: true, have }, true, 'участник сам нажал «Готов» на эту сборку — запуск лидера стартует игру'],
+    ['a', { ready: false, have }, false, 'без своего «Готов» чужой запуск игру не стартует и на сервер не ведёт'],
+    ['a', { ready: true, have: { ...have, version: 'old' } }, false, '«Готов» был на другую версию сборки — это не согласие на эту'],
+    ['a', { ready: true, have: null }, false, 'готовность без сборки ничего не подтверждает'],
+    ['lead', { ready: false, have: null }, true, 'лидер запускает сам, ему своя отметка не нужна'],
+  ]
+  for (const [who, mine, run, why] of AGREED) {
+    test('launchAgreed: ' + why, () => {
+      const p = party([member('lead', 1, { role: 'leader' }), member('a', 2, mine)])
+      expect(launchAgreed(p, launch, who), why).toBe(run)
+    })
+  }
 })
 
 describe('lfgTagsOk', () => {
