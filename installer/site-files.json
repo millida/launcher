@@ -1,0 +1,27 @@
+{
+  "about": "Файлы, которые отдаёт кнопка «Скачать» на millida.net для Windows и macOS, как они есть в https://launcher-storage.millida.net/setup/. Проверка Verify downloads сверяет хранилище с этим списком при каждом прогоне: заменить файл незаметно нельзя. Пакеты Linux в список не входят — кнопка берёт их из релиза лаунчера, и сверяются они с его SHA256SUMS.",
+  "base": "https://launcher-storage.millida.net/setup/",
+  "files": [
+    {
+      "name": "MillidaLauncherSetup.exe",
+      "sha256": "046b8e68ac8a639b95bfd93c65199ec57b037901cdec20b6734fd0e8c2de6241",
+      "signed": "authenticode",
+      "signer": "ИП Веселов Никита Николаевич (EV, GlobalSign)",
+      "built": "вне GitHub, 03.09.2026; замена — подписанный файл из релиза setup-v*"
+    },
+    {
+      "name": "Millida-Launcher-aarch64.dmg",
+      "sha256": "de02f546a62628eaba800c90d526ce80c0493c201bbe7d68744c6d00bfd114e4",
+      "signed": "developer-id, notarized",
+      "signer": "Developer ID Application: Mark Sheremeta (G6P84BXZCC)",
+      "built": "вне GitHub, 10.09.2026"
+    },
+    {
+      "name": "Millida-Launcher-x64.dmg",
+      "sha256": "a01ddb8021ccf6035adeab07b390d14f07bb507a7f6077f940d98ae0ebd55e40",
+      "signed": "developer-id, notarized",
+      "signer": "Developer ID Application: Mark Sheremeta (G6P84BXZCC)",
+      "built": "вне GitHub, 10.09.2026"
+    }
+  ]
+}
