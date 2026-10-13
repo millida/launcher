@@ -1,4 +1,5 @@
 import { loadPlus, type PlusStatus } from '../lib/gameProfile'
+import { purchaseLanded } from '../lib/plusPurchase'
 import { isRealtimeLive, onRealtime } from '../lib/realtime'
 import { pokeGate, purchaseWaitMs } from '../lib/realtimePace'
 
@@ -10,7 +11,7 @@ const GIVE_UP = 15 * 60_000
  * asking. A failed poll is retried on the next tick: one lost answer must not
  * end the wait for a purchase that is still in progress.
  */
-export function watchPlusPurchase(onActive: (status: PlusStatus) => void): () => void {
+export function watchPlusPurchase(before: PlusStatus | null, onActive: (status: PlusStatus) => void): () => void {
   const started = Date.now()
   let stopped = false
   let busy = false
@@ -29,7 +30,7 @@ export function watchPlusPurchase(onActive: (status: PlusStatus) => void): () =>
     const status = await loadPlus().catch(() => null)
     busy = false
     if (stopped) return
-    if (status?.active) {
+    if (status && purchaseLanded(before, status)) {
       stop()
       // Премиум-тема включается сама один раз после оплаты (lib/premiumTheme).
       window.dispatchEvent(new CustomEvent('m-plus-bought', { detail: status.tier ?? 'PLUS' }))

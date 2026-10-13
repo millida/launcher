@@ -216,12 +216,54 @@ async fn install_education(app: &AppHandle, job: &Job) -> Result<(), String> {
     };
     download_checked_progress(EDUCATION_INSTALLER, &dest, None, size, Some(job.cancel_flag()), &report).await?;
     job.check()?;
+    job.emit(app, 95.0, "Проверяем подпись Microsoft");
+    let checked = dest.clone();
+    let signed = tauri::async_runtime::spawn_blocking(move || signed_by_microsoft(&checked))
+        .await
+        .map_err(|e| e.to_string())?;
+    if let Err(why) = signed {
+        let _ = std::fs::remove_file(&dest);
+        return Err(format!(
+            "Установщик Minecraft Education не прошёл проверку подписи Microsoft ({}), поэтому не запущен. Поставь игру со страницы Microsoft Store",
+            why
+        ));
+    }
+    job.check()?;
     job.emit(app, 96.0, "Запускаем установщик");
     let mut cmd = std::process::Command::new(&dest);
     cmd.current_dir(&dir);
     quiet(&mut cmd).spawn().map_err(|e| format!("Установщик не запустился: {}", e))?;
     job.emit(app, 100.0, "Готово");
     Ok(())
+}
+
+const SIGNATURE_PROBE: &str =
+    "$s = Get-AuthenticodeSignature -LiteralPath $env:MILLIDA_SIGNED_FILE; $s.Status.ToString(); $s.SignerCertificate.Subject";
+
+/// The installer is fetched without a published hash, so the only proof it is
+/// Microsoft's is its Authenticode signature: a chain Windows trusts, issued
+/// to Microsoft Corporation.
+fn signed_by_microsoft(file: &std::path::Path) -> Result<(), String> {
+    let root = std::env::var_os("SystemRoot").ok_or("не найдена папка Windows")?;
+    let shell = PathBuf::from(root).join("System32").join("WindowsPowerShell").join("v1.0").join("powershell.exe");
+    let mut cmd = std::process::Command::new(shell);
+    cmd.args(["-NoProfile", "-NonInteractive", "-Command", SIGNATURE_PROBE]).env("MILLIDA_SIGNED_FILE", file);
+    let out = quiet(&mut cmd).output().map_err(|e| format!("проверка не запустилась: {}", e))?;
+    signature_verdict(&String::from_utf8_lossy(&out.stdout))
+}
+
+fn signature_verdict(report: &str) -> Result<(), String> {
+    let mut lines = report.lines().map(str::trim).filter(|l| !l.is_empty());
+    let status = lines.next().unwrap_or("нет ответа");
+    if status != "Valid" {
+        return Err(format!("состояние подписи: {}", status));
+    }
+    let subject = lines.next().unwrap_or_default();
+    if subject.split(',').map(str::trim).any(|part| part == "O=Microsoft Corporation") {
+        Ok(())
+    } else {
+        Err("файл подписан не Microsoft".into())
+    }
 }
 
 async fn content_length(url: &str) -> Option<u64> {
@@ -344,6 +386,34 @@ fn steam_installed(libs: &[PathBuf], appid: u32) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// probe output -> verdict. The installer is run right after this check.
+    #[test]
+    fn only_a_trusted_microsoft_signature_lets_the_installer_run() {
+        let cases: &[(&str, bool, &str)] = &[
+            (
+                "Valid\r\nCN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US\r\n",
+                true,
+                "настоящий установщик Microsoft",
+            ),
+            ("NotSigned\r\n\r\n", false, "файл без подписи — подменённая загрузка"),
+            (
+                "HashMismatch\r\nCN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US\r\n",
+                false,
+                "файл изменён после подписи",
+            ),
+            ("Valid\r\nCN=Some Vendor, O=Some Vendor LLC, C=US\r\n", false, "чужая действительная подпись не делает файл установщиком Microsoft"),
+            (
+                "Valid\r\nCN=\"Evil, O=Microsoft Corporation\", O=Evil LLC, C=US\r\n",
+                false,
+                "название Microsoft внутри чужого имени не считается организацией",
+            ),
+            ("", false, "проверка не ответила — запускать нельзя"),
+        ];
+        for (report, ok, why) in cases {
+            assert_eq!(signature_verdict(report).is_ok(), *ok, "{why}");
+        }
+    }
 
     #[test]
     fn vdf_library_paths_are_read() {

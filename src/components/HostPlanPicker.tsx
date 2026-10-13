@@ -184,18 +184,33 @@ export function HostPlanPicker({
           }).catch(() => {})
         }
         if (mapPick && srv && srv.id) {
-          const ver = await mapGameVersion(mapPick.id)
-          if (ver) {
-            await api('/hosting/servers/' + srv.id + '/core', {
-              method: 'PATCH',
-              body: JSON.stringify({ version: ver }),
-            }).catch(() => {})
+          // The server exists and is paid for by now: a map that failed to install
+          // must not read as «try again», which creates and charges a second server.
+          try {
+            const ver = await mapGameVersion(mapPick.id)
+            if (ver) {
+              await api('/hosting/servers/' + srv.id + '/core', {
+                method: 'PATCH',
+                body: JSON.stringify({ version: ver }),
+              }).catch(() => {})
+            }
+            await api('/hosting/servers/' + srv.id + '/installs', {
+              method: 'POST',
+              body: JSON.stringify({ projectId: String(mapPick.id), source: 'curseforge' }),
+            })
+            serverBorn('С картой «' + mapPick.name + '»')
+          } catch (e) {
+            console.error('[hosting] map install', '' + e)
+            serverBorn('Появится в списке через минуту')
+            showToast(
+              'Сервер создан, но карта «' +
+                mapPick.name +
+                '» не поставилась: ' +
+                apiErrorText(e, 'каталог карт не ответил') +
+                '. Поставь её в панели сервера',
+              'error',
+            )
           }
-          await api('/hosting/servers/' + srv.id + '/installs', {
-            method: 'POST',
-            body: JSON.stringify({ projectId: String(mapPick.id), source: 'curseforge' }),
-          })
-          serverBorn('С картой «' + mapPick.name + '»')
         } else {
           serverBorn('Появится в списке через минуту')
         }

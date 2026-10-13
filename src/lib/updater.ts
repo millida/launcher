@@ -233,6 +233,44 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
   return Promise.race([p, new Promise<null>((res) => setTimeout(() => res(null), ms))])
 }
 
+/// The plugin reports every chunk, so silence this long means a stalled connection. The fallback
+/// channel reports nothing while it downloads and gets a flat limit instead.
+const BOOT_STALL_MS = 45_000
+const BOOT_FALLBACK_LIMIT_MS = 180_000
+
+export type BootLeave = 'skipped' | 'stalled'
+
+let leaveBoot: ((why: BootLeave) => void) | null = null
+
+/// «Продолжить без обновления» on the boot screen: the screen covers the whole window, and a
+/// download that never ends used to leave no way into the launcher at all.
+export function skipBootUpdate() {
+  leaveBoot?.('skipped')
+}
+
+/// A way out of a boot download: the player's button, or `quietMs` with no sign of life.
+function bootEscape(quietMs: number): { left: Promise<BootLeave>; alive: () => void; done: () => void } {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let leave: (why: BootLeave) => void = () => {}
+  const left = new Promise<BootLeave>((res) => {
+    leave = res
+  })
+  const alive = () => {
+    clearTimeout(timer)
+    timer = setTimeout(() => leave('stalled'), quietMs)
+  }
+  leaveBoot = leave
+  alive()
+  return {
+    left,
+    alive,
+    done: () => {
+      clearTimeout(timer)
+      leaveBoot = null
+    },
+  }
+}
+
 /// Applied at startup, before the launcher UI opens: on Windows the installer terminates the
 /// running process, so it cannot be applied mid-session. Returns true when the install started.
 export async function bootUpdate(): Promise<boolean> {
@@ -256,7 +294,17 @@ export async function bootUpdate(): Promise<boolean> {
         return false
       }
       st.set({ bootPhase: 'downloading', version: f.version })
-      const file = await stageFallback()
+      const esc = bootEscape(BOOT_FALLBACK_LIMIT_MS)
+      const staging = stageFallback()
+      const staged = await Promise.race([staging, esc.left]).finally(esc.done)
+      if (staged === 'skipped' || staged === 'stalled') {
+        // Staging goes on in the background and the update installs on exit.
+        staging.catch(() => {})
+        if (staged === 'stalled') noteBootTry('fallback:' + f.version)
+        st.set({ bootPhase: 'idle' })
+        return false
+      }
+      const file = staged
       if (!file) throw new Error('нет файла обновления')
       st.set({ bootPhase: 'installing' })
       noteBootTry('fallback:' + f.version)
@@ -281,14 +329,33 @@ export async function bootUpdate(): Promise<boolean> {
     st.set({ bootPhase: 'downloading', version: upd.version, bootPct: 0 })
     let total = 0
     let got = 0
-    await upd.download((e) => {
-      if (e.event === 'Started') total = e.data.contentLength || 0
-      else if (e.event === 'Progress') {
-        got += e.data.chunkLength || 0
-        if (total) useUpdate.getState().set({ bootPct: Math.min(99, Math.round((got / total) * 100)) })
-      }
-    })
-    downloaded = true
+    const esc = bootEscape(BOOT_STALL_MS)
+    const fetching = upd
+      .download((e) => {
+        esc.alive()
+        if (e.event === 'Started') total = e.data.contentLength || 0
+        else if (e.event === 'Progress') {
+          got += e.data.chunkLength || 0
+          if (total) useUpdate.getState().set({ bootPct: Math.min(99, Math.round((got / total) * 100)) })
+        }
+      })
+      .then(() => {
+        downloaded = true
+      })
+    downloading = fetching
+    const left = await Promise.race([fetching.then(() => null), esc.left]).finally(esc.done)
+    if (left) {
+      // The same download goes on in the background and installs on exit, like an update found mid-session.
+      fetching
+        .then(() => useUpdate.getState().set({ staged: true }))
+        .catch((e) => {
+          downloading = null
+          updateFailed('updater-boot', e)
+        })
+      if (left === 'stalled') noteBootTry(upd.version)
+      useUpdate.getState().set({ bootPhase: 'idle' })
+      return false
+    }
     installing = true
     useUpdate.getState().set({ bootPhase: 'installing', bootPct: 100 })
     trackAppExit()

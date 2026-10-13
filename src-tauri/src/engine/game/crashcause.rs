@@ -40,6 +40,21 @@ fn sets_benign(line: &str) -> Option<bool> {
     None
 }
 
+/// A line the game itself logged at INFO. Chat, signs and entity names land
+/// there verbatim, so its text is written by other players and proves nothing.
+/// Only the header before the message is read, so the text cannot pose as one.
+/// Forge routes the game's own stdout through the logger at INFO, and the crash
+/// notice arrives that way, so those lines are not counted as INFO.
+fn is_info_line(line: &str) -> bool {
+    let t = line.trim_start();
+    if !t.starts_with('[') {
+        return false;
+    }
+    let header = t.split("]: ").next().unwrap_or(t);
+    let head: String = header.chars().take(160).collect::<String>().to_lowercase();
+    (head.contains("/info") || head.contains("[info")) && !head.contains("[stdout")
+}
+
 /// Header of one thread in a watchdog "Thread Dump" (`ThreadInfo.toString`):
 /// `"millida-realtime" daemon prio=5 Id=51 RUNNABLE`. The dump lists every live
 /// thread, so a frame under it is a bystander, not the code that failed.
@@ -228,7 +243,7 @@ pub(crate) fn mod_implicated(text: &str, marks: &ModMarks) -> bool {
         let named = marks.packages.iter().chain(marks.files.iter()).any(|m| low.contains(m));
         // Байткод новее Java валит мод на любом уровне лога: это та самая
         // поломка 16.09.2026, после которой не запускалась ни одна сборка.
-        if named && low.contains("unsupportedclassversionerror") {
+        if named && !is_info_line(line) && low.contains("unsupportedclassversionerror") {
             return true;
         }
         if benign {
@@ -951,8 +966,10 @@ const CRASH_MARKERS: [&str; 7] = [
 ];
 
 pub(crate) fn reports_crash(text: &str) -> bool {
-    let low = text.to_lowercase();
-    CRASH_MARKERS.iter().any(|m| low.contains(m))
+    text.lines().filter(|line| !is_info_line(line)).any(|line| {
+        let low = line.to_lowercase();
+        CRASH_MARKERS.iter().any(|m| low.contains(m))
+    })
 }
 
 #[cfg(test)]
@@ -1023,6 +1040,26 @@ mod tests {
                 "пойманное модом исключение не вылет",
             ),
             ("", false, "пустой лог при коде 0 — игрок закрыл игру"),
+            (
+                "[12:00:00] [Render thread/INFO]: [CHAT] <griefer> Minecraft has crashed, Reported exception thrown!",
+                false,
+                "слова о вылете в чате пишет другой игрок или сервер — обычный выход вылетом не становится",
+            ),
+            (
+                "[12:00:00] [Server thread/INFO]: Named entity Zombie['Shutdown failure'/12, l='world'] died",
+                false,
+                "имя существа задаёт игрок, а строка идёт под INFO — это не отчёт игры о вылете",
+            ),
+            (
+                "[12:00:00] [Render thread/INFO] [STDOUT/]: [net.minecraft.util.registry.Bootstrap:printToSYSOUT:130]: #@!@# Game crashed! Crash report saved to: #@!@# crash.txt",
+                true,
+                "Forge пишет stdout игры через логгер под INFO — отчёт о вылете в таком виде обязан считаться",
+            ),
+            (
+                "[12:00:00] [Render thread/INFO]: [CHAT] <griefer> [STDOUT/]: #@!@# Game crashed!",
+                false,
+                "метка STDOUT в тексте чата стоит после заголовка строки и ничего не меняет",
+            ),
         ];
         for (log, want, why) in cases {
             assert_eq!(
@@ -1112,6 +1149,16 @@ mod tests {
                  \tat net.millida.mod.cosmetics.CosmeticRenderer.render(CosmeticRenderer.java:88)",
                 true,
                 "после дампа потоков настоящий стек ошибки с нашим кадром наверху по-прежнему улика",
+            ),
+            (
+                "[12:00:00] [Render thread/INFO]: [CHAT] <griefer> net.millida.mod.X UnsupportedClassVersionError",
+                false,
+                "строка чата с именем нашего пакета и словом об ошибке отключала косметику любому, кто её прочитал",
+            ),
+            (
+                "[12:00:00] [main/WARN]: Error loading class: net/millida/mod/MillidaForge (java.lang.UnsupportedClassVersionError: compiled by a more recent version of the Java Runtime)",
+                true,
+                "байткод новее Java под WARN по-прежнему улика: так выглядела поломка, валившая все сборки",
             ),
         ];
         for (text, want, why) in cases {

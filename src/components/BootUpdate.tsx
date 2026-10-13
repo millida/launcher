@@ -1,4 +1,5 @@
 import { useUpdate } from '../state/update'
+import { skipBootUpdate } from '../lib/updater'
 
 const TITLES: Record<string, string> = {
   checking: 'Проверяем обновления…',
@@ -26,6 +27,11 @@ export function BootUpdate() {
         </div>
         {/* «Это займёт несколько секунд» снято: обещание без замера (аудит 22.09.2026). */}
         {phase === 'installing' ? <div className="boot-upd-note">Лаунчер перезапустится сам</div> : null}
+        {phase === 'downloading' ? (
+          <button type="button" className="btn sm ghost" onClick={skipBootUpdate}>
+            Продолжить без обновления
+          </button>
+        ) : null}
       </div>
     </div>
   )

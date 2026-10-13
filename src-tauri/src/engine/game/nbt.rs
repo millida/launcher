@@ -73,9 +73,18 @@ impl Nbt {
     }
 }
 
+/// The game itself refuses NBT nested deeper than this.
+const MAX_DEPTH: u32 = 512;
+/// A modded level.dat carries whole registries, a few hundred thousand tags at
+/// most; the cap only stops a file built to exhaust memory.
+const MAX_TAGS: u32 = 2_000_000;
+const MAX_UNPACKED: u64 = 64 * 1024 * 1024;
+
 struct R<'a> {
     b: &'a [u8],
     i: usize,
+    depth: u32,
+    tags: u32,
 }
 
 impl<'a> R<'a> {
@@ -101,18 +110,23 @@ impl<'a> R<'a> {
         Some(String::from_utf8_lossy(self.take(n)?).into_owned())
     }
     fn payload(&mut self, id: u8) -> Option<Nbt> {
+        self.tags += 1;
+        if self.tags > MAX_TAGS {
+            return None;
+        }
+        if id != 9 && id != 10 {
+            return self.leaf(id);
+        }
+        if self.depth >= MAX_DEPTH {
+            return None;
+        }
+        self.depth += 1;
+        let tag = self.container(id);
+        self.depth -= 1;
+        tag
+    }
+    fn container(&mut self, id: u8) -> Option<Nbt> {
         Some(match id {
-            1 => Nbt::Byte(self.u8()? as i8),
-            2 => Nbt::Short(self.i16()?),
-            3 => Nbt::Int(self.i32()?),
-            4 => Nbt::Long(self.i64()?),
-            5 => Nbt::Float(f32::from_be_bytes(self.take(4)?.try_into().ok()?)),
-            6 => Nbt::Double(f64::from_be_bytes(self.take(8)?.try_into().ok()?)),
-            7 => {
-                let n = self.i32()?.max(0) as usize;
-                Nbt::ByteArray(self.take(n)?.to_vec())
-            }
-            8 => Nbt::Str(self.name()?),
             9 => {
                 let et = self.u8()?;
                 let cnt = self.i32()?.max(0) as usize;
@@ -134,6 +148,22 @@ impl<'a> R<'a> {
                 }
                 Nbt::Compound(items)
             }
+            _ => return None,
+        })
+    }
+    fn leaf(&mut self, id: u8) -> Option<Nbt> {
+        Some(match id {
+            1 => Nbt::Byte(self.u8()? as i8),
+            2 => Nbt::Short(self.i16()?),
+            3 => Nbt::Int(self.i32()?),
+            4 => Nbt::Long(self.i64()?),
+            5 => Nbt::Float(f32::from_be_bytes(self.take(4)?.try_into().ok()?)),
+            6 => Nbt::Double(f64::from_be_bytes(self.take(8)?.try_into().ok()?)),
+            7 => {
+                let n = self.i32()?.max(0) as usize;
+                Nbt::ByteArray(self.take(n)?.to_vec())
+            }
+            8 => Nbt::Str(self.name()?),
             11 => {
                 let n = self.i32()?.max(0) as usize;
                 let raw = self.take(n.checked_mul(4)?)?;
@@ -151,7 +181,7 @@ impl<'a> R<'a> {
 
 /// Root tag with its name, as stored in the file.
 pub fn parse(bytes: &[u8]) -> Option<(String, Nbt)> {
-    let mut r = R { b: bytes, i: 0 };
+    let mut r = R { b: bytes, i: 0, depth: 0, tags: 0 };
     if r.u8()? != 10 {
         return None;
     }
@@ -221,7 +251,10 @@ pub fn write(root_name: &str, root: &Nbt) -> Vec<u8> {
 pub fn read_gzip(bytes: &[u8]) -> Option<(String, Nbt)> {
     if bytes.starts_with(&[0x1f, 0x8b]) {
         let mut out = Vec::new();
-        flate2::read::GzDecoder::new(bytes).read_to_end(&mut out).ok()?;
+        flate2::read::GzDecoder::new(bytes).take(MAX_UNPACKED + 1).read_to_end(&mut out).ok()?;
+        if out.len() as u64 > MAX_UNPACKED {
+            return None;
+        }
         return parse(&out);
     }
     parse(bytes)
@@ -281,6 +314,36 @@ mod tests {
         let root = sample();
         let (_, back) = read_gzip(&write("", &root)).expect("несжатый level.dat встречается у сторонних утилит");
         assert_eq!(back, root);
+    }
+
+    fn nested_lists(depth: usize) -> Vec<u8> {
+        let mut bytes = vec![10u8, 0, 0, 9, 0, 1, b'a'];
+        for _ in 0..depth {
+            bytes.extend_from_slice(&[9, 0, 0, 0, 1]);
+        }
+        bytes.extend_from_slice(&[1, 0, 0, 0, 0, 0]);
+        bytes
+    }
+
+    /// A world from someone else's archive is read as soon as it is imported
+    /// and again on every look at the world list.
+    #[test]
+    fn nesting_past_the_game_limit_is_refused_instead_of_overflowing_the_stack() {
+        assert!(parse(&nested_lists(64)).is_some(), "обычная вложенность обязана читаться");
+        assert!(
+            parse(&nested_lists(200_000)).is_none(),
+            "level.dat из вложенных списков ронял лаунчер при каждом открытии списка миров",
+        );
+    }
+
+    #[test]
+    fn a_list_built_to_exhaust_memory_is_refused() {
+        let count = MAX_TAGS + 1;
+        let mut bytes = vec![10u8, 0, 0, 9, 0, 1, b'a', 1];
+        bytes.extend_from_slice(&(count as i32).to_be_bytes());
+        bytes.extend_from_slice(&vec![0u8; count as usize]);
+        bytes.push(0);
+        assert!(parse(&bytes).is_none(), "список из миллионов тегов разворачивался в сотни мегабайт памяти");
     }
 
     #[test]

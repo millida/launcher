@@ -8,7 +8,6 @@ import { backdropClose } from '../../lib/dismiss'
 import { RU_LOADER } from '../../lib/format'
 import { useLobby } from '../../state/lobbyMode'
 import { GENRES, downloadsShort, genresOf, shortPitch, shortTitle } from './premiumPackData'
-import { realDownloads } from '../../lib/realDownloads'
 import { useProfiles } from '../../state/profiles'
 
 /*
@@ -165,7 +164,7 @@ export function StudioModal({
     () =>
       (list || []).map((p) => ({
         p,
-        dl: realDownloads(p.slug, p.downloads) || 0,
+        dl: p.downloads || 0,
         genres: genresOf(p.title, p.summary || ''),
       })),
     [list],

@@ -293,7 +293,43 @@ pub const SEC_MILLIDA_LEGACY: &str = "mc";
 pub const UNAUTHORIZED: &str = "unauthorized";
 
 pub fn millida_token() -> Option<String> {
+    if let Some((access, _)) = unsaved_pair() {
+        return Some(access);
+    }
     crate::secrets::get(SEC_MILLIDA).or_else(|| crate::secrets::get(SEC_MILLIDA_LEGACY))
+}
+
+/// The pair the server has just issued when the vault refused to take it. The
+/// refresh token on disk is already spent by then: reading it back would send
+/// it a second time, which the server answers by ending the session. The pair
+/// lives here until a write succeeds.
+static UNSAVED_PAIR: std::sync::Mutex<Option<(String, String)>> = std::sync::Mutex::new(None);
+
+fn unsaved_pair() -> Option<(String, String)> {
+    UNSAVED_PAIR.lock().unwrap_or_else(|e| e.into_inner()).clone()
+}
+
+fn set_unsaved_pair(pair: Option<(String, String)>) {
+    *UNSAVED_PAIR.lock().unwrap_or_else(|e| e.into_inner()) = pair;
+}
+
+/// Both tokens in one write: an access token saved next to a spent refresh
+/// token is a session that dies at its next refresh.
+fn save_pair(access: &str, refresh: &str) -> Result<(), String> {
+    crate::secrets::set_many(vec![
+        (SEC_MILLIDA.to_string(), access.to_string()),
+        (SEC_MILLIDA_REFRESH.to_string(), refresh.to_string()),
+    ])
+}
+
+fn keep_pair(access: &str, refresh: &str) {
+    match save_pair(access, refresh) {
+        Ok(()) => set_unsaved_pair(None),
+        Err(e) => {
+            eprintln!("[auth] новая сессия Millida не записана на диск, держим её в памяти до следующей попытки: {e}");
+            set_unsaved_pair(Some((access.to_string(), refresh.to_string())));
+        }
+    }
 }
 
 /// Узкий токен для нашего мода в игре: только косметика, живёт 12 часов
@@ -349,18 +385,23 @@ enum Refreshed {
 /// answers by invalidating the whole token family.
 async fn refresh_session(used: Option<String>) -> Refreshed {
     let _guard = REFRESH_LOCK.lock().await;
-    let current = crate::secrets::get(SEC_MILLIDA);
+    if let Some((access, refresh)) = unsaved_pair() {
+        keep_pair(&access, &refresh);
+    }
+    let (current, stored_refresh) = match unsaved_pair() {
+        Some((access, refresh)) => (Some(access), Some(refresh)),
+        None => (crate::secrets::get(SEC_MILLIDA), crate::secrets::get(SEC_MILLIDA_REFRESH)),
+    };
     if current.is_some() && current != used {
         return Refreshed::Token(current.unwrap_or_default());
     }
-    let Some(rt) = crate::secrets::get(SEC_MILLIDA_REFRESH) else { return Refreshed::Dead };
+    let Some(rt) = stored_refresh else { return Refreshed::Dead };
     if refresh_on_cooldown() {
         return Refreshed::Unavailable;
     }
     match millida_refresh(&rt).await {
         Ok((access, next)) => {
-            let _ = crate::secrets::set(SEC_MILLIDA, &access);
-            let _ = crate::secrets::set(SEC_MILLIDA_REFRESH, &next);
+            keep_pair(&access, &next);
             set_refresh_cooldown(false);
             Refreshed::Token(access)
         }
@@ -518,6 +559,7 @@ pub async fn millida_upload_auth(
 }
 
 pub fn millida_forget_session() -> Result<(), String> {
+    set_unsaved_pair(None);
     for key in [SEC_MILLIDA, SEC_MILLIDA_REFRESH, SEC_MILLIDA_LEGACY] {
         crate::secrets::delete(key)?;
     }
@@ -594,6 +636,7 @@ pub async fn millida_login_poll(device_code: String) -> Result<Value, String> {
         pairs.push((SEC_MILLIDA_REFRESH.to_string(), rt.to_string()));
     }
     crate::secrets::store_login(pairs)?;
+    set_unsaved_pair(None);
     Ok(serde_json::json!({ "status": "ok", "user": r["user"].clone() }))
 }
 
