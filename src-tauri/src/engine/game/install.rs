@@ -400,6 +400,140 @@ fn installer_downloads(profile: &Value, version: Option<&Value>) -> Vec<Installe
     out
 }
 
+/// The Mojang mappings one installer processor downloads on its own, and the
+/// install profile without that processor.
+struct MojmapsStep {
+    rel: String,
+    url: String,
+    sha1: String,
+    size: Option<u64>,
+    profile: Value,
+}
+
+/// The output key of a `DOWNLOAD_MOJMAPS` call that only copies the client
+/// mappings of this Minecraft version. Any other argument (`--sanitize`,
+/// `--format`) rewrites the file, which only the installer's own tool can do.
+fn plain_mojmaps_output<'a>(args: &[&'a str], vid: &str) -> Option<&'a str> {
+    let (pairs, rest) = args.as_chunks::<2>();
+    if !rest.is_empty() {
+        return None;
+    }
+    let mut output = None;
+    for [flag, value] in pairs {
+        match (*flag, *value) {
+            ("--task", "DOWNLOAD_MOJMAPS") | ("--side", "{SIDE}") | ("--side", "client") => {}
+            ("--version", version) if version == vid => {}
+            ("--output", key) => output = key.strip_prefix('{').and_then(|k| k.strip_suffix('}')),
+            _ => return None,
+        }
+    }
+    output
+}
+
+/// The `DOWNLOAD_MOJMAPS` processor asks launchermeta and piston-data itself:
+/// no mirror, no proxy route and no check for a file already on disk, so a
+/// blocked Mojang host fails the whole install with "Connection reset". When
+/// the step is a plain copy the launcher fetches the file through its own
+/// routes and the installer runs a profile without that step.
+fn mojmaps_step(profile: &Value, vanilla: &Value, vid: &str) -> Option<MojmapsStep> {
+    let mut rel: Option<String> = None;
+    let mut kept: Vec<Value> = vec![];
+    for p in profile["processors"].as_array()? {
+        let args: Vec<&str> = p["args"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
+        let for_client = p["sides"]
+            .as_array()
+            .is_none_or(|sides| sides.iter().any(|s| s.as_str() == Some("client")));
+        if !for_client || !args.contains(&"DOWNLOAD_MOJMAPS") {
+            kept.push(p.clone());
+            continue;
+        }
+        let key = plain_mojmaps_output(&args, vid)?;
+        let coord = profile["data"][key]["client"].as_str()?.strip_prefix('[')?.strip_suffix(']')?;
+        let path = maven_path(coord);
+        if rel.as_ref().is_some_and(|known| known != &path) {
+            return None;
+        }
+        rel = Some(path);
+    }
+    let rel = rel?;
+    let maps = &vanilla["downloads"]["client_mappings"];
+    let (url, sha1) = (maps["url"].as_str()?, maps["sha1"].as_str()?);
+    if url.is_empty() || sha1.len() != 40 {
+        return None;
+    }
+    let mut without = profile.clone();
+    without["processors"] = Value::Array(kept);
+    Some(MojmapsStep { rel, url: url.to_string(), sha1: sha1.to_ascii_lowercase(), size: maps["size"].as_u64(), profile: without })
+}
+
+/// Attributes `java -jar` applies from the manifest and `java -cp` ignores: an
+/// installer that declares one must be started the way it was published.
+const JAR_ONLY_ATTRIBUTES: [&str; 5] = ["Class-Path:", "Add-Opens:", "Add-Exports:", "Enable-Native-Access:", "Launcher-Agent-Class:"];
+
+/// The class `java -jar` would start, taken from the manifest's main section.
+/// It becomes a JVM argument, so anything but a plain class name is refused.
+fn main_class_of(manifest: &str) -> Option<String> {
+    let main_section: Vec<&str> = manifest.lines().take_while(|l| !l.trim().is_empty()).collect();
+    if main_section.iter().any(|l| JAR_ONLY_ATTRIBUTES.iter().any(|a| l.starts_with(*a))) {
+        return None;
+    }
+    let class = main_section.iter().find_map(|l| l.strip_prefix("Main-Class:"))?.trim();
+    let plain = class
+        .split('.')
+        .all(|part| !part.is_empty() && part.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$'));
+    plain.then(|| class.to_string())
+}
+
+fn installer_main_class(installer: &Path) -> Option<String> {
+    let f = std::fs::File::open(installer).ok()?;
+    let mut zip = zip::ZipArchive::new(std::io::BufReader::new(f)).ok()?;
+    let mut head = std::io::Read::take(zip.by_name("META-INF/MANIFEST.MF").ok()?, 1 << 20);
+    let mut manifest = String::new();
+    std::io::Read::read_to_string(&mut head, &mut manifest).ok()?;
+    main_class_of(&manifest)
+}
+
+/// Puts the mappings on disk and writes the profile without the step next to
+/// the installer; the returned folder goes on the classpath ahead of the jar,
+/// where its `install_profile.json` is found first. `None` leaves the installer
+/// to run as published and to report its own failure.
+async fn take_over_mojmaps(step: &MojmapsStep, dest: &Path, installer: &Path, name: &str) -> Option<(PathBuf, std::ffi::OsString)> {
+    download_checked(&step.url, dest, Some(Sum::Sha1(&step.sha1)), step.size).await.ok()?;
+    let dir = data_dir().join("tmp").join(format!("{}-profile", name));
+    let _ = std::fs::remove_dir_all(&dir);
+    let written = std::fs::create_dir_all(&dir).is_ok() && write_json_atomic(&dir.join("install_profile.json"), &step.profile).is_ok();
+    let classpath = if written { std::env::join_paths([dir.as_path(), installer]).ok() } else { None };
+    if classpath.is_none() {
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+    classpath.map(|cp| (dir, cp))
+}
+
+/// A folder with a replacement profile, the classpath that puts it ahead of the
+/// installer jar, and the class to start.
+type ShadowProfile = (PathBuf, std::ffi::OsString, String);
+
+/// Runs the loader installer for a client. The shadow folder is removed once
+/// the JVM exits.
+fn run_installer(java: &Path, installer: &Path, root: &Path, shadow: Option<&ShadowProfile>) -> Result<std::process::Output, String> {
+    let mut jvm = Command::new(java);
+    quiet(&mut jvm).arg("-Djava.net.useSystemProxies=true");
+    match shadow {
+        Some((_, classpath, main)) => jvm.arg("-cp").arg(classpath).arg(main),
+        None => jvm.arg("-jar").arg(installer),
+    };
+    let out = jvm
+        .arg("--installClient")
+        .arg(root)
+        .current_dir(root)
+        .output()
+        .map_err(|e| spawn_failure(&e, java).replacen("Запуск Java", "Инсталлер загрузчика: запуск Java", 1));
+    if let Some((dir, ..)) = shadow {
+        let _ = std::fs::remove_dir_all(dir);
+    }
+    out
+}
+
 fn read_installer_version_json(installer: &Path, profile: &Value) -> Option<Value> {
     let name = profile["json"].as_str()?.trim_start_matches('/');
     let f = std::fs::File::open(installer).ok()?;
@@ -1011,29 +1145,30 @@ pub async fn install_loader_with_java(
                     emit(app, "files", 60.0, "Ставим загрузчик (может занять минуту)…");
                     // A pre-1.13 profile is laid out here: its installer would
                     // only answer that it does not know `--installClient`.
-                    let (ip, vd, lb) = (inst.clone(), vdir.clone(), libs_root.clone());
+                    let (ip, vd, lb, vanilla, mc) = (inst.clone(), vdir.clone(), libs_root.clone(), vjson.clone(), vid.clone());
                     let laid = tokio::task::spawn_blocking(move || {
                         let legacy = install_legacy_forge(&ip, &vd, &lb)?;
-                        let (outputs, downloads) = match legacy {
-                            Some(_) => (vec![], vec![]),
+                        let (outputs, downloads, mojmaps) = match legacy {
+                            Some(_) => (vec![], vec![], None),
                             None => {
                                 let profile = read_install_profile(&ip)?;
                                 let version = read_installer_version_json(&ip, &profile);
-                                (install_outputs(&profile), installer_downloads(&profile, version.as_ref()))
+                                let mojmaps = installer_main_class(&ip).zip(mojmaps_step(&profile, &vanilla, &mc));
+                                (install_outputs(&profile), installer_downloads(&profile, version.as_ref()), mojmaps)
                             }
                         };
-                        Ok::<_, String>((legacy, outputs, downloads))
+                        Ok::<_, String>((legacy, outputs, downloads, mojmaps))
                     })
                     .await
                     .map_err(|e| e.to_string())?;
-                    let (outputs, downloads) = match laid {
-                        Ok((Some(dir), outputs, _)) => {
+                    let (outputs, downloads, mojmaps) = match laid {
+                        Ok((Some(dir), outputs, _, _)) => {
                             let _ = std::fs::remove_file(&inst);
                             record_outputs(&dir, &outputs)?;
                             found = Some(dir);
                             break;
                         }
-                        Ok((None, outputs, downloads)) => (outputs, downloads),
+                        Ok((None, outputs, downloads, mojmaps)) => (outputs, downloads, mojmaps),
                         Err(e) => {
                             let _ = std::fs::remove_file(&inst);
                             last_err = format!("{}: {}", name, e);
@@ -1057,6 +1192,13 @@ pub async fn install_loader_with_java(
                     // Best effort: whatever did not arrive here the installer
                     // still tries itself and names in its own failure.
                     let _ = fetch_libs(&prefetch, app, 60.0, 60.0, "Библиотеки загрузчика…").await;
+                    let shadow = match mojmaps {
+                        Some((main, step)) => match lib_path(&step.rel) {
+                            Ok(dest) => take_over_mojmaps(&step, &dest, &inst, name).await.map(|(dir, classpath)| (dir, classpath, main)),
+                            Err(_) => None,
+                        },
+                        None => None,
+                    };
                     emit(app, "files", 60.0, "Ставим загрузчик (может занять минуту)…");
                     let (jp, ip, rp) = (java_pre.clone(), inst.clone(), root.clone());
                     // The installer's own output is the only account of why it
@@ -1065,10 +1207,14 @@ pub async fn install_loader_with_java(
                     // The installer's processors download libraries themselves, and
                     // Java skips the system proxy a VPN sets unless asked to use it.
                     let out = tokio::task::spawn_blocking(move || {
-                        quiet(&mut Command::new(&jp)).arg("-Djava.net.useSystemProxies=true")
-                            .arg("-jar").arg(&ip).arg("--installClient").arg(&rp)
-                            .current_dir(&rp).output()
-                            .map_err(|e| spawn_failure(&e, &jp).replacen("Запуск Java", "Инсталлер загрузчика: запуск Java", 1))
+                        let taken = run_installer(&jp, &ip, &rp, shadow.as_ref())?;
+                        // The takeover must never cost an install the published
+                        // installer would have finished, so its failure is
+                        // answered by the installer as it ships.
+                        if shadow.is_some() && !taken.status.success() {
+                            return run_installer(&jp, &ip, &rp, None);
+                        }
+                        Ok(taken)
                     }).await.map_err(|e| e.to_string())??;
                     let _ = std::fs::remove_file(&inst);
                     if !out.status.success() {
@@ -1625,6 +1771,109 @@ e";
             assert!(outputs.iter().any(|o| o == rel), "{} должен проверяться: {}", rel, why);
         }
         assert_eq!(outputs.len(), outputs.iter().collect::<std::collections::HashSet<_>>().len(), "каждый файл проверяется один раз");
+    }
+
+    fn vanilla_with_mappings() -> Value {
+        serde_json::json!({ "downloads": { "client_mappings": {
+            "url": "https://piston-data.mojang.com/v1/objects/6c48521eed01fe2e8ecdadbd5ae348415f3c47da/client.txt",
+            "sha1": "6C48521EED01FE2E8ECDADBD5AE348415F3C47DA",
+            "size": 8001795
+        } } })
+    }
+
+    /// "Failed to run processor: java.net.SocketException:Connection reset" is
+    /// the installer's DOWNLOAD_MOJMAPS step reaching Mojang directly. The step
+    /// is taken over only where the launcher can produce the very same file.
+    #[test]
+    fn mojmaps_step_is_taken_over_only_as_a_plain_copy() {
+        let plain = forge_1_20_1_profile();
+        let with_args = |args: Value| {
+            let mut p = forge_1_20_1_profile();
+            p["processors"][2]["args"] = args;
+            p
+        };
+        let server_only = {
+            let mut p = forge_1_20_1_profile();
+            p["processors"][2]["sides"] = serde_json::json!(["server"]);
+            p
+        };
+        let no_mappings = serde_json::json!({ "downloads": { "client": { "url": "https://piston-data.mojang.com/v1/objects/abc/client.jar" } } });
+        let cases: Vec<(Value, Value, &str, bool, &str)> = vec![
+            (plain.clone(), vanilla_with_mappings(), "1.20.1", true, "Forge 1.20.1 и NeoForge 1.21.1: шаг копирует файл Mojang как есть"),
+            (
+                with_args(serde_json::json!(["--task", "DOWNLOAD_MOJMAPS", "--sanitize", "--version", "1.20.1", "--side", "{SIDE}", "--output", "{MOJMAPS}"])),
+                vanilla_with_mappings(),
+                "1.20.1",
+                false,
+                "--sanitize переписывает файл: такой же получит только сам инсталлер",
+            ),
+            (
+                with_args(serde_json::json!(["--task", "DOWNLOAD_MOJMAPS", "--version", "1.20.1", "--side", "{SIDE}", "--output", "{MOJMAPS}", "--format", "TSRG2"])),
+                vanilla_with_mappings(),
+                "1.20.1",
+                false,
+                "незнакомый аргумент меняет результат шага",
+            ),
+            (
+                with_args(serde_json::json!(["--task", "DOWNLOAD_MOJMAPS", "--version", "1.20.1", "--side", "{SIDE}", "--output", "mappings.txt"])),
+                vanilla_with_mappings(),
+                "1.20.1",
+                false,
+                "выход не из data профиля: куда класть файл, неизвестно",
+            ),
+            (plain.clone(), vanilla_with_mappings(), "1.20.4", false, "шаг просит маппинги другой версии игры"),
+            (plain.clone(), no_mappings, "1.20.1", false, "у версии нет маппингов с опубликованной суммой: сверять файл нечем"),
+            (server_only, vanilla_with_mappings(), "1.20.1", false, "серверный шаг на клиенте не выполняется, забирать нечего"),
+        ];
+        for (profile, vanilla, vid, taken, why) in cases {
+            let step = mojmaps_step(&profile, &vanilla, vid);
+            assert_eq!(step.is_some(), taken, "{}", why);
+            let Some(step) = step else { continue };
+            assert_eq!(
+                step.rel, "net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-mappings.txt",
+                "файл кладётся туда, где его читает MERGE_MAPPING"
+            );
+            assert_eq!(step.sha1, "6c48521eed01fe2e8ecdadbd5ae348415f3c47da", "сумма Mojang сверяется в нижнем регистре");
+            assert_eq!(step.size, Some(8001795), "размер идёт в сверку загрузки");
+            let left: Vec<&str> = step.profile["processors"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .flat_map(|p| p["args"].as_array().unwrap())
+                .filter_map(Value::as_str)
+                .collect();
+            assert!(!left.contains(&"DOWNLOAD_MOJMAPS"), "шаг, который сам ходит к Mojang, из профиля убран");
+            assert!(left.contains(&"MERGE_MAPPING") && left.contains(&"MCP_DATA"), "остальные шаги инсталлер выполняет сам");
+            assert_eq!(
+                step.profile["processors"].as_array().unwrap().len(),
+                profile["processors"].as_array().unwrap().len() - 1,
+                "убран ровно один шаг"
+            );
+            assert_eq!(step.profile["data"], profile["data"], "данные профиля не тронуты");
+        }
+    }
+
+    #[test]
+    fn main_class_is_taken_only_from_a_manifest_java_cp_can_replace() {
+        let cases: [(&str, Option<&str>, &str); 6] = [
+            (
+                "Manifest-Version: 1.0\r\nMain-Class: net.minecraftforge.installer.SimpleInstaller\r\n\r\n",
+                Some("net.minecraftforge.installer.SimpleInstaller"),
+                "Forge 1.20.1 и NeoForge: класс запуска и больше ничего",
+            ),
+            (
+                "Manifest-Version: 1.0\nMain-Class: net.minecraftforge.installer.SimpleInstaller\nEnable-Native-Access: ALL-UNNAMED\nMulti-Release: true\n\n",
+                None,
+                "атрибут действует только при -jar: такой инсталлер запускается как опубликован",
+            ),
+            ("Manifest-Version: 1.0\nMain-Class: -Dfoo=bar\n\n", None, "строка уходит аргументом JVM: опция вместо имени класса отклоняется"),
+            ("Manifest-Version: 1.0\nMain-Class: a..b\n\n", None, "пустая часть имени - не класс"),
+            ("Manifest-Version: 1.0\n\nName: x\nMain-Class: evil.Main\n", None, "класс запуска читается только из главной секции"),
+            ("Manifest-Version: 1.0\n\n", None, "без класса запуска подменять нечем"),
+        ];
+        for (manifest, expected, why) in cases {
+            assert_eq!(main_class_of(manifest).as_deref(), expected, "{}", why);
+        }
     }
 
     /// A Forge 1.16.5 installer that cannot reach maven dies on

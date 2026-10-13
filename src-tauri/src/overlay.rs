@@ -47,11 +47,15 @@ const PASSIVE_GRACE_MS: u64 = 6_000;
 /// cards appear used to pin an always-on-top card on screen for good.
 const HOLD_MAX_MS: u64 = 45_000;
 
-/// A hidden overlay is a whole second webview process. Between games it is
-/// closed after a quiet spell and rebuilt by the next card; during a game it
-/// stays, so the chat hotkey opens without a cold start.
+/// A hidden overlay is a whole second webview process. It is closed after a
+/// quiet spell and rebuilt by the next card; it only stays through a game when
+/// the chat hotkey is on, so that the hotkey opens without a cold start.
 const IDLE_CLOSE_MS: u64 = 120_000;
 static IDLE_SEQ: AtomicU64 = AtomicU64::new(0);
+
+fn stays_warm(game_running: bool, hotkey_on: bool) -> bool {
+    game_running && hotkey_on
+}
 
 /// Whether the current webview has its listeners up. A window shown before that
 /// is a full-screen layer with no page in it yet, and it flashes black over the
@@ -77,7 +81,7 @@ fn close_when_idle(app: &AppHandle) {
             if IDLE_SEQ.load(Ordering::SeqCst) != seq || crate::exiting() {
                 return;
             }
-            if crate::engine::running_games().is_empty() {
+            if !stays_warm(!crate::engine::running_games().is_empty(), enabled()) {
                 break;
             }
         }
@@ -97,6 +101,14 @@ pub fn set_hit_areas(rects: Vec<[f64; 4]>) {
 /// Whether clicks fall through to whatever is under the overlay.
 fn passthrough(interactive: bool, hover: bool) -> bool {
     !interactive && !hover
+}
+
+/// A window kept hidden for the rest of a game still holds a full page; out of
+/// sight the webview gives that memory back, and `reveal` asks for it again.
+fn park(app: &AppHandle, win: &tauri::WebviewWindow) {
+    let _ = win.hide();
+    crate::webview_health::set_low_memory(win, true);
+    close_when_idle(app);
 }
 
 /// The only writer of the hover state. The core flag, the window flag and the
@@ -283,6 +295,7 @@ fn reveal(app: &AppHandle, win: &tauri::WebviewWindow, interactive: bool) -> Res
     if !interactive {
         let _ = app.emit_to(LABEL, "overlay-hover", hover);
     }
+    crate::webview_health::set_low_memory(win, false);
     win.show().map_err(|e| e.to_string())?;
     #[cfg(target_os = "linux")]
     set_passthrough(win, passthrough(interactive, hover));
@@ -306,8 +319,7 @@ pub fn hide(app: &AppHandle) {
     let seq = HIDE_SEQ.fetch_add(1, Ordering::SeqCst) + 1;
     let Some(win) = app.get_webview_window(LABEL) else { return };
     if !READY.load(Ordering::SeqCst) || !win.is_visible().unwrap_or(false) {
-        let _ = win.hide();
-        close_when_idle(app);
+        park(app, &win);
         return;
     }
     let (tx, rx) = tokio::sync::oneshot::channel();
@@ -321,8 +333,7 @@ pub fn hide(app: &AppHandle) {
             return;
         }
         if let Some(w) = handle.get_webview_window(LABEL) {
-            let _ = w.hide();
-            close_when_idle(&handle);
+            park(&handle, &w);
         }
     });
 }
@@ -513,6 +524,26 @@ mod tests {
                 passthrough(interactive, hover),
                 want,
                 "passthrough({interactive}, {hover}) must be {want}: {why}"
+            );
+        }
+    }
+
+    /// The hidden window is a second webview process held next to the game.
+    /// Only the chat hotkey justifies it: nothing else can summon the window
+    /// faster than the next card rebuilds it.
+    #[test]
+    fn hidden_window_outlives_the_quiet_spell_only_for_the_hotkey() {
+        let cases = [
+            ((true, true), true, "the hotkey must open the chat over the game without a cold start"),
+            ((true, false), false, "toasts alone: the window sat in memory until the game closed, with no way to open it"),
+            ((false, true), false, "between games the next card or hotkey press rebuilds it"),
+            ((false, false), false, "nothing is running and nothing can summon it"),
+        ];
+        for ((game_running, hotkey_on), want, why) in cases {
+            assert_eq!(
+                stays_warm(game_running, hotkey_on),
+                want,
+                "stays_warm({game_running}, {hotkey_on}) must be {want}: {why}"
             );
         }
     }
