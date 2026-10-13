@@ -15,6 +15,7 @@ const ALLOWED: &[(&str, &str)] = &[
     ("launcher-storage.millida.net", "/"),
     ("millida.net", "/launcher/"),
     ("github.com", "/millida/launcher/releases/download/"),
+    ("github.com", "/millida/launcher/releases/latest/download/"),
     ("release-assets.githubusercontent.com", "/github-production-release-asset"),
     ("objects.githubusercontent.com", "/github-production-release-asset"),
 ];
@@ -31,7 +32,16 @@ const ALLOWED: &[(&str, &str)] = &[
 /// The query is there for the edge in front of the CDN: a bare manifest URL it
 /// serves from its own copy, which on 11.10.2026 was a day stale and kept half
 /// of the players on an old version. A URL with a query goes to the origin.
+///
+/// The first source is the manifest attached to the newest release on GitHub
+/// itself (the public Manifest workflow puts it there once the files are
+/// signed): a fresh install then takes the list of versions, the installer and
+/// its checksum from GitHub alone, and our storage is only the mirror for the
+/// minutes after a release and for networks where GitHub does not answer.
+pub const GITHUB_MANIFEST_URL: &str = "https://github.com/millida/launcher/releases/latest/download/latest.json";
+
 pub const MANIFEST_URLS: &[&str] = &[
+    GITHUB_MANIFEST_URL,
     "https://launcher-storage.millida.net/v2/gh/latest.json?from=setup",
     "https://launcher-storage.millida.net/v2/install.json?from=setup",
     "https://launcher-storage.millida.net/v2/latest.json?from=setup",
@@ -131,7 +141,9 @@ mod tests {
     /// install anything that leak can sign.
     #[test]
     fn manifests_come_from_the_rotated_channel() {
-        for url in MANIFEST_URLS {
+        // A release asset on GitHub is written by the release pipeline of the
+        // rotated key; the leaked key only ever signed manifests on the storage.
+        for url in MANIFEST_URLS.iter().filter(|u| **u != GITHUB_MANIFEST_URL) {
             assert!(
                 url.contains("/v2/"),
                 "источник {} лежит вне канала v2 — он подписан утёкшим ключом",
@@ -175,6 +187,8 @@ mod tests {
             ("https://127.0.0.1/a.exe", false),
             ("https://[::1]/a.exe", false),
             ("https://github.com/millida/launcher/releases/download/v2.0.203/a-setup.exe", true),
+            ("https://github.com/millida/launcher/releases/latest/download/latest.json", true),
+            ("https://github.com/someone/launcher/releases/latest/download/latest.json", false),
             ("https://github.com/someone/launcher/releases/download/v1/a-setup.exe", false),
             ("https://github.com/millida/launcher/raw/main/a.exe", false),
             ("https://release-assets.githubusercontent.com/github-production-release-asset/1/x?sig=1", true),
