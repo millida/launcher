@@ -106,7 +106,7 @@ import {
 } from "./product-visuals";
 import { StudioAtmosphere, STUDIO_CLEAR_COLOR } from "./studio-atmosphere";
 import { StudioPostFx } from "./studio-postfx";
-import { currentDeviceTier, maxCanvasPixelRatio } from "../../../lib/deviceTier";
+import { currentDeviceTier, currentSceneFpsCap, maxCanvasPixelRatio, noteWebviewGpu } from "../../../lib/deviceTier";
 import {
   DEFAULT_SKIN_DEBUG_OPTIONS,
   SkinModelType,
@@ -148,6 +148,8 @@ const LOOK_WEIGHT_RATE = 5;
 
 const QUALITY_TARGET_FPS = 45;
 const QUALITY_WINDOW_SEC = 2.5;
+/** Запас на погрешность времени кадра: кадр «чуть раньше срока» рисуется. */
+const FRAME_SLACK_MS = 1.5;
 const QUALITY_LOW_PIXEL_RATIO = 1.5;
 const QUALITY_LOW_SHADOW_MAP = 1024;
 
@@ -319,6 +321,9 @@ export class SkinViewEngine {
   private readonly _fpsSamples: number[] = [];
   private _running = false;
   private _rafId = 0;
+  /** Наименьший шаг между кадрами, мс; 0 — рисовать с частотой экрана. */
+  private _minFrameMs = 0;
+  private _nextFrameAt = 0;
   private _resizeObserver: ResizeObserver | null = null;
   private _zoom: number;
   private _fov: number;
@@ -401,12 +406,16 @@ export class SkinViewEngine {
       premultipliedAlpha: false,
       powerPreference: "high-performance",
     });
+    // Имя видеокарты нужно до выбора плотности и частоты кадров: по нему
+    // встроенная графика получает облегчённую сцену с первого же кадра.
+    this._readGpuInfo();
+    noteWebviewGpu(this._gpuRenderer);
+    this.setMaxFps(currentSceneFpsCap());
     this._basePixelRatio = this._targetPixelRatio(options.transparent === true);
     this.renderer.setPixelRatio(this._basePixelRatio);
     this.renderer.setClearColor(0x222222, 1);
     this.renderer.sortObjects = true;
     configureProductRenderer(this.renderer);
-    this._readGpuInfo();
 
     this._envMap = setupSceneEnvironment(this.scene, this.renderer);
 
@@ -1417,7 +1426,24 @@ export class SkinViewEngine {
     if (this._running || this._disposed) return;
     this._running = true;
     this.clock.start();
+    // Первый кадр после запуска рисуется всегда: «один кадр стоящей сцены»
+    // (start + stop) не должен попасть под потолок кадров и остаться старым.
+    this._nextFrameAt = 0;
     this._tick();
+  }
+
+  /**
+   * Потолок частоты кадров. Экран на 144–240 Гц будит цикл чаще, чем нужно
+   * персонажу: лишние пробуждения пропускаются до расчёта анимации и отрисовки.
+   * 0 снимает потолок.
+   */
+  setMaxFps(fps: number): void {
+    this._minFrameMs = fps > 0 ? 1000 / fps : 0;
+    this._nextFrameAt = 0;
+  }
+
+  get maxFps(): number {
+    return this._minFrameMs > 0 ? Math.round(1000 / this._minFrameMs) : 0;
   }
 
   /** Остановка render loop */
@@ -1436,7 +1462,10 @@ export class SkinViewEngine {
     this._qualityElapsed += deltaTime;
     if (this._qualityElapsed < QUALITY_WINDOW_SEC) return;
     this._qualityElapsed = 0;
-    if (this._fpsSamples.length < 3 || this._fpsAvg <= 0 || this._fpsAvg >= QUALITY_TARGET_FPS) return;
+    // Под потолком кадров «медленно» — это заметно ниже потолка, а не ниже 45:
+    // иначе сцена на 30 кадрах сама себе снижала бы качество.
+    const target = this._minFrameMs > 0 ? Math.min(QUALITY_TARGET_FPS, (1000 / this._minFrameMs) * 0.75) : QUALITY_TARGET_FPS;
+    if (this._fpsSamples.length < 3 || this._fpsAvg <= 0 || this._fpsAvg >= target) return;
 
     this._qualityLevel += 1;
     if (this._qualityLevel === 1) {
@@ -1702,8 +1731,23 @@ export class SkinViewEngine {
   }
 
 
-  private _tick = (): void => {
+  private _tick = (frameTime?: number): void => {
     if (!this._running || this._disposed) return;
+
+    if (this._minFrameMs > 0) {
+      // Время кадра от браузера привязано к развёртке и не дрожит, как
+      // performance.now() в занятом потоке: на экране 60 Гц потолок 60 не
+      // пропускает ни одного кадра.
+      const now = typeof frameTime === "number" ? frameTime : performance.now();
+      const due = this._nextFrameAt;
+      if (now < due - FRAME_SLACK_MS) {
+        // Часы не трогаем: пропущенное пробуждение не должно мельчить шаг анимации.
+        this._rafId = requestAnimationFrame(this._tick);
+        return;
+      }
+      // Опоздали меньше чем на шаг — держим фазу; больше — начинаем отсчёт заново.
+      this._nextFrameAt = (due > 0 && now - due < this._minFrameMs ? due : now) + this._minFrameMs;
+    }
 
     const deltaTime = this.clock.getDelta();
     this._frameMs = deltaTime * 1000;

@@ -207,6 +207,7 @@ import { initSecrets } from './lib/secure'
 import { listenGameCrash, listenGameExit, listenGameServer, listenLaunchWarning, listenPackAccessLost, listenTrayExit } from './ipc/events'
 import { useCrash } from './state/crash'
 import { fixMark, forgetCrash, rememberCrash } from './lib/repair'
+import { tryAutoHeal } from './lib/autoHeal'
 import { sendCompatSignal } from './lib/compatSignal'
 import { syncRunningGame, useGame } from './state/game'
 import { watchPromo } from './state/promo'
@@ -220,6 +221,8 @@ import { onRenderGate, renderLive } from './lib/renderGate'
 import { flushPrefs, hydratePrefs } from './lib/prefs'
 
 let gameStartedAt = 0
+/** Когда запускали в последний раз. Не обнуляется выходом: событие выхода приходит и раньше события вылета. */
+let lastGameStartAt = 0
 import { flushNativeCrashes, installErrorHandlers, reportGameCrash } from './lib/crash'
 import { autoUpdate, bootUpdate, installUpdateOnExit, updateReady } from './lib/updater'
 import { BootUpdate } from './components/BootUpdate'
@@ -543,6 +546,7 @@ export function App() {
     let unlisten: (() => void) | null = null
     const onGameStarted = () => {
       gameStartedAt = Date.now()
+      lastGameStartAt = gameStartedAt
     }
     window.addEventListener('millida-game-started', onGameStarted)
 
@@ -598,7 +602,8 @@ export function App() {
           ok: false,
         })
       })
-      useCrash.getState().show(info)
+      // Отказ загрузчика на старте с точным планом чиним сами и запускаем снова; окно — для остального.
+      if (!tryAutoHeal(info, lastGameStartAt)) useCrash.getState().show(info)
       if (info && info.profile) {
         rememberCrash(info)
         void sendCompatSignal(info.profile, info)

@@ -24,6 +24,8 @@ import { launchFailure } from './launchFailure'
 import { packStepForLaunch, runPackUpdateForLaunch } from './packLaunch'
 import { afterPackUpdate } from './packUpdate'
 import { requiresMillidaAuth, serverNeedsMillidaAuth } from './ownServer'
+import { useServers } from '../state/servers'
+import { publicServerLabel } from './liveServer'
 import { NATIVE_NEEDS_MILLIDA, isNativeGame } from './nativeGame'
 import { stopInstall } from '../state/installs'
 
@@ -144,7 +146,8 @@ export function heartbeat(status?: string, server?: string | null) {
   const liveMeta = slug.then((st) => ({
     build: buildTag(build, st?.catalogPackSlug || st?.modpackSlug),
     mc: (pack && pack.version) || null,
-    server: (playing && (server || (session && (session.serverName || session.server)))) || null,
+    // Телеметрия живого онлайна: только сервер рейтинга или наш. Друзьям (ниже) уходит то, что человек им показывает.
+    server: playing && session ? publicServerLabel(session.server, server || session.serverName, useServers.getState().list) : null,
   }))
   const catalogPack = slug.then((st) => (st?.catalogPackSlug || '').trim() || null)
   const liveStatus = playing ? 'playing' : 'idle'

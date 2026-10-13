@@ -288,49 +288,109 @@ export interface WornCosmetic {
  * магазина, снимки наборов и гардероб — каждый своим запросом, впятером
  * одновременно; прокси разработки и прод на этом отвечали 502, и экраны
  * оставались пустыми («ничего не грузится», 06.10.2026). Теперь запрос один
- * на всех, ответ живёт 10 минут, неудача не запоминается и повторяется один раз.
+ * на всех, неудача не запоминается и повторяется один раз.
+ *
+ * Сам разбор 1,5 МБ тоже стоит дорого: 13.10.2026 он давал кадр в 378 мс
+ * (медиана) при входе в лобби у 5 247 установок, потому что каталог
+ * перечитывался каждые 10 минут — с диска, из сети и снова на диск. Теперь
+ * разобранный каталог живёт в памяти до закрытия лаунчера, из сети обновляется
+ * не чаще раза в час и не в первые секунды экрана, а свежая копия с диска
+ * сети не просит вовсе. Новая вещь, которой в копии нет, — повод обновить
+ * сразу: `refreshCosmeticCatalog`.
  */
-const CATALOG_TTL = 10 * 60_000
-let catalogAsk: { at: number; p: Promise<{ items: CosmeticItem[] }> } | null = null
+const CATALOG_FRESH_MS = 60 * 60_000
+/** Обновление после показа экрана: разбор ответа не должен попасть в первые кадры лобби. */
+const CATALOG_REFRESH_DELAY_MS = 8000
+
+type Catalog = { items: CosmeticItem[] }
+let catalogAsk: { at: number; p: Promise<Catalog> } | null = null
+let catalogRefresh: Promise<Catalog> | null = null
+let catalogRefreshTimer: ReturnType<typeof setTimeout> | null = null
 
 const CATALOG_KEY = 'cosmetics-catalog-v1'
 
-async function fetchCatalogRaw(): Promise<{ items: CosmeticItem[] }> {
-  const once = () => api<{ items: CosmeticItem[] }>('/cosmetics/catalog')
+async function fetchCatalogRaw(): Promise<Catalog> {
+  const once = () => api<Catalog>('/cosmetics/catalog')
   const r = await once().catch(() => new Promise<void>((ok) => setTimeout(ok, 1500)).then(once))
   if (r && Array.isArray(r.items) && r.items.length) void idbSet(CATALOG_KEY, r)
   return r
 }
 
-const expanded = (r: { items: CosmeticItem[] }) => ({ ...r, items: expandCatalog(r.items || []) })
+const expanded = (r: Catalog) => ({ ...r, items: expandCatalog(r.items || []) })
 
-/**
- * Каталог с прошлого запуска отдаётся сразу из IndexedDB, а свежий догоняет
- * в фоне и подменяет ответ для следующих запросов: вещи надеваются без
- * 3-12 секунд ожидания 1,5 МБ.
- */
-async function fetchCatalog(): Promise<{ items: CosmeticItem[] }> {
-  const cached = await idbGet<{ items: CosmeticItem[] }>(CATALOG_KEY)
-  if (cached && Array.isArray(cached.value.items) && cached.value.items.length) {
-    void fetchCatalogRaw()
-      .then((r) => {
-        catalogAsk = { at: Date.now(), p: Promise.resolve(expanded(r)) }
-      })
-      .catch(() => {})
-    return expanded(cached.value)
+/** Свежий каталог из сети подменяет ответ для следующих запросов; параллельные просьбы ждут один запрос. */
+export function refreshCosmeticCatalog(): Promise<Catalog> {
+  if (catalogRefresh) return catalogRefresh
+  const p = fetchCatalogRaw().then((r) => {
+    const fresh = expanded(r)
+    if (fresh.items.length) catalogAsk = { at: Date.now(), p: Promise.resolve(fresh) }
+    return fresh
+  })
+  catalogRefresh = p
+  const done = () => {
+    if (catalogRefresh === p) catalogRefresh = null
   }
-  return expanded(await fetchCatalogRaw())
+  p.then(done, done)
+  return p
 }
 
-export function loadCosmeticCatalog(): Promise<{ items: CosmeticItem[] }> {
-  if (catalogAsk && Date.now() - catalogAsk.at < CATALOG_TTL) return catalogAsk.p
-  const p = fetchCatalog()
-  const mine = { at: Date.now(), p }
+function refreshCatalogLater() {
+  if (catalogRefreshTimer || catalogRefresh) return
+  catalogRefreshTimer = setTimeout(() => {
+    catalogRefreshTimer = null
+    void refreshCosmeticCatalog().catch(() => {})
+  }, CATALOG_REFRESH_DELAY_MS)
+}
+
+/**
+ * Каталог с прошлого запуска отдаётся сразу из IndexedDB: вещи надеваются без
+ * 3-12 секунд ожидания 1,5 МБ. Свежая копия сети не просит, старая — догоняется
+ * в фоне после показа экрана.
+ */
+async function fetchCatalog(): Promise<{ at: number; value: Catalog }> {
+  const cached = await idbGet<Catalog>(CATALOG_KEY)
+  if (cached && Array.isArray(cached.value.items) && cached.value.items.length) {
+    return { at: cached.at, value: expanded(cached.value) }
+  }
+  return { at: Date.now(), value: expanded(await fetchCatalogRaw()) }
+}
+
+export function loadCosmeticCatalog(): Promise<Catalog> {
+  if (catalogAsk) {
+    if (Date.now() - catalogAsk.at >= CATALOG_FRESH_MS) refreshCatalogLater()
+    return catalogAsk.p
+  }
+  const mine: { at: number; p: Promise<Catalog> } = { at: Date.now(), p: Promise.resolve({ items: [] }) }
+  mine.p = fetchCatalog().then((r) => {
+    // Возраст копии с диска — её собственный, а не этого запуска.
+    if (catalogAsk === mine) mine.at = r.at
+    if (Date.now() - r.at >= CATALOG_FRESH_MS) refreshCatalogLater()
+    return r.value
+  })
   catalogAsk = mine
-  p.catch(() => {
+  mine.p.catch(() => {
     if (catalogAsk === mine) catalogAsk = null
   })
-  return p
+  return mine.p
+}
+
+const unknownAfterRefresh = new Set<string>()
+
+/**
+ * Каталог, который знает эти вещи. Копия живёт час, а новую вещь человек может
+ * купить и надеть сразу: вещь, которой в копии нет, — повод сходить в сеть сейчас.
+ * Вещь, которой нет и в свежем каталоге, запоминается: иначе снятая с продажи
+ * вещь гоняла бы 1,5 МБ при каждом входе в лобби.
+ */
+export async function catalogKnowing(ids: readonly string[]): Promise<Catalog> {
+  const cat = await loadCosmeticCatalog()
+  const knows = (c: Catalog, id: string) => (c.items || []).some((i) => i.id === id || i.baseId === id)
+  const missing = ids.filter((id) => id && !unknownAfterRefresh.has(id) && !knows(cat, id))
+  if (!missing.length) return cat
+  const fresh = await refreshCosmeticCatalog().catch(() => null)
+  if (!fresh || !fresh.items.length) return cat
+  for (const id of missing) if (!knows(fresh, id)) unknownAfterRefresh.add(id)
+  return fresh
 }
 
 /// На что у игрока есть право. Бесплатное сюда не попадает — оно и так у всех.

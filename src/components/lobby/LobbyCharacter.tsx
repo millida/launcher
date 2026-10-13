@@ -6,7 +6,7 @@ import type { SkinAnimation, SkinViewEngine } from '../../vendor/mine3d'
 import { textureSource } from '../../lib/textureSource'
 import { detectSlimFromUrl } from '../../lib/skinArms'
 import { useViewPrefs } from '../../state/viewPrefs'
-import { LOOK_EVENT, gameProfile, loadCosmeticCatalog, loadWardrobe, loadWornCosmetics, lookVersion } from '../../lib/gameProfile'
+import { LOOK_EVENT, catalogKnowing, gameProfile, loadCosmeticCatalog, loadWardrobe, loadWornCosmetics, lookVersion } from '../../lib/gameProfile'
 import type { CosmeticItem } from '../../lib/gameProfile'
 import { useHasMillida } from '../../state/auth'
 import { getAccount, useAccounts } from '../../state/accounts'
@@ -147,10 +147,12 @@ async function loadLook(nick: string, signedIn: boolean): Promise<Look> {
   } else look.slim = await nickArms()
   look.cape = wardrobe?.active.capeUrl ? fresh(wardrobe.active.capeUrl) : null
   look.show = pickShow(catalog.items || [])
+  // Каталог в памяти живёт час: надетую вещь, которой в нём ещё нет, досматриваем в свежем.
+  const known = worn.length ? await catalogKnowing(worn.map((w) => w.id)).catch(() => catalog) : catalog
   for (const w of worn) {
     // Служба отдаёт базовый код вещи; если ответ пришёл раньше каталога, fromServer
     // не развернул его в «КОД~расцветка» — ищем карточку по baseId и имени расцветки.
-    const all = catalog.items || []
+    const all = known.items || []
     const item =
       all.find((c) => c.id === w.id) ??
       all.find((c) => c.baseId === w.id && c.variants?.[0]?.name === w.variant) ??
@@ -222,7 +224,7 @@ export function LobbyCharacter({
   useEffect(() => {
     if (!dressKey) return setDressItems({ key: '', items: [] })
     let alive = true
-    void loadCosmeticCatalog()
+    void catalogKnowing(dressKey.split(','))
       .then((cat) => {
         if (!alive) return
         const out: Look['items'] = []
