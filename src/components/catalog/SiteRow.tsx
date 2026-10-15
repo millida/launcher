@@ -42,6 +42,7 @@ import { SECTION_VISUAL } from './sections'
 import type { SectionSlug } from './sections'
 import { blockFor } from './itemView'
 import { openItem } from './itemStore'
+import { StarButton } from './StarButton'
 import { Milli } from '../milli/Milli'
 import { aiPackCode, installPackCode } from '../../lib/catalogInstall'
 
@@ -567,9 +568,10 @@ export function SiteRow(props: RowProps) {
   // У наших сборок логотипа нет, есть обложка — она и встаёт в квадрат 96×96
   // (правка владельца 24.09.2026: «вместо букв I, L, C — обложка сборки»).
   const logo = card.icon || card.cover
+  const starrable = useCatalogCtx().target.kind !== 'server'
   return (
     <article
-      className={['card mr-row', card.premium ? 'is-premium' : '', partnerFrame(card.partner) || (card.ru ? 'px-ru' : '')].filter(Boolean).join(' ')}
+      className={['card mr-row', starrable ? 'has-star' : '', card.premium ? 'is-premium' : '', partnerFrame(card.partner) || (card.ru ? 'px-ru' : '')].filter(Boolean).join(' ')}
       data-track="row_open"
       data-kind={trackKind(card, sec)}
       data-id={card.slug}
@@ -605,6 +607,7 @@ export function SiteRow(props: RowProps) {
         <PriceMark card={card} fallback={price} />
         <RowActions card={card} sec={sec} hit={hit} resolve={resolve} />
       </div>
+      <StarButton section={sec.slug} card={card} />
     </article>
   )
 }
@@ -722,6 +725,7 @@ export function SiteGalleryCard(props: RowProps) {
             <RowActions card={card} sec={sec} hit={hit} resolve={resolve} />
           </span>
         </span>
+        <StarButton section={sec.slug} card={card} undo={props.list === 'favorites'} />
       </article>
     </CompactCtx.Provider>
   )

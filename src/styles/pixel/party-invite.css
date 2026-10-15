@@ -86,7 +86,7 @@
 :root .prm-go { width: 100%; }
 
 /* ---------- Окно комнат: полноценный попап ---------- */
-.prm-back { position: fixed; inset: 0; z-index: 940; display: grid; place-items: center; padding: 24px; background: rgba(0, 0, 0, 0.62); animation: pim-in 160ms var(--m-ease-smooth) both; }
+.prm-back { position: fixed; inset: 0; z-index: 940; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; padding: 24px; background: rgba(0, 0, 0, 0.62); animation: pim-in 160ms var(--m-ease-smooth) both; }
 .prm-win { display: grid; grid-template-columns: 220px minmax(0, 1fr); width: min(1000px, 100%); height: min(660px, 100%); color: var(--m-fg); background-color: var(--m-raised); --px-n: 10px; clip-path: var(--px-10); }
 .prm-side { display: flex; flex-direction: column; gap: 6px; padding: 18px 12px; background-color: var(--m-surface); }
 .prm-title { padding: 0 8px 10px; font: 900 24px/1 var(--m-font); }

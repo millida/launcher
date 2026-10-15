@@ -27,6 +27,8 @@ import { activeFilters, setSectionScope, useServerSite, useSite } from './siteSt
 import { cfTail, mrTail, nextLoad } from './mrTail'
 import { CatalogCtx, useCatalogCtx } from './target'
 import { PurchasesPane } from './Purchases'
+import { FavoritesPane } from './Favorites'
+import { useCatalogStars } from '../../state/catalogStars'
 import type { CatalogTarget } from './target'
 import { host } from '../../screens/hosting/api'
 import { useHubTab } from '../playhub/hubTab'
@@ -1249,6 +1251,7 @@ export interface ExtraTab {
   /** Пиксельный значок и его цвет — как у групп каталога. */
   px?: string
   tint?: string
+  count?: number
 }
 
 /**
@@ -1279,10 +1282,23 @@ export function SiteCatalog({
   const narrow = useNarrow()
   const tabs = server ? SERVER_SECTIONS : content ? SITE_SECTIONS.filter((x) => x.kind !== 'modpack') : SITE_SECTIONS
   const seq = useHubTab((s) => s.seq)
+  const starCount = useCatalogStars((s) => s.items.length)
   const extras: ExtraTab[] = [
     ...(extra || []),
     ...(servers ? [{ id: 'servers', label: 'Серверы', node: servers, px: 'server', tint: 'var(--m-sec-servers)' }] : []),
     // Купленное в каталоге — поставить заново в любую сборку. На сервер платное не ставится.
+    ...(server
+      ? []
+      : [
+          {
+            id: 'favorites',
+            label: 'Избранное',
+            node: <FavoritesPane onOpenPack={(slug) => openPack?.(slug)} onBrowse={() => pick('mods')} />,
+            px: 'star',
+            tint: 'var(--m-rarity-legendary)',
+            count: starCount,
+          },
+        ]),
     ...(server ? [] : [{ id: 'purchases', label: 'Покупки', node: <PurchasesPane onOpenPack={(slug) => openPack?.(slug)} />, px: 'wallet', tint: 'var(--m-sec-purchases)' }]),
   ]
   const ctx = useMemo(() => ({ store, target }), [store, target])
@@ -1376,6 +1392,7 @@ export function SiteCatalog({
         {GROUP_ART[x.id] ? <PxArt name={GROUP_ART[x.id]!} size={32} glint={false} /> : x.px ? <PxIcon name={x.px} size={20} /> : null}
       </span>
       <span className="mr-tab-label">{x.label}</span>
+      {x.count ? <span className="mr-tab-n">{x.count}</span> : null}
     </button>
   )
   // Новая вкладка — с самого верха (владелец 10.10.2026: «перекидывает туда, где я был,
