@@ -131,33 +131,50 @@ function pinned<A extends { update(player: unknown, dt: number): void }>(anim: A
   return anim
 }
 
-async function loadLook(nick: string, signedIn: boolean): Promise<Look> {
-  const look: Look = { skin: nickSkinUrl(nick), slim: false, cape: null, items: [], show: [] }
+/**
+ * How long the figure waits for its worn items before it stands in its skin
+ * alone. A stalled catalog or outfit answer used to hold the whole look, and
+ * with no look there is no figure, no nametag and no watchdog to reveal them.
+ */
+const OUTFIT_WAIT_MS = 2500
+
+type LookSkin = Pick<Look, 'skin' | 'slim' | 'cape'>
+
+async function loadLookSkin(nick: string, signedIn: boolean): Promise<LookSkin> {
+  const skin = nickSkinUrl(nick)
+  // A skin found by nick carries no arm type, so it is read from the texture
+  // exactly as the wardrobe does; otherwise an Alex skin got Steve arms here.
+  const nickArms = () => detectSlimFromUrl(skin).catch(() => false)
+  if (!signedIn) return { skin, slim: await nickArms(), cape: null }
+  const wardrobe = await loadWardrobe().catch(() => null)
+  const fresh = (u: string) => (lookVersion && !/^(data|blob):/i.test(u) ? u + (u.includes('?') ? '&' : '?') + 'v=' + lookVersion : u)
+  const cape = wardrobe?.active.capeUrl ? fresh(wardrobe.active.capeUrl) : null
+  if (wardrobe?.active.skinUrl) return { skin: fresh(wardrobe.active.skinUrl), slim: wardrobe.active.model === 'slim', cape }
+  return { skin, slim: await nickArms(), cape }
+}
+
+function loadLook(nick: string, signedIn: boolean): { first: Promise<Look>; full: Promise<Look> } {
+  const skin = loadLookSkin(nick, signedIn)
+  const full = Promise.all([skin, loadLookOutfit(signedIn)]).then(([s, outfit]) => ({ ...s, ...outfit }))
+  const bare = Promise.all([skin, new Promise((ok) => setTimeout(ok, OUTFIT_WAIT_MS))]).then(([s]) => ({ ...s, items: [], show: [] }))
+  return { first: Promise.race([full, bare]), full }
+}
+
+async function loadLookOutfit(signedIn: boolean): Promise<Pick<Look, 'items' | 'show'>> {
+  const look: Pick<Look, 'items' | 'show'> = { items: [], show: [] }
   const catalogAsked = loadCosmeticCatalog().catch(() => ({ items: [] as CosmeticItem[] }))
   const pickShow = (items: CosmeticItem[]) =>
     LOBBY_EMOTES.map((id) => items.find((c) => c.id === id)).filter((c): c is CosmeticItem => Boolean(c && c.model))
-  // A skin found by nick carries no arm type, so it is read from the texture
-  // exactly as the wardrobe does; otherwise an Alex skin got Steve arms here.
-  const nickArms = () => detectSlimFromUrl(look.skin).catch(() => false)
   if (!signedIn) {
-    const [catalog, slim] = await Promise.all([catalogAsked, nickArms()])
-    look.show = pickShow(catalog.items || [])
-    look.slim = slim
+    look.show = pickShow((await catalogAsked).items || [])
     return look
   }
-  const [wardrobe, catalog, worn] = await Promise.all([
-    loadWardrobe().catch(() => null),
+  const [catalog, worn] = await Promise.all([
     catalogAsked,
     gameProfile()
       .then((p) => (p.uuid ? loadWornCosmetics(p.uuid) : []))
       .catch(() => []),
   ])
-  const fresh = (u: string) => (lookVersion && !/^(data|blob):/i.test(u) ? u + (u.includes('?') ? '&' : '?') + 'v=' + lookVersion : u)
-  if (wardrobe?.active.skinUrl) {
-    look.skin = fresh(wardrobe.active.skinUrl)
-    look.slim = wardrobe.active.model === 'slim'
-  } else look.slim = await nickArms()
-  look.cape = wardrobe?.active.capeUrl ? fresh(wardrobe.active.capeUrl) : null
   look.show = pickShow(catalog.items || [])
   // Каталог в памяти живёт час: надетую вещь, которой в нём ещё нет, досматриваем в свежем.
   const known = worn.length ? await catalogKnowing(worn.map((w) => w.id)).catch(() => catalog) : catalog
@@ -301,7 +318,9 @@ export function LobbyCharacter({
   useEffect(() => {
     if (!on) return
     let alive = true
-    void loadLook(nick, signedIn).then((l) => {
+    const { first, full } = loadLook(nick, signedIn)
+    void first.then((l) => alive && setLook((cur) => cur ?? l))
+    void full.then((l) => {
       if (!alive) return
       if (lookKey(l) === lookKey(lastLook) && lastLook) return setLook((cur) => cur ?? lastLook)
       lastLook = l

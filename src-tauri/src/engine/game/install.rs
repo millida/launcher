@@ -26,7 +26,7 @@ struct LibJob {
 /// Turns an installer run into something a player can act on: its exit code
 /// says nothing, while the last lines it printed name the blocked host or the
 /// directory it could not write.
-fn installer_failure(out: &std::process::Output) -> String {
+fn installer_tail(out: &std::process::Output) -> String {
     let mut said = String::from_utf8_lossy(&out.stderr).into_owned();
     if said.trim().is_empty() {
         said = String::from_utf8_lossy(&out.stdout).into_owned();
@@ -42,10 +42,14 @@ fn installer_failure(out: &std::process::Output) -> String {
         .rev()
         .collect::<Vec<_>>()
         .join(" / ");
+    tail.chars().take(400).collect()
+}
+
+fn installer_failure(out: &std::process::Output) -> String {
+    let tail = installer_tail(out);
     if tail.is_empty() {
         return "Инсталлер загрузчика завершился с ошибкой и ничего не сообщил — чаще всего это антивирус или нет доступа к папке игры".into();
     }
-    let tail: String = tail.chars().take(400).collect();
     format!("Инсталлер загрузчика завершился с ошибкой: {}", tail)
 }
 
@@ -1240,7 +1244,12 @@ pub async fn install_loader_with_java(
                         resolve_loader_dir(&vdir, loader, name, &vid)
                     };
                     let Some(dir) = found.clone() else {
-                        last_err = format!("Инсталлер отработал, но профиль {} не появился", name);
+                        let tail = installer_tail(&out);
+                        last_err = if tail.is_empty() {
+                            format!("Инсталлер отработал, но профиль {} не появился", name)
+                        } else {
+                            format!("Инсталлер отработал, но профиль {} не появился: {}", name, tail)
+                        };
                         continue;
                     };
                     let missing = missing_outputs(&libs_root, &outputs)?;
