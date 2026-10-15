@@ -15,8 +15,9 @@ import { anarchyMode } from '../../lib/ownServer'
 import { TIER_SERVER } from '../../state/tiers'
 import { BuildIcon } from '../playhub/BuildIcon'
 import { fmtN } from '../../lib/format'
-import { joinRoom, loadRooms, openRoom } from '../../state/party'
+import { joinRoom, loadRooms, openRoom, usePartyStore } from '../../state/party'
 import { PartyInviteList } from './PartyInviteMenu'
+import { AgeGate } from './LfgModal'
 import { showToast } from '../../state/ui'
 import '../../styles/pixel/party-invite.css'
 
@@ -109,6 +110,8 @@ function usePlaces(): Place[] {
  */
 export function PartyRoomsMenu({ start, close }: { start: 'join' | 'friends'; close: () => void }) {
   const mode = useLobby((s) => s.picked)
+  const age = usePartyStore((s) => s.safety.ageBracket)
+  const askAge = usePartyStore((s) => s.loaded && !s.safety.ageBracket)
   const [rooms, setRooms] = useState<PartyRoom[] | null>(null)
   const [failed, setFailed] = useState('')
   const [busy, setBusy] = useState('')
@@ -165,6 +168,10 @@ export function PartyRoomsMenu({ start, close }: { start: 'join' | 'friends'; cl
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+  useEffect(() => {
+    if (age && failed) void load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [age])
   useEffect(() => {
     if (pick) setCat(pick.cat)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -282,7 +289,9 @@ export function PartyRoomsMenu({ start, close }: { start: 'join' | 'friends'; cl
             <>
               <h2 className="prm-h">Открытые комнаты</h2>
               <div className="prm-rooms">
-                {failed ? (
+                {askAge ? (
+                  <AgeGate />
+                ) : failed ? (
                   <div className="pim-empty">
                     <b>{failed}</b>
                     <button className="btn sm primary" onClick={() => void load()}>

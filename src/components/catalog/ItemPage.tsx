@@ -17,6 +17,7 @@ import { useProfiles } from '../../state/profiles'
 import { SECTION_VISUAL } from './sections'
 import type { SectionSlug } from './sections'
 import { Fallback, MrIcon, RowActions, SiteGalleryCard, shortAuthor, useCardHit } from './SiteRow'
+import { StarButton } from './StarButton'
 import { PriceMark, usePaidCard } from './PaidActs'
 import { useCatalogCtx } from './target'
 import { MediaStrip } from './MediaStrip'
@@ -596,6 +597,7 @@ function CardPage({ card, sec }: { card: SiteCard; sec: SiteSection }) {
           <>
             <PriceMark card={card} />
             <RowActions card={card} sec={sec} hit={hit} resolve={resolve} />
+            <StarButton wide section={sec.slug} card={card} />
           </>
         }
       />

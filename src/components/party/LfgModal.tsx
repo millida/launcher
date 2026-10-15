@@ -21,7 +21,7 @@ function closeness(card: LfgCard, mine: LfgTags | null): number {
   return (card.tags.mode === mine.mode ? 2 : 0) + (card.tags.lang === mine.lang ? 1 : 0)
 }
 
-function AgeGate() {
+export function AgeGate() {
   const [busy, setBusy] = useState(false)
   return (
     <>

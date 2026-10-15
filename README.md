@@ -40,7 +40,7 @@
 <details>
 <summary><b>Windows</b> — установщик <code>.exe</code></summary>
 
-1. Скачай и запусти установщик — лаунчер откроется сам.
+1. Скачай и запусти [установщик с подписью](https://github.com/millida/launcher/releases/download/setup-signed-1/MillidaLauncherSetup.exe) — лаунчер откроется сам.
 2. Если появилось синее окно «Windows защитила ваш компьютер»: **«Подробнее»** → **«Выполнить в любом случае»**.
 
 Обновления лаунчер ставит сам.
