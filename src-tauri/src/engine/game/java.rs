@@ -107,7 +107,7 @@ fn parse_major(first_line: &str) -> Option<u32> {
 /// A 32-bit JVM caps the heap far below what modded packs need, so it is never
 /// preferred over a fresh download.
 fn probe_major(path: &Path) -> Option<u32> {
-    let out = quiet(&mut Command::new(path)).arg("-version").output().ok()?;
+    let out = quiet(&mut Command::new(ansi_safe_path(path))).arg("-version").output().ok()?;
     let text = String::from_utf8_lossy(&out.stderr);
     if !text.contains("64-Bit") {
         return None;
@@ -938,7 +938,7 @@ pub(crate) fn java_major_at(path: &Path) -> Option<u32> {
 }
 
 pub(crate) fn java_version_of(path: &Path) -> Option<String> {
-    let out = quiet(&mut Command::new(path)).arg("-version").output().ok()?;
+    let out = quiet(&mut Command::new(ansi_safe_path(path))).arg("-version").output().ok()?;
     version_line(&String::from_utf8_lossy(&out.stderr))
 }
 

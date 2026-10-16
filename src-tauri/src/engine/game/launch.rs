@@ -1660,6 +1660,7 @@ pub(crate) async fn install_and_launch_into(
     // Флаги из четырёх источников сводятся под выбранную Java: разблокировка
     // экспериментальных, один сборщик мусора, опции новее этой Java — прочь.
     fit_jvm_args(&mut args, java_major_of_bin(&java));
+    ansi_safe_args(&mut args, &[game_dir.clone(), game_root(), data_dir()]);
     /*
      * Сборка со своим classpath не влезает в командную строку Windows: четыреста
      * jar дают 80 000 символов при пределе в 32 767, и процесс не стартует
@@ -1684,7 +1685,7 @@ pub(crate) async fn install_and_launch_into(
         None
     };
     let build = |exe: &Path| -> Command {
-        let mut cmd = Command::new(exe);
+        let mut cmd = Command::new(ansi_safe_path(exe));
         // CREATE_NO_WINDOW on Windows, otherwise every launch pops a console window.
         quiet(&mut cmd);
         apply_gpu_pref(&mut cmd, exe, gpu);
