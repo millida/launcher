@@ -790,7 +790,7 @@ async fn install_java_arch(app: &AppHandle, major: u64, jdir: &Path, arch: Optio
             std::fs::create_dir_all(jdir).map_err(|e| io_fail("Установка Java", jdir, &e))?;
         }
         unpacked = if t.ext == "zip" {
-            unzip_strip1(&archive, jdir).map_err(|e| format!("Распаковка Java: {}", e))
+            unzip_strip1(&archive, jdir, app_local_ucrt).map_err(|e| format!("Распаковка Java: {}", e))
         } else {
             quiet(&mut Command::new("tar"))
                 .args(["-xzf"]).arg(&archive).arg("-C").arg(jdir).arg("--strip-components=1")
@@ -811,6 +811,26 @@ async fn install_java_arch(app: &AppHandle, major: u64, jdir: &Path, arch: Optio
     } else {
         Err("Java распаковалась не полностью — попробуй запустить ещё раз".into())
     }
+}
+
+/// Windows JRE archives carry their own copy of the Universal CRT
+/// (`bin/ucrtbase.dll`, `bin/api-ms-win-*.dll`) for systems older than
+/// Windows 10. Windows 10+ always loads the system UCRT and ignores an
+/// app-local copy, while antivirus software refuses a file named like a system
+/// library outside System32, and no retry gets past that. Such a copy may be
+/// left out when the system one is present.
+fn app_local_ucrt(rel: &str) -> bool {
+    let path = Path::new(rel);
+    let in_bin = path.parent().is_some_and(|p| p == Path::new("bin"));
+    let name = path.file_name().map(|n| n.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+    let ucrt = name == "ucrtbase.dll" || (name.starts_with("api-ms-win-") && name.ends_with(".dll"));
+    cfg!(target_os = "windows") && in_bin && ucrt && system_ucrt_present()
+}
+
+fn system_ucrt_present() -> bool {
+    std::env::var_os("SystemRoot")
+        .map(|root| Path::new(&root).join("System32").join("ucrtbase.dll").is_file())
+        .unwrap_or(false)
 }
 
 /// Whole percent of a download, when its size is known. Without it the Java
@@ -1111,6 +1131,23 @@ pub fn accept_picked_java(path: String) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// archive entry -> may be left out. Only the app-local UCRT in bin/ is
+    /// optional: leaving out anything else gives a Java that does not start.
+    #[test]
+    fn only_app_local_ucrt_is_optional() {
+        let windows = cfg!(target_os = "windows") && system_ucrt_present();
+        for (rel, want, why) in [
+            ("bin/ucrtbase.dll", windows, "антивирус не даёт записать копию системной библиотеки, а Windows 10+ её всё равно не грузит"),
+            ("bin/API-MS-WIN-CRT-RUNTIME-L1-1-0.dll", windows, "переходники UCRT тоже системные, регистр имени не важен"),
+            ("bin/server/jvm.dll", false, "без jvm.dll Java не стартует"),
+            ("bin/java.exe", false, "без java.exe запускать нечего"),
+            ("bin/vcruntime140.dll", false, "VC-рантайм в системе может отсутствовать"),
+            ("lib/ucrtbase.dll", false, "необязательна только копия рядом с java.exe"),
+        ] {
+            assert_eq!(app_local_ucrt(rel), want, "{rel}: {why}");
+        }
+    }
 
     fn make(name: &str) -> PathBuf {
         let d = std::env::temp_dir().join("millida-java-test").join(name);

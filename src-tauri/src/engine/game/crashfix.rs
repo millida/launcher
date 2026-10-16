@@ -257,10 +257,38 @@ fn file_of_ref(file_of: FileOf, m: &ModRef) -> Option<String> {
     file_of(m.name.as_str()).or_else(|| file_of(m.id.as_str()))
 }
 
-fn add_action(out: &mut Vec<(CrashAction, Option<String>)>, a: CrashAction, file: Option<String>) {
-    if !out.iter().any(|(x, _)| x.kind == a.kind && x.arg == a.arg) {
-        out.push((a, file));
+const RANGE_MAX_CHARS: usize = 80;
+
+/// Several addons asking for their own version of one mod become one button:
+/// the ranges are joined, since a space-separated range is read as all of them.
+fn merge_version_ranges(have: &str, add: &str) -> Option<String> {
+    let (file, have_range) = have.split_once('|')?;
+    let (add_file, add_range) = add.split_once('|')?;
+    if file != add_file {
+        return None;
     }
+    let range = match (have_range, add_range) {
+        (h, a) if h == a || a == "*" => h.to_string(),
+        ("*", a) => a.to_string(),
+        (h, a) => format!("{} {}", h, a),
+    };
+    (range.len() <= RANGE_MAX_CHARS).then(|| format!("{}|{}", file, range))
+}
+
+fn add_action(out: &mut Vec<(CrashAction, Option<String>)>, a: CrashAction, file: Option<String>) {
+    if out.iter().any(|(x, _)| x.kind == a.kind && x.arg == a.arg) {
+        return;
+    }
+    if a.kind == "set-mod-version" {
+        if let Some((same, _)) = out.iter_mut().find(|(x, _)| x.kind == a.kind && x.label == a.label) {
+            if let Some(arg) = merge_version_ranges(&same.arg, &a.arg) {
+                same.arg = arg;
+                same.hint = format!("{}; {}", same.hint, a.hint);
+            }
+            return;
+        }
+    }
+    out.push((a, file));
 }
 
 /// What to do about each thing the loader refused, most direct fix first:
@@ -409,6 +437,19 @@ fn finding_actions(findings: &[LoaderFinding], file_of: FileOf, has_source: HasS
                     add_action(&mut out, CrashAction::new("disable-mod", format!("Отключить «{}»", file), file.clone(), &why).alternative(), Some(file.clone()));
                 } else {
                     add_action(&mut out, CrashAction::new("disable-mod", format!("Отключить «{}»", file), file.clone(), &why), Some(file.clone()));
+                }
+            }
+            LoaderFinding::WrongGame { file } => {
+                let why = "Мод собран под другую версию игры";
+                if has_source(file.as_str()) {
+                    add_action(
+                        &mut out,
+                        CrashAction::new("set-mod-version", format!("Заменить «{}»", file), format!("{}|*", file), "Поставим его версию под игру этой сборки"),
+                        Some(file.clone()),
+                    );
+                    add_action(&mut out, CrashAction::new("disable-mod", format!("Отключить «{}»", file), file.clone(), why).alternative(), Some(file.clone()));
+                } else {
+                    add_action(&mut out, CrashAction::new("disable-mod", format!("Отключить «{}»", file), file.clone(), why), Some(file.clone()));
                 }
             }
             LoaderFinding::Duplicate { id, files } => {
@@ -860,6 +901,11 @@ mod tests {
                 "Fabric: зависимость не той версии — меняется версия зависимости",
                 "\t - Mod 'Iris' (iris) 1.7.0 requires version 0.5.8 or later of mod 'Sodium' (sodium), but only the wrong version is present: 0.5.3!",
                 vec![("set-mod-version", "sodium-fabric-0.5.3.jar|>=0.5.8")],
+            ),
+            (
+                "две надстройки просят свою версию одного мода — одна кнопка с обоими требованиями",
+                "\t - Mod 'Iris' (iris) 1.7.0 requires version 0.5.8 or later of mod 'Sodium' (sodium), but only the wrong version is present: 0.5.3!\n\t - Mod 'Walkers' (walkers) 1.0 requires version 0.5.10 or later of mod 'Sodium' (sodium), but only the wrong version is present: 0.5.3!",
+                vec![("set-mod-version", "sodium-fabric-0.5.3.jar|>=0.5.8 >=0.5.10")],
             ),
             (
                 "Fabric: несовместимый мод отключается",

@@ -10,7 +10,7 @@ import { TOUR_STEPS } from '../state/tour'
 import { getAccount, useAccounts } from '../state/accounts'
 import { foundKey } from '../lib/imports'
 import { setSoundMode, soundMode } from '../lib/sound'
-import { setMusicAutostart } from '../state/music'
+import { setMusicAutostart, useMusic } from '../state/music'
 import { track } from '../lib/telemetry'
 import { trackImportFailure } from '../lib/importTrack'
 import { MovePanel } from './MoveBuilds'
@@ -286,6 +286,8 @@ function LookStep() {
             const next = !music
             setMusic(next)
             setMusicAutostart(next)
+            const player = useMusic.getState()
+            if (player.playing !== next && player.tracks.length) player.togglePlay()
           }}
         ></span>
       </div>
