@@ -517,6 +517,9 @@ pub(crate) enum LoaderFinding {
     MixinFailed { by: ModRef },
     /// A jar in mods/ built for another loader.
     WrongLoader { file: String, loader: String },
+    /// A jar in mods/ built for another version of the game: Forge names the
+    /// newer language provider the jar asks for, not the game version.
+    WrongGame { file: String },
     /// One mod id in several files.
     Duplicate { id: String, files: Vec<String> },
     /// The crash report names the mod it was in: Forge and NeoForge «Suspected
@@ -795,6 +798,30 @@ fn wrong_loader_of(line: &str) -> Option<LoaderFinding> {
     (!file.is_empty()).then(|| LoaderFinding::WrongLoader { file, loader: loader.into() })
 }
 
+/// «Missing language javafml version [66,) wanted by x.jar, found 47» and «Mod
+/// File x.jar needs language provider javafml:66 or above to load» (Forge,
+/// NeoForge). The provider's major version follows the game version, so the
+/// jar is built for a newer game than the build runs.
+fn wrong_game_of(line: &str) -> Option<LoaderFinding> {
+    let low = line.to_lowercase();
+    let file = if let Some(at) = low.find(" wanted by ") {
+        if !low.contains("missing language") {
+            return None;
+        }
+        let rest = &line[at + 11..];
+        rest.split(',').next().unwrap_or("").trim()
+    } else if low.contains("needs language provider") {
+        let at = line.find("Mod File ")?;
+        let rest = &line[at + 9..];
+        rest.split(" needs language provider").next().unwrap_or("").trim()
+    } else {
+        return None;
+    };
+    let file = file.trim_matches(['\'', '"']);
+    let file = file.rsplit(['/', '\\']).next().unwrap_or(file);
+    file.to_lowercase().ends_with(".jar").then(|| LoaderFinding::WrongGame { file: file.to_string() })
+}
+
 /// Forge «Mod ID: 'jei' from mod files: a.jar, b.jar», NeoForge «Mod jei is
 /// present in multiple files: a.jar, b.jar», Quilt «Duplicate mod: jei».
 fn duplicate_of(line: &str) -> Option<LoaderFinding> {
@@ -920,6 +947,10 @@ pub(crate) fn loader_findings(text: &str) -> Vec<LoaderFinding> {
             continue;
         }
         if let Some(f) = duplicate_of(line) {
+            push(f, &mut out);
+            continue;
+        }
+        if let Some(f) = wrong_game_of(line) {
             push(f, &mut out);
             continue;
         }
