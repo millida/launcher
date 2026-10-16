@@ -349,7 +349,7 @@ pub(crate) fn argfile_bytes(body: &str, codepage: Option<u32>) -> Vec<u8> {
     }
 }
 
-fn codepage_encoding(cp: u32) -> Option<&'static encoding_rs::Encoding> {
+pub(super) fn codepage_encoding(cp: u32) -> Option<&'static encoding_rs::Encoding> {
     let label = match cp {
         65001 => "utf-8".to_string(),
         874 | 1250..=1258 => format!("windows-{}", cp),
@@ -364,7 +364,7 @@ fn codepage_encoding(cp: u32) -> Option<&'static encoding_rs::Encoding> {
 }
 
 #[cfg(windows)]
-fn ansi_codepage() -> Option<u32> {
+pub(super) fn ansi_codepage() -> Option<u32> {
     extern "system" {
         fn GetACP() -> u32;
     }
@@ -373,7 +373,7 @@ fn ansi_codepage() -> Option<u32> {
 }
 
 #[cfg(not(windows))]
-fn ansi_codepage() -> Option<u32> {
+pub(super) fn ansi_codepage() -> Option<u32> {
     None
 }
 
