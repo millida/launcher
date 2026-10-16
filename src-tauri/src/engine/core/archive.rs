@@ -21,13 +21,19 @@ pub(crate) fn zip_readable(path: &Path) -> bool {
 pub(crate) const UNPACK_CEILING: u64 = 32 * 1024 * 1024 * 1024;
 
 pub(crate) fn unzip_to(archive: &Path, dest: &Path) -> Result<(), String> {
-    extract_zip(archive, dest, UNPACK_CEILING, whole_path)
+    extract_zip(archive, dest, UNPACK_CEILING, whole_path, nothing_skippable)
 }
 
 /// Drops the archive's top-level directory (`tar --strip-components=1`), the
-/// layout Adoptium JRE archives use.
-pub(crate) fn unzip_strip1(archive: &Path, dest: &Path) -> Result<(), String> {
-    extract_zip(archive, dest, UNPACK_CEILING, below_top_folder)
+/// layout Adoptium JRE archives use. `skippable` names entries the caller can
+/// run without: one that a lock refuses to let us write is left out instead of
+/// failing the whole extraction.
+pub(crate) fn unzip_strip1(archive: &Path, dest: &Path, skippable: fn(&str) -> bool) -> Result<(), String> {
+    extract_zip(archive, dest, UNPACK_CEILING, below_top_folder, skippable)
+}
+
+fn nothing_skippable(_: &str) -> bool {
+    false
 }
 
 fn whole_path(name: &Path) -> Option<String> {
@@ -44,7 +50,13 @@ fn below_top_folder(name: &Path) -> Option<String> {
 /// Every archive the launcher unpacks goes through here. A failed extraction
 /// takes back what it wrote itself and nothing else: `dest` may already hold
 /// files that were there before it.
-fn extract_zip(archive: &Path, dest: &Path, ceiling: u64, place: fn(&Path) -> Option<String>) -> Result<(), String> {
+fn extract_zip(
+    archive: &Path,
+    dest: &Path,
+    ceiling: u64,
+    place: fn(&Path) -> Option<String>,
+    skippable: fn(&str) -> bool,
+) -> Result<(), String> {
     let f = std::fs::File::open(archive).map_err(|e| super::io_fail("Распаковка", archive, &e))?;
     let mut zip = zip::ZipArchive::new(f).map_err(|e| format!("Архив повреждён: {}", e))?;
     let declared = declared_total(&mut zip)?;
@@ -56,7 +68,7 @@ fn extract_zip(archive: &Path, dest: &Path, ceiling: u64, place: fn(&Path) -> Op
         ));
     }
     let mut written = Written::default();
-    match extract_entries(&mut zip, dest, declared, place, &mut written) {
+    match extract_entries(&mut zip, dest, declared, place, skippable, &mut written) {
         Ok(()) => Ok(()),
         Err(e) => Err(written.take_back(e)),
     }
@@ -76,6 +88,7 @@ fn extract_entries(
     dest: &Path,
     declared: u64,
     place: fn(&Path) -> Option<String>,
+    skippable: fn(&str) -> bool,
     written: &mut Written,
 ) -> Result<(), String> {
     let mut budget = declared;
@@ -94,10 +107,22 @@ fn extract_entries(
             written.dir(p).map_err(|e| super::io_fail("Распаковка", p, &e))?;
         }
         let _ = std::fs::remove_file(&out);
-        let mut o = super::retry_locked(|| std::fs::File::create(&out)).map_err(|e| super::io_fail("Распаковка", &out, &e))?;
+        let mut o = match super::retry_locked(|| std::fs::File::create(&out)) {
+            Ok(o) => o,
+            Err(e) if skippable(&rel) && super::is_locked_error(&e) => continue,
+            Err(e) => return Err(super::io_fail("Распаковка", &out, &e)),
+        };
         written.files.push(out.clone());
         let limit = file.size().min(budget);
-        match copy_at_most(&mut file, &mut o, limit).map_err(|e| super::io_fail("Распаковка", &out, &e))? {
+        let copied = match copy_at_most(&mut file, &mut o, limit) {
+            Err(e) if skippable(&rel) && super::is_locked_error(&e) => {
+                drop(o);
+                let _ = std::fs::remove_file(&out);
+                continue;
+            }
+            other => other.map_err(|e| super::io_fail("Распаковка", &out, &e))?,
+        };
+        match copied {
             Some(n) => budget -= n,
             None => {
                 return Err(format!(
@@ -484,7 +509,7 @@ mod tests {
                 std::fs::write(&keep, "мир игрока").unwrap();
             }
             let place: fn(&Path) -> Option<String> = if c.strip { below_top_folder } else { whole_path };
-            let res = extract_zip(&archive, &dest, c.ceiling, place);
+            let res = extract_zip(&archive, &dest, c.ceiling, place, nothing_skippable);
             match c.refused_with {
                 None => {
                     res.unwrap_or_else(|e| panic!("случай {i}: {} — а распаковка отказала: {e}", c.why));
@@ -506,6 +531,39 @@ mod tests {
             }
             if c.player_file {
                 assert_eq!(std::fs::read_to_string(&keep).ok().as_deref(), Some("мир игрока"), "случай {i}: файл игрока трогать нельзя: {}", c.why);
+            }
+        }
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// A directory squatting on the entry's path makes Windows answer
+    /// «Access is denied», the same error an antivirus gives when it refuses a
+    /// file by name. Only entries the caller marked skippable may be left out.
+    #[cfg(windows)]
+    #[test]
+    fn locked_entry_is_left_out_only_when_skippable() {
+        fn ucrt_only(rel: &str) -> bool {
+            rel.ends_with("ucrtbase.dll")
+        }
+        let cases: [(fn(&str) -> bool, bool, &str); 2] = [
+            (ucrt_only, true, "необязательный файл, который не дали записать, пропускается — остальное распаковано"),
+            (nothing_skippable, false, "обязательный файл, который не дали записать, останавливает распаковку"),
+        ];
+        let base = std::env::temp_dir().join(format!("millida-unzip-skip-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        for (i, (skippable, want_ok, why)) in cases.into_iter().enumerate() {
+            let dir = base.join(i.to_string());
+            std::fs::create_dir_all(&dir).unwrap();
+            let archive = dir.join("a.zip");
+            let dest = dir.join("out");
+            write_zip(&archive, &[("jdk-21/bin/java.exe", 3000), ("jdk-21/bin/ucrtbase.dll", 3000), ("jdk-21/lib/modules", 3000)], zip::CompressionMethod::Deflated);
+            std::fs::create_dir_all(dest.join("bin").join("ucrtbase.dll")).unwrap();
+            let res = extract_zip(&archive, &dest, UNPACK_CEILING, below_top_folder, skippable);
+            assert_eq!(res.is_ok(), want_ok, "случай {i}: {why} ({res:?})");
+            if want_ok {
+                for rel in ["bin/java.exe", "lib/modules"] {
+                    assert_eq!(std::fs::read(dest.join(rel)).ok(), Some(body(3000)), "случай {i}: «{rel}» должен распаковаться: {why}");
+                }
             }
         }
         let _ = std::fs::remove_dir_all(&base);

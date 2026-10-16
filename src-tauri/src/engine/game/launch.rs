@@ -434,6 +434,16 @@ pub(crate) fn mod_faults(text: &str) -> Vec<ModFault> {
     out
 }
 
+fn wrong_game_files(text: &str) -> Vec<String> {
+    super::crashcause::loader_findings(text)
+        .into_iter()
+        .filter_map(|f| match f {
+            super::crashcause::LoaderFinding::WrongGame { file } => Some(file),
+            _ => None,
+        })
+        .collect()
+}
+
 fn wrong_loader_file(text: &str) -> Option<String> {
     super::crashcause::loader_findings(text).into_iter().find_map(|f| match f {
         super::crashcause::LoaderFinding::WrongLoader { file, .. } => Some(file),
@@ -583,6 +593,7 @@ pub(crate) fn crash_verdict(text: &str) -> CrashVerdict {
         .flatten()
         .and_then(|f| gpu_driver_vendor(&f));
     let faults = mod_faults(text);
+    let wrong_game = wrong_game_files(text);
     let verdict = |reason: String, kind: &'static str| CrashVerdict {
         reason,
         tail: crash_tail(text),
@@ -615,6 +626,12 @@ pub(crate) fn crash_verdict(text: &str) -> CrashVerdict {
         return verdict(mod_fault_reason(&faults), kind);
     } else if loader_reported_missing_dependency(&low) {
         ("Не хватает зависимости одного из модов.", "missing_deps")
+    } else if let Some(file) = wrong_game.first() {
+        let more = if wrong_game.len() > 1 { format!(" и ещё {}", wrong_game.len() - 1) } else { String::new() };
+        return verdict(
+            format!("Мод собран под другую версию игры: {}{}. Поставь его версию под игру сборки или убери из папки mods.", file, more),
+            "wrong_mc",
+        );
     } else if let Some(file) = wrong_loader_file(text) {
         return verdict(format!("В папке mods лежит мод для другого загрузчика: {}. Поставь версию под загрузчик сборки или убери его.", file), "wrong_loader");
     } else if low.contains("duplicate mod")
@@ -3002,6 +3019,36 @@ mod tests {
                 verdict.reason,
                 verdict.kind,
             );
+        }
+    }
+
+    /// log -> the jar the crash window names. A mod for a newer game used to end
+    /// as «Загляни в лог»: Forge reports it as a missing language provider, not
+    /// as a game version, and the window had no file to name.
+    #[test]
+    fn a_mod_for_a_newer_game_is_named() {
+        let cases: &[(&str, Option<&str>, &str)] = &[
+            (
+                "[main/ERROR] [ne.mi.fm.lo.LanguageLoadingProvider/LOADING]: Missing language javafml version [66,) wanted by xaerominimap-forge-26.3-26.6.0.jar, found 47\n[Render thread/FATAL] [ne.mi.fm.ModLoader/CORE]: Error during pre-loading phase",
+                Some("xaerominimap-forge-26.3-26.6.0.jar"),
+                "Xaero's Minimap для 26.3 в сборке Forge 1.20.1 — отчёт тестировщика 14.10",
+            ),
+            (
+                "net.minecraftforge.fml.ModLoadingException: Mod File mods/xaerolib-forge-26.3-1.7.17.jar needs language provider javafml:66 or above to load",
+                Some("xaerolib-forge-26.3-1.7.17.jar"),
+                "та же поломка второй строкой лога, путь до файла отрезается",
+            ),
+            ("[main/INFO]: Found language provider javafml, version 47", None, "обычная строка загрузки — не поломка"),
+        ];
+        for (log, file, why) in cases {
+            let verdict = crash_verdict(log);
+            match file {
+                Some(file) => {
+                    assert_eq!(verdict.kind, "wrong_mc", "вердикт {:?}. Зачем случай закреплён: {why}", verdict.reason);
+                    assert!(verdict.reason.contains(file), "окно должно назвать {file}, а пишет {:?}. Зачем: {why}", verdict.reason);
+                }
+                None => assert_ne!(verdict.kind, "wrong_mc", "вердикт {:?}. Зачем случай закреплён: {why}", verdict.reason),
+            }
         }
     }
 }
