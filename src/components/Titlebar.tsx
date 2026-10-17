@@ -1,6 +1,7 @@
 import { Icon } from './Icon'
 import { tauri } from '../ipc/tauri'
 import { showToast } from '../state/ui'
+import { useT } from '../i18n'
 
 const win = () => {
   const T = tauri()
@@ -10,13 +11,17 @@ const win = () => {
 /// The frameless window has no other way to be minimised, maximised or closed,
 /// so a failure here leaves the player pressing a dead button: it is reported,
 /// never dropped.
-function windowAction(what: string, run: (w: NonNullable<ReturnType<typeof win>>) => Promise<void>) {
+function windowAction(
+  failText: (error: string) => string,
+  run: (w: NonNullable<ReturnType<typeof win>>) => Promise<void>,
+  closeWithoutWindow = false,
+) {
   const w = win()
   if (!w) {
-    if (what === 'закрыть') window.close()
+    if (closeWithoutWindow) window.close()
     return
   }
-  void run(w).catch((e) => showToast('Не удалось ' + what + ' окно: ' + e, 'error'))
+  void run(w).catch((e) => showToast(failText(String(e)), 'error'))
 }
 
 /// macOS keeps the native title bar (Overlay style) with its traffic lights; custom window
@@ -24,6 +29,7 @@ function windowAction(what: string, run: (w: NonNullable<ReturnType<typeof win>>
 const IS_MAC = typeof navigator !== 'undefined' && /mac/i.test(navigator.userAgent)
 
 export function Titlebar() {
+  const t = useT()
   return (
     <div className={'titlebar' + (IS_MAC ? ' mac' : '')}>
       <div className="tb-drag" data-tauri-drag-region="" style={{ flex: 1 }}></div>
@@ -36,24 +42,24 @@ export function Titlebar() {
           <button
             className="tb-btn"
             id="winMin"
-            aria-label="Свернуть"
-            onClick={() => windowAction('свернуть', (w) => w.minimize())}
+            aria-label={t('Свернуть')}
+            onClick={() => windowAction((error) => t('Не удалось свернуть окно: {error}', { error }), (w) => w.minimize())}
           >
             <Icon id="i-minus" />
           </button>
           <button
             className="tb-btn"
             id="winMax"
-            aria-label="Развернуть"
-            onClick={() => windowAction('развернуть', (w) => w.toggleMaximize())}
+            aria-label={t('Развернуть')}
+            onClick={() => windowAction((error) => t('Не удалось развернуть окно: {error}', { error }), (w) => w.toggleMaximize())}
           >
             <Icon id="i-max" />
           </button>
           <button
             className="tb-btn close"
             id="winClose"
-            aria-label="Закрыть"
-            onClick={() => windowAction('закрыть', (w) => w.close())}
+            aria-label={t('Закрыть')}
+            onClick={() => windowAction((error) => t('Не удалось закрыть окно: {error}', { error }), (w) => w.close(), true)}
           >
             <Icon id="i-x" />
           </button>

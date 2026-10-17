@@ -8,6 +8,7 @@ import { BenchTabFrame, LookPic, lookOf, resNum, shortName, useHead, useLooks, u
 import { isRpStyle, requiredTitles, rpTiles, type RpTile } from './benchTabs'
 import '../../../styles/pixel/milli-bench-tabs.css'
 import '../../../styles/pixel/milli-looks.css'
+import { t, useT } from '../../../i18n'
 
 /** Стили-картинки: 1 слово на плитке. Основные пять всегда, остальные — если уже применены. */
 /** Свои пиксельные значки стилей вместо случайных обложек чужих паков. */
@@ -22,13 +23,13 @@ const STYLE_PX: Record<string, string> = {
 }
 
 const STYLES: readonly { id: MilliRpStyle; ru: string; main: boolean }[] = [
-  { id: 'faithful', ru: 'Ванилла+', main: true },
-  { id: 'fantasy', ru: 'Фэнтези', main: true },
-  { id: 'realistic', ru: 'Реализм', main: true },
-  { id: 'cartoon', ru: 'Мульт', main: true },
+  { id: 'faithful', get ru() { return t('Ванилла+') }, main: true },
+  { id: 'fantasy', get ru() { return t('Фэнтези') }, main: true },
+  { id: 'realistic', get ru() { return t('Реализм') }, main: true },
+  { id: 'cartoon', get ru() { return t('Мульт') }, main: true },
   { id: 'pvp', ru: 'PvP', main: true },
-  { id: 'medieval', ru: 'Рыцари', main: false },
-  { id: 'dark', ru: 'Мрак', main: false },
+  { id: 'medieval', get ru() { return t('Рыцари') }, main: false },
+  { id: 'dark', get ru() { return t('Мрак') }, main: false },
 ]
 
 /** Разрешение на значке: 16x / 32x / 64x+ (точное — моддеру). */
@@ -42,9 +43,9 @@ export function resFit(n: number, tier: MilliProfile): Fit {
   return n <= 256 ? 'good' : 'mid'
 }
 const RES_TIP: Record<Fit, string> = {
-  good: 'Твой ПК потянет',
-  mid: 'Может подтормаживать',
-  bad: 'Тяжело для твоего ПК',
+  get good() { return t('Твой ПК потянет') },
+  get mid() { return t('Может подтормаживать') },
+  get bad() { return t('Тяжело для твоего ПК') },
 }
 
 /** Порядок паков: первый перекрывает остальные. */
@@ -62,6 +63,7 @@ export function BenchPacks() {
 }
 
 function Packs({ pack }: { pack: MilliPack }) {
+  const t = useT()
   const modder = useModder()
   const tier = usePcTier(pack)
   const [mode, setMode] = useState<'add' | 'replace'>('add')
@@ -94,10 +96,10 @@ function Packs({ pack }: { pack: MilliPack }) {
     <div className="lk lk-packs">
 
       {modder && live.length ? (
-        <div className="segs bt-mode lk-mode" role="radiogroup" aria-label="Как применить стиль">
+        <div className="segs bt-mode lk-mode" role="radiogroup" aria-label={t('Как применить стиль')}>
           {(['add', 'replace'] as const).map((m) => (
             <button key={m} role="radio" aria-checked={mode === m} className={'seg' + (mode === m ? ' on' : '')} onClick={() => setMode(m)}>
-              {m === 'add' ? 'Добавить' : 'Заменить'}
+              {m === 'add' ? t('Добавить') : t('Заменить')}
             </button>
           ))}
         </div>
@@ -106,9 +108,9 @@ function Packs({ pack }: { pack: MilliPack }) {
       {live.length ? (
         <>
           {modder ? (<div className="lk-cap">
-            <span>Порядок</span>
-            <span className="lk-cap-tip" title="Верхний пак главнее: его текстуры поверх остальных">
-              <i aria-hidden="true">▲</i> главнее
+            <span>{t('Порядок')}</span>
+            <span className="lk-cap-tip" title={t('Верхний пак главнее: его текстуры поверх остальных')}>
+              <i aria-hidden="true">▲</i> {t('главнее')}
             </span>
           </div>) : null}
           <PackList live={live} pack={pack} tier={tier} modder={modder} onMove={move} canMove={ORDER_READY} />
@@ -116,12 +118,12 @@ function Packs({ pack }: { pack: MilliPack }) {
       ) : (
         <div className="lk-none">
           <PxArt name="painting" size={32} />
-          <b className="lk-none-t">Выбери стиль</b>
+          <b className="lk-none-t">{t('Выбери стиль')}</b>
         </div>
       )}
 
-      {live.length ? <div className="lk-cap lk-cap-alt"><span>Другой стиль</span></div> : null}
-      <div className="lk-styles" role="group" aria-label="Стиль">
+      {live.length ? <div className="lk-cap lk-cap-alt"><span>{t('Другой стиль')}</span></div> : null}
+      <div className="lk-styles" role="group" aria-label={t('Стиль')}>
         {styles.map((s, i) => {
           const on = isOn(s.id)
           return (
@@ -130,7 +132,7 @@ function Packs({ pack }: { pack: MilliPack }) {
               className={'lk-style mlm-press mlm-pop' + (on ? ' on' : '')}
               style={{ '--i': i } as CSSProperties}
               aria-pressed={on}
-              title={on ? 'Ещё один в этом стиле' : 'Добавить ' + s.ru}
+              title={on ? t('Ещё один в этом стиле') : t('Добавить {kind}', { kind: s.ru })}
               onClick={() => style(s.id)}
             >
               <span className="lk-style-art" data-style={s.id} aria-hidden="true">
@@ -153,7 +155,7 @@ function Packs({ pack }: { pack: MilliPack }) {
       {live.length ? (
         <button className="btn sm ghost lk-off mlm-press" onClick={none}>
           <PxArt name="barrier" size={16} />
-          Без ресурс-паков
+          {t('Без ресурс-паков')}
         </button>
       ) : null}
     </div>
@@ -237,7 +239,7 @@ function PackList({
 }
 
 function PackRow({
-  t,
+  t: tile,
   n,
   pack,
   tier,
@@ -265,7 +267,8 @@ function PackRow({
   onDown: () => void
   grip: Record<string, (e: ReactPointerEvent) => void>
 }) {
-  const { item } = t
+  const t = useT()
+  const { item } = tile
   const look = lookOf({ slug: item.slug ?? '', projectId: item.projectId, preview: item.preview, res: item.res })
   const res = resNum(look.res)
   const fit = res ? resFit(res, tier) : 'good'
@@ -273,7 +276,7 @@ function PackRow({
   const needs = modder ? requiredTitles(item, pack) : []
   return (
     <li className={'lk-row' + (held ? ' is-held' : '') + (first ? ' is-top' : '')} style={style}>
-      <span className={'lk-grip' + (canMove ? ' can' : '')} {...(canMove ? grip : {})} title={canMove ? 'Потяни, чтобы поменять порядок' : undefined}>
+      <span className={'lk-grip' + (canMove ? ' can' : '')} {...(canMove ? grip : {})} title={canMove ? t('Потяни, чтобы поменять порядок') : undefined}>
         <b className="lk-n">{n}</b>
         <LookPic src={look.img} alt={look.alt} icon={item.icon} px="painting" className="lk-row-pic" />
       </span>
@@ -298,28 +301,29 @@ function PackRow({
       </span>
       {canMove ? (
         <span className="lk-arrows">
-          <button className="lk-arrow mlm-press" disabled={first} aria-label="Выше" onClick={onUp}>
+          <button className="lk-arrow mlm-press" disabled={first} aria-label={t('Выше')} onClick={onUp}>
             ▲
           </button>
-          <button className="lk-arrow mlm-press" disabled={last} aria-label="Ниже" onClick={onDown}>
+          <button className="lk-arrow mlm-press" disabled={last} aria-label={t('Ниже')} onClick={onDown}>
             ▼
           </button>
         </span>
       ) : null}
-      <button className="lk-x mlm-press" aria-label={'Убрать ' + item.title} title="Убрать" onClick={() => void benchOp({ op: 'remove', tab: 'resourcepacks', ref })}>
+      <button className="lk-x mlm-press" aria-label={t('Убрать {name}', { name: item.title })} title={t('Убрать')} onClick={() => void benchOp({ op: 'remove', tab: 'resourcepacks', ref })}>
         <i aria-hidden="true" />
       </button>
     </li>
   )
 }
 
-function Ghost({ t }: { t: RpTile }) {
-  const ref = t.item.slug || t.item.projectId
+function Ghost({ t: tile }: { t: RpTile }) {
+  const t = useT()
+  const ref = tile.item.slug || tile.item.projectId
   return (
     <div className="lk-ghost">
-      <span className="lk-ghost-t">{shortName(t.item.title)}</span>
+      <span className="lk-ghost-t">{shortName(tile.item.title)}</span>
       <button className="btn sm secondary mlm-press" onClick={() => void benchOp({ op: 'restore', tab: 'resourcepacks', ref })}>
-        Вернуть
+        {t('Вернуть')}
       </button>
     </div>
   )

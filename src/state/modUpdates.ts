@@ -3,6 +3,7 @@ import { checkUpdates, updateAll } from '../ipc/commands'
 import { hasTauri } from '../ipc/tauri'
 import { useProfiles } from './profiles'
 import { showToast } from './ui'
+import { t } from '../i18n'
 
 interface State {
   count: number
@@ -53,14 +54,14 @@ export const useModUpdates = create<State>((set, get) => ({
     const names = Object.keys(get().byProfile)
     if (!names.length) return
     set({ updating: true })
-    showToast('Обновляем моды во всех сборках…')
+    showToast(t('Обновляем моды во всех сборках…'))
     let done = 0
     for (const name of names) {
       try {
         done += await updateAll(name, 'mod')
       } catch {}
     }
-    showToast(done ? 'Обновлено модов: ' + done : 'Обновлять нечего')
+    showToast(done ? t('Обновлено модов: {n}', { n: done }) : t('Обновлять нечего'))
     set({ updating: false })
     await get().scan(true)
   },

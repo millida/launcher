@@ -16,6 +16,7 @@ import { ChestPop } from '../chest/ChestPop'
 import { CaseReveal, type RevealData } from '../chest/CaseReveal'
 import { caseCoins, prizeRanges } from './casePrizes'
 import { useOffscreenPause } from './useOffscreen'
+import { intlTag, t, useT } from '../../i18n'
 
 /**
  * Ящики (02.10.2026; в коде case*, в интерфейсе «Ящик» — слово владельца): тема из нескольких наборов, выпадает случайная вещь темы,
@@ -44,7 +45,7 @@ const CHEST: Record<string, { tier: ChestTier; tint?: string }> = {
 }
 const chestOf = (id: string) => CHEST[id] ?? { tier: 'COMMON' as ChestTier }
 
-export const caseTitle = (c: CaseView) => 'Ящик «' + c.title + '»'
+export const caseTitle = (c: CaseView) => t('Ящик «{title}»', { title: c.title })
 /** Цвет ящика для подложки и тона: RRGGBB от службы → #rrggbb. */
 export const caseHex = (c: CaseView) => '#' + (c.color || '8B8B8B').replace('#', '')
 const tint = (c: CaseView): CSSProperties => ({ ['--sh-tone' as string]: caseHex(c), ['--cs' as string]: caseHex(c) })
@@ -121,13 +122,19 @@ export function CaseArt({ view, size = 150, pop, delay = 0 }: { view: CaseView; 
 }
 
 /** Чья гарантия: «Гарант эпической 7/15» (как «Прогресс гаранта 7/20» у OneBlock). */
-const PITY_OF: Partial<Record<Rarity, string>> = { RARE: 'редкой', EPIC: 'эпической', LEGENDARY: 'легендарной', MYTHIC: 'мифической' }
+const PITY_OF: Partial<Record<Rarity, string>> = {
+  get RARE() { return t('редкой') },
+  get EPIC() { return t('эпической') },
+  get LEGENDARY() { return t('легендарной') },
+  get MYTHIC() { return t('мифической') },
+}
 
 /**
  * Счётчик гарантии: подпись с числами и тонкая полоса по делениям — одно деление
  * на открытие. Заполнена — следующее открытие гарантированно `pityFrom` и выше.
  */
 function PityBar({ view }: { view: CaseView }) {
+  const t = useT()
   if (view.pity <= 1) return null
   const done = Math.max(0, Math.min(view.pity, view.pity - view.pityLeft))
   const now = view.pityLeft <= 1
@@ -140,10 +147,10 @@ function PityBar({ view }: { view: CaseView }) {
       aria-valuemin={0}
       aria-valuemax={view.pity}
       aria-valuenow={done}
-      aria-label={'Гарант ' + (PITY_OF[view.pityFrom] ?? '')}
+      aria-label={t('Гарант {rarity}', { rarity: PITY_OF[view.pityFrom] ?? '' })}
     >
       <span className="cs3-pity2-t">
-        <b>{now ? 'Гарант сейчас' : 'Гарант ' + (PITY_OF[view.pityFrom] ?? '')}</b>
+        <b>{now ? t('Гарант сейчас') : t('Гарант {rarity}', { rarity: PITY_OF[view.pityFrom] ?? '' })}</b>
         <i>{(now ? view.pity : done) + '/' + view.pity}</i>
       </span>
       <span className="cs3-segs" style={{ ['--n' as string]: view.pity }}>
@@ -182,8 +189,8 @@ function MultiPrice({ view, balance, busy, onOpen }: { view: CaseView; balance: 
     <button className={'btn md ' + (m.price > balance ? 'secondary' : 'primary') + ' sv-pbtn cs3-x10'} disabled={busy || view.left <= 0} data-track="case_open_x10" onClick={onOpen}>
       <b className="cs3-x10-n">×{m.count}</b>
       <Ruby size={16} />
-      {m.price.toLocaleString('ru-RU')}
-      {m.basePrice > m.price ? <s className="sv-was">{m.basePrice.toLocaleString('ru-RU')}</s> : null}
+      {m.price.toLocaleString(intlTag())}
+      {m.basePrice > m.price ? <s className="sv-was">{m.basePrice.toLocaleString(intlTag())}</s> : null}
     </button>
   )
 }
@@ -195,14 +202,15 @@ function CasePrice({ view, balance, busy, sub, size = 'md', onOpen }: { view: Ca
   return (
     <button className={'btn ' + size + ' ' + (view.price > balance ? 'secondary' : 'primary') + ' sv-pbtn'} disabled={busy || done} data-track="case_open" onClick={onOpen}>
       {done ? <Icon id="i-check" /> : view.currency === 'shards' ? <Shard size={size === 'lg' ? 22 : 16} /> : <Ruby size={size === 'lg' ? 22 : 16} />}
-      {done ? null : view.price.toLocaleString('ru-RU')}
-      {!done && sub && view.basePrice > view.price ? <s className="sv-was">{view.basePrice.toLocaleString('ru-RU')}</s> : null}
+      {done ? null : view.price.toLocaleString(intlTag())}
+      {!done && sub && view.basePrice > view.price ? <s className="sv-was">{view.basePrice.toLocaleString(intlTag())}</s> : null}
     </button>
   )
 }
 
 /** Ящик дня в первом экране: большой сундук на своей сцене, −30%, часы, цена. */
 export function HeroCase({ view, balance, busy, sub, refreshAt, ofDayPct, onOpen }: { view: CaseView; balance: number; busy: boolean; sub?: boolean; refreshAt?: string; ofDayPct: number; onOpen: () => void }) {
+  const t = useT()
   return (
     <div className="card cs3-hero" style={tint(view)} data-kind="case_day" data-id={view.id}>
       <button className="cs3-hero-stage" aria-label={caseTitle(view)} data-track="case_hero" disabled={busy} onClick={onOpen}>
@@ -213,7 +221,7 @@ export function HeroCase({ view, balance, busy, sub, refreshAt, ofDayPct, onOpen
         <CaseArt view={view} size={230} pop />
       </button>
       <span className="sv-corner">
-        <span className="sv-daytag">Ящик дня</span>
+        <span className="sv-daytag">{t('Ящик дня')}</span>
         <OffBadge pct={ofDayPct} />
         {refreshAt ? <DayClock to={refreshAt} /> : null}
       </span>
@@ -249,13 +257,14 @@ function CaseCard({
   onOdds: () => void
   onOpen: (mode?: CaseMode) => void
 }) {
+  const t = useT()
   const done = view.left <= 0
   return (
     <div className={'sh-card cs3' + (view.ofDay ? ' is-day' : '') + (free ? ' is-free' : '')} style={tint(view)} data-kind="case" data-id={view.id}>
       <button className="cs3-stage" aria-label={caseTitle(view)} data-track="case_pick" disabled={busy || done} onClick={() => onOpen(free ? 'free' : 'one')}>
         <CaseArt view={view} size={150} pop delay={(at * 325) % 1300} />
       </button>
-      <button className="cs3-info is-left" aria-label="Что внутри" data-track="case_contents" onClick={onOdds}>
+      <button className="cs3-info is-left" aria-label={t('Что внутри')} data-track="case_contents" onClick={onOdds}>
         <Icon id="i-eye" />
       </button>
       <span className="sv-corner">
@@ -270,7 +279,7 @@ function CaseCard({
           <span className="cs3-free">
             <button className="btn md primary" disabled={busy || done} data-track="case_free" onClick={() => onOpen('free')}>
               <Icon id="i-gift" />
-              Открыть бесплатно
+              {t('Открыть бесплатно')}
             </button>
           </span>
         </span>
@@ -286,6 +295,7 @@ function CaseCard({
 
 /** Лента последних выпадений: голова, ник, картинка вещи. Движется только transform. */
 export function DropsTicker({ drops }: { drops: CaseDrop[] }) {
+  const t = useT()
   if (!drops.length) return null
   const row = (k: string) =>
     drops.map((d, i) => (
@@ -298,7 +308,7 @@ export function DropsTicker({ drops }: { drops: CaseDrop[] }) {
       </span>
     ))
   return (
-    <div className="cs2-ticker" aria-label="Недавние выпадения">
+    <div className="cs2-ticker" aria-label={t('Недавние выпадения')}>
       <div className="cs2-ticker-track" style={{ ['--n' as string]: drops.length }}>
         {row('a')}
         <span aria-hidden="true" className="cs2-ticker-dup">
@@ -329,13 +339,14 @@ export function CasesSection({
   sub?: boolean
   onOpen: (c: CaseView, mode?: CaseMode) => void
 }) {
+  const t = useT()
   const [look, setLook] = useState<CaseView | null>(null)
   const paused = useOffscreenPause<HTMLElement>()
   // Бесплатный первый ящик — на одной карточке: ящик дня, если подходит, иначе первый подходящий.
   const freeId = cases ? (cases.find((c) => c.ofDay && c.freeAvailable) ?? cases.find((c) => c.freeAvailable))?.id : undefined
   return (
     <section id="shop-cases" className="sv-sec" data-section="cases" ref={paused}>
-      <SecHead title="Ящики" />
+      <SecHead title={t('Ящики')} />
       {!cases ? (
         <div className="cs2-grid" aria-hidden="true">
           {Array.from({ length: 8 }, (_, i) => (
@@ -395,6 +406,7 @@ const DOTS = 6
 
 /** Плитка группы: картинка выбранной расцветки, слово редкости, имя, кружки расцветок. */
 function GroupTile({ g, big }: { g: Group; big?: boolean }) {
+  const t = useT()
   const [at, setAt] = useState(0)
   const way = g.ways[at] ?? g.ways[0]!
   const all = g.ways.every((w) => w.owned)
@@ -405,13 +417,13 @@ function GroupTile({ g, big }: { g: Group; big?: boolean }) {
       </span>
       <b className="cs4-name">{way.item.name}</b>
       {g.ways.length > 1 ? (
-        <span className="cs4-dots" role="radiogroup" aria-label="Расцветки">
+        <span className="cs4-dots" role="radiogroup" aria-label={t('Расцветки')}>
           {g.ways.slice(0, DOTS).map((w, i) => (
             <button
               key={w.item.code}
               role="radio"
               aria-checked={i === at}
-              aria-label={w.item.name + (w.owned ? ', есть' : '')}
+              aria-label={w.owned ? t('{name}, есть', { name: w.item.name }) : w.item.name}
               className={'cs4-dot' + (i === at ? ' on' : '') + (w.owned ? ' is-own' : '')}
               style={{ ['--dot' as string]: w.item.color ? '#' + w.item.color.replace('#', '') : RARITY_TONE[w.item.rarity] }}
               onClick={() => setAt(i)}
@@ -421,14 +433,14 @@ function GroupTile({ g, big }: { g: Group; big?: boolean }) {
           ))}
           {g.ways.length > DOTS ? (
             // Остальные расцветки — по кругу одной кнопкой: ряд кружков всегда в одну строку.
-            <button className="cs4-more" aria-label="Следующая расцветка" onClick={() => setAt((i) => (i + 1 < DOTS ? DOTS : i + 1) % g.ways.length)}>
+            <button className="cs4-more" aria-label={t('Следующая расцветка')} onClick={() => setAt((i) => (i + 1 < DOTS ? DOTS : i + 1) % g.ways.length)}>
               {at >= DOTS ? at + 1 + '/' + g.ways.length : '+' + (g.ways.length - DOTS)}
             </button>
           ) : null}
         </span>
       ) : null}
       {all ? (
-        <span className="cs4-own" aria-label="Есть">
+        <span className="cs4-own" aria-label={t('Есть')}>
           <Icon id="i-check" />
         </span>
       ) : null}
@@ -455,6 +467,7 @@ function RestGrid({ groups }: { groups: Group[] }) {
  * Сверху — что бывает вместо вещи: утешительный приз осколками или рубинами.
  */
 function ContentsModal({ view, onClose }: { view: CaseView; onClose: () => void }) {
+  const t = useT()
   const [data, setData] = useState<CaseContents | null>(null)
   const [failed, setFailed] = useState(false)
   const load = () => {
@@ -472,7 +485,7 @@ function ContentsModal({ view, onClose }: { view: CaseView; onClose: () => void 
   return createPortal(
     <div className="modal-bg open vis st-bg" onClick={onClose}>
       <div className="modal mw-xl st-modal cs4" style={tint(view)} role="dialog" aria-label={caseTitle(view)} onClick={(e) => e.stopPropagation()}>
-        <button className="st-x btn sm ghost" aria-label="Закрыть" data-track="case_close" onClick={onClose}>
+        <button className="st-x btn sm ghost" aria-label={t('Закрыть')} data-track="case_close" onClick={onClose}>
           <Icon id="i-x" />
         </button>
         <div className="cs4-head">
@@ -482,12 +495,12 @@ function ContentsModal({ view, onClose }: { view: CaseView; onClose: () => void 
         </div>
         {consolation.length ? (
           <span className="cs4-miss">
-            Не повезло — всё равно {view.cheapItem || data?.items.length ? 'шмотка +' : ''}
+            {t('Не повезло — всё равно')} {view.cheapItem || data?.items.length ? t('шмотка +') : ''}
             {prizeRanges(consolation).map((c, i) => (
               <span key={c.kind} className="cs4-miss-it">
                 {i ? <i>/</i> : null}
                 {c.kind === 'rubies' ? <Ruby size={18} /> : <Shard size={18} />}
-                {c.kind === 'rubies' ? 'рубины' : 'осколки'} {c.min === c.max ? c.min : c.min + '–' + c.max}
+                {c.kind === 'rubies' ? t('рубины') : t('осколки')} {c.min === c.max ? c.min : c.min + '–' + c.max}
               </span>
             ))}
           </span>
@@ -495,7 +508,7 @@ function ContentsModal({ view, onClose }: { view: CaseView; onClose: () => void 
         {failed ? (
           <div className="st-empty">
             <button className="btn sm secondary" onClick={load}>
-              Повторить
+              {t('Повторить')}
             </button>
           </div>
         ) : !data ? (
@@ -548,6 +561,7 @@ export function CaseOpening({
   onClose: () => void
   onWear: (item: ItemRef) => void
 }) {
+  const t = useT()
   const [run, setRun] = useState(0)
   const [mode, setMode] = useState<CaseMode>(view.mode ?? 'one')
   const c = chestOf(view.id)
@@ -579,9 +593,9 @@ export function CaseOpening({
         },
         node: (
           <>
-            {nextMode === 'x10' ? 'Ещё ×10' : 'Ещё раз'}
+            {nextMode === 'x10' ? t('Ещё ×10') : t('Ещё раз')}
             {shards ? <Shard size={18} /> : <Ruby size={18} />}
-            {nextPrice.toLocaleString('ru-RU')}
+            {nextPrice.toLocaleString(intlTag())}
           </>
         ),
       }}

@@ -16,6 +16,7 @@ import type { SiteSlug } from '../catalog/site'
 import { pickFile } from '../catalog/paid'
 import { installCatalogFile } from '../../ipc/commands'
 import '../../styles/pixel/moddl.css'
+import { t, useT } from '../../i18n'
 
 /*
  * «Добавить моды» как в Prism Launcher (владелец 07.10.2026: «прям один в один»):
@@ -38,19 +39,42 @@ type Dep = { source: Source; id: string; title: string; icon: string | null; ver
 
 const MR = 'https://api.modrinth.com/v2'
 const PT: Record<string, string> = { mod: 'mod', resourcepack: 'resourcepack', shader: 'shader', datapack: 'datapack' }
-const KIND_TITLE: Record<string, string> = { mod: 'моды', resourcepack: 'ресурс-паки', shader: 'шейдеры', datapack: 'дата-паки' }
-const SORTS: [string, string][] = [
-  ['relevance', 'Релевантность'],
-  ['downloads', 'Скачивания'],
-  ['follows', 'Подписчики'],
-  ['newest', 'Новые'],
-  ['updated', 'Обновлённые'],
+const KIND_TITLE: Record<string, string> = {
+  get mod() {
+    return t('моды')
+  },
+  get resourcepack() {
+    return t('ресурс-паки')
+  },
+  get shader() {
+    return t('шейдеры')
+  },
+  get datapack() {
+    return t('дата-паки')
+  },
+}
+const sorts = (): [string, string][] => [
+  ['relevance', t('Релевантность')],
+  ['downloads', t('Скачивания')],
+  ['follows', t('Подписчики')],
+  ['newest', t('Новые')],
+  ['updated', t('Обновлённые')],
 ]
 const CF_SORT: Record<string, number> = { relevance: 0, downloads: 6, follows: 2, newest: 11, updated: 3 }
 
-const TYPE_RU: Record<string, string> = { release: 'релиз', beta: 'бета', alpha: 'альфа' }
+const TYPE_RU: Record<string, string> = {
+  get release() {
+    return t('релиз')
+  },
+  get beta() {
+    return t('бета')
+  },
+  get alpha() {
+    return t('альфа')
+  },
+}
 const norm = (t: string) => t.toLowerCase().replace(/[^a-zа-я0-9]+/g, '')
-const fmt = (n: number) => (n >= 1e6 ? (n / 1e6).toFixed(1).replace('.0', '') + ' млн' : n >= 1e3 ? Math.round(n / 1e3) + ' тыс.' : String(n))
+const fmt = (n: number) => (n >= 1e6 ? t('{n} млн', { n: (n / 1e6).toFixed(1).replace('.0', '') }) : n >= 1e3 ? t('{n} тыс.', { n: Math.round(n / 1e3) }) : String(n))
 
 async function mrSearch(q: string, kind: string, build: Profile, fit: Fit, sort: string, offset: number): Promise<{ hits: Hit[]; total: number }> {
   const facets: string[][] = [kind === 'datapack' ? ['categories:datapack'] : ['project_type:' + PT[kind]]]
@@ -172,6 +196,7 @@ export function ModDownloader({
   /** Поставили — список сборки перечитать. demo — что изобразить в браузере. */
   onDone: (demo?: ModFile[]) => void
 }) {
+  const t = useT()
   const [source, setSource] = useState<Source>('millida')
   const [q, setQ] = useState('')
   const [sort, setSort] = useState('relevance')
@@ -203,7 +228,7 @@ export function ModDownloader({
     if (!offset) setHits(null)
     if (source === 'curseforge' && !hasTauri()) {
       setHits([])
-      setErr('CurseForge ищет из приложения')
+      setErr(t('CurseForge ищет из приложения'))
       return
     }
     ;(source === 'millida' ? catSearch : source === 'modrinth' ? mrSearch : cfFind)(q.trim(), kind, build, fit, sort, offset)
@@ -333,7 +358,7 @@ export function ModDownloader({
     const deps = review.filter((d) => d.on && d.ver)
     if (!hasTauri()) {
       if (!DEMO_USER) {
-        showToast('Установка доступна в приложении')
+        showToast(t('Установка доступна в приложении'))
         return
       }
       onDone(
@@ -351,7 +376,7 @@ export function ModDownloader({
           scanned: true,
         })),
       )
-      showToast('Поставлено: ' + (picks.length + deps.length), 'ok')
+      showToast(t('Поставлено: {n}', { n: picks.length + deps.length }), 'ok')
       onClose()
       return
     }
@@ -371,8 +396,8 @@ export function ModDownloader({
         mr.length ? installDepItems(build.name, kind, mr).then((r) => void failed.push(...r.failed)).catch((e) => void failed.push('' + e)) : null,
         inBatches(cfPicks, 4, (x) => cfInstall(Number(x.id), build.version, build.name, kind, Number(x.ver.id)).catch((e) => void failed.push(x.title + ': ' + e))),
       ])
-      if (failed.length) showToast('Не встало: ' + failed.join('; '), 'error')
-      else showToast('Поставлено: ' + (picks.length + deps.length), 'ok', 'install')
+      if (failed.length) showToast(t('Не встало: {list}', { list: failed.join('; ') }), 'error')
+      else showToast(t('Поставлено: {n}', { n: picks.length + deps.length }), 'ok', 'install')
       onDone()
       onClose()
     } catch (e) {
@@ -397,23 +422,23 @@ export function ModDownloader({
 
   // «[![картинка](src)](ссылка)» — баннер-ссылка: парсер описаний её не знает, оставляем картинку.
   const md = useMemo(() => (body ? renderMarkdown(tidyBody(body.replace(/\[(!\[[^\]]*\]\([^)]*\))\]\([^)]*\)/g, '$1'))) : null), [body])
-  const kt = KIND_TITLE[kind] || 'моды'
+  const kt = KIND_TITLE[kind] || t('моды')
 
   return createPortal(
-    <div className="mdl-back" role="dialog" aria-modal="true" aria-label={'Добавить ' + kt}>
+    <div className="mdl-back" role="dialog" aria-modal="true" aria-label={t('Добавить {kind}', { kind: kt })}>
       <div className="card mdl">
         <div className="mdl-top">
           <b className="mdl-title">
-            Добавить {kt} <span>в «{build.name}»</span>
+            {t('Добавить {kind}', { kind: kt })} <span>{t('в «{name}»', { name: build.name })}</span>
           </b>
           <span className="mdl-for">{[build.version, kind === 'mod' ? LOADER_NAME(build) : ''].filter(Boolean).join(' · ')}</span>
-          <button type="button" className="btn sm ghost mdl-x" aria-label="Закрыть" onClick={onClose}>
+          <button type="button" className="btn sm ghost mdl-x" aria-label={t('Закрыть')} onClick={onClose}>
             <Icon id="i-x" />
           </button>
         </div>
 
         <div className="mdl-grid">
-          <nav className="mdl-src" aria-label="Источник">
+          <nav className="mdl-src" aria-label={t('Источник')}>
             {(['millida', 'modrinth', 'curseforge'] as Source[]).map((s) => (
               <button key={s} type="button" className={'mdl-src-btn' + (source === s ? ' on' : '')} onClick={() => (setSource(s), setCur(null))}>
                 {s === 'millida' ? (
@@ -425,7 +450,7 @@ export function ModDownloader({
                     <PxIcon name="flame" size={26} />
                   </span>
                 )}
-                <span>{s === 'millida' ? 'Каталог' : s === 'modrinth' ? 'Modrinth' : 'CurseForge'}</span>
+                <span>{s === 'millida' ? t('Каталог') : s === 'modrinth' ? 'Modrinth' : 'CurseForge'}</span>
               </button>
             ))}
           </nav>
@@ -434,10 +459,10 @@ export function ModDownloader({
             <div className="mdl-bar">
               <div className="input sm mdl-search">
                 <Icon id="i-search" />
-                <input autoFocus placeholder="Поиск" value={q} onChange={(e) => setQ(e.target.value)} />
+                <input autoFocus placeholder={t('Поиск')} value={q} onChange={(e) => setQ(e.target.value)} />
               </div>
-              <select className="m-select-btn mdl-sort" value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Сортировка">
-                {SORTS.map(([v, l]) => (
+              <select className="m-select-btn mdl-sort" value={sort} onChange={(e) => setSort(e.target.value)} aria-label={t('Сортировка')}>
+                {sorts().map(([v, l]) => (
                   <option key={v} value={v}>
                     {l}
                   </option>
@@ -445,7 +470,7 @@ export function ModDownloader({
               </select>
               <button type="button" className={'btn sm ' + (filters ? 'primary' : 'secondary')} aria-expanded={filters} onClick={() => setFilters((v) => !v)}>
                 <Icon id="i-filter" />
-                Фильтр
+                {t('Фильтр')}
                 {(fit.ver ? 1 : 0) + (fit.loader && kind === 'mod' ? 1 : 0) + (hideHave ? 1 : 0) ? <span className="nav-count">{(fit.ver ? 1 : 0) + (fit.loader && kind === 'mod' ? 1 : 0) + (hideHave ? 1 : 0)}</span> : null}
               </button>
             </div>
@@ -453,17 +478,17 @@ export function ModDownloader({
               <div className="mdl-filters">
                 <label className="mdl-fl">
                   <span className={'chk' + (fit.ver ? ' on' : '')} role="checkbox" aria-checked={fit.ver} onClick={() => setFit((f) => ({ ...f, ver: !f.ver }))} />
-                  Только версия {build.version}
+                  {t('Только версия {version}', { version: build.version })}
                 </label>
                 {kind === 'mod' ? (
                   <label className="mdl-fl">
                     <span className={'chk' + (fit.loader ? ' on' : '')} role="checkbox" aria-checked={fit.loader} onClick={() => setFit((f) => ({ ...f, loader: !f.loader }))} />
-                    Только {LOADER_NAME(build)}
+                    {t('Только {loader}', { loader: LOADER_NAME(build) })}
                   </label>
                 ) : null}
                 <label className="mdl-fl">
                   <span className={'chk' + (hideHave ? ' on' : '')} role="checkbox" aria-checked={hideHave} onClick={() => setHideHave((v) => !v)} />
-                  Скрыть то, что уже в сборке
+                  {t('Скрыть то, что уже в сборке')}
                 </label>
               </div>
             ) : null}
@@ -476,7 +501,7 @@ export function ModDownloader({
               ) : err && !hits.length ? (
                 <p className="mdl-note">{err}</p>
               ) : !hits.length ? (
-                <p className="mdl-note">Ничего не нашлось</p>
+                <p className="mdl-note">{t('Ничего не нашлось')}</p>
               ) : (
                 hits.filter((h) => !(hideHave && inBuild(h))).map((h) => {
                   const inQ = queue.has(qkey(h))
@@ -496,7 +521,7 @@ export function ModDownloader({
                         </b>
                         <span>{h.desc}</span>
                       </span>
-                      {inB ? <span className="mdl-tag">В сборке</span> : inQ ? <Icon id="i-check" className="icon mdl-qmark" /> : <span className="mdl-dl">{fmt(h.downloads)}</span>}
+                      {inB ? <span className="mdl-tag">{t('В сборке')}</span> : inQ ? <Icon id="i-check" className="icon mdl-qmark" /> : <span className="mdl-dl">{fmt(h.downloads)}</span>}
                     </button>
                   )
                 })
@@ -521,12 +546,12 @@ export function ModDownloader({
                     value={verId}
                     disabled={!vers || !vers.length || queued || inBuild(cur)}
                     onChange={(e) => setVerId(e.target.value)}
-                    aria-label="Версия"
+                    aria-label={t('Версия')}
                   >
-                    {!vers ? <option>Загружаем версии</option> : !vers.length ? <option>Нет версии под {build.version}</option> : null}
+                    {!vers ? <option>{t('Загружаем версии')}</option> : !vers.length ? <option>{t('Нет версии под {version}', { version: build.version })}</option> : null}
                     {(vers || []).map((v, i) => (
                       <option key={v.id} value={v.id}>
-                        {v.name + (i === 0 ? ' (рекомендуется)' : v.type !== 'release' ? ' · ' + v.type : '')}
+                        {v.name + (i === 0 ? ' ' + t('(рекомендуется)') : v.type !== 'release' ? ' · ' + v.type : '')}
                       </option>
                     ))}
                   </select>
@@ -541,11 +566,11 @@ export function ModDownloader({
                         void (f ? onRemove(f.name) : Promise.resolve()).finally(() => setBusy(false))
                       }}
                     >
-                      <Icon id="i-trash" /> Удалить из сборки
+                      <Icon id="i-trash" /> {t('Удалить из сборки')}
                     </button>
                   ) : (
                     <button type="button" className={'btn md ' + (queued ? 'secondary' : 'primary')} disabled={!queued && !verId} onClick={toggleQueue}>
-                      {queued ? 'Убрать из списка' : 'Выбрать'}
+                      {queued ? t('Убрать из списка') : t('Выбрать')}
                     </button>
                   )}
                 </div>
@@ -569,18 +594,18 @@ export function ModDownloader({
             {queue.size > 8 ? <span className="mdl-chip">+{queue.size - 8}</span> : null}
           </span>
           <button type="button" className="btn md secondary" onClick={onClose}>
-            Отмена
+            {t('Отмена')}
           </button>
           <button type="button" className="btn md primary" disabled={!queue.size || busy} onClick={() => void openReview()}>
             {busy && !review ? <span className="spin" aria-hidden="true" /> : null}
-            Добавить в сборку{queue.size ? ' (' + queue.size + ')' : ''}
+            {t('Добавить в сборку')}{queue.size ? ' (' + queue.size + ')' : ''}
           </button>
         </div>
 
         {review ? (
           <div className="mdl-review-back">
             <div className="card mdl-review">
-              <b className="mdl-title">Добавить в «{build.name}»?</b>
+              <b className="mdl-title">{t('Добавить в «{name}»?', { name: build.name })}</b>
               <ul className="mdl-rv-list">
                 {[...queue.values()].map((x) => (
                   <li key={x.source + x.id} className="mdl-rv-row">
@@ -588,7 +613,7 @@ export function ModDownloader({
                     <span className="mdl-ic">{x.icon ? <img src={x.icon} alt="" /> : <PxIcon name="box" size={20} />}</span>
                     <span className="mdl-txt">
                       <b>{x.title}</b>
-                      <span>{[x.ver.file || x.ver.name, x.source === 'millida' ? 'Каталог Millida' : x.source === 'modrinth' ? 'Modrinth' : 'CurseForge', TYPE_RU[x.ver.type] || x.ver.type].join(' · ')}</span>
+                      <span>{[x.ver.file || x.ver.name, x.source === 'millida' ? t('Каталог Millida') : x.source === 'modrinth' ? 'Modrinth' : 'CurseForge', TYPE_RU[x.ver.type] || x.ver.type].join(' · ')}</span>
                     </span>
                   </li>
                 ))}
@@ -603,7 +628,7 @@ export function ModDownloader({
                     <span className="mdl-ic">{d.icon ? <img src={d.icon} alt="" /> : <PxIcon name="box" size={20} />}</span>
                     <span className="mdl-txt">
                       <b>{d.title}</b>
-                      <span>{d.ver ? 'Нужен для: ' + d.by + ' · ' + (d.ver.file || d.ver.name) : 'нет версии под ' + build.version}</span>
+                      <span>{d.ver ? t('Нужен для: {name}', { name: d.by }) + ' · ' + (d.ver.file || d.ver.name) : t('нет версии под {version}', { version: build.version })}</span>
                     </span>
                   </li>
                 ))}
@@ -618,15 +643,15 @@ export function ModDownloader({
                       setReview(review.map((d) => (d.ver ? { ...d, on } : d)))
                     }}
                   >
-                    Зависимости: {review.every((d) => !d.ver || d.on) ? 'вкл' : 'выкл'}
+                    {review.every((d) => !d.ver || d.on) ? t('Зависимости: вкл') : t('Зависимости: выкл')}
                   </button>
                 ) : null}
                 <button type="button" className="btn md secondary" onClick={() => setReview(null)}>
-                  Назад
+                  {t('Назад')}
                 </button>
                 <button type="button" className="btn md primary" disabled={busy} onClick={() => void confirm()}>
                   {busy ? <span className="spin" aria-hidden="true" /> : null}
-                  Добавить
+                  {t('Добавить')}
                 </button>
               </div>
             </div>

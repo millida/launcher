@@ -1,16 +1,16 @@
 import type { Profile } from '../ipc/commands'
+import { formatFixed, getLocale, intlTag, t } from '../i18n'
 
 export const fmt = (n: number): string =>
   n >= 1e6
-    ? (n / 1e6).toFixed(1).replace('.', ',') + ' млн'
+    ? t('{n} млн', { n: formatFixed(n / 1e6, 1) })
     : n >= 1e3
-      ? (n / 1e3).toFixed(0) + ' тыс'
+      ? t('{n} тыс', { n: (n / 1e3).toFixed(0) })
       : String(n)
 
-export const fmtN = (n: number): string => Number(n || 0).toLocaleString('ru-RU')
+export const fmtN = (n: number): string => Number(n || 0).toLocaleString(intlTag())
 
 const LOADER_NAMES: Record<string, string> = {
-  vanilla: 'Ванилла',
   fabric: 'Fabric',
   quilt: 'Quilt',
   forge: 'Forge',
@@ -20,152 +20,155 @@ const LOADER_NAMES: Record<string, string> = {
 export const loaderId = (p?: Profile | null): string =>
   (p && (p.loader || (p.fabric ? 'fabric' : 'vanilla'))) || 'vanilla'
 
-export const LOADER_NAME = (p?: Profile | null): string => LOADER_NAMES[loaderId(p)] || 'Ванилла'
+export const LOADER_NAME = (p?: Profile | null): string => LOADER_NAMES[loaderId(p)] || t('Ванилла')
 
-const RU_MAP: Record<string, string> = {
+const ruMap = (): Record<string, string> => ({
   fabric: 'Fabric',
   forge: 'Forge',
   quilt: 'Quilt',
   neoforge: 'NeoForge',
-  optimization: 'Оптимизация',
-  adventure: 'Приключения',
-  technology: 'Технологии',
-  magic: 'Магия',
-  library: 'Библиотека',
-  utility: 'Утилиты',
-  decoration: 'Декор',
-  worldgen: 'Генерация мира',
-  equipment: 'Снаряжение',
-  food: 'Еда',
-  storage: 'Хранилища',
-  multiplayer: 'Мультиплеер',
-  social: 'Социальное',
-  challenging: 'Хардкор',
-  'kitchen-sink': 'Всё сразу',
-  lightweight: 'Лёгкий',
-  combat: 'Бой',
-  mobs: 'Мобы',
-  cursed: 'Странное',
-  economy: 'Экономика',
-  'game-mechanics': 'Механики игры',
-  management: 'Менеджмент',
-  minigame: 'Мини-игры',
-  quests: 'Квесты',
-  transportation: 'Транспорт',
-  audio: 'Звук',
-  blocks: 'Блоки',
-  'core-shaders': 'Ядровые шейдеры',
-  entities: 'Сущности',
-  environment: 'Окружение',
-  fonts: 'Шрифты',
-  gui: 'Интерфейс',
-  items: 'Предметы',
-  locale: 'Локализация',
-  modded: 'Для модов',
-  models: 'Модели',
-  realistic: 'Реалистичные',
-  simplistic: 'Минималистичные',
-  themed: 'Тематические',
-  tweaks: 'Мелкие правки',
-  'vanilla-like': 'Как ванилла',
-  atmosphere: 'Атмосфера',
-  bloom: 'Свечение',
-  cartoon: 'Мультяшные',
-  'colored-lighting': 'Цветной свет',
-  fantasy: 'Фэнтези',
-  foliage: 'Листва',
-  low: 'Низкие требования',
-  medium: 'Средние требования',
-  high: 'Высокие требования',
-  screenshot: 'Для скриншотов',
-  'path-tracing': 'Трассировка пути',
-  pbr: 'PBR-материалы',
-  reflections: 'Отражения',
-  'semi-realistic': 'Полуреалистичные',
-  shadows: 'Тени',
-  potato: 'Для слабых ПК',
-  vanilla: 'Ванилла',
-  datapack: 'Дата-пак',
+  optimization: t('Оптимизация'),
+  adventure: t('Приключения'),
+  technology: t('Технологии'),
+  magic: t('Магия'),
+  library: t('Библиотека'),
+  utility: t('Утилиты'),
+  decoration: t('Декор'),
+  worldgen: t('Генерация мира'),
+  equipment: t('Снаряжение'),
+  food: t('Еда'),
+  storage: t('Хранилища'),
+  multiplayer: t('Мультиплеер'),
+  social: t('Социальное'),
+  challenging: t('Хардкор'),
+  'kitchen-sink': t('Всё сразу'),
+  lightweight: t('Лёгкий'),
+  combat: t('Бой'),
+  mobs: t('Мобы'),
+  cursed: t('Странное'),
+  economy: t('Экономика'),
+  'game-mechanics': t('Механики игры'),
+  management: t('Менеджмент'),
+  minigame: t('Мини-игры'),
+  quests: t('Квесты'),
+  transportation: t('Транспорт'),
+  audio: t('Звук'),
+  blocks: t('Блоки'),
+  'core-shaders': t('Ядровые шейдеры'),
+  entities: t('Сущности'),
+  environment: t('Окружение'),
+  fonts: t('Шрифты'),
+  gui: t('Интерфейс'),
+  items: t('Предметы'),
+  locale: t('Локализация'),
+  modded: t('Для модов'),
+  models: t('Модели'),
+  realistic: t('Реалистичные'),
+  simplistic: t('Минималистичные'),
+  themed: t('Тематические'),
+  tweaks: t('Мелкие правки'),
+  'vanilla-like': t('Как ванилла'),
+  atmosphere: t('Атмосфера'),
+  bloom: t('Свечение'),
+  cartoon: t('Мультяшные'),
+  'colored-lighting': t('Цветной свет'),
+  fantasy: t('Фэнтези'),
+  foliage: t('Листва'),
+  low: t('Низкие требования'),
+  medium: t('Средние требования'),
+  high: t('Высокие требования'),
+  screenshot: t('Для скриншотов'),
+  'path-tracing': t('Трассировка пути'),
+  pbr: t('PBR-материалы'),
+  reflections: t('Отражения'),
+  'semi-realistic': t('Полуреалистичные'),
+  shadows: t('Тени'),
+  potato: t('Для слабых ПК'),
+  vanilla: t('Ванилла'),
+  datapack: t('Дата-пак'),
   iris: 'Iris',
   optifine: 'OptiFine',
   canvas: 'Canvas',
   paper: 'Paper',
   spigot: 'Spigot',
   purpur: 'Purpur',
-  miscellaneous: 'Разное',
-  'mc-miscellaneous': 'Разное',
-  general: 'Разное',
-  survival: 'Выживание',
-  exploration: 'Исследование',
-  'adventure-and-rpg': 'Приключения и RPG',
-  'adventure-rpg': 'Приключения и RPG',
-  'role-playing': 'Ролевая игра',
-  roleplay: 'Ролевая игра',
-  'utility-qol': 'Удобство',
+  miscellaneous: t('Разное'),
+  'mc-miscellaneous': t('Разное'),
+  general: t('Разное'),
+  survival: t('Выживание'),
+  exploration: t('Исследование'),
+  'adventure-and-rpg': t('Приключения и RPG'),
+  'adventure-rpg': t('Приключения и RPG'),
+  'role-playing': t('Ролевая игра'),
+  roleplay: t('Ролевая игра'),
+  'utility-qol': t('Удобство'),
   pvp: 'PvP',
-  'combat-pvp': 'Бой и PvP',
-  cosmetic: 'Косметика',
-  fun: 'Развлечения',
-  tech: 'Технологии',
-  'admin-tools': 'Для админов',
-  'server-utility': 'Для сервера',
-  'anti-griefing-tools': 'Защита от гриферов',
-  'developer-tools': 'Для разработчиков',
-  'armor-weapons-tools': 'Броня и оружие',
-  'armor-tools-and-weapons': 'Броня и оружие',
-  creation: 'Творчество',
-  'data-packs': 'Дата-пак',
-  'mod-support': 'Поддержка модов',
-  mechanics: 'Механики игры',
-  'game-map': 'Карта',
-  'map-based': 'Карта',
-  'map-information': 'Карта и подсказки',
-  informational: 'Подсказки',
-  'world-mobs': 'Мобы',
-  'mc-addons': 'Аддоны',
-  'mc-food': 'Еда',
-  'library-api': 'Библиотека',
-  'small-light': 'Лёгкий',
-  'world-gen': 'Генерация мира',
-  'world-structures': 'Постройки',
-  'world-ores-resources': 'Руды и ресурсы',
-  'world-biomes': 'Биомы',
-  'world-dimensions': 'Измерения',
-  'world-editing-and-management': 'Редактирование мира',
-  'custom-terrain': 'Свой рельеф',
-  'modded-world': 'Мир с модами',
-  shaders: 'Шейдеры',
-  traditional: 'Классические',
-  puzzle: 'Головоломки',
-  players: 'Игроки',
-  horror: 'Хоррор',
-  parkour: 'Паркур',
-  hardcore: 'Хардкор',
-  'chat-related': 'Чат',
-  'extra-large': 'Большие',
-  teleportation: 'Телепортация',
-  medieval: 'Средневековье',
-  modern: 'Современность',
-  animated: 'Анимация',
-  skyblock: 'Скайблок',
-  performance: 'Производительность',
-  fixes: 'Исправления',
-  redstone: 'Редстоун',
-  'technology-farming': 'Фермы',
-  'technology-automation': 'Автоматизация',
-  'technology-processing': 'Переработка',
-  'technology-player-transport': 'Транспорт',
-  'technology-item-fluid-energy-tra': 'Передача ресурсов',
+  'combat-pvp': t('Бой и PvP'),
+  cosmetic: t('Косметика'),
+  fun: t('Развлечения'),
+  tech: t('Технологии'),
+  'admin-tools': t('Для админов'),
+  'server-utility': t('Для сервера'),
+  'anti-griefing-tools': t('Защита от гриферов'),
+  'developer-tools': t('Для разработчиков'),
+  'armor-weapons-tools': t('Броня и оружие'),
+  'armor-tools-and-weapons': t('Броня и оружие'),
+  creation: t('Творчество'),
+  'data-packs': t('Дата-пак'),
+  'mod-support': t('Поддержка модов'),
+  mechanics: t('Механики игры'),
+  'game-map': t('Карта'),
+  'map-based': t('Карта'),
+  'map-information': t('Карта и подсказки'),
+  informational: t('Подсказки'),
+  'world-mobs': t('Мобы'),
+  'mc-addons': t('Аддоны'),
+  'mc-food': t('Еда'),
+  'library-api': t('Библиотека'),
+  'small-light': t('Лёгкий'),
+  'world-gen': t('Генерация мира'),
+  'world-structures': t('Постройки'),
+  'world-ores-resources': t('Руды и ресурсы'),
+  'world-biomes': t('Биомы'),
+  'world-dimensions': t('Измерения'),
+  'world-editing-and-management': t('Редактирование мира'),
+  'custom-terrain': t('Свой рельеф'),
+  'modded-world': t('Мир с модами'),
+  shaders: t('Шейдеры'),
+  traditional: t('Классические'),
+  puzzle: t('Головоломки'),
+  players: t('Игроки'),
+  horror: t('Хоррор'),
+  parkour: t('Паркур'),
+  hardcore: t('Хардкор'),
+  'chat-related': t('Чат'),
+  'extra-large': t('Большие'),
+  teleportation: t('Телепортация'),
+  medieval: t('Средневековье'),
+  modern: t('Современность'),
+  animated: t('Анимация'),
+  skyblock: t('Скайблок'),
+  performance: t('Производительность'),
+  fixes: t('Исправления'),
+  redstone: t('Редстоун'),
+  'technology-farming': t('Фермы'),
+  'technology-automation': t('Автоматизация'),
+  'technology-processing': t('Переработка'),
+  'technology-player-transport': t('Транспорт'),
+  'technology-item-fluid-energy-tra': t('Передача ресурсов'),
   'sixteen-x': '16x',
   x16: '16x',
   x32: '32x',
   x64: '64x',
   x128: '128x',
+})
+
+export const RU_LOADER = (c: string): string => ruMap()[c] || c
+
+export const ruLabel = (c: string): string | null => {
+  const map = ruMap()
+  return Object.prototype.hasOwnProperty.call(map, c) ? map[c]! : null
 }
-
-export const RU_LOADER = (c: string): string => RU_MAP[c] || c
-
-export const ruLabel = (c: string): string | null => (Object.prototype.hasOwnProperty.call(RU_MAP, c) ? RU_MAP[c]! : null)
 
 /// Длина текста, который пишет сам игрок. Ограничение стоит и на поле ввода, и
 /// на месте показа: поле бережёт данные, показ — вёрстку, потому что то же имя
@@ -189,14 +192,12 @@ export const cap = (s: string): string => (s ? s[0].toUpperCase() + s.slice(1) :
 
 export const accKindLabel = (k?: string): string =>
   k === 'microsoft'
-    ? 'Лицензия Microsoft'
-    : k === 'elyby'
-      ? 'Аккаунт Ely.by'
-      : k === 'tg' || k === 'millida'
-      ? 'Аккаунт Millida'
+    ? t('Лицензия Microsoft')
+    : k === 'tg' || k === 'millida'
+      ? t('Аккаунт Millida')
       : k === 'offline'
-        ? 'Офлайн-ник'
-        : 'Гость'
+        ? t('Офлайн-ник')
+        : t('Гость')
 
 export function monogramAvatar(nick: string | undefined, size = 40): string {
   const name = (nick || '?').trim() || '?'
@@ -234,6 +235,7 @@ export function onAvatarError(e: { currentTarget: HTMLImageElement }, size = 32,
 }
 
 export const plural = (n: number, one: string, few: string, many: string): string => {
+  if (getLocale() !== 'ru') return Math.abs(n) === 1 ? one : many
   const m10 = n % 10
   const m100 = n % 100
   if (m10 === 1 && m100 !== 11) return one
@@ -243,31 +245,31 @@ export const plural = (n: number, one: string, few: string, many: string): strin
 
 export const fmtPlaytime = (seconds?: number): string => {
   const s = Math.max(0, Math.round(seconds || 0))
-  if (s < 60) return 'меньше минуты'
+  if (s < 60) return t('меньше минуты')
   const h = Math.floor(s / 3600)
   const m = Math.floor((s % 3600) / 60)
-  if (!h) return m + ' мин'
-  return h >= 100 ? h + ' ч' : h + ' ч ' + m + ' м'
+  if (!h) return t('{m} мин', { m })
+  return h >= 100 ? t('{h} ч', { h }) : t('{h} ч {m} м', { h, m })
 }
 
 export const whenText = (tsSeconds?: number): string => {
   if (!tsSeconds) return ''
   const days = (Date.now() / 1000 - tsSeconds) / 86400
-  if (days < 1) return 'сегодня'
-  if (days < 2) return 'вчера'
-  if (days < 30) return Math.round(days) + ' дн назад'
+  if (days < 1) return t('сегодня')
+  if (days < 2) return t('вчера')
+  if (days < 30) return t('{n} дн назад', { n: Math.round(days) })
   const mo = Math.round(days / 30)
-  return mo < 12 ? mo + ' мес назад' : Math.round(days / 365) + ' г назад'
+  return mo < 12 ? t('{n} мес назад', { n: mo }) : t('{n} г назад', { n: Math.round(days / 365) })
 }
 
-export const agoText = (t?: number): string => {
-  if (!t) return ''
-  const m = Math.round(Date.now() / 1000 - t) / 60
+export const agoText = (ts?: number): string => {
+  if (!ts) return ''
+  const m = Math.round(Date.now() / 1000 - ts) / 60
   return m < 60
-    ? Math.round(m) + ' мин назад'
+    ? t('{n} мин назад', { n: Math.round(m) })
     : m < 1440
-      ? Math.round(m / 60) + ' ч назад'
-      : Math.round(m / 1440) + ' дн назад'
+      ? t('{n} ч назад', { n: Math.round(m / 60) })
+      : t('{n} дн назад', { n: Math.round(m / 1440) })
 }
 
 export interface MotdPart {
@@ -351,9 +353,9 @@ export function motdParts(m?: string): MotdPart[] {
 export const fmtSize = (bytes?: number): string => {
   const b = bytes || 0
   if (!b) return ''
-  if (b < 1024 * 1024) return Math.max(1, Math.round(b / 1024)) + ' КБ'
-  return (b / 1024 / 1024).toFixed(b < 10 * 1024 * 1024 ? 1 : 0) + ' МБ'
+  if (b < 1024 * 1024) return t('{n} КБ', { n: Math.max(1, Math.round(b / 1024)) })
+  return t('{n} МБ', { n: (b / 1024 / 1024).toFixed(b < 10 * 1024 * 1024 ? 1 : 0) })
 }
 
 export const timeHM = (ts?: number) =>
-  ts ? new Date(ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : ''
+  ts ? new Date(ts).toLocaleTimeString(intlTag(), { hour: '2-digit', minute: '2-digit' }) : ''

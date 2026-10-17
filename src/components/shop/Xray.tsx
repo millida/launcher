@@ -5,6 +5,7 @@ import { Chest3D } from '../daily/Chest3D'
 import { playSound } from '../../lib/sound'
 import { RARITY_NAMES, type ItemRef, type XrayOffer } from '../../lib/rubies'
 import { ItemArt, Price, Timer, toneStyle } from './parts'
+import { useT } from '../../i18n'
 
 /**
  * Рентген-кейс: сундук, внутри которого вещь видна ДО оплаты, цена
@@ -25,6 +26,7 @@ export function XrayCard({
   onBuy: (offer: XrayOffer) => void
   onEnd?: () => void
 }) {
+  const t = useT()
   const waiting = !!offer.nextAt && new Date(offer.nextAt).getTime() > Date.now()
   const short = offer.price - balance
   return (
@@ -42,16 +44,16 @@ export function XrayCard({
         <div className="sh-xray-body">
           <span className="sh-kicker">
             <Icon id="i-eye" />
-            Рентген-кейс
+            {t('Рентген-кейс')}
           </span>
-          <b className="sh-xray-wait">Открыт: {offer.item.name}</b>
-          <Timer to={offer.nextAt!} label="Новый через" onEnd={onEnd} />
+          <b className="sh-xray-wait">{t('Открыт: {name}', { name: offer.item.name })}</b>
+          <Timer to={offer.nextAt!} label={t('Новый через')} onEnd={onEnd} />
         </div>
       ) : (
         <div className="sh-xray-body">
           <span className="sh-kicker">
             <Icon id="i-eye" />
-            Рентген-кейс
+            {t('Рентген-кейс')}
           </span>
           <span className="sh-xray-item">
             <ItemArt item={offer.item} size="sm" />
@@ -62,9 +64,9 @@ export function XrayCard({
           </span>
           <Price price={offer.price} big />
           <button className={'btn md ' + (short > 0 ? 'secondary' : 'primary')} disabled={busy === offer.id} data-track="buy_xray" onClick={() => onBuy(offer)}>
-            Купить
+            {t('Купить')}
           </button>
-          <Timer to={offer.expiresAt} label="Сменится через" onEnd={onEnd} />
+          <Timer to={offer.expiresAt} label={t('Сменится через')} onEnd={onEnd} />
         </div>
       )}
     </div>
@@ -90,6 +92,7 @@ export function XrayOpening({
   item: ItemRef | null
   onOpened: (item: ItemRef) => void
 }) {
+  const t = useT()
   const [minDone, setMinDone] = useState(false)
   const opened = useRef(onOpened)
   opened.current = onOpened
@@ -103,7 +106,7 @@ export function XrayOpening({
   const mode = minDone && item ? 'open' : 'shake'
 
   return createPortal(
-    <div className="sh-xo" role="status" aria-label="Открытие кейса">
+    <div className="sh-xo" role="status" aria-label={t('Открытие кейса')}>
       <div className="sh-xo-stage">
         <Chest3D
           tier={tier}

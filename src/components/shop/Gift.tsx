@@ -4,6 +4,8 @@ import { Ruby } from '../Ruby'
 import { RARITY_NAMES, type ShopGift } from '../../lib/rubies'
 import { Countdown, Shard, toneStyle } from './parts'
 import './gift.css'
+import { plural } from '../../lib/format'
+import { intlTag, t, useT } from '../../i18n'
 
 const COUNT_MS = 700
 
@@ -22,25 +24,15 @@ function CountUp({ to }: { to: number }) {
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
   }, [to])
-  return <>{shown.toLocaleString('ru-RU')}</>
+  return <>{shown.toLocaleString(intlTag())}</>
 }
 
 /** «осколок / осколка / осколков». */
 function shardsWord(n: number): string {
-  const tens = n % 100
-  const ones = tens % 10
-  if (tens > 10 && tens < 20) return 'осколков'
-  if (ones === 1) return 'осколок'
-  if (ones >= 2 && ones <= 4) return 'осколка'
-  return 'осколков'
+  return plural(n, t('осколок'), t('осколка'), t('осколков'))
 }
 function rubiesWord(n: number): string {
-  const tens = n % 100
-  const ones = tens % 10
-  if (tens > 10 && tens < 20) return 'рубинов'
-  if (ones === 1) return 'рубин'
-  if (ones >= 2 && ones <= 4) return 'рубина'
-  return 'рубинов'
+  return plural(n, t('рубин'), t('рубина'), t('рубинов'))
 }
 
 /**
@@ -52,6 +44,7 @@ function rubiesWord(n: number): string {
  */
 export function GiftTile({ gift, busy, onClaim }: { gift: ShopGift; busy: boolean; onClaim: () => Promise<boolean> }) {
   // «Только что забрал» — играем получение; при повторном открытии экрана — спокойное «Забрано».
+  const t = useT()
   const [fresh, setFresh] = useState(false)
   const claimed = gift.claimed
   const amount = gift.amount ?? 0
@@ -59,7 +52,7 @@ export function GiftTile({ gift, busy, onClaim }: { gift: ShopGift; busy: boolea
 
   return (
     <div className={'gf' + (claimed ? ' is-claimed' : '') + (fresh ? ' is-fresh' : '')} style={isItem ? toneStyle(gift.item!) : undefined}>
-      <span className="gf-kicker">Подарок дня</span>
+      <span className="gf-kicker">{t('Подарок дня')}</span>
       <span className="gf-stage">
         <span className="gf-rays" aria-hidden="true" />
         {fresh ? <span className="gf-burst" aria-hidden="true" /> : null}
@@ -77,7 +70,7 @@ export function GiftTile({ gift, busy, onClaim }: { gift: ShopGift; busy: boolea
           )}
         </span>
         {!isItem ? (
-          <b className="gf-amount">+{fresh ? <CountUp to={amount} /> : amount.toLocaleString('ru-RU')}</b>
+          <b className="gf-amount">+{fresh ? <CountUp to={amount} /> : amount.toLocaleString(intlTag())}</b>
         ) : null}
       </span>
       <span className="gf-line">
@@ -93,7 +86,7 @@ export function GiftTile({ gift, busy, onClaim }: { gift: ShopGift; busy: boolea
       {claimed ? (
         <span className="sh-tag sh-timer gf-next">
           <Icon id="i-clock" />
-          <span>Новый через</span>
+          <span>{t('Новый через')}</span>
           <b>
             <Countdown to={gift.refreshAt} />
           </b>
@@ -109,7 +102,7 @@ export function GiftTile({ gift, busy, onClaim }: { gift: ShopGift; busy: boolea
             })
           }
         >
-          Забрать
+          {t('Забрать')}
         </button>
       )}
     </div>

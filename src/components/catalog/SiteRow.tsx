@@ -18,7 +18,7 @@ import { newBuildFrom, planFor } from './newBuildFrom'
 import { partnerFrame } from '../premium/packView'
 import {
   SIDE_LABEL,
-  capFirst,
+  categoryLabel,
   categoryIconSrc,
   displayName,
   fmtNum,
@@ -32,6 +32,7 @@ import {
   peekHit,
   plural,
   resolveHit,
+  sourcePlatform,
   versionRange,
 } from './site'
 import type { SiteCard, SiteSection } from './site'
@@ -45,6 +46,7 @@ import { openItem } from './itemStore'
 import { StarButton } from './StarButton'
 import { Milli } from '../milli/Milli'
 import { aiPackCode, installPackCode } from '../../lib/catalogInstall'
+import { t, useT } from '../../i18n'
 
 /** Плитка ленты: одна главная кнопка, остальное — на странице материала. */
 const CompactCtx = createContext(false)
@@ -104,15 +106,15 @@ interface Tag {
 }
 
 /** Сборку собрала Милли (30.09.2026): её маскот первой меткой, как на сайте. */
-const milliTag = (): Tag => ({ label: 'Милли', accent: true, bare: true, node: <Milli size={18} /> })
+const milliTag = (): Tag => ({ label: t('Милли'), accent: true, bare: true, node: <Milli size={18} /> })
 
 /** Метка «RU · На русском». Подсказка про студию — только у переводов студии (`by`), русские авторы без неё. */
 const RuMark = ({ className, by }: { className: string; by?: string }) => (
-  <span className={className} title={by ? 'Перевела команда ' + by + ': квесты, предметы и описания на русском' : undefined}>
+  <span className={className} title={by ? t('Перевела команда {team}: квесты, предметы и описания на русском', { team: by }) : undefined}>
     <i className="mr-ru-badge" aria-hidden="true">
       RU
     </i>
-    На русском
+    {t('На русском')}
   </span>
 )
 
@@ -129,7 +131,7 @@ function loaderTag(l: string): Tag {
 
 function catTag(c: string): Tag {
   const src = categoryIconSrc(c)
-  return { label: capFirst(c), node: src ? <MrIcon src={src} size={12} /> : null }
+  return { label: categoryLabel(c), node: src ? <MrIcon src={src} size={12} /> : null }
 }
 
 const versionsTag = (label: string): Tag => ({ label, node: <Glyph d={GLYPH.versions!} /> })
@@ -148,9 +150,10 @@ export function TagGlyph({ node, tone, accent }: { node: ReactNode; tone?: strin
 }
 
 export function Tags({ tags, className }: { tags: Tag[]; className?: string }) {
+  const t = useT()
   if (!tags.length) return null
   return (
-    <ul className={'mr-tags' + (className ? ' ' + className : '')} aria-label="Метки">
+    <ul className={'mr-tags' + (className ? ' ' + className : '')} aria-label={t('Метки')}>
       {tags.map((t, i) => (
         <li
           key={t.label + i}
@@ -241,6 +244,7 @@ function ActBar({
   onNew?: () => void
   newBusy?: boolean
 }) {
+  const t = useT()
   const compact = useContext(CompactCtx)
   return (
     <div className="mr-actions">
@@ -254,7 +258,7 @@ function ActBar({
             onNew()
           }}
         >
-          Новая сборка
+          {t('Новая сборка')}
         </button>
       ) : null}
       <button
@@ -279,6 +283,7 @@ const CONTENT = new Set(['mod', 'resourcepack', 'shader', 'datapack'])
 const SITE_ONLY_KINDS = new Set(['plugin', 'serverpack', 'addon'])
 
 function Bound({ h, kind, want, onFired, extra }: { h: ModHit; kind: string; want: Want | null; onFired: () => void; extra?: ReactNode }) {
+  const t = useT()
   const game = useCatalogCtx().store((s) => s.version)
   const a = useModAction(h, kind === 'modpack' ? game : null, kind)
   const [making, setMaking] = useState(false)
@@ -294,7 +299,7 @@ function Bound({ h, kind, want, onFired, extra }: { h: ModHit; kind: string; wan
     if (want === 'add') a.onClick()
     else if (canNew) makeNew()
   }, [want])
-  const label = a.done || a.running || !content ? a.text : 'В сборку'
+  const label = a.done || a.running || !content ? a.text : t('В сборку')
   return (
     <>
       {a.modal}
@@ -319,6 +324,7 @@ function Bound({ h, kind, want, onFired, extra }: { h: ModHit; kind: string; wan
  * ставит сразу на него.
  */
 export function ServerButton({ target, primary }: { target: HostTarget; primary?: boolean }) {
+  const t = useT()
   const ctx = useCatalogCtx().target
   const [open, setOpen] = useState(false)
   return (
@@ -333,7 +339,7 @@ export function ServerButton({ target, primary }: { target: HostTarget; primary?
         }}
       >
         <HostingMark />
-        На хостинг
+        {t('На хостинг')}
       </button>
       {open ? (
         // Портал всплывает по дереву React — клик в окне не должен открыть строку.
@@ -401,6 +407,7 @@ function Actions({
   resolve: () => Promise<ModHit | null>
   server?: ReactNode
 }) {
+  const t = useT()
   const [want, setWant] = useState<Want | null>(null)
   const [busy, setBusy] = useState(false)
   const paid = usePaidCard(card)
@@ -424,7 +431,7 @@ function Actions({
   if (code)
     return (
       <ActBar
-        label="Установить"
+        label={t('Установить')}
         plus={false}
         done={false}
         busy={busy}
@@ -453,7 +460,7 @@ function Actions({
   const canNew = content && !!planFor(ownPackHit(card), sec.kind)
   return (
     <ActBar
-      label={content ? 'В сборку' : 'Установить'}
+      label={content ? t('В сборку') : t('Установить')}
       plus={content}
       done={false}
       busy={busy}
@@ -467,6 +474,7 @@ function Actions({
 
 /** Кнопки строки: в «Ресурсах» — в сборку и «На сервер», в панели сервера — только «На сервер». */
 export function RowActions(props: { card: SiteCard; sec: SiteSection; hit: ModHit | null | undefined; resolve: () => Promise<ModHit | null> }) {
+  const t = useT()
   const { target } = useCatalogCtx()
   const compact = useContext(CompactCtx)
   const server = useServerButton(props.card, props.sec)
@@ -485,7 +493,7 @@ export function RowActions(props: { card: SiteCard; sec: SiteSection; hit: ModHi
           }}
         >
           <Icon id="i-ext" />
-          На сайте
+          {t('На сайте')}
         </button>}
       </div>
     )
@@ -554,10 +562,11 @@ function usePrice(card: SiteCard): string {
 export function shortAuthor(a: string): string {
   const names = a.split(/\s*[,;&]\s*|\s+and\s+|\s+и\s+/).map((x) => x.trim()).filter(Boolean)
   if (names.length <= 1) return a.length > 28 ? a.slice(0, 26) + '…' : a
-  return names[0] + ' и ещё ' + (names.length - 1)
+  return t('{name} и ещё {n}', { name: names[0] ?? '', n: names.length - 1 })
 }
 
 export function SiteRow(props: RowProps) {
+  const t = useT()
   const { card, sec } = props
   const { hit, resolve } = useCardHit(card)
   const open = useOpen(props)
@@ -586,14 +595,19 @@ export function SiteRow(props: RowProps) {
           <h3 className="mr-title">{name}</h3>
           {card.premium || card.exclusive ? (
             <span className="mr-prem">
-              <Icon id="i-crown" /> {card.exclusive ? 'Эксклюзив' : 'Премиум'}
+              <Icon id="i-crown" /> {card.exclusive ? t('Эксклюзив') : t('Премиум')}
             </span>
           ) : null}
-          {isExclusive(card.slug) ? <span className="mr-prem excl">Эксклюзив</span> : null}
+          {isExclusive(card.slug) ? <span className="mr-prem excl">{t('Эксклюзив')}</span> : null}
           {card.ru ? <RuMark className="mr-prem ru" by={card.ruBy} /> : null}
-          {card.author ? <span className="mr-by" title={card.author}>от {shortAuthor(card.author)}</span> : null}
+          {card.author ? (
+            <span className="mr-by" title={card.author}>
+              {t('от {author}', { author: shortAuthor(card.author) })}
+              <SourceMark card={card} />
+            </span>
+          ) : null}
           {dl ? (
-            <span className="mr-dl" title={fmtNum(dl) + ' ' + plural(dl, 'скачивание', 'скачивания', 'скачиваний')}>
+            <span className="mr-dl" title={plural(dl, t('{n} скачивание', { n: fmtNum(dl) }), t('{n} скачивания', { n: fmtNum(dl) }), t('{n} скачиваний', { n: fmtNum(dl) }))}>
               <Icon id="i-download" />
               {fmtNum(dl)}
             </span>
@@ -624,6 +638,7 @@ export function SiteRow(props: RowProps) {
  * скачивания и тихая «В сборку».
  */
 export function SiteGalleryCard(props: RowProps) {
+  const t = useT()
   const { card, sec } = props
   const { hit, resolve } = useCardHit(card)
   const open = useOpen(props)
@@ -647,11 +662,11 @@ export function SiteGalleryCard(props: RowProps) {
   const logo = card.icon || card.cover
   // Arcania — «Эксклюзив» (своя сборка студии), а не «Премиум» (владелец 12.10.2026).
   const badge = card.exclusive ? (
-    <span className="ph-card-tag prem">Эксклюзив</span>
+    <span className="ph-card-tag prem">{t('Эксклюзив')}</span>
   ) : isExclusive(card.slug) ? (
-    <span className="ph-card-tag excl">Эксклюзив</span>
+    <span className="ph-card-tag excl">{t('Эксклюзив')}</span>
   ) : card.premium ? (
-    <span className="ph-card-tag prem">Премиум</span>
+    <span className="ph-card-tag prem">{t('Премиум')}</span>
   ) : card.ru ? (
     <RuMark className="ph-card-tag ru" by={card.ruBy} />
   ) : null
@@ -703,9 +718,12 @@ export function SiteGalleryCard(props: RowProps) {
             <span className="mr-gal-names">
               <h3 className="mr-gal-title">{name}</h3>
               <span className="mr-gal-author">
-                <span className="mr-gal-by" title={card.author || undefined}>{card.author ? 'от ' + shortAuthor(card.author) : sec.title}</span>
+                <span className="mr-gal-by" title={card.author || undefined}>
+                  {card.author ? t('от {author}', { author: shortAuthor(card.author) }) : sec.title}
+                  {card.author ? <SourceMark card={card} /> : null}
+                </span>
                 {dl ? (
-                  <span className="mr-gal-dl" title="Скачиваний">
+                  <span className="mr-gal-dl" title={t('Скачиваний')}>
                     <Icon id="i-download" />
                     {fmtNum(dl)}
                   </span>
@@ -796,9 +814,15 @@ export function RowSkeleton({ gallery, n = 6, actions = true }: { gallery?: bool
   )
 }
 
+export function SourceMark({ card }: { card: { sourceUrl?: string | null; curseforgeId?: number | null } }) {
+  const platform = sourcePlatform(card)
+  return platform ? <span className="mr-src"> · {platform}</span> : null
+}
+
 /* ── Строка карты (CurseForge): тот же вид, данные из старого каталога ── */
 
 export function HitRow({ h, pos }: { h: ModHit; pos?: number }) {
+  const t = useT()
   const a = useModAction(h)
   return (
     <>
@@ -817,17 +841,22 @@ export function HitRow({ h, pos }: { h: ModHit; pos?: number }) {
         <div className="mr-body">
           <div className="mr-titleline">
             <h3 className="mr-title">{h.title}</h3>
-            {h.author ? <span className="mr-by">от {h.author}</span> : null}
+            {h.author ? (
+              <span className="mr-by">
+                {t('от {author}', { author: h.author })}
+                <span className="mr-src"> · CurseForge</span>
+              </span>
+            ) : null}
           </div>
           {h.desc ? <p className="mr-desc">{h.desc}</p> : null}
-          <Tags tags={h.cats.filter(Boolean).map((c) => ({ label: capFirst(c) }))} />
+          <Tags tags={h.cats.filter(Boolean).map((c) => ({ label: categoryLabel(c) }))} />
         </div>
         <div className="mr-side">
           {h.dl > 0 ? (
             <span className="mr-stat">
               <Icon id="i-download" />
               <b>{fmtNum(h.dl)}</b>
-              <span className="mr-stat-unit">{plural(h.dl, 'скачивание', 'скачивания', 'скачиваний')}</span>
+              <span className="mr-stat-unit">{plural(h.dl, t('скачивание'), t('скачивания'), t('скачиваний'))}</span>
             </span>
           ) : null}
           <ActBar
@@ -859,6 +888,7 @@ export interface MapHit {
 }
 
 export function MapRow({ m, pos }: { m: MapHit; pos?: number }) {
+  const t = useT()
   return (
     <article
       className="card mr-row"
@@ -885,7 +915,7 @@ export function MapRow({ m, pos }: { m: MapHit; pos?: number }) {
           <span className="mr-stat">
             <Icon id="i-download" />
             <b>{fmtNum(m.downloads)}</b>
-            <span className="mr-stat-unit">{plural(m.downloads, 'скачивание', 'скачивания', 'скачиваний')}</span>
+            <span className="mr-stat-unit">{plural(m.downloads, t('скачивание'), t('скачивания'), t('скачиваний'))}</span>
           </span>
         ) : null}
         <div className="mr-actions">

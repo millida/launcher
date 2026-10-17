@@ -10,6 +10,7 @@ import { sendMilli } from '../../../state/milli'
 import { activeShader, configOf, shaderCards, shaderLevelOf } from './benchTabs'
 import '../../../styles/pixel/milli-bench-tabs.css'
 import '../../../styles/pixel/milli-looks.css'
+import { t, useT } from '../../../i18n'
 
 // ─── Общее для вкладок FE-tabs ─────────────────────────────────────────
 
@@ -36,13 +37,14 @@ export function BenchSlot({ item, px, size = 40 }: { item: Partial<MilliItem>; p
 }
 
 /** Пустая вкладка: одна строка и кнопка, которая просит Милли в чате. */
-export function BenchEmpty({ px, text, ask, label = 'Подобрать' }: { px: string; text: string; ask: string; label?: string }) {
+export function BenchEmpty({ px, text, ask, label }: { px: string; text: string; ask: string; label?: string }) {
+  const t = useT()
   return (
     <div className="bt-empty">
       <PxArt name={px} size={48} className="bt-empty-px" />
       <p>{text}</p>
       <button className="btn sm primary" onClick={() => void sendMilli(ask)}>
-        {label}
+        {label ?? t('Подобрать')}
       </button>
     </div>
   )
@@ -229,11 +231,15 @@ const FIT: Record<MilliLevel, Record<MilliProfile, Fit>> = {
   heavy: { low: 'bad', balanced: 'mid', high: 'good' },
 }
 export const fitOf = (level: MilliLevel, tier: MilliProfile): Fit => FIT[level][tier]
-export const FIT_RU: Record<Fit, string> = { good: 'Летает', mid: 'Пойдёт', bad: 'Лагает' }
+export const FIT_RU: Record<Fit, string> = {
+  get good() { return t('Летает') },
+  get mid() { return t('Пойдёт') },
+  get bad() { return t('Лагает') },
+}
 const FIT_TIP: Record<Fit, string> = {
-  good: 'На твоём ПК FPS почти не упадёт',
-  mid: 'На твоём ПК FPS заметно упадёт',
-  bad: 'Для твоего ПК тяжело: будет лагать',
+  get good() { return t('На твоём ПК FPS почти не упадёт') },
+  get mid() { return t('На твоём ПК FPS заметно упадёт') },
+  get bad() { return t('Для твоего ПК тяжело: будет лагать') },
 }
 
 /** Индикатор FPS: 3 пиксельные полоски цвета «светофора». */
@@ -263,10 +269,10 @@ function Flame({ dim }: { dim?: boolean }) {
 }
 
 const LEVELS: readonly { id: MilliLevel; ru: string; flames: number }[] = [
-  { id: 'off', ru: 'Выкл', flames: 0 },
-  { id: 'light', ru: 'Лёгкие', flames: 1 },
-  { id: 'medium', ru: 'Средние', flames: 2 },
-  { id: 'heavy', ru: 'Тяжёлые', flames: 3 },
+  { id: 'off', get ru() { return t('Выкл') }, flames: 0 },
+  { id: 'light', get ru() { return t('Лёгкие') }, flames: 1 },
+  { id: 'medium', get ru() { return t('Средние') }, flames: 2 },
+  { id: 'heavy', get ru() { return t('Тяжёлые') }, flames: 3 },
 ]
 
 /** Подпись загрузчика шейдеров: Iris на Fabric/Quilt/NeoForge, Oculus на Forge. */
@@ -289,6 +295,7 @@ export function BenchShaders() {
 }
 
 function Shaders({ pack }: { pack: MilliPack }) {
+  const t = useT()
   const modder = useModder()
   const tier = usePcTier(pack)
   const level = shaderLevelOf(pack)
@@ -313,7 +320,7 @@ function Shaders({ pack }: { pack: MilliPack }) {
 
   return (
     <div className="lk lk-shaders">
-      <div className="lk-levels" role="radiogroup" aria-label="Шейдеры">
+      <div className="lk-levels" role="radiogroup" aria-label={t('Шейдеры')}>
         {LEVELS.map((l) => {
           const fit = fitOf(l.id, tier)
           const on = level === l.id
@@ -323,7 +330,7 @@ function Shaders({ pack }: { pack: MilliPack }) {
               role="radio"
               aria-checked={on}
               className={'lk-level mlm-press lv-' + l.id + ' fit-' + fit + (on ? ' on' : '')}
-              title={l.id === 'off' ? 'Без шейдеров' : FIT_TIP[fit]}
+              title={l.id === 'off' ? t('Без шейдеров') : FIT_TIP[fit]}
               onClick={() => setLevel(l.id)}
             >
               <span className="lk-level-ic">
@@ -340,7 +347,7 @@ function Shaders({ pack }: { pack: MilliPack }) {
         <div className="lk-hero is-off" key="off">
           <span className="lk-hero-off">
             <PxArt name="redstone_lamp_off" size={48} />
-            <b>Без шейдеров</b>
+            <b>{t('Без шейдеров')}</b>
           </span>
           <span className="lk-hero-top">
             <FpsMeter fit="good" />
@@ -349,11 +356,11 @@ function Shaders({ pack }: { pack: MilliPack }) {
       ) : hero ? (
         <Hero s={hero} fit={fitOf(hero.level ?? level, tier)} loader={loader} modder={modder} />
       ) : (
-        <BenchEmpty px="glowstone" text="Тут пока пусто" ask="подбери шейдеры" />
+        <BenchEmpty px="glowstone" text={t('Тут пока пусто')} ask={t('подбери шейдеры')} />
       )}
 
       {level !== 'off' && cards.length > 1 ? (
-        <div className="lk-swap" role="radiogroup" aria-label="Другой шейдер">
+        <div className="lk-swap" role="radiogroup" aria-label={t('Другой шейдер')}>
           {cards.map((s, i) => {
             const on = (active?.projectId ?? hero?.projectId) === s.projectId
             const look = lookOf(s)
@@ -390,12 +397,13 @@ export function shortName(title: string): string {
 }
 
 function Hero({ s, fit, loader, modder }: { s: MilliItem; fit: Fit; loader: string; modder: boolean }) {
+  const t = useT()
   const look = lookOf(s)
   return (
     <div className="lk-hero" key={s.projectId}>
       <LookPic src={look.img} alt={look.alt} icon={s.icon} px="glowstone" className="lk-hero-pic" eager />
       <span className="lk-hero-top">
-        <span className="lk-chip" title={`${loader} поставится сам — без него шейдеры не работают`}>
+        <span className="lk-chip" title={t('{loader} поставится сам — без него шейдеры не работают', { loader })}>
           <PxArt name="glowstone" size={16} />+{loader}
         </span>
         <FpsMeter fit={fit} />

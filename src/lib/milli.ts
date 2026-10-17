@@ -5,6 +5,7 @@ import { hasTauri } from '../ipc/tauri'
 import { DEMO_USER } from './demo'
 import { LOCKED_SLUGS } from './aiBuilder'
 import type { PlanItem } from '../ipc/commands'
+import { formatFixed, formatNumber, getLocale, t } from '../i18n'
 
 /*
  * Милли — ИИ-сборщик чатом. Клиент адресов `/catalog/milli/*` (контракт —
@@ -32,19 +33,19 @@ export const milliItemUrl = (m: Pick<MilliItem, 'slug' | 'url'>, tab: MilliTab =
   m.url || 'https://modrinth.com/' + (tab === 'shaders' ? 'shader' : tab === 'resourcepacks' ? 'resourcepack' : 'mod') + '/' + m.slug
 
 export const MILLI_TABS: readonly MilliTab[] = ['mods', 'resourcepacks', 'shaders', 'config']
-export const MILLI_TAB_RU: Record<MilliTab, string> = { mods: 'Моды', resourcepacks: 'Ресурс-паки', shaders: 'Шейдеры', config: 'Настройки' }
+export const MILLI_TAB_RU: Record<MilliTab, string> = { get mods() { return t('Моды') }, get resourcepacks() { return t('Ресурс-паки') }, get shaders() { return t('Шейдеры') }, get config() { return t('Настройки') } }
 export const MILLI_CAT_RU: Record<MilliCat, string> = {
-  perf: 'Оптимизация',
-  ui: 'Интерфейс и удобство',
-  world: 'Мир и генерация',
-  mobs: 'Мобы и существа',
-  tech: 'Техника',
-  magic: 'Магия',
-  adventure: 'Приключения и бой',
-  build: 'Строительство и декор',
-  look: 'Графика и звук',
-  misc: 'Разное',
-  lib: 'Библиотеки',
+  get perf() { return t('Оптимизация') },
+  get ui() { return t('Интерфейс и удобство') },
+  get world() { return t('Мир и генерация') },
+  get mobs() { return t('Мобы и существа') },
+  get tech() { return t('Техника') },
+  get magic() { return t('Магия') },
+  get adventure() { return t('Приключения и бой') },
+  get build() { return t('Строительство и декор') },
+  get look() { return t('Графика и звук') },
+  get misc() { return t('Разное') },
+  get lib() { return t('Библиотеки') },
 }
 
 export interface MilliConfig {
@@ -439,20 +440,20 @@ export interface MilliError {
 }
 
 const ERROR_TEXT: Record<MilliErrorKind, string> = {
-  auth: 'Войди в аккаунт Millida',
-  limit: 'Лимит на сегодня',
-  busy: 'Милли ещё думает над прошлым',
-  blocked: 'Милли тебе недоступна',
-  off: 'Милли отдыхает — скоро вернётся',
-  plus: 'Это в PLUS',
-  offline: 'Нет связи с Millida',
-  failed: 'Милли не ответила',
+  get auth() { return t('Войди в аккаунт Millida') },
+  get limit() { return t('Лимит на сегодня') },
+  get busy() { return t('Милли ещё думает над прошлым') },
+  get blocked() { return t('Милли тебе недоступна') },
+  get off() { return t('Милли отдыхает — скоро вернётся') },
+  get plus() { return t('Это в PLUS') },
+  get offline() { return t('Нет связи с Millida') },
+  get failed() { return t('Милли не ответила') },
 }
 
 const err = (kind: MilliErrorKind, scope?: 'day' | 'month'): MilliError => ({
   kind,
   ...(scope ? { scope } : {}),
-  text: kind === 'limit' && scope === 'month' ? 'Лимит на месяц' : ERROR_TEXT[kind],
+  text: kind === 'limit' && scope === 'month' ? t('Лимит на месяц') : ERROR_TEXT[kind],
   retry: kind === 'failed' || kind === 'offline' || kind === 'busy' || kind === 'off',
 })
 
@@ -524,7 +525,7 @@ export function milliLeft(s: Pick<MilliStatus, 'day' | 'month'> | null): number 
 /** Счётчик в шапке Милли (владелец 30.09 16:11: «маленький счётчик "осталось 5"», без простыни про тарифы). */
 export function milliCounterChip(s: Pick<MilliStatus, 'day' | 'month'> | null): string | null {
   const left = milliLeft(s)
-  return left === null ? null : 'осталось ' + left
+  return left === null ? null : t('осталось {n}', { n: left })
 }
 
 /** «Улучшенная сборка» уходит на сервер только у PLUS: у бесплатного переключатель заперт. */
@@ -545,13 +546,13 @@ export function milliResetText(resetAt: string, now: number = Date.now()): strin
   const at = Date.parse(resetAt)
   if (!Number.isFinite(at)) return ''
   const ms = at - now
-  if (ms <= 60_000) return 'через минуту'
+  if (ms <= 60_000) return t('через минуту')
   const min = Math.ceil(ms / 60_000)
-  if (min < 60) return 'через ' + min + ' мин'
+  if (min < 60) return t('через {n} мин', { n: min })
   const h = Math.round(min / 60)
-  if (h < 24) return 'через ' + h + ' ч'
+  if (h < 24) return t('через {n} ч', { n: h })
   const d = Math.round(h / 24)
-  return 'через ' + d + ' ' + plural(d, 'день', 'дня', 'дней')
+  return plural(d, t('через {n} день', { n: d }), t('через {n} дня', { n: d }), t('через {n} дней', { n: d }))
 }
 
 // ─── Сборка → установка ──────────────────────────────────────────────────
@@ -631,7 +632,12 @@ export interface CrashAiAnswer {
  * В приложении — `api()` через ядро с токеном. В dev-браузере без ядра —
  * свой fetch, чтобы `code` и `scope` из тела ошибки дошли до разбора.
  */
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export const withMilliLang = (path: string): string => path + (path.includes('?') ? '&' : '?') + 'lang=' + encodeURIComponent(getLocale())
+
+const MILLI_LANG_PATH = /^\/catalog\/milli\/(?:messages|greeting|crash|doctor|packs\/[^/?]+\/(?:ops|looks|revert))(?:\?|$)/
+
+async function request<T>(bare: string, init?: RequestInit): Promise<T> {
+  const path = MILLI_LANG_PATH.test(bare) ? withMilliLang(bare) : bare
   // Тестовая Милли (milli-server) через прокси Vite: только dev и только с VITE_MILLI_TEST=1 в .env.local.
   if (import.meta.env.DEV && import.meta.env.VITE_MILLI_TEST === '1') {
     // Тариф: ручной «стенд» из меню Милли, а без него — настоящая подписка аккаунта
@@ -639,7 +645,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const tier = milliPreviewTier() ?? accountTier()
     return devFetch<T>('/milli-test' + path, init, { 'Content-Type': 'application/json', ...(tier ? { 'x-milli-tier': tier } : {}) })
   }
-  if (import.meta.env.DEV && DEMO_USER && demoOn()) return demoRequest<T>(path, init)
+  if (import.meta.env.DEV && DEMO_USER && demoOn()) return demoRequest<T>(bare, init)
   if (hasTauri() || !import.meta.env.DEV) return api<T>(path, init)
   return devFetch<T>(LAUNCHER_API + path, init, apiHeaders())
 }
@@ -710,7 +716,10 @@ export interface MilliSendExtra {
   pc?: MilliPc | null
   /** Факты о выбранной сборке на ПК (milliLocal.gatherFacts) — графика, бэкапы, доктор. */
   local?: unknown
+  action?: MilliSendAction
 }
+
+export type MilliSendAction = 'accept'
 
 export const milliSend = (text: string, sessionId?: string | null, enhanced = false, extra: MilliSendExtra = {}) =>
   request<MilliReply>(
@@ -724,6 +733,7 @@ export const milliSend = (text: string, sessionId?: string | null, enhanced = fa
       ...(extra.size && extra.size > 0 ? { size: Math.round(extra.size), ...(extra.sizeSaved ? { sizeSaved: true } : {}) } : {}),
       ...(extra.pc && extra.pc.ramMb > 0 ? { pc: extra.pc } : {}),
       ...(extra.local ? { local: extra.local } : {}),
+      ...(extra.action ? { action: extra.action } : {}),
     }),
   )
 
@@ -807,24 +817,24 @@ const pluralRu = (n: number, one: string, few: string, many: string) => {
 }
 
 /** «212 модов» */
-export const milliModsLabel = (n: number) => n + ' ' + pluralRu(n, 'мод', 'мода', 'модов')
+export const milliModsLabel = (n: number) => n + ' ' + pluralRu(n, t('мод'), t('мода'), t('модов'))
 
 /** Оценка веса: средние файлы Modrinth (мод ~5 МБ, РП ~25 МБ, шейдер ~2 МБ). */
 export const milliSizeMb = (p: Pick<MilliPack, 'mods' | 'resourcepacks' | 'shaders'>) => p.mods.length * 5 + p.resourcepacks.length * 25 + p.shaders.length * 2
 
 /** «~120 МБ», «~1,5 ГБ» */
 export const milliSizeText = (mb: number) =>
-  mb < 1000 ? '~' + Math.max(10, Math.round(mb / 10) * 10) + ' МБ' : '~' + (mb / 1024).toFixed(1).replace('.', ',') + ' ГБ'
+  mb < 1000 ? '~' + t('{n} МБ', { n: Math.max(10, Math.round(mb / 10) * 10) }) : '~' + t('{n} ГБ', { n: formatFixed(mb / 1024, 1) })
 
 /** «ОЗУ 6 ГБ» */
-export const milliRamText = (mb: number) => 'ОЗУ ' + (Math.round((mb / 1024) * 2) / 2).toString().replace('.', ',') + ' ГБ'
+export const milliRamText = (mb: number) => t('ОЗУ {n} ГБ', { n: formatNumber(Math.round((mb / 1024) * 2) / 2) })
 
 /** «Скопировать список»: игроку — названия, моддеру — с версиями и ссылками. */
 export function milliPackList(p: MilliPack, modder: boolean): string {
   const tabs: [ 'mods' | 'resourcepacks' | 'shaders', string][] = [
-    ['mods', 'Моды'],
-    ['resourcepacks', 'Ресурс-паки'],
-    ['shaders', 'Шейдеры'],
+    ['mods', t('Моды')],
+    ['resourcepacks', t('Ресурс-паки')],
+    ['shaders', t('Шейдеры')],
   ]
   const lines = [p.title + ' · ' + p.mcVersion + ' ' + (LOADER_LABEL[p.loader] || p.loader), '']
   for (const [tab, ru] of tabs) {

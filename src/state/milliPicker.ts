@@ -3,6 +3,7 @@ import type { MilliItem, MilliLooks } from '../lib/milli'
 import { benchOp } from './milliBench'
 import { sendMilli } from './milli'
 import { milliEmote } from '../components/milli/milliEmotions'
+import { t } from '../i18n'
 
 /*
  * Выбор ресурс-пака или шейдера — часть разговора: Милли присылает варианты
@@ -17,7 +18,7 @@ export const useMilliPicker = create<{ done: Record<string, string> }>(() => ({ 
 
 /** Плитка стиля / уровня во вкладке — просьба к Милли, чтобы показ стал частью диалога. */
 export function openPicker(kind: PickKind, _key: string, label: string) {
-  void sendMilli(kind === 'rp' ? 'Покажи ресурс-паки в стиле «' + label + '»' : 'Покажи ' + label.toLowerCase() + ' шейдеры')
+  void sendMilli(kind === 'rp' ? t('Покажи ресурс-паки в стиле «{style}»', { style: label }) : t('Покажи {style} шейдеры', { style: label.toLowerCase() }))
 }
 
 export function closePicker(msgId: string) {

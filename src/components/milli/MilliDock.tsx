@@ -33,7 +33,8 @@ import {
   showMilliHistory,
   useMilli,
 } from '../../state/milli'
-import { openModal, useUi } from '../../state/ui'
+import { useUi } from '../../state/ui'
+import { openAccountAdd } from '../../state/accountAdd'
 import { useHubTab } from '../playhub/hubTab'
 import { usePlus } from '../../state/plus'
 import { isMilliScreen } from '../../lib/milliScreens'
@@ -42,6 +43,7 @@ import '../../styles/pixel/milli.css'
 
 // Анимации ленты и карточки (моушн-дизайнер): подключаются, как только файл появится.
 import.meta.glob('../../styles/pixel/milli-motion.css', { eager: true })
+import { intlTag, t, useT } from '../../i18n'
 
 /** Правило 11: игроку не больше двух подсказок; «Отмени» не дублирует кнопку «Отменить» события. */
 function replyChips(m: MilliMessage): string[] {
@@ -52,7 +54,7 @@ function replyChips(m: MilliMessage): string[] {
 /** Ответ на «Сколько модов взять?»: запомнить и отправить размер. */
 function pickSize(n: number) {
   saveMilliSize(n)
-  void sendMilli('≈' + n + ' модов', { size: n })
+  void sendMilli(t('≈{n} модов', { n }), { size: n })
 }
 
 /*
@@ -76,50 +78,82 @@ interface Example {
 }
 const EXAMPLES: readonly Example[] = [
   {
-    label: 'Хоррор на выживание',
-    ask: 'Собери страшную хоррор-сборку на выживание: The Broken Script 2.0, преследующие сущности, тёмные ночи и жуткий звук. Должно быть страшно, но играбельно, можно с другом.',
+    get label() {
+      return t('Хоррор на выживание')
+    },
+    get ask() {
+      return t('Собери страшную хоррор-сборку на выживание: The Broken Script 2.0, преследующие сущности, тёмные ночи и жуткий звук. Должно быть страшно, но играбельно, можно с другом.')
+    },
     mod: 'The Broken Script',
     icon: 'steve_glow',
   },
   {
-    label: 'Зомби-апокалипсис',
-    ask: 'Сделай сборку зомби-апокалипсиса в духе The Last of Us: орды умных зомби, разрушенные города, огнестрел, жажда и выживание.',
+    get label() {
+      return t('Зомби-апокалипсис')
+    },
+    get ask() {
+      return t('Сделай сборку зомби-апокалипсиса в духе The Last of Us: орды умных зомби, разрушенные города, огнестрел, жажда и выживание.')
+    },
     mod: 'Zombie Awareness',
     icon: 'zombie_bandage',
   },
   {
-    label: 'Техно с Create',
-    ask: 'Собери техно-сборку вокруг Create 6: механизмы, поезда, автоматизация заводов и дирижабли из Create Aeronautics, с прогрессией от андезита к латуни.',
+    get label() {
+      return t('Техно с Create')
+    },
+    get ask() {
+      return t('Собери техно-сборку вокруг Create 6: механизмы, поезда, автоматизация заводов и дирижабли из Create Aeronautics, с прогрессией от андезита к латуни.')
+    },
     mod: 'Create',
     icon: 'create_cog',
   },
   {
-    label: 'RPG с классами',
-    ask: 'Хочу RPG-сборку с классами (маг, паладин, лучник, разбойник), красивым боем, данжами и боссами.',
+    get label() {
+      return t('RPG с классами')
+    },
+    get ask() {
+      return t('Хочу RPG-сборку с классами (маг, паладин, лучник, разбойник), красивым боем, данжами и боссами.')
+    },
     mod: 'Better Combat',
     icon: 'rpg_sword_shield',
   },
   {
-    label: 'Оптимизация до 300 FPS',
-    ask: 'Сделай максимально лёгкую сборку на последнюю версию для слабого ПК: как ванилла, но FPS в 2–3 раза выше и без фризов.',
+    get label() {
+      return t('Оптимизация до 300 FPS')
+    },
+    get ask() {
+      return t('Сделай максимально лёгкую сборку на последнюю версию для слабого ПК: как ванилла, но FPS в 2–3 раза выше и без фризов.')
+    },
     mod: 'Sodium',
     icon: 'fps_torch',
   },
   {
-    label: 'Улучшенная ванилла',
-    ask: 'Собери ваниль+: тот же Майнкрафт, но красивее и удобнее: шейдеры, живые анимации мобов, мини-карта, звуки шагов, без новых предметов.',
+    get label() {
+      return t('Улучшенная ванилла')
+    },
+    get ask() {
+      return t('Собери ваниль+: тот же Майнкрафт, но красивее и удобнее: шейдеры, живые анимации мобов, мини-карта, звуки шагов, без новых предметов.')
+    },
     mod: 'Fresh Animations',
     icon: 'grass_dandelion',
   },
   {
-    label: 'Магия и заклинания',
-    ask: 'Хочу магическую сборку: заклинания, книги и посохи, магические боссы и подземелья, прокачка мага.',
+    get label() {
+      return t('Магия и заклинания')
+    },
+    get ask() {
+      return t('Хочу магическую сборку: заклинания, книги и посохи, магические боссы и подземелья, прокачка мага.')
+    },
     mod: 'Iron\'s Spells \'n Spellbooks',
     icon: 'spellbook',
   },
   {
-    label: 'Выживание с друзьями',
-    ask: 'Собери кооп-сборку для игры с друзьями на сервере: голосовой чат, общие приваты, телепорты, ферма и немного Create. Не тяжёлая, чтобы тянули все.',
+    get label() {
+      return t('Выживание с друзьями')
+    },
+    get ask() {
+      return t('Собери кооп-сборку для игры с друзьями на сервере: голосовой чат, общие приваты, телепорты, ферма и немного Create. Не тяжёлая, чтобы тянули все.')
+    },
     mod: 'Simple Voice Chat',
     icon: 'friends_heads',
   },
@@ -132,6 +166,7 @@ const EXAMPLES: readonly Example[] = [
  * нажатие отправляет полный запрос.
  */
 function Hotbar() {
+  const t = useT()
   const pending = useMilli((s) => s.pending)
   const open = useMilli((s) => s.open)
   const [sel, setSel] = useState(0)
@@ -153,7 +188,7 @@ function Hotbar() {
       <span key={sel} className="ml-hb-name" aria-hidden="true">
         <b>{cur.label}</b>
       </span>
-      <div className="ml-chips ml-hb" role="group" aria-label="Подсказки">
+      <div className="ml-chips ml-hb" role="group" aria-label={t('Подсказки')}>
         {EXAMPLES.map((x, i) => (
           <button
             key={x.label}
@@ -188,6 +223,7 @@ function Hotbar() {
 }
 
 function Composer() {
+  const t = useT()
   const [text, setText] = useState('')
   const pending = useMilli((s) => s.pending)
   // Счётчик на нуле — отправка ждёт сброса (карточка лимита уже сказала когда).
@@ -210,11 +246,11 @@ function Composer() {
     requestAnimationFrame(() => ref.current?.setSelectionRange(restore.text.length, restore.text.length))
   }, [restore])
   const submit = () => {
-    const t = text.trim()
-    if (!t || pending || out) return
+    const ask = text.trim()
+    if (!ask || pending || out) return
     globe.current?.launch()
     setText('')
-    void sendMilli(t)
+    void sendMilli(ask)
   }
   return (
     <>
@@ -229,7 +265,7 @@ function Composer() {
           <span className="mlc-preset">
             {preset.mcVersion ? <span className="mpk-plate">{preset.mcVersion}</span> : null}
             {preset.loader ? <span className="mpk-plate">{LOADER_LABEL[preset.loader]}</span> : null}
-            <button type="button" className="mpk-x" aria-label="Убрать версию" onClick={() => useMilli.setState({ preset: null })}>
+            <button type="button" className="mpk-x" aria-label={t('Убрать версию')} onClick={() => useMilli.setState({ preset: null })}>
               <PxIcon name="x" size={12} />
             </button>
           </span>
@@ -241,8 +277,8 @@ function Composer() {
               rows={1}
               value={text}
               maxLength={MILLI_TEXT_MAX}
-              aria-label="Сообщение Милли"
-              placeholder="Напиши Милли…"
+              aria-label={t('Сообщение Милли')}
+              placeholder={t('Напиши Милли…')}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -255,11 +291,11 @@ function Composer() {
           <MilliSafe
             fallback={
               pending ? (
-                <button type="button" className="btn md danger mlc-send" aria-label="Остановить" data-track="milli_cancel" onClick={cancelMilli}>
+                <button type="button" className="btn md danger mlc-send" aria-label={t('Остановить')} data-track="milli_cancel" onClick={cancelMilli}>
                   <PxIcon name="x" size={18} />
                 </button>
               ) : (
-                <button type="submit" className="btn md primary mlc-send" aria-label="Отправить" data-track="milli_send" disabled={!text.trim() || out}>
+                <button type="submit" className="btn md primary mlc-send" aria-label={t('Отправить')} data-track="milli_send" disabled={!text.trim() || out}>
                   <PxIcon name="send" size={18} />
                 </button>
               )
@@ -280,10 +316,11 @@ function Composer() {
 }
 
 function Chips({ items, src }: { items: string[]; src: string }) {
+  const t = useT()
   const pending = useMilli((s) => s.pending)
   if (!items.length) return null
   return (
-    <div className="ml-chips" role="group" aria-label="Подсказки">
+    <div className="ml-chips" role="group" aria-label={t('Подсказки')}>
       {items.map((x, i) => (
         <button key={x} type="button" className="seg ml-chip" data-track="milli_chip" data-src={src} data-pos={i} disabled={pending} onClick={() => void sendMilli(x)}>
           {x}
@@ -309,6 +346,7 @@ function gateAfterBuild(): boolean {
 const gateSeen = new Set<string>()
 
 function PlusNudges({ m, asked }: { m: MilliMessage; asked: string }) {
+  const t = useT()
   const status = useMilli((s) => s.status)
   const plans = useMilli((s) => s.plans)
   if (!status || status.plus) return null
@@ -322,15 +360,15 @@ function PlusNudges({ m, asked }: { m: MilliMessage; asked: string }) {
         <button type="button" className="ml-gate" data-track="milli_plus_upsell" data-src={asks ? 'gate' : 'build'} onClick={() => openPlusSheet(asks ? 'gate' : 'build')}>
           <PxArt name="glowstone" size={28} className="mci" />
           <span>
-            {asks ? 'Шейдеры, паки и карты — с PLUS' : 'С PLUS добавлю шейдеры и карту'}
-            <small>Милли поставит их в сборку сама</small>
+            {asks ? t('Шейдеры, паки и карты — с PLUS') : t('С PLUS добавлю шейдеры и карту')}
+            <small>{t('Милли поставит их в сборку сама')}</small>
           </span>
           <em>PLUS</em>
         </button>
       ) : null}
       {left !== null && left > 0 && left <= 3 ? (
         <button type="button" className="ml-low" data-track="milli_plus_upsell" data-src="low" onClick={() => openPlusSheet('low')}>
-          Осталось {left} на сегодня · <b>с PLUS {milliPlanNumbers(plans).plus} в день</b>
+          {t('Осталось {n} на сегодня', { n: left })} · <b>{t('с PLUS {n} в день', { n: milliPlanNumbers(plans).plus })}</b>
         </button>
       ) : null}
     </>
@@ -387,18 +425,20 @@ function Bubble({ m, last, cheer, asked = '' }: { m: MilliMessage; last: boolean
 
 /** Без входа — Милли машет и одна кнопка (владелец 30.09 16:11: «дизайн, а не текст»). */
 function Gate() {
+  const t = useT()
   return (
     <div className="ml-state">
       <Milli size={136} mode="wave" />
-      <button type="button" className="btn lg primary" data-track="milli_login" onClick={() => openModal('accModal')}>
+      <button type="button" className="btn lg primary" data-track="milli_login" onClick={() => openAccountAdd('millida')}>
         <PxIcon name="login" size={12} />
-        Войти
+        {t('Войти')}
       </button>
     </div>
   )
 }
 
 function ErrorCard({ e }: { e: MilliError }) {
+  const t = useT()
   const status = useMilli((s) => s.status)
   if (e.kind === 'limit') {
     const c = status ? (e.scope === 'month' ? status.month : status.day) : null
@@ -408,12 +448,12 @@ function ErrorCard({ e }: { e: MilliError }) {
         <Milli size={56} mode="think" />
         <span className="ml-limit-text">
           <b>{e.text}</b>
-          {when ? <span>Снова {when}</span> : null}
+          {when ? <span>{t('Снова {when}', { when })}</span> : null}
         </span>
         {!status?.plus ? (
           <button type="button" className="btn sm primary ml-plus" data-track="milli_plus_upsell" data-src="limit" onClick={() => openPlusSheet('limit')}>
             <PxIcon name="crown" size={12} />
-            Больше с PLUS
+            {t('Больше с PLUS')}
           </button>
         ) : null}
       </div>
@@ -428,7 +468,7 @@ function ErrorCard({ e }: { e: MilliError }) {
           <span>{e.text}</span>
           {e.retry ? (
             <button type="button" className="btn sm secondary" data-track="milli_retry" onClick={retryMilli}>
-              Повторить
+              {t('Повторить')}
             </button>
           ) : null}
         </div>
@@ -439,6 +479,7 @@ function ErrorCard({ e }: { e: MilliError }) {
 
 
 function Thinking() {
+  const t = useT()
   const [elapsed, setElapsed] = useState(0)
   const stages = useBench((s) => s.progress)
   const editing = useBench((s) => !!s.head)
@@ -451,16 +492,16 @@ function Thinking() {
   const live = stages.some((st) => st.key !== 'plan')
   const step = milliThinkStep(elapsed)
   return (
-    <div className="ml-msg ml-think" aria-busy="true" aria-label="Милли думает">
+    <div className="ml-msg ml-think" aria-busy="true" aria-label={t('Милли думает')}>
       <MilliAva mode="think" spin />
       <div className="ml-col">
         <div className={'ml-bubble ' + (live ? 'ml-think' : 'ml-typing-b')}>
           <MilliSafe fallback={<span aria-live="polite">{step}</span>}>
             {live ? (
-              <MilliProgress stages={stages} title={editing ? 'Правлю сборку…' : 'Собираю сборку…'} onStop={cancelMilli} />
+              <MilliProgress stages={stages} title={editing ? t('Правлю сборку…') : t('Собираю сборку…')} onStop={cancelMilli} />
             ) : (
               // Этапов сборки нет — это обычный ответ в разговоре: просто «печатает».
-              <span className="ml-typing" aria-label="Милли печатает">
+              <span className="ml-typing" aria-label={t('Милли печатает')}>
                 <i />
                 <i />
                 <i />
@@ -474,9 +515,10 @@ function Thinking() {
 }
 
 function History() {
+  const t = useT()
   const history = useMilli((s) => s.history)
   const failed = useMilli((s) => s.historyFailed)
-  if (failed) return <p className="ml-empty-line">История не загрузилась</p>
+  if (failed) return <p className="ml-empty-line">{t('История не загрузилась')}</p>
   if (!history) {
     return (
       <div className="ml-hist">
@@ -486,7 +528,7 @@ function History() {
       </div>
     )
   }
-  if (!history.length) return <p className="ml-empty-line">Чатов пока нет</p>
+  if (!history.length) return <p className="ml-empty-line">{t('Чатов пока нет')}</p>
   return (
     <ul className="ml-hist">
       {history.map((h) => (
@@ -495,8 +537,8 @@ function History() {
             <span className="mcs ml-hist-ic" aria-hidden="true">
               <PxArt name="book_quill" size={32} className="mci" />
             </span>
-            <b>{h.title || 'Без названия'}</b>
-            <i>{new Date(h.updatedAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}</i>
+            <b>{h.title || t('Без названия')}</b>
+            <i>{new Date(h.updatedAt).toLocaleDateString(intlTag(), { day: 'numeric', month: 'short' })}</i>
           </button>
         </li>
       ))}
@@ -505,6 +547,7 @@ function History() {
 }
 
 function Menu({ onClose }: { onClose: () => void }) {
+  const t = useT()
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const down = (e: MouseEvent) => {
@@ -531,23 +574,23 @@ function Menu({ onClose }: { onClose: () => void }) {
   )
   return (
     <div className="ml-menu" role="menu" ref={ref}>
-      {item('book_quill', 'Новый чат', newMilliChat, 'milli_new')}
-      {item('clock', 'История', () => void showMilliHistory(), 'milli_history')}
-      {item('bell', 'Поддержка', () => openExt(SUPPORT_URL), 'support_open')}
-      {item('barrier', 'Закрыть', closeMilli, 'close')}
+      {item('book_quill', t('Новый чат'), newMilliChat, 'milli_new')}
+      {item('clock', t('История'), () => void showMilliHistory(), 'milli_history')}
+      {item('bell', t('Поддержка'), () => openExt(SUPPORT_URL), 'support_open')}
+      {item('barrier', t('Закрыть'), closeMilli, 'close')}
       {milliPreviewOn()
-        ? (['free', 'plus', 'diamond'] as const).map((t) =>
-            item(t === 'free' ? 'iron_ingot' : t === 'plus' ? 'gold_ingot' : 'diamond', (milliPreviewTier() === t ? '✓ ' : '') + 'Стенд: как ' + (t === 'free' ? 'без PLUS' : t === 'plus' ? 'PLUS' : 'Diamond'), () => {
-              setMilliPreviewTier(milliPreviewTier() === t ? null : t)
+        ? (['free', 'plus', 'diamond'] as const).map((tier) =>
+            item(tier === 'free' ? 'iron_ingot' : tier === 'plus' ? 'gold_ingot' : 'diamond', (milliPreviewTier() === tier ? '✓ ' : '') + t('Стенд: как {tier}', { tier: tier === 'free' ? t('без PLUS') : tier === 'plus' ? 'PLUS' : 'Diamond' }), () => {
+              setMilliPreviewTier(milliPreviewTier() === tier ? null : tier)
               void refreshMilliStatus()
-            }, 'milli_preview_' + t),
+            }, 'milli_preview_' + tier),
           )
         : null}
     </div>
   )
 }
 
-const HELLO_FALLBACK = 'Привет! Какую сборку соберём?'
+const helloFallback = () => t('Привет! Какую сборку соберём?')
 
 /**
  * Пустой чат: сцена, приветствие и примеры; Милли тянется к примеру под мышью.
@@ -555,6 +598,7 @@ const HELLO_FALLBACK = 'Привет! Какую сборку соберём?'
  * пузырь невидим (место занято), сбой или >1,5 с — запасная фраза.
  */
 function Hello({ mood }: { mood: MilliMode }) {
+  const t = useT()
   // Без PLUS Милли то и дело «примеряет» золотую корону (владелец: пусть засматривается на PLUS) — 2,4 с из каждых 9.
   const free = useMilli((st) => !!st.status && !st.status.plus)
   const [tryOn, setTryOn] = useState(false)
@@ -597,14 +641,14 @@ function Hello({ mood }: { mood: MilliMode }) {
       {free ? (
         <button type="button" className={'ml-tryon' + (tryOn ? ' on' : '')} data-track="milli_plus_upsell" data-src="tryon" onClick={() => openPlusSheet('tryon')} tabIndex={tryOn ? 0 : -1} aria-hidden={!tryOn}>
           <PxIcon name="crown" size={12} />
-          Милли с PLUS
+          {t('Милли с PLUS')}
         </button>
       ) : null}
       <div className="ml-say" style={g === undefined ? { visibility: 'hidden' } : undefined}>
-        <p className="ml-bubble">{g?.text ?? HELLO_FALLBACK}</p>
+        <p className="ml-bubble">{g?.text ?? helloFallback()}</p>
       </div>
       {chips.length > 0 && (
-        <div className="ml-chips" role="group" aria-label="С чего начать" style={{ justifyContent: 'center', marginTop: 10 }}>
+        <div className="ml-chips" role="group" aria-label={t('С чего начать')} style={{ justifyContent: 'center', marginTop: 10 }}>
           {chips.map((c, i) => (
             <button
               key={c.label}
@@ -627,6 +671,7 @@ function Hello({ mood }: { mood: MilliMode }) {
 }
 
 function Panel() {
+  const t = useT()
   const open = useMilli((s) => s.open)
   const view = useMilli((s) => s.view)
   const messages = useMilli((s) => s.messages)
@@ -737,7 +782,7 @@ function Panel() {
   ) : off || blocked ? (
     <div className="ml-state">
       <Milli size={96} mode="idle" />
-      <b>{off ? 'Милли отдыхает' : 'Милли тебе недоступна'}</b>
+      <b>{off ? t('Милли отдыхает') : t('Милли тебе недоступна')}</b>
     </div>
   ) : view === 'history' ? (
     <History />
@@ -760,7 +805,7 @@ function Panel() {
       className={
         'ml-panel' + (open || shown ? ' on' : '') + (!open && shown ? ' is-closing' : '') + (pending ? ' is-busy' : '') + (mood === 'happy' ? ' is-happy' : '') + ' tier-' + milliLook(status)
       }
-      aria-label="Милли"
+      aria-label={t('Милли')}
       aria-hidden={!open}
       data-section="milli"
     >
@@ -777,7 +822,7 @@ function Panel() {
         <MilliHead mode={mood} />
         {/* С PLUS/Diamond — плашка тарифа с остатком: игрок видит, что он «на максималках». */}
         {signed && status && status.plus ? (
-          <span className={'ml-tierchip is-' + milliLook(status) + (milliLeft(status) === 0 ? ' out' : '')} aria-label={'Осталось ' + milliLeft(status)}>
+          <span className={'ml-tierchip is-' + milliLook(status) + (milliLeft(status) === 0 ? ' out' : '')} aria-label={t('Осталось {n}', { n: milliLeft(status) ?? 0 })}>
             {milliLook(status) === 'diamond' ? <PxArt name="diamond" size={14} className="mci" /> : <PxIcon name="crown" size={12} />}
             {milliLook(status) === 'diamond' ? 'DIAMOND' : 'PLUS'}
             <span className="ml-tierchip-n">{milliLeft(status)}</span>
@@ -785,30 +830,30 @@ function Panel() {
         ) : null}
         {/* С PLUS — следующая ступень: Diamond (вдвое больше сообщений и все награды пропуска сразу). */}
         {signed && status && status.plus && milliLook(status) !== 'diamond' && !off && !blocked ? (
-          <button type="button" className="ml-up is-dia" data-track="milli_plus_upsell" data-src="head_diamond" aria-label="Больше с Diamond" onClick={() => openPlusSheet('head_diamond')}>
-            <PxArt name="diamond" size={14} className="mci" />×{Math.max(2, Math.round(milliPlanNumbers(plans).diamond / Math.max(1, milliPlanNumbers(plans).plus)))} с Diamond
+          <button type="button" className="ml-up is-dia" data-track="milli_plus_upsell" data-src="head_diamond" aria-label={t('Больше с Diamond')} onClick={() => openPlusSheet('head_diamond')}>
+            <PxArt name="diamond" size={14} className="mci" />×{Math.max(2, Math.round(milliPlanNumbers(plans).diamond / Math.max(1, milliPlanNumbers(plans).plus)))} {t('с Diamond')}
           </button>
         ) : null}
         {/* Без PLUS: «осталось» и выгода одной золотой плашкой — видно сразу, клик открывает «Милли на максималках». */}
         {signed && status && !status.plus && !off && !blocked ? (
-          <button type="button" className={'ml-up' + (milliLeft(status) === 0 ? ' out' : '')} data-track="milli_plus_upsell" data-src="head" aria-label={'Осталось ' + milliLeft(status) + '. Больше с PLUS'} onClick={() => openPlusSheet('head')}>
+          <button type="button" className={'ml-up' + (milliLeft(status) === 0 ? ' out' : '')} data-track="milli_plus_upsell" data-src="head" aria-label={t('Осталось {n}. Больше с PLUS', { n: milliLeft(status) ?? 0 })} onClick={() => openPlusSheet('head')}>
             <span className="ml-up-n">{milliLeft(status)}</span>
-            <PxIcon name="crown" size={12} />×{milliPlanNumbers(plans).x} с PLUS
+            <PxIcon name="crown" size={12} />×{milliPlanNumbers(plans).x} {t('с PLUS')}
           </button>
         ) : null}
         <span className="ml-head-gap" />
         {view === 'history' ? (
-          <button type="button" className="ml-hbtn" aria-label="Назад" onClick={() => useMilli.setState({ view: 'chat' })}>
+          <button type="button" className="ml-hbtn" aria-label={t('Назад')} onClick={() => useMilli.setState({ view: 'chat' })}>
             <PxIcon name="chev-l" size={12} />
           </button>
         ) : null}
         <span className="ml-menu-wrap">
-          <button type="button" className="ml-hbtn" aria-label="Меню" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu((v) => !v)}>
+          <button type="button" className="ml-hbtn" aria-label={t('Меню')} aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu((v) => !v)}>
             <PxIcon name="dots" size={12} />
           </button>
           {menu ? <Menu onClose={() => setMenu(false)} /> : null}
         </span>
-        <button type="button" className="ml-hbtn" aria-label="Закрыть" data-sound="close" onClick={closeMilli}>
+        <button type="button" className="ml-hbtn" aria-label={t('Закрыть')} data-sound="close" onClick={closeMilli}>
           <PxIcon name="x" size={12} />
         </button>
       </header>
@@ -822,24 +867,26 @@ function Panel() {
 }
 
 function Fab() {
+  const t = useT()
   return (
-    <button type="button" className="mlf milli-wave-hover" data-sound="open" data-track="milli_fab" aria-label="Милли" onClick={() => openMilli({ src: 'fab' })}>
+    <button type="button" className="mlf milli-wave-hover" data-sound="open" data-track="milli_fab" aria-label={t('Милли')} onClick={() => openMilli({ src: 'fab' })}>
       <Milli size={60} mode="idle" />
-      <span className="mlf-lab">Милли</span>
+      <span className="mlf-lab">{t('Милли')}</span>
     </button>
   )
 }
 
 /** Вне каталога угол — обычная поддержка: чат поддержки Millida в браузере. */
 function SupportFab() {
+  const t = useT()
   return (
     <button
       type="button"
       className="msf"
       data-sound="open"
       data-track="support_fab"
-      aria-label="Поддержка"
-      data-tip="Поддержка"
+      aria-label={t('Поддержка')}
+      data-tip={t('Поддержка')}
       onClick={() => openExt(SUPPORT_URL)}
     >
       <PxIcon name="headset" size={22} />

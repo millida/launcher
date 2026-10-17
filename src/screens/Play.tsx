@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Icon } from '../components/Icon'
+import { useMarketOffers, useT } from '../i18n'
 import { BuildIcon } from '../components/playhub/BuildIcon'
 import { Installs } from '../components/Installs'
 import { LobbyCharacter } from '../components/lobby/LobbyCharacter'
@@ -80,6 +81,7 @@ function ModeReel() {
 }
 
 export function Play({ on }: { on: boolean }) {
+  const t = useT()
   const profiles = useProfiles((s) => s.profiles)
   const picked = useLobby((s) => s.picked)
   const lobbyServers = useLobby((s) => s.servers)
@@ -92,7 +94,8 @@ export function Play({ on }: { on: boolean }) {
   const statsLoaded = usePlayStats((s) => s.loaded)
   const passOpen = useDaily((s) => s.modal)
   const modalHost = useDailyModalHost()
-  const anarchyPromo = usePromo((s) => s.promo.lobby === ANARCHY.mode)
+  const anarchyLobby = usePromo((s) => s.promo.lobby === ANARCHY.mode)
+  const anarchyPromo = useMarketOffers('partners') && anarchyLobby
   const running = useGame((s) => s.list)
   const gameStopping = useGame((s) => s.stopping)
   // Ход подготовки к запуску — прямо на кнопке: скачиваем → запускаем → в игре.
@@ -193,7 +196,7 @@ export function Play({ on }: { on: boolean }) {
       <ModeReel />
     )
   const modeTitle =
-    mode?.kind === 'build' ? mode.name : mode?.kind === 'version' ? 'Minecraft ' + mode.version : mode?.kind === 'premium' ? mode.title : mode?.kind === 'server' ? mode.name : 'Ещё не выбрано'
+    mode?.kind === 'build' ? mode.name : mode?.kind === 'version' ? 'Minecraft ' + mode.version : mode?.kind === 'premium' ? mode.title : mode?.kind === 'server' ? mode.name : t('Ещё не выбрано')
   const partyOther = !!partyGoes && partyGoes !== modeTitle
   const modeMeta =
     mode?.kind === 'build' && sel ? (
@@ -221,12 +224,12 @@ export function Play({ on }: { on: boolean }) {
     mode?.kind === 'premium' ? (
       <>
         <Icon id="i-crown" />
-        Премиум
+        {t('Премиум')}
       </>
     ) : mode?.kind === 'server' ? (
       <>
         <Icon id="i-server" />
-        Сервер
+        {t('Сервер')}
       </>
     ) : null
 
@@ -254,7 +257,7 @@ export function Play({ on }: { on: boolean }) {
           бонуса нет, у «Магазина» «!», пока бонус не забран. */}
       {/* Плитки остаются и в пати (владелец 12.10.2026: «не убирай элементы, вместо баннера — виджет пати»). */}
       <div className="lobby-left">
-        <nav className="lobby-nav" aria-label="Разделы">
+        <nav className="lobby-nav" aria-label={t('Разделы')}>
           <HubTile kind="shop" />
           <HubTile kind="pvp" />
           <HubTile kind="wardrobe" />
@@ -301,14 +304,14 @@ export function Play({ on }: { on: boolean }) {
                 {modeTag && !partyOther ? <span className="mode-tile-tag">{modeTag}</span> : null}
               </span>
               <span className="lobby-mode-body">
-                <span className="lobby-mode-lab">{partyGoes ? 'Пати идёт' : dayZero && !chosen ? 'Начни отсюда' : 'Сегодня играем'}</span>
+                <span className="lobby-mode-lab">{partyGoes ? t('Пати идёт') : dayZero && !chosen ? t('Начни отсюда') : t('Сегодня играем')}</span>
                 <b>{partyGoes || modeTitle}</b>
                 {modeMeta && !partyOther ? <span className="meta">{modeMeta}</span> : null}
                 {packUpdate ? (
                   <span className="meta" id="lobbyPackUpdate">
                     <span className="hero-num">
                       <Icon id="i-download" />
-                      Доступно обновление сборки
+                      {t('Доступно обновление сборки')}
                     </span>
                   </span>
                 ) : null}
@@ -331,7 +334,7 @@ export function Play({ on }: { on: boolean }) {
             >
               <span className="lbl">
                 <Icon id="i-power" />
-                <span id="playLbl">{gameStopping ? 'Останавливаем…' : 'Остановить'}</span>
+                <span id="playLbl">{gameStopping ? t('Останавливаем…') : t('Остановить')}</span>
               </span>
             </button>
           ) : (
@@ -377,18 +380,18 @@ export function Play({ on }: { on: boolean }) {
                     </>
                   ) : inParty ? (
                     <>
-                      {partyMember ? (partyReady ? 'Не готов' : 'Готов') : 'Играть'}
+                      {partyMember ? (partyReady ? t('Не готов') : t('Готов')) : t('Играть')}
                       {/* В пати кнопка говорит, что запустит (владелец 12.10.2026). */}
-                      <span className="play-what">{party?.target ? party.target.title : mode ? modeTitle : 'Куда идём?'}</span>
+                      <span className="play-what">{party?.target ? party.target.title : mode ? modeTitle : t('Куда идём?')}</span>
                     </>
                   ) : (
                     <>
-                      Играть
+                      {t('Играть')}
                       {/* Наиграно по всем сборкам — всегда, с нуля, со ступенью
                           (владелец 06.10.2026: часы — повод похвастаться). */}
                       <span className="play-hours">
                         {tier.reached > 0 ? (
-                          <span className="play-tier" aria-label={'Ступень ' + tier.reached}>
+                          <span className="play-tier" aria-label={t('Ступень {n}', { n: tier.reached })}>
                             <Icon id="i-trophy" />
                             {tier.reached}
                           </span>
@@ -423,31 +426,31 @@ export function Play({ on }: { on: boolean }) {
               }
             >
               <Icon id="i-logout" />
-              Выйти из пати
+              {t('Выйти из пати')}
             </button>
           ) : (
             <PlayChest on={on} dayZero={dayZero} />
           )}
           </div>
           {btn.kind === 'installing' ? (
-            <button className="play-cancel" aria-label="Отменить запуск" data-track="cancel_launch" onClick={cancelPrelaunch}>
+            <button className="play-cancel" aria-label={t('Отменить запуск')} data-track="cancel_launch" onClick={cancelPrelaunch}>
               <Icon id="i-x" />
             </button>
           ) : null}
         </div>
       </div>
         <div className={'wp-pop' + (wp.popOpen ? ' open' : '')} id="wpPop">
-          <div className="cap">Живые обои</div>
+          <div className="cap">{t('Живые обои')}</div>
           <div className="wp-grid" id="wpGrid">
             <div
               className={'wp-item wp-item-pixels' + (wp.wpCur === 'pixels' ? ' on' : '')}
               data-id="pixels"
-              onClick={() => wp.pick('pixels', 'Сцена')}
+              onClick={() => wp.pick('pixels', t('Сцена'))}
             >
               <span className="wp-item-ph" aria-hidden="true">
                 <Icon id="i-grid" />
               </span>
-              <span>Сцена</span>
+              <span>{t('Сцена')}</span>
             </div>
             {VIDEOS.map((v) => (
               <div
@@ -465,7 +468,7 @@ export function Play({ on }: { on: boolean }) {
               </div>
             ))}
           </div>
-          {wp.gallery.length ? <div className="cap">Мои фоны</div> : null}
+          {wp.gallery.length ? <div className="cap">{t('Мои фоны')}</div> : null}
           <div className="wp-grid">
             {wp.gallery.map((c) => (
               <div
@@ -484,10 +487,10 @@ export function Play({ on }: { on: boolean }) {
                     style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
                   />
                 )}
-                <span>{c.name || 'Свой фон'}</span>
+                <span>{c.name || t('Свой фон')}</span>
                 <button
                   className="wp-item-del"
-                  aria-label="Удалить фон"
+                  aria-label={t('Удалить фон')}
                   onClick={(e) => {
                     e.stopPropagation()
                     wp.removeCustom(c.path)
@@ -501,7 +504,7 @@ export function Play({ on }: { on: boolean }) {
               className="wp-item wp-item-add"
               onClick={() => {
                 if (!hasTauri()) {
-                  showToast('Загрузка своего фона доступна в приложении', 'error')
+                  showToast(t('Загрузка своего фона доступна в приложении'), 'error')
                   return
                 }
                 void pickWallpaper()
@@ -510,18 +513,18 @@ export function Play({ on }: { on: boolean }) {
                   })
                   .catch((e) => {
                     console.error('[wallpaper]', e)
-                    showToast('Не удалось загрузить фон', 'error')
+                    showToast(t('Не удалось загрузить фон'), 'error')
                   })
               }}
             >
               <span className="wp-item-ph">
                 <Icon id="i-upload" />
               </span>
-              <span>Загрузить</span>
+              <span>{t('Загрузить')}</span>
             </div>
           </div>
           <div className="wp-row">
-            <span className="lab">Анимация</span>
+            <span className="lab">{t('Анимация')}</span>
             <span
               className={'tgl' + (wp.wpAnimOn ? ' on' : '')}
               id="wpAnim"

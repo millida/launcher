@@ -6,6 +6,7 @@ import { loadFriends } from '../../state/friends'
 import type { FriendRequest } from '../../state/friends'
 import { apiErrorText } from '../../lib/apiError'
 import { showReward } from '../reward/RewardReveal'
+import { t, useT } from '../../i18n'
 
 const post = (path: string, id: string) =>
   api(path, { method: 'POST', body: JSON.stringify({ id }) }).catch(() => {})
@@ -15,19 +16,20 @@ export function newFriend(nick: string, avatar?: string | null) {
   showReward({
     level: 'mid',
     items: [{ name: nick, art: <Head nick={nick} src={avatar || undefined} size={56} /> }],
-    kicker: 'Новый друг',
-    title: nick || 'Новый друг',
-    sub: 'Теперь в друзьях',
+    kicker: t('Новый друг'),
+    title: nick || t('Новый друг'),
+    sub: t('Теперь в друзьях'),
   })
 }
 
 /** Заявки: входящие и отправленные — двумя подсекциями одной вкладки. */
 export function RequestsTab({ incoming, outgoing }: { incoming: FriendRequest[]; outgoing: FriendRequest[] }) {
+  const t = useT()
   if (!incoming.length && !outgoing.length) {
     return (
       <div className="fr-blank">
         <Icon id="i-inbox" />
-        <b>Заявок нет</b>
+        <b>{t('Заявок нет')}</b>
       </div>
     )
   }
@@ -35,13 +37,13 @@ export function RequestsTab({ incoming, outgoing }: { incoming: FriendRequest[];
     <>
       {incoming.length ? (
         <>
-          <div className="fr-cap">{'Входящие · ' + incoming.length}</div>
+          <div className="fr-cap">{t('Входящие · {n}', { n: incoming.length })}</div>
           {incoming.map((r) => (
             <div className="fr-row" key={r.id}>
               <Head nick={r.nickname} src={r.avatarUrl || undefined} size={40} />
               <span className="fr-body">
                 <span className="fr-nick">{r.nickname || ''}</span>
-                <span className="fr-status">Хочет в друзья</span>
+                <span className="fr-status">{t('Хочет в друзья')}</span>
               </span>
               <button
                 className="btn sm primary fr-acc"
@@ -51,12 +53,12 @@ export function RequestsTab({ incoming, outgoing }: { incoming: FriendRequest[];
                   // Раньше «Теперь в друзьях» показывалось и при ошибке: post глотал её.
                   void api('/friends/accept', { method: 'POST', body: JSON.stringify({ id: r.id }) })
                     .then(() => newFriend(r.nickname || '', r.avatarUrl))
-                    .catch((e) => showToast(apiErrorText(e, 'Не удалось принять заявку'), 'error'))
+                    .catch((e) => showToast(apiErrorText(e, t('Не удалось принять заявку')), 'error'))
                     .finally(() => void loadFriends())
                 }
               >
                 <Icon id="i-check" />
-                Принять
+                {t('Принять')}
               </button>
               <button
                 className="btn sm secondary fr-dec"
@@ -65,7 +67,7 @@ export function RequestsTab({ incoming, outgoing }: { incoming: FriendRequest[];
                 onClick={() => void post('/friends/decline', r.id).finally(() => void loadFriends())}
               >
                 <Icon id="i-x" />
-                Отклонить
+                {t('Отклонить')}
               </button>
             </div>
           ))}
@@ -73,13 +75,13 @@ export function RequestsTab({ incoming, outgoing }: { incoming: FriendRequest[];
       ) : null}
       {outgoing.length ? (
         <>
-          <div className="fr-cap">{'Отправленные · ' + outgoing.length}</div>
+          <div className="fr-cap">{t('Отправленные · {n}', { n: outgoing.length })}</div>
           {outgoing.map((r) => (
             <div className="fr-row off" key={r.id}>
               <Head nick={r.nickname} src={r.avatarUrl || undefined} size={40} />
               <span className="fr-body">
                 <span className="fr-nick">{r.nickname || ''}</span>
-                <span className="fr-status">Ждёт ответа</span>
+                <span className="fr-status">{t('Ждёт ответа')}</span>
               </span>
               <button
                 className="btn sm secondary fr-cancel"
@@ -88,7 +90,7 @@ export function RequestsTab({ incoming, outgoing }: { incoming: FriendRequest[];
                 onClick={() => void post('/friends/cancel', r.id).finally(() => void loadFriends())}
               >
                 <Icon id="i-x" />
-                Отменить
+                {t('Отменить')}
               </button>
             </div>
           ))}

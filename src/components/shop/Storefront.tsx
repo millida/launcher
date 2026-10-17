@@ -10,6 +10,7 @@ import { RARITY_ORDER } from './rarity'
 import { FragBar, RarityFx, RarityPlate } from './rarityUi'
 import { isDuoEmote } from '../../lib/duoEmotes'
 import '../../styles/pixel/duo.css'
+import { useT } from '../../i18n'
 
 /** Мастхэвы первыми: легендарные и эпические в начале ряда, порядок службы внутри редкости. */
 export const byRarity = (cards: ShopCard[]): ShopCard[] =>
@@ -32,13 +33,14 @@ export interface BuyProps {
  * наведении на карточку, отмеченное — всегда (владелец 23.09.2026).
  */
 export function WishBtn({ code, wishlist, onWish }: { code: string; wishlist: string[]; onWish: BuyProps['onWish'] }) {
+  const t = useT()
   const on = wishlist.includes(code)
   return (
     <button
       className={'sh-wish' + (on ? ' on' : '')}
       aria-pressed={on}
-      data-tip={on ? 'Уведомим, когда вернётся' : 'Хочу'}
-      aria-label="Хочу"
+      data-tip={on ? t('Уведомим, когда вернётся') : t('Хочу')}
+      aria-label={t('Хочу')}
       data-track={on ? 'wish_off' : 'wish_on'}
       onClick={(e) => {
         e.stopPropagation()
@@ -62,7 +64,7 @@ export function BuyBtn({
   busy,
   onBuy,
   size = 'sm',
-  label = 'Купить',
+  label,
 }: {
   card: ShopCard
   source: ShopSource
@@ -72,11 +74,12 @@ export function BuyBtn({
   size?: 'sm' | 'md'
   label?: string
 }) {
+  const t = useT()
   if (card.owned)
     return (
       <span className={'sh-owned ' + size}>
         <Icon id="i-check" />
-        Куплено
+        {t('Куплено')}
       </span>
     )
   return (
@@ -86,13 +89,14 @@ export function BuyBtn({
       data-track="buy"
       onClick={() => onBuy(card, source)}
     >
-      {label}
+      {label ?? t('Купить')}
     </button>
   )
 }
 
 /** Карточка витрины: одна клетка сетки, одна высота. Название, редкость, цена, кнопка. */
 export function ItemCard({ card, source, i = 0, ...p }: { card: ShopCard; source: ShopSource; i?: number } & BuyProps) {
+  const t = useT()
   const it = card.item
   return (
     <div
@@ -117,7 +121,7 @@ export function ItemCard({ card, source, i = 0, ...p }: { card: ShopCard; source
         {isDuoEmote(it.code) ? (
           <span className="sh-duo">
             <Icon id="i-users" />
-            Вдвоём
+            {t('Вдвоём')}
           </span>
         ) : null}
       </span>
@@ -160,6 +164,7 @@ export function Showcase({
   ...p
 }: { featured: ShopCard | null; deal: ShopCard | null; items: ShopCard[]; refreshAt: string; onTry: () => void; onEnd?: () => void } & BuyProps) {
   // featured/deal бывают null (пустой пул витрины) — карточку просто не рисуем.
+  const t = useT()
   const f = featured?.item
   const d = deal?.item
   // Показ витрины дня — для CTR карточек: предмет дня, скидка, ряд вещей.
@@ -170,8 +175,8 @@ export function Showcase({
   }, [shownKey])
   return (
     <div className="card sh-block" data-section="storefront">
-      <Head title="Витрина дня">
-        <Timer to={refreshAt} label="Новая через" onEnd={onEnd} />
+      <Head title={t('Витрина дня')}>
+        <Timer to={refreshAt} label={t('Новая через')} onEnd={onEnd} />
       </Head>
       <div className="sh-grid sh-hero has-gift">
         <FreeDaily />
@@ -195,7 +200,7 @@ export function Showcase({
             <span className="sh-feat-acts">
               <BuyBtn card={featured} source="featured" balance={p.balance} busy={p.busy} onBuy={p.onBuy} size="md" />
               <button className="btn md secondary" data-track="try_on" onClick={onTry}>
-                Примерить
+                {t('Примерить')}
               </button>
             </span>
           </span>
@@ -262,18 +267,19 @@ export function BundleCard({
   onBuy: (b: ShopBundle) => void
   onEnd?: () => void
 }) {
+  const t = useT()
   const missing = bundle.items.filter((c) => !c.owned).length
   const short = bundle.price - balance
   return (
     <div className="card sh-block sh-bundle" data-section="bundle" data-kind="offer" data-id={bundle.id}>
       <Head title={bundle.title}>
-        <Timer to={bundle.leavesAt} label="Уйдёт через" onEnd={onEnd} />
+        <Timer to={bundle.leavesAt} label={t('Уйдёт через')} onEnd={onEnd} />
         <span className="sh-head-act">
           <Price price={bundle.price} base={bundle.fullPrice} big />
           {missing === 0 ? (
             <span className="sh-owned md">
               <Icon id="i-check" />
-              Всё есть
+              {t('Всё есть')}
             </span>
           ) : (
             <button
@@ -282,7 +288,7 @@ export function BundleCard({
               data-track="buy_bundle"
               onClick={() => onBuy(bundle)}
             >
-              {missing < bundle.items.length ? 'Докупить ' + missing : 'Купить набор'}
+              {missing < bundle.items.length ? t('Докупить {n}', { n: missing }) : t('Купить набор')}
             </button>
           )}
         </span>
@@ -297,7 +303,7 @@ export function BundleCard({
               c.owned ? (
                 <span className="sh-owned sm">
                   <Icon id="i-check" />
-                  Есть
+                  {t('Есть')}
                 </span>
               ) : (
                 <Price price={c.basePrice} />
@@ -312,6 +318,7 @@ export function BundleCard({
 
 /** «Для тебя»: рентген-кейс — герой-карточка на полряда той же сетки, рядом четыре личные карточки. */
 export function ForYou({ lead, cards, refreshAt, ...p }: { lead: ReactNode; cards: ShopCard[]; refreshAt: string } & BuyProps) {
+  const t = useT()
   const shownKey = byRarity(cards)
     .map((c) => c.item.code)
     .join(',')
@@ -320,8 +327,8 @@ export function ForYou({ lead, cards, refreshAt, ...p }: { lead: ReactNode; card
   }, [shownKey])
   return (
     <div className="card sh-block" data-section="shop_foryou">
-      <Head title="Для тебя">
-        <Timer to={refreshAt} label="Новые через" />
+      <Head title={t('Для тебя')}>
+        <Timer to={refreshAt} label={t('Новые через')} />
       </Head>
       <div className={'sh-grid' + (lead ? ' sh-foryou' : ' is-fit')} style={lead ? undefined : gridCols(cards.length)}>
         {lead ? <div className="sh-lead-bare sh-span-hero">{lead}</div> : null}

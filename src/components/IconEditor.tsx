@@ -10,6 +10,7 @@ import {
   swatchBackground,
 } from '../lib/iconArt'
 import type { IconRecipe } from '../lib/iconArt'
+import { useT } from '../i18n'
 
 export function IconEditor({
   title,
@@ -22,6 +23,7 @@ export function IconEditor({
   onCancel: () => void
   onSave: (icon: string, recipe: IconRecipe) => void
 }) {
+  const t = useT()
   const [recipe, setRecipe] = useState<IconRecipe>(() => current || defaultIconRecipe())
   const [preview, setPreview] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -41,7 +43,7 @@ export function IconEditor({
       .catch((e) => {
         if (!alive) return
         setPreview(null)
-        setError('Не удалось собрать иконку: ' + e + '. Выбери другой символ')
+        setError(t('Не удалось собрать иконку: {error}. Выбери другой символ', { error: String(e) }))
       })
     return () => {
       alive = false
@@ -71,7 +73,7 @@ export function IconEditor({
       .then((icon) => onSave(icon, recipe))
       .catch((e) => {
         setSaving(false)
-        setError('Не удалось собрать иконку: ' + e + '. Выбери другой символ')
+        setError(t('Не удалось собрать иконку: {error}. Выбери другой символ', { error: String(e) }))
       })
   }
 
@@ -80,12 +82,12 @@ export function IconEditor({
       <div className="modal mw-lg ic-ed">
         <div className="ic-ed-head">
           <div>
-            <h3 style={{ margin: 0 }}>Редактор иконки</h3>
+            <h3 style={{ margin: 0 }}>{t('Редактор иконки')}</h3>
             <div className="sub" style={{ margin: '2px 0 0' }}>
-              {title ? 'Сборка «' + title + '»' : 'Смешай фон и символ — иконка соберётся сама'}
+              {title ? t('Сборка «{name}»', { name: title }) : t('Смешай фон и символ — иконка соберётся сама')}
             </div>
           </div>
-          <button className="icon-btn" title="Закрыть" data-sound="close" onClick={onCancel}>
+          <button className="icon-btn" title={t('Закрыть')} data-sound="close" onClick={onCancel}>
             <Icon id="i-x" />
           </button>
         </div>
@@ -113,20 +115,20 @@ export function IconEditor({
               onClick={() => setRecipe((cur) => randomIconRecipe(cur))}
             >
               <Icon id="i-restart" />
-              Случайная
+              {t('Случайная')}
             </button>
             {error ? <p className="ic-ed-err">{error}</p> : null}
           </aside>
 
           <div className="ic-ed-panes">
-            <div className="ic-ed-cap">Фон</div>
+            <div className="ic-ed-cap">{t('Фон')}</div>
             <div className="ic-bg-row">
               {ICON_BACKGROUNDS.map((c) => (
                 <button
                   key={c}
                   className={'ic-bg' + (c === recipe.bg ? ' on' : '')}
                   style={{ background: swatchBackground(c) }}
-                  title="Выбрать фон"
+                  title={t('Выбрать фон')}
                   aria-pressed={c === recipe.bg}
                   onClick={() => setRecipe((cur) => ({ ...cur, bg: c }))}
                 >
@@ -138,7 +140,7 @@ export function IconEditor({
                 </button>
               ))}
             </div>
-            <div className="ic-ed-cap">Символ</div>
+            <div className="ic-ed-cap">{t('Символ')}</div>
             <IconGrid
               id="icEdSymbols"
               flat
@@ -150,13 +152,13 @@ export function IconEditor({
         </div>
 
         <div className="ic-ed-foot">
-          <span className="faint-note">Иконка сохраняется в сборке — картинка не нужна.</span>
+          <span className="faint-note">{t('Иконка сохраняется в сборке — картинка не нужна.')}</span>
           <div style={{ display: 'flex', gap: '10px' }}>
             <button className="btn md secondary" data-sound="close" onClick={onCancel}>
-              Отмена
+              {t('Отмена')}
             </button>
             <button className="btn md primary" disabled={saving || (!preview && !!error)} onClick={save}>
-              Сохранить иконку
+              {t('Сохранить иконку')}
             </button>
           </div>
         </div>

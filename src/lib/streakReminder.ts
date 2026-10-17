@@ -4,6 +4,7 @@ import { showDesktopToast } from './desktopToast'
 import { REMIND_BEFORE_MS, keepWeek, reminderDue, toMskMidnight } from './retention'
 import { dailyReady, useDaily } from '../state/daily'
 import { daysWord } from '../components/daily/track'
+import { t } from '../i18n'
 
 const ON_KEY = 'm-streak-remind'
 const LOG_KEY = 'm-streak-remind-log'
@@ -64,8 +65,8 @@ async function check() {
     const shield = (status.shields ?? 0) > 0
     const shown = showDesktopToast({
       uid: 'streak',
-      nick: 'Серия ' + daysWord(status.streak),
-      text: shield ? 'Иначе уйдёт щит' : 'Сгорит через ' + hours + ' ч',
+      nick: t('Серия {days}', { days: daysWord(status.streak) }),
+      text: shield ? t('Иначе уйдёт щит') : t('Сгорит через {n} ч', { n: hours }),
       ts: now,
       kind: 'streak',
       open: 'daily',

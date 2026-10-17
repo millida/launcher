@@ -6,26 +6,27 @@ import { ensureMcVersions } from './mcVersions'
 import { apiErrorText } from '../lib/apiError'
 import { trackFailure } from '../lib/telemetry'
 import { DEFAULT_FILTERS, pageUrl, type ServerFilters } from '../lib/serverQuery'
+import { t } from '../i18n'
 
-const CAT: Record<string, string> = {
-  SURVIVAL: 'Выживание',
-  VANILLA: 'Ванилла',
-  MMORPG: 'РПГ',
+const catName = (): Record<string, string> => ({
+  SURVIVAL: t('Выживание'),
+  VANILLA: t('Ванилла'),
+  MMORPG: t('РПГ'),
   ONEBLOCK: 'OneBlock',
-  ANARCHY: 'Анархия',
-  MINIGAMES: 'Мини-игры',
-  OTHER: 'Разное',
-  CREATIVE: 'Креатив',
+  ANARCHY: t('Анархия'),
+  MINIGAMES: t('Мини-игры'),
+  OTHER: t('Разное'),
+  CREATIVE: t('Креатив'),
   SKYBLOCK: 'SkyBlock',
   ROLEPLAY: 'RP',
-  TECHNIC: 'Техно',
+  TECHNIC: t('Техно'),
   PVP: 'PvP',
-  ADVENTURE: 'Приключения',
-  ECONOMY: 'Экономика',
-  FACTIONS: 'Фракции',
-  HARDCORE: 'Хардкор',
-  MODDED: 'Моды',
-}
+  ADVENTURE: t('Приключения'),
+  ECONOMY: t('Экономика'),
+  FACTIONS: t('Фракции'),
+  HARDCORE: t('Хардкор'),
+  MODDED: t('Моды'),
+})
 
 export type RatingStatus = 'idle' | 'loading' | 'ok' | 'error'
 
@@ -120,7 +121,7 @@ export const toCard = (sv: RatingServer, rank: number): SnapshotServer => ({
   banner: sv.bannerUrl,
   logo: sv.logoUrl,
   versions: serverVersions(sv.versionMajors),
-  cat: CAT[(sv.categories || ['OTHER'])[0]] || 'Разное',
+  cat: catName()[(sv.categories || ['OTHER'])[0]] || t('Разное'),
   motd: (sv.motd || '').slice(0, 120),
   lic: sv.license || '',
 })
@@ -153,7 +154,7 @@ export async function loadLiveRating(patch?: Partial<ServerFilters>) {
     trackFailure('servers', e, { step: 'list' })
     useServers.getState().set({
       status: 'error',
-      error: apiErrorText(e, 'Список серверов не загрузился'),
+      error: apiErrorText(e, t('Список серверов не загрузился')),
     })
   }
   void loadCatalogVersions()

@@ -1,4 +1,5 @@
 import { Icon } from '../Icon'
+import { useT } from '../../i18n'
 import { fmt } from '../../lib/format'
 import { packFacts, priceLabel, type PremiumPack, type PremiumPlan, type PremiumSubscription } from '../../lib/premium'
 import { hasAccess } from './PremiumBuy'
@@ -13,8 +14,9 @@ interface Props {
 
 /// Карточка ленты: арт, бейдж подписки, название, строка фактов и цена.
 export function PremiumCard({ pack, plan, sub, active, onOpen }: Props) {
+  const t = useT()
   const facts = packFacts(pack)
-  const price = hasAccess(pack, sub) ? 'Открыто' : priceLabel(pack, plan)
+  const price = hasAccess(pack, sub) ? t('Открыто') : priceLabel(pack, plan)
   return (
     <button className={'pm-card' + (active ? ' is-active' : '')} onClick={onOpen} data-sound="open">
       <span className="pm-card-art">
@@ -27,7 +29,7 @@ export function PremiumCard({ pack, plan, sub, active, onOpen }: Props) {
         )}
         {pack.inSubscription || pack.source === 'catalog' ? (
           <span className="pm-badge sm">
-            <Icon id="i-crown" /> {pack.inSubscription ? 'Подписка' : 'Платная'}
+            <Icon id="i-crown" /> {pack.inSubscription ? t('Подписка') : t('Платная')}
           </span>
         ) : null}
         <span className="pm-card-name">{pack.title}</span>

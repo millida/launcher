@@ -30,6 +30,7 @@ import {
   startPartyLaunch,
   usePartyStore,
 } from '../state/party'
+import { t } from '../i18n'
 
 const PACKS_KEY = 'm-party-packs'
 
@@ -77,9 +78,9 @@ export async function targetForMode(mode: LobbyMode): Promise<PartyTarget | null
   if (!hasTauri()) return null
   const prof = profilesNow().find((p) => p.name === mode.name)
   if (!prof) return null
-  const ok = await uiConfirm('Друзья получат список модов этой сборки и поставят её у себя.', {
-    title: 'Поделиться сборкой с пати?',
-    confirmLabel: 'Поделиться',
+  const ok = await uiConfirm(t('Друзья получат список модов этой сборки и поставят её у себя.'), {
+    title: t('Поделиться сборкой с пати?'),
+    confirmLabel: t('Поделиться'),
   })
   if (!ok) return null
   const shared = await shareProfile(prof.name)
@@ -118,13 +119,13 @@ function installCatalog(slug: string, title: string): Promise<boolean> {
     const started = runInstall({
       key: keyCatalogPack(slug),
       title,
-      running: 'Скачивание…',
+      running: t('Скачивание…'),
       run: () => installCatalogPack(slug),
       onError: (e) => {
         if (String(e).startsWith(PACK_ACCESS_PREFIX)) {
           const hit = useLobby.getState().premium.find((p) => p.slug === slug || p.id === slug)
           openPremiumPack(hit ? hit.id : slug)
-        } else showToast('Сборка не установилась: ' + String(e), 'error')
+        } else showToast(t('Сборка не установилась: {error}', { error: String(e) }), 'error')
         resolve(false)
       },
       onCancel: () => resolve(false),
@@ -145,13 +146,13 @@ export async function prepareTarget(target: PartyTarget): Promise<boolean> {
   if (target.kind === 'version' || target.kind === 'server') return true
   if (await localBuild(target)) return true
   if (!hasTauri()) {
-    showToast('Установка сборок — в приложении', 'error')
+    showToast(t('Установка сборок — в приложении'), 'error')
     return false
   }
   if (target.kind === 'premium') {
-    const ok = await uiConfirm('У тебя нет сборки «' + target.title + '» этой версии. Поставить?', {
-      title: 'Нужна сборка лидера',
-      confirmLabel: 'Поставить',
+    const ok = await uiConfirm(t('У тебя нет сборки «{name}» этой версии. Поставить?', { name: target.title }), {
+      title: t('Нужна сборка лидера'),
+      confirmLabel: t('Поставить'),
     })
     return ok ? installCatalog(target.ref, target.title) : false
   }
@@ -160,14 +161,14 @@ export async function prepareTarget(target: PartyTarget): Promise<boolean> {
     const prof = await installSharedPack(target.ref)
     const preview = await packPreview(target.ref)
     if (preview.updatedAt !== target.version) {
-      showToast('Лидер успел поменять сборку — дождись новой версии', 'error')
+      showToast(t('Лидер успел поменять сборку — дождись новой версии'), 'error')
       return false
     }
     rememberPack(target.ref, prof.name, preview.updatedAt)
     await useProfiles.getState().refresh()
     return true
   } catch (e) {
-    showToast('Сборка не установилась: ' + String(e), 'error')
+    showToast(t('Сборка не установилась: {error}', { error: String(e) }), 'error')
     return false
   }
 }
@@ -186,7 +187,7 @@ export async function runLaunch(launch: PartyLaunch): Promise<void> {
   }
   const name = await buildFor(target)
   if (!name) {
-    showToast('Сборки пати нет на компьютере — поставь её и нажми «Готов»', 'error')
+    showToast(t('Сборки пати нет на компьютере — поставь её и нажми «Готов»'), 'error')
     return
   }
   if (addr) {
@@ -220,11 +221,11 @@ export function maybeRunLaunch() {
     console.error('[party] launch seq', e)
   }
   if (!party || !launchAgreed(party, launch, me)) {
-    showToast('Лидер запустил игру, но ты не отмечал «Готов» на эту цель — игра не запущена', 'error')
+    showToast(t('Лидер запустил игру, но ты не отмечал «Готов» на эту цель — игра не запущена'), 'error')
     return
   }
   const where = launch.target.kind === 'server' ? launch.target.ref : launch.addr
-  if (where && !isLeader(party, me)) showToast('Пати заходит на сервер ' + where)
+  if (where && !isLeader(party, me)) showToast(t('Пати заходит на сервер {server}', { server: where }))
   void runLaunch(launch)
 }
 
@@ -270,7 +271,7 @@ export async function toggleReady(): Promise<void> {
     return
   }
   if (!party.target) {
-    showToast('Лидер ещё не выбрал, во что играем', 'error')
+    showToast(t('Лидер ещё не выбрал, во что играем'), 'error')
     return
   }
   readyBusy = true
@@ -279,7 +280,7 @@ export async function toggleReady(): Promise<void> {
     if (!(await prepareTarget(target))) return
     const have = await localHave(target)
     if (!sameIdentity(have, target)) {
-      showToast('Сборка не совпала с выбором лидера — попробуй ещё раз', 'error')
+      showToast(t('Сборка не совпала с выбором лидера — попробуй ещё раз'), 'error')
       return
     }
     await setPartyReady(true, have)
@@ -302,14 +303,14 @@ export async function partyPlayPressed(mode: LobbyMode | null): Promise<void> {
     if (party.target) {
       const wait = launchBlock(party)
       if (wait?.kind === 'not_ready') {
-        showToast('Ждём: ' + wait.nicks.join(', '), 'error')
+        showToast(t('Ждём: {nicks}', { nicks: wait.nicks.join(', ') }), 'error')
         return
       }
       await launchPartyTarget()
       return
     }
     if (!mode) {
-      showToast('Сначала выбери, куда идём', 'error')
+      showToast(t('Сначала выбери, куда идём'), 'error')
       return
     }
     const offer = await targetForMode(mode).catch(() => null)
@@ -317,13 +318,13 @@ export async function partyPlayPressed(mode: LobbyMode | null): Promise<void> {
     return
   }
   if (!mode) {
-    showToast('Сначала выбери, во что играем', 'error')
+    showToast(t('Сначала выбери, во что играем'), 'error')
     return
   }
   let current = party
   if (!current.target || !(await targetMatchesMode(current.target, mode))) {
     const target = await targetForMode(mode).catch((e) => {
-      showToast('Не удалось подготовить выбор для пати: ' + String(e), 'error')
+      showToast(t('Не удалось подготовить выбор для пати: {error}', { error: String(e) }), 'error')
       return null
     })
     if (!target) return
@@ -334,7 +335,7 @@ export async function partyPlayPressed(mode: LobbyMode | null): Promise<void> {
   if (!partyWithOthers(current)) return
   const block = launchBlock(current)
   if (block) {
-    showToast(block.kind === 'no_target' ? 'Выбери, во что играем' : 'Ждём: ' + block.nicks.join(', '), 'error')
+    showToast(block.kind === 'no_target' ? t('Выбери, во что играем') : t('Ждём: {nicks}', { nicks: block.nicks.join(', ') }), 'error')
     return
   }
   if (!current.target) return

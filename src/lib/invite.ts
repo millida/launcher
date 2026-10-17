@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 export const INVITE_PREFIX = '⟪mc-invite⟫'
 
 const JOIN_PAGE = 'https://millida.net/join'
@@ -42,7 +43,7 @@ export function parseInvite(text: string): { addr: string; name: string; version
     const o = JSON.parse(text.slice(INVITE_PREFIX.length))
     if (!o || !o.addr) return null
     const ver = cleanVersion(typeof o.version === 'string' ? o.version : '')
-    const base = { addr: String(o.addr), name: String(o.name || 'Сервер') }
+    const base = { addr: String(o.addr), name: String(o.name || t('Сервер')) }
     return ver ? { ...base, version: ver } : base
   } catch {}
   return null

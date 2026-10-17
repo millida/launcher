@@ -9,6 +9,8 @@ import { backdropClose } from '../lib/dismiss'
 import { mirrorAsset } from '../lib/api'
 import { apiErrorText } from '../lib/apiError'
 import { showReward } from './reward/RewardReveal'
+import { formatFixed, intlTag, t, useT } from '../i18n'
+import { hostingPlanPrice, useRegionalPrices, walletMoney } from '../lib/regionalPrices'
 
 export interface HostPlan {
   code: string
@@ -26,19 +28,22 @@ export interface HostPlan {
   featured?: boolean
 }
 
-const PLAY_KINDS: [string, string, string][] = [
-  ['vanilla', 'i-blocks', 'Обычный'],
-  ['modpack', 'i-box', 'Сборка модов'],
-  ['map', 'i-grid', 'Карта'],
-  ['minigames', 'i-users', 'Мини-игры'],
+const PLAY_KINDS: [string, string][] = [
+  ['vanilla', 'i-blocks'],
+  ['modpack', 'i-box'],
+  ['map', 'i-grid'],
+  ['minigames', 'i-users'],
 ]
 
-const gb = (mb?: number) => ((mb || 0) / 1024).toFixed((mb || 0) % 1024 === 0 ? 0 : 1).replace('.', ',')
-const rub = (k?: number) => Math.round((k || 0) / 100).toLocaleString('ru-RU')
+const playKindLabel = (kind: string): string =>
+  kind === 'vanilla' ? t('Обычный') : kind === 'modpack' ? t('Сборка модов') : kind === 'map' ? t('Карта') : t('Мини-игры')
+
+const gb = (mb?: number) => formatFixed((mb || 0) / 1024, (mb || 0) % 1024 === 0 ? 0 : 1)
+const rub = (k?: number) => Math.round((k || 0) / 100).toLocaleString(intlTag())
 
 /** Свой сервер создан — большой миг награды. */
 const serverBorn = (sub: string) =>
-  showReward({ items: [{ name: 'Сервер', icon: 'server' }], tone: 'var(--m-accent)', kicker: 'Свой сервер', title: 'Сервер создаётся', sub })
+  showReward({ items: [{ name: t('Сервер'), icon: 'server' }], tone: 'var(--m-accent)', kicker: t('Свой сервер'), title: t('Сервер создаётся'), sub })
 
 export interface CurseMap {
   id: number
@@ -104,6 +109,8 @@ export function HostPlanPicker({
   onDone: () => void
   onOpenServer?: (id: string) => void
 }) {
+  const t = useT()
+  useRegionalPrices()
   const [plans, setPlans] = useState<HostPlan[]>([])
   const [vis, setVis] = useState(false)
   const [name, setName] = useState('')
@@ -129,7 +136,7 @@ export function HostPlanPicker({
   useEffect(() => {
     if (mode !== 'create' || playKind !== 'map') return
     let dead = false
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       setMaps(null)
       setMapErr('')
       const qs = mapQuery.trim() ? '&query=' + encodeURIComponent(mapQuery.trim()) : ''
@@ -138,18 +145,18 @@ export function HostPlanPicker({
           if (dead) return
           setMaps(Array.isArray(r?.hits) ? r.hits : [])
           if (r?.error) setMapErr(String(r.error))
-          else if (r && r.enabled === false) setMapErr('Каталог карт сейчас недоступен')
+          else if (r && r.enabled === false) setMapErr(t('Каталог карт сейчас недоступен'))
         })
         .catch(() => {
           if (!dead) {
             setMaps([])
-            setMapErr('Каталог карт сейчас недоступен')
+            setMapErr(t('Каталог карт сейчас недоступен'))
           }
         })
     }, 350)
     return () => {
       dead = true
-      clearTimeout(t)
+      clearTimeout(timer)
     }
   }, [mode, playKind, mapQuery])
 
@@ -162,9 +169,9 @@ export function HostPlanPicker({
     // подтверждения (аудит 22.09.2026, docs/audit-2026-09-22/hosting-settings.md).
     if (
       !isFree &&
-      !(await uiConfirm(rub(p.priceKopecks) + ' ₽ в месяц спишем с кошелька Millida.', {
-        title: 'Тариф «' + p.name + '»',
-        confirmLabel: 'Оплатить ' + rub(p.priceKopecks) + ' ₽',
+      !(await uiConfirm(t('{price} в месяц спишем с кошелька Millida.', { price: hostingPlanPrice(p.code, p.priceKopecks ?? 0) ?? '' }), {
+        title: t('Тариф «{name}»', { name: p.name }),
+        confirmLabel: t('Оплатить {price}', { price: hostingPlanPrice(p.code, p.priceKopecks ?? 0) ?? '' }),
         danger: false,
       }))
     )
@@ -198,39 +205,38 @@ export function HostPlanPicker({
               method: 'POST',
               body: JSON.stringify({ projectId: String(mapPick.id), source: 'curseforge' }),
             })
-            serverBorn('С картой «' + mapPick.name + '»')
+            serverBorn(t('С картой «{name}»', { name: mapPick.name }))
           } catch (e) {
             console.error('[hosting] map install', '' + e)
-            serverBorn('Появится в списке через минуту')
+            serverBorn(t('Появится в списке через минуту'))
             showToast(
-              'Сервер создан, но карта «' +
-                mapPick.name +
-                '» не поставилась: ' +
-                apiErrorText(e, 'каталог карт не ответил') +
-                '. Поставь её в панели сервера',
+              t('Сервер создан, но карта «{name}» не поставилась: {error}. Поставь её в панели сервера', {
+                name: mapPick.name,
+                error: apiErrorText(e, t('каталог карт не ответил')),
+              }),
               'error',
             )
           }
         } else {
-          serverBorn('Появится в списке через минуту')
+          serverBorn(t('Появится в списке через минуту'))
         }
       } else {
         await api('/hosting/servers/' + serverId + '/plan', {
           method: 'POST',
           body: JSON.stringify({ code: p.code, period: 'month' }),
         })
-        showReward({ level: 'mid', items: [{ name: p.name, icon: 'server' }], title: 'Тариф изменён', sub: '«' + p.name + '»' })
+        showReward({ level: 'mid', items: [{ name: p.name, icon: 'server' }], title: t('Тариф изменён'), sub: '«' + p.name + '»' })
       }
       onDone()
       onClose()
     } catch (e) {
       const msg = '' + e
       if (insufficient(msg)) {
-        showToast('Не хватает средств на балансе Millida — пополни и повтори', 'error')
+        showToast(t('Не хватает средств на балансе Millida — пополни и повтори'), 'error')
         openExt(WALLET_URL)
       } else {
         console.error('[hosting] plan pick', msg)
-        showToast(apiErrorText(e, 'Не получилось — попробуй ещё раз'), 'error')
+        showToast(apiErrorText(e, t('Не получилось — попробуй ещё раз')), 'error')
       }
     } finally {
       setBusy('')
@@ -243,18 +249,18 @@ export function HostPlanPicker({
       {...backdropClose(onClose)}
     >
       <div className="modal mw-lg">
-        <h2>{mode === 'create' ? 'Новый сервер' : 'Сменить тариф'}</h2>
-        {mode === 'create' && then ? <span className="sub hpp-then">Потом поставим «{then}»</span> : null}
+        <h2>{mode === 'create' ? t('Новый сервер') : t('Сменить тариф')}</h2>
+        {mode === 'create' && then ? <span className="sub hpp-then">{t('Потом поставим «{name}»', { name: then })}</span> : null}
 
         {mode === 'create' ? (
           <>
             <div className="field" style={{ marginBottom: '12px' }}>
-              <label>Название</label>
+              <label>{t('Название')}</label>
               <div className="input">
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder={ownNick || 'Мой сервер'}
+                  placeholder={ownNick || t('Мой сервер')}
                   maxLength={40}
                 />
               </div>
@@ -265,9 +271,9 @@ export function HostPlanPicker({
               ) : null}
             </div>
             <div className="field" style={{ marginBottom: '16px' }}>
-              <label>Во что играем</label>
+              <label>{t('Во что играем')}</label>
               <div className="segs">
-                {PLAY_KINDS.map(([k, ic, lab]) => (
+                {PLAY_KINDS.map(([k, ic]) => (
                   <button
                     key={k}
                     className={'seg' + (playKind === k ? ' on' : '')}
@@ -277,7 +283,7 @@ export function HostPlanPicker({
                     }}
                   >
                     <Icon id={ic} />
-                    {lab}
+                    {playKindLabel(k)}
                   </button>
                 ))}
               </div>
@@ -285,18 +291,18 @@ export function HostPlanPicker({
 
             {playKind === 'map' ? (
               <div className="field" style={{ marginBottom: '16px' }}>
-                <label>{mapPick ? 'Карта: ' + mapPick.name : 'Выбери карту'}</label>
+                <label>{mapPick ? t('Карта: {name}', { name: mapPick.name }) : t('Выбери карту')}</label>
                 <div className="input" style={{ marginBottom: '10px' }}>
                   <input
                     value={mapQuery}
                     onChange={(e) => setMapQuery(e.target.value)}
-                    placeholder="Поиск: Diversity, Parkour, Escape…"
+                    placeholder={t('Поиск: Diversity, Parkour, Escape…')}
                     maxLength={60}
                   />
                 </div>
                 {mapErr ? (
                   <p className="faint-note" style={{ color: 'var(--danger)' }} data-err={mapErr}>
-                    Каталог карт не ответил
+                    {t('Каталог карт не ответил')}
                   </p>
                 ) : maps === null ? (
                   <div style={{ display: 'grid', gap: '8px' }} aria-busy="true">
@@ -305,7 +311,7 @@ export function HostPlanPicker({
                     ))}
                   </div>
                 ) : maps.length === 0 ? (
-                  <p className="faint-note">Ничего не нашлось</p>
+                  <p className="faint-note">{t('Ничего не нашлось')}</p>
                 ) : (
                   <div style={{ display: 'grid', gap: '8px', maxHeight: '230px', overflowY: 'auto' }}>
                     {maps.map((m) => (
@@ -321,7 +327,7 @@ export function HostPlanPicker({
                         <span style={{ minWidth: 0 }}>
                           <span className="plan-name" style={{ display: 'block' }}>{m.name}</span>
                           <span className="plan-tag" style={{ display: 'block' }}>
-                            {m.downloads ? m.downloads.toLocaleString('ru-RU') + ' загрузок' : ''}
+                            {m.downloads ? t('{n} загрузок', { n: m.downloads.toLocaleString(intlTag()) }) : ''}
                           </span>
                         </span>
                       </button>
@@ -333,7 +339,7 @@ export function HostPlanPicker({
 
             {freeServer ? (
               <div className="field" style={{ marginBottom: '16px' }}>
-                <p className="faint-note">Бесплатный сервер уже есть — один на аккаунт</p>
+                <p className="faint-note">{t('Бесплатный сервер уже есть — один на аккаунт')}</p>
                 {onOpenServer ? (
                   <button
                     className="btn sm secondary"
@@ -343,7 +349,7 @@ export function HostPlanPicker({
                       onClose()
                     }}
                   >
-                    Открыть «{freeServer.name || 'мой сервер'}»
+                    {t('Открыть «{name}»', { name: freeServer.name || t('мой сервер') })}
                   </button>
                 ) : null}
               </div>
@@ -354,10 +360,10 @@ export function HostPlanPicker({
         <div className="plan-wallet">
           <span>
             <Icon id="i-wallet" />
-            Баланс Millida: <b>{balance === null ? '—' : rub(balance) + ' ₽'}</b>
+            {t('Баланс Millida:')} <b>{balance === null ? '—' : walletMoney(balance, (k) => rub(k) + ' ₽')}</b>
           </span>
           <button className="btn sm ghost" onClick={() => openExt(WALLET_URL)}>
-            Пополнить
+            {t('Пополнить')}
           </button>
         </div>
 
@@ -399,18 +405,18 @@ export function HostPlanPicker({
                   <div className="plan-head">
                     <span className="plan-name">{p.name}</span>
                     {free && /бесплат/i.test(p.name) ? null : (
-                      <span className="plan-price">{free ? 'Бесплатно' : rub(p.priceKopecks) + ' ₽/мес'}</span>
+                      <span className="plan-price">{free ? t('Бесплатно') : t('{price}/мес', { price: hostingPlanPrice(p.code, p.priceKopecks ?? 0) ?? '' })}</span>
                     )}
                   </div>
-                  {p.featured ? <div className="plan-pick">Берут чаще всего</div> : p.tagline ? <div className="plan-tag">{p.tagline}</div> : null}
+                  {p.featured ? <div className="plan-pick">{t('Берут чаще всего')}</div> : p.tagline ? <div className="plan-tag">{p.tagline}</div> : null}
                   <div className="plan-specs">
-                    {p.ramMb ? <span><Icon id="i-monitor" /> {gb(p.ramMb)} ГБ</span> : null}
+                    {p.ramMb ? <span><Icon id="i-monitor" /> {t('{n} ГБ', { n: gb(p.ramMb) })}</span> : null}
                     {p.maxPlayers || p.playersComfort ? (
                       <span>
-                        <Icon id="i-users" /> {p.maxPlayers ? p.maxPlayers : 'до ' + p.playersComfort} игроков
+                        <Icon id="i-users" /> {p.maxPlayers ? t('{n} игроков', { n: p.maxPlayers }) : t('до {n} игроков', { n: p.playersComfort ?? 0 })}
                       </span>
                     ) : null}
-                    {p.diskMb ? <span><Icon id="i-box" /> {gb(p.diskMb)} ГБ диск</span> : null}
+                    {p.diskMb ? <span><Icon id="i-box" /> {t('{n} ГБ диск', { n: gb(p.diskMb) })}</span> : null}
                   </div>
                   <button
                     className={'btn sm ' + (isCur ? 'ghost' : p.code === mainCode ? 'primary' : 'secondary')}
@@ -420,16 +426,16 @@ export function HostPlanPicker({
                   >
                     {isCur ? null : free ? <Icon id="i-play" /> : <Icon id="i-wallet" />}
                     {isCur
-                      ? 'Текущий тариф'
+                      ? t('Текущий тариф')
                       : busy === p.code
-                        ? 'Оформляем…'
+                        ? t('Оформляем…')
                         : freeBlocked
-                          ? 'Бесплатный уже есть'
+                          ? t('Бесплатный уже есть')
                           : needMap
-                            ? 'Сначала выбери карту'
+                            ? t('Сначала выбери карту')
                             : free
-                              ? 'Запустить бесплатно'
-                              : 'Оплатить ' + rub(p.priceKopecks) + ' ₽'}
+                              ? t('Запустить бесплатно')
+                              : t('Оплатить {price}', { price: hostingPlanPrice(p.code, p.priceKopecks ?? 0) ?? '' })}
                   </button>
                 </div>
               )
@@ -438,7 +444,7 @@ export function HostPlanPicker({
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
-          <button className="btn sm ghost" onClick={onClose}>Закрыть</button>
+          <button className="btn sm ghost" onClick={onClose}>{t('Закрыть')}</button>
         </div>
       </div>
     </div>

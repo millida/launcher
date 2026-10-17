@@ -1,6 +1,7 @@
 // Settings for voice calls to friends: the Millida API gives the list of STUN/TURN servers (/friends/call/ice). If there is no answer, the fallback is
 // the public STUN servers stun.cloudflare.com and stun.l.google.com (they see your IP; sound goes straight between the people on the call).
 import { api } from '../api'
+import { t } from '../../i18n'
 
 export interface IceConfig {
   iceServers: RTCIceServer[]
@@ -24,7 +25,7 @@ export async function iceConfig(): Promise<IceConfig> {
       '/friends/call/ice',
     )
     const servers = (r.iceServers || []).filter((s) => s && s.urls && s.urls.length)
-    if (!servers.length) throw new Error('пустой список')
+    if (!servers.length) throw new Error(t('пустой список'))
     const config: IceConfig = { iceServers: servers, relayOnly: !!r.relayOnly }
     // Обновляем за пять минут до конца: выданный впритык логин протухнет посреди дозвона.
     const ttl = Math.max(300, (r.ttlSeconds || 3600) - 300)

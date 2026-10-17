@@ -9,11 +9,13 @@ import { loadInvites } from '../lib/referrals'
 import { APP_ICONS, chosenIcon, iconUnlocked, pickAppIcon } from '../lib/appIcon'
 import type { AppIconId } from '../lib/appIcon'
 import '../styles/pixel/invite.css'
+import { useT } from '../i18n'
 
 /// Выбор иконки окна, панели задач и Dock. Закрытые иконки показаны целиком и
 /// крупно — с замком в углу и условием под именем («Пригласи 10 друзей»,
 /// «Только с PLUS»). PLUS и Diamond читаются с аккаунта, остальное — с лестницы друзей.
 export function AppIconPicker() {
+  const t = useT()
   const plus = usePlus((s) => s.active)
   const diamond = usePlus((s) => s.diamond)
   const [perks, setPerks] = useState<string[]>([])
@@ -44,7 +46,7 @@ export function AppIconPicker() {
   }
 
   return (
-    <div className="ico-grid" role="radiogroup" aria-label="Иконка приложения">
+    <div className="ico-grid" role="radiogroup" aria-label={t('Иконка приложения')}>
       {APP_ICONS.map((i) => {
         const open = iconUnlocked(i.id, access)
         return (
@@ -69,7 +71,7 @@ export function AppIconPicker() {
               {picked === i.id ? (
                 <>
                   <Icon id="i-check" />
-                  Выбрана
+                  {t('Выбрана')}
                 </>
               ) : open ? null : (
                 i.need

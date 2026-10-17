@@ -1,9 +1,11 @@
 import { Icon } from './Icon'
 import { togglePause, type InstallTask } from '../state/installs'
+import { useT } from '../i18n'
 
 export function PauseInstall({ task, className, withText = false }: { task: InstallTask | undefined; className: string; withText?: boolean }) {
+  const t = useT()
   if (!task || task.state !== 'run' || !task.pausable) return null
-  const label = task.paused ? 'Продолжить' : 'Пауза'
+  const label = task.paused ? t('Продолжить') : t('Пауза')
   return (
     <button
       className={className}

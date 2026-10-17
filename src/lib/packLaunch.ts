@@ -9,6 +9,7 @@ import { showToast } from '../state/ui'
 import { keyCatalogPack } from './installKeys'
 import { catalogPackSlug, packLaunchStep, packNeedsCheck, packUpdateFor } from './packUpdate'
 import type { PackCard, PackLaunchStep, PackUpdate, PackUpdateOutcome } from './packUpdate'
+import { t } from '../i18n'
 
 const CARD_SYNC_GAP_MS = 10 * 60 * 1000
 const cardSynced = new Map<string, number>()
@@ -74,10 +75,10 @@ export const packUpdateJob = (profile: string, slug: string): Promise<Profile> =
     return p
   })
 
-function outcomeOf(t: InstallTask | undefined): PackUpdateOutcome | null {
-  if (t && t.state === 'run') return null
-  if (!t || t.state === 'done') return t ? { kind: 'done' } : { kind: 'failed', error: 'обновление остановилось без ответа' }
-  return taskCancelled(t) ? { kind: 'cancelled' } : { kind: 'failed', error: t.msg }
+function outcomeOf(task: InstallTask | undefined): PackUpdateOutcome | null {
+  if (task && task.state === 'run') return null
+  if (!task || task.state === 'done') return task ? { kind: 'done' } : { kind: 'failed', error: t('обновление остановилось без ответа') }
+  return taskCancelled(task) ? { kind: 'cancelled' } : { kind: 'failed', error: task.msg }
 }
 
 function watchUpdate(key: string, onProgress: (pct: number) => void): Promise<PackUpdateOutcome> {
@@ -118,11 +119,11 @@ export function runPackUpdateForLaunch(profile: string, u: PackUpdate, onProgres
     runInstall({
       key,
       title: profile,
-      running: 'Обновляем…',
+      running: t('Обновляем…'),
       run: () => packUpdateJob(profile, u.slug),
       onDone: () => {
         void useProfiles.getState().refresh()
-        showToast('Сборка «' + profile + '» обновлена до версии ' + u.to, 'ok', 'achievement')
+        showToast(t('Сборка «{name}» обновлена до версии {version}', { name: profile, version: u.to }), 'ok', 'achievement')
       },
       onError: () => {},
       onCancel: () => {},

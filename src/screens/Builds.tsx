@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useState } from 'react'
 import { Icon } from '../components/Icon'
+import { useT } from '../i18n'
 import { BuildCard } from '../components/BuildCard'
 import { fmtPlaytime, plural, whenText } from '../lib/format'
 import { useProfiles } from '../state/profiles'
@@ -24,6 +25,7 @@ function readSkip(): boolean {
 }
 
 export function Builds({ on }: { on: boolean }) {
+  const t = useT()
   const { profiles, groups } = useProfiles()
   const updates = useModUpdates()
   const stats = usePlayStats((s) => s.stats)
@@ -61,7 +63,7 @@ export function Builds({ on }: { on: boolean }) {
 
   const fillIcons = async () => {
     if (!hasTauri()) {
-      showToast('Доступно в приложении', 'error')
+      showToast(t('Доступно в приложении'), 'error')
       return
     }
     setIconsBusy(true)
@@ -85,18 +87,18 @@ export function Builds({ on }: { on: boolean }) {
     if (done) {
       skipIcons()
       showToast(
-        'Готово: ' + done + ' ' + plural(done, 'иконка', 'иконки', 'иконок') + ' на месте',
+        plural(done, t('Готово: {n} иконка на месте', { n: done }), t('Готово: {n} иконки на месте', { n: done }), t('Готово: {n} иконок на месте', { n: done })),
         'ok',
         'achievement',
       )
     }
-    if (failure) showToast('Не все иконки собрались: ' + failure, 'error')
+    if (failure) showToast(t('Не все иконки собрались: {error}', { error: failure }), 'error')
   }
 
   return (
     <section className={'screen' + (on ? ' on' : '')} id="s-builds">
       <div className="page-head">
-        <h1>Сборки</h1>
+        <h1>{t('Сборки')}</h1>
         {/* Пустой экран держит все входы в своей карточке: тулбар с теми же
             кнопками над ней был дублем (аудит 22.09.2026). «По коду» живёт
             в окне «Импорт» — это третий способ принести чужую сборку. */}
@@ -105,7 +107,7 @@ export function Builds({ on }: { on: boolean }) {
             {updates.count > 0 ? (
               <button className="btn sm secondary" disabled={updates.updating} onClick={() => void updates.runAll()}>
                 <Icon id="i-restart" />
-                {updates.updating ? 'Обновляем…' : 'Обновить моды'}
+                {updates.updating ? t('Обновляем…') : t('Обновить моды')}
                 <span className="nav-count" style={{ marginLeft: '4px' }}>
                   {updates.count}
                 </span>
@@ -113,11 +115,11 @@ export function Builds({ on }: { on: boolean }) {
             ) : null}
             <button className="btn sm secondary" data-sound="open" onClick={() => openModal('impModal')}>
               <Icon id="i-download" />
-              Импорт
+              {t('Импорт')}
             </button>
             <button className="btn sm primary" data-sound="open" onClick={() => openModal('nbModal')}>
               <Icon id="i-plus" />
-              Новая сборка
+              {t('Новая сборка')}
             </button>
           </div>
         ) : null}
@@ -126,20 +128,20 @@ export function Builds({ on }: { on: boolean }) {
       {stats.total_seconds ? (
         <div className="card play-stat">
           <div className="play-stat-main">
-            <span className="play-stat-cap">Наиграно</span>
+            <span className="play-stat-cap">{t('Наиграно')}</span>
             <b className="play-stat-total">{fmtPlaytime(stats.total_seconds)}</b>
             {verifiedSeconds !== null && verifiedSeconds < stats.total_seconds ? (
-              <span className="faint-note">на сайте {fmtPlaytime(verifiedSeconds)}</span>
+              <span className="faint-note">{t('на сайте {time}', { time: fmtPlaytime(verifiedSeconds) })}</span>
             ) : null}
             {stats.sessions ? (
               <span className="faint-note">
-                {stats.sessions + ' ' + plural(stats.sessions, 'запуск', 'запуска', 'запусков')}
+                {plural(stats.sessions, t('{n} запуск', { n: stats.sessions }), t('{n} запуска', { n: stats.sessions }), t('{n} запусков', { n: stats.sessions }))}
               </span>
             ) : null}
           </div>
           {lastServerName ? (
             <div className="play-stat-srv">
-              <span className="play-stat-cap">Последний сервер</span>
+              <span className="play-stat-cap">{t('Последний сервер')}</span>
               <b>{lastServerName}</b>
               <span className="faint-note">{whenText(stats.last_at)}</span>
               {stats.last_server ? (
@@ -152,14 +154,14 @@ export function Builds({ on }: { on: boolean }) {
                   }}
                 >
                   <Icon id="i-play" />
-                  Играть
+                  {t('Играть')}
                 </button>
               ) : null}
             </div>
           ) : null}
           {stats.servers.length > 1 ? (
             <div className="play-stat-list">
-              <span className="play-stat-cap">Любимые серверы</span>
+              <span className="play-stat-cap">{t('Любимые серверы')}</span>
               {stats.servers.slice(0, 3).map((s) => (
                 <span className="play-stat-row" key={s.key}>
                   <span>{s.label || s.key}</span>
@@ -179,15 +181,15 @@ export function Builds({ on }: { on: boolean }) {
             <img src="/block-icons/Block35Millida.png" alt="" />
           </span>
           <div className="icon-nudge-text">
-            <b>{'Иконки для ' + iconless.length + ' ' + plural(iconless.length, 'сборки', 'сборок', 'сборок')}</b>
+            <b>{plural(iconless.length, t('Иконки для {n} сборки', { n: iconless.length }), t('Иконки для {n} сборок', { n: iconless.length }), t('Иконки для {n} сборок', { n: iconless.length }))}</b>
           </div>
           <div className="icon-nudge-acts">
             <button className="btn sm ghost" disabled={iconsBusy} onClick={skipIcons}>
-              Не надо
+              {t('Не надо')}
             </button>
             <button className="btn sm primary" disabled={iconsBusy} onClick={() => void fillIcons()}>
               <Icon id="i-brush" />
-              {iconsBusy ? 'Собираем…' : 'Раздать'}
+              {iconsBusy ? t('Собираем…') : t('Раздать')}
             </button>
           </div>
         </div>
@@ -213,16 +215,16 @@ export function Builds({ on }: { on: boolean }) {
               <img src="/block-icons/Block45Millida.png" alt="" />
               <img src="/block-icons/Block35Millida.png" alt="" />
             </span>
-            <b className="bx-empty-title">Создай первую сборку</b>
+            <b className="bx-empty-title">{t('Создай первую сборку')}</b>
             <div className="bx-empty-acts">
               <button className="btn md primary" data-sound="open" onClick={() => openModal('nbModal')}>
-                <Icon id="i-plus" /> Новая сборка
+                <Icon id="i-plus" /> {t('Новая сборка')}
               </button>
               <button className="btn md secondary" onClick={() => setScreen('mods')}>
-                <Icon id="i-blocks" /> Готовые сборки
+                <Icon id="i-blocks" /> {t('Готовые сборки')}
               </button>
               <button className="btn md secondary" data-sound="open" onClick={() => openModal('impModal')}>
-                <Icon id="i-download" /> Импорт
+                <Icon id="i-download" /> {t('Импорт')}
               </button>
             </div>
           </div>

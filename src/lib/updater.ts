@@ -17,6 +17,7 @@ import { useUpdate } from '../state/update'
 import { openExt } from './api'
 import { reportError } from './crash'
 import { cancelAppExit, trackAppExit, trackFailure } from './telemetry'
+import { t } from '../i18n'
 
 export interface UpdateInfo {
   version: string
@@ -90,9 +91,8 @@ async function noticeManagedUpdate(): Promise<FallbackUpdate | null> {
 function showManagedUpdateHint() {
   const version = useUpdate.getState().version
   showToast(
-    (version ? 'Вышла версия ' + version + '. ' : '') +
-      'Обнови лаунчер в магазине приложений или командой: ' +
-      FLATPAK_UPDATE_COMMAND,
+    (version ? t('Вышла версия {version}.', { version }) + ' ' : '') +
+      t('Обнови лаунчер в магазине приложений или командой: {command}', { command: FLATPAK_UPDATE_COMMAND }),
   )
 }
 
@@ -108,7 +108,7 @@ function remember(upd: Update) {
 }
 
 function ensureDownloaded(): Promise<Update> {
-  if (!current) return Promise.reject(new Error('нет обновления'))
+  if (!current) return Promise.reject(new Error(t('нет обновления')))
   const upd = current
   if (downloaded) return Promise.resolve(upd)
   if (!downloading) {
@@ -227,7 +227,7 @@ const TRANSLOCATED_RE = /запущен из образа/i
 
 function noticeIfTranslocated(e: unknown): boolean {
   if (!TRANSLOCATED_RE.test(String(e))) return false
-  showToast('Лаунчер запущен из образа. Перенеси Millida в «Программы» — иначе обновления не установятся', 'error')
+  showToast(t('Лаунчер запущен из образа. Перенеси Millida в «Программы» — иначе обновления не установятся'), 'error')
   return true
 }
 
@@ -307,11 +307,11 @@ export async function bootUpdate(): Promise<boolean> {
         return false
       }
       const file = staged
-      if (!file) throw new Error('нет файла обновления')
+      if (!file) throw new Error(t('нет файла обновления'))
       st.set({ bootPhase: 'installing' })
       noteBootTry('fallback:' + f.version)
       const res = await updateFallbackRun(file)
-      if (!res.started) throw new Error('установщик не запустился')
+      if (!res.started) throw new Error(t('установщик не запустился'))
       await quit()
       return true
     }
@@ -413,7 +413,7 @@ export async function installUpdateOnExit(): Promise<boolean> {
   if (fallbackFile) {
     installing = true
     useUpdate.getState().set({ busy: true })
-    showToast('Ставим обновление ' + (fallback ? fallback.version : '') + '…')
+    showToast(t('Ставим обновление {version}…', { version: fallback ? fallback.version : '' }))
     try {
       await updateFallbackRun(fallbackFile, false)
     } catch (e) {
@@ -425,7 +425,7 @@ export async function installUpdateOnExit(): Promise<boolean> {
   if (!downloaded || !current) return false
   installing = true
   useUpdate.getState().set({ busy: true })
-  showToast('Ставим обновление ' + (useUpdate.getState().version || '') + '…')
+  showToast(t('Ставим обновление {version}…', { version: useUpdate.getState().version || '' }))
   try {
     await current.install({ restartAfterInstall: false })
   } catch (e) {
@@ -440,10 +440,10 @@ export async function applyFallback(): Promise<void> {
   const st = useUpdate.getState()
   if (st.busy) return
   st.set({ busy: true, manual: true })
-  if (!fallbackFile) showToast('Качаем обновление ' + (st.version || '') + '…')
+  if (!fallbackFile) showToast(t('Качаем обновление {version}…', { version: st.version || '' }))
   try {
     const file = await stageFallback()
-    if (!file) throw new Error('нет файла обновления')
+    if (!file) throw new Error(t('нет файла обновления'))
     const res = await updateFallbackRun(file)
     if (res.started) {
       await quit()
@@ -452,14 +452,14 @@ export async function applyFallback(): Promise<void> {
     st.set({ busy: false })
     showToast(
       /\.(deb|rpm)$/i.test(res.path)
-        ? 'Обновление скачано — подтверди установку в открывшемся установщике пакетов'
-        : 'Обновление скачано — замени приложение файлом из открытой папки',
+        ? t('Обновление скачано — подтверди установку в открывшемся установщике пакетов')
+        : t('Обновление скачано — замени приложение файлом из открытой папки'),
     )
   } catch (e) {
     st.set({ busy: false, failed: true })
     if (noticeIfTranslocated(e)) return
     updateFailed('updater-fallback', e)
-    showToast('Обновиться не вышло: ' + e, 'error')
+    showToast(t('Обновиться не вышло: {error}', { error: String(e) }), 'error')
   }
 }
 
@@ -476,13 +476,13 @@ export async function applyUpdate(): Promise<void> {
       await applyFallback()
       if (!useUpdate.getState().failed) return
     }
-    showToast('Автоматически обновиться не вышло — скачай установщик на открывшейся странице и запусти его поверх', 'error')
+    showToast(t('Автоматически обновиться не вышло — скачай установщик на открывшейся странице и запусти его поверх'), 'error')
     openExt(DOWNLOAD_PAGE)
     return
   }
   if (!current || st.manual) {
     if (!fallback && !(await probeFallback())) {
-      showToast('Обновление недоступно — скачай лаунчер с сайта', 'error')
+      showToast(t('Обновление недоступно — скачай лаунчер с сайта'), 'error')
       st.set({ failed: true })
       return
     }
@@ -491,7 +491,7 @@ export async function applyUpdate(): Promise<void> {
   }
   st.set({ busy: true })
   try {
-    if (!downloaded) showToast('Качаем обновление ' + (st.version || '') + '…')
+    if (!downloaded) showToast(t('Качаем обновление {version}…', { version: st.version || '' }))
     const upd = await ensureDownloaded()
     installing = true
     trackAppExit()
@@ -502,36 +502,36 @@ export async function applyUpdate(): Promise<void> {
     st.set({ busy: false })
     markPluginFailed(current.version)
     updateFailed('updater', e)
-    showToast('Ставим запасным способом…')
+    showToast(t('Ставим запасным способом…'))
     if (await probeFallback()) await applyFallback()
     else {
       st.set({ failed: true })
-      showToast('Не удалось обновиться: ' + e, 'error')
+      showToast(t('Не удалось обновиться: {error}', { error: String(e) }), 'error')
     }
   }
 }
 
 export async function checkForUpdate(loud = false): Promise<UpdateInfo | null> {
   if (!updatesAllowed()) {
-    if (loud) showToast(hasTauri() ? 'В дев-запуске обновления отключены' : 'Обновления доступны в приложении лаунчера', 'error')
+    if (loud) showToast(hasTauri() ? t('В дев-запуске обновления отключены') : t('Обновления доступны в приложении лаунчера'), 'error')
     return null
   }
   if (await updatesManagedOutside()) {
     const f = await noticeManagedUpdate()
     if (f && loud) showManagedUpdateHint()
-    else if (loud) showToast('Установлена последняя версия')
+    else if (loud) showToast(t('Установлена последняя версия'))
     return f ? pending : null
   }
   try {
     if (await pluginGaveUp()) {
       const f = await probeFallback()
-      if (!f && loud) showToast('Установлена последняя версия')
+      if (!f && loud) showToast(t('Установлена последняя версия'))
       return pending
     }
     const upd = await check()
     if (!upd) {
       const f = await probeFallback()
-      if (!f && loud) showToast('Установлена последняя версия')
+      if (!f && loud) showToast(t('Установлена последняя версия'))
       return f ? pending : null
     }
     if (!current || current.version !== upd.version) remember(upd)
@@ -545,7 +545,7 @@ export async function checkForUpdate(loud = false): Promise<UpdateInfo | null> {
     updateFailed('updater', e)
     const f = await probeFallback()
     if (f) return pending
-    if (loud) showToast('Не удалось проверить обновления: ' + e, 'error')
+    if (loud) showToast(t('Не удалось проверить обновления: {error}', { error: String(e) }), 'error')
     return null
   }
 }

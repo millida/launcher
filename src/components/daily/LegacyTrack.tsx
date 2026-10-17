@@ -2,6 +2,7 @@ import { Icon } from '../Icon'
 import { ChestArt } from './ChestArt'
 import { Ruby } from '../Ruby'
 import { dayState, rubiesText, trackDays, type DailyView, type TrackDay } from './track'
+import { useT } from '../../i18n'
 
 /*
  * Трек старой схемы (до 23.09.2026): служба шлёт только `cycle` с рубинами
@@ -24,6 +25,7 @@ function Cell({
   label: string
   onLocked?: () => void
 }) {
+  const t = useT()
   const part = kind === 'plus' ? day.bonus : day.base
   const chest = kind === 'free' && !!part.chest
   const text = rubiesText(part)
@@ -34,7 +36,7 @@ function Cell({
         <span className="dp-day">{state === 'got' ? <Icon id="i-check" /> : label}</span>
       ) : null}
       {chest ? <ChestArt ready={false} size={34} /> : <Ruby size={kind === 'plus' ? 26 : 24} />}
-      <b>{chest ? 'Сундук' : text || '—'}</b>
+      <b>{chest ? t('Сундук') : text || '—'}</b>
       {locked ? (
         <span className="dp-mark lock">
           <Icon id="i-lock" />
@@ -47,7 +49,7 @@ function Cell({
     </>
   )
   return locked && onLocked ? (
-    <button type="button" className={cls} onClick={onLocked} aria-label={'PLUS, день ' + day.day}>
+    <button type="button" className={cls} onClick={onLocked} aria-label={t('PLUS, день {n}', { n: day.day })}>
       {inner}
     </button>
   ) : (
@@ -57,11 +59,12 @@ function Cell({
 
 
 export function LegacyTrack({ status, own, onPlus }: { status: DailyView; own: boolean; onPlus: () => void }) {
+  const t = useT()
   const days = trackDays(status)
   const label = (day: number) => {
-    if (status.cycleDay === day) return status.claimedToday ? 'Взято' : 'Сегодня'
-    if (status.cycleDay + 1 === day) return 'Завтра'
-    return 'День ' + day
+    if (status.cycleDay === day) return status.claimedToday ? t('Взято') : t('Сегодня')
+    if (status.cycleDay + 1 === day) return t('Завтра')
+    return t('День {n}', { n: day })
   }
   return (
     <div className="dp-track" style={{ gridTemplateColumns: '64px repeat(' + days.length + ', minmax(0, 1fr))' }}>
@@ -80,7 +83,7 @@ export function LegacyTrack({ status, own, onPlus }: { status: DailyView; own: b
           onLocked={onPlus}
         />
       ))}
-      <span className="dp-cap">Обычная</span>
+      <span className="dp-cap">{t('Обычная')}</span>
       {days.map((d) => (
         <Cell key={'f' + d.day} kind="free" day={d} state={dayState(status, d.day)} locked={false} label={label(d.day)} />
       ))}

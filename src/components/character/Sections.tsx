@@ -1,4 +1,5 @@
 import { PxIcon } from '../PxIcon'
+import { useT } from '../../i18n'
 
 /**
  * Навигация гардероба — два уровня, не больше (Roblox, Essential, Fortnite:
@@ -25,8 +26,9 @@ export function SectionBar({
   active: string
   onPick: (key: string) => void
 }) {
+  const t = useT()
   return (
-    <div className="ch-secs" role="tablist" aria-label="Разделы гардероба">
+    <div className="ch-secs" role="tablist" aria-label={t('Разделы гардероба')}>
       {sections.map((s) => (
         <button
           key={s.key}
@@ -38,7 +40,7 @@ export function SectionBar({
         >
           <span className="ch-slot-art">
             <PxIcon name={s.icon} className="ch-slot-px" />
-            {s.alert ? <i className="ch-slot-alert" aria-label="Есть награда" /> : null}
+            {s.alert ? <i className="ch-slot-alert" aria-label={t('Есть награда')} /> : null}
           </span>
           <span className="ch-slot-name">{s.name}</span>
         </button>

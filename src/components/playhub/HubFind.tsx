@@ -5,6 +5,7 @@ import { Milli } from '../milli/Milli'
 import { openMilli } from '../../state/milli'
 import { useHubTab } from './hubTab'
 import '../../styles/pixel/hub-ai-intro.css'
+import { useT } from '../../i18n'
 
 /**
  * Первый экран библиотеки (владелец 30.09.2026), как на millida.net/katalog:
@@ -18,6 +19,7 @@ import '../../styles/pixel/hub-ai-intro.css'
  * Пузырь — в портале поверх всего, иначе его срезает шапка библиотеки.
  */
 export function HubFind({ onSearch }: { onSearch: (q: string) => void }) {
+  const t = useT()
   const [q, setQ] = useState('')
   const [say, setSay] = useState(true)
   const [at, setAt] = useState<{ x: number; y: number; tail: number } | null>(null)
@@ -60,10 +62,10 @@ export function HubFind({ onSearch }: { onSearch: (q: string) => void }) {
     >
       <label className="input hs-field hub-find-field">
         <Icon id="i-search" />
-        <input value={q} placeholder="Мод, сборка, карта или просьба к ИИ" maxLength={200} onChange={(e) => setQ(e.target.value)} />
+        <input value={q} placeholder={t('Мод, сборка, карта или просьба к ИИ')} maxLength={200} onChange={(e) => setQ(e.target.value)} />
       </label>
       <button type="submit" className="btn lg primary hub-find-go" data-sound="open" data-track="hub_search">
-        Найти
+        {t('Найти')}
       </button>
       <button type="button" className="btn lg secondary hub-find-ai" data-sound="open" data-track="ai_builder_open" onClick={ask}>
         {/* Милли внутри кнопки: низ спрятан за нижней рамкой, голова и рука выглядывают. */}
@@ -72,7 +74,7 @@ export function HubFind({ onSearch }: { onSearch: (q: string) => void }) {
             <Milli size={64} mode={say ? 'wave' : 'idle'} poke={false} />
           </span>
         </span>
-        Собрать с ИИ
+        {t('Собрать с ИИ')}
       </button>
       {say && at
         ? createPortal(
@@ -82,7 +84,7 @@ export function HubFind({ onSearch }: { onSearch: (q: string) => void }) {
               ref={bub}
               style={{ left: at.x, top: at.y, visibility: at.tail ? 'visible' : 'hidden', ['--tail' as string]: `${at.tail - 6}px` }}
             >
-              Привет! Могу собрать тебе сборку
+              {t('Привет! Могу собрать тебе сборку')}
             </span>,
             document.body,
           )

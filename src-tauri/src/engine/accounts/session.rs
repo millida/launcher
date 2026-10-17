@@ -97,18 +97,8 @@ pub async fn ms_login_poll(device_code: String) -> Result<Value, String> {
     Ok(keep_tokens(device_code, j))
 }
 
-/// One polling step of the Ely.by device flow.
-pub async fn ely_login_poll(device_code: String) -> Result<Value, String> {
-    let j = ely_device_poll(&device_code).await?;
-    Ok(keep_tokens(device_code, j))
-}
-
 pub fn ms_login_commit(device_code: &str, account_id: &str) -> Result<(), String> {
     commit_login(device_code, account_id, "вход Microsoft не найден — начни заново")
-}
-
-pub fn ely_login_commit(device_code: &str, account_id: &str) -> Result<(), String> {
-    commit_login(device_code, account_id, "вход Ely.by не найден — начни заново")
 }
 
 fn commit_login(device_code: &str, account_id: &str, missing: &str) -> Result<(), String> {
@@ -219,18 +209,6 @@ pub async fn resolve_launch_auth(app: &AppHandle, args: Option<AuthArgs>) -> Res
                     uuid: args.uuid.unwrap_or_default(),
                     xuid: args.xuid.unwrap_or_default(),
                     yggdrasil: String::new(),
-                },
-                nick: None,
-            }
-        }
-        "elyby" => {
-            let Some(token) = args.account_id.as_deref().and_then(mc_token) else { return offline };
-            ResolvedAuth {
-                auth: Auth {
-                    token,
-                    uuid: args.uuid.unwrap_or_default(),
-                    xuid: String::new(),
-                    yggdrasil: ELY_YGGDRASIL.into(),
                 },
                 nick: None,
             }

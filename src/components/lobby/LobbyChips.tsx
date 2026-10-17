@@ -8,6 +8,7 @@ import { stopMateSearch, useMateSearch } from '../../state/mateSearch'
 import { closeRoom, partyWithOthers, usePartyStore } from '../../state/party'
 import { showToast } from '../../state/ui'
 import { tierNick } from '../top/TierBoard'
+import { useT } from '../../i18n'
 
 const clock = (ms: number) => {
   const s = Math.max(0, Math.floor(ms / 1000))
@@ -35,6 +36,7 @@ function SearchClock({ since }: { since: number }) {
  * открывает меню с друзьями в сети. В пати и при поиске топ недели уходит.
  */
 export function LobbyChips({ on }: { on: boolean }) {
+  const t = useT()
   const signedIn = hasMillidaAccount()
   const nick = signedIn ? tierNick() : ''
   const week = useTiers((s) => s.periodRows['week:all'])
@@ -50,7 +52,7 @@ export function LobbyChips({ on }: { on: boolean }) {
   }, [on])
 
   const open = () => openPvp('play')
-  const needAccount = () => showToast('Пати — с аккаунтом Millida', 'error')
+  const needAccount = () => showToast(t('Пати — с аккаунтом Millida'), 'error')
   // «Найти пати» открывает комнаты: видно, кто куда идёт, и вход одной кнопкой.
   const find = () => (signedIn ? usePartyStore.getState().set({ roomsOpen: true }) : needAccount())
   const me = usePartyStore((s) => s.me)
@@ -63,7 +65,7 @@ export function LobbyChips({ on }: { on: boolean }) {
       {
         <button className={'lchip lchip-tier' + (row ? '' : ' bait')} data-track="lobby_top" onClick={open}>
           <Icon id="i-trophy" />
-          <b>Топ недели</b>
+          <b>{t('Топ недели')}</b>
           {row ? (
             <span className="lchip-pos">
               #{row.pos}
@@ -73,32 +75,32 @@ export function LobbyChips({ on }: { on: boolean }) {
               </i>
             </span>
           ) : (
-            <span className="lchip-go">Войти в топ</span>
+            <span className="lchip-go">{t('Войти в топ')}</span>
           )}
         </button>
       }
       {full ? null : searching ? (
         <button className="lchip lchip-cancel" data-sound="close" data-track="party_search_cancel" onClick={() => void stopMateSearch()}>
           <Icon id="i-x" />
-          <b>Отмена</b>
+          <b>{t('Отмена')}</b>
           <SearchClock since={since} />
         </button>
       ) : roomOpen ? (
         <button className="lchip lchip-cancel" data-sound="close" data-track="party_room_close" onClick={() => void closeRoom()}>
           <Icon id="i-x" />
-          <b>Закрыть комнату</b>
+          <b>{t('Закрыть комнату')}</b>
           {party?.room?.since ? <SearchClock since={party.room.since} /> : null}
         </button>
       ) : together && !mine ? null : (
         <button className="lchip lchip-party" data-sound="open" data-track="party_rooms_open" aria-haspopup="dialog" onClick={find}>
           <Icon id="i-search" />
-          <b>{together ? 'Комнаты' : 'Найти пати'}</b>
+          <b>{together ? t('Комнаты') : t('Найти пати')}</b>
         </button>
       )}
       {full ? null : (
         <button className="lchip lchip-invite" data-sound="open" data-track="party_invite_open" aria-haspopup="dialog" onClick={invite}>
           <Icon id="i-users" />
-          <b>Позвать друга</b>
+          <b>{t('Позвать друга')}</b>
         </button>
       )}
     </div>

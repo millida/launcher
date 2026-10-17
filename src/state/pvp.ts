@@ -3,6 +3,7 @@ import { setScreen, showToast } from './ui'
 import { api } from '../lib/api'
 import { quickJoin } from '../lib/joinServer'
 import { TIER_SERVER } from './tiers'
+import { t } from '../i18n'
 
 /**
  * Раздел PvP — отдельный режим лаунчера, как MCPVP у Dawn (владелец
@@ -168,7 +169,7 @@ async function joinMatch(ip?: string, name?: string) {
   try {
     await quickJoin(ip || TIER_SERVER.ip, name || TIER_SERVER.name, false, TIER_SERVER.versions)
   } catch {
-    showToast('Игра не запустилась — соперник вернётся в очередь', 'error')
+    showToast(t('Игра не запустилась — соперник вернётся в очередь'), 'error')
   } finally {
     // Дальше статус ведёт сервер (бой, лобби); кнопка снова доступна через минуту.
     window.setTimeout(() => {

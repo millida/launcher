@@ -1,6 +1,7 @@
 import { Icon } from './Icon'
 import { joinRoomVoice } from '../state/call'
 import type { Room } from '../state/rooms'
+import { useT } from '../i18n'
 
 /**
  * Кнопка разговора группы — та же кнопка, что и звонок другу: значок трубки без
@@ -20,6 +21,7 @@ export function RoomCallButton({
   /// же, откуда их берёт звонок другу, чтобы группа не выглядела чужой в ряду.
   row?: boolean
 }) {
+  const t = useT()
   const inside = room.voice || []
   return (
     <button
@@ -28,10 +30,10 @@ export function RoomCallButton({
       }
       title={
         here
-          ? 'Ты в разговоре'
+          ? t('Ты в разговоре')
           : inside.length
-            ? 'Зайти в разговор · ' + inside.length + ' чел.'
-            : 'Начать разговор группы'
+            ? t('Зайти в разговор · {n} чел.', { n: inside.length })
+            : t('Начать разговор группы')
       }
       disabled={here || busy}
       onClick={() => void joinRoomVoice(room.id, room.title)}

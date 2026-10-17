@@ -3,6 +3,7 @@ import { useStagger } from './motion'
 import { PxArt } from './px'
 import type { MilliPack } from '../../lib/milli'
 import '../../styles/pixel/milli-config.css'
+import { t, useT } from '../../i18n'
 
 /*
  * Событие в ленте «Настраиваю графику под твой ПК…»: строки `pack.setup.lines`
@@ -71,20 +72,46 @@ export function setupLines(pack: Pick<MilliPack, 'buildId'> & { setup?: unknown 
 
 /** Коротко (1–2 слова) для известных ключей; полный текст сервера — в title. */
 const SHORT_RU: Record<string, string> = {
-  renderDistance: 'Дальность',
-  simulationDistance: 'Симуляция',
-  ramMb: 'Память',
+  get renderDistance() {
+    return t('Дальность')
+  },
+  get simulationDistance() {
+    return t('Симуляция')
+  },
+  get ramMb() {
+    return t('Память')
+  },
   jvm: 'JVM',
-  shaders: 'Шейдеры',
-  shaderPack: 'Шейдеры',
-  shaderLevel: 'Шейдеры',
-  graphicsMode: 'Графика',
-  entityShadows: 'Тени',
-  renderClouds: 'Облака',
-  particles: 'Частицы',
-  maxFps: 'Лимит FPS',
-  lang: 'Язык',
-  ao: 'Плавный свет',
+  get shaders() {
+    return t('Шейдеры')
+  },
+  get shaderPack() {
+    return t('Шейдеры')
+  },
+  get shaderLevel() {
+    return t('Шейдеры')
+  },
+  get graphicsMode() {
+    return t('Графика')
+  },
+  get entityShadows() {
+    return t('Тени')
+  },
+  get renderClouds() {
+    return t('Облака')
+  },
+  get particles() {
+    return t('Частицы')
+  },
+  get maxFps() {
+    return t('Лимит FPS')
+  },
+  get lang() {
+    return t('Язык')
+  },
+  get ao() {
+    return t('Плавный свет')
+  },
 }
 const shortRu = (l: MilliSetupLine) => (l.value && SHORT_RU[l.key]) || l.ru
 
@@ -97,11 +124,12 @@ const played = new Set<string>()
  * строки (печатаются по одной уже при раскрытии).
  */
 export function MilliSetup({ pack, onEdit, compact }: { pack: MilliPack; onEdit?: () => void; compact?: boolean }) {
+  const t = useT()
   const [open, setOpen] = useState(!compact)
   const lines = setupLines(pack as MilliPack & { setup?: unknown })
   if (!lines.length) return null
   const setup = (pack as { setup?: { titleRu?: unknown; profile?: unknown } }).setup
-  const title = typeof setup?.titleRu === 'string' && setup.titleRu.trim() ? setup.titleRu : 'Графика под твой ПК'
+  const title = typeof setup?.titleRu === 'string' && setup.titleRu.trim() ? setup.titleRu : t('Графика под твой ПК')
   const prof = typeof setup?.profile === 'string' ? PX_BY_KEY[setup.profile] : undefined
   if (!open)
     return (
@@ -117,6 +145,7 @@ export function MilliSetup({ pack, onEdit, compact }: { pack: MilliPack; onEdit?
 }
 
 function SetupBody({ pack, lines, title, prof, onEdit }: { pack: MilliPack; lines: MilliSetupLine[]; title: string; prof?: string; onEdit?: () => void }) {
+  const t = useT()
   const id = pack.buildId
   const [fromHistory] = useState(() => played.has(id))
   const shown = useStagger(lines.length, STEP_MS, fromHistory)
@@ -149,7 +178,7 @@ function SetupBody({ pack, lines, title, prof, onEdit }: { pack: MilliPack; line
       {onEdit ? (
         <div className="mset-foot">
           <button className="btn sm ghost" onClick={onEdit} disabled={!done}>
-            Изменить
+            {t('Изменить')}
           </button>
         </div>
       ) : null}

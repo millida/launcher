@@ -1,6 +1,7 @@
 import { plural } from './format'
 import type { Friend } from '../state/friends'
 import type { Room } from '../state/rooms'
+import { intlTag, t } from '../i18n'
 
 export interface OverlayChatItem {
   key: string
@@ -37,7 +38,7 @@ export function chatItems(friends: Friend[], rooms: Room[], filter = ''): Overla
       id: f.userId,
       room: false,
       title,
-      subtitle: f.text || (f.online ? 'В сети' : ''),
+      subtitle: f.text || (f.online ? t('В сети') : ''),
       nicks: [title],
       unread: f.unread || 0,
       ts: f.lastMessageAt || 0,
@@ -53,8 +54,8 @@ export function chatItems(friends: Friend[], rooms: Room[], filter = ''): Overla
       room: true,
       title: r.title,
       subtitle: inVoice
-        ? inVoice + ' в голосовом'
-        : r.members.length + ' ' + plural(r.members.length, 'участник', 'участника', 'участников'),
+        ? t('{n} в голосовом', { n: inVoice })
+        : r.members.length + ' ' + plural(r.members.length, t('участник'), t('участника'), t('участников')),
       nicks: r.members.map((m) => m.nickname).slice(0, 3),
       unread: r.unread || 0,
       ts: r.lastMessageAt || 0,
@@ -75,9 +76,9 @@ export function chatWhen(ts: number, now = Date.now()): string {
   const today = new Date(now)
   const yesterday = new Date(now - 86_400_000)
   if (d.toDateString() === today.toDateString())
-    return d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
-  if (d.toDateString() === yesterday.toDateString()) return 'вчера'
-  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }).replace('.', '')
+    return d.toLocaleTimeString(intlTag(), { hour: '2-digit', minute: '2-digit' })
+  if (d.toDateString() === yesterday.toDateString()) return t('вчера')
+  return d.toLocaleDateString(intlTag(), { day: 'numeric', month: 'short' }).replace('.', '')
 }
 
 export const unreadOf = (items: OverlayChatItem[]): number => items.reduce((n, i) => n + i.unread, 0)

@@ -7,6 +7,7 @@ import { ChestLive } from './ChestLive'
 import { RARITY_NAME_SHORT, RARITY_TONE } from '../shop/rarity'
 import type { ChestTier, Rarity, Reward } from '../../lib/rubies'
 import type { TrackReward } from './track'
+import { t } from '../../i18n'
 
 /**
  * Картинка награды: осколки — кристалл, сундук — сундук своего уровня (в треке
@@ -15,10 +16,10 @@ import type { TrackReward } from './track'
  */
 
 export const CHEST_NAME: Record<ChestTier, string> = {
-  COMMON: 'Обычный',
-  RARE: 'Редкий',
-  EPIC: 'Эпический',
-  LEGEND: 'Легендарный',
+  get COMMON() { return t('Обычный') },
+  get RARE() { return t('Редкий') },
+  get EPIC() { return t('Эпический') },
+  get LEGEND() { return t('Легендарный') },
 }
 
 const CHEST_RARITY: Record<ChestTier, Rarity> = { COMMON: 'COMMON', RARE: 'RARE', EPIC: 'EPIC', LEGEND: 'LEGENDARY' }
@@ -37,22 +38,25 @@ export const rarityTone = (r: TrackReward) =>
 
 /** Подпись под картинкой: одно короткое слово или число. */
 export function rewardLabel(r: TrackReward): string {
-  if (r.kind === 'MYSTERY') return r.of === 'FRAGMENTS' ? 'Фрагменты' : 'Новая вещь'
+  if (r.kind === 'MYSTERY') return r.of === 'FRAGMENTS' ? t('Фрагменты') : t('Новая вещь')
   if (r.kind === 'RUBIES' || r.kind === 'SHARDS') return String(r.amount)
   if (r.kind === 'CHEST') return CHEST_NAME[r.tier]
-  if (r.kind === 'FRAGMENTS') return 'Фрагменты'
+  if (r.kind === 'FRAGMENTS') return t('Фрагменты')
   return r.item?.name || RARITY_NAME_SHORT[rewardRarity(r)]
 }
 
 /** Для экранного чтеца и подсказок. */
 export function rewardTitle(r: TrackReward): string {
   if (r.kind === 'MYSTERY')
-    return r.of === 'FRAGMENTS' ? (r.amount || 0) + ' фрагм. новой вещи двух недель' : 'Новая вещь, откроется в свою неделю'
-  if (r.kind === 'RUBIES') return r.amount + ' рубинов'
-  if (r.kind === 'SHARDS') return r.amount + ' осколков'
-  if (r.kind === 'CHEST') return CHEST_NAME[r.tier] + ' сундук'
-  if (r.kind === 'FRAGMENTS') return r.amount + ' фрагм. ' + (r.item ? '«' + r.item.name + '»' : RARITY_NAME_SHORT[rewardRarity(r)].toLowerCase())
-  return (r.item?.name || RARITY_NAME_SHORT[rewardRarity(r)]) + ', навсегда'
+    return r.of === 'FRAGMENTS' ? t('{n} фрагм. новой вещи двух недель', { n: r.amount || 0 }) : t('Новая вещь, откроется в свою неделю')
+  if (r.kind === 'RUBIES') return t('{n} рубинов', { n: r.amount })
+  if (r.kind === 'SHARDS') return t('{n} осколков', { n: r.amount })
+  if (r.kind === 'CHEST') return t('{tier} сундук', { tier: CHEST_NAME[r.tier] })
+  if (r.kind === 'FRAGMENTS')
+    return r.item
+      ? t('{n} фрагм. «{name}»', { n: r.amount, name: r.item.name })
+      : t('{n} фрагм. {rarity}', { n: r.amount, rarity: RARITY_NAME_SHORT[rewardRarity(r)].toLowerCase() })
+  return t('{name}, навсегда', { name: r.item?.name || RARITY_NAME_SHORT[rewardRarity(r)] })
 }
 
 export function RewardArt({ reward, size }: { reward: TrackReward; size: number }) {

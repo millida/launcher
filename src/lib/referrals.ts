@@ -1,5 +1,6 @@
 // Inviting friends: requests to the Millida API (invite status, rewards). The core adds the token.
 import { api } from './api'
+import { t } from '../i18n'
 
 export type InviteFriendStatus = 'pending' | 'qualified' | 'rejected'
 export type InviteWait = 'play' | 'email' | 'queue' | null
@@ -131,15 +132,15 @@ const plural = (n: number, one: string, few: string, many: string) => {
   return many
 }
 
-export const daysText = (n: number) => n + ' ' + plural(n, 'день', 'дня', 'дней')
-export const friendsText = (n: number) => n + ' ' + plural(n, 'друг', 'друга', 'друзей')
+export const daysText = (n: number) => n + ' ' + plural(n, t('день'), t('дня'), t('дней'))
+export const friendsText = (n: number) => n + ' ' + plural(n, t('друг'), t('друга'), t('друзей'))
 
 /** Награды ступени по одной: «Иконка «Аметист»», «Эпический сундук», «14 дней PLUS». */
-export function tierRewardParts(t: Pick<InviteTier, 'plusDays' | 'chestName'> & { perks?: InvitePerk[] }): string[] {
+export function tierRewardParts(tier: Pick<InviteTier, 'plusDays' | 'chestName'> & { perks?: InvitePerk[] }): string[] {
   const parts: string[] = []
-  for (const p of t.perks ?? []) parts.push(p.kind === 'icon' ? 'Иконка «' + p.name + '»' : p.name)
-  if (t.chestName) parts.push(t.chestName)
-  if (t.plusDays > 0) parts.push(daysText(t.plusDays) + ' PLUS')
+  for (const p of tier.perks ?? []) parts.push(p.kind === 'icon' ? t('Иконка «{name}»', { name: p.name }) : p.name)
+  if (tier.chestName) parts.push(tier.chestName)
+  if (tier.plusDays > 0) parts.push(daysText(tier.plusDays) + ' PLUS')
   return parts
 }
 
@@ -160,9 +161,9 @@ const clock = (seconds: number) => {
 }
 
 export function friendStatusText(f: Pick<InviteFriend, 'status' | 'wait' | 'playSeconds'>, needSeconds: number): string {
-  if (f.status === 'qualified') return 'Засчитан'
-  if (f.status === 'rejected') return 'Не засчитан'
-  if (f.wait === 'email') return 'Ждёт подтверждения почты'
-  if (f.wait === 'queue') return 'Засчитаем в ближайшие сутки'
-  return 'Играет ' + clock(f.playSeconds) + ' из ' + clock(needSeconds)
+  if (f.status === 'qualified') return t('Засчитан')
+  if (f.status === 'rejected') return t('Не засчитан')
+  if (f.wait === 'email') return t('Ждёт подтверждения почты')
+  if (f.wait === 'queue') return t('Засчитаем в ближайшие сутки')
+  return t('Играет {played} из {need}', { played: clock(f.playSeconds), need: clock(needSeconds) })
 }

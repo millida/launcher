@@ -1,4 +1,5 @@
 import { api } from './api'
+import { intlTag, t } from '../i18n'
 
 /**
  * Семь рангов (модель предметов v3, 24.09.2026). Ранг — у расцветки: базовая
@@ -321,13 +322,13 @@ export interface ProgressItem {
 }
 
 export const RARITY_NAMES: Record<Rarity, string> = {
-  COMMON: 'Обычная',
-  UNCOMMON: 'Необычная',
-  RARE: 'Редкая',
-  EPIC: 'Эпическая',
-  LEGENDARY: 'Легендарная',
-  MYTHIC: 'Мифическая',
-  RELIC: 'Невозможная',
+  get COMMON() { return t('Обычная') },
+  get UNCOMMON() { return t('Необычная') },
+  get RARE() { return t('Редкая') },
+  get EPIC() { return t('Эпическая') },
+  get LEGENDARY() { return t('Легендарная') },
+  get MYTHIC() { return t('Мифическая') },
+  get RELIC() { return t('Невозможная') },
 }
 
 export const loadRules = () => api<Rules>('/rubies/rules')
@@ -411,7 +412,7 @@ export const redeemPromo = (code: string) =>
 export const claimProgress = (code: string) =>
   api<ProgressItem>('/rubies/progress/' + encodeURIComponent(code) + '/claim', { method: 'POST' })
 
-export const rubles = (kopecks: number) => (kopecks / 100).toLocaleString('ru-RU') + ' ₽'
+export const rubles = (kopecks: number) => (kopecks / 100).toLocaleString(intlTag()) + ' ₽'
 
 /** Случайный клиентский сид: игрок его не вводит, но подмешать обязан. */
 export const freshClientSeed = () => Math.random().toString(36).slice(2, 12)

@@ -3,8 +3,10 @@ import { CatalogNotice } from './CatalogShell'
 import { SiteGalleryCard } from './SiteRow'
 import { sectionBySlug } from './site'
 import { useCatalogStars } from '../../state/catalogStars'
+import { useT } from '../../i18n'
 
 export function FavoritesPane({ onOpenPack, onBrowse }: { onOpenPack?: (slug: string) => boolean | void; onBrowse: () => void }) {
+  const t = useT()
   const items = useCatalogStars((s) => s.items)
   const [only, setOnly] = useState<string | null>(null)
   const groups = useMemo(() => {
@@ -15,19 +17,19 @@ export function FavoritesPane({ onOpenPack, onBrowse }: { onOpenPack?: (slug: st
   const active = only && groups.some((g) => g.slug === only) ? only : null
   const shown = active ? items.filter((e) => e.section === active) : items
   if (!items.length)
-    return <CatalogNotice note={{ icon: 'i-star', title: 'В избранном пусто', action: { label: 'Открыть моды', primary: true, onClick: onBrowse } }} />
+    return <CatalogNotice note={{ icon: 'i-star', title: t('В избранном пусто'), action: { label: t('Открыть моды'), primary: true, onClick: onBrowse } }} />
   return (
     <div className="mr-main cat-favorites">
       <header className="mr-head">
         <h1 className="mr-h1">
-          Избранное
+          {t('Избранное')}
           <span className="mr-h1-n">{items.length}</span>
         </h1>
       </header>
       {groups.length > 1 ? (
-        <nav className="sk-chips" aria-label="Разделы избранного">
+        <nav className="sk-chips" aria-label={t('Разделы избранного')}>
           <button type="button" className={'sk-chip' + (!active ? ' on' : '')} data-track="star_tab_all" onClick={() => setOnly(null)}>
-            Все
+            {t('Все')}
           </button>
           {groups.map((g) => (
             <button key={g.slug} type="button" className={'sk-chip' + (active === g.slug ? ' on' : '')} data-track="star_tab_section" data-id={g.slug} onClick={() => setOnly(g.slug)}>

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNod
 import { createPortal } from 'react-dom'
 import { Icon } from '../Icon'
 import { playSound } from '../../lib/sound'
-import { rubles } from '../../lib/rubies'
 import type { ChestTier, DailyClaim, GrantedReward, Reward, WeekItem as WeekItemData } from '../../lib/rubies'
 import { useDaily } from '../../state/daily'
 import { useUi } from '../../state/ui'
@@ -11,6 +10,8 @@ import type { ChestMode } from './chestScene'
 import { FragmentCells } from './WeekItem'
 import { dayChestTier, rarityTone, rewardLabel, rewardRarity, rewardTitle, RewardArt } from './rewards'
 import { RarityChip } from '../shop/rarityUi'
+import { useT } from '../../i18n'
+import { plusPrice } from '../../lib/regionalPrices'
 
 /** Минимум тряски, даже если служба ответила мгновенно: иначе нет «момента». */
 const SHAKE_MS = 1500
@@ -136,6 +137,7 @@ export function Reveal({
   onPlus: () => void
   onDone: () => void
 }) {
+  const t = useT()
   const reduced = useMemo(reducedMotion, [])
   // Вещь недели до «Забрать»: служба пришлёт новое значение, а загореться
   // должны только пришедшие клетки.
@@ -243,7 +245,7 @@ export function Reveal({
             }
           }}
         >
-          {toChests ? 'Открыть сундук' : 'К наградам'}
+          {toChests ? t('Открыть сундук') : t('К наградам')}
         </button>
       </span>
     )
@@ -253,7 +255,7 @@ export function Reveal({
     <div
       className={'rv' + (opened ? ' opened' : '') + (chest ? '' : ' nochest') + ' tier-' + tier.toLowerCase()}
       role="status"
-      aria-label="Награда дня"
+      aria-label={t('Награда дня')}
       onClick={() => {
         if (opened && !finished) setShown(beats.length)
       }}
@@ -292,7 +294,7 @@ export function Reveal({
         {has('missed') ? (
           <div className="rv-missed">
             <span className="rv-missed-head">
-              <Icon id="i-crown" />С PLUS было бы ещё:
+              <Icon id="i-crown" />{t('С PLUS было бы ещё:')}
             </span>
             <span className="rv-missed-row">
               {missed.map((r, i) => (
@@ -303,7 +305,7 @@ export function Reveal({
               ))}
             </span>
             <span className="rv-missed-act">
-              {priceKopecks > 0 ? <b className="rv-price">{rubles(priceKopecks)} в месяц</b> : null}
+              {priceKopecks > 0 ? <b className="rv-price">{t('{price} в месяц', { price: plusPrice('PLUS', priceKopecks) ?? '' })}</b> : null}
               <button
                 className="btn md secondary dp-plus"
                 onClick={(e) => {
@@ -312,7 +314,7 @@ export function Reveal({
                 }}
               >
                 <Icon id="i-crown" />
-                Оформить PLUS
+                {t('Оформить PLUS')}
               </button>
             </span>
           </div>
@@ -344,10 +346,10 @@ export function Reveal({
           <span className="rv-unlock-art">
             {unlockedItem.preview ? <img src={unlockedItem.preview} alt="" draggable={false} /> : null}
           </span>
-          <span className="rv-unlock-kicker">Вещь собрана</span>
+          <span className="rv-unlock-kicker">{t('Вещь собрана')}</span>
           <b className="rv-unlock-name">{unlockedItem.name}</b>
           <button className="btn md primary" autoFocus onClick={onDone}>
-            К наградам
+            {t('К наградам')}
           </button>
         </div>
       ) : null}

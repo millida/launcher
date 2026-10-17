@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Icon } from '../Icon'
 import { SITE_SECTIONS, loadSections, materials } from './site'
 import type { SiteSection, SiteSectionStat } from './site'
+import { useT } from '../../i18n'
 
 /*
  * «Категории» — главная каталога millida.net (/katalog): плитки разделов со
@@ -11,6 +12,7 @@ import type { SiteSection, SiteSectionStat } from './site'
  * «Хостинге». «Моды» и «Сборки» — крупные, как «Моды» на сайте.
  */
 export function CatalogCats({ onOpen }: { onOpen: (s: SiteSection) => void }) {
+  const t = useT()
   const [stats, setStats] = useState<SiteSectionStat[] | null>(null)
   useEffect(() => {
     let alive = true
@@ -27,7 +29,7 @@ export function CatalogCats({ onOpen }: { onOpen: (s: SiteSection) => void }) {
         const n = stats ? (stats.find((x) => x.section === s.slug)?.items ?? 0) : undefined
         // Карт в каталоге сайта пока нет («Наполняется»), в лаунчере они из
         // CurseForge — пустой счётчик у них не пишем.
-        const note = n === undefined ? null : n > 0 ? materials(n) : s.kind === 'world' ? '' : 'Наполняется'
+        const note = n === undefined ? null : n > 0 ? materials(n) : s.kind === 'world' ? '' : t('Наполняется')
         return (
           <button key={s.slug} className={'card mr-cat-tile is-' + s.slug} data-sound="nav" data-track={'cat_' + s.slug} onClick={() => onOpen(s)}>
             <span className="mr-cat-head">

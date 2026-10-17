@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { TOUR_STEPS, stopTour, tourNext, tourPrev, useTour } from '../state/tour'
+import { useT } from '../i18n'
 
 interface Box {
   left: number
@@ -52,6 +53,7 @@ export function cardPos(
 }
 
 export function Tour() {
+  const t = useT()
   const active = useTour((s) => s.active)
   const index = useTour((s) => s.index)
   const [box, setBox] = useState<Box | null>(null)
@@ -103,7 +105,7 @@ export function Tour() {
       )}
       <div ref={cardRef} className="tour-card" style={{ left: pos.left, top: pos.top, width: CARD_W }}>
         {/* Счётчик шагов — полоской, как в первой настройке: видно без чтения. */}
-        <div className="tour-bar" aria-label={'Шаг ' + (index + 1) + ' из ' + TOUR_STEPS.length}>
+        <div className="tour-bar" aria-label={t('Шаг {n} из {total}', { n: index + 1, total: TOUR_STEPS.length })}>
           {TOUR_STEPS.map((_, i) => (
             <span key={i} className={'tour-bar-seg' + (i <= index ? ' on' : '')}></span>
           ))}
@@ -112,16 +114,16 @@ export function Tour() {
         <p>{step.text}</p>
         <div className="tour-actions">
           <button className="btn sm ghost" onClick={stopTour}>
-            Пропустить
+            {t('Пропустить')}
           </button>
           <span className="tour-spacer"></span>
           {index > 0 ? (
             <button className="btn sm secondary" onClick={tourPrev}>
-              Назад
+              {t('Назад')}
             </button>
           ) : null}
           <button className="btn sm primary" onClick={tourNext}>
-            {last ? 'Готово' : 'Далее'}
+            {last ? t('Готово') : t('Далее')}
           </button>
         </div>
       </div>

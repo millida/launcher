@@ -5,6 +5,7 @@ import { useTicker } from './motion'
 import { PxArt } from './px'
 import { PxIcon } from '../PxIcon'
 import '../../styles/pixel/milli-globe.css'
+import { t, useT } from '../../i18n'
 
 /*
  * Кнопка «отправить» и экран «Милли думает» в языке Minecraft (04.10.2026).
@@ -149,10 +150,11 @@ export function MilliSendGlobe({
   className,
   disabled,
   onClick,
-  'aria-label': ariaLabel = 'Отправить',
+  'aria-label': ariaLabel,
   'data-track': dataTrack = 'milli_send',
   ...rest
 }: MilliSendGlobeProps) {
+  const t = useT()
   const [phase, setPhase] = useState<Phase>('idle')
   const timers = useRef<number[]>([])
   const broke = useRef(false)
@@ -215,7 +217,7 @@ export function MilliSendGlobe({
       {...rest}
       type={stop ? 'button' : 'submit'}
       className={cls}
-      aria-label={stop ? 'Остановить' : ariaLabel}
+      aria-label={stop ? t('Остановить') : ariaLabel ?? t('Отправить')}
       data-track={stop ? 'milli_cancel' : dataTrack}
       disabled={stop ? false : disabled}
       onClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
@@ -270,8 +272,8 @@ export const MILLI_THINK_STEPS: readonly (readonly [number, string])[] = [
 
 export function milliThinkStep(elapsedMs: number): string {
   let s = MILLI_THINK_STEPS[0]![1]
-  for (const [at, t] of MILLI_THINK_STEPS) if (elapsedMs >= at) s = t
-  return s
+  for (const [at, text] of MILLI_THINK_STEPS) if (elapsedMs >= at) s = text
+  return t(s)
 }
 
 const PCT_CAP = 95
@@ -356,7 +358,7 @@ const CHUNK_AT: readonly number[] = (() => {
 export function MilliWorldLoading({
   step,
   elapsedMs,
-  title = 'Генерация мира',
+  title = t('Генерация мира'),
   percent,
 }: {
   step: string
@@ -519,6 +521,7 @@ function Tick({ value }: { value: number }) {
 }
 
 export function MilliProgress({ stages, title, onStop }: { stages: readonly MilliStage[]; title: string; onStop?: () => void }) {
+  const t = useT()
   const rows = milliStageRows(stages)
   const { found, checked } = milliTally(stages)
   const names = milliTickerNames(stages)
@@ -532,11 +535,11 @@ export function MilliProgress({ stages, title, onStop }: { stages: readonly Mill
         <b aria-live="polite">{title}</b>
         {onStop ? (
           <button type="button" className="btn sm ghost mlp-stop" data-track="milli_cancel" data-src="progress" onClick={onStop}>
-            Стоп
+            {t('Стоп')}
           </button>
         ) : null}
       </div>
-      <ol className="mlp-steps" aria-label="Этапы сборки">
+      <ol className="mlp-steps" aria-label={t('Этапы сборки')}>
         {rows.map((r) => {
           const now = r.state === 'run'
           const n = now
@@ -553,12 +556,12 @@ export function MilliProgress({ stages, title, onStop }: { stages: readonly Mill
               ) : (
                 <i className="mlp-mark" aria-hidden="true" />
               )}
-              <span className="mlp-t">{r.labelRu}</span>
+              <span className="mlp-t">{t(r.labelRu)}</span>
               {n.length ? (
                 <span className="mlp-n">
                   {n.map(([w, v], i) => (
                     // Правило 11: иконка и число, слово — только в подсказке.
-                    <span key={w} title={w}>
+                    <span key={w} title={t(w)}>
                       {i ? ' · ' : ''}
                       <PxIcon name={w === 'найдено' ? 'search' : 'check'} size={9} /> <Tick value={v} />
                     </span>
@@ -566,14 +569,14 @@ export function MilliProgress({ stages, title, onStop }: { stages: readonly Mill
                 </span>
               ) : now && r.total > 0 ? (
                 <span className="mlp-n">
-                  <Tick value={r.done} /> из {r.total}
+                  <Tick value={r.done} /> {t('из {n}', { n: r.total })}
                 </span>
               ) : null}
             </li>
           )
         })}
       </ol>
-      <div className={'mlp-bar' + (finished ? ' is-done' : '')} role="progressbar" aria-label="Сборка" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(p * 100)}>
+      <div className={'mlp-bar' + (finished ? ' is-done' : '')} role="progressbar" aria-label={t('Сборка')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(p * 100)}>
         <i style={{ '--p': p.toFixed(2) } as CSSProperties} />
       </div>
       {names.length ? (

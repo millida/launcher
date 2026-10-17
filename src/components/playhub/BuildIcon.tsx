@@ -8,6 +8,7 @@ import { pickCoverImage } from '../../ipc/commands'
 import { showToast } from '../../state/ui'
 import { backdropClose } from '../../lib/dismiss'
 import '../../styles/pixel/buildicon.css'
+import { useT } from '../../i18n'
 
 /**
  * Квадратная иконка сборки как у проекта в Modrinth: квадрат 72 px глубокого
@@ -48,6 +49,7 @@ export function IconPicker({
   onPick: (icon: string) => void
   onClose: () => void
 }) {
+  const t = useT()
   const cur = parseIcon(icon)
   const curBg = (icon.split('#bg=')[1] || '').trim()
   const [bg, setBg] = useState(BGS.some((b) => b.id === curBg) ? curBg : BGS.some((b) => b.id === '#' + curBg.toLowerCase()) ? '#' + curBg.toLowerCase() : cur.bg)
@@ -82,7 +84,7 @@ export function IconPicker({
     if (hasTauri()) {
       pickCoverImage()
         .then((data) => data && onPick(data))
-        .catch((e) => showToast('Картинка не подошла: ' + e, 'error'))
+        .catch((e) => showToast(t('Картинка не подошла: {error}', { error: String(e) }), 'error'))
       return
     }
     file.current?.click()
@@ -94,26 +96,26 @@ export function IconPicker({
       className="ip-bg"
       {...backdropClose(onClose)}
     >
-      <div className="ip" role="dialog" aria-label="Иконка сборки">
+      <div className="ip" role="dialog" aria-label={t('Иконка сборки')}>
         <div className="ip-head">
           <BuildIcon icon={photo ? icon : makeIcon(src, bg)} size={72} />
-          <b>Иконка</b>
+          <b>{t('Иконка')}</b>
           <button type="button" className="btn sm secondary ip-roll" data-track="icon_random" onClick={roll}>
-            <span aria-hidden="true">🎲</span> Случайная
+            <span aria-hidden="true">🎲</span> {t('Случайная')}
           </button>
-          <button className="btn sm ghost ip-x" aria-label="Закрыть" data-sound="close" onClick={onClose}>
+          <button className="btn sm ghost ip-x" aria-label={t('Закрыть')} data-sound="close" onClick={onClose}>
             <Icon id="i-x" />
           </button>
         </div>
 
-        <div className="ip-colors" role="radiogroup" aria-label="Фон">
+        <div className="ip-colors" role="radiogroup" aria-label={t('Фон')}>
           {BGS.map((c) => (
             <button
               key={c.id}
               type="button"
               className={'ip-color' + (!photo && bg === c.id ? ' on' : '')}
               style={{ '--c': c.css } as CSSProperties}
-              aria-label={'Фон ' + c.id}
+              aria-label={t('Фон {id}', { id: c.id })}
               aria-pressed={!photo && bg === c.id}
               onClick={() => color(c.id)}
             />
@@ -137,10 +139,10 @@ export function IconPicker({
 
         <div className="ip-foot">
           <button type="button" className={'btn sm secondary' + (photo ? ' on' : '')} onClick={upload}>
-            <Icon id="i-upload" /> Своя картинка
+            <Icon id="i-upload" /> {t('Своя картинка')}
           </button>
           <button type="button" className="btn sm primary" data-sound="close" onClick={onClose}>
-            Готово
+            {t('Готово')}
           </button>
         </div>
         <input
@@ -154,7 +156,7 @@ export function IconPicker({
             if (!f) return
             fileToCover(f)
               .then(onPick)
-              .catch(() => showToast('Картинка не открылась', 'error'))
+              .catch(() => showToast(t('Картинка не открылась'), 'error'))
           }}
         />
       </div>

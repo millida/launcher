@@ -4,6 +4,7 @@ import { Icon } from './Icon'
 import { hasTauri } from '../ipc/tauri'
 import { showToast } from '../state/ui'
 import { loadProfileSettings, setAutoTune, tuneProfile, type Tuning } from '../ipc/commands'
+import { useT } from '../i18n'
 
 interface Props {
   profile: string
@@ -16,6 +17,7 @@ interface Props {
 /// cause of a build that crashes on the loading screen, and a player only
 /// stops setting it by hand once they see why.
 export function TunePanel({ profile, manualGb }: Props) {
+  const t = useT()
   const [tuning, setTuning] = useState<Tuning | null>(null)
   const [on, setOn] = useState(true)
   const [showFlags, setShowFlags] = useState(false)
@@ -35,13 +37,13 @@ export function TunePanel({ profile, manualGb }: Props) {
   return (
     <div className="set-row" style={{ alignItems: 'flex-start' }}>
       <span className="lab">
-        Авто-подбор памяти
+        {t('Авто-подбор памяти')}
         <small>
           {overridden
-            ? `Вручную ${manualGb} ГБ · авто дал бы ${Math.round(tuning.ramMb / 1024)} ГБ`
+            ? t('Вручную {manual} ГБ · авто дал бы {auto} ГБ', { manual: manualGb, auto: Math.round(tuning.ramMb / 1024) })
             : on
-              ? `${Math.round(tuning.ramMb / 1024)} ГБ памяти`
-              : 'Выключен — половина ОЗУ'}
+              ? t('{n} ГБ памяти', { n: Math.round(tuning.ramMb / 1024) })
+              : t('Выключен — половина ОЗУ')}
         </small>
       </span>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '320px' }}>
@@ -55,7 +57,7 @@ export function TunePanel({ profile, manualGb }: Props) {
                 .then(load)
                 .catch((err) => {
                   setOn(!next)
-                  showToast(apiErrorText(err, 'Не сохранилось'), 'error')
+                  showToast(apiErrorText(err, t('Не сохранилось')), 'error')
                 })
             }}
           ></span>
@@ -66,7 +68,7 @@ export function TunePanel({ profile, manualGb }: Props) {
           ))}
         </ul>
         <button className="crash-toggle" onClick={() => setShowFlags((v) => !v)}>
-          <Icon id={showFlags ? 'i-chev-d' : 'i-chev-r'} /> {showFlags ? 'Скрыть флаги' : 'Флаги JVM'}
+          <Icon id={showFlags ? 'i-chev-d' : 'i-chev-r'} /> {showFlags ? t('Скрыть флаги') : t('Флаги JVM')}
         </button>
         {showFlags ? <pre className="host-console crash-tail">{tuning.flags.join('\n')}</pre> : null}
       </div>

@@ -53,6 +53,7 @@ import { autostartOn, setAutostart } from '../lib/autostart'
 import type { NotifyKind, NotifyLevel } from '../state/notifyPrefs'
 import { Slider } from '../components/Slider'
 import { Select } from '../components/Select'
+import { AVAILABLE_LOCALES, intlTag, isAvailableLocale, type MarketFeature, marketOffers, setLocale, t, useLocale, useMarket, useT } from '../i18n'
 import { writePref } from '../lib/prefs'
 import { setMusicAutostart } from '../state/music'
 import { setTelemetryEnabled, telemetryEnabled, track, trackFailure } from '../lib/telemetry'
@@ -104,31 +105,31 @@ import type { PerfMode } from '../state/viewPrefs'
    - Поиск по всем вкладкам сразу: строка сама решает, подходит ли она (Row → keys).
    ============================================================ */
 
-const ACCENTS: (Accent & { name: string })[] = [
-  { id: 'green', name: 'Зелёный', c: '#5EC64D', h: '#70D55F', s: 'rgba(94,198,77,.13)' },
-  { id: 'lime', name: 'Лайм', c: '#9BD628', h: '#ACE23F', s: 'rgba(155,214,40,.14)' },
-  { id: 'teal', name: 'Бирюзовый', c: '#22C7A9', h: '#3ADBBD', s: 'rgba(34,199,169,.14)' },
-  { id: 'cyan', name: 'Голубой', c: '#2CB6E8', h: '#48C6F2', s: 'rgba(44,182,232,.14)' },
-  { id: 'blue', name: 'Синий', c: '#4C8DFF', h: '#639BFF', s: 'rgba(76,141,255,.14)' },
-  { id: 'indigo', name: 'Индиго', c: '#6C6BFF', h: '#8180FF', s: 'rgba(108,107,255,.14)' },
-  { id: 'purple', name: 'Фиолетовый', c: '#9B6BFF', h: '#AC80FF', s: 'rgba(155,107,255,.14)' },
-  { id: 'pink', name: 'Розовый', c: '#FF6BAA', h: '#FF80B8', s: 'rgba(255,107,170,.14)' },
-  { id: 'red', name: 'Красный', c: '#FF6B5E', h: '#FF8073', s: 'rgba(255,107,94,.14)' },
-  { id: 'orange', name: 'Оранжевый', c: '#F5923B', h: '#FFA24F', s: 'rgba(245,146,59,.14)' },
-  { id: 'yellow', name: 'Жёлтый', c: '#F5C93B', h: '#FFD65A', s: 'rgba(245,201,59,.14)' },
+const accents = (): (Accent & { name: string })[] => [
+  { id: 'green', name: t('Зелёный'), c: '#5EC64D', h: '#70D55F', s: 'rgba(94,198,77,.13)' },
+  { id: 'lime', name: t('Лайм'), c: '#9BD628', h: '#ACE23F', s: 'rgba(155,214,40,.14)' },
+  { id: 'teal', name: t('Бирюзовый'), c: '#22C7A9', h: '#3ADBBD', s: 'rgba(34,199,169,.14)' },
+  { id: 'cyan', name: t('Голубой'), c: '#2CB6E8', h: '#48C6F2', s: 'rgba(44,182,232,.14)' },
+  { id: 'blue', name: t('Синий'), c: '#4C8DFF', h: '#639BFF', s: 'rgba(76,141,255,.14)' },
+  { id: 'indigo', name: t('Индиго'), c: '#6C6BFF', h: '#8180FF', s: 'rgba(108,107,255,.14)' },
+  { id: 'purple', name: t('Фиолетовый'), c: '#9B6BFF', h: '#AC80FF', s: 'rgba(155,107,255,.14)' },
+  { id: 'pink', name: t('Розовый'), c: '#FF6BAA', h: '#FF80B8', s: 'rgba(255,107,170,.14)' },
+  { id: 'red', name: t('Красный'), c: '#FF6B5E', h: '#FF8073', s: 'rgba(255,107,94,.14)' },
+  { id: 'orange', name: t('Оранжевый'), c: '#F5923B', h: '#FFA24F', s: 'rgba(245,146,59,.14)' },
+  { id: 'yellow', name: t('Жёлтый'), c: '#F5C93B', h: '#FFD65A', s: 'rgba(245,201,59,.14)' },
   // Больше готовых цветов (правка владельца 23.09.2026): «лучше больше цветов».
   ...(
     [
-      ['emerald', 'Изумрудный', '#2BB673'],
-      ['mint', 'Мятный', '#5FE0B0'],
-      ['sky', 'Небесный', '#6FC3FF'],
-      ['azure', 'Лазурный', '#3A6FE0'],
-      ['lavender', 'Лавандовый', '#B79CFF'],
-      ['magenta', 'Малиновый', '#E8457A'],
-      ['coral', 'Коралловый', '#FF8A65'],
-      ['amber', 'Янтарный', '#FFB020'],
-      ['sand', 'Песочный', '#D8B26E'],
-      ['silver', 'Серебряный', '#BFC7CF'],
+      ['emerald', t('Изумрудный'), '#2BB673'],
+      ['mint', t('Мятный'), '#5FE0B0'],
+      ['sky', t('Небесный'), '#6FC3FF'],
+      ['azure', t('Лазурный'), '#3A6FE0'],
+      ['lavender', t('Лавандовый'), '#B79CFF'],
+      ['magenta', t('Малиновый'), '#E8457A'],
+      ['coral', t('Коралловый'), '#FF8A65'],
+      ['amber', t('Янтарный'), '#FFB020'],
+      ['sand', t('Песочный'), '#D8B26E'],
+      ['silver', t('Серебряный'), '#BFC7CF'],
     ] as const
   ).map(([id, name, hex]) => ({ ...accentFromHex(hex), id, name })),
 ]
@@ -159,14 +160,14 @@ function initialAccent(): string {
 
 type SecId = 'look' | 'sound' | 'game' | 'clips' | 'files' | 'account' | 'about'
 
-const SECTIONS: { id: SecId; label: string }[] = [
-  { id: 'look', label: 'Вид' },
-  { id: 'sound', label: 'Звук' },
-  { id: 'game', label: 'Игра' },
-  { id: 'clips', label: 'Клипы' },
-  { id: 'files', label: 'Файлы' },
-  { id: 'account', label: 'Аккаунт' },
-  { id: 'about', label: 'Лаунчер' },
+const sections = (): { id: SecId; label: string }[] => [
+  { id: 'look', label: t('Вид') },
+  { id: 'sound', label: t('Звук') },
+  { id: 'game', label: t('Игра') },
+  { id: 'clips', label: t('Клипы') },
+  { id: 'files', label: t('Файлы') },
+  { id: 'account', label: t('Аккаунт') },
+  { id: 'about', label: t('Лаунчер') },
 ]
 
 /// Старые адреса вкладок (openSettings('notify') и сохранённый m-set-tab)
@@ -176,7 +177,7 @@ const MOVED: Record<string, SecId> = { window: 'game', notify: 'sound', privacy:
 function toSec(v: string | null | undefined): SecId | null {
   if (!v) return null
   if (MOVED[v]) return MOVED[v]
-  return SECTIONS.some((s) => s.id === v) ? (v as SecId) : null
+  return sections().some((s) => s.id === v) ? (v as SecId) : null
 }
 
 function initialSec(): SecId {
@@ -189,30 +190,33 @@ function initialSec(): SecId {
 
 /// Тумблеры приватности профиля. Те же поля правятся на millida.net —
 /// подписи держим близкими к сайту, чтобы человек узнавал настройку.
-const PRIVACY_ROWS: { key: PrivacyFlag; title: string }[] = [
-  { key: 'showActivity', title: 'Игровая активность' },
-  { key: 'showServers', title: 'Серверы' },
-  { key: 'showPlaytime', title: 'Часы в игре' },
-  { key: 'showFriends', title: 'Список друзей' },
-  { key: 'showAchievements', title: 'Достижения' },
-  { key: 'showMarket', title: 'Маркет' },
+const privacyRows = (): { key: PrivacyFlag; title: string; feature?: MarketFeature }[] => [
+  { key: 'showActivity', title: t('Игровая активность') },
+  { key: 'showServers', title: t('Серверы') },
+  { key: 'showPlaytime', title: t('Часы в игре') },
+  { key: 'showFriends', title: t('Список друзей') },
+  { key: 'showAchievements', title: t('Достижения') },
+  { key: 'showMarket', title: t('Маркет'), feature: 'market' },
 ]
 
-const NOTIFY_ROWS: [NotifyKind, string][] = [
-  ['msg', 'Личные сообщения'],
-  ['room', 'Сообщения в группах'],
-  ['play', 'Друг зашёл в игру'],
-  ['online', 'Друг в сети'],
-  ['request', 'Заявки в друзья'],
+const notifyRows = (): [NotifyKind, string][] => [
+  ['msg', t('Личные сообщения')],
+  ['room', t('Сообщения в группах')],
+  ['play', t('Друг зашёл в игру')],
+  ['online', t('Друг в сети')],
+  ['request', t('Заявки в друзья')],
 ]
 
-const NOTIFY_LEVELS: [NotifyLevel, string][] = [
-  ['sound', 'Со звуком'],
-  ['silent', 'Без звука'],
-  ['off', 'Выкл'],
+const notifyLevels = (): [NotifyLevel, string][] => [
+  ['sound', t('Со звуком')],
+  ['silent', t('Без звука')],
+  ['off', t('Выкл')],
 ]
 
 export function Settings({ on }: { on: boolean }) {
+  const t = useT()
+  const locale = useLocale()
+  const market = useMarket()
   const [sec, setSecState] = useState<SecId>(initialSec)
   const [query, setQuery] = useState('')
   const wantTab = useUi((s) => s.settingsTab)
@@ -322,45 +326,48 @@ export function Settings({ on }: { on: boolean }) {
     if (value === privacy.settings.duoInvites || privacy.saving === 'duoInvites') return
     privacy
       .patch({ duoInvites: value })
-      .then(() => showToast('Эмоции вдвоём: ' + (DUO_INVITE_OPTIONS.find(([v]) => v === value)?.[1] ?? '').toLowerCase()))
-      .catch(() => showToast('Не удалось сохранить настройку приглашений', 'error'))
+      .then(() => showToast(t('Эмоции вдвоём: {who}', { who: t(DUO_INVITE_OPTIONS.find(([v]) => v === value)?.[1] ?? '').toLowerCase() })))
+      .catch(() => showToast(t('Не удалось сохранить настройку приглашений'), 'error'))
   }
 
   const togglePrivacy = (key: PrivacyFlag) => {
     const next = !privacy.settings[key]
-    const row = PRIVACY_ROWS.find((r) => r.key === key)
+    const row = privacyRows().find((r) => r.key === key)
     privacy
       .patch({ [key]: next } as Partial<PrivacySettings>)
-      .then(() => showToast((row ? row.title : 'Настройка') + (next ? ' — видно всем' : ' — скрыто')))
-      .catch(() => showToast('Не удалось сохранить настройку приватности', 'error'))
+      .then(() => {
+        const name = row ? row.title : t('Настройка')
+        showToast(next ? t('{name} — видно всем', { name }) : t('{name} — скрыто', { name }))
+      })
+      .catch(() => showToast(t('Не удалось сохранить настройку приватности'), 'error'))
   }
 
   const onlyApp = (what: string) => {
     if (hasTauri()) return false
-    showToast(what + ' — в приложении лаунчера', 'error')
+    showToast(t('{what} — в приложении лаунчера', { what }), 'error')
     return true
   }
 
   // Смена папки без переноса файлов означала «сделай все сборки заново»:
   // спрашиваем и по умолчанию переносим уже скачанное.
   const changeDir = async () => {
-    if (onlyApp('Смена папки')) return
+    if (onlyApp(t('Смена папки'))) return
     try {
       const p = await pickGameDir()
       if (!p) return
-      const move = await uiConfirm('Перенести в новую папку уже скачанные сборки, версии, миры и ассеты?', {
-        confirmLabel: 'Перенести',
-        cancelLabel: 'Оставить на месте',
+      const move = await uiConfirm(t('Перенести в новую папку уже скачанные сборки, версии, миры и ассеты?'), {
+        confirmLabel: t('Перенести'),
+        cancelLabel: t('Оставить на месте'),
         danger: false,
       })
       setMoving(true)
-      showToast(move ? 'Переносим файлы игры…' : 'Меняем папку…')
+      showToast(move ? t('Переносим файлы игры…') : t('Меняем папку…'))
       await setGameDir(p, move)
       await refreshProfiles()
-      showToast(move ? 'Папка игры сменилась, файлы перенесены' : 'Папка игры сменилась')
+      showToast(move ? t('Папка игры сменилась, файлы перенесены') : t('Папка игры сменилась'))
     } catch (e) {
       console.error('[settings] game dir', e)
-      showToast('Папка не сменилась', 'error')
+      showToast(t('Папка не сменилась'), 'error')
     } finally {
       setMoving(false)
     }
@@ -371,21 +378,21 @@ export function Settings({ on }: { on: boolean }) {
 
   const uploadBackdrop = () => {
     if (!canPickBackdrop()) {
-      onlyApp('Свой фон')
+      onlyApp(t('Свой фон'))
       return
     }
     void pickBackdrop()
       .then((picked) => {
         if (!picked) return
         if (picked.kind === 'video') {
-          showToast('Фоном ставится картинка: PNG, JPG или WebP', 'error')
+          showToast(t('Фоном ставится картинка: PNG, JPG или WebP'), 'error')
           return
         }
         wp.addCustom(picked)
       })
       .catch((e) => {
         console.error('[settings] backdrop', e)
-        showToast('Фон не загрузился — попробуй другую картинку', 'error')
+        showToast(t('Фон не загрузился — попробуй другую картинку'), 'error')
       })
   }
 
@@ -393,10 +400,25 @@ export function Settings({ on }: { on: boolean }) {
 
   const look = (
     <>
+      <Block keys="язык language интерфейс перевод">
+        <Group title={t('Язык')}>
+          <Row title={t('Язык интерфейса')} keys="язык language">
+            <Select
+              value={locale}
+              options={AVAILABLE_LOCALES.map((l) => ({ value: l.code, label: l.native }))}
+              onChange={(v) => {
+                if (isAvailableLocale(v)) void setLocale(v)
+              }}
+              width={200}
+            />
+          </Row>
+        </Group>
+      </Block>
+
       <Block keys="цвет кнопок акцент цвет выделения палитра тема лаунчера plus diamond премиум">
-        <Group title="Цвет кнопок">
-          <div className="s2-swatches" id="accentSwatches" role="radiogroup" aria-label="Цвет кнопок">
-            {ACCENTS.map((a) => (
+        <Group title={t('Цвет кнопок')}>
+          <div className="s2-swatches" id="accentSwatches" role="radiogroup" aria-label={t('Цвет кнопок')}>
+            {accents().map((a) => (
               <button
                 key={a.id}
                 role="radio"
@@ -414,7 +436,7 @@ export function Settings({ on }: { on: boolean }) {
             <PremiumSwatches current={accent} onPick={setAccent} />
             <span className="s2-sw-wrap">
               <button
-                aria-label="Свой цвет"
+                aria-label={t('Свой цвет')}
                 className={'s2-sw custom' + (accent === 'custom' ? ' on' : '')}
                 style={accent === 'custom' ? { background: customHex } : undefined}
                 onClick={() => setPickerOpen((o) => !o)}
@@ -435,21 +457,21 @@ export function Settings({ on }: { on: boolean }) {
             </span>
           </div>
         </Group>
-        <Group title="Тема лаунчера">
+        <Group title={t('Тема лаунчера')}>
           <ThemeRow />
         </Group>
       </Block>
 
       <Block keys="фон лобби обои картинка фото свой фон загрузить сцена галерея">
-        <Group title="Фон">
+        <Group title={t('Фон')}>
           <div className="s2-wp">
             <button
-              aria-label="Сцена"
+              aria-label={t('Сцена')}
               className={'s2-wp-tile' + (wp.wpCur === 'pixels' ? ' on' : '')}
-              onClick={() => wp.pick('pixels', 'Сцена')}
+              onClick={() => wp.pick('pixels', t('Сцена'))}
             >
               <i className="s2-wp-pixels" aria-hidden="true" />
-              <span>Сцена</span>
+              <span>{t('Сцена')}</span>
             </button>
             {STILLS.map((v) => (
               <button
@@ -467,7 +489,7 @@ export function Settings({ on }: { on: boolean }) {
                 key={c.path}
                 role="button"
                 tabIndex={0}
-                aria-label={c.name || 'Свой фон'}
+                aria-label={c.name || t('Свой фон')}
                 className={
                   's2-wp-tile' + (wp.wpCur === 'custom' && wp.custom && wp.custom.path === c.path ? ' on' : '')
                 }
@@ -477,10 +499,10 @@ export function Settings({ on }: { on: boolean }) {
                 }}
               >
                 <img src={convertFileSrc(c.path)} alt="" />
-                <span>{c.name || 'Свой фон'}</span>
+                <span>{c.name || t('Свой фон')}</span>
                 <button
                   className="s2-wp-del"
-                  aria-label="Удалить фон"
+                  aria-label={t('Удалить фон')}
                   onClick={(e) => {
                     e.stopPropagation()
                     wp.removeCustom(c.path)
@@ -494,7 +516,7 @@ export function Settings({ on }: { on: boolean }) {
               <span className="s2-wp-ph">
                 <Icon id="i-upload" />
               </span>
-              <span>Свой фон</span>
+              <span>{t('Свой фон')}</span>
             </button>
           </div>
         </Group>
@@ -502,38 +524,38 @@ export function Settings({ on }: { on: boolean }) {
 
 
       <Block keys="иконка приложения значок ярлык док панель задач искра пламя аметист легенда золото алмаз">
-        <Group title="Иконка приложения">
+        <Group title={t('Иконка приложения')}>
           <AppIconPicker />
         </Group>
       </Block>
 
       <Block keys="анимация движение персонаж танцует фон переход между вкладками скорость плавность оптимизация качество слабый пк производительность лаги fps">
-        <Group title="Анимация">
-          <Row title="Оптимизация" keys="оптимизация качество слабый пк производительность лаги fps плавность">
+        <Group title={t('Анимация')}>
+          <Row title={t('Оптимизация')} keys="оптимизация качество слабый пк производительность лаги fps плавность">
             <Segs<PerfMode>
               value={perf}
               options={[
-                ['auto', 'Авто'],
-                ['high', 'Полное'],
-                ['low', 'Слабый ПК'],
+                ['auto', t('Авто')],
+                ['high', t('Полное')],
+                ['low', t('Слабый ПК')],
               ]}
               onPick={(v) => useViewPrefs.getState().setPerf(v)}
             />
           </Row>
-          <Row title="Персонаж танцует" keys="персонаж анимация танец движение">
-            <Toggle label="Персонаж танцует" on={charAnim} onChange={() => useViewPrefs.getState().setCharAnim(!charAnim)} />
+          <Row title={t('Персонаж танцует')} keys="персонаж анимация танец движение">
+            <Toggle label={t('Персонаж танцует')} on={charAnim} onChange={() => useViewPrefs.getState().setCharAnim(!charAnim)} />
           </Row>
-          <Row title="Живой фон" keys="фон анимация сцена лобби волна искры">
-            <Toggle label="Живой фон" on={bgAnim} onChange={() => useViewPrefs.getState().setBgAnim(!bgAnim)} />
+          <Row title={t('Живой фон')} keys="фон анимация сцена лобби волна искры">
+            <Toggle label={t('Живой фон')} on={bgAnim} onChange={() => useViewPrefs.getState().setBgAnim(!bgAnim)} />
           </Row>
-          <Row title="Переход между вкладками" keys="переход вкладки скорость длительность плавность анимация">
+          <Row title={t('Переход между вкладками')} keys="переход вкладки скорость длительность плавность анимация">
             <Segs<number>
               value={tabMs}
               options={[
-                [0, 'Выкл'],
-                [190, 'Быстро'],
-                [TAB_MS_DEFAULT, 'Обычно'],
-                [640, 'Медленно'],
+                [0, t('Выкл')],
+                [190, t('Быстро')],
+                [TAB_MS_DEFAULT, t('Обычно')],
+                [640, t('Медленно')],
               ]}
               onPick={(v) => useViewPrefs.getState().setTabMs(v)}
             />
@@ -543,13 +565,13 @@ export function Settings({ on }: { on: boolean }) {
 
       {/* В самом конце «Вида» (владелец 07.10.2026: «чтобы мало кто видел»). */}
       <Block keys="старый вид старая версия новая версия раскладка меню боковая панель классика лобби интерфейс">
-        <Group title="Версия интерфейса">
-          <Row title="Вид лаунчера" hint="Старый — разделы в панели слева" keys="старый вид новая версия раскладка боковая панель классика лобби">
+        <Group title={t('Версия интерфейса')}>
+          <Row title={t('Вид лаунчера')} hint={t('Старый — разделы в панели слева')} keys="старый вид новая версия раскладка боковая панель классика лобби">
             <Segs<Layout>
               value={layout}
               options={[
-                ['lobby', 'Новый'],
-                ['classic', 'Старый'],
+                ['lobby', t('Новый')],
+                ['classic', t('Старый')],
               ]}
               onPick={(v) => useLayout.getState().set(v)}
             />
@@ -561,13 +583,13 @@ export function Settings({ on }: { on: boolean }) {
 
   const sound = (
     <>
-      <Group title="Музыка">
-        <Row title="Музыка сейчас" keys="музыка радио включить выключить">
+      <Group title={t('Музыка')}>
+        <Row title={t('Музыка сейчас')} keys="музыка радио включить выключить">
           <MusicNow />
         </Row>
-        <Row title="Музыка при запуске" keys="мелодия фоновая">
+        <Row title={t('Музыка при запуске')} keys="мелодия фоновая">
           <Toggle
-            label="Музыка при запуске"
+            label={t('Музыка при запуске')}
             on={musicAuto}
             onChange={() => {
               const next = !musicAuto
@@ -580,14 +602,14 @@ export function Settings({ on }: { on: boolean }) {
         <RadioCredits />
       </Group>
 
-      <Group title="Звуки">
-        <Row title="Звуки Minecraft" keys="звуки интерфейса клики тишина">
+      <Group title={t('Звуки')}>
+        <Row title={t('Звуки Minecraft')} keys="звуки интерфейса клики тишина">
           <Segs<SoundMode>
             value={soundMd}
             options={[
-              ['off', 'Выкл'],
-              ['notify', 'Уведомления'],
-              ['all', 'Все'],
+              ['off', t('Выкл')],
+              ['notify', t('Уведомления')],
+              ['all', t('Все')],
             ]}
             onPick={(v) => {
               setSoundMd(v)
@@ -598,7 +620,7 @@ export function Settings({ on }: { on: boolean }) {
           />
         </Row>
         {soundMd !== 'off' ? (
-          <Row title="Громкость звуков" keys="громкость">
+          <Row title={t('Громкость звуков')} keys="громкость">
             <div className="s2-slider">
               <Slider
                 value={soundVol}
@@ -611,23 +633,23 @@ export function Settings({ on }: { on: boolean }) {
                 }}
               />
               <span className="s2-val">{soundVol + '%'}</span>
-              <button className="btn sm ghost" data-nosound aria-label="Проверить звук" onClick={() => playSound('achievement')}>
+              <button className="btn sm ghost" data-nosound aria-label={t('Проверить звук')} onClick={() => playSound('achievement')}>
                 <Icon id="i-play" />
               </button>
               <button
                 className="btn sm ghost"
                 disabled={soundBusy}
-                aria-label="Скачать звуки из игры заново"
-                data-tip="Скачать звуки из игры заново"
+                aria-label={t('Скачать звуки из игры заново')}
+                data-tip={t('Скачать звуки из игры заново')}
                 onClick={() => {
                   setSoundBusy(true)
                   fetchSounds()
                     .then((n) =>
-                      showToast(n ? 'Звуков из игры: ' + n : 'Не удалось скачать звуки', n ? 'ok' : 'error', false),
+                      showToast(n ? t('Звуков из игры: {n}', { n }) : t('Не удалось скачать звуки'), n ? 'ok' : 'error', false),
                     )
                     .catch((e) => {
                       console.error('[settings] sounds', e)
-                      showToast('Звуки не скачались', 'error', false)
+                      showToast(t('Звуки не скачались'), 'error', false)
                     })
                     .finally(() => setSoundBusy(false))
                 }}
@@ -640,20 +662,20 @@ export function Settings({ on }: { on: boolean }) {
       </Group>
 
       <Block keys="уведомления сообщения друг в сети заявки группы в игре со звуком без звука">
-        <Group title="Уведомления">
+        <Group title={t('Уведомления')}>
           <div className="s2-matrix" role="table">
             <div className="s2-mx-head" role="row">
               <span></span>
-              {NOTIFY_LEVELS.map(([v, label]) => (
+              {notifyLevels().map(([v, label]) => (
                 <span key={v} role="columnheader" className="s2-mx-col">
                   {label}
                 </span>
               ))}
             </div>
-            {NOTIFY_ROWS.map(([kind, label]) => (
+            {notifyRows().map(([kind, label]) => (
               <div className="s2-mx-row" role="row" key={kind}>
                 <span className="s2-mx-lab">{label}</span>
-                {NOTIFY_LEVELS.map(([v, seg]) => (
+                {notifyLevels().map(([v, seg]) => (
                   <span key={v} className="s2-mx-cell">
                     <button
                       role="radio"
@@ -675,9 +697,9 @@ export function Settings({ on }: { on: boolean }) {
         </Group>
       </Block>
       <Group>
-        <Row title="Карточки поверх всех окон" hint="Даже когда лаунчер свёрнут" keys="уведомления рабочий стол">
+        <Row title={t('Карточки поверх всех окон')} hint={t('Даже когда лаунчер свёрнут')} keys="уведомления рабочий стол">
           <Toggle
-            label="Карточки поверх всех окон"
+            label={t('Карточки поверх всех окон')}
             on={overlay.toasts}
             onChange={() => {
               const next = !overlay.toasts
@@ -685,14 +707,14 @@ export function Settings({ on }: { on: boolean }) {
               setDesktopToasts(next).catch((err) => {
                 console.error('[settings] desktop toasts', err)
                 setOverlay({ ...overlay, toasts: !next })
-                showToast('Не получилось — попробуй ещё раз', 'error', false)
+                showToast(t('Не получилось — попробуй ещё раз'), 'error', false)
               })
             }}
           />
         </Row>
-        <Row title="Напоминать о серии" hint="Вечером, если сундук не забран" keys="серия сундук бонус напоминание уведомления">
+        <Row title={t('Напоминать о серии')} hint={t('Вечером, если сундук не забран')} keys="серия сундук бонус напоминание уведомления">
           <Toggle
-            label="Напоминать о серии"
+            label={t('Напоминать о серии')}
             on={streakRemind}
             onChange={() => {
               const next = !streakRemind
@@ -701,17 +723,17 @@ export function Settings({ on }: { on: boolean }) {
             }}
           />
         </Row>
-        <Row title="Сколько висит карточка" keys="время уведомления секунды">
+        <Row title={t('Сколько висит карточка')} keys="время уведомления секунды">
           <Segs<number>
             value={overlay.cardMs}
-            options={CARD_TTL_CHOICES.map((ms) => [ms, ms / 1000 + ' с'] as [number, string])}
+            options={CARD_TTL_CHOICES.map((ms) => [ms, t('{n} с', { n: ms / 1000 })] as [number, string])}
             onPick={(ms) => {
               const prev = overlay.cardMs
               setOverlay({ ...overlay, cardMs: ms })
               overlaySetCardMs(ms).catch((err) => {
                 console.error('[settings] card ttl', err)
                 setOverlay({ ...overlay, cardMs: prev })
-                showToast('Не сохранилось', 'error', false)
+                showToast(t('Не сохранилось'), 'error', false)
               })
             }}
           />
@@ -719,7 +741,7 @@ export function Settings({ on }: { on: boolean }) {
       </Group>
 
       <Block keys="микрофон наушники динамики устройства звонок шумоподавление громкость голоса">
-        <Group title="Микрофон и наушники">
+        <Group title={t('Микрофон и наушники')}>
           <AudioSettings />
         </Group>
       </Block>
@@ -728,19 +750,19 @@ export function Settings({ on }: { on: boolean }) {
 
   const game = (
     <>
-      <Group title="Скин">
-        <Row title="Откуда брать скин" keys="скины плащи лицензия millida mojang">
+      <Group title={t('Скин')}>
+        <Row title={t('Откуда брать скин')} keys="скины плащи лицензия millida mojang">
           <Segs<SkinSource>
             value={skins}
             options={[
               ['millida', 'Millida'],
-              ['mojang', 'Лицензия'],
+              ['mojang', t('Лицензия')],
             ]}
             onPick={(v) => {
               // Без лицензии Mojang скин брать неоткуда: в игре остаётся
               // Стив, и по этому пути игрок уже приходил в поддержку.
               if (v === 'mojang' && (!acc || acc.kind !== 'microsoft')) {
-                showToast('Скин из лицензии — только с аккаунтом Microsoft', 'error')
+                showToast(t('Скин из лицензии — только с аккаунтом Microsoft'), 'error')
                 return
               }
               setSkins(v)
@@ -748,34 +770,34 @@ export function Settings({ on }: { on: boolean }) {
             }}
           />
         </Row>
-        <Row title="Мод Millida" hint="Скины, плащи и эмоции в игре" keys="мод эмоции плащи">
+        <Row title={t('Мод Millida')} hint={t('Скины, плащи и эмоции в игре')} keys="мод эмоции плащи">
           <Toggle
             id="setMillidaMod"
-            label="Мод Millida"
+            label={t('Мод Millida')}
             on={modOn}
             onChange={() => {
               const next = !modOn
               setModOn(next)
               setMillidaModEnabled(next)
-                .then(() => showToast(next ? 'Мод вернётся при следующем запуске сборки' : 'Мод убран из сборок'))
+                .then(() => showToast(next ? t('Мод вернётся при следующем запуске сборки') : t('Мод убран из сборок')))
                 .catch((err) => {
                   console.error('[settings] millida mod', err)
                   setModOn(!next)
-                  showToast('Не получилось — попробуй ещё раз', 'error')
+                  showToast(t('Не получилось — попробуй ещё раз'), 'error')
                 })
             }}
           />
         </Row>
       </Group>
 
-      <Group title="Во время игры">
-        <Row title="Лаунчер при запуске игры" keys="окно свернуть трей оставить">
+      <Group title={t('Во время игры')}>
+        <Row title={t('Лаунчер при запуске игры')} keys="окно свернуть трей оставить">
           <Segs<LaunchWindowMode>
             value={winMode}
             options={[
-              ['none', 'Оставить'],
-              ['minimize', 'Свернуть'],
-              ...(tray ? [['tray', 'В трей'] as [LaunchWindowMode, string]] : []),
+              ['none', t('Оставить')],
+              ['minimize', t('Свернуть')],
+              ...(tray ? [['tray', t('В трей')] as [LaunchWindowMode, string]] : []),
             ]}
             onPick={(mode) => {
               setWinMode(mode)
@@ -783,9 +805,9 @@ export function Settings({ on }: { on: boolean }) {
             }}
           />
         </Row>
-        <Row title="Вернуть лаунчер после игры" keys="окно развернуть">
+        <Row title={t('Вернуть лаунчер после игры')} keys="окно развернуть">
           <Toggle
-            label="Вернуть лаунчер после игры"
+            label={t('Вернуть лаунчер после игры')}
             on={backAfterGame}
             onChange={() => {
               const next = !backAfterGame
@@ -794,10 +816,10 @@ export function Settings({ on }: { on: boolean }) {
             }}
           />
         </Row>
-        <Row title="Чат друзей поверх игры" hint={<kbd className="s2-kbd">{overlay.hotkey}</kbd>} keys="оверлей горячая клавиша">
+        <Row title={t('Чат друзей поверх игры')} hint={<kbd className="s2-kbd">{overlay.hotkey}</kbd>} keys="оверлей горячая клавиша">
           <Toggle
             id="setOverlay"
-            label="Чат друзей поверх игры"
+            label={t('Чат друзей поверх игры')}
             on={overlay.enabled}
             onChange={() => {
               const next = !overlay.enabled
@@ -805,15 +827,15 @@ export function Settings({ on }: { on: boolean }) {
               overlaySetEnabled(next).catch((err) => {
                 console.error('[settings] overlay', err)
                 setOverlay({ ...overlay, enabled: !next })
-                showToast('Оверлей не включился', 'error')
+                showToast(t('Оверлей не включился'), 'error')
               })
             }}
           />
         </Row>
-        <Row title="Снапшоты в списке версий" keys="версии тестовые снапшоты">
+        <Row title={t('Снапшоты в списке версий')} keys="версии тестовые снапшоты">
           <Toggle
             id="setSnapshots"
-            label="Снапшоты в списке версий"
+            label={t('Снапшоты в списке версий')}
             on={showSnapshots}
             onChange={() => useMcVersionList.getState().setShow(!showSnapshots)}
           />
@@ -824,24 +846,24 @@ export function Settings({ on }: { on: boolean }) {
 
   const files = (
     <>
-      <Group title="Папка игры">
-        <Row title="Папка игры" hint={moving ? 'Переносим — не закрывай лаунчер' : undefined} keys="директория путь сменить открыть">
+      <Group title={t('Папка игры')}>
+        <Row title={t('Папка игры')} hint={moving ? t('Переносим — не закрывай лаунчер') : undefined} keys="директория путь сменить открыть">
           <button className="btn sm secondary" onClick={() => openGameFolder()} disabled={moving}>
-            Открыть
+            {t('Открыть')}
           </button>
           <button className="btn sm secondary" onClick={() => void changeDir()} disabled={moving}>
-            {moving ? 'Переносим…' : 'Сменить'}
+            {moving ? t('Переносим…') : t('Сменить')}
           </button>
         </Row>
-        <Row title="Кэш" hint={cacheMb === null ? undefined : cacheMb + ' МБ'} keys="временные файлы очистить место">
+        <Row title={t('Кэш')} hint={cacheMb === null ? undefined : t('{n} МБ', { n: cacheMb })} keys="временные файлы очистить место">
           <button
             className="btn sm secondary"
             disabled={clearing || !cacheMb}
             onClick={async () => {
-              if (onlyApp('Очистка кэша')) return
+              if (onlyApp(t('Очистка кэша'))) return
               if (
-                !(await uiConfirm('Очистить кэш и временные файлы? Сборки, миры и версии не тронем.', {
-                  confirmLabel: 'Очистить',
+                !(await uiConfirm(t('Очистить кэш и временные файлы? Сборки, миры и версии не тронем.'), {
+                  confirmLabel: t('Очистить'),
                   danger: false,
                 }))
               )
@@ -849,17 +871,17 @@ export function Settings({ on }: { on: boolean }) {
               setClearing(true)
               clearCache()
                 .then((freed) => {
-                  showToast('Освобождено ' + Math.round(freed / 1024 / 1024) + ' МБ')
+                  showToast(t('Освобождено {n} МБ', { n: Math.round(freed / 1024 / 1024) }))
                   setCacheMb(0)
                 })
                 .catch((e) => {
                   console.error('[settings] cache', e)
-                  showToast('Не удалось очистить', 'error')
+                  showToast(t('Не удалось очистить'), 'error')
                 })
                 .finally(() => setClearing(false))
             }}
           >
-            {clearing ? 'Чистим…' : 'Очистить'}
+            {clearing ? t('Чистим…') : t('Очистить')}
           </button>
         </Row>
         <Block keys="общее хранилище моды дубли место">
@@ -868,26 +890,26 @@ export function Settings({ on }: { on: boolean }) {
       </Group>
 
       <Group title="Java">
-        <Row title="Java для всех сборок" hint={javaDef ? javaDef.version : 'Сама под каждую сборку'} keys="java джава путь авто">
+        <Row title={t('Java для всех сборок')} hint={javaDef ? javaDef.version : t('Сама под каждую сборку')} keys="java джава путь авто">
           <button
             className="btn sm secondary"
             onClick={() => {
-              if (onlyApp('Выбор Java')) return
+              if (onlyApp(t('Выбор Java'))) return
               pickJavaPath()
                 .then((j) => {
                   if (!j) return
                   return setDefaultJava(j.path).then(() => {
                     setJavaDef(j)
-                    showToast('Java для всех сборок: ' + j.version)
+                    showToast(t('Java для всех сборок: {version}', { version: j.version }))
                   })
                 })
                 .catch((e) => {
                   trackFailure('settings', e, { step: 'java_pick' })
-                  showToast(apiErrorText(e, 'Не получилось — попробуй ещё раз'), 'error')
+                  showToast(apiErrorText(e, t('Не получилось — попробуй ещё раз')), 'error')
                 })
             }}
           >
-            Указать
+            {t('Указать')}
           </button>
           {javaDef ? (
             <button
@@ -896,19 +918,19 @@ export function Settings({ on }: { on: boolean }) {
                 setDefaultJava(null)
                   .then(() => {
                     setJavaDef(null)
-                    showToast('Java снова выбирается сама')
+                    showToast(t('Java снова выбирается сама'))
                   })
                   .catch((e) => {
                     trackFailure('settings', e, { step: 'java_reset' })
-                    showToast(apiErrorText(e, 'Не получилось — попробуй ещё раз'), 'error')
+                    showToast(apiErrorText(e, t('Не получилось — попробуй ещё раз')), 'error')
                   })
               }}
             >
-              Сбросить
+              {t('Сбросить')}
             </button>
           ) : null}
         </Row>
-        <Row title="Скачать Java" hint={javaBusy ? 'Качаем Java ' + javaBusy + '…' : undefined} keys="java установить">
+        <Row title={t('Скачать Java')} hint={javaBusy ? t('Качаем Java {n}…', { n: javaBusy }) : undefined} keys="java установить">
           <Select
             value={String(javaWant)}
             options={majors.map((m) => ({ value: String(m), label: 'Java ' + m }))}
@@ -919,53 +941,53 @@ export function Settings({ on }: { on: boolean }) {
             className="btn sm secondary"
             disabled={!!javaBusy}
             onClick={() => {
-              if (onlyApp('Скачивание Java')) return
+              if (onlyApp(t('Скачивание Java'))) return
               setJavaBusy(javaWant)
               downloadJavaRuntime(javaWant)
                 .then((v) => {
-                  showToast('Java готова: ' + v)
+                  showToast(t('Java готова: {version}', { version: v }))
                   void listJavaRuntimes().then(setJavas).catch(() => {})
                 })
                 .catch((e) => {
                   trackFailure('settings', e, { step: 'java_download', major: javaWant })
-                  showToast(apiErrorText(e, 'Не получилось — попробуй ещё раз'), 'error')
+                  showToast(apiErrorText(e, t('Не получилось — попробуй ещё раз')), 'error')
                 })
                 .finally(() => setJavaBusy(0))
             }}
           >
             {javaBusy ? <span className="spin"></span> : null}
-            {javaBusy ? 'Качаем…' : 'Скачать'}
+            {javaBusy ? t('Качаем…') : t('Скачать')}
           </button>
         </Row>
         {javas.map((j) => (
           <Row
             key={j.major}
             title={'Java ' + j.major}
-            hint={Math.round(j.size / 1024 / 1024) + ' МБ · ' + (j.in_use ? 'нужна сборкам' : 'не используется')}
+            hint={(j.in_use ? t('{n} МБ · нужна сборкам', { n: Math.round(j.size / 1024 / 1024) }) : t('{n} МБ · не используется', { n: Math.round(j.size / 1024 / 1024) }))}
             keys="java установленная удалить"
           >
             <button
               className="btn sm ghost"
-              aria-label={'Удалить Java ' + j.major}
+              aria-label={t('Удалить Java {n}', { n: j.major })}
               onClick={async () => {
                 const question = j.in_use
-                  ? 'Удалить Java ' + j.major + '? Она нужна установленным сборкам — лаунчер скачает её заново при их запуске.'
-                  : 'Удалить Java ' + j.major + '? Если понадобится, лаунчер скачает её сам.'
+                  ? t('Удалить Java {n}? Она нужна установленным сборкам — лаунчер скачает её заново при их запуске.', { n: j.major })
+                  : t('Удалить Java {n}? Если понадобится, лаунчер скачает её сам.', { n: j.major })
                 if (
                   !(await uiConfirm(question, {
-                    confirmLabel: 'Удалить',
+                    confirmLabel: t('Удалить'),
                     danger: true,
                   }))
                 )
                   return
                 removeJavaRuntime(j.major)
                   .then((freed) => {
-                    showToast('Освобождено ' + Math.round(freed / 1024 / 1024) + ' МБ')
+                    showToast(t('Освобождено {n} МБ', { n: Math.round(freed / 1024 / 1024) }))
                     void listJavaRuntimes().then(setJavas).catch(() => {})
                   })
                   .catch((e) => {
                     console.error('[settings] java remove', e)
-                    showToast(apiErrorText(e, 'Не удалось удалить'), 'error')
+                    showToast(apiErrorText(e, t('Не удалось удалить')), 'error')
                   })
               }}
             >
@@ -976,7 +998,7 @@ export function Settings({ on }: { on: boolean }) {
       </Group>
 
       <Block keys="облако облачный профиль синхронизация сборки выгрузить забрать">
-        <Group title="Облако">
+        <Group title={t('Облако')}>
           <CloudSync />
         </Group>
       </Block>
@@ -987,7 +1009,7 @@ export function Settings({ on }: { on: boolean }) {
     <>
       {millidaAcc ? (
         <Group>
-          <Row title="Баланс" hint={(((millidaAcc.balance || 0) / 100) | 0).toLocaleString('ru-RU') + ' ₽'} keys="кошелёк деньги пополнить рубли">
+          <Row title={t('Баланс')} hint={(((millidaAcc.balance || 0) / 100) | 0).toLocaleString(intlTag()) + ' ₽'} keys="кошелёк деньги пополнить рубли">
             <button
               className="btn sm secondary"
               onClick={() => {
@@ -995,21 +1017,21 @@ export function Settings({ on }: { on: boolean }) {
                 openExt(WALLET_URL)
               }}
             >
-              Пополнить
+              {t('Пополнить')}
             </button>
           </Row>
         </Group>
       ) : null}
 
-      <Group title="Видно в профиле на millida.net">
+      <Group title={t('Видно в профиле на millida.net')}>
         {!hasMillida ? (
-          <Row title="Нужен аккаунт Millida" keys="приватность профиль видно">
+          <Row title={t('Нужен аккаунт Millida')} keys="приватность профиль видно">
             <button className="btn sm primary" onClick={() => logoutToLogin()}>
-              <Icon id="i-login" /> Войти
+              <Icon id="i-login" /> {t('Войти')}
             </button>
           </Row>
         ) : (
-          PRIVACY_ROWS.map((r) => (
+          privacyRows().filter((r) => !r.feature || marketOffers(market, r.feature)).map((r) => (
             <Row key={r.key} title={r.title} keys="приватность профиль видно скрыть">
               {!privacy.loaded && privacy.loading ? (
                 <span className="skel" style={{ width: '42px', height: '24px' }}></span>
@@ -1025,31 +1047,31 @@ export function Settings({ on }: { on: boolean }) {
           ))
         )}
         {privacy.error ? (
-          <Row title="Не загрузилось" keys="приватность ошибка">
+          <Row title={t('Не загрузилось')} keys="приватность ошибка">
             <span data-err={privacy.error} hidden></span>
             <button className="btn sm secondary" onClick={() => void loadPrivacy(true)}>
-              <Icon id="i-restart" /> Повторить
+              <Icon id="i-restart" /> {t('Повторить')}
             </button>
           </Row>
         ) : null}
       </Group>
 
       {hasMillida ? (
-        <Group title="Эмоции вдвоём">
-          <Row title="Кто может звать" keys="эмоции вдвоём приглашение приватность друзья">
+        <Group title={t('Эмоции вдвоём')}>
+          <Row title={t('Кто может звать')} keys="эмоции вдвоём приглашение приватность друзья">
             {!privacy.loaded && privacy.loading ? (
               <span className="skel" style={{ width: '180px', height: '28px' }}></span>
             ) : (
-              <Segs<DuoInvites> value={privacy.settings.duoInvites} options={DUO_INVITE_OPTIONS} onPick={pickDuoInvites} />
+              <Segs<DuoInvites> value={privacy.settings.duoInvites} options={DUO_INVITE_OPTIONS.map(([v, label]) => [v, t(label)] as [DuoInvites, string])} onPick={pickDuoInvites} />
             )}
           </Row>
         </Group>
       ) : null}
 
-      <Group title="Снаружи">
-        <Row title="Активность в Discord" keys="дискорд статус rich presence приватность">
+      <Group title={t('Снаружи')}>
+        <Row title={t('Активность в Discord')} keys="дискорд статус rich presence приватность">
           <Toggle
-            label="Активность в Discord"
+            label={t('Активность в Discord')}
             on={discord}
             onChange={() => {
               const next = !discord
@@ -1060,10 +1082,10 @@ export function Settings({ on }: { on: boolean }) {
             }}
           />
         </Row>
-        <Row title="Статистика использования" hint="Версия, железо, вылеты, клики. Без паролей и файлов" keys="телеметрия данные приватность анонимная статистика">
+        <Row title={t('Статистика использования')} hint={t('Версия, железо, вылеты, клики. Без паролей и файлов')} keys="телеметрия данные приватность анонимная статистика">
           <Toggle
             id="setTelemetry"
-            label="Статистика использования"
+            label={t('Статистика использования')}
             on={telemetryOn}
             onChange={() => {
               const next = !telemetryOn
@@ -1086,11 +1108,11 @@ export function Settings({ on }: { on: boolean }) {
             <small>
               {upd
                 ? updStaged
-                  ? 'Обновление ' + upd.version + ' встанет при выходе'
-                  : 'Доступна ' + upd.version
+                  ? t('Обновление {version} встанет при выходе', { version: upd.version })
+                  : t('Доступна {version}', { version: upd.version })
                 : ver
-                  ? 'Версия ' + ver
-                  : 'Версия приложения'}
+                  ? t('Версия {version}', { version: ver })
+                  : t('Версия приложения')}
             </small>
           </span>
           {upd ? (
@@ -1102,11 +1124,11 @@ export function Settings({ on }: { on: boolean }) {
                 upd.install().catch((e) => {
                   console.error('[settings] update', e)
                   setUpdBusy(false)
-                  showToast('Не удалось обновиться', 'error')
+                  showToast(t('Не удалось обновиться'), 'error')
                 })
               }}
             >
-              <Icon id="i-restart" /> {updBusy ? 'Обновляем…' : 'Обновить'}
+              <Icon id="i-restart" /> {updBusy ? t('Обновляем…') : t('Обновить')}
             </button>
           ) : (
             <button
@@ -1117,12 +1139,12 @@ export function Settings({ on }: { on: boolean }) {
                 void checkForUpdate(true)
                   .then((u) => {
                     setUpd(u)
-                    if (!u) showToast('Стоит последняя версия')
+                    if (!u) showToast(t('Стоит последняя версия'))
                   })
                   .finally(() => setUpdBusy(false))
               }}
             >
-              {updBusy ? <span className="spin"></span> : <Icon id="i-restart" />} Проверить
+              {updBusy ? <span className="spin"></span> : <Icon id="i-restart" />} {t('Проверить')}
             </button>
           )}
         </div>
@@ -1130,17 +1152,17 @@ export function Settings({ on }: { on: boolean }) {
 
       <Group>
         {/* Не верят, что лаунчер собран из открытого кода: ссылка на релиз именно этой версии на GitHub, там файлы, отпечатки и свидетельство сборки. */}
-        <Row title="Собран на GitHub" hint={ver ? 'v' + ver : undefined} keys="github исходный код открытый безопасность вирус проверить сборка">
+        <Row title={t('Собран на GitHub')} hint={ver ? 'v' + ver : undefined} keys="github исходный код открытый безопасность вирус проверить сборка">
           <button
             className="btn md secondary"
             onClick={() => void openUrl('https://github.com/millida/launcher/releases' + (ver ? '/tag/v' + ver : '')).catch(() => {})}
           >
-            Открыть
+            {t('Открыть')}
           </button>
         </Row>
-        <Row title="Тестовые версии" hint={beta ? 'Раньше всех, бывают поломки' : undefined} keys="бета тестирование обновления раньше">
+        <Row title={t('Тестовые версии')} hint={beta ? t('Раньше всех, бывают поломки') : undefined} keys="бета тестирование обновления раньше">
           <Toggle
-            label="Тестовые версии"
+            label={t('Тестовые версии')}
             on={beta}
             onChange={() => {
               const next = !beta
@@ -1149,9 +1171,9 @@ export function Settings({ on }: { on: boolean }) {
             }}
           />
         </Row>
-        <Row title="Запускать вместе с системой" hint="Сразу в трей" keys="автозапуск автозагрузка система windows трей включение">
+        <Row title={t('Запускать вместе с системой')} hint={t('Сразу в трей')} keys="автозапуск автозагрузка система windows трей включение">
           <Toggle
-            label="Запускать вместе с системой"
+            label={t('Запускать вместе с системой')}
             on={autostart}
             onChange={() => {
               const next = !autostart
@@ -1162,19 +1184,19 @@ export function Settings({ on }: { on: boolean }) {
                 .catch((err) => {
                   console.error('[settings] autostart', err)
                   setAutostartOn(!next)
-                  showToast('Система не дала — попробуй ещё раз', 'error', false)
+                  showToast(t('Система не дала — попробуй ещё раз'), 'error', false)
                 })
             }}
           />
         </Row>
-        <Row title="Крестик прячет в трей" hint={tray ? undefined : 'Трей недоступен в этой системе'} keys="трей закрывать окно свернуть">
+        <Row title={t('Крестик прячет в трей')} hint={tray ? undefined : t('Трей недоступен в этой системе')} keys="трей закрывать окно свернуть">
           <Toggle
-            label="Крестик прячет в трей"
+            label={t('Крестик прячет в трей')}
             on={trayClose}
             disabled={!tray}
             onChange={() => {
               if (!tray) {
-                showToast('Трей недоступен в этой системе', 'error')
+                showToast(t('Трей недоступен в этой системе'), 'error')
                 return
               }
               const next = !trayClose
@@ -1183,14 +1205,14 @@ export function Settings({ on }: { on: boolean }) {
             }}
           />
         </Row>
-        <Row title="Гайд по лаунчеру" keys="обучение тур подсказки помощь">
+        <Row title={t('Гайд по лаунчеру')} keys="обучение тур подсказки помощь">
           <button className="btn sm secondary" onClick={startTour}>
-            Показать
+            {t('Показать')}
           </button>
         </Row>
         <Row
-          title="Отчёт для поддержки"
-          hint={diagText ? 'Скопировано — вставь в чат поддержки' : undefined}
+          title={t('Отчёт для поддержки')}
+          hint={diagText ? t('Скопировано — вставь в чат поддержки') : undefined}
           keys="диагностика данные поддержка ошибка логи помощь"
         >
           <button
@@ -1202,21 +1224,21 @@ export function Settings({ on }: { on: boolean }) {
                 .then(async (text) => {
                   setDiagText(text)
                   const ok = await copyText(text)
-                  showToast(ok ? 'Отчёт скопирован' : 'Не скопировалось — выдели текст ниже', ok ? 'ok' : 'error')
+                  showToast(ok ? t('Отчёт скопирован') : t('Не скопировалось — выдели текст ниже'), ok ? 'ok' : 'error')
                   if (!ok) setDiagOpen(true)
                 })
                 .catch((e) => {
                   console.error('[settings] diag', e)
-                  showToast('Отчёт не собрался', 'error')
+                  showToast(t('Отчёт не собрался'), 'error')
                 })
                 .finally(() => setDiagBusy(false))
             }}
           >
-            {diagBusy ? 'Собираем…' : 'Копировать'}
+            {diagBusy ? t('Собираем…') : t('Копировать')}
           </button>
           {diagText ? (
             <button className="btn sm ghost" onClick={() => setDiagOpen((o) => !o)}>
-              {diagOpen ? 'Скрыть' : 'Текст'}
+              {diagOpen ? t('Скрыть') : t('Текст')}
             </button>
           ) : null}
         </Row>
@@ -1234,27 +1256,27 @@ export function Settings({ on }: { on: boolean }) {
     <section className={'screen' + (on ? ' on' : '')} id="s-settings">
       <div className="s2">
         <div className="s2-head">
-          <h1 className="s2-title">Настройки</h1>
+          <h1 className="s2-title">{t('Настройки')}</h1>
           <label className="input sm s2-search">
             <Icon id="i-search" />
             <input
               value={query}
-              placeholder="Найти"
-              aria-label="Найти настройку"
+              placeholder={t('Найти')}
+              aria-label={t('Найти настройку')}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Escape') setQuery('')
               }}
             />
             {query ? (
-              <button className="s2-search-x" aria-label="Очистить поиск" onClick={() => setQuery('')}>
+              <button className="s2-search-x" aria-label={t('Очистить поиск')} onClick={() => setQuery('')}>
                 <Icon id="i-x" />
               </button>
             ) : null}
           </label>
         </div>
-        <nav className="set-tabs s2-tabs" role="tablist" aria-label="Разделы настроек">
-          {SECTIONS.map((s) => (
+        <nav className="set-tabs s2-tabs" role="tablist" aria-label={t('Разделы настроек')}>
+          {sections().map((s) => (
             <button
               key={s.id}
               role="tab"
@@ -1276,7 +1298,7 @@ export function Settings({ on }: { on: boolean }) {
           <div className="s2-body">
             {q ? (
               <>
-                {SECTIONS.map((s) => (
+                {sections().map((s) => (
                   <div className="s2-found" key={s.id}>
                     <button className="s2-found-sec" onClick={() => setSec(s.id)}>
                       {s.label}
@@ -1287,7 +1309,7 @@ export function Settings({ on }: { on: boolean }) {
                 ))}
                 <div className="s2-empty">
                   <Icon id="i-search" />
-                  <b>Ничего не нашлось</b>
+                  <b>{t('Ничего не нашлось')}</b>
                 </div>
               </>
             ) : (
@@ -1302,7 +1324,8 @@ export function Settings({ on }: { on: boolean }) {
 
 /** Музыка лобби вкл/выкл — переехала из лобби (правка владельца 23.09.2026). */
 function MusicNow() {
+  const t = useT()
   const on = useMusic((s) => radioOn(s))
   const toggle = useMusic((s) => s.toggleRadio)
-  return <Toggle label="Музыка сейчас" on={on} onChange={() => toggle()} />
+  return <Toggle label={t('Музыка сейчас')} on={on} onChange={() => toggle()} />
 }

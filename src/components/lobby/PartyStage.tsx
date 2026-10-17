@@ -15,6 +15,7 @@ import { useHasMillida } from '../../state/auth'
 import { stopMateSearch, useMateSearch } from '../../state/mateSearch'
 import { uiConfirm } from '../../state/confirm'
 import { usePartyFlow } from '../../state/partyFlow'
+import { useT } from '../../i18n'
 
 const SHADOW_SIZE = 22
 const CHEST = 18
@@ -185,39 +186,40 @@ function MemberMenu({
   ready: boolean
   close: () => void
 }) {
+  const t = useT()
   const ref = useRef<HTMLDivElement>(null)
   useCloseOutside(ref, close)
-  const nick = m.nickname || 'Игрок'
+  const nick = m.nickname || t('Игрок')
   return (
     <div className="party-pop" ref={ref} role="menu">
       <div className="party-pop-head">
         <Head nick={nick} src={m.avatarUrl} size={28} />
         <span className="party-pop-who">
           <b>{nick}</b>
-          <span className={ready ? 'on' : ''}>{m.role === 'leader' ? 'Лидер' : ready ? 'Готов' : 'Не готов'}</span>
+          <span className={ready ? 'on' : ''}>{m.role === 'leader' ? t('Лидер') : ready ? t('Готов') : t('Не готов')}</span>
         </span>
       </div>
       <button role="menuitem" onClick={() => void openChat(m.userId, nick).then(close)}>
         <Icon id="i-msg" />
-        Написать
+        {t('Написать')}
       </button>
       {leader ? (
         <>
           <button role="menuitem" onClick={() => void promoteInParty(m.userId).then(close)}>
             <Icon id="i-crown" />
-            Сделать лидером
+            {t('Сделать лидером')}
           </button>
           <button
             role="menuitem"
             onClick={() =>
-              void uiConfirm('Исключить ' + nick + ' из пати?', { confirmLabel: 'Исключить', danger: true }).then((ok) => {
+              void uiConfirm(t('Исключить {nick} из пати?', { nick }), { confirmLabel: t('Исключить'), danger: true }).then((ok) => {
                 close()
                 if (ok) void kickFromParty(m.userId)
               })
             }
           >
             <Icon id="i-logout" />
-            Исключить
+            {t('Исключить')}
           </button>
         </>
       ) : null}
@@ -230,7 +232,7 @@ function MemberMenu({
         }}
       >
         <Icon id="i-flag" />
-        Пожаловаться
+        {t('Пожаловаться')}
       </button>
     </div>
   )
@@ -238,6 +240,7 @@ function MemberMenu({
 
 /** Only while a mate search runs: the seat then has two things to offer — calling a friend or stopping the search. */
 function SeatMenu({ close }: { close: () => void }) {
+  const t = useT()
   const ref = useRef<HTMLDivElement>(null)
   useCloseOutside(ref, close)
   return (
@@ -250,7 +253,7 @@ function SeatMenu({ close }: { close: () => void }) {
         }}
       >
         <Icon id="i-users" />
-        Позвать друга
+        {t('Позвать друга')}
       </button>
       <button
         role="menuitem"
@@ -261,7 +264,7 @@ function SeatMenu({ close }: { close: () => void }) {
         }}
       >
         <Icon id="i-x" />
-        Отменить поиск
+        {t('Отменить поиск')}
       </button>
     </div>
   )
@@ -300,6 +303,7 @@ export function PartyOverlay({
   me: string
   awake: boolean
 }) {
+  const t = useT()
   const millida = useHasMillida()
   const parts = useCall((s) => s.parts)
   const callRoom = useCall((s) => s.roomId)
@@ -387,7 +391,7 @@ export function PartyOverlay({
                 data-sound="open"
                 data-notip
                 aria-haspopup={searching ? 'menu' : 'dialog'}
-                aria-label={searching ? 'Ищем напарника' : 'Позвать в пати'}
+                aria-label={searching ? t('Ищем напарника') : t('Позвать в пати')}
                 onClick={() => {
                   if (searching) setMenu(menu === seat.key ? '' : seat.key)
                   else usePartyStore.getState().set({ inviteOpen: true })
@@ -402,7 +406,7 @@ export function PartyOverlay({
                   </>
                 )}
               </button>
-              <span className="party-add-label">{searching ? 'Ищем напарника' : 'Позвать'}</span>
+              <span className="party-add-label">{searching ? t('Ищем напарника') : t('Позвать')}</span>
               {menu === seat.key ? <SeatMenu close={() => setMenu('')} /> : null}
             </span>
           )
@@ -418,14 +422,14 @@ export function PartyOverlay({
               {saying[m.userId] ? <span className="seat-say" key={saying[m.userId].until}>{saying[m.userId].text}</span> : null}
               <span className="seat-nick">
                 {m.role === 'leader' ? <Icon id="i-crown" className="party-crown" /> : null}
-                {m.nickname || 'Игрок'}
+                {m.nickname || t('Игрок')}
                 {speaking ? <Icon id="i-mic" className="party-mic" /> : null}
                 {ready && m.role !== 'leader' ? <Icon id="i-check" className="party-ready" /> : null}
               </span>
             </span>
             <button
               className={'party-hit' + (open ? ' open' : '')}
-              aria-label={m.nickname || 'Игрок'}
+              aria-label={m.nickname || t('Игрок')}
               aria-haspopup="menu"
               onClick={() => setMenu(open ? '' : m.userId)}
             />

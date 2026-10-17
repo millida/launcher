@@ -25,6 +25,7 @@ import { PlusMark } from './premium/PlusMark'
 import { onRealtime } from '../lib/realtime'
 import { preloadScreen } from '../screens/registry'
 import { useDaily } from '../state/daily'
+import { useT } from '../i18n'
 
 /* Навигация как в Brawl Stars: у каждого раздела ровно один вход (владелец
    23.09.2026: «всё дублируется»). В лобби вкладок нет — разделы живут на сцене,
@@ -39,6 +40,7 @@ import { useDaily } from '../state/daily'
  * убавил, не заходя.
  */
 function QuickSound() {
+  const t = useT()
   const music = useMusic((s) => radioOn(s))
   const musicLevel = useMusic((s) => s.level)
   const setMusicLevel = useMusic((s) => s.setVolume)
@@ -54,13 +56,13 @@ function QuickSound() {
     return () => window.removeEventListener('focus', sync)
   }, [])
   return (
-    <span className="lb-vol-pop lb-quick-pop" role="group" aria-label="Звук">
+    <span className="lb-vol-pop lb-quick-pop" role="group" aria-label={t('Звук')}>
       <span className="lb-vol-card lb-quick-card">
         <span className="lb-quick-row">
           <button
             className={'lb-quick-tg' + (ui ? '' : ' off')}
             aria-pressed={ui}
-            aria-label={ui ? 'Выключить звуки' : 'Включить звуки'}
+            aria-label={ui ? t('Выключить звуки') : t('Включить звуки')}
             data-track={ui ? 'sound_off' : 'sound_on'}
             data-notip
             data-nosound
@@ -90,7 +92,7 @@ function QuickSound() {
           <button
             className={'lb-quick-tg' + (music ? '' : ' off')}
             aria-pressed={music}
-            aria-label={music ? 'Выключить музыку' : 'Включить музыку'}
+            aria-label={music ? t('Выключить музыку') : t('Включить музыку')}
             data-track={music ? 'music_off' : 'music_on'}
             data-notip
             onClick={() => toggleMusic()}
@@ -107,7 +109,8 @@ function QuickSound() {
 
 /** Вкладки хаба в верхней полосе: библиотека (во что играть) и ресурсы (каталог). */
 /** libLabel — «Мои сборки» в раскладке «Классика», где так же назван пункт панели. */
-export function HubTopTabs({ libLabel = 'Библиотека' }: { libLabel?: string }) {
+export function HubTopTabs({ libLabel }: { libLabel?: string }) {
+  const t = useT()
   const all = useHubTab((s) => s.all)
   const setAll = useHubTab((s) => s.setAll)
   const go = (v: boolean) => {
@@ -118,19 +121,20 @@ export function HubTopTabs({ libLabel = 'Библиотека' }: { libLabel?: s
     if (c) c.scrollTop = 0
   }
   return (
-    <div className="tb-tabs" role="tablist" aria-label="Во что играем">
+    <div className="tb-tabs" role="tablist" aria-label={t('Во что играем')}>
       <button role="tab" aria-selected={!all} className={'btn md tb-tab ' + (!all ? 'primary on' : 'secondary')} data-sound="nav" data-track="hub_tab_library" onClick={() => go(false)}>
         {/* Библиотека — книжная полка, не сундук (владелец 10.10.2026). */}
-        <img className="tb-tab-block" src="/block-icons/Block52Millida.png" alt="" width={26} height={26} draggable={false} /> {libLabel}
+        <img className="tb-tab-block" src="/block-icons/Block52Millida.png" alt="" width={26} height={26} draggable={false} /> {libLabel ?? t('Библиотека')}
       </button>
       <button role="tab" aria-selected={all} className={'btn md tb-tab ' + (all ? 'primary on' : 'secondary')} data-sound="nav" data-track="hub_tab_resources" onClick={() => go(true)}>
-        <PxIcon name="book" size={30} /> Каталог
+        <PxIcon name="book" size={30} /> {t('Каталог')}
       </button>
     </div>
   )
 }
 
 export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
+  const t = useT()
   const screen = useUi((s) => s.screen)
   const topBack = useTopBar((s) => s.back)
   const topBare = useTopBar((s) => s.bare)
@@ -193,7 +197,7 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
               className="lb-btn lb-friends"
               data-sound="nav"
               data-track={unread && !reqIn.length ? 'nav_messages' : 'nav_friends'}
-              aria-label={'Друзья, в сети ' + online + (unread ? ', непрочитанных ' + unread : '')}
+              aria-label={unread ? t('Друзья, в сети {online}, непрочитанных {unread}', { online, unread }) : t('Друзья, в сети {online}', { online })}
               onMouseEnter={() => preloadScreen(unread ? 'chat' : 'friends')}
               onClick={() => (unread && !reqIn.length ? openMessages() : onNav('friends'))}
             >
@@ -204,7 +208,7 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
               </span>
               <span className="lb-txt">
                 <b>{online}</b>
-                <i>в сети</i>
+                <i>{t('в сети')}</i>
               </span>
             </button>
             {badge(reqIn.length + unread)}
@@ -212,7 +216,7 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
           <div
             className="lb-btn lb-acc account"
             role="button"
-            aria-label="Аккаунты"
+            aria-label={t('Аккаунты')}
             data-track="nav_accounts"
             data-private
             ref={chipRef}
@@ -229,13 +233,13 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
             </span>
             <span className="lb-acc-txt">
               <span className="acc-nick-row">
-                <span className="acc-nick">{inGameNick || 'Гость'}</span>
+                <span className="acc-nick">{inGameNick || t('Гость')}</span>
                 <NickStreak />
               </span>
               {plusActive ? (
                 <PlusMark tier={plusTier === 'DIAMOND' ? 'DIAMOND' : 'PLUS'} height={14} className="lb-pmark-badge" />
               ) : (
-                <i>{acc ? accKindLabel(acc.kind) : 'Войти'}</i>
+                <i>{acc ? accKindLabel(acc.kind) : t('Войти')}</i>
               )}
             </span>
             <Icon id="i-chev-d" />
@@ -245,7 +249,7 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
             className={'lb-btn lb-fb' + (fbReward ? ' has-gift' : '')}
             data-sound="open"
             data-track="nav_feedback"
-            aria-label="Отзыв о лаунчере"
+            aria-label={t('Отзыв о лаунчере')}
             onClick={() => setFbOpen(true)}
           >
             <BugPx size={26} light />
@@ -255,7 +259,7 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
           <span className="lb-vol lb-quick">
             <button
               className="lb-btn"
-              aria-label="Настройки"
+              aria-label={t('Настройки')}
               data-notip
               data-track="nav_settings"
               data-screen="settings"
@@ -289,10 +293,10 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
           onClick={() => (topBack ? topBack() : onNav('play'))}
         >
           <Icon id="i-chev-l" />
-          {topBack ? 'Назад' : 'Лобби'}
+          {topBack ? t('Назад') : t('Лобби')}
         </button>
         {frAlerts ? (
-          <span className="tb-badge" aria-label="Новые сообщения и заявки">
+          <span className="tb-badge" aria-label={t('Новые сообщения и заявки')}>
             {frAlerts > 99 ? '99+' : frAlerts}
           </span>
         ) : null}
@@ -305,10 +309,10 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
         {screen === 'skins' ? (
           <span className="ph-bar">
             <button className="btn md secondary" data-sound="open" data-track="skin_import" onClick={() => window.dispatchEvent(new Event(SKINS_IMPORT_EVENT))}>
-              <Icon id="i-download" /> Импорт
+              <Icon id="i-download" /> {t('Импорт')}
             </button>
             <button className="btn md primary" data-sound="open" data-track="skin_upload" onClick={() => window.dispatchEvent(new Event(SKINS_UPLOAD_EVENT))}>
-              <Icon id="i-upload" /> Загрузить скин
+              <Icon id="i-upload" /> {t('Загрузить скин')}
             </button>
           </span>
         ) : null}
@@ -326,11 +330,12 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
  * около никнейма»). Сегодня день ещё не засчитан — огонь погашен.
  */
 function NickStreak() {
+  const t = useT()
   const status = useDaily((s) => s.status)
   const n = status?.streak ?? 0
   if (n <= 0) return null
   return (
-    <span className={'acc-streak' + (status?.activeToday === false ? ' pending' : '')} data-tip={'Серия: ' + n + ' дн.'}>
+    <span className={'acc-streak' + (status?.activeToday === false ? ' pending' : '')} data-tip={t('Серия: {n} дн.', { n })}>
       <Icon id="i-flame" />
       {n}
     </span>

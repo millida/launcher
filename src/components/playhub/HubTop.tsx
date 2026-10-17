@@ -11,6 +11,7 @@ import { hoursText } from './Hours'
 import { OneBlockBanner } from './OneBlockBanner'
 import { versionCover } from './data'
 import type { HubPack } from './data'
+import { useT } from '../../i18n'
 
 /**
  * Первый экран хаба: слева «Продолжить» — то, во что человек играл или что
@@ -44,6 +45,7 @@ export function ContinueCard({
   profile: Profile | null
   onPlay: () => void
 }) {
+  const t = useT()
   const buildName = mode.kind === 'build' ? mode.name : null
   const seconds = usePlayStats((s) => (buildName ? s.stats.builds.find((b) => b.key === buildName)?.seconds || 0 : 0))
 
@@ -74,7 +76,7 @@ export function ContinueCard({
     <div className={'ph-card ph-cont' + (mode.kind === 'build' ? ' build' : '')}>
       <span className="ph-cont-art" style={artStyle}>
         {art}
-        <span className="ph-card-tag">Продолжить</span>
+        <span className="ph-card-tag">{t('Продолжить')}</span>
       </span>
       <span className="ph-cont-body">
         <span className="ph-cont-text">
@@ -90,7 +92,7 @@ export function ContinueCard({
           </span>
         </span>
         <button className="btn lg primary ph-cont-play" data-sound="open" onClick={onPlay}>
-          <Icon id="i-play" /> Играть
+          <Icon id="i-play" /> {t('Играть')}
         </button>
       </span>
     </div>
@@ -101,19 +103,20 @@ export const ContinueSkel = () => <span className="ph-card ph-cont skel" aria-hi
 
 /** Arcania — премиум: обложка во весь слот, золотая кайма, цена, «Открыть». */
 export function HeroArcania({ pack, onOpen }: { pack: HubPack; onOpen: () => void }) {
+  const t = useT()
   const price = priceLabel(pack)
   return (
     <button className="ph-card ph-hs gold" data-sound="open" onClick={onOpen}>
       {pic(pack.coverUrl, 'ph-hs-img')}
       <span className="ph-hs-body">
         <span className="ph-card-tag gold">
-          <Icon id="i-crown" /> Премиум
+          <Icon id="i-crown" /> {t('Премиум')}
         </span>
         <b>{pack.title}</b>
         <span className="ph-hs-row">
           {price ? <span className="ph-hs-price">{price}</span> : null}
           <span className="btn md primary ph-hs-cta">
-            Открыть <Icon id="i-chev-r" />
+            {t('Открыть')} <Icon id="i-chev-r" />
           </span>
         </span>
       </span>
@@ -131,8 +134,9 @@ export function HeroOneBlock({ online, onPlay }: { online: number | null; onPlay
 
 /** Подборка недели: три обложки рядом, каждая открывает свою сборку. */
 export function HeroWeek({ packs, onOpen }: { packs: HubPack[]; onOpen: (p: HubPack) => void }) {
+  const t = useT()
   return (
-    <div className="ph-card ph-hs week" role="group" aria-label="Подборка недели">
+    <div className="ph-card ph-hs week" role="group" aria-label={t('Подборка недели')}>
       <span className="ph-hs-week">
         {packs.map((p) => (
           <button key={p.id} className="ph-hs-pick" data-sound="nav" onClick={() => onOpen(p)}>
@@ -141,7 +145,7 @@ export function HeroWeek({ packs, onOpen }: { packs: HubPack[]; onOpen: (p: HubP
           </button>
         ))}
       </span>
-      <span className="ph-card-tag ph-hs-week-tag">Подборка недели</span>
+      <span className="ph-card-tag ph-hs-week-tag">{t('Подборка недели')}</span>
     </div>
   )
 }

@@ -3,6 +3,7 @@ import { Icon } from '../Icon'
 import { openImage } from '../ImageLightbox'
 import { openExt } from '../../lib/api'
 import { PremiumHero } from './PremiumHero'
+import { intlTag, t, useT } from '../../i18n'
 import { BuyBlock, CancelLine, orderPlans, planBadge } from './PremiumBuy'
 import {
   loadPremiumPack,
@@ -31,20 +32,21 @@ interface Tile {
 function tilesOf(p: PremiumPackDetail): Tile[] {
   const out: Tile[] = []
   if (typeof p.modsCount === 'number' && p.modsCount > 0)
-    out.push({ label: 'Модов', value: p.modsCount.toLocaleString('ru-RU') })
-  if (p.mcVersion) out.push({ label: 'Версия', value: p.mcVersion })
-  if (p.loader) out.push({ label: 'Загрузчик', value: p.loader })
-  if (typeof p.online === 'number') out.push({ label: 'Сейчас играют', value: p.online.toLocaleString('ru-RU') })
+    out.push({ label: t('Модов'), value: p.modsCount.toLocaleString(intlTag()) })
+  if (p.mcVersion) out.push({ label: t('Версия'), value: p.mcVersion })
+  if (p.loader) out.push({ label: t('Загрузчик'), value: p.loader })
+  if (typeof p.online === 'number') out.push({ label: t('Сейчас играют'), value: p.online.toLocaleString(intlTag()) })
   if (typeof p.downloads === 'number' && p.downloads > 0)
-    out.push({ label: 'Скачиваний', value: p.downloads.toLocaleString('ru-RU') })
-  if (p.author) out.push({ label: 'Собрал', value: p.author })
-  if (p.updatedAt && untilText(p.updatedAt)) out.push({ label: 'Обновлено', value: untilText(p.updatedAt) })
+    out.push({ label: t('Скачиваний'), value: p.downloads.toLocaleString(intlTag()) })
+  if (p.author) out.push({ label: t('Собрал'), value: p.author })
+  if (p.updatedAt && untilText(p.updatedAt)) out.push({ label: t('Обновлено'), value: untilText(p.updatedAt) })
   return out
 }
 
 /// Страница сборки: арт, кадры, числа, состав подписки и блок цены — второй раз
 /// внизу, чтобы не возвращаться наверх (ui-refs.md §3.4).
 export function PremiumPage({ pack, plan, sub, onBack }: Props) {
+  const t = useT()
   const [detail, setDetail] = useState<PremiumPackDetail | null>(null)
   const [failed, setFailed] = useState(false)
   const [tick, setTick] = useState(0)
@@ -66,7 +68,7 @@ export function PremiumPage({ pack, plan, sub, onBack }: Props) {
   const full: PremiumPackDetail = detail ? { ...pack, ...detail } : pack
   const tiles = tilesOf(full)
   // Сервер сборки — единственное, что каталог говорит о составе.
-  const includes = full.includes && full.includes.length ? full.includes : full.hasServer ? ['Сервер сборки'] : []
+  const includes = full.includes && full.includes.length ? full.includes : full.hasServer ? [t('Сервер сборки')] : []
   const plans = full.plans && full.plans.length ? full.plans : plan ? [plan] : []
   const shots = full.screenshots || []
   // Повтор блока цены нужен там, где до него пришлось прокручивать. На короткой
@@ -78,7 +80,7 @@ export function PremiumPage({ pack, plan, sub, onBack }: Props) {
       {onBack ? (
         <div className="pm-back">
           <button className="btn sm ghost" onClick={onBack}>
-            <Icon id="i-chev-l" /> Назад
+            <Icon id="i-chev-l" /> {t('Назад')}
           </button>
         </div>
       ) : null}
@@ -113,7 +115,7 @@ export function PremiumPage({ pack, plan, sub, onBack }: Props) {
 
       {includes.length ? (
         <div className="pm-block">
-          <h3>Что входит</h3>
+          <h3>{t('Что входит')}</h3>
           <ul className="pm-list">
             {includes.map((i) => (
               <li key={i}>
@@ -127,7 +129,7 @@ export function PremiumPage({ pack, plan, sub, onBack }: Props) {
 
       {plans.length ? (
         <div className="pm-block">
-          <h3>Подписка</h3>
+          <h3>{t('Подписка')}</h3>
           <div className="pm-plans">
             {orderPlans(plans).map((p, _, list) => {
               const badge = planBadge(p, list)
@@ -157,7 +159,7 @@ export function PremiumPage({ pack, plan, sub, onBack }: Props) {
 
       {full.patches && full.patches.length ? (
         <div className="pm-block">
-          <h3>Обновления</h3>
+          <h3>{t('Обновления')}</h3>
           <ul className="pm-patches">
             {full.patches.map((p, i) => (
               <li key={i}>
@@ -177,15 +179,15 @@ export function PremiumPage({ pack, plan, sub, onBack }: Props) {
       {failed && !detail ? (
         <div className="pm-note">
           <Icon id="i-alert" />
-          <span>Страница не догрузилась</span>
+          <span>{t('Страница не догрузилась')}</span>
           <button className="btn sm ghost" onClick={() => setTick(tick + 1)}>
-            <Icon id="i-restart" /> Повторить
+            <Icon id="i-restart" /> {t('Повторить')}
           </button>
         </div>
       ) : null}
 
       <p className="pm-legal">
-        Доступ к сборке: моды скачиваются при установке. Не продукт Mojang.
+        {t('Доступ к сборке: моды скачиваются при установке. Не продукт Mojang.')}
         {full.ageRating ? ' ' + full.ageRating : ''}
       </p>
     </div>

@@ -43,6 +43,7 @@ import { weave, weaveMarkdown } from '../catalog/weave'
 import type { WeaveKind } from '../catalog/weave'
 import { installReviewCandidate } from '../ModRow'
 import { reviewCandidateFor } from '../../state/mods'
+import { useT } from '../../i18n'
 
 /**
  * Страница сборки — одна для всех: премиум, бесплатные нашего каталога и
@@ -103,10 +104,11 @@ export function prefetchPackPage(slug: string, premiumId?: string | null): void 
 
 /** Каркас страницы сборки той же формы, что сама страница: ничего не прыгает, когда она приходит. */
 function PackPageSkeleton({ pack, onBack }: { pack: HubPack; onBack: () => void }) {
+  const t = useT()
   const icon = pack.coverUrl || null
   return (
     <div className="ci" data-section="pack_page" aria-busy="true">
-      <Back label="Сборки модов" onBack={onBack} />
+      <Back label={t('Сборки модов')} onBack={onBack} />
       <Hero
         className={null}
         cover={null}
@@ -222,6 +224,7 @@ const descKind = (b: DescBlock): WeaveKind => (b.type === 'image' ? 'media' : b.
 
 /** Шапка: превью ролика до клика, по клику — плеер. Без ролика — обложка. */
 function Media({ video, cover, ob }: { video: string | null; cover: string | null; ob?: boolean }) {
+  const t = useT()
   const [playing, setPlaying] = useState(false)
   useEffect(() => setPlaying(false), [video])
   // Встраивание YouTube в webview без клика ненадёжно (плеер отвечает ошибкой
@@ -231,7 +234,7 @@ function Media({ video, cover, ob }: { video: string | null; cover: string | nul
       <iframe
         className="pp-video"
         src={'https://www.youtube-nocookie.com/embed/' + video + '?autoplay=1&playsinline=1&rel=0&loop=1&playlist=' + video}
-        title="Трейлер"
+        title={t('Трейлер')}
         allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
         allowFullScreen
       />
@@ -249,7 +252,7 @@ function Media({ video, cover, ob }: { video: string | null; cover: string | nul
     <>
       {poster ? <img className="pp-cover" src={poster} alt="" draggable={false} /> : null}
       {video ? (
-        <button className="pp-play" aria-label="Трейлер" data-sound="open" data-track="trailer" onClick={() => setPlaying(true)}>
+        <button className="pp-play" aria-label={t('Трейлер')} data-sound="open" data-track="trailer" onClick={() => setPlaying(true)}>
           <Icon id="i-play" />
         </button>
       ) : null}
@@ -259,32 +262,33 @@ function Media({ video, cover, ob }: { video: string | null; cover: string | nul
 
 /** Установка сборки Modrinth — тем же путём, что строка каталога (ModRow). */
 function MrInstallButton({ pack }: { pack: HubPack }) {
+  const t = useT()
   const slug = pack.slug || ''
   const task = useInstalls((s) => s.tasks[keyMrModpack(slug)])
   const running = !!task && task.state === 'run'
   const start = () => {
     if (!hasTauri()) {
-      showToast('Установка сборок — в приложении', 'error')
+      showToast(t('Установка сборок — в приложении'), 'error')
       return
     }
     runInstall({
       key: keyMrModpack(slug),
       title: pack.title,
-      running: 'Скачивание…',
+      running: t('Скачивание…'),
       run: () => installModpack(slug),
       onDone: (p) => {
         track('catalog_install', { kind: 'modpack', id: slug, source: actionSource('pack_page').source, section: 'pack_page' })
         noteInstallKind('modpack')
         useProfiles.getState().setSelected(p.name)
         void useProfiles.getState().refresh()
-        showToast('Сборка «' + p.name + '» готова к запуску', 'ok', 'achievement')
+        showToast(t('Сборка «{name}» готова к запуску', { name: p.name }), 'ok', 'achievement')
       },
     })
   }
   return (
     <button className="btn lg primary pp-cta" data-track="install" data-src="pack_page" disabled={running} onClick={start}>
       <Icon id="i-download" />{' '}
-      {running ? (task.pct > 0 ? task.label + ' ' + Math.round(task.pct) + '%' : task.label) : 'Установить'}
+      {running ? (task.pct > 0 ? task.label + ' ' + Math.round(task.pct) + '%' : task.label) : t('Установить')}
     </button>
   )
 }
@@ -308,6 +312,7 @@ export function PackPage({
   onPlay: (build: string) => void
   onServer: (s: SnapshotServer) => void
 }) {
+  const t = useT()
   const profiles = useProfiles((s) => s.profiles)
   const mr = pack.origin === 'modrinth'
   const slug = pack.slug || ''
@@ -432,13 +437,13 @@ export function PackPage({
   const client = (view?.files || []).find((f) => f.side === 'client')
 
   const facts: Fact[] = []
-  if (mods) facts.push({ value: fmtN(mods), label: 'модов' })
-  if (mcVersion) facts.push({ value: mcVersion, label: loader || 'версия' })
-  if (typeof full.online === 'number' && full.online > 0) facts.push({ value: fmtN(full.online), label: 'играют сейчас' })
-  else if (server && server.isOnline) facts.push({ value: fmtN(server.online), label: 'онлайн сервера' })
-  if (downloads) facts.push({ value: fmtN(downloads), label: 'скачиваний' })
-  if (project?.followers) facts.push({ value: fmtN(project.followers), label: 'подписчиков' })
-  if (client && client.size > 0) facts.push({ value: gb(client.size), label: 'скачать' })
+  if (mods) facts.push({ value: fmtN(mods), label: t('модов') })
+  if (mcVersion) facts.push({ value: mcVersion, label: loader || t('версия') })
+  if (typeof full.online === 'number' && full.online > 0) facts.push({ value: fmtN(full.online), label: t('играют сейчас') })
+  else if (server && server.isOnline) facts.push({ value: fmtN(server.online), label: t('онлайн сервера') })
+  if (downloads) facts.push({ value: fmtN(downloads), label: t('скачиваний') })
+  if (project?.followers) facts.push({ value: fmtN(project.followers), label: t('подписчиков') })
+  if (client && client.size > 0) facts.push({ value: gb(client.size), label: t('скачать') })
 
   // Обновления: премиум-патчи → версии нашего каталога → версии Modrinth.
   const updates: Update[] = []
@@ -448,7 +453,7 @@ export function PackPage({
     for (const f of item.files) {
       if (seen.has(f.version)) continue
       seen.add(f.version)
-      updates.push({ date: f.releasedAt || null, text: 'Версия ' + f.version + (f.changelog ? ' — ' + f.changelog : '') })
+      updates.push({ date: f.releasedAt || null, text: t('Версия {version}', { version: f.version }) + (f.changelog ? ' — ' + f.changelog : '') })
     }
   } else
     for (const v of versions)
@@ -478,7 +483,7 @@ export function PackPage({
   if (installed)
     cta = (
       <button className="btn lg primary pp-cta" data-sound="open" data-track="play" data-src="pack_page" onClick={() => onPlay(installed)}>
-        <Icon id="i-play" /> Играть
+        <Icon id="i-play" /> {t('Играть')}
       </button>
     )
   else if (mr) cta = <MrInstallButton pack={pack} />
@@ -512,15 +517,15 @@ export function PackPage({
   // Одна страница для всех сборок, платных тоже: без золота и своей «премиум»-подачи
   // (владелец 12.10.2026: «поставь дефолтную страницу, как на любой другой сборке»).
   const inline: ReactNode[] = []
-  if (mods) inline.push(<><b>{fmtNum(mods)}</b> {plural(mods, 'мод', 'мода', 'модов')}</>)
+  if (mods) inline.push(<><b>{fmtNum(mods)}</b> {plural(mods, t('мод'), t('мода'), t('модов'))}</>)
   if (downloads)
     inline.push(
       <>
         <Icon id="i-download" />
-        <b>{fmtNum(downloads)}</b> {plural(downloads, 'скачивание', 'скачивания', 'скачиваний')}
+        <b>{fmtNum(downloads)}</b> {plural(downloads, t('скачивание'), t('скачивания'), t('скачиваний'))}
       </>,
     )
-  if (updated) inline.push(<>Обновлён {updated}</>)
+  if (updated) inline.push(<>{t('Обновлён {when}', { when: updated })}</>)
   // Квадратный значок сборки; обложка в квадрат не лезет — буквы баннера обрезались (владелец 12.10.2026).
   const icon = view?.icon || view?.cover || full.coverUrl || mrHead || cover
 
@@ -529,15 +534,15 @@ export function PackPage({
       <StickyCta watch={heroEnd} icon={icon} title={full.title}>
         {cta}
       </StickyCta>
-      <Back label="Сборки" onBack={onBack} />
+      <Back label={t('Сборки')} onBack={onBack} />
       <Hero
         cover={<Media video={video} cover={cover} ob={slug === ONEBLOCK_PACK} />}
-        badge={<span className="ph-card-tag">{pack.premium ? (view?.protectedContent ? 'Эксклюзив' : 'Премиум') : mr ? 'Modrinth' : 'Бесплатно'}</span>}
+        badge={<span className="ph-card-tag">{pack.premium ? (view?.protectedContent ? t('Эксклюзив') : t('Премиум')) : mr ? 'Modrinth' : t('Бесплатно')}</span>}
         icon={icon ? <img src={icon} alt="" draggable={false} /> : null}
         glow={icon}
         title={full.title}
         line={full.tagline}
-        by={author ? 'Собрал ' + author : null}
+        by={author ? t('Собрал {author}', { author }) : null}
         facts={inline}
         // Главная кнопка — в шапке, рядом с названием; хостинг и сервер — маленькими под ней
         // (владелец 12.10.2026, улучшение №1: раньше в шапке были только они, а «Установить» — ниже справа).
@@ -548,12 +553,12 @@ export function PackPage({
               <div className="pp-hero-sub">
                 {hostTarget ? (
                   <button className="btn sm secondary" data-sound="open" data-track="host_install" onClick={() => setHostOpen(true)}>
-                    <Icon id="i-server-cog" /> На хостинг
+                    <Icon id="i-server-cog" /> {t('На хостинг')}
                   </button>
                 ) : null}
                 {server ? (
                   <button className="btn sm secondary" data-track="pack_server" data-src="pack_page" onClick={() => onServer(server)}>
-                    <Icon id="i-server" /> Сервер сборки
+                    <Icon id="i-server" /> {t('Сервер сборки')}
                     {server.isOnline ? (
                       <span className="ph-hero-srv-n">
                         <span className="ph-dot" aria-hidden="true"></span>
@@ -578,7 +583,7 @@ export function PackPage({
               {updates[0] ? <WhatsNew u={updates[0]} more={updates.length > 1} onAll={() => setTab('versions')} /> : null}
               {includes.length ? (
                 <section className="pp-block">
-                  <h2>Что входит</h2>
+                  <h2>{t('Что входит')}</h2>
                   <ul className="pp-inc">
                     {includes.map((x) => (
                       <li key={x}>
@@ -620,7 +625,7 @@ export function PackPage({
                 disabled={packRunning}
                 onClick={() => installReviewCandidate(slug, full.title, candidate)}
               >
-                Проверить {candidate}
+                {t('Проверить {version}', { version: candidate })}
               </button>
             ) : null}
             {keyEntry ? (
@@ -628,7 +633,7 @@ export function PackPage({
                 <PackKeyField
                   slug={slug}
                   onUnlocked={() => {
-                    showToast('Ключ активирован')
+                    showToast(t('Ключ активирован'))
                     reloadDetail()
                   }}
                 />
@@ -639,7 +644,7 @@ export function PackPage({
             {pack.premium ? <CancelLine sub={liveSubscription(detail) ?? sub} /> : null}
             <span className="pp-legal">
               {full.ageRating ? <b>{full.ageRating}</b> : null}
-              Не продукт Mojang
+              {t('Не продукт Mojang')}
             </span>
           </div>
           <Compat versions={gameVersions} loaders={loaderIds} side={null} />
@@ -746,15 +751,16 @@ function StickyCta({ watch, icon, title, children }: { watch: React.RefObject<HT
 
 /** Улучшение №10: последнее обновление — коротко над описанием, все — во вкладке «Версии». */
 function WhatsNew({ u, more, onAll }: { u: Update; more: boolean; onAll: () => void }) {
+  const t = useT()
   const when = u.date ? untilText(u.date) : ''
   return (
     <section className="card ci-box pp-news">
       <div className="pp-news-h">
-        <b>Что нового</b>
+        <b>{t('Что нового')}</b>
         {when ? <span>{when}</span> : null}
         {more ? (
           <button className="pp-news-all" data-track="pack_news_all" onClick={onAll}>
-            Все версии <Icon id="i-chev-r" />
+            {t('Все версии')} <Icon id="i-chev-r" />
           </button>
         ) : null}
       </div>
@@ -768,6 +774,7 @@ function WhatsNew({ u, more, onAll }: { u: Update; more: boolean; onAll: () => v
  * каталоге; своих мало — популярные наши. Клик — их страница здесь же.
  */
 function MorePacks({ slug, partner, author }: { slug: string; partner: { slug: string; name: string } | null; author: string | null }) {
+  const t = useT()
   const [list, setList] = useState<MillidaPack[] | null>(null)
   const row = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -785,7 +792,7 @@ function MorePacks({ slug, partner, author }: { slug: string; partner: { slug: s
   const same = (partner ? others.filter((p) => p.partner?.slug === partner.slug) : author ? others.filter((p) => p.author === author) : []).sort(byDl)
   const cards = (same.length >= 2 ? same : others.slice().sort(byDl)).slice(0, 10)
   if (!cards.length) return null
-  const title = same.length >= 2 ? 'Ещё от ' + (partner?.name || author) : 'Похожие сборки'
+  const title = same.length >= 2 ? t('Ещё от {author}', { author: partner?.name || author || '' }) : t('Похожие сборки')
   const sec = sectionBySlug('modpacks')
   // Страница новой сборки откроется сверху: прокрутку при смене страницы ведёт хаб (PlayHub).
   const open = (s: string) => {
@@ -798,10 +805,10 @@ function MorePacks({ slug, partner, author }: { slug: string; partner: { slug: s
       <header className="mr-ru-head">
         <h2>{title}</h2>
         <span className="mr-ru-nav">
-          <button className="mr-ru-arrow" aria-label="Назад" data-track="pack_more_prev" onClick={() => step(-1)}>
+          <button className="mr-ru-arrow" aria-label={t('Назад')} data-track="pack_more_prev" onClick={() => step(-1)}>
             <Icon id="i-chev-l" />
           </button>
-          <button className="mr-ru-arrow" aria-label="Дальше" data-track="pack_more_next" onClick={() => step(1)}>
+          <button className="mr-ru-arrow" aria-label={t('Дальше')} data-track="pack_more_next" onClick={() => step(1)}>
             <Icon id="i-chev-r" />
           </button>
         </span>

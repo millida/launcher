@@ -10,6 +10,7 @@ import type { DiaryChange, MilliStep, StepResult } from './milliActions'
 import { cfgSet, type CfgSpec } from './milliCfg'
 import { canLocal, diaryAdd, diaryMarkUndone, dropFactsCache, filesRead, filesWrite, sizeText, snapshot, snapshotRestore } from './milliLocal'
 import { milliEmote } from '../components/milli/milliEmotions'
+import { t } from '../i18n'
 
 type Step<O extends MilliStep['op']> = Extract<MilliStep, { op: O }>
 
@@ -22,31 +23,31 @@ interface OptRule extends CfgSpec {
 }
 
 export const OPT_RULES: Record<string, OptRule> = {
-  renderDistance: { ru: 'Дальность', type: 'int', min: 2, max: 32 },
-  simulationDistance: { ru: 'Симуляция', type: 'int', min: 5, max: 32 },
-  maxFps: { ru: 'Макс. FPS', type: 'int', min: 10, max: 260 },
-  graphicsMode: { ru: 'Графика', type: 'enum', values: ['0', '1', '2'] },
-  particles: { ru: 'Частицы', type: 'enum', values: ['0', '1', '2'] },
-  biomeBlendRadius: { ru: 'Смешение биомов', type: 'int', min: 0, max: 7 },
-  mipmapLevels: { ru: 'Мипмапы', type: 'int', min: 0, max: 4 },
-  renderClouds: { ru: 'Облака', type: 'enum', values: ['true', 'fast', 'false'], quoted: true },
-  entityShadows: { ru: 'Тени мобов', type: 'bool' },
-  ao: { ru: 'Мягкий свет', type: 'bool' },
+  renderDistance: { get ru() { return t('Дальность') }, type: 'int', min: 2, max: 32 },
+  simulationDistance: { get ru() { return t('Симуляция') }, type: 'int', min: 5, max: 32 },
+  maxFps: { get ru() { return t('Макс. FPS') }, type: 'int', min: 10, max: 260 },
+  graphicsMode: { get ru() { return t('Графика') }, type: 'enum', values: ['0', '1', '2'] },
+  particles: { get ru() { return t('Частицы') }, type: 'enum', values: ['0', '1', '2'] },
+  biomeBlendRadius: { get ru() { return t('Смешение биомов') }, type: 'int', min: 0, max: 7 },
+  mipmapLevels: { get ru() { return t('Мипмапы') }, type: 'int', min: 0, max: 4 },
+  renderClouds: { get ru() { return t('Облака') }, type: 'enum', values: ['true', 'fast', 'false'], quoted: true },
+  entityShadows: { get ru() { return t('Тени мобов') }, type: 'bool' },
+  ao: { get ru() { return t('Мягкий свет') }, type: 'bool' },
   enableVsync: { ru: 'V-Sync', type: 'bool' },
-  entityDistanceScaling: { ru: 'Дальность мобов', type: 'float', min: 0.5, max: 5 },
-  gamma: { ru: 'Яркость', type: 'float', min: 0, max: 1 },
-  fov: { ru: 'Обзор', type: 'float', min: -1, max: 1 },
-  fovEffectScale: { ru: 'Качка обзора', type: 'float', min: 0, max: 1 },
-  screenEffectScale: { ru: 'Искажения', type: 'float', min: 0, max: 1 },
-  bobView: { ru: 'Покачивание', type: 'bool' },
-  guiScale: { ru: 'Размер меню', type: 'int', min: 0, max: 6 },
-  lang: { ru: 'Язык', type: 'enum', values: ['ru_ru', 'en_us', 'uk_ua'] },
-  tutorialStep: { ru: 'Подсказки', type: 'enum', values: ['none', 'movement', 'find_tree', 'punch_tree', 'open_inventory', 'craft_planks'] },
-  autoJump: { ru: 'Автопрыжок', type: 'bool' },
-  narrator: { ru: 'Диктор', type: 'enum', values: ['0', '1', '2', '3'] },
-  skipMultiplayerWarning: { ru: 'Предупреждение сети', type: 'bool' },
-  joinedFirstServer: { ru: 'Первый сервер', type: 'bool' },
-  onboardAccessibility: { ru: 'Экран доступности', type: 'bool' },
+  entityDistanceScaling: { get ru() { return t('Дальность мобов') }, type: 'float', min: 0.5, max: 5 },
+  gamma: { get ru() { return t('Яркость') }, type: 'float', min: 0, max: 1 },
+  fov: { get ru() { return t('Обзор') }, type: 'float', min: -1, max: 1 },
+  fovEffectScale: { get ru() { return t('Качка обзора') }, type: 'float', min: 0, max: 1 },
+  screenEffectScale: { get ru() { return t('Искажения') }, type: 'float', min: 0, max: 1 },
+  bobView: { get ru() { return t('Покачивание') }, type: 'bool' },
+  guiScale: { get ru() { return t('Размер меню') }, type: 'int', min: 0, max: 6 },
+  lang: { get ru() { return t('Язык') }, type: 'enum', values: ['ru_ru', 'en_us', 'uk_ua'] },
+  tutorialStep: { get ru() { return t('Подсказки') }, type: 'enum', values: ['none', 'movement', 'find_tree', 'punch_tree', 'open_inventory', 'craft_planks'] },
+  autoJump: { get ru() { return t('Автопрыжок') }, type: 'bool' },
+  narrator: { get ru() { return t('Диктор') }, type: 'enum', values: ['0', '1', '2', '3'] },
+  skipMultiplayerWarning: { get ru() { return t('Предупреждение сети') }, type: 'bool' },
+  joinedFirstServer: { get ru() { return t('Первый сервер') }, type: 'bool' },
+  onboardAccessibility: { get ru() { return t('Экран доступности') }, type: 'bool' },
 }
 
 /** Значение для человека: «0.5» яркости → «50%», fov → градусы. */
@@ -55,18 +56,18 @@ export function optHuman(key: string, v: string | null | undefined): string {
   const s = v.replace(/^"(.*)"$/, '$1')
   if (key === 'gamma') return Math.round(Number(s) * 100) + '%'
   if (key === 'fov') return String(Math.round(70 + Number(s) * 40))
-  if (key === 'graphicsMode') return ['быстро', 'красиво', 'супер'][Number(s)] ?? s
-  if (key === 'particles') return ['все', 'меньше', 'минимум'][Number(s)] ?? s
-  if (key === 'renderClouds') return s === 'true' ? 'красиво' : s === 'fast' ? 'быстро' : 'выкл'
-  if (key === 'maxFps' && s === '260') return 'без лимита'
-  if (s === 'true') return 'вкл'
-  if (s === 'false') return 'выкл'
+  if (key === 'graphicsMode') return [t('быстро'), t('красиво'), t('супер')][Number(s)] ?? s
+  if (key === 'particles') return [t('все'), t('меньше'), t('минимум')][Number(s)] ?? s
+  if (key === 'renderClouds') return s === 'true' ? t('красиво') : s === 'fast' ? t('быстро') : t('выкл')
+  if (key === 'maxFps' && s === '260') return t('без лимита')
+  if (s === 'true') return t('вкл')
+  if (s === 'false') return t('выкл')
   return s
 }
 
 // ─── Общая правка файла ────────────────────────────────────────────────────
 
-const LOCAL_NEEDED: StepResult = { ok: false, detail: 'Обнови лаунчер' }
+const LOCAL_NEEDED: StepResult = { ok: false, get detail() { return t('Обнови лаунчер') } }
 
 /**
  * Прочитать файл, поменять ключ, записать с проверкой sha1. Обратный шаг —
@@ -75,11 +76,11 @@ const LOCAL_NEEDED: StepResult = { ok: false, detail: 'Обнови лаунче
 async function editFile(profile: string, path: string, edit: (text: string, exists: boolean) => ReturnType<typeof cfgSet>, label: string, human = (v: string | null) => v ?? '—'): Promise<StepResult> {
   if (!(await canLocal())) return LOCAL_NEEDED
   const [f] = await filesRead(profile, [path])
-  if (!f) return { ok: false, detail: 'нет файла' }
-  if (f.exists && f.text == null) return { ok: false, detail: 'файл не читается' }
+  if (!f) return { ok: false, detail: t('нет файла') }
+  if (f.exists && f.text == null) return { ok: false, detail: t('файл не читается') }
   const r = edit(f.text ?? '', f.exists)
-  if (!r.ok) return { ok: false, detail: r.error }
-  if (r.text === (f.text ?? '')) return { ok: true, detail: 'уже так' }
+  if (!r.ok) return { ok: false, detail: t(r.error) }
+  if (r.text === (f.text ?? '')) return { ok: true, detail: t('уже так') }
   const [w] = await filesWrite(profile, [{ path, text: r.text, expect: f.exists ? f.sha1 : '' }])
   dropFactsCache()
   return {
@@ -94,7 +95,7 @@ registerStep('opt', {
   run: async (s, { profile }) => {
     const { key, to } = s as Step<'opt'>
     const rule = OPT_RULES[key]
-    if (!rule) return { ok: false, detail: 'эту настройку Милли не трогает' }
+    if (!rule) return { ok: false, detail: t('эту настройку Милли не трогает') }
     return editFile(
       profile,
       'options.txt',
@@ -116,7 +117,7 @@ registerStep('cfg', {
     const st = s as Step<'cfg'>
     const spec: CfgSpec = { ...(st.type ? { type: st.type } : {}), ...(st.min != null ? { min: st.min } : {}), ...(st.max != null ? { max: st.max } : {}), ...(st.values ? { values: st.values } : {}) }
     const label = st.path.split('.').pop() || st.path
-    return editFile(profile, st.file, (text, exists) => (exists ? cfgSet(text, st.format, st.path, st.to, spec, false) : { ok: false, error: 'нет файла — запусти игру разок' }), label)
+    return editFile(profile, st.file, (text, exists) => (exists ? cfgSet(text, st.format, st.path, st.to, spec, false) : { ok: false, error: t('нет файла — запусти игру разок') }), label)
   },
 })
 
@@ -139,13 +140,13 @@ registerStep('shader', {
     const mods = await c.listContent(profile, 'mod').catch(() => [])
     const oculus = mods.some((m) => m.enabled && /oculus/i.test(m.name))
     const iris = mods.some((m) => m.enabled && /iris/i.test(m.name))
-    if (!oculus && !iris && file) return { ok: false, detail: 'нужен Iris' }
+    if (!oculus && !iris && file) return { ok: false, detail: t('нужен Iris') }
     const path = oculus ? 'config/oculus.properties' : 'config/iris.properties'
     // '*' — только что поставленный шейдер: берём Complementary или первый zip в shaderpacks.
     if (file === '*') {
       const packs = (await c.listContent(profile, 'shader').catch(() => [])).map((x) => x.name).filter((n) => /\.zip$/i.test(n))
       const pick = packs.find((n) => /complementary/i.test(n)) ?? packs[0]
-      if (!pick) return { ok: false, detail: 'шейдер не скачался' }
+      if (!pick) return { ok: false, detail: t('шейдер не скачался') }
       return applyShader(profile, path, pick)
     }
     return applyShader(profile, path, file)
@@ -166,8 +167,8 @@ function applyShader(profile: string, path: string, file: string | null): Promis
         }
         return r
       },
-      'Шейдеры',
-      (v) => (v == null || v === 'false' ? 'выкл' : v === 'true' ? 'вкл' : v.replace(/\.zip$/i, '')),
+      t('Шейдеры'),
+      (v) => (v == null || v === 'false' ? t('выкл') : v === 'true' ? t('вкл') : v.replace(/\.zip$/i, '')),
     )
   }
 }
@@ -191,12 +192,12 @@ registerStep('ram', {
       if (gb) localStorage.setItem(ramKey(profile), String(gb))
       else localStorage.removeItem(ramKey(profile))
     } catch {
-      return { ok: false, detail: 'не сохранилось' }
+      return { ok: false, detail: t('не сохранилось') }
     }
-    const h = (g: number) => (g ? g + ' ГБ' : 'авто')
-    if (prev === gb) return { ok: true, detail: 'уже так' }
+    const h = (g: number) => (g ? t('{n} ГБ', { n: g }) : t('авто'))
+    if (prev === gb) return { ok: true, detail: t('уже так') }
     dropFactsCache()
-    return { ok: true, detail: h(prev) + ' → ' + h(gb), undo: [{ op: 'ram', mb: prev * 1024 }], changes: [{ label: 'Память', from: h(prev), to: h(gb) }] }
+    return { ok: true, detail: h(prev) + ' → ' + h(gb), undo: [{ op: 'ram', mb: prev * 1024 }], changes: [{ label: t('Память'), from: h(prev), to: h(gb) }] }
   },
 })
 
@@ -205,14 +206,14 @@ registerStep('fpsboost', {
     const { on } = s as Step<'fpsboost'>
     const c = await import('../ipc/commands')
     const before = await c.fpsBoostState(profile).catch(() => null)
-    if (before && before.applicable === false) return { ok: false, detail: 'автор сборки уже настроил' }
-    if (before?.enabled === on) return { ok: true, detail: 'уже так' }
+    if (before && before.applicable === false) return { ok: false, detail: t('автор сборки уже настроил') }
+    if (before?.enabled === on) return { ok: true, detail: t('уже так') }
     const st = await c.setFpsBoost(profile, on, false, on ? await (await import('./perfTier')).hardwareVideo() : undefined)
     return {
       ok: st.enabled === on,
-      detail: on ? '+' + st.mods.length + ' модов скорости' : 'выкл',
+      detail: on ? t('+{n} модов скорости', { n: st.mods.length }) : t('выкл'),
       undo: [{ op: 'fpsboost', on: !on }],
-      changes: [{ label: 'Режим FPS', from: on ? 'выкл' : 'вкл', to: on ? 'вкл' : 'выкл' }],
+      changes: [{ label: t('Режим FPS'), from: on ? t('выкл') : t('вкл'), to: on ? t('вкл') : t('выкл') }],
     }
   },
   risky: true,
@@ -224,11 +225,11 @@ registerStep('add', {
     const c = await import('../ipc/commands')
     const { useProfiles } = await import('../state/profiles')
     const p = useProfiles.getState().profiles.find((x) => x.name === profile)
-    if (!p) return { ok: false, detail: 'нет сборки' }
+    if (!p) return { ok: false, detail: t('нет сборки') }
     const r = await c.installContent(st.projectId, p.version, profile, st.kind)
-    if (!r.file) return { ok: false, detail: r.mismatch ? 'нет под ' + p.version : 'не скачалось' }
+    if (!r.file) return { ok: false, detail: r.mismatch ? t('нет под {version}', { version: p.version }) : t('не скачалось') }
     dropFactsCache()
-    return { ok: true, detail: 'поставлено', undo: [{ op: 'mod_off', file: r.file }], changes: [{ label: st.title, to: 'добавлен' }] }
+    return { ok: true, detail: t('поставлено'), undo: [{ op: 'mod_off', file: r.file }], changes: [{ label: st.title, to: t('добавлен') }] }
   },
 })
 
@@ -238,7 +239,7 @@ registerStep('mod_off', {
     const { file } = s as Step<'mod_off'>
     const c = await import('../ipc/commands')
     await c.toggleContent(profile, 'mod', file, false)
-    return { ok: true, undo: [{ op: 'mod_on', file }], changes: [{ label: file.replace(/\.jar$/, ''), to: 'выкл' }] }
+    return { ok: true, undo: [{ op: 'mod_on', file }], changes: [{ label: file.replace(/\.jar$/, ''), to: t('выкл') }] }
   },
 })
 registerStep('mod_on', {
@@ -246,7 +247,7 @@ registerStep('mod_on', {
     const { file } = s as Step<'mod_on'>
     const c = await import('../ipc/commands')
     await c.toggleContent(profile, 'mod', file, true)
-    return { ok: true, undo: [{ op: 'mod_off', file }], changes: [{ label: file.replace(/\.jar$/, ''), to: 'вкл' }] }
+    return { ok: true, undo: [{ op: 'mod_off', file }], changes: [{ label: file.replace(/\.jar$/, ''), to: t('вкл') }] }
   },
 })
 
@@ -256,15 +257,15 @@ registerStep('snapshot', {
   run: async (s, { profile }) => {
     const st = s as Step<'snapshot'>
     if (st.scope === 'world') {
-      if (!st.world) return { ok: false, detail: 'какой мир?' }
+      if (!st.world) return { ok: false, detail: t('какой мир?') }
       const c = await import('../ipc/commands')
       const path = await c.backupWorld(profile, st.world)
       const file = path.split(/[\\/]/).pop() || path
-      return { ok: true, detail: 'сохранён', changes: [{ label: 'Бэкап мира', to: st.world }], snapId: file }
+      return { ok: true, detail: t('сохранён'), changes: [{ label: t('Бэкап мира'), to: st.world }], snapId: file }
     }
     if (!(await canLocal())) return LOCAL_NEEDED
-    const snap = await snapshot(profile, st.label || 'Сохранено', false)
-    return { ok: true, detail: sizeText(snap.bytes), changes: [{ label: 'Снимок сборки', to: sizeText(snap.bytes) }], snapId: snap.id }
+    const snap = await snapshot(profile, st.label || t('Сохранено'), false)
+    return { ok: true, detail: sizeText(snap.bytes), changes: [{ label: t('Снимок сборки'), to: sizeText(snap.bytes) }], snapId: snap.id }
   },
 })
 
@@ -274,7 +275,7 @@ registerStep('restore', {
     if (!(await canLocal())) return LOCAL_NEEDED
     const before = await snapshotRestore(profile, id)
     dropFactsCache()
-    return { ok: true, detail: 'вернула', undo: [{ op: 'restore', id: before.id }], changes: [{ label: 'Сборка', to: 'откат' }], snapId: before.id }
+    return { ok: true, detail: t('вернула'), undo: [{ op: 'restore', id: before.id }], changes: [{ label: t('Сборка'), to: t('откат') }], snapId: before.id }
   },
 })
 
@@ -283,7 +284,7 @@ registerStep('world_restore', {
     const { file } = s as Step<'world_restore'>
     const c = await import('../ipc/commands')
     const w = await c.restoreWorldBackup(profile, file)
-    return { ok: true, detail: 'новый мир «' + w.name + '»', changes: [{ label: 'Мир из бэкапа', to: w.name }] }
+    return { ok: true, detail: t('новый мир «{name}»', { name: w.name }), changes: [{ label: t('Мир из бэкапа'), to: w.name }] }
   },
 })
 
@@ -308,21 +309,21 @@ registerStep('import', {
     if (st.source === 'modrinth') p = await c.installModpack(st.ref)
     else if (st.source === 'curseforge') {
       const id = Number(st.ref)
-      if (!Number.isInteger(id) || id <= 0) return { ok: false, detail: 'нужна ссылка с номером проекта' }
+      if (!Number.isInteger(id) || id <= 0) return { ok: false, detail: t('нужна ссылка с номером проекта') }
       p = await c.cfInstallModpack(id)
     } else if (st.source === 'code') p = await c.installSharedPack(st.ref)
     else p = await c.importPackFile()
-    if (!p?.name) return { ok: false, detail: 'не вышло' }
+    if (!p?.name) return { ok: false, detail: t('не вышло') }
     await refreshProfiles().catch(() => {})
     useProfiles.getState().setSelected(p.name)
     dropFactsCache()
     // Сразу доктор (Pair A): скан только читает, карточка предложит улучшения.
     void pushMilliAction(
-      'Поставила «' + p.name + '». Сделать легче, под твой ПК или на русском?',
-      { id: 'imp-' + Date.now().toString(36), kind: 'doctor', profile: p.name, title: 'Проверка', rows: [], steps: [{ op: 'scan', mode: 'import' }], auto: true },
-      ['Сделай легче', 'Под мой ПК', 'На русском'],
+      t('Поставила «{name}». Сделать легче, под твой ПК или на русском?', { name: p.name }),
+      { id: 'imp-' + Date.now().toString(36), kind: 'doctor', profile: p.name, title: t('Проверка'), rows: [], steps: [{ op: 'scan', mode: 'import' }], auto: true },
+      [t('Сделай легче'), t('Под мой ПК'), t('На русском')],
     )
-    return { ok: true, detail: p.name, undo: [], changes: [{ label: 'Импорт', to: p.name }] }
+    return { ok: true, detail: p.name, undo: [], changes: [{ label: t('Импорт'), to: p.name }] }
   },
 })
 
