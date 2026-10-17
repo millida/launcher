@@ -1,3 +1,4 @@
+// Mod update check and install: the sha1 of installed files goes to Modrinth, the new version is downloaded and checked by hash. The old file is deleted only after the swap worked.
 use crate::engine::*;
 use futures::StreamExt;
 use md5::Digest;
@@ -145,6 +146,7 @@ async fn apply_update(profile: &str, kind: &str, file_name: &str, ver: &Value) -
     let newname = install_project_version(profile, kind, &project, ver).await?;
     if newname != file_name {
         for cand in [on, off] {
+            // Deletes the old mod file from the same modpack after the new version is installed.
             if cand.exists() { let _ = std::fs::remove_file(&cand); }
         }
         manifest_remove(profile, kind, &file_name);
@@ -279,6 +281,7 @@ pub async fn add_local_file(profile: String, kind: String, src: String) -> Resul
     let bytes = std::fs::read(&dest).map_err(|e| e.to_string())?;
     let mut h = Sha1::new(); h.update(&bytes);
     let sha1hex: String = h.finalize().iter().map(|b| format!("{:02x}", b)).collect();
+    // Recognizes a file added by hand: its sha1 goes to api.modrinth.com.
     if let Ok(v) = get_json(&format!("https://api.modrinth.com/v2/version_file/{}?algorithm=sha1", sha1hex)).await {
         if let Some(pid) = v["project_id"].as_str() {
             let (pidc, title, icon, summary) = fetch_project_meta(pid).await;

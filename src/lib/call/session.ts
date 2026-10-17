@@ -1,3 +1,4 @@
+// A call: a set of connections (one per person) and the exchange of offers (offer/answer/ice) through the signal channel in signal.ts.
 import { playRemote, type RemoteAudio } from './audio'
 import { iceConfig } from './ice'
 import { createPeer, type Peer, type PeerFlags } from './peer'

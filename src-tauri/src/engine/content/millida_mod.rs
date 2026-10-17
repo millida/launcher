@@ -1,8 +1,13 @@
+// Installs the Millida mod (skins, cosmetics) into the player's modpacks and updates it.
+// The version list comes from cdn.millida.net/mod, the jar is downloaded from there and checked against the sha256 from the list. The list is also signed with the Millida key. The list of blocked versions is api.millida.net/v2/launcher/mod/blocked.
+// Can be turned off in settings. Mod summaries are switched off by the statistics switch.
 use crate::engine::*;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
+// Mod version list on the Millida CDN.
 const MANIFEST_URL: &str = "https://cdn.millida.net/mod/variants.json";
+// Kill switch: mod versions the launcher must not install (crashes).
 const BLOCKED_URL: &str = "https://api.millida.net/v2/launcher/mod/blocked";
 const MOD_BASE: &str = "https://cdn.millida.net/mod";
 
@@ -103,6 +108,7 @@ async fn manifest() -> Result<Value, String> {
 /// Открытая часть ключа, которым CI мода (millida-mod, scripts/manifest_canonical.py)
 /// подписывает список вариантов: сервер или CDN без закрытой части не может
 /// подсунуть в игру другой jar — его sha256 стоит в подписанной строке.
+// Public minisign key in base64 (it contains the text "minisign public key"). The private part is kept in the mod CI and is not in this repository.
 const MOD_MANIFEST_PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDBCMjA5MkFGRDhCODAzOEMKUldTTUE3allyNUlnQ3haTTFKZnlLcjExcFIybGRjVlMrSzNvQzZiQjNLbVY2cEJUVW5lUXZNdDAK";
 
 #[derive(Debug, PartialEq, Eq)]
@@ -178,6 +184,7 @@ fn keep_only(profile: &str, keep: &str) -> Vec<String> {
         if name == keep {
             continue;
         }
+        // Extra versions of our mod are deleted (only files millida-mod-*.jar).
         if std::fs::remove_file(mods.join(&name)).is_err() {
             stuck.push(name);
         }
@@ -394,6 +401,10 @@ pub fn millida_mod_enabled() -> bool {
     enabled_at(&disabled_file())
 }
 
+pub fn millida_mod_wanted(profile: &str) -> bool {
+    millida_mod_enabled() && skin_mod_on(profile)
+}
+
 /// Игрок выключил статистику в лаунчере: мод в игре тоже молчит. Флаг живёт
 /// файлом, потому что игру запускает Rust, а выключатель - в интерфейсе.
 fn telemetry_off_file() -> PathBuf {
@@ -546,6 +557,7 @@ pub fn quarantine_millida_mod(profile: &str, jar: &str) -> bool {
     }
     // Занятый файл (антивирус, игра ещё держит) хотя бы выключается: иначе
     // следующий запуск загрузил бы его снова и упал бы так же.
+    // Our jar is removed from mods/: deleted, or renamed to .disabled if the file is busy.
     if std::fs::remove_file(&path).is_err() {
         let _ = std::fs::rename(&path, profile_dir(profile).join("mods").join(format!("{}.disabled", jar)));
     }
@@ -555,6 +567,7 @@ pub fn quarantine_millida_mod(profile: &str, jar: &str) -> bool {
 /// Копия CustomSkinLoader, которую поставил сам лаунчер. Наш мод отвечает за
 /// скин сам, а два мода на одну текстуру — это падение на загрузчике.
 fn drop_launcher_csl(mods: &Path) -> bool {
+    // Deletes only the file named exactly CustomSkinLoader.jar (the launcher names it so). Copies the player downloaded with a version in the name are not touched.
     let jar = mods.join("CustomSkinLoader.jar");
     jar.exists() && std::fs::remove_file(&jar).is_ok()
 }
@@ -854,7 +867,7 @@ pub async fn ensure_millida_mod(
     nick: &str,
     licensed: bool,
 ) -> Result<Option<String>, String> {
-    if !millida_mod_enabled() {
+    if !millida_mod_wanted(profile) {
         // Мод выключен насовсем: сборку не трогаем и не забираем у неё
         // CustomSkinLoader - без нашего мода скин иначе брать неоткуда.
         remove_mod_from(profile);

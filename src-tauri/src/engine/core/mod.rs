@@ -1,3 +1,4 @@
+// List of core modules: disk and paths, network and mirrors, unpacking, path checks, self-update, self-heal. Does nothing by itself.
 mod paths;
 mod prefs;
 mod http;

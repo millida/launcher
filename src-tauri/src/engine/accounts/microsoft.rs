@@ -1,8 +1,11 @@
+// Microsoft login by code (device code): the user types the password on the Microsoft page, not in the launcher.
+// Then the chain Xbox Live, XSTS, Minecraft Services. All these hosts belong to Microsoft/Mojang. No Millida servers here.
 use crate::engine::*;
 use serde_json::Value;
 
 /// Azure application client_id, baked in at compile time. Own builds should set
 /// MILLIDA_MS_CLIENT_ID to their own registration.
+// Public Azure application id, not a secret. Custom builds set their own through MILLIDA_MS_CLIENT_ID.
 const MS_CLIENT_ID_FALLBACK: &str = "499c8d36-be2a-4231-9ebd-ef291b7bb64c";
 
 pub(crate) fn ms_client_id() -> &'static str {
@@ -15,6 +18,7 @@ pub(crate) fn ms_client_id() -> &'static str {
 pub async fn ms_device_start() -> Result<Value, String> {
     let client_id = ms_client_id();
     let r = client()
+        // Step one: ask Microsoft for a login code. client_id and the list of scopes are sent.
         .post("https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode")
         .form(&[("client_id", client_id), ("scope", "XboxLive.signin offline_access")])
         .send().await.map_err(|e| net_err(&e))?;
@@ -32,6 +36,7 @@ pub async fn ms_device_start() -> Result<Value, String> {
 pub async fn ms_device_poll(device_code: String) -> Result<Value, String> {
     let client_id = ms_client_id();
     let r = client()
+        // Polls Microsoft: has the user signed in on the code page yet.
         .post("https://login.microsoftonline.com/consumers/oauth2/v2.0/token")
         .form(&[
             ("client_id", client_id),
@@ -58,6 +63,7 @@ pub async fn ms_device_poll(device_code: String) -> Result<Value, String> {
 /// Xbox Live -> XSTS -> Minecraft services -> profile, as required by the
 /// Microsoft login protocol. Shared by first login and silent refresh.
 pub(crate) async fn xbox_chain(ms_token: &str) -> Result<Value, String> {
+    // Swaps the Microsoft token for Xbox Live and Minecraft tokens. Tokens go only to xboxlive.com and minecraftservices.com.
     let xbl: Value = client().post("https://user.auth.xboxlive.com/user/authenticate")
         .json(&serde_json::json!({
             "Properties": {"AuthMethod":"RPS","SiteName":"user.auth.xboxlive.com","RpsTicket": format!("d={}", ms_token)},
@@ -105,6 +111,7 @@ pub(crate) async fn xbox_chain(ms_token: &str) -> Result<Value, String> {
     let mut prof = Value::Null;
     let mut prof_status = 0u16;
     for attempt in 0..3u64 {
+        // Gets the player profile (nickname, uuid, capes) from Minecraft Services using the token.
         let r = client().get("https://api.minecraftservices.com/minecraft/profile")
             .bearer_auth(&mc_token).send().await.map_err(|e| net_err(&e))?;
         prof_status = r.status().as_u16();
@@ -149,6 +156,7 @@ pub async fn ms_validate(token: String) -> Result<Value, String> {
 
 /// Silent renewal via the stored refresh_token; returns a fresh Minecraft token
 /// and the rotated refresh_token when Microsoft issues one.
+// Refreshes the login: the refresh token goes to Microsoft, new tokens come back.
 pub async fn ms_refresh(refresh_token: String) -> Result<Value, String> {
     let client_id = ms_client_id();
     let r = client()

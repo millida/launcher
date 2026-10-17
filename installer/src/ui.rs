@@ -1,3 +1,5 @@
+// Installer window on plain WinAPI: a label, a progress bar, an error message.
+// No network, no files. It only draws the window and takes status text from the installer.
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Mutex, OnceLock};
@@ -61,6 +63,7 @@ impl Reporter {
 
     fn post(&self, msg: Msg) {
         if self.tx.send(msg).is_ok() {
+            // unsafe because of WinAPI calls: ask the window to update its label from the install thread.
             unsafe { PostMessageW(self.hwnd as HWND, WM_APP_UPDATE, 0, 0) };
         }
     }
@@ -79,6 +82,7 @@ fn scaled(value: i32) -> i32 {
 /// running window is raised instead.
 pub fn raise_existing() -> bool {
     let class = wide(CLASS_NAME);
+    // Looks for an already open installer window by class name, so we do not start a second copy.
     let hwnd = unsafe { FindWindowW(class.as_ptr(), std::ptr::null()) };
     if hwnd.is_null() {
         return false;

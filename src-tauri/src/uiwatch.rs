@@ -1,3 +1,5 @@
+// Watches if the UI froze: pings the main thread every 2 seconds, and if it hangs longer than 15 seconds writes a note to the crash reports folder on disk.
+// The core sends nothing by itself. The UI reads reports from that folder and sends them only if statistics are on (TELEMETRY.md, /errors).
 //! Watchdog for the thread that pumps the window.
 //!
 //! A freeze of the UI thread is invisible in every log the launcher keeps: the

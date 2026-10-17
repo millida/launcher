@@ -1,3 +1,6 @@
+// Entry point of the small installer: finds the latest launcher version, downloads the installer,
+// checks the signature and runs it (Windows) or puts the app in place (macOS/Linux).
+// URLs are in manifest.rs, downloading is in install.rs. This file only has the order of the steps.
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
 mod install;
@@ -105,6 +108,7 @@ struct InstanceLock(windows_sys::Win32::Foundation::HANDLE);
 #[cfg(windows)]
 impl Drop for InstanceLock {
     fn drop(&mut self) {
+        // Windows system call: close the mutex handle on exit.
         unsafe { windows_sys::Win32::Foundation::CloseHandle(self.0) };
     }
 }
@@ -118,6 +122,7 @@ fn single_instance() -> Instance {
     use windows_sys::Win32::System::Threading::CreateMutexW;
 
     let name = ui::wide("Local\\MillidaLauncherSetup");
+    // Windows system call: a named mutex, so two copies of the installer cannot run at once.
     let handle = unsafe { CreateMutexW(std::ptr::null(), 1, name.as_ptr()) };
     if handle.is_null() {
         return Instance::Unknown;

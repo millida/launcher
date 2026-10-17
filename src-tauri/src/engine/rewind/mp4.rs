@@ -1,3 +1,4 @@
+// Builds an mp4 file from H.264 and AAC packets. Pure byte work in memory: writes into the stream it is given and opens no files.
 use std::io::{Read, Seek, SeekFrom, Write};
 
 use super::ring::{Clip, Packet, Ticks, TICKS_PER_SECOND};

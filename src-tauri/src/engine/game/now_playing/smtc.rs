@@ -1,3 +1,4 @@
+// Windows: reads what the player app is playing through the system SMTC interface: title, artist, cover, position, commands. Goes only to the local mod in the game, not to the internet.
 use super::cover::{CoverCache, MAX_SOURCE_BYTES};
 use super::protocol::{clip, Command, Cover, NowPlaying};
 use super::{Control, Controller, Reading};
@@ -30,6 +31,7 @@ pub(super) fn spawn(publish: watch::Sender<Reading>) -> Option<Controller> {
     std::thread::Builder::new()
         .name("millida-now-playing".into())
         .spawn(move || {
+            // unsafe: COM init for the thread that polls Windows.
             let com = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
             run(&events, rx, &publish);
             if com.is_ok() {

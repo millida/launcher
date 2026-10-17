@@ -1,3 +1,5 @@
+// Modpack repair: downloads again and checks mod files that are missing or damaged.
+// Downloads from Modrinth/CurseForge using the addresses from the modpack's own list and only if there is a hash. A foreign host is rejected.
 use crate::engine::*;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -94,6 +96,7 @@ fn drop_partials(dir: &Path) -> u32 {
     let Ok(rd) = std::fs::read_dir(dir) else { return 0 };
     for e in rd.flatten() {
         let p = e.path();
+        // Deletes unfinished *.part files in the modpack folder.
         if p.is_file() && p.extension().is_some_and(|x| x == "part") && std::fs::remove_file(&p).is_ok() {
             n += 1;
         }
@@ -138,6 +141,7 @@ async fn repair_content(app: &AppHandle, profile: &str, report: &mut RepairRepor
         );
         // The damaged copy goes first: a download that resumes onto it would
         // append to garbage, and download_checked accepts a file it cannot hash.
+        // Deletes one damaged mod from the modpack and downloads it again at once, with a hash check.
         let _ = std::fs::remove_file(&path);
         let dest = match content_file_path(profile, &entry.kind, &entry.file_name) {
             Some((p, _)) if !enabled => p,

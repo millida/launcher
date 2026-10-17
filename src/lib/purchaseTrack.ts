@@ -1,3 +1,4 @@
+// Purchase funnel events (clicked "Buy", result) for statistics. Sent by telemetry.ts: only the product code, the price and the outcome.
 import { track, trackFailure } from './telemetry'
 import { actionSource } from './uiTrack'
 

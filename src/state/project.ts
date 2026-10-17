@@ -1,3 +1,4 @@
+// Project card (mod, pack, modpack): data comes from the Millida catalog and from Modrinth through our API (/launcher/mr).
 import { create } from 'zustand'
 import { cfFiles, cfProject } from '../ipc/commands'
 import { hasTauri } from '../ipc/tauri'

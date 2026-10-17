@@ -1,3 +1,4 @@
+// Mod dependency check: builds a "what else to install" plan and finds version conflicts. Gets data from Modrinth (api.modrinth.com), project and version ids are sent. Files are installed only by install_dep_items, which a UI button calls.
 use crate::engine::*;
 use serde_json::Value;
 use std::cmp::Ordering;

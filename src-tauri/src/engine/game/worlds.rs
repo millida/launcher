@@ -1,3 +1,4 @@
+// List of worlds in a modpack and deleting one world when the player asks. Only files in the saves/ folder of this modpack.
 use crate::engine::*;
 use std::path::PathBuf;
 use tauri::AppHandle;
@@ -28,6 +29,7 @@ pub fn delete_world(profile: &str, folder: &str) -> Result<(), String> {
     let name = safe_file_name(folder)?;
     let dir = safe_child(&profile_dir(profile).join("saves"), &name)?;
     if !dir.is_dir() { return Err("Мир не найден".into()); }
+    // Deletes the world the player picked. The path is built with safe_child, it cannot leave saves/.
     std::fs::remove_dir_all(&dir).map_err(|e| format!("Мир занят другой программой: {}", e))?;
     manifest_remove(profile, "world", &name);
     Ok(())

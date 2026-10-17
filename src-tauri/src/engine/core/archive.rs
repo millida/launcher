@@ -1,3 +1,4 @@
+// Unpacks zip: modpacks, Java, downloaded archives. Does not let files out of the target folder and limits the unpacked size. If unpacking breaks off, it removes only what it wrote itself.
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
@@ -180,6 +181,7 @@ impl Written {
     fn take_back(self, cause: String) -> String {
         let mut stuck: Option<PathBuf> = None;
         for f in &self.files {
+            // Rollback of a failed unpack: deletes only files and folders created by this same unpack.
             if let Err(e) = std::fs::remove_file(f) {
                 if e.kind() != std::io::ErrorKind::NotFound {
                     stuck.get_or_insert_with(|| f.clone());
@@ -238,6 +240,7 @@ pub(crate) fn drop_launcher_service_files(dir: &Path, trusted: &[&str]) -> std::
         let kind = std::fs::symlink_metadata(entry.path())?.file_type();
         if is_launcher_service_file(&name) && !trusted.contains(&name.as_str()) {
             if kind.is_dir() {
+                // Launcher service files (millida-*.json, millida-args.txt) are dropped from a foreign archive, so a modpack cannot slip in its own launch arguments. Links are not followed.
                 std::fs::remove_dir_all(entry.path())?;
             } else {
                 std::fs::remove_file(entry.path())?;
@@ -545,7 +548,8 @@ mod tests {
         fn ucrt_only(rel: &str) -> bool {
             rel.ends_with("ucrtbase.dll")
         }
-        let cases: [(fn(&str) -> bool, bool, &str); 2] = [
+        type Case = (fn(&str) -> bool, bool, &'static str);
+        let cases: [Case; 2] = [
             (ucrt_only, true, "необязательный файл, который не дали записать, пропускается — остальное распаковано"),
             (nothing_skippable, false, "обязательный файл, который не дали записать, останавливает распаковку"),
         ];

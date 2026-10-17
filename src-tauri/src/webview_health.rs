@@ -1,3 +1,5 @@
+// Watches WebView2 on Windows: if it died from lack of memory, reloads the page (at most 3 times) and remembers the reason.
+// The reason goes to telemetry only if statistics are on. No disk, no network.
 //! Survival of the webview's render process.
 //!
 //! When Windows runs out of memory — a modded game holding a large heap next to
@@ -107,6 +109,7 @@ pub fn watch(window: &tauri::WebviewWindow) {
     use webview2_com::ProcessFailedEventHandler;
     use windows::core::Interface;
 
+    // unsafe: subscribe to the WebView2 event "page process crashed".
     let _ = window.with_webview(|webview| unsafe {
         let Ok(core) = webview.controller().CoreWebView2() else { return };
         let mut token = Default::default();

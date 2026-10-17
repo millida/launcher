@@ -1,3 +1,4 @@
+// Helper Media Foundation calls for encoding: start, find the encoder, read ready packets. Every unsafe here is a call into a Windows system library.
 use windows::core::{Interface, Result, GUID};
 use windows::Win32::Media::MediaFoundation::*;
 use windows::Win32::System::Com::CoTaskMemFree;

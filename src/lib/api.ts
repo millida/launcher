@@ -1,3 +1,5 @@
+// UI requests to the Millida API (api.millida.net/v2) and the site addresses. In the app a request goes through the core, which adds
+// the token itself. The direct fetch below has no token, it is a fallback for the browser in development. The Modrinth catalog goes through our API (/launcher/mr).
 import { hasTauri } from '../ipc/tauri'
 import { millidaApi, openUrl } from '../ipc/commands'
 import { hasMillidaSession } from './secure'

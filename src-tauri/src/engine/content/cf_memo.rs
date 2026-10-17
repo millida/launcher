@@ -1,3 +1,4 @@
+// Short memory for CurseForge answers and proxy failures, so we do not hit the server with the same request again. Memory only, no disk, no network.
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};

@@ -1,3 +1,5 @@
+// The game closed right after start: builds a clear message for the player and a short reason for the statistics.
+// The home folder in the text is replaced with "~". Tokens are not cut out separately (a JVM log usually has none).
 //! Игра вышла сразу после старта: что сказать игроку и что отправить в
 //! телеметрию. Телеметрия хранит 120 символов, и в 1.0.115 их целиком съедали
 //! строки `[authlib-injector] [INFO] Logging file: …` — настоящая причина

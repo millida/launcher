@@ -1,3 +1,5 @@
+// Shared network code: HTTP client, file downloads with checksum checks, resume, retries.
+// Every request has the User-Agent "MillidaLauncher/version". No tokens, nickname or hardware are added here. They get into headers only where the calling modules put them.
 use futures::StreamExt;
 use serde_json::Value;
 use std::io::Write;
@@ -11,6 +13,7 @@ use super::jobs::{Halt, CANCELLED};
 /// `Halt::gate` and asks for the rest of the file.
 pub(crate) const PAUSED: &str = "Загрузка на паузе";
 
+// The only header we send to every server ourselves: launcher version and site.
 const UA: &str = concat!("MillidaLauncher/", env!("CARGO_PKG_VERSION"), " (+https://millida.net)");
 const JSON_TIMEOUT: Duration = Duration::from_secs(30);
 const TRIES: u32 = 3;
@@ -132,6 +135,7 @@ fn build_client(native_roots: bool) -> Result<reqwest::Client, reqwest::Error> {
 }
 
 #[cfg(windows)]
+// Windows: reads the system proxy from the registry (read only), so requests take the same road as the browser.
 fn system_proxy() -> String {
     let Ok(key) = windows_registry::CURRENT_USER.open(r"Software\Microsoft\Windows\CurrentVersion\Internet Settings")
     else {
@@ -359,6 +363,7 @@ pub(crate) fn urlencode(s: &str) -> String {
     out
 }
 
+// Plain GET with JSON, retries on failure. Addresses come from the calling modules, mirror.rs picks mirrors.
 pub(crate) async fn get_json(url: &str) -> Result<Value, String> {
     let mut last = String::new();
     for target in super::mirror::routes(url).await {
@@ -447,6 +452,7 @@ async fn revalidated_within(url: &str, cache: &Path, budget: Duration) -> Result
 }
 
 /// Modrinth bulk endpoints only accept a JSON body over POST.
+// POST with JSON, needed for Modrinth batch requests. The body is set by the calling code.
 pub(crate) async fn post_json(url: &str, body: &Value) -> Result<Value, String> {
     let mut last = String::new();
     for target in super::mirror::routes(url).await {
@@ -669,6 +675,12 @@ pub(crate) async fn or_pause<F: std::future::Future>(fut: F, cancel: Option<&Hal
 }
 
 async fn watch<F: std::future::Future>(fut: F, halt: &Halt, stop_on_pause: bool) -> Result<F::Output, String> {
+    // Пауза, поставленная до первого опроса, ловится сразу: иначе локальный
+    // сервер успевал отдать всё тело раньше первого тика, и загрузка «на паузе»
+    // доезжала до конца (тест a_paused_download_... на раннерах GitHub).
+    if stop_on_pause && !halt.cancelled() && halt.paused() {
+        return Err(PAUSED.into());
+    }
     tokio::pin!(fut);
     let mut tick = tokio::time::interval(CANCEL_POLL);
     loop {
@@ -704,6 +716,7 @@ fn resume_after(err: &str, have: u64) -> u64 {
     have
 }
 
+// Downloads a file. The checksum is compared after the download, a wrong file is deleted (SUM_MISMATCH).
 async fn fetch_once(
     url: &str,
     part: &Path,

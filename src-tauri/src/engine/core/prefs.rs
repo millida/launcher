@@ -1,3 +1,4 @@
+// Small UI settings in one file in the launcher data folder. Key and value length are limited. No network, no secrets.
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 

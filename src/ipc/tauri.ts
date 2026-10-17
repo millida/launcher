@@ -1,3 +1,5 @@
+// Bridge between the UI and the launcher core (Rust): a wrapper over invoke from Tauri. It does not use the network by itself.
+// The UI can call only the commands the core registered and allowed in capabilities.
 import { convertFileSrc, invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'

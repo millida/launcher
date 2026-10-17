@@ -1,3 +1,4 @@
+// Format checks for ids that come from outside and end up in paths and in the command line. If it does not fit, we reject it, we do not clean it.
 // Formats of identifiers that arrive from outside the core (the webview, share
 // codes, API answers, pack indexes) and end up in paths, URLs or a command line.
 // A value that does not match is refused, never "cleaned": a cleaned value can

@@ -1,3 +1,5 @@
+// Diagnostics "why is the skin not visible": checks the modpack files and asks api.millida.net if the nickname has a skin and if the texture is served.
+// Only the player nickname and requests to our own skin server are sent. No tokens.
 use crate::engine::*;
 use serde_json::{json, Value};
 
@@ -326,6 +328,7 @@ fn build_report(profile: &Profile, root: &str) -> (Value, BuildFacts) {
 }
 
 async fn texture_ok(url: &str) -> bool {
+    // GET of the texture from the address the Millida skin server named: we check that a picture is served.
     let Ok(resp) = client().get(url).send().await else { return false };
     resp.status().is_success()
         && resp.headers().get("content-type").and_then(|v| v.to_str().ok())
@@ -375,6 +378,7 @@ async fn session_report(nick: &str) -> Value {
         .as_array()
         .map(|a| a.iter().filter_map(|d| d.as_str()).map(|d| d.to_ascii_lowercase()).collect())
         .unwrap_or_default();
+    // POST to api.millida.net with the player nickname: gets its uuid on the skin server.
     let uuid = post_json(
         &format!("{}/yggdrasil/api/profiles/minecraft", MILLIDA_API),
         &json!([nick]),

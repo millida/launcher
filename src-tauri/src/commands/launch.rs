@@ -1,3 +1,5 @@
+// Commands to start the game and what goes around it: Java, logs, worlds, servers, stopping the game.
+// Starting processes and the rest lives in engine/game. Here are only thin wrappers for the UI.
 use crate::engine;
 
 #[tauri::command]
@@ -83,6 +85,7 @@ pub fn get_play_stats() -> engine::PlayStats { engine::get_play_stats() }
 pub fn label_server(addr: String, name: String) { engine::label_server(&addr, &name) }
 
 #[tauri::command]
+// The game log goes to the public mclo.gs only when the user clicks. Before that the token and the home folder are cut out (engine/profiles/sharelog.rs).
 pub async fn share_log(profile: String, name: String) -> Result<String, String> { engine::share_log(profile, name).await }
 
 #[tauri::command(async)]
@@ -95,6 +98,7 @@ pub fn list_backups(profile: String) -> Vec<String> { engine::list_backups(&prof
 pub fn list_worlds(profile: String) -> Vec<engine::WorldEntry> { engine::list_worlds(&profile) }
 
 #[tauri::command(async)]
+// Deletes a world from the profile folder. A button in the UI calls it.
 pub fn delete_world(profile: String, folder: String) -> Result<(), String> { engine::delete_world(&profile, &folder) }
 
 #[tauri::command(async)]

@@ -1,3 +1,5 @@
+// Requests to the Millida API (api.millida.net/v2) and the Millida account session: login, token refresh, file upload.
+// The Millida token goes into the Authorization header only for api.millida.net. Microsoft and Ely.by tokens never get here.
 use crate::engine::*;
 use serde_json::Value;
 
@@ -35,6 +37,7 @@ fn is_dot_segment(segment: &str) -> bool {
 /// still lives under `/v2`. Without this a path like `/../auth/x` normalises to
 /// another prefix of the same host, which would hand the webview the user's
 /// bearer token for endpoints outside the launcher API.
+// The request path is checked: it must stay inside /v2/ on the same server, no .. and no swapped host.
 fn api_url(path: &str) -> Result<url::Url, String> {
     if !path.starts_with('/') || path.contains(['\r', '\n', '\0']) {
         return Err("bad path".into());
@@ -57,6 +60,7 @@ fn api_url(path: &str) -> Result<url::Url, String> {
 /// Пути, которые webview не может вызвать через команду millida_api, даже с
 /// валидным форматом: вход и выпуск токенов живут только в ядре (аудит
 /// 24.09.2026, R2). Вызов из ядра (millida_api_auth напрямую) не ограничен.
+// API paths the UI is not allowed to call: issuing tokens and game sessions stays in the core only.
 pub fn webview_path_allowed(path: &str) -> bool {
     let route = path.split(['?', '#']).next().unwrap_or_default();
     let low = route.to_ascii_lowercase();
@@ -204,6 +208,7 @@ pub async fn millida_api(
             "PUT" => c.put(url),
             _ => c.delete(url),
         };
+        // The Millida account token is added to the header. The address above is always api.millida.net.
         if let Some(t) = token.as_ref() {
             req = req.header("Authorization", format!("Bearer {}", t));
         }
@@ -336,6 +341,7 @@ fn keep_pair(access: &str, refresh: &str) {
 /// (POST /launcher/mod-session). Полный токен аккаунта в окружение игры не
 /// уходит: его прочитал бы любой мод сборки (аудит 24.09.2026). Ручка не
 /// ответила — мод работает без входа (каталог и косметика на игроках видны и так).
+// A separate narrow token for the Millida mod in the game (cosmetics only, 12 hours). The full account token is not passed to the game.
 pub async fn mod_session_token() -> Option<String> {
     millida_token()?;
     let call = millida_api_auth("/launcher/mod-session".into(), "POST".into(), None);
@@ -577,6 +583,7 @@ fn cookie_value(header: &str, name: &str) -> Option<String> {
 /// Returns (access, next refresh). The rotated refresh token arrives only in a
 /// Set-Cookie header; missing it trips server-side reuse detection, which
 /// invalidates the whole token family.
+// Session refresh: the refresh token goes to api.millida.net, the new one comes back in the rt2 cookie.
 pub async fn millida_refresh(refresh_token: &str) -> Result<(String, String), String> {
     let res = client()
         .post(format!("{}/auth/refresh", MILLIDA_API))

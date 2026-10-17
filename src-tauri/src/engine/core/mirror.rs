@@ -1,3 +1,5 @@
+// Fallback when access is blocked. If direct access to Modrinth, CurseForge, Mojang, Java or the loaders does not work, the same request goes through api.millida.net.
+// Then our server sees the IP and the address of the requested file. The content is still checked by checksums. Tokens and account requests do not go through the mirror, see the host list below.
 use super::http::{client, urlencode};
 use crate::engine::MILLIDA_API;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -162,6 +164,7 @@ pub(crate) fn proxy_url(url: &str) -> Option<String> {
 
 /// Живой ли источник напрямую. Ответ любой — даже 404 значит, что до хоста
 /// дошли: блокировка выглядит как таймаут или обрыв соединения, а не как статус.
+// Availability check: one HEAD request to the host itself, no user data.
 async fn direct_works(probe: &str) -> bool {
     client().head(probe).timeout(PROBE_TIMEOUT).send().await.is_ok()
 }
@@ -199,6 +202,7 @@ async fn direct_available(source: Source) -> bool {
 /// Адреса одного и того же ресурса в порядке попыток. Проверка доступности
 /// делается один раз за запуск на источник, а запасной путь остаётся всегда:
 /// прямой путь может отвалиться позже, а наш API — быть недоступен сам.
+// Order of addresses for one resource: direct first, then our mirror (or the other way round if direct does not answer).
 pub(crate) async fn routes(url: &str) -> Vec<String> {
     let Some(source) = source_of(url) else {
         return vec![url.to_string()];

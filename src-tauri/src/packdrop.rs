@@ -1,3 +1,5 @@
+// Dragging a .mrpack or .zip file into the launcher window. The core remembers the path, the UI gets only a number.
+// The file is not read and not sent anywhere until the user confirms the install.
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};

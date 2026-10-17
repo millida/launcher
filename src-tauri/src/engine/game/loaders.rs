@@ -1,3 +1,5 @@
+// Version lists of Fabric, Quilt, Forge and NeoForge from their official addresses (meta.fabricmc.net, meta.quiltmc.org,
+// files.minecraftforge.net, maven.neoforged.net). Plain GET requests with no data about you. Answers are cached on disk.
 use crate::engine::*;
 use std::time::Duration;
 

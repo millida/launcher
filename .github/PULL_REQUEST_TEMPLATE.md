@@ -1,18 +1,26 @@
-## Что и зачем
+## What and why
 
-<!-- Какую задачу решает правка. Ссылка на issue, если он есть. -->
+<!-- Which problem the change solves. A link to the issue, if there is one. -->
 
-## Как проверял
+## How you checked
 
-<!-- ОС, версия Minecraft и загрузчик, сценарий. Для правок интерфейса — скриншот
-     (для темизации — светлая и тёмная тема). -->
+<!-- OS, Minecraft version and loader, scenario. For interface changes, a screenshot
+     (for theming, light and dark theme). -->
 
-## Чек-лист
+## Checklist
 
 - [ ] `bun run typecheck`
 - [ ] `bun test`
-- [ ] `cargo clippy --all-targets -- -D warnings` в `src-tauri`
-- [ ] `cargo test` в `src-tauri`
-- [ ] Проверил вручную, описал выше как именно
-- [ ] Скриншот приложен (для правок интерфейса)
-- [ ] Формат пользовательских данных не изменился — или изменение описано и есть миграция
+- [ ] `cargo clippy --all-targets -- -D warnings` in `src-tauri`
+- [ ] `cargo test` in `src-tauri`
+- [ ] I checked by hand and described above how
+- [ ] A screenshot is attached (for interface changes)
+- [ ] The user data format did not change, or the change is described and there is a migration
+
+---
+
+<details>
+<summary><b>Русская версия</b></summary>
+
+Что и зачем, как проверял, чек-лист — те же пункты на русском можно писать в свободной форме.
+</details>

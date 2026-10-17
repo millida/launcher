@@ -1,3 +1,4 @@
+// Wires up the modules for sounds, music, pictures and wallpapers.
 mod music;
 mod pictures;
 mod sounds;

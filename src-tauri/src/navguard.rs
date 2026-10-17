@@ -1,3 +1,5 @@
+// Keeps launcher windows off foreign sites: any external link is cancelled and opened in the normal browser.
+// Our own pages like tauri.localhost are allowed, nothing else. This protects against an injected script.
 //! Окна лаунчера и оверлея никогда не уходят со своей страницы: любая внешняя
 //! навигация (ссылка в описании мода, window.location из скомпрометированного
 //! скрипта) отменяется и открывается в браузере (аудит 24.09.2026).

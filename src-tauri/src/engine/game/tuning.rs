@@ -1,3 +1,4 @@
+// Picks memory and JVM flags for the computer and the modpack, with the reasons. Downloads and runs nothing.
 //! Memory and JVM flags picked for the machine and the build, with the reasons
 //! spelled out. The most common crash a new player hits is a hundred mods
 //! running in the two gigabytes some guide told them to set.

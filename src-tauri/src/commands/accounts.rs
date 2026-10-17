@@ -1,3 +1,5 @@
+// UI commands about accounts: Discord status, Microsoft and Ely.by login, skins and capes.
+// The launcher never sees the password: login uses a code on the Microsoft or Ely.by site. Tokens are not given to the UI, they come from secrets.rs.
 use crate::{discord, engine};
 
 /// Discord's socket lives on its own thread: a client that accepts the pipe and
@@ -84,6 +86,7 @@ pub fn ely_session_commit(device_code: String, account_id: String) -> Result<(),
 #[tauri::command]
 pub async fn mc_textures(query: String) -> Result<serde_json::Value, String> { engine::mc_textures(query).await }
 
+// The Microsoft token comes from the protected storage and goes only to Microsoft/Mojang requests (profile, cape, skin).
 fn licensed_token(account_id: &str) -> Result<String, String> {
     engine::mc_token(account_id).ok_or_else(|| "вход по лицензии Microsoft устарел".to_string())
 }

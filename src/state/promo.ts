@@ -1,3 +1,4 @@
+// "For you" tiles on the home screen: the server and promo list is loaded from api.millida.net/v2/launcher/promo and cached in localStorage.
 import { create } from 'zustand'
 import { LAUNCHER_API } from '../lib/api'
 

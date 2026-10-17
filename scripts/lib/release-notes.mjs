@@ -11,7 +11,7 @@ const DOWNLOADS = [
 ]
 
 const VERSION_FILES = [
-  { key: 'windows-x86_64', label: 'Windows, установщик' },
+  { key: 'windows-x86_64', label: 'Windows, installer' },
   { key: 'linux-x86_64', label: 'Linux, AppImage' },
   { key: 'linux-x86_64-deb', label: 'Linux, deb' },
   { key: 'linux-x86_64-rpm', label: 'Linux, rpm' },
@@ -24,8 +24,8 @@ export const sourceCommitOf = (message) =>
 /** Тело коммита в публичном репозитории: что поменялось простыми строками, а не голый хеш. */
 export function publicCommitBody({ changes = [], source }) {
   const shown = changes.slice(0, MAX_CHANGES).map((line) => `- ${line}`)
-  if (changes.length > MAX_CHANGES) shown.push(`- и ещё ${changes.length - MAX_CHANGES}`)
-  return [shown.length ? shown.join('\n') : 'Служебные правки без изменений для игрока.', `Source-Commit: ${source}`].join('\n\n')
+  if (changes.length > MAX_CHANGES) shown.push(`- and ${changes.length - MAX_CHANGES} more`)
+  return [shown.length ? shown.join('\n') : 'Internal changes, nothing new for players.', `Source-Commit: ${source}`].join('\n\n')
 }
 
 export function changesFromSubjects(subjects) {
@@ -47,26 +47,26 @@ const fileName = (url) => decodeURIComponent(new URL(url).pathname.split('/').po
 export function releaseNotes({ version, changes = [], platforms = {} }) {
   const buttons = DOWNLOADS.map(
     ({ os, label }) =>
-      `<a href="${SITE}/dl/${os}"><img src="${PUBLIC_REPO_RAW}/v${version}/.github/readme/download-${os}.png" width="260" alt="Скачать для ${label}"></a>`,
+      `<a href="${SITE}/dl/${os}"><img src="${PUBLIC_REPO_RAW}/v${version}/.github/readme/download-${os}-en.png" width="260" alt="Download for ${label}"></a>`,
   ).join('\n')
 
   const parts = [
     `<p>\n${buttons}\n</p>`,
-    `Все файлы этого релиза собрал GitHub Actions из кода под тегом \`v${version}\` — их никто не трогал руками. Проверить любой файл: \`gh attestation verify <файл> -R millida/launcher\`. Подробно — [SAFETY.md](https://github.com/millida/launcher/blob/v${version}/SAFETY.md).`,
-    `Установщик всегда ставит свежую версию. Проверка антивирусами — [millida.net/launcher/antivirus](${SITE}/antivirus).`,
+    `GitHub Actions built every file in this release from the code under tag \`v${version}\`. Nobody touched them by hand. To check any file: \`gh attestation verify <file> -R millida/launcher\`. Details: [SAFETY.md](https://github.com/millida/launcher/blob/v${version}/SAFETY.md).`,
+    `The installer always installs the latest version. Antivirus scan results: [millida.net/launcher/antivirus](${SITE}/antivirus).`,
   ]
 
   if (changes.length) {
     const shown = changes.slice(0, MAX_CHANGES).map((line) => `- ${line}`)
-    if (changes.length > MAX_CHANGES) shown.push(`- и ещё ${changes.length - MAX_CHANGES}`)
-    parts.push(`### Что нового\n\n${shown.join('\n')}`)
+    if (changes.length > MAX_CHANGES) shown.push(`- and ${changes.length - MAX_CHANGES} more`)
+    parts.push(`### What's new\n\n${shown.join('\n')}`)
   }
 
   const rows = VERSION_FILES.filter(({ key }) => platforms[key]?.url).map(
     ({ key, label }) => `| ${label} | [${fileName(platforms[key].url)}](${platforms[key].url}) |`,
   )
   if (rows.length) {
-    parts.push(`<details>\n<summary>Файлы именно этой версии</summary>\n\n| Система | Файл |\n| --- | --- |\n${rows.join('\n')}\n</details>`)
+    parts.push(`<details>\n<summary>Files of this exact version</summary>\n\n| System | File |\n| --- | --- |\n${rows.join('\n')}\n</details>`)
   }
 
   return parts.join('\n\n') + '\n'

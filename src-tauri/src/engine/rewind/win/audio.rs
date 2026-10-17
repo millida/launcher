@@ -1,3 +1,5 @@
+// Sound for clips: the sound of the game process (WASAPI loopback of this game only, no browser and no calls) and, if the user wants, the microphone.
+// The microphone is off by default and has its own checkbox. Sound is encoded to AAC and stays in memory.
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
@@ -125,6 +127,7 @@ fn game_client(pid: u32) -> Result<IAudioClient> {
         Anonymous: AUDIOCLIENT_ACTIVATION_PARAMS_0 {
             ProcessLoopbackParams: AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS {
                 TargetProcessId: pid,
+                // Takes the sound of the game process only (and its children). We do not hear other programs.
                 ProcessLoopbackMode: PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE,
             },
         },
@@ -151,6 +154,7 @@ fn game_client(pid: u32) -> Result<IAudioClient> {
     activated.ok_or_else(windows::core::Error::empty)?.cast()
 }
 
+// Default microphone: opened only if "microphone" is on in the clip settings.
 fn mic_client() -> Result<IAudioClient> {
     let devices: IMMDeviceEnumerator = unsafe { CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)? };
     let device = unsafe { devices.GetDefaultAudioEndpoint(eCapture, eConsole)? };

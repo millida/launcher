@@ -1,3 +1,4 @@
+// Recognizes mods in a modpack: asks Modrinth by sha1 and CurseForge by fingerprint. The requests contain file hashes, not file names.
 use crate::engine::*;
 use md5::Digest;
 use serde_json::Value;
@@ -42,6 +43,7 @@ pub(crate) async fn versions_by_hash_checked(hashes: &[String]) -> Result<HashMa
     let mut out = HashMap::new();
     for chunk in hashes.chunks(100) {
         let body = serde_json::json!({ "hashes": chunk, "algorithm": "sha1" });
+        // POST to api.modrinth.com: hashes of the modpack files.
         let v = post_json("https://api.modrinth.com/v2/version_files", &body).await?;
         for (hash, ver) in v.as_object().cloned().unwrap_or_default() {
             out.insert(hash, ver);

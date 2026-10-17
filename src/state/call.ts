@@ -1,3 +1,5 @@
+// Voice call state in the UI: microphone, camera, screen share, participants. The microphone and camera open when you yourself
+// join a call or turn them on, and close when the call ends (stop/close). Signals go through lib/call/signal.ts, sound goes straight to the other people.
 import { create } from 'zustand'
 import { openMic, storedCallVolume, type MicChain } from '../lib/call/audio'
 import { iceConfig, supportsCalls } from '../lib/call/ice'

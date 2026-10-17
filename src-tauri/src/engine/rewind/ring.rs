@@ -1,3 +1,4 @@
+// Ring buffer in RAM: keeps the last seconds of already compressed video and sound. It writes nothing to disk or network.
 use std::collections::VecDeque;
 use std::sync::Arc;
 

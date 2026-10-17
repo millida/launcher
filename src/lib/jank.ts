@@ -1,3 +1,4 @@
+// Measures long UI frames (over 50 ms) for statistics: screen and function name, no content. Sent by telemetry.ts.
 import { useUi, type ScreenId } from '../state/ui'
 import { track } from './telemetry'
 

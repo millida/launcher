@@ -1,3 +1,4 @@
+// Clock for clip timestamps: the Windows system counter (QueryPerformanceCounter).
 use windows::Win32::System::Performance::{QueryPerformanceCounter, QueryPerformanceFrequency};
 
 use super::super::ring::{Ticks, TICKS_PER_SECOND};

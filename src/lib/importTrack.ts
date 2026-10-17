@@ -1,3 +1,4 @@
+// Event about a failed modpack import for statistics: without the modpack name and paths, since a person chose them. Sent by telemetry.ts.
 import { trackFailure } from './telemetry'
 
 /// Провал импорта сборки (файл, папка чужого лаунчера, перетаскивание): имя,

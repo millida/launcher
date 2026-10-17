@@ -1,3 +1,5 @@
+// Launcher crash reports: writes a panic or a hang into the crashes folder in the launcher data and reads it at the next start.
+// The report text has the version, OS, CPU architecture, the place in the code and the stack. No network here.
 use serde::Serialize;
 use std::path::PathBuf;
 
@@ -116,6 +118,7 @@ pub fn read_crashes() -> Vec<CrashEntry> {
 }
 
 pub fn clear_crashes() {
+    // Cleans our own crashes folder when the user asks.
     let _ = std::fs::remove_dir_all(crash_dir());
 }
 

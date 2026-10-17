@@ -1,3 +1,5 @@
+// Windows: answers "allow" by itself to the microphone request from the launcher window, so WebView2 does not show its own dialog.
+// Microphone only. Camera and geolocation still ask. On macOS and Linux we do not touch it, the system asks there.
 //! Microphone consent for the launcher's own window.
 //!
 //! Voice messages are recorded by the webview, and the webview asks the host
@@ -23,6 +25,7 @@ pub fn allow_microphone(window: &WebviewWindow) {
     use webview2_com::PermissionRequestedEventHandler;
     use windows::core::Interface;
 
+    // unsafe: call into WebView2. The microphone request is allowed without a dialog for any script in the main window. The window opens only our own pages (navguard.rs), so foreign code cannot record sound.
     let _ = window.with_webview(|webview| unsafe {
         let Ok(core) = webview.controller().CoreWebView2() else { return };
         let mut token = Default::default();

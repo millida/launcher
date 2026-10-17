@@ -1,3 +1,5 @@
+// Sharing a modpack by code and link. Publishing sends api.millida.net only the file list from the Modrinth and CurseForge catalogs
+// (project, version, hash, size), with the Millida account token. Files, worlds and settings are not sent. The receiver downloads the mods from the catalogs by hash.
 //! Sharing a build by code or link, and the manifest both sharing and cloud
 //! sync are built on.
 //!
@@ -236,6 +238,7 @@ pub async fn share_profile(profile: String, summary: Option<String>) -> Result<S
         .to_string();
     let body = serde_json::to_value(&manifest).map_err(|e| e.to_string())?;
     let size_bytes = serde_json::to_vec(&body).map(|v| v.len() as u64).unwrap_or(0);
+    // POST of the manifest to the Millida API with the Millida account token. Only the catalog file list, not the files.
     let res = millida_api_auth(PACKS_PATH.to_string(), "POST".into(), Some(body)).await?;
     let code = res["code"].as_str().filter(|c| code_ok(c)).ok_or("Сервер не выдал код сборки")?.to_string();
     Ok(SharedPack {
@@ -253,6 +256,7 @@ pub async fn unshare_profile(code: String) -> Result<(), String> {
     if !code_ok(&code) {
         return Err("Некорректный код сборки".into());
     }
+    // The author takes their publication down from the Millida server.
     millida_api_auth(format!("{}/{}", PACKS_PATH, code), "DELETE".into(), None).await?;
     Ok(())
 }
@@ -754,6 +758,7 @@ async fn fetch_vouched(pdir: &Path, v: &Vouched) -> Result<String, String> {
     let mut last = String::new();
     let mut used = None;
     for url in &v.urls {
+        // A file from a foreign modpack is downloaded only from an allowed host and checked by the hash from the catalog.
         match download_verify(url, &dest, Some(&v.sha1), v.size).await {
             Ok(()) => {
                 used = Some(url.clone());
@@ -768,6 +773,7 @@ async fn fetch_vouched(pdir: &Path, v: &Vouched) -> Result<String, String> {
         .await
         .map_err(|e| format!("Не удалось проверить файл {}: {}", v.name, e))?;
     if !holds {
+        // The file does not match the catalog: delete it and stop the install.
         let removal = std::fs::remove_file(&dest);
         return Err(match removal {
             Ok(()) => format!("Файл {} не совпал с каталогом — установка остановлена", v.name),

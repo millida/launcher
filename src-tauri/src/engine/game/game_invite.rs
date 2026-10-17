@@ -1,3 +1,5 @@
+// Invite code of a partner game: stored in settings and passed to the game at the first launch.
+// It goes to the network once per install and game: a POST to the Millida API (/launcher/game-invites/claim) with the game name, without the account token.
 //! Invite codes of partner games. A code arrives from the website (deep link,
 //! or claimed once per install for a player who had no launcher yet), waits in
 //! the prefs file and is handed to the game on its first successful start.

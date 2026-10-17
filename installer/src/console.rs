@@ -1,3 +1,5 @@
+// Prints installer output to the terminal on macOS and Linux: status lines and download percent.
+// Only writes to stdout/stderr. No network, no disk.
 use std::cell::Cell;
 use std::io::{IsTerminal, Write};
 

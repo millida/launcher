@@ -1,3 +1,4 @@
+// Saves space: identical mods and resource packs from different modpacks are stored as one file (hard links) in the objects folder inside the game root. Files are matched by sha1. No network.
 //! Content-addressed store shared by every build: one copy of Sodium on disk,
 //! however many builds have it installed.
 //!
@@ -236,6 +237,7 @@ pub fn store_gc() -> u64 {
                 continue;
             }
             let size = obj.metadata().map(|m| m.len()).unwrap_or(0);
+            // Cleans the objects store: deletes only files that no modpack links to.
             if std::fs::remove_file(obj.path()).is_ok() {
                 freed += size;
             }

@@ -1,3 +1,4 @@
+// Reads mod info straight from the jar files on disk: name, version, dependencies, icon (fabric.mod.json, mods.toml). No network, nothing leaves the computer.
 use crate::engine::*;
 use base64::Engine as _;
 use serde_json::Value;
@@ -321,6 +322,7 @@ fn read_icon(jar: &mut Jar, candidates: &[String]) -> String {
         } else {
             continue;
         };
+        // The mod icon goes into a data: link as base64 only to show it in the UI.
         let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
         return format!("data:{};base64,{}", mime, b64);
     }

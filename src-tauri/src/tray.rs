@@ -1,3 +1,4 @@
+// Tray icon: show, minimize, quit. No network, no disk.
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use tauri::menu::{Menu, MenuItem};

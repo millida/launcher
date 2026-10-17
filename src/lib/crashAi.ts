@@ -1,3 +1,5 @@
+// Request body for "Ask Milli about the crash": the reason, the log tail (up to 6000 characters, without the token, user paths and email) and the list of enabled mods.
+// Goes to api.millida.net only when the player clicks the button in the crash window (components/CrashModal.tsx).
 import type { CrashInfo } from '../ipc/events'
 import type { ModFile, Profile } from '../ipc/commands'
 import type { CrashAiAnswer, CrashAskBody } from './milli'

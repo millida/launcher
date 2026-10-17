@@ -1,3 +1,5 @@
+// Stores and hands out login tokens. The UI only gets the answer "logged in or not". The tokens themselves are in secrets.rs.
+// The token is put in at game launch (resolve_launch_auth) and nowhere else.
 use crate::engine::*;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -74,6 +76,7 @@ fn take(device_code: &str) -> Option<PendingLogin> {
 }
 
 /// Strips the tokens from a finished device-flow answer and keeps them in the core.
+// Cuts the tokens out of the answer before it reaches the UI. They stay in core memory until confirmed.
 fn keep_tokens(device_code: String, mut j: Value) -> Value {
     if j["status"].as_str() != Some("ok") {
         return j;
@@ -203,6 +206,7 @@ pub struct ResolvedAuth {
 
 const SESSION_ATTEMPTS: u32 = 3;
 
+// Builds the login data for a game launch. The Microsoft or Ely.by token goes to the game itself, like in any launcher.
 pub async fn resolve_launch_auth(app: &AppHandle, args: Option<AuthArgs>) -> ResolvedAuth {
     let args = args.unwrap_or_default();
     let offline = ResolvedAuth { auth: Auth::default(), nick: None };
@@ -264,6 +268,7 @@ async fn millida_launch_auth(app: &AppHandle) -> ResolvedAuth {
     ResolvedAuth { auth: Auth::default(), nick: None }
 }
 
+// For a Millida account we ask api.millida.net for a one-time game session and give it to authlib-injector.
 async fn issue_game_session() -> Result<ResolvedAuth, String> {
     let mut last = String::new();
     for attempt in 0..SESSION_ATTEMPTS {

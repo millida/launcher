@@ -1,3 +1,4 @@
+// Builds the game_crash event for statistics: crash class and reason (up to 300 characters), suspicious mods, game version. The nickname and the modpack name are masked.
 import type { Profile } from '../ipc/commands'
 import type { CrashInfo } from '../ipc/events'
 import { maskValues } from './errorReport'

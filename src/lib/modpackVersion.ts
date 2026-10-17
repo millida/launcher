@@ -1,3 +1,4 @@
+// Picks a Modrinth modpack version for the needed game version. The version list comes through our API (/launcher/mr), no token.
 import { MODRINTH_API } from './api'
 
 export interface MrPackVersion {

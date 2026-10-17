@@ -1,20 +1,21 @@
-name: Ошибка
-description: Что-то работает не так, как ожидалось
+name: Bug report
+description: Something does not work as expected
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        Спасибо за отчёт. Чем точнее шаги, тем быстрее найдётся причина.
+        Thank you for the report. The more exact the steps, the faster we find the cause.
+        You can write in English or in Russian (можно писать по-русски).
 
-        Нашли уязвимость — не создавайте issue: порядок описан в
+        Found a vulnerability? Do not create an issue. The procedure is in
         [SECURITY.md](https://github.com/millida/launcher/blob/main/SECURITY.md).
 
   - type: input
     id: version
     attributes:
-      label: Версия лаунчера
-      description: Видна в настройках лаунчера. Проверьте, что проблема есть на последней версии.
+      label: Launcher version
+      description: Shown in the launcher settings. Check that the problem happens on the latest version.
       placeholder: 1.0.123
     validations:
       required: true
@@ -22,7 +23,7 @@ body:
   - type: dropdown
     id: os
     attributes:
-      label: Операционная система
+      label: Operating system
       options:
         - Windows 11
         - Windows 10
@@ -35,8 +36,8 @@ body:
   - type: input
     id: os_details
     attributes:
-      label: Подробности об ОС
-      description: Версия и, для Linux, дистрибутив и способ установки (deb, rpm, AppImage).
+      label: OS details
+      description: The version and, for Linux, the distribution and install method (deb, rpm, AppImage).
       placeholder: Ubuntu 24.04, AppImage
     validations:
       required: false
@@ -44,8 +45,8 @@ body:
   - type: input
     id: minecraft
     attributes:
-      label: Версия Minecraft и загрузчик
-      description: Версия игры и загрузчик модов, если он используется.
+      label: Minecraft version and loader
+      description: The game version and the mod loader, if you use one.
       placeholder: 1.21.4, Fabric 0.16.9
     validations:
       required: true
@@ -53,41 +54,41 @@ body:
   - type: textarea
     id: steps
     attributes:
-      label: Что вы делали
-      description: Пошагово, с самого начала — так, чтобы повторить на чистой установке.
+      label: What you did
+      description: Step by step, from the very start, so that it can be repeated on a clean install.
       placeholder: |
-        1. Открыл вкладку «Мои сборки»
-        2. Нажал «Играть» на сборке с Fabric
-        3. Дождался окончания загрузки
+        1. Opened the "My instances" tab
+        2. Clicked "Play" on an instance with Fabric
+        3. Waited for the download to finish
     validations:
       required: true
 
   - type: textarea
     id: expected
     attributes:
-      label: Что вы ожидали
+      label: What you expected
     validations:
       required: true
 
   - type: textarea
     id: actual
     attributes:
-      label: Что произошло
-      description: Текст ошибки — целиком, если он есть.
+      label: What happened
+      description: The full error text, if there is one.
     validations:
       required: true
 
   - type: textarea
     id: logs
     attributes:
-      label: Лог
+      label: Log
       description: |
-        Лог запуска или консоль лаунчера. Достаточно фрагмента вокруг ошибки — вставлять файл целиком не нужно.
+        The launch log or the launcher console. A piece around the error is enough. Do not paste the whole file.
 
-        Перед отправкой пробегитесь глазами по тексту: в логах и на скриншотах попадаются
-        токены сессии, ссылки с ключами доступа и адреса электронной почты — замените их
-        на `***`. Не выкладывайте содержимое папки данных лаунчера целиком: там лежат
-        `secrets.bin` и `vault.key`, а также сохранённые сессии.
+        Before you send it, read through the text: logs and screenshots can contain
+        session tokens, links with access keys and email addresses. Replace them
+        with `***`. Do not post the whole launcher data folder: it holds
+        `secrets.bin` and `vault.key`, and saved sessions.
       render: text
     validations:
       required: false
@@ -95,9 +96,9 @@ body:
   - type: checkboxes
     id: checks
     attributes:
-      label: Перед отправкой
+      label: Before you send
       options:
-        - label: Проверил на последней версии лаунчера
+        - label: I checked on the latest launcher version
           required: true
-        - label: Убрал из логов и скриншотов токены, ссылки с ключами и личные данные
+        - label: I removed tokens, links with keys and personal data from logs and screenshots
           required: true

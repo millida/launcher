@@ -1,3 +1,5 @@
+// Commands for "replay" (recording the last seconds of the game): settings, clip list, delete, show in folder.
+// Clip files live in the launcher data folder.
 use crate::engine::rewind::{self, ClipFile, RewindSettings, RewindState};
 
 #[tauri::command]

@@ -1,3 +1,5 @@
+// Clip recording on Windows: finds the game window by its process id, captures it with Windows Graphics Capture and encodes on the graphics card.
+// The desktop and other programs are not captured. unsafe in this section means calls into Windows system libraries (the windows crate).
 mod audio;
 mod clock;
 mod d3d;
@@ -44,6 +46,7 @@ struct Com;
 
 impl Com {
     fn init() -> Option<Com> {
+        // Windows system call: turns on COM in this thread (needed for capture and encoding).
         unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }.is_ok().then_some(Com)
     }
 }

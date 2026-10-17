@@ -1,3 +1,4 @@
+// Diagnostics text for support: version, system, hardware, modpacks, Java, recent errors. Built locally and goes nowhere by itself: the player copies the text and attaches it to the request.
 import {
   appVersion,
   cacheSize,

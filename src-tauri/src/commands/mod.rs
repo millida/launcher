@@ -1,3 +1,4 @@
+// List of command modules the UI can call in the core. Nothing else.
 pub mod profiles;
 pub mod content;
 pub mod launch;

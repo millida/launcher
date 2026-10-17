@@ -1,3 +1,6 @@
+// Changes the launcher icon: in the window, the taskbar, the Dock and on shortcuts.
+// macOS: the Dock icon and the icon of the .app itself, the executable is not changed. Windows: Desktop and Start menu shortcuts that point to our .exe.
+// No network. The icons are built into the binary (include_bytes). Shortcuts of other programs are not touched.
 //! Иконка приложения: окно, панель задач, Dock — сразу, и ярлыки/бандл — чтобы
 //! выбор было видно и при закрытом лаунчере.
 //!
@@ -88,6 +91,7 @@ fn apply(app: &AppHandle, _id: &str, png: Option<&'static [u8]>) -> Result<(), S
         let Some(mtm) = MainThreadMarker::new() else { return };
         let ns_app = NSApplication::sharedApplication(mtm);
         let img = png.and_then(|bytes| NSImage::initWithData(NSImage::alloc(), &NSData::with_bytes(bytes)));
+        // unsafe: Cocoa call, sets the Dock icon.
         unsafe { ns_app.setApplicationIconImage(img.as_deref()) };
         // Иконка самого бандла — видна в Finder и в Dock, когда лаунчер закрыт.
         // Только у настоящего .app (не у dev-бинарника); нет прав на запись — пропускаем.
@@ -125,6 +129,7 @@ mod shortcuts {
     ];
 
     fn known(id: &windows::core::GUID) -> Option<PathBuf> {
+        // unsafe: Windows system call, asks for the path to the Desktop and the Start menu.
         unsafe {
             let p = SHGetKnownFolderPath(id, KF_FLAG_DEFAULT, None).ok()?;
             let out = p.to_string().ok().map(PathBuf::from);
@@ -166,6 +171,7 @@ mod shortcuts {
             }
         }
         let exe_l = exe.to_string_lossy().to_lowercase();
+        // unsafe: Windows COM. Opens the .lnk files it found and changes the icon only on those that point to our .exe (paths are compared below).
         unsafe {
             let init = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
             let mut changed = 0;

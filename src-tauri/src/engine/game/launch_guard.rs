@@ -1,3 +1,5 @@
+// Launch guard against races: launch cancel, one launch of a modpack at a time, cleaning an unfinished Fabric remap cache.
+// Only in-memory state and the .fabric/remappedJars folder of this modpack.
 use std::future::Future;
 use std::path::Path;
 use crate::engine::Halt;
@@ -149,6 +151,7 @@ pub(crate) fn drop_broken_remap_cache(game_dir: &Path) -> bool {
     let Ok(dirs) = std::fs::read_dir(&root) else { return false };
     let mut dropped = false;
     for dir in dirs.flatten().map(|e| e.path()).filter(|p| p.is_dir()) {
+        // Deletes the unfinished Fabric cache folder (.fabric/remappedJars) inside the modpack. The game builds it again.
         if remap_dir_broken(&dir) && std::fs::remove_dir_all(&dir).is_ok() {
             dropped = true;
         }

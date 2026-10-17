@@ -1,3 +1,4 @@
+// Shared scene of the 3D character (light, pose). Cosmetic models are cached in IndexedDB. In development the local folder /__dev/cosmetic-models is used.
 import { LAUNCHER_API } from './api'
 import { idbGet, idbSet } from './idbCache'
 import type { SkinAnimId } from '../vendor/mine3d'

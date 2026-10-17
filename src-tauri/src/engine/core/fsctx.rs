@@ -1,3 +1,4 @@
+// File system errors with the path, and retries on Windows when a file is busy. The home folder in messages is replaced with ~, so the user name does not end up in a report.
 //! Ошибки файловой системы с контекстом и повторы для Windows.
 //!
 //! Голое «Отказано в доступе. (os error 5)» пришло от 177 игроков за две недели
