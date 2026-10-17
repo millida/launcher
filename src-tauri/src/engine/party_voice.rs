@@ -1,3 +1,5 @@
+// Party voice: the launcher gets a ticket from api.millida.net and connects over UDP to the Millida voice relay (domains millida.host and millida.net).
+// The microphone opens only after you join a party. Sound goes to the Millida relay inside the ticket session. Nothing is injected into Minecraft.
 //! Party voice in the lobby over the Millida voice relay, the same room the
 //! game's mod joins under the same player id. The webview names only a party
 //! and its members; the ticket, the secret and the relay address stay here.
@@ -215,6 +217,7 @@ fn iso_millis(s: &str) -> Option<i64> {
 }
 
 /// Relay hosts the client will talk to; the ticket answer names one of them.
+// We accept a voice relay only from Millida domains, so a server answer cannot point the sound at a foreign address. Below is a check that the address is not on a local network.
 const RELAY_DOMAINS: [&str; 2] = ["millida.host", "millida.net"];
 
 fn relay_host_allowed(host: &str) -> bool {
@@ -325,6 +328,7 @@ fn parse_ticket(v: &Value) -> Result<(Ticket, String, u16), String> {
 
 async fn fetch_ticket(party: &str) -> Result<Ticket, String> {
     let body = serde_json::json!({ "party": party });
+    // Ticket request to api.millida.net/v2/voice/ticket with the account token. The answer has the relay address and the session secret, they stay in the core.
     let v = millida_api_auth("/voice/ticket".into(), "POST".into(), Some(body)).await?;
     let (mut ticket, host, port) = parse_ticket(&v)?;
     let resolved = tauri::async_runtime::spawn_blocking(move || {

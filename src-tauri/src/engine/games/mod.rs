@@ -1,3 +1,6 @@
+// Other Minecraft games from stores (Bedrock, Legends, Education): launched and installed through the store itself.
+// The game list is hardcoded, the UI can only name an entry from it. The Education installer is downloaded from aka.ms (Microsoft)
+// and runs only after the Microsoft Corporation signature check. The launcher does not hand out any files of these games.
 //! Other Minecraft games the player owns in a store (Steam, Microsoft Store),
 //! plus Minecraft Education, whose installer Microsoft hands out directly.
 //!
@@ -128,6 +131,7 @@ fn launch_store_copy(g: &StoreGame) -> Result<(), String> {
     }
     if g.slug == "education" {
         let exe = education_exe().ok_or("Minecraft Education не установлена")?;
+        // Starts an already installed Minecraft Education from the path found in the system.
         let mut cmd = std::process::Command::new(&exe);
         if let Some(dir) = exe.parent() {
             cmd.current_dir(dir);
@@ -142,6 +146,7 @@ fn launch_store_copy(g: &StoreGame) -> Result<(), String> {
         .ok_or("Игра не установлена из Microsoft Store")?;
     // Store apps start through the shell by their AppUserModelID.
     let aumid = format!("shell:AppsFolder\\{}!{}", app.family, app.app_id);
+    // Microsoft Store games: Windows starts them through Explorer by app id, like from the Start menu.
     let mut cmd = std::process::Command::new("explorer.exe");
     cmd.arg(aumid);
     quiet(&mut cmd).spawn().map_err(|e| format!("Не удалось запустить игру: {}", e))?;
@@ -171,6 +176,7 @@ async fn install_via_winget(app: &AppHandle, job: &Job, g: &StoreGame) -> Result
     let id = g.ms_product.ok_or("Этой игры нет в Microsoft Store")?.to_string();
     job.emit(app, 5.0, "Ставим через Microsoft Store");
     let out = tauri::async_runtime::spawn_blocking(move || {
+        // Installs the game with the standard winget from the msstore source. This is a download from the Microsoft Store itself under your license.
         let mut cmd = std::process::Command::new("winget");
         cmd.args([
             "install",
@@ -214,6 +220,7 @@ async fn install_education(app: &AppHandle, job: &Job) -> Result<(), String> {
             job.emit(app, 1.0 + 94.0 * (got as f32 / total as f32), &format!("{:.2} / {:.2} ГБ", gb(got), gb(total)));
         }
     };
+    // Installer from aka.ms/downloadmee-desktopApp into the installers/ folder of the launcher. There is no hash, so the Microsoft signature is checked below.
     download_checked_progress(EDUCATION_INSTALLER, &dest, None, size, Some(job.cancel_flag()), &report).await?;
     job.check()?;
     job.emit(app, 95.0, "Проверяем подпись Microsoft");
@@ -222,6 +229,7 @@ async fn install_education(app: &AppHandle, job: &Job) -> Result<(), String> {
         .await
         .map_err(|e| e.to_string())?;
     if let Err(why) = signed {
+        // The signature is not Microsoft: delete the file and do not run it.
         let _ = std::fs::remove_file(&dest);
         return Err(format!(
             "Установщик Minecraft Education не прошёл проверку подписи Microsoft ({}), поэтому не запущен. Поставь игру со страницы Microsoft Store",
@@ -230,6 +238,7 @@ async fn install_education(app: &AppHandle, job: &Job) -> Result<(), String> {
     }
     job.check()?;
     job.emit(app, 96.0, "Запускаем установщик");
+    // Runs the Education installer. Only a file with a valid Microsoft Corporation signature gets here.
     let mut cmd = std::process::Command::new(&dest);
     cmd.current_dir(&dir);
     quiet(&mut cmd).spawn().map_err(|e| format!("Установщик не запустился: {}", e))?;
@@ -246,6 +255,7 @@ const SIGNATURE_PROBE: &str =
 fn signed_by_microsoft(file: &std::path::Path) -> Result<(), String> {
     let root = std::env::var_os("SystemRoot").ok_or("не найдена папка Windows")?;
     let shell = PathBuf::from(root).join("System32").join("WindowsPowerShell").join("v1.0").join("powershell.exe");
+    // System PowerShell with one command, Get-AuthenticodeSignature: reads the signature of the file, changes nothing.
     let mut cmd = std::process::Command::new(shell);
     cmd.args(["-NoProfile", "-NonInteractive", "-Command", SIGNATURE_PROBE]).env("MILLIDA_SIGNED_FILE", file);
     let out = quiet(&mut cmd).output().map_err(|e| format!("проверка не запустилась: {}", e))?;
@@ -267,6 +277,7 @@ fn signature_verdict(report: &str) -> Result<(), String> {
 }
 
 async fn content_length(url: &str) -> Option<u64> {
+    // HEAD request to aka.ms to get the installer size for the progress bar.
     let r = client().head(url).send().await.ok()?;
     r.headers().get("content-length")?.to_str().ok()?.parse().ok().filter(|n: &u64| *n > 0)
 }
@@ -286,6 +297,7 @@ fn installed_appx() -> Vec<Appx> {
         "Get-AppxPackage | Where-Object {{ @({}) -contains $_.Name }} | ForEach-Object {{ $id = (Get-AppxPackageManifest $_).Package.Applications.Application | Select-Object -First 1 -ExpandProperty Id; $_.Name + '|' + $_.PackageFamilyName + '|' + $id }}",
         names.join(",")
     );
+    // PowerShell with our own short script: finds which of these three games are already installed from the Microsoft Store. It only reads the app list.
     let mut cmd = std::process::Command::new("powershell");
     cmd.args(["-NoProfile", "-NonInteractive", "-Command", &script]);
     let Ok(out) = quiet(&mut cmd).output() else { return Vec::new() };

@@ -1,3 +1,5 @@
+// Minecraft server ping: opens a connection to the server address and reads its public answer (online, version, name).
+// Local addresses and addresses inside your network are rejected. Nothing about you is sent to the server except the status request itself.
 // Minecraft Server List Ping (1.7+): handshake, status request, status JSON.
 use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
@@ -140,6 +142,7 @@ pub fn ping(addr: &str) -> Result<PingResult, String> {
         return Err(LOCAL_REFUSED.into());
     }
     let start = std::time::Instant::now();
+    // The only network connection in this file: TCP to a server you added to the list yourself.
     let mut s = TcpStream::connect_timeout(&sock, Duration::from_secs(4)).map_err(|e| e.to_string())?;
     s.set_read_timeout(Some(Duration::from_secs(4))).ok();
     s.set_write_timeout(Some(Duration::from_secs(4))).ok();

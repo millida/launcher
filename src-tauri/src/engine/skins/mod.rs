@@ -1,3 +1,4 @@
+// Skins and capes: own wardrobe, player heads, the CustomSkinLoader skin mod, the authlib-injector agent and diagnostics of whether the skin is visible in the game.
 mod mojang;
 mod authlib;
 mod csl;

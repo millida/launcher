@@ -1,8 +1,12 @@
+// Where the installer gets the version list, and which URLs it counts as its own.
+// Every URL from the manifest is checked against a host allow-list. Other hosts are rejected.
+// The file itself is checked once more by signature in install.rs.
 use url::{Host, Url};
 
 /// Same key as the updater plugin in tauri.conf.json: the stub must not become a
 /// second, weaker way to run code that the launcher itself would refuse. The key
 /// of the legacy channel leaked on 05.09.2026, so only the v2 pair counts.
+// Public part of the signing key in base64 (minisign), the same as in tauri.conf.json. The private part is not here.
 pub const PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDI5MzUwRDVGRUE4NUI5NzcKUldSM3VZWHFYdzAxS1VyamhaeUdwQkRTNzZwN3U2WXRjaDFpWDZ6b3FvLzN0bkFvY3JwWEFQeCsK";
 
 /// millida.net is a multi-tenant site where users upload files, so only the
@@ -11,6 +15,7 @@ pub const PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6ID
 /// GitHub counts only for the public release repository, and its asset hosts
 /// only as the places github.com redirects a release download to. Whatever the
 /// host, the file still has to pass the signature check below.
+// Allow-list: host plus the required start of the path. The installer downloads nothing else.
 const ALLOWED: &[(&str, &str)] = &[
     ("launcher-storage.millida.net", "/"),
     ("millida.net", "/launcher/"),

@@ -1,3 +1,5 @@
+// Music in the launcher: the player's own tracks in the music/ folder of the launcher data, and, on a button, downloading music from the Mojang assets
+// (resources.download.minecraft.net). Files are only copied and deleted inside that folder.
 use crate::engine::*;
 use std::path::{Path, PathBuf};
 
@@ -97,6 +99,7 @@ pub fn add_music_files(paths: Vec<PathBuf>) -> Result<MusicAdded, String> {
         let dest = free_name(&dir, &name)?;
         let part = safe_child(&dir, &format!(".{}.part", name))?;
         if let Err(e) = std::fs::copy(&src, &part).and_then(|_| std::fs::rename(&part, &dest)) {
+            // Copy failed: remove the half-written temporary .part file.
             let _ = std::fs::remove_file(&part);
             return Err(format!("{}: не удалось скопировать — {}", name, e));
         }
@@ -111,6 +114,7 @@ pub fn remove_music_track(file: &str) -> Result<(), String> {
         return Err(format!("{}: это не трек", name));
     }
     let path = safe_child(&music_dir(), &name)?;
+    // The player deletes a track from the launcher music/ folder.
     match std::fs::remove_file(&path) {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -170,6 +174,7 @@ pub async fn download_mc_music() -> Result<u32, String> {
             continue;
         }
         let url = format!("https://resources.download.minecraft.net/{}/{}", &hash[0..2], hash);
+        // Downloads Minecraft music by the hash from the Mojang index. The hash is not checked after the download here.
         if let Ok(r) = client().get(&url).send().await {
             if let Ok(b) = r.bytes().await {
                 if b.len() > 10_000 && std::fs::write(&dest, &b).is_ok() { saved += 1 }

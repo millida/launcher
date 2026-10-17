@@ -1,3 +1,4 @@
+// Installs a modpack from a Milli plan: creates the profile and installs mods, resource packs and shaders with core commands. The core downloads and checks hashes.
 import { auditDeps, createProfile, deviceSpecs, installDepItems, loadProfileSettings, saveProfileSettings } from '../ipc/commands'
 import type { DepReport, MilliOptionsReport } from '../ipc/commands'
 import { hasTauri, tauri } from '../ipc/tauri'

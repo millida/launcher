@@ -1,3 +1,4 @@
+// Linux: if the game crashes on Wayland, switches it to X11 through environment variables of the game process. Nothing else.
 use std::process::Command;
 
 #[derive(Debug, PartialEq, Eq)]

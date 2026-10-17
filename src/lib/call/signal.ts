@@ -1,3 +1,4 @@
+// Call signals (invite, reply, offer/answer/ice) go to api.millida.net /friends/call/signal and come back over the realtime.ts socket. The sound itself does not go here.
 import { api, hasMillidaAccount } from '../api'
 import { isRealtimeLive, onRealtimeData, onRealtimeLiveChange } from '../realtime'
 import { createEnvelopeLog, pushedEnvelope } from './envelopes'

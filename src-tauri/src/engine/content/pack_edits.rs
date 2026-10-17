@@ -1,3 +1,4 @@
+// Finds out if the player changed mods by hand in a catalog modpack, so auto-update does not wipe those changes. Reads the file list in mods/, deletes nothing, no network.
 use crate::engine::*;
 use std::collections::BTreeSet;
 use std::path::Path;

@@ -1,3 +1,6 @@
+// Puts the downloaded launcher in place on macOS and Linux after the signature check.
+// Linux: copy of the AppImage in ~/.local/share/millida-launcher, shortcut in ~/.local/share/applications, millida:// links.
+// macOS: the .app goes to /Applications or ~/Applications. No network.
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
@@ -54,6 +57,7 @@ pub fn place(payload: &Path, workspace: &Path) -> Result<PathBuf, String> {
 
     let target = dir.join("MillidaLauncher.AppImage");
     let staged = dir.join("MillidaLauncher.AppImage.new");
+    // Deletes only our own unfinished .AppImage.new file.
     let _ = std::fs::remove_file(&staged);
     std::fs::copy(payload, &staged).map_err(|e| format!("не записать {}: {}", staged.display(), e))?;
     std::fs::set_permissions(&staged, std::fs::Permissions::from_mode(0o755))
@@ -76,6 +80,7 @@ pub fn place(payload: &Path, workspace: &Path) -> Result<PathBuf, String> {
 #[cfg(target_os = "linux")]
 fn extract_icon(appimage: &Path, workspace: &Path, dir: &Path) -> Option<PathBuf> {
     let stage = workspace.join("icon");
+    // Cleans the temporary icon folder inside the installer work folder.
     let _ = std::fs::remove_dir_all(&stage);
     std::fs::create_dir_all(&stage).ok()?;
     extract(appimage, &stage, ".DirIcon")?;
@@ -102,6 +107,7 @@ fn extract_icon(appimage: &Path, workspace: &Path, dir: &Path) -> Option<PathBuf
 
 #[cfg(target_os = "linux")]
 fn extract(appimage: &Path, stage: &Path, pattern: &str) -> Option<()> {
+    // Runs the just installed AppImage with --appimage-extract to get the icon. Its output is hidden.
     let status = Command::new(appimage)
         .arg("--appimage-extract")
         .arg(pattern)
@@ -167,11 +173,13 @@ fn quote_exec(target: &Path) -> String {
 #[cfg(target_os = "linux")]
 fn register_scheme(home: &Path) {
     let applications = home.join(".local").join("share").join("applications");
+    // Runs the system tool update-desktop-database so the list of link handlers refreshes.
     let _ = Command::new("update-desktop-database")
         .arg(&applications)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status();
+    // Runs xdg-mime: makes the launcher the handler for millida:// links.
     let _ = Command::new("xdg-mime")
         .args(["default", DESKTOP_FILE, SCHEME])
         .stdout(Stdio::null())
@@ -182,8 +190,10 @@ fn register_scheme(home: &Path) {
 #[cfg(target_os = "macos")]
 pub fn place(payload: &Path, workspace: &Path) -> Result<PathBuf, String> {
     let stage = workspace.join("stage");
+    // Cleans our own temporary stage folder in the work folder.
     let _ = std::fs::remove_dir_all(&stage);
     std::fs::create_dir_all(&stage).map_err(|e| format!("не создать папку распаковки: {}", e))?;
+    // The system tar unpacks the downloaded .app archive into a temporary folder.
     let status = Command::new("/usr/bin/tar")
         .arg("-xzf")
         .arg(payload)
@@ -207,12 +217,14 @@ pub fn place(payload: &Path, workspace: &Path) -> Result<PathBuf, String> {
     if replacing {
         // The old copy is moved aside rather than deleted: if the new one fails
         // to land, the user keeps a working launcher instead of none.
+        // The old copy of the app is not deleted. It is renamed to .old-<pid> and removed after the swap worked.
         std::fs::rename(&target, &backup)
             .map_err(|e| format!("не убрать прежнюю версию из {}: {}", root.display(), e))?;
     }
     match move_in(&app, &target) {
         Ok(()) => {
             if replacing {
+                // Deletes the backup of the previous version, the one we renamed above.
                 let _ = std::fs::remove_dir_all(&backup);
             }
             drop_quarantine(&target);
@@ -220,6 +232,7 @@ pub fn place(payload: &Path, workspace: &Path) -> Result<PathBuf, String> {
         }
         Err(reason) => {
             if replacing {
+                // The new copy did not go in: remove it and put the old one back.
                 let _ = std::fs::remove_dir_all(&target);
                 let _ = std::fs::rename(&backup, &target);
             }
@@ -236,6 +249,7 @@ fn move_in(app: &Path, target: &Path) -> Result<(), String> {
     if std::fs::rename(app, target).is_ok() {
         return Ok(());
     }
+    // The system ditto copies the .app when a rename does not work (different disk).
     let status = Command::new("/usr/bin/ditto")
         .arg(app)
         .arg(target)
@@ -274,6 +288,7 @@ fn applications_dir() -> Result<PathBuf, String> {
 
 #[cfg(target_os = "macos")]
 fn writable(dir: &Path) -> bool {
+    // Creates an empty test file in the target folder (/Applications) to see if we can write there. It is deleted right away.
     let probe = dir.join(format!(".millida-setup-{}", std::process::id()));
     match std::fs::File::create(&probe) {
         Ok(_) => {
@@ -288,6 +303,7 @@ fn writable(dir: &Path) -> bool {
 /// the folder earlier can, and Gatekeeper then blocks the replaced bundle.
 #[cfg(target_os = "macos")]
 fn drop_quarantine(target: &Path) {
+    // The system xattr removes the com.apple.quarantine mark from the installed app only. Gatekeeper checks for other apps stay on.
     let _ = Command::new("/usr/bin/xattr")
         .arg("-dr")
         .arg("com.apple.quarantine")
@@ -302,12 +318,14 @@ fn drop_quarantine(target: &Path) {
 pub fn launch(target: &Path) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     let mut command = {
+        // Starts the installed launcher with the system open.
         let mut open = Command::new("/usr/bin/open");
         open.arg(target);
         open
     };
     #[cfg(target_os = "linux")]
     let mut command = {
+        // Starts the installed AppImage.
         let mut run = Command::new(target);
         if !has_fuse2() {
             run.envs(EXTRACT_ENV);

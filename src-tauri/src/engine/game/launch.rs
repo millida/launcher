@@ -1,3 +1,6 @@
+// Game launch: builds the Java command line, starts the process, watches it and analyzes crashes.
+// Almost no network here: only the mod token and the paid modpack key from the Millida API, and the data of
+// the Millida skin server if that account is selected. Writes the launch log and crash snapshots to the modpack folder.
 use super::gameserver::track_server_hop;
 use crate::engine::*;
 use serde_json::Value;
@@ -70,6 +73,7 @@ fn end_game(profile: Option<&str>, force: bool) -> Result<(), String> {
         }
         #[cfg(windows)]
         {
+            // Stops only the game process we started ourselves (pid from the RUNNING list), with its child processes.
             let mut cmd = Command::new("taskkill");
             quiet(&mut cmd);
             cmd.args(["/PID", &pid.to_string(), "/T"]);
@@ -81,6 +85,7 @@ fn end_game(profile: Option<&str>, force: bool) -> Result<(), String> {
         #[cfg(not(windows))]
         {
             let _ = force;
+            // The same on macOS and Linux: ask the game to quit (SIGTERM), the pid comes from our own list.
             let mut cmd = Command::new("kill");
             cmd.args(["-TERM", &pid.to_string()]);
             cmd.status().map_err(|e| e.to_string())?;
@@ -250,6 +255,7 @@ fn prune_crash_snapshots(logs: &Path, keep: usize) {
         .collect();
     snaps.sort_by_key(|s| std::cmp::Reverse(s.1));
     for (p, _) in snaps.into_iter().skip(keep) {
+        // Deletes only old crash snapshots crash-snapshot*.log in logs/ of this modpack, keeps a few fresh ones.
         let _ = std::fs::remove_file(p);
     }
 }
@@ -1143,6 +1149,7 @@ pub(crate) fn build_args(
     // uuid, token "0" and user_type=legacy.
     let online = !auth.token.is_empty();
     let uuid = session_uuid(auth, nick);
+    // The Microsoft token goes only into the arguments of the game itself (like in any launcher). Offline mode puts "0".
     let token = if online { auth.token.clone() } else { "0".to_string() };
     let user_type = if online { "msa" } else { "legacy" };
     let xuid = if auth.xuid.is_empty() { "0".to_string() } else { auth.xuid.clone() };
@@ -1483,6 +1490,7 @@ pub(crate) async fn install_and_launch_into(
     let mut prefetched: Option<String> = None;
     if !auth.yggdrasil.is_empty() {
         match ensure_authlib_injector().await {
+            // One GET to the Millida skin server for its description. The password and the Microsoft token are not sent there.
             Ok(jar) => match get_json(&auth.yggdrasil).await {
                 Ok(meta) => {
                     use base64::Engine as _;
@@ -1529,7 +1537,7 @@ pub(crate) async fn install_and_launch_into(
         None => (false, false),
     };
     let mut own_mod_jar = String::new();
-    match own_mod_action(pack.is_some(), pack_mod, pack_mod_before, millida_mod_enabled()) {
+    match own_mod_action(pack.is_some(), pack_mod, pack_mod_before, millida_mod_wanted(&profile)) {
         OwnMod::Place if matches!(loader_id.as_str(), "fabric" | "quilt" | "forge" | "neoforge") => {
             let licensed = !auth.token.is_empty() && auth.yggdrasil.is_empty();
             match ensure_millida_mod(&app, &profile, &nick, licensed).await {
@@ -1672,6 +1680,7 @@ pub(crate) async fn install_and_launch_into(
         args.extend(server_join_args(prof.as_ref().map(|p| p.version.as_str()).unwrap_or(&version_id), &sv));
     }
     // Токен для мода — узкий, из /launcher/mod-session; нет его — мод без входа.
+    // Millida mod token: short, separate from the Microsoft account token, taken from the Millida API (/launcher/mod-session).
     let mod_token = if own_mod { mod_session_token().await } else { None };
     check_cancel()?;
     // Флаги из четырёх источников сводятся под выбранную Java: разблокировка
@@ -1702,6 +1711,7 @@ pub(crate) async fn install_and_launch_into(
         None
     };
     let build = |exe: &Path| -> Command {
+        // Starts Java from the launcher folder (or the one the player picked) with the ready command line. Nothing else is started.
         let mut cmd = Command::new(ansi_safe_path(exe));
         // CREATE_NO_WINDOW on Windows, otherwise every launch pops a console window.
         quiet(&mut cmd);
@@ -1722,6 +1732,7 @@ pub(crate) async fn install_and_launch_into(
         // пишет, а файл настроек игроки пересылают вместе со сборкой. Это узкий
         // токен мода, не токен аккаунта.
         if let Some(token) = &mod_token {
+            // The mod token goes into the environment of the game process. It is not written to a file.
             cmd.env("MILLIDA_TOKEN", token);
             // The mod joins this party's voice room instead of the server's
             // (VoiceScreen «Канал пати»), so the lobby talk carries on in game.
@@ -1749,6 +1760,7 @@ pub(crate) async fn install_and_launch_into(
         // no common ground with a file timestamp.
         let start_wall = std::time::SystemTime::now();
         let exe = branded_java(&java);
+        // The game process starts here.
         let spawned = match build(&exe).spawn() {
             Ok(c) => Ok(c),
             // Копию java.exe под нашим именем антивирус блокирует чаще

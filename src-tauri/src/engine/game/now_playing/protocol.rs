@@ -1,3 +1,4 @@
+// Message format between the launcher and the mod over WebSocket (handshake, frames, JSON with the track and the cover). No network requests. The launch key is checked on connect.
 use base64::Engine as _;
 use serde_json::{json, Value};
 use sha1::{Digest as _, Sha1};
@@ -9,6 +10,7 @@ pub const MAX_MESSAGE: usize = 64 * 1024;
 pub const MAX_TEXT: usize = 128;
 pub const MAX_COVER: u32 = 64;
 pub const KEY_BYTES: usize = 32;
+// Constant from the WebSocket standard (RFC 6455) for the handshake. Not a secret.
 const ACCEPT_GUID: &str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 const NUDGE_MILLIS: u64 = 1500;
 pub const MAX_SEEK_MS: u64 = 100 * 24 * 60 * 60 * 1000;
@@ -103,6 +105,7 @@ pub fn state_message(now_playing: Option<&NowPlaying>, now: Instant) -> String {
     }
 }
 
+// A 64x64 pixel cover, ARGB in base64, goes to the mod over the local socket.
 pub fn cover_message(cover: &Cover) -> String {
     json!({
         "type": "cover",

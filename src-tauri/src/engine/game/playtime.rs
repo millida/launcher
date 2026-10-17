@@ -1,3 +1,4 @@
+// Play time tracking: how long you played in each modpack and on which servers. Writes to playtime.json in the launcher data folder, no network.
 use crate::engine::*;
 use serde::Serialize;
 use serde_json::{json, Value};

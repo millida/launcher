@@ -1,3 +1,4 @@
+// Minecraft version list to pick from. In the app the core gives it. In the preview browser the list is read straight from piston-meta.mojang.com (the official Mojang list).
 import { create } from 'zustand'
 import { listVersionsTyped } from '../ipc/commands'
 import type { McVersion } from '../ipc/commands'

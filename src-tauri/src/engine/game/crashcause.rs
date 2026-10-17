@@ -1,3 +1,5 @@
+// Crash log analysis: what crashed and whose fault it is (mod, driver, memory). Reads only the logs of this modpack.
+// Before the short reason goes to the statistics, it hides the user path, the nickname and tokens.
 //! Улики из лога вылета: чей код упал и какой строкой это сказано.
 //!
 //! Два вопроса, на которые раньше отвечали поиском слова по всему логу.
@@ -447,6 +449,7 @@ pub(crate) fn scrub_cause(raw: &str, home: Option<&str>, nick: &str) -> String {
     if nick.chars().count() >= 3 {
         out = replace_ci(&out, nick, "<nick>");
     }
+    // Cuts tokens out of the crash line so they do not get into the short reason for statistics.
     for key in ["token:", "accessToken=", "access_token="] {
         out = hide_after(&out, key);
     }

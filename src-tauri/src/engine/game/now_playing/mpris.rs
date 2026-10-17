@@ -1,3 +1,4 @@
+// Linux: reads what the player app is playing through the system D-Bus (MPRIS): title, artist, position, commands. It is not sent out, only to the local mod. Covers come from local files only, the launcher does not fetch links from the internet.
 use super::cover::{CoverCache, MAX_SOURCE_BYTES};
 use super::protocol::{clip, Command, NowPlaying};
 use super::{Control, Controller, Reading};

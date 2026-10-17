@@ -1,3 +1,4 @@
+// Millida catalog (mods, texture packs, modpacks): requests to api.millida.net/v2/launcher/*. No direct calls to Modrinth and CurseForge, they go through our API.
 import { LAUNCHER_API } from './api'
 import type { ModHit } from '../state/mods'
 import type { DepNode, DepPlan, Profile } from '../ipc/commands'

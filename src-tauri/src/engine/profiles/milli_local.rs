@@ -1,3 +1,5 @@
+// Hands of the Milli helper on this PC: read and edit text configs of a modpack (options.txt and config/), keep a diary, make modpack snapshots.
+// Paths and edits come from a model on the server, so the zone is narrow: only options.txt and text files in config/ inside the modpack, no jars and no worlds.
 //! Milli's hands on the player's PC: text configs of a build, a diary, build
 //! snapshots and the list of world backups.
 //!
@@ -216,6 +218,7 @@ pub fn milli_files_write(pdir: &Path, edits: &[LocalFileEdit]) -> Result<Vec<Loc
     for (e, target) in &plan {
         match &e.text {
             Some(t) => write_bytes_atomic(target, t.as_bytes())?,
+            // A Milli edit can delete a config. The path is already checked: inside the modpack, only config/ and options.txt.
             None => match std::fs::remove_file(target) {
                 Ok(()) => {}
                 Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
@@ -357,6 +360,7 @@ fn take_snapshot(pdir: &Path, label: &str, auto: bool) -> Result<MilliSnap, Stri
     let id = new_snap_id(pdir);
     let dir = snaps_dir(pdir).join(&id);
     let staging = snaps_dir(pdir).join(format!(".{}-part", id));
+    // The snapshot draft is deleted before a new one is made: the .part folder inside this modpack.
     let _ = std::fs::remove_dir_all(&staging);
     let mut stats = CopyStats::default();
     let built = (|| -> Result<(), String> {
@@ -405,6 +409,7 @@ fn prune(pdir: &Path) {
     let all = milli_snapshots(pdir);
     for (auto, keep) in [(true, KEEP_AUTO_SNAPSHOTS), (false, KEEP_MANUAL_SNAPSHOTS)] {
         for s in all.iter().filter(|s| s.auto == auto).skip(keep) {
+            // Keeps 10 automatic and 20 manual snapshots, deletes the extra old ones.
             let _ = std::fs::remove_dir_all(snaps_dir(pdir).join(&s.id));
         }
     }
@@ -481,6 +486,7 @@ fn undo_swap(pdir: &Path, trash: &Path, swapped: &[&str]) {
 pub fn milli_snapshot_delete(pdir: &Path, id: &str) -> Result<(), String> {
     let dir = snap_dir(pdir, id)?;
     let _g = locked();
+    // The player deletes their own modpack snapshot.
     match std::fs::remove_dir_all(&dir) {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),

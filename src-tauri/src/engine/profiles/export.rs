@@ -1,3 +1,4 @@
+// Export of a modpack to a .mrpack archive when the player asks. Symbolic links are not put into the archive. No network.
 use crate::engine::*;
 use serde_json::Value;
 use std::path::{Path, PathBuf};

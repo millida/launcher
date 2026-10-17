@@ -1,3 +1,4 @@
+// Describes a click for statistics: screen, block, label (up to 40 characters, digits replaced with #, strings with @ dropped). Blocks marked data-private are written without a label.
 /** Описание клика по элементу — чистая функция, тестируется без браузера. См. uiTrack.ts. */
 
 /** Минимум от DOM-элемента, который нужен описанию клика (так его можно тестировать без браузера). */

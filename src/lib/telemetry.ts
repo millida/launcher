@@ -1,3 +1,6 @@
+// Usage statistics: collects events in a queue (localStorage, key m-telemetry-queue) and sends them in a batch every 2 minutes
+// to api.millida.net/v2/launcher/telemetry. Also a "in lobby / in game" pulse to /launcher/heartbeat. What exactly is sent and how to turn it off:
+// TELEMETRY.md in the root. The switch is m-telemetry-off in localStorage. The install id (a random UUID) is stored here too.
 import { hasTauri } from '../ipc/tauri'
 import { appVersion, deviceSpecs, millidaApi, setGameTelemetry } from '../ipc/commands'
 import { LAUNCHER_API, apiHeaders } from './api'

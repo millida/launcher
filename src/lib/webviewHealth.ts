@@ -1,3 +1,4 @@
+// Watches memory and crashes of the launcher window (WebView). Looks at used memory once a minute. Under high load it writes an event to statistics (telemetry.ts), if statistics are on.
 import { noteGpuProcessExit } from './gpuLite'
 import { hasTauri } from '../ipc/tauri'
 import { appVersion, setWebviewLowMemory, takeWebviewFailure } from '../ipc/commands'

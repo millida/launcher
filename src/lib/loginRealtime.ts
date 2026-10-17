@@ -1,3 +1,4 @@
+// Anonymous socket during login: waits on api.millida.net for the message "login confirmed" instead of polling often. There is no token yet, nothing personal is sent.
 import { Centrifuge } from 'centrifuge'
 import { REALTIME_CLIENT_NAME, REALTIME_SOCKET_URL, loginPushed } from './realtimePace'
 

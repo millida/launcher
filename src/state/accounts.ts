@@ -1,3 +1,5 @@
+// List of launcher accounts (nickname, type, uuid) in localStorage (m-accounts) and the chosen active one (m-active). No tokens here:
+// they are in the core store. On logout the core deletes the session (msSessionForget).
 import { create } from 'zustand'
 import { hasTauri } from '../ipc/tauri'
 import { msSessionForget } from '../ipc/commands'

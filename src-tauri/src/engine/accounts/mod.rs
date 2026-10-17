@@ -1,3 +1,4 @@
+// List of account login modules: Ely.by, Microsoft, Millida and session storage.
 mod elyby;
 mod millida;
 mod microsoft;

@@ -1,3 +1,6 @@
+// Launch of a "native" game from the catalog: not Minecraft, but a partner's own program, one file per system.
+// It runs only for a modpack the core installed from the Millida catalog (registry in catalog_pack.rs), and only a file
+// in the root of that modpack folder. The game gets the nickname, uuid and the Millida session token (not Microsoft).
 use super::launch::{
     crash_tail, read_log_file, session_uuid, spawn_log_reader, wait_log_readers, was_stopped, watch_session, LAUNCH_CAPTURE,
     LAUNCH_CHECK_ALIVE, LOG_DRAIN_WAIT,
@@ -201,10 +204,12 @@ pub fn trusted_native_launch(profile: &str) -> Option<Result<NativeLaunch, Strin
 #[cfg(unix)]
 fn make_runnable(exe: &Path) -> Result<(), String> {
     use std::os::unix::fs::PermissionsExt;
+    // Sets the execute permission only on the chosen game file. Nothing else in the modpack is touched.
     std::fs::set_permissions(exe, std::fs::Permissions::from_mode(0o755)).map_err(|e| io_fail("Подготовка игры", exe, &e))?;
     #[cfg(target_os = "macos")]
     {
         // exits non-zero when the flag is not there, which is the usual case
+        // Removes the "downloaded from the internet" mark from this file, otherwise macOS refuses to open it. Only for this one file.
         if let Err(e) = Command::new("/usr/bin/xattr")
             .args(["-d", "com.apple.quarantine"])
             .arg(exe)
@@ -271,6 +276,7 @@ pub(crate) async fn launch_native(
     check_cancel()?;
     let start = std::time::Instant::now();
     let mut child = {
+        // Starts the partner program from the modpack folder. The launcher does not check a hash or signature of this file. Trust comes from the entry in the Millida catalog.
         let mut cmd = Command::new(&spec.executable);
         quiet(&mut cmd);
         apply_gpu_pref(&mut cmd, &spec.executable, gpu);

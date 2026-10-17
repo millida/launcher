@@ -1,3 +1,5 @@
+// UI commands about mods, modpacks, worlds and catalogs: install, update, delete.
+// Network goes through engine (Modrinth, CurseForge, the Millida catalog). Disk: only the profile folder and the launcher data folder.
 use crate::engine;
 
 #[tauri::command]
@@ -255,6 +257,7 @@ fn hosting_pack_name(profile: &str, stamp: u64) -> String {
 /// на диске, ни адреса API он не знает. Возвращает имя залитого архива —
 /// установку по нему запускает уже обычный запрос API.
 #[tauri::command]
+// Sends a modpack to Millida hosting when the user clicks: packs it as .mrpack, sends it in chunks through the Millida API with the account token.
 pub async fn hosting_send_build(profile: String, server_id: String) -> Result<String, String> {
     if server_id.is_empty() || server_id.len() > 64 || !server_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
         return Err("bad server".into());
@@ -273,6 +276,7 @@ pub async fn hosting_send_build(profile: String, server_id: String) -> Result<St
     let title = profile.clone();
     super::blocking(move || engine::export_mrpack(profile, dst, title, String::new(), String::new(), loader_build)).await??;
     let bytes = tokio::fs::read(&out).await.map_err(|e| e.to_string())?;
+    // Deletes our own temporary .mrpack from exports/hosting after reading it into memory.
     let _ = tokio::fs::remove_file(&out).await;
     let total = bytes.len();
     if total == 0 {

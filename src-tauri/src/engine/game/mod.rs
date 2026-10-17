@@ -1,3 +1,4 @@
+// Everything about starting and maintaining the game: Java, install, launch, crashes, worlds, server ping. This file only wires up the modules.
 mod mcmeta;
 mod java;
 mod mic_sign;

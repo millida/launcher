@@ -1,3 +1,5 @@
+// Turns a crash into a button: which mod to turn off, how much memory to give, which graphics driver to update to.
+// Driver links lead to the NVIDIA, AMD and Intel sites, nothing is downloaded from there. Changes only the files of this modpack.
 //! Turning a crash into something the player can press.
 //!
 //! The verdict itself comes from `analyze_crash`. What this module adds is the

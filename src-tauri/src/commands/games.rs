@@ -1,3 +1,4 @@
+// Commands for the games shelf in the launcher (list, open a game, invites). The requests themselves are made by engine.
 use crate::engine;
 
 #[tauri::command]

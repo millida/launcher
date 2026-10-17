@@ -1,3 +1,4 @@
+// List of mods in a modpack (reading metadata from jars), turning on and off, deleting. Works only in the mods/ folder of this modpack.
 use crate::engine::*;
 
 #[derive(Clone, serde::Serialize)]
@@ -110,6 +111,7 @@ pub fn delete_content(profile: &str, kind: &str, name: &str) -> Result<(), Strin
     let dir = profile_dir(profile).join(content_dir(kind));
     for cand in [safe_child(&dir, &file)?, safe_child(&dir, &format!("{}.disabled", file))?] {
         if cand.exists() {
+            // The player deleted a mod: delete the file itself or its .disabled version, the path goes through safe_child inside mods/.
             std::fs::remove_file(&cand).map_err(file_busy)?;
         }
     }
@@ -128,6 +130,7 @@ pub fn delete_profile(name: &str) -> Result<Vec<Profile>, String> {
     assert_not_running(name, "удали ещё раз")?;
     let dir = profile_dir(name);
     if dir.exists() {
+        // The player deleted the whole modpack: delete its folder (it is not running, checked above).
         std::fs::remove_dir_all(&dir).map_err(|e| format!(
             "Не удалось удалить файлы сборки: {}. Закрой игру и папку сборки в проводнике, затем повтори", e
         ))?;

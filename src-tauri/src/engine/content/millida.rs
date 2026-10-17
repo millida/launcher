@@ -1,3 +1,5 @@
+// Install from the Millida catalog (millida.net/mods, textures, modpacks) when the user asks.
+// The file address comes from api.millida.net. It is checked for https and a Millida host, then the hash is checked.
 use crate::engine::*;
 use serde_json::Value;
 use tauri::AppHandle;
@@ -95,6 +97,7 @@ pub(crate) fn tmp_tag(slug: &str) -> String {
 
 /// Резолвер отдаёт адрес файла, а у файла без зеркала — страницу автора. Её
 /// скачивание положило бы в папку модов HTML под именем jar.
+// Checks the file address from the API answer: https only, allowed hosts only, local addresses are not accepted.
 pub(crate) fn check_file_url(url: &str) -> Result<(), String> {
     let parsed = url::Url::parse(url.trim()).map_err(|_| "API вернул некорректную ссылку на файл".to_string())?;
     if parsed.scheme() != "https" {

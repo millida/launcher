@@ -1,3 +1,5 @@
+// Modpack (profile) commands: create, copy, settings, screenshots, graphics card.
+// Files only inside the launcher data folder. JVM arguments from the settings are checked before they are saved.
 use crate::engine;
 
 #[tauri::command(async)]
@@ -176,6 +178,7 @@ pub fn clear_profile_cover(profile: String) -> Vec<engine::Profile> {
 }
 
 #[tauri::command(async)]
+// Deletes a whole modpack when the user clicks. The path is built from the profile name inside the data folder.
 pub fn delete_profile(name: String) -> Result<Vec<engine::Profile>, String> { engine::delete_profile(&name) }
 
 #[tauri::command(async)]

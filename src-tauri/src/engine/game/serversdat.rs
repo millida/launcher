@@ -1,3 +1,4 @@
+// Reads and writes servers.dat, the server list inside the game. Only the file in the modpack folder.
 //! servers.dat, the in-game server list. Unlike level.dat it is uncompressed
 //! NBT: the root Compound holds a "servers" list of Compound{name,ip,...}.
 

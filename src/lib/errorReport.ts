@@ -1,3 +1,4 @@
+// Shared rules for error reports: limits on rate and length, cutting tokens (redactSecrets) and values out of the text. Sends nothing by itself.
 export type ReportChannel = 'crash' | 'core' | 'install'
 
 // The backend throttles POST /errors at 30 a minute, and the plain UI channel in

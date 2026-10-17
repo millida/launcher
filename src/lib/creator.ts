@@ -1,3 +1,4 @@
+// Creator code (support for a blogger on purchases): requests to api.millida.net /launcher/creator-code. The code is stored on the server, not in the launcher.
 import { api } from './api'
 import { apiErrorText } from './apiError'
 import type { ChestTier } from './rubies'

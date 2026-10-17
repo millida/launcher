@@ -1,3 +1,4 @@
+// Profile privacy settings: stored on the Millida server (GET/PATCH /users/me/privacy). localStorage holds only a copy of the last answer.
 import { create } from 'zustand'
 import { api, hasMillidaAccount } from './api'
 import { DUO_INVITES_DEFAULT, isDuoInvites, type DuoInvites } from './duoEmotes'

@@ -1,3 +1,5 @@
+// Installs one file from the Millida catalog (mod, resource pack, shader, world) into a modpack.
+// Paid file: api.millida.net gives the link after it checks the purchase (Millida token). Downloads only from https addresses of Millida, Modrinth and CurseForge. The file is checked by hash.
 use crate::engine::*;
 use serde_json::Value;
 use tauri::AppHandle;
@@ -14,6 +16,7 @@ const KINDS: [&str; 5] = ["mod", "resourcepack", "shader", "datapack", "world"];
 
 /// Hosts a signed or mirrored catalogue file may be served from. The answer is
 /// ours, but it is still an address the core writes into a game folder from.
+// The only hosts we accept a catalog file from. A link to any other address is rejected.
 const FILE_HOSTS: [&str; 5] = ["millida.net", "millida.trade", "cdn.modrinth.com", "edge.forgecdn.net", "mediafilez.forgecdn.net"];
 
 pub(crate) fn catalog_file_url_allowed(raw: &str) -> bool {
@@ -70,6 +73,7 @@ async fn install_catalog_file_job(
         return Err("Сборка не найдена".into());
     }
     job.emit(app, 5.0, "Получаем ссылку…");
+    // If the user is logged in, we ask api.millida.net for the file link with the Millida token. Otherwise we use the public link.
     let signed_in = millida_token().is_some_and(|t| !t.is_empty());
     let (url, name, size, sha512) = if signed_in {
         let link: Value =

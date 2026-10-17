@@ -1,3 +1,5 @@
+// Commands for the Milli helper: list and read profile files so it can see what the player has installed.
+// Reads only the folder of the selected profile. Where the read data goes is decided by the UI.
 use crate::engine;
 
 use super::blocking;

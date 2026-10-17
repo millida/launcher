@@ -1,3 +1,5 @@
+// Overlay settings commands (small cards on top of the game): on/off, hotkey, duration.
+// No network. Everything is kept in the launcher settings file.
 use crate::overlay;
 
 #[derive(serde::Serialize)]

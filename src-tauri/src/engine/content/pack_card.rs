@@ -1,3 +1,5 @@
+// Modpack card from the catalog: icon, the "author hid the contents" flag, comparison with the catalog.
+// The icon is downloaded only from cdn.millida.trade and checked by size.
 use crate::engine::*;
 use serde_json::Value;
 
@@ -8,6 +10,7 @@ pub const PACK_PROTECTED_KEY: &str = "catalogPackProtected";
 /// put there: a picture with another fingerprint is the player's own choice.
 pub const PACK_ICON_KEY: &str = "catalogPackIcon";
 
+// The only host we take the modpack icon from.
 const ICON_HOST: &str = "cdn.millida.trade";
 const ICON_MAX_BYTES: usize = 2 * 1024 * 1024;
 const ICON_WAIT: std::time::Duration = std::time::Duration::from_secs(20);
@@ -88,6 +91,7 @@ pub fn catalog_icon_step(card_icon: &str, current: Option<&str>, marker: &Value)
     IconStep::Apply
 }
 
+// Downloads the icon over https from our CDN. Any redirects are checked against the same host afterwards.
 async fn fetch_icon(url: &str) -> Result<String, String> {
     let res = client().get(url.trim()).timeout(ICON_WAIT).send().await.map_err(|e| net_err(&e))?;
     if !icon_url_allowed(res.url().as_str()) {

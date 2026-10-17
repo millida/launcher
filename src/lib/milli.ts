@@ -1,3 +1,5 @@
+// Client of the Milli helper (AI modpack builder): requests to api.millida.net /catalog/milli/*. They work only after Millida account login.
+// The player decides what is sent: a chat message. For crashes and modpacks, facts go out (versions, mod ids), no personal files.
 import { api, LAUNCHER_API, apiHeaders } from './api'
 import { hasTauri } from '../ipc/tauri'
 import { DEMO_USER } from './demo'

@@ -1,3 +1,5 @@
+// "More FPS" mode: picks JVM flags, installs a known set of performance mods (Sodium and similar) from Modrinth
+// and, if the user wants, edits options.txt of the modpack. All of it can be undone: turning it off brings the old settings back.
 use crate::engine::*;
 use serde_json::Value;
 use tauri::AppHandle;

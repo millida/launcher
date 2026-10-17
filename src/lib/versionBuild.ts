@@ -1,3 +1,4 @@
+// Creates a modpack for a game version: profile, loader, Millida mod, FPS mode. Mod versions are requested through our API (/launcher/mr).
 import { hasTauri } from '../ipc/tauri'
 import {
   createProfile,

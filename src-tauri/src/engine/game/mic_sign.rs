@@ -1,3 +1,5 @@
+// macOS only: signs the copy of Java in the launcher folder "ad hoc", so voice chat can get access to the microphone.
+// For that it runs the system xattr and codesign on our own Java. The launcher does not turn the microphone on, macOS asks the player.
 use crate::engine::*;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -57,6 +59,7 @@ fn already_signed(dir: &Path, bin: &Path) -> bool {
 }
 
 fn remove_if_present(path: &Path) -> Result<(), String> {
+    // Deletes the old signature marker next to our Java.
     match std::fs::remove_file(path) {
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(format!("{}: {}", path.display(), e)),
         _ => Ok(()),
@@ -70,6 +73,7 @@ fn resign(dir: &Path, bin: &Path, managed_root: &Path, signer: Signer) -> Result
     let tag = unique_tag();
     let plist = managed_root.join(format!(".mic-entitlements-{}.plist", tag));
     let staged = bin.with_file_name(format!(".java-mic-{}", tag));
+    // Temporary entitlements file (microphone and JIT) next to our Java. Deleted after signing.
     std::fs::write(&plist, ENTITLEMENTS).map_err(|e| format!("{}: {}", plist.display(), e))?;
     let signed = std::fs::copy(bin, &staged)
         .map_err(|e| format!("{}: {}", staged.display(), e))
@@ -98,10 +102,12 @@ fn ensure_signed(java: &Path, managed_root: &Path, signer: Signer) -> Result<boo
 }
 
 fn codesign(bin: &Path, entitlements: &Path) -> Result<(), String> {
+    // A system tool removes the quarantine mark from our Java.
     let _ = quiet(&mut Command::new("/usr/bin/xattr"))
         .args(["-d", "com.apple.quarantine"])
         .arg(bin)
         .output();
+    // The system codesign signs our Java without a developer certificate (ad hoc). Other programs are not touched.
     let out = quiet(&mut Command::new("/usr/bin/codesign"))
         .args(["--force", "--sign", "-", "--identifier", IDENTIFIER, "--entitlements"])
         .arg(entitlements)

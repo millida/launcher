@@ -1,3 +1,4 @@
+// Clip settings (on/off, length, quality, key, game sound, microphone) in a file in the launcher data folder. Everything is off by default.
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 

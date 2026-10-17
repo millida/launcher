@@ -1,3 +1,5 @@
+// authlib-injector agent: a small jar attached to the game with the -javaagent flag. It points login and skins to the Millida server.
+// Downloaded from authlib-injector.yushi.moe or the project's GitHub and put into agents/ in the launcher data. It is loaded only after the sha256 check.
 use crate::engine::*;
 use serde_json::Value;
 use std::path::PathBuf;
@@ -26,6 +28,7 @@ pub async fn ensure_authlib_injector() -> Result<PathBuf, String> {
     // Обрезанный или пустой агент JVM не грузит и выходит до окна («Error
     // opening zip file or JAR manifest missing»): такой файл качаем заново.
     if jar.exists() && !zip_readable(&jar) {
+        // A damaged agent is deleted and downloaded again.
         let _ = std::fs::remove_file(&jar);
         let _ = std::fs::remove_file(&stamp);
     }
@@ -47,6 +50,7 @@ pub async fn ensure_authlib_injector() -> Result<PathBuf, String> {
     // loaded into the JVM as -javaagent, so an unverified jar is never used:
     // a feed without a usable address or digest falls back to the pinned build,
     // never to an unchecked download.
+    // The address and the hash come from the project's answer. The address must be on one of two allowed hosts and the hash is required, otherwise we use the version built into the code.
     let signed = meta["download_url"]
         .as_str()
         .filter(|u| authlib_host_ok(u))
@@ -66,6 +70,7 @@ pub async fn ensure_authlib_injector() -> Result<PathBuf, String> {
     // vanilla build, no skin either.
     let next = dir.join("authlib-injector.jar.next");
     let _ = std::fs::remove_file(&next);
+    // The new version is downloaded next to it (.next) and replaces the working one only after the sha256 check passes.
     let fetched = download_checked(&url, &next, Some(Sum::Sha256(&expected)), None)
         .await
         .and_then(|_| std::fs::rename(&next, &jar).map_err(|e| e.to_string()));

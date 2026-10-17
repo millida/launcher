@@ -1,3 +1,7 @@
+// Launch of a catalog modpack by its own description millida-pack-launch.json (main class, library list, JVM flags).
+// The description is read only for a modpack the core installed from the Millida catalog (registry in catalog_pack.rs). For foreign archives
+// and imports it is ignored. Paths in it must be inside the modpack folder, JVM flags go through a filter of forbidden ones.
+// The paid modpack key is taken from the Millida API at every launch (a copy is cached on disk for a week in case the server is down).
 use crate::engine::*;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
@@ -64,6 +68,7 @@ pub struct PackLaunch {
 /// Загрузчик RetroFuturaBootstrap (lwjgl3ify, 1.7.10 на Java 21): его класс
 /// лежит в jar-ах самой сборки, а моды сборки и так исполняют свой код, так
 /// что лишнего доступа он не даёт.
+// The only exception to the filter: one RetroFuturaBootstrap loader flag, and only with this value.
 const PACK_JVM_EXACT: &[&str] = &["-Djava.system.class.loader=com.gtnewhorizons.retrofuturabootstrap.RfbSystemClassLoader"];
 
 fn text(v: &Value, key: &str) -> String {
@@ -85,6 +90,7 @@ fn pack_jvm_args(raw: Vec<String>) -> Vec<String> {
     let mut out = Vec::with_capacity(raw.len());
     let mut it = raw.into_iter().peekable();
     while let Some(a) = it.next() {
+        // Module flags pass only as a "flag and value" pair. A value that looks like a flag or like @file is dropped.
         if PACK_MODULE_FLAGS.contains(&a.to_ascii_lowercase().as_str()) {
             if let Some(value) = it.next_if(|v| !v.is_empty() && !v.starts_with('-') && !v.starts_with('@')) {
                 out.push(a);
@@ -194,6 +200,7 @@ pub fn parse_pack_launch(v: &Value) -> Option<PackLaunch> {
         let d = text(v, "nativesDir");
         platform_natives(v, if d.is_empty() { "natives" } else { &d })
     };
+    // Resource and native library folders must be paths inside the modpack: no absolute paths, no "..".
     if !rel_path_ok(&assets_dir) || !rel_path_ok(&natives_dir) {
         return None;
     }
@@ -211,6 +218,7 @@ pub fn parse_pack_launch(v: &Value) -> Option<PackLaunch> {
          * code execution on every start. Everything the pack actually needs
          * (`-D…`, `-XX:…`) passes that filter.
          */
+        // Modpack flags go through the same blacklist as the key from the server: -javaagent, -agentlib, -Xbootclasspath and similar are cut.
         jvm_args: with_first_thread(
             pack_jvm_args(list(v, "jvmArgs").into_iter().chain(platform_jvm).collect()),
             platform_os_arch().0,
@@ -256,6 +264,7 @@ pub fn module_path_args(modules: &[PathBuf]) -> Vec<String> {
 fn expand_pack_entries(root: &Path, entries: &[String]) -> Result<Vec<PathBuf>, String> {
     let mut out: Vec<PathBuf> = Vec::new();
     for entry in entries {
+        // safe_join does not let a path leave the modpack folder: no "..", no absolute paths, no links outside.
         let path = safe_join(root, entry).map_err(|e| format!("Сборка указала путь вне своей папки: {}", e))?;
         if path.is_dir() {
             let mut found: Vec<PathBuf> = Vec::new();
@@ -314,6 +323,7 @@ pub fn write_argfile(game_dir: &Path, args: &[String]) -> Result<PathBuf, String
     let fail = |e: std::io::Error| format!("Не удалось подготовить запуск сборки: {}", e);
     // В файле ключ подписи и токены запуска: читать его может только владелец
     // (аудит 24.09.2026). Старый файл удаляется, чтобы права взялись заново.
+    // Deletes the previous millida-args.txt in the modpack folder. It holds the modpack key and the game token, and is not needed longer than one launch.
     let _ = std::fs::remove_file(&path);
     let mut opts = std::fs::OpenOptions::new();
     opts.write(true).create_new(true);
@@ -369,6 +379,7 @@ pub(super) fn ansi_codepage() -> Option<u32> {
         fn GetACP() -> u32;
     }
     // SAFETY: GetACP не принимает аргументов и только читает настройку системы.
+    // Windows system call: gets the code page, to write the arguments file in an encoding java can read.
     Some(unsafe { GetACP() })
 }
 
@@ -380,6 +391,7 @@ pub(super) fn ansi_codepage() -> Option<u32> {
 /// JVM читает файл аргументов при старте; через 10 секунд он уже не нужен и
 /// не должен лежать на диске с ключом подписи.
 pub fn drop_argfile_later(path: PathBuf) {
+    // 10 seconds after start we delete the arguments file with our own name millida-args.txt.
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_secs(10));
         let _ = std::fs::remove_file(&path);
@@ -460,6 +472,7 @@ pub fn lwjgl_library_path_arg(dirs: &[PathBuf]) -> Option<String> {
 /// draft packs they check. The service ignores a stale token instead of
 /// refusing, so the public list never breaks on it.
 pub async fn catalog_packs() -> Result<Value, String> {
+    // Request for the modpack list to the Millida API. The Millida account token (not Microsoft) is attached if the user is logged in.
     millida_api("/catalog/packs".into(), "GET".into(), None, millida_token()).await
 }
 
@@ -496,6 +509,7 @@ pub async fn redeem_pack_key(slug: &str, code: &str) -> Result<Value, String> {
 /// line, so revoking access on our side takes effect the next time the player
 /// presses «Играть».
 pub async fn pack_launch_token(slug: &str) -> Result<Vec<String>, String> {
+    // Asks the Millida API for the launch key of a paid modpack with the Millida account token. The key goes into the game arguments. A copy is written to disk only as a spare (see below).
     let res = match millida_api_auth(format!("/catalog/packs/{}/launch-token", slug), "POST".into(), None).await {
         Ok(v) => v,
         // Сбой сервера или сети — не отказ в доступе. 11.10.2026 база API десять
@@ -551,6 +565,7 @@ fn token_cache_path(slug: &str) -> Option<PathBuf> {
     ok.then(|| data_dir().join("pack-launch").join(format!("{}.json", slug)))
 }
 
+// Launch key cache on the PC for a week: used when the Millida server is down. Stored in the launcher data folder.
 fn remember_launch_token(slug: &str, args: &[String], now: u64) {
     let Some(path) = token_cache_path(slug) else { return };
     if let Some(dir) = path.parent() {

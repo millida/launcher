@@ -1,3 +1,4 @@
+// World backup as a zip into the backups/ folder of the modpack, and showing that folder. No network.
 use crate::engine::*;
 
 pub fn backup_world(profile: String, folder: String) -> Result<String, String> {

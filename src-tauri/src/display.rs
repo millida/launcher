@@ -1,3 +1,5 @@
+// Fixes the window after a monitor or resolution change: on Windows it listens to window system messages and resizes WebView2.
+// Reads nothing from disk and has no network.
 //! Recovery after the display configuration changes.
 //!
 //! Turning a monitor off and on, or changing its resolution or refresh rate,
@@ -61,6 +63,7 @@ mod win {
         if APP.set(app.clone()).is_err() {
             return;
         }
+        // unsafe: attach a message handler to the main window (WinAPI SetWindowSubclass).
         unsafe {
             SetWindowSubclass(hwnd.0 as HWND, Some(proc), SUBCLASS_ID, 0);
         }

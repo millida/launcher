@@ -1,3 +1,5 @@
+// Search and install from CurseForge. Requests go through the Millida proxy (api.millida.net/v2/launcher/cf, the API key lives there). Fallback is the public mirror api.curse.tools.
+// Files are downloaded from forgecdn.net and checked against the sha1 from the API answer.
 use super::cf_memo::{cf_memo, cf_memo_key, proxy_verdict, ProxyVerdict};
 use crate::engine::*;
 use serde_json::Value;
@@ -6,10 +8,12 @@ use tauri::AppHandle;
 
 /// CurseForge requests go through the backend proxy so the API key stays
 /// server-side; the public keyless mirror is the fallback.
+// Main path: our proxy. The CurseForge key stays on the Millida server.
 pub(crate) fn cf_base() -> String {
     format!("{}/launcher/cf", MILLIDA_API)
 }
 
+// The fallback mirror api.curse.tools is a third-party public service, not Millida. It gets the same request (search, project id), no tokens are added. Used only if the Millida proxy did not answer.
 pub(crate) const CF_MIRROR: &str = "https://api.curse.tools";
 
 pub(crate) async fn cf_get(path: &str, q: &[(String, String)]) -> Result<Value, String> {
@@ -121,6 +125,7 @@ pub(crate) fn cf_file_urls(file: &Value, fname: &str) -> Vec<String> {
     }
     if fid > 0 {
         let enc = urlencode(fname);
+        // CurseForge CDN hosts the file itself is downloaded from.
         for host in ["https://edge.forgecdn.net", "https://mediafilez.forgecdn.net"] {
             let u = format!("{}/files/{}/{}/{}", host, fid / 1000, fid % 1000, enc);
             if !out.contains(&u) { out.push(u) }
@@ -764,6 +769,7 @@ async fn cf_install_modpack_job(app: &AppHandle, job: &Job, mod_id: u32, file_id
     job.rename(&pname);
     let pdir = profile_dir(&pname);
     // the pack owns mods/: leftovers from a previous install would duplicate mods
+    // Installing a CurseForge modpack replaces the contents of mods/ in this modpack. Only the mods/ folder of the new modpack is wiped.
     let _ = std::fs::remove_dir_all(pdir.join("mods"));
     forget_skin_mod_install(&pname);
     std::fs::create_dir_all(pdir.join("mods")).map_err(|e| e.to_string())?;

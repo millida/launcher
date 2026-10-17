@@ -1,3 +1,5 @@
+// Where the launcher data lives: net.millida.launcher in the user data folder, the game root (inside it by default), moving the root, clearing the cache.
+// Only the cache (tmp and natives) and the old folder after a move are deleted.
 use std::path::PathBuf;
 
 /// Inside Flatpak /app is read-only: self-update is handled by `flatpak update`
@@ -60,6 +62,7 @@ pub fn move_game_data(from: &std::path::Path, to: &std::path::Path) -> Result<us
         }
         std::fs::create_dir_all(&dst).map_err(|e| format!("{}: {}", name, e))?;
         crate::engine::copy_dir_all(&src, &dst).map_err(|e| format!("{}: {}", name, e))?;
+        // Deletes the old copy after it was copied to the new folder the user picked.
         let _ = std::fs::remove_dir_all(&src);
         moved += 1;
     }
@@ -213,6 +216,7 @@ pub fn cache_size() -> u64 {
 pub fn clear_cache() -> u64 {
     let freed = cache_size();
     for p in cache_dirs() {
+        // Cleans only the temporary folders tmp and natives from cache_dirs(). Worlds and modpacks are not in there.
         let _ = std::fs::remove_dir_all(&p);
     }
     freed

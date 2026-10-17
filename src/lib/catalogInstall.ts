@@ -1,3 +1,5 @@
+// Install from the Millida catalog and Modrinth: works out what to install and calls core commands. The core downloads files and checks the hash.
+// From here only metadata requests go out, to api.millida.net (/launcher/mr, /launcher/cf).
 import { hasTauri } from '../ipc/tauri'
 import {
   PACK_ACCESS_PREFIX,

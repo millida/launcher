@@ -1,3 +1,4 @@
+// Finds the window of the right game: goes through the system windows and takes the one that belongs to the game process. It does not read window contents, only size and owner.
 use windows::core::BOOL;
 use windows::Win32::Foundation::{HWND, LPARAM, RECT};
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -18,6 +19,7 @@ impl Window {
     }
 
     pub fn alive(self) -> bool {
+        // Windows system calls: check that the window still exists. The other unsafe below in this file is the same kind (window size and owner).
         unsafe { IsWindow(Some(self.hwnd())).as_bool() }
     }
 

@@ -1,3 +1,6 @@
+// Modpack list (profiles.json in the launcher data folder) and install of Modrinth modpacks (.mrpack).
+// The modpack is downloaded from api.modrinth.com / cdn.modrinth.com, the archive is installed only if the sha512 matches, mods from it go by hash.
+// Temporary files live in data/tmp of the launcher and are deleted after the install.
 use crate::engine::*;
 use serde_json::Value;
 use std::path::PathBuf;
@@ -290,6 +293,7 @@ pub async fn install_modpack_ver(app: AppHandle, slug: String, version_id: Optio
 
 async fn install_modpack_job(app: &AppHandle, job: &Job, slug: String, version_id: Option<String>, target: Option<String>) -> Result<Profile, String> {
     job.emit(app, 5.0, "Читаем сборку…");
+    // GET to api.modrinth.com: version list of a modpack. No tokens, no data about you.
     let versions = get_json(&format!("https://api.modrinth.com/v2/project/{}/version", slug)).await?;
     let has_mrpack = |v: &Value| v["files"].as_array().is_some_and(|fs| fs.iter().any(|f| f["filename"].as_str().unwrap_or("").ends_with(".mrpack")));
     let ver = match &version_id {
@@ -328,6 +332,7 @@ async fn install_modpack_job(app: &AppHandle, job: &Job, slug: String, version_i
     )
     .await?;
     let ex = data_dir().join("tmp").join(format!("mrpack-{}", tmp_name));
+    // Unpacking goes to data/tmp of the launcher. The folder name is a hash, so only our own temporary folder gets deleted.
     let _ = std::fs::remove_dir_all(&ex);
     std::fs::create_dir_all(&ex).map_err(|e| e.to_string())?;
     unzip_to(&tmp, &ex)?;

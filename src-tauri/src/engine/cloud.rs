@@ -1,3 +1,5 @@
+// Cloud profile: when the user clicks "Upload", api.millida.net/v2/launcher/sync gets the modpack descriptions (catalog manifests, not files), the UI settings and the computer name. "Download" brings it all back.
+// Needs a Millida account login. On restore the mods themselves are downloaded from Modrinth/CurseForge and checked by hash.
 //! Cloud profile: the launcher on another machine, with the same builds and the
 //! same settings.
 //!
@@ -58,6 +60,7 @@ pub struct CloudStatus {
     pub missing_there: Vec<String>,
 }
 
+// The computer name from COMPUTERNAME or HOSTNAME (up to 40 characters) goes to the cloud with the upload, so the list shows which device a copy came from. It is only a label in the UI.
 fn device_name() -> String {
     std::env::var("COMPUTERNAME")
         .or_else(|_| std::env::var("HOSTNAME"))
@@ -122,6 +125,7 @@ pub async fn cloud_status() -> Result<CloudStatus, String> {
     Ok(status)
 }
 
+// Upload to the Millida cloud: PUT to /launcher/sync with the account token. Started by a button in settings, never in the background.
 pub async fn cloud_push() -> Result<CloudStatus, String> {
     let snapshot = tauri::async_runtime::spawn_blocking(build_snapshot)
         .await

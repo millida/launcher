@@ -1,3 +1,5 @@
+// Moves a whole modpack from Prism, MultiMC or Modrinth App. The source folder is only read. The copy is built next to it
+// and gets its name after a comparison with the source file list. Through sysinfo it checks if that launcher is running (process names).
 use crate::engine::*;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -234,6 +236,7 @@ struct Staging {
 impl Drop for Staging {
     fn drop(&mut self) {
         if !self.keep {
+            // The draft copy is deleted if the move did not finish.
             let _ = std::fs::remove_dir_all(&self.path);
         }
     }
@@ -324,6 +327,7 @@ fn copy_failed(name: &str, kind: MoveSource, e: &std::io::Error) -> String {
 /// The source is only ever read.
 fn copy_game(game: &Path, dst: &Path, src_manifest: &Manifest, name: &str, kind: MoveSource) -> Result<Staging, String> {
     let stage = sibling(dst, "moving");
+    // Deletes leftovers of the previous failed try: the "moving" folder next to the target, not the source.
     let _ = std::fs::remove_dir_all(&stage);
     std::fs::create_dir_all(&stage).map_err(|e| copy_failed(name, kind, &e))?;
     let _guard = Staging { path: stage.clone(), keep: false };

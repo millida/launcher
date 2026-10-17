@@ -1,3 +1,4 @@
+// Picking another version of an installed mod: list of project files from Modrinth/CurseForge/the catalog, and swapping the file. The old version is deleted after the new one is in place.
 use crate::engine::*;
 use serde_json::Value;
 use std::path::PathBuf;
@@ -181,6 +182,7 @@ async fn swap_file(profile: &str, kind: &str, old: &str, new: NewFile<'_>) -> Re
     if name != old {
         for stale in [old_on, old_off] {
             if stale.exists() && stale != target {
+                // Deletes the old mod file from the same modpack after the swap.
                 std::fs::remove_file(&stale)
                     .map_err(|e| format!("Новая версия {} встала, но старый файл {} не удалился — удали его вручную: {}", name, old, e))?;
             }

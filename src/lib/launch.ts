@@ -1,3 +1,5 @@
+// The "Play" button: checks before launch, the core call, and what happens around the game. While the game runs, a presence pulse
+// (/friends/presence/heartbeat) is sent for friends, and the status goes to Discord. Launch statistics: telemetry.ts.
 import { hasTauri } from '../ipc/tauri'
 import { PACK_ACCESS_PREFIX, cancelLaunch, launchGame, launchProfile, loadProfileSettings, quickPlay, pinServerDat, runningGames, discordPresence as ipcDiscordPresence } from '../ipc/commands'
 import { usePackKey } from '../state/packKey'

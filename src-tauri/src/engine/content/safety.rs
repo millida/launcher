@@ -1,3 +1,5 @@
+// Mod check before launch: the sha1 of each jar is compared with Modrinth and CurseForge, then with the Millida blocked-file list, then we look inside the jar for suspicious calls.
+// Only file hashes go to the network. The mods themselves and their names do not.
 //! Checking the jars in a build before they run.
 //!
 //! After fractureiser this is basic hygiene, not paranoia: a mod is arbitrary
@@ -186,6 +188,7 @@ fn blocklist_cache() -> std::path::PathBuf {
 /// fetch is reported, never silently treated as "nothing is blocked".
 async fn blocklist() -> Result<HashMap<String, String>, String> {
     let cache = blocklist_cache();
+    // List of blocked hashes from api.millida.net (cached for 6 hours).
     let path = format!("{}{}", MILLIDA_API, BLOCKLIST_PATH);
     let v = get_json_fresh(&path, &cache, BLOCKLIST_TTL).await?;
     let mut out = HashMap::new();
@@ -293,6 +296,7 @@ pub async fn scan_safety(profile: String) -> Result<SafetyReport, String> {
         .map_err(|e| format!("фоновая задача прервалась: {e}"))?;
 
     let hashes: Vec<String> = scanned.iter().filter_map(|(h, _)| h.clone()).collect();
+    // The sha1 hashes of your jars go to Modrinth to find out if the file is known.
     let known_remote = versions_by_hash(&hashes).await;
     let (blocked, note) = match blocklist().await {
         Ok(map) => (map, String::new()),

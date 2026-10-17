@@ -1,8 +1,11 @@
+// Ely.by login by code: the launcher shows a code, the user types it on account.ely.by.
+// The launcher never sees the password. The Ely.by token goes only to the Ely.by site and into the game at launch.
 use crate::engine::*;
 use serde_json::Value;
 
 /// Public OAuth client registered on account.ely.by as a desktop application:
 /// it carries no secret, so the id alone is safe to ship in the binary.
+// Millida application id on Ely.by. Public, not a secret.
 const ELY_CLIENT_ID: &str = "millida-launcher";
 const ELY_OAUTH: &str = "https://account.ely.by/api/oauth2/v1";
 const ELY_ACCOUNT_INFO: &str = "https://account.ely.by/api/account/v1/info";
@@ -22,6 +25,7 @@ fn ely_error(j: &Value, fallback: &str) -> String {
     }
 }
 
+// Asks account.ely.by for a login code. Only client_id and the list of scopes are sent.
 pub async fn ely_device_start() -> Result<Value, String> {
     let r = client()
         .post(format!("{}/devicecode", ELY_OAUTH))
@@ -68,6 +72,7 @@ pub async fn ely_device_poll(device_code: &str) -> Result<Value, String> {
     }
     let token = j["access_token"].as_str().filter(|t| !t.is_empty()).ok_or("Ely.by не выдал токен")?.to_string();
     let info: Value = client()
+        // Gets the nickname and uuid with the token we just received (a request to account.ely.by).
         .get(ELY_ACCOUNT_INFO)
         .bearer_auth(&token)
         .send()

@@ -1,3 +1,5 @@
+// "Share log": on the player's button, sends the chosen log to the public site mclo.gs and returns the link.
+// Before sending, the home folder and the --accessToken value are cut out of the text. Only .log and .txt from logs/ and crash-reports/ of the modpack are taken.
 use crate::engine::*;
 use serde_json::Value;
 
@@ -21,6 +23,7 @@ pub async fn share_log(profile: String, name: String) -> Result<String, String> 
     }
     let home = dirs::home_dir().map(|h| h.to_string_lossy().into_owned());
     let content = redact_log(&content, home.as_deref());
+    // Third-party service mclo.gs, not Millida: the log becomes a public page. Sent only after the button click.
     let resp: Value = client().post("https://api.mclo.gs/1/log")
         .form(&[("content", content)])
         .send().await.map_err(|e| e.to_string())?

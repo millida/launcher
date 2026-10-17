@@ -1,3 +1,6 @@
+// Finds and installs Java for the game. Looks for JDKs already installed (JAVA_HOME, vendor folders, PATH), and if the right one is missing, downloads its own:
+// metadata from api.adoptium.net and api.azul.com, the archive from GitHub or the vendor CDN (fallback mirror TUNA for Adoptium).
+// The archive is installed only if the sha256 from the vendor answer matches. Installs into the launcher data folder, system settings are not changed.
 use crate::engine::*;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -107,6 +110,7 @@ fn parse_major(first_line: &str) -> Option<u32> {
 /// A 32-bit JVM caps the heap far below what modded packs need, so it is never
 /// preferred over a fresh download.
 fn probe_major(path: &Path) -> Option<u32> {
+    // Runs the found java with a single flag -version to read its version. It does nothing else.
     let out = quiet(&mut Command::new(ansi_safe_path(path))).arg("-version").output().ok()?;
     let text = String::from_utf8_lossy(&out.stderr);
     if !text.contains("64-Bit") {
@@ -194,6 +198,7 @@ fn system_java_homes() -> Vec<PathBuf> {
 
 fn path_java_bins() -> Vec<PathBuf> {
     let finder = if cfg!(target_os = "windows") { "where" } else { "which" };
+    // where/which java: asks the system where java is in PATH. It only looks, it does not run what it finds.
     let Ok(out) = quiet(&mut Command::new(finder)).arg("java").output() else { return vec![] };
     String::from_utf8_lossy(&out.stdout)
         .lines()
@@ -284,6 +289,7 @@ fn sweep_leftovers(root: &Path, base: &str) {
         let ours = name == base || name.starts_with(&format!("{}~", base));
         let stale = name.starts_with(&staging) || name.starts_with(&format!(".{}-trash", base));
         if stale || (ours && e.path().is_dir() && !java_usable(&e.path())) {
+            // Deletes only half-installed or broken Java inside the launcher's own java/ folder.
             let _ = std::fs::remove_dir_all(e.path());
         }
     }
@@ -467,6 +473,7 @@ pub(crate) async fn ensure_java_for(app: &AppHandle, major: u64, version: &str) 
     }
     if !rosetta_ready() {
         emit(app, "java", 0.0, "Для этой версии нужна Rosetta — подтверди установку");
+        // System macOS window that asks for the password, to install Rosetta from Apple (needed for old game versions on M chips). It does nothing without the user's OK.
         let _ = quiet(&mut Command::new("/usr/bin/osascript"))
             .args(["-e", "do shell script \"/usr/sbin/softwareupdate --install-rosetta --agree-to-license\" with administrator privileges"])
             .status();
@@ -636,8 +643,10 @@ fn unwrap_single_dir(jdir: &Path) -> Result<(), String> {
         "{}-lift",
         jdir.file_name().and_then(|n| n.to_str()).unwrap_or("java")
     ));
+    // Our own temp folder next to the unpacked Java: move the nested folder one level up.
     let _ = std::fs::remove_dir_all(&lifted);
     std::fs::rename(&inner, &lifted).map_err(|e| io_fail("Установка Java", &lifted, &e))?;
+    // Here jdir is the folder of the new Java inside the launcher data. While installing, we do not need its contents anymore.
     std::fs::remove_dir_all(jdir).map_err(|e| io_fail("Установка Java", jdir, &e))?;
     std::fs::rename(&lifted, jdir).map_err(|e| io_fail("Установка Java", jdir, &e))
 }
@@ -648,6 +657,7 @@ fn forget_java_metadata(major: u64, t: &Target) {
         format!("adoptium-{}-{}-{}.json", major, t.os, t.arch),
         format!("azul-{}-{}-{}.json", major, if t.os == "mac" { "macos" } else { t.os }, t.arch),
     ] {
+        // Deletes the cache of Adoptium/Azul answers (small json files), so the next try asks again.
         let _ = std::fs::remove_file(dir.join(name));
     }
 }
@@ -688,6 +698,7 @@ fn disk_full(e: &str) -> bool {
 /// теми же именами. Архив сверяется по sha256 из ответа самого Adoptium, так
 /// что зеркало не может подсунуть другой файл, а github — главный источник
 /// обрывов у игроков из России.
+// Fallback address: a university mirror in China. Swapping the file there would not help, because the sha256 comes from the Adoptium answer itself.
 const ADOPTIUM_MIRROR: &str = "https://mirrors.tuna.tsinghua.edu.cn/Adoptium";
 
 fn adoptium_mirror_url(major: u64, t: &Target, name: &str) -> Option<String> {
@@ -786,12 +797,14 @@ async fn install_java_arch(app: &AppHandle, major: u64, jdir: &Path, arch: Optio
     for attempt in 0..3u64 {
         if attempt > 0 {
             tokio::time::sleep(std::time::Duration::from_secs(2 * attempt)).await;
+            // Unpack again from scratch: clean our own folder of the new Java.
             let _ = std::fs::remove_dir_all(jdir);
             std::fs::create_dir_all(jdir).map_err(|e| io_fail("Установка Java", jdir, &e))?;
         }
         unpacked = if t.ext == "zip" {
             unzip_strip1(&archive, jdir, app_local_ucrt).map_err(|e| format!("Распаковка Java: {}", e))
         } else {
+            // The system tar unpacks the downloaded Java archive, already checked by sha256, into the launcher folder.
             quiet(&mut Command::new("tar"))
                 .args(["-xzf"]).arg(&archive).arg("-C").arg(jdir).arg("--strip-components=1")
                 .status()
@@ -803,6 +816,7 @@ async fn install_java_arch(app: &AppHandle, major: u64, jdir: &Path, arch: Optio
             _ => break,
         }
     }
+    // The downloaded archive is not needed after unpacking.
     let _ = std::fs::remove_file(&archive);
     unpacked?;
     unwrap_single_dir(jdir)?;
@@ -849,6 +863,7 @@ pub(crate) fn branded_alias(java: &Path) -> Option<PathBuf> {
 /// overriding our Rich Presence. Launching a renamed copy avoids that; the copy
 /// must sit in the same bin/ because the JVM locates its home relative to the
 /// executable. Falls back to the original when copying is not permitted.
+// For Discord: copies java.exe next to it as MillidaLauncher.exe (same content, nothing changed) so Discord does not show "Minecraft". If that fails, we start the normal java.
 pub(crate) fn branded_java(java: &Path) -> PathBuf {
     let Some(alias) = branded_alias(java) else { return java.to_path_buf() };
     let src_len = std::fs::metadata(java).map(|m| m.len()).unwrap_or(0);
@@ -938,6 +953,7 @@ pub fn remove_java_runtime(major: u32) -> Result<u64, String> {
     let mut freed = 0;
     for dir in dirs {
         let size = dir_size(&dir);
+        // The player clicked "Delete" on a Java in settings. runtime_dirs only goes through Java folders inside the launcher data.
         std::fs::remove_dir_all(&dir).map_err(|e| format!("Не удалось удалить: {}", e))?;
         freed += size;
     }

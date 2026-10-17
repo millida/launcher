@@ -1,3 +1,5 @@
+// Microsoft login by device code: the launcher shows a code, you type it at microsoft.com/link. The launcher never sees the password.
+// The core keeps the Microsoft token (msDevice*/msSession* commands). The UI gets only the nickname and uuid.
 import { create } from 'zustand'
 import { hasTauri } from '../ipc/tauri'
 import { msDevicePoll, msDeviceStart, msSessionCommit, msSessionRefresh, msSessionValidate, openUrl } from '../ipc/commands'

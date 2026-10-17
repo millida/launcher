@@ -1,3 +1,5 @@
+// Fallback launcher update: takes the version list from launcher-storage.millida.net (addresses from tauri.conf.json), downloads the new build from GitHub or from our mirror and checks the Millida signature (minisign).
+// If the signature does not match, the file is deleted and not run. Running the installer, replacing the .app on macOS and the AppImage on Linux are described at each function.
 use minisign_verify::{PublicKey, Signature};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -14,6 +16,7 @@ use super::paths::open_path;
 // the same signed manifest and verifies it with the same key from
 // tauri.conf.json, so the fallback is not a hole through which a compromised CDN
 // could run an arbitrary installer.
+// Fallback address of the version list. It returns json with the version, the file link and the signature. The main path goes through the Tauri updater plugin.
 const FALLBACK_ENDPOINTS: &[&str] = &["https://launcher-storage.millida.net/latest.json"];
 
 // Testing channel. The player opts in from settings and then sees a release
@@ -134,6 +137,7 @@ fn endpoints(app: &AppHandle) -> Vec<String> {
     channel_order(&configured, beta_channel())
 }
 
+// The public signing key comes from tauri.conf.json. The private part belongs to Millida and is not in this repository.
 fn pubkey(app: &AppHandle) -> Result<String, String> {
     app.config()
         .plugins
@@ -246,6 +250,7 @@ fn decode_text(b64: &str) -> Result<String, String> {
     String::from_utf8(raw).map_err(|e| e.to_string())
 }
 
+// minisign signature check: key and signature in base64, as Tauri issues them. If the signature does not match, the update is not installed.
 fn verify(file: &Path, signature_b64: &str, pubkey_b64: &str) -> Result<(), String> {
     let key = PublicKey::decode(decode_text(pubkey_b64)?.trim())
         .map_err(|e| format!("ключ обновлений не разобран: {}", e))?;
@@ -266,6 +271,7 @@ fn drop_stale(keep: &Path) {
         for e in rd.flatten() {
             let p = e.path();
             if p != keep && p != sig {
+                // Deletes old downloaded updates in our own updates folder.
                 let _ = std::fs::remove_file(p);
             }
         }
@@ -387,6 +393,7 @@ pub fn run_installer(file: &Path, restart: bool) -> Result<bool, String> {
     }
     #[cfg(windows)]
     {
+        // Runs the downloaded NSIS installer with /P /UPDATE. The file just passed the signature check in fallback_run.
         let mut cmd = std::process::Command::new(file);
         cmd.args(nsis_args(restart));
         super::proc::quiet(&mut cmd);
@@ -431,6 +438,7 @@ fn relaunch_after_exit(target: &Path, opener: &str) -> Result<(), String> {
         r#"while kill -0 "$1" 2>/dev/null; do sleep 0.2; done; sleep 0.5; {}"#,
         opener
     );
+    // A short sh script: waits until our process closes, then starts the new copy. The command line is built in the code above, nothing foreign gets in.
     std::process::Command::new("/bin/sh")
         .arg("-c")
         .arg(script)
@@ -461,6 +469,7 @@ fn install_app_bundle(archive: &Path) -> Result<(), String> {
     }
 
     let stage = parent.join(".millida-update");
+    // Cleans our own temporary .millida-update folder next to the app.
     let _ = std::fs::remove_dir_all(&stage);
     std::fs::create_dir_all(&stage)
         .map_err(|e| format!("нет прав на запись в {}: {}", parent.display(), e))?;
@@ -476,6 +485,7 @@ fn install_app_bundle(archive: &Path) -> Result<(), String> {
 
     // Permissions and the quarantine attribute are fixed before the swap: an
     // archived bundle can arrive without the write bit.
+    // chmod u+w and xattr -cr on the freshly unpacked copy: removes the macOS quarantine flag. The archive passed the Millida signature check before, but Gatekeeper is not run on it.
     let _ = std::process::Command::new("/bin/chmod").arg("-R").arg("u+w").arg(&fresh).status();
     let _ = std::process::Command::new("/usr/bin/xattr").arg("-cr").arg(&fresh).status();
 
@@ -498,6 +508,7 @@ fn install_app_bundle(archive: &Path) -> Result<(), String> {
 /// the permission bits a signed bundle needs in order to launch.
 #[cfg(target_os = "macos")]
 fn unpack_bundle(archive: &Path, stage: &Path) -> Result<PathBuf, String> {
+    // Unpacking with the system tar. It keeps the links inside the signed .app.
     let st = std::process::Command::new("/usr/bin/tar")
         .arg("-xzf")
         .arg(archive)
@@ -532,6 +543,7 @@ pub fn sweep_retired_bundles() {
     for e in rd.flatten() {
         let name = e.file_name().to_string_lossy().to_string();
         if name.starts_with(".millida-old-") || name == ".millida-update" {
+            // Deletes leftovers of earlier updates next to the app (.millida-old-*, .millida-update).
             let _ = std::fs::remove_dir_all(e.path());
         }
     }

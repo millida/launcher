@@ -1,3 +1,5 @@
+// Graphics card choice for the game. On Windows it writes one value to HKCU\Software\Microsoft\DirectX\UserGpuPreferences
+// (the same one as in Windows "Graphics settings") for our Java. On Linux it sets environment variables for the launch.
 use std::path::Path;
 use std::process::Command;
 
@@ -37,6 +39,7 @@ pub fn adapter_names() -> Vec<String> {
     use windows::Win32::Graphics::Dxgi::{CreateDXGIFactory1, IDXGIFactory1, DXGI_ADAPTER_FLAG_SOFTWARE};
 
     let mut names = Vec::new();
+    // Windows system call: ask for the list of graphics cards.
     let Ok(factory) = (unsafe { CreateDXGIFactory1::<IDXGIFactory1>() }) else {
         return names;
     };
@@ -139,6 +142,7 @@ fn win_registry(java: &Path, pref: GpuPref) {
     let name = wide(exe);
     let data = wide(value);
     unsafe {
+        // Writes to the registry of the current user (HKCU, no admin rights needed): the graphics card setting for the launcher's java.exe only.
         RegSetKeyValueW(
             HKEY_CURRENT_USER,
             key.as_ptr(),

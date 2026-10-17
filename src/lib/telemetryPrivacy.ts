@@ -1,3 +1,4 @@
+// Cleans text before it goes to statistics: the home folder, nickname and modpack name are replaced, tokens are cut out. Sends nothing by itself.
 /// Что уходит в телеметрию, не должно выдавать человека: имя пользователя в
 /// путях, названия его сборок и серверов (аудит 24.09.2026).
 

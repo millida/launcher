@@ -1,3 +1,5 @@
+// List of all core commands the UI calls (invoke). Only the calls and the answer types are here.
+// Account tokens stay in the core. The UI gets only the result (millidaApi adds the token on the core side).
 import { showToast } from '../state/ui'
 import { tauri } from './tauri'
 
