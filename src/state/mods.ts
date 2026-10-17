@@ -9,6 +9,7 @@ import { cachedCatalog } from '../lib/catalogCache'
 import { mergeSources } from '../lib/modMerge'
 import { pickTargetName } from '../lib/installKeys'
 import { useProfiles } from './profiles'
+import { t } from '../i18n'
 
 export interface ModHit {
   title: string
@@ -95,14 +96,15 @@ function packToHit(p: MillidaPack): ModHit {
   }
 }
 
-export const F_VERS = ['любая', '1.21.4', '1.21.1', '1.20.1', '1.19.2', '1.18.2', '1.16.5']
-export const F_LOADERS = ['любой', 'fabric', 'forge', 'quilt', 'neoforge']
-export const F_SORTS: Record<string, string> = {
-  Популярные: 'downloads',
-  Новые: 'newest',
-  Обновлённые: 'updated',
-  'По рейтингу': 'follows',
-}
+export const ANY_VERSION = 'any'
+export const ANY_LOADER = 'any'
+export const ALL_CATEGORIES = 'all'
+export type CatalogSort = 'downloads' | 'newest' | 'updated' | 'follows'
+
+export const F_VERS = [ANY_VERSION, '1.21.4', '1.21.1', '1.20.1', '1.19.2', '1.18.2', '1.16.5']
+export const F_LOADERS = [ANY_LOADER, 'fabric', 'forge', 'quilt', 'neoforge']
+
+export const mapsAppOnlyNotice = () => t('Каталог карт доступен в приложении')
 
 export const F_SIDES: [string, string][] = [
   ['any', 'Любая'],
@@ -134,11 +136,11 @@ export const WORLD_CATS: [number, string][] = [
 ]
 
 // CurseForge sort ids: 2 Popularity, 3 LastUpdated, 6 TotalDownloads.
-const CF_SORTS: Record<string, number> = {
-  Популярные: 2,
-  Новые: 3,
-  Обновлённые: 3,
-  'По рейтингу': 6,
+const CF_SORTS: Record<CatalogSort, number> = {
+  downloads: 2,
+  newest: 3,
+  updated: 3,
+  follows: 6,
 }
 
 interface ModsState {
@@ -147,7 +149,7 @@ interface ModsState {
   mq: string
   fVer: string
   fLoader: string
-  fSort: string
+  fSort: CatalogSort
   fCat: string
   fCats: string[]
   fSide: string
@@ -208,11 +210,11 @@ async function refreshInstalledIds(kind: string): Promise<Set<string>> {
 
 function scopeFilters(build: string | null): { fVer: string; fLoader: string } {
   const pr = build ? useProfiles.getState().profiles.find((p) => p.name === build) : null
-  if (!pr) return { fVer: 'любая', fLoader: 'любой' }
+  if (!pr) return { fVer: ANY_VERSION, fLoader: ANY_LOADER }
   const loader = pr.loader || (pr.fabric ? 'fabric' : 'vanilla')
   return {
-    fVer: pr.version || 'любая',
-    fLoader: F_LOADERS.includes(loader) ? loader : 'любой',
+    fVer: pr.version || ANY_VERSION,
+    fLoader: F_LOADERS.includes(loader) ? loader : ANY_LOADER,
   }
 }
 
@@ -276,7 +278,7 @@ export interface MrQuery {
   cats: string[]
   side: string
   openSource: boolean
-  sort: string
+  sort: CatalogSort
   query: string
   offset: number
 }
@@ -286,15 +288,15 @@ export interface MrQuery {
 /// снова стало бы походом в сеть.
 export function mrSearchUrl(q: MrQuery): string {
   const f: string[][] = [['project_type:' + q.tab]]
-  if (q.ver !== 'любая') f.push(['versions:' + q.ver])
+  if (q.ver !== ANY_VERSION) f.push(['versions:' + q.ver])
   // Loader is a facet only for mods and modpacks; other types have no such category.
-  if (q.loader !== 'любой' && (q.tab === 'mod' || q.tab === 'modpack')) f.push(['categories:' + q.loader])
-  if (q.cat && q.cat !== 'все') f.push(['categories:' + q.cat])
+  if (q.loader !== ANY_LOADER && (q.tab === 'mod' || q.tab === 'modpack')) f.push(['categories:' + q.loader])
+  if (q.cat && q.cat !== ALL_CATEGORIES) f.push(['categories:' + q.cat])
   q.cats.forEach((c) => f.push(['categories:' + c]))
   if (q.side === 'client') f.push(['client_side:required', 'client_side:optional'])
   if (q.side === 'server') f.push(['server_side:required', 'server_side:optional'])
   if (q.openSource) f.push(['open_source:true'])
-  const idx = q.query ? 'relevance' : F_SORTS[q.sort] || 'downloads'
+  const idx = q.query ? 'relevance' : q.sort
   return (
     MODRINTH_API +
     '/v2/search?limit=' +
@@ -377,7 +379,7 @@ function warmOtherTabs(): void {
   warmTimer = setTimeout(async () => {
     const st = useMods.getState()
     if (st.mq.trim()) return
-    const ver = st.fVer === 'любая' ? '' : st.fVer
+    const ver = st.fVer === ANY_VERSION ? '' : st.fVer
     for (const tab of MOD_TABS) {
       if (tab === st.modTab) continue
       if (tab === 'millida') {
@@ -393,7 +395,7 @@ function warmOtherTabs(): void {
             loader: '',
             index: 0,
             category: 0,
-            sort: CF_SORTS[st.fSort] || 2,
+            sort: CF_SORTS[st.fSort],
           }).catch(() => {})
         continue
       }
@@ -402,7 +404,7 @@ function warmOtherTabs(): void {
           query: '',
           kind: tab,
           ver,
-          loader: st.fLoader === 'любой' ? '' : st.fLoader,
+          loader: st.fLoader === ANY_LOADER ? '' : st.fLoader,
           index: 0,
           category: 0,
           sort: 0,
@@ -414,7 +416,7 @@ function warmOtherTabs(): void {
             tab,
             ver: st.fVer,
             loader: st.fLoader,
-            cat: 'все',
+            cat: ALL_CATEGORIES,
             cats: [],
             side: st.fSide,
             openSource: st.fOpenSource,
@@ -432,15 +434,15 @@ export const useMods = create<ModsState>((set, get) => ({
   modTab: 'modpack',
   modSource: 'all',
   mq: '',
-  fVer: 'любая',
-  fLoader: 'любой',
-  fSort: 'Популярные',
-  fCat: 'все',
+  fVer: ANY_VERSION,
+  fLoader: ANY_LOADER,
+  fSort: 'downloads',
+  fCat: ALL_CATEGORIES,
   fCats: [],
   fSide: 'any',
   fWorldCat: 0,
   fOpenSource: false,
-  cats: ['все'],
+  cats: [ALL_CATEGORIES],
   vers: [],
   hits: [],
   notice: '',
@@ -461,7 +463,7 @@ export const useMods = create<ModsState>((set, get) => ({
   resetFilters: () => {
     set({
       fCats: [],
-      fCat: 'все',
+      fCat: ALL_CATEGORIES,
       fSide: 'any',
       fWorldCat: 0,
       fOpenSource: false,
@@ -497,7 +499,7 @@ export const useMods = create<ModsState>((set, get) => ({
     const query = st.mq.trim()
     if (st.modTab === 'world') {
       if (!hasTauri()) {
-        set({ hits: [], count: '', showMore: false, notice: 'Каталог карт доступен в приложении' })
+        set({ hits: [], count: '', showMore: false, notice: mapsAppOnlyNotice() })
         return
       }
       const idx = append ? s.cfOffset : 0
@@ -505,18 +507,18 @@ export const useMods = create<ModsState>((set, get) => ({
         const hits = await loadCf({
           query,
           kind: 'world',
-          ver: st.fVer === 'любая' ? '' : st.fVer,
+          ver: st.fVer === ANY_VERSION ? '' : st.fVer,
           loader: '',
           index: idx,
           category: st.fWorldCat,
-          sort: CF_SORTS[st.fSort] || 2,
+          sort: CF_SORTS[st.fSort],
         })
         if (stale()) return
         const all = append ? get().hits.concat(hits) : hits
         set({
-          count: all.length ? all.length + ' карт' : '',
+          count: all.length ? t('{n} карт', { n: all.length }) : '',
           hits: all,
-          notice: all.length ? '' : 'Ничего не нашли — попробуй другой запрос или версию',
+          notice: all.length ? '' : t('Ничего не нашли — попробуй другой запрос или версию'),
           cfOffset: idx + hits.length,
           // CurseForge answers 400 past 10 000 results.
           showMore: hits.length >= CF_PAGE && idx + hits.length < 9950,
@@ -529,7 +531,7 @@ export const useMods = create<ModsState>((set, get) => ({
     }
     if (st.modTab === 'millida') {
       if (!hasTauri()) {
-        set({ hits: [], count: '', showMore: false, notice: 'Премиум-сборки ставятся из приложения' })
+        set({ hits: [], count: '', showMore: false, notice: t('Премиум-сборки ставятся из приложения') })
         return
       }
       try {
@@ -541,17 +543,17 @@ export const useMods = create<ModsState>((set, get) => ({
         const hits = packsMatching(own.filter((pack) => pack.accessRequired), query)
         set({
           hits,
-          count: hits.length ? hits.length + ' сборок' : '',
+          count: hits.length ? t('{n} сборок', { n: hits.length }) : '',
           notice: hits.length
             ? ''
             : query
-              ? 'По запросу ничего нет'
-              : 'Премиум-сборки появятся здесь',
+              ? t('По запросу ничего нет')
+              : t('Премиум-сборки появятся здесь'),
           showMore: false,
         })
       } catch (e) {
         if (stale()) return
-        set({ hits: [], count: '', showMore: false, notice: 'Премиум-сборки недоступны: ' + e })
+        set({ hits: [], count: '', showMore: false, notice: t('Премиум-сборки недоступны: {error}', { error: String(e) }) })
       }
       return
     }
@@ -562,7 +564,7 @@ export const useMods = create<ModsState>((set, get) => ({
      */
     const wantsOwn = st.modTab === 'modpack' && !append && hasTauri()
     if (st.modSource === 'curseforge' && !hasTauri()) {
-      set({ hits: [], showMore: false, notice: 'CurseForge доступен в приложении' })
+      set({ hits: [], showMore: false, notice: t('CurseForge доступен в приложении') })
       return
     }
     const wantsCf = (st.modSource === 'curseforge' || st.modSource === 'all') && hasTauri()
@@ -579,8 +581,8 @@ export const useMods = create<ModsState>((set, get) => ({
         ? loadCf({
             query,
             kind: st.modTab,
-            ver: st.fVer === 'любая' ? '' : st.fVer,
-            loader: st.fLoader === 'любой' ? '' : st.fLoader,
+            ver: st.fVer === ANY_VERSION ? '' : st.fVer,
+            loader: st.fLoader === ANY_LOADER ? '' : st.fLoader,
             index: cfOffset,
             category: 0,
             sort: 0,
@@ -612,12 +614,12 @@ export const useMods = create<ModsState>((set, get) => ({
     if (stale()) return
     if (st.modSource === 'curseforge') {
       if (!cf || 'error' in cf) {
-        set({ hits: [], showMore: false, notice: 'CurseForge: ' + (cf ? cf.error : 'нет ответа') })
+        set({ hits: [], showMore: false, notice: 'CurseForge: ' + (cf ? cf.error : t('нет ответа')) })
         return
       }
       const all = append ? get().hits.concat(cf.hits) : cf.hits
       set({
-        count: all.length ? all.length + ' результатов' : '',
+        count: all.length ? t('{n} результатов', { n: all.length }) : '',
         hits: all,
         notice: '',
         cfOffset: cfOffset + cf.hits.length,
@@ -635,7 +637,7 @@ export const useMods = create<ModsState>((set, get) => ({
         const shown = append ? get().hits : []
         const page = ownPacks.concat(mergeSources([], cfBuffer, shown, query))
         set({
-          count: shown.length + page.length + ' результатов',
+          count: t('{n} результатов', { n: shown.length + page.length }),
           hits: append ? shown.concat(page) : page,
           notice: '',
           showMore: cfBuffer.length >= CF_PAGE,
@@ -655,9 +657,9 @@ export const useMods = create<ModsState>((set, get) => ({
     set({
       count:
         st.modSource === 'all'
-          ? shown.length + page.length + ' результатов'
+          ? t('{n} результатов', { n: shown.length + page.length })
           : typeof d.total_hits === 'number'
-            ? fmt(d.total_hits) + ' результатов'
+            ? t('{n} результатов', { n: fmt(d.total_hits) })
             : get().count,
       hits: append ? shown.concat(page) : page,
       notice: '',

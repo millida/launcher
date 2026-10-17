@@ -15,14 +15,15 @@ import { keyContent } from './installKeys'
 import { LOADER_NAME } from './format'
 import { actionSource } from './uiTrack'
 import { errorCode } from './telemetryPrivacy'
+import { t } from '../i18n'
 
-const RU: Record<string, string> = {
-  mod: 'мод',
-  resourcepack: 'ресурспак',
-  datapack: 'дата-пак',
-  shader: 'шейдер',
-  world: 'карту',
-}
+const ruKind = (): Record<string, string> => ({
+  mod: t('мод'),
+  resourcepack: t('ресурспак'),
+  datapack: t('дата-пак'),
+  shader: t('шейдер'),
+  world: t('карту'),
+})
 
 /**
  * Успешная установка из каталога — для воронки «клик → установка».
@@ -43,7 +44,7 @@ export async function resolveTargetBuild(kind: string): Promise<string | null> {
   if (scoped && useProfiles.getState().profiles.some((p) => p.name === scoped)) return scoped
   const profiles = useProfiles.getState().profiles
   if (profiles.length === 1) return profiles[0].name
-  return pickBuild(RU[kind] || 'контент')
+  return pickBuild(ruKind()[kind] || t('контент'))
 }
 
 interface Source {
@@ -61,14 +62,12 @@ function buildOf(name: string) {
 async function confirmMismatch(title: string, prof: string, mismatch: string): Promise<boolean> {
   const pr = buildOf(prof)
   return uiConfirm(
-    '«' +
-      title +
-      '» нет под ' +
-      (pr ? pr.version + ' · ' + LOADER_NAME(pr) : 'эту сборку') +
-      ' — есть только под ' +
-      mismatch +
-      '. Такой файл обычно не даёт игре запуститься. Поставить всё равно?',
-    { title: 'Версия не совпадает', confirmLabel: 'Поставить', danger: true },
+    t('«{name}» нет под {target} — есть только под {versions}. Такой файл обычно не даёт игре запуститься. Поставить всё равно?', {
+      name: title,
+      target: pr ? pr.version + ' · ' + LOADER_NAME(pr) : t('эту сборку'),
+      versions: mismatch,
+    }),
+    { title: t('Версия не совпадает'), confirmLabel: t('Поставить'), danger: true },
   )
 }
 
@@ -87,7 +86,7 @@ export function runPickedVersionInstall(o: {
     runInstall<ContentInstall>({
       key: o.key,
       title: o.title,
-      running: allowMismatch ? 'Ставим всё равно…' : 'Скачивание…',
+      running: allowMismatch ? t('Ставим всё равно…') : t('Скачивание…'),
       versionId: o.versionId,
       run: () => o.run(allowMismatch),
       keepOpen: (r) => !r.file,
@@ -113,12 +112,12 @@ export function installExtras(prof: string, kind: string, extras: PlanItem[], af
   if (!extras.length) return
   runInstall<DepReport>({
     key: keyContent('mr', prof, kind, 'millida:deps'),
-    title: 'Дополнения',
-    running: 'Ставим дополнительные моды…',
+    title: t('Дополнения'),
+    running: t('Ставим дополнительные моды…'),
     run: () => installDepItems(prof, kind, extras),
     onDone: (r) => {
-      if (r.failed.length) showToast('Не встало: ' + r.failed.join('; '), 'error')
-      else showToast('Дополнительно поставлено: ' + r.installed.length, 'ok', 'install')
+      if (r.failed.length) showToast(t('Не встало: {list}', { list: r.failed.join('; ') }), 'error')
+      else showToast(t('Дополнительно поставлено: {n}', { n: r.installed.length }), 'ok', 'install')
       if (after) after()
     },
     onError: (e) => showToast('' + e, 'error'),
@@ -145,7 +144,7 @@ export async function askPlanForVersion(
 export async function installContentFlow(src: Source, kind: string, title?: string): Promise<boolean> {
   const done = catalogInstallTracker(kind, src.source === 'curseforge' ? src.cfid : src.slug)
   if (!hasTauri()) {
-    showToast('Установка доступна в приложении')
+    showToast(t('Установка доступна в приложении'))
     return false
   }
   const prof = await resolveTargetBuild(kind)
@@ -180,7 +179,7 @@ export async function installContentFlow(src: Source, kind: string, title?: stri
     return runInstall<ContentInstall>({
       key,
       title: label,
-      running: allowMismatch ? 'Ставим всё равно…' : 'Скачивание…',
+      running: allowMismatch ? t('Ставим всё равно…') : t('Скачивание…'),
       run: () =>
         src.source === 'curseforge'
           ? cfInstall(src.cfid!, gv, prof, kind, undefined, allowMismatch)
@@ -198,7 +197,7 @@ export async function installContentFlow(src: Source, kind: string, title?: stri
         void useMods.getState().refreshInstalled()
         installExtras(prof, kind, extras)
         showToast(
-          (RU[kind] || 'Контент') + ' → «' + prof + '»: ' + r.file + (r.warning ? ' · ' + r.warning : ''),
+          t('{kind} → «{pack}»: {file}', { kind: ruKind()[kind] || t('Контент'), pack: prof, file: r.file }) + (r.warning ? ' · ' + r.warning : ''),
           'ok',
           'install',
         )

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
+import { useT } from '../i18n'
 import { Head } from '../components/Head'
 import { PROFILE_URL, api, openExt } from '../lib/api'
 import { copyText } from '../lib/clipboard'
@@ -64,6 +65,7 @@ function Skeleton() {
 }
 
 export function Friends({ on }: { on: boolean }) {
+  const t = useT()
   const friends = useFriends((s) => s.friends)
   const reqIn = useFriends((s) => s.reqIn)
   const reqOut = useFriends((s) => s.reqOut)
@@ -144,10 +146,10 @@ export function Friends({ on }: { on: boolean }) {
   const unblock = (b: Blocked) => {
     const nick = b.user?.nickname || b.user?.displayName || ''
     api('/core/blocks/' + encodeURIComponent(b.blockedId), { method: 'DELETE' })
-      .then(() => showToast(nick + ' разблокирован'))
+      .then(() => showToast(t('{nick} разблокирован', { nick })))
       .catch((e) => {
         trackFailure('friends', e, { step: 'unblock' })
-        showToast(apiErrorText(e, 'Не удалось разблокировать'), 'error')
+        showToast(apiErrorText(e, t('Не удалось разблокировать')), 'error')
       })
       .finally(() => void loadBlocked())
   }
@@ -155,33 +157,33 @@ export function Friends({ on }: { on: boolean }) {
   const removeFriend = async (f: Friend) => {
     const nick = f.nickname || ''
     setMenuFor(null)
-    if (!(await uiConfirm('Убрать ' + nick + ' из друзей?', { confirmLabel: 'Убрать' }))) return
+    if (!(await uiConfirm(t('Убрать {nick} из друзей?', { nick }), { confirmLabel: t('Убрать') }))) return
     api('/friends/remove', { method: 'POST', body: JSON.stringify({ userId: f.userId }) })
-      .then(() => showToast(nick + ' удалён из друзей', 'ok', 'delete'))
+      .then(() => showToast(t('{nick} удалён из друзей', { nick }), 'ok', 'delete'))
       .catch((e) => {
         trackFailure('friends', e, { step: 'remove' })
-        showToast(apiErrorText(e, 'Не удалось убрать из друзей'), 'error')
+        showToast(apiErrorText(e, t('Не удалось убрать из друзей')), 'error')
       })
       .finally(() => void loadFriends())
   }
   const blockFriend = async (f: Friend) => {
     const nick = f.nickname || ''
     setMenuFor(null)
-    const ok = await uiConfirm('Заблокировать ' + nick + '? Он пропадёт из друзей и не сможет писать.', {
-      confirmLabel: 'Заблокировать',
+    const ok = await uiConfirm(t('Заблокировать {nick}? Он пропадёт из друзей и не сможет писать.', { nick }), {
+      confirmLabel: t('Заблокировать'),
     })
     if (!ok) return
     try {
       await api('/friends/block', { method: 'POST', body: JSON.stringify({ userId: f.userId }) })
     } catch (e) {
       trackFailure('friends', e, { step: 'block' })
-      showToast(apiErrorText(e, 'Не удалось заблокировать'), 'error')
+      showToast(apiErrorText(e, t('Не удалось заблокировать')), 'error')
       return
     }
     // Служба пока только записывает блокировку, дружба остаётся (аудит F1):
     // убираем из друзей сами, чтобы обещание в вопросе было правдой.
     await api('/friends/remove', { method: 'POST', body: JSON.stringify({ userId: f.userId }) }).catch(() => {})
-    showToast(nick + ' заблокирован и убран из друзей')
+    showToast(t('{nick} заблокирован и убран из друзей', { nick }))
     void loadFriends()
     void loadBlocked()
   }
@@ -191,7 +193,7 @@ export function Friends({ on }: { on: boolean }) {
   const myNick = accountNick && !isTechnicalNick(accountNick) ? accountNick : ''
   const copyNick = async () => {
     const ok = await copyText(myNick)
-    showToast(ok ? 'Ник скопирован: ' + myNick : 'Не удалось скопировать ник', ok ? 'ok' : 'error')
+    showToast(ok ? t('Ник скопирован: {nick}', { nick: myNick }) : t('Не удалось скопировать ник'), ok ? 'ok' : 'error')
   }
 
   // ── Поиск: одно поле фильтрует вкладку и превращается в заявку ─────────────
@@ -261,20 +263,20 @@ export function Friends({ on }: { on: boolean }) {
   const friendsTab = () => {
     if (loading) return <Skeleton />
     if (!friends.length) return needle ? null : <FriendsEmpty myNick={myNick} onFind={() => findRef.current?.focus()} />
-    if (!visible.length) return needle && !candidate ? <p className="faint-note fr-none">Никого не нашли</p> : null
+    if (!visible.length) return needle && !candidate ? <p className="faint-note fr-none">{t('Никого не нашли')}</p> : null
     if (view === 'hours') return byHours.map((f, i) => row(f, i + 1))
     return (
       <>
-        {section('Играют сейчас', playing)}
-        {section('В сети', online)}
+        {section(t('Играют сейчас'), playing)}
+        {section(t('В сети'), online)}
         {offline.length ? (
           <>
             <div className="fr-cap">
-              {'Не в сети · ' + offline.length}
+              {t('Не в сети · {n}', { n: offline.length })}
               {offlineFolded ? (
                 <button className="btn sm ghost fr-cap-act" data-track="friends_show_offline" onClick={() => setShowOffline(true)}>
                   <Icon id="i-chev-d" />
-                  Показать всех
+                  {t('Показать всех')}
                 </button>
               ) : null}
             </div>
@@ -288,7 +290,7 @@ export function Friends({ on }: { on: boolean }) {
   return (
     <section className={'screen' + (on ? ' on' : '')} id="s-friends">
       <div className="page-head">
-        <h1>Друзья</h1>
+        <h1>{t('Друзья')}</h1>
         {!gated ? (
           <div className="right">
             <div className="input sm fr-q">
@@ -296,7 +298,7 @@ export function Friends({ on }: { on: boolean }) {
               <input
                 ref={findRef}
                 id="frQ"
-                placeholder="Ник друга"
+                placeholder={t('Ник друга')}
                 value={q}
                 spellCheck={false}
                 autoComplete="off"
@@ -310,7 +312,7 @@ export function Friends({ on }: { on: boolean }) {
                 }}
               />
               {q ? (
-                <button className="fr-q-x" aria-label="Очистить" data-track="search_clear" onClick={clearQ}>
+                <button className="fr-q-x" aria-label={t('Очистить')} data-track="search_clear" onClick={clearQ}>
                   <Icon id="i-x" />
                 </button>
               ) : null}
@@ -324,29 +326,29 @@ export function Friends({ on }: { on: boolean }) {
           <div className="gate-ic">
             <Icon id="i-users" />
           </div>
-          <div className="gate-title">Играй вместе с друзьями</div>
+          <div className="gate-title">{t('Играй вместе с друзьями')}</div>
           {/* Что даёт вход — значками, а не абзацем. */}
           <div className="fr-gate-feats">
             <span>
               <Icon id="i-play" />
-              Кто играет
+              {t('Кто играет')}
             </span>
             <span>
               <Icon id="i-login" />
-              Зайти к другу
+              {t('Зайти к другу')}
             </span>
             <span>
               <Icon id="i-msg" />
-              Чат
+              {t('Чат')}
             </span>
             <span>
               <Icon id="i-phone" />
-              Звонки
+              {t('Звонки')}
             </span>
           </div>
           <button className="btn md primary gate-btn" id="frLoginCta" data-track="login" onClick={() => logoutToLogin()}>
             <Icon id="i-login" />
-            Войти
+            {t('Войти')}
           </button>
         </div>
       ) : (
@@ -361,7 +363,7 @@ export function Friends({ on }: { on: boolean }) {
                 onClick={() => setTab('friends')}
               >
                 <Icon id="i-users" />
-                Друзья
+                {t('Друзья')}
                 {friends.length ? <span className="fr-tab-n">{friends.length}</span> : null}
               </button>
               <button
@@ -372,7 +374,7 @@ export function Friends({ on }: { on: boolean }) {
                 onClick={() => setTab('requests')}
               >
                 <Icon id="i-inbox" />
-                Заявки
+                {t('Заявки')}
                 {reqIn.length ? <span className="fr-tab-n hot">{unreadText(reqIn.length)}</span> : null}
               </button>
               <button
@@ -383,29 +385,29 @@ export function Friends({ on }: { on: boolean }) {
                 onClick={() => setTab('invite')}
               >
                 <Icon id="i-gift" />
-                Пригласить
+                {t('Пригласить')}
               </button>
               <button className="seg" data-track="friends_tab_top" onClick={() => openTop('week')}>
                 <Icon id="i-trophy" />
-                Топ
+                {t('Топ')}
               </button>
             </div>
             <div className="fr-tabbar-tool">
               {tab === 'friends' && friends.length > 1 ? (
                 <div className="segs fr-sort">
                   <button className={'seg' + (view === 'now' ? ' on' : '')} data-track="friends_sort_now" onClick={() => setView('now')}>
-                    Сейчас
+                    {t('Сейчас')}
                   </button>
                   <button className={'seg' + (view === 'hours' ? ' on' : '')} data-track="friends_sort_hours" onClick={() => setView('hours')}>
                     <Icon id="i-clock" />
-                    Часы
+                    {t('Часы')}
                   </button>
                 </div>
               ) : null}
               {/* Переписки и группы — свой экран, как в Telegram (владелец 24.09.2026). */}
               <button className="btn sm secondary fr-to-chat" data-track="nav_messages" onClick={openMessages}>
                 <Icon id="i-msg" />
-                Сообщения
+                {t('Сообщения')}
                 {chatUnread ? <span className="fr-tab-n hot">{unreadText(chatUnread)}</span> : null}
               </button>
             </div>
@@ -426,20 +428,20 @@ export function Friends({ on }: { on: boolean }) {
 
             {tab === 'friends' && !needle && blocked.length ? (
               <>
-                <div className="fr-cap">{'Заблокированные · ' + blocked.length}</div>
+                <div className="fr-cap">{t('Заблокированные · {n}', { n: blocked.length })}</div>
                 {blocked.map((b) => {
-                  const nick = b.user?.nickname || b.user?.displayName || 'Пользователь'
+                  const nick = b.user?.nickname || b.user?.displayName || t('Пользователь')
                   return (
                     <div className="fr-row off" key={b.blockedId}>
                       <Head nick={b.user?.nickname} size={40} style={{ filter: 'grayscale(1)' }} />
                       <span className="fr-body">
                         <span className="fr-nick">{nick}</span>
                         <span className="fr-status">
-                          <Icon id="i-ban" /> Заблокирован
+                          <Icon id="i-ban" /> {t('Заблокирован')}
                         </span>
                       </span>
                       <button className="btn sm secondary" data-track="unblock" onClick={() => unblock(b)}>
-                        <Icon id="i-check" /> Разблокировать
+                        <Icon id="i-check" /> {t('Разблокировать')}
                       </button>
                     </div>
                   )
@@ -452,20 +454,20 @@ export function Friends({ on }: { on: boolean }) {
             <div className="fr-nick-note">
               {myNick ? (
                 <p className="faint-note">
-                  Твой ник для друзей: <b>{myNick}</b>
+                  {t('Твой ник для друзей:')} <b>{myNick}</b>
                 </p>
               ) : (
-                <p className="faint-note">Ник служебный — друзья тебя не найдут</p>
+                <p className="faint-note">{t('Ник служебный — друзья тебя не найдут')}</p>
               )}
               {myNick ? (
                 <button className="btn sm ghost" data-track="copy_my_nick" onClick={() => void copyNick()}>
                   <Icon id="i-copy" />
-                  Скопировать
+                  {t('Скопировать')}
                 </button>
               ) : (
                 <button className="btn sm ghost" data-track="set_nick" onClick={() => openExt(PROFILE_URL)}>
                   <Icon id="i-user" />
-                  Задать ник
+                  {t('Задать ник')}
                 </button>
               )}
             </div>

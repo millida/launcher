@@ -2,6 +2,7 @@
 // Account tokens stay in the core. The UI gets only the result (millidaApi adds the token on the core side).
 import { showToast } from '../state/ui'
 import { tauri } from './tauri'
+import { t } from '../i18n'
 
 export interface Profile {
   name: string
@@ -719,7 +720,7 @@ export const installVersion = (
 
 // Names the account to play as; the core resolves the credentials itself.
 export interface LaunchAuth {
-  kind: 'offline' | 'microsoft' | 'millida' | 'elyby'
+  kind: 'offline' | 'microsoft' | 'millida'
   accountId?: string
   uuid?: string
   xuid?: string
@@ -780,8 +781,10 @@ export const fpsBoostState = (profile: string) => invoke<FpsBoostState>('fps_boo
 export const setFpsBoost = (profile: string, on: boolean, keepOptions = false, video?: [string, string][]) =>
   invoke<FpsBoostState>('set_fps_boost', { profile, on, keepOptions, video: video ?? null })
 
-export const millidaApi = <T = unknown>(path: string, method: string, body?: unknown) =>
-  invoke<T>('millida_api', { path, method, body: body === undefined ? null : body })
+export type ApiMarket = 'RU' | 'EN'
+
+export const millidaApi = <T = unknown>(path: string, method: string, body?: unknown, market?: ApiMarket) =>
+  invoke<T>('millida_api', { path, method, body: body === undefined ? null : body, market: market ?? null })
 
 export interface MillidaLoginPoll {
   status: 'pending' | 'ok' | 'denied' | 'expired'
@@ -821,13 +824,6 @@ export const msSessionValidate = (accountId: string) => invoke<MsSessionResult>(
 
 export const msSessionForget = (accountId: string) => invoke<void>('ms_session_forget', { accountId })
 
-export const elyDeviceStart = () => invoke<DeviceStart>('ely_device_start')
-
-export const elyDevicePoll = (deviceCode: string) => invoke<DevicePoll>('ely_device_poll', { deviceCode })
-
-export const elySessionCommit = (deviceCode: string, accountId: string) =>
-  invoke<void>('ely_session_commit', { deviceCode, accountId })
-
 export interface MsCape {
   id: string
   alias: string
@@ -857,7 +853,7 @@ export const openProfileFolder = (name: string) => invoke<void>('open_profile_fo
 export const openScreenshots = (profile: string) => invoke<void>('open_screenshots', { profile })
 
 export const openUrl = (url: string) =>
-  invoke<void>('open_url', { url }).catch((e) => showToast('Не удалось открыть ссылку: ' + e, 'error'))
+  invoke<void>('open_url', { url }).catch((e) => showToast(t('Не удалось открыть ссылку: {error}', { error: String(e) }), 'error'))
 
 export const cancelLaunch = () => invoke<void>('cancel_launch')
 

@@ -2,6 +2,7 @@ import { api } from './api'
 import { bytesToBase64 } from './voice'
 import type { VoiceTake } from './voice'
 import type { ChatAttachment } from '../state/friends'
+import { t } from '../i18n'
 
 export const MAX_CHAT_IMAGE_BYTES = 8 * 1024 * 1024
 
@@ -14,7 +15,7 @@ interface UploadResult {
 }
 
 export async function uploadVoice(take: VoiceTake): Promise<ChatAttachment> {
-  if (!take.mp3.length) throw new Error('Запись пустая — микрофон ничего не услышал')
+  if (!take.mp3.length) throw new Error(t('Запись пустая — микрофон ничего не услышал'))
   const r: UploadResult = await api('/friends/chat/upload', {
     method: 'POST',
     body: JSON.stringify({
@@ -27,14 +28,14 @@ export async function uploadVoice(take: VoiceTake): Promise<ChatAttachment> {
   return {
     url: r.url,
     kind: 'voice',
-    name: r.name || 'Голосовое сообщение',
+    name: r.name || t('Голосовое сообщение'),
     durationMs: take.durationMs,
     peaks: take.peaks,
   }
 }
 
 export async function uploadChatImage(file: File | Blob): Promise<ChatAttachment> {
-  if (file.size > MAX_CHAT_IMAGE_BYTES) throw new Error('Картинка больше 8 МБ')
+  if (file.size > MAX_CHAT_IMAGE_BYTES) throw new Error(t('Картинка больше 8 МБ'))
   const bytes = new Uint8Array(await file.arrayBuffer())
   const r: UploadResult = await api('/friends/chat/upload', {
     method: 'POST',

@@ -14,6 +14,7 @@ import { milliLook, milliPlanNumbers } from '../../lib/milli'
 import { loadCosmeticCatalog, type PlusTier } from '../../lib/gameProfile'
 import '../../styles/pixel/plus.css'
 import '../../styles/pixel/milli-plus.css'
+import { intlTag, t, useT } from '../../i18n'
 
 /*
  * PLUS прямо в чате Милли (владелец 05.10.2026). Своего «стиля» нет: те же детали, что на экране
@@ -45,7 +46,7 @@ const PASS = (() => {
   return t
 })()
 
-const fmt = (v: number) => v.toLocaleString('ru-RU')
+const fmt = (v: number) => v.toLocaleString(intlTag())
 
 /** Вещи для витрины: те же, что на экране PLUS (Plus.tsx LOOT), добор — самые редкие из магазина с картинкой. */
 const LOOT = ['FIRE_WINGS_REMASTER', 'AXOLOTL', 'CHERRY_BLOSSOM_PARTICLES', 'NITRO_GEM', 'ANGEL_WINGS', 'CAPYBARA']
@@ -103,14 +104,15 @@ function useShowcase(loot: Loot[]): (Loot | null)[] {
   return slots.map((i) => loot[i] ?? null)
 }
 
-const KINDS = [
-  { icon: 'sun', label: 'Шейдеры' },
-  { icon: 'image', label: 'Ресурс-паки' },
-  { icon: 'map', label: 'Карты' },
-  { icon: 'server', label: 'Сервер в 1 клик' },
+const kinds = () => [
+  { icon: 'sun', label: t('Шейдеры') },
+  { icon: 'image', label: t('Ресурс-паки') },
+  { icon: 'map', label: t('Карты') },
+  { icon: 'server', label: t('Сервер в 1 клик') },
 ]
 
 export function MilliPlusSheet() {
+  const t = useT()
   const open = useMilliPlusSheet((s) => s.open)
   const src = useMilliPlusSheet((s) => s.src)
   const plans = useMilli((s) => s.plans)
@@ -127,8 +129,8 @@ export function MilliPlusSheet() {
   const per = dia ? n.diamond : n.plus
   const buy = () => void useDaily.getState().startPlus((dia ? 'DIAMOND' : 'PLUS') as PlusTier)
   return (
-    <div className={'mps lp' + (dia ? ' is-diamond' : '')} role="dialog" aria-label="Милли с PLUS" data-src={src}>
-      <button type="button" className="mps-x" aria-label="Закрыть" onClick={closeSheet}>
+    <div className={'mps lp' + (dia ? ' is-diamond' : '')} role="dialog" aria-label={t('Милли с PLUS')} data-src={src}>
+      <button type="button" className="mps-x" aria-label={t('Закрыть')} onClick={closeSheet}>
         <PxIcon name="x" size={12} />
       </button>
 
@@ -138,10 +140,10 @@ export function MilliPlusSheet() {
         <Milli size={96} mode="dance" poke={false} track={false} crown={dia ? 'diamond' : 'gold'} />
       </div>
       <h3 className="mps-title">
-        Милли с <em>{dia ? 'PLUS Diamond' : 'PLUS'}</em>
+        {t('Милли с')} <em>{dia ? 'PLUS Diamond' : 'PLUS'}</em>
       </h3>
 
-      <div className="segs mps-segs" role="tablist" aria-label="Тариф">
+      <div className="segs mps-segs" role="tablist" aria-label={t('Тариф')}>
         <button type="button" role="tab" aria-selected={!dia} className={'seg' + (!dia ? ' on' : '')} onClick={() => setDia(false)}>
           <Icon id="i-crown" />
           PLUS · 299 ₽
@@ -156,8 +158,8 @@ export function MilliPlusSheet() {
         <div className="mps-all">
           <PxArt name="diamond" size={22} className="mci" />
           <span>
-            <b>Все награды пропуска — сразу</b>
-            <small>Не ждать 28 дней: рубины, сундуки и вещи в день покупки</small>
+            <b>{t('Все награды пропуска — сразу')}</b>
+            <small>{t('Не ждать 28 дней: рубины, сундуки и вещи в день покупки')}</small>
           </span>
         </div>
       ) : null}
@@ -165,8 +167,8 @@ export function MilliPlusSheet() {
       {/* Косметика — главное в PLUS (владелец 05.10.2026): вещи в лаунчере, носишь в игре */}
       <div className="mps-cos">
         <div className="mps-cos-head">
-          <b>Косметика в лаунчере</b>
-          <span>Крылья, питомцы и эффекты из сундуков PLUS — носишь прямо в игре</span>
+          <b>{t('Косметика в лаунчере')}</b>
+          <span>{t('Крылья, питомцы и эффекты из сундуков PLUS — носишь прямо в игре')}</span>
         </div>
         <div className="mps-cos-row">
           {shown.map((l, k) => (
@@ -179,17 +181,17 @@ export function MilliPlusSheet() {
           <span>
             <PxArt name="chest" size={22} className="mci mps-shake" />
             <b>{PASS.chests}</b>
-            <small>сундуков</small>
+            <small>{t('сундуков')}</small>
           </span>
           <span>
             <PxArt name="nether_star" size={22} className="mci" />
             <b>6–12%</b>
-            <small>шанс вещи</small>
+            <small>{t('шанс вещи')}</small>
           </span>
           <span>
             <Ruby size={20} />
             <b>{fmt(PASS.rubies)}</b>
-            <small>рубинов</small>
+            <small>{t('рубинов')}</small>
           </span>
         </div>
       </div>
@@ -197,12 +199,12 @@ export function MilliPlusSheet() {
       {/* Милли: сколько сообщений и что она соберёт — сравнение полосами и 4 плитки */}
       <div className="mps-ai" key={dia ? 'dia' : 'plus'}>
         <div className="mps-ai-head">
-          <b>Сообщений Милли в день</b>
+          <b>{t('Сообщений Милли в день')}</b>
           <span className="mps-ai-x">×{Math.round(per / Math.max(1, n.free))}</span>
         </div>
         <div className="mps-ai-cmp">
           <div className="mps-ai-row">
-            <span>Без PLUS</span>
+            <span>{t('Без PLUS')}</span>
             <i>
               <s style={{ '--w': Math.max(6, (n.free / per) * 100) + '%' } as CSSProperties} />
             </i>
@@ -217,7 +219,7 @@ export function MilliPlusSheet() {
           </div>
         </div>
         <div className="mps-ai-kinds">
-          {KINDS.map((k) => (
+          {kinds().map((k) => (
             <span key={k.icon}>
               <PxIcon name={k.icon} size={16} />
               {k.label}
@@ -227,7 +229,7 @@ export function MilliPlusSheet() {
       </div>
 
       <button type="button" className="btn lg primary mps-buy" data-track="milli_plus_buy" data-src={src} data-tier={dia ? 'diamond' : 'plus'} disabled={busy} aria-busy={busy || undefined} onClick={buy}>
-        Оформить {dia ? 'Diamond · 539 ₽' : 'PLUS · 299 ₽'}
+        {t('Оформить {plan}', { plan: dia ? 'Diamond · 539 ₽' : 'PLUS · 299 ₽' })}
       </button>
       <button
         type="button"
@@ -239,7 +241,7 @@ export function MilliPlusSheet() {
           useUi.getState().setScreen('plus')
         }}
       >
-        Что ещё даёт PLUS · отмена в любой день
+        {t('Что ещё даёт PLUS · отмена в любой день')}
       </button>
     </div>
   )

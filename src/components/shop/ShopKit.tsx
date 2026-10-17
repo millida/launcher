@@ -69,11 +69,12 @@ import { THEME_TONE } from './Sets'
 import { usePlus } from '../../state/plus'
 import { usePremiumTheme } from '../../lib/premiumTheme'
 import { StatusCompare } from '../premium/StatusCompare'
+import { intlTag, t, useT } from '../../i18n'
 import '../../styles/pixel/sets.css'
 import '../../styles/pixel/shop2.css'
 import '../../styles/pixel/shop-narrow.css'
 
-const ERR = 'Магазин не ответил, попробуй позже'
+const err = () => t('Магазин не ответил, попробуй позже')
 
 /**
  * Нехватка денег на счёте при покупке пакета: `missingKopecks` из ответа
@@ -94,6 +95,7 @@ const wearItems = (list: ItemRef[]) => wearNow(list.map((it) => ({ code: it.code
 
 import { ShardsSection } from './Shards'
 import { craftItem, loadWorkshop, type Workshop } from '../../lib/rubies'
+import { plusPrice, rubyPackPrice, useRegionalPrices } from '../../lib/regionalPrices'
 import { fragmentWord } from './rarity'
 
 /**
@@ -119,6 +121,7 @@ let shopMemo: ShopMemo | null = null
  * ShopOverlays — окно покупки и открытие ящика, только у видимого экрана.
  */
 export function useShop(on: boolean) {
+  useRegionalPrices()
   const signedIn = hasMillidaAccount()
   const walletBal = useAccounts((st) => st.list).find((a) => a.kind === 'millida' || a.kind === 'tg')?.balance
   const walletKopecks = walletBal ?? 0
@@ -160,7 +163,7 @@ export function useShop(on: boolean) {
       })
       .catch((e) => {
         trackFailure('shop', e, { step: 'load' })
-        setError(apiErrorText(e, ERR))
+        setError(apiErrorText(e, err()))
         return null
       })
 
@@ -273,7 +276,7 @@ export function useShop(on: boolean) {
   const short = (price: number, result: ReturnType<typeof purchaseFlow>) => {
     if (price <= balance) return false
     result(false, 'insufficient')
-    showToast('Не хватает ' + (price - balance) + ' ' + word(price - balance), 'error')
+    showToast(t('Не хватает {n} {word}', { n: price - balance, word: word(price - balance) }), 'error')
     toPacks()
     return true
   }
@@ -300,7 +303,7 @@ export function useShop(on: boolean) {
           return { onWear: () => wearItems([got]) }
         } catch (e) {
           result(false, 'error', e)
-          showToast(apiErrorText(e, ERR), 'error')
+          showToast(apiErrorText(e, err()), 'error')
           throw e
         } finally {
           setBusy('')
@@ -333,7 +336,7 @@ export function useShop(on: boolean) {
           return { onWear: () => wearItems(all) }
         } catch (e) {
           result(false, 'error', e)
-          showToast(apiErrorText(e, ERR), 'error')
+          showToast(apiErrorText(e, err()), 'error')
           void reloadSets()
           throw e
         } finally {
@@ -361,7 +364,7 @@ export function useShop(on: boolean) {
     if (shards) {
       if (workshop && price > workshop.shards) {
         result(false, 'insufficient')
-        return showToast('Не хватает осколков', 'error')
+        return showToast(t('Не хватает осколков'), 'error')
       }
     } else if (short(price, result)) return
     openSheet({
@@ -371,12 +374,12 @@ export function useShop(on: boolean) {
       art: <CaseArt view={c} size={230} />,
       confirm: shards ? (
         <>
-          Открыть
+          {t('Открыть')}
           <Shard size={18} />
-          {price.toLocaleString('ru-RU')}
+          {price.toLocaleString(intlTag())}
         </>
       ) : (
-        <BuyLabel verb={mode === 'x10' ? 'Открыть ×10' : 'Открыть'} price={price} />
+        <BuyLabel verb={mode === 'x10' ? t('Открыть ×10') : t('Открыть')} price={price} />
       ),
       onCancel: () => result(false, 'cancel'),
       run: async () => {
@@ -395,10 +398,10 @@ export function useShop(on: boolean) {
       setDay((d) => (d ? { ...d, balance: res.balance, shards: res.shards } : d))
       const g = res.granted
       if (g.kind === 'ITEM') showReward({ items: [entry(g.item)], onWear: () => wearItems([g.item]) })
-      else showReward({ level: 'small', items: [{ name: 'Осколки', icon: 'shard' }], title: '+' + g.amount })
+      else showReward({ level: 'small', items: [{ name: t('Осколки'), icon: 'shard' }], title: '+' + g.amount })
     } catch (e) {
       trackFailure('shop', e, { step: 'action' })
-      showToast(apiErrorText(e, ERR), 'error')
+      showToast(apiErrorText(e, err()), 'error')
     } finally {
       setBusy('')
     }
@@ -416,14 +419,14 @@ export function useShop(on: boolean) {
       if (res.granted) {
         showReward({
           level: 'mid',
-          items: [{ name: 'Рубины', rubies: res.amount }],
-          title: 'Начислено',
-          sub: res.amount.toLocaleString('ru-RU') + ' ' + word(res.amount),
+          items: [{ name: t('Рубины'), rubies: res.amount }],
+          title: t('Начислено'),
+          sub: res.amount.toLocaleString(intlTag()) + ' ' + word(res.amount),
         })
-      } else showToast('Награда за Discord уже забрана', 'ok')
+      } else showToast(t('Награда за Discord уже забрана'), 'ok')
     } catch (e) {
       trackFailure('shop', e, { step: 'action' })
-      showToast(apiErrorText(e, ERR), 'error')
+      showToast(apiErrorText(e, err()), 'error')
       loadDiscordReward().then(setDiscord).catch(() => setDiscord(null))
     } finally {
       setBusy('')
@@ -442,14 +445,14 @@ export function useShop(on: boolean) {
       if (res.granted) {
         showReward({
           level: 'mid',
-          items: [{ name: 'Рубины', rubies: res.amount }],
-          title: 'Начислено',
-          sub: res.amount.toLocaleString('ru-RU') + ' ' + word(res.amount),
+          items: [{ name: t('Рубины'), rubies: res.amount }],
+          title: t('Начислено'),
+          sub: res.amount.toLocaleString(intlTag()) + ' ' + word(res.amount),
         })
-      } else showToast('Награда за подписку уже забрана', 'ok')
+      } else showToast(t('Награда за подписку уже забрана'), 'ok')
     } catch (e) {
       trackFailure('shop', e, { step: 'action' })
-      showToast(apiErrorText(e, ERR), 'error')
+      showToast(apiErrorText(e, err()), 'error')
       loadTelegramReward().then(setTelegram).catch(() => setTelegram(null))
     } finally {
       setBusy('')
@@ -465,7 +468,7 @@ export function useShop(on: boolean) {
       if (got) showReward({ items: [entry(got)], onWear: () => wearItems([got]) })
     } catch (e) {
       trackFailure('shop', e, { step: 'action' })
-      showToast(apiErrorText(e, ERR), 'error')
+      showToast(apiErrorText(e, err()), 'error')
     } finally {
       setBusy('')
     }
@@ -482,7 +485,7 @@ export function useShop(on: boolean) {
       key: tier.toLowerCase(),
       tone: tier === 'DIAMOND' ? 'var(--m-rarity-rare)' : 'var(--m-rarity-legendary)',
       art: <PlanCard tier={tier} />,
-      confirm: <>{(tier === 'DIAMOND' ? 'Diamond ' : 'PLUS ') + rubles(offerOf(plus, tier).priceKopecks)}</>,
+      confirm: <>{(tier === 'DIAMOND' ? 'Diamond ' : 'PLUS ') + (plusPrice(tier, offerOf(plus, tier).priceKopecks) ?? '')}</>,
       run: async () => {
         await useDaily.getState().startPlus(tier)
         return null
@@ -513,7 +516,7 @@ export function useShop(on: boolean) {
   const doWalletTopUp = (missingKopecks: number) => {
     if (!signedIn) return logoutToLogin()
     openExt(WALLET_URL)
-    showToast('Пополни счёт на ' + rubles(missingKopecks) + ' и вернись за пакетом', 'ok')
+    showToast(t('Пополни счёт на {sum} и вернись за пакетом', { sum: rubles(missingKopecks) }), 'ok')
   }
 
   /** Пакет: окно с мешком рубинов, после оплаты рубины досчитываются. */
@@ -533,7 +536,7 @@ export function useShop(on: boolean) {
           <PackCount n={pack.rubies} />
         </span>
       ),
-      confirm: missing ? 'Пополнить ' + rubles(missing) : rubles(pack.kopecks),
+      confirm: missing ? t('Пополнить {sum}', { sum: rubles(missing) }) : (rubyPackPrice(pack.code, pack.kopecks) ?? ''),
       onCancel: () => result(false, 'cancel'),
       run: async () => {
         if (missing) {
@@ -553,7 +556,7 @@ export function useShop(on: boolean) {
           const miss = insufficientKopecks(e)
           result(false, miss !== null ? 'insufficient' : 'error', e)
           if (miss !== null) doWalletTopUp(topUpKopecks(miss || pack.kopecks - walletKopecks) || pack.kopecks)
-          else showToast(apiErrorText(e, ERR), 'error')
+          else showToast(apiErrorText(e, err()), 'error')
           throw e
         } finally {
           setBusy('')
@@ -571,13 +574,13 @@ export function useShop(on: boolean) {
   /** Осколки → половина фрагментов вещи; остаток докупается рубинами. */
   const doCraft = (w: { item: ItemRef; cost: number }) => {
     if (!signedIn) return logoutToLogin()
-    if (workshop && w.cost > workshop.shards) return showToast('Не хватает осколков', 'error')
+    if (workshop && w.cost > workshop.shards) return showToast(t('Не хватает осколков'), 'error')
     const result = purchaseFlow('craft', w.item.code, w.cost, 'shards')
     openSheet({
       kind: 'craft',
       // The exchange pays half of the fragments, not the item: without saying so
       // players reported shards taken and nothing given.
-      name: w.item.name + ' — половина фрагментов',
+      name: t('{name} — половина фрагментов', { name: w.item.name }),
       art: <ItemShot item={w.item} big />,
       confirm: <ShardLabel n={w.cost} />,
       onCancel: () => result(false, 'cancel'),
@@ -593,7 +596,7 @@ export function useShop(on: boolean) {
           return got && got.have < got.need ? null : { onWear: () => wearItems([res.item]) }
         } catch (e) {
           result(false, 'error', e)
-          showToast(apiErrorText(e, ERR), 'error')
+          showToast(apiErrorText(e, err()), 'error')
           throw e
         } finally {
           setBusy('')
@@ -616,15 +619,15 @@ export function useShop(on: boolean) {
    *  Апгрейд PLUS → Diamond показывает состав Diamond: плитка продаёт то, что на кнопке. */
   const plusTile = plus
     ? tier === 'DIAMOND'
-      ? { rubies: PLUS_PASS.rubies, label: 'Продлить Diamond', onOpen: doManage, sub: true, diamond: true }
+      ? { rubies: PLUS_PASS.rubies, label: t('Продлить Diamond'), onOpen: doManage, sub: true, diamond: true }
       : tier === 'PLUS'
-        ? { rubies: PLUS_PASS.rubies, label: 'Diamond · ' + rubles(offerOf(plus, 'DIAMOND').priceKopecks), onOpen: () => doPlus('DIAMOND'), sub: true, diamond: true }
+        ? { rubies: PLUS_PASS.rubies, label: 'Diamond · ' + (plusPrice('DIAMOND', offerOf(plus, 'DIAMOND').priceKopecks) ?? ''), onOpen: () => doPlus('DIAMOND'), sub: true, diamond: true }
         : {
             rubies: PLUS_PASS.rubies,
-            label: 'Купить · ' + rubles(offerOf(plus, 'PLUS').priceKopecks),
+            label: t('Купить · {price}', { price: plusPrice('PLUS', offerOf(plus, 'PLUS').priceKopecks) ?? '' }),
             onOpen: () => doPlus('PLUS'),
-            prices: { PLUS: rubles(offerOf(plus, 'PLUS').priceKopecks), DIAMOND: rubles(offerOf(plus, 'DIAMOND').priceKopecks) },
-            onPick: (t: PlusTier) => doPlus(t),
+            prices: { PLUS: plusPrice('PLUS', offerOf(plus, 'PLUS').priceKopecks) ?? '', DIAMOND: plusPrice('DIAMOND', offerOf(plus, 'DIAMOND').priceKopecks) ?? '' },
+            onPick: (picked: PlusTier) => doPlus(picked),
           }
     : undefined
 
@@ -640,15 +643,16 @@ export type Shop = ReturnType<typeof useShop>
 
 /** Срок подписки «дд.мм» по Москве для чипа. */
 export const plusUntil = (plus: { paidUntil?: string | null } | null | undefined): string =>
-  plus?.paidUntil ? new Date(plus.paidUntil).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', timeZone: 'Europe/Moscow' }) : ''
+  plus?.paidUntil ? new Date(plus.paidUntil).toLocaleDateString(intlTag(), { day: '2-digit', month: '2-digit', timeZone: 'Europe/Moscow' }) : ''
 
 /** «◇ 450» — главная кнопка покупки за осколки. */
 function ShardLabel({ n }: { n: number }) {
+  const t = useT()
   return (
     <>
-      Обменять
+      {t('Обменять')}
       <Shard size={18} />
-      {n.toLocaleString('ru-RU')}
+      {n.toLocaleString(intlTag())}
     </>
   )
 }
@@ -661,6 +665,7 @@ function ShardLabel({ n }: { n: number }) {
  */
 /** chip — чип подписки в шапке «Пополнить рубины» (гардероб: своей верхней панели магазина там нет). */
 export function ShopFeed({ s, chip = false }: { s: Shop; chip?: boolean }) {
+  const t = useT()
   const { on, day, plus, busy, tier, balance, sets, setsAt, cases, drops, casesAt, ofDayPct, opening, weekly, quests, telegram, discord, plusTile, todayActs, setActs } = s
   const { reloadShop, reloadSets, doOpenCase, doWeekly, doPackQuest, doTelegram, doDiscord, doPlus, doManage, doPack } = s
   if (!day)
@@ -677,14 +682,14 @@ export function ShopFeed({ s, chip = false }: { s: Shop; chip?: boolean }) {
           <div className="sh-head pk-head">
             <h2>
               <Ruby size={26} />
-              Пополнить рубины
+              {t('Пополнить рубины')}
             </h2>
             {chip ? <PlusChip tier={tier} until={plusUntil(plus)} onClick={tier ? doManage : () => doPlus('PLUS')} /> : null}
             {/* Баланс — в шапке магазина; здесь только в гардеробе, где своей шапки магазина нет. */}
             {chip ? (
               <span className="sh-bal pk-bal">
                 <Ruby size={18} />
-                <b>{balance.toLocaleString('ru-RU')}</b>
+                <b>{balance.toLocaleString(intlTag())}</b>
               </span>
             ) : null}
           </div>
@@ -756,6 +761,7 @@ export function ShopFeed({ s, chip = false }: { s: Shop; chip?: boolean }) {
 
 /** Окно покупки и открытие ящика: рисует только видимый экран. */
 export function ShopOverlays({ s }: { s: Shop }) {
+  const t = useT()
   const { on, opening, setOpening, balance, setDay, caseResult, toPacks, reloadCases, reloadSets } = s
   if (!on) return null
   return (
@@ -773,12 +779,12 @@ export function ShopOverlays({ s }: { s: Shop }) {
           onFail={(e) => {
             setOpening(null)
             if (e === 'insufficient') {
-              showToast('Не хватает рубинов', 'error')
+              showToast(t('Не хватает рубинов'), 'error')
               return toPacks()
             }
             caseResult.current?.(false, 'error', e)
             caseResult.current = null
-            showToast(apiErrorText(e, ERR), 'error')
+            showToast(apiErrorText(e, err()), 'error')
           }}
           onDone={() => {
             void reloadCases()

@@ -1,4 +1,5 @@
 import { micConstraint } from './audioDevices'
+import { t } from '../i18n'
 
 export const VOICE_MAX_MS = 120_000
 export const VOICE_PEAKS = 48
@@ -83,7 +84,7 @@ export async function recordVoice(
   onLevel?: (level: number, ms: number) => void,
   onLimit?: () => void,
 ): Promise<VoiceRecorder> {
-  if (!canRecordVoice()) throw new Error('Микрофон недоступен в этой сборке')
+  if (!canRecordVoice()) throw new Error(t('Микрофон недоступен в этой сборке'))
   // The encoder is 170 KB of the bundle and matters only to someone who
   // actually presses record, so it loads on demand.
   const { Mp3Encoder } = await import('@breezystack/lamejs')

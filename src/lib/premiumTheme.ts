@@ -5,6 +5,7 @@ import { computeAccent, paintAccent, saveAccent, withColorFade, type AccentVars 
 import { hydratePrefs, readPref, writePref, type PrefKey } from './prefs'
 import type { ShopTier } from './rubies'
 import { loadPlus, type PlusTier } from './gameProfile'
+import { t } from '../i18n'
 
 /**
  * Тема лаунчера (владелец 06.10.2026): «Стандартная» · «PLUS» · «Diamond».
@@ -25,8 +26,8 @@ export type PremiumTheme = 'off' | 'plus' | 'diamond'
 
 /** Лишний цвет в палитре «Цвет кнопок» — только у подписчика. */
 export const PREMIUM_ACCENTS: { id: string; name: string; c: string; h: string; s: string; tier: PlusTier }[] = [
-  { id: 'premium-plus', name: 'Золото PLUS', c: '#F5BD2C', h: '#FFD45C', s: 'rgba(245,189,44,.15)', tier: 'PLUS' },
-  { id: 'premium-diamond', name: 'Алмаз Diamond', c: '#4FB8FF', h: '#7CCBFF', s: 'rgba(79,184,255,.15)', tier: 'DIAMOND' },
+  { id: 'premium-plus', get name() { return t('Золото PLUS') }, c: '#F5BD2C', h: '#FFD45C', s: 'rgba(245,189,44,.15)', tier: 'PLUS' },
+  { id: 'premium-diamond', get name() { return t('Алмаз Diamond') }, c: '#4FB8FF', h: '#7CCBFF', s: 'rgba(79,184,255,.15)', tier: 'DIAMOND' },
 ]
 
 const KEY: PrefKey = 'm-ptheme'

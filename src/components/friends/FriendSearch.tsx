@@ -9,6 +9,7 @@ import { loadFriends } from '../../state/friends'
 import type { FoundUser } from '../../state/friends'
 import { norm } from './friendsView'
 import { newFriend } from './RequestsTab'
+import { t, useT } from '../../i18n'
 
 const TECHNICAL_NICK = /^(skins|smx|guest|user)_\d{6,}$/i
 export const isTechnicalNick = (nick?: string) => TECHNICAL_NICK.test((nick || '').trim())
@@ -17,13 +18,13 @@ export async function sendRequest(opts: Record<string, string>, clear: () => voi
   try {
     const r = await api('/friends/request', { method: 'POST', body: JSON.stringify(opts) })
     if (r.status === 'accepted') newFriend(opts.nickname || r.nickname || '')
-    else showToast(r.status === 'already_friends' ? 'Уже в друзьях' : 'Заявка отправлена')
+    else showToast(r.status === 'already_friends' ? t('Уже в друзьях') : t('Заявка отправлена'))
   } catch (e) {
     // Сервер объясняет отказ сам: нет такого ника, человек уже в друзьях, он
     // закрыл заявки. Всё это раньше показывалось как «войди в аккаунт».
     const nick = (opts.nickname || '').trim()
     trackFailure('friends', nick ? String(e).split(nick).join('<nick>') : e, { step: 'request' })
-    showToast(apiErrorText(e, 'Не удалось отправить заявку'), 'error')
+    showToast(apiErrorText(e, t('Не удалось отправить заявку')), 'error')
     return
   } finally {
     void loadFriends()
@@ -81,6 +82,7 @@ export function AddRows({
   /// Строка первая в выдаче — тогда её кнопка главная; под совпадениями — вторая.
   lead: boolean
 }) {
+  const t = useT()
   const exact = exactOf(nick, found)
   const similar = found
     .filter((u) => u !== exact && !u.isFriend && !u.pending && u.nickname)
@@ -97,7 +99,7 @@ export function AddRows({
         <span className="fr-body">
           <span className="fr-nick">{shown}</span>
           <span className="fr-status">
-            {exact?.isFriend ? 'Уже в друзьях' : exact?.pending ? 'Заявка отправлена' : 'Нет в друзьях'}
+            {exact?.isFriend ? t('Уже в друзьях') : exact?.pending ? t('Заявка отправлена') : t('Нет в друзьях')}
           </span>
         </span>
         {exact?.isFriend || exact?.pending ? null : (
@@ -109,7 +111,7 @@ export function AddRows({
             onClick={() => void sendRequest(requestFor(nick, exact), onSent)}
           >
             <Icon id="i-plus" />
-            Добавить
+            {t('Добавить')}
           </button>
         )}
       </div>
@@ -118,7 +120,7 @@ export function AddRows({
           <Head nick={u.nickname} size={40} />
           <span className="fr-body">
             <span className="fr-nick">{u.nickname}</span>
-            <span className="fr-status">{u.text || 'Игрок Millida'}</span>
+            <span className="fr-status">{u.text || t('Игрок Millida')}</span>
           </span>
           <button
             className="btn sm secondary fr-send"
@@ -128,7 +130,7 @@ export function AddRows({
             onClick={() => void sendRequest(requestFor(u.nickname || '', u), onSent)}
           >
             <Icon id="i-plus" />
-            Добавить
+            {t('Добавить')}
           </button>
         </div>
       ))}

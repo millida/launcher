@@ -5,7 +5,6 @@ import { LAUNCHER_HIDDEN,
   SECTION_SOURCE,
   SECTION_VISUAL,
   SITE_INSTALL_SECTIONS,
-  curatedTitle,
   foreignTailAllowed,
   groupOf,
   hasFeed,
@@ -82,7 +81,6 @@ describe('«Скачать в лаунчере» с сайта ставится 
       shaders: 'shader',
       'data-packs': 'datapack',
       maps: 'world',
-      cheats: 'mod',
     })
     expect(KIND_OF_SECTION.skins).toBeUndefined()
     expect(KIND_OF_SECTION.capes).toBeUndefined()
@@ -115,11 +113,5 @@ describe('разделы без своей ленты', () => {
   it('сиды, головы, плащи ведут на сайт или в гардероб', () => {
     expect(['seeds', 'heads', 'capes'].every((s) => !hasFeed(s as never))).toBe(true)
     expect(hasFeed('skins')).toBe(true)
-    expect(hasFeed('cheats')).toBe(true)
-  })
-
-  it('название чита из адреса', () => {
-    expect(curatedTitle('meteor-client')).toBe('Meteor Client')
-    expect(curatedTitle('wurst')).toBe('Wurst')
   })
 })

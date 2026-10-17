@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
+import { formatFixed, intlTag, useT } from '../i18n'
 import { TopbarPortal } from '../components/TopbarPortal'
 import { HostingManage } from './HostingManage'
 import { api, hasMillidaAccount, openExt } from '../lib/api'
@@ -31,6 +32,7 @@ import { BalancePill } from '../components/hosting/HostKit'
 import '../styles/pixel/hosting2.css'
 import '../styles/pixel/hosting-scene.css'
 import '../styles/pixel/hosting-panel.css'
+import { hostingPlanPrice } from '../lib/regionalPrices'
 
 export interface HostServer {
   id: string
@@ -63,7 +65,7 @@ export interface HostServer {
 const fmtDate = (iso?: string | null) => {
   if (!iso) return ''
   const d = new Date(iso)
-  return isNaN(d.getTime()) ? '' : d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+  return isNaN(d.getTime()) ? '' : d.toLocaleDateString(intlTag(), { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
 type View = 'initial' | 'gate' | 'loading' | 'error' | 'empty' | 'list'
@@ -95,6 +97,7 @@ function HostSkeleton() {
 }
 
 export function Hosting({ on }: { on: boolean }) {
+  const t = useT()
   const [view, setView] = useState<View>('initial')
   const [err, setErr] = useState('')
   const [list, setList] = useState<HostServer[]>([])
@@ -137,15 +140,15 @@ export function Hosting({ on }: { on: boolean }) {
     setInviteFor(null)
     const addr = s.address || ''
     if (!addr) {
-      showToast('Сервер ещё запускается — адрес появится позже', 'error')
+      showToast(t('Сервер ещё запускается — адрес появится позже'), 'error')
       return
     }
-    const text = encodeInvite(addr, s.name || 'Мой сервер')
+    const text = encodeInvite(addr, s.name || t('Мой сервер'))
     try {
       await api('/friends/chat/' + encodeURIComponent(uid), { method: 'POST', body: JSON.stringify({ text }) })
     } catch {}
     await openChat(uid, nick)
-    showToast('Приглашение отправлено: ' + nick)
+    showToast(t('Приглашение отправлено: {nick}', { nick }))
   }
 
   const load = async (silent?: boolean) => {
@@ -196,23 +199,22 @@ export function Hosting({ on }: { on: boolean }) {
       setTimeout(() => void load(), 1200)
     } catch (e) {
       console.error('[hosting] ' + path, e)
-      showToast('Не получилось — попробуй ещё раз', 'error')
+      showToast(t('Не получилось — попробуй ещё раз'), 'error')
       void load()
     }
   }
 
   const facts = hostPlanFacts(plans)
-  const planRub = (k: number) => Math.round(k / 100).toLocaleString('ru-RU')
-  const planGb = (mb: number) => (mb / 1024).toFixed(mb % 1024 === 0 ? 0 : 1).replace('.', ',')
+  const planGb = (mb: number) => formatFixed(mb / 1024, mb % 1024 === 0 ? 0 : 1)
 
   const joinServer = async (s: HostServer) => {
     const addr = s.address || ''
     if (!addr) {
-      showToast('Сервер ещё запускается')
+      showToast(t('Сервер ещё запускается'))
       return
     }
     if (!hasTauri()) {
-      showToast('Вход на сервер — в приложении')
+      showToast(t('Вход на сервер — в приложении'))
       return
     }
     const sname = s.name || 'Мой сервер'
@@ -229,19 +231,19 @@ export function Hosting({ on }: { on: boolean }) {
       void pinServerDat(prof, sname, addr).catch(() => {})
       void uiConfirm(
         isGameRunning(prof)
-          ? 'Игра уже запущена — «' + sname + '» закреплён первым в списке серверов, зайди прямо из неё. Запустить вторую копию игры?'
-          : 'Уже запущена другая сборка. «' + sname + '» закреплён в списке серверов сборки «' + prof + '». Запустить её второй копией?',
+          ? t('Игра уже запущена — «{server}» закреплён первым в списке серверов, зайди прямо из неё. Запустить вторую копию игры?', { server: sname })
+          : t('Уже запущена другая сборка. «{server}» закреплён в списке серверов сборки «{build}». Запустить её второй копией?', { server: sname, build: prof }),
         {
-          title: 'Игра уже запущена',
-          confirmLabel: 'Запустить вторую копию',
-          cancelLabel: 'Не запускать',
+          title: t('Игра уже запущена'),
+          confirmLabel: t('Запустить вторую копию'),
+          cancelLabel: t('Не запускать'),
           danger: false,
         },
       ).then((ok) => {
         if (!ok) return
         joinWithAuth(prof, null, addr, sname, { confirmed: true })
           .then((res) => {
-            if (joinStarted(res)) showToast('Заходим на твой сервер…')
+            if (joinStarted(res)) showToast(t('Заходим на твой сервер…'))
           })
           .catch((e) => showLaunchError(e))
       })
@@ -249,7 +251,7 @@ export function Hosting({ on }: { on: boolean }) {
     }
     joinWithAuth(prof, null, addr, sname)
       .then((res) => {
-        if (joinStarted(res)) showToast('Заходим на твой сервер…')
+        if (joinStarted(res)) showToast(t('Заходим на твой сервер…'))
       })
       .catch((e) => showLaunchError(e))
   }
@@ -268,14 +270,14 @@ export function Hosting({ on }: { on: boolean }) {
     const canUpsell = facts.ramHigh > 0 && (planFree || (s.planRamMb || 0) < facts.ramHigh)
     const note =
       s.expiresAt && fmtDate(s.expiresAt)
-        ? 'Оплачен до ' + fmtDate(s.expiresAt)
+        ? t('Оплачен до {date}', { date: fmtDate(s.expiresAt) })
         : planFree && s.worldDeleteAt && fmtDate(s.worldDeleteAt)
-          ? 'Мир хранится до ' + fmtDate(s.worldDeleteAt)
+          ? t('Мир хранится до {date}', { date: fmtDate(s.worldDeleteAt) })
           : undefined
     return (
       <div className="host-card hsx-card" data-sid={s.id} data-addr={addr} key={s.id}>
         <HostScene
-          name={s.name || s.slug || 'Мой сервер'}
+          name={s.name || s.slug || t('Мой сервер')}
           status={s.status || ''}
           address={addr}
           icon={s.icon}
@@ -289,19 +291,19 @@ export function Hosting({ on }: { on: boolean }) {
                   там они с подписью и с подтверждением (приказ 23.09.2026). */}
               {running ? (
                 <button className="btn lg primary host-join hsx-main" onClick={() => void joinServer(s)}>
-                  <Icon id="i-play" /> Играть
+                  <Icon id="i-play" /> {t('Играть')}
                 </button>
               ) : (
                 <button
                   className="btn lg primary host-start hsx-main"
                   disabled={s.status === 'STARTING' || s.status === 'INSTALLING'}
-                  onClick={() => void act(s.id, '/start', 'Запускаем сервер…', 'Сервер запускается')}
+                  onClick={() => void act(s.id, '/start', t('Запускаем сервер…'), t('Сервер запускается'))}
                 >
-                  <Icon id="i-play" /> Запустить
+                  <Icon id="i-play" /> {t('Запустить')}
                 </button>
               )}
               <button className="btn lg secondary host-manage-btn" onClick={() => setManageId(s.id)}>
-                <Icon id="i-server-cog" /> Управлять
+                <Icon id="i-server-cog" /> {t('Управлять')}
               </button>
               <div className="host-invite-wrap">
                 <button
@@ -311,11 +313,11 @@ export function Hosting({ on }: { on: boolean }) {
                     setInviteFor(inviteFor === s.id ? null : s.id)
                   }}
                 >
-                  <Icon id="i-users" /> Позвать
+                  <Icon id="i-users" /> {t('Позвать')}
                 </button>
                 {inviteFor === s.id ? (
                   <div className="host-invite-pop" onClick={(e) => e.stopPropagation()}>
-                    <div className="host-invite-cap">Кого позвать</div>
+                    <div className="host-invite-cap">{t('Кого позвать')}</div>
                     {friends.length ? (
                       friends.map((f) => (
                         <button
@@ -330,7 +332,7 @@ export function Hosting({ on }: { on: boolean }) {
                       ))
                     ) : (
                       <button className="btn sm secondary hs-invite-empty" onClick={() => setScreen('friends')}>
-                        <Icon id="i-plus" /> Найти друзей
+                        <Icon id="i-plus" /> {t('Найти друзей')}
                       </button>
                     )}
                   </div>
@@ -348,21 +350,20 @@ export function Hosting({ on }: { on: boolean }) {
                     {maxP ? <small> / {maxP}</small> : null}
                   </>
                 }
-                small="игроков в сети"
+                small={t('игроков в сети')}
                 pct={maxP ? (onl / maxP) * 100 : null}
               />
               {/* ramMb у сервера — выделенная память, а не занятая (тип HostingServer
                   на сайте): живой расход — только в «Управлять», из /stats. */}
-              {ramCap || ramMb ? <HostStat block={20} big={planGb(ramCap || ramMb) + ' ГБ'} small="памяти" /> : null}
+              {ramCap || ramMb ? <HostStat block={20} big={t('{n} ГБ', { n: planGb(ramCap || ramMb) })} small={t('памяти')} /> : null}
               {canUpsell ? (
                 <HostStat
                   block={1}
-                  big={planFree ? 'Тарифы' : s.planName || 'Тариф'}
+                  big={planFree ? t('Тарифы') : s.planName || t('Тариф')}
                   small={
-                    (planFree && facts.minPrice > 0 ? 'от ' + planRub(facts.minPrice) + ' ₽ · ' : '') +
-                    'до ' +
-                    planGb(facts.ramHigh) +
-                    ' ГБ'
+                    planFree && facts.minPrice > 0
+                      ? t('от {price} · до {ram} ГБ', { price: (facts.cheapest ? hostingPlanPrice(facts.cheapest.code, facts.minPrice) : null) ?? '', ram: planGb(facts.ramHigh) })
+                      : t('до {ram} ГБ', { ram: planGb(facts.ramHigh) })
                   }
                   onClick={() => setPicker({ mode: 'upgrade', serverId: s.id, currentCode: s.planCode, focus: 'paid' })}
                 />
@@ -411,11 +412,11 @@ export function Hosting({ on }: { on: boolean }) {
           {millida ? <BalancePill /> : null}
           {view === 'list' && millida ? (
             <button className="btn sm secondary" onClick={() => setPicker({ mode: 'create', focus: 'paid' })}>
-              <Icon id="i-plus" /> Новый сервер
+              <Icon id="i-plus" /> {t('Новый сервер')}
             </button>
           ) : null}
           <button className="btn sm ghost" id="hostPanel" onClick={() => openExt('https://millida.net/hosting')}>
-            Веб-панель
+            {t('Веб-панель')}
             <Icon id="i-ext" />
           </button>
         </div>
@@ -430,9 +431,9 @@ export function Hosting({ on }: { on: boolean }) {
         {view === 'error' ? (
           <div className="card hs-state" data-err={err}>
             <Icon id="i-alert" />
-            <b>Серверы не загрузились</b>
+            <b>{t('Серверы не загрузились')}</b>
             <button className="btn sm secondary" id="hostRetry" onClick={() => void load()}>
-              <Icon id="i-restart" /> Повторить
+              <Icon id="i-restart" /> {t('Повторить')}
             </button>
           </div>
         ) : null}

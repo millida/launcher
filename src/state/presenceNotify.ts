@@ -1,12 +1,13 @@
 import type { Friend } from './friends'
+import { t } from '../i18n'
 
 const MAX_NAMED = 2
 
 export function presenceTitle(list: Friend[]): string {
-  const names = list.map((f) => f.nickname || 'Друг')
+  const names = list.map((f) => f.nickname || t('Друг'))
   if (names.length === 1) return names[0]
   const shown = names.slice(0, MAX_NAMED).join(', ')
-  return names.length > MAX_NAMED ? shown + ' и ещё ' + (names.length - MAX_NAMED) : shown
+  return names.length > MAX_NAMED ? t('{names} и ещё {n}', { names: shown, n: names.length - MAX_NAMED }) : shown
 }
 
 function plural(n: number, one: string, few: string, many: string): string {
@@ -19,13 +20,15 @@ function plural(n: number, one: string, few: string, many: string): string {
 
 export function presenceText(list: Friend[], kind: 'play' | 'online'): string {
   if (list.length > 1) {
-    const word = plural(list.length, 'друг', 'друга', 'друзей')
-    return list.length + ' ' + word + (kind === 'play' ? ' в игре' : ' в сети')
+    const n = list.length
+    return kind === 'play'
+      ? plural(n, t('{n} друг в игре', { n }), t('{n} друга в игре', { n }), t('{n} друзей в игре', { n }))
+      : plural(n, t('{n} друг в сети', { n }), t('{n} друга в сети', { n }), t('{n} друзей в сети', { n }))
   }
   const f = list[0]
-  if (kind === 'online') return 'В сети'
+  if (kind === 'online') return t('В сети')
   const where = f.serverName || f.serverIp || f.build || ''
-  return where ? 'Играет · ' + where : 'Зашёл в игру'
+  return where ? t('Играет · {where}', { where }) : t('Зашёл в игру')
 }
 
 /// Сколько одна игровая сессия друга держится в памяти: карточку «зашёл в игру»

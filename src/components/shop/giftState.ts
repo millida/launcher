@@ -4,6 +4,7 @@ import { hasMillidaAccount } from '../../lib/api'
 import { loadShopDay, type ItemRef, type ShopDay, type ShopGift } from '../../lib/rubies'
 import { setScreen, showToast } from '../../state/ui'
 import { freshWishes, markWishSeen, wishedInShop } from './wish'
+import { t } from '../../i18n'
 
 /**
  * Что в магазине ждёт игрока — для «!» на кнопке «Магазин».
@@ -48,8 +49,8 @@ export const useShopGift = create<GiftState>((set) => ({
     const fresh = freshWishes(day)
     const loud = fresh.filter((it) => !toasted.has(it.code))
     loud.forEach((it) => toasted.add(it.code))
-    if (loud.length) showToast('Из «Хочу» на витрине: ' + loud.map((it) => it.name).join(', '), 'ok', undefined, {
-        label: 'Смотреть',
+    if (loud.length) showToast(t('Из «Хочу» на витрине: {list}', { list: loud.map((it) => it.name).join(', ') }), 'ok', undefined, {
+        label: t('Смотреть'),
         run: () => {
           set({ tab: 'wish' })
           setScreen('rubies')

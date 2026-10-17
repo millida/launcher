@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useT } from '../i18n'
 import { Icon } from './Icon'
 import { fmtN, motdParts } from '../lib/format'
 import { useProfiles } from '../state/profiles'
@@ -14,6 +15,7 @@ import { versionRange } from './ServerRow'
 import { joinAddr } from '../lib/ownServer'
 
 export function ServerDetail() {
+  const t = useT()
   const { sv, close } = useServerDetail()
   const [label, setLabel] = useState('Играть')
   const busy = useRef(false)
@@ -30,14 +32,14 @@ export function ServerDetail() {
 
   const copyIp = async () => {
     if (!sv.ip) return
-    showToast((await copyText(sv.ip)) ? 'Адрес скопирован: ' + sv.ip : 'Скопируй адрес вручную: ' + sv.ip)
+    showToast((await copyText(sv.ip)) ? t('Адрес скопирован: {ip}', { ip: sv.ip }) : t('Скопируй адрес вручную: {ip}', { ip: sv.ip }))
   }
 
   const join = () => {
     if (busy.current) return
     busy.current = true
     setLabel('Подготовка…')
-    quickJoin(joinAddr(sv), sv.name || 'Сервер', licenseRequired(sv.lic), sv.versions)
+    quickJoin(joinAddr(sv), sv.name || t('Сервер'), licenseRequired(sv.lic), sv.versions)
       .then(() => close())
       .catch(() => {})
       .finally(() => {
@@ -51,7 +53,7 @@ export function ServerDetail() {
   const hasBuildForServer = useProfiles.getState().profiles.some((p) => versionFits(p.version, wanted))
 
   const makeBuild = () => {
-    setNewBuildPreset({ version: serverVersion, name: (sv.name || 'Сервер').slice(0, 24) })
+    setNewBuildPreset({ version: serverVersion, name: (sv.name || t('Сервер')).slice(0, 24) })
     close()
     openModal('nbModal')
   }
@@ -81,7 +83,7 @@ export function ServerDetail() {
               ))}
             </span>
           ) : null}
-          <button className="srv-detail-close" data-sound="close" data-track="close" onClick={close} aria-label="Закрыть">
+          <button className="srv-detail-close" data-sound="close" data-track="close" onClick={close} aria-label={t('Закрыть')}>
             <Icon id="i-x" />
           </button>
         </div>
@@ -99,14 +101,14 @@ export function ServerDetail() {
               <h3 style={{ marginBottom: '4px' }}>{sv.name}</h3>
               <div className="srv-detail-tags">
                 {sv.cat ? <span className="pill">{sv.cat}</span> : null}
-                {sv.lic === 'CRACKED' ? <span className="pill">Без лицензии</span> : null}
+                {sv.lic === 'CRACKED' ? <span className="pill">{t('Вход по нику')}</span> : null}
                 {on ? (
                   <span className="pill acc">
                     <span className="dot"></span> {sv.onlineApprox ? '~' : ''}
-                    {fmtN(sv.online)} онлайн
+                    {t('{n} онлайн', { n: fmtN(sv.online) })}
                   </span>
                 ) : (
-                  <span className="pill">офлайн</span>
+                  <span className="pill">{t('офлайн')}</span>
                 )}
               </div>
             </div>
@@ -122,7 +124,7 @@ export function ServerDetail() {
               </div>
             ) : null}
             {sv.ip ? (
-              <button className="srv-detail-fact as-btn" data-track="copy_ip" onClick={copyIp} aria-label="Скопировать адрес">
+              <button className="srv-detail-fact as-btn" data-track="copy_ip" onClick={copyIp} aria-label={t('Скопировать адрес')}>
                 <Icon id="i-link" />
                 <b>{sv.ip}</b>
                 <Icon id="i-copy" />
@@ -133,23 +135,23 @@ export function ServerDetail() {
           {wanted.length && !hasBuildForServer ? (
             <p className="cat-warn">
               <Icon id="i-alert" />
-              Нет сборки под {versionRange(wanted)}
+              {t('Нет сборки под {version}', { version: versionRange(wanted) })}
             </p>
           ) : null}
 
           <div style={{ display: 'flex', gap: '10px', marginTop: '18px', flexWrap: 'wrap' }}>
             {sv.ip ? (
               <button className="btn md primary" style={{ flex: 1 }} disabled={!on || busy.current} data-track="join" onClick={join}>
-                <Icon id="i-play" /> {label}
+                <Icon id="i-play" /> {t(label)}
               </button>
             ) : (
               <span className="pill" style={{ flex: 1, justifyContent: 'center', display: 'flex', alignItems: 'center' }}>
-                Вход по заявке
+                {t('Вход по заявке')}
               </span>
             )}
             <button className="btn md secondary" data-track="server_make_build" onClick={makeBuild}>
               <Icon id="i-plus" />
-              {hasBuildForServer ? 'Ещё сборка' : 'Сборка ' + (serverVersion || 'под сервер')}
+              {hasBuildForServer ? t('Ещё сборка') : serverVersion ? t('Сборка {version}', { version: serverVersion }) : t('Сборка под сервер')}
             </button>
           </div>
         </div>

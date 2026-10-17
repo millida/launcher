@@ -311,6 +311,9 @@ svg.msg-tick.read{color:var(--m-tick-read,#4C9FFE);opacity:1}
    один вид и одни отступы у всего, что открывается по правой кнопке. */
 .ctx-menu{position:fixed;z-index:400;width:224px;display:flex;flex-direction:column;gap:1px;padding:6px;border-radius:13px;background:var(--m-surface-2);border:1px solid var(--m-border);box-shadow:var(--m-shadow-lg)}
 .ctx-menu .msg-menu-item.ctx-sep{margin-top:5px;padding-top:9px;border-top:1px solid var(--m-border);border-radius:9px}
+.lang-menu{width:168px}
+.lang-menu .msg-menu-item .lang-menu-name{flex:1;min-width:0}
+.lang-menu .msg-menu-item.on{color:var(--m-accent)}
 .msg-menu{position:fixed;z-index:400;width:210px;display:flex;flex-direction:column;gap:1px;padding:6px;border-radius:13px;background:var(--m-surface-2);border:1px solid var(--m-border);box-shadow:var(--m-shadow-lg)}
 .msg-menu-react{display:grid;grid-template-columns:repeat(8,1fr);gap:1px;padding-bottom:5px;margin-bottom:4px;border-bottom:1px solid var(--m-border)}
 .msg-menu-emoji{display:grid;place-items:center;height:26px;border:0;background:none;border-radius:7px;font-size:15px;cursor:pointer;transition:background var(--m-t-fast)}

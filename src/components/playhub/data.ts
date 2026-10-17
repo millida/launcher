@@ -7,6 +7,7 @@ import { toCard } from '../../state/servers'
 import type { RatingServer } from '../../state/servers'
 import type { SnapshotServer } from '../../lib/snapshot'
 import { ANARCHY, ONEBLOCK_PACK, OWN_SERVER_ADDR, OWN_SERVER_MODE, OWN_SERVER_SLUG } from '../../lib/ownServer'
+import { t } from '../../i18n'
 
 /**
  * Каталог режимов «Во что играем». Серверный режим — не сервер, а занятие:
@@ -33,22 +34,22 @@ export const SERVER_MODES: ServerModeDef[] = [
   { cat: 'BEDWARS', title: 'BedWars', block: 26, color: '#9e2328' },
   { cat: 'SKYWARS', title: 'SkyWars', block: 20, color: '#1f7fa6' },
   { cat: 'SKYBLOCK', title: 'SkyBlock', block: 43, color: '#3d7f2a' },
-  { cat: 'ANARCHY', title: 'Анархия', block: 23, color: '#3a2468' },
+  { cat: 'ANARCHY', get title() { return t('Анархия') }, block: 23, color: '#3a2468' },
   { cat: 'ONEBLOCK', title: 'OneBlock', block: 48, color: '#7a5528' },
   { cat: 'LIFESTEAL', title: 'LifeSteal', block: 6, color: '#86203a' },
   { cat: 'BOXPVP', title: 'BoxPvP', block: 15, color: '#245f7d' },
-  { cat: 'PRISON', title: 'Тюрьма', block: 30, color: '#34404f' },
-  { cat: 'MINIGAMES', title: 'Мини-игры', block: 2, color: '#6d3a85' },
-  { cat: 'SURVIVAL', title: 'Выживание', block: 51, color: '#5e4125' },
+  { cat: 'PRISON', get title() { return t('Тюрьма') }, block: 30, color: '#34404f' },
+  { cat: 'MINIGAMES', get title() { return t('Мини-игры') }, block: 2, color: '#6d3a85' },
+  { cat: 'SURVIVAL', get title() { return t('Выживание') }, block: 51, color: '#5e4125' },
   { cat: 'PVP', title: 'PvP', block: 16, color: '#6b2424' },
-  { cat: 'GRIEF', title: 'Гриф', block: 27, color: '#a2500f' },
-  { cat: 'FACTIONS', title: 'Кланы', block: 45, color: '#434950' },
-  { cat: 'MMORPG', title: 'РПГ', block: 52, color: '#654322' },
-  { cat: 'HARDCORE', title: 'Хардкор', block: 4, color: '#231d31' },
-  { cat: 'CREATIVE', title: 'Креатив', block: 28, color: '#852680' },
-  { cat: 'PARKOUR', title: 'Паркур', block: 7, color: '#4f7f1b' },
-  { cat: 'LUCKY', title: 'Лаки-блоки', block: 1, color: '#a3830f' },
-  { cat: 'VANILLA', title: 'Ванилла', block: 32, color: '#1d7d37' },
+  { cat: 'GRIEF', get title() { return t('Гриф') }, block: 27, color: '#a2500f' },
+  { cat: 'FACTIONS', get title() { return t('Кланы') }, block: 45, color: '#434950' },
+  { cat: 'MMORPG', get title() { return t('РПГ') }, block: 52, color: '#654322' },
+  { cat: 'HARDCORE', get title() { return t('Хардкор') }, block: 4, color: '#231d31' },
+  { cat: 'CREATIVE', get title() { return t('Креатив') }, block: 28, color: '#852680' },
+  { cat: 'PARKOUR', get title() { return t('Паркур') }, block: 7, color: '#4f7f1b' },
+  { cat: 'LUCKY', get title() { return t('Лаки-блоки') }, block: 1, color: '#a3830f' },
+  { cat: 'VANILLA', get title() { return t('Ванилла') }, block: 32, color: '#1d7d37' },
 ]
 
 export const blockArt = (n: number) => '/block-icons/Block' + n + 'Millida.png'
@@ -116,26 +117,26 @@ export interface LiveMode {
 /** Названия кодов, которых нет в SERVER_MODES: из рейтинга (state/servers). */
 const EXTRA_TITLES: Record<string, string> = {
   ROLEPLAY: 'RP',
-  TECHNIC: 'Техно',
-  ADVENTURE: 'Приключения',
-  ECONOMY: 'Экономика',
-  MODDED: 'Моды',
-  OTHER: 'Разное',
+  get TECHNIC() { return t('Техно') },
+  get ADVENTURE() { return t('Приключения') },
+  get ECONOMY() { return t('Экономика') },
+  get MODDED() { return t('Моды') },
+  get OTHER() { return t('Разное') },
   RP: 'RP',
-  HIDE_SEEK: 'Прятки',
+  get HIDE_SEEK() { return t('Прятки') },
   KITPVP: 'KitPvP',
   BUILD_BATTLE: 'Build Battle',
-  TECHNICAL: 'Техно',
+  get TECHNICAL() { return t('Техно') },
   SPLEEF: 'Spleef',
   UHC: 'UHC',
   TNTRUN: 'TNT Run',
-  HUNGER_GAMES: 'Голодные игры',
+  get HUNGER_GAMES() { return t('Голодные игры') },
   TOWNY: 'Towny',
-  COBBLEMON: 'Пиксельмон',
+  get COBBLEMON() { return t('Пиксельмон') },
   MURDER: 'Murder Mystery',
-  EARTH: 'Земля',
-  MANHUNT: 'Манхант',
-  BINGO: 'Бинго',
+  get EARTH() { return t('Земля') },
+  get MANHUNT() { return t('Манхант') },
+  get BINGO() { return t('Бинго') },
 }
 const EXTRA_LOOK: [number, string][] = [
   [12, '#1d5e5a'],
@@ -416,13 +417,13 @@ export const pinnedPacks = <T extends { slug?: string | null }>(packs: T[]): T[]
  * Catalogue packs that are a server we run with a partner: the feed tags them
  * like OneBlock and shows a short line instead of the loader and version.
  */
-const OWN_SERVER_PACKS = new Map<string, string>([
-  ['prisonrpg', 'Прокопайся до ранга SSS+'],
-  ['pixelmon-metalabs', 'Лови покемонов с друзьями'],
+const OWN_SERVER_PACKS = new Map<string, () => string>([
+  ['prisonrpg', () => t('Прокопайся до ранга SSS+')],
+  ['pixelmon-metalabs', () => t('Лови покемонов с друзьями')],
 ])
 export const isOwnServerPack = (slug: string | null | undefined): boolean => !!slug && OWN_SERVER_PACKS.has(slug)
 export const ownServerTagline = (slug: string | null | undefined): string | undefined =>
-  slug ? OWN_SERVER_PACKS.get(slug) : undefined
+  slug ? OWN_SERVER_PACKS.get(slug)?.() : undefined
 
 /**
  * Players on our OneBlock right now, from its own rating card: the ONEBLOCK

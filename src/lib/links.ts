@@ -1,11 +1,12 @@
 import { copyText } from './clipboard'
 import { showToast } from '../state/ui'
+import { t } from '../i18n'
 
 export async function copyLink(url: string) {
   if (!url) {
-    showToast('Ссылка ещё не готова — подожди пару секунд')
+    showToast(t('Ссылка ещё не готова — подожди пару секунд'))
     return
   }
   const copied = await copyText(url)
-  showToast(copied ? 'Ссылка скопирована — открой её в браузере' : 'Открой вручную: ' + url, copied ? undefined : 'error')
+  showToast(copied ? t('Ссылка скопирована — открой её в браузере') : t('Открой вручную: {url}', { url }), copied ? undefined : 'error')
 }

@@ -12,6 +12,7 @@ import { showToast } from '../../state/ui'
 import { buildIconOf, parseIcon } from '../../lib/buildIcon'
 import { BuildIcon, IconPicker } from './BuildIcon'
 import { hoursText } from './Hours'
+import { useT } from '../../i18n'
 
 /**
  * «Мои сборки» во вкладке «Собрать» — верстак: крупные карточки своих сборок
@@ -62,6 +63,7 @@ function DeckCard({
   onTarget: () => void
   onPlay: () => void
 }) {
+  const t = useT()
   const seconds = usePlayStats((s) => s.stats.builds.find((b) => b.key === p.name)?.seconds || 0)
   const mods = useModCount(p.name)
   const guarded = useGuarded(p.name)
@@ -81,7 +83,7 @@ function DeckCard({
         <button
           type="button"
           className="bi-edit"
-          aria-label="Изменить иконку"
+          aria-label={t('Изменить иконку')}
           data-sound="open"
           onClick={(e) => {
             e.stopPropagation()
@@ -101,7 +103,7 @@ function DeckCard({
           {mods !== null && !guarded ? (
             <span className="bd-fact">
               <Icon id="i-blocks" />
-              {mods + ' ' + plural(mods, 'мод', 'мода', 'модов')}
+              {plural(mods, t('{n} мод', { n: mods }), t('{n} мода', { n: mods }), t('{n} модов', { n: mods }))}
             </span>
           ) : null}
           {seconds >= 60 ? (
@@ -120,7 +122,7 @@ function DeckCard({
               onPlay()
             }}
           >
-            <Icon id="i-play" /> Играть
+            <Icon id="i-play" /> {t('Играть')}
           </button>
           <button
             className="btn sm secondary"
@@ -130,7 +132,7 @@ function DeckCard({
               openBuildSettings(p.name, 'content')
             }}
           >
-            <Icon id="i-blocks" /> Моды
+            <Icon id="i-blocks" /> {t('Моды')}
           </button>
         </span>
       </span>
@@ -144,7 +146,7 @@ function DeckCard({
           <IconPicker
             icon={buildIconOf(p)}
             onClose={() => setEdit(false)}
-            onPick={(icon) => void saveIcon(p.name, icon).catch((e) => showToast('Иконка не сохранилась: ' + e, 'error'))}
+            onPick={(icon) => void saveIcon(p.name, icon).catch((e) => showToast(t('Иконка не сохранилась: {error}', { error: String(e) }), 'error'))}
           />
         </span>
       ) : null}
@@ -167,17 +169,18 @@ export function BuildDeck({
   onTarget: (name: string) => void
   onPlay: (name: string) => void
 }) {
+  const t = useT()
   const [all, setAll] = useState(false)
   const shown = all ? builds : builds.slice(0, SHOWN)
   return (
     <section className="ph-shelf bd">
       <div className="ph-shelf-head">
         <h2>
-          Мои сборки {builds.length ? <span className="ph-count">{builds.length}</span> : null}
+          {t('Мои сборки')} {builds.length ? <span className="ph-count">{builds.length}</span> : null}
         </h2>
         {builds.length > SHOWN ? (
           <button className="btn sm secondary" aria-expanded={all} onClick={() => setAll((v) => !v)}>
-            {all ? 'Свернуть' : 'Все'} <Icon id={all ? 'i-chev-u' : 'i-chev-d'} />
+            {all ? t('Свернуть') : t('Все')} <Icon id={all ? 'i-chev-u' : 'i-chev-d'} />
           </button>
         ) : null}
       </div>

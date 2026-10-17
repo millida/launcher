@@ -14,10 +14,12 @@ import { api } from '../lib/api'
 import { claimWelcome } from '../lib/rubies'
 import { flushTelemetry, track, trackFailure } from '../lib/telemetry'
 import { markMillidaEver, millidaEver } from './onboarding'
+import { firstRunState, gameStepDue, hasGameAccount, startGameStep } from './firstRun'
 import { apiErrorText, isTransientApiError } from '../lib/apiError'
 import { loginPollDelayMs, pokeGate, readLoginChannel } from '../lib/realtimePace'
 import { watchLoginChannel, type LoginWatch } from '../lib/loginRealtime'
 import { withInviteRef } from '../lib/referrals'
+import { t, useI18n } from '../i18n'
 
 interface LauncherInit {
   deviceCode: string
@@ -39,15 +41,15 @@ interface LoginState {
   set: (patch: Partial<LoginState>) => void
 }
 
-const IDLE_LABEL = 'Войти через аккаунт Millida'
+const idleLabel = (): string => t('Войти через аккаунт Millida')
 
 // The browser does not always come up (no default browser, a portable build, a
 // second machine). Saying where the code goes turns a dead end into a two-step
 // login: millida.net/auth/launcher has a field for exactly this code.
-const MANUAL_HINT = 'Подтверди код на странице Millida. Не открылась — зайди на millida.net/auth/launcher и введи код там.'
+const manualHint = (): string => t('Подтверди код на странице Millida. Не открылась — зайди на millida.net/auth/launcher и введи код там.')
 
 export const useLogin = create<LoginState>((set) => ({
-  webLabel: IDLE_LABEL,
+  webLabel: idleLabel(),
   webBusy: false,
   hintShown: false,
   hintText: '',
@@ -55,6 +57,11 @@ export const useLogin = create<LoginState>((set) => ({
   verifyUrl: '',
   set: (patch) => set(patch as LoginState),
 }))
+
+// The store is created before the dictionary arrives; an idle button follows the language once it does.
+useI18n.subscribe(() => {
+  if (!useLogin.getState().webBusy) useLogin.getState().set({ webLabel: idleLabel() })
+})
 
 const openUrlAnywhere = (url: string) => {
   if (hasTauri()) openUrl(url)
@@ -92,7 +99,7 @@ function resetLogin(hint?: string, dropCode = false) {
   loginWatch = null
   useLogin.getState().set({
     webBusy: false,
-    webLabel: IDLE_LABEL,
+    webLabel: idleLabel(),
     userCode: '',
     verifyUrl: '',
     hintShown: !!hint,
@@ -122,9 +129,9 @@ function adoptUser(user: LauncherUser) {
 function loginStartError(e: unknown): string {
   const text = String(e)
   if (text.includes('429') || text.toLowerCase().includes('too many')) {
-    return 'Слишком много попыток входа подряд. Подожди пару минут и нажми «Войти» ещё раз.'
+    return t('Слишком много попыток входа подряд. Подожди пару минут и нажми «Войти» ещё раз.')
   }
-  return apiErrorText(e, 'Не удалось начать вход')
+  return apiErrorText(e, t('Не удалось начать вход'))
 }
 
 export function cancelWebLogin() {
@@ -138,10 +145,10 @@ export function copyVerifyLink() {
 export async function copyUserCode() {
   const code = useLogin.getState().userCode
   if (!code) {
-    showToast('Код ещё не пришёл — подожди пару секунд')
+    showToast(t('Код ещё не пришёл — подожди пару секунд'))
     return
   }
-  showToast((await copyText(code)) ? 'Код скопирован: ' + code : 'Скопируй код вручную: ' + code, code ? undefined : 'error')
+  showToast((await copyText(code)) ? t('Код скопирован: {code}', { code }) : t('Скопируй код вручную: {code}', { code }), code ? undefined : 'error')
 }
 
 export async function startWebLogin(reopen = false) {
@@ -151,10 +158,10 @@ export async function startWebLogin(reopen = false) {
     return
   }
   if (!hasTauri()) {
-    showToast('Вход через аккаунт Millida доступен только в приложении лаунчера', 'error')
+    showToast(t('Вход через аккаунт Millida доступен только в приложении лаунчера'), 'error')
     return
   }
-  s.set({ webBusy: true, webLabel: 'Ждём подтверждения…' })
+  s.set({ webBusy: true, webLabel: t('Ждём подтверждения…') })
   let init: LauncherInit
   const reused = reusableInit()
   if (reused) {
@@ -179,12 +186,12 @@ export async function startWebLogin(reopen = false) {
     userCode: init.userCode,
     verifyUrl: init.verifyUrl,
     hintShown: true,
-    hintText: MANUAL_HINT,
+    hintText: manualHint(),
   })
   openUrlAnywhere(withInviteRef(init.verifyUrl))
   void copyText(init.userCode).then((copied) => {
     if (!copied || useLogin.getState().userCode !== init.userCode) return
-    useLogin.getState().set({ hintText: 'Код скопирован. ' + MANUAL_HINT })
+    useLogin.getState().set({ hintText: t('Код скопирован. {hint}', { hint: manualHint() }) })
   })
 
   const deadline = issued ? issued.deadline : Date.now() + Math.max(60, init.expiresInSec) * 1000
@@ -207,7 +214,7 @@ export async function startWebLogin(reopen = false) {
 
   const poll = async () => {
     if (Date.now() > deadline) {
-      resetLogin('Время вышло — нажми «Войти» ещё раз.', true)
+      resetLogin(t('Время вышло — нажми «Войти» ещё раз.'), true)
       return
     }
     let r
@@ -220,7 +227,7 @@ export async function startWebLogin(reopen = false) {
         pollTimer = setTimeout(() => void poll(), intervalMs)
         return
       }
-      const reason = apiErrorText(e, 'Не удалось сохранить вход')
+      const reason = apiErrorText(e, t('Не удалось сохранить вход'))
       trackFailure('login', e, { provider: 'millida', step: 'poll' })
       resetLogin(reason, true)
       showToast(reason, 'error')
@@ -230,23 +237,25 @@ export async function startWebLogin(reopen = false) {
       const nick = nickFromUser(r.user)
       adoptUser(r.user)
       await refreshSessionState()
+      const returning = millidaEver()
       markMillidaEver()
       useAccounts.getState().add({ nick, kind: 'millida' })
       resetLogin(undefined, true)
-      enterApp()
+      if (gameStepDue({ returning, state: firstRunState(), hasGame: hasGameAccount() })) startGameStep()
+      else enterApp()
       track('account_link', { kind: 'millida' })
       void flushTelemetry()
       void claimWelcome().catch((e) => trackFailure('welcome_claim', e, { provider: 'millida' }))
-      showToast('Вход выполнен: ' + nick)
+      showToast(t('Вход выполнен: {nick}', { nick }))
       return
     }
     if (r.status === 'denied') {
-      resetLogin('Вход отклонён на сайте.', true)
-      showToast('Вход отклонён')
+      resetLogin(t('Вход отклонён на сайте.'), true)
+      showToast(t('Вход отклонён'))
       return
     }
     if (r.status === 'expired') {
-      resetLogin('Код устарел — нажми «Войти» ещё раз.', true)
+      resetLogin(t('Код устарел — нажми «Войти» ещё раз.'), true)
       return
     }
     polling = false
@@ -270,11 +279,11 @@ export function quickStart() {
   // Guest mode is a shortcut for a returning user, not a way around the account:
   // friends, skins, hosting and the game profile all need a Millida login.
   if (!millidaEver()) {
-    showToast('Сначала войди в аккаунт Millida — это нужно один раз', 'error')
+    showToast(t('Сначала войди в аккаунт Millida — это нужно один раз'), 'error')
     return
   }
   const nick = 'Player' + Math.floor(1000 + Math.random() * 8999)
   useAccounts.getState().add({ nick, kind: 'guest' })
   enterApp()
-  showToast('Вошли как ' + nick)
+  showToast(t('Вошли как {nick}', { nick }))
 }

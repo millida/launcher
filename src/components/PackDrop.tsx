@@ -8,12 +8,14 @@ import { showToast, useUi } from '../state/ui'
 import { track } from '../lib/telemetry'
 import type { ScreenId } from '../state/ui'
 import { trackImportFailure } from '../lib/importTrack'
+import { useT } from '../i18n'
 
 const SCREENS: ScreenId[] = ['play', 'builds']
 
 /// Перетаскивание принимает ядро: путь приходит от системы вместе с окном, а не
 /// от страницы, поэтому наружу уходит только выданный ядром номер файла.
 export function PackDrop() {
+  const t = useT()
   const screen = useUi((s) => s.screen)
   const [over, setOver] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
@@ -47,7 +49,7 @@ export function PackDrop() {
           })
           useProfiles.getState().setSelected(prof.name)
           void useProfiles.getState().refresh()
-          showToast('Импортировано: ' + prof.name)
+          showToast(t('Импортировано: {name}', { name: prof.name }))
         } catch (err) {
           trackImportFailure('drop', err, { name: pack.name })
           showToast('' + err, 'error')
@@ -62,7 +64,7 @@ export function PackDrop() {
       setOver(false)
       if (!armed.current || running.current) return
       if (!packs.length) {
-        showToast('Такой файл не подойдёт: нужен .mrpack или zip сборки', 'error')
+        showToast(t('Такой файл не подойдёт: нужен .mrpack или zip сборки'), 'error')
         return
       }
       void run(packs)
@@ -85,8 +87,8 @@ export function PackDrop() {
     <div className={'pack-drop' + (busy ? ' busy' : '')}>
       <div className="pack-drop-card">
         <Icon id="i-box2" />
-        <b>{busy ? 'Импортируем сборку' : 'Отпусти файл сборки'}</b>
-        <span>{busy || '.mrpack, zip сборки или zip клиента'}</span>
+        <b>{busy ? t('Импортируем сборку') : t('Отпусти файл сборки')}</b>
+        <span>{busy || t('.mrpack, zip сборки или zip клиента')}</span>
       </div>
     </div>
   )

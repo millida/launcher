@@ -6,6 +6,7 @@ import { hasTauri } from '../ipc/tauri'
 import { convertFileSrc, musicAdd, musicRemove, musicTracks, openMusicFolder } from '../ipc/commands'
 import { MAX_LINKS, SERVICE_NAME, parseMusicLink, restoreLinks, type MusicLink } from '../lib/musicLinks'
 import { embedKey, embedPause, embedPlay, embedRestart, embedStep, embedStop, type EmbedHooks, type EmbedNow } from '../lib/musicEmbed'
+import { t } from '../i18n'
 
 const DEFAULT_LEVEL = 5
 
@@ -73,7 +74,7 @@ const BUNDLED: Track[] = __HAS_BUNDLED_MUSIC__ ? RADIO : []
 async function loadOwn(): Promise<Track[]> {
   if (!hasTauri()) return []
   const list = await musicTracks()
-  return list.map((t) => ({ src: convertFileSrc(t.path), title: t.title, author: 'Своя музыка', file: t.file }))
+  return list.map((track) => ({ src: convertFileSrc(track.path), title: track.title, author: t('Своя музыка'), file: track.file }))
 }
 
 const linkTrack = (link: MusicLink): Track => ({ src: link.url, title: link.title, author: SERVICE_NAME[link.service], link })
@@ -262,7 +263,7 @@ function rebuild(radio: boolean, own: Track[], links: MusicLink[] = useMusic.get
 }
 
 const emptyHint = () =>
-  useMusic.getState().loaded ? 'Нет треков: включи радио Millida или добавь свою музыку' : 'Радио ещё загружается'
+  useMusic.getState().loaded ? t('Нет треков: включи радио Millida или добавь свою музыку') : t('Радио ещё загружается')
 
 function autoPause(fadeMs: number) {
   if (!useMusic.getState().playing) return
@@ -303,7 +304,7 @@ export const useMusic = create<MusicState>((set, get) => ({
     writePref('m-mus-muted', v ? '1' : '0')
     set({ muted: v })
     apply(FADE_MS)
-    showToast(v ? 'Музыка выключена' : 'Музыка включена')
+    showToast(v ? t('Музыка выключена') : t('Музыка включена'))
   },
   togglePlay: () => {
     if (!get().tracks.length) {
@@ -373,18 +374,18 @@ export const useMusic = create<MusicState>((set, get) => ({
     try {
       rebuild(get().radio, await loadOwn())
     } catch (e) {
-      showToast('Не удалось прочитать папку с музыкой: ' + errText(e), 'error')
+      showToast(t('Не удалось прочитать папку с музыкой: {error}', { error: errText(e) }), 'error')
     }
   },
   addOwn: async () => {
     try {
       const res = await musicAdd()
-      if (res.too_big.length) showToast('Больше 100 МБ, не добавлено: ' + res.too_big.join(', '), 'error')
+      if (res.too_big.length) showToast(t('Больше 100 МБ, не добавлено: {list}', { list: res.too_big.join(', ') }), 'error')
       if (!res.added) return
       rebuild(get().radio, await loadOwn())
-      showToast(res.added === 1 ? 'Трек добавлен' : 'Добавлено треков: ' + res.added)
+      showToast(res.added === 1 ? t('Трек добавлен') : t('Добавлено треков: {n}', { n: res.added }))
     } catch (e) {
-      showToast('Музыку не добавили: ' + errText(e), 'error')
+      showToast(t('Музыку не добавили: {error}', { error: errText(e) }), 'error')
     }
   },
   removeOwn: async (file) => {
@@ -392,7 +393,7 @@ export const useMusic = create<MusicState>((set, get) => ({
       await musicRemove(file)
       rebuild(get().radio, await loadOwn())
     } catch (e) {
-      showToast('Трек не удалён: ' + errText(e), 'error')
+      showToast(t('Трек не удалён: {error}', { error: errText(e) }), 'error')
     }
   },
   addLink: (raw) => {
@@ -408,7 +409,7 @@ export const useMusic = create<MusicState>((set, get) => ({
       return true
     }
     if (s.links.length >= MAX_LINKS) {
-      showToast('Плейлистов по ссылке может быть не больше ' + MAX_LINKS + ' — убери лишний', 'error')
+      showToast(t('Плейлистов по ссылке может быть не больше {n} — убери лишний', { n: MAX_LINKS }), 'error')
       return false
     }
     const links = [...s.links, v.link]
@@ -424,7 +425,7 @@ export const useMusic = create<MusicState>((set, get) => ({
     rebuild(s.radio, s.own, links)
   },
   openFolder: () => {
-    openMusicFolder().catch((e: unknown) => showToast('Папка не открылась: ' + errText(e), 'error'))
+    openMusicFolder().catch((e: unknown) => showToast(t('Папка не открылась: {error}', { error: errText(e) }), 'error'))
   },
 }))
 
@@ -492,7 +493,7 @@ export function stopMusicNow() {
 function boot() {
   return loadOwn()
     .catch((e: unknown) => {
-      showToast('Своя музыка не загрузилась: ' + errText(e), 'error')
+      showToast(t('Своя музыка не загрузилась: {error}', { error: errText(e) }), 'error')
       return [] as Track[]
     })
     .then((own) => {

@@ -5,10 +5,12 @@ import { EltText } from '../lib/eltaller'
 import { openChat } from '../state/friends'
 import { useChatNotify } from '../state/chatNotify'
 import type { ChatNotify as Notify } from '../state/chatNotify'
+import { useT } from '../i18n'
 
 const ICON: Record<string, string> = { play: 'i-play', request: 'i-user', room: 'i-users' }
 
 function NotifyCard({ id, uid, nick, text, kind, actionLabel, action }: Notify) {
+  const t = useT()
   const dismiss = useChatNotify((s) => s.dismiss)
   useEffect(() => {
     const t = setTimeout(() => dismiss(id), kind === 'msg' || !kind ? 6000 : 9000)
@@ -33,7 +35,7 @@ function NotifyCard({ id, uid, nick, text, kind, actionLabel, action }: Notify) 
         <Head nick={nick} size={48} />
       )}
       <div className="chat-notify-body">
-        <b>{nick || 'Игрок'}</b>
+        <b>{nick || t('Игрок')}</b>
         <span><EltText text={text} /></span>
         {actionLabel ? (
           <span className="chat-notify-act">
@@ -44,7 +46,7 @@ function NotifyCard({ id, uid, nick, text, kind, actionLabel, action }: Notify) 
       </div>
       <button
         className="chat-notify-x"
-        title="Скрыть"
+        title={t('Скрыть')}
         onClick={(e) => {
           e.stopPropagation()
           dismiss(id)

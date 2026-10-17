@@ -1,5 +1,6 @@
 import { api } from '../../lib/api'
 import { cachedCatalog, forgetCatalog } from '../../lib/catalogCache'
+import { formatFixed, t } from '../../i18n'
 
 /*
  * Карточка сборки нашего каталога — общие данные страницы сборки (PackPage) и
@@ -64,7 +65,7 @@ export const loadPackDownloads = (slug: string): Promise<number | null> =>
     ),
   )
 
-export const gb = (bytes: number) => (bytes / 1024 ** 3).toFixed(1).replace('.', ',') + ' ГБ'
+export const gb = (bytes: number) => t('{n} ГБ', { n: formatFixed(bytes / 1024 ** 3, 1) })
 export const LOADER: Record<string, string> = { fabric: 'Fabric', forge: 'Forge', neoforge: 'NeoForge', quilt: 'Quilt' }
 
 /** Число модов из текста описания автора («291 мод», «258 модов»): не выдумываем, а читаем. */

@@ -46,8 +46,10 @@ import { Ticks } from './Ticks'
 import { StreakFire } from './friends/StreakFire'
 import { useFriendStreaks } from '../state/friendStreaks'
 import { timeHM } from '../lib/format'
+import { t, useT } from '../i18n'
 
 function InviteCard({ addr, name, version, me }: { addr: string; name: string; version?: string; me?: boolean }) {
+  const t = useT()
   const [busy, setBusy] = useState(false)
   // Приглашение вело в игру напрямую текущей сборкой: версию сервера никто не
   // спрашивал, и гость попадал на «Outdated client». Вход идёт общим путём.
@@ -64,13 +66,13 @@ function InviteCard({ addr, name, version, me }: { addr: string; name: string; v
         <Icon id="i-server" />
       </span>
       <span className="msg-invite-body">
-        <b>Приглашение на сервер</b>
+        <b>{t('Приглашение на сервер')}</b>
         <span className="msg-invite-name">{name}</span>
         <span className="msg-invite-addr">{addr}</span>
       </span>
       <button className="btn sm primary" disabled={busy} data-track="chat_invite_join" data-src="friend" onClick={join}>
         <Icon id="i-login" />
-        {busy ? 'Заходим…' : 'Зайти'}
+        {busy ? t('Заходим…') : t('Зайти')}
       </button>
     </div>
   )
@@ -79,6 +81,7 @@ function InviteCard({ addr, name, version, me }: { addr: string; name: string; v
 /// Итог звонка в ленте: нажатие перезванивает — это самое частое следующее
 /// действие после пропущенного.
 function CallLogCard({ log, me, uid, nick }: { log: CallLog; me?: boolean; uid: string; nick: string }) {
+  const t = useT()
   const busy = useCall((s) => s.status) !== 'idle'
   const missed = log.outcome !== 'done'
   return (
@@ -86,33 +89,34 @@ function CallLogCard({ log, me, uid, nick }: { log: CallLog; me?: boolean; uid: 
       className={'msg-call' + (me ? ' me' : '') + (missed ? ' missed' : '')}
       disabled={busy || !callSupported()}
       data-track="call_back"
-      title={busy ? 'Идёт другой звонок' : 'Позвонить'}
+      title={busy ? t('Идёт другой звонок') : t('Позвонить')}
       onClick={() => void callFriend(uid, nick)}
     >
       <Icon id={missed ? 'i-phone-off' : 'i-phone'} />
       <span className="msg-call-body">
         <b>{callLogTitle(log, !!me)}</b>
-        <span>{log.outcome === 'done' ? fmtCallTime(log.seconds * 1000) : 'Перезвонить'}</span>
+        <span>{log.outcome === 'done' ? fmtCallTime(log.seconds * 1000) : t('Перезвонить')}</span>
       </span>
     </button>
   )
 }
 
 function FriendStats({ p }: { p: FriendProfile }) {
+  const t = useT()
   const s = p.stats
   const joinable = p.playing && p.serverIp
   const lastServer = s?.lastServerName || s?.lastServer || ''
   const rows: Array<[string, string]> = []
-  if (s?.totalSeconds) rows.push(['Всего в игре', fmtPlaytime(s.totalSeconds)])
-  if (s?.sessions) rows.push(['Запусков', String(s.sessions)])
-  if (s?.lastBuild) rows.push(['Последняя сборка', s.lastBuild])
+  if (s?.totalSeconds) rows.push([t('Всего в игре'), fmtPlaytime(s.totalSeconds)])
+  if (s?.sessions) rows.push([t('Запусков'), String(s.sessions)])
+  if (s?.lastBuild) rows.push([t('Последняя сборка'), s.lastBuild])
   if (lastServer)
     rows.push([
-      'Последний сервер',
+      t('Последний сервер'),
       lastServer + (s?.lastPlayedAt ? ' · ' + whenText(Math.round(s.lastPlayedAt / 1000)) : ''),
     ])
   if (!rows.length && !joinable) {
-    return <p className="faint-note fr-stat-empty">Пока без игр</p>
+    return <p className="faint-note fr-stat-empty">{t('Пока без игр')}</p>
   }
   return (
     <div className="fr-stat">
@@ -122,13 +126,13 @@ function FriendStats({ p }: { p: FriendProfile }) {
           data-track="friend_join"
           data-src="friend"
           onClick={() => {
-            const name = p.serverName || 'Сервер ' + p.nick
+            const name = p.serverName || t('Сервер {nick}', { nick: p.nick })
             rememberServerName(p.serverIp!, name)
             void quickJoin(p.serverIp!, name).catch(() => {})
           }}
         >
           <Icon id="i-login" />
-          Зайти
+          {t('Зайти')}
         </button>
       ) : null}
       {rows.map(([k, v]) => (
@@ -173,17 +177,19 @@ function rememberElt(id: string) {
  * остаётся как была. Картинка не загрузилась — подпись вместо пустого места.
  */
 function OldSticker({ url, name }: { url: string; name?: string }) {
+  const t = useT()
   const [broken, setBroken] = useState(!isOwnMediaUrl(url))
-  if (broken) return <span className="msg-gone">{name || 'Стикер'}</span>
-  return <img className="msg-sticker" src={url} alt={name || 'Стикер'} loading="lazy" onError={() => setBroken(true)} />
+  if (broken) return <span className="msg-gone">{name || t('Стикер')}</span>
+  return <img className="msg-sticker" src={url} alt={name || t('Стикер')} loading="lazy" onError={() => setBroken(true)} />
 }
 
 function MessageBody({ m, onJump }: { m: ChatMessage; onJump: (id: string) => void }) {
+  const t = useT()
   const att = m.attachment
-  if (m.deleted) return <span className="msg-gone">Сообщение удалено</span>
+  if (m.deleted) return <span className="msg-gone">{t('Сообщение удалено')}</span>
   const quotedFrom = m.replyTo?.me
-    ? 'Ты'
-    : nickInRooms(m.replyTo?.from || '') || 'Собеседник'
+    ? t('Ты')
+    : nickInRooms(m.replyTo?.from || '') || t('Собеседник')
   return (
     <>
       {m.replyTo ? (
@@ -204,7 +210,7 @@ function MessageBody({ m, onJump }: { m: ChatMessage; onJump: (id: string) => vo
         isOwnMediaUrl(att.url) ? (
           <img className="msg-img" src={att.url} alt="" loading="lazy" onClick={() => openImage(att.url)} />
         ) : (
-          <span className="msg-gone">Вложение</span>
+          <span className="msg-gone">{t('Вложение')}</span>
         )
       ) : null}
       {att && att.kind === 'sticker' ? <OldSticker url={att.url} name={att.name} /> : null}
@@ -223,6 +229,7 @@ const MENU_W = 210
 const MENU_H = 300
 
 function MessageMenu({ at, close }: { at: MenuAt; close: () => void }) {
+  const t = useT()
   const m = at.m
   const run = (fn: () => void) => () => {
     close()
@@ -230,7 +237,7 @@ function MessageMenu({ at, close }: { at: MenuAt; close: () => void }) {
   }
   const react = (emoji: string) => {
     close()
-    toggleChatReaction(m.id || '', emoji).catch(() => showToast('Реакция не поставилась', 'error'))
+    toggleChatReaction(m.id || '', emoji).catch(() => showToast(t('Реакция не поставилась'), 'error'))
   }
   // В корень документа: экран сообщений обрезан срезом угла, и меню у края
   // переписки срезалось бы вместе с ним.
@@ -258,7 +265,7 @@ function MessageMenu({ at, close }: { at: MenuAt; close: () => void }) {
         ))}
       </div>
       <button className="msg-menu-item" data-track="msg_reply" onClick={run(() => useFriends.getState().set({ chatReplyTo: m, chatEditing: null }))}>
-        <Icon id="i-reply" /> Ответить
+        <Icon id="i-reply" /> {t('Ответить')}
       </button>
       {m.text ? (
         <button
@@ -266,20 +273,20 @@ function MessageMenu({ at, close }: { at: MenuAt; close: () => void }) {
           data-track="msg_copy_text"
           onClick={run(() => {
             void copyText(m.text).then((ok) =>
-              ok ? showToast('Скопировано') : showToast('Не удалось скопировать', 'error'),
+              ok ? showToast(t('Скопировано')) : showToast(t('Не удалось скопировать'), 'error'),
             )
           })}
         >
-          <Icon id="i-copy" /> Копировать текст
+          <Icon id="i-copy" /> {t('Копировать текст')}
         </button>
       ) : null}
       {m.attachment?.kind === 'image' && m.attachment.url ? (
         <>
           <button className="msg-menu-item" data-track="msg_copy_image" onClick={run(() => void copyPictureTo({ url: m.attachment!.url }))}>
-            <Icon id="i-copy" /> Копировать картинку
+            <Icon id="i-copy" /> {t('Копировать картинку')}
           </button>
           <button className="msg-menu-item" data-track="msg_save_image" onClick={run(() => void savePictureTo({ url: m.attachment!.url }))}>
-            <Icon id="i-download" /> Сохранить картинку
+            <Icon id="i-download" /> {t('Сохранить картинку')}
           </button>
         </>
       ) : null}
@@ -289,7 +296,7 @@ function MessageMenu({ at, close }: { at: MenuAt; close: () => void }) {
           data-track="msg_edit"
           onClick={run(() => useFriends.getState().set({ chatEditing: m, chatReplyTo: null }))}
         >
-          <Icon id="i-edit" /> Изменить
+          <Icon id="i-edit" /> {t('Изменить')}
         </button>
       ) : null}
       {m.me ? (
@@ -297,16 +304,16 @@ function MessageMenu({ at, close }: { at: MenuAt; close: () => void }) {
           className="msg-menu-item danger"
           data-track="msg_delete"
           onClick={run(() => {
-            void uiConfirm('Сообщение исчезнет и у собеседника.', {
-              title: 'Удалить сообщение?',
-              confirmLabel: 'Удалить',
+            void uiConfirm(t('Сообщение исчезнет и у собеседника.'), {
+              title: t('Удалить сообщение?'),
+              confirmLabel: t('Удалить'),
               danger: true,
             }).then((ok) => {
-              if (ok) deleteChatMessage(m.id || '').catch(() => showToast('Не удалось удалить', 'error'))
+              if (ok) deleteChatMessage(m.id || '').catch(() => showToast(t('Не удалось удалить'), 'error'))
             })
           })}
         >
-          <Icon id="i-trash" /> Удалить
+          <Icon id="i-trash" /> {t('Удалить')}
         </button>
       ) : null}
     </div>,
@@ -339,15 +346,16 @@ function ReactionArt({ emoji }: { emoji: string }) {
 }
 
 function replyLabel(m: { text: string; deleted?: boolean; kind?: string | null }): string {
-  if (m.deleted) return 'Сообщение удалено'
+  if (m.deleted) return t('Сообщение удалено')
   if (m.text) return m.text
-  if (m.kind === 'voice') return 'Голосовое сообщение'
-  if (m.kind === 'image') return 'Картинка'
-  if (m.kind === 'sticker') return 'Стикер'
-  return 'Вложение'
+  if (m.kind === 'voice') return t('Голосовое сообщение')
+  if (m.kind === 'image') return t('Картинка')
+  if (m.kind === 'sticker') return t('Стикер')
+  return t('Вложение')
 }
 
 function Composer() {
+  const t = useT()
   const [text, setText] = useState('')
   const replyTo = useFriends((s) => s.chatReplyTo)
   const editing = useFriends((s) => s.chatEditing)
@@ -422,7 +430,7 @@ function Composer() {
       try {
         await editChatMessage(id, body)
       } catch (e) {
-        showToast(offPlatformReason(e) || 'Не удалось изменить сообщение', 'error')
+        showToast(offPlatformReason(e) || t('Не удалось изменить сообщение'), 'error')
       }
       return
     }
@@ -434,13 +442,13 @@ function Composer() {
     } catch (e) {
       const held = offPlatformReason(e)
       if (!held) trackFailure('chat', e, { step: 'send' })
-      showToast(held || 'Сообщение не ушло — нажми «Повторить» под ним', 'error')
+      showToast(held || t('Сообщение не ушло — нажми «Повторить» под ним'), 'error')
     }
   }
 
   const attachImage = async (file: File) => {
     if (file.size > MAX_CHAT_IMAGE_BYTES) {
-      showToast('Картинка больше 8 МБ', 'error')
+      showToast(t('Картинка больше 8 МБ'), 'error')
       return
     }
     setBusy(true)
@@ -448,7 +456,7 @@ function Composer() {
       await send(await uploadChatImage(file))
     } catch (e) {
       trackFailure('chat', e, { step: 'image' })
-      showToast(apiErrorText(e, 'Картинка не загрузилась'), 'error')
+      showToast(apiErrorText(e, t('Картинка не загрузилась')), 'error')
     } finally {
       setBusy(false)
     }
@@ -468,13 +476,13 @@ function Composer() {
     try {
       const take = await r.stop()
       if (take.durationMs < 700) {
-        showToast('Слишком коротко — держи запись дольше')
+        showToast(t('Слишком коротко — держи запись дольше'))
         return
       }
       await send(await uploadVoice(take))
     } catch (e) {
       trackFailure('chat', e, { step: 'voice' })
-      showToast(apiErrorText(e, 'Голосовое не отправилось'), 'error')
+      showToast(apiErrorText(e, t('Голосовое не отправилось')), 'error')
     } finally {
       setBusy(false)
     }
@@ -482,8 +490,8 @@ function Composer() {
 
   const startRecording = async () => {
     if (!canRecordVoice()) {
-      showToast('Микрофон недоступен — открой настройки звука и проверь его', 'error', undefined, {
-        label: 'Настроить',
+      showToast(t('Микрофон недоступен — открой настройки звука и проверь его'), 'error', undefined, {
+        label: t('Настроить'),
         run: () => openSettings('sound', 'mic'),
       })
       return
@@ -514,7 +522,7 @@ function Composer() {
     } catch (error) {
       if (recAttempt.current !== mine) return
       showToast(micErrorText(error), 'error', undefined, {
-        label: 'Как исправить',
+        label: t('Как исправить'),
         run: () => openSettings('sound', 'mic'),
       })
     } finally {
@@ -526,12 +534,12 @@ function Composer() {
     const left = Math.max(0, VOICE_MAX_MS - recMs)
     return (
       <div className="chat-input chat-rec">
-        <button className="chat-rec-x" title="Отменить" data-track="voice_cancel" onClick={() => void stopRecording(false)}>
+        <button className="chat-rec-x" title={t('Отменить')} data-track="voice_cancel" onClick={() => void stopRecording(false)}>
           <Icon id="i-trash" />
         </button>
         <span className="chat-rec-dot" />
         <span className="chat-rec-time">{fmtVoiceTime(recMs)}</span>
-        <div className="chat-rec-wave" title={left < 10_000 ? 'Осталось ' + fmtVoiceTime(left) : 'Идёт запись'}>
+        <div className="chat-rec-wave" title={left < 10_000 ? t('Осталось {time}', { time: fmtVoiceTime(left) }) : t('Идёт запись')}>
           {Array.from({ length: REC_BARS }, (_, i) => {
             // Right-aligned: the newest sample is next to the send button, so
             // the strip runs towards it like a tape.
@@ -540,7 +548,7 @@ function Composer() {
           })}
         </div>
         {left < 10_000 ? <span className="chat-rec-left">{fmtVoiceTime(left)}</span> : null}
-        <button className="chat-send" title="Отправить" data-track="voice_send" onClick={() => void stopRecording(true)}>
+        <button className="chat-send" title={t('Отправить')} data-track="voice_send" onClick={() => void stopRecording(true)}>
           <Icon id="i-send" />
         </button>
       </div>
@@ -555,12 +563,12 @@ function Composer() {
     <div className="chat-quote">
       <Icon id={editing ? 'i-edit' : 'i-reply'} />
       <span className="chat-quote-body">
-        <b>{editing ? 'Изменение сообщения' : 'Ответ ' + (replyTo?.me ? 'на своё сообщение' : '')}</b>
+        <b>{editing ? t('Изменение сообщения') : replyTo?.me ? t('Ответ на своё сообщение') : t('Ответ')}</b>
         <span><EltText text={replyLabel({ text: quoted.text, deleted: quoted.deleted, kind: quoted.attachment?.kind })} /></span>
       </span>
       <button
         className="chat-quote-x"
-        title="Отменить"
+        title={t('Отменить')}
         data-track="quote_cancel"
         onClick={() => {
           setChat({ chatReplyTo: null, chatEditing: null })
@@ -609,7 +617,7 @@ function Composer() {
       />
       <button
         className={'chat-emoji-btn chat-elt-btn' + (emojiOpen ? ' on' : '')}
-        aria-label="Смайлы"
+        aria-label={t('Смайлы')}
         data-track="emoji_open"
         onClick={(e) => {
           e.stopPropagation()
@@ -618,14 +626,14 @@ function Composer() {
       >
         <img className="elt-emoji" src={eltUrl('41')} alt="" draggable={false} />
       </button>
-      <button className="chat-emoji-btn" aria-label="Картинка" disabled={busy} data-track="attach_image" onClick={() => fileRef.current?.click()}>
+      <button className="chat-emoji-btn" aria-label={t('Картинка')} disabled={busy} data-track="attach_image" onClick={() => fileRef.current?.click()}>
         <Icon id="i-image" />
       </button>
       <div className="input sm">
         <input
           id="chatMsg"
           ref={inputRef}
-          placeholder={busy ? 'Загружаем…' : editing ? 'Новый текст…' : 'Сообщение…'}
+          placeholder={busy ? t('Загружаем…') : editing ? t('Новый текст…') : t('Сообщение…')}
           value={text}
           onChange={(e) => {
             setText(e.target.value)
@@ -643,7 +651,7 @@ function Composer() {
       {text.trim() || editing ? (
         <button
           className="chat-send"
-          title={editing ? 'Сохранить' : 'Отправить'}
+          title={editing ? t('Сохранить') : t('Отправить')}
           data-track={editing ? 'msg_save_edit' : 'send'}
           disabled={busy || (!!editing && !text.trim())}
           onClick={() => void send()}
@@ -651,7 +659,7 @@ function Composer() {
           <Icon id={editing ? 'i-check' : 'i-send'} />
         </button>
       ) : (
-        <button className="chat-send" title="Записать голосовое" disabled={busy} data-track="voice_record" onClick={() => void startRecording()}>
+        <button className="chat-send" title={t('Записать голосовое')} disabled={busy} data-track="voice_record" onClick={() => void startRecording()}>
           <Icon id="i-mic" />
         </button>
       )}
@@ -667,6 +675,7 @@ function Composer() {
  * «Создать свой сервер», приглашение уйдёт само, когда он будет готов.
  */
 function InvitePlay({ target }: { target: InviteTarget }) {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const [addr, setAddr] = useState('')
   const servers = usePlayInvite((s) => s.servers)
@@ -686,7 +695,7 @@ function InvitePlay({ target }: { target: InviteTarget }) {
     .slice(0, INVITE_SERVERS)
   const send = (address: string, name: string, version?: string | null) => {
     if (!isServerAddr(address)) {
-      showToast('Не похоже на адрес сервера', 'error')
+      showToast(t('Не похоже на адрес сервера'), 'error')
       return
     }
     setOpen(false)
@@ -698,7 +707,7 @@ function InvitePlay({ target }: { target: InviteTarget }) {
       ver = cur && cur.version
     }
     sendChat(encodeInvite(address.trim(), (name || address).trim().slice(0, 48), ver)).catch((e) =>
-      showToast(offPlatformReason(e) || 'Приглашение не ушло — нажми «Повторить» под ним', 'error'),
+      showToast(offPlatformReason(e) || t('Приглашение не ушло — нажми «Повторить» под ним'), 'error'),
     )
   }
   return (
@@ -712,7 +721,7 @@ function InvitePlay({ target }: { target: InviteTarget }) {
         }}
       >
         <Icon id="i-server" />
-        Позвать играть
+        {t('Позвать играть')}
       </button>
       {open ? (
         <div className="chat-srv-pop" onClick={(e) => e.stopPropagation()}>
@@ -720,7 +729,7 @@ function InvitePlay({ target }: { target: InviteTarget }) {
             <button key={s.id} className="chat-srv-row mine" data-track="invite_my_server" data-kind="own_server" onClick={() => send(s.address || '', serverTitle(s), s.version || null)}>
               <Icon id="i-server" />
               <span className="chat-srv-name">{serverTitle(s)}</span>
-              <span className="chat-srv-addr">Мой сервер</span>
+              <span className="chat-srv-addr">{t('Мой сервер')}</span>
             </button>
           ))}
           {servers && !mine.length ? (
@@ -733,7 +742,7 @@ function InvitePlay({ target }: { target: InviteTarget }) {
               }}
             >
               <Icon id="i-plus" />
-              <span className="chat-srv-name">Создать свой сервер</span>
+              <span className="chat-srv-name">{t('Создать свой сервер')}</span>
             </button>
           ) : null}
           {recent.map((s) => (
@@ -746,7 +755,7 @@ function InvitePlay({ target }: { target: InviteTarget }) {
           <div className="chat-srv-manual">
             <div className="input sm">
               <input
-                placeholder="Адрес сервера"
+                placeholder={t('Адрес сервера')}
                 value={addr}
                 spellCheck={false}
                 onChange={(e) => setAddr(e.target.value)}
@@ -756,7 +765,7 @@ function InvitePlay({ target }: { target: InviteTarget }) {
               />
             </div>
             <button className="btn sm secondary" disabled={!isServerAddr(addr)} data-track="invite_address" onClick={() => send(addr.trim(), addr.trim())}>
-              Позвать
+              {t('Позвать')}
             </button>
           </div>
         </div>
@@ -766,13 +775,14 @@ function InvitePlay({ target }: { target: InviteTarget }) {
 }
 
 function CallButton({ uid, nick }: { uid: string; nick: string }) {
+  const t = useT()
   const status = useCall((s) => s.status)
   if (!uid || !callSupported()) return null
   return (
     <button
       className="tb-btn call-start"
       data-track="call"
-      title={status === 'idle' ? 'Позвонить' : 'Уже идёт звонок'}
+      title={status === 'idle' ? t('Позвонить') : t('Уже идёт звонок')}
       disabled={status !== 'idle'}
       onClick={() => void callFriend(uid, nick)}
     >
@@ -786,6 +796,7 @@ function CallButton({ uid, nick }: { uid: string; nick: string }) {
  * сам по себе, и кнопка показывает, сколько человек уже внутри.
  */
 function RoomHead({ room }: { room: Room }) {
+  const t = useT()
   const mode = useCall((s) => s.mode)
   const roomId = useCall((s) => s.roomId)
   const status = useCall((s) => s.status)
@@ -799,13 +810,13 @@ function RoomHead({ room }: { room: Room }) {
       <span className="chat-head-body">
         <b>{room.title}</b>
         <span className="chat-head-sub">
-          {room.members.length} чел.
-          {inside.length ? ' · в разговоре ' + inside.length : ''}
+          {t('{n} чел.', { n: room.members.length })}
+          {inside.length ? ' · ' + t('в разговоре {n}', { n: inside.length }) : ''}
         </span>
       </span>
       <InvitePlay target={{ id: room.id, nick: room.title, room: true }} />
       {callSupported() ? <RoomCallButton room={room} here={here} busy={status !== 'idle'} /> : null}
-      <button className="tb-btn" title="Участники группы" data-track="room_manage" onClick={() => openRoomManage(room.id)}>
+      <button className="tb-btn" title={t('Участники группы')} data-track="room_manage" onClick={() => openRoomManage(room.id)}>
         <Icon id="i-dots" />
       </button>
     </>
@@ -848,6 +859,7 @@ function PeerHead({ uid, nick }: { uid: string; nick: string }) {
  * кликом мимо держит экран, а не она.
  */
 export function ChatThread() {
+  const t = useT()
   const {
     chatOpen,
     chatNick,
@@ -914,7 +926,7 @@ export function ChatThread() {
         await new Promise((r) => requestAnimationFrame(r))
         if (focus()) return
       }
-      showToast('Не нашли это сообщение — возможно, оно удалено', 'error')
+      showToast(t('Не нашли это сообщение — возможно, оно удалено'), 'error')
     })()
   }, [])
 
@@ -1048,7 +1060,7 @@ export function ChatThread() {
             chatRoom && !m.me && (!isGrouped(chatMsgs, i) || newDay) ? (
               <span className="msg-author">
                 <Head nick={m.fromNick} size={18} />
-                {m.fromNick || 'Игрок'}
+                {m.fromNick || t('Игрок')}
               </span>
             ) : null
           return (
@@ -1080,7 +1092,7 @@ export function ChatThread() {
               >
                 <MessageBody m={m} onJump={jumpToMessage} />
                 <span className="msg-meta">
-                  {m.editedAt ? <span title="Отредактировано">изм.</span> : null}
+                  {m.editedAt ? <span title={t('Отредактировано')}>{t('изм.')}</span> : null}
                   <span>{timeHM(m.ts)}</span>
                   {/* Одна серая — ещё летит, две серые — сервер принял, две
                       синие — собеседник прочитал. */}
@@ -1090,7 +1102,7 @@ export function ChatThread() {
               {actionable ? (
                 <button
                   className="msg-act"
-                  title="Действия с сообщением"
+                  title={t('Действия с сообщением')}
                   data-track="msg_menu"
                   onClick={(e) => {
                     e.stopPropagation()
@@ -1111,7 +1123,7 @@ export function ChatThread() {
                       data-track="msg_react"
                       onClick={() =>
                         toggleChatReaction(m.id || '', r.emoji).catch(() =>
-                          showToast('Реакция не поставилась', 'error'),
+                          showToast(t('Реакция не поставилась'), 'error'),
                         )
                       }
                     >
@@ -1122,9 +1134,9 @@ export function ChatThread() {
               ) : null}
               {m.state === 'failed' ? (
                 <div className="msg-fail">
-                  <span>Не отправлено</span>
-                  <button data-track="msg_retry" onClick={() => void retryChat(m.localId || '')}>Повторить</button>
-                  <button data-track="msg_drop" onClick={() => dropFailedChat(m.localId || '')}>Удалить</button>
+                  <span>{t('Не отправлено')}</span>
+                  <button data-track="msg_retry" onClick={() => void retryChat(m.localId || '')}>{t('Повторить')}</button>
+                  <button data-track="msg_drop" onClick={() => dropFailedChat(m.localId || '')}>{t('Удалить')}</button>
                 </div>
               ) : null}
               </div>
@@ -1134,20 +1146,22 @@ export function ChatThread() {
         {chatRoom ? (
           chatTypers.length ? (
             <div className="chat-typing">
-              {chatTypers.slice(0, 2).join(', ')}
-              {chatTypers.length > 2 ? ' и ещё ' + (chatTypers.length - 2) : ''} печата
-              {chatTypers.length > 1 ? 'ют' : 'ет'}…
+              {chatTypers.length > 2
+                ? t('{names} и ещё {n} печатают…', { names: chatTypers.slice(0, 2).join(', '), n: chatTypers.length - 2 })
+                : chatTypers.length > 1
+                  ? t('{names} печатают…', { names: chatTypers.join(', ') })
+                  : t('{name} печатает…', { name: chatTypers[0] ?? '' })}
             </div>
           ) : null
         ) : chatTyping ? (
-          <div className="chat-typing">{chatNick} печатает…</div>
+          <div className="chat-typing">{t('{name} печатает…', { name: chatNick })}</div>
         ) : null}
         {!chatHeader && chatEmpty && !chatMsgs.length ? (
-          <p className="faint-note">{chatRoom ? 'Пока тихо — начни разговор' : 'Напиши первым'}</p>
+          <p className="faint-note">{chatRoom ? t('Пока тихо — начни разговор') : t('Напиши первым')}</p>
         ) : null}
       </div>
       {!atBottom ? (
-        <button className="chat-down" title="К последним" data-track="chat_scroll_down" onClick={scrollDown}>
+        <button className="chat-down" title={t('К последним')} data-track="chat_scroll_down" onClick={scrollDown}>
           <Icon id="i-arrow-dn" />
         </button>
       ) : null}

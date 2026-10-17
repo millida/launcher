@@ -7,6 +7,7 @@ import { backdropClose } from '../lib/dismiss'
 import { showToast } from '../state/ui'
 import { shareProfile, unshareProfile, type SharedPack } from '../ipc/commands'
 import { apiErrorText } from '../lib/apiError'
+import { useT } from '../i18n'
 
 interface Props {
   profile: string
@@ -16,6 +17,7 @@ interface Props {
 /// Publishing a build: the code and the link are the whole point, so they are
 /// the first thing on screen once it lands.
 export function SharePackModal({ profile, onClose }: Props) {
+  const t = useT()
   const [summary, setSummary] = useState('')
   const [pack, setPack] = useState<SharedPack | null>(null)
   const [busy, setBusy] = useState(false)
@@ -40,7 +42,7 @@ export function SharePackModal({ profile, onClose }: Props) {
       })
       .catch((e) => {
         console.error('shareProfile', e)
-        showToast(apiErrorText(e, 'Не получилось выдать код'), 'error')
+        showToast(apiErrorText(e, t('Не получилось выдать код')), 'error')
       })
       .finally(() => setBusy(false))
   }
@@ -53,7 +55,7 @@ export function SharePackModal({ profile, onClose }: Props) {
             <Icon id="i-link" />
           </span>
           <div>
-            <h3>Поделиться сборкой</h3>
+            <h3>{t('Поделиться сборкой')}</h3>
             <div className="sub" style={{ marginTop: '2px' }}>
               «{profile}»
             </div>
@@ -64,7 +66,7 @@ export function SharePackModal({ profile, onClose }: Props) {
           <>
             <div className="share-code">{pack.code.slice(0, 4) + '-' + pack.code.slice(4)}</div>
             <p className="faint-note" style={{ textAlign: 'center' }}>
-              {pack.files + ' файлов' + (pack.sizeBytes ? ' · ' + fmtSize(pack.sizeBytes) : '') + ' · Импорт → По коду'}
+              {t('{n} файлов', { n: pack.files }) + (pack.sizeBytes ? ' · ' + fmtSize(pack.sizeBytes) : '') + ' · ' + t('Импорт → По коду')}
             </p>
             <div className="wm-row" style={{ marginTop: '12px' }}>
               <div className="input sm" style={{ flex: 1 }}>
@@ -74,15 +76,15 @@ export function SharePackModal({ profile, onClose }: Props) {
                 className="btn sm secondary"
                 onClick={() => {
                   void copyText(pack.url)
-                  showToast('Ссылка скопирована', 'ok')
+                  showToast(t('Ссылка скопирована'), 'ok')
                 }}
               >
-                <Icon id="i-copy" /> Ссылка
+                <Icon id="i-copy" /> {t('Ссылка')}
               </button>
             </div>
             {pack.skipped.length ? (
               <p className="faint-note" style={{ marginTop: '10px' }}>
-                {'Не поедут (' + pack.skipped.length + '): ' + pack.skipped.slice(0, 4).join(', ') + (pack.skipped.length > 4 ? '…' : '')}
+                {t('Не поедут ({n}): {list}', { n: pack.skipped.length, list: pack.skipped.slice(0, 4).join(', ') + (pack.skipped.length > 4 ? '…' : '') })}
               </p>
             ) : null}
             {/* Код живёт, пока автор его не отозвал: без этой кнопки сборку,
@@ -97,20 +99,20 @@ export function SharePackModal({ profile, onClose }: Props) {
                   .then(() => {
                     setRevoked(true)
                     setPack(null)
-                    showToast('Код отозван — по нему сборка больше не ставится', 'ok')
+                    showToast(t('Код отозван — по нему сборка больше не ставится'), 'ok')
                   })
                   .catch((e) => showToast('' + e, 'error'))
                   .finally(() => setBusy(false))
               }}
             >
-              {revoked ? 'Код отозван' : 'Отозвать код'}
+              {revoked ? t('Код отозван') : t('Отозвать код')}
             </button>
           </>
         ) : (
           <>
             <div className="input sm" style={{ marginTop: '12px' }}>
               <input
-                placeholder="Описание — можно пусто"
+                placeholder={t('Описание — можно пусто')}
                 maxLength={300}
                 value={summary}
                 onChange={(e) => setSummary(e.target.value)}
@@ -126,18 +128,18 @@ export function SharePackModal({ profile, onClose }: Props) {
               style={{ flex: 1 }}
               onClick={() => {
                 void copyText(pack.code)
-                showToast('Код скопирован', 'ok')
+                showToast(t('Код скопирован'), 'ok')
               }}
             >
-              <Icon id="i-copy" /> Код
+              <Icon id="i-copy" /> {t('Код')}
             </button>
           ) : (
             <button className="btn md primary" style={{ flex: 1 }} disabled={busy} onClick={publish}>
-              {busy ? 'Готовим…' : 'Получить код'}
+              {busy ? t('Готовим…') : t('Получить код')}
             </button>
           )}
           <button className="btn md secondary" onClick={onClose}>
-            Закрыть
+            {t('Закрыть')}
           </button>
         </div>
       </div>

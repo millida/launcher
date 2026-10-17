@@ -1,13 +1,21 @@
 import { useUpdate } from '../state/update'
 import { skipBootUpdate } from '../lib/updater'
+import { t, useT } from '../i18n'
 
 const TITLES: Record<string, string> = {
-  checking: 'Проверяем обновления…',
-  downloading: 'Скачиваем обновление',
-  installing: 'Устанавливаем обновление',
+  get checking() {
+    return t('Проверяем обновления…')
+  },
+  get downloading() {
+    return t('Скачиваем обновление')
+  },
+  get installing() {
+    return t('Устанавливаем обновление')
+  },
 }
 
 export function BootUpdate() {
+  const t = useT()
   const phase = useUpdate((s) => s.bootPhase)
   const pct = useUpdate((s) => s.bootPct)
   const version = useUpdate((s) => s.version)
@@ -18,7 +26,7 @@ export function BootUpdate() {
       <div className="boot-upd-card">
         <img src="/millida-logo.svg" alt="" width={44} height={44} />
         <div className="boot-upd-title">{TITLES[phase]}</div>
-        <div className="boot-upd-sub">{version ? 'Версия ' + version : 'Millida Launcher'}</div>
+        <div className="boot-upd-sub">{version ? t('Версия {version}', { version }) : 'Millida Launcher'}</div>
         <div className="boot-upd-bar">
           <span
             className={'boot-upd-fill' + (phase === 'installing' || !pct ? ' pulse' : '')}
@@ -26,10 +34,10 @@ export function BootUpdate() {
           />
         </div>
         {/* «Это займёт несколько секунд» снято: обещание без замера (аудит 22.09.2026). */}
-        {phase === 'installing' ? <div className="boot-upd-note">Лаунчер перезапустится сам</div> : null}
+        {phase === 'installing' ? <div className="boot-upd-note">{t('Лаунчер перезапустится сам')}</div> : null}
         {phase === 'downloading' ? (
           <button type="button" className="btn sm ghost" onClick={skipBootUpdate}>
-            Продолжить без обновления
+            {t('Продолжить без обновления')}
           </button>
         ) : null}
       </div>

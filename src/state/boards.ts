@@ -2,13 +2,14 @@ import { create } from 'zustand'
 import { api } from '../lib/api'
 import { setScreen } from './ui'
 import { plural } from '../lib/format'
+import { formatFixed, t } from '../i18n'
 
 export type Board = 'week' | 'month' | 'all' | 'streak'
-export const BOARDS: { key: Board; name: string }[] = [
-  { key: 'week', name: 'Неделя' },
-  { key: 'month', name: 'Месяц' },
-  { key: 'all', name: 'Всё время' },
-  { key: 'streak', name: 'Огоньки' },
+export const BOARDS: { key: Board; readonly name: string }[] = [
+  { key: 'week', get name() { return t('Неделя') } },
+  { key: 'month', get name() { return t('Месяц') } },
+  { key: 'all', get name() { return t('Всё время') } },
+  { key: 'streak', get name() { return t('Огоньки') } },
 ]
 
 /** Место на доске: только ник, голова, значение (часы или дни), лайки и «друг ли». */
@@ -95,4 +96,6 @@ export function openTop(board: Board | 'tiers') {
 
 /** Значение строки: «42 ч», «7,5 ч» или дни серии. */
 export const boardValueText = (b: Board, v: number): string =>
-  b === 'streak' ? v + ' ' + plural(v, 'день', 'дня', 'дней') : (Number.isInteger(v) ? String(v) : v.toFixed(1).replace('.', ',')) + ' ч'
+  b === 'streak'
+    ? plural(v, t('{n} день', { n: v }), t('{n} дня', { n: v }), t('{n} дней', { n: v }))
+    : t('{h} ч', { h: Number.isInteger(v) ? String(v) : formatFixed(v, 1) })

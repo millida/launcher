@@ -26,6 +26,7 @@ import { PxIcon } from '../components/PxIcon'
 import { aiPresetFor } from '../lib/aiBuilder'
 import { openMilli } from '../state/milli'
 import { openHubBuild } from '../components/playhub/hubTab'
+import { useT } from '../i18n'
 
 /**
  * «Новая сборка» (правки владельца 23.09.2026, 19:40): иконка сборки как в
@@ -48,6 +49,7 @@ const asLoader = (v?: string | null): LoaderId =>
   v === 'vanilla' || v === 'fabric' || v === 'quilt' || v === 'forge' || v === 'neoforge' ? v : DEFAULT_LOADER
 
 export function NewBuildModal() {
+  const t = useT()
   const modal = useUi((s) => s.modals.nbModal)
   const profiles = useProfiles((s) => s.profiles)
   const [name, setName] = useState('')
@@ -104,7 +106,7 @@ export function NewBuildModal() {
       .catch((e) => {
         console.error('mc version list', e)
         trackFailure('build_create', e, { step: 'versions' })
-        showToast('Версии Minecraft не загрузились', 'error')
+        showToast(t('Версии Minecraft не загрузились'), 'error')
       })
       .finally(() => setVerLoading(false))
   }
@@ -151,7 +153,7 @@ export function NewBuildModal() {
     const nm = name.trim() || autoName
     const withFps = fps && FPS_LOADERS.includes(loader)
     if (!hasTauri()) {
-      showReward({ level: 'mid', items: [{ name: nm, art: <BuildIcon icon={icon} size={60} /> }], title: 'Сборка создана', sub: nm })
+      showReward({ level: 'mid', items: [{ name: nm, art: <BuildIcon icon={icon} size={60} /> }], title: t('Сборка создана'), sub: nm })
       useProfiles.setState((s) => ({
         profiles: [...s.profiles, { name: nm, version: ver, fabric: loader === 'fabric', loader, icon }],
       }))
@@ -164,7 +166,7 @@ export function NewBuildModal() {
         track('build_create', { mc: ver, loader, loaderVersion: loaderVer || 'auto', fps: withFps ? 1 : 0 })
         if (withFps) await setFpsBoost(p.name, true, false, await hardwareVideo()).catch((e) => console.error('[new-build] fps', e))
         await useProfiles.getState().refresh()
-        showReward({ level: 'mid', items: [{ name: p.name, art: <BuildIcon icon={icon} size={60} /> }], title: 'Сборка создана', sub: p.name })
+        showReward({ level: 'mid', items: [{ name: p.name, art: <BuildIcon icon={icon} size={60} /> }], title: t('Сборка создана'), sub: p.name })
         close()
         if (!join) return
         useProfiles.getState().setSelected(p.name)
@@ -173,7 +175,7 @@ export function NewBuildModal() {
       .catch((e) => {
         setBusy(false)
         trackFailure('build_create', nm.length >= 2 ? String(e).split(nm).join('<build>') : e, { step: 'create', mc: ver, loader })
-        showToast('Не удалось создать сборку: ' + e, 'error')
+        showToast(t('Не удалось создать сборку: {error}', { error: String(e) }), 'error')
       })
   }
 
@@ -187,21 +189,21 @@ export function NewBuildModal() {
       {...backdropClose(close)}
     >
       <div className="modal nb-modal nb2">
-        <h3>Новая сборка</h3>
+        <h3>{t('Новая сборка')}</h3>
         {vanillaAsk ? (
           // Vanilla без Millida (владелец 24.09.2026, 19:42): предупреждаем сразу.
-          <div className="nb2-ask" role="alertdialog" aria-label="Внимание">
+          <div className="nb2-ask" role="alertdialog" aria-label={t('Внимание')}>
             <div className="nb2-ask-box">
               <Icon id="i-alert" />
-              <b>Внимание</b>
+              <b>{t('Внимание')}</b>
               <ul>
-                <li>Не будет косметики Millida</li>
-                <li>Не будет оптимизации и буста FPS</li>
-                <li>Не поставить моды</li>
+                <li>{t('Не будет косметики Millida')}</li>
+                <li>{t('Не будет оптимизации и буста FPS')}</li>
+                <li>{t('Не поставить моды')}</li>
               </ul>
               <div className="nb2-ask-foot">
                 <button type="button" className="btn md primary" data-track="vanilla_keep_fabric" onClick={() => setVanillaAsk(false)}>
-                  Оставить {loader === 'fabric' ? 'Fabric' : LOADERS.find((x) => x.id === loader)?.label}
+                  {t('Оставить {loader}', { loader: (loader === 'fabric' ? 'Fabric' : LOADERS.find((x) => x.id === loader)?.label) ?? '' })}
                 </button>
                 <button
                   type="button"
@@ -213,7 +215,7 @@ export function NewBuildModal() {
                     setLoaderVer(AUTO_LOADER_VERSION)
                   }}
                 >
-                  Всё равно Vanilla
+                  {t('Всё равно Vanilla')}
                 </button>
               </div>
             </div>
@@ -221,15 +223,15 @@ export function NewBuildModal() {
         ) : null}
 
         <div className="nb2-head">
-          <button type="button" className="bi-edit" aria-label="Изменить иконку" data-sound="open" onClick={() => setPickIcon(true)}>
+          <button type="button" className="bi-edit" aria-label={t('Изменить иконку')} data-sound="open" onClick={() => setPickIcon(true)}>
             <BuildIcon icon={icon} size={72} />
             <span className="bi-edit-lab" aria-hidden="true">
               <Icon id="i-edit" />
-              Изменить
+              {t('Изменить')}
             </span>
           </button>
           <div className="field nb-field nb2-name">
-            <label htmlFor="nbName">Название</label>
+            <label htmlFor="nbName">{t('Название')}</label>
             <div className="input">
               <input
                 id="nbName"
@@ -246,7 +248,7 @@ export function NewBuildModal() {
         </div>
 
         <div className="field nb-field">
-          <label>Загрузчик</label>
+          <label>{t('Загрузчик')}</label>
           <div className="nb2-loaders" style={{ gridTemplateColumns: 'repeat(' + loaders.length + ', minmax(0, 1fr))' }}>
             {loaders.map((l) => {
               const why = blocks[l.id]
@@ -266,7 +268,7 @@ export function NewBuildModal() {
                 >
                   <img src={l.logo} alt="" draggable={false} />
                   <b>{l.label}</b>
-                  <span>{why || l.sub || ''}</span>
+                  <span>{why || (l.sub ? t(l.sub) : '')}</span>
                 </button>
               )
             })}
@@ -275,10 +277,10 @@ export function NewBuildModal() {
 
         <div className="field nb-field">
           <label className="nb2-vhead">
-            <span>Версия Minecraft</span>
+            <span>{t('Версия Minecraft')}</span>
             <span className="input nb2-search">
               <Icon id="i-search" />
-              <input placeholder="Найти" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Найти версию" />
+              <input placeholder={t('Найти')} value={query} onChange={(e) => setQuery(e.target.value)} aria-label={t('Найти версию')} />
             </span>
             <span
               className={'tgl sm' + (showAll ? ' on' : '')}
@@ -289,23 +291,23 @@ export function NewBuildModal() {
               onClick={() => useMcVersionList.getState().setShow(!showAll)}
             ></span>
             <span id="nbSnapLab" className="nb2-tgl-lab" onClick={() => useMcVersionList.getState().setShow(!showAll)}>
-              Снапшоты, бета, ванила
+              {t('Снапшоты, бета, ванила')}
             </span>
           </label>
           {verFailed ? (
             <button type="button" className="nb-retry" onClick={() => loadVersions()}>
               <Icon id="i-alert" />
-              <span>Нет списка версий</span>
+              <span>{t('Нет списка версий')}</span>
               <Icon id="i-restart" />
             </button>
           ) : verLoading && !mcList.length ? (
-            <div className="nb2-vgrid" aria-label="Загрузка">
+            <div className="nb2-vgrid" aria-label={t('Загрузка')}>
               {Array.from({ length: 18 }, (_, i) => (
                 <span key={i} className="skel nb2-ver-skel" />
               ))}
             </div>
           ) : (
-            <div className="nb2-vgrid" role="listbox" aria-label="Версия Minecraft">
+            <div className="nb2-vgrid" role="listbox" aria-label={t('Версия Minecraft')}>
               {shown.map((v) => {
                 const tag = versionTag(v.id, v.kind)
                 return (
@@ -325,7 +327,7 @@ export function NewBuildModal() {
                   </button>
                 )
               })}
-              {!shown.length ? <span className="nb2-none">Нет такой версии</span> : null}
+              {!shown.length ? <span className="nb2-none">{t('Нет такой версии')}</span> : null}
             </div>
           )}
         </div>
@@ -333,10 +335,10 @@ export function NewBuildModal() {
         <div className="nb2-opts">
           <div className="field nb-field">
             <label>
-              <span>Версия загрузчика</span>
+              <span>{t('Версия загрузчика')}</span>
             </label>
             {withLoaderVer && lb.loading ? (
-              <span className="skel nb-skel" aria-label="Загрузка" />
+              <span className="skel nb-skel" aria-label={t('Загрузка')} />
             ) : (
               <Select
                 width="100%"
@@ -344,19 +346,19 @@ export function NewBuildModal() {
                 value={withLoaderVer ? loaderVer : ''}
                 options={withLoaderVer ? lb.options : []}
                 disabled={!withLoaderVer}
-                placeholder={withLoaderVer ? 'Рекомендуемая' : 'Не нужна'}
+                placeholder={withLoaderVer ? t('Рекомендуемая') : t('Не нужна')}
                 onChange={setLoaderVer}
               />
             )}
           </div>
           <div className={'nb2-fps' + (FPS_LOADERS.includes(loader) ? '' : ' off')}>
             <Icon id="i-zap" />
-            <b>Буст FPS</b>
+            <b>{t('Буст FPS')}</b>
             <span
               className={'tgl' + (fps && FPS_LOADERS.includes(loader) ? ' on' : '')}
               role="switch"
               aria-checked={fps && FPS_LOADERS.includes(loader)}
-              aria-label="Буст FPS"
+              aria-label={t('Буст FPS')}
               aria-disabled={!FPS_LOADERS.includes(loader)}
               onClick={() => FPS_LOADERS.includes(loader) && setFps(!fps)}
             ></span>
@@ -378,10 +380,10 @@ export function NewBuildModal() {
             }}
           >
             <PxIcon name="sparkle" size={18} />
-            Собрать с Милли
+            {t('Собрать с Милли')}
           </button>
           <button className="btn md secondary" id="nbCancel" data-sound="close" onClick={close}>
-            Отмена
+            {t('Отмена')}
           </button>
           <button
             className={'btn md primary nb-create' + (busy ? ' busy' : '')}
@@ -390,7 +392,7 @@ export function NewBuildModal() {
             aria-busy={busy}
             onClick={create}
           >
-            <span className="nb-create-lab">Создать</span>
+            <span className="nb-create-lab">{t('Создать')}</span>
             {busy ? <span className="spin nb-create-spin" /> : null}
           </button>
         </div>

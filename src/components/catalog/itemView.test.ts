@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'bun:test'
 import {
-  CHEATS,
   FALLBACK_BLOCKS,
   SERVER_TINTS,
   blockFor,
-  cheatBody,
-  cheatName,
   cmpGameVersion,
   defaultPick,
   filesFor,
@@ -75,22 +72,6 @@ describe('заглушки', () => {
   it('каждый блок заглушки есть в public/block-icons', () => {
     const have = new Set(readdirSync('public/block-icons'))
     for (const n of FALLBACK_BLOCKS) expect(have.has('Block' + n + 'Millida.png')).toBe(true)
-  })
-})
-
-describe('читы', () => {
-  it('имя из справочника, иначе из slug', () => {
-    expect(cheatName('meteor-client')).toBe('Meteor Client')
-    expect(cheatName('some-new-client')).toBe('Some New Client')
-  })
-  it('у каждого чита справочника есть описание, функции и официальный адрес', () => {
-    for (const [slug, c] of Object.entries(CHEATS)) {
-      expect(c.summary.length).toBeGreaterThan(40)
-      expect(c.features.length).toBeGreaterThan(0)
-      expect(c.officialUrl.startsWith('https://')).toBe(true)
-      expect(cheatBody(slug)).toContain('## Что умеет')
-    }
-    expect(cheatBody('unknown')).toBe('')
   })
 })
 

@@ -5,12 +5,14 @@ import {
   type MillidaModState,
 } from '../ipc/commands'
 import { Icon } from './Icon'
+import { useT } from '../i18n'
 
 /**
  * Карточка мода Millida в выбранной сборке: лаунчер сам подбирает вариант под
  * версию и загрузчик, игроку остаётся одна кнопка.
  */
 export function MillidaModCard({ profile }: { profile: string }) {
+  const t = useT()
   const [state, setState] = useState<MillidaModState | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -52,12 +54,12 @@ export function MillidaModCard({ profile }: { profile: string }) {
   const note = error
     ? error
     : fresh
-      ? 'Установлен и подходит этой сборке'
+      ? t('Установлен и подходит этой сборке')
       : installed
-        ? 'Установлена другая версия — обновим'
+        ? t('Установлена другая версия — обновим')
         : available
-          ? 'Скины, плащи, косметика и эмоции прямо в игре'
-          : state?.reason || 'Под эту сборку мода пока нет'
+          ? t('Скины, плащи, косметика и эмоции прямо в игре')
+          : state?.reason || t('Под эту сборку мода пока нет')
 
   return (
     <div className="card icon-nudge">
@@ -65,14 +67,14 @@ export function MillidaModCard({ profile }: { profile: string }) {
         <Icon id="i-brush" />
       </span>
       <div className="icon-nudge-text">
-        <b>Косметика Millida</b>
+        <b>{t('Косметика Millida')}</b>
         <span className="faint-note">{note}</span>
       </div>
       <div className="icon-nudge-acts">
         {canInstall ? (
           <button className="btn sm primary" disabled={busy} onClick={() => void act(millidaModInstall)}>
             <Icon id="i-brush" />
-            {busy ? 'Ставим…' : installed ? 'Обновить' : 'Установить'}
+            {busy ? t('Ставим…') : installed ? t('Обновить') : t('Установить')}
           </button>
         ) : null}
       </div>

@@ -7,6 +7,7 @@ import { BuildIcon } from '../playhub/BuildIcon'
 import { loaderTone } from './site'
 import type { Profile } from '../../ipc/commands'
 import { showToast } from '../../state/ui'
+import { intlTag, useT } from '../../i18n'
 
 /*
  * Верх каталога: для какой сборки ищем (клик — сменить) и поле ИИ-помощника.
@@ -45,6 +46,7 @@ export function CatalogFor({
   onScope: (on: boolean) => void
   onNew: () => void
 }) {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -60,17 +62,17 @@ export function CatalogFor({
       document.removeEventListener('keydown', key)
     }
   }, [open])
-  const n = (v: number | null) => (v == null ? '' : v.toLocaleString('ru-RU'))
+  const n = (v: number | null) => (v == null ? '' : v.toLocaleString(intlTag()))
   return (
     <div className="cfor-wrap" data-private ref={ref}>
-      <section className="card cfor" aria-label="Для какой сборки">
-        <div className="cfor-h">Ставлю в сборку</div>
+      <section className="card cfor" aria-label={t('Для какой сборки')}>
+        <div className="cfor-h">{t('Ставлю в сборку')}</div>
         <div className="cfor-row">
           <span className="cfor-cover">
             {build ? <BuildIcon icon={build.icon} name={build.name} size={40} /> : <Cover url={null} />}
           </span>
           <span className="cfor-text">
-            <b>{build ? build.name : 'Сборка не выбрана'}</b>
+            <b>{build ? build.name : t('Сборка не выбрана')}</b>
             {build ? (
               <small>
                 {build.version} · <span style={{ color: loaderTone(loaderId(build)) || undefined }}>{LOADER_NAME(build)}</span>
@@ -79,22 +81,22 @@ export function CatalogFor({
           </span>
         </div>
         <button type="button" className="btn sm secondary cfor-change" aria-haspopup="listbox" aria-expanded={open} data-track="for_build" onClick={() => setOpen((v) => !v)}>
-          {build ? 'Сменить сборку' : 'Выбрать сборку'}
+          {build ? t('Сменить сборку') : t('Выбрать сборку')}
           <Icon id="i-chev-d" />
         </button>
         {build ? (
           <button type="button" className="cfor-fit" role="switch" aria-checked={scoped} data-track={scoped ? 'for_build_all' : 'for_build_fit'} onClick={() => onScope(!scoped)}>
             <span className={'tgl sm' + (scoped ? ' on' : '')} aria-hidden="true" />
             <span className="cfor-fit-t">
-              <b>Только подходящее</b>
-              <small>{scoped ? (fitCount != null ? n(fitCount) + ' запустится в этой сборке' : 'то, что запустится в этой сборке') : (custom ? 'свои фильтры версии и ядра' : 'показано всё') + (allCount != null ? ' · ' + n(allCount) : '')}</small>
+              <b>{t('Только подходящее')}</b>
+              <small>{scoped ? (fitCount != null ? t('{n} запустится в этой сборке', { n: n(fitCount) }) : t('то, что запустится в этой сборке')) : (custom ? t('свои фильтры версии и ядра') : t('показано всё')) + (allCount != null ? ' · ' + n(allCount) : '')}</small>
             </span>
           </button>
         ) : null}
       </section>
       {open ? (
-        <div className="cfor-pop" role="listbox" aria-label="Сборки">
-          <div className="cfor-pop-h">Куда ставить моды</div>
+        <div className="cfor-pop" role="listbox" aria-label={t('Сборки')}>
+          <div className="cfor-pop-h">{t('Куда ставить моды')}</div>
           <div className="cfor-list">
             {builds.map((p) => {
               const on = !!build && p.name === build.name
@@ -133,7 +135,7 @@ export function CatalogFor({
               onNew()
             }}
           >
-            <Icon id="i-plus" /> Новая сборка
+            <Icon id="i-plus" /> {t('Новая сборка')}
           </button>
         </div>
       ) : null}
@@ -142,10 +144,11 @@ export function CatalogFor({
 }
 
 export function CatalogAsk() {
+  const t = useT()
   const [v, setV] = useState('')
   const send = () => {
     if (!v.trim()) return
-    showToast('ИИ-помощник — скоро', 'ok', false)
+    showToast(t('ИИ-помощник — скоро'), 'ok', false)
   }
   return (
     <form
@@ -156,10 +159,10 @@ export function CatalogAsk() {
       }}
     >
       <PxIcon name="sparkle" size={18} className="px-icon cat3-ask-ic" />
-      <input placeholder="Опиши сборку…" value={v} maxLength={300} onChange={(e) => setV(e.target.value)} />
+      <input placeholder={t('Опиши сборку…')} value={v} maxLength={300} onChange={(e) => setV(e.target.value)} />
       <button type="submit" className="btn sm primary" disabled={!v.trim()}>
         <Icon id="i-send" />
-        Собрать
+        {t('Собрать')}
       </button>
     </form>
   )

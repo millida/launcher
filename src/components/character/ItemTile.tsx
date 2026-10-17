@@ -6,6 +6,7 @@ import { normRarity, rarityOfPrice, RARITY_TONE } from '../shop/rarity'
 import { FragBar, RarityChip, RarityFx } from '../shop/rarityUi'
 import { isDuoEmote } from '../../lib/duoEmotes'
 import '../../styles/pixel/duo.css'
+import { t, useT } from '../../i18n'
 
 /**
  * Карточка вещи в гардеробе. Одна на всё: скин, плащ, украшение, закрытая
@@ -87,10 +88,10 @@ export interface ItemTileProps {
 
 function statusOf(p: ItemTileProps): { text: ReactNode; tone: string } | null {
   if (p.status !== undefined) return p.status === null ? null : { text: p.status, tone: p.on ? 'on' : '' }
-  if (p.on) return { text: 'Надето', tone: 'on' }
-  if (p.trying) return { text: p.loading ? 'Надеваем…' : 'Примерка', tone: 'try' }
+  if (p.on) return { text: t('Надето'), tone: 'on' }
+  if (p.trying) return { text: p.loading ? t('Надеваем…') : t('Примерка'), tone: 'try' }
   // PLUS вещей не даёт (решение владельца 24.09.2026, 18:22): бывшая вещь набора — в магазине.
-  if (p.locked && p.plus) return { text: 'В магазине', tone: 'lock' }
+  if (p.locked && p.plus) return { text: t('В магазине'), tone: 'lock' }
   if (p.locked && p.priceRubies !== undefined)
     return {
       text: (
@@ -107,6 +108,7 @@ function statusOf(p: ItemTileProps): { text: ReactNode; tone: string } | null {
 }
 
 export function ItemTile(p: ItemTileProps) {
+  const t = useT()
   // Каталог не всегда отдаёт rarity — тогда редкость по цене (как в магазине).
   const rarity = normRarity(p.rarity) ?? (p.priceRubies ? rarityOfPrice(p.priceRubies) : undefined)
   const tone = rarity ? RARITY_TONE[rarity] : undefined
@@ -134,14 +136,14 @@ export function ItemTile(p: ItemTileProps) {
         <span className="ch-tile-art">
           {p.art}
           <RarityChip rarity={rarity} />
-          {p.loading ? <span className="ch-tile-load" aria-label="Надеваем"></span> : null}
+          {p.loading ? <span className="ch-tile-load" aria-label={t('Надеваем')}></span> : null}
           {p.locked ? (
             <span className="ch-tile-lock" aria-hidden="true">
               <Icon id="i-lock" />
             </span>
           ) : null}
           {isDuoEmote(p.itemId) ? (
-            <span className="ch-tile-duo" title="Эмоция вдвоём" aria-label="Эмоция вдвоём">
+            <span className="ch-tile-duo" title={t('Эмоция вдвоём')} aria-label={t('Эмоция вдвоём')}>
               <Icon id="i-users" />
             </span>
           ) : null}
@@ -158,7 +160,7 @@ export function ItemTile(p: ItemTileProps) {
       {p.star ? (
         <button
           className={'ch-tile-star' + (p.star.on ? ' on' : '')}
-          aria-label={p.star.on ? 'Убрать из избранного' : 'В избранное'}
+          aria-label={p.star.on ? t('Убрать из избранного') : t('В избранное')}
           data-track={p.star.on ? 'star_off' : 'star_on'}
           onClick={p.star.toggle}
         >
@@ -167,7 +169,7 @@ export function ItemTile(p: ItemTileProps) {
       ) : null}
       {p.tools ? <span className="ch-tile-tools">{p.tools}</span> : null}
       {p.onRemove ? (
-        <button className="ch-tile-del" aria-label="Удалить" data-track="remove" onClick={p.onRemove}>
+        <button className="ch-tile-del" aria-label={t('Удалить')} data-track="remove" onClick={p.onRemove}>
           <Icon id="i-trash" />
         </button>
       ) : null}

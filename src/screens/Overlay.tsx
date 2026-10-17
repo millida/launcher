@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
+import { t, useT } from '../i18n'
 import { SvgSprite } from '../components/SvgSprite'
 import { tauri } from '../ipc/tauri'
 import { overlayCleared, overlayHide, overlayHitAreas, overlayOpen, overlayReady, overlayState } from '../ipc/commands'
@@ -25,22 +26,23 @@ interface Card extends OverlayMessage {
 const CARDS_SHOWN = 3
 const TTL_SEGMENTS = 16
 
-const KIND_TAG: Record<NonNullable<OverlayMessage['kind']>, string> = {
-  msg: 'Сообщение',
-  online: 'В сети',
-  play: 'В игре',
-  streak: 'Серия',
-}
+const KIND_TAG = (): Record<NonNullable<OverlayMessage['kind']>, string> => ({
+  msg: t('Сообщение'),
+  online: t('В сети'),
+  play: t('В игре'),
+  streak: t('Серия'),
+})
 
-const PLAYING = 'Играет · '
+const playingPrefix = () => t('Играет · {where}', { where: '' })
 
 /// The server a friend plays on is the part worth reading, so it takes the card's colour.
 function cardText(m: OverlayMessage) {
-  if (m.kind !== 'play' || !m.text.startsWith(PLAYING)) return m.text
+  const prefix = playingPrefix()
+  if (m.kind !== 'play' || !m.text.startsWith(prefix)) return m.text
   return (
     <>
-      {PLAYING}
-      <em>{m.text.slice(PLAYING.length)}</em>
+      {prefix}
+      <em>{m.text.slice(prefix.length)}</em>
     </>
   )
 }
@@ -53,6 +55,7 @@ const EMPTY_TTL_MS = 4_000
 /// The overlay owns no polling of its own: two pollers would share one `since`
 /// cursor and eat each other's messages. The main window relays what it got.
 export function Overlay() {
+  const t = useT()
   const [interactive, setInteractive] = useState(false)
   const [msgs, setMsgs] = useState<Card[]>([])
   const [hover, setHover] = useState(false)
@@ -248,7 +251,7 @@ export function Overlay() {
               key={m.uid + m.ts}
               role="button"
               tabIndex={-1}
-              title={m.open === 'call' || m.open === 'friends' || m.open === 'daily' ? 'Открыть лаунчер' : 'Открыть чат'}
+              title={m.open === 'call' || m.open === 'friends' || m.open === 'daily' ? t('Открыть лаунчер') : t('Открыть чат')}
               onClick={() => openCard(m)}
             >
               <div className="ov-card-heads">
@@ -271,10 +274,10 @@ export function Overlay() {
                 <b>{m.nick}</b>
                 <span>{cardText(m)}</span>
               </div>
-              <span className="ov-card-tag">{KIND_TAG[m.kind || 'msg']}</span>
+              <span className="ov-card-tag">{KIND_TAG()[m.kind || 'msg']}</span>
               <button
                 className="ov-card-x"
-                title="Скрыть"
+                title={t('Скрыть')}
                 onClick={(e) => {
                   e.stopPropagation()
                   dismiss(m)

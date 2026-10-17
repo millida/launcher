@@ -5,6 +5,7 @@ import type { MilliAction, MilliActionKind, MilliActionRow } from '../../lib/mil
 import '../../lib/milliSteps'
 import { startMilliDoctor } from '../../lib/milliDoctor'
 import '../../styles/pixel/milli-action.css'
+import { useT } from '../../i18n'
 
 /*
  * Карточка действия Милли в чате: заголовок, строки «было → станет»,
@@ -33,6 +34,7 @@ try {
 const SEV_ORDER = { red: 0, yellow: 1, info: 2 } as const
 
 function Row({ r, i, actionId, off, res, canPick }: { r: MilliActionRow; i: number; actionId: string; off: boolean; res?: { ok: boolean; detail?: string }; canPick: boolean }) {
+  const t = useT()
   const [more, setMore] = useState(false)
   const icon = r.icon && /^https:\/\//.test(r.icon) ? <img src={r.icon} alt="" loading="lazy" /> : r.icon ? <PxArt name={r.icon} size={16} /> : null
   return (
@@ -58,7 +60,7 @@ function Row({ r, i, actionId, off, res, canPick }: { r: MilliActionRow; i: numb
           </span>
         ) : null}
         {r.note && !more ? (
-          <button type="button" className="mact-more" onClick={() => setMore(true)} aria-label="Подробнее">
+          <button type="button" className="mact-more" onClick={() => setMore(true)} aria-label={t('Подробнее')}>
             ?
           </button>
         ) : null}
@@ -70,6 +72,7 @@ function Row({ r, i, actionId, off, res, canPick }: { r: MilliActionRow; i: numb
 }
 
 export function MilliActionCard({ action }: { action: MilliAction }) {
+  const t = useT()
   // Состояние живёт в сторе: перерисовка ленты и возврат в чат его не сбрасывают.
   useEffect(() => {
     actionState(action)
@@ -102,22 +105,22 @@ export function MilliActionCard({ action }: { action: MilliAction }) {
         {phase === 'ready' || phase === 'failed' ? (
           a.auto || !a.steps.length ? null : (
             <button type="button" className="btn primary sm" disabled={nothing} data-track="milli_action_apply" data-kind={a.kind} onClick={() => void runAction(a.id)}>
-              {phase === 'failed' ? 'Ещё раз' : a.cta || 'Применить'}
+              {phase === 'failed' ? t('Ещё раз') : a.cta || t('Применить')}
             </button>
           )
         ) : null}
-        {busy ? <span className="mact-msg">{auto ? 'Смотрю…' : phase === 'undoing' ? 'Возвращаю…' : 'Делаю…'}</span> : null}
+        {busy ? <span className="mact-msg">{auto ? t('Смотрю…') : phase === 'undoing' ? t('Возвращаю…') : t('Делаю…')}</span> : null}
         {phase === 'done' ? (
           <>
-            <span className="mact-msg">{a.restart ? 'Готово · перезапусти игру' : 'Готово'}</span>
+            <span className="mact-msg">{a.restart ? t('Готово · перезапусти игру') : t('Готово')}</span>
             {st?.undo.length ? (
               <button type="button" className="btn ghost sm" data-track="milli_action_undo" data-kind={a.kind} onClick={() => void undoAction(a.id)}>
-                Отменить
+                {t('Отменить')}
               </button>
             ) : null}
           </>
         ) : null}
-        {phase === 'undone' ? <span className="mact-msg">Вернула как было</span> : null}
+        {phase === 'undone' ? <span className="mact-msg">{t('Вернула как было')}</span> : null}
         {st?.error ? <span className="mact-msg bad">{st.error}</span> : null}
       </div>
     </div>

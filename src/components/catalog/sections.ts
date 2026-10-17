@@ -8,6 +8,8 @@
  * тот же, что у значка Tabler на сайте. Модуль чистый: без React и сети.
  */
 
+import { t } from '../../i18n'
+
 export type SectionSlug =
   | 'all'
   | 'modpacks'
@@ -16,7 +18,6 @@ export type SectionSlug =
   | 'plugins'
   | 'data-packs'
   | 'addons'
-  | 'cheats'
   | 'texture-packs'
   | 'shaders'
   | 'maps'
@@ -36,25 +37,62 @@ export interface NavGroup {
   tabs: NavTab[]
 }
 
-const tab = (slug: SectionSlug, label: string): NavTab => ({ slug, label })
+const tab = (slug: SectionSlug, label: () => string): NavTab => ({
+  slug,
+  get label() {
+    return label()
+  },
+})
 
 /**
- * Как на сайте (голосовое владельца 29.09.2026), но без серверных сборок, читов
+ * Как на сайте (голосовое владельца 29.09.2026), но без серверных сборок
  * и голов (владелец 30.09.2026, 21:04: «в лаунчере слишком много всего»).
  * Серверные сборки остаются во вкладке контента хостинга (SERVER_SECTIONS).
  */
-export const LAUNCHER_HIDDEN: ReadonlySet<string> = new Set(['server-packs', 'cheats', 'heads'])
+export const LAUNCHER_HIDDEN: ReadonlySet<string> = new Set(['server-packs', 'heads'])
 export const CATALOG_GROUPS: NavGroup[] = [
-  { key: 'all', label: 'Все', tabs: [tab('all', 'Все')] },
-  { key: 'packs', label: 'Сборки', tabs: [tab('modpacks', 'Сборки модов')] },
+  {
+    key: 'all',
+    get label() {
+      return t('Все')
+    },
+    tabs: [tab('all', () => t('Все'))],
+  },
+  {
+    key: 'packs',
+    get label() {
+      return t('Сборки')
+    },
+    tabs: [tab('modpacks', () => t('Сборки модов'))],
+  },
   {
     key: 'mods',
-    label: 'Моды',
-    tabs: [tab('mods', 'Моды'), tab('plugins', 'Плагины'), tab('data-packs', 'Дата-паки'), tab('addons', 'Аддоны')],
+    get label() {
+      return t('Моды')
+    },
+    tabs: [tab('mods', () => t('Моды')), tab('plugins', () => t('Плагины')), tab('data-packs', () => t('Дата-паки')), tab('addons', () => t('Аддоны'))],
   },
-  { key: 'graphics', label: 'Графика', tabs: [tab('texture-packs', 'Ресурс-паки'), tab('shaders', 'Шейдеры')] },
-  { key: 'worlds', label: 'Карты', tabs: [tab('maps', 'Карты'), tab('seeds', 'Сиды')] },
-  { key: 'looks', label: 'Скины', tabs: [tab('skins', 'Скины'), tab('capes', 'Плащи')] },
+  {
+    key: 'graphics',
+    get label() {
+      return t('Графика')
+    },
+    tabs: [tab('texture-packs', () => t('Ресурс-паки')), tab('shaders', () => t('Шейдеры'))],
+  },
+  {
+    key: 'worlds',
+    get label() {
+      return t('Карты')
+    },
+    tabs: [tab('maps', () => t('Карты')), tab('seeds', () => t('Сиды'))],
+  },
+  {
+    key: 'looks',
+    get label() {
+      return t('Скины')
+    },
+    tabs: [tab('skins', () => t('Скины')), tab('capes', () => t('Плащи'))],
+  },
 ]
 
 export const CATALOG_TABS: NavTab[] = CATALOG_GROUPS.flatMap((g) => g.tabs)
@@ -74,7 +112,6 @@ export const SECTION_VISUAL: Record<SectionSlug, SectionVisual> = {
   plugins: { px: 'zap', tint: 'var(--m-sec-plugins)' },
   'data-packs': { px: 'book', tint: 'var(--m-sec-data-packs)' },
   addons: { px: 'gem', tint: 'var(--m-sec-addons)' },
-  cheats: { px: 'eye', tint: 'var(--m-sec-cheats)' },
   'texture-packs': { px: 'brush', tint: 'var(--m-sec-texture-packs)' },
   shaders: { px: 'sun', tint: 'var(--m-sec-shaders)' },
   maps: { px: 'map', tint: 'var(--m-sec-maps)' },
@@ -92,12 +129,11 @@ export const groupOf = (slug: string): NavGroup => CATALOG_GROUPS.find((g) => g.
 /**
  * Откуда лента раздела:
  *  - listing — `/v2/catalog/listing` и `/facets`, как страница раздела сайта;
- *  - curated — `/v2/catalog/curated/<раздел>` (читы: файлы на нашем хранилище);
  *  - skins — `/v2/skins`, сетка скинов сайта;
  *  - site — раздел живёт на сайте (сиды — строка для поля «Сид», головы —
  *    команда /give), плащи — в гардеробе лаунчера.
  */
-export type SectionSource = 'listing' | 'curated' | 'skins' | 'site'
+export type SectionSource = 'listing' | 'skins' | 'site'
 
 export const SECTION_SOURCE: Record<SectionSlug, SectionSource> = {
   all: 'listing',
@@ -107,7 +143,6 @@ export const SECTION_SOURCE: Record<SectionSlug, SectionSource> = {
   plugins: 'listing',
   'data-packs': 'listing',
   addons: 'listing',
-  cheats: 'curated',
   'texture-packs': 'listing',
   shaders: 'listing',
   maps: 'listing',
@@ -181,13 +216,4 @@ export const foreignTailAllowed = (f: Pick<ListingFilters, 'edition' | 'use' | '
 export const hasFeed = (slug: SectionSlug): boolean => SECTION_SOURCE[slug] !== 'site'
 
 /** Разделы, которые «Скачать в лаунчере» сайта шлёт в millida://install/… (см. millidaCatalog.INSTALL_SECTIONS). */
-export const SITE_INSTALL_SECTIONS: SectionSlug[] = ['mods', 'modpacks', 'texture-packs', 'shaders', 'data-packs', 'maps', 'cheats', 'skins', 'capes']
-
-/** Название читa из адреса кураторского раздела: у `/curated/cheats` в ответе только slug и файлы. */
-export function curatedTitle(slug: string): string {
-  return slug
-    .split('-')
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ')
-}
+export const SITE_INSTALL_SECTIONS: SectionSlug[] = ['mods', 'modpacks', 'texture-packs', 'shaders', 'data-packs', 'maps', 'skins', 'capes']

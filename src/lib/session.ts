@@ -16,6 +16,8 @@ import { maybeStartOnboarding } from '../state/onboarding'
 import { syncAppIcon } from './appIcon'
 import { noteAppRun } from '../state/navHint'
 import { loadPrivacy, usePrivacy } from './privacy'
+import { loadRegionalPrices, resetRegionalPrices } from './regionalPrices'
+import { useCurrencyOverride } from '../i18n/currencyOverride'
 
 export interface MillidaProfile {
   nickname?: string
@@ -31,8 +33,10 @@ export let MILLIDA_PROFILE: MillidaProfile | null = null
  */
 export async function refreshMillidaWallet(): Promise<number | null> {
   if (!hasMillidaAccount()) return null
-  const wallet = await api<{ availableKopecks?: number }>('/core/wallet/me/display').catch(() => null)
-  const kopecks = wallet?.availableKopecks
+  const dollars = useCurrencyOverride.getState().forced === 'USD'
+  const kopecks = dollars
+    ? (await api<{ availableCents?: number }>('/core/wallet/me/usd').catch(() => null))?.availableCents
+    : (await api<{ availableKopecks?: number }>('/core/wallet/me/display').catch(() => null))?.availableKopecks
   if (typeof kopecks !== 'number') return null
   const { list, save } = useAccounts.getState()
   const i = list.findIndex((x) => x.kind === 'millida' || x.kind === 'tg')
@@ -77,6 +81,9 @@ export function enterApp() {
   // Приватность живёт на сервере и общая с сайтом: тянем её сразу после входа,
   // чтобы настройка пережила переустановку лаунчера и правку на millida.net.
   void loadPrivacy(true)
+  void loadRegionalPrices().then(() => {
+    if (useCurrencyOverride.getState().forced === 'USD') void refreshMillidaWallet()
+  })
 }
 
 function dropMillidaSession() {
@@ -85,6 +92,7 @@ function dropMillidaSession() {
   // Приватность привязана к аккаунту: следующий вход не должен видеть чужие
   // тумблеры до ответа сервера.
   usePrivacy.setState({ loaded: false, error: '', saving: null })
+  resetRegionalPrices()
   if (!hasTauri()) return
   void millidaLogout()
     .catch(() => {})

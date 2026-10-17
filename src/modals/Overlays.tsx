@@ -8,8 +8,10 @@ import { useModpackVersions } from '../state/modpack'
 import { useProfiles } from '../state/profiles'
 import { openImage } from '../components/ImageLightbox'
 import { backdropClose } from '../lib/dismiss'
+import { useT } from '../i18n'
 
 export function ScreenshotsOverlay() {
+  const t = useT()
   const modal = useUi((s) => s.modals.shotOverlay)
   const { profile, paths } = useScreens()
   if (!modal.open) return null
@@ -21,7 +23,7 @@ export function ScreenshotsOverlay() {
         {...backdropClose(close)}
       >
         <div className="modal mw-xl" style={{ maxHeight: '88%' }}>
-          <h3>{'Скриншоты · ' + paths.length}</h3>
+          <h3>{t('Скриншоты · {n}', { n: paths.length })}</h3>
           <div
             style={{
               display: 'grid',
@@ -51,10 +53,10 @@ export function ScreenshotsOverlay() {
           </div>
           <div style={{ display: 'flex', gap: '10px', justifyContent: 'space-between' }}>
             <button className="btn sm secondary" id="shotFolder" onClick={() => openScreenshots(profile)}>
-              Открыть папку
+              {t('Открыть папку')}
             </button>
             <button className="btn md secondary" id="shotClose" data-sound="close" onClick={close}>
-              Закрыть
+              {t('Закрыть')}
             </button>
           </div>
         </div>
@@ -63,6 +65,7 @@ export function ScreenshotsOverlay() {
 }
 
 export function ModpackVersionsOverlay() {
+  const t = useT()
   const modal = useUi((s) => s.modals.mpOverlay)
   const { profile, slug, title, mode, curId, list, labels, setLabel } = useModpackVersions()
   const install = mode === 'install'
@@ -75,11 +78,11 @@ export function ModpackVersionsOverlay() {
       {...backdropClose(close)}
     >
       <div className="modal mw-lg" style={{ maxHeight: '88%' }}>
-        <h3>{install ? 'Установить «' + title + '»' : 'Версии сборки'}</h3>
+        <h3>{install ? t('Установить «{name}»', { name: title }) : t('Версии сборки')}</h3>
         <div className="sub">
           {install
-            ? 'Выбери версию сборки — Minecraft, загрузчик и моды поставим сами. Запускать сразу не будем.'
-            : 'Обнови до новой или откатись на старую — моды переустановятся, миры и конфиги останутся'}
+            ? t('Выбери версию сборки — Minecraft, загрузчик и моды поставим сами. Запускать сразу не будем.')
+            : t('Обнови до новой или откатись на старую — моды переустановятся, миры и конфиги останутся')}
         </div>
         <div style={{ maxHeight: '56vh', overflow: 'auto', margin: '12px 0' }}>
           {list.length ? (
@@ -96,7 +99,7 @@ export function ModpackVersionsOverlay() {
                     <b>{v.name || v.version_number || v.id}</b>
                     <span className="pill">{v.version_number || ''}</span>
                     <span className="pill">{v.type || ''}</span>
-                    {cur ? <span className="pill acc">текущая</span> : null}
+                    {cur ? <span className="pill acc">{t('текущая')}</span> : null}
                     <span style={{ flex: 1 }}></span>
                     {cur ? null : (
                       <button
@@ -112,17 +115,17 @@ export function ModpackVersionsOverlay() {
                                 close()
                                 useProfiles.getState().setSelected(p.name)
                                 void useProfiles.getState().refresh()
-                                showToast('«' + p.name + '» установлена — жми «Играть»', 'ok', 'achievement')
+                                showToast(t('«{name}» установлена — жми «Играть»', { name: p.name }), 'ok', 'achievement')
                               },
                               onError: (er) => {
-                                setLabel(v.id, 'Установить')
-                                showToast('Не вышло поставить: ' + er, 'error')
+                                setLabel(v.id, t('Установить'))
+                                showToast(t('Не вышло поставить: {error}', { error: String(er) }), 'error')
                               },
                             })
-                            if (started) setLabel(v.id, 'Ставим…')
+                            if (started) setLabel(v.id, t('Ставим…'))
                             return
                           }
-                          if (!(await uiConfirm('Переустановить сборку на эту версию? Моды заменятся.', { confirmLabel: 'Переустановить' })))
+                          if (!(await uiConfirm(t('Переустановить сборку на эту версию? Моды заменятся.'), { confirmLabel: t('Переустановить') })))
                             return
                           const upd = runInstall({
                             key: keyMrModpack(slug, profile),
@@ -131,17 +134,17 @@ export function ModpackVersionsOverlay() {
                             onDone: () => {
                               close()
                               void useProfiles.getState().refresh()
-                              showToast('Сборка обновлена')
+                              showToast(t('Сборка обновлена'))
                             },
                             onError: (er) => {
-                              setLabel(v.id, 'Поставить')
+                              setLabel(v.id, t('Поставить'))
                               showToast('' + er, 'error')
                             },
                           })
-                          if (upd) setLabel(v.id, 'Ставим…')
+                          if (upd) setLabel(v.id, t('Ставим…'))
                         }}
                       >
-                        {labels[v.id] || (install ? 'Установить' : 'Поставить')}
+                        {labels[v.id] || (install ? t('Установить') : t('Поставить'))}
                       </button>
                     )}
                   </div>
@@ -152,12 +155,12 @@ export function ModpackVersionsOverlay() {
               )
             })
           ) : (
-            <p className="faint-note">Версий не найдено</p>
+            <p className="faint-note">{t('Версий не найдено')}</p>
           )}
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <button className="btn md secondary" id="mpClose" data-sound="close" onClick={close}>
-            Закрыть
+            {t('Закрыть')}
           </button>
         </div>
       </div>

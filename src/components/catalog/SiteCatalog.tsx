@@ -9,19 +9,18 @@ import { smartQuery, type SmartResult } from './smartQuery'
 import { HitRow, MapRow, RowSkeleton, SiteGalleryCard, SiteRow } from './SiteRow'
 import { CapesPane } from './CapesPane'
 import type { MapHit } from './SiteRow'
-import { SERVER_SECTIONS, SITE_SECTIONS, fmtNum, loadCurated, loadSkinTags, loadSkins, materials, peekHit, sectionBySlug, sectionByKind } from './site'
+import { SERVER_SECTIONS, SITE_SECTIONS, fmtNum, loadSkinTags, loadSkins, materials, peekHit, sectionBySlug, sectionByKind } from './site'
 import { useSkinTag } from './skinTag'
 import { skinName } from './SkinPage'
-import type { CuratedItem, SiteCard, SkinTile } from './site'
-import { CATALOG_GROUPS, SECTION_VISUAL, curatedTitle, groupOf, groupVisual, siteSectionPath } from './sections'
+import type { SiteCard, SkinTile } from './site'
+import { CATALOG_GROUPS, SECTION_VISUAL, groupOf, groupVisual, siteSectionPath } from './sections'
 import type { NavGroup } from './sections'
 import { PxIcon } from '../PxIcon'
 import { PxArt } from '../milli/px'
-import { Fallback, MrIcon, TagGlyph } from './SiteRow'
-import { CHEAT_SOURCE_NOTE, installFromCatalog } from '../../lib/catalogInstall'
+import { installFromCatalog } from '../../lib/catalogInstall'
 import { openExt } from '../../lib/api'
 import { openModal, setScreen } from '../../state/ui'
-import { capFirst, loaderIconSrc, loaderLabel, loaderTone, plural } from './site'
+import { capFirst, plural } from './site'
 import type { SiteSection } from './site'
 import { activeFilters, setSectionScope, useServerSite, useSite } from './siteStore'
 import { cfTail, mrTail, nextLoad } from './mrTail'
@@ -38,13 +37,13 @@ import type { Profile } from '../../ipc/commands'
 import { loaderId } from '../../lib/format'
 import { pickTargetName } from '../../lib/installKeys'
 import { setNewBuildPreset } from '../../state/newBuild'
-import { F_VERS, WORLD_CATS, useMods } from '../../state/mods'
+import { ANY_LOADER, ANY_VERSION, F_VERS, WORLD_CATS, mapsAppOnlyNotice, useMods } from '../../state/mods'
 import { useProfiles } from '../../state/profiles'
 import { track } from '../../lib/telemetry'
 import { ItemPage } from './ItemPage'
 import { dropItem, openItem, scroller, useItem } from './itemStore'
-import { CHEATS, cheatName } from './itemView'
 import '../../styles/pixel/catalog2.css'
+import { intlTag, useT } from '../../i18n'
 
 /*
  * Каталог Millida в лаунчере — страница раздела millida.net один в один
@@ -89,6 +88,7 @@ function useSearchTrack(section: string, q: string, results: number | null) {
 
 /** Поиск по разделу: выдача меняется по мере набора (пауза 450 мс, от двух букв). */
 function SearchField({ value, label, onCommit }: { value: string; label: string; onCommit: (v: string) => void }) {
+  const t = useT()
   const [v, setV] = useState(value)
   const last = useRef(value)
   useEffect(() => {
@@ -121,7 +121,7 @@ function SearchField({ value, label, onCommit }: { value: string; label: string;
         <button
           type="button"
           className="mr-search-clear"
-          aria-label="Очистить поиск"
+          aria-label={t('Очистить поиск')}
           data-track="search_clear"
           onClick={() => {
             setV('')
@@ -137,13 +137,14 @@ function SearchField({ value, label, onCommit }: { value: string; label: string;
 }
 
 function Sort({ value, onPick }: { value: 'popular' | 'new'; onPick: (v: 'popular' | 'new') => void }) {
+  const t = useT()
   return (
-    <div className="segs mr-sort" role="group" aria-label="Сортировка">
+    <div className="segs mr-sort" role="group" aria-label={t('Сортировка')}>
       <button className={'seg' + (value === 'popular' ? ' on' : '')} aria-pressed={value === 'popular'} data-track="sort_popular" onClick={() => onPick('popular')}>
-        Популярные
+        {t('Популярные')}
       </button>
       <button className={'seg' + (value === 'new' ? ' on' : '')} aria-pressed={value === 'new'} data-track="sort_new" onClick={() => onPick('new')}>
-        Новые
+        {t('Новые')}
       </button>
     </div>
   )
@@ -151,6 +152,7 @@ function Sort({ value, onPick }: { value: 'popular' | 'new'; onPick: (v: 'popula
 
 /** Подгрузка следующей страницы при прокрутке — как `MrAutoMore` сайта. */
 function AutoMore({ onMore, busy, n }: { onMore: () => void; busy: boolean; /** Сколько уже в ленте — сам догружаем, только если прошлый раз что-то пришло. */ n?: number }) {
+  const t = useT()
   const ref = useRef<HTMLDivElement>(null)
   const fn = useRef(onMore)
   fn.current = onMore
@@ -183,10 +185,10 @@ function AutoMore({ onMore, busy, n }: { onMore: () => void; busy: boolean; /** 
         {busy ? (
           <>
             <span className="mr-spin" aria-hidden="true" />
-            Загружаю…
+            {t('Загружаю…')}
           </>
         ) : (
-          'Показать ещё'
+          t('Показать ещё')
         )}
       </button>
     </div>
@@ -274,6 +276,7 @@ function ForBuildInner({ sec }: { sec: SiteSection }) {
 
 /** Карты — на сайте раздел ещё наполняется, поэтому в лаунчере они из CurseForge (как и раньше). */
 function MapsPane({ narrow }: { narrow: boolean }) {
+  const t = useT()
   const mods = useMods()
   const [open, setOpen] = useState(false)
   useEffect(() => {
@@ -287,21 +290,21 @@ function MapsPane({ narrow }: { narrow: boolean }) {
   const filters = (
     <div className="mr-filters">
       <FilterGroup
-        title="Версия игры"
+        title={t('Версия игры')}
         name="version"
         opts={mods.vers.map((v) => ({
           key: v,
           label: v,
           active: mods.fVer === v,
-          onPick: () => (mods.set({ fVer: mods.fVer === v ? 'любая' : v }), reload()),
+          onPick: () => (mods.set({ fVer: mods.fVer === v ? ANY_VERSION : v }), reload()),
         }))}
       />
       <FilterGroup
-        title="Категории"
+        title={t('Категории')}
         name="category"
         opts={WORLD_CATS.filter(([id]) => id).map(([id, label]) => ({
           key: String(id),
-          label,
+          label: t(label),
           active: mods.fWorldCat === id,
           onPick: () => (mods.set({ fWorldCat: mods.fWorldCat === id ? 0 : id }), reload()),
         }))}
@@ -314,15 +317,15 @@ function MapsPane({ narrow }: { narrow: boolean }) {
       sec={sec}
       narrow={narrow}
       filters={filters}
-      active={(mods.fVer !== 'любая' ? 1 : 0) + (mods.fWorldCat ? 1 : 0)}
+      active={(mods.fVer !== ANY_VERSION ? 1 : 0) + (mods.fWorldCat ? 1 : 0)}
       open={open}
       onOpen={() => setOpen((v) => !v)}
-      search={<SearchField value={mods.mq} label={'Поиск по разделу «' + sec.title + '»'} onCommit={(q) => (mods.set({ mq: q }), reload())} />}
+      search={<SearchField value={mods.mq} label={t('Поиск по разделу «{name}»', { name: sec.title })} onCommit={(q) => (mods.set({ mq: q }), reload())} />}
       count={mods.hits.length ? mods.count : null}
-      sort={<Sort value={mods.fSort === 'Новые' ? 'new' : 'popular'} onPick={(v) => (mods.set({ fSort: v === 'new' ? 'Новые' : 'Популярные' }), reload())} />}
+      sort={<Sort value={mods.fSort === 'newest' ? 'new' : 'popular'} onPick={(v) => (mods.set({ fSort: v === 'new' ? 'newest' : 'downloads' }), reload())} />}
     >
       {mods.notice && !mods.hits.length ? (
-        <CatalogNotice note={{ icon: /в приложени/.test(mods.notice) ? 'i-download' : 'i-search', title: /в приложени/.test(mods.notice) ? 'Карты — в приложении' : 'Ничего не нашлось' }} />
+        <CatalogNotice note={{ icon: mods.notice === mapsAppOnlyNotice() ? 'i-download' : 'i-search', title: mods.notice === mapsAppOnlyNotice() ? t('Карты — в приложении') : t('Ничего не нашлось') }} />
       ) : !mods.hits.length ? (
         <div className="mr-list">
           <RowSkeleton />
@@ -347,6 +350,7 @@ function MapsPane({ narrow }: { narrow: boolean }) {
  * Те же рамка, поиск и строки, кнопка — «На сервер».
  */
 function HostMapsPane({ narrow }: { narrow: boolean }) {
+  const t = useT()
   const [q, setQ] = useState('')
   const [ver, setVer] = useState<string | null>(null)
   const [hits, setHits] = useState<MapHit[] | null>(null)
@@ -378,7 +382,7 @@ function HostMapsPane({ narrow }: { narrow: boolean }) {
   const filters = (
     <div className="mr-filters">
       <FilterGroup
-        title="Версия игры"
+        title={t('Версия игры')}
         name="version"
         opts={F_VERS.slice(1).map((v) => ({ key: v, label: v, active: ver === v, onPick: () => setVer(ver === v ? null : v) }))}
       />
@@ -392,18 +396,18 @@ function HostMapsPane({ narrow }: { narrow: boolean }) {
       active={ver ? 1 : 0}
       open={open}
       onOpen={() => setOpen((v) => !v)}
-      search={<SearchField value={q} label={'Поиск по разделу «' + sec.title + '»'} onCommit={setQ} />}
+      search={<SearchField value={q} label={t('Поиск по разделу «{name}»', { name: sec.title })} onCommit={setQ} />}
       count={null}
       sort={null}
     >
       {failed && !(hits && hits.length) ? (
-        <CatalogNotice note={{ icon: 'i-alert', title: 'Каталог карт не ответил', action: { label: 'Повторить', primary: true, icon: 'i-restart', onClick: () => load() } }} />
+        <CatalogNotice note={{ icon: 'i-alert', title: t('Каталог карт не ответил'), action: { label: t('Повторить'), primary: true, icon: 'i-restart', onClick: () => load() } }} />
       ) : hits === null ? (
         <div className="mr-list">
           <RowSkeleton />
         </div>
       ) : !hits.length ? (
-        <CatalogNotice note={{ icon: 'i-search', title: 'Ничего не нашлось' }} />
+        <CatalogNotice note={{ icon: 'i-search', title: t('Ничего не нашлось') }} />
       ) : (
         <>
           <div className={'mr-list' + (busy ? ' cat-dim' : '')}>
@@ -447,6 +451,7 @@ function Frame({
   note?: string | null
   children: React.ReactNode
 }) {
+  const t = useT()
   // Колонка фильтров не длиннее видимой области прокрутки: высоту шапки над ней
   // меряем, а не угадываем (было 100vh − 124px — низ «Категорий» и «Цена» уходили
   // за край окна и не долистывались, 06.10.2026).
@@ -493,7 +498,7 @@ function Frame({
     <div className="mr-layout">
       {/* Сборка — первым блоком колонки фильтров (как профиль в Modrinth App): это главный фильтр. */}
       {!narrow ? (
-        <aside className="mr-aside" aria-label="Фильтры" ref={aside}>
+        <aside className="mr-aside" aria-label={t('Фильтры')} ref={aside}>
           <ForBuild sec={sec} />
           {filters}
         </aside>
@@ -508,7 +513,7 @@ function Frame({
             {narrow ? (
               <button className={'btn sm secondary mr-fbtn' + (open ? ' on' : '')} aria-expanded={open} data-track="filters" onClick={onOpen}>
                 <Icon id="i-grid" />
-                Фильтры
+                {t('Фильтры')}
                 {active ? <span className="mr-fbtn-n">{active}</span> : null}
               </button>
             ) : null}
@@ -578,12 +583,13 @@ function useFeedView(sec: SiteSection): [FeedView, (v: FeedView) => void] {
 }
 
 function ViewToggle({ view, onPick }: { view: FeedView; onPick: (v: FeedView) => void }) {
+  const t = useT()
   return (
-    <div className="segs mr-view" role="group" aria-label="Вид ленты">
-      <button className={'seg' + (view === 'list' ? ' on' : '')} aria-pressed={view === 'list'} aria-label="Списком" data-tip="Списком" data-track="feed_view_list" onClick={() => onPick('list')}>
+    <div className="segs mr-view" role="group" aria-label={t('Вид ленты')}>
+      <button className={'seg' + (view === 'list' ? ' on' : '')} aria-pressed={view === 'list'} aria-label={t('Списком')} data-tip={t('Списком')} data-track="feed_view_list" onClick={() => onPick('list')}>
         <Icon id="i-list" />
       </button>
-      <button className={'seg' + (view === 'gallery' ? ' on' : '')} aria-pressed={view === 'gallery'} aria-label="Карточками" data-tip="Карточками" data-track="feed_view_gallery" onClick={() => onPick('gallery')}>
+      <button className={'seg' + (view === 'gallery' ? ' on' : '')} aria-pressed={view === 'gallery'} aria-label={t('Карточками')} data-tip={t('Карточками')} data-track="feed_view_gallery" onClick={() => onPick('gallery')}>
         <Icon id="i-grid" />
       </button>
     </div>
@@ -614,6 +620,7 @@ function RuShelf({
   onOpenPack?: (slug: string) => boolean | void
   onToggle: () => void
 }) {
+  const t = useT()
   const row = useRef<HTMLDivElement>(null)
   const step = (dir: 1 | -1) => {
     const el = row.current
@@ -625,30 +632,30 @@ function RuShelf({
         <i className="mr-ru-badge" aria-hidden="true">
           RU
         </i>
-        <span>Только сборки на русском</span>
+        <span>{t('Только сборки на русском')}</span>
         <button className="mr-ru-link" data-track="ru_only_off" onClick={onToggle}>
-          Показать все сборки
+          {t('Показать все сборки')}
         </button>
       </div>
     )
   return (
-    <section className="mr-ru" aria-label="Сборки на русском">
+    <section className="mr-ru" aria-label={t('Сборки на русском')}>
       <header className="mr-ru-head">
         <h2>
           <i className="mr-ru-badge" aria-hidden="true">
             RU
           </i>
-          Сборки на русском
+          {t('Сборки на русском')}
         </h2>
         <span className="mr-ru-nav">
           <button className="mr-ru-link" data-track="ru_shelf_all" onClick={onToggle}>
-            Все {total}
+            {t('Все {n}', { n: total })}
             <Icon id="i-chev-r" />
           </button>
-          <button className="mr-ru-arrow" aria-label="Назад" data-track="ru_shelf_prev" onClick={() => step(-1)}>
+          <button className="mr-ru-arrow" aria-label={t('Назад')} data-track="ru_shelf_prev" onClick={() => step(-1)}>
             <Icon id="i-chev-l" />
           </button>
-          <button className="mr-ru-arrow" aria-label="Дальше" data-track="ru_shelf_next" onClick={() => step(1)}>
+          <button className="mr-ru-arrow" aria-label={t('Дальше')} data-track="ru_shelf_next" onClick={() => step(1)}>
             <Icon id="i-chev-r" />
           </button>
         </span>
@@ -663,6 +670,7 @@ function RuShelf({
 }
 
 function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: boolean; onOpenPack?: (slug: string) => boolean | void }) {
+  const t = useT()
   const store = useCatalogCtx().store
   const s = store()
   const [open, setOpen] = useState(false)
@@ -770,19 +778,19 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
       onOpen={() => setOpen((v) => !v)}
       search={
         <div className="mr-smart">
-          <SearchField value={s.q} label="Что ищешь? Например: страшное с другом" onCommit={commitSmart} />
+          <SearchField value={s.q} label={t('Что ищешь? Например: страшное с другом')} onCommit={commitSmart} />
           {smart && smart.chips.length ? (
             <div className="mr-smart-chips" aria-live="polite">
-              <span className="mr-smart-h">Понял так:</span>
+              <span className="mr-smart-h">{t('Понял так:')}</span>
               {smart.chips.map((c) => (
                 <span key={c} className="mr-smart-chip">
-                  {c}
+                  {t(c)}
                 </span>
               ))}
               {smart.q ? <span className="mr-smart-chip is-q">«{smart.q}»</span> : null}
               <button
                 className="mr-smart-x"
-                aria-label="Искать как написал"
+                aria-label={t('Искать как написал')}
                 data-track="smart_search_raw"
                 onClick={() => {
                   setSmart(null)
@@ -792,19 +800,19 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
                   s.patch({ ...undo, q: smart.raw })
                 }}
               >
-                Искать как написал
+                {t('Искать как написал')}
               </button>
             </div>
           ) : null}
         </div>
       }
       count={count}
-      note={loading && s.slow ? 'сервер отвечает дольше обычного…' : null}
+      note={loading && s.slow ? t('сервер отвечает дольше обычного…') : null}
       sort={<ViewToggle view={view} onPick={setView} />}
       refreshing={s.busy && s.page > 0}
     >
       {s.failed ? (
-        <CatalogNotice note={{ icon: 'i-alert', title: 'Каталог не ответил', action: { label: 'Повторить', primary: true, icon: 'i-restart', onClick: () => void s.load() } }} />
+        <CatalogNotice note={{ icon: 'i-alert', title: t('Каталог не ответил'), action: { label: t('Повторить'), primary: true, icon: 'i-restart', onClick: () => void s.load() } }} />
       ) : loading ? (
         <div className={feedClass}>
           <RowSkeleton gallery={gallery} actions={sec.kind !== 'plugin' && sec.kind !== 'serverpack' && sec.kind !== 'addon'} />
@@ -813,8 +821,8 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
         <CatalogNotice
           note={
             q || activeFilters(s)
-              ? { icon: 'i-search', title: 'Ничего не нашлось', action: { label: 'Показать весь раздел', onClick: () => s.reset() } }
-              : { icon: 'i-inbox', title: 'Здесь пока пусто' }
+              ? { icon: 'i-search', title: t('Ничего не нашлось'), action: { label: t('Показать весь раздел'), onClick: () => s.reset() } }
+              : { icon: 'i-inbox', title: t('Здесь пока пусто') }
           }
         />
       ) : (
@@ -837,7 +845,7 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
           {tail.length ? (
             <>
               <div className="mr-src-divider" role="separator">
-                <span>Ещё с Modrinth</span>
+                <span>{t('Ещё с Modrinth')}</span>
               </div>
               <div className={feedClass + (s.busy && s.page === 1 ? ' is-refreshing' : '')}>
                 {tail.map((c, i) => (
@@ -849,7 +857,7 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
           {cfRows.length ? (
             <>
               <div className="mr-src-divider" role="separator">
-                <span>Ещё с CurseForge</span>
+                <span>{t('Ещё с CurseForge')}</span>
               </div>
               <div className={feedClass + (s.busy && s.page === 1 ? ' is-refreshing' : '')}>
                 {cfRows.map((c, i) => (
@@ -866,146 +874,12 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
 }
 
 /*
- * Читы — кураторский раздел сайта: файлы лежат на нашем хранилище, список —
- * `/catalog/curated/cheats`. Карточка того же вида, что у каталога; «В сборку»
- * ставит тот же файл, что «Скачать в лаунчере» на сайте (millida://install/cheats/…).
- */
-function CuratedPane({ narrow }: { narrow: boolean }) {
-  const sec = sectionBySlug('cheats')
-  const [items, setItems] = useState<CuratedItem[] | null>(null)
-  const [failed, setFailed] = useState(false)
-  const [q, setQ] = useState('')
-  const [ver, setVer] = useState<string | null>(null)
-  const [open, setOpen] = useState(false)
-  const load = () => {
-    setFailed(false)
-    loadCurated('cheats')
-      .then((l) => setItems(l))
-      .catch(() => (setFailed(true), setItems([])))
-  }
-  useEffect(load, [])
-  const all = items || []
-  const versions = [...new Set(all.flatMap((i) => i.files.flatMap((f) => f.gameVersions)))].sort((a, b) => b.localeCompare(a, undefined, { numeric: true }))
-  const needle = q.trim().toLowerCase()
-  const shown = all.filter(
-    (i) => (!needle || cheatName(i.slug).toLowerCase().includes(needle) || curatedTitle(i.slug).toLowerCase().includes(needle)) && (!ver || i.files.some((f) => f.gameVersions.includes(ver))),
-  )
-  useSearchTrack('cheats', needle, items ? shown.length : null)
-  const filters = (
-    <div className="mr-filters">
-      <FilterGroup
-        title="Версия игры"
-        name="version"
-        opts={versions.map((v) => ({ key: v, label: v, active: ver === v, onPick: () => setVer(ver === v ? null : v) }))}
-      />
-    </div>
-  )
-  return (
-    <Frame
-      sec={sec}
-      narrow={narrow}
-      filters={filters}
-      active={ver ? 1 : 0}
-      open={open}
-      onOpen={() => setOpen((v) => !v)}
-      search={<SearchField value={q} label={'Поиск по разделу «' + sec.title + '»'} onCommit={setQ} />}
-      count={items ? materials(shown.length) : null}
-      sort={null}
-    >
-      <p role="note" className="mr-cheat-note">
-        <Icon id="i-alert" />
-        {CHEAT_SOURCE_NOTE}
-      </p>
-      {failed ? (
-        <CatalogNotice note={{ icon: 'i-alert', title: 'Каталог не ответил', action: { label: 'Повторить', primary: true, icon: 'i-restart', onClick: load } }} />
-      ) : items === null ? (
-        <div className="mr-galgrid">
-          <RowSkeleton gallery />
-        </div>
-      ) : !shown.length ? (
-        <CatalogNotice note={{ icon: 'i-search', title: 'Ничего не нашлось' }} />
-      ) : (
-        <div className="mr-galgrid">
-          {shown.map((it, i) => (
-            <CheatCard key={it.slug} it={it} pos={i} />
-          ))}
-        </div>
-      )}
-    </Frame>
-  )
-}
-
-/**
- * Плитка чита — та же плитка ленты, что у модов: обложка, значок, название,
- * вид клиента, строка описания, загрузчик и версии, «В сборку». Картинок у
- * кураторского раздела нет — вместо них блок Minecraft на цвете раздела.
- */
-function CheatCard({ it, pos }: { it: CuratedItem; pos: number }) {
-  const title = cheatName(it.slug)
-  const info = CHEATS[it.slug]
-  const loaders = [...new Set(it.files.flatMap((x) => x.loaders))].slice(0, 2)
-  const vers = [...new Set(it.files.flatMap((x) => x.gameVersions))].sort((a, b) => b.localeCompare(a, undefined, { numeric: true }))
-  return (
-    <article className="card mr-gal" data-track="row_open" data-kind="cheat" data-id={it.slug} data-pos={pos} onClick={() => openItem({ kind: 'cheat', item: it })}>
-      <span className="mr-gal-cover" aria-hidden="true">
-        <Fallback slug={it.slug} section="cheats" title={title} />
-      </span>
-      <span className="mr-gal-body">
-        <span className="mr-gal-icon" aria-hidden="true">
-          <Fallback slug={it.slug} section="cheats" title={title} />
-        </span>
-        <h3 className="mr-gal-title">{title}</h3>
-        <span className="mr-gal-author">{info ? info.kind : 'Чит-клиент'}</span>
-        {info ? <span className="mr-gal-summary">{info.features.slice(0, 3).join(' · ')}</span> : null}
-        <ul className="mr-tags mr-gal-tags" aria-label="Метки">
-          {loaders.map((l) => {
-            const src = loaderIconSrc(l)
-            return (
-              <li key={l} className="mr-tag has-tone" style={{ '--mk-tone': loaderTone(l) || undefined } as React.CSSProperties}>
-                {src ? <TagGlyph node={<MrIcon src={src} size={12} />} tone={loaderTone(l)} /> : null}
-                <span>{loaderLabel(l)}</span>
-              </li>
-            )
-          })}
-          {vers.length ? (
-            <li className="mr-tag">
-              <span>{vers.length > 1 ? vers[vers.length - 1] + ' — ' + vers[0] : vers[0]}</span>
-            </li>
-          ) : null}
-        </ul>
-        <span className="mr-gal-foot">
-          <span className="mr-gal-stat">
-            {it.downloads > 0 ? (
-              <>
-                <Icon id="i-download" />
-                <b>{fmtNum(it.downloads)}</b>
-              </>
-            ) : null}
-          </span>
-          <div className="mr-actions">
-            <button
-              className="btn sm primary"
-              data-track="add_to_build"
-              onClick={(e) => {
-                e.stopPropagation()
-                void installFromCatalog('cheats', it.slug)
-              }}
-            >
-              <Icon id="i-plus" />В сборку
-            </button>
-          </div>
-        </span>
-      </span>
-    </article>
-  )
-}
-
-/*
  * Скины — сетка `/skins/katalog` сайта (`/v2/skins`): рендер во весь рост, имя,
  * сколько носят. «В гардероб» — то же, что «Скачать в лаунчере» на сайте
  * (millida://install/skins/<id>): скин ложится в гардероб аккаунта и надевается.
  */
 function SkinsPane() {
+  const t = useT()
   const sec = sectionBySlug('skins')
   const [q, setQ] = useState('')
   const [sort, setSort] = useState<'popular' | 'new'>('popular')
@@ -1055,19 +929,19 @@ function SkinsPane() {
       <header className="mr-head">
         <h1 className="mr-h1">
           {sec.h1}
-          {items ? <span className="mr-h1-n">{total.toLocaleString('ru-RU') + ' ' + plural(total, 'скин', 'скина', 'скинов')}</span> : null}
+          {items ? <span className="mr-h1-n">{plural(total, t('{n} скин', { n: total.toLocaleString(intlTag()) }), t('{n} скина', { n: total.toLocaleString(intlTag()) }), t('{n} скинов', { n: total.toLocaleString(intlTag()) }))}</span> : null}
         </h1>
       </header>
       <div className="mr-toolbar">
-        <SearchField value={q} label="Поиск скинов: аниме, в худи, девочка…" onCommit={setQ} />
+        <SearchField value={q} label={t('Поиск скинов: аниме, в худи, девочка…')} onCommit={setQ} />
         <div className="mr-toolbar-row">
           <Sort value={sort} onPick={setSort} />
         </div>
       </div>
       {shownTags.length ? (
-        <nav className="sk-chips" aria-label="Метки скинов">
+        <nav className="sk-chips" aria-label={t('Метки скинов')}>
           <button type="button" className={'sk-chip' + (!tag ? ' on' : '')} data-track="skin_tag_all" onClick={() => useSkinTag.getState().set(null)}>
-            Все
+            {t('Все')}
           </button>
           {shownTags.map((t) => (
             <button
@@ -1085,7 +959,7 @@ function SkinsPane() {
       ) : null}
       <div className={'mr-loadbar' + (busy && first && items && items.length ? ' on' : '')} aria-hidden="true" />
       {failed && !(items && items.length) ? (
-        <CatalogNotice note={{ icon: 'i-alert', title: 'Каталог скинов не ответил', action: { label: 'Повторить', primary: true, icon: 'i-restart', onClick: () => load(1) } }} />
+        <CatalogNotice note={{ icon: 'i-alert', title: t('Каталог скинов не ответил'), action: { label: t('Повторить'), primary: true, icon: 'i-restart', onClick: () => load(1) } }} />
       ) : items === null ? (
         <div className="mr-skingrid">
           {Array.from({ length: 14 }, (_, i) => (
@@ -1099,7 +973,7 @@ function SkinsPane() {
           ))}
         </div>
       ) : !items.length ? (
-        <CatalogNotice note={{ icon: 'i-search', title: 'Ничего не нашлось', action: tag || q ? { label: 'Все скины', onClick: () => (useSkinTag.getState().set(null), setQ('')) } : undefined }} />
+        <CatalogNotice note={{ icon: 'i-search', title: t('Ничего не нашлось'), action: tag || q ? { label: t('Все скины'), onClick: () => (useSkinTag.getState().set(null), setQ('')) } : undefined }} />
       ) : (
         <>
           <div className="mr-skingrid">
@@ -1115,6 +989,7 @@ function SkinsPane() {
 }
 
 function SkinCard({ k, pos }: { k: SkinTile; pos: number }) {
+  const t = useT()
   const name = skinName(k.title)
   return (
     <article className="card mr-skin" data-track="row_open" data-kind="skin" data-id={k.id} data-pos={pos} onClick={() => openItem({ kind: 'skin', skin: k })}>
@@ -1136,7 +1011,7 @@ function SkinCard({ k, pos }: { k: SkinTile; pos: number }) {
           void installFromCatalog('skins', k.id, { name, slim: k.model === 'slim' })
         }}
       >
-        Надеть
+        {t('Надеть')}
       </button>
     </article>
   )
@@ -1148,6 +1023,7 @@ function SkinCard({ k, pos }: { k: SkinTile; pos: number }) {
  * лаунчер. Лента у них на сайте; плащ Millida надевается в гардеробе.
  */
 function SitePane({ slug }: { slug: 'seeds' | 'heads' | 'capes' }) {
+  const t = useT()
   const sec = sectionBySlug(slug)
   const vis = SECTION_VISUAL[slug]
   return (
@@ -1162,11 +1038,11 @@ function SitePane({ slug }: { slug: 'seeds' | 'heads' | 'capes' }) {
         <div className="mr-sitecard-acts">
           {slug === 'capes' ? (
             <button className="btn md primary" data-track="capes_wardrobe" onClick={() => setScreen('skins')}>
-              <PxIcon name="cape" size={16} /> Гардероб
+              <PxIcon name="cape" size={16} /> {t('Гардероб')}
             </button>
           ) : null}
           <button className={'btn md ' + (slug === 'capes' ? 'secondary' : 'primary')} data-track={'site_' + slug} onClick={() => openExt('https://millida.net' + siteSectionPath(slug))}>
-            <Icon id="i-ext" /> На сайте
+            <Icon id="i-ext" /> {t('На сайте')}
           </button>
         </div>
       </div>
@@ -1186,10 +1062,11 @@ function GroupNav({
   onPick: (slug: string) => void
   extras: ReactNode
 }) {
+  const t = useT()
   const current = groupOf(section)
   return (
     <>
-      <nav className="segs mr-types mr-groups" aria-label="Разделы каталога">
+      <nav className="segs mr-types mr-groups" aria-label={t('Разделы каталога')}>
         {CATALOG_GROUPS.map((g: NavGroup) => {
           const on = !own && g.key === current.key
           const vis = groupVisual(g)
@@ -1218,16 +1095,16 @@ function GroupNav({
         {extras}
       </nav>
       {!own && current.tabs.length > 1 ? (
-        <nav className="segs mr-subtypes" aria-label={'Разделы группы «' + current.label + '»'}>
-          {current.tabs.map((t) => {
-            const on = t.slug === section
-            const vis = SECTION_VISUAL[t.slug]
+        <nav className="segs mr-subtypes" aria-label={t('Разделы группы «{name}»', { name: current.label })}>
+          {current.tabs.map((tab) => {
+            const on = tab.slug === section
+            const vis = SECTION_VISUAL[tab.slug]
             return (
-              <button key={t.slug} className={'seg' + (on ? ' on' : '')} aria-current={on ? 'page' : undefined} data-track={'cat_' + t.slug} onClick={() => onPick(t.slug)}>
+              <button key={tab.slug} className={'seg' + (on ? ' on' : '')} aria-current={on ? 'page' : undefined} data-track={'cat_' + tab.slug} onClick={() => onPick(tab.slug)}>
                 <span className="mr-sec-ic" style={{ color: vis.tint }}>
                   <PxIcon name={vis.px} size={14} />
                 </span>
-                {t.label}
+                {tab.label}
               </button>
             )
           })}
@@ -1275,6 +1152,7 @@ export function SiteCatalog({
   target?: CatalogTarget
   extra?: ExtraTab[]
 }) {
+  const t = useT()
   const server = target.kind === 'server'
   const store = server ? useServerSite : useSite
   const section = store((s) => s.section)
@@ -1285,21 +1163,21 @@ export function SiteCatalog({
   const starCount = useCatalogStars((s) => s.items.length)
   const extras: ExtraTab[] = [
     ...(extra || []),
-    ...(servers ? [{ id: 'servers', label: 'Серверы', node: servers, px: 'server', tint: 'var(--m-sec-servers)' }] : []),
+    ...(servers ? [{ id: 'servers', label: t('Серверы'), node: servers, px: 'server', tint: 'var(--m-sec-servers)' }] : []),
     // Купленное в каталоге — поставить заново в любую сборку. На сервер платное не ставится.
     ...(server
       ? []
       : [
           {
             id: 'favorites',
-            label: 'Избранное',
+            label: t('Избранное'),
             node: <FavoritesPane onOpenPack={(slug) => openPack?.(slug)} onBrowse={() => pick('mods')} />,
             px: 'star',
             tint: 'var(--m-rarity-legendary)',
             count: starCount,
           },
         ]),
-    ...(server ? [] : [{ id: 'purchases', label: 'Покупки', node: <PurchasesPane onOpenPack={(slug) => openPack?.(slug)} />, px: 'wallet', tint: 'var(--m-sec-purchases)' }]),
+    ...(server ? [] : [{ id: 'purchases', label: t('Покупки'), node: <PurchasesPane onOpenPack={(slug) => openPack?.(slug)} />, px: 'wallet', tint: 'var(--m-sec-purchases)' }]),
   ]
   const ctx = useMemo(() => ({ store, target }), [store, target])
   const item = useItem((s) => s.cur)
@@ -1352,8 +1230,8 @@ export function SiteCatalog({
     const scope = firstVisit
       ? { version: null, loader: null }
       : {
-          version: m.fVer !== 'любая' && m.fVer ? m.fVer : null,
-          loader: sec.loaderAxis && sec.kind !== 'shader' && m.fLoader !== 'любой' && m.fLoader ? m.fLoader : null,
+          version: m.fVer !== ANY_VERSION && m.fVer ? m.fVer : null,
+          loader: sec.loaderAxis && sec.kind !== 'shader' && m.fLoader !== ANY_LOADER && m.fLoader ? m.fLoader : null,
         }
     const clean = !st.category && !st.q && !st.use && !st.edition && !st.price && st.access === 'all' && st.sort === 'recommended'
     if (st.section !== sec.slug || !st.page || !clean || (sec.kind === 'modpack' && (st.version || st.loader))) {
@@ -1422,8 +1300,6 @@ export function SiteCatalog({
     <HostMapsPane narrow={narrow} />
   ) : sec.kind === 'world' && mapsEmpty ? (
     <MapsPane narrow={narrow} />
-  ) : sec.source === 'curated' ? (
-    <CuratedPane narrow={narrow} />
   ) : sec.source === 'skins' ? (
     <SkinsPane />
   ) : sec.slug === 'capes' ? (
@@ -1449,17 +1325,17 @@ export function SiteCatalog({
             }
           />
         ) : (
-          <nav className="segs mr-types" aria-label="Разделы каталога">
+          <nav className="segs mr-types" aria-label={t('Разделы каталога')}>
             {extras.filter((x) => x.first).map(extraBtn)}
-            {tabs.map((t) => (
+            {tabs.map((tab) => (
               <button
-                key={t.slug}
-                className={'seg' + (!own && t.slug === section ? ' on' : '')}
-                aria-current={!own && t.slug === section ? 'page' : undefined}
-                data-track={'cat_' + t.slug}
-                onClick={() => pick(t.slug)}
+                key={tab.slug}
+                className={'seg' + (!own && tab.slug === section ? ' on' : '')}
+                aria-current={!own && tab.slug === section ? 'page' : undefined}
+                data-track={'cat_' + tab.slug}
+                onClick={() => pick(tab.slug)}
               >
-                {t.title}
+                {tab.title}
               </button>
             ))}
             {extras.filter((x) => !x.first).map(extraBtn)}

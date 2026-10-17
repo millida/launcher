@@ -12,6 +12,8 @@ import { BenchTabFrame, useHead, useModder } from './BenchShaders'
 import { CONFIG_RULES, OPTION_KEYS, PROFILE_OPTIONS, SHADER_LEVELS, clampOption, configOf, optionOf, ramCapGb, ramForPack, shaderLevelOf } from './benchTabs'
 import '../../../styles/pixel/milli-bench-tabs.css'
 import '../../../styles/pixel/milli-config.css'
+import { t, useT } from '../../../i18n'
+import { plural } from '../../../lib/format'
 
 /*
  * Вкладка «Настройки» карточки сборки. Для игрока 12–14 лет: почти без текста.
@@ -102,9 +104,9 @@ function usePc(): PcInfo | null {
 // ─── Пресеты и оценка FPS ──────────────────────────────────────────────
 
 const PRESETS: readonly { id: MilliProfile; ru: string; icon: string }[] = [
-  { id: 'low', ru: 'Быстро', icon: 'iron_ingot' },
-  { id: 'balanced', ru: 'Баланс', icon: 'gold_ingot' },
-  { id: 'high', ru: 'Красиво', icon: 'diamond' },
+  { id: 'low', get ru() { return t('Быстро') }, icon: 'iron_ingot' },
+  { id: 'balanced', get ru() { return t('Баланс') }, icon: 'gold_ingot' },
+  { id: 'high', get ru() { return t('Красиво') }, icon: 'diamond' },
 ]
 
 /** Потолок шейдеров пресета (presets.ts PROFILE_SHADER). */
@@ -214,6 +216,7 @@ const gbOf = (mb: number) => Math.max(1, Math.round(mb / GB))
 const set = (key: string, value: string) => void benchOp({ op: 'config', key, value })
 
 function Config({ pack }: { pack: MilliPack }) {
+  const t = useT()
   const modder = useModder()
   const pc = usePc()
   const cfg = configOf(pack)
@@ -259,7 +262,7 @@ function Config({ pack }: { pack: MilliPack }) {
     <div className="mcf">
       {pc ? <PcStrip pc={pc} /> : null}
 
-      <div className="mcf-presets" role="radiogroup" aria-label="Графика">
+      <div className="mcf-presets" role="radiogroup" aria-label={t('Графика')}>
         {PRESETS.map((p) => {
           const on = cfg.profile === p.id
           return (
@@ -273,7 +276,7 @@ function Config({ pack }: { pack: MilliPack }) {
               data-id={p.id}
               onClick={() => !on && void benchOp({ op: 'profile', profile: p.id })}
             >
-              {mine === p.id ? <span className="mcf-mine">твой ПК</span> : null}
+              {mine === p.id ? <span className="mcf-mine">{t('твой ПК')}</span> : null}
               <span className="mcf-preset-px" aria-hidden="true">
                 <PxArt name={p.icon} size={32} />
               </span>
@@ -304,24 +307,25 @@ function Config({ pack }: { pack: MilliPack }) {
 }
 
 function PcStrip({ pc }: { pc: PcInfo }) {
+  const t = useT()
   const gpu = gpuShort(pc.gpu, pc.cpu)
   return (
-    <div className="mcf-pc" aria-label="Твой ПК">
-      <span className="mcf-pc-chip" title="Оперативная память">
+    <div className="mcf-pc" aria-label={t('Твой ПК')}>
+      <span className="mcf-pc-chip" title={t('Оперативная память')}>
         <PxArt name="comparator" size={16} />
-        <b>{gbOf(pc.ramMb)} ГБ</b>
+        <b>{t('{n} ГБ', { n: gbOf(pc.ramMb) })}</b>
       </span>
       {gpu ? (
-        <span className="mcf-pc-chip" title={'Видеокарта: ' + gpu}>
+        <span className="mcf-pc-chip" title={t('Видеокарта: {name}', { name: gpu })}>
           <PxArt name="diamond" size={16} />
           <b>{gpu}</b>
         </span>
       ) : null}
       {pc.cores > 0 ? (
-        <span className="mcf-pc-chip" title={pc.cpu ? 'Процессор: ' + pc.cpu : 'Процессор'}>
+        <span className="mcf-pc-chip" title={pc.cpu ? t('Процессор: {name}', { name: pc.cpu }) : t('Процессор')}>
           <PxArt name="redstone" size={16} />
           <b>
-            {pc.cores} {pc.cores % 10 === 1 && pc.cores % 100 !== 11 ? 'ядро' : pc.cores % 10 >= 2 && pc.cores % 10 <= 4 && (pc.cores % 100 < 12 || pc.cores % 100 > 14) ? 'ядра' : 'ядер'}
+            {plural(pc.cores, t('{n} ядро', { n: pc.cores }), t('{n} ядра', { n: pc.cores }), t('{n} ядер', { n: pc.cores }))}
           </b>
         </span>
       ) : null}
@@ -330,17 +334,18 @@ function PcStrip({ pc }: { pc: PcInfo }) {
 }
 
 function Fps({ lo, hi, pc }: { lo: number; hi: number; pc: boolean }) {
+  const t = useT()
   const txt = lo === hi ? String(lo) : `${lo}–${hi}`
   const bump = useBump(txt)
   const tone = lo < 30 ? 'bad' : lo < 55 ? 'mid' : 'ok'
   return (
-    <div className={'mcf-fps ' + tone} title={pc ? 'Оценка по твоему ПК, не замер' : 'Оценка для среднего ПК, не замер'}>
+    <div className={'mcf-fps ' + tone} title={pc ? t('Оценка по твоему ПК, не замер') : t('Оценка для среднего ПК, не замер')}>
       <PxArt name="fps_torch" size={32} className="mcf-fps-px" />
       <b className="mcf-fps-n" data-mlm-bump={bump}>
         {txt}
       </b>
       <span className="mcf-fps-u">FPS</span>
-      <span className="mcf-fps-tag">≈ оценка</span>
+      <span className="mcf-fps-tag">{t('≈ оценка')}</span>
     </div>
   )
 }
@@ -348,21 +353,21 @@ function Fps({ lo, hi, pc }: { lo: number; hi: number; pc: boolean }) {
 // ─── Тонкая настройка ──────────────────────────────────────────────────
 
 const PARTICLES = [
-  { v: '0', ru: 'Все' },
-  { v: '1', ru: 'Меньше' },
-  { v: '2', ru: 'Мин' },
+  { v: '0', get ru() { return t('Все') } },
+  { v: '1', get ru() { return t('Меньше') } },
+  { v: '2', get ru() { return t('Мин') } },
 ]
 const CLOUDS = [
-  { v: 'false', ru: 'Нет' },
-  { v: 'fast', ru: 'Просто' },
-  { v: 'true', ru: 'Красиво' },
+  { v: 'false', get ru() { return t('Нет') } },
+  { v: 'fast', get ru() { return t('Просто') } },
+  { v: 'true', get ru() { return t('Красиво') } },
 ]
 const LANGS = [
   { v: 'ru_ru', ru: 'RU' },
   { v: 'uk_ua', ru: 'UA' },
   { v: 'en_us', ru: 'EN' },
 ]
-const SHADER_RU: Record<MilliLevel, string> = { off: 'Без шейдеров', light: 'Лёгкие', medium: 'Средние', heavy: 'Тяжёлые' }
+const SHADER_RU: Record<MilliLevel, string> = { get off() { return t('Без шейдеров') }, get light() { return t('Лёгкие') }, get medium() { return t('Средние') }, get heavy() { return t('Тяжёлые') } }
 
 interface FineProps {
   cfg: MilliConfig
@@ -378,6 +383,7 @@ interface FineProps {
 }
 
 function Fine(p: FineProps) {
+  const t = useT()
   const [open, toggle] = useFineOpen()
   const fold = useRef<HTMLDivElement>(null)
   const keep = useHeightAnim(fold, open)
@@ -387,18 +393,18 @@ function Fine(p: FineProps) {
       <div className="mcf-fine-head">
         <button type="button" className="mcf-fine-btn" aria-expanded={open} data-track="milli_cfg_fine" onClick={toggle}>
           <PxArt name="comparator" size={16} />
-          <span>Подкрутить самому</span>
-          {n ? <i className="mcf-dot" aria-label={'Изменено: ' + n} /> : null}
+          <span>{t('Подкрутить самому')}</span>
+          {n ? <i className="mcf-dot" aria-label={t('Изменено: {n}', { n })} /> : null}
           <svg className="mcf-chev" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
             <path d="M2 3.5 5 6.5 8 3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
         {n ? (
-          <button type="button" className="btn sm ghost mcf-reset mlm-pop" data-track="milli_cfg_reset" onClick={p.onReset} title="Вернуть как в пресете">
+          <button type="button" className="btn sm ghost mcf-reset mlm-pop" data-track="milli_cfg_reset" onClick={p.onReset} title={t('Вернуть как в пресете')}>
             <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
               <path d="M2.5 6a3.5 3.5 0 1 0 1-2.5M2.5 1.5v2.5H5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            Сбросить
+            {t('Сбросить')}
           </button>
         ) : null}
       </div>
@@ -407,12 +413,12 @@ function Fine(p: FineProps) {
           <div className="mcf-rows">
             <DistanceRow cfg={p.cfg} dirty={p.dirty.has('renderDistance')} />
             {p.canShaders ? <ShaderRow level={p.level} dirty={p.dirty.has('shader')} /> : null}
-            <SegRow label="Частицы" px="firework_star" k="particles" opts={PARTICLES} cfg={p.cfg} dirty={p.dirty.has('particles')} />
-            <SegRow label="Облака" px="painting" k="renderClouds" opts={CLOUDS} cfg={p.cfg} dirty={p.dirty.has('renderClouds')} />
-            <TglRow label="Тени" px="torch" k="entityShadows" cfg={p.cfg} dirty={p.dirty.has('entityShadows')} />
-            <TglRow label="Плавный свет" px="glowstone" k="ao" cfg={p.cfg} dirty={p.dirty.has('ao')} />
+            <SegRow label={t('Частицы')} px="firework_star" k="particles" opts={PARTICLES} cfg={p.cfg} dirty={p.dirty.has('particles')} />
+            <SegRow label={t('Облака')} px="painting" k="renderClouds" opts={CLOUDS} cfg={p.cfg} dirty={p.dirty.has('renderClouds')} />
+            <TglRow label={t('Тени')} px="torch" k="entityShadows" cfg={p.cfg} dirty={p.dirty.has('entityShadows')} />
+            <TglRow label={t('Плавный свет')} px="glowstone" k="ao" cfg={p.cfg} dirty={p.dirty.has('ao')} />
             <RamRow {...p} dirty={p.dirty.has('ramMb')} />
-            <SegRow label="Язык" px="book_quill" k="lang" opts={LANGS} cfg={p.cfg} dirty={false} />
+            <SegRow label={t('Язык')} px="book_quill" k="lang" opts={LANGS} cfg={p.cfg} dirty={false} />
           </div>
         ) : null}
       </div>
@@ -434,6 +440,7 @@ function Row({ label, px, dirty, value, children, wide }: { label: string; px: s
 }
 
 function DistanceRow({ cfg, dirty }: { cfg: MilliConfig; dirty: boolean }) {
+  const t = useT()
   const rule = CONFIG_RULES.renderDistance
   const [v, setV] = useDraft('renderDistance', optionOf(cfg, 'renderDistance'))
   const n = Number(v) || 12
@@ -441,15 +448,15 @@ function DistanceRow({ cfg, dirty }: { cfg: MilliConfig; dirty: boolean }) {
   if (!rule || rule.kind === 'enum') return null
   const step = (d: number) => setV(String(Math.max(rule.min, Math.min(rule.max, n + d))))
   return (
-    <Row label="Дальность" px="spyglass" dirty={dirty}>
-      <span className="mcf-step" role="group" aria-label="Дальность прорисовки, чанков">
-        <button type="button" className="mlm-press" aria-label="Меньше" disabled={n <= rule.min} onClick={() => step(-2)}>
+    <Row label={t('Дальность')} px="spyglass" dirty={dirty}>
+      <span className="mcf-step" role="group" aria-label={t('Дальность прорисовки, чанков')}>
+        <button type="button" className="mlm-press" aria-label={t('Меньше')} disabled={n <= rule.min} onClick={() => step(-2)}>
           −
         </button>
         <b className="mcf-step-n" data-mlm-flip={flip}>
           {n}
         </b>
-        <button type="button" className="mlm-press" aria-label="Больше" disabled={n >= rule.max} onClick={() => step(2)}>
+        <button type="button" className="mlm-press" aria-label={t('Больше')} disabled={n >= rule.max} onClick={() => step(2)}>
           +
         </button>
       </span>
@@ -458,9 +465,10 @@ function DistanceRow({ cfg, dirty }: { cfg: MilliConfig; dirty: boolean }) {
 }
 
 function ShaderRow({ level, dirty }: { level: MilliLevel; dirty: boolean }) {
+  const t = useT()
   return (
-    <Row label="Шейдеры" px="glowstone" dirty={dirty}>
-      <span className="mcf-seg mcf-seg-px" role="radiogroup" aria-label="Шейдеры">
+    <Row label={t('Шейдеры')} px="glowstone" dirty={dirty}>
+      <span className="mcf-seg mcf-seg-px" role="radiogroup" aria-label={t('Шейдеры')}>
         {SHADER_LEVELS.map((l) => (
           <button
             key={l.id}
@@ -514,6 +522,7 @@ function TglRow({ label, px, k, cfg, dirty }: { label: string; px: string; k: st
 }
 
 function RamRow({ cfg, totalMb, capGb, needMb, presetRamGb, mods, dirty }: Omit<FineProps, 'dirty'> & { dirty: boolean }) {
+  const t = useT()
   const totalGb = totalMb > 0 ? Math.round(totalMb / GB) : 0
   // Ползунок дальше безопасного (до «всё, кроме 2 ГБ»), чтобы было видно «слишком много».
   const max = Math.max(capGb, totalGb ? Math.min(32, totalGb - 2) : 16)
@@ -529,15 +538,15 @@ function RamRow({ cfg, totalMb, capGb, needMb, presetRamGb, mods, dirty }: Omit<
   const left = totalGb ? totalGb - gb : 0
   const flip = useBump(gb)
   const warn = high
-    ? { cls: 'bad', ru: 'Слишком много', tip: `Windows и лаунчеру останется ${left} ГБ — компьютер начнёт тормозить` }
+    ? { cls: 'bad', ru: t('Слишком много'), tip: t('Windows и лаунчеру останется {n} ГБ — компьютер начнёт тормозить', { n: left }) }
     : low
-      ? { cls: 'mid', ru: 'Мало', tip: `Сборке на ${mods} модов нужно около ${needGb} ГБ — игра может вылетать` }
+      ? { cls: 'mid', ru: t('Мало'), tip: t('Сборке на {mods} модов нужно около {n} ГБ — игра может вылетать', { mods, n: needGb }) }
       : null
   return (
     <div className={'mcf-row mcf-ram' + (dirty ? ' dirty' : '')}>
       <span className="mcf-lab">
         <PxArt name="redstone" size={16} />
-        Память
+        {t('Память')}
       </span>
       {warn ? (
         <span className={'mcf-warn mlm-pop ' + warn.cls} title={warn.tip}>
@@ -545,9 +554,9 @@ function RamRow({ cfg, totalMb, capGb, needMb, presetRamGb, mods, dirty }: Omit<
         </span>
       ) : null}
       <b className="mcf-val" data-mlm-flip={flip}>
-        {gb} ГБ
+        {t('{n} ГБ', { n: gb })}
       </b>
-      <div className="mcf-ram-track" title={`Зелёная зона — безопасно. Метка — совет: ${presetRamGb} ГБ`}>
+      <div className="mcf-ram-track" title={t('Зелёная зона — безопасно. Метка — совет: {n} ГБ', { n: presetRamGb })}>
         <i className="mcf-zone" style={{ left: zoneFrom + '%', width: Math.max(1.5, zoneTo - zoneFrom) + '%' }} aria-hidden="true" />
         <i className="mcf-tick" style={{ left: pct(presetRamGb) + '%' }} aria-hidden="true" />
         <Slider width="100%" min={2} max={max} value={gb} onChange={(v) => setMb(String(v * GB))} />
@@ -559,6 +568,7 @@ function RamRow({ cfg, totalMb, capGb, needMb, presetRamGb, mods, dirty }: Omit<
 // ─── Для моддеров ──────────────────────────────────────────────────────
 
 function ModderConfig({ cfg }: { cfg: MilliConfig }) {
+  const t = useT()
   return (
     <section className="mcf-modder">
       <div className="mcf-row">
@@ -567,14 +577,14 @@ function ModderConfig({ cfg }: { cfg: MilliConfig }) {
           JVM
         </span>
         <span className="mcf-ctl">
-          <span className="mcf-seg" role="radiogroup" aria-label="Сборщик мусора">
+          <span className="mcf-seg" role="radiogroup" aria-label={t('Сборщик мусора')}>
             {(['g1', 'zgc'] as const).map((j) => (
               <button
                 key={j}
                 type="button"
                 role="radio"
                 aria-checked={cfg.jvm === j}
-                title={j === 'zgc' ? 'Меньше фризов, нужна Java 21+' : 'Надёжно на любой Java'}
+                title={j === 'zgc' ? t('Меньше фризов, нужна Java 21+') : t('Надёжно на любой Java')}
                 className={cfg.jvm === j ? 'on' : undefined}
                 onClick={() => cfg.jvm !== j && void benchOp({ op: 'config', key: 'jvm', value: j })}
               >
@@ -584,7 +594,7 @@ function ModderConfig({ cfg }: { cfg: MilliConfig }) {
           </span>
         </span>
       </div>
-      <div className="mcf-raw" title="options.txt — только эти ключи; бинды не трогаем">
+      <div className="mcf-raw" title={t('options.txt — только эти ключи; бинды не трогаем')}>
         {OPTION_KEYS.map((k) => (
           <RawKey key={k} k={k} value={optionOf(cfg, k)} />
         ))}

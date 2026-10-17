@@ -2,6 +2,7 @@
 import { api } from './api'
 import { apiErrorText } from './apiError'
 import type { ChestTier } from './rubies'
+import { t } from '../i18n'
 
 /**
  * Код автора (как Support-a-Creator в Fortnite, 24.09.2026). Контракт службы:
@@ -57,8 +58,8 @@ export const SOON = 'Коды авторов скоро заработают'
  * это «код не найден», а не отсутствие адреса.
  */
 export function creatorErrorText(e: unknown, live: boolean): string {
-  if (isNotFound(e)) return live ? 'Код не найден' : SOON
-  return apiErrorText(e, 'Не получилось, попробуй позже')
+  if (isNotFound(e)) return live ? t('Код не найден') : t(SOON)
+  return apiErrorText(e, t('Не получилось, попробуй позже'))
 }
 
 /** Подарок за первый код уже получен в этом лаунчере — плашку «+ сундук» больше не показываем. */

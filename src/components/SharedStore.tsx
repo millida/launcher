@@ -3,6 +3,7 @@ import { Row } from './SetKit'
 import { hasTauri } from '../ipc/tauri'
 import { showToast } from '../state/ui'
 import { dedupeGc, dedupeRun, dedupeScan, type DedupReport } from '../ipc/commands'
+import { useT } from '../i18n'
 
 const mb = (bytes: number) => Math.round(bytes / 1024 / 1024)
 
@@ -10,6 +11,7 @@ const mb = (bytes: number) => Math.round(bytes / 1024 / 1024)
 /// eight times as much; the numbers here are what that costs and what sharing
 /// gives back.
 export function SharedStore() {
+  const t = useT()
   const [report, setReport] = useState<DedupReport | null>(null)
   const [busy, setBusy] = useState('')
 
@@ -28,7 +30,7 @@ export function SharedStore() {
       .then((r) => {
         setReport(r)
         showToast(
-          r.note || (r.linked ? `Общими стали ${r.linked} файлов — экономия ${mb(r.savedBytes)} МБ` : 'Дублей не нашлось'),
+          r.note || (r.linked ? t('Общими стали {n} файлов — экономия {mb} МБ', { n: r.linked, mb: mb(r.savedBytes) }) : t('Дублей не нашлось')),
           r.note ? 'error' : 'ok',
         )
       })
@@ -40,7 +42,7 @@ export function SharedStore() {
     setBusy('gc')
     dedupeGc()
       .then((freed) => {
-        showToast(freed ? `Освобождено ${mb(freed)} МБ` : 'Лишних файлов в хранилище нет', 'ok')
+        showToast(freed ? t('Освобождено {mb} МБ', { mb: mb(freed) }) : t('Лишних файлов в хранилище нет'), 'ok')
         return dedupeScan().then(setReport)
       })
       .catch((e) => showToast('' + e, 'error'))
@@ -49,26 +51,26 @@ export function SharedStore() {
 
   return (
     <Row
-      title="Общие моды"
+      title={t('Общие моды')}
       keys="общее хранилище моды дубли повторы место объединить"
       hint={
         busy === 'scan' || !report
-          ? 'Считаем повторы…'
+          ? t('Считаем повторы…')
           : report.savedBytes
-            ? 'Повторов на ' + mb(report.savedBytes) + ' МБ'
-            : 'Повторов между сборками нет'
+            ? t('Повторов на {mb} МБ', { mb: mb(report.savedBytes) })
+            : t('Повторов между сборками нет')
       }
     >
       <button className="btn sm secondary" disabled={busy !== ''} onClick={run}>
-        {busy === 'run' ? 'Объединяем…' : 'Объединить'}
+        {busy === 'run' ? t('Объединяем…') : t('Объединить')}
       </button>
       <button
         className="btn sm ghost"
         disabled={busy !== ''}
-        data-tip="Убрать файлы, которых больше нет ни в одной сборке"
+        data-tip={t('Убрать файлы, которых больше нет ни в одной сборке')}
         onClick={gc}
       >
-        {busy === 'gc' ? 'Чистим…' : 'Подчистить'}
+        {busy === 'gc' ? t('Чистим…') : t('Подчистить')}
       </button>
     </Row>
   )

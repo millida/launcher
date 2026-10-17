@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 /**
  * Иконка сборки как в Modrinth: квадрат глубокого цвета и блок на нём (правка
  * владельца 23.09.2026, 19:40 — «вместо фотообоев — иконки»).
@@ -156,7 +157,7 @@ export function fileToCover(file: File): Promise<string> {
     }
     img.onerror = () => {
       URL.revokeObjectURL(url)
-      rej(new Error('Картинка не открылась'))
+      rej(new Error(t('Картинка не открылась')))
     }
     img.src = url
   })

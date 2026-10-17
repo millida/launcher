@@ -11,6 +11,7 @@ import { isLeader, usePartyStore } from '../../state/party'
 import type { LobbyMode } from '../../state/lobbyMode'
 import { TIER_SERVER, kitIcon, modeTitle, tierRank, useTiers, type TierMode } from '../../state/tiers'
 import '../../styles/pixel/arena.css'
+import { useT } from '../../i18n'
 
 /**
  * PvP-арена Millida (владелец 11.10.2026: «как в Dawn — выбор класса, сразу
@@ -71,6 +72,7 @@ const clock = (ms: number) => {
  * сервере — ничего не показываем, сразу после «Играть» — «запускаем игру».
  */
 function ArenaStatus({ uuid, launching, modes }: { uuid: string | null; launching: boolean; modes: { slug: string; title: string; first_to: number }[] }) {
+  const t = useT()
   const [st, setSt] = useState<ArenaState | null>(null)
   const [now, setNow] = useState(Date.now())
   useEffect(() => {
@@ -100,14 +102,14 @@ function ArenaStatus({ uuid, launching, modes }: { uuid: string | null; launchin
   const kitName = st?.kit ? modeTitle(modes, st.kit) : ''
   const timer = st?.since ? clock(now - st.since) : ''
   let line: { cls: string; t: string; sub?: string } | null = null
-  if (st && st.state === 'queue') line = { cls: 'q', t: st.mode === '2v2' ? 'Ищем пару соперников' : 'Ищем соперника', sub: [kitName, st.ranked ? 'рейтинговый' : '', timer].filter(Boolean).join(' · ') }
+  if (st && st.state === 'queue') line = { cls: 'q', t: st.mode === '2v2' ? t('Ищем пару соперников') : t('Ищем соперника'), sub: [kitName, st.ranked ? t('рейтинговый') : '', timer].filter(Boolean).join(' · ') }
   else if (st && st.state === 'party')
-    line = { cls: 'q', t: 'Ждём напарника', sub: [kitName, typeof st.partyJoined === 'number' && st.partySize ? st.partyJoined + ' из ' + st.partySize : ''].filter(Boolean).join(' · ') }
-  else if (st && st.state === 'match') line = { cls: 'm', t: st.mode === '2v2' ? 'Бой 2 на 2' : 'Бой идёт', sub: [kitName, timer].filter(Boolean).join(' · ') }
-  else if (st && st.state === 'bot') line = { cls: 'm', t: 'Бой с ботом', sub: timer }
-  else if (st && st.state === 'spectating') line = { cls: 'l', t: 'Смотришь бой' }
-  else if (st && st.state !== 'offline') line = { cls: 'l', t: 'Ты на Millida SMP', sub: 'лобби' }
-  else if (launching) line = { cls: 'l', t: 'Запускаем Minecraft', sub: 'очередь начнётся при входе' }
+    line = { cls: 'q', t: t('Ждём напарника'), sub: [kitName, typeof st.partyJoined === 'number' && st.partySize ? t('{n} из {max}', { n: st.partyJoined, max: st.partySize }) : ''].filter(Boolean).join(' · ') }
+  else if (st && st.state === 'match') line = { cls: 'm', t: st.mode === '2v2' ? t('Бой 2 на 2') : t('Бой идёт'), sub: [kitName, timer].filter(Boolean).join(' · ') }
+  else if (st && st.state === 'bot') line = { cls: 'm', t: t('Бой с ботом'), sub: timer }
+  else if (st && st.state === 'spectating') line = { cls: 'l', t: t('Смотришь бой') }
+  else if (st && st.state !== 'offline') line = { cls: 'l', t: t('Ты на Millida SMP'), sub: t('лобби') }
+  else if (launching) line = { cls: 'l', t: t('Запускаем Minecraft'), sub: t('очередь начнётся при входе') }
   if (!line) return null
   return (
     <div className={'ar-status ' + line.cls} role="status">
@@ -121,6 +123,7 @@ function ArenaStatus({ uuid, launching, modes }: { uuid: string | null; launchin
 const winRate = (w: number, l: number) => (w + l > 0 ? Math.round((100 * w) / (w + l)) + '%' : '—')
 
 export function PvpArena() {
+  const t = useT()
   const nick = tierNick()
   const me = useTiers((s) => (s.nick === nick ? s.me : undefined))
   const modes = useTiers((s) => s.modes)
@@ -170,7 +173,7 @@ export function PvpArena() {
       await api('/tiers/intent', { method: 'POST', body: JSON.stringify({ kit, ranked: true, party: party.members.map((m) => m.userId) }) })
     } catch (e) {
       const msg = String(e)
-      showToast(/403/.test(msg) ? 'Позвать в 2 на 2 может только лидер пати' : /404/.test(msg) ? 'У напарника ещё нет игрового профиля Millida' : 'Сервер не принял заявку 2 на 2 — попробуй ещё раз', 'error')
+      showToast(/403/.test(msg) ? t('Позвать в 2 на 2 может только лидер пати') : /404/.test(msg) ? t('У напарника ещё нет игрового профиля Millida') : t('Сервер не принял заявку 2 на 2 — попробуй ещё раз'), 'error')
       setBusy(false)
       return
     }
@@ -188,7 +191,7 @@ export function PvpArena() {
     // ставит в очередь кита. Не ответил за 3 с — игрок просто окажется в лобби сервера.
     const intent = api('/tiers/intent', { method: 'POST', body: JSON.stringify({ kit: k, ranked: true }) }).catch(() => {})
     await Promise.race([intent, new Promise((r) => setTimeout(r, 3000))])
-    showToast('Заходим на Millida SMP · ' + name)
+    showToast(t('Заходим на Millida SMP · {name}', { name }))
     setLaunchAt(Date.now())
     quickJoin(TIER_SERVER.ip, TIER_SERVER.name, false, TIER_SERVER.versions)
       .catch(() => {})
@@ -199,21 +202,21 @@ export function PvpArena() {
     <section className="ar" data-section="pvp_arena">
       <header className="ar-head">
         <span className="ar-head-t">
-          <h1>PvP-арена</h1>
+          <h1>{t('PvP-арена')}</h1>
           <span className="ar-sub">
-            Millida SMP · дуэли по тир-листу
-            {me ? ' · ' + me.title + ' · ' + me.points + ' ' + plural(me.points, 'очко', 'очка', 'очков') : ''}
+            {t('Millida SMP · дуэли по тир-листу')}
+            {me ? ' · ' + me.title + ' · ' + plural(me.points, t('{n} очко', { n: me.points }), t('{n} очка', { n: me.points }), t('{n} очков', { n: me.points })) : ''}
           </span>
         </span>
         <button className="btn sm secondary" data-track="arena_open_top" onClick={() => openTop('tiers')}>
           <Icon id="i-trophy" />
-          Тир-лист
+          {t('Тир-лист')}
         </button>
       </header>
 
       <ArenaStatus uuid={me?.uuid ?? null} launching={launchAt > 0 && Date.now() - launchAt < 180_000} modes={modes} />
 
-      <div className="ar-cards" role="listbox" aria-label="Режим">
+      <div className="ar-cards" role="listbox" aria-label={t('Режим')}>
         {kits.map((m, i) => {
           const t = me?.modes?.[m.slug]
           const tier = t && tierRank(t.tier) !== null ? t.tier.toUpperCase() : null
@@ -261,7 +264,7 @@ export function PvpArena() {
             <>
               <span className="ar-me-tier">
                 <TierBadge tier={myTier} big />
-                {mine.peak && mine.peak !== mine.tier && tierRank(mine.peak) !== null ? <i>пик {mine.peak}</i> : null}
+                {mine.peak && mine.peak !== mine.tier && tierRank(mine.peak) !== null ? <i>{t('пик {tier}', { tier: mine.peak })}</i> : null}
               </span>
               <span className="ar-me-nums">
                 <b>{mine.elo}</b> ELO · <b>{mine.wins}</b>–<b>{mine.losses}</b> · {winRate(mine.wins, mine.losses)}
@@ -270,16 +273,16 @@ export function PvpArena() {
           ) : (
             <>
               <span className="ar-me-tier">
-                <b className="ar-me-none">Без тира</b>
+                <b className="ar-me-none">{t('Без тира')}</b>
               </span>
-              <span className="ar-me-nums">Первый тир — экзамен с ботом, выше LT3 — тесты с игроками</span>
+              <span className="ar-me-nums">{t('Первый тир — экзамен с ботом, выше LT3 — тесты с игроками')}</span>
             </>
           )}
           {st ? (
             <span className="ar-me-live">
-              {st.players} {plural(st.players, 'игрок', 'игрока', 'игроков')} с тиром
-              {st.fighting ? ' · ' + st.fighting + ' в бою' : ''}
-              {st.queued ? ' · ' + st.queued + ' в очереди' : ''}
+              {plural(st.players, t('{n} игрок с тиром', { n: st.players }), t('{n} игрока с тиром', { n: st.players }), t('{n} игроков с тиром', { n: st.players }))}
+              {st.fighting ? ' · ' + t('{n} в бою', { n: st.fighting }) : ''}
+              {st.queued ? ' · ' + t('{n} в очереди', { n: st.queued }) : ''}
             </span>
           ) : null}
         </div>
@@ -292,21 +295,21 @@ export function PvpArena() {
               <TierBadge tier={r.tier} />
             </li>
           ))}
-          {top && !top.length ? <li className="ar-top-empty">Пока никого — стань первым</li> : null}
+          {top && !top.length ? <li className="ar-top-empty">{t('Пока никого — стань первым')}</li> : null}
         </ol>
 
         <div className="ar-go-col">
           <button className="btn lg primary ar-go" data-sound="open" data-track="arena_play" data-id={kit} disabled={busy} onClick={() => void play()}>
             <Icon id="i-play" />
             <span>
-              Играть
+              {t('Играть')}
               <em>{title}</em>
             </span>
           </button>
           {duo ? (
             <button className="btn secondary ar-duo" data-sound="open" data-track="arena_play_2v2" data-id={kit} disabled={busy} onClick={() => void playDuo()}>
               <Icon id="i-users" />
-              2 на 2 с пати
+              {t('2 на 2 с пати')}
             </button>
           ) : null}
         </div>

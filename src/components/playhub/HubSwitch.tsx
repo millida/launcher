@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import { PxIcon } from '../PxIcon'
 import type { HubTab } from './hubTab'
+import { t, useT } from '../../i18n'
 
 /**
  * Переключатель вкладок хаба «Каталог / Мои сборки» — как выбор режима в Brawl Stars:
@@ -9,8 +10,8 @@ import type { HubTab } from './hubTab'
  * клавиатуре тоже переключают.
  */
 const DEFAULT_TABS: { id: HubTab; label: string; icon: string }[] = [
-  { id: 'catalog', label: 'Каталог', icon: 'book' },
-  { id: 'builds', label: 'Мои сборки', icon: 'chest' },
+  { id: 'catalog', get label() { return t('Каталог') }, icon: 'book' },
+  { id: 'builds', get label() { return t('Мои сборки') }, icon: 'chest' },
 ]
 
 export function HubSwitch<T extends string = HubTab>({
@@ -23,12 +24,13 @@ export function HubSwitch<T extends string = HubTab>({
   /** Свои вкладки; по умолчанию — прежние «Каталог / Мои сборки». */
   tabs?: { id: T; label: string; icon: string }[]
 }) {
+  const t = useT()
   const TABS = (tabs || DEFAULT_TABS) as { id: T; label: string; icon: string }[]
   const refs = useRef<(HTMLButtonElement | null)[]>([])
   const i = TABS.findIndex((t) => t.id === tab)
   return (
     <div className="hub-sw-wrap">
-      <div className={'ph-card hub-sw n' + TABS.length + ' at-' + i} role="tablist" aria-label="Во что играем">
+      <div className={'ph-card hub-sw n' + TABS.length + ' at-' + i} role="tablist" aria-label={t('Во что играем')}>
         <span className="btn primary hub-sw-thumb" aria-hidden="true"></span>
         {TABS.map((t, k) => (
           <button

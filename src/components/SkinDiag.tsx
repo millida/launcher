@@ -7,6 +7,7 @@ import { showToast } from '../state/ui'
 import { track } from '../lib/telemetry'
 import { Icon } from './Icon'
 import { apiErrorText } from '../lib/apiError'
+import { useT } from '../i18n'
 
 const HEALTHY = new Set(['ok', 'never_launched', 'vanilla'])
 
@@ -39,6 +40,7 @@ function reportText(r: SkinDiagReport): string {
 }
 
 export function SkinDiag({ nick, online, onClose }: { nick: string; online: boolean; onClose: () => void }) {
+  const t = useT()
   const [report, setReport] = useState<SkinDiagReport | null>(null)
   const [failed, setFailed] = useState('')
   const [fixing, setFixing] = useState(false)
@@ -53,7 +55,7 @@ export function SkinDiag({ nick, online, onClose }: { nick: string; online: bool
           track('skin_diag', { verdict: r.verdict, builds: r.builds.length })
         })
         .catch((e) => {
-          if (alive()) setFailed(apiErrorText(e, 'Проверка скина не прошла'))
+          if (alive()) setFailed(apiErrorText(e, t('Проверка скина не прошла')))
         }),
     [nick, online],
   )
@@ -73,9 +75,9 @@ export function SkinDiag({ nick, online, onClose }: { nick: string; online: bool
     try {
       await setSkinMod(fix.build, true)
       await check(() => true)
-      showToast('Мод скинов включён для сборки «' + fix.build + '» — запусти её заново')
+      showToast(t('Мод скинов включён для сборки «{name}» — запусти её заново', { name: fix.build }))
     } catch (e) {
-      showToast(apiErrorText(e, 'Не удалось включить мод скинов'), 'error')
+      showToast(apiErrorText(e, t('Не удалось включить мод скинов')), 'error')
     } finally {
       setFixing(false)
     }
@@ -92,10 +94,10 @@ export function SkinDiag({ nick, online, onClose }: { nick: string; online: bool
   return (
     <div className="modal-bg open vis" {...backdropClose(onClose)}>
       <div className="modal mw-sm">
-        <h3>Почему скина нет в игре</h3>
+        <h3>{t('Почему скина нет в игре')}</h3>
         {!report && !failed ? (
           <div className="sub" style={{ marginTop: '10px' }}>
-            Проверяем аккаунт, сборки и наш сервер…
+            {t('Проверяем аккаунт, сборки и наш сервер…')}
           </div>
         ) : null}
         {failed ? (
@@ -142,7 +144,7 @@ export function SkinDiag({ nick, online, onClose }: { nick: string; online: bool
           {fix ? (
             <button className="btn md primary" disabled={fixing} onClick={() => void repair(fix)}>
               <Icon id="i-check" />
-              {fixing ? 'Чиним…' : 'Починить'}
+              {fixing ? t('Чиним…') : t('Починить')}
             </button>
           ) : null}
           {report ? (
@@ -150,12 +152,12 @@ export function SkinDiag({ nick, online, onClose }: { nick: string; online: bool
               className="btn md secondary"
               onClick={() =>
                 void copyText(reportText(report)).then((ok) =>
-                  showToast(ok ? 'Отчёт скопирован — вставь его в поддержку' : 'Не удалось скопировать отчёт', ok ? undefined : 'error'),
+                  showToast(ok ? t('Отчёт скопирован — вставь его в поддержку') : t('Не удалось скопировать отчёт'), ok ? undefined : 'error'),
                 )
               }
             >
               <Icon id="i-copy" />
-              Копировать отчёт
+              {t('Копировать отчёт')}
             </button>
           ) : null}
           {failed ? (
@@ -167,11 +169,11 @@ export function SkinDiag({ nick, online, onClose }: { nick: string; online: bool
               }}
             >
               <Icon id="i-restart" />
-              Повторить
+              {t('Повторить')}
             </button>
           ) : null}
           <button className={'btn md' + (fix ? ' secondary' : ' primary')} onClick={onClose}>
-            Закрыть
+            {t('Закрыть')}
           </button>
         </div>
       </div>

@@ -3,6 +3,7 @@ import { hasTauri } from '../ipc/tauri'
 import { millidaPacks } from '../ipc/commands'
 import type { MillidaPack } from '../ipc/commands'
 import { RU_LOADER } from './format'
+import { intlTag, rubleGoodsPrice, t } from '../i18n'
 
 /// Витрина платных сборок (docs/REDESIGN-2026-09-22.md §2.2).
 ///
@@ -174,17 +175,19 @@ export function buyPremiumPack(id: string): Promise<{ paymentUrl: string }> {
 }
 
 /// Копейки сервера — в рубли без копеечного хвоста, когда он нулевой.
-export function rub(kopecks: number): string {
+function rubText(kopecks: number): string {
   const value = (kopecks || 0) / 100
   const rounded = Math.round(value * 100) / 100
   const text = Number.isInteger(rounded)
-    ? rounded.toLocaleString('ru-RU')
-    : rounded.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    ? rounded.toLocaleString(intlTag())
+    : rounded.toLocaleString(intlTag(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   return text + ' ₽'
 }
 
+export const rub = (kopecks: number): string => rubleGoodsPrice(kopecks, rubText)
+
 export const periodSuffix = (p?: PremiumPeriod | null): string =>
-  p === 'year' ? '/год' : p === 'month' ? '/мес' : ''
+  p === 'year' ? t('/год') : p === 'month' ? t('/мес') : ''
 
 export const planPrice = (plan: PremiumPlan): string => rub(plan.priceKopecks) + periodSuffix(plan.period)
 
@@ -193,13 +196,13 @@ export function untilText(iso?: string | null): string {
   if (!iso) return ''
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
+  return d.toLocaleDateString(intlTag(), { day: 'numeric', month: 'long' })
 }
 
 /// Строка под названием: только живые числа сервера, через разделитель.
 export function packFacts(p: PremiumPack): string {
   const parts: string[] = []
-  if (typeof p.modsCount === 'number' && p.modsCount > 0) parts.push(p.modsCount.toLocaleString('ru-RU') + ' модов')
+  if (typeof p.modsCount === 'number' && p.modsCount > 0) parts.push(t('{n} модов', { n: p.modsCount.toLocaleString(intlTag()) }))
   if (p.mcVersion) parts.push(p.mcVersion)
   if (p.loader) parts.push(p.loader)
   return parts.join(' · ')

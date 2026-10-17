@@ -1,33 +1,34 @@
+import { t } from '../i18n'
 /**
  * Места на теле по-русски. Одна таблица на весь лаунчер: гардероб и магазин
  * показывают одни и те же вещи, и «Шляпа» против «Шляпы» в двух списках
  * читается как два разных места.
  */
 export const COSMETIC_SLOT_NAMES: Record<string, string> = {
-  CAPE: 'Плащ',
-  HAT: 'Шляпа',
-  HEAD: 'Голова',
-  FACE: 'Лицо',
-  EARS: 'Уши',
-  BACK: 'Спина',
-  WINGS: 'Крылья',
-  SHOULDER: 'Плечо',
-  SHOULDERS: 'Плечи',
-  ARMS: 'Руки',
-  HAND: 'Рука',
-  WAIST: 'Пояс',
-  TOP: 'Верх',
-  PANTS: 'Штаны',
-  SKIRT: 'Юбка',
-  SHOES: 'Обувь',
-  FEET: 'Ноги',
-  FULL_BODY: 'Костюм',
-  ACCESSORY: 'Аксессуар',
-  ICON: 'Значок',
-  EFFECT: 'Эффект',
-  AURA: 'Аура',
-  EMOTE: 'Эмоция',
-  PET: 'Питомец',
+  get CAPE() { return t('Плащ') },
+  get HAT() { return t('Шляпа') },
+  get HEAD() { return t('Голова') },
+  get FACE() { return t('Лицо') },
+  get EARS() { return t('Уши') },
+  get BACK() { return t('Спина') },
+  get WINGS() { return t('Крылья') },
+  get SHOULDER() { return t('Плечо') },
+  get SHOULDERS() { return t('Плечи') },
+  get ARMS() { return t('Руки') },
+  get HAND() { return t('Рука') },
+  get WAIST() { return t('Пояс') },
+  get TOP() { return t('Верх') },
+  get PANTS() { return t('Штаны') },
+  get SKIRT() { return t('Юбка') },
+  get SHOES() { return t('Обувь') },
+  get FEET() { return t('Ноги') },
+  get FULL_BODY() { return t('Костюм') },
+  get ACCESSORY() { return t('Аксессуар') },
+  get ICON() { return t('Значок') },
+  get EFFECT() { return t('Эффект') },
+  get AURA() { return t('Аура') },
+  get EMOTE() { return t('Эмоция') },
+  get PET() { return t('Питомец') },
 }
 
 export const cosmeticSlotName = (slot: string) => COSMETIC_SLOT_NAMES[slot] || slot

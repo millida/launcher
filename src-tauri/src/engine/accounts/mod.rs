@@ -1,10 +1,8 @@
-// List of account login modules: Ely.by, Microsoft, Millida and session storage.
-mod elyby;
+// List of account login modules: Microsoft, Millida and session storage.
 mod millida;
 mod microsoft;
 mod session;
 
-pub use elyby::*;
 pub use millida::*;
 pub use microsoft::*;
 pub use session::*;
