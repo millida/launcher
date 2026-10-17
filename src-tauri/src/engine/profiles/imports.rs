@@ -1,3 +1,6 @@
+// Search and import of modpacks from other launchers (Prism, MultiMC, Modrinth App, TLauncher, plain .minecraft). Looks in their folders and on other disks
+// three levels deep, and only reads folder names and version.json. Accounts and tokens of other launchers are not read.
+// Only a path the launcher found itself or the player picked in a dialog is copied into the Millida folder.
 use crate::engine::*;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -922,6 +925,7 @@ pub fn import_instance(path: String, name: String, version: String, loader: Stri
     std::fs::create_dir_all(&dst).map_err(|e| e.to_string())?;
     match copy_game_files(&game, &dst, &[]) {
         Ok(0) => {
+            // Import failed: delete the half-copied folder of the new modpack inside the launcher data. The source is not touched.
             let _ = std::fs::remove_dir_all(&dst);
             return Err("В выбранной папке нет файлов игры (mods, config, saves…)".into());
         }

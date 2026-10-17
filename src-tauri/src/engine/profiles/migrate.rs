@@ -1,3 +1,5 @@
+// Moves a modpack to another game version: copies worlds and settings, looks up the mods again on Modrinth for that version.
+// The copy is made next to the original and deleted on failure. The original stays as it was.
 use crate::engine::*;
 use futures::StreamExt;
 use serde_json::Value;
@@ -200,6 +202,7 @@ async fn migrate_job(
         .map_err(|e| e.to_string())
         .and_then(|_| copy_game_files(&from, &to, LEFT_BEHIND));
     if let Err(e) = carried {
+        // It failed: remove the copy we just made. The old modpack is untouched.
         let _ = std::fs::remove_dir_all(&to);
         return Err(e);
     }

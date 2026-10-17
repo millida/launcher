@@ -1,3 +1,4 @@
+// Reads and writes the NBT format, where Minecraft keeps worlds and the server list. Pure byte parsing, no disk, no network.
 //! Minimal NBT that survives a round trip. `level.dat` is read to describe a
 //! world and rewritten when the player renames one, so every tag the game wrote
 //! has to come back out byte for byte — an unknown tag dropped on the way is a

@@ -1,3 +1,6 @@
+// Install and search for mods, resource packs and shaders through Modrinth (api.modrinth.com).
+// The network gets project and version ids and the sha1 of files already on disk. Downloaded files are written to the modpack folder after the hash check.
+// The list of installed content is kept in millida-content.json next to the profile.
 use crate::engine::*;
 use serde_json::Value;
 use std::path::PathBuf;
@@ -109,6 +112,7 @@ pub(crate) async fn fetch_project_meta(project: &str) -> MetaTriple {
             return m.clone();
         }
     }
+    // Request to api.modrinth.com: only the project id is sent, to get the name and the icon.
     if let Ok(p) = get_json(&format!("https://api.modrinth.com/v2/project/{}", project)).await {
         let m = meta_of(&p, project);
         meta_remember(project, &m);
@@ -132,6 +136,7 @@ pub(crate) async fn warm_projects_meta(ids: &[String]) {
     // Modrinth limits query string length, so batch the ids
     for chunk in unknown.chunks(50) {
         let list = serde_json::to_string(&chunk.to_vec()).unwrap_or_else(|_| "[]".into());
+        // Request to api.modrinth.com: a list of project ids is sent, nothing else.
         let url = format!(
             "https://api.modrinth.com/v2/projects?ids={}",
             urlencode(&list)
@@ -174,6 +179,7 @@ pub(crate) async fn bulk_latest_by_hash(
         if !channels.is_empty() {
             body["version_types"] = serde_json::json!(channels);
         }
+        // POST to api.modrinth.com: sends the sha1 of installed files to find out if newer versions exist.
         let Ok(v) = post_json("https://api.modrinth.com/v2/version_files/update", &body).await else {
             continue;
         };
@@ -185,6 +191,7 @@ pub(crate) async fn bulk_latest_by_hash(
 }
 
 pub(crate) async fn project_versions(project: &str) -> Result<Vec<Value>, String> {
+    // Request to api.modrinth.com: version list of a project, the project id is sent.
     let versions = get_json(&format!("https://api.modrinth.com/v2/project/{}/version", project)).await?;
     Ok(versions.as_array().cloned().unwrap_or_default())
 }
@@ -372,6 +379,7 @@ async fn install_project_version_cancellable(
     let shared = !dest.exists() && !sha1.is_empty()
         && link_from_store(sha1, &dest, file["size"].as_u64());
     if !shared {
+        // Downloads the file from the link in the catalog answer. The sha512/sha1 from the same answer goes to the check.
         download_checked_cancellable(file["url"].as_str().unwrap_or(""), &dest, Some(sum), file["size"].as_u64(), cancel).await?;
         if !sha1.is_empty() { adopt_to_store(&dest, sha1); }
     }
@@ -500,6 +508,7 @@ async fn install_version_job(
     allow_mismatch: bool,
 ) -> Result<ContentInstall, String> {
     job.emit(app, 20.0, "Скачиваем версию…");
+    // Request to api.modrinth.com: data of one version by its id.
     let ver = get_json(&format!("https://api.modrinth.com/v2/version/{}", version_id)).await?;
     let prof = load_profiles().into_iter().find(|p| p.name == profile);
     let loader_id = prof.as_ref().map(|p| p.loader_id()).unwrap_or_else(|| "vanilla".into());

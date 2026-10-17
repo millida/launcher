@@ -1,3 +1,4 @@
+// Turns a track cover into a small square picture (up to 64 px) for the mod. Only converts bytes in memory.
 use super::protocol::{cover_key, Cover, MAX_COVER};
 use std::sync::Arc;
 

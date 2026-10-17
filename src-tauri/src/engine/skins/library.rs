@@ -1,3 +1,5 @@
+// Wardrobe of the player's skins and capes: PNG files in the launcher data folder. Import by link works only from checked sites
+// (Mojang, Millida, Modrinth). Local addresses and foreign hosts are rejected.
 use crate::engine::*;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -149,6 +151,7 @@ pub fn save_texture(kind: &str, name: &str, data: &str, slim: bool) -> Result<Ve
         },
     );
     for extra in metas.split_off(MAX_ITEMS.min(metas.len())) {
+        // Wardrobe entry limit: the oldest files are deleted from our folder.
         let _ = std::fs::remove_file(dir.join(&extra.file));
     }
     store(kind, &metas)
@@ -229,6 +232,7 @@ pub async fn fetch_texture(url: String) -> Result<String, String> {
     let parsed = validate_texture_url(&url)?;
     // Skins and capes ride the same sockets as the API: without the spare pool
     // a hung one leaves the figure bare until the read timeout.
+    // GET of a picture from the player's link to an allowed host. A redirect to another host is caught by the check below.
     let res = hedged(|| client().get(parsed.as_str()).send(), || spare_client().get(parsed.as_str()).send())
         .await
         .map_err(|e| e.to_string())?;
@@ -249,6 +253,7 @@ pub async fn fetch_texture(url: String) -> Result<String, String> {
 pub fn delete_texture(kind: &str, file: &str) -> Result<Vec<TextureEntry>, String> {
     let dir = kind_dir(kind)?;
     let name = safe_file_name(file)?;
+    // The player deleted a skin from the wardrobe: delete one file from our folder.
     let _ = std::fs::remove_file(dir.join(&name));
     let mut metas = sync_index(kind)?;
     metas.retain(|m| m.file != name);

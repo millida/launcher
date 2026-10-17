@@ -1,3 +1,5 @@
+// Clicks and views for statistics: one listener on the document. The event has the screen, the block and a short button label (digits replaced with #),
+// no chat text. Sending is done by telemetry.ts, if statistics are not turned off.
 import { track, telemetryEnabled } from './telemetry'
 import { CLICKABLE, describeClick } from './uiClick'
 import type { TrackNode } from './uiClick'

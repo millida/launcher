@@ -1,3 +1,4 @@
+// List of modpack logs and game versions to pick from. The version list comes from Mojang (piston-meta), logs are only read from disk.
 use crate::engine::*;
 
 pub fn list_logs(profile: &str) -> Vec<String> {

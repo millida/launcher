@@ -1,3 +1,4 @@
+// Rules from the Mojang version.json (which libraries and arguments for which system) and md5 for old assets. Only computes, no network.
 use md5::{Digest, Md5};
 use serde_json::Value;
 use std::path::PathBuf;

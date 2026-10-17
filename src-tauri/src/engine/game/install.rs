@@ -1,3 +1,7 @@
+// Game install: Minecraft client, libraries, assets, and also Fabric, Quilt, Forge and NeoForge.
+// Connects to Mojang (piston-meta and assets), meta.fabricmc.net, meta.quiltmc.org and the maven servers of the loaders
+// (fallback through the Millida mirror, see core/mirror.rs). Every file is checked against the hash from their own lists.
+// The Forge and NeoForge installers run under Java, so their hash is checked before they start. Writes to the game folder and to data/tmp of the launcher.
 use crate::engine::*;
 use futures::StreamExt;
 use serde_json::Value;
@@ -114,6 +118,7 @@ async fn fetch_missing(jobs: &[LibJob], strict: bool) -> Result<(), String> {
     // accepted as is — a jar already judged broken has to go before the refetch.
     for (_, path, _) in &items {
         if path.exists() {
+            // Deletes our own loader library that failed the check, and downloads it again.
             let _ = std::fs::remove_file(path);
         }
     }
@@ -249,6 +254,7 @@ async fn maven_sha1_via(targets: &[String]) -> Result<String, MavenMiss> {
 /// maven's own answer "no such file" — through our mirror it comes back the same.
 async fn maven_sha1_once(sum: &str) -> Result<String, MavenMiss> {
     let res = client()
+        // Reads the .sha1 file (40 characters) that lies next to it on maven. It is a checksum, not code.
         .get(sum)
         .timeout(SUM_TIMEOUT)
         .send()
@@ -516,6 +522,7 @@ fn installer_main_class(installer: &Path) -> Option<String> {
 /// to run as published and to report its own failure.
 async fn take_over_mojmaps(step: &MojmapsStep, dest: &Path, installer: &Path, name: &str) -> Option<(PathBuf, std::ffi::OsString)> {
     download_checked(&step.url, dest, Some(Sum::Sha1(&step.sha1)), step.size).await.ok()?;
+    // The replacement install_profile.json goes to the launcher temp folder (data/tmp) and is put before the installer in the classpath.
     let dir = data_dir().join("tmp").join(format!("{}-profile", name));
     let _ = std::fs::remove_dir_all(&dir);
     let written = std::fs::create_dir_all(&dir).is_ok() && write_json_atomic(&dir.join("install_profile.json"), &step.profile).is_ok();
@@ -533,6 +540,7 @@ type ShadowProfile = (PathBuf, std::ffi::OsString, String);
 /// Runs the loader installer for a client. The shadow folder is removed once
 /// the JVM exits.
 fn run_installer(java: &Path, installer: &Path, root: &Path, shadow: Option<&ShadowProfile>) -> Result<std::process::Output, String> {
+    // Runs the Forge/NeoForge installer, already checked by hash, under the launcher's Java with the --installClient flag. It installs the loader into the game folder.
     let mut jvm = Command::new(java);
     quiet(&mut jvm).arg("-Djava.net.useSystemProxies=true");
     match shadow {
@@ -546,6 +554,7 @@ fn run_installer(java: &Path, installer: &Path, root: &Path, shadow: Option<&Sha
         .output()
         .map_err(|e| spawn_failure(&e, java).replacen("Запуск Java", "Инсталлер загрузчика: запуск Java", 1));
     if let Some((dir, ..)) = shadow {
+        // Removes the temp folder with the replacement profile.
         let _ = std::fs::remove_dir_all(dir);
     }
     out
@@ -712,6 +721,7 @@ fn install_legacy_forge(installer: &Path, vdir: &Path, libs: &Path) -> Result<Op
         let mut out = std::fs::File::create(&tmp).map_err(|e| format!("{}: {}", tmp.display(), e))?;
         std::io::copy(&mut src, &mut out).map_err(|e| format!("{}: {}", tmp.display(), e))?;
     }
+    // Old Forge is installed without running the installer: we take the jar out of the archive and put it in place.
     std::fs::rename(&tmp, &jar).map_err(|e| {
         let _ = std::fs::remove_file(&tmp);
         format!("{}: {}", jar.display(), e)
@@ -1128,6 +1138,7 @@ pub async fn install_loader_with_java(
                 };
                 // The installer refuses to run without launcher_profiles.json.
                 let lp = root.join("launcher_profiles.json");
+                // An empty launcher_profiles.json in the game folder: Forge installers refuse to work without it.
                 if !lp.exists() { let _ = std::fs::write(&lp, b"{\"profiles\":{},\"version\":3}"); }
                 let mut last_err = String::new();
                 // Имена, которых в репозитории просто нет. Их 404 — не поломка,
@@ -1143,6 +1154,7 @@ pub async fn install_loader_with_java(
                     let inst = data_dir().join("tmp").join(format!("{}-installer.jar", name));
                     // The installer is executed by a JVM, so it is only accepted
                     // with the maven-published sha1.
+                    // The hash comes from the built-in table (loader_sums.rs) or from maven. Without a hash we do not run the installer.
                     let sha1 = match installer_sha1(inst_url).await {
                         Ok(sum) => sum,
                         Err(MavenMiss::Absent) => {
@@ -1187,6 +1199,7 @@ pub async fn install_loader_with_java(
                         }
                         Ok((None, outputs, downloads, mojmaps)) => (outputs, downloads, mojmaps),
                         Err(e) => {
+                            // Deletes the downloaded installer after use.
                             let _ = std::fs::remove_file(&inst);
                             last_err = format!("{}: {}", name, e);
                             continue;

@@ -1,3 +1,4 @@
+// Mod search and list: requests go to our API (/launcher/mr and the Millida catalog), results are cached in memory.
 import { create } from 'zustand'
 import { hasTauri } from '../ipc/tauri'
 import { cfSearch, listContent, listWorldInstalls, millidaPacks, packReviewQueue } from '../ipc/commands'

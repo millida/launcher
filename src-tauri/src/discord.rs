@@ -1,3 +1,5 @@
+// Shows "playing Minecraft" status in Discord through the local Discord socket on this same computer.
+// It does not go to the internet itself: only the running Discord app gets the data (modpack name, server, join link). The application id below is public.
 //! Discord Rich Presence over the local Discord IPC socket. The application id
 //! controls the displayed app name and the asset images; override it with
 //! `MILLIDA_DISCORD_APP_ID`. Failures are non-fatal and retried no more often
@@ -23,6 +25,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+// Public application id from the Discord Developer Portal. Discord needs it to show the name and pictures. It is not a secret.
 const DEFAULT_APP_ID: &str = "1530764069965922354";
 const RETRY_AFTER: Duration = Duration::from_secs(30);
 const SITE_URL: &str = "https://millida.net/launcher";
@@ -149,6 +152,7 @@ fn is_stuck(busy_since: u64, now: u64, timeout: Duration) -> bool {
 fn spawn_worker(generation: u64, rx: Receiver<Job>) {
     std::thread::Builder::new()
         .name("discord-ipc".into())
+        // A separate thread for the Discord socket, so a stuck Discord cannot freeze the launcher window.
         .spawn(move || worker(generation, rx))
         .ok();
 }
@@ -317,6 +321,7 @@ fn drop_client(client: &mut Option<DiscordIpcClient>) {
 /// hand so that id survives.
 fn handshake(c: &mut DiscordIpcClient, id: &str) -> Result<String, Box<dyn std::error::Error>> {
     c.connect_ipc()?;
+    // First message to the Discord socket (handshake): protocol version and application id.
     c.send(json!({ "v": 1, "client_id": id }), 0)?;
     let (_, val) = c.recv()?;
     Ok(val["data"]["user"]["id"].as_str().unwrap_or_default().to_string())

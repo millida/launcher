@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Уязвимость в безопасности
+  - name: Security vulnerability
     url: https://github.com/millida/launcher/blob/main/SECURITY.md
-    about: Не создавайте публичный issue. Порядок сообщения описан в SECURITY.md — пишите на security@millida.net.
+    about: Do not create a public issue. The reporting procedure is in SECURITY.md. Write to security@millida.net.

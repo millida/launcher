@@ -1,3 +1,5 @@
+// Modpack screenshot gallery: show, save somewhere else, delete, share a link.
+// The network gets something only on the "Share" button: one chosen PNG to the Millida server.
 //! Screenshot gallery: what the game wrote into `screenshots/`, plus the two
 //! things a player wants next — keep it somewhere else, or send it to someone.
 
@@ -114,6 +116,7 @@ fn shot_path(profile: &str, name: &str) -> Result<PathBuf, String> {
 
 pub fn delete_screenshot(profile: &str, name: &str) -> Result<(), String> {
     let path = shot_path(profile, name)?;
+    // The player deleted a screenshot: delete one PNG from screenshots/ of this modpack.
     std::fs::remove_file(&path).map_err(|e| format!("Не удалось удалить скриншот: {}", e))
 }
 
@@ -147,6 +150,7 @@ pub async fn share_screenshot(profile: String, name: String) -> Result<String, S
     }
     let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
     let file = safe_file_name(&name)?;
+    // Uploads a screenshot to the Millida server (with the account token) on the "Share" button. A link comes back.
     let res = millida_upload_auth(SHARE_ENDPOINT.to_string(), file, "image/png", bytes, vec![]).await?;
     res.get("url")
         .and_then(|v| v.as_str())

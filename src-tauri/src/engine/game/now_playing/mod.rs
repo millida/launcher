@@ -1,3 +1,5 @@
+// What is playing on the computer (title, artist, cover) is given to the Millida mod at the local address 127.0.0.1, with a random port and a key for each game launch, so the mod can show a player in the game.
+// None of it goes to the internet. On by default, turned off by the "gameMedia" setting. Works only in modpacks that have our mod.
 //! What plays on the computer, handed to the Millida mod's Dynamic Island over
 //! a loopback WebSocket. The contract is millida-mod/docs/media.md.
 
@@ -109,6 +111,7 @@ impl MediaLink {
 
     pub fn start_with(music: bool) -> Option<MediaLink> {
         let hub = if music { Hub::shared()? } else { Hub::silent() };
+        // Listens only on 127.0.0.1 (the system picks the port). The port and the key go to the game in the environment variables MILLIDA_MEDIA_PORT and MILLIDA_MEDIA_KEY.
         let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).ok()?;
         listener.set_nonblocking(true).ok()?;
         let port = listener.local_addr().ok()?.port();

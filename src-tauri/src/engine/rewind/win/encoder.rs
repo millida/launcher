@@ -1,3 +1,4 @@
+// H.264 video encoder from Media Foundation (on the graphics card when possible). Works with frames in memory, writes nothing to disk.
 use windows::core::{Interface, Result};
 use windows::Win32::Foundation::LUID;
 use windows::Win32::Graphics::Direct3D11::{ID3D11Texture2D, D3D11_BIND_RENDER_TARGET};
@@ -129,6 +130,7 @@ fn build(activate: &IMFActivate, s: &Settings) -> Result<Parts> {
         Some(luid) => d3d::device(Some(luid)).or_else(|_| d3d::device(None))?,
         None => d3d::device(None)?,
     };
+    // Windows system call: creates the Media Foundation encoder. The other unsafe here is the same kind.
     let transform: IMFTransform = unsafe { activate.ActivateObject()? };
     let attributes = unsafe { transform.GetAttributes()? };
     unsafe { attributes.SetUINT32(&MF_TRANSFORM_ASYNC_UNLOCK, 1)? };

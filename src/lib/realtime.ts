@@ -1,3 +1,6 @@
+// Live connection to the Millida server (wss://api.millida.net/v2/realtime, Centrifugo) for friends, statuses, calls and chats.
+// Opens only after Millida account login. The API gives the socket token on request at /realtime/token. Channels: friends, presence, calls,
+// inbox, hosting, account, party. The install id is sent only if statistics are on.
 import { Centrifuge, UnauthorizedError } from 'centrifuge'
 import { hasTauri } from '../ipc/tauri'
 import { getMillidaAccount, useAccounts } from '../state/accounts'

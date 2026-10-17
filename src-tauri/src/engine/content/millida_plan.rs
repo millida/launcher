@@ -1,3 +1,5 @@
+// Install plan from the catalog: which files a modpack needs (required and optional), their links and hashes from api.millida.net.
+// Files are downloaded into a temporary folder in the launcher data and moved into the modpack after the check.
 use crate::engine::*;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -341,6 +343,7 @@ async fn plan_job(app: &AppHandle, job: &Job, req: &CatalogPlanReq) -> Result<Ca
         todo.push(f);
     }
 
+    // Cleans our own temporary millida-plan-* folder inside the launcher data.
     // Всё качаем рядом, в свою папку, и только проверенное переносим в сборку.
     let stage = data_dir().join("tmp").join(format!("millida-plan-{}", tmp_tag(&req.slug)));
     let _ = std::fs::remove_dir_all(&stage);
@@ -371,6 +374,7 @@ async fn plan_job(app: &AppHandle, job: &Job, req: &CatalogPlanReq) -> Result<Ca
             // в папке — самый частый краш на старте.
             for e in manifest.iter().filter(|e| e.kind == f.kind && e.project_id == format!("millida:{}", f.slug)) {
                 if e.file_name != f.name {
+                    // When a file is replaced by a new version, the old file from the same modpack is deleted (the path is checked with safe_child).
                     if let Ok(old) = safe_child(&dir, &e.file_name) {
                         let _ = std::fs::remove_file(&old);
                     }

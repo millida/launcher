@@ -1,3 +1,4 @@
+// Turns off duplicate mods in old Forge modpacks (the same mod in two jars). Files are not deleted, only disabled in the modpack folder.
 use crate::engine::*;
 
 /// What one enabled jar registers with the loader.

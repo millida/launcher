@@ -1,3 +1,4 @@
+// Local WebSocket server for the Millida mod: accepts only connections from this same computer and only with the launch key in the Authorization header. Sends the player state and takes the commands pause, next, seek.
 use super::protocol::{self, FrameError};
 use super::{Hub, Reading};
 use std::collections::HashSet;
@@ -29,6 +30,7 @@ pub(super) async fn serve(listener: std::net::TcpListener, key: String, hub: Arc
     let (generation, _) = watch::channel(0u64);
     let generation = Arc::new(generation);
     let mut sessions = JoinSet::new();
+    // Foreign addresses are not accepted: the connection must come from loopback.
     loop {
         tokio::select! {
             accepted = listener.accept() => match accepted {

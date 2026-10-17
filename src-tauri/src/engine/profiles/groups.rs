@@ -1,3 +1,4 @@
+// Modpack groups in the list: modpack name and group name in profile-groups.json in the launcher data folder.
 use crate::engine::*;
 use serde_json::Value;
 use std::path::PathBuf;

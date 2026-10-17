@@ -1,3 +1,5 @@
+// General commands: game folder, music and sounds, autostart, tray, cache, duplicates, fallback update.
+// Two things use the network: downloading Minecraft music/sounds and the fallback launcher update. Hardware info is read locally and leaves only through telemetry (see TELEMETRY.md).
 use crate::engine;
 
 #[tauri::command]
@@ -84,6 +86,7 @@ pub fn ui_sounds() -> Vec<engine::UiSound> { engine::ui_sounds() }
 pub async fn download_ui_sounds() -> Result<Vec<engine::UiSound>, String> { engine::download_ui_sounds().await }
 
 #[tauri::command]
+// Opens a link in the system browser. The address is checked inside engine::open_external_anyhow (core/external.rs).
 pub fn open_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
     engine::open_external_anyhow(&app, &url)
 }
@@ -102,6 +105,7 @@ pub fn started_by_os() -> bool {
 
 /// Включён ли запуск вместе с системой.
 #[tauri::command]
+// Autostart with the system. It turns on only when the user flips the switch.
 pub fn autostart_state(app: tauri::AppHandle) -> Result<bool, String> {
     use tauri_plugin_autostart::ManagerExt;
     app.autolaunch().is_enabled().map_err(|e| e.to_string())
@@ -139,6 +143,7 @@ pub struct DeviceSpecs {
 /// The facts never change while the process lives, and collecting them opens
 /// OS performance counters, so they are read once on the blocking pool.
 #[tauri::command]
+// Hardware info for telemetry: CPU, cores, memory, graphics cards, OS. No nickname, no serial numbers. This function sends nothing by itself.
 pub async fn device_specs() -> Result<DeviceSpecs, String> {
     static SPECS: std::sync::OnceLock<DeviceSpecs> = std::sync::OnceLock::new();
     if let Some(known) = SPECS.get() {
@@ -230,6 +235,7 @@ pub async fn update_notes(app: tauri::AppHandle) -> Result<Option<engine::Fallba
 }
 
 #[tauri::command]
+// Starts a downloaded and checked launcher update (fallback path if the built-in update failed). The signature is checked in core/selfupdate.rs.
 pub fn update_fallback_run(
     app: tauri::AppHandle,
     path: String,
@@ -260,6 +266,7 @@ pub async fn cache_size() -> Result<u64, String> {
 }
 
 #[tauri::command]
+// Clears the launcher cache (the cache folder inside the launcher data, not the game folder).
 pub async fn clear_cache() -> Result<u64, String> {
     super::blocking(engine::clear_cache).await
 }

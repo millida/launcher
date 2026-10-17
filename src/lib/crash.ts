@@ -1,3 +1,5 @@
+// Error reports from the UI itself: POST to api.millida.net/v2/errors. Before sending, the text and stack are cleaned of tokens and paths
+// with the user name, at most 10 per launch. Turned off by the same statistics switch as telemetry.ts.
 import { api } from './api'
 import { hasTauri } from '../ipc/tauri'
 import {

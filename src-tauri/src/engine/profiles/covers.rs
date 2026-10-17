@@ -1,3 +1,4 @@
+// Modpack covers: the picked picture is shrunk to a small PNG and stored right in profiles.json.
 use crate::engine::*;
 use base64::Engine as _;
 

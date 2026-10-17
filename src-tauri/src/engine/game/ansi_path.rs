@@ -1,3 +1,5 @@
+// Windows: turns paths with characters outside the system code page into short 8.3 names, so java does not fail on Cyrillic in the user name.
+// It only reads file names through a system call and changes nothing.
 //! java.exe on Windows reads its own location and its arguments through ANSI
 //! APIs. A character outside the system code page (a Greek or CJK user name on
 //! a cp1251 system) turns into `?`, and the JVM dies with «could not find
@@ -23,6 +25,7 @@ fn short_path(p: &Path) -> Option<PathBuf> {
     loop {
         // SAFETY: `wide` is NUL-terminated and outlives the call; the buffer
         // length is passed together with the slice.
+        // Windows system call: the short (8.3) name of a path, so java can read Cyrillic in the path.
         let n = unsafe { GetShortPathNameW(PCWSTR(wide.as_ptr()), Some(&mut buf)) } as usize;
         if n == 0 {
             return None;

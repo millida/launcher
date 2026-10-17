@@ -47,12 +47,12 @@ describe('releaseNotes', () => {
     const body = releaseNotes({ version: '2.0.1' })
     for (const os of ['windows', 'macos', 'linux']) {
       expect(body, `${os} button must lead to the always-fresh installer`).toContain(`https://millida.net/launcher/dl/${os}`)
-      expect(body, `${os} image must not change after the release`).toContain(`/v2.0.1/.github/readme/download-${os}.png`)
+      expect(body, `${os} image must not change after the release`).toContain(`/v2.0.1/.github/readme/download-${os}-en.png`)
     }
   })
 
   test('changes section appears only when there are changes', () => {
-    expect(releaseNotes({ version: '2.0.1' })).not.toContain('Что нового')
+    expect(releaseNotes({ version: '2.0.1' })).not.toContain("What's new")
     expect(releaseNotes({ version: '2.0.1', changes: ['Быстрее лобби'] })).toContain('- Быстрее лобби')
   })
 
@@ -60,7 +60,7 @@ describe('releaseNotes', () => {
     const changes = Array.from({ length: 25 }, (_, i) => `Правка ${i}`)
     const body = releaseNotes({ version: '2.0.1', changes })
     expect(body, 'the 21st change must be folded into the counter').not.toContain('Правка 20')
-    expect(body).toContain('- и ещё 5')
+    expect(body).toContain('- and 5 more')
   })
 
   test('versioned files list skips updater-only macOS archives', () => {

@@ -1,3 +1,4 @@
+// Decides which server may be shown in live online statistics: only one from the rating or ours. The player's private server stays home.
 import { isOwnServerAddr, serverNeedsMillidaAuth } from './ownServer'
 
 const key = (ip: string) =>

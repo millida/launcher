@@ -1,3 +1,5 @@
+// Built-in table of sha1 sums for the Forge and NeoForge installers, so we do not ask maven for the checksum every time.
+// The sum is needed because the installer runs Java. There is no code here that does anything, only data.
 //! Контрольные суммы инсталляторов Forge и NeoForge, которые ставят сборки
 //! каталога и чаще всего выбирают игроки.
 //!

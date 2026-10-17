@@ -1,3 +1,5 @@
+// Player heads for lists and the profile. The nickname goes to api.millida.net (skin and head render), ready PNGs are cached on disk.
+// No tokens are sent.
 use super::library::as_data_url;
 use crate::engine::*;
 use std::path::PathBuf;
@@ -64,6 +66,7 @@ fn prune(dir: &std::path::Path) {
     }
     files.sort_by_key(|(t, _)| *t);
     for (_, path) in files.iter().take(files.len() - MAX_FILES) {
+        // The head cache is limited by file count: the oldest files are deleted.
         let _ = std::fs::remove_file(path);
     }
 }
@@ -71,6 +74,7 @@ fn prune(dir: &std::path::Path) {
 /// The nick is already sanitized, so it cannot inject a path into the URL.
 async fn download_head_service(nick: &str, px: u32) -> Result<Vec<u8>, String> {
     let url = format!("{}{}?size={}", HEAD_URL, nick, px);
+    // GET to api.millida.net/v2/heads/avatar/<nickname>: only the nickname and the size are sent.
     let res = client().get(url).send().await.map_err(|e| e.to_string())?;
     if !res.status().is_success() {
         return Err(format!("сервис голов ответил {}", res.status().as_u16()));

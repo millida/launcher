@@ -1,3 +1,5 @@
+// Settings for voice calls to friends: the Millida API gives the list of STUN/TURN servers (/friends/call/ice). If there is no answer, the fallback is
+// the public STUN servers stun.cloudflare.com and stun.l.google.com (they see your IP; sound goes straight between the people on the call).
 import { api } from '../api'
 
 export interface IceConfig {

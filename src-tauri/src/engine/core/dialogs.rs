@@ -1,3 +1,4 @@
+// System dialogs to pick a file or a folder (rfd), attached to the launcher window. The UI gets a path only from them.
 use rfd::AsyncFileDialog;
 use std::path::PathBuf;
 use std::sync::OnceLock;

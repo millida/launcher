@@ -1,3 +1,5 @@
+// Finds out from the game log which server the player joined and tells the launcher UI (for status and play time).
+// Reads only log lines, sends nothing out.
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter};
 

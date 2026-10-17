@@ -1,3 +1,4 @@
+// Modpack icons from the catalog: metadata comes through our API (/launcher/mr), pictures from blocked CDNs go through api.millida.net/launcher/dl.
 import { api, mirrorAsset, MODRINTH_API } from './api'
 import { DEFAULT_ICON } from './buildIcon'
 import { loadProfileSettings, setProfileIcon } from '../ipc/commands'

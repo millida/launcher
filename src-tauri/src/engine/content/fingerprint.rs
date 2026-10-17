@@ -1,3 +1,4 @@
+// File fingerprint for CurseForge (MurmurHash2). Computed locally, CurseForge uses it to recognize a mod. The file itself is not sent anywhere.
 //! CurseForge file fingerprint.
 //!
 //! CurseForge does not index files by sha1, so a jar that came from there is

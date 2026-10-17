@@ -1,3 +1,4 @@
+// Saving a clip to the "Videos\Millida Clips" folder: written to a temporary .part file and renamed on success. Clip list and delete.
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 
@@ -61,6 +62,7 @@ pub fn save(dir: &Path, profile: &str, stamp: &str, clip: &Clip, audio_bitrate: 
     let target = unused(dir, profile, stamp);
     let partial = target.with_extension(PARTIAL);
     let written = (|| -> std::io::Result<()> {
+        // Writes the clip to a draft file next to the final one. It holds what was in the memory buffer when the key was pressed.
         let file = std::fs::File::create(&partial)?;
         let mut out = std::io::BufWriter::with_capacity(1 << 20, file);
         mp4::write(&mut out, clip, audio_bitrate)?;
@@ -125,6 +127,7 @@ pub fn resolve(dir: &Path, name: &str) -> Result<PathBuf, String> {
 
 pub fn delete(dir: &Path, name: &str) -> Result<(), String> {
     let path = resolve(dir, name)?;
+    // The player deleted a clip: delete one mp4 from the Millida Clips folder.
     std::fs::remove_file(&path).map_err(|e| format!("Не удалось удалить клип: {}", e))
 }
 

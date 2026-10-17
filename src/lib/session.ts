@@ -1,3 +1,4 @@
+// What happens after login: loading the profile, wallet, friends, modpacks. Requests go to the Millida API through api(), the core adds the token.
 import { api, hasMillidaAccount } from './api'
 import { MILLIDA_USER_KEY, useAccounts } from '../state/accounts'
 import { syncAuth } from '../state/auth'

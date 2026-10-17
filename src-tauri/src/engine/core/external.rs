@@ -1,3 +1,4 @@
+// Opens links in the browser: http and https only. On Windows we find the browser with ShellExecute and by reading the registry (read only). Fallback is a window inside the launcher.
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 /// Accepts only http(s) URLs with a real host. Kept free of side effects so the
@@ -93,6 +94,7 @@ mod win {
     use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    // Registry keys we read (read only) to find the default browser and the paths of installed browsers.
     const USER_CHOICE: &str =
         r"Software\Microsoft\Windows\Shell\Associations\UrlAssociations\https\UserChoice";
     const APP_PATHS: &str = r"Software\Microsoft\Windows\CurrentVersion\App Paths";
@@ -133,6 +135,7 @@ mod win {
         unsafe { ShellExecuteExW(&mut info) != 0 }
     }
 
+    // Starts the browser with the link address, without a console window. The address already passed the scheme check above.
     pub fn spawn(exe: &Path, url: &str) -> bool {
         Command::new(exe)
             .arg(url)

@@ -1,3 +1,5 @@
+// Profile, capes and skin upload to the Microsoft account through api.minecraftservices.com (the official Mojang API).
+// The Microsoft token is put in by the core (commands/accounts.rs), the UI does not see it. It goes only to this address.
 use crate::engine::*;
 use serde_json::Value;
 
@@ -64,6 +66,7 @@ async fn ms_json(req: reqwest::RequestBuilder) -> Result<Value, String> {
 /// Full account profile: every owned cape with its ACTIVE/INACTIVE status. The
 /// session profile (`mc_textures`) only reports the equipped one.
 pub async fn ms_profile(token: String) -> Result<Value, String> {
+    // The Microsoft token in the Authorization header, a Mojang address. Nowhere else.
     let prof = ms_json(client().get(MS_PROFILE).bearer_auth(&token)).await?;
     let capes: Vec<Value> = prof["capes"]
         .as_array()
@@ -96,6 +99,7 @@ pub async fn ms_profile(token: String) -> Result<Value, String> {
 pub async fn ms_set_cape(token: String, cape_id: String) -> Result<Value, String> {
     let url = format!("{}/capes/active", MS_PROFILE);
     if cape_id.is_empty() {
+        // Removes the cape on the Microsoft account.
         return ms_json(client().delete(&url).bearer_auth(&token)).await;
     }
     ms_json(
@@ -126,6 +130,7 @@ pub async fn ms_upload_skin_png(token: String, png_base64: String, slim: bool) -
     let form = reqwest::multipart::Form::new()
         .text("variant", if slim { "slim" } else { "classic" })
         .part("file", part);
+    // Uploads the skin the player picked to their Mojang account.
     let res = ms_json(client().post(format!("{}/skins", MS_PROFILE)).bearer_auth(&token).multipart(form)).await?;
     // Ответ Mojang — это профиль целиком: сверяем, что активный скин появился,
     // иначе «применили» превращается в тихую ложь.

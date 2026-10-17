@@ -1,3 +1,4 @@
+// Party voice chat commands: join, leave, volume and microphone. The microphone and the network are handled in engine/party_voice.rs.
 use crate::engine::party_voice::{self, AudioPrefs};
 use tauri::AppHandle;
 

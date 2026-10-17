@@ -1,3 +1,5 @@
+// Self-heal: if the UI did not come up 25 seconds after start, the launcher downloads an update itself and runs the installer, at most three times.
+// The installer goes through the same signature check as a normal update. The attempt counter is stored in selfheal.json.
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::AppHandle;
@@ -85,6 +87,7 @@ pub fn arm_selfheal(app: &AppHandle) {
     });
 }
 
+// Automatic reinstall without asking the user. Runs only when the window never came alive. The update signature is checked in fallback_stage.
 async fn heal(app: &AppHandle) -> Result<bool, String> {
     let version = app.package_info().version.to_string();
     let mut st = load_state(&version);
@@ -119,6 +122,7 @@ async fn heal(app: &AppHandle) -> Result<bool, String> {
 
 /// Last resort when recovery failed: a native system dialog, since the webview
 /// is exactly what is broken.
+// If healing did not work, we show the normal window that offers to open the launcher download page on millida.net.
 async fn offer_manual_download(reason: &str) {
     let text = format!(
         "Лаунчер не смог открыться и не сумел обновиться сам ({}).\n\nСкачай свежую версию с сайта и поставь поверх — сборки, миры и аккаунты останутся на месте.",

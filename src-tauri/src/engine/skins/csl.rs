@@ -1,3 +1,6 @@
+// CustomSkinLoader skin mod: puts its jar into mods/ of the modpack (from GitHub, by sha256), so the skin from the Millida wardrobe is visible in the game.
+// If the modpack already has another skin mod or the player refused it, the second one is not installed. The refusal is remembered in the file .millida-skip.
+// The player's wardrobe lives in the launcher data folder. Only the selected PNGs are copied into the modpack folder.
 use crate::engine::*;
 use serde_json::Value;
 
@@ -55,6 +58,7 @@ pub fn set_local_skin(skin: Option<String>, cape: Option<String>, slim: bool) ->
         let Some(b) = b64 else { return Ok(()) };
         let p = dir.join(name);
         if b.is_empty() {
+            // An empty value means "remove the skin or cape": deletes our own PNG from the launcher wardrobe.
             let _ = std::fs::remove_file(&p);
             return Ok(());
         }
@@ -63,6 +67,7 @@ pub fn set_local_skin(skin: Option<String>, cape: Option<String>, slim: bool) ->
         if bytes.len() > 2_000_000 || !bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
             return Err("не PNG или слишком большой".into());
         }
+        // Writes the PNG skin to the launcher data folder. Before that the PNG signature and the size (up to 2 MB) are checked.
         std::fs::write(&p, &bytes).map_err(|e| e.to_string())
     };
     write_png("skin.png", &skin)?;
@@ -95,6 +100,7 @@ fn place_local_skin(build_dir: &std::path::Path, nick: &str) {
             std::fs::create_dir_all(&to_dir).ok();
             let _ = std::fs::copy(&from, &to);
         } else {
+            // The skin is not needed in the modpack anymore: deletes its copy from CustomSkinLoader/LocalSkin inside the modpack.
             let _ = std::fs::remove_file(&to);
         }
     }
@@ -251,9 +257,11 @@ pub async fn ensure_custom_skin_loader(
             Err(format!("в сборке уже есть свой мод скинов ({})", other))
         };
     }
+    // GET to api.github.com for the description of the latest mod release (no tokens).
     let latest = get_json(CSL_LATEST).await.unwrap_or(Value::Null);
     let (url, digest) = signed_universal_asset(&latest)
         .unwrap_or_else(|| (CSL_PINNED_URL.to_string(), CSL_PINNED_SHA256.to_string()));
+    // Downloads the mod jar into mods/ of the modpack. The sha256 comes from the same GitHub release, or from the one built into the code if it is missing.
     download_checked(&url, &jar, Some(Sum::Sha256(&digest)), None).await?;
     // last, and only on a real success: a marker set next to the attempt would
     // make a failed download look like a jar the player deleted
@@ -302,6 +310,7 @@ pub fn drop_custom_skin_loader(profile: &str) -> bool {
     if !jar.exists() {
         return false;
     }
+    // The skin mod crashed in the game: remove its jar from mods/ of this modpack and remember the refusal.
     let removed = std::fs::remove_file(&jar).is_ok();
     if removed {
         opt_out(profile, b"crash");
@@ -316,6 +325,7 @@ pub fn drop_custom_skin_loader(profile: &str) -> bool {
 fn opt_out(profile: &str, why: &[u8]) {
     let cfg = profile_dir(profile).join("CustomSkinLoader");
     let _ = std::fs::create_dir_all(&cfg);
+    // Marker "do not install the skin mod again" in the modpack folder.
     let _ = std::fs::write(cfg.join(CSL_OPTOUT), why);
     let mut patch = serde_json::Map::new();
     patch.insert("skinMod".into(), Value::String("off".into()));
@@ -324,14 +334,25 @@ fn opt_out(profile: &str, why: &[u8]) {
 }
 
 pub(crate) fn profile_settings(profile: &str) -> Value {
-    std::fs::read(profile_dir(profile).join("millida-settings.json")).ok()
+    settings_in(&profile_dir(profile))
+}
+
+fn settings_in(dir: &std::path::Path) -> Value {
+    std::fs::read(dir.join("millida-settings.json")).ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or(Value::Null)
 }
 
-fn skin_mod_on(profile: &str) -> bool {
-    profile_settings(profile)["skinMod"].as_str() != Some("off")
-        && !profile_dir(profile).join("CustomSkinLoader").join(CSL_OPTOUT).exists()
+/// The build's own "skin mod" switch. It covers whichever jar the launcher
+/// injects for skins, the Millida mod included: a switch that only knew
+/// CustomSkinLoader let the Millida mod come back on every launch.
+pub(crate) fn skin_mod_on(profile: &str) -> bool {
+    skin_mod_on_in(&profile_dir(profile))
+}
+
+fn skin_mod_on_in(dir: &std::path::Path) -> bool {
+    settings_in(dir)["skinMod"].as_str() != Some("off")
+        && !dir.join("CustomSkinLoader").join(CSL_OPTOUT).exists()
 }
 
 fn mark_installed(profile: &str, installed: bool) {
@@ -342,7 +363,7 @@ fn mark_installed(profile: &str, installed: bool) {
 
 /// The file name the launcher gives its own copy, so the mods list can tell
 /// removing it apart from removing a mod the build brought itself.
-pub fn is_injected_skin_mod(file: &str) -> bool { file.eq_ignore_ascii_case(CSL_JAR) }
+pub fn is_injected_skin_mod(file: &str) -> bool { file.eq_ignore_ascii_case(CSL_JAR) || is_millida_mod_file(file) }
 
 /// Called when a pack install wipes `mods/`: the jar it removed was not taken
 /// out by the player, so the next launch must not read that as an opt-out.
@@ -381,6 +402,7 @@ pub fn skin_mod_state(profile: &str) -> Value {
 /// so the build screen and `mods/` never disagree.
 pub fn set_skin_mod(profile: &str, on: bool) -> Result<Value, String> {
     if on {
+        // The player turned the skin mod back on: remove the refusal marker.
         let _ = std::fs::remove_file(profile_dir(profile).join("CustomSkinLoader").join(CSL_OPTOUT));
         let mut patch = serde_json::Map::new();
         patch.insert("skinMod".into(), Value::String("auto".into()));
@@ -388,6 +410,7 @@ pub fn set_skin_mod(profile: &str, on: bool) -> Result<Value, String> {
     } else {
         let jar = profile_dir(profile).join("mods").join(CSL_JAR);
         if jar.exists() {
+            // The player turned the skin mod off: remove its jar from mods/ of this modpack.
             std::fs::remove_file(&jar)
                 .map_err(|e| format!("Не удалось убрать мод скинов: {} — закрой игру и попробуй ещё раз", e))?;
         }
@@ -599,6 +622,47 @@ mod tests {
         );
         assert_eq!(absent_action(false, false, false), Absent::Skip);
         assert_eq!(absent_action(false, true, true), Absent::Skip);
+    }
+
+    /// file switched or deleted in the mods list -> recorded as the build's opt-out
+    #[test]
+    fn the_mods_list_opt_out_covers_the_millida_mod() {
+        let cases: [(&str, bool, &str); 5] = [
+            ("CustomSkinLoader.jar", true, "the copy of CustomSkinLoader the launcher adds"),
+            ("millida-mod-fabric-1.21.1-0.4.2.jar", true, "17.10: the Millida mod switched off in the list came back on every launch and broke a custom eye-animation skin mod"),
+            ("millida-mod-forge-1.20.1-0.4.2.jar", true, "every loader variant of our mod is the same opt-out"),
+            ("CustomSkinLoader_Fabric-14.20.jar", false, "a skin mod the build brought itself is the player's own, not ours to track"),
+            ("sodium-fabric-0.6.0.jar", false, "an ordinary mod switched off says nothing about skins"),
+        ];
+        for (file, want, why) in cases {
+            assert_eq!(is_injected_skin_mod(file), want, "{file}: {why}");
+        }
+    }
+
+    /// build folder state -> whether the launcher may put its skin mod (the Millida mod included) into it
+    #[test]
+    fn the_build_skin_switch_is_read_from_the_settings_and_the_marker() {
+        let root = std::env::temp_dir().join(format!("millida-build-skin-switch-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let cases: [(&str, Option<&str>, bool, bool, &str); 5] = [
+            ("fresh", None, false, true, "an untouched build gets the mod by itself"),
+            ("auto", Some(r#"{"skinMod":"auto"}"#), false, true, "switched back on in the build settings"),
+            ("off", Some(r#"{"skinMod":"off"}"#), false, false, "17.10: switched off in the build settings, yet the Millida mod was downloaded again"),
+            ("marker", Some(r#"{"name":"x"}"#), true, false, "settings rewritten by an older build: the marker alone keeps the opt-out"),
+            ("broken", Some("{"), true, false, "an unreadable settings file must not undo the marker"),
+        ];
+        for (name, settings, marker, want, why) in cases {
+            let dir = root.join(name);
+            std::fs::create_dir_all(dir.join("CustomSkinLoader")).unwrap();
+            if let Some(s) = settings {
+                std::fs::write(dir.join("millida-settings.json"), s).unwrap();
+            }
+            if marker {
+                std::fs::write(dir.join("CustomSkinLoader").join(CSL_OPTOUT), b"off").unwrap();
+            }
+            assert_eq!(skin_mod_on_in(&dir), want, "{name}: {why}");
+        }
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     /// loader  | online | скин выбран | вердикт

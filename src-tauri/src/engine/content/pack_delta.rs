@@ -1,3 +1,5 @@
+// Delta update of a modpack: instead of the full archive, only the changed parts of the file are downloaded (HTTP Range). Hashes are checked.
+// Where it connects: the same archive address as in a normal install.
 use crate::engine::*;
 use serde_json::Value;
 use std::collections::HashSet;
@@ -354,6 +356,7 @@ pub(crate) fn content_range_ok(header: Option<&str>, from: u64, to_exclusive: u6
 
 async fn fetch_span_once(url: &str, group: &Group, total: u64, dest: &Path, job: &Job, on: &(dyn Fn(u64) + Send + Sync)) -> Result<(), String> {
     let cancel = Some(job.cancel_flag());
+    // Requests a part of the archive (Range header) from an address that already passed the check.
     let req = client().get(url).header(reqwest::header::RANGE, format!("bytes={}-{}", group.from, group.to - 1));
     let resp = or_pause(req.send(), cancel).await?.map_err(|e| net_err(&e))?;
     if !super::catalog_pack::pack_url_allowed(resp.url().as_str()) {

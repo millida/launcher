@@ -1,3 +1,5 @@
+// Picture viewer: copy to the clipboard and save to disk. Downloads a picture only from millida.net and millida.trade
+// (chat and site). A local file is read only from the launcher's own folders. Saving goes where the player points in the file dialog.
 //! What a player expects from a picture they opened in the viewer: put it on
 //! the clipboard, or keep a copy on disk.
 
@@ -45,6 +47,7 @@ async fn remote_bytes(url: &str) -> Result<Vec<u8>, String> {
         return Err("Эту картинку лаунчер не может скачать".into());
     }
     let res = client()
+        // GET of a picture from a checked millida.net or millida.trade address, no tokens or cookies, at most 32 MB.
         .get(parsed.as_str())
         .timeout(FETCH_TIMEOUT)
         .send()
@@ -170,6 +173,7 @@ pub async fn copy_picture(app: AppHandle, src: PictureRef) -> Result<(), String>
     .await
     .map_err(|e| e.to_string())??;
     let (raw, w, h) = rgba;
+    // Puts the picture in the clipboard, only when the player clicks.
     app.clipboard()
         .write_image(&Image::new(&raw, w, h))
         .map_err(|e| format!("Буфер обмена не принял картинку: {}", e))
@@ -188,6 +192,7 @@ pub async fn save_picture_as(src: PictureRef) -> Result<Option<String>, String> 
     )
     .await;
     let Some(out) = picked else { return Ok(None) };
+    // Writes the file where the player picked the place in the save dialog.
     std::fs::write(&out, &bytes).map_err(|e| format!("Не удалось сохранить: {}", e))?;
     Ok(Some(out.to_string_lossy().to_string()))
 }

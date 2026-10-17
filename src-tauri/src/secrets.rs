@@ -1,3 +1,6 @@
+// Login token storage on disk: the file secrets.bin in the launcher data folder, encrypted with AES-256-GCM.
+// The key lies next to it in vault.key (on Windows it is also protected by DPAPI). Tokens are not given out and not given to the UI. This file does not go to the network.
+// The machine id is read only to tie the encryption to this computer.
 use aes_gcm::aead::rand_core::RngCore;
 use aes_gcm::aead::{Aead, KeyInit, OsRng, Payload};
 use aes_gcm::{Aes256Gcm, Nonce};
@@ -18,6 +21,7 @@ use std::sync::{Mutex, MutexGuard, OnceLock};
 // Binding to the machine identifier makes secrets.bin + vault.key useless when
 // copied to another machine or another user account, without any prompts.
 
+// This is a salt for key derivation, not a secret: anyone can read it, the key strength does not depend on it.
 const VAULT_SALT: &[u8] = b"millida-launcher-vault-v2";
 const VAULT_INFO: &[u8] = b"secrets";
 const NONCE_LEN: usize = 12;
@@ -88,6 +92,7 @@ fn dpapi(input: &[u8], protect: bool) -> Option<Vec<u8>> {
         pbData: input.as_ptr() as *mut u8,
     };
     let mut out = CRYPT_INTEGER_BLOB { cbData: 0, pbData: std::ptr::null_mut() };
+    // unsafe: Windows DPAPI system call, encrypts the store key under the user's account.
     let ok = unsafe {
         if protect {
             CryptProtectData(
@@ -125,6 +130,7 @@ fn dpapi(input: &[u8], protect: bool) -> Option<Vec<u8>> {
 fn machine_binding() -> Vec<u8> {
     let mut id = [0u8; 16];
     let wait = libc::timespec { tv_sec: 5, tv_nsec: 0 };
+    // unsafe: macOS gives the computer id. It is used as part of the encryption key and is not sent anywhere.
     let rc = unsafe { libc::gethostuuid(id.as_mut_ptr(), &wait) };
     if rc == 0 {
         id.to_vec()
@@ -135,6 +141,7 @@ fn machine_binding() -> Vec<u8> {
 
 #[cfg(target_os = "linux")]
 fn machine_binding() -> Vec<u8> {
+    // Linux: reads /etc/machine-id as part of the encryption key. It does not go to the network and is not written to logs.
     for p in ["/etc/machine-id", "/var/lib/dbus/machine-id"] {
         if let Ok(s) = std::fs::read_to_string(p) {
             let s = s.trim().to_string();
@@ -349,6 +356,7 @@ fn decrypt(key: &str, record: &Value) -> Option<String> {
 }
 
 /// v1 format (XOR against a mask file), kept only to migrate stored tokens to v2.
+// Old store format (XOR with a mask file). Read only to move the tokens to the new format. After the move the mask is deleted.
 fn legacy_unscramble(key: &str, data: &[u8]) -> Option<String> {
     let m = std::fs::read(legacy_mask_path()).ok()?;
     if m.len() != 32 {

@@ -1,3 +1,5 @@
+// Login state for the UI: is there a Millida or Microsoft session. The tokens live only in the core store (secrets.rs).
+// Only the fact "a session exists" comes here. Old tokens from localStorage of earlier versions are deleted at start.
 import { hasTauri } from '../ipc/tauri'
 import { sessionStatus } from '../ipc/commands'
 import { DEMO_USER } from './demo'

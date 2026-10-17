@@ -1,3 +1,4 @@
+// Install of modpacks from a .mrpack file the player picked. Mods are downloaded by the list in the file (download_pack_entries). Temporary files go to data/tmp.
 use crate::engine::*;
 use serde_json::Value;
 use std::path::Path;
@@ -76,6 +77,7 @@ async fn from_mrpack(progress: Progress<'_>, ex: &Path, name_hint: &str) -> Resu
         Err(e) => Err(e),
     };
     if let Err(e) = fetched.and_then(|()| progress.check()) {
+        // Install failed: remove the half-installed folder of the new modpack.
         let _ = std::fs::remove_dir_all(&pdir);
         return Err(e);
     }

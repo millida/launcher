@@ -1,3 +1,4 @@
+// In-memory list of running installs: pause, cancel, progress for the UI. No disk, no network.
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};

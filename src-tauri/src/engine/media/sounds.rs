@@ -1,3 +1,5 @@
+// Launcher UI sounds. Missing ones are taken from the Mojang assets (list from piston-meta, files from resources.download.minecraft.net)
+// and put into the sounds/ folder of the launcher data. Nothing else is downloaded.
 use crate::engine::*;
 use std::path::PathBuf;
 
@@ -57,6 +59,7 @@ pub fn ui_sounds() -> Vec<UiSound> {
             }
             let event = p.file_stem().map(|x| x.to_string_lossy().to_string()).unwrap_or_default();
             if !UI_SOUNDS.iter().any(|(e, _)| *e == event) {
+                // Deletes wav files from the launcher sounds/ folder that are not in our event list.
                 std::fs::remove_file(&p).ok();
                 continue;
             }
@@ -138,6 +141,7 @@ pub async fn download_ui_sounds() -> Result<Vec<UiSound>, String> {
             };
             let dest = dir.join(format!("{}.wav", event));
             let url = format!("{}/{}/{}", RESOURCES, &hash[0..2], hash);
+            // Downloads a sound by the hash from the Mojang index. It is plain audio, but the hash is not checked after the download here.
             if let Ok(r) = client().get(&url).send().await {
                 if let Ok(b) = r.bytes().await {
                     if let Some(wav) = ogg_to_wav(&b) {

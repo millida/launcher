@@ -1,3 +1,5 @@
+// Checks paths from foreign sources (modpack archives, manifests, UI commands): does not let them leave the folder through .., links or system names.
+// Writes and deletes nothing. It only lets a path through or rejects it.
 use std::path::{Path, PathBuf};
 
 // Single validation point for untrusted paths (mrpack and CurseForge manifest

@@ -1,3 +1,5 @@
+// What to keep on the player's side when a catalog modpack updates: their worlds, settings, server list, own mods.
+// Works only in the folder of this modpack. Downloads and runs nothing.
 use crate::engine::*;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -116,6 +118,7 @@ fn move_path(from: &Path, to: &Path) -> Result<(), String> {
     }
     if from.is_dir() {
         copy_dir_all(from, to).map_err(|e| e.to_string())?;
+        // Move by copying and deleting the original: only when a plain rename failed (different disk).
         std::fs::remove_dir_all(from).map_err(|e| e.to_string())
     } else {
         std::fs::copy(from, to).map_err(|e| e.to_string())?;
@@ -207,6 +210,7 @@ pub(crate) fn withhold_player_made(overrides: &Path, pdir: &Path) {
         let (shipped, theirs) = (overrides.join(rel), pdir.join(rel));
         if !shipped.is_dir() {
             if theirs.exists() {
+                // Removes the file from the unpacked modpack, not from the player: the player already has one and it matters more.
                 let _ = std::fs::remove_file(&shipped);
             }
             continue;
@@ -217,6 +221,7 @@ pub(crate) fn withhold_player_made(overrides: &Path, pdir: &Path) {
             }
             let entry = shipped.join(&name);
             if entry.is_dir() {
+                // The same for a folder: deletes the copy from the unpacked modpack archive, not the player's folder.
                 let _ = std::fs::remove_dir_all(&entry);
             } else {
                 let _ = std::fs::remove_file(&entry);
@@ -285,6 +290,7 @@ fn copy_path(from: &Path, to: &Path) -> std::io::Result<()> {
 fn replace_path(from: &Path, to: &Path) -> std::io::Result<()> {
     if let Ok(meta) = std::fs::symlink_metadata(to) {
         if meta.is_dir() {
+            // Replaces the old version entry with the one the player picked. The path is inside this modpack folder.
             std::fs::remove_dir_all(to)?;
         } else if from.is_dir() {
             std::fs::remove_file(to)?;

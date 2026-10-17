@@ -1,3 +1,4 @@
+// UI sounds. The core downloads the sound files from the Mojang assets and puts them on disk. The UI only plays them through Web Audio.
 import { convertFileSrc, downloadUiSounds, uiSounds } from '../ipc/commands'
 import { hasTauri } from '../ipc/tauri'
 import { writePref } from './prefs'

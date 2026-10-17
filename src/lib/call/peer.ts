@@ -1,3 +1,4 @@
+// One WebRTC connection to a caller: sound, camera, screen share. Quality and bitrate limits. Data goes straight to the other person or through TURN.
 import type { IceConfig } from './ice'
 
 /** Потолок показа экрана одному зрителю; на группу он делится между ними. */

@@ -1,3 +1,5 @@
+// App assembly: wires up the Tauri plugins, registers the commands for the UI and opens the windows.
+// No network of its own. Plugins: auto-update, autostart, global hotkey for the overlay, clipboard, millida:// links. Which files the window may read is written at asset_dirs().
 use tauri::Manager;
 
 pub mod engine;
@@ -67,6 +69,7 @@ fn on_run_event(app: &tauri::AppHandle, event: &tauri::RunEvent) {
 pub fn allow_assets(app: &tauri::AppHandle) {
     let scope = app.asset_protocol_scope();
     for dir in asset_dirs() {
+        // The window may read only the wallpaper, music and sound folders. The token store (secrets.bin, vault.key) is not in the list.
         std::fs::create_dir_all(&dir).ok();
         let _ = scope.allow_directory(&dir, true);
     }
@@ -90,6 +93,7 @@ fn nvidia_driver_loaded() -> bool {
 fn avoid_webkit_dmabuf_renderer() {
     const VAR: &str = "WEBKIT_DISABLE_DMABUF_RENDERER";
     if std::env::var_os(VAR).is_none() && needs_dmabuf_off(std::env::var_os("APPIMAGE").is_some(), nvidia_driver_loaded()) {
+        // Environment variables only for drawing the window on Linux (NVIDIA video driver, AppImage). Nothing to do with network or data.
         std::env::set_var(VAR, "1");
     }
 }
@@ -169,12 +173,15 @@ pub fn run() {
         }))
         .plugin(navguard::init())
         .plugin(tauri_plugin_deep_link::init())
+        // Tauri auto-update plugin. The address and the public signing key are in tauri.conf.json. Our own signature check code is in engine/core/selfupdate.rs.
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        // Only one global hotkey is registered: the overlay hotkey (Alt+M by default), see overlay.rs.
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         // Запуск вместе с системой (06.10.2026): лаунчер живёт в трее, и
         // напоминания о сундуке и серии есть кому показать.
+        // Autostart with the system. The user turns it on with a switch in settings.
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec![commands::system::AUTOSTART_ARG]),

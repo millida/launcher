@@ -1,3 +1,5 @@
+// Installs a ready modpack from the Millida catalog: the card and the archive link come from api.millida.net, the archive is downloaded from garage.millida.net and unpacked into the modpack folder.
+// Launcher service files are dropped from the foreign archive, except the launch description that the catalog check reads.
 use super::pack_delta;
 use crate::engine::*;
 use serde_json::Value;
@@ -10,6 +12,7 @@ use tauri::AppHandle;
 /// about to download two gigabytes from and unpack into a game folder. A
 /// compromised or simply mistaken API answer must not be able to point the
 /// launcher at another host, so the verdict is taken here and not upstream.
+// The only host we accept a modpack archive from (checked in pack_url_allowed).
 const PACK_HOST: &str = "garage.millida.net";
 
 const MANIFEST_NAME: &str = "millida.pack.json";
@@ -201,6 +204,7 @@ async fn fetch_pack(app: &AppHandle, job: &Job, slug: &str, review: bool, reuse:
         let answer = pack_review_candidate(slug).await?;
         view_from_candidate(slug, &answer)?
     } else {
+        // Request for the modpack card to api.millida.net. The Millida token is added if the user is logged in.
         millida_api(format!("/catalog/packs/{}", slug), "GET".into(), None, millida_token()).await?
     };
     let (file_id, size, sha512) = client_file(&view)?;
@@ -299,6 +303,7 @@ async fn fetch_pack(app: &AppHandle, job: &Job, slug: &str, review: bool, reuse:
     job.emit(app, 70.0, "Распаковываем…");
     let from = archive.clone();
     let into = unpacked.clone();
+    // Cleans our own temporary unpack folder before a new try.
     let _ = std::fs::remove_dir_all(&into);
     tokio::task::spawn_blocking(move || -> Result<(), String> {
         unzip_to(&from, &into)?;
@@ -498,6 +503,7 @@ async fn update_catalog_pack_job(app: &AppHandle, job: &Job, current: &Profile, 
     }
     trust_pack_launch(profile, slug);
     forget_skin_mod_install(profile);
+    // The old version of the modpack, which we moved aside ourselves during the update, is deleted after the swap worked.
     if let Err(e) = std::fs::remove_dir_all(&previous) {
         eprintln!("[pack] старая версия «{}» не удалилась, уберём при следующем обновлении: {}", profile, e);
     }

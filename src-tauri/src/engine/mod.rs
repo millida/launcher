@@ -1,6 +1,9 @@
+// Engine root: wires up the modules (accounts, core, content, game launch) and holds the shared launch types.
+// The Mojang addresses below are the official ones the launcher takes the version list and game assets from.
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
+// Official Minecraft version list from Mojang.
 pub(crate) const MANIFEST: &str = "https://launchermeta.mojang.com/mc/game/version_manifest_v2.json";
 pub(crate) const RESOURCES: &str = "https://resources.download.minecraft.net";
 

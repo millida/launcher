@@ -1,3 +1,5 @@
+// Worlds in the saves/ folder of a modpack: rename, copy, export to zip, import, restore from a backup.
+// Works only inside the modpack folder. Folder names come from the UI and are checked with safe_child. No network.
 //! World manager: what `saves/` actually contains, and the operations a player
 //! expects over it — rename, copy, export, import, restore from a backup.
 //!
@@ -231,6 +233,7 @@ pub fn duplicate_world(profile: &str, folder: &str) -> Result<WorldInfo, String>
     let dst = safe_child(&saves, &dst_folder)?;
     std::fs::create_dir_all(&dst).map_err(|e| e.to_string())?;
     if let Err(e) = copy_dir_all(&src, &dst) {
+        // Copying the world failed: remove the half-copied folder. The original is not touched.
         let _ = std::fs::remove_dir_all(&dst);
         return Err(format!("Не удалось скопировать мир: {}", e));
     }
@@ -315,6 +318,7 @@ fn world_root(dir: &Path) -> Option<PathBuf> {
 
 pub(crate) fn import_world_zip(profile: &str, archive: &Path) -> Result<WorldInfo, String> {
     let tmp = data_dir().join("tmp").join("world-import");
+    // Temporary unpack folder for an imported world, inside data/tmp of the launcher.
     let _ = std::fs::remove_dir_all(&tmp);
     std::fs::create_dir_all(&tmp).map_err(|e| e.to_string())?;
     let cleanup = TempDir(tmp.clone());
@@ -346,6 +350,7 @@ struct TempDir(PathBuf);
 
 impl Drop for TempDir {
     fn drop(&mut self) {
+        // The temporary folder is removed on any exit from the import.
         let _ = std::fs::remove_dir_all(&self.0);
     }
 }
@@ -372,6 +377,7 @@ pub fn delete_backup(profile: &str, file: &str) -> Result<(), String> {
         return Err("Это не файл бэкапа".into());
     }
     let path = safe_child(&profile_dir(profile).join("backups"), &name)?;
+    // The player clicked "Delete" on a backup: deletes one zip from the backups folder of this modpack.
     std::fs::remove_file(&path).map_err(|e| format!("Не удалось удалить бэкап: {}", e))
 }
 

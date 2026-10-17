@@ -1,3 +1,5 @@
+// Own launcher wallpapers: copies the picture the player picked into the wallpaper/ folder of the launcher data and keeps at most eight.
+// No network.
 use crate::engine::*;
 
 #[derive(serde::Serialize)]
@@ -71,6 +73,7 @@ pub async fn pick_wallpaper() -> Result<Option<CustomWallpaper>, String> {
         for e in rd.flatten() {
             let fname = e.file_name().to_string_lossy().to_string();
             if fname.starts_with("custom.") {
+                // Removes the previous custom.* wallpaper in our wallpaper/ folder.
                 let _ = std::fs::remove_file(e.path());
             } else if fname.starts_with("wp_") {
                 let mt = e.metadata().and_then(|m| m.modified()).unwrap_or(std::time::UNIX_EPOCH);
@@ -79,6 +82,7 @@ pub async fn pick_wallpaper() -> Result<Option<CustomWallpaper>, String> {
         }
         wps.sort_by_key(|w| std::cmp::Reverse(w.1));
         for (p, _) in wps.into_iter().skip(8) {
+            // Keeps the eight newest wallpapers, deletes older ones (only in the wallpaper/ folder).
             let _ = std::fs::remove_file(p);
         }
     }

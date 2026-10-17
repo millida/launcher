@@ -1,3 +1,4 @@
+// Captures frames of the game window through Windows Graphics Capture and the graphics card (Direct3D 11). Frames stay in video memory and go to the encoder.
 use std::collections::HashMap;
 
 use windows::core::{Interface, Result};
@@ -65,6 +66,7 @@ pub struct Capture {
 impl Capture {
     pub fn start(gpu: &Gpu, window: Window, min_interval: i64) -> Result<Capture> {
         let interop = windows::core::factory::<GraphicsCaptureItem, IGraphicsCaptureItemInterop>()?;
+        // Capture starts from the game window, not the whole screen. The other unsafe in this file is DirectX system calls.
         let item: GraphicsCaptureItem = unsafe { interop.CreateForWindow(window.hwnd())? };
         let dxgi: IDXGIDevice = gpu.device.cast()?;
         let winrt_device: IDirect3DDevice = unsafe { CreateDirect3D11DeviceFromDXGIDevice(&dxgi)? }.cast()?;

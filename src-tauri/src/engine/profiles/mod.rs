@@ -1,3 +1,4 @@
+// Modpacks (profiles): list, install, import, export, copies, mods, screenshots, logs and modpack sharing. This file only wires up the modules.
 mod store;
 mod mods;
 mod groups;

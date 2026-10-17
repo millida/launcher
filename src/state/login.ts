@@ -1,3 +1,5 @@
+// Millida account login by code: the launcher opens a millida.net page in the browser and waits for confirmation (millidaLoginPoll through the core).
+// The password is never typed into the launcher, the token stays in the core.
 import { create } from 'zustand'
 import { hasTauri } from '../ipc/tauri'
 import { millidaLoginPoll, openUrl } from '../ipc/commands'

@@ -1,3 +1,5 @@
+// Millida hosting panel: server console stream, file download and upload.
+// Talks only to api.millida.net with the Millida account token. The user picks the file to upload in a dialog.
 // Live server console. The API serves an SSE stream without CORS headers, so it
 // is consumed here and forwarded to the frontend as "host-console" events.
 // Cancellation works by generation counter: only the newest stream stays active.
@@ -10,6 +12,7 @@ static CONSOLE_GEN: AtomicU64 = AtomicU64::new(0);
 #[tauri::command]
 pub async fn host_console_start(app: AppHandle, id: String) -> Result<(), String> {
     check_id(&id)?;
+    // The Millida token comes from secrets and goes only to api.millida.net in the Authorization header.
     let token = secrets::get("millida")
         .or_else(|| secrets::get("mc"))
         .ok_or("нет токена Millida")?;
@@ -85,6 +88,7 @@ pub fn host_console_stop() {
     CONSOLE_GEN.fetch_add(1, Ordering::SeqCst);
 }
 
+// This is just the base64 alphabet. We have our own encoder for uploading a file in chunks inside JSON.
 const B64: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 fn b64(bytes: &[u8]) -> String {
@@ -144,6 +148,7 @@ pub async fn host_download(id: String, path: Option<String>) -> Result<Option<St
     let Some(dest) = dest else { return Ok(None) };
 
     let mut res = engine::client()
+        // Downloads a server file from Millida hosting (api.millida.net, with the token) to the place the user picked.
         .get(&url)
         .header("Authorization", format!("Bearer {}", token))
         .send()
@@ -201,6 +206,7 @@ pub async fn host_upload(id: String, dir: String) -> Result<Option<String>, Stri
     let mut append = false;
     for chunk in bytes.chunks(CHUNK) {
         let res = engine::client()
+            // Uploads a file the user picked to their server, in 6 MB chunks, base64 inside JSON.
             .post(&url)
             .header("Authorization", format!("Bearer {}", token))
             .json(&serde_json::json!({ "contentBase64": b64(chunk), "append": append }))

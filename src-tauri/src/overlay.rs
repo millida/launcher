@@ -1,3 +1,5 @@
+// Overlay: a small window on top of the game with notifications and a hotkey.
+// It is a separate launcher window. Nothing is injected into Minecraft and we do not touch the game process. No network of its own.
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
@@ -174,6 +176,7 @@ fn arm_hit_watch(app: &AppHandle) {
             if !win.is_visible().unwrap_or(false) {
                 break;
             }
+            // Takes the mouse position on screen, to let clicks pass through the transparent parts of the overlay. The position is not saved or sent anywhere.
             let now = match (handle.cursor_position(), win.outer_position(), win.scale_factor()) {
                 (Ok(cur), Ok(pos), Ok(scale)) if scale > 0.0 => {
                     inside_card((cur.x - pos.x as f64) / scale, (cur.y - pos.y as f64) / scale)
@@ -238,6 +241,7 @@ fn build(app: &AppHandle) -> Result<tauri::WebviewWindow, String> {
         .title("Millida Overlay")
         .decorations(false)
         .transparent(true)
+        // The overlay window is always on top, otherwise it is not visible over the game.
         .always_on_top(true)
         .skip_taskbar(true)
         .shadow(false)
@@ -398,6 +402,7 @@ pub async fn notify(app: &AppHandle, payload: serde_json::Value) -> Result<(), S
 /// Rebinding drops the previous accelerator first: a changed hotkey that left
 /// the old one registered would fire the overlay from two keys forever.
 pub fn rebind_hotkey(app: &AppHandle) {
+    // Registers the global overlay hotkey. Other key presses are not tracked.
     use tauri_plugin_global_shortcut::GlobalShortcutExt;
     let gs = app.global_shortcut();
     // Only our own combination: the clip hotkey shares the plugin.

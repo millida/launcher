@@ -1,3 +1,6 @@
+// Downloads the launcher installer and runs it. Only talks to the hosts in the allow-list in manifest.rs
+// (GitHub Releases and launcher-storage.millida.net). Plain GET requests, nothing about you is sent.
+// The downloaded file runs only after the Millida signature check passes. Writes to its own work folder and deletes it at the end.
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -79,6 +82,7 @@ impl Workspace {
         static SEQ: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let dir = base_dir().join(format!("{}{}", own_prefix(), seq));
+        // Deletes only our own work folder millida-setup-<process id> inside the installer directory.
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).map_err(|e| format!("не создать рабочую папку: {}", e))?;
         Ok(Self(dir))
@@ -123,6 +127,7 @@ pub fn sweep_stale() {
             .map(|t| t.elapsed().map(|age| age < STALE_AFTER).unwrap_or(true))
             .unwrap_or(false);
         if !fresh {
+            // Deletes old millida-setup-* folders left by interrupted runs. Folders with other names are left alone.
             let _ = std::fs::remove_dir_all(entry.path());
         }
     }
@@ -136,6 +141,7 @@ pub struct Lock(PathBuf);
 #[cfg(unix)]
 impl Drop for Lock {
     fn drop(&mut self) {
+        // Removes our own lock file setup.lock.
         let _ = std::fs::remove_file(&self.0);
     }
 }
@@ -179,6 +185,7 @@ pub fn single_instance() -> Instance {
     Instance::Unknown
 }
 
+// HTTP client: User-Agent MillidaLauncherSetup/1, no cookies, no logins. Redirects are off, we follow them ourselves.
 pub fn client() -> Result<Client, String> {
     Client::builder()
         .user_agent("MillidaLauncherSetup/1")
@@ -245,6 +252,7 @@ fn fetch_range(
         if let Some((from, to)) = range {
             request = request.header(RANGE, format!("bytes={}-{}", from, to));
         }
+        // The request goes to an already checked address. Only the Cache-Control and Range headers are set, nothing about the user.
         let response = request
             .send()
             .map_err(|e| format!("не достучаться до {}: {}", current, network_error(&e.without_url())))?;
@@ -303,6 +311,7 @@ fn next_hop(current: &url::Url, location: &str) -> Result<url::Url, String> {
     manifest::check_url(next.as_str())
 }
 
+// Version list: try the URLs from MANIFEST_URLS one by one, read at most 64 KB of the answer.
 pub fn fetch_build(client: &Client) -> Result<Build, String> {
     let mut failures: Vec<String> = Vec::new();
     for url in manifest::MANIFEST_URLS {
@@ -338,6 +347,7 @@ pub fn download_verified(
         match download(client, url, dest, &mut report).and_then(|()| verify(dest, &build.signature)) {
             Ok(()) => return Ok(()),
             Err(e) => {
+                // The file failed the signature check or the download is incomplete: delete it.
                 let _ = std::fs::remove_file(dest);
                 failures.push(e);
             }
@@ -520,6 +530,7 @@ fn download_once(
     Ok(())
 }
 
+// The key and the signature come as base64. It is the minisign signature text, not hidden data.
 fn decode_text(value: &str) -> Result<String, String> {
     let raw = base64::engine::general_purpose::STANDARD
         .decode(value.trim())
@@ -544,6 +555,7 @@ fn open_locked(file: &Path) -> std::io::Result<File> {
 /// checked are the bytes on disk at that moment. The handle is closed before the
 /// launch on purpose: holding it sends the antivirus check of the new file down
 /// a slow path and turns a three-second install into a four-minute one.
+// Signature check: the public key from manifest.rs against the file. If it does not match, the installer does not run.
 pub fn verify(file: &Path, signature: &str) -> Result<(), String> {
     let mut handle = open_locked(file).map_err(|e| format!("не открыть скачанный установщик: {}", e))?;
     let key = PublicKey::decode(decode_text(manifest::PUBKEY)?.trim())
@@ -561,6 +573,7 @@ pub fn verify(file: &Path, signature: &str) -> Result<(), String> {
 /// rights — with a per-machine bundle a silent install would fail silently.
 #[cfg(windows)]
 pub fn run_installer(file: &Path, cwd: &Path) -> Result<(), String> {
+    // Runs the downloaded NSIS installer with /S (silent) and /R (open the launcher after). Only a file with a valid signature gets here.
     let status = Command::new(file)
         .args(["/S", "/R"])
         // Otherwise the child inherits the Downloads folder, where any site can

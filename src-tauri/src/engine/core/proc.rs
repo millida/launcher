@@ -1,3 +1,4 @@
+// Hides the black console window when child processes start on Windows. Nothing else.
 use std::process::Command;
 
 /// On Windows every `Command::new` pops up a console window without

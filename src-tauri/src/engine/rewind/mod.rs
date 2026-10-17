@@ -1,3 +1,6 @@
+// "Clips": keeps the last seconds of the game window in memory and writes them to mp4 in "Videos\Millida Clips" on a hotkey.
+// Off by default, the microphone is off too. Recording runs only while the game runs, and only of that game's window.
+// Video and sound do not go to the network. They are written to disk only when you press the key.
 //! Rewind: the last seconds of a running game, kept encoded in memory and
 //! written to an MP4 on a hotkey. Capture lives in the launcher, outside the
 //! game, so it behaves the same on every Minecraft version. Windows only:
@@ -129,6 +132,7 @@ fn bind_hotkey(app: &AppHandle) {
     if *bound == want {
         return;
     }
+    // The hotkey (Alt+F10 by default) is taken only while the game is being recorded, then it is released.
     let shortcuts = app.global_shortcut();
     if let Some(old) = bound.take() {
         let _ = shortcuts.unregister(old.as_str());
@@ -355,6 +359,7 @@ pub fn clip_path(name: &str) -> Result<std::path::PathBuf, String> {
 
 pub fn open_folder() -> Result<(), String> {
     let folder = clips::folder();
+    // The Millida Clips folder inside the system "Videos" folder.
     std::fs::create_dir_all(&folder).map_err(|e| format!("Не удалось создать папку клипов: {}", e))?;
     crate::engine::open_path(&folder.to_string_lossy());
     Ok(())

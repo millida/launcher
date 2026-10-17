@@ -1,3 +1,4 @@
+// Ely.by login by device code: the code is typed at account.ely.by/code. The core keeps the token, only the nickname comes here.
 import { create } from 'zustand'
 import { hasTauri } from '../ipc/tauri'
 import { elyDevicePoll, elyDeviceStart, elySessionCommit, openUrl } from '../ipc/commands'
