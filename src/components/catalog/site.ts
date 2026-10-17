@@ -9,6 +9,11 @@ import { cfProjectOf } from '../../lib/millidaCatalog'
 import { SECTION_SOURCE, listingQuery } from './sections'
 import type { CatalogSortId, EditionFilter, PriceFilter, SectionSlug, SectionSource, SideFilter } from './sections'
 import type { CatalogFile, Pricing } from './paid'
+import { getLocale, intlTag, t, type Locale } from '../../i18n'
+import { withCatalogLang } from './catalogLang'
+import { plural } from '../../lib/format'
+
+export { plural }
 
 /*
  * Каталог Millida в лаунчере = каталог millida.net (приказ владельца
@@ -44,7 +49,6 @@ export interface SiteSection {
     | 'plugin'
     | 'serverpack'
     | 'addon'
-    | 'cheat'
     | 'seed'
     | 'skin'
     | 'cape'
@@ -60,11 +64,15 @@ export interface SiteSection {
 
 const GALLERY_SLUGS = new Set<string>(['texture-packs', 'shaders', 'maps', 'seeds', 'capes', 'heads'])
 
-const sec = (slug: SiteSlug, kind: SiteSection['kind'], title: string, h1: string, loaderAxis: boolean): SiteSection => ({
+const sec = (slug: SiteSlug, kind: SiteSection['kind'], title: () => string, h1: () => string, loaderAxis: boolean): SiteSection => ({
   slug,
   kind,
-  title,
-  h1,
+  get title() {
+    return title()
+  },
+  get h1() {
+    return h1()
+  },
   loaderAxis,
   // Картинкой выбирают только то, что смотрят глазами (как Modrinth: галерея по умолчанию у шейдеров и
   // ресурс-паков); сборки и моды — плотным списком (владелец 10.10.2026: «всё большое»).
@@ -74,20 +82,19 @@ const sec = (slug: SiteSlug, kind: SiteSection['kind'], title: string, h1: strin
 
 /** Все разделы сайта в порядке групп шапки (`CATALOG_GROUPS`). */
 export const ALL_SECTIONS: SiteSection[] = [
-  sec('all', 'all', 'Все', 'Всё для Minecraft', true),
-  sec('modpacks', 'modpack', 'Сборки модов', 'Сборки модов для Minecraft', true),
-  sec('server-packs', 'serverpack', 'Серверные сборки', 'Серверные сборки для Minecraft', true),
-  sec('mods', 'mod', 'Моды', 'Моды для Minecraft', true),
-  sec('plugins', 'plugin', 'Плагины', 'Плагины для сервера Minecraft', true),
-  sec('data-packs', 'datapack', 'Дата-паки', 'Дата-паки для Minecraft', false),
-  sec('cheats', 'cheat', 'Читы', 'Читы для Minecraft', true),
-  sec('texture-packs', 'resourcepack', 'Ресурс-паки', 'Ресурс-паки и текстуры для Minecraft', false),
-  sec('shaders', 'shader', 'Шейдеры', 'Шейдеры для Minecraft', true),
-  sec('maps', 'world', 'Карты', 'Карты для Minecraft', false),
-  sec('seeds', 'seed', 'Сиды', 'Сиды для Minecraft', false),
-  sec('skins', 'skin', 'Скины', 'Скины для Minecraft', false),
-  sec('capes', 'cape', 'Плащи', 'Плащи для Minecraft', false),
-  sec('heads', 'head', 'Головы', 'Головы для Minecraft', false),
+  sec('all', 'all', () => t('Все'), () => t('Всё для Minecraft'), true),
+  sec('modpacks', 'modpack', () => t('Сборки модов'), () => t('Сборки модов для Minecraft'), true),
+  sec('server-packs', 'serverpack', () => t('Серверные сборки'), () => t('Серверные сборки для Minecraft'), true),
+  sec('mods', 'mod', () => t('Моды'), () => t('Моды для Minecraft'), true),
+  sec('plugins', 'plugin', () => t('Плагины'), () => t('Плагины для сервера Minecraft'), true),
+  sec('data-packs', 'datapack', () => t('Дата-паки'), () => t('Дата-паки для Minecraft'), false),
+  sec('texture-packs', 'resourcepack', () => t('Ресурс-паки'), () => t('Ресурс-паки и текстуры для Minecraft'), false),
+  sec('shaders', 'shader', () => t('Шейдеры'), () => t('Шейдеры для Minecraft'), true),
+  sec('maps', 'world', () => t('Карты'), () => t('Карты для Minecraft'), false),
+  sec('seeds', 'seed', () => t('Сиды'), () => t('Сиды для Minecraft'), false),
+  sec('skins', 'skin', () => t('Скины'), () => t('Скины для Minecraft'), false),
+  sec('capes', 'cape', () => t('Плащи'), () => t('Плащи для Minecraft'), false),
+  sec('heads', 'head', () => t('Головы'), () => t('Головы для Minecraft'), false),
 ]
 
 const bySlug = (slug: SiteSlug): SiteSection => ALL_SECTIONS.find((s) => s.slug === slug)!
@@ -241,7 +248,8 @@ function qs(p: Record<string, string | number | null | undefined>): string {
 }
 
 /** Ключ кэша выдачи — по нему же берётся сохранённая на диске копия (staleCatalog). */
-export const listingKey = (p: ListingQuery): string => 'site:/catalog/listing?' + listingQuery(p.section, { ...p, perPage: p.perPage || PER_PAGE })
+export const listingKey = (p: ListingQuery, locale: Locale = getLocale()): string =>
+  'site:' + withCatalogLang('/catalog/listing?' + listingQuery(p.section, { ...p, perPage: p.perPage || PER_PAGE }), locale)
 
 export function loadListing(p: ListingQuery): Promise<SiteListing> {
   const key = listingKey(p)
@@ -255,18 +263,6 @@ export const facetsKey = (section: SiteSlug, version?: string | null, loader?: s
 export function loadFacets(section: SiteSlug, version?: string | null, loader?: string | null, edition?: EditionFilter | null): Promise<SiteFacets> {
   const key = facetsKey(section, version, loader, edition)
   return cachedCatalog(key, () => api<SiteFacets>(key.slice(5)), { persist: true })
-}
-
-/** Читы и другое кураторское: файлы на нашем хранилище, `/catalog/curated/<раздел>`. */
-export interface CuratedItem {
-  slug: string
-  downloads: number
-  files: { id: string; version: string; fileName: string; size: number; gameVersions: string[]; loaders: string[]; releasedAt: string | null }[]
-}
-export function loadCurated(section: 'cheats'): Promise<CuratedItem[]> {
-  return cachedCatalog('site:curated:' + section, () =>
-    api<{ items?: CuratedItem[] }>('/catalog/curated/' + section).then((d) => (Array.isArray(d.items) ? d.items : [])),
-  )
 }
 
 /** Скин сетки каталога (`/v2/skins`, `SkinCard` сайта). */
@@ -457,7 +453,7 @@ const LOADER_LABEL: Record<string, string> = {
   datapack: 'Дата-пак', 'java-agent': 'Java Agent', optifine: 'OptiFine', iris: 'Iris', minecraft: 'Ванильная игра',
   rift: 'Rift', modloader: 'ModLoader', babric: 'Babric', canvas: 'canvas', vanilla: 'vanilla',
 }
-export const loaderLabel = (slug: string): string => LOADER_LABEL[slug] || slug
+export const loaderLabel = (slug: string): string => (LOADER_LABEL[slug] ? t(LOADER_LABEL[slug]) : slug)
 
 /** Наши русские категории → значок категории Modrinth с тем же смыслом. */
 export const MR_CATEGORY: Record<string, string> = {
@@ -484,39 +480,38 @@ export function categoryIconSrc(value: string): string | null {
 
 export const capFirst = (s: string): string => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s)
 
-export function plural(n: number, one: string, few: string, many: string): string {
-  const m10 = n % 10
-  const m100 = n % 100
-  if (m10 === 1 && m100 !== 11) return one
-  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few
-  return many
-}
+/// The catalogue API names categories and uses in Russian; the set is closed, so the label is translated here.
+export const categoryLabel = (value: string): string => t(capFirst(value))
+
 
 /** «88 тыс.», «1,3 млн» — как на сайте. */
 export function fmtNum(n: number): string {
   if (n >= 1_000_000) {
     const m = n / 1_000_000
     const digits = m >= 100 ? 0 : 1
-    return `${m.toLocaleString('ru-RU', { minimumFractionDigits: digits, maximumFractionDigits: digits })} млн`
+    return t('{n} млн', { n: m.toLocaleString(intlTag(), { minimumFractionDigits: digits, maximumFractionDigits: digits }) })
   }
-  if (n >= 10_000) return `${Math.round(n / 1000).toLocaleString('ru-RU')} тыс.`
-  return n.toLocaleString('ru-RU')
+  if (n >= 10_000) return t('{n} тыс.', { n: Math.round(n / 1000).toLocaleString(intlTag()) })
+  return n.toLocaleString(intlTag())
 }
 
-export const materials = (n: number): string => `${n.toLocaleString('ru-RU')} ${plural(n, 'материал', 'материала', 'материалов')}`
+export const materials = (n: number): string => {
+  const shown = n.toLocaleString(intlTag())
+  return plural(n, t('{n} материал', { n: shown }), t('{n} материала', { n: shown }), t('{n} материалов', { n: shown }))
+}
 
 export function relativeTime(iso?: string | null): string {
   if (!iso) return ''
-  const t = Date.parse(iso)
-  if (Number.isNaN(t)) return ''
-  const diffMin = Math.floor((Date.now() - t) / 60000)
-  if (diffMin < 1) return 'только что'
-  if (diffMin < 60) return `${diffMin} ${plural(diffMin, 'минуту', 'минуты', 'минут')} назад`
+  const at = Date.parse(iso)
+  if (Number.isNaN(at)) return ''
+  const diffMin = Math.floor((Date.now() - at) / 60000)
+  if (diffMin < 1) return t('только что')
+  if (diffMin < 60) return plural(diffMin, t('{n} минуту назад', { n: diffMin }), t('{n} минуты назад', { n: diffMin }), t('{n} минут назад', { n: diffMin }))
   const h = Math.floor(diffMin / 60)
-  if (h < 24) return `${h} ${plural(h, 'час', 'часа', 'часов')} назад`
+  if (h < 24) return plural(h, t('{n} час назад', { n: h }), t('{n} часа назад', { n: h }), t('{n} часов назад', { n: h }))
   const d = Math.floor(h / 24)
-  if (d < 7) return `${d} ${plural(d, 'день', 'дня', 'дней')} назад`
-  return new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
+  if (d < 7) return plural(d, t('{n} день назад', { n: d }), t('{n} дня назад', { n: d }), t('{n} дней назад', { n: d }))
+  return new Date(at).toLocaleDateString(intlTag(), { day: 'numeric', month: 'long' })
 }
 
 /** Имя без хвостов «— скачать мод на Fabric» и «для Minecraft» (`displayName` сайта). */
@@ -536,9 +531,24 @@ export function versionRange(versions: string[]): string | null {
 }
 
 export const SIDE_LABEL: Record<string, { label: string; icon: string }> = {
-  CLIENT: { label: 'Клиент', icon: 'i-monitor' },
-  SERVER: { label: 'Сервер', icon: 'i-server' },
-  BOTH: { label: 'Клиент и сервер', icon: 'globe' },
+  CLIENT: {
+    get label() {
+      return t('Клиент')
+    },
+    icon: 'i-monitor',
+  },
+  SERVER: {
+    get label() {
+      return t('Сервер')
+    },
+    icon: 'i-server',
+  },
+  BOTH: {
+    get label() {
+      return t('Клиент и сервер')
+    },
+    icon: 'globe',
+  },
 }
 
 /* ── Установка: карточка сайта → то, что умеет ставить лаунчер ── */
@@ -568,6 +578,7 @@ export interface ItemView {
   side?: string | null
   downloads?: number | null
   updatedAt?: string | null
+  contentLang?: 'en' | 'ru'
   dependencies?: { requires?: { kind: string; slug: string | null; section: string | null; title: string }[] }
   similar?: { slug: string; section: string | null; title: string; summary: string; cover: string | null; icon: string | null; downloads: number | null }[]
 }
@@ -601,8 +612,10 @@ export function ownPackHit(card: SiteCard): ModHit {
  * (`/catalog/items/:slug` → `sourceUrl`). По нему строим строку, которую ставит
  * обычный путь лаунчера, а номер проекта нужен, чтобы узнать «уже установлено».
  */
+export const hitKey = (slug: string, locale: Locale = getLocale()): string => 'site:hit:' + withCatalogLang(slug, locale)
+
 export async function resolveHit(card: SiteCard): Promise<ModHit | null> {
-  const key = 'site:hit:' + card.slug
+  const key = hitKey(card.slug)
   const hit = peekCatalog<ModHit | null>(key)
   if (hit !== undefined) return hit
   return cachedCatalog(key, async () => {
@@ -619,6 +632,26 @@ export async function resolveHit(card: SiteCard): Promise<ModHit | null> {
   })
 }
 
+export type SourcePlatform = 'Modrinth' | 'CurseForge'
+
+function hostOf(url: string | null | undefined): string {
+  try {
+    return url ? new URL(url).hostname.toLowerCase() : ''
+  } catch {
+    return ''
+  }
+}
+
+const onHost = (host: string, domain: string) => host === domain || host.endsWith('.' + domain)
+
+/// Where a mirrored item came from, named next to its author; own packs have no source and stay unnamed.
+export function sourcePlatform(item: { sourceUrl?: string | null; curseforgeId?: number | null }): SourcePlatform | null {
+  const host = hostOf(item.sourceUrl)
+  if (onHost(host, 'modrinth.com')) return 'Modrinth'
+  if (onHost(host, 'curseforge.com') || onHost(host, 'forgecdn.net')) return 'CurseForge'
+  return item.curseforgeId && item.curseforgeId > 0 ? 'CurseForge' : null
+}
+
 /// A listing that already names the source spares a full item request per feed row.
 export function sourceOf(card: SiteCard): Pick<ItemView, 'sourceUrl' | 'curseforgeId'> | null {
   if (card.sourceUrl === undefined) return null
@@ -630,19 +663,21 @@ export function sourceOf(card: SiteCard): Pick<ItemView, 'sourceUrl' | 'cursefor
  * платность. `fresh` — мимо кэша: после покупки сервер может отдать файлы,
  * которых до неё не показывал.
  */
+export const itemKey = (slug: string, locale: Locale = getLocale()): string => 'site:item:' + withCatalogLang(slug, locale)
+
 export function loadItem(slug: string, fresh = false, urgent = false): Promise<ItemView> {
-  const key = 'site:item:' + slug
-  return fresh ? itemQueued(slug, urgent) : cachedCatalog(key, () => itemQueued(slug, urgent))
+  const locale = getLocale()
+  return fresh ? itemQueued(slug, urgent, locale) : cachedCatalog(itemKey(slug, locale), () => itemQueued(slug, urgent, locale))
 }
 
 /** Не больше трёх карточек материала разом: лента — двадцать строк. Сбой не кэшируется. */
 let itemsActive = 0
 const itemsWaiting: (() => void)[] = []
-function itemQueued(slug: string, urgent = false): Promise<ItemView> {
+function itemQueued(slug: string, urgent: boolean, locale: Locale): Promise<ItemView> {
   return new Promise((resolve, reject) => {
     const run = () => {
       itemsActive++
-      api<ItemView>('/catalog/items/' + encodeURIComponent(slug))
+      api<ItemView>(withCatalogLang('/catalog/items/' + encodeURIComponent(slug), locale))
         .then(resolve, reject)
         .finally(() => {
           itemsActive--
@@ -706,7 +741,7 @@ function flushMr() {
 export function peekHit(card: SiteCard): ModHit | null | undefined {
   if (card.mrHit) return card.mrHit
   if (card.launcherOnly) return ownPackHit(card)
-  return peekCatalog<ModHit | null>('site:hit:' + card.slug)
+  return peekCatalog<ModHit | null>(hitKey(card.slug))
 }
 
 export const openOnSite = (section: string, slug: string) => openExt(siteUrl(section, slug))

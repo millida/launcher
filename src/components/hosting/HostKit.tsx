@@ -3,21 +3,24 @@ import { Icon } from '../Icon'
 import { WALLET_URL, openExt } from '../../lib/api'
 import { track } from '../../lib/telemetry'
 import { useAccounts } from '../../state/accounts'
+import { intlTag, t, useT } from '../../i18n'
 
 // Мелкие детали экрана хостинга, общие для списка и разделов.
 
 /// Статус → подпись и тон бейджа. Закрашенная точка — живое, полая — нет.
-export const HOST_ST: Record<string, [string, 'success' | 'warning' | 'danger' | 'neutral', boolean]> = {
-  RUNNING: ['Работает', 'success', true],
-  STARTING: ['Запускается', 'warning', true],
-  QUEUED: ['В очереди', 'warning', true],
-  INSTALLING: ['Устанавливается', 'warning', true],
-  STOPPING: ['Останавливается', 'warning', true],
-  STOPPED: ['Остановлен', 'neutral', false],
-  SLEEPING: ['Спит', 'neutral', false],
-  CRASHED: ['Упал', 'danger', false],
-  SUSPENDED: ['Приостановлен', 'danger', false],
-  ARCHIVED: ['В архиве', 'neutral', false],
+type HostStatus = [string, 'success' | 'warning' | 'danger' | 'neutral', boolean]
+
+export const HOST_ST: Record<string, HostStatus> = {
+  get RUNNING(): HostStatus { return [t('Работает'), 'success', true] },
+  get STARTING(): HostStatus { return [t('Запускается'), 'warning', true] },
+  get QUEUED(): HostStatus { return [t('В очереди'), 'warning', true] },
+  get INSTALLING(): HostStatus { return [t('Устанавливается'), 'warning', true] },
+  get STOPPING(): HostStatus { return [t('Останавливается'), 'warning', true] },
+  get STOPPED(): HostStatus { return [t('Остановлен'), 'neutral', false] },
+  get SLEEPING(): HostStatus { return [t('Спит'), 'neutral', false] },
+  get CRASHED(): HostStatus { return [t('Упал'), 'danger', false] },
+  get SUSPENDED(): HostStatus { return [t('Приостановлен'), 'danger', false] },
+  get ARCHIVED(): HostStatus { return [t('В архиве'), 'neutral', false] },
 }
 
 const CORE_NAME: Record<string, string> = {
@@ -65,16 +68,17 @@ export function ServerIcon({ icon, size }: { icon?: string; size: number }) {
   )
 }
 
-export const rubLabel = (kopecks: number) => Math.round(kopecks / 100).toLocaleString('ru-RU') + ' ₽'
+export const rubLabel = (kopecks: number) => Math.round(kopecks / 100).toLocaleString(intlTag()) + ' ₽'
 
 /// Баланс кошелька Millida компактной плашкой: кошелёк, сумма, «+» — пополнение.
 export function BalancePill() {
+  const t = useT()
   const acc = useAccounts((s) => s.list).find((a) => a.kind === 'millida' || a.kind === 'tg')
   if (!acc) return null
   return (
     <button
       className="hp-balance"
-      data-tip="Пополнить кошелёк Millida"
+      data-tip={t('Пополнить кошелёк Millida')}
       onClick={() => {
         track('store_open', { where: 'wallet_topup' })
         openExt(WALLET_URL)

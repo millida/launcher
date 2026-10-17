@@ -1,6 +1,7 @@
 import { PACK_ACCESS_PREFIX, type ProfileSettings } from '../ipc/commands'
 import type { PackView } from '../components/premium/packView'
 import { apiErrorText } from './apiError'
+import { t } from '../i18n'
 
 export interface PackUpdate {
   slug: string
@@ -63,7 +64,7 @@ export type PackLaunchStep =
 
 export function packLaunchStep(s: PackSettings | null | undefined, card: PackCard): PackLaunchStep {
   if (!packNeedsCheck(s)) return { kind: 'launch' }
-  if ('error' in card) return { kind: 'launch-unchecked', reason: apiErrorText(card.error, 'каталог Millida не ответил') }
+  if ('error' in card) return { kind: 'launch-unchecked', reason: apiErrorText(card.error, t('каталог Millida не ответил')) }
   const update = packUpdateFor(s, card.view)
   return update ? { kind: 'update', update } : { kind: 'launch' }
 }
@@ -81,7 +82,7 @@ function failureReason(e: unknown): string {
     .trim()
   const at = text.indexOf(PACK_ACCESS_PREFIX)
   const reason = (at >= 0 ? text.slice(at + PACK_ACCESS_PREFIX.length) : text).trim()
-  return reason || 'причина неизвестна'
+  return reason || t('причина неизвестна')
 }
 
 /**
@@ -94,6 +95,6 @@ export function afterPackUpdate(u: PackUpdate, outcome: PackUpdateOutcome): Afte
   if (outcome.kind === 'cancelled') return { launch: false, toast: null }
   return {
     launch: true,
-    toast: 'Сборку не удалось обновить до ' + u.to + ': ' + failureReason(outcome.error) + '. Запускаем установленную версию ' + u.from,
+    toast: t('Сборку не удалось обновить до {to}: {reason}. Запускаем установленную версию {from}', { to: u.to, reason: failureReason(outcome.error), from: u.from }),
   }
 }

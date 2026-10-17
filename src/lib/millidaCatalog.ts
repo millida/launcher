@@ -5,6 +5,7 @@ import type { DepNode, DepPlan, Profile } from '../ipc/commands'
 import { loaderId } from './format'
 import { cachedCatalog } from './catalogCache'
 import { cfProxyBackoff, proxyVerdict } from './proxyBackoff'
+import { t } from '../i18n'
 
 /// Каталог Millida — библиотека лаунчера (приказ владельца 21.09.2026): то же,
 /// что на millida.net/mods, /texture-packs, /modpacks, с тем же поиском и теми же
@@ -26,7 +27,6 @@ export const INSTALL_SECTIONS = [
   'data-packs',
   'maps',
   'addons',
-  'cheats',
   'skins',
   'capes',
 ] as const
@@ -41,7 +41,6 @@ export const KIND_OF_SECTION: Record<string, string> = {
   shaders: 'shader',
   'data-packs': 'datapack',
   maps: 'world',
-  cheats: 'mod',
 }
 
 /// Вкладка экрана «Контент» → раздел каталога.
@@ -163,16 +162,6 @@ export interface PackView {
   files: { id: string; side: 'client' | 'server'; version: string; size: number; sha512: string | null; fileName: string }[]
 }
 
-export interface CuratedFile {
-  id: string
-  version: string
-  fileName: string
-  size: number
-  sha256: string
-  gameVersions: string[]
-  loaders: string[]
-}
-
 /// План установки с зависимостями: GET /catalog/items/:slug/resolve?gameVersion=&loader=.
 /// Окно плана читает его здесь, а ставит ядро — оно запрашивает план у API
 /// заново и никому на слово не верит (engine/content/millida_plan.rs).
@@ -266,7 +255,7 @@ export function planToDepPlan(plan: ResolvePlan, slug: string, title: string): D
   const missing = (Array.isArray(plan.missing) ? plan.missing : [])
     .map((m) => (typeof m === 'string' ? m : m.title || m.name || m.slug || ''))
     .filter(Boolean)
-    .map((t) => ({ ...node({ slug: t, role: 'required', fileName: '', url: '' }, 'required'), problem: 'нет в каталоге Millida — поставь вручную' }))
+    .map((slug) => ({ ...node({ slug, role: 'required', fileName: '', url: '' }, 'required'), problem: t('нет в каталоге Millida — поставь вручную') }))
   return {
     title,
     version_number: (files.find(isPrimary) || { version: '' }).version || '',
@@ -569,11 +558,6 @@ export const catalog = {
       CATALOG_API + '/items/' + encodeURIComponent(slug) + '/resolve?' + qs({ gameVersion, loader }),
     ),
   pack: (slug: string) => getJson<PackView>(CATALOG_API + '/packs/' + encodeURIComponent(slug)),
-  curated: async (section: 'cheats' | 'addons', slug: string): Promise<CuratedFile[]> => {
-    const d = await getJson<{ items?: { slug: string; files: CuratedFile[] }[] }>(CATALOG_API + '/curated/' + section)
-    const hit = (d.items || []).find((i) => i.slug === slug)
-    return hit ? hit.files : []
-  },
 }
 
 /// Id карточки каталога скинов сайта (/skins/katalog/<id>): 16 hex хеша текстуры

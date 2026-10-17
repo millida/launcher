@@ -1,6 +1,7 @@
 import { canonAddr } from './serverAddr'
 import type { LobbyMode } from '../state/lobbyMode'
 import { usePromo } from '../state/promo'
+import { t } from '../i18n'
 
 export const ONEBLOCK_PACK = 'oneblock-metalabs'
 
@@ -60,11 +61,11 @@ export const ownServerMode = (cover: string | null = null): LobbyMode => ({
 export const ANARCHY = {
   mode: 'MCRU_ANARCHY',
   slug: 'mcru-anarchy',
-  name: 'Анархия',
-  fullName: 'Анархия MCRU',
+  get name() { return t('Анархия') },
+  get fullName() { return t('Анархия MCRU') },
   addr: 'mcru.me',
   version: '1.21.11',
-  tagline: 'Выживание без правил',
+  get tagline() { return t('Выживание без правил') },
 } as const
 
 export type AnarchyServer = { mode: string; slug: string; name: string; fullName: string; addr: string; version: string; tagline: string }

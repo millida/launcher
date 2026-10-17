@@ -3,6 +3,7 @@ import { RarityChip } from '../shop/rarityUi'
 import { PxThumb, defaultWay } from '../shop/Sets'
 import { toneStyle } from '../shop/parts'
 import { ItemGrid, ItemTile } from './ItemTile'
+import { useT } from '../../i18n'
 
 /**
  * «Наборы» в разделе «Образы» гардероба (02.10.2026): наборы магазина, где у
@@ -23,11 +24,12 @@ export function SetLooks({
   busy: string
   onWear: (set: SetView, way: SetColorwayView) => void
 }) {
+  const t = useT()
   const mine = sets.filter((s) => s.colorways.some((c) => c.have > 0))
   if (!mine.length) return null
   return (
     <>
-      <h3 className="ch-bar-title ch-sub">Наборы</h3>
+      <h3 className="ch-bar-title ch-sub">{t('Наборы')}</h3>
       <ItemGrid>
         {mine.map((set) => {
           const way = wardrobeWay(set)
@@ -46,7 +48,7 @@ export function SetLooks({
                 </span>
               }
               name={set.title}
-              status={way.have >= way.items.length ? 'Весь ' + way.have + '/' + way.items.length : way.have + '/' + way.items.length}
+              status={way.have >= way.items.length ? t('Весь {have}/{total}', { have: way.have, total: way.items.length }) : way.have + '/' + way.items.length}
               loading={busy === set.id}
               track="set_wear_wardrobe"
               kind="set"

@@ -5,10 +5,11 @@ import { modeBackground, modeLook } from './modeArt'
 import { modeScene } from '../iso/modeScenes'
 import { OWN_SERVER, isExclusive } from './data'
 import { ONEBLOCK_ART, modeIcon } from './modeIcon'
+import { formatNumber, t, useT } from '../../i18n'
 
 /** Онлайн коротко, чтобы название влезло в строку: 163 400 → «163 тыс». */
 const short = (n: number) =>
-  n >= 10000 ? Math.round(n / 1000) + ' тыс' : n >= 1000 ? (n / 1000).toFixed(1).replace('.', ',').replace(',0', '') + ' тыс' : String(n)
+  n >= 10000 ? t('{n} тыс', { n: Math.round(n / 1000) }) : n >= 1000 ? t('{n} тыс', { n: formatNumber(n / 1000, { maximumFractionDigits: 1 }) }) : String(n)
 
 /**
  * Плитка режима: мозаика крупных клеток цвета режима со ступенчатым светом,
@@ -38,6 +39,7 @@ export function ModeTile({
   on?: boolean
   onClick: () => void
 }) {
+  const t = useT()
   const own = cat === OWN_SERVER.mode
   const art = useMemo(() => {
     const set = modeIcon(cat)
@@ -59,7 +61,7 @@ export function ModeTile({
         data-pos={index}
         data-src="mode"
         aria-pressed={on}
-        aria-label={'Играть в ' + title}
+        aria-label={t('Играть в {name}', { name: title })}
         style={{ '--px-img': 'url(' + ONEBLOCK_ART.bg + ')' } as CSSProperties}
         onClick={onClick}
       >
@@ -69,16 +71,16 @@ export function ModeTile({
           ))}
         </span>
         <img className="ph-ob2-rig" src={ONEBLOCK_ART.rig} alt="" draggable={false} />
-        {isExclusive(cat) ? <span className="ph-card-tag excl">Эксклюзив</span> : null}
+        {isExclusive(cat) ? <span className="ph-card-tag excl">{t('Эксклюзив')}</span> : null}
         <img className="ph-ob2-logo" src={ONEBLOCK_ART.logo} alt="OneBlock" draggable={false} />
         <span className="ph-ob2-foot">
           <span className="btn lg primary ph-mt-play" aria-hidden="true">
-            <Icon id="i-play" /> Играть
+            <Icon id="i-play" /> {t('Играть')}
           </span>
           {online >= 20 ? (
             <span className="ph-mt-on">
               <span className="ph-dot" aria-hidden="true"></span>
-              {short(online)} играют
+              {t('{n} играют', { n: short(online) })}
             </span>
           ) : null}
         </span>
@@ -103,7 +105,7 @@ export function ModeTile({
       style={{ '--px-img': 'url(' + art.bg + ')', backgroundColor: art.color } as CSSProperties}
       onClick={onClick}
     >
-      {isExclusive(cat) ? <span className="ph-card-tag excl">Эксклюзив</span> : null}
+      {isExclusive(cat) ? <span className="ph-card-tag excl">{t('Эксклюзив')}</span> : null}
       {art.rig ? (
         <img
           className="ph-mt-rig"
@@ -132,7 +134,7 @@ export function ModeTile({
         {online >= 20 ? (
           <span className="ph-mt-on">
             <span className="ph-dot" aria-hidden="true"></span>
-            {short(online)} играют
+            {t('{n} играют', { n: short(online) })}
           </span>
         ) : null}
       </span>

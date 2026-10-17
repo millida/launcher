@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
+import { intlTag, useT } from '../../i18n'
 import { showToast } from '../../state/ui'
 import { uiConfirm } from '../../state/confirm'
 import { Empty, Loading } from './kit'
@@ -8,6 +9,7 @@ import type { HostingApiKey, HostingShare } from './api'
 import { copyText } from '../../lib/clipboard'
 
 export function TabAccess({ serverId }: { serverId: string }) {
+  const t = useT()
   const [shares, setShares] = useState<HostingShare[] | null>(null)
   const [keys, setKeys] = useState<HostingApiKey[] | null>(null)
   const [prefs, setPrefs] = useState<Record<string, string[]> | null>(null)
@@ -41,7 +43,7 @@ export function TabAccess({ serverId }: { serverId: string }) {
       const list = await host.addShare(serverId, email.trim(), perms)
       setShares(Array.isArray(list) ? list : shares)
       setEmail('')
-      showToast('Доступ выдан')
+      showToast(t('Доступ выдан'))
     } catch (e) {
       showToast(errText(e), 'error')
     } finally {
@@ -50,7 +52,7 @@ export function TabAccess({ serverId }: { serverId: string }) {
   }
 
   const removeShare = async (s: HostingShare) => {
-    if (!(await uiConfirm('Забрать доступ у ' + (s.nickname || s.email || 'участника') + '?', { confirmLabel: 'Забрать' }))) return
+    if (!(await uiConfirm(t('Забрать доступ у {name}?', { name: s.nickname || s.email || t('участника') }), { confirmLabel: t('Забрать') }))) return
     try {
       const list = await host.removeShare(serverId, s.userId)
       setShares(Array.isArray(list) ? list : (shares || []).filter((x) => x.userId !== s.userId))
@@ -78,7 +80,7 @@ export function TabAccess({ serverId }: { serverId: string }) {
       setKeyName('')
       const list = await host.apiKeys(serverId)
       setKeys(Array.isArray(list) ? list : keys)
-      showToast('Ключ создан — он показывается один раз')
+      showToast(t('Ключ создан — он показывается один раз'))
     } catch (e) {
       showToast(errText(e), 'error')
     } finally {
@@ -87,7 +89,7 @@ export function TabAccess({ serverId }: { serverId: string }) {
   }
 
   const revokeKey = async (k: HostingApiKey) => {
-    if (!(await uiConfirm('Отозвать ключ «' + k.name + '»?', { confirmLabel: 'Отозвать' }))) return
+    if (!(await uiConfirm(t('Отозвать ключ «{name}»?', { name: k.name }), { confirmLabel: t('Отозвать') }))) return
     try {
       await host.revokeApiKey(serverId, k.id)
       setKeys((list) => (list || []).filter((x) => x.id !== k.id))
@@ -113,23 +115,23 @@ export function TabAccess({ serverId }: { serverId: string }) {
     <>
       <div className="card" style={{ padding: '18px' }}>
         <div className="side-cap" style={{ padding: '0 2px 10px' }}>
-          Кому открыт сервер
+          {t('Кому открыт сервер')}
         </div>
         <div className="host-ask">
           <div className="input sm" style={{ flex: 1 }}>
             <input
-              placeholder="Почта аккаунта Millida"
+              placeholder={t('Почта аккаунта Millida')}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && void addShare()}
             />
           </div>
           <button className="btn sm primary" disabled={busy === 'share' || !email.trim()} onClick={() => void addShare()}>
-            Дать доступ
+            {t('Дать доступ')}
           </button>
         </div>
         <div className="host-perms">
-          {HOST_PERMISSIONS.map(([p, label]) => (
+          {HOST_PERMISSIONS().map(([p, label]) => (
             <button key={p} className={'host-perm' + (perms.includes(p) ? ' on' : '')} onClick={() => togglePerm(p)}>
               {perms.includes(p) ? <Icon id="i-check" /> : null}
               {label}
@@ -148,15 +150,15 @@ export function TabAccess({ serverId }: { serverId: string }) {
                     <Icon id="i-user" />
                   </span>
                   <span className="fr-body">
-                    <span className="fr-nick">{s.nickname || s.email || 'участник'}</span>
+                    <span className="fr-nick">{s.nickname || s.email || t('участник')}</span>
                     <span className="fr-status">{s.email || ''}</span>
                   </span>
-                  <button className="btn sm ghost" aria-label="Забрать доступ" data-tip="Забрать доступ" onClick={() => void removeShare(s)}>
+                  <button className="btn sm ghost" aria-label={t('Забрать доступ')} data-tip={t('Забрать доступ')} onClick={() => void removeShare(s)}>
                     <Icon id="i-trash" />
                   </button>
                 </div>
                 <div className="host-perms">
-                  {HOST_PERMISSIONS.map(([p, label]) => (
+                  {HOST_PERMISSIONS().map(([p, label]) => (
                     <button
                       key={p}
                       className={'host-perm' + (s.permissions.includes(p) ? ' on' : '')}
@@ -171,36 +173,36 @@ export function TabAccess({ serverId }: { serverId: string }) {
             ))}
           </div>
         ) : (
-          <Empty icon="i-users" text="Пока только ты" />
+          <Empty icon="i-users" text={t('Пока только ты')} />
         )}
       </div>
 
       <div className="card" style={{ padding: '18px', marginTop: '14px' }}>
         <div className="side-cap" style={{ padding: '0 2px 10px' }}>
-          Ключи для ботов и скриптов
+          {t('Ключи для ботов и скриптов')}
         </div>
         <div className="host-ask">
           <div className="input sm" style={{ flex: 1 }}>
             <input
-              placeholder="Название, например «бот Discord»"
+              placeholder={t('Название, например «бот Discord»')}
               value={keyName}
               onChange={(e) => setKeyName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && void createKey()}
             />
           </div>
           <button className="btn sm secondary" disabled={busy === 'key' || !keyName.trim()} onClick={() => void createKey()}>
-            <Icon id="i-key" /> Создать
+            <Icon id="i-key" /> {t('Создать')}
           </button>
         </div>
         {freshKey ? (
           <div className="host-cred-row" style={{ marginTop: '10px' }}>
-            <span className="host-cred-k">Ключ</span>
+            <span className="host-cred-k">{t('Ключ')}</span>
             <code className="host-cred-v">{freshKey}</code>
             <button
               className="btn sm ghost"
-              aria-label="Копировать"
-              data-tip="Копировать"
-              onClick={() => void copyText(freshKey).then((ok) => showToast(ok ? 'Ключ скопирован' : 'Не удалось скопировать ключ'))}
+              aria-label={t('Копировать')}
+              data-tip={t('Копировать')}
+              onClick={() => void copyText(freshKey).then((ok) => showToast(ok ? t('Ключ скопирован') : t('Не удалось скопировать ключ')))}
             >
               <Icon id="i-copy" />
             </button>
@@ -218,33 +220,33 @@ export function TabAccess({ serverId }: { serverId: string }) {
                 <span className="fr-body">
                   <span className="fr-nick">{k.name}</span>
                   <span className="fr-status">
-                    {k.prefix}… · {k.lastUsedAt ? 'использован ' + new Date(k.lastUsedAt).toLocaleDateString('ru-RU') : 'ещё не использован'}
+                    {k.prefix}… · {k.lastUsedAt ? t('использован {date}', { date: new Date(k.lastUsedAt).toLocaleDateString(intlTag()) }) : t('ещё не использован')}
                   </span>
                 </span>
-                <button className="btn sm ghost" aria-label="Отозвать ключ" data-tip="Отозвать ключ" onClick={() => void revokeKey(k)}>
+                <button className="btn sm ghost" aria-label={t('Отозвать ключ')} data-tip={t('Отозвать ключ')} onClick={() => void revokeKey(k)}>
                   <Icon id="i-trash" />
                 </button>
               </div>
             ))}
           </div>
         ) : (
-          <Empty icon="i-key" text="Ключей нет" />
+          <Empty icon="i-key" text={t('Ключей нет')} />
         )}
       </div>
 
       <div className="card" style={{ padding: '18px', marginTop: '14px' }}>
         <div className="side-cap" style={{ padding: '0 2px 10px' }}>
-          О чём предупреждать
+          {t('О чём предупреждать')}
         </div>
         {prefs === null ? (
           <Loading />
         ) : (
           <div className="host-notify">
-            {NOTIFY_EVENTS.map(([ev, label]) => (
+            {NOTIFY_EVENTS().map(([ev, label]) => (
               <div className="host-notify-row" key={ev}>
                 <span className="host-notify-k">{label}</span>
                 <div className="host-perms">
-                  {NOTIFY_CHANNELS.map(([ch, chLabel]) => {
+                  {NOTIFY_CHANNELS().map(([ch, chLabel]) => {
                     const on = (prefs[ev] || []).includes(ch)
                     return (
                       <button key={ch} className={'host-perm' + (on ? ' on' : '')} onClick={() => void toggleNotify(ev, ch)}>

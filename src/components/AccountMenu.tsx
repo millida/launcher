@@ -11,6 +11,7 @@ import { refreshMsAccounts, startMsLogin } from '../state/msLogin'
 import { openModal, setScreen, showToast } from '../state/ui'
 import { uiConfirm } from '../state/confirm'
 import { forgetMillidaIfGone, logoutToLogin } from '../lib/session'
+import { useT } from '../i18n'
 
 /** Ширина меню (.acc-menu): по ней меню прижимается к правому краю окна. */
 const ACC_MENU_W = 330
@@ -24,6 +25,7 @@ export function AccountMenu({
   onClose: () => void
   chipRef: RefObject<HTMLDivElement | null>
 }) {
+  const t = useT()
   const { list, active, setActive, remove } = useAccounts()
   const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number }>({ left: 8, bottom: 8 })
 
@@ -78,7 +80,7 @@ export function AccountMenu({
           bottom: pos.bottom != null ? pos.bottom + 'px' : undefined,
         }}
       >
-        <div className="acc-menu-cap">Аккаунты</div>
+        <div className="acc-menu-cap">{t('Аккаунты')}</div>
         {list.length ? (
           list.map((a) => (
             <div
@@ -88,19 +90,19 @@ export function AccountMenu({
                 setActive(a.id)
                 if (lost(a)) {
                   onClose()
-                  showToast('Проверяем лицензию Microsoft…')
+                  showToast(t('Проверяем лицензию Microsoft…'))
                   void refreshMsAccounts(true).then(() => {
                     const now = useAccounts.getState().list.find((x) => x.id === a.id)
                     if (now && !lost(now)) {
-                      showToast('Активный аккаунт: ' + a.nick)
+                      showToast(t('Активный аккаунт: {nick}', { nick: a.nick }))
                       return
                     }
-                    showToast('Вход по лицензии слетел — подтверди аккаунт Microsoft заново', 'error')
+                    showToast(t('Вход по лицензии слетел — подтверди аккаунт Microsoft заново'), 'error')
                     void startMsLogin()
                   })
                   return
                 }
-                showToast('Активный аккаунт: ' + a.nick)
+                showToast(t('Активный аккаунт: {nick}', { nick: a.nick }))
               }}
             >
               <Head
@@ -113,20 +115,20 @@ export function AccountMenu({
               <span style={{ flex: 1, minWidth: 0 }}>
                 <b className="acc-item-nick">{a.nick}</b>
                 <span className={'acc-item-kind' + (lost(a) ? ' lost' : '')}>
-                  {lost(a) ? 'Войти заново' : accKindLabel(a.kind)}
+                  {lost(a) ? t('Войти заново') : accKindLabel(a.kind)}
                 </span>
               </span>
               {a.id === active ? <Icon id="i-check" style={{ color: 'var(--m-accent)', flex: 'none' }} /> : null}
               <button
                 className="acc-item-del"
-                aria-label="Выйти из аккаунта"
+                aria-label={t('Выйти из аккаунта')}
                 data-track="account_remove"
-                title="Выйти из аккаунта"
+                title={t('Выйти из аккаунта')}
                 onClick={async (e) => {
                   e.stopPropagation()
                   // Убрать аккаунт = выйти из него (правка владельца 23.09.2026:
                   // отдельной «Выйти из Millida» больше нет).
-                  if (await uiConfirm('Выйти из аккаунта «' + a.nick + '»?', { confirmLabel: 'Выйти' })) {
+                  if (await uiConfirm(t('Выйти из аккаунта «{nick}»?', { nick: a.nick }), { confirmLabel: t('Выйти') })) {
                     remove(a.id)
                     forgetMillidaIfGone()
                     if (!useAccounts.getState().list.length) logoutToLogin()
@@ -138,7 +140,7 @@ export function AccountMenu({
             </div>
           ))
         ) : (
-          <div className="acc-menu-empty">Пока нет аккаунтов</div>
+          <div className="acc-menu-empty">{t('Пока нет аккаунтов')}</div>
         )}
         <div className="acc-menu-sep"></div>
         <button
@@ -162,7 +164,7 @@ export function AccountMenu({
           }}
         >
           <Icon id="i-plus" />
-          Добавить аккаунт
+          {t('Добавить аккаунт')}
         </button>
       </div>
     </>,

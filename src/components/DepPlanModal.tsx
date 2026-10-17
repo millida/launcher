@@ -5,6 +5,7 @@ import { backdropClose } from '../lib/dismiss'
 import { autoItems, depSummary, fmtBytes, planItem } from '../lib/deps'
 import type { DepNode } from '../ipc/commands'
 import { mirrorAsset } from '../lib/api'
+import { useT } from '../i18n'
 
 function DepRow({
   node,
@@ -15,6 +16,7 @@ function DepRow({
   checked?: boolean
   onToggle?: () => void
 }) {
+  const t = useT()
   const facts = [node.version_number, fmtBytes(node.size), node.source === 'curseforge' ? 'CurseForge' : node.source === 'millida' ? 'Millida' : 'Modrinth']
     .filter(Boolean)
     .join(' · ')
@@ -35,12 +37,12 @@ function DepRow({
             {node.title}
             {node.problem ? (
               <span className="mod-upd" style={{ background: 'var(--m-danger-soft)', color: 'var(--m-danger)' }}>
-                нет версии
+                {t('нет версии')}
               </span>
             ) : null}
           </span>
           <span className="mod-card-sub">
-            {node.problem || (node.required_by ? 'нужен для «' + node.required_by + '»' : '') || facts}
+            {node.problem || (node.required_by ? t('нужен для «{name}»', { name: node.required_by }) : '') || facts}
           </span>
         </span>
         {node.problem ? null : <span className="set-val">{facts}</span>}
@@ -50,6 +52,7 @@ function DepRow({
 }
 
 export function DepPlanModal() {
+  const t = useT()
   const { open, plan, decide } = useDepPlan()
   const [picked, setPicked] = useState<Set<string>>(new Set())
 
@@ -72,14 +75,14 @@ export function DepPlanModal() {
   return (
     <div className="modal-bg open vis" style={{ zIndex: 470 }} {...backdropClose(() => decide({ go: false, extras: [] }))}>
       <div className="modal mw-sm">
-        <h3>«{plan.title}» — что поставим</h3>
+        <h3>{t('«{title}» — что поставим', { title: plan.title })}</h3>
         {depSummary(plan) ? <div className="sub">{depSummary(plan)}</div> : null}
 
         <div style={{ maxHeight: '360px', overflowY: 'auto', marginTop: '14px' }}>
           {plan.conflicts.length ? (
             <>
               <div className="set-val" style={{ color: 'var(--m-danger)', margin: '0 0 6px' }}>
-                Конфликты
+                {t('Конфликты')}
               </div>
               {plan.conflicts.map((c) => (
                 <p
@@ -93,7 +96,7 @@ export function DepPlanModal() {
                     borderRadius: '10px',
                   }}
                 >
-                  <Icon id="i-alert" /> «{c.title}» и «{c.with}» несовместимы: {c.reason}
+                  <Icon id="i-alert" /> {t('«{a}» и «{b}» несовместимы: {reason}', { a: c.title, b: c.with, reason: c.reason })}
                 </p>
               ))}
             </>
@@ -102,7 +105,7 @@ export function DepPlanModal() {
           {plan.required.length ? (
             <>
               <div className="set-val" style={{ margin: '10px 0 6px' }}>
-                Вместе с модом
+                {t('Вместе с модом')}
               </div>
               {plan.required.map((n) => (
                 <DepRow node={n} key={n.project_id} />
@@ -113,7 +116,7 @@ export function DepPlanModal() {
           {plan.missing.length ? (
             <>
               <div className="set-val" style={{ color: 'var(--m-danger)', margin: '10px 0 6px' }}>
-                Нет под эту версию
+                {t('Нет под эту версию')}
               </div>
               {plan.missing.map((n) => (
                 <DepRow node={n} key={n.project_id} />
@@ -124,7 +127,7 @@ export function DepPlanModal() {
           {plan.optional.length ? (
             <>
               <div className="set-val" style={{ margin: '10px 0 6px' }}>
-                По желанию
+                {t('По желанию')}
               </div>
               {plan.optional.map((n) => (
                 <DepRow
@@ -144,18 +147,18 @@ export function DepPlanModal() {
         </div>
 
         {plan.truncated ? (
-          <p className="faint-note">Показаны первые — остальные подтянутся сами</p>
+          <p className="faint-note">{t('Показаны первые — остальные подтянутся сами')}</p>
         ) : null}
         {plan.missing.length ? (
-          <p className="faint-note">Без них мод может не запуститься — лучше взять другую версию мода</p>
+          <p className="faint-note">{t('Без них мод может не запуститься — лучше взять другую версию мода')}</p>
         ) : null}
 
         <div style={{ display: 'flex', gap: '10px', marginTop: '18px' }}>
           <button className="btn md primary" style={{ flex: 1 }} onClick={() => decide({ go: true, extras })}>
-            <Icon id="i-download" /> Установить{total ? ' + ' + total : ''}
+            <Icon id="i-download" /> {t('Установить')}{total ? ' + ' + total : ''}
           </button>
           <button className="btn md ghost" onClick={() => decide({ go: false, extras: [] })}>
-            Отмена
+            {t('Отмена')}
           </button>
         </div>
       </div>

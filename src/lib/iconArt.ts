@@ -1,5 +1,6 @@
 import { coverGradient, shade } from './blockColor'
 import { BLOCK_ICONS } from './icons'
+import { t } from '../i18n'
 
 /// Composed icons are stored as the same 128px PNG data URL a picked cover is,
 /// so every place that already renders `profile.icon` keeps working unchanged.
@@ -66,7 +67,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     const img = new Image()
     img.crossOrigin = 'anonymous'
     img.onload = () => res(img)
-    img.onerror = () => rej(new Error('символ не загрузился: ' + src))
+    img.onerror = () => rej(new Error(t('символ не загрузился: {src}', { src })))
     img.src = src
   })
   // a failed load must not be remembered as the answer for every later attempt
@@ -90,7 +91,7 @@ export async function composeIcon(recipe: IconRecipe): Promise<string> {
   c.width = PX
   c.height = PX
   const g = c.getContext('2d')
-  if (!g) throw new Error('графика недоступна — обнови драйвер или перезапусти лаунчер')
+  if (!g) throw new Error(t('графика недоступна — обнови драйвер или перезапусти лаунчер'))
   paintBackground(g, recipe.bg)
   const box = PX * (1 - SYMBOL_INSET * 2)
   const w = img.naturalWidth || box

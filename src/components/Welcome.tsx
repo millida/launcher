@@ -8,6 +8,7 @@ import { Burst, Confetti, Rays } from './reward/RewardReveal'
 import { ItemArt } from './shop/parts'
 import { FragBar, RarityFx, RarityPlate } from './shop/rarityUi'
 import { rarityProps } from './shop/rarity'
+import { useT } from '../i18n'
 
 /**
  * Заставка при запуске: «С возвращением, <ник>» на зелёной сцене лобби
@@ -41,6 +42,7 @@ function firstEver(): boolean {
 }
 
 export function Welcome() {
+  const t = useT()
   const logged = useUi((s) => s.logged)
   const gameName = useGameNick((s) => s.name)
   const [phase, setPhase] = useState<'off' | 'in' | 'out'>('off')
@@ -149,12 +151,12 @@ export function Welcome() {
       <div className="welcome-body" aria-live="polite">
         {first && phase === 'in' ? <Burst n={30} spread={320} seed={9} /> : null}
         <img className="welcome-logo" src="/millida-logo.svg" alt="" />
-        <span className="welcome-hi">{first ? 'Добро пожаловать' : 'С возвращением,'}</span>
-        <b className="welcome-nick">{first ? 'в Millida' : nick || 'игрок'}</b>
+        <span className="welcome-hi">{first ? t('Добро пожаловать') : t('С возвращением,')}</span>
+        <b className="welcome-nick">{first ? t('в Millida') : nick || t('игрок')}</b>
         {gift ? (
           <div className="welcome-gift sh-card is-show" {...rarityProps(gift.item.rarity)}>
             <RarityFx />
-            <span className="welcome-gift-tag">Подарок</span>
+            <span className="welcome-gift-tag">{t('Подарок')}</span>
             <ItemArt item={gift.item} size="lg" />
             <b className="sh-card-name">{gift.item.name}</b>
             <span className="welcome-gift-foot">
@@ -162,7 +164,7 @@ export function Welcome() {
               {gift.fragments ? (
                 <FragBar have={gift.fragments.have} need={gift.fragments.need} rarity={gift.item.rarity} />
               ) : (
-                <span className="welcome-gift-on">Надето</span>
+                <span className="welcome-gift-on">{t('Надето')}</span>
               )}
             </span>
           </div>

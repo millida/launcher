@@ -4,14 +4,10 @@ import { Icon } from '../Icon'
 import { OUTFIT_NAME_MAX, OUTFITS_LIMIT } from '../../state/outfits'
 import type { Outfit } from '../../state/outfits'
 import { ItemGrid, ItemTile } from './ItemTile'
+import { t, useT } from '../../i18n'
+import { plural } from '../../lib/format'
 
-const things = (n: number) => {
-  const d = n % 10
-  const dd = n % 100
-  if (d === 1 && dd !== 11) return n + ' вещь'
-  if (d >= 2 && d <= 4 && (dd < 12 || dd > 14)) return n + ' вещи'
-  return n + ' вещей'
-}
+const things = (n: number) => plural(n, t('{n} вещь', { n }), t('{n} вещи', { n }), t('{n} вещей', { n }))
 
 /**
  * Раздел «Образы», как Outfits в Roblox и Essential: карточка — весь набор
@@ -42,6 +38,7 @@ export function Outfits({
   onRename: (id: string, name: string) => void
   onRemove: (o: Outfit) => void
 }) {
+  const t = useT()
   const [editing, setEditing] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
 
@@ -69,8 +66,8 @@ export function Outfits({
               </span>
             </span>
           }
-          name={list.length ? 'Новый образ' : 'Сохранить образ'}
-          status={list.length + ' из ' + OUTFITS_LIMIT}
+          name={list.length ? t('Новый образ') : t('Сохранить образ')}
+          status={t('{n} из {max}', { n: list.length, max: OUTFITS_LIMIT })}
           track="outfit_save"
           onClick={onSave}
         />
@@ -102,16 +99,16 @@ export function Outfits({
               name={o.name}
               on={o.id === activeId}
               loading={o.id === busyId}
-              status={o.id === activeId ? 'Надет' : things(o.cosmetics.length + 1 + (o.cape !== 'none' ? 1 : 0))}
+              status={o.id === activeId ? t('Надет') : things(o.cosmetics.length + 1 + (o.cape !== 'none' ? 1 : 0))}
               track="outfit_wear"
               kind="outfit"
               onClick={busyId ? undefined : () => onWear(o)}
               tools={
                 <>
-                  <button aria-label="Переименовать" data-track="outfit_rename" onClick={() => startEdit(o)}>
+                  <button aria-label={t('Переименовать')} data-track="outfit_rename" onClick={() => startEdit(o)}>
                     <Icon id="i-edit" />
                   </button>
-                  <button aria-label="Удалить" data-track="outfit_remove" onClick={() => onRemove(o)}>
+                  <button aria-label={t('Удалить')} data-track="outfit_remove" onClick={() => onRemove(o)}>
                     <Icon id="i-trash" />
                   </button>
                 </>

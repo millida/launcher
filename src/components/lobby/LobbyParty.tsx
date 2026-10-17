@@ -12,6 +12,7 @@ import { rememberServerName } from '../../state/playStats'
 import { setScreen, showToast } from '../../state/ui'
 import { profileSlug } from '../../state/accounts'
 import { copyText } from '../../lib/clipboard'
+import { useT } from '../../i18n'
 
 /** Сколько друзей стоит рядом с персонажем: дальше — вкладка «Друзья». */
 const SHOWN = 4
@@ -25,6 +26,7 @@ const SHOWN = 4
  * приглашение в то, что выбрано в «Что играем сегодня».
  */
 export function LobbyParty({ on, modeTitle }: { on: boolean; modeTitle: string | null }) {
+  const t = useT()
   const friends = useFriends((s) => s.friends)
   const reqIn = useFriends((s) => s.reqIn)
   const rooms = useRooms((s) => s.rooms)
@@ -38,9 +40,9 @@ export function LobbyParty({ on, modeTitle }: { on: boolean; modeTitle: string |
     const slug = profileSlug()
     if (!slug) return setScreen('friends')
     const ok = await copyText('https://millida.net/u/' + encodeURIComponent(slug))
-    if (!ok) return showToast('Не удалось скопировать', 'error')
+    if (!ok) return showToast(t('Не удалось скопировать'), 'error')
     setCopied(true)
-    showToast('Ссылка скопирована — отправь другу')
+    showToast(t('Ссылка скопирована — отправь другу'))
     setTimeout(() => setCopied(false), 2500)
   }
 
@@ -56,22 +58,22 @@ export function LobbyParty({ on, modeTitle }: { on: boolean; modeTitle: string |
   const alerts = millida ? unreadTotal(friends) + roomsUnreadTotal(rooms) + reqIn.length : 0
 
   const call = async (f: Friend) => {
-    const text = modeTitle ? 'Го играть: ' + modeTitle : 'Го играть'
+    const text = modeTitle ? t('Го играть: {mode}', { mode: modeTitle }) : t('Го играть')
     setCalled((c) => ({ ...c, [f.userId]: true }))
     try {
       await api('/friends/chat/' + encodeURIComponent(f.userId), { method: 'POST', body: JSON.stringify({ text }) })
-      showToast('Позвали ' + (f.nickname || 'друга'))
+      showToast(f.nickname ? t('Позвали {nick}', { nick: f.nickname }) : t('Позвали друга'))
     } catch (e) {
       console.error('[lobby] invite', e)
       setCalled((c) => ({ ...c, [f.userId]: false }))
-      showToast('Не удалось позвать', 'error')
+      showToast(t('Не удалось позвать'), 'error')
     }
   }
 
   const join = (f: Friend) => {
     const addr = friendServer(f)
     if (!addr) return
-    const name = f.serverName || 'Сервер ' + (f.nickname || 'друга')
+    const name = f.serverName || (f.nickname ? t('Сервер {nick}', { nick: f.nickname }) : t('Сервер друга'))
     rememberServerName(addr, name)
     void quickJoin(addr, name).catch(() => {})
   }
@@ -83,10 +85,10 @@ export function LobbyParty({ on, modeTitle }: { on: boolean; modeTitle: string |
           выглядели странно. */}
       {online.length ? null : (
         <div className="lobby-invite">
-          <b>Никого нет в сети</b>
+          <b>{t('Никого нет в сети')}</b>
           <button className="btn primary lobby-invite-btn" data-sound="nav" onClick={() => void invite()}>
             <Icon id={copied ? 'i-check' : 'i-link'} />
-            {copied ? 'Ссылка скопирована' : 'Пригласить'}
+            {copied ? t('Ссылка скопирована') : t('Пригласить')}
           </button>
         </div>
       )}
@@ -96,13 +98,13 @@ export function LobbyParty({ on, modeTitle }: { on: boolean; modeTitle: string |
           <div className="lobby-mate" key={f.userId}>
             <Head nick={f.nickname} src={f.avatarUrl} size={36} className="lobby-mate-head" />
             <span className="lobby-mate-body">
-              <b>{f.nickname || 'Друг'}</b>
-              <span className="meta">{addr ? f.serverName || 'В игре' : f.place === 'game' ? 'В игре' : 'В лаунчере'}</span>
+              <b>{f.nickname || t('Друг')}</b>
+              <span className="meta">{addr ? f.serverName || t('В игре') : f.place === 'game' ? t('В игре') : t('В лаунчере')}</span>
             </span>
             {addr ? (
               <button className="lobby-mate-act" data-sound="nav" onClick={() => join(f)}>
                 <Icon id="i-login" />
-                Зайти
+                {t('Зайти')}
               </button>
             ) : (
               <button
@@ -112,7 +114,7 @@ export function LobbyParty({ on, modeTitle }: { on: boolean; modeTitle: string |
                 onClick={() => void call(f)}
               >
                 <Icon id={called[f.userId] ? 'i-check' : 'i-send'} />
-                {called[f.userId] ? 'Позвали' : 'Позвать'}
+                {called[f.userId] ? t('Позвали') : t('Позвать')}
               </button>
             )}
           </div>
@@ -123,10 +125,10 @@ export function LobbyParty({ on, modeTitle }: { on: boolean; modeTitle: string |
           <Icon id="i-users" />
         </span>
         <span className="lobby-mate-body">
-          <b>{online.length ? 'Все друзья' : 'Друзья'}</b>
+          <b>{online.length ? t('Все друзья') : t('Друзья')}</b>
         </span>
         {alerts ? (
-          <span className="lobby-mate-badge" aria-label="Новые сообщения и заявки">
+          <span className="lobby-mate-badge" aria-label={t('Новые сообщения и заявки')}>
             {alerts > 99 ? '99+' : alerts}
           </span>
         ) : null}

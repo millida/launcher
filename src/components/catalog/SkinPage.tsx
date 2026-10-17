@@ -13,6 +13,7 @@ import type { SkinTile } from './site'
 import { Back } from './ItemPage'
 import { dropItem, openItem } from './itemStore'
 import { useSkinTag } from './skinTag'
+import { useT } from '../../i18n'
 
 /*
  * Страница скина (владелец 10.10.2026: «внутри просто полная хуйня»): фигура в 3D —
@@ -36,6 +37,7 @@ const loadSkin = (id: string) => cachedCatalog('site:/skins/' + id, () => api<Sk
 export const skinName = (title: string) => capFirst(title.replace(/^Скин:\s*/i, ''))
 
 function SkinStage({ texture, slim, fallback }: { texture: string | null; slim: boolean; fallback: string }) {
+  const t = useT()
   const canvas = useRef<HTMLCanvasElement>(null)
   const [m3d, setM3d] = useState<Mine3dModule | null>(null)
   const [ready, setReady] = useState(false)
@@ -83,10 +85,10 @@ function SkinStage({ texture, slim, fallback }: { texture: string | null; slim: 
     <div className={'card sk-stage' + (ready && !broken ? ' is-3d' : '')}>
       {/* Пока 3D собирается (или не вышло) — та же фигура картинкой, без пустого окна. */}
       <img className="sk-flat" src={fallback} alt="" draggable={false} />
-      {broken ? null : <canvas ref={canvas} className="sk-canvas" aria-label="Скин в 3D: потяни, чтобы повернуть" />}
+      {broken ? null : <canvas ref={canvas} className="sk-canvas" aria-label={t('Скин в 3D: потяни, чтобы повернуть')} />}
       {ready && !broken ? (
         <span className="sk-hint">
-          <Icon id="i-restart" /> Потяни, чтобы повернуть
+          <Icon id="i-restart" /> {t('Потяни, чтобы повернуть')}
         </span>
       ) : null}
     </div>
@@ -94,6 +96,7 @@ function SkinStage({ texture, slim, fallback }: { texture: string | null; slim: 
 }
 
 export function SkinPage({ k }: { k: SkinTile }) {
+  const t = useT()
   const name = skinName(k.title)
   const [d, setD] = useState<SkinDetail | null>(null)
   useEffect(() => {
@@ -112,13 +115,13 @@ export function SkinPage({ k }: { k: SkinTile }) {
   const related = ((d && d.related) || []).filter((x) => x && x.id !== k.id).slice(0, 12)
   const servers = ((d && d.servers) || []).filter((s) => s && s.name).slice(0, 6)
   const facts: { n: number; label: string }[] = []
-  if (k.wearers > 0) facts.push({ n: k.wearers, label: plural(k.wearers, 'носит', 'носят', 'носят') })
-  if (d && d.downloads) facts.push({ n: d.downloads, label: plural(d.downloads, 'скачал', 'скачали', 'скачали') })
-  if (d && d.views) facts.push({ n: d.views, label: plural(d.views, 'просмотр', 'просмотра', 'просмотров') })
+  if (k.wearers > 0) facts.push({ n: k.wearers, label: plural(k.wearers, t('носит'), t('носят'), t('носят')) })
+  if (d && d.downloads) facts.push({ n: d.downloads, label: plural(d.downloads, t('скачал'), t('скачали'), t('скачали')) })
+  if (d && d.views) facts.push({ n: d.views, label: plural(d.views, t('просмотр'), t('просмотра'), t('просмотров')) })
   const wear = () => void installFromCatalog('skins', k.id, { name, slim })
   return (
     <div className="ci sk-page" data-section="item" data-kind="skin" data-id={k.id}>
-      <Back label="Скины" />
+      <Back label={t('Скины')} />
       <div className="sk-grid">
         <SkinStage texture={texture} slim={slim} fallback={k.renderUrl} />
         <div className="sk-side">
@@ -126,7 +129,7 @@ export function SkinPage({ k }: { k: SkinTile }) {
           <div className="sk-facts">
             <span className="sk-fact">
               <PxIcon name="shirt" size={12} />
-              {slim ? 'Тонкие руки' : 'Классические руки'}
+              {slim ? t('Тонкие руки') : t('Классические руки')}
             </span>
             {facts.map((f) => (
               <span key={f.label} className="sk-fact">
@@ -135,7 +138,7 @@ export function SkinPage({ k }: { k: SkinTile }) {
             ))}
           </div>
           {tags.length ? (
-            <div className="sk-tags" aria-label="Метки">
+            <div className="sk-tags" aria-label={t('Метки')}>
               {tags.map((t) => (
                 <button
                   key={t.slug}
@@ -164,7 +167,7 @@ export function SkinPage({ k }: { k: SkinTile }) {
           <div className="sk-acts">
             <button className="btn lg primary" data-track="skin_wear" onClick={wear}>
               <PxIcon name="shirt" size={14} />
-              Надеть
+              {t('Надеть')}
             </button>
             {d && d.downloadUrl ? (
               <button className="btn lg secondary" data-track="skin_png" onClick={() => openExt(d.downloadUrl!)}>
@@ -174,13 +177,13 @@ export function SkinPage({ k }: { k: SkinTile }) {
             ) : null}
             <button className="btn lg ghost" data-track="item_site" onClick={() => openExt('https://millida.net/skins/katalog/' + k.id)}>
               <Icon id="i-ext" />
-              На сайте
+              {t('На сайте')}
             </button>
           </div>
-          <p className="sk-note">«Надеть» — скин сразу появится в гардеробе и на твоём персонаже.</p>
+          <p className="sk-note">{t('«Надеть» — скин сразу появится в гардеробе и на твоём персонаже.')}</p>
           {servers.length ? (
-            <section className="sk-servers" aria-label="Где носят">
-              <h2 className="sk-h2">В нём ходят на серверах</h2>
+            <section className="sk-servers" aria-label={t('Где носят')}>
+              <h2 className="sk-h2">{t('В нём ходят на серверах')}</h2>
               <div className="sk-srv-list">
                 {servers.map((s) => (
                   <span key={s.slug} className="sk-srv">
@@ -194,8 +197,8 @@ export function SkinPage({ k }: { k: SkinTile }) {
         </div>
       </div>
       {related.length ? (
-        <section className="sk-related" aria-label="Похожие скины">
-          <h2 className="sk-h2">Похожие скины</h2>
+        <section className="sk-related" aria-label={t('Похожие скины')}>
+          <h2 className="sk-h2">{t('Похожие скины')}</h2>
           <div className="mr-skingrid">
             {related.map((r, i) => (
               <article key={r.id} className="card mr-skin" data-track="row_open" data-kind="skin" data-id={r.id} data-pos={i} onClick={() => openItem({ kind: 'skin', skin: r })}>

@@ -21,13 +21,21 @@ if (import.meta.env.DEV && !('__TAURI_INTERNALS__' in window) && new URLSearchPa
     if (Array.isArray(raw)) current = raw
   } catch {}
   const ours = !current.length || current.every((a) => a && (a.id === 'preview' || a.id === 'demo-user'))
-  if (ours) {
+  // `?preview=onboarding` starts a clean first run: no accounts and no chosen language.
+  const firstRun = new URLSearchParams(location.search).get('preview') === 'onboarding'
+  if (firstRun) {
+    localStorage.removeItem('m-accounts')
+    localStorage.removeItem('m-active')
+    localStorage.removeItem('m-first-run')
+    localStorage.removeItem('m-lang')
+  } else if (ours) {
     localStorage.setItem('m-accounts', JSON.stringify(seeded))
     localStorage.setItem('m-active', seeded[0]!.id)
   }
   if (!demo) localStorage.removeItem('m-millida-uid')
 
-  localStorage.setItem('m-mil-ever', '1')
+  if (firstRun) localStorage.removeItem('m-mil-ever')
+  else localStorage.setItem('m-mil-ever', '1')
   localStorage.setItem('m-onb-done', '1')
 
   // Видно, что это не настоящий вход: маленькая неяркая плашка в углу.
@@ -55,6 +63,10 @@ if (import.meta.env.DEV && !('__TAURI_INTERNALS__' in window) && new URLSearchPa
     if (document.body) mark()
     else document.addEventListener('DOMContentLoaded', mark, { once: true })
   }
+
+  // `?preview=onboarding&step=game` shows the game account step that follows a Millida sign-in.
+  if (firstRun && new URLSearchParams(location.search).get('step') === 'game')
+    setTimeout(() => void import('./state/firstRun').then((m) => m.useFirstRun.setState({ open: true })), 600)
 
   // `&open=rubies` — сразу открыть экран (скриншоты магазина без кликов).
   const open = new URLSearchParams(location.search).get('open')

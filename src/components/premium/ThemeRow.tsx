@@ -1,4 +1,5 @@
 import { Icon } from '../Icon'
+import { useT } from '../../i18n'
 import { PlusMark } from './PlusMark'
 import { allowed, applyPremiumAccent, chooseTheme, PREMIUM_ACCENTS, usePremiumTheme, type PremiumTheme } from '../../lib/premiumTheme'
 
@@ -7,15 +8,16 @@ import { allowed, applyPremiumAccent, chooseTheme, PREMIUM_ACCENTS, usePremiumTh
  * 06.10.2026). Закрытый вариант — с замком; клик открывает окно покупки.
  */
 export function ThemeRow() {
+  const t = useT()
   const theme = usePremiumTheme((s) => s.theme)
   const tier = usePremiumTheme((s) => s.tier)
   const opts: { id: PremiumTheme; label: string }[] = [
-    { id: 'off', label: 'Стандартная' },
+    { id: 'off', label: t('Стандартная') },
     { id: 'plus', label: 'PLUS' },
     { id: 'diamond', label: 'Diamond' },
   ]
   return (
-    <div className="pt-row" role="radiogroup" aria-label="Тема лаунчера">
+    <div className="pt-row" role="radiogroup" aria-label={t('Тема лаунчера')}>
       {opts.map((o) => {
         const locked = !allowed(o.id, tier)
         return (

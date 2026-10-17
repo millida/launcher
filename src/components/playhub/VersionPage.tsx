@@ -5,6 +5,7 @@ import { fpsMods, loaderTitle, setVersionFps, versionBuildName, versionFps } fro
 import type { FpsMod } from '../../lib/versionBuild'
 import { VERSION_ART } from './data'
 import { Hours } from './Hours'
+import { useT } from '../../i18n'
 
 /**
  * Страница версии Minecraft — полная, как страница сборки (приказ владельца
@@ -26,6 +27,7 @@ export function VersionPage({
   onBack: () => void
   onPlay: (fps: boolean) => void
 }) {
+  const t = useT()
   const [fps, setFps] = useState(() => versionFps(version))
   const [mods, setMods] = useState<FpsMod[] | null | undefined>(undefined)
   useEffect(() => {
@@ -52,7 +54,7 @@ export function VersionPage({
       <header className="pp-head">
         <img className="pp-cover" src={art} alt="" draggable={false} />
         <button className="btn sm secondary ph-back pp-back" data-track="back" onClick={onBack}>
-          <Icon id="i-chev-l" /> Каталог
+          <Icon id="i-chev-l" /> {t('Каталог')}
         </button>
         <div className="pp-title">
           {update ? <span className="ph-card-tag">{update}</span> : null}
@@ -64,16 +66,16 @@ export function VersionPage({
       <div className="pp-facts">
         <div className="pp-fact">
           <b>{version}</b>
-          <span>версия</span>
+          <span>{t('версия')}</span>
         </div>
         <div className="pp-fact">
           <b>{loader}</b>
-          <span>загрузчик</span>
+          <span>{t('загрузчик')}</span>
         </div>
         {mods && mods.length ? (
           <div className="pp-fact">
             <b>{mods.length}</b>
-            <span>FPS-модов</span>
+            <span>{t('FPS-модов')}</span>
           </div>
         ) : null}
       </div>
@@ -111,17 +113,17 @@ export function VersionPage({
 
         <aside className="pp-buy">
           <button className="btn lg primary pp-cta" data-sound="open" data-track="play" data-src="pack_page" disabled={busy} onClick={() => onPlay(boost)}>
-            <Icon id="i-play" /> {busy ? 'Готовим…' : 'Играть'}
+            <Icon id="i-play" /> {busy ? t('Готовим…') : t('Играть')}
           </button>
           {!none ? (
             <label className="ph-fps vp-fps" data-track="fps_toggle">
               <Icon id="i-zap" />
-              <span>FPS-мод</span>
-              <Toggle on={fps} onChange={flip} label="FPS-мод" />
+              <span>{t('FPS-мод')}</span>
+              <Toggle on={fps} onChange={flip} label={t('FPS-мод')} />
             </label>
           ) : null}
           <Hours build={versionBuildName(version)} />
-          <span className="pp-legal">Не продукт Mojang</span>
+          <span className="pp-legal">{t('Не продукт Mojang')}</span>
         </aside>
       </div>
     </div>

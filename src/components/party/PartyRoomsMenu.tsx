@@ -20,15 +20,17 @@ import { PartyInviteList } from './PartyInviteMenu'
 import { AgeGate } from './LfgModal'
 import { showToast } from '../../state/ui'
 import '../../styles/pixel/party-invite.css'
+import { t, useMarketOffers, useT } from '../../i18n'
 
 const KIND: Record<PartyTargetKind, { label: string; icon: string; tint: string }> = {
-  server: { label: 'Сервер', icon: 'i-server', tint: '#2b63c4' },
-  build: { label: 'Сборка', icon: 'i-blocks', tint: '#7a4a2a' },
-  premium: { label: 'Сборка', icon: 'i-crown', tint: '#b8862b' },
+  server: { get label() { return t('Сервер') }, icon: 'i-server', tint: '#2b63c4' },
+  build: { get label() { return t('Сборка') }, icon: 'i-blocks', tint: '#7a4a2a' },
+  premium: { get label() { return t('Сборка') }, icon: 'i-crown', tint: '#b8862b' },
   version: { label: 'Minecraft', icon: 'i-play', tint: '#3a7a4b' },
 }
 
 function RoomRow({ r, busy, onJoin }: { r: PartyRoom; busy: boolean; onJoin: () => void }) {
+  const t = useT()
   const k = KIND[r.target.kind] || KIND.server
   return (
     <div className="prm-row">
@@ -38,10 +40,10 @@ function RoomRow({ r, busy, onJoin }: { r: PartyRoom; busy: boolean; onJoin: () 
       <span className="prm-what">
         <b>{r.target.title}</b>
         <span>
-          {k.label} · {r.host.nickname || 'Игрок'}
+          {k.label} · {r.host.nickname || t('Игрок')}
         </span>
       </span>
-      <span className="prm-heads" aria-label={'В комнате ' + r.size + ' из ' + r.capacity}>
+      <span className="prm-heads" aria-label={t('В комнате {n} из {max}', { n: r.size, max: r.capacity })}>
         {r.members.slice(0, 4).map((m) => (
           <Head key={m.userId} nick={m.nickname || 'MHF_Steve'} src={m.avatarUrl} size={24} />
         ))}
@@ -50,7 +52,7 @@ function RoomRow({ r, busy, onJoin }: { r: PartyRoom; busy: boolean; onJoin: () 
         </i>
       </span>
       <button className="btn sm primary prm-join" data-track="party_room_join" data-kind={r.target.kind} disabled={busy} onClick={onJoin}>
-        Войти
+        {t('Войти')}
       </button>
     </div>
   )
@@ -66,9 +68,9 @@ interface Place {
   mode: LobbyMode
 }
 const CATS: { id: Place['cat']; label: string; icon: string }[] = [
-  { id: 'ours', label: 'Режимы Millida', icon: 'i-zap' },
-  { id: 'servers', label: 'Серверы', icon: 'i-server' },
-  { id: 'builds', label: 'Мои сборки', icon: 'i-blocks' },
+  { id: 'ours', get label() { return t('Режимы Millida') }, icon: 'i-zap' },
+  { id: 'servers', get label() { return t('Серверы') }, icon: 'i-server' },
+  { id: 'builds', get label() { return t('Мои сборки') }, icon: 'i-blocks' },
   { id: 'versions', label: 'Minecraft', icon: 'i-play' },
 ]
 const VERSIONS = ['26.3', '26.2', '1.21.11', '1.21.4', '1.21.1', '1.20.1', '1.19.2', '1.16.5', '1.12.2']
@@ -78,27 +80,28 @@ const img = (src: string) => <img src={src} alt="" draggable={false} loading="la
 function usePlaces(): Place[] {
   const servers = useLobby((s) => s.servers)
   const profiles = useProfiles((s) => s.profiles)
+  const t = useT()
+  const partners = useMarketOffers('partners')
   return useMemo(() => {
-    const an = anarchyMode()
     const list: Place[] = [
       {
-        key: 'pvp', cat: 'ours', title: 'PvP-дуэли', sub: 'Тиры · 14 китов', art: img('/mode-art/kit-rigs/sword.webp'),
-        mode: { kind: 'server', slug: 'millida-pvp', name: 'PvP-дуэли', ip: TIER_SERVER.ip, logo: null, banner: null, versions: TIER_SERVER.versions, licensed: false },
+        key: 'pvp', cat: 'ours', title: t('PvP-дуэли'), sub: t('Тиры · 14 китов'), art: img('/mode-art/kit-rigs/sword.webp'),
+        mode: { kind: 'server', slug: 'millida-pvp', name: t('PvP-дуэли'), ip: TIER_SERVER.ip, logo: null, banner: null, versions: TIER_SERVER.versions, licensed: false },
       },
-      { key: 'anarchy', cat: 'ours', title: 'Анархия', sub: 'Выживание без правил', art: img('/mode-art/ANARCHY.png'), mode: an },
     ]
+    if (partners) list.push({ key: 'anarchy', cat: 'ours', title: t('Анархия'), sub: t('Выживание без правил'), art: img('/mode-art/ANARCHY.png'), mode: anarchyMode() })
     for (const s of servers.filter((x) => x.isOnline).slice(0, 40))
       list.push({
-        key: 'srv:' + s.slug, cat: 'servers', title: s.name, sub: fmtN(s.online) + ' онлайн',
+        key: 'srv:' + s.slug, cat: 'servers', title: s.name, sub: t('{n} онлайн', { n: fmtN(s.online) }),
         art: s.logo || s.banner ? img((s.logo || s.banner) as string) : <Icon id="i-server" />,
         mode: { kind: 'server', slug: s.slug, name: s.name, ip: s.ip, logo: s.logo || null, banner: s.banner || null, versions: s.versions, licensed: s.lic === 'licensed' },
       })
     for (const p of profiles)
       list.push({ key: 'build:' + p.name, cat: 'builds', title: p.name, sub: p.version, art: <BuildIcon icon={p.icon} name={p.name} size={64} />, mode: { kind: 'build', name: p.name } })
     for (const v of VERSIONS)
-      list.push({ key: 'ver:' + v, cat: 'versions', title: 'Minecraft ' + v, sub: 'Чистая игра', art: img('/versions/' + v + '.webp'), mode: { kind: 'version', version: v } })
+      list.push({ key: 'ver:' + v, cat: 'versions', title: 'Minecraft ' + v, sub: t('Чистая игра'), art: img('/versions/' + v + '.webp'), mode: { kind: 'version', version: v } })
     return list.filter((p) => p.mode.kind !== 'server' || !!p.mode.ip)
-  }, [servers, profiles])
+  }, [servers, profiles, t, partners])
 }
 
 /**
@@ -109,6 +112,7 @@ function usePlaces(): Place[] {
  * рейтинга, мои сборки, версии) с поиском и плитками, внизу — кто может войти и «Открыть».
  */
 export function PartyRoomsMenu({ start, close }: { start: 'join' | 'friends'; close: () => void }) {
+  const t = useT()
   const mode = useLobby((s) => s.picked)
   const age = usePartyStore((s) => s.safety.ageBracket)
   const askAge = usePartyStore((s) => s.loaded && !s.safety.ageBracket)
@@ -145,7 +149,7 @@ export function PartyRoomsMenu({ start, close }: { start: 'join' | 'friends'; cl
         setRooms(l)
         setFailed('')
       })
-      .catch((e) => alive.current && setFailed(apiErrorText(e, 'Комнаты не загрузились')))
+      .catch((e) => alive.current && setFailed(apiErrorText(e, t('Комнаты не загрузились'))))
 
   useEffect(() => {
     alive.current = true
@@ -198,7 +202,7 @@ export function PartyRoomsMenu({ start, close }: { start: 'join' | 'friends'; cl
     setBusy('host')
     try {
       const srv = await api<MyServer>('/hosting/servers', { method: 'POST', body: JSON.stringify({ playKind: 'vanilla', name: name.slice(0, 32) }) })
-      if (!srv?.id) throw new Error('сервер не создался')
+      if (!srv?.id) throw new Error(t('Сервер не создался'))
       const base = '/hosting/servers/' + encodeURIComponent(srv.id)
       await api(base + '/settings', { method: 'PATCH', body: JSON.stringify({ onlineMode: false }) }).catch(() => {})
       if (build) {
@@ -219,10 +223,10 @@ export function PartyRoomsMenu({ start, close }: { start: 'join' | 'friends'; cl
         }
         await new Promise((r) => window.setTimeout(r, 3000))
       }
-      showToast('Сервер создаётся дольше обычного — он появится в «Хостинге»', 'error')
+      showToast(t('Сервер создаётся дольше обычного — он появится в «Хостинге»'), 'error')
       return null
     } catch (e) {
-      showToast(apiErrorText(e, 'Сервер не создался'), 'error')
+      showToast(apiErrorText(e, t('Сервер не создался')), 'error')
       return null
     } finally {
       setBusy('')
@@ -233,7 +237,7 @@ export function PartyRoomsMenu({ start, close }: { start: 'join' | 'friends'; cl
     if (busy || !pick) return
     const at = place?.addr || where
     const atName = place?.name || whereName
-    if (needServer && !at) return showToast('Выбери сервер, где играем', 'error')
+    if (needServer && !at) return showToast(t('Выбери сервер, где играем'), 'error')
     setBusy('new')
     try {
       const base = await targetForMode(pick.mode)
@@ -247,7 +251,7 @@ export function PartyRoomsMenu({ start, close }: { start: 'join' | 'friends'; cl
       }
     } catch (e) {
       console.error('[party] room', e)
-      showToast('Не удалось собрать комнату', 'error')
+      showToast(t('Не удалось собрать комнату'), 'error')
     } finally {
       setBusy('')
     }
@@ -258,36 +262,36 @@ export function PartyRoomsMenu({ start, close }: { start: 'join' | 'friends'; cl
 
   return (
     <div className="prm-back" onPointerDown={close}>
-      <div className="prm-win" role="dialog" aria-modal="true" aria-label="Найти пати" data-private data-section="party_rooms" onPointerDown={(e) => e.stopPropagation()}>
+      <div className="prm-win" role="dialog" aria-modal="true" aria-label={t('Найти пати')} data-private data-section="party_rooms" onPointerDown={(e) => e.stopPropagation()}>
         <aside className="prm-side">
-          <b className="prm-title">Пати</b>
+          <b className="prm-title">{t('Пати')}</b>
           <button className={'prm-nav' + (tab === 'join' ? ' on' : '')} aria-pressed={tab === 'join'} onClick={() => setTab('join')}>
             <Icon id="i-search" />
-            Комнаты
+            {t('Комнаты')}
             {rooms ? <span className="prm-n">{rooms.length}</span> : null}
           </button>
           <button className={'prm-nav' + (tab === 'own' ? ' on' : '')} aria-pressed={tab === 'own'} onClick={() => setTab('own')}>
             <Icon id="i-plus" />
-            Своя комната
+            {t('Своя комната')}
           </button>
           <button className={'prm-nav' + (tab === 'friends' ? ' on' : '')} aria-pressed={tab === 'friends'} onClick={() => setTab('friends')}>
             <Icon id="i-users" />
-            Позвать друга
+            {t('Позвать друга')}
           </button>
         </aside>
 
         <section className="prm-main">
-          <button className="pim-x prm-x" aria-label="Закрыть" onClick={close}>
+          <button className="pim-x prm-x" aria-label={t('Закрыть')} onClick={close}>
             <Icon id="i-x" />
           </button>
           {tab === 'friends' ? (
             <>
-              <h2 className="prm-h">Позвать друга</h2>
+              <h2 className="prm-h">{t('Позвать друга')}</h2>
               <PartyInviteList close={close} />
             </>
           ) : tab === 'join' ? (
             <>
-              <h2 className="prm-h">Открытые комнаты</h2>
+              <h2 className="prm-h">{t('Открытые комнаты')}</h2>
               <div className="prm-rooms">
                 {askAge ? (
                   <AgeGate />
@@ -295,7 +299,7 @@ export function PartyRoomsMenu({ start, close }: { start: 'join' | 'friends'; cl
                   <div className="pim-empty">
                     <b>{failed}</b>
                     <button className="btn sm primary" onClick={() => void load()}>
-                      Повторить
+                      {t('Повторить')}
                     </button>
                   </div>
                 ) : !rooms ? (
@@ -305,9 +309,9 @@ export function PartyRoomsMenu({ start, close }: { start: 'join' | 'friends'; cl
                 ) : (
                   <div className="pim-empty">
                     <Icon id="i-users" />
-                    <b>Сейчас никто не ждёт</b>
+                    <b>{t('Сейчас никто не ждёт')}</b>
                     <button className="btn md primary" onClick={() => setTab('own')}>
-                      Открыть свою
+                      {t('Открыть свою')}
                     </button>
                   </div>
                 )}
@@ -315,7 +319,7 @@ export function PartyRoomsMenu({ start, close }: { start: 'join' | 'friends'; cl
             </>
           ) : (
             <>
-              <h2 className="prm-h">Куда идём</h2>
+              <h2 className="prm-h">{t('Куда идём')}</h2>
               <div className="prm-bar">
                 <div className="segs prm-cats" role="tablist">
                   {CATS.map((c) => (
@@ -328,7 +332,7 @@ export function PartyRoomsMenu({ start, close }: { start: 'join' | 'friends'; cl
                 </div>
                 <div className="input sm prm-search">
                   <Icon id="i-search" />
-                  <input placeholder="Сервер, сборка, версия" value={q} onChange={(e) => setQ(e.target.value)} />
+                  <input placeholder={t('Сервер, сборка, версия')} value={q} onChange={(e) => setQ(e.target.value)} />
                 </div>
               </div>
               <div className="prm-grid">
@@ -341,13 +345,13 @@ export function PartyRoomsMenu({ start, close }: { start: 'join' | 'friends'; cl
                 ))}
                 {!shown.length ? (
                   <div className="pim-empty">
-                    <b>{cat === 'builds' && !needle ? 'Сборок пока нет' : 'Ничего не нашлось'}</b>
+                    <b>{cat === 'builds' && !needle ? t('Сборок пока нет') : t('Ничего не нашлось')}</b>
                   </div>
                 ) : null}
               </div>
               {needServer ? (
                 <div className="prm-srv">
-                  <b>Где играем</b>
+                  <b>{t('Где играем')}</b>
                   {mine.map((m) => (
                     <button key={m.id} className={'pty-chip' + (srv === m.id ? ' hot' : '')} aria-pressed={srv === m.id} onClick={() => setSrv(m.id)}>
                       <Icon id="i-server" />
@@ -355,7 +359,7 @@ export function PartyRoomsMenu({ start, close }: { start: 'join' | 'friends'; cl
                     </button>
                   ))}
                   <div className={'input sm prm-addr' + (srv === 'addr' ? ' on' : '')}>
-                    <input placeholder="Адрес сервера" maxLength={80} value={addr} onFocus={() => setSrv('addr')} onChange={(e) => { setAddr(e.target.value); setSrv('addr') }} />
+                    <input placeholder={t('Адрес сервера')} maxLength={80} value={addr} onFocus={() => setSrv('addr')} onChange={(e) => { setAddr(e.target.value); setSrv('addr') }} />
                   </div>
                   {pick && (pick.mode.kind === 'version' || (pick.mode.kind === 'build' && hasTauri())) && !mine.length ? (
                     <button
@@ -364,12 +368,12 @@ export function PartyRoomsMenu({ start, close }: { start: 'join' | 'friends'; cl
                       disabled={!!busy}
                       onClick={() => {
                         const m = pick.mode
-                        const job = m.kind === 'build' ? hostNow('', m.name, m.name) : hostNow(m.kind === 'version' ? m.version : '', 'Пати ' + pick.title)
+                        const job = m.kind === 'build' ? hostNow('', m.name, m.name) : hostNow(m.kind === 'version' ? m.version : '', t('Пати {name}', { name: pick.title }))
                         void job.then((place) => place && create(place))
                       }}
                     >
                       <Icon id="i-zap" />
-                      {busy === 'send' ? 'Отправляем сборку…' : busy === 'host' ? 'Создаём сервер…' : 'Сервер Millida бесплатно'}
+                      {busy === 'send' ? t('Отправляем сборку…') : busy === 'host' ? t('Создаём сервер…') : t('Сервер Millida бесплатно')}
                     </button>
                   ) : (
                     <button
@@ -381,7 +385,7 @@ export function PartyRoomsMenu({ start, close }: { start: 'join' | 'friends'; cl
                       }}
                     >
                       <Icon id="i-plus" />
-                      Создать сервер
+                      {t('Создать сервер')}
                     </button>
                   )}
                 </div>
@@ -390,19 +394,19 @@ export function PartyRoomsMenu({ start, close }: { start: 'join' | 'friends'; cl
                 <div className="prm-who">
                   <button className={'prm-opt' + (open ? ' on' : '')} aria-pressed={open} onClick={() => setOpen(true)}>
                     <Icon id="i-users" />
-                    <b>Все</b>
-                    <span>видна в списке</span>
+                    <b>{t('Все')}</b>
+                    <span>{t('видна в списке')}</span>
                   </button>
                   <button className={'prm-opt' + (open ? '' : ' on')} aria-pressed={!open} onClick={() => setOpen(false)}>
                     <Icon id="i-lock" />
-                    <b>Только друзья</b>
-                    <span>по приглашению</span>
+                    <b>{t('Только друзья')}</b>
+                    <span>{t('по приглашению')}</span>
                   </button>
                 </div>
                 <button className="btn lg primary prm-go" data-track="party_room_create" data-kind={pick?.cat} disabled={!pick || !!busy || (needServer && !where)} onClick={() => void create()}>
                   <span>
-                    Открыть комнату
-                    <em>{!pick ? 'выбери, куда идём' : needServer && !where ? 'выбери сервер' : pick.title}</em>
+                    {t('Открыть комнату')}
+                    <em>{!pick ? t('выбери, куда идём') : needServer && !where ? t('выбери сервер') : pick.title}</em>
                   </span>
                 </button>
               </div>

@@ -100,7 +100,7 @@ import { closeModal, setScreen, showToast, useUi, openModal } from '../state/ui'
 import { repairPack } from '../lib/repair'
 import { openMilli } from '../state/milli'
 import { joinWithAuth, realLaunch, showLaunchError, startPrelaunch } from '../lib/launch'
-import { useMods } from '../state/mods'
+import { ALL_CATEGORIES, useMods } from '../state/mods'
 import { useModpackVersions } from '../state/modpack'
 import { useMigrate } from '../state/migrate'
 import { openProject } from '../state/project'
@@ -108,6 +108,7 @@ import { stopRunningGame, useGame } from '../state/game'
 import { apiErrorText } from '../lib/apiError'
 import { trackFailure } from '../lib/telemetry'
 import { hasMillidaAccount, mirrorAsset } from '../lib/api'
+import { t, useT } from '../i18n'
 
 /// Имя сборки в тексте ошибки — личное.
 const maskBuild = (e: unknown, name: string | null | undefined) =>
@@ -124,19 +125,19 @@ const KIND_ICON: Record<string, string> = {
   shader: 'i-eye',
 }
 
-const KINDS: [string, string][] = [
-  ['mod', 'Моды'],
-  ['resourcepack', 'Ресурспаки'],
-  ['datapack', 'Дата-паки'],
-  ['shader', 'Шейдеры'],
+const kinds = (): [string, string][] => [
+  ['mod', t('Моды')],
+  ['resourcepack', t('Ресурспаки')],
+  ['datapack', t('Дата-паки')],
+  ['shader', t('Шейдеры')],
 ]
 
-const AUDIT_LABEL: Record<string, string> = {
-  missing: 'не хватает мода',
-  conflict: 'конфликт',
-  version: 'не для этой версии',
-  loader: 'другой загрузчик',
-}
+const auditLabel = (): Record<string, string> => ({
+  missing: t('не хватает мода'),
+  conflict: t('конфликт'),
+  version: t('не для этой версии'),
+  loader: t('другой загрузчик'),
+})
 
 const CONTENT_EXTS: Record<string, string[]> = {
   mod: ['jar', 'zip', 'litemod'],
@@ -159,18 +160,18 @@ function shareCatalogLink(profile: string) {
   loadProfileSettings(profile)
     .then((s) => {
       const slug = catalogPackSlug(s)
-      if (!slug) throw new Error('у сборки нет страницы в каталоге')
+      if (!slug) throw new Error(t('у сборки нет страницы в каталоге'))
       return copyText(CATALOG_PACK_PAGE + slug)
     })
     .then((copied) => {
-      if (!copied) throw new Error('буфер обмена занят — попробуй ещё раз')
-      showToast('Ссылка на сборку в каталоге скопирована', 'ok')
+      if (!copied) throw new Error(t('буфер обмена занят — попробуй ещё раз'))
+      showToast(t('Ссылка на сборку в каталоге скопирована'), 'ok')
     })
-    .catch((e) => showToast('Не удалось скопировать ссылку: ' + apiErrorText(e, 'попробуй ещё раз'), 'error'))
+    .catch((e) => showToast(t('Не удалось скопировать ссылку: {error}', { error: apiErrorText(e, t('попробуй ещё раз')) }), 'error'))
 }
 
-const CORE_OPTS: [string, string][] = [
-  ['vanilla', 'Ванилла'],
+const coreOpts = (): [string, string][] => [
+  ['vanilla', t('Ванилла')],
   ['fabric', 'Fabric'],
   ['quilt', 'Quilt'],
   ['forge', 'Forge'],
@@ -178,13 +179,19 @@ const CORE_OPTS: [string, string][] = [
 ]
 
 
-const KIND_ONE: Record<string, string> = { mod: 'мод', resourcepack: 'ресурс-пак', datapack: 'дата-пак', shader: 'шейдер' }
-const KIND_FEW: Record<string, string> = { mod: 'мода', resourcepack: 'ресурс-пака', datapack: 'дата-пака', shader: 'шейдера' }
-const KIND_MANY: Record<string, string> = { mod: 'модов', resourcepack: 'ресурс-паков', datapack: 'дата-паков', shader: 'шейдеров' }
-const EMPTY_TITLE: Record<string, string> = { mod: 'Модов пока нет', resourcepack: 'Ресурс-паков пока нет', datapack: 'Дата-паков пока нет', shader: 'Шейдеров пока нет' }
+const kindForms = (kind: string): { one?: string; few?: string; many?: string } =>
+  (
+    {
+      mod: { one: t('мод'), few: t('мода'), many: t('модов') },
+      resourcepack: { one: t('ресурс-пак'), few: t('ресурс-пака'), many: t('ресурс-паков') },
+      datapack: { one: t('дата-пак'), few: t('дата-пака'), many: t('дата-паков') },
+      shader: { one: t('шейдер'), few: t('шейдера'), many: t('шейдеров') },
+    } as Record<string, { one: string; few: string; many: string }>
+  )[kind] ?? {}
+const emptyTitle = (): Record<string, string> => ({ mod: t('Модов пока нет'), resourcepack: t('Ресурс-паков пока нет'), datapack: t('Дата-паков пока нет'), shader: t('Шейдеров пока нет') })
 
 type ContentSort = 'name' | 'new' | 'old'
-const SORT_LABEL: Record<ContentSort, string> = { name: 'По названию', new: 'Сначала новые', old: 'Сначала старые' }
+const sortLabel = (): Record<ContentSort, string> => ({ name: t('По названию'), new: t('Сначала новые'), old: t('Сначала старые') })
 const SORT_KEY = 'm-content-sort'
 const readSort = (): ContentSort => {
   try {
@@ -217,8 +224,9 @@ function ModArt({ src, icon, sm }: { src?: string; icon: string; sm?: boolean })
 }
 
 /** Главная кнопка вкладки «Контент»: что именно добавляем (владелец 07.10.2026: «Скачать» непонятно). */
-const ADD_LABEL: Record<string, string> = { mod: 'Добавить моды', resourcepack: 'Добавить ресурс-паки', shader: 'Добавить шейдеры', datapack: 'Добавить дата-паки' }
+const addLabel = (): Record<string, string> => ({ mod: t('Добавить моды'), resourcepack: t('Добавить ресурс-паки'), shader: t('Добавить шейдеры'), datapack: t('Добавить дата-паки') })
 export function InstancePage() {
+  const t = useT()
   const modal = useUi((s) => s.modals.bsModal)
   const profile = useInstance((s) => s.profile)
   const profiles = useProfiles((s) => s.profiles)
@@ -239,7 +247,7 @@ export function InstancePage() {
   const [itemLabels, setItemLabels] = useState<Record<string, string>>({})
   const [emptyList, setEmptyList] = useState(false)
   const [openInfo, setOpenInfo] = useState('')
-  const [scanLabel, setScanLabel] = useState('Сканировать')
+  const [scanLabel, setScanLabel] = useState(t('Сканировать'))
   const [audit, setAudit] = useState<DepAudit | null>(null)
   const [auditBusy, setAuditBusy] = useState(false)
   const [noticeList, setNoticeList] = useState('')
@@ -275,7 +283,7 @@ export function InstancePage() {
   const [gpuOk, setGpuOk] = useState(true)
   const [javaAll, setJavaAll] = useState<number[]>([])
   const [javaBusy, setJavaBusy] = useState(0)
-  const [detectLabel, setDetectLabel] = useState('Найти')
+  const [detectLabel, setDetectLabel] = useState(t('Найти'))
   const [shotCount, setShotCount] = useState('—')
   const [mpSlug, setMpSlug] = useState('')
   const [mpVersion, setMpVersion] = useState('')
@@ -302,8 +310,8 @@ export function InstancePage() {
   const gameStopping = useGame((s) => s.stopping)
   const thisRunning = !!profile && running.includes(profile)
   const liveRef = useRef<HTMLPreElement>(null)
-  const [shareLabel, setShareLabel] = useState('Поделиться')
-  const [updateAllLabel, setUpdateAllLabel] = useState('Обновить всё')
+  const [shareLabel, setShareLabel] = useState(t('Поделиться'))
+  const [updateAllLabel, setUpdateAllLabel] = useState(t('Обновить всё'))
   const [renameVal, setRenameVal] = useState('')
   const [renameBusy, setRenameBusy] = useState(false)
   const [newLoader, setNewLoader] = useState('vanilla')
@@ -369,7 +377,7 @@ export function InstancePage() {
       return
     }
     let alive = true
-    void Promise.all(KINDS.map(([k]) => listContent(profile, k).then((l) => [k, l.length] as const, () => [k, 0] as const))).then(
+    void Promise.all(kinds().map(([k]) => listContent(profile, k).then((l) => [k, l.length] as const, () => [k, 0] as const))).then(
       (rows) => alive && setCounts(Object.fromEntries(rows)),
     )
     return () => {
@@ -420,7 +428,7 @@ export function InstancePage() {
         // Демо (?preview): список модов как в настоящей сборке, чтобы видеть экран целиком.
         const demo = DEMO_USER && kk === 'mod' ? DEMO_MODS : []
         setItems(demo)
-        setNoticeList(demo.length ? '' : 'Список появится в приложении')
+        setNoticeList(demo.length ? '' : t('Список появится в приложении'))
         setEmptyList(false)
         return
       }
@@ -480,7 +488,7 @@ export function InstancePage() {
         })
         .catch((e) => {
           setAuditBusy(false)
-          if (!auto) showToast('Не удалось проверить: ' + e, 'error')
+          if (!auto) showToast(t('Не удалось проверить: {error}', { error: String(e) }), 'error')
         })
     },
     [profile, loadMods],
@@ -502,7 +510,7 @@ export function InstancePage() {
     if (!profile) return
     if (!hasTauri()) {
       setServers([])
-      setWorldsNotice('Доступно в приложении')
+      setWorldsNotice(t('Доступно в приложении'))
       return
     }
     setWorldsNotice('')
@@ -518,7 +526,7 @@ export function InstancePage() {
         setLogFiles(files)
         if (!files.length) {
           setLogFile('')
-          setLogBody('Логи появятся после первого запуска игры')
+          setLogBody(t('Логи появятся после первого запуска игры'))
           return
         }
         setLogFile(files[0])
@@ -528,7 +536,7 @@ export function InstancePage() {
 
   useEffect(() => {
     if (!profile || !logFile || !hasTauri()) return
-    readLog(profile, logFile).then((t) => setLogBody(t || '(пусто)'))
+    readLog(profile, logFile).then((text) => setLogBody(text || t('(пусто)')))
   }, [profile, logFile])
 
   useEffect(() => {
@@ -601,7 +609,7 @@ export function InstancePage() {
     setPlaytime('')
     setRam(parseInt(localStorage.getItem(ramKey(profile)) || '0', 10) || 0)
     setJavaList([])
-    setDetectLabel('Найти')
+    setDetectLabel(t('Найти'))
     setShotCount('—')
     setMpSlug('')
     setMpVersion('')
@@ -610,8 +618,8 @@ export function InstancePage() {
     setServerForm(false)
     setWsName('')
     setWsIp('')
-    setShareLabel('Поделиться')
-    setUpdateAllLabel('Обновить всё')
+    setShareLabel(t('Поделиться'))
+    setUpdateAllLabel(t('Обновить всё'))
     setRenameVal(profile)
     try {
       setNote(localStorage.getItem('m-note-' + profile) || '')
@@ -620,13 +628,17 @@ export function InstancePage() {
     }
     if (hasTauri()) {
       ensureMcVersionList().catch((e) =>
-        showToast('Список версий Minecraft не загрузился: ' + e + '. Проверь интернет и открой сборку заново', 'error'),
+        showToast(t('Список версий Minecraft не загрузился: {error}. Проверь интернет и открой сборку заново', { error: String(e) }), 'error'),
       )
       getPlayStats()
         .then((s) => {
           const b = s.builds.find((x) => x.key === profile)
           if (!b || !b.seconds) return
-          setPlaytime(' · играно ' + fmtPlaytime(b.seconds) + (b.last ? ' · заходил ' + whenText(b.last) : ''))
+          setPlaytime(
+            b.last
+              ? t(' · играно {time} · заходил {when}', { time: fmtPlaytime(b.seconds), when: whenText(b.last) })
+              : t(' · играно {time}', { time: fmtPlaytime(b.seconds) }),
+          )
         })
         .catch(() => {})
       gpuSwitchSupported()
@@ -655,7 +667,7 @@ export function InstancePage() {
         .then(setJavaAll)
         .catch(() => {})
       countScreenshots(profile)
-        .then((n) => setShotCount(n ? n + ' шт.' : 'пока нет'))
+        .then((n) => setShotCount(n ? t('{n} шт.', { n }) : t('пока нет')))
         .catch(() => {})
       modpackInfo(profile)
         .then((mp) => {
@@ -682,7 +694,7 @@ export function InstancePage() {
   const toggleBoost = async () => {
     if (!profile) return
     if (!hasTauri()) {
-      showToast('Буст FPS доступен в приложении', 'error')
+      showToast(t('Буст FPS доступен в приложении'), 'error')
       return
     }
     const on = !(boost && boost.enabled)
@@ -692,19 +704,18 @@ export function InstancePage() {
       setBoost(next)
       loadMods()
       if (!on) {
-        showToast('Буст FPS выключен — моды сняты, настройки графики вернули как было')
+        showToast(t('Буст FPS выключен — моды сняты, настройки графики вернули как было'))
       } else if (next.vanilla) {
-        showToast('Буст FPS включён: профиль JVM и лёгкая графика. Моды-ускорители работают только на Fabric/Forge.')
+        showToast(t('Буст FPS включён: профиль JVM и лёгкая графика. Моды-ускорители работают только на Fabric/Forge.'))
       } else {
         showToast(
-          'Буст FPS включён: ' +
-            next.mods.length +
-            ' мод(ов), профиль JVM и лёгкая графика' +
-            (next.skipped.length ? '. Без сборки под эту версию: ' + next.skipped.join(', ') : ''),
+          next.skipped.length
+            ? t('Буст FPS включён: {n} мод(ов), профиль JVM и лёгкая графика. Без сборки под эту версию: {list}', { n: next.mods.length, list: next.skipped.join(', ') })
+            : t('Буст FPS включён: {n} мод(ов), профиль JVM и лёгкая графика', { n: next.mods.length }),
         )
       }
     } catch (e) {
-      showToast('Не удалось переключить буст FPS: ' + e, 'error')
+      showToast(t('Не удалось переключить буст FPS: {error}', { error: String(e) }), 'error')
     } finally {
       setBoostBusy(false)
     }
@@ -719,11 +730,11 @@ export function InstancePage() {
       loadMods()
       showToast(
         on
-          ? 'Мод скинов вернётся в сборку при следующем запуске'
-          : 'Мод скинов убран — лаунчер больше не будет добавлять его в эту сборку',
+          ? t('Мод скинов вернётся в сборку при следующем запуске')
+          : t('Мод скинов убран — лаунчер больше не будет добавлять его в эту сборку'),
       )
     } catch (e) {
-      showToast('Не удалось переключить мод скинов: ' + e, 'error')
+      showToast(t('Не удалось переключить мод скинов: {error}', { error: String(e) }), 'error')
     } finally {
       setSkinModBusy(false)
     }
@@ -733,7 +744,7 @@ export function InstancePage() {
     const nn = renameVal.trim()
     if (!profile || !nn || nn === profile) return
     if (!hasTauri()) {
-      showToast('Переименование доступно в приложении', 'error')
+      showToast(t('Переименование доступно в приложении'), 'error')
       return
     }
     setRenameBusy(true)
@@ -749,28 +760,28 @@ export function InstancePage() {
         useInstance.getState().setProfile(nn)
         useProfiles.getState().setSelected(nn)
         void useProfiles.getState().refresh()
-        showToast('Сборка переименована в «' + nn + '»')
+        showToast(t('Сборка переименована в «{name}»', { name: nn }))
       })
-      .catch((e) => showToast('Не удалось переименовать: ' + e, 'error'))
+      .catch((e) => showToast(t('Не удалось переименовать: {error}', { error: String(e) }), 'error'))
       .finally(() => setRenameBusy(false))
   }
 
   const applyCore = async () => {
     if (!profile || !pr) return
     if (!hasTauri()) {
-      showToast('Доступно в приложении', 'error')
+      showToast(t('Доступно в приложении'), 'error')
       return
     }
     const ver = (newVersion || pr.version).trim()
     const lver = hasLoaderVersions(newLoader) ? newLoaderVer : AUTO_LOADER_VERSION
     if (ver === pr.version && newLoader === loaderId(pr) && lver === (pr.loader_version || AUTO_LOADER_VERSION)) {
-      showToast('Ничего не поменялось')
+      showToast(t('Ничего не поменялось'))
       return
     }
-    const label = (CORE_OPTS.find((c) => c[0] === newLoader)?.[1] || newLoader) + (lver ? ' ' + lver : '')
+    const label = (coreOpts().find((c) => c[0] === newLoader)?.[1] || newLoader) + (lver ? ' ' + lver : '')
     if (
-      !(await uiConfirm('Сменить сборку на ' + label + ' ' + ver + '? Установленные моды могут стать несовместимы — проверь их после смены.', {
-        confirmLabel: 'Сменить',
+      !(await uiConfirm(t('Сменить сборку на {loader} {version}? Установленные моды могут стать несовместимы — проверь их после смены.', { loader: label, version: ver }), {
+        confirmLabel: t('Сменить'),
       }))
     )
       return
@@ -785,13 +796,13 @@ export function InstancePage() {
         void useProfiles.getState().refresh()
         if (modCount > 0 && newLoader !== loaderId(pr)) {
           showToast(
-            'Загрузчик сменили на ' + label + '. Проверь моды (' + modCount + ' шт.) — часть может не подойти.',
+            t('Загрузчик сменили на {loader}. Проверь моды ({n} шт.) — часть может не подойти.', { loader: label, n: modCount }),
           )
         } else {
-          showToast('Готово: ' + label + ' · ' + ver + '. Доустановим при запуске.')
+          showToast(t('Готово: {loader} · {version}. Доустановим при запуске.', { loader: label, version: ver }))
         }
       })
-      .catch((e) => showToast('Не удалось сменить: ' + e, 'error'))
+      .catch((e) => showToast(t('Не удалось сменить: {error}', { error: String(e) }), 'error'))
       .finally(() => setCoreBusy(false))
   }
 
@@ -807,13 +818,13 @@ export function InstancePage() {
       const refit = plan ? plan.items.filter((i) => i.ok && installed.get(i.file_name) !== i.version_number) : []
       const blocked = plan ? plan.items.filter((i) => !i.ok).map((i) => i.title) : []
       const unchecked = plan ? plan.unlinked : []
-      const listed = (names: string[]) => names.slice(0, 5).join(', ') + (names.length > 5 ? ' и ещё ' + (names.length - 5) : '')
+      const listed = (names: string[]) => names.slice(0, 5).join(', ') + (names.length > 5 ? t(' и ещё {n}', { n: names.length - 5 }) : '')
       const text =
-        'Обновить Minecraft ' + pr.version + ' → ' + target + '?' +
-        (refit.length ? ' Моды под новую версию обновятся сами: ' + refit.length + ' шт.' : '') +
-        (blocked.length ? ' Нет сборки под ' + target + ': ' + listed(blocked) + ' — останутся как есть и могут не запуститься.' : '') +
-        (unchecked.length ? ' Не проверить, добавлены вручную: ' + listed(unchecked) + '.' : '')
-      if (!(await uiConfirm(text, { confirmLabel: 'Обновить' }))) return
+        t('Обновить Minecraft {from} → {to}?', { from: pr.version, to: target }) +
+        (refit.length ? t(' Моды под новую версию обновятся сами: {n} шт.', { n: refit.length }) : '') +
+        (blocked.length ? t(' Нет сборки под {version}: {list} — останутся как есть и могут не запуститься.', { version: target, list: listed(blocked) }) : '') +
+        (unchecked.length ? t(' Не проверить, добавлены вручную: {list}.', { list: listed(unchecked) }) : '')
+      if (!(await uiConfirm(text, { confirmLabel: t('Обновить') }))) return
       await setProfileLoader(profile, target, loader, lver)
       const failed: string[] = []
       for (const i of refit) {
@@ -822,12 +833,12 @@ export function InstancePage() {
       void useProfiles.getState().refresh()
       loadMods()
       if (failed.length) {
-        showToast('Minecraft обновлён до ' + target + ', но не обновились моды: ' + listed(failed) + '. Обнови их на вкладке модов.', 'error')
+        showToast(t('Minecraft обновлён до {version}, но не обновились моды: {list}. Обнови их на вкладке модов.', { version: target, list: listed(failed) }), 'error')
       } else {
-        showToast('Minecraft обновлён до ' + target + '. Доустановим при запуске.')
+        showToast(t('Minecraft обновлён до {version}. Доустановим при запуске.', { version: target }))
       }
     } catch (e) {
-      showToast('Не удалось обновить Minecraft: ' + e, 'error')
+      showToast(t('Не удалось обновить Minecraft: {error}', { error: String(e) }), 'error')
     } finally {
       setCoreBusy(false)
     }
@@ -837,15 +848,15 @@ export function InstancePage() {
     if (!profile || !pr) return
     const loader = loaderId(pr)
     const label = LOADER_NAME(pr)
-    if (!(await uiConfirm('Обновить ' + label + ' ' + pr.loader_version + ' → ' + target + '?', { confirmLabel: 'Обновить' })))
+    if (!(await uiConfirm(t('Обновить {loader} {from} → {to}?', { loader: label, from: pr.loader_version ?? '', to: target }), { confirmLabel: t('Обновить') })))
       return
     setCoreBusy(true)
     setProfileLoader(profile, pr.version, loader, target)
       .then(() => {
         void useProfiles.getState().refresh()
-        showToast(label + ' обновлён до ' + target + '. Доустановим при запуске.')
+        showToast(t('{loader} обновлён до {version}. Доустановим при запуске.', { loader: label, version: target }))
       })
-      .catch((e) => showToast('Не удалось обновить загрузчик: ' + e, 'error'))
+      .catch((e) => showToast(t('Не удалось обновить загрузчик: {error}', { error: String(e) }), 'error'))
       .finally(() => setCoreBusy(false))
   }
 
@@ -857,11 +868,11 @@ export function InstancePage() {
       const accepted = (paths || []).filter((x) => acceptsFile(k, x))
       const skipped = (paths || []).length - accepted.length
       if (!accepted.length) {
-        showToast('Нужен файл ' + extsOf(k).map((e) => '.' + e).join(' / '), 'error')
+        showToast(t('Нужен файл {exts}', { exts: extsOf(k).map((e) => '.' + e).join(' / ') }), 'error')
         return
       }
       setDropBusy(true)
-      showToast('Добавляем ' + accepted.length + ' файл(ов)…')
+      showToast(t('Добавляем {n} файл(ов)…', { n: accepted.length }))
       const errors = await Promise.all(
         accepted.map((x) =>
           addLocalFile(p, k, x).then(
@@ -873,14 +884,14 @@ export function InstancePage() {
       loadMods()
       const failed = errors.filter(Boolean)
       if (failed.length === accepted.length) {
-        showToast('Не удалось добавить: ' + failed[0], 'error')
+        showToast(t('Не удалось добавить: {error}', { error: failed[0] ?? '' }), 'error')
         return
       }
       if (failed.length) {
-        showToast('Добавлено ' + (accepted.length - failed.length) + ', с ошибкой ' + failed.length + ': ' + failed[0], 'error')
+        showToast(t('Добавлено {ok}, с ошибкой {bad}: {error}', { ok: accepted.length - failed.length, bad: failed.length, error: failed[0] ?? '' }), 'error')
         return
       }
-      showToast('Добавлено в сборку: ' + accepted.length + (skipped ? ' · пропущено не по формату: ' + skipped : ''))
+      showToast(skipped ? t('Добавлено в сборку: {n} · пропущено не по формату: {skipped}', { n: accepted.length, skipped }) : t('Добавлено в сборку: {n}', { n: accepted.length }))
     },
     [loadMods],
   )
@@ -929,12 +940,12 @@ export function InstancePage() {
     if (!major) {
       setJavaMajor(0)
       setProfileJavaMajor(profile, null)
-        .then(() => showToast('Java для сборки снова выбирается автоматически'))
+        .then(() => showToast(t('Java для сборки снова выбирается автоматически')))
         .catch((e) => showToast('' + e, 'error'))
       return
     }
     if (!javaAll.includes(major)) {
-      showToast('Лаунчер ставит только Java ' + javaAll.join(', '), 'error')
+      showToast(t('Лаунчер ставит только Java {list}', { list: javaAll.join(', ') }), 'error')
       return
     }
     setJavaBusy(major)
@@ -942,7 +953,7 @@ export function InstancePage() {
       .then((v) => {
         setJavaMajor(major)
         setJava('')
-        showToast('Сборка запускается на Java ' + major + ' · ' + v)
+        showToast(t('Сборка запускается на Java {major} · {version}', { major, version: v }))
       })
       .catch((e) => showToast('' + e, 'error'))
       .finally(() => setJavaBusy(0))
@@ -961,45 +972,38 @@ export function InstancePage() {
 
   const runScan = () => {
     if (!hasTauri()) {
-      showToast('Доступно в приложении')
+      showToast(t('Доступно в приложении'))
       return
     }
-    setScanLabel('Сканируем…')
+    setScanLabel(t('Сканируем…'))
     scanContent(profile!, kind)
       .then((r) => {
-        setScanLabel('Сканировать')
+        setScanLabel(t('Сканировать'))
         if (kindRef.current === kind) setItems(r.items)
         showToast(
           r.identified
-            ? 'Опознано ' +
-              r.identified +
-              ' из ' +
-              r.scanned +
-              ' (' +
-              [
-                r.modrinth ? 'Modrinth: ' + r.modrinth : '',
-                r.curseforge ? 'CurseForge: ' + r.curseforge : '',
-              ]
-                .filter(Boolean)
-                .join(', ') +
-              ')'
-            : 'Разобрано файлов: ' + r.scanned,
+            ? t('Опознано {found} из {total} ({sources})', {
+                found: r.identified,
+                total: r.scanned,
+                sources: [r.modrinth ? 'Modrinth: ' + r.modrinth : '', r.curseforge ? 'CurseForge: ' + r.curseforge : ''].filter(Boolean).join(', '),
+              })
+            : t('Разобрано файлов: {n}', { n: r.scanned }),
         )
       })
       .catch((e) => {
-        setScanLabel('Сканировать')
-        showToast('Не удалось просканировать: ' + e, 'error')
+        setScanLabel(t('Сканировать'))
+        showToast(t('Не удалось просканировать: {error}', { error: String(e) }), 'error')
       })
   }
 
   const runExport = () => {
     if (!hasTauri()) {
-      showToast('Доступно в приложении')
+      showToast(t('Доступно в приложении'))
       return
     }
-    showToast('Собираем .mrpack…')
+    showToast(t('Собираем .mrpack…'))
     exportMrpack(profile!, profile!, '1.0.0', pr ? LOADER_NAME(pr) + ' ' + pr.version : '')
-      .then((p) => showToast('Экспортировано: ' + ('' + p).split('/').pop()))
+      .then((p) => showToast(t('Экспортировано: {file}', { file: ('' + p).split('/').pop() ?? '' })))
       .catch((e) => showToast('' + e))
   }
 
@@ -1011,17 +1015,17 @@ export function InstancePage() {
     close()
     setScreen('mods')
     useMods.getState().scopeTo(profile)
-    useMods.getState().set({ modTab: 'world', fCat: 'все' })
+    useMods.getState().set({ modTab: 'world', fCat: ALL_CATEGORIES })
     void useMods.getState().load()
   }
   const importWorldArchive = () => {
     if (!hasTauri() || !profile) {
-      showToast('Доступно в приложении')
+      showToast(t('Доступно в приложении'))
       return
     }
     importWorld(profile)
       .then((w) => {
-        if (w) showToast('Мир внесён в сборку', 'ok')
+        if (w) showToast(t('Мир внесён в сборку'), 'ok')
         setWorldsReload((n) => n + 1)
       })
       .catch((e) => showToast('' + e, 'error'))
@@ -1034,7 +1038,7 @@ export function InstancePage() {
         loadMods()
         if (after) after()
       })
-      .catch((e) => showToast(apiErrorText(e, 'Не удалось выполнить действие'), 'error'))
+      .catch((e) => showToast(apiErrorText(e, t('Не удалось выполнить действие')), 'error'))
 
 
   const cq = contentQuery.trim().toLowerCase()
@@ -1068,7 +1072,7 @@ export function InstancePage() {
   const toggleOne = (md: ModFile) =>
     toggleContent(profile!, kind, md.name, !md.enabled)
       .then(() => loadMods())
-      .catch((e) => showToast(apiErrorText(e, 'Не удалось выполнить действие'), 'error'))
+      .catch((e) => showToast(apiErrorText(e, t('Не удалось выполнить действие')), 'error'))
 
   const row = (md: ModFile) => {
     const up = upd[md.name]
@@ -1077,12 +1081,12 @@ export function InstancePage() {
     const picked = sel.has(md.name)
     const modrinth = md.project_id && !md.project_id.startsWith('cf:') && !md.project_id.startsWith('millida:') ? md.project_id : ''
     const curse = md.project_id && md.project_id.startsWith('cf:') ? md.project_id.slice(3) : ''
-    const src = modrinth ? 'Modrinth' : curse ? 'CurseForge' : md.project_id && md.project_id.startsWith('millida:') ? 'Millida' : 'Файл'
+    const src = modrinth ? 'Modrinth' : curse ? 'CurseForge' : md.project_id && md.project_id.startsWith('millida:') ? 'Millida' : t('Файл')
     const fresh = freshNames.has(md.name)
     const facts = [
-      md.version_number ? 'версия ' + md.version_number : '',
+      md.version_number ? t('версия {version}', { version: md.version_number }) : '',
       md.mc ? 'MC ' + md.mc : '',
-      md.author ? 'автор: ' + md.author : '',
+      md.author ? t('автор: {author}', { author: md.author }) : '',
       md.loaders?.length ? md.loaders.join(' · ') : md.loader || '',
       fmtSize(md.size),
     ].filter(Boolean)
@@ -1104,7 +1108,7 @@ export function InstancePage() {
             data-sel={md.name}
             role="checkbox"
             aria-checked={picked}
-            aria-label={'Выбрать ' + title}
+            aria-label={t('Выбрать {name}', { name: title })}
             onClick={() =>
               setSel((cur) => {
                 const next = new Set(cur)
@@ -1118,11 +1122,11 @@ export function InstancePage() {
           <span className="bpg-body">
             <span className="bpg-title">
               <b>{title}</b>
-              {fresh ? <span className="bpg-tag new">Новый</span> : null}
-              {incompatibleWith(md.mc, pr ? pr.version : '') ? <span className="bpg-tag bad">для {md.mc}</span> : null}
-              {!md.enabled ? <span className="bpg-tag">выключен</span> : null}
+              {fresh ? <span className="bpg-tag new">{t('Новый')}</span> : null}
+              {incompatibleWith(md.mc, pr ? pr.version : '') ? <span className="bpg-tag bad">{t('для {version}', { version: md.mc ?? '' })}</span> : null}
+              {!md.enabled ? <span className="bpg-tag">{t('выключен')}</span> : null}
             </span>
-            <span className="bpg-sub">{md.author ? 'от ' + md.author : md.title ? md.description || md.name : 'Файл · ' + md.name}</span>
+            <span className="bpg-sub">{md.author ? t('от {author}', { author: md.author }) : md.title ? md.description || md.name : t('Файл · {name}', { name: md.name })}</span>
           </span>
           <span className="bpg-ver">
             <b title={md.version_number || md.name}>{md.version_number || '—'}</b>
@@ -1131,13 +1135,13 @@ export function InstancePage() {
               <button
                 className="bpg-verup"
                 data-upd={md.name}
-                title={'Обновить ' + title + ' до ' + up}
+                title={t('Обновить {name} до {version}', { name: title, version: up })}
                 onClick={() => {
-                  setItemLabels((l) => ({ ...l, [md.name]: 'Обновляем…' }))
+                  setItemLabels((l) => ({ ...l, [md.name]: t('Обновляем…') }))
                   updateContent(profile!, kind, md.name)
                     .then(() => {
                       loadMods()
-                      showToast('Обновлено: ' + title)
+                      showToast(t('Обновлено: {name}', { name: title }))
                     })
                     .catch((er) => {
                       loadMods()
@@ -1148,7 +1152,7 @@ export function InstancePage() {
                 {itemLabels[md.name] || (
                   <>
                     <Icon id="i-arrow-up" />
-                    <span>до {up}</span>
+                    <span>{t('до {version}', { version: up })}</span>
                   </>
                 )}
               </button>
@@ -1162,19 +1166,19 @@ export function InstancePage() {
               data-tg={md.name}
               role="switch"
               aria-checked={md.enabled}
-              aria-label={(md.enabled ? 'Выключить ' : 'Включить ') + title}
+              aria-label={md.enabled ? t('Выключить {name}', { name: title }) : t('Включить {name}', { name: title })}
               onClick={() => void toggleOne(md)}
             />
             <button
               className="icon-btn del bpg-del"
               data-del={md.name}
-              aria-label="Удалить"
-              title="Удалить (Shift — без вопроса)"
+              aria-label={t('Удалить')}
+              title={t('Удалить (Shift — без вопроса)')}
               onClick={async (e) => {
-                if (!e.shiftKey && !(await uiConfirm('Удалить «' + title + '» из сборки?', { confirmLabel: 'Удалить' }))) return
+                if (!e.shiftKey && !(await uiConfirm(t('Удалить «{name}» из сборки?', { name: title }), { confirmLabel: t('Удалить') }))) return
                 deleteContent(profile!, kind, md.name)
                   .then(() => loadMods())
-                  .catch((er) => showToast(apiErrorText(er, 'Не удалось выполнить действие'), 'error'))
+                  .catch((er) => showToast(apiErrorText(er, t('Не удалось выполнить действие')), 'error'))
               }}
             >
               <Icon id="i-trash" />
@@ -1200,7 +1204,7 @@ export function InstancePage() {
               ) : null}
               {modrinth ? (
                 <button className="btn sm secondary" onClick={() => openProject(modrinth, kind)}>
-                  <Icon id="i-ext" /> Страница мода
+                  <Icon id="i-ext" /> {t('Страница мода')}
                 </button>
               ) : null}
               {curse ? (
@@ -1209,8 +1213,8 @@ export function InstancePage() {
                 </button>
               ) : null}
               {!md.project_id ? (
-                <button className="btn sm secondary" disabled={scanLabel !== 'Сканировать'} onClick={runScan}>
-                  <Icon id="i-search" /> {scanLabel === 'Сканировать' ? 'Найти в каталогах' : scanLabel}
+                <button className="btn sm secondary" disabled={scanLabel !== t('Сканировать')} onClick={runScan}>
+                  <Icon id="i-search" /> {scanLabel === t('Сканировать') ? t('Найти в каталогах') : scanLabel}
                 </button>
               ) : null}
             </div>
@@ -1231,7 +1235,7 @@ export function InstancePage() {
       <div className="instance-shell">
         <div className="inst-head">
           <button className="inst-back" id="bsClose" data-sound="close" onClick={close}>
-            <Icon id="i-chev-l" /> К сборкам
+            <Icon id="i-chev-l" /> {t('К сборкам')}
           </button>
           <div className="inst-hero">
             <div className="inst-icon" id="bsIconBig">
@@ -1241,7 +1245,7 @@ export function InstancePage() {
               <h1 id="bsTitle">{profile}</h1>
               <div className="inst-sub" id="bsSub">
                 {(pr ? LOADER_NAME(pr) + ' · ' + pr.version : '—') +
-                  (counts.mod ? ' · ' + counts.mod + ' ' + plural(counts.mod, 'мод', 'мода', 'модов') : '') +
+                  (counts.mod ? ' · ' + counts.mod + ' ' + plural(counts.mod, t('мод'), t('мода'), t('модов')) : '') +
                   playtime}
               </div>
             </div>
@@ -1250,7 +1254,7 @@ export function InstancePage() {
                 className="btn md secondary inst-share"
                 onClick={() => {
                   if (!hasTauri()) {
-                    showToast('Доступно в приложении')
+                    showToast(t('Доступно в приложении'))
                     return
                   }
                   if (guarded) {
@@ -1260,7 +1264,7 @@ export function InstancePage() {
                   setShareOpen(true)
                 }}
               >
-                <Icon id="i-link" /> Поделиться
+                <Icon id="i-link" /> {t('Поделиться')}
               </button>
               {thisRunning ? (
                 <button
@@ -1270,7 +1274,7 @@ export function InstancePage() {
                   disabled={gameStopping}
                   onClick={() => stopRunningGame(profile!)}
                 >
-                  <Icon id="i-power" /> {gameStopping ? 'Останавливаем…' : 'Остановить'}
+                  <Icon id="i-power" /> {gameStopping ? t('Останавливаем…') : t('Остановить')}
                 </button>
               ) : (
                 <button
@@ -1282,7 +1286,7 @@ export function InstancePage() {
                     else startPrelaunch(profile!)
                   }}
                 >
-                  <Icon id="i-play" /> Играть
+                  <Icon id="i-play" /> {t('Играть')}
                 </button>
               )}
               {/* «⋯» — те же изменения, что на карточке «Мои сборки» (24.09.2026, 18:35). */}
@@ -1290,7 +1294,7 @@ export function InstancePage() {
                 <button
                   type="button"
                   className={'btn lg secondary inst-more' + (moreOpen ? ' on' : '')}
-                  aria-label="Управление сборкой"
+                  aria-label={t('Управление сборкой')}
                   aria-expanded={moreOpen}
                   data-track="build_menu"
                   onClick={() => setMoreOpen((v) => !v)}
@@ -1323,11 +1327,11 @@ export function InstancePage() {
         <div className="inst-body">
           <nav className="inst-tabs">
             {[
-              ['content', 'i-blocks', 'Контент'],
-              ['worlds', 'i-server', 'Миры и серверы'],
-              ['shots', 'i-image', 'Скриншоты'],
-              ['logs', 'i-list', 'Логи'],
-              ['opts', 'i-settings', 'Параметры'],
+              ['content', 'i-blocks', t('Контент')],
+              ['worlds', 'i-server', t('Миры и серверы')],
+              ['shots', 'i-image', t('Скриншоты')],
+              ['logs', 'i-list', t('Логи')],
+              ['opts', 'i-settings', t('Параметры')],
             ].map(([id, ic, label]) => (
               <button
                 key={id}
@@ -1361,20 +1365,20 @@ export function InstancePage() {
                   onRemove={async (file) => {
                     if (!hasTauri()) {
                       setItems((l) => l.filter((m) => m.name !== file))
-                      showToast('Удалено из сборки', 'ok')
+                      showToast(t('Удалено из сборки'), 'ok')
                       return
                     }
                     await deleteContent(profile!, kind, file)
-                      .then(() => (loadMods(), showToast('Удалено из сборки', 'ok')))
-                      .catch((e) => showToast(apiErrorText(e, 'Не удалось удалить'), 'error'))
+                      .then(() => (loadMods(), showToast(t('Удалено из сборки'), 'ok')))
+                      .catch((e) => showToast(apiErrorText(e, t('Не удалось удалить')), 'error'))
                   }}
                 />
               ) : null}
               {guarded ? (
                 <div className="bx-mini-empty pr-locked" id="bsGuarded">
                   <Icon id="i-lock" />
-                  <b>Эту сборку менять нельзя</b>
-                  <span>Моды в ней ставит сервер — так она всегда совпадает с ним</span>
+                  <b>{t('Эту сборку менять нельзя')}</b>
+                  <span>{t('Моды в ней ставит сервер — так она всегда совпадает с ним')}</span>
                   <button
                     type="button"
                     className="btn md primary"
@@ -1384,15 +1388,15 @@ export function InstancePage() {
                       openModal('nbModal')
                     }}
                   >
-                    <Icon id="i-plus" /> Своя сборка с модами
+                    <Icon id="i-plus" /> {t('Своя сборка с модами')}
                   </button>
                 </div>
               ) : (
               <>
               {/* Ряд 1: что редактируем (вкладки со счётчиками) и как добавить — как в Modrinth App. */}
               <div className="bpg-bar">
-                <div className="bpg-kinds" role="tablist" aria-label="Что в сборке">
-                  {KINDS.map(([k, label]) => (
+                <div className="bpg-kinds" role="tablist" aria-label={t('Что в сборке')}>
+                  {kinds().map(([k, label]) => (
                     <button
                       key={k}
                       type="button"
@@ -1422,20 +1426,20 @@ export function InstancePage() {
                   disabled={dropBusy}
                   onClick={() => {
                     if (!hasTauri()) {
-                      showToast('Доступно в приложении', 'error')
+                      showToast(t('Доступно в приложении'), 'error')
                       return
                     }
                     pickContentFiles(kindRef.current)
                       .then((paths) => {
                         if (paths && paths.length) void addFiles(paths)
                       })
-                      .catch((e) => showToast('Не удалось открыть выбор файлов: ' + e, 'error'))
+                      .catch((e) => showToast(t('Не удалось открыть выбор файлов: {error}', { error: String(e) }), 'error'))
                   }}
                 >
-                  <Icon id="i-upload" /> {dropBusy ? 'Добавляем…' : 'Из файла'}
+                  <Icon id="i-upload" /> {dropBusy ? t('Добавляем…') : t('Из файла')}
                 </button>
                 <button className="btn md primary" id="bsAddContent" data-track="build_download" onClick={() => setDlOpen(true)}>
-                  <Icon id="i-plus" /> {ADD_LABEL[kind] || 'Добавить'}
+                  <Icon id="i-plus" /> {addLabel()[kind] || t('Добавить')}
                 </button>
               </div>
 
@@ -1445,7 +1449,7 @@ export function InstancePage() {
                   <div className="bx-audit-row">
                     <Icon id="i-alert" />
                     <span className="bx-audit-text">
-                      {'Проблем: ' + audit.issues.length + ' — сборка может не запуститься'}
+                      {t('Проблем: {n} — сборка может не запуститься', { n: audit.issues.length })}
                     </span>
                     <span style={{ flex: 1 }}></span>
                     {fixItems(audit).length ? (
@@ -1458,7 +1462,7 @@ export function InstancePage() {
                           })
                         }
                       >
-                        Доустановить ({fixItems(audit).length})
+                        {t('Доустановить ({n})', { n: fixItems(audit).length })}
                       </button>
                     ) : null}
                   </div>
@@ -1468,7 +1472,7 @@ export function InstancePage() {
                         <Icon id={it.kind === 'missing' ? 'i-download' : 'i-alert'} />
                         <span className="bpg-problem-t">
                           <b>{it.title}</b>
-                          <span className={'bpg-tag' + (it.kind === 'missing' ? '' : ' bad')}>{AUDIT_LABEL[it.kind]}</span>
+                          <span className={'bpg-tag' + (it.kind === 'missing' ? '' : ' bad')}>{auditLabel()[it.kind]}</span>
                           <small>{it.detail}</small>
                         </span>
                         {issueInstall(it) ? (
@@ -1481,7 +1485,7 @@ export function InstancePage() {
                               })
                             }
                           >
-                            Поставить
+                            {t('Поставить')}
                           </button>
                         ) : null}
                       </div>
@@ -1497,14 +1501,14 @@ export function InstancePage() {
                     <Icon id="i-search" />
                     <input
                       id="bsSearch"
-                      placeholder={'Искать среди ' + items.length + ' ' + plural(items.length, KIND_ONE[kind] || 'файла', KIND_FEW[kind] || 'файлов', KIND_MANY[kind] || 'файлов')}
+                      placeholder={t('Искать среди {count}', { count: items.length + ' ' + plural(items.length, kindForms(kind).one || t('файла'), kindForms(kind).few || t('файлов'), kindForms(kind).many || t('файлов')) })}
                       value={contentQuery}
                       autoComplete="off"
                       spellCheck={false}
                       onChange={(e) => setContentQuery(e.target.value)}
                     />
                     {contentQuery ? (
-                      <button type="button" className="bpg-search-x" aria-label="Очистить" onClick={() => setContentQuery('')}>
+                      <button type="button" className="bpg-search-x" aria-label={t('Очистить')} onClick={() => setContentQuery('')}>
                         <Icon id="i-x" />
                       </button>
                     ) : (
@@ -1524,22 +1528,22 @@ export function InstancePage() {
                       }}
                     >
                       <Icon id="i-list" />
-                      {SORT_LABEL[sort]}
+                      {sortLabel()[sort]}
                       <Icon id="i-chev-d" />
                     </button>
                     <span className="bpg-vsep" />
-                    <div className="bpg-chips" role="group" aria-label="Фильтр">
+                    <div className="bpg-chips" role="group" aria-label={t('Фильтр')}>
                       <button type="button" className={'bpg-chip' + (!filter ? ' on' : '')} onClick={() => setFilter('')}>
-                        Все <span>{items.length}</span>
+                        {t('Все')} <span>{items.length}</span>
                       </button>
                       {updCount ? (
                         <button type="button" className={'bpg-chip is-upd' + (filter === 'updates' ? ' on' : '')} onClick={() => setFilter(filter === 'updates' ? '' : 'updates')}>
-                          Есть обновления <span>{updCount}</span>
+                          {t('Есть обновления')} <span>{updCount}</span>
                         </button>
                       ) : null}
                       {offCount ? (
                         <button type="button" className={'bpg-chip' + (filter === 'off' ? ' on' : '')} onClick={() => setFilter(filter === 'off' ? '' : 'off')}>
-                          Выключенные <span>{offCount}</span>
+                          {t('Выключенные')} <span>{offCount}</span>
                         </button>
                       ) : null}
                     </div>
@@ -1549,10 +1553,10 @@ export function InstancePage() {
                         type="button"
                         className={'bpg-status' + (auditBusy ? ' busy' : audit && audit.issues.length ? ' bad' : audit ? ' ok' : '')}
                         disabled={auditBusy}
-                        data-tip="Проверить совместимость ещё раз"
+                        data-tip={t('Проверить совместимость ещё раз')}
                         onClick={() => {
                           if (!hasTauri()) {
-                            showToast('Доступно в приложении')
+                            showToast(t('Доступно в приложении'))
                             return
                           }
                           autoRound.current = 0
@@ -1560,7 +1564,7 @@ export function InstancePage() {
                         }}
                       >
                         {auditBusy ? <span className="mr-spin" aria-hidden="true" /> : <Icon id={audit && audit.issues.length ? 'i-alert' : 'i-shield'} />}
-                        {auditBusy ? 'Проверяем…' : !audit ? 'Проверить совместимость' : audit.issues.length ? 'Проблем: ' + audit.issues.length : 'Всё совместимо'}
+                        {auditBusy ? t('Проверяем…') : !audit ? t('Проверить совместимость') : audit.issues.length ? t('Проблем: {n}', { n: audit.issues.length }) : t('Всё совместимо')}
                       </button>
                     ) : null}
                     {updCount ? (
@@ -1570,27 +1574,27 @@ export function InstancePage() {
                         id="bsUpdateAll"
                         onClick={() => {
                           if (!hasTauri()) return
-                          setUpdateAllLabel('Обновляем…')
+                          setUpdateAllLabel(t('Обновляем…'))
                           updateAll(profile!, kind)
                             .then((n) => {
-                              setUpdateAllLabel('Обновить всё')
+                              setUpdateAllLabel(t('Обновить всё'))
                               loadMods()
-                              showToast(n ? 'Обновлено: ' + n : 'Всё актуально')
+                              showToast(n ? t('Обновлено: {n}', { n }) : t('Всё актуально'))
                             })
                             .catch((e) => {
-                              setUpdateAllLabel('Обновить всё')
+                              setUpdateAllLabel(t('Обновить всё'))
                               showToast('' + e)
                             })
                         }}
                       >
-                        <Icon id="i-arrow-up" /> {updateAllLabel === 'Обновить всё' ? 'Обновить всё · ' + updCount : updateAllLabel}
+                        <Icon id="i-arrow-up" /> {updateAllLabel === t('Обновить всё') ? t('Обновить всё · {n}', { n: updCount }) : updateAllLabel}
                       </button>
                     ) : null}
                     <button
                       type="button"
                       className="btn sm ghost bpg-more"
                       id="bsMore"
-                      aria-label="Ещё"
+                      aria-label={t('Ещё')}
                       onClick={(e) => {
                         const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
                         setMoreMenu({ x: r.right - 220, y: r.bottom + 4 })
@@ -1608,7 +1612,7 @@ export function InstancePage() {
                   onClose={() => setSortMenu(null)}
                   items={(['name', 'new', 'old'] as const).map((id) => ({
                     id,
-                    label: (sort === id ? '✓ ' : '') + SORT_LABEL[id],
+                    label: (sort === id ? '✓ ' : '') + sortLabel()[id],
                     icon: id === 'name' ? 'i-list' : 'i-clock',
                     onPick: () => pickSort(id),
                   }))}
@@ -1621,10 +1625,10 @@ export function InstancePage() {
                   onClose={() => setMoreMenu(null)}
                   items={
                     [
-                      items.length && scanLabel === 'Сканировать' ? { id: 'scan', label: 'Опознать файлы', icon: 'i-search', onPick: runScan } : null,
-                      kind === 'mod' && items.length ? { id: 'safety', label: 'Проверить безопасность', icon: 'i-shield', onPick: () => setSafetyOpen(true) } : null,
-                      { id: 'export', label: 'Экспорт в .mrpack', icon: 'i-download', onPick: runExport },
-                      { id: 'folder', label: 'Открыть папку сборки', icon: 'i-folder', onPick: () => (hasTauri() ? void openProfileFolder(profile!) : showToast('Доступно в приложении')) },
+                      items.length && scanLabel === t('Сканировать') ? { id: 'scan', label: t('Опознать файлы'), icon: 'i-search', onPick: runScan } : null,
+                      kind === 'mod' && items.length ? { id: 'safety', label: t('Проверить безопасность'), icon: 'i-shield', onPick: () => setSafetyOpen(true) } : null,
+                      { id: 'export', label: t('Экспорт в .mrpack'), icon: 'i-download', onPick: runExport },
+                      { id: 'folder', label: t('Открыть папку сборки'), icon: 'i-folder', onPick: () => (hasTauri() ? void openProfileFolder(profile!) : showToast(t('Доступно в приложении'))) },
                     ].filter(Boolean) as ContextItem[]
                   }
                 />
@@ -1634,7 +1638,7 @@ export function InstancePage() {
                 {dropActive ? (
                   <div className="mod-drop">
                     <Icon id="i-upload" />
-                    <b>Отпусти — добавим в сборку</b>
+                    <b>{t('Отпусти — добавим в сборку')}</b>
                     <span>{extsOf(kind).map((e) => '.' + e).join(' / ')}</span>
                   </div>
                 ) : null}
@@ -1645,15 +1649,15 @@ export function InstancePage() {
                     <span className="bpg-empty-ic">
                       <Icon id={KIND_ICON[kind]} />
                     </span>
-                    <b>{EMPTY_TITLE[kind] || 'Пока пусто'}</b>
-                    <span>Найди в каталоге — всё нужное для работы поставится само. Или перетащи {extsOf(kind).map((e) => '.' + e).join(' / ')} сюда.</span>
+                    <b>{emptyTitle()[kind] || t('Пока пусто')}</b>
+                    <span>{t('Найди в каталоге — всё нужное для работы поставится само. Или перетащи {exts} сюда.', { exts: extsOf(kind).map((e) => '.' + e).join(' / ') })}</span>
                     <button className="btn md primary" onClick={() => setDlOpen(true)}>
-                      <Icon id="i-plus" /> {ADD_LABEL[kind] || 'Добавить'}
+                      <Icon id="i-plus" /> {addLabel()[kind] || t('Добавить')}
                     </button>
                   </div>
                 ) : !shownItems.length ? (
                   <div className="bpg-none">
-                    <span>{contentQuery.trim() ? 'Ничего по «' + contentQuery.trim() + '»' : 'Здесь пусто'}</span>
+                    <span>{contentQuery.trim() ? t('Ничего по «{query}»', { query: contentQuery.trim() }) : t('Здесь пусто')}</span>
                     <button
                       type="button"
                       className="btn sm secondary"
@@ -1662,7 +1666,7 @@ export function InstancePage() {
                         setFilter('')
                       }}
                     >
-                      Показать всё
+                      {t('Показать всё')}
                     </button>
                   </div>
                 ) : (
@@ -1672,14 +1676,14 @@ export function InstancePage() {
                         className={'chk bpg-chk' + (allSel ? ' on' : sel.size ? ' part' : '')}
                         role="checkbox"
                         aria-checked={allSel}
-                        aria-label="Выбрать все"
+                        aria-label={t('Выбрать все')}
                         onClick={() => setSel(allSel ? new Set() : new Set(shownItems.map((x) => x.name)))}
                       />
                       <span className="bpg-head-t">
-                        {grouped ? mains.length + ' ' + plural(mains.length, KIND_ONE[kind] || 'файл', KIND_FEW[kind] || 'файла', KIND_MANY[kind] || 'файлов') + (libs.length ? ' · ' + libs.length + ' ' + plural(libs.length, 'библиотека', 'библиотеки', 'библиотек') : '') : shownItems.length + ' ' + plural(shownItems.length, KIND_ONE[kind] || 'файл', KIND_FEW[kind] || 'файла', KIND_MANY[kind] || 'файлов')}
+                        {grouped ? mains.length + ' ' + plural(mains.length, kindForms(kind).one || t('файл'), kindForms(kind).few || t('файла'), kindForms(kind).many || t('файлов')) + (libs.length ? ' · ' + libs.length + ' ' + plural(libs.length, t('библиотека'), t('библиотеки'), t('библиотек')) : '') : shownItems.length + ' ' + plural(shownItems.length, kindForms(kind).one || t('файл'), kindForms(kind).few || t('файла'), kindForms(kind).many || t('файлов'))}
                       </span>
-                      <span className="bpg-head-ver">Версия</span>
-                      <span className="bpg-head-acts">Вкл</span>
+                      <span className="bpg-head-ver">{t('Версия')}</span>
+                      <span className="bpg-head-acts">{t('Вкл')}</span>
                     </div>
                     {mains.map(row)}
                     {libs.length ? (
@@ -1692,10 +1696,10 @@ export function InstancePage() {
                           </span>
                           <span className="bpg-libs-t">
                             <b>
-                              Библиотеки · {libs.length}
-                              {libs.some((l) => upd[l.name]) ? <span className="bpg-tag upd">есть обновления</span> : null}
+                              {t('Библиотеки · {n}', { n: libs.length })}
+                              {libs.some((l) => upd[l.name]) ? <span className="bpg-tag upd">{t('есть обновления')}</span> : null}
                             </b>
-                            <small>Нужны другим модам — лаунчер ставит их сам, трогать не обязательно</small>
+                            <small>{t('Нужны другим модам — лаунчер ставит их сам, трогать не обязательно')}</small>
                           </span>
                           <Icon id="i-chev-d" />
                         </button>
@@ -1708,22 +1712,22 @@ export function InstancePage() {
 
               {/* Выбрали несколько — действия прилипают снизу, а не висят серыми всё время. */}
               {sel.size ? (
-                <div className="bpg-selbar" role="toolbar" aria-label="Действия с выбранным">
-                  <b>Выбрано: {sel.size}</b>
+                <div className="bpg-selbar" role="toolbar" aria-label={t('Действия с выбранным')}>
+                  <b>{t('Выбрано: {n}', { n: sel.size })}</b>
                   <span className="bpg-grow" />
                   <button className="btn sm secondary" data-bulk="enable" onClick={() => void bulk([...sel], (n) => toggleContent(profile!, kind, n, true))}>
-                    <Icon id="i-check" /> Включить
+                    <Icon id="i-check" /> {t('Включить')}
                   </button>
                   <button className="btn sm secondary" data-bulk="disable" onClick={() => void bulk([...sel], (n) => toggleContent(profile!, kind, n, false))}>
-                    <Icon id="i-ban" /> Выключить
+                    <Icon id="i-ban" /> {t('Выключить')}
                   </button>
                   {[...sel].some((n) => upd[n]) ? (
                     <button
                       className="btn sm primary"
                       data-bulk="update"
-                      onClick={() => void bulk([...sel].filter((n) => upd[n]), (n) => updateContent(profile!, kind, n), () => showToast('Обновлено'))}
+                      onClick={() => void bulk([...sel].filter((n) => upd[n]), (n) => updateContent(profile!, kind, n), () => showToast(t('Обновлено')))}
                     >
-                      <Icon id="i-arrow-up" /> Обновить · {[...sel].filter((n) => upd[n]).length}
+                      <Icon id="i-arrow-up" /> {t('Обновить · {n}', { n: [...sel].filter((n) => upd[n]).length })}
                     </button>
                   ) : null}
                   <button
@@ -1731,13 +1735,13 @@ export function InstancePage() {
                     data-bulk="delete"
                     onClick={async () => {
                       const names = [...sel]
-                      if (await uiConfirm('Удалить из сборки: ' + names.length + '?', { confirmLabel: 'Удалить' }))
+                      if (await uiConfirm(t('Удалить из сборки: {n}?', { n: names.length }), { confirmLabel: t('Удалить') }))
                         void bulk(names, (n) => deleteContent(profile!, kind, n))
                     }}
                   >
-                    <Icon id="i-trash" /> Удалить
+                    <Icon id="i-trash" /> {t('Удалить')}
                   </button>
-                  <button className="btn sm ghost" aria-label="Снять выбор" data-tip="Esc" onClick={() => setSel(new Set())}>
+                  <button className="btn sm ghost" aria-label={t('Снять выбор')} data-tip="Esc" onClick={() => setSel(new Set())}>
                     <Icon id="i-x" />
                   </button>
                 </div>
@@ -1751,12 +1755,12 @@ export function InstancePage() {
                   сверху фильтр и одна кнопка «Добавить», ниже — два понятных раздела. Пусто —
                   объясняем, откуда берутся миры, и даём два действия; форма сервера — только по кнопке. */}
               <div className="bpg-bar">
-                <div className="bpg-kinds" role="tablist" aria-label="Что показать">
+                <div className="bpg-kinds" role="tablist" aria-label={t('Что показать')}>
                   {(
                     [
-                      ['all', 'Всё', 'i-blocks'],
-                      ['single', 'Миры', 'i-map'],
-                      ['server', 'Серверы', 'i-server'],
+                      ['all', t('Всё'), 'i-blocks'],
+                      ['single', t('Миры'), 'i-map'],
+                      ['server', t('Серверы'), 'i-server'],
                     ] as const
                   ).map(([k, label, ic]) => (
                     <button
@@ -1788,7 +1792,7 @@ export function InstancePage() {
                     setAddMenu({ x: r.right - 240, y: r.bottom + 4 })
                   }}
                 >
-                  <Icon id="i-plus" /> Добавить
+                  <Icon id="i-plus" /> {t('Добавить')}
                 </button>
                 {addMenu ? (
                   <ContextMenu
@@ -1796,11 +1800,11 @@ export function InstancePage() {
                     y={addMenu.y}
                     onClose={() => setAddMenu(null)}
                     items={[
-                      { id: 'maps', label: 'Карту из каталога', icon: 'i-map', onPick: openMapsCatalog },
-                      { id: 'archive', label: 'Мир из архива (.zip)', icon: 'i-upload', onPick: importWorldArchive },
+                      { id: 'maps', label: t('Карту из каталога'), icon: 'i-map', onPick: openMapsCatalog },
+                      { id: 'archive', label: t('Мир из архива (.zip)'), icon: 'i-upload', onPick: importWorldArchive },
                       {
                         id: 'server',
-                        label: 'Сервер по адресу',
+                        label: t('Сервер по адресу'),
                         icon: 'i-server',
                         onPick: () => {
                           setServerForm(true)
@@ -1814,7 +1818,7 @@ export function InstancePage() {
 
               {wFilter !== 'server' ? (
                 <section className="bpg-sec">
-                  {wFilter === 'all' ? <h3 className="bpg-sec-h">Миры{worldCount ? <span>{worldCount}</span> : null}</h3> : null}
+                  {wFilter === 'all' ? <h3 className="bpg-sec-h">{t('Миры')}{worldCount ? <span>{worldCount}</span> : null}</h3> : null}
                   <WorldManager
                     profile={profile!}
                     reloadKey={worldsReload}
@@ -1825,21 +1829,21 @@ export function InstancePage() {
                         <span className="bpg-empty-ic">
                           <Icon id="i-map" />
                         </span>
-                        <b>Миров пока нет</b>
-                        <span>Мир появится здесь, когда создашь его в игре. Или поставь готовую карту — паркур, хоррор, выживание на острове.</span>
+                        <b>{t('Миров пока нет')}</b>
+                        <span>{t('Мир появится здесь, когда создашь его в игре. Или поставь готовую карту — паркур, хоррор, выживание на острове.')}</span>
                         <div className="bpg-empty-acts">
                           <button className="btn md primary" onClick={openMapsCatalog}>
-                            <Icon id="i-map" /> Карты из каталога
+                            <Icon id="i-map" /> {t('Карты из каталога')}
                           </button>
                           <button className="btn md secondary" onClick={importWorldArchive}>
-                            <Icon id="i-upload" /> Мир из архива
+                            <Icon id="i-upload" /> {t('Мир из архива')}
                           </button>
                         </div>
                       </div>
                     }
                     onPlay={(folder, name) => {
                       close()
-                      showToast('Заходим в мир «' + name + '»…')
+                      showToast(t('Заходим в мир «{name}»…', { name }))
                       joinWithAuth(profile!, folder, null).catch((e) => showLaunchError(e))
                     }}
                   />
@@ -1848,7 +1852,7 @@ export function InstancePage() {
 
               {wFilter !== 'single' ? (
                 <section className="bpg-sec">
-                  {wFilter === 'all' ? <h3 className="bpg-sec-h">Серверы{servers.length ? <span>{servers.length}</span> : null}</h3> : null}
+                  {wFilter === 'all' ? <h3 className="bpg-sec-h">{t('Серверы')}{servers.length ? <span>{servers.length}</span> : null}</h3> : null}
                   {worldsNotice ? (
                     <p className="faint-note">{worldsNotice}</p>
                   ) : servers.length ? (
@@ -1875,13 +1879,13 @@ export function InstancePage() {
                               <span className="srv-line-meta">
                                 {online ? (
                                   <>
-                                    {pg!.online}/{pg!.max} онлайн{pg!.version ? ' · ' + pg!.version : ''}
+                                    {t('{online}/{max} онлайн', { online: pg!.online, max: pg!.max })}{pg!.version ? ' · ' + pg!.version : ''}
                                     {pg!.motd ? ' · ' + pg!.motd.slice(0, 40) : ''}
                                   </>
                                 ) : pg === undefined ? (
-                                  'проверяем…'
+                                  t('проверяем…')
                                 ) : (
-                                  s2.ip + ' · не отвечает'
+                                  t('{address} · не отвечает', { address: s2.ip })
                                 )}
                               </span>
                             </span>
@@ -1890,15 +1894,15 @@ export function InstancePage() {
                               data-ip={s2.ip}
                               onClick={() => {
                                 close()
-                                showToast('Подключаемся к ' + s2.ip + '…')
+                                showToast(t('Подключаемся к {address}…', { address: s2.ip }))
                                 joinWithAuth(profile!, null, s2.ip, s2.name).catch((e) => showLaunchError(e))
                               }}
                             >
-                              <Icon id="i-play" /> Играть
+                              <Icon id="i-play" /> {t('Играть')}
                             </button>
                             <button
                               className="icon-btn del w-del"
-                              aria-label="Убрать сервер"
+                              aria-label={t('Убрать сервер')}
                               data-ip={s2.ip}
                               onClick={() => removeServer(profile!, s2.ip).then(() => loadWorlds())}
                             >
@@ -1910,9 +1914,9 @@ export function InstancePage() {
                     </div>
                   ) : !serverForm ? (
                     <div className="bpg-none left">
-                      <span>Серверов в этой сборке нет — добавь адрес, и он появится в списке серверов в игре.</span>
+                      <span>{t('Серверов в этой сборке нет — добавь адрес, и он появится в списке серверов в игре.')}</span>
                       <button type="button" className="btn sm secondary" onClick={() => setServerForm(true)}>
-                        <Icon id="i-plus" /> Добавить сервер
+                        <Icon id="i-plus" /> {t('Добавить сервер')}
                       </button>
                     </div>
                   ) : null}
@@ -1924,7 +1928,7 @@ export function InstancePage() {
                         const ip = wsIp.trim()
                         if (!ip) return
                         if (!hasTauri()) {
-                          showToast('Доступно в приложении')
+                          showToast(t('Доступно в приложении'))
                           return
                         }
                         addServer(profile!, wsName.trim() || ip, ip).then(() => {
@@ -1932,21 +1936,21 @@ export function InstancePage() {
                           setWsIp('')
                           setServerForm(false)
                           loadWorlds()
-                          showToast('Сервер добавлен')
+                          showToast(t('Сервер добавлен'))
                         })
                       }}
                     >
                       <div className="input sm">
-                        <input id="wsIp" placeholder="Адрес сервера, например mc.example.net" value={wsIp} onChange={(e) => setWsIp(e.target.value)} />
+                        <input id="wsIp" placeholder={t('Адрес сервера, например mc.example.net')} value={wsIp} onChange={(e) => setWsIp(e.target.value)} />
                       </div>
                       <div className="input sm bpg-srv-name">
-                        <input id="wsName" placeholder="Название (не обязательно)" value={wsName} onChange={(e) => setWsName(e.target.value)} />
+                        <input id="wsName" placeholder={t('Название (не обязательно)')} value={wsName} onChange={(e) => setWsName(e.target.value)} />
                       </div>
                       <button type="submit" className="btn sm primary" id="wsAdd" disabled={!wsIp.trim()}>
-                        Добавить
+                        {t('Добавить')}
                       </button>
                       <button type="button" className="btn sm ghost" onClick={() => setServerForm(false)}>
-                        Отмена
+                        {t('Отмена')}
                       </button>
                     </form>
                   ) : null}
@@ -1967,7 +1971,7 @@ export function InstancePage() {
                   style={{ height: '32px', fontSize: '12.5px' }}
                   onClick={() => setLogView('live')}
                 >
-                  <Icon id="i-list" /> Консоль
+                  <Icon id="i-list" /> {t('Консоль')}
                   {liveLines.length ? <span className="log-live-dot"></span> : null}
                 </button>
                 <button
@@ -1975,7 +1979,7 @@ export function InstancePage() {
                   style={{ height: '32px', fontSize: '12.5px' }}
                   onClick={() => setLogView('files')}
                 >
-                  <Icon id="i-book" /> Файлы
+                  <Icon id="i-book" /> {t('Файлы')}
                 </button>
               </div>
 
@@ -1985,7 +1989,7 @@ export function InstancePage() {
                     {liveLines.length ? (
                       liveLines.map((l, i) => <div key={i}>{l}</div>)
                     ) : (
-                      <div className="faint-note">Запусти игру — вывод появится здесь</div>
+                      <div className="faint-note">{t('Запусти игру — вывод появится здесь')}</div>
                     )}
                   </pre>
                   <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
@@ -1993,18 +1997,18 @@ export function InstancePage() {
                       liveBuffer.current = []
                       setLiveLines([])
                     }}>
-                      <Icon id="i-trash" /> Очистить
+                      <Icon id="i-trash" /> {t('Очистить')}
                     </button>
                     <button
                       className="btn sm secondary"
                       style={{ flex: 1 }}
                       onClick={() => {
                         void copyText(liveLines.join('\n')).then((ok) =>
-                          showToast(ok ? 'Консоль скопирована' : 'Не удалось скопировать консоль'),
+                          showToast(ok ? t('Консоль скопирована') : t('Не удалось скопировать консоль')),
                         )
                       }}
                     >
-                      <Icon id="i-copy" /> Скопировать
+                      <Icon id="i-copy" /> {t('Скопировать')}
                     </button>
                   </div>
                 </>
@@ -2049,10 +2053,10 @@ export function InstancePage() {
                   style={{ flex: 1 }}
                   onClick={() => {
                     void copyText(logBody)
-                    showToast('Лог скопирован')
+                    showToast(t('Лог скопирован'))
                   }}
                 >
-                  <Icon id="i-copy" /> Скопировать
+                  <Icon id="i-copy" /> {t('Скопировать')}
                 </button>
                 <button
                   className="btn sm secondary"
@@ -2060,24 +2064,24 @@ export function InstancePage() {
                   style={{ flex: 1 }}
                   onClick={() => {
                     if (!hasTauri()) {
-                      showToast('Доступно в приложении')
+                      showToast(t('Доступно в приложении'))
                       return
                     }
-                    const name = logFiles.length ? logFile : 'нет логов'
-                    if (!name || name === 'нет логов') {
-                      showToast('Нет лога для отправки')
+                    const name = logFiles.length ? logFile : ''
+                    if (!name) {
+                      showToast(t('Нет лога для отправки'))
                       return
                     }
-                    setShareLabel('Загружаем…')
+                    setShareLabel(t('Загружаем…'))
                     shareLog(profile!, name)
                       .then((url) => {
-                        setShareLabel('Поделиться')
+                        setShareLabel(t('Поделиться'))
                         void copyText(url)
-                        showToast('Ссылка на лог скопирована: ' + url)
+                        showToast(t('Ссылка на лог скопирована: {url}', { url }))
                         openUrl(url)
                       })
                       .catch((e) => {
-                        setShareLabel('Поделиться')
+                        setShareLabel(t('Поделиться'))
                         showToast('' + e)
                       })
                   }}
@@ -2089,17 +2093,17 @@ export function InstancePage() {
             </div>
 
             <div id="bsTabOpts" style={{ display: tab === 'opts' ? '' : 'none' }}>
-              <div className="bx-opts-cap">Сборка</div>
+              <div className="bx-opts-cap">{t('Сборка')}</div>
               <div className="set-row">
                 <span className="lab">
-                  Название
+                  {t('Название')}
                 </span>
                 <div className="input sm" style={{ width: '220px' }}>
                   <input
                     id="bsRename"
                     maxLength={BUILD_NAME_MAX}
                     value={renameVal}
-                    placeholder="Название"
+                    placeholder={t('Название')}
                     onChange={(e) => setRenameVal(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') doRename()
@@ -2109,13 +2113,13 @@ export function InstancePage() {
                 {/* Кнопка — только когда имя правда меняют: серой «Переименовать» на виду не стоит. */}
                 {renameVal.trim() && renameVal.trim() !== profile ? (
                   <button className="btn sm primary" disabled={renameBusy} onClick={doRename}>
-                    {renameBusy ? 'Сохраняем…' : 'Сохранить'}
+                    {renameBusy ? t('Сохраняем…') : t('Сохранить')}
                   </button>
                 ) : null}
               </div>
               <div className="set-row" style={{ alignItems: coreEdit ? 'flex-start' : 'center' }}>
                 <span className="lab">
-                  Версия и загрузчик
+                  {t('Версия и загрузчик')}
                 </span>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '300px', alignItems: 'flex-end' }}>
                   {/* Сводкой: «Forge 47.4.10 · Minecraft 1.20.1». Три выпадающих списка — только по «Изменить». */}
@@ -2128,7 +2132,7 @@ export function InstancePage() {
                         <b>Minecraft {pr ? pr.version : ''}</b>
                       </span>
                       <button type="button" className="btn sm secondary" onClick={() => setCoreEdit(true)}>
-                        Изменить
+                        {t('Изменить')}
                       </button>
                     </div>
                   ) : (
@@ -2137,7 +2141,7 @@ export function InstancePage() {
                     <Select
                       width={148}
                       value={newLoader}
-                      options={CORE_OPTS.map(([v, label]) => ({ value: v, label }))}
+                      options={coreOpts().map(([v, label]) => ({ value: v, label }))}
                       onChange={(v) => {
                         setNewLoader(v)
                         setNewLoaderVer(AUTO_LOADER_VERSION)
@@ -2159,7 +2163,7 @@ export function InstancePage() {
                       value={newLoaderVer}
                       options={lb.withPinned(newLoaderVer)}
                       disabled={lb.loading}
-                      placeholder={lb.loading ? 'Загружаем версии загрузчика…' : 'Рекомендуемая'}
+                      placeholder={lb.loading ? t('Загружаем версии загрузчика…') : t('Рекомендуемая')}
                       onChange={setNewLoaderVer}
                     />
                   ) : null}
@@ -2174,10 +2178,10 @@ export function InstancePage() {
                     }
                     onClick={() => void applyCore()}
                   >
-                    {coreBusy ? 'Меняем…' : 'Сменить'}
+                    {coreBusy ? t('Меняем…') : t('Сменить')}
                   </button>
                   <button type="button" className="btn sm ghost" style={{ alignSelf: 'flex-start' }} onClick={() => setCoreEdit(false)}>
-                    Отмена
+                    {t('Отмена')}
                   </button>
                   </>
                   )}
@@ -2189,7 +2193,7 @@ export function InstancePage() {
                           disabled={coreBusy || thisRunning}
                           onClick={() => coreUpd.mc && void applyGameUpdate(coreUpd.mc)}
                         >
-                          Обновить Minecraft до {coreUpd.mc}
+                          {t('Обновить Minecraft до {version}', { version: coreUpd.mc })}
                         </button>
                       ) : null}
                       {coreUpd.loader ? (
@@ -2198,7 +2202,7 @@ export function InstancePage() {
                           disabled={coreBusy || thisRunning}
                           onClick={() => coreUpd.loader && void applyLoaderUpdate(coreUpd.loader)}
                         >
-                          Обновить {LOADER_NAME(pr)} до {coreUpd.loader}
+                          {t('Обновить {loader} до {version}', { loader: LOADER_NAME(pr), version: coreUpd.loader })}
                         </button>
                       ) : null}
                     </div>
@@ -2207,22 +2211,22 @@ export function InstancePage() {
               </div>
               <div className="set-row" style={{ alignItems: 'center' }}>
                 <span className="lab">
-                  Иконка
+                  {t('Иконка')}
                 </span>
                 <div className="bpg-iconset">
                   {/* Иконка — набором Modrinth App (10.10.2026: «тут старое, надо новые»): окно выбора,
                       «Случайная» и своя картинка. Старые блоки и «Собрать» убраны. */}
-                  <button type="button" className="bi-edit" aria-label="Сменить иконку" data-sound="open" onClick={() => setPickIcon(true)}>
+                  <button type="button" className="bi-edit" aria-label={t('Сменить иконку')} data-sound="open" onClick={() => setPickIcon(true)}>
                     <BuildIcon icon={pr ? pr.icon : null} name={profile || ''} size={72} />
                     <span className="bi-edit-lab" aria-hidden="true">
                       <Icon id="i-edit" />
-                      Сменить
+                      {t('Сменить')}
                     </span>
                   </button>
                   <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                     {/* Одна кнопка «Сменить» (там и набор Modrinth, и своя картинка) и «Случайная». */}
                     <button className="btn sm secondary" id="bsIconPick" data-sound="open" onClick={() => setPickIcon(true)}>
-                      Сменить
+                      {t('Сменить')}
                     </button>
                     <button
                       className="btn sm secondary"
@@ -2240,22 +2244,22 @@ export function InstancePage() {
                             if (Array.isArray(list)) useProfiles.setState({ profiles: list })
                             else void useProfiles.getState().refresh()
                           })
-                          .catch((e) => showToast('Иконка не сохранилась: ' + e, 'error'))
+                          .catch((e) => showToast(t('Иконка не сохранилась: {error}', { error: String(e) }), 'error'))
                       }}
                     >
-                      <span aria-hidden="true">🎲</span> Случайная
+                      <span aria-hidden="true">🎲</span> {t('Случайная')}
                     </button>
                   </div>
                 </div>
               </div>
               <div className="set-row">
                 <span className="lab">
-                  Группа
+                  {t('Группа')}
                 </span>
                 <div className="input sm" style={{ width: '180px' }}>
                   <input
                     id="bsGroup"
-                    placeholder="Технические"
+                    placeholder={t('Технические')}
                     maxLength={GROUP_NAME_MAX}
                     value={group}
                     onChange={(e) => setGroup(e.target.value)}
@@ -2264,7 +2268,7 @@ export function InstancePage() {
                       const g = group.trim()
                       setProfileGroup(profile, g).then(() => {
                         void useProfiles.getState().refresh()
-                        showToast(g ? 'Группа: ' + g : 'Убрано из группы')
+                        showToast(g ? t('Группа: {name}', { name: g }) : t('Убрано из группы'))
                       })
                     }}
                   />
@@ -2272,12 +2276,12 @@ export function InstancePage() {
               </div>
               <div className="set-row" style={{ alignItems: 'flex-start' }}>
                 <span className="lab">
-                  Заметка
+                  {t('Заметка')}
                 </span>
                 <div className="input sm" style={{ width: '300px' }}>
                   <input
                     id="bsNote"
-                    placeholder="Для игры с друзьями"
+                    placeholder={t('Для игры с друзьями')}
                     value={note}
                     maxLength={200}
                     onChange={(e) => setNote(e.target.value)}
@@ -2294,25 +2298,25 @@ export function InstancePage() {
               </div>
               <div className="set-row" id="bsModpackRow" style={{ display: mpSlug ? '' : 'none' }}>
                 <span className="lab">
-                  Версия модпака
+                  {t('Версия модпака')}
                 </span>
                 <button
                   className="btn sm secondary"
                   id="bsModpackUpd"
                   onClick={() => useModpackVersions.getState().open(profile!, mpSlug, mpVersion)}
                 >
-                  Версии
+                  {t('Версии')}
                 </button>
               </div>
               {profile ? <PackAutoUpdateRow profile={profile} /> : null}
-              <div className="bx-opts-cap">Игра</div>
+              <div className="bx-opts-cap">{t('Игра')}</div>
               <div className="set-row">
                 <span className="lab">
-                  Память
-                  {ramMax < RAM_MAX_GB ? <small>{`Максимум ${ramMax} ГБ — остальное нужно системе`}</small> : null}
+                  {t('Память')}
+                  {ramMax < RAM_MAX_GB ? <small>{t('Максимум {n} ГБ — остальное нужно системе', { n: ramMax })}</small> : null}
                 </span>
                 <span className="set-val" id="bsRamVal">
-                  {ram > 0 ? ram + ' ГБ' : 'Авто'}
+                  {ram > 0 ? t('{n} ГБ', { n: ram }) : t('Авто')}
                 </span>
                 <Slider
                   width={200}
@@ -2330,17 +2334,17 @@ export function InstancePage() {
               <TunePanel profile={profile!} manualGb={ram} />
               <div className="set-row">
                 <span className="lab">
-                  Видеокарта
-                  {!gpuOk ? <small>Здесь карту выбирает система</small> : null}
+                  {t('Видеокарта')}
+                  {!gpuOk ? <small>{t('Здесь карту выбирает система')}</small> : null}
                 </span>
                 <Select
                   width={230}
                   value={gpu}
                   disabled={!gpuOk}
                   options={[
-                    { value: 'auto', label: 'Авто', sub: 'Как решит система' },
-                    { value: 'discrete', label: 'Дискретная', sub: 'NVIDIA или AMD — больше FPS' },
-                    { value: 'integrated', label: 'Встроенная', sub: 'Тише и дольше от батареи' },
+                    { value: 'auto', label: t('Авто'), sub: t('Как решит система') },
+                    { value: 'discrete', label: t('Дискретная'), sub: t('NVIDIA или AMD — больше FPS') },
+                    { value: 'integrated', label: t('Встроенная'), sub: t('Тише и дольше от батареи') },
                   ]}
                   onChange={(v) => {
                     if (!profile) return
@@ -2351,15 +2355,15 @@ export function InstancePage() {
                         setGpu(saved)
                         showToast(
                           saved === 'discrete'
-                            ? 'Запускаем на дискретной карте'
+                            ? t('Запускаем на дискретной карте')
                             : saved === 'integrated'
-                              ? 'Запускаем на встроенной карте'
-                              : 'Карту выбирает система',
+                              ? t('Запускаем на встроенной карте')
+                              : t('Карту выбирает система'),
                         )
                       })
                       .catch((e) => {
                         setGpu(prev)
-                        showToast('Не удалось сохранить выбор карты: ' + e, 'error')
+                        showToast(t('Не удалось сохранить выбор карты: {error}', { error: String(e) }), 'error')
                       })
                   }}
                 />
@@ -2367,13 +2371,13 @@ export function InstancePage() {
               {boost && boost.applicable === false && !boost.enabled ? null : (
               <div className="set-row">
                 <span className="lab">
-                  Буст FPS
+                  {t('Буст FPS')}
                   <small>
                     {boost && boost.enabled && boost.skipped.length
-                      ? 'Нет под эту версию: ' + boost.skipped.join(', ')
+                      ? t('Нет под эту версию: {list}', { list: boost.skipped.join(', ') })
                       : boost && boost.vanilla
-                        ? 'Java и графика; моды — на Fabric/Forge'
-                        : 'Sodium, настройки Java и лёгкая графика'}
+                        ? t('Java и графика; моды — на Fabric/Forge')
+                        : t('Sodium, настройки Java и лёгкая графика')}
                   </small>
                 </span>
                 <span
@@ -2381,7 +2385,7 @@ export function InstancePage() {
                   data-fpsboost={boost && boost.enabled ? 'on' : 'off'}
                   role="switch"
                   aria-checked={!!(boost && boost.enabled)}
-                  aria-label="Буст FPS"
+                  aria-label={t('Буст FPS')}
                   onClick={() => {
                     if (!boostBusy) void toggleBoost()
                   }}
@@ -2391,13 +2395,13 @@ export function InstancePage() {
               {pr && loaderId(pr) !== 'vanilla' ? (
                 <div className="set-row">
                   <span className="lab">
-                    Скин Millida в игре
+                    {t('Скин Millida в игре')}
                     <small>
                       {skinMod?.conflict
-                        ? 'Уже есть свой мод скинов: ' + skinMod.conflict
+                        ? t('Уже есть свой мод скинов: {name}', { name: skinMod.conflict })
                         : skinMod?.on
-                          ? 'Твой скин видно на серверах'
-                          : 'Включи, если скин не виден в игре'}
+                          ? t('Твой скин видно на серверах')
+                          : t('Включи, если скин не виден в игре')}
                     </small>
                   </span>
                   <span
@@ -2405,17 +2409,17 @@ export function InstancePage() {
                     data-skinmod={skinMod?.on ? 'on' : 'off'}
                     role="switch"
                     aria-checked={!!skinMod?.on}
-                    aria-label="Скин Millida в игре"
+                    aria-label={t('Скин Millida в игре')}
                     onClick={() => {
                       if (!skinModBusy && skinMod) void toggleSkinMod()
                     }}
                   ></span>
                 </div>
               ) : null}
-              <div className="bx-opts-cap">Файлы</div>
+              <div className="bx-opts-cap">{t('Файлы')}</div>
               <div className="set-row">
                 <span className="lab">
-                  Починить сборку
+                  {t('Починить сборку')}
                 </span>
                 <button
                   className="btn sm secondary"
@@ -2433,57 +2437,57 @@ export function InstancePage() {
                           d.startMilliDoctor()
                           const { text, action } = d.crashAction({ profile: name, reason: crash.reason, tail: '', culprits: crash.culprits, actions: crash.actions, kind: crash.kind })
                           openMilli({ src: 'repair' })
-                          void d.pushMilliAction(text, action, ['Почему так?', 'Осмотри сборку'])
+                          void d.pushMilliAction(text, action, [t('Почему так?'), t('Осмотри сборку')])
                         })
                       })
                       .finally(() => setRepairBusy(false))
                   }}
                 >
-                  <Icon id="i-restart" /> {repairBusy ? 'Чиним…' : 'Починить'}
+                  <Icon id="i-restart" /> {repairBusy ? t('Чиним…') : t('Починить')}
                 </button>
               </div>
               {guarded ? null : (
               <div className="set-row">
-                <span className="lab">Папка сборки</span>
+                <span className="lab">{t('Папка сборки')}</span>
                 <button
                   className="btn sm secondary"
                   id="bsFolder"
                   onClick={() => {
                     if (hasTauri()) openProfileFolder(profile!)
-                    else showToast('Папка (демо)')
+                    else showToast(t('Папка (демо)'))
                   }}
                 >
-                  <Icon id="i-folder" /> Открыть
+                  <Icon id="i-folder" /> {t('Открыть')}
                 </button>
               </div>
               )}
               <div className="set-row">
                 <span className="lab">
-                  Копия сборки
+                  {t('Копия сборки')}
                 </span>
                 <button
                   className="btn sm secondary"
                   id="bsDup"
                   onClick={() => {
                     if (!hasTauri()) {
-                      showToast('Доступно в приложении')
+                      showToast(t('Доступно в приложении'))
                       return
                     }
                     duplicateProfile(profile!)
                       .then(() => {
                         close()
                         void useProfiles.getState().refresh()
-                        showToast('Сборка продублирована')
+                        showToast(t('Сборка продублирована'))
                       })
-                      .catch((e) => showToast('Не удалось продублировать: ' + e, 'error'))
+                      .catch((e) => showToast(t('Не удалось продублировать: {error}', { error: String(e) }), 'error'))
                   }}
                 >
-                  <Icon id="i-copy" /> Дублировать
+                  <Icon id="i-copy" /> {t('Дублировать')}
                 </button>
               </div>
               <div className="set-row">
                 <span className="lab">
-                  Копия под другую версию
+                  {t('Копия под другую версию')}
                 </span>
                 <button
                   className="btn sm secondary"
@@ -2493,7 +2497,7 @@ export function InstancePage() {
                     useMigrate.getState().open(profile, pr.version, loaderId(pr))
                   }}
                 >
-                  <Icon id="i-arrow-r" /> Перенести
+                  <Icon id="i-arrow-r" /> {t('Перенести')}
                 </button>
               </div>
               <button
@@ -2501,12 +2505,12 @@ export function InstancePage() {
                 aria-expanded={advanced}
                 onClick={() => setAdvanced((v) => !v)}
               >
-                <Icon id={advanced ? 'i-chev-d' : 'i-chev-r'} /> Для опытных
+                <Icon id={advanced ? 'i-chev-d' : 'i-chev-r'} /> {t('Для опытных')}
               </button>
               <div style={{ display: advanced ? '' : 'none' }}>
                 <div className="set-row">
                   <span className="lab">
-                    Аргументы JVM
+                    {t('Аргументы JVM')}
                   </span>
                   <div className="input sm" style={{ width: '220px' }}>
                     <input
@@ -2523,10 +2527,10 @@ export function InstancePage() {
                     Java
                     <small>
                       {javaBusy
-                        ? 'Качаем Java ' + javaBusy + '…'
+                        ? t('Качаем Java {n}…', { n: javaBusy })
                         : javaMajor
-                          ? 'Java ' + javaMajor + ' от лаунчера'
-                          : 'Пусто — подберём сами'}
+                          ? t('Java {n} от лаунчера', { n: javaMajor })
+                          : t('Пусто — подберём сами')}
                     </small>
                   </span>
                   <div style={{ width: '300px' }}>
@@ -2535,15 +2539,15 @@ export function InstancePage() {
                       value={String(javaMajor)}
                       disabled={!!javaBusy}
                       options={[
-                        { value: '0', label: 'Версия Java: авто', sub: 'Ту, которую просит сборка' },
-                        ...javaAll.map((m) => ({ value: String(m), label: 'Java ' + m, sub: 'Скачаем и закрепим за сборкой' })),
+                        { value: '0', label: t('Версия Java: авто'), sub: t('Ту, которую просит сборка') },
+                        ...javaAll.map((m) => ({ value: String(m), label: 'Java ' + m, sub: t('Скачаем и закрепим за сборкой') })),
                       ]}
                       onChange={(v) => pinJavaMajor(Number(v))}
                     />
                     <div className="input sm" style={{ margin: '6px 0' }}>
                       <input
                         id="bsJava"
-                        placeholder="Номер версии (25) или путь к java"
+                        placeholder={t('Номер версии (25) или путь к java')}
                         value={java}
                         onChange={(e) => setJava(e.target.value)}
                         onBlur={saveJavaField}
@@ -2554,7 +2558,7 @@ export function InstancePage() {
                       value={java && javaList.some((j) => j.path === java) ? java : ''}
                       disabled={!javaList.length}
                       placeholder={
-                        javaList.length ? 'Найденные (' + javaList.length + ')' : 'Ищем Java…'
+                        javaList.length ? t('Найденные ({n})', { n: javaList.length }) : t('Ищем Java…')
                       }
                       options={javaList.map((j) => ({ value: j.path, label: j.version, sub: j.path }))}
                       onChange={(v) => {
@@ -2563,7 +2567,7 @@ export function InstancePage() {
                           saveProfileSettings(profile, jvm || '', +w || 0, +h || 0, v)
                             .then(() => {
                               setJavaMajor(0)
-                              showToast('Java выбрана')
+                              showToast(t('Java выбрана'))
                             })
                             .catch((e) => {
                               trackFailure('build_settings', maskBuild(e, profile), { step: 'java_select' })
@@ -2578,7 +2582,7 @@ export function InstancePage() {
                         style={{ flex: 1 }}
                         onClick={() => {
                           if (!hasTauri()) {
-                            showToast('Доступно в приложении')
+                            showToast(t('Доступно в приложении'))
                             return
                           }
                           pickJavaPath()
@@ -2593,7 +2597,7 @@ export function InstancePage() {
                                     trackFailure('build_settings', maskBuild(e, profile), { step: 'java_save' })
                                     showToast('' + e, 'error')
                                   })
-                              showToast('Java выбрана: ' + j.version)
+                              showToast(t('Java выбрана: {version}', { version: j.version }))
                             })
                             .catch((e) => {
                               trackFailure('build_settings', e, { step: 'java_pick' })
@@ -2601,7 +2605,7 @@ export function InstancePage() {
                             })
                         }}
                       >
-                        Обзор…
+                        {t('Обзор…')}
                       </button>
                       <button
                         className="btn sm secondary"
@@ -2609,22 +2613,22 @@ export function InstancePage() {
                         style={{ flex: 1 }}
                         onClick={() => {
                           if (!hasTauri()) {
-                            showToast('Доступно в приложении')
+                            showToast(t('Доступно в приложении'))
                             return
                           }
-                          setDetectLabel('Ищем…')
+                          setDetectLabel(t('Ищем…'))
                           detectJava()
                             .then((list) => {
-                              setDetectLabel('Найти')
+                              setDetectLabel(t('Найти'))
                               setJavaList(list)
                               showToast(
                                 list.length
-                                  ? 'Найдено Java: ' + list.length
-                                  : 'Java в системе не найдена — жми «Обзор…» или оставь пусто, скачаем сами',
+                                  ? t('Найдено Java: {n}', { n: list.length })
+                                  : t('Java в системе не найдена — жми «Обзор…» или оставь пусто, скачаем сами'),
                               )
                             })
                             .catch((e) => {
-                              setDetectLabel('Найти')
+                              setDetectLabel(t('Найти'))
                               showToast('' + e)
                             })
                         }}
@@ -2637,35 +2641,35 @@ export function InstancePage() {
                         style={{ flex: 1 }}
                         onClick={() => {
                           if (!hasTauri()) {
-                            showToast('Доступно в приложении')
+                            showToast(t('Доступно в приложении'))
                             return
                           }
                           const p = java.trim()
                           if (!p) {
-                            showToast('Пусто = скачаем нужную Java сами')
+                            showToast(t('Пусто = скачаем нужную Java сами'))
                             return
                           }
                           testJava(p)
                             // Статус несёт иконка тоста (i-check / i-alert), дингбаты в тексте не нужны
                             .then((v) => showToast(String(v)))
-                            .catch((e) => showToast(apiErrorText(e, 'Не удалось выполнить действие'), 'error'))
+                            .catch((e) => showToast(apiErrorText(e, t('Не удалось выполнить действие')), 'error'))
                         }}
                       >
-                        Тест
+                        {t('Тест')}
                       </button>
                     </div>
                   </div>
                 </div>
                 <div className="set-row">
                   <span className="lab">
-                    Размер окна
+                    {t('Размер окна')}
                   </span>
                   <div style={{ display: 'flex', gap: '6px' }}>
                     <div className="input sm" style={{ width: '80px' }}>
                       <input
                         id="bsW"
                         type="number"
-                        placeholder="Ширина"
+                        placeholder={t('Ширина')}
                         value={w}
                         onChange={(e) => setW(e.target.value)}
                         onBlur={saveOpts}
@@ -2675,7 +2679,7 @@ export function InstancePage() {
                       <input
                         id="bsH"
                         type="number"
-                        placeholder="Высота"
+                        placeholder={t('Высота')}
                         value={h}
                         onChange={(e) => setH(e.target.value)}
                         onBlur={saveOpts}
@@ -2685,15 +2689,15 @@ export function InstancePage() {
                 </div>
               </div>
               <div className="set-row bx-danger-row">
-                <span className="lab">Удалить сборку</span>
+                <span className="lab">{t('Удалить сборку')}</span>
                 <button
                   className="btn sm danger"
                   id="bsDelete"
                   onClick={async () => {
                     if (
                       !(await uiConfirm(
-                        'Удалить сборку «' + profile + '» со всеми модами, мирами и часами игры? Отменить будет нельзя. Введи её название, чтобы удалить.',
-                        { confirmLabel: 'Удалить', typeToConfirm: profile ?? undefined },
+                        t('Удалить сборку «{name}» со всеми модами, мирами и часами игры? Отменить будет нельзя. Введи её название, чтобы удалить.', { name: profile ?? '' }),
+                        { confirmLabel: t('Удалить'), typeToConfirm: profile ?? undefined },
                       ))
                     )
                       return
@@ -2703,7 +2707,7 @@ export function InstancePage() {
                           close()
                           useProfiles.getState().setSelected(null)
                           void useProfiles.getState().refresh()
-                          showToast('Сборка удалена', 'ok', 'delete')
+                          showToast(t('Сборка удалена'), 'ok', 'delete')
                         })
                         .catch((e) => {
                           void useProfiles.getState().refresh()
@@ -2711,11 +2715,11 @@ export function InstancePage() {
                         })
                     } else {
                       close()
-                      showToast('Удалено (демо)')
+                      showToast(t('Удалено (демо)'))
                     }
                   }}
                 >
-                  <Icon id="i-trash" /> Удалить
+                  <Icon id="i-trash" /> {t('Удалить')}
                 </button>
               </div>
             </div>
@@ -2734,7 +2738,7 @@ export function InstancePage() {
           onCancel={() => setIconEditor(false)}
           onSave={(data, r) => {
             if (!hasTauri()) {
-              showToast('Доступно в приложении', 'error')
+              showToast(t('Доступно в приложении'), 'error')
               return
             }
             setProfileIcon(profile, data)
@@ -2742,9 +2746,9 @@ export function InstancePage() {
                 rememberIconRecipe(profile, r)
                 setIconEditor(false)
                 void useProfiles.getState().refresh()
-                showToast('Иконка обновлена')
+                showToast(t('Иконка обновлена'))
               })
-              .catch((e) => showToast('Не удалось сохранить иконку: ' + e, 'error'))
+              .catch((e) => showToast(t('Не удалось сохранить иконку: {error}', { error: String(e) }), 'error'))
           }}
         />
       ) : null}

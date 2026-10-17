@@ -1,48 +1,44 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Icon } from '../components/Icon'
+import { PxIcon } from '../components/PxIcon'
 import { closeModal, showToast, useUi } from '../state/ui'
-import { openExt } from '../lib/api'
-import { useAccounts } from '../state/accounts'
+import { isOfflineNick, pinnedOfflineNick, useAccounts } from '../state/accounts'
+import { useGameNick } from '../state/gameNick'
+import { hasMillidaAccount } from '../lib/api'
+import { useAccountAdd, type AccountAddKind } from '../state/accountAdd'
 import { cancelWebLogin, copyUserCode, copyVerifyLink, startWebLogin, useLogin } from '../state/login'
 import { cancelMsLogin, copyMsCode, copyMsVerifyLink, openMsVerifyPage, startMsLogin, useMsLogin } from '../state/msLogin'
-import { cancelElyLogin, copyElyCode, copyElyVerifyLink, openElyVerifyPage, startElyLogin, useElyLogin } from '../state/elyLogin'
+import { enterApp } from '../lib/session'
 import { backdropClose } from '../lib/dismiss'
+import { useT, type Vars } from '../i18n'
 import { SecurityInfo } from './SecurityInfo'
+import { AccountChoice } from '../components/AccountChoice'
 
-type Kind = 'millida' | 'microsoft' | 'elyby' | 'offline'
+type Kind = AccountAddKind
 
-const KINDS: { id: Kind; ic: string; title: string; sub: string }[] = [
-  {
-    id: 'millida',
-    ic: 'i-mo-key',
-    title: 'Аккаунт Millida',
-    sub: 'Друзья, ник и баланс',
-  },
-  {
-    id: 'microsoft',
-    ic: 'i-mo-shield',
-    title: 'Лицензия Microsoft',
-    sub: 'Лицензионные серверы, свой скин',
-  },
-  {
-    id: 'elyby',
-    ic: 'i-mo-key',
-    title: 'Аккаунт Ely.by',
-    sub: 'Серверы Ely.by, скин из Ely.by',
-  },
-  {
-    id: 'offline',
-    ic: 'i-mo-user',
-    title: 'Офлайн-аккаунт',
-    sub: 'Только ник, без лицензии',
-  },
-]
+interface KindMeta {
+  id: Kind
+  icon: ReactNode
+  title: string
+  sub: string
+}
 
-function KindPanel({ kind, onBack, onDone, onSafety }: { kind: Kind; onBack: () => void; onDone: () => void; onSafety: () => void }) {
+const MC_ICON = <PxIcon name="mc-grass" size={24} />
+
+function kindMeta(kind: Kind, t: (key: string, vars?: Vars) => string): KindMeta {
+  if (kind === 'microsoft') return { id: kind, icon: MC_ICON, title: t('Лицензия Minecraft'), sub: t('Вход через Microsoft') }
+  if (kind === 'offline') return { id: kind, icon: <Icon id="i-mo-user" />, title: t('Офлайн-аккаунт'), sub: t('нет Realms и нет лицензионных серверов') }
+  return { id: kind, icon: <Icon id="i-mo-key" />, title: t('Аккаунт Millida'), sub: t('Друзья, ник и баланс') }
+}
+
+export function KindPanel({ kind, onBack, onDone, onSafety }: { kind: Kind; onBack: () => void; onDone: () => void; onSafety: () => void }) {
+  const t = useT()
   const login = useLogin()
   const ms = useMsLogin()
-  const ely = useElyLogin()
-  const [nick, setNick] = useState('')
+  const profileNick = useGameNick((s) => s.name)
+  const pinned = pinnedOfflineNick(hasMillidaAccount(), profileNick)
+  const [typed, setTyped] = useState('')
+  const nick = pinned || typed
   const count = useAccounts((s) => s.list.length)
   const startCount = useRef(count)
   const doneRef = useRef(false)
@@ -57,19 +53,21 @@ function KindPanel({ kind, onBack, onDone, onSafety }: { kind: Kind; onBack: () 
 
   const createOffline = () => {
     const v = nick.trim()
-    if (!/^[A-Za-z0-9_]{3,16}$/.test(v)) {
-      showToast('Ник: латиница, цифры и _, от 3 до 16 символов', 'error')
+    if (!isOfflineNick(v)) {
+      showToast(t('Ник: латиница, цифры и _, от 3 до 16 символов'), 'error')
       return
     }
     useAccounts.getState().add({ nick: v, kind: 'offline' })
+    if (!useUi.getState().logged) enterApp()
     onDone()
-    showToast('Аккаунт создан: ' + v)
+    showToast(t('Аккаунт создан: {nick}', { nick: v }))
   }
 
-  const meta = KINDS.find((k) => k.id === kind)!
-  const busy = kind === 'millida' ? login.webBusy : kind === 'microsoft' ? ms.busy : kind === 'elyby' ? ely.busy : false
-  const code = kind === 'millida' ? login.userCode : kind === 'elyby' ? ely.userCode : ms.userCode
-  const hint = kind === 'millida' ? login.hintText : kind === 'elyby' ? ely.hint : ms.hint
+  const meta = kindMeta(kind, t)
+  const millida = kind === 'millida'
+  const busy = millida ? login.webBusy : ms.busy
+  const code = millida ? login.userCode : ms.userCode
+  const hint = millida ? login.hintText : ms.hint
 
   return (
     <>
@@ -77,19 +75,16 @@ function KindPanel({ kind, onBack, onDone, onSafety }: { kind: Kind; onBack: () 
         className="btn sm ghost"
         style={{ alignSelf: 'flex-start', marginBottom: '12px' }}
         onClick={() => {
-          if (kind === 'millida') cancelWebLogin()
+          if (millida) cancelWebLogin()
           if (kind === 'microsoft') cancelMsLogin()
-          if (kind === 'elyby') cancelElyLogin()
           onBack()
         }}
       >
         <Icon id="i-chev-l" />
-        Назад
+        {t('Назад')}
       </button>
       <div className="acc-opt" style={{ cursor: 'default' }}>
-        <span className="acc-opt-ic">
-          <Icon id={meta.ic} />
-        </span>
+        <span className="acc-opt-ic">{meta.icon}</span>
         <span style={{ flex: 1, minWidth: 0 }}>
           <b style={{ display: 'block', fontSize: '13.5px', fontWeight: 650 }}>{meta.title}</b>
           <span style={{ fontSize: '12px', color: 'var(--m-fg-subtle)' }}>{meta.sub}</span>
@@ -100,21 +95,23 @@ function KindPanel({ kind, onBack, onDone, onSafety }: { kind: Kind; onBack: () 
         <div style={{ marginTop: '16px' }}>
           <div className="input" style={{ width: '100%' }}>
             <input
-              placeholder="Ник в игре (латиница, 3–16)"
+              placeholder={t('Ник в игре (латиница, 3–16)')}
               maxLength={16}
               autoFocus
+              readOnly={!!pinned}
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}
               value={nick}
-              onChange={(e) => setNick(e.target.value)}
+              onChange={(e) => setTyped(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') createOffline()
               }}
             />
           </div>
+          {pinned ? <p className="faint-note">{t('Ник аккаунта Millida: пускает на серверы с входом Millida')}</p> : null}
           <button className="btn md primary" style={{ width: '100%', marginTop: '12px' }} onClick={createOffline}>
-            Создать
+            {t('Создать')}
           </button>
         </div>
       ) : (
@@ -123,8 +120,8 @@ function KindPanel({ kind, onBack, onDone, onSafety }: { kind: Kind; onBack: () 
             <>
               <button
                 className="acc-code"
-                aria-label="Скопировать код"
-                onClick={() => void (kind === 'millida' ? copyUserCode() : kind === 'elyby' ? copyElyCode() : copyMsCode())}
+                aria-label={t('Скопировать код')}
+                onClick={() => void (millida ? copyUserCode() : copyMsCode())}
               >
                 <span>{code}</span>
                 <Icon id="i-copy" />
@@ -133,21 +130,15 @@ function KindPanel({ kind, onBack, onDone, onSafety }: { kind: Kind; onBack: () 
                 <button
                   className="btn sm secondary"
                   style={{ flex: 1 }}
-                  onClick={() => (kind === 'millida' ? void startWebLogin(true) : kind === 'elyby' ? openElyVerifyPage() : openMsVerifyPage())}
+                  onClick={() => (millida ? void startWebLogin(true) : openMsVerifyPage())}
                 >
-                  Открыть страницу
+                  {t('Открыть страницу')}
                 </button>
-                <button
-                  className="btn sm ghost"
-                  onClick={() => (kind === 'millida' ? copyVerifyLink() : kind === 'elyby' ? copyElyVerifyLink() : copyMsVerifyLink())}
-                >
-                  Копировать ссылку
+                <button className="btn sm ghost" onClick={() => (millida ? copyVerifyLink() : copyMsVerifyLink())}>
+                  {t('Копировать ссылку')}
                 </button>
-                <button
-                  className="btn sm ghost"
-                  onClick={() => (kind === 'millida' ? cancelWebLogin() : kind === 'elyby' ? cancelElyLogin() : cancelMsLogin())}
-                >
-                  Отмена
+                <button className="btn sm ghost" onClick={() => (millida ? cancelWebLogin() : cancelMsLogin())}>
+                  {t('Отмена')}
                 </button>
               </div>
             </>
@@ -156,24 +147,16 @@ function KindPanel({ kind, onBack, onDone, onSafety }: { kind: Kind; onBack: () 
               className="btn md primary"
               style={{ width: '100%' }}
               disabled={busy}
-              onClick={() => void (kind === 'millida' ? startWebLogin() : kind === 'elyby' ? startElyLogin() : startMsLogin())}
+              onClick={() => void (millida ? startWebLogin() : startMsLogin())}
             >
-              <Icon id={meta.ic} />
-              {busy
-                ? 'Ждём подтверждения…'
-                : kind === 'millida'
-                  ? 'Войти через Millida'
-                  : kind === 'elyby'
-                    ? 'Войти через Ely.by'
-                    : 'Войти через Microsoft'}
+              {millida ? <Icon id="i-mo-key" /> : <Icon id="i-mo-shield" />}
+              {busy ? t('Ждём подтверждения…') : millida ? t('Войти через Millida') : t('Войти через Microsoft')}
             </button>
           )}
-          {/* Строка доверия под входом Microsoft (06.10.2026): ведёт на разбор
-              безопасности на сайте. Текст короткий, факты — на странице. */}
           {kind === 'microsoft' ? (
             <div className="faint-note" style={{ marginTop: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <Icon id="i-shield" />
-              <span>Полностью безопасно. Убедись сам:</span>
+              <span>{t('Полностью безопасно. Убедись сам:')}</span>
               <a
                 href="https://millida.net/launcher/bezopasnost"
                 onClick={(e) => {
@@ -181,12 +164,10 @@ function KindPanel({ kind, onBack, onDone, onSafety }: { kind: Kind; onBack: () 
                   onSafety()
                 }}
               >
-                Как это работает?
+                {t('Как это работает?')}
               </a>
             </div>
           ) : null}
-          {/* Пояснение по умолчанию снято: кнопка «Войти через …» и код говорят сами.
-              Живую подсказку процесса входа (hint) оставляем — это статус, а не абзац. */}
           {hint ? (
             <p className="faint-note" style={{ marginTop: '12px', lineHeight: 1.5 }}>
               {hint}
@@ -199,16 +180,21 @@ function KindPanel({ kind, onBack, onDone, onSafety }: { kind: Kind; onBack: () 
 }
 
 export function AccountAddModal() {
+  const t = useT()
   const modal = useUi((s) => s.modals.accModal)
+  const preset = useAccountAdd((s) => s.kind)
   const [kind, setKind] = useState<Kind | null>(null)
   const [safety, setSafety] = useState(false)
 
   useEffect(() => {
-    if (!modal.open) {
-      setKind(null)
-      setSafety(false)
+    if (modal.open) {
+      setKind(preset)
+      return
     }
-  }, [modal.open])
+    setKind(null)
+    setSafety(false)
+    useAccountAdd.setState({ kind: null })
+  }, [modal.open, preset])
 
   useEffect(() => {
     if (!modal.open) return
@@ -229,51 +215,26 @@ export function AccountAddModal() {
       {...backdropClose(close)}
     >
       <div className={'modal ' + (safety ? 'mw-md' : 'mw-sm')} style={{ display: 'flex', flexDirection: 'column' }}>
-        <h3>{safety ? 'Как это работает' : 'Добавить аккаунт'}</h3>
+        <h3>{safety ? t('Как это работает') : t('Добавить аккаунт')}</h3>
 
         <div style={{ marginTop: '18px', display: 'flex', flexDirection: 'column' }}>
           {safety ? (
             <SecurityInfo onBack={() => setSafety(false)} />
           ) : kind ? (
-            <KindPanel kind={kind} onBack={() => setKind(null)} onDone={close} onSafety={() => setSafety(true)} />
+            <KindPanel
+              kind={kind}
+              onBack={() => (preset ? close() : setKind(null))}
+              onDone={close}
+              onSafety={() => setSafety(true)}
+            />
           ) : (
-            <div style={{ display: 'grid', gap: '10px' }}>
-              {KINDS.map((k) => (
-                <button key={k.id} className="acc-opt" onClick={() => setKind(k.id)}>
-                  <span className="acc-opt-ic">
-                    <Icon id={k.ic} />
-                  </span>
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <b style={{ display: 'block', fontSize: '13.5px', fontWeight: 650 }}>{k.title}</b>
-                    <span style={{ fontSize: '12px', color: 'var(--m-fg-subtle)' }}>{k.sub}</span>
-                  </span>
-                  <Icon id="i-chev-r" style={{ color: 'var(--m-fg-faint)' }} />
-                </button>
-              ))}
-              <a
-                className="acc-buy"
-                href="https://blups.me/product/minecraft"
-                onClick={(e) => {
-                  e.preventDefault()
-                  openExt('https://blups.me/product/minecraft')
-                }}
-              >
-                <span className="acc-buy-ic">
-                  <Icon id="i-mo-bag" />
-                </span>
-                <span style={{ flex: 1, minWidth: 0 }}>
-                  <b style={{ display: 'block', fontSize: '13.5px', fontWeight: 700 }}>Купить лицензию</b>
-                  <span className="acc-buy-sub">Ключ Minecraft на Blups</span>
-                </span>
-                <Icon id="i-ext" />
-              </a>
-            </div>
+            <AccountChoice track="account_add" onPick={setKind} />
           )}
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '22px' }}>
           <button className="btn md secondary" data-sound="close" onClick={close}>
-            Закрыть
+            {t('Закрыть')}
           </button>
         </div>
       </div>

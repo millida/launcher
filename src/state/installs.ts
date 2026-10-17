@@ -7,6 +7,8 @@ import { installTarget } from '../lib/errorReport'
 import { trackFailure } from '../lib/telemetry'
 import { buildTag } from '../lib/telemetryPrivacy'
 import { showToast } from './ui'
+import { t } from '../i18n'
+import { CORE_INSTALL_CANCELLED, CORE_PICK_CANCELLED } from '../lib/coreErrors'
 
 // Install jobs live in the core and outlive the component that started them, so
 // state is global and keyed exactly like the core job registry. A second attempt
@@ -65,18 +67,18 @@ export const useInstalls = create<InstallsState>((set, get) => ({
   tasks: {},
   done: {},
   doneVersion: {},
-  patch: (key, t) => {
+  patch: (key, task) => {
     const prev = get().tasks[key]
     const next: InstallTask = {
       key,
-      title: t.title || (prev && prev.title) || '',
-      label: t.label || (prev && prev.label) || 'Ставим…',
-      msg: t.msg !== undefined ? t.msg : (prev && prev.msg) || '',
-      pct: t.pct !== undefined ? t.pct : (prev && prev.pct) || 0,
-      state: t.state || (prev && prev.state) || 'run',
-      versionId: t.versionId !== undefined ? t.versionId : prev && prev.versionId,
-      paused: t.paused !== undefined ? t.paused : prev && prev.paused,
-      pausable: t.pausable !== undefined ? t.pausable : prev && prev.pausable,
+      title: task.title || (prev && prev.title) || '',
+      label: task.label || (prev && prev.label) || t('Ставим…'),
+      msg: task.msg !== undefined ? task.msg : (prev && prev.msg) || '',
+      pct: task.pct !== undefined ? task.pct : (prev && prev.pct) || 0,
+      state: task.state || (prev && prev.state) || 'run',
+      versionId: task.versionId !== undefined ? task.versionId : prev && prev.versionId,
+      paused: task.paused !== undefined ? task.paused : prev && prev.paused,
+      pausable: task.pausable !== undefined ? task.pausable : prev && prev.pausable,
     }
     set({ tasks: { ...get().tasks, [key]: next } })
   },
@@ -100,11 +102,9 @@ const markDone = (key: string, versionId?: string) =>
 /// Ровно тот текст, который ядро возвращает по отмене (engine/core/jobs.rs).
 /// Отмена — не сбой: красная плашка и тост «ошибка» пугали игрока, который сам
 /// её и нажал.
-const CANCELLED = 'Установка отменена'
+export const isCancelled = (e: unknown): boolean => String(e).includes(CORE_INSTALL_CANCELLED)
 
-export const isCancelled = (e: unknown): boolean => String(e).includes(CANCELLED)
-
-const CANCELLED_MSG = 'Отменено'
+const CANCELLED_MSG = CORE_PICK_CANCELLED
 
 export const taskCancelled = (t: InstallTask): boolean => t.state === 'error' && t.msg === CANCELLED_MSG
 
@@ -133,13 +133,13 @@ interface RunOptions<T> {
 export function runInstall<T>(o: RunOptions<T>): boolean {
   const cur = useInstalls.getState().tasks[o.key]
   if (cur && cur.state === 'run') {
-    showToast('«' + (cur.title || o.title) + '» уже ставится' + (cur.msg ? ': ' + cur.msg : ''))
+    showToast(cur.msg ? t('«{name}» уже ставится: {status}', { name: cur.title || o.title || '', status: cur.msg }) : t('«{name}» уже ставится', { name: cur.title || o.title || '' }))
     return false
   }
   clearTimeout(hideTimers[o.key])
   useInstalls.getState().patch(o.key, {
     title: o.title,
-    label: o.running || 'Ставим…',
+    label: o.running || t('Ставим…'),
     msg: '',
     pct: 0,
     state: 'run',
@@ -153,7 +153,7 @@ export function runInstall<T>(o: RunOptions<T>): boolean {
         useInstalls.getState().drop(o.key)
       } else {
         markDone(o.key, o.versionId)
-        useInstalls.getState().patch(o.key, { label: 'Установлено', pct: 100, msg: '', state: 'done' })
+        useInstalls.getState().patch(o.key, { label: t('Установлено'), pct: 100, msg: '', state: 'done' })
         fade(o.key)
       }
       if (o.onDone) o.onDone(r)
@@ -163,7 +163,7 @@ export function runInstall<T>(o: RunOptions<T>): boolean {
         useInstalls.getState().patch(o.key, { label: '', msg: CANCELLED_MSG, state: 'error' })
         fade(o.key)
         if (o.onCancel) o.onCancel()
-        else showToast('Установка «' + (o.title || '') + '» отменена', 'ok', false)
+        else showToast(t('Установка «{name}» отменена', { name: o.title || '' }), 'ok', false)
         return
       }
       void reportInstallFailure(o.key, o.title, e)
@@ -177,34 +177,34 @@ export function runInstall<T>(o: RunOptions<T>): boolean {
 }
 
 export function stopInstall(key: string): void {
-  const t = useInstalls.getState().tasks[key]
-  if (!t || t.state !== 'run') return
-  useInstalls.getState().patch(key, { msg: 'Отменяем…' })
+  const task = useInstalls.getState().tasks[key]
+  if (!task || task.state !== 'run') return
+  useInstalls.getState().patch(key, { msg: t('Отменяем…') })
   void cancelInstall(key)
     .then((stopped) => {
       // Ядро уже не знает такой задачи: экран показывал прогресс, которого нет,
       // и «Отменить» выглядело сломанным. Убираем карточку сами.
       if (!stopped) useInstalls.getState().drop(key)
     })
-    .catch((e) => showToast('Не удалось отменить: ' + e, 'error'))
+    .catch((e) => showToast(t('Не удалось отменить: {error}', { error: String(e) }), 'error'))
 }
 
 /// Пауза держит уже скачанное: ядро рвёт соединение и после «Продолжить»
 /// докачивает с того же байта (engine/core/jobs.rs, Halt).
 export function togglePause(key: string): void {
-  const t = useInstalls.getState().tasks[key]
-  if (!t || t.state !== 'run' || !t.pausable) return
-  const paused = !t.paused
+  const task = useInstalls.getState().tasks[key]
+  if (!task || task.state !== 'run' || !task.pausable) return
+  const paused = !task.paused
   void pauseInstall(key, paused)
     .then((ok) => {
       if (ok) useInstalls.getState().patch(key, { paused })
       else useInstalls.getState().patch(key, { pausable: false, paused: false })
     })
-    .catch((e) => showToast((paused ? 'Не удалось поставить на паузу: ' : 'Не удалось продолжить: ') + e, 'error'))
+    .catch((e) => showToast(paused ? t('Не удалось поставить на паузу: {error}', { error: String(e) }) : t('Не удалось продолжить: {error}', { error: String(e) }), 'error'))
 }
 
-export const runningMsg = (t: InstallTask, text: string): string =>
-  t.paused ? 'На паузе' + (text ? ' · ' + text : '') : text
+export const runningMsg = (task: InstallTask, text: string): string =>
+  task.paused ? (text ? t('На паузе · {text}', { text }) : t('На паузе')) : text
 
 export function initInstalls(): void {
   if (!hasTauri()) return
@@ -230,13 +230,13 @@ export function initInstalls(): void {
       }
       if (!p.error && known.state === 'run') {
         markDone(p.key)
-        useInstalls.getState().patch(p.key, { label: 'Установлено', pct: 100, msg: '', state: 'done' })
+        useInstalls.getState().patch(p.key, { label: t('Установлено'), pct: 100, msg: '', state: 'done' })
         fade(p.key)
       }
       return
     }
     if (!known) {
-      useInstalls.getState().patch(p.key, { title: p.title, label: 'Ставим…', pct: p.pct, msg: p.msg, pausable: p.pausable })
+      useInstalls.getState().patch(p.key, { title: p.title, label: t('Ставим…'), pct: p.pct, msg: p.msg, pausable: p.pausable })
       return
     }
     useInstalls.getState().patch(p.key, { title: p.title || known.title, pct: p.pct, msg: p.msg, pausable: p.pausable })
@@ -247,7 +247,7 @@ export function initInstalls(): void {
         if (useInstalls.getState().tasks[j.key]) continue
         useInstalls.getState().patch(j.key, {
           title: j.title,
-          label: 'Ставим…',
+          label: t('Ставим…'),
           pct: j.pct,
           msg: j.msg,
           paused: j.paused,

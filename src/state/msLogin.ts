@@ -12,6 +12,8 @@ import { copyText } from '../lib/clipboard'
 import { copyLink } from '../lib/links'
 import { apiErrorText } from '../lib/apiError'
 import { track, trackFailure } from '../lib/telemetry'
+import { t } from '../i18n'
+import { CORE_NO_CONNECTION } from '../lib/coreErrors'
 
 interface MsLoginState {
   busy: boolean
@@ -57,10 +59,10 @@ export function copyMsVerifyLink() {
 export async function copyMsCode() {
   const code = useMsLogin.getState().userCode
   if (!code) {
-    showToast('Код ещё не пришёл — подожди пару секунд')
+    showToast(t('Код ещё не пришёл — подожди пару секунд'))
     return
   }
-  showToast((await copyText(code)) ? 'Код скопирован: ' + code : 'Скопируй код вручную: ' + code)
+  showToast((await copyText(code)) ? t('Код скопирован: {code}', { code }) : t('Скопируй код вручную: {code}', { code }))
 }
 
 const maskNick = (e: unknown, nick: string) => (nick ? String(e).split(nick).join('<nick>') : String(e))
@@ -72,35 +74,35 @@ export async function startMsLogin() {
     return
   }
   if (!hasTauri()) {
-    showToast('Вход по лицензии доступен только в приложении лаунчера', 'error')
+    showToast(t('Вход по лицензии доступен только в приложении лаунчера'), 'error')
     return
   }
-  s.set({ busy: true, hint: 'Запрашиваем код у Microsoft…' })
+  s.set({ busy: true, hint: t('Запрашиваем код у Microsoft…') })
   let init
   try {
     try {
       init = await msDeviceStart()
     } catch (e) {
-      if (!String(e).startsWith('нет связи')) throw e
+      if (!String(e).startsWith(CORE_NO_CONNECTION)) throw e
       await new Promise((r) => setTimeout(r, 1500))
       init = await msDeviceStart()
     }
   } catch (e) {
     trackFailure('login', e, { provider: 'microsoft', step: 'start' })
-    reset(apiErrorText(e, 'Microsoft не ответила — повтори попытку'))
-    showToast('Microsoft: ' + apiErrorText(e, 'нет ответа'), 'error')
+    reset(apiErrorText(e, t('Microsoft не ответила — повтори попытку')))
+    showToast('Microsoft: ' + apiErrorText(e, t('нет ответа')), 'error')
     return
   }
   const url = init.verification_uri || MS_VERIFY_URL
   useMsLogin.getState().set({
     userCode: init.user_code,
     verifyUrl: url,
-    hint: 'Введи код на странице Microsoft и подтверди вход.',
+    hint: t('Введи код на странице Microsoft и подтверди вход.'),
   })
   openMsVerifyPage()
   void copyText(init.user_code).then((copied) => {
     if (!copied || useMsLogin.getState().userCode !== init.user_code) return
-    useMsLogin.getState().set({ hint: 'Код скопирован — вставь его на странице Microsoft и подтверди вход.' })
+    useMsLogin.getState().set({ hint: t('Код скопирован — вставь его на странице Microsoft и подтверди вход.') })
   })
 
   const intervalMs = Math.max(2, init.interval || 5) * 1000
@@ -109,7 +111,7 @@ export async function startMsLogin() {
 
   const poll = async () => {
     if (Date.now() > deadline) {
-      reset('Время вышло — начни вход заново.')
+      reset(t('Время вышло — начни вход заново.'))
       return
     }
     let r
@@ -118,7 +120,7 @@ export async function startMsLogin() {
       netFails = 0
     } catch (e) {
       // Обрыв соединения посреди ожидания не должен убивать вход: код устройства жив 15 минут.
-      if (String(e).startsWith('нет связи') && ++netFails <= MAX_POLL_NET_FAILS) {
+      if (String(e).startsWith(CORE_NO_CONNECTION) && ++netFails <= MAX_POLL_NET_FAILS) {
         pollTimer = setTimeout(() => void poll(), intervalMs)
         return
       }
@@ -151,7 +153,7 @@ export async function startMsLogin() {
     reset()
     enterApp()
     track('account_link', { kind: 'microsoft' })
-    showToast('Лицензия подключена: ' + r.nick)
+    showToast(t('Лицензия подключена: {nick}', { nick: r.nick }))
   }
   pollTimer = setTimeout(() => void poll(), intervalMs)
 }

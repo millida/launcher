@@ -1,4 +1,5 @@
 import type { MilliChosen, MilliConfig, MilliItem, MilliLevel, MilliPack, MilliProfile, MilliRpStyle } from '../../../lib/milli'
+import { t } from '../../../i18n'
 
 /*
  * Чистые функции вкладок верстака «Шейдеры», «Ресурс-паки», «Настройки» и
@@ -10,10 +11,10 @@ import type { MilliChosen, MilliConfig, MilliItem, MilliLevel, MilliPack, MilliP
 // ─── Шейдеры ───────────────────────────────────────────────────────────
 
 export const SHADER_LEVELS: readonly { id: MilliLevel; ru: string; icon: string }[] = [
-  { id: 'off', ru: 'Без', icon: 'barrier' },
-  { id: 'light', ru: 'Лёгкие', icon: 'torch' },
-  { id: 'medium', ru: 'Средние', icon: 'redstone_lamp_on' },
-  { id: 'heavy', ru: 'Тяжёлые', icon: 'glowstone_bright' },
+  { id: 'off', get ru() { return t('Без') }, icon: 'barrier' },
+  { id: 'light', get ru() { return t('Лёгкие') }, icon: 'torch' },
+  { id: 'medium', get ru() { return t('Средние') }, icon: 'redstone_lamp_on' },
+  { id: 'heavy', get ru() { return t('Тяжёлые') }, icon: 'glowstone_bright' },
 ]
 
 const removedSet = (pack: Pick<MilliPack, 'userRemoved'>) => new Set(Array.isArray(pack.userRemoved) ? pack.userRemoved : [])
@@ -44,13 +45,13 @@ export function shaderCards(pack: Pick<MilliPack, 'shaderChoices' | 'shaders' | 
 
 /** Если сервер не прислал `rpStyles` (старый ответ) — тот же набор, что в presets.ts. */
 export const RP_STYLES: readonly { id: MilliRpStyle; ru: string }[] = [
-  { id: 'fantasy', ru: 'Фэнтези' },
-  { id: 'medieval', ru: 'Средневековье' },
-  { id: 'faithful', ru: 'Как ванилла' },
-  { id: 'cartoon', ru: 'Мультяшный' },
-  { id: 'realistic', ru: 'Реализм' },
-  { id: 'dark', ru: 'Мрачный' },
-  { id: 'pvp', ru: 'ПвП' },
+  { id: 'fantasy', get ru() { return t('Фэнтези') } },
+  { id: 'medieval', get ru() { return t('Средневековье') } },
+  { id: 'faithful', get ru() { return t('Как ванилла') } },
+  { id: 'cartoon', get ru() { return t('Мультяшный') } },
+  { id: 'realistic', get ru() { return t('Реализм') } },
+  { id: 'dark', get ru() { return t('Мрачный') } },
+  { id: 'pvp', get ru() { return t('ПвП') } },
 ]
 
 const RP_STYLE_IDS = new Set<string>(RP_STYLES.map((s) => s.id))
@@ -87,9 +88,9 @@ export function rpTiles(pack: Pick<MilliPack, 'resourcepacks' | 'userRemoved' | 
 // ─── Настройки ─────────────────────────────────────────────────────────
 
 export const PROFILES: readonly { id: MilliProfile; ru: string; sub: string; icon: string }[] = [
-  { id: 'low', ru: 'Слабый', sub: 'до 8 ГБ', icon: 'iron_ingot' },
-  { id: 'balanced', ru: 'Средний', sub: '16 ГБ', icon: 'gold_ingot' },
-  { id: 'high', ru: 'Мощный', sub: '32 ГБ+', icon: 'diamond' },
+  { id: 'low', get ru() { return t('Слабый') }, get sub() { return t('до 8 ГБ') }, icon: 'iron_ingot' },
+  { id: 'balanced', get ru() { return t('Средний') }, get sub() { return t('16 ГБ') }, icon: 'gold_ingot' },
+  { id: 'high', get ru() { return t('Мощный') }, get sub() { return t('32 ГБ+') }, icon: 'diamond' },
 ]
 
 /** Пресеты профиля (presets.ts) — для значений, которых нет в `config.options`. */
@@ -182,7 +183,7 @@ export function ramAdvice(ramMb: number, totalMb: number): string {
   const gb = Math.max(1, Math.round(ramMb / MB))
   const cap = ramCapGb(totalMb)
   const tip = Math.min(gb, totalMb > 0 ? cap : gb)
-  return totalMb > 0 ? `Советуем ${tip} ГБ из ${Math.round(totalMb / MB)}` : `Советуем ${tip} ГБ`
+  return totalMb > 0 ? t('Советуем {n} ГБ из {total}', { n: tip, total: Math.round(totalMb / MB) }) : t('Советуем {n} ГБ', { n: tip })
 }
 
 /** ГБ для ползунка лаунчера (`m-ram-<профиль>`, целые ГБ), не выше потолка машины. */

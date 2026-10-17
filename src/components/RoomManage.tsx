@@ -14,6 +14,7 @@ import {
   type Room,
 } from '../state/rooms'
 import { apiErrorText } from '../lib/apiError'
+import { useT } from '../i18n'
 
 /** Тот же потолок, что и на сервере: список друзей не должен предлагать больше. */
 const MAX_MEMBERS = 10
@@ -27,6 +28,7 @@ function FriendPicker({
   disabled: string[]
   onToggle: (userId: string) => void
 }) {
+  const t = useT()
   const friends = useFriends((s) => s.friends)
   const [q, setQ] = useState('')
   const needle = q.trim().toLowerCase()
@@ -38,14 +40,14 @@ function FriendPicker({
     [friends, needle],
   )
   if (!friends.length) {
-    return <p className="faint-note">Сначала добавь друзей</p>
+    return <p className="faint-note">{t('Сначала добавь друзей')}</p>
   }
   return (
     <>
       {friends.length > 6 ? (
         <div className="input sm room-pick-search">
           <Icon id="i-search" />
-          <input placeholder="Найти друга…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <input placeholder={t('Найти друга…')} value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
       ) : null}
       <div className="room-pick">
@@ -62,14 +64,14 @@ function FriendPicker({
               <Head nick={f.nickname} size={28} />
               <span className="room-pick-nick">{f.nickname || ''}</span>
               {off ? (
-                <span className="room-pick-note">уже в группе</span>
+                <span className="room-pick-note">{t('уже в группе')}</span>
               ) : (
                 <Icon id={on ? 'i-check' : 'i-plus'} />
               )}
             </button>
           )
         })}
-        {!list.length ? <p className="faint-note">Никого не нашли</p> : null}
+        {!list.length ? <p className="faint-note">{t('Никого не нашли')}</p> : null}
       </div>
     </>
   )
@@ -77,6 +79,7 @@ function FriendPicker({
 
 /** Создание группы: имя и кого позвать — больше на старте ничего не нужно. */
 function RoomCreate({ close, onCreated }: { close: () => void; onCreated?: (room: Room) => void }) {
+  const t = useT()
   const [title, setTitle] = useState('')
   const [chosen, setChosen] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
@@ -84,7 +87,7 @@ function RoomCreate({ close, onCreated }: { close: () => void; onCreated?: (room
   const submit = async () => {
     const name = title.trim()
     if (!name) {
-      showToast('Придумай название группы', 'error')
+      showToast(t('Придумай название группы'), 'error')
       return
     }
     setBusy(true)
@@ -93,7 +96,7 @@ function RoomCreate({ close, onCreated }: { close: () => void; onCreated?: (room
       close()
       if (onCreated) onCreated(room)
     } catch (e) {
-      showToast(apiErrorText(e, 'Не удалось создать группу'), 'error')
+      showToast(apiErrorText(e, t('Не удалось создать группу')), 'error')
     } finally {
       setBusy(false)
     }
@@ -106,15 +109,15 @@ function RoomCreate({ close, onCreated }: { close: () => void; onCreated?: (room
           <span className="room-ava">
             <Icon id="i-users" />
           </span>
-          <b>Новая группа</b>
-          <button className="tb-btn" aria-label="Закрыть" onClick={close}>
+          <b>{t('Новая группа')}</b>
+          <button className="tb-btn" aria-label={t('Закрыть')} onClick={close}>
             <Icon id="i-x" />
           </button>
         </div>
         <div className="input sm">
           <input
             autoFocus
-            placeholder="Название группы"
+            placeholder={t('Название группы')}
             maxLength={48}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -123,7 +126,7 @@ function RoomCreate({ close, onCreated }: { close: () => void; onCreated?: (room
             }}
           />
         </div>
-        <div className="side-cap">Кого позвать · {chosen.length + 1} из {MAX_MEMBERS}</div>
+        <div className="side-cap">{t('Кого позвать · {n} из {max}', { n: chosen.length + 1, max: MAX_MEMBERS })}</div>
         <FriendPicker
           chosen={chosen}
           disabled={[]}
@@ -131,7 +134,7 @@ function RoomCreate({ close, onCreated }: { close: () => void; onCreated?: (room
             setChosen((prev) => {
               if (prev.includes(id)) return prev.filter((x) => x !== id)
               if (prev.length + 1 >= MAX_MEMBERS) {
-                showToast('В группе не больше ' + MAX_MEMBERS + ' человек', 'error')
+                showToast(t('В группе не больше {n} человек', { n: MAX_MEMBERS }), 'error')
                 return prev
               }
               return prev.concat([id])
@@ -140,11 +143,11 @@ function RoomCreate({ close, onCreated }: { close: () => void; onCreated?: (room
         />
         <div className="room-modal-acts">
           <button className="btn sm ghost" onClick={close}>
-            Отмена
+            {t('Отмена')}
           </button>
           <button className="btn sm primary" disabled={busy || !title.trim()} onClick={() => void submit()}>
             <Icon id="i-check" />
-            {busy ? 'Создаём…' : 'Создать'}
+            {busy ? t('Создаём…') : t('Создать')}
           </button>
         </div>
       </div>
@@ -154,6 +157,7 @@ function RoomCreate({ close, onCreated }: { close: () => void; onCreated?: (room
 
 /** Состав группы: кто внутри, кого позвать, кого убрать и как выйти самому. */
 function RoomManage({ room, close }: { room: Room; close: () => void }) {
+  const t = useT()
   const me = useRooms((s) => s.me)
   const fresh = useRooms((s) => s.rooms.find((r) => r.id === room.id)) || room
   const owner = fresh.ownerId === me
@@ -170,9 +174,9 @@ function RoomManage({ room, close }: { room: Room; close: () => void }) {
     try {
       await renameRoom(fresh.id, next)
       setChat({ chatNick: next })
-      showToast('Группа переименована')
+      showToast(t('Группа переименована'))
     } catch {
-      showToast('Не удалось переименовать', 'error')
+      showToast(t('Не удалось переименовать'), 'error')
     } finally {
       setBusy(false)
     }
@@ -183,36 +187,36 @@ function RoomManage({ room, close }: { room: Room; close: () => void }) {
     try {
       await inviteToRoom(fresh.id, [userId])
     } catch (e) {
-      showToast(apiErrorText(e, 'Не удалось позвать'), 'error')
+      showToast(apiErrorText(e, t('Не удалось позвать')), 'error')
     } finally {
       setBusy(false)
     }
   }
 
   const kick = async (userId: string, nick: string) => {
-    if (!(await uiConfirm('Убрать ' + nick + ' из группы?', { confirmLabel: 'Убрать', danger: true }))) return
+    if (!(await uiConfirm(t('Убрать {nick} из группы?', { nick }), { confirmLabel: t('Убрать'), danger: true }))) return
     try {
       await kickFromRoom(fresh.id, userId)
     } catch {
-      showToast('Не удалось убрать', 'error')
+      showToast(t('Не удалось убрать'), 'error')
     }
   }
 
   const quit = async () => {
     const ok = await uiConfirm(
       owner
-        ? 'Группа перейдёт к тому, кто в ней дольше всех.'
-        : 'Переписка группы останется у остальных.',
-      { title: 'Выйти из «' + fresh.title + '»?', confirmLabel: 'Выйти', danger: true },
+        ? t('Группа перейдёт к тому, кто в ней дольше всех.')
+        : t('Переписка группы останется у остальных.'),
+      { title: t('Выйти из «{name}»?', { name: fresh.title }), confirmLabel: t('Выйти'), danger: true },
     )
     if (!ok) return
     try {
       await leaveRoom(fresh.id)
       setChat({ chatOpen: false, chatRoom: '' })
       close()
-      showToast('Ты вышел из группы')
+      showToast(t('Ты вышел из группы'))
     } catch {
-      showToast('Не удалось выйти', 'error')
+      showToast(t('Не удалось выйти'), 'error')
     }
   }
 
@@ -226,7 +230,7 @@ function RoomManage({ room, close }: { room: Room; close: () => void }) {
             <Icon id="i-users" />
           </span>
           <b>{fresh.title}</b>
-          <button className="tb-btn" aria-label="Закрыть" onClick={close}>
+          <button className="tb-btn" aria-label={t('Закрыть')} onClick={close}>
             <Icon id="i-x" />
           </button>
         </div>
@@ -245,7 +249,7 @@ function RoomManage({ room, close }: { room: Room; close: () => void }) {
             </div>
             <button
               className="btn sm secondary"
-              aria-label="Переименовать"
+              aria-label={t('Переименовать')}
               disabled={busy || !title.trim() || title.trim() === fresh.title}
               onClick={() => void rename()}
             >
@@ -254,25 +258,25 @@ function RoomManage({ room, close }: { room: Room; close: () => void }) {
           </div>
         ) : null}
 
-        <div className="side-cap">Участники · {fresh.members.length}</div>
+        <div className="side-cap">{t('Участники · {n}', { n: fresh.members.length })}</div>
         <div className="room-members">
           {fresh.members.map((m) => (
             <div className="room-member" key={m.userId}>
               <Head nick={m.nickname} size={30} />
               <span className="room-member-nick">
                 {m.nickname}
-                {m.userId === me ? <span className="room-tag">ты</span> : null}
-                {m.role === 'owner' ? <span className="room-tag own">создатель</span> : null}
+                {m.userId === me ? <span className="room-tag">{t('ты')}</span> : null}
+                {m.role === 'owner' ? <span className="room-tag own">{t('создатель')}</span> : null}
               </span>
               {inVoice.has(m.userId) ? (
-                <span className="room-inv" aria-label="Сейчас в разговоре">
+                <span className="room-inv" aria-label={t('Сейчас в разговоре')}>
                   <Icon id="i-headset" />
                 </span>
               ) : null}
               {owner && m.userId !== me ? (
                 <button
                   className="tb-btn danger"
-                  aria-label="Убрать из группы"
+                  aria-label={t('Убрать из группы')}
                   onClick={() => void kick(m.userId, m.nickname)}
                 >
                   <Icon id="i-x" />
@@ -284,7 +288,7 @@ function RoomManage({ room, close }: { room: Room; close: () => void }) {
 
         {fresh.members.length < MAX_MEMBERS ? (
           <>
-            <div className="side-cap">Позвать друга</div>
+            <div className="side-cap">{t('Позвать друга')}</div>
             <FriendPicker
               chosen={[]}
               disabled={fresh.members.map((m) => m.userId)}
@@ -292,13 +296,13 @@ function RoomManage({ room, close }: { room: Room; close: () => void }) {
             />
           </>
         ) : (
-          <p className="faint-note">Группа заполнена</p>
+          <p className="faint-note">{t('Группа заполнена')}</p>
         )}
 
         <div className="room-modal-acts">
           <button className="btn sm danger" onClick={() => void quit()}>
             <Icon id="i-logout" />
-            Выйти из группы
+            {t('Выйти из группы')}
           </button>
         </div>
       </div>

@@ -7,6 +7,7 @@ import { MilliSafe } from './MilliStage'
 import { Art } from './MilliModTip'
 import '../../styles/pixel/milli-pack.css'
 import '../../styles/pixel/milli-plan.css'
+import { useT } from '../../i18n'
 
 const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '')
 const strs = (v: unknown, n: number): string[] => (Array.isArray(v) ? v.map(str).filter(Boolean).slice(0, n) : [])
@@ -31,6 +32,7 @@ function shortTitle(t: string, max = 52): string {
 }
 
 function PlanBody({ plan, active }: { plan: MilliPlanCard; active: boolean }) {
+  const t = useT()
   const pending = useMilli((s) => s.pending)
   const themes = strs(plan.themes, 5)
   const avoid = strs(plan.avoid, 5)
@@ -40,11 +42,11 @@ function PlanBody({ plan, active }: { plan: MilliPlanCard; active: boolean }) {
   const loader = str(plan.loader) || str(plan.loaderPick)
   const shaders = str(plan.shaders)
   const rp = str(plan.rp)
-  const title = str(plan.title) || 'Сборка'
+  const title = str(plan.title) || t('Сборка')
   const more = size ? Math.max(0, size - mods.length) : 0
   const ver = [mc, loader ? LOADER_LABEL[loader] ?? loader : ''].filter(Boolean).join(' · ')
   return (
-    <div className="mpl" role="group" aria-label="План сборки">
+    <div className="mpl" role="group" aria-label={t('План сборки')}>
       <div className="mpl-head">
         <span className="mpc-badge" aria-hidden="true">
           <Art px="book_quill" size={24}>
@@ -52,14 +54,14 @@ function PlanBody({ plan, active }: { plan: MilliPlanCard; active: boolean }) {
           </Art>
         </span>
         <span className="mpl-id">
-          <span className="mpl-kicker">План сборки</span>
+          <span className="mpl-kicker">{t('План сборки')}</span>
           <b className="mpl-title" title={title}>
             {shortTitle(title)}
           </b>
         </span>
       </div>
       {mods.length ? (
-        <div className="mpl-mods" aria-label="Главные моды">
+        <div className="mpl-mods" aria-label={t('Главные моды')}>
           {mods.map((m, i) => (
             <span key={m.projectId ?? i} className="mpl-mod" data-name={str(m.title)} title={str(m.title)} style={{ '--i': i } as CSSProperties}>
               <span className="mpc-slot" aria-hidden="true">
@@ -68,7 +70,7 @@ function PlanBody({ plan, active }: { plan: MilliPlanCard; active: boolean }) {
             </span>
           ))}
           {more ? (
-            <span className="mpl-more" title={'Ещё ' + more + ' модов'} style={{ '--i': mods.length } as CSSProperties}>
+            <span className="mpl-more" title={t('Ещё {n} модов', { n: more })} style={{ '--i': mods.length } as CSSProperties}>
               +{more}
             </span>
           ) : null}
@@ -76,7 +78,7 @@ function PlanBody({ plan, active }: { plan: MilliPlanCard; active: boolean }) {
       ) : null}
       <div className="mpl-chips">
         {ver ? (
-          <span className="mpl-chip meta" title="Версия и загрузчик">
+          <span className="mpl-chip meta" title={t('Версия и загрузчик')}>
             <Art px="compass" size={12}>
               <PxIcon name="map" size={12} />
             </Art>
@@ -84,15 +86,15 @@ function PlanBody({ plan, active }: { plan: MilliPlanCard; active: boolean }) {
           </span>
         ) : null}
         {size ? (
-          <span className="mpl-chip meta" title="Модов в сборке">
+          <span className="mpl-chip meta" title={t('Модов в сборке')}>
             <Art px="chest" size={12}>
               <PxIcon name="plus" size={12} />
             </Art>
-            ≈{size} модов
+            {t('≈{n} модов', { n: size })}
           </span>
         ) : null}
         {shaders ? (
-          <span className="mpl-chip meta" title="Шейдеры">
+          <span className="mpl-chip meta" title={t('Шейдеры')}>
             <Art px="steve_glow" size={12}>
               <PxIcon name="crown" size={12} />
             </Art>
@@ -100,37 +102,37 @@ function PlanBody({ plan, active }: { plan: MilliPlanCard; active: boolean }) {
           </span>
         ) : null}
         {rp ? (
-          <span className="mpl-chip meta" title="Ресурспак">
+          <span className="mpl-chip meta" title={t('Ресурспак')}>
             <Art px="grass_dandelion" size={12}>
               <PxIcon name="crown" size={12} />
             </Art>
             {rp}
           </span>
         ) : null}
-        {themes.map((t) => (
-          <span key={'t' + t} className="mpl-chip">
-            {t}
+        {themes.map((theme) => (
+          <span key={'t' + theme} className="mpl-chip">
+            {theme}
           </span>
         ))}
-        {avoid.map((t) => (
-          <span key={'a' + t} className="mpl-chip no" title={'Без: ' + t}>
-            {t}
+        {avoid.map((name) => (
+          <span key={'a' + name} className="mpl-chip no" title={t('Без: {name}', { name })}>
+            {name}
           </span>
         ))}
       </div>
       {active ? (
         <div className="mpl-act">
-          <button type="button" className="btn primary mpl-go" data-track="milli_plan_accept" disabled={pending} onClick={() => void sendMilli('Принять')}>
+          <button type="button" className="btn primary mpl-go" data-track="milli_plan_accept" disabled={pending} onClick={() => void sendMilli(t('Принять'), { action: 'accept' })}>
             <PxIcon name="play" size={12} />
-            Принять
+            {t('Принять')}
           </button>
-          <button type="button" className="btn sm secondary" data-track="milli_plan_more" disabled={pending} onClick={() => prefillMilli('Ещё хочу ')}>
+          <button type="button" className="btn sm secondary" data-track="milli_plan_more" disabled={pending} onClick={() => prefillMilli(t('Ещё хочу') + ' ')}>
             <PxIcon name="plus" size={10} />
-            Дополнить
+            {t('Дополнить')}
           </button>
-          <button type="button" className="btn sm secondary" data-track="milli_plan_edit" disabled={pending} onClick={() => prefillMilli('Поменяй ')}>
+          <button type="button" className="btn sm secondary" data-track="milli_plan_edit" disabled={pending} onClick={() => prefillMilli(t('Поменяй') + ' ')}>
             <PxIcon name="restart" size={10} />
-            Изменить
+            {t('Изменить')}
           </button>
         </div>
       ) : null}

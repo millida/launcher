@@ -3,6 +3,7 @@ import type { MilliCat, MilliItem } from '../../../lib/milli'
 import type { BenchFilter, BenchGroup } from '../../../state/milliBench'
 import { isLib, orphansOf, packTree } from '../milliPackTree'
 import type { PackTree } from '../milliPackTree'
+import { t } from '../../../i18n'
 
 /*
  * Строки вкладки «Моды» карточки — чистые функции (тестируются без React).
@@ -67,45 +68,45 @@ export const catOf = (m: MilliItem): MilliCat => (m.cat && m.cat in MILLI_CAT_RU
 interface Sub { key: string; label: string; px: string; rx?: RegExp }
 
 const SUBS: Record<MilliCat, Sub[]> = {
-  perf: [{ key: 'perf', label: 'Оптимизация', px: 'fps_torch' }],
+  perf: [{ key: 'perf', get label() { return t('Оптимизация') }, px: 'fps_torch' }],
   ui: [
-    { key: 'ui:map', label: 'Карты', px: 'compass', rx: /\b(map|minimap|journeymap|xaero|waypoint)/ },
-    { key: 'ui:recipe', label: 'Рецепты', px: 'book_quill', rx: /\b(jei|emi|rei|recipe|рецепт)/ },
-    { key: 'ui:inv', label: 'Инвентарь', px: 'chest', rx: /\b(inventory|sort|mouse ?tweaks|инвентар)/ },
-    { key: 'ui', label: 'Удобство', px: 'spyglass' },
+    { key: 'ui:map', get label() { return t('Карты') }, px: 'compass', rx: /\b(map|minimap|journeymap|xaero|waypoint)/ },
+    { key: 'ui:recipe', get label() { return t('Рецепты') }, px: 'book_quill', rx: /\b(jei|emi|rei|recipe|рецепт)/ },
+    { key: 'ui:inv', get label() { return t('Инвентарь') }, px: 'chest', rx: /\b(inventory|sort|mouse ?tweaks|инвентар)/ },
+    { key: 'ui', get label() { return t('Удобство') }, px: 'spyglass' },
   ],
   world: [
-    { key: 'world:struct', label: 'Постройки и данжи', px: 'shulker_box', rx: /\b(structure|dungeon|village|tower|ruin|castle|данж|построй|строени)/ },
-    { key: 'world:biome', label: 'Биомы и пещеры', px: 'grass_dandelion', rx: /\b(biome|terrain|cave|terralith|tectonic|биом|пещер)/ },
-    { key: 'world', label: 'Мир', px: 'grass_dandelion' },
+    { key: 'world:struct', get label() { return t('Постройки и данжи') }, px: 'shulker_box', rx: /\b(structure|dungeon|village|tower|ruin|castle|данж|построй|строени)/ },
+    { key: 'world:biome', get label() { return t('Биомы и пещеры') }, px: 'grass_dandelion', rx: /\b(biome|terrain|cave|terralith|tectonic|биом|пещер)/ },
+    { key: 'world', get label() { return t('Мир') }, px: 'grass_dandelion' },
   ],
   mobs: [
-    { key: 'mobs:boss', label: 'Боссы', px: 'nether_star', rx: /\b(boss|cataclysm|mowzie|босс)/ },
-    { key: 'mobs', label: 'Мобы и существа', px: 'zombie_bandage' },
+    { key: 'mobs:boss', get label() { return t('Боссы') }, px: 'nether_star', rx: /\b(boss|cataclysm|mowzie|босс)/ },
+    { key: 'mobs', get label() { return t('Мобы и существа') }, px: 'zombie_bandage' },
   ],
   tech: [
-    { key: 'tech:create', label: 'Create и аддоны', px: 'create_cog', rx: /\bcreate\b/ },
-    { key: 'tech:energy', label: 'Энергия и машины', px: 'redstone_lamp_on', rx: /\b(energy|power|electric|mekanism|thermal|reactor|generator|энерг)/ },
-    { key: 'tech:store', label: 'Хранение', px: 'chest_large', rx: /\b(storage|drawer|backpack|ae2|applied|refined|хранени|рюкзак)/ },
-    { key: 'tech', label: 'Техника', px: 'comparator' },
+    { key: 'tech:create', get label() { return t('Create и аддоны') }, px: 'create_cog', rx: /\bcreate\b/ },
+    { key: 'tech:energy', get label() { return t('Энергия и машины') }, px: 'redstone_lamp_on', rx: /\b(energy|power|electric|mekanism|thermal|reactor|generator|энерг)/ },
+    { key: 'tech:store', get label() { return t('Хранение') }, px: 'chest_large', rx: /\b(storage|drawer|backpack|ae2|applied|refined|хранени|рюкзак)/ },
+    { key: 'tech', get label() { return t('Техника') }, px: 'comparator' },
   ],
-  magic: [{ key: 'magic', label: 'Магия', px: 'spellbook' }],
+  magic: [{ key: 'magic', get label() { return t('Магия') }, px: 'spellbook' }],
   adventure: [
-    { key: 'adv:fight', label: 'Оружие и бой', px: 'rpg_sword_shield', rx: /\b(weapon|sword|gun|combat|armor|оруж|меч|бой)/ },
-    { key: 'adv:rpg', label: 'Классы и прокачка', px: 'diamond', rx: /\b(class|skill|level|rpg|quest|класс|навык|прокач|квест)/ },
-    { key: 'adventure', label: 'Приключения', px: 'compass' },
+    { key: 'adv:fight', get label() { return t('Оружие и бой') }, px: 'rpg_sword_shield', rx: /\b(weapon|sword|gun|combat|armor|оруж|меч|бой)/ },
+    { key: 'adv:rpg', get label() { return t('Классы и прокачка') }, px: 'diamond', rx: /\b(class|skill|level|rpg|quest|класс|навык|прокач|квест)/ },
+    { key: 'adventure', get label() { return t('Приключения') }, px: 'compass' },
   ],
   build: [
-    { key: 'build:decor', label: 'Декор и мебель', px: 'painting', rx: /\b(furniture|decor|мебел|декор)/ },
-    { key: 'build', label: 'Строительство', px: 'crafting_table' },
+    { key: 'build:decor', get label() { return t('Декор и мебель') }, px: 'painting', rx: /\b(furniture|decor|мебел|декор)/ },
+    { key: 'build', get label() { return t('Строительство') }, px: 'crafting_table' },
   ],
   look: [
-    { key: 'look:sound', label: 'Звук', px: 'bell', rx: /\b(sound|audio|music|звук|музык)/ },
-    { key: 'look:anim', label: 'Анимации', px: 'firework_star', rx: /\b(animation|anim|анимац)/ },
-    { key: 'look', label: 'Графика', px: 'glowstone_bright' },
+    { key: 'look:sound', get label() { return t('Звук') }, px: 'bell', rx: /\b(sound|audio|music|звук|музык)/ },
+    { key: 'look:anim', get label() { return t('Анимации') }, px: 'firework_star', rx: /\b(animation|anim|анимац)/ },
+    { key: 'look', get label() { return t('Графика') }, px: 'glowstone_bright' },
   ],
-  misc: [{ key: 'misc', label: 'Разное', px: 'chest' }],
-  lib: [{ key: 'lib', label: 'Библиотеки', px: 'book_quill' }],
+  misc: [{ key: 'misc', get label() { return t('Разное') }, px: 'chest' }],
+  lib: [{ key: 'lib', get label() { return t('Библиотеки') }, px: 'book_quill' }],
 }
 
 const SUB_BY_KEY = new Map(Object.values(SUBS).flat().map((x) => [x.key, x]))
@@ -170,8 +171,8 @@ export function matcher(query: string, index: SearchIndex): ((m: MilliItem) => b
 
 /** ⚠ строки: версия не проверена (сеть), известный риск. */
 export function problemOf(m: MilliItem): string {
-  if (m.unchecked) return 'Версия не проверена'
-  if (m.risk === 'risky') return m.riskNote || 'Известная проблема обойдена'
+  if (m.unchecked) return t('Версия не проверена')
+  if (m.risk === 'risky') return m.riskNote || t('Известная проблема обойдена')
   return ''
 }
 
@@ -244,7 +245,10 @@ export function benchRows(inp: RowsInput): RowsOut {
   const warnOf = (m: MilliItem, ghost: boolean): string => {
     if (ghost && isLib(m)) {
       const left = (tree.parents.get(m.projectId) || []).filter((p) => onIds.has(p.projectId))
-      if (left.length) return 'Убрана — не запустятся: ' + left.slice(0, 2).map((p) => p.title).join(', ') + (left.length > 2 ? ' и ещё ' + (left.length - 2) : '')
+      if (left.length)
+        return t('Убрана — не запустятся: {list}', {
+          list: left.length > 2 ? t('{names} и ещё {n}', { names: left.slice(0, 2).map((p) => p.title).join(', '), n: left.length - 2 }) : left.map((p) => p.title).join(', '),
+        })
     }
     return problemOf(m)
   }
@@ -378,10 +382,10 @@ export function benchRows(inp: RowsInput): RowsOut {
         placed.add(d.projectId)
       }
     }
-    pushGroup('roots', 'Моды и их библиотеки', roots)
+    pushGroup('roots', t('Моды и их библиотеки'), roots)
     const core = live.filter((m) => isLib(m) && !placed.has(m.projectId)).sort(byTitle)
-    pushGroup('core', 'Основа сборки', core.map((m) => ({ m, ghost: false })))
-    pushGroup('gone', 'Убрано', dead.sort(byTitle).map((m) => ({ m, ghost: true })))
+    pushGroup('core', t('Основа сборки'), core.map((m) => ({ m, ghost: false })))
+    pushGroup('gone', t('Убрано'), dead.sort(byTitle).map((m) => ({ m, ghost: true })))
   }
 
   return { rows, counts, shown, orphans }

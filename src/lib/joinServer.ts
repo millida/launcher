@@ -19,6 +19,7 @@ import { ensureVersionBuild, pvpBuildName } from './versionBuild'
 import { pickVersionForServer } from './mcVersion'
 import { ensureMcVersionList, useMcVersionList } from '../state/mcVersionList'
 import { isOwnServerAddr, serverNeedsMillidaAuth } from './ownServer'
+import { t } from '../i18n'
 
 const addrKey = (ip: string) =>
   (ip || '')
@@ -71,19 +72,18 @@ async function licenseGate(licensed: boolean): Promise<boolean> {
   const ms = !!acc && acc.kind === 'microsoft'
   if (ms && (await ensureMsAuth(acc))) return true
   const who = ms
-    ? 'лицензионный аккаунт, но его вход слетел'
+    ? t('лицензионный аккаунт, но его вход слетел')
     : acc
       ? acc.kind === 'offline'
-        ? 'офлайн-ник'
-        : 'аккаунт Millida'
-      : 'вход без аккаунта'
+        ? t('офлайн-ник')
+        : t('аккаунт Millida')
+      : t('вход без аккаунта')
   return uiConfirm(
-    'Этот сервер пускает только по лицензии Minecraft, а сейчас активен ' +
-      who +
-      '. Сервер ответит «Не удалось проверить имя пользователя». ' +
-      (ms ? 'Войди в аккаунт Microsoft заново в меню аккаунтов' : 'Добавь аккаунт Microsoft в меню аккаунтов') +
-      ' — или зайти всё равно?',
-    { title: 'Нужна лицензия Minecraft', confirmLabel: 'Всё равно зайти', danger: false },
+    t('Этот сервер пускает только по лицензии Minecraft, а сейчас активен {who}. Сервер ответит «Не удалось проверить имя пользователя». {fix} — или зайти всё равно?', {
+      who,
+      fix: ms ? t('Войди в аккаунт Microsoft заново в меню аккаунтов') : t('Добавь аккаунт Microsoft в меню аккаунтов'),
+    }),
+    { title: t('Нужна лицензия Minecraft'), confirmLabel: t('Всё равно зайти'), danger: false },
   )
 }
 
@@ -107,7 +107,7 @@ export async function buildForServer(join: JoinIntent, wanted: string[]): Promis
     // 25.09.2026: HypeGO создавал 1.12.2 вместо свежей).
     const version = await newestReleaseFor(wanted)
     if (version) {
-      showToast('Готовим сборку ' + version + ' под «' + join.name + '»')
+      showToast(t('Готовим сборку {version} под «{server}»', { version, server: join.name }))
       const made = await ensureVersionBuild(version, { fps: true })
       if (made) {
         await useProfiles.getState().refresh()
@@ -123,23 +123,21 @@ export async function buildForServer(join: JoinIntent, wanted: string[]): Promis
 
   if (plan.kind === 'switch') {
     setSelected(plan.build)
-    showToast('Сервер на ' + wanted.join(', ') + ' — заходим сборкой «' + plan.build + '» (' + plan.version + ')')
+    showToast(t('Сервер на {versions} — заходим сборкой «{build}» ({version})', { versions: wanted.join(', '), build: plan.build, version: plan.version }))
     return plan.build
   }
 
   if (plan.kind === 'unknown') {
     const go = await uiChoice(
-      'Версию сервера «' +
-        join.name +
-        '» узнать не удалось — он не ответил на запрос. Сейчас выбрана сборка «' +
-        plan.build +
-        '» (' +
-        plan.version +
-        '). Если версии разойдутся, сервер напишет, что клиент устарел. Заходим этой сборкой?',
+      t('Версию сервера «{server}» узнать не удалось — он не ответил на запрос. Сейчас выбрана сборка «{build}» ({version}). Если версии разойдутся, сервер напишет, что клиент устарел. Заходим этой сборкой?', {
+        server: join.name,
+        build: plan.build,
+        version: plan.version,
+      }),
       {
-        title: 'Какой сборкой заходим?',
-        confirmLabel: 'Этой сборкой',
-        cancelLabel: 'Выбрать другую',
+        title: t('Какой сборкой заходим?'),
+        confirmLabel: t('Этой сборкой'),
+        cancelLabel: t('Выбрать другую'),
         danger: false,
       },
     )
@@ -152,19 +150,16 @@ export async function buildForServer(join: JoinIntent, wanted: string[]): Promis
   }
 
   const make = await uiChoice(
-    'Сервер работает на ' +
-      wanted.join(', ') +
-      ', а сборки под эту версию у тебя нет — «' +
-      plan.build +
-      '» на ' +
-      plan.version +
-      '. Сервер не пустит и напишет, что версия не подходит. Создать сборку ' +
-      (wanted[0] || '') +
-      '?',
+    t('Сервер работает на {versions}, а сборки под эту версию у тебя нет — «{build}» на {version}. Сервер не пустит и напишет, что версия не подходит. Создать сборку {target}?', {
+      versions: wanted.join(', '),
+      build: plan.build,
+      version: plan.version,
+      target: wanted[0] || '',
+    }),
     {
-      title: 'Версия не совпадает',
-      confirmLabel: 'Создать сборку',
-      cancelLabel: 'Всё равно зайти',
+      title: t('Версия не совпадает'),
+      confirmLabel: t('Создать сборку'),
+      cancelLabel: t('Всё равно зайти'),
       danger: false,
     },
   )
@@ -185,7 +180,7 @@ async function millidaSmpBuild(wanted: string[]): Promise<string | null> {
   const version = (await newestReleaseFor(wanted)) || wanted[0] || ''
   if (!version) return null
   const name = pvpBuildName(version)
-  if (!useProfiles.getState().profiles.some((p) => p.name === name)) showToast('Готовим сборку «' + name + '»')
+  if (!useProfiles.getState().profiles.some((p) => p.name === name)) showToast(t('Готовим сборку «{name}»', { name }))
   const made = await ensureVersionBuild(version, { fps: true, name })
   if (made) await useProfiles.getState().refresh()
   return made
@@ -193,7 +188,7 @@ async function millidaSmpBuild(wanted: string[]): Promise<string | null> {
 
 export async function quickJoin(ip: string, name: string, licensed?: boolean, versions?: string[]): Promise<void> {
   if (!hasTauri()) {
-    showToast('Подключение к серверу доступно в приложении', 'error')
+    showToast(t('Подключение к серверу доступно в приложении'), 'error')
     return Promise.reject(new Error('no-tauri'))
   }
   if (isOwnServerAddr(ip)) return (await import('./lobbyPlay')).playOwnServer(useProfiles.getState().profiles)
@@ -219,7 +214,7 @@ export async function quickJoin(ip: string, name: string, licensed?: boolean, ve
   rememberServerName(ip, name)
   return joinWithAuth(prof, null, ip, name)
     .then((res) => {
-      if (joinStarted(res)) showToast('Заходим на «' + name + '»')
+      if (joinStarted(res)) showToast(t('Заходим на «{name}»', { name }))
     })
     .catch((err) => {
       showLaunchError(err)

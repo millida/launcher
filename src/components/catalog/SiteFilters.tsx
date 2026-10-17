@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { Icon } from '../Icon'
 import { MrIcon, TagGlyph } from './SiteRow'
-import { capFirst, categoryIconSrc, fmtNum, loaderIconSrc, loaderLabel, loaderTone } from './site'
+import { capFirst, categoryIconSrc, categoryLabel, fmtNum, loaderIconSrc, loaderLabel, loaderTone } from './site'
 import type { SiteFacets, SiteSection } from './site'
 import type { SiteAccess, SiteSort } from './siteStore'
 import type { EditionFilter, PriceFilter, SideFilter } from './sections'
+import { t, useT } from '../../i18n'
 
 /*
  * Колонка фильтров — как на сайте (`mr-filters.tsx`): группы «Версия игры»,
@@ -40,6 +41,7 @@ export function FilterGroup({
   /** Машинное имя фильтра для аналитики: filter_<name>. */
   name?: string
 }) {
+  const t = useT()
   const [open, setOpen] = useState(true)
   const head = (lead ? opts.filter(lead) : opts).slice(0, VISIBLE)
   const shown = head.length ? head : opts.slice(0, 1)
@@ -59,7 +61,7 @@ export function FilterGroup({
           ))}
           {hidden && !more ? (
             <button type="button" className="mr-more-btn" data-track={name ? 'filter_' + name + '_more' : undefined} onClick={() => setMore(true)}>
-              Показать все · {hidden}
+              {t('Показать все · {n}', { n: hidden })}
             </button>
           ) : null}
         </div>
@@ -102,17 +104,17 @@ const CATS_VISIBLE = 12
 const CATS_VISIBLE_TIGHT = 6
 const USES_VISIBLE = 6
 
-const SORTS: [SiteSort, string][] = [
-  ['relevance', 'По релевантности'],
-  ['recommended', 'Рекомендуемые'],
-  ['popular', 'По скачиваниям'],
-  ['follows', 'По подписчикам'],
-  ['new', 'Новые'],
-  ['updated', 'Обновлённые'],
+const sorts = (): [SiteSort, string][] => [
+  ['relevance', t('По релевантности')],
+  ['recommended', t('Рекомендуемые')],
+  ['popular', t('По скачиваниям')],
+  ['follows', t('По подписчикам')],
+  ['new', t('Новые')],
+  ['updated', t('Обновлённые')],
 ]
 /** Без поиска релевантности нет; подписчиков и «обновлённых» — только если сервер их знает. */
 const sortsFor = (searching: boolean, server: string[]) =>
-  SORTS.filter(([id]) => (id === 'relevance' ? searching : id === 'follows' || id === 'updated' ? server.includes(id) : true))
+  sorts().filter(([id]) => (id === 'relevance' ? searching : id === 'follows' || id === 'updated' ? server.includes(id) : true))
 
 function Key({ o, name, plain }: { o: FilterOpt; name?: string; plain?: boolean }) {
   const tone = o.tone ? ({ color: o.tone } as CSSProperties) : undefined
@@ -169,15 +171,16 @@ function PickBtn({ open, onClick, children, label }: { open: boolean; onClick: (
 }
 
 function SortPicker({ value, onPick, searching, server }: { value: SiteSort; onPick: (v: SiteSort) => void; searching: boolean; server: string[] }) {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const ref = useDismiss(open, () => setOpen(false))
   const list = sortsFor(searching, server)
-  const cur = SORTS.find(([id]) => id === value) ?? list[0]!
+  const cur = sorts().find(([id]) => id === value) ?? list[0]!
   return (
     <div className="mr-pick" ref={ref}>
-      <PickBtn open={open} onClick={() => setOpen((v) => !v)} label="Сортировка">
+      <PickBtn open={open} onClick={() => setOpen((v) => !v)} label={t('Сортировка')}>
         <span className="mr-pick-v">
-          <span className="mr-pick-l">Сорт.:</span> {cur[1]}
+          <span className="mr-pick-l">{t('Сорт.:')}</span> {cur[1]}
         </span>
       </PickBtn>
       {open ? (
@@ -203,6 +206,7 @@ function SortPicker({ value, onPick, searching, server }: { value: SiteSort; onP
 }
 
 function VersionPicker({ opts, current, quick }: { opts: FilterOpt[]; current: string | null; quick: FilterOpt[] }) {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
   const ref = useDismiss(open, () => setOpen(false))
@@ -210,14 +214,14 @@ function VersionPicker({ opts, current, quick }: { opts: FilterOpt[]; current: s
   const list = needle ? opts.filter((o) => o.label.toLowerCase().includes(needle)) : opts
   return (
     <div className="mr-pick" ref={ref}>
-      <PickBtn open={open} onClick={() => setOpen((v) => !v)} label="Версия игры">
-        <span className={'mr-pick-v' + (current ? '' : ' is-empty')}>{current ?? 'Все версии'}</span>
+      <PickBtn open={open} onClick={() => setOpen((v) => !v)} label={t('Версия игры')}>
+        <span className={'mr-pick-v' + (current ? '' : ' is-empty')}>{current ?? t('Все версии')}</span>
       </PickBtn>
       {open ? (
         <div className="mr-pick-pop">
           <label className="mr-pick-q">
             <Icon id="i-search" />
-            <input type="search" inputMode="decimal" autoFocus value={q} placeholder="Найти версию" aria-label="Найти версию" onChange={(e) => setQ(e.target.value)} />
+            <input type="search" inputMode="decimal" autoFocus value={q} placeholder={t('Найти версию')} aria-label={t('Найти версию')} onChange={(e) => setQ(e.target.value)} />
           </label>
           <div className="mr-pick-list">
             {list.map((o) => (
@@ -237,7 +241,7 @@ function VersionPicker({ opts, current, quick }: { opts: FilterOpt[]; current: s
                 {o.count !== undefined ? <span className="mr-key-n">{fmtNum(o.count)}</span> : null}
               </button>
             ))}
-            {list.length === 0 ? <div className="mr-pick-none">Нет такой версии</div> : null}
+            {list.length === 0 ? <div className="mr-pick-none">{t('Нет такой версии')}</div> : null}
           </div>
         </div>
       ) : null}
@@ -260,7 +264,7 @@ function KeySection({
   split = VISIBLE,
   name,
   plain,
-  moreLabel = 'Ещё',
+  moreLabel,
 }: {
   title: string
   opts: FilterOpt[]
@@ -269,6 +273,7 @@ function KeySection({
   plain?: boolean
   moreLabel?: string
 }) {
+  const t = useT()
   const cut = Math.max(1, Math.min(opts.length, split))
   // Хвост из одного ключа не прячем: «Ещё 1» занимает столько же места.
   const head = opts.length - cut <= 1 ? opts : opts.slice(0, cut)
@@ -284,7 +289,7 @@ function KeySection({
         ))}
         {rest.length && !more ? (
           <button type="button" className="seg mr-key mr-more" data-track={'filter_' + name + '_more'} onClick={() => setMore(true)}>
-            <span className="mr-key-t">{moreLabel}</span>
+            <span className="mr-key-t">{moreLabel ?? t('Ещё')}</span>
             <span className="mr-key-n">{rest.length}</span>
             <Icon id="i-chev-d" />
           </button>
@@ -292,7 +297,7 @@ function KeySection({
         {more ? rest.map((o) => <Key key={o.key} o={o} name={name} plain={plain} />) : null}
         {rest.length && more ? (
           <button type="button" className="seg mr-key mr-more mr-more-close" data-track={'filter_' + name + '_less'} onClick={() => setMore(false)}>
-            <span className="mr-key-t">Свернуть</span>
+            <span className="mr-key-t">{t('Свернуть')}</span>
             <Icon id="i-chev-d" />
           </button>
         ) : null}
@@ -305,14 +310,14 @@ const EDITIONS: [EditionFilter, string][] = [
   ['JAVA', 'Java'],
 ]
 
-const PRICES: [PriceFilter, string][] = [
-  ['free', 'Бесплатно'],
-  ['paid', 'Платно'],
+const prices = (): [PriceFilter, string][] => [
+  ['free', t('Бесплатно')],
+  ['paid', t('Платно')],
 ]
 
-const ACCESS: [Exclude<SiteAccess, 'all'>, string][] = [
-  ['premium', 'Премиум'],
-  ['free', 'Обычные'],
+const accessKinds = (): [Exclude<SiteAccess, 'all'>, string][] => [
+  ['premium', t('Премиум')],
+  ['free', t('Обычные')],
 ]
 
 export function SiteFilters({
@@ -368,6 +373,7 @@ export function SiteFilters({
   }) => void
   onReset: () => void
 }) {
+  const t = useT()
   if (!facets) return <FiltersSkeleton />
   const filled = new Set(facets.versions.filter((v) => v.count >= 12 || v.value === version).map((v) => v.value))
   const versions: FilterOpt[] = facets.versions.map((v) => ({
@@ -402,7 +408,7 @@ export function SiteFilters({
     const src = categoryIconSrc(c.value)
     return {
       key: c.value,
-      label: capFirst(c.value),
+      label: categoryLabel(c.value),
       count: c.count,
       icon: src ? <TagGlyph node={<MrIcon src={src} size={12} />} /> : null,
       active: category === c.value,
@@ -413,7 +419,7 @@ export function SiteFilters({
   const langOpts: FilterOpt[] = [
     {
       key: 'ru',
-      label: 'На русском',
+      label: t('На русском'),
       count: ruCount,
       icon: <i className="mr-ru-badge">RU</i>,
       tone: 'var(--m-rarity-rare)',
@@ -422,7 +428,7 @@ export function SiteFilters({
     },
   ]
   const accessOpts: FilterOpt[] = access
-    ? ACCESS.map(([id, label]) => ({
+    ? accessKinds().map(([id, label]) => ({
         key: id,
         label,
         active: access === id,
@@ -442,12 +448,12 @@ export function SiteFilters({
       : []
   const uses: FilterOpt[] = (facets.uses || []).map((u) => ({
     key: u.value,
-    label: u.label,
+    label: t(u.label),
     count: u.count,
     active: use === u.value,
     onPick: () => onPatch({ use: use === u.value ? null : u.value }),
   }))
-  const prices: FilterOpt[] = PRICES.map(([id, label]) => ({
+  const priceOpts: FilterOpt[] = prices().map(([id, label]) => ({
     key: id,
     label,
     active: price === id,
@@ -458,7 +464,7 @@ export function SiteFilters({
       ? [
           {
             key: 'client',
-            label: 'Только для клиента',
+            label: t('Только для клиента'),
             active: side === 'client',
             onPick: () => onPatch({ side: side === 'client' ? null : 'client' }),
           },
@@ -476,24 +482,24 @@ export function SiteFilters({
       {sort && onSort ? <SortPicker value={sort} onPick={onSort} searching={!!searching} server={serverSorts || []} /> : null}
       {anyActive ? (
         <button type="button" className="mr-reset" data-track="filter_reset" onClick={onReset}>
-          Сбросить
+          {t('Сбросить')}
         </button>
       ) : null}
-      {access && ruCount ? <KeySection title="Язык" name="lang" opts={langOpts} /> : null}
+      {access && ruCount ? <KeySection title={t('Язык')} name="lang" opts={langOpts} /> : null}
       {versions.length ? (
         <section className="mr-fsec">
-          <div className="mr-fsec-t">Версия</div>
+          <div className="mr-fsec-t">{t('Версия')}</div>
           <VersionPicker opts={versions} current={version} quick={quick} />
         </section>
       ) : null}
       {/* «Доступ» — только когда выбран: платных единицы (владелец 30.09.2026, 20:39). */}
-      {access === 'premium' || access === 'free' ? <KeySection title="Доступ" name="access" opts={accessOpts} plain /> : null}
-      <KeySection title="Издание" name="edition" opts={editions} plain />
-      <KeySection title="Загрузчик" name="loader" opts={loaders} split={LOADERS_VISIBLE} />
-      <KeySection title="Сторона" name="side" opts={sides} plain />
-      <KeySection title="Для чего" name="use" opts={uses} split={USES_VISIBLE} plain />
-      <KeySection title="Категории" name="category" opts={cats} split={tight ? CATS_VISIBLE_TIGHT : CATS_VISIBLE} plain moreLabel="Все категории" />
-      {access ? null : <KeySection title="Цена" name="price" opts={prices} plain />}
+      {access === 'premium' || access === 'free' ? <KeySection title={t('Доступ')} name="access" opts={accessOpts} plain /> : null}
+      <KeySection title={t('Издание')} name="edition" opts={editions} plain />
+      <KeySection title={t('Загрузчик')} name="loader" opts={loaders} split={LOADERS_VISIBLE} />
+      <KeySection title={t('Сторона')} name="side" opts={sides} plain />
+      <KeySection title={t('Для чего')} name="use" opts={uses} split={USES_VISIBLE} plain />
+      <KeySection title={t('Категории')} name="category" opts={cats} split={tight ? CATS_VISIBLE_TIGHT : CATS_VISIBLE} plain moreLabel={t('Все категории')} />
+      {access ? null : <KeySection title={t('Цена')} name="price" opts={priceOpts} plain />}
     </div>
   )
 }
@@ -512,6 +518,7 @@ function loaderFitsSection(sec: Pick<SiteSection, 'kind' | 'slug'>, value: strin
 
 /** Пока фильтры в пути — та же колонка с настоящими заголовками и полосками вместо строк. */
 function FiltersSkeleton() {
+  const t = useT()
   const row = (w: number, k: number) => (
     <span key={k} className="seg mr-key">
       <span className="skel-text" style={{ width: w + '%' }} />
@@ -520,15 +527,15 @@ function FiltersSkeleton() {
   return (
     <div className="card mr-filters mr-fbox cat-skel" aria-hidden="true">
       <section className="mr-fsec">
-        <div className="mr-fsec-t">Версия</div>
+        <div className="mr-fsec-t">{t('Версия')}</div>
         <span className="seg mr-key">
           <span className="skel-text" style={{ width: '45%' }} />
         </span>
       </section>
       {[
-        ['Загрузчик', [52, 44, 60, 38]],
-        ['Для чего', [56, 40, 64, 48, 36]],
-        ['Категории', [62, 50, 70, 44, 58, 40]],
+        [t('Загрузчик'), [52, 44, 60, 38]],
+        [t('Для чего'), [56, 40, 64, 48, 36]],
+        [t('Категории'), [62, 50, 70, 44, 58, 40]],
       ].map(([title, rows]) => (
         <section key={title as string} className="mr-fsec">
           <div className="mr-fsec-t">{title as string}</div>

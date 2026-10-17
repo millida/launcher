@@ -3,6 +3,7 @@ import { Icon } from '../Icon'
 import { loadCapeCatalog, loadMojangCapes, type CapeCatalogItem, type MojangCape } from '../../lib/gameProfile'
 import { installFromCatalog } from '../../lib/catalogInstall'
 import { setScreen } from '../../state/ui'
+import { useT } from '../../i18n'
 
 /**
  * Раздел «Плащи» в каталоге (владелец 12.10.2026: «там нет плащей, там просто
@@ -23,6 +24,7 @@ function CapeArt({ url }: { url: string }) {
 }
 
 function MillidaCape({ c }: { c: CapeCatalogItem }) {
+  const t = useT()
   const [busy, setBusy] = useState(false)
   const open = c.unlocked !== false
   const need = shortNeed(c.requirement)
@@ -45,13 +47,13 @@ function MillidaCape({ c }: { c: CapeCatalogItem }) {
       <b className="cp-name">{c.name}</b>
       {open ? (
         <button className="btn sm primary cp-act" data-track="cape_wear" data-id={c.id} disabled={busy} onClick={() => void wear()}>
-          Надеть
+          {t('Надеть')}
         </button>
       ) : (
         <>
           <span className="cp-need">{need}</span>
           {typeof c.progress === 'number' && c.progress > 0 ? (
-            <span className="cp-bar" aria-label={'Выполнено ' + Math.round(c.progress) + '%'}>
+            <span className="cp-bar" aria-label={t('Выполнено {pct}%', { pct: Math.round(c.progress) })}>
               <span style={{ width: Math.min(100, Math.round(c.progress)) + '%' }} />
             </span>
           ) : null}
@@ -75,6 +77,7 @@ function Skeleton() {
 }
 
 export function CapesPane() {
+  const t = useT()
   const [own, setOwn] = useState<CapeCatalogItem[] | null>(null)
   const [mojang, setMojang] = useState<MojangCape[] | null>(null)
   const [failed, setFailed] = useState(false)
@@ -100,13 +103,13 @@ export function CapesPane() {
   return (
     <div className="mr-main cp" data-section="capes">
       <header className="mr-head">
-        <h1 className="mr-h1">Плащи для Minecraft</h1>
+        <h1 className="mr-h1">{t('Плащи для Minecraft')}</h1>
       </header>
       {failed ? (
         <div className="card cp-fail">
-          <b>Плащи не загрузились</b>
+          <b>{t('Плащи не загрузились')}</b>
           <button className="btn sm primary" onClick={() => setTurn((n) => n + 1)}>
-            Повторить
+            {t('Повторить')}
           </button>
         </div>
       ) : (
@@ -135,7 +138,7 @@ export function CapesPane() {
                       <CapeArt url={c.url} />
                     </button>
                     <b className="cp-name">{c.name}</b>
-                    <span className="cp-need">На лицензии</span>
+                    <span className="cp-need">{t('На лицензии')}</span>
                   </article>
                 ))}
               </div>

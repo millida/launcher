@@ -44,6 +44,7 @@ import {
 } from '../../lib/recsMix'
 import type { FeedItem, FeedWhy, RecsLog } from '../../lib/recsMix'
 import { readSignals } from '../../lib/recsSignals'
+import { t, useMarketOffers, useT } from '../../i18n'
 
 /**
  * «Рекомендуем» (бывшее «Для тебя»; владелец 30.09.2026, 15:06 — тот же блок,
@@ -68,12 +69,12 @@ const EXCL = 2
 // Только сборки (07.10.2026): карты, моды, паки и шейдеры живут в каталоге — в библиотеке они мешали выбору и не продают.
 const FEED_SECTIONS: SiteSlug[] = []
 const SECTION_TAG: Record<string, string> = {
-  modpacks: 'Сборка',
-  maps: 'Карта',
-  'texture-packs': 'Ресурс-пак',
-  shaders: 'Шейдер',
-  mods: 'Мод',
-  'data-packs': 'Дата-пак',
+  get modpacks() { return t('Сборка') },
+  get maps() { return t('Карта') },
+  get 'texture-packs'() { return t('Ресурс-пак') },
+  get shaders() { return t('Шейдер') },
+  get mods() { return t('Мод') },
+  get 'data-packs'() { return t('Дата-пак') },
 }
 const LOADER: Record<string, string> = { fabric: 'Fabric', forge: 'Forge', neoforge: 'NeoForge', quilt: 'Quilt' }
 /** Порог качества ленты, как на сайте: картинка и тысяча скачиваний. */
@@ -136,6 +137,8 @@ interface CardProps {
 }
 
 function Card({ art, tag, gold, excl, own, section, title, meta, onClick, wide, kind, id, pos }: CardProps) {
+  const t = useT()
+  const ruContent = useMarketOffers('ru-content')
   const vis = section ? SECTION_VISUAL[section as keyof typeof SECTION_VISUAL] : undefined
   return (
     <button
@@ -158,7 +161,7 @@ function Card({ art, tag, gold, excl, own, section, title, meta, onClick, wide, 
           {tag}
         </span>
         {/* Наши сборки переведены (08.10.2026): «На русском» на каждой Arcania Labs. */}
-        {gold || excl ? <span className="ph-card-ru">На русском</span> : null}
+        {ruContent && (gold || excl) ? <span className="ph-card-ru">{t('На русском')}</span> : null}
       </span>
       <span className="ph-card-body">
         <b>{title}</b>
@@ -229,6 +232,7 @@ export function ForYou({
   /** Материал каталога из ленты — его страница в каталоге Millida. */
   onItem: (section: string, card: SiteCard) => void
 }) {
+  const t = useT()
   const fyHead = usePromo((s) => s.promo.forYou)
   const an = useAnarchy()
   const [list, setList] = useState<HostServer[] | 'none' | null>(null)
@@ -302,9 +306,9 @@ export function ForYou({
     >
       <img className="fy-host-art" src="/lobby/duo@2x.webp" alt="" draggable={false} />
       <span className="fy-host-body">
-        <span className="ph-card-tag">Хостинг Millida</span>
-        <b>Играть по сети с другом</b>
-        <span className="btn md primary fy-host-cta">{nServers ? 'Мои серверы · ' + nServers : 'Создать бесплатно'}</span>
+        <span className="ph-card-tag">{t('Хостинг Millida')}</span>
+        <b>{t('Играть по сети с другом')}</b>
+        <span className="btn md primary fy-host-cta">{nServers ? t('Мои серверы · {n}', { n: nServers }) : t('Создать бесплатно')}</span>
       </span>
     </button>
   )
@@ -327,7 +331,7 @@ export function ForYou({
             excl
             art={img(p.coverUrl)}
             title={p.title}
-            meta={priceLabel(p) || 'Премиум'}
+            meta={priceLabel(p) || t('Премиум')}
             onClick={() => onPack(p)}
           />
         ) : (
@@ -336,7 +340,7 @@ export function ForYou({
             kind="pack"
             id={p.slug || p.id}
             pos={fyHead.length + i}
-            tag="Сборка"
+            tag={t('Сборка')}
             section="modpacks"
             art={img(p.coverUrl)}
             title={p.title}
@@ -400,7 +404,7 @@ export function ForYou({
           key={'pack:' + p.id}
           kind={p.premium ? 'premium' : 'pack'}
           id={p.slug || p.id}
-          tag={isOwnServerPack(p.slug) ? 'Наш сервер' : isExclusive(p.slug) ? 'Arcania Labs' : 'Сборка'}
+          tag={isOwnServerPack(p.slug) ? t('Наш сервер') : isExclusive(p.slug) ? 'Arcania Labs' : t('Сборка')}
           own={isOwnServerPack(p.slug)}
           excl={isExclusive(p.slug)}
           section="modpacks"
@@ -419,7 +423,7 @@ export function ForYou({
           key={key}
           kind={section}
           id={c.slug}
-          tag={SECTION_TAG[section] || 'Каталог'}
+          tag={SECTION_TAG[section] || t('Каталог')}
           section={section}
           art={img(c.cover || c.icon)}
           title={c.title}
@@ -452,7 +456,7 @@ export function ForYou({
             key={'mp:' + p.id}
             kind="pack"
             id={p.slug || p.id}
-            tag="Сборка"
+            tag={t('Сборка')}
             section="modpacks"
             art={img(p.coverUrl)}
             title={p.title}
@@ -474,7 +478,7 @@ export function ForYou({
           pos={fyHead.indexOf(OWN_SERVER_MODE)}
           kind="mode"
           id="ONEBLOCK"
-          tag="Наш сервер"
+          tag={t('Наш сервер')}
           own
           art={<ObArt />}
           title="OneBlock"
@@ -482,10 +486,10 @@ export function ForYou({
             oneblockOnline && oneblockOnline >= 20 ? (
               <>
                 <span className="ph-dot" aria-hidden="true"></span>
-                {fmtN(oneblockOnline)} играют
+                {t('{n} играют', { n: fmtN(oneblockOnline) })}
               </>
             ) : (
-              'Выживи на одном блоке'
+              t('Выживи на одном блоке')
             )
           }
           onClick={() => onMode('ONEBLOCK')}
@@ -499,7 +503,7 @@ export function ForYou({
         pos={fyHead.indexOf(ANARCHY.mode)}
         kind="pack"
         id={featured.pack.slug || featured.pack.id}
-        tag="Наш сервер"
+        tag={t('Наш сервер')}
         own
         section="modpacks"
         art={img(featured.pack.coverUrl)}
@@ -508,7 +512,7 @@ export function ForYou({
           anarchyOnlineShown(featured.pack.online) ? (
             <>
               <span className="ph-dot" aria-hidden="true"></span>
-              {fmtN(featured.pack.online)} играют
+              {t('{n} играют', { n: fmtN(featured.pack.online) })}
             </>
           ) : (
             ownServerTagline(featured.pack.slug) || featured.pack.tagline
@@ -524,7 +528,7 @@ export function ForYou({
       pos={fyHead.indexOf(ANARCHY.mode)}
       kind="own_server"
       id={ANARCHY.mode}
-      tag="Наш сервер"
+      tag={t('Наш сервер')}
       own
       art={<AnarchyArt />}
       title={an.name}
@@ -532,7 +536,7 @@ export function ForYou({
         anarchyOnlineShown(anarchyOnline) ? (
           <>
             <span className="ph-dot" aria-hidden="true"></span>
-            {fmtN(anarchyOnline)} играют
+            {t('{n} играют', { n: fmtN(anarchyOnline) })}
           </>
         ) : (
           an.tagline
@@ -581,8 +585,8 @@ export function ForYou({
             <span className="fy-more-ic">
               <Icon id="i-chev-r" />
             </span>
-            <b>Ещё</b>
-            <span className="ph-card-meta">Весь каталог</span>
+            <b>{t('Ещё')}</b>
+            <span className="ph-card-meta">{t('Весь каталог')}</span>
           </button>
         ) : null}
         {!packs.length && rotated.length < rest ? Array.from({ length: rest - rotated.length }, (_, i) => <Skel key={'sk' + i} />) : null}

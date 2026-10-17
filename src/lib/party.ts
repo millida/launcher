@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 export type AgeBracket = 'u13' | '13_15' | '16_17' | 'adult'
 export type PartyTargetKind = 'build' | 'version' | 'premium' | 'server'
 
@@ -101,7 +102,7 @@ export interface PartyInvite {
 export const DEFAULT_PARTY_CAPACITY = 3
 
 export const AGE_BRACKETS: { id: AgeBracket; label: string }[] = [
-  { id: 'u13', label: 'До 13' },
+  { id: 'u13', get label() { return t('До 13') } },
   { id: '13_15', label: '13–15' },
   { id: '16_17', label: '16–17' },
   { id: 'adult', label: '18+' },
@@ -214,19 +215,19 @@ export function launchBlock(party: Party): LaunchBlock {
   const waiting = party.members.filter(
     (m) => m.userId !== party.leaderId && (!m.ready || !sameIdentity(m.have, target)),
   )
-  return waiting.length ? { kind: 'not_ready', nicks: waiting.map((m) => m.nickname || 'Игрок') } : null
+  return waiting.length ? { kind: 'not_ready', nicks: waiting.map((m) => m.nickname || t('Игрок')) } : null
 }
 
 export const LFG_MODES = [
-  { id: 'survival', label: 'Выживание' },
-  { id: 'creative', label: 'Креатив' },
+  { id: 'survival', get label() { return t('Выживание') } },
+  { id: 'creative', get label() { return t('Креатив') } },
   { id: 'pvp', label: 'PvP' },
-  { id: 'minigames', label: 'Мини-игры' },
-  { id: 'modded', label: 'С модами' },
-  { id: 'anarchy', label: 'Анархия' },
-  { id: 'skyblock', label: 'Скайблок' },
+  { id: 'minigames', get label() { return t('Мини-игры') } },
+  { id: 'modded', get label() { return t('С модами') } },
+  { id: 'anarchy', get label() { return t('Анархия') } },
+  { id: 'skyblock', get label() { return t('Скайблок') } },
   { id: 'rpg', label: 'RPG' },
-  { id: 'other', label: 'Другое' },
+  { id: 'other', get label() { return t('Другое') } },
 ] as const
 
 export const LFG_LANGS = [
@@ -235,22 +236,22 @@ export const LFG_LANGS = [
   { id: 'uk', label: 'Українська' },
   { id: 'kk', label: 'Қазақша' },
   { id: 'by', label: 'Беларуская' },
-  { id: 'other', label: 'Другой' },
+  { id: 'other', get label() { return t('Другой') } },
 ] as const
 
 export const LFG_REGIONS = [
-  { id: 'eu', label: 'Европа' },
-  { id: 'ru_west', label: 'Запад РФ' },
-  { id: 'ru_east', label: 'Восток РФ' },
-  { id: 'asia', label: 'Азия' },
-  { id: 'na', label: 'Америка' },
-  { id: 'other', label: 'Другой' },
+  { id: 'eu', get label() { return t('Европа') } },
+  { id: 'ru_west', get label() { return t('Запад РФ') } },
+  { id: 'ru_east', get label() { return t('Восток РФ') } },
+  { id: 'asia', get label() { return t('Азия') } },
+  { id: 'na', get label() { return t('Америка') } },
+  { id: 'other', get label() { return t('Другой') } },
 ] as const
 
 export const LFG_TIMES = [
-  { id: 'now', label: 'Сейчас' },
-  { id: 'evening', label: 'Вечером' },
-  { id: 'weekend', label: 'В выходные' },
+  { id: 'now', get label() { return t('Сейчас') } },
+  { id: 'evening', get label() { return t('Вечером') } },
+  { id: 'weekend', get label() { return t('В выходные') } },
 ] as const
 
 export interface LfgTags {
@@ -314,15 +315,15 @@ const labelOf = (list: readonly { id: string; label: string }[], id: string): st
   list.find((x) => x.id === id)?.label || ''
 
 /** A card is read as a row of tags only: nothing a stranger typed is ever shown. */
-export function lfgTagLabels(t: LfgTags): string[] {
+export function lfgTagLabels(tags: LfgTags): string[] {
   return [
-    labelOf(LFG_MODES, t.mode),
-    t.version,
-    t.pack,
-    labelOf(LFG_LANGS, t.lang),
-    labelOf(LFG_REGIONS, t.region),
-    t.voice ? 'С голосом' : 'Без голоса',
-    labelOf(LFG_TIMES, t.time),
+    labelOf(LFG_MODES, tags.mode),
+    tags.version,
+    tags.pack,
+    labelOf(LFG_LANGS, tags.lang),
+    labelOf(LFG_REGIONS, tags.region),
+    tags.voice ? t('С голосом') : t('Без голоса'),
+    labelOf(LFG_TIMES, tags.time),
   ].filter(Boolean)
 }
 

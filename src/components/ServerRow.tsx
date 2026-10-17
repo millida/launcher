@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { useT } from '../i18n'
 import type { SnapshotServer } from '../lib/snapshot'
 import { fmtN, motdParts } from '../lib/format'
 import { quickJoin } from '../lib/joinServer'
@@ -24,6 +25,7 @@ export function versionRange(list?: string[] | null): string {
 }
 
 function Banner({ sv }: { sv: SnapshotServer }) {
+  const t = useT()
   if (sv.banner)
     return (
       <span className="srv-banner">
@@ -55,7 +57,7 @@ function Banner({ sv }: { sv: SnapshotServer }) {
     <span className="srv-banner">
       {sv.isOnline ? null : (
         <span className="motd" style={{ color: 'var(--m-fg-faint)' }}>
-          <span style={{ color: 'var(--m-fg-subtle)' }}>Сервер не в сети</span>
+          <span style={{ color: 'var(--m-fg-subtle)' }}>{t('Сервер не в сети')}</span>
         </span>
       )}
     </span>
@@ -86,6 +88,7 @@ function Logo({ sv }: { sv: SnapshotServer }) {
 }
 
 export function ServerRow({ sv, hidden, pos }: { sv: SnapshotServer; hidden?: boolean; pos?: number }) {
+  const t = useT()
   const on = sv.isOnline
   const [label, setLabel] = useState('Играть')
   const busy = useRef(false)
@@ -97,7 +100,7 @@ export function ServerRow({ sv, hidden, pos }: { sv: SnapshotServer; hidden?: bo
     // Вход на сервер — тоже выбор режима: лобби вернёт на этот сервер.
     useLobby.getState().pick(serverMode(sv))
     setLabel('Подготовка…')
-    quickJoin(joinAddr(sv), sv.name || 'Сервер', licenseRequired(sv.lic), sv.versions)
+    quickJoin(joinAddr(sv), sv.name || t('Сервер'), licenseRequired(sv.lic), sv.versions)
       .catch(() => {})
       .finally(() => {
         setLabel('Играть')
@@ -129,7 +132,7 @@ export function ServerRow({ sv, hidden, pos }: { sv: SnapshotServer; hidden?: bo
           <b>{sv.name}</b>
           {on ? <span className="dot"></span> : null}
           <span className="pill">{sv.cat}</span>
-          {sv.lic === 'CRACKED' ? <span className="pill lic-cracked">Без лицензии</span> : null}
+          {sv.lic === 'CRACKED' ? <span className="pill lic-cracked">{t('Вход по нику')}</span> : null}
         </span>
         <span className="srv-meta cat-srv-meta">
           {range ? (
@@ -157,15 +160,15 @@ export function ServerRow({ sv, hidden, pos }: { sv: SnapshotServer; hidden?: bo
               </b>
             </>
           ) : (
-            'офлайн'
+            t('офлайн')
           )}
         </span>
         {sv.ip ? (
           <button className="btn sm primary srv-join" disabled={!on || busy.current} data-track="join" onClick={join}>
-            {label}
+            {t(label)}
           </button>
         ) : (
-          <span className="pill">Вход по заявке</span>
+          <span className="pill">{t('Вход по заявке')}</span>
         )}
       </span>
     </div>

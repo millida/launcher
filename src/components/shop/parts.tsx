@@ -7,6 +7,7 @@ import { CurrencyIcon } from '../CurrencyIcon'
 import { cosmeticSlotIcon } from '../../lib/cosmeticSlots'
 import type { ItemRef } from '../../lib/rubies'
 import { RARITY_TONE } from './rarity'
+import { intlTag, t } from '../../i18n'
 
 /**
  * Осколок — вторая валюта. Рисунок, а не значок: как рубин, это предмет,
@@ -23,7 +24,7 @@ export function Shard({ size = 18 }: { size?: number }) {
 
 /** «до 24 сентября» по Москве: смена дня магазина — 00:00 МСК. */
 export function untilLabel(iso: string): string {
-  return 'до ' + new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', timeZone: 'Europe/Moscow' })
+  return t('до {date}', { date: new Date(iso).toLocaleDateString(intlTag(), { day: 'numeric', month: 'long', timeZone: 'Europe/Moscow' }) })
 }
 
 /** Сколько целых часов осталось (минимум 1): для спокойной строки «через 3 ч». */
@@ -58,14 +59,14 @@ export function useNow(): number {
 
 /** «2д 14ч», «5ч 12м», «12 мин», «меньше минуты». */
 export function leftLabel(ms: number): string {
-  if (ms <= 60_000) return 'меньше минуты'
+  if (ms <= 60_000) return t('меньше минуты')
   const min = Math.floor(ms / 60_000)
   const d = Math.floor(min / 1440)
   const h = Math.floor((min % 1440) / 60)
   const m = min % 60
-  if (d > 0) return d + 'д ' + h + 'ч'
-  if (h > 0) return h + 'ч ' + String(m).padStart(2, '0') + 'м'
-  return m + ' мин'
+  if (d > 0) return t('{d}д {h}ч', { d, h })
+  if (h > 0) return t('{h}ч {m}м', { h, m: String(m).padStart(2, '0') })
+  return t('{m} мин', { m })
 }
 
 /** Живой отсчёт до `to`. Дошёл до нуля — один раз зовёт `onEnd` (обновить витрину). */
@@ -139,8 +140,8 @@ export function Price({ price, base, big }: { price: number; base?: number; big?
   return (
     <span className={'sh-pr' + (big ? ' big' : '') + (off ? ' is-off' : '')}>
       <Ruby size={big ? 20 : 15} />
-      <b>{shown.toLocaleString('ru-RU')}</b>
-      {off ? <s>{base!.toLocaleString('ru-RU')}</s> : null}
+      <b>{shown.toLocaleString(intlTag())}</b>
+      {off ? <s>{base!.toLocaleString(intlTag())}</s> : null}
     </span>
   )
 }

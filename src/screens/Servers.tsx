@@ -4,6 +4,7 @@ import { FilterPill } from '../components/FilterPill'
 import { ServerRow } from '../components/ServerRow'
 import { openExt } from '../lib/api'
 import { track } from '../lib/telemetry'
+import { t, useT } from '../i18n'
 import {
   DEFAULT_FILTERS,
   PAGE_SIZE,
@@ -15,31 +16,32 @@ import {
   useServers,
 } from '../state/servers'
 
-const SORTS: [string, string][] = [
-  ['rating', 'По рейтингу'],
-  ['online', 'По онлайну'],
-  ['name', 'По названию'],
-  ['new', 'Сначала новые'],
+const SORTS = (): [string, string][] => [
+  ['rating', t('По рейтингу')],
+  ['online', t('По онлайну')],
+  ['name', t('По названию')],
+  ['new', t('Сначала новые')],
 ]
 
-const LICENSES: [string, string][] = [
-  ['', 'Любая лицензия'],
-  ['CRACKED', 'Без лицензии'],
-  ['LICENSE', 'Только лицензия'],
+const LICENSES = (): [string, string][] => [
+  ['', t('Любая лицензия')],
+  ['CRACKED', t('Вход по нику')],
+  ['LICENSE', t('Только лицензия')],
 ]
 
 const RATING_ADD_URL = 'https://millida.net/rating/add'
 
-const ONLINE_FILTERS: [string, string][] = [
-  ['', 'Любой онлайн'],
-  ['live', 'Сейчас есть игроки'],
-  ['20', 'От 20 игроков'],
-  ['100', 'От 100 игроков'],
+const ONLINE_FILTERS = (): [string, string][] => [
+  ['', t('Любой онлайн')],
+  ['live', t('Сейчас есть игроки')],
+  ['20', t('От 20 игроков')],
+  ['100', t('От 100 игроков')],
 ]
 
 const SEARCH_DELAY = 400
 
 export function Servers({ on }: { on: boolean }) {
+  const t = useT()
   const { list, total, status, error, loadingMore, category, sort, license, online, version, versions, search } =
     useServers()
   const [q, setQ] = useState(search)
@@ -92,12 +94,12 @@ export function Servers({ on }: { on: boolean }) {
   return (
     <section className={'screen' + (on ? ' on' : '')} id="s-servers">
       <div className="page-head">
-        <h1>Серверы</h1>
+        <h1>{t('Серверы')}</h1>
         <div className="right">
           <div className="input sm" style={{ width: '240px' }}>
             <Icon id="i-search" />
             <input
-              placeholder="Поиск"
+              placeholder={t('Поиск')}
               value={q}
               onChange={(e) => {
                 typed.current = true
@@ -108,7 +110,7 @@ export function Servers({ on }: { on: boolean }) {
           {/* Для владельцев серверов, не для игрока: главное на экране — «Играть» в строке. */}
           <button className="btn sm secondary" data-sound="open" data-track="rating_add_server" onClick={() => openExt(RATING_ADD_URL)}>
             <Icon id="i-plus" />
-            Свой сервер
+            {t('Свой сервер')}
           </button>
         </div>
       </div>
@@ -116,53 +118,53 @@ export function Servers({ on }: { on: boolean }) {
       <div className="mods-filters">
         <FilterPill
           icon="i-grid"
-          label="Категория"
+          label={t('Категория')}
           track="category"
           defaultValue=""
           value={category}
           width={200}
-          options={SERVER_TABS.map(([label, code]) => ({ value: code, label }))}
+          options={SERVER_TABS.map(([label, code]) => ({ value: code, label: t(label) }))}
           onPick={(v) => void loadLiveRating({ category: v })}
         />
         <FilterPill
           icon="i-filter"
-          label="Сортировка"
+          label={t('Сортировка')}
           track="sort"
           defaultValue={DEFAULT_FILTERS.sort}
           value={sort}
           width={180}
-          options={SORTS.map(([v, label]) => ({ value: v, label }))}
+          options={SORTS().map(([v, label]) => ({ value: v, label }))}
           onPick={(v) => void loadLiveRating({ sort: v })}
         />
         <FilterPill
           icon="i-key"
-          label="Лицензия"
+          label={t('Лицензия')}
           track="license"
           defaultValue=""
           value={license}
           width={190}
-          options={LICENSES.map(([v, label]) => ({ value: v, label }))}
+          options={LICENSES().map(([v, label]) => ({ value: v, label }))}
           onPick={(v) => void loadLiveRating({ license: v })}
         />
         <FilterPill
           icon="i-users"
-          label="Онлайн"
+          label={t('Онлайн')}
           track="online"
           defaultValue=""
           value={online}
           width={190}
-          options={ONLINE_FILTERS.map(([v, label]) => ({ value: v, label }))}
+          options={ONLINE_FILTERS().map(([v, label]) => ({ value: v, label }))}
           onPick={(v) => void loadLiveRating({ online: v })}
         />
         {versionOptions.length ? (
           <FilterPill
             icon="i-box2"
-            label="Версия"
+            label={t('Версия')}
             track="version"
             defaultValue=""
             value={version}
             width={190}
-            options={[{ value: '', label: 'Любая версия' }].concat(
+            options={[{ value: '', label: t('Любая версия') }].concat(
               versionOptions.map((v) => ({ value: v.version, label: v.version + ' · ' + v.servers })),
             )}
             onPick={(v) => void loadLiveRating({ version: v })}
@@ -171,7 +173,7 @@ export function Servers({ on }: { on: boolean }) {
         {filtered ? (
           <button type="button" className="mk-pill" data-track="filter_reset" onClick={reset}>
             <Icon id="i-x" />
-            <span>Сбросить</span>
+            <span>{t('Сбросить')}</span>
           </button>
         ) : null}
       </div>
@@ -182,10 +184,10 @@ export function Servers({ on }: { on: boolean }) {
           <span className="cat-empty-ic">
             <Icon id="i-alert" />
           </span>
-          <b>Серверы не загрузились</b>
+          <b>{t('Серверы не загрузились')}</b>
           <button className="btn md primary" data-track="retry" onClick={() => void loadLiveRating()}>
             <Icon id="i-restart" />
-            Повторить
+            {t('Повторить')}
           </button>
         </div>
       ) : list.length ? (
@@ -203,7 +205,7 @@ export function Servers({ on }: { on: boolean }) {
                 data-track="load_more"
                 onClick={() => void loadMoreServers()}
               >
-                Показать ещё {Math.min(PAGE_SIZE, total - list.length)}
+                {t('Показать ещё {n}', { n: Math.min(PAGE_SIZE, total - list.length) })}
               </button>
             </div>
           ) : null}
@@ -213,10 +215,10 @@ export function Servers({ on }: { on: boolean }) {
           <span className="cat-empty-ic">
             <Icon id={filtered ? 'i-search' : 'i-server'} />
           </span>
-          <b>{filtered ? 'Ничего не нашли' : 'Здесь пока пусто'}</b>
+          <b>{filtered ? t('Ничего не нашли') : t('Здесь пока пусто')}</b>
           {filtered ? (
             <button className="btn md secondary" data-track="filter_reset" onClick={reset}>
-              Сбросить
+              {t('Сбросить')}
             </button>
           ) : null}
         </div>

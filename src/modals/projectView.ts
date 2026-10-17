@@ -4,6 +4,9 @@
  * сборкой игрока, подписи вида материала. Под тесты (projectView.test.ts).
  */
 
+import { formatDate, getLocale, t } from '../i18n'
+import { plural } from '../lib/format'
+
 /** Лицензия из Modrinth: SPDX-id, своё имя и ссылка на текст. */
 export interface LicenseInfo {
   id: string
@@ -46,22 +49,22 @@ export function licenseLabel(lic: LicenseInfo | string | null | undefined): Lice
   const name = typeof lic === 'string' ? '' : (lic.name || '').trim()
   if (!id && !name) return null
   if (/^LicenseRef-All-Rights-Reserved$/i.test(id) || /^(ARR|All Rights Reserved)$/i.test(id || name)) {
-    return { text: 'Все права защищены', open: false }
+    return { text: t('Все права защищены'), open: false }
   }
-  if (SPDX[id]) return { text: SPDX[id], open: OPEN.test(id) }
+  if (SPDX[id]) return { text: t(SPDX[id]), open: OPEN.test(id) }
   const gpl = id.match(/^(A|L)?GPL-(\d(?:\.\d)?)(?:-(only|or-later))?$/i)
   if (gpl) {
     const base = (gpl[1] ? gpl[1].toUpperCase() : '') + 'GPL ' + gpl[2]
-    return { text: gpl[3] && gpl[3].toLowerCase() === 'or-later' ? base + ' и новее' : base, open: true }
+    return { text: gpl[3] && gpl[3].toLowerCase() === 'or-later' ? t('{license} и новее', { license: base }) : base, open: true }
   }
   if (/^LicenseRef-/i.test(id)) {
     if (name && !/^custom$/i.test(name)) return { text: name, open: false }
     const tail = id.replace(/^LicenseRef-/i, '').replace(/[-_]+/g, ' ').trim()
-    if (!tail || /^(custom|unknown|other)$/i.test(tail)) return { text: 'Своя лицензия автора', open: false }
+    if (!tail || /^(custom|unknown|other)$/i.test(tail)) return { text: t('Своя лицензия автора'), open: false }
     return { text: tail, open: false }
   }
   // CurseForge и каталог Millida присылают имя строкой: «MIT License», «Custom».
-  if (/^custom$/i.test(id)) return { text: 'Своя лицензия автора', open: false }
+  if (/^custom$/i.test(id)) return { text: t('Своя лицензия автора'), open: false }
   return { text: name || id.replace(/-/g, ' '), open: OPEN.test(id) }
 }
 
@@ -107,39 +110,39 @@ export function compatOf(
 export function compatText(c: Compat): string {
   switch (c) {
     case 'ok':
-      return 'Подходит'
+      return t('Подходит')
     case 'game':
-      return 'Другая версия игры'
+      return t('Другая версия игры')
     case 'loader':
-      return 'Другой загрузчик'
+      return t('Другой загрузчик')
     case 'both':
-      return 'Не для этой сборки'
+      return t('Не для этой сборки')
     default:
       return ''
   }
 }
 
-const KIND: Record<string, string> = {
-  mod: 'Мод',
-  modpack: 'Сборка',
-  resourcepack: 'Ресурспак',
-  shader: 'Шейдер',
-  datapack: 'Датапак',
-  plugin: 'Плагин',
-  world: 'Карта',
-  map: 'Карта',
-}
+const kinds = (): Record<string, string> => ({
+  mod: t('Мод'),
+  modpack: t('Сборка'),
+  resourcepack: t('Ресурспак'),
+  shader: t('Шейдер'),
+  datapack: t('Датапак'),
+  plugin: t('Плагин'),
+  world: t('Карта'),
+  map: t('Карта'),
+})
 
-export const kindLabel = (kind: string): string => KIND[kind] || 'Материал'
+export const kindLabel = (kind: string): string => kinds()[kind] || t('Материал')
 
 /** «Клиент и сервер», «Только клиент» — где нужен мод (поля client_side/server_side Modrinth). */
 export function sideLabel(client?: string | null, server?: string | null): string {
   const c = client === 'required' || client === 'optional'
   const s = server === 'required' || server === 'optional'
-  if (client === 'required' && server === 'required') return 'Клиент и сервер'
-  if (c && !s) return 'Только клиент'
-  if (s && !c) return 'Только сервер'
-  if (c && s) return 'Клиент или сервер'
+  if (client === 'required' && server === 'required') return t('Клиент и сервер')
+  if (c && !s) return t('Только клиент')
+  if (s && !c) return t('Только сервер')
+  if (c && s) return t('Клиент или сервер')
   return ''
 }
 
@@ -158,14 +161,6 @@ export function orderGallery<T extends { featured?: boolean; ordering?: number }
 
 const RU_MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
 
-const plural = (n: number, one: string, few: string, many: string): string => {
-  const m10 = n % 10
-  const m100 = n % 100
-  if (m10 === 1 && m100 !== 11) return one
-  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few
-  return many
-}
-
 /**
  * «сегодня», «вчера», «5 дней назад», «3 недели назад», «12 марта», «12 марта 2024» —
  * когда вышел файл или обновился проект. `now` — для тестов.
@@ -174,18 +169,19 @@ const RU_MONTHS_SHORT = ['янв', 'фев', 'мар', 'апр', 'мая', 'ию
 
 export function agoLabel(iso: string | null | undefined, now: number = Date.now(), short = false): string {
   if (!iso) return ''
-  const t = Date.parse(iso)
-  if (Number.isNaN(t)) return ''
-  const days = Math.floor((now - t) / 86400000)
-  if (days < 1) return 'сегодня'
-  if (days < 2) return 'вчера'
-  if (days < 7) return days + ' ' + plural(days, 'день', 'дня', 'дней') + ' назад'
+  const ts = Date.parse(iso)
+  if (Number.isNaN(ts)) return ''
+  const days = Math.floor((now - ts) / 86400000)
+  if (days < 1) return t('сегодня')
+  if (days < 2) return t('вчера')
+  if (days < 7) return plural(days, t('{n} день назад', { n: days }), t('{n} дня назад', { n: days }), t('{n} дней назад', { n: days }))
   if (days < 30) {
     const w = Math.floor(days / 7)
-    return w + ' ' + plural(w, 'неделю', 'недели', 'недель') + ' назад'
+    return plural(w, t('{n} неделю назад', { n: w }), t('{n} недели назад', { n: w }), t('{n} недель назад', { n: w }))
   }
-  const d = new Date(t)
+  const d = new Date(ts)
   const same = d.getFullYear() === new Date(now).getFullYear()
+  if (getLocale() !== 'ru') return formatDate(d, { day: 'numeric', month: short ? 'short' : 'long', year: same ? undefined : 'numeric' })
   return d.getDate() + ' ' + (short ? RU_MONTHS_SHORT : RU_MONTHS)[d.getMonth()] + (same ? '' : ' ' + d.getFullYear())
 }
 

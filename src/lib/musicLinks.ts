@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 export type LinkService = 'youtube' | 'soundcloud'
 
 export interface MusicLink {
@@ -25,13 +26,13 @@ const SC_PAGES = ['discover', 'search', 'you', 'upload', 'stream', 'feed', 'sett
 /** Watch later, Liked videos, Liked music: private to their owner, an embedded player gets nothing. */
 const YT_PRIVATE_LISTS = ['WL', 'LL', 'LM']
 
-const NOT_A_LINK = 'Это не ссылка — вставь адрес плейлиста целиком'
-const UNKNOWN_SITE = 'Играем плейлисты YouTube и SoundCloud — вставь ссылку оттуда'
-const SPOTIFY = 'Spotify вне своего приложения отдаёт только отрывки по 30 секунд. Вставь плейлист с YouTube или SoundCloud'
-const YT_NOTHING = 'В ссылке нет ни плейлиста, ни ролика — открой плейлист на YouTube и скопируй адрес'
-const YT_PRIVATE = 'Это личный список YouTube, он открывается только тебе. Сделай обычный плейлист с доступом по ссылке'
-const SC_NOTHING = 'Нужна ссылка на плейлист, трек или автора SoundCloud'
-const TOO_LONG = 'Ссылка слишком длинная — скопируй адрес плейлиста без лишних параметров'
+const notALink = (): string => t('Это не ссылка — вставь адрес плейлиста целиком')
+const unknownSite = (): string => t('Играем плейлисты YouTube и SoundCloud — вставь ссылку оттуда')
+const spotify = (): string => t('Spotify вне своего приложения отдаёт только отрывки по 30 секунд. Вставь плейлист с YouTube или SoundCloud')
+const ytNothing = (): string => t('В ссылке нет ни плейлиста, ни ролика — открой плейлист на YouTube и скопируй адрес')
+const ytPrivate = (): string => t('Это личный список YouTube, он открывается только тебе. Сделай обычный плейлист с доступом по ссылке')
+const scNothing = (): string => t('Нужна ссылка на плейлист, трек или автора SoundCloud')
+const tooLong = (): string => t('Ссылка слишком длинная — скопируй адрес плейлиста без лишних параметров')
 
 const fail = (error: string): LinkVerdict => ({ ok: false, error })
 
@@ -51,7 +52,7 @@ function toUrl(raw: string): URL | null {
 function youtube(url: URL): LinkVerdict {
   const list = url.searchParams.get('list') || ''
   const video = /(?:youtu\.be\/|[?&]v=|\/embed\/|\/shorts\/|\/live\/)([\w-]{11})(?![\w-])/.exec(url.href)?.[1] || ''
-  if (YT_PRIVATE_LISTS.includes(list)) return fail(YT_PRIVATE)
+  if (YT_PRIVATE_LISTS.includes(list)) return fail(ytPrivate())
   if (/^[\w-]{12,64}$/.test(list)) {
     return {
       ok: true,
@@ -59,15 +60,15 @@ function youtube(url: URL): LinkVerdict {
         service: 'youtube',
         key: 'yt:l:' + list,
         url: 'https://www.youtube.com/playlist?list=' + list,
-        title: 'Плейлист YouTube',
+        title: t('Плейлист YouTube'),
         embed: YT_EMBED + 'videoseries?list=' + list,
       },
     }
   }
-  if (!video) return fail(YT_NOTHING)
+  if (!video) return fail(ytNothing())
   return {
     ok: true,
-    link: { service: 'youtube', key: 'yt:v:' + video, url: 'https://youtu.be/' + video, title: 'Ролик YouTube', embed: YT_EMBED + video },
+    link: { service: 'youtube', key: 'yt:v:' + video, url: 'https://youtu.be/' + video, title: t('Ролик YouTube'), embed: YT_EMBED + video },
   }
 }
 
@@ -82,11 +83,11 @@ const words = (slug: string) => {
 function soundcloud(url: URL): LinkVerdict {
   const parts = url.pathname.split('/').filter(Boolean)
   const first = (parts[0] || '').toLowerCase()
-  if (!parts.length || SC_PAGES.includes(first)) return fail(SC_NOTHING)
-  if (parts.some((p) => !/^[\w.%-]+$/.test(p))) return fail(SC_NOTHING)
+  if (!parts.length || SC_PAGES.includes(first)) return fail(scNothing())
+  if (parts.some((p) => !/^[\w.%-]+$/.test(p))) return fail(scNothing())
   const path = parts.slice(0, 4).join('/')
   const canon = 'https://soundcloud.com/' + path
-  if (canon.length > MAX_LINK_URL) return fail(TOO_LONG)
+  if (canon.length > MAX_LINK_URL) return fail(tooLong())
   const name = parts[1] === 'sets' ? parts[2] : parts[1]
   return {
     ok: true,
@@ -103,12 +104,12 @@ function soundcloud(url: URL): LinkVerdict {
 /** The pasted text never reaches the player: the address is rebuilt from the recognised id. */
 export function parseMusicLink(raw: string): LinkVerdict {
   const url = toUrl(raw)
-  if (!url) return fail(NOT_A_LINK)
+  if (!url) return fail(notALink())
   const host = url.hostname.toLowerCase()
   if (hostIs(host, YT_HOSTS)) return youtube(url)
   if (host === 'soundcloud.com' || host === 'www.soundcloud.com' || host === 'm.soundcloud.com') return soundcloud(url)
-  if (hostIs(host, SPOTIFY_HOSTS)) return fail(SPOTIFY)
-  return fail(UNKNOWN_SITE)
+  if (hostIs(host, SPOTIFY_HOSTS)) return fail(spotify())
+  return fail(unknownSite())
 }
 
 /** Stored addresses go through the same check as pasted ones: another launcher version may have written them. */

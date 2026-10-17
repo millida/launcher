@@ -1,4 +1,5 @@
 import { hydratePrefs, readPref, writePref } from './prefs'
+import { t } from '../i18n'
 
 /// Размер интерфейса — атрибут `data-density` на <html>, правила в 07-density.css.
 
@@ -8,10 +9,10 @@ export type Density = '' | 'compact' | 'roomy'
 export type DensityPref = Density | 'auto'
 
 export const DENSITIES: { id: DensityPref; label: string }[] = [
-  { id: 'auto', label: 'Авто' },
-  { id: 'compact', label: 'Плотно' },
-  { id: '', label: 'Обычно' },
-  { id: 'roomy', label: 'Крупно' },
+  { id: 'auto', get label() { return t('Авто') } },
+  { id: 'compact', get label() { return t('Плотно') } },
+  { id: '', get label() { return t('Обычно') } },
+  { id: 'roomy', get label() { return t('Крупно') } },
 ]
 
 /// Kept in step with the second tier of 09-wide.css: past this the column is
