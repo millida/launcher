@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../../components/Icon'
+import { t, useT } from '../../i18n'
 import { SiteCatalog } from '../../components/catalog/SiteCatalog'
 import type { CatalogTarget } from '../../components/catalog/target'
 import { FilterPill } from '../../components/FilterPill'
@@ -29,44 +30,44 @@ type Source = 'modrinth' | 'curseforge' | 'ftb'
  *   в каталоге сайта плагинов 808 против ~18 тыс. на Modrinth, и FTB-сборок
  *   в нём нет — прежний путь установки не теряем.
  */
-const SOURCE_TABS: CatalogTab[] = [
-  { id: 'modpack', label: 'Сборки', icon: 'i-box2' },
-  { id: 'plugin', label: 'Плагины', icon: 'i-grid' },
-  { id: 'mod', label: 'Моды', icon: 'i-blocks' },
-  { id: 'map', label: 'Карты', icon: 'i-map' },
-  { id: 'datapack', label: 'Дата-паки', icon: 'i-book' },
+const SOURCE_TABS = (): CatalogTab[] => [
+  { id: 'modpack', label: t('Сборки'), icon: 'i-box2' },
+  { id: 'plugin', label: t('Плагины'), icon: 'i-grid' },
+  { id: 'mod', label: t('Моды'), icon: 'i-blocks' },
+  { id: 'map', label: t('Карты'), icon: 'i-map' },
+  { id: 'datapack', label: t('Дата-паки'), icon: 'i-book' },
 ]
 
-const INSTALL_KIND: Record<string, string> = {
-  MOD: 'Мод',
-  PLUGIN: 'Плагин',
-  MODPACK: 'Сборка',
-  DATAPACK: 'Дата-пак',
-  MAP: 'Карта',
-}
+const INSTALL_KIND = (): Record<string, string> => ({
+  MOD: t('Мод'),
+  PLUGIN: t('Плагин'),
+  MODPACK: t('Сборка'),
+  DATAPACK: t('Дата-пак'),
+  MAP: t('Карта'),
+})
 
-const INSTALL_SOURCE: Record<string, string> = {
+const INSTALL_SOURCE = (): Record<string, string> => ({
   modrinth: 'Modrinth',
   curseforge: 'CurseForge',
   ftb: 'FTB',
-  market: 'Маркет',
-  upload: 'Свой файл',
-  partner: 'Сборка партнёра',
-  catalog: 'Каталог Millida',
-}
+  market: t('Маркет'),
+  upload: t('Свой файл'),
+  partner: t('Сборка партнёра'),
+  catalog: t('Каталог Millida'),
+})
 
-const INSTALL_ST: Record<string, [string, string]> = {
-  PENDING: ['Встанет при запуске', 'warn'],
-  INSTALLED: ['Установлено', 'acc'],
-  FAILED: ['Ошибка', 'danger'],
-}
+const INSTALL_ST = (): Record<string, [string, string]> => ({
+  PENDING: [t('Встанет при запуске'), 'warn'],
+  INSTALLED: [t('Установлено'), 'acc'],
+  FAILED: [t('Ошибка'), 'danger'],
+})
 
-const FAMILY_LABEL: Record<string, string> = {
-  vanilla: 'Без модов и плагинов',
-  plugins: 'Держит плагины',
-  mods: 'Держит моды',
-  proxy: 'Связывает серверы',
-}
+const FAMILY_LABEL = (): Record<string, string> => ({
+  vanilla: t('Без модов и плагинов'),
+  plugins: t('Держит плагины'),
+  mods: t('Держит моды'),
+  proxy: t('Связывает серверы'),
+})
 
 /** Версия сортируется как версия, а не как строка: 1.9 выше 1.10. */
 function verKey(v: string): number[] {
@@ -95,6 +96,7 @@ export function TabContent({
   running: boolean
   onChanged: () => void
 }) {
+  const t = useT()
   const [installs, setInstalls] = useState<HostingInstall[] | null>(null)
   const [updates, setUpdates] = useState<InstallUpdate[]>([])
   const [updBusy, setUpdBusy] = useState<string | null>(null)
@@ -120,11 +122,11 @@ export function TabContent({
   const target = useMemo<CatalogTarget>(() => ({ kind: 'server', serverId, onInstalled: () => changed.current() }), [serverId])
 
   const removeInstall = async (item: HostingInstall) => {
-    if (!(await uiConfirm('Убрать «' + item.name + '» с сервера?', { confirmLabel: 'Убрать' }))) return
+    if (!(await uiConfirm(t('Убрать «{name}» с сервера?', { name: item.name }), { confirmLabel: t('Убрать') }))) return
     try {
       await host.removeInstall(serverId, item.id)
       setInstalls((list) => (list || []).filter((x) => x.id !== item.id))
-      showToast('Убрали. Применится после перезапуска')
+      showToast(t('Убрали. Применится после перезапуска'))
     } catch (e) {
       showToast(errText(e), 'error')
     }
@@ -140,7 +142,7 @@ export function TabContent({
         source: (item.source as Source) || 'modrinth',
         ...(u.latestVersionId ? { versionId: u.latestVersionId } : {}),
       })
-      showToast('«' + item.name + '» обновится при следующем запуске')
+      showToast(t('«{name}» обновится при следующем запуске', { name: item.name }))
       changed.current()
     } catch (e) {
       showToast(errText(e), 'error')
@@ -156,7 +158,7 @@ export function TabContent({
       {updates.length ? (
         <div className="card" style={{ padding: '18px' }}>
           <div className="side-cap" style={{ padding: '0 2px 10px' }}>
-            Есть обновления — {updates.length}
+            {t('Есть обновления — {n}', { n: updates.length })}
           </div>
           <div className="stack">
             {updates.map((u) => (
@@ -168,11 +170,11 @@ export function TabContent({
                   <span className="fr-nick">{u.name}</span>
                   <span className="fr-status">
                     {(u.current || '—') + ' → ' + (u.latest || '—')}
-                    {u.compatible ? '' : ' · под другую версию'}
+                    {u.compatible ? '' : ' · ' + t('под другую версию')}
                   </span>
                 </span>
                 <button className="btn sm secondary" disabled={!u.compatible || updBusy === u.installId} onClick={() => void applyUpdate(u)}>
-                  Обновить
+                  {t('Обновить')}
                 </button>
               </div>
             ))}
@@ -182,14 +184,14 @@ export function TabContent({
 
       <div className="card" style={{ padding: '18px', marginTop: updates.length ? '14px' : 0 }}>
         <div className="side-cap" style={{ padding: '0 2px 10px' }}>
-          Сейчас на сервере — {core} {version}
+          {t('Сейчас на сервере — {core} {version}', { core, version })}
         </div>
         {installs === null ? (
           <Loading />
         ) : installs.length ? (
           <div className="stack">
             {installs.map((i) => {
-              const st = INSTALL_ST[i.status] || ['—', 'off']
+              const st = INSTALL_ST()[i.status] || ['—', 'off']
               return (
                 <div className="fr-row" key={i.id}>
                   {i.iconUrl ? (
@@ -202,8 +204,8 @@ export function TabContent({
                   <span className="fr-body">
                     <span className="fr-nick">{i.name}</span>
                     <span className="fr-status">
-                      {(INSTALL_KIND[i.kind] || i.kind) +
-                        (INSTALL_SOURCE[i.source] ? ' · ' + INSTALL_SOURCE[i.source] : '') +
+                      {(INSTALL_KIND()[i.kind] || i.kind) +
+                        (INSTALL_SOURCE()[i.source] ? ' · ' + INSTALL_SOURCE()[i.source] : '') +
                         (i.versionName ? ' · ' + i.versionName : '')}
                       {i.error ? ' · ' + i.error : ''}
                     </span>
@@ -212,14 +214,14 @@ export function TabContent({
                     <span className="dot"></span> {st[0]}
                   </span>
                   <button className="btn sm secondary" onClick={() => void removeInstall(i)}>
-                    <Icon id="i-trash" /> Убрать
+                    <Icon id="i-trash" /> {t('Убрать')}
                   </button>
                 </div>
               )
             })}
           </div>
         ) : (
-          <Empty icon="i-box" text="Пока пусто" />
+          <Empty icon="i-box" text={t('Пока пусто')} />
         )}
       </div>
 
@@ -227,8 +229,8 @@ export function TabContent({
         <SiteCatalog
           target={target}
           extra={[
-            { id: 'core', label: 'Ядра', first: true, node: <LegacyCatalog key="core" mode="core" {...legacy} /> },
-            { id: 'sources', label: 'Другие каталоги', node: <LegacyCatalog key="sources" mode="sources" {...legacy} /> },
+            { id: 'core', label: t('Ядра'), first: true, node: <LegacyCatalog key="core" mode="core" {...legacy} /> },
+            { id: 'sources', label: t('Другие каталоги'), node: <LegacyCatalog key="sources" mode="sources" {...legacy} /> },
           ]}
         />
       </div>
@@ -252,6 +254,7 @@ function LegacyCatalog({
   running: boolean
   onChanged: () => void
 }) {
+  const t = useT()
   const [cores, setCores] = useState<CatalogCore[] | null>(null)
   const [coresFailed, setCoresFailed] = useState(false)
   const [pickVersion, setPickVersion] = useState(version)
@@ -338,18 +341,18 @@ function LegacyCatalog({
     const ver = next.versions.includes(pickVersion) ? pickVersion : next.latest || next.versions[0] || pickVersion
     if (
       !(await uiConfirm(
-        'Поставить ' + next.name + ' ' + ver + '? Установленная сборка сбросится, мир останется.',
-        { confirmLabel: 'Поставить' },
+        t('Поставить {core} {version}? Установленная сборка сбросится, мир останется.', { core: next.name, version: ver }),
+        { confirmLabel: t('Поставить') },
       ))
     )
       return
     setSavingCore(true)
     try {
       await host.changeCore(serverId, { core: next.id, version: ver })
-      showToast('Ядро сервера: ' + next.name + ' ' + ver + (running ? ' — сервер перезапустится' : ''))
+      showToast(running ? t('Ядро сервера: {core} {version} — сервер перезапустится', { core: next.name, version: ver }) : t('Ядро сервера: {core} {version}', { core: next.name, version: ver }))
       onChanged()
     } catch (e) {
-      showToast('Не удалось сменить ядро: ' + errText(e), 'error')
+      showToast(t('Не удалось сменить ядро: {error}', { error: errText(e) }), 'error')
     } finally {
       setSavingCore(false)
     }
@@ -359,7 +362,7 @@ function LegacyCatalog({
     setBusyId(projectId)
     try {
       await host.install(serverId, { projectId, source: src, ...(versionId ? { versionId } : {}) })
-      showToast('«' + name + '» встанет при следующем запуске')
+      showToast(t('«{name}» встанет при следующем запуске', { name }))
       onChanged()
     } catch (e) {
       showToast(errText(e), 'error')
@@ -384,21 +387,21 @@ function LegacyCatalog({
       ? null
       : isCores
         ? coresFailed
-          ? { icon: 'i-alert', title: 'Каталог не ответил', action: { label: 'Повторить', primary: true, icon: 'i-restart', onClick: loadCores } }
-          : { icon: 'i-search', title: 'Под эту версию ядер нет' }
+          ? { icon: 'i-alert', title: t('Каталог не ответил'), action: { label: t('Повторить'), primary: true, icon: 'i-restart', onClick: loadCores } }
+          : { icon: 'i-search', title: t('Под эту версию ядер нет') }
         : failed
           ? {
               icon: 'i-alert',
-              title: 'Каталог не ответил',
-              action: { label: 'Повторить', primary: true, icon: 'i-restart', onClick: () => void search() },
+              title: t('Каталог не ответил'),
+              action: { label: t('Повторить'), primary: true, icon: 'i-restart', onClick: () => void search() },
             }
           : {
               icon: 'i-search',
-              title: 'Ничего не нашли',
+              title: t('Ничего не нашли'),
               ...(q
                 ? {
                     action: {
-                      label: 'Сбросить',
+                      label: t('Сбросить'),
                       onClick: () => {
                         setQuery('')
                         void search()
@@ -412,7 +415,7 @@ function LegacyCatalog({
     <>
       <div className="cat2-legacy">
         <CatalogShell
-          tabs={mode === 'core' ? [] : SOURCE_TABS}
+          tabs={mode === 'core' ? [] : SOURCE_TABS()}
           tab={tab}
           compact
           onTab={(id) => {
@@ -430,7 +433,7 @@ function LegacyCatalog({
             isCores ? (
               <FilterPill
                 icon="i-box"
-                label="Версия игры"
+                label={t('Версия игры')}
                 width={160}
                 value={pickVersion}
                 options={allVersions.map((v) => ({ value: v, label: v }))}
@@ -439,7 +442,7 @@ function LegacyCatalog({
             ) : (
               <FilterPill
                 icon="i-download"
-                label="Источник"
+                label={t('Источник')}
                 defaultValue="modrinth"
                 value={source}
                 options={[
@@ -464,17 +467,17 @@ function LegacyCatalog({
                     key={c.id}
                     fallbackIcon="i-server-cog"
                     title={c.name}
-                    desc={FAMILY_LABEL[c.family] || ''}
+                    desc={FAMILY_LABEL()[c.family] || ''}
                     aside={
                       c.recommended && !now ? (
                         <span className="cat2-now">
                           <Icon id="i-star" />
-                          Советуем
+                          {t('Советуем')}
                         </span>
                       ) : null
                     }
                     action={{
-                      label: now ? 'Стоит сейчас' : 'Поставить',
+                      label: now ? t('Стоит сейчас') : t('Поставить'),
                       done: now,
                       disabled: savingCore || now,
                       onClick: () => void applyCore(c),
@@ -492,17 +495,17 @@ function LegacyCatalog({
                       title={p.name}
                       desc={p.summary}
                       downloads={p.installs}
-                      downloadsLabel="установок"
+                      downloadsLabel={t('установок')}
                       aside={
                         v && v.minRamMb ? (
                           <span className="cat-dl">
                             <Icon id="i-server" />
-                            <b>от {Math.round(v.minRamMb / 1024)} ГБ</b>
+                            <b>{t('от {n} ГБ', { n: Math.round(v.minRamMb / 1024) })}</b>
                           </span>
                         ) : null
                       }
                       action={{
-                        label: 'Поставить',
+                        label: t('Поставить'),
                         disabled: busyId === String(p.id),
                         onClick: () => void install(String(p.id), p.name, 'ftb'),
                       }}
@@ -520,7 +523,7 @@ function LegacyCatalog({
                       desc={h.summary}
                       downloads={h.downloads}
                       action={{
-                        label: 'Поставить',
+                        label: t('Поставить'),
                         disabled: busyId === id,
                         onClick: () => void install(id, h.name, source),
                       }}

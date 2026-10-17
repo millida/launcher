@@ -4,6 +4,7 @@ import { create } from 'zustand'
 import { Icon } from '../Icon'
 import { Ruby } from '../Ruby'
 import { playSound } from '../../lib/sound'
+import { intlTag, useT } from '../../i18n'
 
 /**
  * Одно окно подтверждения на любую покупку магазина (ТЗ v3, 06.10.2026):
@@ -58,12 +59,13 @@ export const useBuySheet = create<SheetState>((set) => ({
 export const openSheet = (spec: SheetSpec) => useBuySheet.getState().open(spec)
 
 /** «Купить ◆1 020» — главная кнопка покупки за рубины. */
-export function BuyLabel({ verb = 'Купить', price }: { verb?: string; price: number }) {
+export function BuyLabel({ verb, price }: { verb?: string; price: number }) {
+  const t = useT()
   return (
     <>
-      {verb}
+      {verb ?? t('Купить')}
       <Ruby size={18} />
-      {price.toLocaleString('ru-RU')}
+      {price.toLocaleString(intlTag())}
     </>
   )
 }
@@ -88,7 +90,7 @@ function CountUp({ from, to }: { from: number; to: number }) {
   return (
     <span className="bs-count">
       <Ruby size={44} />
-      <b>{n.toLocaleString('ru-RU')}</b>
+      <b>{n.toLocaleString(intlTag())}</b>
     </span>
   )
 }
@@ -101,6 +103,7 @@ export function BuySheetHost() {
   const shut = useBuySheet((s) => s.close)
   const [phase, setPhase] = useState<'ask' | 'busy' | 'done'>('ask')
   const [done, setDone] = useState<SheetDone | null>(null)
+  const t = useT()
   const hold = useRef(false)
   const timer = useRef(0)
 
@@ -162,7 +165,7 @@ export function BuySheetHost() {
       <div
         className={'modal bs' + (isDone ? ' is-done' : '') + (spec.choices ? ' is-choice' : '')}
         role="dialog"
-        aria-label={spec.name || 'Покупка'}
+        aria-label={spec.name || t('Покупка')}
         data-kind={'sheet_' + spec.kind}
         style={spec.tone ? { ['--sh-tone' as string]: spec.tone } : undefined}
         onClick={(e) => e.stopPropagation()}
@@ -175,7 +178,7 @@ export function BuySheetHost() {
               <div key={c.key} className="bs-choice" style={c.tone ? { ['--sh-tone' as string]: c.tone } : undefined}>
                 <div className="bs-art">{c.art}</div>
                 <button className="btn lg primary bs-buy" disabled={phase === 'busy'} data-track={'sheet_buy_' + spec.kind + '_' + c.key} onClick={() => void buy(c.run)}>
-                  {phase === 'busy' ? <span className="bs-spin" aria-label="Ждём" /> : c.confirm}
+                  {phase === 'busy' ? <span className="bs-spin" aria-label={t('Ждём')} /> : c.confirm}
                 </button>
               </div>
             ))}
@@ -186,7 +189,7 @@ export function BuySheetHost() {
           {isDone ? (
             <>
               <i className="bs-flash" aria-hidden="true" />
-              <span className="bs-ok" aria-label="Готово">
+              <span className="bs-ok" aria-label={t('Готово')}>
                 <Icon id="i-check" />
               </span>
             </>
@@ -197,22 +200,22 @@ export function BuySheetHost() {
           {isDone ? (
             done?.onWear ? (
               <button className="btn lg primary" data-track={'sheet_wear_' + spec.kind} onClick={() => (close(), done.onWear?.())}>
-                Надеть
+                {t('Надеть')}
               </button>
             ) : (
               <button className="btn lg primary" data-track={'sheet_ok_' + spec.kind} onClick={close}>
-                Ок
+                {t('Ок')}
               </button>
             )
           ) : (
             <>
               {spec.choices ? null : (
                 <button className="btn lg primary bs-buy" disabled={phase === 'busy'} data-track={'sheet_buy_' + spec.kind} onClick={() => void buy()}>
-                  {phase === 'busy' ? <span className="bs-spin" aria-label="Ждём" /> : spec.confirm}
+                  {phase === 'busy' ? <span className="bs-spin" aria-label={t('Ждём')} /> : spec.confirm}
                 </button>
               )}
               <button className="btn lg secondary" disabled={phase === 'busy'} data-track={'sheet_cancel_' + spec.kind} onClick={close}>
-                Отмена
+                {t('Отмена')}
               </button>
             </>
           )}

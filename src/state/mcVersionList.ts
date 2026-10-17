@@ -3,6 +3,7 @@ import { create } from 'zustand'
 import { listVersionsTyped } from '../ipc/commands'
 import type { McVersion } from '../ipc/commands'
 import { hasTauri } from '../ipc/tauri'
+import { t } from '../i18n'
 
 const PREF = 'm-show-snapshots'
 
@@ -14,11 +15,11 @@ const DEMO: McVersion[] = [
   { id: '1.20.1', kind: 'release' },
 ]
 
-const KIND_NAME: Record<string, string> = {
-  snapshot: 'снапшот',
-  old_beta: 'бета',
-  old_alpha: 'альфа',
-}
+const kindName = (): Record<string, string> => ({
+  snapshot: t('снапшот'),
+  old_beta: t('бета'),
+  old_alpha: t('альфа'),
+})
 
 function storedShow(): boolean {
   try {
@@ -67,7 +68,7 @@ export function ensureMcVersionList(): Promise<void> {
   if (pending) return pending
   pending = (hasTauri() ? listVersionsTyped() : browserManifest())
     .then((list) => {
-      if (!Array.isArray(list) || !list.length) throw new Error('Mojang вернул пустой список версий')
+      if (!Array.isArray(list) || !list.length) throw new Error(t('Mojang вернул пустой список версий'))
       useMcVersionList.setState({ list, error: '' })
     })
     .catch((e) => {
@@ -81,7 +82,7 @@ export function ensureMcVersionList(): Promise<void> {
 export function versionOptions(list: McVersion[], show: boolean, pinned?: string) {
   const opts = list
     .filter((v) => (show ? true : v.kind === 'release'))
-    .map((v) => ({ value: v.id, label: v.kind === 'release' ? v.id : v.id + ' · ' + (KIND_NAME[v.kind] || v.kind) }))
+    .map((v) => ({ value: v.id, label: v.kind === 'release' ? v.id : v.id + ' · ' + (kindName()[v.kind] || v.kind) }))
   if (pinned && !opts.some((o) => o.value === pinned)) opts.unshift({ value: pinned, label: pinned })
   return opts
 }

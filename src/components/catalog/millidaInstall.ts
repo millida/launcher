@@ -14,6 +14,7 @@ import { showToast } from '../../state/ui'
 import { loadItem } from './site'
 import { paidVerdict, pickFile, verdictText } from './paid'
 import { requireMillida, usePaid } from './paidStore'
+import { t } from '../../i18n'
 
 /*
  * Материал каталога Millida, у которого нет источника на Modrinth (его
@@ -23,7 +24,23 @@ import { requireMillida, usePaid } from './paidStore'
  * выдаст только аккаунт с доступом.
  */
 
-const RU: Record<string, string> = { mod: 'Мод', resourcepack: 'Ресурс-пак', shader: 'Шейдер', datapack: 'Дата-пак', world: 'Карта' }
+const RU: Record<string, string> = {
+  get mod() {
+    return t('Мод')
+  },
+  get resourcepack() {
+    return t('Ресурс-пак')
+  },
+  get shader() {
+    return t('Шейдер')
+  },
+  get datapack() {
+    return t('Дата-пак')
+  },
+  get world() {
+    return t('Карта')
+  },
+}
 
 export const MILLIDA_KINDS = new Set(Object.keys(RU))
 
@@ -34,7 +51,7 @@ export const millidaKey = (build: string, kind: string, slug: string) => keyCont
 export async function installMillidaItem(o: { slug: string; title: string; kind: string; paid: boolean }): Promise<boolean> {
   if (!MILLIDA_KINDS.has(o.kind)) return false
   if (!hasTauri()) {
-    showToast('Установка доступна в приложении')
+    showToast(t('Установка доступна в приложении'))
     return false
   }
   if (o.paid && !(await requireMillida())) return false
@@ -47,18 +64,20 @@ export async function installMillidaItem(o: { slug: string; title: string; kind:
     // После покупки — мимо кэша: до неё сервер мог не показать файлы.
     files = (await loadItem(o.slug, o.paid)).files
   } catch (e) {
-    showToast(apiErrorText(e, 'Каталог не ответил — повтори'), 'error')
+    showToast(apiErrorText(e, t('Каталог не ответил — повтори')), 'error')
     return false
   }
   const pick = pickFile(files, build, o.kind)
   if (!pick) {
-    showToast('У материала пока нет файла', 'error')
+    showToast(t('У материала пока нет файла'), 'error')
     return false
   }
   if (!pick.fits && pr) {
     const ok = await uiConfirm(
-      '«' + o.title + '» нет под ' + pr.version + ' · ' + LOADER_NAME(pr) + (pick.versions.length ? ' — есть под ' + pick.versions.join(', ') : '') + '. Поставить всё равно?',
-      { title: 'Версия не совпадает', confirmLabel: 'Поставить', danger: true },
+      pick.versions.length
+        ? t('«{title}» нет под {version} · {loader} — есть под {list}. Поставить всё равно?', { title: o.title, version: pr.version, loader: LOADER_NAME(pr), list: pick.versions.join(', ') })
+        : t('«{title}» нет под {version} · {loader}. Поставить всё равно?', { title: o.title, version: pr.version, loader: LOADER_NAME(pr) }),
+      { title: t('Версия не совпадает'), confirmLabel: t('Поставить'), danger: true },
     )
     if (!ok) return false
   }
@@ -67,7 +86,7 @@ export async function installMillidaItem(o: { slug: string; title: string; kind:
   return runInstall<ContentInstall>({
     key: millidaKey(prof, o.kind, o.slug),
     title: o.title,
-    running: 'Скачивание…',
+    running: t('Скачивание…'),
     run: () => installCatalogFile(prof, o.kind, o.slug, pick.file.id, o.title, pick.file.sha1),
     onDone: (r) => {
       trackTimed('content_install', startedAt, { name: o.title, kind: o.kind, mc: build?.version || '', loader: build?.loader || '', source: 'millida' })
@@ -75,8 +94,8 @@ export async function installMillidaItem(o: { slug: string; title: string; kind:
       void useMods.getState().refreshInstalled()
       showToast(
         o.kind === 'world'
-          ? 'Карта «' + r.file + '» → «' + prof + '»: заходи в одиночную игру'
-          : (RU[o.kind] || 'Файл') + ' → «' + prof + '»: ' + r.file,
+          ? t('Карта «{map}» → «{pack}»: заходи в одиночную игру', { map: r.file, pack: prof })
+          : t('{kind} → «{pack}»: {file}', { kind: RU[o.kind] || t('Файл'), pack: prof, file: r.file }),
         'ok',
         'install',
       )
@@ -88,7 +107,7 @@ export async function installMillidaItem(o: { slug: string; title: string; kind:
         void requireMillida()
         return
       }
-      showToast(verdictText(v) || apiErrorText(e, 'Не удалось поставить'), 'error')
+      showToast(verdictText(v) || apiErrorText(e, t('Не удалось поставить')), 'error')
     },
   })
 }

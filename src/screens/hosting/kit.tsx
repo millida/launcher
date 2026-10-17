@@ -2,16 +2,17 @@ import { useEffect, useState } from 'react'
 import type React from 'react'
 import { Icon } from '../../components/Icon'
 import { uiConfirm } from '../../state/confirm'
+import { formatFixed, intlTag, t, useT } from '../../i18n'
 
 // Раньше здесь был абзац на четыре строки. Тарифы отличаются только памятью,
 // поэтому достаточно одной строки: что открывается и что для этого нужно.
-const PAID_SUMMARY = 'Файлы, SFTP, своё ядро, база и порты — на любом платном тарифе.'
+const PAID_SUMMARY = () => t('Файлы, SFTP, своё ядро, база и порты — на любом платном тарифе.')
 
 export async function paidLock(feature: string, onTariff: () => void) {
-  const ok = await uiConfirm(PAID_SUMMARY, {
-    title: feature + ' — на платном',
-    confirmLabel: 'Выбрать тариф',
-    cancelLabel: 'Закрыть',
+  const ok = await uiConfirm(PAID_SUMMARY(), {
+    title: t('{feature} — на платном', { feature }),
+    confirmLabel: t('Выбрать тариф'),
+    cancelLabel: t('Закрыть'),
     danger: false,
   })
   if (ok) onTariff()
@@ -30,11 +31,12 @@ export function LockBtn({
   title?: string
   onTariff: () => void
 }) {
+  const t = useT()
   return (
     <button
       className={'btn sm ' + (label ? 'secondary' : 'ghost')}
-      aria-label={title || feature + ' — на платном тарифе'}
-      data-tip={label ? undefined : title || feature + ' — на платном'}
+      aria-label={title || t('{feature} — на платном тарифе', { feature })}
+      data-tip={label ? undefined : title || t('{feature} — на платном', { feature })}
       onClick={() => void paidLock(feature, onTariff)}
     >
       <Icon id={icon || 'i-lock'} /> {label}
@@ -231,29 +233,29 @@ export function Loading({ rows = 3 }: { text?: string; rows?: number }) {
   )
 }
 
-export const gbLabel = (mb: number) => (mb / 1024).toFixed(mb % 1024 === 0 ? 0 : 1).replace('.', ',')
+export const gbLabel = (mb: number) => formatFixed(mb / 1024, mb % 1024 === 0 ? 0 : 1)
 
 export const sizeLabel = (bytes: number) => {
-  if (bytes < 1024) return bytes + ' Б'
-  if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' КБ'
-  if (bytes < 1024 * 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1).replace('.', ',') + ' МБ'
-  return (bytes / 1024 / 1024 / 1024).toFixed(2).replace('.', ',') + ' ГБ'
+  if (bytes < 1024) return t('{n} Б', { n: bytes })
+  if (bytes < 1024 * 1024) return t('{n} КБ', { n: Math.round(bytes / 1024) })
+  if (bytes < 1024 * 1024 * 1024) return t('{n} МБ', { n: formatFixed(bytes / 1024 / 1024, 1) })
+  return t('{n} ГБ', { n: formatFixed(bytes / 1024 / 1024 / 1024, 2) })
 }
 
 export const dtLabel = (iso?: string | null) => {
   if (!iso) return '—'
   const d = new Date(iso)
-  return isNaN(d.getTime()) ? '—' : d.toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+  return isNaN(d.getTime()) ? '—' : d.toLocaleString(intlTag(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
 export const dateLabel = (iso?: string | null) => {
   if (!iso) return '—'
   const d = new Date(iso)
-  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString(intlTag(), { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
 export const downloadsLabel = (n: number) => {
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace('.', ',') + ' млн'
-  if (n >= 1000) return Math.round(n / 1000) + ' тыс.'
+  if (n >= 1_000_000) return t('{n} млн', { n: formatFixed(n / 1_000_000, 1) })
+  if (n >= 1000) return t('{n} тыс.', { n: Math.round(n / 1000) })
   return String(n)
 }

@@ -13,6 +13,7 @@ import { runInstall, useInstalls } from '../state/installs'
 import { useMods } from '../state/mods'
 import { useProfiles } from '../state/profiles'
 import { showToast } from '../state/ui'
+import { t } from '../i18n'
 
 /*
  * Сборка из плана ИИ: профиль под версию и загрузчик, затем моды, ресурспаки и
@@ -50,10 +51,10 @@ async function installAuditFixes(profile: string): Promise<DepReport> {
  */
 function installSteps(chosen: MilliChosen): Step[] {
   const steps: Step[] = [
-    { kind: 'mod', label: 'Моды', running: 'Ставим моды…', items: milliItems(chosen.mods) },
-    { kind: 'mod', label: 'Зависимости', running: 'Проверяем зависимости…', items: [], audit: chosen.mods.length > 0 },
-    { kind: 'resourcepack', label: 'Ресурспаки', running: 'Ставим ресурспаки…', items: milliItems(chosen.resourcepacks) },
-    { kind: 'shader', label: 'Шейдеры', running: 'Ставим шейдеры…', items: milliItems(chosen.shaders) },
+    { kind: 'mod', label: t('Моды'), running: t('Ставим моды…'), items: milliItems(chosen.mods) },
+    { kind: 'mod', label: t('Зависимости'), running: t('Проверяем зависимости…'), items: [], audit: chosen.mods.length > 0 },
+    { kind: 'resourcepack', label: t('Ресурспаки'), running: t('Ставим ресурспаки…'), items: milliItems(chosen.resourcepacks) },
+    { kind: 'shader', label: t('Шейдеры'), running: t('Ставим шейдеры…'), items: milliItems(chosen.shaders) },
   ]
   return steps.filter((s) => s.items.length || s.audit)
 }
@@ -138,7 +139,7 @@ async function applyMilliConfig(profile: string, cfg: MilliConfig): Promise<void
   if (args) {
     const s = await loadProfileSettings(profile).catch(() => null)
     await saveProfileSettings(profile, args, s?.width ?? 0, s?.height ?? 0, s?.javaPath ?? '').catch((e) =>
-      showToast('Флаги JVM: ' + errRu(e, 'не сохранились'), 'error'),
+      showToast(t('Флаги JVM: {error}', { error: errRu(e, t('не сохранились')) }), 'error'),
     )
   }
 }
@@ -147,17 +148,17 @@ async function applyMilliConfig(profile: string, cfg: MilliConfig): Promise<void
 function demoInstall(name: string, total: number, onDone: (name: string) => void): string {
   const key = 'ai-demo:' + name
   const st = useInstalls.getState()
-  st.patch(key, { title: name, label: 'Ставим моды…', pct: 2, msg: '', state: 'run' })
+  st.patch(key, { title: name, label: t('Ставим моды…'), pct: 2, msg: '', state: 'run' })
   let i = 0
-  const t = setInterval(() => {
+  const timer = setInterval(() => {
     i++
     if (i > total) {
-      clearInterval(t)
-      useInstalls.getState().patch(key, { label: 'Установлено', pct: 100, msg: '', state: 'done' })
+      clearInterval(timer)
+      useInstalls.getState().patch(key, { label: t('Установлено'), pct: 100, msg: '', state: 'done' })
       onDone(name)
       return
     }
-    useInstalls.getState().patch(key, { pct: 5 + (90 * i) / total, msg: 'Ставим ' + i + '/' + total + '…' })
+    useInstalls.getState().patch(key, { pct: 5 + (90 * i) / total, msg: t('Ставим {i}/{total}…', { i, total }) })
   }, 260)
   return key
 }
@@ -185,7 +186,7 @@ export async function createAiBuild(
       onStep(demoInstall(name, steps.reduce((n, s) => n + s.items.length, 0), (built) => onDone(built, [])))
       return true
     }
-    showToast('Сборки создаются в приложении')
+    showToast(t('Сборки создаются в приложении'))
     return false
   }
   let created = ''
@@ -193,7 +194,7 @@ export async function createAiBuild(
     const p = await createProfile(name, plan.mcVersion, plan.loader === 'fabric', plan.loader, null)
     created = p.name
   } catch (e) {
-    showToast('Не удалось создать сборку: ' + errRu(e, 'ошибка лаунчера'), 'error')
+    showToast(t('Не удалось создать сборку: {error}', { error: errRu(e, t('ошибка лаунчера')) }), 'error')
     return false
   }
   if (plan.config) await applyMilliConfig(created, plan.config)
@@ -218,7 +219,7 @@ export async function createAiBuild(
     void graphics.finally(() => {
       void useMods.getState().refreshInstalled()
       void useMods.getState().load()
-      if (failed.length) showToast('Не встало: ' + failed.slice(0, 3).join('; '), 'error')
+      if (failed.length) showToast(t('Не встало: {list}', { list: failed.slice(0, 3).join('; ') }), 'error')
       onDone(created, failed)
     })
   }
@@ -242,10 +243,10 @@ export async function createAiBuild(
       onError: (e) => {
         // Моды уже в сборке: сбой ресурспаков или шейдеров — строка в итоге, а не повод собирать заново.
         if (i === 0) {
-          showToast(errRu(e, 'Моды не встали — попробуй ещё раз'), 'error')
+          showToast(errRu(e, t('Моды не встали — попробуй ещё раз')), 'error')
           onFail()
         } else {
-          const next = [...failed, step.label + ': ' + errRu(e, 'не встали')]
+          const next = [...failed, step.label + ': ' + errRu(e, t('не встали'))]
           if (!runStep(i + 1, next)) finish(next)
         }
       },

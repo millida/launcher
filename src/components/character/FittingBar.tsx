@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react'
 import { Icon } from '../Icon'
 import { Ruby } from '../Ruby'
+import { t, useT } from '../../i18n'
+import { plural } from '../../lib/format'
 
 /**
  * Панель «Сет» под фигурой. Сет собирается кликами по вещам в разделах: своя
@@ -22,13 +24,7 @@ export interface SetPiece {
   tone?: string
 }
 
-const things = (n: number) => {
-  const d = n % 10
-  const dd = n % 100
-  if (d === 1 && dd !== 11) return n + ' вещь'
-  if (d >= 2 && d <= 4 && (dd < 12 || dd > 14)) return n + ' вещи'
-  return n + ' вещей'
-}
+const things = (n: number) => plural(n, t('{n} вещь', { n }), t('{n} вещи', { n }), t('{n} вещей', { n }))
 
 export function FittingBar({
   pieces,
@@ -68,15 +64,16 @@ export function FittingBar({
   /** Примеряется набор магазина: «Докупить набор» со скидкой набора. */
   offer?: { price: number; onBuy: () => void }
 }) {
+  const t = useT()
   if (!pieces.length) return null
   const short = Math.max(0, total - rubies)
   return (
-    <div className="ch-fit ch-set" aria-label="Сет" data-section="fitting">
+    <div className="ch-fit ch-set" aria-label={t('Сет')} data-section="fitting">
       <div className="ch-set-head">
-        <b>Сет</b>
+        <b>{t('Сет')}</b>
         <small>{things(pieces.length)}</small>
         <button className="btn sm ghost" disabled={busy} data-track="fitting_clear" onClick={onClear}>
-          Сбросить
+          {t('Сбросить')}
         </button>
       </div>
       <div className="ch-set-list">
@@ -94,7 +91,7 @@ export function FittingBar({
                   {piece.price}
                 </>
               ) : (
-                piece.note ?? 'твоя'
+                piece.note ?? t('твоя')
               )}
             </span>
             {(piece.tones?.length ?? 0) > 1 ? (
@@ -117,7 +114,7 @@ export function FittingBar({
       <div className="ch-fit-buy">
         {offer && !needLogin ? (
           <button className="btn md primary" disabled={busy} data-track="set_buy_fitting" onClick={offer.onBuy}>
-            Докупить набор
+            {t('Докупить набор')}
             <Ruby size={14} />
             {offer.price}
           </button>
@@ -126,21 +123,21 @@ export function FittingBar({
           needLogin ? (
             <button className="btn md primary" disabled={busy} data-track="login" onClick={onBuy}>
               <Icon id="i-login" />
-              Войти
+              {t('Войти')}
             </button>
           ) : short > 0 ? (
             <button className="btn md primary" disabled={busy} data-track="fitting_topup" onClick={onTopUp}>
-              Не хватает
+              {t('Не хватает')}
               <Ruby size={14} />
               {short}
             </button>
           ) : (
             <button className={'btn md ' + (offer ? 'secondary' : 'primary')} disabled={busy} data-track="fitting_buy" onClick={onBuy}>
               {busy ? (
-                'Покупаем…'
+                t('Покупаем…')
               ) : (
                 <>
-                  Купить всё
+                  {t('Купить всё')}
                   <Ruby size={14} />
                   {total}
                 </>
@@ -156,11 +153,11 @@ export function FittingBar({
         ) : null}
         {canWear ? (
           <button className={'btn md ' + (total > 0 || onPlus ? 'secondary' : 'primary')} disabled={busy} data-track="fitting_wear" onClick={onWear}>
-            Надеть
+            {t('Надеть')}
           </button>
         ) : null}
         {total > 0 && !needLogin ? (
-          <span className="ch-fit-have" title="Твои рубины">
+          <span className="ch-fit-have" title={t('Твои рубины')}>
             <Ruby size={12} />
             {rubies}
           </span>

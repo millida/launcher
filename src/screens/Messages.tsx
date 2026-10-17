@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
+import { useT } from '../i18n'
 import { ChatThread } from '../components/Chat'
 import { ChatRow, openChatItem } from '../components/friends/ChatRow'
 import { chatList, matchFriend, norm } from '../components/friends/friendsView'
@@ -45,6 +46,7 @@ function ListSkeleton() {
  * Группы живут здесь же, в одном списке с личкой, а не отдельной вкладкой.
  */
 export function Messages({ on }: { on: boolean }) {
+  const t = useT()
   const millida = useHasMillida()
   const friends = useFriends((s) => s.friends)
   const chatWith = useFriends((s) => s.chatWith)
@@ -120,10 +122,10 @@ export function Messages({ on }: { on: boolean }) {
     return (
       <section className={'screen' + (on ? ' on' : '')} id="s-chat">
         <div className="card gate-card">
-          <div className="gate-title">Сообщения — после входа</div>
+          <div className="gate-title">{t('Сообщения — после входа')}</div>
           <button className="btn md primary gate-btn" data-track="login" onClick={() => logoutToLogin()}>
             <Icon id="i-login" />
-            Войти
+            {t('Войти')}
           </button>
         </div>
       </section>
@@ -137,7 +139,7 @@ export function Messages({ on }: { on: boolean }) {
           <div className="input sm msgs-q">
             <Icon id="i-search" />
             <input
-              placeholder="Поиск"
+              placeholder={t('Поиск')}
               value={q}
               spellCheck={false}
               autoComplete="off"
@@ -154,9 +156,9 @@ export function Messages({ on }: { on: boolean }) {
               }}
             />
           </div>
-          <button className="btn sm secondary msgs-new" aria-label="Новая группа" data-track="room_create" onClick={openRoomCreate}>
+          <button className="btn sm secondary msgs-new" aria-label={t('Новая группа')} data-track="room_create" onClick={openRoomCreate}>
             <Icon id="i-plus" />
-            Группа
+            {t('Группа')}
           </button>
         </div>
         <div className="msgs-list" role="list" data-private data-section="chat_list">
@@ -171,7 +173,7 @@ export function Messages({ on }: { on: boolean }) {
               active={i.key === openKey}
             />
           ))}
-          {others.length ? <div className="msgs-cap">Друзья</div> : null}
+          {others.length ? <div className="msgs-cap">{t('Друзья')}</div> : null}
           {others.map((f) => (
             <button className="cl-row" key={f.userId} data-track="chat_open_friend" onClick={() => void openChat(f.userId, f.nickname || '')}>
               <span className="cl-ava">
@@ -184,13 +186,13 @@ export function Messages({ on }: { on: boolean }) {
           ))}
           {!loading && !items.length && !others.length ? (
             needle ? (
-              <p className="faint-note msgs-none-q">Никого не нашли</p>
+              <p className="faint-note msgs-none-q">{t('Никого не нашли')}</p>
             ) : (
               <div className="msgs-blank">
-                <b>Переписок нет</b>
+                <b>{t('Переписок нет')}</b>
                 <button className="btn sm primary" data-track="nav_friends" onClick={() => setScreen('friends')}>
                   <Icon id="i-users" />
-                  Друзья
+                  {t('Друзья')}
                 </button>
               </div>
             )
@@ -203,7 +205,7 @@ export function Messages({ on }: { on: boolean }) {
         ) : (
           <div className="msgs-empty">
             <Icon id="i-msg" />
-            <b>Выбери чат</b>
+            <b>{t('Выбери чат')}</b>
           </div>
         )}
       </div>

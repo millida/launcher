@@ -11,6 +11,7 @@ import { invitePlay } from '../../state/playInvite'
 import type { Friend } from '../../state/friends'
 import { useFriendStreaks } from '../../state/friendStreaks'
 import { StreakFire } from './StreakFire'
+import { t, useT } from '../../i18n'
 
 /** Адрес сервера друга: поле называется по-разному в разных ответах сервера. */
 export const friendServer = (f: Friend): string | undefined =>
@@ -27,18 +28,18 @@ const seenAgo = (lastSeen?: number | null): string =>
 /// чем «4 ч», а минуты тут ничего не решают.
 export const hoursText = (seconds: number): string => {
   const h = Math.floor(seconds / 3600)
-  return h >= 1 ? h + ' ч' : Math.max(1, Math.round(seconds / 60)) + ' мин'
+  return h >= 1 ? t('{n} ч', { n: h }) : t('{n} мин', { n: Math.max(1, Math.round(seconds / 60)) })
 }
 
 /** Одна строка состояния: где человек сейчас или когда был. */
 export function statusText(f: Friend): string {
   if (f.playing) {
     const where = f.serverName || friendServer(f)
-    return where ? 'В игре · ' + where : f.text || 'В игре'
+    return where ? t('В игре · {where}', { where }) : f.text || t('В игре')
   }
-  if (f.online) return f.text || (f.place === 'web' ? 'На сайте' : 'В сети')
+  if (f.online) return f.text || (f.place === 'web' ? t('На сайте') : t('В сети'))
   const ago = seenAgo(f.lastSeen)
-  return f.text || (ago ? 'Был ' + ago : 'Был давно')
+  return f.text || (ago ? t('Был {ago}', { ago }) : t('Был давно'))
 }
 
 const MENU_W = 220
@@ -74,6 +75,7 @@ export function FriendRow({
   onRemove: () => void
   onBlock: () => void
 }) {
+  const t = useT()
   const addr = friendServer(f)
   const canJoin = !!(f.playing && addr)
   const nick = f.nickname || ''
@@ -96,7 +98,7 @@ export function FriendRow({
   }, [menuOpen])
   const join = () => {
     if (!addr) return
-    const name = f.serverName || 'Сервер ' + (nick || 'друга')
+    const name = f.serverName || (nick ? t('Сервер {nick}', { nick }) : t('Сервер друга'))
     rememberServerName(addr, name)
     void quickJoin(addr, name).catch(() => {})
   }
@@ -152,23 +154,23 @@ export function FriendRow({
         {canJoin ? (
           <button className="btn md primary fr-join" data-track="friend_join" data-src="friend" onClick={join}>
             <Icon id="i-login" />
-            Зайти
+            {t('Зайти')}
           </button>
         ) : (
           <button className="btn md primary fr-invite" data-track="invite" onClick={invite}>
             <Icon id="i-server" />
-            Позвать играть
+            {t('Позвать играть')}
           </button>
         )}
         <button className={'btn md secondary fr-msg' + (f.unread ? ' hot' : '')} data-track="friend_write" onClick={write}>
           <Icon id="i-msg" />
-          Написать
+          {t('Написать')}
         </button>
       </span>
       <button
         ref={moreRef}
         className={'tb-btn fr-more' + (menuOpen ? ' on' : '')}
-        aria-label="Ещё"
+        aria-label={t('Ещё')}
         aria-expanded={menuOpen}
         data-track="friend_menu"
         onClick={(e) => {
@@ -189,7 +191,7 @@ export function FriendRow({
             >
               {canJoin ? (
                 <button data-track="invite" onClick={pick(invite)}>
-                  <Icon id="i-server" /> Позвать играть
+                  <Icon id="i-server" /> {t('Позвать играть')}
                 </button>
               ) : null}
               {callSupported() ? (
@@ -199,17 +201,17 @@ export function FriendRow({
                   data-track="call"
                   onClick={pick(() => void callFriend(f.userId, nick))}
                 >
-                  <Icon id="i-phone" /> {callBusy ? 'Идёт звонок' : 'Позвонить'}
+                  <Icon id="i-phone" /> {callBusy ? t('Идёт звонок') : t('Позвонить')}
                 </button>
               ) : null}
               <button data-track="friend_profile" onClick={pick(profile)}>
-                <Icon id="i-user" /> Профиль
+                <Icon id="i-user" /> {t('Профиль')}
               </button>
               <button className="danger" data-track="friend_remove" onClick={onRemove}>
-                <Icon id="i-trash" /> Убрать из друзей
+                <Icon id="i-trash" /> {t('Убрать из друзей')}
               </button>
               <button className="danger" data-track="friend_block" onClick={onBlock}>
-                <Icon id="i-ban" /> Заблокировать
+                <Icon id="i-ban" /> {t('Заблокировать')}
               </button>
             </div>,
             document.body,

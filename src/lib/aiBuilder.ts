@@ -1,4 +1,5 @@
 import type { DepAudit, PlanItem } from '../ipc/commands'
+import { t } from '../i18n'
 
 /*
  * Общее для ИИ-сборки: типы плана из РЕАЛЬНЫХ проектов Modrinth, базовые моды
@@ -88,10 +89,10 @@ export function auditFixItems(audit: Pick<DepAudit, 'issues'>): PlanItem[] {
 }
 
 const EXCLUDED_WHY: Record<string, string> = {
-  quarantine: 'ломает запуск на этой версии',
-  wrong_mc: 'не для этой версии игры',
-  dep_version: 'не уживается с версией своей зависимости',
-  duplicate: 'повтор мода',
+  get quarantine() { return t('ломает запуск на этой версии') },
+  get wrong_mc() { return t('не для этой версии игры') },
+  get dep_version() { return t('не уживается с версией своей зависимости') },
+  get duplicate() { return t('повтор мода') },
 }
 
 /** One line per mod the server left out, so the player sees why a mod they may expect is missing. */

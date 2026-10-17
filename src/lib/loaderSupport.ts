@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { listLoaderVersions } from '../ipc/commands'
 import { hasTauri } from '../ipc/tauri'
+import { t } from '../i18n'
 
 /**
  * Какие загрузчики лаунчер реально поставит на версию Minecraft. Ядро умеет
@@ -53,17 +54,17 @@ function atLeast(nums: number[], min: number[]): boolean {
 export function loaderBlock(loader: LoaderId, id: string, kind: string): string | null {
   if (loader === 'vanilla' || !id) return null
   const v = parse(id, kind)
-  if (v.old) return 'Не для бет'
+  if (v.old) return t('Не для бет')
   if (loader === 'fabric' || loader === 'quilt') {
     // Fabric и Quilt — с 1.14 и её снапшотов (18w43b).
-    if (v.week) return v.week[0] > 18 || (v.week[0] === 18 && v.week[1] >= 43) ? null : 'С 1.14'
+    if (v.week) return v.week[0] > 18 || (v.week[0] === 18 && v.week[1] >= 43) ? null : t('С 1.14')
     if (!v.nums) return null
-    return atLeast(v.nums, [1, 14]) ? null : 'С 1.14'
+    return atLeast(v.nums, [1, 14]) ? null : t('С 1.14')
   }
   // Forge и NeoForge выходят только под релизы.
-  if (!v.release) return 'Только релизы'
-  if (loader === 'neoforge') return v.nums && atLeast(v.nums, [1, 20, 2]) ? null : 'С 1.20.2'
-  return v.nums && atLeast(v.nums, [1, 1]) ? null : 'Нет под ' + id
+  if (!v.release) return t('Только релизы')
+  if (loader === 'neoforge') return v.nums && atLeast(v.nums, [1, 20, 2]) ? null : t('С 1.20.2')
+  return v.nums && atLeast(v.nums, [1, 1]) ? null : t('Нет под {version}', { version: id })
 }
 
 const liveCache = new Map<string, Promise<boolean | null>>()
@@ -93,7 +94,7 @@ export function useLoaderBlocks(id: string, kind: string, active: boolean): Reco
     for (const l of LOADER_IDS) {
       if (l === 'vanilla' || now[l]) continue
       void liveHas(l, id).then((has) => {
-        if (alive && has === false) setOut((o) => ({ ...o, [l]: 'Нет под ' + id }))
+        if (alive && has === false) setOut((o) => ({ ...o, [l]: t('Нет под {version}', { version: id }) }))
       })
     }
     return () => {
@@ -106,9 +107,9 @@ export function useLoaderBlocks(id: string, kind: string, active: boolean): Reco
 /** Подпись версии в списке: снапшот, pre, rc, бета, альфа. */
 export function versionTag(id: string, kind: string): string | null {
   if (kind === 'release') return null
-  if (kind === 'old_beta') return 'бета'
-  if (kind === 'old_alpha') return 'альфа'
+  if (kind === 'old_beta') return t('бета')
+  if (kind === 'old_alpha') return t('альфа')
   if (/-pre|pre-release| Pre-Release/i.test(id)) return 'pre'
   if (/-rc/i.test(id)) return 'rc'
-  return 'снапшот'
+  return t('снапшот')
 }

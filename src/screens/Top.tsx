@@ -1,6 +1,7 @@
 import { createPortal } from 'react-dom'
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { Icon } from '../components/Icon'
+import { useT } from '../i18n'
 import { Head } from '../components/Head'
 import { StreakFire } from '../components/friends/StreakFire'
 import { BOARDS, boardValueText, useBoards, type Board, type BoardEntry } from '../state/boards'
@@ -30,6 +31,7 @@ function Value({ board, v }: { board: Board; v: number }) {
 }
 
 function Actions({ e, mine }: { e: BoardEntry; mine: boolean }) {
+  const t = useT()
   const [liked, setLiked] = useState(false)
   if (mine) return <span className="tb-acts" />
   return (
@@ -37,7 +39,7 @@ function Actions({ e, mine }: { e: BoardEntry; mine: boolean }) {
       <button
         className={'tb-act tb-like' + (liked ? ' on' : '')}
         data-track="top_like"
-        aria-label="Нравится"
+        aria-label={t('Нравится')}
         disabled={!e.slug || liked}
         onClick={() => void likeEntry(e).then((ok) => ok && setLiked(true))}
       >
@@ -45,11 +47,11 @@ function Actions({ e, mine }: { e: BoardEntry; mine: boolean }) {
         <span>{e.likes}</span>
       </button>
       {e.isFriend ? (
-        <button className="tb-act" data-track="top_write" aria-label="Написать" onClick={() => writeTo(e)}>
+        <button className="tb-act" data-track="top_write" aria-label={t('Написать')} onClick={() => writeTo(e)}>
           <Icon id="i-msg" />
         </button>
       ) : (
-        <button className="tb-act tb-add" data-track="top_add" aria-label="В друзья" onClick={() => addFriend(e)}>
+        <button className="tb-act tb-add" data-track="top_add" aria-label={t('В друзья')} onClick={() => addFriend(e)}>
           <Icon id="i-plus" />
         </button>
       )}
@@ -58,12 +60,13 @@ function Actions({ e, mine }: { e: BoardEntry; mine: boolean }) {
 }
 
 function ShieldLine() {
+  const t = useT()
   const max = useDaily((s) => s.status?.shieldsMax ?? 0)
   if (!max) return null
   return (
     <span className="tb-shield">
       <Icon id="i-shield" />
-      {'Щит: ' + max + ' ' + plural(max, 'пропуск', 'пропуска', 'пропусков') + ' в неделю'}
+      {plural(max, t('Щит: {n} пропуск в неделю', { n: max }), t('Щит: {n} пропуска в неделю', { n: max }), t('Щит: {n} пропусков в неделю', { n: max }))}
     </span>
   )
 }
@@ -120,10 +123,11 @@ function Podium({ board, items, onOpen }: { board: Board; items: BoardEntry[]; o
 }
 
 function Card({ board, e, mine, onClose }: { board: Board; e: BoardEntry; mine: boolean; onClose: () => void }) {
+  const t = useT()
   return (
     <div className="modal-bg open vis" onMouseDown={(ev) => ev.target === ev.currentTarget && onClose()}>
       <div className="modal tb-card" role="dialog" aria-label={e.nick}>
-        <button className="tb-card-x" aria-label="Закрыть" onClick={onClose}>
+        <button className="tb-card-x" aria-label={t('Закрыть')} onClick={onClose}>
           <Icon id="i-x" />
         </button>
         <img className="tb-card-rig" src={bodyUrl(e.nick, 192)} alt="" draggable={false} />
@@ -139,6 +143,7 @@ function Card({ board, e, mine, onClose }: { board: Board; e: BoardEntry; mine: 
 }
 
 function MoreCue({ count }: { count: number }) {
+  const t = useT()
   const anchor = useRef<HTMLDivElement>(null)
   const [away, setAway] = useState(false)
 
@@ -161,7 +166,7 @@ function MoreCue({ count }: { count: number }) {
         aria-hidden={away}
         onClick={() => anchor.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
       >
-        {'Ещё ' + count + ' ' + plural(count, 'место', 'места', 'мест')}
+        {plural(count, t('Ещё {n} место', { n: count }), t('Ещё {n} места', { n: count }), t('Ещё {n} мест', { n: count }))}
         <Icon id="i-chev-d" />
       </button>
       <div className="tb-rest-anchor" ref={anchor} />
@@ -190,6 +195,7 @@ const Skeleton = () => (
  * пьедестале фигурами. Строка открывает карточку; «♥», «В друзья», «Написать».
  */
 export function Top({ on }: { on: boolean }) {
+  const t = useT()
   const board = useBoards((s) => s.board)
   const tiers = useBoards((s) => s.tiers)
   const view = useBoards((s) => s.views[board])
@@ -218,29 +224,29 @@ export function Top({ on }: { on: boolean }) {
         <span className="tb-theme-ic" aria-hidden="true">
           <Icon id={tiers ? 'i-shield' : board === 'streak' ? 'i-flame' : 'i-clock'} />
         </span>
-        <h1>Топ</h1>
+        <h1>{t('Топ')}</h1>
       </div>
       {/* Два разных топа (07.10.2026): часы в игре — с периодом, огоньки — серия дней, без периода. */}
       {/* Тир-лист — главный топ; часы и огоньки — мелкими вкладками рядом (владелец 11.10.2026). */}
-      <div className="segs tb-kinds" role="tablist" aria-label="Топ">
+      <div className="segs tb-kinds" role="tablist" aria-label={t('Топ')}>
         <button role="tab" aria-selected={tiers} className={'seg' + (tiers ? ' on' : '')} data-track="top_kind_tiers" onClick={() => useBoards.getState().setTiers(true)}>
           <Icon id="i-shield" />
-          Тир-лист
+          {t('Тир-лист')}
         </button>
         <button role="tab" aria-selected={!tiers && board !== 'streak'} className={'seg minor' + (!tiers && board !== 'streak' ? ' on' : '')} data-track="top_kind_hours" onClick={() => useBoards.getState().setBoard(board === 'streak' ? lastHours.current : board)}>
           <Icon id="i-clock" />
-          Часы
+          {t('Часы')}
         </button>
         <button role="tab" aria-selected={!tiers && board === 'streak'} className={'seg minor' + (!tiers && board === 'streak' ? ' on' : '')} data-track="top_kind_streak" onClick={() => useBoards.getState().setBoard('streak')}>
           <Icon id="i-flame" />
-          Огоньки
+          {t('Огоньки')}
         </button>
       </div>
       {tiers ? <TierBoard on={on} /> : null}
       {/* Своё место — компактной плашкой справа от переключателей, не строкой поверх списка (07.10.2026). */}
       {!tiers && me ? (
         <button className="tb-mine" data-track="top_me" onClick={() => setOpen(me)}>
-          <span className="tb-mine-cap">Ты</span>
+          <span className="tb-mine-cap">{t('Ты')}</span>
           <b className="tb-mine-rank">{'#' + me.rank}</b>
           <Value board={board} v={me.value} />
         </button>
@@ -251,7 +257,7 @@ export function Top({ on }: { on: boolean }) {
         </div>
       ) : null}
       {!tiers && board !== 'streak' ? (
-        <div className="segs tb-boards" role="tablist" aria-label="Период">
+        <div className="segs tb-boards" role="tablist" aria-label={t('Период')}>
           {BOARDS.filter((b) => b.key !== 'streak').map((b) => (
             <button
               key={b.key}
@@ -261,7 +267,7 @@ export function Top({ on }: { on: boolean }) {
               data-track={'top_board_' + b.key}
               onClick={() => useBoards.getState().setBoard(b.key)}
             >
-              {b.name}
+              {t(b.name)}
             </button>
           ))}
         </div>
@@ -272,10 +278,10 @@ export function Top({ on }: { on: boolean }) {
           failed ? (
             <div className="fr-blank">
               <Icon id="i-trophy" />
-              <b>Топ не загрузился</b>
+              <b>{t('Топ не загрузился')}</b>
               <button className="btn sm secondary" data-track="top_retry" onClick={() => void useBoards.getState().load(board, true)}>
                 <Icon id="i-restart" />
-                Повторить
+                {t('Повторить')}
               </button>
             </div>
           ) : (
@@ -283,7 +289,7 @@ export function Top({ on }: { on: boolean }) {
           )
         ) : (
           <>
-            {!me && hasMillidaAccount() ? <div className="tb-none">{board === 'streak' ? 'Зайди завтра — зажжёшь огонь' : 'Сыграй — попадёшь в топ'}</div> : null}
+            {!me && hasMillidaAccount() ? <div className="tb-none">{board === 'streak' ? t('Зайди завтра — зажжёшь огонь') : t('Сыграй — попадёшь в топ')}</div> : null}
             {view.items.length ? (
               flat ? (
                 <Podium board={board} items={view.items.slice(0, 3)} onOpen={setOpen} />
@@ -293,7 +299,7 @@ export function Top({ on }: { on: boolean }) {
             ) : (
               <div className="fr-blank">
                 <Icon id="i-trophy" />
-                <b>Пока пусто</b>
+                <b>{t('Пока пусто')}</b>
               </div>
             )}
             {rest.length ? <MoreCue key={board} count={rest.length} /> : null}

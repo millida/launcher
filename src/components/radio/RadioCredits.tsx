@@ -4,6 +4,7 @@ import { hasTauri } from '../../ipc/tauri'
 import { openUrl } from '../../ipc/commands'
 import { RADIO } from '../../state/music'
 import { Row } from '../SetKit'
+import { useT } from '../../i18n'
 
 const open = (url: string) => (hasTauri() ? openUrl(url) : window.open(url, '_blank'))
 
@@ -16,19 +17,20 @@ const authors = [...new Set(RADIO.map((t) => t.author))].join(', ')
  * CC BY требует назвать автора и лицензию там, где трек звучит, — это здесь.
  */
 export function RadioCredits() {
+  const t = useT()
   const [shown, setShown] = useState(false)
   return (
     <>
-      <Row title="Авторы музыки" hint={authors} keys="музыка авторы лицензия cc by треки радио">
+      <Row title={t('Авторы музыки')} hint={authors} keys="музыка авторы лицензия cc by треки радио">
         <button className="btn sm ghost" aria-expanded={shown} onClick={() => setShown(!shown)}>
-          {shown ? 'Скрыть' : 'Треки'}
+          {shown ? t('Скрыть') : t('Треки')}
         </button>
       </Row>
       {shown
-        ? RADIO.map((t) => (
-            <Row key={t.src} title={t.title} hint={t.author + ' · ' + t.license} keys="музыка авторы лицензия">
-              {t.url ? (
-                <button className="btn sm ghost" aria-label={'Страница трека ' + t.title} onClick={() => open(t.url!)}>
+        ? RADIO.map((track) => (
+            <Row key={track.src} title={track.title} hint={track.author + ' · ' + track.license} keys="музыка авторы лицензия">
+              {track.url ? (
+                <button className="btn sm ghost" aria-label={t('Страница трека {title}', { title: track.title })} onClick={() => open(track.url!)}>
                   <Icon id="i-ext" />
                 </button>
               ) : null}
@@ -36,8 +38,8 @@ export function RadioCredits() {
           ))
         : null}
       {shown ? (
-        <Row title="CC BY 4.0" hint="Текст лицензии" keys="музыка лицензия">
-          <button className="btn sm ghost" aria-label="Текст лицензии CC BY 4.0" onClick={() => open(CC_BY)}>
+        <Row title="CC BY 4.0" hint={t('Текст лицензии')} keys="музыка лицензия">
+          <button className="btn sm ghost" aria-label={t('Текст лицензии CC BY 4.0')} onClick={() => open(CC_BY)}>
             <Icon id="i-ext" />
           </button>
         </Row>

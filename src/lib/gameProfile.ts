@@ -1,6 +1,7 @@
 import { splitVariantCode, variantCode, variantTitles } from './variantNames'
 import { idbGet, idbSet } from './idbCache'
 import { api, hasMillidaAccount } from './api'
+import { getMarket } from '../i18n'
 import { getAccount } from '../state/accounts'
 
 export type SkinSource = 'millida' | 'mojang'
@@ -442,10 +443,19 @@ export interface PlusStatus {
   items: number
   /** Уровень оплаченной подписки (магазин v2). */
   tier?: 'PLUS' | 'DIAMOND' | null
+  /** How this buyer pays: the Russian subscription, or a month from the dollar balance abroad. */
+  checkout?: 'gateway' | 'dollar-wallet'
 }
 
+/// The market of the interface language goes along: a guest-like account on the English
+/// interface is offered the dollar checkout, a proven account its own region.
 export function loadPlus(): Promise<PlusStatus> {
-  return api<PlusStatus>('/launcher/plus')
+  return api<PlusStatus>('/launcher/plus?market=' + getMarket())
+}
+
+/// A month of PLUS from the wallet in the buyer's own currency (dollars abroad), no renewal.
+export function buyPlusMonth(tier: PlusTier, requestId: string): Promise<{ paidUntil: string; priceKopecks: number; currency?: 'RUB' | 'USD' }> {
+  return api('/launcher/plus/wallet/buy', { method: 'POST', body: JSON.stringify({ tier, requestId }) })
 }
 
 export type PlusTier = 'PLUS' | 'DIAMOND'

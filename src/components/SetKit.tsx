@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react'
 import type { ReactNode } from 'react'
+import { t } from '../i18n'
 
 /// Кирпичики экрана настроек: строка «название · управление», плита-группа,
 /// тумблер, сегменты и поиск по строкам. Вынесены отдельно,
@@ -10,6 +11,9 @@ import type { ReactNode } from 'react'
 export const Query = createContext('')
 
 const norm = (s: string) => s.toLowerCase().replace(/ё/g, 'е')
+
+/// Search words are written in Russian; the translated set is added so a query in the interface language finds the row too.
+export const searchWords = (keys: string): string => (keys ? keys + ' ' + t(keys) : '')
 
 export function useMatch(text: string): boolean {
   const q = useContext(Query)
@@ -49,7 +53,7 @@ export function Row({
   id?: string
   children?: ReactNode
 }) {
-  const ok = useMatch(title + ' ' + keys + ' ' + (typeof hint === 'string' ? hint : ''))
+  const ok = useMatch(title + ' ' + searchWords(keys) + ' ' + (typeof hint === 'string' ? hint : ''))
   if (!ok) return null
   return (
     <div className={'s2-row' + (top ? ' top' : '')} id={id}>
@@ -65,7 +69,7 @@ export function Row({
 /// Блок целиком (устройства, облако): показывается при поиске,
 /// только если запрос попал в его слова.
 export function Block({ keys, children }: { keys: string; children: ReactNode }) {
-  return useMatch(keys) ? <>{children}</> : null
+  return useMatch(searchWords(keys)) ? <>{children}</> : null
 }
 
 export function Toggle({

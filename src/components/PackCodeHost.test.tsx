@@ -50,7 +50,7 @@ describe('install by code window', () => {
 
   it('the Import button opens the code window through the shared store', () => {
     const imp = source('../modals/Import.tsx')
-    const button = imp.slice(imp.lastIndexOf('<button', imp.indexOf('<b>По коду</b>')), imp.indexOf('<b>По коду</b>'))
+    const button = imp.slice(imp.lastIndexOf('<button', imp.indexOf("<b>{t('По коду')}</b>")), imp.indexOf("<b>{t('По коду')}</b>"))
     expect(button, '«По коду» must ask the app-wide host for the code window').toContain('usePackCode.getState().show()')
   })
 

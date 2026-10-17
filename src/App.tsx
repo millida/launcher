@@ -41,6 +41,7 @@ import { MoveBuildsModal } from './modals/MoveBuilds'
 import { ProjectModal } from './modals/Project'
 import { NewBuildModal } from './modals/NewBuild'
 import { AccountAddModal } from './modals/AccountAdd'
+import { gameStepPending, hasGameAccount, useFirstRun } from './state/firstRun'
 import { BuyModal } from './components/catalog/PaidActs'
 import { ModpackVersionsOverlay, ScreenshotsOverlay } from './modals/Overlays'
 import { MigrateBuildModal } from './modals/MigrateBuild'
@@ -67,7 +68,7 @@ import { createPresenceMemo, presenceEvents, presenceText, presenceTitle } from 
 import { initDesktopToasts, showDesktopToast } from './lib/desktopToast'
 import { parseInvite } from './lib/invite'
 import { parseCallLog } from './lib/call/callLog'
-import { effectiveNick, getAccount, getMillidaAccount, isMillidaKind, useAccounts } from './state/accounts'
+import { effectiveNick, getAccount, getMillidaAccount, isGameAccountKind, isMillidaKind, useAccounts } from './state/accounts'
 import { markMillidaEver, millidaEver } from './state/onboarding'
 import { OnboardingModal } from './modals/Onboarding'
 import { Tour } from './components/Tour'
@@ -147,14 +148,14 @@ function applyRoomPoll(r: RoomPoll) {
       return
     }
     bumpRoom(m.roomId, m.ts || Date.now(), true)
-    const title = roomById(m.roomId)?.title || 'Группа'
+    const title = roomById(m.roomId)?.title || t('Группа')
     const nick = m.fromNick || ''
     pushChatNotify({
       uid: m.roomId,
       nick: title,
       text: (nick ? nick + ': ' : '') + previewOf(m),
       kind: 'room',
-      actionLabel: 'Открыть группу',
+      actionLabel: t('Открыть группу'),
       action: () => void openRoomChat(m.roomId, title),
     })
     if (notifyShown('room')) {
@@ -176,19 +177,20 @@ function applyRoomPoll(r: RoomPoll) {
   const f = useFriends.getState()
   if (f.chatRoom) {
     const mine = (r.roomTyping || []).find((t) => t.roomId === f.chatRoom)
-    f.set({ chatTypers: (mine?.users || []).map((id) => nickInRooms(id) || 'Кто-то') })
+    f.set({ chatTypers: (mine?.users || []).map((id) => nickInRooms(id) || t('Кто-то')) })
   }
 }
 
 function previewOf(m: PolledMessage): string {
   const text = String(m.text || '')
-  if (m.attachment?.kind === 'voice') return 'Голосовое сообщение'
-  if (m.attachment?.kind === 'image') return 'Картинка'
+  if (m.attachment?.kind === 'voice') return t('Голосовое сообщение')
+  if (m.attachment?.kind === 'image') return t('Картинка')
   const call = parseCallLog(text)
-  if (call) return call.outcome === 'done' ? 'Звонок завершён' : 'Пропущенный звонок'
-  return parseInvite(text) ? 'Приглашение на сервер' : text
+  if (call) return call.outcome === 'done' ? t('Звонок завершён') : t('Пропущенный звонок')
+  return parseInvite(text) ? t('Приглашение на сервер') : text
 }
 import { refreshPlayStats, rememberServerName, serverNameFor, watchPlaytimeWhileRunning } from './state/playStats'
+import { claimJoin, watchJoinClaims } from './lib/joinClaim'
 import { quickJoin } from './lib/joinServer'
 import { findProfile, refreshProfiles } from './state/profiles'
 import { gameCrashData } from './lib/crashEvent'
@@ -248,11 +250,12 @@ import { hideLauncherToTray, initTray, restoreLauncher, restoreOnGameExit, trayC
 import { SESSION_EXPIRED_EVENT, api, hasMillidaAccount } from './lib/api'
 import { hasTauri, tauri } from './ipc/tauri'
 import type { UnlistenFn } from './ipc/tauri'
+import { syncLocaleFromPrefs, t, useT } from './i18n'
 
 function joinAction(f: Friend): (() => void) | undefined {
   const addr = f.serverIp || ''
   if (!addr) return undefined
-  const name = f.serverName || 'Сервер ' + (f.nickname || 'друга')
+  const name = f.serverName || (f.nickname ? t('Сервер {nick}', { nick: f.nickname }) : t('Сервер друга'))
   return () => {
     rememberServerName(addr, name)
     void quickJoin(addr, name).catch(() => {})
@@ -270,7 +273,7 @@ function announcePresence(list: Friend[], kind: 'play' | 'online') {
     text: presenceText(list, kind),
     ts: Date.now(),
     kind,
-    nicks: list.map((f) => f.nickname || 'Друг'),
+    nicks: list.map((f) => f.nickname || t('Друг')),
     open: 'friends' as const,
   }
   if (showDesktopToast(card)) {
@@ -283,7 +286,7 @@ function announcePresence(list: Friend[], kind: 'play' | 'online') {
     nick: card.nick,
     text: card.text,
     kind,
-    actionLabel: join ? 'Зайти к нему' : 'Открыть друзей',
+    actionLabel: join ? t('Зайти к нему') : t('Открыть друзей'),
     action: join || (() => gotoScreen('friends')),
   })
 }
@@ -297,6 +300,8 @@ function notifyPresence(before: Friend[], now: Friend[]) {
 }
 
 export function App() {
+  // Subscribes the shell to language changes; long-lived effects below read the global t, not a captured one.
+  useT()
   useSlidingSegs()
   const classic = useLayout((st) => st.layout === 'classic')
   // Subscribe field by field: subscribing to the whole store re-rendered the active
@@ -382,16 +387,20 @@ export function App() {
     // disk copy has to land before boot decides whether this account may skip login.
     void Promise.all([initSecrets(), hydratePrefs()]).then(() => {
       clearTimeout(safety)
+      syncLocaleFromPrefs()
       const acc = getAccount()
       if (getMillidaAccount()) markMillidaEver()
       // Account present but its token did not survive a secret-storage migration:
       // clear the session once instead of showing a half-logged-in state everywhere.
       if (acc && isMillidaKind(acc.kind) && !hasMillidaAccount()) {
         logoutToLogin()
-        showToast('После обновления войдите в Millida заново — один раз', 'error')
-      } else if (acc && !millidaEver()) {
+        showToast(t('После обновления войдите в Millida заново — один раз'), 'error')
+      } else if (acc && gameStepPending() && !hasGameAccount()) {
+        useUi.getState().setLogged(false)
+        useFirstRun.setState({ open: true })
+      } else if (acc && !millidaEver() && !isGameAccountKind(acc.kind)) {
         logoutToLogin()
-        showToast('Войди в аккаунт Millida — это нужно один раз', 'error')
+        showToast(t('Войди в аккаунт Millida — это нужно один раз'), 'error')
       } else if (acc) enterApp()
       else logoutToLogin()
       void refreshProfiles()
@@ -474,7 +483,7 @@ export function App() {
       // остаётся наполовину залогиненным до перезапуска.
       const wasLogged = useUi.getState().logged
       logoutToLogin()
-      if (wasLogged) showToast('Сессия истекла — войди заново', 'error')
+      if (wasLogged) showToast(t('Сессия истекла — войди заново'), 'error')
     }
     window.addEventListener(SESSION_EXPIRED_EVENT, onExpired)
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired)
@@ -512,7 +521,7 @@ export function App() {
     // The backend keeps a friend online for 60s after the last beat, so beating
     // faster than 45s is pointless; hidden windows only slow down, never stop.
     let lastBeat = 0
-    const t = setInterval(() => {
+    const beat = setInterval(() => {
       const quiet = document.hidden && !gameSession()
       if (Date.now() - lastBeat < (quiet ? 55000 : 45000)) return
       lastBeat = Date.now()
@@ -555,6 +564,7 @@ export function App() {
     // минуту, а до сих пор интерфейс спрашивал только при выходе, и под
     // запущенной сборкой время не появлялось вовсе.
     watchPlaytimeWhileRunning(() => useGame.getState().list.length > 0)
+    const stopJoinClaims = watchJoinClaims()
     void listenGameExit((profile) => {
       // Отыграл спокойно 3+ минуты — план вылета, случившегося до этого запуска, больше не нужен,
       // а починка перед ним засчитывается.
@@ -569,7 +579,7 @@ export function App() {
       // A second copy may still be alive — only the last exit puts the launcher back into lobby.
       if (useGame.getState().list.length) {
         void refreshPlayStats()
-        showToast('Игра «' + profile + '» закрыта')
+        showToast(t('Игра «{name}» закрыта', { name: profile }))
         return
       }
       gameStartedAt = 0
@@ -577,12 +587,13 @@ export function App() {
       heartbeat('lobby')
       void refreshPlayStats()
       if (restoreOnGameExit()) restoreLauncher()
-      showToast('Игра закрыта')
+      showToast(t('Игра закрыта'))
     }).then((u) => {
       unlisten = u
     })
     let unServer: UnlistenFn | null = null
     void listenGameServer((addr) => {
+      if (addr) void claimJoin(addr)
       const name = addr ? serverNameFor(addr) : ''
       if (addr && name) rememberServerName(addr, name)
       updateSessionServer(addr || null, name || null)
@@ -628,13 +639,14 @@ export function App() {
     })
     return () => {
       window.removeEventListener('millida-game-started', onGameStarted)
-      clearInterval(t)
+      clearInterval(beat)
       clearTimeout(t0)
       clearTimeout(dropTimer)
       offSettled()
       offPresenceMode()
       offLive()
       if (unlisten) unlisten()
+      stopJoinClaims()
       if (unServer) unServer()
       if (unCrash) unCrash()
       if (unPackAccess) unPackAccess()
@@ -685,10 +697,10 @@ export function App() {
                 .forEach((x) =>
                   pushChatNotify({
                     uid: x.userId || x.id,
-                    nick: x.nickname || 'Игрок',
-                    text: 'Хочет добавить тебя в друзья',
+                    nick: x.nickname || t('Игрок'),
+                    text: t('Хочет добавить тебя в друзья'),
                     kind: 'request',
-                    actionLabel: 'Открыть заявки',
+                    actionLabel: t('Открыть заявки'),
                     action: () => setScreen('friends'),
                   }),
                 )
@@ -837,7 +849,7 @@ export function App() {
             {/* Классика: шапки с вкладками нет — переключатель «Мои сборки / Каталог» над экраном. */}
             {classic && screen === 'playhub' ? (
               <div className="cl-hubbar">
-                <HubTopTabs libLabel="Мои сборки" />
+                <HubTopTabs libLabel={t('Мои сборки')} />
                 <span className="cl-hubbar-act">
                   <PlayhubBar />
                 </span>

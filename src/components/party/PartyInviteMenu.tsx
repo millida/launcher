@@ -10,6 +10,7 @@ import { loadFriends, useFriends, type Friend } from '../../state/friends'
 import { inviteToParty, joinPartyByCode, partyInviteCode, usePartyStore } from '../../state/party'
 import { setScreen, showToast } from '../../state/ui'
 import '../../styles/pixel/party-invite.css'
+import { t, useT } from '../../i18n'
 
 /** Сколько приглашение «висит» на кнопке, прежде чем её можно нажать снова. */
 const INVITE_MS = 60_000
@@ -30,21 +31,23 @@ const clock = (ms: number) => {
 
 /** Чем занят друг — одной строкой под ником. */
 function statusOf(f: Friend, other?: FriendParty): string {
-  const party = other ? ' · пати ' + other.size + '/' + other.capacity : ''
-  if (!f.online) return 'Не в сети'
-  if (f.place === 'game' || f.playing) return 'Играет' + (f.serverName ? ': ' + f.serverName : f.build ? ': ' + f.build : '') + party
-  if (f.place === 'launcher') return 'В лаунчере' + party
-  return 'На сайте' + party
+  const party = other ? ' · ' + t('пати {n}/{max}', { n: other.size, max: other.capacity }) : ''
+  if (!f.online) return t('Не в сети')
+  const where = f.serverName || f.build
+  if (f.place === 'game' || f.playing) return (where ? t('Играет: {where}', { where }) : t('Играет')) + party
+  if (f.place === 'launcher') return t('В лаунчере') + party
+  return t('На сайте') + party
 }
 
 function Row({ f, inside, full, other, now }: { f: Friend; inside: boolean; full: boolean; other?: FriendParty; now: number }) {
+  const t = useT()
   const until = useSent((s) => s.until[f.userId] || 0)
   const [busy, setBusy] = useState(false)
   const waiting = until > now
   const call = async () => {
     if (busy) return
     // В показе настоящим друзьям приглашение не уходит: зовутся только боты.
-    if (PARTY_SHOWCASE && !SHOWCASE_FRIENDS.some((b) => b.userId === f.userId)) return showToast('В показе зовутся только боты', 'error')
+    if (PARTY_SHOWCASE && !SHOWCASE_FRIENDS.some((b) => b.userId === f.userId)) return showToast(t('В показе зовутся только боты'), 'error')
     setBusy(true)
     const ok = await inviteToParty(f.userId)
     setBusy(false)
@@ -57,18 +60,18 @@ function Row({ f, inside, full, other, now }: { f: Friend; inside: boolean; full
         {f.online ? <i className={'pim-dot' + (f.place === 'game' || f.playing ? ' game' : '')} /> : null}
       </span>
       <span className="pim-who">
-        <b>{f.nickname || 'Друг'}</b>
+        <b>{f.nickname || t('Друг')}</b>
         <span>{statusOf(f, other)}</span>
       </span>
       {inside ? (
         <span className="pim-in">
-          <Icon id="i-check" />В пати
+          <Icon id="i-check" />{t('В пати')}
         </span>
       ) : waiting ? (
-        <span className="pim-wait">Ждём {clock(until - now)}</span>
+        <span className="pim-wait">{t('Ждём {time}', { time: clock(until - now) })}</span>
       ) : (
         <button className="btn sm primary pim-call" data-track="party_invite" disabled={full || busy} onClick={() => void call()}>
-          Позвать
+          {t('Позвать')}
         </button>
       )}
     </div>
@@ -82,6 +85,7 @@ function Row({ f, inside, full, other, now }: { f: Friend; inside: boolean; full
  * «Позвать» → «Ждём 0:58» → «В пати». Не в сети — свёрнуты. Внизу код пати.
  */
 export function PartyInviteList({ close }: { close: () => void }) {
+  const t = useT()
   const real = useFriends((s) => s.friends)
   const party = usePartyStore((s) => s.party)
   const [q, setQ] = useState('')
@@ -93,8 +97,8 @@ export function PartyInviteList({ close }: { close: () => void }) {
   const [now, setNow] = useState(Date.now)
 
   useEffect(() => {
-    const t = window.setInterval(() => setNow(Date.now()), 1000)
-    return () => window.clearInterval(t)
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
   }, [])
 
   useEffect(() => {
@@ -126,15 +130,15 @@ export function PartyInviteList({ close }: { close: () => void }) {
     setBusy('')
     if (!r) return
     setCode({ code: r.code, expiresAt: r.expiresAt })
-    if (await copyText(prettyPartyCode(r.code))) showToast('Код скопирован — отправь другу')
+    if (await copyText(prettyPartyCode(r.code))) showToast(t('Код скопирован — отправь другу'))
   }
   const copy = async () => {
     if (!code) return
-    if (await copyText(prettyPartyCode(code.code))) showToast('Код скопирован')
-    else showToast('Не удалось скопировать', 'error')
+    if (await copyText(prettyPartyCode(code.code))) showToast(t('Код скопирован'))
+    else showToast(t('Не удалось скопировать'), 'error')
   }
   const join = async () => {
-    if (!partyCodeOk(entry)) return showToast('Код из 8 знаков, например AB23-CD45', 'error')
+    if (!partyCodeOk(entry)) return showToast(t('Код из 8 знаков, например AB23-CD45'), 'error')
     setBusy('join')
     const joined = await joinPartyByCode(entry)
     setBusy('')
@@ -146,19 +150,19 @@ export function PartyInviteList({ close }: { close: () => void }) {
         {friends.length > 6 ? (
           <div className="input sm pim-search">
             <Icon id="i-search" />
-            <input placeholder="Ник друга" value={q} onChange={(e) => setQ(e.target.value)} />
+            <input placeholder={t('Ник друга')} value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
         ) : null}
 
         <div className="pim-list">
-          {online.length ? <div className="pim-cap">В сети · {online.length}</div> : null}
+          {online.length ? <div className="pim-cap">{t('В сети · {n}', { n: online.length })}</div> : null}
           {online.map((f) => (
             <Row key={f.userId} f={f} inside={inside.has(f.userId)} full={full} other={elsewhere[f.userId]} now={now} />
           ))}
           {!friends.length ? (
             <div className="pim-empty">
               <Icon id="i-users" />
-              <b>Друзей пока нет</b>
+              <b>{t('Друзей пока нет')}</b>
               <button
                 className="btn sm primary"
                 onClick={() => {
@@ -166,18 +170,18 @@ export function PartyInviteList({ close }: { close: () => void }) {
                   setScreen('friends')
                 }}
               >
-                Найти друзей
+                {t('Найти друзей')}
               </button>
             </div>
           ) : !online.length && !needle ? (
             <div className="pim-empty">
               <Icon id="i-users" />
-              <b>Никого нет в сети</b>
+              <b>{t('Никого нет в сети')}</b>
             </div>
           ) : null}
           {offline.length ? (
             <button className="pim-cap pim-toggle" aria-expanded={showOff || !!needle} onClick={() => setShowOff((v) => !v)}>
-              Не в сети · {offline.length}
+              {t('Не в сети · {n}', { n: offline.length })}
               <Icon id="i-chev-d" className={'icon' + (showOff || needle ? ' up' : '')} />
             </button>
           ) : null}
@@ -195,15 +199,15 @@ export function PartyInviteList({ close }: { close: () => void }) {
           ) : (
             <button className="btn sm secondary pim-code" data-track="party_code_make" disabled={busy === 'code' || full} onClick={() => void makeCode()}>
               <Icon id="i-link" />
-              Код пати
+              {t('Код пати')}
             </button>
           )}
           <div className="input sm pim-join">
-            <input placeholder="Ввести код" maxLength={64} value={entry} onChange={(e) => setEntry(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void join()} />
+            <input placeholder={t('Ввести код')} maxLength={64} value={entry} onChange={(e) => setEntry(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void join()} />
           </div>
           {entry.trim() ? (
             <button className="btn sm primary" disabled={busy === 'join'} onClick={() => void join()}>
-              Войти
+              {t('Войти')}
             </button>
           ) : null}
         </div>

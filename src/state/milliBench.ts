@@ -3,6 +3,7 @@ import { milliOps, milliRevert } from '../lib/milli'
 import type { MilliChangeRef, MilliChangeset, MilliItem, MilliOp, MilliPack, MilliTab } from '../lib/milli'
 import { useUi } from './ui'
 import { PROFILE_OPTIONS } from '../components/milli/bench/benchTabs'
+import { t } from '../i18n'
 
 /*
  * Верстак Милли: одна сборка на весь лаунчер. Квитанция в ленте, верстак и
@@ -165,7 +166,7 @@ export function projectOps(pack: MilliPack, ops: MilliOp[]): MilliPack {
         for (const tab of LIST_TABS) p[tab] = p[tab].map((m) => (matches(m, o.ref) ? { ...m, pinned: o.on } : m))
         break
       case 'shader_level': {
-        ch.changed.push({ projectId: '', title: 'Шейдеры', field: 'level', from: p.shaderLevel ?? 'off', to: o.level })
+        ch.changed.push({ projectId: '', title: t('Шейдеры'), field: 'level', from: p.shaderLevel ?? 'off', to: o.level })
         p.shaderLevel = o.level
         if (o.level === 'off') {
           for (const old of p.shaders.splice(0)) ch.removed.push(ref(old, 'shaders'))
@@ -201,7 +202,7 @@ export function projectOps(pack: MilliPack, ops: MilliOp[]): MilliPack {
         const before = p.resourcepacks.map((m) => m.projectId).join()
         p.resourcepacks = p.resourcepacks.map((m, i) => ({ m, i })).sort((a, b) => pos(a.m) - pos(b.m) || a.i - b.i).map((x) => x.m)
         if (p.resourcepacks.map((m) => m.projectId).join() !== before) ch.titleRu = 'Порядок ресурс-паков'
-        if (p.resourcepacks.map((m) => m.projectId).join() !== before) ch.changed.push({ projectId: '', title: 'Ресурс-паки', field: 'order', from: before, to: p.resourcepacks.map((m) => m.projectId).join() })
+        if (p.resourcepacks.map((m) => m.projectId).join() !== before) ch.changed.push({ projectId: '', title: t('Ресурс-паки'), field: 'order', from: before, to: p.resourcepacks.map((m) => m.projectId).join() })
         break
       }
       // size / theme / rp_style решает сервер — локально не угадываем.
@@ -326,7 +327,7 @@ function settle(next: MilliPack | null, failed: string | null) {
     busy: queue.length > 0,
     canRedo: future.length > 0,
   }))
-  if (failed) useUi.getState().showToast(failed, failed === NOTHING ? 'ok' : 'error', failed === NOTHING ? false : undefined)
+  if (failed) useUi.getState().showToast(t(failed), failed === NOTHING ? 'ok' : 'error', failed === NOTHING ? false : undefined)
 }
 
 const NOTHING = 'Отменять нечего'
@@ -362,7 +363,7 @@ function run(job: Job): Promise<boolean> {
       queue = queue.filter((j) => j !== job)
       const nothing = job.kind === 'revert' && !job.to && /milli_rev|\b409\b/.test(String((e as Error)?.message ?? e))
       if (nothing) past = []
-      settle(null, nothing ? NOTHING : 'Не получилось — вернула как было')
+      settle(null, nothing ? NOTHING : t('Не получилось — вернула как было'))
       return false
     }
   })
@@ -431,7 +432,7 @@ export const useBench = create<BenchState>((set, get) => ({
     // Цель отмены: верх стека клиента; чат из истории — parent (сервер знает точнее).
     const target = past[past.length - 1] ?? cur?.parent ?? null
     if (!cur || !target) {
-      useUi.getState().showToast(NOTHING, 'ok', false)
+      useUi.getState().showToast(t(NOTHING), 'ok', false)
       return Promise.resolve(false)
     }
     return run({ kind: 'revert', target })

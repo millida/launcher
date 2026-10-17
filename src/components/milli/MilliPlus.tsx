@@ -1,5 +1,6 @@
 import { PxIcon } from '../PxIcon'
 import { useDaily } from '../../state/daily'
+import { useT } from '../../i18n'
 
 /**
  * «Больше с PLUS» — сразу в оплату (владелец 30.09 16:11). Путь тот же, что у
@@ -9,7 +10,8 @@ import { useDaily } from '../../state/daily'
  * создаётся. После оплаты `usePlus.active` меняется — панель Милли
  * перечитывает статус (MilliDock).
  */
-export function MilliPlusButton({ label = 'Больше с PLUS', track, src }: { label?: string; track: string; src: string }) {
+export function MilliPlusButton({ label, track, src }: { label?: string; track: string; src: string }) {
+  const t = useT()
   const busy = useDaily((s) => s.busy === 'plus')
   return (
     <button
@@ -22,7 +24,7 @@ export function MilliPlusButton({ label = 'Больше с PLUS', track, src }: 
       onClick={() => void useDaily.getState().startPlus()}
     >
       <PxIcon name="crown" size={12} />
-      {label}
+      {label ?? t('Больше с PLUS')}
     </button>
   )
 }

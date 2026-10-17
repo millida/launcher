@@ -2,6 +2,7 @@ import type React from 'react'
 import { Icon } from '../Icon'
 import { copyText } from '../../lib/clipboard'
 import { showToast } from '../../state/ui'
+import { formatFixed, t, useT } from '../../i18n'
 
 // Сцена сервера — как первый экран millida.net/hosting (приказ владельца 23.09.2026:
 // «как на официальном сайте — супер просто, те же цвета»). Зелёная половина —
@@ -10,19 +11,19 @@ import { showToast } from '../../state/ui'
 // стоит и в списке серверов, и в «Управлять» — человек узнаёт свой сервер.
 
 export const HOST_ST: Record<string, [string, string]> = {
-  RUNNING: ['Работает', 'on'],
-  STARTING: ['Запускается', 'warn'],
-  STOPPING: ['Останавливается', 'warn'],
-  STOPPED: ['Остановлен', 'off'],
-  SUSPENDED: ['Приостановлен', 'danger'],
-  QUEUED: ['В очереди', 'warn'],
-  SLEEPING: ['Спит', 'off'],
-  CRASHED: ['Упал', 'danger'],
-  INSTALLING: ['Устанавливается', 'warn'],
+  get RUNNING(): [string, string] { return [t('Работает'), 'on'] },
+  get STARTING(): [string, string] { return [t('Запускается'), 'warn'] },
+  get STOPPING(): [string, string] { return [t('Останавливается'), 'warn'] },
+  get STOPPED(): [string, string] { return [t('Остановлен'), 'off'] },
+  get SUSPENDED(): [string, string] { return [t('Приостановлен'), 'danger'] },
+  get QUEUED(): [string, string] { return [t('В очереди'), 'warn'] },
+  get SLEEPING(): [string, string] { return [t('Спит'), 'off'] },
+  get CRASHED(): [string, string] { return [t('Упал'), 'danger'] },
+  get INSTALLING(): [string, string] { return [t('Устанавливается'), 'warn'] },
 }
 
 export const blockSrc = (n: number) => '/block-icons/Block' + n + 'Millida.png'
-export const gbNum = (mb: number) => (mb / 1024).toFixed(mb % 1024 === 0 ? 0 : 1).replace('.', ',')
+export const gbNum = (mb: number) => formatFixed(mb / 1024, mb % 1024 === 0 ? 0 : 1)
 
 /// Шкала из десяти клеток, как полоска опыта в игре: плотный акцент, без градиента.
 export function PixMeter({ pct, tone }: { pct: number; tone?: 'warn' | 'danger' }) {
@@ -94,10 +95,11 @@ export function HostScene({
   stats: React.ReactNode
   compact?: boolean
 }) {
+  const t = useT()
   const st = HOST_ST[status] || ['—', 'off']
   const copy = async () => {
     if (!address) return
-    showToast((await copyText(address)) ? 'Адрес скопирован: ' + address : 'Скопируй адрес вручную: ' + address)
+    showToast((await copyText(address)) ? t('Адрес скопирован: {ip}', { ip: address }) : t('Скопируй адрес вручную: {ip}', { ip: address }))
   }
   return (
     <section className={'hsx-scene' + (compact ? ' is-compact' : '')}>
@@ -125,8 +127,8 @@ export function HostScene({
             <h2>{name}</h2>
           </div>
         </div>
-        <button className="hsx-addr" onClick={() => void copy()} disabled={!address} aria-label="Скопировать адрес">
-          <span>{address || 'Адрес появится после запуска'}</span>
+        <button className="hsx-addr" onClick={() => void copy()} disabled={!address} aria-label={t('Скопировать адрес')}>
+          <span>{address || t('Адрес появится после запуска')}</span>
           {address ? <Icon id="i-copy" /> : null}
         </button>
         {note ? (

@@ -3,14 +3,16 @@ import { packAutoUpdate, setPackAutoUpdate } from '../ipc/commands'
 import type { PackAutoUpdate } from '../ipc/commands'
 import { hasTauri } from '../ipc/tauri'
 import { showToast } from '../state/ui'
+import { t, useT } from '../i18n'
 
 export function packAutoUpdateNote(s: PackAutoUpdate): string | null {
-  if (s.on && s.modified) return 'Твои изменения модов заменятся версией автора'
-  if (!s.on && s.modified && s.chosen === null) return 'Выключено: ты менял моды'
+  if (s.on && s.modified) return t('Твои изменения модов заменятся версией автора')
+  if (!s.on && s.modified && s.chosen === null) return t('Выключено: ты менял моды')
   return null
 }
 
 export function PackAutoUpdateRow({ profile }: { profile: string }) {
+  const t = useT()
   const [state, setState] = useState<PackAutoUpdate | null>(null)
   const [busy, setBusy] = useState(false)
   const seq = useRef(0)
@@ -36,9 +38,9 @@ export function PackAutoUpdateRow({ profile }: { profile: string }) {
     setPackAutoUpdate(profile, next)
       .then((s) => {
         if (my === seq.current) setState(s)
-        showToast(next ? 'Сборка будет обновляться сама' : 'Сборка обновляется только по кнопке «Обновить»')
+        showToast(next ? t('Сборка будет обновляться сама') : t('Сборка обновляется только по кнопке «Обновить»'))
       })
-      .catch((e) => showToast('Не удалось сохранить автообновление: ' + e, 'error'))
+      .catch((e) => showToast(t('Не удалось сохранить автообновление: {error}', { error: String(e) }), 'error'))
       .finally(() => setBusy(false))
   }
 
@@ -46,7 +48,7 @@ export function PackAutoUpdateRow({ profile }: { profile: string }) {
   return (
     <div className="set-row" id="bsPackAutoUpdate">
       <span className="lab">
-        Автообновление сборки
+        {t('Автообновление сборки')}
         {note ? <small>{note}</small> : null}
       </span>
       <span
@@ -54,7 +56,7 @@ export function PackAutoUpdateRow({ profile }: { profile: string }) {
         data-packautoupdate={state.on ? 'on' : 'off'}
         role="switch"
         aria-checked={state.on}
-        aria-label="Автообновление сборки"
+        aria-label={t('Автообновление сборки')}
         onClick={toggle}
       ></span>
     </div>

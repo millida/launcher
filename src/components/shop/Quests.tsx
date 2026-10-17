@@ -3,15 +3,17 @@ import type { PackQuest } from '../../lib/rubies'
 import { Head, ItemArt, toneStyle } from './parts'
 import { RarityPlate } from './rarityUi'
 import { minuteWord, questPct, questState } from './packQuests'
+import { useT } from '../../i18n'
 
 export function QuestsBlock({ quests, busy, onClaim }: { quests: PackQuest[]; busy: string; onClaim: (quest: PackQuest) => void }) {
+  const t = useT()
   if (!quests.length) return null
   return (
     <div className="card sh-block" id="shop-quests" data-section="pack_quests">
-      <Head title="Задания сборок">
+      <Head title={t('Задания сборок')}>
         <span className="sh-tag">
           <Icon id="i-clock" />
-          Вещь целиком — за игру
+          {t('Вещь целиком — за игру')}
         </span>
       </Head>
       <div className="sh-ach-prizes">
@@ -24,6 +26,7 @@ export function QuestsBlock({ quests, busy, onClaim }: { quests: PackQuest[]; bu
 }
 
 function QuestRow({ quest, busy, onClaim }: { quest: PackQuest; busy: boolean; onClaim: (quest: PackQuest) => void }) {
+  const t = useT()
   const state = questState(quest)
   const tip = quest.fragments ? quest.item.name + ' · ' + quest.fragments.have + '/' + quest.fragments.need : quest.item.name
   return (
@@ -39,7 +42,7 @@ function QuestRow({ quest, busy, onClaim }: { quest: PackQuest; busy: boolean; o
         </span>
       </span>
       <span className="sh-prize-n">
-        {Math.min(quest.minutes, quest.needMinutes)}/{quest.needMinutes} мин
+        {t('{have}/{need} мин', { have: Math.min(quest.minutes, quest.needMinutes), need: quest.needMinutes })}
       </span>
       {state.kind === 'claim' ? (
         <button
@@ -50,16 +53,16 @@ function QuestRow({ quest, busy, onClaim }: { quest: PackQuest; busy: boolean; o
           data-id={quest.item.code}
           onClick={() => onClaim(quest)}
         >
-          Забрать
+          {t('Забрать')}
         </button>
       ) : state.kind === 'play' ? (
         <span className="sh-meter-cap">
-          Ещё {state.left} {minuteWord(state.left)} в {quest.packName}
+          {t('Ещё {n} {word} в {pack}', { n: state.left, word: minuteWord(state.left), pack: quest.packName })}
         </span>
       ) : (
         <span className="sh-owned sm">
           <Icon id="i-check" />
-          {state.kind === 'owned' ? 'Есть' : 'Забрано'}
+          {state.kind === 'owned' ? t('Есть') : t('Забрано')}
         </span>
       )}
     </div>

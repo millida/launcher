@@ -334,7 +334,14 @@
   --px-n: 5px;
   --px-ol: var(--m-accent); --px-ol-w: 3px;
 }
-:root:root .s2-wp-tile.add { --px-ol: var(--m-border-strong); --px-ol-w: 2px; }
+.s2-wp-tile.add::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: var(--m-border-strong);
+  clip-path: var(--px-ring-5);
+}
 
 :root:root .s2-dot { --px-ol: var(--m-border-strong); --px-ol-w: 2px; }
 :root:root .s2-dot:hover { --px-ol: var(--m-accent); }

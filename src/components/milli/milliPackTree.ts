@@ -1,4 +1,5 @@
 import type { MilliExcluded, MilliItem } from '../../lib/milli'
+import { t } from '../../i18n'
 
 /*
  * Связи в карточке сборки Милли (04.10.2026): какая библиотека для какого
@@ -144,19 +145,19 @@ export function excludedWhy(e: Pick<MilliExcluded, 'reason' | 'detail'>): { why:
   switch (e.reason) {
     case 'dep_version':
       return dep
-        ? { why: 'Не нашлось подходящей зависимости', cause: 'Требует ' + dep[1] + ' — его нет под ' + dep[2] }
-        : { why: 'Не уживается с версией своей зависимости', cause: cap(d) }
+        ? { why: t('Не нашлось подходящей зависимости'), cause: t('Требует {name} — его нет под {version}', { name: dep[1] ?? '', version: dep[2] ?? '' }) }
+        : { why: t('Не уживается с версией своей зависимости'), cause: cap(d) }
     case 'wrong_mc':
-      return { why: 'Нет версии для этой игры', cause: dep ? 'Файла под ' + dep[2] + ' нет' : cap(d) }
+      return { why: t('Нет версии для этой игры'), cause: dep ? t('Файла под {version} нет', { version: dep[2] ?? '' }) : cap(d) }
     case 'conflict':
-      return { why: 'Конфликт модов', cause: cap(d) }
+      return { why: t('Конфликт модов'), cause: cap(d) }
     case 'duplicate':
-      return { why: 'Повтор', cause: cap(d) }
+      return { why: t('Повтор'), cause: cap(d) }
     case 'crash':
-      return { why: 'Вылетает при запуске', cause: cap(d) }
+      return { why: t('Вылетает при запуске'), cause: cap(d) }
     case 'quarantine':
-      return { why: 'Ломает запуск на этой версии', cause: cap(d) }
+      return { why: t('Ломает запуск на этой версии'), cause: cap(d) }
     default:
-      return { why: cap(d) || 'Не подошёл', cause: '' }
+      return { why: cap(d) || t('Не подошёл'), cause: '' }
   }
 }

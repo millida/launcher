@@ -10,6 +10,7 @@ import type { LobbyMode } from '../../state/lobbyMode'
 import { HubSearch, MyServers } from './HubSearch'
 import { blockArt } from './data'
 import { trackFailure } from '../../lib/telemetry'
+import { t, useT } from '../../i18n'
 
 /**
  * Вкладка «Мои серверы» хаба: свои серверы хостинга Millida (статус, «Зайти»,
@@ -23,7 +24,7 @@ type Load = HostServer[] | 'none' | 'error' | null
 const ownMode = (s: HostServer): LobbyMode => ({
   kind: 'server',
   slug: s.address || s.id,
-  name: s.name || 'Мой сервер',
+  name: s.name || t('Мой сервер'),
   ip: s.address || '',
   logo: s.icon || null,
   banner: null,
@@ -32,14 +33,15 @@ const ownMode = (s: HostServer): LobbyMode => ({
 })
 
 const STATUS: Record<string, [string, string]> = {
-  RUNNING: ['Работает', 'on'],
-  STARTING: ['Запускается', 'wait'],
-  INSTALLING: ['Запускается', 'wait'],
-  STOPPING: ['Выключается', 'wait'],
+  get RUNNING(): [string, string] { return [t('Работает'), 'on'] },
+  get STARTING(): [string, string] { return [t('Запускается'), 'wait'] },
+  get INSTALLING(): [string, string] { return [t('Запускается'), 'wait'] },
+  get STOPPING(): [string, string] { return [t('Выключается'), 'wait'] },
 }
 
 function OwnCard({ s, onJoin, onStart }: { s: HostServer; onJoin: () => void; onStart: () => void }) {
-  const [label, tone] = STATUS[s.status || ''] || ['Выключен', 'off']
+  const t = useT()
+  const [label, tone] = STATUS[s.status || ''] || [t('Выключен'), 'off']
   const running = s.status === 'RUNNING'
   const busy = s.status === 'STARTING' || s.status === 'INSTALLING' || s.status === 'STOPPING'
   const max = s.maxPlayers || s.planMaxPlayers || 0
@@ -49,7 +51,7 @@ function OwnCard({ s, onJoin, onStart }: { s: HostServer; onJoin: () => void; on
         {s.icon ? <img src={s.icon} alt="" draggable={false} /> : <img className="hsv-block" src={blockArt(10)} alt="" draggable={false} />}
       </span>
       <span className="hsv-body">
-        <b>{s.name || 'Мой сервер'}</b>
+        <b>{s.name || t('Мой сервер')}</b>
         <span className="hsv-meta">
           <span className={'hsv-st ' + tone}>
             <span className="hsv-dot" aria-hidden="true"></span>
@@ -57,7 +59,7 @@ function OwnCard({ s, onJoin, onStart }: { s: HostServer; onJoin: () => void; on
           </span>
           {running ? (
             <span>
-              {(s.playersOnline || 0) + (max ? ' / ' + max : '')} в игре
+              {t('{n} в игре', { n: (s.playersOnline || 0) + (max ? ' / ' + max : '') })}
             </span>
           ) : null}
           {s.address ? <span className="hsv-addr">{s.address}</span> : null}
@@ -66,18 +68,18 @@ function OwnCard({ s, onJoin, onStart }: { s: HostServer; onJoin: () => void; on
       <span className="hsv-acts">
         {running ? (
           <button className="btn md primary" data-sound="open" data-track="join" onClick={onJoin}>
-            <Icon id="i-play" /> Зайти
+            <Icon id="i-play" /> {t('Зайти')}
           </button>
         ) : (
           <button className="btn md primary" disabled={busy} data-track="server_start" onClick={onStart}>
-            <Icon id="i-play" /> Запустить
+            <Icon id="i-play" /> {t('Запустить')}
           </button>
         )}
         <button className="btn md secondary" data-sound="open" data-track="invite_friends" onClick={() => setScreen('friends')}>
-          <Icon id="i-users" /> Позвать друзей
+          <Icon id="i-users" /> {t('Позвать друзей')}
         </button>
         <button className="btn md secondary" data-sound="open" data-track="server_manage" onClick={() => setScreen('hosting')}>
-          <Icon id="i-server-cog" /> Управлять
+          <Icon id="i-server-cog" /> {t('Управлять')}
         </button>
       </span>
     </div>
@@ -90,6 +92,7 @@ function OwnCard({ s, onJoin, onStart }: { s: HostServer; onJoin: () => void; on
  * (под «Режимами»). Без `part` — всё подряд, как было.
  */
 export function ServersPane({ on, onPlay, part }: { on: boolean; onPlay: (m: LobbyMode) => void; part?: 'own' | 'find' }) {
+  const t = useT()
   const [list, setList] = useState<Load>(null)
   const [picker, setPicker] = useState(false)
 
@@ -117,13 +120,13 @@ export function ServersPane({ on, onPlay, part }: { on: boolean; onPlay: (m: Lob
   usePolling(() => void load(), 20000, { enabled: own && on && Array.isArray(list), hiddenMs: 0, immediate: false, realtime: 'hosting' })
 
   const start = async (s: HostServer) => {
-    showToast('Запускаем сервер…')
+    showToast(t('Запускаем сервер…'))
     try {
       await api('/hosting/servers/' + encodeURIComponent(s.id) + '/start', { method: 'POST' })
       setTimeout(() => void load(), 1200)
     } catch (e) {
       console.warn('[hub] start', e)
-      showToast('Не получилось — попробуй ещё раз', 'error')
+      showToast(t('Не получилось — попробуй ещё раз'), 'error')
     }
   }
 
@@ -135,7 +138,7 @@ export function ServersPane({ on, onPlay, part }: { on: boolean; onPlay: (m: Lob
     <>
       {part === 'own' && !Array.isArray(list) ? (
         <div className="ph-shelf-head">
-          <h2>Мой сервер</h2>
+          <h2>{t('Мой сервер')}</h2>
         </div>
       ) : null}
       {list === null ? (
@@ -143,27 +146,27 @@ export function ServersPane({ on, onPlay, part }: { on: boolean; onPlay: (m: Lob
       ) : list === 'error' ? (
         <div className="ph-noans">
           <Icon id="i-alert" />
-          <b>Не загрузилось</b>
+          <b>{t('Не загрузилось')}</b>
           <button className="btn sm secondary" data-track="retry" onClick={() => void load()}>
-            <Icon id="i-restart" /> Повторить
+            <Icon id="i-restart" /> {t('Повторить')}
           </button>
         </div>
       ) : list === 'none' ? (
         <div className="ph-card hsv-new">
           <img className="hsv-new-art" src="/lobby/duo@2x.webp" alt="" draggable={false} />
           <span className="hsv-new-body">
-            <b>Свой сервер для друзей</b>
+            <b>{t('Свой сервер для друзей')}</b>
             <button className="btn lg primary" data-sound="open" data-track="server_create" onClick={create}>
-              <Icon id="i-plus" /> Создать · бесплатно
+              <Icon id="i-plus" /> {t('Создать · бесплатно')}
             </button>
           </span>
         </div>
       ) : (
         <section className="ph-shelf">
           <div className="ph-shelf-head">
-            <h2>{part === 'own' ? 'Мой сервер' : 'Хостинг Millida'}</h2>
+            <h2>{part === 'own' ? t('Мой сервер') : t('Хостинг Millida')}</h2>
             <button className="btn sm secondary" data-track="server_create" onClick={create}>
-              <Icon id="i-plus" /> Новый сервер
+              <Icon id="i-plus" /> {t('Новый сервер')}
             </button>
           </div>
           <div className="hsv-list">
@@ -191,12 +194,12 @@ export function ServersPane({ on, onPlay, part }: { on: boolean; onPlay: (m: Lob
     <>
       <section className="ph-shelf">
         <div className="ph-shelf-head">
-          <h2>Зайти на сервер</h2>
+          <h2>{t('Зайти на сервер')}</h2>
         </div>
-        <HubSearch placeholder="Имя или адрес сервера" onServer={onPlay} />
+        <HubSearch placeholder={t('Имя или адрес сервера')} onServer={onPlay} />
       </section>
 
-      <MyServers title="Недавние" limit={12} onPlay={onPlay} />
+      <MyServers title={t('Недавние')} limit={12} onPlay={onPlay} />
     </>
   )
 

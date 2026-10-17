@@ -20,18 +20,19 @@ import {
 } from '../ipc/commands'
 import { listenRewindClip, listenRewindState } from '../ipc/events'
 import { hotkeyFromEvent } from '../lib/rewindHotkey'
+import { t, useT } from '../i18n'
 
-const SECONDS: [number, string][] = [
-  [15, '15 с'],
-  [30, '30 с'],
-  [60, '1 мин'],
-  [120, '2 мин'],
+const seconds = (): [number, string][] => [
+  [15, t('{n} с', { n: 15 })],
+  [30, t('{n} с', { n: 30 })],
+  [60, t('{n} мин', { n: 1 })],
+  [120, t('{n} мин', { n: 2 })],
 ]
 
-const QUALITY: [RewindQuality, string][] = [
+const quality = (): [RewindQuality, string][] => [
   ['720p', '720p'],
   ['1080p', '1080p'],
-  ['native', 'Как в игре'],
+  ['native', t('Как в игре')],
 ]
 
 const FPS: [number, string][] = [
@@ -45,6 +46,7 @@ const clock = (ms: number) => {
 }
 
 function HotkeyButton({ value, onPick }: { value: string; onPick: (combo: string) => void }) {
+  const t = useT()
   const [listening, setListening] = useState(false)
   const onKey = (e: ReactKeyboardEvent<HTMLButtonElement>) => {
     if (!listening) return
@@ -61,17 +63,18 @@ function HotkeyButton({ value, onPick }: { value: string; onPick: (combo: string
   return (
     <button
       className="btn sm ghost"
-      aria-label="Сменить клавишу клипа"
+      aria-label={t('Сменить клавишу клипа')}
       onClick={() => setListening(true)}
       onBlur={() => setListening(false)}
       onKeyDown={onKey}
     >
-      {listening ? 'Нажми сочетание' : <kbd className="s2-kbd">{value}</kbd>}
+      {listening ? t('Нажми сочетание') : <kbd className="s2-kbd">{value}</kbd>}
     </button>
   )
 }
 
 export function RewindClips() {
+  const t = useT()
   const [state, setState] = useState<RewindState | null>(null)
   const [clips, setClips] = useState<ClipFile[]>([])
   const [loading, setLoading] = useState(hasTauri)
@@ -130,12 +133,12 @@ export function RewindClips() {
     <>
       <Group title="Rewind">
         <Row
-          title="Запись последних секунд"
-          hint={supported ? (problem ?? <kbd className="s2-kbd">{s?.hotkey ?? 'Alt+F10'}</kbd>) : 'Только Windows'}
+          title={t('Запись последних секунд')}
+          hint={supported ? (problem ?? <kbd className="s2-kbd">{s?.hotkey ?? 'Alt+F10'}</kbd>) : t('Только Windows')}
           keys="rewind клипы запись повтор видео"
         >
           <Toggle
-            label="Запись последних секунд"
+            label={t('Запись последних секунд')}
             on={!!s?.enabled}
             disabled={!supported || !s}
             onChange={() => supported && s && save({ enabled: !s.enabled })}
@@ -143,22 +146,22 @@ export function RewindClips() {
         </Row>
         {s && supported ? (
           <>
-            <Row title="Длина клипа" keys="длительность секунды">
-              <Segs<number> value={s.seconds} options={SECONDS} onPick={(v) => save({ seconds: v })} />
+            <Row title={t('Длина клипа')} keys="длительность секунды">
+              <Segs<number> value={s.seconds} options={seconds()} onPick={(v) => save({ seconds: v })} />
             </Row>
-            <Row title="Качество" keys="разрешение 720 1080">
-              <Segs<RewindQuality> value={s.quality} options={QUALITY} onPick={(v) => save({ quality: v })} />
+            <Row title={t('Качество')} keys="разрешение 720 1080">
+              <Segs<RewindQuality> value={s.quality} options={quality()} onPick={(v) => save({ quality: v })} />
             </Row>
-            <Row title="Кадров в секунду" keys="fps частота">
+            <Row title={t('Кадров в секунду')} keys="fps частота">
               <Segs<number> value={s.fps} options={FPS} onPick={(v) => save({ fps: v })} />
             </Row>
-            <Row title="Звук игры" hint={status?.audioProblem ?? undefined} keys="звук аудио">
-              <Toggle label="Звук игры" on={s.gameAudio} onChange={() => save({ gameAudio: !s.gameAudio })} />
+            <Row title={t('Звук игры')} hint={status?.audioProblem ?? undefined} keys="звук аудио">
+              <Toggle label={t('Звук игры')} on={s.gameAudio} onChange={() => save({ gameAudio: !s.gameAudio })} />
             </Row>
-            <Row title="Микрофон" keys="микрофон голос">
-              <Toggle label="Микрофон" on={s.mic} onChange={() => save({ mic: !s.mic })} />
+            <Row title={t('Микрофон')} keys="микрофон голос">
+              <Toggle label={t('Микрофон')} on={s.mic} onChange={() => save({ mic: !s.mic })} />
             </Row>
-            <Row title="Сохранить клип" keys="клавиша горячая сочетание">
+            <Row title={t('Сохранить клип')} keys="клавиша горячая сочетание">
               <HotkeyButton value={s.hotkey} onPick={(hotkey) => save({ hotkey })} />
             </Row>
           </>
@@ -166,14 +169,14 @@ export function RewindClips() {
       </Group>
 
       <Block keys="клипы видео папка">
-        <Group title="Клипы">
+        <Group title={t('Клипы')}>
           <div className="s2-row">
             <span className="s2-lab">
-              <b>{clips.length ? clips.length + ' в папке' : 'Millida Clips'}</b>
+              <b>{clips.length ? t('{n} в папке', { n: clips.length }) : 'Millida Clips'}</b>
             </span>
             <div className="s2-ctl">
               <button className="btn sm ghost" onClick={() => rewindOpenFolder().catch((e) => showToast('' + e, 'error'))}>
-                <Icon id="i-folder" /> Папка
+                <Icon id="i-folder" /> {t('Папка')}
               </button>
             </div>
           </div>
@@ -186,9 +189,9 @@ export function RewindClips() {
           ) : clips.length === 0 ? (
             <div className="bx-mini-empty">
               <Icon id="i-play" />
-              <b>Клипов пока нет</b>
+              <b>{t('Клипов пока нет')}</b>
               <span>
-                В игре жми <kbd className="bx-kbd">{s?.hotkey ?? 'Alt+F10'}</kbd>
+                {t('В игре жми')} <kbd className="bx-kbd">{s?.hotkey ?? 'Alt+F10'}</kbd>
               </span>
             </div>
           ) : (
@@ -207,16 +210,16 @@ export function RewindClips() {
                   <div className="shot-acts">
                     <button
                       className="icon-btn"
-                      aria-label="Показать в папке"
+                      aria-label={t('Показать в папке')}
                       onClick={() => rewindRevealClip(clip.name).catch((e) => showToast('' + e, 'error'))}
                     >
                       <Icon id="i-folder" />
                     </button>
                     <button
                       className="icon-btn del"
-                      aria-label="Удалить"
+                      aria-label={t('Удалить')}
                       onClick={() => {
-                        void uiConfirm('Удалить клип «' + clip.name + '»?', { confirmLabel: 'Удалить' }).then((ok) => {
+                        void uiConfirm(t('Удалить клип «{name}»?', { name: clip.name }), { confirmLabel: t('Удалить') }).then((ok) => {
                           if (!ok) return
                           rewindDeleteClip(clip.name)
                             .then(loadClips)

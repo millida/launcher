@@ -25,6 +25,7 @@ import { pickFriendsTab } from '../components/friends/friendsView'
 import { parseInstallLink } from './millidaCatalog'
 import { installFromCatalog } from './catalogInstall'
 import { openGameFromLink } from './gameInvite'
+import { t } from '../i18n'
 
 function handle(raw: string) {
   let url: URL
@@ -48,9 +49,9 @@ function handle(raw: string) {
     // someone else's server asks first. Имя приходит из ссылки и может врать —
     // поэтому рядом всегда настоящий адрес, а запоминаем имя только после «да».
     const label = name === addr ? `«${addr}»` : `«${name}» (${addr})`
-    void uiConfirm(`Запустить игру и зайти на сервер ${label}?`, {
+    void uiConfirm(t('Запустить игру и зайти на сервер {server}?', { server: label }), {
       title: 'Millida',
-      confirmLabel: 'Запустить',
+      confirmLabel: t('Запустить'),
       danger: false,
     }).then((ok) => {
       if (!ok) return
@@ -74,13 +75,13 @@ function handle(raw: string) {
     const profile = decodeURIComponent(rest || q.get('build') || '')
     const exists = useProfiles.getState().profiles.some((p) => p.name === profile)
     if (!exists) {
-      showToast('Сборки «' + profile + '» нет в лаунчере', 'error')
+      showToast(t('Сборки «{name}» нет в лаунчере', { name: profile }), 'error')
       setScreen('builds')
       return
     }
-    void uiConfirm(`Запустить сборку «${profile}»?`, {
+    void uiConfirm(t('Запустить сборку «{name}»?', { name: profile }), {
       title: 'Millida',
-      confirmLabel: 'Запустить',
+      confirmLabel: t('Запустить'),
       danger: false,
     }).then((ok) => {
       if (ok) realLaunch(profile)
@@ -102,7 +103,7 @@ function handle(raw: string) {
   if (action === 'install') {
     const link = parseInstallLink(action, rest, q)
     if (!link) {
-      showToast('Ссылка на установку не распознана', 'error')
+      showToast(t('Ссылка на установку не распознана'), 'error')
       return
     }
     if (link.section === 'modpacks') setScreen('builds')
@@ -139,9 +140,9 @@ function handle(raw: string) {
     if (!slug) return
     setScreen('builds')
     const title = q.get('name') || slug
-    void uiConfirm(title === slug ? `Установить сборку «${slug}»?` : `Установить сборку «${title}» (${slug})?`, {
+    void uiConfirm(title === slug ? t('Установить сборку «{name}»?', { name: slug }) : t('Установить сборку «{name}» ({slug})?', { name: title, slug }), {
       title: 'Millida',
-      confirmLabel: 'Установить',
+      confirmLabel: t('Установить'),
       danger: false,
     }).then((ok) => {
       if (ok) installPackFromLink(slug, title)
@@ -189,14 +190,14 @@ function handle(raw: string) {
     void (find() ? Promise.resolve() : loadFriends().catch(() => {})).then(() => {
       const friend = find()
       if (!friend) {
-        showToast('Позвонить по ссылке можно только другу', 'error')
+        showToast(t('Позвонить по ссылке можно только другу'), 'error')
         return
       }
       const nick = friend.nickname || ''
       // Any web page can fire a millida:// link, so calling someone asks first.
-      void uiConfirm(`Позвонить ${nick || 'этому игроку'}?`, {
+      void uiConfirm(t('Позвонить {nick}?', { nick: nick || t('этому игроку') }), {
         title: 'Millida',
-        confirmLabel: 'Позвонить',
+        confirmLabel: t('Позвонить'),
         danger: false,
       }).then((ok) => {
         if (ok) void callFriend(uid, nick).catch(() => {})
@@ -217,7 +218,7 @@ function installPackFromLink(slug: string, title: string): void {
   runInstall({
     key: keyCatalogPack(slug),
     title,
-    running: 'Скачивание…',
+    running: t('Скачивание…'),
     run: () => installCatalogPack(slug),
     onError: (e) => {
       const text = String(e)
@@ -230,7 +231,7 @@ function installPackFromLink(slug: string, title: string): void {
     onDone: (p) => {
       useProfiles.getState().setSelected(p.name)
       void useProfiles.getState().refresh()
-      showToast('Сборка «' + p.name + '» готова к запуску', 'ok', 'achievement')
+      showToast(t('Сборка «{name}» готова к запуску', { name: p.name }), 'ok', 'achievement')
     },
   })
 }

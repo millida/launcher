@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Icon } from '../Icon'
 import { fmt } from '../../lib/format'
 import { mirrorAsset } from '../../lib/api'
+import { useT } from '../../i18n'
 
 /*
  * Строка Millida Каталога. Одна на весь лаунчер: и клиентский каталог, и
@@ -51,7 +52,8 @@ export function CatalogRow({
   buttonClass?: string
   buttonAttrs?: Record<string, string | number | undefined>
 }) {
-  const word = downloadsLabel || 'скачиваний'
+  const t = useT()
+  const word = downloadsLabel || t('скачиваний')
   return (
     <div className={'mod-row' + (onOpen ? ' cat2-open' : '')} onClick={onOpen} {...attrs}>
       <span className="mod-icon">
@@ -64,7 +66,7 @@ export function CatalogRow({
       <span className="mod-body">
         <span className="mod-name">
           <b>{title}</b>
-          {author ? <span>от {author}</span> : null}
+          {author ? <span>{t('от {author}', { author })}</span> : null}
         </span>
         {desc ? <span className="mod-desc">{desc}</span> : null}
       </span>

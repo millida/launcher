@@ -15,10 +15,12 @@ import { crashAskBody, crashDisableOffers } from '../lib/crashAi'
 import { milliCrash } from '../lib/milli'
 import { useHasMillida } from '../state/auth'
 import { Milli } from './milli/Milli'
+import { useT } from '../i18n'
 
 const SUPPORT_ACT = 'support'
 
 export function CrashModal() {
+  const t = useT()
   const { info, close } = useCrash()
   const [showTail, setShowTail] = useState(false)
   const [repairing, setRepairing] = useState(false)
@@ -58,7 +60,7 @@ export function CrashModal() {
             <Icon id="i-alert" />
           </span>
           <div>
-            <h3>Игра вылетела</h3>
+            <h3>{t('Игра вылетела')}</h3>
             <div className="sub" style={{ marginTop: '2px' }}>
               {info.profile}
             </div>
@@ -67,7 +69,7 @@ export function CrashModal() {
         <p className="crash-reason">{info.reason}</p>
         {planSteps.length ? (
           <div className="crash-plan">
-            <span>Починка сделает:</span>
+            <span>{t('Починка сделает:')}</span>
             <ul>
               {planSteps.map((s) => (
                 <li key={s}>{s}</li>
@@ -79,7 +81,7 @@ export function CrashModal() {
         {info.tail ? (
           <>
             <button className="crash-toggle" onClick={() => setShowTail((v) => !v)}>
-              <Icon id={showTail ? 'i-chev-d' : 'i-chev-r'} /> Подробности
+              <Icon id={showTail ? 'i-chev-d' : 'i-chev-r'} /> {t('Подробности')}
             </button>
             {showTail ? <pre className="host-console crash-tail">{info.tail}</pre> : null}
           </>
@@ -122,7 +124,7 @@ export function CrashModal() {
                       shareCrashLog(info.profile, info.logFile)
                         .then((url) => {
                           void copyText(url)
-                          done('Ссылка на лог скопирована')
+                          done(t('Ссылка на лог скопирована'))
                         })
                         .catch(failed)
                       return
@@ -132,7 +134,7 @@ export function CrashModal() {
                       .catch(failed)
                   }}
                 >
-                  {acting === a.kind + (a.arg ?? '') ? 'Делаем…' : a.label}
+                  {acting === a.kind + (a.arg ?? '') ? t('Делаем…') : a.label}
                 </button>
               ))}
           </div>
@@ -174,7 +176,7 @@ export function CrashModal() {
                 .finally(() => setRepairing(false))
             }}
           >
-            <Icon id="i-restart" /> {repairing ? 'Чиним…' : 'Починить сборку'}
+            <Icon id="i-restart" /> {repairing ? t('Чиним…') : t('Починить сборку')}
           </button>
           {/* Автопочинка через Милли (09.10.2026): она объясняет причину и сама применяет исправления ядра. */}
           <button
@@ -185,12 +187,12 @@ export function CrashModal() {
                 d.startMilliDoctor()
                 const { text, action } = d.crashAction(info)
                 openMilli({ src: 'crash' })
-                void d.pushMilliAction(text, action, ['Почему так?', 'Осмотри сборку'])
+                void d.pushMilliAction(text, action, [t('Почему так?'), t('Осмотри сборку')])
                 close()
               })
             }}
           >
-            <Icon id="i-sparkle" /> Починить с Милли
+            <Icon id="i-sparkle" /> {t('Починить с Милли')}
           </button>
           <button
             className="btn lg secondary"
@@ -207,27 +209,27 @@ export function CrashModal() {
                     openUrl(SUPPORT_URL)
                     showToast(
                       copied
-                        ? 'Данные о вылете скопированы — вставь их в чат поддержки'
-                        : 'Чат открыт. Скопировать данные не вышло: «Настройки → О лаунчере → Данные для поддержки»',
+                        ? t('Данные о вылете скопированы — вставь их в чат поддержки')
+                        : t('Чат открыт. Скопировать данные не вышло: «Настройки → О лаунчере → Данные для поддержки»'),
                       copied ? 'ok' : 'error',
                     )
                   }),
                 )
                 .catch((e) => {
                   openUrl(SUPPORT_URL)
-                  showToast('Чат открыт, но данные о вылете собрать не вышло: ' + e, 'error')
+                  showToast(t('Чат открыт, но данные о вылете собрать не вышло: {error}', { error: String(e) }), 'error')
                 })
                 .finally(() => setActing(''))
             }}
           >
-            <Icon id="i-headset" /> {acting === SUPPORT_ACT ? 'Собираем…' : 'Поддержка'}
+            <Icon id="i-headset" /> {acting === SUPPORT_ACT ? t('Собираем…') : t('Поддержка')}
           </button>
           <div className="crash-acts-min">
             <button className="btn md ghost" onClick={() => hasTauri() && openProfileFolder(info.profile)}>
-              <Icon id="i-folder" /> Папка
+              <Icon id="i-folder" /> {t('Папка')}
             </button>
             <button className="btn md ghost" onClick={close}>
-              Закрыть
+              {t('Закрыть')}
             </button>
           </div>
         </div>
@@ -247,6 +249,7 @@ type CrashAiState =
  * аккаунт Millida — у Милли свой суточный лимит на игрока.
  */
 function CrashAi({ info }: { info: CrashInfo }) {
+  const t = useT()
   const hasMillida = useHasMillida()
   const [state, setState] = useState<CrashAiState>({ step: 'idle' })
   const [disabling, setDisabling] = useState('')
@@ -263,7 +266,7 @@ function CrashAi({ info }: { info: CrashInfo }) {
       const answer = await milliCrash(crashAskBody(info, mods, profile))
       setState({ step: 'done', explain: answer.explain, steps: answer.steps, offers: crashDisableOffers(answer, mods) })
     } catch (e) {
-      showToast('Милли не смогла разобрать вылет: ' + e, 'error')
+      showToast(t('Милли не смогла разобрать вылет: {error}', { error: String(e) }), 'error')
       setState({ step: 'idle' })
     }
   }
@@ -272,7 +275,7 @@ function CrashAi({ info }: { info: CrashInfo }) {
     return (
       <div className="crash-fixes">
         <button className="btn md secondary" data-track="crash_ai" disabled={state.step === 'asking'} onClick={() => void ask()}>
-          <Milli size={20} mode={state.step === 'asking' ? 'think' : 'idle'} /> {state.step === 'asking' ? 'Милли читает лог…' : 'Спросить ИИ'}
+          <Milli size={20} mode={state.step === 'asking' ? 'think' : 'idle'} /> {state.step === 'asking' ? t('Милли читает лог…') : t('Спросить ИИ')}
         </button>
       </div>
     )
@@ -281,7 +284,7 @@ function CrashAi({ info }: { info: CrashInfo }) {
   return (
     <>
       <div className="crash-plan" aria-live="polite">
-        <span>Милли: {state.explain}</span>
+        <span>{t('Милли: {text}', { text: state.explain })}</span>
         {state.steps.length ? (
           <ul>
             {state.steps.map((s) => (
@@ -309,7 +312,7 @@ function CrashAi({ info }: { info: CrashInfo }) {
                   .finally(() => setDisabling(''))
               }}
             >
-              {disabling === o.file ? 'Отключаем…' : `Отключить «${o.title}»`}
+              {disabling === o.file ? t('Отключаем…') : t('Отключить «{title}»', { title: o.title })}
             </button>
           ))}
         </div>

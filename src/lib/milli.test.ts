@@ -12,8 +12,10 @@ import {
   milliResetText,
   refineMilliError,
   siteUrl,
+  withMilliLang,
   withPreset,
 } from './milli'
+import { useI18n } from '../i18n'
 import type { MilliItem, MilliPack, MilliStatus } from './milli'
 
 const item = (projectId: string, slug = projectId, base = false): MilliItem => ({
@@ -152,5 +154,22 @@ describe('milliPlans — живые тарифы из /catalog/milli/limits', ()
   it('чего нет или мусор — из сетки 10/40, 100/600, 200/1500', () => {
     expect(milliPlans({ plus: { day: 120 } })).toEqual({ free: { day: 10, month: 40 }, plus: { day: 120, month: 600 }, diamond: { day: 200, month: 1500 } })
     expect(milliPlans(null)).toEqual(MILLI_PLANS)
+  })
+})
+
+describe('withMilliLang: Milli answers in the launcher language', () => {
+  const cases: [string, string, string][] = [
+    ['en', '/catalog/milli/messages', '/catalog/milli/messages?lang=en'],
+    ['ru', '/catalog/milli/doctor', '/catalog/milli/doctor?lang=ru'],
+    ['pt-BR', '/catalog/milli/greeting?playerId=p1', '/catalog/milli/greeting?playerId=p1&lang=pt-BR'],
+  ]
+  it.each(cases)('%s: %s -> %s', (locale, path, want) => {
+    const before = useI18n.getState().locale
+    useI18n.setState({ locale: locale as never })
+    try {
+      expect(withMilliLang(path)).toBe(want)
+    } finally {
+      useI18n.setState({ locale: before })
+    }
   })
 })

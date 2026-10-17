@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as RPointerEvent } from 'react'
 import { Icon } from '../components/Icon'
+import { t, useT } from '../i18n'
 import { Head } from '../components/Head'
 import { api } from '../lib/api'
 import { quickJoin } from '../lib/joinServer'
@@ -55,14 +56,15 @@ const clock = (ms: number) => {
 
 function ago(ts: number): string {
   const m = Math.max(0, Math.round((Date.now() - ts) / 60_000))
-  if (m < 1) return 'сейчас'
-  if (m < 60) return m + ' мин'
+  if (m < 1) return t('сейчас')
+  if (m < 60) return t('{n} мин', { n: m })
   const h = Math.round(m / 60)
-  if (h < 24) return h + ' ч'
-  return Math.round(h / 24) + ' дн'
+  if (h < 24) return t('{n} ч', { n: h })
+  return t('{n} дн', { n: Math.round(h / 24) })
 }
 
 export function Pvp({ on }: { on: boolean }) {
+  const t = useT()
   const nick = tierNick()
   const view = usePvp((s) => s.view)
 
@@ -87,14 +89,14 @@ export function Pvp({ on }: { on: boolean }) {
   if (view === 'tiers')
     return (
       <div className="pv-page" data-section="pvp_tiers">
-        <h1 className="pv-page-title">Тир-лист</h1>
+        <h1 className="pv-page-title">{t('Тир-лист')}</h1>
         <TierBoard on={on} />
       </div>
     )
   if (view === 'matches')
     return (
       <div className="pv-page" data-section="pvp_matches">
-        <h1 className="pv-page-title">Мои матчи</h1>
+        <h1 className="pv-page-title">{t('Мои матчи')}</h1>
         <MyMatches nick={nick} all />
       </div>
     )
@@ -151,6 +153,7 @@ function useArenaState(uuid: string | null): ArenaState | null {
 }
 
 function PvpPlay({ on }: { on: boolean }) {
+  const t = useT()
   const nick = tierNick()
   const me = useTiers((s) => (s.nick === nick ? s.me : undefined))
   const modes = useTiers((s) => s.modes)
@@ -205,7 +208,7 @@ function PvpPlay({ on }: { on: boolean }) {
       await api('/tiers/intent', { method: 'POST', body: JSON.stringify({ kit, ranked: true, party: party.members.map((m) => m.userId) }) })
     } catch (e) {
       const msg = String(e)
-      showToast(/403/.test(msg) ? 'Позвать в 2 на 2 может только лидер пати' : /404/.test(msg) ? 'У напарника ещё нет игрового профиля Millida' : 'Сервер не принял заявку 2 на 2 — попробуй ещё раз', 'error')
+      showToast(/403/.test(msg) ? t('Позвать в 2 на 2 может только лидер пати') : /404/.test(msg) ? t('У напарника ещё нет игрового профиля Millida') : t('Сервер не принял заявку 2 на 2 — попробуй ещё раз'), 'error')
       setBusy(false)
       return
     }
@@ -235,10 +238,10 @@ function PvpPlay({ on }: { on: boolean }) {
         {q.phase === 'queued' ? (
           <button className="btn lg secondary pv-go is-queue" data-sound="close" data-track="pvp_queue_cancel" data-id={q.kit} onClick={() => void q.cancel()}>
             <span>
-              Поиск соперника · {clock(now - q.since)}
+              {t('Поиск соперника · {time}', { time: clock(now - q.since) })}
               <em>
                 {modeTitle(modes, q.kit)}
-                {q.waiting ? ' · ' + q.waiting + ' в очереди' : ''} · нажми, чтобы отменить
+                {q.waiting ? ' · ' + t('{n} в очереди', { n: q.waiting }) : ''} · {t('нажми, чтобы отменить')}
               </em>
             </span>
           </button>
@@ -253,20 +256,20 @@ function PvpPlay({ on }: { on: boolean }) {
           >
             <Icon id={queued || found || launching ? 'i-clock' : 'i-play'} />
             <span>
-              {found ? 'Соперник найден' : queued ? 'В очереди' : fighting ? 'Идёт бой' : launching ? 'Запускаем игру' : result ? 'Ещё раз' : 'Играть'}
+              {found ? t('Соперник найден') : queued ? t('В очереди') : fighting ? t('Идёт бой') : launching ? t('Запускаем игру') : result ? t('Ещё раз') : t('Играть')}
               <em>{queued && queueSince ? title + ' · ' + clock(now - queueSince) : title}</em>
             </span>
           </button>
         )}
         {!queued && !fighting && !found && q.phase !== 'queued' ? (
-          <button className="btn lg secondary pv-roll" data-nosound data-track="pvp_kit_random" aria-label="Случайный кит" disabled={busy || launching} onClick={() => usePvp.getState().roll()}>
+          <button className="btn lg secondary pv-roll" data-nosound data-track="pvp_kit_random" aria-label={t('Случайный кит')} disabled={busy || launching} onClick={() => usePvp.getState().roll()}>
             <DicePx />
-            Случайный
+            {t('Случайный')}
           </button>
         ) : null}
         {duo && !queued && !fighting ? (
           <button className="btn lg secondary pv-duo" data-sound="open" data-track="pvp_play_2v2" data-id={kit} disabled={busy || found} onClick={() => void playDuo()}>
-            <Icon id="i-users" />2 на 2
+            <Icon id="i-users" />{t('2 на 2')}
           </button>
         ) : null}
       </div>
@@ -397,6 +400,7 @@ function KitCarousel({
   onPick: (k: string) => void
   onPlay: (k: string) => void
 }) {
+  const t = useT()
   const n = kits.length
   const track = useRef<HTMLDivElement>(null)
   const ring = useRef<HTMLDivElement>(null)
@@ -707,7 +711,7 @@ function KitCarousel({
 
   return (
     <div className="pv-car">
-      <button className="pv-car-arrow l" aria-label="Предыдущий кит" data-track="pvp_kit_prev" onClick={() => step(-1)}>
+      <button className="pv-car-arrow l" aria-label={t('Предыдущий кит')} data-track="pvp_kit_prev" onClick={() => step(-1)}>
         <Icon id="i-chev-l" />
       </button>
       <span className="pv-car-back" ref={back} aria-hidden="true">
@@ -718,7 +722,7 @@ function KitCarousel({
         className="pv-car-track"
         ref={track}
         role="listbox"
-        aria-label="Кит"
+        aria-label={t('Кит')}
         tabIndex={0}
         onKeyDown={onKey}
         onPointerDown={onDown}
@@ -784,7 +788,7 @@ function KitCarousel({
         </div>
       </div>
       <span className="pv-sparks" ref={sparks} aria-hidden="true" />
-      <button className="pv-car-arrow r" aria-label="Следующий кит" data-track="pvp_kit_next" onClick={() => step(1)}>
+      <button className="pv-car-arrow r" aria-label={t('Следующий кит')} data-track="pvp_kit_next" onClick={() => step(1)}>
         <Icon id="i-chev-r" />
       </button>
     </div>
@@ -793,10 +797,11 @@ function KitCarousel({
 
 /** Итог матча (сервер держит 30 с): победа или поражение, счёт и ±ELO — рядом «Ещё раз». */
 function ResultLine({ r, modes }: { r: ArenaState; modes: TierModeInfo[] }) {
+  const t = useT()
   const cls = r.win === true ? 'win' : r.win === false ? 'loss' : 'draw'
   return (
     <span className={'pv-result ' + cls}>
-      <b>{r.win === true ? 'Победа' : r.win === false ? 'Поражение' : 'Ничья'}</b>
+      <b>{r.win === true ? t('Победа') : r.win === false ? t('Поражение') : t('Ничья')}</b>
       {r.score ? <span>{r.score}</span> : null}
       {r.opponent?.name ? <span className="pv-result-opp">vs {r.opponent.name}</span> : null}
       {r.kit ? <span className="pv-result-kit">{modeTitle(modes, r.kit)}</span> : null}
@@ -807,18 +812,19 @@ function ResultLine({ r, modes }: { r: ArenaState; modes: TierModeInfo[] }) {
 
 /** «Матч найден» как у Dawn: соперник, его тир, кит и сколько осталось на вход. */
 function MatchFound({ q, now, modes }: { q: { phase: string; kit: string; opponent: { name: string; tier?: string } | null; joinBy: number | null }; now: number; modes: TierModeInfo[] }) {
+  const t = useT()
   if (!q.opponent) return null
   const left = q.joinBy ? Math.max(0, q.joinBy - now) : 0
   return (
-    <div className="pv-found" role="alertdialog" aria-label="Матч найден" style={{ '--kc': look(q.kit).c } as CSSProperties}>
-      <span className="pv-found-cap">Матч найден</span>
+    <div className="pv-found" role="alertdialog" aria-label={t('Матч найден')} style={{ '--kc': look(q.kit).c } as CSSProperties}>
+      <span className="pv-found-cap">{t('Матч найден')}</span>
       <span className="pv-found-who">
         <Head nick={q.opponent.name} size={56} src={avatarUrl(q.opponent.name)} />
         <b>{q.opponent.name}</b>
         {q.opponent.tier && tierRank(q.opponent.tier) !== null ? <TierBadge tier={q.opponent.tier.toUpperCase()} /> : null}
       </span>
       <span className="pv-found-sub">
-        {modeTitle(modes, q.kit)} · {q.phase === 'joining' ? 'запускаем игру прямо в матч' : 'готовим вход'}
+        {modeTitle(modes, q.kit)} · {q.phase === 'joining' ? t('запускаем игру прямо в матч') : t('готовим вход')}
         {left ? ' · ' + clock(left) : ''}
       </span>
     </div>
@@ -827,21 +833,22 @@ function MatchFound({ q, now, modes }: { q: { phase: string; kit: string; oppone
 
 /* ---------------- Мои матчи: последние, под кнопкой ---------------- */
 
-const TYPE_NAME: Record<string, string> = { ranked: 'Рейтинговый', casual: 'Без рейтинга', duel: 'Дуэль', bot: 'Бот' }
+const TYPE_NAME = (): Record<string, string> => ({ ranked: t('Рейтинговый'), casual: t('Без рейтинга'), duel: t('Дуэль'), bot: t('Бот') })
 
 function MyMatches({ nick, all }: { nick: string; all?: boolean }) {
+  const t = useT()
   const modes = useTiers((s) => s.modes)
   const rows = useTiers((s) => (nick ? s.matches[nick.toLowerCase()] : null))
-  if (!rows || !rows.length) return all ? <div className="fr-blank"><b>Матчей пока нет</b></div> : null
+  if (!rows || !rows.length) return all ? <div className="fr-blank"><b>{t('Матчей пока нет')}</b></div> : null
   const shown = all ? rows : rows.slice(0, 6)
   return (
-    <section className="pv-matches" aria-label="Мои матчи">
+    <section className="pv-matches" aria-label={t('Мои матчи')}>
       {all ? null : (
         <header className="pv-sec-head">
-          <h2 className="pv-cap">Мои матчи</h2>
+          <h2 className="pv-cap">{t('Мои матчи')}</h2>
           {rows.length > shown.length ? (
             <button className="btn sm secondary" data-track="pvp_matches_all" onClick={() => usePvp.getState().setView('matches')}>
-              Все матчи
+              {t('Все матчи')}
             </button>
           ) : null}
         </header>
@@ -853,19 +860,19 @@ function MyMatches({ nick, all }: { nick: string; all?: boolean }) {
               <img src={kitIcon(m.kit)} alt="" width={30} height={30} draggable={false} />
               <span>
                 <b>{modeTitle(modes, m.kit)}</b>
-                <i>{TYPE_NAME[m.type] ?? m.type}</i>
+                <i>{TYPE_NAME()[m.type] ?? m.type}</i>
               </span>
             </span>
             <span className="pv-m-opp">
               <Head nick={m.opponent} size={32} src={avatarUrl(m.opponent)} />
               <span>
                 <b>{m.opponent}</b>
-                <i>{ago(m.playedAt)} назад</i>
+                <i>{t('{time} назад', { time: ago(m.playedAt) })}</i>
               </span>
             </span>
             <span className="pv-m-elo">{m.type === 'ranked' && m.delta ? <em className={m.delta > 0 ? 'up' : 'down'}>{(m.delta > 0 ? '+' : '') + m.delta} ELO</em> : null}</span>
             <span className="pv-m-res">
-              <i>{m.win ? 'Победа' : 'Поражение'}</i>
+              <i>{m.win ? t('Победа') : t('Поражение')}</i>
               <b>{m.score.replace(':', ' – ')}</b>
             </span>
           </div>
@@ -880,7 +887,7 @@ function MyMatches({ nick, all }: { nick: string; all?: boolean }) {
 /** Сколько мест видно на главной раздела; остальные — по «Показать всех». */
 const TOP_SHOWN = 10
 
-const pts = (n: number) => n + ' ' + plural(n, 'очко', 'очка', 'очков')
+const pts = (n: number) => plural(n, t('{n} очко', { n }), t('{n} очка', { n }), t('{n} очков', { n }))
 const badgeOf = (t: string | undefined) => (t && tierRank(t) !== null ? t.toUpperCase() : undefined)
 
 /**
@@ -903,6 +910,7 @@ function decayOf(m: TierMode | undefined, tier: string | null, kit: string, matc
  * ELO, подсказка сервера «что дальше» и сколько тир ещё держится без игр.
  */
 function MyPlace() {
+  const t = useT()
   const nick = tierNick()
   const me = useTiers((s) => (s.nick === nick ? s.me : undefined))
   const modes = useTiers((s) => s.modes)
@@ -912,8 +920,8 @@ function MyPlace() {
   if (!me)
     return (
       <section className="pv-me none">
-        <h2 className="pv-cap">Моё место</h2>
-        <span className="pv-me-none">Пока без тира. Первый тир — экзамен с ботом, выше LT3 — тесты с игроками</span>
+        <h2 className="pv-cap">{t('Моё место')}</h2>
+        <span className="pv-me-none">{t('Пока без тира. Первый тир — экзамен с ботом, выше LT3 — тесты с игроками')}</span>
       </section>
     )
   const m = me.modes?.[kit]
@@ -923,7 +931,7 @@ function MyPlace() {
   const title = modeTitle(modes, kit)
   return (
     <section className="pv-me" style={{ '--kc': look(kit).c } as CSSProperties}>
-      <h2 className="pv-cap">Моё место</h2>
+      <h2 className="pv-cap">{t('Моё место')}</h2>
       <div className="pv-me-card">
         <div className="pv-me-top">
           <Head nick={me.name} size={64} src={avatarUrl(me.name)} />
@@ -932,7 +940,7 @@ function MyPlace() {
             <i>{me.title}</i>
           </span>
           <div className="pv-me-stat">
-            <i>Общий рейтинг · очки за тиры во всех китах</i>
+            <i>{t('Общий рейтинг · очки за тиры во всех китах')}</i>
             <span>
               <b className="pv-me-num">{me.rank ? '#' + me.rank : '—'}</b>
               {overall ? <TierBadge tier={overall} big /> : null}
@@ -940,7 +948,7 @@ function MyPlace() {
             </span>
           </div>
         </div>
-        <div className="pv-me-kits" role="listbox" aria-label="Мои тиры по китам">
+        <div className="pv-me-kits" role="listbox" aria-label={t('Мои тиры по китам')}>
           {modes.map((k) => {
             const t = badgeOf(me.modes?.[k.slug]?.tier)
             return (
@@ -959,7 +967,7 @@ function MyPlace() {
           {m && tier ? (
             <>
               <span>
-                <b>{m.rank ? '#' + m.rank : '—'}</b> в ките
+                <b>{m.rank ? '#' + m.rank : '—'}</b> {t('в ките')}
               </span>
               <span>
                 <b>{m.elo}</b> ELO
@@ -968,18 +976,18 @@ function MyPlace() {
                 <b>
                   {m.wins}–{m.losses}
                 </b>{' '}
-                побед–поражений
+                {t('побед–поражений')}
               </span>
               {m.next ? <span className={'pv-me-next' + (m.test ? ' open' : '')}>{m.next}</span> : null}
               {decay !== null ? (
                 <span className={'pv-me-decay' + (decay <= 5 ? ' soon' : '')}>
                   {/* Защиты тира нет: взятый тестом не падает, только «???» после 30 дней без рейтинга. */}
-                  {decay > 0 ? 'без рейтинга станет «???» через ' + decay + ' ' + plural(decay, 'день', 'дня', 'дней') : 'сегодня без рейтинговой игры станет «???»'}
+                  {decay > 0 ? plural(decay, t('без рейтинга станет «???» через {n} день', { n: decay }), t('без рейтинга станет «???» через {n} дня', { n: decay }), t('без рейтинга станет «???» через {n} дней', { n: decay })) : t('сегодня без рейтинговой игры станет «???»')}
                 </span>
               ) : null}
             </>
           ) : (
-            <span>тира пока нет — первый даёт экзамен с ботом</span>
+            <span>{t('тира пока нет — первый даёт экзамен с ботом')}</span>
           )}
         </div>
       </div>
@@ -993,6 +1001,7 @@ function MyPlace() {
  * тир, ELO и победы. Все места — отдельной страницей.
  */
 function TopTen() {
+  const t = useT()
   const nick = tierNick()
   const me = useTiers((s) => (s.nick === nick ? s.me : undefined))
   const top = useTiers((s) => s.top)
@@ -1009,12 +1018,12 @@ function TopTen() {
   const meName = (me?.name ?? nick).toLowerCase()
 
   return (
-    <section className="pv-top" aria-label="Тир-лист">
+    <section className="pv-top" aria-label={t('Тир-лист')}>
       <header className="pv-sec-head">
-        <h2 className="pv-cap">Тир-лист · топ-10</h2>
-        <div className="segs pv-board-segs" role="tablist" aria-label="Какой топ">
+        <h2 className="pv-cap">{t('Тир-лист · топ-10')}</h2>
+        <div className="segs pv-board-segs" role="tablist" aria-label={t('Какой топ')}>
           <button role="tab" aria-selected={board === 'all'} className={'seg' + (board === 'all' ? ' on' : '')} data-track="pvp_board_all" onClick={() => usePvp.getState().setBoard('all')}>
-            Общий
+            {t('Общий')}
           </button>
           <button role="tab" aria-selected={board === 'kit'} className={'seg' + (board === 'kit' ? ' on' : '')} data-track="pvp_board_kit" onClick={() => usePvp.getState().setBoard('kit')}>
             {modeTitle(modes, kit)}
@@ -1026,7 +1035,7 @@ function TopTen() {
           ? Array.from({ length: TOP_SHOWN }, (_, i) => <div key={i} className="tb-row skel" style={{ height: 72 }} aria-hidden="true" />)
           : lines.length
             ? lines.slice(0, TOP_SHOWN).map((l) => <TierRow key={l.pos + l.name} l={l} modes={modes} mine={l.name.toLowerCase() === meName} />)
-            : <span className="pv-mine-none">Здесь пока пусто — стань первым</span>}
+            : <span className="pv-mine-none">{t('Здесь пока пусто — стань первым')}</span>}
       </div>
       <button
         className="btn secondary pv-board-all"
@@ -1037,7 +1046,7 @@ function TopTen() {
           usePvp.getState().setView('tiers')
         }}
       >
-        Показать всех
+        {t('Показать всех')}
       </button>
     </section>
   )

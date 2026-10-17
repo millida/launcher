@@ -8,8 +8,10 @@ import { openModal } from '../state/ui'
 import { setNewBuildPreset } from '../state/newBuild'
 import { backdropClose } from '../lib/dismiss'
 import { versionFits } from '../lib/mcVersion'
+import { useT } from '../i18n'
 
 export function BuildPicker() {
+  const t = useT()
   const { open, kindLabel, choose, title, sub, wanted, only, preset } = useBuildPicker()
   const all = useProfiles((s) => s.profiles)
   const profiles = only ? all.filter((p) => only.includes(p.name)) : all
@@ -33,7 +35,7 @@ export function BuildPicker() {
       {...backdropClose(() => choose(null))}
     >
       <div className="modal mw-xs">
-        <h3>{title || 'Куда добавить ' + kindLabel + '?'}</h3>
+        <h3>{title || t('Куда добавить {kind}?', { kind: kindLabel })}</h3>
         {sub ? <div className="sub">{sub}</div> : null}
 
         {list.length ? (
@@ -47,7 +49,7 @@ export function BuildPicker() {
                   </span>
                   <span className="bp-meta">
                     <b>{p.name}</b>
-                    <span>{LOADER_NAME(p) + ' · ' + p.version + (off ? ' · не та версия' : '')}</span>
+                    <span>{LOADER_NAME(p) + ' · ' + p.version + (off ? ' · ' + t('не та версия') : '')}</span>
                   </span>
                   <Icon id="i-chev-r" />
                 </button>
@@ -57,7 +59,7 @@ export function BuildPicker() {
         ) : (
           <div className="bx-mini-empty">
             <Icon id="i-box2" />
-            <b>{only && all.length ? 'Подходящей сборки нет' : 'Сборок пока нет'}</b>
+            <b>{only && all.length ? t('Подходящей сборки нет') : t('Сборок пока нет')}</b>
           </div>
         )}
 
@@ -71,10 +73,10 @@ export function BuildPicker() {
               openModal('nbModal')
             }}
           >
-            <Icon id="i-plus" /> Новая сборка
+            <Icon id="i-plus" /> {t('Новая сборка')}
           </button>
           <button className="btn md ghost" onClick={() => choose(null)}>
-            Отмена
+            {t('Отмена')}
           </button>
         </div>
       </div>

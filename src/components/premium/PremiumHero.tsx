@@ -1,4 +1,5 @@
 import { Icon } from '../Icon'
+import { useT } from '../../i18n'
 import { BuyButton, PriceLine } from './PremiumBuy'
 import { packFacts, type PremiumPack, type PremiumPlan, type PremiumSubscription } from '../../lib/premium'
 
@@ -13,6 +14,7 @@ interface Props {
 /// Герой витрины: арт, бейдж подписки рядом с названием, одна строка фактов,
 /// главная кнопка и цена. Раскладка — docs/research-2026-09-22/ui-refs.md §3.4.
 export function PremiumHero({ pack, plan, sub, onOpen }: Props) {
+  const t = useT()
   const facts = packFacts(pack)
   return (
     <div className="pm-hero">
@@ -28,11 +30,11 @@ export function PremiumHero({ pack, plan, sub, onOpen }: Props) {
           <h2>{pack.title}</h2>
           {pack.inSubscription ? (
             <span className="pm-badge">
-              <Icon id="i-crown" /> По подписке
+              <Icon id="i-crown" /> {t('По подписке')}
             </span>
           ) : pack.source === 'catalog' ? (
             <span className="pm-badge">
-              <Icon id="i-crown" /> Платная
+              <Icon id="i-crown" /> {t('Платная')}
             </span>
           ) : null}
           {pack.ageRating ? <span className="pm-age">{pack.ageRating}</span> : null}
@@ -42,7 +44,7 @@ export function PremiumHero({ pack, plan, sub, onOpen }: Props) {
           <BuyButton pack={pack} plan={plan} sub={sub} />
           {onOpen ? (
             <button className="btn secondary" onClick={onOpen}>
-              Подробнее
+              {t('Подробнее')}
             </button>
           ) : null}
           <PriceLine pack={pack} plan={plan} sub={sub} />

@@ -18,7 +18,7 @@ pub struct CatalogInstallReq {
     #[serde(default)]
     pub icon: String,
     /// "file" — файл карточки через резолвер статьи-хранилища;
-    /// "curated" — файлы разделов /cheats и /addons.
+    /// "curated" — файлы раздела /addons.
     /// Готовая сборка лаунчера (launcherOnly) сюда не ходит: у неё свой путь —
     /// install_catalog_pack (catalog_pack.rs): ключ доступа, миры игрока, свой хост.
     pub via: String,
@@ -37,7 +37,7 @@ pub struct CatalogInstallReq {
     /// Контрольная сумма из карточки. Сверяем по ней, если API её не отдал сам.
     #[serde(default)]
     pub sha1: String,
-    /// Файлы разделов /cheats и /addons приходят с sha256, а не sha1.
+    /// Файлы раздела /addons приходят с sha256, а не sha1.
     #[serde(default)]
     pub sha256: String,
     #[serde(default)]
@@ -127,7 +127,7 @@ async fn resolve(req: &CatalogInstallReq) -> Result<Resolved, String> {
             (millida_api_auth(path, "GET".into(), None).await?, "name")
         }
         "curated" => {
-            if !matches!(req.section.as_str(), "cheats" | "addons") {
+            if req.section != "addons" {
                 return Err("Раздел не найден".into());
             }
             let path = format!("/catalog/curated/{}/{}/download?file={}", req.section, urlencode(req.slug.trim()), file);

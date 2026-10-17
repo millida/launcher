@@ -22,6 +22,7 @@ import {
 import { useDaily } from '../../state/daily'
 import { showToast } from '../../state/ui'
 import { useShopGift } from './giftState'
+import { useT } from '../../i18n'
 
 /**
  * «Код автора» (Support-a-Creator, задача владельца 24.09.2026): с магазина v2
@@ -31,6 +32,7 @@ import { useShopGift } from './giftState'
  * честно отвечает «скоро заработают» — успехом не притворяемся.
  */
 export function CreatorCode() {
+  const t = useT()
   /** undefined — ещё грузим; null — никого не поддерживает. */
   const [cur, setCur] = useState<CreatorSupport | null | undefined>(undefined)
   /** Служба ответила на GET: 404 на вводе тогда значит «код не найден». */
@@ -83,21 +85,21 @@ export function CreatorCode() {
         // Сундук ложится в «Мои сундуки» — они в пассе наверху магазина.
         void useDaily.getState().load()
         showReward({
-          kicker: 'Ты поддерживаешь ' + res.name,
-          title: CHEST_NAME[tier] + ' сундук',
-          sub: 'Подарок за первый код автора',
-          items: [{ name: CHEST_NAME[tier] + ' сундук', rarity: tier, art: <ChestLive ready tier={tier} size={150} look="model" /> }],
-          doneLabel: 'В сундуки',
+          kicker: t('Ты поддерживаешь {name}', { name: res.name }),
+          title: t('{name} сундук', { name: CHEST_NAME[tier] }),
+          sub: t('Подарок за первый код автора'),
+          items: [{ name: t('{name} сундук', { name: CHEST_NAME[tier] }), rarity: tier, art: <ChestLive ready tier={tier} size={150} look="model" /> }],
+          doneLabel: t('В сундуки'),
           onDone: () => useShopGift.getState().setTab('chests'),
         })
       } else {
         showReward({
-          kicker: 'Код автора',
-          title: 'Ты поддерживаешь ' + res.name,
-          sub: 'Часть с твоих покупок — автору',
+          kicker: t('Код автора'),
+          title: t('Ты поддерживаешь {name}', { name: res.name }),
+          sub: t('Часть с твоих покупок — автору'),
           tone: 'var(--m-danger)',
           items: [head],
-          doneLabel: 'Круто',
+          doneLabel: t('Круто'),
         })
       }
     } catch (x) {
@@ -115,7 +117,7 @@ export function CreatorCode() {
       setCur(null)
       setEditing(false)
     } catch (x) {
-      showToast(isNotFound(x) ? SOON : apiErrorText(x, 'Не получилось, попробуй позже'), 'error')
+      showToast(isNotFound(x) ? SOON : apiErrorText(x, t('Не получилось, попробуй позже')), 'error')
     } finally {
       setBusy(false)
     }
@@ -125,7 +127,7 @@ export function CreatorCode() {
 
   const on = !!cur && !editing
   return (
-    <section className="card sv-banner is-support" aria-label="Поддержи автора" data-section="creator_code" data-private>
+    <section className="card sv-banner is-support" aria-label={t('Поддержи автора')} data-section="creator_code" data-private>
       <span className="sv-banner-art" aria-hidden="true">
         {on && cur ? (
           <Head nick={cur.name} src={cur.avatarUrl} size={128} className="sv-banner-face" />
@@ -138,14 +140,14 @@ export function CreatorCode() {
         )}
       </span>
       <span className="sv-banner-body">
-        <h2 className="sv-banner-title">{on && cur ? cur.name : 'Поддержи автора'}</h2>
-        <span className="sv-banner-line">Автор получит деньги с твоих покупок</span>
+        <h2 className="sv-banner-title">{on && cur ? cur.name : t('Поддержи автора')}</h2>
+        <span className="sv-banner-line">{t('Автор получит деньги с твоих покупок')}</span>
         {on && cur ? (
           <span className="sv-banner-row">
             <span className="sv-banner-on">
               <Icon id="i-heart" />
             </span>
-            <button type="button" className="btn md secondary" aria-label="Убрать код" disabled={busy} data-track="creator_remove" onClick={() => void remove()}>
+            <button type="button" className="btn md secondary" aria-label={t('Убрать код')} disabled={busy} data-track="creator_remove" onClick={() => void remove()}>
               <Icon id="i-x" />
             </button>
           </span>
@@ -156,8 +158,8 @@ export function CreatorCode() {
                 value={code}
                 maxLength={32}
                 autoFocus={editing}
-                placeholder="КОД"
-                aria-label="Код автора"
+                placeholder={t('КОД')}
+                aria-label={t('Код автора')}
                 aria-invalid={!!err}
                 spellCheck={false}
                 onChange={(e) => {
@@ -170,7 +172,7 @@ export function CreatorCode() {
               />
             </span>
             <button type="submit" className="btn lg primary" disabled={!code.trim() || busy} data-track="creator_apply">
-              Ок
+              {t('Ок')}
             </button>
           </form>
         )}
@@ -186,19 +188,20 @@ export function CreatorCode() {
 
 /** «Стань автором»: баннер в пару к «Поддержи автора» — арт, два слова, «Хочу». Ведёт на сайт авторов. */
 export function CreatorBanner() {
+  const t = useT()
   return (
-    <section className="card sv-banner is-become" aria-label="Стать автором" data-section="creator_become">
+    <section className="card sv-banner is-become" aria-label={t('Стать автором')} data-section="creator_become">
       <span className="sv-banner-art" aria-hidden="true">
         <PxIcon name="star" size={110} className="a1" />
         <PxIcon name="cam" size={52} className="a2" />
         <PxIcon name="gem" size={40} className="a3" />
       </span>
       <span className="sv-banner-body">
-        <h2 className="sv-banner-title">Стань автором</h2>
-        <span className="sv-banner-line">Получай 50% с покупок по твоему коду</span>
+        <h2 className="sv-banner-title">{t('Стань автором')}</h2>
+        <span className="sv-banner-line">{t('Получай 50% с покупок по твоему коду')}</span>
         <span className="sv-banner-row">
           <button type="button" className="btn lg primary" data-sound="open" data-track="creator_become" onClick={() => openExt(CREATORS_URL)}>
-            Хочу
+            {t('Хочу')}
           </button>
         </span>
       </span>

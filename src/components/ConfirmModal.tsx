@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useConfirm } from '../state/confirm'
 import { backdropClose } from '../lib/dismiss'
+import { useT } from '../i18n'
 
 export function ConfirmModal() {
+  const t = useT()
   const { open, title, message, confirmLabel, cancelLabel, danger, rememberKey, rememberLabel, typeToConfirm, close } =
     useConfirm()
   const [remember, setRemember] = useState(false)
@@ -48,7 +50,7 @@ export function ConfirmModal() {
             spellCheck={false}
             autoComplete="off"
             placeholder={typeToConfirm}
-            aria-label={'Введи «' + typeToConfirm + '», чтобы подтвердить'}
+            aria-label={t('Введи «{text}», чтобы подтвердить', { text: typeToConfirm ?? '' })}
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
             style={{ width: '100%', marginTop: '16px' }}

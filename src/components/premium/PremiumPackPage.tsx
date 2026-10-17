@@ -14,6 +14,7 @@ import { exclusivesOf, iconOf, parseReqs, splitTitle, storyOf } from './premiumP
 import { StudioModal, packWord, useStudioCount } from './PremiumStudio'
 import type { Chapter, Story } from './premiumPackData'
 import { Hours } from '../playhub/Hours'
+import { useT } from '../../i18n'
 import type { HubPack } from '../playhub/data'
 import { MediaStrip } from '../catalog/MediaStrip'
 import { PremiumMore } from './PremiumMore'
@@ -86,10 +87,11 @@ const scrollToId = (id: string) => document.getElementById(id)?.scrollIntoView({
 /* ---------------- история ---------------- */
 
 function ChapterView({ c, n }: { c: Chapter; n: number }) {
+  const t = useT()
   return (
     <article className={'ppx-ch' + (c.image ? ' img' : ' flat')} id={c.id}>
       {c.image ? (
-        <button className="ppx-ch-art" data-track="desc_image" aria-label={c.image.alt || 'Открыть кадр'} onClick={() => openImage(mirrorAsset(c.image!.src) || c.image!.src)}>
+        <button className="ppx-ch-art" data-track="desc_image" aria-label={c.image.alt || t('Открыть кадр')} onClick={() => openImage(mirrorAsset(c.image!.src) || c.image!.src)}>
           <img src={mirrorAsset(c.image.src)} alt={c.image.alt} loading="lazy" draggable={false} />
           {c.image.caption ? <span>{c.image.caption}</span> : null}
         </button>
@@ -120,9 +122,10 @@ function ChapterView({ c, n }: { c: Chapter; n: number }) {
 
 /** Описание всегда раскрыто целиком (владелец 04.10.2026: «Читать полностью» не нужно). */
 function StoryBlock({ story, includes }: { story: Story; includes: string[] }) {
+  const t = useT()
   return (
     <section className="ppx-sec" id="ppx-about">
-      <SecHead eyebrow="История" title="О сборке" />
+      <SecHead eyebrow={t('История')} title={t('О сборке')} />
       {story.lead.length ? (
         <div className="ppx-lead">
           {story.lead.map((p, i) => (
@@ -164,27 +167,28 @@ function SecHead({ eyebrow, title, aside }: { eyebrow: string; title: string; as
 /* ---------------- требования ---------------- */
 
 function SpecsBlock({ m, reqsText, version, loaderVersion }: { m: PremiumPackModel; reqsText: string | null; version: string | null; loaderVersion: string | null }) {
+  const t = useT()
   const [tech, setTech] = useState(false)
   const reqs = parseReqs(reqsText)
   // Игроку — размер и свежесть; версии и загрузчик — под «Для моддеров» (правило 11).
   const rows: [string, string][] = []
-  if (m.size) rows.push(['Скачать', gb(m.size)])
+  if (m.size) rows.push([t('Скачать'), gb(m.size)])
   const fresh = m.updates[0]?.date || m.full.updatedAt
-  if (fresh && untilText(fresh)) rows.push(['Обновлено', untilText(fresh)])
+  if (fresh && untilText(fresh)) rows.push([t('Обновлено'), untilText(fresh)])
   const techRows: [string, string][] = []
   if (m.mcVersion) techRows.push(['Minecraft', m.mcVersion])
-  if (m.loader) techRows.push(['Загрузчик', m.loader + (loaderVersion ? ' ' + loaderVersion : '')])
-  if (version) techRows.push(['Версия сборки', version])
+  if (m.loader) techRows.push([t('Загрузчик'), m.loader + (loaderVersion ? ' ' + loaderVersion : '')])
+  if (version) techRows.push([t('Версия сборки'), version])
   if (!rows.length && !techRows.length && !reqsText) return null
   return (
     <section className="ppx-sec" id="ppx-specs">
-      <SecHead eyebrow="Твой ПК" title="Требования" />
+      <SecHead eyebrow={t('Твой ПК')} title={t('Требования')} />
       {reqs ? (
         <div className="ppx-reqs">
           {(
             [
-              ['Минимум', reqs.min, ''],
-              ['Рекомендуем', reqs.rec, ' rec'],
+              [t('Минимум'), reqs.min, ''],
+              [t('Рекомендуем'), reqs.rec, ' rec'],
             ] as const
           ).map(([title, list, cls]) =>
             list.length ? (
@@ -217,7 +221,7 @@ function SpecsBlock({ m, reqsText, version, loaderVersion }: { m: PremiumPackMod
       ) : null}
       {techRows.length ? (
         <button className="btn sm ghost ppx-more" aria-expanded={tech} data-track="pack_tech" onClick={() => setTech(!tech)}>
-          Для моддеров <Icon id={tech ? 'i-chev-u' : 'i-chev-d'} />
+          {t('Для моддеров')} <Icon id={tech ? 'i-chev-u' : 'i-chev-d'} />
         </button>
       ) : null}
     </section>
@@ -233,6 +237,7 @@ function shotOrder(slug: string, shots: string[]): string[] {
 }
 
 export function PremiumPackPage(m: PremiumPackModel) {
+  const t = useT()
   const { full, view } = m
   const slug = m.pack.slug || ''
   const [tab, setTab] = useState<PageTab>('desc')
@@ -316,9 +321,9 @@ export function PremiumPackPage(m: PremiumPackModel) {
 
   const hasStory = !!(story.chapters.length || story.lead.length || m.includes.length)
   const tabs: [PageTab, string, number | null][] = [
-    ['desc', 'Описание', null],
-    ...(shots.length ? [['gallery', 'Галерея', shots.length] as [PageTab, string, number]] : []),
-    ['specs', 'Требования', null],
+    ['desc', t('Описание'), null],
+    ...(shots.length ? [['gallery', t('Галерея'), shots.length] as [PageTab, string, number]] : []),
+    ['specs', t('Требования'), null],
   ]
 
   // Та же страница, что у бесплатных сборок (PackPage → ItemPage): полоса-обложка,
@@ -329,21 +334,21 @@ export function PremiumPackPage(m: PremiumPackModel) {
   const heroFacts: ReactNode[] = [
     <span className="ppx-ci-badge">
       <Icon id="i-crown" />
-      {exclusives.length ? 'Премиум · Эксклюзив' : 'Премиум'}
+      {exclusives.length ? t('Премиум · Эксклюзив') : t('Премиум')}
     </span>,
     ...m.facts
-      .filter((f) => f.label !== 'модов')
+      .filter((f) => f.label !== t('модов'))
       .map((f) => (
         <>
-          {f.label === 'скачиваний' ? <Icon id="i-download" /> : null}
-          <b>{f.value}</b> {f.label === 'скачать' ? 'размер' : f.label}
+          {f.label === t('скачиваний') ? <Icon id="i-download" /> : null}
+          <b>{f.value}</b> {f.label === t('скачать') ? t('размер') : f.label}
         </>
       )),
   ]
   const by =
     studio && partner && partner.slug ? (
-      <button className="ppx-ci-studio" aria-label={'Все сборки ' + studio} data-sound="open" data-track="studio_open" onClick={() => setStudioOpen(true)}>
-        от <b>{studio}</b>
+      <button className="ppx-ci-studio" aria-label={t('Все сборки {studio}', { studio })} data-sound="open" data-track="studio_open" onClick={() => setStudioOpen(true)}>
+        {t('от')} <b>{studio}</b>
         <span className="ppx-verified" aria-hidden="true">
           <Icon id="i-check" />
         </span>
@@ -355,12 +360,12 @@ export function PremiumPackPage(m: PremiumPackModel) {
         <Icon id="i-chev-r" className="icon ppx-studio-go" />
       </button>
     ) : studio ? (
-      'от ' + studio
+      t('от {author}', { author: studio })
     ) : null
 
   return (
     <div className="ppx ci pp-ci ppx-ci" data-section="pack_page" data-kind="premium" data-id={slug || m.pack.id}>
-      {m.onBack ? <Back label="Сборки модов" onBack={m.onBack} /> : null}
+      {m.onBack ? <Back label={t('Сборки модов')} onBack={m.onBack} /> : null}
       <ItemHero
         // Премиум — тот же каркас, что у бесплатных; отличие — тёплый золотой свет
         // из-под обложки и золотые акценты, без мигающих рамок и искр (владелец 06.10.2026).
@@ -377,12 +382,12 @@ export function PremiumPackPage(m: PremiumPackModel) {
       {/* «Только в Millida» (владелец 06.10.2026: «мало эксклюзивности»): то, чего нет ни в одной
           другой сборке, — сразу под шапкой, золотыми плитками; клик — глава в «Описании». */}
       {exclusives.length ? (
-        <section className="ppx-excl" aria-label="Только в Millida">
+        <section className="ppx-excl" aria-label={t('Только в Millida')}>
           <div className="ppx-excl-h">
             <span className="ppx-excl-badge">
-              <Icon id="i-crown" /> Эксклюзив Millida
+              <Icon id="i-crown" /> {t('Эксклюзив Millida')}
             </span>
-            <span className="ppx-excl-sub">Есть только здесь</span>
+            <span className="ppx-excl-sub">{t('Есть только здесь')}</span>
           </div>
           <div className="ppx-excl-row">
             {exclusives.map((x) => (
@@ -438,7 +443,7 @@ export function PremiumPackPage(m: PremiumPackModel) {
               slots={{
                 server: server ? (
                   <button className="btn sm secondary" data-track="pack_server" data-src="pack_page" onClick={() => m.onServer(server)}>
-                    <Icon id="i-server" /> Сервер сборки
+                    <Icon id="i-server" /> {t('Сервер сборки')}
                     {server.isOnline ? (
                       <span className="ph-hero-srv-n">
                         <span className="ph-dot" aria-hidden="true"></span>

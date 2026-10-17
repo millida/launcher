@@ -157,11 +157,11 @@
   box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
   background: var(--m-raised);
 }
-:root:root :is(.acc-item, .acc-add-btn, .acc-item-del, .acc-opt, .acc-buy, .acc-code, .side-collapse, .sec-link, .mus-btn, .mus-item, #musPop .icon-btn, .wp-item-del, .login-code) {
+:root:root :is(.acc-item, .acc-add-btn, .acc-item-del, .acc-opt, .acc-code, .side-collapse, .sec-link, .mus-btn, .mus-item, #musPop .icon-btn, .wp-item-del, .login-code) {
   border-radius: 0;
   --px-n: 5px; clip-path: var(--px-5);
 }
-:root:root :is(.acc-item img, .acc-item canvas, .acc-opt-ic, .acc-buy-ic, .ava) {
+:root:root :is(.acc-item img, .acc-item canvas, .acc-opt-ic, .ava) {
   border-radius: 0;
   --px-n: 4px; clip-path: var(--px-4);
 }
@@ -181,23 +181,9 @@
 
 /* Выбор типа аккаунта: строки-плиты. Значки — одноцветные пиксельные
    силуэты акцентом, как до перехода спрайта на цветные предметы
-   (23.09.2026, 22:50: ключ-золото, щит, человечек читались как эмодзи).
-   «Купить лицензию» — плотный акцент с тёмным текстом и подошвой, как
-   прежний зелёный баннер, но без градиента. */
+   (23.09.2026, 22:50: ключ-золото, щит, человечек читались как эмодзи). */
 :root:root .acc-opt { box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent; }
-:root:root :is(.acc-opt-ic, .acc-buy-ic) svg { width: 20px; height: 20px; }
-:root:root .acc-buy {
-  background: var(--m-accent);
-  color: var(--px-on-accent);
-  padding-bottom: 15px;
-  box-shadow: var(--px-btn); --px-ol: var(--px-btn-ol); --px-ol-w: 2px; --px-ft: var(--px-btn-t); --px-ft-w: 3px; --px-fb: var(--px-btn-b); --px-fb-w: 5px; --px-fl: var(--px-btn-l); --px-fl-w: 3px; --px-fr: var(--px-btn-r); --px-fr-w: 3px;
-}
-:root:root .acc-buy:hover { background: var(--m-accent); filter: brightness(1.06); transform: none; }
-:root:root .acc-buy:active { transform: translateY(2px); }
-:root:root .acc-buy-ic { background: rgba(0, 0, 0, 0.14); }
-:root:root .acc-buy-ic svg { color: var(--px-on-accent); }
-:root:root .acc-buy > svg { color: var(--px-on-accent); opacity: 0.8; }
-:root:root .acc-buy-sub { font-size: 12px; color: var(--px-on-accent); opacity: 0.75; }
+:root:root .acc-opt-ic svg { width: 20px; height: 20px; }
 :root:root .acc-code { border: 0; box-shadow: var(--px-well); --px-ol: var(--px-well-ol); --px-ol-w: 1px; --px-ft: var(--px-well-t); --px-ft-w: 3px; --px-fb: transparent; --px-fl: transparent; --px-fr: transparent; }
 
 /* Плашка обновления — плита со срезом, кнопка — обычная главная. */

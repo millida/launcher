@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 /**
  * Ступени наигранного времени — как трофеи в Brawl Stars: растут и никогда
  * не отнимаются (разбор лобби 23.09.2026). Считаются только от часов,
@@ -28,7 +29,7 @@ export function playTier(seconds: number): PlayTier {
  */
 export function playHoursLabel(seconds: number): string {
   const s = Math.max(0, Math.floor(seconds || 0))
-  if (s < 60) return '0 ч'
-  if (s < 3600) return Math.floor(s / 60) + ' мин'
-  return Math.floor(s / 3600) + ' ч'
+  if (s < 60) return t('0 ч')
+  if (s < 3600) return t('{m} мин', { m: Math.floor(s / 60) })
+  return t('{h} ч', { h: Math.floor(s / 3600) })
 }

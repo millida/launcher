@@ -1,4 +1,5 @@
 import type { MusicLink } from './musicLinks'
+import { t } from '../i18n'
 
 export interface EmbedNow {
   title: string
@@ -18,9 +19,9 @@ const READY_TIMEOUT_MS = 20000
 const SC_FINISH_CHECK_MS = 900
 const YT_ENDED = 0
 
-const NO_ANSWER = 'Плеер не ответил. Проверь интернет: без VPN YouTube и SoundCloud могут не открываться'
-const YT_REFUSED = 'YouTube не отдал это видео: оно закрыто, удалено или автор запретил играть его вне YouTube'
-const SC_REFUSED = 'SoundCloud не отдал этот плейлист — проверь, что он открыт по ссылке'
+const noAnswer = (): string => t('Плеер не ответил. Проверь интернет: без VPN YouTube и SoundCloud могут не открываться')
+const ytRefused = (): string => t('YouTube не отдал это видео: оно закрыто, удалено или автор запретил играть его вне YouTube')
+const scRefused = (): string => t('SoundCloud не отдал этот плейлист — проверь, что он открыт по ссылке')
 
 let frame: HTMLIFrameElement | null = null
 let link: MusicLink | null = null
@@ -90,7 +91,7 @@ function onYoutube(msg: Record<string, unknown>) {
   becomeReady()
   if (msg.event === 'onError') {
     if (hasNext()) yt('nextVideo')
-    else hooks?.onError(YT_REFUSED)
+    else hooks?.onError(ytRefused())
     return
   }
   const info = msg.info
@@ -143,7 +144,7 @@ function onSoundcloud(msg: Record<string, unknown>) {
       if (value === true && wantPlay && !hasNext()) hooks?.onEnded()
       return
     case 'error':
-      hooks?.onError(SC_REFUSED)
+      hooks?.onError(scRefused())
       return
   }
 }
@@ -178,7 +179,7 @@ function mount(l: MusicLink) {
     listening = true
   }
   const el = document.createElement('iframe')
-  el.title = 'Музыка'
+  el.title = t('Музыка')
   el.tabIndex = -1
   el.setAttribute('aria-hidden', 'true')
   el.allow = 'autoplay; encrypted-media'
@@ -197,7 +198,7 @@ function mount(l: MusicLink) {
   document.body.appendChild(el)
   readyTimer = setTimeout(() => {
     if (frame !== el || ready) return
-    hooks?.onError(NO_ANSWER)
+    hooks?.onError(noAnswer())
   }, READY_TIMEOUT_MS)
 }
 

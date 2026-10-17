@@ -4,6 +4,7 @@ import { loadWardrobe } from '../../lib/gameProfile'
 import { nickSkinUrl } from '../../lib/characterStage'
 import { getAccount } from '../../state/accounts'
 import { useGameNick } from '../../state/gameNick'
+import { useT } from '../../i18n'
 import '../../styles/pixel/nametag.css'
 import '../../styles/pixel/status-compare.css'
 
@@ -53,6 +54,7 @@ function useOwnSkin(): string {
 }
 
 export function StatusCompare({ compact = false, row = false }: { compact?: boolean; row?: boolean }) {
+  const t = useT()
   const gameName = useGameNick((s) => s.name)
   const nick = gameName || (getAccount() || { nick: '' }).nick || 'Steve'
   const skin = useOwnSkin()
@@ -66,7 +68,7 @@ export function StatusCompare({ compact = false, row = false }: { compact?: bool
         </span>
         {skin ? <SkinBody url={skin} height={h} /> : <span className="skel" style={{ width: h / 2, height: h }} />}
       </span>
-      <figcaption>{plus ? 'С PLUS' : 'Обычные игроки'}</figcaption>
+      <figcaption>{plus ? t('С PLUS') : t('Обычные игроки')}</figcaption>
     </figure>
   )
   return (
@@ -75,7 +77,7 @@ export function StatusCompare({ compact = false, row = false }: { compact?: bool
         {fig(false)}
         {fig(true)}
       </div>
-      <p className="sc-line">Золотой знак у ника в игре</p>
+      <p className="sc-line">{t('Золотой знак у ника в игре')}</p>
     </div>
   )
 }
@@ -86,11 +88,12 @@ export function StatusCompare({ compact = false, row = false }: { compact?: bool
  * и обратно. Знак — тот же глиф мода (BadgeGlyph). Без движения — два чипа рядом.
  */
 export function NickFlip() {
+  const t = useT()
   const gameName = useGameNick((s) => s.name)
   const nick = gameName || (getAccount() || { nick: '' }).nick || 'Steve'
   const face = (plus: boolean) => (
     <span className={'nf-face' + (plus ? ' is-plus' : '')}>
-      <small>{plus ? 'с PLUS' : 'без PLUS'}</small>
+      <small>{plus ? t('с PLUS') : t('без PLUS')}</small>
       <span className="mc-nametag nf-tag">
         <BadgeGlyph plus={plus} size={14} />
         <span>{nick}</span>
@@ -98,7 +101,7 @@ export function NickFlip() {
     </span>
   )
   return (
-    <span className="nf" aria-label="Золотой знак у ника в игре">
+    <span className="nf" aria-label={t('Золотой знак у ника в игре')}>
       {face(false)}
       {face(true)}
     </span>

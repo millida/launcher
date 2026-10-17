@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
+import { useT } from '../../i18n'
 import { showToast } from '../../state/ui'
 import { uiConfirm } from '../../state/confirm'
 import { hasTauri } from '../../ipc/tauri'
@@ -21,6 +22,7 @@ const parentOf = (path: string) => {
 const joinPath = (dir: string, name: string) => (dir ? dir + '/' + name : name)
 
 export function TabFiles({ serverId, full, onTariff }: { serverId: string; full: boolean; onTariff: () => void }) {
+  const t = useT()
   const [dir, setDir] = useState('')
   const [entries, setEntries] = useState<HostingFileEntry[] | null>(null)
   const [editing, setEditing] = useState<{ path: string; content: string } | null>(null)
@@ -46,7 +48,7 @@ export function TabFiles({ serverId, full, onTariff }: { serverId: string; full:
       return
     }
     if (!TEXT_EXT.test(e.name)) {
-      showToast('Это не текстовый файл — его можно скачать или заменить', 'error')
+      showToast(t('Это не текстовый файл — его можно скачать или заменить'), 'error')
       return
     }
     setBusy(e.name)
@@ -66,7 +68,7 @@ export function TabFiles({ serverId, full, onTariff }: { serverId: string; full:
     setBusy('save')
     try {
       await host.writeFile(serverId, editing.path, draft)
-      showToast('Сохранено — применится после перезапуска')
+      showToast(t('Сохранено — применится после перезапуска'))
       setEditing({ ...editing, content: draft })
     } catch (e) {
       showToast(errText(e), 'error')
@@ -76,7 +78,7 @@ export function TabFiles({ serverId, full, onTariff }: { serverId: string; full:
   }
 
   const remove = async (e: HostingFileEntry) => {
-    if (!(await uiConfirm('Удалить «' + e.name + '»' + (e.dir ? ' со всем содержимым' : '') + '?', { confirmLabel: 'Удалить' })))
+    if (!(await uiConfirm(e.dir ? t('Удалить «{name}» со всем содержимым?', { name: e.name }) : t('Удалить «{name}»?', { name: e.name }), { confirmLabel: t('Удалить') })))
       return
     try {
       await host.deleteFile(serverId, joinPath(dir, e.name))
@@ -97,11 +99,11 @@ export function TabFiles({ serverId, full, onTariff }: { serverId: string; full:
   }
 
   const extract = async (e: HostingFileEntry) => {
-    if (!(await uiConfirm('Распаковать «' + e.name + '» в текущую папку?', { confirmLabel: 'Распаковать', danger: false }))) return
+    if (!(await uiConfirm(t('Распаковать «{name}» в текущую папку?', { name: e.name }), { confirmLabel: t('Распаковать'), danger: false }))) return
     setBusy(e.name)
     try {
       await host.extractFile(serverId, joinPath(dir, e.name), dir || '.')
-      showToast('Распаковано')
+      showToast(t('Распаковано'))
       load()
     } catch (err) {
       showToast(errText(err), 'error')
@@ -112,13 +114,13 @@ export function TabFiles({ serverId, full, onTariff }: { serverId: string; full:
 
   const download = async (e: HostingFileEntry) => {
     if (!hasTauri()) {
-      showToast('Скачивание — в приложении', 'error')
+      showToast(t('Скачивание — в приложении'), 'error')
       return
     }
     setBusy(e.name)
     try {
       const path = await hostDownload(serverId, joinPath(dir, e.name))
-      showToast(path ? 'Сохранено: ' + path : 'Отменено')
+      showToast(path ? t('Сохранено: {path}', { path }) : t('Отменено'))
     } catch (err) {
       showToast(errText(err), 'error')
     } finally {
@@ -128,20 +130,20 @@ export function TabFiles({ serverId, full, onTariff }: { serverId: string; full:
 
   const upload = async () => {
     if (!hasTauri()) {
-      showToast('Загрузка файлов — в приложении', 'error')
+      showToast(t('Загрузка файлов — в приложении'), 'error')
       return
     }
     setBusy('upload')
     try {
       const target = await hostUpload(serverId, dir)
       if (!target) {
-        showToast('Отменено')
+        showToast(t('Отменено'))
         return
       }
-      showToast('Загружено: ' + target)
+      showToast(t('Загружено: {path}', { path: target }))
       load()
     } catch (e) {
-      showToast('Не удалось загрузить: ' + errText(e), 'error')
+      showToast(t('Не удалось загрузить: {error}', { error: errText(e) }), 'error')
     } finally {
       setBusy(null)
     }
@@ -162,12 +164,12 @@ export function TabFiles({ serverId, full, onTariff }: { serverId: string; full:
       <div className="card" style={{ padding: '18px' }}>
         <div className="host-files-head">
           <button className="inst-back" onClick={() => setEditing(null)}>
-            <Icon id="i-chev-l" /> К файлам
+            <Icon id="i-chev-l" /> {t('К файлам')}
           </button>
           <span className="host-files-path">{editing.path}</span>
           <span style={{ flex: 1 }}></span>
           <button className="btn sm primary" disabled={busy === 'save' || draft === editing.content} onClick={() => void saveFile()}>
-            Сохранить
+            {t('Сохранить')}
           </button>
         </div>
         <textarea className="host-file-edit" value={draft} spellCheck={false} onChange={(e) => setDraft(e.target.value)} />
@@ -181,11 +183,11 @@ export function TabFiles({ serverId, full, onTariff }: { serverId: string; full:
     <div className="card" style={{ padding: '18px' }}>
       <div className="host-files-head">
         <button className="inst-back" disabled={!dir} onClick={() => setDir(parentOf(dir))}>
-          <Icon id="i-chev-l" /> Назад
+          <Icon id="i-chev-l" /> {t('Назад')}
         </button>
         <span className="host-files-path">
           <button className="host-crumb" onClick={() => setDir('')}>
-            сервер
+            {t('сервер')}
           </button>
           {crumbs.map((c, i) => (
             <button key={i} className="host-crumb" onClick={() => setDir(crumbs.slice(0, i + 1).join('/'))}>
@@ -196,17 +198,17 @@ export function TabFiles({ serverId, full, onTariff }: { serverId: string; full:
         <span style={{ flex: 1 }}></span>
         {full ? (
           <button className="btn sm secondary" onClick={() => setAsk({ kind: 'mkdir', from: '', value: '' })}>
-            <Icon id="i-plus" /> Папка
+            <Icon id="i-plus" /> {t('Папка')}
           </button>
         ) : (
-          <LockBtn label="Папка" feature="Свои папки" onTariff={onTariff} />
+          <LockBtn label={t('Папка')} feature={t('Свои папки')} onTariff={onTariff} />
         )}
         {full ? (
           <button className="btn sm secondary" disabled={busy === 'upload'} onClick={() => void upload()}>
-            <Icon id="i-upload" /> Загрузить
+            <Icon id="i-upload" /> {t('Загрузить')}
           </button>
         ) : (
-          <LockBtn label="Загрузить" feature="Загрузка своих файлов" onTariff={onTariff} />
+          <LockBtn label={t('Загрузить')} feature={t('Загрузка своих файлов')} onTariff={onTariff} />
         )}
       </div>
 
@@ -218,7 +220,7 @@ export function TabFiles({ serverId, full, onTariff }: { serverId: string; full:
           <div className="input sm" style={{ flex: 1 }}>
             <input
               autoFocus
-              placeholder={ask.kind === 'mkdir' ? 'Название папки' : 'Новое имя'}
+              placeholder={ask.kind === 'mkdir' ? t('Название папки') : t('Новое имя')}
               value={ask.value}
               onChange={(e) => setAsk({ ...ask, value: e.target.value })}
               onKeyDown={(e) => {
@@ -241,10 +243,10 @@ export function TabFiles({ serverId, full, onTariff }: { serverId: string; full:
               void (kind === 'mkdir' ? mkdir(value) : rename(from, value.trim()))
             }}
           >
-            {ask.kind === 'mkdir' ? 'Создать' : 'Переименовать'}
+            {ask.kind === 'mkdir' ? t('Создать') : t('Переименовать')}
           </button>
           <button className="btn sm ghost" onClick={() => setAsk(null)}>
-            Отмена
+            {t('Отмена')}
           </button>
         </div>
       ) : null}
@@ -263,45 +265,45 @@ export function TabFiles({ serverId, full, onTariff }: { serverId: string; full:
                 <button className="host-file-name" onClick={() => void open(e)}>
                   {e.name}
                 </button>
-                <span className="host-file-meta">{e.dir ? 'папка' : sizeLabel(e.size)}</span>
+                <span className="host-file-meta">{e.dir ? t('папка') : sizeLabel(e.size)}</span>
                 {!e.dir && ARCHIVE_EXT.test(e.name) ? (
                   full ? (
                     <button className="btn sm secondary" disabled={busy === e.name} onClick={() => void extract(e)}>
-                      Распаковать
+                      {t('Распаковать')}
                     </button>
                   ) : (
-                    <LockBtn label="Распаковать" feature="Распаковка архивов" onTariff={onTariff} />
+                    <LockBtn label={t('Распаковать')} feature={t('Распаковка архивов')} onTariff={onTariff} />
                   )
                 ) : null}
                 {!e.dir ? (
                   full ? (
-                    <button className="btn sm ghost" aria-label="Скачать" data-tip="Скачать" disabled={busy === e.name} onClick={() => void download(e)}>
+                    <button className="btn sm ghost" aria-label={t('Скачать')} data-tip={t('Скачать')} disabled={busy === e.name} onClick={() => void download(e)}>
                       <Icon id="i-download" />
                     </button>
                   ) : (
-                    <LockBtn feature="Скачивание файлов" icon="i-download" title="Скачивание файлов — на платном тарифе" onTariff={onTariff} />
+                    <LockBtn feature={t('Скачивание файлов')} icon="i-download" title={t('Скачивание файлов — на платном тарифе')} onTariff={onTariff} />
                   )
                 ) : null}
                 {full ? (
                   <button
                     className="btn sm ghost"
-                    aria-label="Переименовать"
-                    data-tip="Переименовать"
+                    aria-label={t('Переименовать')}
+                    data-tip={t('Переименовать')}
                     onClick={() => setAsk({ kind: 'rename', from: e.name, value: e.name })}
                   >
                     <Icon id="i-brush" />
                   </button>
                 ) : (
-                  <LockBtn feature="Переименование файлов" icon="i-brush" title="Переименование — на платном тарифе" onTariff={onTariff} />
+                  <LockBtn feature={t('Переименование файлов')} icon="i-brush" title={t('Переименование — на платном тарифе')} onTariff={onTariff} />
                 )}
-                <button className="btn sm ghost" aria-label="Удалить" data-tip="Удалить" onClick={() => void remove(e)}>
+                <button className="btn sm ghost" aria-label={t('Удалить')} data-tip={t('Удалить')} onClick={() => void remove(e)}>
                   <Icon id="i-trash" />
                 </button>
               </div>
             ))}
         </div>
       ) : (
-        <Empty icon="i-inbox" text="Папка пуста" />
+        <Empty icon="i-inbox" text={t('Папка пуста')} />
       )}
     </div>
   )

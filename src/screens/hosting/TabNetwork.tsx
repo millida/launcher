@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
+import { useT } from '../../i18n'
 import { showToast } from '../../state/ui'
 import { uiConfirm } from '../../state/confirm'
 import { ApplyField, Cap, Empty, Loading, LockBtn, Row } from './kit'
@@ -26,6 +27,7 @@ export function TabNetwork({
   onTariff?: () => void
   onChanged: () => void
 }) {
+  const t = useT()
   const locked = !full && !!onTariff
   const [busy, setBusy] = useState<string | null>(null)
   const [ports, setPorts] = useState<{ ports: { port: number; note?: string }[]; limit: number; address: string } | null>(null)
@@ -51,19 +53,19 @@ export function TabNetwork({
   useEffect(load, [serverId])
 
   const copy = async (text: string, label: string) => {
-    if (await copyText(text)) showToast(label + ' скопирован')
-    else showToast('Скопируй вручную: ' + text, 'error')
+    if (await copyText(text)) showToast(t('{label} скопирован', { label }))
+    else showToast(t('Скопируй вручную: {text}', { text }), 'error')
   }
 
   const changeAddress = async (next: string) => {
     const clean = next.trim().toLowerCase()
     if (!clean || clean === slug) return
-    if (!(await uiConfirm('Сменить адрес на ' + clean + '.millida.host? Старый перестанет работать у всех, кто его сохранил.', { confirmLabel: 'Сменить' })))
+    if (!(await uiConfirm(t('Сменить адрес на {address}? Старый перестанет работать у всех, кто его сохранил.', { address: clean + '.millida.host' }), { confirmLabel: t('Сменить') })))
       return
     setBusy('slug')
     try {
       await host.changeAddress(serverId, clean)
-      showToast('Новый адрес: ' + clean + '.millida.host')
+      showToast(t('Новый адрес: {address}', { address: clean + '.millida.host' }))
       onChanged()
     } catch (e) {
       showToast(errText(e), 'error')
@@ -77,7 +79,7 @@ export function TabNetwork({
     try {
       const r = await host.setDomain(serverId, domain.trim().toLowerCase())
       setDns(r?.dnsTarget || null)
-      showToast(domain.trim() ? 'Домен привязан — осталось прописать запись у регистратора' : 'Домен отвязан')
+      showToast(domain.trim() ? t('Домен привязан — осталось прописать запись у регистратора') : t('Домен отвязан'))
       onChanged()
     } catch (e) {
       showToast(errText(e), 'error')
@@ -90,7 +92,7 @@ export function TabNetwork({
     setBusy('port')
     try {
       const r = await host.addPort(serverId)
-      showToast('Порт выдан: ' + r.port)
+      showToast(t('Порт выдан: {port}', { port: r.port }))
       load()
     } catch (e) {
       showToast(errText(e), 'error')
@@ -100,7 +102,7 @@ export function TabNetwork({
   }
 
   const removePort = async (port: number) => {
-    if (!(await uiConfirm('Освободить порт ' + port + '?', { confirmLabel: 'Освободить' }))) return
+    if (!(await uiConfirm(t('Освободить порт {port}?', { port }), { confirmLabel: t('Освободить') }))) return
     try {
       await host.removePort(serverId, port)
       load()
@@ -114,7 +116,7 @@ export function TabNetwork({
     try {
       const info = await host.createDatabase(serverId)
       setDb(info)
-      showToast('База данных создана')
+      showToast(t('База данных создана'))
     } catch (e) {
       showToast(errText(e), 'error')
     } finally {
@@ -123,11 +125,11 @@ export function TabNetwork({
   }
 
   const dropDb = async () => {
-    if (!(await uiConfirm('Удалить базу данных со всем содержимым?', { confirmLabel: 'Удалить' }))) return
+    if (!(await uiConfirm(t('Удалить базу данных со всем содержимым?'), { confirmLabel: t('Удалить') }))) return
     try {
       await host.dropDatabase(serverId)
       setDb(null)
-      showToast('База удалена')
+      showToast(t('База удалена'))
     } catch (e) {
       showToast(errText(e), 'error')
     }
@@ -139,7 +141,7 @@ export function TabNetwork({
       const creds = await host.issueSftp(serverId)
       setSftpPass(creds)
       setSftp({ active: true, host: creds.host, port: creds.port, login: creds.login, expiresAt: creds.expiresAt })
-      showToast('Доступ выдан — пароль показываем один раз')
+      showToast(t('Доступ выдан — пароль показываем один раз'))
     } catch (e) {
       showToast(errText(e), 'error')
     } finally {
@@ -152,7 +154,7 @@ export function TabNetwork({
       await host.revokeSftp(serverId)
       setSftp({ active: false, host: null, port: 22, login: '', expiresAt: null })
       setSftpPass(null)
-      showToast('Доступ отозван')
+      showToast(t('Доступ отозван'))
     } catch (e) {
       showToast(errText(e), 'error')
     }
@@ -161,21 +163,21 @@ export function TabNetwork({
   return (
     <>
       <div className="card set-group" style={{ padding: '10px 20px 18px' }}>
-        <Cap first>Адрес сервера</Cap>
-        <Row k="Как заходят игроки">
-          <button className="ip-pill" onClick={() => void copy(address, 'Адрес')}>
+        <Cap first>{t('Адрес сервера')}</Cap>
+        <Row k={t('Как заходят игроки')}>
+          <button className="ip-pill" onClick={() => void copy(address, t('Адрес'))}>
             {address || '—'}
             <Icon id="i-copy" />
           </button>
         </Row>
-        <Row k="Короткий адрес" sub="Латиница, цифры и тире">
-          <ApplyField value={slug} label="Сменить" busy={busy === 'slug'} width="260px" suffix=".millida.host" onApply={changeAddress} />
+        <Row k={t('Короткий адрес')} sub={t('Латиница, цифры и тире')}>
+          <ApplyField value={slug} label={t('Сменить')} busy={busy === 'slug'} width="260px" suffix=".millida.host" onApply={changeAddress} />
         </Row>
-        <Row k="Свой домен" sub={dns ? 'CNAME на ' + dns : 'Пусто — отвязать'}>
+        <Row k={t('Свой домен')} sub={dns ? t('CNAME на {target}', { target: dns }) : t('Пусто — отвязать')}>
           <ApplyField
             value={customDomain || ''}
             placeholder="play.example.ru"
-            label="Привязать"
+            label={t('Привязать')}
             busy={busy === 'domain'}
             width="220px"
             onApply={setDomain}
@@ -186,18 +188,18 @@ export function TabNetwork({
       <div className="card" style={{ padding: '18px', marginTop: '14px' }}>
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: '12px' }}>
           <div className="side-cap" style={{ padding: 0, flex: 1 }}>
-            Дополнительные порты {ports ? '· занято ' + ports.ports.length + ' из ' + ports.limit : ''}
+            {ports ? t('Дополнительные порты · занято {used} из {limit}', { used: ports.ports.length, limit: ports.limit }) : t('Дополнительные порты')}
           </div>
           {locked ? (
-            <LockBtn label="Выдать порт" feature="Дополнительные порты" onTariff={onTariff!} />
+            <LockBtn label={t('Выдать порт')} feature={t('Дополнительные порты')} onTariff={onTariff!} />
           ) : (
             <button className="btn sm secondary" disabled={busy === 'port'} onClick={() => void addPort()}>
-              <Icon id="i-plus" /> Выдать порт
+              <Icon id="i-plus" /> {t('Выдать порт')}
             </button>
           )}
         </div>
         {ports === null ? (
-          <Empty icon="i-lock" text="Только на платном тарифе" />
+          <Empty icon="i-lock" text={t('Только на платном тарифе')} />
         ) : ports.ports.length ? (
           <div className="stack">
             {ports.ports.map((p) => (
@@ -209,34 +211,34 @@ export function TabNetwork({
                   <span className="fr-nick">{ports.address + ':' + p.port}</span>
                   {p.note ? <span className="fr-status">{p.note}</span> : null}
                 </span>
-                <button className="btn sm ghost" aria-label="Копировать" data-tip="Копировать" onClick={() => void copy(ports.address + ':' + p.port, 'Адрес')}>
+                <button className="btn sm ghost" aria-label={t('Копировать')} data-tip={t('Копировать')} onClick={() => void copy(ports.address + ':' + p.port, t('Адрес'))}>
                   <Icon id="i-copy" />
                 </button>
-                <button className="btn sm ghost" aria-label="Освободить порт" data-tip="Освободить порт" onClick={() => void removePort(p.port)}>
+                <button className="btn sm ghost" aria-label={t('Освободить порт')} data-tip={t('Освободить порт')} onClick={() => void removePort(p.port)}>
                   <Icon id="i-trash" />
                 </button>
               </div>
             ))}
           </div>
         ) : (
-          <Empty icon="i-link" text="Портов нет" />
+          <Empty icon="i-link" text={t('Портов нет')} />
         )}
       </div>
 
       <div className="card" style={{ padding: '18px', marginTop: '14px' }}>
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: '12px' }}>
           <div className="side-cap" style={{ padding: 0, flex: 1 }}>
-            База данных MySQL
+            {t('База данных MySQL')}
           </div>
           {db ? (
             <button className="btn sm ghost" onClick={() => void dropDb()}>
-              <Icon id="i-trash" /> Удалить
+              <Icon id="i-trash" /> {t('Удалить')}
             </button>
           ) : locked ? (
-            <LockBtn label="Создать" feature="База данных" onTariff={onTariff!} />
+            <LockBtn label={t('Создать')} feature={t('База данных')} onTariff={onTariff!} />
           ) : (
             <button className="btn sm secondary" disabled={busy === 'db' || db === undefined} onClick={() => void createDb()}>
-              <Icon id="i-plus" /> Создать
+              <Icon id="i-plus" /> {t('Создать')}
             </button>
           )}
         </div>
@@ -245,58 +247,58 @@ export function TabNetwork({
         ) : db ? (
           <div className="host-creds">
             {[
-              ['Хост', db.host],
-              ['Порт', String(db.port)],
-              ['База', db.database],
-              ['Логин', db.user],
-              ['Пароль', db.password],
+              [t('Хост'), db.host],
+              [t('Порт'), String(db.port)],
+              [t('База'), db.database],
+              [t('Логин'), db.user],
+              [t('Пароль'), db.password],
             ].map(([k, v]) => (
               <div className="host-cred-row" key={k}>
                 <span className="host-cred-k">{k}</span>
                 <code className="host-cred-v">{v}</code>
-                <button className="btn sm ghost" aria-label="Копировать" data-tip="Копировать" onClick={() => void copy(v, k)}>
+                <button className="btn sm ghost" aria-label={t('Копировать')} data-tip={t('Копировать')} onClick={() => void copy(v, k)}>
                   <Icon id="i-copy" />
                 </button>
               </div>
             ))}
           </div>
         ) : (
-          <Empty icon="i-server" text="Базы нет" />
+          <Empty icon="i-server" text={t('Базы нет')} />
         )}
       </div>
 
       <div className="card" style={{ padding: '18px', marginTop: '14px' }}>
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: '12px' }}>
           <div className="side-cap" style={{ padding: 0, flex: 1 }}>
-            SFTP-доступ к файлам
+            {t('SFTP-доступ к файлам')}
           </div>
           {sftp?.active ? (
             <button className="btn sm ghost" onClick={() => void revokeSftp()}>
-              Отозвать
+              {t('Отозвать')}
             </button>
           ) : null}
           {locked && !sftp?.active ? (
-            <LockBtn label="Выдать доступ" feature="SFTP" onTariff={onTariff!} />
+            <LockBtn label={t('Выдать доступ')} feature="SFTP" onTariff={onTariff!} />
           ) : (
             <button className="btn sm secondary" style={{ marginLeft: '8px' }} disabled={busy === 'sftp'} onClick={() => void issueSftp()}>
-              <Icon id="i-key" /> {sftp?.active ? 'Новый пароль' : 'Выдать доступ'}
+              <Icon id="i-key" /> {sftp?.active ? t('Новый пароль') : t('Выдать доступ')}
             </button>
           )}
         </div>
         {sftp?.active ? (
           <div className="host-creds">
             {[
-              ['Хост', sftp.host || '—'],
-              ['Порт', String(sftp.port)],
-              ['Логин', sftp.login],
+              [t('Хост'), sftp.host || '—'],
+              [t('Порт'), String(sftp.port)],
+              [t('Логин'), sftp.login],
               // Пароль показывается один раз при выдаче; потом — только «Новый пароль».
-              ['Пароль', sftpPass ? sftpPass.password : ''],
+              [t('Пароль'), sftpPass ? sftpPass.password : ''],
             ].map(([k, v]) => (
               <div className="host-cred-row" key={k}>
                 <span className="host-cred-k">{k}</span>
                 <code className="host-cred-v">{v || '••••••'}</code>
                 {v ? (
-                  <button className="btn sm ghost" aria-label="Копировать" data-tip="Копировать" onClick={() => void copy(v, k)}>
+                  <button className="btn sm ghost" aria-label={t('Копировать')} data-tip={t('Копировать')} onClick={() => void copy(v, k)}>
                     <Icon id="i-copy" />
                   </button>
                 ) : null}
@@ -304,7 +306,7 @@ export function TabNetwork({
             ))}
           </div>
         ) : (
-          <Empty icon="i-key" text="Доступ не выдан" />
+          <Empty icon="i-key" text={t('Доступ не выдан')} />
         )}
       </div>
     </>

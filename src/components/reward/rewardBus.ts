@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { create } from 'zustand'
+import { t } from '../../i18n'
 
 /**
  * Единый «миг награды» лаунчера. Любое место, где человек что-то получил,
@@ -99,11 +100,11 @@ const TONE: Record<RewardRarity, string> = {
 const ORDER: RewardRarity[] = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY']
 
 export const RARITY_WORD: Record<RewardRarity, string> = {
-  COMMON: 'Обычная',
-  UNCOMMON: 'Необычная',
-  RARE: 'Редкая',
-  EPIC: 'Эпическая',
-  LEGENDARY: 'Легендарная',
+  get COMMON() { return t('Обычная') },
+  get UNCOMMON() { return t('Необычная') },
+  get RARE() { return t('Редкая') },
+  get EPIC() { return t('Эпическая') },
+  get LEGENDARY() { return t('Легендарная') },
 }
 
 const asRarity = (r?: string | null): RewardRarity | null =>

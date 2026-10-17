@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from './Icon'
 import { usePopover } from '../lib/popover'
+import { useT } from '../i18n'
 
 export interface SelectOption {
   value: string
@@ -63,6 +64,7 @@ export function Select({
   /// Long lists (game versions, loader builds) are unusable by scrolling alone.
   search?: boolean
 }) {
+  const t = useT()
   const pop = usePopover<HTMLDivElement>()
   const [q, setQ] = useState('')
   const [pos, setPos] = useState<PopPlace | null>(null)
@@ -118,7 +120,7 @@ export function Select({
           <input
             autoFocus
             value={q}
-            placeholder="Поиск"
+            placeholder={t('Поиск')}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => {
               if (e.key !== 'Enter' || !shown.length) return
@@ -145,7 +147,7 @@ export function Select({
           {o.value === value ? <Icon id="i-check" /> : null}
         </button>
       ))}
-      {searchable && !shown.length ? <p className="m-select-empty">Ничего не нашлось</p> : null}
+      {searchable && !shown.length ? <p className="m-select-empty">{t('Ничего не нашлось')}</p> : null}
     </div>
   ) : null
 

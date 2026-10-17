@@ -5,11 +5,13 @@ import type { MilliLooks } from '../../lib/milli'
 import { closePicker, pickLook, useMilliPicker } from '../../state/milliPicker'
 import { LookPic } from './bench/BenchShaders'
 import '../../styles/pixel/milli-picker.css'
+import { t, useT } from '../../i18n'
 
-const fmt = (n?: number) => (!n ? '' : n >= 1e6 ? (n / 1e6).toFixed(1).replace('.0', '') + ' млн' : n >= 1e3 ? Math.round(n / 1e3) + ' тыс.' : String(n))
+const fmt = (n?: number) => (!n ? '' : n >= 1e6 ? t('{n} млн', { n: (n / 1e6).toFixed(1).replace('.0', '') }) : n >= 1e3 ? t('{n} тыс.', { n: Math.round(n / 1e3) }) : String(n))
 
 /** Варианты ресурс-пака / шейдера в сообщении Милли: навёл — ожил, нажал — улетел в сборку. */
 export function MilliPicker({ msgId, looks, active }: { msgId: string; looks: MilliLooks; active: boolean }) {
+  const t = useT()
   const done = useMilliPicker((s) => s.done[msgId])
   const box = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -54,14 +56,14 @@ export function MilliPicker({ msgId, looks, active }: { msgId: string; looks: Mi
                     {it.downloads ? <i>{fmt(it.downloads)}</i> : null}
                   </span>
                   <span className="mpk-pick-go" aria-hidden="true">
-                    Взять
+                    {t('Взять')}
                   </span>
                 </button>
               ))}
         </div>
         {!p.picked ? (
           <button type="button" className="mpk-pick-x" onClick={() => closePicker(msgId)}>
-            Не надо
+            {t('Не надо')}
           </button>
         ) : null}
     </div>

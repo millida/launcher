@@ -8,6 +8,7 @@ import { Shard } from './parts'
 import { BoltArt, GemArt } from './shopArt'
 import { PlusMark } from '../premium/PlusMark'
 import '../../styles/pixel/plus-chip.css'
+import { formatNumber, intlTag, useT } from '../../i18n'
 
 export const PLUS_CHESTS = Object.values(PLUS_PASS.chests).reduce((a, b) => a + (b || 0), 0)
 
@@ -28,7 +29,7 @@ export function PlusFacts({ tier = 'PLUS' }: { tier?: PlusTier }) {
       </span>
       <span className="pl-fact">
         <Shard size={24} />
-        <b>×{String(PLUS_PASS.shardBoost).replace('.', ',')}</b>
+        <b>×{formatNumber(PLUS_PASS.shardBoost)}</b>
       </span>
     </span>
   )
@@ -36,6 +37,7 @@ export function PlusFacts({ tier = 'PLUS' }: { tier?: PlusTier }) {
 
 /** Картинка подписки: корона, гигантское «◆2100» и «каждый месяц». Её же показывает окно покупки. */
 export function PlusArt({ tier = 'PLUS', size = 'lg' }: { tier?: PlusTier; size?: 'lg' | 'md' }) {
+  const t = useT()
   const big = size === 'lg'
   return (
     <span className={'pl-art is-' + size + (tier === 'DIAMOND' ? ' is-diamond' : '')}>
@@ -44,9 +46,9 @@ export function PlusArt({ tier = 'PLUS', size = 'lg' }: { tier?: PlusTier; size?
       </span>
       <span className="pl-sum">
         <Ruby size={big ? 56 : 44} />
-        <b>{PLUS_PASS.rubies.toLocaleString('ru-RU')}</b>
+        <b>{PLUS_PASS.rubies.toLocaleString(intlTag())}</b>
       </span>
-      <small className="pl-month">каждый месяц</small>
+      <small className="pl-month">{t('каждый месяц')}</small>
     </span>
   )
 }
@@ -73,20 +75,21 @@ export function TierBtn({ tier, label, onClick, track, size = 'lg' }: { tier: Pl
  * значок «сразу всё»), «◆2100», ценности чипами и как приходят награды.
  */
 export function PlanCard({ tier }: { tier: PlusTier }) {
+  const t = useT()
   const diamond = tier === 'DIAMOND'
   return (
     <span className={'pl-plan' + (diamond ? ' is-diamond' : '')}>
       {diamond ? (
         <span className="pl-now">
           <BoltArt size={16} />
-          сразу всё
+          {t('сразу всё')}
         </span>
       ) : null}
       <span className="pl-plan-art">
         <PlusMark tier={tier} height={diamond ? 34 : 46} shine />
       </span>
       <PlusChips tier={tier} />
-      {diamond ? <b className="pl-all">+ сразу всё</b> : <small className="pl-month">награды по дням, 28 дней</small>}
+      {diamond ? <b className="pl-all">+ {t('сразу всё')}</b> : <small className="pl-month">{t('награды по дням, 28 дней')}</small>}
     </span>
   )
 }
@@ -97,23 +100,24 @@ export function PlanCard({ tier }: { tier: PlusTier }) {
  * вещей. Числа — как у службы (PLUS_PASS, PLUS_ITEM_PCT / DIAMOND_ITEM_PCT).
  */
 export function PlusChips({ tier = 'PLUS' }: { tier?: PlusTier }) {
+  const t = useT()
   const parts = [
     <>
       <Ruby size={20} />
-      <b>{PLUS_PASS.rubies.toLocaleString('ru-RU')}</b> из пропуска
+      <b>{PLUS_PASS.rubies.toLocaleString(intlTag())}</b> {t('из пропуска')}
     </>,
     <>
       <ChestArt ready={false} tier="EPIC" size={22} />
-      <b>{PLUS_CHESTS}</b> сундуков
+      <b>{PLUS_CHESTS}</b> {t('сундуков')}
     </>,
     <>
       <Shard size={18} />
-      осколки <b>×{String(PLUS_PASS.shardBoost).replace('.', ',')}</b>
+      {t('осколки')} <b>×{formatNumber(PLUS_PASS.shardBoost)}</b>
     </>,
     <>
-      <b>−{tier === 'DIAMOND' ? DIAMOND_ITEM_PCT : PLUS_ITEM_PCT}%</b> на всё
+      <b>−{tier === 'DIAMOND' ? DIAMOND_ITEM_PCT : PLUS_ITEM_PCT}%</b> {t('на всё')}
     </>,
-    <>фрагменты вещей</>,
+    <>{t('фрагменты вещей')}</>,
   ]
   return (
     <span className="pl-chain">
@@ -133,11 +137,12 @@ export function PlusChips({ tier = 'PLUS' }: { tier?: PlusTier }) {
  * подписки — слово серое и маленький золотой «+» со свечением; клик — окно PLUS.
  */
 export function PlusChip({ tier, until, onClick, track = 'plus_chip' }: { tier: ShopTier; until?: string; onClick: () => void; track?: string }) {
+  const t = useT()
   const off = !tier
   return (
     <button
       className={'pc ' + (off ? 'is-off' : tier === 'DIAMOND' ? 'is-diamond' : 'is-plus')}
-      aria-label={off ? 'Подключить PLUS' : tier === 'DIAMOND' ? 'Diamond' : 'PLUS'}
+      aria-label={off ? t('Подключить PLUS') : tier === 'DIAMOND' ? 'Diamond' : 'PLUS'}
       data-track={track}
       onClick={onClick}
     >
@@ -146,7 +151,7 @@ export function PlusChip({ tier, until, onClick, track = 'plus_chip' }: { tier: 
         <svg className="pc-add" viewBox="0 0 3 3" width={12} height={12} shapeRendering="crispEdges" aria-hidden="true">
           <path d="M1 0h1v3H1zM0 1h3v1H0z" />
         </svg>
-      ) : until ? <small>до {until}</small> : null}
+      ) : until ? <small>{t('до {date}', { date: until })}</small> : null}
     </button>
   )
 }
