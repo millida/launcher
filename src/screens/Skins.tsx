@@ -31,6 +31,7 @@ import type { Mine3dModule } from '../lib/mine3d'
 import type { SkinAnimation, SkinViewEngine } from '../vendor/mine3d'
 import { textureSource } from '../lib/textureSource'
 import { detectSlim, detectSlimFromUrl, loadImg } from '../lib/skinArms'
+import { warnHdSkinWithoutPlus } from '../lib/skinLock'
 import { capeById, contentFingerprint, dedupeCapes, textureHash } from '../lib/capes'
 import { SkinBody } from '../components/SkinBody'
 import {
@@ -2236,7 +2237,8 @@ export function Skins({ on }: { on: boolean }) {
   }
 
   const [uploadOpen, setUploadOpen] = useState(false)
-  const [uploadArms, setUploadArms] = useState<SkinArms>('classic')
+  // No preset: a pre-selected "classic" skipped the texture check and saved Alex skins with wide arms.
+  const [uploadArms, setUploadArms] = useState<SkinArms | null>(null)
 
   // Native dialog: HTML <input type=file> aborts WKWebView on macOS (runOpenPanel).
   const pickSkin = (model?: SkinArms) => {
@@ -2248,6 +2250,7 @@ export function Skins({ on }: { on: boolean }) {
       .then(async (p) => {
         if (!p) return
         setUploadOpen(false)
+        setUploadArms(null)
         await acceptSkin(p.name, p.data, model)
       })
       .catch((e) => {
@@ -2267,6 +2270,7 @@ export function Skins({ on }: { on: boolean }) {
     // Загрузка — тоже выбор: обновление каталога по ходу не должно вернуть на
     // фигуру прежний скин аккаунта.
     startSkinPick()
+    if (hasMillidaAccount()) await warnHdSkinWithoutPlus(data)
     const first = !mySkins.length && firstSkinEver()
     let slim = model === 'slim'
     if (!model) {
@@ -3227,7 +3231,7 @@ export function Skins({ on }: { on: boolean }) {
               <button className="btn sm ghost" onClick={() => setUploadOpen(false)}>
                 {t('Отмена')}
               </button>
-              <button className="btn sm primary" data-track="skin_upload_pick" onClick={() => pickSkin(uploadArms)}>
+              <button className="btn sm primary" data-track="skin_upload_pick" onClick={() => pickSkin(uploadArms ?? undefined)}>
                 <Icon id="i-upload" />
                 {t('Выбрать PNG')}
               </button>
@@ -3245,6 +3249,7 @@ export function Skins({ on }: { on: boolean }) {
                 note={sk.slim ? t('Тонкие руки') : t('Классические руки')}
                 on={activeMy === sk.file}
                 onClick={() => {
+                  if (hasMillidaAccount()) void warnHdSkinWithoutPlus(sk.data)
                   chooseVariant('m:' + sk.file, sk.slim ? 'slim' : 'classic', false)
                   pickAndApply(sk.data, () => {
                     setActiveMy(sk.file)
@@ -3267,7 +3272,10 @@ export function Skins({ on }: { on: boolean }) {
                     activeWardrobe === item.id ||
                     (!!activeMyHash && activeMyHash === wardrobeSkinHash(item.url))
                   }
-                  onClick={() => void useWardrobeSkin(item)}
+                  onClick={() => {
+                    if (item.source !== 'order') void warnHdSkinWithoutPlus(item.url)
+                    void useWardrobeSkin(item)
+                  }}
                   onRemove={() => removeWardrobeSkin(item)}
                 />
               ))}

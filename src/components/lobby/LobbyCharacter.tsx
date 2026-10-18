@@ -17,7 +17,8 @@ import { maskedSkin } from '../../lib/maskedSkin'
 import { CosmeticEmote, emoteClip } from '../../lib/cosmeticEmote'
 import { emoteSequence } from '../../lib/emoteSequence'
 import { readAnimations } from '../../lib/cosmeticAnimation'
-import { emoteShowMs, showPicker, wornEmoteLoops } from '../../lib/lobbyShow'
+import { emoteShowMs, showPicker, skinMaskEmote, wornEmoteLoops } from '../../lib/lobbyShow'
+import { lookStages } from '../../lib/lobbyLook'
 import { defaultVariant } from '../../lib/cosmeticVariants'
 import { Nametag, nametagSpot } from '../character/Nametag'
 import { FlatFigure } from '../character/FlatFigure'
@@ -138,24 +139,39 @@ const OUTFIT_WAIT_MS = 2500
 
 type LookSkin = Pick<Look, 'skin' | 'slim' | 'cape'>
 
-async function loadLookSkin(nick: string, signedIn: boolean): Promise<LookSkin> {
+/**
+ * How long the figure waits for the wardrobe before it stands in the skin found
+ * by nick. The wardrobe answer has no limit of its own, and while it hung the
+ * scene stayed empty; the wardrobe skin replaces the stand-in when it arrives.
+ */
+const WARDROBE_WAIT_MS = 3500
+
+async function nickLookSkin(nick: string): Promise<LookSkin> {
   const skin = nickSkinUrl(nick)
   // A skin found by nick carries no arm type, so it is read from the texture
   // exactly as the wardrobe does; otherwise an Alex skin got Steve arms here.
-  const nickArms = () => detectSlimFromUrl(skin).catch(() => false)
-  if (!signedIn) return { skin, slim: await nickArms(), cape: null }
+  return { skin, slim: await detectSlimFromUrl(skin).catch(() => false), cape: null }
+}
+
+async function loadLookSkin(nick: string, signedIn: boolean): Promise<LookSkin> {
+  if (!signedIn) return nickLookSkin(nick)
   const wardrobe = await loadWardrobe().catch(() => null)
   const fresh = (u: string) => (lookVersion && !/^(data|blob):/i.test(u) ? u + (u.includes('?') ? '&' : '?') + 'v=' + lookVersion : u)
   const cape = wardrobe?.active.capeUrl ? fresh(wardrobe.active.capeUrl) : null
   if (wardrobe?.active.skinUrl) return { skin: fresh(wardrobe.active.skinUrl), slim: wardrobe.active.model === 'slim', cape }
-  return { skin, slim: await nickArms(), cape }
+  return { ...(await nickLookSkin(nick)), cape }
 }
 
 function loadLook(nick: string, signedIn: boolean): { first: Promise<Look>; full: Promise<Look> } {
-  const skin = loadLookSkin(nick, signedIn)
-  const full = Promise.all([skin, loadLookOutfit(signedIn)]).then(([s, outfit]) => ({ ...s, ...outfit }))
-  const bare = Promise.all([skin, new Promise((ok) => setTimeout(ok, OUTFIT_WAIT_MS))]).then(([s]) => ({ ...s, items: [], show: [] }))
-  return { first: Promise.race([full, bare]), full }
+  return lookStages<LookSkin, Pick<Look, 'items' | 'show'>>(
+    {
+      skin: loadLookSkin(nick, signedIn),
+      nickSkin: () => nickLookSkin(nick),
+      outfit: loadLookOutfit(signedIn),
+      noOutfit: { items: [], show: [] },
+    },
+    { skinMs: WARDROBE_WAIT_MS, outfitMs: OUTFIT_WAIT_MS },
+  )
 }
 
 async function loadLookOutfit(signedIn: boolean): Promise<Pick<Look, 'items' | 'show'>> {
@@ -283,6 +299,12 @@ export function LobbyCharacter({
   const [dressedFor, setDressedFor] = useState('')
   const shown = !!look && skinFor === lookKey(look) && dressedFor === lookKey(look)
   const [emoting, setEmoting] = useState(false)
+  const [maskShow, setMaskShow] = useState<CosmeticItem | null>(null)
+  const skinMasks = useMemo(() => {
+    if (!look) return ''
+    const outfit = look.items.map((x) => x.item)
+    return maskUrls(outfit, look.slim, skinMaskEmote(outfit, !!shop, maskShow)).join('\n')
+  }, [look, shop, maskShow])
   const [awake, setAwake] = useState(false)
   const [tag, setTag] = useState<{ x: number; y: number } | null>(null)
   // Ник следует за головой (правка владельца 23.09.2026: в прыжке и эмоции
@@ -507,7 +529,8 @@ export function LobbyCharacter({
     let alive = true
     engine.setModelType(look.slim ? m3d.SkinModelType.Slim : m3d.SkinModelType.Classic)
     const outfit = look.items.map((x) => x.item)
-    const masks = maskUrls(outfit, look.slim, outfit.find((item) => item.slot === 'EMOTE'))
+    const masks = skinMasks ? skinMasks.split('\n') : []
+    const resting = maskUrls(outfit, look.slim, skinMaskEmote(outfit, !!shop, null)).join('\n') === skinMasks
     const key = lookKey(look)
     const reveal = () => {
       if (!alive) return
@@ -538,7 +561,7 @@ export function LobbyCharacter({
       .then(({ src, worn }) => {
         if (!alive) return
         const remember = () => {
-          if (shop) return
+          if (shop || !resting) return
           void loadImg(src).then(
             (picture) => {
               lastSkin = { nick, key, src, picture }
@@ -586,7 +609,7 @@ export function LobbyCharacter({
     return () => {
       alive = false
     }
-  }, [look, ready, m3d])
+  }, [look, ready, m3d, skinMasks])
 
   useEffect(() => {
     const engine = viewerRef.current
@@ -738,6 +761,7 @@ export function LobbyCharacter({
       busyRef.current = false
       if (!alive) return
       rest()
+      setMaskShow(null)
       if (dressed) dropProps()
       timer = setTimeout(() => void toShow(), between(IDLE_SHOW_GAP_MIN, IDLE_SHOW_GAP_MAX))
     }
@@ -764,6 +788,7 @@ export function LobbyCharacter({
       const list = item.variants ?? []
       const base = list.length ? defaultVariant(list) : undefined
       const own = wornEmote && wornEmote.item === item ? wornEmote : null
+      setMaskShow(own ? own.item : null)
       const texture = own ? own.texture : (base?.texture ?? item.texture)
       if (texture) {
         try {
@@ -789,6 +814,7 @@ export function LobbyCharacter({
       alive = false
       clearTimeout(timer)
       dropProps()
+      setMaskShow(null)
     }
   }, [m3d, ready, awake, emoting, look, charAnim])
 

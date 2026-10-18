@@ -2,7 +2,7 @@ import { loadPlus, loadWardrobe } from './gameProfile'
 import { t } from '../i18n'
 import { uiChoice } from '../state/confirm'
 import { setScreen } from '../state/ui'
-import { isOrderedSkin, skinLockVerdict, type SkinLockVerdict } from './skinLockRule'
+import { STANDARD_SKIN_SIDE, isOrderedSkin, skinLockVerdict, type SkinLockVerdict } from './skinLockRule'
 
 const PROBE_TIMEOUT_MS = 4000
 
@@ -34,6 +34,26 @@ async function readSkinLock(): Promise<SkinLock> {
   const orderedSkin = isOrderedSkin(url, wardrobe.items)
   const side = orderedSkin ? 0 : await skinWidth(url)
   return { verdict: skinLockVerdict({ millidaSkin: true, plusActive: plus.active, orderedSkin, skinWidth: side }), side }
+}
+
+/// Told at upload and pick time, not at launch: finding out only when the game
+/// refuses to start read as "my own skin is behind a paywall". A failed check stays silent.
+export async function warnHdSkinWithoutPlus(texture: string): Promise<void> {
+  const side = await skinWidth(texture)
+  if (side <= STANDARD_SKIN_SIDE) return
+  const plus = await loadPlus().catch(() => null)
+  if (!plus) return
+  if (skinLockVerdict({ millidaSkin: true, plusActive: plus.active, orderedSkin: false, skinWidth: side }) === 'play') return
+  const choice = await uiChoice(
+    t('Скин {side}×{side} — HD, а HD-скины работают в игре только с PLUS. Оформи PLUS или выбери обычный скин 64×64.', { side }),
+    {
+      title: t('HD-скин без PLUS'),
+      confirmLabel: t('Оформить PLUS'),
+      cancelLabel: t('Не сейчас'),
+      danger: false,
+    },
+  )
+  if (choice === 'yes') setScreen('premium')
 }
 
 /// Resolves true when the launch must stop. A failed check lets the game start:
