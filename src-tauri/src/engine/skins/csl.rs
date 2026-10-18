@@ -412,7 +412,9 @@ pub fn skin_mod_state(profile: &str) -> Value {
     serde_json::json!({
         "on": skin_mod_on(profile),
         "present": mods.join(CSL_JAR).exists(),
-        "conflict": skin_owning_mod(&mods)
+        "conflict": skin_owning_mod(&mods),
+        "offReason": skin_mod_off_reason(profile),
+        "quarantine": quarantined_mod_version(profile)
     })
 }
 

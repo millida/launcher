@@ -28,7 +28,7 @@ import '../styles/pixel/pvp.css'
  * персонажа, % ширины: по ней он встаёт в центр карточки, а длинное оружие
  * уходит за край (владелец: «меч за кадром, чтобы перс был в центре»).
  */
-const KIT_LOOK: Record<string, { c: string; rig: string; fx?: number }> = {
+const KIT_LOOK: Record<string, { c: string; rig: string; fx?: number; art?: string; bg?: string }> = {
   vanilla: { c: '#6b3fb8', rig: 'vanilla' },
   sword: { c: '#2b63c4', rig: 'sword', fx: 33 },
   pot: { c: '#b8324a', rig: 'pot' },
@@ -43,9 +43,20 @@ const KIT_LOOK: Record<string, { c: string; rig: string; fx?: number }> = {
   cart: { c: '#9e3a2a', rig: 'cart' },
   bow: { c: '#5f8722', rig: 'bow', fx: 40 },
   sumo: { c: '#2f9c55', rig: 'sumo', fx: 46 },
+  bridges: { c: '#2a7fb0', rig: 'bridges', art: 'PARKOUR', bg: 'PARKOUR' },
+  bedwars: { c: '#c23838', rig: 'bedwars', art: 'BEDWARS', bg: 'BEDWARS' },
+  bedwars18: { c: '#d06a24', rig: 'bedwars18', art: 'TNTRUN', bg: 'TNTRUN', fx: 40 },
+  skywars: { c: '#2fa0d4', rig: 'skywars', art: 'SKYWARS', bg: 'SKYWARS', fx: 58 },
+  skywars18: { c: '#6f8a26', rig: 'skywars18', art: 'HUNGER_GAMES', bg: 'HUNGER_GAMES', fx: 45 },
+  murder: { c: '#7a1f33', rig: 'murder', art: 'MURDER', bg: 'MURDER' },
+  buildbattle: { c: '#d0951f', rig: 'buildbattle', art: 'BUILD_BATTLE', bg: 'BUILD_BATTLE', fx: 55 },
 }
 const look = (kit: string) => KIT_LOOK[kit] ?? { c: '#4a5560', rig: 'sword' }
-const rigUrl = (kit: string) => '/mode-art/kit-rigs/' + look(kit).rig + '.webp'
+const rigUrl = (kit: string) => {
+  const l = look(kit)
+  return l.art ? '/mode-art/rigs/' + l.art + '.webp' : '/mode-art/kit-rigs/' + l.rig + '.webp'
+}
+const bgUrl = (kit: string) => "url('/mode-art/" + (look(kit).bg ?? 'PVP') + "-bg.png')"
 
 const avatarUrl = (nick: string) => 'https://api.millida.net/v2/heads/avatar/' + encodeURIComponent(nick || 'Steve') + '?size=64&safe=1'
 
@@ -742,7 +753,7 @@ function KitCarousel({
               aria-selected={sel}
               tabIndex={-1}
               className={'pv-kcard' + (sel ? ' on' : '')}
-              style={{ '--kc': look(m.slug).c } as CSSProperties}
+              style={{ '--kc': look(m.slug).c, '--kbg': bgUrl(m.slug) } as CSSProperties}
               data-track={'pvp_kit_' + m.slug}
               onClick={() => {
                 if (track.current?.classList.contains('dragging')) return

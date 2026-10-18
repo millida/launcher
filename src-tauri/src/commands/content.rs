@@ -352,6 +352,14 @@ pub async fn millida_mod_state(profile: String) -> Result<engine::MillidaModStat
     engine::millida_mod_state(profile).await
 }
 
+/// Only the build name crosses the bridge; the core checks it against its own
+/// list and decides which files go.
+#[tauri::command(async)]
+pub fn lift_millida_mod_quarantine(profile: String) -> Result<serde_json::Value, String> {
+    engine::lift_millida_mod_quarantine(&profile)?;
+    Ok(engine::skin_mod_state(&profile))
+}
+
 #[tauri::command]
 pub async fn millida_mod_install(
     app: tauri::AppHandle,

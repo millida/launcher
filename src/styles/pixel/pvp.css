@@ -44,7 +44,7 @@
 .pv-card-bg {
   position: absolute; inset: 0;
   background-color: var(--kc);
-  background-image: url('/mode-art/PVP-bg.png'); background-size: 96px 96px; background-blend-mode: soft-light;
+  background-image: var(--kbg, url('/mode-art/PVP-bg.png')); background-size: 96px 96px; background-blend-mode: soft-light;
   image-rendering: pixelated;
 }
 .pv-card-shade { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; }
