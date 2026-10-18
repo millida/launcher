@@ -32,6 +32,7 @@ import { TabAccess } from './hosting/TabAccess'
 import { Journal, TabPlan } from './hosting/TabPlan'
 import { HostScene, HostStat, PixMeter } from '../components/hosting/HostScene'
 import { BalancePill } from '../components/hosting/HostKit'
+import { hostingPlanPrice, moneyText, useMoney } from '../lib/useMoney'
 
 // Console error prefix: a word, not a "⚠" dingbat (rule 5.1 — Lucide icons only).
 // The .err class is applied by matching this same prefix.
@@ -235,6 +236,7 @@ export function HostingManage({
   onUpgrade?: (serverId: string, planCode?: string | null) => void
 }) {
   const t = useT()
+  useMoney()
   const [tab, setTab] = useState('overview')
   const [detail, setDetail] = useState<Detail | null>(null)
   const [stats, setStats] = useState<Stats | null>(null)
@@ -694,7 +696,7 @@ export function HostingManage({
             ) : null}
             <HostStat
               block={1}
-              big={Math.round((cur.planPriceKopecks || 0) / 100).toLocaleString(intlTag()) + ' ₽'}
+              big={free ? (moneyText(0, null) ?? '') : (hostingPlanPrice(cur.planCode) ?? '—')}
               small={free ? cur.planName || t('Бесплатный') : cur.planName ? t('в месяц · {plan}', { plan: cur.planName }) : t('в месяц')}
               onClick={() => setTab('plan')}
             />
@@ -1374,6 +1376,7 @@ export function HostingManage({
           <TabPlan
             serverId={server.id}
             planName={cur.planName}
+            planCode={cur.planCode}
             planPriceKopecks={cur.planPriceKopecks}
             subscription={detail?.subscription ?? null}
             canDelete={detail?.canDelete}

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { hasMillidaAccount, openExt, WALLET_URL } from '../../lib/api'
+import { hasMillidaAccount } from '../../lib/api'
 import { onRealtime } from '../../lib/realtime'
 import { apiErrorText } from '../../lib/apiError'
 import {
@@ -19,7 +19,6 @@ import {
   loadRules,
   loadSets,
   loadShopDay,
-  rubles,
   type CaseDrop,
   type CaseView,
   type ItemRef,
@@ -38,10 +37,10 @@ import type { PlusTier } from '../../lib/gameProfile'
 import { useAccounts } from '../../state/accounts'
 import { showToast, useUi } from '../../state/ui'
 import { showReward, type RewardEntry } from '../reward/RewardReveal'
-import { logoutToLogin, refreshMillidaWallet } from '../../lib/session'
+import { logoutToLogin } from '../../lib/session'
 import { Ruby } from '../Ruby'
 import { Guard } from '../Guard'
-import { MonthOfferBlock, PackArt, PackCount, Packs, topUpKopecks } from './Packs'
+import { MonthOfferBlock, PackArt, PackCount, Packs } from './Packs'
 import { word } from './rarity'
 import { claimWeeklyStep, loadWeeklyAny, type WeeklyPath } from './weekly'
 import { useShopGift } from './giftState'
@@ -60,7 +59,7 @@ import { SetsSection, type SetActs } from './SetsV2'
 import { SetShot } from './ShopStage'
 import { CaseArt, CaseOpening, CasesSection, caseHex, casePriceOf, type CaseMode, type CaseRun } from './Cases'
 import { BonusesSection, TasksSection } from './TasksSection'
-import { PlanCard, offerOf } from './PlusBanner'
+import { PlanCard } from './PlusBanner'
 import { SHOP_SECTIONS } from './ShopNav'
 import { PlusChip } from './PlusBanner'
 import { ItemShot, TodaySection, type TodayActs } from './Today'
@@ -76,18 +75,6 @@ import '../../styles/pixel/shop-narrow.css'
 
 const err = () => t('Магазин не ответил, попробуй позже')
 
-/**
- * Нехватка денег на счёте при покупке пакета: `missingKopecks` из ответа
- * службы (0 — сумма не дошла: мост Tauri пропускает из тела ошибки только
- * `message`, тогда недостачу считаем сами), `null` — ошибка другая.
- */
-function insufficientKopecks(e: unknown): number | null {
-  const text = typeof e === 'string' ? e : e instanceof Error ? e.message : JSON.stringify(e ?? '')
-  if (!/insufficient_funds|http 402|не хватает денег|недостаточно средств/i.test(text)) return null
-  const m = /missingKopecks\W{0,3}(\d+)/.exec(text)
-  return m ? Number(m[1]) : 0
-}
-
 /** Вещь каталога — плашка мига награды. */
 const entry = (it: ItemRef): RewardEntry => ({ name: it.name, preview: it.preview, rarity: it.rarity })
 /** «Надеть» — сразу на фигуру (владелец 24.09.2026, 19:56). */
@@ -95,7 +82,8 @@ const wearItems = (list: ItemRef[]) => wearNow(list.map((it) => ({ code: it.code
 
 import { ShardsSection } from './Shards'
 import { craftItem, loadWorkshop, type Workshop } from '../../lib/rubies'
-import { plusPrice, rubyPackPrice, useRegionalPrices } from '../../lib/regionalPrices'
+import { affords, openTopup, plusPrice, refreshMoney, rubyPackPrice, rubyQuote, shortfallFor, useMoney } from '../../lib/useMoney'
+import { formatMoney, moneyShortfall, shortfallText, type MoneyShortfall } from '../../lib/money'
 import { fragmentWord } from './rarity'
 
 /**
@@ -121,12 +109,8 @@ let shopMemo: ShopMemo | null = null
  * ShopOverlays — окно покупки и открытие ящика, только у видимого экрана.
  */
 export function useShop(on: boolean) {
-  useRegionalPrices()
+  useMoney()
   const signedIn = hasMillidaAccount()
-  const walletBal = useAccounts((st) => st.list).find((a) => a.kind === 'millida' || a.kind === 'tg')?.balance
-  const walletKopecks = walletBal ?? 0
-  /** Баланс счёта пришёл: только тогда пакету можно сказать «не хватает». */
-  const walletKnown = typeof walletBal === 'number'
   // Куда прокрутить ленту (тост «Пополнить» → к пакетам).
   const anchor = useShopGift((st) => st.tab)
   const who = useAccounts((st) => st.list.find((a) => a.kind === 'millida' || a.kind === 'tg')?.id ?? '')
@@ -222,7 +206,7 @@ export function useShop(on: boolean) {
 
   useEffect(() => {
     if (!on || !signedIn) return
-    const refresh = () => void refreshMillidaWallet()
+    const refresh = () => void refreshMoney()
     refresh()
     window.addEventListener('focus', refresh)
     return () => window.removeEventListener('focus', refresh)
@@ -485,7 +469,7 @@ export function useShop(on: boolean) {
       key: tier.toLowerCase(),
       tone: tier === 'DIAMOND' ? 'var(--m-rarity-rare)' : 'var(--m-rarity-legendary)',
       art: <PlanCard tier={tier} />,
-      confirm: <>{(tier === 'DIAMOND' ? 'Diamond ' : 'PLUS ') + (plusPrice(tier, offerOf(plus, tier).priceKopecks) ?? '')}</>,
+      confirm: <>{(tier === 'DIAMOND' ? 'Diamond ' : 'PLUS ') + (plusPrice(tier) ?? '')}</>,
       run: async () => {
         await useDaily.getState().startPlus(tier)
         return null
@@ -509,24 +493,21 @@ export function useShop(on: boolean) {
     useUi.getState().setScreen('plus')
   }
 
-  /**
-   * Пополнить счёт Millida на недостающее (правка владельца 24.09.2026). Сайт
-   * пока не принимает сумму в ссылке — открываем кошелёк, сумму говорим тостом.
-   */
-  const doWalletTopUp = (missingKopecks: number) => {
+  const doWalletTopUp = (s: MoneyShortfall) => {
     if (!signedIn) return logoutToLogin()
-    openExt(WALLET_URL)
-    showToast(t('Пополни счёт на {sum} и вернись за пакетом', { sum: rubles(missingKopecks) }), 'ok')
+    openTopup(s.topup)
+    showToast(s.topup ? t('Пополни счёт на {sum} и вернись за пакетом', { sum: formatMoney(s.topup.amountMinor, s.topup.currency) }) : shortfallText(s), 'ok')
   }
 
   /** Пакет: окно с мешком рубинов, после оплаты рубины досчитываются. */
   const doPack = async (pack: ShopPack, art: string) => {
     if (!signedIn) return logoutToLogin()
     const result = purchaseFlow('ruby_pack', pack.code, pack.kopecks, 'kopecks')
-    let missing = 0
-    if (walletKnown && pack.kopecks > walletKopecks) {
-      const fresh = await refreshMillidaWallet()
-      missing = fresh === null ? 0 : topUpKopecks(pack.kopecks - fresh)
+    const quote = rubyQuote(pack.code)
+    let missing: MoneyShortfall | null = null
+    if (affords(quote) === false) {
+      await refreshMoney()
+      missing = shortfallFor(quote)
     }
     openSheet({
       kind: missing ? 'topup' : 'pack',
@@ -536,7 +517,7 @@ export function useShop(on: boolean) {
           <PackCount n={pack.rubies} />
         </span>
       ),
-      confirm: missing ? t('Пополнить {sum}', { sum: rubles(missing) }) : (rubyPackPrice(pack.code, pack.kopecks) ?? ''),
+      confirm: missing?.topup ? t('Пополнить {sum}', { sum: formatMoney(missing.topup.amountMinor, missing.topup.currency) }) : (rubyPackPrice(pack.code) ?? ''),
       onCancel: () => result(false, 'cancel'),
       run: async () => {
         if (missing) {
@@ -552,10 +533,9 @@ export function useShop(on: boolean) {
           setDay((d) => (d ? { ...d, balance: res.balance } : d))
           return { rubies: { from, to: res.balance } }
         } catch (e) {
-          // Служба (fix/payments): 400 {status:'insufficient_funds', missingKopecks}.
-          const miss = insufficientKopecks(e)
-          result(false, miss !== null ? 'insufficient' : 'error', e)
-          if (miss !== null) doWalletTopUp(topUpKopecks(miss || pack.kopecks - walletKopecks) || pack.kopecks)
+          const miss = moneyShortfall(e)
+          result(false, miss ? 'insufficient' : 'error', e)
+          if (miss) doWalletTopUp(miss)
           else showToast(apiErrorText(e, err()), 'error')
           throw e
         } finally {
@@ -621,12 +601,12 @@ export function useShop(on: boolean) {
     ? tier === 'DIAMOND'
       ? { rubies: PLUS_PASS.rubies, label: t('Продлить Diamond'), onOpen: doManage, sub: true, diamond: true }
       : tier === 'PLUS'
-        ? { rubies: PLUS_PASS.rubies, label: 'Diamond · ' + (plusPrice('DIAMOND', offerOf(plus, 'DIAMOND').priceKopecks) ?? ''), onOpen: () => doPlus('DIAMOND'), sub: true, diamond: true }
+        ? { rubies: PLUS_PASS.rubies, label: 'Diamond · ' + (plusPrice('DIAMOND') ?? ''), onOpen: () => doPlus('DIAMOND'), sub: true, diamond: true }
         : {
             rubies: PLUS_PASS.rubies,
-            label: t('Купить · {price}', { price: plusPrice('PLUS', offerOf(plus, 'PLUS').priceKopecks) ?? '' }),
+            label: t('Купить · {price}', { price: plusPrice('PLUS') ?? '' }),
             onOpen: () => doPlus('PLUS'),
-            prices: { PLUS: plusPrice('PLUS', offerOf(plus, 'PLUS').priceKopecks) ?? '', DIAMOND: plusPrice('DIAMOND', offerOf(plus, 'DIAMOND').priceKopecks) ?? '' },
+            prices: { PLUS: plusPrice('PLUS') ?? '', DIAMOND: plusPrice('DIAMOND') ?? '' },
             onPick: (picked: PlusTier) => doPlus(picked),
           }
     : undefined

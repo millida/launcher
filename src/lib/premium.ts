@@ -4,7 +4,8 @@ import { hasTauri } from '../ipc/tauri'
 import { millidaPacks } from '../ipc/commands'
 import type { MillidaPack } from '../ipc/commands'
 import { RU_LOADER } from './format'
-import { intlTag, rubleGoodsPrice, t } from '../i18n'
+import { intlTag, t } from '../i18n'
+import { catalogPrice } from './useMoney'
 
 /// Витрина платных сборок (docs/REDESIGN-2026-09-22.md §2.2).
 ///
@@ -177,22 +178,13 @@ export function buyPremiumPack(id: string): Promise<{ paymentUrl: string }> {
   })
 }
 
-/// Копейки сервера — в рубли без копеечного хвоста, когда он нулевой.
-function rubText(kopecks: number): string {
-  const value = (kopecks || 0) / 100
-  const rounded = Math.round(value * 100) / 100
-  const text = Number.isInteger(rounded)
-    ? rounded.toLocaleString(intlTag())
-    : rounded.toLocaleString(intlTag(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-  return text + ' ₽'
-}
-
-export const rub = (kopecks: number): string => rubleGoodsPrice(kopecks, rubText)
+/// A subscription is billed by the ruble gateway and keeps its ruble line; a one-time buy follows the account currency.
+export const premiumPrice = (kopecks: number, period?: PremiumPeriod | null): string => catalogPrice(kopecks, period ? 'RUB' : undefined) ?? ''
 
 export const periodSuffix = (p?: PremiumPeriod | null): string =>
   p === 'year' ? t('/год') : p === 'month' ? t('/мес') : ''
 
-export const planPrice = (plan: PremiumPlan): string => rub(plan.priceKopecks) + periodSuffix(plan.period)
+export const planPrice = (plan: PremiumPlan): string => premiumPrice(plan.priceKopecks, plan.period) + periodSuffix(plan.period)
 
 /// Дата подписки человеческим видом: «до 12 октября».
 export function untilText(iso?: string | null): string {
@@ -219,6 +211,6 @@ export const viaCatalog = (p: PremiumPack): boolean => p.source === 'catalog' &&
 export function priceLabel(p: PremiumPack, plan?: PremiumPlan | null): string {
   if (p.owned) return ''
   if (p.inSubscription && plan) return planPrice(plan)
-  if (typeof p.priceKopecks === 'number' && p.priceKopecks > 0) return rub(p.priceKopecks)
+  if (typeof p.priceKopecks === 'number' && p.priceKopecks > 0) return premiumPrice(p.priceKopecks)
   return ''
 }

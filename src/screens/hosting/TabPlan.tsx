@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { useT } from '../../i18n'
-import { BalancePill, Panel, rubLabel } from '../../components/hosting/HostKit'
+import { BalancePill, Panel } from '../../components/hosting/HostKit'
+import { hostingPlanPrice, moneyText, useMoney } from '../../lib/useMoney'
 import { showToast } from '../../state/ui'
 import { uiConfirm } from '../../state/confirm'
 import { Empty, Loading, Row, Toggle, dateLabel, dtLabel } from './kit'
@@ -44,6 +45,7 @@ export function TabPlan({
   serverId,
   view,
   planName,
+  planCode,
   planPriceKopecks,
   subscription,
   canDelete,
@@ -56,6 +58,7 @@ export function TabPlan({
   /// «Тариф и оплата» или «Опасная зона» — подразделы, как на сайте.
   view?: 'plan' | 'danger'
   planName?: string | null
+  planCode?: string | null
   planPriceKopecks?: number | null
   subscription?: HostingSubscription | null
   canDelete?: boolean
@@ -65,6 +68,7 @@ export function TabPlan({
   onChanged: () => void
 }) {
   const t = useT()
+  useMoney()
   const [autoRenew, setAutoRenew] = useState(!!subscription?.autoRenew)
   const [busy, setBusy] = useState<string | null>(null)
 
@@ -134,7 +138,7 @@ export function TabPlan({
       >
         <div className="set-group hp-set">
           <Row k={planName || t('Тариф')}>
-            <span className="host-cfg-v">{planPriceKopecks ? t('{price} в месяц', { price: rubLabel(planPriceKopecks) }) : t('Бесплатно')}</span>
+            <span className="host-cfg-v">{planPriceKopecks ? t('{price} в месяц', { price: hostingPlanPrice(planCode) ?? '—' }) : t('Бесплатно')}</span>
           </Row>
           {subscription ? (
             <>
@@ -153,7 +157,7 @@ export function TabPlan({
           {/* Баланс стоит в шапке панели; здесь — только нехватка на продление, как на сайте. */}
           {shortfall > 0 ? (
             <Row k={t('На балансе не хватает')} sub={t('Пополни, иначе сервер приостановится')}>
-              <b className="host-cfg-v" style={{ color: 'var(--m-danger)' }}>{rubLabel(shortfall)}</b>
+              <b className="host-cfg-v" style={{ color: 'var(--m-danger)' }}>{moneyText(shortfall, subscription?.renewCurrency ?? 'RUB')}</b>
               <BalancePill />
             </Row>
           ) : null}

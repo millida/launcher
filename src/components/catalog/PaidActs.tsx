@@ -8,14 +8,15 @@ import { pickTargetName } from '../../lib/installKeys'
 import { useInstalls } from '../../state/installs'
 import { useMods } from '../../state/mods'
 import { useProfiles } from '../../state/profiles'
-import { buyLabel, isPaid, priceTag, rubles, shortfallKopecks } from './paid'
+import { buyLabel, isPaid, priceTag } from './paid'
 import type { Pricing } from './paid'
 import { closeBuy, confirmBuy, loadAccess, startPaid, usePaid } from './paidStore'
 import { MILLIDA_KINDS, installMillidaItem, millidaKey, millidaPid } from './millidaInstall'
 import type { SiteCard, SiteSection } from './site'
 import { displayName } from './site'
 import { useT } from '../../i18n'
-import { walletMoney } from '../../lib/regionalPrices'
+import { balanceText, useMoney } from '../../lib/useMoney'
+import { formatMoney } from '../../lib/money'
 
 /*
  * Кнопки платного и собственного материала каталога Millida в строке ленты:
@@ -37,6 +38,7 @@ export function usePaidCard(card: Pick<SiteCard, 'slug' | 'pricing' | 'priceKope
 /** Цена или «Куплено» — справа в строке. */
 export function PriceMark({ card, fallback }: { card: SiteCard; fallback?: string }) {
   const t = useT()
+  useMoney()
   const p = usePaidCard(card)
   if (p.paid && p.open) return <span className="mr-owned">{t('Куплено')}</span>
   const text = priceTag(card.pricing, card.priceKopecks) || fallback || ''
@@ -111,8 +113,9 @@ export const nativeKind = (sec: SiteSection): boolean => MILLIDA_KINDS.has(sec.k
 /** Окно покупки: цена, баланс, одна главная кнопка. */
 export function BuyModal() {
   const t = useT()
+  useMoney()
   const d = usePaid((s) => s.dialog)
-  const balance = usePaid((s) => s.balance)
+  const balance = balanceText()
   const busy = usePaid((s) => s.busy)
   useEffect(() => {
     if (!d) return
@@ -123,10 +126,10 @@ export function BuyModal() {
   if (!d) return null
   const sub = d.pricing === 'SUBSCRIPTION'
   const funds = d.step === 'funds'
-  const short = shortfallKopecks(d.priceKopecks, balance)
+  const short = d.shortfall?.displayCurrency && d.shortfall.missingMinor ? formatMoney(d.shortfall.missingMinor, d.shortfall.displayCurrency) : null
   const head = funds
     ? short
-      ? t('Не хватает {sum}', { sum: rubles(short) })
+      ? t('Не хватает {sum}', { sum: short })
       : t('Не хватает денег')
     : sub
       ? t('Подписка «{name}»', { name: d.title })
@@ -142,7 +145,7 @@ export function BuyModal() {
         {sub ? null : (
           <div className="cat-buy-wallet">
             <span>{t('Баланс')}</span>
-            {balance === null ? <span className="skel skel-line" style={{ width: 64 }} /> : <b>{walletMoney(balance, rubles)}</b>}
+            {balance === null ? <span className="skel skel-line" style={{ width: 64 }} /> : <b>{balance}</b>}
           </div>
         )}
         <div className="cat-buy-btns">

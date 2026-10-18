@@ -298,6 +298,10 @@ pub async fn millida_api_in(
         if let Some(reason) = off_platform_reason(&text) {
             return Err(format!("{}{}", OFF_PLATFORM_PREFIX, reason));
         }
+        // The top-up is sized by the server; the bare message would leave the webview guessing the sum.
+        if let Some(detail) = insufficient_funds_detail(&text) {
+            return Err(format!("{}{}", INSUFFICIENT_FUNDS_PREFIX, detail));
+        }
         return Err(api_error_message(&text).unwrap_or_else(|| format!("http {}", status.as_u16())));
     }
     parse_api_body(&text)
@@ -319,6 +323,36 @@ fn off_platform_reason(text: &str) -> Option<String> {
         return None;
     }
     api_error_message(text)
+}
+
+pub const INSUFFICIENT_FUNDS_PREFIX: &str = "insufficient-funds: ";
+
+fn insufficient_funds_detail(text: &str) -> Option<String> {
+    let v: Value = serde_json::from_str(text).ok()?;
+    if v.get("code")?.as_str()? != "INSUFFICIENT_FUNDS" {
+        return None;
+    }
+    let options: Vec<Value> = v
+        .get("topupCurrencyOptions")
+        .and_then(Value::as_array)
+        .map(|list| {
+            list.iter()
+                .filter_map(|o| {
+                    let currency = o.get("currency")?.as_str()?;
+                    let amount = o.get("amountMinor")?.as_u64()?;
+                    Some(serde_json::json!({ "currency": currency, "amountMinor": amount }))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let detail = serde_json::json!({
+        "code": "INSUFFICIENT_FUNDS",
+        "displayCurrency": v.get("displayCurrency").and_then(Value::as_str),
+        "missingMinor": v.get("missingMinor").and_then(Value::as_u64),
+        "missingKopecks": v.get("missingKopecks").and_then(Value::as_u64),
+        "topupCurrencyOptions": options,
+    });
+    Some(detail.to_string())
 }
 
 pub const SEC_MILLIDA: &str = "millida";
@@ -690,7 +724,7 @@ pub async fn millida_login_poll(device_code: String) -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        api_url, etag_key, login_poll_answer, market_header, refresh_on_cooldown, remember_in, repeatable, webview_path_allowed, set_refresh_cooldown,
+        api_url, etag_key, insufficient_funds_detail, login_poll_answer, market_header, refresh_on_cooldown, remember_in, repeatable, webview_path_allowed, set_refresh_cooldown,
         verdict_for, RefreshVerdict, Tagged, ETAG_CACHE_BUDGET, MILLIDA_API,
     };
     use std::collections::BTreeMap;
@@ -765,6 +799,29 @@ mod tests {
         for (input, want, why) in cases {
             assert_eq!(market_header(input).map_err(|_| ()), want, "{:?}: {}", input, why);
         }
+    }
+
+    #[test]
+    fn a_shortfall_reaches_the_webview_with_its_top_up() {
+        let body = r#"{"status":"insufficient_funds","code":"INSUFFICIENT_FUNDS","displayCurrency":"USD","missingMinor":250,"missingKopecks":22500,"topupCurrencyOptions":[{"currency":"USD","amountMinor":250,"methods":["paypal"]},{"currency":"RUB","amountMinor":22500}],"message":"short"}"#;
+        let detail = insufficient_funds_detail(body).unwrap_or_default();
+        let got: serde_json::Value = serde_json::from_str(&detail).unwrap_or_default();
+        // (field, expected, why this case is pinned)
+        let cases: [(&str, serde_json::Value, &str); 4] = [
+            ("displayCurrency", serde_json::json!("USD"), "the sum is shown in the currency the buyer saw"),
+            ("missingMinor", serde_json::json!(250), "the shortfall in that currency names the sum to top up"),
+            ("missingKopecks", serde_json::json!(22500), "the ruble figure stays beside it"),
+            (
+                "topupCurrencyOptions",
+                serde_json::json!([{ "currency": "USD", "amountMinor": 250 }, { "currency": "RUB", "amountMinor": 22500 }]),
+                "only currency and sum cross the bridge, and the first option leads",
+            ),
+        ];
+        for (field, want, why) in cases {
+            assert_eq!(got.get(field), Some(&want), "{}: {}", field, why);
+        }
+        assert!(insufficient_funds_detail(r#"{"message":"Not found"}"#).is_none(), "any other refusal keeps its plain message");
+        assert!(insufficient_funds_detail("not json").is_none(), "a body that is not JSON is never read as a shortfall");
     }
 
     #[test]

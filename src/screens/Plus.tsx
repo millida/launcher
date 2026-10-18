@@ -9,8 +9,8 @@ import { ChestLive } from '../components/daily/ChestLive'
 import { Milli } from '../components/milli/Milli'
 import { seasonCell, TRACK_DAYS } from '../components/daily/track'
 import { api, hasMillidaAccount } from '../lib/api'
-import { DEFAULT_PLUS_OFFERS, loadPlusEconomy, loadRules, type PlusEconomy, type Reward, type Rules } from '../lib/rubies'
-import { plusPrice, rubyPackPrice, rubyWorthPrice, useRegionalPrices } from '../lib/regionalPrices'
+import { loadPlusEconomy, loadRules, type PlusEconomy, type Reward, type Rules } from '../lib/rubies'
+import { plusPrice, rubyPackPrice, useMoney, worthPrice } from '../lib/useMoney'
 import { loadCosmeticCatalog } from '../lib/gameProfile'
 import { getAccount, isMillidaKind, useAccounts } from '../state/accounts'
 import { useGameNick } from '../state/gameNick'
@@ -131,7 +131,7 @@ function Block({ title, sub, children, foot, dark }: { title: ReactNode; sub?: R
 
 export function Plus({ on }: { on: boolean }) {
   const t = useT()
-  useRegionalPrices()
+  useMoney()
   const [plus, setPlus] = useState<PlusEconomy | null>(null)
   const [rules, setRules] = useState<Rules | null>(null)
   const [milli, setMilli] = useState<MilliLimits | null>(null)
@@ -222,8 +222,6 @@ export function Plus({ on }: { on: boolean }) {
   const until = plus?.paidUntil
     ? new Date(plus.paidUntil).toLocaleDateString(intlTag(), { day: 'numeric', month: 'long', timeZone: 'Europe/Moscow' })
     : ''
-  const offers = plus?.offers?.length ? plus.offers : DEFAULT_PLUS_OFFERS
-  const offer = (tier: 'PLUS' | 'DIAMOND') => offers.find((o) => o.tier === tier) || DEFAULT_PLUS_OFFERS.find((o) => o.tier === tier)!
   const buy = (tier: 'PLUS' | 'DIAMOND' = 'PLUS') => void useDaily.getState().startPlus(tier)
   const waiting = !!pay && Date.now() - pay.at < 15 * 60_000
 
@@ -269,7 +267,7 @@ export function Plus({ on }: { on: boolean }) {
           <h1>
             Millida <em>PLUS</em>
           </h1>
-          {price ? <p>{t('{price} / 28 дней · отмена в любой день', { price: plusPrice('PLUS', price) ?? '' })}</p> : <span className="skel lp-price-skel" aria-hidden="true" />}
+          {price && plusPrice('PLUS') ? <p>{t('{price} / 28 дней · отмена в любой день', { price: plusPrice('PLUS') ?? '' })}</p> : <span className="skel lp-price-skel" aria-hidden="true" />}
           <div className="lp-hero-cta">{cta}</div>
           {waiting && !active ? <small className="lp-note">{t('Ждём оплату в браузере')}</small> : null}
         </div>
@@ -308,7 +306,7 @@ export function Plus({ on }: { on: boolean }) {
         title={
           <Em text={t('[{n}] рубинов в месяц', { n: n(PLUS.rubies) })} />
         }
-        sub={small ? t('«{title}» за {price} — {n}', { title: small.title, price: rubyPackPrice(small.code, small.kopecks) ?? '', n: n(small.rubies) }) : undefined}
+        sub={small ? t('«{title}» за {price} — {n}', { title: small.title, price: rubyPackPrice(small.code) ?? '', n: n(small.rubies) }) : undefined}
       >
         <div className="lp-ruby-row">
           <div>
@@ -316,9 +314,9 @@ export function Plus({ on }: { on: boolean }) {
             <b className="is-gold">{n(PLUS.rubies)}</b>
             <small>{t('за 28 дней входа')}</small>
           </div>
-          {rate ? (
+          {rate && worthPrice(Math.round(PLUS.rubies / rate) * 100) ? (
             <div>
-              <b>{rubyWorthPrice(Math.round(PLUS.rubies / rate) * 100)}</b>
+              <b>{worthPrice(Math.round(PLUS.rubies / rate) * 100)}</b>
               <small>{t('по цене магазина')}</small>
             </div>
           ) : null}
@@ -538,7 +536,7 @@ export function Plus({ on }: { on: boolean }) {
       >
         <div className="lp-path">
           {[
-            [t('Оформи PLUS'), price ? t('{price} / 28 дней', { price: plusPrice('PLUS', price) ?? '' }) : t('Раз в 28 дней')],
+            [t('Оформи PLUS'), price && plusPrice('PLUS') ? t('{price} / 28 дней', { price: plusPrice('PLUS') ?? '' }) : t('Раз в 28 дней')],
             [t('Заходи в лаунчер'), t('Клетка наград за день')],
             [t('Забирай'), t('Рубины, сундуки, осколки')],
           ].map(([title, s], i, all) => (
@@ -599,7 +597,7 @@ export function Plus({ on }: { on: boolean }) {
             <div key={tier} className={'lp-buy-card' + (tier === 'PLUS' ? ' is-main' : ' is-diamond')}>
               <div>
                 <b>{tier === 'PLUS' ? 'PLUS' : 'PLUS Diamond'}</b>
-                <strong className="lp-buy-price">{t('{price} / 28 дней', { price: plusPrice(tier, offer(tier).priceKopecks) ?? '' })}</strong>
+                <strong className="lp-buy-price">{t('{price} / 28 дней', { price: plusPrice(tier) ?? '' })}</strong>
                 {tier === 'DIAMOND' ? <small>{t('Все награды пропуска сразу')}</small> : <small>{t('Награды каждый день')}</small>}
               </div>
               {active ? (
@@ -638,7 +636,7 @@ export function Plus({ on }: { on: boolean }) {
       >
         <div className="lp-faq">
           {[
-            [t('Сколько стоит?'), t('{price} за 28 дней. Автопродление выключается на millida.net в профиле, оплаченные дни остаются.', { price: plusPrice('PLUS', price || 29900) ?? '' })],
+            [t('Сколько стоит?'), t('{price} за 28 дней. Автопродление выключается на millida.net в профиле, оплаченные дни остаются.', { price: plusPrice('PLUS') ?? '' })],
             [t('Как приходят рубины и сундуки?'), t('Каждый день входа открывает клетку наград в бонусе за вход: за 28 дней это {rubies} рубинов и {chests} сундуков сверх бесплатных. Сундуки ждут в «Моих сундуках».', { rubies: n(PLUS.rubies), chests: PLUS.chests })],
             [t('Что, если пропустить день?'), t('Клетка открывается за день входа, пропуск клетку не добавляет. Забранное остаётся.')],
             ...(milli

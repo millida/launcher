@@ -1,7 +1,7 @@
 import { pollDelayMs } from './pollPace'
-import { readPresencePush, readTypingPush } from './friendsPush'
+import { readPresencePush, readRoomTypingPush, readTypingPush } from './friendsPush'
 
-export const REALTIME_TOPICS = ['friends', 'presence', 'calls', 'inbox', 'hosting', 'account', 'party'] as const
+export const REALTIME_TOPICS = ['friends', 'presence', 'calls', 'inbox', 'hosting', 'account', 'party', 'rooms'] as const
 export type RealtimeTopic = (typeof REALTIME_TOPICS)[number]
 
 export const REALTIME_HOST = 'api.millida.net'
@@ -77,6 +77,7 @@ export function pokeTopic(channel: unknown, data: unknown): RealtimeTopic | null
 export function carriesData(topic: RealtimeTopic, data: unknown): boolean {
   if (topic === 'presence') return !!readPresencePush(data)
   if (topic === 'friends') return !!readTypingPush(data)
+  if (topic === 'rooms') return !!readRoomTypingPush(data)
   return false
 }
 
@@ -143,7 +144,15 @@ export function friendsPollWait(live: boolean): 0 | 1 {
   return live ? 0 : 1
 }
 
-/** Null: no timer, the next poll waits for a publication. A failed poll still retries with backoff. */
+/** While the socket is live a publication drives the refetch; this only covers a publication that got lost. */
+export const SAFETY_POLL_MS = 120_000
+export const HIDDEN_SAFETY_FACTOR = 4
+
+export function safetyPollMs(hidden: boolean): number {
+  return hidden ? SAFETY_POLL_MS * HIDDEN_SAFETY_FACTOR : SAFETY_POLL_MS
+}
+
+/** Live: the safety interval with spread. A failed poll still retries with backoff. */
 export function friendsPollDelayMs(
   live: boolean,
   serverMs: number,
@@ -151,9 +160,38 @@ export function friendsPollDelayMs(
   hidden: boolean,
   random: () => number,
   waited: boolean,
-): number | null {
-  if (live) return failures > 0 ? pollDelayMs(serverMs, failures, hidden, random) : null
+): number {
+  if (live) {
+    if (failures > 0) return pollDelayMs(serverMs, failures, hidden, random)
+    return Math.round(safetyPollMs(hidden) * (0.8 + random() * 0.4))
+  }
   return pollDelayMs(serverMs, failures, hidden, random, waited)
+}
+
+/** Whether a timer tick should refetch: always without the socket, as before; live only once the safety interval passed. */
+export function safetyDue(live: boolean, hidden: boolean, sinceLastMs: number): boolean {
+  return !live || sinceLastMs >= safetyPollMs(hidden)
+}
+
+export const PARTY_POLL_MS = 15_000
+export const PARTY_SLOW_POLL_MS = 60_000
+
+/** Null: skip this tick. Without the socket the cadence is the old one: 15 s with a party or an invite, 60 s otherwise. */
+export function partyPollEveryMs(live: boolean, busy: boolean, hidden: boolean): number | null {
+  if (hidden && !busy) return null
+  if (live) return safetyPollMs(hidden)
+  return busy ? PARTY_POLL_MS : PARTY_SLOW_POLL_MS
+}
+
+export interface PartyRev {
+  id: string
+  rev: number
+}
+
+/** A reply about the same party with a lower rev was built before a change this client already applied. */
+export function staleParty(applied: PartyRev | null, incoming: PartyRev | null): boolean {
+  if (!applied || !incoming || applied.id !== incoming.id) return false
+  return Number.isFinite(incoming.rev) && Number.isFinite(applied.rev) && incoming.rev < applied.rev
 }
 
 /** Null while the socket is live: the topic's publication is the only trigger. */
@@ -189,6 +227,49 @@ export function pokeGate(isBusy: () => boolean, fire: () => void): PokeGate {
       const was = queued
       queued = false
       return was
+    },
+  }
+}
+
+export interface SafetyRefresh {
+  poke: () => void
+  tick: () => void
+}
+
+export interface SafetyRefreshOptions {
+  load: () => Promise<unknown>
+  /** False skips the run entirely, e.g. the screen that shows the data is not open. */
+  allowed: () => boolean
+  live: () => boolean
+  hidden: () => boolean
+  now?: () => number
+}
+
+/**
+ * Refetch on pokes and on a timer tick. A poke during a run collapses into one rerun
+ * after it, so a reply started before the change never stays the last word.
+ */
+export function safetyRefresh(opts: SafetyRefreshOptions): SafetyRefresh {
+  const now = opts.now ?? Date.now
+  let busy = false
+  let last = now()
+  const run = () => {
+    if (!opts.allowed()) return
+    busy = true
+    last = now()
+    void opts
+      .load()
+      .catch((e) => console.warn('[realtime] refresh failed', e))
+      .finally(() => {
+        busy = false
+        if (gate.take()) gate.poke()
+      })
+  }
+  const gate = pokeGate(() => busy, run)
+  return {
+    poke: gate.poke,
+    tick: () => {
+      if (!busy && safetyDue(opts.live(), opts.hidden(), now() - last)) run()
     },
   }
 }

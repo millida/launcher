@@ -18,8 +18,6 @@ export type Locale =
   | 'ko'
   | 'pl'
 
-export type Currency = 'RUB' | 'USD'
-
 export type Market = 'RU' | 'INTL'
 
 /// Things that exist only on the Russian market: Millida Trade (server donation
@@ -32,29 +30,30 @@ export type MarketFeature = 'trade' | 'market' | 'partners' | 'ru-content' | 'pa
 export interface LocaleInfo {
   code: Locale
   native: string
+  english: string
   intl: string
   rtl: boolean
 }
 
 export const LOCALES: readonly LocaleInfo[] = [
-  { code: 'en', native: 'English', intl: 'en-US', rtl: false },
-  { code: 'zh', native: '简体中文', intl: 'zh-CN', rtl: false },
-  { code: 'hi', native: 'हिन्दी', intl: 'hi-IN', rtl: false },
-  { code: 'es', native: 'Español', intl: 'es-ES', rtl: false },
-  { code: 'ar', native: 'العربية', intl: 'ar', rtl: true },
-  { code: 'fr', native: 'Français', intl: 'fr-FR', rtl: false },
-  { code: 'bn', native: 'বাংলা', intl: 'bn-BD', rtl: false },
-  { code: 'pt-BR', native: 'Português (Brasil)', intl: 'pt-BR', rtl: false },
-  { code: 'id', native: 'Bahasa Indonesia', intl: 'id-ID', rtl: false },
-  { code: 'ur', native: 'اردو', intl: 'ur-PK', rtl: true },
-  { code: 'ru', native: 'Русский', intl: 'ru-RU', rtl: false },
-  { code: 'de', native: 'Deutsch', intl: 'de-DE', rtl: false },
-  { code: 'ja', native: '日本語', intl: 'ja-JP', rtl: false },
-  { code: 'vi', native: 'Tiếng Việt', intl: 'vi-VN', rtl: false },
-  { code: 'te', native: 'తెలుగు', intl: 'te-IN', rtl: false },
-  { code: 'tr', native: 'Türkçe', intl: 'tr-TR', rtl: false },
-  { code: 'ko', native: '한국어', intl: 'ko-KR', rtl: false },
-  { code: 'pl', native: 'Polski', intl: 'pl-PL', rtl: false },
+  { code: 'en', native: 'English', english: 'English', intl: 'en-US', rtl: false },
+  { code: 'zh', native: '简体中文', english: 'Chinese (Simplified)', intl: 'zh-CN', rtl: false },
+  { code: 'hi', native: 'हिन्दी', english: 'Hindi', intl: 'hi-IN', rtl: false },
+  { code: 'es', native: 'Español', english: 'Spanish', intl: 'es-ES', rtl: false },
+  { code: 'ar', native: 'العربية', english: 'Arabic', intl: 'ar', rtl: true },
+  { code: 'fr', native: 'Français', english: 'French', intl: 'fr-FR', rtl: false },
+  { code: 'bn', native: 'বাংলা', english: 'Bengali', intl: 'bn-BD', rtl: false },
+  { code: 'pt-BR', native: 'Português (Brasil)', english: 'Portuguese (Brazil)', intl: 'pt-BR', rtl: false },
+  { code: 'id', native: 'Bahasa Indonesia', english: 'Indonesian', intl: 'id-ID', rtl: false },
+  { code: 'ur', native: 'اردو', english: 'Urdu', intl: 'ur-PK', rtl: true },
+  { code: 'ru', native: 'Русский', english: 'Russian', intl: 'ru-RU', rtl: false },
+  { code: 'de', native: 'Deutsch', english: 'German', intl: 'de-DE', rtl: false },
+  { code: 'ja', native: '日本語', english: 'Japanese', intl: 'ja-JP', rtl: false },
+  { code: 'vi', native: 'Tiếng Việt', english: 'Vietnamese', intl: 'vi-VN', rtl: false },
+  { code: 'te', native: 'తెలుగు', english: 'Telugu', intl: 'te-IN', rtl: false },
+  { code: 'tr', native: 'Türkçe', english: 'Turkish', intl: 'tr-TR', rtl: false },
+  { code: 'ko', native: '한국어', english: 'Korean', intl: 'ko-KR', rtl: false },
+  { code: 'pl', native: 'Polski', english: 'Polish', intl: 'pl-PL', rtl: false },
 ]
 
 export const SOURCE_LOCALE: Locale = 'ru'
@@ -99,8 +98,6 @@ export function localeFromSystem(tags: readonly string[]): Locale {
 export const availableLocale = (code: Locale): Locale => (AVAILABLE.has(code) ? code : FALLBACK_LOCALE)
 
 export const marketOf = (code: Locale): Market => (code === 'ru' ? 'RU' : 'INTL')
-
-export const marketCurrency = (code: Locale): Currency => (marketOf(code) === 'RU' ? 'RUB' : 'USD')
 
 const RU_ONLY: ReadonlySet<MarketFeature> = new Set(['trade', 'market', 'partners', 'ru-content', 'paid-packs'])
 

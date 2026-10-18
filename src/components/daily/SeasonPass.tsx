@@ -8,7 +8,7 @@ import { useRail } from './useRail'
 import { rarityTone, rewardLabel, rewardTitle, RewardArt } from './rewards'
 import '../../styles/pixel/pass.css'
 import { intlTag, useT } from '../../i18n'
-import { plusPrice } from '../../lib/regionalPrices'
+import { plusPrice, useMoney } from '../../lib/useMoney'
 
 /**
  * Пропуск сезона v4 (06.10.2026, «как в Brawl Stars и на Majestic»):
@@ -266,6 +266,7 @@ export function SeasonPass({
   below?: ReactNode
 }) {
   const t = useT()
+  useMoney()
   const { ref, edge, page } = useRail(focus, 3 * (compact ? 136 : 152), '.bp-col.focus')
   const { launch, layer } = useFlights()
   const ready = cols.flatMap((c) => [
@@ -365,7 +366,7 @@ export function SeasonPass({
             <button className="bp-plus" data-track="plus_subscribe" onClick={onPlus}>
               <Icon id="i-crown" />
               <span>{t('Открыть PLUS')}</span>
-              {price ? <small>{t('{price}/мес', { price: plusPrice('PLUS', price) ?? '' })}</small> : null}
+              {price && plusPrice('PLUS') ? <small>{t('{price}/мес', { price: plusPrice('PLUS') ?? '' })}</small> : null}
             </button>
           ) : null}
         </div>

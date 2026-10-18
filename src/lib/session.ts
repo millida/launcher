@@ -16,8 +16,7 @@ import { maybeStartOnboarding } from '../state/onboarding'
 import { syncAppIcon } from './appIcon'
 import { noteAppRun } from '../state/navHint'
 import { loadPrivacy, usePrivacy } from './privacy'
-import { loadRegionalPrices, resetRegionalPrices } from './regionalPrices'
-import { useCurrencyOverride } from '../i18n/currencyOverride'
+import { loadMoney, refreshMoney, resetMoney } from './useMoney'
 
 export interface MillidaProfile {
   nickname?: string
@@ -26,31 +25,10 @@ export interface MillidaProfile {
 
 export let MILLIDA_PROFILE: MillidaProfile | null = null
 
-/**
- * The wallet is topped up on the site, outside the launcher, so the cached
- * balance goes stale. Returns the fresh available amount, or null when the
- * wallet could not be read and the cached value must not be trusted.
- */
-export async function refreshMillidaWallet(): Promise<number | null> {
-  if (!hasMillidaAccount()) return null
-  const dollars = useCurrencyOverride.getState().forced === 'USD'
-  const kopecks = dollars
-    ? (await api<{ availableCents?: number }>('/core/wallet/me/usd').catch(() => null))?.availableCents
-    : (await api<{ availableKopecks?: number }>('/core/wallet/me/display').catch(() => null))?.availableKopecks
-  if (typeof kopecks !== 'number') return null
-  const { list, save } = useAccounts.getState()
-  const i = list.findIndex((x) => x.kind === 'millida' || x.kind === 'tg')
-  if (i < 0) return null
-  const l = list.slice()
-  l[i] = { ...l[i], balance: kopecks }
-  save(l)
-  return kopecks
-}
-
 export async function loadMillidaProfile(): Promise<MillidaProfile | null> {
   if (!hasMillidaAccount()) return null
   try {
-    const [me] = await Promise.all([api<MillidaProfile>('/users/me'), refreshMillidaWallet()])
+    const [me] = await Promise.all([api<MillidaProfile>('/users/me'), refreshMoney()])
     MILLIDA_PROFILE = me
     const { list, save } = useAccounts.getState()
     const i = list.findIndex((x) => x.kind === 'millida' || x.kind === 'tg')
@@ -81,9 +59,7 @@ export function enterApp() {
   // Приватность живёт на сервере и общая с сайтом: тянем её сразу после входа,
   // чтобы настройка пережила переустановку лаунчера и правку на millida.net.
   void loadPrivacy(true)
-  void loadRegionalPrices().then(() => {
-    if (useCurrencyOverride.getState().forced === 'USD') void refreshMillidaWallet()
-  })
+  void loadMoney()
 }
 
 function dropMillidaSession() {
@@ -92,7 +68,7 @@ function dropMillidaSession() {
   // Приватность привязана к аккаунту: следующий вход не должен видеть чужие
   // тумблеры до ответа сервера.
   usePrivacy.setState({ loaded: false, error: '', saving: null })
-  resetRegionalPrices()
+  resetMoney()
   if (!hasTauri()) return
   void millidaLogout()
     .catch(() => {})

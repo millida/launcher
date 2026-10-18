@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { interpolate, lookup, placeholdersOf } from './core'
-import { AVAILABLE_LOCALES, EXTRA_LOCALES, EXTRA_LOCALES_PUBLIC, LOCALES, isLocale, localeFromSystem, marketCurrency, type Locale } from './locales'
+import { AVAILABLE_LOCALES, EXTRA_LOCALES, EXTRA_LOCALES_PUBLIC, LOCALES, isLocale, localeFromSystem, type Locale } from './locales'
 
 describe('lookup falls back own language -> English -> Russian key', () => {
   const own = { 'Далее': 'Weiter' }
@@ -44,10 +44,6 @@ describe('system language', () => {
     test(c.tags.join(',') || 'empty', () => {
       expect(localeFromSystem(c.tags), c.why).toBe(c.want as never)
     })
-})
-
-test('market currency: Russian pays in roubles, everyone else in dollars', () => {
-  for (const l of LOCALES) expect(marketCurrency(l.code), l.code).toBe(l.code === 'ru' ? 'RUB' : 'USD')
 })
 
 test('the launcher knows exactly the 18 agreed languages, right-to-left only for Arabic and Urdu', () => {

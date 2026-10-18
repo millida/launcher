@@ -4,6 +4,7 @@ import { setDemoPartyPoke } from '../lib/demo'
 import { apiErrorText } from '../lib/apiError'
 import { warmHeads } from '../lib/heads'
 import { isRealtimeLive, onRealtime } from '../lib/realtime'
+import { partyPollEveryMs, staleParty } from '../lib/realtimePace'
 import {
   normalizePartyCode,
   type AgeBracket,
@@ -87,7 +88,7 @@ export async function loadParty(): Promise<void> {
   if (!hasMillidaAccount()) return
   const seq = ++loadSeq
   const r = await api<PartyLoad>('/party')
-  if (seq !== loadSeq) return
+  if (seq !== loadSeq || staleParty(st().party, r.party || null)) return
   st().set({
     me: r.me || '',
     invites: Array.isArray(r.invites) ? r.invites : [],
@@ -103,7 +104,7 @@ async function partyCall(path: string, body?: unknown): Promise<Party | null> {
     method: 'POST',
     body: JSON.stringify(body ?? {}),
   })
-  if (seq === loadSeq) applyParty(r.party ?? null)
+  if (seq === loadSeq && !staleParty(st().party, r.party ?? null)) applyParty(r.party ?? null)
   return r.party ?? null
 }
 
@@ -251,29 +252,26 @@ export async function reportPlayer(
   return true
 }
 
-const SLOW_POLL_MS = 60_000
-const PARTY_POLL_MS = 15_000
-
 let started = false
 
 /** Server-side party survives restarts: the launcher restores it on start and follows pushes after. */
 export function initParty(onChange: () => void): () => void {
   if (started) return () => {}
   started = true
-  const refresh = () =>
+  let last = Date.now()
+  const refresh = () => {
+    last = Date.now()
     void loadParty()
       .then(onChange)
       .catch((e) => console.error('[party] load', e))
+  }
   refresh()
   if (import.meta.env.DEV) setDemoPartyPoke(refresh)
   const off = onRealtime('party', refresh)
-  let last = Date.now()
   const timer = setInterval(() => {
     const busy = !!st().party || st().invites.length > 0
-    const every = isRealtimeLive() ? SLOW_POLL_MS : busy ? PARTY_POLL_MS : SLOW_POLL_MS
-    if (document.hidden && !busy) return
-    if (Date.now() - last < every) return
-    last = Date.now()
+    const every = partyPollEveryMs(isRealtimeLive(), busy, document.hidden)
+    if (every === null || Date.now() - last < every) return
     refresh()
   }, 5000)
   return () => {

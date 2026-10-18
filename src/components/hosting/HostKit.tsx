@@ -1,9 +1,9 @@
 import type React from 'react'
 import { Icon } from '../Icon'
-import { WALLET_URL, openExt } from '../../lib/api'
+import { balanceText, openTopup, useMoney } from '../../lib/useMoney'
 import { track } from '../../lib/telemetry'
 import { useAccounts } from '../../state/accounts'
-import { intlTag, t, useT } from '../../i18n'
+import { t, useT } from '../../i18n'
 
 // Мелкие детали экрана хостинга, общие для списка и разделов.
 
@@ -68,11 +68,10 @@ export function ServerIcon({ icon, size }: { icon?: string; size: number }) {
   )
 }
 
-export const rubLabel = (kopecks: number) => Math.round(kopecks / 100).toLocaleString(intlTag()) + ' ₽'
-
 /// Баланс кошелька Millida компактной плашкой: кошелёк, сумма, «+» — пополнение.
 export function BalancePill() {
   const t = useT()
+  useMoney()
   const acc = useAccounts((s) => s.list).find((a) => a.kind === 'millida' || a.kind === 'tg')
   if (!acc) return null
   return (
@@ -81,11 +80,11 @@ export function BalancePill() {
       data-tip={t('Пополнить кошелёк Millida')}
       onClick={() => {
         track('store_open', { where: 'wallet_topup' })
-        openExt(WALLET_URL)
+        openTopup()
       }}
     >
       <Icon id="i-wallet" />
-      <b>{rubLabel(acc.balance || 0)}</b>
+      <b>{balanceText() ?? '—'}</b>
       <span className="hp-balance-add">
         <Icon id="i-plus" />
       </span>

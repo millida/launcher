@@ -4,7 +4,7 @@ import { api } from '../../lib/api'
 import { HostStat } from './HostScene'
 import { formatFixed, useT } from '../../i18n'
 import { plural } from '../../lib/format'
-import { hostingPlanPrice, useRegionalPrices } from '../../lib/regionalPrices'
+import { hostingPlanPrice, moneyText, useMoney } from '../../lib/useMoney'
 
 // Первый экран хостинга — две дороги: платный сервер (главная кнопка)
 // и бесплатный (вторая). Все числа живые из /hosting/plans: цена, память,
@@ -68,11 +68,11 @@ export function HostRoads({
   onFree: () => void
 }) {
   const t = useT()
-  useRegionalPrices()
+  useMoney()
   const [plans, setPlans] = useState<HostPlanLite[] | null>(null)
   useEffect(() => {
     let alive = true
-    api('/hosting/plans')
+    api('/hosting/plans?brand=millida')
       .then((r) => alive && setPlans(Array.isArray(r) ? r : []))
       .catch(() => alive && setPlans([]))
     return () => {
@@ -96,7 +96,7 @@ export function HostRoads({
             <span className="skel skel-line" style={{ width: 140, height: 22 }}></span>
           ) : f.minPrice ? (
             <div className="hsx-price">
-              {t('от')} <b>{f.cheapest ? hostingPlanPrice(f.cheapest.code, f.minPrice) : null}</b> {t('в месяц')}
+              {t('от')} <b>{f.cheapest ? hostingPlanPrice(f.cheapest.code) : null}</b> {t('в месяц')}
             </div>
           ) : null}
         </header>
@@ -121,7 +121,7 @@ export function HostRoads({
         <header className="hsx-road-head">
           <h2>{t('Бесплатно')}</h2>
           <div className="hsx-price">
-            <b>0 ₽</b>
+            <b>{moneyText(0, null)}</b>
           </div>
         </header>
         {loading ? (

@@ -1,6 +1,6 @@
 // Call signals (invite, reply, offer/answer/ice) go to api.millida.net /friends/call/signal and come back over the realtime.ts socket. The sound itself does not go here.
 import { api, hasMillidaAccount } from '../api'
-import { isRealtimeLive, onRealtimeData, onRealtimeLiveChange } from '../realtime'
+import { isRealtimeLive, onRealtimeCatchUp, onRealtimeData, onRealtimeLiveChange } from '../realtime'
 import { createEnvelopeLog, pushedEnvelope } from './envelopes'
 
 export type CallSignalKind =
@@ -108,7 +108,14 @@ export function startSignalPump(onEvent: (e: CallEvent) => void): Pump {
     catchUp = true
     nudge()
   })
-  const offLive = onRealtimeLiveChange(() => {
+  // Socket gone: back to the long poll at once. Socket back: the mailbox is fetched only
+  // when the server could not replay what was missed (a recovered reconnect needs nothing).
+  const offLive = onRealtimeLiveChange((live) => {
+    if (live) return
+    catchUp = true
+    nudge()
+  })
+  const offCatchUp = onRealtimeCatchUp(() => {
     catchUp = true
     nudge()
   })
@@ -152,6 +159,7 @@ export function startSignalPump(onEvent: (e: CallEvent) => void): Pump {
       stopped = true
       offPush()
       offLive()
+      offCatchUp()
       nudge()
     },
   }

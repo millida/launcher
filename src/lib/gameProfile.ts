@@ -1,7 +1,7 @@
 import { splitVariantCode, variantCode, variantTitles } from './variantNames'
 import { idbGet, idbSet } from './idbCache'
 import { api, hasMillidaAccount } from './api'
-import { getMarket } from '../i18n'
+import type { Quote } from './money'
 import { getAccount } from '../state/accounts'
 
 export type SkinSource = 'millida' | 'mojang'
@@ -443,14 +443,21 @@ export interface PlusStatus {
   items: number
   /** Уровень оплаченной подписки (магазин v2). */
   tier?: 'PLUS' | 'DIAMOND' | null
-  /** How this buyer pays: the Russian subscription, or a month from the dollar balance abroad. */
   checkout?: 'gateway' | 'dollar-wallet'
+  checkoutOptions?: ('gateway' | 'dollar-wallet')[]
+  quote?: Quote
 }
 
-/// The market of the interface language goes along: a guest-like account on the English
-/// interface is offered the dollar checkout, a proven account its own region.
 export function loadPlus(): Promise<PlusStatus> {
-  return api<PlusStatus>('/launcher/plus?market=' + getMarket())
+  return api<PlusStatus>('/launcher/plus')
+}
+
+/// The ruble gateway charges rubles, so a buyer shown a dollar price pays from the balance at that price.
+export function plusCheckout(status: PlusStatus | null | undefined): 'gateway' | 'balance' {
+  if (!status) return 'gateway'
+  const options = status.checkoutOptions ?? (status.checkout ? [status.checkout] : ['gateway'])
+  if (options.includes('dollar-wallet') && (status.quote?.displayCurrency === 'USD' || !options.includes('gateway'))) return 'balance'
+  return 'gateway'
 }
 
 /// A month of PLUS from the wallet in the buyer's own currency (dollars abroad), no renewal.

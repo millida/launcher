@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Icon } from './Icon'
-import { WALLET_URL, api, openExt } from '../lib/api'
+import { api } from '../lib/api'
 import { track } from '../lib/telemetry'
 import { getMillidaAccount } from '../state/accounts'
 import { showToast } from '../state/ui'
@@ -10,7 +10,7 @@ import { mirrorAsset } from '../lib/api'
 import { apiErrorText } from '../lib/apiError'
 import { showReward } from './reward/RewardReveal'
 import { formatFixed, intlTag, t, useT } from '../i18n'
-import { hostingPlanPrice, useRegionalPrices, walletMoney } from '../lib/regionalPrices'
+import { affords, balanceText, hostingPlanPrice, hostingQuote, openTopup, refreshMoney, shortfallFor, showMoneyError, showShortfall, useMoney } from '../lib/useMoney'
 
 export interface HostPlan {
   code: string
@@ -39,7 +39,6 @@ const playKindLabel = (kind: string): string =>
   kind === 'vanilla' ? t('Обычный') : kind === 'modpack' ? t('Сборка модов') : kind === 'map' ? t('Карта') : t('Мини-игры')
 
 const gb = (mb?: number) => formatFixed((mb || 0) / 1024, (mb || 0) % 1024 === 0 ? 0 : 1)
-const rub = (k?: number) => Math.round((k || 0) / 100).toLocaleString(intlTag())
 
 /** Свой сервер создан — большой миг награды. */
 const serverBorn = (sub: string) =>
@@ -110,7 +109,7 @@ export function HostPlanPicker({
   onOpenServer?: (id: string) => void
 }) {
   const t = useT()
-  useRegionalPrices()
+  useMoney()
   const [plans, setPlans] = useState<HostPlan[]>([])
   const [vis, setVis] = useState(false)
   const [name, setName] = useState('')
@@ -121,13 +120,12 @@ export function HostPlanPicker({
   const [mapPick, setMapPick] = useState<CurseMap | null>(null)
   const [mapErr, setMapErr] = useState('')
   const millidaAcc = getMillidaAccount()
-  const balance = millidaAcc && millidaAcc.balance != null ? millidaAcc.balance : null
   const ownNick = (millidaAcc && millidaAcc.nick) || ''
   const autoAddress = ownNick && !name.trim() ? hostAddressPreview(ownNick) : ''
 
   useEffect(() => {
     const t = setTimeout(() => setVis(true), 10)
-    api('/hosting/plans')
+    api('/hosting/plans?brand=millida')
       .then((r) => setPlans((Array.isArray(r) ? r : []).filter((p: HostPlan) => p.code)))
       .catch(() => setPlans([]))
     return () => clearTimeout(t)
@@ -160,18 +158,21 @@ export function HostPlanPicker({
     }
   }, [mode, playKind, mapQuery])
 
-  const insufficient = (e: string) => /баланс|средств|insufficient|not enough|hosting:funds/i.test(e)
-
   const pick = async (p: HostPlan) => {
     if (busy) return
     const isFree = !p.priceKopecks
+    if (!isFree && mode === 'create' && affords(hostingQuote(p.code)) === false) {
+      await refreshMoney()
+      const short = shortfallFor(hostingQuote(p.code))
+      if (short) return showShortfall(short)
+    }
     // Платный тариф списывается с кошелька сразу — раньше без единого шага
     // подтверждения (аудит 22.09.2026, docs/audit-2026-09-22/hosting-settings.md).
     if (
       !isFree &&
-      !(await uiConfirm(t('{price} в месяц спишем с кошелька Millida.', { price: hostingPlanPrice(p.code, p.priceKopecks ?? 0) ?? '' }), {
+      !(await uiConfirm(t('{price} в месяц спишем с кошелька Millida.', { price: hostingPlanPrice(p.code) ?? '' }), {
         title: t('Тариф «{name}»', { name: p.name }),
-        confirmLabel: t('Оплатить {price}', { price: hostingPlanPrice(p.code, p.priceKopecks ?? 0) ?? '' }),
+        confirmLabel: t('Оплатить {price}', { price: hostingPlanPrice(p.code) ?? '' }),
         danger: false,
       }))
     )
@@ -230,12 +231,8 @@ export function HostPlanPicker({
       onDone()
       onClose()
     } catch (e) {
-      const msg = '' + e
-      if (insufficient(msg)) {
-        showToast(t('Не хватает средств на балансе Millida — пополни и повтори'), 'error')
-        openExt(WALLET_URL)
-      } else {
-        console.error('[hosting] plan pick', msg)
+      if (!showMoneyError(e)) {
+        console.error('[hosting] plan pick', '' + e)
         showToast(apiErrorText(e, t('Не получилось — попробуй ещё раз')), 'error')
       }
     } finally {
@@ -360,9 +357,9 @@ export function HostPlanPicker({
         <div className="plan-wallet">
           <span>
             <Icon id="i-wallet" />
-            {t('Баланс Millida:')} <b>{balance === null ? '—' : walletMoney(balance, (k) => rub(k) + ' ₽')}</b>
+            {t('Баланс Millida:')} <b>{balanceText() ?? '—'}</b>
           </span>
-          <button className="btn sm ghost" onClick={() => openExt(WALLET_URL)}>
+          <button className="btn sm ghost" onClick={() => openTopup()}>
             {t('Пополнить')}
           </button>
         </div>
@@ -405,7 +402,7 @@ export function HostPlanPicker({
                   <div className="plan-head">
                     <span className="plan-name">{p.name}</span>
                     {free && /бесплат/i.test(p.name) ? null : (
-                      <span className="plan-price">{free ? t('Бесплатно') : t('{price}/мес', { price: hostingPlanPrice(p.code, p.priceKopecks ?? 0) ?? '' })}</span>
+                      <span className="plan-price">{free ? t('Бесплатно') : t('{price}/мес', { price: hostingPlanPrice(p.code) ?? '' })}</span>
                     )}
                   </div>
                   {p.featured ? <div className="plan-pick">{t('Берут чаще всего')}</div> : p.tagline ? <div className="plan-tag">{p.tagline}</div> : null}
@@ -435,7 +432,7 @@ export function HostPlanPicker({
                             ? t('Сначала выбери карту')
                             : free
                               ? t('Запустить бесплатно')
-                              : t('Оплатить {price}', { price: hostingPlanPrice(p.code, p.priceKopecks ?? 0) ?? '' })}
+                              : t('Оплатить {price}', { price: hostingPlanPrice(p.code) ?? '' })}
                   </button>
                 </div>
               )
