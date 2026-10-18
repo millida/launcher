@@ -15,6 +15,7 @@ import { setScreen } from '../../state/ui'
 import { loadCatalogPacks } from '../playhub/data'
 import { PRISON_SLUG } from '../playhub/featured'
 import { PxIcon } from '../PxIcon'
+import { PlusMark } from '../premium/PlusMark'
 import { modeIcon } from '../playhub/modeIcon'
 import { hasMillidaAccount, openExt } from '../../lib/api'
 import { loadDiscordReward, loadTelegramReward } from '../../lib/rubies'
@@ -22,6 +23,9 @@ import { TIER_SERVER } from '../../state/tiers'
 import { openPvpArena } from '../playhub/hubTab'
 import { ARCANIA_SLUG, DISCORD_INVITE, PROMO_ROTATE_MS, TELEGRAM_CHAT, promoAt, promoSeed, promoSlides, promoStart } from './promo'
 import { PRISON_BANNER, PRISON_CO, type PrisonFace } from '../playhub/PrisonTile'
+import { loadInvites } from '../../lib/referrals'
+import { pickFriendsTab } from '../friends/friendsView'
+import { t, useMarket, useMarketOffers, useT, type Market } from '../../i18n'
 import '../../styles/pixel/playhub.css'
 
 type PackFace = PrisonFace
@@ -33,7 +37,10 @@ type PackFace = PrisonFace
  * релиза (promo.lobby).
  */
 export function Recommend({ on }: { on: boolean }) {
+  const t = useT()
   const shown = usePromo((s) => s.promo.lobby === ANARCHY.mode)
+  const partners = useMarketOffers('partners')
+  const ruContent = useMarketOffers('ru-content')
   const [packs, setPacks] = useState<{ prison: PackFace | null; arcania: PackFace | null } | undefined>(undefined)
   const [step, setStep] = useState(0)
   // Направление последней смены: слайд въезжает с той стороны, куда листали.
@@ -43,7 +50,8 @@ export function Recommend({ on }: { on: boolean }) {
   const hovered = useRef(false)
   const swipe = useRef<{ x: number; moved: boolean } | null>(null)
   const rewards = useChatRewards(on && shown)
-  const slides = packs ? promoSlides({ arcania: !!packs.arcania, prisonrpg: !!packs.prison }) : null
+  const invite = useInviteOffer(on && shown)
+  const slides = packs ? promoSlides({ arcania: !!packs.arcania, prisonrpg: !!packs.prison, invite: !!invite, partners, ruContent }) : null
   const seed = promoSeed()
   const start = slides ? promoStart(slides.length, seed.day, seed.salt) : 0
   const slide = slides ? promoAt(slides, start, step) : null
@@ -98,6 +106,7 @@ export function Recommend({ on }: { on: boolean }) {
   else if (slide === 'arcania' && packs?.arcania) body = <PackPromo slug={ARCANIA_SLUG} pack={packs.arcania} hover={hover} dots={null} />
   else if (slide === 'discord' || slide === 'telegram') body = <ChatPromo kind={slide} reward={rewards[slide]} />
   else if (slide === 'smp') body = <SmpPromo hover={hover} dots={null} />
+  else if (slide === 'invite' && invite) body = <InvitePromo plusDays={invite.plusDays} />
   else body = <AnarchyPromo on={on} hover={hover} dots={null} />
 
   return (
@@ -137,15 +146,15 @@ export function Recommend({ on }: { on: boolean }) {
       <div key={slide + ':' + step} className={'lrec-slide ' + (dir > 0 ? 'from-r' : 'from-l')}>
         {body}
       </div>
-      <button className="lrec-arrow l" aria-label="Предыдущий" data-track="recommend_prev" onClick={() => go(-1)}>
+      <button className="lrec-arrow l" aria-label={t('Предыдущий')} data-track="recommend_prev" onClick={() => go(-1)}>
         <Icon id="i-chev-r" />
       </button>
-      <button className="lrec-arrow r" aria-label="Следующий" data-track="recommend_next" onClick={() => go(1)}>
+      <button className="lrec-arrow r" aria-label={t('Следующий')} data-track="recommend_next" onClick={() => go(1)}>
         <Icon id="i-chev-r" />
       </button>
       <span className="lrec-dots">
         {slides.map((sl, i) => (
-          <button key={sl} className={sl === slide ? 'on' : undefined} aria-label={'Слайд ' + (i + 1)} onClick={() => jump(i)} />
+          <button key={sl} className={sl === slide ? 'on' : undefined} aria-label={t('Слайд {n}', { n: i + 1 })} onClick={() => jump(i)} />
         ))}
       </span>
     </div>
@@ -171,6 +180,24 @@ function useChatRewards(on: boolean): { telegram: number; discord: number } {
   return r
 }
 
+/// The slide quotes the referral terms the server answers with, so it stays hidden until they arrive.
+function useInviteOffer(on: boolean): { plusDays: number } | null {
+  const [offer, setOffer] = useState<{ plusDays: number } | null>(null)
+  useEffect(() => {
+    if (!on || !hasMillidaAccount()) return
+    let alive = true
+    void loadInvites()
+      .then((r) => {
+        if (alive && r.perFriendPlusDays > 0) setOffer({ plusDays: r.perFriendPlusDays })
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [on])
+  return offer
+}
+
 /** Открыть магазин на задании и подсветить его (блок грузится вместе с магазином — ждём до 4 с). */
 function openShopTask(id: string) {
   setScreen('rubies')
@@ -190,6 +217,7 @@ type Hover = Pick<ComponentProps<'button'>, 'onPointerEnter' | 'onPointerLeave'>
 
 /** The lobby banner of our anarchy in one palette: obsidian, lava and white. Pressing it starts the game right away. */
 function AnarchyPromo({ on, hover, dots }: { on: boolean; hover: Hover; dots: ReactNode }) {
+  const t = useT()
   const [online, setOnline] = useState<number | null>(null)
   const an = useAnarchy()
 
@@ -218,7 +246,7 @@ function AnarchyPromo({ on, hover, dots }: { on: boolean; hover: Hover; dots: Re
       data-kind="own_server"
       data-id={ANARCHY.mode}
       data-pos={0}
-      aria-label={'Играть: ' + an.fullName}
+      aria-label={t('Играть: {name}', { name: an.fullName })}
       style={{ '--px-img': 'url("' + OBSIDIAN_TILE + '")' } as CSSProperties}
       onClick={play}
       {...hover}
@@ -229,18 +257,18 @@ function AnarchyPromo({ on, hover, dots }: { on: boolean; hover: Hover; dots: Re
       </span>
       <span className="lan-co">MCRU.ME × Millida</span>
       <span className="lan-title">
-        Полная
+        {t('Полная')}
         <br />
-        <em>анархия</em>
+        <em>{t('анархия')}</em>
       </span>
       <span className="lan-foot">
         <span className="lan-go">
-          <Icon id="i-play" /> Играть
+          <Icon id="i-play" /> {t('Играть')}
         </span>
         {anarchyOnlineShown(online) ? (
           <span className="lan-on">
             <span className="ph-dot" aria-hidden="true"></span>
-            {fmtN(online)} играют
+            {t('{n} играют', { n: fmtN(online) })}
           </span>
         ) : null}
       </span>
@@ -252,12 +280,23 @@ function AnarchyPromo({ on, hover, dots }: { on: boolean; hover: Hover; dots: Re
 // Discord и Telegram: есть награда — «+300 рубинов» и кнопка в задание магазина
 // (владелец 11.10.2026: «мотивация — подпишись, получи»); забрана — просто вход.
 const CHAT = {
-  discord: { url: DISCORD_INVITE, task: 'shop-discord', what: 'за Discord', title: 'Войсы и пати', where: 'в Discord', icon: 'discord', go: 'Зайти' },
-  telegram: { url: TELEGRAM_CHAT, task: 'shop-telegram', what: 'за Telegram', title: 'Новости первыми', where: 'в Telegram', icon: 'telegram', go: 'Подписаться' },
+  discord: { url: DISCORD_INVITE, task: 'shop-discord', icon: 'discord' },
+  telegram: { url: TELEGRAM_CHAT, task: 'shop-telegram', icon: 'telegram' },
 } as const
 
+// Abroad the Discord slide is the plain invitation the owner asked for: «Join our Discord».
+const chatCopy = (kind: 'discord' | 'telegram', market: Market) =>
+  kind === 'discord'
+    ? market === 'RU'
+      ? { what: t('за Discord'), title: t('Войсы и пати'), where: t('в Discord'), go: t('Зайти') }
+      : { what: t('за Discord'), title: t('Вступай в наш'), where: 'Discord', go: t('Вступить') }
+    : { what: t('за Telegram'), title: t('Новости первыми'), where: t('в Telegram'), go: t('Подписаться') }
+
 function ChatPromo({ kind, reward }: { kind: 'discord' | 'telegram'; reward: number }) {
+  const t = useT()
   const c = CHAT[kind]
+  const market = useMarket()
+  const copy = chatCopy(kind, market)
   const paid = reward > 0
   return (
     <button
@@ -269,7 +308,7 @@ function ChatPromo({ kind, reward }: { kind: 'discord' | 'telegram'; reward: num
       data-kind="chat"
       data-id={kind + (paid ? '_reward' : '')}
       data-pos={0}
-      aria-label={paid ? '+' + reward + ' рубинов ' + c.what : c.title + ' ' + c.where}
+      aria-label={paid ? t('+{n} рубинов {what}', { n: reward, what: copy.what }) : copy.title + ' ' + copy.where}
       onClick={() => (paid ? openShopTask(c.task) : openExt(c.url))}
     >
       {paid ? <img className="lch-pile" src="/packs/hoard.png" alt="" draggable={false} /> : null}
@@ -279,18 +318,54 @@ function ChatPromo({ kind, reward }: { kind: 'discord' | 'telegram'; reward: num
       {paid ? (
         <span className="lan-title lch-reward">
           <em>+{reward}</em>
-          <small>рубинов {c.what}</small>
+          <small>{t('рубинов {what}', { what: copy.what })}</small>
         </span>
       ) : (
         <span className="lan-title">
-          {c.title}
+          {copy.title}
           <br />
-          <em>{c.where}</em>
+          <em>{copy.where}</em>
         </span>
       )}
       <span className="lan-foot">
         <span className="lan-go">
-          <Icon id={paid ? 'i-gift' : 'i-play'} /> {paid ? 'Забрать' : c.go}
+          <Icon id={paid ? 'i-gift' : 'i-play'} /> {paid ? t('Забрать') : copy.go}
+        </span>
+      </span>
+    </button>
+  )
+}
+
+function InvitePromo({ plusDays }: { plusDays: number }) {
+  const open = () => {
+    setScreen('friends')
+    pickFriendsTab('invite')
+  }
+  return (
+    <button
+      className="lobby-rec lobby-an lobby-chat is-invite"
+      data-sound="open"
+      data-track="recommend"
+      data-section="recommend"
+      data-src="recommend"
+      data-kind="promo"
+      data-id="invite"
+      data-pos={0}
+      aria-label={t('Бесплатный PLUS за друга')}
+      onClick={open}
+    >
+      <span className="lch-logo" aria-hidden="true">
+        <PlusMark height={30} shine />
+      </span>
+      <span className="lan-co">{t('+{days} дн. PLUS за каждого друга', { days: plusDays })}</span>
+      <span className="lan-title">
+        {t('Бесплатный PLUS')}
+        <br />
+        <em>{t('за друга')}</em>
+      </span>
+      <span className="lan-foot">
+        <span className="lan-go">
+          <Icon id="i-users" /> {t('Пригласить')}
         </span>
       </span>
     </button>
@@ -299,6 +374,7 @@ function ChatPromo({ kind, reward }: { kind: 'discord' | 'telegram'; reward: num
 
 /** Сервер PvP-тиров: вход сразу на экзамен, тир пишется на аккаунт Millida. */
 function SmpPromo({ hover, dots }: { hover: Hover; dots: ReactNode }) {
+  const t = useT()
   const rig = modeIcon('PVP')?.rig
   return (
     <button
@@ -310,20 +386,20 @@ function SmpPromo({ hover, dots }: { hover: Hover; dots: ReactNode }) {
       data-kind="own_server"
       data-id="millida-smp"
       data-pos={0}
-      aria-label={'Играть: ' + TIER_SERVER.name}
+      aria-label={t('Играть: {name}', { name: TIER_SERVER.name })}
       onClick={() => openPvpArena()}
       {...hover}
     >
       {rig ? <img className="lan-hero lsmp-rig" src={rig.url} alt="" draggable={false} /> : null}
       <span className="lan-co">{TIER_SERVER.name}</span>
       <span className="lan-title">
-        Узнай свой
+        {t('Узнай свой')}
         <br />
-        <em>PvP-тир</em>
+        <em>{t('PvP-тир')}</em>
       </span>
       <span className="lan-foot">
         <span className="lan-go">
-          <Icon id="i-play" /> Играть
+          <Icon id="i-play" /> {t('Играть')}
         </span>
       </span>
       {dots}
@@ -333,6 +409,7 @@ function SmpPromo({ hover, dots }: { hover: Hover; dots: ReactNode }) {
 
 /** Сборка из каталога (Аркания) во весь баннер: открывает её страницу в «Во что играем». */
 function PackPromo({ slug, pack, hover, dots }: { slug: string; pack: PackFace; hover: Hover; dots: ReactNode }) {
+  const t = useT()
   const open = () => {
     useLobby.setState({ hubTarget: { pack: slug } })
     setScreen('playhub')
@@ -347,7 +424,7 @@ function PackPromo({ slug, pack, hover, dots }: { slug: string; pack: PackFace; 
       data-kind="pack"
       data-id={slug}
       data-pos={0}
-      aria-label={'Открыть: ' + pack.title}
+      aria-label={t('Открыть: {name}', { name: pack.title })}
       onClick={open}
       {...hover}
     >
@@ -355,7 +432,7 @@ function PackPromo({ slug, pack, hover, dots }: { slug: string; pack: PackFace; 
       <span className="pr-co">{pack.title}</span>
       <span className="lan-foot">
         <span className="lan-go">
-          <Icon id="i-arrow-r" /> Открыть
+          <Icon id="i-arrow-r" /> {t('Открыть')}
         </span>
       </span>
       {dots}
@@ -369,6 +446,7 @@ function PackPromo({ slug, pack, hover, dots }: { slug: string; pack: PackFace; 
  * pack page in «Во что играем» instead of joining a server.
  */
 function PrisonRecommend({ pack, hover, dots }: { pack: PrisonFace; hover: Hover; dots: ReactNode }) {
+  const t = useT()
   const open = () => {
     useLobby.setState({ hubTarget: { pack: PRISON_SLUG } })
     setScreen('playhub')
@@ -383,7 +461,7 @@ function PrisonRecommend({ pack, hover, dots }: { pack: PrisonFace; hover: Hover
       data-kind="pack"
       data-id={PRISON_SLUG}
       data-pos={0}
-      aria-label={'Открыть: ' + pack.title}
+      aria-label={t('Открыть: {name}', { name: pack.title })}
       onClick={open}
       {...hover}
     >
@@ -391,12 +469,12 @@ function PrisonRecommend({ pack, hover, dots }: { pack: PrisonFace; hover: Hover
       <span className="pr-co">{PRISON_CO}</span>
       <span className="lan-foot">
         <span className="lan-go">
-          <Icon id="i-play" /> Играть
+          <Icon id="i-play" /> {t('Играть')}
         </span>
         {anarchyOnlineShown(pack.online) ? (
           <span className="lan-on">
             <span className="ph-dot" aria-hidden="true"></span>
-            {fmtN(pack.online)} играют
+            {t('{n} играют', { n: fmtN(pack.online) })}
           </span>
         ) : null}
       </span>

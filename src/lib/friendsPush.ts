@@ -1,4 +1,5 @@
 import type { Friend } from '../state/friends'
+import { t } from '../i18n'
 
 export type PushedStatus = 'online' | 'playing' | 'offline'
 
@@ -52,7 +53,7 @@ export function withPresence(list: Friend[], u: PresencePush): Friend[] | null {
   const f = list[i]
   let next: Friend
   if (u.status === 'online') {
-    next = { ...f, online: true, playing: false, place: 'launcher', text: 'В лаунчере', lastSeen: u.at }
+    next = { ...f, online: true, playing: false, place: 'launcher', text: t('В лаунчере'), lastSeen: u.at }
     delete next.serverIp
     delete next.serverName
     delete next.build

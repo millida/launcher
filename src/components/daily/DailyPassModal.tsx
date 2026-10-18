@@ -5,7 +5,6 @@ import { PxIcon } from '../PxIcon'
 import { PlusCelebration } from '../PlusCelebration'
 import { backdropClose } from '../../lib/dismiss'
 import { openExt, PLUS_MANAGE_URL } from '../../lib/api'
-import { rubles } from '../../lib/rubies'
 import type { GrantedReward, Reward } from '../../lib/rubies'
 import { useDaily } from '../../state/daily'
 import { usePlus } from '../../state/plus'
@@ -35,12 +34,14 @@ import { SeasonPass } from './SeasonPass'
 import { CHEST_NAME, dayChestTier } from './rewards'
 import '../../styles/pixel/daily.css'
 import { wearNow } from '../../state/wearIntent'
+import { intlTag, t, useT } from '../../i18n'
+import { plusPrice } from '../../lib/regionalPrices'
 
 const real = (list: TrackReward[]) => list.filter((r): r is Reward => r.kind !== 'MYSTERY')
 
 const endDate = (iso: string) => {
   const d = new Date(iso)
-  return Number.isFinite(d.getTime()) ? d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) : ''
+  return Number.isFinite(d.getTime()) ? d.toLocaleDateString(intlTag(), { day: 'numeric', month: 'long' }) : ''
 }
 
 /** Вещь награды — плашка мига награды. */
@@ -63,21 +64,21 @@ function announce(granted: GrantedReward[]) {
   const chests = granted.filter((g): g is GrantedReward & { kind: 'CHEST' } => g.kind === 'CHEST')
   const items = granted.flatMap((g) => (g.kind === 'ITEM' && g.item ? [itemEntry(g.item)] : []))
   const cur: RewardEntry[] = []
-  if (rub) cur.push({ name: '+' + rub.toLocaleString('ru-RU') + ' ' + rubyWord(rub), rubies: rub })
+  if (rub) cur.push({ name: '+' + rub.toLocaleString(intlTag()) + ' ' + rubyWord(rub), rubies: rub })
   if (sh) cur.push({ name: '+' + sh + ' ' + shardWord(sh), icon: 'shard' })
-  const kicker = granted.every((g) => g.source === 'plus') ? 'PLUS' : 'Бонус за вход'
+  const kicker = granted.every((g) => g.source === 'plus') ? 'PLUS' : t('Бонус за вход')
   if (chests.length) {
     const size = chests.length > 1 ? 88 : 150
     showReward({
       items: chests.map((c) => ({
-        name: CHEST_NAME[c.tier] + ' сундук',
+        name: t('{tier} сундук', { tier: CHEST_NAME[c.tier] }),
         rarity: c.tier,
         art: <ChestLive ready tier={c.tier} size={size} />,
       })),
       kicker,
-      title: chests.length > 1 ? 'Сундуки: ' + chests.length : undefined,
+      title: chests.length > 1 ? t('Сундуки: {n}', { n: chests.length }) : undefined,
       sub: cur.length ? cur.map((c) => c.name).join(', ') : undefined,
-      doneLabel: 'В сундуки',
+      doneLabel: t('В сундуки'),
     })
     return
   }
@@ -94,7 +95,7 @@ function announce(granted: GrantedReward[]) {
     return
   }
   if (!cur.length) return
-  showReward({ level: 'mid', items: cur, kicker, title: cur.map((c) => c.name).join(' и ') })
+  showReward({ level: 'mid', items: cur, kicker, title: cur.map((c) => c.name).join(' ' + t('и') + ' ') })
 }
 
 /**
@@ -132,6 +133,7 @@ export function PassBody({
   /** Забрать есть что-то ещё (неделя, задания), когда клетки пропуска пусты. */
   extra?: { busy: boolean; onClaim: () => void } | null
 }) {
+  const t = useT()
   const status = useDaily((s) => s.status)
   const busy = useDaily((s) => s.busy)
   const reveal = useDaily((s) => s.reveal)
@@ -231,7 +233,7 @@ export function PassBody({
             >
               <PxIcon name="gift" size={84} />
               {can ? (
-                <b className="tk3-take">Забрать</b>
+                <b className="tk3-take">{t('Забрать')}</b>
               ) : (
                 <b className="tk3-timer">
                   <Icon id="i-clock" />
@@ -295,15 +297,15 @@ export function PassBody({
   return (
     <>
       <div className="dp-head">
-        {inline ? <h2>{compact ? 'Пропуск' : 'Бонус за вход'}</h2> : <h3>Бонус за вход</h3>}
+        {inline ? <h2>{compact ? t('Пропуск') : t('Бонус за вход')}</h2> : <h3>{t('Бонус за вход')}</h3>}
         {status && status.streak > 0 ? (
           <span className="dp-streak">
             <Icon id="i-flame" />
             <b>{status.streak}</b>
-            подряд
+            {t('подряд')}
           </span>
         ) : null}
-        {track && season && !legacy ? <span className="dp-season">до {endDate(season.endsAt)}</span> : null}
+        {track && season && !legacy ? <span className="dp-season">{t('до {date}', { date: endDate(season.endsAt) })}</span> : null}
         {track && ready.length ? (
           <button
             className={'btn md primary dp-all' + (onClose ? '' : ' end')}
@@ -311,11 +313,11 @@ export function PassBody({
             data-track="daily_claim"
             onClick={() => void useDaily.getState().claim(legacy ? undefined : 'all')}
           >
-            {ready.length > 1 ? 'Забрать всё (' + ready.length + ')' : 'Забрать'}
+            {ready.length > 1 ? t('Забрать всё ({n})', { n: ready.length }) : t('Забрать')}
           </button>
         ) : null}
         {onClose ? (
-          <button className="icon-btn dp-x" aria-label="Закрыть" data-track="close" onClick={onClose}>
+          <button className="icon-btn dp-x" aria-label={t('Закрыть')} data-track="close" onClick={onClose}>
             <Icon id="i-x" />
           </button>
         ) : null}
@@ -341,7 +343,7 @@ export function PassBody({
                       data-track="daily_claim"
                       onClick={() => void useDaily.getState().claim(ready[0])}
                     >
-                      Забрать
+                      {t('Забрать')}
                     </button>
                   ) : (
                     <b className="dp-timer dp2-timer">
@@ -364,18 +366,18 @@ export function PassBody({
               <span className="dp-foot-body" />
               {!own && price ? (
                 <span className="dp-price">
-                  <b>{rubles(price)}</b>
-                  <small>в месяц</small>
+                  <b>{plusPrice('PLUS', price)}</b>
+                  <small>{t('в месяц')}</small>
                 </span>
               ) : null}
               {!own ? (
                 <button className="btn md secondary dp-plus" disabled={busy === 'plus'} data-track="plus_subscribe" onClick={plus}>
                   <Icon id="i-crown" />
-                  Оформить PLUS
+                  {t('Оформить PLUS')}
                 </button>
               ) : (
                 <button className="btn sm ghost" data-track="plus_manage" onClick={() => openExt(PLUS_MANAGE_URL)}>
-                  Отменить PLUS
+                  {t('Отменить PLUS')}
                 </button>
               )}
             </div>
@@ -405,6 +407,7 @@ export function PassBody({
 
 /** Окно пасса (открывается из других мест, например «Весь трек»). */
 export function DailyPassModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const t = useT()
   const [vis, setVis] = useState(false)
   const track = useDaily((s) => !!s.status?.track?.length)
 
@@ -433,7 +436,7 @@ export function DailyPassModal({ open, onClose }: { open: boolean; onClose: () =
 
   return createPortal(
     <div className={'modal-bg open dp-bg' + (vis ? ' vis' : '')} {...backdropClose(onClose)}>
-      <div className={'modal dp' + (track ? ' dp2' : ' mw-lg')} role="dialog" aria-modal="true" aria-label="Бонус за вход">
+      <div className={'modal dp' + (track ? ' dp2' : ' mw-lg')} role="dialog" aria-modal="true" aria-label={t('Бонус за вход')}>
         <PassBody active={open} onClose={onClose} />
       </div>
     </div>,

@@ -4,6 +4,7 @@ import type { Rarity } from '../../lib/rubies'
 import { RARITY_NAME_SHORT, RARITY_SHORT, RARITY_TONE, normRarity } from './rarity'
 import '../../styles/pixel/rarity.css'
 import '../../styles/pixel/chest.css'
+import { useT } from '../../i18n'
 
 /*
  * Кирпичики единой системы редкости (модель предметов v2, 24.09.2026):
@@ -52,6 +53,7 @@ export function FragmentIcon({ rarity, size = 16 }: { rarity?: Rarity | string |
  * полоса акцентом. `gain` — сколько пришло сейчас (в сундуке): рисуется ярче.
  */
 export function FragBar({ have, need, rarity, gain = 0 }: { have: number; need: number; rarity?: string | null; gain?: number }) {
+  const t = useT()
   const r = normRarity(rarity)
   const done = have >= need
   const pct = need > 0 ? Math.min(100, (have / need) * 100) : 0
@@ -60,7 +62,7 @@ export function FragBar({ have, need, rarity, gain = 0 }: { have: number; need: 
     <span
       className={'rar-fbar' + (done ? ' done' : '')}
       style={r ? ({ ['--rar' as string]: RARITY_TONE[r] } as CSSProperties) : undefined}
-      aria-label={'Фрагменты: ' + have + ' из ' + need}
+      aria-label={t('Фрагменты: {have} из {need}', { have, need })}
     >
       <FragmentIcon rarity={r} size={14} />
       <b>

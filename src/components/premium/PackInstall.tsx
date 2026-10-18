@@ -11,11 +11,13 @@ import { showToast } from '../../state/ui'
 import type { PremiumPack } from '../../lib/premium'
 import { DEMO_USER } from '../../lib/demo'
 import { catalogInstallTracker } from '../../lib/install'
+import { useT } from '../../i18n'
 
 /// Установка платной сборки каталога — тем же путём, каким она шла из раздела
 /// «Контент»: доступ проверяет сервер, отказ открывает окно ключа, после
 /// активации установка продолжается сама.
 export function PackInstallButton({ pack, size }: { pack: PremiumPack; size?: 'sm' }) {
+  const t = useT()
   const [keyFor, setKeyFor] = useState<string | null>(null)
   const slug = pack.slug || ''
   const task = useInstalls((s) => s.tasks[keyCatalogPack(slug)])
@@ -26,8 +28,8 @@ export function PackInstallButton({ pack, size }: { pack: PremiumPack; size?: 's
       ? task.label + ' ' + Math.round(task.pct) + '%'
       : task.label
     : done
-      ? 'Установлено'
-      : 'Установить'
+      ? t('Установлено')
+      : t('Установить')
 
   const start = () => {
     if (!slug) return
@@ -37,7 +39,7 @@ export function PackInstallButton({ pack, size }: { pack: PremiumPack; size?: 's
         setKeyFor('')
         return
       }
-      showToast('Установка сборок — в приложении', 'error')
+      showToast(t('Установка сборок — в приложении'), 'error')
       return
     }
     const startedAt = performance.now()
@@ -45,7 +47,7 @@ export function PackInstallButton({ pack, size }: { pack: PremiumPack; size?: 's
     runInstall({
       key: keyCatalogPack(slug),
       title: pack.title || slug,
-      running: 'Скачивание…',
+      running: t('Скачивание…'),
       run: () => installCatalogPack(slug),
       onError: (e) => {
         const text = String(e)
@@ -66,7 +68,7 @@ export function PackInstallButton({ pack, size }: { pack: PremiumPack; size?: 's
         installed()
         useProfiles.getState().setSelected(p.name)
         void useProfiles.getState().refresh()
-        showToast('Сборка «' + p.name + '» готова к запуску', 'ok', 'achievement')
+        showToast(t('Сборка «{name}» готова к запуску', { name: p.name }), 'ok', 'achievement')
       },
     })
   }

@@ -7,6 +7,7 @@ import { showToast, useUi } from '../state/ui'
 import { autoHealPlan, crashedOnStart, takeAutoHeal } from './autoHealPlan'
 import { realLaunch } from './launch'
 import { markFixApplied } from './repair'
+import { t } from '../i18n'
 
 const EXIT_WAIT_MS = 8000
 
@@ -25,7 +26,7 @@ function gone(profile: string): Promise<boolean> {
 
 async function heal(info: CrashInfo, plan: CrashAction): Promise<void> {
   const setPrelaunch = useUi.getState().setPrelaunch
-  setPrelaunch({ open: true, sub: info.profile, stage: 0, pct: 4, msg: 'Чиним сборку…', mode: 'repair' })
+  setPrelaunch({ open: true, sub: info.profile, stage: 0, pct: 4, msg: t('Чиним сборку…'), mode: 'repair' })
   try {
     await applyCrashFix(info.profile, plan.kind, plan.arg ?? '')
   } catch {
@@ -38,10 +39,10 @@ async function heal(info: CrashInfo, plan: CrashAction): Promise<void> {
   const free = await gone(info.profile)
   setPrelaunch({ open: false })
   if (!free) {
-    showToast('Сборку починили. Запусти игру', 'ok')
+    showToast(t('Сборку починили. Запусти игру'), 'ok')
     return
   }
-  showToast('Сборку починили — запускаем снова', 'ok')
+  showToast(t('Сборку починили — запускаем снова'), 'ok')
   realLaunch(info.profile)
 }
 

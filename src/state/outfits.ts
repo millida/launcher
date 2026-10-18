@@ -6,6 +6,8 @@
  * скины и права на вещи, и чужой образ на нём наполовину бы не наделся.
  */
 
+import { t } from '../i18n'
+
 export const OUTFITS_LIMIT = 12
 export const OUTFIT_NAME_MAX = 24
 
@@ -93,12 +95,12 @@ export function nextOutfitName(list: Outfit[]): string {
   const taken = new Set(list.map((o) => o.name))
   let n = list.length + 1
   for (let i = 1; i <= list.length + 1; i++) {
-    if (!taken.has('Образ ' + i)) {
+    if (!taken.has(t('Образ {n}', { n: i }))) {
       n = i
       break
     }
   }
-  return 'Образ ' + n
+  return t('Образ {n}', { n })
 }
 
 /** Новый образ в конец ряда. На лимите список не меняется — решает экран. */

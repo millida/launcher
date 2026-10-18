@@ -97,18 +97,8 @@ pub async fn ms_login_poll(device_code: String) -> Result<Value, String> {
     Ok(keep_tokens(device_code, j))
 }
 
-/// One polling step of the Ely.by device flow.
-pub async fn ely_login_poll(device_code: String) -> Result<Value, String> {
-    let j = ely_device_poll(&device_code).await?;
-    Ok(keep_tokens(device_code, j))
-}
-
 pub fn ms_login_commit(device_code: &str, account_id: &str) -> Result<(), String> {
     commit_login(device_code, account_id, "вход Microsoft не найден — начни заново")
-}
-
-pub fn ely_login_commit(device_code: &str, account_id: &str) -> Result<(), String> {
-    commit_login(device_code, account_id, "вход Ely.by не найден — начни заново")
 }
 
 fn commit_login(device_code: &str, account_id: &str, missing: &str) -> Result<(), String> {
@@ -223,18 +213,6 @@ pub async fn resolve_launch_auth(app: &AppHandle, args: Option<AuthArgs>) -> Res
                 nick: None,
             }
         }
-        "elyby" => {
-            let Some(token) = args.account_id.as_deref().and_then(mc_token) else { return offline };
-            ResolvedAuth {
-                auth: Auth {
-                    token,
-                    uuid: args.uuid.unwrap_or_default(),
-                    xuid: String::new(),
-                    yggdrasil: ELY_YGGDRASIL.into(),
-                },
-                nick: None,
-            }
-        }
         "millida" => millida_launch_auth(app).await,
         _ => offline,
     }
@@ -265,7 +243,83 @@ async fn millida_launch_auth(app: &AppHandle) -> ResolvedAuth {
         app,
         &format!("Вход Millida не выдан, играем офлайн (Multiplayer и Realms будут недоступны): {}", last),
     );
-    ResolvedAuth { auth: Auth::default(), nick: None }
+    known_identity_offline()
+}
+
+/// Vault slot with the game profile of the last session issued to this Millida
+/// login. The server often creates the session yet answers after the launch
+/// budget, and a game started with the nick-derived uuid is a different player
+/// to every world: FTB quests, advancements and LAN inventories reset, then come
+/// back on the next normal launch.
+pub const SEC_MILLIDA_GAME_PROFILE: &str = "millida-game-profile";
+
+/// Who the account's game profile is, as remembered from its last session.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KnownIdentity {
+    pub uuid: String,
+    pub name: String,
+}
+
+/// The `sub` claim of our own access token, read without verifying the
+/// signature: it only tells apart which login a remembered profile belongs to.
+fn token_subject(jwt: &str) -> Option<String> {
+    use base64::Engine as _;
+    let payload = jwt.split('.').nth(1)?;
+    let raw = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(payload.trim_end_matches('=')).ok()?;
+    let claims: Value = serde_json::from_slice(&raw).ok()?;
+    claims["sub"].as_str().map(str::trim).filter(|s| !s.is_empty()).map(str::to_string)
+}
+
+fn valid_profile_uuid(uuid: &str) -> bool {
+    let hex: String = uuid.chars().filter(|c| *c != '-').collect();
+    let dashes_ok = uuid.len() == 32 || (uuid.len() == 36 && [8, 13, 18, 23].iter().all(|&i| uuid.as_bytes()[i] == b'-'));
+    dashes_ok && hex.len() == 32 && hex.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+fn valid_game_name(name: &str) -> bool {
+    (1..=16).contains(&name.len()) && name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
+}
+
+fn remembered_profile_record(subject: &str, uuid: &str, name: &str) -> Option<String> {
+    (valid_profile_uuid(uuid) && valid_game_name(name) && !subject.is_empty())
+        .then(|| serde_json::json!({ "sub": subject, "uuid": uuid, "name": name }).to_string())
+}
+
+/// The remembered profile, only for the login it was issued to and only when it
+/// still looks like a game profile: the record may come from an older build.
+fn identity_for(record: Option<&str>, subject: Option<&str>) -> Option<KnownIdentity> {
+    let subject = subject?;
+    let v: Value = serde_json::from_str(record?).ok()?;
+    let uuid = v["uuid"].as_str()?;
+    let name = v["name"].as_str()?;
+    (v["sub"].as_str() == Some(subject) && valid_profile_uuid(uuid) && valid_game_name(name))
+        .then(|| KnownIdentity { uuid: uuid.to_string(), name: name.to_string() })
+}
+
+fn remember_game_profile(uuid: &str, name: &str) {
+    let Some(subject) = millida_token().as_deref().and_then(token_subject) else { return };
+    let Some(record) = remembered_profile_record(&subject, uuid, name) else { return };
+    if let Err(e) = crate::secrets::set_many(vec![(SEC_MILLIDA_GAME_PROFILE.to_string(), record)]) {
+        eprintln!("[auth] игровой профиль Millida не запомнен, при сбое входа игра стартует с UUID по нику: {e}");
+    }
+}
+
+pub fn known_millida_identity() -> Option<KnownIdentity> {
+    let record = crate::secrets::get(SEC_MILLIDA_GAME_PROFILE);
+    let subject = millida_token().as_deref().and_then(token_subject);
+    identity_for(record.as_deref(), subject.as_deref())
+}
+
+/// Offline start that keeps the account's own uuid and name, and keeps our
+/// Yggdrasil so a world opened to LAN still verifies guests against it.
+fn known_identity_offline() -> ResolvedAuth {
+    match known_millida_identity() {
+        Some(id) => ResolvedAuth {
+            auth: Auth { token: String::new(), uuid: id.uuid, xuid: String::new(), yggdrasil: millida_yggdrasil() },
+            nick: Some(id.name),
+        },
+        None => ResolvedAuth { auth: Auth::default(), nick: None },
+    }
 }
 
 // For a Millida account we ask api.millida.net for a one-time game session and give it to authlib-injector.
@@ -277,14 +331,14 @@ async fn issue_game_session() -> Result<ResolvedAuth, String> {
             Ok(v) => {
                 let token = v["accessToken"].as_str().unwrap_or_default().to_string();
                 if !token.is_empty() {
+                    let uuid = v["uuid"].as_str().unwrap_or_default().to_string();
+                    let nick = v["name"].as_str().filter(|s| !s.is_empty()).map(|s| s.to_string());
+                    if let Some(name) = nick.as_deref() {
+                        remember_game_profile(&uuid, name);
+                    }
                     return Ok(ResolvedAuth {
-                        auth: Auth {
-                            token,
-                            uuid: v["uuid"].as_str().unwrap_or_default().to_string(),
-                            xuid: String::new(),
-                            yggdrasil: millida_yggdrasil(),
-                        },
-                        nick: v["name"].as_str().filter(|s| !s.is_empty()).map(|s| s.to_string()),
+                        auth: Auth { token, uuid, xuid: String::new(), yggdrasil: millida_yggdrasil() },
+                        nick,
                     });
                 }
                 last = "в ответе нет accessToken".into();
@@ -343,6 +397,61 @@ mod tests {
             "another account must not queue behind an unrelated renewal",
         );
         drop(held);
+    }
+
+    fn jwt(claims: &str) -> String {
+        use base64::Engine as _;
+        let b = |s: &str| base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(s);
+        format!("{}.{}.sig", b(r#"{"alg":"HS256"}"#), b(claims))
+    }
+
+    #[test]
+    fn token_subject_names_the_login() {
+        let cases: Vec<(String, Option<&str>, &str)> = vec![
+            (jwt(r#"{"sub":"glmypb7nm5r0xxlt8rnpxfc7","typ":"access"}"#), Some("glmypb7nm5r0xxlt8rnpxfc7"), "an access token names its user"),
+            (jwt(r#"{"typ":"access"}"#), None, "no subject means no login to bind the profile to"),
+            (jwt(r#"{"sub":"  "}"#), None, "a blank subject would match every other blank one"),
+            ("opaque-token".into(), None, "a token that is not a JWT binds nothing"),
+            ("a.!!!.c".into(), None, "a broken payload is not read"),
+        ];
+        for (token, want, why) in cases {
+            assert_eq!(token_subject(&token).as_deref(), want, "{why}");
+        }
+    }
+
+    #[test]
+    fn remembered_identity_belongs_to_its_login_only() {
+        let rec = remembered_profile_record("u1", "c6d9db59f6fc4b81a447cd6b60936a6f", "BrainMcpe55");
+        let id = Some(KnownIdentity { uuid: "c6d9db59f6fc4b81a447cd6b60936a6f".into(), name: "BrainMcpe55".into() });
+        type Case<'a> = (Option<String>, Option<&'a str>, Option<KnownIdentity>, &'a str);
+        let cases: Vec<Case> = vec![
+            (rec.clone(), Some("u1"), id.clone(), "the same login gets its own uuid back, so a failed session keeps the player"),
+            (rec.clone(), Some("u2"), None, "another login on this launcher must never play as the previous player"),
+            (rec.clone(), None, None, "without a readable login nothing proves whose profile it is"),
+            (None, Some("u1"), None, "nothing remembered yet: the old offline start"),
+            (Some(r#"{"sub":"u1","uuid":"../../x","name":"BrainMcpe55"}"#.into()), Some("u1"), None, "a record from an older build is checked again before use"),
+            (Some(r#"{"sub":"u1","uuid":"c6d9db59f6fc4b81a447cd6b60936a6f","name":"no spaces allowed"}"#.into()), Some("u1"), None, "a nick the game would refuse is not used"),
+            (Some("not json".into()), Some("u1"), None, "a damaged record is ignored"),
+        ];
+        for (record, subject, want, why) in cases {
+            assert_eq!(identity_for(record.as_deref(), subject), want, "{why}");
+        }
+    }
+
+    #[test]
+    fn only_a_game_profile_is_remembered() {
+        let cases: Vec<(&str, &str, &str, bool, &str)> = vec![
+            ("u1", "c6d9db59f6fc4b81a447cd6b60936a6f", "BrainMcpe55", true, "undashed uuid as the server sends it"),
+            ("u1", "c6d9db59-f6fc-4b81-a447-cd6b60936a6f", "icon", true, "dashed uuid"),
+            ("u1", "", "BrainMcpe55", false, "a session without uuid gives nothing to keep"),
+            ("u1", "c6d9db59f6fc4b81a447cd6b60936a6", "BrainMcpe55", false, "31 hex digits is not a uuid"),
+            ("u1", "c6d9db59f6fc4b81a447cd6b60936a6f", "", false, "an empty nick"),
+            ("u1", "c6d9db59f6fc4b81a447cd6b60936a6f", "SeventeenLetters1", false, "longer than the game allows"),
+            ("", "c6d9db59f6fc4b81a447cd6b60936a6f", "BrainMcpe55", false, "no login to bind it to"),
+        ];
+        for (sub, uuid, name, kept, why) in cases {
+            assert_eq!(remembered_profile_record(sub, uuid, name).is_some(), kept, "{why}");
+        }
     }
 
     #[test]

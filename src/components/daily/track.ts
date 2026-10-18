@@ -9,6 +9,8 @@ import type {
 } from '../../lib/rubies'
 import { word } from '../shop/rarity'
 import { DAILY_CONFIG } from './config'
+import { t } from '../../i18n'
+import { plural } from '../../lib/format'
 
 export type CycleDay = DailyStatus['cycle'][number]
 
@@ -95,12 +97,7 @@ export function timerText(ms: number): string {
 
 /** «6 дней» с верным окончанием. */
 export function daysWord(n: number): string {
-  const a = Math.abs(n) % 100
-  const b = a % 10
-  if (a > 10 && a < 20) return n + ' дней'
-  if (b === 1) return n + ' день'
-  if (b >= 2 && b <= 4) return n + ' дня'
-  return n + ' дней'
+  return plural(Math.abs(n), t('{n} день', { n }), t('{n} дня', { n }), t('{n} дней', { n }))
 }
 
 /* ============================================================

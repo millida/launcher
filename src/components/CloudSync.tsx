@@ -9,6 +9,7 @@ import { showToast } from '../state/ui'
 import { useProfiles } from '../state/profiles'
 import { cloudForget, cloudPull, cloudPush, cloudStatus, type CloudStatus } from '../ipc/commands'
 import { logoutToLogin } from '../lib/session'
+import { useT } from '../i18n'
 
 // The server sends an ISO date, while whenText counts in epoch seconds.
 const syncedAgo = (iso: string): string => {
@@ -20,6 +21,7 @@ const syncedAgo = (iso: string): string => {
 /// from the server — count, date, size — because "synced" without numbers is
 /// exactly the claim players stop believing after the first silent failure.
 export function CloudSync() {
+  const t = useT()
   const [status, setStatus] = useState<CloudStatus | null>(null)
   const [busy, setBusy] = useState('')
 
@@ -27,7 +29,7 @@ export function CloudSync() {
     if (!hasTauri()) return
     cloudStatus()
       .then(setStatus)
-      .catch((e) => showToast(apiErrorText(e, 'Облако не ответило'), 'error'))
+      .catch((e) => showToast(apiErrorText(e, t('Облако не ответило')), 'error'))
   }, [])
 
   useEffect(load, [load])
@@ -37,9 +39,9 @@ export function CloudSync() {
     cloudPush()
       .then((s) => {
         setStatus(s)
-        showToast('Сборки и настройки выгружены в облако', 'ok')
+        showToast(t('Сборки и настройки выгружены в облако'), 'ok')
       })
-      .catch((e) => showToast(apiErrorText(e, 'Облако не ответило'), 'error'))
+      .catch((e) => showToast(apiErrorText(e, t('Облако не ответило')), 'error'))
       .finally(() => setBusy(''))
   }
 
@@ -49,24 +51,24 @@ export function CloudSync() {
       .then((r) => {
         void useProfiles.getState().refresh()
         const parts = [
-          r.installed.length ? 'поставили ' + r.installed.length : '',
-          r.updated.length ? 'обновили ' + r.updated.length : '',
-          r.failed.length ? 'не вышло: ' + r.failed.length : '',
+          r.installed.length ? t('поставили {n}', { n: r.installed.length }) : '',
+          r.updated.length ? t('обновили {n}', { n: r.updated.length }) : '',
+          r.failed.length ? t('не вышло: {n}', { n: r.failed.length }) : '',
         ].filter(Boolean)
-        showToast(parts.length ? 'Сборки: ' + parts.join(', ') : 'Всё уже на месте', r.failed.length ? 'error' : 'ok')
+        showToast(parts.length ? t('Сборки: {list}', { list: parts.join(', ') }) : t('Всё уже на месте'), r.failed.length ? 'error' : 'ok')
         if (r.failed.length) r.failed.slice(0, 3).forEach((f) => showToast(f, 'error'))
         load()
       })
-      .catch((e) => showToast(apiErrorText(e, 'Облако не ответило'), 'error'))
+      .catch((e) => showToast(apiErrorText(e, t('Облако не ответило')), 'error'))
       .finally(() => setBusy(''))
   }
 
   if (!status) return null
   if (!status.signedIn) {
     return (
-      <Row title="Сборки в облаке" hint="Нужен аккаунт Millida" keys="облако облачный профиль синхронизация сборки выгрузить забрать">
+      <Row title={t('Сборки в облаке')} hint={t('Нужен аккаунт Millida')} keys="облако облачный профиль синхронизация сборки выгрузить забрать">
         <button className="btn sm primary" onClick={() => logoutToLogin()}>
-          <Icon id="i-login" /> Войти
+          <Icon id="i-login" /> {t('Войти')}
         </button>
       </Row>
     )
@@ -75,62 +77,62 @@ export function CloudSync() {
   return (
     <>
       <Row
-        title="Сборки в облаке"
+        title={t('Сборки в облаке')}
         keys="облако облачный профиль синхронизация сборки выгрузить забрать"
         hint={
           status.hasRemote
-            ? `${status.remoteProfiles} сборок · ${fmtSize(status.sizeBytes)} · ${syncedAgo(status.updatedAt)}`
-            : 'Пока пусто'
+            ? `${t('{n} сборок', { n: status.remoteProfiles })} · ${fmtSize(status.sizeBytes)} · ${syncedAgo(status.updatedAt)}`
+            : t('Пока пусто')
         }
       >
         <button className="btn sm secondary" disabled={busy !== ''} onClick={push}>
-          <Icon id="i-upload" /> {busy === 'push' ? 'Выгружаем…' : 'Выгрузить'}
+          <Icon id="i-upload" /> {busy === 'push' ? t('Выгружаем…') : t('Выгрузить')}
         </button>
         <button
           className="btn sm secondary"
           disabled={busy !== '' || !status.hasRemote}
           onClick={() => pull(null)}
         >
-          <Icon id="i-download" /> {busy === 'pull' ? 'Ставим…' : 'Забрать'}
+          <Icon id="i-download" /> {busy === 'pull' ? t('Ставим…') : t('Забрать')}
         </button>
       </Row>
 
       {status.missingHere.length ? (
-        <Row title="Есть в облаке, нет здесь" hint={status.missingHere.join(', ')} keys="облако поставить сборки">
+        <Row title={t('Есть в облаке, нет здесь')} hint={status.missingHere.join(', ')} keys="облако поставить сборки">
           <button className="btn sm primary" disabled={busy !== ''} onClick={() => pull(status.missingHere)}>
-            Поставить {status.missingHere.length}
+            {t('Поставить {n}', { n: status.missingHere.length })}
           </button>
         </Row>
       ) : null}
 
       {status.missingThere.length ? (
-        <Row title="Есть здесь, нет в облаке" hint={status.missingThere.join(', ')} keys="облако выгрузить сборки">
+        <Row title={t('Есть здесь, нет в облаке')} hint={status.missingThere.join(', ')} keys="облако выгрузить сборки">
           <button className="btn sm secondary" disabled={busy !== ''} onClick={push}>
-            Выгрузить
+            {t('Выгрузить')}
           </button>
         </Row>
       ) : null}
 
       {status.hasRemote ? (
-        <Row title="Удалить копию из облака" hint="Сборки здесь останутся" keys="облако удалить копию">
+        <Row title={t('Удалить копию из облака')} hint={t('Сборки здесь останутся')} keys="облако удалить копию">
           <button
             className="btn sm danger"
             disabled={busy !== ''}
             onClick={() => {
-              void uiConfirm('Удалить облачную копию сборок и настроек?', { confirmLabel: 'Удалить' }).then((ok) => {
+              void uiConfirm(t('Удалить облачную копию сборок и настроек?'), { confirmLabel: t('Удалить') }).then((ok) => {
                 if (!ok) return
                 setBusy('forget')
                 cloudForget()
                   .then(() => {
-                    showToast('Облачная копия удалена', 'ok')
+                    showToast(t('Облачная копия удалена'), 'ok')
                     load()
                   })
-                  .catch((e) => showToast(apiErrorText(e, 'Облако не ответило'), 'error'))
+                  .catch((e) => showToast(apiErrorText(e, t('Облако не ответило')), 'error'))
                   .finally(() => setBusy(''))
               })
             }}
           >
-            Удалить
+            {t('Удалить')}
           </button>
         </Row>
       ) : null}

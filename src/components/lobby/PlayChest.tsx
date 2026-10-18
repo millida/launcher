@@ -9,11 +9,13 @@ import { dailyReady, useDaily } from '../../state/daily'
 import { nextResetAt } from '../daily/track'
 import { useCountdown } from '../daily/useCountdown'
 import { chestTimerText } from '../../lib/retention'
+import { useT } from '../../i18n'
 
 /** Три слота сундуков за игру: ● забран/готов, ○ ещё нет — «●●○ 3 в день». */
 export function PlayPips({ n = 3, filled }: { n?: number; filled: number }) {
+  const t = useT()
   return (
-    <span className="pc-pips" aria-label={filled + ' из ' + n + ' за день'}>
+    <span className="pc-pips" aria-label={t('{n} из {total} за день', { n: filled, total: n })}>
       {Array.from({ length: n }, (_, i) => (
         <i key={i} className={i < filled ? 'on' : ''} />
       ))}
@@ -23,6 +25,7 @@ export function PlayPips({ n = 3, filled }: { n?: number; filled: number }) {
 
 /** Строка сундуков за игру (06.10.2026): «Забрать сундук (2)» или «через 34 мин» — ведёт в «Бонусы» магазина. */
 function PlayChestLine({ on }: { on: boolean }) {
+  const t = useT()
   const view = usePlayChests((s) => s.view)
   const at = usePlayChests((s) => s.at)
   useEffect(() => {
@@ -46,13 +49,13 @@ function PlayChestLine({ on }: { on: boolean }) {
     >
       <Icon id="i-chest" />
       {view.ready ? (
-        <>Открыть сундук{view.ready > 1 ? ' ×' + view.ready : ''}</>
+        <>{t('Открыть сундук')}{view.ready > 1 ? ' ×' + view.ready : ''}</>
       ) : left !== null ? (
         <>
-          Сундук через <b>{playLeftText(left)}</b>
+          {t('Сундук через')} <b>{playLeftText(left)}</b>
         </>
       ) : (
-        <>Сундуки — завтра</>
+        <>{t('Сундуки — завтра')}</>
       )}
       <PlayPips n={view.limit} filled={view.earned} />
     </button>
@@ -65,6 +68,7 @@ function PlayChestLine({ on }: { on: boolean }) {
  * пока игра ни разу не запускалась, — обещание сундука за первый час.
  */
 export function PlayChest({ on, dayZero }: { on: boolean; dayZero: boolean }) {
+  const t = useT()
   const status = useDaily((s) => s.status)
   const play = usePlayChests((s) => s.view)
   const failed = useDaily((s) => s.failed)
@@ -86,7 +90,7 @@ export function PlayChest({ on, dayZero }: { on: boolean; dayZero: boolean }) {
     return (
       <button className="play-chest go" id="playChest" data-track="lobby_chest_claim" onClick={() => openShopAt()}>
         <Icon id="i-chest" />
-        Забрать сундук
+        {t('Забрать сундук')}
       </button>
     )
   }
@@ -95,7 +99,7 @@ export function PlayChest({ on, dayZero }: { on: boolean; dayZero: boolean }) {
   return (
     <div className="play-chest" id="playChest">
       <Icon id="i-chest" />
-      Сундук через <b>{chestTimerText(left)}</b>
+      {t('Сундук через')} <b>{chestTimerText(left)}</b>
       <PlayChestLine on={on} />
     </div>
   )

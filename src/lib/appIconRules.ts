@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 export type AppIconId = 'default' | 'spark' | 'flame' | 'amethyst' | 'legend' | 'gold' | 'diamond'
 export type IconRule = 'free' | 'friends' | 'plus' | 'diamond'
 
@@ -14,12 +15,12 @@ export interface AppIconDef {
 
 export const APP_ICONS: readonly AppIconDef[] = [
   { id: 'default', name: 'Millida', src: '/app-icons/default.png', rule: 'free', need: '' },
-  { id: 'spark', name: 'Искра', src: '/app-icons/spark.png', rule: 'friends', friends: 5, need: 'Пригласи 5 друзей' },
-  { id: 'flame', name: 'Пламя', src: '/app-icons/flame.png', rule: 'friends', friends: 10, need: 'Пригласи 10 друзей' },
-  { id: 'amethyst', name: 'Аметист', src: '/app-icons/amethyst.png', rule: 'friends', friends: 25, need: 'Пригласи 25 друзей' },
-  { id: 'legend', name: 'Легенда', src: '/app-icons/legend.png', rule: 'friends', friends: 50, need: 'Пригласи 50 друзей' },
-  { id: 'gold', name: 'Золото', src: '/app-icons/gold.png', rule: 'plus', need: 'Только с PLUS' },
-  { id: 'diamond', name: 'Алмаз', src: '/app-icons/diamond.png', rule: 'diamond', need: 'Только с Diamond' },
+  { id: 'spark', get name() { return t('Искра') }, src: '/app-icons/spark.png', rule: 'friends', friends: 5, get need() { return t('Пригласи 5 друзей') } },
+  { id: 'flame', get name() { return t('Пламя') }, src: '/app-icons/flame.png', rule: 'friends', friends: 10, get need() { return t('Пригласи 10 друзей') } },
+  { id: 'amethyst', get name() { return t('Аметист') }, src: '/app-icons/amethyst.png', rule: 'friends', friends: 25, get need() { return t('Пригласи 25 друзей') } },
+  { id: 'legend', get name() { return t('Легенда') }, src: '/app-icons/legend.png', rule: 'friends', friends: 50, get need() { return t('Пригласи 50 друзей') } },
+  { id: 'gold', get name() { return t('Золото') }, src: '/app-icons/gold.png', rule: 'plus', get need() { return t('Только с PLUS') } },
+  { id: 'diamond', get name() { return t('Алмаз') }, src: '/app-icons/diamond.png', rule: 'diamond', get need() { return t('Только с Diamond') } },
 ]
 
 export interface IconAccess {

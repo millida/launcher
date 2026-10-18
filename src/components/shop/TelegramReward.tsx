@@ -5,6 +5,7 @@ import { openUrl } from '../../ipc/commands'
 import type { TelegramReward } from '../../lib/rubies'
 import { Head } from './parts'
 import { telegramLink, telegramStep } from './telegramRewardState'
+import { useT } from '../../i18n'
 
 const open = (url: string | null) => {
   if (!url) return
@@ -13,39 +14,40 @@ const open = (url: string | null) => {
 }
 
 export function TelegramRewardBlock({ view, busy, onClaim }: { view: TelegramReward | null; busy: boolean; onClaim: () => void }) {
+  const t = useT()
   const step = telegramStep(view)
   if (!view || step === 'hidden') return null
   return (
     <div className="card sh-block" id="shop-telegram" data-section="telegram_reward">
-      <Head title="Telegram-канал">
+      <Head title={t('Telegram-канал')}>
         <span className="sh-tag">
           <Icon id="i-send" />
-          Разовая награда
+          {t('Разовая награда')}
         </span>
       </Head>
       <div className="sh-ach-prizes">
         <div className="sh-prize sh-quest">
           <Ruby size={40} />
           <span className="sh-prize-body">
-            <b>Подпишись на канал Millida</b>
+            <b>{t('Подпишись на канал Millida')}</b>
             <span className="sh-meter-cap">
               {step === 'link'
-                ? 'Сначала привяжи Telegram в боте, потом подпишись на канал'
-                : 'Подпишись на канал и нажми «Проверить»'}
+                ? t('Сначала привяжи Telegram в боте, потом подпишись на канал')
+                : t('Подпишись на канал и нажми «Проверить»')}
             </span>
           </span>
           <span className="sh-prize-n">+{view.amount}</span>
           {step === 'link' ? (
             <button className="btn sm primary" data-track="tg_reward_link" onClick={() => open(telegramLink(view.botUrl))}>
-              Привязать Telegram
+              {t('Привязать Telegram')}
             </button>
           ) : (
             <>
               <button className="btn sm" data-track="tg_reward_channel" onClick={() => open(telegramLink(view.channelUrl))}>
-                Подписаться
+                {t('Подписаться')}
               </button>
               <button className="btn sm primary" disabled={busy} data-track="tg_reward_claim" onClick={onClaim}>
-                Проверить
+                {t('Проверить')}
               </button>
             </>
           )}

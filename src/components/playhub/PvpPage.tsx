@@ -9,17 +9,19 @@ import { PVP_VERSIONS, fpsMods, loaderTitle } from '../../lib/versionBuild'
 import type { FpsMod } from '../../lib/versionBuild'
 import { modeIcon } from './modeIcon'
 import { PvpArena } from './PvpArena'
+import { t, useT } from '../../i18n'
 
 const FEATURES: { icon: string; title: string; line: string }[] = [
-  { icon: 'i-grid', title: 'HUD-модули', line: 'FPS, CPS, пинг, броня, эффекты, комбо' },
-  { icon: 'i-edit', title: 'Редактор на Right Shift', line: 'Двигай и настраивай модули прямо в игре' },
-  { icon: 'i-arrow-r', title: 'Переключение бега', line: 'Бег без зажатой клавиши' },
-  { icon: 'i-search', title: 'Приближение', line: 'Зум на клавишу, глубже колесом' },
-  { icon: 'i-flame', title: 'Нажатия клавиш', line: 'WASD, кнопки мыши и CPS на экране' },
-  { icon: 'i-shield', title: 'Анимации 1.7', line: 'Блок мечом и старый взмах' },
+  { icon: 'i-grid', get title() { return t('HUD-модули') }, get line() { return t('FPS, CPS, пинг, броня, эффекты, комбо') } },
+  { icon: 'i-edit', get title() { return t('Редактор на Right Shift') }, get line() { return t('Двигай и настраивай модули прямо в игре') } },
+  { icon: 'i-arrow-r', get title() { return t('Переключение бега') }, get line() { return t('Бег без зажатой клавиши') } },
+  { icon: 'i-search', get title() { return t('Приближение') }, get line() { return t('Зум на клавишу, глубже колесом') } },
+  { icon: 'i-flame', get title() { return t('Нажатия клавиш') }, get line() { return t('WASD, кнопки мыши и CPS на экране') } },
+  { icon: 'i-shield', get title() { return t('Анимации 1.7') }, get line() { return t('Блок мечом и старый взмах') } },
 ]
 
 export function PvpPage({ busy, onPlay, arena = true }: { busy: boolean; onPlay: (version: string) => void; arena?: boolean }) {
+  const t = useT()
   const [version, setVersion] = useState<string>(PVP_VERSIONS[0])
   const [mods, setMods] = useState<FpsMod[] | null | undefined>(undefined)
   const [hudOn, setHudOn] = useState(true)
@@ -55,7 +57,7 @@ export function PvpPage({ busy, onPlay, arena = true }: { busy: boolean; onPlay:
     setSaving(true)
     setPvpHudDefault(next)
       .then(() => setHudOn(next))
-      .catch((e) => showToast('Настройка не сохранилась: ' + String(e) + '. Попробуй ещё раз.', 'error'))
+      .catch((e) => showToast(t('Настройка не сохранилась: {error}. Попробуй ещё раз.', { error: String(e) }), 'error'))
       .finally(() => setSaving(false))
   }
 
@@ -81,7 +83,7 @@ export function PvpPage({ busy, onPlay, arena = true }: { busy: boolean; onPlay:
           </span>
         ) : null}
         <div className="ph-mode-title">
-          <h1>PvP-клиент для любых серверов</h1>
+          <h1>{t('PvP-клиент для любых серверов')}</h1>
           <span className="ph-mode-meta">{loader + ' · ' + version + (boost ? ' · Boost FPS' : '')}</span>
         </div>
       </header>
@@ -89,16 +91,16 @@ export function PvpPage({ busy, onPlay, arena = true }: { busy: boolean; onPlay:
       <div className="pp-facts">
         <div className="pp-fact">
           <b>{version}</b>
-          <span>версия</span>
+          <span>{t('версия')}</span>
         </div>
         <div className="pp-fact">
           <b>{loader}</b>
-          <span>загрузчик</span>
+          <span>{t('загрузчик')}</span>
         </div>
         {boost ? (
           <div className="pp-fact">
             <b>{ready.length}</b>
-            <span>FPS-модов</span>
+            <span>{t('FPS-модов')}</span>
           </div>
         ) : null}
       </div>
@@ -106,7 +108,7 @@ export function PvpPage({ busy, onPlay, arena = true }: { busy: boolean; onPlay:
       <div className="pp-cols">
         <div className="pp-main">
           <section className="pp-block">
-            <h2>Что внутри</h2>
+            <h2>{t('Что внутри')}</h2>
             <div className="vp-mods">
               {FEATURES.map((f) => (
                 <div className="vp-mod" key={f.title}>
@@ -151,7 +153,7 @@ export function PvpPage({ busy, onPlay, arena = true }: { busy: boolean; onPlay:
         </div>
 
         <aside className="pp-buy">
-          <div className="segs" role="group" aria-label="Версия Minecraft">
+          <div className="segs" role="group" aria-label={t('Версия Minecraft')}>
             {PVP_VERSIONS.map((v) => (
               <button
                 key={v}
@@ -174,14 +176,14 @@ export function PvpPage({ busy, onPlay, arena = true }: { busy: boolean; onPlay:
             disabled={busy}
             onClick={() => onPlay(version)}
           >
-            <Icon id="i-play" /> {busy ? 'Готовим…' : 'Играть'}
+            <Icon id="i-play" /> {busy ? t('Готовим…') : t('Играть')}
           </button>
           <label className="ph-fps vp-fps" data-track="pvp_hud_default">
             <Icon id="i-grid" />
-            <span>Модули PvP включены по умолчанию</span>
-            <Toggle on={hudOn} busy={saving} onChange={flipHud} label="Модули PvP включены по умолчанию" />
+            <span>{t('Модули PvP включены по умолчанию')}</span>
+            <Toggle on={hudOn} busy={saving} onChange={flipHud} label={t('Модули PvP включены по умолчанию')} />
           </label>
-          <span className="pp-legal">Не продукт Mojang</span>
+          <span className="pp-legal">{t('Не продукт Mojang')}</span>
         </aside>
       </div>
     </div>

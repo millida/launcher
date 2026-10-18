@@ -2,6 +2,7 @@ import { Icon } from './Icon'
 import { useUi } from '../state/ui'
 import { cancelPrelaunch } from '../lib/launch'
 import { prelaunchPct, prelaunchStageName } from '../lib/launchView'
+import { useT } from '../i18n'
 
 export function Toast() {
   const toastMsg = useUi((s) => s.toastMsg)
@@ -31,6 +32,7 @@ export function Toast() {
 /// The lobby shows launch progress on the Play button itself; on every other
 /// screen it lives here, in the same shell as the other notices.
 export function LaunchToast() {
+  const t = useT()
   const pl = useUi((s) => s.prelaunch)
   const lobby = useUi((s) => s.screen === 'play')
   if (!pl.open || lobby) return null
@@ -40,14 +42,14 @@ export function LaunchToast() {
       <span className="spin" aria-hidden="true"></span>
       <span className="launch-toast-body">
         <span className="launch-toast-row">
-          <span className="launch-toast-name">{prelaunchStageName(pl)}</span>
+          <span className="launch-toast-name">{t(prelaunchStageName(pl))}</span>
           <b className="launch-toast-pct">{pct + '%'}</b>
         </span>
         <span className="launch-toast-bar">
           <i style={{ width: pct + '%' }} />
         </span>
       </span>
-      <button className="launch-toast-x" aria-label="Отменить запуск" data-track="cancel_launch" onClick={cancelPrelaunch}>
+      <button className="launch-toast-x" aria-label={t('Отменить запуск')} data-track="cancel_launch" onClick={cancelPrelaunch}>
         <Icon id="i-x" />
       </button>
     </div>

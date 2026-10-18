@@ -13,6 +13,7 @@ import { RARITY_NAME_SHORT, RARITY_TONE, rarityRank, shardWord, word } from '../
 import { dealOrder, finalRarity, ladderAt, openOfRewards, revealLadder } from './revealLadder'
 import { showToast } from '../../state/ui'
 import '../../styles/pixel/reveal.css'
+import { intlTag, useT } from '../../i18n'
 
 /**
  * Открытие сундука (06.10.2026, «как в Brawl Stars»), общее для всех ящиков
@@ -98,7 +99,7 @@ function BigReward({ r }: { r: CaseReward }) {
   return (
     <div className="rv2-cash" style={{ ['--sh-tone' as string]: rewardTone(r) } as CSSProperties}>
       <span className="rv2-cash-pic">{r.kind === 'rubies' ? <Ruby size={150} /> : <Shard size={150} />}</span>
-      <b className="rv2-cash-n">+{n.toLocaleString('ru-RU')}</b>
+      <b className="rv2-cash-n">+{n.toLocaleString(intlTag())}</b>
       <span className="rv2-cash-w">{r.kind === 'rubies' ? word(n) : shardWord(n)}</span>
     </div>
   )
@@ -106,6 +107,7 @@ function BigReward({ r }: { r: CaseReward }) {
 
 /** Карточка награды: картинка на плашке, слово редкости, имя или сумма. */
 export function RewardCard({ r, big }: { r: CaseReward; big?: boolean }) {
+  const t = useT()
   const tone = rewardTone(r)
   return (
     <div className={'rv2-card' + (big ? ' is-big' : '')} style={{ ['--sh-tone' as string]: tone } as CSSProperties} data-rar={r.item?.rarity}>
@@ -125,15 +127,15 @@ export function RewardCard({ r, big }: { r: CaseReward; big?: boolean }) {
       <b className="rv2-name">
         {r.item
           ? r.item.name
-          : '+' + (r.amount ?? 0).toLocaleString('ru-RU') + ' ' + (r.kind === 'rubies' ? word(r.amount ?? 0) : shardWord(r.amount ?? 0))}
+          : '+' + (r.amount ?? 0).toLocaleString(intlTag()) + ' ' + (r.kind === 'rubies' ? word(r.amount ?? 0) : shardWord(r.amount ?? 0))}
       </b>
-      {r.item && r.kind === 'cheap' && r.amount ? <span className="rv2-plus">+{r.amount.toLocaleString('ru-RU')}</span> : null}
+      {r.item && r.kind === 'cheap' && r.amount ? <span className="rv2-plus">+{r.amount.toLocaleString(intlTag())}</span> : null}
       {r.kind === 'fragments' && r.frag ? (
         <span className="rv2-frag">
           <FragBar have={r.frag.have} need={r.frag.need} rarity={r.item?.rarity} gain={r.amount} />
         </span>
       ) : null}
-      {r.dup ? <span className="rv2-dup">повтор</span> : null}
+      {r.dup ? <span className="rv2-dup">{t('повтор')}</span> : null}
     </div>
   )
 }
@@ -179,6 +181,7 @@ export function CaseReveal({
   onClose: () => void
   onWear: (item: ItemRef) => void
 }) {
+  const t = useT()
   const calm = reduced()
   const need = deal ? Math.max(base, 4) : base
   const [phase, setPhase] = useState<Phase>('hit')
@@ -275,8 +278,8 @@ export function CaseReveal({
   const waiting = phase === 'hit' && hits >= need
   useEffect(() => {
     if (!waiting || opens) return
-    const t = window.setTimeout(() => alive.current && showToast('Связь медленная — ждём ответ'), SLOW_ANSWER_MS)
-    return () => window.clearTimeout(t)
+    const timer = window.setTimeout(() => alive.current && showToast(t('Связь медленная — ждём ответ')), SLOW_ANSWER_MS)
+    return () => window.clearTimeout(timer)
   }, [waiting, opens])
 
   const dealDone = deal && !!opens && flipped >= opens.length
@@ -402,22 +405,22 @@ export function CaseReveal({
       ref={root$}
       className={'rv2 rv2-ph-' + phase + (deal ? ' is-multi' : '') + (lvl ? ' has-lvl' : '')}
       role="dialog"
-      aria-label={'Открытие: ' + title}
+      aria-label={t('Открытие: {name}', { name: title })}
       style={{ ['--box' as string]: color, ['--rw-tone' as string]: color, ['--glow' as string]: glow, ['--flash' as string]: flashTone, ['--lvl' as string]: lvlTone } as CSSProperties}
       onClick={phase === 'hit' ? hit : phase === 'card' ? next : phase === 'deal' && !dealDone ? flipNext : undefined}
     >
       <Rays className="rv2-rays on" />
       {phase === 'sum' || dealDone ? (
-        <button className="btn sm ghost rv2-skip" aria-label="Закрыть" data-track="case_close" onClick={onClose}>
+        <button className="btn sm ghost rv2-skip" aria-label={t('Закрыть')} data-track="case_close" onClick={onClose}>
           <Icon id="i-x" />
         </button>
       ) : phase === 'deal' ? (
         <button className="btn sm primary rv2-skip" data-track="case_flip_all" onClick={(e) => (e.stopPropagation(), flipAll())}>
-          Открыть все
+          {t('Открыть все')}
         </button>
       ) : (
         <button className="btn sm secondary rv2-skip" data-track="case_skip" onClick={(e) => (e.stopPropagation(), skip())} disabled={!opens}>
-          Пропустить
+          {t('Пропустить')}
         </button>
       )}
 
@@ -442,7 +445,7 @@ export function CaseReveal({
                   {RARITY_NAME_SHORT[lvl] + (step === 0 && hits < need ? '+' : '')}
                 </b>
               ) : null}
-              <span className={'rv2-pips' + (waiting ? ' wait' : '')} aria-label={waiting ? 'Открываем' : 'Ударов: ' + hits + ' из ' + need}>
+              <span className={'rv2-pips' + (waiting ? ' wait' : '')} aria-label={waiting ? t('Открываем') : t('Ударов: {n} из {total}', { n: hits, total: need })}>
                 {Array.from({ length: need }, (_, i) => (
                   <i key={i} className={i < hits ? 'on' : ''} />
                 ))}
@@ -451,7 +454,7 @@ export function CaseReveal({
                   (владелец 13.10.2026: «кейс завис на этом моменте»). */}
               {waiting ? null : (
                 <b key={'t' + kick} className="rv2-tap">
-                  Жми!
+                  {t('Жми!')}
                 </b>
               )}
             </>
@@ -461,7 +464,7 @@ export function CaseReveal({
               <Burst n={deal ? 72 : 48} spread={deal ? 640 : 520} seed={99} />
             </>
           ) : left > 0 ? (
-            <span className="rv2-left" aria-label={'Осталось наград: ' + left}>
+            <span className="rv2-left" aria-label={t('Осталось наград: {n}', { n: left })}>
               {left}
             </span>
           ) : null}
@@ -476,7 +479,7 @@ export function CaseReveal({
           <div key={shown} className="rv2-slam">
             <BigReward r={cur} />
           </div>
-          <b className="rv2-tap is-small">Жми</b>
+          <b className="rv2-tap is-small">{t('Жми')}</b>
         </div>
       ) : null}
 
@@ -499,7 +502,7 @@ export function CaseReveal({
           <span className="rv2-acts">
             {items.length ? (
               <button className="btn lg primary" data-track="case_wear" onClick={() => onWear(items[0]!)}>
-                Надеть
+                {t('Надеть')}
               </button>
             ) : null}
             {again ? (
@@ -508,7 +511,7 @@ export function CaseReveal({
               </button>
             ) : (
               <button className="btn lg secondary" data-track="case_done" onClick={onClose}>
-                Готово
+                {t('Готово')}
               </button>
             )}
           </span>
@@ -550,6 +553,7 @@ function Deal({
   onClose: () => void
   onWear: (item: ItemRef) => void
 }) {
+  const t = useT()
   const bestAt = order[order.length - 1]!
   const best = opens[bestAt]!
   const bestRank = best.kind === 'item' ? rarityRank(best.rarity ?? best.rewards[0]?.item?.rarity) : -1
@@ -593,7 +597,7 @@ function Deal({
               </div>
               {done && r.item && (r.kind === 'item' || r.kind === 'cheap') ? (
                 <button className="btn sm secondary rv3-wear" data-track="case_wear" onClick={() => onWear(r.item!)}>
-                  Надеть
+                  {t('Надеть')}
                 </button>
               ) : null}
             </div>
@@ -606,12 +610,12 @@ function Deal({
             <span className="rv3-cash">
               {rubies ? (
                 <span>
-                  <Ruby size={20} />+{rubies.toLocaleString('ru-RU')}
+                  <Ruby size={20} />+{rubies.toLocaleString(intlTag())}
                 </span>
               ) : null}
               {shards ? (
                 <span>
-                  <Shard size={20} />+{shards.toLocaleString('ru-RU')}
+                  <Shard size={20} />+{shards.toLocaleString(intlTag())}
                 </span>
               ) : null}
             </span>
@@ -623,12 +627,12 @@ function Deal({
               </button>
             ) : null}
             <button className="btn lg secondary" data-track="case_done" onClick={onClose}>
-              Готово
+              {t('Готово')}
             </button>
           </span>
         </>
       ) : (
-        <b className="rv2-tap is-small">Жми</b>
+        <b className="rv2-tap is-small">{t('Жми')}</b>
       )}
     </div>
   )

@@ -1,4 +1,6 @@
 import type { PackQuest } from '../../lib/rubies'
+import { plural } from '../../lib/format'
+import { t } from '../../i18n'
 
 export type QuestState = { kind: 'owned' } | { kind: 'claimed' } | { kind: 'claim' } | { kind: 'play'; left: number }
 
@@ -15,12 +17,7 @@ export function questPct(quest: PackQuest): number {
 }
 
 export function minuteWord(count: number): string {
-  const tens = Math.abs(count) % 100
-  const ones = tens % 10
-  if (tens > 10 && tens < 20) return 'минут'
-  if (ones === 1) return 'минута'
-  if (ones >= 2 && ones <= 4) return 'минуты'
-  return 'минут'
+  return plural(Math.abs(count), t('минута'), t('минуты'), t('минут'))
 }
 
 export function questsToShow(list: unknown): PackQuest[] {

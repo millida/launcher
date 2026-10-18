@@ -97,9 +97,27 @@ static ETAG_CACHE: std::sync::Mutex<std::collections::BTreeMap<String, Tagged>> 
 
 /// The account is part of the key: a personal answer cached for one session
 /// must never be replayed to the next one signed in on the same launcher.
-fn etag_key(token: Option<&String>, url: &str) -> String {
+/// The market is part of it too: the same rating address answers with another
+/// catalogue for another market.
+fn etag_key(token: Option<&String>, url: &str, market: Option<&str>) -> String {
     let account = token.map(|t| sha256_hex(t.as_bytes())).unwrap_or_default();
-    format!("{}\n{}", account, url)
+    match market {
+        Some(m) => format!("{}\n{}\n{}", account, m, url),
+        None => format!("{}\n{}", account, url),
+    }
+}
+
+/// The API splits the server rating by market and reads it from this header; a
+/// request without it is answered from the Russian catalogue.
+const MARKET_HEADER: &str = "X-Market";
+
+/// The webview names a market, never a header: only the known values pass.
+pub fn market_header(raw: Option<&str>) -> Result<Option<&'static str>, String> {
+    match raw.map(str::trim).unwrap_or_default() {
+        "" | "RU" => Ok(None),
+        "EN" => Ok(Some("EN")),
+        _ => Err("bad market".into()),
+    }
 }
 
 fn remembered(key: &str) -> Option<Tagged> {
@@ -191,6 +209,16 @@ pub async fn millida_api(
     body: Option<Value>,
     token: Option<String>,
 ) -> Result<Value, String> {
+    millida_api_in(path, method, body, token, None).await
+}
+
+pub async fn millida_api_in(
+    path: String,
+    method: String,
+    body: Option<Value>,
+    token: Option<String>,
+    market: Option<&'static str>,
+) -> Result<Value, String> {
     let resolved = api_url(&path)?;
     let url = resolved.as_str();
     let m = method.to_uppercase();
@@ -198,7 +226,7 @@ pub async fn millida_api(
         return Err("bad method".into());
     }
     let token = token.filter(|t| !t.is_empty());
-    let conditional = (m == "GET").then(|| etag_key(token.as_ref(), url));
+    let conditional = (m == "GET").then(|| etag_key(token.as_ref(), url, market));
     let known = conditional.as_deref().and_then(remembered);
     let build_on = |c: reqwest::Client| {
         let mut req = match m.as_str() {
@@ -211,6 +239,9 @@ pub async fn millida_api(
         // The Millida account token is added to the header. The address above is always api.millida.net.
         if let Some(t) = token.as_ref() {
             req = req.header("Authorization", format!("Bearer {}", t));
+        }
+        if let Some(mk) = market {
+            req = req.header(MARKET_HEADER, mk);
         }
         if let Some(b) = body.as_ref() {
             req = req.json(b);
@@ -433,14 +464,23 @@ async fn refresh_session(used: Option<String>) -> Refreshed {
 /// The only way the launcher talks to the Millida API as the signed-in user:
 /// the token is read from the vault here and never leaves the core.
 pub async fn millida_api_auth(path: String, method: String, body: Option<Value>) -> Result<Value, String> {
+    millida_api_auth_in(path, method, body, None).await
+}
+
+pub async fn millida_api_auth_in(
+    path: String,
+    method: String,
+    body: Option<Value>,
+    market: Option<&'static str>,
+) -> Result<Value, String> {
     let token = millida_token();
-    let first = millida_api(path.clone(), method.clone(), body.clone(), token.clone()).await;
+    let first = millida_api_in(path.clone(), method.clone(), body.clone(), token.clone(), market).await;
     let Err(e) = first else { return first };
     if e != "http 401" {
         return Err(e);
     }
     match refresh_session(token).await {
-        Refreshed::Token(fresh) => millida_api(path, method, body, Some(fresh)).await,
+        Refreshed::Token(fresh) => millida_api_in(path, method, body, Some(fresh), market).await,
         Refreshed::Dead => Err(UNAUTHORIZED.into()),
         Refreshed::Unavailable => Err(e),
     }
@@ -566,7 +606,7 @@ pub async fn millida_upload_auth(
 
 pub fn millida_forget_session() -> Result<(), String> {
     set_unsaved_pair(None);
-    for key in [SEC_MILLIDA, SEC_MILLIDA_REFRESH, SEC_MILLIDA_LEGACY] {
+    for key in [SEC_MILLIDA, SEC_MILLIDA_REFRESH, SEC_MILLIDA_LEGACY, SEC_MILLIDA_GAME_PROFILE] {
         crate::secrets::delete(key)?;
     }
     Ok(())
@@ -650,7 +690,7 @@ pub async fn millida_login_poll(device_code: String) -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        api_url, etag_key, login_poll_answer, refresh_on_cooldown, remember_in, repeatable, webview_path_allowed, set_refresh_cooldown,
+        api_url, etag_key, login_poll_answer, market_header, refresh_on_cooldown, remember_in, repeatable, webview_path_allowed, set_refresh_cooldown,
         verdict_for, RefreshVerdict, Tagged, ETAG_CACHE_BUDGET, MILLIDA_API,
     };
     use std::collections::BTreeMap;
@@ -693,7 +733,7 @@ mod tests {
         let alice = "token-alice".to_string();
         let bob = "token-bob".to_string();
         let mut cache: BTreeMap<String, Tagged> = BTreeMap::new();
-        remember_in(&mut cache, etag_key(Some(&alice), url), "\"v1\"".into(), "{\"items\":[]}".into());
+        remember_in(&mut cache, etag_key(Some(&alice), url, None), "\"v1\"".into(), "{\"items\":[]}".into());
         // (account, address, expected etag, why this case is pinned)
         let cases: [(Option<&String>, &str, Option<&str>, &str); 4] = [
             (Some(&alice), url, Some("\"v1\""), "the same session asks again and gets a 304 instead of 1.4 MB"),
@@ -702,8 +742,28 @@ mod tests {
             (Some(&alice), "https://api.millida.net/v2/cosmetics/owned", None, "one address never answers for another"),
         ];
         for (account, address, expected, why) in cases {
-            let got = cache.get(&etag_key(account, address)).map(|t| t.etag.as_str());
+            let got = cache.get(&etag_key(account, address, None)).map(|t| t.etag.as_str());
             assert_eq!(got, expected, "{}", why);
+        }
+        assert!(
+            !cache.contains_key(&etag_key(Some(&alice), url, Some("EN"))),
+            "a rating cached for the Russian market must never answer for the English one",
+        );
+    }
+
+    type MarketCase<'a> = (Option<&'a str>, Result<Option<&'a str>, ()>, &'a str);
+
+    #[test]
+    fn only_known_markets_reach_the_header() {
+        let cases: [MarketCase; 5] = [
+            (None, Ok(None), "no market keeps the request exactly as before"),
+            (Some("RU"), Ok(None), "Russian is the API default and needs no header"),
+            (Some("EN"), Ok(Some("EN")), "the English catalogue is asked for by its header"),
+            (Some("en\r\nX-Evil: 1"), Err(()), "a webview value must never become a header of its own"),
+            (Some("DE"), Err(()), "an unknown market is refused rather than silently served Russian"),
+        ];
+        for (input, want, why) in cases {
+            assert_eq!(market_header(input).map_err(|_| ()), want, "{:?}: {}", input, why);
         }
     }
 

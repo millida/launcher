@@ -26,6 +26,7 @@ import { openCfProject, openMillidaProject, openProject } from '../state/project
 import { DEMO_USER } from '../lib/demo'
 import { loadPackView } from './premium/packView'
 import { modpackVersionFor } from '../lib/modpackVersion'
+import { t, useT } from '../i18n'
 
 /** Версия сборки на проверке — одна установка для строки каталога и страницы сборки. */
 export function installReviewCandidate(slug: string, title: string, version: string) {
@@ -34,13 +35,13 @@ export function installReviewCandidate(slug: string, title: string, version: str
     // по адресу сборки, и свой ключ оставил бы полоску неподвижной.
     key: keyCatalogPack(slug),
     title: title + ' ' + version,
-    running: 'Скачивание…',
+    running: t('Скачивание…'),
     run: () => installPackCandidate(slug),
     onError: (e) => showToast(String(e), 'error'),
     onDone: (p) => {
       useProfiles.getState().setSelected(p.name)
       void useProfiles.getState().refresh()
-      showToast('Версия на проверке установлена — запусти её, и мы запишем результат', 'ok')
+      showToast(t('Версия на проверке установлена — запусти её, и мы запишем результат'), 'ok')
     },
   })
 }
@@ -53,6 +54,7 @@ export function installReviewCandidate(slug: string, title: string, version: str
 export function useModAction(h: ModHit, game?: string | null, kind?: string) {
   // Вид берётся у карточки, когда он известен: в ленте «Все» каталога рядом
   // стоят мод, шейдер и карта, и общий modTab положил бы шейдер в папку модов.
+  const t = useT()
   const storeTab = useMods((s) => s.modTab)
   const modTab = kind || storeTab
   const installedIds = useMods((s) => s.installedIds)
@@ -81,7 +83,7 @@ export function useModAction(h: ModHit, game?: string | null, kind?: string) {
   const done = installed || !!doneKeys[key]
   // Сборку ставят, а не добавляют: «Добавить» — про мод, который кладут в
   // существующую сборку, и на готовой сборке читается как другое действие.
-  const idle = done ? 'Установлено' : modTab === 'modpack' || h.packSlug ? 'Установить' : 'Добавить'
+  const idle = done ? t('Установлено') : modTab === 'modpack' || h.packSlug ? t('Установить') : t('Добавить')
   const running = task && task.state === 'run'
   const text = running ? (task.pct > 0 ? task.label + ' ' + Math.round(task.pct) + '%' : task.label) : idle
 
@@ -91,23 +93,20 @@ export function useModAction(h: ModHit, game?: string | null, kind?: string) {
     runInstall({
       key: keyContent('cf', prof, 'world', h.cfid!),
       title: h.title || String(h.cfid),
-      running: force ? 'Ставим всё равно…' : 'Скачивание…',
+      running: force ? t('Ставим всё равно…') : t('Скачивание…'),
       run: () => cfInstallWorld(h.cfid!, prof, force),
       keepOpen: (r) => !r.folder,
       onDone: (r) => {
         if (!r.folder) {
           const pr = useProfiles.getState().profiles.find((x) => x.name === prof)
           void uiConfirm(
-            'Карта «' +
-              h.title +
-              '» рассчитана на ' +
-              (r.mismatch || 'другие версии') +
-              ', а у сборки «' +
-              prof +
-              '» версия ' +
-              ((pr && pr.version) || '—') +
-              '. Мир может не открыться или сломаться. Поставить всё равно?',
-            { title: 'Версия не совпадает', confirmLabel: 'Поставить', danger: false },
+            t('Карта «{map}» рассчитана на {wanted}, а у сборки «{pack}» версия {version}. Мир может не открыться или сломаться. Поставить всё равно?', {
+              map: h.title,
+              wanted: r.mismatch || t('другие версии'),
+              pack: prof,
+              version: (pr && pr.version) || '—',
+            }),
+            { title: t('Версия не совпадает'), confirmLabel: t('Поставить'), danger: false },
           ).then((ok) => {
             if (ok) installWorld(prof, true)
           })
@@ -119,7 +118,7 @@ export function useModAction(h: ModHit, game?: string | null, kind?: string) {
           source: 'curseforge',
         })
         installed()
-        showToast('Карта «' + r.folder + '» → «' + prof + '»: заходи в одиночную игру', 'ok', 'install')
+        showToast(t('Карта «{map}» → «{pack}»: заходи в одиночную игру', { map: r.folder ?? '', pack: prof }), 'ok', 'install')
       },
     })
   }
@@ -130,8 +129,10 @@ export function useModAction(h: ModHit, game?: string | null, kind?: string) {
     if (!done) return false
     showToast(
       modTab === 'modpack'
-        ? 'Сборка уже установлена — открой карточку, чтобы выбрать другую версию'
-        : 'Уже в сборке' + (target ? ' «' + target + '»' : '') + ' — версию можно сменить в карточке',
+        ? t('Сборка уже установлена — открой карточку, чтобы выбрать другую версию')
+        : target
+          ? t('Уже в сборке «{pack}» — версию можно сменить в карточке', { pack: target })
+          : t('Уже в сборке — версию можно сменить в карточке'),
       'ok',
       false,
     )
@@ -141,7 +142,7 @@ export function useModAction(h: ModHit, game?: string | null, kind?: string) {
   const onCf = () => {
     if (sayInstalled()) return
     if (!hasTauri()) {
-      showToast('CurseForge доступен в приложении')
+      showToast(t('CurseForge доступен в приложении'))
       return
     }
     if (modTab === 'world') {
@@ -169,7 +170,7 @@ export function useModAction(h: ModHit, game?: string | null, kind?: string) {
           installed()
           useProfiles.getState().setSelected(p.name)
           void useProfiles.getState().refresh()
-          showToast('Сборка «' + p.name + '» готова — жми «Играть»', 'ok', 'achievement')
+          showToast(t('Сборка «{name}» готова — жми «Играть»', { name: p.name }), 'ok', 'achievement')
         },
       })
       return
@@ -198,8 +199,8 @@ export function useModAction(h: ModHit, game?: string | null, kind?: string) {
     // сборка сразу показывает то, что увидит человек без доступа, — баннер.
     if (h.packSlug && DEMO_USER) {
       void loadPackView(h.packSlug)
-        .then((v) => (v && v.accessRequired ? setKeyFor('') : showToast('Установка доступна в приложении')))
-        .catch(() => showToast('Установка доступна в приложении'))
+        .then((v) => (v && v.accessRequired ? setKeyFor('') : showToast(t('Установка доступна в приложении'))))
+        .catch(() => showToast(t('Установка доступна в приложении')))
       return
     }
     if (h.slug && hasTauri() && modTab === 'modpack') {
@@ -208,7 +209,7 @@ export function useModAction(h: ModHit, game?: string | null, kind?: string) {
       runInstall({
         key: keyMrModpack(h.slug),
         title: h.title || h.slug,
-        running: 'Скачивание…',
+        running: t('Скачивание…'),
         run: () => (game ? modpackVersionFor(h.slug!, game).then((id) => installModpackVersion(h.slug!, id)) : installModpack(h.slug!)),
         onDone: (p) => {
           trackTimed('modpack_install', modpackStartedAt, {
@@ -221,12 +222,12 @@ export function useModAction(h: ModHit, game?: string | null, kind?: string) {
           installed()
           useProfiles.getState().setSelected(p.name)
           void useProfiles.getState().refresh()
-          showToast('Сборка «' + p.name + '» готова к запуску', 'ok', 'achievement')
+          showToast(t('Сборка «{name}» готова к запуску', { name: p.name }), 'ok', 'achievement')
         },
       })
       return
     }
-    showToast('Установка доступна в приложении')
+    showToast(t('Установка доступна в приложении'))
   }
 
   const [keyFor, setKeyFor] = useState<string | null>(null)
@@ -241,7 +242,7 @@ export function useModAction(h: ModHit, game?: string | null, kind?: string) {
     runInstall({
       key: keyCatalogPack(h.packSlug),
       title: h.title || h.packSlug,
-      running: 'Скачивание…',
+      running: t('Скачивание…'),
       run: () => installCatalogPack(h.packSlug!),
       onError: (e) => {
         const text = String(e)
@@ -262,7 +263,7 @@ export function useModAction(h: ModHit, game?: string | null, kind?: string) {
         installed()
         useProfiles.getState().setSelected(p.name)
         void useProfiles.getState().refresh()
-        showToast('Сборка «' + p.name + '» готова к запуску', 'ok', 'achievement')
+        showToast(t('Сборка «{name}» готова к запуску', { name: p.name }), 'ok', 'achievement')
       },
     })
   }
@@ -312,6 +313,7 @@ export function useModAction(h: ModHit, game?: string | null, kind?: string) {
 }
 
 export function ModRow({ h }: { h: ModHit }) {
+  const t = useT()
   const a = useModAction(h)
   return (
     <>
@@ -328,7 +330,7 @@ export function ModRow({ h }: { h: ModHit }) {
       {a.candidate && h.packCandidate ? (
         // Версия на проверке — только у проверяющих (ветка main, ef1c98f).
         <button className="btn sm secondary" onClick={a.candidate}>
-          Проверить {h.packCandidate.version}
+          {t('Проверить {version}', { version: h.packCandidate.version })}
         </button>
       ) : null}
     </>

@@ -1,4 +1,5 @@
 import type { ChestDrop, ChestOpenResult, ChestTier, Rarity } from '../../lib/rubies'
+import { intlTag, t } from '../../i18n'
 
 /**
  * Что лежит в сундуке и как его открывают (схема 24.09.2026, документ
@@ -91,7 +92,7 @@ export const fragmentTopUp = (r: Rarity, have: number) => {
 
 /** Шанс в базисных пунктах → «4,5 %», «0,02 %». */
 export const pctOfBp = (bp: number) =>
-  (bp / 100).toLocaleString('ru-RU', { maximumFractionDigits: bp < 10 ? 2 : 1 }) + ' %'
+  (bp / 100).toLocaleString(intlTag(), { maximumFractionDigits: bp < 10 ? 2 : 1 }) + ' %'
 
 /** Строка шансов службы → базисные пункты: новая шлёт bp, старая — промилле. */
 export const bpOf = (c: { permille: number; bp?: number }) => c.bp ?? Math.round(c.permille * 10)
@@ -128,13 +129,13 @@ export const PITY_AFTER = CHEST_CONFIG.pityAfter
 export const PITY_LEGEND_AFTER = CHEST_CONFIG.pityLegendAfter
 
 export const RARITY_NAME: Record<Rarity, string> = {
-  COMMON: 'Обычная',
-  UNCOMMON: 'Необычная',
-  RARE: 'Редкая',
-  EPIC: 'Эпическая',
-  LEGENDARY: 'Легендарная',
-  MYTHIC: 'Мифическая',
-  RELIC: 'Невозможная',
+  get COMMON() { return t('Обычная') },
+  get UNCOMMON() { return t('Необычная') },
+  get RARE() { return t('Редкая') },
+  get EPIC() { return t('Эпическая') },
+  get LEGENDARY() { return t('Легендарная') },
+  get MYTHIC() { return t('Мифическая') },
+  get RELIC() { return t('Невозможная') },
 }
 
 export const isTier = (t: unknown): t is ChestTier => typeof t === 'string' && t in CHEST_DROPS

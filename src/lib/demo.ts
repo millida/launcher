@@ -97,6 +97,22 @@ async function demoSkinUrl(): Promise<string | null> {
   return apiBase() + '/heads/skin/MHF_Steve'
 }
 
+/// `&skin=hd` wears a self-uploaded 128×128 skin, so Play without PLUS hits the HD lock;
+/// `&skin=hd-order` wears the same skin as a paid order, which must launch as usual.
+function demoHdSkin(): { url: string; source: string } | null {
+  const mode = new URLSearchParams(location.search).get('skin')
+  if (mode !== 'hd' && mode !== 'hd-order') return null
+  const canvas = document.createElement('canvas')
+  canvas.width = 128
+  canvas.height = 128
+  const ctx = canvas.getContext('2d')
+  if (ctx) {
+    ctx.fillStyle = 'gray'
+    ctx.fillRect(0, 0, 128, 128)
+  }
+  return { url: canvas.toDataURL('image/png'), source: mode === 'hd-order' ? 'order' : 'upload' }
+}
+
 const DAY = 86_400_000
 const ago = (ms: number) => Date.now() - ms
 const iso = (ms: number) => new Date(ms).toISOString()
@@ -996,14 +1012,22 @@ const ROUTES: [RegExp, Handler][] = [
     publicSlug: 'slavamine',
     nameConflict: false,
   })],
-  [/^\/launcher\/wardrobe$/, async () => ({
+  [/^\/launcher\/wardrobe$/, async () => {
+    const hd = demoHdSkin()
+    if (hd)
+      return {
+        items: [{ id: 'w-hd', kind: 'skin', name: 'HD', url: hd.url, model: 'classic', source: hd.source, createdAt: iso(ago(40 * DAY)) }],
+        active: { skinUrl: hd.url, capeUrl: null, model: 'classic' },
+      }
+    return {
     items: [
       { id: 'w-1', kind: 'skin', name: 'Мой основной', url: await demoSkinUrl(), model: 'classic', source: 'upload', createdAt: iso(ago(30 * DAY)) },
       // Второй — тонкие руки: на нём видно, что кнопка «Удалить» не уходит под руку.
       { id: 'w-2', kind: 'skin', name: 'Лёгкий', url: await demoSkinUrl(), model: 'slim', source: 'upload', createdAt: iso(ago(12 * DAY)) },
     ],
     active: { skinUrl: await demoSkinUrl(), capeUrl: null, model: 'classic' },
-  })],
+    }
+  }],
   [/^\/launcher\/wardrobe\//, async () => ({ skinUrl: await demoSkinUrl(), capeUrl: null, model: 'classic' })],
   [/^\/launcher\/game-texture$/, async () => ({ skinUrl: await demoSkinUrl(), capeUrl: null, model: 'classic' })],
   [/^\/launcher\/rewards$/, () => ({

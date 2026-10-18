@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Icon } from '../components/Icon'
+import { useT } from '../i18n'
 import { PremiumHero } from '../components/premium/PremiumHero'
 import { PremiumCard } from '../components/premium/PremiumCard'
 import { PremiumPage } from '../components/premium/PremiumPage'
@@ -14,6 +15,7 @@ import { trackFailure } from '../lib/telemetry'
 /// нашего каталога, которые есть уже сейчас. Все карточки, цены и числа —
 /// с сервера: чего в ответе нет, того на экране нет.
 export function Premium({ on }: { on: boolean }) {
+  const t = useT()
   const [data, setData] = useState<PremiumShowcase | null>(null)
   const [state, setState] = useState<'load' | 'ready' | 'error'>('load')
   const [openId, setOpenId] = useState('')
@@ -69,7 +71,7 @@ export function Premium({ on }: { on: boolean }) {
     return (
       <section className={'screen' + (on ? ' on' : '')} id="s-premium">
         <div className="page-head">
-          <h1>Премиум</h1>
+          <h1>{t('Премиум')}</h1>
         </div>
         <PremiumPage pack={single} plan={plan} sub={sub} />
       </section>
@@ -85,7 +87,7 @@ export function Premium({ on }: { on: boolean }) {
   return (
     <section className={'screen' + (on ? ' on' : '')} id="s-premium">
       <div className="page-head">
-        <h1>Премиум</h1>
+        <h1>{t('Премиум')}</h1>
       </div>
 
       {state === 'load' ? (
@@ -102,9 +104,9 @@ export function Premium({ on }: { on: boolean }) {
       {state === 'error' ? (
         <div className="pm-state card">
           <Icon id="i-alert" />
-          <b>Витрина не открылась</b>
+          <b>{t('Витрина не открылась')}</b>
           <button className="btn sm secondary" onClick={() => setTick(tick + 1)}>
-            <Icon id="i-restart" /> Повторить
+            <Icon id="i-restart" /> {t('Повторить')}
           </button>
         </div>
       ) : null}
@@ -112,9 +114,9 @@ export function Premium({ on }: { on: boolean }) {
       {state === 'ready' && !packs.length ? (
         <div className="pm-state card">
           <Icon id="i-crown" />
-          <b>Платные сборки скоро</b>
+          <b>{t('Платные сборки скоро')}</b>
           <button className="btn sm secondary" onClick={() => setTick(tick + 1)}>
-            <Icon id="i-restart" /> Обновить
+            <Icon id="i-restart" /> {t('Обновить')}
           </button>
         </div>
       ) : null}
@@ -130,7 +132,7 @@ export function Premium({ on }: { on: boolean }) {
           <CancelLine sub={sub} />
           {rest.length ? (
             <div className="pm-shelf">
-              <h3>Другие сборки</h3>
+              <h3>{t('Другие сборки')}</h3>
               <div className="pm-grid">
                 {rest.map((p) => (
                   <PremiumCard key={p.id} pack={p} plan={plan} sub={sub} onOpen={() => setOpenId(p.id)} />

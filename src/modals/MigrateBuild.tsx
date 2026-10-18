@@ -10,9 +10,10 @@ import { useMigrate } from '../state/migrate'
 import { useProfiles } from '../state/profiles'
 import { ensureMcVersionList, useMcVersionList, versionOptions } from '../state/mcVersionList'
 import { closeModal, showToast, useUi } from '../state/ui'
+import { t, useT } from '../i18n'
 
-const LOADERS: [string, string][] = [
-  ['vanilla', 'Ванилла'],
+const loaders = (): [string, string][] => [
+  ['vanilla', t('Ванилла')],
   ['fabric', 'Fabric'],
   ['quilt', 'Quilt'],
   ['forge', 'Forge'],
@@ -33,6 +34,7 @@ function PlanSkeleton() {
 }
 
 export function MigrateBuildModal() {
+  const t = useT()
   const modal = useUi((s) => s.modals.mgModal)
   const { profile, version, loader, plan, loading, error, set, load } = useMigrate()
   const [name, setName] = useState('')
@@ -71,15 +73,15 @@ export function MigrateBuildModal() {
         void useProfiles.getState().refresh()
         if (res.failed.length) {
           showToast(
-            'Сборка «' + res.profile.name + '»: перенесли ' + res.moved + ', не нашли ' + res.failed.length + ' — их придётся подобрать вручную',
+            t('Сборка «{name}»: перенесли {moved}, не нашли {missing} — их придётся подобрать вручную', { name: res.profile.name, moved: res.moved, missing: res.failed.length }),
           )
         } else {
-          showToast('Сборка «' + res.profile.name + '» готова: перенесли модов — ' + res.moved, 'ok', 'achievement')
+          showToast(t('Сборка «{name}» готова: перенесли модов — {n}', { name: res.profile.name, n: res.moved }), 'ok', 'achievement')
         }
       },
       onError: (e) => {
         setBusy(false)
-        showToast('Перенести не вышло: ' + e, 'error')
+        showToast(t('Перенести не вышло: {error}', { error: String(e) }), 'error')
       },
     })
     if (!started) setBusy(false)
@@ -92,18 +94,17 @@ export function MigrateBuildModal() {
       {...backdropClose(close)}
     >
       <div className="modal mw-lg" style={{ maxHeight: '88%' }}>
-        <h3>Перенос сборки на другую версию</h3>
+        <h3>{t('Перенос сборки на другую версию')}</h3>
         <div className="sub">
-          Соберём копию «{profile}» под другую версию Minecraft: миры, конфиги и настройки скопируем, а каждому моду
-          подберём файл под новую версию. Исходная сборка останется как есть.
+          {t('Соберём копию «{name}» под другую версию Minecraft: миры, конфиги и настройки скопируем, а каждому моду подберём файл под новую версию. Исходная сборка останется как есть.', { name: profile ?? '' })}
         </div>
         <div style={{ display: 'flex', gap: '12px', margin: '16px 0 6px', flexWrap: 'wrap' }}>
           <div className="field" style={{ flex: '1 1 200px', margin: 0 }}>
-            <label>Новая версия Minecraft</label>
+            <label>{t('Новая версия Minecraft')}</label>
             <Select width="100%" value={version} options={verOpts} onChange={(v) => set({ version: v })} />
           </div>
           <div className="field" style={{ flex: '1 1 260px', margin: 0 }}>
-            <label>Название новой сборки</label>
+            <label>{t('Название новой сборки')}</label>
             <div className="input">
               <input
                 id="mgName"
@@ -116,9 +117,9 @@ export function MigrateBuildModal() {
           </div>
         </div>
         <div className="field" style={{ marginTop: '12px' }}>
-          <label>Загрузчик</label>
+          <label>{t('Загрузчик')}</label>
           <div className="segs">
-            {LOADERS.map(([k, label]) => (
+            {loaders().map(([k, label]) => (
               <button
                 key={k}
                 className={'seg' + (loader === k ? ' on' : '')}
@@ -134,13 +135,13 @@ export function MigrateBuildModal() {
           {loading ? (
             <PlanSkeleton />
           ) : error ? (
-            <p className="faint-note">Не удалось проверить моды: {error}</p>
+            <p className="faint-note">{t('Не удалось проверить моды: {error}', { error })}</p>
           ) : plan ? (
             <>
               <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
-                <span className="pill acc">переедут: {plan.ready}</span>
-                {plan.missing ? <span className="pill">без версии: {plan.missing}</span> : null}
-                {plan.unlinked.length ? <span className="pill">свои файлы: {plan.unlinked.length}</span> : null}
+                <span className="pill acc">{t('переедут: {n}', { n: plan.ready })}</span>
+                {plan.missing ? <span className="pill">{t('без версии: {n}', { n: plan.missing })}</span> : null}
+                {plan.unlinked.length ? <span className="pill">{t('свои файлы: {n}', { n: plan.unlinked.length })}</span> : null}
               </div>
               {plan.items.map((it) => (
                 <div key={it.file_name} className="mod-line">
@@ -166,22 +167,22 @@ export function MigrateBuildModal() {
               ))}
               {plan.unlinked.length ? (
                 <p className="faint-note" style={{ marginTop: '10px' }}>
-                  Останутся в старой сборке — эти файлы не из каталога, подходящую версию для них взять неоткуда:{' '}
+                  {t('Останутся в старой сборке — эти файлы не из каталога, подходящую версию для них взять неоткуда:')}{' '}
                   {plan.unlinked.join(', ')}
                 </p>
               ) : null}
               {!plan.items.length && !plan.unlinked.length ? (
-                <p className="faint-note">В сборке нет модов — переедут миры, конфиги и ресурспаки.</p>
+                <p className="faint-note">{t('В сборке нет модов — переедут миры, конфиги и ресурспаки.')}</p>
               ) : null}
             </>
           ) : null}
         </div>
         <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
           <button className="btn md secondary" id="mgCancel" data-sound="close" onClick={close}>
-            Отмена
+            {t('Отмена')}
           </button>
           <button className="btn md primary" id="mgGo" disabled={loading || busy || !plan} onClick={start}>
-            {busy ? 'Переносим…' : 'Перенести'}
+            {busy ? t('Переносим…') : t('Перенести')}
           </button>
         </div>
       </div>

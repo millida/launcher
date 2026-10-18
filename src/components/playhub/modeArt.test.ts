@@ -23,7 +23,7 @@ describe('mode tiles cover every rating mode', () => {
   for (const code of RATING_CODES)
     test(code, () => {
       expect(modeLook(code).glyph, 'own icon, not the diamond fallback').not.toBe('diamond')
-      expect(modeIcon(code), 'Blups-style icon from scripts/mode-icons.mjs').not.toBeNull()
+      expect(modeIcon(code), 'pixel icon from scripts/mode-icons.mjs').not.toBeNull()
       if (!NATURAL.has(code))
         expect(modeTitle(code), 'a human title, not the raw code').not.toBe(code.charAt(0) + code.slice(1).toLowerCase().replace(/_/g, ' '))
     })

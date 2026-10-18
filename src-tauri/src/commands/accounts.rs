@@ -70,20 +70,6 @@ pub fn ms_session_forget(account_id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn ely_device_start() -> Result<serde_json::Value, String> { engine::ely_device_start().await }
-
-#[tauri::command]
-pub async fn ely_device_poll(device_code: String) -> Result<serde_json::Value, String> {
-    engine::ely_login_poll(device_code).await
-}
-
-/// Binds the finished Ely.by login to the account row the frontend created.
-#[tauri::command(async)]
-pub fn ely_session_commit(device_code: String, account_id: String) -> Result<(), String> {
-    engine::ely_login_commit(&device_code, &account_id)
-}
-
-#[tauri::command]
 pub async fn mc_textures(query: String) -> Result<serde_json::Value, String> { engine::mc_textures(query).await }
 
 // The Microsoft token comes from the protected storage and goes only to Microsoft/Mojang requests (profile, cape, skin).
@@ -135,11 +121,17 @@ pub fn millida_logout() -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn millida_api(path: String, method: String, body: Option<serde_json::Value>) -> Result<serde_json::Value, String> {
+pub async fn millida_api(
+    path: String,
+    method: String,
+    body: Option<serde_json::Value>,
+    market: Option<String>,
+) -> Result<serde_json::Value, String> {
     if !engine::webview_path_allowed(&path) {
         return Err("bad path".into());
     }
-    engine::millida_api_auth(path, method, body).await
+    let market = engine::market_header(market.as_deref())?;
+    engine::millida_api_auth_in(path, method, body, market).await
 }
 
 #[tauri::command(async)]

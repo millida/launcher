@@ -29,6 +29,8 @@ import {
   type PremiumSubscription,
 } from '../../lib/premium'
 import '../../styles/pixel/premium-buy.css'
+import { t, useT } from '../../i18n'
+import { plural } from '../../lib/format'
 
 /*
  * Покупка и доступ премиум-сборки. Внешний вид — src/styles/pixel/premium-buy.css.
@@ -67,10 +69,10 @@ async function openPayment(
       return opened ? answer.paymentUrl : null
     }
     result(false, 'error', 'no_payment_url')
-    showToast('Оплата не открылась', 'error')
+    showToast(t('Оплата не открылась'), 'error')
   } catch (e) {
     result(false, 'error', e)
-    showToast('Оплата не открылась', 'error')
+    showToast(t('Оплата не открылась'), 'error')
   }
   return null
 }
@@ -110,7 +112,7 @@ function runPayment(
   run: () => Promise<{ paymentUrl: string }>,
   result: (ok: boolean, reason?: 'checkout' | 'error', err?: unknown) => void,
   onOwned?: (() => void) | null,
-  ownedText = 'Подписка оформлена',
+  ownedText = t('Подписка оформлена'),
 ) {
   setPay(packId, { kind: 'opening' })
   void openPayment(run, result).then((url) => {
@@ -146,10 +148,10 @@ function startPlan(pack: PremiumPack, plan: PremiumPlan, onOwned: () => void) {
 
 /// «Все сборки» — сначала состав пакета в подтверждении.
 function confirmBundle(pack: PremiumPack, plan: PremiumPlan, onOwned: () => void) {
-  void uiConfirm((plan.items || []).join('. ') || 'Все сборки автора в одной подписке.', {
-    title: plan.title || 'Все сборки',
-    confirmLabel: 'Оформить · ' + planPrice(plan),
-    cancelLabel: 'Отмена',
+  void uiConfirm((plan.items || []).join('. ') || t('Все сборки автора в одной подписке.'), {
+    title: plan.title || t('Все сборки'),
+    confirmLabel: t('Оформить · {price}', { price: planPrice(plan) }),
+    cancelLabel: t('Отмена'),
   }).then((yes) => yes && startPlan(pack, plan, onOwned))
 }
 
@@ -166,7 +168,7 @@ function startSub(pack: PremiumPack, plan: PremiumPlan, onOwned?: (() => void) |
 function startBuy(pack: PremiumPack, onOwned?: (() => void) | null) {
   track('store_open', { where: 'premium_buy' })
   const result = purchaseFlow('premium_pack', pack.slug || pack.id, pack.priceKopecks ?? undefined, 'kopecks')
-  runPayment(pack.id, () => buyPremiumPack(pack.id), result, onOwned, 'Сборка куплена')
+  runPayment(pack.id, () => buyPremiumPack(pack.id), result, onOwned, t('Сборка куплена'))
 }
 
 /// Планы по порядку: «все сборки» первыми — партнёр продвигает общую подписку.
@@ -184,13 +186,13 @@ export function planBadge(plan: PremiumPlan, ordered: PremiumPlan[]): string {
   if (plan.period === 'year' && monthly.length) {
     const ref = Math.max(...monthly.map((p) => p.priceKopecks))
     const save = Math.round((1 - perMonth(plan) / ref) * 100)
-    if (save >= 5) return 'Выгоднее −' + save + '%'
+    if (save >= 5) return t('Выгоднее −{n}%', { n: save })
   }
   const anyYearDeal = ordered.some((p) => p.period === 'year' && monthly.length && perMonth(p) < Math.max(...monthly.map((m) => m.priceKopecks)))
-  return !anyYearDeal && plan === ordered[0] ? 'Рекомендуем' : ''
+  return !anyYearDeal && plan === ordered[0] ? t('Рекомендуем') : ''
 }
 
-const planName = (plan: PremiumPlan) => (plan.id === 'pack' ? 'Эта сборка' : 'Все сборки')
+const planName = (plan: PremiumPlan) => (plan.id === 'pack' ? t('Эта сборка') : t('Все сборки'))
 
 /* ============ Кнопки, которыми пользуются другие экраны ============ */
 
@@ -202,6 +204,7 @@ export function BuyButton({
   size,
   onOwned,
 }: BuyProps & { size?: 'sm' | 'lg'; onOwned?: (() => void) | null }) {
+  const t = useT()
   const pay = usePay(pack.id)
   const cls = 'btn primary pab-prem' + (size === 'sm' ? ' sm' : size === 'lg' ? ' lg' : '')
   // Сборка каталога: цены у нас нет, доступ проверяет сервер при установке.
@@ -220,7 +223,7 @@ export function BuyButton({
     if (!pack.slug) {
       return (
         <button className={cls} disabled>
-          <Icon id="i-download" /> Скоро
+          <Icon id="i-download" /> {t('Скоро')}
         </button>
       )
     }
@@ -241,7 +244,7 @@ export function BuyButton({
         data-id={pack.slug || pack.id}
         onClick={() => startSub(pack, plan, onOwned)}
       >
-        <Icon id="i-crown" /> Оформить
+        <Icon id="i-crown" /> {t('Оформить')}
       </button>
     )
   if (typeof pack.priceKopecks === 'number' && pack.priceKopecks > 0)
@@ -253,17 +256,18 @@ export function BuyButton({
         data-id={pack.slug || pack.id}
         onClick={() => startBuy(pack, onOwned)}
       >
-        <Icon id="i-gem" /> Купить
+        <Icon id="i-gem" /> {t('Купить')}
       </button>
     )
   return null
 }
 
 function WaitButton({ cls, pay }: { cls: string; pay: Pay }) {
+  const t = useT()
   return (
     <button className={cls + ' pab-wait'} disabled aria-busy="true">
       <span className="pab-spin" aria-hidden="true" />
-      {pay.kind === 'opening' ? 'Открываем оплату' : 'Ждём оплату'}
+      {pay.kind === 'opening' ? t('Открываем оплату') : t('Ждём оплату')}
     </button>
   )
 }
@@ -335,12 +339,13 @@ export function PlanButtons({
 /// Цена рядом с кнопкой: подписка отдельной строкой от разовой цены, чтобы они
 /// не спорили. Срок и отмена показаны честно (ФЗ о рекламе, ст. 6).
 export function PriceLine({ pack, plan, sub }: BuyProps) {
+  const t = useT()
   if (hasAccess(pack, sub)) {
     const until = untilText(sub?.paidUntil)
     return (
       <span className="pm-price">
-        <b>Доступ открыт</b>
-        {sub?.active && until ? <i>Подписка до {until}</i> : null}
+        <b>{t('Доступ открыт')}</b>
+        {sub?.active && until ? <i>{t('Подписка до {date}', { date: until })}</i> : null}
       </span>
     )
   }
@@ -351,20 +356,21 @@ export function PriceLine({ pack, plan, sub }: BuyProps) {
   return (
     <span className="pm-price">
       <b>{main}</b>
-      {alsoOnce ? <i>или {priceLabel({ ...pack, inSubscription: false })} разово</i> : null}
-      {!pack.inSubscription ? <i>Покупка навсегда</i> : null}
+      {alsoOnce ? <i>{t('или {price} разово', { price: priceLabel({ ...pack, inSubscription: false }) })}</i> : null}
+      {!pack.inSubscription ? <i>{t('Покупка навсегда')}</i> : null}
     </span>
   )
 }
 
 /// Повтор блока цены внизу страницы сборки: возвращаться наверх не нужно.
 export function BuyBlock({ pack, plan, sub }: BuyProps) {
+  const t = useT()
   const access = hasAccess(pack, sub)
   return (
     <div className={'pm-buy pab-wide' + (access ? ' is-open' : '')}>
       <div className="pm-buy-left">
         <span className="pab-eyebrow">
-          <Icon id="i-crown" /> Премиум
+          <Icon id="i-crown" /> {t('Премиум')}
         </span>
         <b>{pack.title}</b>
         <PriceLine pack={pack} plan={plan} sub={sub} />
@@ -391,16 +397,11 @@ const expiringSoon = (sub?: PremiumSubscription | null): boolean => {
   const d = daysLeft(sub.paidUntil)
   return d !== null && d <= 7
 }
-const daysWord = (n: number) => {
-  const a = n % 10
-  const b = n % 100
-  if (a === 1 && b !== 11) return 'день'
-  if (a >= 2 && a <= 4 && (b < 12 || b > 14)) return 'дня'
-  return 'дней'
-}
+const daysWord = (n: number) => plural(n, t('{n} день', { n }), t('{n} дня', { n }), t('{n} дней', { n }))
 
 /// Отмена не прячется: ссылка стоит там же, где подписка.
 export function CancelLine({ sub }: { sub?: PremiumSubscription | null }) {
+  const t = useT()
   if (!sub) return null
   if (sub.active) {
     const until = untilText(sub.paidUntil)
@@ -409,13 +410,13 @@ export function CancelLine({ sub }: { sub?: PremiumSubscription | null }) {
       <div className={'pm-note pab-manage' + (soon ? ' warn' : '')}>
         <Icon id={soon ? 'i-alert' : 'i-restart'} />
         {sub.canceled ? (
-          <span>Продление выключено{until ? ', доступ до ' + until : ''}</span>
+          <span>{until ? t('Продление выключено, доступ до {date}', { date: until }) : t('Продление выключено')}</span>
         ) : (
-          <span>Списание каждый месяц{until ? ', следующее ' + until : ''}</span>
+          <span>{until ? t('Списание каждый месяц, следующее {date}', { date: until }) : t('Списание каждый месяц')}</span>
         )}
         {sub.manageUrl ? (
           <button className="btn sm ghost" data-track="premium_cancel" onClick={() => openPaymentUrl(sub.manageUrl)}>
-            {sub.canceled ? 'Продлить' : 'Отменить'}
+            {sub.canceled ? t('Продлить') : t('Отменить')}
           </button>
         ) : null}
       </div>
@@ -424,10 +425,10 @@ export function CancelLine({ sub }: { sub?: PremiumSubscription | null }) {
   return (
     <div className="pm-note pab-manage">
       <Icon id="i-info" />
-      <span>Отмена в любой момент</span>
+      <span>{t('Отмена в любой момент')}</span>
       {sub.manageUrl ? (
         <button className="btn sm ghost" data-track="premium_manage" onClick={() => openPaymentUrl(sub.manageUrl)}>
-          Подписка
+          {t('Подписка')}
         </button>
       ) : null}
     </div>
@@ -496,16 +497,17 @@ function useInstallTask(slug: string) {
 }
 
 function InstallBar({ slug }: { slug: string }) {
+  const t = useT()
   const task = useInstallTask(slug)
   if (!task) return null
   const pct = Math.max(0, Math.min(100, Math.round(task.pct)))
   return (
-    <div className="pab-prog" role="progressbar" aria-label="Установка сборки" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
+    <div className="pab-prog" role="progressbar" aria-label={t('Установка сборки')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
       <span className="pab-prog-track">
         <span className="pab-prog-fill" style={{ width: pct + '%' }} />
       </span>
       <span className="pab-prog-text">
-        <span>Установка идёт фоном — можно уйти со страницы</span>
+        <span>{t('Установка идёт фоном — можно уйти со страницы')}</span>
       </span>
     </div>
   )
@@ -513,6 +515,7 @@ function InstallBar({ slug }: { slug: string }) {
 
 /// Главная кнопка по состоянию. `pick` — выбранный план в карточке; без него — первый.
 function MainButton({ p, stage, pick, size }: { p: AccessProps; stage: Stage; pick?: PremiumPlan | null; size?: 'lg' }) {
+  const t = useT()
   const pay = usePay(p.pack.id)
   const lg = size === 'lg' ? ' lg' : ''
   // Те же классы, что у «Установить»/«Играть» обычной страницы сборки (PackPage: btn lg primary pp-cta).
@@ -526,7 +529,7 @@ function MainButton({ p, stage, pick, size }: { p: AccessProps; stage: Stage; pi
         data-src="pack_page"
         onClick={() => p.onPlay(stage.build)}
       >
-        <Icon id="i-play" /> Играть
+        <Icon id="i-play" /> {t('Играть')}
       </button>
     )
   if (stage.kind === 'plans') {
@@ -542,7 +545,7 @@ function MainButton({ p, stage, pick, size }: { p: AccessProps; stage: Stage; pi
         data-plan={plan.id}
         onClick={() => choosePlan(p.pack, plan, p.onOwned)}
       >
-        <Icon id="i-crown" /> Оформить · {planPrice(plan)}
+        <Icon id="i-crown" /> {t('Оформить · {price}', { price: planPrice(plan) })}
       </button>
     )
   }
@@ -556,15 +559,16 @@ function MainButton({ p, stage, pick, size }: { p: AccessProps; stage: Stage; pi
 
 /// Ждём оплату / оплата не открылась — короткая строка под кнопкой.
 export function PayNote({ packId }: { packId: string }) {
+  const t = useT()
   const pay = usePay(packId)
   if (pay.kind === 'waiting')
     return (
       <div className="pab-paynote" role="status">
-        <span>Оплатите во вкладке браузера — доступ откроется сам.</span>
+        <span>{t('Оплатите во вкладке браузера — доступ откроется сам.')}</span>
         <span className="pab-paynote-act">
           {pay.url ? (
             <button className="btn sm ghost" data-track="premium_pay_reopen" onClick={() => pay.url && openPaymentUrl(pay.url)}>
-              <Icon id="i-ext" /> Открыть снова
+              <Icon id="i-ext" /> {t('Открыть снова')}
             </button>
           ) : null}
           <button
@@ -575,7 +579,7 @@ export function PayNote({ packId }: { packId: string }) {
               setPay(packId, IDLE)
             }}
           >
-            Отмена
+            {t('Отмена')}
           </button>
         </span>
       </div>
@@ -584,7 +588,7 @@ export function PayNote({ packId }: { packId: string }) {
     return (
       <div className="pab-paynote err" role="alert">
         <Icon id="i-alert" />
-        <span>Оплата не открылась. Проверьте интернет и нажмите ещё раз.</span>
+        <span>{t('Оплата не открылась. Проверьте интернет и нажмите ещё раз.')}</span>
       </div>
     )
   return null
@@ -604,6 +608,7 @@ export function PremiumPrimaryAction(p: AccessProps & { pickId?: string | null }
 
 /// «Работает · запускали 56 мин назад», шкала и «86% запусков без ошибок».
 function Trust({ slug, title }: { slug: string; title: string }) {
+  const t = useT()
   const [health, setHealth] = useState<PackHealth | null>(null)
   const [report, setReport] = useState(false)
   useEffect(() => {
@@ -632,13 +637,13 @@ function Trust({ slug, title }: { slug: string; title: string }) {
             ))}
           </span>
           <span>
-            <b>{line.pct}%</b> запусков без ошибок
+            <b>{line.pct}%</b> {t('запусков без ошибок')}
           </span>
         </span>
       ) : null}
       {line.report ? (
         <button className="btn sm ghost pab-trust-report" data-track="pack_report" data-src="pack_page" onClick={() => setReport(true)}>
-          Сообщить о проблеме
+          {t('Сообщить о проблеме')}
         </button>
       ) : null}
       {report ? (
@@ -685,8 +690,9 @@ function PlanPick({
   onPick: (p: PremiumPlan) => void
   disabled?: boolean
 }) {
+  const t = useT()
   return (
-    <div className="pab-plans" role="radiogroup" aria-label="Подписка">
+    <div className="pab-plans" role="radiogroup" aria-label={t('Подписка')}>
       {plans.map((plan) => {
         const on = plan.id === pick.id
         const badge = planBadge(plan, plans)
@@ -711,7 +717,7 @@ function PlanPick({
             <span className="pab-plan-cost">
               <b>{rub(plan.priceKopecks)}</b>
               <i>{periodSuffix(plan.period)}</i>
-              {plan.period === 'year' ? <em>≈ {rub(Math.round(perMonth(plan) / 100) * 100)}/мес</em> : null}
+              {plan.period === 'year' ? <em>{t('≈ {price}/мес', { price: rub(Math.round(perMonth(plan) / 100) * 100) })}</em> : null}
             </span>
             {badge ? <span className="pab-plan-badge">{badge}</span> : null}
           </button>
@@ -727,6 +733,7 @@ function PlanPick({
  * управление подпиской и правовая строка. Ширина — от 260 до 520px.
  */
 export function PremiumAccessCard(p: AccessCardProps) {
+  const t = useT()
   const { pack, detail, sub, installed, onHost, slots } = p
   const stage = stageOf(p)
   const pay = usePay(pack.id)
@@ -751,10 +758,10 @@ export function PremiumAccessCard(p: AccessCardProps) {
   if (access || stage.kind === 'install' || stage.kind === 'soon') {
     const line = live?.active && until
       ? live.canceled
-        ? 'Доступ до ' + until
-        : 'Подписка до ' + until
+        ? t('Доступ до {date}', { date: until })
+        : t('Подписка до {date}', { date: until })
       : pack.owned
-        ? 'Куплено навсегда'
+        ? t('Куплено навсегда')
         : ''
     head = (
       <div className="pab-head open">
@@ -762,13 +769,13 @@ export function PremiumAccessCard(p: AccessCardProps) {
           <Icon id="i-check" />
         </span>
         <span className="pab-head-text">
-          <b>{stage.kind === 'play' ? 'Готово к игре' : 'Доступ открыт'}</b>
+          <b>{stage.kind === 'play' ? t('Готово к игре') : t('Доступ открыт')}</b>
           {line || soon ? (
             <span className="pab-head-line">
               {line ? <span>{line}</span> : null}
               {soon && left !== null ? (
                 <span className="pab-chip warn">
-                  {left === 0 ? 'Последний день' : 'Ещё ' + left + ' ' + daysWord(left)}
+                  {left === 0 ? t('Последний день') : t('Ещё {days}', { days: daysWord(left) })}
                 </span>
               ) : null}
             </span>
@@ -780,8 +787,8 @@ export function PremiumAccessCard(p: AccessCardProps) {
     head = (
       <div className="pab-head">
         <span className="pab-head-text">
-          <b>Откройте доступ</b>
-          <span>Выберите подписку</span>
+          <b>{t('Откройте доступ')}</b>
+          <span>{t('Выберите подписку')}</span>
         </span>
       </div>
     )
@@ -791,7 +798,7 @@ export function PremiumAccessCard(p: AccessCardProps) {
       <div className="pab-head offer">
         <Price kopecks={stage.plan.priceKopecks} period={stage.plan.period} />
         <span className="pab-sub">
-          {alsoOnce ? 'или ' + rub(pack.priceKopecks as number) + ' разово' : stage.plan.title || 'Подписка'}
+          {alsoOnce ? t('или {price} разово', { price: rub(pack.priceKopecks as number) }) : stage.plan.title || t('Подписка')}
         </span>
       </div>
     )
@@ -799,15 +806,15 @@ export function PremiumAccessCard(p: AccessCardProps) {
     head = (
       <div className="pab-head offer">
         <Price kopecks={pack.priceKopecks as number} />
-        <span className="pab-sub">Покупка навсегда</span>
+        <span className="pab-sub">{t('Покупка навсегда')}</span>
       </div>
     )
   } else {
     head = (
       <div className="pab-head">
         <span className="pab-head-text">
-          <b>Премиум-сборка</b>
-          <span>Доступ проверим при установке</span>
+          <b>{t('Премиум-сборка')}</b>
+          <span>{t('Доступ проверим при установке')}</span>
         </span>
       </div>
     )
@@ -816,9 +823,9 @@ export function PremiumAccessCard(p: AccessCardProps) {
   const items = stage.kind === 'plans' ? pick?.items : stage.kind === 'sub' ? stage.plan.items : null
   const fine =
     stage.kind === 'plans' || stage.kind === 'sub'
-      ? 'Отмена в любой момент'
+      ? t('Отмена в любой момент')
       : stage.kind === 'buy'
-        ? 'Один платёж, обновления включены'
+        ? t('Один платёж, обновления включены')
         : ''
 
   return (
@@ -827,7 +834,7 @@ export function PremiumAccessCard(p: AccessCardProps) {
         <div className="pab-in">
           <div className="pab-top">
             <span className="pab-eyebrow">
-              <Icon id="i-crown" /> Премиум
+              <Icon id="i-crown" /> {t('Премиум')}
             </span>
             {pack.ageRating ? <span className="pab-age">{pack.ageRating}</span> : null}
           </div>
@@ -848,7 +855,7 @@ export function PremiumAccessCard(p: AccessCardProps) {
                 {fine && !busy ? <span className="pab-fine">{fine}</span> : null}
                 {keyEntry && !keyOpen ? (
                   <button className="btn sm ghost pab-keylink" data-track="premium_key_open" onClick={() => setKeyOpen(true)}>
-                    <Icon id="i-key" /> Есть ключ?
+                    <Icon id="i-key" /> {t('Есть ключ?')}
                   </button>
                 ) : null}
               </span>
@@ -860,7 +867,7 @@ export function PremiumAccessCard(p: AccessCardProps) {
               <PackKeyField
                 slug={slug}
                 onUnlocked={() => {
-                  showToast('Ключ активирован')
+                  showToast(t('Ключ активирован'))
                   p.onOwned()
                 }}
               />
@@ -873,7 +880,7 @@ export function PremiumAccessCard(p: AccessCardProps) {
             <div className={'pab-more' + (onHost && slots?.server ? ' two' : '')}>
               {onHost ? (
                 <button className="btn sm secondary pab-srv" data-sound="open" data-track="host_install" onClick={onHost}>
-                  <Icon id="i-server-cog" /> На хостинг
+                  <Icon id="i-server-cog" /> {t('На хостинг')}
                 </button>
               ) : null}
               {slots?.server}
@@ -884,7 +891,7 @@ export function PremiumAccessCard(p: AccessCardProps) {
 
           {live || sub ? <CancelLine sub={live ?? sub} /> : null}
 
-          <span className="pab-legal">Не продукт Mojang. Моды скачиваются при установке.</span>
+          <span className="pab-legal">{t('Не продукт Mojang. Моды скачиваются при установке.')}</span>
         </div>
       </div>
     </div>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { renderMarkdown } from '../../lib/markdown'
 import { cachedTranslation, translateProject, type TrBlock, type TrView } from '../../modals/projectTranslate'
 import { weaveMarkdown } from './weave'
+import { useT } from '../../i18n'
 
 /*
  * Полное описание мода по-русски на странице каталога (владелец 10.10.2026: «картинки,
@@ -21,6 +22,7 @@ const hasLetters = (s: string) => /[\p{L}]/u.test(s.replace(/!\[[^\]]*\]\([^)]*\
 const FIRST_WAIT_MS = 4500
 
 export function RuDesc({ projectId, englishBody, shots, lead }: { projectId: string; englishBody: string; shots: string[]; /** Русская строка-суть из каталога — видна сразу. */ lead?: string }) {
+  const t = useT()
   const [view, setView] = useState<TrView | null>(() => cachedTranslation(projectId))
   const [failed, setFailed] = useState(false)
   const [late, setLate] = useState(false)
@@ -47,12 +49,12 @@ export function RuDesc({ projectId, englishBody, shots, lead }: { projectId: str
       <>
         {en ? (
           <button className="ci-lang" data-track="item_desc_ru" onClick={() => setEn(false)}>
-            Показать по-русски
+            {t('Показать по-русски')}
           </button>
         ) : (
           <>
             {ruLead}
-            <div className="ci-orig-h">{failed ? 'От автора (на английском)' : 'От автора — перевод ещё готовится'}</div>
+            <div className="ci-orig-h">{failed ? t('От автора (на английском)') : t('От автора — перевод ещё готовится')}</div>
           </>
         )}
         {renderMarkdown(weaveMarkdown(stripAds(englishBody), shots))}
@@ -60,7 +62,7 @@ export function RuDesc({ projectId, englishBody, shots, lead }: { projectId: str
     )
   if (!view)
     return failed ? (
-      ruLead || <p className="faint-note">Без описания</p>
+      ruLead || <p className="faint-note">{t('Без описания')}</p>
     ) : (
       <>
         {ruLead}
@@ -71,13 +73,13 @@ export function RuDesc({ projectId, englishBody, shots, lead }: { projectId: str
   return (
     <>
       <button className="ci-lang" data-track="item_desc_en" onClick={() => setEn(true)}>
-        Оригинал на английском
+        {t('Оригинал на английском')}
       </button>
       {blocks.map((b, i) => {
         if (b.kind === 'image' || b.tier === 'same' || !hasLetters(b.src)) return <div key={b.id || i}>{renderMarkdown(b.src)}</div>
         if (b.ru) return <div key={b.id || i}>{renderMarkdown(b.ru)}</div>
         return (
-          <div key={b.id || i} className="ci-tr-wait" aria-label="Переводим">
+          <div key={b.id || i} className="ci-tr-wait" aria-label={t('Переводим')}>
             {Array.from({ length: Math.min(4, Math.max(1, b.lines || 1)) }, (_, k) => (
               <span key={k} className="skel skel-line" style={{ width: 70 + ((i * 13 + k * 7) % 30) + '%' }} />
             ))}

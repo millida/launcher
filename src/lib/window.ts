@@ -2,6 +2,7 @@ import { hasTauri, tauri } from '../ipc/tauri'
 import { hideToTray, setRestoreOnExitNative, showFromTray, trayAvailable } from '../ipc/commands'
 import { suspendMusic } from '../state/music'
 import { showToast } from '../state/ui'
+import { t } from '../i18n'
 
 export type LaunchWindowMode = 'none' | 'minimize' | 'tray'
 
@@ -59,7 +60,7 @@ function hideWindow() {
     return
   }
   localStorage.setItem(HINT_KEY, '1')
-  showToast('Лаунчер убрался в трей — иконка рядом с часами, выход в меню по правому клику')
+  showToast(t('Лаунчер убрался в трей — иконка рядом с часами, выход в меню по правому клику'))
   setTimeout(() => {
     void hideToTray().catch(minimizeWindow)
   }, 2200)

@@ -6,6 +6,7 @@ import { apiErrorText } from '../../lib/apiError'
 import { AGE_BRACKETS, lfgTagLabels, type LfgCard, type LfgTags } from '../../lib/party'
 import { showToast } from '../../state/ui'
 import { loadParty, setAgeBracket, usePartyStore } from '../../state/party'
+import { useT } from '../../i18n'
 
 interface LfgRequest {
   id: string
@@ -22,10 +23,11 @@ function closeness(card: LfgCard, mine: LfgTags | null): number {
 }
 
 export function AgeGate() {
+  const t = useT()
   const [busy, setBusy] = useState(false)
   return (
     <>
-      <div className="side-cap">Сколько тебе лет?</div>
+      <div className="side-cap">{t('Сколько тебе лет?')}</div>
       <div className="party-chips">
         {AGE_BRACKETS.map((b) => (
           <button
@@ -41,7 +43,7 @@ export function AgeGate() {
           </button>
         ))}
       </div>
-      <p className="faint-note">Напарников подбираем только из твоего возраста</p>
+      <p className="faint-note">{t('Напарников подбираем только из твоего возраста')}</p>
     </>
   )
 }
@@ -52,6 +54,7 @@ export function AgeGate() {
  * who accepts it into the party.
  */
 export function LfgModal({ close }: { close: () => void }) {
+  const t = useT()
   const safety = usePartyStore((s) => s.safety)
   const [cards, setCards] = useState<LfgCard[]>([])
   const [mine, setMine] = useState<LfgCard | null>(null)
@@ -80,7 +83,7 @@ export function LfgModal({ close }: { close: () => void }) {
       setRequests(Array.isArray(req.requests) ? req.requests : [])
       setError('')
     } catch (e) {
-      if (my === seq.current) setError(apiErrorText(e, 'Не удалось загрузить карточки'))
+      if (my === seq.current) setError(apiErrorText(e, t('Не удалось загрузить карточки')))
     }
   }
 
@@ -102,22 +105,22 @@ export function LfgModal({ close }: { close: () => void }) {
   }
 
   const publish = async () => {
-    if (await post('card', '/party/lfg', { tags: DRAFT }, 'Не удалось начать поиск')) void load()
+    if (await post('card', '/party/lfg', { tags: DRAFT }, t('Не удалось начать поиск'))) void load()
   }
 
   const remove = async () => {
-    if (await post('card', '/party/lfg/remove', {}, 'Не удалось убрать карточку')) void load()
+    if (await post('card', '/party/lfg/remove', {}, t('Не удалось убрать карточку'))) void load()
   }
 
   const ask = async (card: LfgCard) => {
-    if (await post(card.id, '/party/lfg/' + encodeURIComponent(card.id) + '/request', {}, 'Запрос не ушёл')) {
+    if (await post(card.id, '/party/lfg/' + encodeURIComponent(card.id) + '/request', {}, t('Запрос не ушёл'))) {
       setCards((list) => list.map((c) => (c.id === card.id ? { ...c, requested: true } : c)))
     }
   }
 
   const answer = async (r: LfgRequest, accept: boolean) => {
     const path = '/party/lfg/requests/' + encodeURIComponent(r.id) + (accept ? '/accept' : '/decline')
-    if (await post(r.id, path, {}, accept ? 'Не удалось принять' : 'Не удалось отклонить')) {
+    if (await post(r.id, path, {}, accept ? t('Не удалось принять') : t('Не удалось отклонить'))) {
       setRequests((list) => list.filter((x) => x.id !== r.id))
       if (accept) void loadParty().catch((e) => console.error('[party] reload', e))
     }
@@ -135,8 +138,8 @@ export function LfgModal({ close }: { close: () => void }) {
           <span className="room-ava">
             <Icon id="i-search" />
           </span>
-          <b>Напарники</b>
-          <button className="tb-btn" aria-label="Закрыть" onClick={close}>
+          <b>{t('Напарники')}</b>
+          <button className="tb-btn" aria-label={t('Закрыть')} onClick={close}>
             <Icon id="i-x" />
           </button>
         </div>
@@ -148,11 +151,11 @@ export function LfgModal({ close }: { close: () => void }) {
             <div className="segs party-tabs" role="tablist">
               <button role="tab" aria-selected={tab === 'find'} className={'seg' + (tab === 'find' ? ' on' : '')} onClick={() => setTab('find')}>
                 <Icon id="i-search" />
-                Найти пати
+                {t('Найти пати')}
               </button>
               <button role="tab" aria-selected={tab === 'host'} className={'seg' + (tab === 'host' ? ' on' : '')} onClick={() => setTab('host')}>
                 <Icon id="i-users" />
-                Собрать пати
+                {t('Собрать пати')}
                 {requests.length ? <span className="party-badge">{requests.length}</span> : null}
               </button>
             </div>
@@ -162,7 +165,7 @@ export function LfgModal({ close }: { close: () => void }) {
                 <Icon id="i-alert" />
                 <span>{error}</span>
                 <button className="btn sm secondary" onClick={() => void load()}>
-                  <Icon id="i-restart" /> Повторить
+                  <Icon id="i-restart" /> {t('Повторить')}
                 </button>
               </div>
             ) : null}
@@ -172,7 +175,7 @@ export function LfgModal({ close }: { close: () => void }) {
                 {sorted.length ? (
                   <button className="btn primary party-wide" disabled={!!busy || safety.newAccount || sorted[0]!.requested} onClick={() => void ask(sorted[0]!)}>
                     <Icon id="i-zap" />
-                    Быстрый вход
+                    {t('Быстрый вход')}
                   </button>
                 ) : null}
                 {sorted.map((c) => (
@@ -186,16 +189,16 @@ export function LfgModal({ close }: { close: () => void }) {
                       <Icon id="i-users" />
                       {c.size + '/' + c.capacity}
                     </span>
-                    <button className="btn sm ghost" aria-label="Пожаловаться" onClick={() => report(c.user.userId, c.user.nickname, c.id)}>
+                    <button className="btn sm ghost" aria-label={t('Пожаловаться')} onClick={() => report(c.user.userId, c.user.nickname, c.id)}>
                       <Icon id="i-flag" />
                     </button>
                     <button className="btn sm secondary" disabled={c.requested || busy === c.id || safety.newAccount} onClick={() => void ask(c)}>
                       <Icon id={c.requested ? 'i-check' : 'i-login'} />
-                      {c.requested ? 'Ждём' : 'Войти'}
+                      {c.requested ? t('Ждём') : t('Войти')}
                     </button>
                   </div>
                 ))}
-                {!sorted.length && !error ? <p className="faint-note">Открытых пати пока нет — собери свою</p> : null}
+                {!sorted.length && !error ? <p className="faint-note">{t('Открытых пати пока нет — собери свою')}</p> : null}
               </>
             ) : (
               <>
@@ -209,8 +212,8 @@ export function LfgModal({ close }: { close: () => void }) {
                 >
                   <span className={'tgl' + (mine ? ' on' : '')} aria-hidden="true" />
                   <span className="party-open-text">
-                    <b>Открыть пати для всех</b>
-                    <span>{safety.newAccount ? 'Доступно через неделю после регистрации' : mine ? 'Тебя видят в поиске' : 'Добирать игроков в пати'}</span>
+                    <b>{t('Открыть пати для всех')}</b>
+                    <span>{safety.newAccount ? t('Доступно через неделю после регистрации') : mine ? t('Тебя видят в поиске') : t('Добирать игроков в пати')}</span>
                   </span>
                 </button>
                 {requests.map((r) => (
@@ -218,17 +221,17 @@ export function LfgModal({ close }: { close: () => void }) {
                     <Head nick={r.from.nickname} src={r.from.avatarUrl} size={32} />
                     <span className="party-row-who">
                       <b>{r.from.nickname}</b>
-                      <span>Хочет в пати</span>
+                      <span>{t('Хочет в пати')}</span>
                     </span>
-                    <button className="btn sm ghost" aria-label="Пожаловаться" onClick={() => report(r.from.userId, r.from.nickname, r.id)}>
+                    <button className="btn sm ghost" aria-label={t('Пожаловаться')} onClick={() => report(r.from.userId, r.from.nickname, r.id)}>
                       <Icon id="i-flag" />
                     </button>
-                    <button className="btn sm ghost" aria-label="Отклонить" disabled={busy === r.id} onClick={() => void answer(r, false)}>
+                    <button className="btn sm ghost" aria-label={t('Отклонить')} disabled={busy === r.id} onClick={() => void answer(r, false)}>
                       <Icon id="i-x" />
                     </button>
                     <button className="btn sm primary" disabled={busy === r.id} onClick={() => void answer(r, true)}>
                       <Icon id="i-check" />
-                      Принять
+                      {t('Принять')}
                     </button>
                   </div>
                 ))}

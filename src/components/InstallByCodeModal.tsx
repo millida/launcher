@@ -7,6 +7,7 @@ import { showToast } from '../state/ui'
 import { useProfiles } from '../state/profiles'
 import { installSharedPack, packPreview, type PackPreview } from '../ipc/commands'
 import { apiErrorText } from '../lib/apiError'
+import { useT } from '../i18n'
 
 /// Сырой ответ сервера («Unexpected token '<'», JSON) игроку не показываем:
 /// сам текст уходит в консоль, на экране — короткая фраза.
@@ -24,6 +25,7 @@ interface Props {
 /// Installing a build somebody shared. The preview step is deliberate: a code
 /// from a chat should say what it will install before it installs it.
 export function InstallByCodeModal({ onClose, initialCode = '' }: Props) {
+  const t = useT()
   const [code, setCode] = useState(initialCode)
   const [preview, setPreview] = useState<PackPreview | null>(null)
   const [busy, setBusy] = useState(false)
@@ -41,7 +43,7 @@ export function InstallByCodeModal({ onClose, initialCode = '' }: Props) {
     setError('')
     packPreview(value)
       .then(setPreview)
-      .catch((e) => setError(humanError(e, 'Код не найден')))
+      .catch((e) => setError(humanError(e, t('Код не найден'))))
       .finally(() => setBusy(false))
   }
 
@@ -56,11 +58,11 @@ export function InstallByCodeModal({ onClose, initialCode = '' }: Props) {
     setBusy(true)
     installSharedPack(preview.code)
       .then((p) => {
-        showToast('Сборка «' + p.name + '» установлена', 'ok')
+        showToast(t('Сборка «{name}» установлена', { name: p.name }), 'ok')
         void useProfiles.getState().refresh()
         onClose()
       })
-      .catch((e) => showToast(humanError(e, 'Не получилось поставить сборку'), 'error'))
+      .catch((e) => showToast(humanError(e, t('Не получилось поставить сборку')), 'error'))
       .finally(() => setBusy(false))
   }
 
@@ -72,9 +74,9 @@ export function InstallByCodeModal({ onClose, initialCode = '' }: Props) {
             <Icon id="i-download" />
           </span>
           <div>
-            <h3>Сборка по коду</h3>
+            <h3>{t('Сборка по коду')}</h3>
             <div className="sub" style={{ marginTop: '2px' }}>
-              Код или ссылка от друга
+              {t('Код или ссылка от друга')}
             </div>
           </div>
         </div>
@@ -95,7 +97,7 @@ export function InstallByCodeModal({ onClose, initialCode = '' }: Props) {
             />
           </div>
           <button className="btn sm secondary" disabled={busy || !code.trim()} onClick={() => look(code)}>
-            <Icon id="i-search" /> Найти
+            <Icon id="i-search" /> {t('Найти')}
           </button>
         </div>
 
@@ -104,7 +106,7 @@ export function InstallByCodeModal({ onClose, initialCode = '' }: Props) {
             <Icon id="i-alert" />
             <span>{error}</span>
             <button className="btn sm secondary" disabled={busy} onClick={() => look(code)}>
-              <Icon id="i-restart" /> Повторить
+              <Icon id="i-restart" /> {t('Повторить')}
             </button>
           </div>
         ) : null}
@@ -116,10 +118,10 @@ export function InstallByCodeModal({ onClose, initialCode = '' }: Props) {
               {[
                 preview.game,
                 preview.loader,
-                preview.files + ' файлов',
+                t('{n} файлов', { n: preview.files }),
                 fmtSize(preview.sizeBytes),
-                preview.author ? 'от ' + preview.author : '',
-                preview.installs ? preview.installs + ' установок' : '',
+                preview.author ? t('от {author}', { author: preview.author }) : '',
+                preview.installs ? t('{n} установок', { n: preview.installs }) : '',
               ]
                 .filter(Boolean)
                 .join(' · ')}
@@ -130,10 +132,10 @@ export function InstallByCodeModal({ onClose, initialCode = '' }: Props) {
 
         <div style={{ display: 'flex', gap: '10px', marginTop: '18px' }}>
           <button className="btn md primary" style={{ flex: 1 }} disabled={!preview || busy} onClick={install}>
-            <Icon id="i-download" /> {busy ? 'Ставим…' : 'Установить'}
+            <Icon id="i-download" /> {busy ? t('Ставим…') : t('Установить')}
           </button>
           <button className="btn md secondary" onClick={onClose}>
-            Отмена
+            {t('Отмена')}
           </button>
         </div>
       </div>

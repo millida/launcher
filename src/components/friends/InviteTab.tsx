@@ -21,6 +21,7 @@ import type { InviteOverview, InvitePerk } from '../../lib/referrals'
 import { FRIENDS_TAB_EVENT } from './friendsView'
 import { INVITEE_GIFTS } from '../../lib/inviteGifts'
 import '../../styles/pixel/invite.css'
+import { useT } from '../../i18n'
 
 function Skeleton() {
   return (
@@ -33,6 +34,7 @@ function Skeleton() {
 }
 
 function ApplyCode({ initial, onApplied }: { initial: string; onApplied: (next: InviteOverview) => void }) {
+  const t = useT()
   const [code, setCode] = useState(initial)
   const [busy, setBusy] = useState(false)
   const submit = () => {
@@ -42,11 +44,11 @@ function ApplyCode({ initial, onApplied }: { initial: string; onApplied: (next: 
     applyInviteCode(value)
       .then((next) => {
         onApplied(next)
-        showToast('Код друга принят', 'ok', 'achievement')
+        showToast(t('Код друга принят'), 'ok', 'achievement')
       })
       .catch((e) => {
         trackFailure('invite', e, { step: 'apply' })
-        showToast(apiErrorText(e, 'Не удалось ввести код'), 'error')
+        showToast(apiErrorText(e, t('Не удалось ввести код')), 'error')
       })
       .finally(() => setBusy(false))
   }
@@ -54,13 +56,13 @@ function ApplyCode({ initial, onApplied }: { initial: string; onApplied: (next: 
     <div className="card inv-card inv-apply">
       <div className="inv-title">
         <Icon id="i-gift" />
-        Есть код друга?
+        {t('Есть код друга?')}
       </div>
       <div className="inv-apply-row">
         <div className="input sm inv-apply-input">
           <Icon id="i-key" />
           <input
-            placeholder="Код друга"
+            placeholder={t('Код друга')}
             value={code}
             maxLength={16}
             spellCheck={false}
@@ -73,7 +75,7 @@ function ApplyCode({ initial, onApplied }: { initial: string; onApplied: (next: 
         </div>
         <button className="btn sm primary" data-track="invite_apply" disabled={busy || !normalizeInviteCode(code)} onClick={submit}>
           <Icon id="i-check" />
-          Ввести
+          {t('Ввести')}
         </button>
       </div>
     </div>
@@ -87,24 +89,25 @@ function clock(seconds: number) {
 
 /// Что получил ты сам, когда тебя позвали: три плитки, каждая — сделано или в пути.
 function InviteeGifts({ gifts }: { gifts: NonNullable<InviteOverview['invitee']> }) {
+  const t = useT()
   const chest = gifts.chest
   const state = {
     rubies: { done: !!gifts.badge, note: '' },
     chest: { done: chest.granted, note: chest.granted ? '' : clock(chest.playSeconds) + ' / ' + clock(chest.needSeconds) },
-    plus: { done: gifts.plus.granted, note: gifts.plus.granted ? '' : 'после 2 ч' },
+    plus: { done: gifts.plus.granted, note: gifts.plus.granted ? '' : t('после 2 ч') },
   }
   return (
     <div className="card inv-card">
       <div className="inv-title">
         <Icon id="i-gift" />
-        Твои подарки
+        {t('Твои подарки')}
       </div>
       <div className="inv-gifts">
         {INVITEE_GIFTS.map((g) => (
           <div key={g.id} className={'inv-gift' + (state[g.id].done ? ' on' : '')}>
             <Icon id={g.icon} />
             <b>{g.title}</b>
-            <small>{state[g.id].done ? 'Получено' : state[g.id].note}</small>
+            <small>{state[g.id].done ? t('Получено') : state[g.id].note}</small>
           </div>
         ))}
       </div>
@@ -113,6 +116,7 @@ function InviteeGifts({ gifts }: { gifts: NonNullable<InviteOverview['invitee']>
 }
 
 export function InviteTab({ on }: { on: boolean }) {
+  const t = useT()
   const [data, setData] = useState<InviteOverview | null>(null)
   const [failed, setFailed] = useState(false)
   const [pendingCode, setPendingCode] = useState('')
@@ -157,7 +161,7 @@ export function InviteTab({ on }: { on: boolean }) {
 
   const copy = async (text: string, what: string) => {
     const ok = await copyText(text)
-    showToast(ok ? what + ' скопирована' : 'Не удалось скопировать', ok ? 'ok' : 'error')
+    showToast(ok ? t('{what} скопирована', { what }) : t('Не удалось скопировать'), ok ? 'ok' : 'error')
   }
 
   if (!data) {
@@ -165,10 +169,10 @@ export function InviteTab({ on }: { on: boolean }) {
     return (
       <div className="fr-blank">
         <Icon id="i-alert" />
-        <b>Не удалось загрузить приглашения</b>
+        <b>{t('Не удалось загрузить приглашения')}</b>
         <button className="btn sm secondary" data-track="invite_retry" onClick={load}>
           <Icon id="i-restart" />
-          Повторить
+          {t('Повторить')}
         </button>
       </div>
     )
@@ -182,7 +186,7 @@ export function InviteTab({ on }: { on: boolean }) {
       {data.canApply ? <ApplyCode key={pendingCode} initial={pendingCode} onApplied={applied} /> : null}
       {data.invitedBy ? (
         <p className="faint-note inv-by">
-          Тебя пригласил <b>{data.invitedBy.nickname || 'друг'}</b>
+          {t('Тебя пригласил')} <b>{data.invitedBy.nickname || t('друг')}</b>
         </p>
       ) : null}
       {data.invitee ? <InviteeGifts gifts={data.invitee} /> : null}
@@ -190,23 +194,23 @@ export function InviteTab({ on }: { on: boolean }) {
       <div className="card inv-card">
         <div className="inv-title">
           <Icon id="i-users" />
-          Пригласи друга — получи PLUS
+          {t('Пригласи друга — получи PLUS')}
         </div>
         <div className="inv-code-row">
           <span className="inv-code" data-private>
             {data.code}
           </span>
-          <button className="btn sm primary" data-track="invite_copy_link" onClick={() => void copy(data.link, 'Ссылка')}>
+          <button className="btn sm primary" data-track="invite_copy_link" onClick={() => void copy(data.link, t('Ссылка'))}>
             <Icon id="i-link" />
-            Копировать ссылку
+            {t('Копировать ссылку')}
           </button>
-          <button className="btn sm secondary" data-track="invite_copy_code" onClick={() => void copy(data.code, 'Код')}>
+          <button className="btn sm secondary" data-track="invite_copy_code" onClick={() => void copy(data.code, t('Код'))}>
             <Icon id="i-copy" />
-            Код
+            {t('Код')}
           </button>
         </div>
         <p className="faint-note inv-rule">
-          {'+' + daysText(data.perFriendPlusDays) + ' PLUS за друга · ' + hours + ' ч за ' + data.rules.playDays + ' дня'}
+          {t('+{days} PLUS за друга · {hours} ч за {n} дня', { days: daysText(data.perFriendPlusDays), hours, n: data.rules.playDays })}
         </p>
       </div>
 
@@ -214,7 +218,7 @@ export function InviteTab({ on }: { on: boolean }) {
         <div className="inv-head">
           <span className="inv-title">
             <Icon id="i-trophy" />
-            {'Засчитано: ' + friendsText(data.qualified)}
+            {t('Засчитано: {friends}', { friends: friendsText(data.qualified) })}
           </span>
           {data.earned.plusDays ? <span className="inv-earned">{'+' + daysText(data.earned.plusDays) + ' PLUS'}</span> : null}
         </div>
@@ -223,7 +227,7 @@ export function InviteTab({ on }: { on: boolean }) {
             <div className="bar inv-bar">
               <i style={{ width: Math.round(tierProgress(data.qualified, data.tiers) * 100) + '%' }} />
             </div>
-            <p className="faint-note inv-next">{'Ещё ' + friendsText(data.next.left) + ' — ' + tierRewardText(nextTier)}</p>
+            <p className="faint-note inv-next">{t('Ещё {friends} — {reward}', { friends: friendsText(data.next.left), reward: tierRewardText(nextTier) })}</p>
           </>
         ) : null}
         <ol className="inv-ladder">
@@ -252,12 +256,12 @@ export function InviteTab({ on }: { on: boolean }) {
 
       {data.friends.length ? (
         <>
-          <div className="fr-cap">{'Приглашённые · ' + data.friends.length}</div>
+          <div className="fr-cap">{t('Приглашённые · {n}', { n: data.friends.length })}</div>
           {data.friends.map((f, i) => (
             <div className={'fr-row' + (f.status === 'rejected' ? ' off' : '')} key={(f.nickname || '') + f.invitedAt + i}>
               <Head nick={f.nickname || undefined} size={40} />
               <span className="fr-body">
-                <span className="fr-nick">{f.nickname || 'Игрок'}</span>
+                <span className="fr-nick">{f.nickname || t('Игрок')}</span>
                 <span className={'fr-status inv-st-' + f.status}>
                   <Icon id={f.status === 'qualified' ? 'i-check' : f.status === 'rejected' ? 'i-ban' : 'i-clock'} />
                   {friendStatusText(f, data.rules.playSeconds)}
@@ -269,10 +273,10 @@ export function InviteTab({ on }: { on: boolean }) {
       ) : (
         <div className="fr-blank">
           <Icon id="i-gift" />
-          <b>Пока никого</b>
-          <button className="btn sm primary" data-track="invite_copy_link_empty" onClick={() => void copy(data.link, 'Ссылка')}>
+          <b>{t('Пока никого')}</b>
+          <button className="btn sm primary" data-track="invite_copy_link_empty" onClick={() => void copy(data.link, t('Ссылка'))}>
             <Icon id="i-link" />
-            Копировать ссылку
+            {t('Копировать ссылку')}
           </button>
         </div>
       )}

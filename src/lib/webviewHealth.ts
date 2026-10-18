@@ -5,6 +5,7 @@ import { appVersion, setWebviewLowMemory, takeWebviewFailure } from '../ipc/comm
 import { showToast } from '../state/ui'
 import { track } from './telemetry'
 import { heapEventDue } from './heapPressure'
+import { t } from '../i18n'
 
 /// Chromium-only: the heap the UI holds and the ceiling the renderer dies at.
 interface HeapInfo {
@@ -138,14 +139,14 @@ export async function reportWebviewFailure(): Promise<void> {
     { ok: false },
   )
   if (f.reason === 'out_of_memory') {
-    showToast('Машине не хватило памяти — окно лаунчера перезапустилось само. Уменьши память сборке или закрой лишние программы', 'error')
+    showToast(t('Машине не хватило памяти — окно лаунчера перезапустилось само. Уменьши память сборке или закрой лишние программы'), 'error')
     return
   }
   if (f.kind === 'gpu' && liteAfterFailure) {
-    showToast('Видеокарта сбросила окно — включили лёгкую графику без 3D', 'error')
+    showToast(t('Видеокарта сбросила окно — включили лёгкую графику без 3D'), 'error')
     return
   }
-  showToast('Окно лаунчера подвисло и перезапустилось само', 'error')
+  showToast(t('Окно лаунчера подвисло и перезапустилось само'), 'error')
 }
 
 /// Called around the game, when the machine is tightest: out of sight the webview

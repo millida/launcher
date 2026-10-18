@@ -11,6 +11,7 @@ import { LfgModal } from './LfgModal'
 import { PackConfirmModal } from './PackConfirmModal'
 import { ReportModal } from './ReportModal'
 import '../../styles/pixel/party.css'
+import { useT } from '../../i18n'
 
 const typing = (t: EventTarget | null) => {
   const el = t as HTMLElement | null
@@ -22,6 +23,7 @@ const typing = (t: EventTarget | null) => {
  * any screen, and push-to-talk works wherever the launcher window has focus.
  */
 export function PartyHost() {
+  const t = useT()
   const millida = useHasMillida()
   const inviteOpen = usePartyStore((s) => s.inviteOpen)
   const roomsOpen = usePartyStore((s) => s.roomsOpen)
@@ -55,8 +57,8 @@ export function PartyHost() {
       if (seen.current.has(inv.id)) continue
       seen.current.add(inv.id)
       if (useUi.getState().screen === 'play') continue
-      showToast((inv.from.nickname || 'Друг') + ' зовёт в пати', 'ok', undefined, {
-        label: 'Войти',
+      showToast(t('{nick} зовёт в пати', { nick: inv.from.nickname || t('Друг') }), 'ok', undefined, {
+        label: t('Войти'),
         run: () =>
           void acceptPartyInvite(inv.id).then((p) => {
             if (p) setScreen('play')

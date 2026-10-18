@@ -2,6 +2,7 @@ import { Icon } from '../Icon'
 import { fmtN } from '../../lib/format'
 import { anarchyOnlineShown } from './AnarchyTile'
 import { PRISON_SLUG } from './featured'
+import { useT } from '../../i18n'
 
 export const PRISON_BANNER = 'https://cdn.millida.trade/catalog/launcher-packs/prisonrpg/2026-10-05/prisonrpg-banner.webp'
 export const PRISON_CO = 'MetaLabs × Millida'
@@ -21,6 +22,7 @@ const cover = (p: PrisonFace) => p.coverUrl || PRISON_BANNER
  * the logo to a crop. Pressing it opens the pack page, never a Minecraft join.
  */
 export function PrisonTile({ pack, index, cell, onClick }: { pack: PrisonFace; index: number; cell?: boolean; onClick: () => void }) {
+  const t = useT()
   return (
     <button
       className={'ph-card ph-mt ph-mt-pr' + (cell ? ' is-cell' : '')}
@@ -29,19 +31,19 @@ export function PrisonTile({ pack, index, cell, onClick }: { pack: PrisonFace; i
       data-id={PRISON_SLUG}
       data-pos={index}
       data-src="mode"
-      aria-label={'Открыть: ' + pack.title}
+      aria-label={t('Открыть: {name}', { name: pack.title })}
       onClick={onClick}
     >
       <img className="pr-art" src={cover(pack)} alt="" draggable={false} />
       <span className="pr-co">{PRISON_CO}</span>
       <span className="an-foot">
         <span className="an-play" aria-hidden="true">
-          <Icon id="i-play" /> Играть
+          <Icon id="i-play" /> {t('Играть')}
         </span>
         {anarchyOnlineShown(pack.online) ? (
           <span className="an-on">
             <span className="ph-dot" aria-hidden="true"></span>
-            {fmtN(pack.online)} играют
+            {t('{n} играют', { n: fmtN(pack.online) })}
           </span>
         ) : null}
       </span>

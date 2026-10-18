@@ -6,6 +6,7 @@ import { PxIcon } from '../PxIcon'
 import { hasPx } from '../pxArt'
 import { Ruby } from '../Ruby'
 import { playSound } from '../../lib/sound'
+import { intlTag, useT } from '../../i18n'
 import { itemTone, rarityWord, rewardTone, useReward, type RewardEntry, type RewardShown } from './rewardBus'
 import '../../styles/pixel/reward.css'
 
@@ -135,7 +136,7 @@ function Art({ it, size }: { it: RewardEntry; size: number }) {
     return (
       <span className="rw-art-ruby">
         <Ruby size={Math.round(size * 0.62)} />
-        <b style={{ fontSize: Math.max(12, Math.round(size * 0.2)) }}>+{it.rubies.toLocaleString('ru-RU')}</b>
+        <b style={{ fontSize: Math.max(12, Math.round(size * 0.2)) }}>+{it.rubies.toLocaleString(intlTag())}</b>
       </span>
     )
   if (it.preview && !broken)
@@ -176,6 +177,7 @@ function Plate({ tone, children, className = '' }: { tone?: string; children: Re
 /* ─────────────────────────── Большой ─────────────────────────── */
 
 function BigReveal({ r, onClose }: { r: RewardShown; onClose: () => void }) {
+  const t = useT()
   const reduced = useMemo(reducedMotion, [])
   const items: RewardEntry[] = r.items.length ? r.items : [{ name: r.title || '', icon: 'trophy' }]
   const many = items.length > 1
@@ -251,9 +253,9 @@ function BigReveal({ r, onClose }: { r: RewardShown; onClose: () => void }) {
   }, [])
 
   const one = items[0]
-  const title = r.title ?? (many ? 'Твоё: ' + items.length : one.name)
+  const title = r.title ?? (many ? t('Твоё: {n}', { n: items.length }) : one.name)
   const sub = r.sub ?? (many ? undefined : rarityWord(one))
-  const kicker = r.kicker ?? (many ? 'Новые вещи' : one.preview || one.rarity ? 'Новая вещь' : undefined)
+  const kicker = r.kicker ?? (many ? t('Новые вещи') : one.preview || one.rarity ? t('Новая вещь') : undefined)
   const mid = (cards.length - 1) / 2
 
   return createPortal(
@@ -322,11 +324,11 @@ function BigReveal({ r, onClose }: { r: RewardShown; onClose: () => void }) {
           {r.onWear ? (
             <button className="btn md secondary" onClick={wear}>
               <Icon id="i-shirt" />
-              {r.wearLabel || 'Надеть'}
+              {r.wearLabel || t('Надеть')}
             </button>
           ) : null}
           <button className="btn md primary" autoFocus onClick={done}>
-            {r.doneLabel || 'Круто'}
+            {r.doneLabel || t('Круто')}
           </button>
         </div>
       ) : null}
@@ -338,6 +340,7 @@ function BigReveal({ r, onClose }: { r: RewardShown; onClose: () => void }) {
 /* ─────────────────────────── Средний ─────────────────────────── */
 
 function MidCard({ r, onClose }: { r: RewardShown; onClose: () => void }) {
+  const t = useT()
   const [leaving, setLeaving] = useState(false)
   const reduced = useMemo(reducedMotion, [])
   const one: RewardEntry = r.items[0] || { name: r.title || '', icon: 'check' }
@@ -380,7 +383,7 @@ function MidCard({ r, onClose }: { r: RewardShown; onClose: () => void }) {
               done()
             }}
           >
-            {r.wearLabel || 'Открыть'}
+            {r.wearLabel || t('Открыть')}
           </button>
         ) : null}
       </Plate>

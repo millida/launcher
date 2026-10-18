@@ -8,6 +8,7 @@ import { VIEW_PREFS_EVENT, bgAnimOn } from '../../state/viewPrefs'
 import { backdropOf, useWallpaper } from '../../state/wallpaper'
 import { makePal, paintScene, paintVignette, paintWaiting, stageGrid } from './stageArt'
 import type { Pal } from './stageArt'
+import { t } from '../../i18n'
 
 /**
  * Живой фон лобби «Сцена»: резкий шейдерный кадр Minecraft-мира и слои рецепта
@@ -83,7 +84,7 @@ function image(src: string, onload: () => void) {
   if (!reported.has(src)) {
     reported.add(src)
     console.warn('[lobby] backdrop picture did not load', src.slice(0, 120))
-    showToast('Фон не открылся — в лобби стоит сцена. Выбери другой в настройках', 'error')
+    showToast(t('Фон не открылся — в лобби стоит сцена. Выбери другой в настройках'), 'error')
   }
   return null
 }

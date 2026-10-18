@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 export const W = 320
 export const H = 104
 
@@ -58,7 +59,7 @@ export interface Scene {
 
 export const SCENES: Record<string, Scene> = {
   taiga: {
-    name: 'Тайга на рассвете',
+    get name() { return t('Тайга на рассвете') },
     draw(c, t, mx, my) {
       const g = c.createLinearGradient(0, 0, 0, H)
       g.addColorStop(0, '#0C2622')
@@ -92,7 +93,7 @@ export const SCENES: Record<string, Scene> = {
     },
   },
   sunset: {
-    name: 'Закат в саванне',
+    get name() { return t('Закат в саванне') },
     draw(c, t, mx, my) {
       const g = c.createLinearGradient(0, 0, 0, H)
       g.addColorStop(0, '#241134')
@@ -132,7 +133,7 @@ export const SCENES: Record<string, Scene> = {
     },
   },
   cave: {
-    name: 'Лавовая пещера',
+    get name() { return t('Лавовая пещера') },
     draw(c, t, mx, _my) {
       c.fillStyle = '#0A0C10'
       c.fillRect(0, 0, W, H)
@@ -171,7 +172,7 @@ export const SCENES: Record<string, Scene> = {
     },
   },
   end: {
-    name: 'Край (Энд)',
+    get name() { return t('Край (Энд)') },
     draw(c, t, mx, my) {
       const g = c.createLinearGradient(0, 0, 0, H)
       g.addColorStop(0, '#0D0716')
@@ -226,10 +227,10 @@ export interface VideoWp {
 // `src` is empty when the clip was not fetched from the CDN (see assets.json): the poster
 // stays in the repo, so such a wallpaper degrades to a still frame instead of a black box.
 export const VIDEOS: VideoWp[] = [
-  { id: 'bg1', name: 'Вишнёвая роща', src: '', poster: '/bg/bg1.jpg' },
-  { id: 'bg2', name: 'Уютная пещера', src: '', poster: '/bg/bg2.jpg' },
-  { id: 'bg3', name: 'Солнечный город', src: '', poster: '/bg/bg3.jpg' },
-  { id: 'bg4', name: 'У камина', src: '', poster: '/bg/bg4.jpg' },
+  { id: 'bg1', get name() { return t('Вишнёвая роща') }, src: '', poster: '/bg/bg1.jpg' },
+  { id: 'bg2', get name() { return t('Уютная пещера') }, src: '', poster: '/bg/bg2.jpg' },
+  { id: 'bg3', get name() { return t('Солнечный город') }, src: '', poster: '/bg/bg3.jpg' },
+  { id: 'bg4', get name() { return t('У камина') }, src: '', poster: '/bg/bg4.jpg' },
 ].map((v) => (__BUNDLED_VIDEOS__.includes(v.id) ? { ...v, src: '/bg/' + v.id + '.mp4' } : v))
 
 export const isVideoWp = (id: string) => VIDEOS.some((v) => v.id === id)
@@ -242,10 +243,10 @@ export interface StillWp {
 }
 
 export const STILLS: StillWp[] = [
-  { id: 'bg5', name: 'Золотой час', thumb: '/bg/bg5.jpg', src: '/lobby/world.webp' },
-  { id: 'bg2', name: 'Уютная пещера', thumb: '/bg/bg2.jpg', src: '/bg/bg2-wide.webp' },
-  { id: 'bg3', name: 'Солнечный город', thumb: '/bg/bg3.jpg', src: '/bg/bg3-wide.webp' },
-  { id: 'bg4', name: 'У камина', thumb: '/bg/bg4.jpg', src: '/bg/bg4-wide.webp' },
+  { id: 'bg5', get name() { return t('Золотой час') }, thumb: '/bg/bg5.jpg', src: '/lobby/world.webp' },
+  { id: 'bg2', get name() { return t('Уютная пещера') }, thumb: '/bg/bg2.jpg', src: '/bg/bg2-wide.webp' },
+  { id: 'bg3', get name() { return t('Солнечный город') }, thumb: '/bg/bg3.jpg', src: '/bg/bg3-wide.webp' },
+  { id: 'bg4', get name() { return t('У камина') }, thumb: '/bg/bg4.jpg', src: '/bg/bg4-wide.webp' },
 ]
 
 export const stillOf = (id: string) => STILLS.find((s) => s.id === id) ?? null

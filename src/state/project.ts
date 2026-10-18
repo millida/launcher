@@ -9,6 +9,7 @@ import { openModal } from './ui'
 import { useMods } from './mods'
 import { orderGallery } from '../modals/projectView'
 import type { LicenseInfo } from '../modals/projectView'
+import { t } from '../i18n'
 
 export interface ProjectVersion {
   id: string
@@ -216,12 +217,12 @@ function mrLinks(p: {
   donation_urls?: { platform?: string; url?: string }[] | null
 }): ProjectLink[] {
   const out: ProjectLink[] = []
-  if (p.source_url) out.push({ kind: 'source', label: 'Исходный код', url: p.source_url })
-  if (p.wiki_url) out.push({ kind: 'wiki', label: 'Вики', url: p.wiki_url })
+  if (p.source_url) out.push({ kind: 'source', label: t('Исходный код'), url: p.source_url })
+  if (p.wiki_url) out.push({ kind: 'wiki', label: t('Вики'), url: p.wiki_url })
   if (p.discord_url) out.push({ kind: 'discord', label: 'Discord', url: p.discord_url })
-  if (p.issues_url) out.push({ kind: 'issues', label: 'Сообщить об ошибке', url: p.issues_url })
+  if (p.issues_url) out.push({ kind: 'issues', label: t('Сообщить об ошибке'), url: p.issues_url })
   const d = (p.donation_urls || []).find((x) => x && x.url)
-  if (d && d.url) out.push({ kind: 'donate', label: 'Поддержать автора' + (d.platform ? ' · ' + d.platform : ''), url: d.url })
+  if (d && d.url) out.push({ kind: 'donate', label: d.platform ? t('Поддержать автора · {platform}', { platform: d.platform }) : t('Поддержать автора'), url: d.url })
   return out
 }
 
@@ -252,9 +253,9 @@ export async function openCfProject(cfid: number, kind?: string, fallbackTitle?:
     source: 'curseforge',
     kind: k,
     tab: 'desc',
-    title: fallbackTitle || 'Загружаем…',
+    title: fallbackTitle || t('Загружаем…'),
     icon: '',
-    sub: 'Загружаем…',
+    sub: t('Загружаем…'),
     body: '',
     gallery: [],
     versions: [],
@@ -265,7 +266,7 @@ export async function openCfProject(cfid: number, kind?: string, fallbackTitle?:
   })
   openModal('pjModal')
   if (!hasTauri()) {
-    useProject.getState().set({ loading: false, sub: 'Каталог CurseForge доступен в приложении' })
+    useProject.getState().set({ loading: false, sub: t('Каталог CurseForge доступен в приложении') })
     return
   }
   try {
@@ -279,10 +280,9 @@ export async function openCfProject(cfid: number, kind?: string, fallbackTitle?:
       updated: p.updated || null,
       gameVersions: p.game_versions || [],
       sub:
-        fmt(p.downloads) +
-        ' скачиваний' +
+        t('{n} скачиваний', { n: fmt(p.downloads) }) +
         (p.authors ? ' · ' + p.authors : '') +
-        (p.updated ? ' · обновлён ' + p.updated.slice(0, 10).split('-').reverse().join('.') : ''),
+        (p.updated ? ' · ' + t('обновлён {when}', { when: p.updated.slice(0, 10).split('-').reverse().join('.') }) : ''),
       tags: p.categories.slice(0, 6),
       body: p.description || p.summary,
       gallery: p.gallery.map((g) => ({ ...g, url: mirrorAsset(g.url) || g.url })),
@@ -290,7 +290,7 @@ export async function openCfProject(cfid: number, kind?: string, fallbackTitle?:
       loading: false,
     })
   } catch (e) {
-    useProject.getState().set({ loading: false, failed: true, title: 'Не удалось загрузить', sub: '' + e })
+    useProject.getState().set({ loading: false, failed: true, title: t('Не удалось загрузить'), sub: '' + e })
     return
   }
   try {
@@ -328,7 +328,7 @@ export async function openProject(slug: string, kind?: string, game?: string | n
     cfid: 0,
     kind: kind || useMods.getState().modTab,
     tab: 'desc',
-    title: 'Загружаем…',
+    title: t('Загружаем…'),
     body: '',
     gallery: [],
     versions: [],
@@ -349,10 +349,10 @@ export async function openProject(slug: string, kind?: string, game?: string | n
       icon: mirrorAsset(p.icon_url) || '',
       title: p.title,
       sub:
-        fmt(p.downloads) +
-        ' скачиваний · ' +
-        fmt(p.followers || 0) +
-        ' подписчиков · ' +
+        t('{n} скачиваний', { n: fmt(p.downloads) }) +
+        ' · ' +
+        t('{n} подписчиков', { n: fmt(p.followers || 0) }) +
+        ' · ' +
         ((p.license && p.license.id) || '—'),
       summary: p.description || '',
       downloads: typeof p.downloads === 'number' ? p.downloads : null,
@@ -409,7 +409,7 @@ export async function openProject(slug: string, kind?: string, game?: string | n
       }),
     })
   } catch {
-    if (still()) useProject.getState().set({ title: 'Не удалось загрузить', loading: false, failed: true })
+    if (still()) useProject.getState().set({ title: t('Не удалось загрузить'), loading: false, failed: true })
   }
 }
 
@@ -443,8 +443,7 @@ export async function openMillidaProject(slug: string, section: string, kind?: s
       title: cleanTitle(p.title),
       launcherOnly: !!p.launcherOnly,
       sub:
-        fmt(Math.max(p.downloads || 0, p.sourceDownloads || 0)) +
-        ' скачиваний' +
+        t('{n} скачиваний', { n: fmt(Math.max(p.downloads || 0, p.sourceDownloads || 0)) }) +
         (p.author ? ' · ' + p.author : '') +
         (p.license ? ' · ' + p.license : ''),
       tags: (p.tags || []).slice(0, 6),
@@ -455,7 +454,7 @@ export async function openMillidaProject(slug: string, section: string, kind?: s
       updated: p.updatedAt || null,
       loaders: [...new Set((p.files || []).flatMap((f) => f.loaders || []))],
       gameVersions: [...new Set((p.files || []).flatMap((f) => f.gameVersions || []))],
-      links: p.sourceUrl ? [{ kind: 'source', label: 'Страница автора', url: p.sourceUrl }] : [],
+      links: p.sourceUrl ? [{ kind: 'source', label: t('Страница автора'), url: p.sourceUrl }] : [],
       body: blocksToMarkdown(p.description) || p.summary || '',
       gallery: (p.gallery || []).map((url) => ({ url })),
       versions: (p.files || []).slice(0, 40).map((f) => ({
@@ -491,7 +490,7 @@ export async function openMillidaProject(slug: string, section: string, kind?: s
       return
     } catch {}
   }
-  useProject.getState().set({ loading: false, failed: true, title: fallbackTitle || 'Не удалось загрузить', sub: '' })
+  useProject.getState().set({ loading: false, failed: true, title: fallbackTitle || t('Не удалось загрузить'), sub: '' })
 }
 
 // ─── Мод из сборки Милли ─────────────────────────────────────────────────────

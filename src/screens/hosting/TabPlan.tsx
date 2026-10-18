@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
+import { useT } from '../../i18n'
 import { BalancePill, Panel, rubLabel } from '../../components/hosting/HostKit'
 import { showToast } from '../../state/ui'
 import { uiConfirm } from '../../state/confirm'
@@ -9,6 +10,7 @@ import type { HostingEvent, HostingSubscription } from './api'
 
 /// Журнал сервера — подраздел «Автоматика и журнал», как на сайте.
 export function Journal({ serverId }: { serverId: string }) {
+  const t = useT()
   const [events, setEvents] = useState<HostingEvent[] | null>(null)
   useEffect(() => {
     setEvents(null)
@@ -18,7 +20,7 @@ export function Journal({ serverId }: { serverId: string }) {
       .catch(() => setEvents([]))
   }, [serverId])
   return (
-    <Panel title="Журнал">
+    <Panel title={t('Журнал')}>
       {events === null ? (
         <Loading />
       ) : events.length ? (
@@ -32,7 +34,7 @@ export function Journal({ serverId }: { serverId: string }) {
           ))}
         </div>
       ) : (
-        <Empty icon="i-list" text="Записей пока нет" />
+        <Empty icon="i-list" text={t('Записей пока нет')} />
       )}
     </Panel>
   )
@@ -62,6 +64,7 @@ export function TabPlan({
   onDeleted: () => void
   onChanged: () => void
 }) {
+  const t = useT()
   const [autoRenew, setAutoRenew] = useState(!!subscription?.autoRenew)
   const [busy, setBusy] = useState<string | null>(null)
 
@@ -73,7 +76,7 @@ export function TabPlan({
     setAutoRenew(v)
     try {
       const r = await host.setAutoRenew(serverId, v)
-      showToast(v ? 'Продление включено' : 'Продление выключено — оплаченный срок остаётся')
+      showToast(v ? t('Продление включено') : t('Продление выключено — оплаченный срок остаётся'))
       setAutoRenew(r.autoRenew)
       onChanged()
     } catch (e) {
@@ -86,8 +89,8 @@ export function TabPlan({
 
   const remove = async () => {
     if (
-      !(await uiConfirm('Удалить сервер? Мир, плагины и настройки пропадут, адрес освободится не сразу.', {
-        confirmLabel: 'Удалить сервер',
+      !(await uiConfirm(t('Удалить сервер? Мир, плагины и настройки пропадут, адрес освободится не сразу.'), {
+        confirmLabel: t('Удалить сервер'),
         danger: true,
       }))
     )
@@ -95,7 +98,7 @@ export function TabPlan({
     setBusy('delete')
     try {
       await host.remove(serverId)
-      showToast('Сервер удалён')
+      showToast(t('Сервер удалён'))
       onDeleted()
     } catch (e) {
       showToast(errText(e), 'error')
@@ -106,11 +109,11 @@ export function TabPlan({
 
   const dangerEl = (
       <section className="hp-panel hp-danger">
-        <h3>Удалить сервер</h3>
+        <h3>{t('Удалить сервер')}</h3>
         <div className="host-danger-row">
-          <div className="host-danger-sub">{canDelete === false ? 'Сначала выключи автопродление' : 'Мир, плагины и настройки пропадут'}</div>
+          <div className="host-danger-sub">{canDelete === false ? t('Сначала выключи автопродление') : t('Мир, плагины и настройки пропадут')}</div>
           <button className="btn sm danger" disabled={busy === 'delete' || canDelete === false} onClick={() => void remove()}>
-            <Icon id="i-trash" /> Удалить
+            <Icon id="i-trash" /> {t('Удалить')}
           </button>
         </div>
       </section>
@@ -122,34 +125,34 @@ export function TabPlan({
   return (
     <>
       <Panel
-        title="Тариф"
+        title={t('Тариф')}
         action={
           <button className="btn sm primary" onClick={onUpgrade}>
-            <Icon id="i-arrow-up" /> Сменить тариф
+            <Icon id="i-arrow-up" /> {t('Сменить тариф')}
           </button>
         }
       >
         <div className="set-group hp-set">
-          <Row k={planName || 'Тариф'}>
-            <span className="host-cfg-v">{planPriceKopecks ? rubLabel(planPriceKopecks) + ' в месяц' : 'Бесплатно'}</span>
+          <Row k={planName || t('Тариф')}>
+            <span className="host-cfg-v">{planPriceKopecks ? t('{price} в месяц', { price: rubLabel(planPriceKopecks) }) : t('Бесплатно')}</span>
           </Row>
           {subscription ? (
             <>
-              <Row k="Оплачен до" sub={'период ' + subscription.periodDays + ' дн.'}>
+              <Row k={t('Оплачен до')} sub={t('период {n} дн.', { n: subscription.periodDays })}>
                 <span className="host-cfg-v">{dateLabel(subscription.paidUntil)}</span>
               </Row>
-              <Row k="Автопродление" sub="Списывается с баланса Millida">
+              <Row k={t('Автопродление')} sub={t('Списывается с баланса Millida')}>
                 <Toggle on={autoRenew} busy={busy === 'renew'} onChange={(v) => void toggleRenew(v)} />
               </Row>
             </>
           ) : worldDeleteAt ? (
-            <Row k="Мир хранится до" sub="Запуск сервера продлевает срок">
+            <Row k={t('Мир хранится до')} sub={t('Запуск сервера продлевает срок')}>
               <span className="host-cfg-v">{dateLabel(worldDeleteAt)}</span>
             </Row>
           ) : null}
           {/* Баланс стоит в шапке панели; здесь — только нехватка на продление, как на сайте. */}
           {shortfall > 0 ? (
-            <Row k="На балансе не хватает" sub="Пополни, иначе сервер приостановится">
+            <Row k={t('На балансе не хватает')} sub={t('Пополни, иначе сервер приостановится')}>
               <b className="host-cfg-v" style={{ color: 'var(--m-danger)' }}>{rubLabel(shortfall)}</b>
               <BalancePill />
             </Row>

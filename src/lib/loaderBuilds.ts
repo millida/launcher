@@ -3,6 +3,7 @@ import { listLoaderVersions, type LoaderBuild } from '../ipc/commands'
 import { hasTauri } from '../ipc/tauri'
 import type { SelectOption } from '../components/Select'
 import { apiErrorText } from './apiError'
+import { t } from '../i18n'
 
 /// Empty means "let the installer pick the recommended build".
 export const AUTO_LOADER_VERSION = ''
@@ -32,7 +33,7 @@ export function useLoaderBuilds(loader: string, mcVersion: string, active: boole
       })
       .catch((e) => {
         if (!alive) return
-        setError(apiErrorText(e, 'Список сборок не загрузился'))
+        setError(apiErrorText(e, t('Список сборок не загрузился')))
         setLoading(false)
       })
     return () => {
@@ -47,7 +48,7 @@ export function useLoaderBuilds(loader: string, mcVersion: string, active: boole
   const options = useMemo((): SelectOption[] => {
     const auto: SelectOption = {
       value: AUTO_LOADER_VERSION,
-      label: 'Рекомендуемая',
+      label: t('Рекомендуемая'),
       sub: recommended ? recommended : undefined,
     }
     return [
@@ -55,14 +56,14 @@ export function useLoaderBuilds(loader: string, mcVersion: string, active: boole
       ...builds.map((b) => ({
         value: b.version,
         label: b.version,
-        sub: b.recommended ? 'рекомендуемая' : b.stable ? undefined : 'нестабильная',
+        sub: b.recommended ? t('рекомендуемая') : b.stable ? undefined : t('нестабильная'),
       })),
     ]
   }, [builds, recommended])
 
   const withPinned = (pinned?: string | null): SelectOption[] =>
     pinned && !options.some((o) => o.value === pinned)
-      ? [options[0], { value: pinned, label: pinned, sub: 'выбрана' }, ...options.slice(1)]
+      ? [options[0], { value: pinned, label: pinned, sub: t('выбрана') }, ...options.slice(1)]
       : options
 
   return { builds, loading, error, recommended, options, withPinned }

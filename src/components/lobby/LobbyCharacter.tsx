@@ -46,6 +46,7 @@ import {
 } from '../../lib/characterStage'
 import { releaseSnapshotGl } from '../../lib/glPool'
 import { PartyOverlay, usePartyStage } from './PartyStage'
+import { useT } from '../../i18n'
 
 /** Во что одет игрок: то же, что видят другие на сервере. */
 interface Look {
@@ -232,6 +233,7 @@ export function LobbyCharacter({
   /** Витрина: сколько вещей из `dress` встало на фигуру (0 — 3D не вышло, покажи превью). */
   onDressed?: (n: number) => void
 }) {
+  const t = useT()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<SkinViewEngine | null>(null)
@@ -916,7 +918,7 @@ export function LobbyCharacter({
         drag.current = null
       }}
     >
-      <canvas key={glEpoch} ref={canvasRef} aria-label={'Персонаж ' + nick} />
+      <canvas key={glEpoch} ref={canvasRef} aria-label={t('Персонаж {nick}', { nick })} />
       <span ref={tagWrap} className="lobby-tag-follow">
         {shop ? null : <Nametag nick={nick} at={shown ? tag : null} />}
       </span>

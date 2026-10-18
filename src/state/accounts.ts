@@ -29,6 +29,10 @@ const isHeadAvatar = (v?: string, from?: string): boolean =>
 
 export const isMillidaKind = (kind: string) => kind === 'millida' || kind === 'tg'
 
+/// A licence or an offline nick is what the first-run screen offers to play with,
+/// so such an account opens the launcher without a Millida sign-in.
+export const isGameAccountKind = (kind: string) => kind === 'microsoft' || kind === 'offline'
+
 function readAccounts(): Account[] {
   try {
     const list = JSON.parse(localStorage.getItem('m-accounts') || 'null') || []
@@ -64,13 +68,42 @@ function collapseMillida(list: Account[], active: string): { list: Account[]; ac
   return { list: next, active: list.some((a) => a.id === active) && !next.some((a) => a.id === active) ? keep.id : active }
 }
 
+const RETIRED_ELYBY = 'elyby'
+
+/// Ely.by sign-in is gone from the launcher. Its rows become offline nicks instead
+/// of vanishing: the player keeps the name they played under and Play keeps working,
+/// while the core has no way left to use the stored Ely.by session.
+export function retireElyby(list: Account[], active: string): { list: Account[]; active: string; retired: string[] } {
+  const retired: string[] = []
+  const next: Account[] = []
+  let current = active
+  for (const a of list) {
+    if (a.kind !== RETIRED_ELYBY) {
+      next.push(a)
+      continue
+    }
+    retired.push(a.id)
+    const twin = list.find((x) => x.kind === 'offline' && x.nick === a.nick)
+    if (twin) {
+      if (current === a.id) current = twin.id
+      continue
+    }
+    next.push({ id: a.id, nick: a.nick, kind: 'offline', avatar: a.avatar, avatarFrom: a.avatarFrom })
+  }
+  return { list: next, active: current, retired }
+}
+
 export function loadState(): { list: Account[]; active: string } {
   const stored = readAccounts()
-  const state = collapseMillida(stored, readActive())
-  if (state.list.length !== stored.length) {
+  const migrated = retireElyby(stored, readActive())
+  const state = collapseMillida(migrated.list, migrated.active)
+  if (migrated.retired.length || state.list.length !== stored.length) {
     persist(state.list)
     localStorage.setItem('m-active', state.active)
   }
+  if (migrated.retired.length && hasTauri())
+    for (const id of migrated.retired)
+      void msSessionForget(id).catch((e: unknown) => console.warn('[accounts] stale Ely.by session was not removed', e))
   return state
 }
 
@@ -170,16 +203,31 @@ export function effectiveNick(): string {
   return (a && a.nick) || 'Player' + Math.floor(Math.random() * 9999)
 }
 
-export type LaunchAuthKind = 'offline' | 'microsoft' | 'millida' | 'elyby'
+export type LaunchAuthKind = 'offline' | 'microsoft' | 'millida'
 
-/// An offline account is an explicit choice of nick: issuing a Millida session for it would
-/// replace that nick with the one bound to the site login, so only a Millida account gets one.
+const OFFLINE_NICK = /^[A-Za-z0-9_]{3,16}$/
+
+export const isOfflineNick = (nick: string): boolean => OFFLINE_NICK.test(nick)
+
+export const millidaGameNick = (): string => localStorage.getItem(GAME_NICK_KEY) || ''
+
+/// While a Millida login is present an offline account is created under the
+/// Millida profile name: that name is held by the account on the server, and a
+/// launch under it can carry the Millida session into servers with Millida sign-in.
+export function pinnedOfflineNick(millidaSession: boolean, profileNick: string): string {
+  return millidaSession && isOfflineNick(profileNick) ? profileNick : ''
+}
+
+/// A Millida session names the player after the Millida profile, so an offline
+/// account takes it only when its nick is exactly that name: the offline UUID is
+/// derived from the exact spelling, and a new profile's UUID is that same one.
+/// Any other offline nick starts plain offline and keeps its own name.
 /// A server that checks sessions only against our Yggdrasil turns away a licence
 /// and an offline nick alike, so its build always starts on the Millida session.
-export function launchAuthKind(acc: Account | null, millidaSession: boolean, millidaOnly = false): LaunchAuthKind {
+export function launchAuthKind(acc: Account | null, millidaSession: boolean, millidaOnly = false, profileNick = ''): LaunchAuthKind {
   if (millidaOnly) return millidaSession ? 'millida' : 'offline'
   if (acc && acc.kind === 'microsoft') return 'microsoft'
-  if (acc && acc.kind === 'elyby') return 'elyby'
+  if (acc && acc.kind === 'offline') return millidaSession && !!profileNick && acc.nick === profileNick ? 'millida' : 'offline'
   if (acc && !isMillidaKind(acc.kind)) return 'offline'
   return millidaSession ? 'millida' : 'offline'
 }

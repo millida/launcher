@@ -2,6 +2,7 @@ import { useEffect, useRef, type ReactNode } from 'react'
 import { Icon } from '../Icon'
 import { CatalogSkeleton } from './CatalogRow'
 import '../../styles/pixel/catalog2.css'
+import { useT } from '../../i18n'
 
 /*
  * Millida Каталог — один компонент на два места. В лаунчере он показывает
@@ -36,13 +37,14 @@ export function CatalogSearch({
   delay?: number
   width?: number
 }) {
+  const t = useT()
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
   useEffect(() => () => clearTimeout(timer.current), [])
   return (
     <div className="input sm cat2-search" style={width ? { width: width + 'px' } : undefined}>
       <Icon id="i-search" />
       <input
-        placeholder="Поиск"
+        placeholder={t('Поиск')}
         value={value}
         onChange={(e) => {
           const v = e.target.value
@@ -149,6 +151,7 @@ export function CatalogShell({
   skeleton?: ReactNode
   children?: ReactNode
 }) {
+  const t = useT()
   const body = note ? <CatalogNotice note={note} /> : loading ? skeleton || <CatalogSkeleton /> : children
   const wrap = layout === 'grid' && !note ? 'cat3-grid' : 'stack'
 
@@ -190,7 +193,7 @@ export function CatalogShell({
           onClick={more.onClick}
           disabled={more.busy}
         >
-          Показать ещё
+          {t('Показать ещё')}
         </button>
       ) : null}
     </>

@@ -3,6 +3,8 @@ import { Slider } from '../Slider'
 import { PxArt } from './px'
 import { useBump } from './motion'
 import { benchOp } from '../../state/milliBench'
+import { t, useT } from '../../i18n'
+import { plural } from '../../lib/format'
 
 /*
  * Выбор размера сборки: ≈25 · ≈70 · ≈150 · ≈250 · своё число (10–400).
@@ -16,10 +18,34 @@ export const MILLI_SIZE_MAX = 400
 const KEY = 'm-milli-size'
 
 export const MILLI_SIZES: readonly { n: number; ru: string; px: string }[] = [
-  { n: 25, ru: 'лёгкая', px: 'chest' },
-  { n: 70, ru: 'обычная', px: 'chest_large' },
-  { n: 150, ru: 'большая', px: 'ender_chest' },
-  { n: 250, ru: 'огромная', px: 'shulker_box' },
+  {
+    n: 25,
+    get ru() {
+      return t('лёгкая')
+    },
+    px: 'chest',
+  },
+  {
+    n: 70,
+    get ru() {
+      return t('обычная')
+    },
+    px: 'chest_large',
+  },
+  {
+    n: 150,
+    get ru() {
+      return t('большая')
+    },
+    px: 'ender_chest',
+  },
+  {
+    n: 250,
+    get ru() {
+      return t('огромная')
+    },
+    px: 'shulker_box',
+  },
 ]
 
 /** Число в пределах 10–400 или null (мусор, пусто). */
@@ -47,11 +73,7 @@ export function saveMilliSize(n: number): void {
 
 /** «70 модов», «1 мод», «23 мода». */
 export function modsWord(n: number): string {
-  const d = n % 10
-  const h = n % 100
-  if (d === 1 && h !== 11) return n + ' мод'
-  if (d >= 2 && d <= 4 && (h < 12 || h > 14)) return n + ' мода'
-  return n + ' модов'
+  return plural(n, t('{n} мод', { n }), t('{n} мода', { n }), t('{n} модов', { n }))
 }
 
 /** Ближайший чип к числу: подсвечиваем его, если число «около» (±15 %). */
@@ -74,6 +96,7 @@ export function MilliSizePick({
   onClose?: () => void
   compact?: boolean
 }) {
+  const t = useT()
   const [own, setOwn] = useState(false)
   const start = value ?? readMilliSize() ?? 70
   const [custom, setCustom] = useState(String(start))
@@ -101,14 +124,14 @@ export function MilliSizePick({
   const ownN = clampMilliSize(custom) ?? start
   const bump = useBump(ownN)
   return (
-    <div className={'msz' + (compact ? ' compact' : '')} ref={root} role="group" aria-label="Сколько модов взять">
+    <div className={'msz' + (compact ? ' compact' : '')} ref={root} role="group" aria-label={t('Сколько модов взять')}>
       <div className="msz-chips">
         {MILLI_SIZES.map((s) => (
           <button
             key={s.n}
             className={'seg msz-chip' + (on === s.n && !own ? ' on' : '')}
             onClick={() => pick(s.n)}
-            aria-label={'≈' + s.n + ' модов, ' + s.ru}
+            aria-label={t('≈{n} модов, {size}', { n: s.n, size: s.ru })}
             aria-pressed={on === s.n && !own}
           >
             <PxArt name={s.px} size={compact ? 12 : 32} />
@@ -118,7 +141,7 @@ export function MilliSizePick({
         ))}
         <button className={'seg msz-chip own' + (own ? ' on' : '')} aria-expanded={own} onClick={() => setOwn((v) => !v)}>
           {compact ? null : <PxArt name="crafting_table" size={32} />}
-          <span className="msz-n">Своё</span>
+          <span className="msz-n">{t('Своё')}</span>
         </button>
       </div>
       {own ? (
@@ -130,14 +153,14 @@ export function MilliSizePick({
           <span className="input sm">
             <input
               inputMode="numeric"
-              aria-label="Число модов"
+              aria-label={t('Число модов')}
               value={custom}
               onChange={(e) => setCustom(e.target.value.replace(/\D/g, '').slice(0, 3))}
               onKeyDown={(e) => e.key === 'Enter' && pick(ownN)}
             />
           </span>
           <button className="btn sm primary" onClick={() => pick(ownN)}>
-            Готово
+            {t('Готово')}
           </button>
         </div>
       ) : null}
