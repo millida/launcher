@@ -6,11 +6,13 @@ import { apiErrorText, isTransientApiError } from '../../lib/apiError'
 import { purchaseFlow } from '../../lib/purchaseTrack'
 import { getMillidaAccount } from '../../state/accounts'
 import { uiConfirm } from '../../state/confirm'
-import { openModal, showToast } from '../../state/ui'
+import { showToast } from '../../state/ui'
+import { openAccountAdd } from '../../state/accountAdd'
 import { isRealtimeLive, onRealtime } from '../../lib/realtime'
 import { pokeGate, purchaseWaitMs } from '../../lib/realtimePace'
 import { accessState, livePriceKopecks, newIdempotencyKey, paidVerdict, purchasesFrom, shortfallKopecks, verdictText } from './paid'
 import type { AccessState, Pricing, Purchase } from './paid'
+import { t } from '../../i18n'
 
 /*
  * Покупка и подписка материала каталога Millida из лаунчера — те же адреса и
@@ -108,8 +110,8 @@ export async function loadPurchases(): Promise<void> {
 /** Покупки привязаны к аккаунту Millida: без него — одно окно «Войти». */
 export async function requireMillida(): Promise<boolean> {
   if (hasMillidaAccount()) return true
-  if (await uiConfirm('Покупки и доступ хранятся в аккаунте Millida.', { title: 'Войди в Millida', confirmLabel: 'Войти', danger: false })) {
-    openModal('accModal')
+  if (await uiConfirm(t('Покупки и доступ хранятся в аккаунте Millida.'), { title: t('Войди в Millida'), confirmLabel: t('Войти'), danger: false })) {
+    openAccountAdd('millida')
   }
   return false
 }
@@ -201,13 +203,13 @@ async function fail(e: unknown, d: BuyDialog): Promise<void> {
     return
   }
   if (v.kind === 'owned') {
-    owned(d.slug, 'Уже куплено')
+    owned(d.slug, t('Уже куплено'))
     return
   }
   if (flow) flow(false, 'error', e)
   flow = null
   usePaid.setState({ dialog: null })
-  showToast(verdictText(v) || apiErrorText(e, d.pricing === 'SUBSCRIPTION' ? 'Не удалось оформить подписку' : 'Не удалось купить'), 'error')
+  showToast(verdictText(v) || apiErrorText(e, d.pricing === 'SUBSCRIPTION' ? t('Не удалось оформить подписку') : t('Не удалось купить')), 'error')
 }
 
 /** Главная кнопка окна: купить, оформить подписку или пополнить. */
@@ -240,12 +242,12 @@ export async function confirmBuy(): Promise<void> {
     })
     usePaid.setState({ busy: false })
     void refreshMillidaWallet()
-    owned(d.slug, 'Куплено')
+    owned(d.slug, t('Куплено'))
   } catch (e) {
     usePaid.setState({ busy: false })
     // Обрыв связи или 5xx могли уже списать: повтор идёт с тем же ключом.
     if (isTransientApiError(e)) {
-      showToast(apiErrorText(e, 'Millida не ответила — повтори'), 'error')
+      showToast(apiErrorText(e, t('Millida не ответила — повтори')), 'error')
       return
     }
     buyKey = null
@@ -277,7 +279,7 @@ function watchPayment(): void {
         usePaid.setState((s) => ({ waiting: { ...s.waiting, [slug]: false } }))
         const done = afterOwnedBySlug.get(slug)
         afterOwnedBySlug.delete(slug)
-        showToast('Подписка оформлена', 'ok', 'achievement')
+        showToast(t('Подписка оформлена'), 'ok', 'achievement')
         void loadPurchases()
         if (done) done()
       }

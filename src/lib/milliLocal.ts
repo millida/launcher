@@ -5,6 +5,7 @@
  */
 import { tauri, hasTauri } from '../ipc/tauri'
 import type { DiaryChange, MilliAction, MilliStep } from './milliActions'
+import { formatFixed, t } from '../i18n'
 
 // ─── IPC ─────────────────────────────────────────────────────────────────
 
@@ -190,7 +191,7 @@ export function diaryCatchUp(profile: string, now: PackPrint): Promise<DiaryEntr
       await diarySave(profile, d)
       return null
     }
-    const e: DiaryEntry = { id: newId(), at: Date.now(), by: 'player', kind: 'player', title: 'Ты поменял', changes: changes.slice(0, 30) }
+    const e: DiaryEntry = { id: newId(), at: Date.now(), by: 'player', kind: 'player', title: t('Ты поменял'), changes: changes.slice(0, 30) }
     d.entries.push(e)
     await diarySave(profile, d)
     return e
@@ -205,14 +206,14 @@ export function printDiff(a: PackPrint, b: PackPrint): DiaryChange[] {
   const am = new Map(Object.entries(a.mods).map(([f, on]) => [base(f), on]))
   const bm = new Map(Object.entries(b.mods).map(([f, on]) => [base(f), on]))
   for (const [f, on] of bm) {
-    if (!am.has(f)) out.push({ label: modName(f), to: 'добавлен' })
-    else if (am.get(f) !== on) out.push({ label: modName(f), from: am.get(f) ? 'вкл' : 'выкл', to: on ? 'вкл' : 'выкл' })
+    if (!am.has(f)) out.push({ label: modName(f), to: t('добавлен') })
+    else if (am.get(f) !== on) out.push({ label: modName(f), from: am.get(f) ? t('вкл') : t('выкл'), to: on ? t('вкл') : t('выкл') })
   }
-  for (const f of am.keys()) if (!bm.has(f)) out.push({ label: modName(f), from: 'был', to: 'убран' })
+  for (const f of am.keys()) if (!bm.has(f)) out.push({ label: modName(f), from: t('был'), to: t('убран') })
   for (const k of new Set([...Object.keys(a.opts), ...Object.keys(b.opts)])) {
     if (a.opts[k] !== b.opts[k]) out.push({ label: k, from: a.opts[k] ?? '—', to: b.opts[k] ?? '—' })
   }
-  if (a.ram !== b.ram) out.push({ label: 'Память', from: a.ram ? a.ram + ' ГБ' : 'авто', to: b.ram ? b.ram + ' ГБ' : 'авто' })
+  if (a.ram !== b.ram) out.push({ label: t('Память'), from: a.ram ? t('{n} ГБ', { n: a.ram }) : t('авто'), to: b.ram ? t('{n} ГБ', { n: b.ram }) : t('авто') })
   return out
 }
 
@@ -363,9 +364,9 @@ async function activeShader(profile: string): Promise<string> {
 /** «340 МБ», «1,2 ГБ». */
 export function sizeText(bytes: number): string {
   const mb = bytes / 1048576
-  if (mb < 1) return '<1 МБ'
-  if (mb < 1000) return Math.round(mb) + ' МБ'
-  return (mb / 1024).toFixed(1).replace('.', ',') + ' ГБ'
+  if (mb < 1) return t('<1 МБ')
+  if (mb < 1000) return t('{n} МБ', { n: Math.round(mb) })
+  return t('{n} ГБ', { n: formatFixed(mb / 1024, 1) })
 }
 
 /** «сегодня 14:05», «вчера 21:30», «пн 12:00», «3 окт». */
@@ -375,10 +376,10 @@ export function whenText(ms: number, now = Date.now()): string {
   const hm = d.toTimeString().slice(0, 5)
   const day = (x: Date) => Math.floor((x.getTime() - x.getTimezoneOffset() * 60000) / 86400000)
   const diff = day(n) - day(d)
-  if (diff === 0) return 'сегодня ' + hm
-  if (diff === 1) return 'вчера ' + hm
-  if (diff < 7) return ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'][d.getDay()] + ' ' + hm
-  return d.getDate() + ' ' + ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'][d.getMonth()]
+  if (diff === 0) return t('сегодня {time}', { time: hm })
+  if (diff === 1) return t('вчера {time}', { time: hm })
+  if (diff < 7) return [t('вс'), t('пн'), t('вт'), t('ср'), t('чт'), t('пт'), t('сб')][d.getDay()] + ' ' + hm
+  return d.getDate() + ' ' + [t('янв'), t('фев'), t('мар'), t('апр'), t('мая'), t('июн'), t('июл'), t('авг'), t('сен'), t('окт'), t('ноя'), t('дек')][d.getMonth()]
 }
 
 export type { MilliAction }

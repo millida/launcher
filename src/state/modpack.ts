@@ -3,6 +3,7 @@ import { modpackVersions } from '../ipc/commands'
 import type { ModpackVersion } from '../ipc/commands'
 import { hasTauri } from '../ipc/tauri'
 import { openModal, showToast } from './ui'
+import { t } from '../i18n'
 
 interface ModpackState {
   profile: string
@@ -28,10 +29,10 @@ export const useModpackVersions = create<ModpackState>((set, get) => ({
   setLabel: (id, v) => set({ labels: { ...get().labels, [id]: v } }),
   open: async (profile, slug, curId) => {
     if (!hasTauri()) {
-      showToast('Доступно в приложении')
+      showToast(t('Доступно в приложении'))
       return
     }
-    showToast('Загружаем версии сборки…')
+    showToast(t('Загружаем версии сборки…'))
     try {
       const list = await modpackVersions(slug)
       set({ profile, slug, mode: 'update', curId, list: list || [], labels: {} })
@@ -42,16 +43,16 @@ export const useModpackVersions = create<ModpackState>((set, get) => ({
   },
   openInstall: async (slug, title) => {
     if (!hasTauri()) {
-      showToast('Установка сборок — в приложении', 'error')
+      showToast(t('Установка сборок — в приложении'), 'error')
       return
     }
-    showToast('Смотрим версии «' + title + '»…')
+    showToast(t('Смотрим версии «{name}»…', { name: title }))
     try {
       const list = await modpackVersions(slug)
       set({ profile: '', slug, title, mode: 'install', curId: '', list: list || [], labels: {} })
       openModal('mpOverlay')
     } catch (e) {
-      showToast('Не удалось получить версии: ' + e, 'error')
+      showToast(t('Не удалось получить версии: {error}', { error: String(e) }), 'error')
     }
   },
 }))

@@ -5,6 +5,7 @@ import { loadListing } from '../catalog/site'
 import type { SiteCard, SiteSlug } from '../catalog/site'
 import { dayIndex, hashStr, rng } from '../../lib/recsMix'
 import { readSignals } from '../../lib/recsSignals'
+import { useT } from '../../i18n'
 
 /**
  * «Играть вдвоём» — тот же блок, что на millida.net/katalog (владелец
@@ -94,6 +95,7 @@ export function mixTogether(pools: Pick[][], n = SHOWN, opts?: TogetherOpts): Pi
 const LOADER: Record<string, string> = { fabric: 'Fabric', forge: 'Forge', neoforge: 'NeoForge', quilt: 'Quilt' }
 
 export function PlayTogether({ onPack, onMap, onItem, lead, onMore }: { onPack: (slug: string, title: string) => void; onMap: (title: string) => void; onItem?: (section: string, card: SiteCard) => void; /** Первая двойная клетка ряда — «Свой сервер» (хостинг). */ lead?: ReactNode; /** «Ещё» — весь каталог «С другом». */ onMore?: () => void }) {
+  const t = useT()
   const [list, setList] = useState<Pick[] | null>(null)
   useEffect(() => {
     let alive = true
@@ -154,14 +156,14 @@ export function PlayTogether({ onPack, onMap, onItem, lead, onMore }: { onPack: 
                       }}
                     />
                   ) : null}
-                  <span className="ph-card-tag">{p.section === 'maps' ? 'Карта' : 'Сборка'}</span>
+                  <span className="ph-card-tag">{p.section === 'maps' ? t('Карта') : t('Сборка')}</span>
                 </span>
                 <span className="ph-card-body">
                   <b>{p.card.title}</b>
                   <span className="ph-card-meta">
                     {meta || (
                       <>
-                        <Icon id="i-users" /> С другом
+                        <Icon id="i-users" /> {t('С другом')}
                       </>
                     )}
                   </span>
@@ -174,8 +176,8 @@ export function PlayTogether({ onPack, onMap, onItem, lead, onMore }: { onPack: 
           <span className="fy-more-ic">
             <Icon id="i-chev-r" />
           </span>
-          <b>Ещё</b>
-          <span className="ph-card-meta">Всё «С другом»</span>
+          <b>{t('Ещё')}</b>
+          <span className="ph-card-meta">{t('Всё «С другом»')}</span>
         </button>
       ) : null}
     </div>

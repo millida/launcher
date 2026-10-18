@@ -43,6 +43,7 @@ import { BenchConfig } from './bench/BenchConfig'
 import { benchChosen } from './bench/benchTabs'
 import { Art, XpOrb } from './MilliModTip'
 import '../../styles/pixel/milli-pack.css'
+import { t, useT } from '../../i18n'
 
 /*
  * Карточка сборки в ленте Милли — всё внутри маленького чата (решение
@@ -75,6 +76,7 @@ const sizeMod = Object.values(import.meta.glob<{ MilliSizePick?: ComponentType<S
 const SizePick = sizeMod?.MilliSizePick ?? null
 
 function ServerPick({ pack, projectIds, onClose }: { pack: MilliPack; projectIds: string[]; onClose: () => void }) {
+  const t = useT()
   const [list, setList] = useState<HostServer[] | null>(null)
   const [failed, setFailed] = useState(false)
   const [busy, setBusy] = useState('')
@@ -91,31 +93,31 @@ function ServerPick({ pack, projectIds, onClose }: { pack: MilliPack; projectIds
     } catch (e) {
       const m = milliError(e)
       if (m.kind === 'plus') openPlus()
-      else showToast(m.kind === 'failed' ? 'Не встало на сервер — повтори' : m.text, 'error')
+      else showToast(m.kind === 'failed' ? t('Не встало на сервер — повтори') : m.text, 'error')
     } finally {
       setBusy('')
     }
   }
   return (
-    <div className="mpc-srv" role="group" aria-label="Сервер">
+    <div className="mpc-srv" role="group" aria-label={t('Сервер')}>
       <div className="mpc-srv-head">
-        <b>{done ? 'Готово' : 'На какой сервер?'}</b>
-        <button type="button" className="mpc-x" aria-label="Закрыть" onClick={onClose}>
+        <b>{done ? t('Готово') : t('На какой сервер?')}</b>
+        <button type="button" className="mpc-x" aria-label={t('Закрыть')} onClick={onClose}>
           <PxIcon name="x" size={12} />
         </button>
       </div>
       {done ? (
         <p className="mpc-srv-done">
-          Встало {done.installed.length}
-          {done.skipped.length ? ', пропущено ' + done.skipped.length : ''}
+          {t('Встало {n}', { n: done.installed.length })}
+          {done.skipped.length ? ', ' + t('пропущено {n}', { n: done.skipped.length }) : ''}
         </p>
       ) : failed ? (
-        <p className="mpc-srv-done">Список серверов не загрузился</p>
+        <p className="mpc-srv-done">{t('Список серверов не загрузился')}</p>
       ) : !list ? (
         <span className="skel" style={{ height: 44 }} />
       ) : !list.length ? (
         <button type="button" className="btn sm secondary" onClick={() => (closeMilli(), setScreen('hosting'))}>
-          Создать сервер
+          {t('Создать сервер')}
         </button>
       ) : (
         <ul className="mpc-srv-list">
@@ -124,7 +126,7 @@ function ServerPick({ pack, projectIds, onClose }: { pack: MilliPack; projectIds
               <button type="button" className="mpc-srv-row" disabled={!!busy} data-track="milli_server_pick" onClick={() => void send(s)}>
                 <ServerIcon icon={s.icon} size={28} />
                 <span className="mpc-srv-body">
-                  <b>{s.name || s.slug || 'Мой сервер'}</b>
+                  <b>{s.name || s.slug || t('Мой сервер')}</b>
                   <i>{buildLabel(s)}</i>
                 </span>
                 {busy === s.id ? <span className="spin" /> : <StatusBadge status={s.status || ''} />}
@@ -156,17 +158,18 @@ function XpBar({ pct, done, msg }: { pct: number; done: boolean; msg: string }) 
 }
 
 const CodeLine = memo(function CodeLine({ code }: { code: string }) {
+  const t = useT()
   if (!code) return null
   return (
     <div className="mpc-code">
-      <span>Код для друзей</span>
+      <span>{t('Код для друзей')}</span>
       <b>{code}</b>
       <button
         type="button"
         className="mpc-x"
-        aria-label="Скопировать код"
+        aria-label={t('Скопировать код')}
         data-track="milli_code_copy"
-        onClick={() => void copyText(code).then((ok) => showToast(ok ? 'Код скопирован' : 'Не удалось скопировать', ok ? 'ok' : 'error'))}
+        onClick={() => void copyText(code).then((ok) => showToast(ok ? t('Код скопирован') : t('Не удалось скопировать'), ok ? 'ok' : 'error'))}
       >
         <PxIcon name="copy" size={12} />
       </button>
@@ -177,6 +180,7 @@ const CodeLine = memo(function CodeLine({ code }: { code: string }) {
 
 /** Бейдж мгновенной проверки (pack.check): «✓ Совместимо» или «⚠ 2»; по клику — пункты значками. */
 function CheckBadge({ check }: { check: MilliCheck }) {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const fold = useRef<HTMLSpanElement>(null)
   const keep = useHeightAnim(fold, open)
@@ -188,7 +192,7 @@ function CheckBadge({ check }: { check: MilliCheck }) {
       <span className="mlm-spark-host">
         <button type="button" className={'mpc-plate mpc-compat ' + (ok ? 'ok' : 'mid')} aria-expanded={open} data-track="milli_check" onClick={() => setOpen((v) => !v)}>
           <PxIcon name={ok ? 'check' : 'alert'} size={8} />
-          {ok ? 'Совместимо' : n}
+          {ok ? t('Совместимо') : n}
         </button>
         {ok ? <i className="mlm-spark" aria-hidden="true" /> : null}
       </span>
@@ -225,6 +229,7 @@ const Plates = memo(function Plates({ pack }: { pack: MilliPack }) {
 
 /** Установка: новая сборка через ядро (installBench — ровно голова) + код для друзей («Поделиться»). */
 function useInstall() {
+  const t = useT()
   const [phase, setPhase] = useState<Phase>('plan')
   const [key, setKey] = useState<string | null>(null)
   const [built, setBuilt] = useState('')
@@ -250,14 +255,14 @@ function useInstall() {
         setBuilt(name)
         setPhase('done')
         milliCue('spin', document.querySelector('.ml-panel .mlh'))
-        if (!failed.length) showToast('Сборка готова', 'ok', 'install', { label: 'Играть', run: () => play(name) })
+        if (!failed.length) showToast(t('Сборка готова'), 'ok', 'install', { label: t('Играть'), run: () => play(name) })
       },
       () => setPhase('plan'),
     )
     if (!started) setPhase('plan')
   }
   const pct = phase === 'done' ? 100 : Math.round(task?.pct ?? 0)
-  const msg = phase === 'done' ? 'Сборка готова' : task?.msg || task?.label || 'Создаём…'
+  const msg = phase === 'done' ? t('Сборка готова') : task?.msg || task?.label || t('Создаём…')
   return { phase, built, code, pct, msg, install, reset: () => setPhase('plan') }
 }
 
@@ -276,6 +281,7 @@ function Sum({ mods, mb, ram }: { mods: number; mb?: number; ram?: number }) {
 
 /** «Установить ▾»: Установить · Скачать .mrpack · Скопировать список · На сервер (PLUS). */
 function InstallMenu({ onInstall, onServer, head, canServer }: { onInstall: () => void; onServer: () => void; head: MilliPack; canServer: boolean }) {
+  const t = useT()
   const modder = useBench((s) => s.ui.modder)
   const [menu, setMenu] = useState(false)
   const ref = useRef<HTMLSpanElement>(null)
@@ -293,8 +299,8 @@ function InstallMenu({ onInstall, onServer, head, canServer }: { onInstall: () =
   useEffect(() => {
     if (!menu) return
     const down = (e: MouseEvent) => {
-      const t = e.target as Node
-      if (ref.current && !ref.current.contains(t) && !menuRef.current?.contains(t)) setMenu(false)
+      const target = e.target as Node
+      if (ref.current && !ref.current.contains(target) && !menuRef.current?.contains(target)) setMenu(false)
     }
     const key = (e: KeyboardEvent) => e.key === 'Escape' && setMenu(false)
     const away = (e: Event) => !menuRef.current?.contains(e.target as Node) && setMenu(false)
@@ -315,15 +321,15 @@ function InstallMenu({ onInstall, onServer, head, canServer }: { onInstall: () =
   }
   const copy = async () => {
     const ok = await copyText(milliPackList(head, modder))
-    showToast(ok ? 'Список скопирован' : 'Не удалось скопировать', ok ? 'ok' : 'error')
+    showToast(ok ? t('Список скопирован') : t('Не удалось скопировать'), ok ? 'ok' : 'error')
   }
   return (
     <span className="mpc-inst ml-menu-wrap" ref={ref}>
       <button type="button" className="btn sm primary mpc-inst-main" data-track="milli_install" onClick={onInstall}>
         <PxIcon name="download" size={12} />
-        Установить
+        {t('Установить')}
       </button>
-      <button type="button" className="btn sm primary mpc-inst-more" aria-label="Ещё" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu((v) => !v)}>
+      <button type="button" className="btn sm primary mpc-inst-more" aria-label={t('Ещё')} aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu((v) => !v)}>
         <PxIcon name="chev-d" size={10} />
       </button>
       {menu && pos ? createPortal(
@@ -332,23 +338,23 @@ function InstallMenu({ onInstall, onServer, head, canServer }: { onInstall: () =
             <Art px="crafting_table" size={16}>
               <PxIcon name="download" size={12} />
             </Art>
-            Установить
+            {t('Установить')}
           </button>
-          <button type="button" className="ml-menu-item" role="menuitem" data-track="milli_mrpack" onClick={pick(() => void milliDownloadMrpack(head, openExt).then((ok) => ok || showToast('Скачать не вышло', 'error')))}>
+          <button type="button" className="ml-menu-item" role="menuitem" data-track="milli_mrpack" onClick={pick(() => void milliDownloadMrpack(head, openExt).then((ok) => ok || showToast(t('Скачать не вышло'), 'error')))}>
             <Art px="hopper" size={16}>
               <PxIcon name="download" size={12} />
             </Art>
-            Скачать .mrpack
+            {t('Скачать .mrpack')}
           </button>
           <button type="button" className="ml-menu-item" role="menuitem" data-track="milli_copy_list" onClick={pick(() => void copy())}>
             <Art px="book_quill" size={16}>
               <PxIcon name="copy" size={12} />
             </Art>
-            Скопировать список
+            {t('Скопировать список')}
           </button>
           <button type="button" className="ml-menu-item" role="menuitem" data-track="milli_server" data-plus={canServer ? 1 : 0} onClick={pick(onServer)}>
             {canServer ? <PxIcon name="server" size={12} /> : <PxIcon name="crown" size={12} />}
-            На сервер
+            {t('На сервер')}
           </button>
         </div>,
         pos.host,
@@ -358,7 +364,20 @@ function InstallMenu({ onInstall, onServer, head, canServer }: { onInstall: () =
 }
 
 const TAB_PX: Record<MilliTab, string> = { mods: 'crafting_table', resourcepacks: 'painting', shaders: 'glowstone', config: 'comparator' }
-const TAB_SHORT: Record<MilliTab, string> = { mods: 'Моды', resourcepacks: 'Паки', shaders: 'Шейдеры', config: 'Графика' }
+const TAB_SHORT: Record<MilliTab, string> = {
+  get mods() {
+    return t('Моды')
+  },
+  get resourcepacks() {
+    return t('Паки')
+  },
+  get shaders() {
+    return t('Шейдеры')
+  },
+  get config() {
+    return t('Графика')
+  },
+}
 
 type Counts = { mods: number; resourcepacks: number; shaders: number }
 const countsOf = (p: MilliPack): Counts =>
@@ -389,10 +408,11 @@ function Skeleton() {
 }
 
 function TabFail() {
+  const t = useT()
   return (
     <div className="mpc-err" role="alert">
       <PxIcon name="alert" size={12} />
-      Ошибка
+      {t('Ошибка')}
     </div>
   )
 }
@@ -471,7 +491,8 @@ const Pane = memo(function Pane({ tab, on }: { tab: MilliTab; on: boolean }) {
 })
 
 /** Вкладка: счётчик подпрыгивает при смене (моушн). */
-function TabBtn({ t, n, on, dot, onTab }: { t: MilliTab; n: number | null; on: boolean; dot: boolean; onTab: (t: MilliTab) => void }) {
+function TabBtn({ t: tab, n, on, dot, onTab }: { t: MilliTab; n: number | null; on: boolean; dot: boolean; onTab: (t: MilliTab) => void }) {
+  const t = useT()
   const bump = useBump(n)
   return (
     <button
@@ -481,32 +502,33 @@ function TabBtn({ t, n, on, dot, onTab }: { t: MilliTab; n: number | null; on: b
       aria-expanded={on}
       className={'mpc-tab' + (on ? ' on' : '')}
       data-track="milli_card_tab"
-      data-tab={t}
-      onClick={() => onTab(t)}
+      data-tab={tab}
+      onClick={() => onTab(tab)}
     >
-      <PxArt name={TAB_PX[t]} size={14} className="mci" />
-      <span className="mpc-tab-t" data-short={TAB_SHORT[t]}>
-        {MILLI_TAB_RU[t]}
+      <PxArt name={TAB_PX[tab]} size={14} className="mci" />
+      <span className="mpc-tab-t" data-short={TAB_SHORT[tab]}>
+        {MILLI_TAB_RU[tab]}
       </span>
       {n !== null ? (
         <b className="mpc-tab-n" data-mlm-bump={bump}>
           {n}
         </b>
       ) : null}
-      {dot ? <i className="mpc-tab-dot" aria-label="Есть изменения" /> : null}
+      {dot ? <i className="mpc-tab-dot" aria-label={t('Есть изменения')} /> : null}
     </button>
   )
 }
 
 /** Сегмент-вкладки со скользящим индикатором. Клик по открытой — свернуть. */
 function TabSeg({ counts, tab, open, marked, onTab }: { counts: Counts; tab: MilliTab | null; open: boolean; marked: Set<MilliTab>; onTab: (t: MilliTab) => void }) {
+  const t = useT()
   const idx = open && tab ? MILLI_TABS.indexOf(tab) : -1
   const ind = useSegIndicator(idx)
   return (
-    <nav className="mpc-tabs" role="tablist" aria-label="Состав сборки" ref={ind}>
+    <nav className="mpc-tabs" role="tablist" aria-label={t('Состав сборки')} ref={ind}>
       <i className="mlm-seg-ind" aria-hidden="true" />
-      {MILLI_TABS.map((t) => (
-        <TabBtn key={t} t={t} n={t === 'config' || !counts[t] ? null : counts[t]} on={open && tab === t} dot={marked.has(t)} onTab={onTab} />
+      {MILLI_TABS.map((key) => (
+        <TabBtn key={key} t={key} n={key === 'config' || !counts[key] ? null : counts[key]} on={open && tab === key} dot={marked.has(key)} onTab={onTab} />
       ))}
     </nav>
   )
@@ -521,6 +543,7 @@ function MapIcon({ icon }: { icon: string | null }) {
 
 /** Карты, ссылки, «Можно добавить», PLUS — короткими строками под вкладками. */
 const Extras = memo(function Extras({ pack }: { pack: MilliPack }) {
+  const t = useT()
   const plus = useMilli((s) => !!s.status?.plus)
   const extras = pack.resourcepacks.length + pack.shaders.length + pack.maps.length + pack.links.length > 0
   return (
@@ -556,7 +579,7 @@ const Extras = memo(function Extras({ pack }: { pack: MilliPack }) {
       ) : null}
       {pack.locked.extras && !plus && !extras ? (
         <button type="button" className="mpc-up" data-track="milli_plus_upsell" data-src="extras" onClick={openPlus}>
-          <span className="mpc-up-t">Шейдеры и карты</span>
+          <span className="mpc-up-t">{t('Шейдеры и карты')}</span>
           <b>
             <PxIcon name="crown" size={10} />
             PLUS
@@ -605,12 +628,13 @@ function openVersion(pack: MilliPack, tab: MilliTab | null, done: () => void) {
       if (!p || !Array.isArray(p.mods)) throw new Error('empty')
       go(p)
     })
-    .catch(() => showToast('Не удалось открыть эту версию', 'error'))
+    .catch(() => showToast(t('Не удалось открыть эту версию'), 'error'))
     .finally(done)
 }
 
 /** Компактная карточка: старая ревизия в ленте или stub из истории. Клик по вкладке — сделать её головой и раскрыть. */
 function MiniCard({ pack, latest }: { pack: MilliPack; latest: boolean }) {
+  const t = useT()
   const [opening, setOpening] = useState(false)
   const counts = countsOf(pack)
   const old = !latest && !pack.stub
@@ -636,9 +660,9 @@ function MiniCard({ pack, latest }: { pack: MilliPack; latest: boolean }) {
     >
       {old ? (
         <p className="mpc-note">
-          Старая версия
+          {t('Старая версия')}
           <button type="button" className="mpc-note-btn" data-track="milli_rev_back" data-id={pack.buildId} disabled={opening} onClick={back}>
-            Вернуть
+            {t('Вернуть')}
           </button>
         </p>
       ) : null}
@@ -652,17 +676,17 @@ function MiniCard({ pack, latest }: { pack: MilliPack; latest: boolean }) {
           </b>
           <span className="mpc-meta">
             <Plates pack={pack} />
-            {pack.rev ? <span className="mpr-rev">версия {pack.rev}</span> : null}
+            {pack.rev ? <span className="mpr-rev">{t('версия {n}', { n: pack.rev })}</span> : null}
           </span>
         </span>
       </div>
-      <TabSeg counts={counts} tab={null} open={false} marked={EMPTY_TABS} onTab={(t) => open(t)} />
+      <TabSeg counts={counts} tab={null} open={false} marked={EMPTY_TABS} onTab={(key) => open(key)} />
       <div className="mpc-foot">
         <Sum mods={counts.mods} />
         {pack.stub ? (
           <button type="button" className="btn sm secondary" data-track="milli_stub_open" data-id={pack.buildId} disabled={opening} onClick={() => open('mods')}>
             {opening ? <span className="spin" /> : <PxIcon name="restart" size={12} />}
-            Открыть
+            {t('Открыть')}
           </button>
         ) : null}
       </div>
@@ -675,6 +699,7 @@ const HIDE = { display: 'none' } as const
 
 /** Живая карточка: голова цепочки, вкладки раскрываются внутри. */
 function LiveCard({ pack }: { pack: MilliPack }) {
+  const t = useT()
   const head = useBench((s) => s.head) ?? pack
   const open = useBench((s) => s.ui.open)
   const tab = useBench((s) => s.ui.tab)
@@ -756,7 +781,7 @@ function LiveCard({ pack }: { pack: MilliPack }) {
             className="mpc-title"
             value={title}
             maxLength={24}
-            aria-label="Название сборки"
+            aria-label={t('Название сборки')}
             disabled={inst.phase !== 'plan'}
             spellCheck={false}
             onChange={(e) => setTitle(e.target.value)}
@@ -772,7 +797,7 @@ function LiveCard({ pack }: { pack: MilliPack }) {
               onClick={() => setSizeOpen((v) => !v)}
             >
               <b>{milliModsLabel(counts.mods)}</b>
-              {SizePick ? ' · изменить' : null}
+              {SizePick ? ' · ' + t('изменить') : null}
             </button>
           </span>
         </span>
@@ -790,7 +815,7 @@ function LiveCard({ pack }: { pack: MilliPack }) {
             }
           }}
         >
-          <span>Для моддеров</span>
+          <span>{t('Для моддеров')}</span>
           <span className={'tgl' + (modder ? ' on' : '')} aria-hidden="true" />
         </label>
       </div>
@@ -826,7 +851,7 @@ function LiveCard({ pack }: { pack: MilliPack }) {
             {inst.phase === 'done' ? (
               <button type="button" className="btn sm primary" data-track="play" data-kind="build" data-id={inst.built} data-private onClick={() => play(inst.built)}>
                 <PxIcon name="play" size={12} />
-                Играть
+                {t('Играть')}
               </button>
             ) : null}
           </>

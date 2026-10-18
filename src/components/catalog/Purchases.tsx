@@ -7,7 +7,8 @@ import { sectionOfType } from './paid'
 import type { Purchase, Pricing } from './paid'
 import { loadPurchases, usePaid } from './paidStore'
 import { hasMillidaAccount } from '../../lib/api'
-import { openModal } from '../../state/ui'
+import { openAccountAdd } from '../../state/accountAdd'
+import { useT } from '../../i18n'
 
 /*
  * «Покупки» — всё купленное в каталоге Millida (`/catalog/purchases/me`):
@@ -38,6 +39,7 @@ function cardOf(p: Purchase, section: string): SiteCard {
 }
 
 export function PurchasesPane({ onOpenPack }: { onOpenPack?: (slug: string) => boolean | void }) {
+  const t = useT()
   const rows = usePaid((s) => s.purchases)
   const failed = usePaid((s) => s.purchasesFailed)
   const signed = hasMillidaAccount()
@@ -47,12 +49,12 @@ export function PurchasesPane({ onOpenPack }: { onOpenPack?: (slug: string) => b
   if (!signed)
     return (
       <CatalogNotice
-        note={{ icon: 'i-wallet', title: 'Покупки — в аккаунте Millida', action: { label: 'Войти', primary: true, onClick: () => openModal('accModal') } }}
+        note={{ icon: 'i-wallet', title: t('Покупки — в аккаунте Millida'), action: { label: t('Войти'), primary: true, onClick: () => openAccountAdd('millida') } }}
       />
     )
   if (failed && !(rows && rows.length))
     return (
-      <CatalogNotice note={{ icon: 'i-alert', title: 'Покупки не загрузились', action: { label: 'Повторить', primary: true, icon: 'i-restart', onClick: () => void loadPurchases() } }} />
+      <CatalogNotice note={{ icon: 'i-alert', title: t('Покупки не загрузились'), action: { label: t('Повторить'), primary: true, icon: 'i-restart', onClick: () => void loadPurchases() } }} />
     )
   if (rows === null)
     return (
@@ -60,11 +62,11 @@ export function PurchasesPane({ onOpenPack }: { onOpenPack?: (slug: string) => b
         <RowSkeleton gallery n={3} />
       </div>
     )
-  if (!rows.length) return <CatalogNotice note={{ icon: 'i-inbox', title: 'Покупок пока нет' }} />
+  if (!rows.length) return <CatalogNotice note={{ icon: 'i-inbox', title: t('Покупок пока нет') }} />
   return (
     <div className="mr-main cat-purchases">
       <header className="mr-head">
-        <h1 className="mr-h1">Мои покупки</h1>
+        <h1 className="mr-h1">{t('Мои покупки')}</h1>
       </header>
       <div className="mr-galgrid">
         {rows.map((p, i) => {

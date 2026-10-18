@@ -17,6 +17,7 @@ import { useEffect, useState } from 'react'
 
 import { hexColor, recolorPixels } from './variantRecolor'
 import { screenSettled } from './screenSettle'
+import { t } from '../i18n'
 
 export { hexColor, recolorPixels }
 
@@ -38,12 +39,12 @@ function recolorWorker(): Worker | null {
       if (!p) return
       pending.delete(e.data.id)
       if (e.data.blob) p.ok(e.data.blob)
-      else p.fail(new Error(e.data.error || 'перекраска'))
+      else p.fail(new Error(e.data.error || t('перекраска')))
     }
     w.onerror = () => {
       worker = null
       w.terminate()
-      for (const p of pending.values()) p.fail(new Error('перекраска'))
+      for (const p of pending.values()) p.fail(new Error(t('перекраска')))
       pending.clear()
     }
     worker = w
@@ -55,7 +56,7 @@ function recolorWorker(): Worker | null {
 
 async function recolorOffThread(img: HTMLImageElement, from: string | null, to: string): Promise<Blob> {
   const w = recolorWorker()
-  if (!w) throw new Error('перекраска')
+  if (!w) throw new Error(t('перекраска'))
   const bitmap = await createImageBitmap(img)
   const id = ++seq
   return new Promise<Blob>((ok, fail) => {
@@ -69,12 +70,12 @@ function recolorHere(img: HTMLImageElement, from: string | null, to: string): Pr
   c.width = img.naturalWidth
   c.height = img.naturalHeight
   const g = c.getContext('2d', { willReadFrequently: true })
-  if (!g) return Promise.reject(new Error('холст'))
+  if (!g) return Promise.reject(new Error(t('холст')))
   g.drawImage(img, 0, 0)
   const data = g.getImageData(0, 0, c.width, c.height)
   recolorPixels(data.data, from, to)
   g.putImageData(data, 0, 0)
-  return new Promise((ok, fail) => c.toBlob((b) => (b ? ok(b) : fail(new Error('холст'))), 'image/png'))
+  return new Promise((ok, fail) => c.toBlob((b) => (b ? ok(b) : fail(new Error(t('холст')))), 'image/png'))
 }
 
 async function loadImage(src: string): Promise<HTMLImageElement> {
@@ -84,7 +85,7 @@ async function loadImage(src: string): Promise<HTMLImageElement> {
   try {
     await img.decode()
   } catch {
-    throw new Error('картинка')
+    throw new Error(t('картинка'))
   }
   return img
 }
@@ -94,7 +95,7 @@ function tint(src: string, from: string | null | undefined, to: string): Promise
   const known = cache.get(key)
   if (known) return known
   const job = (async () => {
-    if (!hexColor(to)) throw new Error('цвет')
+    if (!hexColor(to)) throw new Error(t('цвет'))
     // Recolouring is a per-pixel loop plus PNG encoding: off the transition frames and off the main thread.
     const loading = loadImage(src)
     loading.catch(() => undefined)

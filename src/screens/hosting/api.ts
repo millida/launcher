@@ -1,9 +1,10 @@
 import { api } from '../../lib/api'
 import { apiErrorText } from '../../lib/apiError'
+import { t } from '../../i18n'
 
 export const P = (id: string) => '/hosting/servers/' + encodeURIComponent(id)
 
-export const errText = (e: unknown) => apiErrorText(e, 'Сервис хостинга не ответил, попробуй позже')
+export const errText = (e: unknown) => apiErrorText(e, t('Сервис хостинга не ответил, попробуй позже'))
 
 export interface CatalogCore {
   id: string
@@ -190,35 +191,35 @@ export interface HostingSubscription {
   renewShortfallKopecks?: number
 }
 
-export const HOST_PERMISSIONS: [string, string][] = [
-  ['control', 'Запуск и остановка'],
-  ['console', 'Консоль и команды'],
-  ['settings', 'Настройки сервера'],
-  ['content', 'Плагины, моды и версия'],
-  ['players', 'Игроки, баны и вайтлист'],
-  ['world', 'Мир: скачать и пересоздать'],
-  ['backups', 'Резервные копии'],
-  ['files', 'Файлы и конфиги'],
-  ['database', 'База данных'],
-  ['network', 'Адрес, домен и порты'],
-  ['schedule', 'Расписание'],
+export const HOST_PERMISSIONS = (): [string, string][] => [
+  ['control', t('Запуск и остановка')],
+  ['console', t('Консоль и команды')],
+  ['settings', t('Настройки сервера')],
+  ['content', t('Плагины, моды и версия')],
+  ['players', t('Игроки, баны и вайтлист')],
+  ['world', t('Мир: скачать и пересоздать')],
+  ['backups', t('Резервные копии')],
+  ['files', t('Файлы и конфиги')],
+  ['database', t('База данных')],
+  ['network', t('Адрес, домен и порты')],
+  ['schedule', t('Расписание')],
 ]
 
-export const NOTIFY_EVENTS: [string, string][] = [
-  ['crash', 'Сервер упал'],
-  ['sleep', 'Сервер уснул'],
-  ['wake', 'Сервер проснулся'],
-  ['backup_ok', 'Копия создана'],
-  ['backup_fail', 'Копию сделать не удалось'],
-  ['plan_expiring', 'Тариф кончается'],
-  ['suspended', 'Приостановлен за неоплату'],
-  ['world_delete', 'Мир будет удалён'],
+export const NOTIFY_EVENTS = (): [string, string][] => [
+  ['crash', t('Сервер упал')],
+  ['sleep', t('Сервер уснул')],
+  ['wake', t('Сервер проснулся')],
+  ['backup_ok', t('Копия создана')],
+  ['backup_fail', t('Копию сделать не удалось')],
+  ['plan_expiring', t('Тариф кончается')],
+  ['suspended', t('Приостановлен за неоплату')],
+  ['world_delete', t('Мир будет удалён')],
 ]
 
-export const NOTIFY_CHANNELS: [string, string][] = [
+export const NOTIFY_CHANNELS = (): [string, string][] => [
   ['telegram', 'Telegram'],
   ['discord', 'Discord'],
-  ['email', 'Почта'],
+  ['email', t('Почта')],
 ]
 
 export const host = {

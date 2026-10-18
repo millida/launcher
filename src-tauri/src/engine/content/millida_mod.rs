@@ -402,7 +402,7 @@ pub fn millida_mod_enabled() -> bool {
 }
 
 pub fn millida_mod_wanted(profile: &str) -> bool {
-    millida_mod_enabled() && skin_mod_on(profile)
+    millida_mod_enabled() && millida_mod_on(profile)
 }
 
 /// Игрок выключил статистику в лаунчере: мод в игре тоже молчит. Флаг живёт

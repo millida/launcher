@@ -1,3 +1,4 @@
+import { t } from '../../i18n'
 export const CALL_LOG_PREFIX = '⟪call⟫'
 
 export type CallOutcome = 'done' | 'missed' | 'declined' | 'canceled' | 'failed'
@@ -29,8 +30,8 @@ export function parseCallLog(text: string): CallLog | null {
 }
 
 export function callLogTitle(log: CallLog, mine: boolean): string {
-  if (log.outcome === 'done') return mine ? 'Исходящий звонок' : 'Входящий звонок'
-  if (log.outcome === 'declined') return mine ? 'Звонок отклонён' : 'Ты отклонил звонок'
-  if (log.outcome === 'failed') return 'Звонок сорвался'
-  return mine ? 'Не дозвонился' : 'Пропущенный звонок'
+  if (log.outcome === 'done') return mine ? t('Исходящий звонок') : t('Входящий звонок')
+  if (log.outcome === 'declined') return mine ? t('Звонок отклонён') : t('Ты отклонил звонок')
+  if (log.outcome === 'failed') return t('Звонок сорвался')
+  return mine ? t('Не дозвонился') : t('Пропущенный звонок')
 }

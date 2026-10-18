@@ -5,6 +5,7 @@ import { track, trackFailure } from '../../lib/telemetry'
 import { useMods, type ModHit } from '../../state/mods'
 import { useProfiles } from '../../state/profiles'
 import { showToast } from '../../state/ui'
+import { t } from '../../i18n'
 
 /*
  * «Новая сборка» из плитки каталога: сборка под версию и загрузчик самой вещи,
@@ -49,7 +50,7 @@ export async function newBuildFrom(h: ModHit, kind: string): Promise<void> {
   const plan = planFor(h, kind)
   if (!plan) return
   if (!hasTauri()) {
-    showToast('Сборки создаются в приложении')
+    showToast(t('Сборки создаются в приложении'))
     return
   }
   const { version, loader } = plan
@@ -59,14 +60,14 @@ export async function newBuildFrom(h: ModHit, kind: string): Promise<void> {
     name = p.name
   } catch (e) {
     trackFailure('build_create', e, { step: 'create', from: 'catalog', mc: version, loader })
-    showToast('Не удалось создать сборку: ' + e, 'error')
+    showToast(t('Не удалось создать сборку: {error}', { error: String(e) }), 'error')
     return
   }
   track('build_create', { mc: version, loader, from: 'catalog' })
   await useProfiles.getState().refresh()
   useProfiles.getState().setSelected(name)
   useMods.getState().scopeTo(name)
-  showToast('Сборка «' + name + '» · ' + version, 'ok', 'install')
+  showToast(t('Сборка «{name}» · {version}', { name, version }), 'ok', 'install')
   const src =
     h.cfid !== undefined
       ? { source: 'curseforge' as const, cfid: h.cfid }

@@ -1,5 +1,6 @@
 import type { DescBlock } from './packView'
 import { plusIcon } from './packView'
+import { intlTag, t } from '../../i18n'
 
 /*
  * Разбор описания премиум-сборки для её страницы (PremiumPackPage): главы
@@ -155,13 +156,13 @@ function reqRows(text: string): ReqRow[] {
     const s = raw.trim().replace(/[.;]+$/, '')
     if (!s) continue
     const gb = /(\d+(?:[.,]\d+)?)\s*ГБ/i.exec(s)
-    if (/оператив|ОЗУ|RAM|памят/i.test(s)) rows.push({ label: 'Память', value: gb ? gb[1] + ' ГБ' : s })
+    if (/оператив|ОЗУ|RAM|памят/i.test(s)) rows.push({ label: t('Память'), value: gb ? t('{n} ГБ', { n: gb[1] ?? '' }) : s })
     else if (/видеокарт|GPU|GTX|RTX|Radeon/i.test(s))
-      rows.push({ label: 'Видеокарта', value: gb ? gb[1] + ' ГБ видеопамяти' : s.replace(/^видеокарта\s*/i, '') })
-    else if (/\bi\d\b|Ryzen|процессор|CPU|Intel|AMD/i.test(s)) rows.push({ label: 'Процессор', value: s.replace(/^процессор\s*/i, '') })
-    else if (/диск|SSD|места/i.test(s)) rows.push({ label: 'Диск', value: s })
+      rows.push({ label: t('Видеокарта'), value: gb ? t('{n} ГБ видеопамяти', { n: gb[1] ?? '' }) : s.replace(/^видеокарта\s*/i, '') })
+    else if (/\bi\d\b|Ryzen|процессор|CPU|Intel|AMD/i.test(s)) rows.push({ label: t('Процессор'), value: s.replace(/^процессор\s*/i, '') })
+    else if (/диск|SSD|места/i.test(s)) rows.push({ label: t('Диск'), value: s })
     // «8 ГБ» без слова «память» в начале строки требований — это память.
-    else if (gb && !rows.length && /^\d/.test(s)) rows.push({ label: 'Память', value: gb[1] + ' ГБ' })
+    else if (gb && !rows.length && /^\d/.test(s)) rows.push({ label: t('Память'), value: t('{n} ГБ', { n: gb[1] ?? '' }) })
   }
   return rows
 }
@@ -195,11 +196,11 @@ export function downloadsShort(n: number): string {
   if (n < 1000) return String(Math.max(0, Math.round(n)))
   if (n < 1e6) {
     const k = Math.round(n / 100) / 10
-    if (k < 100) return k.toLocaleString('ru-RU') + ' тыс.'
+    if (k < 100) return t('{n} тыс.', { n: k.toLocaleString(intlTag()) })
     const whole = Math.round(n / 1e3)
-    if (whole < 1000) return whole.toLocaleString('ru-RU') + ' тыс.'
+    if (whole < 1000) return t('{n} тыс.', { n: whole.toLocaleString(intlTag()) })
   }
-  return (Math.round(n / 1e5) / 10).toLocaleString('ru-RU') + ' млн'
+  return t('{n} млн', { n: (Math.round(n / 1e5) / 10).toLocaleString(intlTag()) })
 }
 
 /**
@@ -234,10 +235,10 @@ export function shortTitle(title: string): string {
 
 /** Жанры сборок студии — по словам названия и сути: тегов каталог не отдаёт. */
 export const GENRES: { id: string; label: string; re: RegExp }[] = [
-  { id: 'horror', label: 'Хоррор', re: /хоррор|ужас|зомби|апокалип|страх|horror|zombie|dread/i },
+  { id: 'horror', get label() { return t('Хоррор') }, re: /хоррор|ужас|зомби|апокалип|страх|horror|zombie|dread/i },
   { id: 'rpg', label: 'RPG', re: /\brpg\b|рпг|фэнтез|маги|подземел|dungeon|dragon/i },
-  { id: 'tech', label: 'Техника', re: /техн|create|завод|автомат|mekani|индустр|industr/i },
-  { id: 'survival', label: 'Выживание', re: /выжив|хардкор|survival|terrafirma|stranded/i },
+  { id: 'tech', get label() { return t('Техника') }, re: /техн|create|завод|автомат|mekani|индустр|industr/i },
+  { id: 'survival', get label() { return t('Выживание') }, re: /выжив|хардкор|survival|terrafirma|stranded/i },
 ]
 
 export const genresOf = (title: string, summary: string): string[] =>

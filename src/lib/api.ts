@@ -1,7 +1,8 @@
 // UI requests to the Millida API (api.millida.net/v2) and the site addresses. In the app a request goes through the core, which adds
 // the token itself. The direct fetch below has no token, it is a fallback for the browser in development. The Modrinth catalog goes through our API (/launcher/mr).
 import { hasTauri } from '../ipc/tauri'
-import { millidaApi, openUrl } from '../ipc/commands'
+import { millidaApi, openUrl, type ApiMarket } from '../ipc/commands'
+import { getMarket } from '../i18n'
 import { hasMillidaSession } from './secure'
 import { DEMO_USER, ECONOMY_SHOWCASE, demoAnswer } from './demo'
 
@@ -55,6 +56,13 @@ export function apiHeaders(): Record<string, string> {
   return { 'Content-Type': 'application/json' }
 }
 
+/// The API keeps a separate server rating per market and picks it by header, the
+/// same way cobblo.net asks for the English one. Only the rating is split.
+export function marketFor(pathname: string): ApiMarket | undefined {
+  if (!pathname.startsWith('/rating/') && !pathname.startsWith('/launcher/premium')) return undefined
+  return getMarket() === 'RU' ? undefined : 'EN'
+}
+
 export function hasMillidaAccount(): boolean {
   return hasMillidaSession()
 }
@@ -81,7 +89,8 @@ export async function api<T = any>(pathname: string, opts?: RequestInit): Promis
     }
     try {
       const method = ((opts && opts.method) || 'GET').toUpperCase()
-      const run = () => millidaApi<T>(pathname, method, body)
+      const market = marketFor(pathname)
+      const run = () => millidaApi<T>(pathname, method, body, market)
       return await (method === 'GET' ? hedged(run) : run())
     } catch (e) {
       if (String(e).includes('unauthorized')) window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT))
@@ -95,10 +104,15 @@ export async function api<T = any>(pathname: string, opts?: RequestInit): Promis
     const demo = demoAnswer(pathname, opts)
     if (demo) return (await demo) as T
   }
+  const market = marketFor(pathname)
   const run = async (): Promise<T> => {
     const r = await fetch(LAUNCHER_API + pathname, {
       ...opts,
-      headers: { ...apiHeaders(), ...((opts && (opts.headers as Record<string, string>)) || {}) },
+      headers: {
+        ...apiHeaders(),
+        ...(market ? { 'X-Market': market } : {}),
+        ...((opts && (opts.headers as Record<string, string>)) || {}),
+      },
     })
     if (!r.ok) throw new Error('http ' + r.status)
     return r.json()

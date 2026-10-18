@@ -6,19 +6,20 @@ import { RARITY_NAMES, type EconomyProgress, type FragmentCard, type ItemRef, ty
 import { gridCols, Head, ItemArt, Shard, Timer, toneStyle } from './parts'
 import { FragBar, RarityFx, RarityPlate } from './rarityUi'
 import type { WeeklyPath } from './weekly'
+import { intlTag, t, useT } from '../../i18n'
 
-const num = (n: number) => n.toLocaleString('ru-RU')
+const num = (n: number) => n.toLocaleString(intlTag())
 /** Часы с одной цифрой после запятой: «1,6». */
-const hrs = (n: number) => (Math.floor(n * 10) / 10).toLocaleString('ru-RU')
+const hrs = (n: number) => (Math.floor(n * 10) / 10).toLocaleString(intlTag())
 
 /** Прокрутить ленту к блоку по id. */
 const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
 /** Откуда берутся осколки — значком и словом, клик ведёт к источнику. */
 const SOURCES: { icon: string; label: string; to: string }[] = [
-  { icon: 'i-clock', label: 'За игру', to: 'shop-weekly' },
-  { icon: 'i-star', label: 'Задания недели', to: 'shop-weekly' },
-  { icon: 'i-gift', label: 'Бонус дня', to: 'shop-pass' },
+  { icon: 'i-clock', get label() { return t('За игру') }, to: 'shop-weekly' },
+  { icon: 'i-star', get label() { return t('Задания недели') }, to: 'shop-weekly' },
+  { icon: 'i-gift', get label() { return t('Бонус дня') }, to: 'shop-pass' },
 ]
 
 /**
@@ -45,6 +46,7 @@ export function WorkshopBlock({
   /** Блок «Задания недели» на экране: без него кнопки-источники к нему не ведут. */
   weekly?: boolean
 }) {
+  const t = useT()
   const full = data.shards >= data.cap
   const open = data.workshop.items.filter((w) => !w.owned)
   // Цель — самая дешёвая вещь, на которую ещё не хватает; хватает на всё — самая дорогая.
@@ -55,11 +57,11 @@ export function WorkshopBlock({
   const items = data.workshop.items
   return (
     <div className="card sh-block sh-work" id="shop-work" data-section="workshop">
-      <Head title="Осколки">
-        <Timer to={data.workshop.rotatesAt} label="Новые через" />
+      <Head title={t('Осколки')}>
+        <Timer to={data.workshop.rotatesAt} label={t('Новые через')} />
       </Head>
       <div className="sh-work-how">
-        <span className="sh-work-eq" aria-label="Осколки меняются на фрагменты вещей">
+        <span className="sh-work-eq" aria-label={t('Осколки меняются на фрагменты вещей')}>
           <span className="sh-work-coin">
             <Shard size={42} />
           </span>
@@ -67,11 +69,11 @@ export function WorkshopBlock({
           {goal ? <ItemArt item={goal.item} size="sm" /> : <Icon id="i-shirt" />}
         </span>
         <span className="sh-work-bal">
-          <span className="sh-work-num" data-tip={full ? 'Потолок ' + num(data.cap) + ': трать, чтобы копить дальше' : undefined}>
+          <span className="sh-work-num" data-tip={full ? t('Потолок {n}: трать, чтобы копить дальше', { n: num(data.cap) }) : undefined}>
             <Shard size={20} />
             <b>{num(data.shards)}</b>
             {goal && goal.cost > data.shards ? <span>/ {num(goal.cost)}</span> : null}
-            {full ? <span className="sh-meter-cap full">потолок</span> : null}
+            {full ? <span className="sh-meter-cap full">{t('потолок')}</span> : null}
           </span>
           <span className="sh-meter-bar">
             <i style={{ width: Math.min(100, goal ? (data.shards / goal.cost) * 100 : 100) + '%' }} />
@@ -80,9 +82,9 @@ export function WorkshopBlock({
           {data.today ? (
             <span
               className={'sh-work-today' + (data.today.earned >= data.today.limit ? ' full' : '')}
-              data-tip="Из сундуков, подарка и фрагментов — не больше в сутки"
+              data-tip={t('Из сундуков, подарка и фрагментов — не больше в сутки')}
             >
-              Сегодня <b>{num(Math.min(data.today.earned, data.today.limit))}</b>/{num(data.today.limit)}
+              {t('Сегодня')} <b>{num(Math.min(data.today.earned, data.today.limit))}</b>/{num(data.today.limit)}
             </span>
           ) : null}
         </span>
@@ -114,7 +116,7 @@ export function WorkshopBlock({
                 {w.owned ? (
                   <span className="sh-owned sm">
                     <Icon id="i-check" />
-                    Есть
+                    {t('Есть')}
                   </span>
                 ) : (
                   <button
@@ -125,7 +127,7 @@ export function WorkshopBlock({
                     data-id={w.item.code}
                     onClick={() => onCraft(w)}
                   >
-                    {short > 0 ? 'Ещё ' + num(short) : 'Обменять'}
+                    {short > 0 ? t('Ещё {n}', { n: num(short) }) : t('Обменять')}
                   </button>
                 )}
               </span>
@@ -151,9 +153,10 @@ function Collecting({
   busy: string
   onTopUp: (f: FragmentCard & { topUp: number }) => void
 }) {
+  const t = useT()
   return (
     <div className="sh-collect" data-section="fragments">
-      <h3 className="sh-collect-h">Собираются</h3>
+      <h3 className="sh-collect-h">{t('Собираются')}</h3>
       <div className="sh-grid is-fit" style={gridCols(list.length)}>
         {list.map((f) => (
           <div key={f.item.code} className="sh-card is-show" style={toneStyle(f.item)} data-rar={f.item.rarity}>
@@ -173,7 +176,7 @@ function Collecting({
                   data-id={f.item.code}
                   onClick={() => onTopUp({ ...f, topUp: f.topUp as number })}
                 >
-                  Докупить
+                  {t('Докупить')}
                   <span className="sh-pr">
                     <Ruby size={15} />
                     <b>{num(f.topUp)}</b>
@@ -194,6 +197,7 @@ function Collecting({
  * Часы — только подтверждённые сервером. Забрал — «Забрана» и таймер до новой.
  */
 export function ParcelBlock({ data, busy, onClaim }: { data: WeeklyParcel; busy: string; onClaim: (item: ItemRef) => void }) {
+  const t = useT()
   const [pick, setPick] = useState('')
   const claimed = !!data.claimedAt
   const choices = data.ready && !claimed && data.choices?.length ? data.choices : null
@@ -203,13 +207,13 @@ export function ParcelBlock({ data, busy, onClaim }: { data: WeeklyParcel; busy:
   const chosen = choices?.find((c) => c.code === pick) ?? null
   return (
     <div className={'card sh-block sh-weekly' + (choices ? ' is-ready' : '') + (claimed ? ' is-claimed' : '')} id="shop-weekly" data-section="weekly">
-      <Head title="Посылка недели">
-        <Timer to={data.resetsAt} label={claimed ? 'Новая через' : 'Сгорит через'} />
+      <Head title={t('Посылка недели')}>
+        <Timer to={data.resetsAt} label={claimed ? t('Новая через') : t('Сгорит через')} />
       </Head>
       <div className="sh-meter sh-parcel-meter">
         <Icon id="i-clock" />
         <b>
-          {hrs(have)}/{data.need} ч
+          {t('{have}/{need} ч', { have: hrs(have), need: data.need })}
         </b>
         <span className="sh-meter-bar">
           <i style={{ width: pct + '%' }} />
@@ -217,15 +221,15 @@ export function ParcelBlock({ data, busy, onClaim }: { data: WeeklyParcel; busy:
         {claimed ? (
           <span className="sh-owned">
             <Icon id="i-check" />
-            Забрана
+            {t('Забрана')}
           </span>
         ) : choices ? null : (
-          <span className="sh-meter-cap">Ещё {hrs(left)} ч в игре</span>
+          <span className="sh-meter-cap">{t('Ещё {n} ч в игре', { n: hrs(left) })}</span>
         )}
       </div>
       {choices ? (
         <>
-          <div className="sh-pick3" role="radiogroup" aria-label="Фрагменты какой вещи забрать">
+          <div className="sh-pick3" role="radiogroup" aria-label={t('Фрагменты какой вещи забрать')}>
             {choices.map((it) => (
               <button
                 key={it.code}
@@ -256,7 +260,7 @@ export function ParcelBlock({ data, busy, onClaim }: { data: WeeklyParcel; busy:
               data-track="weekly_claim"
               onClick={() => chosen && onClaim(chosen)}
             >
-              {chosen ? 'Забрать фрагменты' : 'Выбери одну'}
+              {chosen ? t('Забрать фрагменты') : t('Выбери одну')}
             </button>
           </div>
         </>
@@ -285,6 +289,7 @@ export function WeeklyPathBlock({
   onClaim: (at: number) => void
   onBoost: (stars: number) => void
 }) {
+  const t = useT()
   const prizeStep = data.steps.find((s) => s.reward.kind === 'ITEM')
   const done = data.stars >= data.need
   const owned = !!prizeStep?.claimed
@@ -292,8 +297,8 @@ export function WeeklyPathBlock({
   const pct = Math.min(100, (data.stars / data.need) * 100)
   return (
     <div className={'card sh-block sh-wp' + (done && !owned ? ' is-ready' : '')} id="shop-weekly">
-      <Head title="Задания недели">
-        <Timer to={data.resetsAt} label="Новые через" />
+      <Head title={t('Задания недели')}>
+        <Timer to={data.resetsAt} label={t('Новые через')} />
       </Head>
 
       <div
@@ -308,12 +313,12 @@ export function WeeklyPathBlock({
           </span>
         </span>
         <span className="sh-wp-info">
-          <span className="sh-kicker">Вещь недели</span>
+          <span className="sh-kicker">{t('Вещь недели')}</span>
           <b className="sh-feat-name">{data.prize.name}</b>
           <span className="sh-card-meta">
             <i>{RARITY_NAMES[data.prize.rarity]}</i>
             <span>
-              в магазине <s>{num(data.prizePrice)}</s>
+              {t('в магазине')} <s>{num(data.prizePrice)}</s>
             </span>
           </span>
           <span className="sh-wp-goal">
@@ -323,21 +328,21 @@ export function WeeklyPathBlock({
             <b className="sh-wp-count">
               {data.stars}/{data.need}
               <Icon id="i-star" />
-              <span>— твоя</span>
+              <span>{t('— твоя')}</span>
             </b>
           </span>
           {owned ? (
             <span className="sh-owned md">
               <Icon id="i-check" />
-              Твоя
+              {t('Твоя')}
             </span>
           ) : done ? (
             <button className="btn md primary" disabled={busy === 'weekly'} data-track="weekly_claim" onClick={() => prizeStep && onClaim(prizeStep.at)}>
-              Забрать
+              {t('Забрать')}
             </button>
           ) : data.boost?.available ? (
             <button className="btn md secondary sh-wp-boost" disabled={busy === 'weekly-boost'} data-track="weekly_boost" onClick={() => onBoost(data.boost!.missing)}>
-              Докупить {data.boost.missing}
+              {t('Докупить {n}', { n: data.boost.missing })}
               <Icon id="i-star" />
               <span className="sh-pr">
                 <Ruby size={15} />
@@ -348,10 +353,10 @@ export function WeeklyPathBlock({
         </span>
       </div>
 
-      <div className="sh-wp-sum" aria-label="Задания дают звёзды, звёзды открывают награды">
+      <div className="sh-wp-sum" aria-label={t('Задания дают звёзды, звёзды открывают награды')}>
         <span>
           <Icon id="i-check" />
-          Задания
+          {t('Задания')}
         </span>
         <Icon id="i-arrow-r" />
         <span className="star">
@@ -361,11 +366,11 @@ export function WeeklyPathBlock({
         <span>
           <Shard size={16} />
           <ItemArt item={data.prize} size="sm" />
-          Награды
+          {t('Награды')}
         </span>
       </div>
 
-      <div className="sh-wp-track" role="img" aria-label={'Звёзд: ' + data.stars + ' из ' + data.need}>
+      <div className="sh-wp-track" role="img" aria-label={t('Звёзд: {n} из {need}', { n: data.stars, need: data.need })}>
         {Array.from({ length: data.need }, (_, i) => {
           const n = i + 1
           const step = stepAt.get(n)
@@ -379,7 +384,7 @@ export function WeeklyPathBlock({
                     <ItemArt item={rw.item} size="sm" />
                   </span>
                 ) : step!.claimed ? (
-                  <span className="sh-wp-gift done" data-tip="Забрано">
+                  <span className="sh-wp-gift done" data-tip={t('Забрано')}>
                     <Shard size={16} />+{rw.amount}
                     <Icon id="i-check" />
                   </span>
@@ -401,24 +406,24 @@ export function WeeklyPathBlock({
       </div>
 
       <div className="sh-wp-tasks">
-        {data.tasks.map((t) => {
-          const full = t.earned >= t.stars
+        {data.tasks.map((task) => {
+          const full = task.earned >= task.stars
           return (
-            <div key={t.code} className={'sh-ach-row' + (full ? ' done' : '')}>
+            <div key={task.code} className={'sh-ach-row' + (full ? ' done' : '')}>
               <span className="sh-ach-mark">
                 <Icon id={full ? 'i-check' : 'i-star'} />
               </span>
               <span className="sh-ach-body">
-                <b>{t.title}</b>
+                <b>{task.title}</b>
                 {!full ? (
                   <span className="sh-ach-bar">
-                    <i style={{ width: Math.min(100, (t.progress / t.target) * 100) + '%' }} />
+                    <i style={{ width: Math.min(100, (task.progress / task.target) * 100) + '%' }} />
                   </span>
                 ) : null}
               </span>
-              <span className="sh-ach-n">{full ? '' : hrs(t.progress) + '/' + t.target + (t.unit ? ' ' + t.unit : '')}</span>
-              <span className={'sh-wp-stars' + (full ? ' done' : '')} data-tip={t.earned > 0 && !full ? 'Уже ' + t.earned : undefined}>
-                +{t.stars}
+              <span className="sh-ach-n">{full ? '' : hrs(task.progress) + '/' + task.target + (task.unit ? ' ' + task.unit : '')}</span>
+              <span className={'sh-wp-stars' + (full ? ' done' : '')} data-tip={task.earned > 0 && !full ? t('Уже {n}', { n: task.earned }) : undefined}>
+                +{task.stars}
                 <Icon id="i-star" />
               </span>
             </div>
@@ -428,7 +433,7 @@ export function WeeklyPathBlock({
       <div className="sh-wp-foot">
         <span className={'sh-tag' + (data.plus ? ' on' : '')}>
           <Icon id="i-crown" />
-          {data.plus ? 'PLUS: часы ×' + data.plusHoursBoost : 'С PLUS часы ×' + data.plusHoursBoost}
+          {data.plus ? t('PLUS: часы ×{n}', { n: data.plusHoursBoost }) : t('С PLUS часы ×{n}', { n: data.plusHoursBoost })}
         </span>
       </div>
     </div>
@@ -443,6 +448,7 @@ const at = (h: number, max: number) => (Math.log10(Math.max(1, h)) / Math.log10(
  * фрагментов плаща, остаток докупается в «Собираются» (26.09.2026).
  */
 export function PathBlock({ data }: { data: EconomyProgress }) {
+  const t = useT()
   const steps = data.hourItems
   const max = steps[steps.length - 1]?.hours ?? 2000
   const min = steps[0]?.hours ?? 10
@@ -455,16 +461,16 @@ export function PathBlock({ data }: { data: EconomyProgress }) {
   return (
     <>
       <div className="card sh-block sh-path" id="shop-hours" data-section="hours_path">
-        <Head title="Плащи">
+        <Head title={t('Плащи')}>
           <span className="sh-tag">
             <Icon id="i-clock" />
-            Половина — за часы
+            {t('Половина — за часы')}
           </span>
         </Head>
         <div className="sh-meter">
           <Icon id="i-clock" />
-          <b>{num(Math.floor(data.hours))} ч в игре</b>
-          {nextHours ? <span className="sh-meter-cap">До следующего {num(Math.ceil(nextHours.hours - data.hours))} ч</span> : null}
+          <b>{t('{n} ч в игре', { n: num(Math.floor(data.hours)) })}</b>
+          {nextHours ? <span className="sh-meter-cap">{t('До следующего {n} ч', { n: num(Math.ceil(nextHours.hours - data.hours)) })}</span> : null}
         </div>
         <div className="sh-road">
           <span className="sh-road-line">
@@ -478,7 +484,7 @@ export function PathBlock({ data }: { data: EconomyProgress }) {
               data-tip={s.fragments ? s.item.name + ' · ' + s.fragments.have + '/' + s.fragments.need : s.item.name}
             >
               <ItemArt item={s.item} size="sm" />
-              <b>{num(s.hours)} ч</b>
+              <b>{t('{n} ч', { n: num(s.hours) })}</b>
               {s.owned ? (
                 <span className="sh-road-mark">
                   <Icon id="i-check" />

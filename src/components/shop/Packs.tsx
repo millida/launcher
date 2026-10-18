@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from 'react'
 import { Icon } from '../Icon'
 import { Ruby } from '../Ruby'
-import { DIAMOND_ITEM_PCT, PLUS_ITEM_PCT, rubles, type ChestTier, type MonthOffer, type ShopPack } from '../../lib/rubies'
+import { DIAMOND_ITEM_PCT, PLUS_ITEM_PCT, type ChestTier, type MonthOffer, type ShopPack } from '../../lib/rubies'
+import { rubyPackPrice, rubyWorthPrice } from '../../lib/regionalPrices'
 import { BoltArt, GemArt } from './shopArt'
 import { NickFlip } from '../premium/StatusCompare'
 import { PlusMark } from '../premium/PlusMark'
@@ -12,6 +13,7 @@ import { Shard, Timer } from './parts'
 import { FragmentIcon } from './rarityUi'
 import { useOffscreenPause } from './useOffscreen'
 import '../../styles/pixel/plus-bundle.css'
+import { formatNumber, intlTag, t, useT } from '../../i18n'
 
 /** Недостающее на счёте, округлённое вверх до целого рубля; 0 — хватает. */
 export const topUpKopecks = (short: number): number => (short > 0 ? Math.ceil(short / 100) * 100 : 0)
@@ -54,20 +56,26 @@ type PlusTier = 'PLUS' | 'DIAMOND'
 const PASS_CHESTS = (['RARE', 'EPIC', 'LEGEND'] as ChestTier[])
   .map((t) => ({ tier: t, n: PLUS_PASS.chests[t] ?? 0 }))
   .filter((c) => c.n > 0)
-const CHEST_LABEL: Record<ChestTier, string> = { COMMON: 'Обычный', RARE: 'Редкий', EPIC: 'Эпический', LEGEND: 'Легендарный' }
+const CHEST_LABEL: Record<ChestTier, string> = {
+  get COMMON() { return t('Обычный') },
+  get RARE() { return t('Редкий') },
+  get EPIC() { return t('Эпический') },
+  get LEGEND() { return t('Легендарный') },
+}
 /** Пример зачёркнутой цены в плитке скидки. */
 const EXAMPLE_PRICE = 1000
 const cut = (price: number, pct: number) => Math.max(10, Math.round((price * (100 - pct)) / 100 / 10) * 10)
-const nf = (n: number) => n.toLocaleString('ru-RU')
+const nf = (n: number) => n.toLocaleString(intlTag())
 
 /** Плитка содержимого бандла: картинка крупно, число, подпись в одно слово. */
 function Part({ art, n, cap, tone, wide, now, children }: { art: ReactNode; n: ReactNode; cap?: ReactNode; tone?: string; wide?: boolean; now?: boolean; children?: ReactNode }) {
+  const t = useT()
   return (
     <span className={'pb-part' + (wide ? ' is-wide' : '')} style={tone ? { ['--pb-tone' as string]: tone } : undefined}>
       {now ? (
         <i className="pb-stamp">
           <BoltArt size={12} />
-          сразу
+          {t('сразу')}
         </i>
       ) : null}
       <span className="pb-part-art">{art}</span>
@@ -80,6 +88,7 @@ function Part({ art, n, cap, tone, wide, now, children }: { art: ReactNode; n: R
 
 /** «Что внутри»: обычное содержимое сундука каждого уровня по таблице выпадения. */
 function ChestInside() {
+  const t = useT()
   return (
     <span className="pb-in" role="tooltip">
       {PASS_CHESTS.map(({ tier, n }) => {
@@ -96,7 +105,7 @@ function ChestInside() {
             </span>
             <span className="pb-in-got">
               <FragmentIcon rarity={tier === 'LEGEND' ? 'LEGENDARY' : tier} size={16} />
-              {d.items === 1 ? '1 вещь' : d.items + ' вещи'}
+              {d.items === 1 ? t('1 вещь') : t('{n} вещи', { n: d.items })}
             </span>
             {d.rubies ? (
               <span className="pb-in-got">
@@ -119,6 +128,7 @@ function ChestInside() {
  * фрагменты. Diamond — те же награды сразу и −15%.
  */
 function PlusBundle({ tile }: { tile: PlusTile }) {
+  const t = useT()
   const paused = useOffscreenPause<HTMLDivElement>()
   const [pick, setPick] = useState<PlusTier>('PLUS')
   const [inside, setInside] = useState(false)
@@ -126,16 +136,16 @@ function PlusBundle({ tile }: { tile: PlusTile }) {
   const tier: PlusTier = dia ? 'DIAMOND' : 'PLUS'
   const pct = dia ? DIAMOND_ITEM_PCT : PLUS_ITEM_PCT
   const buy = () => (tile.onPick && !tile.sub ? tile.onPick(tier) : tile.onOpen())
-  const label = tile.sub || !tile.prices ? tile.label : 'Купить · ' + tile.prices[tier]
+  const label = tile.sub || !tile.prices ? tile.label : t('Купить · {price}', { price: tile.prices[tier] })
   return (
     <div className={'pb pb2' + (dia ? ' is-diamond' : '')} ref={paused} data-kind="plus_offer" data-id="plus" data-tier={tier}>
-      <span className="pb-ribbon">{dia ? 'Всё сразу — в день покупки' : 'Выгоднее, чем просто рубины'}</span>
+      <span className="pb-ribbon">{dia ? t('Всё сразу — в день покупки') : t('Выгоднее, чем просто рубины')}</span>
       <div className="pb-top">
         <button className="pb-head" aria-label={'Millida ' + tier} data-track="plus_tile_art" onClick={buy}>
           <PlusMark tier={tier} height={dia ? 28 : 38} shine />
         </button>
         {tile.sub || !tile.prices ? null : (
-          <span className="pb-seg" role="radiogroup" aria-label="Тариф">
+          <span className="pb-seg" role="radiogroup" aria-label={t('Тариф')}>
             {(['PLUS', 'DIAMOND'] as PlusTier[]).map((t) => (
               <button
                 key={t}
@@ -156,18 +166,18 @@ function PlusBundle({ tile }: { tile: PlusTile }) {
           {dia ? (
             <>
               <BoltArt size={18} />
-              сразу: <Ruby size={18} />
-              <b>{nf(tile.rubies)}</b> + <b>{PLUS_CHESTS}</b> сундуков
+              {t('сразу:')} <Ruby size={18} />
+              <b>{nf(tile.rubies)}</b> + <b>{PLUS_CHESTS}</b> {t('сундуков')}
             </>
           ) : (
-            <>по дням, 28 дней</>
+            <>{t('по дням, 28 дней')}</>
           )}
         </span>
         <NickFlip />
       </div>
       <div className="pb-body">
         <div className="pb-parts">
-          <Part art={<img src="/packs/treasury.png" alt="" draggable={false} />} n={<><Ruby size={20} />{nf(tile.rubies)}</>} cap="рубинов" tone="#e8364f" now={dia} />
+          <Part art={<img src="/packs/treasury.png" alt="" draggable={false} />} n={<><Ruby size={20} />{nf(tile.rubies)}</>} cap={t('рубинов')} tone="#e8364f" now={dia} />
           <Part
             wide
             now={dia}
@@ -182,11 +192,11 @@ function PlusBundle({ tile }: { tile: PlusTile }) {
                 ))}
               </span>
             }
-            n={PLUS_CHESTS + ' сундуков'}
+            n={t('{n} сундуков', { n: PLUS_CHESTS })}
           >
             <span className={'pb-inside' + (inside ? ' is-open' : '')} onMouseLeave={() => setInside(false)}>
               <button className="pb-inside-btn" data-notip aria-expanded={inside} data-track="plus_tile_inside" onClick={() => setInside((v) => !v)}>
-                что внутри
+                {t('что внутри')}
               </button>
               <ChestInside />
             </span>
@@ -203,11 +213,11 @@ function PlusBundle({ tile }: { tile: PlusTile }) {
                 </span>
               </span>
             }
-            n="на всё"
-            cap="в магазине"
+            n={t('на всё')}
+            cap={t('в магазине')}
           />
-          <Part art={<Shard size={60} />} n={'×' + String(PLUS_PASS.shardBoost).replace('.', ',')} cap="осколки" tone="#36b3ff" />
-          <Part art={<FragmentIcon rarity="EPIC" size={60} />} n="фрагменты" cap="вещей" tone="#f5b301" />
+          <Part art={<Shard size={60} />} n={'×' + formatNumber(PLUS_PASS.shardBoost)} cap={t('осколки')} tone="#36b3ff" />
+          <Part art={<FragmentIcon rarity="EPIC" size={60} />} n={t('фрагменты')} cap={t('вещей')} tone="#f5b301" />
         </div>
         <div className="pb-buy">
           <button className={'btn lg pl-btn pb-btn ' + (dia ? 'is-diamond' : 'is-plus')} data-track="plus_tile" onClick={buy}>
@@ -237,26 +247,27 @@ export function usualKopecks(rubies: number, packs: ShopPack[]): number {
  * Стоит прямо перед «Скидками дня»; null — блока нет.
  */
 export function MonthOfferBlock({ offer, packs, busy, onBuy, onEnd }: { offer: MonthOffer; packs: ShopPack[]; busy: boolean; onBuy: () => void; onEnd?: () => void }) {
+  const t = useT()
   const was = usualKopecks(offer.rubies, packs)
   return (
     <section className="mo" data-section="month_offer" data-kind="ruby_pack" data-id={offer.code}>
-      <button className="mo-art" aria-label={offer.rubies + ' рубинов'} data-track="buy_month_art" disabled={busy} onClick={onBuy}>
+      <button className="mo-art" aria-label={t('{n} рубинов', { n: offer.rubies })} data-track="buy_month_art" disabled={busy} onClick={onBuy}>
         <img src="/packs/vault.png" alt="" draggable={false} />
       </button>
       <div className="mo-mid">
         <span className="mo-tags">
-          <b className="mo-once">Один раз</b>
+          <b className="mo-once">{t('Один раз')}</b>
           <Timer to={offer.endsAt} onEnd={onEnd} />
         </span>
         <b className="mo-n">
-          {offer.rubies.toLocaleString('ru-RU')}
+          {offer.rubies.toLocaleString(intlTag())}
           <Ruby size={40} />
         </b>
         <small className="mo-title">{offer.title}</small>
       </div>
       <button className="btn lg primary mo-btn" disabled={busy} data-track="buy_month" onClick={onBuy}>
-        {was > offer.kopecks ? <s>{rubles(was)}</s> : null}
-        {rubles(offer.kopecks)}
+        {was > offer.kopecks ? <s>{rubyWorthPrice(was)}</s> : null}
+        {rubyPackPrice(offer.code, offer.kopecks)}
       </button>
     </section>
   )
@@ -290,7 +301,7 @@ export function PackArt({ src, size = 'md' }: { src: string; size?: 'md' | 'lg' 
 export const PackCount = ({ n }: { n: number }) => (
   <b className="pk-count">
     <Ruby size={22} />
-    {n.toLocaleString('ru-RU')}
+    {n.toLocaleString(intlTag())}
   </b>
 )
 
@@ -310,6 +321,7 @@ export function Packs<P extends ShopPack>({
   /** Плитка подписки первой. Гостю её нет. */
   plusTile?: PlusTile
 }) {
+  const t = useT()
   const starter = packs?.find((p) => p.oneTime) ?? null
   const { list, best } = sortPacks((packs ?? []).filter((p) => !p.oneTime))
   const starterWas = starter ? usualKopecks(starter.rubies, list) : 0
@@ -320,17 +332,17 @@ export function Packs<P extends ShopPack>({
       {/* Стартовый набор — такая же плитка пакета, с лентой акции и зачёркнутой ценой. */}
       {starter ? (
         <div className="sh-card pk is-promo" data-kind="ruby_pack" data-id={starter.code}>
-          <span className="pk-promo">Акция · один раз</span>
-          <button className="pk-pick" aria-label={starter.rubies + ' рубинов'} data-track="buy_starter_art" disabled={busy === starter.code} onClick={() => onBuy(starter, '/packs/starter.png')}>
+          <span className="pk-promo">{t('Акция · один раз')}</span>
+          <button className="pk-pick" aria-label={t('{n} рубинов', { n: starter.rubies })} data-track="buy_starter_art" disabled={busy === starter.code} onClick={() => onBuy(starter, '/packs/starter.png')}>
             <PackArt src="/packs/starter.png" />
           </button>
           <button className="btn md primary pk-btn pk-topup" disabled={busy === starter.code} data-track="buy_starter" onClick={() => onBuy(starter, '/packs/starter.png')}>
             <b>
-              +{starter.rubies.toLocaleString('ru-RU')}
+              +{starter.rubies.toLocaleString(intlTag())}
               <Ruby size={16} />
             </b>
             <small>
-              {starterWas > starter.kopecks ? <s>{rubles(starterWas)}</s> : null} {rubles(starter.kopecks)}
+              {starterWas > starter.kopecks ? <s>{rubyWorthPrice(starterWas)}</s> : null} {rubyPackPrice(starter.code, starter.kopecks)}
             </small>
           </button>
         </div>
@@ -341,16 +353,16 @@ export function Packs<P extends ShopPack>({
             const art = packArtAt(i, list.length)
             return (
               <div key={pack.code} className="sh-card pk" data-kind="ruby_pack" data-id={pack.code} data-pos={i}>
-                {pack.code === best ? <span className="pk-best">выгодно</span> : null}
-                <button className="pk-pick" aria-label={pack.rubies + ' рубинов'} data-track="buy_pack_art" disabled={busy === pack.code} onClick={() => onBuy(pack, art)}>
+                {pack.code === best ? <span className="pk-best">{t('выгодно')}</span> : null}
+                <button className="pk-pick" aria-label={t('{n} рубинов', { n: pack.rubies })} data-track="buy_pack_art" disabled={busy === pack.code} onClick={() => onBuy(pack, art)}>
                   <PackArt src={art} />
                 </button>
                 <button className="btn md primary pk-btn pk-topup" disabled={busy === pack.code} data-track="buy_pack" onClick={() => onBuy(pack, art)}>
                   <b>
-                    +{pack.rubies.toLocaleString('ru-RU')}
+                    +{pack.rubies.toLocaleString(intlTag())}
                     <Ruby size={16} />
                   </b>
-                  <small>{rubles(pack.kopecks)}</small>
+                  <small>{rubyPackPrice(pack.code, pack.kopecks)}</small>
                 </button>
               </div>
             )

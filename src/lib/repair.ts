@@ -6,6 +6,7 @@ import type { CrashAction, CrashInfo } from '../ipc/events'
 import type { UnlistenFn } from '../ipc/tauri'
 import { showToast, useUi } from '../state/ui'
 import { trackFailure } from './telemetry'
+import { t } from '../i18n'
 
 const STAGE_IDX: Record<string, number> = { files: 0, java: 1, assets: 2, content: 3, mod: 0, launch: 3 }
 
@@ -30,7 +31,7 @@ export function repairChangedFiles(r: Pick<RepairReport, 'restored'>): boolean {
 }
 
 export const NOTHING_TO_REPAIR =
-  'Файлы игры в порядке — эту причину вылета автоматически не убрать. Нажми «Поддержка» или поделись логом'
+  t('Файлы игры в порядке — эту причину вылета автоматически не убрать. Нажми «Поддержка» или поделись логом')
 
 export const repairRunning = () => running
 let lastSummary = ''
@@ -167,11 +168,11 @@ export interface PackRepair {
  */
 export async function repairPack(profile: string): Promise<PackRepair | null> {
   if (!hasTauri()) {
-    showToast('Доступно в приложении', 'error')
+    showToast(t('Доступно в приложении'), 'error')
     return null
   }
   if (running) {
-    showToast('Починка уже идёт')
+    showToast(t('Починка уже идёт'))
     return null
   }
   const done: string[] = []
@@ -181,7 +182,7 @@ export async function repairPack(profile: string): Promise<PackRepair | null> {
   if (fix) {
     try {
       const msg = await applyCrashFix(profile, fix.kind, fix.arg ?? '')
-      done.push(String(msg || 'причина вылета убрана').replace(/\.?\s*Запусти игру ещё раз\.?$/, ''))
+      done.push(String(msg || t('причина вылета убрана')).replace(/\.?\s*Запусти игру ещё раз\.?$/, ''))
       forgetCrash(profile)
     } catch (e) {
       failed.push(errMsg(e))
@@ -192,14 +193,14 @@ export async function repairPack(profile: string): Promise<PackRepair | null> {
   if (deps.length) {
     try {
       const rep = await installDepItems(profile, 'mod', deps)
-      if (rep.installed.length) done.push('поставлены зависимости: ' + fileList(rep.installed))
-      if (rep.failed.length) failed.push('не встали: ' + fileList(rep.failed))
+      if (rep.installed.length) done.push(t('поставлены зависимости: {list}', { list: fileList(rep.installed) }))
+      if (rep.failed.length) failed.push(t('не встали: {list}', { list: fileList(rep.failed) }))
     } catch (e) {
       failed.push(errMsg(e))
     }
   }
   const files = await runRepair(profile, { quiet: true })
-  if (files && repairChangedFiles(files)) done.push('перекачано файлов — ' + files.restored)
+  if (files && repairChangedFiles(files)) done.push(t('перекачано файлов — {n}', { n: files.restored }))
   const unresolved = crash && !fix ? crash : null
   if (done.length) markFixApplied(profile, fix ? 'pack:' + fix.kind : deps.length ? 'pack:deps' : 'pack:files')
   const res: PackRepair = { done, failed, unresolved, files, filesText: lastSummary }
@@ -208,33 +209,33 @@ export async function repairPack(profile: string): Promise<PackRepair | null> {
 }
 
 export function packRepairText(r: Pick<PackRepair, 'done' | 'failed' | 'unresolved' | 'filesText'>): string {
-  const head = r.done.length ? 'Готово: ' + r.done.join('; ') + '. Запусти игру' : ''
-  const fail = r.failed.length ? 'Не вышло: ' + r.failed.join('; ') : ''
+  const head = r.done.length ? t('Готово: {list}. Запусти игру', { list: r.done.join('; ') }) : ''
+  const fail = r.failed.length ? t('Не вышло: {list}', { list: r.failed.join('; ') }) : ''
   if (head || fail) return [head, fail].filter(Boolean).join('. ')
-  if (r.unresolved) return 'Файлы в порядке, а причину вылета автоматом не убрать — Милли разберёт лог'
-  return r.filesText || 'Всё на месте: файлы игры сверены по хешам'
+  if (r.unresolved) return t('Файлы в порядке, а причину вылета автоматом не убрать — Милли разберёт лог')
+  return r.filesText || t('Всё на месте: файлы игры сверены по хешам')
 }
 
 function fileList(names: string[]): string {
   const head = names.slice(0, 3).join(', ')
-  return names.length > 3 ? head + ' и ещё ' + (names.length - 3) : head
+  return names.length > 3 ? t('{names} и ещё {n}', { names: head, n: names.length - 3 }) : head
 }
 
 // Починка сверяет файлы по хешам, но устаревший мод — целый файл: сборка
 // падает, а отчёт говорит «всё на месте». Число обновлений досчитываем тем же
 // проверяльщиком, что и экран сборок, и дописываем в тот же итог.
 function summary(r: RepairReport, outdated: number): string {
-  const tail = outdated ? '. Устарело модов — ' + outdated + ', обнови их на экране сборки' : ''
+  const tail = outdated ? '. ' + t('Устарело модов — {n}, обнови их на экране сборки', { n: outdated }) : ''
   const refused = r.refused.length
-    ? 'Починка не качает моды с незнакомых адресов: ' + fileList(r.refused) + ' — поставь их заново из каталога'
+    ? t('Починка не качает моды с незнакомых адресов: {list} — поставь их заново из каталога', { list: fileList(r.refused) })
     : ''
   if (r.broken.length) {
-    return 'Файлы игры на месте, но не удалось восстановить: ' + fileList(r.broken) + ' — удали их и поставь заново' + (refused ? '. ' + refused : '') + tail
+    return t('Файлы игры на месте, но не удалось восстановить: {list} — удали их и поставь заново', { list: fileList(r.broken) }) + (refused ? '. ' + refused : '') + tail
   }
-  if (refused) return 'Файлы игры на месте. ' + refused + tail
-  if (r.restored) return 'Готово: перекачано файлов — ' + r.restored + ', проверено модов — ' + r.checked + tail
-  if (r.checked) return 'Всё на месте: проверено модов — ' + r.checked + ', файлы игры сверены по хешам' + tail
-  return 'Всё на месте: файлы игры сверены по хешам' + tail
+  if (refused) return t('Файлы игры на месте.') + ' ' + refused + tail
+  if (r.restored) return t('Готово: перекачано файлов — {restored}, проверено модов — {checked}', { restored: r.restored, checked: r.checked }) + tail
+  if (r.checked) return t('Всё на месте: проверено модов — {n}, файлы игры сверены по хешам', { n: r.checked }) + tail
+  return t('Всё на месте: файлы игры сверены по хешам') + tail
 }
 
 /// Progress travels on the same `launch-progress` channel as a launch, so the
@@ -242,21 +243,21 @@ function summary(r: RepairReport, outdated: number): string {
 /// the minutes a full rehash takes.
 export async function runRepair(profile: string, opts: { quiet?: boolean } = {}): Promise<RepairReport | null> {
   if (!hasTauri()) {
-    showToast('Доступно в приложении', 'error')
+    showToast(t('Доступно в приложении'), 'error')
     return null
   }
   if (running) {
-    showToast('Починка уже идёт')
+    showToast(t('Починка уже идёт'))
     return null
   }
   running = true
   const setPrelaunch = useUi.getState().setPrelaunch
   setPrelaunch({
     open: true,
-    sub: profile === 'default' ? 'Быстрый запуск' : profile,
+    sub: profile === 'default' ? t('Быстрый запуск') : profile,
     stage: 0,
     pct: 2,
-    msg: 'Готовимся…',
+    msg: t('Готовимся…'),
     mode: 'repair',
   })
   let unlisten: UnlistenFn | null = null
@@ -285,7 +286,7 @@ export async function runRepair(profile: string, opts: { quiet?: boolean } = {})
   } catch (e) {
     const msg = String(e && (e as Error).message ? (e as Error).message : e).replace(/^Error:\s*/, '')
     trackFailure('repair', profile.length >= 2 ? msg.split(profile).join('<build>') : msg)
-    showToast(/отмен/i.test(msg) ? 'Починка отменена' : 'Не удалось починить: ' + msg, 'error')
+    showToast(/отмен/i.test(msg) ? t('Починка отменена') : t('Не удалось починить: {error}', { error: msg }), 'error')
     return null
   } finally {
     stop()

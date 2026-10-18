@@ -48,6 +48,7 @@ import { usePackKey } from '../state/packKey'
 import { uiConfirm } from '../state/confirm'
 import { detectSlimFromUrl } from './skinArms'
 import { setScreen, showToast } from '../state/ui'
+import { t } from '../i18n'
 
 /// «Установить» из каталога Millida — одна точка и для кнопки на сайте
 /// (millida://install/…), и для библиотеки внутри лаунчера. Решение «откуда
@@ -59,14 +60,14 @@ import { setScreen, showToast } from '../state/ui'
 /// Моды с Modrinth идут вторым путём даже при зеркале: только он ставит
 /// обязательные зависимости, без которых мод не запустится.
 
-const RU: Record<string, string> = {
-  mod: 'мод',
-  resourcepack: 'ресурспак',
-  datapack: 'дата-пак',
-  shader: 'шейдер',
-  world: 'карту',
-  modpack: 'сборку',
-}
+const ruKind = (): Record<string, string> => ({
+  mod: t('мод'),
+  resourcepack: t('ресурспак'),
+  datapack: t('дата-пак'),
+  shader: t('шейдер'),
+  world: t('карту'),
+  modpack: t('сборку'),
+})
 
 export interface CatalogInstallOpts {
   /// Из ссылки сайта: версии игры и загрузчики, под которые человек выбирал.
@@ -90,14 +91,14 @@ const profiles = () => useProfiles.getState().profiles
 const buildOf = (name: string) => profiles().find((p) => p.name === name)
 
 function notFound(section: string, slug: string) {
-  showToast('В каталоге Millida нет «' + slug + '»', 'error', undefined, {
-    label: 'На сайт',
+  showToast(t('В каталоге Millida нет «{slug}»', { slug }), 'error', undefined, {
+    label: t('На сайт'),
     run: () => openExt(sitePage(section, slug)),
   })
 }
 
 function toSite(section: string, slug: string, why: string) {
-  showToast(why, 'error', undefined, { label: 'Открыть', run: () => openExt(sitePage(section, slug)) })
+  showToast(why, 'error', undefined, { label: t('Открыть'), run: () => openExt(sitePage(section, slug)) })
 }
 
 async function chooseBuild(
@@ -121,13 +122,15 @@ async function chooseBuild(
     if (!opts.fromLink) return fit[0]
     const pr = buildOf(fit[0])
     const ok = await uiConfirm(
-      'Поставить «' + title + '» в сборку «' + fit[0] + '»' + (pr ? ' (' + pr.version + ' · ' + LOADER_NAME(pr) + ')' : '') + '?',
-      { title: 'Millida', confirmLabel: 'Поставить', danger: false },
+      pr
+        ? t('Поставить «{name}» в сборку «{pack}» ({version} · {loader})?', { name: title, pack: fit[0] ?? '', version: pr.version, loader: LOADER_NAME(pr) })
+        : t('Поставить «{name}» в сборку «{pack}»?', { name: title, pack: fit[0] ?? '' }),
+      { title: 'Millida', confirmLabel: t('Поставить'), danger: false },
     )
     return ok ? fit[0] : null
   }
   // Подходящих нет — показываем все сборки: поставить можно и так, но спросим.
-  return pickBuild(RU[kind] || 'контент', fit.length ? { only: fit, preset } : { preset })
+  return pickBuild(ruKind()[kind] || t('контент'), fit.length ? { only: fit, preset } : { preset })
 }
 
 async function mrVersionBySha1(sha1: string | null): Promise<string | null> {
@@ -146,8 +149,8 @@ function done(prof: string, kind: string, file: string, warning?: string) {
   void useMods.getState().refreshInstalled()
   showToast(
     kind === 'world'
-      ? 'Карта «' + file + '» → «' + prof + '»: заходи в одиночную игру'
-      : (RU[kind] || 'Контент') + ' → «' + prof + '»: ' + file + (warning ? ' · ' + warning : ''),
+      ? t('Карта «{map}» → «{pack}»: заходи в одиночную игру', { map: file, pack: prof })
+      : t('{kind} → «{pack}»: {file}', { kind: ruKind()[kind] || t('Контент'), pack: prof, file }) + (warning ? ' · ' + warning : ''),
     'ok',
     'install',
   )
@@ -164,7 +167,7 @@ async function viaModrinth(prof: string, kind: string, mr: string, file: Catalog
   return runInstall({
     key: keyContent('mr', prof, kind, mr),
     title,
-    running: 'Скачивание…',
+    running: t('Скачивание…'),
     versionId: vid || undefined,
     run: () => (vid ? installVersion(mr, vid, prof, kind) : installContent(mr, (pr && pr.version) || '', prof, kind, true)),
     onDone: (r) => {
@@ -184,7 +187,7 @@ function viaCurseforge(prof: string, kind: string, cfid: number, file: CatalogFi
   return runInstall<ContentInstall>({
     key: keyContent('cf', prof, kind, cfid),
     title,
-    running: 'Скачивание…',
+    running: t('Скачивание…'),
     run: () => cfInstall(cfid, (pr && pr.version) || '', prof, kind, cfFileIdOf(file.origin) ?? undefined, true),
     onDone: (r) => {
       trackTimed('content_install', startedAt, { name: title, kind, mc: (pr && pr.version) || '', source: 'millida-cf' })
@@ -214,7 +217,7 @@ function viaMirror(prof: string, kind: string, item: CatalogItem, file: CatalogF
   return runInstall({
     key: keyMillida(prof, kind, item.slug),
     title: item.title,
-    running: 'Скачивание…',
+    running: t('Скачивание…'),
     versionId: file.id,
     run: () => catalogInstall(req),
     onDone: (r) => {
@@ -257,16 +260,16 @@ async function viaPlan(prof: string, kind: string, item: CatalogItem): Promise<b
   return runInstall({
     key: keyMillida(prof, kind, item.slug),
     title: item.title,
-    running: 'Скачивание…',
+    running: t('Скачивание…'),
     run: () =>
       catalogInstallPlan({ slug: item.slug, title: item.title, icon: item.icon || '', profile: prof, kind, optional }),
     onDone: (r) => {
       trackTimed('content_install', startedAt, { name: item.title, kind, mc: pr.version, source: 'millida-plan' })
-      const extra = r.installed.length ? 'и ещё ' + r.installed.length + ' зависимост' + (r.installed.length === 1 ? 'ь' : 'и') : ''
+      const extra = r.installed.length ? (r.installed.length === 1 ? t('и ещё {n} зависимость', { n: 1 }) : t('и ещё {n} зависимости', { n: r.installed.length })) : ''
       done(prof, kind, r.file, extra)
       if (r.missing.length)
-        showToast('Нет в каталоге Millida, поставь вручную: ' + r.missing.join(', '), 'error', undefined, {
-          label: 'Открыть',
+        showToast(t('Нет в каталоге Millida, поставь вручную: {list}', { list: r.missing.join(', ') }), 'error', undefined, {
+          label: t('Открыть'),
           run: () => openExt(sitePage(item.section || 'mods', item.slug)),
         })
     },
@@ -284,7 +287,7 @@ async function installContentItem(section: string, slug: string, kind: string, o
   }
   const files = opts.fileId ? item.files.filter((f) => f.id === opts.fileId) : item.files
   if (!files.length) {
-    toSite(section, slug, 'У «' + item.title + '» пока нет файлов для лаунчера')
+    toSite(section, slug, t('У «{name}» пока нет файлов для лаунчера', { name: item.title }))
     return false
   }
   const prof = await chooseBuild(item.title, kind, files, opts)
@@ -300,10 +303,12 @@ async function installContentItem(section: string, slug: string, kind: string, o
   if (!file) {
     // Файл под другую версию запускается и роняет игру — решает человек.
     const ok = await uiConfirm(
-      '«' + item.title + '» нет под ' + (pr ? pr.version + ' · ' + LOADER_NAME(pr) : 'эту сборку') +
-        ' — есть только под ' + (knownVersions(files) || 'другие версии') +
-        '. Такой файл обычно не даёт игре запуститься. Поставить всё равно?',
-      { title: 'Версия не совпадает', confirmLabel: 'Поставить', danger: true },
+      t('«{name}» нет под {target} — есть только под {versions}. Такой файл обычно не даёт игре запуститься. Поставить всё равно?', {
+        name: item.title,
+        target: pr ? pr.version + ' · ' + LOADER_NAME(pr) : t('эту сборку'),
+        versions: knownVersions(files) || t('другие версии'),
+      }),
+      { title: t('Версия не совпадает'), confirmLabel: t('Поставить'), danger: true },
     )
     if (!ok) return false
     file = pickFile(files, '', loaderId(pr), kind) || files[0]
@@ -314,7 +319,7 @@ async function installContentItem(section: string, slug: string, kind: string, o
   if (mr) return viaModrinth(prof, kind, mr, file, item.title)
   const cfid = kind === 'world' ? null : await cfProjectOf(item)
   if (cfid) return viaCurseforge(prof, kind, cfid, file, item.title)
-  toSite(section, slug, 'Файла «' + item.title + '» нет на зеркале Millida — он у автора')
+  toSite(section, slug, t('Файла «{name}» нет на зеркале Millida — он у автора', { name: item.title }))
   return false
 }
 
@@ -323,14 +328,14 @@ function packDone(p: Profile | null, title: string, startedAt: number, source: s
   trackTimed('modpack_install', startedAt, { name: title, kind: 'modpack', mc: p.version, loader: loaderId(p), source })
   useProfiles.getState().setSelected(p.name)
   void useProfiles.getState().refresh()
-  showToast('Сборка «' + p.name + '» готова — жми «Играть»', 'ok', 'achievement')
+  showToast(t('Сборка «{name}» готова — жми «Играть»', { name: p.name }), 'ok', 'achievement')
 }
 
 async function confirmPack(title: string, what: string, opts: CatalogInstallOpts): Promise<boolean> {
   if (!opts.fromLink) return true
-  return uiConfirm('Установить сборку «' + title + '»' + (what ? ' (' + what + ')' : '') + '? Она появится отдельной сборкой.', {
+  return uiConfirm(what ? t('Установить сборку «{name}» ({what})? Она появится отдельной сборкой.', { name: title, what }) : t('Установить сборку «{name}»? Она появится отдельной сборкой.', { name: title }), {
     title: 'Millida',
-    confirmLabel: 'Установить',
+    confirmLabel: t('Установить'),
     danger: false,
   })
 }
@@ -340,7 +345,7 @@ async function confirmPack(title: string, what: string, opts: CatalogInstallOpts
 /// «Сборка по коду» / millida://pack/<код> — `install_shared_pack`.
 export async function installPackCode(code: string, title: string, opts: CatalogInstallOpts = {}, slug = code): Promise<boolean> {
   if (!hasTauri()) {
-    showToast('Установка доступна в приложении')
+    showToast(t('Установка доступна в приложении'))
     return false
   }
   if (!(await confirmPack(title, '', opts))) return false
@@ -348,7 +353,7 @@ export async function installPackCode(code: string, title: string, opts: Catalog
   return runInstall({
     key: keyMillidaModpack(slug),
     title,
-    running: 'Скачивание…',
+    running: t('Скачивание…'),
     run: () => installSharedPack(code),
     onDone: (p) => packDone(p, title, startedAt, 'millida-code'),
     onError: (e) => showToast('' + e, 'error'),
@@ -373,11 +378,11 @@ async function installModpackItem(slug: string, opts: CatalogInstallOpts): Promi
       return false
     }
     if (!pack.files.some((f) => f.side === 'client')) {
-      toSite('modpacks', slug, 'У сборки «' + pack.title + '» нет файла для игры')
+      toSite('modpacks', slug, t('У сборки «{name}» нет файла для игры', { name: pack.title }))
       return false
     }
     if (!hasMillidaAccount()) {
-      showToast('Войди в аккаунт Millida — сборки каталога ставятся на аккаунт', 'error')
+      showToast(t('Войди в аккаунт Millida — сборки каталога ставятся на аккаунт'), 'error')
       return false
     }
     if (!(await confirmPack(pack.title, [pack.game, pack.loader].filter(Boolean).join(' · '), opts))) return false
@@ -394,7 +399,7 @@ async function installModpackItem(slug: string, opts: CatalogInstallOpts): Promi
     return runInstall({
       key: keyMillidaModpack(slug),
       title: item.title,
-      running: 'Скачивание…',
+      running: t('Скачивание…'),
       versionId: file.id,
       run: () =>
         catalogInstall({
@@ -421,7 +426,7 @@ async function installModpackItem(slug: string, opts: CatalogInstallOpts): Promi
     return runInstall({
       key: keyMrModpack(mr),
       title: item.title,
-      running: 'Скачивание…',
+      running: t('Скачивание…'),
       versionId: vid || undefined,
       run: () => (vid ? installModpackVersion(mr, vid) : installModpack(mr)),
       onDone: (p) => packDone(p, item.title, startedAt, 'millida-mr'),
@@ -435,83 +440,14 @@ async function installModpackItem(slug: string, opts: CatalogInstallOpts): Promi
     return runInstall({
       key: keyCfModpack(cfid),
       title: item.title,
-      running: 'Скачивание…',
+      running: t('Скачивание…'),
       run: () => cfInstallModpack(cfid, cfFile ?? undefined),
       onDone: (p) => packDone(p, item.title, startedAt, 'millida-cf'),
       onError: (e) => showToast('' + e, 'error'),
     })
   }
-  toSite('modpacks', slug, 'Файла сборки «' + item.title + '» нет на зеркале Millida')
+  toSite('modpacks', slug, t('Файла сборки «{name}» нет на зеркале Millida', { name: item.title }))
   return false
-}
-
-export const CHEAT_SOURCE_NOTE =
-  'Читы — сторонние программы: файлы взяты у их авторов. Мы дополнительно проверяем их антивирусом, но не гарантируем безопасность и не отвечаем за последствия установки.'
-export const CHEAT_RULES_NOTE = 'Играйте с читами только на серверах, где это разрешено правилами — за нарушение банят.'
-
-/// Читы: файлы лежат на нашем хранилище после антивируса (/catalog/curated/cheats).
-async function installCheat(slug: string, opts: CatalogInstallOpts): Promise<boolean> {
-  let list: CatalogFile[] = []
-  const sha256 = new Map<string, string>()
-  try {
-    const raw = await catalog.curated('cheats', slug)
-    raw.forEach((f) => sha256.set(f.id, f.sha256))
-    list = raw.map((f) => ({
-      id: f.id,
-      version: f.version,
-      gameVersions: f.gameVersions,
-      primaryGameVersion: f.gameVersions[0] || null,
-      loaders: f.loaders,
-      fileName: f.fileName,
-      size: f.size,
-      sha1: null,
-      mirrored: true,
-      origin: null,
-      releasedAt: null,
-      downloads: 0,
-    }))
-  } catch {}
-  // Установщик — не мод: его запускают руками, в папке модов он ломает игру.
-  list = list.filter((f) => /\.jar$/i.test(f.fileName) && !/^installer/i.test(f.fileName))
-  if (opts.fileId) list = list.filter((f) => f.id === opts.fileId)
-  if (!list.length) {
-    toSite('cheats', slug, 'Для этого клиента нет файла, который ставится в сборку')
-    return false
-  }
-  const agreed = await uiConfirm(CHEAT_RULES_NOTE + ' ' + CHEAT_SOURCE_NOTE, {
-    title: 'Перед установкой чита',
-    confirmLabel: 'Понятно, установить',
-    danger: false,
-  })
-  if (!agreed) return false
-  const prof = await chooseBuild(slug, 'mod', list, opts)
-  if (!prof) return false
-  const pr = buildOf(prof)
-  const file = pickFile(list, (pr && pr.version) || '', loaderId(pr), 'mod')
-  if (!file) {
-    showToast('Под «' + prof + '» файла нет — есть под ' + (knownVersions(list) || 'другие версии'), 'error')
-    return false
-  }
-  return runInstall({
-    key: keyMillida(prof, 'mod', slug),
-    title: slug,
-    running: 'Скачивание…',
-    run: () =>
-      catalogInstall({
-        slug,
-        title: slug,
-        via: 'curated',
-        section: 'cheats',
-        fileId: file.id,
-        profile: prof,
-        kind: 'mod',
-        versionLabel: file.version,
-        size: file.size,
-        sha256: sha256.get(file.id) || '',
-      }),
-    onDone: (r) => done(prof, 'mod', r.file),
-    onError: (e) => showToast('' + e, 'error'),
-  })
 }
 
 /// Скин каталога сайта — в гардероб аккаунта и сразу надеть. Гардероб живёт на
@@ -519,12 +455,12 @@ async function installCheat(slug: string, opts: CatalogInstallOpts): Promise<boo
 async function applySkin(slug: string, opts: CatalogInstallOpts): Promise<boolean> {
   setScreen('skins')
   if (!hasMillidaAccount()) {
-    showToast('Войди в аккаунт Millida, чтобы надеть скин', 'error')
+    showToast(t('Войди в аккаунт Millida, чтобы надеть скин'), 'error')
     return false
   }
   const name = opts.name || slug
   if (opts.fromLink) {
-    const ok = await uiConfirm('Надеть скин «' + name + '»?', { title: 'Millida', confirmLabel: 'Надеть', danger: false })
+    const ok = await uiConfirm(t('Надеть скин «{name}»?', { name }), { title: 'Millida', confirmLabel: t('Надеть'), danger: false })
     if (!ok) return false
   }
   try {
@@ -533,10 +469,10 @@ async function applySkin(slug: string, opts: CatalogInstallOpts): Promise<boolea
     const slim = opts.slim ?? (await detectSlimFromUrl('data:image/png;base64,' + png).catch(() => false))
     const item = await addToWardrobe({ kind: 'skin', name, pngBase64: png, source: 'catalog', ...(slim ? { slim: true } : {}) })
     await applyWardrobeItem(item.id)
-    showToast('Скин надет — виден в игре после перезахода', 'ok', 'install')
+    showToast(t('Скин надет — виден в игре после перезахода'), 'ok', 'install')
     return true
   } catch (e) {
-    showToast('Не удалось надеть скин: ' + e, 'error')
+    showToast(t('Не удалось надеть скин: {error}', { error: String(e) }), 'error')
     return false
   }
 }
@@ -557,32 +493,32 @@ async function fetchSkinPng(slug: string): Promise<string> {
 async function applyCape(slug: string): Promise<boolean> {
   setScreen('skins')
   if (!hasMillidaAccount()) {
-    showToast('Войди в аккаунт Millida, чтобы надеть плащ', 'error')
+    showToast(t('Войди в аккаунт Millida, чтобы надеть плащ'), 'error')
     return false
   }
   const list = await loadCapeCatalog().catch(() => [])
   const cape = list.find((c) => c.id === slug)
   if (!cape) {
-    showToast('Этот плащ выдаёт Mojang, а не лаунчер — плащи Millida во вкладке «Скины»')
+    showToast(t('Этот плащ выдаёт Mojang, а не лаунчер — плащи Millida во вкладке «Скины»'))
     return false
   }
   if (cape.unlocked === false) {
-    showToast('Плащ «' + cape.name + '» ещё закрыт' + (cape.requirement ? ': ' + cape.requirement : ''))
+    showToast(cape.requirement ? t('Плащ «{name}» ещё закрыт: {why}', { name: cape.name, why: cape.requirement }) : t('Плащ «{name}» ещё закрыт', { name: cape.name }))
     return false
   }
   try {
     await applyCatalogCape(cape.id)
-    showToast('Плащ «' + cape.name + '» надет', 'ok', 'install')
+    showToast(t('Плащ «{name}» надет', { name: cape.name }), 'ok', 'install')
     return true
   } catch (e) {
-    showToast('Не удалось надеть плащ: ' + e, 'error')
+    showToast(t('Не удалось надеть плащ: {error}', { error: String(e) }), 'error')
     return false
   }
 }
 
 export async function installFromCatalog(section: string, slug: string, opts: CatalogInstallOpts = {}): Promise<boolean> {
   if (!hasTauri()) {
-    showToast('Установка доступна в приложении')
+    showToast(t('Установка доступна в приложении'))
     return false
   }
   if (section === 'skins') return applySkin(slug, opts)
@@ -591,10 +527,9 @@ export async function installFromCatalog(section: string, slug: string, opts: Ca
     return false
   }
   if (section === 'modpacks') return installModpackItem(slug, opts)
-  if (section === 'cheats') return installCheat(slug, opts)
   const kind = KIND_OF_SECTION[section]
   if (!kind) {
-    toSite(section, slug, 'Этот раздел лаунчер не ставит')
+    toSite(section, slug, t('Этот раздел лаунчер не ставит'))
     return false
   }
   return installContentItem(section, slug, kind, opts)
@@ -608,7 +543,7 @@ export function installOwnPack(slug: string, title: string): boolean {
   return runInstall({
     key: keyCatalogPack(slug),
     title: title || slug,
-    running: 'Скачивание…',
+    running: t('Скачивание…'),
     run: () => installCatalogPack(slug),
     onError: (e) => {
       const text = String(e)

@@ -18,21 +18,22 @@ import { useHasMillida } from '../state/auth'
 import { usePlus } from '../state/plus'
 import { PL_STAGES, cancelPrelaunch } from '../lib/launch'
 import { preloadScreen } from '../screens/registry'
+import { t, useT } from '../i18n'
 
 /** hub: раздел «Во что играем» — false «Мои сборки» (сборки и рекомендации), true «Каталог». */
 const NAV: { id: ScreenId; icon: string; label: string; pill?: string; hub?: boolean }[] = [
-  { id: 'play', icon: 'i-play', label: 'Играть' },
-  { id: 'playhub', icon: 'i-box2', label: 'Мои сборки', hub: false },
-  { id: 'playhub', icon: 'i-blocks', label: 'Каталог', hub: true },
-  { id: 'servers', icon: 'i-server', label: 'Серверы' },
-  { id: 'skins', icon: 'i-shirt', label: 'Скины' },
-  { id: 'rubies', icon: 'i-gem', label: 'Магазин' },
-  { id: 'top', icon: 'i-trophy', label: 'Топ' },
-  { id: 'friends', icon: 'i-users', label: 'Друзья' },
-  { id: 'hosting', icon: 'i-server-cog', label: 'Мой сервер' },
+  { id: 'play', icon: 'i-play', get label() { return t('Играть') } },
+  { id: 'playhub', icon: 'i-box2', get label() { return t('Мои сборки') }, hub: false },
+  { id: 'playhub', icon: 'i-blocks', get label() { return t('Каталог') }, hub: true },
+  { id: 'servers', icon: 'i-server', get label() { return t('Серверы') } },
+  { id: 'skins', icon: 'i-shirt', get label() { return t('Скины') } },
+  { id: 'rubies', icon: 'i-gem', get label() { return t('Магазин') } },
+  { id: 'top', icon: 'i-trophy', get label() { return t('Топ') } },
+  { id: 'friends', icon: 'i-users', get label() { return t('Друзья') } },
+  { id: 'hosting', icon: 'i-server-cog', get label() { return t('Мой сервер') } },
 ]
 
-const NAV_BOTTOM: { id: ScreenId; icon: string; label: string }[] = [{ id: 'settings', icon: 'i-settings', label: 'Настройки' }]
+const NAV_BOTTOM: { id: ScreenId; icon: string; label: string }[] = [{ id: 'settings', icon: 'i-settings', get label() { return t('Настройки') } }]
 
 /**
  * Подсказка «бесплатно» продаёт хостинг только тому, кто его ещё не пробовал:
@@ -56,10 +57,11 @@ function pillOf(
 function dismissHint(e: ReactMouseEvent) {
   e.preventDefault()
   hideNavHint()
-  showToast('Подсказка убрана', 'ok', false, { label: 'Вернуть', run: restoreNavHint })
+  showToast(t('Подсказка убрана'), 'ok', false, { label: t('Вернуть'), run: restoreNavHint })
 }
 
 export function ClassicSidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
+  const t = useT()
   const screen = useUi((s) => s.screen)
   const prelaunch = useUi((s) => s.prelaunch)
   const friends = useFriends((s) => s.friends)
@@ -125,8 +127,8 @@ export function ClassicSidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
           наведении на панель (как в Notion и Linear). По умолчанию панель открыта. */}
       <button
         className="cl-fold"
-        aria-label={collapsed ? 'Развернуть меню' : 'Свернуть меню'}
-        title={collapsed ? 'Развернуть меню' : 'Свернуть меню'}
+        aria-label={collapsed ? t('Развернуть меню') : t('Свернуть меню')}
+        title={collapsed ? t('Развернуть меню') : t('Свернуть меню')}
         onClick={toggleCollapsed}
       >
         <Icon id={collapsed ? 'i-chev-r' : 'i-chev-l'} />
@@ -157,12 +159,12 @@ export function ClassicSidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
             {n.id === 'friends' ? (
               <>
                 {frOnline ? (
-                  <span className="nav-count" id="frOnline" title="Друзья в сети">
+                  <span className="nav-count" id="frOnline" title={t('Друзья в сети')}>
                     {frOnline}
                   </span>
                 ) : null}
                 {frAlerts ? (
-                  <span className="nav-badge" title="Новые сообщения и заявки">
+                  <span className="nav-badge" title={t('Новые сообщения и заявки')}>
                     {frAlerts > 99 ? '99+' : frAlerts}
                   </span>
                 ) : null}
@@ -197,7 +199,7 @@ export function ClassicSidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
                 </div>
               ))}
               <button className="btn sm ghost" style={{ width: '100%', marginTop: '6px' }} onClick={cancelPrelaunch}>
-                Отменить запуск
+                {t('Отменить запуск')}
               </button>
             </div>
           </div>
@@ -225,8 +227,8 @@ export function ClassicSidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
 
       <div
         className="account"
-        title="Аккаунты"
-        data-tip={inGameNick || 'Гость'}
+        title={t('Аккаунты')}
+        data-tip={inGameNick || t('Гость')}
         ref={chipRef}
         onClick={() => setMenuOpen((v) => !v)}
       >
@@ -240,9 +242,9 @@ export function ClassicSidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
           />
         </span>
         <span className="acc-meta">
-          <span className="acc-nick">{inGameNick || 'Гость'}</span>{' '}
+          <span className="acc-nick">{inGameNick || t('Гость')}</span>{' '}
           <span className="acc-kind">
-            {acc ? (otherAccountNick ? 'Ник в игре · аккаунт ' + otherAccountNick : accKindLabel(acc.kind)) : 'Нажми, чтобы войти'}
+            {acc ? (otherAccountNick ? t('Ник в игре · аккаунт {nick}', { nick: otherAccountNick }) : accKindLabel(acc.kind)) : t('Нажми, чтобы войти')}
           </span>
         </span>
         <span className="acc-chevron">

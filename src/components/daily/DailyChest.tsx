@@ -15,6 +15,7 @@ import { HubTile } from '../lobby/HubTile'
 import { WeekItem } from './WeekItem'
 import { dayChestTier } from './rewards'
 import '../../styles/pixel/daily.css'
+import { useT } from '../../i18n'
 
 /**
  * Окно трека рисует только одна из плашек на экране: иначе при двух
@@ -66,6 +67,7 @@ export function DailyChest({
   hero?: boolean
   className?: string
 }) {
+  const t = useT()
   const status = useDaily((s) => s.status)
   const loading = useDaily((s) => s.loading)
   const failed = useDaily((s) => s.failed)
@@ -102,9 +104,9 @@ export function DailyChest({
           kind="daily"
           className={className}
           daily={{
-            title: 'Ежедневный бонус',
+            title: t('Ежедневный бонус'),
             art: '/lobby/daily@2x.png',
-            sub: guest ? 'Войди и забирай' : wait ? '' : ready ? 'Забери награду' : 'Через ' + timerText(left),
+            sub: guest ? t('Войди и забирай') : wait ? '' : ready ? t('Забери награду') : t('Через {time}', { time: timerText(left) }),
             ribbon: null,
             hot: !guest && ready,
             onClick: open,
@@ -120,10 +122,10 @@ export function DailyChest({
       <div className={cls + ' guest'}>
         <ChestLive ready={false} size={size} />
         <span className="dc-body">
-          <b className="dc-title">{hero ? 'Награды каждый день' : 'Сундук каждый день'}</b>
+          <b className="dc-title">{hero ? t('Награды каждый день') : t('Сундук каждый день')}</b>
         </span>
         <button className="btn sm primary dc-act" data-track="login" onClick={() => logoutToLogin()}>
-          Войти
+          {t('Войти')}
         </button>
       </div>
     )
@@ -158,20 +160,20 @@ export function DailyChest({
         className={cls + ' clickable'}
         role="button"
         tabIndex={0}
-        aria-label="Награды за вход"
+        aria-label={t('Награды за вход')}
         data-track="daily_open"
         onClick={open}
         onKeyDown={onKey}
       >
         <ChestLive ready={ready} size={size} tier={tier} />
         <span className="dc-body">
-          <b className="dc-title">{ready ? (hero ? 'Награда на сегодня' : 'Сундук готов') : 'Через ' + timerText(left)}</b>
+          <b className="dc-title">{ready ? (hero ? t('Награда на сегодня') : t('Сундук готов')) : t('Через {time}', { time: timerText(left) })}</b>
           {!hero && status.weekItem && !status.weekItem.owned ? (
             <WeekItem item={status.weekItem} compact />
           ) : status.streak > 0 ? (
             <span className="dc-sub">
               <Icon id="i-flame" />
-              {compact ? daysWord(status.streak) : daysWord(status.streak) + ' подряд'}
+              {compact ? daysWord(status.streak) : t('{days} подряд', { days: daysWord(status.streak) })}
             </span>
           ) : null}
         </span>
@@ -187,7 +189,7 @@ export function DailyChest({
               open()
             }}
           >
-            Забрать
+            {t('Забрать')}
           </button>
         ) : (
           <Icon id="i-chev-r" className="icon dc-chev" />

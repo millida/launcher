@@ -27,6 +27,7 @@ import {
   type ChatMessage,
 } from '../state/friends'
 import { loadRooms, useRooms } from '../state/rooms'
+import { t, useT } from '../i18n'
 
 export interface OverlayTarget {
   id: string
@@ -44,7 +45,7 @@ const STICK_PX = 90
 const COMPOSER_MAX_PX = 104
 
 const attachmentLabel = (kind?: string) =>
-  kind === 'voice' ? 'Голосовое сообщение' : kind === 'image' ? 'Изображение' : 'Файл'
+  kind === 'voice' ? t('Голосовое сообщение') : kind === 'image' ? t('Изображение') : t('Файл')
 
 function Skeleton() {
   return (
@@ -67,6 +68,7 @@ export function OverlayChat({
   onClose: () => void
   onLauncher: (target: OverlayTarget | null) => void
 }) {
+  const t = useT()
   const friends = useFriends((s) => s.friends)
   const rooms = useRooms((s) => s.rooms)
   const chatWith = useFriends((s) => s.chatWith)
@@ -212,7 +214,7 @@ export function OverlayChat({
       await sendChat(body)
       setText('')
     } catch (e) {
-      setError(apiErrorText(e, 'Сообщение не отправлено'))
+      setError(apiErrorText(e, t('Сообщение не отправлено')))
     } finally {
       setSending(false)
       inputRef.current?.focus()
@@ -248,7 +250,7 @@ export function OverlayChat({
           {showAuthor ? (
             <span className="msg-author">
               <Head nick={m.fromNick} size={18} />
-              {m.fromNick || 'Участник'}
+              {m.fromNick || t('Участник')}
             </span>
           ) : null}
           <div
@@ -261,7 +263,7 @@ export function OverlayChat({
             }
           >
             {m.deleted ? (
-              <span className="msg-gone">Сообщение удалено</span>
+              <span className="msg-gone">{t('Сообщение удалено')}</span>
             ) : (
               <>
                 {att && att.kind === 'image' && isOwnMediaUrl(att.url) ? (
@@ -271,7 +273,7 @@ export function OverlayChat({
                     <Icon id={att.kind === 'voice' ? 'i-mic' : 'i-box'} />
                     <span>
                       <b>{att.name || attachmentLabel(att.kind)}</b>
-                      Открыть в лаунчере
+                      {t('Открыть в лаунчере')}
                     </span>
                   </button>
                 ) : null}
@@ -280,14 +282,14 @@ export function OverlayChat({
             )}
             <span className="msg-meta">
               <span>{timeHM(m.ts)}</span>
-              {m.editedAt ? <span>изменено</span> : null}
+              {m.editedAt ? <span>{t('изменено')}</span> : null}
               {m.me && m.state !== 'failed' ? <Ticks state={m.state} read={isRead(m, peerReadAt)} /> : null}
             </span>
           </div>
           {m.state === 'failed' ? (
             <button className="ovc-retry" onClick={() => void retryChat(m.localId || '')}>
               <Icon id="i-restart" />
-              Не отправлено — повторить
+              {t('Не отправлено — повторить')}
             </button>
           ) : null}
         </div>
@@ -300,14 +302,14 @@ export function OverlayChat({
       <aside className="ovc-rail">
         <div className="ovc-brand">
           <Icon id="i-msg" />
-          <b>Чат Millida</b>
+          <b>{t('Чат Millida')}</b>
           {unread ? <span className="fr-unread">{unread > 9 ? '9+' : unread}</span> : null}
         </div>
         <label className="ovc-search">
           <Icon id="i-search" />
           <input
             value={filter}
-            placeholder="Поиск по имени"
+            placeholder={t('Поиск по имени')}
             onChange={(e) => setFilter(e.target.value)}
           />
         </label>
@@ -336,13 +338,13 @@ export function OverlayChat({
           ))}
           {!items.length ? (
             <p className="ovc-note">
-              {filter.trim() ? 'Никого по «' + filter.trim() + '»' : 'Друзей пока нет'}
+              {filter.trim() ? t('Никого по «{query}»', { query: filter.trim() }) : t('Друзей пока нет')}
             </p>
           ) : null}
         </div>
         <button className="ovc-rail-foot" onClick={() => onLauncher(null)}>
           <Icon id="i-users" />
-          Все друзья и группы
+          {t('Все друзья и группы')}
         </button>
       </aside>
 
@@ -362,18 +364,18 @@ export function OverlayChat({
             </>
           ) : (
             <span className="ovc-head-body">
-              <b>Переписки</b>
+              <b>{t('Переписки')}</b>
             </span>
           )}
-          <span className="ovc-hint">{hotkey ? hotkey + ' или Esc — закрыть' : 'Esc — закрыть'}</span>
+          <span className="ovc-hint">{hotkey ? t('{key} или Esc — закрыть', { key: hotkey }) : t('Esc — закрыть')}</span>
           <button
             className="ovc-act"
-            title="Открыть в лаунчере"
+            title={t('Открыть в лаунчере')}
             onClick={() => onLauncher(current ? asTarget(current) : null)}
           >
             <Icon id="i-ext" />
           </button>
-          <button className="ovc-act" title="Закрыть" onClick={onClose}>
+          <button className="ovc-act" title={t('Закрыть')} onClick={onClose}>
             <Icon id="i-x" />
           </button>
         </div>
@@ -389,7 +391,7 @@ export function OverlayChat({
           {!openId ? (
             <div className="ovc-blank">
               <Icon id="i-msg" />
-              <b>Выбери переписку слева</b>
+              <b>{t('Выбери переписку слева')}</b>
             </div>
           ) : loading && !msgs.length ? (
             <Skeleton />
@@ -397,14 +399,14 @@ export function OverlayChat({
             <>
               {hasMore ? (
                 <button className="ovc-older" disabled={olderBusy} onClick={() => void older()}>
-                  {olderBusy ? 'Грузим…' : 'Показать раньше'}
+                  {olderBusy ? t('Грузим…') : t('Показать раньше')}
                 </button>
               ) : null}
               {msgs.map(bubble)}
               {!msgs.length ? (
                 <div className="ovc-blank">
                   <Icon id="i-msg" />
-                  <b>Напиши первым</b>
+                  <b>{t('Напиши первым')}</b>
                 </div>
               ) : null}
             </>
@@ -425,7 +427,7 @@ export function OverlayChat({
             value={text}
             disabled={!openId || sending}
             placeholder={
-              !openId ? 'Выбери, кому написать' : chatRoom ? 'Сообщение в ' + chatNick + '…' : 'Написать ' + chatNick + '…'
+              !openId ? t('Выбери, кому написать') : chatRoom ? t('Сообщение в {name}…', { name: chatNick }) : t('Написать {name}…', { name: chatNick })
             }
             onChange={(e) => type(e.target.value)}
             onKeyDown={(e) => {
@@ -437,7 +439,7 @@ export function OverlayChat({
           />
           <button
             className="chat-send"
-            title="Отправить"
+            title={t('Отправить')}
             disabled={!openId || sending || !text.trim()}
             onClick={() => void send()}
           >

@@ -8,6 +8,7 @@ import { nextResetAt, passCols, readyCells, type Row, type TrackReward } from '.
 import { shardWord, word } from './rarity'
 import { Countdown, Shard } from './parts'
 import './gift.css'
+import { intlTag, useT } from '../../i18n'
 
 /** Что показать крупно: осколки важнее рубинов, вещь — картинкой. */
 const RANK: Record<string, number> = { SHARDS: 0, FRAGMENTS: 1, RUBIES: 2, ITEM: 3, CHEST: 4, MYSTERY: 5 }
@@ -24,6 +25,7 @@ const pick = (list: TrackReward[]): TrackReward | null => [...list].sort((a, b) 
  * поэтому награда не приходит дважды. Забрано — «Завтра» с таймером.
  */
 export function FreeDaily() {
+  const t = useT()
   const status = useDaily((s) => s.status)
   const busy = useDaily((s) => s.busy)
   const plusActive = usePlus((s) => s.active)
@@ -64,7 +66,7 @@ export function FreeDaily() {
       <Icon id={r.kind === 'CHEST' ? 'i-chest' : 'i-gift'} />
     )
   const label =
-    !r ? 'Подарок' : r.kind === 'SHARDS' ? shardWord(amount) : r.kind === 'RUBIES' ? word(amount) : r.kind === 'ITEM' ? r.item?.name || 'Вещь' : r.kind === 'CHEST' ? 'Сундук' : 'Подарок'
+    !r ? t('Подарок') : r.kind === 'SHARDS' ? shardWord(amount) : r.kind === 'RUBIES' ? word(amount) : r.kind === 'ITEM' ? r.item?.name || t('Вещь') : r.kind === 'CHEST' ? t('Сундук') : t('Подарок')
   const claim = () => {
     if (view.cell) void useDaily.getState().claim(view.cell)
     else void useDaily.getState().claim()
@@ -72,23 +74,23 @@ export function FreeDaily() {
 
   return (
     <div className={'gf sh-free' + (view.ready ? ' is-ready' : ' is-claimed')} style={{ ['--rw-tone' as string]: 'var(--m-accent)' }}>
-      <span className="gf-kicker">Бесплатно</span>
+      <span className="gf-kicker">{t('Бесплатно')}</span>
       <span className="gf-stage">
         {view.ready ? <Rays className="sh-free-rays" /> : null}
         <span className="gf-prize sh-free-prize">{art}</span>
-        {amount ? <b className="gf-amount">+{amount.toLocaleString('ru-RU')}</b> : null}
+        {amount ? <b className="gf-amount">+{amount.toLocaleString(intlTag())}</b> : null}
       </span>
       <span className="gf-line">
         <b>{label}</b>
       </span>
       {view.ready ? (
         <button className="btn md primary gf-btn" disabled={busy === 'claim'} data-track="daily_claim" onClick={claim}>
-          Забрать
+          {t('Забрать')}
         </button>
       ) : (
         <span className="sh-tag sh-timer gf-next">
           <Icon id="i-clock" />
-          <span>Завтра</span>
+          <span>{t('Завтра')}</span>
           <b>
             <Countdown to={new Date(nextResetAt(status)).toISOString()} onEnd={() => void useDaily.getState().load()} />
           </b>

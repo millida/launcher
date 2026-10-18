@@ -1,4 +1,5 @@
 import { textureSource } from './textureSource'
+import { t } from '../i18n'
 
 export function loadImg(url: string): Promise<HTMLImageElement> {
   return textureSource(url).then(
@@ -7,7 +8,7 @@ export function loadImg(url: string): Promise<HTMLImageElement> {
         const i = new Image()
         if (!/^(data|blob):/i.test(src)) i.crossOrigin = 'anonymous'
         i.onload = () => res(i)
-        i.onerror = () => rej(new Error('текстура недоступна: ' + url))
+        i.onerror = () => rej(new Error(t('текстура недоступна: {url}', { url })))
         i.src = src
       }),
   )

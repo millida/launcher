@@ -3,6 +3,7 @@ import type { WeekItem as WeekItemData } from '../../lib/rubies'
 import { RARITY_TONE } from '../shop/rarity'
 import { Icon } from '../Icon'
 import { daysWord } from './track'
+import { useT } from '../../i18n'
 
 /** Сколько целых дней до конца периода вещи (минимум 1, пока он идёт). */
 export function weekDaysLeft(endsAt: string, now = Date.now()): number {
@@ -35,12 +36,13 @@ export function FragmentCells({ have, need, gain = 0 }: { have: number; need: nu
  * `compact` — полоска для плашки лобби.
  */
 export function WeekItem({ item, compact = false }: { item: WeekItemData; compact?: boolean }) {
+  const t = useT()
   const tone = { '--wi-tone': RARITY_TONE[item.rarity || 'EPIC'] } as CSSProperties
   const have = Math.min(item.have, item.need)
   const left = weekDaysLeft(item.endsAt)
   if (compact) {
     return (
-      <span className="wi-strip" style={tone} aria-label={'Вещь двух недель: ' + have + ' из ' + item.need}>
+      <span className="wi-strip" style={tone} aria-label={t('Вещь двух недель: {n} из {total}', { n: have, total: item.need })}>
         <span className="wi-strip-bar">
           <i style={{ width: (have / Math.max(1, item.need)) * 100 + '%' }} />
         </span>
@@ -61,7 +63,7 @@ export function WeekItem({ item, compact = false }: { item: WeekItemData; compac
         ) : null}
       </span>
       <span className="wi-body">
-        <span className="wi-kicker">Вещь двух недель</span>
+        <span className="wi-kicker">{t('Вещь двух недель')}</span>
         <b className="wi-name">{item.name}</b>
         <span className="wi-prog">
           <FragmentCells have={have} need={item.need} />
@@ -72,7 +74,7 @@ export function WeekItem({ item, compact = false }: { item: WeekItemData; compac
         {left > 0 && !item.owned ? (
           <span className="wi-left">
             <Icon id="i-clock" />
-            {'до конца ' + daysWord(left)}
+            {t('до конца {days}', { days: daysWord(left) })}
           </span>
         ) : null}
       </span>

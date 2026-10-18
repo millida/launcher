@@ -10,6 +10,7 @@ import { usePackKey } from '../state/packKey'
 import { useProfiles } from '../state/profiles'
 import { uiConfirm } from '../state/confirm'
 import { showToast } from '../state/ui'
+import { useT } from '../i18n'
 
 /**
  * The newer published version of a catalogue build, to take ahead of time;
@@ -17,6 +18,7 @@ import { showToast } from '../state/ui'
  * old one and switches only once it is complete.
  */
 export function PackUpdateRow({ profile, onUpdated }: { profile: string; onUpdated?: () => void }) {
+  const t = useT()
   const [update, setUpdate] = useState<PackUpdate | null>(null)
   const [round, setRound] = useState(0)
   const task = useInstalls((s) => (update ? s.tasks[keyCatalogPack(update.slug)] : undefined))
@@ -49,13 +51,13 @@ export function PackUpdateRow({ profile, onUpdated }: { profile: string; onUpdat
   if (!update) return null
 
   const running = !!task && task.state === 'run'
-  const label = running ? (task.pct > 0 ? task.label + ' ' + Math.round(task.pct) + '%' : task.label) : 'Обновить'
+  const label = running ? (task.pct > 0 ? task.label + ' ' + Math.round(task.pct) + '%' : task.label) : t('Обновить')
 
   const run = (u: PackUpdate) => {
     runInstall({
       key: keyCatalogPack(u.slug),
       title: profile,
-      running: 'Обновляем…',
+      running: t('Обновляем…'),
       run: () => packUpdateJob(profile, u.slug),
       onError: (e) => {
         const text = String(e)
@@ -67,7 +69,7 @@ export function PackUpdateRow({ profile, onUpdated }: { profile: string; onUpdat
       },
       onDone: () => {
         void useProfiles.getState().refresh()
-        showToast('Сборка «' + profile + '» обновлена до версии ' + u.to, 'ok', 'achievement')
+        showToast(t('Сборка «{name}» обновлена до версии {version}', { name: profile, version: u.to }), 'ok', 'achievement')
       },
     })
   }
@@ -78,11 +80,9 @@ export function PackUpdateRow({ profile, onUpdated }: { profile: string; onUpdat
       () => true,
     )
     const ok = await uiConfirm(
-      'Поставим версию ' +
-        u.to +
-        ' рядом со старой и перенесём миры, скриншоты и настройки игры. Старая версия удалится, только когда новая встанет на место.' +
-        (edited ? ' Моды придут в версии автора: добавленные тобой моды не перенесутся.' : ''),
-      { title: 'Обновить «' + profile + '»?', confirmLabel: 'Обновить', danger: false },
+      t('Поставим версию {version} рядом со старой и перенесём миры, скриншоты и настройки игры. Старая версия удалится, только когда новая встанет на место.', { version: u.to }) +
+        (edited ? ' ' + t('Моды придут в версии автора: добавленные тобой моды не перенесутся.') : ''),
+      { title: t('Обновить «{name}»?', { name: profile }), confirmLabel: t('Обновить'), danger: false },
     )
     if (ok) run(u)
   }
@@ -92,7 +92,7 @@ export function PackUpdateRow({ profile, onUpdated }: { profile: string; onUpdat
       <div className="bx-audit-row">
         <Icon id="i-download" />
         <span className="bx-audit-text">
-          {'Доступна новая версия сборки · ' + update.from + ' → ' + update.to}
+          {t('Доступна новая версия сборки · {from} → {to}', { from: update.from, to: update.to })}
         </span>
         <span style={{ flex: 1 }}></span>
         <button

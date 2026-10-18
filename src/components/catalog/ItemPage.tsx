@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { Icon } from '../Icon'
 import { PxIcon } from '../PxIcon'
@@ -16,7 +16,7 @@ import { useMods } from '../../state/mods'
 import { useProfiles } from '../../state/profiles'
 import { SECTION_VISUAL } from './sections'
 import type { SectionSlug } from './sections'
-import { Fallback, MrIcon, RowActions, SiteGalleryCard, shortAuthor, useCardHit } from './SiteRow'
+import { Fallback, MrIcon, RowActions, SiteGalleryCard, SourceMark, shortAuthor, useCardHit } from './SiteRow'
 import { StarButton } from './StarButton'
 import { PriceMark, usePaidCard } from './PaidActs'
 import { useCatalogCtx } from './target'
@@ -42,12 +42,13 @@ import {
   sectionBySlug,
   siteUrl,
 } from './site'
-import type { CuratedItem, ItemView, SiteCard, SiteSection, SiteSlug } from './site'
-import { CHEATS, cheatBody, cheatName, defaultPick, filesFor, loaderOptions, sizeLabel, spanOf, versionOptions } from './itemView'
+import type { ItemView, SiteCard, SiteSection, SiteSlug } from './site'
+import { defaultPick, filesFor, loaderOptions, sizeLabel, spanOf, versionOptions } from './itemView'
 import type { VerFile } from './itemView'
 import { weaveMarkdown } from './weave'
 import { planMedia, readsRussian, russianText, tagLabels } from './itemBody'
 import '../../styles/pixel/catalog-item.css'
+import { useMarketOffers, useT } from '../../i18n'
 
 /*
  * Страница материала каталога внутри лаунчера (владелец 30.09.2026: «у
@@ -224,11 +225,12 @@ function useTargetBuild(): { name: string; version: string; loader: string } | n
 /* ── Каркас страницы ─────────────────────────────────────────── */
 
 export function Back({ label, onBack = closeItem }: { label: string; onBack?: () => void }) {
+  const t = useT()
   return (
-    <nav className="ci-crumbs" aria-label="Навигация">
+    <nav className="ci-crumbs" aria-label={t('Навигация')}>
       <button className="btn sm secondary ci-back" data-track="item_back" data-sound="close" onClick={onBack}>
         <Icon id="i-chev-l" />
-        Назад
+        {t('Назад')}
       </button>
       <span className="ci-crumb">{label}</span>
     </nav>
@@ -301,11 +303,12 @@ function LoaderChip({ l }: { l: string }) {
 
 export type Tab = 'desc' | 'gallery' | 'versions'
 
-export function Tabs({ tab, onTab, gallery, versions, versionsLabel = 'Версии' }: { tab: Tab; onTab: (t: Tab) => void; gallery: number; versions: number; versionsLabel?: string }) {
+export function Tabs({ tab, onTab, gallery, versions, versionsLabel }: { tab: Tab; onTab: (t: Tab) => void; gallery: number; versions: number; versionsLabel?: string }) {
+  const t = useT()
   const list: [Tab, string, number | null][] = [
-    ['desc', 'Описание', null],
-    ['gallery', 'Галерея', gallery],
-    ['versions', versionsLabel, versions],
+    ['desc', t('Описание'), null],
+    ['gallery', t('Галерея'), gallery],
+    ['versions', versionsLabel ?? t('Версии'), versions],
   ]
   return (
     <div className="segs mr-subtypes ci-tabs" role="tablist">
@@ -338,18 +341,19 @@ export function Gallery({ urls }: { urls: string[] }) {
  * кнопкой. Русского нет — текст автора под своей пометкой.
  */
 function DescBody({ body, ru, shots }: { body: string; ru: string; shots: string[] }) {
+  const t = useT()
   const [en, setEn] = useState(false)
-  if (!ru && !body) return <p className="faint-note">Без описания</p>
+  if (!ru && !body) return <p className="faint-note">{t('Без описания')}</p>
   const foreign = !!body && body !== ru && !readsRussian(body)
   if (!ru || en)
     return (
       <>
         {en ? (
           <button className="ci-lang" data-track="item_desc_ru" onClick={() => setEn(false)}>
-            Показать по-русски
+            {t('Показать по-русски')}
           </button>
         ) : foreign ? (
-          <div className="ci-orig-h">От автора (на английском)</div>
+          <div className="ci-orig-h">{t('От автора (на английском)')}</div>
         ) : null}
         {renderMarkdown(weaveMarkdown(body, shots))}
       </>
@@ -358,7 +362,7 @@ function DescBody({ body, ru, shots }: { body: string; ru: string; shots: string
     <>
       {foreign ? (
         <button className="ci-lang" data-track="item_desc_en" onClick={() => setEn(true)}>
-          Оригинал на английском
+          {t('Оригинал на английском')}
         </button>
       ) : null}
       {renderMarkdown(ru)}
@@ -396,13 +400,14 @@ function Picker({
   onInstall?: (f: VerFile) => void
   locked: boolean
 }) {
+  const t = useT()
   const vers = versionOptions(files)
   const loaders = loaderAxis ? loaderOptions(files, pick.version) : []
   const fit = filesFor(files, pick.version, loaderAxis ? pick.loader : null)
   const file = fit[0] || null
   return (
-    <section className="card ci-box ci-pick" aria-label="Версия">
-      <h2 className="ci-box-h">Версия</h2>
+    <section className="card ci-box ci-pick" aria-label={t('Версия')}>
+      <h2 className="ci-box-h">{t('Версия')}</h2>
       {vers.length ? (
         <Select
           value={pick.version || ''}
@@ -415,7 +420,7 @@ function Picker({
         />
       ) : null}
       {loaders.length > 1 ? (
-        <div className="segs ci-loaders" role="group" aria-label="Загрузчик">
+        <div className="segs ci-loaders" role="group" aria-label={t('Загрузчик')}>
           {loaders.map((l) => {
             const src = loaderIconSrc(l)
             return (
@@ -437,12 +442,12 @@ function Picker({
           <span className="ci-file-size">{sizeLabel(file.size)}</span>
         </div>
       ) : (
-        <div className="ci-file is-none">Под этот выбор файла нет</div>
+        <div className="ci-file is-none">{t('Под этот выбор файла нет')}</div>
       )}
       {onInstall && file ? (
         <button className="btn md secondary ci-pick-go" data-track="install_version" disabled={locked} onClick={() => onInstall(file)}>
           {locked ? <Icon id="i-lock" /> : <Icon id="i-download" />}
-          {'Поставить ' + (pick.version || file.name)}
+          {t('Поставить {version}', { version: pick.version || file.name })}
         </button>
       ) : null}
     </section>
@@ -450,6 +455,7 @@ function Picker({
 }
 
 function Versions({ files, onInstall, locked }: { files: VerFile[]; onInstall?: (f: VerFile) => void; locked: boolean }) {
+  const t = useT()
   const [all, setAll] = useState(false)
   const shown = all ? files : files.slice(0, 15)
   return (
@@ -464,14 +470,14 @@ function Versions({ files, onInstall, locked }: { files: VerFile[]; onInstall?: 
           {onInstall ? (
             <button className="btn sm secondary" data-track="install_version" disabled={locked} onClick={() => onInstall(f)}>
               {locked ? <Icon id="i-lock" /> : null}
-              Поставить
+              {t('Поставить')}
             </button>
           ) : null}
         </div>
       ))}
       {files.length > shown.length ? (
         <button className="btn sm secondary ci-more" onClick={() => setAll(true)}>
-          {'Ещё ' + (files.length - shown.length)}
+          {t('Ещё {n}', { n: files.length - shown.length })}
         </button>
       ) : null}
     </div>
@@ -479,12 +485,13 @@ function Versions({ files, onInstall, locked }: { files: VerFile[]; onInstall?: 
 }
 
 export function Compat({ versions, loaders, side, extra }: { versions: string[]; loaders: string[]; side: string | null; extra?: ReactNode }) {
+  const t = useT()
   const span = spanOf(versions)
   const s = side ? SIDE_LABEL[side] : null
   if (!span && !loaders.length && !s && !extra) return null
   return (
-    <section className="card ci-box" aria-label="Совместимость">
-      <h2 className="ci-box-h">Совместимость</h2>
+    <section className="card ci-box" aria-label={t('Совместимость')}>
+      <h2 className="ci-box-h">{t('Совместимость')}</h2>
       <div className="ci-chips">
         {span ? (
           <span className="ci-chip">
@@ -505,6 +512,8 @@ export function Compat({ versions, loaders, side, extra }: { versions: string[];
 /* ── Материал ленты (Millida, Modrinth, CurseForge) ─────────── */
 
 function CardPage({ card, sec }: { card: SiteCard; sec: SiteSection }) {
+  const t = useT()
+  const ruContent = useMarketOffers('ru-content')
   const { target } = useCatalogCtx()
   const { hit, resolve } = useCardHit(card)
   // У карточек сайта полного описания часто нет (только короткое на английском) — берём
@@ -565,10 +574,10 @@ function CardPage({ card, sec }: { card: SiteCard; sec: SiteSection }) {
     facts.push(
       <>
         <Icon id="i-download" />
-        <b>{fmtNum(dl)}</b> {plural(dl, 'скачивание', 'скачивания', 'скачиваний')}
+        <b>{fmtNum(dl)}</b> {plural(dl, t('скачивание'), t('скачивания'), t('скачиваний'))}
       </>,
     )
-  if (updated) facts.push(<>Обновлён {updated}</>)
+  if (updated) facts.push(<>{t('Обновлён {when}', { when: updated })}</>)
   facts.push(
     <>
       <span className="ci-sec-ic" style={{ color: vis.tint }}>
@@ -591,7 +600,14 @@ function CardPage({ card, sec }: { card: SiteCard; sec: SiteSection }) {
         glow={card.icon || null}
         icon={card.icon || card.cover ? <img src={card.icon || card.cover!} alt="" draggable={false} /> : <Fallback slug={card.slug} section={sec.slug} title={name} />}
         title={name}
-        by={card.author ? 'от ' + shortAuthor(card.author) : null}
+        by={
+          card.author ? (
+            <>
+              {t('от {author}', { author: shortAuthor(card.author) })}
+              <SourceMark card={card} />
+            </>
+          ) : null
+        }
         facts={facts}
         cta={
           <>
@@ -610,7 +626,7 @@ function CardPage({ card, sec }: { card: SiteCard; sec: SiteSection }) {
               {/* Перевод не ждёт карточку сайта: как только известен проект Modrinth — сразу он. */}
               {data && data.ruArticle ? (
                 renderMarkdown(media.body)
-              ) : mrId ? (
+              ) : mrId && ruContent ? (
                 <RuDesc projectId={mrId} englishBody={fullBody || (data ? data.body : '')} lead={card.summary} shots={shots} />
               ) : data === null ? (
                 <>
@@ -618,12 +634,12 @@ function CardPage({ card, sec }: { card: SiteCard; sec: SiteSection }) {
                   {DescSkel()}
                 </>
               ) : (
-                <DescBody body={stripAds(fullBody || data.body)} ru={media.body} shots={shots} />
+                <DescBody body={stripAds(fullBody || data.body)} ru={ruContent ? media.body : ''} shots={shots} />
               )}
               {failed ? (
                 <button className="btn sm secondary ci-retry" onClick={retry}>
                   <Icon id="i-restart" />
-                  Повторить
+                  {t('Повторить')}
                 </button>
               ) : null}
             </article>
@@ -641,8 +657,8 @@ function CardPage({ card, sec }: { card: SiteCard; sec: SiteSection }) {
             side={(data && data.side) || card.side}
           />
           {data && data.requires.length ? (
-            <section className="card ci-box" aria-label="Нужно для работы">
-              <h2 className="ci-box-h">Нужно для работы</h2>
+            <section className="card ci-box" aria-label={t('Нужно для работы')}>
+              <h2 className="ci-box-h">{t('Нужно для работы')}</h2>
               <div className="ci-chips">
                 {data.requires.map((r, i) => (
                   <button
@@ -665,7 +681,7 @@ function CardPage({ card, sec }: { card: SiteCard; sec: SiteSection }) {
             </section>
           ) : null}
           {data && (tags.length || data.license) ? (
-            <section className="card ci-box" aria-label="Метки">
+            <section className="card ci-box" aria-label={t('Метки')}>
               <div className="ci-chips">
                 {tags.map((t) => (
                   <span key={t} className="ci-chip is-soft">
@@ -679,14 +695,14 @@ function CardPage({ card, sec }: { card: SiteCard; sec: SiteSection }) {
           {data && data.website ? (
             <button className="btn sm ghost ci-site" data-track="item_site" onClick={() => openExt(data.website)}>
               <Icon id="i-ext" />
-              {sourceOf(card) === 'millida' ? 'На millida.net' : sourceOf(card) === 'modrinth' ? 'Modrinth' : 'CurseForge'}
+              {sourceOf(card) === 'millida' ? t('На millida.net') : sourceOf(card) === 'modrinth' ? 'Modrinth' : 'CurseForge'}
             </button>
           ) : null}
         </aside>
       </div>
       {similar.length ? (
-        <section className="ci-similar" aria-label="Похожие">
-          <h2 className="ci-sim-h">Похожие</h2>
+        <section className="ci-similar" aria-label={t('Похожие')}>
+          <h2 className="ci-sim-h">{t('Похожие')}</h2>
           <div className="mr-galgrid">
             {similar.map((c, i) => (
               <SiteGalleryCard key={c.slug} card={c} sec={c.section ? sectionBySlug(c.section) : sec} pos={i} />
@@ -694,87 +710,6 @@ function CardPage({ card, sec }: { card: SiteCard; sec: SiteSection }) {
           </div>
         </section>
       ) : null}
-    </div>
-  )
-}
-
-/* ── Чит (кураторский раздел: файлы на нашем хранилище) ────────── */
-
-function CheatPage({ it }: { it: CuratedItem }) {
-  const sec = sectionBySlug('cheats')
-  const info = CHEATS[it.slug]
-  const name = cheatName(it.slug)
-  const build = useTargetBuild()
-  const files: VerFile[] = useMemo(
-    () => it.files.map((f) => ({ id: f.id, name: f.version, gameVersions: f.gameVersions, loaders: f.loaders, size: f.size, date: f.releasedAt })),
-    [it.slug],
-  )
-  const [pick, setPick] = useState(() => defaultPick(files, build))
-  const [tab, setTab] = useState<Tab>('desc')
-  const install = (f?: VerFile) => void installFromCatalog('cheats', it.slug, f ? { fileId: f.id } : {})
-  const facts: ReactNode[] = []
-  if (it.downloads > 0)
-    facts.push(
-      <>
-        <Icon id="i-download" />
-        <b>{fmtNum(it.downloads)}</b> {plural(it.downloads, 'скачивание', 'скачивания', 'скачиваний')}
-      </>,
-    )
-  facts.push(
-    <span className="ci-warn">
-      <Icon id="i-alert" />
-      Бан на серверах с античитом
-    </span>,
-  )
-  const art = <Fallback slug={it.slug} section="cheats" title={name} />
-  return (
-    <div className="ci" data-section="item" data-kind="cheat" data-id={it.slug}>
-      <Back label={sec.title} />
-      <Hero
-        cover={null}
-        icon={art}
-        title={name}
-        by={info ? info.kind : null}
-        facts={facts}
-        cta={
-          <div className="mr-actions">
-            <button className="btn md primary" data-track="add_to_build" onClick={() => install()}>
-              <Icon id="i-plus" />В сборку
-            </button>
-          </div>
-        }
-      />
-      <div className="ci-grid">
-        <main className="ci-main">
-          <Tabs tab={tab} onTab={setTab} gallery={0} versions={files.length} />
-          {tab === 'versions' ? (
-            <Versions files={files} onInstall={install} locked={false} />
-          ) : (
-            <article className="card ci-box ci-desc pj-body">{info ? renderMarkdown(cheatBody(it.slug)) : <p className="faint-note">Без описания</p>}</article>
-          )}
-        </main>
-        <aside className="ci-aside">
-          <Picker files={files} loaderAxis pick={pick} onPick={setPick} onInstall={install} locked={false} />
-          <Compat versions={files.flatMap((f) => f.gameVersions)} loaders={[...new Set(files.flatMap((f) => f.loaders))]} side="CLIENT" />
-          {info ? (
-            <section className="card ci-box" aria-label="Метки">
-              <div className="ci-chips">
-                {info.tags.map((t) => (
-                  <span key={t} className="ci-chip is-soft">
-                    {t}
-                  </span>
-                ))}
-              </div>
-            </section>
-          ) : null}
-          {info ? (
-            <button className="btn sm ghost ci-site" data-track="item_official" onClick={() => openExt(info.officialUrl)}>
-              <Icon id="i-ext" />
-              Сайт автора
-            </button>
-          ) : null}
-        </aside>
-      </div>
     </div>
   )
 }
@@ -794,7 +729,6 @@ export function ItemPage({ it }: { it: OpenItem }) {
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [])
-  if (it.kind === 'cheat') return <CheatPage key={it.item.slug} it={it.item} />
   if (it.kind === 'skin') return <SkinPage key={it.skin.id} k={it.skin} />
   const sec = sectionBySlug(it.card.section && it.section === 'all' ? it.card.section : it.section)
   return <CardPage key={it.card.slug} card={it.card} sec={sec} />

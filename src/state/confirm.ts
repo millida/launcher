@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { t } from '../i18n'
 
 interface ConfirmOpts {
   title?: string
@@ -73,12 +74,12 @@ export function uiChoice(message: string, opts: ConfirmOpts = {}): Promise<Confi
     useConfirm.setState({
       open: true,
       message,
-      title: opts.title || 'Подтверждение',
-      confirmLabel: opts.confirmLabel || 'Подтвердить',
-      cancelLabel: opts.cancelLabel || 'Отмена',
+      title: opts.title || t('Подтверждение'),
+      confirmLabel: opts.confirmLabel || t('Подтвердить'),
+      cancelLabel: opts.cancelLabel || t('Отмена'),
       danger: opts.danger ?? true,
       rememberKey: opts.rememberKey || null,
-      rememberLabel: opts.rememberLabel || 'Больше не спрашивать',
+      rememberLabel: opts.rememberLabel || t('Больше не спрашивать'),
       typeToConfirm: opts.typeToConfirm?.trim() || null,
       resolver: resolve,
     })

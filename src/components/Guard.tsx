@@ -1,5 +1,6 @@
 import { Component, type ReactNode } from 'react'
 import { track } from '../lib/telemetry'
+import { t } from '../i18n'
 
 /**
  * Ловит падение куска интерфейса.
@@ -32,10 +33,10 @@ export class Guard extends Component<
     if (this.props.silent) return null
     return (
       <div className="card" style={{ display: 'grid', gap: '10px' }}>
-        <b>{this.props.what} не открылся</b>
+        <b>{t('{what} не открылся', { what: t(this.props.what) })}</b>
         <span className="side-cap">{this.state.failed}</span>
         <button className="btn sm secondary" onClick={() => this.setState({ failed: null })}>
-          Попробовать снова
+          {t('Попробовать снова')}
         </button>
       </div>
     )

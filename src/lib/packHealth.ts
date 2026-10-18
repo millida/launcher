@@ -1,4 +1,5 @@
 import { api } from './api'
+import { t } from '../i18n'
 
 /**
  * Здоровье сборки каталога: когда её последний раз удачно запускали и какая
@@ -28,21 +29,21 @@ export interface HealthLine {
 function ago(iso: string, now: number): string {
   const min = (now - Date.parse(iso)) / 60_000
   if (!Number.isFinite(min)) return ''
-  if (min < 5) return 'только что'
-  if (min < 60) return Math.round(min) + ' мин назад'
-  if (min < 1440) return Math.round(min / 60) + ' ч назад'
-  return Math.round(min / 1440) + ' дн назад'
+  if (min < 5) return t('только что')
+  if (min < 60) return t('{n} мин назад', { n: Math.round(min) })
+  if (min < 1440) return t('{n} ч назад', { n: Math.round(min / 60) })
+  return t('{n} дн назад', { n: Math.round(min / 1440) })
 }
 
 /** Строка под кнопкой. null — данных нет, строки на странице нет. */
 export function healthLine(h: PackHealth | null, now = Date.now()): HealthLine | null {
   if (!h || h.status === 'unknown') return null
   const since = h.lastOkAt ? ago(h.lastOkAt, now) : ''
-  const when = since ? 'запускали ' + since : ''
+  const when = since ? t('запускали {when}', { when: since }) : ''
   const pct = h.successPct
-  if (h.status === 'warn') return { tone: 'warn', head: 'Бывают сбои', when, pct, report: true }
+  if (h.status === 'warn') return { tone: 'warn', head: t('Бывают сбои'), when, pct, report: true }
   if (!when && pct === null) return null
-  return { tone: 'ok', head: 'Работает', when, pct, report: false }
+  return { tone: 'ok', head: t('Работает'), when, pct, report: false }
 }
 
 const cache = new Map<string, Promise<PackHealth | null>>()

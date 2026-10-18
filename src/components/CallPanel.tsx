@@ -23,14 +23,15 @@ import { setStoredCallVolume } from '../lib/call/audio'
 import { openChat, openRoomChat } from '../state/friends'
 import { canShareScreen } from '../lib/call/screen'
 import { canUseCamera } from '../lib/call/camera'
+import { t, useT } from '../i18n'
 
 /// Индикатор связи: точное значение задержки в панели звонка никому не нужно,
 /// нужен ответ на вопрос «нормально ли слышно».
 function qualityLabel(rttMs: number | null, lossPct: number): { text: string; cls: string } {
-  if (rttMs === null) return { text: 'Соединяемся', cls: 'wait' }
-  if (lossPct > 8 || rttMs > 350) return { text: 'Плохая связь', cls: 'bad' }
-  if (lossPct > 3 || rttMs > 180) return { text: 'Связь так себе', cls: 'mid' }
-  return { text: 'Связь хорошая', cls: 'ok' }
+  if (rttMs === null) return { text: t('Соединяемся'), cls: 'wait' }
+  if (lossPct > 8 || rttMs > 350) return { text: t('Плохая связь'), cls: 'bad' }
+  if (lossPct > 3 || rttMs > 180) return { text: t('Связь так себе'), cls: 'mid' }
+  return { text: t('Связь хорошая'), cls: 'ok' }
 }
 
 function Timer({ from }: { from: number }) {
@@ -43,23 +44,24 @@ function Timer({ from }: { from: number }) {
 }
 
 function IncomingCard() {
+  const t = useT()
   const nick = useCall((s) => s.peerNick)
   return (
     <div className="call-ring" data-private data-section="call">
       <div className="call-ring-card">
         <Head nick={nick || 'MHF_Steve'} size={56} />
         <div className="call-ring-body">
-          <b>{nick || 'Друг'}</b>
-          <span>Входящий звонок</span>
+          <b>{nick || t('Друг')}</b>
+          <span>{t('Входящий звонок')}</span>
         </div>
         <div className="call-ring-acts">
           <button className="btn sm primary" onClick={() => void acceptCall()}>
             <Icon id="i-phone" />
-            Ответить
+            {t('Ответить')}
           </button>
           <button className="btn sm danger" onClick={() => void declineCall()}>
             <Icon id="i-phone-hang" />
-            Отклонить
+            {t('Отклонить')}
           </button>
         </div>
       </div>
@@ -373,9 +375,10 @@ function useDockBox(ref: React.RefObject<HTMLDivElement | null>) {
  * который возникает в группе — «кто сейчас говорит».
  */
 function RoomParticipants({ parts, screenOf }: { parts: CallParticipant[]; screenOf: string }) {
+  const t = useT()
   const set = useCall((s) => s.set)
   if (!parts.length) {
-    return <div className="call-room-empty">Пока ты один — позови остальных</div>
+    return <div className="call-room-empty">{t('Пока ты один — позови остальных')}</div>
   }
   return (
     <div className="call-room">
@@ -390,9 +393,9 @@ function RoomParticipants({ parts, screenOf }: { parts: CallParticipant[]; scree
           }
           title={
             p.connection === 'failed'
-              ? p.nick + ' — связь потеряна'
+              ? t('{nick} — связь потеряна', { nick: p.nick })
               : p.sharing
-                ? p.nick + ' показывает экран'
+                ? t('{nick} показывает экран', { nick: p.nick })
                 : p.nick
           }
           onClick={() => {
@@ -434,22 +437,23 @@ function ScreenVideo({ stream }: { stream: MediaStream }) {
  * привык видеть себя в зеркале, и незеркальная картинка читается как чужая.
  */
 function CamTiles({ mine, parts }: { mine: MediaStream | null; parts: CallParticipant[] }) {
+  const t = useT()
   const set = useCall((s) => s.set)
   const others = parts.filter((p) => p.cam)
   if (!mine && !others.length) return null
   return (
     <div className={'call-cams' + (others.length + (mine ? 1 : 0) > 1 ? ' many' : '')}>
       {mine ? (
-        <div className="call-cam self" title="Твоя камера">
+        <div className="call-cam self" title={t('Твоя камера')}>
           <ScreenVideo stream={mine} />
-          <span className="call-screen-hint">Ты</span>
+          <span className="call-screen-hint">{t('Ты')}</span>
         </div>
       ) : null}
       {others.map((p) => (
         <div
           key={p.userId}
           className="call-cam"
-          title={p.nick + ' — нажми, чтобы развернуть'}
+          title={t('{nick} — нажми, чтобы развернуть', { nick: p.nick })}
           onClick={() => set({ camOf: p.userId, camFull: true })}
         >
           <ScreenVideo stream={p.cam as MediaStream} />
@@ -461,6 +465,7 @@ function CamTiles({ mine, parts }: { mine: MediaStream | null; parts: CallPartic
 }
 
 function ScreenFull({ stream, onClose }: { stream: MediaStream; onClose: () => void }) {
+  const t = useT()
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
@@ -473,7 +478,7 @@ function ScreenFull({ stream, onClose }: { stream: MediaStream; onClose: () => v
       <div className="call-screen-stage" onClick={(e) => e.stopPropagation()}>
         <ScreenVideo stream={stream} />
       </div>
-      <button className="call-screen-x" title="Свернуть (Esc)" onClick={onClose}>
+      <button className="call-screen-x" title={t('Свернуть (Esc)')} onClick={onClose}>
         <Icon id="i-minimize" />
       </button>
     </div>
@@ -481,6 +486,7 @@ function ScreenFull({ stream, onClose }: { stream: MediaStream; onClose: () => v
 }
 
 export function CallPanel() {
+  const t = useT()
   const status = useCall((s) => s.status)
   const mode = useCall((s) => s.mode)
   const nick = useCall((s) => s.peerNick)
@@ -523,7 +529,7 @@ export function CallPanel() {
   if (status === 'incoming') return <IncomingCard />
 
   const q = qualityLabel(quality?.rttMs ?? null, quality?.lossPct ?? 0)
-  const state = status === 'outgoing' ? 'Звоним…' : status === 'connecting' ? 'Соединяем…' : q.text
+  const state = status === 'outgoing' ? t('Звоним…') : status === 'connecting' ? t('Соединяем…') : q.text
   const placed = box.x !== null && box.y !== null
   const dockStyle = placed
     ? { left: box.x + 'px', top: box.y + 'px', bottom: 'auto', width: box.w + 'px' }
@@ -557,14 +563,14 @@ export function CallPanel() {
           <div className="call-dock-top">
             <span
               className="call-dock-grip"
-              title="Перетащить панель (двойной клик — вернуть на место)"
+              title={t('Перетащить панель (двойной клик — вернуть на место)')}
               onDoubleClick={reset}
             >
               <Icon id="i-grip" />
             </span>
             <button
               className="call-dock-who"
-              title={mode === 'room' ? 'Открыть переписку группы' : 'Открыть переписку'}
+              title={mode === 'room' ? t('Открыть переписку группы') : t('Открыть переписку')}
               onClick={() =>
                 mode === 'room' ? void openRoomChat(roomId, roomTitle) : void openChat(peerId, nick)
               }
@@ -577,13 +583,13 @@ export function CallPanel() {
                 <Head nick={nick || 'MHF_Steve'} size={34} />
               )}
               <span className="call-dock-name">
-                <b>{mode === 'room' ? roomTitle || 'Группа' : nick || 'Друг'}</b>
+                <b>{mode === 'room' ? roomTitle || t('Группа') : nick || t('Друг')}</b>
                 <span className={'call-dock-state ' + (status === 'active' ? q.cls : 'wait')}>
                   {status === 'active' ? <Timer from={answeredAt} /> : null}
                   {status === 'active' ? ' · ' : ''}
-                  {mode === 'room' && status === 'active' ? parts.length + 1 + ' в разговоре · ' : ''}
+                  {mode === 'room' && status === 'active' ? t('{n} в разговоре', { n: parts.length + 1 }) + ' · ' : ''}
                   {state}
-                  {peerMuted ? ' · без микрофона' : ''}
+                  {peerMuted ? ' · ' + t('без микрофона') : ''}
                 </span>
               </span>
             </button>
@@ -599,18 +605,18 @@ export function CallPanel() {
         {remoteScreen && !screenFull ? (
           <div
             className="call-screen-mini"
-            title="Развернуть на весь экран"
+            title={t('Развернуть на весь экран')}
             onClick={() => set({ screenFull: true })}
           >
             <ScreenVideo stream={remoteScreen} />
             <span className="call-screen-hint">
               {(mode === 'room'
-                ? 'Экран · ' + (shown.find((p) => p.screen === remoteScreen)?.nick || 'участник')
-                : 'Экран собеседника')}
+                ? t('Экран · {nick}', { nick: shown.find((p) => p.screen === remoteScreen)?.nick || t('участник') })
+                : t('Экран собеседника'))}
             </span>
             <button
               className="call-screen-max"
-              title="Развернуть на весь экран"
+              title={t('Развернуть на весь экран')}
               onClick={() => set({ screenFull: true })}
             >
               <Icon id="i-maximize" />
@@ -621,14 +627,14 @@ export function CallPanel() {
         <div className="call-dock-acts">
           <button
             className={'tb-btn' + (muted ? ' off' : '')}
-            title={muted ? 'Включить микрофон' : 'Выключить микрофон'}
+            title={muted ? t('Включить микрофон') : t('Выключить микрофон')}
             onClick={toggleMute}
           >
             <Icon id={muted ? 'i-mic-off' : 'i-mic'} />
           </button>
           <button
             className={'tb-btn' + (deafened ? ' off' : '')}
-            title={deafened ? 'Включить звук' : 'Заглушить звук'}
+            title={deafened ? t('Включить звук') : t('Заглушить звук')}
             onClick={toggleDeafen}
           >
             <Icon id={deafened ? 'i-headset-off' : 'i-headset'} />
@@ -638,10 +644,10 @@ export function CallPanel() {
               className={'tb-btn' + (sharing ? ' on' : '')}
               title={
                 screenBlocked
-                  ? 'Показ экрана — пока в разговоре не больше ' + (SCREEN_MAX_VIEWERS + 1) + ' человек'
+                  ? t('Показ экрана — пока в разговоре не больше {n} человек', { n: SCREEN_MAX_VIEWERS + 1 })
                   : sharing
-                    ? 'Остановить показ экрана'
-                    : 'Показать экран'
+                    ? t('Остановить показ экрана')
+                    : t('Показать экран')
               }
               disabled={status !== 'active' || screenBlocked}
               onClick={() => void toggleScreen()}
@@ -654,10 +660,10 @@ export function CallPanel() {
               className={'tb-btn' + (camOn ? ' on' : '')}
               title={
                 camBlocked
-                  ? 'Камера — пока в разговоре не больше ' + (CAM_MAX_VIEWERS + 1) + ' человек'
+                  ? t('Камера — пока в разговоре не больше {n} человек', { n: CAM_MAX_VIEWERS + 1 })
                   : camOn
-                    ? 'Выключить камеру'
-                    : 'Включить камеру'
+                    ? t('Выключить камеру')
+                    : t('Включить камеру')
               }
               disabled={status !== 'active' || camBlocked}
               onClick={() => void toggleCamera()}
@@ -667,19 +673,19 @@ export function CallPanel() {
           ) : null}
           <button
             className={'tb-btn' + (volOpen ? ' on' : '')}
-            title="Громкость собеседника"
+            title={t('Громкость собеседника')}
             onClick={() => setVolOpen((v) => !v)}
           >
             <Icon id="i-volume" />
           </button>
           {mode === 'room' ? (
-            <button className="tb-btn" title="Позвать остальных" onClick={() => void ringRoom(roomId)}>
+            <button className="tb-btn" title={t('Позвать остальных')} onClick={() => void ringRoom(roomId)}>
               <Icon id="i-bell" />
             </button>
           ) : null}
           <button
             className="btn sm danger"
-            title={mode === 'room' ? 'Выйти из разговора' : 'Завершить звонок'}
+            title={mode === 'room' ? t('Выйти из разговора') : t('Завершить звонок')}
             onClick={() => void hangUp()}
           >
             <Icon id="i-phone-hang" />
@@ -700,7 +706,7 @@ export function CallPanel() {
           </div>
         ) : null}
 
-        <span className="call-dock-resize" title="Изменить размер" onPointerDown={(e) => drag('size', e)} />
+        <span className="call-dock-resize" title={t('Изменить размер')} onPointerDown={(e) => drag('size', e)} />
       </div>
     </>
   )

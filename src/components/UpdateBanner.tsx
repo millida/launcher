@@ -1,8 +1,10 @@
 import { Icon } from './Icon'
 import { useUpdate } from '../state/update'
 import { applyUpdate } from '../lib/updater'
+import { useT } from '../i18n'
 
 export function UpdateBanner() {
+  const t = useT()
   const version = useUpdate((s) => s.version)
   const staged = useUpdate((s) => s.staged)
   const busy = useUpdate((s) => s.busy)
@@ -12,10 +14,10 @@ export function UpdateBanner() {
   // Текст — одна строка, действие — в кнопке. Раньше «скачай с сайта» стояло
   // и в строке, и на кнопке (аудит 22.09.2026).
   const label = failed
-    ? 'Обновление ' + version
+    ? t('Обновление {version}', { version })
     : staged
-      ? 'Обновление ' + version + ' встанет при выходе'
-      : 'Качаем обновление ' + version
+      ? t('Обновление {version} встанет при выходе', { version })
+      : t('Качаем обновление {version}', { version })
 
   return (
     <div className="upd-banner" role="status">
@@ -25,12 +27,12 @@ export function UpdateBanner() {
         {busy ? (
           <>
             <span className="spin" style={{ width: '14px', height: '14px' }}></span>
-            Обновляем…
+            {t('Обновляем…')}
           </>
         ) : (
           <>
             <Icon id={failed ? 'i-download' : 'i-restart'} />
-            {failed ? 'Скачать' : 'Обновить'}
+            {failed ? t('Скачать') : t('Обновить')}
           </>
         )}
       </button>

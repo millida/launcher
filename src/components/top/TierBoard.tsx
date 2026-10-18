@@ -6,6 +6,7 @@ import { api, hasMillidaAccount } from '../../lib/api'
 import { modeIcon } from '../playhub/modeIcon'
 import { openPvp } from '../../state/pvp'
 import { plural } from '../../lib/format'
+import { t, useT } from '../../i18n'
 import {
 
   bestTier,
@@ -49,7 +50,7 @@ function KitIcon({ slug, size = 20 }: { slug: string; size?: number }) {
   return <img className="tl-kit-ic" src={kitIcon(slug)} alt="" width={size} height={size} draggable={false} />
 }
 
-const points = (n: number) => n + ' ' + plural(n, 'очко', 'очка', 'очков')
+const points = (n: number) => plural(n, t('{n} очко', { n }), t('{n} очка', { n }), t('{n} очков', { n }))
 
 /** Все тиры игрока лучшими вперёд. */
 function sortedTiers(tiers: Record<string, string>, order: string[]): { mode: string; tier: string }[] {
@@ -69,6 +70,7 @@ const winRate = (w: number, l: number) => (w + l > 0 ? Math.round((100 * w) / (w
  * на millida.net/tiers; три лучших — на пьедестале; свежие тесты — лентой.
  */
 export function TierBoard({ on }: { on: boolean }) {
+  const t = useT()
   const nick = tierNick()
   const me = useTiers((s) => (s.nick === nick ? s.me : undefined))
   const top = useTiers((s) => s.top)
@@ -103,7 +105,7 @@ export function TierBoard({ on }: { on: boolean }) {
         <PlayerCard p={found} modes={modes} onClose={() => setFound(null)} />
       ) : mine ? (
         <div className="tl-mine">
-          <span className="tl-mine-cap">Моё место</span>
+          <span className="tl-mine-cap">{t('Моё место')}</span>
           <Row l={mine.line} modes={modes} mine />
           {mine.next ? <span className="tl-mine-next">{mine.next}</span> : null}
         </div>
@@ -144,22 +146,23 @@ function myLine(p: TierPlayer, kit: string, order: string[]): { line: Line; next
 }
 
 function KitRail({ kit, modes, stats }: { kit: string; modes: TierModeInfo[]; stats: Record<string, { players: number; fighting: number; queued: number }> | null }) {
+  const t = useT()
   return (
-    <div className="tl-kits" role="tablist" aria-label="Режим">
+    <div className="tl-kits" role="tablist" aria-label={t('Режим')}>
       <button role="tab" aria-selected={kit === 'all'} className={'tl-kit all' + (kit === 'all' ? ' on' : '')} data-track="tiers_kit_all" onClick={() => useTiers.getState().setKit('all')}>
         <span className="tl-kit-art">
           <Icon id="i-trophy" />
         </span>
-        <b>Все</b>
+        <b>{t('Все')}</b>
       </button>
       {modes.map((m) => {
         const st = stats?.[m.slug]
         const live = st ? st.fighting + st.queued : 0
         return (
-          <button key={m.slug} role="tab" aria-selected={kit === m.slug} className={'tl-kit' + (kit === m.slug ? ' on' : '')} data-track={'tiers_kit_' + m.slug} data-tip={st ? m.title + ' · ' + st.players + ' ' + plural(st.players, 'игрок', 'игрока', 'игроков') : m.title} onClick={() => useTiers.getState().setKit(m.slug)}>
+          <button key={m.slug} role="tab" aria-selected={kit === m.slug} className={'tl-kit' + (kit === m.slug ? ' on' : '')} data-track={'tiers_kit_' + m.slug} data-tip={st ? m.title + ' · ' + plural(st.players, t('{n} игрок', { n: st.players }), t('{n} игрока', { n: st.players }), t('{n} игроков', { n: st.players })) : m.title} onClick={() => useTiers.getState().setKit(m.slug)}>
             <span className="tl-kit-art">
               <KitIcon slug={m.slug} size={30} />
-              {live > 0 ? <i className="tl-kit-live" aria-label="Идут бои" /> : null}
+              {live > 0 ? <i className="tl-kit-live" aria-label={t('Идут бои')} /> : null}
             </span>
             <b>{m.title}</b>
           </button>
@@ -170,6 +173,7 @@ function KitRail({ kit, modes, stats }: { kit: string; modes: TierModeInfo[]; st
 }
 
 function SearchBox({ onFound }: { onFound: (p: TierPlayer | null) => void }) {
+  const t = useT()
   const [q, setQ] = useState('')
   const [state, setState] = useState<'idle' | 'busy' | 'none'>('idle')
   const submit = (e: FormEvent) => {
@@ -190,7 +194,7 @@ function SearchBox({ onFound }: { onFound: (p: TierPlayer | null) => void }) {
       <input
         value={q}
         maxLength={16}
-        placeholder={state === 'none' ? 'Нет в тир-листе' : 'Найти игрока'}
+        placeholder={state === 'none' ? t('Нет в тир-листе') : t('Найти игрока')}
         spellCheck={false}
         onChange={(e) => {
           setQ(e.target.value)
@@ -202,17 +206,18 @@ function SearchBox({ onFound }: { onFound: (p: TierPlayer | null) => void }) {
 }
 
 function JoinBanner({ hasTier }: { hasTier: boolean }) {
+  const t = useT()
   const art = modeIcon('PVP')
   return (
     <div className="tr-banner">
       {art?.rig ? <img className="tr-banner-rig" src={art.rig.url} alt="" draggable={false} /> : null}
       <span className="tr-banner-text">
-        <b>{hasTier ? 'Подними свой тир' : 'Тебя ещё нет в тир-листе'}</b>
-        <span>Первый тир — экзамен с ботом, выше LT3 — тесты с игроками</span>
+        <b>{hasTier ? t('Подними свой тир') : t('Тебя ещё нет в тир-листе')}</b>
+        <span>{t('Первый тир — экзамен с ботом, выше LT3 — тесты с игроками')}</span>
       </span>
       <button className="btn primary tr-banner-go" data-track="tiers_join_smp" onClick={() => openPvp('play')}>
         <Icon id="i-play" />
-        Найти игру
+        {t('Найти игру')}
       </button>
     </div>
   )
@@ -220,22 +225,23 @@ function JoinBanner({ hasTier }: { hasTier: boolean }) {
 
 /** Карточка игрока: свой тир или найденный поиском — рендер скина, очки, плитки всех режимов. */
 function PlayerCard({ p, modes, mine, pos, onClose }: { p: TierPlayer; modes: TierModeInfo[]; mine?: boolean; pos?: number | null; onClose?: () => void }) {
+  const t = useT()
   const tiers = playerTiers(p)
   const best = bestTier(tiers, modes.map((m) => m.slug))
   return (
     <div className={'tl-card' + (mine ? ' mine' : '')}>
       <img className="tl-card-body" src={bodyUrl(p.name, 200)} alt="" draggable={false} />
       <div className="tl-card-head">
-        <span className="tl-card-cap">{mine ? 'Ты' : 'Игрок'}</span>
+        <span className="tl-card-cap">{mine ? t('Ты') : t('Игрок')}</span>
         <b className="tl-card-nick">{p.name}</b>
         <span className="tl-card-meta">
           {p.title} · {points(p.points)}
-          {pos ? ' · #' + pos + ' в общем' : ''}
+          {pos ? ' · ' + t('#{n} в общем', { n: pos }) : ''}
         </span>
         {mine ? (
           <button className="btn primary sm tl-card-go" data-track="tiers_join_smp_me" onClick={() => openPvp('play')}>
             <Icon id="i-play" />
-            {best ? 'Поднять тир' : 'Играть'}
+            {best ? t('Поднять тир') : t('Играть')}
           </button>
         ) : null}
       </div>
@@ -251,7 +257,7 @@ function PlayerCard({ p, modes, mine, pos, onClose }: { p: TierPlayer; modes: Ti
         })}
       </div>
       {onClose ? (
-        <button className="tl-card-x" aria-label="Закрыть" data-track="tiers_search_close" onClick={onClose}>
+        <button className="tl-card-x" aria-label={t('Закрыть')} data-track="tiers_search_close" onClick={onClose}>
           <Icon id="i-x" />
         </button>
       ) : null}
@@ -284,9 +290,9 @@ export function linesOf(kit: string, period: TierPeriod, top: TierTopEntry[] | n
       value: period === 'week' ? ((r.eloDelta ?? 0) >= 0 ? '+' : '') + (r.eloDelta ?? 0) + ' ELO' : (r.sr ?? r.score ?? 0) + ' SR',
       extra:
         period === 'week'
-          ? (r.wins ?? 0) + ' из ' + (r.games ?? 0) + ' ' + plural(r.games ?? 0, 'боя', 'боёв', 'боёв')
+          ? plural(r.games ?? 0, t('{wins} из {n} боя', { wins: r.wins ?? 0, n: r.games ?? 0 }), t('{wins} из {n} боёв', { wins: r.wins ?? 0, n: r.games ?? 0 }), t('{wins} из {n} боёв', { wins: r.wins ?? 0, n: r.games ?? 0 }))
           : r.games
-            ? r.games + ' ' + plural(r.games, 'бой', 'боя', 'боёв')
+            ? plural(r.games, t('{n} бой', { n: r.games }), t('{n} боя', { n: r.games }), t('{n} боёв', { n: r.games }))
             : undefined,
     }))
   }
@@ -304,7 +310,7 @@ export function linesOf(kit: string, period: TierPeriod, top: TierTopEntry[] | n
         more: Math.max(0, all.length - 6),
         value: points(e.points),
         // Откуда очки: сколько китов с тиром складываются в общий рейтинг.
-        extra: all.length ? 'за ' + all.length + ' ' + plural(all.length, 'кит', 'кита', 'китов') : undefined,
+        extra: all.length ? plural(all.length, t('за {n} кит', { n: all.length }), t('за {n} кита', { n: all.length }), t('за {n} китов', { n: all.length })) : undefined,
       }
     })
   }
@@ -313,7 +319,7 @@ export function linesOf(kit: string, period: TierPeriod, top: TierTopEntry[] | n
     pos: r.pos,
     name: r.name,
     badge: r.tier,
-    sub: r.peak && r.peak !== r.tier && tierRank(r.peak) !== null && tierRank(r.peak)! < tierRank(r.tier)! ? 'пик ' + r.peak : undefined,
+    sub: r.peak && r.peak !== r.tier && tierRank(r.peak) !== null && tierRank(r.peak)! < tierRank(r.tier)! ? t('пик {tier}', { tier: r.peak }) : undefined,
     value: r.elo + ' ELO',
     extra: r.wins + r.losses > 0 ? r.wins + '–' + r.losses + ' · ' + winRate(r.wins, r.losses) : undefined,
   }))
@@ -330,16 +336,17 @@ function Board(props: {
   meName: string
   failed: boolean
 }) {
+  const t = useT()
   const lines = linesOf(props.kit, props.period, props.top, props.kitRows, props.periodRows, props.order)
   if (!lines) {
     if (props.failed)
       return (
         <div className="fr-blank">
           <Icon id="i-trophy" />
-          <b>Тир-лист не загрузился</b>
+          <b>{t('Тир-лист не загрузился')}</b>
           <button className="btn sm secondary" data-track="tiers_retry" onClick={() => void useTiers.getState().load(tierNick(), true)}>
             <Icon id="i-restart" />
-            Повторить
+            {t('Повторить')}
           </button>
         </div>
       )
@@ -355,7 +362,7 @@ function Board(props: {
     return (
       <div className="fr-blank">
         <Icon id="i-trophy" />
-        <b>Здесь пока пусто — стань первым</b>
+        <b>{t('Здесь пока пусто — стань первым')}</b>
       </div>
     )
   const me = props.meName.toLowerCase()

@@ -33,19 +33,26 @@ import {
   type CameraQuality,
 } from '../lib/call/camera'
 import { setCallMicGain, setCallNoise, setCallProcessing, setCallVolume } from '../state/call'
+import { t, useT } from '../i18n'
 
-const SYSTEM = { value: '', label: 'Системное по умолчанию' }
+const SYSTEM = {
+  value: '',
+  get label() {
+    return t('Системное по умолчанию')
+  },
+}
 
-const MIC_STEPS = [
-  'Разреши доступ к микрофону в системе: Windows — Параметры → Конфиденциальность → Микрофон, macOS — Системные настройки → Конфиденциальность → Микрофон.',
-  'Закрой программы, которые держат микрофон: Discord, OBS, браузер с созвоном.',
-  'Выбери устройство в списке выше и нажми «Проверить» — полоса должна двигаться.',
-  'Если полоса стоит на месте — микрофон отключён или замьючен в самой системе.',
+const micSteps = () => [
+  t('Разреши доступ к микрофону в системе: Windows — Параметры → Конфиденциальность → Микрофон, macOS — Системные настройки → Конфиденциальность → Микрофон.'),
+  t('Закрой программы, которые держат микрофон: Discord, OBS, браузер с созвоном.'),
+  t('Выбери устройство в списке выше и нажми «Проверить» — полоса должна двигаться.'),
+  t('Если полоса стоит на месте — микрофон отключён или замьючен в самой системе.'),
 ]
 
 /// A meter beats any wording: a mic that shows nothing here is the mic that
 /// records silence, and a test tone tells the output apart from the file.
 function MicMeter({ deviceId, onFail }: { deviceId: string; onFail: () => void }) {
+  const t = useT()
   const [level, setLevel] = useState(0)
   const [busy, setBusy] = useState(false)
   const stopRef = useRef<(() => void) | null>(null)
@@ -117,7 +124,7 @@ function MicMeter({ deviceId, onFail }: { deviceId: string; onFail: () => void }
       monitor.srcObject = stream
       await applyOutput(monitor)
       if (attempt.current !== mine) return
-      void monitor.play().catch(() => showToast('Не удалось вывести звук микрофона в наушники — проверь их в списке ниже', 'error'))
+      void monitor.play().catch(() => showToast(t('Не удалось вывести звук микрофона в наушники — проверь их в списке ниже'), 'error'))
     } catch (error) {
       if (attempt.current !== mine) return
       halt()
@@ -132,7 +139,7 @@ function MicMeter({ deviceId, onFail }: { deviceId: string; onFail: () => void }
     <div className="aud-meter-row">
       <button className="btn sm secondary" onClick={() => void listen()}>
         <Icon id="i-mic" />
-        {busy ? 'Остановить' : 'Проверить'}
+        {busy ? t('Остановить') : t('Проверить')}
       </button>
       <div className="aud-meter" key={deviceId}>
         <i style={{ width: Math.round(level * 100) + '%' }} />
@@ -142,37 +149,99 @@ function MicMeter({ deviceId, onFail }: { deviceId: string; onFail: () => void }
 }
 
 const NOISE_OPTIONS: { value: NoiseMode; label: string }[] = [
-  { value: 'off', label: 'Выключен' },
-  { value: 'standard', label: 'Обычный' },
-  { value: 'strong', label: 'Сильный' },
+  {
+    value: 'off',
+    get label() {
+      return t('Выключен')
+    },
+  },
+  {
+    value: 'standard',
+    get label() {
+      return t('Обычный')
+    },
+  },
+  {
+    value: 'strong',
+    get label() {
+      return t('Сильный')
+    },
+  },
 ]
 
 const NOISE_HINT: Record<NoiseMode, string> = {
-  off: 'Микрофон как есть',
-  standard: 'Тишина между фразами',
-  strong: 'Для шумной комнаты',
+  get off() {
+    return t('Микрофон как есть')
+  },
+  get standard() {
+    return t('Тишина между фразами')
+  },
+  get strong() {
+    return t('Для шумной комнаты')
+  },
 }
 
 const SCREEN_OPTIONS: { value: ScreenQuality; label: string }[] = [
-  { value: 'smooth', label: 'Плавно — 720p, 60 кадров' },
-  { value: 'balanced', label: 'Поровну — 900p, 30 кадров' },
-  { value: 'sharp', label: 'Чётко — 1080p, 15 кадров' },
+  {
+    value: 'smooth',
+    get label() {
+      return t('Плавно — 720p, 60 кадров')
+    },
+  },
+  {
+    value: 'balanced',
+    get label() {
+      return t('Поровну — 900p, 30 кадров')
+    },
+  },
+  {
+    value: 'sharp',
+    get label() {
+      return t('Чётко — 1080p, 15 кадров')
+    },
+  },
 ]
 
 const CAMERA_OPTIONS: { value: CameraQuality; label: string }[] = [
-  { value: 'eco', label: 'Экономно — 360p, 20 кадров' },
-  { value: 'balanced', label: 'Поровну — 480p, 24 кадра' },
-  { value: 'sharp', label: 'Чётко — 720p, 30 кадров' },
+  {
+    value: 'eco',
+    get label() {
+      return t('Экономно — 360p, 20 кадров')
+    },
+  },
+  {
+    value: 'balanced',
+    get label() {
+      return t('Поровну — 480p, 24 кадра')
+    },
+  },
+  {
+    value: 'sharp',
+    get label() {
+      return t('Чётко — 720p, 30 кадров')
+    },
+  },
 ]
 
 const ON_OFF = [
-  { value: 'on', label: 'Включено' },
-  { value: 'off', label: 'Выключено' },
+  {
+    value: 'on',
+    get label() {
+      return t('Включено')
+    },
+  },
+  {
+    value: 'off',
+    get label() {
+      return t('Выключено')
+    },
+  },
 ]
 
 /// Настройки звонка меняются и во время разговора: значение уходит и в
 /// хранилище, и в живой звонок, иначе его пришлось бы перезванивать.
 function CallSettings() {
+  const t = useT()
   const [noise, setNoise] = useState<NoiseMode>(storedNoiseMode())
   const [gain, setGain] = useState(storedMicGain())
   const [volume, setVolume] = useState(storedCallVolume())
@@ -199,7 +268,7 @@ function CallSettings() {
     <>
       <div className="set-row">
         <span className="lab">
-          Шумоподавление в звонках<small>{NOISE_HINT[noise]}</small>
+          {t('Шумоподавление в звонках')}<small>{NOISE_HINT[noise]}</small>
         </span>
         <Select
           value={noise}
@@ -215,8 +284,8 @@ function CallSettings() {
       </div>
       <div className="set-row">
         <span className="lab">
-          Автоуровень микрофона
-          {processing.agc ? <small>Убавляет громкость на долгой речи</small> : null}
+          {t('Автоуровень микрофона')}
+          {processing.agc ? <small>{t('Убавляет громкость на долгой речи')}</small> : null}
         </span>
         <Select
           value={processing.agc ? 'on' : 'off'}
@@ -227,8 +296,8 @@ function CallSettings() {
       </div>
       <div className="set-row">
         <span className="lab">
-          Подавление эха
-          <small>{processing.echo ? 'Нужно для колонок' : 'В наушниках не нужно'}</small>
+          {t('Подавление эха')}
+          <small>{processing.echo ? t('Нужно для колонок') : t('В наушниках не нужно')}</small>
         </span>
         <Select
           value={processing.echo ? 'on' : 'off'}
@@ -239,7 +308,7 @@ function CallSettings() {
       </div>
       <div className="set-row">
         <span className="lab">
-          Усиление микрофона<small>{gain}%</small>
+          {t('Усиление микрофона')}<small>{gain}%</small>
         </span>
         <div style={{ width: 230 }}>
           <Slider
@@ -257,7 +326,7 @@ function CallSettings() {
       </div>
       <div className="set-row">
         <span className="lab">
-          Громкость собеседника<small>{volume}%</small>
+          {t('Громкость собеседника')}<small>{volume}%</small>
         </span>
         <div style={{ width: 230 }}>
           <Slider
@@ -273,7 +342,7 @@ function CallSettings() {
       {canShareScreen() ? (
         <div className="set-row">
           <span className="lab">
-            Показ экрана
+            {t('Показ экрана')}
           </span>
           <Select
             value={screen}
@@ -289,7 +358,7 @@ function CallSettings() {
       ) : (
         <div className="set-row">
           <span className="lab">
-            Показ экрана<small>Недоступен в этой системе</small>
+            {t('Показ экрана')}<small>{t('Недоступен в этой системе')}</small>
           </span>
         </div>
       )}
@@ -297,8 +366,8 @@ function CallSettings() {
         <>
           <div className="set-row">
             <span className="lab">
-              Камера
-              {cams.length ? null : <small>Названия скрыты до первого включения</small>}
+              {t('Камера')}
+              {cams.length ? null : <small>{t('Названия скрыты до первого включения')}</small>}
             </span>
             <Select
               value={cam}
@@ -312,8 +381,8 @@ function CallSettings() {
           </div>
           <div className="set-row">
             <span className="lab">
-              Качество камеры
-              <small>Встанет при следующем включении</small>
+              {t('Качество камеры')}
+              <small>{t('Встанет при следующем включении')}</small>
             </span>
             <Select
               value={camQuality}
@@ -333,6 +402,7 @@ function CallSettings() {
 }
 
 export function AudioSettings() {
+  const t = useT()
   const [inputs, setInputs] = useState<AudioDevice[]>([])
   const [outputs, setOutputs] = useState<AudioDevice[]>([])
   const [named, setNamed] = useState(true)
@@ -384,7 +454,7 @@ export function AudioSettings() {
   const showSteps = micFailed || focus === 'mic'
   const namesBtn = (
     <button className="btn sm ghost" style={{ marginTop: 8 }} onClick={() => void reload(true)}>
-      Показать названия
+      {t('Показать названия')}
     </button>
   )
 
@@ -392,8 +462,8 @@ export function AudioSettings() {
     <>
       <div className={'set-row' + (focus === 'mic' ? ' focus-flash' : '')} ref={micRow}>
         <span className="lab">
-          Микрофон
-          {unnamed ? <small>Названия скрыты до первой проверки</small> : null}
+          {t('Микрофон')}
+          {unnamed ? <small>{t('Названия скрыты до первой проверки')}</small> : null}
         </span>
         <Select
           value={mic}
@@ -407,7 +477,7 @@ export function AudioSettings() {
       </div>
       <div className="set-row" style={{ alignItems: 'flex-start' }}>
         <span className="lab">
-          Проверка записи<small>Скажи что-нибудь — услышишь себя в наушниках</small>
+          {t('Проверка записи')}<small>{t('Скажи что-нибудь — услышишь себя в наушниках')}</small>
         </span>
         <div style={{ width: 230 }}>
           <MicMeter deviceId={mic} onFail={() => setMicFailed(true)} />
@@ -417,10 +487,10 @@ export function AudioSettings() {
       {showSteps ? (
         <div className="set-row" style={{ alignItems: 'flex-start' }}>
           <span className="lab">
-            Микрофон не работает
+            {t('Микрофон не работает')}
           </span>
           <ol className="set-steps">
-            {MIC_STEPS.map((s) => (
+            {micSteps().map((s) => (
               <li key={s}>{s}</li>
             ))}
           </ol>
@@ -430,8 +500,8 @@ export function AudioSettings() {
         <>
           <div className="set-row">
             <span className="lab">
-              Наушники
-              {unnamed ? <small>Названия скрыты до первой проверки</small> : null}
+              {t('Наушники')}
+              {unnamed ? <small>{t('Названия скрыты до первой проверки')}</small> : null}
             </span>
             <div style={{ width: 230 }}>
               <Select
@@ -447,7 +517,7 @@ export function AudioSettings() {
           </div>
           <div className="set-row">
             <span className="lab">
-              Проверка звука
+              {t('Проверка звука')}
             </span>
             <button
               className="btn sm secondary"
@@ -455,18 +525,18 @@ export function AudioSettings() {
               onClick={() => {
                 setToneBusy(true)
                 playTestTone()
-                  .catch(() => showToast('Не удалось проиграть сигнал — устройство занято или отключено', 'error'))
+                  .catch(() => showToast(t('Не удалось проиграть сигнал — устройство занято или отключено'), 'error'))
                   .finally(() => setToneBusy(false))
               }}
             >
               <Icon id="i-volume" />
-              {toneBusy ? 'Играет…' : 'Проверить'}
+              {toneBusy ? t('Играет…') : t('Проверить')}
             </button>
           </div>
         </>
       ) : null}
       <div className="side-cap" style={{ padding: '10px 2px 2px' }}>
-        Звонки
+        {t('Звонки')}
       </div>
       <CallSettings />
     </>

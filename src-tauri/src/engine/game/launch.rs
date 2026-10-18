@@ -1119,10 +1119,17 @@ pub(crate) fn filter_loader_jvm_args(list: Vec<String>) -> Vec<String> {
     out
 }
 
-/// The uuid the game is started with: the session's own when there is one,
-/// otherwise the offline uuid derived from the nick.
+/// The uuid the game is started with: the account's own whenever it is known,
+/// even when its session could not be had, otherwise the offline uuid derived
+/// from the nick. Worlds key quests, advancements and LAN inventories by uuid.
 pub(super) fn session_uuid(auth: &Auth, nick: &str) -> String {
-    if !auth.token.is_empty() && !auth.uuid.is_empty() { auth.uuid.clone() } else { offline_uuid(nick) }
+    if !auth.uuid.is_empty() { auth.uuid.clone() } else { offline_uuid(nick) }
+}
+
+/// The same account without a usable session: the game starts offline yet stays
+/// the same player in every world.
+fn offline_keeping_uuid(auth: &Auth) -> Auth {
+    Auth { uuid: auth.uuid.clone(), ..Auth::default() }
 }
 
 /// Builds jvm+game arguments from the version json, expanding `${...}` placeholders.
@@ -1502,19 +1509,18 @@ pub(crate) async fn install_and_launch_into(
                 }
                 Err(e) => {
                     warn(&app, &format!("Сервер скинов Millida не ответил ({}) — запускаем в офлайн-режиме", e));
-                    auth = Auth::default();
+                    auth = offline_keeping_uuid(&auth);
                 }
             },
             Err(e) => {
                 warn(&app, &format!("Скины Millida недоступны ({}) — запускаем в офлайн-режиме", e));
-                auth = Auth::default();
+                auth = offline_keeping_uuid(&auth);
             }
         }
     }
     // CustomSkinLoader is a client mod, so it can only be installed on modded
     // profiles; vanilla has no way to load custom skins without Yggdrasil.
-    // Only our server has the CustomSkinAPI next to Yggdrasil; Ely.by serves
-    // skins through the session itself.
+    // Only our server has the CustomSkinAPI next to Yggdrasil.
     let root = if agent.is_some() && auth.yggdrasil == millida_yggdrasil() {
         Some(format!("{}/csl/", auth.yggdrasil.trim_end_matches('/')))
     } else { None };
@@ -1987,6 +1993,23 @@ fn server_join_args(mc_version: &str, addr: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_account_uuid_survives_a_missing_session() {
+        let millida = "c6d9db59f6fc4b81a447cd6b60936a6f";
+        let with = |token: &str, uuid: &str| Auth { token: token.into(), uuid: uuid.into(), ..Auth::default() };
+        let cases: Vec<(Auth, &str, String, &str)> = vec![
+            (with("t", millida), "BrainMcpe55", millida.into(), "a live session plays as the account"),
+            (with("", millida), "BrainMcpe55", millida.into(), "a session that did not arrive in time must not turn the player into someone else in every world"),
+            (offline_keeping_uuid(&with("t", millida)), "BrainMcpe55", millida.into(), "losing authlib-injector keeps the account uuid too"),
+            (Auth::default(), "BrainMcpe55", offline_uuid("BrainMcpe55"), "an offline account plays with the uuid every offline server derives from its nick"),
+        ];
+        for (auth, nick, want, why) in cases {
+            assert_eq!(session_uuid(&auth, nick), want, "{why}");
+        }
+        let dropped = offline_keeping_uuid(&with("t", millida));
+        assert!(dropped.token.is_empty() && dropped.yggdrasil.is_empty(), "the fallback must really be offline: no token, no agent");
+    }
 
     /// (game version, address) -> join arguments. Older clients ignore Quick
     /// Play and drop the player on the title screen instead of the server.

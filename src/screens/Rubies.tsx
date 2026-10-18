@@ -1,4 +1,5 @@
 import { Icon } from '../components/Icon'
+import { intlTag, useT } from '../i18n'
 import { Ruby } from '../components/Ruby'
 import { TopbarPortal } from '../components/TopbarPortal'
 import { logoutToLogin } from '../lib/session'
@@ -17,12 +18,13 @@ import '../styles/pixel/shop2.css'
  * (components/shop/ShopKit). Любая покупка идёт через одно окно подтверждения.
  */
 export function Rubies({ on }: { on: boolean }) {
+  const t = useT()
   const s = useShop(on)
   const { signedIn, day, rules, busy, tier, balance, error, bump } = s
   const { toPacks, doManage, doPlus, doPack, reloadShop } = s
   // Срок подписки чипом в шапке вместо полосы над магазином (владелец 06.10.2026).
   const until = s.plus?.paidUntil
-    ? new Date(s.plus.paidUntil).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', timeZone: 'Europe/Moscow' })
+    ? new Date(s.plus.paidUntil).toLocaleDateString(intlTag(), { day: '2-digit', month: '2-digit', timeZone: 'Europe/Moscow' })
     : ''
   const feed = <ShopFeed s={s} />
 
@@ -32,16 +34,16 @@ export function Rubies({ on }: { on: boolean }) {
       {signedIn ? (
         <TopbarPortal>
           <div className="tb-actions sh-wallet2">
-            <span className={'sh-bal' + (bump ? ' bump' : '')} data-cur="rubies" data-tip="Рубины">
+            <span className={'sh-bal' + (bump ? ' bump' : '')} data-cur="rubies" data-tip={t('Рубины')}>
               <Ruby size={20} />
-              <b>{day ? balance.toLocaleString('ru-RU') : '—'}</b>
+              <b>{day ? balance.toLocaleString(intlTag()) : '—'}</b>
             </span>
             {/* Осколки — рядом с рубинами, а не только в блоке «За осколки» (владелец 11.10.2026). */}
-            <span className="sh-bal" data-cur="shards" data-tip="Осколки">
+            <span className="sh-bal" data-cur="shards" data-tip={t('Осколки')}>
               <Shard size={20} />
-              <b>{day ? (s.workshop?.shards ?? day.shards ?? 0).toLocaleString('ru-RU') : '—'}</b>
+              <b>{day ? (s.workshop?.shards ?? day.shards ?? 0).toLocaleString(intlTag()) : '—'}</b>
             </span>
-            <button className="btn sm primary sh-add" aria-label="Пополнить" data-track="top_up" onClick={toPacks}>
+            <button className="btn sm primary sh-add" aria-label={t('Пополнить')} data-track="top_up" onClick={toPacks}>
               <Icon id="i-plus" />
             </button>
             <PlusChip tier={tier} until={until} onClick={tier ? doManage : () => doPlus('PLUS')} />
@@ -55,7 +57,7 @@ export function Rubies({ on }: { on: boolean }) {
             <Ruby size={40} />
             <button className="btn md primary" id="rubiesLoginCta" data-track="login" onClick={() => logoutToLogin()}>
               <Icon id="i-login" />
-              Войти
+              {t('Войти')}
             </button>
           </div>
           <Packs packs={rules ? rules.packs.items : null} busy={busy} onBuy={(p, art) => void doPack(p, art)} />
@@ -65,7 +67,7 @@ export function Rubies({ on }: { on: boolean }) {
           <div className="sh-head">
             <h2>{error}</h2>
             <button className="btn sm secondary" data-track="retry" onClick={() => void reloadShop()}>
-              Повторить
+              {t('Повторить')}
             </button>
           </div>
         </div>

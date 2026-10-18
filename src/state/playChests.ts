@@ -4,6 +4,7 @@ import { hasMillidaAccount } from '../lib/api'
 import { apiErrorText } from '../lib/apiError'
 import { showToast } from './ui'
 import { openChestFlow } from '../components/daily/ChestOpen'
+import { t } from '../i18n'
 
 /**
  * Сундуки за игру (06.10.2026, служба 47ea1c7d8): час игры за сутки — обычный
@@ -39,7 +40,7 @@ export const usePlayChests = create<PlayChestsState>((set, get) => ({
       set({ view: res, at: Date.now() })
       openChestFlow([{ id: res.chestId, tier: 'COMMON', source: 'play', title: res.chest, createdAt: new Date().toISOString() }])
     } catch (e) {
-      showToast(apiErrorText(e, 'Сундук не забрался, попробуй позже'), 'error')
+      showToast(apiErrorText(e, t('Сундук не забрался, попробуй позже')), 'error')
       void get().load()
     } finally {
       set({ busy: false })
@@ -50,6 +51,6 @@ export const usePlayChests = create<PlayChestsState>((set, get) => ({
 /** «34 мин» / «1 ч 05 мин» до следующего сундука. */
 export function playLeftText(seconds: number): string {
   const m = Math.max(1, Math.ceil(seconds / 60))
-  if (m < 60) return m + ' мин'
-  return Math.floor(m / 60) + ' ч ' + String(m % 60).padStart(2, '0') + ' мин'
+  if (m < 60) return t('{m} мин', { m })
+  return t('{h} ч {m} мин', { h: Math.floor(m / 60), m: String(m % 60).padStart(2, '0') })
 }

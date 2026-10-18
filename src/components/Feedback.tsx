@@ -12,6 +12,7 @@ import { hasTauri } from '../ipc/tauri'
 import { openUrl } from '../ipc/commands'
 import { PxIcon } from './PxIcon'
 import '../styles/pixel/feedback.css'
+import { t, useT } from '../i18n'
 
 /**
  * Отзыв о лаунчере (владелец 24.09.2026, 16:41): зелёный «жучок» в верхней
@@ -37,7 +38,7 @@ const BUG_KINDS: [string, string][] = [
   ['other', 'Другое'],
 ]
 
-const STAR_WORDS = ['', 'Плохо', 'Так себе', 'Нормально', 'Хорошо', 'Отлично']
+const starWords = () => ['', t('Плохо'), t('Так себе'), t('Нормально'), t('Хорошо'), t('Отлично')]
 
 /** Награда за отзыв — раз в неделю, чтобы отзывы не писали ради осколков. */
 export const FEEDBACK_SHARDS = 50
@@ -138,7 +139,7 @@ async function send(body: Record<string, unknown>) {
 }
 
 async function sendFeedback(text: string, stars: number): Promise<FeedbackAnswer> {
-  if (!hasMillidaAccount()) throw new Error('Отзыв привязывается к аккаунту Millida — войди в него и отправь ещё раз')
+  if (!hasMillidaAccount()) throw new Error(t('Отзыв привязывается к аккаунту Millida — войди в него и отправь ещё раз'))
   return api<FeedbackAnswer>('/launcher/feedback', {
     method: 'POST',
     body: JSON.stringify(stars ? { text, stars } : { text }),
@@ -151,6 +152,7 @@ async function sendFeedback(text: string, stars: number): Promise<FeedbackAnswer
  * поддержка видела, о какой сборке речь, без вопросов игроку.
  */
 export function FeedbackModal({ onClose, about, kind: startKind }: { onClose: () => void; about?: string; kind?: string }) {
+  const t = useT()
   const [mode, setMode] = useState<Mode>(about ? 'bug' : 'pick')
   const [stars, setStars] = useState(0)
   const [hover, setHover] = useState(0)
@@ -166,30 +168,30 @@ export function FeedbackModal({ onClose, about, kind: startKind }: { onClose: ()
     if (mode === 'rate' && stars) sent.rating = stars
     try {
       if (mode === 'rate') {
-        const t = text.trim()
-        const answer = await sendFeedback(t, stars)
+        const trimmed = text.trim()
+        const answer = await sendFeedback(trimmed, stars)
         applyStatus(false, answer.nextAt)
         showReward({
           level: 'mid',
-          kicker: 'Спасибо за отзыв',
-          title: answer.granted ? '+' + answer.shards + ' осколков' : 'Отзыв принят',
-          sub: answer.granted ? 'Мы читаем каждый' : 'Награда раз в неделю',
+          kicker: t('Спасибо за отзыв'),
+          title: answer.granted ? t('+{n} осколков', { n: answer.shards }) : t('Отзыв принят'),
+          sub: answer.granted ? t('Мы читаем каждый') : t('Награда раз в неделю'),
         })
       } else {
-        const t = text.trim()
+        const trimmed = text.trim()
         await send({
           category: kind,
           severity: kind === 'crash' || kind === 'game_launch' || kind === 'auth' ? 'high' : 'medium',
-          title: (BUG_KINDS.find((k) => k[0] === kind)?.[1] || 'Баг') + ': ' + (about ? about + ' — ' : '') + t.slice(0, 60),
-          description: about ? about + '\n\n' + t : t,
+          title: (BUG_KINDS.find((k) => k[0] === kind)?.[1] || 'Баг') + ': ' + (about ? about + ' — ' : '') + trimmed.slice(0, 60),
+          description: about ? about + '\n\n' + trimmed : trimmed,
         })
-        showToast('Баг отправлен — спасибо, разберёмся', 'ok')
+        showToast(t('Баг отправлен — спасибо, разберёмся'), 'ok')
       }
       track('feedback_send', { ...sent, ok: true })
       onClose()
     } catch (e) {
       track('feedback_send', { ...sent, ok: false }, { ok: false })
-      showToast(apiErrorText(e, 'Не отправилось, попробуй ещё раз'), 'error')
+      showToast(apiErrorText(e, t('Не отправилось, попробуй ещё раз')), 'error')
     } finally {
       setBusy(false)
     }
@@ -200,37 +202,37 @@ export function FeedbackModal({ onClose, about, kind: startKind }: { onClose: ()
 
   return createPortal(
     <div className="fb-bg" onClick={onClose} role="presentation">
-      <div className="fb-box" role="dialog" aria-label="Отзыв о лаунчере" data-section="feedback" onClick={(e) => e.stopPropagation()}>
-        <button className="fb-x" aria-label="Закрыть" data-track="close" onClick={onClose}>
+      <div className="fb-box" role="dialog" aria-label={t('Отзыв о лаунчере')} data-section="feedback" onClick={(e) => e.stopPropagation()}>
+        <button className="fb-x" aria-label={t('Закрыть')} data-track="close" onClick={onClose}>
           <Icon id="i-x" />
         </button>
         {mode === 'pick' ? (
           <>
-            <b className="fb-title">Что думаешь о лаунчере?</b>
-            {reward ? <span className="fb-gift">+{FEEDBACK_SHARDS} осколков за отзыв</span> : null}
+            <b className="fb-title">{t('Что думаешь о лаунчере?')}</b>
+            {reward ? <span className="fb-gift">{t('+{n} осколков за отзыв', { n: FEEDBACK_SHARDS })}</span> : null}
             <div className="fb-pick">
               <button className="fb-opt rate" data-sound="open" data-track="feedback_review" onClick={() => setMode('rate')}>
                 <span className="fb-stars-ic">★★★★★</span>
-                <b>Написать отзыв</b>
+                <b>{t('Написать отзыв')}</b>
               </button>
               <button className="fb-opt bug" data-sound="open" data-track="feedback_bug" onClick={() => setMode('bug')}>
                 <BugPx size={40} />
-                <b>Нашёл баг</b>
+                <b>{t('Нашёл баг')}</b>
               </button>
               <button className="fb-opt gh" data-track="feedback_github" onClick={openGithub}>
                 <PxIcon name="star" size={40} />
-                <b>Звезда на GitHub</b>
+                <b>{t('Звезда на GitHub')}</b>
               </button>
             </div>
           </>
         ) : mode === 'rate' ? (
           <>
-            <b className="fb-title">Что думаешь о лаунчере?</b>
-            {reward ? <span className="fb-gift">+{FEEDBACK_SHARDS} осколков</span> : null}
+            <b className="fb-title">{t('Что думаешь о лаунчере?')}</b>
+            {reward ? <span className="fb-gift">{t('+{n} осколков', { n: FEEDBACK_SHARDS })}</span> : null}
             <textarea
               className="fb-text"
               autoFocus
-              placeholder="Что нравится, что бесит, чего не хватает"
+              placeholder={t('Что нравится, что бесит, чего не хватает')}
               maxLength={2000}
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -240,7 +242,7 @@ export function FeedbackModal({ onClose, about, kind: startKind }: { onClose: ()
                 <button
                   key={n}
                   className={'fb-star' + ((hover || stars) >= n ? ' on' : '')}
-                  aria-label={n + ' из 5'}
+                  aria-label={t('{n} из 5', { n })}
                   data-track="feedback_star"
                   data-pos={n}
                   onMouseEnter={() => setHover(n)}
@@ -250,22 +252,22 @@ export function FeedbackModal({ onClose, about, kind: startKind }: { onClose: ()
                 </button>
               ))}
             </div>
-            <span className="fb-word">{STAR_WORDS[hover || stars] || 'Оценка — по желанию'}</span>
+            <span className="fb-word">{starWords()[hover || stars] || t('Оценка — по желанию')}</span>
           </>
         ) : (
           <>
-            <b className="fb-title">Что сломалось?</b>
+            <b className="fb-title">{t('Что сломалось?')}</b>
             <div className="fb-kinds">
               {BUG_KINDS.map(([k, label]) => (
                 <button key={k} className={'fb-kind' + (kind === k ? ' on' : '')} data-track="feedback_bug_kind" data-id={k} onClick={() => setKind(k)}>
-                  {label}
+                  {t(label)}
                 </button>
               ))}
             </div>
             <textarea
               className="fb-text"
               autoFocus
-              placeholder="Что делал и что случилось"
+              placeholder={t('Что делал и что случилось')}
               maxLength={4000}
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -275,10 +277,10 @@ export function FeedbackModal({ onClose, about, kind: startKind }: { onClose: ()
         {mode !== 'pick' ? (
           <div className="fb-foot">
             <button className="btn md secondary" data-track="back" onClick={() => setMode('pick')}>
-              Назад
+              {t('Назад')}
             </button>
             <button className="btn md primary" disabled={!canSend || busy} data-track="feedback_send" onClick={() => void submit()}>
-              {busy ? 'Отправляем…' : 'Отправить'}
+              {busy ? t('Отправляем…') : t('Отправить')}
             </button>
           </div>
         ) : null}

@@ -60,7 +60,7 @@ Modrinth, CurseForge и часть сайтов Mojang в России откр�
 | Чего боятся | Как на самом деле | Где проверить |
 | --- | --- | --- |
 | Лаунчер увидит пароль | Пароль вводится на сайте Microsoft по коду, лаунчер его не получает | [microsoft.rs](src-tauri/src/engine/accounts/microsoft.rs) — `devicecode` |
-| Токен уйдёт в Millida | Токен Microsoft ходит только на сервера Microsoft и Mojang и передаётся самой игре при запуске, как в любом лаунчере. На сервера Millida — никогда. Вход Ely.by — так же, на сайт Ely.by | [microsoft.rs](src-tauri/src/engine/accounts/microsoft.rs), [accounts.rs](src-tauri/src/commands/accounts.rs) |
+| Токен уйдёт в Millida | Токен Microsoft ходит только на сервера Microsoft и Mojang и передаётся самой игре при запуске, как в любом лаунчере. На сервера Millida — никогда. | [microsoft.rs](src-tauri/src/engine/accounts/microsoft.rs), [accounts.rs](src-tauri/src/commands/accounts.rs) |
 | Токен утащит сайт внутри лаунчера | Интерфейс токена не видит: ядро вырезает его из ответа | [session.rs](src-tauri/src/engine/accounts/session.rs) — `keep_tokens` |
 | Лаунчер полезет в файлы или запустит что угодно | У интерфейса нет доступа к диску и командной строке, только к командам ядра | [capabilities/default.json](src-tauri/capabilities/default.json) |
 | Подсунут обновление | Обновление без нашей подписи не установится | [selfupdate.rs](src-tauri/src/engine/core/selfupdate.rs), ключ в [tauri.conf.json](src-tauri/tauri.conf.json) |

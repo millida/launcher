@@ -8,6 +8,12 @@ pub(crate) const CSL_LATEST: &str = "https://api.github.com/repos/xfl03/MCCustom
 const CSL_JAR: &str = "CustomSkinLoader.jar";
 const CSL_DISABLED: &str = "CustomSkinLoader.jar.disabled";
 const CSL_OPTOUT: &str = ".millida-skip";
+/// The player's own "no skin mod in this build" for the Millida mod. Kept apart
+/// from CSL_OPTOUT on purpose: that marker was also written by the launcher on
+/// its own (a crashed CustomSkinLoader, or its copy found missing after the
+/// Millida mod had replaced it), so builds carry it without the player ever
+/// refusing the Millida mod.
+const MILLIDA_OPTOUT: &str = ".millida-mod-skip";
 
 pub(crate) fn is_skin_mod_file(name: &str) -> bool {
     name == CSL_JAR
@@ -225,7 +231,7 @@ pub async fn ensure_custom_skin_loader(
             Absent::Install => {}
             Absent::Skip => return Ok(turned_off),
             Absent::OptOut => {
-                note_skin_mod_removed(profile);
+                opt_out(profile, b"removed");
                 return Ok(turned_off);
             }
         }
@@ -343,9 +349,6 @@ fn settings_in(dir: &std::path::Path) -> Value {
         .unwrap_or(Value::Null)
 }
 
-/// The build's own "skin mod" switch. It covers whichever jar the launcher
-/// injects for skins, the Millida mod included: a switch that only knew
-/// CustomSkinLoader let the Millida mod come back on every launch.
 pub(crate) fn skin_mod_on(profile: &str) -> bool {
     skin_mod_on_in(&profile_dir(profile))
 }
@@ -353,6 +356,21 @@ pub(crate) fn skin_mod_on(profile: &str) -> bool {
 fn skin_mod_on_in(dir: &std::path::Path) -> bool {
     settings_in(dir)["skinMod"].as_str() != Some("off")
         && !dir.join("CustomSkinLoader").join(CSL_OPTOUT).exists()
+}
+
+/// The build's skin switch as far as the Millida mod is concerned: only a
+/// refusal the player made through the launcher turns it off.
+pub(crate) fn millida_mod_on(profile: &str) -> bool {
+    millida_mod_on_in(&profile_dir(profile))
+}
+
+fn millida_mod_on_in(dir: &std::path::Path) -> bool {
+    !dir.join(MILLIDA_OPTOUT).exists()
+}
+
+fn player_opt_out(profile: &str, why: &[u8]) {
+    opt_out(profile, why);
+    let _ = std::fs::write(profile_dir(profile).join(MILLIDA_OPTOUT), why);
 }
 
 fn mark_installed(profile: &str, installed: bool) {
@@ -375,7 +393,7 @@ pub fn forget_skin_mod_install(profile: &str) {
 /// version put it straight back on the next launch, which is how a build that
 /// the mod does not fit kept crashing after the player had already fixed it.
 pub fn note_skin_mod_removed(profile: &str) {
-    opt_out(profile, b"removed");
+    player_opt_out(profile, b"removed");
 }
 
 /// Why the mod is off for this build, as the marker records it: `crash` and
@@ -404,6 +422,7 @@ pub fn set_skin_mod(profile: &str, on: bool) -> Result<Value, String> {
     if on {
         // The player turned the skin mod back on: remove the refusal marker.
         let _ = std::fs::remove_file(profile_dir(profile).join("CustomSkinLoader").join(CSL_OPTOUT));
+        let _ = std::fs::remove_file(profile_dir(profile).join(MILLIDA_OPTOUT));
         let mut patch = serde_json::Map::new();
         patch.insert("skinMod".into(), Value::String("auto".into()));
         merge_settings(profile, patch);
@@ -414,7 +433,7 @@ pub fn set_skin_mod(profile: &str, on: bool) -> Result<Value, String> {
             std::fs::remove_file(&jar)
                 .map_err(|e| format!("Не удалось убрать мод скинов: {} — закрой игру и попробуй ещё раз", e))?;
         }
-        opt_out(profile, b"off");
+        player_opt_out(profile, b"off");
     }
     Ok(skin_mod_state(profile))
 }
@@ -661,6 +680,37 @@ mod tests {
                 std::fs::write(dir.join("CustomSkinLoader").join(CSL_OPTOUT), b"off").unwrap();
             }
             assert_eq!(skin_mod_on_in(&dir), want, "{name}: {why}");
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// build folder state -> whether the Millida mod is still placed into the build
+    #[test]
+    fn only_the_players_refusal_keeps_the_millida_mod_out() {
+        let root = std::env::temp_dir().join(format!("millida-mod-switch-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        type Case = (&'static str, Option<&'static str>, Option<&'static str>, Option<&'static str>, bool, &'static str);
+        let cases: [Case; 6] = [
+            ("fresh", None, None, None, true, "an untouched build gets the mod"),
+            ("csl-removed", Some(r#"{"skinMod":"off","skinModInstalled":false}"#), Some("removed"), None, true, "18.10: the launcher wrote this itself when the Millida mod had replaced its CustomSkinLoader copy; after 2.0.232 such builds lost Millida skins on every server"),
+            ("csl-crash", Some(r#"{"skinMod":"off"}"#), Some("crash"), None, true, "CustomSkinLoader crashing the game says nothing about the Millida mod"),
+            ("csl-off-legacy", Some(r#"{"skinMod":"off"}"#), Some("off"), None, true, "an old switch that only ever controlled CustomSkinLoader"),
+            ("player-off", Some(r#"{"skinMod":"off"}"#), Some("off"), Some("off"), false, "17.10: switched off by the player in the build settings or the mods list stays off"),
+            ("player-removed", None, None, Some("removed"), false, "the player deleted the Millida jar from the mods list, even if an older build rewrote the settings"),
+        ];
+        for (name, settings, csl_marker, mod_marker, want, why) in cases {
+            let dir = root.join(name);
+            std::fs::create_dir_all(dir.join("CustomSkinLoader")).unwrap();
+            if let Some(s) = settings {
+                std::fs::write(dir.join("millida-settings.json"), s).unwrap();
+            }
+            if let Some(m) = csl_marker {
+                std::fs::write(dir.join("CustomSkinLoader").join(CSL_OPTOUT), m).unwrap();
+            }
+            if let Some(m) = mod_marker {
+                std::fs::write(dir.join(MILLIDA_OPTOUT), m).unwrap();
+            }
+            assert_eq!(millida_mod_on_in(&dir), want, "{name}: {why}");
         }
         let _ = std::fs::remove_dir_all(&root);
     }

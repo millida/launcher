@@ -1,3 +1,4 @@
+import { t } from '../../i18n'
 export type CameraQuality = 'eco' | 'balanced' | 'sharp'
 
 interface Preset {
@@ -104,13 +105,13 @@ export function cameraErrorText(error: unknown): string {
   const name = (error as { name?: string; message?: string } | null)?.name
   const message = String((error as { message?: string } | null)?.message || '')
   if (name === 'NotAllowedError' || name === 'SecurityError') {
-    return 'Система не дала доступ к камере — разреши его лаунчеру в настройках приватности'
+    return t('Система не дала доступ к камере — разреши его лаунчеру в настройках приватности')
   }
   if (name === 'NotFoundError' || name === 'OverconstrainedError' || message === 'no-video') {
-    return 'Камера не найдена — подключи её и выбери в настройках звонков'
+    return t('Камера не найдена — подключи её и выбери в настройках звонков')
   }
   if (message === 'unsupported' || name === 'NotSupportedError' || name === 'TypeError') {
-    return 'Камера недоступна в этой сборке системы'
+    return t('Камера недоступна в этой сборке системы')
   }
-  return 'Камера занята другой программой — закрой её и попробуй ещё раз'
+  return t('Камера занята другой программой — закрой её и попробуй ещё раз')
 }
