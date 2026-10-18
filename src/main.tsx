@@ -1,6 +1,7 @@
 // Первым: до модулей, которые читают адрес API при импорте.
 import './preview'
 import { createRoot } from 'react-dom/client'
+import './i18n'
 import './styles/01-base.css'
 import './styles/02-kit.css'
 import './styles/03-mods.css'
@@ -16,6 +17,7 @@ import './styles/12-pixel.css'
 // Импорты явные, а не glob: glob-импорты Vite поднимает НАД остальными,
 // и кит перебивал эти правила (22.09.2026).
 import './styles/pixel/builds.css'
+import './styles/pixel/first-run.css'
 import './styles/pixel/catalog.css'
 import './styles/pixel/hosting-settings.css'
 import './styles/pixel/premium.css'

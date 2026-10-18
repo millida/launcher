@@ -42,6 +42,7 @@ import { nickInRooms, useRooms, type VoiceMember } from './rooms'
 import { usePartyStore } from './party'
 import { apiErrorText } from '../lib/apiError'
 import { trackFailure } from '../lib/telemetry'
+import { t } from '../i18n'
 
 export type CallStatus = 'idle' | 'outgoing' | 'incoming' | 'connecting' | 'active'
 
@@ -199,7 +200,7 @@ function blankPart(userId: string, nick: string): CallParticipant {
 function nickOf(uid: string): string {
   const friend = useFriends.getState().friends.find((f) => f.userId === uid)?.nickname
   const mate = usePartyStore.getState().party?.members.find((m) => m.userId === uid)?.nickname
-  return friend || nickInRooms(uid) || mate || 'Друг'
+  return friend || nickInRooms(uid) || mate || t('Друг')
 }
 
 function clearTimers() {
@@ -259,7 +260,7 @@ async function openMicOrFail(): Promise<MicChain | null> {
   } catch (e) {
     trackFailure('call', errName(e), { step: 'mic' })
     showToast(micErrorText(e), 'error', undefined, {
-      label: 'Настроить',
+      label: t('Настроить'),
       run: () => openSettings('sound', 'mic'),
     })
     return null
@@ -304,7 +305,7 @@ function armConnectTimeout() {
   ringTimer = setTimeout(() => {
     if (st().status !== 'connecting') return
     trackFailure('call', 'connect_timeout', { step: 'connect', mode: st().mode })
-    showToast('Не удалось соединиться — попробуй позвонить ещё раз', 'error')
+    showToast(t('Не удалось соединиться — попробуй позвонить ещё раз'), 'error')
     void finish('failed')
   }, CONNECT_TIMEOUT_MS)
 }
@@ -330,17 +331,17 @@ async function recover(peerId: string) {
   if (used >= RETRY_LIMIT) {
     trackFailure('call', 'peer_lost', { step: 'recover', mode: cur.mode })
     if (cur.mode === 'dm') {
-      showToast('Связь оборвалась', 'error')
+      showToast(t('Связь оборвалась'), 'error')
       await finish('failed')
       return
     }
-    showToast('Связь с ' + nickOf(peerId) + ' оборвалась', 'error')
+    showToast(t('Связь с {nick} оборвалась', { nick: nickOf(peerId) }), 'error')
     session.drop(peerId)
     patchPart(peerId, { connection: 'failed', speaking: false, level: 0 })
     return
   }
   retries.set(peerId, used + 1)
-  if (cur.mode === 'dm') showToast('Связь пропала — восстанавливаем')
+  if (cur.mode === 'dm') showToast(t('Связь пропала — восстанавливаем'))
   await session.reconnect(peerId, politeFor(peerId))
   if (mic) await session.setMic(mic.track)
 }
@@ -394,11 +395,11 @@ export function callSupported(): boolean {
 export async function callFriend(peerId: string, nick: string) {
   const cur = st()
   if (cur.status !== 'idle') {
-    showToast('Сначала заверши текущий звонок', 'error')
+    showToast(t('Сначала заверши текущий звонок'), 'error')
     return
   }
   if (!callSupported()) {
-    showToast('Звонки недоступны в этой сборке', 'error')
+    showToast(t('Звонки недоступны в этой сборке'), 'error')
     return
   }
   const callId = newCallId()
@@ -416,13 +417,13 @@ export async function callFriend(peerId: string, nick: string) {
   } catch (e) {
     trackFailure('call', e, { step: 'invite' })
     reset()
-    showToast(apiErrorText(e, 'Не удалось начать звонок'), 'error')
+    showToast(apiErrorText(e, t('Не удалось начать звонок')), 'error')
     return
   }
   startRing('outgoing')
   ringTimer = setTimeout(() => {
     if (st().status !== 'outgoing') return
-    showToast('Не ответил — звонок отменён')
+    showToast(t('Не ответил — звонок отменён'))
     void finish('cancel')
   }, RING_TIMEOUT_MS)
 }
@@ -519,9 +520,7 @@ export async function toggleScreen() {
   }
   if (cur.mode === 'room' && !canShareScreenTo(cur.parts.length)) {
     showToast(
-      'Показать экран можно, пока в разговоре не больше ' +
-        (SCREEN_MAX_VIEWERS + 1) +
-        ' человек — дальше картинка съест канал вместе с голосом',
+      t('Показать экран можно, пока в разговоре не больше {n} человек — дальше картинка съест канал вместе с голосом', { n: SCREEN_MAX_VIEWERS + 1 }),
       'error',
     )
     return
@@ -529,7 +528,7 @@ export async function toggleScreen() {
   // Через ретранслятор картинка уходит каждому зрителю отдельным потоком и
   // оплачивается трафиком: в группе такой показ выключен намеренно.
   if (cur.mode === 'room' && cur.parts.length > 1 && (await iceConfig()).relayOnly) {
-    showToast('Показ экрана в группе недоступен на этом соединении', 'error')
+    showToast(t('Показ экрана в группе недоступен на этом соединении'), 'error')
     return
   }
   try {
@@ -571,9 +570,7 @@ export async function toggleCamera() {
   }
   if (cur.mode === 'room' && !canShowCamTo(cur.parts.length)) {
     showToast(
-      'Камеру можно включить, пока в разговоре не больше ' +
-        (CAM_MAX_VIEWERS + 1) +
-        ' человек — дальше картинка съест канал вместе с голосом',
+      t('Камеру можно включить, пока в разговоре не больше {n} человек — дальше картинка съест канал вместе с голосом', { n: CAM_MAX_VIEWERS + 1 }),
       'error',
     )
     return
@@ -631,7 +628,7 @@ export async function setCallProcessing(p: MicProcessing) {
   }
   if (!mic) return
   const applied = await mic.setProcessing(p, st().noise)
-  if (!applied) showToast('Настройка микрофона встанет со следующего звонка — эта уже идёт', 'ok')
+  if (!applied) showToast(t('Настройка микрофона встанет со следующего звонка — эта уже идёт'), 'ok')
 }
 
 interface VoiceReply {
@@ -656,15 +653,15 @@ export async function joinPartyVoice(partyId: string, startMuted = false) {
   const cur = st()
   if (cur.status !== 'idle') {
     if (cur.mode === 'room' && cur.roomId === partyId) return
-    showToast('Сначала заверши текущий разговор', 'error')
+    showToast(t('Сначала заверши текущий разговор'), 'error')
     return
   }
   handedOff = ''
   const reason = await joinRelayVoice(partyId, startMuted)
   if (reason === null) return
   trackFailure('call', new Error(reason), { step: 'party_relay' })
-  showToast('Голос через сервер Millida недоступен: ' + reason + '. Включаю запасной режим', 'error')
-  return joinVoice(partyId, 'Пати', '/party')
+  showToast(t('Голос через сервер Millida недоступен: {reason}. Включаю запасной режим', { reason }), 'error')
+  return joinVoice(partyId, t('Пати'), '/party')
 }
 
 function relayFlags(flags: PeerFlags) {
@@ -697,19 +694,19 @@ async function pushRelayAudio(processing?: MicProcessing) {
   try {
     await partyVoiceAudio(await relayAudio(processing))
   } catch (e) {
-    showToast('Настройка звука не применилась к голосу пати: ' + relayErrorText(e), 'error')
+    showToast(t('Настройка звука не применилась к голосу пати: {error}', { error: relayErrorText(e) }), 'error')
   }
 }
 
 function relayErrorText(e: unknown): string {
   if (typeof e === 'string' && e.trim()) return e.trim()
   if (e instanceof Error && e.message) return e.message
-  return 'сервер не ответил'
+  return t('сервер не ответил')
 }
 
 /** null when the relay carries the party now (or the join was cancelled); otherwise why it could not. */
 async function joinRelayVoice(partyId: string, startMuted = false): Promise<string | null> {
-  if (!tauri()) return 'нужно приложение лаунчера'
+  if (!tauri()) return t('нужно приложение лаунчера')
   const cur = st()
   cur.set({
     ...IDLE,
@@ -717,7 +714,7 @@ async function joinRelayVoice(partyId: string, startMuted = false): Promise<stri
     status: 'connecting',
     callId: partyId,
     roomId: partyId,
-    roomTitle: 'Пати',
+    roomTitle: t('Пати'),
     voicePath: '/party',
     // С незнакомцами из поиска голос подключается сам, но микрофон открывает человек.
     muted: cur.ptt || startMuted,
@@ -742,7 +739,7 @@ async function joinRelayVoice(partyId: string, startMuted = false): Promise<stri
   } catch (e) {
     trackFailure('call', e, { step: 'room_join' })
     reset()
-    showToast(apiErrorText(e, 'Не удалось войти в разговор'), 'error')
+    showToast(apiErrorText(e, t('Не удалось войти в разговор')), 'error')
     return null
   }
   if (st().roomId !== partyId) return null
@@ -758,11 +755,11 @@ function onRelayState(e: PartyVoiceState) {
   const cur = st()
   if (!relay || cur.roomId !== e.party) return
   if (e.state === 'device_fallback') {
-    showToast(e.reason || 'Выбранное звуковое устройство не найдено, взято системное', 'error')
+    showToast(e.reason || t('Выбранное звуковое устройство не найдено, взято системное'), 'error')
     return
   }
   if (e.state === 'mic_failed') {
-    showToast('Микрофон не открылся: ' + (e.reason || 'нет доступа') + '. Ты слышишь остальных, но тебя не слышно', 'error')
+    showToast(t('Микрофон не открылся: {reason}. Ты слышишь остальных, но тебя не слышно', { reason: e.reason || t('нет доступа') }), 'error')
     return
   }
   if (e.state !== 'lost') return
@@ -770,10 +767,10 @@ function onRelayState(e: PartyVoiceState) {
   void leaveRoomVoice()
   if (useGame.getState().list.length) {
     handedOff = party
-    showToast('Голос пати перешёл в игру', 'ok')
+    showToast(t('Голос пати перешёл в игру'), 'ok')
     return
   }
-  showToast('Связь с сервером голоса пропала — подключаюсь заново', 'error')
+  showToast(t('Связь с сервером голоса пропала — подключаюсь заново'), 'error')
   void joinPartyVoice(party)
 }
 
@@ -828,11 +825,11 @@ async function joinVoice(roomId: string, title: string, voicePath: string) {
   const cur = st()
   if (cur.status !== 'idle') {
     if (cur.mode === 'room' && cur.roomId === roomId) return
-    showToast('Сначала заверши текущий разговор', 'error')
+    showToast(t('Сначала заверши текущий разговор'), 'error')
     return
   }
   if (!callSupported()) {
-    showToast('Звонки недоступны в этой сборке', 'error')
+    showToast(t('Звонки недоступны в этой сборке'), 'error')
     return
   }
   cur.set({ ...IDLE, mode: 'room', status: 'connecting', callId: roomId, roomId, roomTitle: title, voicePath, muted: cur.ptt })
@@ -851,7 +848,7 @@ async function joinVoice(roomId: string, title: string, voicePath: string) {
   } catch (e) {
     trackFailure('call', e, { step: 'room_join' })
     reset()
-    showToast(apiErrorText(e, 'Не удалось войти в разговор'), 'error')
+    showToast(apiErrorText(e, t('Не удалось войти в разговор')), 'error')
     return
   }
   if (st().roomId !== roomId) return
@@ -895,9 +892,9 @@ export async function ringRoom(roomId: string) {
       '/friends/rooms/' + encodeURIComponent(roomId) + '/voice/ring',
       { method: 'POST' },
     )
-    showToast(r.called ? 'Позвали ' + r.called + ' чел.' : 'Все уже в разговоре')
+    showToast(r.called ? t('Позвали {n} чел.', { n: r.called }) : t('Все уже в разговоре'))
   } catch {
-    showToast('Не удалось позвать', 'error')
+    showToast(t('Не удалось позвать'), 'error')
   }
 }
 
@@ -947,7 +944,7 @@ async function onInvite(e: CallEvent) {
   // Пока идёт игра, окно лаунчера не трогаем: полноэкранная игра свернулась бы
   // ради вызова. Карточка уходит на оверлей поверх игры.
   if (useGame.getState().list.length) {
-    void overlayNotify({ uid: e.from, nick, text: 'Звонит — ответить можно в лаунчере', ts: Date.now(), open: 'call' }).catch(
+    void overlayNotify({ uid: e.from, nick, text: t('Звонит — ответить можно в лаунчере'), ts: Date.now(), open: 'call' }).catch(
       () => {},
     )
     return
@@ -966,10 +963,10 @@ async function onAccept(e: CallEvent) {
 }
 
 function endedText(kind: CallEvent['kind']): string {
-  if (kind === 'decline') return 'Звонок отклонён'
-  if (kind === 'busy') return 'Собеседник уже разговаривает'
-  if (kind === 'cancel') return 'Звонок отменён'
-  return 'Звонок завершён'
+  if (kind === 'decline') return t('Звонок отклонён')
+  if (kind === 'busy') return t('Собеседник уже разговаривает')
+  if (kind === 'cancel') return t('Звонок отменён')
+  return t('Звонок завершён')
 }
 
 /** Зовут в голос группы: показываем карточку, зайти можно одним нажатием. */
@@ -977,7 +974,7 @@ function onRing(e: CallEvent) {
   const cur = st()
   if (cur.status !== 'idle') return
   const roomId = String((e.data as { roomId?: string }).roomId || e.callId)
-  const title = String((e.data as { title?: string }).title || 'группе')
+  const title = String((e.data as { title?: string }).title || t('группе'))
   const nick = nickOf(e.from)
   startRing('incoming')
   setTimeout(stopRing, 4000)
@@ -985,14 +982,14 @@ function onRing(e: CallEvent) {
     void overlayNotify({
       uid: e.from,
       nick,
-      text: nick + ' зовёт в «' + title + '» — зайти можно в лаунчере',
+      text: t('{nick} зовёт в «{room}» — зайти можно в лаунчере', { nick, room: title }),
       ts: Date.now(),
       open: 'call',
     }).catch(() => {})
     return
   }
-  showToast(nick + ' зовёт в разговор «' + title + '»', 'ok', undefined, {
-    label: 'Зайти',
+  showToast(t('{nick} зовёт в разговор «{room}»', { nick, room: title }), 'ok', undefined, {
+    label: t('Зайти'),
     run: () => void joinRoomVoice(roomId, title),
   })
 }

@@ -10,7 +10,7 @@ import { api, hasMillidaAccount } from './api'
 import { joinPageUrl } from './invite'
 import { beatKey, beatStatus, presenceBeatDue } from './presence'
 import { isPresenceTracked } from './realtime'
-import { effectiveNick, getAccount, hasLicenseSession, isMillidaKind, launchAuthKind, profileSlug } from '../state/accounts'
+import { effectiveNick, getAccount, isMillidaKind, launchAuthKind, millidaGameNick, profileSlug } from '../state/accounts'
 import { ensureMsAuth, startMsLogin } from '../state/msLogin'
 import { uiChoice, uiConfirm } from '../state/confirm'
 import { useProfiles } from '../state/profiles'
@@ -30,6 +30,10 @@ import { useServers } from '../state/servers'
 import { publicServerLabel } from './liveServer'
 import { NATIVE_NEEDS_MILLIDA, isNativeGame } from './nativeGame'
 import { stopInstall } from '../state/installs'
+import { holdLaunchForHdSkin } from './skinLock'
+import { claimJoin } from './joinClaim'
+import { t } from '../i18n'
+import { CORE_LAUNCH_CANCELLED, mentionsCancel } from './coreErrors'
 
 export { PL_STAGES, REPAIR_STAGES } from './launchView'
 
@@ -101,10 +105,10 @@ export function discordPresence(status?: string, server?: string | null): Promis
   const pack = build ? useProfiles.getState().profiles.find((p) => p.name === build) : undefined
   // Discord only proxies https images; data: and local paths are silently ignored.
   const icon = pack && pack.icon && pack.icon.startsWith('https://') ? pack.icon : ''
-  const details = playing ? (build ? 'Играет · ' + build : 'В игре') : 'В лаунчере'
+  const details = playing ? (build ? t('Играет · {where}', { where: build }) : t('В игре')) : t('В лаунчере')
   const addr = (session && session.server) || ''
   const place = (session && (session.serverName || session.server)) || server || ''
-  const state = playing && place ? 'Сервер: ' + place : nick ? 'Ник: ' + nick : 'Millida Launcher'
+  const state = playing && place ? t('Сервер: {name}', { name: place }) : nick ? t('Ник: {nick}', { nick }) : 'Millida Launcher'
   // Версия сборки уезжает в ссылку: принимающий лаунчер иначе знает только
   // адрес и заходит тем, что у гостя выбрано сейчас.
   const joinUrl = playing && addr ? joinPageUrl(addr, (session && session.serverName) || null, pack && pack.version) : ''
@@ -208,42 +212,43 @@ async function resolveAuth(profile: string | null, server?: string | null): Prom
   const native = isNativeGame(useProfiles.getState().profiles.find((p) => p.name === profile))
   const smp = serverNeedsMillidaAuth(server)
   const millidaOnly = native || smp || (await profileNeedsMillidaAuth(profile))
-  const kind = launchAuthKind(acc, hasMillidaAccount(), millidaOnly)
+  const kind = launchAuthKind(acc, hasMillidaAccount(), millidaOnly, millidaGameNick())
   if (millidaOnly) {
     const where = smp ? 'Millida SMP' : 'OneBlock'
     if (kind !== 'millida')
-      throw new Error(native ? NATIVE_NEEDS_MILLIDA : where + ' пускает только с аккаунтом Millida: войди в Millida и нажми «Играть» ещё раз')
-    if (!native && acc && !isMillidaKind(acc.kind)) showToast(where + ': заходим с аккаунтом Millida')
-    return { nick: offline.nick, auth: { kind: 'millida' } }
+      throw new Error(native ? t(NATIVE_NEEDS_MILLIDA) : t('{where} пускает только с аккаунтом Millida: войди в Millida и нажми «Играть» ещё раз', { where }))
+    if (!native && acc && !isMillidaKind(acc.kind)) showToast(t('{where}: заходим с аккаунтом Millida', { where }))
+    return millidaAuth(offline.nick)
   }
   // A live token is required, not just a stored one: Minecraft session tokens expire after a day.
   if (acc && kind === 'microsoft') {
     const ms = await ensureMsAuth(acc)
     if (ms) return { nick: acc.nick, auth: { kind: 'microsoft', accountId: ms.id, uuid: ms.uuid, xuid: ms.xuid } }
     const relogin = await uiChoice(
-      'Вход по лицензии Microsoft истёк — сессия Minecraft больше не действует. Онлайн-серверы такой запуск не примут: игра скажет «Вы не вошли в свой аккаунт Minecraft». Войти заново?',
+      t('Вход по лицензии Microsoft истёк — сессия Minecraft больше не действует. Онлайн-серверы такой запуск не примут: игра скажет «Вы не вошли в свой аккаунт Minecraft». Войти заново?'),
       {
-        title: 'Лицензия не подтверждена',
-        confirmLabel: 'Войти заново',
-        cancelLabel: 'Играть офлайн',
+        title: t('Лицензия не подтверждена'),
+        confirmLabel: t('Войти заново'),
+        cancelLabel: t('Играть офлайн'),
         danger: false,
       },
     )
     if (relogin === 'yes') {
       void startMsLogin()
-      throw new Error('Вход по лицензии Microsoft истёк — подтверди аккаунт и запусти игру снова')
+      throw new Error(t('Вход по лицензии Microsoft истёк — подтверди аккаунт и запусти игру снова'))
     }
-    if (relogin === 'dismiss') throw new Error('Запуск отменён')
-    showToast('Играем офлайн: онлайн-серверы ответят «Вы не вошли в свой аккаунт Minecraft»')
-    return offline
-  }
-  if (acc && kind === 'elyby') {
-    if (hasLicenseSession(acc)) return { nick: acc.nick, auth: { kind: 'elyby', accountId: acc.id, uuid: acc.uuid } }
-    showToast('Вход Ely.by не найден — добавь аккаунт заново. Сейчас играем офлайн', 'error')
+    if (relogin === 'dismiss') throw new Error(CANCELLED_TEXT)
+    showToast(t('Играем офлайн: онлайн-серверы ответят «Вы не вошли в свой аккаунт Minecraft»'))
     return offline
   }
   if (kind !== 'millida') return offline
-  return { nick: offline.nick, auth: { kind: 'millida' } }
+  return millidaAuth(offline.nick)
+}
+
+/// The HD skin lives on the Millida profile, so only a Millida session carries it into the game.
+async function millidaAuth(nick: string): Promise<{ nick: string; auth: LaunchAuth }> {
+  if (await holdLaunchForHdSkin()) throw new Error(CANCELLED_TEXT)
+  return { nick, auth: { kind: 'millida' } }
 }
 
 async function profileNeedsMillidaAuth(profile: string | null): Promise<boolean> {
@@ -256,13 +261,13 @@ export function showLaunchError(e: unknown) {
   const msg = String(e && (e as Error).message ? (e as Error).message : e).replace(/^Error:\s*/, '')
   // A launch the user called off is not a failure and must not raise a red toast.
   if (/^Запуск отменён/.test(msg)) return
-  showToast(/лиценз/i.test(msg) ? msg : 'Ошибка запуска: ' + msg, 'error')
+  showToast(/лиценз/i.test(msg) ? msg : t('Ошибка запуска: {error}', { error: msg }), 'error')
 }
 
 let launching = false
 /// Растёт при каждом «Отменить»: запуск, который ещё ждал входа, по нему видит отмену и не зовёт ядро.
 let cancelEpoch = 0
-const CANCELLED_TEXT = 'Запуск отменён'
+const CANCELLED_TEXT = CORE_LAUNCH_CANCELLED
 /// Install key of the pack update this launch started; cancelling the launch cancels it too.
 let updatingKey: string | null = null
 
@@ -275,12 +280,12 @@ async function freshenPack(profile: string, epoch: number, openCard: boolean): P
   const step = await packStepForLaunch(profile)
   if (epoch !== cancelEpoch) throw new Error(CANCELLED_TEXT)
   if (step.kind === 'launch-unchecked') {
-    showToast('Не удалось проверить обновление сборки: ' + step.reason + '. Запускаем установленную версию')
+    showToast(t('Не удалось проверить обновление сборки: {reason}. Запускаем установленную версию', { reason: step.reason }))
     return
   }
   if (step.kind !== 'update') return
   const u = step.update
-  const label = 'Обновляем сборку до ' + u.to + '…'
+  const label = t('Обновляем сборку до {version}…', { version: u.to })
   const open = openCard ? { open: true, sub: profile, stage: 0, msg: null, mode: 'launch' as const } : {}
   useUi.getState().setPrelaunch({ ...open, label, pct: 0 })
   const job = runPackUpdateForLaunch(profile, u, (pct) => {
@@ -291,11 +296,11 @@ async function freshenPack(profile: string, epoch: number, openCard: boolean): P
     if (updatingKey === job.key) updatingKey = null
   })
   if (epoch !== cancelEpoch) throw new Error(CANCELLED_TEXT)
-  useUi.getState().setPrelaunch(openCard ? { open: false, label: null } : { label: null, pct: 2, msg: 'Готовимся…' })
+  useUi.getState().setPrelaunch(openCard ? { open: false, label: null } : { label: null, pct: 2, msg: t('Готовимся…') })
   const next = afterPackUpdate(u, outcome)
   if (next.toast) showToast(next.toast, 'error')
   if (!next.launch) {
-    showToast('Обновление сборки отменено — игра не запускалась')
+    showToast(t('Обновление сборки отменено — игра не запускалась'))
     throw new Error(CANCELLED_TEXT)
   }
 }
@@ -317,17 +322,15 @@ function confirmSecondCopy(profile: string): Promise<boolean> {
   const same = list.includes(profile)
   return uiConfirm(
     same
-      ? 'Сборка «' +
-          profile +
-          '» уже запущена. Вторая копия будет писать в те же миры — одиночный мир может испортиться. Запустить ещё раз?'
-      : 'Уже запущена сборка «' + list[0] + '». Запустить ещё и «' + profile + '»? Игры поделят память компьютера.',
+      ? t('Сборка «{name}» уже запущена. Вторая копия будет писать в те же миры — одиночный мир может испортиться. Запустить ещё раз?', { name: profile })
+      : t('Уже запущена сборка «{running}». Запустить ещё и «{name}»? Игры поделят память компьютера.', { running: list[0] ?? '', name: profile }),
     {
-      title: 'Игра уже запущена',
-      confirmLabel: 'Запустить ещё раз',
-      cancelLabel: 'Не запускать',
+      title: t('Игра уже запущена'),
+      confirmLabel: t('Запустить ещё раз'),
+      cancelLabel: t('Не запускать'),
       danger: same,
       rememberKey: same ? RELAUNCH_SAME_KEY : RELAUNCH_OTHER_KEY,
-      rememberLabel: 'Больше не спрашивать',
+      rememberLabel: t('Больше не спрашивать'),
     },
   )
 }
@@ -340,7 +343,7 @@ export function joinWithAuth(
   opts?: { confirmed?: boolean },
 ) {
   if (launching) {
-    showToast('Игра уже запускается')
+    showToast(t('Игра уже запускается'))
     return Promise.resolve(JOIN_SKIPPED)
   }
   if (!opts?.confirmed && useGame.getState().list.length)
@@ -350,7 +353,7 @@ export function joinWithAuth(
 
 function doJoin(profile: string, world: string | null, server: string | null, serverName?: string | null) {
   if (launching) {
-    showToast('Игра уже запускается')
+    showToast(t('Игра уже запускается'))
     return Promise.resolve(JOIN_SKIPPED)
   }
   // Same reason as in doLaunch: no core means no game and no way to notice it ended.
@@ -379,6 +382,7 @@ function doJoin(profile: string, world: string | null, server: string | null, se
     .then(() => resolveAuth(profile, server))
     .then((a) => {
       if (epoch !== cancelEpoch) throw new Error(CANCELLED_TEXT)
+      void claimJoin(server ?? null)
       return quickPlay(profile, a.nick, ramMbFor(profile), world, server, a.auth)
     })
     .then((res) => {
@@ -437,13 +441,13 @@ export function pinHostServer(profile: string) {
     const raw = localStorage.getItem('m-host-pin')
     if (!raw) return
     const { name, addr } = JSON.parse(raw) as { name?: string; addr?: string }
-    if (addr) void pinServerDat(profile, name || 'Мой сервер', addr).catch(() => {})
+    if (addr) void pinServerDat(profile, name || t('Мой сервер'), addr).catch(() => {})
   } catch {}
 }
 
 export function realLaunch(name: string) {
   if (launching) {
-    showToast('Игра уже запускается')
+    showToast(t('Игра уже запускается'))
     return
   }
   if (useGame.getState().list.length) {
@@ -458,14 +462,14 @@ export function realLaunch(name: string) {
 
 function doLaunch(name: string) {
   if (launching) {
-    showToast('Игра уже запускается')
+    showToast(t('Игра уже запускается'))
     return
   }
   launching = true
   const setPrelaunch = useUi.getState().setPrelaunch
   const pack = useProfiles.getState().profiles.find((p) => p.name === name)
-  const ver = isNativeGame(pack) ? '' : pack ? (pack.version === 'latest' ? 'Minecraft последней версии' : 'Minecraft ' + pack.version) : 'Minecraft последней версии'
-  setPrelaunch({ open: true, sub: ver ? name + ' · ' + ver : name, stage: 0, pct: 2, msg: 'Готовимся…', mode: 'launch' })
+  const ver = isNativeGame(pack) ? '' : pack ? (pack.version === 'latest' ? t('Minecraft последней версии') : 'Minecraft ' + pack.version) : t('Minecraft последней версии')
+  setPrelaunch({ open: true, sub: ver ? name + ' · ' + ver : name, stage: 0, pct: 2, msg: t('Готовимся…'), mode: 'launch' })
   try {
     localStorage.setItem('m-last-' + name, String(Date.now()))
   } catch {}
@@ -506,6 +510,7 @@ function doLaunch(name: string) {
     .then(() => resolveAuth(prof || null))
     .then((a) => {
       if (epoch !== cancelEpoch) throw new Error(CANCELLED_TEXT)
+      void claimJoin(null)
       return prof
         ? launchProfile(prof, a.nick, ramMbFor(prof), a.auth)
         : launchGame('latest', a.nick, false, ramMbFor('default'), a.auth)
@@ -541,7 +546,7 @@ function doLaunch(name: string) {
       window.dispatchEvent(new Event('millida-game-started'))
       setTimeout(() => {
         setPrelaunch({ open: false })
-        showToast('Игра запущена')
+        showToast(t('Игра запущена'))
         applyLaunchWindowMode()
       }, 1200)
       stopProgress()
@@ -553,7 +558,7 @@ function doLaunch(name: string) {
       if (epoch !== cancelEpoch) return
       setPrelaunch({ open: false })
       setGameSession(null)
-      if (String(err).includes('отмен')) return
+      if (mentionsCancel(err)) return
       const host = failedHost(err)
       const fail = launchFailure(err, lastStage, [
         [prof, '<build>'],
@@ -592,6 +597,13 @@ function doLaunch(name: string) {
 let plTimer: ReturnType<typeof setInterval> | null = null
 
 export function startPrelaunch(name: string) {
+  if (launchAuthKind(getAccount(), hasMillidaAccount(), false, millidaGameNick()) !== 'millida') return runPrelaunch(name)
+  void holdLaunchForHdSkin().then((held) => {
+    if (!held) runPrelaunch(name)
+  })
+}
+
+function runPrelaunch(name: string) {
   const setPrelaunch = useUi.getState().setPrelaunch
   let stage = 0
   let prog = 0
@@ -607,7 +619,7 @@ export function startPrelaunch(name: string) {
       if (plTimer) clearInterval(plTimer)
       setTimeout(() => {
         setPrelaunch({ open: false })
-        showToast('Игра запущена — лаунчер свернётся')
+        showToast(t('Игра запущена — лаунчер свернётся'))
       }, 900)
       return
     }
@@ -625,10 +637,10 @@ export function cancelPrelaunch() {
   if (hasTauri()) cancelLaunch().catch(() => {})
   if (updatingKey) stopInstall(updatingKey)
   if (repair) {
-    ui.setPrelaunch({ msg: 'Отменяем…' })
+    ui.setPrelaunch({ msg: t('Отменяем…') })
     return
   }
   ui.setPrelaunch({ open: false })
   launching = false
-  showToast('Запуск отменён')
+  showToast(t('Запуск отменён'))
 }

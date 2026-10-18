@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { CuratedItem, SiteCard, SkinTile } from './site'
+import type { SiteCard, SkinTile } from './site'
 
 /*
  * Открытая страница материала. Одна на каталог: лента под ней остаётся на
@@ -8,7 +8,6 @@ import type { CuratedItem, SiteCard, SkinTile } from './site'
 
 export type OpenItem =
   | { kind: 'card'; section: string; card: SiteCard }
-  | { kind: 'cheat'; item: CuratedItem }
   | { kind: 'skin'; skin: SkinTile }
 
 interface ItemState {

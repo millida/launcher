@@ -10,12 +10,12 @@ import {
   type DailyClaim,
   type PendingChest,
 } from '../lib/rubies'
-import { api, hasMillidaAccount } from '../lib/api'
+import { api, hasMillidaAccount, openExt, WALLET_URL } from '../lib/api'
 import { isPaymentUrl } from '../lib/payHosts'
 import { openPaymentUrl } from '../lib/openPayment'
 import { MILLIDA_USER_KEY } from './accounts'
 import { apiErrorText } from '../lib/apiError'
-import { loadPlus, subscribePlus, type PlusStatus, type PlusTier } from '../lib/gameProfile'
+import { buyPlusMonth, loadPlus, subscribePlus, type PlusStatus, type PlusTier } from '../lib/gameProfile'
 import { logoutToLogin } from '../lib/session'
 import { watchPlusPurchase } from './plusWatch'
 import { purchaseFlow } from '../lib/purchaseTrack'
@@ -26,6 +26,7 @@ import { passCols, readyCells, seasonal, type ClaimTarget, type DailyView } from
 import { demoClaim, forgetDemoChest } from '../components/daily/demoTrack'
 import { demoOpen, isTier, RARITY_ORDER } from '../components/daily/chestDrops'
 import type { Rarity } from '../lib/rubies'
+import { t } from '../i18n'
 
 /**
  * Ежедневный сундук в лобби (как Brawl Pass): одна копия состояния на весь
@@ -237,7 +238,7 @@ export const useDaily = create<DailyState>((set, get) => ({
       set({ status: res, reveal: res })
     } catch (e) {
       trackFailure('daily_claim', e)
-      showToast(apiErrorText(e, 'Служба рубинов не ответила, попробуй позже'), 'error')
+      showToast(apiErrorText(e, t('Служба рубинов не ответила, попробуй позже')), 'error')
     } finally {
       set({ busy: '' })
     }
@@ -254,6 +255,26 @@ export const useDaily = create<DailyState>((set, get) => ({
     const fresh = get().pay && savedPay()
     if (fresh && (fresh.tier ?? 'PLUS') === tier && Date.now() - fresh.at < PAY_TTL) {
       openPaymentUrl(fresh.url)
+      return
+    }
+    if (get().plus?.checkout === 'dollar-wallet') {
+      set({ busy: 'plus' })
+      const paid = purchaseFlow('plus', 'plus')
+      try {
+        await buyPlusMonth(tier, 'plus-' + tier + '-' + Date.now().toString(36))
+        paid(true)
+        await get().load()
+      } catch (e) {
+        paid(false, 'error', e)
+        if (String(e).includes('insufficient')) {
+          openExt(WALLET_URL)
+          showToast(t('Пополни долларовый баланс на сайте и вернись за PLUS'), 'ok')
+        } else {
+          showToast(apiErrorText(e, t('Не удалось оформить подписку')), 'error')
+        }
+      } finally {
+        set({ busy: '' })
+      }
       return
     }
     set({ busy: 'plus' })
@@ -275,7 +296,7 @@ export const useDaily = create<DailyState>((set, get) => ({
       })
     } catch (e) {
       result(false, 'error', e)
-      showToast(apiErrorText(e, 'Не удалось оформить подписку'), 'error')
+      showToast(apiErrorText(e, t('Не удалось оформить подписку')), 'error')
     } finally {
       set({ busy: '' })
     }
@@ -286,7 +307,7 @@ export const useDaily = create<DailyState>((set, get) => ({
   openOne: async (id) => {
     if (!hasMillidaAccount()) {
       logoutToLogin()
-      return { error: 'Войди в аккаунт Millida' }
+      return { error: t('Войди в аккаунт Millida') }
     }
     const drop = () => {
       const cur = get().status
@@ -318,18 +339,18 @@ export const useDaily = create<DailyState>((set, get) => ({
       // 404: ручки нет (старая служба) или служба не знает сундук; 400 «уже открыт».
       if (/already|уже открыт/i.test(raw)) {
         drop()
-        return { error: 'Этот сундук уже открыт' }
+        return { error: t('Этот сундук уже открыт') }
       }
       // «Сундука нет» — служба не знает этот id (уже открыт в другом окне или
       // пропал): это не «старая служба», убираем его из списка.
       if (/сундука нет/i.test(raw)) {
         drop()
-        return { error: 'Этого сундука уже нет' }
+        return { error: t('Этого сундука уже нет') }
       }
       if (/\b404\b|not found|cannot post/i.test(raw))
-        return { error: 'Откроется после обновления Millida', outdated: true }
+        return { error: t('Откроется после обновления Millida'), outdated: true }
       trackFailure('chest_open', e)
-      return { error: apiErrorText(e, 'Сундук не открылся, попробуй ещё раз') }
+      return { error: apiErrorText(e, t('Сундук не открылся, попробуй ещё раз')) }
     }
   },
 

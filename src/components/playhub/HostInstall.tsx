@@ -12,6 +12,7 @@ import { errText, host, P } from '../../screens/hosting/api'
 import type { HostServer } from '../../screens/Hosting'
 import type { HostingPack } from './data'
 import '../../styles/pixel/playhub.css'
+import { useT } from '../../i18n'
 
 /**
  * «На сервер» — одно окно на весь лаунчер (приказ владельца 23.09.2026 и
@@ -85,6 +86,7 @@ export function HostInstall({
   /** Установка принята — панель обновляет список «Сейчас на сервере». */
   onDone?: () => void
 }) {
+  const t = useT()
   const signed = hasMillidaAccount()
   const [list, setList] = useState<Row[] | null>(null)
   const [failed, setFailed] = useState(false)
@@ -115,7 +117,7 @@ export function HostInstall({
               return (r && Array.isArray(r.servers) ? r.servers : []).map((s) => ({
                 id: s.id,
                 name: s.name,
-                sub: [s.address, s.coreLabel + ' ' + s.version, s.compatible && s.fileVersion ? 'встанет ' + s.fileVersion : '']
+                sub: [s.address, s.coreLabel + ' ' + s.version, s.compatible && s.fileVersion ? t('встанет {version}', { version: s.fileVersion }) : '']
                   .filter(Boolean)
                   .join(' · '),
                 status: s.status,
@@ -127,7 +129,7 @@ export function HostInstall({
         : api<HostServer[]>('/hosting/servers/me').then((l) =>
             (Array.isArray(l) ? l : []).map((s) => ({
               id: s.id,
-              name: s.name || s.slug || 'Мой сервер',
+              name: s.name || s.slug || t('Мой сервер'),
               sub: [s.address, buildLabel(s)].filter((x) => x && x !== '—').join(' · '),
               status: s.status || '',
               icon: s.icon,
@@ -199,7 +201,7 @@ export function HostInstall({
       onDone?.()
       // Панель сервера: хватит тоста — список «Сейчас на сервере» уже обновился.
       if (serverId) {
-        showToast('«' + target.title + '» ' + (replaces ? 'заменит мир — ставим' : 'встанет при запуске сервера'), 'ok')
+        showToast(replaces ? t('«{name}» заменит мир — ставим', { name: target.title }) : t('«{name}» встанет при запуске сервера', { name: target.title }), 'ok')
         onClose()
         return
       }
@@ -225,16 +227,16 @@ export function HostInstall({
 
   const busy = step === 'run' || step === 'stop'
   const heading =
-    step === 'done' ? 'Готово' : single && server ? 'Поставить на «' + server.name + '»?' : 'Куда поставить?'
+    step === 'done' ? t('Готово') : single && server ? t('Поставить на «{name}»?', { name: server.name }) : t('Куда поставить?')
 
   let body
   if (!signed)
     body = (
       <div className="hi-empty">
         <Icon id="i-server" />
-        <b>Серверы привязаны к аккаунту Millida</b>
+        <b>{t('Серверы привязаны к аккаунту Millida')}</b>
         <button className="btn md primary" data-track="login" onClick={() => logoutToLogin()}>
-          <Icon id="i-login" /> Войти
+          <Icon id="i-login" /> {t('Войти')}
         </button>
       </div>
     )
@@ -242,15 +244,15 @@ export function HostInstall({
     body = (
       <div className="hi-empty">
         <Icon id="i-check" />
-        <b>Ставим на «{server?.name || 'сервер'}»</b>
-        <span className="sub">{replaces ? 'Прежний мир сохранён копией' : 'Встанет при запуске сервера'}</span>
+        <b>{t('Ставим на «{name}»', { name: server?.name || t('сервер') })}</b>
+        <span className="sub">{replaces ? t('Прежний мир сохранён копией') : t('Встанет при запуске сервера')}</span>
         <div className="hi-acts">
           <button className="btn md secondary" data-track="close" onClick={onClose}>
-            Готово
+            {t('Готово')}
           </button>
           {serverId ? null : (
             <button className="btn md primary" data-track="open_server" onClick={openServer}>
-              <Icon id="i-server" /> Открыть сервер
+              <Icon id="i-server" /> {t('Открыть сервер')}
             </button>
           )}
         </div>
@@ -261,10 +263,10 @@ export function HostInstall({
     body = (
       <div className="hi-empty">
         <Icon id="i-server" />
-        <b>Своего сервера пока нет</b>
-        <span className="sub">Создадим — и поставим</span>
+        <b>{t('Своего сервера пока нет')}</b>
+        <span className="sub">{t('Создадим — и поставим')}</span>
         <button className="btn md primary" data-track="server_create" onClick={() => setPicker(true)}>
-          <Icon id="i-plus" /> Создать сервер
+          <Icon id="i-plus" /> {t('Создать сервер')}
         </button>
       </div>
     )
@@ -275,9 +277,9 @@ export function HostInstall({
           {list === null && !failed ? [0, 1].map((i) => <span key={i} className="skel hi-skel"></span>) : null}
           {failed ? (
             <div className="hi-note">
-              Хостинг не ответил
+              {t('Хостинг не ответил')}
               <button className="btn sm secondary" data-track="retry" onClick={load}>
-                <Icon id="i-restart" /> Повторить
+                <Icon id="i-restart" /> {t('Повторить')}
               </button>
             </div>
           ) : null}
@@ -306,7 +308,7 @@ export function HostInstall({
                 <Icon id="i-plus" />
               </span>
               <span className="hi-srv-main">
-                <b>Новый сервер</b>
+                <b>{t('Новый сервер')}</b>
               </span>
             </button>
           ) : null}
@@ -316,15 +318,15 @@ export function HostInstall({
             className="input hi-code"
             value={code}
             spellCheck={false}
-            placeholder="Код активации сборки"
+            placeholder={t('Код активации сборки')}
             onChange={(e) => setCode(e.target.value)}
           />
         ) : null}
-        {replaces && server && server.ok ? <span className="hi-warn">Мир сервера заменится, прежний уйдёт в копию</span> : null}
+        {replaces && server && server.ok ? <span className="hi-warn">{t('Мир сервера заменится, прежний уйдёт в копию')}</span> : null}
         {error ? <span className="hi-err">{error}</span> : null}
         <div className="hi-acts">
           <button className="btn md secondary" data-track="cancel" disabled={busy} onClick={onClose}>
-            Отмена
+            {t('Отмена')}
           </button>
           <button
             className="btn md primary"
@@ -333,7 +335,7 @@ export function HostInstall({
             onClick={() => void run()}
           >
             {busy ? <span className="spin" /> : <Icon id="i-download" />}{' '}
-            {step === 'stop' ? 'Останавливаем…' : step === 'run' ? 'Ставим…' : replaces ? 'Заменить мир' : 'Поставить'}
+            {step === 'stop' ? t('Останавливаем…') : step === 'run' ? t('Ставим…') : replaces ? t('Заменить мир') : t('Поставить')}
           </button>
         </div>
       </>

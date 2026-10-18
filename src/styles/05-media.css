@@ -735,14 +735,6 @@
 .acc-opt-ic{width:38px;height:38px;border-radius:10px;background:var(--m-surface-2);display:grid;place-items:center;flex:none}
 .acc-opt-ic svg{width:18px;height:18px;color:var(--m-accent)}
 .acc-code{display:flex;align-items:center;gap:10px;justify-content:center;width:100%;font-size:22px;font-weight:700;letter-spacing:.14em;padding:14px;border-radius:12px;background:var(--m-inset);border:1px dashed var(--m-border);color:var(--m-fg);cursor:pointer}
-/* "Buy a licence" promo banner: not an account, so it reads as an ad.
-   Kit rule 5.2: the only permitted gradient is the brand 45deg (--m-grad). */
-.acc-buy{display:flex;align-items:center;gap:12px;width:100%;text-decoration:none;padding:12px;margin-top:2px;border-radius:12px;color:var(--m-accent-fg);background:var(--m-grad);position:relative;overflow:hidden;transition:filter var(--m-t-fast),transform var(--m-t-fast)}
-.acc-buy:hover{filter:brightness(1.08);transform:translateY(-1px)}
-.acc-buy>svg{width:16px;height:16px;opacity:.9;flex:none}
-/* Плитка иконки — плоская подложка на фирменном фоне, без радужного конуса и тени (5.2 / 1.5) */
-.acc-buy-ic{width:38px;height:38px;border-radius:10px;flex:none;display:grid;place-items:center;background:rgba(255,255,255,.18)}
-.acc-buy-ic svg{width:18px;height:18px;color:var(--m-accent-fg)}
 
 /* ---- Incoming message popup ---- */
 .chat-notify-stack{position:absolute;top:52px;right:16px;z-index:400;display:flex;flex-direction:column;gap:10px;width:392px;max-width:calc(100% - 32px)}

@@ -1,3 +1,4 @@
+import { t } from '../../i18n'
 export type ScreenQuality = 'smooth' | 'balanced' | 'sharp'
 
 interface Preset {
@@ -80,8 +81,8 @@ export function screenErrorText(error: unknown): string {
   const message = String((error as { message?: string } | null)?.message || '')
   if (name === 'NotAllowedError') return ''
   if (message === 'unsupported' || name === 'NotSupportedError' || name === 'TypeError') {
-    return 'Показ экрана недоступен в этой сборке системы — на macOS его не даёт встроенный движок'
+    return t('Показ экрана недоступен в этой сборке системы — на macOS его не даёт встроенный движок')
   }
-  if (name === 'NotFoundError') return 'Нечего показывать — система не отдала ни одного экрана'
-  return 'Не получилось начать показ экрана — попробуй ещё раз'
+  if (name === 'NotFoundError') return t('Нечего показывать — система не отдала ни одного экрана')
+  return t('Не получилось начать показ экрана — попробуй ещё раз')
 }

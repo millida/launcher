@@ -24,6 +24,8 @@ import { BuildIcon, IconPicker } from './BuildIcon'
 import { hoursText } from './Hours'
 import '../../styles/pixel/playhub.css'
 import { trackImportFailure } from '../../lib/importTrack'
+import { t, useT } from '../../i18n'
+import { isPickCancelled } from '../../lib/coreErrors'
 
 /**
  * «Мои сборки» — первой полкой «Во что играем» (правки владельца 23.09.2026,
@@ -57,9 +59,9 @@ export async function saveIcon(name: string, icon: string): Promise<void> {
 
 /** Удалить свою сборку — с подтверждением; `after` — что сделать после удаления. */
 export function removeBuild(name: string, after?: () => void) {
-  void uiConfirm('Сборка «' + name + '» удалится с модами и мирами. Вернуть нельзя. Введи её название, чтобы удалить.', {
-    title: 'Удалить сборку',
-    confirmLabel: 'Удалить',
+  void uiConfirm(t('Сборка «{name}» удалится с модами и мирами. Вернуть нельзя. Введи её название, чтобы удалить.', { name }), {
+    title: t('Удалить сборку'),
+    confirmLabel: t('Удалить'),
     typeToConfirm: name,
   }).then((ok) => {
     if (!ok) return
@@ -72,12 +74,12 @@ export function removeBuild(name: string, after?: () => void) {
       .then(() => {
         if (useProfiles.getState().selected === name) useProfiles.getState().setSelected(null)
         void useProfiles.getState().refresh()
-        showToast('Сборка удалена', 'ok', 'delete')
+        showToast(t('Сборка удалена'), 'ok', 'delete')
         after?.()
       })
       .catch((e) => {
         void useProfiles.getState().refresh()
-        showToast('Не удалось удалить: ' + e, 'error')
+        showToast(t('Не удалось удалить: {error}', { error: String(e) }), 'error')
       })
   })
 }
@@ -164,31 +166,32 @@ export function BuildMenuItems({
   /** Страница сборки уже открыта — переключаем её вкладку, а не открываем заново. */
   onTab?: (tab: 'opts', rename: boolean) => void
 }) {
+  const t = useT()
   const go = (rename: boolean) => (onTab ? onTab('opts', rename) : openBuildSettings(name, 'opts', rename))
   const guarded = useGuarded(name)
   return (
     <>
       <button role="menuitem" data-track="build_rename" onClick={() => (onClose(), go(true))}>
         <Icon id="i-mo-pencil" />
-        Переименовать
+        {t('Переименовать')}
       </button>
       <button role="menuitem" data-track="build_icon" onClick={() => (onClose(), onIcon())}>
         <Icon id="i-mo-image" />
-        Иконка
+        {t('Иконка')}
       </button>
       <button role="menuitem" data-track="build_settings" onClick={() => (onClose(), go(false))}>
         <Icon id="i-mo-gear" />
-        Настройки
+        {t('Настройки')}
       </button>
       {hasTauri() && !guarded ? (
         <button role="menuitem" data-track="build_folder" onClick={() => (onClose(), void openProfileFolder(name).catch(() => {}))}>
           <Icon id="i-mo-folder" />
-          Папка
+          {t('Папка')}
         </button>
       ) : null}
       <button role="menuitem" className="danger" data-track="build_delete" onClick={() => (onClose(), removeBuild(name, onRemoved))}>
         <Icon id="i-mo-trash" />
-        Удалить
+        {t('Удалить')}
       </button>
     </>
   )
@@ -201,7 +204,7 @@ export function BuildIconPicker({ name, icon, onClose }: { name: string; icon?: 
       <IconPicker
         icon={buildIconOf({ name, icon })}
         onClose={onClose}
-        onPick={(v) => void saveIcon(name, v).catch((e) => showToast('Иконка не сохранилась: ' + e, 'error'))}
+        onPick={(v) => void saveIcon(name, v).catch((e) => showToast(t('Иконка не сохранилась: {error}', { error: String(e) }), 'error'))}
       />
     </span>
   )
@@ -228,6 +231,7 @@ export function MyBuildCard({
   /** Запуск — только большой «Играть» в лобби (правка владельца 21:20). */
   onPlay?: () => void
 }) {
+  const t = useT()
   const seconds = usePlayStats((s) => s.stats.builds.find((b) => b.key === p.name)?.seconds || 0)
   const [edit, setEdit] = useState(false)
   const [menu, setMenu] = useState(false)
@@ -256,7 +260,7 @@ export function MyBuildCard({
           ref={moreRef}
           type="button"
           className="ph-mine-more"
-          aria-label="Управление сборкой"
+          aria-label={t('Управление сборкой')}
           data-track="build_menu"
           aria-expanded={menu}
           onClick={(e) => {
@@ -283,9 +287,9 @@ export function MyBuildCard({
           // Библиотека (08.10.2026): при наведении — «Играть» и «Изменить», клик по карточке — изменить.
           <span className="ph-mine-acts">
             <button type="button" className="btn sm primary" data-track="build_play" onClick={(e) => (e.stopPropagation(), onPlay())}>
-              <Icon id="i-play" /> Играть
+              <Icon id="i-play" /> {t('Играть')}
             </button>
-            <button type="button" className="btn sm secondary ph-mine-ed" aria-label="Изменить сборку" title="Изменить" data-track="build_edit" onClick={(e) => (e.stopPropagation(), openBuildSettings(p.name, 'content'))}>
+            <button type="button" className="btn sm secondary ph-mine-ed" aria-label={t('Изменить сборку')} title={t('Изменить')} data-track="build_edit" onClick={(e) => (e.stopPropagation(), openBuildSettings(p.name, 'content'))}>
               <Icon id="i-edit" />
             </button>
           </span>
@@ -300,7 +304,7 @@ export function MyBuildCard({
             openBuildSettings(p.name, 'content')
           }}
         >
-          <Icon id="i-edit" /> Редактировать
+          <Icon id="i-edit" /> {t('Редактировать')}
         </button>
       </span>
       <span className="ph-card-body">
@@ -356,7 +360,7 @@ export function ActCard({
 }
 
 export const NewBuildCard = () => (
-  <ActCard icon="i-plus" title="Новая сборка" meta="Версия, загрузчик, моды" track="new_build" onClick={() => openModal('nbModal')} />
+  <ActCard icon="i-plus" title={t('Новая сборка')} meta={t('Версия, загрузчик, моды')} track="new_build" onClick={() => openModal('nbModal')} />
 )
 
 /** Демо в браузере: ядра нет, «нашли» две сборки TLauncher. */
@@ -368,9 +372,9 @@ const DEMO_FOUND: FoundInstance[] = [
 /** «Нашли 3 сборки в Prism» / «… в Prism и TLauncher» / «… в 3 лаунчерах». */
 function foundText(list: FoundInstance[]): string {
   const src = [...new Set(list.map((x) => x.source))]
-  const n = list.length + ' ' + plural(list.length, 'сборку', 'сборки', 'сборок')
-  const where = src.length === 1 ? src[0] : src.length === 2 ? src[0] + ' и ' + src[1] : src.length + ' лаунчерах'
-  return 'Нашли ' + n + ' в ' + where
+  const n = plural(list.length, t('{n} сборку', { n: list.length }), t('{n} сборки', { n: list.length }), t('{n} сборок', { n: list.length }))
+  const where = src.length === 1 ? src[0] ?? '' : src.length === 2 ? t('{a} и {b}', { a: src[0] ?? '', b: src[1] ?? '' }) : t('{n} лаунчерах', { n: src.length })
+  return t('Нашли {what} в {where}', { what: n, where })
 }
 
 /**
@@ -380,6 +384,7 @@ function foundText(list: FoundInstance[]): string {
  * одним кликом. Не нашёл — «Импорт»: файл сборки.
  */
 export function TakeAllCard({ have, bar }: { have: string[]; bar?: boolean }) {
+  const t = useT()
   const [found, setFound] = useState<FoundInstance[] | null>(null)
   const [done, setDone] = useState(0)
   const [busy, setBusy] = useState(false)
@@ -416,15 +421,15 @@ export function TakeAllCard({ have, bar }: { have: string[]; bar?: boolean }) {
     }
     if (hasTauri()) await useProfiles.getState().refresh()
     setBusy(false)
-    if (ok) showToast('Забрали ' + ok + ' ' + plural(ok, 'сборку', 'сборки', 'сборок'), 'ok', 'achievement')
-    else showToast('Не получилось забрать сборки', 'error')
+    if (ok) showToast(t('Забрали {what}', { what: plural(ok, t('{n} сборку', { n: ok }), t('{n} сборки', { n: ok }), t('{n} сборок', { n: ok })) }), 'ok', 'achievement')
+    else showToast(t('Не получилось забрать сборки'), 'error')
   }
 
   // «Импорт» — файл сборки (.mrpack, CurseForge .zip и др.) сразу в «Мои
   // сборки». Правка владельца 20:37: не «Указать папку», а импорт.
   const importFile = () => {
     if (!hasTauri()) {
-      showToast('Доступно в приложении')
+      showToast(t('Доступно в приложении'))
       return
     }
     setBusy(true)
@@ -432,11 +437,11 @@ export function TakeAllCard({ have, bar }: { have: string[]; bar?: boolean }) {
       .then((p) => {
         track('build_import', { source: 'file', mc: p.version, loader: p.loader || (p.fabric ? 'fabric' : 'vanilla') })
         void useProfiles.getState().refresh()
-        showToast('Импортировано: ' + p.name, 'ok')
+        showToast(t('Импортировано: {name}', { name: p.name }), 'ok')
       })
       .catch((err) => {
         trackImportFailure('file', err)
-        if (!String(err).includes('Отменено')) showToast('' + err, 'error')
+        if (!isPickCancelled(err)) showToast('' + err, 'error')
       })
       .finally(() => setBusy(false))
   }
@@ -446,26 +451,26 @@ export function TakeAllCard({ have, bar }: { have: string[]; bar?: boolean }) {
     if (busy)
       return (
         <button className="btn md secondary" disabled>
-          <span className="spin" /> {rest.length ? 'Забираем ' + done + ' из ' + rest.length : 'Импорт…'}
+          <span className="spin" /> {rest.length ? t('Забираем {n} из {total}', { n: done, total: rest.length }) : t('Импорт…')}
         </button>
       )
     if (movable.length)
       return (
         <button className="btn md secondary" data-sound="open" data-track="move_found" title={foundText(movable)} onClick={() => openModal('mvModal')}>
-          <Icon id="i-download" /> Перенести в Millida · {movable.length}
+          <Icon id="i-download" /> {t('Перенести в Millida · {n}', { n: movable.length })}
         </button>
       )
     if (rest.length)
       return (
         <button className="btn md secondary" data-sound="open" data-track="import_found" title={foundText(rest)} onClick={() => openModal('impModal')}>
-          <Icon id="i-download" /> Импорт · нашли {rest.length}
+          <Icon id="i-download" /> {t('Импорт · нашли {n}', { n: rest.length })}
         </button>
       )
     // «Импорт» — окно, которое само ищет сборки других лаунчеров, а если
     // не нашло — «Из папки» / «Из файла» / «По коду» (правка владельца 22:03).
     return (
       <button className="btn md secondary" data-sound="open" data-track="import" onClick={() => openModal('impModal')}>
-        <Icon id="i-upload" /> Импорт
+        <Icon id="i-upload" /> {t('Импорт')}
       </button>
     )
   }
@@ -480,12 +485,12 @@ export function TakeAllCard({ have, bar }: { have: string[]; bar?: boolean }) {
       </span>
     )
   if (busy)
-    return <ActCard icon="i-download" title="Забираем" meta={rest.length ? done + ' из ' + rest.length : 'Файл сборки'} busy onClick={() => {}} />
+    return <ActCard icon="i-download" title={t('Забираем')} meta={rest.length ? t('{n} из {max}', { n: done, max: rest.length }) : t('Файл сборки')} busy onClick={() => {}} />
   if (movable.length)
-    return <ActCard icon="i-download" title="Перенести в Millida" meta={foundText(movable)} track="move_found" onClick={() => openModal('mvModal')} />
+    return <ActCard icon="i-download" title={t('Перенести в Millida')} meta={foundText(movable)} track="move_found" onClick={() => openModal('mvModal')} />
   if (rest.length)
-    return <ActCard icon="i-download" title="Забрать всё" meta={foundText(rest)} track="import_take_all" onClick={() => void takeAll(rest)} />
-  return <ActCard icon="i-upload" title="Импорт" meta="Файл сборки" track="import" onClick={importFile} />
+    return <ActCard icon="i-download" title={t('Забрать всё')} meta={foundText(rest)} track="import_take_all" onClick={() => void takeAll(rest)} />
+  return <ActCard icon="i-upload" title={t('Импорт')} meta={t('Файл сборки')} track="import" onClick={importFile} />
 }
 
 /**
@@ -503,6 +508,7 @@ export function PresetCard({
   onPick: () => void
   onPlay: () => void
 }) {
+  const t = useT()
   const loader = { vanilla: 'Vanilla', fabric: 'Fabric', forge: 'Forge', neoforge: 'NeoForge', quilt: 'Quilt' }[v.loader]
   return (
     <div
@@ -527,7 +533,7 @@ export function PresetCard({
             onPlay()
           }}
         >
-          <Icon id="i-play" /> Играть
+          <Icon id="i-play" /> {t('Играть')}
         </button>
       </span>
       <span className="ph-card-body">
@@ -560,6 +566,7 @@ export function useMyBuilds(profiles: Profile[]): Profile[] {
 /** «Импорт» и «Новая сборка» — всегда справа в верхней полосе хаба, напротив
  *  «Лобби» (владелец 24.09.2026, 15:24: «пусть везде висит, всегда»). */
 export function PlayhubBar() {
+  const t = useT()
   const have = useProfiles((s) => s.profiles.map((p) => p.name).join('\n'))
   return (
     <span className="ph-bar">
@@ -568,7 +575,7 @@ export function PlayhubBar() {
         <TakeAllCard have={have ? have.split('\n') : []} bar />
       </span>
       <button className="btn md primary" data-sound="open" data-track="new_build" onClick={() => openModal('nbModal')}>
-        <Icon id="i-plus" /> Новая сборка
+        <Icon id="i-plus" /> {t('Новая сборка')}
       </button>
     </span>
   )

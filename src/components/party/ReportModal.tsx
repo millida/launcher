@@ -1,18 +1,20 @@
 import { useEffect, useState } from 'react'
 import { Icon } from '../Icon'
 import { reportPlayer, type ReportAsk, type ReportReason } from '../../state/party'
+import { t, useT } from '../../i18n'
 
 const REASONS: { id: ReportReason; label: string }[] = [
-  { id: 'abuse', label: 'Оскорбления' },
-  { id: 'inappropriate', label: 'Неприличное' },
-  { id: 'spam', label: 'Спам' },
-  { id: 'scam', label: 'Обман' },
-  { id: 'cheating', label: 'Читы' },
-  { id: 'other', label: 'Другое' },
+  { id: 'abuse', get label() { return t('Оскорбления') } },
+  { id: 'inappropriate', get label() { return t('Неприличное') } },
+  { id: 'spam', get label() { return t('Спам') } },
+  { id: 'scam', get label() { return t('Обман') } },
+  { id: 'cheating', get label() { return t('Читы') } },
+  { id: 'other', get label() { return t('Другое') } },
 ]
 
 /** A report picks a reason from the list; the server attaches where it happened. */
 export function ReportModal({ ask, close }: { ask: ReportAsk; close: () => void }) {
+  const t = useT()
   const [reason, setReason] = useState<ReportReason | ''>('')
   const [block, setBlock] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -38,8 +40,8 @@ export function ReportModal({ ask, close }: { ask: ReportAsk; close: () => void 
           <span className="room-ava">
             <Icon id="i-flag" />
           </span>
-          <b>{'Жалоба на ' + ask.nick}</b>
-          <button className="tb-btn" aria-label="Закрыть" onClick={close}>
+          <b>{t('Жалоба на {nick}', { nick: ask.nick })}</b>
+          <button className="tb-btn" aria-label={t('Закрыть')} onClick={close}>
             <Icon id="i-x" />
           </button>
         </div>
@@ -52,15 +54,15 @@ export function ReportModal({ ask, close }: { ask: ReportAsk; close: () => void 
         </div>
         <button className={'party-tag pick' + (block ? ' on' : '')} aria-pressed={block} onClick={() => setBlock(!block)}>
           <Icon id={block ? 'i-check' : 'i-ban'} />
-          Заблокировать
+          {t('Заблокировать')}
         </button>
         <div className="room-modal-acts">
           <button className="btn sm ghost" onClick={close}>
-            Отмена
+            {t('Отмена')}
           </button>
           <button className="btn sm primary" disabled={!reason || busy} onClick={() => void send()}>
             <Icon id="i-send" />
-            Отправить
+            {t('Отправить')}
           </button>
         </div>
       </div>

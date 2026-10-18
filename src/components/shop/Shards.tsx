@@ -1,6 +1,7 @@
 import type { ItemRef, Workshop } from '../../lib/rubies'
 import { Head, Shard, toneStyle } from './parts'
 import { ItemShot } from './Today'
+import { intlTag, useT } from '../../i18n'
 
 /**
  * «За осколки» (мастерская): вещи недели за осколки — картинка, имя, кнопка
@@ -18,15 +19,16 @@ export function ShardsSection({
   /** Счётчик в шапке блока — только там, где нет шапки магазина с осколками (гардероб). */
   showBalance?: boolean
 }) {
+  const t = useT()
   const items = data.workshop.items.filter((w) => !w.owned).slice(0, 6)
   if (!items.length) return null
   return (
     <section id="shop-shards" className="sv-sec" data-section="shards">
-      <Head title="За осколки">
+      <Head title={t('За осколки')}>
         {showBalance ? (
           <span className="sh-bal sd-bal">
             <Shard size={20} />
-            <b>{data.shards.toLocaleString('ru-RU')}</b>
+            <b>{data.shards.toLocaleString(intlTag())}</b>
           </span>
         ) : null}
       </Head>
@@ -44,7 +46,7 @@ export function ShardsSection({
               onClick={() => onCraft(w)}
             >
               <Shard size={16} />
-              {w.cost.toLocaleString('ru-RU')}
+              {w.cost.toLocaleString(intlTag())}
             </button>
           </div>
         ))}

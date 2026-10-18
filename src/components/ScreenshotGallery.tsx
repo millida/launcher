@@ -14,12 +14,14 @@ import {
   shareScreenshot,
   type Screenshot,
 } from '../ipc/commands'
+import { useT } from '../i18n'
 
 interface Props {
   profile: string
 }
 
 export function ScreenshotGallery({ profile }: Props) {
+  const t = useT()
   const [shots, setShots] = useState<Screenshot[]>([])
   const [loading, setLoading] = useState(true)
   const [scope, setScope] = useState<'build' | 'all'>('build')
@@ -48,7 +50,7 @@ export function ScreenshotGallery({ profile }: Props) {
     shareScreenshot(shot.profile, shot.name)
       .then((url) => {
         void copyText(url)
-        showToast('Ссылка на скриншот скопирована', 'ok')
+        showToast(t('Ссылка на скриншот скопирована'), 'ok')
       })
       .catch((e) => showToast('' + e, 'error'))
       .finally(() => setBusy(''))
@@ -59,8 +61,8 @@ export function ScreenshotGallery({ profile }: Props) {
       <div className="segs" style={{ marginBottom: '12px', width: 'auto' }}>
         {(
           [
-            ['build', 'Эта сборка'],
-            ['all', 'Все сборки'],
+            ['build', t('Эта сборка')],
+            ['all', t('Все сборки')],
           ] as const
         ).map(([k, label]) => (
           <button
@@ -73,7 +75,7 @@ export function ScreenshotGallery({ profile }: Props) {
           </button>
         ))}
         <button className="btn sm ghost" style={{ marginLeft: 'auto' }} onClick={() => openScreenshots(profile)}>
-          <Icon id="i-folder" /> Папка
+          <Icon id="i-folder" /> {t('Папка')}
         </button>
       </div>
 
@@ -86,16 +88,16 @@ export function ScreenshotGallery({ profile }: Props) {
       ) : shots.length === 0 ? (
         <div className="bx-mini-empty">
           <Icon id="i-cam" />
-          <b>Скриншотов пока нет</b>
+          <b>{t('Скриншотов пока нет')}</b>
           <span>
-            В игре жми <kbd className="bx-kbd">F2</kbd>
+            {t('В игре жми')} <kbd className="bx-kbd">F2</kbd>
           </span>
         </div>
       ) : (
         <div className="shot-grid">
           {shots.map((shot) => (
             <figure className="shot-card" key={shot.path}>
-              <button className="shot-thumb" onClick={() => openImage(src(shot), { path: shot.path })} aria-label="Открыть">
+              <button className="shot-thumb" onClick={() => openImage(src(shot), { path: shot.path })} aria-label={t('Открыть')}>
                 <img src={src(shot)} alt={shot.name} loading="lazy" />
               </button>
               <figcaption>
@@ -114,7 +116,7 @@ export function ScreenshotGallery({ profile }: Props) {
               <div className="shot-acts">
                 <button
                   className="icon-btn"
-                  aria-label="Поделиться ссылкой"
+                  aria-label={t('Поделиться ссылкой')}
                   disabled={busy === shot.path}
                   onClick={() => share(shot)}
                 >
@@ -122,10 +124,10 @@ export function ScreenshotGallery({ profile }: Props) {
                 </button>
                 <button
                   className="icon-btn"
-                  aria-label="Сохранить как…"
+                  aria-label={t('Сохранить как…')}
                   onClick={() =>
                     saveScreenshotAs(shot.profile, shot.name)
-                      .then((p) => p && showToast('Сохранено', 'ok'))
+                      .then((p) => p && showToast(t('Сохранено'), 'ok'))
                       .catch((e) => showToast('' + e, 'error'))
                   }
                 >
@@ -133,9 +135,9 @@ export function ScreenshotGallery({ profile }: Props) {
                 </button>
                 <button
                   className="icon-btn del"
-                  aria-label="Удалить"
+                  aria-label={t('Удалить')}
                   onClick={() => {
-                    void uiConfirm('Удалить скриншот «' + shot.name + '»?', { confirmLabel: 'Удалить' }).then((ok) => {
+                    void uiConfirm(t('Удалить скриншот «{name}»?', { name: shot.name }), { confirmLabel: t('Удалить') }).then((ok) => {
                       if (!ok) return
                       deleteScreenshot(shot.profile, shot.name)
                         .then(load)

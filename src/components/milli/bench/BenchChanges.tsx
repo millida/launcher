@@ -6,6 +6,7 @@ import { MilliSafe } from '../MilliStage'
 import type { MilliChangeset, MilliPack, MilliTab } from '../../../lib/milli'
 import { changeCount, firstChange, useBench } from '../../../state/milliBench'
 import { showToast } from '../../../state/ui'
+import { t, useT } from '../../../i18n'
 
 /*
  * Маленькое событие в ленте под ответом Милли: «Шейдеры полегче · +1 −1 ~1 ·
@@ -24,16 +25,17 @@ export async function benchUndo(): Promise<void> {
   const ok = await useBench.getState().revert()
   if (!ok) return
   milliCue('wake', head())
-  showToast('Отменено', 'ok', false, {
-    label: 'Вернуть',
+  showToast(t('Отменено'), 'ok', false, {
+    label: t('Вернуть'),
     run: () => void useBench.getState().redo().then((back) => back && milliCue('hop', head())),
   })
 }
 
 function Counts({ c }: { c: MilliChangeset }) {
+  const t = useT()
   const changed = c.changed.length + (c.config?.length ?? 0)
   return (
-    <span className="mlx-n" aria-label={'Добавлено ' + c.added.length + ', убрано ' + c.removed.length + ', изменено ' + changed}>
+    <span className="mlx-n" aria-label={t('Добавлено {added}, убрано {removed}, изменено {changed}', { added: c.added.length, removed: c.removed.length, changed })}>
       {c.added.length ? <b className="mlx-add">+{c.added.length}</b> : null}
       {c.removed.length ? <b className="mlx-rm">−{c.removed.length}</b> : null}
       {changed ? <b className="mlx-ch">~{changed}</b> : null}
@@ -47,6 +49,7 @@ const TAB_PX: Record<MilliTab, string> = { mods: 'crafting_table', resourcepacks
 const iconOf = (c: MilliChangeset) => TAB_PX[firstChange(c)?.tab ?? 'mods']
 
 function Chip({ title, c, kind, undo, undone, redo }: { title: string; c: MilliChangeset; kind: 'milli' | 'user'; undo: boolean; undone: boolean; redo: boolean }) {
+  const t = useT()
   const busy = useBench((s) => s.busy)
   const [open, setOpen] = useState(false)
   // «Отменить» — класс сразу, не дожидаясь сервера: счётчики сдуваются (моушн).
@@ -75,12 +78,12 @@ function Chip({ title, c, kind, undo, undone, redo }: { title: string; c: MilliC
         <Counts c={c} />
         <span className="mlx-acts">
           <button type="button" className="mlx-btn" data-track="milli_changes_show" onClick={show}>
-            Показать
+            {t('Показать')}
           </button>
           {undone ? (
             redo ? (
               <button type="button" className="mlx-btn mlx-undo" data-track="milli_changes_redo" disabled={busy} onClick={() => void useBench.getState().redo()}>
-                Вернуть
+                {t('Вернуть')}
               </button>
             ) : null
           ) : undo ? (
@@ -94,17 +97,17 @@ function Chip({ title, c, kind, undo, undone, redo }: { title: string; c: MilliC
                 void benchUndo().finally(() => setUndoing(false))
               }}
             >
-              Отменить
+              {t('Отменить')}
             </button>
           ) : null}
         </span>
       </div>
       {open && list.length ? (
         <ul className="mlx-list">
-          {list.slice(0, 40).map((t, i) => (
-            <li key={i}>{t}</li>
+          {list.slice(0, 40).map((line, i) => (
+            <li key={i}>{line}</li>
           ))}
-          {list.length > 40 ? <li>и ещё {list.length - 40}</li> : null}
+          {list.length > 40 ? <li>{t('и ещё {n}', { n: list.length - 40 })}</li> : null}
         </ul>
       ) : null}
     </>
@@ -154,6 +157,7 @@ export function benchEdits(after: { changes?: MilliChangeset | null }[]) {
 }
 
 function Changes({ pack }: { pack: MilliPack }) {
+  const t = useT()
   const revs = useBench((s) => s.revs)
   const head = useBench((s) => s.head)
   const canRedo = useBench((s) => s.canRedo)
@@ -173,7 +177,7 @@ function Changes({ pack }: { pack: MilliPack }) {
     <div className="mlx-wrap">
       {own ? (
         <Chip
-          title={own.titleRu || 'Изменения'}
+          title={own.titleRu ? t(own.titleRu) : t('Изменения')}
           c={own}
           kind="milli"
           undo={canUndo && !live.length && !ownUndone && (atHead || !shownUser)}
@@ -183,7 +187,7 @@ function Changes({ pack }: { pack: MilliPack }) {
       ) : null}
       {shownUser ? (
         <Chip
-          title={'Ваши правки · ' + changeCount(shownUser)}
+          title={t('Ваши правки · {n}', { n: changeCount(shownUser) })}
           c={shownUser}
           kind="user"
           undo={canUndo && live.length > 0}

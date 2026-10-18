@@ -5,10 +5,11 @@ import { hasTauri } from '../../ipc/tauri'
 import { loadProfileSettings, millidaPacks } from '../../ipc/commands'
 import type { MillidaPack } from '../../ipc/commands'
 import { backdropClose } from '../../lib/dismiss'
-import { RU_LOADER } from '../../lib/format'
+import { RU_LOADER, plural } from '../../lib/format'
 import { useLobby } from '../../state/lobbyMode'
 import { GENRES, downloadsShort, genresOf, shortPitch, shortTitle } from './premiumPackData'
 import { useProfiles } from '../../state/profiles'
+import { intlTag, t, useT } from '../../i18n'
 
 /*
  * Студия и эксклюзив премиум-сборки (PremiumPackPage):
@@ -96,11 +97,7 @@ function scrollTop() {
 }
 
 function packWord(n: number): string {
-  const d = n % 10
-  const h = n % 100
-  if (d === 1 && h !== 11) return 'сборка'
-  if (d >= 2 && d <= 4 && (h < 12 || h > 14)) return 'сборки'
-  return 'сборок'
+  return plural(n, t('сборка'), t('сборки'), t('сборок'))
 }
 
 /** Слаги наших сборок, которые уже стоят на компьютере. */
@@ -135,6 +132,7 @@ export function StudioModal({
   current: string
   onClose: () => void
 }) {
+  const t = useT()
   const [list, setList] = useState<MillidaPack[] | null>(null)
   const [failed, setFailed] = useState(false)
   const [q, setQ] = useState('')
@@ -204,14 +202,14 @@ export function StudioModal({
 
   return (
     <div className="modal-bg open vis ppx-studio-bg" {...backdropClose(onClose)}>
-      <div className="modal ppx-studio-modal" role="dialog" aria-label={'Сборки ' + studio.name} data-section="studio_packs" data-id={studio.slug}>
+      <div className="modal ppx-studio-modal" role="dialog" aria-label={t('Сборки {studio}', { studio: studio.name })} data-section="studio_packs" data-id={studio.slug}>
         <header className="ppx-sm-head">
           <span className="ppx-sm-seal" aria-hidden="true">
             <Icon id="i-crown" />
           </span>
           <div>
             <span className="ppx-sm-kicker">
-              Проверенная студия <Icon id="i-check" />
+              {t('Проверенная студия')} <Icon id="i-check" />
             </span>
             <h3>{studio.name}</h3>
             <span className="ppx-sm-sub">
@@ -219,19 +217,19 @@ export function StudioModal({
                 ? list.length +
                   ' ' +
                   packWord(list.length) +
-                  (exclusive ? ' · ' + exclusive + ' эксклюзив' : '') +
-                  (exclusive && translated ? ' · ' + translated + ' на русском' : '')
-                : 'Сборки студии'}
+                  (exclusive ? ' · ' + t('{n} эксклюзив', { n: exclusive }) : '') +
+                  (exclusive && translated ? ' · ' + t('{n} на русском', { n: translated }) : '')
+                : t('Сборки студии')}
             </span>
           </div>
-          <button className="ppx-sm-x" aria-label="Закрыть" data-track="studio_close" onClick={onClose}>
+          <button className="ppx-sm-x" aria-label={t('Закрыть')} data-track="studio_close" onClick={onClose}>
             <Icon id="i-x" />
           </button>
         </header>
 
         {list && list.length > 1 ? (
           <div className="ppx-sm-tools">
-            <div className="ppx-sm-chips-row" role="group" aria-label="Жанр">
+            <div className="ppx-sm-chips-row" role="group" aria-label={t('Жанр')}>
               <button
                 className={'ppx-sm-chip' + (!genre ? ' on' : '')}
                 aria-pressed={!genre}
@@ -239,7 +237,7 @@ export function StudioModal({
                 data-id="all"
                 onClick={() => setGenre(null)}
               >
-                <Icon id="i-flame" /> Топ
+                <Icon id="i-flame" /> {t('Топ')}
               </button>
               {genres.map((g) => (
                 <button
@@ -257,7 +255,7 @@ export function StudioModal({
             {list.length > 6 ? (
               <label className="input ppx-sm-search">
                 <Icon id="i-search" />
-                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Найти сборку" aria-label="Найти сборку" />
+                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('Найти сборку')} aria-label={t('Найти сборку')} />
               </label>
             ) : null}
           </div>
@@ -267,9 +265,9 @@ export function StudioModal({
           <div className="ppx-sm-grid">
             {failed ? (
               <div className="ppx-sm-empty">
-                <span>Список не загрузился</span>
+                <span>{t('Список не загрузился')}</span>
                 <button className="btn sm secondary" onClick={() => setTick(tick + 1)}>
-                  <Icon id="i-restart" /> Повторить
+                  <Icon id="i-restart" /> {t('Повторить')}
                 </button>
               </div>
             ) : !list ? (
@@ -291,23 +289,23 @@ export function StudioModal({
                     <span className="ppx-sm-art">
                       {p.cover ? <img src={mirrorAsset(p.cover)} alt="" loading="lazy" draggable={false} /> : null}
                       {here ? (
-                        <span className="ppx-sm-tag here">Вы здесь</span>
+                        <span className="ppx-sm-tag here">{t('Вы здесь')}</span>
                       ) : p.protectedContent ? (
                         <span className="ppx-sm-tag gold">
-                          <Icon id="i-crown" /> Эксклюзив
+                          <Icon id="i-crown" /> {t('Эксклюзив')}
                         </span>
                       ) : p.accessRequired ? (
                         <span className="ppx-sm-tag gold">
-                          <Icon id="i-crown" /> Премиум
+                          <Icon id="i-crown" /> {t('Премиум')}
                         </span>
                       ) : null}
                       {have ? (
                         <span className="ppx-sm-tag have">
-                          <Icon id="i-check" /> Установлено
+                          <Icon id="i-check" /> {t('Установлено')}
                         </span>
                       ) : null}
                       {top ? (
-                        <span className="ppx-sm-rank" aria-label={'Топ ' + top}>
+                        <span className="ppx-sm-rank" aria-label={t('Топ {n}', { n: top })}>
                           <i>#</i>
                           {top}
                         </span>
@@ -316,11 +314,11 @@ export function StudioModal({
                     <span className="ppx-sm-body">
                       {p.protectedContent ? (
                         <span className="ppx-sm-kind ex">
-                          <Icon id="i-crown" /> Эксклюзив · сделана студией
+                          <Icon id="i-crown" /> {t('Эксклюзив · сделана студией')}
                         </span>
                       ) : (
                         <span className="ppx-sm-kind ru">
-                          <i>RU</i> Переведена на русский
+                          <i>RU</i> {t('Переведена на русский')}
                         </span>
                       )}
                       <b title={p.title}>{shortTitle(p.title)}</b>
@@ -329,7 +327,7 @@ export function StudioModal({
                         {p.game ? <span>{p.game}</span> : null}
                         {p.loader ? <span>{RU_LOADER(p.loader)}</span> : null}
                         {dl > 0 ? (
-                          <em title={dl.toLocaleString('ru-RU') + ' скачиваний'}>
+                          <em title={t('{n} скачиваний', { n: dl.toLocaleString(intlTag()) })}>
                             <Icon id="i-download" />
                             {downloadsShort(dl)}
                           </em>
@@ -341,7 +339,7 @@ export function StudioModal({
               })
             ) : (
               <div className="ppx-sm-empty">
-                <span>{query ? 'Ничего не нашли по «' + q + '»' : 'В этом жанре сборок нет'}</span>
+                <span>{query ? t('Ничего не нашли по «{q}»', { q }) : t('В этом жанре сборок нет')}</span>
               </div>
             )}
           </div>

@@ -1,5 +1,7 @@
 import type { CSSProperties } from 'react'
 import type { Rarity } from '../../lib/rubies'
+import { t } from '../../i18n'
+import { plural } from '../../lib/format'
 
 /**
  * Единая система редкости (модель предметов v3, 24.09.2026). Цвет, плашка и
@@ -29,34 +31,34 @@ export const RARITY_ORDER: Rarity[] = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LE
 
 /** Короткое имя для плашки: влезает в карточку шириной 120 px. */
 export const RARITY_SHORT: Record<Rarity, string> = {
-  COMMON: 'Обычная',
-  UNCOMMON: 'Необычная',
-  RARE: 'Редкая',
-  EPIC: 'Эпическая',
-  LEGENDARY: 'Легенда',
-  MYTHIC: 'Миф',
-  RELIC: 'Невозможная',
+  get COMMON() { return t('Обычная') },
+  get UNCOMMON() { return t('Необычная') },
+  get RARE() { return t('Редкая') },
+  get EPIC() { return t('Эпическая') },
+  get LEGENDARY() { return t('Легенда') },
+  get MYTHIC() { return t('Миф') },
+  get RELIC() { return t('Невозможная') },
 }
 
 /** Полное имя ранга для подписей (без сокращений плашки). */
 export const RARITY_NAME_SHORT: Record<Rarity, string> = {
-  COMMON: 'Обычная',
-  UNCOMMON: 'Необычная',
-  RARE: 'Редкая',
-  EPIC: 'Эпическая',
-  LEGENDARY: 'Легендарная',
-  MYTHIC: 'Мифическая',
-  RELIC: 'Невозможная',
+  get COMMON() { return t('Обычная') },
+  get UNCOMMON() { return t('Необычная') },
+  get RARE() { return t('Редкая') },
+  get EPIC() { return t('Эпическая') },
+  get LEGENDARY() { return t('Легендарная') },
+  get MYTHIC() { return t('Мифическая') },
+  get RELIC() { return t('Невозможная') },
 }
 
 export const RARITY_NAME_PLURAL: Record<Rarity, string> = {
-  COMMON: 'обычные',
-  UNCOMMON: 'необычные',
-  RARE: 'редкие',
-  EPIC: 'эпические',
-  LEGENDARY: 'легендарные',
-  MYTHIC: 'мифические',
-  RELIC: 'невозможные',
+  get COMMON() { return t('обычные') },
+  get UNCOMMON() { return t('необычные') },
+  get RARE() { return t('редкие') },
+  get EPIC() { return t('эпические') },
+  get LEGENDARY() { return t('легендарные') },
+  get MYTHIC() { return t('мифические') },
+  get RELIC() { return t('невозможные') },
 }
 
 /** Строка каталога → редкость. Незнакомое слово — undefined: выдуманная редкость хуже никакой. */
@@ -96,32 +98,17 @@ export function rarityProps(value?: string | null): { 'data-rar'?: string; style
 
 /** Слово «рубин» в нужном падеже: число без слова читается как код. */
 export function word(count: number): string {
-  const tens = Math.abs(count) % 100
-  const ones = tens % 10
-  if (tens > 10 && tens < 20) return 'рубинов'
-  if (ones === 1) return 'рубин'
-  if (ones >= 2 && ones <= 4) return 'рубина'
-  return 'рубинов'
+  return plural(Math.abs(count), t('рубин'), t('рубина'), t('рубинов'))
 }
 
 /** «фрагмент / фрагмента / фрагментов». */
 export function fragmentWord(count: number): string {
-  const tens = Math.abs(count) % 100
-  const ones = tens % 10
-  if (tens > 10 && tens < 20) return 'фрагментов'
-  if (ones === 1) return 'фрагмент'
-  if (ones >= 2 && ones <= 4) return 'фрагмента'
-  return 'фрагментов'
+  return plural(Math.abs(count), t('фрагмент'), t('фрагмента'), t('фрагментов'))
 }
 
 /** «осколок / осколка / осколков». */
 export function shardWord(count: number): string {
-  const tens = Math.abs(count) % 100
-  const ones = tens % 10
-  if (tens > 10 && tens < 20) return 'осколков'
-  if (ones === 1) return 'осколок'
-  if (ones >= 2 && ones <= 4) return 'осколка'
-  return 'осколков'
+  return plural(Math.abs(count), t('осколок'), t('осколка'), t('осколков'))
 }
 
 /**

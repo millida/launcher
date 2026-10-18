@@ -44,7 +44,7 @@ import { useHubTab } from '../components/playhub/hubTab'
 import { GAMES, gameHero, useGame } from '../lib/games'
 import '../styles/pixel/game.css'
 import type { HubSection } from '../components/playhub/hubTab'
-import { useMods } from '../state/mods'
+import { ALL_CATEGORIES, ANY_LOADER, ANY_VERSION, useMods } from '../state/mods'
 import { ForYou } from '../components/playhub/ForYou'
 import { PlayTogether } from '../components/playhub/PlayTogether'
 import { CatalogPane } from './Mods'
@@ -63,13 +63,14 @@ import { PvpPage } from '../components/playhub/PvpPage'
 import { openPvp } from '../state/pvp'
 import { ensurePvpBuild, pvpBuildName } from '../lib/versionBuild'
 import { hasTauri } from '../ipc/tauri'
+import { t, useMarketOffers, useT } from '../i18n'
 
 /**
  * «Во что играем», версия 6 (владелец 30.09.2026, 15:06 — те же блоки и
  * порядок, что у главной millida.net/katalog): «Мои сборки» обычными
  * карточками с обложкой (нет сборок — полка версий Minecraft) → «Категории»
  * маленькими кнопками → «Рекомендуем» в четыре ряда (хостинг, эксклюзивы,
- * OneBlock, лента) → «Режимы» (значки в стиле Blups, баннер OneBlock) →
+ * OneBlock, лента) → «Режимы» (пиксельные значки, баннер OneBlock) →
  * «Играть вдвоём» → «Другие игры» → «Серверы».
  * «Новая сборка» и «Импорт» — в верхней полосе хаба (PlayhubBar).
  * «Продолжить» здесь нет: продолжение — кнопка «Играть» в лобби.
@@ -128,12 +129,13 @@ const img = (src: string | null | undefined) =>
 
 /** Полка без ответа прода: короткая фраза и «Повторить», без технического текста. */
 function NoAnswer({ onRetry }: { onRetry: () => void }) {
+  const t = useT()
   return (
     <div className="ph-noans">
       <Icon id="i-alert" />
-      <b>Не загрузилось</b>
+      <b>{t('Не загрузилось')}</b>
       <button className="btn sm secondary" data-track="retry" onClick={onRetry}>
-        <Icon id="i-restart" /> Повторить
+        <Icon id="i-restart" /> {t('Повторить')}
       </button>
     </div>
   )
@@ -158,13 +160,13 @@ function versionSpan(list: string[]): string {
   return lo === hi ? lo : lo + '–' + hi
 }
 
-const servers = (n: number) => fmtN(n) + ' ' + plural(n, 'сервер', 'сервера', 'серверов')
+const servers = (n: number) => plural(n, t('{n} сервер', { n: fmtN(n) }), t('{n} сервера', { n: fmtN(n) }), t('{n} серверов', { n: fmtN(n) }))
 
-const FEED_SORTS: [FeedSort, string][] = [
-  ['rating', 'По рейтингу'],
-  ['online', 'По онлайну'],
-  ['votes', 'По голосам'],
-  ['new', 'Новые'],
+const FEED_SORTS = (): [FeedSort, string][] => [
+  ['rating', t('По рейтингу')],
+  ['online', t('По онлайну')],
+  ['votes', t('По голосам')],
+  ['new', t('Новые')],
 ]
 
 /** Серверы одного режима — лента рейтинга по его тегу: выбрал — играешь. */
@@ -179,9 +181,10 @@ function ModePage({
   current: LobbyMode | null
   onPick: (s: SnapshotServer) => void
 }) {
+  const t = useT()
   // Картинка — та же, что у плитки режима: свет в цвете режима и сцена из блоков.
   const art = useMemo(() => {
-    // Набор значков в стиле Blups — тот же, что у плитки; кода нет — сцена из блоков.
+    // Набор пиксельных значков — тот же, что у плитки; кода нет — сцена из блоков.
     const set = modeIcon(def.cat)
     if (set?.rig) return { color: set.color, bg: set.bg, icon: { url: set.rig.url, w: set.rig.w, h: set.rig.h }, k: 230 / set.rig.h, set: true, rig: true }
     if (set) return { color: set.color, bg: set.bg, icon: { url: set.icon, w: 16, h: 16 }, k: 10, set: true, rig: false }
@@ -220,7 +223,7 @@ function ModePage({
           <h1>{def.title}</h1>
           {stats ? (
             <span className="ph-mode-meta">
-              <Players n={stats.online} /> играют · {servers(stats.total)}
+              <Players n={stats.online} /> {t('играют')} · {servers(stats.total)}
             </span>
           ) : null}
         </div>
@@ -228,15 +231,15 @@ function ModePage({
       <div className="ph-mode-tools">
         <label className="input hs-field ph-mode-find">
           <Icon id="i-search" />
-          <input value={q} placeholder="Имя или адрес сервера" maxLength={60} onChange={(e) => setQ(e.target.value)} />
+          <input value={q} placeholder={t('Имя или адрес сервера')} maxLength={60} onChange={(e) => setQ(e.target.value)} />
           {q ? (
-            <button type="button" className="hs-clear" aria-label="Очистить" data-track="search_clear" onClick={() => setQ('')}>
+            <button type="button" className="hs-clear" aria-label={t('Очистить')} data-track="search_clear" onClick={() => setQ('')}>
               <Icon id="i-x" />
             </button>
           ) : null}
         </label>
-        <div className="segs mr-sort ph-mode-sort" role="group" aria-label="Сортировка серверов">
-          {FEED_SORTS.map(([id, label]) => (
+        <div className="segs mr-sort ph-mode-sort" role="group" aria-label={t('Сортировка серверов')}>
+          {FEED_SORTS().map(([id, label]) => (
             <button
               key={id}
               type="button"
@@ -269,6 +272,7 @@ function ModePage({
  * и «Играть».
  */
 function AllServers({ current, onPick }: { current: LobbyMode | null; onPick: (s: SnapshotServer) => void }) {
+  const t = useT()
   const [q, setQ] = useState('')
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState<FeedSort>('rating')
@@ -289,34 +293,34 @@ function AllServers({ current, onPick }: { current: LobbyMode | null; onPick: (s
   return (
     <div className="ph-mode ph-allsrv srv2" data-section="servers">
       <header className="srv2-head">
-        <h1 className="ph-allsrv-h">Серверы Minecraft</h1>
+        <h1 className="ph-allsrv-h">{t('Серверы Minecraft')}</h1>
         {/* Сумма по режимам считала сервер в каждом его режиме — число было раздутым; вместо него — как играть. */}
-        <span className="srv2-live">«Играть» — и лаунчер сам подберёт версию и зайдёт на сервер</span>
+        <span className="srv2-live">{t('«Играть» — и лаунчер сам подберёт версию и зайдёт на сервер')}</span>
       </header>
       <div className="srv2-tools">
         <label className="input hs-field ph-mode-find srv2-find">
           <Icon id="i-search" />
-          <input value={q} placeholder="Имя или адрес сервера" maxLength={60} onChange={(e) => setQ(e.target.value)} />
+          <input value={q} placeholder={t('Имя или адрес сервера')} maxLength={60} onChange={(e) => setQ(e.target.value)} />
           {q ? (
-            <button type="button" className="hs-clear" aria-label="Очистить" onClick={() => setQ('')}>
+            <button type="button" className="hs-clear" aria-label={t('Очистить')} onClick={() => setQ('')}>
               <Icon id="i-x" />
             </button>
           ) : null}
         </label>
-        <div className="segs mr-sort srv2-sort" role="group" aria-label="Сортировка серверов">
-          {FEED_SORTS.filter(([id]) => id !== 'votes').map(([id, label]) => (
+        <div className="segs mr-sort srv2-sort" role="group" aria-label={t('Сортировка серверов')}>
+          {FEED_SORTS().filter(([id]) => id !== 'votes').map(([id, label]) => (
             <button key={id} type="button" className={'seg' + (sort === id ? ' on' : '')} aria-pressed={sort === id} data-track={'servers_sort_' + id} onClick={() => setSort(id)}>
               {label}
             </button>
           ))}
         </div>
       </div>
-      <nav className="srv2-modes" aria-label="Режимы">
+      <nav className="srv2-modes" aria-label={t('Режимы')}>
         <button type="button" className={'srv2-mode' + (cat === null ? ' on' : '')} data-track="servers_mode_all" onClick={() => setCat(null)}>
           <span className="srv2-mode-ic is-all">
             <Icon id="i-grid" />
           </span>
-          <span className="srv2-mode-t">Все</span>
+          <span className="srv2-mode-t">{t('Все')}</span>
         </button>
         {modes === null
           ? Array.from({ length: 8 }, (_, i) => <span key={i} className="srv2-mode skel" aria-hidden="true" />)
@@ -355,6 +359,7 @@ function AllServers({ current, onPick }: { current: LobbyMode | null; onPick: (s
 
 /** Карточка сервера витрины: баннер, значок, онлайн, строка о сервере, адрес, «Играть». */
 function ServerCard({ s, pos, current, onPlay }: { s: SnapshotServer; pos?: number; current: LobbyMode | null; onPlay: (s: SnapshotServer) => void }) {
+  const t = useT()
   const on = sameMode(current, serverMode(s))
   const [copied, setCopied] = useState(false)
   const span = versionSpan(s.versions)
@@ -366,20 +371,20 @@ function ServerCard({ s, pos, current, onPlay }: { s: SnapshotServer; pos?: numb
         <SrvArt className="srv2-logo" src={s.logo} name={s.slug || s.name || s.ip} />
         <div className="srv2-top">
           <h3 className="srv2-name">{s.name}</h3>
-          <span className={'srv2-online' + (s.isOnline ? '' : ' is-off')}>{s.isOnline ? <Players n={s.online} approx={s.onlineApprox} /> : 'офлайн'}</span>
+          <span className={'srv2-online' + (s.isOnline ? '' : ' is-off')}>{s.isOnline ? <Players n={s.online} approx={s.onlineApprox} /> : t('офлайн')}</span>
         </div>
-        {about ? <p className="srv2-about">{about}</p> : <p className="srv2-about is-empty">Сервер без описания</p>}
+        {about ? <p className="srv2-about">{about}</p> : <p className="srv2-about is-empty">{t('Сервер без описания')}</p>}
         <div className="srv2-tags">
           {s.cat ? <span className="srv2-tag is-cat">{s.cat}</span> : null}
           {span ? <span className="srv2-tag">{span}</span> : null}
-          {s.lic === 'CRACKED' ? <span className="srv2-tag is-free">Без лицензии</span> : s.lic === 'LICENSE' ? <span className="srv2-tag">Лицензия</span> : null}
+          {s.lic === 'CRACKED' ? <span className="srv2-tag is-free">{t('Вход по нику')}</span> : s.lic === 'LICENSE' ? <span className="srv2-tag">{t('Лицензия')}</span> : null}
         </div>
         <div className="srv2-foot">
           {s.ip ? (
             <button
               type="button"
               className="srv2-ip"
-              title="Скопировать адрес"
+              title={t('Скопировать адрес')}
               data-track="server_copy_ip"
               onClick={() => {
                 void copyText(s.ip).then((ok) => {
@@ -390,13 +395,13 @@ function ServerCard({ s, pos, current, onPlay }: { s: SnapshotServer; pos?: numb
               }}
             >
               <Icon id={copied ? 'i-check' : 'i-copy'} />
-              <span>{copied ? 'Скопировано' : s.ip}</span>
+              <span>{copied ? t('Скопировано') : s.ip}</span>
             </button>
           ) : (
             <span />
           )}
           <button className="btn sm primary srv2-play" data-track="play" onClick={() => onPlay(s)}>
-            <Icon id="i-play" /> Играть
+            <Icon id="i-play" /> {t('Играть')}
           </button>
         </div>
       </div>
@@ -417,6 +422,7 @@ function ServerRow({
   current: LobbyMode | null
   onPlay: (s: SnapshotServer) => void
 }) {
+  const t = useT()
   const on = sameMode(current, serverMode(s))
   return (
     <div
@@ -432,12 +438,12 @@ function ServerRow({
         <b>{s.name}</b>
         <span className="ph-srv-meta">
           {versionSpan(s.versions) ? <span>{versionSpan(s.versions)}</span> : null}
-          {s.lic === 'CRACKED' ? <span>Без лицензии</span> : s.lic ? <span>Лицензия</span> : null}
+          {s.lic === 'CRACKED' ? <span>{t('Вход по нику')}</span> : s.lic ? <span>{t('Лицензия')}</span> : null}
         </span>
       </span>
-      <span className="ph-srv-online">{s.isOnline ? <Players n={s.online} approx={s.onlineApprox} /> : 'офлайн'}</span>
+      <span className="ph-srv-online">{s.isOnline ? <Players n={s.online} approx={s.onlineApprox} /> : t('офлайн')}</span>
       <button className="btn md primary" data-track="play" onClick={() => onPlay(s)}>
-        <Icon id="i-play" /> Играть
+        <Icon id="i-play" /> {t('Играть')}
       </button>
     </div>
   )
@@ -446,6 +452,8 @@ function ServerRow({
 const isArcania = (p: HubPack) => /arcania/i.test(p.slug || p.title)
 
 export function PlayHub({ on }: { on?: boolean }) {
+  const t = useT()
+  const partners = useMarketOffers('partners')
   const current = useLobby((s) => s.picked)
   const anarchy = useAnarchy()
   const pick = useLobby((s) => s.pick)
@@ -674,14 +682,14 @@ export function PlayHub({ on }: { on?: boolean }) {
 
   const playPvp = async (version: string) => {
     if (!hasTauri()) {
-      showToast('Установка сборок — в приложении', 'error')
+      showToast(t('Установка сборок — в приложении'), 'error')
       return
     }
     setPvpBusy(true)
     try {
       const name = await ensurePvpBuild(version)
       if (name) launch({ kind: 'build', name })
-      else showToast('PvP-сборка не собралась. Нажми «Играть» ещё раз.', 'error')
+      else showToast(t('PvP-сборка не собралась. Нажми «Играть» ещё раз.'), 'error')
     } finally {
       setPvpBusy(false)
     }
@@ -719,11 +727,11 @@ export function PlayHub({ on }: { on?: boolean }) {
   }
   const pickMode = (cat: string, source: 'hub' | 'search' | 'foryou' = 'hub') => {
     track('mode_open', { mode: cat, source })
-    if (cat === ANARCHY.mode) {
+    if (partners && cat === ANARCHY.mode) {
       launch(anarchyMode())
       return
     }
-    if (modeAction(cat) === 'launch') {
+    if (partners && modeAction(cat) === 'launch') {
       launch(ownMode)
       return
     }
@@ -771,14 +779,14 @@ export function PlayHub({ on }: { on?: boolean }) {
   /** Раздел каталога целиком — страница раздела, как на millida.net. */
   const openSection = (kind: string, mq = '') => {
     noteVisitKind(kind)
-    useMods.getState().set({ modTab: kind, mq, fCats: [], fCat: 'все', fVer: 'любая', fLoader: 'любой', count: '' })
+    useMods.getState().set({ modTab: kind, mq, fCats: [], fCat: ALL_CATEGORIES, fVer: ANY_VERSION, fLoader: ANY_LOADER, count: '' })
     useHubTab.setState((st) => ({ seq: st.seq + 1 }))
     setAll(true)
     top0()
   }
   // Свои серверы — такими же плитками, как жанры, и вместо своего жанра (08.10.2026):
   // есть наша Анархия — плитки «Анархия» нет; OneBlock, Тюрьма (PrisonRPG) — так же.
-  const ownSlides = heroSlides({
+  const ownSlides = !partners ? [] : heroSlides({
     prison: prisonPack || null,
     pixelmon: pixelmonPack,
     anarchyOnline,
@@ -789,7 +797,8 @@ export function PlayHub({ on }: { on?: boolean }) {
     onOneBlock: () => pickMode(own.mode, 'hub'),
     onPack: openPack,
   })
-  const replaced = new Set([ANARCHY.mode, own.mode, 'ANARCHY', 'ONEBLOCK', ...(prisonPack ? ['PRISON'] : [])])
+  // ONEBLOCK is the partner server's own genre code: its tile counts and starts that server, so no market lists it as a genre.
+  const replaced = new Set([ANARCHY.mode, own.mode, 'ONEBLOCK', ...(partners ? ['ANARCHY', ...(prisonPack ? ['PRISON'] : [])] : [])])
   const gridModes = shelfModes.filter((m) => !('pack' in m) && !replaced.has(m.def.cat))
   // Два ряда по шесть: 11 жанров и «Остальные».
   const MODES_FOLD = 10 - ownSlides.length
@@ -832,8 +841,8 @@ export function PlayHub({ on }: { on?: boolean }) {
                 <Icon id={allModes ? 'i-chev-u' : 'i-grid'} />
               </span>
               <span className="ph-mt-foot">
-                <b>{allModes ? 'Свернуть' : 'Остальные'}</b>
-                {allModes ? null : <span className="ph-mt-on">{gridModes.length - MODES_FOLD + ' ' + plural(gridModes.length - MODES_FOLD, 'режим', 'режима', 'режимов')}</span>}
+                <b>{allModes ? t('Свернуть') : t('Остальные')}</b>
+                {allModes ? null : <span className="ph-mt-on">{plural(gridModes.length - MODES_FOLD, t('{n} режим', { n: gridModes.length - MODES_FOLD }), t('{n} режима', { n: gridModes.length - MODES_FOLD }), t('{n} режимов', { n: gridModes.length - MODES_FOLD }))}</span>}
               </span>
             </button>
           ) : null}
@@ -892,7 +901,7 @@ export function PlayHub({ on }: { on?: boolean }) {
       {mine.length
         ? head(
             'builds',
-            'Мои сборки',
+            t('Мои сборки'),
             <div className="hub-grid" data-section="my_builds" data-src="hub_card" data-private>
               {/* Как ряд «Сборки» (08.10.2026): обложка с названием; клик — страница сборки
                   (изменить), при наведении — «Играть» и «Изменить». Последняя — первой. */}
@@ -911,7 +920,7 @@ export function PlayHub({ on }: { on?: boolean }) {
                   <span className="fy-more-ic">
                     <Icon id={allBuilds ? 'i-chev-u' : 'i-chev-d'} />
                   </span>
-                  <b>{allBuilds ? 'Свернуть' : 'Ещё ' + (myOrder.length - MY_FOLD)}</b>
+                  <b>{allBuilds ? t('Свернуть') : t('Ещё {n}', { n: myOrder.length - MY_FOLD })}</b>
                 </button>
               ) : null}
             </div>,
@@ -949,7 +958,7 @@ export function PlayHub({ on }: { on?: boolean }) {
       {/* 3. Рекомендуем: хостинг, эксклюзивы, OneBlock, дальше лента в четыре ряда. */}
       {head(
         'foryou',
-        'Сборки',
+        t('Сборки'),
         <ForYou
           bare
           on={!!on}
@@ -975,7 +984,7 @@ export function PlayHub({ on }: { on?: boolean }) {
       {/* Во что играть: свои серверы первым рядом, потом режимы — после сборок (08.10.2026: сначала сборки, потом серверы). */}
       {head(
         'modes',
-        'Режимы',
+        t('Режимы'),
         <>
           {modesPane}
         </>,
@@ -984,7 +993,7 @@ export function PlayHub({ on }: { on?: boolean }) {
       {/* Играть вдвоём — сборки и карты «С другом» из разных тем, как на сайте. */}
       {head(
         'together',
-        'Играть вдвоём',
+        t('Играть вдвоём'),
         <PlayTogether
           lead={<HostTile />}
           onMore={() => {
@@ -1007,18 +1016,18 @@ export function PlayHub({ on }: { on?: boolean }) {
       {/* Под режимами — вся лента серверов Millida (владелец 24.09.2026, 18:29). */}
       {head(
         'servers',
-        'Серверы',
+        t('Серверы'),
         <>
           <ServerFeed limit={6} render={(s, i) => <ServerRow s={s} pos={i} current={current} onPlay={(x) => launch(serverMode(x))} />} />
           <button className="btn md secondary hub-srv-more" data-sound="nav" data-track="hub_all_servers" onClick={() => setScreen('servers')}>
-            Все серверы <Icon id="i-chev-r" />
+            {t('Все серверы')} <Icon id="i-chev-r" />
           </button>
         </>,
       )}
       {/* Игры Minecraft — такими же карточками, как сборки; клик открывает экран игры (владелец 29.09.2026). */}
       {head(
         'games',
-        'Другие игры',
+        t('Другие игры'),
         <div className="hub-grid" data-section="games" data-src="hub_card">
           {GAMES.map((g, i) => (
             <button
@@ -1035,7 +1044,7 @@ export function PlayHub({ on }: { on?: boolean }) {
             >
               <span className="ph-card-art">
                 {img(gameHero(g.slug))}
-                {g.isNew ? <span className="gm-new gm-new-card">Новинка</span> : null}
+                {g.isNew ? <span className="gm-new gm-new-card">{t('Новинка')}</span> : null}
               </span>
               <span className="ph-card-body">
                 <b>{g.name}</b>

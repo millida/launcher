@@ -14,6 +14,7 @@ import {
   type PartyTarget,
 } from '../lib/party'
 import { showToast } from './ui'
+import { t } from '../i18n'
 
 export interface PartySafety {
   ageBracket: AgeBracket | null
@@ -120,7 +121,7 @@ export const isLeader = (p: Party | null, me: string): boolean => !!p && !!me &&
 
 export const partyWithOthers = (p: Party | null): boolean => !!p && p.members.length > 1
 
-export const createParty = () => attempt(() => partyCall(''), 'Не удалось собрать пати')
+export const createParty = () => attempt(() => partyCall(''), t('Не удалось собрать пати'))
 
 export async function leaveParty(): Promise<void> {
   try {
@@ -131,7 +132,7 @@ export async function leaveParty(): Promise<void> {
     // genuine failure keeps us there and explains itself.
     await loadParty().catch(() => {})
     if (st().party) {
-      showToast(apiErrorText(e, 'Не удалось выйти из пати'), 'error')
+      showToast(apiErrorText(e, t('Не удалось выйти из пати')), 'error')
       return
     }
   }
@@ -143,27 +144,27 @@ export async function leaveParty(): Promise<void> {
   st().set({ party: null })
 }
 
-export const kickFromParty = (userId: string) => attempt(() => partyCall('/kick', { userId }), 'Не удалось исключить')
+export const kickFromParty = (userId: string) => attempt(() => partyCall('/kick', { userId }), t('Не удалось исключить'))
 
 export const promoteInParty = (userId: string) =>
-  attempt(() => partyCall('/promote', { userId }), 'Не удалось передать лидерство')
+  attempt(() => partyCall('/promote', { userId }), t('Не удалось передать лидерство'))
 
 export const setPartyCapacity = (capacity: number) =>
-  attempt(() => partyCall('/capacity', { capacity }), 'Не удалось изменить размер пати')
+  attempt(() => partyCall('/capacity', { capacity }), t('Не удалось изменить размер пати'))
 
 export const setPartyTarget = (target: PartyTarget) =>
-  attempt(() => partyCall('/target', { target }), 'Не удалось выбрать режим для пати')
+  attempt(() => partyCall('/target', { target }), t('Не удалось выбрать режим для пати'))
 
 export const setPartyReady = (ready: boolean, have: PartyHave | null) =>
-  attempt(() => partyCall('/ready', have ? { ready, have } : { ready }), 'Не удалось отметить готовность')
+  attempt(() => partyCall('/ready', have ? { ready, have } : { ready }), t('Не удалось отметить готовность'))
 
-export const sendPartyChat = (text: string) => attempt(() => partyCall('/chat', { text }), 'Сообщение не ушло')
+export const sendPartyChat = (text: string) => attempt(() => partyCall('/chat', { text }), t('Сообщение не ушло'))
 
 export const proposeToParty = (target: PartyTarget) =>
-  attempt(() => partyCall('/propose', { target }), 'Не удалось предложить')
+  attempt(() => partyCall('/propose', { target }), t('Не удалось предложить'))
 
 export const answerPartyProposal = (id: string, yes: boolean) =>
-  attempt(() => partyCall('/propose/answer', { id, yes }), 'Не удалось ответить')
+  attempt(() => partyCall('/propose/answer', { id, yes }), t('Не удалось ответить'))
 
 /** Открытые комнаты моей возрастной группы; своя в список не входит. */
 export async function loadRooms(): Promise<PartyRoom[]> {
@@ -173,21 +174,21 @@ export async function loadRooms(): Promise<PartyRoom[]> {
 
 /** Собрать комнату: объявить, куда идём, и открыть её для всех или только для своих. */
 export const openRoom = (target: PartyTarget, open: boolean) =>
-  attempt(() => partyCall('/room', { target, open }), 'Не удалось собрать комнату')
+  attempt(() => partyCall('/room', { target, open }), t('Не удалось собрать комнату'))
 
-export const closeRoom = () => attempt(() => partyCall('/room/close'), 'Не удалось закрыть комнату')
+export const closeRoom = () => attempt(() => partyCall('/room/close'), t('Не удалось закрыть комнату'))
 
 export const joinRoom = (id: string) =>
-  attempt(() => partyCall('/rooms/' + encodeURIComponent(id) + '/join'), 'Не удалось войти в комнату')
+  attempt(() => partyCall('/rooms/' + encodeURIComponent(id) + '/join'), t('Не удалось войти в комнату'))
 
 export const startPartyLaunch = (addr: string | null) =>
-  attempt(() => partyCall('/launch', addr ? { addr } : {}), 'Не удалось запустить пати')
+  attempt(() => partyCall('/launch', addr ? { addr } : {}), t('Не удалось запустить пати'))
 
 export async function inviteToParty(userId: string): Promise<boolean> {
   if (!st().party && !(await createParty())) return false
   const ok = await attempt(
     () => api('/party/invite', { method: 'POST', body: JSON.stringify({ userId }) }),
-    'Приглашение не ушло',
+    t('Приглашение не ушло'),
   )
   return ok !== null
 }
@@ -196,15 +197,15 @@ export async function partyInviteCode(): Promise<{ code: string; url: string; ex
   if (!st().party && !(await createParty())) return null
   return attempt(
     () => api<{ code: string; url: string; expiresAt: number }>('/party/code', { method: 'POST', body: '{}' }),
-    'Не удалось получить код',
+    t('Не удалось получить код'),
   )
 }
 
 export const joinPartyByCode = (raw: string) =>
-  attempt(() => partyCall('/join', { code: normalizePartyCode(raw) }), 'Не удалось войти в пати')
+  attempt(() => partyCall('/join', { code: normalizePartyCode(raw) }), t('Не удалось войти в пати'))
 
 export async function acceptPartyInvite(id: string): Promise<Party | null> {
-  const party = await attempt(() => partyCall('/invites/' + encodeURIComponent(id) + '/accept'), 'Не удалось войти в пати')
+  const party = await attempt(() => partyCall('/invites/' + encodeURIComponent(id) + '/accept'), t('Не удалось войти в пати'))
   st().set({ invites: st().invites.filter((i) => i.id !== id) })
   return party
 }
@@ -212,7 +213,7 @@ export async function acceptPartyInvite(id: string): Promise<Party | null> {
 export async function declinePartyInvite(id: string): Promise<void> {
   const ok = await attempt(
     () => api('/party/invites/' + encodeURIComponent(id) + '/decline', { method: 'POST', body: '{}' }),
-    'Не удалось отклонить',
+    t('Не удалось отклонить'),
   )
   if (ok !== null) st().set({ invites: st().invites.filter((i) => i.id !== id) })
 }
@@ -220,7 +221,7 @@ export async function declinePartyInvite(id: string): Promise<void> {
 export async function setAgeBracket(ageBracket: AgeBracket): Promise<boolean> {
   const r = await attempt(
     () => api<{ ageBracket: AgeBracket }>('/party/safety', { method: 'POST', body: JSON.stringify({ ageBracket }) }),
-    'Не удалось сохранить возраст',
+    t('Не удалось сохранить возраст'),
   )
   if (!r) return false
   st().set({ safety: { ...st().safety, ageBracket: r.ageBracket } })
@@ -242,10 +243,10 @@ export async function reportPlayer(
         method: 'POST',
         body: JSON.stringify({ userId, reason, context, refId: opts.refId, block: !!opts.block }),
       }),
-    'Жалоба не отправилась',
+    t('Жалоба не отправилась'),
   )
   if (r === null) return false
-  showToast(opts.block ? 'Жалоба отправлена, игрок заблокирован' : 'Жалоба отправлена')
+  showToast(opts.block ? t('Жалоба отправлена, игрок заблокирован') : t('Жалоба отправлена'))
   if (opts.block) void loadParty().catch((e) => console.error('[party] reload', e))
   return true
 }

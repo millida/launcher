@@ -1,4 +1,5 @@
 import { noteContextCreated } from './gpuLite'
+import { t } from '../i18n'
 
 const SOFTWARE = /swiftshader|llvmpipe|softpipe|software|basic render|generic renderer/i
 const VENDOR_ONLY = /^(nvidia|amd|ati|intel|apple|microsoft|google|mesa|qualcomm|arm)\.?$/i
@@ -30,7 +31,7 @@ function unwrapAngle(raw: string): string {
 
 export function normalizeGpu(raw: string): string | undefined {
   if (!raw) return undefined
-  if (SOFTWARE.test(raw)) return 'Программный рендер'
+  if (SOFTWARE.test(raw)) return t('Программный рендер')
   const name = stripNoise(unwrapAngle(raw.trim()))
   if (!name || name.length < 3 || VENDOR_ONLY.test(name)) return undefined
   return name.slice(0, 96)

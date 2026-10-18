@@ -27,7 +27,8 @@ import {
 } from '../ipc/commands'
 import type { CrashInfo } from '../ipc/events'
 import { api, hasMillidaAccount } from './api'
-import { milliPc } from './milli'
+import { milliPc, withMilliLang } from './milli'
+import { t } from '../i18n'
 import { pushMilliAction, registerStep, type MilliAction, type MilliActionRow, type MilliStep, type StepResult } from './milliActions'
 
 // ─── Контракт сервера (milli-server/src/doctor.ts) ─────────────────────────
@@ -66,7 +67,7 @@ export interface DoctorReport {
 }
 
 const KIND: Record<DocMode, MilliAction['kind']> = { scan: 'doctor', update: 'update', port: 'port' }
-const CTA: Record<DocMode, string> = { scan: 'Починить', update: 'Обновить', port: 'Перенести' }
+const cta = (): Record<DocMode, string> => ({ scan: t('Починить'), update: t('Обновить'), port: t('Перенести') })
 
 /** Отчёт сервера → карточка действия. Строка без шагов (всё в порядке) — просто строка. */
 export function reportAction(r: DoctorReport, id = 'doc-' + Date.now().toString(36)): MilliAction {
@@ -75,7 +76,7 @@ export function reportAction(r: DoctorReport, id = 'doc-' + Date.now().toString(
     const idx = row.steps.map((s) => steps.push(s as MilliStep) - 1)
     const icon = row.mods.find((m) => m.icon)?.icon ?? undefined
     const names = row.mods.map((m) => m.title)
-    const extra = names.length > 1 ? names.slice(0, 6).join(', ') + (names.length > 6 ? ' и ещё ' + (names.length - 6) : '') : ''
+    const extra = names.length > 1 ? names.slice(0, 6).join(', ') + (names.length > 6 ? t(' и ещё {n}', { n: names.length - 6 }) : '') : ''
     return {
       id: row.id,
       label: row.text,
@@ -89,7 +90,7 @@ export function reportAction(r: DoctorReport, id = 'doc-' + Date.now().toString(
   })
   if (r.port) {
     for (const x of r.port.replaced.slice(0, 8)) rows.push({ id: 'rep:' + x.from, label: `${x.from} → ${x.to.title}`, note: x.why, sev: 'info' })
-    if (r.port.lost.length) rows.push({ id: 'lost', label: `Не найдутся: ${r.port.lost.length}`, note: r.port.lost.slice(0, 8).join(', '), sev: 'yellow' })
+    if (r.port.lost.length) rows.push({ id: 'lost', label: t('Не найдутся: {n}', { n: r.port.lost.length }), note: r.port.lost.slice(0, 8).join(', '), sev: 'yellow' })
   }
   return {
     id,
@@ -100,7 +101,7 @@ export function reportAction(r: DoctorReport, id = 'doc-' + Date.now().toString(
     rows,
     steps,
     risky: steps.some((s) => s.op !== 'ram'),
-    cta: steps.length ? CTA[r.mode] : undefined,
+    cta: steps.length ? cta()[r.mode] : undefined,
     restart: steps.length > 0,
   }
 }
@@ -121,7 +122,7 @@ const loaderOf = (p: Profile) => (p.loader || (p.fabric ? 'fabric' : 'vanilla'))
 
 async function profileOf(name: string): Promise<Profile> {
   const p = (await listProfiles()).find((x) => x.name === name)
-  if (!p) throw new Error('Сборка не найдена')
+  if (!p) throw new Error(t('Сборка не найдена'))
   return p
 }
 
@@ -221,7 +222,7 @@ export async function runDoctor(profile: string, mode: DocMode, target?: { mc: s
       : {}),
     ...(opts.quiet ? { quiet: true } : {}),
   }
-  const r = await post<DoctorReport>('/catalog/milli/doctor', body)
+  const r = await post<DoctorReport>(withMilliLang('/catalog/milli/doctor'), body)
   remember(r)
   return r
 }
@@ -253,9 +254,9 @@ export function registerDoctorSteps() {
     const ok = !!now && now.enabled === on
     return {
       ok,
-      detail: ok ? (on ? 'включён' : 'выключен') : 'не вышло',
+      detail: ok ? (on ? t('включён') : t('выключен')) : t('не вышло'),
       undo: [{ op: on ? 'mod_off' : 'mod_on', file }],
-      changes: [{ label: now?.title || file, from: on ? 'выкл' : 'вкл', to: on ? 'вкл' : 'выкл' }],
+      changes: [{ label: now?.title || file, from: on ? t('выкл') : t('вкл'), to: on ? t('вкл') : t('выкл') }],
     }
   }
   registerStep('mod_off', { run: toggle(false) })
@@ -272,7 +273,7 @@ export function registerDoctorSteps() {
       const ok = !!after
       return {
         ok,
-        detail: ok ? (s.toNum ? '→ ' + s.toNum.slice(0, 16) : 'обновлён') : 'не встал',
+        detail: ok ? (s.toNum ? '→ ' + s.toNum.slice(0, 16) : t('обновлён')) : t('не встал'),
         undo: from ? [{ op: 'mod_update', file, to: from, toNum: before?.version_number }] : [],
         changes: [{ label: before?.title || s.file, from: before?.version_number, to: after?.version_number || s.toNum }],
       }
@@ -285,10 +286,10 @@ export function registerDoctorSteps() {
       const ok = rep.installed.length > 0
       return {
         ok,
-        detail: ok ? 'поставлен' : rep.failed[0]?.slice(0, 60) || 'не встал',
+        detail: ok ? t('поставлен') : rep.failed[0]?.slice(0, 60) || t('не встал'),
         // Откат — выключить поставленное (файл остаётся, вернуть можно одним нажатием).
         undo: rep.installed.map((file) => ({ op: 'mod_off', file }) as MilliStep),
-        changes: [{ label: s.title, to: 'поставлен' }],
+        changes: [{ label: s.title, to: t('поставлен') }],
       }
     },
   })
@@ -305,8 +306,11 @@ export function registerDoctorSteps() {
       }
       return {
         ok: true,
-        detail: `«${name}»: ${res.moved} перенесено${added ? `, ${added} замен` : ''}${res.failed.length ? `, ${res.failed.length} не встало` : ''}`,
-        changes: [{ label: 'Новая сборка', to: name }],
+        detail:
+          t('«{name}»: {n} перенесено', { name, n: res.moved }) +
+          (added ? t(', {n} замен', { n: added }) : '') +
+          (res.failed.length ? t(', {n} не встало', { n: res.failed.length }) : ''),
+        changes: [{ label: t('Новая сборка'), to: name }],
       }
     },
   })
@@ -316,7 +320,7 @@ export function registerDoctorSteps() {
       const msg = await applyCrashFix(ctx.profile, s.kind, s.arg)
       return {
         ok: true,
-        detail: String(msg || 'готово').slice(0, 60),
+        detail: String(msg || t('готово')).slice(0, 60),
         undo: s.kind === 'disable-mod' ? [{ op: 'mod_on', file: s.arg }] : [],
         changes: [{ label: String(msg || s.kind).slice(0, 80) }],
       }
@@ -331,13 +335,13 @@ export function crashAction(info: CrashInfo): { text: string; action: MilliActio
   const acts = (info.actions ?? []).filter((a) => a.kind && a.kind !== 'open-folder' && a.kind !== 'open-log' && a.kind !== 'share-log').slice(0, 3)
   const steps: MilliStep[] = acts.map((a) => ({ op: 'crashfix', kind: a.kind, arg: a.arg ?? '' }))
   const rows: MilliActionRow[] = acts.map((a, i) => ({ id: 'cf' + i, label: a.label, ...(a.hint ? { note: a.hint } : {}), sev: i === 0 ? 'red' : 'yellow', optional: acts.length > 1, on: i === 0, steps: [i] }))
-  rows.push({ id: 'scan', label: 'Осмотреть всю сборку', note: 'Найду конфликты и старые моды', sev: 'info', optional: true, on: !acts.length, steps: [steps.length] })
+  rows.push({ id: 'scan', label: t('Осмотреть всю сборку'), note: t('Найду конфликты и старые моды'), sev: 'info', optional: true, on: !acts.length, steps: [steps.length] })
   steps.push({ op: 'scan', mode: 'scan' })
   const culprit = info.culprits?.[0]
-  const text = (culprit ? `Игра упала из-за «${culprit}». ` : 'Игра вылетела. ') + (acts.length ? 'Могу починить — потом запусти снова.' : 'Давай осмотрю сборку?')
+  const text = (culprit ? t('Игра упала из-за «{mod}».', { mod: culprit }) : t('Игра вылетела.')) + ' ' + (acts.length ? t('Могу починить — потом запусти снова.') : t('Давай осмотрю сборку?'))
   return {
     text,
-    action: { id: 'crash-' + Date.now().toString(36), kind: 'crashfix', profile: info.profile, title: 'Вылет', reason: info.reason.slice(0, 200), rows, steps, risky: true, cta: 'Починить', restart: true },
+    action: { id: 'crash-' + Date.now().toString(36), kind: 'crashfix', profile: info.profile, title: t('Вылет'), reason: info.reason.slice(0, 200), rows, steps, risky: true, cta: t('Починить'), restart: true },
   }
 }
 
@@ -359,7 +363,7 @@ export async function proactiveDoctor(profile: string | null, opts: { busy: () =
   const quick = await runDoctor(profile, 'scan', undefined, { quiet: true })
   const important = quick.counts.red > 0 || quick.rows.some((x) => x.kind === 'outdated' && x.steps.length >= 3) || quick.counts.yellow >= 2
   if (!important || opts.busy()) return false
-  await pushMilliAction(quick.say, reportAction(quick), ['Что не так?', 'Не сейчас'])
+  await pushMilliAction(quick.say, reportAction(quick), [t('Что не так?'), t('Не сейчас')])
   return true
 }
 
@@ -376,7 +380,7 @@ export function startMilliDoctor() {
       if (!info?.profile || info === last) return
       last = info
       const { text, action } = crashAction(info)
-      void pushMilliAction(text, action, ['Почему так?', 'Осмотри сборку'])
+      void pushMilliAction(text, action, [t('Почему так?'), t('Осмотри сборку')])
     })
     const busy = () => milli.useMilli.getState().pending
     setTimeout(() => void proactiveDoctor(profiles.useProfiles.getState().selected, { busy }).catch(() => {}), 25_000)

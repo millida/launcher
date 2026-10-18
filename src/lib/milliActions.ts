@@ -13,6 +13,7 @@
 import { create } from 'zustand'
 import { markFixApplied } from './repair'
 import type { MilliMessage } from './milli'
+import { t } from '../i18n'
 
 // ─── Контракт (синхронно с milli-server/src/types.ts MilliAction) ───────────
 
@@ -240,13 +241,13 @@ export async function runAction(id: string): Promise<ActionState | null> {
   const a = st0.action
   const profile = a.profile || defaultProfile()
   if (!profile) {
-    aset(id, { phase: 'failed', error: 'Выбери сборку' })
+    aset(id, { phase: 'failed', error: t('Выбери сборку') })
     return useMilliActions.getState().byId[id]
   }
   const list = chosenSteps(a, st0.off)
   const missing = list.find((x) => !runners.has(x.step.op))
   if (missing) {
-    aset(id, { phase: 'failed', error: 'Обнови лаунчер' })
+    aset(id, { phase: 'failed', error: t('Обнови лаунчер') })
     return useMilliActions.getState().byId[id]
   }
   aset(id, { phase: 'running', error: undefined })
@@ -255,7 +256,7 @@ export async function runAction(id: string): Promise<ActionState | null> {
   let snapId: string | undefined
   if (risky && hooks.snapshot && !list.some((x) => x.step.op === 'snapshot')) {
     try {
-      snapId = (await hooks.snapshot(profile, 'Перед: ' + a.title)) ?? undefined
+      snapId = (await hooks.snapshot(profile, t('Перед: {title}', { title: a.title }))) ?? undefined
     } catch {
       // Снимок не вышел — продолжаем на обратных шагах, они есть у каждого runner.
     }
@@ -300,7 +301,7 @@ export async function runAction(id: string): Promise<ActionState | null> {
   // Итог починки виден в следующем выходе/вылете сборки (repair.ts, fixMark).
   if (changes.length && (a.kind === 'crashfix' || a.kind === 'doctor')) markFixApplied(profile, 'milli:' + a.kind)
   const failedAll = !okAll && !changes.length && !undo.length
-  aset(id, { phase: failedAll ? 'failed' : 'done', rows, undo, diaryId, error: failedAll ? firstDetail(rows) || 'Не вышло' : undefined })
+  aset(id, { phase: failedAll ? 'failed' : 'done', rows, undo, diaryId, error: failedAll ? firstDetail(rows) || t('Не вышло') : undefined })
   hooks.mood?.(okAll ? 'proud' : 'oops')
   return useMilliActions.getState().byId[id]
 }
@@ -315,7 +316,7 @@ export async function undoAction(id: string): Promise<boolean> {
   hooks.mood?.('rewind')
   const ok = await runSteps(profile, st.action, st.undo)
   if (st.diaryId && hooks.diaryUndone) await hooks.diaryUndone(profile, st.diaryId).catch(() => {})
-  aset(id, { phase: ok ? 'undone' : 'done', error: ok ? undefined : 'Отменить не вышло' })
+  aset(id, { phase: ok ? 'undone' : 'done', error: ok ? undefined : t('Отменить не вышло') })
   hooks.mood?.(ok ? 'idle' : 'oops')
   return ok
 }
@@ -353,8 +354,8 @@ const firstDetail = (rows: Record<string, RowResult>) => Object.values(rows).fin
 
 export function errText(e: unknown): string {
   const s = String((e as { message?: string } | null)?.message ?? e ?? '').replace(/^Error:\s*/, '').trim()
-  if (/not found|unknown command|command .* not/i.test(s)) return 'Обнови лаунчер'
-  return s.slice(0, 80) || 'Не вышло'
+  if (/not found|unknown command|command .* not/i.test(s)) return t('Обнови лаунчер')
+  return s.slice(0, 80) || t('Не вышло')
 }
 
 // ─── Карточка не из ответа сервера ──────────────────────────────────────────

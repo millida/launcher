@@ -5,6 +5,7 @@ import { showToast } from '../../state/ui'
 import { openChat, useFriends } from '../../state/friends'
 import { sendRequest } from '../friends/FriendSearch'
 import { useBoards, type BoardEntry } from '../../state/boards'
+import { t } from '../../i18n'
 
 /** userId друга по нику: доска отдаёт только ник, а переписка адресуется id. */
 export const friendIdOf = (nick: string): string | null =>
@@ -24,7 +25,7 @@ export async function likeEntry(e: BoardEntry): Promise<boolean> {
     if (typeof r?.likes === 'number') useBoards.getState().bumpLikes(e.slug, r.likes)
     return true
   } catch (err) {
-    showToast(apiErrorText(err, 'Лайк не поставился'), 'error')
+    showToast(apiErrorText(err, t('Лайк не поставился')), 'error')
     return false
   }
 }

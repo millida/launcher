@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { FeedbackModal } from '../Feedback'
 import { healthLine, loadPackHealth } from '../../lib/packHealth'
 import type { PackHealth } from '../../lib/packHealth'
+import { useT } from '../../i18n'
 
 /**
  * «Работает · запускали 2 ч назад · 97% запусков без ошибок» под кнопкой
@@ -9,6 +10,7 @@ import type { PackHealth } from '../../lib/packHealth'
  * «Сообщить о проблеме» с уже подписанной сборкой. Нет данных — нет строки.
  */
 export function PackHealthLine({ slug, title }: { slug: string; title: string }) {
+  const t = useT()
   const [health, setHealth] = useState<PackHealth | null>(null)
   const [report, setReport] = useState(false)
 
@@ -32,12 +34,12 @@ export function PackHealthLine({ slug, title }: { slug: string; title: string })
       </span>
       {line.pct !== null ? (
         <span className="pp-health-pct">
-          <b>{line.pct}%</b> запусков без ошибок
+          <b>{line.pct}%</b> {t('запусков без ошибок')}
         </span>
       ) : null}
       {line.report ? (
         <button className="btn sm ghost pp-health-report" data-track="pack_report" data-src="pack_page" onClick={() => setReport(true)}>
-          Сообщить о проблеме
+          {t('Сообщить о проблеме')}
         </button>
       ) : null}
       {report ? (

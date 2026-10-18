@@ -12,6 +12,7 @@ import { Head } from './parts'
 import { questState } from './packQuests'
 import type { WeeklyPath } from './weekly'
 import type { PackQuest } from '../../lib/rubies'
+import { useT } from '../../i18n'
 
 /**
  * Задания (ТЗ v3, 06.10.2026): одна большая кнопка-подарок «Забрать» и ряд
@@ -36,6 +37,7 @@ export function TasksSection({
   onQuest: (q: PackQuest) => void
   onPlus: () => void
 }) {
+  const t = useT()
   const step = weekly?.steps.find((s) => !s.claimed && weekly.stars >= s.at)
   const quest = quests.find((q) => questState(q).kind === 'claim')
   const extra = step
@@ -45,7 +47,7 @@ export function TasksSection({
       : null
   return (
     <section id="shop-pass" className="sv-sec" data-section="pass">
-      <Head title="Пропуск" />
+      <Head title={t('Пропуск')} />
       <div className="card sh-block tk3-card">
         {on ? <PassBody active={on} inline mini onPlus={onPlus} extra={extra} /> : <span className="skel sh-skel" style={{ height: '200px' }} />}
       </div>
@@ -67,6 +69,7 @@ const mskReset = () => {
  * обновятся. Рядом — подписанные плитки «Подарок дня» и «Пропуск».
  */
 export function BonusesSection({ on }: { on: boolean }) {
+  const t = useT()
   const view = usePlayChests((s) => s.view)
   const at = usePlayChests((s) => s.at)
   const busy = usePlayChests((s) => s.busy)
@@ -83,17 +86,17 @@ export function BonusesSection({ on }: { on: boolean }) {
   return (
     <section id="shop-tasks" className="sv-sec" data-section="tasks">
       <div className="sh-head">
-        <h2>Бонусы</h2>
+        <h2>{t('Бонусы')}</h2>
       </div>
       <div className="bn">
         <div className="card bn-play">
           <div className="bn-head">
             <b>
-              Сундуки за игру · {view.claimed} из {view.limit}
+              {t('Сундуки за игру · {n} из {limit}', { n: view.claimed, limit: view.limit })}
             </b>
             <span className="bn-reset">
               <Icon id="i-clock" />
-              Обновится через <Countdown to={mskReset()} />
+              {t('Обновится через')} <Countdown to={mskReset()} />
             </span>
           </div>
           <div className="bn-slots">
@@ -108,15 +111,15 @@ export function BonusesSection({ on }: { on: boolean }) {
                   {state === 'got' ? (
                     <b className="bn-slot-got">
                       <Icon id="i-check" />
-                      Забрано
+                      {t('Забрано')}
                     </b>
                   ) : state === 'ready' ? (
                     <button className="btn md primary bn-claim" disabled={busy} data-track="play_chest_claim" onClick={() => void usePlayChests.getState().claim()}>
-                      Забери
+                      {t('Забери')}
                     </button>
                   ) : (
                     <span className="bn-slot-wait">
-                      <b>{state === 'next' && left !== null ? 'Через ' + playLeftText(left) + ' игры' : 'Ещё ' + (i + 1 - view.earned) + ' ч игры'}</b>
+                      <b>{state === 'next' && left !== null ? t('Через {time} игры', { time: playLeftText(left) }) : t('Ещё {n} ч игры', { n: i + 1 - view.earned })}</b>
                       <span className="bn-bar">
                         <i style={{ transform: 'scaleX(' + k + ')' }} />
                       </span>
@@ -131,15 +134,15 @@ export function BonusesSection({ on }: { on: boolean }) {
           <button className={'card bn-tile' + (giftReady ? ' is-ready' : '')} disabled={!giftReady || !!dailyBusy} data-track="bonus_gift" onClick={() => void useDaily.getState().claim(seasonal(status) ? 'all' : undefined)}>
             <PxIcon name="gift" size={48} />
             <span className="bn-tile-body">
-              <b>Подарок дня</b>
-              <small>{giftReady ? 'Забери ' + giftReady : 'Завтра новый'}</small>
+              <b>{t('Подарок дня')}</b>
+              <small>{giftReady ? t('Забери {n}', { n: giftReady }) : t('Завтра новый')}</small>
             </span>
           </button>
           <button className="card bn-tile" data-track="bonus_pass" onClick={() => document.getElementById('shop-pass')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
             <PxIcon name="star" size={48} />
             <span className="bn-tile-body">
-              <b>Пропуск</b>
-              <small>День {day} из 28</small>
+              <b>{t('Пропуск')}</b>
+              <small>{t('День {day} из 28', { day })}</small>
               <span className="bn-bar">
                 <i style={{ transform: 'scaleX(' + Math.min(1, day / 28) + ')' }} />
               </span>

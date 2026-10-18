@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { Icon } from '../components/Icon'
+import { t, useT } from '../i18n'
 import { PixelField } from '../components/lobby/PixelField'
 import { SKINS_IMPORT_EVENT, SKINS_UPLOAD_EVENT } from '../state/topbar'
 import { HEAD_FROM_CPU, getAccount, useAccounts } from '../state/accounts'
 import type { Account } from '../state/accounts'
 import { noteCosmeticsSeen } from '../state/newHint'
 import { setScreen, showToast } from '../state/ui'
-import { accKindLabel } from '../lib/format'
+import { accKindLabel, plural } from '../lib/format'
 import { onRenderGate, renderLive } from '../lib/renderGate'
 import { hasTauri } from '../ipc/tauri'
 import {
@@ -134,6 +135,7 @@ import { openPaymentUrl } from '../lib/openPayment'
 import { drawFront, skinCanvas } from '../lib/skinFlat'
 import { noteContextCreated, noteContextLost } from '../lib/gpuLite'
 import { artFit } from '../lib/artFit'
+import { plusPrice } from '../lib/regionalPrices'
 
 interface CatalogSkin {
   key: string
@@ -144,33 +146,26 @@ interface CatalogSkin {
 
 const mojangTexture = (hash: string) => 'https://textures.minecraft.net/texture/' + hash
 
-const EARNED_BY: Record<string, string> = {
-  ACHIEVEMENT: 'Достижение',
-  HOURS: 'Часы в игре',
-  QUEST: 'Задание',
-  SEASON: 'Сезон',
+const EARNED_BY = (): Record<string, string> => ({
+  ACHIEVEMENT: t('Достижение'),
+  HOURS: t('Часы в игре'),
+  QUEST: t('Задание'),
+  SEASON: t('Сезон'),
   PLUS_MONTH: 'PLUS',
-  WELCOME: 'Подарок',
-  LEGACY: 'Снято с продажи',
-}
+  WELCOME: t('Подарок'),
+  LEGACY: t('Снято с продажи'),
+})
 
 const onSale = (c: CosmeticItem) => c.access === 'PURCHASE' && (c.priceRubies ?? 0) > 0
 
-const earnedNote = (c: CosmeticItem) => (c.access === 'PURCHASE' && !onSale(c) ? EARNED_BY[c.channel ?? ''] ?? 'Не продаётся' : undefined)
+const earnedNote = (c: CosmeticItem) => (c.access === 'PURCHASE' && !onSale(c) ? EARNED_BY()[c.channel ?? ''] ?? t('Не продаётся') : undefined)
 
 
 /** Дата словами: «до 14 октября» читается, «2026-10-14T00:00:00Z» - нет. */
 
-const rubles = (kopecks: number) => Math.round(kopecks / 100) + ' ₽'
-
 /** «1 рубин», «2 рубина», «5 рубинов» — цену читают, а не считают падежи. */
-function rubyWord(count: number): string {
-  const tens = Math.abs(count) % 100
-  const ones = tens % 10
-  if (tens > 10 && tens < 20) return 'рубинов'
-  if (ones === 1) return 'рубин'
-  if (ones >= 2 && ones <= 4) return 'рубина'
-  return 'рубинов'
+function rubyCount(count: number): string {
+  return plural(count, t('{n} рубин', { n: count }), t('{n} рубина', { n: count }), t('{n} рубинов', { n: count }))
 }
 
 /** Сколько вещей раздела видно сразу и сколько добавляет подход к концу ленты. */
@@ -296,13 +291,13 @@ function CosmeticArt({ item, height, onGiveUp }: { item: CosmeticItem; height: n
 }
 
 const OFFICIAL_SKINS: CatalogSkin[] = [
-  { key: 'off-steve', label: 'Стив', url: mojangTexture('31f477eb1a7beee631c2ca64d06f8f68fa93a3386d04452ab27f43acdf1b60cb') },
-  { key: 'off-alex', label: 'Алекс', url: mojangTexture('46acd06e8483b176e8ea39fc12fe105eb3a2a4970f5100057e9d84d4b60bdfa7') },
-  { key: 'off-ari', label: 'Ари', url: mojangTexture('6ac6ca262d67bcfb3dbc924ba8215a18195497c780058a5749de674217721892') },
-  { key: 'off-efe', label: 'Эфе', url: mojangTexture('fece7017b1bb13926d1158864b283b8b930271f80a90482f174cca6a17e88236') },
-  { key: 'off-makena', label: 'Макена', url: mojangTexture('7cb3ba52ddd5cc82c0b050c3f920f87da36add80165846f479079663805433db') },
-  { key: 'off-noor', label: 'Нур', url: mojangTexture('6c160fbd16adbc4bff2409e70180d911002aebcfa811eb6ec3d1040761aea6dd') },
-  { key: 'off-zuri', label: 'Зури', url: mojangTexture('eee522611005acf256dbd152e992c60c0bb7978cb0f3127807700e478ad97664') },
+  { key: 'off-steve', get label() { return t('Стив') }, url: mojangTexture('31f477eb1a7beee631c2ca64d06f8f68fa93a3386d04452ab27f43acdf1b60cb') },
+  { key: 'off-alex', get label() { return t('Алекс') }, url: mojangTexture('46acd06e8483b176e8ea39fc12fe105eb3a2a4970f5100057e9d84d4b60bdfa7') },
+  { key: 'off-ari', get label() { return t('Ари') }, url: mojangTexture('6ac6ca262d67bcfb3dbc924ba8215a18195497c780058a5749de674217721892') },
+  { key: 'off-efe', get label() { return t('Эфе') }, url: mojangTexture('fece7017b1bb13926d1158864b283b8b930271f80a90482f174cca6a17e88236') },
+  { key: 'off-makena', get label() { return t('Макена') }, url: mojangTexture('7cb3ba52ddd5cc82c0b050c3f920f87da36add80165846f479079663805433db') },
+  { key: 'off-noor', get label() { return t('Нур') }, url: mojangTexture('6c160fbd16adbc4bff2409e70180d911002aebcfa811eb6ec3d1040761aea6dd') },
+  { key: 'off-zuri', get label() { return t('Зури') }, url: mojangTexture('eee522611005acf256dbd152e992c60c0bb7978cb0f3127807700e478ad97664') },
 ]
 
 
@@ -326,83 +321,83 @@ interface SectionDef {
   chips: ChipDef[]
 }
 
-const COSMETIC_SECTIONS: SectionDef[] = [
+const COSMETIC_SECTIONS = (): SectionDef[] => [
   {
     key: 'head',
-    name: 'Голова',
+    name: t('Голова'),
     icon: 'i-hat',
     chips: [
-      { key: 'HAT', name: 'Шляпы', slots: ['HAT'] },
-      { key: 'HEAD', name: 'Причёски', slots: ['HEAD'] },
-      { key: 'FACE', name: 'Лицо', slots: ['FACE'] },
-      { key: 'EARS', name: 'Уши и рога', slots: ['EARS'] },
+      { key: 'HAT', name: t('Шляпы'), slots: ['HAT'] },
+      { key: 'HEAD', name: t('Причёски'), slots: ['HEAD'] },
+      { key: 'FACE', name: t('Лицо'), slots: ['FACE'] },
+      { key: 'EARS', name: t('Уши и рога'), slots: ['EARS'] },
     ],
   },
   {
     key: 'body',
-    name: 'Тело',
+    name: t('Тело'),
     icon: 'i-shirt',
     chips: [
-      { key: 'FULL_BODY', name: 'Костюмы', slots: ['FULL_BODY'] },
-      { key: 'TOP', name: 'Верх', slots: ['TOP', 'ACCESSORY'] },
-      { key: 'PANTS', name: 'Низ', slots: ['PANTS', 'SKIRT', 'WAIST'] },
-      { key: 'SHOES', name: 'Обувь', slots: ['SHOES', 'FEET'] },
-      { key: 'ARMS', name: 'Руки', slots: ['ARMS', 'HAND', 'SHOULDERS', 'SHOULDER'] },
+      { key: 'FULL_BODY', name: t('Костюмы'), slots: ['FULL_BODY'] },
+      { key: 'TOP', name: t('Верх'), slots: ['TOP', 'ACCESSORY'] },
+      { key: 'PANTS', name: t('Низ'), slots: ['PANTS', 'SKIRT', 'WAIST'] },
+      { key: 'SHOES', name: t('Обувь'), slots: ['SHOES', 'FEET'] },
+      { key: 'ARMS', name: t('Руки'), slots: ['ARMS', 'HAND', 'SHOULDERS', 'SHOULDER'] },
     ],
   },
   {
     key: 'back',
-    name: 'Спина',
+    name: t('Спина'),
     icon: 'i-wings',
     chips: [
-      { key: 'WINGS', name: 'Крылья', slots: ['WINGS'] },
-      { key: 'BACK', name: 'За спиной', slots: ['BACK'] },
+      { key: 'WINGS', name: t('Крылья'), slots: ['WINGS'] },
+      { key: 'BACK', name: t('За спиной'), slots: ['BACK'] },
     ],
   },
-  { key: 'pet', name: 'Питомцы', icon: 'i-paw', chips: [{ key: 'PET', name: 'Питомцы', slots: ['PET'] }] },
+  { key: 'pet', name: t('Питомцы'), icon: 'i-paw', chips: [{ key: 'PET', name: t('Питомцы'), slots: ['PET'] }] },
   // Эмоции и ауры — одно «живое» место: не вещь на теле, а движение и частицы
   // (у Essential эмоции тоже отдельно от слотов). Так разделов восемь, а не девять.
   {
     key: 'emote',
-    name: 'Эмоции',
+    name: t('Эмоции'),
     icon: 'i-smile',
     chips: [
-      { key: 'EMOTE', name: 'Эмоции', slots: ['EMOTE'] },
-      { key: 'EFFECT', name: 'Ауры', slots: ['EFFECT', 'AURA', 'ICON'] },
+      { key: 'EMOTE', name: t('Эмоции'), slots: ['EMOTE'] },
+      { key: 'EFFECT', name: t('Ауры'), slots: ['EFFECT', 'AURA', 'ICON'] },
     ],
   },
 ]
 
-const KNOWN_SLOTS = new Set(['CAPE', ...COSMETIC_SECTIONS.flatMap((s) => s.chips.flatMap((c) => c.slots))])
+const KNOWN_SLOTS = new Set(['CAPE', ...COSMETIC_SECTIONS().flatMap((s) => s.chips.flatMap((c) => c.slots))])
 
 /** Разделы с учётом того, что реально есть в каталоге: новое место каталога уходит в «Тело · Другое». */
 function cosmeticSections(slots: string[]): SectionDef[] {
   // Каталог ещё грузится — показываем все разделы сразу, иначе первые секунды
   // видны только «Образы, Скины, Плащи» и полоса прыгает (владелец 24.09.2026).
-  if (!slots.length) return COSMETIC_SECTIONS
+  if (!slots.length) return COSMETIC_SECTIONS()
   const unknown = Array.from(new Set(slots.filter((s) => !KNOWN_SLOTS.has(s))))
-  return COSMETIC_SECTIONS.map((sec) => ({
+  return COSMETIC_SECTIONS().map((sec) => ({
     ...sec,
     chips: sec.chips
-      .concat(sec.key === 'body' && unknown.length ? [{ key: 'OTHER', name: 'Другое', slots: unknown }] : [])
+      .concat(sec.key === 'body' && unknown.length ? [{ key: 'OTHER', name: t('Другое'), slots: unknown }] : [])
       .filter((c) => c.slots.some((slot) => slots.includes(slot))),
   })).filter((sec) => sec.chips.length > 0)
 }
 
-const SKIN_CHIPS: { key: 'mine' | ShowcaseKind; name: string }[] = [
-  { key: 'mine', name: 'Мои' },
-  { key: 'top', name: 'Популярные' },
-  { key: 'new', name: 'Новые' },
-  { key: 'random', name: 'Случайные' },
+const SKIN_CHIPS = (): { key: 'mine' | ShowcaseKind; name: string }[] => [
+  { key: 'mine', name: t('Мои') },
+  { key: 'top', name: t('Популярные') },
+  { key: 'new', name: t('Новые') },
+  { key: 'random', name: t('Случайные') },
 ]
 
 const NICK_RE = /^[A-Za-z0-9_]{3,16}$/
 
 type SkinArms = 'classic' | 'slim'
 
-const SKIN_ARMS: [SkinArms, string][] = [
-  ['classic', 'Классическая'],
-  ['slim', 'Узкая'],
+const SKIN_ARMS = (): [SkinArms, string][] => [
+  ['classic', t('Классическая')],
+  ['slim', t('Узкая')],
 ]
 
 /** Сколько живёт «Отменить» после удаления скина: столько же, сколько тост с действием. */
@@ -410,8 +405,8 @@ const SKIN_UNDO_MS = 7000
 
 const rewardProgress = (r: { unit: string; progress: number; goal: number }) =>
   r.unit === 'seconds'
-    ? Math.floor(r.progress / 3600) + ' из ' + Math.floor(r.goal / 3600) + ' ч'
-    : r.progress + ' из ' + r.goal
+    ? t('{n} из {goal} ч', { n: Math.floor(r.progress / 3600), goal: Math.floor(r.goal / 3600) })
+    : t('{n} из {goal}', { n: r.progress, goal: r.goal })
 
 const MILLIDA_SKINS_URL = 'https://millida.net/skins'
 
@@ -471,7 +466,7 @@ async function migrateStored(kind: TextureKind, key: string): Promise<MySkin[] |
   for (const item of stored.slice(0, 24).reverse()) {
     if (!item || typeof item.data !== 'string') continue
     try {
-      list = await saveTexture(kind, item.name || 'Скин', item.data, !!item.slim)
+      list = await saveTexture(kind, item.name || t('Скин'), item.data, !!item.slim)
     } catch {}
   }
   localStorage.removeItem(key)
@@ -604,7 +599,7 @@ async function headDataUrl(url: string, size = 64): Promise<string> {
   c.width = size
   c.height = size
   const g = skinCanvas(c)
-  if (!g) throw new Error('canvas недоступен')
+  if (!g) throw new Error(t('canvas недоступен'))
   g.imageSmoothingEnabled = false
   g.drawImage(img, 8 * s, 8 * s, 8 * s, 8 * s, 0, 0, size, size)
   if (img.height >= img.width) g.drawImage(img, 40 * s, 8 * s, 8 * s, 8 * s, 0, 0, size, size)
@@ -629,7 +624,7 @@ async function toPngBase64(url: string): Promise<string> {
   canvas.width = img.naturalWidth
   canvas.height = img.naturalHeight
   const ctx = canvas.getContext('2d')
-  if (!ctx) throw new Error('canvas недоступен')
+  if (!ctx) throw new Error(t('canvas недоступен'))
   ctx.drawImage(img, 0, 0)
   return canvas.toDataURL('image/png').replace(/^data:image\/png;base64,/, '')
 }
@@ -718,6 +713,7 @@ function firstSkinEver(): boolean {
 }
 
 export function Skins({ on }: { on: boolean }) {
+  const t = useT()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<SkinViewEngine | null>(null)
@@ -858,7 +854,7 @@ export function Skins({ on }: { on: boolean }) {
         const list = migrated || (await listTextures(kind))
         if (alive) apply(list)
       } catch (e) {
-        showToast('Не удалось прочитать свои текстуры: ' + e, 'error')
+        showToast(t('Не удалось прочитать свои текстуры: {error}', { error: String(e) }), 'error')
       }
     }
     void load('skins', 'm-my-skins', setMySkins)
@@ -911,7 +907,7 @@ export function Skins({ on }: { on: boolean }) {
         if (w.active.skinUrl) setSkinSrc(w.active.skinUrl)
       }
       await syncLocalSkin(w.active.skinUrl, w.active.model === 'slim').catch((e) =>
-        showToast('На этом компьютере скин не обновился — в сборках останется прежний: ' + e, 'error'),
+        showToast(t('На этом компьютере скин не обновился — в сборках останется прежний: {error}', { error: String(e) }), 'error'),
       )
       if (!wardrobeVariantRef.current) {
         wardrobeVariantRef.current = true
@@ -927,7 +923,7 @@ export function Skins({ on }: { on: boolean }) {
       setWardrobeFailed(true)
       console.warn('[skins] wardrobe', e)
       trackFailure('skins', e, { step: 'wardrobe_load' })
-      showToast('Каталог скинов не загрузился', 'error')
+      showToast(t('Каталог скинов не загрузился'), 'error')
     }
   }
 
@@ -1002,11 +998,11 @@ export function Skins({ on }: { on: boolean }) {
       .then(() => {
         setWorn(next)
         setFitting((now) => now.filter((c) => !mine.some((m) => m.slot === c.slot)))
-        showToast('Надето — видят игроки с Millida', 'ok')
+        showToast(t('Надето — видят игроки с Millida'), 'ok')
       })
       .catch((e) => {
         trackFailure('skins', e, { step: 'cosmetic_wear' })
-        showToast(apiErrorText(e, 'Не удалось надеть'), 'error')
+        showToast(apiErrorText(e, t('Не удалось надеть')), 'error')
       })
       .finally(() => setCosmeticBusy(''))
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1115,9 +1111,9 @@ export function Skins({ on }: { on: boolean }) {
     const result = purchaseFlow('item', bill.length > 1 ? 'set:' + bill.length : bill[0].id, total, 'rubies')
     const ok = await uiConfirm(
       bill.length > 1
-        ? 'Сет из ' + bill.length + ' вещей за ' + total + ' ' + rubyWord(total) + '. Купить и надеть?'
-        : '«' + bill[0].name + '» за ' + total + ' ' + rubyWord(total) + '. Купить и надеть?',
-      { title: 'Покупка', confirmLabel: 'Купить', cancelLabel: 'Не сейчас', danger: false },
+        ? t('Сет из {n} вещей за {price}. Купить и надеть?', { n: bill.length, price: rubyCount(total) })
+        : t('«{name}» за {price}. Купить и надеть?', { name: bill[0].name, price: rubyCount(total) }),
+      { title: t('Покупка'), confirmLabel: t('Купить'), cancelLabel: t('Не сейчас'), danger: false },
     )
     if (!ok) return result(false, 'cancel')
     setCosmeticBusy('fitting')
@@ -1128,7 +1124,7 @@ export function Skins({ on }: { on: boolean }) {
         await buyCosmetic(item.id)
         bought.push(item)
       } catch (e) {
-        failed.push(item.name + (e ? ' (' + apiErrorText(e, 'отказ') + ')' : ''))
+        failed.push(item.name + (e ? ' (' + apiErrorText(e, t('отказ')) + ')' : ''))
       }
     }
     const got = bought.map((c) => c.id)
@@ -1137,7 +1133,7 @@ export function Skins({ on }: { on: boolean }) {
     if (owned) setCosmeticOwned(Array.from(new Set(owned.items.concat(got))))
     await refreshRubies()
     result(bought.length > 0, bought.length ? undefined : 'error')
-    if (failed.length) showToast('Не удалось купить: ' + failed.join(', '), 'error')
+    if (failed.length) showToast(t('Не удалось купить: {items}', { items: failed.join(', ') }), 'error')
     if (!bought.length) {
       setCosmeticBusy('')
       return
@@ -1153,15 +1149,15 @@ export function Skins({ on }: { on: boolean }) {
       setFitting((now) => now.filter((c) => !got.includes(c.id)))
     } catch (e) {
       wore = false
-      showToast(apiErrorText(e, 'Куплено, но не наделось — нажми «Надеть»'), 'error')
+      showToast(apiErrorText(e, t('Куплено, но не наделось — нажми «Надеть»')), 'error')
     } finally {
       setCosmeticBusy('')
     }
     showReward({
       items: bought.map((c) => ({ name: c.name, preview: c.preview, rarity: rarityOfPrice(c.priceRubies || 0) })),
-      kicker: bought.length > 1 ? bought.length + ' ' + (bought.length < 5 ? 'вещи' : 'вещей') : 'Твоя вещь',
-      title: bought.length > 1 ? 'Сет собран' : undefined,
-      sub: wore ? 'Уже на тебе' : undefined,
+      kicker: bought.length > 1 ? (bought.length < 5 ? t('{n} вещи', { n: bought.length }) : t('{n} вещей', { n: bought.length })) : t('Твоя вещь'),
+      title: bought.length > 1 ? t('Сет собран') : undefined,
+      sub: wore ? t('Уже на тебе') : undefined,
       // Надеть заново — если сервер не принял набор с первого раза.
       onWear: wore ? undefined : () => wearFittingRef.current(),
     })
@@ -1201,9 +1197,9 @@ export function Skins({ on }: { on: boolean }) {
       await applyCosmetics(next)
       setWorn(next)
       setFitting((now) => now.filter((c) => !ready.some((r) => r.id === c.id)))
-      showToast('Надето — видят игроки с Millida', 'ok')
+      showToast(t('Надето — видят игроки с Millida'), 'ok')
     } catch (e) {
-      showToast(apiErrorText(e, 'Не удалось надеть'), 'error')
+      showToast(apiErrorText(e, t('Не удалось надеть')), 'error')
     } finally {
       setCosmeticBusy('')
     }
@@ -1222,7 +1218,7 @@ export function Skins({ on }: { on: boolean }) {
     try {
       const started = await subscribePlus()
       openPaymentUrl(started.paymentUrl)
-      showToast('Оплата открыта в браузере. Набор откроется сразу после оплаты')
+      showToast(t('Оплата открыта в браузере. Набор откроется сразу после оплаты'))
       stopPlusWatch.current?.()
       stopPlusWatch.current = watchPlusPurchase(plus ?? null, (status) => {
         result(true)
@@ -1232,7 +1228,7 @@ export function Skins({ on }: { on: boolean }) {
       })
     } catch (e) {
       result(false, 'error', e)
-      showToast(apiErrorText(e, 'Не удалось оформить подписку'), 'error')
+      showToast(apiErrorText(e, t('Не удалось оформить подписку')), 'error')
     } finally {
       setPlusBusy(false)
     }
@@ -1241,7 +1237,7 @@ export function Skins({ on }: { on: boolean }) {
   const toggleCosmetic = async (item: CosmeticItem) => {
     if (cosmeticBusy) return
     if (cosmeticLocked(item)) {
-      showToast('Эта вещь ещё не открыта')
+      showToast(t('Эта вещь ещё не открыта'))
       return
     }
     const already = worn.some((w) => w.id === item.id)
@@ -1255,9 +1251,9 @@ export function Skins({ on }: { on: boolean }) {
       setWorn(next)
       // Своё надетое вытесняет примерку на том же месте.
       if (!already) setFitting((now) => now.filter((c) => c.slot !== item.slot))
-      showToast(already ? 'Снято' : 'Надето — видят игроки с Millida')
+      showToast(already ? t('Снято') : t(t('Надето — видят игроки с Millida')))
     } catch (e) {
-      showToast(apiErrorText(e, 'Не удалось изменить косметику'), 'error')
+      showToast(apiErrorText(e, t('Не удалось изменить косметику')), 'error')
     } finally {
       setCosmeticBusy('')
     }
@@ -1280,9 +1276,9 @@ export function Skins({ on }: { on: boolean }) {
     try {
       await applyCosmetics(next)
       setWorn(next)
-      showToast('Снято')
+      showToast(t('Снято'))
     } catch (e) {
-      showToast(apiErrorText(e, 'Не удалось снять'), 'error')
+      showToast(apiErrorText(e, t('Не удалось снять')), 'error')
     } finally {
       setCosmeticBusy('')
     }
@@ -1295,7 +1291,7 @@ export function Skins({ on }: { on: boolean }) {
       setRewards(r.items)
     } catch (e) {
       console.warn('[skins] rewards', e)
-      showToast('Награды не загрузились', 'error')
+      showToast(t('Награды не загрузились'), 'error')
     }
   }
 
@@ -1354,12 +1350,12 @@ export function Skins({ on }: { on: boolean }) {
       showReward({
         items: [{ name: r.title, icon: 'cape', art: r.capeUrl ? <CapePreview url={r.capeUrl} h={180} /> : undefined }],
         tone: 'var(--m-rarity-legendary)',
-        kicker: 'Новый плащ',
+        kicker: t('Новый плащ'),
         title: r.title,
-        sub: 'Уже в гардеробе',
+        sub: t('Уже в гардеробе'),
       })
     } catch (e) {
-      showToast('Не удалось забрать награду: ' + e, 'error')
+      showToast(t('Не удалось забрать награду: {error}', { error: String(e) }), 'error')
     } finally {
       setClaiming('')
     }
@@ -1538,9 +1534,9 @@ export function Skins({ on }: { on: boolean }) {
           licensedHashes.add(textureHash(c.url))
           licensed.push({
             id: 'ms:' + a.id + ':' + c.id,
-            name: c.alias || mojangByHash.get(textureHash(c.url))?.name || 'Плащ',
+            name: c.alias || mojangByHash.get(textureHash(c.url))?.name || t('Плащ'),
             url: c.url,
-            sub: c.active ? 'Надет на ' + a.nick : 'На аккаунте ' + a.nick,
+            sub: c.active ? t('Надет на {nick}', { nick: a.nick }) : t('На аккаунте {nick}', { nick: a.nick }),
             onAccount: true,
             active: c.active,
             msId: c.id,
@@ -1554,7 +1550,7 @@ export function Skins({ on }: { on: boolean }) {
       const accHashes = new Set(accCapes.map((c) => c.hash).filter(Boolean))
       const stored: CapeOption[] = wardrobe
         .filter((i) => i.kind === 'cape')
-        .map((i) => ({ id: 'w:' + i.id, name: i.name, url: i.url, sub: 'В каталоге Millida', wardrobeId: i.id }))
+        .map((i) => ({ id: 'w:' + i.id, name: i.name, url: i.url, sub: t('В каталоге Millida'), wardrobeId: i.id }))
       // Плащ на аккаунт Millida ставит сервер по идентификатору карточки
       // (catalogId), файл туда не уходит: список открытых плащей — серверный.
       const official: CapeOption[] = mojangCapes
@@ -1564,7 +1560,7 @@ export function Skins({ on }: { on: boolean }) {
           catalogId: c.id,
           name: c.name,
           url: c.url,
-          sub: 'Дизайн Mojang',
+          sub: t('Дизайн Mojang'),
           onAccount: accHashes.has(textureHash(c.url)),
         }))
       const acc: CapeOption[] = accCapes
@@ -1573,11 +1569,11 @@ export function Skins({ on }: { on: boolean }) {
           id: 'acc:' + c.id,
           name: c.nick,
           url: c.url,
-          sub: 'На аккаунте ' + accKindLabel(c.kind),
+          sub: t('На аккаунте {nick}', { nick: accKindLabel(c.kind) }),
           onAccount: true,
         }))
       const design: CapeOption[] = [
-        { id: 'millida', catalogId: 'design:millida', name: 'Millida', url: MILLIDA_CAPE, sub: 'Плащ лаунчера' },
+        { id: 'millida', catalogId: 'design:millida', name: 'Millida', url: MILLIDA_CAPE, sub: t('Плащ лаунчера') },
       ]
       // Повторы между каталогом Millida, гардеробом аккаунта и списком Mojang
       // схлопывает dedupeCapes: у него один набор правил на все источники.
@@ -1592,7 +1588,7 @@ export function Skins({ on }: { on: boolean }) {
             catalogId: c.id,
             name: c.name,
             url: c.url,
-            sub: locked ? c.requirement || 'Пока закрыт' : c.rarity ? 'Каталог Millida · ' + c.rarity : 'Каталог Millida',
+            sub: locked ? c.requirement || t('Пока закрыт') : c.rarity ? t('Каталог Millida · {rarity}', { rarity: c.rarity }) : t('Каталог Millida'),
             locked,
             requirement: c.requirement,
             rarity: c.rarity,
@@ -1607,7 +1603,7 @@ export function Skins({ on }: { on: boolean }) {
         id: 'my:' + i,
         name: c.name,
         url: c.data,
-        sub: 'Загружено ранее',
+        sub: t('Загружено ранее'),
       }))
       // Плащи за задания - те же плащи: отдельным списком снизу они выглядели
       // повтором, и у них были свои кнопки вместо общего правила «нажал на
@@ -1640,7 +1636,7 @@ export function Skins({ on }: { on: boolean }) {
         .concat(earned)
         .concat(shut)
     },
-    [accounts, textures, myCapes, msCapes, wardrobe, capeCatalog, rewards, mojangCapes],
+    [accounts, textures, myCapes, msCapes, wardrobe, capeCatalog, rewards, mojangCapes, t],
   )
 
   // Отпечатки текстур: один и тот же плащ приезжает из каталога Millida и из
@@ -1759,7 +1755,7 @@ export function Skins({ on }: { on: boolean }) {
     const own = msCapes[accId] || []
     if ((own.find((c) => c.active)?.id || '') === msId) return false
     const ms = await ensureMsAuth(acc)
-    if (!ms) throw new Error('вход в аккаунт ' + acc.nick + ' устарел')
+    if (!ms) throw new Error(t('вход в аккаунт {nick} устарел', { nick: acc.nick }))
     await msSetCape(ms.id, msId)
     setMsCapes({ ...msCapes, [accId]: own.map((c) => ({ ...c, active: c.id === msId })) })
     texCache.delete(acc.uuid || acc.nick)
@@ -1780,11 +1776,11 @@ export function Skins({ on }: { on: boolean }) {
       target ? switchLicensedCape(target.accId, target.msId) : Promise.resolve(false),
     ]).then(([millida, license]) => {
       if (millida.status === 'rejected')
-        showToast(apiErrorText(millida.reason, 'Плащ не надет — попробуй ещё раз'), 'error')
-      if (license.status === 'rejected') showToast('Плащ лицензии не переключился: ' + license.reason, 'error')
-      if (license.status === 'fulfilled' && license.value) showToast('Плащ «' + c.name + '» надет на лицензию')
-      else if (millida.status === 'fulfilled' && millida.value) showToast('Плащ «' + c.name + '» надет')
-      else if (millida.status === 'fulfilled' && license.status === 'fulfilled') showToast('Плащ: ' + c.name)
+        showToast(apiErrorText(millida.reason, t('Плащ не надет — попробуй ещё раз')), 'error')
+      if (license.status === 'rejected') showToast(t('Плащ лицензии не переключился: {error}', { error: String(license.reason) }), 'error')
+      if (license.status === 'fulfilled' && license.value) showToast(t('Плащ «{name}» надет на лицензию', { name: c.name }))
+      else if (millida.status === 'fulfilled' && millida.value) showToast(t('Плащ «{name}» надет', { name: c.name }))
+      else if (millida.status === 'fulfilled' && license.status === 'fulfilled') showToast(t('Плащ: {name}', { name: c.name }))
     })
   }
 
@@ -1800,15 +1796,15 @@ export function Skins({ on }: { on: boolean }) {
   const takeOffCape = () => {
     chooseCape('none')
     if (!hasMillidaAccount()) {
-      showToast('Плащ снят')
+      showToast(t('Плащ снят'))
       return
     }
     void uploadTexture('cape', null)
       .then(() => refreshWardrobe())
-      .then(() => showToast('Плащ снят'))
+      .then(() => showToast(t('Плащ снят')))
       .catch((e) => {
         trackFailure('skins', e, { step: 'cape_remove' })
-        showToast(apiErrorText(e, 'Плащ не снялся — попробуй ещё раз'), 'error')
+        showToast(apiErrorText(e, t('Плащ не снялся — попробуй ещё раз')), 'error')
       })
   }
 
@@ -1934,7 +1930,7 @@ export function Skins({ on }: { on: boolean }) {
             console.warn('[skins] setSkin', e)
             if (!alive) return
             setModelShown(true)
-            showToast('Скин не прочитался — проверь, что это PNG 64×64', 'error')
+            showToast(t('Скин не прочитался — проверь, что это PNG 64×64'), 'error')
           })
       })
     return () => {
@@ -1976,7 +1972,7 @@ export function Skins({ on }: { on: boolean }) {
         if (lost.length) {
           // Молчаливая пустота на фигуре читается как «примерка не работает».
           // Лучше честно сказать, что вещь не приехала, чем оставить гадать.
-          showToast('Не удалось показать на фигуре: ' + lost.join(', '), 'error')
+          showToast(t('Не удалось показать на фигуре: {items}', { items: lost.join(', ') }), 'error')
         }
         // Эмоция двигает самого игрока, а не вещь: её клип идёт вместо покоя.
         const emote = loaded.find((got) => got.item.slot === 'EMOTE' && got.file?.animations)
@@ -2018,7 +2014,7 @@ export function Skins({ on }: { on: boolean }) {
             })
             .catch((e: unknown) => {
               console.warn('[skins] duo partner', e)
-              if (alive) showToast('Второй участник эмоции не загрузился — видна только твоя половина', 'error')
+              if (alive) showToast(t('Второй участник эмоции не загрузился — видна только твоя половина'), 'error')
             })
         }
         for (const got of loaded) {
@@ -2245,7 +2241,7 @@ export function Skins({ on }: { on: boolean }) {
   // Native dialog: HTML <input type=file> aborts WKWebView on macOS (runOpenPanel).
   const pickSkin = (model?: SkinArms) => {
     if (!hasTauri()) {
-      showToast('Загрузка скина доступна в приложении', 'error')
+      showToast(t('Загрузка скина доступна в приложении'), 'error')
       return
     }
     void pickTexture()
@@ -2256,7 +2252,7 @@ export function Skins({ on }: { on: boolean }) {
       })
       .catch((e) => {
         trackFailure('skins', e, { step: 'skin_pick' })
-        showToast('Не удалось загрузить: ' + e, 'error')
+        showToast(t('Не удалось загрузить: {error}', { error: String(e) }), 'error')
       })
   }
   pickSkinRef.current = pickSkin
@@ -2294,20 +2290,20 @@ export function Skins({ on }: { on: boolean }) {
         setActiveWardrobe(null)
         setActiveMy(next[0]?.file ?? null)
       } catch (e) {
-        showToast('В каталог аккаунта не сохранилось: ' + e, 'error')
+        showToast(t('В каталог аккаунта не сохранилось: {error}', { error: String(e) }), 'error')
       }
     }
     const title = name.replace(/\.png$/i, '')
-    const arms = slim ? 'Тонкие руки' : 'Классические руки'
+    const arms = slim ? t('Тонкие руки') : t('Классические руки')
     if (first)
       showReward({
         items: [{ name: title, art: <SkinBody url={data} model={slim ? 'slim' : 'default'} height={200} fallback={<SkinThumb url={data} slim={slim} />} /> }],
         tone: 'var(--m-accent)',
-        kicker: 'Первый свой скин',
+        kicker: t('Первый свой скин'),
         title,
         sub: arms,
       })
-    else showReward({ level: 'small', items: [{ name: title, icon: 'ws-skin' }], title: 'Скин «' + title + '» загружен', sub: arms })
+    else showReward({ level: 'small', items: [{ name: title, icon: 'ws-skin' }], title: t('Скин «{name}» загружен', { name: title }), sub: arms })
   }
 
   const [importOpen, setImportOpen] = useState(false)
@@ -2318,18 +2314,18 @@ export function Skins({ on }: { on: boolean }) {
     const url = importUrl.trim()
     if (!url) return
     if (!hasTauri()) {
-      showToast('Импорт по ссылке доступен в приложении', 'error')
+      showToast(t('Импорт по ссылке доступен в приложении'), 'error')
       return
     }
     setImporting(true)
     try {
       const data = await fetchTexture(url)
-      const name = decodeURIComponent(url.split('/').pop() || 'Скин по ссылке').slice(0, 40)
+      const name = decodeURIComponent(url.split('/').pop() || t('Скин по ссылке')).slice(0, 40)
       await acceptSkin(name, data)
       setImportUrl('')
       setImportOpen(false)
     } catch (e) {
-      showToast('Не удалось забрать скин: ' + e, 'error')
+      showToast(t('Не удалось забрать скин: {error}', { error: String(e) }), 'error')
     } finally {
       setImporting(false)
     }
@@ -2338,23 +2334,23 @@ export function Skins({ on }: { on: boolean }) {
   const importByNick = async () => {
     const player = importUrl.trim()
     if (!NICK_RE.test(player)) {
-      showToast('Ник — 3–16 символов: буквы, цифры и подчёркивание', 'error')
+      showToast(t('Ник — 3–16 символов: буквы, цифры и подчёркивание'), 'error')
       return
     }
     if (!hasTauri()) {
-      showToast('Импорт игрока доступен в приложении', 'error')
+      showToast(t('Импорт игрока доступен в приложении'), 'error')
       return
     }
     setImporting(true)
     try {
-      const t = await mcTextures(player)
-      if (!t.skin) throw new Error('у игрока стандартный скин')
-      const data = await fetchTexture(t.skin)
+      const tex = await mcTextures(player)
+      if (!tex.skin) throw new Error(t('у игрока стандартный скин'))
+      const data = await fetchTexture(tex.skin)
       await acceptSkin(player, data)
       setImportUrl('')
       setImportOpen(false)
     } catch (e) {
-      showToast('Не удалось забрать скин игрока: ' + e, 'error')
+      showToast(t('Не удалось забрать скин игрока: {error}', { error: String(e) }), 'error')
     } finally {
       setImporting(false)
     }
@@ -2373,16 +2369,16 @@ export function Skins({ on }: { on: boolean }) {
       try {
         await applyWardrobeItem(item.id)
         appliedRef.current = item.url
-        if (!stale()) showToast('Скин «' + item.name + '» надет')
+        if (!stale()) showToast(t('Скин «{name}» надет', { name: item.name }))
       } catch (e) {
-        if (!stale()) showToast('Не удалось надеть скин: ' + e, 'error')
+        if (!stale()) showToast(t('Не удалось надеть скин: {error}', { error: String(e) }), 'error')
         return
       }
       if (stale()) return
       try {
         await syncLocalSkin(item.url, item.model === 'slim')
       } catch (e) {
-        showToast('На этом компьютере скин не обновился — в сборках останется прежний: ' + e, 'error')
+        showToast(t('На этом компьютере скин не обновился — в сборках останется прежний: {error}', { error: String(e) }), 'error')
       }
     })
   }
@@ -2398,12 +2394,12 @@ export function Skins({ on }: { on: boolean }) {
     if (activeWardrobe === item.id) setActiveWardrobe(null)
     const commit = setTimeout(() => {
       void removeWardrobeItem(item.id).catch((e) => {
-        showToast(apiErrorText(e, 'Скин не удалился'), 'error')
+        showToast(apiErrorText(e, t('Скин не удалился')), 'error')
         void refreshWardrobe()
       })
     }, SKIN_UNDO_MS)
-    showToast('Скин «' + item.name + '» удалён', undefined, undefined, {
-      label: 'Отменить',
+    showToast(t('Скин «{name}» удалён', { name: item.name }), undefined, undefined, {
+      label: t('Отменить'),
       run: () => {
         clearTimeout(commit)
         setWardrobe((cur) => (cur.some((i) => i.id === item.id) ? cur : [...cur.slice(0, at), item, ...cur.slice(at)]))
@@ -2424,10 +2420,10 @@ export function Skins({ on }: { on: boolean }) {
       if (wasActive) void dropLocalSkin()
       void deleteTexture('skins', target.file)
         .then(setMySkins)
-        .catch((e) => showToast('Не удалось удалить: ' + e, 'error'))
+        .catch((e) => showToast(t('Не удалось удалить: {error}', { error: String(e) }), 'error'))
     }, SKIN_UNDO_MS)
-    showToast('Скин «' + target.name + '» удалён', undefined, undefined, {
-      label: 'Отменить',
+    showToast(t('Скин «{name}» удалён', { name: target.name }), undefined, undefined, {
+      label: t('Отменить'),
       run: () => {
         clearTimeout(commit)
         setMySkins((cur) => (cur.some((s) => s.file === target.file) ? cur : [...cur.slice(0, i), target, ...cur.slice(i)]))
@@ -2441,7 +2437,7 @@ export function Skins({ on }: { on: boolean }) {
     if (cape === 'my:' + i) chooseCape('none')
     void deleteTexture('capes', target.file)
       .then(setMyCapes)
-      .catch((e) => showToast('Не удалось удалить: ' + e, 'error'))
+      .catch((e) => showToast(t('Не удалось удалить: {error}', { error: String(e) }), 'error'))
   }
 
   const selectCatalog = (it: CatalogSkin) => {
@@ -2463,7 +2459,7 @@ export function Skins({ on }: { on: boolean }) {
   // чипу. Поиск — по всему каталогу сразу, как в Roblox: ищут вещь, а не место.
   const cosmeticQueryNorm = cosmeticQuery.trim().toLowerCase()
 
-  const sections = useMemo(() => cosmeticSections(cosmetics.map((c) => c.slot)), [cosmetics])
+  const sections = useMemo(() => cosmeticSections(cosmetics.map((c) => c.slot)), [cosmetics, t])
 
   const sectionDef = sections.find((s) => s.key === section)
   const chipKey = chipBy[section] ?? (sectionDef ? sectionDef.chips[0].key : section === 'skin' ? 'mine' : 'all')
@@ -2501,7 +2497,7 @@ export function Skins({ on }: { on: boolean }) {
     if (stored) return stored.name
     const my = mySkinOf(activeMy)
     if (my) return my.name
-    return 'Скин ' + nick
+    return t('Скин {nick}', { nick })
   }
 
   const refreshHead = async (texture: string) => {
@@ -2567,7 +2563,7 @@ export function Skins({ on }: { on: boolean }) {
   const applyToMillida = (picked?: string, arms?: string): Promise<void> => {
     const texture = picked ?? skinSrc
     if (!texture) {
-      showToast('Сначала выбери скин — свой, из каталога или из аккаунта', 'error')
+      showToast(t('Сначала выбери скин — свой, из каталога или из аккаунта'), 'error')
       return Promise.resolve()
     }
     const token = startSkinPick()
@@ -2584,7 +2580,7 @@ export function Skins({ on }: { on: boolean }) {
     const undo =
       prev && prev !== texture
         ? {
-            label: 'Вернуть',
+            label: t('Вернуть'),
             run: () => {
               setSkinSrc(prev)
               setActiveMy(null)
@@ -2595,17 +2591,17 @@ export function Skins({ on }: { on: boolean }) {
         : undefined
     try {
       const skin = await toPngBase64(texture).catch(() => {
-        throw new Error('картинка скина не читается — выбери его заново')
+        throw new Error(t('картинка скина не читается — выбери его заново'))
       })
       const capePng = currentCape
         ? await toPngBase64(currentCape.url).catch(() => {
-            throw new Error('плащ «' + currentCape.name + '» не скачался — выбери другой')
+            throw new Error(t('плащ «{name}» не скачался — выбери другой', { name: currentCape.name }))
           })
         : null
       if (stale()) return
       if (hasTauri())
         await setLocalSkin(skin, capePng ?? '', slimArms).catch((e) => {
-          throw new Error('скин не сохранился на этом компьютере: ' + e)
+          throw new Error(t('скин не сохранился на этом компьютере: {error}', { error: String(e) }))
         })
       const acc = getAccount()
       let licensed = false
@@ -2614,7 +2610,7 @@ export function Skins({ on }: { on: boolean }) {
         licensed = await applyLicensedCape()
       } catch (e) {
         trackFailure('skins', e, { step: 'license_cape' })
-        showToast('Плащ лицензии не переключился: ' + e, 'error')
+        showToast(t('Плащ лицензии не переключился: {error}', { error: String(e) }), 'error')
       }
       // Скин на лицензию уходит независимо от аккаунта Millida: раньше он был
       // привязан к загрузке в каталог, и без входа в Millida на аккаунте
@@ -2628,7 +2624,7 @@ export function Skins({ on }: { on: boolean }) {
             licensed = true
           } catch (e) {
             trackFailure('skins', e, { step: 'license_skin' })
-            showToast('На лицензию скин не уехал: ' + e, 'error')
+            showToast(t('На лицензию скин не уехал: {error}', { error: String(e) }), 'error')
           }
         }
       }
@@ -2637,13 +2633,12 @@ export function Skins({ on }: { on: boolean }) {
         if (stale()) return
         const applied = await uploadTexture('skin', skin, slimArms, skinTitle()).catch((e) => {
           throw new Error(
-            'скин не сохранился в аккаунте Millida (' +
-              apiErrorText(e, 'Millida не приняла скин') +
-              ')' +
-              (licensed ? ' — на лицензии он уже применён' : ''),
+            licensed
+              ? t('скин не сохранился в аккаунте Millida ({error}) — на лицензии он уже применён', { error: apiErrorText(e, t('Millida не приняла скин')) })
+              : t('скин не сохранился в аккаунте Millida ({error})', { error: apiErrorText(e, t('Millida не приняла скин')) }),
           )
         })
-        if (!applied || !applied.skinUrl) throw new Error('сервер не сохранил скин')
+        if (!applied || !applied.skinUrl) throw new Error(t('сервер не сохранил скин'))
         // Пока ехали, выбрали другой скин: он уже стоит в очереди следом и
         // перезапишет этот. Карточки и тосты — его забота.
         if (stale()) return
@@ -2666,13 +2661,13 @@ export function Skins({ on }: { on: boolean }) {
         await refreshRewards()
         if (capeLocalOnly)
           showToast(
-            'Плащ «' + capeLocalOnly + '» виден только на этом компьютере: на аккаунт ставятся плащи из каталога',
+            t('Плащ «{name}» виден только на этом компьютере: на аккаунт ставятся плащи из каталога', { name: capeLocalOnly }),
           )
         appliedRef.current = texture
         showToast(
           licensed
-            ? 'Скин применён — сохранён в каталоге Millida и на лицензии'
-            : 'Скин применён и сохранён в каталоге Millida',
+            ? t('Скин применён — сохранён в каталоге Millida и на лицензии')
+            : t('Скин применён и сохранён в каталоге Millida'),
           undefined,
           undefined,
           undo,
@@ -2682,8 +2677,8 @@ export function Skins({ on }: { on: boolean }) {
         appliedRef.current = texture
         showToast(
           licensed
-            ? 'Скин применён на лицензии Microsoft'
-            : 'Скин применён — увидишь его в игре на модовых сборках после запуска',
+            ? t('Скин применён на лицензии Microsoft')
+            : t('Скин применён — увидишь его в игре на модовых сборках после запуска'),
           undefined,
           undefined,
           undo,
@@ -2697,7 +2692,7 @@ export function Skins({ on }: { on: boolean }) {
       })
     } catch (e) {
       if (!stale()) trackFailure('skins', e, { step: 'apply' })
-      if (!stale()) showToast(apiErrorText(e, 'Не удалось применить скин'), 'error')
+      if (!stale()) showToast(apiErrorText(e, t('Не удалось применить скин')), 'error')
     }
   }
 
@@ -2735,20 +2730,20 @@ export function Skins({ on }: { on: boolean }) {
     const same = outfits.find((o) => o.id === activeOutfit)
     if (same) {
       // Тот же набор — ведём переодеться: новый образ из тех же вещей не нужен.
-      showToast('Это «' + same.name + '». Надень другое — и сохрани')
+      showToast(t('Это «{name}». Надень другое — и сохрани', { name: same.name }))
       pickSection('skin')
       return
     }
     if (outfits.length >= OUTFITS_LIMIT) {
-      showToast('Больше ' + OUTFITS_LIMIT + ' образов не сохранить', 'error')
+      showToast(t('Больше {n} образов не сохранить', { n: OUTFITS_LIMIT }), 'error')
       return
     }
     const next = addOutfit(outfits, currentLook())
     keepOutfits(next)
     showReward({
       level: 'mid',
-      items: [{ name: 'Образ', art: figureArt(64) }],
-      title: 'Образ сохранён',
+      items: [{ name: t('Образ'), art: figureArt(64) }],
+      title: t('Образ сохранён'),
       sub: '«' + next[next.length - 1].name + '»',
     })
   }
@@ -2757,8 +2752,8 @@ export function Skins({ on }: { on: boolean }) {
     const before = outfits
     keepOutfits(removeOutfit(outfits, o.id))
     // Удаление без окна подтверждения, но с откатом: образ собирали руками.
-    showToast('Образ «' + o.name + '» удалён', undefined, undefined, {
-      label: 'Вернуть',
+    showToast(t('Образ «{name}» удалён', { name: o.name }), undefined, undefined, {
+      label: t('Вернуть'),
       run: () => keepOutfits(before),
     })
   }
@@ -2794,11 +2789,11 @@ export function Skins({ on }: { on: boolean }) {
       setWorn(next)
       setFitting((now) => now.filter((c) => !mine.some((m) => m.slot === c.slot) && !missing.some((m) => m.slot === c.slot)).concat(missing))
       setSetOffer(missing.length && way.price > 0 ? { setId: set.id, colorway: way.name, title: set.title, price: way.price } : null)
-      if (missing.length) showToast('«' + set.title + '» надет: ' + mine.length + ' из ' + way.items.length, 'ok')
-      else showReward({ level: 'small', items: [{ name: set.title, icon: 'looks' }], title: '«' + set.title + '» надет' })
+      if (missing.length) showToast(t('«{name}» надет: {n} из {total}', { name: set.title, n: mine.length, total: way.items.length }), 'ok')
+      else showReward({ level: 'small', items: [{ name: set.title, icon: 'looks' }], title: t('«{name}» надет', { name: set.title }) })
     } catch (e) {
       trackFailure('skins', e, { step: 'set_wear' })
-      showToast(apiErrorText(e, 'Набор надет не целиком'), 'error')
+      showToast(apiErrorText(e, t('Набор надет не целиком')), 'error')
     } finally {
       setSetBusy('')
     }
@@ -2815,13 +2810,13 @@ export function Skins({ on }: { on: boolean }) {
     const result = purchaseFlow('bundle', offer.setId + (offer.colorway ? '~' + offer.colorway : ''), price, 'rubies')
     if (price > rubies) {
       result(false, 'insufficient')
-      showToast('Не хватает ' + (price - rubies) + ' ' + rubyWord(price - rubies), 'error')
+      showToast(t('Не хватает {price}', { price: rubyCount(price - rubies) }), 'error')
       return setScreen('rubies')
     }
-    const ok = await uiConfirm('«' + offer.title + '» за ' + price + ' ' + rubyWord(price) + '. Купить и надеть?', {
-      title: 'Докупить набор',
-      confirmLabel: 'Купить',
-      cancelLabel: 'Не сейчас',
+    const ok = await uiConfirm(t('«{name}» за {price}. Купить и надеть?', { name: offer.title, price: rubyCount(price) }), {
+      title: t('Докупить набор'),
+      confirmLabel: t('Купить'),
+      cancelLabel: t('Не сейчас'),
       danger: false,
     })
     if (!ok) return result(false, 'cancel')
@@ -2845,7 +2840,7 @@ export function Skins({ on }: { on: boolean }) {
         setWorn(next)
         setFitting([])
       } catch (e) {
-        showToast(apiErrorText(e, 'Куплено, но не наделось — нажми на набор'), 'error')
+        showToast(apiErrorText(e, t('Куплено, но не наделось — нажми на набор')), 'error')
       }
       setSetOffer(null)
       void reloadSets()
@@ -2855,7 +2850,7 @@ export function Skins({ on }: { on: boolean }) {
       })
     } catch (e) {
       result(false, 'error', e)
-      showToast(apiErrorText(e, 'Не удалось купить набор'), 'error')
+      showToast(apiErrorText(e, t('Не удалось купить набор')), 'error')
       void reloadSets()
     } finally {
       setCosmeticBusy('')
@@ -2907,7 +2902,7 @@ export function Skins({ on }: { on: boolean }) {
               target ? switchLicensedCape(target.accId, target.msId) : Promise.resolve(false),
             ])
             if (millida.status === 'rejected') throw millida.reason
-            if (license.status === 'rejected') showToast('Плащ лицензии не переключился: ' + license.reason, 'error')
+            if (license.status === 'rejected') showToast(t('Плащ лицензии не переключился: {error}', { error: String(license.reason) }), 'error')
           }
         }
       }
@@ -2927,11 +2922,11 @@ export function Skins({ on }: { on: boolean }) {
         setFitting([])
       }
 
-      if (skipped) showToast('«' + o.name + '» надет, закрытых вещей пропущено: ' + skipped)
-      else showReward({ level: 'small', items: [{ name: o.name, icon: 'looks' }], title: '«' + o.name + '» надет' })
+      if (skipped) showToast(t('«{name}» надет, закрытых вещей пропущено: {n}', { name: o.name, n: skipped }))
+      else showReward({ level: 'small', items: [{ name: o.name, icon: 'looks' }], title: t('«{name}» надет', { name: o.name }) })
     } catch (e) {
       trackFailure('skins', e, { step: 'outfit' })
-      showToast(apiErrorText(e, 'Образ надет не целиком'), 'error')
+      showToast(apiErrorText(e, t('Образ надет не целиком')), 'error')
     } finally {
       setOutfitBusy(null)
     }
@@ -3001,11 +2996,11 @@ export function Skins({ on }: { on: boolean }) {
      «возьми с Essential для кнопок разделов косметики»). Картинки вещей в
      кнопках раздела сливались в пёструю полосу. */
   const sectionList: Section[] = [
-    { key: 'looks', name: 'Образы', icon: 'ws-looks' },
+    { key: 'looks', name: t('Образы'), icon: 'ws-looks' },
     // Магазин рядом с вещами (06.10.2026, «один в один»): те же блоки, что в магазине.
-    ...(hasMillidaAccount() ? [{ key: 'shop', name: 'Магазин', icon: 'ws-shop' }] : []),
-    { key: 'skin', name: 'Скины', icon: 'ws-skin' },
-    { key: 'cape', name: 'Плащи', icon: 'ws-cape', alert: readyRewards > 0 },
+    ...(hasMillidaAccount() ? [{ key: 'shop', name: t('Магазин'), icon: 'ws-shop' }] : []),
+    { key: 'skin', name: t('Скины'), icon: 'ws-skin' },
+    { key: 'cape', name: t('Плащи'), icon: 'ws-cape', alert: readyRewards > 0 },
     ...sections.map((sec) => ({ key: sec.key, name: sec.name, icon: 'ws-' + sec.key })),
   ]
 
@@ -3026,12 +3021,12 @@ export function Skins({ on }: { on: boolean }) {
 
   const chipList =
     section === 'skin'
-      ? SKIN_CHIPS.map((c) => ({ key: c.key, name: c.name }))
+      ? SKIN_CHIPS().map((c) => ({ key: c.key, name: c.name }))
       : section === 'cape'
         ? earnedCapes.length
           ? [
-              { key: 'all', name: 'Все', count: ownCapes.length + cosmetics.filter((c) => c.slot === 'CAPE').length },
-              { key: 'quest', name: 'За задания', count: earnedCapes.length },
+              { key: 'all', name: t('Все'), count: ownCapes.length + cosmetics.filter((c) => c.slot === 'CAPE').length },
+              { key: 'quest', name: t('За задания'), count: earnedCapes.length },
             ]
           : []
         : sectionDef
@@ -3046,8 +3041,8 @@ export function Skins({ on }: { on: boolean }) {
     <div className="segs ch-own">
       {(
         [
-          ['all', 'Все'],
-          ['mine', 'Мои'],
+          ['all', t('Все')],
+          ['mine', t('Мои')],
         ] as [string, string][]
       ).map(([key, label]) => (
         <button key={key} className={'seg' + (own === key ? ' on' : '')} data-track={'wardrobe_own_' + key} onClick={() => setOwn(key)}>
@@ -3094,7 +3089,7 @@ export function Skins({ on }: { on: boolean }) {
         key={c.id}
         art={<CapePreview url={c.url} h={128} />}
         name={c.name}
-        note={c.locked ? (c.rewardReady ? 'Можно забрать' : c.requirement || 'Пока закрыт') : undefined}
+        note={c.locked ? (c.rewardReady ? t('Можно забрать') : c.requirement || t('Пока закрыт')) : undefined}
         rarity={c.rarity}
         locked={c.locked}
         on={c.id === cape}
@@ -3122,8 +3117,8 @@ export function Skins({ on }: { on: boolean }) {
             <Icon id="i-star" />
           </span>
         }
-        name={plusBusy ? 'Открываем…' : 'Открыть с PLUS'}
-        status={rubles(plus?.priceKopecks ?? 29900) + ' в месяц'}
+        name={plusBusy ? t('Открываем…') : t('Открыть с PLUS')}
+        status={t('{price} в месяц', { price: plusPrice('PLUS', plus?.priceKopecks ?? 29900) ?? '' })}
         track="plus_subscribe"
         onClick={plusBusy ? undefined : () => void startPlus()}
       />
@@ -3152,7 +3147,7 @@ export function Skins({ on }: { on: boolean }) {
         }}
       />
       {value ? (
-        <button className="ch-search-x" aria-label="Очистить" data-track="search_clear" onClick={() => set('')}>
+        <button className="ch-search-x" aria-label={t('Очистить')} data-track="search_clear" onClick={() => set('')}>
           <Icon id="i-x" />
         </button>
       ) : null}
@@ -3162,15 +3157,15 @@ export function Skins({ on }: { on: boolean }) {
   const catalogBroken =
     cosmetics.length === 0 ? (
       <div className="load-again">
-        <span>{cosmeticsFailed ? 'Каталог не загрузился' : 'Каталог пока пуст'}</span>
+        <span>{cosmeticsFailed ? t('Каталог не загрузился') : t('Каталог пока пуст')}</span>
         <button className="btn sm secondary" onClick={() => void refreshCosmetics()}>
           <Icon id="i-restart" />
-          Повторить
+          {t('Повторить')}
         </button>
       </div>
     ) : null
 
-  const nothing = <div className="ch-nothing">Ничего не нашлось</div>
+  const nothing = <div className="ch-nothing">{t('Ничего не нашлось')}</div>
 
   const skinPanel = (
     <>
@@ -3179,7 +3174,7 @@ export function Skins({ on }: { on: boolean }) {
           <div className="input sm">
             <Icon id="i-link" />
             <input
-              placeholder="Ссылка на PNG или ник игрока…"
+              placeholder={t('Ссылка на PNG или ник игрока…')}
               value={importUrl}
               autoFocus
               onChange={(e) => setImportUrl(e.target.value)}
@@ -3191,14 +3186,14 @@ export function Skins({ on }: { on: boolean }) {
             />
           </div>
           <button className="btn sm ghost" onClick={() => setImportOpen(false)}>
-            Отмена
+            {t('Отмена')}
           </button>
           <button
             className="btn sm primary"
             disabled={importing || !importUrl.trim()}
             onClick={() => (NICK_RE.test(importUrl.trim()) ? void importByNick() : void importByUrl())}
           >
-            {importing ? 'Забираем…' : 'Забрать'}
+            {importing ? t('Забираем…') : t('Забрать')}
           </button>
         </div>
       ) : null}
@@ -3208,17 +3203,17 @@ export function Skins({ on }: { on: boolean }) {
           {hasMillidaAccount() ? null : (
             <div className="ch-warn">
               <Icon id="i-lock" />
-              <span>Скины только на этом компьютере</span>
+              <span>{t('Скины только на этом компьютере')}</span>
               <button className="btn sm secondary" onClick={() => logoutToLogin()}>
                 <Icon id="i-login" />
-                Войти
+                {t('Войти')}
               </button>
             </div>
           )}
           {uploadOpen ? (
             <div className="ch-import">
               <div className="segs">
-                {SKIN_ARMS.map(([key, label]) => (
+                {SKIN_ARMS().map(([key, label]) => (
                   <button
                     key={key}
                     className={'seg' + (uploadArms === key ? ' on' : '')}
@@ -3230,11 +3225,11 @@ export function Skins({ on }: { on: boolean }) {
                 ))}
               </div>
               <button className="btn sm ghost" onClick={() => setUploadOpen(false)}>
-                Отмена
+                {t('Отмена')}
               </button>
               <button className="btn sm primary" data-track="skin_upload_pick" onClick={() => pickSkin(uploadArms)}>
                 <Icon id="i-upload" />
-                Выбрать PNG
+                {t('Выбрать PNG')}
               </button>
             </div>
           ) : null}
@@ -3247,7 +3242,7 @@ export function Skins({ on }: { on: boolean }) {
                 key={'my:' + sk.file}
                 art={<SkinCardThumb url={sk.data} slim={sk.slim} />}
                 name={sk.name}
-                note={sk.slim ? 'Тонкие руки' : 'Классические руки'}
+                note={sk.slim ? t('Тонкие руки') : t('Классические руки')}
                 on={activeMy === sk.file}
                 onClick={() => {
                   chooseVariant('m:' + sk.file, sk.slim ? 'slim' : 'classic', false)
@@ -3267,7 +3262,7 @@ export function Skins({ on }: { on: boolean }) {
                   key={item.id}
                   art={<SkinCardThumb url={item.url} slim={item.model === 'slim'} />}
                   name={item.name}
-                  note={item.model === 'slim' ? 'Тонкие руки' : 'Классические руки'}
+                  note={item.model === 'slim' ? t('Тонкие руки') : t('Классические руки')}
                   on={
                     activeWardrobe === item.id ||
                     (!!activeMyHash && activeMyHash === wardrobeSkinHash(item.url))
@@ -3286,7 +3281,7 @@ export function Skins({ on }: { on: boolean }) {
                   />
                 }
                 name={a.nick}
-                note="Скин аккаунта"
+                note={t('Скин аккаунта')}
                 mark={a.id === activeId ? <Icon id="i-user" /> : undefined}
                 onClick={() => {
                   const t = textures[a.id]
@@ -3313,7 +3308,7 @@ export function Skins({ on }: { on: boolean }) {
                   <Icon id="i-upload" />
                 </span>
               }
-              name="Загрузить скин"
+              name={t('Загрузить скин')}
               status="PNG"
               track="skin_upload_tile"
               onClick={() => setUploadOpen(true)}
@@ -3325,7 +3320,7 @@ export function Skins({ on }: { on: boolean }) {
                   <Icon id="i-brush" />
                 </span>
               }
-              name="Заказать свой скин"
+              name={t('Заказать свой скин')}
               status="millida.net"
               track="skin_order"
               onClick={() => {
@@ -3336,20 +3331,20 @@ export function Skins({ on }: { on: boolean }) {
           </ItemGrid>
           {wardrobeFailed && hasMillidaAccount() ? (
             <div className="load-again">
-              <span>Каталог не загрузился</span>
+              <span>{t('Каталог не загрузился')}</span>
               <button className="btn sm secondary" onClick={() => void refreshWardrobe()}>
                 <Icon id="i-restart" />
-                Повторить
+                {t('Повторить')}
               </button>
             </div>
           ) : null}
         </>
       ) : catFailed ? (
         <div className="load-again">
-          <span>Каталог не загрузился</span>
+          <span>{t('Каталог не загрузился')}</span>
           <button className="btn sm secondary" onClick={() => void loadCatalog(catKind)}>
             <Icon id="i-restart" />
-            Повторить
+            {t('Повторить')}
           </button>
         </div>
       ) : catFound.length || NICK_RE.test(catQuery.trim()) ? (
@@ -3358,7 +3353,7 @@ export function Skins({ on }: { on: boolean }) {
             <ItemTile
               art={<CatalogThumb nick={catQuery.trim()} />}
               name={catQuery.trim()}
-              note="Скин игрока"
+              note={t('Скин игрока')}
               onClick={() => selectCatalog({ key: '', nick: catQuery.trim(), label: catQuery.trim() })}
             />
           ) : null}
@@ -3375,7 +3370,7 @@ export function Skins({ on }: { on: boolean }) {
           })}
         </ItemGrid>
       ) : (
-        <div className="ch-nothing">{catQuery.trim() ? 'Ничего не нашли' : 'Каталог пока пуст'}</div>
+        <div className="ch-nothing">{catQuery.trim() ? t('Ничего не нашли') : t('Каталог пока пуст')}</div>
       )}
     </>
   )
@@ -3411,7 +3406,7 @@ export function Skins({ on }: { on: boolean }) {
     </>
   )
 
-  const sectionName = sectionList.find((s) => s.key === section)?.name ?? 'Гардероб'
+  const sectionName = sectionList.find((s) => s.key === section)?.name ?? t('Гардероб')
 
   return (
     <section className={'screen' + (on ? ' on' : '')} id="s-skins">
@@ -3449,11 +3444,11 @@ export function Skins({ on }: { on: boolean }) {
                 transition: 'opacity var(--m-t-base)',
               }}
             ></canvas>
-            {use3d && !modelShown ? <span className="skin-loader" aria-label="Загружаем модель"></span> : null}
+            {use3d && !modelShown ? <span className="skin-loader" aria-label={t('Загружаем модель')}></span> : null}
             {fitLoading.length ? (
               <span className="stage-note" aria-live="polite">
                 <span className="stage-spin" aria-hidden="true"></span>
-                Надеваем…
+                {t('Надеваем…')}
               </span>
             ) : null}
             {!use3d && fallback ? (
@@ -3461,7 +3456,7 @@ export function Skins({ on }: { on: boolean }) {
                 <SkinThumb url={skinSrc || skinUrl(nick)} size={288} slim={variant === 'slim'} />
               </div>
             ) : !use3d ? (
-              <span className="skin-loader" aria-label="Загружаем модель"></span>
+              <span className="skin-loader" aria-label={t('Загружаем модель')}></span>
             ) : null}
           </div>
 
@@ -3527,10 +3522,10 @@ export function Skins({ on }: { on: boolean }) {
             <div className="ch-warn">
               <Icon id="i-alert" />
               <span>
-                В игре ты <b>{gameNick.name}</b> — ник занят
+                {t('В игре ты')} <b>{gameNick.name}</b> {t('— ник занят')}
               </span>
               <button className="btn sm secondary" onClick={() => openExt(SUPPORT_URL)}>
-                Поддержка
+                {t('Поддержка')}
               </button>
             </div>
           ) : null}
@@ -3566,7 +3561,7 @@ export function Skins({ on }: { on: boolean }) {
                         void takeOffSlots(off.slots)
                       }}
                     >
-                      <Icon id="i-x" /> Снять
+                      <Icon id="i-x" /> {t('Снять')}
                     </button>
                   ) : null}
                   {cosmetic ? ownFilter : null}
@@ -3578,7 +3573,7 @@ export function Skins({ on }: { on: boolean }) {
 
           {section === 'skin' && chipKey !== 'mine' ? (
             <div className="ch-bar">
-              {searchBox('Ник или название…', catQuery, setCatQuery, () => {
+              {searchBox(t('Ник или название…'), catQuery, setCatQuery, () => {
                 if (NICK_RE.test(catQuery.trim()))
                   selectCatalog({ key: '', nick: catQuery.trim(), label: catQuery.trim() })
               })}
@@ -3592,7 +3587,7 @@ export function Skins({ on }: { on: boolean }) {
           ) : section === 'looks' ? (
             <>
             <SetLooks sets={setList} busy={setBusy} onWear={(st, w) => void wearSet(st, w)} />
-            {setList.some((x) => x.colorways.some((c) => c.have > 0)) ? <h3 className="ch-bar-title ch-sub">Мои</h3> : null}
+            {setList.some((x) => x.colorways.some((c) => c.have > 0)) ? <h3 className="ch-bar-title ch-sub">{t('Мои')}</h3> : null}
             <Outfits
               list={outfits}
               activeId={activeOutfit}
@@ -3626,7 +3621,7 @@ export function Skins({ on }: { on: boolean }) {
             <div className="cape-info-art">
               <CapePreview url={capeInfo.url} h={120} />
             </div>
-            <div className="sub">{capeInfo.requirement || 'Плащ каталога Millida'}</div>
+            <div className="sub">{capeInfo.requirement || t('Плащ каталога Millida')}</div>
             {capeInfo.progress !== undefined ? (
               <>
                 <span className="cape-prog" style={{ marginTop: '14px' }}>
@@ -3642,7 +3637,7 @@ export function Skins({ on }: { on: boolean }) {
             ) : null}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '18px' }}>
               <button className="btn md secondary" onClick={() => setCapeInfo(null)}>
-                Закрыть
+                {t('Закрыть')}
               </button>
               {capeInfo.rewardCode && capeInfo.rewardReady ? (
                 <button
@@ -3650,7 +3645,7 @@ export function Skins({ on }: { on: boolean }) {
                   disabled={claiming === capeInfo.rewardCode}
                   onClick={() => void takeCape(capeInfo)}
                 >
-                  {claiming === capeInfo.rewardCode ? 'Выдаём…' : 'Забрать'}
+                  {claiming === capeInfo.rewardCode ? t('Выдаём…') : t('Забрать')}
                 </button>
               ) : null}
             </div>

@@ -3,6 +3,7 @@ import { claimProgress, loadProgress } from './rubies'
 import { hasMillidaAccount } from './api'
 import { useDaily } from '../state/daily'
 import { showToast } from '../state/ui'
+import { t } from '../i18n'
 
 const KEY = 'm-hours1-chest'
 const CODE = 'hours1'
@@ -45,7 +46,7 @@ export function useFirstHourChest(on: boolean, totalSeconds: number) {
       const got = await claimProgress(CODE)
       if (!got.claimed) return
       settle()
-      showToast('Сундук за первый час — в «Моих сундуках»', 'ok')
+      showToast(t('Сундук за первый час — в «Моих сундуках»'), 'ok')
       void useDaily.getState().load()
     })().catch(() => {
       asked = false

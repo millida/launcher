@@ -1,15 +1,17 @@
 import { Icon } from './Icon'
 import { PL_STAGES, REPAIR_STAGES, cancelPrelaunch } from '../lib/launch'
 import { useUi } from '../state/ui'
+import { useT } from '../i18n'
 
 export function Prelaunch() {
+  const t = useT()
   const pl = useUi((s) => s.prelaunch)
   const repair = pl.mode === 'repair'
   const stages = repair ? REPAIR_STAGES : PL_STAGES
   return (
     <div className={'prelaunch' + (pl.open ? ' open' : '')} id="prelaunch">
       <div className="pl-title" id="plTitle">
-        {repair ? 'Починка сборки' : 'Запуск сборки'}
+        {repair ? t('Починка сборки') : t('Запуск сборки')}
       </div>
       <div className="pl-sub" id="plSub">
         {pl.sub}
@@ -20,7 +22,7 @@ export function Prelaunch() {
             <span className="st-ic">
               {i < pl.stage ? <Icon id="i-check" /> : i === pl.stage ? <span className="spin"></span> : null}
             </span>
-            {i === pl.stage && pl.msg ? pl.msg : st}
+            {i === pl.stage && pl.msg ? pl.msg : t(st)}
           </div>
         ))}
       </div>
@@ -28,7 +30,7 @@ export function Prelaunch() {
         <i id="plBar" style={{ width: pl.pct + '%' }}></i>
       </div>
       <button className="btn sm ghost" style={{ width: '100%' }} id="plCancel" onClick={cancelPrelaunch}>
-        Отмена
+        {t('Отмена')}
       </button>
     </div>
   )

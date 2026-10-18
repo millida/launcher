@@ -2,6 +2,7 @@ import type { ReactElement } from 'react'
 import { Icon } from '../Icon'
 import { fmtN } from '../../lib/format'
 import { blockArt } from './data'
+import { useT } from '../../i18n'
 
 /**
  * Баннер OneBlock — первая карточка «Режимов», на две колонки (приказ
@@ -75,6 +76,7 @@ function Cloud({ x, y, u }: { x: number; y: number; u: number }) {
 }
 
 export function OneBlockBanner({ online, onPlay }: { online: number | null; onPlay: () => void }) {
+  const t = useT()
   return (
     <div className="ph-ob" role="group" aria-label="OneBlock">
       <svg className="ph-ob-sky" viewBox="0 0 720 300" preserveAspectRatio="xMaxYMid slice" aria-hidden="true">
@@ -104,11 +106,11 @@ export function OneBlockBanner({ online, onPlay }: { online: number | null; onPl
         {online && online >= 20 ? (
           <span className="ph-ob-online">
             <span className="ph-dot" aria-hidden="true"></span>
-            {fmtN(online)} играют
+            {t('{n} играют', { n: fmtN(online) })}
           </span>
         ) : null}
         <button className="btn lg primary ph-ob-cta" data-sound="open" onClick={onPlay}>
-          <Icon id="i-play" /> Играть
+          <Icon id="i-play" /> {t('Играть')}
         </button>
       </span>
     </div>

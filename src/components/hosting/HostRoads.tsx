@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 import { Icon } from '../Icon'
 import { api } from '../../lib/api'
 import { HostStat } from './HostScene'
+import { formatFixed, useT } from '../../i18n'
+import { plural } from '../../lib/format'
+import { hostingPlanPrice, useRegionalPrices } from '../../lib/regionalPrices'
 
 // Первый экран хостинга — две дороги: платный сервер (главная кнопка)
 // и бесплатный (вторая). Все числа живые из /hosting/plans: цена, память,
@@ -22,8 +25,7 @@ export interface HostPlanLite {
   fullAccess?: boolean
 }
 
-const rub = (k: number) => Math.round(k / 100).toLocaleString('ru-RU')
-const gb = (mb: number) => (mb / 1024).toFixed(mb % 1024 === 0 ? 0 : 1).replace('.', ',')
+const gb = (mb: number) => formatFixed(mb / 1024, mb % 1024 === 0 ? 0 : 1)
 
 export function hostPlanFacts(plans: HostPlanLite[]) {
   const free = plans.find((p) => !p.priceKopecks) || null
@@ -32,9 +34,11 @@ export function hostPlanFacts(plans: HostPlanLite[]) {
   const prices = nums((p) => p.priceKopecks)
   const rams = nums((p) => p.ramMb)
   const players = nums((p) => p.playersComfort || p.maxPlayers)
+  const cheapest = paid.reduce<HostPlanLite | null>((best, p) => (!best || (p.priceKopecks ?? 0) < (best.priceKopecks ?? 0) ? p : best), null)
   return {
     free,
     paid,
+    cheapest,
     minPrice: prices.length ? Math.min(...prices) : 0,
     ramLow: rams.length ? Math.min(...rams) : 0,
     ramHigh: rams.length ? Math.max(...rams) : 0,
@@ -63,6 +67,8 @@ export function HostRoads({
   onPaid: () => void
   onFree: () => void
 }) {
+  const t = useT()
+  useRegionalPrices()
   const [plans, setPlans] = useState<HostPlanLite[] | null>(null)
   useEffect(() => {
     let alive = true
@@ -85,12 +91,12 @@ export function HostRoads({
     <div className="hsx-roads">
       <section className="hsx-road is-green">
         <header className="hsx-road-head">
-          <h2>Платный сервер</h2>
+          <h2>{t('Платный сервер')}</h2>
           {loading ? (
             <span className="skel skel-line" style={{ width: 140, height: 22 }}></span>
           ) : f.minPrice ? (
             <div className="hsx-price">
-              от <b>{rub(f.minPrice)} ₽</b> в месяц
+              {t('от')} <b>{f.cheapest ? hostingPlanPrice(f.cheapest.code, f.minPrice) : null}</b> {t('в месяц')}
             </div>
           ) : null}
         </header>
@@ -99,21 +105,21 @@ export function HostRoads({
         ) : (
           <div className="hsx-road-stats">
             {f.ramHigh ? (
-              <HostStat block={20} big={(f.ramLow && f.ramLow !== f.ramHigh ? gb(f.ramLow) + '–' : '') + gb(f.ramHigh) + ' ГБ'} small="памяти" />
+              <HostStat block={20} big={(f.ramLow && f.ramLow !== f.ramHigh ? gb(f.ramLow) + '–' : '') + gb(f.ramHigh) + ' ' + t('ГБ')} small={t('памяти')} />
             ) : null}
-            {f.playersMax ? <HostStat block={32} big={'до ' + f.playersMax} small="игроков" /> : null}
-            <HostStat block={52} big="Моды" small="и плагины" />
-            {paidAwake ? <HostStat block={36} big="24/7" small="не засыпает" /> : null}
+            {f.playersMax ? <HostStat block={32} big={t('до {n}', { n: f.playersMax })} small={t('игроков')} /> : null}
+            <HostStat block={52} big={t('Моды')} small={t('и плагины')} />
+            {paidAwake ? <HostStat block={36} big="24/7" small={t('не засыпает')} /> : null}
           </div>
         )}
         <button className="btn lg primary hsx-cta" id={paidId} onClick={onPaid}>
-          <Icon id="i-server-cog" /> Выбрать тариф
+          <Icon id="i-server-cog" /> {t('Выбрать тариф')}
         </button>
       </section>
 
       <section className="hsx-road is-navy">
         <header className="hsx-road-head">
-          <h2>Бесплатно</h2>
+          <h2>{t('Бесплатно')}</h2>
           <div className="hsx-price">
             <b>0 ₽</b>
           </div>
@@ -122,13 +128,19 @@ export function HostRoads({
           <StatSkel n={3} />
         ) : f.free ? (
           <div className="hsx-road-stats">
-            {f.free.ramMb ? <HostStat block={5} big={gb(f.free.ramMb) + ' ГБ'} small="памяти" /> : null}
-            {f.free.maxPlayers ? <HostStat block={51} big={String(f.free.maxPlayers)} small="друзей" /> : null}
-            {f.free.worldKeepDays ? <HostStat block={12} big={f.free.worldKeepDays + ' дней'} small="хранится мир" /> : null}
+            {f.free.ramMb ? <HostStat block={5} big={t('{n} ГБ', { n: gb(f.free.ramMb) })} small={t('памяти')} /> : null}
+            {f.free.maxPlayers ? <HostStat block={51} big={String(f.free.maxPlayers)} small={t('друзей')} /> : null}
+            {f.free.worldKeepDays ? (
+              <HostStat
+                block={12}
+                big={plural(f.free.worldKeepDays, t('{n} день', { n: f.free.worldKeepDays }), t('{n} дня', { n: f.free.worldKeepDays }), t('{n} дней', { n: f.free.worldKeepDays }))}
+                small={t('хранится мир')}
+              />
+            ) : null}
           </div>
         ) : null}
         <button className="btn lg secondary hsx-cta" id={freeId} onClick={onFree}>
-          <Icon id="i-play" /> Начать бесплатно
+          <Icon id="i-play" /> {t('Начать бесплатно')}
         </button>
       </section>
     </div>

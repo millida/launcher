@@ -9,6 +9,7 @@ import { Ruby } from '../Ruby'
 import { Shard } from '../shop/parts'
 import { shardWord } from '../shop/rarity'
 import '../../styles/pixel/chest.css'
+import { intlTag } from '../../i18n'
 
 /** Перемешанный мешок: вещи идут по одной, без повторов, пока пул не кончится. */
 export function bagOrder(n: number, random: () => number = Math.random): number[] {
@@ -158,7 +159,7 @@ export function ChestPop({
           ) : (
             <span className="cpop-plate cpop-coin">
               {p.coin!.kind === 'rubies' ? <Ruby size={56} /> : <Shard size={56} />}
-              <b className="cpop-sum">+{p.coin!.amount.toLocaleString('ru-RU')}</b>
+              <b className="cpop-sum">+{p.coin!.amount.toLocaleString(intlTag())}</b>
               {p.coin!.kind === 'shards' ? <small className="cpop-word">{shardWord(p.coin!.amount)}</small> : null}
             </span>
           )}

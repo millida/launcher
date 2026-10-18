@@ -12,9 +12,11 @@ import { usePackCode } from '../state/packCode'
 import { showReward } from '../components/reward/RewardReveal'
 import { BuildIcon } from '../components/playhub/BuildIcon'
 import { trackImportFailure } from '../lib/importTrack'
+import { t, useT } from '../i18n'
+import { isPickCancelled } from '../lib/coreErrors'
 
 const imported = (p: { name: string; icon?: string | null }) =>
-  showReward({ level: 'mid', items: [{ name: p.name, art: <BuildIcon icon={p.icon} name={p.name} size={60} /> }], title: 'Сборка импортирована', sub: p.name })
+  showReward({ level: 'mid', items: [{ name: p.name, art: <BuildIcon icon={p.icon} name={p.name} size={60} /> }], title: t('Сборка импортирована'), sub: p.name })
 
 /// Где ищем сборки — показываем значками вместо абзаца со списком.
 const SOURCES = ['Prism', 'MultiMC', 'CurseForge', 'GDLauncher', 'ATLauncher', 'Modrinth App', 'TLauncher']
@@ -22,6 +24,7 @@ const SOURCES = ['Prism', 'MultiMC', 'CurseForge', 'GDLauncher', 'ATLauncher', '
 type RowState = 'idle' | 'busy' | 'done'
 
 export function ImportModal() {
+  const t = useT()
   const modal = useUi((s) => s.modals.impModal)
   const profiles = useProfiles((s) => s.profiles)
   const [list, setList] = useState<FoundInstance[] | null>(null)
@@ -32,7 +35,7 @@ export function ImportModal() {
   const fromFile = () => {
     if (fileBusy) return
     if (!hasTauri()) {
-      showToast('Импорт файлом доступен в приложении лаунчера', 'error')
+      showToast(t('Импорт файлом доступен в приложении лаунчера'), 'error')
       return
     }
     setFileBusy(true)
@@ -45,7 +48,7 @@ export function ImportModal() {
         close()
       })
       .catch((err) => {
-        if (String(err).includes('Отменено')) return
+        if (isPickCancelled(err)) return
         trackImportFailure('file', err)
         showToast('' + err, 'error')
       })
@@ -56,20 +59,20 @@ export function ImportModal() {
   // .minecraft, папка экземпляров другого лаунчера или одна сборка.
   const fromDir = () => {
     if (!hasTauri()) {
-      showToast('Доступно в приложении лаунчера', 'error')
+      showToast(t('Доступно в приложении лаунчера'), 'error')
       return
     }
     pickImportDir()
       .then((l) => {
         if (!l) return
         if (!l.length) {
-          showToast('В этой папке сборок нет', 'error')
+          showToast(t('В этой папке сборок нет'), 'error')
           return
         }
         setFailed(false)
         setList((cur) => [...(cur || []), ...l.filter((x) => !(cur || []).some((c) => c.path === x.path))])
       })
-      .catch((e) => showToast('Папка не открылась: ' + e, 'error'))
+      .catch((e) => showToast(t('Папка не открылась: {error}', { error: String(e) }), 'error'))
   }
 
   const scan = () => {
@@ -103,14 +106,14 @@ export function ImportModal() {
       {...backdropClose(close)}
     >
       <div className="modal mw-md">
-        <h3>Импорт сборок</h3>
+        <h3>{t('Импорт сборок')}</h3>
         <div id="impList" className="imp-list">
           {failed ? (
             <div className="bx-mini-empty">
               <Icon id="i-alert" />
-              <b>Не получилось поискать</b>
+              <b>{t('Не получилось поискать')}</b>
               <button className="btn sm secondary" onClick={scan}>
-                <Icon id="i-restart" /> Повторить
+                <Icon id="i-restart" /> {t('Повторить')}
               </button>
             </div>
           ) : list === null ? (
@@ -126,7 +129,7 @@ export function ImportModal() {
                 <span className="mod-mini">
                   <Icon id="i-download" />
                 </span>
-                <b>Перенести в Millida целиком</b>
+                <b>{t('Перенести в Millida целиком')}</b>
                 <span className="pill" style={{ marginRight: '6px' }}>
                   Prism · Modrinth App
                 </span>
@@ -140,7 +143,7 @@ export function ImportModal() {
                     openModal('mvModal')
                   }}
                 >
-                  Перенести
+                  {t('Перенести')}
                 </button>
               </div>
             ) : null}
@@ -179,7 +182,7 @@ export function ImportModal() {
                         })
                     }}
                   >
-                    {state === 'busy' ? 'Добавляем…' : already ? <><Icon id="i-check" /> Уже есть</> : 'Добавить'}
+                    {state === 'busy' ? t('Добавляем…') : already ? <><Icon id="i-check" /> {t('Уже есть')}</> : t('Добавить')}
                   </button>
                 </div>
               )
@@ -187,7 +190,7 @@ export function ImportModal() {
             </>
           ) : (
             <div className="bx-mini-empty">
-              <b>Других лаунчеров не нашли</b>
+              <b>{t('Других лаунчеров не нашли')}</b>
               <div className="bx-chips">
                 {SOURCES.map((x) => (
                   <span className="pill" key={x}>
@@ -204,12 +207,12 @@ export function ImportModal() {
         <div className="imp-ways">
           <button className="imp-way" onClick={fromDir}>
             <Icon id="i-folder" />
-            <b>Из папки</b>
-            <span>Другой лаунчер</span>
+            <b>{t('Из папки')}</b>
+            <span>{t('Другой лаунчер')}</span>
           </button>
           <button className="imp-way" onClick={fromFile} disabled={fileBusy}>
             <Icon id="i-upload" />
-            <b>{fileBusy ? 'Добавляем…' : 'Из файла'}</b>
+            <b>{fileBusy ? t('Добавляем…') : t('Из файла')}</b>
             <span>.mrpack · .zip</span>
           </button>
           <button
@@ -221,13 +224,13 @@ export function ImportModal() {
             }}
           >
             <Icon id="i-link" />
-            <b>По коду</b>
+            <b>{t('По коду')}</b>
             <span>AB23-CD45</span>
           </button>
         </div>
         <div style={{ display: 'flex', marginTop: '14px', justifyContent: 'flex-end' }}>
           <button className="btn md secondary" id="impClose" data-sound="close" onClick={close}>
-            Закрыть
+            {t('Закрыть')}
           </button>
         </div>
       </div>

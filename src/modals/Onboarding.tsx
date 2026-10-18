@@ -20,36 +20,39 @@ import { apiErrorText } from '../lib/apiError'
 import { Head } from '../components/Head'
 import { dropInviteCode, lookupInviter, onboardingInvite, peekInviteCode } from '../lib/referrals'
 import { INVITEE_GIFTS } from '../lib/inviteGifts'
+import { useT } from '../i18n'
+import { isPickCancelled } from '../lib/coreErrors'
 
 function Welcome({ nick }: { nick: string }) {
+  const t = useT()
   return (
     <>
       <div className="onb-hero">
         <img src="/millida-logo.svg" alt="" />
         <div>
-          <h3>Привет{nick ? ', ' + nick : ''}!</h3>
+          <h3>{nick ? t('Привет, {nick}!', { nick }) : t('Привет!')}</h3>
         </div>
       </div>
       <div className="onb-list">
         <div className="onb-point">
           <Icon id="i-box2" />
           <span>
-            <b>Перенесём сборки</b>
-            <small>Prism, MultiMC, CurseForge и другие</small>
+            <b>{t('Перенесём сборки')}</b>
+            <small>{t('Prism, MultiMC, CurseForge и другие')}</small>
           </span>
         </div>
         <div className="onb-point">
           <Icon id="i-image" />
           <span>
-            <b>Подберём оформление</b>
-            <small>Тема, музыка, звуки</small>
+            <b>{t('Подберём оформление')}</b>
+            <small>{t('Тема, музыка, звуки')}</small>
           </span>
         </div>
         <div className="onb-point">
           <Icon id="i-play" />
           <span>
-            <b>Покажем, где что</b>
-            <small>{TOUR_STEPS.length} подсказок в конце</small>
+            <b>{t('Покажем, где что')}</b>
+            <small>{t('{n} подсказок в конце', { n: TOUR_STEPS.length })}</small>
           </span>
         </div>
       </div>
@@ -60,6 +63,7 @@ function Welcome({ nick }: { nick: string }) {
 /// «Кто тебя позвал?»: ник или код друга, можно пропустить. Подарки показаны
 /// плитками — по ним видно, зачем вводить.
 function InviterStep() {
+  const t = useT()
   const [query, setQuery] = useState(() => peekInviteCode())
   const [found, setFound] = useState<{ nickname: string | null } | null>(null)
   const [miss, setMiss] = useState(false)
@@ -72,7 +76,7 @@ function InviterStep() {
     setMiss(false)
     if (text.length < 3) return
     const mine = ++seq.current
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       lookupInviter(text)
         .then((r) => {
           if (mine !== seq.current) return
@@ -81,7 +85,7 @@ function InviterStep() {
         })
         .catch(() => {})
     }, 350)
-    return () => clearTimeout(t)
+    return () => clearTimeout(timer)
   }, [query])
 
   const confirm = () => {
@@ -90,16 +94,16 @@ function InviterStep() {
     onboardingInvite(query.trim())
       .then(() => {
         dropInviteCode()
-        showToast('Друг найден — подарок твой', 'ok', 'achievement')
+        showToast(t('Друг найден — подарок твой'), 'ok', 'achievement')
         onboardingNext(!hasMillidaAccount())
       })
-      .catch((e) => showToast(apiErrorText(e, 'Не удалось применить'), 'error'))
+      .catch((e) => showToast(apiErrorText(e, t('Не удалось применить')), 'error'))
       .finally(() => setBusy(false))
   }
 
   return (
     <>
-      <h3>Кто тебя позвал?</h3>
+      <h3>{t('Кто тебя позвал?')}</h3>
       <div className="onb-ref-gifts">
         {INVITEE_GIFTS.map((g) => (
           <div className="onb-ref-gift" key={g.id}>
@@ -113,7 +117,7 @@ function InviterStep() {
           <Icon id="i-user" />
           <input
             autoFocus
-            placeholder="Ник или код друга"
+            placeholder={t('Ник или код друга')}
             value={query}
             maxLength={32}
             spellCheck={false}
@@ -128,16 +132,16 @@ function InviterStep() {
       {found ? (
         <div className="onb-ref-found">
           <Head nick={found.nickname || undefined} size={40} />
-          <b>{found.nickname || 'Игрок'}</b>
+          <b>{found.nickname || t('Игрок')}</b>
           <button className="btn md primary" data-track="onb_ref_confirm" disabled={busy} onClick={confirm}>
             <Icon id="i-check" />
-            Это он
+            {t('Это он')}
           </button>
         </div>
       ) : miss ? (
         <div className="onb-ref-miss">
           <Icon id="i-search" />
-          Не нашли
+          {t('Не нашли')}
         </div>
       ) : null}
     </>
@@ -145,6 +149,7 @@ function InviterStep() {
 }
 
 function ImportStep() {
+  const t = useT()
   const profiles = useProfiles((s) => s.profiles)
   const [list, setList] = useState<FoundInstance[] | null>(null)
   const [failed, setFailed] = useState(false)
@@ -182,18 +187,18 @@ function ImportStep() {
       } catch (err) {
         console.error('[onb-import]', it.path, err)
         trackImportFailure(it.source, err, it)
-        showToast('Не удалось перенести «' + it.name + '»', 'error')
+        showToast(t('Не удалось перенести «{name}»', { name: it.name }), 'error')
       }
     }
     setBusy('')
     void useProfiles.getState().refresh()
-    if (ok) showToast(ok === 1 ? 'Импортирована 1 сборка' : 'Импортировано сборок: ' + ok)
+    if (ok) showToast(ok === 1 ? t('Импортирована 1 сборка') : t('Импортировано сборок: {n}', { n: ok }))
   }
 
   const fromFile = () => {
     if (fileBusy) return
     if (!hasTauri()) {
-      showToast('Импорт файлом доступен в приложении лаунчера', 'error')
+      showToast(t('Импорт файлом доступен в приложении лаунчера'), 'error')
       return
     }
     setFileBusy(true)
@@ -202,32 +207,32 @@ function ImportStep() {
         track('build_import', { source: 'file', mc: p.version, loader: p.loader || (p.fabric ? 'fabric' : 'vanilla') })
         useProfiles.getState().setSelected(p.name)
         void useProfiles.getState().refresh()
-        showToast('Импортировано: ' + p.name)
+        showToast(t('Импортировано: {name}', { name: p.name }))
       })
       .catch((err) => {
-        if (String(err).includes('Отменено')) return
+        if (isPickCancelled(err)) return
         // Своя фраза бэкенда («Файл не найден», «Не удалось распаковать») — до двоеточия;
         // системный хвост и английские ошибки ОС — только в лог.
         console.error('[onb-import-file]', err)
         trackImportFailure('file', err)
         const head = String(err).split(':')[0].trim()
-        showToast(/^[А-ЯЁ]/.test(head) ? head : 'Не удалось импортировать файл', 'error')
+        showToast(/^[А-ЯЁ]/.test(head) ? head : t('Не удалось импортировать файл'), 'error')
       })
       .finally(() => setFileBusy(false))
   }
 
   return (
     <>
-      <h3>Перенесём сборки</h3>
-      <div className="sub">{movable ? 'Сборки Prism и Modrinth App переедут в Millida целиком — с мирами и настройками' : 'Оригиналы останутся на месте'}</div>
+      <h3>{t('Перенесём сборки')}</h3>
+      <div className="sub">{movable ? t('Сборки Prism и Modrinth App переедут в Millida целиком — с мирами и настройками') : t('Оригиналы останутся на месте')}</div>
       {movable ? <MovePanel /> : null}
       <div className="onb-scroll">
         {failed ? (
-          <p className="faint-note">Не удалось найти сборки</p>
+          <p className="faint-note">{t('Не удалось найти сборки')}</p>
         ) : list === null ? (
           <p className="faint-note onb-scan">
             <span className="spin"></span>
-            Ищем на дисках
+            {t('Ищем на дисках')}
           </p>
         ) : movable && !list.length ? null : list.length ? (
           list.map((it) => {
@@ -247,21 +252,21 @@ function ImportStep() {
                     {it.source} · {it.loader} · {it.version}
                   </small>
                 </span>
-                <span className="pill">{busy === key ? 'Переносим…' : already ? 'Уже в лаунчере' : 'К переносу'}</span>
+                <span className="pill">{busy === key ? t('Переносим…') : already ? t('Уже в лаунчере') : t('К переносу')}</span>
               </label>
             )
           })
         ) : (
-          <p className="faint-note">Других сборок не нашли</p>
+          <p className="faint-note">{t('Других сборок не нашли')}</p>
         )}
       </div>
       <div className="onb-inline">
         <button className="btn sm secondary" onClick={fromFile} disabled={fileBusy || !!busy}>
-          <Icon id="i-box2" /> {fileBusy ? 'Импортируем…' : 'Импорт из файла'}
+          <Icon id="i-box2" /> {fileBusy ? t('Импортируем…') : t('Импорт из файла')}
         </button>
         {importable.length ? (
           <button className="btn sm primary" onClick={() => void runImport()} disabled={!selected.length || !!busy}>
-            {busy ? 'Переносим…' : 'Перенести (' + selected.length + ')'}
+            {busy ? t('Переносим…') : t('Перенести ({n})', { n: selected.length })}
           </button>
         ) : null}
       </div>
@@ -270,15 +275,16 @@ function ImportStep() {
 }
 
 function LookStep() {
+  const t = useT()
   const [music, setMusic] = useState(() => localStorage.getItem('m-mus-auto') !== '0')
   const [sound, setSound] = useState(() => soundMode() !== 'off')
 
   return (
     <>
-      <h3>Звук</h3>
+      <h3>{t('Звук')}</h3>
       <div className="set-row">
         <span className="lab">
-          Музыка
+          {t('Музыка')}
         </span>
         <span
           className={'tgl' + (music ? ' on' : '')}
@@ -293,7 +299,7 @@ function LookStep() {
       </div>
       <div className="set-row">
         <span className="lab">
-          Звуки
+          {t('Звуки')}
         </span>
         <span
           className={'tgl' + (sound ? ' on' : '')}
@@ -309,6 +315,7 @@ function LookStep() {
 }
 
 function ReadyStep() {
+  const t = useT()
   const [autostart, setAuto] = useState(true)
   useEffect(() => {
     if (hasTauri()) void autostartOn().then(setAuto)
@@ -316,9 +323,9 @@ function ReadyStep() {
 
   return (
     <>
-      <h3>Готово</h3>
+      <h3>{t('Готово')}</h3>
       <div className="set-row">
-        <span className="lab">Запускать вместе с системой</span>
+        <span className="lab">{t('Запускать вместе с системой')}</span>
         <span
           className={'tgl' + (autostart ? ' on' : '')}
           role="switch"
@@ -335,15 +342,15 @@ function ReadyStep() {
         <div className="onb-point">
           <Icon id="i-play" />
           <span>
-            <b>Гайд по разделам</b>
-            <small>{TOUR_STEPS.length} подсказок, можно прервать</small>
+            <b>{t('Гайд по разделам')}</b>
+            <small>{t('{n} подсказок, можно прервать', { n: TOUR_STEPS.length })}</small>
           </span>
         </div>
         <div className="onb-point">
           <Icon id="i-settings" />
           <span>
-            <b>Повторить потом</b>
-            <small>Настройки → «Показать гайд»</small>
+            <b>{t('Повторить потом')}</b>
+            <small>{t('Настройки → «Показать гайд»')}</small>
           </span>
         </div>
       </div>
@@ -352,6 +359,7 @@ function ReadyStep() {
 }
 
 export function OnboardingModal() {
+  const t = useT()
   const open = useOnboarding((s) => s.open)
   const step = useOnboarding((s) => s.step)
   useAccounts()
@@ -382,21 +390,21 @@ export function OnboardingModal() {
         <div className="onb-actions">
           {step > 0 ? (
             <button className="btn md secondary" onClick={() => onboardingBack(!hasMillidaAccount())}>
-              Назад
+              {t('Назад')}
             </button>
           ) : (
             <button className="btn md ghost" onClick={() => finishOnboarding(false)}>
-              Пропустить
+              {t('Пропустить')}
             </button>
           )}
           <span className="tour-spacer"></span>
           {last ? (
             <>
               <button className="btn md ghost" onClick={() => finishOnboarding(false)}>
-                Без гайда
+                {t('Без гайда')}
               </button>
               <button className="btn md primary" onClick={() => finishOnboarding(true)}>
-                <Icon id="i-play" /> Показать гайд
+                <Icon id="i-play" /> {t('Показать гайд')}
               </button>
             </>
           ) : (
@@ -405,7 +413,7 @@ export function OnboardingModal() {
               data-track={step === INVITER_STEP ? 'onb_ref_skip' : undefined}
               onClick={() => onboardingNext(!hasMillidaAccount())}
             >
-              {step === 0 ? 'Поехали' : step === INVITER_STEP ? 'Пропустить' : 'Далее'}
+              {step === 0 ? t('Поехали') : step === INVITER_STEP ? t('Пропустить') : t('Далее')}
             </button>
           )}
         </div>

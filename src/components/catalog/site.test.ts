@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test'
 import { cfProjectOf, cfSourceRef } from '../../lib/millidaCatalog'
-import { resolveHit, sourceOf, type SiteCard } from './site'
+import { resolveHit, sourceOf, sourcePlatform, type SiteCard } from './site'
 
 describe('cfSourceRef', () => {
   const cases: { why: string; url: string; want: ReturnType<typeof cfSourceRef> }[] = [
@@ -132,4 +132,17 @@ describe('resolveHit', () => {
     expect(hit?.pid, 'the Modrinth project must still resolve from the listed source').toBe('AANobbMI')
     expect(asked.filter((u) => u.includes('/catalog/items/')), 'per-row item requests were 13% of all launcher API calls').toEqual([])
   })
+})
+
+describe('sourcePlatform', () => {
+  const cases: { why: string; item: { sourceUrl?: string | null; curseforgeId?: number | null }; want: ReturnType<typeof sourcePlatform> }[] = [
+    { why: 'a Modrinth mirror names Modrinth next to the author', item: { sourceUrl: 'https://modrinth.com/mod/sodium' }, want: 'Modrinth' },
+    { why: 'a CurseForge page names CurseForge', item: { sourceUrl: 'https://www.curseforge.com/minecraft/mc-mods/jei' }, want: 'CurseForge' },
+    { why: 'a forgecdn file link is CurseForge too', item: { sourceUrl: 'https://edge.forgecdn.net/files/8448/903/x.zip' }, want: 'CurseForge' },
+    { why: 'a stored CurseForge id is enough when the link is missing', item: { sourceUrl: null, curseforgeId: 238222 }, want: 'CurseForge' },
+    { why: 'own packs have no source and must not be credited to a platform', item: { sourceUrl: null, curseforgeId: null }, want: null },
+    { why: 'a look-alike host is not Modrinth', item: { sourceUrl: 'https://modrinth.com.evil.example/mod/x' }, want: null },
+    { why: 'a broken link names nothing', item: { sourceUrl: 'not a url' }, want: null },
+  ]
+  for (const c of cases) it(c.why, () => expect(sourcePlatform(c.item), c.why).toBe(c.want))
 })

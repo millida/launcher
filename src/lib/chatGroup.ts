@@ -1,4 +1,5 @@
 import type { ChatMessage } from '../state/friends'
+import { intlTag, t } from '../i18n'
 
 /// Consecutive messages from one side within a couple of minutes read as a
 /// single utterance; repeating the timestamp on each line is only noise.
@@ -10,9 +11,9 @@ export function dayLabel(ts: number, now = Date.now()): string {
   const d = new Date(ts)
   const today = new Date(now)
   const yesterday = new Date(now - 86_400_000)
-  if (d.toDateString() === today.toDateString()) return 'Сегодня'
-  if (d.toDateString() === yesterday.toDateString()) return 'Вчера'
-  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
+  if (d.toDateString() === today.toDateString()) return t('Сегодня')
+  if (d.toDateString() === yesterday.toDateString()) return t('Вчера')
+  return d.toLocaleDateString(intlTag(), { day: 'numeric', month: 'long' })
 }
 
 export function isGrouped(msgs: ChatMessage[], i: number): boolean {

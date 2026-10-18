@@ -14,6 +14,8 @@ import { closeBuy, confirmBuy, loadAccess, startPaid, usePaid } from './paidStor
 import { MILLIDA_KINDS, installMillidaItem, millidaKey, millidaPid } from './millidaInstall'
 import type { SiteCard, SiteSection } from './site'
 import { displayName } from './site'
+import { useT } from '../../i18n'
+import { walletMoney } from '../../lib/regionalPrices'
 
 /*
  * Кнопки платного и собственного материала каталога Millida в строке ленты:
@@ -34,16 +36,18 @@ export function usePaidCard(card: Pick<SiteCard, 'slug' | 'pricing' | 'priceKope
 
 /** Цена или «Куплено» — справа в строке. */
 export function PriceMark({ card, fallback }: { card: SiteCard; fallback?: string }) {
+  const t = useT()
   const p = usePaidCard(card)
-  if (p.paid && p.open) return <span className="mr-owned">Куплено</span>
+  if (p.paid && p.open) return <span className="mr-owned">{t('Куплено')}</span>
   const text = priceTag(card.pricing, card.priceKopecks) || fallback || ''
   return text ? <span className="mr-price">{text}</span> : null
 }
 
 /** «Купить» / «Подписаться» / «Ждём оплату» вместо установки, пока доступа нет. */
 export function BuyBar({ card, extra, onOwned }: { card: SiteCard; extra?: ReactNode; onOwned: () => void }) {
+  const t = useT()
   const p = usePaidCard(card)
-  const label = p.waiting ? 'Ждём оплату' : buyLabel(card.pricing)
+  const label = p.waiting ? t('Ждём оплату') : buyLabel(card.pricing)
   return (
     <div className="mr-actions">
       {extra}
@@ -70,6 +74,7 @@ export function BuyBar({ card, extra, onOwned }: { card: SiteCard; extra?: React
 
 /** Своя вещь Millida без источника на Modrinth: ставится файлом каталога. */
 export function NativeBar({ card, sec, extra }: { card: SiteCard; sec: SiteSection; extra?: ReactNode }) {
+  const t = useT()
   const scoped = useMods((s) => s.targetBuild)
   const profiles = useProfiles((s) => s.profiles)
   const selected = useProfiles((s) => s.selected)
@@ -80,7 +85,7 @@ export function NativeBar({ card, sec, extra }: { card: SiteCard; sec: SiteSecti
   const running = !!task && task.state === 'run'
   const done = installed || doneKey
   const content = sec.kind !== 'world'
-  const label = running ? (task!.pct > 0 ? task!.label + ' ' + Math.round(task!.pct) + '%' : task!.label) : done ? 'Установлено' : content ? 'В сборку' : 'Установить'
+  const label = running ? (task!.pct > 0 ? task!.label + ' ' + Math.round(task!.pct) + '%' : task!.label) : done ? t('Установлено') : content ? t('В сборку') : t('Установить')
   return (
     <div className="mr-actions">
       {extra}
@@ -105,6 +110,7 @@ export const nativeKind = (sec: SiteSection): boolean => MILLIDA_KINDS.has(sec.k
 
 /** Окно покупки: цена, баланс, одна главная кнопка. */
 export function BuyModal() {
+  const t = useT()
   const d = usePaid((s) => s.dialog)
   const balance = usePaid((s) => s.balance)
   const busy = usePaid((s) => s.busy)
@@ -118,9 +124,15 @@ export function BuyModal() {
   const sub = d.pricing === 'SUBSCRIPTION'
   const funds = d.step === 'funds'
   const short = shortfallKopecks(d.priceKopecks, balance)
-  const head = funds ? (short ? 'Не хватает ' + rubles(short) : 'Не хватает денег') : sub ? 'Подписка «' + d.title + '»' : 'Купить «' + d.title + '»'
-  const line = funds ? 'Пополни кошелёк и вернись' : d.repriced ? 'Цена изменилась' : sub ? 'Оплата на следующем шаге' : 'Спишем с кошелька Millida'
-  const cta = funds ? 'Пополнить' : sub ? 'Оформить' : 'Купить'
+  const head = funds
+    ? short
+      ? t('Не хватает {sum}', { sum: rubles(short) })
+      : t('Не хватает денег')
+    : sub
+      ? t('Подписка «{name}»', { name: d.title })
+      : t('Купить «{name}»', { name: d.title })
+  const line = funds ? t('Пополни кошелёк и вернись') : d.repriced ? t('Цена изменилась') : sub ? t('Оплата на следующем шаге') : t('Спишем с кошелька Millida')
+  const cta = funds ? t('Пополнить') : sub ? t('Оформить') : t('Купить')
   return createPortal(
     <div className="modal-bg open vis cat-buy-bg" {...backdropClose(closeBuy)}>
       <div className="modal mw-xs cat-buy" role="dialog" aria-label={head} data-step={d.step}>
@@ -129,13 +141,13 @@ export function BuyModal() {
         <div className={'sub cat-buy-line' + (d.repriced && !funds ? ' is-warn' : '')}>{line}</div>
         {sub ? null : (
           <div className="cat-buy-wallet">
-            <span>Баланс</span>
-            {balance === null ? <span className="skel skel-line" style={{ width: 64 }} /> : <b>{rubles(balance)}</b>}
+            <span>{t('Баланс')}</span>
+            {balance === null ? <span className="skel skel-line" style={{ width: 64 }} /> : <b>{walletMoney(balance, rubles)}</b>}
           </div>
         )}
         <div className="cat-buy-btns">
           <button className="btn md secondary" disabled={busy} onClick={closeBuy}>
-            Отмена
+            {t('Отмена')}
           </button>
           <button
             className={'btn md primary' + (busy ? ' cat-busy' : '')}

@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Icon } from '../Icon'
+import { t, useT } from '../../i18n'
 
 /** Разделы ленты магазина: порядок = порядок денег (ТЗ магазина v2, 06.10.2026). */
 export const SHOP_SECTIONS = [
-  { id: 'shop-rubies', name: 'Рубины', icon: 'i-gem' },
-  { id: 'shop-pass', name: 'Пропуск', icon: 'i-star' },
-  { id: 'shop-day', name: 'Скидки', icon: 'i-flame' },
-  { id: 'shop-tasks', name: 'Бонусы', icon: 'i-gift' },
-  { id: 'shop-sets', name: 'Наборы', icon: 'i-shirt' },
-  { id: 'shop-cases', name: 'Ящики', icon: 'i-chest' },
+  { id: 'shop-rubies', get name() { return t('Рубины') }, icon: 'i-gem' },
+  { id: 'shop-pass', get name() { return t('Пропуск') }, icon: 'i-star' },
+  { id: 'shop-day', get name() { return t('Скидки') }, icon: 'i-flame' },
+  { id: 'shop-tasks', get name() { return t('Бонусы') }, icon: 'i-gift' },
+  { id: 'shop-sets', get name() { return t('Наборы') }, icon: 'i-shirt' },
+  { id: 'shop-cases', get name() { return t('Ящики') }, icon: 'i-chest' },
 ] as const
 
 /**
@@ -16,6 +17,7 @@ export const SHOP_SECTIONS = [
  * подсвечен. Вкладок нет — страница одна.
  */
 export function ShopNav({ on, order }: { on: boolean; /** Порядок разделов ленты (задания выше у новичков). */ order?: string[] }) {
+  const t = useT()
   const list = order ? order.map((id) => SHOP_SECTIONS.find((s) => s.id === id)!).filter(Boolean) : SHOP_SECTIONS
   const [active, setActive] = useState<string>(SHOP_SECTIONS[0].id)
   useEffect(() => {
@@ -42,7 +44,7 @@ export function ShopNav({ on, order }: { on: boolean; /** Порядок раз�
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
   return (
-    <nav className="sv-nav" aria-label="Разделы магазина">
+    <nav className="sv-nav" aria-label={t('Разделы магазина')}>
       {list.map((s) => (
         <button key={s.id} className={'sv-chip' + (active === s.id ? ' on' : '')} aria-current={active === s.id} data-track={'shop_jump_' + s.id.slice(5)} onClick={() => go(s.id)}>
           <Icon id={s.icon} />

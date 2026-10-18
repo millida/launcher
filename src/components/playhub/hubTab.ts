@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { setScreen } from '../../state/ui'
-import { useMods } from '../../state/mods'
+import { ALL_CATEGORIES, ANY_LOADER, ANY_VERSION, useMods } from '../../state/mods'
 import { openPvp } from '../../state/pvp'
 
 /**
@@ -47,7 +47,7 @@ export const useHubTab = create<HubTabState>((set) => ({
  * перед переходом (сборки, моды, паки, шейдеры, карты).
  */
 export function openHubBuild(modTab?: string) {
-  if (modTab) useMods.getState().set({ modTab, fCats: [], fCat: 'все', count: '' })
+  if (modTab) useMods.getState().set({ modTab, fCats: [], fCat: ALL_CATEGORIES, count: '' })
   useHubTab.setState((s) => ({ tab: 'catalog', all: true, section: null, seq: s.seq + 1 }))
   setScreen('playhub')
 }
@@ -58,7 +58,7 @@ export function openHubBuild(modTab?: string) {
  * Возврат со страницы сборки сюда не ведёт — там лента остаётся как была.
  */
 export function openCatalogHome() {
-  useMods.getState().set({ modTab: 'modpack', mq: '', fCats: [], fCat: 'все', fVer: 'любая', fLoader: 'любой', count: '' })
+  useMods.getState().set({ modTab: 'modpack', mq: '', fCats: [], fCat: ALL_CATEGORIES, fVer: ANY_VERSION, fLoader: ANY_LOADER, count: '' })
   useHubTab.setState((s) => ({ tab: 'catalog', all: true, section: null, seq: s.seq + 1 }))
 }
 

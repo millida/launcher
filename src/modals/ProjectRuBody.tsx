@@ -3,6 +3,7 @@ import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode } fr
 import { PxIcon } from '../components/PxIcon'
 import { Guard } from '../components/Guard'
 import { RU_LOADER } from '../lib/format'
+import { t, useT } from '../i18n'
 import { renderMarkdown } from '../lib/markdown'
 import { loaderLabel } from '../components/catalog/site'
 import { useProject } from '../state/project'
@@ -113,9 +114,10 @@ function Skel({ b, i }: { b: SkelBlock; i: number }) {
 /* ── Сводка ── */
 
 function SummaryCard({ s, live, noText }: { s: TrSummary; live: boolean; noText?: boolean }) {
+  const t = useT()
   const chips = [...s.loaders.map((t) => ({ t, k: 'ld' })), ...s.categories.map((t) => ({ t, k: 'cat' }))].slice(0, 8)
   return (
-    <section className={'pjt-sum' + (live ? ' live' : '')} aria-label="Коротко о моде">
+    <section className={'pjt-sum' + (live ? ' live' : '')} aria-label={t('Коротко о моде')}>
       {noText ? null : <p className="pjt-sum-t">{s.text}</p>}
       {chips.length ? (
         <div className="pjt-sum-chips">
@@ -128,7 +130,7 @@ function SummaryCard({ s, live, noText }: { s: TrSummary; live: boolean; noText?
       ) : null}
       {s.adds.length ? (
         <div className="pjt-adds">
-          <span className="pjt-adds-k">Добавляет:</span>
+          <span className="pjt-adds-k">{t('Добавляет:')}</span>
           {s.adds.map((a) => (
             <span key={a} className="pjt-item">
               {a}
@@ -145,6 +147,7 @@ function SummaryCard({ s, live, noText }: { s: TrSummary; live: boolean; noText?
 const CYR = /[а-яё]/i
 
 function SuggestBox({ projectId, block, onClose, onAccepted }: { projectId: string; block: TrBlock; onClose: () => void; onAccepted: (ru: string) => void }) {
+  const t = useT()
   const start = block.ru || ''
   const [text, setText] = useState(start)
   const [st, setSt] = useState<{ busy: boolean; msg: string; ok: boolean }>({ busy: false, msg: '', ok: false })
@@ -171,14 +174,14 @@ function SuggestBox({ projectId, block, onClose, onAccepted }: { projectId: stri
   const send = () => {
     const ru = text.trim()
     if (st.busy) return
-    if (!ru || ru === start.trim()) return setSt({ busy: false, msg: 'Сначала поправь текст', ok: false })
-    if (!CYR.test(ru)) return setSt({ busy: false, msg: 'Нужен текст по-русски', ok: false })
-    if (ru.length > Math.max(block.src.length * 4, 40)) return setSt({ busy: false, msg: 'Слишком длинно для этого абзаца', ok: false })
+    if (!ru || ru === start.trim()) return setSt({ busy: false, msg: t('Сначала поправь текст'), ok: false })
+    if (!CYR.test(ru)) return setSt({ busy: false, msg: t('Нужен текст по-русски'), ok: false })
+    if (ru.length > Math.max(block.src.length * 4, 40)) return setSt({ busy: false, msg: t('Слишком длинно для этого абзаца'), ok: false })
     setSt({ busy: true, msg: '', ok: false })
     suggestEdit(projectId, blockId, ru)
       .then((r) => {
         if (r && r.accepted) onAccepted(ru)
-        setSt({ busy: false, ok: true, msg: r && r.accepted ? 'Принято — спасибо!' : 'Отправлено. Правка встанет, когда её поддержат' })
+        setSt({ busy: false, ok: true, msg: r && r.accepted ? t('Принято — спасибо!') : t('Отправлено. Правка встанет, когда её поддержат') })
         setVoted((v) => (r && r.id ? { ...v, [r.id]: true } : v))
         load()
       })
@@ -194,7 +197,7 @@ function SuggestBox({ projectId, block, onClose, onAccepted }: { projectId: stri
         if (r && typeof r.votes === 'number') setItems((xs) => (xs ? xs.map((x) => (x.id === s.id ? { ...x, votes: r.votes } : x)) : xs))
         if (r && r.accepted) {
           onAccepted(s.ru)
-          setSt({ busy: false, ok: true, msg: 'Правка принята' })
+          setSt({ busy: false, ok: true, msg: t('Правка принята') })
         }
       })
       .catch((e) => {
@@ -223,7 +226,7 @@ function SuggestBox({ projectId, block, onClose, onAccepted }: { projectId: stri
         value={text}
         spellCheck
         lang="ru"
-        aria-label="Твой вариант перевода"
+        aria-label={t('Твой вариант перевода')}
         onChange={(e) => {
           setText(e.target.value)
           e.target.style.height = 'auto'
@@ -231,23 +234,23 @@ function SuggestBox({ projectId, block, onClose, onAccepted }: { projectId: stri
         }}
       />
       <details className="pjt-orig">
-        <summary>Оригинал абзаца</summary>
+        <summary>{t('Оригинал абзаца')}</summary>
         <div className="pjt-orig-t" lang="en">
           {block.src}
         </div>
       </details>
       {items && items.length ? (
-        <div className="pjt-sugs" aria-label="Правки игроков">
-          <span className="pjt-sugs-h">Правки игроков</span>
+        <div className="pjt-sugs" aria-label={t('Правки игроков')}>
+          <span className="pjt-sugs-h">{t('Правки игроков')}</span>
           {items.map((s) => (
             <div className="pjt-sug" key={s.id}>
               <span className="pjt-sug-t">{s.ru}</span>
               <span className="pjt-vote">
-                <button className="pjt-vb up" aria-label="За" title="За" disabled={!!voted[s.id]} data-track="pj_tr_vote_up" onClick={() => vote(s, true)}>
+                <button className="pjt-vb up" aria-label={t('За')} title={t('За')} disabled={!!voted[s.id]} data-track="pj_tr_vote_up" onClick={() => vote(s, true)}>
                   <PxIcon name="chev-r" size={9} />
                 </button>
                 <b className={s.votes > 0 ? 'pos' : s.votes < 0 ? 'neg' : ''}>{s.votes > 0 ? '+' + s.votes : s.votes}</b>
-                <button className="pjt-vb down" aria-label="Против" title="Против" disabled={!!voted[s.id]} data-track="pj_tr_vote_down" onClick={() => vote(s, false)}>
+                <button className="pjt-vb down" aria-label={t('Против')} title={t('Против')} disabled={!!voted[s.id]} data-track="pj_tr_vote_down" onClick={() => vote(s, false)}>
                   <PxIcon name="chev-r" size={9} />
                 </button>
               </span>
@@ -261,14 +264,14 @@ function SuggestBox({ projectId, block, onClose, onAccepted }: { projectId: stri
             {st.msg}
           </span>
         ) : (
-          <span className="pjt-box-hint">Правку увидят все, когда её поддержат игроки</span>
+          <span className="pjt-box-hint">{t('Правку увидят все, когда её поддержат игроки')}</span>
         )}
         <button className="btn sm ghost" data-track="pj_tr_suggest_cancel" onClick={onClose}>
-          {st.ok ? 'Закрыть' : 'Отмена'}
+          {st.ok ? t('Закрыть') : t('Отмена')}
         </button>
         {st.ok ? null : (
           <button className="btn sm primary" data-track="pj_tr_suggest_send" disabled={st.busy} onClick={send}>
-            {st.busy ? 'Отправляем…' : 'Предложить'}
+            {st.busy ? t('Отправляем…') : t('Предложить')}
           </button>
         )}
       </div>
@@ -289,6 +292,7 @@ interface Props {
 const EDITABLE = (b: TrBlock) => !!b.id && b.tier !== 'same' && b.kind !== 'code' && b.kind !== 'image' && b.kind !== 'hr'
 
 function RuBody({ view, busy, err, onRetry, onOriginal }: Props) {
+  const t = useT()
   const pj = useProject()
   const skel = useMemo(() => skelBlocks(pj.body || ''), [pj.body])
   const fallback = useMemo(
@@ -331,11 +335,11 @@ function RuBody({ view, busy, err, onRetry, onOriginal }: Props) {
           <PxIcon name="alert" size={11} />
           <span>{err}</span>
           <button className="pjx-tr-retry" data-track="pj_lang_retry" onClick={onRetry}>
-            Ещё раз
+            {t('Ещё раз')}
           </button>
           {pj.body ? (
             <button className="pjx-tr-retry" data-track="pj_tr_err_orig" onClick={onOriginal}>
-              Оригинал
+              {t('Оригинал')}
             </button>
           ) : null}
         </div>
@@ -350,7 +354,7 @@ function RuBody({ view, busy, err, onRetry, onOriginal }: Props) {
                 key={key + ':ru'}
                 className={'pjt-b' + (draft ? ' draft' : '') + (b.tier === 'community' ? ' comm' : '') + (edit === key ? ' editing' : '')}
                 data-kind={b.kind}
-                title={draft ? 'Черновой перевод, скоро улучшится' : undefined}
+                title={draft ? t('Черновой перевод, скоро улучшится') : undefined}
                 style={{ animationDelay: Math.min(i, 8) * 40 + 'ms' } as CSSProperties}
               >
                 {nodes}
@@ -364,7 +368,7 @@ function RuBody({ view, busy, err, onRetry, onOriginal }: Props) {
                     }}
                   >
                     <PxIcon name="edit" size={10} />
-                    Предложить правку
+                    {t('Предложить правку')}
                   </button>
                 ) : null}
                 {edit === key ? (
@@ -394,7 +398,7 @@ function RuBody({ view, busy, err, onRetry, onOriginal }: Props) {
               {waiting ? null : (
                 <span className="pjt-hold-t">
                   <PxIcon name="clock" size={10} />
-                  переводим…
+                  {t('переводим…')}
                 </span>
               )}
             </div>
@@ -405,9 +409,9 @@ function RuBody({ view, busy, err, onRetry, onOriginal }: Props) {
       )}
       {view && view.truncated && !err ? (
         <p className="pjt-trunc">
-          Описание длинное — перевели начало.{' '}
+          {t('Описание длинное — перевели начало.')}{' '}
           <button className="pjt-peek-b" data-track="pj_tr_trunc_orig" onClick={onOriginal}>
-            Оригинал целиком
+            {t('Оригинал целиком')}
           </button>
         </p>
       ) : null}
@@ -426,6 +430,7 @@ export function ProjectRuBody(props: Props) {
 
 /** Знак «Перевод Millida» у переключателя языка. */
 export function TrMark({ view, busy }: { view: TrView | null; busy: boolean }) {
+  const t = useT()
   const blocks = view ? view.blocks : []
   const ready = blocks.filter((b) => b.ru !== null).length
   const community = blocks.some((b) => b.tier === 'community')
@@ -434,7 +439,7 @@ export function TrMark({ view, busy }: { view: TrView | null; busy: boolean }) {
     <Guard what="Знак перевода" silent>
       <span
         className="pjt-mark"
-        title={draft ? 'Часть абзацев — черновой перевод, скоро улучшится' : 'Перевод Millida: словари Minecraft, память переводов и правки игроков'}
+        title={draft ? t('Часть абзацев — черновой перевод, скоро улучшится') : t('Перевод Millida: словари Minecraft, память переводов и правки игроков')}
       >
         {busy && blocks.length && ready < blocks.length ? (
           <span className="pjt-mark-n" aria-live="polite">
@@ -442,8 +447,8 @@ export function TrMark({ view, busy }: { view: TrView | null; busy: boolean }) {
           </span>
         ) : null}
         <PxIcon name="sparkle" size={10} />
-        <span className="pjt-mark-t">Перевод Millida</span>
-        {community ? <em className="pjt-mark-c">· проверено сообществом</em> : null}
+        <span className="pjt-mark-t">{t('Перевод Millida')}</span>
+        {community ? <em className="pjt-mark-c">{t('· проверено сообществом')}</em> : null}
       </span>
     </Guard>
   )
@@ -453,13 +458,13 @@ export function TrMark({ view, busy }: { view: TrView | null; busy: boolean }) {
  * Короткий текст в режиме RU (описание под названием, подпись картинки, имя
  * версии): перевод — текстом, ещё нет — полоска-заглушка его длины на месте.
  */
-export function RuLine({ t, src, className, block }: { t: TrText | null | undefined; src: string; className?: string; block?: boolean }): ReactNode {
-  const ru = ruOrPending(t, src)
+export function RuLine({ t: text, src, className, block }: { t: TrText | null | undefined; src: string; className?: string; block?: boolean }): ReactNode {
+  const ru = ruOrPending(text, src)
   if (ru !== null) return ru
   const ch = Math.min(src.length, 160)
   const rows = Math.max(1, Math.ceil(ch / 72))
   return (
-    <span className={'pjt-line' + (block ? ' block' : '') + (className ? ' ' + className : '')} aria-label="переводим…" role="img">
+    <span className={'pjt-line' + (block ? ' block' : '') + (className ? ' ' + className : '')} aria-label={t('переводим…')} role="img">
       {Array.from({ length: block ? rows : 1 }, (_, k) => (
         <span
           key={k}

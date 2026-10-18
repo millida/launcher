@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { showReward, useReward } from './reward/rewardBus'
+import { t } from '../i18n'
 
 /**
  * Праздник оформления PLUS — большой миг награды (лучи, корона влетает,
@@ -14,9 +15,9 @@ export function PlusCelebration({ onDone }: { items?: number; onDone: () => void
     const id = showReward({
       items: [{ name: 'PLUS', icon: 'crown' }],
       tone: 'var(--m-rarity-legendary)',
-      kicker: 'Подписка',
-      title: 'PLUS открыт',
-      sub: 'Вторая награда дня',
+      kicker: t('Подписка'),
+      title: t('PLUS открыт'),
+      sub: t('Вторая награда дня'),
       onDone: () => done.current(),
     })
     // StrictMode монтирует дважды — первое раскрытие убираем без onDone.
