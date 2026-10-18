@@ -6,7 +6,8 @@ import { Ruby } from '../Ruby'
 import { RARITY_TONE } from '../shop/rarity'
 import type { CaseReward, ChestDrop, ChestTier, ItemRef, PendingChest } from '../../lib/rubies'
 import { playSound } from '../../lib/sound'
-import { useDaily, type ChestOpenAnswer } from '../../state/daily'
+import { useDaily } from '../../state/daily'
+import { createOpenOnce } from './openOnce'
 import { showToast } from '../../state/ui'
 import { CHEST_DROPS, TIER_ORDER, viewOf } from './chestDrops'
 import { CHEST_NAME } from './rewards'
@@ -59,17 +60,7 @@ export const useChestOpen = create<Flow>((set, get) => ({
 export const openChestFlow = (list: PendingChest[]) => useChestOpen.getState().start(list)
 
 /** Один запрос на сундук, даже если окно смонтируется дважды. */
-const inflight = new Map<string, Promise<ChestOpenAnswer>>()
-function openOnce(id: string): Promise<ChestOpenAnswer> {
-  let p = inflight.get(id)
-  if (!p) {
-    p = useDaily.getState().openOne(id)
-    inflight.set(id, p)
-    // Ошибку можно повторить при следующем открытии окна.
-    void p.then((a) => 'error' in a && inflight.delete(id))
-  }
-  return p
-}
+const openOnce = createOpenOnce((id) => useDaily.getState().openOne(id))
 
 /** Выпадение сундука → награда общего открытия (CaseReveal). */
 export function dropReward(d: ChestDrop): CaseReward {
@@ -115,8 +106,8 @@ function Opening({ chest, left, onDone, onNext }: { chest: PendingChest; left: n
   const [bought, setBought] = useState<Set<number>>(() => new Set())
   const [buying, setBuying] = useState(-1)
   const [need, setNeed] = useState(CHEST_DROPS[tier].hits)
-  const request = () =>
-    openOnce(chest.id).then((a) => {
+  const request = (attempt: number) =>
+    openOnce(chest.id, attempt > 0).then((a) => {
       if (!('ok' in a)) throw new Error(a.error)
       const view = viewOf(a.ok)
       setDrops(view.drops)

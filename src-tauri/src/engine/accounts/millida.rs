@@ -120,6 +120,17 @@ pub fn market_header(raw: Option<&str>) -> Result<Option<&'static str>, String> 
     }
 }
 
+/// An unproven buyer is shown rubles only when the request states a ruble-zone language,
+/// so money requests carry the interface language. Only the launcher's own codes pass.
+const LANGS: [&str; 18] = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt-BR", "id", "ur", "ru", "de", "ja", "vi", "te", "tr", "ko", "pl"];
+
+pub fn lang_header(raw: Option<&str>) -> Result<Option<&'static str>, String> {
+    match raw.map(str::trim).unwrap_or_default() {
+        "" => Ok(None),
+        code => LANGS.iter().copied().find(|l| *l == code).map(Some).ok_or_else(|| "bad lang".to_string()),
+    }
+}
+
 fn remembered(key: &str) -> Option<Tagged> {
     ETAG_CACHE.lock().unwrap_or_else(|e| e.into_inner()).get(key).cloned()
 }
@@ -144,6 +155,51 @@ fn remember_in(cache: &mut std::collections::BTreeMap<String, Tagged>, key: Stri
 /// холодный запрос сервера — до нескольких секунд; дубль — только хвосту.
 const HEDGE_AFTER: std::time::Duration = std::time::Duration::from_millis(2500);
 
+const HEDGE_WINDOW: std::time::Duration = std::time::Duration::from_secs(60);
+const HEDGE_SHARE_DIVISOR: usize = 5;
+const HEDGE_FLOOR: usize = 1;
+
+/// A duplicate rescues one hung socket; when the API itself is slow every
+/// request hangs, and unlimited duplicates double the load on an overloaded server.
+pub(crate) struct HedgeBudget {
+    reads: std::collections::VecDeque<std::time::Instant>,
+    hedges: std::collections::VecDeque<std::time::Instant>,
+}
+
+impl HedgeBudget {
+    pub(crate) const fn new() -> Self {
+        Self { reads: std::collections::VecDeque::new(), hedges: std::collections::VecDeque::new() }
+    }
+
+    pub(crate) fn note_read(&mut self, now: std::time::Instant) {
+        self.reads.push_back(now);
+    }
+
+    pub(crate) fn try_hedge(&mut self, now: std::time::Instant) -> bool {
+        if let Some(since) = now.checked_sub(HEDGE_WINDOW) {
+            while self.reads.front().is_some_and(|t| *t < since) {
+                self.reads.pop_front();
+            }
+            while self.hedges.front().is_some_and(|t| *t < since) {
+                self.hedges.pop_front();
+            }
+        }
+        let limit = (self.reads.len() / HEDGE_SHARE_DIVISOR).max(HEDGE_FLOOR);
+        if self.hedges.len() >= limit {
+            return false;
+        }
+        self.hedges.push_back(now);
+        true
+    }
+}
+
+static HEDGE_BUDGET: std::sync::Mutex<HedgeBudget> = std::sync::Mutex::new(HedgeBudget::new());
+
+fn with_hedge_budget<R>(run: impl FnOnce(&mut HedgeBudget) -> R) -> R {
+    let mut budget = HEDGE_BUDGET.lock().unwrap_or_else(|e| e.into_inner());
+    run(&mut budget)
+}
+
 /// Hedged request: первый ответ из двух; ошибка одного — ждём другой.
 pub(crate) async fn hedged<F1, F2, Fut1, Fut2>(first: F1, second: F2) -> Result<reqwest::Response, reqwest::Error>
 where
@@ -152,11 +208,15 @@ where
     Fut1: std::future::Future<Output = Result<reqwest::Response, reqwest::Error>>,
     Fut2: std::future::Future<Output = Result<reqwest::Response, reqwest::Error>>,
 {
+    with_hedge_budget(|b| b.note_read(std::time::Instant::now()));
     let a = first();
     tokio::pin!(a);
     tokio::select! {
         r = &mut a => return r,
         _ = tokio::time::sleep(HEDGE_AFTER) => {}
+    }
+    if !with_hedge_budget(|b| b.try_hedge(std::time::Instant::now())) {
+        return a.await;
     }
     let b = second();
     tokio::pin!(b);
@@ -209,7 +269,7 @@ pub async fn millida_api(
     body: Option<Value>,
     token: Option<String>,
 ) -> Result<Value, String> {
-    millida_api_in(path, method, body, token, None).await
+    millida_api_in(path, method, body, token, None, None).await
 }
 
 pub async fn millida_api_in(
@@ -218,6 +278,7 @@ pub async fn millida_api_in(
     body: Option<Value>,
     token: Option<String>,
     market: Option<&'static str>,
+    lang: Option<&'static str>,
 ) -> Result<Value, String> {
     let resolved = api_url(&path)?;
     let url = resolved.as_str();
@@ -242,6 +303,9 @@ pub async fn millida_api_in(
         }
         if let Some(mk) = market {
             req = req.header(MARKET_HEADER, mk);
+        }
+        if let Some(l) = lang {
+            req = req.header(reqwest::header::ACCEPT_LANGUAGE, l);
         }
         if let Some(b) = body.as_ref() {
             req = req.json(b);
@@ -498,7 +562,7 @@ async fn refresh_session(used: Option<String>) -> Refreshed {
 /// The only way the launcher talks to the Millida API as the signed-in user:
 /// the token is read from the vault here and never leaves the core.
 pub async fn millida_api_auth(path: String, method: String, body: Option<Value>) -> Result<Value, String> {
-    millida_api_auth_in(path, method, body, None).await
+    millida_api_auth_in(path, method, body, None, None).await
 }
 
 pub async fn millida_api_auth_in(
@@ -506,15 +570,16 @@ pub async fn millida_api_auth_in(
     method: String,
     body: Option<Value>,
     market: Option<&'static str>,
+    lang: Option<&'static str>,
 ) -> Result<Value, String> {
     let token = millida_token();
-    let first = millida_api_in(path.clone(), method.clone(), body.clone(), token.clone(), market).await;
+    let first = millida_api_in(path.clone(), method.clone(), body.clone(), token.clone(), market, lang).await;
     let Err(e) = first else { return first };
     if e != "http 401" {
         return Err(e);
     }
     match refresh_session(token).await {
-        Refreshed::Token(fresh) => millida_api_in(path, method, body, Some(fresh), market).await,
+        Refreshed::Token(fresh) => millida_api_in(path, method, body, Some(fresh), market, lang).await,
         Refreshed::Dead => Err(UNAUTHORIZED.into()),
         Refreshed::Unavailable => Err(e),
     }
@@ -724,10 +789,39 @@ pub async fn millida_login_poll(device_code: String) -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        api_url, etag_key, insufficient_funds_detail, login_poll_answer, market_header, refresh_on_cooldown, remember_in, repeatable, webview_path_allowed, set_refresh_cooldown,
-        verdict_for, RefreshVerdict, Tagged, ETAG_CACHE_BUDGET, MILLIDA_API,
+        api_url, etag_key, insufficient_funds_detail, lang_header, login_poll_answer, market_header, refresh_on_cooldown, remember_in, repeatable, webview_path_allowed, set_refresh_cooldown,
+        verdict_for, HedgeBudget, RefreshVerdict, Tagged, ETAG_CACHE_BUDGET, HEDGE_WINDOW, MILLIDA_API,
     };
     use std::collections::BTreeMap;
+
+    #[test]
+    fn duplicates_stay_within_a_fifth_of_reads() {
+        // (reads in the window, hedges already granted, seconds later, next hedge allowed, why this case is pinned)
+        let cases: [(usize, usize, u64, bool, &str); 5] = [
+            (1, 0, 0, true, "a single hung socket is still rescued by the spare pool"),
+            (5, 1, 0, false, "five reads a minute earn exactly one duplicate"),
+            (10, 1, 0, true, "a fifth of ten reads is two duplicates"),
+            (10, 2, 0, false, "on 18.10 every slow read was doubled and the 503 wave held for half an hour"),
+            (5, 1, HEDGE_WINDOW.as_secs() + 1, true, "duplicates older than the window are forgotten"),
+        ];
+        for (reads, granted, later, allowed, why) in cases {
+            let start = std::time::Instant::now() + HEDGE_WINDOW;
+            let mut budget = HedgeBudget::new();
+            for _ in 0..reads {
+                budget.note_read(start);
+            }
+            for _ in 0..granted {
+                assert!(budget.try_hedge(start), "case setup failed: {why}");
+            }
+            let now = start + std::time::Duration::from_secs(later);
+            if later > 0 {
+                for _ in 0..reads {
+                    budget.note_read(now);
+                }
+            }
+            assert_eq!(budget.try_hedge(now), allowed, "{why}");
+        }
+    }
 
     #[test]
     fn only_reads_are_asked_twice() {
@@ -798,6 +892,22 @@ mod tests {
         ];
         for (input, want, why) in cases {
             assert_eq!(market_header(input).map_err(|_| ()), want, "{:?}: {}", input, why);
+        }
+    }
+
+    #[test]
+    fn only_launcher_languages_reach_the_header() {
+        // (from the webview, header sent, why this case is pinned)
+        type Case<'a> = (Option<&'a str>, Result<Option<&'a str>, ()>, &'a str);
+        let cases: [Case; 5] = [
+            (None, Ok(None), "a request without a language stays exactly as before"),
+            (Some("ru"), Ok(Some("ru")), "a ruble-zone language lets an unproven buyer see rubles"),
+            (Some("pt-BR"), Ok(Some("pt-BR")), "a regional code passes as the launcher spells it"),
+            (Some("ru\r\nX-Evil: 1"), Err(()), "a webview value must never become a header of its own"),
+            (Some("xx"), Err(()), "a language the launcher does not have is refused"),
+        ];
+        for (input, want, why) in cases {
+            assert_eq!(lang_header(input).map_err(|_| ()), want, "{:?}: {}", input, why);
         }
     }
 

@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { create } from 'zustand'
 import { api, hasMillidaAccount, openExt } from './api'
-import { t, useLocale } from '../i18n'
+import { t, useI18n, useLocale } from '../i18n'
 import { showToast } from '../state/ui'
 import {
   balanceOf,
@@ -53,6 +53,10 @@ export async function refreshMoney(): Promise<MoneyView | null> {
   if (view) useMoneyStore.setState({ view })
   return view ?? useMoneyStore.getState().view
 }
+
+useI18n.subscribe((s, was) => {
+  if (s.locale !== was.locale && useMoneyStore.getState().prices) void loadMoney()
+})
 
 export function resetMoney(): void {
   useMoneyStore.setState((s) => ({ view: null, prices: null, loading: false, failedAt: 0, seq: s.seq + 1 }))

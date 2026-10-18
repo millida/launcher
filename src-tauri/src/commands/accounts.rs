@@ -126,12 +126,14 @@ pub async fn millida_api(
     method: String,
     body: Option<serde_json::Value>,
     market: Option<String>,
+    lang: Option<String>,
 ) -> Result<serde_json::Value, String> {
     if !engine::webview_path_allowed(&path) {
         return Err("bad path".into());
     }
     let market = engine::market_header(market.as_deref())?;
-    engine::millida_api_auth_in(path, method, body, market).await
+    let lang = engine::lang_header(lang.as_deref())?;
+    engine::millida_api_auth_in(path, method, body, market, lang).await
 }
 
 #[tauri::command(async)]

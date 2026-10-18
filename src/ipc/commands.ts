@@ -783,8 +783,8 @@ export const setFpsBoost = (profile: string, on: boolean, keepOptions = false, v
 
 export type ApiMarket = 'RU' | 'EN'
 
-export const millidaApi = <T = unknown>(path: string, method: string, body?: unknown, market?: ApiMarket) =>
-  invoke<T>('millida_api', { path, method, body: body === undefined ? null : body, market: market ?? null })
+export const millidaApi = <T = unknown>(path: string, method: string, body?: unknown, market?: ApiMarket, lang?: string) =>
+  invoke<T>('millida_api', { path, method, body: body === undefined ? null : body, market: market ?? null, lang: lang ?? null })
 
 export interface MillidaLoginPoll {
   status: 'pending' | 'ok' | 'denied' | 'expired'

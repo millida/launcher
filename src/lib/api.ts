@@ -4,7 +4,7 @@ import { hasTauri } from '../ipc/tauri'
 import { millidaApi, openUrl, type ApiMarket } from '../ipc/commands'
 import { getMarket } from '../i18n'
 import { hasMillidaSession } from './secure'
-import { shortfallMarker } from './money'
+import { moneyLangFor, shortfallMarker } from './money'
 import { DEMO_USER, ECONOMY_SHOWCASE, demoAnswer } from './demo'
 
 // Dev-приложение открыто с http://localhost:5173, а прод по CORS пускает только
@@ -89,8 +89,8 @@ export async function api<T = any>(pathname: string, opts?: RequestInit): Promis
     try {
       const method = ((opts && opts.method) || 'GET').toUpperCase()
       const market = marketFor(pathname)
-      const run = () => millidaApi<T>(pathname, method, body, market)
-      return await (method === 'GET' ? hedged(run) : run())
+      const lang = moneyLangFor(pathname)
+      return await millidaApi<T>(pathname, method, body, market, lang)
     } catch (e) {
       if (String(e).includes('unauthorized')) window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT))
       throw e
@@ -104,12 +104,14 @@ export async function api<T = any>(pathname: string, opts?: RequestInit): Promis
     if (demo) return (await demo) as T
   }
   const market = marketFor(pathname)
+  const lang = moneyLangFor(pathname)
   const run = async (): Promise<T> => {
     const r = await fetch(LAUNCHER_API + pathname, {
       ...opts,
       headers: {
         ...apiHeaders(),
         ...(market ? { 'X-Market': market } : {}),
+        ...(lang ? { 'Accept-Language': lang } : {}),
         ...((opts && (opts.headers as Record<string, string>)) || {}),
       },
     })
@@ -133,7 +135,45 @@ export const HEDGE_AFTER_MS = 6_000
  * и кнопка «Выбрать» оставалась выключенной. Быстрая ошибка возвращается
  * сразу, как раньше; повторяются только GET.
  */
-export function hedged<T>(run: () => Promise<T>, afterMs = HEDGE_AFTER_MS): Promise<T> {
+export const HEDGE_WINDOW_MS = 60_000
+export const HEDGE_SHARE = 0.2
+export const HEDGE_FLOOR = 1
+
+/**
+ * A hedge rescues one hung connection; when the API itself is slow every read
+ * hangs, and unlimited hedges double the load on an already overloaded server.
+ */
+export class HedgeBudget {
+  private readonly reads: number[] = []
+  private readonly hedges: number[] = []
+
+  constructor(private readonly now: () => number = Date.now) {}
+
+  noteRead(): void {
+    this.reads.push(this.now())
+  }
+
+  tryHedge(): boolean {
+    const since = this.now() - HEDGE_WINDOW_MS
+    prune(this.reads, since)
+    prune(this.hedges, since)
+    const limit = Math.max(HEDGE_FLOOR, Math.floor(this.reads.length * HEDGE_SHARE))
+    if (this.hedges.length >= limit) return false
+    this.hedges.push(this.now())
+    return true
+  }
+}
+
+function prune(stamps: number[], since: number): void {
+  let drop = 0
+  while (drop < stamps.length && (stamps[drop] ?? since) < since) drop++
+  stamps.splice(0, drop)
+}
+
+const hedgeBudget = new HedgeBudget()
+
+export function hedged<T>(run: () => Promise<T>, afterMs = HEDGE_AFTER_MS, budget: HedgeBudget = hedgeBudget): Promise<T> {
+  budget.noteRead()
   return new Promise<T>((resolve, reject) => {
     let done = false
     let pending = 0
@@ -157,7 +197,7 @@ export function hedged<T>(run: () => Promise<T>, afterMs = HEDGE_AFTER_MS): Prom
       )
     }
     timer = setTimeout(() => {
-      if (!done) start()
+      if (!done && budget.tryHedge()) start()
     }, afterMs) as unknown as number
     start()
   })

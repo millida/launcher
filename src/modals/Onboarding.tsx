@@ -60,7 +60,7 @@ function Welcome({ nick }: { nick: string }) {
   )
 }
 
-/// «Кто тебя позвал?»: ник или код друга, можно пропустить. Подарки показаны
+/// «Кто тебя позвал?»: код друга, можно пропустить. Подарки показаны
 /// плитками — по ним видно, зачем вводить.
 function InviterStep() {
   const t = useT()
@@ -117,7 +117,7 @@ function InviterStep() {
           <Icon id="i-user" />
           <input
             autoFocus
-            placeholder={t('Ник или код друга')}
+            placeholder={t('Код друга')}
             value={query}
             maxLength={32}
             spellCheck={false}
