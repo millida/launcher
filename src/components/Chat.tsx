@@ -19,6 +19,7 @@ import {
   replyPreviewOf,
   retryChat,
   sendChat,
+  syncChat,
   toggleChatReaction,
   useFriends,
 } from '../state/friends'
@@ -973,6 +974,13 @@ export function ChatThread() {
     setAtBottom(true)
     scrollDown()
   }, [chatOpen, chatWith, chatRoom, scrollDown])
+
+  useEffect(() => {
+    if (!chatOpen) return
+    const sync = () => void syncChat()
+    window.addEventListener('focus', sync)
+    return () => window.removeEventListener('focus', sync)
+  }, [chatOpen])
 
   const onScroll = () => {
     const b = bodyRef.current

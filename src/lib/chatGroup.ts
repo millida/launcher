@@ -31,3 +31,16 @@ export function isGrouped(msgs: ChatMessage[], i: number): boolean {
 export function isRead(m: ChatMessage, peerReadAt: number): boolean {
   return !!m.me && !m.state && !!m.ts && m.ts <= peerReadAt
 }
+
+/// The message poll only carries what others wrote, so our own messages sent
+/// from the overlay or another device reach an open thread only from a fresh
+/// page. Merging keeps the older pages already scrolled in. While a send is in
+/// flight the page may already hold that message under an id the local copy
+/// does not have yet, so nothing is merged until it settles.
+export function withLatestPage(current: ChatMessage[], latest: ChatMessage[]): ChatMessage[] | null {
+  if (current.some((m) => m.state === 'sending')) return null
+  const known = new Set(current.map((m) => m.id).filter(Boolean))
+  const added = latest.filter((m) => m.id && !known.has(m.id))
+  if (!added.length) return null
+  return current.concat(added).sort((a, b) => (a.ts || 0) - (b.ts || 0))
+}

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { dayLabel, isGrouped, isRead } from './chatGroup'
+import { dayLabel, isGrouped, isRead, withLatestPage } from './chatGroup'
 import type { ChatMessage } from '../state/friends'
 
 const at = (ts: number, me?: boolean): ChatMessage => ({ text: 'x', ts, me })
@@ -37,4 +37,42 @@ test('прочитанным считается только своё доста
   expect(isRead({ text: 'a', me: true, ts: 900, state: 'failed' }, readAt)).toBe(false)
   expect(isRead({ text: 'a', me: false, ts: 900 }, readAt)).toBe(false)
   expect(isRead({ text: 'a', me: true }, readAt)).toBe(false)
+})
+
+const msg = (id: string, ts: number, p: Partial<ChatMessage> = {}): ChatMessage => ({ text: id, id, ts, ...p })
+
+// Вход -> вердикт. Опрос приносит только чужие сообщения, поэтому свои ответы
+// из оверлея пропадали из открытой в лаунчере переписки (18.10.2026).
+test('свежая страница дописывает недостающее и не трогает остальное', () => {
+  const cases: Array<[string, ChatMessage[], ChatMessage[], string[] | null]> = [
+    [
+      'свой ответ из оверлея встаёт по времени между чужими',
+      [msg('a', 1), msg('c', 3)],
+      [msg('a', 1), msg('b', 2, { me: true }), msg('c', 3)],
+      ['a', 'b', 'c'],
+    ],
+    ['ничего нового — ленту не перерисовываем', [msg('a', 1)], [msg('a', 1)], null],
+    [
+      'подгруженная ранее история не теряется',
+      [msg('old', 0), msg('a', 1)],
+      [msg('a', 1), msg('b', 2)],
+      ['old', 'a', 'b'],
+    ],
+    [
+      'пока своё сообщение в полёте — не сливаем, иначе оно задвоится',
+      [msg('a', 1), { text: 'x', ts: 2, me: true, state: 'sending', localId: 'l1' }],
+      [msg('a', 1), msg('x', 2, { me: true })],
+      null,
+    ],
+    [
+      'неотправленное остаётся в ленте',
+      [msg('a', 1), { text: 'f', ts: 5, me: true, state: 'failed', localId: 'l2' }],
+      [msg('a', 1), msg('b', 2)],
+      ['a', 'b', 'f'],
+    ],
+  ]
+  for (const [why, current, latest, want] of cases) {
+    const got = withLatestPage(current, latest)
+    expect(got ? got.map((m) => m.id || m.text) : null, why).toEqual(want)
+  }
 })
