@@ -110,7 +110,7 @@ export function canAfford(q: Quote | null | undefined, view: MoneyView | null): 
 
 /// The server's dollar list for ruble-only goods follows the PLUS price ratio, not the exchange rate.
 export function digitalUsdCents(rubKopecks: number): number {
-  const cents = (rubKopecks * 499) / 29900
+  const cents = (rubKopecks * 500) / 29900
   const step = cents >= 1000 ? 100 : 10
   return Math.max(99, Math.round(cents / step) * step - 1)
 }
