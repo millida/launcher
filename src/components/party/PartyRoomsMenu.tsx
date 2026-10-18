@@ -21,6 +21,7 @@ import { AgeGate } from './LfgModal'
 import { showToast } from '../../state/ui'
 import '../../styles/pixel/party-invite.css'
 import { t, useMarketOffers, useT } from '../../i18n'
+import { TIERS_SECTION_PUBLIC } from '../../lib/tiersSection'
 
 const KIND: Record<PartyTargetKind, { label: string; icon: string; tint: string }> = {
   server: { get label() { return t('Сервер') }, icon: 'i-server', tint: '#2b63c4' },
@@ -83,12 +84,12 @@ function usePlaces(): Place[] {
   const t = useT()
   const partners = useMarketOffers('partners')
   return useMemo(() => {
-    const list: Place[] = [
-      {
+    const list: Place[] = []
+    if (TIERS_SECTION_PUBLIC)
+      list.push({
         key: 'pvp', cat: 'ours', title: t('PvP-дуэли'), sub: t('Тиры · 14 китов'), art: img('/mode-art/kit-rigs/sword.webp'),
         mode: { kind: 'server', slug: 'millida-pvp', name: t('PvP-дуэли'), ip: TIER_SERVER.ip, logo: null, banner: null, versions: TIER_SERVER.versions, licensed: false },
-      },
-    ]
+      })
     if (partners) list.push({ key: 'anarchy', cat: 'ours', title: t('Анархия'), sub: t('Выживание без правил'), art: img('/mode-art/ANARCHY.png'), mode: anarchyMode() })
     for (const s of servers.filter((x) => x.isOnline).slice(0, 40))
       list.push({

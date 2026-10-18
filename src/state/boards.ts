@@ -3,6 +3,7 @@ import { api } from '../lib/api'
 import { setScreen } from './ui'
 import { plural } from '../lib/format'
 import { formatFixed, t } from '../i18n'
+import { TIERS_SECTION_PUBLIC } from '../lib/tiersSection'
 
 export type Board = 'week' | 'month' | 'all' | 'streak'
 export const BOARDS: { key: Board; readonly name: string }[] = [
@@ -55,7 +56,7 @@ interface State {
 export const useBoards = create<State>((set, get) => ({
   board: 'week',
   // Тир-лист — главный топ (владелец 11.10.2026), часы и огоньки — фоном.
-  tiers: true,
+  tiers: TIERS_SECTION_PUBLIC,
   setTiers: (tiers) => set({ tiers }),
   views: {},
   at: {},
@@ -89,7 +90,7 @@ export const useBoards = create<State>((set, get) => ({
 
 /** Открыть экран досок на нужной (огонь серии → «Огоньки», место недели → «Неделя», тир → «PvP-тир»). */
 export function openTop(board: Board | 'tiers') {
-  if (board === 'tiers') useBoards.getState().setTiers(true)
+  if (board === 'tiers') useBoards.getState().setTiers(TIERS_SECTION_PUBLIC)
   else useBoards.getState().setBoard(board)
   setScreen('top')
 }

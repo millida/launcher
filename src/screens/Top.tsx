@@ -14,6 +14,7 @@ import { TierBoard } from '../components/top/TierBoard'
 import { useDaily } from '../state/daily'
 import { plural } from '../lib/format'
 import '../styles/pixel/retention.css'
+import { TIERS_SECTION_PUBLIC } from '../lib/tiersSection'
 
 const bodyUrl = (nick: string, size = 128) =>
   'https://api.millida.net/v2/heads/body/' + encodeURIComponent(nick || 'Steve') + '?size=' + size + '&safe=1'
@@ -229,10 +230,12 @@ export function Top({ on }: { on: boolean }) {
       {/* Два разных топа (07.10.2026): часы в игре — с периодом, огоньки — серия дней, без периода. */}
       {/* Тир-лист — главный топ; часы и огоньки — мелкими вкладками рядом (владелец 11.10.2026). */}
       <div className="segs tb-kinds" role="tablist" aria-label={t('Топ')}>
-        <button role="tab" aria-selected={tiers} className={'seg' + (tiers ? ' on' : '')} data-track="top_kind_tiers" onClick={() => useBoards.getState().setTiers(true)}>
-          <Icon id="i-shield" />
-          {t('Тир-лист')}
-        </button>
+        {TIERS_SECTION_PUBLIC ? (
+          <button role="tab" aria-selected={tiers} className={'seg' + (tiers ? ' on' : '')} data-track="top_kind_tiers" onClick={() => useBoards.getState().setTiers(true)}>
+            <Icon id="i-shield" />
+            {t('Тир-лист')}
+          </button>
+        ) : null}
         <button role="tab" aria-selected={!tiers && board !== 'streak'} className={'seg minor' + (!tiers && board !== 'streak' ? ' on' : '')} data-track="top_kind_hours" onClick={() => useBoards.getState().setBoard(board === 'streak' ? lastHours.current : board)}>
           <Icon id="i-clock" />
           {t('Часы')}

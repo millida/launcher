@@ -49,6 +49,7 @@ import '../styles/pixel/play.css'
 import '../styles/pixel/lobby.css'
 import '../styles/pixel/retention.css'
 import '../styles/pixel/party.css'
+import { TIERS_SECTION_PUBLIC } from '../lib/tiersSection'
 
 /* Разделы на лобби, как в Brawl Stars: у каждого ровно один вход (владелец
    23.09.2026: «всё дублируется»). Режимы и каталог открывает плашка «Что
@@ -259,7 +260,7 @@ export function Play({ on }: { on: boolean }) {
       <div className="lobby-left">
         <nav className="lobby-nav" aria-label={t('Разделы')}>
           <HubTile kind="shop" />
-          <HubTile kind="pvp" />
+          {TIERS_SECTION_PUBLIC ? <HubTile kind="pvp" /> : null}
           <HubTile kind="wardrobe" />
           <HubTile kind="server" />
         </nav>

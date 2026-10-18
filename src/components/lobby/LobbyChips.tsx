@@ -9,6 +9,7 @@ import { closeRoom, partyWithOthers, usePartyStore } from '../../state/party'
 import { showToast } from '../../state/ui'
 import { tierNick } from '../top/TierBoard'
 import { useT } from '../../i18n'
+import { TIERS_SECTION_PUBLIC } from '../../lib/tiersSection'
 
 const clock = (ms: number) => {
   const s = Math.max(0, Math.floor(ms / 1000))
@@ -48,7 +49,7 @@ export function LobbyChips({ on }: { on: boolean }) {
   const full = !!party && partyFull(party)
 
   useEffect(() => {
-    if (on) void useTiers.getState().loadPeriod('week', 'all')
+    if (on && TIERS_SECTION_PUBLIC) void useTiers.getState().loadPeriod('week', 'all')
   }, [on])
 
   const open = () => openPvp('play')
@@ -62,7 +63,7 @@ export function LobbyChips({ on }: { on: boolean }) {
 
   return (
     <div className="lobby-chips">
-      {
+      {TIERS_SECTION_PUBLIC && (
         <button className={'lchip lchip-tier' + (row ? '' : ' bait')} data-track="lobby_top" onClick={open}>
           <Icon id="i-trophy" />
           <b>{t('Топ недели')}</b>
@@ -78,7 +79,7 @@ export function LobbyChips({ on }: { on: boolean }) {
             <span className="lchip-go">{t('Войти в топ')}</span>
           )}
         </button>
-      }
+      )}
       {full ? null : searching ? (
         <button className="lchip lchip-cancel" data-sound="close" data-track="party_search_cancel" onClick={() => void stopMateSearch()}>
           <Icon id="i-x" />

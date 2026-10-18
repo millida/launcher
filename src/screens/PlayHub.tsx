@@ -64,6 +64,7 @@ import { openPvp } from '../state/pvp'
 import { ensurePvpBuild, pvpBuildName } from '../lib/versionBuild'
 import { hasTauri } from '../ipc/tauri'
 import { t, useMarketOffers, useT } from '../i18n'
+import { TIERS_SECTION_PUBLIC } from '../lib/tiersSection'
 
 /**
  * «Во что играем», версия 6 (владелец 30.09.2026, 15:06 — те же блоки и
@@ -813,19 +814,21 @@ export function PlayHub({ on }: { on?: boolean }) {
           {ownSlides.map((sl, i) => (
             <OwnModeTile key={sl.key} slide={sl} index={i} />
           ))}
-          <ModeTile
-            cat="PVP"
-            kind="pvp_client"
-            title="PvP"
-            online={0}
-            index={ownSlides.length}
-            on={!!current && current.kind === 'build' && current.name.startsWith(pvpBuildName(''))}
-            onClick={() => {
-              // PvP — свой раздел лаунчера (12.10.2026), плитка ведёт туда.
-              track('pvp_client_open', { source: 'hub' })
-              openPvp('play')
-            }}
-          />
+          {TIERS_SECTION_PUBLIC ? (
+            <ModeTile
+              cat="PVP"
+              kind="pvp_client"
+              title="PvP"
+              online={0}
+              index={ownSlides.length}
+              on={!!current && current.kind === 'build' && current.name.startsWith(pvpBuildName(''))}
+              onClick={() => {
+                // PvP — свой раздел лаунчера (12.10.2026), плитка ведёт туда.
+                track('pvp_client_open', { source: 'hub' })
+                openPvp('play')
+              }}
+            />
+          ) : null}
           {shownModes.map((m, i) =>
             'pack' in m ? <PrisonTile key={PRISON_SLUG} cell index={i} pack={m.pack} onClick={() => openPack(m.pack)} /> : modeTile(m, i),
           )}
