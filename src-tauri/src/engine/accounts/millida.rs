@@ -155,51 +155,6 @@ fn remember_in(cache: &mut std::collections::BTreeMap<String, Tagged>, key: Stri
 /// холодный запрос сервера — до нескольких секунд; дубль — только хвосту.
 const HEDGE_AFTER: std::time::Duration = std::time::Duration::from_millis(2500);
 
-const HEDGE_WINDOW: std::time::Duration = std::time::Duration::from_secs(60);
-const HEDGE_SHARE_DIVISOR: usize = 5;
-const HEDGE_FLOOR: usize = 1;
-
-/// A duplicate rescues one hung socket; when the API itself is slow every
-/// request hangs, and unlimited duplicates double the load on an overloaded server.
-pub(crate) struct HedgeBudget {
-    reads: std::collections::VecDeque<std::time::Instant>,
-    hedges: std::collections::VecDeque<std::time::Instant>,
-}
-
-impl HedgeBudget {
-    pub(crate) const fn new() -> Self {
-        Self { reads: std::collections::VecDeque::new(), hedges: std::collections::VecDeque::new() }
-    }
-
-    pub(crate) fn note_read(&mut self, now: std::time::Instant) {
-        self.reads.push_back(now);
-    }
-
-    pub(crate) fn try_hedge(&mut self, now: std::time::Instant) -> bool {
-        if let Some(since) = now.checked_sub(HEDGE_WINDOW) {
-            while self.reads.front().is_some_and(|t| *t < since) {
-                self.reads.pop_front();
-            }
-            while self.hedges.front().is_some_and(|t| *t < since) {
-                self.hedges.pop_front();
-            }
-        }
-        let limit = (self.reads.len() / HEDGE_SHARE_DIVISOR).max(HEDGE_FLOOR);
-        if self.hedges.len() >= limit {
-            return false;
-        }
-        self.hedges.push_back(now);
-        true
-    }
-}
-
-static HEDGE_BUDGET: std::sync::Mutex<HedgeBudget> = std::sync::Mutex::new(HedgeBudget::new());
-
-fn with_hedge_budget<R>(run: impl FnOnce(&mut HedgeBudget) -> R) -> R {
-    let mut budget = HEDGE_BUDGET.lock().unwrap_or_else(|e| e.into_inner());
-    run(&mut budget)
-}
-
 /// Hedged request: первый ответ из двух; ошибка одного — ждём другой.
 pub(crate) async fn hedged<F1, F2, Fut1, Fut2>(first: F1, second: F2) -> Result<reqwest::Response, reqwest::Error>
 where
@@ -208,15 +163,11 @@ where
     Fut1: std::future::Future<Output = Result<reqwest::Response, reqwest::Error>>,
     Fut2: std::future::Future<Output = Result<reqwest::Response, reqwest::Error>>,
 {
-    with_hedge_budget(|b| b.note_read(std::time::Instant::now()));
     let a = first();
     tokio::pin!(a);
     tokio::select! {
         r = &mut a => return r,
         _ = tokio::time::sleep(HEDGE_AFTER) => {}
-    }
-    if !with_hedge_budget(|b| b.try_hedge(std::time::Instant::now())) {
-        return a.await;
     }
     let b = second();
     tokio::pin!(b);
@@ -790,38 +741,9 @@ pub async fn millida_login_poll(device_code: String) -> Result<Value, String> {
 mod tests {
     use super::{
         api_url, etag_key, insufficient_funds_detail, lang_header, login_poll_answer, market_header, refresh_on_cooldown, remember_in, repeatable, webview_path_allowed, set_refresh_cooldown,
-        verdict_for, HedgeBudget, RefreshVerdict, Tagged, ETAG_CACHE_BUDGET, HEDGE_WINDOW, MILLIDA_API,
+        verdict_for, RefreshVerdict, Tagged, ETAG_CACHE_BUDGET, MILLIDA_API,
     };
     use std::collections::BTreeMap;
-
-    #[test]
-    fn duplicates_stay_within_a_fifth_of_reads() {
-        // (reads in the window, hedges already granted, seconds later, next hedge allowed, why this case is pinned)
-        let cases: [(usize, usize, u64, bool, &str); 5] = [
-            (1, 0, 0, true, "a single hung socket is still rescued by the spare pool"),
-            (5, 1, 0, false, "five reads a minute earn exactly one duplicate"),
-            (10, 1, 0, true, "a fifth of ten reads is two duplicates"),
-            (10, 2, 0, false, "on 18.10 every slow read was doubled and the 503 wave held for half an hour"),
-            (5, 1, HEDGE_WINDOW.as_secs() + 1, true, "duplicates older than the window are forgotten"),
-        ];
-        for (reads, granted, later, allowed, why) in cases {
-            let start = std::time::Instant::now() + HEDGE_WINDOW;
-            let mut budget = HedgeBudget::new();
-            for _ in 0..reads {
-                budget.note_read(start);
-            }
-            for _ in 0..granted {
-                assert!(budget.try_hedge(start), "case setup failed: {why}");
-            }
-            let now = start + std::time::Duration::from_secs(later);
-            if later > 0 {
-                for _ in 0..reads {
-                    budget.note_read(now);
-                }
-            }
-            assert_eq!(budget.try_hedge(now), allowed, "{why}");
-        }
-    }
 
     #[test]
     fn only_reads_are_asked_twice() {
