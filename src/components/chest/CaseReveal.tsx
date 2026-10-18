@@ -11,6 +11,7 @@ import { FragBar, RarityChip } from '../shop/rarityUi'
 import { PxThumb } from '../shop/Sets'
 import { RARITY_NAME_SHORT, RARITY_TONE, rarityRank, shardWord, word } from '../shop/rarity'
 import { dealOrder, finalRarity, ladderAt, openOfRewards, revealLadder } from './revealLadder'
+import { ANSWER_TIMEOUT_MS, hitView, skipAction } from './answerDeadline'
 import { showToast } from '../../state/ui'
 import '../../styles/pixel/reveal.css'
 import { intlTag, useT } from '../../i18n'
@@ -175,7 +176,7 @@ export function CaseReveal({
   /** Своё под карточкой награды в итоге (например «Докупить» фрагменты). */
   extra?: (r: CaseReward, i: number) => ReactNode
   /** Запрос открытия: уходит при первом ударе (или сразу, `early`), ответ ждёт конец ударов. */
-  request: () => Promise<RevealData>
+  request: (attempt: number) => Promise<RevealData>
   onFail: (e: unknown) => void
   onDone: () => void
   onClose: () => void
@@ -199,19 +200,48 @@ export function CaseReveal({
   const timers = useRef<number[]>([])
   const later = (fn: () => void, ms: number) => timers.current.push(window.setTimeout(fn, ms))
   const rewards = opens ? opens[0]!.rewards : null
+  const attempt = useRef(0)
+  const answered = useRef(false)
+  const deadline = useRef(0)
+  const [late, setLate] = useState(false)
 
-  const begin = () => {
-    if (asked.current) return
-    asked.current = request()
-    asked.current.then(
+  const send = () => {
+    const mine = attempt.current
+    const p = request(mine)
+    asked.current = p
+    setLate(false)
+    window.clearTimeout(deadline.current)
+    deadline.current = window.setTimeout(() => {
+      if (alive.current && !answered.current && attempt.current === mine) setLate(true)
+    }, ANSWER_TIMEOUT_MS)
+    p.then(
       (d) => {
+        // Every attempt replays the same server result, so whichever answers first wins.
+        if (answered.current) return
+        answered.current = true
+        window.clearTimeout(deadline.current)
         const list = opensOfData(d)
         // Картинки наград грузятся, пока игрок добивает сундук: на выходе — сразу видны.
         for (const o of list) for (const x of o.rewards) if (x.item?.preview) new Image().src = x.item.preview
         if (alive.current) setOpens(list)
       },
-      (e) => alive.current && onFail(e),
+      (e) => {
+        if (answered.current || attempt.current !== mine) return
+        window.clearTimeout(deadline.current)
+        if (alive.current) onFail(e)
+      },
     )
+  }
+
+  const begin = () => {
+    if (asked.current) return
+    send()
+  }
+
+  const retry = () => {
+    if (answered.current) return
+    attempt.current += 1
+    send()
   }
 
   useEffect(() => {
@@ -222,6 +252,7 @@ export function CaseReveal({
     return () => {
       alive.current = false
       timers.current.forEach((t) => window.clearTimeout(t))
+      window.clearTimeout(deadline.current)
       // Закрыли до итога, а покупка уже прошла — список ящиков всё равно обновить.
       if (asked.current && !finished.current) onDone()
     }
@@ -276,6 +307,7 @@ export function CaseReveal({
   // Все удары сделаны, а ответа ещё нет: сундук ждёт службу. На медленной связи
   // это до минуты — говорим об этом, а не оставляем «Жми!» под мёртвыми нажатиями.
   const waiting = phase === 'hit' && hits >= need
+  const view = hitView(hits, need, !!opens, late)
   useEffect(() => {
     if (!waiting || opens) return
     const timer = window.setTimeout(() => alive.current && showToast(t('Связь медленная — ждём ответ')), SLOW_ANSWER_MS)
@@ -355,7 +387,7 @@ export function CaseReveal({
   }
 
   const skip = () => {
-    if (!opens) return
+    if (skipAction(!!opens) === 'close' || !opens) return onClose()
     timers.current.forEach((t) => window.clearTimeout(t))
     bursting.current = true
     setHits(need)
@@ -419,7 +451,7 @@ export function CaseReveal({
           {t('Открыть все')}
         </button>
       ) : (
-        <button className="btn sm secondary rv2-skip" data-track="case_skip" onClick={(e) => (e.stopPropagation(), skip())} disabled={!opens}>
+        <button className="btn sm secondary rv2-skip" data-track="case_skip" onClick={(e) => (e.stopPropagation(), skip())}>
           {t('Пропустить')}
         </button>
       )}
@@ -445,17 +477,34 @@ export function CaseReveal({
                   {RARITY_NAME_SHORT[lvl] + (step === 0 && hits < need ? '+' : '')}
                 </b>
               ) : null}
-              <span className={'rv2-pips' + (waiting ? ' wait' : '')} aria-label={waiting ? t('Открываем') : t('Ударов: {n} из {total}', { n: hits, total: need })}>
-                {Array.from({ length: need }, (_, i) => (
-                  <i key={i} className={i < hits ? 'on' : ''} />
-                ))}
-              </span>
-              {/* Удары сделаны, ответ службы ещё в пути: «Жми!» убрано — нажимать больше нечего
-                  (владелец 13.10.2026: «кейс завис на этом моменте»). */}
-              {waiting ? null : (
-                <b key={'t' + kick} className="rv2-tap">
-                  {t('Жми!')}
-                </b>
+              {view === 'stalled' ? (
+                <div className="rv2-stall" role="alert" onClick={(e) => e.stopPropagation()}>
+                  <b>{t('Сервер не ответил')}</b>
+                  <span>{t('Награда не пропадёт: повтори или закрой окно')}</span>
+                  <span className="rv2-stall-acts">
+                    <button className="btn sm primary" data-track="case_retry" onClick={retry}>
+                      {t('Повторить')}
+                    </button>
+                    <button className="btn sm secondary" data-track="case_stall_close" onClick={onClose}>
+                      {t('Закрыть')}
+                    </button>
+                  </span>
+                </div>
+              ) : (
+                <>
+                  <span className={'rv2-pips' + (waiting ? ' wait' : '')} aria-label={waiting ? t('Открываем') : t('Ударов: {n} из {total}', { n: hits, total: need })}>
+                    {Array.from({ length: need }, (_, i) => (
+                      <i key={i} className={i < hits ? 'on' : ''} />
+                    ))}
+                  </span>
+                  {/* Удары сделаны, ответ службы ещё в пути: «Жми!» убрано — нажимать больше нечего
+                      (владелец 13.10.2026: «кейс завис на этом моменте»). */}
+                  {view === 'tap' ? (
+                    <b key={'t' + kick} className="rv2-tap">
+                      {t('Жми!')}
+                    </b>
+                  ) : null}
+                </>
               )}
             </>
           ) : phase === 'burst' ? (

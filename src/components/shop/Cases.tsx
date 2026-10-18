@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from '../Icon'
 import { Ruby } from '../Ruby'
@@ -14,6 +14,7 @@ import { useVirtualRows } from './useVirtualRows'
 import { ItemShot } from './Today'
 import { ChestPop } from '../chest/ChestPop'
 import { CaseReveal, type RevealData } from '../chest/CaseReveal'
+import { caseOpenKeys } from '../chest/answerDeadline'
 import { caseCoins, prizeRanges } from './casePrizes'
 import { useOffscreenPause } from './useOffscreen'
 import { intlTag, t, useT } from '../../i18n'
@@ -563,6 +564,7 @@ export function CaseOpening({
 }) {
   const t = useT()
   const [run, setRun] = useState(0)
+  const openKey = useRef(caseOpenKeys(newRequestId))
   const [mode, setMode] = useState<CaseMode>(view.mode ?? 'one')
   const c = chestOf(view.id)
   const shards = view.currency === 'shards'
@@ -579,7 +581,7 @@ export function CaseOpening({
       deal={mode === 'x10'}
       early
       request={(): Promise<RevealData> =>
-        openCase(view.id, newRequestId(), mode === 'x10' ? { count: 10 } : mode === 'free' ? { free: true } : {}).then((r) => {
+        openCase(view.id, openKey.current.at(view, run), mode === 'x10' ? { count: 10 } : mode === 'free' ? { free: true } : {}).then((r) => {
           onBalance(r.balance)
           return { opens: opensOf(r) }
         })

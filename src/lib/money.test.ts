@@ -4,6 +4,7 @@ import {
   canAfford,
   formatMoney,
   goodsQuote,
+  moneyLangFor,
   moneyShortfall,
   quoteText,
   shortfallOf,
@@ -150,6 +151,26 @@ const URLS: Array<[why: string, locale: Locale, ask: { currency: MoneyCurrency; 
 for (const [why, locale, ask, want] of URLS) {
   test('top-up link: ' + why, () => {
     expect(topupUrl(ask, locale)).toBe(want)
+  })
+}
+
+const LANG_PATHS: Array<[why: string, path: string, sent: boolean]> = [
+  ['the account money view decides the shown currency', '/me/money', true],
+  ['the price list quotes every product', '/pricing', true],
+  ['the PLUS status carries its quote', '/launcher/plus', true],
+  ['a PLUS wallet buy can answer with a shortfall', '/launcher/plus/wallet/buy', true],
+  ['a ruby pack buy can answer with a shortfall', '/rubies/packs/buy', true],
+  ['hosting plans are quoted for the viewer', '/hosting/plans?brand=millida', true],
+  ['creating a paid server charges the balance', '/hosting/servers', true],
+  ['changing a plan charges the balance', '/hosting/servers/abc/plan', true],
+  ['the catalog access answer carries the price', '/catalog/items/bsl/access', true],
+  ['a server console has nothing to price', '/hosting/servers/abc/console', false],
+  ['the friends list has nothing to price', '/friends', false],
+]
+
+for (const [why, path, sent] of LANG_PATHS) {
+  test('language on money requests: ' + why, () => {
+    expect(moneyLangFor(path, 'ru'), 'only money requests name the language').toBe(sent ? 'ru' : undefined)
   })
 }
 

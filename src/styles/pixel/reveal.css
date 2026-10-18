@@ -56,6 +56,13 @@
 @keyframes rv2-tap { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
 .rv2-stage .rv2-pips { position: absolute; bottom: -8%; }
 .rv2-stage .rv2-tap { position: absolute; bottom: -24%; }
+.rv2-stall {
+  position: absolute; bottom: -30%; z-index: 6; display: grid; justify-items: center; gap: 8px;
+  max-width: min(420px, 90vw); text-align: center; cursor: default;
+}
+.rv2-stall > b { font-size: 22px; font-weight: 900; }
+.rv2-stall > span { font-size: 14px; opacity: 0.8; }
+.rv2-stall-acts { display: flex; gap: 8px; margin-top: 6px; }
 /* Вспышка — на весь экран, круглым светом от центра (квадратная плашка резала сцену). */
 .rv2-flash {
   position: fixed; inset: 0; z-index: 5; pointer-events: none;

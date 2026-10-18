@@ -153,6 +153,14 @@ export function shortfallOf(q: Quote | null | undefined, view: MoneyView | null)
   return { displayCurrency: currency, missingMinor, missingKopecks, topup: topupFor(missingKopecks, view) }
 }
 
+const MONEY_PATHS =
+  /^\/(me\/money|pricing|launcher\/plus(\/.*)?|rubies\/(rules|packs(\/.*)?|shop\/packs(\/.*)?|topup)|hosting\/plans(\/.*)?|hosting\/servers(\/[^/?]+\/plan(\/.*)?)?|vds\/plans|catalog\/(purchases\/quotes|items\/[^/?]+\/(access|buy|subscribe)))(\?.*)?$/
+
+/// The server shows an unproven buyer rubles only when the request states a ruble-zone language,
+/// so money requests name the interface language; other requests stay as they were.
+export const moneyLangFor = (pathname: string, locale: Locale = getLocale()): Locale | undefined =>
+  MONEY_PATHS.test(pathname) ? locale : undefined
+
 /// The core passes an INSUFFICIENT_FUNDS refusal through as this marker plus the body as JSON.
 export const INSUFFICIENT_FUNDS_PREFIX = 'insufficient-funds: '
 
