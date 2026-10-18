@@ -71,7 +71,7 @@ export const isLocale = (v: unknown): v is Locale => typeof v === 'string' && CO
 /// Only these tables are offered for now. The others stay in the code and turn
 /// on by adding their code here, without touching the pickers.
 /// The translated tables wait for review behind this single switch.
-export const EXTRA_LOCALES_PUBLIC = false
+export const EXTRA_LOCALES_PUBLIC = true
 
 export const EXTRA_LOCALES: readonly Locale[] = ['pt-BR', 'es', 'de', 'tr', 'pl']
 

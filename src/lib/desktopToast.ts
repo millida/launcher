@@ -1,4 +1,4 @@
-import { overlaySetToasts, overlayState, overlayToast } from '../ipc/commands'
+import { overlayNotify, overlaySetToasts, overlayState, overlayToast } from '../ipc/commands'
 import type { OverlayCard } from '../ipc/commands'
 import { hasTauri } from '../ipc/tauri'
 
@@ -29,4 +29,11 @@ export function showDesktopToast(card: OverlayCard): boolean {
   if (!enabled || !hasTauri() || launcherHasUser()) return false
   void overlayToast(card).catch(() => {})
   return true
+}
+
+// An overlay card over a focused launcher duplicated the launcher's own card,
+// and clicking it opened the overlay chat on top of the launcher chat.
+export function showAwayCard(card: OverlayCard, gameRunning: boolean) {
+  if (launcherHasUser() || showDesktopToast(card) || !gameRunning) return
+  void overlayNotify(card).catch(() => {})
 }

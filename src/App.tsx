@@ -60,12 +60,12 @@ import { Installs } from './components/Installs'
 import { PackDrop } from './components/PackDrop'
 import { initInstalls } from './state/installs'
 import { initCalls } from './state/call'
-import { loadProfileSettings, overlayNotify } from './ipc/commands'
+import { loadProfileSettings } from './ipc/commands'
 import { ServerDetail } from './components/ServerDetail'
 import { pushChatNotify } from './state/chatNotify'
 import { notifyAudible, notifyShown } from './state/notifyPrefs'
 import { createPresenceMemo, presenceEvents, presenceText, presenceTitle } from './state/presenceNotify'
-import { initDesktopToasts, showDesktopToast } from './lib/desktopToast'
+import { initDesktopToasts, showAwayCard, showDesktopToast } from './lib/desktopToast'
 import { parseInvite } from './lib/invite'
 import { parseCallLog } from './lib/call/callLog'
 import { effectiveNick, getAccount, getMillidaAccount, isGameAccountKind, isMillidaKind, useAccounts } from './state/accounts'
@@ -167,7 +167,7 @@ function applyRoomPoll(r: RoomPoll) {
         kind: 'msg' as const,
         open: 'room' as const,
       }
-      if (!showDesktopToast(card) && useGame.getState().list.length) void overlayNotify(card).catch(() => {})
+      showAwayCard(card, useGame.getState().list.length > 0)
     }
   })
   ;(r.roomUpdates || []).forEach((u) => {
@@ -735,8 +735,7 @@ export function App() {
                   kind: 'msg' as const,
                   open: 'chat' as const,
                 }
-                if (!showDesktopToast(card) && useGame.getState().list.length)
-                  void overlayNotify(card).catch(() => {})
+                showAwayCard(card, useGame.getState().list.length > 0)
               }
             }
           })

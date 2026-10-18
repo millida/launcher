@@ -8,6 +8,7 @@ import { trackFailure } from '../lib/telemetry'
 import { getMillidaAccount } from './accounts'
 import { clearRoomUnread } from './rooms'
 import { typingHoldMs, type TypingPush } from '../lib/friendsPush'
+import { withLatestPage } from '../lib/chatGroup'
 
 export interface Friend {
   userId: string
@@ -329,6 +330,23 @@ export async function renderChat(append?: boolean) {
     chatEmpty: append ? cur.chatEmpty : msgs.length === 0,
     chatHasMore: !!page.hasMore,
     chatPeerReadAt: page.peerReadAt || 0,
+    chatSeq: cur.chatSeq + 1,
+  })
+}
+
+export async function syncChat() {
+  const s = useFriends.getState()
+  if (!s.chatOpen || (!s.chatWith && !s.chatRoom)) return
+  const scope = scopeKey(s)
+  const page: ChatPage = await api<ChatPage>(chatBase(s)).catch(() => ({}))
+  const cur = useFriends.getState()
+  if (scopeKey(cur) !== scope) return
+  const merged = withLatestPage(cur.chatMsgs, page.messages || [])
+  if (!merged) return
+  cur.set({
+    chatMsgs: merged,
+    chatEmpty: false,
+    chatPeerReadAt: Math.max(cur.chatPeerReadAt, page.peerReadAt || 0),
     chatSeq: cur.chatSeq + 1,
   })
 }

@@ -13,6 +13,9 @@ import { retainOverlayRealtime } from '../lib/realtimeRelay'
 import { readPresencePush, withPresence } from '../lib/friendsPush'
 import { isOwnMediaUrl } from '../lib/ownMedia'
 import { overlayState } from '../ipc/commands'
+import { callLogTitle, parseCallLog } from '../lib/call/callLog'
+import { parseInvite } from '../lib/invite'
+import { fmtCallTime } from '../state/call'
 import {
   loadFriends,
   loadOlderChat,
@@ -241,6 +244,8 @@ export function OverlayChat({
     const grouped = isGrouped(msgs, i)
     const att = m.attachment
     const showAuthor = !!chatRoom && !m.me && !grouped
+    const callLog = m.text ? parseCallLog(m.text) : null
+    const invite = m.text && !callLog ? parseInvite(m.text) : null
     return (
       <Fragment key={m.id || m.localId || String(m.ts) + i}>
         {m.ts && dayKey(m.ts) !== dayKey(msgs[i - 1]?.ts) ? (
@@ -277,7 +282,21 @@ export function OverlayChat({
                     </span>
                   </button>
                 ) : null}
-                {m.text ? <span className="msg-text">{m.text}</span> : null}
+                {callLog || invite ? (
+                  <button className="ovc-att" onClick={() => onLauncher(current ? asTarget(current) : null)}>
+                    <Icon id={callLog ? (callLog.outcome === 'done' ? 'i-phone' : 'i-phone-off') : 'i-server'} />
+                    <span>
+                      <b>{callLog ? callLogTitle(callLog, !!m.me) : t('Приглашение на сервер')}</b>
+                      {callLog
+                        ? callLog.outcome === 'done'
+                          ? fmtCallTime(callLog.seconds * 1000)
+                          : t('Открыть в лаунчере')
+                        : invite?.name}
+                    </span>
+                  </button>
+                ) : m.text ? (
+                  <span className="msg-text">{m.text}</span>
+                ) : null}
               </>
             )}
             <span className="msg-meta">
