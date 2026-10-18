@@ -12,6 +12,11 @@ import {
   loginPushed,
   needsCatchUp,
   ownSocketUrl,
+  partyPollEveryMs,
+  safetyDue,
+  safetyPollMs,
+  safetyRefresh,
+  staleParty,
   pokeGate,
   pokeTopic,
   presenceModeAfter,
@@ -92,6 +97,8 @@ const pokes: Array<[string, unknown, unknown, ReturnType<typeof pokeTopic>]> = [
   ['статус сервера хостинга', 'personal:#42', { t: 'hosting' }, 'hosting'],
   ['счётчики сайта', 'personal:#42', { t: 'inbox' }, 'inbox'],
   ['рубины, PLUS или купленная косметика', 'personal:#42', { t: 'account' }, 'account'],
+  ['«печатает» в группе — новая тема контракта', 'personal:#42', { t: 'rooms', typing: { roomId: 'g1', from: 'u1', until: 5 } }, 'rooms'],
+  ['пати', 'personal:#42', { t: 'party', partyId: 'p1', rev: 3 }, 'party'],
   ['неизвестная тема', 'personal:#42', { t: 'wallet' }, null],
   ['чужой канал', 'news', { t: 'friends' }, null],
   ['канал присутствия не пинает темы', 'lp:3', { t: 'presence' }, null],
@@ -116,6 +123,9 @@ const carried: Array<[string, RealtimeTopic, unknown, boolean]> = [
   ['«печатает» без until — перезапрос', 'friends', { t: 'friends', typing: { from: 'u1' } }, false],
   ['аккаунт всегда толчок', 'account', { t: 'account' }, false],
   ['звонки разбирает свой слушатель, перезапрос не глушится', 'calls', { t: 'calls', e: {} }, false],
+  ['«печатает» в группе применяется без запроса', 'rooms', { t: 'rooms', typing: { roomId: 'g1', from: 'u1', until: 5 } }, true],
+  ['«печатает» в группе без комнаты — не данные', 'rooms', { t: 'rooms', typing: { from: 'u1', until: 5 } }, false],
+  ['пати всегда перечитывается: rev не заменяет ответ /party', 'party', { t: 'party', partyId: 'p1', rev: 3 }, false],
 ]
 
 for (const [name, topic, data, want] of carried) {
@@ -264,9 +274,14 @@ test('без realtime темп опроса прежний, до единицы'
   expect(friendsPollDelayMs(false, POLL_BASE_MS, 0, false, half, false)).toBe(POLL_BASE_MS)
 })
 
-test('при живом realtime опрос друзей не взводит таймер: следующий запрос только по публикации', () => {
-  expect(friendsPollDelayMs(true, POLL_BASE_MS, 0, false, half, true)).toBeNull()
-  expect(friendsPollDelayMs(true, POLL_BASE_MS, 0, true, half, false)).toBeNull()
+test('при живом realtime опрос друзей держит только страховку контракта: 120 с, в скрытом окне ×4', () => {
+  expect(friendsPollDelayMs(true, POLL_BASE_MS, 0, false, half, true)).toBe(120_000)
+  expect(friendsPollDelayMs(true, POLL_BASE_MS, 0, true, half, false)).toBe(480_000)
+})
+
+test('страховка опроса друзей разбросана: после рестарта сервера лаунчеры не приходят одной волной', () => {
+  expect(friendsPollDelayMs(true, POLL_BASE_MS, 0, false, () => 0, false)).toBe(96_000)
+  expect(friendsPollDelayMs(true, POLL_BASE_MS, 0, false, () => 1, false)).toBe(144_000)
 })
 
 test('ошибка при живом realtime повторяется с нарастающей паузой, а не ждёт публикации вечно', () => {
@@ -400,4 +415,198 @@ test('пинок после повтора снова стреляет сраз�
   gate.take()
   gate.poke()
   expect(fired).toBe(1)
+})
+
+type Resource = 'party' | 'friends/poll' | 'friends+requests+rooms' | 'overlay list'
+
+// Вход → вердикт: сокет × окно × ресурс → интервал опроса. Сокет жив — только страховка
+// контракта (120 с, скрытое окно ×4); сокета нет — прежний темп до миллисекунды, иначе
+// без сокета данные перестанут обновляться или польётся лишний опрос.
+const schedule: Array<[string, Resource, boolean, boolean, boolean, number | null]> = [
+  ['пати с сокетом: страховка 120 с', 'party', true, false, true, 120_000],
+  ['пати с сокетом без пати: та же страховка', 'party', true, false, false, 120_000],
+  ['пати с сокетом в скрытом окне ×4', 'party', true, true, true, 480_000],
+  ['скрытое окно без пати не опрашивает, как раньше', 'party', true, true, false, null],
+  ['пати без сокета: 15 с в пати, как раньше', 'party', false, false, true, 15_000],
+  ['пати без сокета: 60 с без пати, как раньше', 'party', false, false, false, 60_000],
+  ['пати без сокета в скрытом окне с пати — 15 с, как раньше', 'party', false, true, true, 15_000],
+  ['пати без сокета в скрытом окне без пати — пропуск, как раньше', 'party', false, true, false, null],
+]
+
+for (const [name, , live, hidden, busy, want] of schedule) {
+  test(`темп: ${name}`, () => {
+    expect(partyPollEveryMs(live, busy, hidden)).toBe(want)
+  })
+}
+
+// Вход → вердикт для тика таймера экрана друзей и оверлея: без сокета каждый тик, как
+// раньше; с сокетом — только когда с прошлого запроса прошла страховка.
+const due: Array<[string, Resource, boolean, boolean, number, boolean]> = [
+  ['без сокета тик сразу после запроса', 'friends+requests+rooms', false, false, 0, true],
+  ['без сокета в скрытом окне тоже', 'overlay list', false, true, 0, true],
+  ['с сокетом 30 с после запроса — рано', 'friends+requests+rooms', true, false, 30_000, false],
+  ['с сокетом 119 с — ещё рано', 'friends+requests+rooms', true, false, 119_999, false],
+  ['с сокетом 120 с — страховка', 'overlay list', true, false, 120_000, true],
+  ['с сокетом в скрытом окне 120 с — рано (×4)', 'friends+requests+rooms', true, true, 120_000, false],
+  ['с сокетом в скрытом окне 480 с — страховка', 'friends+requests+rooms', true, true, 480_000, true],
+]
+
+for (const [name, , live, hidden, since, want] of due) {
+  test(`тик экрана: ${name}`, () => {
+    expect(safetyDue(live, hidden, since)).toBe(want)
+  })
+}
+
+test('страховка из контракта: 60–120 с в видимом окне, ×4 в скрытом', () => {
+  expect(safetyPollMs(false)).toBeGreaterThanOrEqual(60_000)
+  expect(safetyPollMs(false)).toBeLessThanOrEqual(120_000)
+  expect(safetyPollMs(true)).toBe(safetyPollMs(false) * 4)
+})
+
+// Вход → вердикт для ответа /party: старый rev той же пати отбрасывается, иначе ответ,
+// собранный до изменения, откатит уже применённое состояние.
+const revs: Array<[string, { id: string; rev: number } | null, { id: string; rev: number } | null, boolean]> = [
+  ['ответ с меньшим rev той же пати — старый', { id: 'p1', rev: 5 }, { id: 'p1', rev: 4 }, true],
+  ['тот же rev (изменилось только приглашение) — применяем', { id: 'p1', rev: 5 }, { id: 'p1', rev: 5 }, false],
+  ['больший rev — применяем', { id: 'p1', rev: 5 }, { id: 'p1', rev: 6 }, false],
+  ['другая пати: rev несравним', { id: 'p1', rev: 9 }, { id: 'p2', rev: 1 }, false],
+  ['пати ещё не было', null, { id: 'p1', rev: 1 }, false],
+  ['из пати вышли: ответ без пати применяется', { id: 'p1', rev: 5 }, null, false],
+]
+
+for (const [name, applied, incoming, want] of revs) {
+  test(`rev пати: ${name}`, () => {
+    expect(staleParty(applied, incoming)).toBe(want)
+  })
+}
+
+function deferred() {
+  let resolve = () => {}
+  const promise = new Promise<void>((r) => {
+    resolve = r
+  })
+  return { promise, resolve }
+}
+
+const flush = () => new Promise((r) => setTimeout(r, 0))
+
+function harness(live: boolean, allowed = true) {
+  let clock = 1_000_000
+  const runs: Array<ReturnType<typeof deferred>> = []
+  const state = { live, allowed, hidden: false }
+  const refresh = safetyRefresh({
+    load: () => {
+      const d = deferred()
+      runs.push(d)
+      return d.promise
+    },
+    allowed: () => state.allowed,
+    live: () => state.live,
+    hidden: () => state.hidden,
+    now: () => clock,
+  })
+  return { refresh, runs, state, advance: (ms: number) => void (clock += ms) }
+}
+
+type Harness = ReturnType<typeof harness>
+
+// Вход → вердикт: сокет × событие → сколько запросов уходит.
+const refreshCases: Array<[string, boolean, (h: Harness) => Promise<void>, number]> = [
+  [
+    'без сокета каждый тик — запрос, как раньше',
+    false,
+    async (h) => {
+      h.refresh.tick()
+      h.runs[0]?.resolve()
+      await flush()
+      h.refresh.tick()
+    },
+    2,
+  ],
+  [
+    'с сокетом тик до страховки молчит',
+    true,
+    async (h) => {
+      h.advance(30_000)
+      h.refresh.tick()
+    },
+    0,
+  ],
+  [
+    'с сокетом тик после страховки — один запрос',
+    true,
+    async (h) => {
+      h.advance(120_000)
+      h.refresh.tick()
+    },
+    1,
+  ],
+  ['с сокетом толчок — запрос сразу', true, async (h) => h.refresh.poke(), 1],
+  [
+    'толчки во время запроса — ровно один повтор после него',
+    true,
+    async (h) => {
+      h.refresh.poke()
+      h.refresh.poke()
+      h.refresh.poke()
+      h.runs[0]?.resolve()
+      await flush()
+    },
+    2,
+  ],
+  [
+    'толчок сдвигает страховку: тик через 100 с после него молчит',
+    true,
+    async (h) => {
+      h.advance(110_000)
+      h.refresh.poke()
+      h.runs[0]?.resolve()
+      await flush()
+      h.advance(100_000)
+      h.refresh.tick()
+    },
+    1,
+  ],
+  [
+    'сокет упал — следующий тик опрашивает сразу',
+    true,
+    async (h) => {
+      h.advance(30_000)
+      h.state.live = false
+      h.refresh.tick()
+    },
+    1,
+  ],
+]
+
+for (const [name, live, act, want] of refreshCases) {
+  test(`обновление списков: ${name}`, async () => {
+    const h = harness(live)
+    await act(h)
+    expect(h.runs.length).toBe(want)
+  })
+}
+
+test('экран закрыт — ни тик, ни толчок не ходят в сеть', () => {
+  const h = harness(false, false)
+  h.refresh.tick()
+  h.refresh.poke()
+  expect(h.runs.length).toBe(0)
+})
+
+test('упавший запрос не запирает обновление: следующий толчок снова идёт в сеть', async () => {
+  let calls = 0
+  const refresh = safetyRefresh({
+    load: () => {
+      calls += 1
+      return Promise.reject(new Error('net'))
+    },
+    allowed: () => true,
+    live: () => true,
+    hidden: () => false,
+  })
+  refresh.poke()
+  await flush()
+  refresh.poke()
+  expect(calls).toBe(2)
 })

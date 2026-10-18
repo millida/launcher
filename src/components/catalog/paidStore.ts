@@ -1,16 +1,16 @@
 import { create } from 'zustand'
-import { WALLET_URL, api, hasMillidaAccount, openExt } from '../../lib/api'
-import { refreshMillidaWallet } from '../../lib/session'
+import { api, hasMillidaAccount } from '../../lib/api'
+import { affords, catalogQuote, openTopup, refreshMoney, shortfallFor } from '../../lib/useMoney'
+import { moneyShortfall, type MoneyShortfall } from '../../lib/money'
 import { openPaymentUrl } from '../../lib/openPayment'
 import { apiErrorText, isTransientApiError } from '../../lib/apiError'
 import { purchaseFlow } from '../../lib/purchaseTrack'
-import { getMillidaAccount } from '../../state/accounts'
 import { uiConfirm } from '../../state/confirm'
 import { showToast } from '../../state/ui'
 import { openAccountAdd } from '../../state/accountAdd'
 import { isRealtimeLive, onRealtime } from '../../lib/realtime'
 import { pokeGate, purchaseWaitMs } from '../../lib/realtimePace'
-import { accessState, livePriceKopecks, newIdempotencyKey, paidVerdict, purchasesFrom, shortfallKopecks, verdictText } from './paid'
+import { accessState, livePriceKopecks, newIdempotencyKey, paidVerdict, purchasesFrom, verdictText } from './paid'
 import type { AccessState, Pricing, Purchase } from './paid'
 import { t } from '../../i18n'
 
@@ -35,6 +35,7 @@ export type BuyStep = 'confirm' | 'funds'
 export interface BuyDialog extends PaidTarget {
   step: BuyStep
   repriced: boolean
+  shortfall: MoneyShortfall | null
 }
 
 interface PaidState {
@@ -44,7 +45,6 @@ interface PaidState {
   purchases: Purchase[] | null
   purchasesFailed: boolean
   dialog: BuyDialog | null
-  balance: number | null
   busy: boolean
 }
 
@@ -54,7 +54,6 @@ export const usePaid = create<PaidState>(() => ({
   purchases: null,
   purchasesFailed: false,
   dialog: null,
-  balance: null,
   busy: false,
 }))
 
@@ -123,16 +122,7 @@ let buyKey: string | null = null
 /** Воронка покупки (`purchase_start` → `purchase_result`) открытого окна. */
 let flow: ReturnType<typeof purchaseFlow> | null = null
 
-function cachedBalance(): number | null {
-  const acc = getMillidaAccount()
-  return acc && typeof acc.balance === 'number' ? acc.balance : null
-}
-
-async function freshBalance(): Promise<number | null> {
-  const b = (await refreshMillidaWallet().catch(() => null)) ?? cachedBalance()
-  usePaid.setState({ balance: b })
-  return b
-}
+const oneTimeShortfall = (d: PaidTarget): MoneyShortfall | null => (d.pricing === 'ONE_TIME' ? shortfallFor(catalogQuote(d.priceKopecks)) : null)
 
 /**
  * «Купить» / «Подписаться» на строке. Доступ уже есть (купил на сайте, ключ,
@@ -149,13 +139,11 @@ export async function startPaid(t: PaidTarget, onOwned: () => void): Promise<voi
   afterOwned = onOwned
   buyKey = null
   flow = purchaseFlow(t.pricing === 'SUBSCRIPTION' ? 'catalog_sub' : 'catalog_item', t.slug, t.priceKopecks, 'kopecks')
-  usePaid.setState({ dialog: { ...t, step: 'confirm', repriced: false }, balance: cachedBalance(), busy: false })
-  const b = await freshBalance()
+  usePaid.setState({ dialog: { ...t, step: 'confirm', repriced: false, shortfall: null }, busy: false })
+  await refreshMoney()
   const d = usePaid.getState().dialog
-  if (d && d.slug === t.slug && d.pricing === 'ONE_TIME') {
-    const short = shortfallKopecks(d.priceKopecks, b)
-    if (short) usePaid.setState({ dialog: { ...d, step: 'funds' } })
-  }
+  const short = d && d.slug === t.slug ? oneTimeShortfall(d) : null
+  if (d && short) usePaid.setState({ dialog: { ...d, step: 'funds', shortfall: short } })
 }
 
 export function closeBuy(): void {
@@ -191,8 +179,8 @@ async function fail(e: unknown, d: BuyDialog): Promise<void> {
     return
   }
   if (v.kind === 'funds') {
-    await freshBalance()
-    usePaid.setState({ dialog: { ...d, step: 'funds' } })
+    await refreshMoney()
+    usePaid.setState({ dialog: { ...d, step: 'funds', shortfall: moneyShortfall(e) ?? oneTimeShortfall(d) } })
     return
   }
   if (v.kind === 'price-changed') {
@@ -218,7 +206,7 @@ export async function confirmBuy(): Promise<void> {
   const d = st.dialog
   if (!d || st.busy) return
   if (d.step === 'funds') {
-    openExt(WALLET_URL)
+    openTopup(d.shortfall?.topup ?? null)
     return
   }
   usePaid.setState({ busy: true })
@@ -241,7 +229,7 @@ export async function confirmBuy(): Promise<void> {
       body: JSON.stringify({ idempotencyKey: buyKey, expectedPriceKopecks: d.priceKopecks }),
     })
     usePaid.setState({ busy: false })
-    void refreshMillidaWallet()
+    void refreshMoney()
     owned(d.slug, t('Куплено'))
   } catch (e) {
     usePaid.setState({ busy: false })
@@ -321,9 +309,9 @@ if (typeof window !== 'undefined') {
   window.addEventListener('focus', () => {
     const d = usePaid.getState().dialog
     if (!d || d.step !== 'funds') return
-    void freshBalance().then((b) => {
+    void refreshMoney().then(() => {
       const cur = usePaid.getState().dialog
-      if (cur && cur.slug === d.slug && shortfallKopecks(cur.priceKopecks, b) === 0) usePaid.setState({ dialog: { ...cur, step: 'confirm' } })
+      if (cur && cur.slug === d.slug && cur.pricing === 'ONE_TIME' && affords(catalogQuote(cur.priceKopecks)) === true) usePaid.setState({ dialog: { ...cur, step: 'confirm', shortfall: null } })
     })
   })
 }

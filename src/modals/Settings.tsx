@@ -53,12 +53,13 @@ import { autostartOn, setAutostart } from '../lib/autostart'
 import type { NotifyKind, NotifyLevel } from '../state/notifyPrefs'
 import { Slider } from '../components/Slider'
 import { Select } from '../components/Select'
-import { AVAILABLE_LOCALES, intlTag, isAvailableLocale, type MarketFeature, marketOffers, setLocale, t, useLocale, useMarket, useT } from '../i18n'
+import { type MarketFeature, marketOffers, t, useMarket, useT } from '../i18n'
+import { LangPicker } from '../components/LangPicker'
 import { writePref } from '../lib/prefs'
 import { setMusicAutostart } from '../state/music'
 import { setTelemetryEnabled, telemetryEnabled, track, trackFailure } from '../lib/telemetry'
 import { getAccount, getMillidaAccount, useAccounts } from '../state/accounts'
-import { WALLET_URL, openExt } from '../lib/api'
+import { balanceText, openTopup, useMoney } from '../lib/useMoney'
 // Наличие аккаунта берём из стора, а не вызовом hasMillidaAccount(): вызов не
 // реактивен, и вкладка «Приватность», открытая до готовности хранилища сессий
 // (или до входа в аккаунт), навсегда застревала на «Нужен аккаунт Millida».
@@ -215,7 +216,6 @@ const notifyLevels = (): [NotifyLevel, string][] => [
 
 export function Settings({ on }: { on: boolean }) {
   const t = useT()
-  const locale = useLocale()
   const market = useMarket()
   const [sec, setSecState] = useState<SecId>(initialSec)
   const [query, setQuery] = useState('')
@@ -274,6 +274,7 @@ export function Settings({ on }: { on: boolean }) {
   const perf = useViewPrefs((s) => s.perf)
   const layout = useLayout((s) => s.layout)
   useAccounts()
+  useMoney()
   const acc = getAccount()
   const millidaAcc = getMillidaAccount()
 
@@ -403,14 +404,7 @@ export function Settings({ on }: { on: boolean }) {
       <Block keys="язык language интерфейс перевод">
         <Group title={t('Язык')}>
           <Row title={t('Язык интерфейса')} keys="язык language">
-            <Select
-              value={locale}
-              options={AVAILABLE_LOCALES.map((l) => ({ value: l.code, label: l.native }))}
-              onChange={(v) => {
-                if (isAvailableLocale(v)) void setLocale(v)
-              }}
-              width={200}
-            />
+            <LangPicker variant="field" />
           </Row>
         </Group>
       </Block>
@@ -1009,12 +1003,12 @@ export function Settings({ on }: { on: boolean }) {
     <>
       {millidaAcc ? (
         <Group>
-          <Row title={t('Баланс')} hint={(((millidaAcc.balance || 0) / 100) | 0).toLocaleString(intlTag()) + ' ₽'} keys="кошелёк деньги пополнить рубли">
+          <Row title={t('Баланс')} hint={balanceText() ?? '—'} keys="кошелёк деньги пополнить рубли">
             <button
               className="btn sm secondary"
               onClick={() => {
                 track('store_open', { where: 'wallet_topup' })
-                openExt(WALLET_URL)
+                openTopup()
               }}
             >
               {t('Пополнить')}

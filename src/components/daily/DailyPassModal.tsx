@@ -35,7 +35,7 @@ import { CHEST_NAME, dayChestTier } from './rewards'
 import '../../styles/pixel/daily.css'
 import { wearNow } from '../../state/wearIntent'
 import { intlTag, t, useT } from '../../i18n'
-import { plusPrice } from '../../lib/regionalPrices'
+import { plusPrice, useMoney } from '../../lib/useMoney'
 
 const real = (list: TrackReward[]) => list.filter((r): r is Reward => r.kind !== 'MYSTERY')
 
@@ -134,6 +134,7 @@ export function PassBody({
   extra?: { busy: boolean; onClaim: () => void } | null
 }) {
   const t = useT()
+  useMoney()
   const status = useDaily((s) => s.status)
   const busy = useDaily((s) => s.busy)
   const reveal = useDaily((s) => s.reveal)
@@ -366,7 +367,7 @@ export function PassBody({
               <span className="dp-foot-body" />
               {!own && price ? (
                 <span className="dp-price">
-                  <b>{plusPrice('PLUS', price)}</b>
+                  <b>{plusPrice('PLUS')}</b>
                   <small>{t('в месяц')}</small>
                 </span>
               ) : null}

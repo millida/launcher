@@ -10,12 +10,13 @@ import {
   type DailyClaim,
   type PendingChest,
 } from '../lib/rubies'
-import { api, hasMillidaAccount, openExt, WALLET_URL } from '../lib/api'
+import { api, hasMillidaAccount } from '../lib/api'
+import { affords, plusQuote, refreshMoney, shortfallFor, showMoneyError, showShortfall } from '../lib/useMoney'
 import { isPaymentUrl } from '../lib/payHosts'
 import { openPaymentUrl } from '../lib/openPayment'
 import { MILLIDA_USER_KEY } from './accounts'
 import { apiErrorText } from '../lib/apiError'
-import { buyPlusMonth, loadPlus, subscribePlus, type PlusStatus, type PlusTier } from '../lib/gameProfile'
+import { buyPlusMonth, loadPlus, plusCheckout, subscribePlus, type PlusStatus, type PlusTier } from '../lib/gameProfile'
 import { logoutToLogin } from '../lib/session'
 import { watchPlusPurchase } from './plusWatch'
 import { purchaseFlow } from '../lib/purchaseTrack'
@@ -257,21 +258,28 @@ export const useDaily = create<DailyState>((set, get) => ({
       openPaymentUrl(fresh.url)
       return
     }
-    if (get().plus?.checkout === 'dollar-wallet') {
+    if (plusCheckout(get().plus) === 'balance') {
       set({ busy: 'plus' })
       const paid = purchaseFlow('plus', 'plus')
+      if (affords(plusQuote(tier)) === false) {
+        await refreshMoney()
+        const short = shortfallFor(plusQuote(tier))
+        if (short) {
+          paid(false, 'insufficient')
+          showShortfall(short)
+          set({ busy: '' })
+          return
+        }
+      }
       try {
         await buyPlusMonth(tier, 'plus-' + tier + '-' + Date.now().toString(36))
         paid(true)
+        void refreshMoney()
         await get().load()
       } catch (e) {
-        paid(false, 'error', e)
-        if (String(e).includes('insufficient')) {
-          openExt(WALLET_URL)
-          showToast(t('Пополни долларовый баланс на сайте и вернись за PLUS'), 'ok')
-        } else {
-          showToast(apiErrorText(e, t('Не удалось оформить подписку')), 'error')
-        }
+        const short = showMoneyError(e)
+        paid(false, short ? 'insufficient' : 'error', e)
+        if (!short) showToast(apiErrorText(e, t('Не удалось оформить подписку')), 'error')
       } finally {
         set({ busy: '' })
       }

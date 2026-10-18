@@ -4,6 +4,7 @@ import { hasTauri } from '../ipc/tauri'
 import { millidaApi, openUrl, type ApiMarket } from '../ipc/commands'
 import { getMarket } from '../i18n'
 import { hasMillidaSession } from './secure'
+import { shortfallMarker } from './money'
 import { DEMO_USER, ECONOMY_SHOWCASE, demoAnswer } from './demo'
 
 // Dev-приложение открыто с http://localhost:5173, а прод по CORS пускает только
@@ -41,8 +42,6 @@ export function mirrorAsset(url: string | undefined | null): string | undefined 
   if (!MIRRORED_ASSET_HOSTS.includes(host)) return url
   return LAUNCHER_API + '/launcher/dl?url=' + encodeURIComponent(url)
 }
-
-export const WALLET_URL = 'https://millida.net/profile?tab=wallet'
 
 export const PROFILE_URL = 'https://millida.net/profile'
 
@@ -114,7 +113,10 @@ export async function api<T = any>(pathname: string, opts?: RequestInit): Promis
         ...((opts && (opts.headers as Record<string, string>)) || {}),
       },
     })
-    if (!r.ok) throw new Error('http ' + r.status)
+    if (!r.ok) {
+      const body = await r.json().catch(() => null)
+      throw new Error(shortfallMarker(body) ?? 'http ' + r.status)
+    }
     return r.json()
   }
   return !opts || !opts.method || opts.method.toUpperCase() === 'GET' ? hedged(run) : run()

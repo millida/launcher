@@ -1,4 +1,7 @@
-import { expect, test } from 'bun:test'
+import { afterEach, expect, test } from 'bun:test'
+import { useI18n } from '../../i18n'
+import { resetMoney, useMoneyStore } from '../../lib/useMoney'
+import type { MoneyCurrency, MoneyView } from '../../lib/money'
 import {
   accessState,
   buyLabel,
@@ -9,15 +12,36 @@ import {
   priceTag,
   purchasesFrom,
   sectionOfType,
-  shortfallKopecks,
   verdictText,
 } from './paid'
 import type { CatalogFile } from './paid'
 
-test('цена на строке: разово, подписка, бесплатно', () => {
-  expect(priceTag('ONE_TIME', 30000)).toBe('300 ₽')
-  expect(priceTag('SUBSCRIPTION', 25900)).toBe('259 ₽/мес')
-  expect(priceTag('ONE_TIME', 129050)).toBe('1 290,50 ₽')
+const account = (currency: MoneyCurrency): MoneyView => ({
+  region: currency === 'RUB' ? 'RU' : 'INTL',
+  proven: true,
+  country: currency === 'RUB' ? 'RU' : 'US',
+  displayCurrency: currency,
+  balance: { kopecks: 50000, displayMinor: currency === 'RUB' ? 50000 : 555, displayCurrency: currency, rate: currency === 'RUB' ? 1 : 90 },
+  rubPerUsd: 90,
+  canProveRuVia: [],
+  topup: { RUB: { minMinor: 10000, maxMinor: 10000000, methods: [], methodMinMinor: {} }, USD: { minMinor: 100, maxMinor: 100000, methods: [], methodMinMinor: {} } },
+})
+
+const spaced = (s: string) => s.replace(/\s/g, ' ')
+
+const initialLocale = useI18n.getState().locale
+
+afterEach(() => {
+  resetMoney()
+  useI18n.setState({ locale: initialLocale } as never)
+})
+
+test('цена на строке у рублёвого аккаунта: разово, подписка, бесплатно', () => {
+  useI18n.setState({ locale: 'ru' } as never)
+  useMoneyStore.setState({ view: account('RUB') })
+  expect(spaced(priceTag('ONE_TIME', 30000))).toBe('300 ₽')
+  expect(spaced(priceTag('SUBSCRIPTION', 25900))).toBe('259 ₽/мес')
+  expect(spaced(priceTag('ONE_TIME', 129050))).toBe('1 290,50 ₽')
   expect(priceTag('FREE', 30000)).toBe('')
   expect(priceTag('ONE_TIME', 0)).toBe('')
   expect(priceTag(undefined, null)).toBe('')
@@ -34,9 +58,22 @@ test('доступ и живая цена — как на сайте', () => {
   expect(livePriceKopecks({ pricing: 'ONE_TIME', priceKopecks: 35000 })).toBe(35000)
   expect(livePriceKopecks({ pricing: 'FREE', priceKopecks: 35000 })).toBe(null)
   expect(livePriceKopecks({ pricing: 'ONE_TIME', priceKopecks: 1.5 })).toBe(null)
-  expect(shortfallKopecks(30000, 12000)).toBe(18000)
-  expect(shortfallKopecks(30000, 50000)).toBe(0)
-  expect(shortfallKopecks(30000, null)).toBe(null)
+})
+
+test('a dollar account sees the dollar list of a one-time buy and the ruble line of a subscription', () => {
+  useI18n.setState({ locale: 'en' } as never)
+  useMoneyStore.setState({ view: account('USD') })
+  expect(spaced(priceTag('ONE_TIME', 30000)), 'the server charges the PLUS-ratio dollar list, not the rate').toBe('$4.99')
+  expect(spaced(priceTag('SUBSCRIPTION', 25900)), 'a subscription is billed by the ruble gateway').toBe('RUB 259/mo')
+})
+
+test('without the account currency a price is hidden, never guessed from the language', () => {
+  useI18n.setState({ locale: 'en' } as never)
+  expect(priceTag('ONE_TIME', 30000)).toBe('')
+})
+
+test('the core shortfall marker is the funds verdict', () => {
+  expect(paidVerdict('insufficient-funds: {"code":"INSUFFICIENT_FUNDS","displayCurrency":"USD","missingMinor":250}').kind).toBe('funds')
 })
 
 test('отказы: строка ядра и код браузера дают один вердикт', () => {

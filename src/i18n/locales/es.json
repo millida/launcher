@@ -4331,5 +4331,6 @@
   "WASD, кнопки мыши и CPS на экране": "WASD, botones del ratón y CPS en pantalla",
   "Windows и лаунчеру останется {n} ГБ — компьютер начнёт тормозить": "Windows y el launcher se quedarán con {n} GB, así que tu computadora empezará a ir lento",
   "YouTube или SoundCloud": "YouTube o SoundCloud",
-  "YouTube не отдал это видео: оно закрыто, удалено или автор запретил играть его вне YouTube": "YouTube no dio este video: es privado, fue eliminado o el autor desactivó la reproducción fuera de YouTube"
+  "YouTube не отдал это видео: оно закрыто, удалено или автор запретил играть его вне YouTube": "YouTube no dio este video: es privado, fue eliminado o el autor desactivó la reproducción fuera de YouTube",
+  "Не хватает {sum} на балансе Millida — пополни и повтори": "Te faltan {sum} en tu saldo de Millida. Recarga y vuelve a intentarlo"
 }

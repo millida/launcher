@@ -135,7 +135,7 @@ import { openPaymentUrl } from '../lib/openPayment'
 import { drawFront, skinCanvas } from '../lib/skinFlat'
 import { noteContextCreated, noteContextLost } from '../lib/gpuLite'
 import { artFit } from '../lib/artFit'
-import { plusPrice } from '../lib/regionalPrices'
+import { plusPrice } from '../lib/useMoney'
 
 interface CatalogSkin {
   key: string
@@ -3118,7 +3118,7 @@ export function Skins({ on }: { on: boolean }) {
           </span>
         }
         name={plusBusy ? t('Открываем…') : t('Открыть с PLUS')}
-        status={t('{price} в месяц', { price: plusPrice('PLUS', plus?.priceKopecks ?? 29900) ?? '' })}
+        status={t('{price} в месяц', { price: plusPrice('PLUS') ?? '' })}
         track="plus_subscribe"
         onClick={plusBusy ? undefined : () => void startPlus()}
       />

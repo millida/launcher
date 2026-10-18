@@ -19,8 +19,6 @@
 }
 .lg2 .lg2-card { position: relative; }
 .lg2 .lg2-lang { position: absolute; top: 18px; right: 18px; gap: 6px; padding: 0 10px; color: var(--m-fg-muted); }
-.lg2 .lg2-lang .icon { width: 16px; height: 16px; }
-.lg2 .lg2-lang span { font-size: 12px; font-weight: 650; letter-spacing: 0.04em; }
 .lg2 .login-logo { margin-bottom: 16px; }
 .lg2 .login-logo img { display: block; width: 56px; height: 56px; }
 .lg2 .lg2-card h1 { font: 900 32px/1.05 var(--m-font); letter-spacing: -0.02em; color: #fff; margin: 0 0 8px; }

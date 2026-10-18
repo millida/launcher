@@ -2,7 +2,7 @@ import { Icon } from '../Icon'
 import { Ruby } from '../Ruby'
 import { ChestArt } from '../daily/ChestArt'
 import { PLUS_PASS } from '../daily/chestDrops'
-import { DEFAULT_PLUS_OFFERS, DIAMOND_ITEM_PCT, PLUS_ITEM_PCT, type PlusEconomy, type ShopTier } from '../../lib/rubies'
+import { DIAMOND_ITEM_PCT, PLUS_ITEM_PCT, type PlusEconomy, type ShopTier } from '../../lib/rubies'
 import type { PlusTier } from '../../lib/gameProfile'
 import { Shard } from './parts'
 import { BoltArt, GemArt } from './shopArt'
@@ -11,9 +11,6 @@ import '../../styles/pixel/plus-chip.css'
 import { formatNumber, intlTag, useT } from '../../i18n'
 
 export const PLUS_CHESTS = Object.values(PLUS_PASS.chests).reduce((a, b) => a + (b || 0), 0)
-
-export const offerOf = (plus: PlusEconomy | null, tier: 'PLUS' | 'DIAMOND') =>
-  plus?.offers?.find((o) => o.tier === tier) ?? DEFAULT_PLUS_OFFERS.find((o) => o.tier === tier)!
 
 
 /** Три факта значками: сундуки, скидка, осколки. Без слов-объяснений. */

@@ -1,6 +1,6 @@
 // Live connection to the Millida server (wss://api.millida.net/v2/realtime, Centrifugo) for friends, statuses, calls and chats.
 // Opens only after Millida account login. The API gives the socket token on request at /realtime/token. Channels: friends, presence, calls,
-// inbox, hosting, account, party. The install id is sent only if statistics are on.
+// inbox, hosting, account, party, rooms. The install id is sent only if statistics are on.
 import { Centrifuge, UnauthorizedError } from 'centrifuge'
 import { hasTauri } from '../ipc/tauri'
 import { getMillidaAccount, useAccounts } from '../state/accounts'
@@ -38,6 +38,7 @@ const handlers = new Map<RealtimeTopic, Set<Handler>>()
 const dataHandlers = new Map<RealtimeTopic, Set<DataHandler>>()
 const liveHandlers = new Set<LiveHandler>()
 const settledHandlers = new Set<Handler>()
+const catchUpHandlers = new Set<Handler>()
 const presenceHandlers = new Set<LiveHandler>()
 
 let client: Centrifuge | null = null
@@ -81,6 +82,13 @@ function deliver(topic: RealtimeTopic, data: unknown) {
 function catchUp() {
   relay?.({ kind: 'catchup' })
   catchUpListeners<Handler>(handlers.values()).forEach((h) => safely(h))
+  catchUpHandlers.forEach((h) => safely(h))
+}
+
+/** Fires once per (re)connect whose missed publications the server could not replay. */
+export function onRealtimeCatchUp(handler: Handler): () => void {
+  catchUpHandlers.add(handler)
+  return () => void catchUpHandlers.delete(handler)
 }
 
 export function onRealtime(topic: RealtimeTopic, handler: Handler): () => void {

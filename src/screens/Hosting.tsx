@@ -32,7 +32,7 @@ import { BalancePill } from '../components/hosting/HostKit'
 import '../styles/pixel/hosting2.css'
 import '../styles/pixel/hosting-scene.css'
 import '../styles/pixel/hosting-panel.css'
-import { hostingPlanPrice } from '../lib/regionalPrices'
+import { hostingPlanPrice, useMoney } from '../lib/useMoney'
 
 export interface HostServer {
   id: string
@@ -98,6 +98,7 @@ function HostSkeleton() {
 
 export function Hosting({ on }: { on: boolean }) {
   const t = useT()
+  useMoney()
   const [view, setView] = useState<View>('initial')
   const [err, setErr] = useState('')
   const [list, setList] = useState<HostServer[]>([])
@@ -118,7 +119,7 @@ export function Hosting({ on }: { on: boolean }) {
   useEffect(() => {
     if (!on) return
     let alive = true
-    api('/hosting/plans')
+    api('/hosting/plans?brand=millida')
       .then((r) => alive && setPlans(Array.isArray(r) ? r : []))
       .catch(() => {})
     return () => {
@@ -362,7 +363,7 @@ export function Hosting({ on }: { on: boolean }) {
                   big={planFree ? t('Тарифы') : s.planName || t('Тариф')}
                   small={
                     planFree && facts.minPrice > 0
-                      ? t('от {price} · до {ram} ГБ', { price: (facts.cheapest ? hostingPlanPrice(facts.cheapest.code, facts.minPrice) : null) ?? '', ram: planGb(facts.ramHigh) })
+                      ? t('от {price} · до {ram} ГБ', { price: (facts.cheapest ? hostingPlanPrice(facts.cheapest.code) : null) ?? '', ram: planGb(facts.ramHigh) })
                       : t('до {ram} ГБ', { ram: planGb(facts.ramHigh) })
                   }
                   onClick={() => setPicker({ mode: 'upgrade', serverId: s.id, currentCode: s.planCode, focus: 'paid' })}

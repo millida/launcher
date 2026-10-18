@@ -12,6 +12,7 @@ import { closeMilli, useMilli } from '../../state/milli'
 import { useUi } from '../../state/ui'
 import { milliLook, milliPlanNumbers } from '../../lib/milli'
 import { loadCosmeticCatalog, type PlusTier } from '../../lib/gameProfile'
+import { plusPrice, useMoney } from '../../lib/useMoney'
 import '../../styles/pixel/plus.css'
 import '../../styles/pixel/milli-plus.css'
 import { intlTag, t, useT } from '../../i18n'
@@ -111,8 +112,15 @@ const kinds = () => [
   { icon: 'server', label: t('Сервер в 1 клик') },
 ]
 
+const planLabel = (tier: PlusTier): string => {
+  const name = tier === 'DIAMOND' ? 'Diamond' : 'PLUS'
+  const price = plusPrice(tier)
+  return price ? name + ' · ' + price : name
+}
+
 export function MilliPlusSheet() {
   const t = useT()
+  useMoney()
   const open = useMilliPlusSheet((s) => s.open)
   const src = useMilliPlusSheet((s) => s.src)
   const plans = useMilli((s) => s.plans)
@@ -146,11 +154,11 @@ export function MilliPlusSheet() {
       <div className="segs mps-segs" role="tablist" aria-label={t('Тариф')}>
         <button type="button" role="tab" aria-selected={!dia} className={'seg' + (!dia ? ' on' : '')} onClick={() => setDia(false)}>
           <Icon id="i-crown" />
-          PLUS · 299 ₽
+          {planLabel('PLUS')}
         </button>
         <button type="button" role="tab" aria-selected={dia} className={'seg' + (dia ? ' on' : '')} onClick={() => setDia(true)}>
           <PxArt name="diamond" size={14} className="mci" />
-          Diamond · 539 ₽
+          {planLabel('DIAMOND')}
         </button>
       </div>
 
@@ -229,7 +237,7 @@ export function MilliPlusSheet() {
       </div>
 
       <button type="button" className="btn lg primary mps-buy" data-track="milli_plus_buy" data-src={src} data-tier={dia ? 'diamond' : 'plus'} disabled={busy} aria-busy={busy || undefined} onClick={buy}>
-        {t('Оформить {plan}', { plan: dia ? 'Diamond · 539 ₽' : 'PLUS · 299 ₽' })}
+        {t('Оформить {plan}', { plan: planLabel(dia ? 'DIAMOND' : 'PLUS') })}
       </button>
       <button
         type="button"

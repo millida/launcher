@@ -19,7 +19,7 @@ import {
   periodSuffix,
   planPrice,
   priceLabel,
-  rub,
+  premiumPrice,
   subscribePremium,
   untilText,
   viaCatalog,
@@ -657,7 +657,7 @@ function Trust({ slug, title }: { slug: string; title: string }) {
 function Price({ kopecks, period }: { kopecks: number; period?: PremiumPlan['period'] | null }) {
   return (
     <span className="pab-price">
-      <b>{rub(kopecks)}</b>
+      <b>{premiumPrice(kopecks, period)}</b>
       {period ? <i>{periodSuffix(period)}</i> : null}
     </span>
   )
@@ -715,9 +715,9 @@ function PlanPick({
               {sub ? <span>{sub}</span> : null}
             </span>
             <span className="pab-plan-cost">
-              <b>{rub(plan.priceKopecks)}</b>
+              <b>{premiumPrice(plan.priceKopecks, plan.period)}</b>
               <i>{periodSuffix(plan.period)}</i>
-              {plan.period === 'year' ? <em>{t('≈ {price}/мес', { price: rub(Math.round(perMonth(plan) / 100) * 100) })}</em> : null}
+              {plan.period === 'year' ? <em>{t('≈ {price}/мес', { price: premiumPrice(Math.round(perMonth(plan) / 100) * 100, 'month') })}</em> : null}
             </span>
             {badge ? <span className="pab-plan-badge">{badge}</span> : null}
           </button>
@@ -798,7 +798,7 @@ export function PremiumAccessCard(p: AccessCardProps) {
       <div className="pab-head offer">
         <Price kopecks={stage.plan.priceKopecks} period={stage.plan.period} />
         <span className="pab-sub">
-          {alsoOnce ? t('или {price} разово', { price: rub(pack.priceKopecks as number) }) : stage.plan.title || t('Подписка')}
+          {alsoOnce ? t('или {price} разово', { price: premiumPrice(pack.priceKopecks as number) }) : stage.plan.title || t('Подписка')}
         </span>
       </div>
     )

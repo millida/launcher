@@ -8,7 +8,9 @@
  * вердикт узнаётся и по коду статуса (браузер), и по тексту (приложение).
  */
 
-import { intlTag, rubleGoodsPrice, t } from '../../i18n'
+import { t } from '../../i18n'
+import { moneyShortfall } from '../../lib/money'
+import { catalogPrice } from '../../lib/useMoney'
 
 export type Pricing = 'FREE' | 'ONE_TIME' | 'SUBSCRIPTION'
 
@@ -27,23 +29,15 @@ export interface CatalogFile {
   releasedAt: string | null
 }
 
-/** «300 ₽», «1 290,50 ₽» — как `rub` в `lib/premium.ts`, без его зависимостей. */
-export function rubles(kopecks: number): string {
-  const value = Math.round(kopecks || 0) / 100
-  const text = Number.isInteger(value)
-    ? value.toLocaleString(intlTag())
-    : value.toLocaleString(intlTag(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-  return text + ' ₽'
-}
-
 export function isPaid(pricing: string | null | undefined, kopecks: number | null | undefined): boolean {
   return (pricing === 'ONE_TIME' || pricing === 'SUBSCRIPTION') && typeof kopecks === 'number' && kopecks > 0
 }
 
-/** Цена на строке: «300 ₽» за покупку навсегда, «300 ₽/мес» за подписку, пусто у бесплатного. */
+/// A subscription is charged by the ruble gateway, so it keeps its ruble line whatever the account currency.
 export function priceTag(pricing: string | null | undefined, kopecks: number | null | undefined): string {
   if (!isPaid(pricing, kopecks)) return ''
-  const price = rubleGoodsPrice(kopecks as number, rubles)
+  const price = catalogPrice(kopecks as number, pricing === 'SUBSCRIPTION' ? 'RUB' : undefined)
+  if (!price) return ''
   return pricing === 'SUBSCRIPTION' ? t('{price}/мес', { price }) : price
 }
 
@@ -66,12 +60,6 @@ export function livePriceKopecks(body: unknown): number | null {
     : null
 }
 
-/** Сколько не хватает на кошельке; null — баланс неизвестен, решает сервер. */
-export function shortfallKopecks(price: number, balance: number | null | undefined): number | null {
-  if (typeof balance !== 'number' || !Number.isFinite(balance)) return null
-  return Math.max(0, Math.ceil(price - balance))
-}
-
 /* ── Отказы ── */
 
 export type PaidVerdict =
@@ -86,7 +74,6 @@ export type PaidVerdict =
 
 const RULES: [RegExp, PaidVerdict['kind']][] = [
   [/^http 401$|^unauthorized$|войдите в аккаунт|войди в аккаунт|сессия millida/i, 'login'],
-  [/^http 402$|insufficient_funds|не хватает (денег|средств)/i, 'funds'],
   [/price_changed|цена изменилась/i, 'price-changed'],
   [/already_owned|доступ уже есть|это ваш материал|own_item/i, 'owned'],
   [/balance_frozen|баланс заморожен/i, 'frozen'],
@@ -103,6 +90,7 @@ export function paidVerdict(e: unknown): PaidVerdict {
     .replace(/^Error:\s*/, '')
     .replace(/^pack-access:\s*/, '')
     .trim()
+  if (moneyShortfall(e)) return { kind: 'funds' }
   for (const [re, kind] of RULES) if (re.test(raw)) return { kind } as PaidVerdict
   return { kind: 'error', raw }
 }

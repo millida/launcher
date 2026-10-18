@@ -21,6 +21,7 @@ import { demoOpen, isTier } from '../components/daily/chestDrops'
 import type { DailyClaim } from './rubies'
 import { demoEconomy, demoTier, type DemoCatalogItem } from '../components/shop/demoShop'
 import { demoSets } from '../components/shop/demoSets'
+import { digitalUsdCents, kopecksForUsdCents, type MoneyView, type PriceList, type Quote } from './money'
 
 const demoParam = (): boolean => {
   try {
@@ -59,6 +60,63 @@ function apiBase(): string {
     return localStorage.getItem('m-api') || 'https://api.millida.net/v2'
   } catch {
     return 'https://api.millida.net/v2'
+  }
+}
+
+/** ?preview=user&money=intl shows a foreign account: dollars on any interface language. */
+const demoForeign = (): boolean => {
+  try {
+    return new URLSearchParams(location.search).get('money') === 'intl'
+  } catch {
+    return false
+  }
+}
+
+const DEMO_RUB_PER_USD = 90
+
+const demoQuote = (rubKopecks: number): Quote => {
+  if (!demoForeign()) return { displayCurrency: 'RUB', priceMinor: rubKopecks, chargeKopecks: rubKopecks }
+  const cents = digitalUsdCents(rubKopecks)
+  return { displayCurrency: 'USD', priceMinor: cents, chargeKopecks: kopecksForUsdCents(cents, DEMO_RUB_PER_USD) }
+}
+
+function demoMoney(): MoneyView {
+  const usd = demoForeign()
+  return {
+    region: usd ? 'INTL' : 'RU',
+    proven: true,
+    country: usd ? 'US' : 'RU',
+    displayCurrency: usd ? 'USD' : 'RUB',
+    balance: {
+      kopecks: DEMO_BALANCE_KOPECKS,
+      displayMinor: usd ? Math.floor(DEMO_BALANCE_KOPECKS / DEMO_RUB_PER_USD) : DEMO_BALANCE_KOPECKS,
+      displayCurrency: usd ? 'USD' : 'RUB',
+      rate: usd ? DEMO_RUB_PER_USD : 1,
+    },
+    rubPerUsd: DEMO_RUB_PER_USD,
+    canProveRuVia: usd ? ['sbp', 'card_ru'] : [],
+    topup: {
+      RUB: { minMinor: 10000, maxMinor: 10000000, methods: ['sbp'], methodMinMinor: {} },
+      USD: { minMinor: 100, maxMinor: 100000, methods: ['card_global', 'paypal'], methodMinMinor: { card_global: 500, paypal: 500 } },
+    },
+  }
+}
+
+async function demoPricing(): Promise<PriceList> {
+  const [rules, plans] = await Promise.all([
+    live<{ packs?: { items?: { code: string; kopecks: number }[] } }>('/rubies/rules'),
+    live<{ code: string; ramMb: number; priceKopecks: number }[]>('/hosting/plans?brand=millida'),
+  ])
+  const packs = rules?.packs?.items ?? []
+  return {
+    displayCurrency: demoForeign() ? 'USD' : 'RUB',
+    rubPerUsd: DEMO_RUB_PER_USD,
+    plus: [
+      { tier: 'PLUS', quote: demoQuote(29900) },
+      { tier: 'DIAMOND', quote: demoQuote(53900) },
+    ],
+    hosting: (Array.isArray(plans) ? plans : []).filter((p) => p.priceKopecks > 0).map((p) => ({ code: p.code, ramMb: p.ramMb, quote: demoQuote(p.priceKopecks) })),
+    rubies: [...packs, { code: 'starter', kopecks: 9900 }, { code: 'month', kopecks: 49900 }].map((p) => ({ code: p.code, quote: demoQuote(p.kopecks) })),
   }
 }
 
@@ -974,11 +1032,8 @@ const ROUTES: [RegExp, Handler][] = [
     showServers: true,
     ...(body || {}),
   })],
-  [/^\/core\/wallet\/me\/display$/, () => ({
-    availableKopecks: DEMO_BALANCE_KOPECKS,
-    frozenKopecks: 0,
-    currency: 'RUB',
-  })],
+  [/^\/me\/money$/, () => demoMoney()],
+  [/^\/pricing$/, () => demoPricing()],
   // Каталог: одна покупка, у платной сборки доступа нет — видно и «Купить», и «Куплено».
   [/^\/catalog\/purchases\/me$/, () => [
     {
@@ -1050,6 +1105,9 @@ const ROUTES: [RegExp, Handler][] = [
       canceled: false,
       priceKopecks: (plus && plus.priceKopecks) || 0,
       items: (plus && plus.items) || 0,
+      checkout: demoForeign() ? 'dollar-wallet' : 'gateway',
+      checkoutOptions: [demoForeign() ? 'dollar-wallet' : 'gateway'],
+      quote: demoQuote(29900),
       ...(await economy.plus()),
     }
   }],

@@ -1,5 +1,5 @@
 import { api } from './api'
-import { intlTag, t } from '../i18n'
+import { t } from '../i18n'
 
 /**
  * Семь рангов (модель предметов v3, 24.09.2026). Ранг — у расцветки: базовая
@@ -412,8 +412,6 @@ export const redeemPromo = (code: string) =>
 export const claimProgress = (code: string) =>
   api<ProgressItem>('/rubies/progress/' + encodeURIComponent(code) + '/claim', { method: 'POST' })
 
-export const rubles = (kopecks: number) => (kopecks / 100).toLocaleString(intlTag()) + ' ₽'
-
 /** Случайный клиентский сид: игрок его не вводит, но подмешать обязан. */
 export const freshClientSeed = () => Math.random().toString(36).slice(2, 12)
 
@@ -611,12 +609,6 @@ export interface PlusOffer {
   priceKopecks: number
   days: number
 }
-
-/** Запасные тарифы, если служба не прислала offers. */
-export const DEFAULT_PLUS_OFFERS: PlusOffer[] = [
-  { tier: 'PLUS', priceKopecks: 29900, days: 30 },
-  { tier: 'DIAMOND', priceKopecks: 53900, days: 30 },
-]
 
 const post = (body: unknown): RequestInit => ({ method: 'POST', body: JSON.stringify(body) })
 

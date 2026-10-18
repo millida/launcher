@@ -11,7 +11,7 @@ import { FragmentCells } from './WeekItem'
 import { dayChestTier, rarityTone, rewardLabel, rewardRarity, rewardTitle, RewardArt } from './rewards'
 import { RarityChip } from '../shop/rarityUi'
 import { useT } from '../../i18n'
-import { plusPrice } from '../../lib/regionalPrices'
+import { plusPrice, useMoney } from '../../lib/useMoney'
 
 /** Минимум тряски, даже если служба ответила мгновенно: иначе нет «момента». */
 const SHAKE_MS = 1500
@@ -138,6 +138,7 @@ export function Reveal({
   onDone: () => void
 }) {
   const t = useT()
+  useMoney()
   const reduced = useMemo(reducedMotion, [])
   // Вещь недели до «Забрать»: служба пришлёт новое значение, а загореться
   // должны только пришедшие клетки.
@@ -305,7 +306,7 @@ export function Reveal({
               ))}
             </span>
             <span className="rv-missed-act">
-              {priceKopecks > 0 ? <b className="rv-price">{t('{price} в месяц', { price: plusPrice('PLUS', priceKopecks) ?? '' })}</b> : null}
+              {priceKopecks > 0 && plusPrice('PLUS') ? <b className="rv-price">{t('{price} в месяц', { price: plusPrice('PLUS') ?? '' })}</b> : null}
               <button
                 className="btn md secondary dp-plus"
                 onClick={(e) => {

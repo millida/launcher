@@ -2,7 +2,6 @@ import { useCallback } from 'react'
 import { create } from 'zustand'
 import { readPref, writePref } from '../lib/prefs'
 import { translate, type Table, type Vars } from './core'
-import { useCurrencyOverride } from './currencyOverride'
 import {
   AVAILABLE_LOCALES,
   FALLBACK_LOCALE,
@@ -12,17 +11,15 @@ import {
   isLocale,
   localeFromSystem,
   localeInfo,
-  marketCurrency,
   marketOf,
   marketOffers,
-  type Currency,
   type Locale,
   type Market,
   type MarketFeature,
 } from './locales'
 
-export { AVAILABLE_LOCALES, LOCALES, isAvailableLocale, isLocale, localeInfo, marketCurrency, marketOf, marketOffers }
-export type { Currency, Locale, Market, MarketFeature, Vars }
+export { AVAILABLE_LOCALES, LOCALES, isAvailableLocale, isLocale, localeInfo, marketOf, marketOffers }
+export type { Locale, Market, MarketFeature, Vars }
 
 const STORE_KEY = 'm-lang'
 
@@ -158,45 +155,6 @@ export const formatFixed = (value: number, digits: number): string =>
 
 export function formatDate(value: Date | number, options?: Intl.DateTimeFormatOptions): string {
   return new Intl.DateTimeFormat(intlTag(), options).format(value)
-}
-
-export const currentCurrency = (): Currency => useCurrencyOverride.getState().forced ?? marketCurrency(getLocale())
-
-export function formatPrice(amount: number, currency: Currency = currentCurrency()): string {
-  const whole = Number.isInteger(amount)
-  return new Intl.NumberFormat(intlTag(), {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: whole ? 0 : 2,
-    maximumFractionDigits: whole ? 0 : 2,
-  }).format(amount)
-}
-
-/// The API sends money in minor units: kopecks for RUB, cents for USD.
-export const formatMinorPrice = (minor: number, currency: Currency = currentCurrency()): string => formatPrice(minor / 100, currency)
-
-/// A price is shown only in the market's own currency. When the API has no
-/// amount for it the caller gets null and must hide the price or the offer:
-/// converting by a guessed rate would quote a sum nobody can actually pay.
-/// Goods priced only in rubles (author packs): a foreign account is charged their dollar list
-/// price from the dollar wallet, so a dollar surface shows that, not a converted ruble sum.
-export function rubleGoodsPrice(kopecks: number, rubText: (kopecks: number) => string): string {
-  if (currentCurrency() === 'RUB') return rubText(kopecks)
-  return formatMinorPrice(digitalUsdCents(kopecks), 'USD')
-}
-
-/// Dollar list price of goods priced in rubles only, at the PLUS ratio the server charges abroad
-/// (trade-api core/pricing/price-book.ts digitalUsdCents), not at the exchange rate.
-export function digitalUsdCents(rubKopecks: number): number {
-  const cents = (rubKopecks * 499) / 29900
-  const step = cents >= 1000 ? 100 : 10
-  return Math.max(99, Math.round(cents / step) * step - 1)
-}
-
-export function marketPrice(minorByCurrency: Partial<Record<Currency, number>>): string | null {
-  const currency = currentCurrency()
-  const minor = minorByCurrency[currency]
-  return typeof minor === 'number' && Number.isFinite(minor) ? formatMinorPrice(minor, currency) : null
 }
 
 void activate(useI18n.getState().locale)

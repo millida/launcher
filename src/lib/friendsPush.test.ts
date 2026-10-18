@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'bun:test'
 import type { Friend } from '../state/friends'
-import { TYPING_FALLBACK_MS, readPresencePush, readTypingPush, typingHoldMs, withPresence } from './friendsPush'
+import {
+  TYPING_FALLBACK_MS,
+  mergeTypers,
+  readPresencePush,
+  readRoomTypingPush,
+  readTypingPush,
+  typingHoldMs,
+  withPresence,
+} from './friendsPush'
 
 const inGame: Friend = {
   userId: 'u1',
@@ -111,6 +119,41 @@ describe('typingHoldMs', () => {
   for (const [name, until, now, want] of cases) {
     it(name, () => {
       expect(typingHoldMs(until, now)).toBe(want)
+    })
+  }
+})
+
+/// Input -> verdict for the `rooms` topic: a group typer is applied without a fetch,
+/// but only with a room, a sender and a numeric deadline.
+describe('readRoomTypingPush', () => {
+  const cases: Array<[string, unknown, boolean]> = [
+    ['форма из контракта', { t: 'rooms', typing: { roomId: 'g1', from: 'u1', until: 10 } }, true],
+    ['без комнаты — это личка, не группа', { t: 'rooms', typing: { from: 'u1', until: 10 } }, false],
+    ['пустая комната', { t: 'rooms', typing: { roomId: '', from: 'u1', until: 10 } }, false],
+    ['комната числом', { t: 'rooms', typing: { roomId: 7, from: 'u1', until: 10 } }, false],
+    ['без until', { t: 'rooms', typing: { roomId: 'g1', from: 'u1' } }, false],
+    ['лишние поля не мешают', { t: 'rooms', typing: { roomId: 'g1', from: 'u1', until: 10, x: 1 }, y: 2 }, true],
+  ]
+  for (const [name, data, ok] of cases) {
+    it(name, () => {
+      expect(!!readRoomTypingPush(data)).toBe(ok)
+    })
+  }
+})
+
+/// Input -> verdict. A poll reply built before a push must not hide a typer the push
+/// announced; an expired push must not keep one forever.
+describe('mergeTypers', () => {
+  const cases: Array<[string, string[], Array<[string, number]>, number, string[]]> = [
+    ['только опрос', ['u1'], [], 100, ['u1']],
+    ['толчок новее опроса добавляет печатающего', [], [['u2', 200]], 100, ['u2']],
+    ['истёкший толчок не держит индикатор', [], [['u2', 100]], 100, []],
+    ['без дублей', ['u1'], [['u1', 200]], 100, ['u1']],
+    ['опрос и толчок вместе', ['u1'], [['u2', 200]], 100, ['u1', 'u2']],
+  ]
+  for (const [name, polled, pushed, now, want] of cases) {
+    it(name, () => {
+      expect(mergeTypers(polled, new Map(pushed), now)).toEqual(want)
     })
   }
 })

@@ -177,8 +177,33 @@ function applyRoomPoll(r: RoomPoll) {
   const f = useFriends.getState()
   if (f.chatRoom) {
     const mine = (r.roomTyping || []).find((t) => t.roomId === f.chatRoom)
-    f.set({ chatTypers: (mine?.users || []).map((id) => nickInRooms(id) || t('Кто-то')) })
+    polledRoomTypers = { roomId: f.chatRoom, users: mine?.users || [], at: Date.now() }
+    showRoomTypers(f.chatRoom)
   }
+}
+
+let polledRoomTypers: { roomId: string; users: string[]; at: number } = { roomId: '', users: [], at: 0 }
+const pushedRoomTypers = new Map<string, Map<string, number>>()
+
+function showRoomTypers(roomId: string) {
+  const f = useFriends.getState()
+  if (f.chatRoom !== roomId) return
+  const now = Date.now()
+  // A poll snapshot only vouches for a typer as long as the server's typing flag lives.
+  const fresh = polledRoomTypers.roomId === roomId && now - polledRoomTypers.at < TYPING_FALLBACK_MS
+  const users = mergeTypers(fresh ? polledRoomTypers.users : [], pushedRoomTypers.get(roomId) || new Map<string, number>(), now)
+  f.set({ chatTypers: users.map((id) => nickInRooms(id) || t('Кто-то')) })
+}
+
+function applyRoomTypingPush(p: RoomTypingPush) {
+  const now = Date.now()
+  const hold = typingHoldMs(p.until, now)
+  const room = pushedRoomTypers.get(p.roomId) || new Map<string, number>()
+  for (const [id, until] of room) if (until <= now) room.delete(id)
+  room.set(p.from, now + hold)
+  pushedRoomTypers.set(p.roomId, room)
+  showRoomTypers(p.roomId)
+  setTimeout(() => showRoomTypers(p.roomId), hold + 50)
 }
 
 function previewOf(m: PolledMessage): string {
@@ -233,7 +258,7 @@ import { Welcome } from './components/Welcome'
 import { useSlidingSegs } from './lib/slidingSegs'
 import { beatAfterReconnect, gameSession, heartbeat, ramMbFor, reconcileGameSession, setGameSession, updateSessionServer } from './lib/launch'
 import { POLL_BASE_MS, pollIntervalFrom } from './lib/pollPace'
-import { friendsPollDelayMs, friendsPollWait, pokeGate, refreshDue } from './lib/realtimePace'
+import { friendsPollDelayMs, friendsPollWait, pokeGate, safetyRefresh } from './lib/realtimePace'
 import {
   isPresenceTracked,
   isRealtimeLive,
@@ -245,7 +270,16 @@ import {
   retainRealtime,
 } from './lib/realtime'
 import { initRealtimeRelay } from './lib/realtimeRelay'
-import { readPresencePush, readTypingPush, withPresence } from './lib/friendsPush'
+import {
+  TYPING_FALLBACK_MS,
+  mergeTypers,
+  readPresencePush,
+  readRoomTypingPush,
+  readTypingPush,
+  typingHoldMs,
+  withPresence,
+  type RoomTypingPush,
+} from './lib/friendsPush'
 import { hideLauncherToTray, initTray, restoreLauncher, restoreOnGameExit, trayCloseEnabled } from './lib/window'
 import { SESSION_EXPIRED_EVENT, api, hasMillidaAccount } from './lib/api'
 import { hasTauri, tauri } from './ipc/tauri'
@@ -500,16 +534,15 @@ export function App() {
   }, [])
 
   useEffect(() => {
-    const refresh = () => {
-      if (document.hidden || useUi.getState().screen !== 'friends') return
-      void loadFriends()
-      void loadRooms()
-    }
-    const t = setInterval(() => {
-      if (refreshDue(isRealtimeLive())) refresh()
-    }, 30000)
-    const offFriends = onRealtime('friends', refresh)
-    const offPresence = onRealtime('presence', refresh)
+    const screen = safetyRefresh({
+      load: () => Promise.all([loadFriends(), loadRooms()]),
+      allowed: () => !document.hidden && useUi.getState().screen === 'friends',
+      live: isRealtimeLive,
+      hidden: () => document.hidden,
+    })
+    const t = setInterval(screen.tick, 30000)
+    const offFriends = onRealtime('friends', screen.poke)
+    const offPresence = onRealtime('presence', screen.poke)
     return () => {
       clearInterval(t)
       offFriends()
@@ -756,8 +789,7 @@ export function App() {
         }
       }
       inFlight = false
-      const wait = friendsPollDelayMs(isRealtimeLive(), serverPollMs, failures, document.hidden, Math.random, waited)
-      if (wait !== null) timer = setTimeout(loop, wait)
+      timer = setTimeout(loop, friendsPollDelayMs(isRealtimeLive(), serverPollMs, failures, document.hidden, Math.random, waited))
       if (gate.take()) fire()
     }
     const fire = () => {
@@ -784,6 +816,10 @@ export function App() {
       const typing = readTypingPush(data)
       if (typing) applyTypingPush(typing)
     })
+    const offRoomTyping = onRealtimeData('rooms', (data) => {
+      const typing = readRoomTypingPush(data)
+      if (typing) applyRoomTypingPush(typing)
+    })
     const offLive = onRealtimeLiveChange((live) => {
       if (!live) gate.poke()
     })
@@ -801,6 +837,7 @@ export function App() {
       offPresencePoke()
       offPresenceData()
       offTyping()
+      offRoomTyping()
       offLive()
       document.removeEventListener('visibilitychange', wake)
     }

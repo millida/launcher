@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { Icon } from '../Icon'
 import { Ruby } from '../Ruby'
 import { DIAMOND_ITEM_PCT, PLUS_ITEM_PCT, type ChestTier, type MonthOffer, type ShopPack } from '../../lib/rubies'
-import { rubyPackPrice, rubyWorthPrice } from '../../lib/regionalPrices'
+import { rubyPackPrice, rubyPackWas, useMoney } from '../../lib/useMoney'
 import { BoltArt, GemArt } from './shopArt'
 import { NickFlip } from '../premium/StatusCompare'
 import { PlusMark } from '../premium/PlusMark'
@@ -14,9 +14,6 @@ import { FragmentIcon } from './rarityUi'
 import { useOffscreenPause } from './useOffscreen'
 import '../../styles/pixel/plus-bundle.css'
 import { formatNumber, intlTag, t, useT } from '../../i18n'
-
-/** Недостающее на счёте, округлённое вверх до целого рубля; 0 — хватает. */
-export const topUpKopecks = (short: number): number => (short > 0 ? Math.ceil(short / 100) * 100 : 0)
 
 /**
  * Рисунки пакетов от малого к большому. Кодов у сервера девять и они
@@ -248,6 +245,7 @@ export function usualKopecks(rubies: number, packs: ShopPack[]): number {
  */
 export function MonthOfferBlock({ offer, packs, busy, onBuy, onEnd }: { offer: MonthOffer; packs: ShopPack[]; busy: boolean; onBuy: () => void; onEnd?: () => void }) {
   const t = useT()
+  useMoney()
   const was = usualKopecks(offer.rubies, packs)
   return (
     <section className="mo" data-section="month_offer" data-kind="ruby_pack" data-id={offer.code}>
@@ -266,8 +264,8 @@ export function MonthOfferBlock({ offer, packs, busy, onBuy, onEnd }: { offer: M
         <small className="mo-title">{offer.title}</small>
       </div>
       <button className="btn lg primary mo-btn" disabled={busy} data-track="buy_month" onClick={onBuy}>
-        {was > offer.kopecks ? <s>{rubyWorthPrice(was)}</s> : null}
-        {rubyPackPrice(offer.code, offer.kopecks)}
+        {was > offer.kopecks ? <s>{rubyPackWas(offer.code, offer.kopecks, was)}</s> : null}
+        {rubyPackPrice(offer.code)}
       </button>
     </section>
   )
@@ -322,6 +320,7 @@ export function Packs<P extends ShopPack>({
   plusTile?: PlusTile
 }) {
   const t = useT()
+  useMoney()
   const starter = packs?.find((p) => p.oneTime) ?? null
   const { list, best } = sortPacks((packs ?? []).filter((p) => !p.oneTime))
   const starterWas = starter ? usualKopecks(starter.rubies, list) : 0
@@ -342,7 +341,7 @@ export function Packs<P extends ShopPack>({
               <Ruby size={16} />
             </b>
             <small>
-              {starterWas > starter.kopecks ? <s>{rubyWorthPrice(starterWas)}</s> : null} {rubyPackPrice(starter.code, starter.kopecks)}
+              {starterWas > starter.kopecks ? <s>{rubyPackWas(starter.code, starter.kopecks, starterWas)}</s> : null} {rubyPackPrice(starter.code)}
             </small>
           </button>
         </div>
@@ -362,7 +361,7 @@ export function Packs<P extends ShopPack>({
                     +{pack.rubies.toLocaleString(intlTag())}
                     <Ruby size={16} />
                   </b>
-                  <small>{rubyPackPrice(pack.code, pack.kopecks)}</small>
+                  <small>{rubyPackPrice(pack.code)}</small>
                 </button>
               </div>
             )

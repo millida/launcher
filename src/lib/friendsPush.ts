@@ -15,6 +15,10 @@ export interface TypingPush {
   until: number
 }
 
+export interface RoomTypingPush extends TypingPush {
+  roomId: string
+}
+
 const STATUSES: readonly unknown[] = ['online', 'playing', 'offline']
 
 /** Matches the server's typing box TTL; used when the two clocks disagree too much to trust `until`. */
@@ -38,6 +42,23 @@ export function readTypingPush(data: unknown): TypingPush | null {
   if (!t || typeof t.from !== 'string' || !t.from) return null
   if (typeof t.until !== 'number' || !Number.isFinite(t.until)) return null
   return { from: t.from, until: t.until }
+}
+
+export function readRoomTypingPush(data: unknown): RoomTypingPush | null {
+  const t = record(record(data)?.typing)
+  if (!t || typeof t.roomId !== 'string' || !t.roomId) return null
+  const typing = readTypingPush(data)
+  return typing ? { roomId: t.roomId, ...typing } : null
+}
+
+/**
+ * Who is shown typing in a group: the poll's snapshot plus everyone a push says is
+ * still typing. A poll reply built before the push must not hide that typer.
+ */
+export function mergeTypers(polled: readonly string[], pushed: ReadonlyMap<string, number>, now: number): string[] {
+  const out = polled.slice()
+  for (const [id, until] of pushed) if (until > now && !out.includes(id)) out.push(id)
+  return out
 }
 
 /**

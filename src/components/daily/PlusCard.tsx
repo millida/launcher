@@ -9,7 +9,7 @@ import { ChestLive } from './ChestLive'
 import { CHEST_NAME } from './rewards'
 import { rowTotals, type TrackCol } from './track'
 import { intlTag, useT } from '../../i18n'
-import { plusPrice } from '../../lib/regionalPrices'
+import { plusPrice, useMoney } from '../../lib/useMoney'
 
 const PAY_TTL = 15 * 60_000
 const TIERS: ChestTier[] = ['EPIC', 'RARE', 'COMMON']
@@ -23,6 +23,7 @@ const TIERS: ChestTier[] = ['EPIC', 'RARE', 'COMMON']
  */
 export function PlusCard({ cols }: { cols: TrackCol[] }) {
   const t = useT()
+  useMoney()
   const open = useDaily((s) => s.plusCard)
   const info = useDaily((s) => s.plus)
   const busy = useDaily((s) => s.busy)
@@ -68,7 +69,7 @@ export function PlusCard({ cols }: { cols: TrackCol[] }) {
         </div>
 
         <div className="pc-price">
-          {price ? <b>{plusPrice('PLUS', price)}</b> : <span className="skel pc-price-skel" aria-hidden="true" />}
+          {price && plusPrice('PLUS') ? <b>{plusPrice('PLUS')}</b> : <span className="skel pc-price-skel" aria-hidden="true" />}
           <small>{t('в месяц · подписка')}</small>
         </div>
 

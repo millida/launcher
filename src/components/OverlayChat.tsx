@@ -8,7 +8,7 @@ import { apiErrorText } from '../lib/apiError'
 import { chatItems, chatKey, chatWhen, unreadOf, type OverlayChatItem } from '../lib/overlayChats'
 import { initSecrets } from '../lib/secure'
 import { isRealtimeLive, onRealtime, onRealtimeData } from '../lib/realtime'
-import { refreshDue } from '../lib/realtimePace'
+import { refreshDue, safetyRefresh } from '../lib/realtimePace'
 import { retainOverlayRealtime } from '../lib/realtimeRelay'
 import { readPresencePush, withPresence } from '../lib/friendsPush'
 import { isOwnMediaUrl } from '../lib/ownMedia'
@@ -159,15 +159,15 @@ export function OverlayChat({
   }, [openId])
 
   useEffect(() => {
-    const refresh = () => {
-      void loadFriends()
-      void loadRooms()
-    }
-    const t = setInterval(() => {
-      if (refreshDue(isRealtimeLive())) refresh()
-    }, LIST_POLL_MS)
-    const offFriends = onRealtime('friends', refresh)
-    const offPresence = onRealtime('presence', refresh)
+    const list = safetyRefresh({
+      load: () => Promise.all([loadFriends(), loadRooms()]),
+      allowed: () => true,
+      live: isRealtimeLive,
+      hidden: () => document.hidden,
+    })
+    const t = setInterval(list.tick, LIST_POLL_MS)
+    const offFriends = onRealtime('friends', list.poke)
+    const offPresence = onRealtime('presence', list.poke)
     const offPresenceData = onRealtimeData('presence', (data) => {
       const u = readPresencePush(data)
       if (!u) return

@@ -1,4 +1,5 @@
 import { offPlatformReason } from './offPlatform'
+import { moneyShortfall, shortfallText } from './money'
 import { t } from '../i18n'
 
 /// Разбор один на весь лаунчер: раньше каждый экран решал сам, и «не нашли
@@ -76,6 +77,8 @@ export function apiErrorText(e: unknown, fallback: string): string {
   const held = offPlatformReason(e)
   if (held) return held
   if (!raw) return fallback
+  const short = moneyShortfall(e)
+  if (short) return shortfallText(short)
 
   if (OFFLINE.test(raw)) return t('Нет связи с Millida — проверь интернет и повтори')
   if (TIMEOUT.test(raw)) return t('Millida не ответила вовремя — повтори попытку')
