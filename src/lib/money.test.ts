@@ -28,7 +28,7 @@ const account = (currency: MoneyCurrency, kopecks: number, proven = true): Money
 })
 
 const PLUS_RUB: Quote = { displayCurrency: 'RUB', priceMinor: 29900, chargeKopecks: 29900 }
-const PLUS_USD: Quote = { displayCurrency: 'USD', priceMinor: 499, chargeKopecks: 499 * RATE }
+const PLUS_USD: Quote = { displayCurrency: 'USD', priceMinor: 500, chargeKopecks: 500 * RATE }
 
 const spaced = (s: string | null) => (s ?? '').replace(/\s/g, ' ')
 
@@ -56,22 +56,22 @@ const BUYERS: BuyerCase[] = [
     topup: null,
   },
   {
-    why: 'a proven foreign account sees dollars; 300 RUB of balance is less than $4.99 at 90 RUB, so it tops up the missing $1.66',
+    why: 'a proven foreign account sees dollars; 300 RUB of balance is less than $5.00 at 90 RUB, so it tops up the missing $1.67',
     locale: 'en',
     view: account('USD', 30000),
     quote: PLUS_USD,
-    shown: '$4.99',
+    shown: '$5',
     affords: false,
-    topup: { currency: 'USD', amountMinor: 166 },
+    topup: { currency: 'USD', amountMinor: 167 },
   },
   {
     why: 'the Russian interface does not turn a dollar account into rubles: the currency is the account, the language only formats',
     locale: 'ru',
     view: account('USD', 30000, false),
     quote: PLUS_USD,
-    shown: '4,99 $',
+    shown: '5 $',
     affords: false,
-    topup: { currency: 'USD', amountMinor: 166 },
+    topup: { currency: 'USD', amountMinor: 167 },
   },
   {
     why: 'the English interface does not turn a ruble account into dollars',
@@ -83,11 +83,11 @@ const BUYERS: BuyerCase[] = [
     topup: { currency: 'RUB', amountMinor: 10000 },
   },
   {
-    why: 'cents never meet kopecks: 555 cents of a dollar balance are 50 000 kopecks and cover a $4.99 price',
+    why: 'cents never meet kopecks: 555 cents of a dollar balance are 50 000 kopecks and cover a $5.00 price',
     locale: 'en',
     view: account('USD', 50000),
     quote: PLUS_USD,
-    shown: '$4.99',
+    shown: '$5',
     affords: true,
     topup: null,
   },
