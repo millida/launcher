@@ -141,7 +141,20 @@ export interface TierPeriodRow {
 export type TierPeriod = 'tier' | 'season' | 'week'
 
 /** Иконка режима: предмет Minecraft из public/mode-art/kits (как на millida.net/tiers). */
-export const kitIcon = (slug: string): string => '/mode-art/kits/' + slug + '.png'
+const KIT_ICONS = new Set(['vanilla', 'sword', 'pot', 'nethop', 'uhc', 'smp', 'axe', 'mace', 'op', 'diasmp', 'spear', 'cart', 'bow', 'sumo'])
+const GAME_ICONS: Record<string, string> = {
+  bridges: 'PARKOUR',
+  bedwars: 'BEDWARS',
+  bedwars18: 'TNTRUN',
+  skywars: 'SKYWARS',
+  skywars18: 'HUNGER_GAMES',
+  murder: 'MURDER',
+  buildbattle: 'BUILD_BATTLE',
+}
+export const kitIcon = (slug: string): string => {
+  if (KIT_ICONS.has(slug)) return '/mode-art/kits/' + slug + '.png'
+  return '/mode-art/' + (GAME_ICONS[slug] ?? 'PVP') + '.png'
+}
 
 /**
  * Место тира в лестнице: HT1 = 0 (лучший), MT1 = 1, LT1 = 2, HT2 = 3 … LT5 = 14;

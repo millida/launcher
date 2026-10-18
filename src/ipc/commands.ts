@@ -962,12 +962,17 @@ export interface SkinModState {
   on: boolean
   present: boolean
   conflict: string | null
+  offReason: string | null
+  quarantine: string | null
 }
 
 export const skinModState = (profile: string) => invoke<SkinModState>('skin_mod_state', { profile })
 
 export const setSkinMod = (profile: string, on: boolean) =>
   invoke<SkinModState>('set_skin_mod', { profile, on })
+
+export const liftMillidaModQuarantine = (profile: string) =>
+  invoke<SkinModState>('lift_millida_mod_quarantine', { profile })
 
 export const setProfileJavaMajor = (profile: string, major: number | null) =>
   invoke<string>('set_profile_java_major', { profile, major })

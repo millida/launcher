@@ -21,6 +21,7 @@ permissions = [
   "allow-install-mod",
   "allow-millida-mod-state",
   "allow-millida-mod-install",
+  "allow-lift-millida-mod-quarantine",
   "allow-millida-mod-enabled",
   "allow-set-millida-mod-enabled",
   "allow-set-game-telemetry",

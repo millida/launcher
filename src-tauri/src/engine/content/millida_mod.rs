@@ -564,6 +564,55 @@ pub fn quarantine_millida_mod(profile: &str, jar: &str) -> bool {
     true
 }
 
+fn jar_version(jar: &str) -> String {
+    let stem = jar.strip_prefix(FILE_PREFIX).unwrap_or(jar);
+    let stem = stem.strip_suffix(".jar").unwrap_or(stem);
+    stem.rsplit('-').next().unwrap_or("").to_string()
+}
+
+/// A quarantine file outlives its reason: once a newer jar from the catalogue
+/// is installed, the record still names the old one but holds nothing back, and
+/// the build page must not tell the player the cosmetics are off.
+fn active_quarantine(quarantined_jar: &str, installed: &[String]) -> Option<String> {
+    if quarantined_jar.is_empty() || installed.iter().any(|j| j != quarantined_jar) {
+        return None;
+    }
+    Some(jar_version(quarantined_jar))
+}
+
+pub fn quarantined_mod_version(profile: &str) -> Option<String> {
+    active_quarantine(&quarantined(profile).0, &installed_jars(profile))
+}
+
+fn lift_quarantine_in(dir: &Path) -> Result<(), String> {
+    let mods = dir.join("mods");
+    if let Ok(entries) = std::fs::read_dir(&mods) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            let Some(jar) = name.strip_suffix(".disabled") else { continue };
+            if !is_millida_mod_file(jar) {
+                continue;
+            }
+            std::fs::remove_file(entry.path())
+                .map_err(|e| format!("Не удалось убрать выключенный мод {}: {} — закрой игру и попробуй ещё раз", name, e))?;
+        }
+    }
+    match std::fs::remove_file(dir.join("millida").join("mod-quarantine")) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(format!("Не удалось вернуть косметику: {} — закрой игру и попробуй ещё раз", e)),
+    }
+}
+
+/// The player takes the crashed version back on purpose: the next launch
+/// installs the catalogue jar again, and a repeat crash quarantines it anew.
+pub fn lift_millida_mod_quarantine(profile: &str) -> Result<(), String> {
+    if profile_of(profile).is_none() {
+        return Err("Сборка не найдена".into());
+    }
+    lift_quarantine_in(&profile_dir(profile))
+}
+
 /// Копия CustomSkinLoader, которую поставил сам лаунчер. Наш мод отвечает за
 /// скин сам, а два мода на одну текстуру — это падение на загрузчике.
 fn drop_launcher_csl(mods: &Path) -> bool {
@@ -1301,6 +1350,50 @@ mod tests {
         assert!(!blocked_by(&json!({"version": "", "variants": []}), "fabric-1.20.1", "0.2.12"));
         assert!(!blocked_by(&json!({}), "fabric-1.20.1", "0.2.12"), "пустой ответ не блокирует");
         assert!(!blocked_by(&list, "", "0.2.12"));
+    }
+
+    /// (quarantined jar, jars in mods/) -> version the build page reports as held back.
+    #[test]
+    fn only_a_quarantine_still_in_force_is_reported() {
+        let old = "millida-mod-fabric-1.20.1-0.2.18.jar";
+        let new = "millida-mod-fabric-1.20.1-0.2.19.jar";
+        type Case<'a> = (&'a str, &'a [&'a str], Option<&'a str>, &'a str);
+        let cases: [Case; 5] = [
+            ("", &[], None, "no quarantine file: nothing to report"),
+            (old, &[], Some("0.2.18"), "the crashed jar was taken out and nothing replaced it"),
+            (old, &[old], Some("0.2.18"), "the busy jar is still there under the same name"),
+            (old, &[new], None, "a newer catalogue jar is installed, the quarantine holds nothing back"),
+            (old, &[old, new], None, "any other jar in mods/ means the launcher moved past the crashed one"),
+        ];
+        for (quarantined, installed, want, why) in cases {
+            let installed: Vec<String> = installed.iter().map(|s| s.to_string()).collect();
+            assert_eq!(active_quarantine(quarantined, &installed).as_deref(), want, "{}", why);
+        }
+    }
+
+    /// (files before) -> files left after «Вернуть». Only our quarantine traces go.
+    #[test]
+    fn lifting_the_quarantine_removes_only_our_traces() {
+        let dir = std::env::temp_dir().join(format!("millida-mod-lift-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("mods")).unwrap();
+        std::fs::create_dir_all(dir.join("millida")).unwrap();
+        let cases: [(&str, bool, &str); 5] = [
+            ("millida/mod-quarantine", false, "the record that keeps the crashed jar out"),
+            ("mods/millida-mod-fabric-1.20.1-0.2.18.jar.disabled", false, "the busy jar the quarantine could only rename"),
+            ("mods/sodium-fabric-0.6.jar.disabled", true, "a mod the player turned off stays off"),
+            ("mods/sodium-fabric-0.6.jar", true, "the player's own mods are untouched"),
+            ("mods/millida-mod-fabric-1.20.1-0.2.19.jar", true, "a working jar of ours is not a quarantine trace"),
+        ];
+        for (file, _, _) in cases {
+            std::fs::write(dir.join(file), b"x").unwrap();
+        }
+        lift_quarantine_in(&dir).expect("lifting must succeed on a build nobody holds open");
+        for (file, stays, why) in cases {
+            assert_eq!(dir.join(file).exists(), stays, "{}: {}", file, why);
+        }
+        lift_quarantine_in(&dir).expect("lifting an already lifted quarantine is not an error");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

@@ -261,6 +261,7 @@ pub fn run() {
             commands::content::install_mod,
             commands::content::millida_mod_state,
             commands::content::millida_mod_install,
+            commands::content::lift_millida_mod_quarantine,
             commands::content::millida_mod_enabled,
             commands::content::set_millida_mod_enabled,
             commands::content::set_game_telemetry,

@@ -15,6 +15,7 @@ import { TunePanel } from '../components/TunePanel'
 import { IconEditor } from '../components/IconEditor'
 import { recallIconRecipe, rememberIconRecipe } from '../lib/iconArt'
 import { uiConfirm } from '../state/confirm'
+import { isOwnModFile, keepAfterOwnModConfirm, skinModOff } from '../lib/millidaModGuard'
 import { copyText } from '../lib/clipboard'
 import { hasTauri } from '../ipc/tauri'
 import { listenDragDrop, listenDragState, listenGameLog, listenGameLogStart } from '../ipc/events'
@@ -40,6 +41,7 @@ import {
   migratePlan,
   fpsBoostState,
   gpuSwitchSupported,
+  liftMillidaModQuarantine,
   setProfileGpu,
   setSkinMod,
   skinModState,
@@ -273,6 +275,7 @@ export function InstancePage() {
   const [boostBusy, setBoostBusy] = useState(false)
   const [skinMod, setSkinModState] = useState<SkinModState | null>(null)
   const [skinModBusy, setSkinModBusy] = useState(false)
+  const skinOff = skinModOff(skinMod)
   const [jvm, setJvm] = useState('')
   const [w, setW] = useState('')
   const [h, setH] = useState('')
@@ -740,6 +743,26 @@ export function InstancePage() {
     }
   }
 
+  const liftQuarantine = async () => {
+    if (!profile) return
+    setSkinModBusy(true)
+    try {
+      setSkinModState(await liftMillidaModQuarantine(profile))
+      showToast(t('Косметика Millida вернётся в сборку при следующем запуске'))
+    } catch (e) {
+      showToast(t('Не удалось вернуть косметику Millida: {error}', { error: String(e) }), 'error')
+    } finally {
+      setSkinModBusy(false)
+    }
+  }
+
+  const askOwnModRemoval = () =>
+    uiConfirm(t('Скины, плащи и косметика Millida пропадут в этой сборке. Вернуть можно в настройках сборки.'), {
+      title: t('Отключить косметику Millida в этой сборке?'),
+      confirmLabel: t('Отключить'),
+      cancelLabel: t('Отмена'),
+    })
+
   const doRename = () => {
     const nn = renameVal.trim()
     if (!profile || !nn || nn === profile) return
@@ -1175,7 +1198,9 @@ export function InstancePage() {
               aria-label={t('Удалить')}
               title={t('Удалить (Shift — без вопроса)')}
               onClick={async (e) => {
-                if (!e.shiftKey && !(await uiConfirm(t('Удалить «{name}» из сборки?', { name: title }), { confirmLabel: t('Удалить') }))) return
+                if (kind === 'mod' && isOwnModFile(md.name)) {
+                  if (!(await askOwnModRemoval())) return
+                } else if (!e.shiftKey && !(await uiConfirm(t('Удалить «{name}» из сборки?', { name: title }), { confirmLabel: t('Удалить') }))) return
                 deleteContent(profile!, kind, md.name)
                   .then(() => loadMods())
                   .catch((er) => showToast(apiErrorText(er, t('Не удалось выполнить действие')), 'error'))
@@ -1363,6 +1388,7 @@ export function InstancePage() {
                   onClose={() => setDlOpen(false)}
                   onDone={(demo) => (demo ? setItems((l) => [...demo, ...l.filter((m) => !demo.some((d) => d.name === m.name))]) : loadMods())}
                   onRemove={async (file) => {
+                    if (kind === 'mod' && isOwnModFile(file) && !(await askOwnModRemoval())) return
                     if (!hasTauri()) {
                       setItems((l) => l.filter((m) => m.name !== file))
                       showToast(t('Удалено из сборки'), 'ok')
@@ -1735,8 +1761,9 @@ export function InstancePage() {
                     data-bulk="delete"
                     onClick={async () => {
                       const names = [...sel]
-                      if (await uiConfirm(t('Удалить из сборки: {n}?', { n: names.length }), { confirmLabel: t('Удалить') }))
-                        void bulk(names, (n) => deleteContent(profile!, kind, n))
+                      if (!(await uiConfirm(t('Удалить из сборки: {n}?', { n: names.length }), { confirmLabel: t('Удалить') }))) return
+                      const go = kind === 'mod' ? await keepAfterOwnModConfirm(names, askOwnModRemoval) : names
+                      void bulk(go, (n) => deleteContent(profile!, kind, n))
                     }}
                   >
                     <Icon id="i-trash" /> {t('Удалить')}
@@ -2399,11 +2426,29 @@ export function InstancePage() {
                     <small>
                       {skinMod?.conflict
                         ? t('Уже есть свой мод скинов: {name}', { name: skinMod.conflict })
-                        : skinMod?.on
-                          ? t('Твой скин видно на серверах')
-                          : t('Включи, если скин не виден в игре')}
+                        : skinOff?.kind === 'quarantine'
+                          ? skinOff.version
+                            ? t('Отключён после вылета (версия {version})', { version: skinOff.version })
+                            : t('Отключён после вылета')
+                          : skinOff?.kind === 'removed'
+                            ? t('Удалён вручную')
+                            : skinOff?.kind === 'off'
+                              ? t('Выключен вами')
+                              : skinMod?.on
+                                ? t('Твой скин видно на серверах')
+                                : t('Включи, если скин не виден в игре')}
                     </small>
                   </span>
+                  {skinOff?.kind === 'quarantine' || skinOff?.kind === 'removed' ? (
+                    <button
+                      className="btn sm secondary"
+                      data-skinmod-restore={skinOff.kind}
+                      disabled={skinModBusy}
+                      onClick={() => void (skinOff.kind === 'quarantine' ? liftQuarantine() : toggleSkinMod())}
+                    >
+                      {t('Вернуть мод')}
+                    </button>
+                  ) : null}
                   <span
                     className={'tgl' + (skinMod?.on ? ' on' : '') + (skinModBusy || !skinMod ? ' busy' : '')}
                     data-skinmod={skinMod?.on ? 'on' : 'off'}

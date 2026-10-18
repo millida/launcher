@@ -17,6 +17,7 @@ import { maskedSkin } from '../../lib/maskedSkin'
 import { CosmeticEmote, emoteClip } from '../../lib/cosmeticEmote'
 import { emoteSequence } from '../../lib/emoteSequence'
 import { readAnimations } from '../../lib/cosmeticAnimation'
+import { emoteShowMs, showPicker, wornEmoteLoops } from '../../lib/lobbyShow'
 import { defaultVariant } from '../../lib/cosmeticVariants'
 import { Nametag, nametagSpot } from '../character/Nametag'
 import { FlatFigure } from '../character/FlatFigure'
@@ -89,10 +90,6 @@ const LOBBY_EMOTES = [
 
 /** Встроенные движения, если эмоции не доехали. */
 const BUILTIN_SHOW = IDLE_SHOW
-
-/** Сколько длится показ эмоции: короткую петлю повторяем, длинную режем. */
-const EMOTE_MIN_MS = 2500
-const EMOTE_MAX_MS = 8000
 
 /** Последний образ: при возврате на главную персонаж надевается сразу. */
 let lastLook: Look | null = null
@@ -612,6 +609,7 @@ export function LobbyCharacter({
       setDressedFor(lookKey(look))
     }
     const dressOne = (got: (typeof worn)[number] & { file: Awaited<ReturnType<typeof cosmeticModel>> }) => {
+      if (got.item.slot === 'EMOTE' && !wornEmoteLoops(!!shop)) return
       let emote: { sequence: ReturnType<typeof emoteSequence>; playing: CosmeticEmote | null } | null = null
       if (got.item.slot === 'EMOTE' && got.file?.animations) {
         const clips = readAnimations(got.file.animations)
@@ -709,12 +707,8 @@ export function LobbyCharacter({
     if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) return
     let alive = true
     let timer: ReturnType<typeof setTimeout> | undefined
-    let bag: number[] = []
-    const show = look?.show ?? []
-    const next = () => {
-      if (!bag.length) bag = show.map((_, i) => i).sort(() => Math.random() - 0.5)
-      return show[bag.pop() as number]
-    }
+    const wornEmote = look?.items.find((x) => x.item.slot === 'EMOTE' && x.item.model) ?? null
+    const next = showPicker(look?.show ?? [], wornEmote?.item ?? null)
     // Реквизит эмоции (сердечки, монета) снимается точечно, надетое не трогаем:
     // полное переодевание мигало крыльями и шляпой.
     let props: { anchor: string; object: import('three').Object3D }[] = []
@@ -758,7 +752,7 @@ export function LobbyCharacter({
     const toShow = async () => {
       const e = viewerRef.current
       if (!e || !alive) return
-      const item = show.length ? next() : null
+      const item = next()
       const file = item?.model ? await cosmeticModel(item.model) : null
       if (!alive) return
       const clips = file?.animations ? readAnimations(file.animations) : {}
@@ -769,7 +763,8 @@ export function LobbyCharacter({
       e.setAnimation(playing as unknown as SkinAnimation)
       const list = item.variants ?? []
       const base = list.length ? defaultVariant(list) : undefined
-      const texture = base?.texture ?? item.texture
+      const own = wornEmote && wornEmote.item === item ? wornEmote : null
+      const texture = own ? own.texture : (base?.texture ?? item.texture)
       if (texture) {
         try {
           for (const piece of buildCosmetic(
@@ -780,17 +775,14 @@ export function LobbyCharacter({
             item.animation,
             { sequence, clock: () => playing.progress },
             pieceCover([...(look?.items ?? []).map((x) => x.item), item], item),
-            base?.emissive ?? item.emissive,
+            own ? own.glow : (base?.emissive ?? item.emissive),
           )) {
             e.attachCosmetic(piece.anchor, piece.object)
             props.push(piece)
           }
         } catch {}
       }
-      const intro = sequence.intro ? sequence.intro.length : 0
-      const loop = sequence.main.length || 1
-      const ms = Math.min(EMOTE_MAX_MS, Math.max(EMOTE_MIN_MS, (intro + loop * Math.max(1, Math.ceil(3 / loop))) * 1000))
-      timer = setTimeout(() => toRest(true), ms)
+      timer = setTimeout(() => toRest(true), emoteShowMs(sequence.intro?.length ?? 0, sequence.main.length))
     }
     timer = setTimeout(() => void toShow(), between(IDLE_SHOW_FIRST_MIN, IDLE_SHOW_FIRST_MAX))
     return () => {
